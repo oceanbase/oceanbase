@@ -101,8 +101,6 @@ class ObTenantIOManager final
 {
 public:
   static int mtl_init(ObTenantIOManager *&io_service);
-  static void mtl_stop(ObTenantIOManager *&io_service);
-  static void mtl_wait(ObTenantIOManager *&io_service);
   static void mtl_destroy(ObTenantIOManager *&io_service);
 public:
   ObTenantIOManager();

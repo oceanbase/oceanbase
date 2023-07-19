@@ -169,7 +169,6 @@ int PalfDiskOptionsWrapper::update_disk_options_not_guarded_by_lock_(const PalfD
     disk_opts_for_stopping_writing_.log_disk_throttling_percentage_ = new_trigger_percentage;
     disk_opts_for_recycling_blocks_.log_disk_throttling_maximum_duration_ = new_maximum_duration;
     disk_opts_for_stopping_writing_.log_disk_throttling_maximum_duration_ = new_maximum_duration;
-
     sequence_++;
   }
   return ret;
@@ -404,7 +403,7 @@ int PalfEnvImpl::create_palf_handle_impl_(const int64_t palf_id,
     PALF_LOG(WARN, "palf_handle has exist, ignore this request", K(ret), K(palf_id));
   } else if (false == check_can_create_palf_handle_impl_()) {
     ret = OB_LOG_OUTOF_DISK_SPACE;
-    PALF_LOG(ERROR, "PalfEnv can not hold more instance", K(ret), KPC(this), K(palf_id));
+    PALF_LOG(WARN, "PalfEnv can not hold more instance", K(ret), KPC(this), K(palf_id));
   } else if (0 > (pret = snprintf(base_dir, MAX_PATH_SIZE, "%s/%ld", log_dir_, palf_id))) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "snprinf failed", K(pret), K(palf_id));
@@ -709,6 +708,11 @@ int PalfEnvImpl::try_recycle_blocks()
     const bool curr_diskspace_enough =
         usable_disk_limit_size_to_stop_writing > total_used_size_byte ? true : false;
     constexpr int64_t MB = 1024 * 1024LL;
+    const int64_t print_error_log_disk_size =
+        disk_opts_for_stopping_writing.log_disk_usage_limit_size_
+        * disk_opts_for_stopping_writing.log_disk_utilization_threshold_;
+    const bool need_print_error_log =
+        print_error_log_disk_size > total_used_size_byte ? false : true;
 
     // step1. change SHRINKING_STATUS to normal
     // 1. when there is no possibility to stop writing,
@@ -736,23 +740,27 @@ int PalfEnvImpl::try_recycle_blocks()
     if (diskspace_enough_ != curr_diskspace_enough) {
       ATOMIC_STORE(&diskspace_enough_, curr_diskspace_enough);
     }
-    if ((true == need_recycle && false == has_recycled && false == is_shrinking) || false == diskspace_enough_) {
+
+    // NB: print error log when:
+    // 1. write-stop.
+    // 2. the used log disk space exceeded the log disk recycle threshold(stop-write PalfDiskOptions) and there is no recycable block.
+    if ((false == diskspace_enough_) || (true == need_print_error_log && false == has_recycled)) {
       constexpr int64_t INTERVAL = 1*1000*1000;
       if (palf_reach_time_interval(INTERVAL, disk_not_enough_print_interval_)) {
-      int tmp_ret = OB_LOG_OUTOF_DISK_SPACE;
-      LOG_DBA_ERROR(OB_LOG_OUTOF_DISK_SPACE, "msg", "log disk space is almost full", "ret", tmp_ret,
-          "total_size(MB)", disk_opts_for_recycling_blocks.log_disk_usage_limit_size_/MB,
-          "used_size(MB)", total_used_size_byte/MB,
-          "used_percent(%)", (total_used_size_byte* 100) / (disk_opts_for_stopping_writing.log_disk_usage_limit_size_ + 1),
-          "warn_size(MB)", (total_size_to_recycle_blocks*disk_opts_for_recycling_blocks.log_disk_utilization_threshold_)/100/MB,
-          "warn_percent(%)", disk_opts_for_recycling_blocks.log_disk_utilization_threshold_,
-          "limit_size(MB)", (total_size_to_recycle_blocks*disk_opts_for_recycling_blocks.log_disk_utilization_limit_threshold_)/100/MB,
-          "limit_percent(%)", disk_opts_for_recycling_blocks.log_disk_utilization_limit_threshold_,
-          "total_unrecyclable_size_byte(MB)", total_unrecyclable_size_byte/MB,
-          "maximum_used_size(MB)", maximum_used_size/MB,
-          "maximum_log_stream", palf_id,
-          "oldest_log_stream", oldest_palf_id,
-          "oldest_scn", oldest_scn);
+        int tmp_ret = OB_LOG_OUTOF_DISK_SPACE;
+        LOG_DBA_ERROR(OB_LOG_OUTOF_DISK_SPACE, "msg", "log disk space is almost full", "ret", tmp_ret,
+            "total_size(MB)", disk_opts_for_recycling_blocks.log_disk_usage_limit_size_/MB,
+            "used_size(MB)", total_used_size_byte/MB,
+            "used_percent(%)", (total_used_size_byte* 100) / (disk_opts_for_stopping_writing.log_disk_usage_limit_size_ + 1),
+            "warn_size(MB)", (total_size_to_recycle_blocks*disk_opts_for_recycling_blocks.log_disk_utilization_threshold_)/100/MB,
+            "warn_percent(%)", disk_opts_for_recycling_blocks.log_disk_utilization_threshold_,
+            "limit_size(MB)", (total_size_to_recycle_blocks*disk_opts_for_recycling_blocks.log_disk_utilization_limit_threshold_)/100/MB,
+            "limit_percent(%)", disk_opts_for_recycling_blocks.log_disk_utilization_limit_threshold_,
+            "total_unrecyclable_size_byte(MB)", total_unrecyclable_size_byte/MB,
+            "maximum_used_size(MB)", maximum_used_size/MB,
+            "maximum_log_stream", palf_id,
+            "oldest_log_stream", oldest_palf_id,
+            "oldest_scn", oldest_scn);
       }
     } else {
        if (REACH_TIME_INTERVAL(2 * 1000 * 1000L)) {
@@ -886,13 +894,15 @@ int PalfEnvImpl::update_options(const PalfOptions &options)
   } else if (false == options.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(options));
-  } else if (OB_FAIL(disk_options_wrapper_.update_disk_options(options.disk_options_))) {
-    PALF_LOG(WARN, "update_disk_options failed", K(ret), K(options));
   } else if (OB_FAIL(log_rpc_.update_transport_compress_options(options.compress_options_))) {
     PALF_LOG(WARN, "update_transport_compress_options failed", K(ret), K(options));
+  } else if (FALSE_IT(rebuild_replica_log_lag_threshold_ = options.rebuild_replica_log_lag_threshold_)) {
+  } else if (OB_FAIL(check_can_update_log_disk_options_(options.disk_options_))) {
+    PALF_LOG(WARN, "check_can_update_log_disk_options_ failed", K(options));
+  } else if (OB_FAIL(disk_options_wrapper_.update_disk_options(options.disk_options_))) {
+    PALF_LOG(WARN, "update_disk_options failed", K(ret), K(options));
   } else {
-    rebuild_replica_log_lag_threshold_ = options.rebuild_replica_log_lag_threshold_;
-    PALF_LOG(INFO, "update_palf_options success", K(options));
+    PALF_LOG(INFO, "update_options successs", K(options), KPC(this));
   }
   return ret;
 }
@@ -1312,6 +1322,19 @@ int PalfEnvImpl::init_log_io_worker_config_(const int log_writer_parallelism,
                             tmp_upper_align_div(default_io_batch_width, real_log_writer_parallelism));
   config.batch_depth_ = PALF_SLIDING_WINDOW_SIZE;
   PALF_LOG(INFO, "init_log_io_worker_config_ success", K(config), K(tenant_id), K(log_writer_parallelism));
+  return ret;
+}
+
+int PalfEnvImpl::check_can_update_log_disk_options_(const PalfDiskOptions &disk_opts)
+{
+  int ret = OB_SUCCESS;
+  const int64_t curr_palf_instance_num = palf_handle_impl_map_.count();
+  const int64_t curr_min_log_disk_size = curr_palf_instance_num * MIN_DISK_SIZE_PER_PALF_INSTANCE;
+  if (disk_opts.log_disk_usage_limit_size_ < curr_min_log_disk_size) {
+    ret = OB_NOT_SUPPORTED;
+    PALF_LOG(WARN, "can not hold current palf instance", K(curr_palf_instance_num),
+             K(curr_min_log_disk_size), K(disk_opts));
+  }
   return ret;
 }
 

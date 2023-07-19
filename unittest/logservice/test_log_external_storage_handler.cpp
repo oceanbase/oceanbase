@@ -140,7 +140,7 @@ TEST(TestLogExternalStorageHandler, test_log_external_storage_handler)
   handler.handle_adapter_ = &adapter;
   EXPECT_EQ(true, handler.is_inited_);
   EXPECT_EQ(OB_NOT_RUNNING, handler.pread(uri, storage_info, offset, read_buf, read_buf_size, real_read_size));
-  EXPECT_EQ(OB_NOT_RUNNING, handler.resize(16, 0));
+  EXPECT_EQ(OB_NOT_RUNNING, handler.resize(16, 100));
 
 
   // 测试invalid argument
@@ -159,8 +159,9 @@ TEST(TestLogExternalStorageHandler, test_log_external_storage_handler)
   {
     ObString empty_uri;
     EXPECT_EQ(OB_INVALID_ARGUMENT, handler.pread(empty_uri, storage_info, offset, read_buf, read_buf_size, real_read_size));
+    // NFS的storage info为empty
     ObString empty_storage_info;
-    EXPECT_EQ(OB_INVALID_ARGUMENT, handler.pread(uri, empty_storage_info, offset, read_buf, read_buf_size, real_read_size));
+    EXPECT_EQ(OB_SUCCESS, handler.pread(uri, empty_storage_info, offset, read_buf, read_buf_size, real_read_size));
     int64_t invalid_offset = -1;
     EXPECT_EQ(OB_INVALID_ARGUMENT, handler.pread(uri, storage_info, invalid_offset, read_buf, read_buf_size, real_read_size));
     invalid_offset = 100*1024*1024;
@@ -175,7 +176,7 @@ TEST(TestLogExternalStorageHandler, test_log_external_storage_handler)
   {
     int64_t invalid_concurrency = -1;
     EXPECT_EQ(OB_INVALID_ARGUMENT, handler.resize(invalid_concurrency, 0));
-    int64_t invalid_timeout_us = -1;
+    int64_t invalid_timeout_us = 0;
     EXPECT_EQ(OB_INVALID_ARGUMENT, handler.resize(concurrency, invalid_timeout_us));
   }
 
@@ -488,7 +489,7 @@ int main(int argc, char **argv)
 {
   system("rm -rf test_log_external_storage_handler.log*");
   OB_LOGGER.set_file_name("test_log_external_storage_handler.log", true);
-  OB_LOGGER.set_log_level("TRACE");
+  OB_LOGGER.set_log_level("WDIAG");
   srandom(ObTimeUtility::current_time());
   PALF_LOG(INFO, "begin unittest::test_log_external_storage_handler");
   ::testing::InitGoogleTest(&argc, argv);

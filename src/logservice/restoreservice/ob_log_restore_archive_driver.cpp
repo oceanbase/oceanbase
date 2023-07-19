@@ -114,18 +114,12 @@ int ObLogRestoreArchiveDriver::check_need_schedule_(ObLS &ls,
     int64_t &task_count)
 {
   int ret = OB_SUCCESS;
-  int64_t concurrency = 0;
   ObRemoteFetchContext context;
   ObLogRestoreHandler *restore_handler = NULL;
   bool need_delay = false;
   need_schedule = false;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-  const int64_t log_restore_concurrency = tenant_config.is_valid() ? tenant_config->log_restore_concurrency : 1L;
-  if (0 == log_restore_concurrency) {
-    concurrency = std::min(get_restore_concurrency_by_max_cpu(), MAX_LS_FETCH_LOG_TASK_CONCURRENCY);
-  } else {
-    concurrency = std::min(log_restore_concurrency, MAX_LS_FETCH_LOG_TASK_CONCURRENCY);
-  }
+  int64_t concurrency = 0;
+  int64_t fetch_log_worker_count = 0;
   if (OB_ISNULL(restore_handler = ls.get_log_restore_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get restore_handler failed", K(ret), "id", ls.get_ls_id());
@@ -133,6 +127,9 @@ int ObLogRestoreArchiveDriver::check_need_schedule_(ObLS &ls,
     LOG_WARN("get fetch log context failed", K(ret), K(ls));
   } else if (! need_schedule) {
     // do nothing
+  } else if (OB_FAIL(worker_->get_thread_count(fetch_log_worker_count))) {
+    LOG_WARN("get_thread_count from worker_ failed", K(ret), K(ls));
+  } else if (FALSE_IT(concurrency = std::min(fetch_log_worker_count, MAX_LS_FETCH_LOG_TASK_CONCURRENCY))) {
   } else if (context.issue_task_num_ >= concurrency) {
     need_schedule = false;
   } else if (OB_FAIL(check_need_delay_(ls.get_ls_id(), need_delay))) {

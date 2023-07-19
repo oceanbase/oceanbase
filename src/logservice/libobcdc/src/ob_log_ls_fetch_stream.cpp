@@ -1272,7 +1272,9 @@ bool FetchStream::need_add_into_blacklist_(const KickOutReason reason)
 {
   bool bool_ret = false;
 
-  if ((NEED_SWITCH_SERVER == reason) || (DISCARDED == reason)) {
+  if ((NEED_SWITCH_SERVER == reason) ||
+      (DISCARDED == reason) ||
+      (ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF == reason)) {
     bool_ret = false;
   } else {
     bool_ret = true;
@@ -1445,6 +1447,7 @@ int FetchStream::fetch_miss_log_direct_(
   const int64_t tenant_id = ls_fetch_ctx.get_tls_id().get_tenant_id();
   const ObLSID &ls_id = ls_fetch_ctx.get_tls_id().get_ls_id();
   archive::LargeBufferPool *buffer_pool = NULL;
+  logservice::ObLogExternalStorageHandler *log_ext_handler = NULL;
   ObRpcResultCode rcode;
   SCN cur_scn;
   const int64_t start_fetch_ts = get_timestamp();
@@ -1458,6 +1461,8 @@ int FetchStream::fetch_miss_log_direct_(
     LOG_ERROR("convert log progress to scn failed", KR(ret), K(current_progress));
   } else if (OB_FAIL(ls_fetch_ctx.get_large_buffer_pool(buffer_pool))) {
     LOG_ERROR("get large buffer pool when fetching missing log failed", KR(ret), K(ls_fetch_ctx));
+  } else if (OB_FAIL(ls_fetch_ctx.get_log_ext_handler(log_ext_handler))) {
+    LOG_ERROR("get log ext handler when fetching missing log failed", KR(ret), K(ls_fetch_ctx));
   } else {
     int64_t fetched_cnt = 0;
     const int64_t arr_cnt = miss_log_array.count();
@@ -1478,7 +1483,7 @@ int FetchStream::fetch_miss_log_direct_(
         if (get_timestamp() > time_upper_limit) {
           is_timeout = true;
         } else if (OB_FAIL(entry_iter.init(tenant_id, ls_id, cur_scn, missing_lsn,
-            LSN(palf::LOG_MAX_LSN_VAL), buffer_pool))) {
+            LSN(palf::LOG_MAX_LSN_VAL), buffer_pool, log_ext_handler))) {
           LOG_WARN("remote entry iter init failed", KR(ret));
         } else if (OB_FAIL(entry_iter.next(log_entry, lsn, buf, buf_size))) {
           retry_on_err =true;
@@ -1981,6 +1986,10 @@ FetchStream::KickOutReason FetchStream::get_feedback_reason_(const Feedback &fee
 
     case ObCdcLSFetchLogResp::LS_OFFLINED:
       reason = LS_OFFLINED;
+      break;
+
+    case ObCdcLSFetchLogResp::ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF:
+      reason = ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF;
       break;
 
     default:

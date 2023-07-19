@@ -29,7 +29,7 @@ namespace oceanbase
 {
 namespace logservice
 {
-
+class ObLogService;
 class ObServerLogBlockMgr : public palf::ILogBlockPool
 {
 public:
@@ -187,14 +187,14 @@ public:
   // @brief before 'update_tenant_log_disk_size' in ObMultiTenant, need update it.
   // @param[in] the log disk size used by tenant.
   // @param[in] the log disk size need by tenant.
+  // @param[in] the log disk size allowed by tenant
+  // @param[in] ObLogService*
   //   OB_SUCCESS
   //   OB_MACHINE_RESOURCE_NOT_ENOUGH
-  int update_tenant(const int64_t old_log_disk_size, const int64_t new_log_disk_size);
-
-  // @brief after 'update_tenant_log_disk_size' in ObMultiTenant failed, need rollbakc it.
-  // @param[in] the log disk size need by tenant.
-  // @param[in] the log disk size used by tenant.
-  void abort_update_tenant(const int64_t old_log_disk_size, const int64_t new_log_disk_size);
+  int update_tenant(const int64_t old_log_disk_size,
+                    const int64_t new_log_disk_size,
+                    int64_t &allowed_log_disk_size,
+                    ObLogService *log_service);
 
   // @brief after 'del_tenant' in ObMultiTenant success, need remove it from ObServerLogBlockMgr
   // NB: accurately, when tenant not exist in 'omt_', we can remove it from ObServerLogBlockMgr

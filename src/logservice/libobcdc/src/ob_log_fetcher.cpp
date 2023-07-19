@@ -45,6 +45,7 @@ ObLogFetcher::ObLogFetcher() :
     fetching_mode_(ClientFetchingMode::FETCHING_MODE_UNKNOWN),
     archive_dest_(),
     large_buffer_pool_(),
+    log_ext_handler_(),
     task_pool_(NULL),
     sys_ls_handler_(NULL),
     err_handler_(NULL),
@@ -139,6 +140,8 @@ int ObLogFetcher::init(
       LOG_ERROR("init part trans resolver factory fail", KR(ret));
     } else if (large_buffer_pool_.init("ObLogFetcher", 1L * 1024 * 1024 * 1024)) {
       LOG_ERROR("init large buffer pool failed", KR(ret));
+    } else if (log_ext_handler_.init()) {
+      LOG_ERROR("init log ext handler failed", KR(ret));
     } else if (OB_FAIL(ls_fetch_mgr_.init(max_cached_ls_fetch_ctx_count,
             progress_controller_,
             part_trans_resolver_factory_,
@@ -243,6 +246,8 @@ void ObLogFetcher::destroy()
   }
   // Finally reset fetching_mode_ because of some processing dependencies, such as ObLogRouteService
   fetching_mode_ = ClientFetchingMode::FETCHING_MODE_UNKNOWN;
+  log_ext_handler_.wait();
+  log_ext_handler_.destroy();
 
   LOG_INFO("destroy fetcher succ");
 }
@@ -263,7 +268,10 @@ int ObLogFetcher::start()
   } else {
     stop_flag_ = false;
 
-    if (is_integrated_fetching_mode(fetching_mode_) && OB_FAIL(log_route_service_.start())) {
+    // TODO by wenyue.zxl: change the concurrency of 'log_ext_handler_'(see resize interface)
+    if (OB_FAIL(log_ext_handler_.start(0))) {
+      LOG_ERROR("start ObLogExternalStorageHandler fail", KR(ret));
+    } else if (is_integrated_fetching_mode(fetching_mode_) && OB_FAIL(log_route_service_.start())) {
       LOG_ERROR("start LogRouterService fail", KR(ret));
     } else if (OB_FAIL(start_lsn_locator_.start())) {
       LOG_ERROR("start 'start_lsn_locator' fail", KR(ret));
@@ -318,6 +326,7 @@ void ObLogFetcher::stop()
     if (is_integrated_fetching_mode(fetching_mode_)) {
       log_route_service_.stop();
     }
+    log_ext_handler_.stop();
 
     LOG_INFO("stop fetcher succ");
   }
@@ -600,6 +609,19 @@ int ObLogFetcher::get_large_buffer_pool(archive::LargeBufferPool *&large_buffer_
     LOG_ERROR("fetcher not inited, could not get large buffer pool", KR(ret), K_(is_inited));
   } else {
     large_buffer_pool = &large_buffer_pool_;
+  }
+  return ret;
+}
+
+int ObLogFetcher::get_log_ext_handler(logservice::ObLogExternalStorageHandler *&log_ext_handler)
+{
+  int ret = OB_SUCCESS;
+
+  if(IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("fetcher not inited, could not get log ext handler", KR(ret), K_(is_inited));
+  } else {
+    log_ext_handler = &log_ext_handler_;
   }
   return ret;
 }

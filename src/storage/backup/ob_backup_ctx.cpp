@@ -1405,7 +1405,7 @@ int ObLSBackupCtx::prepare_tablet_id_reader_(ObILSTabletIdReader *&reader)
   const share::ObBackupSetDesc &backup_set_desc = param_.backup_set_desc_;
   const share::ObLSID &ls_id = param_.ls_id_;
   const ObLSTabletIdReaderType type = LS_TABLET_ID_READER;
-  if (OB_ISNULL(tmp_reader = ObLSBackupFactory::get_ls_tablet_id_reader(type))) {
+  if (OB_ISNULL(tmp_reader = ObLSBackupFactory::get_ls_tablet_id_reader(type, tenant_id))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to get ls tablet id reader", K(ret), K(type));
   } else if (OB_FAIL(tmp_reader->init(backup_dest, tenant_id, backup_set_desc, ls_id))) {

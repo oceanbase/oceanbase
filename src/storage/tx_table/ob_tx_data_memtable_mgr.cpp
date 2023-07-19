@@ -341,7 +341,7 @@ int ObTxDataMemtableMgr::get_active_memtable(ObTableHandleV2 &handle) const
   MemMgrRLockGuard lock_guard(lock_);
   if (0 == memtable_tail_) {
     ret = OB_EAGAIN;
-    STORAGE_LOG(INFO, "tx data memtable is not created yet. try agagin.", K(ret), K(memtable_tail_));
+    STORAGE_LOG(INFO, "tx data memtable is not created yet. try agagin.", K(ret), K(ls_id_), K(memtable_tail_));
   } else if (0 == get_memtable_count_()) {
     ret = OB_ENTRY_NOT_EXIST;
     STORAGE_LOG(WARN, "the tx data memtable manager is empty. may be offline", KR(ret), K(get_memtable_count_()));

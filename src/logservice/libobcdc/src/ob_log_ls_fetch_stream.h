@@ -151,6 +151,9 @@ private:
 
     NEED_SWITCH_SERVER           = 10,  // There is a higher priority server that actively switch
     DISCARDED                    = 11,  // Partition is discard
+
+    // Feedback
+    ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF        = 12,  //same as ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF
   };
   static const char *print_kick_out_reason_(const KickOutReason reason);
   // Determine if the server needs to be blacklisted,

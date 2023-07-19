@@ -452,7 +452,6 @@ public:
   VIRTUAL_TO_STRING_KV(K("ObTabletRestoreTask"), KP(this), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
 private:
   int update_restore_status_();
-  int check_tablet_valid_();
   int record_server_event_();
 
 private:

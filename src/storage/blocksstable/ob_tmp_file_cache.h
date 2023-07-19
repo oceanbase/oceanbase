@@ -331,6 +331,7 @@ public:
   int alloc_block_all_pages(ObTmpMacroBlock *t_mblk, ObTmpFileExtent &extent);
   int free_macro_block(const int64_t block_id);
   int wash_block(const int64_t block_id, ObIOWaitInfoHandle &handle);
+  int erase_block_from_map(const int64_t block_id);
   int cleanup();
   int add_macro_block(ObTmpMacroBlock *&t_mblk);
   int wait_write_finish(const int64_t block_id, const int64_t timeout_ms);

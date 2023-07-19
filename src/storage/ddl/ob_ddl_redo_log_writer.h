@@ -288,7 +288,7 @@ public:
                      const int64_t execution_id,
                      const int64_t data_format_version,
                      ObDDLKvMgrHandle &ddl_kv_mgr_handle);
-  int end_ddl_redo_and_create_ddl_sstable(ObLSHandle &ls_handle,
+  int end_ddl_redo_and_create_ddl_sstable(const share::ObLSID &ls_id,
                                           const ObITable::TableKey &table_key,
                                           const uint64_t table_id,
                                           const int64_t execution_id,

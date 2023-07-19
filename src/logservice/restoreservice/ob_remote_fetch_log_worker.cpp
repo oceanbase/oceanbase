@@ -65,6 +65,7 @@ ObRemoteFetchWorker::ObRemoteFetchWorker() :
   ls_svr_(NULL),
   task_queue_(),
   allocator_(NULL),
+  log_ext_handler_(),
   cond_()
 {}
 
@@ -95,6 +96,8 @@ int ObRemoteFetchWorker::init(const uint64_t tenant_id,
         K(allocator), K(restore_service), K(ls_svr));
   } else if (OB_FAIL(task_queue_.init(FETCH_LOG_TASK_LIMIT, "RFLTaskQueue", MTL_ID()))) {
     LOG_WARN("task_queue_ init failed", K(ret));
+  } else if (OB_FAIL(log_ext_handler_.init())) {
+    LOG_WARN("log_ext_handler_ init failed", K(ret));
   } else {
     tenant_id_ = tenant_id;
     allocator_ = allocator;
@@ -129,6 +132,7 @@ void ObRemoteFetchWorker::destroy()
     ls_svr_ = NULL;
     allocator_ = NULL;
     restore_controller_ = NULL;
+    log_ext_handler_.destroy();
     inited_ = false;
   }
 }
@@ -140,6 +144,8 @@ int ObRemoteFetchWorker::start()
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
     LOG_ERROR("ObRemoteFetchWorker not init", K(ret));
+  } else if (OB_FAIL(log_ext_handler_.start(0))) {
+    LOG_WARN("ObLogExtStorageHandler start failed");
   } else if (OB_FAIL(ObThreadPool::start())) {
     LOG_WARN("ObRemoteFetchWorker start failed", K(ret));
   } else {
@@ -151,12 +157,14 @@ int ObRemoteFetchWorker::start()
 void ObRemoteFetchWorker::stop()
 {
   LOG_INFO("ObRemoteFetchWorker thread stop", K_(tenant_id));
+  log_ext_handler_.stop();
   ObThreadPool::stop();
 }
 
 void ObRemoteFetchWorker::wait()
 {
   LOG_INFO("ObRemoteFetchWorker thread wait", K_(tenant_id));
+  log_ext_handler_.wait();
   ObThreadPool::wait();
 }
 
@@ -183,21 +191,31 @@ int ObRemoteFetchWorker::submit_fetch_log_task(ObFetchLogTask *task)
   return ret;
 }
 
-int ObRemoteFetchWorker::modify_thread_count(const int64_t thread_count)
+int ObRemoteFetchWorker::modify_thread_count(const int64_t log_restore_concurrency)
 {
   int ret = OB_SUCCESS;
-  int64_t count = thread_count;
-  if (thread_count < MIN_FETCH_LOG_WORKER_THREAD_COUNT) {
-    count = MIN_FETCH_LOG_WORKER_THREAD_COUNT;
-  } else if (thread_count > MAX_FETCH_LOG_WORKER_THREAD_COUNT) {
-    count = MAX_FETCH_LOG_WORKER_THREAD_COUNT;
-  }
-  if (count == get_thread_count()) {
+  int64_t thread_count = 0;
+  if (OB_FAIL(log_ext_handler_.resize(log_restore_concurrency))) {
+    LOG_WARN("log_ext_handler_ resize failed", K(log_restore_concurrency), K(thread_count));
+  } else if (FALSE_IT(thread_count = calcuate_thread_count_(log_restore_concurrency))) {
+    LOG_WARN("calcuate_thread_count_ failed", K(log_restore_concurrency), K(thread_count));
+  } else if (thread_count == lib::Threads::get_thread_count()) {
     // do nothing
-  } else if (OB_FAIL(set_thread_count(count))) {
+  } else if (OB_FAIL(set_thread_count(thread_count))) {
     LOG_WARN("set thread count failed", K(ret));
   } else {
-    LOG_INFO("set thread count succ", K(count));
+    LOG_INFO("set thread count succ", K(thread_count), K(log_restore_concurrency));
+  }
+  return ret;
+}
+
+int ObRemoteFetchWorker::get_thread_count(int64_t &thread_count) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(! inited_)) {
+    LOG_WARN("ObRemoteFetchWorker not init");
+  } else {
+    thread_count = lib::Threads::get_thread_count();
   }
   return ret;
 }
@@ -228,7 +246,7 @@ void ObRemoteFetchWorker::do_thread_task_()
 {
   int ret = OB_SUCCESS;
   int64_t size = task_queue_.size();
-  if (0 != get_thread_idx() || get_thread_count() <= 1) {
+  if (0 != get_thread_idx() || lib::Threads::get_thread_count() <= 1) {
     for (int64_t i = 0; i < size && OB_SUCC(ret) && !has_set_stop(); i++) {
       if (OB_FAIL(handle_single_task_())) {
         LOG_WARN("handle single task failed", K(ret));
@@ -292,7 +310,8 @@ int ObRemoteFetchWorker::handle_fetch_log_task_(ObFetchLogTask *task)
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(ret), K(task));
   } else if (OB_FAIL(task->iter_.init(tenant_id_, task->id_, task->pre_scn_,
-          task->cur_lsn_, task->end_lsn_, allocator_->get_buferr_pool(), DEFAULT_BUF_SIZE))) {
+          task->cur_lsn_, task->end_lsn_, allocator_->get_buferr_pool(),
+          &log_ext_handler_, DEFAULT_BUF_SIZE))) {
     LOG_WARN("ObRemoteLogIterator init failed", K(ret), K_(tenant_id), KPC(task));
   } else if (!need_fetch_log_(task->id_)) {
     LOG_TRACE("no need fetch log", KPC(task));
@@ -597,6 +616,15 @@ void ObRemoteFetchWorker::report_error_(const ObLSID &id,
   GET_RESTORE_HANDLER_CTX(id) {
     restore_handler->mark_error(*ObCurTraceId::get_trace_id(), ret_code, lsn, error_type);
   }
+}
+
+int64_t ObRemoteFetchWorker::calcuate_thread_count_(const int64_t log_restore_concurrency)
+{
+  int64_t thread_count = 0;
+  int64_t recommend_concurrency_in_single_file = log_ext_handler_.get_recommend_concurrency_in_single_file();
+  thread_count = static_cast<int64_t>(
+    log_restore_concurrency + recommend_concurrency_in_single_file - 1) / recommend_concurrency_in_single_file;
+  return thread_count;
 }
 
 } // namespace logservice

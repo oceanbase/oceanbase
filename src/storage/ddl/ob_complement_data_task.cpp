@@ -1238,7 +1238,6 @@ int ObComplementMergeTask::process()
 int ObComplementMergeTask::add_build_hidden_table_sstable()
 {
   int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
   ObITable::TableKey hidden_table_key;
   SCN commit_scn;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1249,12 +1248,10 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
       || OB_UNLIKELY(!param_->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected", K(ret), KP(param_), KP(context_));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
-    LOG_WARN("failed to get log stream", K(ret), K(param_->ls_id_));
   } else if (OB_FAIL(param_->get_hidden_table_key(hidden_table_key))) {
     LOG_WARN("fail to get hidden table key", K(ret), K(hidden_table_key));
   } else if (OB_FAIL(context_->data_sstable_redo_writer_.end_ddl_redo_and_create_ddl_sstable(
-      ls_handle, hidden_table_key, param_->dest_table_id_, param_->execution_id_, param_->task_id_))) {
+      param_->ls_id_, hidden_table_key, param_->dest_table_id_, param_->execution_id_, param_->task_id_))) {
     LOG_WARN("failed to end ddl redo", K(ret));
   }
   return ret;

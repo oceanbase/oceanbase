@@ -13,11 +13,12 @@
 #ifndef OCEANBASE_LOGSERVICE_OB_REMOTE_FETCH_LOG_WORKER_H_
 #define OCEANBASE_LOGSERVICE_OB_REMOTE_FETCH_LOG_WORKER_H_
 
-#include "lib/queue/ob_lighty_queue.h"      // ObLightyQueue
-#include "common/ob_queue_thread.h"         // ObCond
-#include "share/ob_thread_pool.h"           // ObThreadPool
-#include "share/ob_ls_id.h"                 // ObLSID
-#include "ob_remote_log_iterator.h"         // ObRemoteLogGroupEntryIterator
+#include "lib/queue/ob_lighty_queue.h"                      // ObLightyQueue
+#include "common/ob_queue_thread.h"                         // ObCond
+#include "share/ob_thread_pool.h"                           // ObThreadPool
+#include "share/ob_ls_id.h"                                 // ObLSID
+#include "ob_remote_log_iterator.h"                         // ObRemoteLogGroupEntryIterator
+#include "logservice/ob_log_external_storage_handler.h"     // ObLogExternalStorageHandler
 
 namespace oceanbase
 {
@@ -71,7 +72,8 @@ public:
   // @retval other code          unexpected error
   int submit_fetch_log_task(ObFetchLogTask *task);
 
-  int modify_thread_count(const int64_t count);
+  int modify_thread_count(const int64_t log_restore_concurrency);
+  int get_thread_count(int64_t &thread_count) const;
 
 private:
   void run1();
@@ -99,6 +101,7 @@ private:
                      const int ret_code,
                      const palf::LSN &lsn,
                      const ObLogRestoreErrorContext::ErrorType &error_type);
+  int64_t calcuate_thread_count_(const int64_t log_restore_concurrency);
 private:
   bool inited_;
   uint64_t tenant_id_;
@@ -107,6 +110,7 @@ private:
   storage::ObLSService *ls_svr_;
   common::ObLightyQueue task_queue_;
   ObLogRestoreAllocator *allocator_;
+  ObLogExternalStorageHandler log_ext_handler_;
 
   common::ObCond cond_;
 private:

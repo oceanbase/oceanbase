@@ -93,6 +93,7 @@ struct ObLSVTInfo
   int64_t rebuild_seq_;
   share::SCN tablet_change_checkpoint_scn_;
   share::SCN transfer_scn_;
+  bool tx_blocked_;
 };
 
 // 诊断虚表统计信息

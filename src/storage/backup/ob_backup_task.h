@@ -528,7 +528,7 @@ private:
   int check_disk_space_();
   int get_macro_block_id_list_(common::ObIArray<ObBackupMacroBlockId> &list);
   int get_meta_item_list_(common::ObIArray<ObBackupProviderItem> &list);
-  int prepare_macro_block_reader_(
+  int prepare_macro_block_reader_(const uint64_t tenant_id,
       const common::ObIArray<ObBackupMacroBlockId> &list, ObMultiMacroBlockBackupReader *&reader);
   int prepare_tablet_meta_reader_(const common::ObTabletID &tablet_id, const ObTabletMetaReaderType &reader_type,
       storage::ObTabletHandle &tablet_handle, ObITabletMetaBackupReader *&reader);

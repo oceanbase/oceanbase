@@ -348,6 +348,7 @@ _server_standby_fetch_log_bandwidth_limit
 _session_context_size
 _sort_area_size
 _sqlexec_disable_hash_based_distagg_tiv
+_stall_threshold_for_dynamic_worker
 _storage_meta_memory_limit_percentage
 _temporary_file_io_area_size
 _trace_control_info
@@ -361,7 +362,6 @@ _tx_result_retention
 _upgrade_stage
 _wait_interval_after_truncate
 _with_subquery
-_worker_long_stall_threshold
 _xa_gc_interval
 _xa_gc_timeout
 _xsolapi_generate_with_clause

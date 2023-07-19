@@ -918,6 +918,14 @@ int ObMacroBlockWriter::build_micro_block()
     if (OB_FAIL(micro_helper_.compress_encrypt_micro_block(micro_block_desc))) {
       micro_writer_->dump_diagnose_info(); // ignore dump error
       STORAGE_LOG(WARN, "failed to compress and encrypt micro block", K(ret), K(micro_block_desc));
+
+#ifdef ENABLE_DEBUG_LOG
+      if (OB_CHECKSUM_ERROR == ret) {
+        ob_usleep(1000 * 1000);
+        ob_abort();
+      }
+#endif
+
     } else {
       if (OB_FAIL(write_micro_block(micro_block_desc))) {
         STORAGE_LOG(WARN, "fail to write micro block ", K(ret), K(micro_block_desc));

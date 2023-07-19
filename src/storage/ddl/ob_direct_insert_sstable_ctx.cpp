@@ -422,7 +422,7 @@ int ObSSTableInsertSliceWriter::close()
 /***************              ObSSTableInsertTabletContext              *****************/
 
 ObSSTableInsertTabletContext::ObSSTableInsertTabletContext()
-  : mutex_(ObLatchIds::SSTABLE_INSERT_TABLET_CONTEXT_LOCK), allocator_(), ls_handle_(), tablet_handle_(), data_sstable_redo_writer_(),
+  : mutex_(ObLatchIds::SSTABLE_INSERT_TABLET_CONTEXT_LOCK), allocator_(), data_sstable_redo_writer_(),
     sstable_created_(false), task_finish_count_(0), index_builder_(nullptr),
     task_id_(0)
 {
@@ -444,11 +444,7 @@ int ObSSTableInsertTabletContext::init(const ObSSTableInsertTabletParam &build_p
 {
   int ret = OB_SUCCESS;
   const int64_t memory_limit = 1024L * 1024L * 1024L * 10L; // 10GB
-  const ObTabletID &tablet_id = build_param.tablet_id_;
-  const ObLSID &ls_id = build_param.ls_id_;
   share::ObLocationService *location_service = GCTX.location_service_;
-  ObLS *ls = nullptr;
-  ObLSService *ls_service = nullptr;
   lib::ObMutexGuard guard(mutex_);
   if (OB_UNLIKELY(build_param_.is_valid())) {
     ret = OB_INIT_TWICE;
@@ -456,15 +452,8 @@ int ObSSTableInsertTabletContext::init(const ObSSTableInsertTabletParam &build_p
   } else if (OB_UNLIKELY(!build_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(build_param));
-  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("ls service should not be null", K(ret));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle_, ObLSGetMod::DDL_MOD))) {
-    LOG_WARN("get ls failed", K(ret), K(ls_id));
-  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle_, tablet_id, tablet_handle_))) {
-    LOG_WARN("fail to get tablet handle", K(ret), K(tablet_id));
-  } else if (OB_FAIL(data_sstable_redo_writer_.init(ls_id, tablet_id))) {
-    LOG_WARN("fail to init sstable redo writer", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(data_sstable_redo_writer_.init(build_param.ls_id_, build_param.tablet_id_))) {
+    LOG_WARN("fail to init sstable redo writer", K(ret), K(build_param));
   } else if (OB_FAIL(allocator_.init(OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                     lib::ObLabel("TabletInsCtx"),
                                     OB_SERVER_TENANT_ID,
@@ -614,8 +603,6 @@ int ObSSTableInsertTabletContext::construct_sstable_slice_writer(
   int ret = OB_SUCCESS;
   sstable_slice_writer = nullptr;
   const int64_t tenant_id = MTL_ID();
-  const ObTabletID &tablet_id = build_param.tablet_id_;
-  ObLSID ls_id;
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   ObFreezeInfoProxy freeze_info_proxy(tenant_id);
   ObSimpleFrozenStatus frozen_status;
@@ -628,11 +615,7 @@ int ObSSTableInsertTabletContext::construct_sstable_slice_writer(
     lib::ObMutexGuard guard(mutex_);
     snapshot_version = build_param_.snapshot_version_;
   }
-  if (ls_handle_.get_ls() == nullptr) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls is null", K(ret));
-  } else if (FALSE_IT(ls_id = ls_handle_.get_ls()->get_ls_id())) {
-  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
       tenant_id, schema_guard, build_param.schema_version_))) {
     LOG_WARN("get tenant schema failed", K(ret), K(build_param));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
@@ -653,7 +636,7 @@ int ObSSTableInsertTabletContext::construct_sstable_slice_writer(
   } else if (OB_FAIL(freeze_info_proxy.get_frozen_info_less_than(
           *sql_proxy, snapshot_scn, frozen_status))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("get freeze info failed", K(ret), K(tablet_id));
+      LOG_WARN("get freeze info failed", K(ret), K(build_param_));
     } else {
       frozen_status.frozen_scn_ = SCN::base_scn();
       ret = OB_SUCCESS;
@@ -661,8 +644,8 @@ int ObSSTableInsertTabletContext::construct_sstable_slice_writer(
   }
   if (OB_SUCC(ret)) {
     ObSSTableInsertSliceParam slice_param;
-    slice_param.tablet_id_ = tablet_id;
-    slice_param.ls_id_ = ls_id;
+    slice_param.tablet_id_ = build_param_.tablet_id_;
+    slice_param.ls_id_ = build_param_.ls_id_;
     slice_param.table_key_ = table_key;
     slice_param.start_seq_ = start_seq;
     slice_param.start_scn_ = data_sstable_redo_writer_.get_start_scn();
@@ -697,11 +680,8 @@ int ObSSTableInsertTabletContext::prepare_index_builder_if_need(const ObTableSch
   lib::ObMutexGuard guard(mutex_);
   if (index_builder_ != nullptr) {
     LOG_INFO("index builder is already prepared");
-  } else if (OB_ISNULL(ls_handle_.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls is null", K(ret));
   } else if (OB_FAIL(data_desc.init_as_index(table_schema,
-                                    ls_handle_.get_ls()->get_ls_id(),
+                                    build_param_.ls_id_,
                                     build_param_.tablet_id_, // TODO(shuangcan): confirm this
                                     build_param_.write_major_ ? storage::MAJOR_MERGE : storage::MINOR_MERGE,
                                     1L /*snapshot_version*/,
@@ -774,7 +754,7 @@ int ObSSTableInsertTabletContext::create_sstable()
     LOG_INFO("sstable has been created", K(ret), K(build_param_), K(sstable_created_));
   } else if (OB_FAIL(get_table_key(table_key))) {
     LOG_WARN("get table key failed", K(ret), K(build_param_));
-  } else if (OB_FAIL(create_sstable_with_clog(tablet_handle_.get_obj(), table_key, build_param_.table_id_))) {
+  } else if (OB_FAIL(create_sstable_with_clog(table_key, build_param_.table_id_))) {
     LOG_WARN("create sstable with clog failed", K(ret), K(build_param_), K(table_key));
   } else {
     sstable_created_ = true;
@@ -819,7 +799,6 @@ public:
 };
 
 int ObSSTableInsertTabletContext::create_sstable_with_clog(
-    ObTablet *tablet,
     const ObITable::TableKey &table_key,
     const int64_t table_id)
 {
@@ -843,7 +822,7 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
   } else {
     DEBUG_SYNC(AFTER_REMOTE_WRITE_DDL_PREPARE_LOG);
     if (OB_FAIL(data_sstable_redo_writer_.end_ddl_redo_and_create_ddl_sstable(
-        ls_handle_, table_key, table_id, build_param_.execution_id_, build_param_.ddl_task_id_))) {
+        build_param_.ls_id_, table_key, table_id, build_param_.execution_id_, build_param_.ddl_task_id_))) {
       LOG_WARN("fail create ddl sstable", K(ret), K(table_key));
     }
   }

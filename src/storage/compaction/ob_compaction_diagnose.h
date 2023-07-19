@@ -438,11 +438,9 @@ private:
       const ObLSID &ls_id);
   int diagnose_tablet_mini_merge(const ObLSID &ls_id, ObTablet &tablet);
   int diagnose_tablet_minor_merge(const ObLSID &ls_id, ObTablet &tablet);
-  int diagnose_tablet_medium_merge(
-      const int64_t compaction_scn,
-      const ObLSID &ls_id,
-      ObTablet &tablet);
-  int diagnose_tablet_major_merge(
+  int diagnose_tablet_major_and_medium(
+      const bool diagnose_major_flag,
+      const bool weak_read_ts_ready,
       const int64_t compaction_scn,
       const ObLSID &ls_id,
       ObTablet &tablet,
@@ -470,13 +468,10 @@ private:
 
   int diagnose_medium_scn_table(const int64_t compaction_scn);
   OB_INLINE bool can_add_diagnose_info() { return idx_ < max_cnt_; }
-  int get_suspect_info(
+  int get_suspect_info_and_print(
       const ObMergeType merge_type,
       const ObLSID &ls_id,
-      const ObTabletID &tablet_id,
-      ObScheduleSuspectInfo &ret_info,
-      char *buf,
-      const int64_t buf_len);
+      const ObTabletID &tablet_id);
   int check_if_need_diagnose(rootserver::ObMajorFreezeService *&major_freeze_service,
                              bool &need_diagnose) const;
   int do_tenant_major_merge_diagnose(rootserver::ObMajorFreezeService *major_freeze_service);
@@ -484,8 +479,7 @@ private:
 public:
   typedef common::hash::ObHashMap<ObLSID, ObLSCheckStatus> LSStatusMap;
 private:
-  static const int64_t WAIT_MEDIUM_SCHEDULE_INTERVAL = 1000L * 1000L * 1000L * 120L; // 120 seconds // ns
-  static const int64_t SUSPECT_INFO_WARNING_THRESHOLD = 1000L * 1000L * 60L * 5; // 5 mins
+  static const int64_t WAIT_MEDIUM_SCHEDULE_INTERVAL = 1000L * 1000L * 1000L * 60L * 5; // 5 min // ns
   static const int64_t MAX_LS_TABLET_CNT = 10 * 10000; // TODO(@jingshui): tmp solution
   bool is_inited_;
   ObIAllocator *allocator_;
@@ -493,7 +487,6 @@ private:
   common::ObArenaAllocator tablet_allocator_;
   ObTabletHandle tablet_handle_;
   void *iter_buf_;
-  LSStatusMap ls_status_map_;
   ObCompactionDiagnoseInfo *info_array_;
   int64_t max_cnt_;
   int64_t idx_;

@@ -346,6 +346,8 @@ private:
                                  const int64_t tenant_id,
                                  LogIOWorkerConfig &config);
 
+  int check_can_update_log_disk_options_(const PalfDiskOptions &disk_options);
+
 private:
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RLockGuard;

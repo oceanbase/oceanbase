@@ -249,6 +249,7 @@ public:
   bool is_degraded(const PalfHandleImplGuard &leader, const int64_t degraded_server_idx);
   bool is_upgraded(PalfHandleImplGuard &leader, const int64_t palf_id);
   int wait_until_disk_space_to(const int64_t server_id, const int64_t expect_log_disk_space);
+  int update_server_log_disk(const int64_t log_disk_size);
 public:
   static int64_t palf_id_;
 private:

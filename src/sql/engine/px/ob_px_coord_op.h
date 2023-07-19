@@ -61,6 +61,7 @@ public:
     allocator_.reset();
     ObPxReceiveOp::destroy();
   }
+  virtual int inner_drain_exch() override;
   void reset_for_rescan()
   {
     coord_info_.reset_for_rescan();

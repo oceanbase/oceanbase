@@ -708,6 +708,8 @@ int ObLogGroupBy::compute_one_row_info()
   int ret = OB_SUCCESS;
   if (group_exprs_.empty() && rollup_exprs_.empty()) {
     set_is_at_most_one_row(true);
+  } else if (has_rollup()) {
+    set_is_at_most_one_row(false);
   } else if (OB_FAIL(ObLogicalOperator::compute_one_row_info())) {
     LOG_WARN("failed to compute one row info", K(ret));
   } else { /*do nothing*/ }

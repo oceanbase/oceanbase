@@ -280,8 +280,6 @@ int ObLSTabletService::safe_to_destroy(bool &is_safe)
 {
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  bool all_table_released = false;
-  bool all_tablet_released = false;
   is_safe = true;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -305,19 +303,12 @@ int ObLSTabletService::safe_to_destroy(bool &is_safe)
       mds_table_mgr_.destroy();
     }
     if (is_safe) {
-      if (OB_FAIL(t3m->gc_tablets_in_queue(all_tablet_released))) {
-        LOG_WARN("failed to check all tablet released", K(ret));
+       bool is_wait_gc = false;
+      if (OB_FAIL(t3m->has_meta_wait_gc(is_wait_gc))) {
+        LOG_WARN("failed to check has_meta_wait_gc", K(ret));
         is_safe = false;
       } else {
-        is_safe = all_tablet_released;
-      }
-    }
-    if (is_safe) {
-      if (OB_FAIL(t3m->gc_tables_in_queue(all_table_released))) {
-        LOG_WARN("failed to check all table released", K(ret));
-        is_safe = false;
-      } else {
-        is_safe = all_table_released;
+        is_safe = !is_wait_gc;
       }
     }
   }
@@ -1614,7 +1605,10 @@ int ObLSTabletService::update_tablet_restore_status(
     } else if (restore_status == ObTabletRestoreStatus::UNDEFINED
                && OB_FALSE_IT((void)tablet->tablet_meta_.reset_transfer_table())) {
     } else {
-      if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*tablet, new_tablet_handle))) {
+      // TODO(jiahua.cjh) move check valid to tablet init after generate new version tablet.
+      if (OB_FAIL(tablet->check_valid())) {
+        LOG_WARN("failed to check tablet valid", K(ret), K(restore_status), KPC(tablet));
+      } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*tablet, new_tablet_handle))) {
         LOG_WARN("fail to persist and transform tablet", K(ret), KPC(tablet), K(new_tablet_handle));
       } else if (FALSE_IT(time_guard.click("Persist"))) {
       } else if (FALSE_IT(disk_addr = new_tablet_handle.get_obj()->tablet_addr_)) {

@@ -562,13 +562,16 @@ int ObTmpMacroBlock::get_wash_io_info(ObTmpBlockIOInfo &info)
   return ret;
 }
 
-int ObTmpMacroBlock::give_back_buf_into_cache()
+int ObTmpMacroBlock::give_back_buf_into_cache(const bool is_wash)
 {
   int ret = OB_SUCCESS;
   ObTmpBlockCacheKey key(tmp_file_header_.block_id_, tmp_file_header_.tenant_id_);
   SpinWLockGuard guard(lock_);
   if (OB_FAIL(ObTmpBlockCache::get_instance().put_block(key, handle_))) {
     STORAGE_LOG(WARN, "fail to put block into block cache", K(ret), K(key));
+  // set block status disked in lock_ to avoid concurrency issues.
+  } else if (is_wash && OB_FAIL(check_and_set_status(BlockStatus::WASHING, BlockStatus::DISKED))) {
+    STORAGE_LOG(WARN, "fail to check and set status", K(ret), K(key));
   }
   return ret;
 }
@@ -1158,8 +1161,7 @@ int ObTmpTenantFileStore::alloc_macro_block(const int64_t dir_id, const uint64_t
     ret = OB_SIZE_OVERFLOW;
     STORAGE_LOG(WARN, "mem block is full", K(ret), K(tenant_id), K(dir_id));
   } else if (OB_FAIL(tmp_block_manager_.alloc_macro_block(dir_id, tenant_id, t_mblk))) {
-    STORAGE_LOG(WARN, "cannot allocate a tmp macro block", K(ret), K(dir_id),
-        K(tenant_id));
+    STORAGE_LOG(WARN, "cannot allocate a tmp macro block", K(ret), K(dir_id), K(tenant_id));
   } else if (OB_ISNULL(t_mblk)) {
     ret = OB_ERR_NULL_VALUE;
     STORAGE_LOG(WARN, "block is null", K(ret));
@@ -1349,9 +1351,8 @@ int ObTmpTenantFileStore::write(const ObTmpBlockIOInfo &io_info)
   } else {
     // Skip washing and disked status
     // Won't change io_info for retry alloc block.
-    ret = OB_NOT_SUPPORTED;
-    STORAGE_LOG(WARN, "fail to write tmp block, because of not support update-in-place",
-        K(ret), K(io_info));
+    ret = OB_EAGAIN;
+    STORAGE_LOG(WARN, "block status is not correct", K(ret), K(io_info));
   }
   return ret;
 }

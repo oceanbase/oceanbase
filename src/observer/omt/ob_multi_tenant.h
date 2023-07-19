@@ -112,8 +112,8 @@ public:
   int update_tenant_memory(const uint64_t tenant_id, const int64_t mem_limit, int64_t &allowed_mem_limit);
   int update_tenant_memory(const share::ObUnitInfoGetter::ObTenantConfig &unit);
   int update_tenant_log_disk_size(const uint64_t tenant_id,
-                                  const int64_t expected_log_disk_size,
                                   const int64_t old_log_disk_size,
+                                  const int64_t new_log_disk_size,
                                   int64_t &allowed_log_disk_size);
   int modify_tenant_io(const uint64_t tenant_id, const share::ObUnitConfig &unit_config);
   int update_tenant_config(uint64_t tenant_id);

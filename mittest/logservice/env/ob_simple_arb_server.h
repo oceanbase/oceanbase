@@ -171,6 +171,8 @@ public:
     }
     return ret;
   }
+  int update_server_log_disk(const int64_t log_disk_size)
+    {return OB_SUCCESS;}
 public:
   int simple_init(const std::string &cluster_name,
                   const common::ObAddr &addr,

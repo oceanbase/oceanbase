@@ -37,27 +37,27 @@ using namespace logservice;
 namespace unittest
 {
 class TestObSimpleLogDiskMgr : public ObSimpleLogClusterTestEnv
-{
-public:
-  TestObSimpleLogDiskMgr() : ObSimpleLogClusterTestEnv()
   {
-    int ret = init();
-    if (OB_SUCCESS != ret) {
-      throw std::runtime_error("TestObSimpleLogDiskMgr init failed");
+  public:
+    TestObSimpleLogDiskMgr() : ObSimpleLogClusterTestEnv()
+    {
+      int ret = init();
+      if (OB_SUCCESS != ret) {
+        throw std::runtime_error("TestObSimpleLogDiskMgr init failed");
+      }
     }
-  }
-  ~TestObSimpleLogDiskMgr()
-  {
-    destroy();
-  }
-  int init()
-  {
-    return OB_SUCCESS;
-  }
-  void destroy()
-  {}
-  int64_t id_;
-};
+    ~TestObSimpleLogDiskMgr()
+    {
+      destroy();
+    }
+    int init()
+    {
+      return OB_SUCCESS;
+    }
+    void destroy()
+    {}
+    int64_t id_;
+  };
 
 int64_t ObSimpleLogClusterTestBase::member_cnt_ = 1;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 1;
@@ -66,6 +66,8 @@ bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
 
 TEST_F(TestObSimpleLogDiskMgr, out_of_disk_space)
 {
+  update_server_log_disk(10*1024*1024*1024ul);
+  update_disk_options(10*1024*1024*1024ul/palf::PALF_PHY_BLOCK_SIZE);
   SET_CASE_LOG_FILE(TEST_NAME, "out_of_disk_space");
   int64_t id = ATOMIC_AAF(&palf_id_, 1);
   int server_idx = 0;
@@ -117,7 +119,8 @@ TEST_F(TestObSimpleLogDiskMgr, update_disk_options_basic)
             palf_env->palf_env_impl_.disk_options_wrapper_.status_);
   EXPECT_EQ(palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_recycling_blocks_.log_disk_usage_limit_size_,
             20*PALF_PHY_BLOCK_SIZE);
-  // 可以在上一次为缩容完成之前，可以继续缩容
+
+  // case1: 在上一次未缩容完成之前，可以继续缩容
   EXPECT_EQ(OB_SUCCESS, update_disk_options(leader_idx, 10));
   usleep(1000*1000+palf::BlockGCTimerTask::BLOCK_GC_TIMER_INTERVAL_MS);
   EXPECT_EQ(PalfDiskOptionsWrapper::Status::SHRINKING_STATUS,
@@ -130,8 +133,7 @@ TEST_F(TestObSimpleLogDiskMgr, update_disk_options_basic)
     EXPECT_EQ(OB_SUCCESS, get_disk_options(leader_idx, opts));
     EXPECT_EQ(opts.log_disk_usage_limit_size_, 10*1024*1024*1024ul);
   }
-  // 可以在上一次未缩容完成之前，可以继续扩容, 同时由于扩容后日志盘依旧小于第一次缩容
-  // ，因此依旧处于缩容状态.
+  // case2: 在上一次未缩容完成之前，可以继续扩容, 同时由于扩容后日志盘依旧小于第一次缩容，因此依旧处于缩容状态.
   EXPECT_EQ(OB_SUCCESS, update_disk_options(leader_idx, 11));
   usleep(1000*1000+palf::BlockGCTimerTask::BLOCK_GC_TIMER_INTERVAL_MS);
   EXPECT_EQ(PalfDiskOptionsWrapper::Status::SHRINKING_STATUS,
@@ -169,6 +171,37 @@ TEST_F(TestObSimpleLogDiskMgr, update_disk_options_basic)
     EXPECT_EQ(OB_SUCCESS, get_disk_options(leader_idx, opts));
     EXPECT_EQ(opts.log_disk_usage_limit_size_, 11*PALF_PHY_BLOCK_SIZE);
   }
+}
+
+TEST_F(TestObSimpleLogDiskMgr, shrink_log_disk)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "shrink_log_disk");
+  OB_LOGGER.set_log_level("INFO");
+  // 验证缩容由于单日志流最少需要512MB日志盘失败
+  // 保证能同时容纳两个日志流
+  PalfEnv *palf_env = NULL;
+  int64_t leader_idx = 0;
+  PalfHandleImplGuard leader;
+  share::SCN create_scn = share::SCN::base_scn();
+  int server_idx = 0;
+  EXPECT_EQ(OB_SUCCESS, get_palf_env(server_idx, palf_env));
+  EXPECT_EQ(OB_SUCCESS, update_disk_options(16));
+  EXPECT_EQ(PalfDiskOptionsWrapper::Status::NORMAL_STATUS,
+            palf_env->palf_env_impl_.disk_options_wrapper_.status_);
+  EXPECT_EQ(palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_usage_limit_size_,
+            16*PALF_PHY_BLOCK_SIZE);
+  int64_t tmp_id1 = ATOMIC_AAF(&palf_id_, 1);
+  {
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group(tmp_id1, leader_idx, leader));
+  }
+  int64_t tmp_id2 = ATOMIC_AAF(&palf_id_, 1);
+  {
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group(tmp_id2, leader_idx, leader));
+  }
+  EXPECT_EQ(OB_NOT_SUPPORTED, update_disk_options(9));
+  EXPECT_EQ(OB_SUCCESS, delete_paxos_group(tmp_id1));
 }
 
 TEST_F(TestObSimpleLogDiskMgr, update_disk_options_restart)

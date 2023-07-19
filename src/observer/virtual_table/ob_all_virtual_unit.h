@@ -53,7 +53,8 @@ public:
   virtual int inner_open();
   virtual void reset();
   virtual int inner_get_next_row(common::ObNewRow *&row);
-
+private:
+  int get_clog_disk_used_size_(const uint64_t tenant_id, int64_t &log_used_size);
 private:
   char ip_buf_[common::OB_IP_STR_BUFF];
   common::ObAddr addr_;

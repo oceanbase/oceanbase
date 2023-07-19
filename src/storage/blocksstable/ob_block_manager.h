@@ -408,7 +408,11 @@ private:
   class MarkBlockTask : public common::ObTimerTask
   {
   public:
-    MarkBlockTask(ObBlockManager &blk_mgr) : blk_mgr_(blk_mgr) {}
+    MarkBlockTask(ObBlockManager &blk_mgr)
+        : blk_mgr_(blk_mgr)
+    {
+      disable_timeout_check();
+    }
     virtual ~MarkBlockTask() = default;
     virtual void runTimerTask() override;
 

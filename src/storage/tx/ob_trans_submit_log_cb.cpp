@@ -134,42 +134,31 @@ bool ObTxLogCb::is_valid() const
   return cb_arg_array_.count() > 0;
 }
 
-void ObTxLogCb::check_warn_() const
-{
-  const int64_t used_time = ObClockGenerator::getRealClock() - get_submit_ts();
-  if (used_time >= ObServerConfig::get_instance().clog_sync_time_warn_threshold) {
-    TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "transaction log sync use too much time", K(*this), K(used_time));
-  }
-}
-
 int ObTxLogCb::on_success()
 {
   int ret = OB_SUCCESS;
   const ObTransID tx_id = trans_id_;
-  #ifndef NDEBUG
-  TRANS_LOG(INFO, "before ObTxLogCb::on_success", K(*this));
-  #endif
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "ObTxLogCb not inited", K(ret));
   } else if (NULL == ctx_) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "ctx is null", K(ret), K(trans_id_), KP(ctx_));
+    TRANS_LOG(ERROR, "ctx is null", K(ret), K(tx_id), KP(ctx_));
   } else {
     // make sure set log type to log callback successfully
     ctx_->test_lock(this);
     if (cb_arg_array_.count() == 0) {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(trans_id_), KP(ctx_));
+      TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(tx_id), KP(ctx_));
       ctx_->print_trace_log();
     } else {
-      TRANS_LOG(DEBUG, "get last log type success", K(trans_id_));
+      TRANS_LOG(DEBUG, "get last log type success", K(tx_id));
       // TODO. iterate all log type
       ObPartTransCtx *part_ctx = static_cast<ObPartTransCtx *>(ctx_);
 
       if (OB_FAIL(part_ctx->on_success(this))) {
-        TRANS_LOG(WARN, "sync log success callback error", K(ret), K(trans_id_));
+        TRANS_LOG(WARN, "sync log success callback error", K(ret), K(tx_id));
       }
     }
   }
@@ -194,12 +183,12 @@ int ObTxLogCb::on_failure()
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "cb arg array is empty", K(ret));
     } else {
-      TRANS_LOG(DEBUG, "get last log type success", K(trans_id_));
+      TRANS_LOG(DEBUG, "get last log type success", K(tx_id));
       // TODO. iterate all log type
       ObPartTransCtx *part_ctx = static_cast<ObPartTransCtx *>(ctx_);
 
       if (OB_FAIL(part_ctx->on_failure(this))) {
-        TRANS_LOG(WARN, "sync log success callback error", KR(ret), K(trans_id_));
+        TRANS_LOG(WARN, "sync log success callback error", KR(ret), K(tx_id));
       }
     }
   }
@@ -221,8 +210,9 @@ int ObTxLogCb::copy(const ObTxLogCb &other)
   is_callbacked_ = other.is_callbacked_;
 
   // without txdata
-  mds_range_ = other.mds_range_;
-  if (OB_FAIL(cb_arg_array_.assign(other.cb_arg_array_))) {
+  if (OB_FAIL(mds_range_.assign(other.mds_range_))) {
+    TRANS_LOG(WARN, "assign mds range failed", K(ret), KPC(this));
+  } else if (OB_FAIL(cb_arg_array_.assign(other.cb_arg_array_))) {
     TRANS_LOG(WARN, "assign cb_arg_array_ failed", K(ret), KPC(this));
   }
   first_part_scn_ = other.first_part_scn_;

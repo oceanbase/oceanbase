@@ -36,7 +36,8 @@ namespace logfetcher
   if (OB_TIMEOUT == arg \
   || OB_TENANT_NOT_EXIST == arg \
   || OB_TENANT_NOT_IN_SERVER == arg \
-  || OB_IN_STOP_STATE == arg) \
+  || OB_IN_STOP_STATE == arg \
+  || OB_SERVER_IS_INIT == arg) \
 
 int64_t FetchStream::g_rpc_timeout = ObLogFetcherConfig::default_fetch_log_rpc_timeout_sec * _SEC_;
 int64_t FetchStream::g_dml_progress_limit = ObLogFetcherConfig::default_progress_limit_sec_for_dml * _SEC_;
@@ -1301,7 +1302,9 @@ bool FetchStream::need_add_into_blacklist_(const KickOutReason reason)
 {
   bool bool_ret = false;
 
-  if ((NEED_SWITCH_SERVER == reason) || (DISCARDED == reason)) {
+  if ((NEED_SWITCH_SERVER == reason) ||
+      (DISCARDED == reason) ||
+      (ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF == reason)) {
     bool_ret = false;
   } else {
     bool_ret = true;
@@ -1468,6 +1471,10 @@ KickOutReason FetchStream::get_feedback_reason_(const Feedback &feedback) const
 
     case ObCdcLSFetchLogResp::LS_OFFLINED:
       reason = LS_OFFLINED;
+      break;
+
+    case ObCdcLSFetchLogResp::ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF:
+      reason = ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF;
       break;
 
     default:

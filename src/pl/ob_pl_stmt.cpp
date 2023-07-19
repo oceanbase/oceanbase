@@ -1514,7 +1514,8 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
             LOG_WARN("get package id failed", K(ret));
           } else if (OB_INVALID_ID == package_id
                     && (OB_INVALID_INDEX == parent_id
-                        || is_oracle_sys_database_id(parent_id))) {
+                        || is_oracle_sys_database_id(parent_id)
+                        || is_oceanbase_sys_database_id(parent_id))) {
             if (OB_FAIL(schema_guard.get_package_id(OB_SYS_TENANT_ID,
                                                     OB_SYS_DATABASE_ID,
                                                     name,

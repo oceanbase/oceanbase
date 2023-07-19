@@ -42,6 +42,9 @@ enum KickOutReason
 
   NEED_SWITCH_SERVER           = 10,  // There is a higher priority server that actively switch
   DISCARDED                    = 11,  // Partition is discard
+
+  // Feedback
+  ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF        = 12,  //same as ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF
 };
 const char *print_switch_reason(const KickOutReason reason);
 

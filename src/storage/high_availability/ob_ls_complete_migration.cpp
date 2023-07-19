@@ -1113,13 +1113,17 @@ int ObStartCompleteMigrationTask::wait_transfer_table_replace_()
   ObLS *ls = nullptr;
   const int64_t check_all_tablet_start_ts = ObTimeUtility::current_time();
   const bool need_initial_state = false;
-
+  bool need_wait_transfer_table_replace = false;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start complete migration task do not init", K(ret));
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to change member list", K(ret), KP(ls));
+  } else if (OB_FAIL(check_need_wait_transfer_table_replace_(ls, need_wait_transfer_table_replace))) {
+    LOG_WARN("failed to check need wait transfer table replace", K(ret), KPC(ctx_));
+  } else if (!need_wait_transfer_table_replace) {
+    LOG_INFO("no need wait transfer table replace", KPC(ls));
   } else {
     SERVER_EVENT_ADD("storage_ha", "wait_transfer_table_replace",
                   "tenant_id", ctx_->tenant_id_,
@@ -1413,6 +1417,27 @@ int ObStartCompleteMigrationTask::check_need_wait_(
         && ObReplicaTypeCheck::is_full_replica(ctx_->arg_.dst_.get_replica_type())) {
       need_wait = true;
     }
+  }
+  return ret;
+}
+
+int ObStartCompleteMigrationTask::check_need_wait_transfer_table_replace_(
+    ObLS *ls,
+    bool &need_wait)
+{
+  int ret = OB_SUCCESS;
+  ObLSRestoreStatus ls_restore_status;
+  need_wait = true;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("start complete migration task do not init", K(ret));
+  } else if (OB_ISNULL(ls)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check need wait log sync get invalid argument", K(ret), KP(ls));
+  } else if (OB_FAIL(ls->get_restore_status(ls_restore_status))) {
+    LOG_WARN("failed to get restore status", K(ret), KPC(ctx_));
+  } else if (ls_restore_status.is_in_restore_and_before_quick_restore()) {
+    need_wait = false;
   }
   return ret;
 }

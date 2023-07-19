@@ -1177,25 +1177,26 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
 }
 
 int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
-    ObLSHandle &ls_handle,
+    const share::ObLSID &ls_id,
     const ObITable::TableKey &table_key,
     const uint64_t table_id,
     const int64_t execution_id,
     const int64_t ddl_task_id)
 {
   int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
   ObDDLKvMgrHandle ddl_kv_mgr_handle;
   const ObTabletID &tablet_id = table_key.tablet_id_;
   ObLS *ls = nullptr;
-  ObLSID ls_id;
   SCN ddl_start_scn = get_start_scn();
   SCN commit_scn = SCN::min_scn();
   bool is_remote_write = false;
-  if (OB_ISNULL(ls = ls_handle.get_ls()) || OB_UNLIKELY(!table_key.is_valid())) {
+  if (OB_UNLIKELY(!ls_id.is_valid() || !table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid ls", K(ret), K(table_key));
-  } else if (OB_FALSE_IT(ls_id = ls->get_ls_id())) {
+    LOG_WARN("invalid ls", K(ret), K(ls_id), K(table_key));
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("get ls failed", K(ret), K(ls_id));
   } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id, tablet_handle))) {
     LOG_WARN("get tablet failed", K(ret));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {

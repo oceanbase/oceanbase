@@ -1266,7 +1266,7 @@ int ObTmpTenantMemBlockManager::get_block_and_set_washing(int64_t block_id, ObTm
   hash_val = murmurhash(&block_id, sizeof(block_id), hash_val);
   ObBucketHashRLockGuard lock_guard(map_lock_, hash_val);
   if (OB_FAIL(t_mblk_map_.get_refactored(block_id, m_blk))) {
-    STORAGE_LOG(WARN, "tenant mem block manager get block failed", K(ret), K(block_id));
+    STORAGE_LOG(DEBUG, "tenant mem block manager get block failed", K(ret), K(block_id));
   }  else if (OB_ISNULL(m_blk)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "the block is null", K(ret), K(*m_blk));
@@ -1280,6 +1280,8 @@ int ObTmpTenantMemBlockManager::get_block_and_set_washing(int64_t block_id, ObTm
     if (OB_FAIL(refresh_dir_to_blk_map(m_blk->get_dir_id(), m_blk))) {
       STORAGE_LOG(WARN, "fail to refresh dir_to_blk_map", K(ret), K(*m_blk));
     }
+    // refresh ret can be ignored. overwrite the ret.
+    ret = OB_STATE_NOT_MATCH;
   } else if (OB_FAIL(m_blk->close(is_closed))) {
     STORAGE_LOG(WARN, "fail to close block", K(ret), K(*m_blk));
   } else if (!is_closed) {
@@ -1332,13 +1334,23 @@ int ObTmpTenantMemBlockManager::wash_block(const int64_t block_id, ObIOWaitInfoH
       STORAGE_LOG(WARN, "fail to set block into write_handles_map", K(ret), "block_id", m_blk->get_block_id());
     } else if (OB_FAIL(wait_info_queue_.push(wait_info))) {
       STORAGE_LOG(WARN, "fail to push back into write_handles", K(ret), K(wait_info));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(wait_handles_map_.erase_refactored(m_blk->get_block_id()))) {
+        STORAGE_LOG(WARN, "fail to erase block from wait handles map", K(tmp_ret), K(m_blk->get_block_id()));
+      }
     } else {
       ATOMIC_INC(&washing_count_);
     }
-  }
-  if (OB_FAIL(ret) && OB_NOT_NULL(m_blk)) {
-    m_blk->check_and_set_status(ObTmpMacroBlock::BlockStatus::WASHING,
-                                ObTmpMacroBlock::BlockStatus::MEMORY);
+    if (OB_FAIL(ret) && OB_NOT_NULL(m_blk)) {
+      mb_handle.reset();
+      if (OB_NOT_NULL(wait_info)) {
+        wait_info->~IOWaitInfo();
+        allocator_->free(wait_info);
+        wait_info = nullptr;
+      }
+      m_blk->check_and_set_status(ObTmpMacroBlock::BlockStatus::WASHING,
+                                  ObTmpMacroBlock::BlockStatus::MEMORY);
+    }
   }
   return ret;
 }
@@ -1399,6 +1411,21 @@ int64_t ObTmpTenantMemBlockManager::get_tenant_mem_block_num()
   return tenant_mem_block_num;
 }
 
+int ObTmpTenantMemBlockManager::erase_block_from_map(const int64_t block_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(t_mblk_map_.erase_refactored(block_id))) {
+    STORAGE_LOG(WARN, "fail to erase t_mblk_map", K(ret), K(block_id));
+  }
+
+  int tmp_ret = ret;
+  if (OB_FAIL(wait_handles_map_.erase_refactored(block_id))) {
+    STORAGE_LOG(WARN, "fail to erase wait handles map", K(ret), K(block_id));
+  }
+  // need erase block_id from both map, return the error if not OB_SUCCESS
+  return OB_SUCCESS == tmp_ret ? ret : tmp_ret;
+}
+
 int ObTmpTenantMemBlockManager::exec_wait()
 {
   int ret = OB_SUCCESS;
@@ -1424,49 +1451,47 @@ int ObTmpTenantMemBlockManager::exec_wait()
         STORAGE_LOG(WARN, "fail to exec iohandle wait", K(ret), K_(tenant_id));
       } else if (FALSE_IT(wait_info->reset_io())) {
       } else {
+        bool need_rollback = true;
         ObTmpMacroBlock &blk = wait_info->get_block();
+        const int64_t block_id = blk.get_block_id();
+        STORAGE_LOG(INFO, "start to wash a block", KPC(&blk));
         ObThreadCondGuard cond_guard(cond_);
         if (OB_FAIL(cond_guard.get_ret())) {
           STORAGE_LOG(ERROR, "fail to guard request condition", K(ret));
-        } else if (OB_FAIL(t_mblk_map_.erase_refactored(blk.get_block_id()))) {
-          STORAGE_LOG(WARN, "fail to erase t_mblk_map", K(ret));
-        } else if (OB_FAIL(wait_handles_map_.erase_refactored(blk.get_block_id()))) {
-          STORAGE_LOG(WARN, "fail to erase t_mblk_map", K(ret));
-        } else if (OB_FAIL(blk.check_and_set_status(ObTmpMacroBlock::BlockStatus::WASHING,
-                                        ObTmpMacroBlock::BlockStatus::DISKED))) {
-          STORAGE_LOG(WARN, "set block status failed", K(ret), K(blk.get_block_id()));
-        } else if (OB_FAIL(blk.give_back_buf_into_cache())) {
-          STORAGE_LOG(WARN, "fail to put tmp block cache", K(ret), K_(tenant_id));
+        } else if (OB_FAIL(erase_block_from_map(block_id))) {
+          STORAGE_LOG(WARN, "fail to erase t_mblk_map", K(ret), K(block_id));
+        } else if (OB_FAIL(blk.give_back_buf_into_cache(true/*set block disked for washed block*/))) {
+          STORAGE_LOG(WARN, "fail to give back buf into cache", K(ret), K(block_id));
+        } else if (FALSE_IT(need_rollback = false)) {
         } else if (OB_FAIL(wait_info->broadcast())) {
-          STORAGE_LOG(ERROR, "signal io request condition failed", K(ret), K(blk.get_block_id()));
+          STORAGE_LOG(ERROR, "signal io request condition failed", K(ret), K(block_id));
         } else if (FALSE_IT(OB_TMP_FILE_STORE.dec_block_cache_num(tenant_id_, 1))) {
         } else {
           ObTaskController::get().allow_next_syslog();
-          STORAGE_LOG(INFO, "succeed to wash a block", K(blk), K(t_mblk_map_.size()));
+          STORAGE_LOG(INFO, "succeed to wash a block", K(block_id), K(t_mblk_map_.size()));
           ATOMIC_DEC(&washing_count_);
         }
 
-        if (OB_FAIL(ret)) {
-          STORAGE_LOG(WARN, "fail to wash a block", K(blk));
+        if (OB_FAIL(ret) && need_rollback) {
+          STORAGE_LOG(WARN, "fail to wash a block, need rollback", K(ret), K(blk));
           int tmp_ret = OB_SUCCESS;
           blk.set_block_status(ObTmpMacroBlock::BlockStatus::MEMORY);
-          if (OB_SUCCESS != (tmp_ret = t_mblk_map_.set_refactored(blk.get_block_id(), &blk, 1/*overwrite*/))) {
-            STORAGE_LOG(INFO, "fail to retry wash block", K(tmp_ret), K(blk), K(t_mblk_map_.size()));
-          } else if (OB_SUCCESS != (tmp_ret = dir_to_blk_map_.set_refactored(
-                      blk.get_dir_id(), blk.get_block_id(), 1/*overwrite*/))) {
-            STORAGE_LOG(INFO, "fail to set dir to blk map", K(tmp_ret), K(blk), K(dir_to_blk_map_.size()));
+          if (OB_SUCCESS != (tmp_ret = t_mblk_map_.set_refactored(block_id, &blk, 1/*overwrite*/))) {
+            STORAGE_LOG(INFO, "fail to retry wash block", K(tmp_ret), K(block_id), K(t_mblk_map_.size()));
           } else {
             ret = OB_SUCCESS;
           }
         }
         if (OB_SUCC(ret) && OB_FAIL(cond_.broadcast())) {
-          STORAGE_LOG(ERROR, "signal wash condition failed", K(ret), K(blk.get_block_id()));
+          STORAGE_LOG(ERROR, "signal wash condition failed", K(ret), K(block_id));
         }
       }
     }
     // no wait handle to process.
-    if (OB_EAGAIN != ret) {
-      STORAGE_LOG(ERROR, "unexpected error", K(ret));
+    if (OB_FAIL(ret)) {
+      if (OB_EAGAIN != ret) {
+        STORAGE_LOG(ERROR, "unexpected error", K(ret));
+      }
     }
   }
   return ret;
@@ -1512,7 +1537,7 @@ int ObTmpTenantMemBlockManager::wait_write_finish(const int64_t block_id, const 
     }
   } else {
     bool is_found = false;
-    while (OB_SUCC(ret) && blk->is_washing()) {
+    while (OB_SUCC(ret) && blk->is_washing() && !is_found) {
       if (OB_FAIL(wait_handles_map_.get_refactored(block_id, handle))) {
         if (OB_HASH_NOT_EXIST == ret) {
           ret = OB_SUCCESS;

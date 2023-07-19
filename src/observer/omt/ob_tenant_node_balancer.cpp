@@ -460,11 +460,16 @@ int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits &old_tenants
     if (!found) {
       ObTenant *tenant = nullptr;
       MTL_SWITCH(tenant_config.tenant_id_) {
-        if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->check_all_meta_mem_released(*MTL(ObLSService *),
-            is_released, "[DELETE_TENANT]"))) {
+        if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->check_all_meta_mem_released(is_released, "[DELETE_TENANT]"))) {
           LOG_WARN("fail to check_all_meta_mem_released", K(ret), K(tenant_config));
         } else if (!is_released) {
-          // can not release now. do nothing
+          // can not release now. dump some debug info
+          const uint64_t interval = 180 * 1000 * 1000; // 180s
+          if (!is_released && REACH_TIME_INTERVAL(interval)) {
+            MTL(ObTenantMetaMemMgr*)->dump_tablet_info();
+            MTL(ObLSService *)->dump_ls_info();
+            PRINT_OBJ_LEAK(MTL_ID(), share::LEAK_CHECK_OBJ_MAX_NUM);
+          }
         } else {
           // check ls service safe to destroy.
           is_released = MTL(ObLSService *)->safe_to_destroy();

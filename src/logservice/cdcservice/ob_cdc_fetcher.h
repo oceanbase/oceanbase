@@ -27,6 +27,10 @@
 
 namespace oceanbase
 {
+namespace logservice
+{
+class ObLogExternalStorageHandler;
+}
 namespace cdc
 {
 using oceanbase::storage::ObLSService;
@@ -48,7 +52,8 @@ public:
   ~ObCdcFetcher();
   int init(const uint64_t tenant_id,
       ObLSService *ls_service,
-      archive::LargeBufferPool *buffer_pool);
+      archive::LargeBufferPool *buffer_pool,
+      logservice::ObLogExternalStorageHandler *log_ext_handler);
   void destroy();
 
 public:
@@ -201,6 +206,7 @@ private:
   uint64_t           tenant_id_;
   ObLSService        *ls_service_;
   archive::LargeBufferPool *large_buffer_pool_;
+  logservice::ObLogExternalStorageHandler *log_ext_handler_;
 };
 
 // Some parameters and status during Fetch execution

@@ -120,13 +120,14 @@ LogSlidingWindow::LogSlidingWindow()
     last_rebuild_lsn_(),
     last_record_end_lsn_(PALF_INITIAL_LSN_VAL),
     fs_cb_cost_stat_("[PALF STAT FS CB]", PALF_STAT_PRINT_INTERVAL_US),
-    log_life_time_stat_("[PALF STAT LOG LIFETIME]", PALF_STAT_PRINT_INTERVAL_US),
-    log_gen_to_freeze_cost_stat_("PALF STAT LOG GEN_TO_FREEZE COST TIME", PALF_STAT_PRINT_INTERVAL_US),
-    log_gen_to_submit_cost_stat_("PALF STAT LOG GEN_TO_SUBMIT COST TIME", PALF_STAT_PRINT_INTERVAL_US),
-    log_submit_to_first_ack_cost_stat_("PALF STAT LOG SUBMIT_TO_FIRST_ACK COST TIME", PALF_STAT_PRINT_INTERVAL_US),
-    log_submit_to_flush_cost_stat_("PALF STAT LOG SUBMIT_TO_FLUSH COST TIME", PALF_STAT_PRINT_INTERVAL_US),
-    log_submit_to_commit_cost_stat_("PALF STAT LOG SUBMIT_TO_COMMIT COST TIME", PALF_STAT_PRINT_INTERVAL_US),
-    log_submit_to_slide_cost_stat_("[PALF STAT LOG SUBMIT_TO_SLIDE COST TIME]", PALF_STAT_PRINT_INTERVAL_US),
+    log_life_time_stat_("[PALF STAT LOG LIFE TIME]", PALF_STAT_PRINT_INTERVAL_US),
+    accum_slide_log_cnt_(0),
+    accum_log_gen_to_freeze_cost_(0),
+    accum_log_gen_to_submit_cost_(0),
+    accum_log_submit_to_flush_cost_(0),
+    accum_log_submit_to_first_ack_cost_(0),
+    accum_log_submit_to_commit_cost_(0),
+    accum_log_submit_to_slide_cost_(0),
     group_log_stat_time_us_(OB_INVALID_TIMESTAMP),
     accum_log_cnt_(0),
     accum_group_log_size_(0),
@@ -267,12 +268,6 @@ int LogSlidingWindow::init(const int64_t palf_id,
     PALF_REPORT_INFO_KV(K_(palf_id));
     fs_cb_cost_stat_.set_extra_info(EXTRA_INFOS);
     log_life_time_stat_.set_extra_info(EXTRA_INFOS);
-    log_gen_to_freeze_cost_stat_.set_extra_info(EXTRA_INFOS);
-    log_gen_to_submit_cost_stat_.set_extra_info(EXTRA_INFOS);
-    log_submit_to_first_ack_cost_stat_.set_extra_info(EXTRA_INFOS);
-    log_submit_to_flush_cost_stat_.set_extra_info(EXTRA_INFOS);
-    log_submit_to_commit_cost_stat_.set_extra_info(EXTRA_INFOS);
-    log_submit_to_slide_cost_stat_.set_extra_info(EXTRA_INFOS);
 
     is_inited_ = true;
     LogGroupEntryHeader group_header;
@@ -2189,19 +2184,36 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
 
         const int64_t log_life_time = fs_cb_begin_ts - log_gen_ts;
         log_life_time_stat_.stat(log_life_time);
-        // When role is follower, the freeze state takes effect immediately and we do not need to stat it.
-        log_gen_to_freeze_cost_stat_.stat(log_freeze_ts - log_gen_ts);
-        log_gen_to_submit_cost_stat_.stat(log_submit_ts - log_gen_ts);
-        log_submit_to_flush_cost_stat_.stat(log_flush_ts - log_submit_ts);
+
         // Concurrency problem
         // The first_ack_ts and committed_ts of log_task may havn't been updated when they were slided from sw.
-        if (OB_INVALID_TIMESTAMP != log_first_ack_ts) {
-          log_submit_to_first_ack_cost_stat_.stat(log_first_ack_ts - log_submit_ts);
+        if (OB_INVALID_TIMESTAMP != log_first_ack_ts && OB_INVALID_TIMESTAMP != log_commit_ts) {
+          const int64_t total_slide_log_cnt = ATOMIC_AAF(&accum_slide_log_cnt_, 1);
+          const int64_t total_log_gen_to_freeze_cost = ATOMIC_AAF(&accum_log_gen_to_freeze_cost_, log_freeze_ts - log_gen_ts);
+          const int64_t total_log_gen_to_submit_cost = ATOMIC_AAF(&accum_log_gen_to_submit_cost_, log_submit_ts - log_gen_ts);
+          const int64_t total_log_submit_to_flush_cost = ATOMIC_AAF(&accum_log_submit_to_flush_cost_, log_flush_ts - log_submit_ts);
+          const int64_t total_log_submit_to_first_ack_cost = ATOMIC_AAF(&accum_log_submit_to_first_ack_cost_, log_first_ack_ts - log_submit_ts);
+          const int64_t total_log_submit_to_commit_cost = ATOMIC_AAF(&accum_log_submit_to_commit_cost_, log_commit_ts - log_submit_ts);
+          const int64_t total_log_submit_to_slide_cost = ATOMIC_AAF(&accum_log_submit_to_slide_cost_, fs_cb_begin_ts - log_submit_ts);
+          if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, log_slide_stat_time_)) {
+            const int64_t avg_log_gen_to_freeze_time = total_log_gen_to_freeze_cost / total_slide_log_cnt;
+            const int64_t avg_log_gen_to_submit_time = total_log_gen_to_submit_cost / total_slide_log_cnt;
+            const int64_t avg_log_submit_to_flush_time = total_log_submit_to_flush_cost / total_slide_log_cnt;
+            const int64_t avg_log_submit_to_first_ack_time = total_log_submit_to_first_ack_cost / total_slide_log_cnt;
+            const int64_t avg_log_submit_to_commit_time = total_log_submit_to_commit_cost / total_slide_log_cnt;
+            const int64_t avg_log_submit_to_slide_time = total_log_submit_to_slide_cost / total_slide_log_cnt;
+            PALF_LOG(INFO, "[PALF STAT LOG TASK TIME]", K_(palf_id), K_(self), K(total_slide_log_cnt),
+                K(avg_log_gen_to_freeze_time), K(avg_log_gen_to_submit_time), K(avg_log_submit_to_flush_time),
+                K(avg_log_submit_to_first_ack_time), K(avg_log_submit_to_commit_time), K(avg_log_submit_to_slide_time));
+            ATOMIC_STORE(&accum_slide_log_cnt_, 0);
+            ATOMIC_STORE(&accum_log_gen_to_freeze_cost_, 0);
+            ATOMIC_STORE(&accum_log_gen_to_submit_cost_, 0);
+            ATOMIC_STORE(&accum_log_submit_to_flush_cost_, 0);
+            ATOMIC_STORE(&accum_log_submit_to_first_ack_cost_, 0);
+            ATOMIC_STORE(&accum_log_submit_to_commit_cost_, 0);
+            ATOMIC_STORE(&accum_log_submit_to_slide_cost_, 0);
+          }
         }
-        if (OB_INVALID_TIMESTAMP != log_commit_ts) {
-          log_submit_to_commit_cost_stat_.stat(log_commit_ts - log_submit_ts);
-        }
-        log_submit_to_slide_cost_stat_.stat(fs_cb_begin_ts - log_submit_ts);
 
         if (log_life_time > 100 * 1000) {
           if (palf_reach_time_interval(100 * 1000, log_life_long_warn_time_)) {

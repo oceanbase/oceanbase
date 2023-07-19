@@ -457,7 +457,8 @@ public:
 TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "io_reducer_func");
-
+  update_server_log_disk(4*1024*1024*1024ul);
+  update_disk_options(4*1024*1024*1024ul/palf::PALF_PHY_BLOCK_SIZE);
   OB_LOGGER.set_log_level("TRACE");
   PALF_LOG(INFO, "begin io_reducer_basic_func");
   PalfHandleImplGuard leader_1;

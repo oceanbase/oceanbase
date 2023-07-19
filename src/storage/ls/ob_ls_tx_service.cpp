@@ -743,6 +743,18 @@ int ObLSTxService::set_max_replay_commit_version(share::SCN commit_version)
   }
   return ret;
 }
+
+int ObLSTxService::check_tx_blocked(bool &tx_blocked) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
+  } else {
+    tx_blocked = mgr_->is_blocked();
+  }
+  return ret;
+}
 } // transaction
 
 } // oceanbase
