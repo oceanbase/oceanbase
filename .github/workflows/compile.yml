@@ -45,7 +45,7 @@ jobs:
       env:
         cache-name: cache-build
       with:
-        key: ${{ runner.os }}-${{ env.cache-name }}-el7.x86_64-${{ github.ref_name }}
+        key: ${{ runner.os }}-${{ env.cache-name }}-${{ matrix.image }}-el7.x86_64-${{ github.ref_name }}
         path: ~/.ccache
         enableCrossOsArchive: false
         restore-keys: |
@@ -64,4 +64,6 @@ jobs:
         bash build.sh debug -DOB_USE_CCACHE=ON
         cd build_debug && make -j4 && cd -
         deps/3rd/usr/local/oceanbase/devtools/bin/ccache -s
-        cat $PWD/ccache.log
+        
+    - if: ${{ runner.debug }}
+      run: cat $PWD/ccache.log
