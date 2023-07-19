@@ -1597,6 +1597,8 @@ int ObTablet::inner_inc_macro_ref_cnt()
 
   if (OB_FAIL(check_meta_addr())) {
     LOG_WARN("fail to check meta addrs", K(ret));
+  } else if (OB_FAIL(inc_linked_block_ref_cnt(medium_info_list_addr.addr_, inc_medium_info_list_ref))) {
+    LOG_WARN("fail to increase macro blocks' ref cnt for medium info list", K(ret), K(medium_info_list_addr));
   } else if (OB_FAIL(inc_addr_ref_cnt(table_store_addr_.addr_, inc_table_store_ref))) {
     LOG_WARN("fail to increase macro blocks' ref cnt for table store", K(ret), K(table_store_addr_.addr_));
   } else if (OB_FAIL(inc_addr_ref_cnt(storage_schema_addr_.addr_, inc_storage_schema_ref))) {
@@ -1609,8 +1611,6 @@ int ObTablet::inner_inc_macro_ref_cnt()
     LOG_WARN("fail to increase macro blocks' ref cnt for aux tablet info uncommitted kv", K(ret), K(aux_tablet_info_uncommitted_kv_addr.addr_));
   } else if (OB_FAIL(inc_addr_ref_cnt(aux_tablet_info_committed_kv_addr.addr_, inc_aux_tablet_info_committed_kv_ref))) {
     LOG_WARN("fail to increase macro blocks' ref cnt for aux tablet info committed kv", K(ret), K(aux_tablet_info_committed_kv_addr.addr_));
-  } else if (OB_FAIL(inc_addr_ref_cnt(medium_info_list_addr.addr_, inc_medium_info_list_ref))) {
-    LOG_WARN("fail to increase macro blocks' ref cnt for medium info list", K(ret), K(medium_info_list_addr));
   } else if (OB_FAIL(inc_addr_ref_cnt(auto_inc_seq_addr.addr_, inc_auto_inc_ref))) {
     LOG_WARN("fail to increase macro blocks' ref cnt for auto inc seq", K(ret), K(auto_inc_seq_addr.addr_));
   } else if (OB_FAIL(inc_addr_ref_cnt(tablet_addr_, inc_tablet_ref))) {
@@ -1628,15 +1628,14 @@ int ObTablet::inner_inc_macro_ref_cnt()
       K(tablet_addr_), KP(this), K(lbt()));
 
   if (OB_FAIL(ret)) {
-    int tmp_ret = OB_SUCCESS;
+    if (inc_medium_info_list_ref) {
+      dec_linked_block_ref_cnt(medium_info_list_addr.addr_);
+    }
     if (inc_table_store_ref) {
       dec_addr_ref_cnt(table_store_addr_.addr_);
     }
     if (inc_storage_schema_ref) {
       dec_addr_ref_cnt(storage_schema_addr_.addr_);
-    }
-    if (inc_medium_info_list_ref) {
-      dec_addr_ref_cnt(medium_info_list_addr.addr_);
     }
     if (inc_tablet_status_uncommitted_kv_ref) {
       dec_addr_ref_cnt(tablet_status_uncommitted_kv_addr.addr_);
@@ -1690,6 +1689,7 @@ void ObTablet::dec_macro_ref_cnt()
     LOG_WARN("fail to check meta addrs", K(ret));
   } else {
     // the order can't be changed, must be sstable blocks' ref cnt -> tablet meta blocks' ref cnt
+    dec_linked_block_ref_cnt(medium_info_list_addr.addr_);
     dec_table_store_ref_cnt();
     dec_addr_ref_cnt(table_store_addr_.addr_);
     dec_addr_ref_cnt(storage_schema_addr_.addr_);
@@ -1697,7 +1697,6 @@ void ObTablet::dec_macro_ref_cnt()
     dec_addr_ref_cnt(tablet_status_committed_kv_addr.addr_);
     dec_addr_ref_cnt(aux_tablet_info_uncommitted_kv_addr.addr_);
     dec_addr_ref_cnt(aux_tablet_info_committed_kv_addr.addr_);
-    dec_addr_ref_cnt(medium_info_list_addr.addr_);
     dec_addr_ref_cnt(auto_inc_seq_addr.addr_);
     dec_addr_ref_cnt(tablet_addr_);
   }
@@ -1762,9 +1761,82 @@ void ObTablet::dec_addr_ref_cnt(const ObMetaDiskAddr &addr)
   int64_t size;
   if (addr.is_block()) { // skip full/old/empty_shell tablet
     if (OB_FAIL(addr.get_block_addr(macro_id, offset, size))) {
-      LOG_ERROR("fail to get macro id from addr", K(ret), K(addr));
+      LOG_ERROR("fail to get macro id from addr, macro block leaks", K(ret), K(addr));
     } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
-      LOG_ERROR("fail to decrease macro block's ref cnt", K(ret), K(macro_id));
+      LOG_ERROR("fail to decrease macro block's ref cnt, macro block leaks", K(ret), K(macro_id));
+    }
+  }
+}
+
+int ObTablet::inc_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr, bool &inc_success)
+{
+  int ret = OB_SUCCESS;
+  inc_success = false;
+  ObSharedBlockLinkIter iter;
+  MacroBlockId macro_id;
+  int64_t block_cnt = 0;
+
+  if (head_addr.is_block()) {
+    if (OB_FAIL(iter.init(head_addr))) {
+      LOG_WARN("fail to init link iter", K(ret), K(head_addr));
+    } else {
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(iter.get_next_macro_id(macro_id))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("fail to get next macro id", K(ret));
+          }
+        } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_id))) {
+          LOG_ERROR("fail to increase linked blocks' ref cnt", K(ret), K(macro_id));
+        } else {
+          block_cnt++;
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret) && 0 != block_cnt) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(iter.reuse())) {
+      LOG_WARN("fail to reuse link iter", K(tmp_ret), K(iter));
+    } else {
+      for (int64_t i = 0; i < block_cnt; i++) {
+        if (OB_TMP_FAIL(iter.get_next_macro_id(macro_id))) {
+          LOG_ERROR("fail to get next macro id for rollback, macro block leaks", K(tmp_ret), K(macro_id));
+        } else if (OB_TMP_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+          LOG_ERROR("fail to decrease ref cnt, macro block leaks", K(tmp_ret), K(macro_id));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    inc_success = true;
+  }
+  return ret;
+}
+
+void ObTablet::dec_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr)
+{
+  int ret = OB_SUCCESS;
+  ObSharedBlockLinkIter iter;
+  MacroBlockId macro_id;
+  if (head_addr.is_block()) {
+    if (OB_FAIL(iter.init(head_addr))) {
+      LOG_ERROR("fail to init link iter, macro block leaks", K(ret), K(head_addr));
+    } else {
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(iter.get_next_macro_id(macro_id))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_ERROR("fail to get next macro id, macro block leaks", K(ret));
+          }
+        } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+          LOG_ERROR("fail to decrease linked blocks' ref cnt, macro block leaks", K(ret), K(macro_id));
+        }
+      }
     }
   }
 }

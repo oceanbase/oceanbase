@@ -453,32 +453,73 @@ int ObSharedBlockLinkIter::init(const ObMetaDiskAddr &head)
   return ret;
 }
 
-int ObSharedBlockLinkIter::get_next(ObIAllocator &allocator, char *&buf, int64_t &buf_len)
+int ObSharedBlockLinkIter::reuse()
 {
   int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(!head_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("head_ is invalid", K(ret), K_(head));
+  } else {
+    cur_ = head_;
+  }
+  return ret;
+}
+
+int ObSharedBlockLinkIter::get_next_block(ObIAllocator &allocator, char *&buf, int64_t &buf_len)
+{
+  int ret = OB_SUCCESS;
+  ObSharedBlockReadHandle block_handle;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Not init", K(ret), KPC(this));
   } else if (cur_.is_none()) {
     ret = OB_ITER_END;
+  } else if (OB_FAIL(read_next_block(block_handle))) {
+    LOG_WARN("fail to read next block", K(ret), K(head_), K(cur_));
+  } else if (OB_FAIL(block_handle.get_data(allocator, buf, buf_len))) {
+    LOG_WARN("Fail to get data", K(ret), K(block_handle));
+  }
+  return ret;
+}
+
+int ObSharedBlockLinkIter::get_next_macro_id(MacroBlockId &macro_id)
+{
+  int ret = OB_SUCCESS;
+  ObSharedBlockReadHandle block_handle;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not init", K(ret), KPC(this));
+  } else if (cur_.is_none()) {
+    ret = OB_ITER_END;
+  } else if (!cur_.is_block()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cur addr is not block addr", K(ret), K(cur_));
+  } else if (FALSE_IT(macro_id = cur_.block_id())) {
+  } else if (OB_FAIL(read_next_block(block_handle))) {
+    LOG_WARN("fail to read next block", K(ret), K(head_), K(cur_));
+  }
+  return ret;
+}
+
+int ObSharedBlockLinkIter::read_next_block(ObSharedBlockReadHandle &block_handle)
+{
+  int ret = OB_SUCCESS;
+  ObSharedBlockReadInfo read_info;
+  read_info.addr_ = cur_;
+  read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+  if (OB_FAIL(ObSharedBlockReaderWriter::async_read(read_info, block_handle))) {
+    LOG_WARN("Fail to read block", K(ret), K(read_info));
+  } else if (OB_FAIL(block_handle.wait())) {
+    LOG_WARN("Fail to wait read io finish", K(ret), K(block_handle));
   } else {
-    ObSharedBlockReadInfo read_info;
-    ObSharedBlockReadHandle block_handle;
-    read_info.addr_ = cur_;
-    read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-    if (OB_FAIL(ObSharedBlockReaderWriter::async_read(read_info, block_handle))) {
-      LOG_WARN("Fail to read block", K(ret), K(read_info));
-    } else if (OB_FAIL(block_handle.wait())) {
-      LOG_WARN("Fail to wait read io finish", K(ret), K(block_handle));
-    } else if (OB_FAIL(block_handle.get_data(allocator, buf, buf_len))) {
-      LOG_WARN("Fail to get data", K(ret), K(block_handle));
-    } else {
-      ObMacroBlockHandle &macro_handle = block_handle.macro_handle_;
-      const ObSharedBlockHeader *header =
-          reinterpret_cast<const ObSharedBlockHeader *>(macro_handle.get_buffer());
-      cur_ = header->prev_addr_;
-      LOG_DEBUG("zhuixin debug get next link block", K(ret), K(head_), K(cur_), KPC(header));
-    }
+    ObMacroBlockHandle &macro_handle = block_handle.macro_handle_;
+    const ObSharedBlockHeader *header =
+        reinterpret_cast<const ObSharedBlockHeader *>(macro_handle.get_buffer());
+    cur_ = header->prev_addr_;
+    LOG_DEBUG("get next link block macro id", K(ret), K(head_), K(cur_), KPC(header));
   }
   return ret;
 }

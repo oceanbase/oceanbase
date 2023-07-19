@@ -685,7 +685,7 @@ int ObSSTableMacroInfo::inc_linked_block_ref_cnt(common::ObArenaAllocator &alloc
     for (; OB_SUCC(ret) && idx < linked_block_count_; idx++) {
       const MacroBlockId &macro_id = linked_block_ids_[idx];
       if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_id))) {
-        LOG_WARN("fail to increase macro block ref cnt", K(ret), K(macro_id));
+        LOG_ERROR("fail to increase macro block ref cnt", K(ret), K(macro_id));
       }
     }
 

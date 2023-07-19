@@ -309,6 +309,47 @@ TEST_F(TestTabletRefCnt, test_empty_shell_macro_ref_cnt)
   ASSERT_EQ(ref_cnt, block_info.ref_cnt_);
 }
 
+TEST_F(TestTabletRefCnt, test_linked_block_ref_cnt)
+{
+  int ret = OB_SUCCESS;
+  ObMacroBlockHandle tmp_handle;
+  ObSharedBlockReaderWriter &shared_rw = MTL(ObTenantCheckpointSlogHandler*)->get_shared_block_reader_writer();
+  ASSERT_EQ(OB_SUCCESS, shared_rw.switch_block(tmp_handle));
+  common::ObArenaAllocator arena_allocator("unittest");
+  ObSharedBlocksWriteCtx write_ctx;
+  static const int64_t BLOCK_CNT = 10;
+
+  // write linked blocks and wait
+  char *buffer = static_cast<char*>(arena_allocator.alloc(4096));
+  ObSharedBlockWriteInfo write_info;
+  ObSharedBlockLinkHandle write_handle;
+  write_info.buffer_ = buffer;
+  write_info.offset_ = 0;
+  write_info.size_ = 4096;
+  write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
+  for (int64_t i = 0; i < BLOCK_CNT; i++) {
+    ASSERT_EQ(OB_SUCCESS, shared_rw.async_link_write(write_info, write_handle));
+  }
+  ASSERT_EQ(OB_SUCCESS, write_handle.get_write_ctx(write_ctx));
+
+  // increase macro blocks' ref cnt and check
+  bool inc_success = false;
+  ObBlockManager::BlockInfo block_info;
+  MacroBlockId macro_id = write_ctx.addr_.block_id();
+  {
+    ObBucketHashWLockGuard lock_guard(OB_SERVER_BLOCK_MGR.bucket_lock_, macro_id.hash());
+    ASSERT_EQ(OB_SUCCESS, OB_SERVER_BLOCK_MGR.block_map_.get(macro_id, block_info));
+  }
+  int64_t ref_cnt = block_info.ref_cnt_;
+
+  ASSERT_EQ(OB_SUCCESS, ObTablet::inc_linked_block_ref_cnt(write_ctx.addr_, inc_success));
+  {
+    ObBucketHashWLockGuard lock_guard(OB_SERVER_BLOCK_MGR.bucket_lock_, macro_id.hash());
+    ASSERT_EQ(OB_SUCCESS, OB_SERVER_BLOCK_MGR.block_map_.get(macro_id, block_info));
+  }
+  ASSERT_EQ(ref_cnt + BLOCK_CNT, block_info.ref_cnt_);
+}
+
 } // storage
 } // oceanbase
 
