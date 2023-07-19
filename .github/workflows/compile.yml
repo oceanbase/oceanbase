@@ -20,7 +20,7 @@ jobs:
       shell: bash
       if: ${{ startsWith(matrix.image, 'ubuntu') }}
       run: |
-        apt-get upadte
+        apt-get update
         apt-get install -y git wget rpm rpm2cpio cpio make build-essential binutils m4 libtool-bin
       
     - name: Install centos environment
