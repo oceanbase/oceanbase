@@ -34,6 +34,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "share/scn.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "share/ob_occam_time_guard.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -57,6 +58,7 @@ int ObTabletCreateDeleteHelper::get_tablet(
     ObTabletHandle &handle,
     const int64_t timeout_us)
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
   static const int64_t SLEEP_TIME_US = 10;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
@@ -489,12 +491,13 @@ int ObTabletCreateDeleteHelper::acquire_tmp_tablet(
     common::ObArenaAllocator &allocator,
     ObTabletHandle &handle)
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(key));
-  } else if (OB_FAIL(t3m->acquire_tmp_tablet(WashTabletPriority::WTP_HIGH, key, allocator, handle))) {
+  } else if (CLICK_FAIL(t3m->acquire_tmp_tablet(WashTabletPriority::WTP_HIGH, key, allocator, handle))) {
     LOG_WARN("fail to acquire temporary tablet", K(ret), K(key));
   } else if (OB_ISNULL(handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;

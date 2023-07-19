@@ -399,7 +399,7 @@ int ObTenantMdsTimer::process_with_tablet_(ObTablet &tablet)
     if (OB_EAGAIN != ret) {
       MDS_LOG_GC(WARN, "fail to gc mds table");
     } else {
-      MDS_LOG_GC(INFO, "try gc mds table need do again later");
+      MDS_LOG_GC(TRACE, "try gc mds table need do again later");
     }
   } else {
     MDS_LOG_GC(INFO, "success do try gc mds table");
