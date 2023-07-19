@@ -243,6 +243,7 @@ _backup_idle_time
 _backup_task_keep_alive_interval
 _backup_task_keep_alive_timeout
 _balance_kill_transaction_threshold
+_balance_wait_killing_transaction_end_threshold
 _bloom_filter_enabled
 _bloom_filter_ratio
 _cache_wash_interval

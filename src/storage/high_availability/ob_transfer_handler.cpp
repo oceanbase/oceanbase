@@ -418,7 +418,6 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   ObTimeoutCtx timeout_ctx;
   ObMySQLTransaction trans;
   bool enable_kill_trx = false;
-  int64_t kill_trx_threshold = 0;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -450,14 +449,13 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (tenant_config.is_valid()) {
       enable_kill_trx = tenant_config->_enable_balance_kill_transaction;
-      kill_trx_threshold = tenant_config->_balance_kill_transaction_threshold;
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(lock_src_and_dest_ls_member_list_(task_info, task_info.src_ls_id_, task_info.dest_ls_id_))) {
       LOG_WARN("failed to lock src and dest ls member list", K(ret), K(task_info));
     } else if (!enable_kill_trx && OB_FAIL(check_src_ls_has_active_trans_(task_info.src_ls_id_))) {
       LOG_WARN("failed to check src ls active trans", K(ret), K(task_info));
-    } else if (OB_FAIL(block_and_kill_tx_(task_info, enable_kill_trx, kill_trx_threshold, timeout_ctx))) {
+    } else if (OB_FAIL(block_and_kill_tx_(task_info, enable_kill_trx, timeout_ctx))) {
       LOG_WARN("failed to block and kill tx", K(ret), K(task_info));
     } else if (OB_FAIL(check_start_status_transfer_tablets_(task_info))) {
       LOG_WARN("failed to check start status transfer tablets", K(ret), K(task_info));
@@ -905,7 +903,11 @@ int ObTransferHandler::start_trans_(
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   int64_t stmt_timeout = 10_s;
   if (tenant_config.is_valid()) {
-    stmt_timeout = tenant_config->_transfer_start_trans_timeout + tenant_config->_balance_kill_transaction_threshold;
+    stmt_timeout = tenant_config->_transfer_start_trans_timeout;
+    if (tenant_config->_enable_balance_kill_transaction) {
+      stmt_timeout += tenant_config->_balance_kill_transaction_threshold;
+      stmt_timeout += tenant_config->_balance_wait_killing_transaction_end_threshold;
+    }
   }
 
   if (!is_inited_) {
@@ -1746,22 +1748,34 @@ int ObTransferHandler::do_worker_transfer_()
 int ObTransferHandler::block_and_kill_tx_(
     const share::ObTransferTaskInfo &task_info,
     const bool enable_kill_trx,
-    const int64_t kill_trx_threshold,
     ObTimeoutCtx &timeout_ctx)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = task_info.tenant_id_;
   const share::ObLSID &src_ls_id = task_info.src_ls_id_;
   const int64_t start_ts = ObTimeUtil::current_time();
+  int64_t before_kill_trx_threshold = 0;
+  int64_t after_kill_trx_threshold = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  int64_t active_trans_count = 0;
+  if (tenant_config.is_valid()) {
+    before_kill_trx_threshold = tenant_config->_balance_kill_transaction_threshold;
+    after_kill_trx_threshold = tenant_config->_balance_wait_killing_transaction_end_threshold;
+  }
+
   if (OB_FAIL(block_tx_(tenant_id, src_ls_id))) {
     LOG_WARN("failed to block tx", K(ret), K(task_info));
   } else if (!enable_kill_trx) {
-    LOG_INFO("transfer no need kill tx", K(task_info));
-  } else if (OB_FAIL(check_for_kill_(tenant_id, src_ls_id, kill_trx_threshold, false/*is_after_kill*/, timeout_ctx))) {
-    LOG_WARN("failed to check before kill", K(ret));
-  } else if (OB_FAIL(kill_tx_(tenant_id, src_ls_id))) {
-    LOG_WARN("failed to kill tx", K(ret));
-  } else if (OB_FAIL(check_for_kill_(tenant_id, src_ls_id, kill_trx_threshold, true/*is_after_kill*/, timeout_ctx))) {
+    if (OB_FAIL(get_ls_active_trans_count_(src_ls_id, active_trans_count))) {
+      LOG_WARN("failed to get src ls has active trans", K(ret));
+    } else if (0 != active_trans_count) {
+      ret = OB_TRANSFER_WAIT_TRANSACTION_END_TIMEOUT;
+      LOG_WARN("transfer src ls still has active transactions, cannot do transfer", K(ret), K(src_ls_id),
+          K(active_trans_count));
+    }
+  } else if (OB_FAIL(check_and_kill_tx_(tenant_id, src_ls_id, before_kill_trx_threshold, false/*with_trans_kill*/, timeout_ctx))) {
+    LOG_WARN("failed to check after kill", K(ret));
+  } else if (OB_FAIL(check_and_kill_tx_(tenant_id, src_ls_id, after_kill_trx_threshold, true/*with_trans_kill*/, timeout_ctx))) {
     LOG_WARN("failed to check after kill", K(ret));
   } else {
     LOG_INFO("[TRANSFER] success to block and kill tx", "cost", ObTimeUtil::current_time() - start_ts);
@@ -1773,11 +1787,11 @@ int ObTransferHandler::block_and_kill_tx_(
   return ret;
 }
 
-int ObTransferHandler::check_for_kill_(
+int ObTransferHandler::check_and_kill_tx_(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
     const int64_t timeout,
-    const bool is_after_kill,
+    const bool with_trans_kill,
     ObTimeoutCtx &timeout_ctx)
 {
   int ret = OB_SUCCESS;
@@ -1790,9 +1804,9 @@ int ObTransferHandler::check_for_kill_(
       ret = OB_TIMEOUT;
       LOG_WARN("trans ctx already timeout", K(ret));
     } else if (cur_ts - start_ts > timeout) {
-      if (is_after_kill) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("check active trans after kill timeout", K(cur_ts), K(start_ts));
+      if (with_trans_kill) {
+        ret = OB_TRANSFER_WAIT_TRANSACTION_END_TIMEOUT;
+        LOG_WARN("wait active trans finish timeout", K(ret), K(cur_ts), K(start_ts));
       } else {
         break;
       }
@@ -1806,6 +1820,13 @@ int ObTransferHandler::check_for_kill_(
       LOG_WARN("failed to get src ls has active trans", K(ret));
     } else if (0 != active_trans_count) {
       LOG_INFO("still has active trans", K(tenant_id), K(ls_id), K(active_trans_count));
+      if (with_trans_kill && OB_FAIL(kill_tx_(tenant_id, ls_id))) {
+        if (OB_EAGAIN == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to kill tx", K(ret), K(tenant_id), K(ls_id));
+        }
+      }
     } else {
       break;
     }
