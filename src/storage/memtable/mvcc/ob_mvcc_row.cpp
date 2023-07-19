@@ -914,6 +914,7 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
                                                                    list_head_->get_dml_flag(),
                                                                    list_head_->get_seq_no()))) {
         TRANS_LOG(WARN, "check sequence set violation failed", K(ret), KPC(this));
+      } else if (nullptr != list_head_ && FALSE_IT(res.is_checked_ = true)) {
       } else if (OB_SUCC(check_double_insert_(snapshot_version,
                                               writer_node,
                                               list_head_))) {

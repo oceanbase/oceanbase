@@ -1205,6 +1205,7 @@ int ObMemtable::lock_row_on_frozen_stores_(
         // We need check whether the same row is operated by same txn
         // concurrently to prevent undesirable resuly.
         if (res.has_insert() &&     // we only need check when the node is exactly inserted
+            !res.is_checked_ &&     // we only need check when the active memtable check is missed
             OB_FAIL(concurrent_control::check_sequence_set_violation(ctx.mvcc_acc_ctx_.write_flag_,
                                                                      reader_seq_no,
                                                                      my_tx_id,
