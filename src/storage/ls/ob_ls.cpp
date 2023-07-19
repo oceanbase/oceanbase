@@ -463,6 +463,11 @@ ObInnerLSStatus ObLS::get_create_state() const
   return ls_meta_.get_ls_create_status();
 }
 
+bool ObLS::is_create_committed() const
+{
+  return ObInnerLSStatus::COMMITTED == ls_meta_.get_ls_create_status();
+}
+
 bool ObLS::is_need_gc() const
 {
   int ret = OB_SUCCESS;

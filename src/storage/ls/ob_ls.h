@@ -240,6 +240,8 @@ public:
   // @param[in] new_status, the new create state which will be set.
   void set_create_state(const ObInnerLSStatus new_status);
   ObInnerLSStatus get_create_state() const;
+
+  bool is_create_committed() const;
   bool is_need_gc() const;
   bool is_in_gc();
   bool is_enable_for_restore() const;

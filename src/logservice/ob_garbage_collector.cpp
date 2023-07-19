@@ -1296,7 +1296,9 @@ int ObGarbageCollector::construct_server_ls_map_for_member_list_(ServerLSMap &se
         }
       } else if (OB_ISNULL(ls)) {
         tmp_ret = OB_ERR_UNEXPECTED;
-        CLOG_LOG(ERROR, "log stream is NULL", K(tmp_ret), K(ls));
+        CLOG_LOG(ERROR, "log stream is NULL", K(tmp_ret), KP(ls));
+      } else if (OB_UNLIKELY(!ls->is_create_committed())) {
+        CLOG_LOG(INFO, "ls is not committed, just ignore", K(ls));
       } else if (OB_SUCCESS != (tmp_ret = GCTX.location_service_->nonblock_get_leader(
                                 cluster_id, tenant_id, ls->get_ls_id(), leader))) {
         if (is_location_service_renew_error(tmp_ret)) {
@@ -1387,7 +1389,9 @@ void ObGarbageCollector::gc_check_ls_status_(ObGCCandidateArray &gc_candidates)
           CLOG_LOG(WARN, "get next log stream failed", K(ret));
         }
       } else if (OB_ISNULL(ls)) {
-        CLOG_LOG(ERROR, "log stream is NULL", K(ls));
+        CLOG_LOG(ERROR, "log stream is NULL", KP(ls));
+      } else if (OB_UNLIKELY(!ls->is_create_committed())) {
+        CLOG_LOG(INFO, "ls is not committed, just ignore", K(ls));
       } else if (OB_SUCCESS != (tmp_ret = gc_check_ls_status_(*ls, gc_candidates))) {
         CLOG_LOG(WARN, "get_ls_status_ failed", K(tmp_ret), K(ls->get_ls_id()));
       } else {}
