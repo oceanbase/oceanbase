@@ -1,0 +1,668 @@
+set @@ob_enable_transformation=0;
+drop table if exists t1, t2;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+Note	1051	Unknown table 'test.t2'
+create table t1 (c1 int, c2 int, c3 int);
+create table t2 (c1 int, c2 int, c3 int);
+call dbms_stats.gather_table_stats(NULL, 't1');
+call dbms_stats.gather_table_stats(NULL, 't2');
+INSERT INTO t1 VALUES (1,1,1);
+INSERT INTO t1 VALUES (2,2,2);
+INSERT INTO t1 VALUES (3,3,3);
+INSERT INTO t2 VALUES (1,1,1);
+INSERT INTO t2 VALUES (2,2,2);
+INSERT INTO t2 VALUES (3,3,3);
+result_format: 4
+explain_protocol: 2
+################################
+## 1 join
+EXPLAIN select /*+use_nl(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+Query Plan
+===========================================================
+|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |MATERIAL                   |    |3       |5           |
+|1 |└─SORT                     |    |3       |5           |
+|2 |  └─MATERIAL               |    |3       |5           |
+|3 |    └─HASH FULL OUTER JOIN |    |3       |5           |
+|4 |      ├─MATERIAL           |    |3       |2           |
+|5 |      │ └─TABLE FULL SCAN  |t1  |3       |2           |
+|6 |      └─MATERIAL           |    |3       |2           |
+|7 |        └─TABLE FULL SCAN  |t2  |3       |2           |
+===========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  1 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC], [t2.c1, ASC])
+  2 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  3 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  4 - output([t1.c1]), filter(nil), rowset=256
+  5 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([t2.c1]), filter(nil), rowset=256
+  7 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+use_nl(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
++------+------+
+| c1   | c1   |
++------+------+
+|    1 |    1 |
+|    2 |    2 |
+|    3 |    3 |
++------+------+
+EXPLAIN select /*+use_nl(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 where t1.c1 between 5 and 24 order by t1.c1, t2.c1;
+Query Plan
+===========================================================
+|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |MATERIAL                   |    |1       |5           |
+|1 |└─SORT                     |    |1       |5           |
+|2 |  └─MATERIAL               |    |1       |5           |
+|3 |    └─HASH FULL OUTER JOIN |    |1       |5           |
+|4 |      ├─MATERIAL           |    |3       |2           |
+|5 |      │ └─TABLE FULL SCAN  |t1  |3       |2           |
+|6 |      └─MATERIAL           |    |3       |2           |
+|7 |        └─TABLE FULL SCAN  |t2  |3       |2           |
+===========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  1 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC], [t2.c1, ASC])
+  2 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  3 - output([t1.c1], [t2.c1]), filter([t1.c1 >= 5], [t1.c1 <= 24]), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  4 - output([t1.c1]), filter(nil), rowset=256
+  5 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([t2.c1]), filter(nil), rowset=256
+  7 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+use_nl(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 where t1.c1 between 5 and 24 order by t1.c1, t2.c1;
++------+------+
+| c1   | c1   |
++------+------+
++------+------+
+EXPLAIN select /*+use_mj(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+Query Plan
+===========================================================
+|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |MATERIAL                   |    |3       |5           |
+|1 |└─SORT                     |    |3       |5           |
+|2 |  └─MATERIAL               |    |3       |5           |
+|3 |    └─HASH FULL OUTER JOIN |    |3       |5           |
+|4 |      ├─MATERIAL           |    |3       |2           |
+|5 |      │ └─TABLE FULL SCAN  |t1  |3       |2           |
+|6 |      └─MATERIAL           |    |3       |2           |
+|7 |        └─TABLE FULL SCAN  |t2  |3       |2           |
+===========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  1 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC], [t2.c1, ASC])
+  2 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  3 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  4 - output([t1.c1]), filter(nil), rowset=256
+  5 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([t2.c1]), filter(nil), rowset=256
+  7 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+use_mj(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
++------+------+
+| c1   | c1   |
++------+------+
+|    1 |    1 |
+|    2 |    2 |
+|    3 |    3 |
++------+------+
+EXPLAIN select /*+use_mj(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 where t1.c1 between 5 and 24 order by t1.c1, t2.c1;
+Query Plan
+===========================================================
+|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |MATERIAL                   |    |1       |5           |
+|1 |└─SORT                     |    |1       |5           |
+|2 |  └─MATERIAL               |    |1       |5           |
+|3 |    └─HASH FULL OUTER JOIN |    |1       |5           |
+|4 |      ├─MATERIAL           |    |3       |2           |
+|5 |      │ └─TABLE FULL SCAN  |t1  |3       |2           |
+|6 |      └─MATERIAL           |    |3       |2           |
+|7 |        └─TABLE FULL SCAN  |t2  |3       |2           |
+===========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  1 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC], [t2.c1, ASC])
+  2 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  3 - output([t1.c1], [t2.c1]), filter([t1.c1 >= 5], [t1.c1 <= 24]), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  4 - output([t1.c1]), filter(nil), rowset=256
+  5 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([t2.c1]), filter(nil), rowset=256
+  7 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+use_mj(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 where t1.c1 between 5 and 24 order by t1.c1, t2.c1;
++------+------+
+| c1   | c1   |
++------+------+
++------+------+
+EXPLAIN select /*+use_hash(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+Query Plan
+===========================================================
+|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |MATERIAL                   |    |3       |5           |
+|1 |└─SORT                     |    |3       |5           |
+|2 |  └─MATERIAL               |    |3       |5           |
+|3 |    └─HASH FULL OUTER JOIN |    |3       |5           |
+|4 |      ├─MATERIAL           |    |3       |2           |
+|5 |      │ └─TABLE FULL SCAN  |t1  |3       |2           |
+|6 |      └─MATERIAL           |    |3       |2           |
+|7 |        └─TABLE FULL SCAN  |t2  |3       |2           |
+===========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  1 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC], [t2.c1, ASC])
+  2 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  3 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  4 - output([t1.c1]), filter(nil), rowset=256
+  5 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([t2.c1]), filter(nil), rowset=256
+  7 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+use_hash(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
++------+------+
+| c1   | c1   |
++------+------+
+|    1 |    1 |
+|    2 |    2 |
+|    3 |    3 |
++------+------+
+EXPLAIN select /*+use_hash(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 where t1.c1 between 5 and 24 order by t1.c1, t2.c1;
+Query Plan
+===========================================================
+|ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------
+|0 |MATERIAL                   |    |1       |5           |
+|1 |└─SORT                     |    |1       |5           |
+|2 |  └─MATERIAL               |    |1       |5           |
+|3 |    └─HASH FULL OUTER JOIN |    |1       |5           |
+|4 |      ├─MATERIAL           |    |3       |2           |
+|5 |      │ └─TABLE FULL SCAN  |t1  |3       |2           |
+|6 |      └─MATERIAL           |    |3       |2           |
+|7 |        └─TABLE FULL SCAN  |t2  |3       |2           |
+===========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  1 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC], [t2.c1, ASC])
+  2 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  3 - output([t1.c1], [t2.c1]), filter([t1.c1 >= 5], [t1.c1 <= 24]), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  4 - output([t1.c1]), filter(nil), rowset=256
+  5 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([t2.c1]), filter(nil), rowset=256
+  7 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+use_hash(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 where t1.c1 between 5 and 24 order by t1.c1, t2.c1;
++------+------+
+| c1   | c1   |
++------+------+
++------+------+
+
+## 2 dml
+drop table if exists t_s;
+Warnings:
+Note	1051	Unknown table 'test.t_s'
+create table t_s(c1 int primary key, c2 int ,c3 int);
+
+EXPLAIN insert /*+blocking('all')*/ into t_s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+Query Plan
+====================================================
+|ID|OPERATOR            |NAME|EST.ROWS|EST.TIME(us)|
+----------------------------------------------------
+|0 |MATERIAL            |    |10      |70          |
+|1 |└─DISTRIBUTED INSERT|    |10      |70          |
+|2 |  └─MATERIAL        |    |10      |1           |
+|3 |    └─EXPRESSION    |    |10      |1           |
+====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=256
+  1 - output(nil), filter(nil)
+      columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]),
+      column_values([column_conv(INT,PS:(11,0),NOT NULL,__values.c1)], [column_conv(INT,PS:(11,0),NULL,__values.c2)], [column_conv(INT,PS:(11,0),NULL,cast(NULL,
+       INT(-1, 0)))])
+  2 - output([__values.c1], [__values.c2]), filter(nil), rowset=256
+  3 - output([__values.c1], [__values.c2]), filter(nil)
+      values({1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}, {7, 7}, {8, 8}, {9, 9}, {10, 10})
+insert /*+blocking('all')*/ into t_s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_s');
+explain basic delete /*+use_px, blocking('all')*/ from t_s;
+Query Plan
+===============================
+|ID|OPERATOR             |NAME|
+-------------------------------
+|0 |MATERIAL             |    |
+|1 |└─DELETE             |    |
+|2 |  └─MATERIAL         |    |
+|3 |    └─TABLE FULL SCAN|t_s |
+===============================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=256
+  1 - output(nil), filter(nil)
+      table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+      access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t_s.c1]), range(MIN ; MAX)always true
+EXPLAIN delete /*+use_px, blocking('all')*/ from t_s;
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |MATERIAL             |    |10      |61          |
+|1 |└─DELETE             |    |10      |60          |
+|2 |  └─MATERIAL         |    |10      |3           |
+|3 |    └─TABLE FULL SCAN|t_s |10      |3           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil), rowset=256
+  1 - output(nil), filter(nil)
+      table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+      access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t_s.c1]), range(MIN ; MAX)always true
+delete /*+use_px, blocking('all')*/ from t_s;
+EXPLAIN select * from t_s order by c1;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t_s |1       |3           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+      access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t_s.c1]), range(MIN ; MAX)always true
+select * from t_s order by c1;
++----+------+------+
+| c1 | c2   | c3   |
++----+------+------+
++----+------+------+
+
+## 3 TEMP TABLE INSERT
+drop table if exists t_emp, t_dept, t_bonus, EMP, DEPT, BONUS;
+create table t_dept(
+  DEPTNO number(2),
+  DNAME char(45),
+  LOC VARCHAR(39),
+  primary key (DEPTNO)
+) ;
+create table t_bonus (
+  ENAME varchar(30),
+  JOB varchar(30),
+  SAL number,
+  COMM number,
+  primary key (ENAME) ) ;
+
+create table EMP (
+  EMPno  number,
+  ENAME varchar(30),
+  JOB varchar(30),
+  MGR number(4),
+  HIREDATE date,
+  SAL number(7,2),
+  COMM number(7,2),
+  DEPTNO number(2)
+) ;
+create table DEPT(
+  DEPTNO number(2),
+  DNAME char(45),
+  LOC VARCHAR(39)
+) ;
+create table BONUS (
+  ENAME varchar(30),
+  JOB varchar(30),
+  SAL number,
+  COMM number ) ;
+create table t_emp (
+  EMPno  number,
+  ENAME varchar(30),
+  JOB varchar(30),
+  MGR number(4),
+  HIREDATE date,
+  SAL number(7,2),
+  COMM number(7,2),
+  DEPTNO number(2)
+ -- foreign key (deptno) references t_dept (deptno),
+ -- foreign key (ename) references t_bonus (ename)
+) ;
+
+with RECURSIVE
+  wc_dept as
+  ( select /*+ blocking('all'), MATERIALIZE */ * from t_dept ),
+  wc_bonus as
+  ( select /*+ MATERIALIZE */ * from t_bonus )
+select /*+ STAR_TRANSFORMATION FACT(emp) */ sum(emp.sal) sum_sal,
+  dept.dname, bonus.job
+from t_emp emp, wc_dept dept, wc_bonus bonus
+where emp.deptno = dept.deptno and
+  emp.ename = bonus.ename
+group by dept.dname, bonus.job
+order by 2, 3, 1;
++---------+-------+------+
+| sum_sal | dname | job  |
++---------+-------+------+
++---------+-------+------+
+
+## 4 blocking and monitoring
+explain outline  select /*+use_hash(t1 t2), tracing(0,1,2), blocking(0,1,2)*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+Query Plan
+===============================================================
+|ID|OPERATOR                       |NAME|EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |MATERIAL                       |    |3       |5           |
+|1 |└─MONITORING DUMP              |    |3       |5           |
+|2 |  └─SORT                       |    |3       |5           |
+|3 |    └─MATERIAL                 |    |3       |5           |
+|4 |      └─MONITORING DUMP        |    |3       |5           |
+|5 |        └─HASH FULL OUTER JOIN |    |3       |5           |
+|6 |          ├─MATERIAL           |    |3       |2           |
+|7 |          │ └─MONITORING DUMP  |    |3       |2           |
+|8 |          │   └─TABLE FULL SCAN|t1  |3       |2           |
+|9 |          └─TABLE FULL SCAN    |t2  |3       |2           |
+===============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  1 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  2 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC], [t2.c1, ASC])
+  3 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  4 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  5 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  6 - output([t1.c1]), filter(nil), rowset=256
+  7 - output([t1.c1]), filter(nil), rowset=256
+  8 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  9 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      LEADING(@"SEL$1" ("test"."t1"@"SEL$1" "test"."t2"@"SEL$1"))
+      USE_HASH(@"SEL$1" "test"."t2"@"SEL$1")
+      FULL(@"SEL$1" "test"."t1"@"SEL$1")
+      FULL(@"SEL$1" "test"."t2"@"SEL$1")
+      TRACING(0 1 2)
+      BLOCKING(0 1 2)
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      END_OUTLINE_DATA
+  */
+EXPLAIN select /*+use_hash(t1 t2), blocking(0), tracing(0,1,2)*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+Query Plan
+=============================================================
+|ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |MATERIAL                     |    |3       |5           |
+|1 |└─MONITORING DUMP            |    |3       |5           |
+|2 |  └─SORT                     |    |3       |5           |
+|3 |    └─MONITORING DUMP        |    |3       |5           |
+|4 |      └─HASH FULL OUTER JOIN |    |3       |5           |
+|5 |        ├─MONITORING DUMP    |    |3       |2           |
+|6 |        │ └─TABLE FULL SCAN  |t1  |3       |2           |
+|7 |        └─TABLE FULL SCAN    |t2  |3       |2           |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  1 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  2 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC], [t2.c1, ASC])
+  3 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  4 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  5 - output([t1.c1]), filter(nil), rowset=256
+  6 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  7 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+use_hash(t1 t2), blocking(0), tracing(0,1,2)*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
++------+------+
+| c1   | c1   |
++------+------+
+|    1 |    1 |
+|    2 |    2 |
+|    3 |    3 |
++------+------+
+EXPLAIN select /*+use_hash(t1 t2), tracing(0,1,2), blocking(0)*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+Query Plan
+=============================================================
+|ID|OPERATOR                     |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |MATERIAL                     |    |3       |5           |
+|1 |└─MONITORING DUMP            |    |3       |5           |
+|2 |  └─SORT                     |    |3       |5           |
+|3 |    └─MONITORING DUMP        |    |3       |5           |
+|4 |      └─HASH FULL OUTER JOIN |    |3       |5           |
+|5 |        ├─MONITORING DUMP    |    |3       |2           |
+|6 |        │ └─TABLE FULL SCAN  |t1  |3       |2           |
+|7 |        └─TABLE FULL SCAN    |t2  |3       |2           |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  1 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  2 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC], [t2.c1, ASC])
+  3 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  4 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  5 - output([t1.c1]), filter(nil), rowset=256
+  6 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  7 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+use_hash(t1 t2), tracing(0,1,2), blocking(0)*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
++------+------+
+| c1   | c1   |
++------+------+
+|    1 |    1 |
+|    2 |    2 |
+|    3 |    3 |
++------+------+
+
+## 5 px
+EXPLAIN select /*+use_hash(t1 t2), blocking('all'),  parallel(2)*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+Query Plan
+===============================================================================
+|ID|OPERATOR                                   |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------------
+|0 |MATERIAL                                   |        |3       |6           |
+|1 |└─PX COORDINATOR MERGE SORT                |        |3       |6           |
+|2 |  └─EXCHANGE OUT DISTR                     |:EX10002|3       |5           |
+|3 |    └─MATERIAL                             |        |3       |4           |
+|4 |      └─SORT                               |        |3       |4           |
+|5 |        └─MATERIAL                         |        |3       |4           |
+|6 |          └─HASH FULL OUTER JOIN           |        |3       |4           |
+|7 |            ├─MATERIAL                     |        |3       |2           |
+|8 |            │ └─EXCHANGE IN DISTR          |        |3       |2           |
+|9 |            │   └─EXCHANGE OUT DISTR (HASH)|:EX10000|3       |2           |
+|10|            │     └─MATERIAL               |        |3       |1           |
+|11|            │       └─PX BLOCK ITERATOR    |        |3       |1           |
+|12|            │         └─MATERIAL           |        |3       |1           |
+|13|            │           └─TABLE FULL SCAN  |t1      |3       |1           |
+|14|            └─MATERIAL                     |        |3       |2           |
+|15|              └─EXCHANGE IN DISTR          |        |3       |2           |
+|16|                └─EXCHANGE OUT DISTR (HASH)|:EX10001|3       |2           |
+|17|                  └─MATERIAL               |        |3       |1           |
+|18|                    └─PX BLOCK ITERATOR    |        |3       |1           |
+|19|                      └─MATERIAL           |        |3       |1           |
+|20|                        └─TABLE FULL SCAN  |t2      |3       |1           |
+===============================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  1 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC], [t2.c1, ASC])
+  2 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      dop=2
+  3 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  4 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC], [t2.c1, ASC])
+  5 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  6 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  7 - output([t1.c1]), filter(nil), rowset=256
+  8 - output([t1.c1]), filter(nil), rowset=256
+  9 - output([t1.c1]), filter(nil), rowset=256
+      (#keys=1, [t1.c1]), dop=2
+ 10 - output([t1.c1]), filter(nil), rowset=256
+ 11 - output([t1.c1]), filter(nil), rowset=256
+ 12 - output([t1.c1]), filter(nil), rowset=256
+ 13 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+ 14 - output([t2.c1]), filter(nil), rowset=256
+ 15 - output([t2.c1]), filter(nil), rowset=256
+ 16 - output([t2.c1]), filter(nil), rowset=256
+      (#keys=1, [t2.c1]), dop=2
+ 17 - output([t2.c1]), filter(nil), rowset=256
+ 18 - output([t2.c1]), filter(nil), rowset=256
+ 19 - output([t2.c1]), filter(nil), rowset=256
+ 20 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+use_hash(t1 t2), blocking('all'),  parallel(2)*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
++------+------+
+| c1   | c1   |
++------+------+
+|    1 |    1 |
+|    2 |    2 |
+|    3 |    3 |
++------+------+
+EXPLAIN select /*+use_hash(t1 t2), blocking('dfo'),  parallel(2)*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+Query Plan
+===========================================================================
+|ID|OPERATOR                               |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |MATERIAL                               |        |3       |6           |
+|1 |└─PX COORDINATOR MERGE SORT            |        |3       |6           |
+|2 |  └─EXCHANGE OUT DISTR                 |:EX10002|3       |5           |
+|3 |    └─SORT                             |        |3       |4           |
+|4 |      └─HASH FULL OUTER JOIN           |        |3       |4           |
+|5 |        ├─MATERIAL                     |        |3       |2           |
+|6 |        │ └─EXCHANGE IN DISTR          |        |3       |2           |
+|7 |        │   └─EXCHANGE OUT DISTR (HASH)|:EX10000|3       |2           |
+|8 |        │     └─PX BLOCK ITERATOR      |        |3       |1           |
+|9 |        │       └─TABLE FULL SCAN      |t1      |3       |1           |
+|10|        └─MATERIAL                     |        |3       |2           |
+|11|          └─EXCHANGE IN DISTR          |        |3       |2           |
+|12|            └─EXCHANGE OUT DISTR (HASH)|:EX10001|3       |2           |
+|13|              └─PX BLOCK ITERATOR      |        |3       |1           |
+|14|                └─TABLE FULL SCAN      |t2      |3       |1           |
+===========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+  1 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC], [t2.c1, ASC])
+  2 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      dop=2
+  3 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC], [t2.c1, ASC])
+  4 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  5 - output([t1.c1]), filter(nil), rowset=256
+  6 - output([t1.c1]), filter(nil), rowset=256
+  7 - output([t1.c1]), filter(nil), rowset=256
+      (#keys=1, [t1.c1]), dop=2
+  8 - output([t1.c1]), filter(nil), rowset=256
+  9 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+ 10 - output([t2.c1]), filter(nil), rowset=256
+ 11 - output([t2.c1]), filter(nil), rowset=256
+ 12 - output([t2.c1]), filter(nil), rowset=256
+      (#keys=1, [t2.c1]), dop=2
+ 13 - output([t2.c1]), filter(nil), rowset=256
+ 14 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+use_hash(t1 t2), blocking('dfo'),  parallel(2)*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
++------+------+
+| c1   | c1   |
++------+------+
+|    1 |    1 |
+|    2 |    2 |
+|    3 |    3 |
++------+------+
+
+## clear tables
+drop table if exists t_s, t1, t2;
+drop table t_emp, t_dept, t_bonus, EMP, DEPT, BONUS;

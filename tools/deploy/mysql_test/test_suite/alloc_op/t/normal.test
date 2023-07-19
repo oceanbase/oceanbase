@@ -1,0 +1,117 @@
+set @@ob_enable_transformation=0;
+
+drop table if exists t1, t2;
+create table t1 (c1 int, c2 int, c3 int);
+create table t2 (c1 int, c2 int, c3 int);
+call dbms_stats.gather_table_stats(NULL, 't1');
+call dbms_stats.gather_table_stats(NULL, 't2');
+
+INSERT INTO t1 VALUES (1,1,1);
+INSERT INTO t1 VALUES (2,2,2);
+INSERT INTO t1 VALUES (3,3,3);
+INSERT INTO t2 VALUES (1,1,1);
+INSERT INTO t2 VALUES (2,2,2);
+INSERT INTO t2 VALUES (3,3,3);
+
+--result_format 4
+--explain_protocol 2
+
+################################
+## 1 join
+# nestedloop jion
+select /*+use_nl(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+select /*+use_nl(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 where t1.c1 between 5 and 24 order by t1.c1, t2.c1;
+# merge jion
+select /*+use_mj(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+select /*+use_mj(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 where t1.c1 between 5 and 24 order by t1.c1, t2.c1;
+# hash jion
+select /*+use_hash(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+select /*+use_hash(t1 t2), blocking('all')*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 where t1.c1 between 5 and 24 order by t1.c1, t2.c1;
+
+## 2 dml
+drop table if exists t_s;
+create table t_s(c1 int primary key, c2 int ,c3 int);
+
+insert /*+blocking('all')*/ into t_s(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9),(10,10);
+call dbms_stats.gather_table_stats('test','t_s');
+explain basic delete /*+use_px, blocking('all')*/ from t_s;
+delete /*+use_px, blocking('all')*/ from t_s;
+select * from t_s order by c1;
+
+
+## 3 TEMP TABLE INSERT
+--disable_warnings
+drop table if exists t_emp, t_dept, t_bonus, EMP, DEPT, BONUS;
+--enable_warnings
+
+create table t_dept(
+  DEPTNO number(2),
+  DNAME char(45),
+  LOC VARCHAR(39),
+  primary key (DEPTNO)
+) ;
+create table t_bonus (
+  ENAME varchar(30),
+  JOB varchar(30),
+  SAL number,
+  COMM number,
+  primary key (ENAME) ) ;
+
+create table EMP (
+  EMPno  number,
+  ENAME varchar(30),
+  JOB varchar(30),
+  MGR number(4),
+  HIREDATE date,
+  SAL number(7,2),
+  COMM number(7,2),
+  DEPTNO number(2)
+) ;
+create table DEPT(
+  DEPTNO number(2),
+  DNAME char(45),
+  LOC VARCHAR(39)
+) ;
+create table BONUS (
+  ENAME varchar(30),
+  JOB varchar(30),
+  SAL number,
+  COMM number ) ;
+create table t_emp (
+  EMPno  number,
+  ENAME varchar(30),
+  JOB varchar(30),
+  MGR number(4),
+  HIREDATE date,
+  SAL number(7,2),
+  COMM number(7,2),
+  DEPTNO number(2)
+ -- foreign key (deptno) references t_dept (deptno),
+ -- foreign key (ename) references t_bonus (ename)
+) ;
+
+with RECURSIVE
+  wc_dept as
+  ( select /*+ blocking('all'), MATERIALIZE */ * from t_dept ),
+  wc_bonus as
+  ( select /*+ MATERIALIZE */ * from t_bonus )
+select /*+ STAR_TRANSFORMATION FACT(emp) */ sum(emp.sal) sum_sal,
+  dept.dname, bonus.job
+from t_emp emp, wc_dept dept, wc_bonus bonus
+where emp.deptno = dept.deptno and
+  emp.ename = bonus.ename
+group by dept.dname, bonus.job
+order by 2, 3, 1;
+
+## 4 blocking and monitoring
+explain outline  select /*+use_hash(t1 t2), tracing(0,1,2), blocking(0,1,2)*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+select /*+use_hash(t1 t2), blocking(0), tracing(0,1,2)*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+select /*+use_hash(t1 t2), tracing(0,1,2), blocking(0)*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+
+## 5 px
+select /*+use_hash(t1 t2), blocking('all'),  parallel(2)*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+select /*+use_hash(t1 t2), blocking('dfo'),  parallel(2)*/ t1.c1, t2.c1 from t1 full join t2 on t1.c1 = t2.c1 order by t1.c1, t2.c1;
+
+## clear tables
+drop table if exists t_s, t1, t2;
+drop table t_emp, t_dept, t_bonus, EMP, DEPT, BONUS;

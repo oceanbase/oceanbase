@@ -9704,7 +9704,7 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
     AllocGIContext gi_ctx;
     ObPxPipeBlockingCtx pipe_block_ctx(get_allocator());
     ObLocationConstraintContext location_constraints;
-    AllocMDContext md_ctx;
+    AllocOpContext alloc_op_ctx;
     AllocBloomFilterContext bf_ctx;
     SMART_VAR(ObBatchExecParamCtx, batch_exec_param_ctx) {
       // set up context
@@ -9729,8 +9729,12 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
         }
         break;
       }
-      case ALLOC_MONITORING_DUMP: {
-        ctx = &md_ctx;
+      case ALLOC_OP: {
+        if (OB_FAIL(alloc_op_ctx.init())) {
+          LOG_WARN("fail to init alloc op ctx", K(ret));
+        } else {
+          ctx = &alloc_op_ctx;
+        }
         break;
       }
       case RUNTIME_FILTER: {
@@ -11209,7 +11213,7 @@ int ObLogPlan::generate_plan()
   } else if (OB_FAIL(plan_traverse_loop(RUNTIME_FILTER,
                                         ALLOC_GI,
                                         PX_PIPE_BLOCKING,
-                                        ALLOC_MONITORING_DUMP,
+                                        ALLOC_OP,
                                         OPERATOR_NUMBERING,
                                         PX_RESCAN,
                                         EXCHANGE_NUMBERING,

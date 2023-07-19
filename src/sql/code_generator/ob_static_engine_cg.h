@@ -482,11 +482,6 @@ private:
 
   int generate_insert_all_table_info(const ObInsertAllTableInfo &insert_tbl_info,
                                      InsertAllTableInfo *&tbl_info);
-  static int find_rownum_expr(bool &support, ObLogicalOperator *op);
-  static int find_rownum_expr_recursively(bool &support,
-                                           const ObRawExpr *raw_expr);
-  inline static int find_rownum_expr(bool &support,
-                              const common::ObIArray<ObRawExpr *> &exprs);
   int map_value_param_index(const ObInsertStmt *insert_stmt, RowParamMap &row_params_map);
   int add_output_datum_check_flag(ObOpSpec &spec);
   int generate_calc_part_id_expr(const ObRawExpr &src, const ObDASTableLocMeta *loc_meta, ObExpr *&dst);
