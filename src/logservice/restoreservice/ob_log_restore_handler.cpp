@@ -517,7 +517,8 @@ void ObLogRestoreHandler::mark_error(share::ObTaskId &trace_id,
       || (OB_TENANT_NOT_EXIST == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type)
       || (OB_TENANT_NOT_IN_SERVER == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type)
       || (OB_IN_STOP_STATE == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type)
-      || (OB_SERVER_IS_INIT == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type)) {
+      || (OB_SERVER_IS_INIT == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type)
+      || (OB_ERR_OUT_OF_LOWER_BOUND == ret_code && ObLogRestoreErrorContext::ErrorType::FETCH_LOG == error_type)) {
       CLOG_LOG(WARN, "fetch log failed in restore", KPC(parent_), KPC(this));
     } else if(OB_SUCCESS != ret_code) {
       CLOG_LOG(ERROR, "fatal error occur in restore", KPC(parent_), KPC(this));
