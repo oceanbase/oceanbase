@@ -49,7 +49,7 @@ jobs:
         path: ~/.ccache
         enableCrossOsArchive: false
         restore-keys: |
-          ${{ runner.os }}-${{ env.cache-name }}-el7.x86_64
+          ${{ runner.os }}-${{ env.cache-name }}-${{ matrix.image }}-el7.x86_64
     
     - name: Build init
       if: steps.cache-deps.outputs.cache-hit != 'true'
