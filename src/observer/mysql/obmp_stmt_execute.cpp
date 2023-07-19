@@ -631,6 +631,7 @@ int ObMPStmtExecute::parse_request_type(const char* &pos,
   for (int i = 0; OB_SUCC(ret) && i < num_of_params; ++i) {
     uint8_t type = 0;
     int8_t flag = 0;
+    TypeInfo &type_name_info = param_type_infos.at(i);
     if (1 == new_param_bound_flag) {
       PS_DEFENSE_CHECK(2) // type(1) + flag(1)
       {
@@ -638,6 +639,16 @@ int ObMPStmtExecute::parse_request_type(const char* &pos,
         ObMySQLUtil::get_int1(pos, flag);
         if (OB_FAIL(param_types.push_back(static_cast<EMySQLFieldType>(type)))) {
           LOG_WARN("fail to push back", K(type), K(i));
+        } else if (EMySQLFieldType::MYSQL_TYPE_COMPLEX != type) {
+          int16_t unsigned_flag = 128;
+          ObObjType ob_elem_type;
+          if (OB_FAIL(ObSMUtils::get_ob_type(ob_elem_type,
+                                    static_cast<EMySQLFieldType>(type),
+                                    flag & unsigned_flag ? true : false))) {
+            LOG_WARN("get ob type fail. ", K(type));
+          } else {
+            type_name_info.elem_type_.set_obj_type(ob_elem_type);
+          }
         }
       }
     } else {
@@ -651,7 +662,7 @@ int ObMPStmtExecute::parse_request_type(const char* &pos,
     }
 
     if (OB_SUCC(ret)) {
-      TypeInfo &type_name_info = param_type_infos.at(i);
+
       uint8_t elem_type = 0;
       if (EMySQLFieldType::MYSQL_TYPE_COMPLEX == type) {
         type_name_info.is_basic_type_ = false;
@@ -2068,7 +2079,8 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
                                              const common::ObTimeZoneInfo *tz_info,
                                              ObObj &param,
                                              bool is_complex_element,
-                                             ObPSAnalysisChecker *checker)
+                                             ObPSAnalysisChecker *checker,
+                                             bool is_unsigned)
 {
   int ret = OB_SUCCESS;
   UNUSED(charset);
@@ -2077,7 +2089,7 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
     case MYSQL_TYPE_SHORT:
     case MYSQL_TYPE_LONG:
     case MYSQL_TYPE_LONGLONG: {
-      if (OB_FAIL(parse_integer_value(type, data, param, allocator, is_complex_element, checker))) {
+      if (OB_FAIL(parse_integer_value(type, data, param, allocator, is_complex_element, checker, is_unsigned))) {
         LOG_WARN("parse integer value from client failed", K(ret));
       }
       break;
@@ -2441,8 +2453,9 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         OX (param.set_param_meta());
       }
     } else {
+      bool is_unsigned = NULL == type_info || !type_info->elem_type_.get_meta_type().is_unsigned_integer() ? false : true;
       if (OB_FAIL(parse_basic_param_value(allocator, type, charset, cs_type, ncs_type,
-                                          data, tz_info, param, false, &analysis_checker_))) {
+                                          data, tz_info, param, false, &analysis_checker_, is_unsigned))) {
         LOG_WARN("failed to parse basic param value", K(ret));
       } else {
         param.set_param_meta();
@@ -2531,8 +2544,9 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
           LOG_WARN("store string fail.", K(ret), K(stmt_id_), K(param_id));
         } else {
           const char* src = tmp;
+          bool is_unsigned = NULL == type_info || !type_info->elem_type_.get_meta_type().is_unsigned_integer() ? false : true;
           if (OB_FAIL(parse_basic_param_value(allocator, type, charset, cs_type, ncs_type,
-                                              src, tz_info, param, false))) {
+                                              src, tz_info, param, false, NULL ,is_unsigned))) {
             LOG_WARN("failed to parse basic param value", K(ret));
           } else {
             param.set_param_meta();
@@ -2608,18 +2622,20 @@ int ObMPStmtExecute::parse_integer_value(const uint32_t type,
                                          ObObj &param,
                                          ObIAllocator &allocator,
                                          bool is_complex_element,
-                                         ObPSAnalysisChecker *checker)
+                                         ObPSAnalysisChecker *checker,
+                                         bool is_unsigned) // oracle unsigned need
 {
   int ret = OB_SUCCESS;
   bool cast_to_number = !(lib::is_mysql_mode() || is_complex_element || MYSQL_TYPE_TINY == type);
   int64_t res_val = 0;
+  ObObjType unsigned_type = is_unsigned ? ObUInt64Type : ObNumberType;
   switch(type) {
     case MYSQL_TYPE_TINY: {
       PS_STATIC_DEFENSE_CHECK(checker, 1)
       {
         int8_t value;
         ObMySQLUtil::get_int1(data, value);
-        param.set_tinyint(value);
+        is_unsigned ? param.set_utinyint(value) : param.set_tinyint(value);
       }
       break;
     }
@@ -2629,8 +2645,11 @@ int ObMPStmtExecute::parse_integer_value(const uint32_t type,
         int16_t value = 0;
         ObMySQLUtil::get_int2(data, value);
         if (!cast_to_number) {
-          param.set_smallint(value);
+          is_unsigned ? param.set_usmallint(value) : param.set_smallint(value);
         } else {
+          if (is_unsigned) {
+            unsigned_type = ObUSmallIntType;
+          }
           res_val = static_cast<int64_t>(value);
         }
       }
@@ -2642,8 +2661,11 @@ int ObMPStmtExecute::parse_integer_value(const uint32_t type,
         int32_t value = 0;
         ObMySQLUtil::get_int4(data, value);
         if (!cast_to_number) {
-          param.set_int32(value);
+          is_unsigned ? param.set_uint32(value) : param.set_int32(value);
         } else {
+          if (is_unsigned) {
+            unsigned_type = ObUInt32Type;
+          }
           res_val = static_cast<int64_t>(value);
         }
       }
@@ -2655,8 +2677,11 @@ int ObMPStmtExecute::parse_integer_value(const uint32_t type,
         int64_t value = 0;
         ObMySQLUtil::get_int8(data, value);
         if (!cast_to_number) {
-          param.set_int(value);
+          is_unsigned ? param.set_uint(ObUInt64Type, value) : param.set_int(value);
         } else {
+          if (is_unsigned) {
+            unsigned_type = ObUInt64Type;
+          }
           res_val = value;
         }
       }
@@ -2673,7 +2698,11 @@ int ObMPStmtExecute::parse_integer_value(const uint32_t type,
     if (OB_FAIL(nb.from(res_val, allocator))) {
       LOG_WARN("decode param to number failed", K(ret), K(res_val));
     } else {
-      param.set_number(nb);
+      if (is_unsigned) {
+        param.set_number(unsigned_type, nb);
+      } else {
+        param.set_number(nb);
+      }
     }
   }
   return ret;
