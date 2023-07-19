@@ -246,25 +246,69 @@ int ObStorageHAUtils::check_transfer_ls_can_rebuild(
 {
   int ret = OB_SUCCESS;
   SCN readable_scn = SCN::base_scn();
-  rootserver::ObTenantInfoLoader *info = MTL(rootserver::ObTenantInfoLoader*);
   need_rebuild = false;
   if (!replay_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("argument invalid", K(ret), K(replay_scn));
-  } else if (OB_ISNULL(info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant info is null", K(ret), K(replay_scn));
   } else if (MTL_IS_PRIMARY_TENANT()) {
     need_rebuild = true;
+  } else if (OB_FAIL(get_readable_scn_(readable_scn))) {
+    LOG_WARN("failed to get readable scn", K(ret), K(replay_scn));
+  } else if (readable_scn >= replay_scn) {
+    need_rebuild = true;
+  } else {
+    need_rebuild = false;
+  }
+  return ret;
+}
+
+int ObStorageHAUtils::get_readable_scn_with_retry(share::SCN &readable_scn)
+{
+  int ret = OB_SUCCESS;
+  readable_scn.set_base();
+  rootserver::ObTenantInfoLoader *info = MTL(rootserver::ObTenantInfoLoader*);
+  const int64_t GET_READABLE_SCN_INTERVAL = 100 * 1000; // 100ms
+  const int64_t GET_REABLE_SCN_TIMEOUT = 9 * 1000 * 1000; // 9s
+
+  if (OB_ISNULL(info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant info is null", K(ret), KP(info));
+  } else {
+    const int64_t start_ts = ObTimeUtility::current_time();
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(get_readable_scn_(readable_scn))) {
+        LOG_WARN("failed to get readable scn", K(ret));
+        if (OB_EAGAIN == ret) {
+          //overwrite ret
+          if (ObTimeUtil::current_time() - start_ts >= GET_REABLE_SCN_TIMEOUT) {
+            ret = OB_TIMEOUT;
+            LOG_WARN("get valid readable scn timeout", K(ret), K(readable_scn));
+          } else {
+            ret = OB_SUCCESS;
+            ob_usleep(GET_READABLE_SCN_INTERVAL);
+          }
+        }
+      } else {
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObStorageHAUtils::get_readable_scn_(share::SCN &readable_scn)
+{
+  int ret = OB_SUCCESS;
+  readable_scn.set_base();
+  rootserver::ObTenantInfoLoader *info = MTL(rootserver::ObTenantInfoLoader*);
+  if (OB_ISNULL(info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant info is null", K(ret), KP(info));
   } else if (OB_FAIL(info->get_readable_scn(readable_scn))) {
     LOG_WARN("failed to get readable scn", K(ret), K(readable_scn));
   } else if (!readable_scn.is_valid()) {
     ret = OB_EAGAIN;
     LOG_WARN("readable_scn not valid", K(ret), K(readable_scn));
-  } else if (readable_scn >= replay_scn) {
-    need_rebuild = true;
-  } else {
-    need_rebuild = false;
   }
   return ret;
 }

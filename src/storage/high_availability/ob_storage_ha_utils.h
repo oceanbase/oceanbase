@@ -42,6 +42,7 @@ public:
   static int check_transfer_ls_can_rebuild(
       const share::SCN replay_scn,
       bool &need_rebuild);
+  static int get_readable_scn_with_retry(share::SCN &readable_scn);
 
 private:
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);
@@ -50,6 +51,7 @@ private:
     share::SCN &compaction_scn);
   static int check_tablet_replica_checksum_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
     const share::ObLSID &ls_id, const share::SCN &compaction_scn, common::ObISQLClient &sql_client);
+  static int get_readable_scn_(share::SCN &readable_scn);
 };
 
 struct ObTransferUtils
