@@ -3779,11 +3779,21 @@ int ObPartTransCtx::submit_log_impl_(const ObTxLogType log_type)
     }
   } else if (OB_ERR_TOO_BIG_ROWSIZE == ret) {
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(do_local_tx_end_(TxEndAction::DELAY_ABORT_TX))) {
-      TRANS_LOG(WARN, "do local tx end failed", K(tmp_ret), K(log_type), KPC(this));
+    if (ObPartTransAction::COMMIT == part_trans_action_
+        || get_upstream_state() >= ObTxState::REDO_COMPLETE) {
+      if (OB_TMP_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
+        TRANS_LOG(WARN, "abort tx failed", KR(ret), KPC(this));
+      } else {
+        TRANS_LOG(WARN, "do abort tx end for committing txn", K(ret),
+                  K(log_type), KPC(this));
+      }
     } else {
-      TRANS_LOG(WARN, "row size is too big for only one redo", K(ret),
-                K(log_type), KPC(this));
+      if (OB_TMP_FAIL(do_local_tx_end_(TxEndAction::DELAY_ABORT_TX))) {
+        TRANS_LOG(WARN, "do local tx end failed", K(tmp_ret), K(log_type), KPC(this));
+      } else {
+        TRANS_LOG(WARN, "row size is too big for only one redo", K(ret),
+                  K(log_type), KPC(this));
+      }
     }
   }
 
