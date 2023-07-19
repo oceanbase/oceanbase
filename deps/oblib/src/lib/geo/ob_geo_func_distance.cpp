@@ -125,7 +125,6 @@ private:
   {
     INIT_SUCC(ret);
     common::ObIAllocator *allocator = context.get_allocator();
-    typename CollectonType::iterator iter;
     double min_dist = std::numeric_limits<double>::infinity();
     double temp_res = min_dist;
 
@@ -134,7 +133,7 @@ private:
       LOG_WARN("Null allocator", K(ret));
     } else if (g1->type() == ObGeoType::GEOMETRYCOLLECTION) {
       const CollectonType *geo1 = reinterpret_cast<const CollectonType *>(g1->val());
-      iter = geo1->begin();
+      typename CollectonType::iterator iter = geo1->begin();
       for (; iter != geo1->end() && OB_SUCC(ret); iter++) {
         typename CollectonType::const_pointer sub_ptr = iter.operator->();
         ObGeoType sub_type = geo1->get_sub_type(sub_ptr);
@@ -155,7 +154,7 @@ private:
       }
     } else if (g2->type() == ObGeoType::GEOMETRYCOLLECTION) {
       const CollectonType *geo2 = reinterpret_cast<const CollectonType *>(g2->val());
-      iter = geo2->begin();
+      typename CollectonType::iterator iter = geo2->begin();
       for (; iter != geo2->end() && OB_SUCC(ret); iter++) {
         typename CollectonType::const_pointer sub_ptr = iter.operator->();
         ObGeoType sub_type = geo2->get_sub_type(sub_ptr);

@@ -188,10 +188,8 @@ int ObExprSTDistance::eval_st_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   int ret = OB_SUCCESS;
   ObDatum *gis_datum1 = NULL;
   ObDatum *gis_datum2 = NULL;
-  ObDatum *gis_unit = NULL;
   ObExpr *gis_arg1 = expr.args_[0];
   ObExpr *gis_arg2 = expr.args_[1];
-  const int max_arg_num = 3;
 
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
@@ -250,7 +248,9 @@ int ObExprSTDistance::eval_st_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDat
           ObGeoExprUtils::geo_func_error_handle(ret, N_ST_DISTANCE);
         }
       } else {
+        const int max_arg_num = 3;
         if (expr.arg_cnt_ == max_arg_num) {
+          ObDatum *gis_unit = NULL;
           double factor = 0.0;
           if (OB_FAIL(expr.args_[max_arg_num - 1]->eval(ctx, gis_unit))) {
             LOG_WARN("eval geo unit arg failed", K(ret));
