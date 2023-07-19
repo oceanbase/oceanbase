@@ -733,6 +733,9 @@ private:
                          const bool is_heap_table,
                          common::ObNewRowIterator *row_iter,
                          int64_t &affected_rows);
+  static int check_is_gencol_check_failed(const ObRelativeTable &data_table,
+                                uint64_t error_col_id,
+                                bool &is_virtual_gencol);
 
 private:
   friend class ObLSTabletIterator;
