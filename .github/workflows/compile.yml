@@ -39,7 +39,7 @@ jobs:
         path: deps/3rd
         enableCrossOsArchive: true
 
-    - name: cache-build
+    - name: Cache build
       id: cache-build
       uses: actions/cache@v3
       env:
