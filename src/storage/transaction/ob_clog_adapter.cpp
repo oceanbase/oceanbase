@@ -824,7 +824,7 @@ int ObClogAdapter::submit_log_(const ObPartitionKey& partition, const ObVersion&
     } else {
     }
     if (OB_SUCC(ret)) {
-      // ObTransStatistic::get_instance().add_clog_submit_count(partition.get_tenant_id(), 1);
+      ObTransStatistic::get_instance().add_clog_submit_count(partition.get_tenant_id(), 1);
       TRANS_LOG(DEBUG, "submit log success", K(partition), K(size));
     }
   }
@@ -882,7 +882,7 @@ int ObClogAdapter::submit_log_(const ObPartitionKey& partition, const ObVersion&
       // do nothing
     }
     if (OB_SUCC(ret)) {
-      // ObTransStatistic::get_instance().add_clog_submit_count(partition.get_tenant_id(), 1);
+      ObTransStatistic::get_instance().add_clog_submit_count(partition.get_tenant_id(), 1);
       TRANS_LOG(DEBUG, "submit log success", K(partition), K(size));
     }
   }

@@ -768,6 +768,10 @@ int ObGtsSource::query_gts_(const ObAddr& leader)
     TRANS_LOG(WARN, "post gts request failed", KR(ret), K(leader), K(msg));
     (void)refresh_gts_location_();
   } else {
+    if (GCONF.enable_record_trace_log) {
+      gts_statistics_.inc_gts_rpc_cnt();
+      ObTransStatistic::get_instance().add_gts_rpc_count(tenant_id_, 1);
+    }
     TRANS_LOG(DEBUG, "post gts request success", K(srr), K_(gts_local_cache));
   }
   return ret;
