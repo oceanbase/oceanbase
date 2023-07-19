@@ -12276,6 +12276,10 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12416: __all_virtual_balance_task_helper
 
 # 12417: __all_virtual_balance_group_ls_stat
+# 12418: __all_virtual_cgroup_info
+# 12419: __all_virtual_cgroup_config
+
+#
 # 余留位置
 #
 
