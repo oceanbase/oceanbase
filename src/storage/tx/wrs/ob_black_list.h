@@ -23,7 +23,7 @@
 // 判断时间戳是否赶上/落后的缓冲时间(ns)，避免阈值附近的日志流反复加入/移出黑名单
 #define BLACK_LIST_WHITEWASH_INTERVAL_NS  1000000000  // 1s
 // 黑名单信息打印时间间隔(us)
-#define BLACK_LIST_PRINT_INTERVAL         10000000    // 10s
+#define BLACK_LIST_PRINT_INTERVAL         5000000    // 5s
 // 清理超时对象的时间间隔(us)，这些对象不会出现在 SQLResult 中，比如切换server之后旧server上的日志流
 #define BLACK_LIST_CLEAN_UP_INTERVAL      5000000     // 5s
 // 最大连续失败次数，连续刷新黑名单失败 达到 该次数则清空黑名单

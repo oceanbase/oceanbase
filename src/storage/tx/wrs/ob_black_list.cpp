@@ -245,7 +245,7 @@ int ObBLService::do_black_list_check_(sqlclient::ObMySQLResult *result)
       TRANS_LOG(WARN, "get_info_from_result_ fail ", KR(ret), K(result));
     } else if (ls_info.is_leader()) {
       // cannot add leader into blacklist
-    } else if (ls_info.weak_read_scn_ == 0 && ls_info.migrate_status_ == OB_MIGRATE_STATUS_NONE) {
+    } else if (ls_info.weak_read_scn_ == 0) {
       // log stream is initializing, should't be put into blacklist
     } else if (OB_FAIL(OB_TS_MGR.get_gts(bl_key.get_tenant_id(), NULL, gts_scn))) {
       TRANS_LOG(WARN, "get gts scn error", K(ret), K(bl_key));
@@ -323,6 +323,9 @@ int ObBLService::get_info_from_result_(sqlclient::ObMySQLResult &result, ObBLKey
     TRANS_LOG(WARN, "bl_key init fail", K(server), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(ls_info.init(ls_role, weak_read_scn, migrate_status, tx_blocked))) {
     TRANS_LOG(WARN, "ls_info init fail", K(ls_role), K(weak_read_scn), K(migrate_status), K(tx_blocked));
+  }
+  if (tx_blocked) {
+    TRANS_LOG(INFO, "current ls is blocked, need to put blacklist", K(bl_key), K(ls_info));
   }
 
   return ret;

@@ -94,6 +94,18 @@ struct ObLSVTInfo
   share::SCN tablet_change_checkpoint_scn_;
   share::SCN transfer_scn_;
   bool tx_blocked_;
+  TO_STRING_KV(K_(ls_id),
+               K_(replica_type),
+               K_(ls_state),
+               K_(migrate_status),
+               K_(tablet_count),
+               K_(weak_read_scn),
+               K_(checkpoint_scn),
+               K_(checkpoint_lsn),
+               K_(rebuild_seq),
+               K_(tablet_change_checkpoint_scn),
+               K_(transfer_scn),
+               K_(tx_blocked));
 };
 
 // 诊断虚表统计信息
