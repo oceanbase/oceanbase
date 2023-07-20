@@ -722,6 +722,7 @@ ObSchemaMgr &ObSchemaMgr::operator =(const ObSchemaMgr &other)
 int ObSchemaMgr::assign(const ObSchemaMgr &other)
 {
   int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
   if (!check_inner_stat()) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -732,9 +733,12 @@ int ObSchemaMgr::assign(const ObSchemaMgr &other)
     is_consistent_ = other.is_consistent_;
     #define ASSIGN_FIELD(x)                        \
       if (OB_SUCC(ret)) {                          \
+        int64_t start_ts = ObTimeUtility::current_time();   \
         if (OB_FAIL(x.assign(other.x))) {          \
           LOG_WARN("assign " #x "failed", K(ret)); \
         }                                          \
+        LOG_INFO("assign "#x" cost", KR(ret),                       \
+                 "cost", ObTimeUtility::current_time() - start_ts); \
       }
     ASSIGN_FIELD(tenant_infos_);
     // System variables need to be assigned first
@@ -781,6 +785,7 @@ int ObSchemaMgr::assign(const ObSchemaMgr &other)
       } else if (OB_FAIL(sequence_mgr_.assign(other.sequence_mgr_))) {
         LOG_WARN("assign sequence mgr failed", K(ret));
       } else if (OB_FAIL(keystore_mgr_.assign(other.keystore_mgr_))) {
+        LOG_WARN("assign keystore mgr failed", K(ret));
       } else if (OB_FAIL(tablespace_mgr_.assign(other.tablespace_mgr_))) {
         LOG_WARN("assign sequence mgr failed", K(ret));
       } else if (OB_FAIL(label_se_policy_mgr_.assign(other.label_se_policy_mgr_))) {
@@ -812,13 +817,14 @@ int ObSchemaMgr::assign(const ObSchemaMgr &other)
       }
     }
   }
-
+  LOG_INFO("ObSchemaMgr assign cost", KR(ret), "cost", ObTimeUtility::current_time() - start_time);
   return ret;
 }
 
 int ObSchemaMgr::deep_copy(const ObSchemaMgr &other)
 {
   int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
   if (!check_inner_stat()) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -829,6 +835,7 @@ int ObSchemaMgr::deep_copy(const ObSchemaMgr &other)
     is_consistent_ = other.is_consistent_;
     #define ADD_SCHEMA(SCHEMA, SCHEMA_TYPE, SCHEMA_ITER)  \
       if (OB_SUCC(ret)) {                                 \
+        int64_t start_ts = ObTimeUtility::current_time(); \
         for (SCHEMA_ITER iter = other.SCHEMA##_infos_.begin();               \
             OB_SUCC(ret) && iter != other.SCHEMA##_infos_.end(); iter++) {   \
           const SCHEMA_TYPE *schema = *iter;                                 \
@@ -839,6 +846,9 @@ int ObSchemaMgr::deep_copy(const ObSchemaMgr &other)
             LOG_WARN("add "#SCHEMA" failed", K(ret), K(*schema));            \
           }                                                                  \
         }                                                                    \
+        LOG_INFO("add "#SCHEMA"s cost", KR(ret),                             \
+                 "count", other.SCHEMA##_infos_.count(),                     \
+                 "cost", ObTimeUtility::current_time() - start_ts);          \
       }
     ADD_SCHEMA(tenant, ObSimpleTenantSchema, ConstTenantIterator);
     // System variables need to be copied first
@@ -913,7 +923,7 @@ int ObSchemaMgr::deep_copy(const ObSchemaMgr &other)
       }
     }
   }
-
+  LOG_INFO("ObSchemaMgr deep_copy cost", KR(ret), "cost", ObTimeUtility::current_time() - start_time);
   return ret;
 }
 
@@ -2284,24 +2294,155 @@ int ObSchemaMgr::get_tablegroup_schema(
   return ret;
 }
 
-int ObSchemaMgr::add_tables(const ObIArray<ObSimpleTableSchemaV2> &table_schemas)
+int ObSchemaMgr::add_tables(
+    const ObIArray<ObSimpleTableSchemaV2> &table_schemas,
+    const bool refresh_full_schema/*= false*/)
 {
   int ret = OB_SUCCESS;
-
+  int64_t start_time = ObTimeUtility::current_time();
+  static const int64_t STAGE_CNT = 5;
+  int64_t cost_time_array[STAGE_CNT] = {0};
+  ObArrayWrap<int64_t> cost_array(cost_time_array, STAGE_CNT);
   if (!check_inner_stat()) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
+    LOG_WARN("not init", KR(ret));
+  } else if (refresh_full_schema && OB_FAIL(reserved_mem_for_tables_(table_schemas))) {
+    LOG_WARN("fail to reserved mem for tables", KR(ret));
   } else {
-    FOREACH_CNT_X(table_schema, table_schemas, OB_SUCC(ret)) {
-      if (OB_FAIL(add_table(*table_schema))) {
-        LOG_WARN("add table failed", K(ret),
-                 "table_schema", *table_schema);
+    bool desc_order = true;
+    if (OB_SUCC(ret) && table_schemas.count() >= 2) {
+      // 1. when refresh user simple table schemas, table_schemas will be sorted in desc order by sql.
+      // 2. when broadcast schema or refresh core/system tables or other situations, table_schemas will be sorted in asc order.
+      // Because table_infos_ are sorted in asc order, we should also add table in asc order to reduce performance lost.
+      // Normally, we consider table_schemas are in desc order in most situations.
+      desc_order = table_schemas.at(0).get_table_id() > table_schemas.at(1).get_table_id();
+    }
+
+    if (OB_SUCC(ret)) {
+      if (desc_order) {
+        for (int64_t i = table_schemas.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+          const ObSimpleTableSchemaV2 &table = table_schemas.at(i);
+          if (OB_FAIL(add_table(table, &cost_array))) {
+            LOG_WARN("add table failed", KR(ret), K(table));
+          }
+        } // end for
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); i++) {
+          const ObSimpleTableSchemaV2 &table = table_schemas.at(i);
+          if (OB_FAIL(add_table(table, &cost_array))) {
+            LOG_WARN("add table failed", KR(ret), K(table));
+          }
+        } // end for
       }
     }
   }
-
+  FLOG_INFO("add tables", KR(ret),
+            "stage_cost", cost_array,
+            "cost", ObTimeUtility::current_time() - start_time);
   return ret;
 }
+
+int ObSchemaMgr::reserved_mem_for_tables_(
+    const ObIArray<ObSimpleTableSchemaV2> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  const int64_t table_cnt = table_schemas.count();
+  int64_t index_cnt = 0;
+  int64_t vp_cnt = 0;
+  int64_t lob_meta_cnt = 0;
+  int64_t lob_piece_cnt = 0;
+  int64_t hidden_table_cnt = 0;
+  int64_t other_table_cnt = 0;
+  int64_t fk_cnt = 0;
+  int64_t cst_cnt = 0;
+  const int64_t OBJECT_SIZE = sizeof(void*);
+  if (!check_inner_stat()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(table_infos_.reserve(table_cnt))) {
+    LOG_WARN("fail to reserved array", KR(ret), K(table_cnt));
+  } else {
+    //(void) table_id_map_.set_sub_map_mem_size(table_cnt * OBJECT_SIZE);
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); i++) {
+      const ObSimpleTableSchemaV2 &table = table_schemas.at(i);
+      if (table.is_index_table() || table.is_materialized_view()) {
+        index_cnt++;
+      } else if (table.is_aux_vp_table()) {
+        vp_cnt++;
+      } else if (table.is_aux_lob_meta_table()) {
+        lob_meta_cnt++;
+      } else if (table.is_aux_lob_piece_table()) {
+        lob_piece_cnt++;
+      } else if (table.is_user_hidden_table()) {
+        hidden_table_cnt++;
+      } else {
+        other_table_cnt++;
+      }
+
+      if ((table.is_table() || table.is_oracle_tmp_table())
+          && !table.is_user_hidden_table()) {
+        fk_cnt += table.get_simple_foreign_key_info_array().count();
+      }
+
+      if ((table.is_table() || table.is_oracle_tmp_table())
+          && !table.is_user_hidden_table()
+          && !table.is_mysql_tmp_table()) {
+        cst_cnt += table.get_simple_constraint_info_array().count();
+      }
+    } // end for
+
+    if (OB_SUCC(ret) && index_cnt > 0) {
+      if (OB_FAIL(index_infos_.reserve(index_cnt))) {
+        LOG_WARN("fail to reserved array", KR(ret), K(index_cnt));
+      } else {
+        //(void) index_name_map_.set_sub_map_mem_size(index_cnt * OBJECT_SIZE);
+      }
+    }
+
+    if (OB_SUCC(ret) && vp_cnt > 0) {
+      if (OB_FAIL(aux_vp_infos_.reserve(vp_cnt))) {
+        LOG_WARN("fail to reserved array", KR(ret), K(vp_cnt));
+      } else {
+        //(void) aux_vp_name_map_.set_sub_map_mem_size(vp_cnt * OBJECT_SIZE);
+      }
+    }
+
+    if (OB_SUCC(ret) && lob_meta_cnt > 0) {
+      if (OB_FAIL(lob_meta_infos_.reserve(lob_meta_cnt))) {
+        LOG_WARN("fail to reserved array", KR(ret), K(lob_meta_cnt));
+      }
+    }
+
+    if (OB_SUCC(ret) && lob_piece_cnt > 0) {
+      if (OB_FAIL(lob_piece_infos_.reserve(lob_piece_cnt))) {
+        LOG_WARN("fail to reserved array", KR(ret), K(lob_piece_cnt));
+      }
+    }
+
+    if (OB_SUCC(ret) && other_table_cnt > 0) {
+      //(void) table_name_map_.set_sub_map_mem_size(other_table_cnt * OBJECT_SIZE);
+    }
+
+    if (OB_SUCC(ret) && fk_cnt > 0) {
+      //(void) foreign_key_name_map_.set_sub_map_mem_size(fk_cnt * OBJECT_SIZE);
+    }
+
+    if (OB_SUCC(ret) && cst_cnt > 0) {
+      //(void) constraint_name_map_.set_sub_map_mem_size(cst_cnt * OBJECT_SIZE);
+    }
+
+  }
+  FLOG_INFO("reserve mem", KR(ret),
+            K(table_cnt), K(index_cnt), K(vp_cnt),
+            K(lob_meta_cnt), K(lob_piece_cnt),
+            K(hidden_table_cnt), K(other_table_cnt),
+            K(fk_cnt), K(cst_cnt),
+            "cost", ObTimeUtility::current_time() - start_time);
+  return ret;
+}
+
 
 int ObSchemaMgr::del_tables(const ObIArray<ObTenantTableId> &tables)
 {
@@ -2323,7 +2464,9 @@ int ObSchemaMgr::del_tables(const ObIArray<ObTenantTableId> &tables)
   return ret;
 }
 
-int ObSchemaMgr::add_table(const ObSimpleTableSchemaV2 &table_schema)
+int ObSchemaMgr::add_table(
+    const ObSimpleTableSchemaV2 &table_schema,
+    common::ObArrayWrap<int64_t> *cost_array /*= NULL*/)
 {
   int ret = OB_SUCCESS;
 
@@ -2333,6 +2476,7 @@ int ObSchemaMgr::add_table(const ObSimpleTableSchemaV2 &table_schema)
   ObSimpleTableSchemaV2 *replaced_table = NULL;
   const uint64_t table_id = table_schema.get_table_id();
   bool is_system_table = false;
+  bool idx = 0;
   if (OB_ALL_CORE_TABLE_TID == table_schema.get_table_id()) {
     FLOG_INFO("add __all_core_table schema", KR(ret), K(table_schema), K(lbt()));
   }
@@ -2365,6 +2509,7 @@ int ObSchemaMgr::add_table(const ObSimpleTableSchemaV2 &table_schema)
     LOG_WARN("invalid case mode", K(ret), K(mode));
   }
 
+  int64_t start_time = ObTimeUtility::current_time();
   if (OB_FAIL(ret)){
   } else if (OB_FAIL(ObSchemaUtils::alloc_schema(allocator_, table_schema, new_table_schema))) {
     LOG_WARN("alloc schema failed", K(ret));
@@ -2372,6 +2517,11 @@ int ObSchemaMgr::add_table(const ObSimpleTableSchemaV2 &table_schema)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL ptr", K(ret), K(new_table_schema));
   }
+  if (OB_NOT_NULL(cost_array) && idx < cost_array->count()) {
+    cost_array->at(idx++) += ObTimeUtility::current_time() - start_time;
+  }
+
+  start_time = ObTimeUtility::current_time();
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(new_table_schema->set_name_case_mode(mode))) {
     // will not reach here
@@ -2418,7 +2568,11 @@ int ObSchemaMgr::add_table(const ObSimpleTableSchemaV2 &table_schema)
       LOG_WARN("failed to add lob piece schema", K(ret));
     }
   }
+  if (OB_NOT_NULL(cost_array) && idx < cost_array->count()) {
+    cost_array->at(idx++) += ObTimeUtility::current_time() - start_time;
+  }
 
+  start_time = ObTimeUtility::current_time();
   if (OB_SUCC(ret)) {
     if (NULL == replaced_table) {
       // do-nothing
@@ -2428,11 +2582,21 @@ int ObSchemaMgr::add_table(const ObSimpleTableSchemaV2 &table_schema)
       LOG_WARN("failed to deal with change table state", K(ret));
     }
   }
+  if (OB_NOT_NULL(cost_array) && idx < cost_array->count()) {
+    cost_array->at(idx++) += ObTimeUtility::current_time() - start_time;
+  }
+
   if (OB_SUCC(ret)) {
+    start_time = ObTimeUtility::current_time();
     int over_write = 1;
     int hash_ret = table_id_map_.set_refactored(new_table_schema->get_table_id(),
                                      new_table_schema,
                                      over_write);
+    if (OB_NOT_NULL(cost_array) && idx < cost_array->count()) {
+      cost_array->at(idx++) += ObTimeUtility::current_time() - start_time;
+    }
+
+    start_time = ObTimeUtility::current_time();
     if (OB_SUCCESS != hash_ret && OB_HASH_EXIST != hash_ret) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("build table id hashmap failed", K(ret), K(hash_ret),
@@ -2562,6 +2726,9 @@ int ObSchemaMgr::add_table(const ObSimpleTableSchemaV2 &table_schema)
           }
         }
       }
+    }
+    if (OB_NOT_NULL(cost_array) && idx < cost_array->count()) {
+      cost_array->at(idx++) += ObTimeUtility::current_time() - start_time;
     }
   }
 

@@ -987,13 +987,15 @@ private:
       ObISQLClient &sql_client,
       const uint64_t tenant_id,
       const char* tname,
-      ObTimeoutCtx &ctx);
+      ObTimeoutCtx &ctx,
+      int64_t &table_cnt);
 
   int calc_refresh_full_schema_timeout_ctx_(
       ObISQLClient &sql_client,
       const uint64_t tenant_id,
       const char* tname,
-      int64_t &timeout);
+      int64_t &timeout,
+      int64_t &table_cnt);
 private:
   common::ObMySQLProxy *mysql_proxy_;
   common::ObDbLinkProxy *dblink_proxy_;

@@ -6204,6 +6204,7 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         }
       }
 
+      const bool refresh_full_schema = true;
       // add simple schema for cache
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(schema_mgr_for_cache->sys_variable_mgr_
@@ -6215,7 +6216,7 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         LOG_WARN("add databases failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->add_tablegroups(simple_tablegroups))) {
         LOG_WARN("add tablegroups failed", K(ret));
-      } else if (OB_FAIL(schema_mgr_for_cache->add_tables(simple_tables))) {
+      } else if (OB_FAIL(schema_mgr_for_cache->add_tables(simple_tables, refresh_full_schema))) {
         LOG_WARN("add tables failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->outline_mgr_.add_outlines(simple_outlines))) {
         LOG_WARN("add outlines failed", K(ret));
