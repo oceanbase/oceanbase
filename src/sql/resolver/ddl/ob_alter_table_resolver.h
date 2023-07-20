@@ -70,7 +70,7 @@ public:
                             ObReducedVisibleColSet &reduced_visible_col_set);
   int resolve_drop_column(const ParseNode &node,
                           ObReducedVisibleColSet &reduced_visible_col_set);
-  int resolve_drop_column_nodes_for_mysql(const ParseNode& node);
+  int resolve_drop_column_nodes_for_mysql(const ParseNode& node, ObReducedVisibleColSet &reduced_visible_col_set);
   int resolve_rename_column(const ParseNode &node);
   int fill_table_option(const share::schema::ObTableSchema *table_schema);
   //save table option to AlterTableArg

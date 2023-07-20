@@ -856,17 +856,18 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
     //deal with drop column affer drop constraint (mysql mode)
     if (OB_SUCC(ret) && lib::is_mysql_mode() && drop_col_act_position_list.count() > 0) {
       for (uint64_t i = 0; i < drop_col_act_position_list.count(); ++i) {
-        if (OB_FAIL(resolve_drop_column_nodes_for_mysql(*node.children_[drop_col_act_position_list.at(i)]))) {
+        if (OB_FAIL(resolve_drop_column_nodes_for_mysql(*node.children_[drop_col_act_position_list.at(i)], reduced_visible_col_set))) {
           SQL_RESV_LOG(WARN, "Resolve drop column error!", K(ret));
         }
       }
     }
-    if (OB_SUCC(ret) && lib::is_oracle_mode()) {
-      if (is_modify_column_visibility && (alter_column_times != alter_column_visibility_times)) {
+    if (OB_SUCC(ret)) {
+      if (lib::is_oracle_mode() && is_modify_column_visibility && (alter_column_times != alter_column_visibility_times)) {
         ret = OB_ERR_MODIFY_COL_VISIBILITY_COMBINED_WITH_OTHER_OPTION;
         SQL_RESV_LOG(WARN, "Column visibility modifications can not be combined with any other modified column DDL option.", K(ret));
       } else {
         bool has_visible_col = false;
+        bool has_hidden_gencol = false;
         ObColumnIterByPrevNextID iter(*table_schema_);
         const ObColumnSchemaV2 *column_schema = NULL;
         while (OB_SUCC(ret) && OB_SUCC(iter.next(column_schema)) && !has_visible_col) {
@@ -881,6 +882,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
             continue;
           } else if (column_schema->is_hidden()) {
             // skip hidden column
+            has_hidden_gencol |= column_schema->is_virtual_generated_column();
             continue;
           } else { // is visible column
             ObColumnNameHashWrapper col_key(column_schema->get_column_name_str());
@@ -902,9 +904,10 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
           ret = OB_SUCCESS;
         }
         if (OB_SUCC(ret)) {
-          if (alter_column_visibility_times > reduced_visible_col_set.count()) {
+          if (lib::is_oracle_mode() && alter_column_visibility_times > reduced_visible_col_set.count()) {
             // 走到这里说明存在 alter table modify column visible，则至少有一个 visible column，不应该报错
-          } else if (!has_visible_col) {
+          } else if (!has_visible_col && (is_oracle_mode() || has_hidden_gencol)) {
+            //If there's no hidden generated columns, OB will check if all fields are dropped on rootserver
             ret = OB_ERR_ONLY_HAVE_INVISIBLE_COL_IN_TABLE;
             SQL_RESV_LOG(WARN, "table must have at least one column that is not invisible", K(ret));
           }
@@ -1054,10 +1057,9 @@ int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
   return ret;
 }
 
-int ObAlterTableResolver::resolve_drop_column_nodes_for_mysql(const ParseNode& node)
+int ObAlterTableResolver::resolve_drop_column_nodes_for_mysql(const ParseNode& node, ObReducedVisibleColSet &reduced_visible_col_set)
 {
   int ret = OB_SUCCESS;
-  ObReducedVisibleColSet reduced_visible_col_set;
   if (T_ALTER_COLUMN_OPTION != node.type_ || OB_ISNULL(node.children_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
@@ -5265,7 +5267,7 @@ int ObAlterTableResolver::resolve_drop_column(const ParseNode &node, ObReducedVi
           SQL_RESV_LOG(WARN, "Add alter column schema failed!", K(ret));
         }
       }
-      if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+      if (OB_SUCC(ret)) {
         const ObString &column_name = alter_column_schema.get_origin_column_name();
         ObColumnSchemaHashWrapper col_key(column_name);
         if (OB_FAIL(reduced_visible_col_set.set_refactored(col_key))) {
