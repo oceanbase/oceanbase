@@ -1128,6 +1128,7 @@ public:
     UDF_NS,
     LOCAL_TYPE,         // 本地的自定义类型
     PKG_TYPE,           // 包中的自定义类型
+    SELF_ATTRIBUTE,
   };
 
   ObPLExternalNS(const ObPLResolveCtx &resolve_ctx, const ObPLBlockNS *parent_ns)

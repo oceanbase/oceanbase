@@ -12360,6 +12360,7 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
                || (ObPLExternalNS::UDT_NS == type && is_routine)) {
       OZ (resolve_construct(access_ident, ns, access_idxs, var_index, func));
     } else if (ObPLExternalNS::INVALID_VAR == type
+               || (ObPLExternalNS::SELF_ATTRIBUTE == type)
                || (ObPLExternalNS::LOCAL_VAR == type && is_routine)
                || (ObPLExternalNS::TABLE_NS == type && is_routine)
                || (ObPLExternalNS::LABEL_NS == type && is_routine)
@@ -14822,9 +14823,9 @@ int ObPLResolver::verify_goto_stmt_restriction(const ObPLStmt &goto_stmt,
       bool is_hit = false;
       // tracking back to parent recursively,
       // to see if this goto stmt is transfer control to other encolsing block
-      const ObPLStmtBlock * parent = blk->get_block();
+      const ObPLStmtBlock *parent = blk->get_block();
       while (OB_NOT_NULL(parent)) {
-        if (parent->is_contain_stmt(&dst_stmt)) {
+        if (parent->is_contain_stmt(&dst_stmt) && !parent->in_handler()) {
           is_hit = true;
           break;
         }
@@ -14838,8 +14839,11 @@ int ObPLResolver::verify_goto_stmt_restriction(const ObPLStmt &goto_stmt,
         result = RESTRICTION_JUMP_OUT_EXCEPTION;
       }
     } else {
+      // do nothing ...
     }
-  } else {}
+  } else {
+    // do nothing ...
+  }
   return ret;
 }
 

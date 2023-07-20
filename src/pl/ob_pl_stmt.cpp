@@ -2457,6 +2457,38 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
         }
       }
     }
+    // try attribute of self argument
+    if (OB_SUCC(ret)
+        && OB_NOT_NULL(symbol_table_->get_self_param())
+        && OB_INVALID_INDEX == var_idx
+        && OB_INVALID_INDEX == parent_id) {
+      const ObPLDataType &pl_type = symbol_table_->get_self_param()->get_type();
+      const ObUserDefinedType *user_type = NULL;
+      const ObRecordType *record_type = NULL;
+      if (!pl_type.is_udt_type() || pl_type.is_opaque_type()) {
+        // type is invalid when create udt & opaque type has not attribute, so do nothing ...
+      } else if (OB_FAIL(get_user_type(pl_type.get_user_type_id(), user_type))) {
+        LOG_WARN("failed to get user type", K(ret), KPC(user_type));
+      } else if (OB_ISNULL(user_type) || !user_type->is_object_type()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected user type", K(ret), KPC(user_type));
+      } else if (OB_ISNULL(record_type = static_cast<const ObRecordType*>(user_type))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected record type", K(ret), KPC(record_type), KPC(user_type));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_record_member_count(); ++i) {
+          if (OB_ISNULL(record_type->get_record_member_name(i))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected record member name", K(ret), K(i), KPC(record_type));
+          } else if (ObCharset::case_compat_mode_equal(var_name, *record_type->get_record_member_name(i))) {
+            type = ObPLExternalNS::SELF_ATTRIBUTE;
+            var_idx = i;
+            parent_id = user_type->get_user_type_id();
+            break;
+          }
+        }
+      }
+    }
     // 尝试解析为外部符号
     if (OB_SUCC(ret) && OB_INVALID_INDEX == var_idx && resolve_external) {
       if (OB_NOT_NULL(external_ns_)) {
