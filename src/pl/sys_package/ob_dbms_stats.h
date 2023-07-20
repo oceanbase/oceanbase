@@ -454,25 +454,19 @@ public:
                                             sql::ParamStore &params,
                                             common::ObObj &result);
 
-  static int get_need_statistics_tables(sql::ObExecContext &ctx,
-                                        ObIArray<StatTable> &user_missing_tables,
-                                        ObIArray<StatTable> &user_stale_tables,
-                                        ObIArray<StatTable> &sys_missing_tables,
-                                        ObIArray<StatTable> &sys_stale_tables);
+  static int gather_database_table_stats(sql::ObExecContext &ctx,
+                                         ObAutoGatherStatsParams &auto_gather_params);
+
+  static int do_gather_table_stats(sql::ObExecContext &ctx,
+                                   const ObTableSchema *table_schema,
+                                   const uint64_t tenant_id,
+                                   ObAutoGatherStatsParams &auto_gather_params);
 
   static int get_table_stale_percent(sql::ObExecContext &ctx,
                                      const uint64_t tenant_id,
                                      const share::schema::ObTableSchema &table_schema,
                                      const double stale_percent_threshold,
                                      StatTable &stat_table);
-
-  static int gather_tables_stats_with_default_param(ObExecContext &ctx,
-                                                    const bool need_sort,
-                                                    const int64_t start_time,
-                                                    const int64_t duration_time,
-                                                    ObIArray<StatTable> &stat_tables,
-                                                    int64_t &succeed_count,
-                                                    int64_t &failed_count);
 
   static int gather_table_stats_with_default_param(ObExecContext &ctx,
                                                    const int64_t start_time,

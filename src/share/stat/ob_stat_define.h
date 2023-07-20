@@ -665,6 +665,23 @@ public:
 
 typedef common::hash::ObHashMap<ObObjectID, OSGPartInfo, common::hash::NoPthreadDefendMode> OSGPartMap;
 
+struct ObAutoGatherStatsParams {
+  ObAutoGatherStatsParams() :
+    duration_time_(-1),
+    start_time_(ObTimeUtility::current_time()),
+    total_cnt_(0),
+    succeed_cnt_(0),
+    failed_cnt_(0)
+  { }
+  //duration_time to is used to mark the gather database stats job can use max time. default value
+  //is -1, it's meaning gather until all table have been gathered.
+  int64_t duration_time_;
+  int64_t start_time_;
+  int64_t total_cnt_;
+  int64_t succeed_cnt_;
+  int64_t failed_cnt_;
+};
+
 }
 }
 

@@ -5198,17 +5198,9 @@ int ObDbmsStats::gather_database_stats_job_proc(sql::ObExecContext &ctx,
   int ret = OB_SUCCESS;
   UNUSED(params);
   UNUSED(result);
-  ObArray<StatTable> user_missing_tables;
-  ObArray<StatTable> user_stale_tables;
-  ObArray<StatTable> sys_missing_tables;
-  ObArray<StatTable> sys_stale_tables;
+  ObAutoGatherStatsParams auto_gather_params;
   number::ObNumber num_duration;
-  //duration_time to is used to mark the gather database stats job can use max time. default value
-  //is -1, it's meaning gather until all table have been gathered.
   int64_t duration_time = -1;
-  const int64_t start_time = ObTimeUtility::current_time();
-  int64_t failed_count = 0;
-  int64_t succeed_count = 0;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     ret = OB_SUCCESS;
     LOG_INFO("auto gather database statistics abort because of statistic table is unwriteable");
@@ -5223,122 +5215,123 @@ int ObDbmsStats::gather_database_stats_job_proc(sql::ObExecContext &ctx,
     LOG_WARN("failed to get duration", K(ret), K(params.at(0)));
   } else if (OB_FAIL(ObOptStatMonitorManager::flush_database_monitoring_info(ctx))) {
     LOG_WARN("failed to flush database monitoring info", K(ret));
-  } else if (OB_FAIL(get_need_statistics_tables(ctx, user_missing_tables, user_stale_tables,
-                                                sys_missing_tables, sys_stale_tables))) {
-    LOG_WARN("failed to get need statistics tables", K(ret));
-  } else if (OB_FAIL(gather_tables_stats_with_default_param(ctx, false, start_time, duration_time,
-                                                            user_missing_tables, succeed_count,
-                                                            failed_count))) {
-    LOG_WARN("failed to gather tables stats with default param", K(ret));
-  } else if (OB_FAIL(gather_tables_stats_with_default_param(ctx, true, start_time, duration_time,
-                                                            user_stale_tables, succeed_count,
-                                                            failed_count))) {
-    LOG_WARN("failed to gather tables stats with default param", K(ret));
-  } else if (OB_FAIL(gather_tables_stats_with_default_param(ctx, false, start_time, duration_time,
-                                                            sys_missing_tables, succeed_count,
-                                                            failed_count))) {
-    LOG_WARN("failed to gather tables stats with default param", K(ret));
-  } else if (OB_FAIL(gather_tables_stats_with_default_param(ctx, true, start_time, duration_time,
-                                                            sys_stale_tables, succeed_count,
-                                                            failed_count))) {
-    LOG_WARN("failed to gather tables stats with default param", K(ret));
+  } else if (OB_FALSE_IT(auto_gather_params.duration_time_ = duration_time)) {
+  } else if (OB_FAIL(gather_database_table_stats(ctx, auto_gather_params))) {
+    LOG_WARN("failed to gather table stats", K(ret));
   } else {/*do nothing*/}
-  const int64_t exe_time = ObTimeUtility::current_time() - start_time;
-  const int64_t total_cnt = user_missing_tables.count() + user_stale_tables.count() +
-                            sys_missing_tables.count() + sys_stale_tables.count();
+  const int64_t exe_time = ObTimeUtility::current_time() - auto_gather_params.start_time_;
   LOG_INFO("have been gathered database stats job",
             "the total used time:", exe_time,
-            "the duration time:", duration_time,
-            "the toatal gather table cnt:", total_cnt,
-            "the succeed to gather table cnt:", succeed_count,
-            "the failed to gather table cnt:", failed_count, K(ret));
+            "the duration time:", auto_gather_params.duration_time_,
+            "the toatal gather table cnt:", auto_gather_params.total_cnt_,
+            "the succeed to gather table cnt:", auto_gather_params.succeed_cnt_,
+            "the failed to gather table cnt:", auto_gather_params.failed_cnt_, K(ret));
   //reset the error code, the reason is that the total gather time is reach the duration time.
   ret = ret == OB_TIMEOUT ? OB_SUCCESS : ret;
   return ret;
 }
 
-int ObDbmsStats::get_need_statistics_tables(sql::ObExecContext &ctx,
-                                            ObIArray<StatTable> &user_missing_tables,
-                                            ObIArray<StatTable> &user_stale_tables,
-                                            ObIArray<StatTable> &sys_missing_tables,
-                                            ObIArray<StatTable> &sys_stale_tables)
+int ObDbmsStats::gather_database_table_stats(sql::ObExecContext &ctx, ObAutoGatherStatsParams &auto_gather_params)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<int64_t, 64> table_ids;
   ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   ObSQLSessionInfo *session = ctx.get_my_session();
-  ObSEArray<const ObDatabaseSchema *, 16> database_schemas;
   uint64_t tenant_id = OB_INVALID_ID;
-  uint64_t database_id = OB_INVALID_ID;
-  const ObDatabaseSchema *database_schema = NULL;
-  const ObTableSchema *table_schema = NULL;
   if (OB_ISNULL(schema_guard) || OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(schema_guard), K(session));
   } else if (OB_FALSE_IT(tenant_id = session->get_effective_tenant_id())) {
-  } else if (is_virtual_tenant_id(tenant_id)) {
-    // do nothing
-  } else if (OB_FAIL(schema_guard->get_database_schemas_in_tenant(tenant_id, database_schemas))) {
-    LOG_WARN("failed to get database sehcmas in tenant", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < database_schemas.count(); ++i) {
-      ObSEArray<const ObTableSchema *, 128> table_schemas;
-      if (OB_ISNULL(database_schema = database_schemas.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(database_schema));
-      } else if (is_recyclebin_database_id(database_id = database_schema->get_database_id())) {
-        // do not gather statistics for tables in recyclebin
-      } else if (OB_FAIL(schema_guard->get_table_schemas_in_database(tenant_id,
-                                                                     database_id,
-                                                                     table_schemas))) {
-        LOG_WARN("failed to get table schema in database", K(ret));
+  } else if (!is_virtual_tenant_id(tenant_id)) {
+    int64_t slice_cnt = 10000; // maximum tables we can gather stats at each iteration
+    int64_t tmp_succeed = 0;
+    do {
+      table_ids.reuse();
+      tmp_succeed = auto_gather_params.succeed_cnt_;
+      if (OB_FAIL(ObBasicStatsEstimator::get_need_stats_tables(ctx, tenant_id, table_ids, slice_cnt))) {
+        LOG_WARN("failed to get tables that need gather stats", K(ret));
       } else {
-        bool is_valid = false;
-        for (int64_t j = 0; OB_SUCC(ret) && j < table_schemas.count(); ++j) {
-          if (OB_ISNULL(table_schema = table_schemas.at(j))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(ret), K(table_schema));
-          } else if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(*schema_guard,
-                                                                   tenant_id,
-                                                                   table_schema->get_table_id(),
-                                                                   is_valid))) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
+          const ObTableSchema *table_schema = NULL;
+          int64_t table_id = table_ids.at(i);
+          bool is_valid = false;
+          if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(*schema_guard,
+                                                            tenant_id,
+                                                            table_id,
+                                                            is_valid))) {
             LOG_WARN("failed to check sy table validity", K(ret));
           } else if (!is_valid) {
             // only gather statistics for following tables:
             // 1. user table
             // 2. valid sys table
             // 3. virtual table
-          } else {
-            StatTable stat_table(database_id, table_schema->get_table_id());
-            ObIArray<StatTable> *target_array = NULL;
-            double stale_percent_threshold = OPT_DEFAULT_STALE_PERCENT;
-            if (OB_FAIL(get_table_stale_percent_threshold(ctx,
-                                                          tenant_id,
-                                                          stat_table,
-                                                          stale_percent_threshold))) {
-              LOG_WARN("failed to get table stale percent threshold", K(ret));
-            } else if (OB_FAIL(get_table_stale_percent(ctx, tenant_id, *table_schema,
-                                                       stale_percent_threshold, stat_table))) {
-              LOG_WARN("failed to get table stale percent", K(ret));
-            } else if (table_schema->is_user_table()) {
-              if (stat_table.stale_percent_ < 0) {
-                target_array = &user_missing_tables;
-              } else if (stat_table.stale_percent_ > stale_percent_threshold) {
-                target_array = &user_stale_tables;
-              }
-            } else {
-              if (stat_table.stale_percent_ < 0) {
-                target_array = &sys_missing_tables;
-              } else if (stat_table.stale_percent_ > stale_percent_threshold) {
-                target_array = &sys_stale_tables;
-              }
-            }
-            if (OB_SUCC(ret) && NULL != target_array) {
-              if (OB_FAIL(target_array->push_back(stat_table))) {
-                LOG_WARN("failed to push back stat table", K(ret));
-              }
-            }
+          } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
+            LOG_WARN("failed to get table schema", K(ret));
+          } else if (OB_ISNULL(table_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null", K(ret));
+          } else if (OB_FAIL(do_gather_table_stats(ctx, table_schema, tenant_id, auto_gather_params))) {
+            LOG_WARN("failed to gather table stats", K(ret));
           }
         }
+      }
+      // case that we can break the loop:
+      // 1. #table_ids < slice_cnt, which means that we have fetched all the tables we need to gather stats
+      // 2. duration_time_ = -1, and has reached the ob_query_timeout session variable limit
+      // 3. duration_time is not -1, and the time we cost to gather stats has reached duration_time
+    } while (OB_SUCC(ret) && table_ids.count() == slice_cnt &&
+            (auto_gather_params.succeed_cnt_ - tmp_succeed) != 0 &&
+            ((auto_gather_params.duration_time_ == -1 && THIS_WORKER.get_timeout_remain() > 0) ||
+            (ObTimeUtility::current_time() - auto_gather_params.start_time_) < auto_gather_params.duration_time_));
+  }
+  return ret;
+}
+
+int ObDbmsStats::do_gather_table_stats(sql::ObExecContext &ctx,
+                                       const ObTableSchema *table_schema,
+                                       const uint64_t tenant_id,
+                                       ObAutoGatherStatsParams &auto_gather_params)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    StatTable stat_table(table_schema->get_database_id(), table_schema->get_table_id());
+    double stale_percent_threshold = OPT_DEFAULT_STALE_PERCENT;
+    if (OB_FAIL(get_table_stale_percent_threshold(ctx,
+                                                  tenant_id,
+                                                  stat_table,
+                                                  stale_percent_threshold))) {
+      LOG_WARN("failed to get table stale percent threshold", K(ret));
+    } else if (OB_FAIL(get_table_stale_percent(ctx, tenant_id, *table_schema,
+                                                stale_percent_threshold, stat_table))) {
+      LOG_WARN("failed to get table stale percent", K(ret));
+    } else if (stat_table.stale_percent_ < 0 || stat_table.stale_percent_ > stale_percent_threshold) {
+      ++auto_gather_params.total_cnt_;
+      if (is_oceanbase_sys_database_id(stat_table.database_id_)) {
+        lib::CompatModeGuard compat_guard(lib::Worker::CompatMode::MYSQL);
+        if (OB_FAIL(gather_table_stats_with_default_param(ctx, auto_gather_params.start_time_,
+                                                          auto_gather_params.duration_time_, stat_table))) {
+          LOG_WARN("failed to gather table stats with default param", K(ret));
+        }
+      } else if (OB_FAIL(gather_table_stats_with_default_param(ctx, auto_gather_params.start_time_,
+                                                                auto_gather_params.duration_time_, stat_table))) {
+        LOG_WARN("failed to gather table stats with default param", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+        if (OB_ERR_QUERY_INTERRUPTED == ret) {
+          LOG_WARN("query interrupted", K(ret));
+        } else if (OB_TABLE_NOT_EXIST == ret || OB_TIMEOUT == ret) {
+          // do nothing
+          ret = OB_SUCCESS;
+        } else {
+          ++auto_gather_params.failed_cnt_;
+          LOG_WARN("failed to gather table stats with some unknown reason", K(ret));
+          ret = OB_SUCCESS;
+        }
+      } else {
+        ++auto_gather_params.succeed_cnt_;
       }
     }
   }
@@ -5564,47 +5557,6 @@ int ObDbmsStats::get_user_partition_table_stale_percent(
   }
   LOG_TRACE("succeed to get user partition table stale percent", K(stat_table),
                                                                  K(partition_stat_infos));
-  return ret;
-}
-
-int ObDbmsStats::gather_tables_stats_with_default_param(ObExecContext &ctx,
-                                                        const bool need_sort,
-                                                        const int64_t start_time,
-                                                        const int64_t duration_time,
-                                                        ObIArray<StatTable> &stat_tables,
-                                                        int64_t &succeed_count,
-                                                        int64_t &failed_count)
-{
-  int ret = OB_SUCCESS;
-  if (need_sort && stat_tables.count() > 0) {
-    std::sort(&stat_tables.at(0), &stat_tables.at(0) + stat_tables.count());
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < stat_tables.count(); ++i) {
-    if (is_oceanbase_sys_database_id(stat_tables.at(i).database_id_)) {
-      lib::CompatModeGuard compat_guard(lib::Worker::CompatMode::MYSQL);
-      if (OB_FAIL(gather_table_stats_with_default_param(ctx, start_time,
-                                                        duration_time, stat_tables.at(i)))) {
-        LOG_WARN("failed to gather table stats with default param", K(ret));
-      }
-    } else if (OB_FAIL(gather_table_stats_with_default_param(ctx, start_time,
-                                                             duration_time, stat_tables.at(i)))) {
-      LOG_WARN("failed to gather table stats with default param", K(ret));
-    }
-    if (OB_FAIL(ret)) {
-      if (OB_ERR_QUERY_INTERRUPTED == ret) {
-        LOG_WARN("query interrupted", K(ret));
-      } else if (OB_TABLE_NOT_EXIST == ret || OB_TIMEOUT == ret) {
-        // do nothing
-        ret = OB_SUCCESS;
-      } else {
-        ++failed_count;
-        LOG_WARN("failed to gather table stats with some unknown reason", K(ret));
-        ret = OB_SUCCESS;
-      }
-    } else {
-      ++ succeed_count;
-    }
-  }
   return ret;
 }
 
