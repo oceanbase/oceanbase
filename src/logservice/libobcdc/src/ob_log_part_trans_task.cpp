@@ -2408,7 +2408,11 @@ int PartTransTask::push_fetched_log_entry(const palf::LSN &lsn)
   } else if (OB_FAIL(alloc_log_entry_node_(lsn, log_entry_node))) {
     LOG_ERROR("alloc_log_entry_node_ failed", KR(ret), K(lsn), KPC(this));
   } else if (OB_FAIL(sorted_log_entry_info_.push_fetched_log_entry_node(log_entry_node))) {
-    LOG_ERROR("push_fetched_log_entry_node failed", KR(ret), KPC(log_entry_node), KPC(this));
+    if (OB_ENTRY_EXIST != ret) {
+      LOG_ERROR("push_fetched_log_entry_node failed", KR(ret), KPC(log_entry_node), KPC(this));
+    } else {
+      LOG_DEBUG("duplicate log_entry", KR(ret), KPC(log_entry_node), KPC(this));
+    }
   }
 
   return ret;
@@ -2498,8 +2502,8 @@ int PartTransTask::push_multi_data_source_data(
         }
         default:
         {
-          LOG_WARN("ignore not_supportted multi_data_source type", KR(ret), K_(tls_id), K_(trans_id), K(lsn),
-              K(is_commit_log), K(mds_data_arr), K(mds_buffer_node));
+          LOG_INFO("ignore not_supportted multi_data_source type", KR(ret), K_(tls_id), K_(trans_id), K(lsn),
+              K(is_commit_log), K(mds_type));
           break;
         }
       }
@@ -2714,8 +2718,6 @@ int PartTransTask::check_for_ddl_trans(
         } else {
           is_not_barrier = true;
         }
-      } else if (OB_DDL_TRUNCATE_TABLE == op_type) {
-        is_not_barrier = true;
       } else {
         ++other_ddl_count;
       }

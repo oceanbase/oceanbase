@@ -74,6 +74,7 @@ public:
   inline bool is_consumer() const { return !is_producer_; }
   inline bool is_px_producer() const { return is_producer_ && !is_remote_; }
   inline bool is_px_consumer() const { return !is_producer_ && !is_remote_; }
+  inline bool is_px_coord() const { return is_px_consumer() && is_rescanable(); }
   inline void set_rescanable(bool rescan) { is_rescanable_ = rescan; }
   inline bool is_rescanable() const { return is_rescanable_; }
   inline void set_dfo_id(int64_t dfo_id) { dfo_id_ = dfo_id; }

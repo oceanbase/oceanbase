@@ -80,7 +80,7 @@ static void sock_destroy(sock_t* s) {
 static void eloop_handle_sock_event(sock_t* s) {
   int err = 0;
   if (skt(s, ERR) || skt(s, HUP)) {
-    rk_info("sock destroy: sock=%p, connection=%s, err=%d", s, T2S(sock_fd, s->fd), err);
+    rk_info("sock destroy: sock=%p, connection=%s, s->mask=0x%x", s, T2S(sock_fd, s->fd), s->mask);
     sock_destroy(s);
   } else if (0 == (err = s->handle_event(s))) {
     // yield

@@ -341,7 +341,7 @@ int ObTransService::txn_free_route__handle_tx_exist_(const ObTransID &tx_id, ObT
     // then continue with retry
     auto assoc_sess_id = tmp_tx->assoc_sess_id_;
     TRANS_LOG(WARN, "tx found associate with other session, will kill the session",
-              K(session_id), K(assoc_sess_id), K(tx_id));
+              K(assoc_sess_id), K(tx_id));
     if (OB_FAIL(txn_free_route__kill_session_(assoc_sess_id))) {
       TRANS_LOG(WARN, "kill old session failed", K(ret), K(assoc_sess_id));
     } else if (OB_FAIL(release_tx(*tmp_tx))) {

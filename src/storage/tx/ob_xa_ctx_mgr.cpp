@@ -11,6 +11,7 @@
  */
 
 #include "ob_xa_ctx_mgr.h"
+#include "ob_xa_service.h"
 //#include "ob_xa_ctx.h"
 
 namespace oceanbase
@@ -20,6 +21,16 @@ using namespace common;
 
 namespace transaction
 {
+
+void XACtxAlloc::free_value(ObXACtx* ctx)
+{
+  if (NULL != ctx) {
+    ctx->destroy();
+    op_reclaim_free(ctx);
+    ctx = NULL;
+    MTL(ObXAService *)->get_xa_statistics().dec_ctx_count();
+  }
+}
 
 int ObXACtxMgr::init()
 {
@@ -172,7 +183,7 @@ int ObXACtxMgr::get_xa_ctx_(const ObTransID &trans_id, bool &alloc, ObXACtx*& ct
     } else {
       ctx = tmp_ctx;
       inc_total_ctx_count();
-      ObXAStatistics::get_instance().inc_ctx_count();
+      MTL(ObXAService *)->get_xa_statistics().inc_ctx_count();
     }
   }
 

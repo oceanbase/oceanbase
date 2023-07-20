@@ -10340,6 +10340,7 @@ int ObTransformUtils::add_param_bool_constraint(ObTransformerCtx *ctx,
     }
     if (OB_SUCC(ret) && !existed) {
       ObExprConstraint cons(bool_expr, expect_result);
+      cons.ignore_const_check_ = ignore_const_check;
       if (OB_FAIL(ctx->expr_constraints_.push_back(cons))) {
         LOG_WARN("failed to push back pre calc constraints", K(ret));
       }

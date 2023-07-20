@@ -191,16 +191,15 @@ private:
   int block_and_kill_tx_(
       const share::ObTransferTaskInfo &task_info,
       const bool enable_kill_trx,
-      const int64_t kill_trx_threshold,
       ObTimeoutCtx &timeout_ctx);
   int block_tx_(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id);
-  int check_for_kill_(
+  int check_and_kill_tx_(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const int64_t timeout,
-      const bool is_after_kill,
+      const bool with_trans_kill,
       ObTimeoutCtx &timeout_ctx);
   int kill_tx_(
       const uint64_t tenant_id,

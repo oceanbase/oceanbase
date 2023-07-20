@@ -2659,7 +2659,7 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
         if (OB_FAIL(ret)) {
         } else if (!dest_type.is_composite_type()) {
           ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("incorrect argument type", K(ret));
+          LOG_WARN("incorrect argument type", K(ret), K(dest_type), K(udt_id));
         } else if (OB_INVALID_ID == udt_id) { // 匿名数组
           bool need_cast = false;
           const pl::ObPLCollection *src_coll = NULL;
@@ -2763,7 +2763,7 @@ int ObPLExecState::init_params(const ParamStore *params, bool is_anonymous)
     OZ (ctx_.exec_ctx_->init_pl_ctx());
     CK (OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx()));
   }
-  if (OB_SUCC(ret) && ctx_.exec_ctx_->get_sql_ctx()->is_execute_call_stmt_) {
+  if (OB_SUCC(ret) && top_call_ && ctx_.exec_ctx_->get_sql_ctx()->is_execute_call_stmt_) {
     OZ (check_routine_param_legal(const_cast<ParamStore *>(params)));
   }
   OZ (get_params().reserve(func_.get_variables().count()));

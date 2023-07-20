@@ -44,7 +44,15 @@ public:
       const common::ObTabletID &tablet_id,
       const share::schema::ObTableSchema &table_schema,
       common::ObArenaAllocator &allocator,
-      const ObTabletStatus::Status tablet_status = ObTabletStatus::Status::NORMAL,
+      const ObTabletStatus::Status tablet_status,
+      const share::SCN &create_commit_scn,
+      ObTabletHandle &handle);
+  static int create_tablet(
+      ObLSHandle &ls_handle,
+      const common::ObTabletID &tablet_id,
+      const share::schema::ObTableSchema &table_schema,
+      common::ObArenaAllocator &allocator,
+      const ObTabletStatus::Status tablet_status = ObTabletStatus::NORMAL,
       const share::SCN &create_commit_scn = share::SCN::min_scn());
   static int remove_tablet(
       const ObLSHandle &ls_handle,
@@ -95,7 +103,8 @@ inline int TestTabletHelper::create_tablet(
     const share::schema::ObTableSchema &table_schema,
     common::ObArenaAllocator &allocator,
     const ObTabletStatus::Status tablet_status,
-    const share::SCN &create_commit_scn)
+    const share::SCN &create_commit_scn,
+    ObTabletHandle &handle)
 {
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
@@ -150,8 +159,28 @@ inline int TestTabletHelper::create_tablet(
       STORAGE_LOG(WARN, "failed to compare and swap tablet", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(ls_tablet_svr->tablet_id_set_.set(tablet_id))){
       STORAGE_LOG(WARN, "set tablet id failed", K(ret), K(tablet_id));
+    } else {
+      handle = tablet_handle;
     }
   }
+  return ret;
+}
+
+inline int TestTabletHelper::create_tablet(
+    ObLSHandle &ls_handle,
+    const common::ObTabletID &tablet_id,
+    const share::schema::ObTableSchema &table_schema,
+    common::ObArenaAllocator &allocator,
+    const ObTabletStatus::Status tablet_status,
+    const share::SCN &create_commit_scn)
+{
+  int ret = OB_SUCCESS;
+  ObTabletHandle tablet_handle;
+
+  if (OB_FAIL(create_tablet(ls_handle, tablet_id, table_schema, allocator, tablet_status, create_commit_scn, tablet_handle))) {
+    STORAGE_LOG(WARN, "failed to create tablet", K(ret), K(tablet_id));
+  }
+
   return ret;
 }
 

@@ -65,6 +65,7 @@ public:
     ObLSGetMod mod = ObLSGetMod::STORAGE_MOD,
     const int64_t timeout_us = 0)
     : mod_(mod),
+      report_scn_flag_(false),
       is_major_(is_major),
       scan_finish_(false),
       merge_finish_(false),
@@ -80,6 +81,8 @@ public:
   int get_next_tablet(ObLSHandle &ls_handle, ObTabletHandle &tablet_handle);
   bool is_scan_finish() const { return scan_finish_; }
   bool tenant_merge_finish() const { return merge_finish_ & scan_finish_; }
+  void set_report_scn_flag() { report_scn_flag_ = true; }
+  bool need_report_scn() const { return report_scn_flag_; }
   void update_merge_finish(bool merge_finish) {
     merge_finish_ &= merge_finish;
   }
@@ -96,6 +99,7 @@ private:
   static const int64_t LS_ID_ARRAY_CNT = 10;
   static const int64_t TABLET_ID_ARRAY_CNT = 2000;
   ObLSGetMod mod_;
+  bool report_scn_flag_;
   bool is_major_;
   bool scan_finish_;
   bool merge_finish_;

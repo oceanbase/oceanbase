@@ -182,14 +182,14 @@ TEST_F(TestObSimpleLogClusterRebuild, test_old_leader_rebuild)
   EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
   PALF_LOG(INFO, "after get_leader", K(id), K(leader_idx), K(new_leader_idx));
   // submit logs
-  EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 64 * 6, id, MB));
+  EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 64 * 8, id, MB));
 
   // update new_leader's disk option, only reserves 4 * 80% log blocks,
   // that means 2 blocks will be recycled
   PALF_LOG(INFO, "begin advance_base_lsn", K(id), K(leader_idx), K(new_leader_idx));
   LSN recycle_lsn(2 * PALF_BLOCK_SIZE);
   EXPECT_EQ(OB_SUCCESS, new_leader.palf_handle_impl_->set_base_lsn(recycle_lsn));
-  update_disk_options(new_leader_idx, 4);
+  update_disk_options(new_leader_idx, 8);
   // recycle 2 block
   sleep(5);
   block_id_t leader_min_block_id;
@@ -254,7 +254,7 @@ TEST_F(TestObSimpleLogClusterRebuild, test_old_leader_rebuild)
   revert_cluster_palf_handle_guard(palf_list);
   EXPECT_EQ(OB_SUCCESS, new_leader.palf_handle_impl_->set_base_lsn(LSN(64*6*MB)));
   sleep(1);
-  EXPECT_EQ(OB_SUCCESS, update_disk_options(new_leader_idx, 40));
+  EXPECT_EQ(OB_SUCCESS, update_disk_options(new_leader_idx, 30));
   PALF_LOG(INFO, "end test old_leader_rebuild", K(id));
 }
 
@@ -283,11 +283,11 @@ TEST_F(TestObSimpleLogClusterRebuild, test_follower_rebuild)
   // the follower is empty
   block_net(leader_idx, follower_idx);
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 64, leader_idx, MB));
-  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 64 * 5, leader_idx, MB));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 64 * 7, leader_idx, MB));
   // recycle one block
   LSN recycle_lsn(2 * PALF_BLOCK_SIZE);
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->set_base_lsn(recycle_lsn));
-  update_disk_options(leader_idx, 4);
+  update_disk_options(leader_idx, 8);
   sleep(1);
   block_id_t leader_min_block_id, follower_min_block_id;
   share::SCN min_scn;

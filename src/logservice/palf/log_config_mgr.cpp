@@ -1090,8 +1090,12 @@ int LogConfigMgr::check_config_change_args_by_type_(const LogConfigChangeArgs &a
     const common::GlobalLearnerList &curr_learner_list = log_ms_meta_.curr_.config_.learnerlist_;
     const common::GlobalLearnerList &degraded_learnerlist = log_ms_meta_.curr_.config_.degraded_learnerlist_;
     const common::ObMember &member = args.server_;
+    const common::ObMember member_wo_flag = common::ObMember(args.server_.get_server(), \
+                                                             args.server_.get_timestamp());
     const int64_t new_replica_num = args.new_replica_num_;
-    const bool is_in_log_sync_memberlist = log_sync_member_list.contains(member);
+    // Note: for reentrancy of SWITCH_LEARNER_TO_ACCEPTOR_AND_NUM, we check if the member
+    //       without the flag is in the log_sync_memberlist
+    const bool is_in_log_sync_memberlist = log_sync_member_list.contains(member_wo_flag);
     const bool is_in_degraded_learnerlist = degraded_learnerlist.contains(member);
     const bool is_in_learnerlist = curr_learner_list.contains(member);
     const bool is_arb_replica = (log_ms_meta_.curr_.config_.arbitration_member_ == member);
@@ -1239,6 +1243,7 @@ int LogConfigMgr::check_config_change_args_by_type_(const LogConfigChangeArgs &a
         break;
       }
       case SWITCH_LEARNER_TO_ACCEPTOR:
+      case SWITCH_LEARNER_TO_ACCEPTOR_AND_NUM:
       case UPGRADE_LEARNER_TO_ACCEPTOR:
       {
         if ((is_in_degraded_learnerlist || is_in_learnerlist) && is_in_log_sync_memberlist) {
@@ -1248,12 +1253,12 @@ int LogConfigMgr::check_config_change_args_by_type_(const LogConfigChangeArgs &a
           if (UPGRADE_LEARNER_TO_ACCEPTOR == args.type_ && true == is_in_learnerlist) {
             ret = OB_INVALID_ARGUMENT;
             PALF_LOG(WARN, "can not upgrade a normal learner", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta), K(args));
-          } else if (SWITCH_LEARNER_TO_ACCEPTOR == args.type_ && true == is_in_degraded_learnerlist) {
+          } else if (UPGRADE_LEARNER_TO_ACCEPTOR != args.type_ && true == is_in_degraded_learnerlist) {
             ret = OB_INVALID_ARGUMENT;
-            PALF_LOG(WARN, "can not upgrade a normal learner", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta), K(args));
+            PALF_LOG(WARN, "can not switch a degraded learner to member", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta), K(args));
           }
         } else if (!is_in_learnerlist && !is_in_degraded_learnerlist && is_in_log_sync_memberlist) {
-          if (args.type_ == UPGRADE_LEARNER_TO_ACCEPTOR || new_replica_num == curr_replica_num) {
+          if (args.type_ != SWITCH_LEARNER_TO_ACCEPTOR || new_replica_num == curr_replica_num) {
             is_already_finished = true;
             PALF_LOG(INFO, "learner_to_acceptor is already finished", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta), K(member));
           } else {
@@ -1349,6 +1354,38 @@ int LogConfigMgr::check_config_change_args_by_type_(const LogConfigChangeArgs &a
         } else {
           ret = OB_STATE_NOT_MATCH;
           PALF_LOG(WARN, "config change lock state not match", KR(ret), K_(self), K_(log_ms_meta), K(args));
+        }
+        break;
+      }
+      case REPLACE_LEARNERS:
+      {
+        bool all_added_in_learnerlist = true;
+        bool all_removed_not_in_learnerlist = true;
+        for (int i = 0; OB_SUCC(ret) && i < args.added_list_.get_member_number(); i++) {
+          common::ObMember member;
+          if (OB_FAIL(args.added_list_.get_member_by_index(i, member))) {
+            PALF_LOG(WARN, "get_member_by_index failed", KR(ret), K_(palf_id), K_(self), K(member), K(args));
+          } else if (true == curr_member_list.contains(member.get_server())) {
+            ret = OB_INVALID_ARGUMENT;
+            PALF_LOG(WARN, "server is already in memberlist, can not replace_learners", KR(ret),
+                K_(palf_id), K_(self), K_(log_ms_meta), K(args));
+          } else if (false == curr_learner_list.contains(member)) {
+            all_added_in_learnerlist = false;
+            break;
+          }
+        }
+        for (int i = 0; OB_SUCC(ret) && i < args.removed_list_.get_member_number(); i++) {
+          common::ObMember member;
+          if (OB_FAIL(args.removed_list_.get_member_by_index(i, member))) {
+            PALF_LOG(WARN, "get_member_by_index failed", KR(ret), K_(palf_id), K_(self), K(member), K(args));
+          } else if (true == curr_learner_list.contains(member)) {
+            all_removed_not_in_learnerlist = false;
+            break;
+          }
+        }
+        is_already_finished = OB_SUCC(ret) && all_added_in_learnerlist && all_removed_not_in_learnerlist;
+        if (is_already_finished) {
+          PALF_LOG(INFO, "replace_learners is already finished", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta), K(args));
         }
         break;
       }
@@ -1660,7 +1697,10 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
     if (OB_SUCC(ret) && is_add_member_list(cc_type)) {
       // update log_sync_member_list or arb_member
       if (is_add_log_sync_member_list(args.type_)) {
-        if (OB_FAIL(new_config_info.config_.log_sync_memberlist_.add_member(member))) {
+        // Note: all members in log_sync_member_list must not be migrating status
+        common::ObMember added_log_sync_member = member;
+        added_log_sync_member.reset_migrating();
+        if (OB_FAIL(new_config_info.config_.log_sync_memberlist_.add_member(added_log_sync_member))) {
           PALF_LOG(WARN, "new_member_list add_member failed", KR(ret), K_(palf_id), K_(self), K(args), K(new_config_info));
         }
       } else {
@@ -1693,6 +1733,16 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
         if (OB_FAIL(new_config_info.config_.degraded_learnerlist_.add_learner(member))) {
           PALF_LOG(WARN, "new_learner_list add_learner failed", KR(ret), K_(palf_id), K_(self), K(args), K(new_config_info));
         }
+      } else if (is_use_added_list(cc_type)) {
+        for (int i = 0; OB_SUCC(ret) && i < args.added_list_.get_member_number(); i++) {
+          common::ObMember added_learner;
+          if (OB_FAIL(args.added_list_.get_member_by_index(i, added_learner))) {
+          } else if (OB_FAIL(new_config_info.config_.learnerlist_.add_learner(added_learner)) && OB_ENTRY_EXIST != ret) {
+            PALF_LOG(WARN, "new_learner_list add_learner failed", KR(ret), K_(palf_id), K_(self), K(args), K(new_config_info));
+          } else {
+            ret = OB_SUCCESS;
+          }
+        }
       } else {
         if (OB_FAIL(new_config_info.config_.learnerlist_.add_learner(member))) {
           PALF_LOG(WARN, "new_learner_list add_learner failed", KR(ret), K_(palf_id), K_(self), K(args), K(new_config_info));
@@ -1702,11 +1752,22 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
     // learnerlist remove
     if (OB_SUCC(ret) && is_remove_learner_list(cc_type)) {
       if (UPGRADE_LEARNER_TO_ACCEPTOR == cc_type) {
-        if (OB_FAIL(new_config_info.config_.degraded_learnerlist_.remove_learner(member.get_server()))) {
+        if (OB_FAIL(new_config_info.config_.degraded_learnerlist_.remove_learner(member))) {
           PALF_LOG(WARN, "new_learner_list add_learner failed", KR(ret), K_(palf_id), K_(self), K(args), K(new_config_info));
         }
+      } else if (is_use_removed_list(cc_type)) {
+        for (int i = 0; OB_SUCC(ret) && i < args.removed_list_.get_member_number(); i++) {
+          common::ObMember removed_learner;
+          if (OB_FAIL(args.removed_list_.get_member_by_index(i, removed_learner))) {
+          } else if (OB_FAIL(new_config_info.config_.learnerlist_.remove_learner(removed_learner)) &&
+              OB_ENTRY_NOT_EXIST != ret) {
+            PALF_LOG(WARN, "new_learner_list remove_learner failed", KR(ret), K_(palf_id), K_(self), K(args), K(new_config_info));
+          } else {
+            ret = OB_SUCCESS;
+          }
+        }
       } else {
-        if (OB_FAIL(new_config_info.config_.learnerlist_.remove_learner(member.get_server()))) {
+        if (OB_FAIL(new_config_info.config_.learnerlist_.remove_learner(member))) {
           PALF_LOG(WARN, "new_learner_list add_learner failed", KR(ret), K_(palf_id), K_(self), K(args), K(new_config_info));
         }
       }
@@ -1736,6 +1797,12 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
       new_config_info.config_.arbitration_member_.reset();
       new_config_info.config_.log_sync_memberlist_.add_member(member);
       new_config_info.config_.log_sync_replica_num_ = args.new_replica_num_;
+    }
+    // check if the new_config_info is valid
+    if (OB_SUCC(ret) && false == new_config_info.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "generate_new_config_info_ failed", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta),
+          K(proposal_id), K(args), K(new_config_info));
     }
   }
   return ret;
@@ -2041,7 +2108,8 @@ bool LogConfigChangeArgs::is_valid() const
   bool bool_ret = true;
   bool_ret = bool_ret && (type_ != INVALID_LOG_CONFIG_CHANGE_TYPE);
   bool_ret = bool_ret && ((is_add_member_list(type_) || is_remove_member_list(type_) ||
-           is_add_learner_list(type_) || is_remove_learner_list(type_))? server_.is_valid(): true);
+           is_add_learner_list(type_) || is_remove_learner_list(type_))? \
+           (server_.is_valid() || (added_list_.is_valid() && removed_list_.is_valid())): true);
   bool_ret = bool_ret && ((is_use_replica_num_args(type_))? is_valid_replica_num(new_replica_num_): true);
   bool_ret = bool_ret && ((type_ == CHANGE_REPLICA_NUM)? \
           (curr_member_list_.is_valid() && is_valid_replica_num(curr_replica_num_) && is_valid_replica_num(new_replica_num_)): true);
@@ -2063,6 +2131,8 @@ void LogConfigChangeArgs::reset()
   lock_owner_ = OB_INVALID_CONFIG_CHANGE_LOCK_OWNER;
   lock_type_ = ConfigChangeLockType::LOCK_NOTHING;
   type_ = INVALID_LOG_CONFIG_CHANGE_TYPE;
+  added_list_.reset();
+  removed_list_.reset();
 }
 
 int LogConfigMgr::check_follower_sync_status(const LogConfigChangeArgs &args,
@@ -2352,12 +2422,12 @@ int LogConfigMgr::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
         last_slide_log_id))) {
       // PALF_LOG(WARN, "check_servers_lsn_and_version_ failed", K(ret), K(tmp_ret), K_(palf_id), K_(self), K(server),
       //     K(config_version), K(conn_timeout_us), K(force_remote_check), K(max_flushed_end_lsn), K(has_same_version));
-    } else if (false == is_arb_member) {
+    } else if (false == is_arb_member && max_flushed_end_lsn.is_valid()) {
       lsn_array[log_sync_resp_cnt++] = max_flushed_end_lsn;
       paxos_resp_cnt++;
-    } else {
+    } else if (true == is_arb_member) {
       paxos_resp_cnt++;
-    }
+    } else { }
     added_member_has_new_version = (is_added_member)? has_same_version: added_member_has_new_version;
     added_member_flushed_end_lsn = (is_added_member)? max_flushed_end_lsn: added_member_flushed_end_lsn;
     added_member_last_slide_log_id = (is_added_member)? last_slide_log_id: added_member_last_slide_log_id;
@@ -2641,14 +2711,18 @@ int LogConfigMgr::handle_register_parent_req(const LogLearner &child, const bool
   LogCandidateList candidate_list;
   LogLearnerList retired_children;
   RegisterReturn reg_ret = INVALID_REG_RET;
+  common::ObMember learner_in_list;
+  const int in_list_ret = all_learnerlist_.get_learner_by_addr(child.get_server(), learner_in_list);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (!child.is_valid() || child.register_time_us_ <= 0) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), K_(palf_id), K_(self), K(child));
-  } else if (is_to_leader && !all_learnerlist_.contains(child.get_server())) {
+  } else if (is_to_leader && (OB_SUCCESS != in_list_ret || learner_in_list.is_migrating())) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "registering child is not in global learner list", K_(palf_id), K_(self), K(child));
+    // Note: do not register parent for migrating learners, because their logs may lag behind its parent
+    PALF_LOG(WARN, "registering child is not in learner list or is migrating", K_(palf_id),
+        K_(self), K(child), K(in_list_ret), K(learner_in_list));
   } else {
     SpinLockGuard guard(child_lock_);
     int64_t idx = -1;

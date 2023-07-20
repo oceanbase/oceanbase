@@ -535,7 +535,7 @@ void ObMediumCompactionInfo::gene_info(
     char* buf, const int64_t buf_len, int64_t &pos) const
 {
   J_KV("compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
-      K(medium_snapshot_), K_(parallel_merge_info));
+      K(medium_snapshot_), K_(last_medium_snapshot), K_(parallel_merge_info));
 }
 
 int64_t ObMediumCompactionInfo::to_string(char* buf, const int64_t buf_len) const

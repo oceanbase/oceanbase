@@ -425,7 +425,7 @@ public:
     return (is_out_trans_op_type(op_type_) ||
             is_in_trans_common_lock_op_type(op_type_));
   }
-  bool operator ==(const ObTableLockOp &other) const;
+  bool need_replay_or_recover(const ObTableLockOp &lock_op) const;
 private:
   bool is_need_record_lock_mode_() const
   {

@@ -36,7 +36,6 @@
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/test_dml_common.h"
 #include "storage/test_tablet_helper.h"
-#include "observer/ob_safe_destroy_thread.h"
 #include "storage/tablet/ob_tablet_persister.h"
 #include "unittest/storage/slog/simple_ob_storage_redo_module.h"
 
@@ -94,8 +93,6 @@ void TestLSTabletService::SetUpTestCase()
   LOG_INFO("TestLSTabletService::SetUpTestCase");
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
-  SAFE_DESTROY_INSTANCE.init();
-  SAFE_DESTROY_INSTANCE.start();
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
 
   ObIOManager::get_instance().add_tenant_io_manager(
@@ -141,9 +138,6 @@ void TestLSTabletService::TearDownTestCase()
   ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID), false);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  SAFE_DESTROY_INSTANCE.stop();
-  SAFE_DESTROY_INSTANCE.wait();
-  SAFE_DESTROY_INSTANCE.destroy();
   MockTenantModuleEnv::get_instance().destroy();
 }
 

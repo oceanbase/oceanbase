@@ -1560,7 +1560,7 @@ int ObInnerTableSchema::gv_ob_compaction_diagnose_info_ora_schema(ObTableSchema 
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       TYPE,       LS_ID,       TABLET_ID,       STATUS,       CREATE_TIME,       DIAGNOSE_INFO     FROM SYS.ALL_VIRTUAL_COMPACTION_DIAGNOSE_INFO )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       SVR_IP,       SVR_PORT,       TENANT_ID,       TYPE,       LS_ID,       TABLET_ID,       STATUS,       CREATE_TIME,       DIAGNOSE_INFO     FROM SYS.ALL_VIRTUAL_COMPACTION_DIAGNOSE_INFO     WHERE       STATUS != 'RS_UNCOMPACTED'     AND       STATUS != 'NOT_SCHEDULE' )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

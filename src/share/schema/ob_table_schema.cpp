@@ -4311,10 +4311,6 @@ int ObTableSchema::check_prohibition_rules(const ObColumnSchemaV2 &src_schema,
   // The column contains the check constraint to prohibit modification of the type in mysql mode
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter column with check constraint");
-  } else if (is_offline && OB_FAIL(check_has_trigger_on_table(schema_guard, is_enable))) {
-    LOG_WARN("failed to check alter column in trigger", K(ret));
-  } else if (is_enable) {
-    // do nothing, change/modify column is allowed on table with trigger(enable/disable).
   } else if (is_oracle_mode && src_schema.is_tbl_part_key_column()) {
   // Partition key prohibited to modify the type in oracle mode
     ret = OB_NOT_SUPPORTED;
@@ -4335,6 +4331,10 @@ int ObTableSchema::check_prohibition_rules(const ObColumnSchemaV2 &src_schema,
             && is_column_in_fk) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter column charset or collation with foreign key");
+  } else if (is_offline && OB_FAIL(check_has_trigger_on_table(schema_guard, is_enable))) {
+    LOG_WARN("failed to check alter column in trigger", K(ret));
+  } else if (is_enable) {
+    // do nothing, change/modify column is allowed on table with trigger(enable/disable).
   }
   return ret;
 }

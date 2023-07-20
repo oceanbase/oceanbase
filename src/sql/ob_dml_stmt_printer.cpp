@@ -162,9 +162,8 @@ int ObDMLStmtPrinter::print_table_with_subquery(const TableItem *table_item)
                                subquery_print_params))) {
       LOG_WARN("failed to print subquery", K(ret));
     } else if (!table_item->alias_name_.empty()) {
-      PRINT_QUOT_WITH_SPACE;
-      DATA_PRINTF("%.*s", LEN_AND_PTR(table_item->alias_name_));
-      PRINT_QUOT;
+      DATA_PRINTF(" ");
+      PRINT_IDENT_WITH_QUOT(table_item->alias_name_);
     } else {
       DATA_PRINTF(" ");
       PRINT_TABLE_NAME(print_params_, table_item);
@@ -211,9 +210,8 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
           LOG_WARN("failed to print base table", K(ret), K(*table_item));
         //table in insert all can't print alias(bug:
         } else if (!no_print_alias) {
-          PRINT_QUOT_WITH_SPACE;
-          DATA_PRINTF("%.*s", LEN_AND_PTR(table_item->alias_name_));
-          PRINT_QUOT;
+          DATA_PRINTF(" ");
+          PRINT_IDENT_WITH_QUOT(table_item->alias_name_);
         }
         break;
       }
@@ -329,19 +327,16 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
     case TableItem::CTE_TABLE: {
         PRINT_TABLE_NAME(print_params_, table_item);
         if (! table_item->alias_name_.empty()) {
-          PRINT_QUOT_WITH_SPACE;
-          DATA_PRINTF("%.*s", LEN_AND_PTR(table_item->alias_name_));
-          PRINT_QUOT;
+          DATA_PRINTF(" ");
+          PRINT_IDENT_WITH_QUOT(table_item->alias_name_);
         }
         break;
       }
     case TableItem::FUNCTION_TABLE: {
       DATA_PRINTF("TABLE(");
       OZ (expr_printer_.do_print(table_item->function_table_expr_, T_FROM_SCOPE));
-      DATA_PRINTF(")");
-      PRINT_QUOT_WITH_SPACE;
-      DATA_PRINTF("%.*s", LEN_AND_PTR(table_item->alias_name_));
-      PRINT_QUOT;
+      DATA_PRINTF(") ");
+      PRINT_IDENT_WITH_QUOT(table_item->alias_name_);
       break;
     }
     case TableItem::JSON_TABLE: {
@@ -357,9 +352,8 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
       if (!print_params_.for_dblink_) {
         PRINT_TABLE_NAME(print_params_, table_item);
         if (!table_item->alias_name_.empty()) {
-          PRINT_QUOT_WITH_SPACE;
-          DATA_PRINTF("%.*s", LEN_AND_PTR(table_item->alias_name_));
-          PRINT_QUOT;
+          DATA_PRINTF(" ");
+          PRINT_IDENT_WITH_QUOT(table_item->alias_name_);
         }
       } else if (OB_FAIL(print_table_with_subquery(table_item))) {
         LOG_WARN("failed to print table with subquery", K(ret));
@@ -1454,9 +1448,7 @@ int ObDMLStmtPrinter::print_cte_define_title(TableItem* cte_table)
           || T_CTE_CYCLE_COLUMN == sub_select_items.at(i).expr_->get_expr_type()) {
         //伪列不需要打印出来
       } else {
-        PRINT_QUOT;
-        DATA_PRINTF("%.*s", LEN_AND_PTR(sub_select_items.at(i).alias_name_));
-        PRINT_QUOT;
+        PRINT_IDENT_WITH_QUOT(sub_select_items.at(i).alias_name_);
         if (i != sub_select_items.count() - 1
             && T_CTE_SEARCH_COLUMN != sub_select_items.at(i+1).expr_->get_expr_type()
             && T_CTE_CYCLE_COLUMN != sub_select_items.at(i+1).expr_->get_expr_type()) {
@@ -1522,7 +1514,6 @@ int ObDMLStmtPrinter::print_search_and_cycle(const ObSelectStmt *sub_select_stmt
     for (int64_t i = 0; i < search_items.count() && OB_SUCC(ret); ++i) {
       allocator.reuse();
       ObString column_name = ((ObColumnRefRawExpr*)(search_items.at(i).expr_))->get_column_name();
-      CONVERT_CHARSET_FOR_RPINT(allocator, column_name);
       PRINT_COLUMN_NAME(column_name);
       if (lib::is_mysql_mode()) {
         if (is_descending_direction(search_items.at(i).order_type_)) {
@@ -1559,7 +1550,6 @@ int ObDMLStmtPrinter::print_search_and_cycle(const ObSelectStmt *sub_select_stmt
     for (int64_t i = 0; i < cycle_items.count() && OB_SUCC(ret); ++i) {
       allocator.reuse();
       ObString column_name = ((ObColumnRefRawExpr*)(cycle_items.at(i).expr_))->get_column_name();
-      CONVERT_CHARSET_FOR_RPINT(allocator, column_name);
       PRINT_COLUMN_NAME(column_name);
       if (i != cycle_items.count() - 1) {
         DATA_PRINTF(", ");

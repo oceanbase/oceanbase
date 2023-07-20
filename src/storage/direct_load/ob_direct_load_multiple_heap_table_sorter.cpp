@@ -56,9 +56,6 @@ int ObDirectLoadMultipleHeapTableSorter::add_table(ObIDirectLoadPartitionTable *
     if (OB_ISNULL(external_table = dynamic_cast<ObDirectLoadExternalTable *>(table))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected table", KR(ret), KPC(table));
-    } else if (OB_UNLIKELY(external_table->get_fragments().count() != 1)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("files handle should only have one handle", KR(ret));
     } else if (OB_FAIL(fragments_.push_back(external_table->get_fragments()))) {
       LOG_WARN("fail to push back", KR(ret));
     }

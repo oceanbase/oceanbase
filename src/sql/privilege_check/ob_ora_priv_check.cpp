@@ -2375,6 +2375,10 @@ int ObOraSysChecker::check_ora_ddl_priv(
         DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
         break;
       }
+      case stmt::T_KILL: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
+        break;
+      }
       case stmt::T_CREATE_DBLINK: {
         DEFINE_PUB_CHECK_CMD(PRIV_ID_CREATE_DBLINK);
         break;

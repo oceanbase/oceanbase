@@ -31,7 +31,8 @@ ObCdcFetcher::ObCdcFetcher()
   : is_inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
     ls_service_(NULL),
-    large_buffer_pool_(NULL)
+    large_buffer_pool_(NULL),
+    log_ext_handler_(NULL)
 {
 }
 
@@ -42,7 +43,8 @@ ObCdcFetcher::~ObCdcFetcher()
 
 int ObCdcFetcher::init(const uint64_t tenant_id,
     ObLSService *ls_service,
-    archive::LargeBufferPool *buffer_pool)
+    archive::LargeBufferPool *buffer_pool,
+    logservice::ObLogExternalStorageHandler *log_ext_handler)
 {
   int ret = OB_SUCCESS;
 
@@ -50,7 +52,8 @@ int ObCdcFetcher::init(const uint64_t tenant_id,
     ret = OB_INIT_TWICE;
     LOG_WARN("inited twice", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
-      || OB_ISNULL(ls_service) || OB_ISNULL(buffer_pool)) {
+      || OB_ISNULL(ls_service) || OB_ISNULL(buffer_pool)
+      || OB_ISNULL(log_ext_handler)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_service), K(buffer_pool));
   } else {
@@ -58,6 +61,7 @@ int ObCdcFetcher::init(const uint64_t tenant_id,
     tenant_id_ = tenant_id;
     ls_service_ = ls_service;
     large_buffer_pool_ = buffer_pool;
+    log_ext_handler_ = log_ext_handler;
   }
 
   return ret;
@@ -70,6 +74,7 @@ void ObCdcFetcher::destroy()
     tenant_id_ = OB_INVALID_TENANT_ID;
     ls_service_ = NULL;
     large_buffer_pool_ = NULL;
+    log_ext_handler_ = NULL;
   }
 }
 
@@ -352,7 +357,8 @@ int ObCdcFetcher::fetch_log_in_archive_(
     if (OB_FAIL(pre_scn.convert_from_ts(ctx.get_progress()/1000L))) {
       LOG_WARN("convert progress to scn failed", KR(ret), K(ctx));
     } else if (need_init_iter && OB_FAIL(remote_iter.init(tenant_id_, ls_id, pre_scn,
-                                                   start_lsn, LSN(LOG_MAX_LSN_VAL), large_buffer_pool_))) {
+                                                          start_lsn, LSN(LOG_MAX_LSN_VAL), large_buffer_pool_,
+                                                          log_ext_handler_))) {
       LOG_WARN("init remote log iterator failed", KR(ret), K(tenant_id_), K(ls_id));
     } else if (OB_FAIL(remote_iter.next(log_entry, lsn, buf, buf_size))) {
       // expected OB_ITER_END and OB_SUCCEES, error occurs when other code is returned.
@@ -398,7 +404,7 @@ int ObCdcFetcher::set_fetch_mode_before_fetch_log_(const ObLSID &ls_id,
     // set the switch interval to 10s in test switch fetch mode, the unit of measurement of log_ts(scn) is nano second.
     const int64_t SECOND_NS = 1000L * 1000 * 1000;
     SCN end_scn;
-    const int64_t SWITCH_INTERVAL = test_switch_fetch_mode ? 10L * SECOND_NS : 60L * SECOND_NS;
+    const int64_t SWITCH_INTERVAL = test_switch_fetch_mode ? 10L * SECOND_NS : 60 * SECOND_NS; //default 60s
     if (OB_FAIL(palf_guard.get_end_scn(end_scn))) {
       LOG_WARN("get palf end ts failed", KR(ret));
     } else {
@@ -553,7 +559,9 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
             }
           } else {
             // exit
+            resp.set_feedback_type(obrpc::ObCdcLSFetchLogResp::ARCHIVE_ITER_END_BUT_LS_NOT_EXIST_IN_PALF);
             reach_max_lsn = true;
+            LOG_INFO("reach max lsn in archive but ls not exists in this server, need switch server", K(ls_id));
           }
         } else if (OB_NEED_RETRY == ret) {
           frt.stop("ArchiveNeedRetry");

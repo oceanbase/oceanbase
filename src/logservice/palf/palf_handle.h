@@ -240,7 +240,7 @@ public:
                     const int64_t timeout_us);
 
   // @brief, replace old_member with new_member, can be called only in leader
-  // @param[in] const common::ObMember &added_member: member wil be added
+  // @param[in] const common::ObMember &added_member: member will be added
   // @param[in] const common::ObMember &removed_member: member will be removed
   // @param[in] const LogConfigVersion &config_version: config_version for leader checking
   // @param[in] const int64_t timeout_us
@@ -306,6 +306,36 @@ public:
   int switch_acceptor_to_learner(const common::ObMember &member,
                                  const int64_t new_replica_num,
                                  const int64_t timeout_us);
+
+  // @brief, replace removed_learners with added_learners
+  // @param[in] const common::ObMemberList &added_learners: learners will be added
+  // @param[in] const common::ObMemberList &removed_learners: learners will be removed
+  // @param[in] const int64_t timeout_us
+  // @return
+  // - OB_SUCCESS: replace learner successfully
+  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
+  // - OB_TIMEOUT: replace learner timeout
+  // - OB_NOT_MASTER: not leader or rolechange during membership changing
+  // - other: bug
+  int replace_learners(const common::ObMemberList &added_learners,
+                       const common::ObMemberList &removed_learners,
+                       const int64_t timeout_us);
+
+  // @brief, replace removed_member with learner
+  // @param[in] const common::ObMember &added_member: member will be added
+  // @param[in] const common::ObMember &removed_member: member will be removed
+  // @param[in] const LogConfigVersion &config_version: config_version for leader checking
+  // @param[in] const int64_t timeout_us
+  // @return
+  // - OB_SUCCESS: replace member successfully
+  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
+  // - OB_TIMEOUT: replace member timeout
+  // - OB_NOT_MASTER: not leader or rolechange during membership changing
+  // - other: bug
+  int replace_member_with_learner(const common::ObMember &added_member,
+                                  const common::ObMember &removed_member,
+                                  const LogConfigVersion &config_version,
+                                  const int64_t timeout_us);
   int revoke_leader(const int64_t proposal_id);
   int change_leader_to(const common::ObAddr &dst_addr);
   // @brief: change AccessMode of palf.

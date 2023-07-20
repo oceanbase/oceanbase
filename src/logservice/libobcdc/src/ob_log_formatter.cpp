@@ -1220,7 +1220,7 @@ int ObLogFormatter::group_udt_column_values_(
       *obj2str_helper_,
       ob_ctx_cols,
       cv))) {
-    LOG_ERROR("build udt value failed", KR(ret), K(column_id), K(column_schema_info));
+    LOG_ERROR("build udt value failed", KR(ret), K(column_schema_info.get_column_id()), K(column_schema_info));
   }
   return ret;
 }

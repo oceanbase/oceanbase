@@ -158,7 +158,7 @@ int ObLSRecoveryStatHandler::get_ls_level_recovery_stat(ObLSRecoveryStat &ls_rec
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("pointer is null", KR(ret), KP(ls_svr));
   } else if (OB_FAIL(ls_svr->get_palf_role(ls_->get_ls_id(), role, first_proposal_id))) {
-    LOG_WARN("failed to get first role", KR(ret), K(ls_id), KPC_(ls));
+    LOG_WARN("failed to get first role", KR(ret), K(ls_->get_ls_id()), KPC_(ls));
   } else if (!is_strong_leader(role)) {
     ret = OB_NOT_MASTER;
     LOG_TRACE("not leader", KR(ret), K(role), KPC_(ls));
@@ -499,7 +499,7 @@ int ObLSRecoveryStatHandler::calc_majority_min_readable_scn_(
           majority_min_readable_scn = readable_scn_list.at(i);
         }
       }
-      LOG_TRACE("calculate majority min readable_scn finished", KR(ret), K(leader_readable_scn), K(ls_id),
+      LOG_TRACE("calculate majority min readable_scn finished", KR(ret), K(leader_readable_scn),
           K(majority_min_readable_scn), K(readable_scn_list), K(majority_cnt), K(return_code_array));
     }
   }

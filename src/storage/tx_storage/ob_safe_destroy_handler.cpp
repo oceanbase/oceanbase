@@ -11,11 +11,11 @@
  */
 
 #define USING_LOG_PREFIX SERVER
-#include "observer/ob_safe_destroy_thread.h"
+#include "storage/tx_storage/ob_safe_destroy_handler.h"
 
 namespace oceanbase
 {
-namespace observer
+namespace storage
 {
 
 void ObSafeDestroyTask::set_receive_timestamp(const int64_t receive_timestamp)
@@ -148,53 +148,45 @@ void ObSafeDestroyTaskQueue::destroy()
   looping_ = false;
 }
 
-ObSafeDestroyThread::ObSafeDestroyThread()
+ObSafeDestroyHandler::ObSafeDestroyHandler()
   : is_inited_(false),
     queue_(),
-    timer_(),
-    check_task_(queue_)
+    last_process_timestamp_(0)
 {}
 
-ObSafeDestroyThread::~ObSafeDestroyThread()
+ObSafeDestroyHandler::~ObSafeDestroyHandler()
 {
   destroy();
 }
 
-int ObSafeDestroyThread::init()
+int ObSafeDestroyHandler::init()
 {
 	int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("safe destroy thread init twice.", K(ret));
-  } else if (OB_FAIL(timer_.init("SafeDestroy"))) {
-    LOG_WARN("timer init failed", K(ret));
   } else if (OB_FAIL(queue_.init())) {
     LOG_WARN("queue init failed", K(ret));
   } else {
+    last_process_timestamp_ = ObTimeUtility::current_time();
     is_inited_ = true;
   }
   return ret;
 }
 
-int ObSafeDestroyThread::start()
+int ObSafeDestroyHandler::start()
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("safe destroy thread not inited", K(ret));
-  } else if (OB_FAIL(timer_.start())) {
-    LOG_WARN("timer start failed", K(ret));
-  } else if (OB_FAIL(timer_.schedule(check_task_,
-                                     TASK_SCHEDULER_INTERVAL, /* repeat interval*/
-                                     true /* repeat  */))) {
-    LOG_WARN("schedule timer check task failed", K(ret));
   } else {
-    LOG_INFO("ObSafeDestroyThread start");
+    LOG_INFO("ObSafeDestroyHandler start");
   }
   return ret;
 }
 
-int ObSafeDestroyThread::stop()
+int ObSafeDestroyHandler::stop()
 {
 	int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -204,12 +196,12 @@ int ObSafeDestroyThread::stop()
     queue_.stop();
     // we only stop the queue to prevent push task into the queue.
     // the timer will be stop at the wait function.
-    LOG_INFO("ObSafeDestroyThread stopped");
+    LOG_INFO("ObSafeDestroyHandler stopped");
   }
   return ret;
 }
 
-void ObSafeDestroyThread::wait()
+void ObSafeDestroyHandler::wait()
 {
   static const int64_t SLEEP_TS = 100 * 1000; // 100_ms
   int64_t start_ts = ObTimeUtility::current_time();
@@ -220,19 +212,34 @@ void ObSafeDestroyThread::wait()
     }
     ob_usleep(SLEEP_TS);
   }
-  timer_.stop();
-  timer_.wait();
 }
 
-void ObSafeDestroyThread::destroy()
+void ObSafeDestroyHandler::destroy()
 {
-  LOG_INFO("ObSafeDestroyThread::destroy");
+  LOG_INFO("ObSafeDestroyHandler::destroy");
   is_inited_ = false;
+  last_process_timestamp_ = 0;
   queue_.destroy();
-  timer_.destroy();
 }
 
-int ObSafeDestroyThread::push(ObSafeDestroyTask &task)
+int ObSafeDestroyHandler::handle()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("safe destroy thread not inited", K(ret));
+  } else {
+    int64_t curr_time = ObTimeUtility::current_time();
+    if (curr_time - last_process_timestamp_ >= TASK_SCHEDULER_INTERVAL) {
+      LOG_INFO("ObSafeDestroyHandler start process");
+      queue_.loop();
+      last_process_timestamp_ = ObTimeUtility::current_time();
+    }
+  }
+  return ret;
+}
+
+int ObSafeDestroyHandler::push(ObSafeDestroyTask &task)
 {
 	int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {

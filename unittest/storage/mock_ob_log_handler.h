@@ -333,14 +333,25 @@ public:
     return ret;
   }
 
-  int replace_learner(const common::ObMember &added_learner,
-                      const common::ObMember &removed_learner,
-                      const int64_t timeout_us)
+  int replace_learners(const common::ObMemberList &added_learners,
+                       const common::ObMemberList &removed_learners,
+                       const int64_t timeout_us)
   {
     int ret = OB_SUCCESS;
-    UNUSEDx(added_learner, removed_learner, timeout_us);
+    UNUSEDx(added_learners, removed_learners, timeout_us);
     return ret;
   }
+
+  int replace_member_with_learner(const common::ObMember &added_member,
+                                  const common::ObMember &removed_member,
+                                  const palf::LogConfigVersion &config_version,
+                                  const int64_t timeout_us)
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(added_member, removed_member, timeout_us);
+    return ret;
+  }
+
 
   int switch_learner_to_acceptor(const common::ObMember &learner,
                                  const int64_t new_replica_num,
@@ -382,10 +393,9 @@ public:
     UNUSEDx(upgrade_servers, timeout_us);
     return OB_SUCCESS;
   }
-  int is_valid_member(const common::ObAddr &addr, bool &is_valid) const
+  int get_member_gc_stat(const common::ObAddr &addr, bool &is_valid_member, obrpc::LogMemberGCStat &stat) const
   {
-    UNUSED(addr);
-    UNUSED(is_valid);
+    UNUSEDx(addr, is_valid_member, stat);
     return OB_SUCCESS;
   }
   int set_region(const common::ObRegion &region)

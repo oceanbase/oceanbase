@@ -40,6 +40,7 @@ class LogGroupEntry;
 }
 namespace logservice
 {
+class ObLogExternalStorageHandler;
 using oceanbase::palf::LSN;
 using oceanbase::palf::LogGroupEntry;
 using oceanbase::share::ObLSID;
@@ -142,7 +143,8 @@ public:
       const ObLSID &id,
       const LSN &start_lsn,
       const LSN &end_lsn,
-      const share::SCN &end_scn);
+      const share::SCN &end_scn,
+      logservice::ObLogExternalStorageHandler *log_ext_handler);
   virtual ~RemoteDataGenerator();
 
 public:
@@ -166,6 +168,7 @@ protected:
   share::SCN end_scn_;
   LSN end_lsn_;
   bool to_end_;
+  logservice::ObLogExternalStorageHandler *log_ext_handler_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(RemoteDataGenerator);
@@ -179,7 +182,8 @@ public:
       const LSN &start_lsn,
       const LSN &end_lsn,
       const share::SCN &end_scn,
-      const ObAddr &server);
+      const ObAddr &server,
+      logservice::ObLogExternalStorageHandler *log_ext_handler);
   virtual ~ServiceDataGenerator();
 
 public:
@@ -213,7 +217,8 @@ public:
       ObLogArchivePieceContext *piece_context,
       char *buf,
       const int64_t buf_size,
-      const int64_t single_read_size);
+      const int64_t single_read_size,
+      logservice::ObLogExternalStorageHandler *log_ext_handler);
   ~LocationDataGenerator();
   int next_buffer(palf::LSN &lsn, char *&buf, int64_t &buf_size);
   int update_max_lsn(const palf::LSN &lsn);
@@ -282,6 +287,14 @@ private:
       const int64_t file_id,
       const int64_t file_offset,
       int64_t &size);
+  int read_file_(const ObString &base,
+    const share::ObBackupStorageInfo *storage_info,
+    const share::ObLSID &id,
+    const int64_t file_id,
+    const int64_t offset,
+    char *data,
+    const int64_t data_len,
+    int64_t &real_read_size);
 private:
   share::SCN pre_scn_;
   // base_lsn_ is the start_lsn from the archive file, while the next_fetch_lsn_ is the start_lsn to fetch,
@@ -313,7 +326,8 @@ public:
       const share::SCN &end_scn,
       const int64_t piece_index,
       const int64_t min_file_id,
-      const int64_t max_file_id);
+      const int64_t max_file_id,
+      logservice::ObLogExternalStorageHandler *log_ext_handler);
 
   virtual ~RawPathDataGenerator();
   int next_buffer(palf::LSN &lsn, char *&buf, int64_t &buf_size);

@@ -19,6 +19,7 @@
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "observer/table_load/ob_table_load_utils.h"
+#include "observer/table_load/ob_table_load_task.h"
 
 namespace oceanbase
 {
@@ -99,7 +100,7 @@ int ObTableLoadClientTask::init(uint64_t tenant_id, uint64_t user_id, uint64_t t
     } else if (OB_FAIL(task_allocator_.init("TLD_TaskPool", MTL_ID()))) {
       LOG_WARN("fail to init task allocator", KR(ret));
     } else if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler,
-                                                   (&allocator_), 1, allocator_))) {
+                                                   (&allocator_), 1, table_id, "Client"))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
     } else if (OB_FAIL(task_scheduler_->init())) {

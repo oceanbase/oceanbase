@@ -75,7 +75,7 @@ public:
 
   // acquired connection must be released
   virtual int acquire(const uint64_t tenant_id, common::sqlclient::ObISQLConnection *&conn, ObISQLClient *client_addr) override;
-  virtual int release(common::sqlclient::ObISQLConnection *conn, const bool success, uint32_t sessid = 0);
+  virtual int release(common::sqlclient::ObISQLConnection *conn, const bool success);
   int acquire_spi_conn(sql::ObSQLSessionInfo *session_info, observer::ObInnerSQLConnection *&conn);
   int acquire(sql::ObSQLSessionInfo *session_info,
       common::sqlclient::ObISQLConnection *&conn,
@@ -85,19 +85,18 @@ public:
   virtual common::sqlclient::ObSQLConnPoolType get_type() override { return common::sqlclient::INNER_POOL; }
   virtual common::sqlclient::DblinkDriverProto get_pool_link_driver_proto() override { return common::sqlclient::DBLINK_DRV_OB; }
   // for dblink
-  virtual int create_dblink_pool(uint64_t tenant_id, uint64_t dblink_id, const ObAddr &server,
-                         const ObString &db_tenant, const ObString &db_user,
-                         const ObString &db_pass, const ObString &db_name,
-                         const common::ObString &conn_str,
-                         const common::ObString &cluster_str,
-                         const common::sqlclient::dblink_param_ctx &param_ctx) override
-  { UNUSEDx(tenant_id, dblink_id, server, db_tenant, db_user, db_pass, db_name, conn_str, param_ctx); return OB_SUCCESS; }
-  virtual int acquire_dblink(uint64_t tenant_id, uint64_t dblink_id, const sqlclient::dblink_param_ctx &param_ctx, common::sqlclient::ObISQLConnection *&dblink_conn, uint32_t sessid = 0, int64_t timeout_sec = 0)
-  { UNUSEDx(tenant_id, dblink_id, param_ctx, dblink_conn, sessid, timeout_sec); return OB_SUCCESS; }
-  virtual int release_dblink(common::sqlclient::ObISQLConnection *dblink_conn, uint32_t sessid = 0)
-  { UNUSEDx(dblink_conn, sessid); return OB_SUCCESS; }
-  virtual int do_acquire_dblink(uint64_t tenant_id, uint64_t dblink_id, const sqlclient::dblink_param_ctx &param_ctx, common::sqlclient::ObISQLConnection *&dblink_conn, uint32_t sessid = 0)
-  { UNUSEDx(tenant_id, dblink_id, param_ctx, dblink_conn, sessid); return OB_SUCCESS; }
+  virtual int create_dblink_pool(const common::sqlclient::dblink_param_ctx &param_ctx, const ObAddr &server,
+                                 const ObString &db_tenant, const ObString &db_user,
+                                 const ObString &db_pass, const ObString &db_name,
+                                 const common::ObString &conn_str,
+                                 const common::ObString &cluster_str) override
+  { UNUSEDx(param_ctx, server, db_tenant, db_user, db_pass, db_name, conn_str); return OB_SUCCESS; }
+  virtual int acquire_dblink(const sqlclient::dblink_param_ctx &param_ctx, common::sqlclient::ObISQLConnection *&dblink_conn)
+  { UNUSEDx(param_ctx, dblink_conn); return OB_SUCCESS; }
+  virtual int release_dblink(common::sqlclient::ObISQLConnection *dblink_conn)
+  { UNUSEDx(dblink_conn); return OB_SUCCESS; }
+  virtual int do_acquire_dblink(const sqlclient::dblink_param_ctx &param_ctx, common::sqlclient::ObISQLConnection *&dblink_conn)
+  { UNUSEDx(param_ctx, dblink_conn); return OB_SUCCESS; }
   virtual int try_connect_dblink(common::sqlclient::ObISQLConnection *dblink_conn, int64_t timeout_sec = 0) { UNUSEDx(dblink_conn, timeout_sec); return OB_SUCCESS; }
   virtual int clean_dblink_connection(uint64_t tenant_id)
   { UNUSED(tenant_id); return OB_SUCCESS; }

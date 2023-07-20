@@ -423,6 +423,7 @@ public:
   T_DEF_INT_INFT(test_mode_block_sqlserver_count, OB_CLUSTER_PARAMETER, 0, 0,
       "mock times of con't get rs list under test mode");
 
+  T_DEF_INT(test_mode_ignore_log_type, OB_CLUSTER_PARAMETER, 0, 0, 5, "test_mode ignore log type");
   // Number of REDO logs ignored in test mode
   T_DEF_INT_INFT(test_mode_ignore_redo_count, OB_CLUSTER_PARAMETER, 0, 0,
       "ignore redo log count under test mode");

@@ -33,6 +33,7 @@
 #include "share/backup/ob_backup_struct.h"
 #include "share/rc/ob_tenant_base.h"
 #include "logservice/archiveservice/large_buffer_pool.h"
+#include "logservice/ob_log_external_storage_handler.h"       // ObLogExternalHandler
 
 namespace oceanbase
 {
@@ -81,6 +82,7 @@ public:
       const LSN &start_lsn,
       const LSN &end_lsn,
       archive::LargeBufferPool *buffer_pool,
+      logservice::ObLogExternalStorageHandler *log_ext_handler,
       const int64_t single_read_size = DEFAULT_SINGLE_READ_SIZE);
   // @brief used as local iterator, get one entry if not to end
   // @param[out] entry LogGroupEntry or LogEntry
@@ -138,6 +140,7 @@ private:
   char *buf_;
   int64_t buf_size_;
   archive::LargeBufferPool *buffer_pool_;
+  logservice::ObLogExternalStorageHandler *log_ext_handler_;
   GetSourceFunc get_source_func_;
   UpdateSourceFunc update_source_func_;
   RefreshStorageInfoFunc refresh_storage_info_func_;

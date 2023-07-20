@@ -2059,8 +2059,8 @@ int ObCheckStartTransferTabletsP::check_start_transfer_out_tablets_()
         ret = OB_STATE_NOT_MATCH;
         LOG_WARN("transfer src tablet status is not match", K(ret), KPC(tablet), K(tablet_info), K(user_data));
       } else if (tablet_info.transfer_seq_ != tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tablet transfer seq is unexpected", K(ret), KPC(tablet), K(tablet_info), K(user_data));
+        ret = OB_TABLET_TRANSFER_SEQ_NOT_MATCH;
+        LOG_WARN("tablet transfer seq is is not match", K(ret), KPC(tablet), K(tablet_info), K(user_data));
       } else if (OB_FAIL(check_transfer_out_tablet_sstable_(tablet))) {
         LOG_WARN("failed to check sstable", K(ret), KPC(tablet), K(user_data));
       }
@@ -2109,7 +2109,7 @@ int ObCheckStartTransferTabletsP::check_start_transfer_in_tablets_()
         ret = OB_EAGAIN;
         LOG_WARN("dest ls in start status should not exist transfer tablet, need retry", K(ret), KPC(tablet), K(tablet_info));
       } else if (tablet->get_tablet_meta().transfer_info_.transfer_seq_ > tablet_info.transfer_seq_ + 1) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_TABLET_TRANSFER_SEQ_NOT_MATCH;
         LOG_WARN("tablet is in empty shell but transfer seq not match", K(ret), KPC(tablet), K(tablet_info));
       }
     }
@@ -3546,8 +3546,10 @@ int ObStorageRpc::get_config_version_and_transfer_scn(
     ObStorageChangeMemberRes res;
     arg.tenant_id_ = tenant_id;
     arg.ls_id_ = ls_id;
+    const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
     if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
                            .by(tenant_id)
+                           .timeout(timeout)
                            .dst_cluster_id(src_info.cluster_id_)
                            .get_config_version_and_transfer_scn(arg, res))) {
       LOG_WARN("failed to get config version and transfer scn", K(ret), K(src_info), K(arg));
@@ -3668,6 +3670,7 @@ int ObStorageRpc::lock_config_change(
     arg.lock_timeout_ = lock_timeout;
     const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
     if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                           .by(tenant_id)
                            .timeout(timeout)
                            .dst_cluster_id(src_info.cluster_id_)
                            .lock_config_change(arg, res))) {
@@ -3701,6 +3704,7 @@ int ObStorageRpc::unlock_config_change(
     arg.lock_timeout_ = lock_timeout;
     const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
     if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
+                           .by(tenant_id)
                            .timeout(timeout)
                            .dst_cluster_id(src_info.cluster_id_)
                            .unlock_config_change(arg, res))) {
@@ -3756,7 +3760,7 @@ int ObStorageRpc::wakeup_transfer_service(
     STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
   } else if (tenant_id == OB_INVALID_ID || !src_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info));
   } else {
     ObStorageWakeupTransferServiceArg arg;
     arg.tenant_id_ = tenant_id;

@@ -1642,7 +1642,13 @@ int ObTransferReplaceTableTask::do_replace_logical_tables_(ObLS *ls)
       const common::ObTabletID tablet_id = ctx_->tablet_ids_.at(i);
       bool in_migration = false;
       ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-      if (OB_FAIL(ls->get_migration_status(migration_status))) {
+      if (ctx_->is_failed()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = ctx_->get_result(ret))) {
+          ret = tmp_ret;
+        }
+        LOG_WARN("ctx already failed", K(ret), KPC(ctx_), K(tablet_id));
+      } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
         LOG_WARN("failed to get migration status", K(ret), KPC(ls));
       } else if (FALSE_IT(in_migration = ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status)) {
       } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {

@@ -52,15 +52,15 @@ ObBalanceGroupInfo::~ObBalanceGroupInfo()
 
 int ObBalanceGroupInfo::append_part(ObTransferPartInfo &part,
     const int64_t data_size,
-    const bool need_create_new_part_group/* = false*/)
+    const uint64_t part_group_uid)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(! part.is_valid() || data_size < 0)) {
+  if (OB_UNLIKELY(! part.is_valid() || data_size < 0 || !is_valid_id(part_group_uid))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(part), K(data_size));
-  } else if (need_create_new_part_group && OB_FAIL(create_new_part_group_())) {
-    LOG_WARN("create new partition group fail", KR(ret), K(need_create_new_part_group));
-  } else if (part_groups_.count() <= 0) {
+  } else if (OB_FAIL(create_new_part_group_if_needed_(part_group_uid))) {
+    LOG_WARN("create new part group if needed failed", KR(ret), K(part_group_uid), K_(last_part_group_uid));
+  } else if (OB_UNLIKELY(part_groups_.count() <= 0)) {
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("no partition groups in this balance group", KPC(this), KR(ret), K(part));
   } else {
@@ -70,33 +70,39 @@ int ObBalanceGroupInfo::append_part(ObTransferPartInfo &part,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid data", KR(ret), KPC(part_group), KPC(this));
     } else if (OB_FAIL(part_group->add_part(part, data_size))) {
-      LOG_WARN("add part into partition group fail", KR(ret), KPC(part_group), K(part), K(data_size), KPC(this));
+      LOG_WARN("add part into partition group fail", KR(ret),
+          KPC(part_group), K(part), K(data_size), K(part_group_uid), KPC(this));
     }
 
-    LOG_TRACE("[ObBalanceGroupInfo] append part", K(part), K(data_size),
-        K(need_create_new_part_group),
+    LOG_TRACE("[ObBalanceGroupInfo] append part", K(part), K(data_size), K(part_group_uid),
         "part_group_count", part_groups_.count(), KPC(part_group));
   }
   return ret;
 }
 
-int ObBalanceGroupInfo::create_new_part_group_()
+int ObBalanceGroupInfo::create_new_part_group_if_needed_(const uint64_t part_group_uid)
 {
   int ret = OB_SUCCESS;
-  ObTransferPartGroup *part_group = NULL;
-  const int64_t part_group_size = sizeof(ObTransferPartGroup);
-
-  void *buf = alloc_.alloc(part_group_size);
-  if (OB_ISNULL(buf)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate memory for partition group fail", KR(ret), K(buf), K(part_group_size));
-  } else if (OB_ISNULL(part_group = new(buf) ObTransferPartGroup(alloc_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("construct ObTransferPartGroup fail", KR(ret), K(buf), K(part_group_size));
-  } else if (OB_FAIL(part_groups_.push_back(part_group))) {
-    LOG_WARN("push back new partition group fail", KR(ret), K(part_group), K(part_groups_));
-  } else {
-    // success
+  if (OB_UNLIKELY(!is_valid_id(part_group_uid))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid part_group_uid", KR(ret), K(part_group_uid));
+  } else if (part_group_uid != last_part_group_uid_) {
+    // only create new part group when part_group_uid is different from last_part_group_uid_
+    // (Scenarios with invalid last_part_group_uid_ have been included)
+    ObTransferPartGroup *part_group = NULL;
+    const int64_t part_group_size = sizeof(ObTransferPartGroup);
+    void *buf = alloc_.alloc(part_group_size);
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory for partition group fail", KR(ret), K(buf), K(part_group_size));
+    } else if (OB_ISNULL(part_group = new(buf) ObTransferPartGroup(alloc_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("construct ObTransferPartGroup fail", KR(ret), K(buf), K(part_group_size));
+    } else if (OB_FAIL(part_groups_.push_back(part_group))) {
+      LOG_WARN("push back new partition group fail", KR(ret), K(part_group), K(part_groups_));
+    } else {
+      last_part_group_uid_ = part_group_uid;
+    }
   }
   return ret;
 }
@@ -123,7 +129,8 @@ int ObBalanceGroupInfo::pop_back(const int64_t part_group_count,
       } else if (OB_FAIL(append(part, pg->get_part_list()))) {
         LOG_WARN("append array to part list fail", KR(ret), K(part), KPC(pg));
       } else {
-        // succ
+        // the last part group has been popped, reset the uid
+        last_part_group_uid_ = OB_INVALID_ID;
       }
 
       // free pg memory anyway

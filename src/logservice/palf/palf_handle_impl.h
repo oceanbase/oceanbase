@@ -397,7 +397,7 @@ public:
                             const int64_t timeout_us) = 0;
 
   // @brief, replace old_member with new_member
-  // @param[in] const common::ObMember &added_member: member wil be added
+  // @param[in] const common::ObMember &added_member: member will be added
   // @param[in] const common::ObMember &removed_member: member will be removed
   // @param[in] const LogConfigVersion &config_version: config_version for leader checking
   // @param[in] const int64_t timeout_us
@@ -462,6 +462,35 @@ public:
                                          const int64_t new_replica_num,
                                          const int64_t timeout_us) = 0;
 
+  // @brief, replace removed_learners with added_learners
+  // @param[in] const common::ObMemberList &added_learners: learners will be added
+  // @param[in] const common::ObMemberList &removed_learners: learners will be removed
+  // @param[in] const int64_t timeout_us
+  // @return
+  // - OB_SUCCESS: replace learner successfully
+  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
+  // - OB_TIMEOUT: replace learner timeout
+  // - OB_NOT_MASTER: not leader or rolechange during membership changing
+  // - other: bug
+  virtual int replace_learners(const common::ObMemberList &added_learners,
+                               const common::ObMemberList &removed_learners,
+                               const int64_t timeout_us) = 0;
+
+  // @brief, replace removed_member with learner
+  // @param[in] const common::ObMember &added_member: member will be added
+  // @param[in] const common::ObMember &removed_member: member will be removed
+  // @param[in] const LogConfigVersion &config_version: config_version for leader checking
+  // @param[in] const int64_t timeout_us
+  // @return
+  // - OB_SUCCESS: replace member successfully
+  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
+  // - OB_TIMEOUT: replace member timeout
+  // - OB_NOT_MASTER: not leader or rolechange during membership changing
+  // - other: bug
+  virtual int replace_member_with_learner(const common::ObMember &added_member,
+                                          const common::ObMember &removed_member,
+                                          const LogConfigVersion &config_version,
+                                          const int64_t timeout_us) = 0;
 
   // 设置日志文件的可回收位点，小于等于lsn的日志文件均可以安全回收
   //
@@ -825,6 +854,13 @@ public:
   int switch_acceptor_to_learner(const common::ObMember &member,
                                  const int64_t new_replica_num,
                                  const int64_t timeout_us) override final;
+  int replace_learners(const common::ObMemberList &added_learners,
+                       const common::ObMemberList &removed_learners,
+                       const int64_t timeout_us) override final;
+  int replace_member_with_learner(const common::ObMember &added_member,
+                                  const common::ObMember &removed_member,
+                                  const LogConfigVersion &config_version,
+                                  const int64_t timeout_us) override final;
   int set_base_lsn(const LSN &lsn) override final;
   int enable_sync() override final;
   int disable_sync() override final;
@@ -1185,13 +1221,18 @@ private:
   void report_change_replica_num_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMemberList &member_list);
   void report_add_member_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMember &added_member);
   void report_remove_member_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMember &removed_member);
-  void report_replace_member_(const common::ObMember &added_member, const common::ObMember &removed_member, const common::ObMemberList &member_list);
+  void report_replace_member_(const common::ObMember &added_member,
+                              const common::ObMember &removed_member,
+                              const common::ObMemberList &member_list,
+                              const char *event_name);
   void report_add_learner_(const common::ObMember &added_learner);
   void report_remove_learner_(const common::ObMember &removed_learner);
   void report_add_arb_member_(const common::ObMember &added_arb_member);
   void report_remove_arb_member_(const common::ObMember &removed_arb_member);
   void report_switch_learner_to_acceptor_(const common::ObMember &learner);
   void report_switch_acceptor_to_learner_(const common::ObMember &acceptor);
+  void report_replace_learners_(const common::ObMemberList &added_learners,
+                                const common::ObMemberList &removed_learners);
   // ======================= report event end =======================================
   bool check_need_hook_fetch_log_(const FetchLogType fetch_type, const LSN &start_lsn);
 private:

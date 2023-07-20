@@ -193,27 +193,6 @@ void ObPartitionMergeIter::revise_macro_range(ObDatumRange &range) const
   range.end_key_.datum_cnt_ = MIN(schema_rowkey_column_cnt_, range.end_key_.datum_cnt_);
 }
 
-bool ObPartitionMergeIter::is_tx_table_valid() const
-{
-  bool bret = true;
-  // TODO : @gengli is_tx_table_valid()
-  // storage::ObTxTableGuard *tx_table_guard = nullptr;
-  // transaction::ObPartitionTransCtxMgr *ctx_mgr = nullptr;
-
-  // if (IS_NOT_INIT) {
-  //   LOG_WARN("ObPartitionMergeIter is not inited", K(*this));
-  // } else if (OB_ISNULL(tx_table_guard = store_ctx_.mem_ctx_->get_tx_table_guard())) {
-  //   STORAGE_LOG(ERROR, "The trans state table is invalid", K(*this));
-  // } else if (OB_ISNULL(ctx_mgr = trans_table_guard->
-  //                                get_trans_state_table().get_partition_trans_ctx_mgr())) {
-  //   STORAGE_LOG(ERROR, "The partition ctx mgr is invalid", K(*this));
-  // } else {
-  //   bret = !ctx_mgr->is_partition_stopped();
-  // }
-
-  return bret;
-}
-
 int ObPartitionMergeIter::check_merge_range_cross(ObDatumRange &data_range, bool &range_cross)
 {
   int ret = OB_SUCCESS;

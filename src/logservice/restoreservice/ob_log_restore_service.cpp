@@ -196,7 +196,7 @@ void ObLogRestoreService::do_thread_task_()
         clean_resource_();
       }
 
-      schedule_resource_();
+      schedule_resource_(source.type_);
       report_error_();
       last_normal_work_ts_ = common::ObTimeUtility::fast_current_time();
     }
@@ -226,9 +226,9 @@ void ObLogRestoreService::clean_resource_()
   (void)fetch_log_impl_.clean_resource();
 }
 
-void ObLogRestoreService::schedule_resource_()
+void ObLogRestoreService::schedule_resource_(const share::ObLogRestoreSourceType &source_type)
 {
-  (void)scheduler_.schedule();
+  (void)scheduler_.schedule(source_type);
 }
 
 void ObLogRestoreService::report_error_()

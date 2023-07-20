@@ -717,11 +717,7 @@ int ObDDLUtil::generate_build_replica_sql(
         }
       }
 
-      if (OB_SUCC(ret) && use_schema_version_hint_for_src_table) {
-        if (OB_FAIL(generate_ddl_schema_hint_str(source_table_name, schema_version, oracle_mode, src_table_schema_version_hint_sql_string))) {
-          LOG_WARN("failed to generated ddl schema hint", K(ret));
-        }
-      }
+
 
       if (OB_SUCC(ret)) {
         ObArenaAllocator allocator("ObDDLTmp");
@@ -729,7 +725,6 @@ int ObDDLUtil::generate_build_replica_sql(
         ObString new_dest_table_name;
         ObString new_source_table_name;
         ObString new_source_database_name;
-        ObString new_table_schema_version_hint;
 
         if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
               allocator,
@@ -759,21 +754,19 @@ int ObDDLUtil::generate_build_replica_sql(
               oracle_mode))) {
           LOG_WARN("fail to generate new name with escape character",
                     K(ret), K(source_table_name));
-        } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
-              allocator,
-              src_table_schema_version_hint_sql_string.string(),
-              new_table_schema_version_hint,
-              oracle_mode
-        ))) {
-          LOG_WARN("fail to generate new name with escape character",
-                    K(ret), K(src_table_schema_version_hint_sql_string));
+        } else if (use_schema_version_hint_for_src_table) {
+          if (OB_FAIL(generate_ddl_schema_hint_str(new_source_table_name, schema_version, oracle_mode, src_table_schema_version_hint_sql_string))) {
+            LOG_WARN("failed to generated ddl schema hint", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
         } else if (oracle_mode) {
           if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) opt_param('enable_newsort', 'false') use_px */INTO \"%.*s\".\"%.*s\"(%.*s) SELECT /*+ index(\"%.*s\" primary) %.*s */ %.*s from \"%.*s\".\"%.*s\" as of scn %ld %.*s",
               real_parallelism, execution_id, task_id,
               static_cast<int>(new_dest_database_name.length()), new_dest_database_name.ptr(), static_cast<int>(new_dest_table_name.length()), new_dest_table_name.ptr(),
               static_cast<int>(insert_column_sql_string.length()), insert_column_sql_string.ptr(),
               static_cast<int>(new_source_table_name.length()), new_source_table_name.ptr(),
-              static_cast<int>(new_table_schema_version_hint.length()), new_table_schema_version_hint.ptr(),
+              static_cast<int>(src_table_schema_version_hint_sql_string.length()), src_table_schema_version_hint_sql_string.ptr(),
               static_cast<int>(query_column_sql_string.length()), query_column_sql_string.ptr(),
               static_cast<int>(new_source_database_name.length()), new_source_database_name.ptr(), static_cast<int>(new_source_table_name.length()), new_source_table_name.ptr(),
               snapshot_version, static_cast<int>(rowkey_column_sql_string.length()), rowkey_column_sql_string.ptr()))) {
@@ -785,7 +778,7 @@ int ObDDLUtil::generate_build_replica_sql(
               static_cast<int>(new_dest_database_name.length()), new_dest_database_name.ptr(), static_cast<int>(new_dest_table_name.length()), new_dest_table_name.ptr(),
               static_cast<int>(insert_column_sql_string.length()), insert_column_sql_string.ptr(),
               static_cast<int>(new_source_table_name.length()), new_source_table_name.ptr(),
-              static_cast<int>(new_table_schema_version_hint.length()), new_table_schema_version_hint.ptr(),
+              static_cast<int>(src_table_schema_version_hint_sql_string.length()), src_table_schema_version_hint_sql_string.ptr(),
               static_cast<int>(query_column_sql_string.length()), query_column_sql_string.ptr(),
               static_cast<int>(new_source_database_name.length()), new_source_database_name.ptr(), static_cast<int>(new_source_table_name.length()), new_source_table_name.ptr(),
               snapshot_version, static_cast<int>(rowkey_column_sql_string.length()), rowkey_column_sql_string.ptr()))) {

@@ -81,15 +81,15 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       sess_ref_seq_(0),
       block_allocator_(SMALL_BLOCK_SIZE, common::OB_MALLOC_NORMAL_BLOCK_SIZE - 32,
                        //这里减32是为了适配ObMalloc对齐规则, 防止超8k的内存分配
-                       ObMalloc(ObModIds::OB_SQL_SESSION_SBLOCK)),
+                       ObMalloc(lib::ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION_SBLOCK))),
       ps_session_info_allocator_(sizeof(ObPsSessionInfo), common::OB_MALLOC_NORMAL_BLOCK_SIZE - 32,
                                  //这里减32是为了适配ObMalloc对齐规则, 防止超8k的内存分配
-                                 ObMalloc("PsSessionInfo")),
+                                 ObMalloc(lib::ObMemAttr(orig_tenant_id_, "PsSessionInfo"))),
       cursor_info_allocator_(sizeof(pl::ObDbmsCursorInfo), common::OB_MALLOC_NORMAL_BLOCK_SIZE - 32,
-                             ObMalloc("SessCursorInfo")),
+                             ObMalloc(lib::ObMemAttr(orig_tenant_id_, "SessCursorInfo"))),
       package_info_allocator_(sizeof(pl::ObPLPackageState), common::OB_MALLOC_NORMAL_BLOCK_SIZE - 32,
-                              ObMalloc("SessPackageInfo")),
-      name_pool_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
+                              ObMalloc(lib::ObMemAttr(orig_tenant_id_, "SessPackageInfo"))),
+      name_pool_(lib::ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION), OB_MALLOC_NORMAL_BLOCK_SIZE),
       trans_flags_(),
       sql_scope_flags_(),
       need_reset_package_(false),
@@ -119,8 +119,8 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       client_mode_(OB_MIN_CLIENT_MODE),
       changed_sys_vars_(),
       changed_user_vars_(),
-      changed_var_pool_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
-      extra_info_allocator_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
+      changed_var_pool_(ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION), OB_MALLOC_NORMAL_BLOCK_SIZE),
+      extra_info_allocator_(ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION), OB_MALLOC_NORMAL_BLOCK_SIZE),
       is_database_changed_(false),
       feedback_manager_(),
       trans_spec_status_(TRANS_SPEC_NOT_SET),
@@ -286,6 +286,7 @@ void ObBasicSessionInfo::clean_status()
   sql_scope_flags_.reset();
   trans_spec_status_ = TRANS_SPEC_NOT_SET;
   if (OB_NOT_NULL(tx_desc_)) {
+    LockGuard lock_guard(thread_data_mutex_);
     int ret = OB_SUCCESS;
     MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
     if (OB_SUCC(guard.switch_to(tx_desc_->get_tenant_id(), false))) {
@@ -3544,6 +3545,10 @@ int ObBasicSessionInfo::get_show_ddl_in_compat_mode(bool &show_ddl_in_compat_mod
   return get_bool_sys_var(SYS_VAR__SHOW_DDL_IN_COMPAT_MODE, show_ddl_in_compat_mode);
 }
 
+int ObBasicSessionInfo::get_sql_quote_show_create(bool &sql_quote_show_create) const
+{
+  return get_bool_sys_var(SYS_VAR_SQL_QUOTE_SHOW_CREATE, sql_quote_show_create);
+}
 ////////////////////////////////////////////////////////////////
 int ObBasicSessionInfo::replace_user_variables(const ObSessionValMap &user_var_map)
 {
@@ -3725,7 +3730,7 @@ int64_t ObBasicSessionInfo::to_string(char *buf, const int64_t buf_len) const
   bool ac = false;
   get_autocommit(ac),
   J_OBJ_START();
-  J_KV(KP(this), "id", sessid_,
+  J_KV(KP(this), "id", sessid_, "deser", is_deserialized_,
        N_TENANT, get_tenant_name(), "tenant_id", tenant_id_,
        N_EFFECTIVE_TENANT, get_effective_tenant_name(), "effective_tenant_id", effective_tenant_id_,
        N_DATABASE, get_database_name(),

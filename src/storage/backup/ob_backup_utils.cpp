@@ -973,7 +973,7 @@ int ObBackupTabletStat::alloc_stat_(ObBackupTabletCtx *&stat)
   int ret = OB_SUCCESS;
   stat = NULL;
   ObBackupTabletCtx *tmp_ctx = NULL;
-  if (OB_ISNULL(tmp_ctx = ObLSBackupFactory::get_backup_tablet_ctx())) {
+  if (OB_ISNULL(tmp_ctx = ObLSBackupFactory::get_backup_tablet_ctx(tenant_id_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate ctx", K(ret));
   } else {
@@ -2042,7 +2042,7 @@ int ObBackupTabletProvider::prepare_tablet_logic_id_reader_(const common::ObTabl
   if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tablet_id));
-  } else if (OB_ISNULL(tmp_reader = ObLSBackupFactory::get_tablet_logic_macro_id_reader(type))) {
+  } else if (OB_ISNULL(tmp_reader = ObLSBackupFactory::get_tablet_logic_macro_id_reader(type, param_.tenant_id_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("faild to alloc memory", K(ret));
   } else if (OB_FAIL(tmp_reader->init(tablet_id, tablet_handle, table_key, sstable, BATCH_SIZE))) {

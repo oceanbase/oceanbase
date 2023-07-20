@@ -3327,7 +3327,7 @@ int ObTransService::check_and_fill_state_info(const ObTransID &tx_id, ObStateInf
       } else if (OB_ISNULL(ls = handle.get_ls())) {
         ret = OB_TRANS_CTX_NOT_EXIST;
       } else if (OB_FAIL(ls->get_ls_replica_readable_scn(version))) {
-        TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), K(ls_id));
+        TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), K(ls->get_ls_id()));
       } else if (version >= state_info.snapshot_version_) {
         state_info.state_ = ObTxState::UNKNOWN;
         state_info.version_ = version;

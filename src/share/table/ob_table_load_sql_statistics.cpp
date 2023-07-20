@@ -135,7 +135,21 @@ int ObTableLoadSqlStatistics::add(const ObTableLoadSqlStatistics& other)
   return ret;
 }
 
-int ObTableLoadSqlStatistics::get_col_stat_array(ObIArray<ObOptColumnStat*> &col_stat_array)
+int ObTableLoadSqlStatistics::get_table_stat_array(ObIArray<ObOptTableStat*> &table_stat_array) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_stat_array_.count(); ++i) {
+    if (OB_ISNULL(table_stat_array_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "get unexpected null");
+    } else if (OB_FAIL(table_stat_array.push_back(table_stat_array_.at(i)))) {
+      OB_LOG(WARN, "failed to push back col stat");
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadSqlStatistics::get_col_stat_array(ObIArray<ObOptColumnStat*> &col_stat_array) const
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < col_stat_array_.count(); ++i) {

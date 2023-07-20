@@ -334,6 +334,7 @@ int ObOBJLock::update_lock_status_(
       curr->lock_op_.commit_version_ = commit_version;
       curr->lock_op_.commit_scn_ = commit_scn;
       LOG_DEBUG("update_lock_status_", K(curr->lock_op_));
+      break;
     }
   }
   if (!find) {
@@ -1210,8 +1211,7 @@ void ObOBJLock::check_need_recover_(
 {
   need_recover = true;
   DLIST_FOREACH_NORET(curr, *op_list) {
-    if (curr->lock_op_ == lock_op) {
-      need_recover = false;
+    if (!(need_recover = curr->lock_op_.need_replay_or_recover(lock_op))) {
       break;
     }
   }

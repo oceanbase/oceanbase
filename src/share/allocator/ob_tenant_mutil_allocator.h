@@ -86,7 +86,7 @@ public:
   // The memory percent of clog
   const int64_t CLOG_MEM_LIMIT_PERCENT = 30;
   // The memory percent of replay engine
-  const int64_t REPLAY_MEM_LIMIT_PERCENT = 25;
+  const int64_t REPLAY_MEM_LIMIT_PERCENT = 5;
   // The memory limit of replay engine
   const int64_t REPLAY_MEM_LIMIT_THRESHOLD = 512 * 1024 * 1024ll;
   // The memory percent of replay engine for inner_table

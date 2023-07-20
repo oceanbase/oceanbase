@@ -225,7 +225,7 @@ public:
       uint64_t contain_parallel_range_          : SCS_ONE_BIT;
       uint64_t medium_merge_reason_             : 8;
       uint64_t is_schema_changed_               : SCS_ONE_BIT;
-      uint64_t tenant_id_                       : 16; // record tenant_id of ls primary_leader
+      uint64_t tenant_id_                       : 16; // record tenant_id of ls primary_leader, just for throw medium
       uint64_t reserved_                        : SCS_RESERVED_BITS;
     };
   };

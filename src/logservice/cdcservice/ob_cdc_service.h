@@ -18,6 +18,7 @@
 #include "ob_cdc_start_lsn_locator.h"
 #include "ob_cdc_struct.h"                      // ClientLSKey, ClientLSCtx, ClientLSCtxMap
 #include "logservice/restoreservice/ob_remote_log_iterator.h"
+#include "logservice/ob_log_external_storage_handler.h"   // ObLogExternalStorageHandler
 
 namespace oceanbase
 {
@@ -119,6 +120,7 @@ private:
   common::ObSpinLock dest_info_lock_;
   ClientLSCtxMap ls_ctx_map_;
   archive::LargeBufferPool large_buffer_pool_;
+  logservice::ObLogExternalStorageHandler log_ext_handler_;
 };
 
 } // namespace cdc

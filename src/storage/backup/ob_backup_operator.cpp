@@ -282,7 +282,7 @@ int ObLSBackupOperator::get_all_backup_ls_id(const uint64_t tenant_id, const int
   ObSqlString sql;
   if (OB_INVALID_ID == tenant_id || task_id < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(task_id), K(tenant_id), K(ls_id));
+    LOG_WARN("get invalid args", K(ret), K(task_id), K(tenant_id));
   } else if (OB_FAIL(construct_query_backup_sql_(tenant_id, task_id, sql))) {
     LOG_WARN("failed to construct query backup sql", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(get_distinct_ls_id_(tenant_id, sql, ls_array, sql_client))) {
@@ -299,9 +299,9 @@ int ObLSBackupOperator::get_all_archive_ls_id(const uint64_t tenant_id, const in
   ObSqlString sql;
   int64_t start_piece_id = 0;
   int64_t end_piece_id = 0;
-  if (OB_INVALID_ID == tenant_id || task_id < 0) {
+  if (OB_INVALID_ID == tenant_id || dest_id < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(task_id), K(tenant_id), K(ls_id));
+    LOG_WARN("get invalid args", K(ret), K(tenant_id));
   } else if (OB_FAIL(get_start_piece_id_(tenant_id, dest_id, start_scn, sql_client, start_piece_id))) {
     LOG_WARN("failed to get start piece id", K(ret), K(tenant_id), K(dest_id), K(start_scn));
   } else if (OB_FAIL(get_end_piece_id_(tenant_id, dest_id, end_scn, sql_client, end_piece_id))) {
@@ -529,7 +529,7 @@ int ObLSBackupOperator::get_start_piece_id_(const uint64_t tenant_id, const uint
                         "AND start_scn <= %ld ORDER BY piece_id DESC LIMIT 1";
   if (OB_INVALID_ID == tenant_id || dest_id < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(dest_id), K(tenant_id), K(ls_id));
+    LOG_WARN("get invalid args", K(ret), K(dest_id), K(tenant_id));
   } else if (OB_FAIL(sql.append_fmt(sql_str, OB_ALL_LS_LOG_ARCHIVE_PROGRESS_TNAME,
       tenant_id, dest_id, start_scn.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to append sql", K(ret), K(sql_str), K(tenant_id), K(dest_id));
@@ -550,7 +550,7 @@ int ObLSBackupOperator::get_end_piece_id_(const uint64_t tenant_id, const uint64
                         "AND checkpoint_scn >= %ld ORDER BY piece_id ASC LIMIT 1";
   if (OB_INVALID_ID == tenant_id || dest_id < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(dest_id), K(tenant_id), K(ls_id));
+    LOG_WARN("get invalid args", K(ret), K(dest_id), K(tenant_id));
   } else if (OB_FAIL(sql.append_fmt(sql_str, OB_ALL_LS_LOG_ARCHIVE_PROGRESS_TNAME,
       tenant_id, dest_id, checkpoint_scn.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to append sql", K(ret), K(sql_str), K(tenant_id), K(dest_id));

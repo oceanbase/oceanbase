@@ -74,6 +74,17 @@ set(OB_OBJCOPY_BIN "${DEVTOOLS_DIR}/bin/objcopy")
 # Full RELRO: -Wl,-z,relro,-z,now
 ob_define(OB_RELRO_FLAG "-Wl,-z,relro,-z,now")
 
+ob_define(OB_USE_CCACHE OFF)
+if (OB_USE_CCACHE)
+  find_program(OB_CCACHE ccache PATHS "${DEVTOOLS_DIR}/bin" NO_DEFAULT_PATH)
+  if (NOT OB_CCACHE)
+    message(FATAL_ERROR "cannot find ccache.")
+  else()
+    set(CMAKE_C_COMPILER_LAUNCHER ${OB_CCACHE})
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${OB_CCACHE})
+  endif()
+endif(OB_USE_CCACHE)
+
 if (OB_USE_CLANG)
 
   if (OB_CC)

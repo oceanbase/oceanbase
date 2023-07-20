@@ -22,11 +22,12 @@ int acquire_tx(ObTxDesc *&tx, const uint32_t session_id = 0);
  *
  * @tx:       the target transaction's descriptor
  * @tx_param: transaction parameters
+ * @tx_id:    the txid applied for when xa start
  *
  * Return:
  * OB_SUCCESS - OK
  */
-int start_tx(ObTxDesc &tx, const oceanbase::transaction::ObTxParam &tx_param);
+int start_tx(ObTxDesc &tx, const oceanbase::transaction::ObTxParam &tx_param, const ObTransID &tx_id = ObTransID());
 
 /**
  * abort_tx - abort transaction

@@ -29,7 +29,6 @@
 #include "storage/tablet/ob_tablet_status.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/test_dml_common.h"
-#include "observer/ob_safe_destroy_thread.h"
 
 namespace oceanbase
 {
@@ -126,8 +125,6 @@ void TestTenantMetaMemMgr::SetUpTestCase()
   int ret = OB_SUCCESS;
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
-  SAFE_DESTROY_INSTANCE.init();
-  SAFE_DESTROY_INSTANCE.start();
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
   ObClockGenerator::init();
 
@@ -156,9 +153,6 @@ void TestTenantMetaMemMgr::TearDownTestCase()
   int ret = OB_SUCCESS;
   ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID), false);
   ASSERT_EQ(OB_SUCCESS, ret);
-  SAFE_DESTROY_INSTANCE.stop();
-  SAFE_DESTROY_INSTANCE.wait();
-  SAFE_DESTROY_INSTANCE.destroy();
   MockTenantModuleEnv::get_instance().destroy();
 }
 
@@ -377,6 +371,10 @@ void TestConcurrentT3M::run1()
     if (0 == count % N) {
       ret = t3m_.del_tablet(key);
       ASSERT_EQ(common::OB_SUCCESS, ret);
+    } else {
+      ret = t3m_.tablet_map_.erase(key, tmp_handle);
+      ASSERT_EQ(common::OB_SUCCESS, ret);
+      tmp_handle.reset();
     }
   }
 }
@@ -439,7 +437,8 @@ TEST_F(TestTenantMetaMemMgr, test_memtable)
   ASSERT_EQ(1, t3m_.memtable_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.free_tables_queue_.size());
 
-  t3m_.release_memtable(static_cast<memtable::ObMemtable *>(handle.table_));
+  bool all_table_cleaned = false; // no use
+  ASSERT_EQ(OB_SUCCESS, t3m_.gc_tables_in_queue(all_table_cleaned));
 }
 
 TEST_F(TestTenantMetaMemMgr, test_tx_ctx_memtable)
@@ -467,7 +466,8 @@ TEST_F(TestTenantMetaMemMgr, test_tx_ctx_memtable)
   ASSERT_EQ(1, t3m_.tx_ctx_memtable_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.free_tables_queue_.size());
 
-  t3m_.release_tx_ctx_memtable_(static_cast<ObTxCtxMemtable *>(handle.table_));
+  bool all_table_cleaned = false; // no use
+  ASSERT_EQ(OB_SUCCESS, t3m_.gc_tables_in_queue(all_table_cleaned));
 }
 
 TEST_F(TestTenantMetaMemMgr, test_tx_data_memtable)
@@ -495,7 +495,8 @@ TEST_F(TestTenantMetaMemMgr, test_tx_data_memtable)
   ASSERT_EQ(1, t3m_.tx_data_memtable_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.free_tables_queue_.size());
 
-  t3m_.release_tx_data_memtable_(static_cast<ObTxDataMemtable *>(handle.table_));
+  bool all_table_cleaned = false; // no use
+  ASSERT_EQ(OB_SUCCESS, t3m_.gc_tables_in_queue(all_table_cleaned));
 }
 
 TEST_F(TestTenantMetaMemMgr, test_lock_memtable)
@@ -523,7 +524,8 @@ TEST_F(TestTenantMetaMemMgr, test_lock_memtable)
   ASSERT_EQ(1, t3m_.lock_memtable_pool_.inner_used_num_);
   ASSERT_EQ(1, t3m_.free_tables_queue_.size());
 
-  t3m_.release_lock_memtable_(static_cast<transaction::tablelock::ObLockMemtable *>(handle.table_));
+  bool all_table_cleaned = false; // no use
+  ASSERT_EQ(OB_SUCCESS, t3m_.gc_tables_in_queue(all_table_cleaned));
 }
 
 TEST_F(TestTenantMetaMemMgr, test_tablet)
@@ -632,6 +634,8 @@ TEST_F(TestTenantMetaMemMgr, test_tablet)
 
   ptr_hdl.reset();
   ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
+  ASSERT_EQ(1, t3m_.full_tablet_creator_.get_used_obj_cnt());
+  gc_all_tablets();
 }
 
 TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
@@ -723,11 +727,11 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   ASSERT_EQ(common::OB_INVALID_ARGUMENT, ret);
   ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 
-  ObTabletHandle tmp_handle;
-  ret = t3m_.tablet_map_.erase(key, tmp_handle);
+  handle.reset();
+  ret = t3m_.del_tablet(key);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
-  tmp_handle.reset();
+
   gc_all_tablets();
   ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 }
@@ -834,11 +838,11 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ret = t3m_.compare_and_swap_tablet(key, addr, mem_addr);
   ASSERT_EQ(common::OB_INVALID_ARGUMENT, ret);
 
-  tmp_handle.reset();
-  ret = t3m_.tablet_map_.erase(key, tmp_handle);
+  handle.reset();
+  ret = t3m_.del_tablet(key);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
-  tmp_handle.reset();
+
   gc_all_tablets();
   ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 }
@@ -916,11 +920,11 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 
-  ObTabletHandle tmp_handle;
-  ret = t3m_.tablet_map_.erase(key, tmp_handle);
+  handle.reset();
+  ret = t3m_.del_tablet(key);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
-  tmp_handle.reset();
+
   gc_all_tablets();
   ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 }
@@ -1105,11 +1109,11 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ASSERT_EQ(common::OB_SUCCESS, t3m_.get_tablet_with_allocator(WashTabletPriority::WTP_HIGH, key, allocator, handle));
   ASSERT_TRUE(handle.is_valid());
 
-  ObTabletHandle tmp_handle;
-  ret = t3m_.tablet_map_.erase(key, tmp_handle);
+  handle.reset();
+  ret = t3m_.del_tablet(key);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
-  tmp_handle.reset();
+
   gc_all_tablets();
   ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 }
@@ -1226,11 +1230,11 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
   ret = t3m_.compare_and_swap_tablet(key, addr, none_addr);
   ASSERT_EQ(common::OB_INVALID_ARGUMENT, ret);
 
-  ObTabletHandle tmp_handle;
-  ret = t3m_.tablet_map_.erase(key, tmp_handle);
+  handle.reset();
+  ret = t3m_.del_tablet(key);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
-  tmp_handle.reset();
+
   gc_all_tablets();
   ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
 }
@@ -1365,6 +1369,13 @@ TEST_F(TestTenantMetaMemMgr, test_replace_tablet)
 
   handle.reset();
   ASSERT_EQ(1, t3m_.tablet_buffer_pool_.inner_used_num_);
+
+  ret = t3m_.tablet_map_.erase(key, tmp_handle);
+  ASSERT_EQ(common::OB_SUCCESS, ret);
+  ASSERT_EQ(0, t3m_.tablet_map_.map_.size());
+  tmp_handle.reset();
+
+  gc_all_tablets();
 }
 
 TEST_F(TestTenantMetaMemMgr, test_multi_tablet)
@@ -1376,6 +1387,8 @@ TEST_F(TestTenantMetaMemMgr, test_multi_tablet)
   int ret = multi_thread.start();
   ASSERT_EQ(OB_SUCCESS, ret);
   multi_thread.wait();
+
+  gc_all_tablets();
 }
 
 TEST_F(TestTenantMetaMemMgr, test_tablet_wash_priority)

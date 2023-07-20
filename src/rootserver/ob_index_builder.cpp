@@ -312,6 +312,7 @@ int ObIndexBuilder::do_create_global_index(
       } else if (OB_FAIL(submit_build_index_task(trans,
                                                  new_arg,
                                                  &new_table_schema,
+                                                 nullptr/*inc_data_tablet_ids*/,
                                                  nullptr/*del_data_tablet_ids*/,
                                                  &index_schema,
                                                  arg.parallelism_,
@@ -349,6 +350,7 @@ int ObIndexBuilder::submit_build_index_task(
     ObMySQLTransaction &trans,
     const obrpc::ObCreateIndexArg &create_index_arg,
     const ObTableSchema *data_schema,
+    const ObIArray<ObTabletID> *inc_data_tablet_ids,
     const ObIArray<ObTabletID> *del_data_tablet_ids,
     const ObTableSchema *index_schema,
     const int64_t parallelism,
@@ -373,7 +375,7 @@ int ObIndexBuilder::submit_build_index_task(
   } else if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
     LOG_WARN("submit create index ddl task failed", K(ret));
   } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(
-      *data_schema, del_data_tablet_ids, *index_schema, ObTableLockOwnerID(task_record.task_id_), trans))) {
+      *data_schema, inc_data_tablet_ids, del_data_tablet_ids, *index_schema, ObTableLockOwnerID(task_record.task_id_), trans))) {
     LOG_WARN("failed to lock online ddl lock", K(ret));
   }
   return ret;
@@ -407,7 +409,7 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
     if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
       LOG_WARN("submit create index ddl task failed", K(ret));
     } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(
-        data_schema, nullptr/*del_data_tablet_ids*/, index_schema, ObTableLockOwnerID(task_record.task_id_), trans))) {
+        data_schema, nullptr/*inc_data_tablet_ids*/, nullptr/*del_data_tablet_ids*/, index_schema, ObTableLockOwnerID(task_record.task_id_), trans))) {
       LOG_WARN("failed to lock online ddl lock", K(ret));
     }
   }
@@ -492,6 +494,7 @@ int ObIndexBuilder::do_create_local_index(
       } else if (OB_FAIL(submit_build_index_task(trans,
                                                  create_index_arg,
                                                  &new_table_schema,
+                                                 nullptr/*inc_data_tablet_ids*/,
                                                  nullptr/*del_data_tablet_ids*/,
                                                  &index_schema,
                                                  create_index_arg.parallelism_,

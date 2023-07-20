@@ -445,8 +445,8 @@ struct ObInnerContextMap {
     } else {
       new (context_map_) ObInnerContextHashMap ();
       if (OB_FAIL(context_map_->create(hash::cal_next_prime(32),
-                                      ObModIds::OB_HASH_BUCKET,
-                                      ObModIds::OB_HASH_NODE))) {
+                                       ObModIds::OB_HASH_BUCKET,
+                                       ObModIds::OB_HASH_NODE))) {
         SQL_ENG_LOG(WARN, "failed to init hash map", K(ret));
       }
     }
@@ -1068,6 +1068,7 @@ public:
   int is_temp_table_transformation_enabled(bool &transformation_enabled) const;
   int is_groupby_placement_transformation_enabled(bool &transformation_enabled) const;
   bool is_in_range_optimization_enabled() const;
+  int is_better_inlist_enabled(bool &enabled) const;
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
   void set_ddl_info(const ObSessionDDLInfo &ddl_info) { ddl_info_ = ddl_info; }
@@ -1247,7 +1248,8 @@ private:
     if (OB_UNLIKELY(!ps_session_info_map_.created())) {
       ret = ps_session_info_map_.create(common::hash::cal_next_prime(PS_BUCKET_NUM),
                                         common::ObModIds::OB_HASH_BUCKET_PS_SESSION_INFO,
-                                        common::ObModIds::OB_HASH_NODE_PS_SESSION_INFO);
+                                        common::ObModIds::OB_HASH_NODE_PS_SESSION_INFO,
+                                        orig_tenant_id_);
     }
     return ret;
   }
@@ -1262,7 +1264,8 @@ private:
     if (OB_UNLIKELY(!ps_name_id_map_.created())) {
       ret = ps_name_id_map_.create(common::hash::cal_next_prime(PS_BUCKET_NUM),
                                    common::ObModIds::OB_HASH_BUCKET_PS_SESSION_INFO,
-                                   common::ObModIds::OB_HASH_NODE_PS_SESSION_INFO);
+                                   common::ObModIds::OB_HASH_NODE_PS_SESSION_INFO,
+                                   orig_tenant_id_);
     }
     return ret;
   }

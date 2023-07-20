@@ -459,7 +459,7 @@ int ObTabletTableStore::deep_copy(
       new_table_store->is_inited_ = is_inited_;
       new_table_store->is_ready_for_read_ = is_ready_for_read_;
       value = new_table_store;
-      FLOG_INFO("succeed to deep_copy table store", K(major_tables_), K(minor_tables_), K(memtables_), K(PRINT_TS(*this)));
+      LOG_DEBUG("succeed to deep_copy table store", K(major_tables_), K(minor_tables_), K(memtables_), K(PRINT_TS(*this)));
     }
   }
   return ret;

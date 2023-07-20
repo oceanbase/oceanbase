@@ -59,7 +59,7 @@ private:
   ObLSFreezeThread freeze_thread_;
 
   bool get_disk_usage_threshold_(int64_t &threshold);
-  bool cannot_recycle_log_over_threshold_(const int64_t threshold);
+  bool cannot_recycle_log_over_threshold_(const int64_t threshold, const bool need_update_checkpoint_scn);
   int flush_if_need_(bool need_flush);
   // reduce the risk of clog full due to checkpoint long interval
   static int64_t CHECK_CLOG_USAGE_INTERVAL;

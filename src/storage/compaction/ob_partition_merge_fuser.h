@@ -42,8 +42,7 @@ public:
       nop_pos_(),
       allocator_("MergeFuser"),
       multi_version_column_ids_(common::OB_MAX_COLUMN_NUMBER, allocator_),
-      is_inited_(false),
-      purged_count_(0)
+      is_inited_(false)
   {}
   virtual ~ObIPartitionMergeFuser();
   virtual int init(const ObMergeParameter &merge_param);
@@ -56,7 +55,6 @@ public:
   {
     return multi_version_column_ids_;
   }
-  virtual OB_INLINE int64_t get_purged_count() const { return purged_count_; }
   virtual const char *get_fuser_name() const = 0;
   virtual int set_multi_version_flag(const blocksstable::ObMultiVersionRowFlag &row_flag);
   VIRTUAL_TO_STRING_KV(K_(schema_rowkey_column_cnt), K_(column_cnt),
@@ -81,7 +79,6 @@ protected:
   // for mini & minor: store multi_version rowkey column description
   common::ObArray<share::schema::ObColDesc, common::ObIAllocator &> multi_version_column_ids_;
   bool is_inited_;
-  int64_t purged_count_;
 };
 
 class ObMajorPartitionMergeFuser : public ObIPartitionMergeFuser
@@ -101,8 +98,6 @@ public:
 protected:
   virtual int inner_check_merge_param(const ObMergeParameter &merge_param);
   virtual int inner_init(const ObMergeParameter &merge_param) override;
-
-  virtual int fuse_old_row(ObPartitionMergeIter *row_iter, blocksstable::ObDatumRow *row);
   virtual int fuse_delete_row(ObPartitionMergeIter *row_iter, blocksstable::ObDatumRow &row,
                               const int64_t rowkey_column_cnt) override;
 protected:
@@ -132,8 +127,7 @@ class ObMinorPartitionMergeFuser : public ObIPartitionMergeFuser
 public:
   ObMinorPartitionMergeFuser()
     : ObIPartitionMergeFuser(),
-      multi_version_rowkey_column_cnt_(0),
-      col_id_set_()
+      multi_version_rowkey_column_cnt_(0)
   {}
   virtual ~ObMinorPartitionMergeFuser();
   virtual void reset() override;
@@ -150,7 +144,6 @@ protected:
                       const int64_t rowkey_column_cnt) = 0;
 protected:
   int64_t multi_version_rowkey_column_cnt_;
-  common::ObBitSet<> col_id_set_;
   DISALLOW_COPY_AND_ASSIGN(ObMinorPartitionMergeFuser);
 };
 

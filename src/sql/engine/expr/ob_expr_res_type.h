@@ -165,6 +165,20 @@ public:
   {
     return accuracy_.get_length_semantics();
   }
+  OB_INLINE uint64_t get_expr_udt_id() const
+  {
+    uint64_t udt_id = OB_INVALID_ID;
+    if (is_user_defined_sql_type()) {
+      if (is_xml_sql_type()) {
+        udt_id = T_OBJ_XML;
+      } else {
+        // NOTICE: process new sql type id in here.
+      }
+    } else {
+      udt_id = get_udt_id();
+    }
+    return udt_id;
+  }
   OB_INLINE uint64_t get_udt_id() const
   {
     return accuracy_.get_accuracy();

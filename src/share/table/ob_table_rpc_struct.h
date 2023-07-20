@@ -307,7 +307,10 @@ class ObTableDirectLoadResult
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableDirectLoadResult() : operation_type_(ObTableDirectLoadOperationType::MAX_TYPE) {}
+  ObTableDirectLoadResult()
+    : allocator_(nullptr), operation_type_(ObTableDirectLoadOperationType::MAX_TYPE)
+  {
+  }
   template <class Res>
   int set_res(const Res &res, common::ObIAllocator &allocator)
   {
@@ -342,6 +345,7 @@ public:
   }
   TO_STRING_KV(K_(operation_type), "res_content", common::ObHexStringWrap(res_content_));
 public:
+  common::ObIAllocator *allocator_; // for deserialize
   ObTableDirectLoadOperationType operation_type_;
   ObString res_content_;
 };

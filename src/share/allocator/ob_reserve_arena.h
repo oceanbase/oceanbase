@@ -23,11 +23,10 @@ template<int64_t MAX_RESERVE_SIZE = 0>
 class ObReserveArenaAllocator : public ObIAllocator
 {
 public:
-  ObReserveArenaAllocator(const lib::ObLabel &label,
-                const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE,
-                int64_t tenant_id = OB_SERVER_TENANT_ID)
+  ObReserveArenaAllocator(const lib::ObMemAttr &attr,
+                const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE)
               : pos_(0),
-                allocator_(label, page_size, tenant_id)
+                allocator_(attr, page_size)
   {
     OB_ASSERT(MAX_RESERVE_SIZE >= 0);
   }

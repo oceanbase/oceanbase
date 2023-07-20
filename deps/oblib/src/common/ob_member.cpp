@@ -71,6 +71,21 @@ bool ObMember::is_valid() const
   return server_.is_valid();
 }
 
+bool ObMember::is_migrating() const
+{
+  return (flag_ >> MIGRATING_FLAG_BIT) & 1U;
+}
+
+void ObMember::set_migrating()
+{
+  flag_ |= (1UL << MIGRATING_FLAG_BIT);
+}
+
+void ObMember::reset_migrating()
+{
+  flag_ &= ~(1UL << MIGRATING_FLAG_BIT);
+}
+
 OB_SERIALIZE_MEMBER(ObMember, server_, timestamp_, flag_);
 
 bool ObReplicaMember::is_readonly_replica() const

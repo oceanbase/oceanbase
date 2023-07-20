@@ -46,6 +46,7 @@ ObLogFetcher::ObLogFetcher() :
     fetching_mode_(ClientFetchingMode::FETCHING_MODE_UNKNOWN),
     archive_dest_(),
     large_buffer_pool_(),
+    log_ext_handler_(),
     ls_ctx_add_info_factory_(NULL),
     err_handler_(NULL),
     ls_fetch_mgr_(),
@@ -96,6 +97,8 @@ int ObLogFetcher::init(
     LOG_ERROR("invalid argument", KR(ret), K(err_handler), K(proxy));
   } else {
     cfg_ = &cfg;
+    // set self_tenant_id before suggest_cached_rpc_res_count
+    self_tenant_id_ = self_tenant_id;
     // Before the LogFetcher module is initialized, the following configuration items need to be loaded
     configure(cfg);
     int64_t cached_fetch_log_arpc_res_cnt = cfg.rpc_result_cached_count;
@@ -128,6 +131,8 @@ int ObLogFetcher::init(
       LOG_ERROR("init progress controller fail", KR(ret));
     } else if (OB_FAIL(large_buffer_pool_.init("ObLogFetcher", 1L * 1024 * 1024 * 1024))) {
       LOG_ERROR("init large buffer pool failed", KR(ret));
+    } else if (OB_FAIL(log_ext_handler_.init())) {
+      LOG_ERROR("init failed", KR(ret));
     } else if (OB_FAIL(ls_fetch_mgr_.init(
             progress_controller_,
             ls_ctx_factory,
@@ -181,7 +186,6 @@ int ObLogFetcher::init(
       log_fetcher_user_ = log_fetcher_user;
       cluster_id_ = cluster_id;
       source_tenant_id_ = source_tenant_id;
-      self_tenant_id_ = self_tenant_id;
       is_loading_data_dict_baseline_data_ = is_loading_data_dict_baseline_data;
       fetching_mode_ = fetching_mode;
       archive_dest_ = archive_dest;
@@ -232,6 +236,8 @@ void ObLogFetcher::destroy()
     log_route_service_.wait();
     log_route_service_.destroy();
   }
+  log_ext_handler_.wait();
+  log_ext_handler_.destroy();
   // Finally reset fetching_mode_ because of some processing dependencies, such as ObLogRouteService
   fetching_mode_ = ClientFetchingMode::FETCHING_MODE_UNKNOWN;
   log_fetcher_user_ = LogFetcherUser::UNKNOWN;
@@ -264,6 +270,9 @@ int ObLogFetcher::start()
       LOG_ERROR("start dead pool fail", KR(ret));
     } else if (OB_FAIL(stream_worker_.start())) {
       LOG_ERROR("start stream worker fail", KR(ret));
+      // TODO by wenyue.zxl: change the concurrency of 'log_ext_handler_'(see resize interface)
+    } else if (OB_FAIL(log_ext_handler_.start(0))) {
+      LOG_ERROR("start log external handler failed", KR(ret));
     } else {
       LOG_INFO("LogFetcher start success");
     }
@@ -288,6 +297,7 @@ void ObLogFetcher::stop()
     if (is_integrated_fetching_mode(fetching_mode_)) {
       log_route_service_.stop();
     }
+    log_ext_handler_.stop();
 
     LOG_INFO("LogFetcher stop success");
   }
@@ -711,6 +721,20 @@ int ObLogFetcher::get_large_buffer_pool(archive::LargeBufferPool *&large_buffer_
   return ret;
 }
 
+int ObLogFetcher::get_log_ext_handler(logservice::ObLogExternalStorageHandler *&log_ext_hander)
+{
+  int ret = OB_SUCCESS;
+
+  if(IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("LogFetcher is not inited, could not get log ext handler", KR(ret), K_(is_inited));
+  } else {
+    log_ext_hander = &log_ext_handler_;
+  }
+
+  return ret;
+}
+
 int ObLogFetcher::get_fetcher_config(const ObLogFetcherConfig *&cfg)
 {
   int ret = OB_SUCCESS;
@@ -784,8 +808,8 @@ int ObLogFetcher::suggest_cached_rpc_res_count_(const int64_t min_res_cnt,
     rpc_res_cnt = max_res_cnt;
   }
 
-  LOG_INFO("suggest fetchlog arpc cached rpc result count", K(memory_limit),
-      K(min_res_cnt), K(max_res_cnt), K(rpc_res_cnt));
+  LOG_INFO("suggest fetchlog arpc cached rpc result count", K(self_tenant_id_),
+      K(min_res_cnt), K(max_res_cnt), K(rpc_res_cnt), K(memory_limit));
   return rpc_res_cnt;
 }
 

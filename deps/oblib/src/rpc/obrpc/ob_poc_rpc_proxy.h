@@ -176,6 +176,7 @@ public:
     const int64_t start_ts = common::ObTimeUtility::current_time();
     ObRpcMemPool* pool = NULL;
     uint64_t pnio_group_id = ObPocRpcServer::DEFAULT_PNIO_GROUP;
+    ObTimeGuard timeguard("poc_rpc_post", 10 * 1000);
     // TODO:@fangwu.lcc map proxy.group_id_ to pnio_group_id
     if (OB_LS_FETCH_LOG2 == pcode) {
       pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
@@ -194,10 +195,12 @@ public:
     } else {
       char* req = NULL;
       int64_t req_sz = 0;
+      timeguard.click();
       if (OB_FAIL(rpc_encode_req(proxy, *pool, pcode, args, opts, req, req_sz, NULL == ucb))) {
         RPC_LOG(WARN, "rpc encode req fail", K(ret));
       } else if(OB_FAIL(check_blacklist(addr))) {
         RPC_LOG(WARN, "check_blacklist failed", K(addr));
+      } else if (FALSE_IT(timeguard.click())) {
       } else if (OB_FAIL(ObAsyncRespCallback::create(*pool, ucb, cb))) {
         RPC_LOG(WARN, "create ObAsyncRespCallback failed", K(ucb));
       } else if (OB_NOT_NULL(cb)) {
@@ -207,6 +210,7 @@ public:
           init_ucb(proxy, cb->get_ucb(), addr, start_ts, req_sz);
         }
       }
+      timeguard.click();
       if (OB_SUCC(ret)) {
         sockaddr_in sock_addr;
         if (0 != (sys_err = pn_send(

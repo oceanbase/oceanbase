@@ -50,9 +50,9 @@ private:
   int confirm_begin_peers();
   int pre_merge_peers();
   int start_merge_peers();
-  int commit_peers(table::ObTableLoadSqlStatistics &sql_statistics);
+  int commit_peers();
   int commit_redef_table();
-  int drive_sql_stat(sql::ObExecContext *ctx, table::ObTableLoadSqlStatistics &sql_statistics);
+  int drive_sql_stat(sql::ObExecContext *ctx);
 private:
   int add_check_merge_result_task();
   int check_peers_merge_result(bool &is_finish);

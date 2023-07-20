@@ -49,7 +49,7 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
   ObReqTransport::Result   r;
 
   if (OB_ISNULL(transport_)) {
-    RPC_OBRPC_LOG(INFO, "transport_ is NULL, use poc_rpc", K(sess_id), K(has_more_));
+    RPC_OBRPC_LOG(INFO, "transport_ is NULL, use poc_rpc", K(has_more_));
     const int64_t start_ts = common::ObTimeUtility::current_time();
     int64_t src_tenant_id = ob_get_tenant_id();
     auto &set = obrpc::ObRpcPacketSet::instance();
@@ -186,7 +186,7 @@ int SSHandle<pcodeStruct>::abort()
   ObReqTransport::Result   r;
 
   if (OB_ISNULL(transport_)) {
-    RPC_OBRPC_LOG(INFO, "transport_ is NULL, use poc_rpc", K(sess_id), K(has_more_));
+    RPC_OBRPC_LOG(INFO, "transport_ is NULL, use poc_rpc", K(has_more_));
     const int64_t start_ts = common::ObTimeUtility::current_time();
     int64_t src_tenant_id = ob_get_tenant_id();
     auto &set = obrpc::ObRpcPacketSet::instance();

@@ -499,6 +499,7 @@ public:
     return common::OB_SUCCESS;
   }
   int get_show_ddl_in_compat_mode(bool &show_ddl_in_compat_mode) const;
+  int get_sql_quote_show_create(bool &sql_quote_show_create) const;
   common::ObConsistencyLevel get_consistency_level() const { return consistency_level_; };
   bool is_zombie() const { return SESSION_KILLED == get_session_state();}
   bool is_query_killed() const;

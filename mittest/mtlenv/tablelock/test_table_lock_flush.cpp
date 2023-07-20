@@ -16,7 +16,6 @@
 #define protected public
 #define private public
 #include "mtlenv/mock_tenant_module_env.h"
-#include "observer/ob_safe_destroy_thread.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/ls/ob_ls_tx_service.h"
@@ -86,16 +85,11 @@ void TestTableLockFlush::TearDown()
 void TestTableLockFlush::SetUpTestCase()
 {
   EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
-  SAFE_DESTROY_INSTANCE.init();
-  SAFE_DESTROY_INSTANCE.start();
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
 }
 
 void TestTableLockFlush::TearDownTestCase()
 {
-  SAFE_DESTROY_INSTANCE.stop();
-  SAFE_DESTROY_INSTANCE.wait();
-  SAFE_DESTROY_INSTANCE.destroy();
   MockTenantModuleEnv::get_instance().destroy();
 }
 

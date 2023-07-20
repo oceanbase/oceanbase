@@ -96,7 +96,10 @@ class ObDirectLoadControlResult
   OB_UNIS_VERSION(1);
 
 public:
-  ObDirectLoadControlResult() : command_type_(observer::ObDirectLoadControlCommandType::MAX_TYPE) {}
+  ObDirectLoadControlResult()
+    : allocator_(nullptr), command_type_(observer::ObDirectLoadControlCommandType::MAX_TYPE)
+  {
+  }
   template <class Res>
   int set_res(const Res &res, common::ObIAllocator &allocator)
   {
@@ -132,6 +135,7 @@ public:
   TO_STRING_KV(K_(command_type), "res_content", common::ObHexStringWrap(res_content_));
 
 public:
+  common::ObIAllocator *allocator_; // for deserialize
   observer::ObDirectLoadControlCommandType command_type_;
   ObString res_content_;
 };

@@ -463,6 +463,11 @@ ObInnerLSStatus ObLS::get_create_state() const
   return ls_meta_.get_ls_create_status();
 }
 
+bool ObLS::is_create_committed() const
+{
+  return ObInnerLSStatus::COMMITTED == ls_meta_.get_ls_create_status();
+}
+
 bool ObLS::is_need_gc() const
 {
   int ret = OB_SUCCESS;
@@ -1218,6 +1223,7 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
   bool is_log_sync = false;
   bool is_need_rebuild = false;
   ObMigrationStatus migrate_status;
+  bool tx_blocked = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
@@ -1228,6 +1234,8 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
     LOG_WARN("get ls need rebuild info failed", K(ret), KPC(this));
   } else if (OB_FAIL(ls_meta_.get_migration_status(migrate_status))) {
     LOG_WARN("get ls migrate status failed", K(ret), KPC(this));
+  } else if (OB_FAIL(ls_tx_svr_.check_tx_blocked(tx_blocked))) {
+    LOG_WARN("check tx ls state error", K(ret),KPC(this));
   } else {
     ls_info.ls_id_ = ls_meta_.ls_id_;
     ls_info.replica_type_ = ls_meta_.get_replica_type();
@@ -1241,6 +1249,7 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
     ls_info.rebuild_seq_ = ls_meta_.get_rebuild_seq();
     ls_info.tablet_change_checkpoint_scn_ = ls_meta_.get_tablet_change_checkpoint_scn();
     ls_info.transfer_scn_ = ls_meta_.get_transfer_scn();
+    ls_info.tx_blocked_ = tx_blocked;
   }
   return ret;
 }
@@ -1990,14 +1999,14 @@ int ObLS::try_update_uppder_trans_version()
       while (OB_SUCC(ret)) {
         if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
           if (OB_ITER_END != ret) {
-            LOG_WARN("failed to get tablet", K(ret), K(ls_id), K(tablet_handle));
+            LOG_WARN("failed to get tablet", K(ret), K(ls_meta_.ls_id_), K(tablet_handle));
           } else {
             ret = OB_SUCCESS;
             break;
           }
         } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid tablet handle", K(ret), K(ls_id), K(tablet_handle));
+          LOG_WARN("invalid tablet handle", K(ret), K(ls_meta_.ls_id_), K(tablet_handle));
         } else if (!tablet_handle.get_obj()->get_tablet_meta().ha_status_.is_data_status_complete()) {
           //no need update upper trans version
         } else if (OB_TMP_FAIL(tablet_handle.get_obj()->update_upper_trans_version(*this, is_updated))) {

@@ -69,25 +69,6 @@ static bool enable_new_sql_nio()
   return GCONF._enable_new_sql_nio;
 }
 
-static int get_default_net_thread_count()
-{
-  int cnt = 1;
-  int cpu_num = get_cpu_num();
-
-  if (cpu_num <= 4) {
-    cnt = 1;
-  } else if (cpu_num <= 8) {
-    cnt = 2;
-  } else if (cpu_num <= 16) {
-    cnt = 4;
-  } else if (cpu_num <= 32) {
-    cnt = 7;
-  } else {
-    cnt = max(8, get_cpu_num() / 6);
-  }
-  return cnt;
-}
-
 static int update_tcp_keepalive_parameters_for_sql_nio_server(int tcp_keepalive_enabled, int64_t tcp_keepidle, int64_t tcp_keepintvl, int64_t tcp_keepcnt)
 {
   int ret = OB_SUCCESS;

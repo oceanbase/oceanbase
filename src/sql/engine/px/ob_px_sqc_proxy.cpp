@@ -467,6 +467,7 @@ int ObPxSQCProxy::report(int end_ret) const
           (void)MTL(transaction::ObTransService*)->merge_tx_state(*sqc_tx_desc, *task_tx_desc);
           (void)MTL(transaction::ObTransService*)->release_tx(*task_tx_desc);
         } else {
+          sql::ObSQLSessionInfo::LockGuard guard(session->get_thread_data_lock());
           sqc_tx_desc = task_tx_desc;
         }
         task_tx_desc = NULL;

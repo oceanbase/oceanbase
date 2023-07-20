@@ -56,7 +56,7 @@ TEST_F(TestObBlackList, black_list_init_invalid)
   // update
   ObLsInfo ls_info;
   uint64_t curr_time = static_cast<uint64_t>(ObTimeUtility::current_time());
-  EXPECT_EQ(OB_SUCCESS, ls_info.init(FOLLOWER, curr_time, OB_MIGRATE_STATUS_NONE));
+  EXPECT_EQ(OB_SUCCESS, ls_info.init(0, curr_time, OB_MIGRATE_STATUS_NONE, 0));
   EXPECT_EQ(OB_SUCCESS, bl_service.ls_bl_mgr_.update(key, ls_info));
 
   // check
@@ -241,7 +241,7 @@ TEST_F(TestObBlackList, black_list_parallel_2)
     int rand = 0;
     ObBLKey key;
     ObLsInfo ls_info;
-    EXPECT_EQ(OB_SUCCESS, ls_info.init(FOLLOWER, 1, OB_MIGRATE_STATUS_NONE));
+    EXPECT_EQ(OB_SUCCESS, ls_info.init(0, 1, OB_MIGRATE_STATUS_NONE, 0));
     std::srand((unsigned)std::time(NULL));
     for (int i = 1; i <= loop_cnt; i++) {
       rand = std::rand() % 1000 + 1;

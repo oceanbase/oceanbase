@@ -31,7 +31,6 @@
 #include "storage/tablet/ob_tablet_persister.h"
 #include "storage/multi_data_source/mds_table_handler.h"
 #include "storage/multi_data_source/runtime_utility/mds_factory.h"
-#include "observer/ob_safe_destroy_thread.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -124,8 +123,6 @@ void TestMediumInfoReader::SetUpTestCase()
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  SAFE_DESTROY_INSTANCE.init();
-  SAFE_DESTROY_INSTANCE.start();
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
 
   // create ls
@@ -141,10 +138,6 @@ void TestMediumInfoReader::TearDownTestCase()
   // remove ls
   ret = remove_ls(LS_ID);
   ASSERT_EQ(OB_SUCCESS, ret);
-
-  SAFE_DESTROY_INSTANCE.stop();
-  SAFE_DESTROY_INSTANCE.wait();
-  SAFE_DESTROY_INSTANCE.destroy();
 
   MockTenantModuleEnv::get_instance().destroy();
 }

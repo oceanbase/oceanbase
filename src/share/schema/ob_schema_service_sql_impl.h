@@ -877,9 +877,7 @@ private:
                            ObTablegroupSchema *&tablegroup_schema);
 
   template<typename T>
-  int fetch_link_table_info(uint64_t tenant_id,
-                            uint64_t dblink_id,
-                            common::sqlclient::DblinkDriverProto &link_type,
+  int fetch_link_table_info(common::sqlclient::dblink_param_ctx &param_ctx,
                             sql::DblinkGetConnType conn_type,
                             const common::ObString &database_name,
                             const common::ObString &table_name,
@@ -888,12 +886,9 @@ private:
                             sql::ObSQLSessionInfo *session_info,
                             const ObString &dblink_name,
                             sql::ObReverseLink *reverse_link,
-                            const common::sqlclient::dblink_param_ctx &param_ctx,
-                            int64_t &next_sql_req_level,
                             uint64_t *current_scn);
   template<typename T>
-  int generate_link_table_schema(uint64_t tenant_id, uint64_t dblink_id,
-                                 common::sqlclient::DblinkDriverProto link_type,
+  int generate_link_table_schema(const common::sqlclient::dblink_param_ctx &param_ctx,
                                  sql::DblinkGetConnType conn_type,
                                  const ObString &database_name,
                                  const ObString &table_name,
@@ -901,15 +896,12 @@ private:
                                  T *&table_schema,
                                  const sql::ObSQLSessionInfo *session_info,
                                  common::sqlclient::ObISQLConnection *dblink_conn,
-                                 const common::sqlclient::ObMySQLResult *col_meta_result,
-                                 int64_t &next_sql_req_level);
-  int fetch_link_current_scn(uint64_t tenant_id,
-                             uint64_t dblink_id,
+                                 const common::sqlclient::ObMySQLResult *col_meta_result);
+  int fetch_link_current_scn(const common::sqlclient::dblink_param_ctx &param_ctx,
                              sql::DblinkGetConnType conn_type,
                              ObIAllocator &allocator,
                              common::sqlclient::ObISQLConnection *dblink_conn,
                              sql::ObReverseLink *reverse_link,
-                             int64_t next_sql_req_level,
                              uint64_t &current_scn);
   int try_mock_link_table_column(ObTableSchema &table_schema);
 

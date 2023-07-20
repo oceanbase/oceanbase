@@ -321,7 +321,7 @@ int ObStorageSchemaRecorder::get_schema(
     // The version is checked here, so there is no need to check whether it is full
     int tmp_ret = ret;
     ret = OB_SCHEMA_ERROR;
-    LOG_WARN("failed to get schema", KR(tmp_ret), KR(ret), K(table_id), K_(tablet_id),
+    LOG_WARN("failed to get schema", KR(tmp_ret), KR(ret), K(table_id_), K_(tablet_id),
              K(tenant_schema_version), K(table_version), KPC(t_schema));
     if (NULL != t_schema) {
       LOG_WARN("current schema version", K(t_schema->get_schema_version()));

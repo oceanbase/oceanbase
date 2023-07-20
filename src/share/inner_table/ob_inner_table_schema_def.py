@@ -10833,6 +10833,7 @@ def_table_schema(
   ('rebuild_seq', 'int'),
   ('tablet_change_checkpoint_scn', 'uint'),
   ('transfer_scn', 'uint'),
+  ('tx_blocked', 'uint'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -12273,6 +12274,12 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 
 #
 # 12416: __all_virtual_balance_task_helper
+
+# 12417: __all_virtual_balance_group_ls_stat
+# 12418: __all_virtual_cgroup_info
+# 12419: __all_virtual_cgroup_config
+
+#
 # 余留位置
 #
 
@@ -12647,6 +12654,11 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15388'
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15399', all_def_keywords['__all_virtual_tenant_event_history']))
 
 # 15400: __all_virtual_balance_task_helper
+
+# 15401: __all_virtual_data_activity_metrics
+
+# 15402: __all_virtual_ls
+
 # 余留位置
 
 ################################################################################
@@ -21151,6 +21163,10 @@ def_table_schema(
       CREATE_TIME,
       DIAGNOSE_INFO
     FROM oceanbase.__all_virtual_compaction_diagnose_info
+    WHERE
+      STATUS != "RS_UNCOMPACTED"
+    AND
+      STATUS != "NOT_SCHEDULE"
 """.replace("\n", " ")
 )
 
@@ -50165,6 +50181,10 @@ def_table_schema(
       CREATE_TIME,
       DIAGNOSE_INFO
     FROM SYS.ALL_VIRTUAL_COMPACTION_DIAGNOSE_INFO
+    WHERE
+      STATUS != 'RS_UNCOMPACTED'
+    AND
+      STATUS != 'NOT_SCHEDULE'
 """.replace("\n", " ")
 )
 

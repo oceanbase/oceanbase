@@ -51,14 +51,17 @@ public:
   const ObTabletHandle &get_tablet_handle() const { return tablet_handle_; }
   const ObTableStoreIterator &get_table_iter() const { return *(table_iter_.table_iter()); }
   blocksstable::ObSSTable *get_major_sstable() const { return major_sstable_; }
-  TO_STRING_KV(K_(meta), K_(tablet_handle), K_(table_iter), KP_(major_sstable));
+  const common::ObIArray<blocksstable::ObSSTable *> &get_ddl_sstables() const { return ddl_sstables_; }
+  TO_STRING_KV(K_(meta), K_(tablet_handle), K_(table_iter), KP_(major_sstable), K_(ddl_sstables));
 private:
   int prepare_tables();
 private:
   ObDirectLoadOriginTableMeta meta_;
   ObTabletHandle tablet_handle_;
   ObTabletTableIterator table_iter_;
+  // ddl sstables may not merge to major sstable
   blocksstable::ObSSTable *major_sstable_;
+  common::ObArray<blocksstable::ObSSTable *> ddl_sstables_;
   bool is_inited_;
 };
 

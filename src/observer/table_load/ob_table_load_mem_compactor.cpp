@@ -292,8 +292,8 @@ int ObTableLoadMemCompactor::init_scheduler()
 {
   int ret = OB_SUCCESS;
   // 初始化task_scheduler_
-  if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_),
-                                               1, allocator_))) {
+  if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_), 1,
+                                          param_->table_id_, "MemCompact"))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
   } else if (OB_FAIL(task_scheduler_->init())) {

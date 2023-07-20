@@ -305,13 +305,13 @@ int ObLobLocatorHelper::fuse_mem_lob_header(ObObj &def_obj, uint64_t col_id, boo
                                  payload_size,
                                  0,
                                  false))) {
-          STORAGE_LOG(WARN, "Lob: init locator in build_lob_locatorv2", K(ret), K(column_id));
+          STORAGE_LOG(WARN, "Lob: init locator in build_lob_locatorv2", K(ret), K(col_id));
         } else if (OB_FAIL(locator.set_payload_data(&lob_common, def_obj.get_string()))) {
         } else if (has_extern) {
           ObMemLobTxInfo tx_info(snapshot_version_, tx_id_, scn_);
           ObMemLobLocationInfo location_info(tablet_id_, ls_id_, def_obj.get_collation_type());
-          if (OB_FAIL(locator.set_table_info(table_id_, column_id))) { // ToDo: @gehao should be column idx
-            STORAGE_LOG(WARN, "Lob: set table info failed", K(ret), K(table_id_), K(column_id));
+          if (OB_FAIL(locator.set_table_info(table_id_, col_id))) { // ToDo: @gehao should be column idx
+            STORAGE_LOG(WARN, "Lob: set table info failed", K(ret), K(table_id_), K(col_id));
           } else if (extern_flags.has_tx_info_ && OB_FAIL(locator.set_tx_info(tx_info))) {
             STORAGE_LOG(WARN, "Lob: set transaction info failed", K(ret), K(tx_info));
           } else if (extern_flags.has_location_info_ && OB_FAIL(locator.set_location_info(location_info))) {

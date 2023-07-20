@@ -1895,6 +1895,10 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
         type = stmt::T_START_TRANS;
       }
       break;
+      case T_ALTER_SYSTEM_KILL: {
+        type = stmt::T_KILL;
+      }
+      break;
       case T_MULTI_INSERT: {
         type = stmt::T_INSERT;
       }

@@ -305,15 +305,17 @@ bool ObLSReplica::learner_list_is_equal(const common::GlobalLearnerList &a, cons
 {
   bool is_equal = true;
   if (a.get_member_number() != b.get_member_number()) {
+    // ObMember with flag is considered.
     is_equal = false;
   } else {
     for (int i = 0; is_equal && i < a.get_member_number(); ++i) {
-      ObAddr learner;
+      ObMember learner;
       int ret = OB_SUCCESS;
-      if (OB_FAIL(a.get_server_by_index(i, learner))) {
+      if (OB_FAIL(a.get_member_by_index(i, learner))) {
         is_equal = false;
         LOG_WARN("failed to get server by index", KR(ret), K(i), K(a), K(b));
       } else {
+        // flag of learner is considered
         is_equal = b.contains(learner);
       }
     }
@@ -470,30 +472,47 @@ int ObLSReplica::text2learner_list(const char *text, GlobalLearnerList &learner_
   char *learner_text = nullptr;
   char *save_ptr1 = nullptr;
   learner_list.reset();
-  if (nullptr == text) {
+  if (OB_ISNULL(text)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(text));
   }
   while (OB_SUCC(ret)) {
     learner_text = strtok_r((nullptr == learner_text ? const_cast<char *>(text) : nullptr), ",", &save_ptr1);
     /*
-     * ipv4 format: a.b.c.d:port:timestamp,...
-     * ipv6 format: [a:b:c:d:e:f:g:h]:port:timestamp,...
+     * ipv4 format: a.b.c.d:port:timestamp:flag,...
+     * ipv6 format: [a:b:c:d:e:f:g:h]:port:timestamp:flag,...
      */
-    if (nullptr != learner_text) {
+    if (OB_NOT_NULL(learner_text)) {
+      char *flag_str = nullptr;
       char *timestamp_str = nullptr;
       char *end_ptr = nullptr;
       ObAddr learner_addr;
-      if (OB_NOT_NULL(timestamp_str = strrchr(learner_text, ':'))) {
-        *timestamp_str++ = '\0';
-        int64_t timestamp_val = strtoll(timestamp_str, &end_ptr, 10);
-        if (end_ptr == timestamp_str || *end_ptr != '\0') {
+      if (OB_NOT_NULL(flag_str = strrchr(learner_text, ':'))) {
+        // strrchar will return substring after last ':'
+        *flag_str++ = '\0';
+        int64_t flag_value = strtoll(flag_str, &end_ptr, 10);
+        //end_ptr is the location of the first character can not translated into digital number
+        if (end_ptr == flag_str || *end_ptr != '\0') {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("strtoll failed", KR(ret));
-        } else if (OB_FAIL(learner_addr.parse_from_cstring(learner_text))) {
-          LOG_ERROR("parse from cstring failed", KR(ret), K(learner_text));
-        } else if (OB_FAIL(learner_list.add_learner(ObMember(learner_addr, timestamp_val)))) {
-          LOG_WARN("push back failed", KR(ret), K(learner_addr), K(timestamp_val));
+        } else if (OB_NOT_NULL(timestamp_str = strrchr(learner_text, ':'))) {
+          *timestamp_str++ = '\0';
+          int64_t timestamp_val = strtoll(timestamp_str, &end_ptr, 10);
+          if (end_ptr == timestamp_str || *end_ptr != '\0') {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("strtoll failed", KR(ret));
+          } else if (OB_FAIL(learner_addr.parse_from_cstring(learner_text))) {
+            LOG_ERROR("parse from cstring failed", KR(ret), K(learner_text));
+          } else {
+            ObMember member_to_add(learner_addr, timestamp_val);
+            member_to_add.set_flag(flag_value);
+            if (OB_FAIL(learner_list.add_learner(member_to_add))) {
+              LOG_WARN("push back learner failed", KR(ret), K(member_to_add));
+            }
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("parse learner text failed", KR(ret), K(learner_text));
         }
       } else {
         ret = OB_ERR_UNEXPECTED;

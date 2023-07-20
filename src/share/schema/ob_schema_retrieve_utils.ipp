@@ -4348,6 +4348,7 @@ int ObSchemaRetrieveUtils::fill_base_part_info(
         // bugfix: issue/48579037
         // In 4.x, tablegroup_id/table_id is in the same scope, so we can distinguish table and tablegroup based on object_id.
         bool is_oracle_mode = false;
+        const uint64_t table_id = partition.get_table_id();
         if (is_sys_tablegroup_id(table_id)) {
           is_oracle_mode = false;
         } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(

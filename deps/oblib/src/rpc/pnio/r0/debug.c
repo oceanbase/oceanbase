@@ -20,6 +20,6 @@ void stat_cleanup(void *s) {
   int64_t *time = ((struct stat_time_guard_t *)s)->time;
   *time += cost;
   if (cost > ELOOP_WARN_US) {
-    rk_info("eloop handle events cost too much time: %ldus, procedure: %s", cost, ((struct stat_time_guard_t *)s)->procedure);
+    rk_warn("[delay_warn] cost too much time: %ldus, procedure: %s", cost, ((struct stat_time_guard_t *)s)->procedure);
   }
 }

@@ -53,7 +53,7 @@ int ObTabletMergeChecker::check_need_merge(const ObMergeType merge_type, const O
     } else if (!need_merge) {
       ret = OB_NO_NEED_MERGE;
       LOG_INFO("tablet has no need to merge", K(ret), K(ls_id), K(tablet_id),
-          "merge_type", merge_type_to_str(merge_type));
+          "merge_type", merge_type_to_str(merge_type), K(is_empty_shell));
     }
   }
 

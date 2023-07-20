@@ -100,6 +100,14 @@ int ObKillSessionArg::calculate_sessid(ObExecContext &ctx, const ObKillStmt &stm
           LOG_WARN("fail to calc value", K(ret), K(stmt.get_value_expr()));
         } else {
           const ObObj *res_obj = NULL;
+          if (stmt.is_alter_system_kill()) {
+            ObString str = value_obj.get_string();
+            const char* index = str.find(',');
+            if (index != NULL) {
+              str = str.split_on(index);
+            }
+            value_obj.set_string(value_obj.get_type(), str);
+          }
           EXPR_DEFINE_CAST_CTX(expr_ctx, CM_WARN_ON_FAIL);
           EXPR_CAST_OBJ_V2(ObUInt32Type, value_obj, res_obj);
           ret = OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD == ret ? OB_SUCCESS : ret;

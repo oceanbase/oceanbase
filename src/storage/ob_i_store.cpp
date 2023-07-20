@@ -108,7 +108,7 @@ int ObStoreCtx::init_for_read(const ObLSHandle &ls_handle,
     STORAGE_LOG(WARN, "get invalid arguments", K(ret), K(ls_handle), K(timeout), K(tx_lock_timeout), K(snapshot_version));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "ls is null", K(ret), K(ls_id));
+    STORAGE_LOG(WARN, "ls is null", K(ret), K(ls_id_));
   } else if (OB_FAIL(ls->get_tx_table_guard(tx_table_guard))) {
     STORAGE_LOG(WARN, "get_tx_table_guard from log stream fail.", K(ret), K(*ls));
   } else {

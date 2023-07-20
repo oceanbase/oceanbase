@@ -511,6 +511,9 @@ public:
   // check is master
   bool is_master() const { return is_master_(); }
 
+  // check is blocked
+  bool is_blocked() const { return is_blocked_(); }
+
   // Switch the prev_aggre_log_ts and aggre_log_ts during dump starts
   int refresh_aggre_rec_scn();
 

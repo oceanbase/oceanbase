@@ -62,7 +62,7 @@ int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
                              stmt.get_format_id()))) {
     LOG_WARN("set xid error", K(ret), K(stmt));
   } else if (my_session->get_in_transaction()) {
-    ObTxDesc *&tx_desc = my_session->get_tx_desc();
+    auto tx_desc = my_session->get_tx_desc();
     ret = OB_TRANS_XA_OUTSIDE;
     LOG_WARN("already start trans", K(ret), K(xid), K(tx_desc->tid()),
         K(tx_desc->get_xid()));

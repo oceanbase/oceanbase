@@ -298,6 +298,15 @@ int ObRpcLSTable::do_detect_master_rs_ls_(
     if (OB_TMP_FAIL(proxy.wait_all(return_ret_array))) { // ignore ret
       LOG_WARN("wait batch result failed", KR(tmp_ret), KR(ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
+    } else if (proxy.get_dests().count() != proxy.get_args().count()
+               || return_ret_array.count() != proxy.get_args().count()
+               || return_ret_array.count() != proxy.get_results().count()) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("args/dest/return_ret_array/results count not match, need retry",
+               KR(ret), "args_cnt", proxy.get_args().count(),
+               "dests_cnt", proxy.get_dests().count(),
+               "return_cnt", return_ret_array.count(),
+               "result_cnt", proxy.get_results().count());
     }
     bool leader_exist = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < return_ret_array.count(); i++) {

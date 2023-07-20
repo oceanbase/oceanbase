@@ -206,13 +206,13 @@ int ObGlobalAutoIncService::handle_next_autoinc_request(
                               request.base_value_, desired_count, request.max_value_)))) {
       OZ(fetch_next_node_(request, cache_node));
     } else if (OB_UNLIKELY(request_version > cache_node.autoinc_version_)) {
-      LOG_INFO("start to reset old global table node", K(tenant_id), K(table_id),
+      LOG_INFO("start to reset old global table node", K(tenant_id), K(key.table_id_),
                                                        K(request_version), K(cache_node.autoinc_version_));
       cache_node.reset();
       OZ(fetch_next_node_(request, cache_node));
     } else if (OB_UNLIKELY(request_version < cache_node.autoinc_version_)) {
       ret = OB_AUTOINC_CACHE_NOT_EQUAL;
-      LOG_WARN("request autoinc_version is less than autoinc_version_ in table_node, it should retry", KR(ret), K(tenant_id), K(table_id),
+      LOG_WARN("request autoinc_version is less than autoinc_version_ in table_node, it should retry", KR(ret), K(tenant_id), K(key.table_id_),
                                                                                                        K(request_version), K(cache_node.autoinc_version_));
     }
     if (OB_SUCC(ret)) {
@@ -343,6 +343,9 @@ int ObGlobalAutoIncService::handle_push_autoinc_request(
                             && cache_node.need_sync(request.base_value_))
                         // cache node is expired
                         || (request_version > cache_node.autoinc_version_))) {
+      if (request_version > cache_node.autoinc_version_) {
+        cache_node.reset();
+      }
       if (OB_FAIL(sync_value_to_inner_table_(request, cache_node, sync_value))) {
         LOG_WARN("sync to inner table failed", K(ret));
       } else if (OB_FAIL(autoinc_map_.set_refactored(key, cache_node, 1))) {

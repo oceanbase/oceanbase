@@ -552,7 +552,8 @@ public:
 
   static int print_identifier(char *buf, const int64_t buf_len, int64_t &pos,
                               common::ObCollationType connection_collation,
-                              const common::ObString &identifier_name);
+                              const common::ObString &identifier_name,
+                              bool is_oracle_mode);
   static bool is_one_part_table_can_skip_part_calc(const share::schema::ObTableSchema &schema);
 
   static int create_encode_sortkey_expr(ObRawExprFactory &expr_factory,
@@ -622,6 +623,10 @@ public:
                                   share::schema::ObObjectType &obj_type,
                                   uint64_t &schema_version);
   static bool check_need_disconnect_parser_err(const int ret_code);
+
+  static int print_identifier_require_quotes(ObCollationType collation_type,
+                                             const ObString &ident,
+                                             bool &require);
 private:
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString &name,
                               const bool check_for_path_char, const int64_t max_ident_len);
@@ -1022,15 +1027,19 @@ struct ObExprConstraint
 {
   ObExprConstraint() :
       pre_calc_expr_(NULL),
-      expect_result_(PRE_CALC_RESULT_NONE) {}
+      expect_result_(PRE_CALC_RESULT_NONE),
+      ignore_const_check_(false) {}
   ObExprConstraint(ObRawExpr *expr, PreCalcExprExpectResult expect_result) :
       pre_calc_expr_(expr),
-      expect_result_(expect_result) {}
+      expect_result_(expect_result),
+      ignore_const_check_(false) {}
   bool operator==(const ObExprConstraint &rhs) const;
   ObRawExpr *pre_calc_expr_;
   PreCalcExprExpectResult expect_result_;
+  bool ignore_const_check_;
   TO_STRING_KV(KP_(pre_calc_expr),
-               K_(expect_result));
+               K_(expect_result),
+               K_(ignore_const_check));
 };
 
 struct ObPreCalcExprConstraint : public common::ObDLinkBase<ObPreCalcExprConstraint>

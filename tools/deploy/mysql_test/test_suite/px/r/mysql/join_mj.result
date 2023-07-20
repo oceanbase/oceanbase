@@ -73,14 +73,14 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT  |        |28      |77          |
-|1 |└─EXCHANGE OUT DISTR       |:EX10000|28      |49          |
-|2 |  └─SORT                   |        |28      |18          |
-|3 |    └─PX PARTITION ITERATOR|        |28      |14          |
-|4 |      └─MERGE JOIN         |        |28      |14          |
-|5 |        ├─SORT             |        |14      |7           |
-|6 |        │ └─TABLE FULL SCAN|stu     |14      |6           |
-|7 |        └─TABLE FULL SCAN  |score   |28      |6           |
+|0 |PX COORDINATOR MERGE SORT  |        |28      |90          |
+|1 |└─EXCHANGE OUT DISTR       |:EX10000|28      |62          |
+|2 |  └─SORT                   |        |28      |30          |
+|3 |    └─PX PARTITION ITERATOR|        |28      |27          |
+|4 |      └─MERGE JOIN         |        |28      |27          |
+|5 |        ├─SORT             |        |14      |13          |
+|6 |        │ └─TABLE FULL SCAN|stu     |14      |12          |
+|7 |        └─TABLE FULL SCAN  |score   |28      |13          |
 ===============================================================
 Outputs & filters:
 -------------------------------------

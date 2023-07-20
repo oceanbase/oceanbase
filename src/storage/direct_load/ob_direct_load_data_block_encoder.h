@@ -186,9 +186,12 @@ int ObDirectLoadDataBlockEncoder<Header>::build_data_block(char *&buf, int64_t &
       int64_t pos = 0;
       header_.data_size_ = pos_;
       header_.occupy_size_ = buf_size;
-      header_.checksum_ = ob_crc64_sse42(0, buf + header_size_, pos_ - header_size_);
-      if (OB_FAIL(header_.serialize(buf, buf_size, pos))) {
+      header_.checksum_ = ob_crc64_sse42(0, buf + header_size_, header_.occupy_size_ - header_size_);
+      if (OB_FAIL(header_.serialize(buf, header_size_, pos))) {
         STORAGE_LOG(WARN, "fail to serialize header", KR(ret));
+      } else if (header_size_ != pos) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "header_size must be equal pos", KR(ret), K(header_size_), K(pos));
       }
     }
   }

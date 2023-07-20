@@ -598,8 +598,8 @@ int ObPartitionMergeHelper::init_merge_iters(const ObIPartitionMergeFuser &fuser
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "unexpected null iter", K(ret), K(i), K(merge_param));
       } else if (OB_UNLIKELY(table->is_remote_logical_minor_sstable())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected remote minor sstable", K(ret), KP(sstable));
+        ret = OB_EAGAIN;
+        LOG_WARN("unexpected remote minor sstable, try later", K(ret), KP(sstable));
       } else if (table->is_sstable()) {
         sstable = static_cast<ObSSTable *>(table);
         if (sstable->get_data_macro_block_count() <= 0) {
@@ -722,9 +722,6 @@ int ObPartitionMergeHelper::check_iter_end() const
       } else if (!iter->is_iter_end()) {
         ret = OB_ERR_SYS;
         STORAGE_LOG(ERROR, "Merge iter not iter to end", K(ret), KPC(iter));
-      } else if (i == 0 && !iter->is_tx_table_valid()) {
-        ret = OB_STATE_NOT_MATCH;
-        STORAGE_LOG(ERROR, "Failed to complete the merge because of broken txn table", K(ret), KPC(iter));
       }
     }
   }

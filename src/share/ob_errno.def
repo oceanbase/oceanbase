@@ -163,7 +163,7 @@ DEFINE_ERROR_DEP(OB_LOG_NOT_ALIGN, -4074, -1, "HY000", "Log not aligned");
 DEFINE_ERROR(OB_LOG_MISSING, -4075, -1, "HY000", "Log entry missed");
 DEFINE_ERROR(OB_NEED_WAIT, -4076, -1, "HY000", "Need wait");
 DEFINE_ERROR_DEP(OB_NOT_IMPLEMENT, -4077, -1, "0A000", "Not implemented feature");
-DEFINE_ERROR_DEP(OB_DIVISION_BY_ZERO, -4078, ER_DIVISION_BY_ZERO, "42000", "Divided by zero");
+DEFINE_ERROR_DEP(OB_DIVISION_BY_ZERO, -4078, ER_DIVISION_BY_ZERO, "22012", "Divided by zero");
 DEFINE_ERROR_DEP(OB_EXCEED_MEM_LIMIT, -4080, -1, "HY013", "exceed memory limit");
 DEFINE_ERROR(OB_RESULT_UNKNOWN, -4081, -1, "HY000", "Unknown result");
 DEFINE_ERROR(OB_NO_RESULT, -4084, -1, "02000", "No result");
@@ -819,7 +819,7 @@ DEFINE_ERROR_DEP(OB_CANT_AGGREGATE_2COLLATIONS, -5177, ER_CANT_AGGREGATE_2COLLAT
 DEFINE_ERROR_EXT(OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD, -5178, ER_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD, "HY000", "Field is of a not allowed type for this type of partitioning", "Field \'%.*s\' is of a not allowed type for this type of partitioning");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_TOO_LONG_IDENT, -5179, ER_TOO_LONG_IDENT, "42000", "Identifier name is too long", "Identifier name \'%.*s\' is too long", 972, "identifier is too long", "identifier \'%.*s\' is too long");
 DEFINE_ERROR_EXT(OB_ERR_WRONG_TYPE_FOR_VAR, -5180, ER_WRONG_TYPE_FOR_VAR, "42000", "Incorrect argument type to variable", "Incorrect argument type to variable '%.*s'");
-DEFINE_ERROR_EXT(OB_WRONG_USER_NAME_LENGTH, -5181, ER_WRONG_STRING_LENGTH, "HY000", "String is too long for user_name (should be no longer than 16)", "String '%.*s' is too long for user name (should be no longer than 16)");
+DEFINE_ERROR_EXT(OB_WRONG_USER_NAME_LENGTH, -5181, ER_WRONG_STRING_LENGTH, "HY000", "String is too long for user_name (should be no longer than 64)", "String '%.*s' is too long for user name (should be no longer than 64)");
 DEFINE_ERROR(OB_ERR_PRIV_USAGE, -5182, ER_WRONG_USAGE, "HY000", "Incorrect usage of DB GRANT and GLOBAL PRIVILEGES");
 DEFINE_ERROR(OB_ILLEGAL_GRANT_FOR_TABLE, -5183, ER_ILLEGAL_GRANT_FOR_TABLE, "42000", "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used");
 DEFINE_ERROR(OB_ERR_REACH_AUTOINC_MAX, -5184, ER_AUTOINC_READ_FAILED, "HY000", "Failed to read auto-increment value from storage engine");
@@ -1132,6 +1132,7 @@ DEFINE_ERROR_EXT(OB_ERR_FUNCTIONAL_INDEX_REF_AUTO_INCREMENT, -5496, ER_FUNCTIONA
 DEFINE_ERROR_EXT(OB_ERR_DEPENDENT_BY_FUNCTIONAL_INDEX, -5497, ER_DEPENDENT_BY_FUNCTIONAL_INDEX, "HY000", "Column has a functional index dependency and cannot be dropped.", "Column '%.*s' has a functional index dependency and cannot be dropped.");
 DEFINE_ERROR(OB_ERR_FUNCTIONAL_INDEX_ON_LOB, -5498, ER_FUNCTIONAL_INDEX_ON_LOB, "HY000", "Cannot create a functional index on an expression that returns a BLOB or TEXT. Please consider using CAST.");
 DEFINE_ERROR(OB_ERR_FUNCTIONAL_INDEX_ON_FIELD, -5499, ER_FUNCTIONAL_INDEX_ON_FIELD, "HY000", "Functional index on a column is not supported. Consider using a regular index instead.");
+DEFINE_ERROR(OB_ERR_GENCOL_LEGIT_CHECK_FAILED, -5500, -1, "HY000", "Legitimacy check failed for generated columns.");
 
 DEFINE_ERROR_EXT(OB_ERR_SP_ALREADY_EXISTS, -5541, ER_SP_ALREADY_EXISTS, "42000", "procedure/function already exists", "%s %.*s already exists");
 DEFINE_ERROR_EXT(OB_ERR_SP_DOES_NOT_EXIST, -5542, ER_SP_DOES_NOT_EXIST, "42000", "procedure/function does not exist", "%s %.*s.%.*s does not exist");
@@ -1797,6 +1798,7 @@ DEFINE_ERROR(OB_TRANSFER_SRC_LS_NOT_EXIST, -7115, -1, "HY000", "transfer src ls 
 DEFINE_ERROR(OB_TRANSFER_SRC_TABLET_NOT_EXIST, -7116, -1, "HY000", "transfer src tablet does not exist");
 DEFINE_ERROR(OB_LS_NEED_REBUILD, -7117, -1, "HY000", "ls need rebuild");
 DEFINE_ERROR(OB_OBSOLETE_CLOG_NEED_SKIP, -7118, -1, "HY000", "obsolete clog need skip");
+DEFINE_ERROR(OB_TRANSFER_WAIT_TRANSACTION_END_TIMEOUT, -7119, -1, "HY000", "transfer wait transactions end timeout");
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //error code for gis  -7201 ---- -7300
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1899,7 +1901,7 @@ DEFINE_ORACLE_ERROR(OB_XPATH_EXPRESSION_UNSUPPORTED, -7409, -1, "42000", "Given 
 DEFINE_ORACLE_ERROR(OB_EXTRACTVALUE_NOT_LEAF_NODE, -7410, -1, "42000", "EXTRACTVALUE can only retrieve value of leaf node", 19026, "EXTRACTVALUE can only retrieve value of leaf node");
 DEFINE_ORACLE_ERROR(OB_XML_INSERT_FRAGMENT, -7411, -1, "42000", "Cannot insert XML fragments", 19010, "Cannot insert XML fragments");
 DEFINE_ORACLE_ERROR(OB_ERR_NO_ORDER_MAP_SQL, -7412, -1, "42000", "cannot ORDER objects without MAP or ORDER method", 22950, "cannot ORDER objects without MAP or ORDER method");
-DEFINE_ORACLE_ERROR(OB_ERR_XMLELEMENT_ALIASED, -7413, -1, "42000", "parameter 1 of function XMLELEMENT must be aliased", 19208, "parameter 1 of function XMLELEMENT must be aliased");
+DEFINE_ORACLE_ERROR(OB_ERR_XMLELEMENT_ALIASED, -7413, -1, "42000", "parameter %d of function XMLELEMENT must be aliased", 19208, "parameter %d of function XMLELEMENT must be aliased");
 DEFINE_ORACLE_ERROR(OB_INVALID_ALTERATIONG_DATATYPE, -7414, -1, "42000", "invalid alteration of datatype", 22858, "invalid alteration of datatype");
 DEFINE_ORACLE_ERROR(OB_INVALID_MODIFICATION_OF_COLUMNS, -7415, -1, "42000", "invalid modification of columns", 22859, "invalid modification of columns");
 DEFINE_ORACLE_ERROR(OB_ERR_NULL_FOR_XML_CONSTRUCTOR, -7416, -1, "42000", "Expected XML tag , got no content", 19032, "Expected XML tag , got no content");
@@ -2018,6 +2020,7 @@ DEFINE_ERROR(OB_LS_RESTORE_FAILED, -9094, -1, "HY000", "Restore log stream faile
 DEFINE_ERROR(OB_NO_TABLET_NEED_BACKUP, -9095, -1, "HY000", "No tablet need backup");
 DEFINE_ERROR(OB_ERR_RESTORE_STANDBY_VERSION_LAG, -9096, -1, "HY000", "standby binary version is lower than primary data version, standby need upgrade");
 DEFINE_ERROR(OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED, -9097, -1, "HY000", "primary tenant has been dropped");
+DEFINE_ERROR_DEP(OB_CLOUD_OBJECT_NOT_APPENDABLE, -9098, -1, "HY000", "normal object in object_storage(oss,cos,etc.) can't be appended content");
 // end of backup and restore error codes 9001 ~ 9099
 
 ////////////////////////////////////////////////////////////////

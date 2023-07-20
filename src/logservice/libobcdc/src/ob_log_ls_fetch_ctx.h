@@ -181,6 +181,7 @@ public:
   int locate_end_lsn(IObLogStartLSNLocator &start_lsn_locator);
 
   int get_large_buffer_pool(archive::LargeBufferPool *&large_buffer_pool);
+  int get_log_ext_handler(logservice::ObLogExternalStorageHandler *&log_ext_handler);
   ObRemoteLogParent *get_archive_source() { return source_; }
 
   int init_remote_iter();

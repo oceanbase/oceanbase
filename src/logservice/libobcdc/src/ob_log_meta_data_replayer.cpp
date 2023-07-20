@@ -92,7 +92,7 @@ int ObLogMetaDataReplayer::replay(
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLogMetaDataSQLQueryer is not initialized", KR(ret));
   } else {
-    ISTAT("Begin incremental replay", K(tenant_id), K(start_timestamp_ns), "start_timestamp", NTS_TO_STR(start_timestamp_ns));
+    ISTAT("BEGIN", K(tenant_id), K(start_timestamp_ns), "start_timestamp", NTS_TO_STR(start_timestamp_ns));
     bool is_done = false;
     ReplayInfoStat replay_info_stat;
 
@@ -135,7 +135,7 @@ int ObLogMetaDataReplayer::replay(
       }
     } // while
 
-    _ISTAT("End incremental replay: tenant_id=%ld start_timestamp_ns=%ld(%s) "
+    _ISTAT("END tenant_id=%ld start_timestamp_ns=%ld(%s) "
         "TRANS_COUNT(TOTAL=%ld DDL_TRANS=%ld/%ld LS_OP=%ld)",
         tenant_id, start_timestamp_ns, NTS_TO_STR(start_timestamp_ns),
         replay_info_stat.total_part_trans_task_count_,

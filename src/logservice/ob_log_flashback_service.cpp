@@ -178,12 +178,12 @@ int ObLogFlashbackService::wait_all_ls_replicas_log_sync_(
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS == op.ret_) {
         } else if (OB_SUCCESS != (tmp_ret = failed_ls_ops.push_back(op))) {
-          CLOG_LOG(WARN, "push_back failed", K(ret), K_(self), K(ls_id));
+          CLOG_LOG(WARN, "push_back failed", K(ret), K_(self), K(op));
         }
       }
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "logs of some replicas may be not sync, check these replicas");
       CLOG_LOG(WARN, "logs of some replicas may be not sync, check these replicas", K(ret),
-          K_(self), K(ls_id), K(failed_ls_ops));
+          K_(self), K(failed_ls_ops));
     }
   }
   #undef COMMON_LOG_INFO
@@ -271,12 +271,12 @@ int ObLogFlashbackService::do_flashback_(
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS == op.ret_) {
         } else if (OB_SUCCESS != (tmp_ret = failed_ls_ops.push_back(op))) {
-          CLOG_LOG(WARN, "push_back failed", K(ret), K_(self), K(ls_id));
+          CLOG_LOG(WARN, "push_back failed", K(ret), K_(self), K(op));
         }
       }
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "logs of some replicas may have not been flashbacked, check these replicas");
       CLOG_LOG(WARN, "logs of some replicas may have not been flashbacked, check these replicas",
-          K(ret), K_(self), K(ls_id), K(failed_ls_ops));
+          K(ret), K_(self), K(failed_ls_ops));
     }
   }
   #undef COMMON_LOG_INFO
@@ -319,9 +319,9 @@ int ObLogFlashbackService::cast_ls_operator_list_(
     DST_T op(src_array.at(i));
     if (false == op.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(WARN, "FlashbackService Operator invalid", K(ret), K_(self), K(ls_id), K(op));
+      CLOG_LOG(WARN, "FlashbackService Operator invalid", K(ret), K_(self), K(op));
     } else if (OB_FAIL(dst_array.push_back(op))) {
-      CLOG_LOG(WARN, "push_back failed", K(ret), K_(self), K(ls_id));
+      CLOG_LOG(WARN, "push_back failed", K(ret), K_(self));
     }
   }
   return ret;

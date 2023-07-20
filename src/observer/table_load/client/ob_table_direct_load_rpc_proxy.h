@@ -44,6 +44,7 @@ public:
     table::ObTableDirectLoadResult result;                                            \
     request.credential_ = credential_;                                                \
     request.operation_type_ = pcode;                                                  \
+    result.allocator_ = &allocator_;                                                  \
     if (OB_FAIL(request.set_arg(arg, allocator_))) {                                  \
       SERVER_LOG(WARN, "fail to set arg", K(ret), K(arg));                            \
     } else if (OB_FAIL(rpc_proxy_.to(addr_)                                           \
@@ -69,6 +70,7 @@ public:
     table::ObTableDirectLoadResult result;                                            \
     request.credential_ = credential_;                                                \
     request.operation_type_ = pcode;                                                  \
+    result.allocator_ = &allocator_;                                                  \
     if (OB_FAIL(request.set_arg(arg, allocator_))) {                                  \
       SERVER_LOG(WARN, "fail to set arg", K(ret), K(arg));                            \
     } else if (OB_FAIL(rpc_proxy_.to(addr_)                                           \

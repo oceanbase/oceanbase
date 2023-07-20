@@ -55,7 +55,10 @@ class ObConstraint;
 class ObSchemaPrinter
 {
 public:
-  explicit ObSchemaPrinter(ObSchemaGetterGuard &schema_guard, bool strict_compat = false);
+  explicit ObSchemaPrinter(ObSchemaGetterGuard &schema_guard,
+                           bool strict_compat = false,
+                           bool sql_quote_show_create = true,
+                           bool ansi_quotes = false);
   virtual ~ObSchemaPrinter() { }
 private:
   ObSchemaPrinter();
@@ -447,6 +450,17 @@ public:
                                      char* buf,
                                      const int64_t& buf_len,
                                      int64_t& pos) const;
+  int print_identifier(char* buf,
+                       const int64_t& buf_len,
+                       int64_t& pos,
+                       const ObString &ident,
+                       bool is_oracle_mode) const;
+
+  int print_view_define_str(char* buf,
+                            const int64_t &buf_len,
+                            int64_t& pos,
+                            bool is_oracle_mode,
+                            const ObString &sql) const;
 private:
   static bool is_subpartition_valid_in_mysql(const ObTableSchema &table_schema)
   {
@@ -459,6 +473,8 @@ private:
 
   ObSchemaGetterGuard &schema_guard_;
   bool strict_compat_;
+  bool sql_quote_show_create_;
+  bool ansi_quotes_;
 };
 
 

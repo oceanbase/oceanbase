@@ -27,7 +27,6 @@
 #include "observer/omt/ob_tenant_node_balancer.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_service.h"
-#include "observer/ob_safe_destroy_thread.h"
 #include "share/ob_simple_mem_limit_getter.h"
 #include "share/scn.h"
 #include "mtlenv/mock_tenant_module_env.h"
@@ -169,8 +168,6 @@ TestIndexBlockDataPrepare::~TestIndexBlockDataPrepare()
 void TestIndexBlockDataPrepare::SetUpTestCase()
 {
   EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
-  SAFE_DESTROY_INSTANCE.init();
-  SAFE_DESTROY_INSTANCE.start();
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
   ObClockGenerator::init();
 
@@ -199,9 +196,6 @@ void TestIndexBlockDataPrepare::TearDownTestCase()
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ObLSID(ls_id_), false));
   ObKVGlobalCache::get_instance().destroy();
   OB_STORE_CACHE.destroy();
-  SAFE_DESTROY_INSTANCE.stop();
-  SAFE_DESTROY_INSTANCE.wait();
-  SAFE_DESTROY_INSTANCE.destroy();
   MockTenantModuleEnv::get_instance().destroy();
 }
 

@@ -21,7 +21,6 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/init_basic_struct.h"
 #include "storage/tablelock/ob_lock_memtable.h"
-#include "observer/ob_safe_destroy_thread.h"
 
 namespace oceanbase
 {
@@ -85,17 +84,12 @@ void TestLockMemtableCheckpoint::SetUpTestCase()
   LOG_INFO("SetUpTestCase");
   init_default_lock_test_value();
   EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
-  SAFE_DESTROY_INSTANCE.init();
-  SAFE_DESTROY_INSTANCE.start();
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
 }
 
 void TestLockMemtableCheckpoint::TearDownTestCase()
 {
   LOG_INFO("TearDownTestCase");
-  SAFE_DESTROY_INSTANCE.stop();
-  SAFE_DESTROY_INSTANCE.wait();
-  SAFE_DESTROY_INSTANCE.destroy();
   MockTenantModuleEnv::get_instance().destroy();
 }
 

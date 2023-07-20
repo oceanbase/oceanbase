@@ -404,7 +404,7 @@ int ObSMUtils::get_mysql_type(ObObjType ob_type, EMySQLFieldType &mysql_type,
   return ret;
 }
 
-int ObSMUtils::get_ob_type(ObObjType &ob_type, EMySQLFieldType mysql_type)
+int ObSMUtils::get_ob_type(ObObjType &ob_type, EMySQLFieldType mysql_type, const bool is_unsigned)
 {
   int ret = OB_SUCCESS;
   switch (mysql_type) {
@@ -412,16 +412,16 @@ int ObSMUtils::get_ob_type(ObObjType &ob_type, EMySQLFieldType mysql_type)
       ob_type = ObNullType;
       break;
     case EMySQLFieldType::MYSQL_TYPE_TINY:
-      ob_type = ObTinyIntType;
+      ob_type = is_unsigned ? ObUTinyIntType : ObTinyIntType;
       break;
     case EMySQLFieldType::MYSQL_TYPE_SHORT:
-      ob_type = ObSmallIntType;
+      ob_type = is_unsigned ? ObUSmallIntType : ObSmallIntType;
       break;
     case EMySQLFieldType::MYSQL_TYPE_LONG:
-      ob_type = ObInt32Type;
+      ob_type = is_unsigned ? ObUInt32Type : ObInt32Type;
       break;
     case EMySQLFieldType::MYSQL_TYPE_LONGLONG:
-      ob_type = ObIntType;
+      ob_type = is_unsigned ? ObUInt64Type : ObIntType;
       break;
     case EMySQLFieldType::MYSQL_TYPE_FLOAT:
       ob_type = ObFloatType;

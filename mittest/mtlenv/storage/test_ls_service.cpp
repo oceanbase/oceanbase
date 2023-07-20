@@ -26,7 +26,6 @@
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/init_basic_struct.h"
 #include "storage/test_tablet_helper.h"
-#include "observer/ob_safe_destroy_thread.h"
 
 namespace oceanbase
 {
@@ -63,16 +62,11 @@ using namespace oceanbase::obsys;
 void TestLSService::SetUpTestCase()
 {
   EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
-  SAFE_DESTROY_INSTANCE.init();
-  SAFE_DESTROY_INSTANCE.start();
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
 }
 
 void TestLSService::TearDownTestCase()
 {
-  SAFE_DESTROY_INSTANCE.stop();
-  SAFE_DESTROY_INSTANCE.wait();
-  SAFE_DESTROY_INSTANCE.destroy();
   MockTenantModuleEnv::get_instance().destroy();
 }
 

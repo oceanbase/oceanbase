@@ -254,13 +254,13 @@ TEST_F(TestSharedBlockRWriter, test_link_write)
   char *buf = nullptr;
   int64_t buf_len = 0;
   for (int i = 0; i < test_round; ++i) {
-    OK(iter.get_next(allocator_, buf, buf_len));
+    OK(iter.get_next_block(allocator_, buf, buf_len));
     ASSERT_EQ(10, buf_len);
     for (int64_t j = 0; j < buf_len; ++j) {
       ASSERT_EQ(buf[j], '0'+9-i);
     }
   }
-  ASSERT_EQ(OB_ITER_END, iter.get_next(allocator_, buf, buf_len));
+  ASSERT_EQ(OB_ITER_END, iter.get_next_block(allocator_, buf, buf_len));
 }
 
 TEST_F(TestSharedBlockRWriter, test_cb_single_write)

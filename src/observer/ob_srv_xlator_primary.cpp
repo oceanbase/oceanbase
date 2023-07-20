@@ -187,7 +187,6 @@ void oceanbase::observer::init_srv_xlator_for_logservice(ObSrvRpcXlator *xlator)
 {
   RPC_PROCESSOR(logservice::LogMembershipChangeP);
   RPC_PROCESSOR(logservice::LogGetPalfStatReqP);
-  RPC_PROCESSOR(logservice::LogGetLeaderMaxScnP);
   RPC_PROCESSOR(logservice::LogChangeAccessModeP);
   RPC_PROCESSOR(logservice::LogFlashbackMsgP);
 }

@@ -788,7 +788,7 @@ int ObJsonPath::change_json_expr_res_type_if_need(common::ObIAllocator &allocato
             ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
             ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
             ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 20;
-            ret_node.length_semantics_ = 1;
+            ret_node.length_semantics_ = 0;
             ret_node.is_hidden_const_ = 1;
             break;
           }
@@ -826,7 +826,7 @@ int ObJsonPath::change_json_expr_res_type_if_need(common::ObIAllocator &allocato
               ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
               ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
               ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 4000;
-              ret_node.length_semantics_ = 1;
+              ret_node.length_semantics_ = 0;
               ret_node.is_hidden_const_ = 1;
             } else {
               ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_NUMBER;
@@ -857,7 +857,7 @@ int ObJsonPath::change_json_expr_res_type_if_need(common::ObIAllocator &allocato
             ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
             ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
             ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 4000;
-            ret_node.length_semantics_ = 1;
+            ret_node.length_semantics_ = 0;
             ret_node.is_hidden_const_ = 1;
           }
           case JPN_UPPER:
@@ -867,7 +867,7 @@ int ObJsonPath::change_json_expr_res_type_if_need(common::ObIAllocator &allocato
             ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
             ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
             ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 75;
-            ret_node.length_semantics_ = 1;
+            ret_node.length_semantics_ = 0;
             ret_node.is_hidden_const_ = 1;
             break;
             break;

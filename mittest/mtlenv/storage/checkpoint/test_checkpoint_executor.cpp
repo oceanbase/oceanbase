@@ -24,7 +24,6 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/init_basic_struct.h"
 #include "storage/mock_ob_log_handler.h"
-#include "observer/ob_safe_destroy_thread.h"
 #include "share/scn.h"
 
 using namespace oceanbase;
@@ -227,16 +226,11 @@ void TestCheckpointExecutor::TearDown()
 void TestCheckpointExecutor::SetUpTestCase()
 {
   EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
-  SAFE_DESTROY_INSTANCE.init();
-  SAFE_DESTROY_INSTANCE.start();
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
 }
 
 void TestCheckpointExecutor::TearDownTestCase()
 {
-  SAFE_DESTROY_INSTANCE.stop();
-  SAFE_DESTROY_INSTANCE.wait();
-  SAFE_DESTROY_INSTANCE.destroy();
   MockTenantModuleEnv::get_instance().destroy();
 }
 

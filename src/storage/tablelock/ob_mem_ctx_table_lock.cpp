@@ -414,8 +414,7 @@ int ObLockMemCtx::check_lock_need_replay(
   } else {
     RDLockGuard guard(list_rwlock_);
     DLIST_FOREACH(curr, lock_list_) {
-      if (curr->lock_op_ == lock_op) {
-        need_replay = false;
+      if (!(need_replay = curr->lock_op_.need_replay_or_recover(lock_op))) {
         break;
       }
     }

@@ -37,7 +37,7 @@ int get_server_auth_methods()
 
 void set_client_auth_methods(const int methods)
 {
-  g_ussl_client_auth_methods = methods;
+  ATOMIC_STORE(&g_ussl_client_auth_methods, methods);
 }
 
 int get_client_auth_methods()

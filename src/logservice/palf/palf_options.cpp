@@ -67,6 +67,11 @@ bool PalfDiskOptions::operator==(const PalfDiskOptions &palf_disk_options) const
     && log_writer_parallelism_ == palf_disk_options.log_writer_parallelism_;
 }
 
+bool PalfDiskOptions::operator!=(const PalfDiskOptions &palf_disk_options) const
+{
+  return !this->operator==(palf_disk_options);
+}
+
 PalfDiskOptions &PalfDiskOptions::operator=(const PalfDiskOptions &other)
 {
   log_disk_usage_limit_size_ = other.log_disk_usage_limit_size_;

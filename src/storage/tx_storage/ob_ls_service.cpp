@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "lib/guard/ob_shared_guard.h"
-#include "observer/ob_safe_destroy_thread.h"
+#include "logservice/ob_garbage_collector.h"
 #include "observer/ob_service.h"
 #include "observer/ob_srv_network_frame.h"
 #include "share/rc/ob_tenant_module_init_ctx.h"
@@ -30,6 +30,7 @@
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx_storage/ob_ls_handle.h" //ObLSHandle
+#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "rootserver/ob_tenant_info_loader.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
@@ -38,6 +39,7 @@ namespace oceanbase
 using namespace share;
 using namespace palf;
 using namespace lib;
+using namespace logservice;
 namespace storage
 {
 
@@ -98,8 +100,10 @@ bool ObLSService::safe_to_destroy()
                   ATOMIC_LOAD(&safe_ls_destroy_task_cnt_) == 0 &&
                   ATOMIC_LOAD(&iter_cnt_) == 0);
   if (!is_safe && REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+    bool is_t3m_meta_released = false;
+    MTL(ObTenantMetaMemMgr*)->check_all_meta_mem_released(is_t3m_meta_released, "ObLSService"); //just for debug
     LOG_INFO("ls service is not safe to destroy", K(ls_map_.is_empty()),
-             K_(safe_ls_destroy_task_cnt), K_(iter_cnt));
+             K_(safe_ls_destroy_task_cnt), K_(iter_cnt), K(is_t3m_meta_released));
   }
   return is_safe;
 }
@@ -156,13 +160,17 @@ int ObLSService::stop()
         } else if (OB_FAIL(ls->offline())) {
           LOG_WARN("ls offline failed", K(ret), K(ls->get_ls_id()), KP(ls));
         } else if (OB_FAIL(ls->stop())) {
-          LOG_WARN("stop ls failed", K(ret), KP(ls), K(ls_id));
+          LOG_WARN("stop ls failed", K(ret), KP(ls), K(ls->get_ls_id()));
         } else if (FALSE_IT(ls->wait())) {
         } else if (OB_FAIL(handle.set_ls(ls_map_, *ls, ObLSGetMod::TXSTORAGE_MOD))) {
           LOG_WARN("get ls handle failed", K(ret), KPC(ls));
         } else {
+          ObGarbageCollector *gc_service = MTL(logservice::ObGarbageCollector *);
           ObLSLockGuard lock_ls(ls);
-          if (OB_ISNULL(task = (ObLSSafeDestroyTask*)ob_malloc(sizeof(ObLSSafeDestroyTask),
+          if (OB_ISNULL(gc_service)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("gc service is null", K(ret));
+          } else if (OB_ISNULL(task = (ObLSSafeDestroyTask*)ob_malloc(sizeof(ObLSSafeDestroyTask),
                                                                "LSSafeDestroy"))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("alloc memory failed", K(ret));
@@ -174,7 +182,7 @@ int ObLSService::stop()
           } else {
             remove_ls_(ls, remove_from_disk);
             // try until success.
-            while (OB_FAIL(SAFE_DESTROY_INSTANCE.push(*task))) {
+            while (OB_FAIL(gc_service->add_safe_destroy_task(*task))) {
               if (REACH_TIME_INTERVAL(1_min)) { // every minute
                 LOG_WARN("add safe destroy task failed, retry", K(ret), KPC(task));
               }
@@ -910,10 +918,14 @@ int ObLSService::remove_ls(
                                                   abs_timeout_ts))) {
     LOG_WARN("get timeout ts failed", KR(ret));
   } else {
+    ObGarbageCollector *gc_service = MTL(logservice::ObGarbageCollector *);
     ObMutexGuardWithTimeout change_guard(change_lock_, abs_timeout_ts);
     if (OB_FAIL(change_guard.get_ret())) {
       LOG_WARN("lock failed, try again later", K(ret));
       ret = OB_EAGAIN;
+    } else if (OB_ISNULL(gc_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("gc service is null", K(ret));
     } else if (OB_FAIL(get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD))) {
       if (ret == OB_LS_NOT_EXIST) {
         ret = OB_SUCCESS;
@@ -951,7 +963,7 @@ int ObLSService::remove_ls(
       } else {
         remove_ls_(ls);
         // try until success.
-        while (OB_FAIL(SAFE_DESTROY_INSTANCE.push(*task))) {
+        while (OB_FAIL(gc_service->add_safe_destroy_task(*task))) {
           if (REACH_TIME_INTERVAL(1_min)) { // every minute
             LOG_WARN("add safe destroy task failed, retry", K(ret), KPC(task));
           }
@@ -1196,8 +1208,12 @@ int ObLSService::check_ls_waiting_safe_destroy(const share::ObLSID &ls_id, bool 
   } else if (ATOMIC_LOAD(&safe_ls_destroy_task_cnt_) == 0) {
     // there is no ls waiting safe destroy
   } else {
+    ObGarbageCollector *gc_service = MTL(logservice::ObGarbageCollector *);
     ObSafeDestroyCheckLSExist fn(ls_id);
-    if (OB_FAIL(SAFE_DESTROY_INSTANCE.for_each(fn))) {
+    if (OB_ISNULL(gc_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("gc service is null", K(ret));
+    } else if (OB_FAIL(gc_service->safe_destroy_task_for_each(fn))) {
       LOG_WARN("check ls waiting safe destroy failed", K(ret), K(ls_id));
     } else if (OB_FAIL(fn.get_ret_code())) {
       LOG_WARN("the check process failed", K(ret), K(ls_id));
@@ -1304,6 +1320,36 @@ int ObLSService::get_restore_status_(
   }
   return ret;
 }
+
+int ObLSService::dump_ls_info()
+{
+  int ret = OB_SUCCESS;
+  common::ObSharedGuard<ObLSIterator> ls_iter;
+  ObLS *ls = nullptr;
+  ObLSMeta ls_meta;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD))) {
+    LOG_WARN("failed to get ls iter", K(ret));
+  }
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(ls_iter->get_next(ls))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get next ls", K(ret));
+      }
+    } else if (OB_ISNULL(ls)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls is null", K(ret));
+    } else if (OB_FAIL(ls->get_ls_meta(ls_meta))) {
+      LOG_WARN("fail to get ls meta", K(ret));
+    } else {
+      FLOG_INFO("dump ls info", K(ls_meta));
+    }
+  }
+  return ret;
+}
+
 
 
 } // storage

@@ -1,6 +1,14 @@
-// Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
-// Author:
-//   suzhi.yt <>
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -236,39 +244,23 @@ int ObDirectLoadTabletMergeCtx::collect_sql_statistics(
         // scan task_array
         for (int64_t j = 0; OB_SUCC(ret) && j < task_array_.count(); ++j) {
           ObOptOSGColumnStat *tmp_col_stat = task_array_.at(j)->get_column_stat_array().at(i);
-          ObOptOSGColumnStat *copied_col_stat = NULL;
-          if (OB_ISNULL(tmp_col_stat)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null");
-          } else if (OB_ISNULL(copied_col_stat =
-                    ObOptOSGColumnStat::create_new_osg_col_stat(sql_statistics.allocator_))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("failed to allocate memory");
-          } else if (OB_FAIL(copied_col_stat->deep_copy(*tmp_col_stat))) {
-            LOG_WARN("fail to copy colstat", KR(ret));
-          } else if (OB_FAIL(osg_col_stat->merge_column_stat(*copied_col_stat))) {
-            LOG_WARN("fail to merge column stat", KR(ret));
-          } else {
-            row_count += task_array_.at(j)->get_row_count();
+          if (task_array_.at(j)->get_row_count() != 0) {
+            if (OB_FAIL(osg_col_stat->merge_column_stat(*tmp_col_stat))) {
+              LOG_WARN("fail to merge column stat", KR(ret));
+            } else {
+              row_count += task_array_.at(j)->get_row_count();
+            }
           }
         }
         // scan fast heap table
         for (int64_t j = 0; OB_SUCC(ret) && j < fast_heap_table_array.count(); ++j) {
           ObOptOSGColumnStat *tmp_col_stat = fast_heap_table_array.at(j)->get_column_stat_array().at(i);
-          ObOptOSGColumnStat *copied_col_stat = NULL;
-          if (OB_ISNULL(tmp_col_stat)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null");
-          } else if (OB_ISNULL(copied_col_stat =
-                    ObOptOSGColumnStat::create_new_osg_col_stat(sql_statistics.allocator_))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("failed to allocate memory");
-          } else if (OB_FAIL(copied_col_stat->deep_copy(*tmp_col_stat))) {
-            LOG_WARN("fail to copy colstat", KR(ret));
-          } else if (OB_FAIL(osg_col_stat->merge_column_stat(*copied_col_stat))) {
-            LOG_WARN("fail to merge column stat", KR(ret));
-          } else {
-            row_count += fast_heap_table_array.at(j)->get_row_count();
+          if (fast_heap_table_array.at(j)->get_row_count() != 0) {
+            if (OB_FAIL(osg_col_stat->merge_column_stat(*tmp_col_stat))) {
+              LOG_WARN("fail to merge column stat", KR(ret));
+            } else {
+              row_count += fast_heap_table_array.at(j)->get_row_count();
+            }
           }
         }
         if (OB_SUCC(ret)) {
@@ -280,6 +272,9 @@ int ObDirectLoadTabletMergeCtx::collect_sql_statistics(
           osg_col_stat->col_stat_->set_stat_level(stat_level);
           osg_col_stat->col_stat_->set_column_id(param_.col_descs_->at(col_id).col_id_);
           osg_col_stat->col_stat_->set_num_distinct(ObGlobalNdvEval::get_ndv_from_llc(osg_col_stat->col_stat_->get_llc_bitmap()));
+          if (OB_FAIL(osg_col_stat->set_min_max_datum_to_obj())) {
+            LOG_WARN("failed to set min max datum to obj", K(ret));
+          }
         }
       }
       if (OB_SUCC(ret)) {
@@ -288,10 +283,6 @@ int ObDirectLoadTabletMergeCtx::collect_sql_statistics(
         table_stat->set_object_type(stat_level);
         table_stat->set_row_count(table_row_cnt);
         table_stat->set_avg_row_size(table_avg_len);
-      }
-      // persistence col stat once a merge task finished
-      if (OB_SUCC(ret) && OB_FAIL(sql_statistics.persistence_col_stats())) {
-        LOG_WARN("failed to persistence col stats");
       }
     }
   }

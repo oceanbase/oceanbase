@@ -212,8 +212,10 @@ int ObPartitionBalance::on_new_partition(
     const ObLSID &src_ls_id,
     const ObLSID &dest_ls_id,
     const int64_t tablet_size,
-    const bool in_new_partition_group)
+    const bool in_new_partition_group,
+    const uint64_t part_group_uid)
 {
+  UNUSEDx(tablet_id, part_group_uid);
   int ret = OB_SUCCESS;
   ObBalanceGroup bg = bg_in; // get a copy
   ObLSDesc *src_ls_desc = nullptr;

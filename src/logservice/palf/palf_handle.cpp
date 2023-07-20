@@ -391,6 +391,23 @@ int PalfHandle::switch_acceptor_to_learner(const common::ObMember &member,
   return palf_handle_impl_->switch_acceptor_to_learner(member, new_replica_num, timeout_us);
 }
 
+int PalfHandle::replace_learners(const common::ObMemberList &added_learners,
+                                 const common::ObMemberList &removed_learners,
+                                 const int64_t timeout_us)
+{
+  CHECK_VALID;
+  return palf_handle_impl_->replace_learners(added_learners, removed_learners, timeout_us);
+}
+
+int PalfHandle::replace_member_with_learner(const common::ObMember &added_member,
+                                            const common::ObMember &removed_member,
+                                            const LogConfigVersion &config_version,
+                                            const int64_t timeout_us)
+{
+  CHECK_VALID;
+  return palf_handle_impl_->replace_member_with_learner(added_member, removed_member, config_version, timeout_us);
+}
+
 
 int PalfHandle::change_leader_to(const common::ObAddr &dst_addr)
 {

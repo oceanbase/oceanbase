@@ -27,7 +27,7 @@
 #include "storage/init_basic_struct.h"
 #include "storage/test_tablet_helper.h"
 #include "storage/test_dml_common.h"
-#include "observer/ob_safe_destroy_thread.h"
+#include "observer/ob_server_startup_task_handler.h"
 
 #include "lib/oblog/ob_log.h"
 #include "share/ob_force_print_log.h"
@@ -65,9 +65,9 @@ void TestWriteTabletSlog::SetUpTestCase()
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  SAFE_DESTROY_INSTANCE.init();
-  SAFE_DESTROY_INSTANCE.start();
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
+  ASSERT_EQ(OB_SUCCESS, SERVER_STARTUP_TASK_HANDLER.init());
+  ASSERT_EQ(OB_SUCCESS, SERVER_STARTUP_TASK_HANDLER.start());
 
   // create ls
   ObLSHandle ls_handle;
@@ -81,10 +81,7 @@ void TestWriteTabletSlog::TearDownTestCase()
   ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID), false);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  SAFE_DESTROY_INSTANCE.stop();
-  SAFE_DESTROY_INSTANCE.wait();
-  SAFE_DESTROY_INSTANCE.destroy();
-
+  SERVER_STARTUP_TASK_HANDLER.destroy();
   MockTenantModuleEnv::get_instance().destroy();
 }
 
@@ -159,7 +156,7 @@ TEST_F(TestWriteTabletSlog, basic)
   ASSERT_EQ(OB_SUCCESS, log_replayer.register_redo_module(
       ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE, slog_handler));
   ASSERT_EQ(OB_SUCCESS, log_replayer.replay(replay_start_cursor, replay_finish_cursor, OB_SERVER_TENANT_ID));
-  ASSERT_EQ(OB_SUCCESS, slog_handler->replay_load_tablets());
+  ASSERT_EQ(OB_SUCCESS, slog_handler->concurrent_replay_load_tablets());
 
   // check the result of replay
   ObTabletHandle replay_tablet_handle;

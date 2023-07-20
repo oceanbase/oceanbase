@@ -22,7 +22,6 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/palf/log_define.h"
-#include "logservice/palf/palf_env.h"
 #include "logservice/palf/lsn.h"
 #include "logservice/archiveservice/ob_archive_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"
@@ -203,17 +202,13 @@ bool ObCheckPointService::get_disk_usage_threshold_(int64_t &threshold)
   bool get_disk_usage_threshold_success = false;
   // avod clog disk full
   logservice::ObLogService *log_service = nullptr;
-  PalfEnv *palf_env = nullptr;
   if (OB_ISNULL(log_service = MTL(logservice::ObLogService *))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "get_log_service failed", K(ret));
-  } else if (OB_ISNULL(palf_env = log_service->get_palf_env())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "get_palf_env failed", K(ret));
   } else {
     int64_t used_size = 0;
     int64_t total_size = 0;
-    if (OB_FAIL(palf_env->get_disk_usage(used_size, total_size))) {
+    if (OB_FAIL(log_service->get_palf_disk_usage(used_size, total_size))) {
       STORAGE_LOG(WARN, "get_disk_usage failed", K(ret), K(used_size), K(total_size));
     } else {
       threshold = total_size * NEED_FLUSH_CLOG_DISK_PERCENT / 100;
@@ -224,7 +219,7 @@ bool ObCheckPointService::get_disk_usage_threshold_(int64_t &threshold)
   return get_disk_usage_threshold_success;
 }
 
-bool ObCheckPointService::cannot_recycle_log_over_threshold_(const int64_t threshold)
+bool ObCheckPointService::cannot_recycle_log_over_threshold_(const int64_t threshold, const bool need_update_checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   ObLSIterator *iter = NULL;
@@ -251,7 +246,7 @@ bool ObCheckPointService::cannot_recycle_log_over_threshold_(const int64_t thres
         STORAGE_LOG(WARN, "log stream not exist", K(ret), K(ls->get_ls_id()));
       } else if (OB_ISNULL(checkpoint_executor = ls->get_checkpoint_executor())) {
         STORAGE_LOG(WARN, "checkpoint_executor should not be null", K(ls->get_ls_id()));
-      } else if (OB_FAIL(checkpoint_executor->update_clog_checkpoint())) {
+      } else if (need_update_checkpoint_scn && OB_FAIL(checkpoint_executor->update_clog_checkpoint())) {
         STORAGE_LOG(WARN, "update_clog_checkpoint failed", K(ret), K(ls->get_ls_id()));
       } else {
         cannot_recycle_log_size += checkpoint_executor->get_cannot_recycle_log_size();
@@ -262,7 +257,7 @@ bool ObCheckPointService::cannot_recycle_log_over_threshold_(const int64_t thres
         cannot_recycle_log_over_threshold = true;
       }
       STORAGE_LOG(INFO, "cannot_recycle_log_size statistics",
-                  K(cannot_recycle_log_size), K(threshold));
+                  K(cannot_recycle_log_size), K(threshold), K(need_update_checkpoint_scn));
     }
   }
 
@@ -353,8 +348,13 @@ void ObCheckPointService::ObCheckClogDiskUsageTask::runTimerTask()
   int64_t threshold_size = INT64_MAX;
   bool need_flush = false;
   if (checkpoint_service_.get_disk_usage_threshold_(threshold_size)) {
-    if (checkpoint_service_.cannot_recycle_log_over_threshold_(threshold_size)) {
-      need_flush = true;
+    if (checkpoint_service_.cannot_recycle_log_over_threshold_(threshold_size,
+        false /* not udpate clog_checkpoint_scn */ )) {
+      // update clog_checkpoint_scn, double check
+      if (checkpoint_service_.cannot_recycle_log_over_threshold_(threshold_size,
+          true /* update clog_checkpoint_scn */ )) {
+        need_flush = true;
+      }
     }
   }
 

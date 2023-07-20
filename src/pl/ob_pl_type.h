@@ -733,7 +733,7 @@ public:
     share::schema::ObIRoutineInfo *routine_info_;
     const ObPLBlockNS *var_ns_; //当AccessType是SUBPROGRAM_VAR时,这里记录的是VAR对应的NS
   };
-  common::ObArray<int64_t> type_method_params_;
+  common::ObSEArray<int64_t, 4> type_method_params_;
   sql::ObRawExpr *get_sysfunc_; //user/session/pkg var or table index expr
 };
 

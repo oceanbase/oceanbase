@@ -185,7 +185,6 @@ int ObLSMeta::set_clog_checkpoint(const LSN &clog_checkpoint_lsn,
 
 SCN ObLSMeta::get_tablet_change_checkpoint_scn() const
 {
-  ObSpinLockTimeGuard guard(lock_);
 	return tablet_change_checkpoint_scn_;
 }
 

@@ -163,6 +163,7 @@ public:
   // 在priority间进行比较的方法
   virtual int compare_with(const palf::election::ElectionPriority &rhs,
                            const uint64_t compare_version,
+                           const bool decentralized_voting,
                            int &result,
                            ObStringHolder &reason) const;
   virtual int get_size_of_impl_type() const;

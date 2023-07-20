@@ -6961,7 +6961,7 @@ int ObRawExprUtils::build_inner_aggr_code_expr(ObRawExprFactory &factory,
 
 int ObRawExprUtils::build_inner_wf_aggr_status_expr(ObRawExprFactory &factory,
                                                     const ObSQLSessionInfo &session_info,
-                                                    ObRawExpr *&out)
+                                                    ObOpPseudoColumnRawExpr *&out)
 {
   int ret = OB_SUCCESS;
   ObOpPseudoColumnRawExpr *expr = NULL;

@@ -32,15 +32,7 @@ class XACtxAlloc
 {
 public:
   ObXACtx* alloc_value() { return NULL; }
-  void free_value(ObXACtx* ctx)
-  {
-    if (NULL != ctx) {
-      ctx->destroy();
-      op_reclaim_free(ctx);
-      ctx = NULL;
-      ObXAStatistics::get_instance().dec_ctx_count();
-    }
-  }
+  void free_value(ObXACtx* ctx);
   XACtxHashNode* alloc_node(ObXACtx* node)
   {
     UNUSED(node);

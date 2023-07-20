@@ -1024,7 +1024,9 @@ int ObTableCtx::init_trans(transaction::ObTxDesc *trans_desc,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("trans desc is null", K(ret));
   } else {
-    get_session_info().get_tx_desc() = trans_desc;
+    sql::ObSQLSessionInfo &session = get_session_info();
+    sql::ObSQLSessionInfo::LockGuard guard(session.get_thread_data_lock());
+    session.get_tx_desc() = trans_desc;
     exec_ctx_.get_das_ctx().set_snapshot(tx_snapshot);
   }
 

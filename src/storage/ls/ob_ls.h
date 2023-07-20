@@ -93,6 +93,7 @@ struct ObLSVTInfo
   int64_t rebuild_seq_;
   share::SCN tablet_change_checkpoint_scn_;
   share::SCN transfer_scn_;
+  bool tx_blocked_;
 };
 
 // 诊断虚表统计信息
@@ -239,6 +240,8 @@ public:
   // @param[in] new_status, the new create state which will be set.
   void set_create_state(const ObInnerLSStatus new_status);
   ObInnerLSStatus get_create_state() const;
+
+  bool is_create_committed() const;
   bool is_need_gc() const;
   bool is_in_gc();
   bool is_enable_for_restore() const;
@@ -600,10 +603,11 @@ public:
   // @brief, get max decided log scn considering both apply and replay.
   // @param[out] share::SCN&, max decided log scn.
   DELEGATE_WITH_RET(log_handler_, get_max_decided_scn, int);
-  // @breif, check request server is in self member list
+  // @breif,get member stat: whether in paxos member list or learner list and whether is migrating
   // @param[in] const common::ObAddr, request server.
-  // @param[out] bool&, whether in self member list.
-  DELEGATE_WITH_RET(log_handler_, is_valid_member, int);
+  // @param[out] bool &(is_valid_member),
+  // @param[out] LogMemberGCStat&,
+  DELEGATE_WITH_RET(log_handler_, get_member_gc_stat, int);
   // @brief append count bytes from the buffer starting at buf to the palf handle, return the LSN and timestamp
   // @param[in] const void *, the data buffer.
   // @param[in] const uint64_t, the length of data buffer.
@@ -639,9 +643,10 @@ public:
   DELEGATE_WITH_RET(member_list_service_, switch_learner_to_acceptor, int);
   DELEGATE_WITH_RET(member_list_service_, add_member, int);
   DELEGATE_WITH_RET(member_list_service_, replace_member, int);
+  DELEGATE_WITH_RET(member_list_service_, replace_member_with_learner, int);
   DELEGATE_WITH_RET(member_list_service_, get_config_version_and_transfer_scn, int);
   DELEGATE_WITH_RET(log_handler_, add_learner, int); //TODO(yanfeng): fix it
-  DELEGATE_WITH_RET(log_handler_, replace_learner, int); //TODO(yanfeng): fix it
+  DELEGATE_WITH_RET(log_handler_, replace_learners, int);
   DELEGATE_WITH_RET(block_tx_service_, ha_block_tx, int);
   DELEGATE_WITH_RET(block_tx_service_, ha_kill_tx, int);
   DELEGATE_WITH_RET(block_tx_service_, ha_unblock_tx, int);

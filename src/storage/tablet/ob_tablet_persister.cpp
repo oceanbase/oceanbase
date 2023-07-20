@@ -86,6 +86,7 @@ int ObTabletPersister::persist_and_transform_tablet(
     const ObTablet &old_tablet,
     ObTabletHandle &new_handle)
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
   common::ObArenaAllocator allocator;
   common::ObSEArray<ObSharedBlocksWriteCtx, 16> tablet_meta_write_ctxs;
@@ -94,12 +95,12 @@ int ObTabletPersister::persist_and_transform_tablet(
   if (OB_UNLIKELY(!old_tablet.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid old tablet to persist", K(ret), K(old_tablet));
-  } else if (OB_FAIL(recursively_persist(
+  } else if (CLICK_FAIL(recursively_persist(
       old_tablet, allocator, tablet_meta_write_ctxs, sstable_meta_write_ctxs, new_handle))) {
     LOG_WARN("fail to recursively persist and fill tablet", K(ret), K(old_tablet));
-  } else if (OB_FAIL(check_tablet_meta_ids(tablet_meta_write_ctxs, *(new_handle.get_obj())))) {
+  } else if (CLICK_FAIL(check_tablet_meta_ids(tablet_meta_write_ctxs, *(new_handle.get_obj())))) {
     LOG_WARN("fail to check whether tablet meta's macro ids match", K(ret), K(tablet_meta_write_ctxs), KPC(new_handle.get_obj()));
-  } else if (OB_FAIL(persist_4k_tablet(allocator, new_handle))) {
+  } else if (CLICK_FAIL(persist_4k_tablet(allocator, new_handle))) {
     LOG_WARN("fail to persist 4k tablet", K(ret), K(new_handle), KPC(new_handle.get_obj()));
   } else {
     FLOG_INFO("succeed to persist 4k tablet", K(&old_tablet), K(new_handle.get_obj()));
@@ -114,14 +115,15 @@ int ObTabletPersister::recursively_persist(
     common::ObIArray<ObSharedBlocksWriteCtx> &sstable_meta_write_ctxs,
     ObTabletHandle &new_handle)
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
-  if (OB_FAIL(persist_and_fill_tablet(
+  if (CLICK_FAIL(persist_and_fill_tablet(
       old_tablet, allocator, tablet_meta_write_ctxs, sstable_meta_write_ctxs, new_handle))) {
     LOG_WARN("fail to persist and fill tablet", K(ret), K(old_tablet));
   } else if (old_tablet.get_tablet_meta().has_next_tablet_) {
     ObTabletHandle new_next_handle;
     const ObTablet &old_next_tablet = *(old_tablet.get_next_tablet_guard().get_obj());
-    if (OB_FAIL(recursively_persist(
+    if (CLICK_FAIL(recursively_persist(
         old_next_tablet, allocator, tablet_meta_write_ctxs, sstable_meta_write_ctxs, new_next_handle))) {
       LOG_WARN("fail to recursively persist and fill next tablet",
           K(ret), K(old_next_tablet), K(tablet_meta_write_ctxs), K(sstable_meta_write_ctxs));
@@ -137,18 +139,19 @@ int ObTabletPersister::convert_tablet_to_mem_arg(
       ObTabletMemberWrapper<share::ObTabletAutoincSeq> &auto_inc_seq,
       ObTabletTransformArg &arg)
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
   arg.reset();
   if (OB_UNLIKELY(!tablet.is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("old tablet isn't valid, don't allow to degrade tablet memory", K(ret), K(tablet));
-  } else if (OB_FAIL(arg.tablet_status_cache_.assign(tablet.mds_data_.tablet_status_cache_))) {
+  } else if (CLICK_FAIL(arg.tablet_status_cache_.assign(tablet.mds_data_.tablet_status_cache_))) {
     LOG_WARN("fail to assign tablet status cache", K(ret), K(tablet));
-  } else if (OB_FAIL(arg.aux_tablet_info_cache_.assign(tablet.mds_data_.aux_tablet_info_cache_))) {
+  } else if (CLICK_FAIL(arg.aux_tablet_info_cache_.assign(tablet.mds_data_.aux_tablet_info_cache_))) {
     LOG_WARN("fail to assign aux tablet info cache", K(ret), K(tablet));
-  } else if (OB_FAIL(arg.tablet_meta_.assign(tablet.tablet_meta_))) {
+  } else if (CLICK_FAIL(arg.tablet_meta_.assign(tablet.tablet_meta_))) {
     LOG_WARN("fail to assign tablet meta", K(ret), K(tablet));
-  } else if (OB_FAIL(tablet.fetch_autoinc_seq(auto_inc_seq))) {
+  } else if (CLICK_FAIL(tablet.fetch_autoinc_seq(auto_inc_seq))) {
     LOG_WARN("fail to fetch autoinc seq", K(ret), K(tablet));
   } else {
     arg.auto_inc_seq_ptr_ = auto_inc_seq.get_member();
@@ -174,6 +177,7 @@ int ObTabletPersister::convert_tablet_to_disk_arg(
       ObTabletMemberWrapper<share::ObTabletAutoincSeq> &auto_inc_seq,
       ObTabletTransformArg &arg)
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
   arg.reset();
 
@@ -199,34 +203,34 @@ int ObTabletPersister::convert_tablet_to_disk_arg(
   const ObTabletComplexAddr<mds::MdsDumpKV> &committed_aux_tablet_info_addr = tablet.mds_data_.aux_tablet_info_.committed_kv_;
   const ObTabletComplexAddr<ObTabletDumpedMediumInfo> &medium_info_list_addr = tablet.mds_data_.medium_info_list_;
 
-  if (OB_FAIL(arg.tablet_status_cache_.assign(tablet.mds_data_.tablet_status_cache_))) {
+  if (CLICK_FAIL(arg.tablet_status_cache_.assign(tablet.mds_data_.tablet_status_cache_))) {
     LOG_WARN("fail to assign tablet status cache", K(ret), K(tablet));
-  } else if (OB_FAIL(arg.aux_tablet_info_cache_.assign(tablet.mds_data_.aux_tablet_info_cache_))) {
+  } else if (CLICK_FAIL(arg.aux_tablet_info_cache_.assign(tablet.mds_data_.aux_tablet_info_cache_))) {
     LOG_WARN("fail to assign aux tablet info cache", K(ret), K(tablet));
-  } else if (OB_FAIL(arg.tablet_meta_.assign(tablet.tablet_meta_))) {
+  } else if (CLICK_FAIL(arg.tablet_meta_.assign(tablet.tablet_meta_))) {
     LOG_WARN("fail to assign tablet meta", K(ret), K(tablet));
   } else if (FALSE_IT(arg.rowkey_read_info_ptr_ = tablet.rowkey_read_info_)) {
   } else if (FALSE_IT(arg.extra_medium_info_ = tablet.mds_data_.extra_medium_info_)) {
-  } else if (OB_FAIL(fetch_wrapper_and_write_info(allocator, fetch_table_store, table_store, write_infos, sstable_meta_write_ctxs))) {
+  } else if (CLICK_FAIL(fetch_wrapper_and_write_info(allocator, fetch_table_store, table_store, write_infos, sstable_meta_write_ctxs))) {
     LOG_WARN("fail to fetch table store wrapper and write info", K(ret));
-  } else if (OB_FAIL(fetch_wrapper_and_write_info(
+  } else if (CLICK_FAIL(fetch_wrapper_and_write_info(
         allocator, fetch_auto_inc_seq, auto_inc_seq, write_infos, tablet_meta_write_ctxs))) {
     LOG_WARN("fail to fetch auto inc seq wrapper and write info", K(ret));
   } else if (FALSE_IT(arg.auto_inc_seq_ptr_ = auto_inc_seq.get_member())) {
-  } else if (OB_FAIL(load_member_and_write_info(
+  } else if (CLICK_FAIL(load_member_and_write_info(
         allocator, load_storage_schema, storage_schema, write_infos))) {
     LOG_WARN("fail to load storage schema and write info", K(ret));
-  } else if (OB_FAIL(load_dump_kv_and_fill_write_info(allocator, uncommitted_tablet_status_addr, write_infos))) {
+  } else if (CLICK_FAIL(load_dump_kv_and_fill_write_info(allocator, uncommitted_tablet_status_addr, write_infos))) {
     LOG_WARN("fail to load tablet status uncommitted kv", K(ret), K(uncommitted_tablet_status_addr));
-  } else if (OB_FAIL(load_dump_kv_and_fill_write_info(allocator, committed_tablet_status_addr, write_infos))) {
+  } else if (CLICK_FAIL(load_dump_kv_and_fill_write_info(allocator, committed_tablet_status_addr, write_infos))) {
     LOG_WARN("fail to load tablet status committed kv", K(ret), K(committed_tablet_status_addr));
-  } else if (OB_FAIL(load_dump_kv_and_fill_write_info(allocator, uncommitted_aux_tablet_info_addr, write_infos))) {
+  } else if (CLICK_FAIL(load_dump_kv_and_fill_write_info(allocator, uncommitted_aux_tablet_info_addr, write_infos))) {
     LOG_WARN("fail to load aux tablet info uncommitted kv", K(ret), K(uncommitted_aux_tablet_info_addr));
-  } else if (OB_FAIL(load_dump_kv_and_fill_write_info(allocator, committed_aux_tablet_info_addr, write_infos))) {
+  } else if (CLICK_FAIL(load_dump_kv_and_fill_write_info(allocator, committed_aux_tablet_info_addr, write_infos))) {
     LOG_WARN("fail to load aux tablet info committed kv", K(ret), K(committed_aux_tablet_info_addr));
-  } else if (OB_FAIL(write_and_fill_args(write_infos, arg, tablet_meta_write_ctxs))) {
+  } else if (CLICK_FAIL(write_and_fill_args(write_infos, arg, tablet_meta_write_ctxs))) {
     LOG_WARN("fail to write and fill address", K(ret), K(write_infos), K(auto_inc_seq));
-  } else if (OB_FAIL(load_medium_info_list_and_write(allocator, medium_info_list_addr, arg.medium_info_list_addr_, tablet_meta_write_ctxs))) {
+  } else if (CLICK_FAIL(load_medium_info_list_and_write(allocator, medium_info_list_addr, arg.medium_info_list_addr_, tablet_meta_write_ctxs))) {
     LOG_WARN("fail to load medium info list and write", K(ret), K(medium_info_list_addr));
   } else {
     const int64_t try_cache_size = sizeof(ObTablet)
@@ -248,6 +252,7 @@ int ObTabletPersister::persist_and_fill_tablet(
     common::ObIArray<ObSharedBlocksWriteCtx> &sstable_meta_write_ctxs,
     ObTabletHandle &new_handle)
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
   common::ObSEArray<ObSharedBlockWriteInfo, 8> write_infos;
   ObTabletTransformArg arg;
@@ -262,16 +267,16 @@ int ObTabletPersister::persist_and_fill_tablet(
     if (OB_FAIL(convert_tablet_to_mem_arg(old_tablet, auto_inc_seq, arg))) {
       LOG_WARN("fail to conver tablet to mem arg", K(ret), K(old_tablet));
     }
-  } else if (OB_FAIL(convert_tablet_to_disk_arg(
+  } else if (CLICK_FAIL(convert_tablet_to_disk_arg(
       allocator, old_tablet, tablet_meta_write_ctxs, sstable_meta_write_ctxs, type, auto_inc_seq, arg))) {
     LOG_WARN("fail to conver tablet to disk arg", K(ret), K(old_tablet));
   } else if (sizeof(old_tablet) + old_tablet.rowkey_read_info_->get_deep_copy_size() > ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
     try_smaller_pool = false;
   }
 
-  if (FAILEDx(acquire_tablet(type, key, try_smaller_pool, new_handle))) {
+  if (CLICK() && FAILEDx(acquire_tablet(type, key, try_smaller_pool, new_handle))) {
     LOG_WARN("fail to acquire tablet", K(ret), K(key), K(type));
-  } else if (OB_FAIL(transform(arg, new_handle.get_buf(), new_handle.get_buf_len()))) {
+  } else if (CLICK_FAIL(transform(arg, new_handle.get_buf(), new_handle.get_buf_len()))) {
     LOG_WARN("fail to transform old tablet", K(ret), K(arg), K(new_handle), K(type));
   }
 
@@ -282,6 +287,7 @@ int ObTabletPersister::check_tablet_meta_ids(
     const common::ObIArray<ObSharedBlocksWriteCtx> &tablet_meta_write_ctxs,
     const ObTablet &tablet)
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
   ObSArray<MacroBlockId> meta_ids;
   ObSArray<MacroBlockId> ctx_ids;
@@ -290,14 +296,15 @@ int ObTabletPersister::check_tablet_meta_ids(
       LOG_WARN("fail to parse meta addr", K(ret), K(tablet_meta_write_ctxs.at(i).addr_));
     }
   }
-  if (OB_FAIL(ret)) {
+  if (CLICK_FAIL(ret)) {
     // do nothing
-  } else if (OB_FAIL(tablet.get_tablet_meta_ids(meta_ids))) {
+  } else if (CLICK_FAIL(tablet.get_tablet_meta_ids(meta_ids))) {
     LOG_WARN("fail to get tablet meta ids", K(ret), K(tablet));
   } else if (meta_ids.count() != ctx_ids.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet meta's macro ids don't match", K(ret), K(meta_ids.count()), K(ctx_ids.count()));
   } else {
+    CLICK();
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx_ids.count(); i++) {
       for (int64_t j = 0; OB_SUCC(ret) && j < meta_ids.count(); j++) {
         if (meta_ids.at(j) == ctx_ids.at(i)) {
@@ -344,23 +351,24 @@ int ObTabletPersister::acquire_tablet(
 
 int ObTabletPersister::persist_4k_tablet(common::ObArenaAllocator &allocator, ObTabletHandle &new_handle)
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
   ObTablet *new_tablet = new_handle.get_obj();
   ObTenantCheckpointSlogHandler *ckpt_slog_hanlder = MTL(ObTenantCheckpointSlogHandler*);
   common::ObSEArray<ObSharedBlockWriteInfo, 1> write_infos;
   ObSharedBlockWriteHandle handle;
   ObSharedBlocksWriteCtx write_ctx;
-  if (OB_FAIL(fill_write_info(allocator, new_tablet, write_infos))) {
+  if (CLICK_FAIL(fill_write_info(allocator, new_tablet, write_infos))) {
     LOG_WARN("fail to fill write info", K(ret), KPC(new_tablet));
   } else if (OB_ISNULL(ckpt_slog_hanlder)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, ckpt slog handler is nullptr", K(ret), KP(ckpt_slog_hanlder));
-  } else if (OB_FAIL(ckpt_slog_hanlder->get_shared_block_reader_writer().async_write(write_infos.at(0), handle))) {
+  } else if (CLICK_FAIL(ckpt_slog_hanlder->get_shared_block_reader_writer().async_write(write_infos.at(0), handle))) {
     LOG_WARN("fail to async write", K(ret), K(write_infos));
-  } else if (OB_FAIL(handle.get_write_ctx(write_ctx))) {
+  } else if (CLICK_FAIL(handle.get_write_ctx(write_ctx))) {
     LOG_WARN("fail to batch get address", K(ret), K(handle));
   } else if (FALSE_IT(new_tablet->set_tablet_addr(write_ctx.addr_))) {
-  } else if (OB_FAIL(new_tablet->inc_macro_ref_cnt())) {
+  } else if (CLICK_FAIL(new_tablet->inc_macro_ref_cnt())) {
     LOG_WARN("fail to increase macro ref cnt for new tablet", K(ret), KPC(new_tablet));
   }
   return ret;
@@ -403,6 +411,7 @@ int ObTabletPersister::transform(
     char *buf,
     const int64_t len)
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
   ObTablet *tiny_tablet = reinterpret_cast<ObTablet *>(buf);
   if (len <= sizeof(ObTablet) || OB_ISNULL(buf)) {
@@ -424,7 +433,7 @@ int ObTabletPersister::transform(
       if (OB_UNLIKELY(remain < rowkey_read_info_size)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet memory buffer not enough for rowkey read info", K(ret), K(remain), K(rowkey_read_info_size));
-      } else if (OB_FAIL(arg.rowkey_read_info_ptr_->deep_copy(
+      } else if (CLICK_FAIL(arg.rowkey_read_info_ptr_->deep_copy(
           buf + start_pos, remain, tiny_tablet->rowkey_read_info_))) {
         LOG_WARN("fail to deep copy rowkey read info to tablet", K(ret), KPC(arg.rowkey_read_info_ptr_));
       } else if (OB_ISNULL(tiny_tablet->rowkey_read_info_)) {
@@ -447,11 +456,11 @@ int ObTabletPersister::transform(
           LOG_WARN("fail to allocate a buffer", K(ret), "sizeof", sizeof(ObTabletTableStore));
         } else {
           table_store = new (ptr) ObTabletTableStore();
-          if (OB_FAIL(table_store->init(allocator, *tiny_tablet))) {
+          if (CLICK_FAIL(table_store->init(allocator, *tiny_tablet))) {
             LOG_WARN("fail to init table store", K(ret), K(*tiny_tablet));
           }
         }
-      } else if (OB_FAIL(load_table_store(allocator, *tiny_tablet, arg.table_store_addr_, table_store))) {
+      } else if (CLICK_FAIL(load_table_store(allocator, *tiny_tablet, arg.table_store_addr_, table_store))) {
         LOG_WARN("fail to load table store", K(ret), KPC(tiny_tablet), K(arg.table_store_addr_));
       }
     }
@@ -459,12 +468,12 @@ int ObTabletPersister::transform(
     if (OB_SUCC(ret)) {
       int64_t table_store_size = table_store->get_deep_copy_size();
       if (OB_LIKELY((remain - table_store_size) >= 0)) {
-        if (OB_FAIL(table_store->batch_cache_sstable_meta(allocator, remain - table_store_size))) {
+        if (CLICK_FAIL(table_store->batch_cache_sstable_meta(allocator, remain - table_store_size))) {
           LOG_WARN("fail to batch cache sstable meta", K(ret), K(remain), K(table_store_size));
         } else {
           ObIStorageMetaObj *table_store_obj = nullptr;
           table_store_size = table_store->get_deep_copy_size();
-          if (OB_FAIL(table_store->deep_copy(buf + start_pos, remain, table_store_obj))) {
+          if (CLICK_FAIL(table_store->deep_copy(buf + start_pos, remain, table_store_obj))) {
             LOG_WARN("fail to deep copy table store v2", K(ret), K(table_store));
           } else if (OB_ISNULL(table_store_obj)) {
             ret = OB_ERR_UNEXPECTED;
@@ -487,7 +496,7 @@ int ObTabletPersister::transform(
       ObIStorageMetaObj *auto_inc_obj = nullptr;
       const int auto_inc_seq_size = arg.auto_inc_seq_ptr_->get_deep_copy_size();
       if (OB_LIKELY((remain - auto_inc_seq_size) > 0)) {
-        if(OB_FAIL(arg.auto_inc_seq_ptr_->deep_copy(buf + start_pos, remain, auto_inc_obj))) {
+        if(CLICK_FAIL(arg.auto_inc_seq_ptr_->deep_copy(buf + start_pos, remain, auto_inc_obj))) {
           LOG_WARN("fail to deep copy auto inc seq", K(ret), K(arg.auto_inc_seq_ptr_));
         } else {
           tiny_tablet->mds_data_.auto_inc_seq_.ptr_ = static_cast<share::ObTabletAutoincSeq *>(auto_inc_obj);

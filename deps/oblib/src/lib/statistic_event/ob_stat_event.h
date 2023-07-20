@@ -204,6 +204,9 @@ STAT_EVENT_ADD_DEF(STORAGE_META_CACHE_MISS, "storage meta cache miss", ObStatCla
 STAT_EVENT_ADD_DEF(TABLET_CACHE_HIT, "tablet cache hit", ObStatClassIds::CACHE, "tablet cache hit", 50059, true, true)
 STAT_EVENT_ADD_DEF(TABLET_CACHE_MISS, "tablet cache miss", ObStatClassIds::CACHE, "tablet cache miss", 50060, true, true)
 
+STAT_EVENT_ADD_DEF(SCHEMA_HISTORY_CACHE_HIT, "schema history cache hit", ObStatClassIds::CACHE, "schema cache history hit", 50061, false, true)
+STAT_EVENT_ADD_DEF(SCHEMA_HISTORY_CACHE_MISS, "schema history cache miss", ObStatClassIds::CACHE, "schema cache history miss", 50062, false, true)
+
 // STORAGE
 //STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_READS, "MEMSTORE_LOGICAL_READS", STORAGE, "MEMSTORE_LOGICAL_READS")
 //STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_BYTES, "MEMSTORE_LOGICAL_BYTES", STORAGE, "MEMSTORE_LOGICAL_BYTES")

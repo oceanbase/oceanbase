@@ -21,7 +21,7 @@
 #include "logservice/logfetcher/ob_log_fetcher_ls_ctx_additional_info_factory.h"
 #include "logservice/logfetcher/ob_log_fetcher_err_handler.h"
 #include "logservice/logfetcher/ob_log_fetcher_ls_ctx_default_factory.h"
-#include "share/backup/ob_backup_struct.h"   // ObRestoreSourceServiceAttr
+#include "share/backup/ob_log_restore_struct.h"   // ObRestoreSourceServiceAttr
 #include "share/ob_log_restore_proxy.h"   // ObLogRestoreProxyUtil
 #include "ob_log_restore_driver_base.h"
 #include "ob_restore_log_function.h"  // ObRestoreLogFunction

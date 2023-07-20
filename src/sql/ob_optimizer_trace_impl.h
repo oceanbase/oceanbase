@@ -37,6 +37,7 @@ struct JoinInfo;
 class OptTableMetas;
 class TableItem;
 class ObSQLSessionInfo;
+struct CandidatePlan;
 
 class ObOptimizerTraceImpl;
 
@@ -235,6 +236,7 @@ public:
 /***********************************************/
   int new_line();
   int append_lower(const char* msg);
+  int append_ptr(const void *ptr);
   int append();
   int append(const bool &value);
   int append(const char* msg);
@@ -244,6 +246,9 @@ public:
   int append(const uint32_t &value);
   int append(const double & value);
   int append(const ObObj& value);
+  int append(const OpParallelRule& rule);
+  int append(const ObTableLocationType& type);
+  int append(const ObPhyPlanType& type);
 /***********************************************/
 ////print plan info
 /***********************************************/
@@ -253,6 +258,8 @@ public:
   int append(const JoinPath *value);
   int append(const JoinInfo& info);
   int append(const TableItem *table);
+  int append(const ObShardingInfo *info);
+  int append(const CandidatePlan &plan);
 /***********************************************/
 ////print template type
 /***********************************************/

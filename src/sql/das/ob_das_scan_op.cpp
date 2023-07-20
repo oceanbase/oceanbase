@@ -316,7 +316,7 @@ int ObDASScanOp::open_op()
     LOG_WARN("init scan param failed", K(ret));
   } else if (OB_FAIL(tsc_service.table_scan(scan_param_, result_))) {
     if (OB_SNAPSHOT_DISCARDED == ret && scan_param_.fb_snapshot_.is_valid()) {
-      ret = OB_INVALID_QUERY_TIMESTAMP;
+      ret = OB_TABLE_DEFINITION_CHANGED;
     } else if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("fail to scan table", K(scan_param_), K(ret));
     }
@@ -1130,6 +1130,7 @@ int ObLocalIndexLookupOp::check_lookup_row_cnt()
                       "lookup_group_cnt", get_lookup_group_cnt(),
                       "index_table_id", index_ctdef_->ref_table_id_ ,
                       "data_table_tablet_id", tablet_id_ ,
+                      KPC_(snapshot),
                       KPC_(tx_desc));
       if (trans_info_array_.count() == scan_param_.key_ranges_.count()) {
         for (int64_t i = 0; i < trans_info_array_.count(); i++) {

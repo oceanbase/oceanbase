@@ -441,7 +441,7 @@ int ObTableDirectLoadInsertExecutor::decode_payload(const ObString &payload,
     LOG_WARN("invalid args", KR(ret), K(payload));
   } else {
     ObTableLoadSharedAllocatorHandle allocator_handle =
-      ObTableLoadSharedAllocatorHandle::make_handle();
+      ObTableLoadSharedAllocatorHandle::make_handle("TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     const int64_t data_len = payload.length();
     char *buf = nullptr;
     int64_t pos = 0;

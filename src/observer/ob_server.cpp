@@ -35,7 +35,6 @@
 #include "lib/thread/thread_mgr.h"
 #include "observer/ob_server_utils.h"
 #include "observer/ob_rpc_extra_payload.h"
-#include "observer/ob_safe_destroy_thread.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "observer/omt/ob_tenant_srs_mgr.h"
 #include "observer/table/ob_table_rpc_processor.h"
@@ -105,6 +104,7 @@
 #include "observer/ob_server_utils.h"
 #include "observer/table_load/ob_table_load_partition_calc.h"
 #include "observer/virtual_table/ob_mds_event_buffer.h"
+#include "observer/ob_server_startup_task_handler.h"
 #include "share/detect/ob_detect_manager.h"
 
 using namespace oceanbase::lib;
@@ -369,13 +369,13 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init ObStorageLoggerManager failed", KR(ret));
     } else if (OB_FAIL(ObVirtualTenantManager::get_instance().init())) {
       LOG_ERROR("init tenant manager failed", KR(ret));
+    } else if (OB_FAIL(SERVER_STARTUP_TASK_HANDLER.init())) {
+      LOG_ERROR("init server startup task handler failed", KR(ret));
     } else if (OB_FAIL(ObServerCheckpointSlogHandler::get_instance().init())) {
       LOG_ERROR("init server checkpoint slog handler failed", KR(ret));
     } else if (FALSE_IT(common::occam::ObThreadHungDetector::get_instance())) {
     } else if (OB_FAIL(palf::election::GLOBAL_INIT_ELECTION_MODULE())) {
       LOG_ERROR("init election module failed", KR(ret));
-    } else if (OB_FAIL(SAFE_DESTROY_INSTANCE.init())) {
-      LOG_ERROR("init safe to destroy instance failed", K(ret));
     } else if (OB_FAIL(init_multi_tenant())) {
       LOG_ERROR("init multi tenant failed", KR(ret));
     } else if (OB_FAIL(init_ctas_clean_up_task())) {
@@ -669,10 +669,6 @@ void ObServer::destroy()
     multi_tenant_.destroy();
     FLOG_INFO("wait destroy multi tenant success");
 
-    FLOG_INFO("begin to destroy safe destroy instance");
-    SAFE_DESTROY_INSTANCE.destroy();
-    FLOG_INFO("wait destroy safe destroy instance success");
-
     FLOG_INFO("begin to destroy query retry ctrl");
     ObQueryRetryCtrl::destroy();
     FLOG_INFO("query retry ctrl destroy");
@@ -680,6 +676,10 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy server checkpoint slog handler");
     ObServerCheckpointSlogHandler::get_instance().destroy();
     FLOG_INFO("server checkpoint slog handler destroyed");
+
+    FLOG_INFO("begin to destroy server startup task handler");
+    SERVER_STARTUP_TASK_HANDLER.destroy();
+    FLOG_INFO("server startup task handler destroyed");
 
     FLOG_INFO("begin to destroy backup index cache");
     OB_BACKUP_INDEX_CACHE.destroy();
@@ -750,6 +750,12 @@ int ObServer::start()
       LOG_ERROR("fail to start signal worker", KR(ret));
     }
 
+    if (FAILEDx(SERVER_STARTUP_TASK_HANDLER.start())) {
+      LOG_ERROR("fail to start server startup task handler", KR(ret));
+    } else {
+      FLOG_INFO("success to start server startup task handler");
+    }
+
     if (FAILEDx(OB_TS_MGR.start())) {
       LOG_ERROR("fail to start ts mgr", KR(ret));
     } else {
@@ -774,13 +780,6 @@ int ObServer::start()
       LOG_ERROR("fail to start io manager", KR(ret));
     } else {
       FLOG_INFO("success to start io manager");
-    }
-
-    // safe destroy instance should start before multi tenant
-    if (FAILEDx(SAFE_DESTROY_INSTANCE.start())) {
-      LOG_ERROR("fail to start safe destroy thread", KR(ret));
-    } else {
-      FLOG_INFO("success to start safe destroy thread");
     }
 
     if (FAILEDx(multi_tenant_.start())) {
@@ -907,6 +906,8 @@ int ObServer::start()
       stop_ = false;
       has_stopped_ = false;
     }
+    // this handler is only used to process tasks during startup. so it can be destroied here.
+    SERVER_STARTUP_TASK_HANDLER.destroy();
 
     // refresh server configure
     //
@@ -1263,6 +1264,10 @@ int ObServer::stop()
     ObServerCheckpointSlogHandler::get_instance().stop();
     FLOG_INFO("server checkpoint slog handler stopped");
 
+    FLOG_INFO("begin to stop server startup task handler");
+    SERVER_STARTUP_TASK_HANDLER.stop();
+    FLOG_INFO("server startup task handler stopped");
+
     // It will wait for all requests done.
     FLOG_INFO("begin to stop multi tenant");
     multi_tenant_.stop();
@@ -1271,12 +1276,6 @@ int ObServer::stop()
     FLOG_INFO("begin to stop ob_service");
     ob_service_.stop();
     FLOG_INFO("ob_service stopped");
-
-    // safe destroy instance should stop after multi_tenant_
-    FLOG_INFO("begin to stop safe destroy instance");
-    SAFE_DESTROY_INSTANCE.stop();
-    FLOG_INFO("safe destroy instance stopped");
-
 
     FLOG_INFO("begin to stop slogger manager");
     SLOGGERMGR.destroy();
@@ -1490,12 +1489,6 @@ int ObServer::wait()
     multi_tenant_.wait();
     FLOG_INFO("wait multi tenant success");
 
-    // safe to destroy
-    FLOG_INFO("begin to wait for safe destroy instance");
-    SAFE_DESTROY_INSTANCE.wait();
-    FLOG_INFO("wait for safe destroy instance success");
-
-
     FLOG_INFO("begin to wait ratelimit manager");
     rl_mgr_.wait();
     FLOG_INFO("wait ratelimit manager success");
@@ -1584,6 +1577,10 @@ int ObServer::wait()
     FLOG_INFO("begin to wait server checkpoint slog handler");
     ObServerCheckpointSlogHandler::get_instance().wait();
     FLOG_INFO("wait server checkpoint slog handler success");
+
+    FLOG_INFO("begin to wait server startup task handler");
+    SERVER_STARTUP_TASK_HANDLER.wait();
+    FLOG_INFO("wait server startup task handler success");
 
     FLOG_INFO("begin to wait global election report timer");
     palf::election::GLOBAL_REPORT_TIMER.wait();

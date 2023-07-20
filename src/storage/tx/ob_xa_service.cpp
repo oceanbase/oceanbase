@@ -308,7 +308,7 @@ int ObXAService::insert_record_for_standby(const uint64_t tenant_id,
   } else if (OB_FAIL(mysql_proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
     TRANS_LOG(WARN, "execute insert record sql failed", KR(ret), K(exec_tenant_id), K(tenant_id));
   } else {
-    ObXAStatistics::get_instance().inc_cleanup_tx_count();
+    xa_statistics_.inc_cleanup_tx_count();
     TRANS_LOG(INFO, "execute insert record sql success", K(exec_tenant_id), K(tenant_id),
               K(sql), K(affected_rows));
   }
@@ -1006,8 +1006,10 @@ int ObXAService::xa_start(const ObXATransID &xid,
     tx_desc->set_xa_start_addr(GCONF.self_addr_);
   }
   if (OB_FAIL(ret)) {
+    xa_statistics_.inc_failure_xa_start();
     TRANS_LOG(WARN, "xa start failed", K(ret), K(xid), K(flags), K(timeout_seconds));
   } else {
+    xa_statistics_.inc_success_xa_start();
     TRANS_LOG(INFO, "xa start", K(ret), K(xid), K(flags), K(timeout_seconds), "tx_id", tx_desc->get_tx_id(), KPC(tx_desc));
   }
 
@@ -1036,7 +1038,9 @@ int ObXAService::xa_start_(const ObXATransID &xid,
 
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
   // step 1: if tightly coupled, insert lock record first.
-  if (OB_FAIL(trans.start(MTL(ObTransService *)->get_mysql_proxy(), exec_tenant_id))) {
+  if (OB_FAIL(MTL(transaction::ObTransService *)->gen_trans_id(trans_id))) {
+    TRANS_LOG(WARN, "gen trans id fail", K(ret), K(exec_tenant_id), K(xid));
+  } else if (OB_FAIL(trans.start(MTL(ObTransService *)->get_mysql_proxy(), exec_tenant_id))) {
     TRANS_LOG(WARN, "trans start failed", K(ret), K(exec_tenant_id), K(xid));
   } else {
     if (is_tightly_coupled) {
@@ -1082,12 +1086,10 @@ int ObXAService::xa_start_(const ObXATransID &xid,
       // this code may be moved to pl sql level
       if (OB_FAIL(MTL(ObTransService *)->acquire_tx(tx_desc, session_id))) {
         TRANS_LOG(WARN, "fail acquire trans", K(ret), K(tx_param));
-      } else if (OB_FAIL(MTL(ObTransService *)->start_tx(*tx_desc, tx_param))) {
+      } else if (OB_FAIL(MTL(ObTransService *)->start_tx(*tx_desc, tx_param, trans_id))) {
         TRANS_LOG(WARN, "fail start trans", K(ret), KPC(tx_desc));
         MTL(ObTransService *)->release_tx(*tx_desc);
         tx_desc = NULL;
-      } else {
-        trans_id = tx_desc->get_tx_id();
       }
     } else {
       // not first xa start
@@ -1117,9 +1119,7 @@ int ObXAService::xa_start_(const ObXATransID &xid,
   } else {
     // if enter this branch, tx_desc must be valid
     if (is_first_xa_start) {
-      if (is_tightly_coupled && OB_FAIL(update_xa_lock(trans, tenant_id, xid, trans_id))) {
-        TRANS_LOG(WARN, "update xa lock record failed", K(ret), K(trans_id), K(xid));
-      } else if (OB_FAIL(xa_ctx_mgr_.get_xa_ctx(trans_id, alloc, xa_ctx))) {
+      if (OB_FAIL(xa_ctx_mgr_.get_xa_ctx(trans_id, alloc, xa_ctx))) {
         TRANS_LOG(WARN, "get xa ctx failed", K(ret), K(xid));
       } else if (!alloc) {
         ret = OB_ERR_UNEXPECTED;
@@ -1476,10 +1476,16 @@ int ObXAService::xa_commit(const ObXATransID &xid,
     if (ObXAFlag::is_tmnoflags(flags, ObXAReqType::XA_COMMIT)) {
       if (OB_FAIL(two_phase_xa_commit_(xid, timeout_us, request_id, has_tx_level_temp_table))) {
         TRANS_LOG(WARN, "two phase xa commit failed", K(ret), K(xid));
+        xa_statistics_.inc_failure_xa_2pc_commit();
+      } else {
+        xa_statistics_.inc_success_xa_2pc_commit();
       }
     } else if (ObXAFlag::is_tmonephase(flags)) {
       if (OB_FAIL(one_phase_xa_commit_(xid, timeout_us, request_id, has_tx_level_temp_table))) {
         TRANS_LOG(WARN, "one phase xa commit failed", K(ret), K(xid));
+        xa_statistics_.inc_failure_xa_1pc_commit();
+      } else {
+        xa_statistics_.inc_success_xa_1pc_commit();
       }
     } else {
       ret = OB_TRANS_XA_INVAL;
@@ -1634,6 +1640,7 @@ int ObXAService::xa_rollback(const ObXATransID &xid,
     }
   }
   TRANS_LOG(INFO, "xa rollback", K(ret), K(xid), K(xa_timeout_seconds));
+  xa_statistics_.inc_xa_rollback();
   return ret;
 }
 
@@ -2156,6 +2163,11 @@ int ObXAService::xa_prepare(const ObXATransID &xid,
     ret = OB_TRANS_XA_RDONLY;
   }
 
+  if (OB_FAIL(ret)) {
+    xa_statistics_.inc_failure_xa_prepare();
+  } else {
+    xa_statistics_.inc_success_xa_prepare();
+  }
   return ret;
 }
 

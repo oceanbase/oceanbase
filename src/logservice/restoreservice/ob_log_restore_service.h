@@ -14,18 +14,18 @@
 #define OCEANBASE_LOGSERVICE_OB_LOG_RESTORE_SERVICE_H_
 
 #include "lib/utility/ob_macro_utils.h"
-#include "rpc/frame/ob_req_transport.h"   // ObReqTransport
-#include "share/ob_thread_pool.h"         // ObThreadPool
-#include "ob_remote_fetch_log.h"          // ObRemoteFetchLogImpl
-#include "ob_log_restore_rpc.h"           // ObLogResSvrRpc
-#include "ob_remote_fetch_log_worker.h"   // ObRemoteFetchWorker
-#include "ob_remote_location_adaptor.h"   // ObRemoteLocationAdaptor
-#include "ob_remote_error_reporter.h"     // ObRemoteErrorReporter
-#include "ob_log_restore_allocator.h"     // ObLogRestoreAllocator
-#include "ob_log_restore_scheduler.h"     // ObLogRestoreScheduler
-#include "ob_log_restore_controller.h"    // ObLogRestoreController
-#include "ob_log_restore_net_driver.h"    // ObLogRestoreNetDriver
-#include "ob_log_restore_archive_driver.h"    // ObLogRestoreArchiveDriver
+#include "rpc/frame/ob_req_transport.h"                     // ObReqTransport
+#include "share/ob_thread_pool.h"                           // ObThreadPool
+#include "ob_remote_fetch_log.h"                            // ObRemoteFetchLogImpl
+#include "ob_log_restore_rpc.h"                             // ObLogResSvrRpc
+#include "ob_remote_fetch_log_worker.h"                     // ObRemoteFetchWorker
+#include "ob_remote_location_adaptor.h"                     // ObRemoteLocationAdaptor
+#include "ob_remote_error_reporter.h"                       // ObRemoteErrorReporter
+#include "ob_log_restore_allocator.h"                       // ObLogRestoreAllocator
+#include "ob_log_restore_scheduler.h"                       // ObLogRestoreScheduler
+#include "ob_log_restore_controller.h"                      // ObLogRestoreController
+#include "ob_log_restore_net_driver.h"                      // ObLogRestoreNetDriver
+#include "ob_log_restore_archive_driver.h"                  // ObLogRestoreArchiveDriver
 
 namespace oceanbase
 {
@@ -76,7 +76,7 @@ private:
   void update_restore_quota_();
   int update_upstream_(share::ObLogRestoreSourceItem &source, bool &source_exist);
   void schedule_fetch_log_(share::ObLogRestoreSourceItem &source);
-  void schedule_resource_();
+  void schedule_resource_(const share::ObLogRestoreSourceType &source_type);
   void clean_resource_();
   void report_error_();
   void update_restore_upper_limit_();

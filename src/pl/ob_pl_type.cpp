@@ -873,7 +873,9 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
     } else if (OB_FAIL(ObSMUtils::get_mysql_type(get_obj_type(), mysql_type, flags, num_decimals))) {
       LOG_WARN("get mysql type failed", K(ret));
     } else if (OB_FAIL(ObMPStmtExecute::parse_basic_param_value(
-        allocator, (uint8_t)mysql_type, charset, cs_type, ncs_type, src, tz_info, param, true))) {
+        allocator, (uint8_t)mysql_type, charset, cs_type, ncs_type, src, tz_info, param, true, NULL,
+        NULL == get_data_type() ? false : get_data_type()->get_meta_type().is_unsigned_integer()))) {
+      // get_data_type() is null, its a extend type, unsigned need false.
       LOG_WARN("failed to parse basic param value", K(ret));
     } else {
       ObObj *obj = reinterpret_cast<ObObj *>(dst + dst_pos);

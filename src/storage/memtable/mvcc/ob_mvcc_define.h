@@ -117,11 +117,14 @@ struct ObMvccWriteResult {
   // tx_node_ is the node used for insert, whether it is inserted is decided by
   // has_insert()
   ObMvccTransNode *tx_node_;
+  // is_checked_ is used to tell lock_rows_on_forzen_stores whether sequence_set_violation has finished its check
+  bool is_checked_;
 
   TO_STRING_KV(K_(can_insert),
                K_(need_insert),
                K_(is_new_locked),
                K_(lock_state),
+               K_(is_checked),
                KPC_(tx_node));
 
   ObMvccWriteResult()
@@ -129,7 +132,8 @@ struct ObMvccWriteResult {
     need_insert_(false),
     is_new_locked_(false),
     lock_state_(),
-    tx_node_(NULL) {}
+    tx_node_(NULL),
+    is_checked_(false) {}
 
   // has_insert indicates whether the insert is succeed
   // It is decided by both can_insert_ and need_insert_
@@ -142,6 +146,7 @@ struct ObMvccWriteResult {
     is_new_locked_ = false;
     lock_state_.reset();
     tx_node_ = NULL;
+    is_checked_ = false;
   }
 };
 

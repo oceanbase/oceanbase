@@ -50,6 +50,7 @@ int ObDictTenantInfo::init()
   } else if (OB_FAIL(table_map_.init("DATADICTTB"))) {
     LOG_ERROR("table_map_ init fail", KR(ret));
   } else {
+    cfifo_allocator_.set_label("DictTenantInfo");
     is_inited_ = true;
 
     LOG_INFO("ObDictTenantInfo init success");
@@ -271,6 +272,7 @@ int ObDictTenantInfo::free_dict_table_meta(datadict::ObDictTableMeta *dict_table
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("dict_table_meta is nullptr", KR(ret));
   } else {
+    dict_table_meta->reset();
     cfifo_allocator_.free(dict_table_meta);
     dict_table_meta = nullptr;
   }

@@ -1086,7 +1086,10 @@ int ObTenantDagScheduler::create_dag(
     T *&dag)
 {
   int ret = common::OB_SUCCESS;
-  if (OB_FAIL(alloc_dag(dag))) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
+  } else if (OB_FAIL(alloc_dag(dag))) {
     COMMON_LOG(WARN, "failed to alloc dag", K(ret));
   } else if (OB_FAIL(dag->init_by_param(param))) {
     COMMON_LOG(WARN, "failed to init dag", K(ret), KPC(dag));

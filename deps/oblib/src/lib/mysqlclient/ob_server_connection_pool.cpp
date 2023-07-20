@@ -102,7 +102,7 @@ int ObServerConnectionPool::acquire(ObMySQLConnection *&conn, uint32_t sessid)
   return ret;
 }
 
-int ObServerConnectionPool::release(common::sqlclient::ObISQLConnection *conn, const bool succ, uint32_t sessid)
+int ObServerConnectionPool::release(common::sqlclient::ObISQLConnection *conn, const bool succ)
 {
   int ret = OB_SUCCESS;
   ObMySQLConnection *connection = static_cast<ObMySQLConnection *>(conn);
@@ -119,7 +119,7 @@ int ObServerConnectionPool::release(common::sqlclient::ObISQLConnection *conn, c
       connection->error_times_++;
       connection->close();
     }
-    if (OB_FAIL(connection_pool_ptr_->put_cached(connection, sessid))) {
+    if (OB_FAIL(connection_pool_ptr_->put_cached(connection, connection->get_sessid()))) {
       ATOMIC_DEC(&busy_conn_count_);
       LOG_WARN("connection object failed to put to cache. destroyed", K(ret));
     } else {
@@ -127,7 +127,14 @@ int ObServerConnectionPool::release(common::sqlclient::ObISQLConnection *conn, c
       ATOMIC_INC(&free_conn_count_);
     }
   }
-  LOG_TRACE("release connection to server conn pool", KP(this), K(busy_conn_count_), K(free_conn_count_), KP(connection), K(sessid), K(succ), K(ret), K(lbt()));
+  LOG_TRACE("release connection to server conn pool", KP(this),
+                                                      K(busy_conn_count_),
+                                                      K(free_conn_count_),
+                                                      KP(connection),
+                                                      K(connection->get_sessid()),
+                                                      K(succ),
+                                                      K(ret),
+                                                      K(lbt()));
   return ret;
 }
 

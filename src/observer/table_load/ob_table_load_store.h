@@ -38,8 +38,10 @@ public:
   int confirm_begin();
   int pre_merge(const table::ObTableLoadArray<table::ObTableLoadTransId> &committed_trans_id_array);
   int start_merge();
-  int commit(table::ObTableLoadResultInfo &result_info, table::ObTableLoadSqlStatistics &sql_statistics);
+  int commit(table::ObTableLoadResultInfo &result_info);
   int get_status(table::ObTableLoadStatusType &status, int &error_code);
+private:
+  int commit_sql_statistics(const table::ObTableLoadSqlStatistics &sql_statistics);
 private:
   class MergeTaskProcessor;
   class MergeTaskCallback;

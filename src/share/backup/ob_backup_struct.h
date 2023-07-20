@@ -910,6 +910,7 @@ public:
   bool is_root_path_equal(const ObBackupDest &backup_dest) const;
   int is_backup_path_equal(const ObBackupDest &backup_dest, bool &is_equal) const;
   int get_backup_dest_str(char *buf, const int64_t buf_size) const;
+  int get_backup_dest_str_with_primary_attr(char *buf, const int64_t buf_size) const;
   int get_backup_path_str(char *buf, const int64_t buf_size) const;
   common::ObString get_root_path() const { return root_path_;}
   share::ObBackupStorageInfo *get_storage_info() const { return storage_info_;}
@@ -1703,73 +1704,6 @@ struct ObLogArchiveDestAtrr final
   int64_t piece_switch_interval_;
   int64_t lag_target_;
   ObLogArchiveDestState state_;
-};
-
-struct ObRestoreSourceServiceUser final
-{
-  ObRestoreSourceServiceUser();
-  ~ObRestoreSourceServiceUser() {}
-  void reset();
-  bool is_valid() const;
-  int assign(const ObRestoreSourceServiceUser &user);
-  char user_name_[OB_MAX_USER_NAME_LENGTH];
-  char tenant_name_[OB_MAX_ORIGINAL_NANE_LENGTH];
-  ObCompatibilityMode mode_;
-  uint64_t tenant_id_;
-  int64_t cluster_id_;
-  bool operator == (const ObRestoreSourceServiceUser &other) const;
-  TO_STRING_KV(K_(user_name), K_(tenant_name), K_(tenant_id), K_(cluster_id));
-};
-
-struct ObRestoreSourceServiceAttr final
-{
-  ObRestoreSourceServiceAttr();
-  ~ObRestoreSourceServiceAttr() {}
-  void reset();
-  int parse_service_attr_from_str(ObSqlString &str);
-  int do_parse_sub_service_attr(const char *sub_value);
-  int set_service_user_config(const char *user_tenant);
-  int set_service_user(const char *user, const char *tenant);
-  int set_service_tenant_id(const char *tenant_id);
-  int set_service_cluster_id(const char *cluster_id);
-  int set_service_compatibility_mode(const char *compatibility_mode);
-  // It need to convert password to encrypted password when pasre from log_restore_source config.
-  int set_service_passwd_to_encrypt(const char *passwd);
-  // There's no need to convert password to encrypted password when parse from __all_log_restore_source record.
-  int set_service_passwd_no_encrypt(const char *passwd);
-  int parse_ip_port_from_str(const char *buf, const char *delimiter);
-  bool is_valid() const;
-  bool service_user_is_valid() const;
-  bool service_host_is_valid() const;
-  bool service_password_is_valid() const;
-  int gen_config_items(common::ObIArray<BackupConfigItemPair> &items) const;
-  int gen_service_attr_str(char *buf, const int64_t buf_size) const;
-  int gen_service_attr_str(ObSqlString &str) const;
-  int get_ip_list_str_(char *buf, const int64_t buf_size) const;
-  int get_ip_list_str_(ObSqlString &str) const;
-  int get_user_str_(char *buf, const int64_t buf_size) const;
-  int get_user_str_(ObSqlString &str) const;
-  int get_password_str_(char *buf, const int64_t buf_size) const;
-  int get_password_str_(ObSqlString &str) const;
-  int get_tenant_id_str_(char *buf ,const int64_t buf_size) const;
-  int get_tenant_id_str_(ObSqlString &str) const;
-  int get_cluster_id_str_(char *buf, const int64_t buf_size) const;
-  int get_cluster_id_str_(ObSqlString &str) const;
-  int get_compatibility_mode_str_(char *buf, const int64_t buf_size) const;
-  int get_compatibility_mode_str_(ObSqlString &str) const;
-  int get_is_encrypted_str_(char *buf, const int64_t buf_size) const;
-  int get_is_encrypted_str_(ObSqlString &str) const;
-  int set_encrypt_password_key_(const char *encrypt_key);
-  int get_decrypt_password_key_(char *unencrypt_key, const int64_t buf_size) const;
-  // return the origion password
-  int get_password(char *passwd, const int64_t buf_size) const;
-  bool compare_addr_(common::ObArray<common::ObAddr> addr) const;
-  bool operator ==(const ObRestoreSourceServiceAttr &other) const;
-  int assign(const ObRestoreSourceServiceAttr &attr);
-  TO_STRING_KV(K_(addr), K_(user), K_(encrypt_passwd));
-  common::ObArray<common::ObAddr> addr_;
-  ObRestoreSourceServiceUser user_;
-  char encrypt_passwd_[OB_MAX_BACKUP_SERIALIZEKEY_LENGTH];
 };
 
 // trim '/' from right until encouter a non backslash charactor.

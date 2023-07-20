@@ -289,15 +289,18 @@ void PartProgressController::update_execution_time_(int64_t execution_time)
       types::uint128_t global_count_and_timeval;
       LOAD128(global_count_and_timeval, &global_count_and_timeval_);
       // Calculate the number of times the array was scanned during this interval and the average time to scan an array
-      uint64_t scan_cnt = global_count_and_timeval.lo - last_global_count_and_timeval_.lo;
-      uint64_t time = (global_count_and_timeval.hi - last_global_count_and_timeval_.hi) /scan_cnt;
+      const uint64_t scan_cnt = global_count_and_timeval.lo - last_global_count_and_timeval_.lo;
+      uint64_t time = 0;
+      if (0 != scan_cnt) {
+        time = (global_count_and_timeval.hi - last_global_count_and_timeval_.hi) / scan_cnt;
+      }
       // part count
-      int64_t part_cnt = ATOMIC_LOAD(&progress_cnt_);
+      const int64_t part_cnt = ATOMIC_LOAD(&progress_cnt_);
       // Record current statistics
       last_global_count_and_timeval_.lo = global_count_and_timeval.lo;
       last_global_count_and_timeval_.hi = global_count_and_timeval.hi;
 
-       _LOG_INFO("[STAT] [GET_MIN_PROGRESS] AVG_TIME=%ld PART_COUNT=%ld SCAN_COUNT=%ld",
+       _LOG_INFO("[STAT] [GET_MIN_PROGRESS] AVG_TIME=%lu LS_COUNT=%ld SCAN_COUNT=%lu",
                  time, part_cnt, scan_cnt);
     }
   }

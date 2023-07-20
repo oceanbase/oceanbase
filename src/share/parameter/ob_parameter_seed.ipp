@@ -519,9 +519,11 @@ DEF_STR_WITH_CHECKER(log_transport_compress_func, OB_TENANT_PARAMETER, "lz4_1.0"
 //         "control if enable log archive",
 //         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_INT(log_restore_concurrency, OB_TENANT_PARAMETER, "1", "[1, 100]",
-        "log restore concurrency, for both restore tenant and standby tenant. "
-        "Range: [1, 100] in integer",
+DEF_INT(log_restore_concurrency, OB_TENANT_PARAMETER, "0", "[0, 100]",
+        "log restore concurrency, for both the restore tenant and standby tenant. "
+        "If the value is default 0, the database will automatically calculate the number of restore worker threads "
+        "based on the tenant specification, which is tenant max_cpu; otherwise set the the worker count equals to the value."
+        "Range: [0, 100] in integer",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(log_archive_concurrency, OB_TENANT_PARAMETER, "0", "[0, 100]",
@@ -729,7 +731,7 @@ DEF_INT(rpc_memory_limit_percentage, OB_TENANT_PARAMETER, "0", "[0,100]",
          "maximum memory for rpc in a tenant, as a percentage of total tenant memory, "
          "and 0 means no limit to rpc memory",
         ObParameterAttr(Section::RPC, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(_max_rpc_packet_size, OB_CLUSTER_PARAMETER, "16MB", "[2M,2047M]",
+DEF_CAP(_max_rpc_packet_size, OB_CLUSTER_PARAMETER, "64MB", "[2M,2047M]",
         "the max rpc packet size when sending RPC or responding RPC results",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(standby_fetch_log_bandwidth_limit, OB_CLUSTER_PARAMETER, "0MB", "[0M,10000G]",
@@ -1484,6 +1486,10 @@ DEF_TIME(_balance_kill_transaction_threshold, OB_TENANT_PARAMETER, "100ms", "[1m
          "the time given to the transaction to execute when do balance"
          "before it will be killed. Range: [1ms, 60s]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_balance_wait_killing_transaction_end_threshold, OB_TENANT_PARAMETER, "100ms", "[10ms, 60s]",
+         "the threshold for waiting time after killing transactions until they end."
+         "Range: [10ms, 60s]",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_px_fast_reclaim, OB_CLUSTER_PARAMETER, "True",
         "Enable the fast reclaim function through PX tasks deteting for survival by detect manager. The default value is True.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1540,6 +1546,10 @@ DEF_BOOL(_enable_system_tenant_memory_limit, OB_CLUSTER_PARAMETER, "True",
          "specifies whether allowed to limit the memory of tenant 500",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 #endif
-DEF_TIME(_worker_long_stall_threshold, OB_TENANT_PARAMETER, "3ms", "[0ms,)",
+DEF_TIME(_stall_threshold_for_dynamic_worker, OB_TENANT_PARAMETER, "3ms", "[0ms,)",
         "threshold of dynamic worker works",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_optimizer_better_inlist_costing, OB_TENANT_PARAMETER, "False",
+        "enable improved costing of index access using in-list(s)",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -210,8 +210,12 @@ public:
   {}
   ~ObSharedBlockLinkIter() = default;
   int init(const ObMetaDiskAddr &head);
-  int get_next(ObIAllocator &allocator, char *&buf, int64_t &buf_len);
+  int reuse();
+  int get_next_block(ObIAllocator &allocator, char *&buf, int64_t &buf_len);
+  int get_next_macro_id(blocksstable::MacroBlockId &macro_id);
   TO_STRING_KV(K_(head), K_(cur), K_(is_inited));
+private:
+  int read_next_block(ObSharedBlockReadHandle &block_handle);
 private:
   ObMetaDiskAddr head_;
   ObMetaDiskAddr cur_;

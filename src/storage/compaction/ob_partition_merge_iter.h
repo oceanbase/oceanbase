@@ -76,7 +76,6 @@ public:
   virtual int open_curr_range(const bool for_rewrite, const bool for_compare = false) { UNUSEDx(for_rewrite, for_compare); return OB_NOT_SUPPORTED; }
   virtual bool is_macro_block_opened() const { return true; }
   virtual bool is_micro_block_opened() const { return true; }
-  virtual bool is_tx_table_valid() const;
   virtual OB_INLINE const blocksstable::ObDatumRow *get_curr_row() const { return curr_row_; }
   virtual int get_curr_range(blocksstable::ObDatumRange &range) const { UNUSED(range); return OB_NOT_SUPPORTED; }
   //TODO return ptr instead
@@ -230,12 +229,6 @@ public:
   virtual OB_INLINE bool is_multi_version_minor_iter() const { return true; }
   virtual bool is_curr_row_commiting() const;
   virtual int collect_tnode_dml_stat(storage::ObTransNodeDMLStat &tnode_stat) const override;
-  virtual void reset_first_multi_version_row_flag()
-  {
-    if (nullptr != curr_row_) {
-      const_cast<blocksstable::ObDatumRow *>(curr_row_)->mvcc_row_flag_.set_first_multi_version_row(false);
-    }
-  }
   INHERIT_TO_STRING_KV("ObPartitionMinorRowMergeIter", ObPartitionMergeIter, K_(ghost_row_count),
                        K_(check_committing_trans_compacted), K_(row_queue));
 protected:

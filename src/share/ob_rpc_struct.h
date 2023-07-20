@@ -8581,12 +8581,20 @@ public:
   TO_STRING_KV(K(tenant_id_), K(self_addr_), K(ls_array_));
 };
 
+enum LogMemberGCStat
+{
+  LOG_MEMBER_GC_STAT_INVALID = 0,
+  LOG_MEMBER_NORMAL_GC_STAT = 1,
+  LOG_LEARNER_IN_MIGRATING = 2,
+  LOG_MEMBER_GC_STAT_MAX = 256
+};
+
 struct ObQueryLSIsValidMemberResponse
 {
   OB_UNIS_VERSION(1);
 public:
   ObQueryLSIsValidMemberResponse() : ret_value_(common::OB_SUCCESS), ls_array_(),
-    candidates_status_(), ret_array_() {}
+    candidates_status_(), ret_array_(), gc_stat_array_() {}
   ~ObQueryLSIsValidMemberResponse() {}
   void reset()
   {
@@ -8594,13 +8602,15 @@ public:
     ls_array_.reset();
     candidates_status_.reset();
     ret_array_.reset();
+    gc_stat_array_.reset();
   }
 
   int ret_value_;
   share::ObLSArray ls_array_;
   common::ObSEArray<bool, 16> candidates_status_;
   common::ObSEArray<int, 16> ret_array_;
-  TO_STRING_KV(K(ret_value_), K(ls_array_), K(candidates_status_), K(ret_array_));
+  common::ObSEArray<LogMemberGCStat, 16> gc_stat_array_;
+  TO_STRING_KV(K(ret_value_), K(ls_array_), K(candidates_status_), K(ret_array_), K(gc_stat_array_));
 };
 
 struct ObSwitchSchemaResult

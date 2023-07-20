@@ -37,7 +37,7 @@ public:
     TablePtr() : table_(nullptr), hdl_idx_(-1) {}
     ~TablePtr() = default;
     bool is_valid() const { return nullptr != table_; }
-    TO_STRING_KV(KP_(table), K_(hdl_idx));
+    TO_STRING_KV(KPC_(table), K_(hdl_idx));
   public:
     ObITable *table_;
     int64_t hdl_idx_;

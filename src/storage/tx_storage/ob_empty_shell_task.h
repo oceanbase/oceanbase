@@ -66,6 +66,7 @@ private:
   // or 2. The migration status of dest_ls is OB_MIGRATION_STATUS_MIGRATE;
   // or 3. The replay decided scn of dest_ls is greater than the finish_scn of transfer_out_deleted tablet
   int check_tablet_empty_shell_for_primary_(
+      const ObTablet &tablet,
       const ObTabletCreateDeleteMdsUserData &user_data,
       bool &can, bool &need_retry);
   // Conditions for a tablet status is transfer_out_deleted to become an empty shell in standby database(1 or 2 or 3 or 4):
@@ -74,10 +75,11 @@ private:
   // 3. The migration status of dest_ls is OB_MIGRATION_STATUS_MIGRATE;
   // 4. The replay decided scn of dest_ls is greater than the finish_scn of transfer_out_deleted tablet
   int check_tablet_empty_shell_for_standby_(
+      const ObTablet &tablet,
       const ObTabletCreateDeleteMdsUserData &user_data,
       bool &can, bool &need_retry);
-  int check_can_become_empty_shell_(ObTablet *tablet, bool &can, bool &need_retry);
-  int check_transfer_out_deleted_tablet_(const ObTabletCreateDeleteMdsUserData &user_data, bool &can, bool &need_retry);
+  int check_can_become_empty_shell_(const ObTablet &tablet, bool &can, bool &need_retry);
+  int check_transfer_out_deleted_tablet_(const ObTablet &tablet, const ObTabletCreateDeleteMdsUserData &user_data, bool &can, bool &need_retry);
 
 public:
   obsys::ObRWLock wait_lock_;

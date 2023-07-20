@@ -35,6 +35,7 @@
 #include "ob_log_progress_info.h"               // ProgressInfo
 #include "ob_log_fetcher_start_parameters.h"    // ObLogFetcherStartParameters
 #include "ob_log_fetcher_err_handler.h"         // IObLogErrHandler
+#include "logservice/ob_log_external_storage_handler.h" // ObLogExternalStorageHandler
 
 namespace oceanbase
 {
@@ -131,6 +132,8 @@ public:
   virtual int get_log_route_service(logservice::ObLogRouteService *&log_route_service) = 0;
 
   virtual int get_large_buffer_pool(archive::LargeBufferPool *&large_buffer_pool) = 0;
+
+  virtual int get_log_ext_handler(logservice::ObLogExternalStorageHandler *&log_ext_handler) = 0;
 
   virtual int get_fetcher_config(const ObLogFetcherConfig *&cfg) = 0;
 
@@ -245,6 +248,8 @@ public:
 
   virtual int get_large_buffer_pool(archive::LargeBufferPool *&large_buffer_pool);
 
+  virtual int get_log_ext_handler(logservice::ObLogExternalStorageHandler *&log_ext_handler);
+
   virtual int get_fetcher_config(const ObLogFetcherConfig *&cfg);
 
   virtual int check_progress(
@@ -275,39 +280,40 @@ private:
   };
 
 private:
-  bool                          is_inited_;
-  LogFetcherUser                log_fetcher_user_;
-  int64_t                       cluster_id_;
-  uint64_t                      source_tenant_id_;
-  uint64_t                      self_tenant_id_;
-  const ObLogFetcherConfig      *cfg_;
+  bool                                     is_inited_;
+  LogFetcherUser                           log_fetcher_user_;
+  int64_t                                  cluster_id_;
+  uint64_t                                 source_tenant_id_;
+  uint64_t                                 self_tenant_id_;
+  const ObLogFetcherConfig                 *cfg_;
 
-  bool                          is_loading_data_dict_baseline_data_;
-  ClientFetchingMode            fetching_mode_;
-  ObBackupPathString            archive_dest_;
-  archive::LargeBufferPool      large_buffer_pool_;
-  ObILogFetcherLSCtxAddInfoFactory *ls_ctx_add_info_factory_;
-  IObLogErrHandler              *err_handler_;
+  bool                                     is_loading_data_dict_baseline_data_;
+  ClientFetchingMode                       fetching_mode_;
+  ObBackupPathString                       archive_dest_;
+  archive::LargeBufferPool                 large_buffer_pool_;
+  logservice::ObLogExternalStorageHandler  log_ext_handler_;
+  ObILogFetcherLSCtxAddInfoFactory         *ls_ctx_add_info_factory_;
+  IObLogErrHandler                         *err_handler_;
 
-  ObLogLSFetchMgr               ls_fetch_mgr_;                  // Fetch Log Task Manager
-  PartProgressController        progress_controller_;           // Process Controller
+  ObLogLSFetchMgr                          ls_fetch_mgr_;                  // Fetch Log Task Manager
+  PartProgressController                   progress_controller_;           // Process Controller
 
   // Function Modules
-  ObLogRpc                      rpc_;
-  logservice::ObLogRouteService log_route_service_;
-  ObLogStartLSNLocator          start_lsn_locator_;
-  ObLogFetcherIdlePool          idle_pool_;
-  ObLogFetcherDeadPool          dead_pool_;
-  ObLSWorker                    stream_worker_;
+  ObLogRpc                                 rpc_;
+  logservice::ObLogRouteService            log_route_service_;
+  ObLogStartLSNLocator                     start_lsn_locator_;
+  ObLogFetcherIdlePool                     idle_pool_;
+  ObLogFetcherDeadPool                     dead_pool_;
+  ObLSWorker                               stream_worker_;
   // TODO
-  ObFsContainerMgr              fs_container_mgr_;
+  ObFsContainerMgr                         fs_container_mgr_;
 
-  volatile bool                 stop_flag_ CACHE_ALIGNED;
+  volatile bool                            stop_flag_ CACHE_ALIGNED;
 
   // stop flag
-  bool                          paused_ CACHE_ALIGNED;
-  int64_t                       pause_time_ CACHE_ALIGNED;
-  int64_t                       resume_time_ CACHE_ALIGNED;
+  bool                                     paused_ CACHE_ALIGNED;
+  int64_t                                  pause_time_ CACHE_ALIGNED;
+  int64_t                                  resume_time_ CACHE_ALIGNED;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogFetcher);

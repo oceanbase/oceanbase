@@ -66,25 +66,10 @@ int ObAllVirtualTabletBufferInfo::inner_get_next_row(common::ObNewRow *&row)
 int ObAllVirtualTabletBufferInfo::get_tablet_pool_infos()
 {
   int ret = OB_SUCCESS;
-  buffer_infos_.reuse();
   ObMemAttr attr(MTL_ID(), "TabletBuffer");
   buffer_infos_.set_attr(attr);
-  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  if (ObTabletPoolType::TP_MAX == pool_type_) {
-    pool_type_ = ObTabletPoolType::TP_NORMAL;
-  } else if (ObTabletPoolType::TP_NORMAL == pool_type_) {
-    pool_type_ = ObTabletPoolType::TP_LARGE;
-  } else {
-    pool_type_ = ObTabletPoolType::TP_MAX;
-    ret = OB_ITER_END;
-  }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(t3m->get_tablet_buffer_infos(pool_type_, buffer_infos_))) {
-    SERVER_LOG(WARN, "fail to get tablet buffer infos", K_(pool_type));
-  } else {
-    index_ = 0;
+  if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->get_tablet_buffer_infos(buffer_infos_))) {
+    SERVER_LOG(WARN, "fail to get tablet buffer infos", K(ret));
   }
   return ret;
 }
@@ -101,35 +86,26 @@ bool ObAllVirtualTabletBufferInfo::is_need_process(uint64_t tenant_id)
 
 int ObAllVirtualTabletBufferInfo::process_curr_tenant(common::ObNewRow *&row)
 {
-  /**
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cur_row_.cells_)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(ERROR, "cur row cell is nullptr", K(ret));
+  } else if (0 == buffer_infos_.size() && OB_FAIL(get_tablet_pool_infos())) {
+    SERVER_LOG(WARN, "fail to get tablet pool infos", K(ret));
   } else if (buffer_infos_.size() <= index_) {
-    if (OB_FAIL(get_tablet_pool_infos())) {
-      if (OB_ITER_END != ret) {
-        SERVER_LOG(WARN, "fail to get tablet pool infos", K(ret));
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
+    ret = OB_ITER_END;
   } else if (OB_FAIL(gen_row(buffer_infos_[index_], row))) {
     SERVER_LOG(WARN, "fail to gen_row", K(ret));
   } else {
     index_++;
   }
   return ret;
-  */
-  UNUSED(row);
-  return OB_ITER_END;
 }
 
 void ObAllVirtualTabletBufferInfo::release_last_tenant()
 {
   buffer_infos_.reset();
+  index_ = 0;
 }
 
 int ObAllVirtualTabletBufferInfo::gen_row(

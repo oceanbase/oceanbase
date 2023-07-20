@@ -22,7 +22,7 @@
 
 namespace oceanbase
 {
-namespace observer
+namespace storage
 {
 class ObSafeDestroyTask
 {
@@ -154,51 +154,37 @@ int ObSafeDestroyTaskQueue::for_each(Function &fn)
   return ret;
 }
 
-class ObSafeDestroyThread
+class ObSafeDestroyHandler
 {
   const static int64_t TASK_SCHEDULER_INTERVAL = 2 * 1000 * 1000; // 2_s
 public:
-  ObSafeDestroyThread();
-  ~ObSafeDestroyThread();
+  ObSafeDestroyHandler();
+  ~ObSafeDestroyHandler();
   int init();
   int start();
   int stop();
   void wait();
   void destroy();
+  int handle();
   // add a task into the thread
   // task will be execute every TASK_SCHEDULER_INTERVAL
   int push(ObSafeDestroyTask &task);
-  static OB_INLINE ObSafeDestroyThread &get_instance();
+  static OB_INLINE ObSafeDestroyHandler &get_instance();
   // For each.
   // Call fn on every element of this task queue.
   // fn: bool operator()(const Task &task);
   // If operator() returns false, for_each() would stop immediately.
   template <typename Function>
   int for_each(Function &fn);
-
-  class SafeDestroyTimerTask : public common::ObTimerTask
-  {
-  public:
-    SafeDestroyTimerTask(ObSafeDestroyTaskQueue &queue)
-      : queue_(queue)
-    {}
-    void runTimerTask()
-    { queue_.loop(); }
-  private:
-    ObSafeDestroyTaskQueue &queue_;
-  };
 private:
   bool is_inited_;
   // push the safe destroy task into the queue.
   ObSafeDestroyTaskQueue queue_;
-  // timer used to process the check task
-  common::ObTimer timer_;
-  // process the safe to destroy task at queue_;
-  SafeDestroyTimerTask check_task_;
+  int64_t last_process_timestamp_;
 };
 
 template <typename Function>
-int ObSafeDestroyThread::for_each(Function &fn)
+int ObSafeDestroyHandler::for_each(Function &fn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -212,13 +198,6 @@ int ObSafeDestroyThread::for_each(Function &fn)
   return ret;
 }
 
-OB_INLINE ObSafeDestroyThread &ObSafeDestroyThread::get_instance()
-{
-  static ObSafeDestroyThread instance;
-  return instance;
-}
-
-#define SAFE_DESTROY_INSTANCE (::oceanbase::observer::ObSafeDestroyThread::get_instance())
 
 } // observer
 } // oceanbase

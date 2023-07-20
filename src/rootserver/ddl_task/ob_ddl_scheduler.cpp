@@ -449,7 +449,7 @@ int ObRedefCallback::modify_info(ObTableRedefinitionTask &redef_task,
           if (OB_ENTRY_NOT_EXIST == ret) {
             bool exist = false;
             if (OB_FAIL(ObDDLTaskRecordOperator::check_task_id_exist(*GCTX.sql_proxy_, redef_task.get_tenant_id(), redef_task.get_task_id(), exist))) {
-              LOG_WARN("check task id exist fail", K(ret), K(redef_task.get_tenant_id()), K(task_id));
+              LOG_WARN("check task id exist fail", K(ret), K(redef_task.get_tenant_id()));
             } else {
               if (exist) {
                 ret = OB_EAGAIN;
@@ -823,7 +823,7 @@ void ObDDLScheduler::run1()
       }
       if (do_idle) {
         first_retry_task = nullptr;
-        idler_.idle(100 * 1000L);
+        idler_.idle(10 * 1000L);
       }
     }
   }

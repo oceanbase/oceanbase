@@ -343,7 +343,7 @@ int ObMediumCompactionScheduleFunc::get_max_reserved_snapshot(int64_t &max_reser
   } else if (FALSE_IT(max_merged_snapshot = wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/)->get_snapshot_version())) {
   } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr*)->get_min_reserved_snapshot(
       tablet->get_tablet_meta().tablet_id_, max_merged_snapshot, min_reserved_snapshot))) {
-    LOG_WARN("failed to get multi version from freeze info mgr", K(ret), K(table_id));
+    LOG_WARN("failed to get multi version from freeze info mgr", K(ret), K(tablet->get_tablet_meta().tablet_id_));
   } else {
     max_reserved_snapshot = MAX(ls_.get_min_reserved_snapshot(), min_reserved_snapshot);
   }

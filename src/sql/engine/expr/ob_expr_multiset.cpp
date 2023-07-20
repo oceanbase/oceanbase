@@ -104,6 +104,7 @@ int ObExprMultiSet::calc_result_type2(ObExprResType &type,
         CK (cnt < ca->get_actual_count()); \
         if (OB_SUCC(ret)) { \
           elem = static_cast<ObObj *>(ca->get_data()) + i; \
+          dst[cnt + offset].set_null();       \
           if (OB_NOT_NULL(elem)) { \
             if (elem->is_pl_extend() &&  \
                 elem->get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) { \
@@ -250,6 +251,7 @@ int ObExprMultiSet::calc_ms_one_distinct(common::ObIAllocator *coll_allocator,
         LOG_WARN("allocate result obobj array failed, size is: ", K(res_cnt));
       } else {
         for (int64_t i = 0; i < res_cnt; ++i) {
+          data_arr[i].set_null();
           if (objs[i].is_pl_extend() &&
               objs[i].get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
             if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*coll_allocator, objs[i], data_arr[i], true))) {
@@ -343,6 +345,7 @@ int ObExprMultiSet::calc_ms_all_impl(common::ObIAllocator *coll_allocator,
         #define COPY_ELEM(iscopy) \
         do{ \
           if (iscopy) { \
+            data_arr[index].set_null();  \
             if (elem->is_pl_extend() && elem->get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) { \
               OZ (pl::ObUserDefinedType::deep_copy_obj(*coll_allocator, *elem, data_arr[index], true)); \
             } else {  \

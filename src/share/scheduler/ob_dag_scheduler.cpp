@@ -1306,7 +1306,7 @@ ObTenantDagWorker::ObTenantDagWorker()
     check_period_(0),
     last_check_time_(0),
     function_type_(0),
-    group_id_(INT64_MAX),
+    group_id_(0),
     tg_id_(-1),
     is_inited_(false)
 {
@@ -1367,7 +1367,7 @@ void ObTenantDagWorker::destroy()
     check_period_ = 0;
     last_check_time_ = 0;
     function_type_ = 0;
-    group_id_ = INT64_MAX;
+    group_id_ = 0;
     self_ = NULL;
     is_inited_ = false;
     TG_DESTROY(tg_id_);
@@ -1401,11 +1401,11 @@ int ObTenantDagWorker::set_dag_resource(const uint64_t group_id)
       LOG_WARN("fail to get group id by function", K(ret), K(MTL_ID()), K(function_type_), K(consumer_group_id));
     }
     if (OB_SUCC(ret) && consumer_group_id != group_id_) {
-      if (OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_group(MTL_ID(), group_id))) {
+      if (OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_group(MTL_ID(), consumer_group_id))) {
         LOG_WARN("bind back thread to group failed", K(ret), K(GETTID()), K(MTL_ID()), K(group_id));
       } else {
-        ATOMIC_SET(&group_id_, group_id);
-        THIS_WORKER.set_group_id(static_cast<int32_t>(group_id));
+        ATOMIC_SET(&group_id_, consumer_group_id);
+        THIS_WORKER.set_group_id(static_cast<int32_t>(consumer_group_id));
       }
     }
   }
@@ -1649,7 +1649,9 @@ void ObTenantDagScheduler::destroy()
 
     destroy_all_workers();
     is_inited_ = false; // avoid alloc dag/dag_net
+    WEAK_BARRIER();
     int tmp_ret = OB_SUCCESS;
+    int64_t abort_dag_cnt = 0;
     for (int64_t j = 0; j < DAG_LIST_MAX; ++j) {
       for (int64_t i = 0; i < PriorityDagList::PRIO_CNT; ++i) {
         ObIDag *head = dag_list_[j].get_head(i);
@@ -1666,10 +1668,12 @@ void ObTenantDagScheduler::destroy()
           }
           if (OB_TMP_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, *cur_dag, tmp_dag_net))) {
             STORAGE_LOG_RET(WARN, tmp_ret, "failed to abort dag", K(tmp_ret), KPC(cur_dag));
+          } else {
+            ++abort_dag_cnt;
           }
           cur_dag = next;
         } // end of while
-      }
+      } // end of prio loop
       dag_list_[j].reset();
     } // end of for
     blocking_dag_net_list_.reset();
@@ -1692,7 +1696,7 @@ void ObTenantDagScheduler::destroy()
     if (dag_net_id_map_.created()) {
       dag_net_id_map_.destroy();
     }
-
+    COMMON_LOG(INFO, "ObTenantDagScheduler before allocator destroyed", K(abort_dag_cnt), K(allocator_.used()), K(ha_allocator_.used()));
     allocator_.reset();
     ha_allocator_.reset();
     scheduler_sync_.destroy();
@@ -1872,10 +1876,7 @@ int ObTenantDagScheduler::add_dag(
 {
   int ret = OB_SUCCESS;
 
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
-  } else if (OB_ISNULL(dag)) {
+  if (OB_ISNULL(dag)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid argument", KP(dag));
   } else if (OB_UNLIKELY(!dag->is_valid())) {
@@ -2826,6 +2827,9 @@ int ObTenantDagScheduler::loop_blocking_dag_net_list()
       } else {
         tmp = cur;
         cur = cur->get_next();
+        if (OB_TMP_FAIL(tmp->clear_dag_net_ctx())) {
+          COMMON_LOG(ERROR, "failed to clear dag net ctx", K(tmp));
+        }
         if (!blocking_dag_net_list_.remove(tmp)) {
           COMMON_LOG(WARN, "failed to remove dag_net from blocking_dag_net_list", K(tmp));
           ob_abort();

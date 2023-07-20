@@ -152,4 +152,7 @@ TG_DEF(InfoPoolResize, InfoPoolResize, TIMER)
 TG_DEF(MinorScan, MinorScan, TIMER)
 TG_DEF(MajorScan, MajorScan, TIMER)
 TG_DEF(TenantTransferService, TransferSrv, REENTRANT_THREAD_POOL, ThreadCountPair(4 ,1))
+TG_DEF(SvrStartupHandler, SvrStartupHandler, QUEUE_THREAD,
+   ThreadCountPair(observer::ObServerStartupTaskHandler::get_thread_num(), observer::ObServerStartupTaskHandler::get_thread_num()),
+   observer::ObServerStartupTaskHandler::MAX_QUEUED_TASK_NUM)
 #endif

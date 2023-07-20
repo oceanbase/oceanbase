@@ -200,6 +200,9 @@ int ObTextStringIter::get_outrow_lob_full_data(ObIAllocator *allocator /*nullptr
       if (!param.ls_id_.is_valid() || !param.tablet_id_.is_valid()) {
         ret = OB_INVALID_ARGUMENT;
         COMMON_LOG(WARN, "Lob: invalid param.", K(ret), K(param));
+      } else if (param.byte_size_ == 0) {
+        // empty lob
+        ctx_->content_byte_len_ = 0;
       } else if (param.byte_size_ < 0 || param.len_ == 0) {
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN,"Lob: calc byte size is negative.", K(ret), K(param));
@@ -403,6 +406,8 @@ int ObTextStringIter::get_first_block(ObString &str)
       if (!param.ls_id_.is_valid() || !param.tablet_id_.is_valid()) {
         ret = OB_INVALID_ARGUMENT;
         COMMON_LOG(WARN, "Lob: invalid param.", K(ret), K(param));
+      } else if (param.byte_size_ == 0) {
+        state_ = TEXTSTRING_ITER_END;
       } else if (param.byte_size_ < 0 || param.len_ == 0) {
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN,"Lob: calc byte size is negative.", K(ret), K(param));

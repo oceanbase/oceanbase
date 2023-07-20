@@ -129,7 +129,8 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array,
     }
     // init task_scheduler_
     else if (OB_ISNULL(task_scheduler_ = OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_),
-                                                 ctx_->param_.session_count_, allocator_))) {
+                                                 ctx_->param_.session_count_,
+                                                 ctx_->param_.table_id_, "Coordinator"))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
     }

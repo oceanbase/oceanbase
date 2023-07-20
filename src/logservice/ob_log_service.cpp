@@ -495,6 +495,17 @@ int ObLogService::get_palf_disk_usage(int64_t &used_size_byte, int64_t &total_si
   return ret;
 }
 
+int ObLogService::get_palf_stable_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    ret = palf_env_->get_stable_disk_usage(used_size_byte, total_size_byte);
+  }
+  return ret;
+}
+
 int ObLogService::update_palf_options_except_disk_usage_limit_size()
 {
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));

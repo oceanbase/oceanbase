@@ -108,8 +108,8 @@ public:
   ObTxRetainCtxMgr() : retain_ctx_list_(reserve_allocator_) { reset(); }
   void reset();
 
-  void *alloc_object(const int64_t size);
-  void free_object(void *ptr);
+  static void *alloc_object(const int64_t size);
+  static void free_object(void *ptr);
 
   int push_retain_ctx(ObIRetainCtxCheckFunctor *retain_func, int64_t timeout_us);
   int try_gc_retain_ctx(storage::ObLS *ls);

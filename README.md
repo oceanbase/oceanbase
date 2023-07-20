@@ -3,6 +3,7 @@
         <img alt="OceanBase Logo" src="images/logo.svg" width="50%" />
     </a>
 </p>
+
 <p align="center">
     <a href="https://github.com/oceanbase/oceanbase/blob/master/LICENSE">
         <img alt="license" src="https://img.shields.io/badge/license-MulanPubL--2.0-blue" />
@@ -16,7 +17,7 @@
     <a href="https://github.com/oceanbase/oceanbase">
         <img alt="forks" src="https://img.shields.io/badge/dynamic/json?color=blue&label=forks&query=forks&url=https%3A%2F%2Fapi.github.com%2Frepos%2Foceanbase%2Foceanbase" />
     </a>
-    <a href="https://en.oceanbase.com/docs/community-observer-en-10000000000829617">
+    <a href="https://en.oceanbase.com/docs/oceanbase-database">
         <img alt="English doc" src="https://img.shields.io/badge/docs-English-blue" />
     </a>
     <a href="https://www.oceanbase.com/docs/oceanbase-database-cn">
@@ -33,30 +34,41 @@
     </a>
 </p>
 
+English | [中文版](README_CN.md)
+
 **OceanBase Database** is a distributed relational database. It is developed entirely by Ant Group. OceanBase Database is built on a common server cluster. Based on the [Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) protocol and its distributed structure, OceanBase Database provides high availability and linear scalability. OceanBase Database is not dependent on specific hardware architectures.
 
 # Key features
 
-* **Transparent Scalability** : An OceanBase cluster can be scaled out to 1,500 nodes transparently, handling petabytes of data and a trillion rows of records.
-* **Ultra-fast Performance** : The only distributed database that has refreshed both TPC-C record, at 707 million tmpC, and TPC-H record, at 15.26 million QphH @30000GB.
-* **Real-time Operational Analytics** : A unified system for both transactional and real-time operational analytics workloads.
-* **Continuous Availability** : OceanBase Database adopts Paxos Consensus algorithm to achieve Zero RPO and less than 8 seconds of RTO.
-* **MySQL Compatible** : OceanBase Database is highly compatible with MySQL, which ensures that zero or few modification is needed for migration.
-* **Cost Effeciency** : The cutting-edge compression technology saves 70%-90% of storage costs without compromising performance. The multi-tenancy architecture achieves higher resource utilization.
+- **Transparent Scalability**
+
+    An OceanBase cluster can be scaled out to 1,500 nodes transparently, handling petabytes of data and a trillion rows of records.
+
+- **Ultra-fast Performance**
+    
+    The only distributed database that has refreshed both TPC-C record, at 707 million tmpC, and TPC-H record, at 15.26 million QphH @30000GB.
+
+- **Real-time Operational Analytics**
+    
+    A unified system for both transactional and real-time operational analytics workloads.
+
+- **Continuous Availability**
+    
+    OceanBase Database adopts Paxos Consensus algorithm to achieve Zero RPO and less than 8 seconds of RTO.
+
+- **MySQL Compatible**
+     
+     OceanBase Database is highly compatible with MySQL, which ensures that zero or few modification is needed for migration.
+
+- **Cost Effeciency**
+
+    The cutting-edge compression technology saves 70%-90% of storage costs without compromising performance. The multi-tenancy architecture achieves higher resource utilization.
 
 See also [key features](https://en.oceanbase.com/product/opensource) for more details.
 
-# System architecture
-
-![image.png](https://cdn.nlark.com/yuque/0/2022/png/25820454/1667369873624-c1707034-471a-4f79-980f-6d1760dac8eb.png)
-
-[Learn More](https://en.oceanbase.com/docs/community-observer-en-10000000000829641)
-
 # Quick start
 
-## How to deploy
-
-### 🔥 Deploy by all-in-one
+## 🔥 Start with all-in-one
 
 You can quickly deploy a standalone OceanBase Database to experience with the following commands.
 
@@ -71,36 +83,26 @@ source ~/.oceanbase-all-in-one/bin/env.sh
 obd demo
 ```
 
-### 🐳 Deploy by docker
+## 🐳 Start with docker
 
-1. Pull OceanBase image (optional):
-
-    ```shell
-    docker pull oceanbase/oceanbase-ce
-    ```
-
-2. Start an OceanBase Database instance:
+1. Start an OceanBase Database instance:
 
     ```shell
-    # Deploy an instance with the maximum specifications supported by the container.
-    docker run -p 2881:2881 --name obstandalone -e MINI_MODE=0 -d oceanbase/oceanbase-ce
-    # Or deploy a mini standalone instance.
-    docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+    # Deploy a mini standalone instance.
+    docker run -p 2881:2881 --name oceanbase-ce -e MINI_MODE=1 -d oceanbase/oceanbase-ce
     ```
 
-3. Connect to the OceanBase Database instance:
+2. Connect to the OceanBase Database instance:
 
     ```shell
-    docker exec -it obstandalone ob-mysql sys # Connect to the root user of the sys tenant.
-    docker exec -it obstandalone ob-mysql root # Connect to the root user of the test tenant.
-    docker exec -it obstandalone ob-mysql test # Connect to the test user of the test tenant.
+    docker exec -it oceanbase-ce ob-mysql sys # Connect to the root user of the sys tenant.
     ```
 
-See also [Quick experience](https://en.oceanbase.com/docs/community-observer-en-10000000000829647) or [Quick Start (Simplified Chinese)](https://www.oceanbase.com/docs/common-oceanbase-database-cn-10000000001692850) for more details.
+See also [Quick experience](https://en.oceanbase.com/docs/community-observer-en-10000000000829647) or [Quick Start (Simplified Chinese)](https://open.oceanbase.com/quickStart) for more details.
 
-## How to build
+## 👨‍💻 Start developing
 
-See [OceanBase Developer Document](https://github.com/oceanbase/oceanbase/wiki/Compile) to learn how to compile and deploy a munually compiled observer.
+See [OceanBase Developer Document](https://github.com/oceanbase/oceanbase/wiki/Compile) to learn how to compile and deploy a manually compiled observer.
 
 # Roadmap
 
@@ -108,9 +110,15 @@ For future plans, see [Roadmap 2023](https://github.com/oceanbase/oceanbase/issu
 
 # Case study
 
-OceanBase makes data management and use easier with technology innovation. It has been serving more than 400 customers upgrade their database from different industries, including Financial Services, Telecom, Retail, Internet and more.
+OceanBase has been serving more than 400 customers upgrade their database from different industries, including Financial Services, Telecom, Retail, Internet and more.
 
 See also [success stories](https://en.oceanbase.com/customer/home) and [Who is using OceanBase](https://github.com/oceanbase/oceanbase/issues/1301) for more details.
+
+# System architecture
+
+![oceanbase architecture](https://cdn.nlark.com/yuque/0/2022/png/25820454/1667369873624-c1707034-471a-4f79-980f-6d1760dac8eb.png)
+
+[Learn More](https://en.oceanbase.com/docs/community-observer-en-10000000000829641)
 
 # Contributing
 

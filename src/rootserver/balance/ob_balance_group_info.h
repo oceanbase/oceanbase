@@ -63,6 +63,7 @@ class ObBalanceGroupInfo final
 public:
   explicit ObBalanceGroupInfo(const ObBalanceGroupID &id, common::ObIAllocator &alloc) :
       id_(id),
+      last_part_group_uid_(OB_INVALID_ID),
       alloc_(alloc),
       part_groups_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(alloc, "PartGroupArray"))
   {
@@ -79,14 +80,14 @@ public:
   //
   // @param [in] part                         target partition info which will be added
   // @param [in] data_size                    partition data size
-  // @param [in] need_create_new_part_group   whether to create new partition group
+  // @param [in] part_group_uid               partition group unique id
   //
   // @return OB_SUCCESS         success
   // @return OB_ENTRY_EXIST     no partition group found
   // @return other              fail
   int append_part(share::ObTransferPartInfo &part,
       const int64_t data_size,
-      const bool need_create_new_part_group = false);
+      const uint64_t part_group_uid);
 
   // pop partition groups from back of array, and push back into part list
   //
@@ -100,10 +101,11 @@ public:
   TO_STRING_KV(K_(id), "part_group_count", part_groups_.count());
 
 private:
-  int create_new_part_group_();
+  int create_new_part_group_if_needed_(const uint64_t part_group_uid);
 
 private:
   ObBalanceGroupID id_;
+  int64_t last_part_group_uid_; // unique id of the last part group in part_groups_
   ObIAllocator &alloc_; // allocator for ObTransferPartGroup
   // Partition Group Array
   common::ObArray<ObTransferPartGroup *> part_groups_;

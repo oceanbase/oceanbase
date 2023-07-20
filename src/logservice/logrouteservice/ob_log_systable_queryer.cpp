@@ -304,7 +304,8 @@ int ObLogSysTableQueryer::do_query_(const uint64_t tenant_id,
     ret = ERRSIM_FETCH_LOG_SYS_QUERY_FAILED;
     LOG_WARN("errsim do query error", K(ERRSIM_FETCH_LOG_SYS_QUERY_FAILED));
   }
-  if (OB_NOT_NULL(err_handler_) && (-ER_CONNECT_FAILED == ret || -ER_ACCESS_DENIED_ERROR == ret)) {
+  if (OB_NOT_NULL(err_handler_) && (-ER_CONNECT_FAILED == ret || -ER_ACCESS_DENIED_ERROR == ret
+    || OB_SERVER_IS_INIT == ret || OB_TENANT_NOT_EXIST == ret || OB_TENANT_NOT_IN_SERVER == ret)) {
     err_handler_->handle_error(share::SYS_LS, logfetcher::IObLogErrHandler::ErrType::FETCH_LOG, trace_id,
       palf::LSN(palf::LOG_INVALID_LSN_VAL)/*no need to pass lsn*/, ret, "%s");
   }
@@ -371,7 +372,13 @@ int ObLogSysTableQueryer::parse_record_from_row_(common::sqlclient::ObMySQLResul
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid server address", K(ip), K(port));
   } else {
-    common::ObZoneType zone_type = str_to_zone_type(zone_type_str.ptr());
+    common::ObZoneType zone_type;
+    if (nullptr == zone_type_str.ptr()) {
+      // After the ObServer of the primary database crashes and restarts, the Zone Type may become an invalid value.
+      // It can be ignored to avoid errors.
+    } else {
+      zone_type = str_to_zone_type(zone_type_str.ptr());
+    }
 
     if (OB_FAIL(units_record.init(server, zone, zone_type, region))) {
       LOG_ERROR("units_record init failed", KR(ret), K(server), K(zone), K(zone_type), K(region));

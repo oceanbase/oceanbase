@@ -18,6 +18,11 @@
 #include "lib/time/ob_time_utility.h"
 #include "lib/utility/ob_defer.h"
 #include "logservice/palf/election/utils/election_common_define.h"
+#define private public
+#define protected public
+#include "share/config/ob_server_config.h"
+#undef private
+#undef protected
 
 namespace oceanbase
 {
@@ -79,6 +84,8 @@ bool ObSimpleClusterTestBase::is_started_ = false;
 std::string ObSimpleClusterTestBase::env_prefix_;
 std::string ObSimpleClusterTestBase::curr_dir_;
 bool ObSimpleClusterTestBase::enable_env_warn_log_ = false;
+const char *ObSimpleClusterTestBase::UNIT_BASE ="box_ym_";
+const char *ObSimpleClusterTestBase::POOL_BASE ="pool_ym_";
 
 ObSimpleClusterTestBase::ObSimpleClusterTestBase(const std::string &env_prefix,
                                                  const char *log_disk_size,
@@ -156,7 +163,6 @@ int ObSimpleClusterTestBase::start()
   GCONF.enable_record_trace_log = false;
   GMEMCONF.set_server_memory_limit(10 * 1024  * 1024 * 1024ul);
 
-
   int32_t log_level;
   bool change_log_level = false;
   if (enable_env_warn_log_) {
@@ -223,8 +229,8 @@ int ObSimpleClusterTestBase::create_tenant(const char *tenant_name,
   {
     ObSqlString sql;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.assign_fmt("create resource unit box_ym_%s max_cpu 8, memory_size '%s', log_disk_size='%s';",
-                                      tenant_name, memory_size, log_disk_size))) {
+    } else if (OB_FAIL(sql.assign_fmt("create resource unit %s%s max_cpu 2, memory_size '%s', log_disk_size='%s';",
+                                      UNIT_BASE, tenant_name, memory_size, log_disk_size))) {
       SERVER_LOG(WARN, "create_tenant", K(ret));
     } else if (OB_FAIL(sql_proxy.write(sql.ptr(), affected_rows))) {
       SERVER_LOG(WARN, "create_tenant", K(ret));
@@ -233,7 +239,7 @@ int ObSimpleClusterTestBase::create_tenant(const char *tenant_name,
   {
     ObSqlString sql;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.assign_fmt("create resource pool pool_ym_%s unit = 'box_ym_%s', unit_num = 1, zone_list = ('zone1');", tenant_name, tenant_name))) {
+    } else if (OB_FAIL(sql.assign_fmt("create resource pool %s%s unit = '%s%s', unit_num = 1, zone_list = ('zone1');", POOL_BASE, tenant_name, UNIT_BASE, tenant_name))) {
       SERVER_LOG(WARN, "create_tenant", K(ret));
     } else if (OB_FAIL(sql_proxy.write(sql.ptr(), affected_rows))) {
       SERVER_LOG(WARN, "create_tenant", K(ret));
@@ -242,7 +248,7 @@ int ObSimpleClusterTestBase::create_tenant(const char *tenant_name,
   {
     ObSqlString sql;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.assign_fmt("create tenant %s replica_num = 1, primary_zone='zone1', resource_pool_list=('pool_ym_%s') set ob_tcp_invited_nodes='%%'%s", tenant_name, tenant_name, oracle_mode ? ", ob_compatibility_mode='oracle'" : ";"))) {
+    } else if (OB_FAIL(sql.assign_fmt("create tenant %s replica_num = 1, primary_zone='zone1', resource_pool_list=('%s%s') set ob_tcp_invited_nodes='%%'%s", tenant_name, POOL_BASE, tenant_name, oracle_mode ? ", ob_compatibility_mode='oracle'" : ";"))) {
       SERVER_LOG(WARN, "create_tenant", K(ret));
     } else if (OB_FAIL(sql_proxy.write(sql.ptr(), affected_rows))) {
       SERVER_LOG(WARN, "create_tenant", K(ret));
@@ -251,7 +257,7 @@ int ObSimpleClusterTestBase::create_tenant(const char *tenant_name,
   if (change_log_level) {
     OB_LOGGER.set_log_level(log_level);
   }
-  SERVER_LOG(INFO, "create tenant finish", K(ret));
+  SERVER_LOG(INFO, "create tenant finish", K(ret), K(tenant_name));
   return ret;
 }
 

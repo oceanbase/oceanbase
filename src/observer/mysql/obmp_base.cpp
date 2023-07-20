@@ -543,11 +543,6 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
                                     &allocator,
                                     &session))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
-        } else if (value.is_user_defined_sql_type()
-                   && OB_FAIL(ObQueryDriver::process_sql_udt_results(value,
-                                    &allocator,
-                                    &session))) {
-          LOG_WARN("convert udt to client format failed", K(ret), K(value.get_udt_subschema_id()));
         }
       }
     }

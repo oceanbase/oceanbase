@@ -75,6 +75,7 @@ ob_unittest_observer(test_ob_detect_manager_in_simple_server test_ob_detect_mana
 ob_unittest_observer(test_transfer_lock_info_operator storage_ha/test_transfer_lock_info_operator.cpp)
 ob_unittest_observer(test_mds_recover test_mds_recover.cpp)
 ob_unittest_observer(test_keep_alive_min_start_scn test_keep_alive_min_start_scn.cpp)
+ob_unittest_observer(test_ls_replica test_ls_replica.cpp)
 # TODO(muwei.ym): open later
 #ob_ha_unittest_observer(test_transfer_handler storage_ha/test_transfer_handler.cpp)
 #ob_ha_unittest_observer(test_transfer_and_restart_basic storage_ha/test_transfer_and_restart_basic.cpp)

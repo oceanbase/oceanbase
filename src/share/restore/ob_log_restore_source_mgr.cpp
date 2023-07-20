@@ -14,12 +14,14 @@
 #include "lib/restore/ob_storage.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "share/backup/ob_backup_struct.h"
+#include "share/backup/ob_log_restore_struct.h"
 #include "ob_log_restore_source_mgr.h"
 #include "lib/ob_define.h"
 #include "lib/ob_errno.h"
 #include "lib/net/ob_addr.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
+
 using namespace oceanbase::share;
 int ObLogRestoreSourceMgr::init(const uint64_t tenant_id, ObISQLClient *proxy)
 {
@@ -105,7 +107,7 @@ int ObLogRestoreSourceMgr::add_location_source(const SCN &recovery_until_scn,
 {
   int ret = OB_SUCCESS;
   ObBackupDest dest;
-  char dest_buf[OB_MAX_BACKUP_DEST_LENGTH] = {0};
+  char dest_buf[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLogRestoreSourceMgr not init", K(ret), K(is_inited_));
@@ -115,8 +117,9 @@ int ObLogRestoreSourceMgr::add_location_source(const SCN &recovery_until_scn,
   } else if (OB_FAIL(dest.set(archive_dest.ptr()))) {
     // use backup dest to manage oss key
     LOG_WARN("set backup dest failed", K(ret), K(archive_dest));
-  } else if (OB_FAIL(dest.get_backup_dest_str(dest_buf, OB_MAX_BACKUP_DEST_LENGTH))) {
-    LOG_WARN("get backup dest str failed", K(ret), K(dest));
+  } else if (OB_FAIL(dest.get_backup_dest_str(dest_buf, sizeof(dest_buf)))) {
+    // store primary cluster id and tenant id in log restore source
+    LOG_WARN("get backup dest str with primary attr failed", K(ret), K(dest));
   } else {
     ObLogRestoreSourceItem item(tenant_id_,
                                 OB_DEFAULT_LOG_RESTORE_SOURCE_ID,

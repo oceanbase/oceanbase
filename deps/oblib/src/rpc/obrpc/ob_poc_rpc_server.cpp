@@ -49,6 +49,7 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
   int ret = OB_SUCCESS;
   ObPocServerHandleContext* ctx = NULL;
   ObRpcPacket tmp_pkt;
+  ObTimeGuard timeguard("rpc_request_create", 200 * 1000);
   const int64_t alloc_payload_sz = sz;
   if (OB_FAIL(tmp_pkt.decode(buf, sz))) {
     RPC_LOG(ERROR, "decode packet fail", K(ret));
@@ -62,6 +63,7 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
     if (OB_UNLIKELY(tmp_pkt.get_group_id() == OBCG_ELECTION)) {
       tenant_id = OB_SERVER_TENANT_ID;
     }
+    timeguard.click();
     ObRpcMemPool* pool = ObRpcMemPool::create(tenant_id, pcode_label, pool_size);
     void *temp = NULL;
     if (OB_ISNULL(pool)) {
@@ -75,6 +77,7 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
       ctx = new(temp)ObPocServerHandleContext(*pool, resp_id, resp_expired_abs_us);
       ctx->set_peer_unsafe();
       req = new(ctx + 1)ObRequest(ObRequest::OB_RPC, ObRequest::TRANSPORT_PROTO_POC);
+      timeguard.click();
       ObRpcPacket* pkt = (ObRpcPacket*)pool->alloc(sizeof(ObRpcPacket) + alloc_payload_sz);
       if (NULL == pkt) {
         RPC_LOG(WARN, "pool allocate rpc packet memory failed", K(tenant_id), K(pcode_label));
@@ -186,6 +189,7 @@ int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  ObTimeGuard timeguard("rpc_serve_cb", 200 * 1000);
   if (NULL == b || sz <= easy_head_size) {
     tmp_ret = OB_INVALID_DATA;
     RPC_LOG(WARN, "rpc request is invalid", K(tmp_ret), K(b), K(sz));
@@ -198,6 +202,7 @@ int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id)
     if (OB_TMP_FAIL(ObPocServerHandleContext::create(resp_id, b, sz, req))) {
       RPC_LOG(WARN, "created req is null", K(tmp_ret), K(sz), K(resp_id));
     } else {
+      timeguard.click();
       global_deliver->deliver(*req);
     }
   }

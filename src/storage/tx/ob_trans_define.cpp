@@ -866,6 +866,17 @@ void ObTxMDSRange::range_sync_failed(ObTxMDSCache &cache)
   cache.update_sync_failed_range(range_array_);
 }
 
+int ObTxMDSRange::assign(const ObTxMDSRange &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(range_array_.assign(other.range_array_))) {
+    TRANS_LOG(WARN, "assign range array failed", K(ret));
+  } else {
+    tx_ctx_ = other.tx_ctx_;
+  }
+  return ret;
+}
+
 void ObTxMDSCache::reset()
 {
   // allocator_.reset();

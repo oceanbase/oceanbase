@@ -17,7 +17,6 @@
 #define protected public
 #include "storage/test_dml_common.h"
 #include "share/schema/ob_table_dml_param.h"
-#include "observer/ob_safe_destroy_thread.h"
 #include "storage/test_tablet_helper.h"
 
 namespace oceanbase
@@ -73,16 +72,11 @@ void TestTableScanPureDataTable::SetUpTestCase()
   ASSERT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
   // MTL(transaction::ObTransService*)->tx_desc_mgr_.tx_id_allocator_ =
   //   [](transaction::ObTransID &tx_id) { tx_id = transaction::ObTransID(1001); return OB_SUCCESS; };
-  SAFE_DESTROY_INSTANCE.init();
-  SAFE_DESTROY_INSTANCE.start();
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
 }
 
 void TestTableScanPureDataTable::TearDownTestCase()
 {
-  SAFE_DESTROY_INSTANCE.stop();
-  SAFE_DESTROY_INSTANCE.wait();
-  SAFE_DESTROY_INSTANCE.destroy();
   MockTenantModuleEnv::get_instance().destroy();
 }
 

@@ -40,26 +40,18 @@ namespace sql
                               table_item->database_name_ ) :                 \
                              table_item->synonym_db_name_;                  \
     ObString table_name = table_item->synonym_name_.empty() ? table_item->table_name_ : table_item->synonym_name_ ; \
-    int64_t temp_buf_len = (table_name.length() + database_name.length()) * 4;  \
-    char temp_buf[temp_buf_len];                                                \
-    ObDataBuffer data_buff(temp_buf, temp_buf_len);                             \
-    if (OB_FAIL(ObCharset::charset_convert(data_buff, table_name, CS_TYPE_UTF8MB4_BIN,  \
-                                           print_params_.cs_type_, table_name))) {      \
-    } else if (OB_FAIL(ObCharset::charset_convert(data_buff, database_name, CS_TYPE_UTF8MB4_BIN, \
-                                            print_params_.cs_type_, database_name))) { \
-    } \
-    bool is_oracle_mode = lib::is_oracle_mode();                            \
-    if (table_item->cte_type_ == TableItem::NOT_CTE) {											\
+    if (table_item->cte_type_ == TableItem::NOT_CTE) {								      \
       if (!database_name.empty()) {                                         \
-        DATA_PRINTF(is_oracle_mode ? "\"%.*s\"." : "`%.*s`.", LEN_AND_PTR(database_name)); \
+        PRINT_IDENT_WITH_QUOT(database_name);                               \
+        DATA_PRINTF(".");                                                   \
       }                                                                     \
-      DATA_PRINTF(is_oracle_mode ? "\"%.*s\"" : "`%.*s`", LEN_AND_PTR(table_name)); \
+      PRINT_IDENT_WITH_QUOT(table_name);                                      \
       if (table_item->synonym_name_.empty() && table_item->is_link_type()) {  \
         const ObString &dblink_name = table_item->dblink_name_;               \
         DATA_PRINTF("@%.*s", LEN_AND_PTR(dblink_name));                       \
       } \
     } else {																																\
-        DATA_PRINTF(is_oracle_mode ? "\"%.*s\"" : "`%.*s`", LEN_AND_PTR(table_name)); \
+      PRINT_IDENT_WITH_QUOT(table_name);                                    \
     }																																				\
   } while (0)
 
@@ -67,25 +59,12 @@ namespace sql
   do {                                                                		  \
     ObString database_name = table_item->database_name_;                    \
     ObString table_name = table_item->table_name_;                          \
-    int64_t temp_buf_len = (table_name.length() + database_name.length()) * 4; \
-    char temp_buf[temp_buf_len];  \
-    ObDataBuffer data_buff(temp_buf, temp_buf_len); \
-    if (OB_FAIL(ObCharset::charset_convert(data_buff, table_name, CS_TYPE_UTF8MB4_BIN, \
-                                           print_params_.cs_type_, table_name))) { \
-    } else if (OB_FAIL(ObCharset::charset_convert(data_buff, database_name, CS_TYPE_UTF8MB4_BIN, \
-                                            print_params_.cs_type_, database_name))) { \
-    } \
-    bool is_oracle_mode = lib::is_oracle_mode();                            \
-    if (table_item->cte_type_ == TableItem::NOT_CTE) {											\
+    if (table_item->cte_type_ == TableItem::NOT_CTE) {								\
       if (!database_name.empty()) {                                         \
-        PRINT_QUOT;                                                         \
-        DATA_PRINTF("%.*s", LEN_AND_PTR(database_name));                    \
-        PRINT_QUOT;                                                         \
+        PRINT_IDENT_WITH_QUOT(database_name);                               \
         DATA_PRINTF(".");                                                   \
       }                                                                     \
-      PRINT_QUOT;                                                           \
-      DATA_PRINTF("%.*s", LEN_AND_PTR(table_name));                         \
-      PRINT_QUOT;                                                           \
+      PRINT_IDENT_WITH_QUOT(table_name);                                    \
       if (table_item->is_link_type()) {                                    \
         const ObString &dblink_name = table_item->dblink_name_;             \
         if (table_item->is_reverse_link_) {                                 \
@@ -95,19 +74,15 @@ namespace sql
         }                                                                   \
       }                                                                     \
     } else {																																\
-      PRINT_QUOT;                                                           \
-      DATA_PRINTF("%.*s", LEN_AND_PTR(table_name));                         \
-      PRINT_QUOT;                                                           \
+      PRINT_IDENT_WITH_QUOT(table_name);                                    \
     }																																			  \
   } while (0)
 
 #define PRINT_COLUMN_NAME(column_name) \
   do {\
     if (column_name.empty()) { \
-    } else if (lib::is_oracle_mode()) {\
-      DATA_PRINTF("\"%.*s\"", LEN_AND_PTR(column_name));\
     } else {\
-      DATA_PRINTF("`%.*s`", LEN_AND_PTR(column_name));\
+      PRINT_IDENT_WITH_QUOT(column_name);\
     }\
   } while (0);
 

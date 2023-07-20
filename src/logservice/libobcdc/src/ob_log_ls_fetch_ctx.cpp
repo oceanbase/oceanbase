@@ -77,6 +77,7 @@ int LSFetchCtxUpdateSourceFunctor::operator()(const ObLSID &id, logservice::ObRe
 
 /////////////////////////////// LSFetchCtx /////////////////////////////////
 LSFetchCtx::LSFetchCtx() :
+    source_(NULL),
     remote_iter_(LSFetchCtxGetSourceFunctor(*this),
                  LSFetchCtxUpdateSourceFunctor(*this))
 {
@@ -248,6 +249,7 @@ int LSFetchCtx::init_remote_iter()
   const LSN &start_lsn = progress_.get_next_lsn();
   const int64_t cur_log_progress = progress_.get_progress();
   archive::LargeBufferPool *large_buffer_pool = NULL;
+  logservice::ObLogExternalStorageHandler *log_ext_handler = NULL;
   SCN start_scn;
 
   if (remote_iter_.is_init()) {
@@ -257,8 +259,10 @@ int LSFetchCtx::init_remote_iter()
     LOG_ERROR("convert log progress to start scn failed", KR(ret), K(cur_log_progress));
   } else if (OB_FAIL(get_large_buffer_pool(large_buffer_pool))) {
     LOG_ERROR("get large buffer pool failed", KR(ret));
+  } else if (OB_FAIL(get_log_ext_handler(log_ext_handler))) {
+    LOG_ERROR("get log ext handler failed", KR(ret));
   } else if (OB_FAIL(remote_iter_.init(tenant_id, ls_id, start_scn, start_lsn,
-      LSN(LOG_MAX_LSN_VAL), large_buffer_pool))) {
+      LSN(LOG_MAX_LSN_VAL), large_buffer_pool, log_ext_handler))) {
     LOG_ERROR("remote iter init failed", KR(ret), K(tenant_id), K(ls_id), K(start_scn), K(start_lsn));
   }
   return ret;
@@ -677,6 +681,22 @@ int LSFetchCtx::get_large_buffer_pool(archive::LargeBufferPool *&large_buffer_po
   } else if (OB_ISNULL(large_buffer_pool)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("log_route_service is nullptr", KR(ret), K(large_buffer_pool));
+  }
+  return ret;
+}
+
+int LSFetchCtx::get_log_ext_handler(logservice::ObLogExternalStorageHandler *&log_ext_handler)
+{
+  int ret = OB_SUCCESS;
+  IObLogFetcher *fetcher = static_cast<IObLogFetcher *>(ls_fetch_mgr_->get_fetcher_host());
+  if (OB_ISNULL(fetcher)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("fetcher is nullptr", KR(ret), K(fetcher));
+  } else if (OB_FAIL(fetcher->get_log_ext_handler(log_ext_handler))) {
+    LOG_ERROR("Fetcher get_log_ext_handler fail", KR(ret));
+  } else if (OB_ISNULL(log_ext_handler)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("log_ext_handler is nullptr", KR(ret), K(log_ext_handler));
   }
   return ret;
 }

@@ -902,6 +902,26 @@ bool ObOptimizerUtil::same_exprs(const common::ObIArray<ObRawExpr*> &src_exprs,
 
 int ObOptimizerUtil::intersect_exprs(const ObIArray<ObRawExpr *> &first,
                                      const ObIArray<ObRawExpr *> &right,
+                                     const EqualSets &equal_sets,
+                                     ObIArray<ObRawExpr *> &result)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> tmp;
+  for (int64_t i = 0; OB_SUCC(ret) && i < first.count(); ++i) {
+    if (!find_equal_expr(right, first.at(i), equal_sets)) {
+      // do nothing
+    } else if (OB_FAIL(tmp.push_back(first.at(i)))) {
+      LOG_WARN("failed to push back first expr", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(result.assign(tmp))) {
+    LOG_WARN("failed to assign expr array", K(ret));
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::intersect_exprs(const ObIArray<ObRawExpr *> &first,
+                                     const ObIArray<ObRawExpr *> &right,
                                      ObIArray<ObRawExpr *> &result)
 {
   int ret = OB_SUCCESS;
@@ -3603,7 +3623,8 @@ int ObOptimizerUtil::check_need_sort(const ObIArray<OrderItem> &expected_order_i
                                      const bool is_at_most_one_row,
                                      bool &need_sort,
                                      int64_t &prefix_pos,
-                                     const int64_t part_cnt)
+                                     const int64_t part_cnt,
+                                     const bool check_part_only/* default false */)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 6> expected_order_exprs;
@@ -3622,7 +3643,8 @@ int ObOptimizerUtil::check_need_sort(const ObIArray<OrderItem> &expected_order_i
                                      is_at_most_one_row,
                                      need_sort,
                                      prefix_pos,
-                                     part_cnt))) {
+                                     part_cnt,
+                                     check_part_only))) {
     LOG_WARN("failed to check need sort", K(ret));
   } else { /*do nothing*/ }
   return ret;
@@ -3638,11 +3660,13 @@ int ObOptimizerUtil::check_need_sort(const ObIArray<ObRawExpr*> &expected_order_
                                      const bool is_at_most_one_row,
                                      bool &need_sort,
                                      int64_t &prefix_pos,
-                                     const int64_t part_cnt)
+                                     const int64_t part_cnt,
+                                     const bool check_part_only/* default false */)
 {
   int ret = OB_SUCCESS;
   need_sort = true;
-  if (OB_FAIL(ObOptimizerUtil::check_need_sort(expected_order_exprs,
+  if (!check_part_only &&
+      OB_FAIL(ObOptimizerUtil::check_need_sort(expected_order_exprs,
                                                expected_order_directions,
                                                input_ordering,
                                                fd_item_set,

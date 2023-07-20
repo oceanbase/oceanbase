@@ -666,7 +666,8 @@ private:
   int try_ls_disaster_recovery(
       const bool only_for_display,
       DRLSInfo &dr_ls_info,
-      int64_t &acc_dr_task);
+      int64_t &acc_dr_task,
+      DRLSInfo &dr_ls_info_with_flag);
 
   int check_has_leader_while_remove_replica(
       const common::ObAddr &server,
@@ -696,7 +697,7 @@ private:
       const ObMember &member_to_remove,
       int64_t &acc_dr_task);
 
-  int check_ls_only_in_member_list_(
+  int check_ls_only_in_member_list_or_with_flag_(
       const DRLSInfo &dr_ls_info);
 
   int check_can_generate_task(

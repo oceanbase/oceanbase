@@ -198,6 +198,8 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
     if (OB_UNLIKELY(!tablet_handle.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "unexpected invalid tablet", K(ret), K(tablet_handle));
+    } else if (tablet_handle.get_obj()->is_empty_shell()) {
+      // skip empty shell
     } else if (OB_FAIL(tablet_handle.get_obj()->get_sstables_size(sstable_size, true /*ignore shared block*/))) {
       STORAGE_LOG(WARN, "failed to get new tablet's disk usage", K(ret), K(sstable_size));
     } else {
@@ -301,7 +303,7 @@ int ObDiskUsageReportTask::count_tenant_clog(const uint64_t tenant_id)
   if (OB_ISNULL(log_svr = MTL(ObLogService*))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "log service is null", K(ret), KP(log_svr));
-  } else if (OB_FAIL(log_svr->get_palf_disk_usage(clog_space, size_limit))) {
+  } else if (OB_FAIL(log_svr->get_palf_stable_disk_usage(clog_space, size_limit))) {
     STORAGE_LOG(WARN, "failed to get the disk space that clog used", K(ret));
   } else {
     report_key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_CLOG_DATA;

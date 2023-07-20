@@ -2148,7 +2148,7 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
     // add for cte:
     if (OB_SUCC(ret) && !is_oracle_mode() && !params_.has_cte_param_list_) {
       if (OB_FAIL(cte_ctx_.cte_col_names_.push_back(select_item.alias_name_))) {
-        LOG_WARN("push back column alia name failed", K(ret));
+        LOG_WARN("push back column alias name failed", K(ret));
       }
     }
   } // end for
@@ -2388,6 +2388,7 @@ int ObSelectResolver::resolve_star_for_table_groups()
     num = select_stmt->get_table_size();
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
+    ObArray<SelectItem> target_list;
     const TableItem *table_item = select_stmt->get_table_item(i);
     if (OB_ISNULL(table_item)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2398,7 +2399,6 @@ int ObSelectResolver::resolve_star_for_table_groups()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table_item has wrong type", K(table_item));
       } else {
-        ObArray<SelectItem> target_list;
         if (OB_FAIL(expand_target_list(*table_item, target_list))) {
           LOG_WARN("resolve table columns failed", K(ret), K(table_item));
         }
@@ -2421,15 +2421,14 @@ int ObSelectResolver::resolve_star_for_table_groups()
         LOG_WARN("find_joined_table_group_for_table failed", K(ret), K(table_item));
       } else if (jointable_idx != -1) {
         // located in joined table with jointable_idx of joined_tables
-        ObArray<SelectItem> sorted_select_items;
-        if (OB_FAIL(find_select_columns_for_join_group(jointable_idx, &sorted_select_items))) {
+        if (OB_FAIL(find_select_columns_for_join_group(jointable_idx, &target_list))) {
           LOG_WARN("find_select_columns_for_join_group failed", K(ret));
         } else {
           // skip next tables in joined group
           i += select_stmt->get_joined_tables().at(jointable_idx)->single_table_ids_.count() - 1;
           // push back select items to select stmt
-          for (int j = 0; OB_SUCC(ret) && j < sorted_select_items.count(); j++) {
-            SelectItem &item = sorted_select_items.at(j);
+          for (int j = 0; OB_SUCC(ret) && j < target_list.count(); j++) {
+            SelectItem &item = target_list.at(j);
             if (OB_FAIL(item.expr_->extract_info())) {
               LOG_WARN("extract info failed", K(ret));
             } else if (OB_FAIL(item.expr_->deduce_type(session_info_))) {
@@ -2449,7 +2448,6 @@ int ObSelectResolver::resolve_star_for_table_groups()
         }
       } else {
         // based table or alias table or generated table
-        ObArray<SelectItem> target_list;
         OZ( expand_target_list(*table_item, target_list), table_item );
         for (int64_t i = 0; OB_SUCC(ret) && i < target_list.count(); ++i) {
           if (OB_FAIL(select_stmt->add_select_item(target_list.at(i)))) {
@@ -2459,6 +2457,13 @@ int ObSelectResolver::resolve_star_for_table_groups()
             OZ( standard_group_checker_.add_unsettled_column(target_list.at(i).expr_) );
             OZ( standard_group_checker_.add_unsettled_expr(target_list.at(i).expr_) );
           }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !is_oracle_mode() && !params_.has_cte_param_list_) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < target_list.count(); ++i) {
+        if (OB_FAIL(cte_ctx_.cte_col_names_.push_back(target_list[i].alias_name_))) {
+          LOG_WARN("push back column alias name failed", K(ret));
         }
       }
     }
@@ -2585,9 +2590,9 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
     if (num <= 0) {
       // select *
       // select * from dual
+      SelectItem select_item;
       if (lib::is_mysql_mode()) {
         ObConstRawExpr *c_expr = NULL;
-        SelectItem select_item;
         if (!is_in_exists_subquery()) {
           ret = OB_ERR_NO_TABLES_USED;
           LOG_WARN("No tables used");
@@ -2615,7 +2620,6 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
           obj.set_string(ObVarcharType, string_value);
           obj.set_collation_type(CS_TYPE_UTF8MB4_BIN);
           c_expr->set_value(obj);
-          SelectItem select_item;
           select_item.expr_ = c_expr;
           select_item.expr_name_ = string_name;
           select_item.alias_name_ = string_name;
@@ -2623,6 +2627,11 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
           if (OB_FAIL(select_stmt->add_select_item(select_item))) {
             LOG_WARN("failed to add select item", K(ret));
           } else {/*do nothing*/}
+        }
+      }
+      if (OB_SUCC(ret) && !is_oracle_mode() && !params_.has_cte_param_list_) {
+        if (OB_FAIL(cte_ctx_.cte_col_names_.push_back(select_item.alias_name_))) {
+          LOG_WARN("push back column alias name failed", K(ret));
         }
       }
     } else if (OB_FAIL(resolve_star_for_table_groups())) {
@@ -2698,6 +2707,11 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
           if (OB_SUCC(ret) && !is_column_name_equal) {
             ret = column_namespace_checker_.check_column_existence_in_using_clause(
                     table_items.at(i)->table_id_, target_list.at(j).expr_name_);
+          }
+          if (OB_SUCC(ret) && !is_oracle_mode() && !params_.has_cte_param_list_) {
+            if (OB_FAIL(cte_ctx_.cte_col_names_.push_back(target_list[j].alias_name_))) {
+              LOG_WARN("push back column alias name failed", K(ret));
+            }
           }
         }
       }

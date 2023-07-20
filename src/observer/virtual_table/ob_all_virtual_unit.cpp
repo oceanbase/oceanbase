@@ -16,12 +16,14 @@
 #include "observer/omt/ob_multi_tenant.h" 
 #include "observer/omt/ob_tenant.h"
 #include "share/ob_unit_getter.h"
+#include "logservice/ob_log_service.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
 using namespace oceanbase::observer;
 using namespace oceanbase::omt;
+using namespace logservice;
 
 ObAllVirtualUnit::ObAllVirtualUnit()
     : ObVirtualTableScannerIterator(),
@@ -244,9 +246,9 @@ int ObAllVirtualUnit::inner_get_next_row(ObNewRow *&row)
           break;
         case LOG_DISK_IN_USE: {
           int64_t clog_disk_in_use = 0;
-          if (OB_FAIL(static_cast<ObDiskUsageReportTask*>(GCTX.disk_reporter_)
-                ->get_clog_disk_used_size(tenant_meta.unit_.tenant_id_, clog_disk_in_use))) {
-            SERVER_LOG(WARN, "fail to get data disk in use", K(ret), K(tenant_meta));
+          const uint64_t tenant_id = tenant_meta.unit_.tenant_id_;
+          if (OB_FAIL(get_clog_disk_used_size_(tenant_id, clog_disk_in_use))) {
+            SERVER_LOG(WARN, "fail to get clog disk in use", K(ret), K(tenant_meta));
           } else {
             cur_row_.cells_[i].set_int(clog_disk_in_use);
           }
@@ -284,5 +286,25 @@ int ObAllVirtualUnit::inner_get_next_row(ObNewRow *&row)
   return ret;
 }
 
+int ObAllVirtualUnit::get_clog_disk_used_size_(const uint64_t tenant_id,
+                                               int64_t &log_used_size)
+{
+  int ret = OB_SUCCESS;
+  log_used_size = 0;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  if (OB_SUCC(guard.switch_to(tenant_id))) {
+    ObLogService *log_service = MTL(ObLogService*);
+    int64_t unused_log_disk_total_size = 0;
+    if (OB_ISNULL(log_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "ObLogService is nullptr", KP(log_service), K(tenant_id));
+    } else if (OB_FAIL(log_service->get_palf_stable_disk_usage(log_used_size,
+                                                               unused_log_disk_total_size))) {
+      SERVER_LOG(WARN, "get_palf_stable_disk_usage failed", KP(log_service), K(tenant_id));
+    }
+  }
+  // return OB_SUCCESS whatever.
+  return OB_SUCCESS;
+}
 
 

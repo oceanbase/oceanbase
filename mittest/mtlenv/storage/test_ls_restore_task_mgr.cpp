@@ -20,7 +20,6 @@
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/init_basic_struct.h"
 #include "storage/tablet/ob_tablet_iterator.h"
-#include "observer/ob_safe_destroy_thread.h"
 #include "share/partition_table/fake_part_property_getter.h"
 #include "share/ob_define.h"
 
@@ -208,15 +207,10 @@ public:
   virtual ~TestLSRestoreHandler() = default;
   static void SetUpTestCase()
   {
-    SAFE_DESTROY_INSTANCE.init();
-    SAFE_DESTROY_INSTANCE.start();
     ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
   }
   static void TearDownTestCase()
   {
-    SAFE_DESTROY_INSTANCE.stop();
-    SAFE_DESTROY_INSTANCE.wait();
-    SAFE_DESTROY_INSTANCE.destroy();
     MockTenantModuleEnv::get_instance().destroy();
   }
 

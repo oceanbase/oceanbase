@@ -607,6 +607,37 @@ int ObPxCoordOp::inner_close()
   return ret;
 }
 
+int ObPxCoordOp::inner_drain_exch()
+{
+  int ret = OB_SUCCESS;
+  LOG_TRACE("drain QC", K(get_spec().id_), K(iter_end_), K(exch_drained_),
+            K(enable_px_batch_rescan()), K(lbt()));
+  /**
+    * why different from receive operator?
+    * 1. Why not need try link channel.
+    * There are two situations when qc call drain_exch.
+    * The first is qc return iter_end when inner_get_next_row, in this case, it will not reach here.
+    * The second is plan like this:
+    *               merge join
+    *          QC1              QC2
+    * If QC1 ends, the main thread will call drain exch of QC2.
+    * In this situation, no action is required because the upper operator has already got enough rows
+    * and will call inner_close to terminate all dfos soon.
+    * Therefore, there is no need to send a termination message
+    * 2. Why not drain channels if enable px batch rescan?
+    * If use px batch rescan, drain channel may lead to missing results of other params in the batch.
+  */
+  if (enable_px_batch_rescan()) {
+    // do nothing
+  } else if (iter_end_) {
+    exch_drained_ = true;
+  } else if (!exch_drained_) {
+    dfc_.drain_all_channels();
+    exch_drained_ = true;
+  }
+  return ret;
+}
+
 int ObPxCoordOp::destroy_all_channel()
 {
   int ret = OB_SUCCESS;

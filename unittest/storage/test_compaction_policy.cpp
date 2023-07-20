@@ -27,7 +27,6 @@
 #include "storage/compaction/ob_partition_merge_policy.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "mtlenv/mock_tenant_module_env.h"
-#include "observer/ob_safe_destroy_thread.h"
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "storage/tablet/ob_tablet_table_store_flag.h"
 #include "storage/test_dml_common.h"
@@ -178,12 +177,6 @@ void TestCompactionPolicy::SetUp()
 {
   ASSERT_TRUE(MockTenantModuleEnv::get_instance().is_inited());
   int ret = OB_SUCCESS;
-  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  t3m->stop();
-  t3m->wait();
-  t3m->destroy();
-  ret = t3m->init();
-  ASSERT_EQ(OB_SUCCESS, ret);
 
   share::schema::ObTableSchema table_schema;
   prepare_schema(table_schema);
@@ -203,9 +196,8 @@ void TestCompactionPolicy::TearDown()
   memtables_.reset();
 
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  t3m->stop();
-  t3m->wait();
-  t3m->destroy();
+  bool all_released = false;
+  t3m->check_all_meta_mem_released(all_released, "TestCompactionPolicy");
 
   ObTenantFreezeInfoMgr *freeze_info_mgr = MTL(ObTenantFreezeInfoMgr *);
   ASSERT_TRUE(nullptr != freeze_info_mgr);
@@ -222,9 +214,6 @@ void TestCompactionPolicy::SetUpTestCase()
   ret = MockTenantModuleEnv::get_instance().init();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  SAFE_DESTROY_INSTANCE.init();
-  SAFE_DESTROY_INSTANCE.start();
-
   // ls service cannot service before ObServerCheckpointSlogHandler starts running
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
   // create ls
@@ -233,25 +222,21 @@ void TestCompactionPolicy::SetUpTestCase()
   if (OB_SUCCESS != ret) {
     LOG_ERROR("[FATAL ERROR] failed to create ls", K(ret));
   }
+  ASSERT_EQ(OB_SUCCESS, ret);
 }
 
 void TestCompactionPolicy::TearDownTestCase()
 {
   int ret = OB_SUCCESS;
-
-  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  t3m->stop();
-  t3m->wait();
-  t3m->destroy();
-  ret = t3m->init();
-  ASSERT_EQ(OB_SUCCESS, ret);
-
   ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID), false);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  ASSERT_EQ(OB_SUCCESS, ret);
 
-  SAFE_DESTROY_INSTANCE.stop();
-  SAFE_DESTROY_INSTANCE.wait();
-  SAFE_DESTROY_INSTANCE.destroy();
+  ObLSID ls_id = ObLSID(TEST_LS_ID);
+  ObTabletID tablet_id = ObTabletID(TEST_TABLET_ID);
+  ObTabletMapKey key(ls_id, tablet_id);
+  ASSERT_EQ(OB_SUCCESS, t3m->del_tablet(key));
 
   MockTenantModuleEnv::get_instance().destroy();
 }

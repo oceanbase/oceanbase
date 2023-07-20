@@ -14,9 +14,11 @@
 #include "lib/ob_define.h"
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"
+#include "logservice/restoreservice/ob_log_restore_define.h"
 #include "ob_remote_fetch_log_worker.h"
 #include "ob_log_restore_allocator.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "share/rc/ob_tenant_base.h"
 #include <cstdint>
 
 namespace oceanbase
@@ -65,20 +67,33 @@ void ObLogRestoreScheduler::destroy()
   worker_ = NULL;
 }
 
-int ObLogRestoreScheduler::schedule()
+int ObLogRestoreScheduler::schedule(const share::ObLogRestoreSourceType &source_type)
 {
-  (void)modify_thread_count_();
+  (void)modify_thread_count_(source_type);
   (void)purge_cached_buffer_();
   return OB_SUCCESS;
 }
 
-int ObLogRestoreScheduler::modify_thread_count_()
+int ObLogRestoreScheduler::modify_thread_count_(const share::ObLogRestoreSourceType &source_type)
 {
   int ret = OB_SUCCESS;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-  const int64_t restore_concurrency =
-    tenant_config.is_valid() ? tenant_config->log_restore_concurrency : 1L;
-  if (OB_FAIL(worker_->modify_thread_count(std::max(1L, restore_concurrency)))) {
+  int64_t restore_concurrency = 0;
+  // for primary tenant, set restore_concurrency to 1.
+  // otherwise, set restore_concurrency to tenant config.
+  if (MTL_GET_TENANT_ROLE() == share::ObTenantRole::PRIMARY_TENANT
+      || !share::is_location_log_source_type(source_type)) {
+    restore_concurrency = 1;
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    if (!tenant_config.is_valid()) {
+      restore_concurrency = 1L;
+    } else if (0 == tenant_config->log_restore_concurrency) {
+      restore_concurrency = MTL_CPU_COUNT();
+    } else {
+      restore_concurrency = tenant_config->log_restore_concurrency;
+    }
+  }
+  if (OB_FAIL(worker_->modify_thread_count(restore_concurrency))) {
     CLOG_LOG(WARN, "modify worker thread failed", K(ret));
   }
   return ret;

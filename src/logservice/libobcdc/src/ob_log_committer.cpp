@@ -1136,9 +1136,9 @@ int ObLogCommitter::update_tenant_trans_commit_version_(const PartTransTask &par
   if (OB_UNLIKELY(! tls_id.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid tenant_ls_id for checkpoint_task", KR(ret), K(participants));
-  } else if (OB_UNLIKELY(OB_INVALID_VERSION == commit_version)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid commit_version", KR(ret), K(participants));
+//  } else if (OB_UNLIKELY(OB_INVALID_VERSION == commit_version)) {
+//    ret = OB_ERR_UNEXPECTED;
+//    LOG_ERROR("invalid commit_version", KR(ret), K(participants));
   } else {
     ObLogTenantGuard guard;
     ObLogTenant *tenant = NULL;

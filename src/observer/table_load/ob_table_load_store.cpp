@@ -17,6 +17,7 @@
 #include "observer/table_load/ob_table_load_utils.h"
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 
 namespace oceanbase
 {
@@ -276,7 +277,7 @@ int ObTableLoadStore::start_merge()
   return ret;
 }
 
-int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info, ObTableLoadSqlStatistics &sql_statistics)
+int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -286,6 +287,7 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info, ObTableLoadSqlS
     LOG_INFO("store commit");
     ObMutexGuard guard(store_ctx_->get_op_lock());
     ObTableLoadDmlStat dml_stats;
+    ObTableLoadSqlStatistics sql_statistics;
     if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check store status", KR(ret));
     } else if (OB_FAIL(store_ctx_->insert_table_ctx_->commit())) {
@@ -295,6 +297,9 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info, ObTableLoadSqlS
     } else if (param_.online_opt_stat_gather_ &&
                OB_FAIL(store_ctx_->merger_->collect_sql_statistics(sql_statistics))) {
       LOG_WARN("fail to collect sql stats", KR(ret));
+    } else if (param_.online_opt_stat_gather_ &&
+               OB_FAIL(commit_sql_statistics(sql_statistics))) {
+      LOG_WARN("fail to commit sql stats", KR(ret));
     } else if (OB_FAIL(store_ctx_->merger_->collect_dml_stat(dml_stats))) {
       LOG_WARN("fail to build dml stat", KR(ret));
     } else if (OB_FAIL(ObOptStatMonitorManager::get_instance().update_dml_stat_info_from_direct_load(dml_stats.dml_stat_array_))) {
@@ -304,6 +309,34 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info, ObTableLoadSqlS
     } else {
       result_info = store_ctx_->result_info_;
     }
+  }
+  return ret;
+}
+
+int ObTableLoadStore::commit_sql_statistics(const ObTableLoadSqlStatistics &sql_statistics)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  const uint64_t table_id = param_.table_id_;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+  ObSEArray<ObOptColumnStat *, 64> part_column_stats;
+  ObSEArray<ObOptTableStat *, 64> part_table_stats;
+  if (sql_statistics.is_empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql statistics is empty", K(ret));
+  } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard,
+                                                         table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(sql_statistics.get_col_stat_array(part_column_stats))) {
+    LOG_WARN("failed to get column stat array");
+  } else if (OB_FAIL(sql_statistics.get_table_stat_array(part_table_stats))) {
+    LOG_WARN("failed to get table stat array");
+  } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(
+               &schema_guard, store_ctx_->ctx_->session_info_, GCTX.sql_proxy_, part_table_stats,
+               part_column_stats))) {
+    LOG_WARN("failed to batch write stats", K(ret), K(sql_statistics.table_stat_array_),
+             K(sql_statistics.col_stat_array_));
   }
   return ret;
 }

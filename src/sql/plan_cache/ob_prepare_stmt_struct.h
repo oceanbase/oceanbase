@@ -314,7 +314,7 @@ typedef common::ObSEArray<bool, 16> ParamCastArray;
 class ObPsSessionInfo
 {
 public:
-  ObPsSessionInfo(const int64_t num_of_params) :
+  ObPsSessionInfo(const int64_t tenant_id, const int64_t num_of_params) :
     stmt_id_(common::OB_INVALID_STMT_ID),
     stmt_type_(stmt::T_NONE),
     num_of_params_(num_of_params),
@@ -323,6 +323,8 @@ public:
     inner_stmt_id_(0),
     num_of_returning_into_(common::OB_INVALID_STMT_ID) // num_of_returning_into_ init as -1
   {
+    param_types_.set_attr(ObMemAttr(tenant_id, "ParamTypes"));
+    param_type_infos_.set_attr(ObMemAttr(tenant_id, "ParamTypesInfo"));
     param_types_.reserve(num_of_params_);
   }
   //{ param_types_.set_label(common::ObModIds::OB_PS_SESSION_INFO_ARRAY); }

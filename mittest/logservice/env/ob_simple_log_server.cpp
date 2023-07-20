@@ -154,6 +154,8 @@ int ObSimpleLogServer::simple_init(
     SERVER_LOG(WARN, "init_io failed", K(ret), K(addr));
   } else if (FALSE_IT(guard.click("init_io_")) || OB_FAIL(init_log_service_())) {
     SERVER_LOG(WARN, "init_log_service failed", K(ret), K(addr));
+  } else if (FALSE_IT(guard.click("init_log_service_")) || OB_FAIL(looper_.init(this))) {
+    SERVER_LOG(WARN, "init ObLooper failed", K(ret), K(addr));
   } else {
     guard.click("init_log_service_");
     SERVER_LOG(INFO, "simple_log_server init success", KPC(this), K(guard));
@@ -161,9 +163,85 @@ int ObSimpleLogServer::simple_init(
   return ret;
 }
 
+int ObSimpleLogServer::update_tenant_log_disk_size_(const uint64_t tenant_id,
+                                                    const int64_t old_log_disk_size,
+                                                    const int64_t new_log_disk_size,
+                                                    int64_t &allowed_new_log_disk_size)
+{
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  if (OB_SUCC(guard.switch_to(tenant_id))) {
+    ObLogService *log_service = MTL(ObLogService *);
+    if (OB_ISNULL(log_service)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(log_service->update_log_disk_usage_limit_size(new_log_disk_size))) {
+      LOG_WARN("failed to update_log_disk_usage_limit_size", K(ret), K(tenant_id), K(new_log_disk_size),
+               K(old_log_disk_size), K(allowed_new_log_disk_size));
+    } else if (OB_FAIL(log_block_pool_.update_tenant(old_log_disk_size, new_log_disk_size, allowed_new_log_disk_size, log_service))) {
+      LOG_WARN("failed to update teannt int ObServerLogBlockMGR", K(ret), K(tenant_id), K(new_log_disk_size),
+               K(old_log_disk_size), K(allowed_new_log_disk_size));
+    } else {
+      disk_opts_.log_disk_usage_limit_size_ = allowed_new_log_disk_size;
+      LOG_INFO("update_log_disk_usage_limit_size success", K(ret), K(tenant_id), K(new_log_disk_size),
+               K(old_log_disk_size), K(allowed_new_log_disk_size), K(disk_opts_));
+    }
+  }
+  return ret;
+}
+
+int ObSimpleLogServer::update_disk_opts_no_lock_(const PalfDiskOptions &opts)
+{
+  int ret = OB_SUCCESS;
+  CLOG_LOG(INFO, "begin update_disk_opts_no_lock_", K(opts), K(disk_opts_), K(inner_table_disk_opts_));
+  int64_t old_log_disk_size = disk_opts_.log_disk_usage_limit_size_;
+  int64_t new_log_disk_size = opts.log_disk_usage_limit_size_;
+  int64_t allowed_new_log_disk_size = 0;
+  // 内部表中的disk_opts立马生效
+  inner_table_disk_opts_ = opts;
+  // disk_opts_表示本地持久化最新的disk_opts，log_disk_percentage_延迟生效
+  disk_opts_ = opts;
+  disk_opts_.log_disk_usage_limit_size_ = old_log_disk_size;
+  if (!opts.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(opts));
+  } else if (OB_FAIL(update_tenant_log_disk_size_(node_id_,
+                                                  old_log_disk_size,
+                                                  new_log_disk_size,
+                                                  allowed_new_log_disk_size))) {
+    CLOG_LOG(WARN, "update_tenant_log_disk_size_ failed", K(new_log_disk_size), K(old_log_disk_size),
+             K(allowed_new_log_disk_size));
+  } else {
+    CLOG_LOG(INFO, "update_disk_opts success", K(opts), K(disk_opts_), K(new_log_disk_size), K(old_log_disk_size),
+             K(allowed_new_log_disk_size));
+  }
+  return ret;
+}
+
+
 int ObSimpleLogServer::update_disk_opts(const PalfDiskOptions &opts)
 {
-  return palf_env_->palf_env_impl_.disk_options_wrapper_.update_disk_options(opts);
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(log_disk_lock_);
+  ret = update_disk_opts_no_lock_(opts);
+  return ret;
+}
+
+int ObSimpleLogServer::try_resize()
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(log_disk_lock_);
+  if (disk_opts_ != inner_table_disk_opts_) {
+    if (OB_FAIL(update_disk_opts_no_lock_(inner_table_disk_opts_))) {
+
+    }
+  }
+  return ret;
+}
+
+int ObSimpleLogServer::update_server_log_disk(const int64_t log_disk_size)
+{
+  ObSpinLockGuard guard(log_disk_lock_);
+  return log_block_pool_.resize_(log_disk_size);
 }
 
 int ObSimpleLogServer::init_memory_dump_timer_()
@@ -243,7 +321,8 @@ int ObSimpleLogServer::init_io_(const std::string &cluster_name)
     storage_env.default_block_size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
     storage_env.data_disk_size_ = 1024 * 1024 * 1024;
     storage_env.data_disk_percentage_ = 0;
-    storage_env.log_disk_size_ = 2LL * 1024 * 1024 * 1024;
+    // 当disk_opts_有效时，使用disk_opts_中记录的log_disk_usage_limit_size_作为log_block_pool_的初始值，否则重启会失败
+    storage_env.log_disk_size_ = disk_opts_.is_valid() ? disk_opts_.log_disk_usage_limit_size_ : 2LL * 1024 * 1024 * 1024;
     storage_env.log_disk_percentage_ = 0;
 
     storage_env.log_spec_.log_dir_ = slog_dir.c_str();
@@ -256,7 +335,6 @@ int ObSimpleLogServer::init_io_(const std::string &cluster_name)
     iod_opt_array_[3].set("datafile_disk_percentage", storage_env.data_disk_percentage_);
     iod_opt_array_[4].set("datafile_size", storage_env.data_disk_size_);
     iod_opts_.opt_cnt_ = MAX_IOD_OPT_CNT;
-    const int64_t DEFATULT_RESERVED_SIZE = 10 * 1024 * 1024 * 1024ul;
     if (OB_FAIL(io_device_->init(iod_opts_))) {
       SERVER_LOG(ERROR, "init io device fail", K(ret));
     } else if (OB_FAIL(log_block_pool_.init(storage_env.clog_dir_))) {
@@ -267,9 +345,10 @@ int ObSimpleLogServer::init_io_(const std::string &cluster_name)
       SERVER_LOG(INFO, "init_io_ successs", K(ret), K(guard));
     }
     if (OB_SUCC(ret)) {
-      log_block_pool_.get_tenants_log_disk_size_func_ = [this, &storage_env](int64_t &log_disk_size) -> int
+      log_block_pool_.get_tenants_log_disk_size_func_ = [](int64_t &log_disk_size) -> int
       {
-        log_disk_size = log_block_pool_.lower_align_(storage_env.log_disk_size_);
+        // ObServerLogBlockMGR 率先于 ObLogService加载，此时租户使用的log_disk_size为0.
+        log_disk_size = 0;
         return OB_SUCCESS;
       };
       if (OB_FAIL(log_block_pool_.start(storage_env.log_disk_size_))) {
@@ -285,12 +364,18 @@ int ObSimpleLogServer::init_log_service_()
   int ret = OB_SUCCESS;
   // init deps of log_service
   palf::PalfOptions opts;
-  opts.disk_options_.log_disk_usage_limit_size_ = 10 * 1024 * 1024 * 1024ul;
-  opts.disk_options_.log_disk_utilization_threshold_ = 80;
-  opts.disk_options_.log_disk_utilization_limit_threshold_ = 95;
-  opts.disk_options_.log_disk_throttling_percentage_ = 100;
-  opts.disk_options_.log_disk_throttling_maximum_duration_ = 2 * 3600 * 1000 * 1000L;
-  opts.disk_options_.log_writer_parallelism_ = 2;
+  if (disk_opts_.is_valid()) {
+    opts.disk_options_ = disk_opts_;
+  } else {
+    opts.disk_options_.log_disk_usage_limit_size_ = 2 * 1024 * 1024 * 1024ul;
+    opts.disk_options_.log_disk_utilization_threshold_ = 80;
+    opts.disk_options_.log_disk_utilization_limit_threshold_ = 95;
+    opts.disk_options_.log_disk_throttling_percentage_ = 100;
+    opts.disk_options_.log_disk_throttling_maximum_duration_ = 2 * 3600 * 1000 * 1000L;
+    opts.disk_options_.log_writer_parallelism_ = 2;
+    disk_opts_ = opts.disk_options_;
+    inner_table_disk_opts_ = disk_opts_;
+  }
   std::string clog_dir = clog_dir_ + "/tenant_1";
   allocator_ = OB_NEW(ObTenantMutilAllocator, "TestBase", node_id_);
   ObMemAttr attr(1, "SimpleLog");
@@ -301,12 +386,14 @@ int ObSimpleLogServer::init_log_service_()
   } else if (OB_FAIL(log_service_.init(opts, clog_dir.c_str(), addr_, allocator_, transport_, &ls_service_,
       &location_service_, &reporter_, &log_block_pool_, &sql_proxy_, net_keepalive_))) {
     SERVER_LOG(ERROR, "init_log_service_ fail", K(ret));
+  } else if (OB_FAIL(log_block_pool_.create_tenant(opts.disk_options_.log_disk_usage_limit_size_))) {
+    SERVER_LOG(ERROR, "crete tenant failed", K(ret));
   } else if (OB_FAIL(mock_election_map_.init(ele_attr))) {
     SERVER_LOG(ERROR, "mock_election_map_ init fail", K(ret));
   } else {
     palf_env_ = log_service_.get_palf_env();
     palf_env_->palf_env_impl_.log_rpc_.tenant_id_ = OB_SERVER_TENANT_ID;
-    SERVER_LOG(INFO, "init_log_service_ success", K(ret));
+    SERVER_LOG(INFO, "init_log_service_ success", K(ret), K(opts), K(disk_opts_));
   }
   return ret;
 }
@@ -321,6 +408,8 @@ int ObSimpleLogServer::simple_start(const bool is_bootstrap = false)
     SERVER_LOG(ERROR, "deliver_ start failed", K(ret));
   } else if (OB_FAIL(log_service_.arb_service_.start())) {
     SERVER_LOG(ERROR, "arb_service start failed", K(ret));
+  } else if (OB_FAIL(looper_.start())) {
+    SERVER_LOG(ERROR, "ObLooper start failed", K(ret));
   }
   // do not start entire log_service_ for now, it will
   // slow down cases running
@@ -331,6 +420,7 @@ int ObSimpleLogServer::simple_close(const bool is_shutdown = false)
 {
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(tenant_base_);
+  looper_.destroy();
   ObTimeGuard guard("simple_close", 0);
   deliver_.destroy(is_shutdown);
   guard.click("destroy");
@@ -723,10 +813,6 @@ int ObLogDeliver::handle_req_(rpc::ObRequest &req)
       modify_pkt.set_tenant_id(node_id_);
       PROCESS(LogFlashbackMsgP)
     }
-    case obrpc::OB_LOG_GET_LEADER_MAX_SCN: {
-      modify_pkt.set_tenant_id(node_id_);
-      PROCESS(LogGetLeaderMaxScnP)
-    }
     case obrpc::OB_LOG_GET_STAT: {
       modify_pkt.set_tenant_id(node_id_);
       PROCESS(LogGetStatP)
@@ -742,5 +828,73 @@ int ObLogDeliver::handle_req_(rpc::ObRequest &req)
   return ret;
 }
 
+ObLooper::ObLooper() : log_server_(nullptr),
+                       run_interval_(0),
+                       is_inited_(false) { }
+
+ObLooper::~ObLooper()
+{
+  destroy();
+}
+
+int ObLooper::init(ObSimpleLogServer *log_server)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    PALF_LOG(WARN, "ObLooper has been inited", K(ret));
+  } else if (NULL == log_server) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), KP(log_server));
+  } else {
+    log_server_ = log_server;
+    share::ObThreadPool::set_run_wrapper(MTL_CTX());
+    run_interval_ = ObLooper::INTERVAL_US;
+    is_inited_ = true;
+  }
+
+  if ((OB_FAIL(ret)) && (OB_INIT_TWICE != ret)) {
+    destroy();
+  }
+  PALF_LOG(INFO, "ObLooper init finished", K(ret));
+  return ret;
+}
+
+void ObLooper::destroy()
+{
+  stop();
+  wait();
+  is_inited_ = false;
+  log_server_ = NULL;
+}
+
+void ObLooper::run1()
+{
+  lib::set_thread_name("ObLooper");
+  log_loop_();
+}
+
+void ObLooper::log_loop_()
+{
+
+  while (!has_set_stop()) {
+    int ret = OB_SUCCESS;
+    const int64_t start_ts = ObTimeUtility::current_time();
+
+    if (OB_FAIL(log_server_->try_resize())) {
+      PALF_LOG(WARN, "try_resize failed", K(ret));
+    }
+    const int64_t round_cost_time = ObTimeUtility::current_time() - start_ts;
+    int32_t sleep_ts = run_interval_ - static_cast<const int32_t>(round_cost_time);
+    if (sleep_ts < 0) {
+      sleep_ts = 0;
+    }
+    ob_usleep(sleep_ts);
+
+    if (REACH_TENANT_TIME_INTERVAL(5 * 1000 * 1000)) {
+      PALF_LOG(INFO, "ObLooper round_cost_time(us)", K(round_cost_time));
+    }
+  }
+}
 } // unittest
 } // oceanbase

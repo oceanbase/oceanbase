@@ -259,7 +259,7 @@ int ObDirectLoadControlCommitExecutor::process()
       ObTableLoadStore store(table_ctx);
       if (OB_FAIL(store.init())) {
         LOG_WARN("fail to init store", KR(ret));
-      } else if (OB_FAIL(store.commit(res_.result_info_, res_.sql_statistics_))) {
+      } else if (OB_FAIL(store.commit(res_.result_info_))) {
         LOG_WARN("fail to store commit", KR(ret));
       } else if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
         LOG_WARN("fail to remove table ctx", KR(ret), K(key));
@@ -598,7 +598,7 @@ int ObDirectLoadControlInsertTransExecutor::process()
     ObTableLoadTableCtx *table_ctx = nullptr;
     ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
     ObTableLoadSharedAllocatorHandle allocator_handle =
-      ObTableLoadSharedAllocatorHandle::make_handle();
+      ObTableLoadSharedAllocatorHandle::make_handle("TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     int64_t data_len = arg_.payload_.length();
     char *buf = nullptr;
     if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {

@@ -409,6 +409,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(ObTenantMetaMemMgr::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTransService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObLogService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, logservice::ObGarbageCollector::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObLSService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantCheckpointSlogHandler::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
 
@@ -426,7 +427,6 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, share::ObDagWarningHistoryManager::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, compaction::ObScheduleSuspectInfoMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, memtable::ObLockWaitMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
-    MTL_BIND2(mtl_new_default, logservice::ObGarbageCollector::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTableLockService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObPrimaryMajorFreezeService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObRestoreMajorFreezeService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
@@ -1003,7 +1003,9 @@ int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantCo
   const double max_cpu = static_cast<double>(unit.config_.max_cpu());
   const uint64_t tenant_id = unit.tenant_id_;
   int64_t allowed_mem_limit = 0;
-
+  ObUnitInfoGetter::ObTenantConfig allowed_new_unit;
+  ObUnitInfoGetter::ObTenantConfig old_unit;
+  int64_t allowed_new_log_disk_size = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -1012,13 +1014,27 @@ int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantCo
   } else if (OB_ISNULL(tenant)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tenant is nullptr", K(tenant_id));
-  } else if (OB_FAIL(write_update_tenant_unit_slog(unit))) {
+  } else if (OB_FAIL(old_unit.assign(tenant->get_unit()))) {
+    LOG_ERROR("fail to assign old unit failed", K(tenant_id), K(unit));
+  } else if (OB_FAIL(update_tenant_memory(tenant_id, unit.config_.memory_size(), allowed_mem_limit))) {
+    LOG_WARN("fail to update tenant memory", K(ret), K(tenant_id));
+  } else if (OB_FAIL(update_tenant_log_disk_size(tenant_id,
+                                                 old_unit.config_.log_disk_size(),
+                                                 unit.config_.log_disk_size(),
+                                                 allowed_new_log_disk_size))) {
+    LOG_WARN("fail to update tenant log disk size", K(ret), K(tenant_id));
+  } else if (OB_FAIL(construct_allowed_unit_config(allowed_new_log_disk_size,
+                                                   unit,
+                                                   allowed_new_unit))) {
+    LOG_WARN("fail to construct_allowed_unit_config", K(allowed_new_log_disk_size),
+             K(allowed_new_unit));
+  } else if (OB_FAIL(write_update_tenant_unit_slog(allowed_new_unit))) {
     LOG_WARN("fail to write tenant meta slog", K(ret), K(tenant_id));
-  }  else if (OB_FAIL(tenant->update_thread_cnt(max_cpu))) {
+  } else if (OB_FAIL(update_tenant_freezer_mem_limit(tenant_id, unit.config_.memory_size(), allowed_mem_limit))) {
+    LOG_WARN("fail to update_tenant_freezer_mem_limit", K(ret), K(tenant_id));
+  } else if (OB_FAIL(tenant->update_thread_cnt(max_cpu))) {
     LOG_WARN("fail to update mtl module thread_cnt", K(ret), K(tenant_id));
-  } else if (OB_FAIL(update_tenant_log_disk_size(tenant_id, unit.config_.log_disk_size()))) {
-      LOG_WARN("fail to update tenant log disk size", K(ret), K(tenant_id));
-  } else if (FALSE_IT(tenant->set_unit_memory_size(allowed_mem_limit))) {
+  } else if (FALSE_IT(tenant->set_unit_memory_size(unit.config_.memory_size()))) {
     // unreachable
   } else {
     if (tenant->unit_min_cpu() != min_cpu) {
@@ -1027,7 +1043,7 @@ int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantCo
     if (tenant->unit_max_cpu() != max_cpu) {
       tenant->set_unit_max_cpu(max_cpu);
     }
-    tenant->set_tenant_unit(unit);
+    tenant->set_tenant_unit(allowed_new_unit);
     LOG_INFO("succecc to set tenant unit config", K(unit), K(allowed_mem_limit));
   }
 
@@ -1043,6 +1059,34 @@ int ObMultiTenant::update_tenant_memory(const ObUnitInfoGetter::ObTenantConfig &
     LOG_WARN("fail to update tenant memory", K(ret), K(tenant_id));
   } else if (OB_FAIL(update_tenant_freezer_mem_limit(tenant_id, unit.config_.memory_size(), allowed_mem_limit))) {
     LOG_WARN("fail to update_tenant_freezer_mem_limit", K(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObMultiTenant::construct_allowed_unit_config(const int64_t allowed_new_log_disk_size,
+                                                 const ObUnitInfoGetter::ObTenantConfig &expected_unit_config,
+                                                 ObUnitInfoGetter::ObTenantConfig &allowed_new_unit)
+{
+  int ret = OB_SUCCESS;
+  if (0 >= allowed_new_log_disk_size
+      || !expected_unit_config.is_valid()) {
+    ret= OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(allowed_new_unit.assign(expected_unit_config))) {
+    LOG_ERROR("fail to assign new unit", K(allowed_new_log_disk_size), K(expected_unit_config));
+  } else {
+    // construct allowed resource.
+    ObUnitResource allowed_resource(
+        expected_unit_config.config_.max_cpu(),
+        expected_unit_config.config_.min_cpu(),
+        expected_unit_config.config_.memory_size(),
+        allowed_new_log_disk_size,
+        expected_unit_config.config_.max_iops(),
+        expected_unit_config.config_.min_iops(),
+        expected_unit_config.config_.iops_weight());
+    if (OB_FAIL(allowed_new_unit.config_.update_unit_resource(allowed_resource))) {
+      LOG_WARN("update_unit_resource failed", K(allowed_new_log_disk_size), K(allowed_new_unit),
+               K(allowed_resource));
+    }
   }
   return ret;
 }
@@ -1110,33 +1154,23 @@ int ObMultiTenant::update_tenant_memory(const uint64_t tenant_id, const int64_t 
 }
 
 int ObMultiTenant::update_tenant_log_disk_size(const uint64_t tenant_id,
-                                               const int64_t expected_log_disk_size)
+                                               const int64_t old_log_disk_size,
+                                               const int64_t new_log_disk_size,
+                                               int64_t &allowed_new_log_disk_size)
 {
   int ret = OB_SUCCESS;
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
-  int64_t old_log_disk_size = 0;
-  int64_t unused_log_disk_size = 0;
   if (OB_SUCC(guard.switch_to(tenant_id))) {
     ObLogService *log_service = MTL(ObLogService *);
     if (OB_ISNULL(log_service)) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(log_service->get_palf_disk_usage(unused_log_disk_size, old_log_disk_size))) {
-      LOG_WARN("failed to get_palf_disk_usage", K(ret), K(unused_log_disk_size), K(old_log_disk_size),
-          K(expected_log_disk_size));
-    } else if(OB_FAIL(GCTX.log_block_mgr_->update_tenant(old_log_disk_size, expected_log_disk_size))) {
-      LOG_WARN("failed to update_tenant in ObServerLogBlockMgr", K(ret), K(old_log_disk_size),
-          K(expected_log_disk_size));
+    } else if (OB_FAIL(GCTX.log_block_mgr_->update_tenant(old_log_disk_size, new_log_disk_size,
+                                                          allowed_new_log_disk_size, log_service))) {
+      LOG_WARN("fail to update_tenant", K(tenant_id), K(old_log_disk_size), K(new_log_disk_size),
+               K(allowed_new_log_disk_size));
     } else {
-      if (OB_FAIL(log_service->update_log_disk_usage_limit_size(expected_log_disk_size))) {
-        LOG_WARN("failed to update_log_disk_usage_limit_size", K(ret), K(tenant_id),
-               K(expected_log_disk_size));
-      } else {
-        LOG_INFO("update_tenant_log_disk_size success", K(ret), K(tenant_id),
-               K(expected_log_disk_size));
-      }
-      if (false == is_virtual_tenant_id(tenant_id) && OB_FAIL(ret)) {
-        GCTX.log_block_mgr_->abort_update_tenant(expected_log_disk_size, old_log_disk_size);
-      }
+      LOG_INFO("update_tenant_log_disk_size success", K(tenant_id), K(old_log_disk_size),
+               K(new_log_disk_size), K(allowed_new_log_disk_size));
     }
   }
   return ret;
@@ -1509,6 +1543,17 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
       }
     }
   }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(OB_TMP_FILE_STORE.free_tenant_file_store(tenant_id))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        STORAGE_LOG(WARN, "fail to free tmp tenant file store", K(ret), K(tenant_id));
+      }
+    }
+  }
+
   if (OB_SUCC(ret) && OB_NOT_NULL(removed_tenant)) {
     ObLDHandle handle;
     if (OB_FAIL(removed_tenant->try_wait())) {
@@ -1548,16 +1593,6 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
       removed_tenant->destroy();
       ob_delete(removed_tenant);
       LOG_INFO("remove tenant success", K(tenant_id));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(OB_TMP_FILE_STORE.free_tenant_file_store(tenant_id))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        STORAGE_LOG(WARN, "fail to free tmp tenant file store", K(ret), K(tenant_id));
-      }
     }
   }
 

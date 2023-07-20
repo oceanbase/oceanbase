@@ -38,14 +38,16 @@ RemoteDataGenerator::RemoteDataGenerator(const uint64_t tenant_id,
     const ObLSID &id,
     const LSN &start_lsn,
     const LSN &end_lsn,
-    const SCN &end_scn) :
+    const SCN &end_scn,
+    ObLogExternalStorageHandler *log_ext_handler) :
   tenant_id_(tenant_id),
   id_(id),
   start_lsn_(start_lsn),
   next_fetch_lsn_(start_lsn),
   end_scn_(end_scn),
   end_lsn_(end_lsn),
-  to_end_(false)
+  to_end_(false),
+  log_ext_handler_(log_ext_handler)
 {}
 
 RemoteDataGenerator::~RemoteDataGenerator()
@@ -55,6 +57,7 @@ RemoteDataGenerator::~RemoteDataGenerator()
   start_lsn_.reset();
   next_fetch_lsn_.reset();
   end_lsn_.reset();
+  log_ext_handler_ = NULL;
 }
 
 bool RemoteDataGenerator::is_valid() const
@@ -64,7 +67,8 @@ bool RemoteDataGenerator::is_valid() const
     && start_lsn_.is_valid()
     && end_scn_.is_valid()
     && end_lsn_.is_valid()
-    && end_lsn_ > start_lsn_;
+    && end_lsn_ > start_lsn_
+    && log_ext_handler_ != NULL;
 }
 
 bool RemoteDataGenerator::is_fetch_to_end() const
@@ -108,8 +112,9 @@ ServiceDataGenerator::ServiceDataGenerator(const uint64_t tenant_id,
     const LSN &start_lsn,
     const LSN &end_lsn,
     const SCN &end_scn,
-    const ObAddr &server) :
-  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_scn),
+    const ObAddr &server,
+    ObLogExternalStorageHandler *log_ext_handler) :
+  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_scn, log_ext_handler),
   server_(server),
   result_()
 {}
@@ -184,34 +189,6 @@ static int64_t cal_lsn_to_file_id_(const LSN &lsn)
   return cal_archive_file_id(lsn, palf::PALF_BLOCK_SIZE);
 }
 
-static int read_file_(const ObString &base,
-    const share::ObBackupStorageInfo *storage_info,
-    const share::ObLSID &id,
-    const int64_t file_id,
-    const int64_t offset,
-    char *data,
-    const int64_t data_len,
-    int64_t &data_size)
-{
-  int ret = OB_SUCCESS;
-  share::ObBackupPath path;
-  if (OB_FAIL(ObArchivePathUtil::build_restore_path(base.ptr(), id, file_id, path))) {
-    LOG_WARN("build restore path failed", K(ret));
-  } else {
-    ObString uri(path.get_obstr());
-    int64_t real_size = 0;
-    if (OB_FAIL(ObArchiveFileUtils::range_read(uri, storage_info, data, data_len, offset, real_size))) {
-      LOG_WARN("read file failed", K(ret), K(uri), K(storage_info));
-    } else if (0 == real_size) {
-      ret = OB_ITER_END;
-      LOG_INFO("read no data, need retry", K(ret), K(uri), K(storage_info), K(offset), K(real_size));
-    } else {
-      data_size = real_size;
-    }
-  }
-  return ret;
-}
-
 static int extract_archive_file_header_(char *buf,
     const int64_t buf_size,
     palf::LSN &lsn)
@@ -263,8 +240,9 @@ LocationDataGenerator::LocationDataGenerator(const uint64_t tenant_id,
     ObLogArchivePieceContext *piece_context,
     char *buf,
     const int64_t buf_size,
-    const int64_t single_read_size) :
-  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_scn),
+    const int64_t single_read_size,
+    ObLogExternalStorageHandler *log_ext_handler) :
+  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_scn, log_ext_handler),
   pre_scn_(pre_scn),
   base_lsn_(),
   data_len_(0),
@@ -477,6 +455,40 @@ void LocationDataGenerator::cal_read_size_(const int64_t dest_id,
   }
 }
 
+int LocationDataGenerator::read_file_(const ObString &base,
+    const share::ObBackupStorageInfo *storage_info,
+    const share::ObLSID &id,
+    const int64_t file_id,
+    const int64_t offset,
+    char *data,
+    const int64_t data_len,
+    int64_t &data_size)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  if (OB_FAIL(ObArchivePathUtil::build_restore_path(base.ptr(), id, file_id, path))) {
+    LOG_WARN("build restore path failed", K(ret));
+  } else {
+    ObString uri(path.get_obstr());
+    char storage_info_cstr[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = {'\0'};
+    int64_t real_size = 0;
+    if (OB_FAIL(storage_info->get_storage_info_str(storage_info_cstr, OB_MAX_BACKUP_STORAGE_INFO_LENGTH, false))) {
+      LOG_WARN("get_storage_info_str failed", K(ret), K(uri), K(storage_info));
+    } else {
+      ObString storage_info_ob_str(storage_info_cstr);
+      if (OB_FAIL(log_ext_handler_->pread(uri, storage_info_ob_str, offset, data, data_len, real_size))) {
+        LOG_WARN("read file failed", K(ret), K(uri), K(storage_info));
+      } else if (0 == real_size) {
+        ret = OB_ITER_END;
+        LOG_INFO("read no data, need retry", K(ret), K(uri), K(storage_info), K(offset), K(real_size));
+      } else {
+        data_size = real_size;
+      }
+    }
+  }
+  return ret;
+}
+
 bool LocationDataGenerator::FileDesc::is_valid() const
 {
   return dest_id_ > 0
@@ -586,8 +598,9 @@ RawPathDataGenerator::RawPathDataGenerator(const uint64_t tenant_id,
     const SCN &end_scn,
     const int64_t piece_index,
     const int64_t min_file_id,
-    const int64_t max_file_id) :
-  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_scn),
+    const int64_t max_file_id,
+    ObLogExternalStorageHandler *log_ext_handler) :
+  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_scn, log_ext_handler),
   array_(array),
   data_len_(0),
   file_id_(0),

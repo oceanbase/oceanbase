@@ -42,6 +42,9 @@ public:
   int switch_learner_to_acceptor(const common::ObMember &learner,
                                  const int64_t paxos_replica_num,
                                  const int64_t timeout);
+  int replace_member_with_learner(const common::ObMember &added_member,
+                                  const common::ObMember &removed_member,
+                                  const int64_t timeout);
 
 private:
   int get_leader_config_version_and_transfer_scn_(

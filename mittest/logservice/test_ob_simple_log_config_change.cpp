@@ -379,6 +379,230 @@ TEST_F(TestObSimpleLogClusterConfigChange, test_basic_config_change)
   PALF_LOG(INFO, "end test config change", K(id));
 }
 
+TEST_F(TestObSimpleLogClusterConfigChange, test_basic_config_change_for_migration)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "config_change_for_migration");
+  int ret = OB_SUCCESS;
+	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  PALF_LOG(INFO, "begin test config change", K(id));
+  {
+	  int64_t leader_idx = 0;
+    std::vector<PalfHandleImplGuard*> palf_list;
+    const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, &loc_cb, leader_idx, leader));
+    PalfHandleImplGuard new_leader;
+    int64_t new_leader_idx;
+    EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
+    loc_cb.leader_ = get_cluster()[new_leader_idx]->get_addr();
+    PALF_LOG(INFO, "set leader for loc_cb", "leader", get_cluster()[new_leader_idx]->get_addr());
+    EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
+    const common::ObAddr &addr2 = get_cluster()[(leader_idx+2)%3]->get_addr();
+    const common::ObAddr &addr3 = get_cluster()[3]->get_addr();
+    const common::ObAddr &addr4 = get_cluster()[4]->get_addr();
+    const common::ObAddr &addr5 = get_cluster()[5]->get_addr();
+    // 1. replicate an FULL replica
+    {
+      PALF_LOG(INFO, "CASE1: replicate an FULL replica", K(id));
+      common::ObMember added_member = ObMember(addr3, 1);
+      added_member.set_migrating();
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(added_member, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_member));
+      EXPECT_EQ(3, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_replica_num_);
+
+      // clean
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_learner(added_member, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_member));
+      // add again
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(added_member, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_member));
+
+      LogConfigVersion config_version;
+      ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_learner_to_acceptor(added_member, 4, config_version, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_member));
+      // member with flag do not exist
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(added_member));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(added_member.get_server()));
+      EXPECT_EQ(4, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_replica_num_);
+      // reentrant, do not get config_version again
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_learner_to_acceptor(added_member, 4, config_version, CONFIG_CHANGE_TIMEOUT));
+      // reset environment
+      added_member.reset_migrating();
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(added_member, 3, CONFIG_CHANGE_TIMEOUT));
+    }
+
+    // 2. migrate an FULL replica (addr2 -> addr3)
+    {
+      PALF_LOG(INFO, "CASE2: migrate an FULL replica", K(id));
+      common::ObMember added_member = ObMember(addr3, 1);
+      added_member.set_migrating();
+      common::ObMember replaced_member = ObMember(addr2, 1);
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(added_member, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_member));
+      EXPECT_EQ(3, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_replica_num_);
+      LogConfigVersion config_version;
+      ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+      LogConfigChangeArgs args(added_member, 0, config_version, SWITCH_LEARNER_TO_ACCEPTOR_AND_NUM);
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->one_stage_config_change_(args, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_member));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(added_member));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(added_member.get_server()));
+      EXPECT_EQ(4, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_replica_num_);
+
+      ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_member_with_learner(added_member, replaced_member, config_version, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_member));
+      // member with flag do not exist
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(added_member));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(added_member.get_server()));
+      EXPECT_EQ(3, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_replica_num_);
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(replaced_member.get_server()));
+      // reentrant and check
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_member_with_learner(added_member, replaced_member, config_version, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_member));
+      // member with flag do not exist
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(added_member));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(added_member.get_server()));
+      EXPECT_EQ(3, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_replica_num_);
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(replaced_member.get_server()));
+      // reset environment
+      added_member.reset_migrating();
+      ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_member(replaced_member, added_member, config_version, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(added_member.get_server()));
+      EXPECT_EQ(3, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_replica_num_);
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(replaced_member.get_server()));
+    }
+
+    // 3. replicate an READONLY replica
+    {
+      PALF_LOG(INFO, "CASE3: replicate an READONLY replica", K(id));
+      // learner's addr must be different from members'
+      common::ObMember migrating_member = ObMember(addr2, 1);
+      EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->add_learner(migrating_member, CONFIG_CHANGE_TIMEOUT));
+
+      common::ObMember added_migrating_learner = ObMember(addr3, 1);
+      common::ObMember added_learner = ObMember(addr3, 1);
+      added_migrating_learner.set_migrating();
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(added_migrating_learner, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_migrating_learner));
+      EXPECT_EQ(3, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_replica_num_);
+      ObMemberList added_learners, removed_learners;
+      EXPECT_EQ(OB_SUCCESS, added_learners.add_member(added_learner));
+      EXPECT_EQ(OB_SUCCESS, removed_learners.add_member(added_migrating_learner));
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_learners(added_learners, removed_learners, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_learner));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_migrating_learner));
+      // reentrant and check
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_learners(added_learners, removed_learners, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_learner));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_migrating_learner));
+      // reset environment
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_learner(added_learner, CONFIG_CHANGE_TIMEOUT));
+    }
+
+    // 4. migrate an READONLY replica, addr4 -> addr3
+    {
+      PALF_LOG(INFO, "CASE4: migrate an READONLY replica", K(id));
+      common::ObMember removed_learner = ObMember(addr4, 1);
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(removed_learner, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(removed_learner));
+
+      common::ObMember added_migrating_learner = ObMember(addr3, 1);
+      common::ObMember added_learner = ObMember(addr3, 1);
+      added_migrating_learner.set_migrating();
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(added_migrating_learner, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_migrating_learner));
+      EXPECT_EQ(3, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_replica_num_);
+      ObMemberList added_learners, removed_learners;
+      EXPECT_EQ(OB_SUCCESS, added_learners.add_member(added_learner));
+      EXPECT_EQ(OB_SUCCESS, removed_learners.add_member(added_migrating_learner));
+      EXPECT_EQ(OB_SUCCESS, removed_learners.add_member(removed_learner));
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_learners(added_learners, removed_learners, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_learner));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_migrating_learner));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(removed_learner));
+      // reentrant and check
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_learners(added_learners, removed_learners, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_learner));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_migrating_learner));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(removed_learner));
+      // reset environment
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_learner(added_learner, CONFIG_CHANGE_TIMEOUT));
+    }
+    // 5. replace_learners (addr3, addr4) -> (addr3, addr5)
+    {
+      PALF_LOG(INFO, "CASE5: replace_learners", K(id));
+      const common::ObMember member2 = ObMember(addr2, 1);
+      const common::ObMember member3 = ObMember(addr3, 1);
+      const common::ObMember member4 = ObMember(addr4, 1);
+      const common::ObMember member5 = ObMember(addr5, 1);
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(member3, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(member4, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(member3));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(member4));
+
+      ObMemberList added_learners, removed_learners;
+      EXPECT_EQ(OB_SUCCESS, added_learners.add_member(member3));
+      EXPECT_EQ(OB_SUCCESS, added_learners.add_member(member5));
+      EXPECT_EQ(OB_SUCCESS, removed_learners.add_member(member2));
+      EXPECT_EQ(OB_SUCCESS, removed_learners.add_member(member4));
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_learners(added_learners, removed_learners, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(member3));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(member5));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(member2));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(member4));
+      // reentrant and check
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_learners(added_learners, removed_learners, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(member3));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(member5));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(member2));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(member4));
+      // reset environment
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_learner(member3, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_learner(member5, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(member3));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(member5));
+    }
+    // 6. defensive
+    {
+      PALF_LOG(INFO, "CASE6: defensive", K(id));
+      const common::ObMember member2 = ObMember(addr2, 1);
+      const common::ObMember member3 = ObMember(addr3, 1);
+      const common::ObMember member4 = ObMember(addr4, 1);
+      const common::ObMember member5 = ObMember(addr5, 1);
+      common::ObMember migrating_member3 = member3;
+      migrating_member3.set_migrating();
+
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(migrating_member3, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->add_learner(member3, CONFIG_CHANGE_TIMEOUT));
+      LogConfigVersion config_version;
+      ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+      EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->add_member(member3, 4, config_version, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_learner(member3, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(migrating_member3));
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_learner(migrating_member3, CONFIG_CHANGE_TIMEOUT));
+      EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(migrating_member3));
+
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(migrating_member3, CONFIG_CHANGE_TIMEOUT));
+      ObMemberList added_learners, removed_learners;
+      EXPECT_EQ(OB_SUCCESS, added_learners.add_member(member3));
+      EXPECT_EQ(OB_SUCCESS, removed_learners.add_member(member4));
+      EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->replace_learners(added_learners, removed_learners, CONFIG_CHANGE_TIMEOUT));
+
+      common::ObMember migrating_member2 = member2;
+      migrating_member2.set_migrating();
+      EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->remove_member(migrating_member2, 2, CONFIG_CHANGE_TIMEOUT));
+    }
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
+    revert_cluster_palf_handle_guard(palf_list);
+  }
+  delete_paxos_group(id);
+  PALF_LOG(INFO, "end test config change", K(id));
+}
+
 TEST_F(TestObSimpleLogClusterConfigChange, test_replace_member)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "replace_member");

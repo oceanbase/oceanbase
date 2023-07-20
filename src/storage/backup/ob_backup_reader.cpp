@@ -330,7 +330,7 @@ ObMultiMacroBlockBackupReader::~ObMultiMacroBlockBackupReader()
   reset();
 }
 
-int ObMultiMacroBlockBackupReader::init(
+int ObMultiMacroBlockBackupReader::init(const uint64_t tenant_id,
     const ObMacroBlockReaderType &reader_type, const common::ObIArray<ObBackupMacroBlockId> &list)
 {
   int ret = OB_SUCCESS;
@@ -346,7 +346,7 @@ int ObMultiMacroBlockBackupReader::init(
     readers_.reset();
     for (int64_t i = 0; OB_SUCC(ret) && i < list.count(); ++i) {
       ObIMacroBlockBackupReader *reader = NULL;
-      if (OB_FAIL(alloc_macro_block_reader_(reader_type, reader))) {
+      if (OB_FAIL(alloc_macro_block_reader_(tenant_id, reader_type, reader))) {
         LOG_WARN("failed to alloc macro block reader", K(ret), K(reader_type));
       } else if (OB_FAIL(readers_.push_back(reader))) {
         LOG_WARN("failed to push back reader", K(ret));
@@ -402,12 +402,12 @@ void ObMultiMacroBlockBackupReader::reset_prev_macro_block_reader_(const int64_t
   }
 }
 
-int ObMultiMacroBlockBackupReader::alloc_macro_block_reader_(
+int ObMultiMacroBlockBackupReader::alloc_macro_block_reader_(const uint64_t tenant_id,
     const ObMacroBlockReaderType &reader_type, ObIMacroBlockBackupReader *&reader)
 {
   int ret = OB_SUCCESS;
   ObIMacroBlockBackupReader *tmp_reader = NULL;
-  if (OB_ISNULL(tmp_reader = ObLSBackupFactory::get_macro_block_backup_reader(reader_type))) {
+  if (OB_ISNULL(tmp_reader = ObLSBackupFactory::get_macro_block_backup_reader(reader_type, tenant_id))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to get macro block backup reader", K(ret));
   } else {

@@ -1074,7 +1074,7 @@ int ObTabletMdsData::read_medium_info(
       len = 0;
       int64_t pos = 0;
 
-      if (OB_FAIL(iter.get_next(allocator, buf, len))) {
+      if (OB_FAIL(iter.get_next_block(allocator, buf, len))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           break;

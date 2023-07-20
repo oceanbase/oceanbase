@@ -163,7 +163,7 @@ void ObMajorRowsMergerTest::prepare_merge_context(const ObMergeType &merge_type,
 }
 
 
-TEST_F(ObMajorRowsMergerTest, tset_compare_func)
+TEST_F(ObMajorRowsMergerTest, test_compare_func)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -283,6 +283,12 @@ TEST_F(ObMajorRowsMergerTest, tset_compare_func)
   OK(item_0.iter_->next());
   OK(cmp.compare(item_0, item_1, cmp_ret));
   ASSERT_EQ(1, cmp_ret);
+  if (OB_NOT_NULL(iter_0)) {
+    iter_0->~ObPartitionMergeIter();
+  }
+  if (OB_NOT_NULL(iter_1)) {
+    iter_1->~ObPartitionMergeIter();
+  }
 }
 
 TEST_F(ObMajorRowsMergerTest, single)
@@ -388,6 +394,12 @@ TEST_F(ObMajorRowsMergerTest, single)
   ASSERT_EQ(OB_SUCCESS, merger.top(top));
   ASSERT_EQ(item_1.iter_idx_, top->iter_idx_);
   ASSERT_EQ(OB_SUCCESS, merger.pop());
+  if (OB_NOT_NULL(iter_0)) {
+    iter_0->~ObPartitionMergeIter();
+  }
+  if (OB_NOT_NULL(iter_1)) {
+    iter_1->~ObPartitionMergeIter();
+  }
 }
 
 TEST_F(ObMajorRowsMergerTest, two_iters)
@@ -491,6 +503,12 @@ TEST_F(ObMajorRowsMergerTest, two_iters)
   ASSERT_EQ(0, top->iter_idx_);
   OK(merger.pop());
   ASSERT_TRUE(merger.empty());
+  if (OB_NOT_NULL(iter_0)) {
+    iter_0->~ObPartitionMergeIter();
+  }
+  if (OB_NOT_NULL(iter_1)) {
+    iter_1->~ObPartitionMergeIter();
+  }
 }
 
 }

@@ -314,6 +314,54 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, test_committed_end_lsn_after_r
   PALF_LOG(INFO, "end test test_committed_end_lsn_after_removing_member", K(id));
 }
 
+TEST_F(TestObSimpleLogClusterConfigChangeMockEle, test_remove_if_another_rebuild)
+{
+  int ret = OB_SUCCESS;
+	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  const int64_t CONFIG_CHANGE_TIMEOUT = 4 * 1000 * 1000L; // 10s
+  SET_CASE_LOG_FILE(TEST_NAME, "test_remove_if_another_rebuild");
+  PALF_LOG(INFO, "begin test test_remove_if_another_rebuild", K(id));
+  {
+    int64_t leader_idx = 0;
+    PalfHandleImplGuard leader;
+    std::vector<PalfHandleImplGuard*> palf_list;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_mock_election(id, leader_idx, leader));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
+    EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+
+    const int64_t b_idx = (leader_idx + 1) % 4;
+    const int64_t c_idx = (leader_idx + 2) % 4;
+    const int64_t d_idx = (leader_idx + 3) % 4;
+    const common::ObAddr b_addr = get_cluster()[b_idx]->get_addr();
+    const common::ObAddr c_addr = get_cluster()[c_idx]->get_addr();
+    const common::ObAddr d_addr = get_cluster()[d_idx]->get_addr();
+    PalfHandleImplGuard *a_handle = palf_list[leader_idx];
+    PalfHandleImplGuard *b_handle = palf_list[b_idx];
+    PalfHandleImplGuard *c_handle = palf_list[c_idx];
+    PalfHandleImplGuard *d_handle = palf_list[d_idx];
+    LogConfigVersion config_version;
+
+    // 1. disable vote
+    EXPECT_EQ(OB_SUCCESS, c_handle->palf_handle_impl_->disable_vote(false));
+    EXPECT_EQ(OB_TIMEOUT, leader.palf_handle_impl_->remove_member(common::ObMember(b_addr, 1), 2, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, c_handle->palf_handle_impl_->enable_vote());
+
+    // 2. disable sync
+    EXPECT_EQ(OB_SUCCESS, c_handle->palf_handle_impl_->disable_sync());
+    EXPECT_EQ(OB_TIMEOUT, leader.palf_handle_impl_->remove_member(common::ObMember(b_addr, 1), 2, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, c_handle->palf_handle_impl_->enable_sync());
+
+    // 3. need rebuild
+    c_handle->palf_handle_impl_->last_rebuild_lsn_ = LSN(leader.get_palf_handle_impl()->get_max_lsn().val_ + 100000);
+    EXPECT_EQ(OB_TIMEOUT, leader.palf_handle_impl_->remove_member(common::ObMember(b_addr, 1), 2, CONFIG_CHANGE_TIMEOUT));
+
+    leader.reset();
+    revert_cluster_palf_handle_guard(palf_list);
+  }
+  delete_paxos_group(id);
+  PALF_LOG(INFO, "end test test_committed_end_lsn_after_removing_member", K(id));
+}
+
 } // end unittest
 } // end oceanbase
 
