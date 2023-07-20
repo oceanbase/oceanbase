@@ -396,7 +396,8 @@ public:
   {
     return (
          ctx_.get_my_session()->is_user_session() &&
-         ! ObStmt::is_dml_write_stmt(ctx_.get_physical_plan_ctx()->get_phy_plan()->get_stmt_type())
+         (! ObStmt::is_dml_write_stmt(ctx_.get_physical_plan_ctx()->get_phy_plan()->get_stmt_type()) )&&
+         (! ctx_.get_physical_plan_ctx()->get_phy_plan()->has_for_update() )
         );
   }
 protected:
