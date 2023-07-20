@@ -438,7 +438,8 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
       is_use_pdml = true;
     } else {
       // 如果显式指定了 PARALLEL(X) 则要求必须 parallel > 1 才开启 pdml，否则并行无效
-      is_use_pdml = (global_hint.get_parallel_hint() > ObGlobalHint::DEFAULT_PARALLEL);
+      is_use_pdml = ((global_hint.get_parallel_hint() > ObGlobalHint::DEFAULT_PARALLEL) &&
+		    is_strict_mode(session.get_sql_mode()));
     }
   } else {
   // case 2
@@ -446,8 +447,9 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
     const ObGlobalHint &global_hint = ctx_.get_query_ctx()->get_global_hint();
     if (OB_FAIL(session.get_force_parallel_query_dop(query_dop))) {
       LOG_WARN("fail get query dop", K(ret));
-    } else if (global_hint.get_parallel_hint() > ObGlobalHint::DEFAULT_PARALLEL ||
-               query_dop >  ObGlobalHint::DEFAULT_PARALLEL || ctx_.is_online_ddl()) {
+    } else if ((is_strict_mode(session.get_sql_mode()) && global_hint.get_parallel_hint() > ObGlobalHint::DEFAULT_PARALLEL) ||
+               (is_strict_mode(session.get_sql_mode()) && query_dop >  ObGlobalHint::DEFAULT_PARALLEL) ||
+               ctx_.is_online_ddl()) {
       // 当 px 开启，hint 中指定的 parallel > 1，或者 force parallel query > 1，并且有：
       //  - HINT: /*+ ENABLE_PARALLEL_DML */
       //  - 或 set _enable_parallel_dml = 1
