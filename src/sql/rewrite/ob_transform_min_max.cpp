@@ -86,7 +86,7 @@ int ObTransformMinMax::check_transform_validity(ObSelectStmt *select_stmt,
   if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(select_stmt));
-  } else if (select_stmt->has_recusive_cte() || select_stmt->has_hierarchical_query()) {
+  } else if (select_stmt->has_recursive_cte() || select_stmt->has_hierarchical_query()) {
     OPT_TRACE("stmt has recusive cte or hierarchical query");
   } else if (select_stmt->get_from_item_size() != 1 ||
              select_stmt->get_from_item(0).is_joined_ ||

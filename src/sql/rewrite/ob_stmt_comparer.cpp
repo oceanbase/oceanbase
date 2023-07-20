@@ -397,7 +397,7 @@ int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
     /*do nothing*/
   } else if (FALSE_IT(second_sel = const_cast<ObSelectStmt*>(static_cast<const ObSelectStmt*>(second)))) {
     /*do nothing*/
-  } else if (first_sel->has_recusive_cte() || second_sel->has_recusive_cte() ||
+  } else if (first_sel->has_recursive_cte() || second_sel->has_recursive_cte() ||
              first_sel->has_hierarchical_query() || second_sel->has_hierarchical_query() ||
              first_sel->is_contains_assignment() || second_sel->is_contains_assignment()) {
     /*do nothing*/

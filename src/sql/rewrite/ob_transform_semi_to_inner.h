@@ -127,6 +127,8 @@ private:
                            bool& need_check_cost,
                            TransformParam& trans_param);
 
+  int check_query_from_dual(ObSelectStmt *stmt, bool& query_from_dual);
+
   int collect_unique_property_of_from_items(ObTransformerCtx* ctx,
                                              ObDMLStmt* stmt,
                                              ObIArray<ObSEArray<ObRawExpr*, 4>>& unique_column_group);

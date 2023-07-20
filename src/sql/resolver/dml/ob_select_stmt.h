@@ -408,7 +408,7 @@ public:
                                                  get_aggr_item_size() > 0; }
 
   inline bool has_hierarchical_query() const { return is_hierarchical_query_ ; }
-  inline bool has_recusive_cte() const { return is_recursive_cte_; }
+  inline bool has_recursive_cte() const { return is_recursive_cte_; }
   void set_order_siblings(bool is_order_siblings) { is_order_siblings_ = is_order_siblings; }
   bool is_order_siblings() const { return is_order_siblings_; }
   void set_hierarchical_query(bool is_hierarchical_query) { is_hierarchical_query_ = is_hierarchical_query; }
