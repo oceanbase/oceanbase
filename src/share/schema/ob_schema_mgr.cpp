@@ -2856,7 +2856,10 @@ int ObSchemaMgr::get_table_schema(const uint64_t tenant_id, const uint64_t datab
       LOG_WARN("invalid case mode", K(ret), K(mode));
     }
     if (OB_SUCC(ret)) {
-      const ObTableSchemaHashWrapper table_name_wrapper(tenant_id, database_id, session_id, mode, table_name);
+      // issue/48358895
+      // sys table mode must be OB_ORIGIN_AND_INSENSITIVE
+      const ObTableSchemaHashWrapper table_name_wrapper(
+          tenant_id, database_id, session_id, mode, table_name, is_system_table);
       int hash_ret = table_name_map_.get_refactored(table_name_wrapper, tmp_schema);
       if (OB_SUCCESS == hash_ret) {
         if (OB_ISNULL(tmp_schema)) {
@@ -2868,7 +2871,8 @@ int ObSchemaMgr::get_table_schema(const uint64_t tenant_id, const uint64_t datab
       } else if (OB_HASH_NOT_EXIST == hash_ret && 0 != session_id && OB_INVALID_ID != session_id) {
         // If session_id != 0, the search just now is based on the possible match of the temporary table.
         // If it is not found, then it will be searched according to session_id = 0, which is the normal table.
-        const ObTableSchemaHashWrapper table_name_wrapper2(tenant_id, database_id, 0, mode, table_name);
+        const ObTableSchemaHashWrapper table_name_wrapper2(
+            tenant_id, database_id, 0, mode, table_name, is_system_table);
         hash_ret = table_name_map_.get_refactored(table_name_wrapper2, tmp_schema);
         if (OB_SUCCESS == hash_ret) {
           if (OB_ISNULL(tmp_schema)) {

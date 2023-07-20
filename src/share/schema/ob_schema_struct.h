@@ -1043,16 +1043,27 @@ public:
   ObCompareNameWithTenantID()
       : tenant_id_(common::OB_INVALID_ID),
         name_case_mode_(common::OB_NAME_CASE_INVALID),
-        database_id_(common::OB_INVALID_ID)
+        database_id_(common::OB_INVALID_ID),
+        is_sys_inner_object_(false)
   {}
   ObCompareNameWithTenantID(uint64_t tenant_id)
-      : tenant_id_(tenant_id), name_case_mode_(common::OB_NAME_CASE_INVALID), database_id_(common::OB_INVALID_ID)
+      : tenant_id_(tenant_id),
+        name_case_mode_(common::OB_NAME_CASE_INVALID),
+        database_id_(common::OB_INVALID_ID),
+        is_sys_inner_object_(false)
   {}
   ObCompareNameWithTenantID(uint64_t tenant_id, common::ObNameCaseMode mode)
-      : tenant_id_(tenant_id), name_case_mode_(mode), database_id_(common::OB_INVALID_ID)
+      : tenant_id_(tenant_id), name_case_mode_(mode), database_id_(common::OB_INVALID_ID), is_sys_inner_object_(false)
   {}
   ObCompareNameWithTenantID(uint64_t tenant_id, common::ObNameCaseMode mode, uint64_t database_id)
-      : tenant_id_(tenant_id), name_case_mode_(mode), database_id_(database_id)
+      : tenant_id_(tenant_id), name_case_mode_(mode), database_id_(database_id), is_sys_inner_object_(false)
+  {}
+  ObCompareNameWithTenantID(
+      uint64_t tenant_id, common::ObNameCaseMode mode, uint64_t database_id, bool is_sys_inner_object)
+      : tenant_id_(tenant_id),
+        name_case_mode_(mode),
+        database_id_(database_id),
+        is_sys_inner_object_(is_sys_inner_object)
   {}
   ~ObCompareNameWithTenantID()
   {}
@@ -1062,6 +1073,7 @@ private:
   uint64_t tenant_id_;
   common::ObNameCaseMode name_case_mode_;
   uint64_t database_id_;
+  bool is_sys_inner_object_;
 };
 
 class ObSchema {
@@ -3790,7 +3802,8 @@ public:
       : tenant_id_(common::OB_INVALID_ID),
         database_id_(common::OB_INVALID_ID),
         session_id_(common::OB_INVALID_ID),
-        name_case_mode_(common::OB_NAME_CASE_INVALID)
+        name_case_mode_(common::OB_NAME_CASE_INVALID),
+        is_sys_inner_object_(false)
   {}
   ObTableSchemaHashWrapper(const uint64_t tenant_id, const uint64_t database_id, const uint64_t session_id,
       const common::ObNameCaseMode mode, const common::ObString &table_name)
@@ -3798,7 +3811,17 @@ public:
         database_id_(database_id),
         session_id_(session_id),
         name_case_mode_(mode),
-        table_name_(table_name)
+        table_name_(table_name),
+        is_sys_inner_object_(false)
+  {}
+  ObTableSchemaHashWrapper(const uint64_t tenant_id, const uint64_t database_id, const uint64_t session_id,
+      const common::ObNameCaseMode mode, const common::ObString &table_name, const bool is_sys_inner_object)
+      : tenant_id_(tenant_id),
+        database_id_(database_id),
+        session_id_(session_id),
+        name_case_mode_(mode),
+        table_name_(table_name),
+        is_sys_inner_object_(is_sys_inner_object)
   {}
   ~ObTableSchemaHashWrapper()
   {}
@@ -3828,6 +3851,7 @@ private:
   uint64_t session_id_;
   common::ObNameCaseMode name_case_mode_;
   common::ObString table_name_;
+  bool is_sys_inner_object_;
 };
 
 inline uint64_t ObTableSchemaHashWrapper::hash() const
@@ -3843,7 +3867,8 @@ inline uint64_t ObTableSchemaHashWrapper::hash() const
 // See ObSchemaMgr::get_table_schema comment for session visibility judgment
 inline bool ObTableSchemaHashWrapper::operator==(const ObTableSchemaHashWrapper &rv) const
 {
-  ObCompareNameWithTenantID name_cmp(tenant_id_, name_case_mode_, database_id_);
+  bool is_sys_inner_object = is_sys_inner_object_ || rv.is_sys_inner_object_;
+  ObCompareNameWithTenantID name_cmp(tenant_id_, name_case_mode_, database_id_, is_sys_inner_object);
   return (tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_) &&
          (name_case_mode_ == rv.name_case_mode_) &&
          (session_id_ == rv.session_id_ || common::OB_INVALID_ID == rv.session_id_) &&

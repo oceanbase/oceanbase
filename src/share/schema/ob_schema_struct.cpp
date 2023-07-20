@@ -10616,6 +10616,8 @@ int ObCompareNameWithTenantID::compare(const common::ObString& str1, const commo
       combine_id(tenant_id_, OB_SYS_DATABASE_ID) == database_id_) {
     // If it is the oceanbase database, no matter what the tenant, I hope that it is not case sensitive
     cs_type = common::CS_TYPE_UTF8MB4_GENERAL_CI;
+  } else if (is_sys_inner_object_) {
+    cs_type = ObSchema::get_cs_type_with_cmp_mode(name_case_mode_);
   } else if (share::is_oracle_mode()) {
     cs_type = common::CS_TYPE_UTF8MB4_BIN;
   } else if (tenant_id_ == OB_INVALID_ID) {
