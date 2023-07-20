@@ -12272,10 +12272,16 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   in_tenant_space = True,
   keywords = all_def_keywords['__all_tenant_event_history']))
 
-#
-# 12416: __all_virtual_balance_task_helper
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12416',
+  table_name = '__all_virtual_balance_task_helper',
+  keywords = all_def_keywords['__all_balance_task_helper']))
 
-# 12417: __all_virtual_balance_group_ls_stat
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12417',
+  table_name = '__all_virtual_balance_group_ls_stat',
+  keywords = all_def_keywords['__all_balance_group_ls_stat']))
+
 # 12418: __all_virtual_cgroup_info
 # 12419: __all_virtual_cgroup_config
 
@@ -12520,7 +12526,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15281', all_def_keywords['__all_tenant_rewrite_rules']))
 def_table_schema(**no_direct_access(gen_sys_agent_virtual_table_def('15282', all_def_keywords['__all_tenant'])))
 
-# 15283: __all_virtual_tenant_info_agent
+# 15283: __all_virtual_tenant_info_agent abandoned
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15284', all_def_keywords['__all_virtual_sql_plan'])))
 # 15285 abandoned
@@ -12657,8 +12663,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15399', all_def_keyword
 
 # 15401: __all_virtual_data_activity_metrics
 
-# 15402: __all_virtual_ls
-
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15402', all_def_keywords['__all_ls']))
 # 余留位置
 
 ################################################################################
@@ -16442,7 +16447,10 @@ SELECT A.TENANT_ID,
         END) AS LOG_MODE,
        ARBITRATION_SERVICE_STATUS,
        UNIT_NUM,
-       COMPATIBLE
+       COMPATIBLE,
+       (CASE
+            WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1
+            ELSE B.MAX_LS_ID END) AS MAX_LS_ID
 FROM OCEANBASE.__ALL_VIRTUAL_TENANT_MYSQL_SYS_AGENT AS A
 LEFT JOIN OCEANBASE.__ALL_VIRTUAL_TENANT_INFO AS B
     ON A.TENANT_ID = B.TENANT_ID
@@ -27838,8 +27846,75 @@ def_table_schema(
 # 21442: DBA_OB_MVIEW_REFRESH_STMT_STATS
 # 21443: DBA_WR_CONTROL
 # 21444: CDB_WR_CONTROL
-# 21445: DBA_OB_LS_HISTORY
-# 21446: CDB_OB_LS_HISTORY
+def_table_schema(
+  owner           = 'msy164651',
+  table_name      = 'DBA_OB_LS_HISTORY',
+  table_id        = '21445',
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+    SELECT
+          (CASE
+               WHEN A.LS_ID IS NULL THEN B.LS_ID
+               ELSE A.LS_ID END) AS LS_ID,
+          (CASE
+               WHEN A.LS_GROUP_ID IS NULL THEN B.LS_GROUP_ID
+               ELSE A.LS_GROUP_ID END) AS LS_GROUP_ID,
+          (CASE
+               WHEN A.STATUS IS NULL THEN B.STATUS
+               ELSE A.STATUS END) AS STATUS,
+          (CASE
+               WHEN A.FLAG IS NULL THEN B.FLAG
+               ELSE A.FLAG END) AS FLAG,
+          (CASE
+               WHEN A.LS_ID = 1 THEN 0
+               ELSE B.CREATE_SCN END) AS CREATE_SCN
+    FROM OCEANBASE.__ALL_VIRTUAL_LS_STATUS AS A
+         FULL JOIN OCEANBASE.__ALL_LS AS B
+              ON A.LS_ID = B.LS_ID
+    WHERE A.TENANT_ID = EFFECTIVE_TENANT_ID();
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'msy164651',
+  table_name      = 'CDB_OB_LS_HISTORY',
+  table_id        = '21446',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+    SELECT
+          (CASE
+               WHEN A.TENANT_ID IS NULL THEN B.TENANT_ID
+               ELSE A.TENANT_ID END) AS TENANT_ID,
+          (CASE
+               WHEN A.LS_ID IS NULL THEN B.LS_ID
+               ELSE A.LS_ID END) AS LS_ID,
+          (CASE
+               WHEN A.LS_GROUP_ID IS NULL THEN B.LS_GROUP_ID
+               ELSE A.LS_GROUP_ID END) AS LS_GROUP_ID,
+          (CASE
+               WHEN A.STATUS IS NULL THEN B.STATUS
+               ELSE A.STATUS END) AS STATUS,
+          (CASE
+               WHEN A.FLAG IS NULL THEN B.FLAG
+               ELSE A.FLAG END) AS FLAG,
+          (CASE
+               WHEN A.LS_ID = 1 THEN 0
+               ELSE B.CREATE_SCN END) AS CREATE_SCN
+    FROM OCEANBASE.__ALL_VIRTUAL_LS_STATUS AS A
+         FULL JOIN OCEANBASE.__ALL_VIRTUAL_LS AS B
+              ON A.LS_ID = B.LS_ID AND A.TENANT_ID = B.TENANT_ID;
+  """.replace("\n", " "),
+)
+
 
 def_table_schema(
   owner           = 'wanhong.wwh',
@@ -44348,7 +44423,10 @@ SELECT A.TENANT_ID,
         END) AS LOG_MODE,
        ARBITRATION_SERVICE_STATUS,
        UNIT_NUM,
-       COMPATIBLE
+       COMPATIBLE,
+       (CASE
+            WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1
+            ELSE B.MAX_LS_ID END) AS MAX_LS_ID
 FROM SYS.ALL_VIRTUAL_TENANT_SYS_AGENT A
 LEFT JOIN SYS.ALL_VIRTUAL_TENANT_INFO B
     ON A.TENANT_ID = B.TENANT_ID
@@ -45726,8 +45804,41 @@ JOIN SYS.ALL_VIRTUAL_OPTSTAT_GLOBAL_PREFS_REAL_AGENT GP
 # 25255: DBA_OB_MVIEW_REFRESH_STMT_STATS
 # 25256: DBMS_LOCK_ALLOCATED
 # 25257: DBA_WR_CONTROL
-# 25258: DBA_OB_LS_HISTORY
-
+def_table_schema(
+  owner           = 'msy164651',
+  table_name      = 'DBA_OB_LS_HISTORY',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25258',
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+    SELECT
+          (CASE
+               WHEN A.LS_ID IS NULL THEN B.LS_ID
+               ELSE A.LS_ID END) AS LS_ID,
+          (CASE
+               WHEN A.LS_GROUP_ID IS NULL THEN B.LS_GROUP_ID
+               ELSE A.LS_GROUP_ID END) AS LS_GROUP_ID,
+          (CASE
+               WHEN A.STATUS IS NULL THEN B.STATUS
+               ELSE A.STATUS END) AS STATUS,
+          (CASE
+               WHEN A.FLAG IS NULL THEN B.FLAG
+               ELSE A.FLAG END) AS FLAG,
+          (CASE
+               WHEN A.LS_ID = 1 THEN 0
+               ELSE B.CREATE_SCN END) AS CREATE_SCN
+    FROM SYS.ALL_VIRTUAL_LS_STATUS A
+         FULL JOIN SYS.ALL_VIRTUAL_LS_REAL_AGENT B
+              ON A.LS_ID = B.LS_ID
+    WHERE A.TENANT_ID = EFFECTIVE_TENANT_ID();
+  """.replace("\n", " "),
+)
 def_table_schema(
   owner           = 'wanhong.wwh',
   table_name      = 'DBA_OB_TENANT_EVENT_HISTORY',

@@ -793,20 +793,22 @@ int ObRecoveryLSService::process_ls_operator_in_trans_(
               tenant_info.get_switchover_status(), trans))) {
         LOG_WARN("failed to drop ls", KR(ret), K(tenant_id_), K(ls_attr));
       }
+    } else if (OB_FAIL(ls_operator.get_ls_status_info(tenant_id_, ls_attr.get_ls_id(),
+            ls_status, trans))) {
+      LOG_WARN("failed to get ls status", KR(ret), K(tenant_id_), K(ls_attr));
     } else if (share::is_ls_drop_end_op(ls_attr.get_ls_operation_type())) {
       if (OB_FAIL(ls_life_agent.set_ls_offline_in_trans(tenant_id_, ls_attr.get_ls_id(),
-              ls_attr.get_ls_status(), sync_scn, tenant_info.get_switchover_status(), trans))) {
-        LOG_WARN("failed to set offline", KR(ret), K(tenant_id_), K(ls_attr), K(sync_scn), K(tenant_info));
+              ls_status.status_, sync_scn, tenant_info.get_switchover_status(), trans))) {
+        LOG_WARN("failed to set offline", KR(ret), K(tenant_id_), K(ls_attr),
+            K(sync_scn), K(tenant_info), K(ls_status));
       }
+    } else if (ls_status.ls_is_creating()) {
+      //can not be creating, must be created or other status
+      ret = OB_EAGAIN;
+      LOG_WARN("ls not created, need wait", KR(ret), K(ls_status));
     } else {
       ObLSStatus target_status = share::OB_LS_EMPTY;
-      if (OB_FAIL(ls_operator.get_ls_status_info(tenant_id_, ls_attr.get_ls_id(),
-              ls_status, trans))) {
-        LOG_WARN("failed to get ls status", KR(ret), K(tenant_id_), K(ls_attr));
-      } else if (ls_status.ls_is_creating()) {
-        ret = OB_EAGAIN;
-        LOG_WARN("ls not created, need wait", KR(ret), K(ls_status));
-      } else if (share::is_ls_create_end_op(ls_attr.get_ls_operation_type())) {
+      if (share::is_ls_create_end_op(ls_attr.get_ls_operation_type())) {
         // set ls to normal
         target_status = share::OB_LS_NORMAL;
       } else if (share::is_ls_tenant_drop_op(ls_attr.get_ls_operation_type())) {

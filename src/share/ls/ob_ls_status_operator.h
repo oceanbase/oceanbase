@@ -56,20 +56,6 @@ namespace schema
 class ObMultiVersionSchemaService;
 }
 
-ObLSStatus str_to_ls_status(const ObString &status_str);
-const char* ls_status_to_str(const ObLSStatus &status);
-
-bool ls_is_empty_status(const ObLSStatus &status);
-bool ls_is_creating_status(const ObLSStatus &status);
-bool ls_is_created_status(const ObLSStatus &status);
-bool ls_is_normal_status(const ObLSStatus &status);
-bool ls_is_tenant_dropping_status(const ObLSStatus &status);
-bool ls_is_dropping_status(const ObLSStatus &status);
-bool ls_is_wait_offline_status(const ObLSStatus &status);
-bool is_valid_status_in_ls(const ObLSStatus &status);
-bool ls_is_create_abort_status(const ObLSStatus &status);
-bool ls_need_create_abort_status(const ObLSStatus &status);
-bool ls_is_pre_tenant_dropping_status(const ObLSStatus &status);
 class ObLSStatusOperator;
 
 const int64_t MAX_MEMBERLIST_FLAG_LENGTH = 10;
@@ -258,7 +244,6 @@ class ObLSStatusOperator : public ObLSLifeIAgent, public ObLSTemplateOperator
  public:
   ObLSStatusOperator() {};
   virtual ~ObLSStatusOperator(){}
-
 public:
   /*
    * description: override of ObLSLifeIAgent

@@ -20,6 +20,7 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/string/ob_sql_string.h"
 #include "share/scn.h"
+#include "rootserver/ob_rs_event_history_table_operator.h"
 namespace oceanbase
 {
 namespace common
@@ -32,17 +33,35 @@ namespace sqlclient
 {
 class ObMySQLResult;
 }
+
 }
 namespace share
 {
 class ObLSID;
 struct ObLSStatusInfo;
-/**
- * @description:
- *    In order to let switchover switch the accessmode of all LS correctly,
- *    when creating, deleting, and updating LS status,
- *    it needs to be mutually exclusive with switchover status of __all_tenant_info
- */
+#define ALL_LS_EVENT_ADD(tenant_id, ls_id, event, ret, sql, args...)\
+  do {\
+    const int64_t MAX_VALUE_LENGTH = 512; \
+    char VALUE[MAX_VALUE_LENGTH] = {""}; \
+    int64_t pos = 0; \
+    common::ObCurTraceId::TraceId *trace_id = ObCurTraceId::get_trace_id();\
+    common::databuff_print_kv(VALUE, MAX_VALUE_LENGTH, pos, ##args, KPC(trace_id)); \
+    ROOTSERVICE_EVENT_ADD("LS", event, "tenant_id", tenant_id, "ls_id", ls_id,\
+        "ret", ret, "sql", ObHexEscapeSqlStr(sql.string()),\
+        "", NULL, "", NULL, ObHexEscapeSqlStr(VALUE));\
+  } while (0)
+
+#define LS_EVENT_ADD(tenant_id, ls_id, event, ret, paxos_cnt, success_cnt, args...)\
+  do {\
+    const int64_t MAX_VALUE_LENGTH = 512; \
+    char VALUE[MAX_VALUE_LENGTH] = {""}; \
+    int64_t pos = 0; \
+    common::ObCurTraceId::TraceId *trace_id = ObCurTraceId::get_trace_id();\
+    common::databuff_print_kv(VALUE, MAX_VALUE_LENGTH, pos, ##args, KPC(trace_id)); \
+    ROOTSERVICE_EVENT_ADD("LS", event, "tenant_id", tenant_id, "ls_id", ls_id,\
+        "ret", ret, "success_cnt", success_cnt, "paxos_cnt", paxos_cnt, "", NULL, ObHexEscapeSqlStr(VALUE));\
+  } while (0)
+
 
 enum ObLSStatus
 {
@@ -55,7 +74,16 @@ enum ObLSStatus
   OB_LS_WAIT_OFFLINE,
   OB_LS_CREATE_ABORT,
   OB_LS_PRE_TENANT_DROPPING,//only for sys ls
+  OB_LS_DROPPED,//for __all_ls
+  OB_LS_MAX_STATUS,
 };
+
+/**
+ * @description:
+ *    In order to let switchover switch the accessmode of all LS correctly,
+ *    when creating, deleting, and updating LS status,
+ *    it needs to be mutually exclusive with switchover status of __all_tenant_info
+ */
 
 /*
  *log stream lifetime description:
