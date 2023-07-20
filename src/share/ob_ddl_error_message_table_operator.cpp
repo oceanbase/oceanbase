@@ -331,7 +331,7 @@ int ObDDLErrorMessageTableOperator::report_ddl_error_message(const ObBuildDDLErr
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected affected rows", K(ret), K(affected_rows));
     } else {
-      LOG_INFO("process ddl error message report success", K(ret), K(schema_version), K(table_id), K(addr), K(error_message), K(update_sql.ptr()));
+      LOG_INFO("process ddl error message report success", K(ret), K(task_id), K(schema_version), K(table_id), K(addr), K(error_message), K(update_sql.ptr()));
     }
   }
   return ret;

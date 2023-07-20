@@ -947,12 +947,15 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
   const ObDDLTaskStatus old_status = task_status_;
   const bool error_need_retry = OB_SUCCESS != ret_code && is_error_need_retry(ret_code);
   if (OB_TMP_FAIL(check_ddl_task_is_cancel(trace_id_, is_cancel))) {
-    LOG_WARN("check ddl task is cancel failed", K(tmp_ret), K_(trace_id));
+    LOG_WARN("check ddl task is cancel failed", K(tmp_ret), K(task_id_), K(parent_task_id_), K_(trace_id));
   }
   if (is_cancel) {
     real_ret_code = (OB_SUCCESS == ret_code || error_need_retry) ? OB_CANCELED : ret_code;
+    FLOG_INFO("ddl task is canceled", K(task_id_), K(parent_task_id_), K(object_id_),
+        K(target_object_id_), K(ret_code), K(error_need_retry), K(real_ret_code));
   } else if (SUCCESS == old_status || error_need_retry) {
-    LOG_INFO("error code found, but execute again", K(ret_code), K(ret_code_), K(old_status), K(new_status), K(err_code_occurence_cnt_));
+    LOG_INFO("error code found, but execute again", K(task_id_), K(parent_task_id_),
+        K(ret_code), K(ret_code_), K(old_status), K(new_status), K(err_code_occurence_cnt_));
     real_new_status = old_status;
     real_ret_code = OB_SUCCESS;
   }
@@ -967,12 +970,12 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
     LOG_WARN("check if tenant has been dropped failed", K(ret), K(tenant_id_));
   } else if (is_tenant_dropped) {
     need_retry_ = false;
-    LOG_INFO("tenant has been dropped, exit anyway", K(ret), K(tenant_id_));
+    LOG_INFO("tenant has been dropped, exit anyway", K(ret), K(task_id_), K(parent_task_id_), K(tenant_id_));
   } else if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(&root_service->get_sql_proxy(), tenant_id_, is_standby_tenant))) {
     LOG_WARN("check is standby tenant failed", K(ret), K(tenant_id_));
   } else if (is_standby_tenant) {
     need_retry_ = false;
-    LOG_INFO("tenant is standby, exit anyway", K(ret), K(tenant_id_));
+    LOG_INFO("tenant is standby, exit anyway", K(ret), K(task_id_), K(parent_task_id_), K(tenant_id_));
   } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id_))) {
     LOG_WARN("start transaction failed", K(ret));
   } else {
