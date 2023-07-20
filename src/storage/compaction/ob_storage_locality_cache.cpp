@@ -274,6 +274,7 @@ int ObStorageLocalityCache::generate_ls_locality(
   }
   common::ObArray<ObLSLocalityInCache> tmp_ls_locality_array;
   ObLSLocalityInCache ls_locality;
+  ls_locality.set_attr(tenant_id_);
   int64_t ls_id = 0;
   ObString svr_ip;
   int64_t svr_port = 0;

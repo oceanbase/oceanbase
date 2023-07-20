@@ -38,6 +38,11 @@ public:
   ~ObLSLocalityStruct()
   {
   }
+  void set_attr(const int64_t tenant_id)
+  {
+    ObMemAttr attr(tenant_id, "LSLocCache");
+    svr_addr_list_.set_attr(attr);
+  }
   void reset()
   {
     ls_id_.reset();
