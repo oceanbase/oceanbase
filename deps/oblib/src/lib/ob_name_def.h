@@ -86,6 +86,7 @@
 #define N_PARTITION_EXPR "partition_express"
 #define N_SUBPARTITION_EXPR "partition_express"
 #define N_IDX "idx"
+#define N_TYPE_VALUE "type_value"
 #define N_CHILDREN_OPS "child_operators"
 #define N_PHY_OP_ID "phy_operator_id"
 #define N_CHILDREN_NUM "child_operators_num"

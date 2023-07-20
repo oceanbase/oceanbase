@@ -209,11 +209,10 @@ int ObInnerSQLConnectionPool::acquire(
   return ret;
 }
 
-int ObInnerSQLConnectionPool::release(common::sqlclient::ObISQLConnection *conn,
-    const bool success, uint32_t sessid)
+int ObInnerSQLConnectionPool::release(common::sqlclient::ObISQLConnection *conn, const bool success)
 {
   // alway try to destroy connection, ignore success flag.
-  UNUSEDx(success, sessid);
+  UNUSEDx(success);
   int ret = OB_SUCCESS;
   if (!inited_) {
     ret = OB_NOT_INIT;

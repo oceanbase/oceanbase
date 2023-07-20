@@ -48,7 +48,7 @@ public:
             const ObParamStore &param_store,
             ObReverseLink *reverse_link = NULL);
   virtual int inner_execute_link_stmt(const char *link_stmt) = 0;
-  static int init_dblink_param_ctx(ObExecContext &exec_ctx, common::sqlclient::dblink_param_ctx &param_ctx);
+  int init_dblink_param_ctx(common::sqlclient::dblink_param_ctx &param_ctx);
   static int get_charset_id(ObExecContext &exec_ctx, uint16_t &charset_id, uint16_t &ncharset_id);
 protected:
   int combine_link_stmt(const common::ObString &link_stmt_fmt,

@@ -84,6 +84,126 @@ int ObDblinkService::get_length_from_type_text(ObString &type_text, int32_t &len
   return ret;
 }
 
+int ObDblinkService::get_set_sql_mode_cstr(sql::ObSQLSessionInfo *session_info, const char *&set_sql_mode_cstr, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString set_sql_mode_sql;
+  ObObj sql_mode_int_obj;
+  ObObj sql_mode_str_obj;
+  const char *set_sql_mode_fmt = "SET SESSION sql_mode = '%.*s'";
+  void *buf = NULL;
+  int64_t copy_len = 0;
+  if (lib::is_oracle_mode()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("only used in mysql mode", K(ret));
+  } else if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_SQL_MODE, sql_mode_int_obj))) {
+    LOG_WARN("failed to get SYS_VAR_SET_REVERSE_DBLINK_INFOS", K(sql_mode_int_obj), K(ret));
+  } else if (OB_FAIL(ob_sql_mode_to_str(sql_mode_int_obj, sql_mode_str_obj, &allocator))) {
+    LOG_WARN("failed sql mode to str", K(sql_mode_int_obj), K(ret));
+  } else if (OB_FAIL(set_sql_mode_sql.append_fmt(set_sql_mode_fmt,
+                                                 sql_mode_str_obj.val_len_,
+                                                 sql_mode_str_obj.v_.string_))) {
+    LOG_WARN("append sql failed", K(ret), K(sql_mode_str_obj));
+  } else if (FALSE_IT([&]{ copy_len = set_sql_mode_sql.length(); }())) {
+  } else if (OB_ISNULL(buf = allocator.alloc(copy_len + 1))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", K(ret), K(copy_len));
+  } else {
+    MEMCPY(buf, set_sql_mode_sql.ptr(), copy_len);
+    char *sql_cstr = static_cast<char *>(buf);
+    sql_cstr[copy_len] = 0;
+    set_sql_mode_cstr = sql_cstr;
+  }
+  return ret;
+}
+
+int ObDblinkService::get_set_names_cstr(sql::ObSQLSessionInfo *session_info,
+                                        const char *&set_client_charset,
+                                        const char *&set_connection_charset,
+                                        const char *&set_results_charset)
+{
+  int ret = OB_SUCCESS;
+  int64_t client = -1;
+  int64_t connection = -1;
+  int64_t results = -1;
+  set_client_charset = NULL;
+  set_connection_charset = NULL;
+  set_results_charset = "set character_set_results = NULL";
+  if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_CHARACTER_SET_CLIENT, client))) {
+    LOG_WARN("failed to get client characterset", K(ret));
+  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_CHARACTER_SET_CONNECTION, connection))) {
+    LOG_WARN("failed to get connection characterset", K(ret));
+  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_CHARACTER_SET_CLIENT, results))) {
+    LOG_WARN("failed to get results characterset", K(ret));
+  } else {
+    switch(ObCharset::charset_type_by_coll(ObCollationType(client))) {
+      case ObCharsetType::CHARSET_UTF8MB4:
+        set_client_charset = "set character_set_client = utf8mb4";
+        break;
+      case ObCharsetType::CHARSET_GBK:
+        set_client_charset = "set character_set_client = gbk";
+        break;
+      case ObCharsetType::CHARSET_BINARY:
+        set_client_charset = "set character_set_client = binary";
+        break;
+      default:
+        // do nothing
+        break;
+    }
+    switch(ObCharset::charset_type_by_coll(ObCollationType(connection))) {
+      case ObCharsetType::CHARSET_UTF8MB4:
+        set_connection_charset = "set character_set_connection = utf8mb4";
+        break;
+      case ObCharsetType::CHARSET_GBK:
+        set_connection_charset = "set character_set_connection = gbk";
+        break;
+      case ObCharsetType::CHARSET_BINARY:
+        set_connection_charset = "set character_set_connection = binary";
+        break;
+      default:
+        // do nothing
+        break;
+    }
+    switch(ObCharset::charset_type_by_coll(ObCollationType(results))) {
+      case ObCharsetType::CHARSET_UTF8MB4:
+        set_results_charset = "set character_set_results = utf8mb4";
+        break;
+      case ObCharsetType::CHARSET_GBK:
+        set_results_charset = "set character_set_results = gbk";
+        break;
+      case ObCharsetType::CHARSET_BINARY:
+        set_results_charset = "set character_set_results = binary";
+        break;
+      default:
+        // do nothing
+        break;
+    }
+  }
+  return ret;
+}
+
+int ObDblinkService::get_local_session_vars(sql::ObSQLSessionInfo *session_info,
+                                            ObIAllocator &allocator,
+                                            common::sqlclient::dblink_param_ctx &param_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (lib::is_mysql_mode() && OB_FAIL(get_set_sql_mode_cstr(session_info, param_ctx.set_sql_mode_cstr_, allocator))) {
+    LOG_WARN("failed to get set_sql_mode_cstr", K(ret));
+  } else if (OB_FAIL(get_set_names_cstr(session_info,
+                                        param_ctx.set_client_charset_cstr_,
+                                        param_ctx.set_connection_charset_cstr_,
+                                        param_ctx.set_results_charset_cstr_))) {
+    LOG_WARN("failed to get set_names_cstr", K(ret));
+  }
+  return ret;
+}
+
 ObReverseLink::ObReverseLink()
   : user_(),
     tenant_(),
@@ -192,7 +312,11 @@ const int64_t ObReverseLink::LONG_QUERY_TIMEOUT = 120*1000*1000; //120 seconds
 int ObReverseLink::open(int64_t session_sql_req_level)
 {
   int ret = OB_SUCCESS;
-  if (!is_close_) {
+  common::sqlclient::dblink_param_ctx param_ctx;
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (!is_close_) {
     // nothing to do
   } else if (tenant_.empty() || user_.empty() || passwd_.empty() /*|| db_name.empty()*/
       || OB_UNLIKELY(cluster_.length() >= OB_MAX_CLUSTER_NAME_LENGTH)
@@ -202,6 +326,8 @@ int ObReverseLink::open(int64_t session_sql_req_level)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret),
              K(cluster_), K(tenant_), K(user_), K(passwd_));
+  } else if (OB_FAIL(ObDblinkService::get_local_session_vars(session_info_, allocator_, param_ctx))) {
+      LOG_WARN("failed to get local session vars", K(ret));
   } else {
     if (cluster_.empty()) {
       (void)snprintf(db_user_, sizeof(db_user_), "%.*s@%.*s", user_.length(), user_.ptr(),
@@ -213,14 +339,12 @@ int ObReverseLink::open(int64_t session_sql_req_level)
     }
     (void)snprintf(db_pass_, sizeof(db_pass_), "%.*s", passwd_.length(), passwd_.ptr());
     LOG_DEBUG("open reverse link connection", K(ret), K(db_user_), K(db_pass_), K(addr_));
+    param_ctx.link_type_ = common::sqlclient::DBLINK_DRV_OB;
     if (OB_FAIL(reverse_conn_.connect(db_user_, db_pass_, "", addr_, 10, true, session_sql_req_level))) { //just set connect timeout to 10s, read and write have not timeout
-      ObDblinkUtils::process_dblink_errno(common::sqlclient::DBLINK_DRV_OB, ret);
       LOG_WARN("failed to open reverse link connection", K(ret), K(db_user_), K(db_pass_), K(addr_));
     } else if (OB_FAIL(reverse_conn_.set_timeout_variable(LONG_QUERY_TIMEOUT, common::sqlclient::ObMySQLConnectionPool::DEFAULT_TRANSACTION_TIMEOUT_US))) {
-      ObDblinkUtils::process_dblink_errno(common::sqlclient::DBLINK_DRV_OB, ret);
       LOG_WARN("failed to set reverse link connection's timeout", K(ret));
-    } else if (OB_FAIL(ObDbLinkProxy::execute_init_sql(&reverse_conn_, common::sqlclient::DBLINK_DRV_OB))) {
-      ObDblinkUtils::process_dblink_errno(common::sqlclient::DBLINK_DRV_OB, ret);
+    } else if (OB_FAIL(ObDbLinkProxy::execute_init_sql(param_ctx, &reverse_conn_))) {
       LOG_WARN("failed to init reverse link connection", K(ret));
     } else {
       is_close_ = false;
@@ -241,11 +365,21 @@ int ObReverseLink::read(const char *sql, ObISQLClient::ReadResult &res)
     ret = OB_NOT_INIT;
     LOG_WARN("reverse link connection is closed", K(ret));
   } else if (OB_FAIL(reverse_conn_.execute_read(OB_INVALID_TENANT_ID, sql, res))) {
-    int dblink_errno = ret;
-    ObDblinkUtils::process_dblink_errno(common::sqlclient::DblinkDriverProto::DBLINK_DRV_OB, &reverse_conn_, ret);
     LOG_WARN("faild to read by reverse link connection", K(ret), K(sql));
   } else {
     LOG_DEBUG("succ to read by reverse link connection", K(ret), K(sql));
+  }
+  return ret;
+}
+
+int ObReverseLink::ping()
+{
+  int ret = OB_SUCCESS;
+  if (is_close_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("reverse link connection is closed", K(ret));
+  } else if (OB_FAIL(reverse_conn_.ping())) {
+    LOG_WARN("faild to ping reverse link connection", K(ret));
   }
   return ret;
 }
@@ -259,57 +393,6 @@ int ObReverseLink::close()
     LOG_DEBUG("reversesucc to close reverse link connection", K(ret), K(lbt()));
   }
   return ret;
-}
-
-int ObDblinkUtils::process_dblink_errno(common::sqlclient::DblinkDriverProto dblink_type, common::sqlclient::ObISQLConnection *dblink_conn, int &ob_errno) {
-  // The purpose of adding the process_dblink_errno function
-  // is to distinguish the errno processing when dblink connects to other types of databases.
-  const int orcl_errno = ob_errno;
-  switch (dblink_type) {
-    case common::sqlclient::DblinkDriverProto::DBLINK_DRV_OB: {
-      if (OB_UNLIKELY(NULL == dblink_conn)) {
-        get_ob_errno_from_oracle_errno(orcl_errno, NULL, ob_errno);
-      } else {
-        get_ob_errno_from_oracle_errno(orcl_errno, mysql_error(static_cast<common::sqlclient::ObMySQLConnection *>(dblink_conn)->get_handler()), ob_errno);
-      }
-      break;
-    }
-    case common::sqlclient::DblinkDriverProto::DBLINK_DRV_OCI: {
-      get_ob_errno_from_oracle_errno(orcl_errno, NULL, ob_errno);
-    }
-    default: {
-      //nothing
-      break;
-    }
-  }
-  // some oracle error code can not translate to oceanbase error code,
-  // so use OB_ERR_DBLINK_REMOTE_ECODE to represent those oracle error code.
-  if (orcl_errno == ob_errno &&
-      // error code -40xx will report from code in deps/, need skip it
-      (ob_errno != -4016 || ob_errno != -4012 ||
-       ob_errno != -4013 || ob_errno != -4002 || ob_errno != -4007)) {
-    LOG_USER_ERROR(OB_ERR_DBLINK_REMOTE_ECODE, orcl_errno);
-    ob_errno = OB_ERR_DBLINK_REMOTE_ECODE;
-  }
-  return OB_SUCCESS;
-}
-
-int ObDblinkUtils::process_dblink_errno(common::sqlclient::DblinkDriverProto dblink_type, int &ob_errno) {
-  // The purpose of adding the process_dblink_errno function
-  // is to distinguish the errno processing when dblink connects to other types of databases.
-  const int orcl_errno = ob_errno;
-  get_ob_errno_from_oracle_errno(orcl_errno, NULL, ob_errno);
-  // some oracle error code can not translate to oceanbase error code,
-  // so use OB_ERR_DBLINK_REMOTE_ECODE to represent those oracle error code.
-  if (-4016 == ob_errno ||
-      -4012 == ob_errno ||
-      -4002 == ob_errno) {
-    // do nothing
-  } else if (orcl_errno == ob_errno) {
-    LOG_USER_ERROR(OB_ERR_DBLINK_REMOTE_ECODE, orcl_errno);
-    ob_errno = OB_ERR_DBLINK_REMOTE_ECODE;
-  }
-  return OB_SUCCESS;
 }
 
 int ObDblinkUtils::has_reverse_link_or_any_dblink(const ObDMLStmt *stmt, bool &has, bool has_any_dblink) {
@@ -472,7 +555,7 @@ int ObDblinkCtxInSession::clean_dblink_conn(const bool force_disconnect)
         LOG_WARN("server_conn_pool of dblink connection is NULL", K(this), K(dblink_conn), K(i), K(ret));
       } else {
         const bool need_disconnect = force_disconnect || !dblink_conn->usable();
-        if (OB_FAIL(server_conn_pool->release(dblink_conn, !need_disconnect, session_info_->get_sessid()))) {
+        if (OB_FAIL(server_conn_pool->release(dblink_conn, !need_disconnect))) {
           LOG_WARN("session failed to release dblink connection", K(session_info_->get_sessid()), K(this), KP(dblink_conn), K(i), K(ret));
         } else {
           LOG_TRACE("session succ to release dblink connection", K(session_info_->get_sessid()), K(this), KP(dblink_conn), K(i), K(ret));
@@ -527,6 +610,7 @@ int ObDblinkCtxInSession::get_reverse_link(ObReverseLink *&reverse_dblink)
         } else if (OB_FAIL(reverse_dblink_->deserialize(new_buff, new_size, pos))) {
           LOG_WARN("failed to deserialize reverse_dblink_", K(new_size), K(ret));
         } else {
+          reverse_dblink_->set_session_info(session_info_);
           reverse_dblink = reverse_dblink_;
           LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_sessid()), K(*reverse_dblink), KP(reverse_dblink));
         }
@@ -542,5 +626,65 @@ int ObDblinkCtxInSession::get_reverse_link(ObReverseLink *&reverse_dblink)
     reverse_dblink = reverse_dblink_;
     LOG_DEBUG("succ to get reverse link from seesion", K(session_info_->get_sessid()), K(*reverse_dblink), KP(reverse_dblink));
   }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObParamPosIdx, pos_, idx_, type_value_);
+
+int ObLinkStmtParam::write(char *buf, int64_t buf_len, int64_t &pos, int64_t param_idx, int8_t type_value)
+{
+  /*
+   * we need 4 bytes for every const param:
+   * 1 byte:  '\0' for meta info flag. '\0' can not appear in any sql stmt fmt.
+   * 1 byte:  meta info type. now we used 0 to indicate const param.
+   * 2 bytes: uint16 for param index.
+   */
+  int ret = OB_SUCCESS;
+  if (buf_len - pos < PARAM_LEN) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("buffer is not enough", K(ret), K(buf_len), K(pos));
+  } else if (type_value < -1 || type_value > static_cast<int8_t>(ObObjType::ObMaxType)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid type_value", K(type_value), K(ret));
+  } else if (param_idx < 0 || param_idx > UINT16_MAX) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("param count should be between 0 and UINT16_MAX", K(ret), K(param_idx));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "param count not in the range 0 - UINT16_MAX");
+  } else {
+    buf[pos++] = 0;   // meta flag.
+    buf[pos++] = type_value;   // meta type.
+    *(uint16_t*)(buf + pos) = param_idx;
+    pos += sizeof(uint16_t);
+  }
+  return ret;
+}
+
+int64_t ObLinkStmtParam::get_param_len()
+{
+  return PARAM_LEN;
+}
+
+const int64_t ObLinkStmtParam::PARAM_LEN = sizeof(char) * 2 + sizeof(uint16_t);
+
+int ObLinkStmtParam::read_next(const char *buf, int64_t buf_len, int64_t &pos, int64_t &param_idx, int8_t &type_value)
+{
+  int ret = OB_SUCCESS;
+  const char *ch = buf + pos;
+  const char *buf_end = buf + buf_len - PARAM_LEN + 1;
+  param_idx = -1;
+  while (OB_SUCC(ret) && param_idx < 0 && ch < buf_end) {
+    if (0 != ch[0]) {
+      ch++;
+    } else {
+      type_value = static_cast<int8_t>(ch[1]);
+      if (type_value < -1 || type_value > static_cast<int8_t>(ObObjType::ObMaxType)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid type_value", K(type_value), K(ret));
+      } else {
+        param_idx = static_cast<int64_t>(*(uint16_t*)(ch + 2));
+      }
+    }
+  }
+  pos = ch - buf;
   return ret;
 }

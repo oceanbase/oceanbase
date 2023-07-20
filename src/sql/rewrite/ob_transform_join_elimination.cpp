@@ -551,6 +551,7 @@ int ObTransformJoinElimination::create_missing_select_items(ObSelectStmt *source
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(temp_source_table), K(temp_target_table), K(ret));
         } else if ((temp_source_table->is_basic_table() && temp_target_table->is_basic_table()) ||
+                    (temp_source_table->is_link_table() && temp_target_table->is_link_table()) ||
                    (temp_source_table->is_temp_table() && temp_target_table->is_temp_table()) ||
                    (temp_source_table->is_generated_table() && temp_target_table->is_generated_table())) {
           if (OB_FAIL(ObTransformUtils::merge_table_items(source_stmt,

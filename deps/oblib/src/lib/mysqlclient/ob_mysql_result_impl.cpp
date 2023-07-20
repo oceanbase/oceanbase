@@ -614,7 +614,7 @@ int ObMySQLResultImpl::get_timestamp_nano(const int64_t col_idx, const common::O
   return get_otimestamp_value(col_idx, tz_info, ObTimestampNanoType, otimestamp_val);
 }
 
-int ObMySQLResultImpl::get_ob_type(ObObjType &ob_type, obmysql::EMySQLFieldType mysql_type) const
+int ObMySQLResultImpl::get_ob_type(ObObjType &ob_type, obmysql::EMySQLFieldType mysql_type, bool is_unsigned_type) const
 {
   int ret = OB_SUCCESS;
   switch (mysql_type) {
@@ -622,22 +622,47 @@ int ObMySQLResultImpl::get_ob_type(ObObjType &ob_type, obmysql::EMySQLFieldType 
       ob_type = ObNullType;
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_TINY:
-      ob_type = ObTinyIntType;
+      if (is_unsigned_type) {
+        ob_type = ObUTinyIntType;
+      } else {
+        ob_type = ObTinyIntType;
+      }
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_SHORT:
-      ob_type = ObSmallIntType;
+      if (is_unsigned_type) {
+        ob_type = ObUSmallIntType;
+      } else {
+        ob_type = ObSmallIntType;
+      }
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_LONG:
-      ob_type = ObInt32Type;
+      if (is_unsigned_type) {
+        ob_type = ObUInt32Type;
+      } else {
+        ob_type = ObInt32Type;
+      }
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_LONGLONG:
-      ob_type = ObIntType;
+    case obmysql::EMySQLFieldType::MYSQL_TYPE_INT24:
+      if (is_unsigned_type) {
+        ob_type = ObUInt64Type;
+      } else {
+        ob_type = ObIntType;
+      }
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_FLOAT:
-      ob_type = ObFloatType;
+      if (is_unsigned_type) {
+        ob_type = ObUFloatType;
+      } else {
+        ob_type = ObFloatType;
+      }
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_DOUBLE:
-      ob_type = ObDoubleType;
+      if (is_unsigned_type) {
+        ob_type = ObUDoubleType;
+      } else {
+        ob_type = ObDoubleType;
+      }
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_TIMESTAMP:
       ob_type = ObTimestampType;
@@ -686,7 +711,13 @@ int ObMySQLResultImpl::get_ob_type(ObObjType &ob_type, obmysql::EMySQLFieldType 
       ob_type = ObRawType;
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_NEWDECIMAL:
-      ob_type = ObNumberType;
+      if (is_unsigned_type) {
+        // for decimal type , is_unsigned_type == 1 means signed
+        // is_unsigned_type comes from obmysql::EMySQLFieldType::fields_ UNSIGNED_FLAG
+        ob_type = ObUNumberType;
+      } else {
+        ob_type = ObNumberType;
+      }
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_OB_NUMBER_FLOAT:
       ob_type = ObNumberFloatType;
@@ -741,7 +772,8 @@ int ObMySQLResultImpl::get_type(const int64_t col_idx, ObObjMeta &type) const
   } else if (col_idx < 0 || col_idx >= result_column_count_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid column idx", K(col_idx), K_(result_column_count));
-  } else if (OB_FAIL(get_ob_type(ob_type, static_cast<obmysql::EMySQLFieldType>(fields_[col_idx].type)))) {
+  } else if (OB_FAIL(get_ob_type(ob_type, static_cast<obmysql::EMySQLFieldType>(fields_[col_idx].type),
+                                 fields_[col_idx].flags & UNSIGNED_FLAG))) {
     LOG_WARN("failed to get ob type", K(ret), "mysql_type", fields_[col_idx].type);
   } else {
     type.set_type(ob_type);
@@ -750,8 +782,8 @@ int ObMySQLResultImpl::get_type(const int64_t col_idx, ObObjMeta &type) const
   return ret;
 }
 int ObMySQLResultImpl::get_col_meta(const int64_t col_idx, bool old_max_length,
-                                    oceanbase::common::ObString &name, ObObjMeta &meta,
-                                    ObAccuracy &acc) const
+                                    oceanbase::common::ObString &name,
+                                    ObDataType &data_type) const
 {
   int ret = OB_SUCCESS;
   return ret;
@@ -796,7 +828,7 @@ int ObMySQLResultImpl::get_obj(const int64_t col_idx, ObObj &obj,
       case ObUDoubleType:
         if (OB_SUCC(get_double(col_idx, obj_value.double_)))
         {
-          obj.set_double(obj_value.double_);
+          obj.set_double(type.get_type(), obj_value.double_);
         }
         break;
       case ObVarcharType:
@@ -830,7 +862,9 @@ int ObMySQLResultImpl::get_obj(const int64_t col_idx, ObObj &obj,
       case ObRawType:
         if (OB_SUCC(get_raw(col_idx, obj_str)))
         {
-          if (OB_ISNULL(allocator)) {
+          if (obj_str.empty()) {
+            obj.set_null();
+          } else if (OB_ISNULL(allocator)) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("allocator is NULL", K(ret));
           } else if (OB_FAIL(ObHexUtilsBase::unhex(obj_str, *allocator, obj))) {
@@ -844,7 +878,7 @@ int ObMySQLResultImpl::get_obj(const int64_t col_idx, ObObj &obj,
       case ObUFloatType:
         if (OB_SUCC(get_float(col_idx, obj_value.float_)))
         {
-          obj.set_float(obj_value.float_);
+          obj.set_float(type.get_type(), obj_value.float_);
         }
         break;
       case ObDateTimeType:
@@ -854,9 +888,10 @@ int ObMySQLResultImpl::get_obj(const int64_t col_idx, ObObj &obj,
         }
         break;
       case ObTimestampType:
-        //TODO::need fill available timezone here @zhuweng
-        if (OB_SUCC(get_timestamp(col_idx, nullptr, obj_value.datetime_)))
-        {
+        if (OB_ISNULL(tz_info)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("tz info is NULL", K(ret));
+        } else if (OB_SUCC(get_timestamp(col_idx, tz_info, obj_value.datetime_))) {
           obj.set_timestamp(obj_value.datetime_);
         }
         break;
@@ -886,6 +921,27 @@ int ObMySQLResultImpl::get_obj(const int64_t col_idx, ObObj &obj,
           }
         }
         break;
+      case ObDateType: {
+        if (OB_SUCC(get_date(col_idx, obj_value.date_)))
+        {
+          obj.set_date(obj_value.date_);
+        }
+        break;
+      }
+      case ObTimeType: {
+        if (OB_SUCC(get_time(col_idx, obj_value.time_)))
+        {
+          obj.set_time(obj_value.time_);
+        }
+        break;
+      }
+      case ObYearType: {
+        if (OB_SUCC(get_year(col_idx, obj_value.year_)))
+        {
+          obj.set_year(obj_value.year_);
+        }
+        break;
+      }
       case ObIntervalYMType: {
         ObIntervalYMValue ym_val;
         if (OB_SUCC(get_interval_ym(col_idx, ym_val))) {
@@ -916,9 +972,63 @@ int ObMySQLResultImpl::get_obj(const int64_t col_idx, ObObj &obj,
         }
         break;
       }
-      case ObDateType:
-      case ObTimeType:
-      case ObYearType:
+      case ObTinyTextType:
+      case ObTextType:
+      case ObMediumTextType:
+      case ObLongTextType: {
+        if (lib::is_oracle_mode()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("oracle mode dblink not support lob type", K(ret), K(type.get_type()));
+        } else if (OB_SUCC(get_varchar(col_idx, obj_str))) {
+          obj.set_lob_value(type.get_type(), obj_str.ptr(), obj_str.length());
+          obj.set_collation_type(type.get_collation_type());
+        }
+        break;
+      }
+      case ObEnumType: {
+        if (OB_SUCC(get_varchar(col_idx, obj_str)))
+        {
+          obj.set_enum_inner(obj_str);
+          obj.set_collation_type(type.get_collation_type());
+        }
+        break;
+      }
+      case ObSetType: {
+        if (OB_SUCC(get_varchar(col_idx, obj_str)))
+        {
+          obj.set_set_inner(obj_str);
+          obj.set_collation_type(type.get_collation_type());
+        }
+        break;
+      }
+      case ObGeometryType: {
+        /*
+        if (OB_SUCC(get_varchar(col_idx, obj_str)))
+        {
+          obj.set_geometry_value(type.get_type(), obj_str.ptr(), obj_str.length());
+
+        }*/
+        ret = OB_NOT_SUPPORTED;
+        break;
+      }
+      case ObJsonType: {
+        /*if (OB_SUCC(get_varchar(col_idx, obj_str)))
+        {
+          obj.set_json_value(type.get_type(), obj_str.ptr(), obj_str.length());
+          obj.set_collation_type(type.get_collation_type());
+        }*/
+        ret = OB_NOT_SUPPORTED;
+        break;
+      }
+      case ObBitType: {
+        /*
+        if (OB_SUCC(get_uint(col_idx, obj_value.uint64_)))//ailing to do
+        {
+          obj.set_bit(obj_value.uint64_);
+        }*/
+        ret = OB_NOT_SUPPORTED;
+        break;
+      }
       default:
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not supported object type", "obj_type", obj.get_type(), K(ret));

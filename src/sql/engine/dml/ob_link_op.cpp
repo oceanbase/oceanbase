@@ -6,6 +6,7 @@
 #include "share/schema/ob_dblink_mgr.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"
 #include "lib/mysqlclient/ob_mysql_connection_pool.h"
+#include "common/sql_mode/ob_sql_mode_utils.h"
 #include "sql/ob_sql_utils.h"
 namespace oceanbase
 {
@@ -108,6 +109,7 @@ int ObLinkOp::init_dblink(uint64_t dblink_id, ObDbLinkProxy *dblink_proxy, bool 
   my_session = ctx_.get_my_session();
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   in_xa_trascaction_ = in_xa_trascaction;
+  dblink_id_ = dblink_id;
   if (OB_NOT_NULL(dblink_proxy_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("link scan ctx already inited", K(ret));
@@ -127,36 +129,29 @@ int ObLinkOp::init_dblink(uint64_t dblink_id, ObDbLinkProxy *dblink_proxy, bool 
     LOG_WARN("dblink schema is NULL", K(ret), K(dblink_id));
   } else if (FALSE_IT(set_link_driver_proto(static_cast<DblinkDriverProto>(dblink_schema_->get_driver_proto())))) {
     // do nothing
-  } else if (OB_FAIL(ObLinkOp::init_dblink_param_ctx(ctx_, param_ctx))) {
+  } else if (OB_FAIL(ObLinkOp::init_dblink_param_ctx(param_ctx))) {
     LOG_WARN("failed to init dblink param ctx", K(ret));
-  } else if (OB_FAIL(dblink_proxy->create_dblink_pool(tenant_id_,
-                                                      dblink_id,
-                                                      link_type_,
+  } else if (OB_FAIL(dblink_proxy->create_dblink_pool(param_ctx,
                                                       dblink_schema_->get_host_addr(),
                                                       dblink_schema_->get_tenant_name(),
                                                       dblink_schema_->get_user_name(),
                                                       dblink_schema_->get_plain_password(),
                                                       ObString(""),
                                                       dblink_schema_->get_conn_string(),
-                                                      dblink_schema_->get_cluster_name(),
-                                                      param_ctx))) {
+                                                      dblink_schema_->get_cluster_name()))) {
     LOG_WARN("failed to create dblink pool", K(ret));
   } else if (OB_FAIL(my_session->get_dblink_context().get_dblink_conn(dblink_id, dblink_conn))) {
     LOG_WARN("failed to get dblink connection from session", K(my_session), K(sessid_), K(ret));
   } else {
     if (NULL == dblink_conn) {
-      if (OB_FAIL(dblink_proxy->acquire_dblink(tenant_id_,
-                                              dblink_id,
-                                              link_type_,
-                                              param_ctx,
-                                              dblink_conn_,
-                                              sessid_,
-                                              next_sql_req_level_))) {
-        ObDblinkUtils::process_dblink_errno(link_type_, dblink_conn_, ret);
-        LOG_WARN("failed to acquire dblink", K(ret), K(dblink_id));
+      if (OB_FAIL(ObDblinkService::get_local_session_vars(my_session, allocator_, param_ctx))) {
+      LOG_WARN("failed to get local session vars", K(ret));
+      } else if (OB_FAIL(dblink_proxy->acquire_dblink(param_ctx, dblink_conn_))) {
+        LOG_WARN("failed to acquire dblink", K(ret), K(param_ctx));
       } else if (OB_FAIL(my_session->get_dblink_context().register_dblink_conn_pool(dblink_conn_->get_common_server_pool()))) {
         LOG_WARN("failed to register dblink conn pool to current session", K(ret));
-      } else if (in_xa_trascaction_ && OB_FAIL(my_session->get_dblink_context().set_dblink_conn(dblink_conn_))) {
+      } else if (in_xa_trascaction_ &&
+                 OB_FAIL(my_session->get_dblink_context().set_dblink_conn(dblink_conn_))) {
         LOG_WARN("failed to set dblink connection to session", K(my_session), K(sessid_), K(ret));
       } else {
         LOG_TRACE("link op get connection from dblink pool", KP(dblink_conn_), K(lbt()));
@@ -167,7 +162,6 @@ int ObLinkOp::init_dblink(uint64_t dblink_id, ObDbLinkProxy *dblink_proxy, bool 
       LOG_TRACE("link op get connection from xa trasaction", K(dblink_id), KP(dblink_conn_));
     }
     if (OB_SUCC(ret)) {
-      dblink_id_ = dblink_id;
       dblink_proxy_ = dblink_proxy;
     }
   }
@@ -234,14 +228,23 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
       // copy from param_store.
       int64_t saved_stmt_pos = link_stmt_pos;
       int64_t param_idx = param_infos.at(next_param).idx_;
+      int8_t param_type_value = param_infos.at(next_param).type_value_;
       const ObObjParam &param = param_store.at(param_idx);
       ObObjPrintParams obj_print_params = CREATE_OBJ_PRINT_PARAM(ctx_.get_my_session());
+      if (param_type_value < 0 || param_type_value > static_cast<int8_t>(ObObjType::ObMaxType)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid param type_value", K(param_type_value), K(ret));
+      } else if (param.is_null()) {
+        obj_print_params.ob_obj_type_  = ObObjType(param_type_value);
+        obj_print_params.print_null_string_value_ = 1;
+      }
       if (DBLINK_DRV_OCI == link_type_) {
         // Ensure that when oceanbase connects to oracle,
         // the target character set of param is the same as that of oci connection.
         obj_print_params.cs_type_ = ctx_.get_my_session()->get_nls_collation();
       }
       obj_print_params.need_cast_expr_ = true;
+      obj_print_params.print_const_expr_type_ = true;
       while (OB_SUCC(ret) && link_stmt_pos == saved_stmt_pos) {
         //Previously, the format parameter of the print sql literal function was NULL.
         //In the procedure scenario, when dblink reverse spell trunc(date type), it will treat the date type as a string,
@@ -353,23 +356,28 @@ int ObLinkSpec::set_param_infos(const ObIArray<ObParamPosIdx> &param_infos)
   return ret;
 }
 
-int ObLinkOp::init_dblink_param_ctx(ObExecContext &exec_ctx, dblink_param_ctx &param_ctx)
+int ObLinkOp::init_dblink_param_ctx(dblink_param_ctx &param_ctx)
 {
   int ret = OB_SUCCESS;
   uint16_t charset_id = 0;
   uint16_t ncharset_id = 0;
-  if (OB_FAIL(get_charset_id(exec_ctx, charset_id, ncharset_id))) {
+  if (OB_FAIL(get_charset_id(ctx_, charset_id, ncharset_id))) {
     LOG_WARN("failed to get session charset id", K(ret));
   } else {
     param_ctx.charset_id_ = charset_id;
     param_ctx.ncharset_id_ = ncharset_id;
     param_ctx.pool_type_ = DblinkPoolType::DBLINK_POOL_DEF;
+    param_ctx.tenant_id_ = tenant_id_;
+    param_ctx.dblink_id_ = dblink_id_;
+    param_ctx.link_type_ = link_type_;
+    param_ctx.sessid_ = sessid_;
   }
   return ret;
 }
 
 int ObLinkOp::get_charset_id(ObExecContext &exec_ctx,
-                                 uint16_t &charset_id, uint16_t &ncharset_id)
+                             uint16_t &charset_id,
+                             uint16_t &ncharset_id)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *sess_info = NULL;

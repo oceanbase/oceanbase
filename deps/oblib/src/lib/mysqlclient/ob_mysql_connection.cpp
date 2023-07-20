@@ -20,6 +20,7 @@
 #include "lib/profile/ob_trace_id.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/mysqlclient/ob_mysql_read_context.h"
+#include "lib/mysqlclient/ob_dblink_error_trans.h"
 
 namespace oceanbase
 {
@@ -231,6 +232,9 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
       ret = -mysql_errno(&mysql_);
       LOG_WARN("fail to connect to mysql server", K(get_sessid()), KCSTRING(host), KCSTRING(user), K(port),
                "info", mysql_error(&mysql_), K(ret));
+      if (OB_INVALID_ID != get_dblink_id()) {
+        TRANSLATE_CLIENT_ERR_2(ret, false, mysql_error(&mysql_));
+      }
     } else {
       /*Note: mysql_real_connect() incorrectly reset the MYSQL_OPT_RECONNECT option
        * to its default value before MySQL 5.0.19. Therefore, prior to that version,
@@ -258,7 +262,7 @@ void ObMySQLConnection::close()
     closed_ = true;
     sessid_ = 0;
     memset(&mysql_, 0, sizeof(MYSQL));
-    set_init_remote_env(false);
+    set_session_init_status(false);
   }
 }
 

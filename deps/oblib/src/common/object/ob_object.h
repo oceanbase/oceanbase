@@ -1043,19 +1043,22 @@ struct ObObjPrintParams
   ObObjPrintParams (const ObTimeZoneInfo *tz_info, ObCollationType cs_type):
     tz_info_(tz_info),
     cs_type_(cs_type),
-    print_flags_(0)
+    print_flags_(0),
+    ob_obj_type_(ObNullType)
   {}
   ObObjPrintParams (const ObTimeZoneInfo *tz_info):
     tz_info_(tz_info),
     cs_type_(CS_TYPE_UTF8MB4_GENERAL_CI),
-    print_flags_(0)
+    print_flags_(0),
+    ob_obj_type_(ObNullType)
   {}
   ObObjPrintParams ():
     tz_info_(NULL),
     cs_type_(CS_TYPE_UTF8MB4_GENERAL_CI),
-    print_flags_(0)
+    print_flags_(0),
+    ob_obj_type_(ObNullType)
   {}
-  TO_STRING_KV(K_(tz_info), K_(cs_type),K_(print_flags));
+  TO_STRING_KV(K_(tz_info), K_(cs_type),K_(print_flags), K_(ob_obj_type));
   const ObTimeZoneInfo *tz_info_;
   ObCollationType cs_type_;
   union {
@@ -1069,9 +1072,12 @@ struct ObObjPrintParams
       uint32_t for_dblink_:1;
       uint32_t binary_string_print_hex_:1;
       uint32_t need_print_converter_:1;
-      uint32_t reserved_:24;
+      uint32_t print_const_expr_type_:1;
+      uint32_t print_null_string_value_:1;
+      uint32_t reserved_:22;
     };
   };
+  ObObjType ob_obj_type_;
 };
 
 // sizeof(ObObjValue)=8
