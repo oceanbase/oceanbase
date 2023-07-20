@@ -443,8 +443,12 @@ int ObGlobalAutoIncService::fetch_next_node_(const ObGAISNextAutoIncValReq &requ
                                                     end_inclusive,
                                                     sync_value))) {
     LOG_WARN("fail to require autoinc value from inner table", K(ret));
-  } else if (OB_LIKELY(node.is_valid()) && OB_FAIL(node.update_available_value(end_inclusive))) {
-    LOG_WARN("fail to update available value", K(ret), K(node), K(end_inclusive));
+  } else if (OB_LIKELY(node.is_valid() && node.last_available_value_ == start_inclusive - 1)) {
+    if (OB_FAIL(node.update_available_value(end_inclusive))) {
+      LOG_WARN("fail to update available value", K(ret), K(node), K(end_inclusive));
+    } else {
+      LOG_TRACE("fetch next node done", K(request), K(node));
+    }
   } else if (OB_FAIL(node.init(start_inclusive, end_inclusive, sync_value, autoinc_version))){
     LOG_WARN("fail to init node", K(ret), K(start_inclusive), K(end_inclusive), K(sync_value));
   } else {
