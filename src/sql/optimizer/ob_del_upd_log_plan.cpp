@@ -48,7 +48,11 @@ int ObDelUpdLogPlan::compute_dml_parallel()
   use_pdml_ = false;
   max_dml_parallel_ = ObGlobalHint::UNSET_PARALLEL;
   const ObOptimizerContext &opt_ctx = get_optimizer_context();
-  if (!opt_ctx.can_use_pdml()) {
+  const ObSQLSessionInfo *session_info = NULL;
+  if (OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_optimizer_context().get_session_info()));
+  } else if (!opt_ctx.can_use_pdml()) {
     max_dml_parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
     use_pdml_ = false;
     if (opt_ctx.is_online_ddl()) {
@@ -65,7 +69,9 @@ int ObDelUpdLogPlan::compute_dml_parallel()
       LOG_WARN("get unexpected parallel", K(ret), K(dml_parallel), K(opt_ctx.get_parallel_rule()));
     } else {
       max_dml_parallel_ = dml_parallel;
-      use_pdml_ = opt_ctx.is_online_ddl() || ObGlobalHint::DEFAULT_PARALLEL < dml_parallel;
+      use_pdml_ = (opt_ctx.is_online_ddl() ||
+                  (ObGlobalHint::DEFAULT_PARALLEL < dml_parallel &&
+                  is_strict_mode(session_info->get_sql_mode())));
     }
   }
   LOG_TRACE("finish compute dml parallel", K(use_pdml_), K(max_dml_parallel_),
