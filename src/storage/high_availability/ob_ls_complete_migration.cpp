@@ -1009,6 +1009,8 @@ int ObStartCompleteMigrationTask::wait_log_replay_sync_()
   //TODO(muwei.ym) MAKE THIS TIME PARAM as hide configuration iterms
   bool need_wait = false;
   bool is_done = false;
+  const bool is_primay_tenant = MTL_IS_PRIMARY_TENANT();
+  share::SCN readable_scn;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1029,6 +1031,8 @@ int ObStartCompleteMigrationTask::wait_log_replay_sync_()
     LOG_WARN("failed to check need wait log replay", K(ret), KPC(ctx_));
   } else if (!need_wait) {
     FLOG_INFO("no need wait replay log sync", KPC(ctx_));
+  } else if (!is_primay_tenant && OB_FAIL(ObStorageHAUtils::get_readable_scn_with_retry(readable_scn))) {
+    LOG_WARN("failed to get readable scn", K(ret), KPC(ctx_));
   } else {
 #ifdef ERRSIM
     SERVER_EVENT_SYNC_ADD("storage_ha", "wait_log_replay_sync",
@@ -1060,7 +1064,14 @@ int ObStartCompleteMigrationTask::wait_log_replay_sync_()
         LOG_INFO("wait replay log ts ns success, stop wait", "arg", ctx_->arg_, K(cost_ts));
       } else if (OB_FAIL(ls->get_max_decided_scn(current_replay_scn))) {
         LOG_WARN("failed to get current replay log ts", K(ret), KPC(ctx_));
-      } else {
+      } else if (!is_primay_tenant && current_replay_scn >= readable_scn) {
+        wait_log_replay_success = true;
+        const int64_t cost_ts = ObTimeUtility::current_time() - wait_replay_start_ts;
+        LOG_INFO("wait replay log ts ns success, stop wait", "arg", ctx_->arg_, K(cost_ts),
+            K(is_primay_tenant), K(current_replay_scn), K(readable_scn));
+      }
+
+      if (OB_SUCC(ret) && !wait_log_replay_success) {
         current_ts = ObTimeUtility::current_time();
         bool is_timeout = false;
         if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {

@@ -34,6 +34,7 @@ namespace logfetcher
 {
 #define IS_WARN_LOG_LEVEL(arg) \
   if (OB_TIMEOUT == arg \
+  || OB_ERR_OUT_OF_LOWER_BOUND == arg \
   || OB_TENANT_NOT_EXIST == arg \
   || OB_TENANT_NOT_IN_SERVER == arg \
   || OB_IN_STOP_STATE == arg \

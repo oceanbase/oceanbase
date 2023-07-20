@@ -97,6 +97,8 @@ int ObLogFetcher::init(
     LOG_ERROR("invalid argument", KR(ret), K(err_handler), K(proxy));
   } else {
     cfg_ = &cfg;
+    // set self_tenant_id before suggest_cached_rpc_res_count
+    self_tenant_id_ = self_tenant_id;
     // Before the LogFetcher module is initialized, the following configuration items need to be loaded
     configure(cfg);
     int64_t cached_fetch_log_arpc_res_cnt = cfg.rpc_result_cached_count;
@@ -184,7 +186,6 @@ int ObLogFetcher::init(
       log_fetcher_user_ = log_fetcher_user;
       cluster_id_ = cluster_id;
       source_tenant_id_ = source_tenant_id;
-      self_tenant_id_ = self_tenant_id;
       is_loading_data_dict_baseline_data_ = is_loading_data_dict_baseline_data;
       fetching_mode_ = fetching_mode;
       archive_dest_ = archive_dest;
@@ -807,8 +808,8 @@ int ObLogFetcher::suggest_cached_rpc_res_count_(const int64_t min_res_cnt,
     rpc_res_cnt = max_res_cnt;
   }
 
-  LOG_INFO("suggest fetchlog arpc cached rpc result count", K(memory_limit),
-      K(min_res_cnt), K(max_res_cnt), K(rpc_res_cnt));
+  LOG_INFO("suggest fetchlog arpc cached rpc result count", K(self_tenant_id_),
+      K(min_res_cnt), K(max_res_cnt), K(rpc_res_cnt), K(memory_limit));
   return rpc_res_cnt;
 }
 

@@ -1069,26 +1069,28 @@ int ObTmpTenantMemBlockManager::get_available_macro_block(const int64_t dir_id, 
 int ObTmpTenantMemBlockManager::check_memory_limit()
 {
   int ret = OB_SUCCESS;
-  const int64_t timeout_ms = 120 * 1000; // 120s
+  const int64_t timeout_ts = THIS_WORKER.get_timeout_ts();
   while (OB_SUCC(ret) && get_tenant_mem_block_num() < t_mblk_map_.size()) {
     ObThreadCondGuard guard(cond_);
     if (OB_FAIL(guard.get_ret())) {
       STORAGE_LOG(ERROR, "fail to guard request condition", K(ret));
     } else {
-      int64_t wait_ms = timeout_ms;
-      int64_t begin_us = ObTimeUtility::fast_current_time();
-      while (OB_SUCC(ret) && get_tenant_mem_block_num() < t_mblk_map_.size() && wait_ms > 0) {
+      int64_t wait_ms = (timeout_ts - ObTimeUtility::current_time()) / 1000;
+      while (OB_SUCC(ret)
+          && get_tenant_mem_block_num() < t_mblk_map_.size()
+          && !wait_info_queue_.is_empty()
+          && wait_ms > 0) {
         if (OB_FAIL(cond_.wait(wait_ms))) {
           STORAGE_LOG(WARN, "fail to wait block write condition", K(ret), K(wait_ms));
         } else if (get_tenant_mem_block_num() < t_mblk_map_.size()) {
-          wait_ms = timeout_ms - (ObTimeUtility::fast_current_time() - begin_us) / 1000;
+          wait_ms = (timeout_ts - ObTimeUtility::current_time()) / 1000;
         }
+      }
 
-        if (OB_SUCC(ret) && OB_UNLIKELY(wait_ms <= 0)) {
-          ret = OB_TIMEOUT;
-          STORAGE_LOG(WARN, "fail to wait block io condition due to spurious wakeup",
-              K(ret), K(wait_ms));
-        }
+      if (OB_SUCC(ret) && OB_UNLIKELY(wait_ms <= 0)) {
+        ret = OB_TIMEOUT;
+        STORAGE_LOG(WARN, "fail to wait block io condition due to spurious wakeup",
+            K(ret), K(wait_ms), K(timeout_ts), K(ObTimeUtility::current_time()));
       }
     }
   }
@@ -1482,9 +1484,6 @@ int ObTmpTenantMemBlockManager::exec_wait()
             ret = OB_SUCCESS;
           }
         }
-        if (OB_SUCC(ret) && OB_FAIL(cond_.broadcast())) {
-          STORAGE_LOG(ERROR, "signal wash condition failed", K(ret), K(block_id));
-        }
       }
     }
     // no wait handle to process.
@@ -1492,6 +1491,12 @@ int ObTmpTenantMemBlockManager::exec_wait()
       if (OB_EAGAIN != ret) {
         STORAGE_LOG(ERROR, "unexpected error", K(ret));
       }
+    }
+  }
+  if (OB_SUCC(ret) || OB_EAGAIN == ret) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(cond_.broadcast())) {
+      STORAGE_LOG(ERROR, "signal wash condition failed", K(ret), K(tmp_ret));
     }
   }
   return ret;

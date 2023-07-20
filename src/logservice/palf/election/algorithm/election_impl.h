@@ -147,12 +147,12 @@ private:// 定向暴露给友元类
   bool is_rhs_message_higher_(const MSG &lhs,
                               const MSG &rhs,
                               ObStringHolder &reason,
-                              const bool compare_with_ip_port,
+                              const bool decentralized_voting,
                               const LogPhase phase) const
   {
     ELECT_TIME_GUARD(500_ms);
     #define PRINT_WRAPPER KR(ret), K(rhs_is_higher), K(compare_result), K(reason), K(lhs), K(rhs),\
-                          K(compare_with_ip_port), KPC(self_priority), KPC(lhs_priority),\
+                          K(decentralized_voting), KPC(self_priority), KPC(lhs_priority),\
                           KPC(rhs_priority), K(*this)
     int ret = OB_SUCCESS;
     bool rhs_is_higher = false;
@@ -192,7 +192,7 @@ private:// 定向暴露给友元类
         if (rhs.is_buffer_valid()) {// 如果rhs消息的优先级非空，rhs消息高于lhs消息
           rhs_is_higher = true;
           (void) reason.assign("priority is valid");
-        } else if (compare_with_ip_port && rhs.get_sender() < lhs.get_sender()) {// 如果lhs的消息和rhs消息的优先级都是空的，那么比较IP
+        } else if (decentralized_voting && rhs.get_sender() < lhs.get_sender()) {// 如果lhs的消息和rhs消息的优先级都是空的，那么比较IP
           rhs_is_higher = true;
           (void) reason.assign("IP-PORT(priority invalid)");
         } else {
@@ -212,7 +212,7 @@ private:// 定向暴露给友元类
             LOG_PHASE(WARN, phase, "self ever seen min_cluster_version is 0, can only compare IP-PORT");
           }
           if (can_only_compare_ip_port) {
-            if (compare_with_ip_port && rhs.get_sender() < lhs.get_sender()) {
+            if (decentralized_voting && rhs.get_sender() < lhs.get_sender()) {
               rhs_is_higher = true;
               (void) reason.assign("IP-PORT(priority invalid)");
             } else {
@@ -237,13 +237,17 @@ private:// 定向暴露给友元类
                                                             pos2))) {
               LOG_PHASE(WARN, phase, "deserialize new message priority failed");
               (void) reason.assign("DESERIALIZE FAIL");
-            } else if (CLICK_FAIL(lhs_priority->compare_with(*rhs_priority, compare_version, compare_result, reason))) {
+            } else if (CLICK_FAIL(lhs_priority->compare_with(*rhs_priority,
+                                                             compare_version,
+                                                             decentralized_voting,
+                                                             compare_result,
+                                                             reason))) {
               LOG_PHASE(WARN, phase, "compare priority failed");
               (void) reason.assign("COMPARE FAIL");
             } else {
               if (compare_result < 0) {
                 rhs_is_higher = true;
-              } else if (compare_result == 0 && compare_with_ip_port) {
+              } else if (compare_result == 0 && decentralized_voting) {
                 if (rhs.get_sender() < lhs.get_sender()) {
                   rhs_is_higher = true;
                   (void) reason.assign("IP-PORT(priority equal)");

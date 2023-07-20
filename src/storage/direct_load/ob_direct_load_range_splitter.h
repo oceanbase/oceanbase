@@ -43,6 +43,12 @@ public:
                                             const ObDirectLoadTableDataDesc &table_data_desc,
                                             common::ObIAllocator &allocator,
                                             ObIDirectLoadMultipleDatumRowkeyIterator *&rowkey_iter);
+  // append to rowkey_iters
+  static int construct_origin_table_rowkey_iters(ObDirectLoadOriginTable *origin_table,
+                                                 const blocksstable::ObDatumRange &scan_range,
+                                                 common::ObIAllocator &allocator,
+                                                 int64_t &total_block_count,
+                                                 common::ObIArray<ObIDirectLoadDatumRowkeyIterator *> &rowkey_iters);
 };
 
 class ObDirectLoadRowkeyMergeRangeSplitter
@@ -101,7 +107,6 @@ public:
   int split_range(common::ObIArray<blocksstable::ObDatumRange> &range_array,
                   int64_t max_range_count, common::ObIAllocator &allocator);
 private:
-  int construct_origin_table_rowkey_iter(ObDirectLoadOriginTable *origin_table);
   int construct_sstable_rowkey_iters(const common::ObIArray<ObDirectLoadSSTable *> &sstable_array);
 private:
   common::ObArenaAllocator allocator_;
@@ -125,7 +130,6 @@ public:
   int split_range(common::ObIArray<blocksstable::ObDatumRange> &range_array,
                   int64_t max_range_count, common::ObIAllocator &allocator);
 private:
-  int construct_origin_table_rowkey_iter(ObDirectLoadOriginTable *origin_table);
   int construct_sstable_rowkey_iters(
     const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
     const ObDirectLoadTableDataDesc &table_data_desc,

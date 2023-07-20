@@ -12276,6 +12276,10 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12416: __all_virtual_balance_task_helper
 
 # 12417: __all_virtual_balance_group_ls_stat
+# 12418: __all_virtual_cgroup_info
+# 12419: __all_virtual_cgroup_config
+
+#
 # 余留位置
 #
 
@@ -21161,6 +21165,8 @@ def_table_schema(
     FROM oceanbase.__all_virtual_compaction_diagnose_info
     WHERE
       STATUS != "RS_UNCOMPACTED"
+    AND
+      STATUS != "NOT_SCHEDULE"
 """.replace("\n", " ")
 )
 
@@ -50177,6 +50183,8 @@ def_table_schema(
     FROM SYS.ALL_VIRTUAL_COMPACTION_DIAGNOSE_INFO
     WHERE
       STATUS != 'RS_UNCOMPACTED'
+    AND
+      STATUS != 'NOT_SCHEDULE'
 """.replace("\n", " ")
 )
 

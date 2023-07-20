@@ -260,6 +260,17 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
           if (1 != stmt->get_table_size()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("SET ROW must be used for single table", K(stmt->get_table_size()), K(ret));
+          } else if (params_.secondary_namespace_ == NULL) {
+            TableItem *table_item = stmt->get_table_item(0);
+            CK (OB_NOT_NULL(table_item));
+            if (OB_SUCC(ret)) {
+              ObString row = ObString::make_string("row");
+              ObString table_name = table_item->get_table_name().length() > 0 ?
+                                        table_item->get_table_name() : ObString::make_string(" ");
+              ret = OB_ERR_BAD_FIELD_ERROR; //oracle will report an ORA-00936 error, ob does not have the error code.
+              LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, row.length(), row.ptr(), table_name.length(), table_name.ptr());
+              LOG_WARN("column does not existed", K(ret));
+            }
           } else {
             TableItem *table_item = stmt->get_table_item(0);
             const share::schema::ObTableSchema *table_schema = NULL;

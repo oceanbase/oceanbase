@@ -518,7 +518,10 @@ private:
 private:
   int by_pass_prepare_one_batch(const int64_t batch_size);
   int by_pass_get_next_permutation(int64_t &nth_group, bool &last_group, bool &insert_group_ht);
-  int by_pass_get_next_permutation_batch(int64_t &nth_group, bool &last_group, const ObBatchRows *child_brs, bool &insert_group_ht);
+  int by_pass_get_next_permutation_batch(int64_t &nth_group, bool &last_group,
+                                         const ObBatchRows *child_brs,
+                                         ObBatchRows &my_brs,
+                                         bool &insert_group_ht);
   int init_by_pass_op();
   // Alloc one batch group_row_item at a time
   static const int64_t BATCH_GROUP_ITEM_SIZE = 16;

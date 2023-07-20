@@ -1633,7 +1633,10 @@ int ObDMLService::add_related_index_info(const ObDASTabletLoc &tablet_loc,
   for (int64_t i = 0; OB_SUCC(ret) && i < related_ctdefs.count(); ++i) {
     ObDASTabletLoc *index_tablet_loc = ObDASUtils::get_related_tablet_loc(
         const_cast<ObDASTabletLoc&>(tablet_loc), related_ctdefs.at(i)->index_tid_);
-    if (OB_FAIL(das_op.get_related_ctdefs().push_back(related_ctdefs.at(i)))) {
+    if (OB_ISNULL(index_tablet_loc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("index tablet loc is null", K(ret), K(i));
+    } else if (OB_FAIL(das_op.get_related_ctdefs().push_back(related_ctdefs.at(i)))) {
       LOG_WARN("store related ctdef failed", K(ret), K(related_ctdefs), K(i));
     } else if (OB_FAIL(das_op.get_related_rtdefs().push_back(related_rtdefs.at(i)))) {
       LOG_WARN("store related rtdef failed", K(ret));

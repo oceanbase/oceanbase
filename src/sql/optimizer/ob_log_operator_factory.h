@@ -257,13 +257,29 @@ inline DistAlgo get_opposite_distributed_type(DistAlgo dist_type)
 }
 
 // Window function distribution
-enum class WinDistAlgo
+enum WinDistAlgo
 {
-  NONE = 0,
-  HASH = 1, // hash distribute
-  RANGE = 2, // range distribute
-  LIST = 3 // range + random distribute
+  WIN_DIST_INVALID = 0,
+  WIN_DIST_NONE    = (1UL),
+  WIN_DIST_HASH    = (1UL << 1), // hash distribute
+  WIN_DIST_RANGE   = (1UL << 2), // range distribute
+  WIN_DIST_LIST    = (1UL << 3)  // range + random distribute
 };
+
+inline WinDistAlgo get_win_dist_algo(uint64_t method)
+{
+  if (method & WinDistAlgo::WIN_DIST_LIST) {
+    return WinDistAlgo::WIN_DIST_LIST;
+  } else if (method & WinDistAlgo::WIN_DIST_RANGE) {
+    return WinDistAlgo::WIN_DIST_RANGE;
+  } else if (method & WinDistAlgo::WIN_DIST_HASH) {
+    return WinDistAlgo::WIN_DIST_HASH;
+  } else if (method & WinDistAlgo::WIN_DIST_NONE) {
+    return WinDistAlgo::WIN_DIST_NONE;
+  } else {
+    return WinDistAlgo::WIN_DIST_INVALID;
+  }
+}
 
 class ObLogPlan;
 class ObLogOperatorFactory

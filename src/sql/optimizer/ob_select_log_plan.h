@@ -473,6 +473,75 @@ private:
   //    int process_subplan();
   int candi_allocate_subplan_filter_for_select_item();
 
+  struct WinFuncOpHelper
+  {
+    WinFuncOpHelper(const ObIArray<ObWinFunRawExpr*> &all_win_func_exprs,
+                    const ObWindowDistHint *win_dist_hint,
+                    const bool explicit_hint,
+                    const ObFdItemSet &fd_item_set,
+                    const EqualSets &equal_sets,
+                    const ObIArray<ObRawExpr*> &const_exprs,
+                    const double card,
+                    const bool is_at_most_one_row)
+      : all_win_func_exprs_(all_win_func_exprs),
+        win_dist_hint_(win_dist_hint),
+        explicit_hint_(explicit_hint),
+        fd_item_set_(fd_item_set),
+        equal_sets_(equal_sets),
+        const_exprs_(const_exprs),
+        card_(card),
+        is_at_most_one_row_(is_at_most_one_row),
+        win_dist_method_(WinDistAlgo::WIN_DIST_INVALID),
+        force_normal_sort_(false),
+        force_hash_sort_(false),
+        force_no_pushdown_(false),
+        force_pushdown_(false),
+        part_cnt_(false),
+        win_op_idx_(false),
+        wf_aggr_status_expr_(NULL)
+    {
+    }
+    virtual ~WinFuncOpHelper() {}
+
+    // is const during allocate multi window function op
+    const ObIArray<ObWinFunRawExpr*> &all_win_func_exprs_;  // original ordered window functions from stmt
+    const ObWindowDistHint *win_dist_hint_;
+    const bool explicit_hint_;
+    const ObFdItemSet &fd_item_set_;
+    const EqualSets &equal_sets_;
+    const ObIArray<ObRawExpr*> &const_exprs_;
+    const double card_;
+    const bool is_at_most_one_row_;
+
+    // attribute for single window function op
+    WinDistAlgo win_dist_method_;
+    bool force_normal_sort_;
+    bool force_hash_sort_;
+    bool force_no_pushdown_;  // hint force pushdown, at least pushdown one window function
+    bool force_pushdown_;  // hint force pushdown, at least pushdown one window function
+
+    int64_t part_cnt_;
+    int64_t win_op_idx_;
+    ObOpPseudoColumnRawExpr *wf_aggr_status_expr_;
+    ObArray<ObRawExpr*> partition_exprs_;
+    ObArray<ObWinFunRawExpr*> ordered_win_func_exprs_;
+    ObArray<double> sort_key_ndvs_;
+    ObArray<std::pair<int64_t, int64_t>> pby_oby_prefixes_;
+    ObArray<OrderItem> sort_keys_;
+
+    TO_STRING_KV(K_(win_dist_method),
+                 K_(win_op_idx),
+                 K_(force_normal_sort),
+                 K_(force_hash_sort),
+                 K_(force_no_pushdown),
+                 K_(force_pushdown),
+                 K_(partition_exprs),
+                 K_(part_cnt),
+                 K_(ordered_win_func_exprs),
+                 K_(win_dist_hint),
+                 K_(explicit_hint));
+  };
+
 private:
   int decide_sort_keys_for_runion(const common::ObIArray<OrderItem> &order_items,
                                   common::ObIArray<OrderItem> &new_order_items);
@@ -483,62 +552,155 @@ private:
                                const bool can_ignore_merge_plan);
 
   int candi_allocate_window_function();
+  int candi_allocate_window_function_with_hint(const ObIArray<ObWinFunRawExpr*> &win_func_exprs,
+                                               common::ObIArray<CandidatePlan> &total_plans);
+  int candi_allocate_window_function(const ObIArray<ObWinFunRawExpr*> &win_func_exprs,
+                                     ObIArray<CandidatePlan> &total_plans);
+  int create_one_window_function(CandidatePlan &candidate_plan,
+                                 const WinFuncOpHelper &win_func_helper,
+                                 ObIArray<CandidatePlan> &all_plans);
+  int create_none_dist_win_func(ObLogicalOperator *top,
+                                const WinFuncOpHelper &win_func_helper,
+                                const int64_t need_sort,
+                                const int64_t prefix_pos,
+                                const int64_t part_cnt,
+                                ObIArray<CandidatePlan> &all_plans);
+  int create_range_list_dist_win_func(ObLogicalOperator *top,
+                                      const WinFuncOpHelper &win_func_helper,
+                                      const int64_t part_cnt,
+                                      ObIArray<CandidatePlan> &all_plans);
+  int get_range_dist_keys(const WinFuncOpHelper &win_func_helper,
+                          const ObWinFunRawExpr *win_func,
+                          ObIArray<OrderItem> &range_dist_keys,
+                          int64_t &pby_prefix);
+  int get_range_list_win_func_exchange_info(const WinDistAlgo dist_method,
+                                            const ObIArray<OrderItem> &range_dist_keys,
+                                            ObExchangeInfo &exch_info,
+                                            ObRawExpr *&random_expr);
+  int set_exchange_random_expr(ObLogicalOperator *top, ObRawExpr *random_expr);
 
-  int generate_window_functions_plan(const ObIArray<ObWinFunRawExpr*> &winfunc_exprs,
-                                     ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
-                                     common::ObIArray<CandidatePlan> &total_plans,
+  int create_hash_dist_win_func(ObLogicalOperator *top,
+                                const WinFuncOpHelper &win_func_helper,
+                                const int64_t need_sort,
+                                const int64_t prefix_pos,
+                                const int64_t part_cnt,
+                                ObIArray<CandidatePlan> &all_plans);
+  int create_normal_hash_dist_win_func(ObLogicalOperator *&top,
+                                       const ObIArray<ObWinFunRawExpr*> &win_func_exprs,
+                                       const ObIArray<ObRawExpr*> &partition_exprs,
+                                       const ObIArray<OrderItem> &sort_keys,
+                                       const int64_t need_sort,
+                                       const int64_t prefix_pos,
+                                       OrderItem *hash_sortkey);
+  int create_pushdown_hash_dist_win_func(ObLogicalOperator *&top,
+                                         const ObIArray<ObWinFunRawExpr*> &win_func_exprs,
+                                         const ObIArray<OrderItem> &sort_keys,
+                                         const ObIArray<bool> &pushdown_info,
+                                         ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
+                                         const int64_t need_sort,
+                                         const int64_t prefix_pos,
+                                         OrderItem *hash_sortkey);
+  int check_is_win_func_hint_valid(const ObIArray<ObWinFunRawExpr*> &all_win_exprs,
+                                   const ObWindowDistHint *hint,
+                                   bool &is_valid);
+  int init_win_func_helper_with_hint(const ObIArray<CandidatePlan> &candi_plans,
+                                     ObIArray<ObWinFunRawExpr*> &remaining_exprs,
+                                     WinFuncOpHelper &win_func_helper,
+                                     bool &is_valid);
+  int calc_win_func_helper_with_hint(const ObLogicalOperator *op,
+                                     WinFuncOpHelper &win_func_helper,
+                                     bool &is_valid);
+  int check_win_dist_method_valid(const WinFuncOpHelper &win_func_helper,
+                                  bool &is_valid);
+  int generate_window_functions_plan(WinFuncOpHelper &win_func_helper,
+                                     ObIArray<ObOpPseudoColumnRawExpr*> &status_exprs,
+                                     ObIArray<CandidatePlan> &total_plans,
                                      CandidatePlan &orig_candidate_plan);
-
-  int get_next_group_window_exprs(const ObLogicalOperator *top,
+  int check_win_func_need_sort(const ObLogicalOperator &top,
+                               const WinFuncOpHelper &win_func_helper,
+                               bool &need_sort,
+                               int64_t &prefix_pos,
+                               int64_t &part_cnt);
+  int prepare_next_group_win_funcs(const bool distributed,
+                                   const ObIArray<OrderItem> &op_ordering,
+                                   const int64_t dop,
+                                   WinFuncOpHelper &win_func_helper,
+                                   ObIArray<ObWinFunRawExpr*> &remaining_exprs,
+                                   ObIArray<ObWinFunRawExpr*> &ordered_win_func_exprs,
+                                   ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes,
+                                   ObIArray<int64_t> &split,
+                                   ObIArray<WinDistAlgo> &methods);
+  int init_win_func_helper(const ObIArray<ObWinFunRawExpr*> &ordered_win_func_exprs,
+                           const ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes,
+                           const ObIArray<int64_t> &split,
+                           const ObIArray<WinDistAlgo> &methods,
+                           const int64_t splict_idx,
+                           ObIArray<ObOpPseudoColumnRawExpr*> &status_exprs,
+                           WinFuncOpHelper &win_func_helper);
+  int get_next_group_window_exprs(const ObIArray<OrderItem> &op_ordering,
+                                  WinFuncOpHelper &win_func_helper,
                                   ObIArray<ObWinFunRawExpr*> &remaining_exprs,
-                                  ObIArray<OrderItem> &current_sort_keys,
-                                  ObIArray<ObWinFunRawExpr*> &current_exprs,
-                                  ObIArray<OrderItem> &next_sort_keys);
+                                  ObIArray<ObWinFunRawExpr*> &current_exprs);
+  int gen_win_func_sort_keys(const ObIArray<OrderItem> &input_ordering,
+                             WinFuncOpHelper &win_func_helper,
+                             bool &is_valid);
+  int classify_window_exprs(const WinFuncOpHelper &win_func_helper,
+                            const ObIArray<OrderItem> &input_ordering,
+                            const ObIArray<ObWinFunRawExpr*> &remaining_exprs,
+                            ObIArray<ObWinFunRawExpr*> &no_need_sort_exprs,
+                            ObIArray<ObWinFunRawExpr*> &no_need_order_exprs,
+                            ObIArray<ObWinFunRawExpr*> &rest_win_func_exprs,
+                            ObIArray<OrderItem> &best_sort_keys,
+                            ObIArray<OrderItem> &possible_sort_keys);
 
-  int prepare_for_split_winfuncs(
-      const ObLogicalOperator *top,
-      const common::ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
-      const ObIArray<OrderItem> &sort_keys,
-      ObIArray<double> &sort_key_ndvs,
-      ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes);
+  int calc_ndvs_and_pby_oby_prefix(const ObIArray<ObWinFunRawExpr*> &win_func_exprs,
+                                   WinFuncOpHelper &win_func_helper,
+                                   ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes);
 
-  int check_winfunc_pushdown(
-      const ObLogicalOperator *top, const common::ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
-      const WinDistAlgo method, const ObIArray<double> &sort_key_ndvs,
-      const ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes,
-      bool &is_pushdown, ObIArray<bool> &pushdown_info);
+  int check_win_func_pushdown(const int64_t dop,
+                              const WinFuncOpHelper &win_func_helper,
+                              ObIArray<bool> &pushdown_info);
 
-  // Split adjusted window function (`adjusted_winfunc_exprs()` called) into groups such that each
+  // Split adjusted window function (`sort_win_func_exprs()` called) into groups such that each
   // group hash same distribute method.
   //
-  // @param top
-  // @param winfunc_exprs window functions to split, must adjusted by `adjusted_winfunc_exprs()`
-  // @param remaining_exprs remaining window functions
-  // @param sort_keys
-  // @param stmt_func_idx  window function operator of current stmt
+  // @param distributed
+  // @param win_func_exprs window functions to split, must adjusted by `sort_win_func_exprs()`
+  // @param sort_key_ndvs
+  // @param pby_oby_prefixes
   // @param[out] split split result which stores the %window_exprs array end positions
   // @param[out] methods window distribute method for each split array
-  // @param[out] pushdown_supported_array to record if each split array can support pushdown
-  int split_winfuncs_by_dist_method(const ObLogicalOperator *top,
-                                    const common::ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
-                                    const common::ObIArray<ObWinFunRawExpr *> &remaining_exprs,
-                                    const int64_t stmt_func_idx,
+  int split_win_funcs_by_dist_method(const bool distributed,
+                                    const common::ObIArray<ObWinFunRawExpr *> &win_func_exprs,
                                     const ObIArray<double> &sort_key_ndvs,
                                     const ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes,
+                                    const int64_t dop,
+                                    const double card,
+                                    const ObWindowDistHint *hint,
+                                    const int64_t win_op_idx,
                                     common::ObIArray<int64_t> &split,
-                                    common::ObIArray<WinDistAlgo> &methods,
-                                    bool &has_non_parallel_wf);
+                                    common::ObIArray<WinDistAlgo> &methods);
 
   // Generate sort keys for window function
   // @param[out] order_item generated sort keys
   // @param[out] pby_prefix set the prefix count of %order_item for partition by exprs if not NULL
   // @return
-  int get_sort_keys_for_window_function(const ObLogicalOperator *top,
+  int get_sort_keys_for_window_function(const ObFdItemSet &fd_item_set,
+                                        const EqualSets &equal_sets,
+                                        const ObIArray<ObRawExpr*> &const_exprs,
                                         const ObWinFunRawExpr *win_expr,
                                         const ObIArray<OrderItem> &ordering,
                                         const ObIArray<ObWinFunRawExpr*> &winfunc_exprs,
                                         ObIArray<OrderItem> &order_items,
                                         int64_t *pby_prefix = NULL);
+
+  int get_win_func_pby_oby_sort_prefix(const ObFdItemSet &fd_item_set,
+                                       const EqualSets &equal_sets,
+                                       const ObIArray<ObRawExpr*> &const_exprs,
+                                       const ObWinFunRawExpr *win_expr,
+                                       const ObIArray<OrderItem> &ordering,
+                                       int64_t &pby_prefix,
+                                       int64_t &pby_oby_prefix);
 
   // Get the PBY, PBY + OBY prefix count of %ordering
   // e.g.:
@@ -546,18 +708,15 @@ private:
   //  %ordering should start with [a, b, c] or [b, a, c]
   //  %pby_prefix will be 2 
   //  %pby_oby_prefix will b 3
-  int get_winfunc_pby_oby_sort_prefix(const ObLogicalOperator *top,
+  int get_winfunc_pby_oby_sort_prefix(const ObFdItemSet &fd_item_set,
+                                      const EqualSets &equal_sets,
+                                      const ObIArray<ObRawExpr*> &const_exprs,
                                       const ObWinFunRawExpr *win_expr,
                                       const ObIArray<OrderItem> &ordering,
                                       int64_t &pby_prefix,
                                       int64_t &pby_oby_prefix);
 
-  int get_partition_count(const ObSEArray<std::pair<int64_t, int64_t>, 8> pby_oby_prefixes,
-                          const int64_t start,
-                          const int64_t end,
-                          const ObIArray<ObRawExpr*> &partition_exprs,
-                          const int64_t prefix_pos,
-                          int64_t &part_cnt);
+  int calc_partition_count(WinFuncOpHelper &win_func_helper);
 
   /**
    * @brief set_default_sort_directions
@@ -588,14 +747,17 @@ private:
                                        const ObIArray<ObWinFunRawExpr*> &adjusted_winfunc_exprs,
                                        const ObIArray<OrderItem> &sort_keys,
                                        const ObIArray<ObRawExpr*> &partition_exprs,
-                                       const int64_t part_cnt,
+                                       const OrderItem &hash_sortkey,
                                        const bool is_pushdown,
                                        ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
                                        const ObIArray<bool> &pushdown_info);
 
-  int adjust_window_functions(const ObLogicalOperator *top,
-                              const ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
-                              ObIArray<ObWinFunRawExpr *> &adjusted_winfunc_exprs);
+  int sort_window_functions(const ObFdItemSet &fd_item_set,
+                            const EqualSets &equal_sets,
+                            const ObIArray<ObRawExpr *> &const_exprs,
+                            const ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
+                            ObIArray<ObWinFunRawExpr *> &adjusted_winfunc_exprs,
+                            bool &ordering_changed);
 
   int match_window_function_parallel(const ObIArray<ObWinFunRawExpr *> &win_exprs,
                                      bool &can_parallel);
@@ -606,23 +768,30 @@ private:
   int check_wf_pushdown_supported(ObWinFunRawExpr *win_expr, bool &supported);
 
   int get_pushdown_window_function_exchange_info(const ObIArray<ObWinFunRawExpr *> &win_exprs,
-                                                 const EqualSets & equal_sets,
-                                                 ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
+                                                 ObLogicalOperator *op,
                                                  ObExchangeInfo &exch_info);
 
-  int get_window_function_partition_exprs(const ObIArray<ObWinFunRawExpr *> &win_exprs,
-                                          ObIArray<ObRawExpr*> &partition_exprs);
+  int extract_window_function_partition_exprs(WinFuncOpHelper &winfunc_helper);
 
-  int allocate_window_function_as_top(const ObIArray<ObWinFunRawExpr *> &win_exprs,
+  int allocate_window_function_as_top(const WinDistAlgo dist_algo,
+                                      const ObIArray<ObWinFunRawExpr *> &win_exprs,
                                       const bool match_parallel,
                                       const bool is_partition_wise,
+                                      const bool use_hash_sort,
+                                      const ObIArray<OrderItem> &sort_keys,
+                                      ObLogicalOperator *&top);
+  int allocate_window_function_as_top(const WinDistAlgo dist_algo,
+                                      const ObIArray<ObWinFunRawExpr *> &win_exprs,
+                                      const bool match_parallel,
+                                      const bool is_partition_wise,
+                                      const bool use_hash_sort,
                                       const int32_t role_type,
                                       const ObIArray<OrderItem> &sort_keys,
                                       const int64_t range_dist_keys_cnt,
                                       const int64_t range_dist_pby_prefix,
                                       ObLogicalOperator *&top,
-                                      ObOpPseudoColumnRawExpr *wf_aggr_status_expr,
-                                      const ObIArray<bool> &pushdown_info);
+                                      ObOpPseudoColumnRawExpr *wf_aggr_status_expr = NULL,
+                                      const ObIArray<bool> *pushdown_info = NULL);
 
   int candi_allocate_late_materialization();
 

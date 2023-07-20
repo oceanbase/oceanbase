@@ -1102,11 +1102,14 @@ int ObTmpFile::aio_write(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &hand
             allocator_->free(extent);
             extent = NULL;
           }
+          if (OB_NOT_NULL(tmp)) {
+            tmp = NULL;
+          }
         }
       } else {
         // this extent has allocated, no one page, invalid extent(tmp->is_alloced = false).
         ret = OB_INVALID_ERROR;
-        STORAGE_LOG(WARN, "invalid extent", K(ret));
+        STORAGE_LOG(WARN, "invalid extent", K(ret), KPC(tmp), KPC(this));
       }
       if (OB_SUCC(ret)) {
         if (OB_ISNULL(tmp)) {

@@ -78,6 +78,7 @@ int LSFetchCtxUpdateSourceFunctor::operator()(const ObLSID &id, logservice::ObRe
 
 /////////////////////////////// LSFetchCtx /////////////////////////////////
 LSFetchCtx::LSFetchCtx() :
+    source_(NULL),
     remote_iter_(LSFetchCtxGetSourceFunctor(*this), LSFetchCtxUpdateSourceFunctor(*this))
 {
   reset();

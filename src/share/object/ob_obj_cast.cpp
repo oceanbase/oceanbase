@@ -5095,8 +5095,12 @@ static int string_double(const ObObjType expect_type, ObObjCastParams &params,
           } else if (OB_SUCCESS != (ret = check_convert_str_err(
                                           str_utf8.ptr(), endptr, str_utf8.length(), err, in.get_collation_type()))) {
             LOG_WARN("failed to check_convert_str_err", K(ret), K(str_utf8), K(value), K(err), K(in.get_collation_type()));
-            ret = OB_ERR_DOUBLE_TRUNCATED;
+            // Compatible with oracle error massage, mapping `OB_ERR_DOUBLE_TRUNCATED` to invalid number error
+            if (lib::is_oracle_mode()) {
+              ret = OB_ERR_DOUBLE_TRUNCATED;
+            }
             if (CM_IS_WARN_ON_FAIL(cast_mode)) {
+              ret = OB_ERR_DOUBLE_TRUNCATED;
               LOG_USER_WARN(OB_ERR_DOUBLE_TRUNCATED, str_utf8.length(), str_utf8.ptr());
             }
           }

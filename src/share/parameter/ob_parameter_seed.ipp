@@ -1486,6 +1486,10 @@ DEF_TIME(_balance_kill_transaction_threshold, OB_TENANT_PARAMETER, "100ms", "[1m
          "the time given to the transaction to execute when do balance"
          "before it will be killed. Range: [1ms, 60s]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_balance_wait_killing_transaction_end_threshold, OB_TENANT_PARAMETER, "100ms", "[10ms, 60s]",
+         "the threshold for waiting time after killing transactions until they end."
+         "Range: [10ms, 60s]",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_px_fast_reclaim, OB_CLUSTER_PARAMETER, "True",
         "Enable the fast reclaim function through PX tasks deteting for survival by detect manager. The default value is True.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1545,3 +1549,7 @@ DEF_BOOL(_enable_system_tenant_memory_limit, OB_CLUSTER_PARAMETER, "True",
 DEF_TIME(_stall_threshold_for_dynamic_worker, OB_TENANT_PARAMETER, "3ms", "[0ms,)",
         "threshold of dynamic worker works",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_optimizer_better_inlist_costing, OB_TENANT_PARAMETER, "False",
+        "enable improved costing of index access using in-list(s)",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

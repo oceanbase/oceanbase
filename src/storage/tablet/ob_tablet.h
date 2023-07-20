@@ -511,8 +511,10 @@ private:
   int inner_inc_macro_ref_cnt();
   void dec_table_store_ref_cnt();
   int inc_table_store_ref_cnt(bool &inc_success);
-  void dec_addr_ref_cnt(const ObMetaDiskAddr &addr);
-  int inc_addr_ref_cnt(const ObMetaDiskAddr &addr, bool &inc_success);
+  static int inc_addr_ref_cnt(const ObMetaDiskAddr &addr, bool &inc_success);
+  static void dec_addr_ref_cnt(const ObMetaDiskAddr &addr);
+  static int inc_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr, bool &inc_success);
+  static void dec_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr);
 
 private:
   int inner_check_valid(const bool ignore_ha_status = false) const;

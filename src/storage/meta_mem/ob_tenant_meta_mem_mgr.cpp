@@ -1340,6 +1340,7 @@ int ObTenantMetaMemMgr::acquire_tmp_tablet(
     common::ObArenaAllocator &allocator,
     ObTabletHandle &tablet_handle)
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
   void *buf = nullptr;
   tablet_handle.reset();
@@ -1358,16 +1359,17 @@ int ObTenantMetaMemMgr::acquire_tmp_tablet(
     tablet_handle.get_obj()->set_allocator(&allocator);
     tablet_handle.disallow_copy_and_assign();
     bool is_exist = false;
+    CLICK();
     ObBucketHashWLockGuard lock_guard(bucket_lock_, key.hash());
-    if (OB_FAIL(has_tablet(key, is_exist))) {
+    if (CLICK_FAIL(has_tablet(key, is_exist))) {
       LOG_WARN("fail to check tablet existence", K(ret), K(key));
     } else if (is_exist) {
       ObTabletPointerHandle ptr_handle(tablet_map_);
-      if (OB_FAIL(tablet_map_.set_attr_for_obj(key, tablet_handle))) {
+      if (CLICK_FAIL(tablet_map_.set_attr_for_obj(key, tablet_handle))) {
         LOG_WARN("fail to set attribute for tablet", K(ret), K(key), K(tablet_handle));
-      } else if (OB_FAIL(tablet_map_.get(key, ptr_handle))) {
+      } else if (CLICK_FAIL(tablet_map_.get(key, ptr_handle))) {
         LOG_WARN("fail to get tablet pointer handle", K(ret), K(key), K(tablet_handle));
-      } else if (OB_FAIL(tablet_handle.get_obj()->assign_pointer_handle(ptr_handle))) {
+      } else if (CLICK_FAIL(tablet_handle.get_obj()->assign_pointer_handle(ptr_handle))) {
         LOG_WARN("fail to set tablet pointer handle for tablet", K(ret), K(key));
       }
     } else {
@@ -1375,7 +1377,7 @@ int ObTenantMetaMemMgr::acquire_tmp_tablet(
       LOG_WARN("The tablet pointer isn't exist, don't support to acquire", K(ret), K(key));
     }
   }
-  if (OB_FAIL(ret)) {
+  if (CLICK_FAIL(ret)) {
     tablet_handle.reset();
   }
   return ret;
@@ -1771,6 +1773,7 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
     const ObTabletHandle &old_handle,
     ObTabletHandle &new_handle)
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
   const ObMetaDiskAddr &new_addr = new_handle.get_obj()->get_tablet_addr();
   const ObTablet *old_tablet = old_handle.get_obj();
@@ -1790,9 +1793,9 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
     LOG_WARN("invalid argument", K(ret), K(key), K(new_addr), K(old_handle), K(new_handle));
   } else {
     ObBucketHashWLockGuard lock_guard(bucket_lock_, key.hash());
-    if (OB_FAIL(tablet_map_.compare_and_swap_addr_and_object(key, new_addr, old_handle, new_handle))) {
+    if (CLICK_FAIL(tablet_map_.compare_and_swap_addr_and_object(key, new_addr, old_handle, new_handle))) {
       LOG_WARN("fail to compare and swap tablet", K(ret), K(key), K(new_addr), K(old_handle), K(new_handle));
-    } else if (OB_FAIL(update_tablet_buffer_header(old_handle.get_obj(), new_handle.get_obj()))) {
+    } else if (CLICK_FAIL(update_tablet_buffer_header(old_handle.get_obj(), new_handle.get_obj()))) {
       LOG_WARN("fail to update tablet buffer header", K(ret), K(old_handle), K(new_handle));
     } else if (old_handle.get_obj() != new_handle.get_obj()) { // skip first init, old_handle == new_handle
       // TODO zhouxinlan.zxl update min minor sstable by link
@@ -1801,7 +1804,7 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
       if (OB_ISNULL(t_ptr = reinterpret_cast<ObTabletPointer *>(ptr_hdl.get_resource_ptr()))) {
         ret = common::OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get tablet pointer", K(ret), K(key), K(ptr_hdl));
-      } else if (OB_FAIL(t_ptr->add_tablet_to_old_version_chain(
+      } else if (CLICK_FAIL(t_ptr->add_tablet_to_old_version_chain(
           reinterpret_cast<ObTablet *>(old_handle.get_obj())))) {
         LOG_WARN("fail to add tablet to old version chain", K(ret), K(key), KPC(old_tablet));
       }

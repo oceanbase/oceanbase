@@ -198,6 +198,8 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
     if (OB_UNLIKELY(!tablet_handle.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "unexpected invalid tablet", K(ret), K(tablet_handle));
+    } else if (tablet_handle.get_obj()->is_empty_shell()) {
+      // skip empty shell
     } else if (OB_FAIL(tablet_handle.get_obj()->get_sstables_size(sstable_size, true /*ignore shared block*/))) {
       STORAGE_LOG(WARN, "failed to get new tablet's disk usage", K(ret), K(sstable_size));
     } else {

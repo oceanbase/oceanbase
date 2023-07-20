@@ -192,6 +192,7 @@ private:
 
 int ElectionPriorityImpl::compare_with(const ElectionPriority &rhs,
                                        const uint64_t compare_version,
+                                       const bool decentralized_voting,
                                        int &result,
                                        ObStringHolder &reason) const
 {
@@ -210,11 +211,11 @@ int ElectionPriorityImpl::compare_with(const ElectionPriority &rhs,
     result = 0;
     COORDINATOR_LOG(WARN, "compare between invalid priority");
   } else if (functor1.get_closest_priority()->is_valid() && !functor2.get_closest_priority()->is_valid()) {
-    result = 1;
+    result = decentralized_voting ? 1 : 0;
     (void) reason.assign("compare with invalid rhs priority");
     COORDINATOR_LOG(WARN, "rhs priority is invalid", KR(ret), K(MTL_ID()), K(*this), K(rhs), K(compare_version), K(result), K(reason));
   } else if (!functor1.get_closest_priority()->is_valid() && functor2.get_closest_priority()->is_valid()) {
-    result = -1;
+    result = decentralized_voting ? -1 : 0;
     (void) reason.assign("compare with invalid lhs priority");
     COORDINATOR_LOG(WARN, "lhs priority is invalid", KR(ret), K(MTL_ID()), K(*this), K(rhs), K(compare_version), K(result), K(reason));
   } else if (CLICK_FAIL(functor1.get_closest_priority()->compare(*functor2.get_closest_priority(), result, reason))) {

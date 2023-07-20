@@ -1342,6 +1342,8 @@ bool ObMultipleMerge::need_read_lob_columns(const blocksstable::ObDatumRow &row)
 int ObMultipleMerge::handle_lob_before_fuse_row()
 {
   int ret = OB_SUCCESS;
+  // reuse lob locator every row because output filter shared common expr is already fixed
+  reuse_lob_locator();
   // Notice: should not  change behavior dynamicly by min cluster version:
   // for example, while running in 4.0 compat mode, the min cluster version changes to 4.1
   // but lob_locator_helper is not initialized.

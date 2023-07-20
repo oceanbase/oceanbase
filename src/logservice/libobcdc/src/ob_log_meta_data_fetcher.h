@@ -56,7 +56,12 @@ public:
 
 private:
   static const int64_t TASK_POOL_ALLOCATOR_TOTAL_LIMIT = (1LL << 32); // 4G
-  static const int64_t TASK_POOL_ALLOCATOR_PAGE_SIZE = common::OB_MALLOC_BIG_BLOCK_SIZE;
+  // Setting the page size to 64K can prevent ObVSliceAlloc from caching too much memory. The scenario is as follows:
+  // 1. During the startup, the baseline data for the data dictionary is constructed. This may replay too many
+  //    SYS log stream transactions, in which only a portion of them are DDL transactions that need to be concerned.
+  // 2. If the page size is set to 2M, many pages (blocks) cannot be completely returned and released,
+  //    which can cause the allocator to hold too much memory, thus causing allocation errors.                                                                     //
+  static const int64_t TASK_POOL_ALLOCATOR_PAGE_SIZE = common::OB_MALLOC_MIDDLE_BLOCK_SIZE;
   static const int64_t TASK_POOL_ALLOCATOR_HOLD_LIMIT = TASK_POOL_ALLOCATOR_PAGE_SIZE;
   static const int64_t PART_TRANS_TASK_PREALLOC_COUNT = 1000;
   static const int64_t PART_TRANS_TASK_PREALLOC_PAGE_COUNT = 1000;

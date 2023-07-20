@@ -29,6 +29,8 @@ namespace sql
     };
     ObLogWindowFunction(ObLogPlan &plan)
         : ObLogicalOperator(plan),
+        algo_(WinDistAlgo::WIN_DIST_INVALID),
+        use_hash_sort_(false),
         single_part_parallel_(false),
         range_dist_parallel_(false),
         role_type_(WindowFunctionRoleType::NORMAL),
@@ -46,6 +48,7 @@ namespace sql
     inline int add_window_expr(ObWinFunRawExpr *win_expr)
     { return win_exprs_.push_back(win_expr); }
     inline ObIArray<ObWinFunRawExpr *> &get_window_exprs() { return win_exprs_; }
+    inline const ObIArray<ObWinFunRawExpr *> &get_window_exprs() const { return win_exprs_; }
     virtual uint64_t hash(uint64_t seed) const override;
     virtual int est_cost() override;
     virtual int est_width() override;
@@ -67,9 +70,9 @@ namespace sql
     int get_winfunc_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
     void set_role_type(WindowFunctionRoleType v) { role_type_ = v; }
     WindowFunctionRoleType get_role_type() const { return role_type_; }
-    bool is_push_down() { return PARTICIPATOR == role_type_|| CONSOLIDATOR == role_type_; }
-    bool is_participator() { return PARTICIPATOR == role_type_; }
-    bool is_consolidator() { return CONSOLIDATOR == role_type_; }
+    bool is_push_down() const { return PARTICIPATOR == role_type_|| CONSOLIDATOR == role_type_; }
+    bool is_participator() const { return PARTICIPATOR == role_type_; }
+    bool is_consolidator() const { return CONSOLIDATOR == role_type_; }
     int get_rd_sort_keys(common::ObIArray<OrderItem> &rd_sort_keys);
     int set_sort_keys(const common::ObIArray<OrderItem> &sort_keys)
     {
@@ -91,17 +94,23 @@ namespace sql
     void set_rd_pby_sort_cnt(const int64_t cnt) { rd_pby_sort_cnt_ = cnt; }
     int64_t get_rd_pby_sort_cnt() const { return rd_pby_sort_cnt_; }
 
-    int set_dist_hint(const common::ObIArray<WinDistAlgo> &dist_hint)
-    {
-      return dist_hint_.assign(dist_hint);
-    }
+    void set_win_dist_algo(const WinDistAlgo algo)  { algo_ = algo; }
+    WinDistAlgo get_win_dist_algo() const { return algo_; }
+    void set_use_hash_sort(const bool use_hash_sort)  { use_hash_sort_ = use_hash_sort; }
+    bool get_use_hash_sort() const { return use_hash_sort_; }
     virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
     virtual int print_outline_data(PlanText &plan_text) override;
     virtual int print_used_hint(PlanText &plan_text) override;
-
+    int add_win_dist_options(const ObLogicalOperator *op,
+                             const ObIArray<ObWinFunRawExpr*> &all_win_funcs,
+                             ObWindowDistHint &win_dist_hint);
   private:
     ObSEArray<ObWinFunRawExpr *, 4, common::ModulePageAllocator, true> win_exprs_;
+
+    // for print PQ_DISTRIBUTE_WINDOW hint outline
+    WinDistAlgo algo_;
+    bool use_hash_sort_;
 
     // Single partition (no partition by) window function parallel process, need the PX COORD
     // to collect the partial result and broadcast the final result to each worker.
@@ -130,9 +139,6 @@ namespace sql
     int64_t rd_sort_keys_cnt_;
     // the first %rd_pby_sort_cnt_ of %rd_sort_keys_ is the partition by of window function.
     int64_t rd_pby_sort_cnt_;
-
-    // for PQ_DISTRIBUTE_WINDOW hint outline
-    common::ObSEArray<WinDistAlgo, 8, common::ModulePageAllocator, true> dist_hint_;
 
     // for reporting window function adaptive pushdown
     ObOpPseudoColumnRawExpr *wf_aggr_status_expr_;

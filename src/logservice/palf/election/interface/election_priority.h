@@ -39,6 +39,7 @@ public:
   // 在priority间进行比较的方法
   virtual int compare_with(const ElectionPriority &rhs,
                            const uint64_t compare_version,
+                           const bool decentralized_voting,
                            int &result,
                            common::ObStringHolder &reason) const = 0;
   virtual int get_size_of_impl_type() const = 0;

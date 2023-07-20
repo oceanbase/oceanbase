@@ -4860,7 +4860,9 @@ void PalfHandleImpl::is_in_sync_(bool &is_log_sync, bool &is_use_cache)
       sw_.get_committed_end_lsn(local_end_lsn);
       const bool is_scn_sync = (leader_max_scn.convert_to_ts() - local_max_scn.convert_to_ts() <= PALF_LOG_SYNC_DELAY_THRESHOLD_US);
       const bool is_log_size_sync = (leader_end_lsn - local_end_lsn) < 2 * PALF_BLOCK_SIZE;
-      is_log_sync = is_scn_sync || is_log_size_sync;
+      // Note: do not consider the gap of LSN (120 MB is too much to catch up for migration dest)
+      UNUSED(is_log_size_sync);
+      is_log_sync = is_scn_sync;
     }
   } else {
     is_use_cache = true;

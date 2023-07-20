@@ -2502,8 +2502,8 @@ int PartTransTask::push_multi_data_source_data(
         }
         default:
         {
-          LOG_WARN("ignore not_supportted multi_data_source type", KR(ret), K_(tls_id), K_(trans_id), K(lsn),
-              K(is_commit_log), K(mds_data_arr), K(mds_buffer_node));
+          LOG_INFO("ignore not_supportted multi_data_source type", KR(ret), K_(tls_id), K_(trans_id), K(lsn),
+              K(is_commit_log), K(mds_type));
           break;
         }
       }
@@ -2718,8 +2718,6 @@ int PartTransTask::check_for_ddl_trans(
         } else {
           is_not_barrier = true;
         }
-      } else if (OB_DDL_TRUNCATE_TABLE == op_type) {
-        is_not_barrier = true;
       } else {
         ++other_ddl_count;
       }

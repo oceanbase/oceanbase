@@ -50,6 +50,7 @@ int ObMdsTableMergeTask::init(const ObMdsTableMergeDagParam &param)
 
 int ObMdsTableMergeTask::process()
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObLSService *ls_service = MTL(ObLSService*);
@@ -66,24 +67,24 @@ int ObMdsTableMergeTask::process()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (MDS_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is null", K(ret), K(ls_id), K(ls_handle));
-  } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+  } else if (MDS_FAIL(ls->get_tablet(tablet_id, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet is null", K(ret), K(ls_id), K(tablet_handle));
-  } else if (OB_FAIL(ls->get_tablet_svr()->build_new_tablet_from_mds_table(tablet_id, flush_scn))) {
+  } else if (MDS_FAIL(ls->get_tablet_svr()->build_new_tablet_from_mds_table(tablet_id, flush_scn))) {
     LOG_WARN("failed to build new tablet from mds table", K(ret), K(ls_id), K(tablet_id), K(flush_scn));
   } else {
     share::dag_yield();
   }
 
   // always notify flush ret
-  if (OB_NOT_NULL(tablet) && OB_TMP_FAIL(tablet->notify_mds_table_flush_ret(flush_scn, ret))) {
+  if (CLICK() && OB_NOT_NULL(tablet) && OB_TMP_FAIL(tablet->notify_mds_table_flush_ret(flush_scn, ret))) {
     LOG_WARN("failed to notify mds table flush ret", K(tmp_ret), K(ls_id), K(tablet_id), K(flush_scn), "flush_ret", ret);
   }
 

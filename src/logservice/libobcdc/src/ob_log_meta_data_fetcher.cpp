@@ -92,6 +92,7 @@ int ObLogMetaDataFetcher::init(
   } else if (OB_FAIL(log_entry_task_pool_.init(LOG_ENTRY_TASK_COUNT))) {
     LOG_ERROR("log_entry_task_pool_ init failed", KR(ret));
   } else {
+    trans_task_pool_alloc_.set_label("DictConFAlloc");
     INIT(log_fetcher_, ObLogFetcher, true/*is_loading_data_dict_baseline_data*/,
         fetching_mode, archive_dest, fetcher_dispatcher,
         sys_ls_handler, &trans_task_pool_, &log_entry_task_pool_, proxy, err_handler,
@@ -187,6 +188,7 @@ int ObLogMetaDataFetcher::add_ls_and_fetch_until_the_progress_is_reached(
           if (REACH_TIME_INTERVAL(10 * _SEC_)) {
             LOG_INFO("ObLogFetcher check_progress is less than end_timestamp",
                 K(tenant_id), K(cur_progress), K(end_tstamp_ns));
+            trans_task_pool_.print_stat_info();
           }
           int64_t end_time = get_timestamp();
 

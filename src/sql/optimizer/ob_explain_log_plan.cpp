@@ -143,15 +143,10 @@ int ObExplainLogPlan::check_explain_generate_plan_with_outline(ObLogPlan *real_p
   } else if (0 == sql_ctx->first_plan_hash_) {  /* generate plan first time */
     void *tmp_ptr = NULL;
     sql_ctx->first_outline_data_.reset();
-    bool has_win_func = false;
     if (OB_UNLIKELY(0 == real_plan->get_signature()) || 0 < sql_ctx->retry_times_) {
       /* do nothing */
     } else if (OB_SUCC(OB_E(EventTable::EN_EXPLAIN_GENERATE_PLAN_WITH_OUTLINE) OB_SUCCESS)) {
       /* do nothing */
-    } else if (OB_FAIL(check_has_win_func(explain_stmt->get_explain_query_stmt(), has_win_func))) {
-      LOG_WARN("failed to check has window function", K(ret));
-    } else if (has_win_func) {
-      /* outline is usually invalid for plan contain window functions, remove this after some hint is added. */
     } else if (OB_UNLIKELY(NULL == (tmp_ptr = get_optimizer_context().get_allocator().alloc(OB_MAX_SQL_LENGTH)))) {
       /* allocator in optimizer context is from ObResultSet */
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -194,29 +189,6 @@ int ObExplainLogPlan::check_explain_generate_plan_with_outline(ObLogPlan *real_p
       }
       sql_ctx->first_plan_hash_ = 0;
       sql_ctx->first_outline_data_.reset();
-    }
-  }
-  return ret;
-}
-
-
-int ObExplainLogPlan::check_has_win_func(const ObDMLStmt *stmt, bool &has_win_func)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt is null", K(ret), K(stmt));
-  } else if (stmt->is_select_stmt() && static_cast<const ObSelectStmt*>(stmt)->has_window_function()) {
-    has_win_func = true;
-  } else {
-    ObSEArray<ObSelectStmt*, 8> child_stmts;
-    if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
-      LOG_WARN("get child stmt failed", K(ret));
-    }
-    for (int64_t i = 0; !has_win_func && OB_SUCC(ret) && i < child_stmts.count(); ++i) {
-      if (OB_FAIL(SMART_CALL(check_has_win_func(child_stmts.at(i), has_win_func)))) {
-        LOG_WARN("failed to check has window function", K(ret));
-      }
     }
   }
   return ret;
