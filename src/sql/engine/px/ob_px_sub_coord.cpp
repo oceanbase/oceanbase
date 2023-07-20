@@ -874,8 +874,8 @@ int ObPxSubCoord::end_ddl(const bool need_commit)
       LOG_WARN("ddl manager finish contex failed", K(ret), K(ddl_ctrl_));
     }
     LOG_INFO("end ddl sstable", K(ret), K(need_commit));
+    DEBUG_SYNC(END_DDL_IN_PX_SUBCOORD);
   }
-  DEBUG_SYNC(END_DDL_IN_PX_SUBCOORD);
   if (OB_EAGAIN == ret) {
     ret = OB_STATE_NOT_MATCH; // avoid px hang
   }

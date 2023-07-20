@@ -441,7 +441,7 @@ public:
   static int check_and_wait_old_complement_task(
       const uint64_t tenant_id,
       const uint64_t index_table_id,
-      const uint64_t ddl_task_id,
+      const int64_t ddl_task_id,
       const int64_t execution_id,
       const common::ObAddr &inner_sql_exec_addr,
       const common::ObCurTraceId::TraceId &trace_id,
@@ -468,7 +468,7 @@ private:
       const common::ObAddr &inner_sql_exec_addr,
       const common::ObCurTraceId::TraceId &trace_id,
       const uint64_t tenant_id,
-      const int64_t execution_id,
+      const int64_t task_id,
       const int64_t scn,
       bool &is_old_task_session_exist);
 
