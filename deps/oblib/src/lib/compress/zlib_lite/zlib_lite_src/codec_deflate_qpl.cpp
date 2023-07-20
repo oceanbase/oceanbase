@@ -184,7 +184,7 @@ int32_t CodecDeflateQpl::do_compress_data(const char * source, uint32_t source_s
   job_ptr->available_in = source_size;
   job_ptr->level = qpl_default_level;
   job_ptr->available_out = dest_size;
-  job_ptr->flags = QPL_FLAG_FIRST | QPL_FLAG_DYNAMIC_HUFFMAN | QPL_FLAG_LAST | QPL_FLAG_OMIT_VERIFY;
+  job_ptr->flags = QPL_FLAG_FIRST | QPL_FLAG_DYNAMIC_HUFFMAN | QPL_FLAG_LAST;
 
   qpl_status status = qpl_execute_job(job_ptr);
 
