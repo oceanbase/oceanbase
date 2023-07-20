@@ -233,6 +233,7 @@ do {\
 // flag is needed to rollback logic
 #define MDS_FAIL_FLAG(stmt, flag) (CLICK_FAIL(stmt) || FALSE_IT(flag = true))
 #define MDS_FAIL(stmt) (CLICK_FAIL(stmt))
+#define MDS_TMP_FAIL(stmt) (CLICK_TMP_FAIL(stmt))
 
 }
 }

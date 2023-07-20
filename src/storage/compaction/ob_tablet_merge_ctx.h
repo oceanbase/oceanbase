@@ -118,6 +118,7 @@ public:
     RELEASE_MEMTABLE,
     SCHEDULE_OTHER_COMPACTION,
     DAG_FINISH,
+    GET_TABLET,
     COMPACTION_EVENT_MAX
   };
   const static char *ObTabletCompactionEventStr[];

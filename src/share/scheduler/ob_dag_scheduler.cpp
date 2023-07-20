@@ -2191,14 +2191,9 @@ int ObTenantDagScheduler::check_ls_compaction_dag_exist_with_cancel(
       ObIDag *head = dag_list_[READY_DAG_LIST].get_head(ObIDag::MergeDagPrio[i]);
       ObIDag *cur = head->get_next();
       while (head != cur) {
-        if (ObDagType::DAG_TYPE_MDS_TABLE_MERGE == cur->get_type()) {
-          // TODO (bowen.gbw) : make ObMdsTableMergeDag inherit from ObTabletMergeDag
-        const mds::ObMdsTableMergeDag *mds_dag = static_cast<const mds::ObMdsTableMergeDag *>(cur);
-          cancel_flag = (ls_id == mds_dag->get_param().ls_id_);
-        } else {
-          dag = static_cast<compaction::ObTabletMergeDag *>(cur);
-          cancel_flag = (ls_id == dag->get_ls_id());
-        }
+        dag = static_cast<compaction::ObTabletMergeDag *>(cur);
+        cancel_flag = (ls_id == dag->get_ls_id());
+
         if (cancel_flag) {
           if (cur->get_dag_status() == ObIDag::DAG_STATUS_READY) {
             cancel_dag = cur;

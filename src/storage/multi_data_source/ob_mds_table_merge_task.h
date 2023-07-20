@@ -14,7 +14,6 @@
 #define OCEANBASE_STORAGE_OB_MDS_TABLE_MERGE_TASK
 
 #include "share/scheduler/ob_dag_scheduler.h"
-#include "storage/multi_data_source/ob_mds_table_merge_dag_param.h"
 
 namespace oceanbase
 {
@@ -22,6 +21,8 @@ namespace storage
 {
 namespace mds
 {
+class ObMdsTableMergeDag;
+
 class ObMdsTableMergeTask : public share::ObITask
 {
 public:
@@ -32,10 +33,10 @@ public:
 public:
   virtual int process() override;
 
-  int init(const ObMdsTableMergeDagParam &param);
+  int init();
 private:
   bool is_inited_;
-  ObMdsTableMergeDagParam param_;
+  ObMdsTableMergeDag *mds_merge_dag_;
 };
 } // namespace mds
 } // namespace storage

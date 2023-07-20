@@ -95,8 +95,7 @@ struct ObTabletMergeDagParam : public share::ObIDagInitParam
     return is_tenant_major_merge_ ? MAJOR_MERGE : merge_type_;
   }
 
-  TO_STRING_KV("merge_type",merge_type_to_str(merge_type_), K_(merge_version), K_(ls_id), K_(tablet_id),
-    KP(report_), K_(for_diagnose), K_(is_tenant_major_merge), K_(need_swap_tablet_flag));
+  virtual int64_t to_string(char* buf, const int64_t buf_len) const;
 
   bool for_diagnose_;
   bool is_tenant_major_merge_;
@@ -247,12 +246,27 @@ class ObTabletMergeDag : public ObBasicTabletMergeDag
 public:
   ObTabletMergeDag(const share::ObDagType::ObDagTypeEnum type);
   virtual ~ObTabletMergeDag() {}
-  template <class T>
+  template <typename T>
   int create_first_task();
 
   virtual int gene_compaction_info(compaction::ObTabletCompactionProgress &progress) override;
   virtual int diagnose_compaction_info(compaction::ObDiagnoseTabletCompProgress &progress) override;
 };
+
+template <typename T>
+int ObTabletMergeDag::create_first_task()
+{
+  int ret = common::OB_SUCCESS;
+  T *task = nullptr;
+  if (OB_FAIL(alloc_task(task))) {
+    STORAGE_LOG(WARN, "fail to alloc task", K(ret));
+  } else if (OB_FAIL(task->init())) {
+    STORAGE_LOG(WARN, "failed to init task", K(ret));
+  } else if (OB_FAIL(add_task(*task))) {
+    STORAGE_LOG(WARN, "fail to add task", K(ret), K_(ls_id), K_(tablet_id), K_(ctx));
+  }
+  return ret;
+}
 
 class ObTabletMajorMergeDag: public ObTabletMergeDag
 {

@@ -381,6 +381,7 @@ const char *ObCompactionTimeGuard::ObTabletCompactionEventStr[] = {
     "UPDATE_TABLET",
     "RELEASE_MEMTABLE",
     "SCHEDULE_OTHER_COMPACTION",
+    "GET_TABLET",
     "DAG_FINISH"
 };
 

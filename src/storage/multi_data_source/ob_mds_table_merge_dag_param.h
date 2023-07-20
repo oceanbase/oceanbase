@@ -13,10 +13,9 @@
 #ifndef OCEANBASE_STORAGE_OB_MDS_TABLE_MERGE_PARAM
 #define OCEANBASE_STORAGE_OB_MDS_TABLE_MERGE_PARAM
 
-#include "share/scheduler/ob_dag_scheduler.h"
+#include <stdint.h>
+#include "storage/compaction/ob_tablet_merge_task.h"
 #include "share/scn.h"
-#include "share/ob_ls_id.h"
-#include "common/ob_tablet_id.h"
 
 namespace oceanbase
 {
@@ -24,37 +23,18 @@ namespace storage
 {
 namespace mds
 {
-class ObMdsTableMergeDagParam : public share::ObIDagInitParam
+class ObMdsTableMergeDagParam : public compaction::ObTabletMergeDagParam
 {
 public:
   ObMdsTableMergeDagParam();
   virtual ~ObMdsTableMergeDagParam() = default;
 public:
-  virtual bool is_valid() const override;
-  bool operator==(const ObMdsTableMergeDagParam &other) const;
-
-  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(flush_scn), KTIME_(generate_ts));
+  INHERIT_TO_STRING_KV("ObTabletMergeDagParam", compaction::ObTabletMergeDagParam,
+                       K_(flush_scn), KTIME_(generate_ts));
 public:
-  share::ObLSID ls_id_;
-  common::ObTabletID tablet_id_;
   share::SCN flush_scn_;
   int64_t generate_ts_;
 };
-
-inline bool ObMdsTableMergeDagParam::is_valid() const
-{
-  return ls_id_.is_valid()
-      && tablet_id_.is_valid()
-      && !tablet_id_.is_ls_inner_tablet()
-      && flush_scn_.is_valid();
-}
-
-inline bool ObMdsTableMergeDagParam::operator==(const ObMdsTableMergeDagParam &other) const
-{
-  return ls_id_ == other.ls_id_
-      && tablet_id_ == other.tablet_id_
-      && flush_scn_ == other.flush_scn_;
-}
 } // namespace mds
 } // namespace storage
 } // namespace oceanbase

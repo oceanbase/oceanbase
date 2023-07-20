@@ -203,6 +203,22 @@ bool ObTabletMergeDagParam::is_valid() const
          && (!is_major_merge_type(merge_type_) || merge_version_ >= 0);
 }
 
+int64_t ObTabletMergeDagParam::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("merge_type", merge_type_to_str(merge_type_),
+       K_(merge_version),
+       K_(ls_id),
+       K_(tablet_id),
+       KP(report_),
+       K_(for_diagnose),
+       K_(is_tenant_major_merge),
+       K_(need_swap_tablet_flag));
+  J_OBJ_END();
+  return pos;
+}
+
 ObBasicTabletMergeDag::ObBasicTabletMergeDag(
     const ObDagType::ObDagTypeEnum type)
   : ObIDag(type),
@@ -374,8 +390,8 @@ int64_t ObMergeDagHash::inner_hash() const
   int64_t hash_value = 0;
   // make two merge type same
   hash_value = common::murmurhash(&merge_type_, sizeof(merge_type_), hash_value);
-  hash_value += ls_id_.hash();
-  hash_value += tablet_id_.hash();
+  hash_value = common::murmurhash(&ls_id_, sizeof(ls_id_), hash_value);
+  hash_value = common::murmurhash(&tablet_id_, sizeof(tablet_id_), hash_value);
   return hash_value;
 }
 
@@ -399,7 +415,7 @@ int ObBasicTabletMergeDag::fill_info_param(compaction::ObIBasicInfoParam *&out_p
   int ret = OB_SUCCESS;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ls basic table merge dag do not init", K(ret));
+    LOG_WARN("ls basic tablet merge dag do not init", K(ret));
   } else {
     const char *merge_type = merge_type_to_str(merge_type_);
     if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
@@ -429,21 +445,6 @@ int ObBasicTabletMergeDag::fill_dag_key(char *buf, const int64_t buf_len) const
 ObTabletMergeDag::ObTabletMergeDag(const ObDagType::ObDagTypeEnum type)
   : ObBasicTabletMergeDag(type)
 {
-}
-
-template <class T>
-int ObTabletMergeDag::create_first_task()
-{
-  int ret = OB_SUCCESS;
-  T *task = nullptr;
-  if (OB_FAIL(alloc_task(task))) {
-    STORAGE_LOG(WARN, "fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    STORAGE_LOG(WARN, "failed to init task", K(ret));
-  } else if (OB_FAIL(add_task(*task))) {
-    STORAGE_LOG(WARN, "fail to add task", K(ret), K_(ls_id), K_(tablet_id), K_(ctx));
-  }
-  return ret;
 }
 
 int ObTabletMergeDag::gene_compaction_info(compaction::ObTabletCompactionProgress &input_progress)

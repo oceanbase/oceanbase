@@ -316,7 +316,7 @@ public:
   // get tablet but don't check user_data while replaying clog, because user_data may not exist.
   int replay_get_tablet_no_check(
       const common::ObTabletID &tablet_id,
-      const SCN &scn,
+      const share::SCN &scn,
       ObTabletHandle &tablet_handle) const;
 
   int flush_if_need(const bool need_flush);
@@ -788,12 +788,16 @@ public:
       const ObUpdateTableStoreParam &param,
       ObTabletHandle &handle);
   int update_tablet_table_store(
-      const int64_t rebuild_seq,
+      const int64_t ls_rebuild_seq,
       const ObTabletHandle &old_tablet_handle,
       const ObIArray<storage::ObITable *> &tables);
   int build_ha_tablet_new_table_store(
       const ObTabletID &tablet_id,
       const ObBatchUpdateTableStoreParam &param);
+  int build_new_tablet_from_mds_table(
+      const int64_t ls_rebuild_seq,
+      const common::ObTabletID &tablet_id,
+      const share::SCN &flush_scn);
   int try_update_uppder_trans_version();
   int diagnose(DiagnoseInfo &info) const;
 
