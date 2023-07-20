@@ -45,6 +45,7 @@ enum ObMigrationStatus
   OB_MIGRATION_STATUS_MIGRATE_WAIT = 10,
   OB_MIGRATION_STATUS_ADD_WAIT = 11,
   OB_MIGRATION_STATUS_REBUILD_WAIT = 12,
+  OB_MIGRATION_STATUS_GC = 13,  // ls wait allow gc
   OB_MIGRATION_STATUS_MAX,
 };
 
@@ -75,7 +76,11 @@ public:
   static int trans_reboot_status(const ObMigrationStatus &cur_status, ObMigrationStatus &reboot_status);
   static bool check_can_election(const ObMigrationStatus &cur_status);
   static bool check_can_restore(const ObMigrationStatus &cur_status);
-  static int check_allow_gc(const share::ObLSID &ls_id, const ObMigrationStatus &cur_status, bool &allow_gc);
+  static int check_ls_allow_gc(
+      const share::ObLSID &ls_id,
+      const ObMigrationStatus &cur_status,
+      const bool not_in_member_list_scene,
+      bool &allow_gc);
   // Check the migration status. The LS in the XXX_FAIL state is considered to be an abandoned LS, which can be judged to be directly GC when restarting
   static bool check_allow_gc_abandoned_ls(const ObMigrationStatus &cur_status);
   static bool check_can_migrate_out(const ObMigrationStatus &cur_status);
@@ -86,15 +91,30 @@ public:
   static bool is_valid(const ObMigrationStatus &status);
   static int trans_rebuild_fail_status(
       const ObMigrationStatus &cur_status,
-      const bool is_in_member_list,
+      const bool not_in_member_list_scene,
       const bool is_ls_deleted,
       ObMigrationStatus &fail_status);
   static int check_migration_in_final_state(
       const ObMigrationStatus &status,
       bool &in_final_state);
+  static bool check_is_running_migration(const ObMigrationStatus &cur_status);
 private:
-  static int check_ls_transfer_tablet_(const share::ObLSID &ls_id, bool &allow_gc);
-  static int check_transfer_dest_ls_status_(const share::ObLSID &transfer_ls_id, bool &allow_gc);
+  static int check_ls_transfer_tablet_(
+      const share::ObLSID &ls_id,
+      const ObMigrationStatus &migration_status,
+      const bool not_in_member_list_scene,
+      bool &allow_gc);
+  static int check_transfer_dest_ls_status_for_ls_gc(
+      const share::ObLSID &transfer_ls_id,
+      const ObTabletID &tablet_id,
+      const bool not_in_member_list_scene,
+      bool &allow_gc);
+  static int check_transfer_dest_tablet_for_ls_gc(ObLS *ls, const ObTabletID &tablet_id, bool &allow_gc);
+  static bool check_migration_status_is_fail_(const ObMigrationStatus &cur_status);
+  static int set_ls_migrate_gc_status_(
+      ObLS &ls,
+      const ObMigrationStatus &migration_status,
+      const bool not_in_member_list_scene);
 };
 
 enum ObMigrationOpPriority

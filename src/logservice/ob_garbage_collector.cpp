@@ -237,14 +237,24 @@ int ObGarbageCollector::QueryLSIsValidMemberFunctor::handle_rpc_response_(const 
         if (OB_SUCCESS != (tmp_ret = gc_handler->gc_check_invalid_member_seq(gc_seq_, need_gc))) {
           CLOG_LOG(WARN, "gc_check_invalid_member_seq failed", K(tmp_ret), K(id), K(leader), K(gc_seq_), K(need_gc));
         } else if (need_gc) {
-          GCCandidate candidate;
-          candidate.ls_id_ = id;
-          candidate.ls_status_ = LSStatus::LS_NEED_GC;
-          candidate.gc_reason_ = NOT_IN_LEADER_MEMBER_LIST;
-          if (OB_FAIL(gc_candidates_.push_back(candidate))) {
-            CLOG_LOG(WARN, "gc_candidates push_back failed", K(ret), K(id), K(leader));
+          bool allow_gc = false;
+          ObMigrationStatus migration_status;
+          if (OB_FAIL(ls->get_migration_status(migration_status))) {
+            CLOG_LOG(WARN, "get_migration_status failed", K(ret), K(id));
+          } else if (OB_FAIL(ObMigrationStatusHelper::check_ls_allow_gc(id, migration_status, true/*not_in_member_list_scene*/, allow_gc))) {
+            CLOG_LOG(WARN, "failed to check allow gc", K(ret), K(id), K(leader));
+          } else if (!allow_gc) {
+            CLOG_LOG(INFO, "The ls is dependent and is not allowed to be GC", K(id), K(leader));
           } else {
-            CLOG_LOG(INFO, "gc_candidates push_back success", K(ret), K(candidate), K(leader));
+            GCCandidate candidate;
+            candidate.ls_id_ = id;
+            candidate.ls_status_ = LSStatus::LS_NEED_GC;
+            candidate.gc_reason_ = NOT_IN_LEADER_MEMBER_LIST;
+            if (OB_FAIL(gc_candidates_.push_back(candidate))) {
+              CLOG_LOG(WARN, "gc_candidates push_back failed", K(ret), K(id), K(leader));
+            } else {
+              CLOG_LOG(INFO, "gc_candidates push_back success", K(ret), K(candidate), K(leader));
+            }
           }
         } else {
           CLOG_LOG(INFO, "gc_check_invalid_member_seq set seq", K(tmp_ret), K(id), K(leader), K(gc_seq_), K(need_gc));
@@ -1293,7 +1303,6 @@ int ObGarbageCollector::construct_server_ls_map_for_member_list_(ServerLSMap &se
     int tmp_ret = OB_SUCCESS;
     while (OB_SUCC(ret)) {
       common::ObAddr leader;
-      bool allow_gc = false;
       if (OB_FAIL(iter->get_next(ls))) {
         if (OB_ITER_END != ret) {
           CLOG_LOG(WARN, "get next log stream failed", K(ret));
@@ -1320,10 +1329,8 @@ int ObGarbageCollector::construct_server_ls_map_for_member_list_(ServerLSMap &se
         CLOG_LOG(WARN, "get invalid leader from location service", K(tmp_ret), K(ls->get_ls_id()));
       } else if (OB_SUCCESS != (tmp_ret = ls->get_migration_status(migration_status))) {
         CLOG_LOG(WARN, "get_migration_status failed", K(tmp_ret), K(ls->get_ls_id()));
-      } else if (OB_SUCCESS != (tmp_ret = ObMigrationStatusHelper::check_allow_gc(ls->get_ls_id(), migration_status, allow_gc))) {
-        CLOG_LOG(WARN, "failed to check ls allowed to gc", K(tmp_ret), K(migration_status), "ls_id", ls->get_ls_id());
-      } else if (!allow_gc) {
-        CLOG_LOG(INFO, "The ls is dependent and is not allowed to be GC", "ls_id", ls->get_ls_id(), K(migration_status));
+      } else if (ObMigrationStatusHelper::check_is_running_migration(migration_status)) {
+        CLOG_LOG(INFO, "The log stream is in the process of being migrated", "ls_id", ls->get_ls_id(), K(migration_status));
       } else if (OB_SUCCESS != (tmp_ret = construct_server_ls_map_(server_ls_map, leader, ls->get_ls_id()))) {
         CLOG_LOG(WARN, "construct_server_ls_map_ failed", K(tmp_ret), K(ls->get_ls_id()), K(leader));
       }
@@ -1448,7 +1455,8 @@ int ObGarbageCollector::gc_check_ls_status_(storage::ObLS &ls,
     } else if (OB_ENTRY_NOT_EXIST == ret) {
       if (OB_SUCCESS != (tmp_ret = ls.get_migration_status(migration_status))) {
         CLOG_LOG(WARN, "get_migration_status failed", K(tmp_ret), K(ls_id));
-      } else if (OB_SUCCESS != (tmp_ret = ObMigrationStatusHelper::check_allow_gc(ls.get_ls_id(), migration_status, allow_gc))) {
+      } else if (OB_SUCCESS != (tmp_ret = ObMigrationStatusHelper::check_ls_allow_gc(
+            ls.get_ls_id(), migration_status, false/*not_in_member_list_scene*/, allow_gc))) {
         CLOG_LOG(WARN, "failed to check ls allowed to gc", K(tmp_ret), K(migration_status), K(ls_id));
       } else if (!allow_gc) {
         CLOG_LOG(INFO, "The ls is dependent and is not allowed to be GC", K(ls_id), K(migration_status));
