@@ -1441,7 +1441,7 @@ int ObRestoreService::restore_wait_tenant_finish(const share::ObPhysicalRestoreJ
       LOG_WARN("tenant schema is null", K(ret), K(tenant_id));
     } else if (tenant_schema->is_restore_tenant_status() || tenant_schema->is_normal()) {
       if (tenant_schema->is_restore_tenant_status()) {
-        const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;
+        const int64_t DEFAULT_TIMEOUT = GCONF.internal_sql_execute_timeout;
         // try finish restore status
         obrpc::ObCreateTenantEndArg arg;
         arg.tenant_id_ = tenant_id;
@@ -1450,7 +1450,7 @@ int ObRestoreService::restore_wait_tenant_finish(const share::ObPhysicalRestoreJ
           LOG_WARN("restore scheduler stopped", K(ret));
         } else if (OB_FAIL(rpc_proxy_->timeout(DEFAULT_TIMEOUT)
                                .create_tenant_end(arg))) {
-          LOG_WARN("fail to create tenant end", K(ret), K(arg));
+          LOG_WARN("fail to create tenant end", K(ret), K(arg), K(DEFAULT_TIMEOUT));
         }
       }
       if (OB_SUCC(ret)) {
