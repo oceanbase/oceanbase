@@ -142,7 +142,7 @@ int PartProgressController::acquire_progress(int64_t &progress_id, const int64_t
     ATOMIC_INC(&valid_progress_cnt_);
 
     _LOG_INFO("[STAT] [PROGRESS_CONTROLLER] [ACQUIRE] progress_id=%ld start_progress=%ld(%s) "
-        "progress_cnt=(total=%ld,valid=%ld,recycled=%ld,max=%ld) ",
+        "progress_cnt=(total=%ld,valid=%ld,recycled=%ld,max=%ld)",
         progress_id, start_progress, NTS_TO_STR(start_progress),
         progress_cnt_, valid_progress_cnt_, recycled_indices_.count(), max_progress_cnt_);
   }

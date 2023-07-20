@@ -1242,7 +1242,7 @@ int ObLogTenantMgr::add_all_tenants(const int64_t start_tstamp_ns,
     bool is_new_created_tenant = false;
     bool is_new_tenant_by_restore = false;
     const int64_t total_tenant_count = tenant_ids.count();
-    const bool enable_filter_sys_tenant = (1 == TCONF.enable_filter_sys_tenant);
+    const bool enable_filter_sys_tenant = TCTX.enable_filter_sys_tenant_;
     ISTAT("[ADD_ALL_TENANTS] BEGIN", K(sys_schema_version), K(start_tstamp_ns),
         "start_tstamp_ns", NTS_TO_STR(start_tstamp_ns), K(total_tenant_count), K(tenant_ids));
 

@@ -197,9 +197,13 @@ int ObLogMysqlProxy::detect_tenant_mode_(ServerProviderType *server_provider)
           } else {
             is_oracle_mode_ = conn.is_oracle_mode();
             detect_succ = true;
-            LOG_INFO("detect connection_pool mode success", KR(ret), K_(is_oracle_mode), K(config));
+            LOG_INFO("[DETECT_TENANT_MODE] detect tenant mode success", KR(ret), K_(is_oracle_mode), K(config));
           }
         }
+      }
+      if (OB_UNLIKELY(!detect_succ)) {
+        ret = OB_CONNECT_ERROR;
+        LOG_ERROR("[DETECT_TENANT_MODE] connect to all server in tenant endpoint list failed", KR(ret), K(svr_cnt));
       }
     }
   }
