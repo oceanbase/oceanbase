@@ -203,14 +203,20 @@ int ObSafeDestroyHandler::stop()
 
 void ObSafeDestroyHandler::wait()
 {
+  int ret = OB_SUCCESS;
   static const int64_t SLEEP_TS = 100 * 1000; // 100_ms
   int64_t start_ts = ObTimeUtility::current_time();
-  while (!queue_.stop_finished()) {
-    if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) { // every minute
-      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "the safe destroy thread wait cost too much time",
-               K(ObTimeUtility::current_time() - start_ts));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("safe destroy thread not inited", K(ret));
+  } else {
+    while (!queue_.stop_finished()) {
+      if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) { // every minute
+        LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "the safe destroy thread wait cost too much time",
+                     K(ObTimeUtility::current_time() - start_ts));
+      }
+      ob_usleep(SLEEP_TS);
     }
-    ob_usleep(SLEEP_TS);
   }
 }
 

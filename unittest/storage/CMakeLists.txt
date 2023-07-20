@@ -79,6 +79,7 @@ storage_unittest(test_backup_index_merger backup/test_backup_index_merger.cpp)
 storage_unittest(test_backup_extern_info_mgr backup/test_backup_extern_info_mgr.cpp)
 
 #storage_unittest(test_create_tablet_clog tx_storage/test_create_tablet_clog.cpp)
+storage_unittest(test_safe_destroy_handler tx_storage/test_safe_destroy_handler.cpp)
 storage_unittest(test_simple_rows_merger)
 storage_unittest(test_partition_incremental_range_spliter)
 storage_unittest(test_partition_major_sstable_range_spliter)
