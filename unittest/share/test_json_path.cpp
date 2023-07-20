@@ -64,42 +64,43 @@ TEST_F(TestJsonPath, test_is_mysql_terminator_mysql)
 // 测试 basicNode的构造函数
 TEST_F(TestJsonPath, test_create_basic_node)
 {
+  ObArenaAllocator allocator(ObModIds::TEST);
   // **
-  ObJsonPathBasicNode temp1;
+  ObJsonPathBasicNode temp1(&allocator);
   ASSERT_EQ(0, temp1.init(JPN_WILDCARD_ELLIPSIS, true));
   ASSERT_EQ(JPN_WILDCARD_ELLIPSIS, temp1.get_node_type());
-  ASSERT_EQ(true, temp1.get_node_content().is_had_wildcard_);
+  ASSERT_EQ(true, temp1.node_content_.is_had_wildcard_);
   // .*
-  ObJsonPathBasicNode temp2;
+  ObJsonPathBasicNode temp2(&allocator);
   ASSERT_EQ(0, temp2.init(JPN_MEMBER_WILDCARD, true));
   ASSERT_EQ(JPN_MEMBER_WILDCARD, temp2.get_node_type());
-  ASSERT_EQ(true, temp2.get_node_content().is_had_wildcard_);
+  ASSERT_EQ(true, temp2.node_content_.is_had_wildcard_);
   // [*]
-  ObJsonPathBasicNode temp3;
+  ObJsonPathBasicNode temp3(&allocator);
   ASSERT_EQ(0, temp3.init(JPN_ARRAY_CELL_WILDCARD, true));
   ASSERT_EQ(JPN_ARRAY_CELL_WILDCARD, temp3.get_node_type());
-  ASSERT_EQ(true, temp3.get_node_content().is_had_wildcard_);
+  ASSERT_EQ(true, temp3.node_content_.is_had_wildcard_);
   // [1]
-  ObJsonPathBasicNode temp4(1,false);
+  ObJsonPathBasicNode temp4(&allocator,1,false);
   ASSERT_EQ(JPN_ARRAY_CELL, temp4.get_node_type());
-  ASSERT_EQ(1, temp4.get_node_content().array_cell_.index_);
-  ASSERT_EQ(false, temp4.get_node_content().array_cell_.is_index_from_end_);
+  ASSERT_EQ(1, temp4.node_content_.array_cell_.index_);
+  ASSERT_EQ(false, temp4.node_content_.array_cell_.is_index_from_end_);
   // [last-3 to 6]
-  ObJsonPathBasicNode temp5(3, true, 6, false);
+  ObJsonPathBasicNode temp5(&allocator,3, true, 6, false);
   ASSERT_EQ(JPN_ARRAY_RANGE, temp5.get_node_type());
-  ASSERT_EQ(3, temp5.get_node_content().array_range_.first_index_);
-  ASSERT_EQ(true, temp5.get_node_content().array_range_.is_first_index_from_end_);
-  ASSERT_EQ(6, temp5.get_node_content().array_range_.last_index_);
-  ASSERT_EQ(false, temp5.get_node_content().array_range_.is_last_index_from_end_);
+  ASSERT_EQ(3, temp5.node_content_.array_range_.first_index_);
+  ASSERT_EQ(true, temp5.node_content_.array_range_.is_first_index_from_end_);
+  ASSERT_EQ(6, temp5.node_content_.array_range_.last_index_);
+  ASSERT_EQ(false, temp5.node_content_.array_range_.is_last_index_from_end_);
   // .keyname
   ObString kn("keyname");
-  ObJsonPathBasicNode temp6(kn);
+  ObJsonPathBasicNode temp6(&allocator,kn);
   ASSERT_EQ(JPN_MEMBER, temp6.get_node_type());
-  std::cout<<temp6.get_node_content().member_.object_name_<<std::endl;
+  std::cout<<temp6.node_content_.member_.object_name_<<std::endl;
 
   ObJsonPathNode *fa1 = &temp1;
   ASSERT_EQ(JPN_WILDCARD_ELLIPSIS, (static_cast<ObJsonPathBasicNode *> (fa1))->get_node_type());
-  ASSERT_EQ(true, fa1->get_node_content().is_had_wildcard_);
+  ASSERT_EQ(true, fa1->node_content_.is_had_wildcard_);
 }
 
 // 测试 append函数
@@ -109,60 +110,60 @@ TEST_F(TestJsonPath, test_append)
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonPath test_path(&allocator);
-  ObJsonPathBasicNode temp1;
+  ObJsonPathBasicNode temp1(&allocator);
   ASSERT_EQ(0, temp1.init(JPN_WILDCARD_ELLIPSIS, true));
   ObJsonPathNode *fa1 = &temp1;
   ret = test_path.append(fa1);
   ASSERT_EQ(OB_SUCCESS,ret);
   ASSERT_EQ(JPN_WILDCARD_ELLIPSIS, test_path.path_nodes_[0]->get_node_type());
-  ASSERT_EQ(true, test_path.path_nodes_[0]->get_node_content().is_had_wildcard_);
+  ASSERT_EQ(true, test_path.path_nodes_[0]->node_content_.is_had_wildcard_);
 
   // append .*
-  ObJsonPathBasicNode temp2;
+  ObJsonPathBasicNode temp2(&allocator);
   ASSERT_EQ(0, temp2.init(JPN_MEMBER_WILDCARD, true));
   ObJsonPathNode *fa2 = &temp2;
   ret = test_path.append(fa2);
   ASSERT_EQ(OB_SUCCESS,ret);
   ASSERT_EQ(JPN_MEMBER_WILDCARD, test_path.path_nodes_[1]->get_node_type());
-  ASSERT_EQ(true, test_path.path_nodes_[1]->get_node_content().is_had_wildcard_);
+  ASSERT_EQ(true, test_path.path_nodes_[1]->node_content_.is_had_wildcard_);
 
   // append [*]
-  ObJsonPathBasicNode temp3;
+  ObJsonPathBasicNode temp3(&allocator);
   ASSERT_EQ(0, temp3.init(JPN_ARRAY_CELL_WILDCARD, true));
   ObJsonPathNode *fa3 = &temp3;
   ret = test_path.append(fa3);
   ASSERT_EQ(OB_SUCCESS,ret);
   ASSERT_EQ(JPN_ARRAY_CELL_WILDCARD, test_path.path_nodes_[2]->get_node_type());
-  ASSERT_EQ(true, test_path.path_nodes_[2]->get_node_content().is_had_wildcard_);
+  ASSERT_EQ(true, test_path.path_nodes_[2]->node_content_.is_had_wildcard_);
 
   // append array_cell
-  ObJsonPathBasicNode temp4(1,false);
+  ObJsonPathBasicNode temp4(&allocator,1,false);
   ObJsonPathNode *fa4 = &temp4;
   ret = test_path.append(fa4);
   ASSERT_EQ(OB_SUCCESS,ret);
   ASSERT_EQ(JPN_ARRAY_CELL, test_path.path_nodes_[3]->get_node_type());
-  ASSERT_EQ(1, test_path.path_nodes_[3]->get_node_content().array_cell_.index_);
-  ASSERT_EQ(false, test_path.path_nodes_[3]->get_node_content().array_cell_.is_index_from_end_);
+  ASSERT_EQ(1, test_path.path_nodes_[3]->node_content_.array_cell_.index_);
+  ASSERT_EQ(false, test_path.path_nodes_[3]->node_content_.array_cell_.is_index_from_end_);
 
   // [last-3 to 6]
-  ObJsonPathBasicNode temp5(3, true, 6, false);
+  ObJsonPathBasicNode temp5(&allocator,3, true, 6, false);
   ObJsonPathNode *fa5 = &temp5;
   ret = test_path.append(fa5);
   ASSERT_EQ(OB_SUCCESS,ret);
   ASSERT_EQ(JPN_ARRAY_RANGE, test_path.path_nodes_[4]->get_node_type());
-  ASSERT_EQ(3, test_path.path_nodes_[4]->get_node_content().array_range_.first_index_);
-  ASSERT_EQ(true, test_path.path_nodes_[4]->get_node_content().array_range_.is_first_index_from_end_);
-  ASSERT_EQ(6, test_path.path_nodes_[4]->get_node_content().array_range_.last_index_);
-  ASSERT_EQ(false, test_path.path_nodes_[4]->get_node_content().array_range_.is_last_index_from_end_);
+  ASSERT_EQ(3, test_path.path_nodes_[4]->node_content_.array_range_.first_index_);
+  ASSERT_EQ(true, test_path.path_nodes_[4]->node_content_.array_range_.is_first_index_from_end_);
+  ASSERT_EQ(6, test_path.path_nodes_[4]->node_content_.array_range_.last_index_);
+  ASSERT_EQ(false, test_path.path_nodes_[4]->node_content_.array_range_.is_last_index_from_end_);
 
   // .keyname
   ObString kn("keyname");
-  ObJsonPathBasicNode temp6(kn);
+  ObJsonPathBasicNode temp6(&allocator,kn);
   ObJsonPathNode *fa6 = &temp6;
   ret = test_path.append(fa6);
   ASSERT_EQ(OB_SUCCESS,ret);
   ASSERT_EQ(JPN_MEMBER, test_path.path_nodes_[5]->get_node_type());
-  std::cout<<"6: "<<test_path.path_nodes_[5]->get_node_content().member_.object_name_<<std::endl;
+  std::cout<<"6: "<<test_path.path_nodes_[5]->node_content_.member_.object_name_<<std::endl;
 }
 
 // 测试 parse_array_index()函数，用于得到array_index(包括last和-的处理)
@@ -213,10 +214,10 @@ TEST_F(TestJsonPath, test_array_cell_node)
   // 只有一个节点
   ASSERT_EQ(1, test_path.path_node_cnt());
   ASSERT_EQ(JPN_MULTIPLE_ARRAY,test_path.path_nodes_[0]->get_node_type());
-  ASSERT_EQ(10, test_path.path_nodes_[0]->get_node_content().multi_array_[0]->first_index_);
-  ASSERT_EQ(true,test_path.path_nodes_[0]->get_node_content().multi_array_[0]->is_first_index_from_end_);
-  ASSERT_EQ(10, test_path.path_nodes_[0]->get_node_content().multi_array_[0]->last_index_);
-  ASSERT_EQ(true,test_path.path_nodes_[0]->get_node_content().multi_array_[0]->is_last_index_from_end_);
+  ASSERT_EQ(10, test_path.path_nodes_[0]->node_content_.multi_array_[0]->first_index_);
+  ASSERT_EQ(true,test_path.path_nodes_[0]->node_content_.multi_array_[0]->is_first_index_from_end_);
+  ASSERT_EQ(10, test_path.path_nodes_[0]->node_content_.multi_array_[0]->last_index_);
+  ASSERT_EQ(true,test_path.path_nodes_[0]->node_content_.multi_array_[0]->is_last_index_from_end_);
 }
 
 // 测试能否正确解析array_range_node
@@ -236,10 +237,10 @@ TEST_F(TestJsonPath, test_array_range_node)
   // 只有一个节点
   ASSERT_EQ(1, test_path.path_node_cnt());
   ASSERT_EQ(JPN_MULTIPLE_ARRAY,test_path.path_nodes_[0]->get_node_type());
-  ASSERT_EQ(1, test_path.path_nodes_[0]->get_node_content().multi_array_[0]->first_index_);
-  ASSERT_EQ(false,test_path.path_nodes_[0]->get_node_content().multi_array_[0]->is_first_index_from_end_);
-  ASSERT_EQ(10, test_path.path_nodes_[0]->get_node_content().multi_array_[0]->last_index_);
-  ASSERT_EQ(false,test_path.path_nodes_[0]->get_node_content().multi_array_[0]->is_last_index_from_end_);
+  ASSERT_EQ(1, test_path.path_nodes_[0]->node_content_.multi_array_[0]->first_index_);
+  ASSERT_EQ(false,test_path.path_nodes_[0]->node_content_.multi_array_[0]->is_first_index_from_end_);
+  ASSERT_EQ(10, test_path.path_nodes_[0]->node_content_.multi_array_[0]->last_index_);
+  ASSERT_EQ(false,test_path.path_nodes_[0]->node_content_.multi_array_[0]->is_last_index_from_end_);
 }
 
 TEST_F(TestJsonPath, test_multi_array_node)
@@ -258,17 +259,17 @@ TEST_F(TestJsonPath, test_multi_array_node)
   // 只有一个节点
   ASSERT_EQ(1, test_path.path_node_cnt());
   ASSERT_EQ(JPN_MULTIPLE_ARRAY,test_path.path_nodes_[0]->get_node_type());
-  ASSERT_EQ(2, test_path.path_nodes_[0]->get_node_content().multi_array_.size());
+  ASSERT_EQ(2, test_path.path_nodes_[0]->node_content_.multi_array_.size());
 
-  ASSERT_EQ(10, test_path.path_nodes_[0]->get_node_content().multi_array_[0]->first_index_);
-  ASSERT_EQ(true,test_path.path_nodes_[0]->get_node_content().multi_array_[0]->is_first_index_from_end_);
-  ASSERT_EQ(10, test_path.path_nodes_[0]->get_node_content().multi_array_[0]->last_index_);
-  ASSERT_EQ(true,test_path.path_nodes_[0]->get_node_content().multi_array_[0]->is_last_index_from_end_);
+  ASSERT_EQ(10, test_path.path_nodes_[0]->node_content_.multi_array_[0]->first_index_);
+  ASSERT_EQ(true,test_path.path_nodes_[0]->node_content_.multi_array_[0]->is_first_index_from_end_);
+  ASSERT_EQ(10, test_path.path_nodes_[0]->node_content_.multi_array_[0]->last_index_);
+  ASSERT_EQ(true,test_path.path_nodes_[0]->node_content_.multi_array_[0]->is_last_index_from_end_);
 
-  ASSERT_EQ(1, test_path.path_nodes_[0]->get_node_content().multi_array_[1]->first_index_);
-  ASSERT_EQ(false,test_path.path_nodes_[0]->get_node_content().multi_array_[1]->is_first_index_from_end_);
-  ASSERT_EQ(10, test_path.path_nodes_[0]->get_node_content().multi_array_[1]->last_index_);
-  ASSERT_EQ(false,test_path.path_nodes_[0]->get_node_content().multi_array_[1]->is_last_index_from_end_);
+  ASSERT_EQ(1, test_path.path_nodes_[0]->node_content_.multi_array_[1]->first_index_);
+  ASSERT_EQ(false,test_path.path_nodes_[0]->node_content_.multi_array_[1]->is_first_index_from_end_);
+  ASSERT_EQ(10, test_path.path_nodes_[0]->node_content_.multi_array_[1]->last_index_);
+  ASSERT_EQ(false,test_path.path_nodes_[0]->node_content_.multi_array_[1]->is_last_index_from_end_);
 }
 
 TEST_F(TestJsonPath, test_filter_node)
@@ -295,15 +296,6 @@ TEST_F(TestJsonPath, test_filter_node)
   }
   ASSERT_EQ(OB_SUCCESS, ret);
   std::cout<<test_path.path_nodes_[0]->get_node_type()<<std::endl;
-  ObPathNodeContent ans =  test_path.path_nodes_[0]->get_node_content();
-  std::cout<<ans.comp_.left_type_<<std::endl;
-  std::cout<<ans.comp_.right_type_<<std::endl;
-  ObJsonPath* tmp_p = ans.comp_.comp_left_.filter_path_;
-  ObJsonBuffer str(&allocator);
-  tmp_p->to_string(str);
-  ObString str_scalar(str.ptr());
-  std::cout<<str_scalar.ptr()<<std::endl;
-  std::cout<<ans.comp_.comp_right_.path_scalar_.scalar_<<std::endl;
   // 只有一个节点
   ASSERT_EQ(1, test_path.path_node_cnt());
 
@@ -683,10 +675,10 @@ TEST_F(TestJsonPath, test_member_node)
   // 只有一个节点
   ASSERT_EQ(1, test_path.path_node_cnt());
   ASSERT_EQ(JPN_MEMBER,test_path.path_nodes_[0]->get_node_type());
-  const auto &member = test_path.path_nodes_[0]->get_node_content().member_;
+  const auto &member = test_path.path_nodes_[0]->node_content_.member_;
   ObString str(member.len_, member.object_name_);
   ASSERT_TRUE(str.case_compare("name") == 0);
-  std::cout<<test_path.path_nodes_[0]->get_node_content().member_.object_name_<<std::endl;
+  std::cout<<test_path.path_nodes_[0]->node_content_.member_.object_name_<<std::endl;
 }
 
 // 测试能否正确解析ellipsis_node
@@ -701,8 +693,8 @@ TEST_F(TestJsonPath, test_ellipsis_node)
   ASSERT_EQ(2, test_path.path_node_cnt());
   ASSERT_EQ(JPN_WILDCARD_ELLIPSIS,test_path.path_nodes_[0]->get_node_type());
   ASSERT_EQ(JPN_ARRAY_CELL,test_path.path_nodes_[1]->get_node_type());
-  ASSERT_EQ(10,test_path.path_nodes_[1]->get_node_content().array_cell_.index_);
-  ASSERT_EQ(false,test_path.path_nodes_[1]->get_node_content().array_cell_.is_index_from_end_);
+  ASSERT_EQ(10,test_path.path_nodes_[1]->node_content_.array_cell_.index_);
+  ASSERT_EQ(false,test_path.path_nodes_[1]->node_content_.array_cell_.is_index_from_end_);
 }
 
 // 测试能否成功解析path表达式
@@ -727,15 +719,15 @@ TEST_F(TestJsonPath, test_parse_path)
         //ASSERT_EQ(JPN_ARRAY_CELL_WILDCARD,test_path.path_nodes_[i]->node_type);
         /*
         ASSERT_EQ(JPN_MEMBER,test_path.path_nodes_[i]->node_type);
-        std::cout<<test_path.path_nodes_[0]->get_node_content().member_.object_name_<<std::endl;
+        std::cout<<test_path.path_nodes_[0]->node_content_.member_.object_name_<<std::endl;
         ASSERT_EQ(JPN_ARRAY_CELL,test_path.path_nodes_[i]->node_type);
-        ASSERT_EQ(10,test_path.path_nodes_[i]->get_node_content().array_cell_.index_);
-        ASSERT_EQ(true,test_path.path_nodes_[i]->get_node_content().array_cell_.is_index_from_end_);
+        ASSERT_EQ(10,test_path.path_nodes_[i]->node_content_.array_cell_.index_);
+        ASSERT_EQ(true,test_path.path_nodes_[i]->node_content_.array_cell_.is_index_from_end_);
         */
-        ASSERT_EQ(10,test_path.path_nodes_[i]->get_node_content().array_range_.first_index_);
-        ASSERT_EQ(true,test_path.path_nodes_[i]->get_node_content().array_range_.is_first_index_from_end_);
-        ASSERT_EQ(1,test_path.path_nodes_[i]->get_node_content().array_range_.last_index_);
-        ASSERT_EQ(true,test_path.path_nodes_[i]->get_node_content().array_range_.is_last_index_from_end_);
+        ASSERT_EQ(10,test_path.path_nodes_[i]->node_content_.array_range_.first_index_);
+        ASSERT_EQ(true,test_path.path_nodes_[i]->node_content_.array_range_.is_first_index_from_end_);
+        ASSERT_EQ(1,test_path.path_nodes_[i]->node_content_.array_range_.last_index_);
+        ASSERT_EQ(true,test_path.path_nodes_[i]->node_content_.array_range_.is_last_index_from_end_);
 
       }
     }
@@ -751,7 +743,7 @@ TEST_F(TestJsonPath, test_array_cell_node_to_string)
 {
   ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonBuffer str(&allocator);
-  ObJsonPathBasicNode node(10, true);
+  ObJsonPathBasicNode node(&allocator,10, true);
   node.node_to_string(str, true, false);
   std::cout<<str.ptr()<<std::endl;
 }
@@ -761,7 +753,7 @@ TEST_F(TestJsonPath, test_array_range_node_to_string)
 {
   ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonBuffer str(&allocator);
-  ObJsonPathBasicNode node(5, true, 1, true);
+  ObJsonPathBasicNode node(&allocator, 5, true, 1, true);
   node.node_to_string(str, true, false);
   std::cout<<"test\n";
   std::cout<<str.ptr()<<std::endl;
@@ -772,7 +764,7 @@ TEST_F(TestJsonPath, test_array_wildcard_node_to_string)
 {
   ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonBuffer str(&allocator);
-  ObJsonPathBasicNode node;
+  ObJsonPathBasicNode node(&allocator);
   ASSERT_EQ(0, node.init(JPN_ARRAY_CELL_WILDCARD, true));
   node.node_to_string(str, true, false);
   std::cout<<"test\n";
@@ -784,7 +776,7 @@ TEST_F(TestJsonPath, test_member_wildcard_node_to_string)
 {
   ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonBuffer str(&allocator);
-  ObJsonPathBasicNode node;
+  ObJsonPathBasicNode node(&allocator);
   ASSERT_EQ(0, node.init(JPN_MEMBER_WILDCARD, true));
   node.node_to_string(str, true, false);
   std::cout<<"test\n";
@@ -797,7 +789,7 @@ TEST_F(TestJsonPath, test_member_node_to_string)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonBuffer str(&allocator);
   ObString kn("keyname");
-  ObJsonPathBasicNode node(kn);
+  ObJsonPathBasicNode node(&allocator, kn);
   node.node_to_string(str, true, false);
   std::cout<<"test\n";
   std::cout<<str.ptr()<<std::endl;
@@ -808,7 +800,7 @@ TEST_F(TestJsonPath, test_ellipsis_node_to_string)
 {
   ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonBuffer str(&allocator);
-  ObJsonPathBasicNode node;
+  ObJsonPathBasicNode node(&allocator);
   ASSERT_EQ(0, node.init(JPN_WILDCARD_ELLIPSIS, true));
   node.node_to_string(str, true, false);
   std::cout<<"test\n";
@@ -822,8 +814,8 @@ TEST_F(TestJsonPath, test_path_to_string)
   ObJsonBuffer str(&allocator);
   ObJsonPath test_path(&allocator);
   ObString name = "keyname";
-  ObJsonPathBasicNode node;
-  ObJsonPathBasicNode member_node(name);
+  ObJsonPathBasicNode node(&allocator);
+  ObJsonPathBasicNode member_node(&allocator, name);
   test_path.is_mysql_ = false;
   if(test_path.is_mysql_ == false){
     std::cout<<"oracle"<<std::endl;
@@ -1349,11 +1341,11 @@ TEST_F(TestJsonPath, test_good_path)
   {
     std::cout<<"type:"<<test_path.path_nodes_[i]->get_node_type()<<std::endl;
     if (i==0) {
-      std::cout<<"content:"<<test_path.path_nodes_[i]->get_node_content().member_.object_name_<<std::endl;
+      std::cout<<"content:"<<test_path.path_nodes_[i]->node_content_.member_.object_name_<<std::endl;
     }
     if (i==1) {
-      std::cout<<"content:"<<test_path.path_nodes_[i]->get_node_content().array_cell_.index_<<std::endl;
-      std::cout<<"content:"<<test_path.path_nodes_[i]->get_node_content().array_cell_.is_index_from_end_<<std::endl;
+      std::cout<<"content:"<<test_path.path_nodes_[i]->node_content_.array_cell_.index_<<std::endl;
+      std::cout<<"content:"<<test_path.path_nodes_[i]->node_content_.array_cell_.is_index_from_end_<<std::endl;
     }
   }
 

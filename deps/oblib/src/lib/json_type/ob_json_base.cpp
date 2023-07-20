@@ -2647,7 +2647,7 @@ int ObIJsonBase::get_sign_result_left_subpath(ObIAllocator* allocator, ObSeekPar
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("compare value is null.", K(ret));
   } else {
-    ObPathComparison comp_content = path_node->get_node_content().comp_;
+    ObPathComparison comp_content = path_node->node_content_.comp_;
 
     SMART_VAR (ObJsonBaseVector, hit) {
       ObJsonPath* sub_path = comp_content.comp_left_.filter_path_;
@@ -2697,7 +2697,7 @@ int ObIJsonBase::get_sign_result_right_subpath(ObIAllocator* allocator, ObSeekPa
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("compare value is null.", K(ret));
   } else {
-    ObPathComparison comp_content = path_node->get_node_content().comp_;
+    ObPathComparison comp_content = path_node->node_content_.comp_;
 
     SMART_VAR (ObJsonBaseVector,hit) {
       ObJsonPath* sub_path = comp_content.comp_right_.filter_path_;
@@ -2802,8 +2802,8 @@ int ObIJsonBase::compare_scalar(ObIAllocator* allocator, const ObJsonPathFilterN
                                 bool& filter_result) const
 {
   INIT_SUCC(ret);
-  ObJsonPathNodeType left_type = path_node->get_node_content().comp_.left_type_;
-  ObJsonPathNodeType right_type = path_node->get_node_content().comp_.right_type_;
+  ObJsonPathNodeType left_type = path_node->node_content_.comp_.left_type_;
+  ObJsonPathNodeType right_type = path_node->node_content_.comp_.right_type_;
   int res = -3;
   switch (left_type) {
     case JPN_NULL: {
@@ -2823,8 +2823,8 @@ int ObIJsonBase::compare_scalar(ObIAllocator* allocator, const ObJsonPathFilterN
         if (right_type == left_type) res = 0;
         cmp_based_on_node_type(path_node->get_node_type(), res, filter_result);
       } else if (right_type == JPN_SCALAR) {
-        ObString str(path_node->get_node_content().comp_.comp_right_.path_scalar_.s_length_,
-                    path_node->get_node_content().comp_.comp_right_.path_scalar_.scalar_);
+        ObString str(path_node->node_content_.comp_.comp_right_.path_scalar_.s_length_,
+                    path_node->node_content_.comp_.comp_right_.path_scalar_.scalar_);
         if (str.length() == strlen("\"true\"") && 0 == strncasecmp(str.ptr(), "\"true\"", strlen("\"true\""))) {
           if (left_type == JPN_BOOL_TRUE) res = 0;
           cmp_based_on_node_type(path_node->get_node_type(), res, filter_result);
@@ -2846,8 +2846,8 @@ int ObIJsonBase::compare_scalar(ObIAllocator* allocator, const ObJsonPathFilterN
       if (right_type == JPN_SCALAR) {
         ObIJsonBase *left_s = NULL;
         ObIJsonBase *right_s = NULL;
-        if (OB_FAIL(get_scalar(allocator, left_type, path_node->get_node_content().comp_.comp_left_.path_scalar_, left_s))
-          || OB_FAIL(get_scalar(allocator, right_type, path_node->get_node_content().comp_.comp_right_.path_scalar_, right_s))) {
+        if (OB_FAIL(get_scalar(allocator, left_type, path_node->node_content_.comp_.comp_left_.path_scalar_, left_s))
+          || OB_FAIL(get_scalar(allocator, right_type, path_node->node_content_.comp_.comp_right_.path_scalar_, right_s))) {
           LOG_WARN("fail to get scalar.", K(ret), K(right_type));
         } else {
           if ((is_json_number(left_s->json_type()) && is_json_number(right_s->json_type()))
@@ -2865,8 +2865,8 @@ int ObIJsonBase::compare_scalar(ObIAllocator* allocator, const ObJsonPathFilterN
           }
         }
       } else if (right_type == JPN_BOOL_TRUE || right_type == JPN_BOOL_FALSE ) {
-        ObString str(path_node->get_node_content().comp_.comp_left_.path_scalar_.s_length_,
-                    path_node->get_node_content().comp_.comp_left_.path_scalar_.scalar_);
+        ObString str(path_node->node_content_.comp_.comp_left_.path_scalar_.s_length_,
+                    path_node->node_content_.comp_.comp_left_.path_scalar_.scalar_);
         if (str.length() == strlen("\"true\"") && 0 == strncasecmp(str.ptr(), "\"true\"", strlen("\"true\""))) {
           if (right_type == JPN_BOOL_TRUE) res = 0;
           cmp_based_on_node_type(path_node->get_node_type(), res, filter_result);
@@ -2900,7 +2900,7 @@ int ObIJsonBase::get_sign_comp_result(ObIAllocator* allocator, ObSeekParentInfo 
   //                       (scalar, subpath/scalar)
   //                       (sql_var, subpath)
   // for scalar: bool, null, number, str(string/date)
-  ObPathComparison comp_content = path_node->get_node_content().comp_;
+  ObPathComparison comp_content = path_node->node_content_.comp_;
 
   // left is subpath, right could be scalar/sql_var
   if (comp_content.left_type_ == ObJsonPathNodeType::JPN_SUB_PATH) {
@@ -3108,7 +3108,7 @@ int ObIJsonBase::get_str_comp_result(ObIAllocator* allocator, ObSeekParentInfo &
                                     PassingMap* sql_var) const
 {
   INIT_SUCC(ret);
-  ObPathComparison comp_content = path_node->get_node_content().comp_;
+  ObPathComparison comp_content = path_node->node_content_.comp_;
   bool end_comp = false;
   // could be:(sub_path，string), (sub_path, var) ,(string, string)
   // get right_str, right arg could be scalar/var
@@ -3215,11 +3215,11 @@ int ObIJsonBase::find_comp_result(ObIAllocator* allocator, ObSeekParentInfo &par
     }
   } else if (pnode_type == JPN_EXISTS || pnode_type == JPN_NOT_EXISTS) {
     // only have right arg
-    if (path_node->get_node_content().comp_.right_type_ != JPN_SUB_PATH) {
+    if (path_node->node_content_.comp_.right_type_ != JPN_SUB_PATH) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("wrong argument of exists.", K(ret), K(pnode_type));
     } else {
-      ObJsonPath* sub_path = path_node->get_node_content().comp_.comp_right_.filter_path_;
+      ObJsonPath* sub_path = path_node->node_content_.comp_.comp_right_.filter_path_;
       ObJsonPathNodeType last_node_type = sub_path->get_last_node_type();
       SMART_VAR (ObJsonBaseVector, hit) {
         if (OB_FAIL(parent_info.parent_jb_->seek(allocator, (*sub_path),
@@ -3302,8 +3302,8 @@ int ObIJsonBase::find_cond_result(ObIAllocator* allocator, ObSeekParentInfo &par
   INIT_SUCC(ret);
   bool left_ans = false;
   bool right_ans = false;
-  ObJsonPathFilterNode* cond_left = path_node->get_node_content().cond_.cond_left_;
-  ObJsonPathFilterNode* cond_right = path_node->get_node_content().cond_.cond_right_;
+  ObJsonPathFilterNode* cond_left = path_node->node_content_.cond_.cond_left_;
+  ObJsonPathFilterNode* cond_right = path_node->node_content_.cond_.cond_right_;
   ObJsonPathNodeType right_type = cond_right->get_node_type();
   if (path_node->get_node_type() == JPN_NOT_COND) {
     if (OB_FAIL(get_half_ans(allocator, parent_info, right_type,

@@ -97,11 +97,6 @@ ObJsonPathNodeType ObJsonPathNode::get_node_type() const
   return node_type_;
 }
 
-ObPathNodeContent ObJsonPathNode::get_node_content() const
-{
-  return node_content_;
-}
-
 ObJsonPathNode::~ObJsonPathNode()
 {}
 
@@ -310,35 +305,40 @@ int ObJsonPathBasicNode::init(ObJsonPathNodeType cur_node_type, bool is_mysql)
   return ret;
 }
 
-ObJsonPathBasicNode::ObJsonPathBasicNode(ObString &keyname)
+ObJsonPathBasicNode::ObJsonPathBasicNode(ObIAllocator *allocator, ObString &keyname)
+: ObJsonPathNode(allocator)
 {
   node_content_.member_.object_name_ = keyname.ptr();
   node_content_.member_.len_ = keyname.length();
   node_type_ = JPN_MEMBER;
 }
 
-ObJsonPathBasicNode::ObJsonPathBasicNode(const char* name, uint64_t len)
+ObJsonPathBasicNode::ObJsonPathBasicNode(ObIAllocator *allocator, const char* name, uint64_t len)
+: ObJsonPathNode(allocator)
 {
   node_content_.member_.object_name_ = name;
   node_content_.member_.len_ = len;
   node_type_ = JPN_MEMBER;
 }
 
-ObJsonPathBasicNode::ObJsonPathBasicNode(uint64_t idx)
+ObJsonPathBasicNode::ObJsonPathBasicNode(ObIAllocator *allocator, uint64_t idx)
+: ObJsonPathNode(allocator)
 {
   node_content_.array_cell_.index_ = idx;
   node_content_.array_cell_.is_index_from_end_ = false;
   node_type_ = JPN_ARRAY_CELL;
 }
 
-ObJsonPathBasicNode::ObJsonPathBasicNode(uint64_t idx, bool is_from_end)
+ObJsonPathBasicNode::ObJsonPathBasicNode(ObIAllocator *allocator, uint64_t idx, bool is_from_end)
+: ObJsonPathNode(allocator)
 {
   node_content_.array_cell_.index_ = idx;
   node_content_.array_cell_.is_index_from_end_ = is_from_end;
   node_type_ = JPN_ARRAY_CELL;
 }
 
-ObJsonPathBasicNode::ObJsonPathBasicNode(uint64_t first_idx, uint64_t last_idx)
+ObJsonPathBasicNode::ObJsonPathBasicNode(ObIAllocator *allocator, uint64_t first_idx, uint64_t last_idx)
+: ObJsonPathNode(allocator)
 {
   node_content_.array_range_.first_index_ = first_idx;
   node_content_.array_range_.is_first_index_from_end_ = false;
@@ -347,8 +347,10 @@ ObJsonPathBasicNode::ObJsonPathBasicNode(uint64_t first_idx, uint64_t last_idx)
   node_type_ = JPN_ARRAY_RANGE;
 }
 
-ObJsonPathBasicNode::ObJsonPathBasicNode(uint64_t first_idx, bool is_first_from_end,
+ObJsonPathBasicNode::ObJsonPathBasicNode(ObIAllocator *allocator, uint64_t first_idx,
+                                        bool is_first_from_end,
                                          uint64_t last_idx, bool is_last_from_end)
+: ObJsonPathNode(allocator)
 {
   node_content_.array_range_.first_index_ = first_idx;
   node_content_.array_range_.is_first_index_from_end_ = is_first_from_end;
@@ -357,7 +359,8 @@ ObJsonPathBasicNode::ObJsonPathBasicNode(uint64_t first_idx, bool is_first_from_
   node_type_ = JPN_ARRAY_RANGE;
 }
 
-ObJsonPathBasicNode::ObJsonPathBasicNode(ObPathArrayRange* o_array)
+ObJsonPathBasicNode::ObJsonPathBasicNode(ObIAllocator *allocator, ObPathArrayRange* o_array)
+: ObJsonPathNode(allocator)
 {
   node_content_.multi_array_.push_back(o_array);
   node_type_ = JPN_MULTIPLE_ARRAY;
@@ -773,7 +776,7 @@ int ObJsonPath::change_json_expr_res_type_if_need(common::ObIAllocator &allocato
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate row buffer failed at member_node", K(ret));
     } else {
-      func_node = new (func_node) ObJsonPathFuncNode();
+      func_node = new (func_node) ObJsonPathFuncNode(&allocator);
       if ((OB_FAIL(func_node->init(res_str, name_len)))) {
         // should not set error only pass set return type
         ret = OB_SUCCESS;
@@ -1061,11 +1064,6 @@ void ObJsonPathCache::set_allocator(common::ObIAllocator *allocator)
 common::ObIAllocator* ObJsonPathCache::get_allocator()
 {
   return allocator_;
-}
-
-ObJsonPathCache::ObJsonPathCache(common::ObIAllocator *allocator)
-{
-  allocator_ = allocator;
 }
  
 int ObJsonPathUtil::append_array_index(uint64_t index, bool from_end, ObJsonBuffer& str)
@@ -1830,7 +1828,7 @@ int ObJsonPath::parse_wildcard_ellipsis_node()
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate row buffer failed at ellipsis_node", K(ret), K(index_), K(expression_));
     } else {
-      ellipsis_node = new (ellipsis_node) ObJsonPathBasicNode();
+      ellipsis_node = new (ellipsis_node) ObJsonPathBasicNode(allocator_);
       if (OB_FAIL(ellipsis_node->init(JPN_WILDCARD_ELLIPSIS, is_mysql_))) {
         LOG_WARN("fail to init path basic node with type", K(ret), K(JPN_WILDCARD_ELLIPSIS));
       } else if (OB_FAIL(append(ellipsis_node))) {
@@ -2062,7 +2060,7 @@ int ObJsonPath::add_single_array_node(bool is_cell_type, uint64_t& index1, uint6
       LOG_WARN("allocate row buffer failed at cell_node",
       K(ret), K(index_), K(expression_));
     } else {
-      cell_node = new (cell_node) ObJsonPathBasicNode(index1, from_end1);
+      cell_node = new (cell_node) ObJsonPathBasicNode(allocator_, index1, from_end1);
       if (OB_FAIL(append(cell_node))) {
         LOG_WARN("fail to append JsonPathNode(cell_node)!", 
         K(ret) , K(index_), K(expression_));
@@ -2084,7 +2082,7 @@ int ObJsonPath::add_single_array_node(bool is_cell_type, uint64_t& index1, uint6
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate row buffer failed at range_node", K(ret), K(index_), K(expression_));
       } else {
-        range_node = new (range_node) ObJsonPathBasicNode(index1, from_end1, index2, from_end2);
+        range_node = new (range_node) ObJsonPathBasicNode(allocator_, index1, from_end1, index2, from_end2);
         if (OB_FAIL(append(range_node))) {
           LOG_WARN("fail to append JsonPathNode!(range_node)", K(ret), K(index_), K(expression_));
         }
@@ -2259,7 +2257,7 @@ int ObJsonPath::parse_member_wildcard_node()
     LOG_WARN("allocate row buffer failed at member_wildcard_node",
     K(ret), K(index_), K(expression_));
   } else {
-    member_wildcard_node = new (member_wildcard_node) ObJsonPathBasicNode();
+    member_wildcard_node = new (member_wildcard_node) ObJsonPathBasicNode(allocator_);
     if (OB_FAIL(member_wildcard_node->init(JPN_MEMBER_WILDCARD, is_mysql_))) {
       LOG_WARN("fail to PathBasicNode init with type", K(ret), K(JPN_MEMBER_WILDCARD));
     } else if (OB_FAIL(append(member_wildcard_node))) {
@@ -2285,7 +2283,7 @@ int ObJsonPath::parse_array_wildcard_node()
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate row buffer failed at cell_wildcard_node", K(ret), K(expression_));
     } else {
-      cell_wildcard_node = new (cell_wildcard_node) ObJsonPathBasicNode();
+      cell_wildcard_node = new (cell_wildcard_node) ObJsonPathBasicNode(allocator_);
       if (OB_FAIL(cell_wildcard_node->init(JPN_ARRAY_CELL_WILDCARD, is_mysql_))) {
         allocator_->free(cell_wildcard_node);
         LOG_WARN("fail to PathBasicNode init with type", K(ret), K(JPN_ARRAY_CELL_WILDCARD));
@@ -2357,7 +2355,7 @@ int ObJsonPath::parse_mysql_member_node()
               ret = OB_ALLOCATE_MEMORY_FAILED;
               LOG_WARN("allocate row buffer failed at member_node", K(ret), K(index_), K(expression_));
             } else {
-              member_node = new (member_node) ObJsonPathBasicNode(name, name_len);
+              member_node = new (member_node) ObJsonPathBasicNode(allocator_, name, name_len);
               if (OB_FAIL(append(member_node) )) {
                 LOG_WARN("fail to append JsonPathNode(member_node)!",
                 K(ret), K(index_), K(expression_));
@@ -2941,7 +2939,7 @@ int ObJsonPath::parse_dot_ellipsis_node()
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate row buffer failed at ellipsis_node", K(ret), K(index_), K(expression_));
     } else {
-      ellipsis_node = new (ellipsis_node) ObJsonPathBasicNode();
+      ellipsis_node = new (ellipsis_node) ObJsonPathBasicNode(allocator_);
       if (OB_FAIL(ellipsis_node->init(JPN_DOT_ELLIPSIS, is_mysql_))) {
         allocator_->free(ellipsis_node);
         LOG_WARN("fail to init path basic node with type", K(ret), K(JPN_WILDCARD_ELLIPSIS));
@@ -3166,7 +3164,7 @@ int ObJsonPath::parse_func_node(char*& name, uint64_t& len)
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate row buffer failed at member_node", K(ret), K(index_), K(expression_));
       } else {
-        func_node = new (func_node) ObJsonPathFuncNode();
+        func_node = new (func_node) ObJsonPathFuncNode(allocator_);
         if ((OB_FAIL(func_node->init(name, len))) || OB_FAIL(append(func_node) )) {
           allocator_->free(func_node);
           LOG_WARN("fail to append JsonPathNode(member_node)!",
@@ -3216,7 +3214,7 @@ int ObJsonPath::parse_oracle_member_node()
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("allocate row buffer failed at member_node", K(ret), K(index_), K(expression_));
         } else {
-          member_node = new (member_node) ObJsonPathBasicNode(name, name_len);
+          member_node = new (member_node) ObJsonPathBasicNode(allocator_, name, name_len);
           if (OB_FAIL(append(member_node) )) {
             LOG_WARN("fail to append JsonPathNode(member_node)!",
             K(ret), K(index_), K(expression_));
@@ -3372,7 +3370,7 @@ int ObJsonPath::parse_multiple_array_node()
               init_multi_array(o_array, index1, index2, from_end1, from_end2);
             }
             if (the_first) {
-              multi_array_node = new (multi_array_node) ObJsonPathBasicNode(o_array);
+              multi_array_node = new (multi_array_node) ObJsonPathBasicNode(allocator_, o_array);
               the_first = false;
             } else {
               multi_array_node->add_multi_array(o_array);
@@ -4211,8 +4209,8 @@ int ObJsonPath::is_legal_comparison(ObJsonPathFilterNode* filter_comp_node)
   ObJsonPath* sub_path = nullptr;
   ObPathScalar scalar;
   ObJsonPathNodeType scalar_type = JPN_ERROR;
-  ObJsonPathNodeType right_type = filter_comp_node->get_node_content().comp_.right_type_;
-  ObCompContent comp_right = filter_comp_node->get_node_content().comp_.comp_right_;
+  ObJsonPathNodeType right_type = filter_comp_node->node_content_.comp_.right_type_;
+  ObCompContent comp_right = filter_comp_node->node_content_.comp_.comp_right_;
  if (filter_comp_node->get_node_type() == ObJsonPathNodeType::JPN_EXISTS
    || filter_comp_node->get_node_type() == ObJsonPathNodeType::JPN_NOT_EXISTS) {
     if (right_type != ObJsonPathNodeType::JPN_SUB_PATH) {
@@ -4220,8 +4218,8 @@ int ObJsonPath::is_legal_comparison(ObJsonPathFilterNode* filter_comp_node)
       LOG_WARN("a sub_path must follow by exists!", K(ret));
     }
   } else {
-    ObJsonPathNodeType left_type = filter_comp_node->get_node_content().comp_.left_type_;
-    ObCompContent comp_left = filter_comp_node->get_node_content().comp_.comp_left_;
+    ObJsonPathNodeType left_type = filter_comp_node->node_content_.comp_.left_type_;
+    ObCompContent comp_left = filter_comp_node->node_content_.comp_.comp_left_;
     switch (filter_comp_node->get_node_type()) {
       case ObJsonPathNodeType::JPN_LARGGER:
       case ObJsonPathNodeType::JPN_LARGGER_EQUAL:
@@ -4337,7 +4335,7 @@ int ObJsonPath::parse_comparison(ObFilterArrayPointers& filter_stack, bool not_e
     LOG_WARN("allocate row buffer failed at filter_comp_node",
     K(ret), K(index_), K(expression_));
   } else {
-    filter_comp_node = new (filter_comp_node) ObJsonPathFilterNode();
+    filter_comp_node = new (filter_comp_node) ObJsonPathFilterNode(allocator_);
   }
 
   if (OB_SUCC(ret)) {
@@ -4409,7 +4407,7 @@ int ObJsonPath::parse_condition(ObFilterArrayPointers& filter_stack, ObCharArray
         K(ret), K(index_), K(expression_));
         break;
       } else {
-        filter_cond_node = new (filter_cond_node) ObJsonPathFilterNode();
+        filter_cond_node = new (filter_cond_node) ObJsonPathFilterNode(allocator_);
         ObJsonPathFilterNode* right_comp = filter_stack[size_f - 1];
         ObJsonPathFilterNode* left_comp = nullptr;
         if (OB_FAIL(ObJsonPathUtil::pop_filter_stack(filter_stack))) {
