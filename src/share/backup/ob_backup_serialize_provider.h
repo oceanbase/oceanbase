@@ -38,7 +38,6 @@ public:
 
 
 // Wrapper backup serialize data with common backup header.
-  // TODO: support deserialize according to different version.
 class ObBackupSerializeHeaderWrapper final : public ObIBackupSerializeProvider
 {
 public:

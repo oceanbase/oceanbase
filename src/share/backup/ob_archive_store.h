@@ -222,7 +222,6 @@ public:
   int64_t piece_id_;
   int64_t incarnation_;
   ObArchiveCompatible compatible_;
-  // TODO: scn type need provide serialize method which returns fixed length.
   SCN start_scn_; // archive start time of the round
   SCN checkpoint_scn_; // archive end time of the round
   SCN max_scn_;

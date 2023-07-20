@@ -1543,7 +1543,6 @@ int ObTransferReplaceTableTask::check_tablet_after_replace_(ObLS *ls, const comm
     LOG_WARN("fetch table store fail", K(ret), KPC(tablet));
   } else if (tablet->get_tablet_meta().ha_status_.is_restore_status_full()
              && wrapper.get_member()->get_major_sstables().empty()) {
-    // TODO(wangxiaohui.wxh), consider index tablet, major is generated when replay commit log.
     // In case of restore, if restore status is FULL, major sstable must be exist after replace.
     ret = OB_INVALID_TABLE_STORE;
     LOG_WARN("tablet should be exist major sstable", K(ret), KPC(tablet));

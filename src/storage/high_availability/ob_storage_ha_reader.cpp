@@ -1369,8 +1369,7 @@ int ObCopySSTableInfoRestoreReader::get_next_tablet_sstable_header(
     sstable_index_ = 0;
     is_sstable_iter_end_ = true;
     copy_header.sstable_count_ = 0;
-    // TODO(wangxiaohui.wxh): to correct the version
-    copy_header.version_ = 0; // restore version is not valid
+    copy_header.version_ = restore_base_info_->backup_cluster_version_;
     tablet_index_++;
   } else if (OB_FAIL(get_backup_sstable_metas_(tablet_id))) {
     LOG_WARN("failed to get backup sstable metas", K(ret), K(tablet_id), KPC(restore_base_info_));
@@ -1378,7 +1377,7 @@ int ObCopySSTableInfoRestoreReader::get_next_tablet_sstable_header(
     sstable_index_ = 0;
     is_sstable_iter_end_ = backup_sstable_meta_array_.count() > 0 ? false : true;
     copy_header.sstable_count_ = backup_sstable_meta_array_.count();
-    copy_header.version_ = 0; // restore version is not valid
+    copy_header.version_ = restore_base_info_->backup_cluster_version_;
     tablet_index_++;
   }
   return ret;

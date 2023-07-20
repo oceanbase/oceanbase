@@ -2164,7 +2164,7 @@ int ObLSQuickRestoreState::leader_quick_restore_()
   }
 
 #if 0
-  // TODO(wangxiaohui.wxh): let leader restore from backup and follower restore from leader.
+  // TODO(wangxiaohui.wxh): 4.3, let leader restore from backup and follower restore from leader.
 
   int tmp_ret = OB_SUCCESS; // try rpc's best
   if (restored_tablets.empty()) {
@@ -2233,7 +2233,7 @@ int ObLSQuickRestoreState::do_quick_restore_(const ObLSRestoreTaskMgr::ToRestore
   }
 
 #if 0
-  // TODO(wangxiaohui.wxh): let leader restore from backup and follower restore from leader.
+  // TODO(wangxiaohui.wxh): 4.3, let leader restore from backup and follower restore from leader.
   if (!is_follower(role_)
       || tablet_need_restore.action() == ObTabletRestoreAction::ACTION::RESTORE_TABLET_META) {
     if (OB_FAIL(leader_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
