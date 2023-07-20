@@ -326,9 +326,7 @@ int ObAllVirtualIOQuota::init(const common::ObAddr &addr)
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
       const uint64_t cur_tenant_id = tenant_ids.at(i);
       ObRefHolder<ObTenantIOManager> tenant_holder;
-      if (OB_SERVER_TENANT_ID == cur_tenant_id) {
-        // do nothing
-      } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
+      if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
         if (OB_HASH_NOT_EXIST != ret) {
           LOG_WARN("get tenant io manager failed", K(ret), K(cur_tenant_id));
         } else {
@@ -552,9 +550,7 @@ int ObAllVirtualIOScheduler::init(const common::ObAddr &addr)
       for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
         const uint64_t cur_tenant_id = tenant_ids.at(i);
         ObRefHolder<ObTenantIOManager> tenant_holder;
-        if (OB_SERVER_TENANT_ID == cur_tenant_id) {
-          // tenent_id = 500, do nothing
-        } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
+        if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
           if (OB_HASH_NOT_EXIST != ret) {
             LOG_WARN("get tenant io manager failed", K(ret), K(cur_tenant_id));
           } else {
