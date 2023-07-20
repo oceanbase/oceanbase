@@ -12243,12 +12243,12 @@ def_table_schema(
   ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
   ('svr_port', 'int'),
   ('tenant_id', 'int'),
-  ('tablet buffer', 'varchar:128'),
+  ('tablet_buffer', 'varchar:128'),
   ],
 
   normal_columns = [
   ('tablet', 'varchar:128'),
-	('pool type', 'varchar:128'),
+	('pool_type', 'varchar:128'),
   ('ls_id', 'int'),
   ('tablet_id', 'int'),
   ('in_map', 'bool'),

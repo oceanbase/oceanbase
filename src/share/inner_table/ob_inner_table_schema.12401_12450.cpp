@@ -580,7 +580,7 @@ int ObInnerTableSchema::all_virtual_tablet_buffer_info_schema(ObTableSchema &tab
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("tablet buffer", //column_name
+    ADD_COLUMN_SCHEMA("tablet_buffer", //column_name
       ++column_id, //column_id
       4, //rowkey_id
       0, //index_id
@@ -610,7 +610,7 @@ int ObInnerTableSchema::all_virtual_tablet_buffer_info_schema(ObTableSchema &tab
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("pool type", //column_name
+    ADD_COLUMN_SCHEMA("pool_type", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
