@@ -269,7 +269,7 @@ private:
 
 // format id of dblink trans
 // from Oracle
-static const int32_t DBLINK_FORMAT_ID = 306206;
+static const int32_t DBLINK_FORMAT_ID = 830487;
 class ObXADefault
 {
 public:
