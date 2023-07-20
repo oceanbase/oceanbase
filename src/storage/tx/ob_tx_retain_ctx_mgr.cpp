@@ -276,7 +276,10 @@ void ObTxRetainCtxMgr::try_advance_retain_ctx_gc(share::ObLSID ls_id)
   int ret = OB_SUCCESS;
 
   const int64_t tenant_id = MTL_ID();
-  const int64_t CUR_LS_CNT = MTL(ObLSService *)->get_ls_map()->get_ls_count();
+  int64_t CUR_LS_CNT = MTL(ObLSService *)->get_ls_map()->get_ls_count();
+  if (CUR_LS_CNT == 0) {
+    CUR_LS_CNT = 1;
+  }
   const int64_t IDLE_GC_INTERVAL = 30 * 60 * 1000 * 1000; // 30 min
   // const int64_t MIN_RETAIN_CTX_GC_THRESHOLD = 1000;
   const int64_t MIN_RETAIN_CTX_GC_THRESHOLD = ::oceanbase::lib::get_tenant_memory_limit(tenant_id)
