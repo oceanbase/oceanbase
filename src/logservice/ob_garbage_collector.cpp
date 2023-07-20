@@ -33,6 +33,7 @@
 #include "rootserver/ob_ls_recovery_reportor.h"      // ObLSRecoveryReportor
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "share/ob_occam_time_guard.h"
+#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 
 namespace oceanbase
 {
@@ -1177,7 +1178,10 @@ void ObGarbageCollector::run1()
   lib::set_thread_name("GCCollector");
 
   while (!has_set_stop()) {
-    if (!stop_create_new_gc_task_) {
+    if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+      // tablets are not ready for read
+      usleep(5000 * 1000); // 5s
+    } else if (!stop_create_new_gc_task_) {
       ObGCCandidateArray gc_candidates;
       int64_t gc_interval = GC_INTERVAL;
       CLOG_LOG(INFO, "Garbage Collector is running", K(seq_), K(gc_interval));
