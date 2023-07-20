@@ -68,7 +68,7 @@ TEST_F(TestXPathFilter, test_false_function)
     ret = pass.add("h", &data);
     ASSERT_EQ(OB_SUCCESS, ret);
 
-    ObPathExprIter pathiter;
+    ObPathExprIter pathiter(&allocator);
     pathiter.init(ctx, enter_xpath, default_ns, doc, &pass);
     ret = pathiter.open();
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -123,7 +123,7 @@ TEST_F(TestXPathFilter, test_function)
     ret = pass.add("h", &data);
     ASSERT_EQ(OB_SUCCESS, ret);
 
-    ObPathExprIter pathiter;
+    ObPathExprIter pathiter(&allocator);
     pathiter.init(ctx, enter_xpath, default_ns, doc, &pass);
     ret = pathiter.open();
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -170,7 +170,7 @@ TEST_F(TestXPathFilter, test_complex_in_predicate)
   ret = pass.add("h", &data);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObPathExprIter pathiter;
+  ObPathExprIter pathiter(&allocator);
   pathiter.init(ctx, enter_xpath, default_ns, doc, &pass);
   ret = pathiter.open();
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -420,7 +420,7 @@ TEST_F(TestXPathFilter, test_in_predicate)
     ret = pass.add("h", &data);
     ASSERT_EQ(OB_SUCCESS, ret);
 
-    ObPathExprIter pathiter;
+    ObPathExprIter pathiter(&allocator);
     pathiter.init(ctx, enter_xpath, default_ns, doc, &pass);
     ret = pathiter.open();
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -582,7 +582,7 @@ TEST_F(TestXPathFilter, test_false_in_predicate)
     ret = pass.add("h", &data);
     ASSERT_EQ(OB_SUCCESS, ret);
 
-    ObPathExprIter pathiter;
+    ObPathExprIter pathiter(&allocator);
     pathiter.init(ctx, enter_xpath, default_ns, doc, &pass);
     ret = pathiter.open();
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -641,7 +641,7 @@ TEST_F(TestXPathFilter, test_equal_compare)
     ret = pass.add("h", &data);
     ASSERT_EQ(OB_SUCCESS, ret);
 
-    ObPathExprIter pathiter;
+    ObPathExprIter pathiter(&allocator);
     pathiter.init(ctx, enter_xpath, default_ns, doc, &pass);
     ret = pathiter.open();
     ASSERT_EQ(OB_SUCCESS, ret);

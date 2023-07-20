@@ -548,6 +548,8 @@ TEST_F(TestXmlBin, set_at)
   ret = rbin.set_at(0);
   ASSERT_EQ(ret, OB_SUCCESS);
 
+  ObXmlBin bin_ele_entry = rbin;
+
   ObString ele_key;
   ASSERT_EQ(rbin.get_key(ele_key), 0);
   ASSERT_EQ(std::string("shiporder"), std::string(ele_key.ptr(), ele_key.length()));
@@ -566,17 +568,16 @@ TEST_F(TestXmlBin, set_at)
   ASSERT_EQ(std::string("orderid"), std::string(key_str.ptr(), key_str.length()));
   ASSERT_EQ(std::string("889923"), std::string(value_str.ptr(), value_str.length()));
 
-  ASSERT_EQ(rbin.move_to_parent(), OB_SUCCESS);
+  rbin = bin_ele_entry;
+
   ret = rbin.set_at(1);
   ASSERT_EQ(ret, OB_SUCCESS);
+
   ASSERT_EQ(rbin.get_key(key_str), OB_SUCCESS);
   ASSERT_EQ(std::string("orderperson"), std::string(key_str.ptr(), key_str.length()));
 
   {
     ObXmlBin tmp(rbin);
-    ret = tmp.check_dup_status(&rbin);
-    ASSERT_EQ(ret, OB_SUCCESS);
-
     ret = tmp.set_at(0);
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(tmp.get_value(value_str), OB_SUCCESS);
@@ -584,19 +585,16 @@ TEST_F(TestXmlBin, set_at)
   }
 
 
-  ASSERT_EQ(rbin.move_to_parent(), OB_SUCCESS);
-  ret = rbin.set_at(2);
+  ret = bin_ele_entry.set_at(2);
   ASSERT_EQ(ret, OB_SUCCESS);
-  ASSERT_EQ(rbin.get_key(key_str), OB_SUCCESS);
+  ASSERT_EQ(bin_ele_entry.get_key(key_str), OB_SUCCESS);
   ASSERT_EQ(std::string("shipto"), std::string(key_str.ptr(), key_str.length()));
-  ASSERT_EQ(rbin.size(), 4);
-  ASSERT_EQ(rbin.count(), 4);
-  ASSERT_EQ(rbin.get_child_start(), 0);
+  ASSERT_EQ(bin_ele_entry.size(), 4);
+  ASSERT_EQ(bin_ele_entry.count(), 4);
+  ASSERT_EQ(bin_ele_entry.get_child_start(), 0);
 
   {
-    ObXmlBin tmp(rbin);
-    ret = tmp.check_dup_status(&rbin);
-    ASSERT_EQ(ret, OB_SUCCESS);
+    ObXmlBin tmp(bin_ele_entry);
 
     ret = tmp.set_at(0);
     ASSERT_EQ(ret, OB_SUCCESS);
@@ -609,9 +607,7 @@ TEST_F(TestXmlBin, set_at)
     ASSERT_EQ(std::string("Ola Nordmann"), std::string(value_str.ptr(), value_str.length()));
 
 
-    ASSERT_EQ(tmp.move_to_parent(), OB_SUCCESS);
-    ASSERT_EQ(tmp.move_to_parent(), OB_SUCCESS);
-
+    tmp = bin_ele_entry;
     ret = tmp.set_at(1);
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(tmp.get_key(key_str), OB_SUCCESS);
@@ -622,9 +618,7 @@ TEST_F(TestXmlBin, set_at)
     ASSERT_EQ(tmp.get_value(value_str), OB_SUCCESS);
     ASSERT_EQ(std::string("Langgt 23"), std::string(value_str.ptr(), value_str.length()));
 
-    ASSERT_EQ(tmp.move_to_parent(), OB_SUCCESS);
-    ASSERT_EQ(tmp.move_to_parent(), OB_SUCCESS);
-
+    tmp = bin_ele_entry;
     ret = tmp.set_at(2);
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(tmp.get_key(key_str), OB_SUCCESS);
@@ -635,9 +629,7 @@ TEST_F(TestXmlBin, set_at)
     ASSERT_EQ(tmp.get_value(value_str), OB_SUCCESS);
     ASSERT_EQ(std::string("4000 Stavanger"), std::string(value_str.ptr(), value_str.length()));
 
-    ASSERT_EQ(tmp.move_to_parent(), OB_SUCCESS);
-    ASSERT_EQ(tmp.move_to_parent(), OB_SUCCESS);
-
+    tmp = bin_ele_entry;
     ret = tmp.set_at(3);
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(tmp.get_key(key_str), OB_SUCCESS);
@@ -722,20 +714,21 @@ TEST_F(TestXmlBin, iterator_base)
   ObXmlBin* child1 = *iter1;
   ASSERT_NE(child1, nullptr);
 
-  // ASSERT_EQ(child1->type(), M_ATTRIBUTE);
-  //
-  // ObString attr_key1;
-  // ASSERT_EQ(child1->get_key(attr_key1), 0);
-  // ObString attr_val1;
-  // ASSERT_EQ(child1->get_value(attr_val1), 0);
-  //
-  // ASSERT_EQ(std::string(attr_key1.ptr(), attr_key1.length()), std::string("orderid"));
-  // ASSERT_EQ(std::string(attr_val1.ptr(), attr_val1.length()), std::string("889923"));
+  ASSERT_EQ(child1->type(), M_ATTRIBUTE);
+
+  ObString attr_key1;
+  ASSERT_EQ(child1->get_key(attr_key1), 0);
+  ObString attr_val1;
+  ASSERT_EQ(child1->get_value(attr_val1), 0);
+
+  ASSERT_EQ(std::string(attr_key1.ptr(), attr_key1.length()), std::string("orderid"));
+  ASSERT_EQ(std::string(attr_val1.ptr(), attr_val1.length()), std::string("889923"));
 
   ASSERT_EQ(iter1 != end1, true);
   ASSERT_EQ(iter1.is_valid(), true);
   ASSERT_EQ(iter1 < end1, true);
 
+  ++iter1;
   ObXmlBin* child2 = *iter1;
   ASSERT_NE(child2, nullptr);
 
@@ -985,7 +978,6 @@ TEST_F(TestXmlBin, reader)
   ASSERT_EQ(element.size(), 7);
   ASSERT_EQ(sub1.size(), 3);
 
-
   {
     ObXmlBin xbin(ctx);
     ASSERT_EQ(xbin.parse_tree(&element), 0);
@@ -994,20 +986,41 @@ TEST_F(TestXmlBin, reader)
     seek_info.type_ = SimpleSeekType::ALL_KEY_TYPE;
 
     ObMulModeReader reader(&xbin, seek_info);
-    ObArray<ObIMulModeBase*> result1;
 
-    ASSERT_EQ(reader.get_children_nodes(result1), OB_SUCCESS);
-    ASSERT_EQ(result1.size(), 7);
+    ObIMulModeBase* node = nullptr;
+    ObString key;
 
-    for (int64_t pos = 0; pos < result1.count(); ++pos) {
-      ObXmlBin* tmp = static_cast<ObXmlBin*>(result1.at(pos));
-      ObString key ;
-      ASSERT_EQ( tmp->get_key(key), 0);
-      std::string tmp_str(key.ptr(), key.length());
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key1"));
 
-      cout << tmp_str << endl;
-      ASSERT_EQ(tmp->type(), M_DOCUMENT);
-    }
+
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key2"));
+
+
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key3"));
+
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key3"));
+
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key3"));
+
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key4"));
+
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key5"));
+
+    ASSERT_EQ(reader.next(node), OB_ITER_END);
   }
 
   {
@@ -1019,18 +1032,29 @@ TEST_F(TestXmlBin, reader)
     seek_info.key_ = key3;
 
     ObMulModeReader reader(&xbin, seek_info);
-    ObArray<ObIMulModeBase*> result1;
+    ObIMulModeBase* node = nullptr;
+    ObString key;
+    ObString prefix;
 
-    ASSERT_EQ(reader.get_children_nodes(result1), OB_SUCCESS);
-    ASSERT_EQ(result1.size(), 3);
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key3"));
+    prefix = node->get_prefix();
+    ASSERT_EQ(std::string(prefix.ptr(), prefix.length()), std::string("value3"));
 
-    for (int64_t pos = 0; pos < result1.count(); ++pos) {
-      ObXmlBin* tmp = static_cast<ObXmlBin*>(result1.at(pos));
-      ObString key ;
-      ASSERT_EQ( tmp->get_key(key), 0);
-      ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key3"));
-      ASSERT_EQ(tmp->type(), M_DOCUMENT);
-    }
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key3"));
+    prefix = node->get_prefix();
+    ASSERT_EQ(std::string(prefix.ptr(), prefix.length()), std::string("value3_1"));
+
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key3"));
+    prefix = node->get_prefix();
+    ASSERT_EQ(std::string(prefix.ptr(), prefix.length()), std::string("value3_2"));
+
+    ASSERT_EQ(reader.next(node), OB_ITER_END);
   }
 
   /**
@@ -1051,77 +1075,56 @@ TEST_F(TestXmlBin, reader)
   {
     ObXmlBin xbin(ctx);
     ASSERT_EQ(xbin.parse_tree(&element), 0);
-    ObString key ;
-    ASSERT_EQ( xbin.get_key(key), 0);
-    string out_str(key.ptr(), key.length());
-    cout << out_str << endl;
-
 
     ObPathSeekInfo seek_info;
-    seek_info.type_ = SimpleSeekType::POST_SCAN_TYPE;
+    seek_info.type_ = SimpleSeekType::KEY_TYPE;
+    seek_info.key_ = key1;
 
     ObMulModeReader reader(&xbin, seek_info);
-    ObArray<ObIMulModeBase*> result1;
+    ObIMulModeBase* node = nullptr;
+    ObString key;
+    ObString prefix;
 
-    ASSERT_EQ(reader.get_children_nodes(result1), OB_SUCCESS);
-    ASSERT_EQ(result1.size(), 14);
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key1"));
+    prefix = node->get_prefix();
+    ASSERT_EQ(std::string(prefix.ptr(), prefix.length()), std::string("value1"));
 
-    for (int64_t pos = 0; pos < result1.count(); ++pos) {
-      ObXmlBin* tmp = static_cast<ObXmlBin*>(result1.at(pos));
-      ObString key ;
-      ASSERT_EQ( tmp->get_key(key), 0);
-      string out_str(key.ptr(), key.length());
-      cout << out_str << endl;
+    {
+      ObPathSeekInfo seek_info;
+      seek_info.type_ = SimpleSeekType::ALL_KEY_TYPE;
+      seek_info.key_ = ObString("");
+
+      ObMulModeReader reader(node, seek_info);
+      ObString key;
+      ObString prefix;
+
+      ASSERT_EQ(reader.next(node), OB_SUCCESS);
+      ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+      ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("sub_key1"));
+      prefix = node->get_prefix();
+      ASSERT_EQ(std::string(prefix.ptr(), prefix.length()), std::string("sub_value1"));
+
+      ASSERT_EQ(reader.next(node), OB_SUCCESS);
+      ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+      ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("sub_key2"));
+      prefix = node->get_prefix();
+      ASSERT_EQ(std::string(prefix.ptr(), prefix.length()), std::string("sub_value2"));
+
+      ASSERT_EQ(reader.next(node), OB_SUCCESS);
+      ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+      ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("sub_key3"));
+      prefix = node->get_prefix();
+      ASSERT_EQ(std::string(prefix.ptr(), prefix.length()), std::string("sub_value3"));
+
+      ASSERT_EQ(reader.next(node), OB_ITER_END);
     }
-  }
 
-  {
-    ObXmlBin xbin(ctx);
-    ASSERT_EQ(xbin.parse_tree(&element), 0);
-    ObString key ;
-    ASSERT_EQ( xbin.get_key(key), 0);
-    string out_str(key.ptr(), key.length());
-    cout << out_str << endl;
-
-
-    ObPathSeekInfo seek_info;
-    seek_info.type_ = SimpleSeekType::PRE_SCAN_TYPE;
-
-    ObMulModeReader reader(&xbin, seek_info);
-    ObArray<ObIMulModeBase*> result1;
-
-    ASSERT_EQ(reader.get_children_nodes(result1), OB_SUCCESS);
-    ASSERT_EQ(result1.size(), 14);
-
-    for (int64_t pos = 0; pos < result1.count(); ++pos) {
-      ObXmlBin* tmp = static_cast<ObXmlBin*>(result1.at(pos));
-      ObString key ;
-      ASSERT_EQ( tmp->get_key(key), 0);
-      string out_str(key.ptr(), key.length());
-      cout << out_str << endl;
-    }
-  }
-
-
-  {
-    ObXmlBin xbin(ctx);
-    ASSERT_EQ(xbin.parse_tree(&element), 0);
-
-    ObPathSeekInfo seek_info;
-    seek_info.type_ = SimpleSeekType::ALL_ARR_TYPE;
-
-    ObMulModeReader reader(&xbin, seek_info);
-    ObArray<ObIMulModeBase*> result1;
-
-    ASSERT_EQ(reader.get_children_nodes(result1), OB_SUCCESS);
-    ASSERT_EQ(result1.size(), 7);
-
-    cout << "children scan type..." << endl;
-    for (int64_t pos = 0; pos < result1.count(); ++pos) {
-      ObXmlBin* tmp = static_cast<ObXmlBin*>(result1.at(pos));
-    }
   }
 }
+
+
 
 TEST_F(TestXmlBin, test_simple_print_document)
 {
@@ -1562,50 +1565,6 @@ TEST_F(TestXmlBin, test_print_document)
   ASSERT_EQ(bin.print_document(buf_str_bin, type, ObXmlFormatType::NO_FORMAT), 0);
 
   ASSERT_EQ(std::string(xml_text.ptr(), xml_text.length()), std::string(buf_str_bin.ptr(), buf_str_bin.length()));
-
-}
-
-
-
-TEST_F(TestXmlBin, read_pre_order)
-{
-  int ret = 0;
-  ObCollationType type = CS_TYPE_UTF8MB4_GENERAL_CI;
-  common::ObString xml_text(
-    "<a>&lt;heading&gt;Reminder&lt;/heading&gt;</a>"
-  );
-
-  ObArenaAllocator allocator(ObModIds::TEST);
-  ObXmlDocument* doc = nullptr;
-  ObMulModeMemCtx* ctx = nullptr;
-  ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
-  ret = ObXmlParserUtils::parse_content_text(ctx, xml_text, doc);
-
-  {
-    ObXmlBin xbin(ctx);
-    ASSERT_EQ(xbin.parse_tree(doc), 0);
-
-    ObXmlBin* current = nullptr;
-    ObXmlBin::tree_iterator iter(xbin, PRE_ORDER);
-
-    ObXmlBin* tmp = nullptr;
-
-    ASSERT_EQ(iter.start(), 0);
-
-    // root
-    ASSERT_EQ(iter.next(tmp), 0);
-    ASSERT_EQ(tmp->type(), M_CONTENT);
-
-    ASSERT_EQ(iter.next(tmp), 0);
-    ASSERT_EQ(tmp->type(), M_ELEMENT);
-
-    ASSERT_EQ(iter.next(tmp), 0);
-    ASSERT_EQ(tmp->type(), M_TEXT);
-
-    std::string tmp_str(tmp->meta_.value_ptr_, tmp->meta_.value_len_);
-
-    cout << tmp_str << endl;
-  }
 
 }
 
