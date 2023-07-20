@@ -486,8 +486,9 @@ private:
 public:
   typedef common::hash::ObHashMap<ObLSID, ObLSCheckStatus> LSStatusMap;
 private:
-  static const int64_t WAIT_MEDIUM_SCHEDULE_INTERVAL = 1000L * 1000L * 1000L * 60L * 5; // 5 min // ns
-  static const int64_t TOLERATE_MEDIUM_SCHEDULE_INTERVAL = 1000L * 1000L * 1000L * 60L * 60L * 5; // 5 hour
+  static const int64_t NS_TIME = 1000L * 1000L * 1000L;
+  static const int64_t WAIT_MEDIUM_SCHEDULE_INTERVAL = NS_TIME * 60L * 5; // 5 min // ns
+  static const int64_t TOLERATE_MEDIUM_SCHEDULE_INTERVAL = NS_TIME * 60L * 60L * 36; // 36 hour
   static const int64_t MAX_LS_TABLET_CNT = 10 * 10000; // TODO(@jingshui): tmp solution
   static const int64_t DIAGNOSE_TABELT_MAX_COUNT = 10; // same type diagnose info max count
   bool is_inited_;

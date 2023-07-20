@@ -1122,7 +1122,6 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_major_and_medium(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   tablet_major_finish = false;
-  const storage::ObMergeType merge_type = MEDIUM_MERGE;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   ObITable *last_major_sstable = nullptr;
   int64_t max_sync_medium_scn = 0;
@@ -1141,34 +1140,36 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_major_and_medium(
   } else {
     // diagnose medium
     LOG_TRACE("diagnose tablet medium merge", K(max_sync_medium_scn));
-    if (max_sync_medium_scn > last_major_sstable->get_snapshot_version()) {
-      if (tablet.get_snapshot_version() < max_sync_medium_scn) { // wait mini compaction or tablet freeze
-        if (ObTimeUtility::current_time_ns() > max_sync_medium_scn + WAIT_MEDIUM_SCHEDULE_INTERVAL) {
-          if (DIAGNOSE_TABELT_MAX_COUNT > medium_not_schedule_count_ && can_add_diagnose_info()) {
-            SET_DIAGNOSE_INFO(
-                info_array_[idx_++],
-                merge_type,
-                MTL_ID(),
-                ls_id,
-                tablet_id,
-                gen_diagnose_status(max_sync_medium_scn),
-                ObTimeUtility::fast_current_time(),
-                "medium wait for freeze, interval", static_cast<int64_t>(WAIT_MEDIUM_SCHEDULE_INTERVAL),
-                "max_receive_medium_scn", max_sync_medium_scn,
-                "tablet_snapshot", tablet.get_snapshot_version());
+    if (!diagnose_major_flag || (diagnose_major_flag && max_sync_medium_scn < compaction_scn)) {
+      if (max_sync_medium_scn > last_major_sstable->get_snapshot_version()) {
+        if (tablet.get_snapshot_version() < max_sync_medium_scn) { // wait mini compaction or tablet freeze
+          if (ObTimeUtility::current_time_ns() > max_sync_medium_scn + WAIT_MEDIUM_SCHEDULE_INTERVAL) {
+            if (DIAGNOSE_TABELT_MAX_COUNT > medium_not_schedule_count_ && can_add_diagnose_info()) {
+              SET_DIAGNOSE_INFO(
+                  info_array_[idx_++],
+                  MEDIUM_MERGE,
+                  MTL_ID(),
+                  ls_id,
+                  tablet_id,
+                  gen_diagnose_status(max_sync_medium_scn),
+                  ObTimeUtility::fast_current_time(),
+                  "medium wait for freeze, interval", static_cast<int64_t>(WAIT_MEDIUM_SCHEDULE_INTERVAL / NS_TIME),
+                  "max_receive_medium_scn", max_sync_medium_scn,
+                  "tablet_snapshot", tablet.get_snapshot_version());
+            }
+            ++medium_not_schedule_count_;
           }
-          ++medium_not_schedule_count_;
-        }
-      } else if (max_sync_medium_scn != compaction_scn) {
-        // last medium not finish or schedule
-        ObTabletMajorMergeDag dag;
-        if (OB_TMP_FAIL(diagnose_tablet_merge(
-                dag,
-                merge_type,
-                ls_id,
-                tablet_id,
-                max_sync_medium_scn))) {
-          LOG_WARN("diagnose failed", K(tmp_ret), K(ls_id), K(tablet_id), KPC(last_major_sstable));
+        } else {
+          // last medium not finish or schedule
+          ObTabletMajorMergeDag dag;
+          if (OB_TMP_FAIL(diagnose_tablet_merge(
+                  dag,
+                  MEDIUM_MERGE,
+                  ls_id,
+                  tablet_id,
+                  max_sync_medium_scn))) {
+            LOG_WARN("diagnose failed", K(tmp_ret), K(ls_id), K(tablet_id), KPC(last_major_sstable));
+          }
         }
       }
     }
@@ -1185,7 +1186,7 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_major_and_medium(
         if (max_sync_medium_scn < compaction_scn
             && max_sync_medium_scn == last_major_sstable->get_snapshot_version()) {
           // last compaction finish
-          if (OB_TMP_FAIL(get_suspect_info_and_print(merge_type, ls_id, tablet_id))) {
+          if (OB_TMP_FAIL(get_suspect_info_and_print(MEDIUM_MERGE, ls_id, tablet_id))) {
             if (OB_HASH_NOT_EXIST != tmp_ret) {
               LOG_WARN("failed get major merge suspect info", K(ret), K(ls_id));
             }
@@ -1202,7 +1203,7 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_major_and_medium(
                     tablet_id,
                     gen_diagnose_status(compaction_scn),
                     ObTimeUtility::fast_current_time(),
-                    "major not schedule for long time, interval", static_cast<int64_t>(WAIT_MEDIUM_SCHEDULE_INTERVAL * 2),
+                    "major not schedule for long time, interval", static_cast<int64_t>(WAIT_MEDIUM_SCHEDULE_INTERVAL * 2 / NS_TIME),
                     "max_receive_medium_snapshot", max_sync_medium_scn,
                     "compaction_scn", compaction_scn))) {
               LOG_WARN("failed to add diagnose info", K(ret), K(ls_id), K(tablet_id));
@@ -1215,13 +1216,13 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_major_and_medium(
               if (DIAGNOSE_TABELT_MAX_COUNT > major_not_schedule_count_ && can_add_diagnose_info()) {
                 SET_DIAGNOSE_INFO(
                     info_array_[idx_++],
-                    merge_type,
+                    MAJOR_MERGE,
                     MTL_ID(),
                     ls_id,
                     tablet_id,
                     gen_diagnose_status(compaction_scn),
                     ObTimeUtility::fast_current_time(),
-                    "major wait for freeze, interval", static_cast<int64_t>(WAIT_MEDIUM_SCHEDULE_INTERVAL),
+                    "major wait for freeze, interval", static_cast<int64_t>(WAIT_MEDIUM_SCHEDULE_INTERVAL / NS_TIME),
                     "compaction_scn", compaction_scn,
                     "tablet_snapshot", tablet.get_snapshot_version());
               }
@@ -1231,7 +1232,7 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_major_and_medium(
             ObTabletMajorMergeDag dag;
             if (OB_TMP_FAIL(diagnose_tablet_merge(
                     dag,
-                    merge_type,
+                    MEDIUM_MERGE,
                     ls_id,
                     tablet.get_tablet_meta().tablet_id_,
                     compaction_scn))) {
