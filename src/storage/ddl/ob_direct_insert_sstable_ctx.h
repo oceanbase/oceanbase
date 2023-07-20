@@ -195,7 +195,6 @@ public:
   TO_STRING_KV(K(build_param_), K(sstable_created_));
 private:
   int create_sstable_with_clog(
-      ObTablet *tablet,
       const ObITable::TableKey &table_key,
       const int64_t table_id);
   int get_table_key(ObITable::TableKey &table_key);
@@ -205,8 +204,6 @@ private:
   lib::ObMutex mutex_;
   common::ObConcurrentFIFOAllocator allocator_;
   ObSSTableInsertTabletParam build_param_;
-  ObLSHandle ls_handle_;
-  ObTabletHandle tablet_handle_;
   ObDDLSSTableRedoWriter data_sstable_redo_writer_;
   bool sstable_created_;
   int64_t task_finish_count_;
