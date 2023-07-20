@@ -681,3 +681,10 @@ int ObLinkStmtParam::read_next(const char *buf, int64_t buf_len, int64_t &pos, i
   pos = ch - buf;
   return ret;
 }
+
+int64_t ObLinkStmtParam::get_param_len()
+{
+  return PARAM_LEN;
+}
+
+const int64_t ObLinkStmtParam::PARAM_LEN = sizeof(char) * 2 + sizeof(uint16_t);

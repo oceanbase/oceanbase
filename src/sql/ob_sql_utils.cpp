@@ -3140,13 +3140,6 @@ int ObImplicitCursorInfo::merge_cursor(const ObImplicitCursorInfo &other)
   return ret;
 }
 
-int64_t ObLinkStmtParam::get_param_len()
-{
-  return PARAM_LEN;
-}
-
-const int64_t ObLinkStmtParam::PARAM_LEN = sizeof(char) * 2 + sizeof(uint16_t);
-
 bool ObSQLUtils::is_same_type_for_compare(const ObObjMeta &meta1, const ObObjMeta &meta2)
 {
   bool is_same = false;

@@ -156,9 +156,7 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
     }
 
     // format scale from others to oceanbase
-    if (DBLINK_DRV_OCI == link_type && (ObFloatType == ob_type || ObDoubleType == ob_type)) {
-      scale = OB_MIN_NUMBER_SCALE - 1; // binary_float and binar_double scale from oci is 0, need set to -85
-    } else if (DBLINK_DRV_OCI == link_type && ObDateTimeType == ob_type) {
+    if (DBLINK_DRV_OCI == link_type && ObDateTimeType == ob_type) {
       scale = 0;
     } else if (tmp_scale < OB_MIN_NUMBER_SCALE || tmp_scale > OB_MAX_NUMBER_SCALE ||
               (-1 == precision && ObNumberType == ob_type)) {
@@ -181,10 +179,15 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
         length = tmp_length;
       }
     }
-    if (ObDoubleType == ob_type || ObFloatType == ob_type) {
+    if (ObDoubleType == ob_type || ObUDoubleType == ob_type) {
       precision = -1;
-      scale = -1;
-      length = -1;
+      scale = -85;
+      length = 22;
+    }
+    if (ObFloatType == ob_type ||  ObUFloatType == ob_type) {
+      precision = -1;
+      scale = -85;
+      length = 12;
     }
     if (ObIntervalYMType == ob_type || ObIntervalDSType == ob_type) {
       precision = -1;
