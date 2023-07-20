@@ -323,6 +323,7 @@ private:
   ObSSTableArray meta_major_tables_;
   ObMemtableArray memtables_;
   ObDDLKVArray ddl_mem_sstables_;
+  mutable common::SpinRWLock memtables_lock_; // protect memtable read and update after inited
   bool is_ready_for_read_;
   bool is_inited_;
 
