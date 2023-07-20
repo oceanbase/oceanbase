@@ -166,7 +166,7 @@ int ObServerCheckpointSlogHandler::try_write_checkpoint_for_compat()
   if (OB_ISNULL(omt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, omt is nullptr", K(ret));
-  } else if (OB_FAIL(omt->get_tenant_metas(tenant_metas))) {
+  } else if (OB_FAIL(omt->get_tenant_metas_for_ckpt(tenant_metas))) {
     LOG_WARN("fail to get tenant metas", K(ret), KP(omt));
   } else {
     bool need_svr_ckpt = false;
@@ -183,6 +183,8 @@ int ObServerCheckpointSlogHandler::try_write_checkpoint_for_compat()
           // so it is necessary to update version here
           if (super_block.is_hidden_) {
             super_block.version_ = ObTenantSuperBlock::TENANT_SUPER_BLOCK_VERSION;
+            omt::ObTenant *tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant());
+            tenant->set_tenant_super_block(super_block);
           }
           need_svr_ckpt = true;
         }
