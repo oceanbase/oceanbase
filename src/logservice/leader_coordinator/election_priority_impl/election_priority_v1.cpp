@@ -85,7 +85,7 @@ int PriorityV1::compare(const AbstractPriority &rhs, int &result, ObStringHolder
 // ----------|------------------------------|-----------------
 //  APPEND   |           max_scn            | max_replayed_scn
 // ----------|------------------------------|-----------------
-// RAW_WRITE | min(replayable_scn, max_scn) | max_replayed_scn
+// RAW_WRITE |         SCN::max_scn         |  SCN::max_scn
 // ----------|------------------------------|-----------------
 // OTHER     |          like RAW_WRITE
 int PriorityV1::get_scn_(const share::ObLSID &ls_id, SCN &scn)
@@ -97,12 +97,23 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, SCN &scn)
   palf::AccessMode access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
   ObLogService* log_service = MTL(ObLogService*);
   common::ObRole role;
-  SCN replayable_scn, max_scn;
   int64_t unused_pid = -1;
   if (OB_ISNULL(log_service)) {
     COORDINATOR_LOG_(ERROR, "ObLogService is nullptr");
   } else if (CLICK_FAIL(log_service->open_palf(ls_id, palf_handle_guard))) {
     COORDINATOR_LOG_(WARN, "open_palf failed");
+  } else if (CLICK_FAIL(palf_handle_guard.get_palf_handle()->get_access_mode(access_mode))) {
+    COORDINATOR_LOG_(WARN, "get_access_mode failed");
+  } else if (palf::AccessMode::APPEND != access_mode) {
+    // Note: set scn to max_scn when access mode is not APPEND.
+    // 1. A possible risk is when LS is switched from RAW_WRITE to APPEND, the leader
+    // may be APPEND and followers may be RAW_WRITE within a very short time window,
+    // the leader's scn (log sync max_scn) may be smaller than followers' scns (SCN::max_scn).
+    // To avoid the problem, if scn of a election priority is max_scn, we think the
+    // priority is equivalent to any priorities whose scn is any values.
+    // 2. Do not set scn to min_scn, if a follower do not replay any logs, its replayed_scn
+    // may be SCN::min_scn, and the leadership may be switched to the follower.
+    scn = SCN::max_scn();
   } else if (CLICK_FAIL(palf_handle_guard.get_role(role, unused_pid))) {
     COORDINATOR_LOG_(WARN, "get_role failed");
   } else if (FOLLOWER == role) {
@@ -110,28 +121,14 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, SCN &scn)
       COORDINATOR_LOG_(WARN, "failed to get_max_replayed_scn");
       ret = OB_SUCCESS;
     }
-  } else if (CLICK_FAIL(palf_handle_guard.get_palf_handle()->get_access_mode(access_mode))) {
-    COORDINATOR_LOG_(WARN, "get_access_mode failed");
-  } else if (palf::AccessMode::APPEND == access_mode) {
-    if (CLICK_FAIL(palf_handle_guard.get_max_scn(scn))) {
-      COORDINATOR_LOG_(WARN, "get_max_scn failed");
-    }
-  } else if (CLICK_FAIL(log_service->get_log_replay_service()->get_replayable_point(replayable_scn))) {
-    COORDINATOR_LOG_(WARN, "failed to get_replayable_point");
-    ret = OB_SUCCESS;
-  } else if (CLICK_FAIL(palf_handle_guard.get_max_scn(max_scn))) {
+  } else if (CLICK_FAIL(palf_handle_guard.get_max_scn(scn))) {
     COORDINATOR_LOG_(WARN, "get_max_scn failed");
-  } else {
-    // For LEADER in RAW_WRITE mode, scn = min(replayable_scn, max_scn)
-    if (max_scn < replayable_scn) {
-      scn = max_scn;
-    } else {
-      scn = replayable_scn;
-    }
   }
   // scn may fallback because palf's role may be different with apply_service.
   // So we need check it here to keep inc update semantic.
-  if (scn < scn_) {
+  // Note: scn is always max_scn when access mode is not APPEND, so we just
+  // keep its inc update semantic when cached scn_ is not SCN::max_scn
+  if (scn < scn_ && SCN::max_scn() != scn_) {
     COORDINATOR_LOG_(TRACE, "new scn is smaller than current, no need update", K(role), K(access_mode), K(scn));
     scn = scn_;
   }
@@ -339,7 +336,10 @@ int PriorityV1::compare_scn_(int &ret, const PriorityV1&rhs) const
 {
   int compare_result = 0;
   if (OB_SUCC(ret)) {
-    if (scn_ == rhs.scn_) {
+    // If scn of a election priority is max_scn, we think the priority is
+    // equivalent to any priorities whose scn is any values.
+    // See detailed reason in PriorityV1::get_scn_
+    if (scn_ == rhs.scn_ || scn_.is_max() || rhs.scn_.is_max()) {
       compare_result = 0;
     } else if (scn_.is_valid() && rhs.scn_.is_valid()) {
       if (std::max(scn_, rhs.scn_).convert_to_ts() - std::min(scn_, rhs.scn_).convert_to_ts() <= MAX_UNREPLAYED_LOG_TS_DIFF_THRESHOLD_US) {

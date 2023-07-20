@@ -197,7 +197,7 @@ int ObLSRecoveryStatHandler::do_get_ls_level_readable_scn_(SCN &read_scn)
   } else if (OB_FAIL(get_majority_readable_scn_(read_scn /* leader_readable_scn */, majority_min_readable_scn))) {
     LOG_WARN("failed to get_majority_readable_scn_", KR(ret), K(read_scn), KPC_(ls));
   } else {
-    read_scn = share::SCN::min(majority_min_readable_scn, read_scn /* leader_readable_scn */);
+    read_scn = majority_min_readable_scn;
   }
 
   LOG_TRACE("do_get_ls_level_readable_scn_ finished", KR(ret), KPC_(ls), K(read_scn),
