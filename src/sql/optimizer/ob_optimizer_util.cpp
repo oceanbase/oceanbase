@@ -5691,7 +5691,11 @@ bool ObOptimizerUtil::is_lossless_type_conv(const ObExprResType &child_type, con
   if (child_type.get_type() == dst_type.get_type() &&
     (child_type.get_accuracy().get_precision() == dst_acc.get_precision() || -1 == dst_acc.get_precision()) &&
     (child_type.get_accuracy().get_scale() == dst_acc.get_scale() || -1 == dst_acc.get_scale())) {
-    if (ob_is_string_type(child_type.get_type())) {
+    if (is_oracle_mode()
+       && ObNumberTC == dst_tc
+       && child_type.get_accuracy().get_scale() != child_type.get_accuracy().get_scale()) {
+      //TODO: need to be supplemented for the conversion from number to number
+    } else if (ob_is_string_type(child_type.get_type())) {
       if (dst_type.get_obj_meta().get_collation_type() == child_type.get_obj_meta().get_collation_type() &&
          (child_type.get_accuracy().get_length() <= dst_acc.get_length() || -1 == dst_acc.get_length())) {
         is_lossless = true;
@@ -5760,7 +5764,8 @@ bool ObOptimizerUtil::is_lossless_type_conv(const ObExprResType &child_type, con
       }
     }
   } else {
-    if (ObNumberTC == child_tc || ObIntTC == child_tc || ObUIntTC == child_tc) {
+    if (ObIntTC == child_tc || ObUIntTC == child_tc) {
+      //TODO: need to be supplemented for the conversion from number to number
       if (child_tc == dst_tc || ObNumberTC == dst_tc) {
         ObAccuracy lossless_acc = child_type.get_accuracy();
         if ((dst_acc.get_scale() >= 0 &&
@@ -5870,7 +5875,8 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
         }
       }
     } else {
-      if (ObNumberTC == child_tc || ObIntTC == child_tc || ObUIntTC == child_tc) {
+      if (ObIntTC == child_tc || ObUIntTC == child_tc) {
+        //TODO: need to be supplemented for the conversion from number to number
         if (child_tc == dst_tc || ObNumberTC == dst_tc) {
           ObAccuracy lossless_acc = child_type.get_accuracy();
           if ((dst_acc.get_scale() >= 0 &&
