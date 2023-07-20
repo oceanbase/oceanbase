@@ -243,6 +243,11 @@ void ObPartTransCtx::destroy()
       FORCE_PRINT_TRACE(tlog_, "[missing callback scheduler] ");
     }
 
+    if (OB_NOT_NULL(retain_ctx_func_ptr_)) {
+      TRANS_LOG(INFO, "the memory of retain_ctx_func_ptr is active, need free", K(ret),
+                KP(retain_ctx_func_ptr_), KPC(retain_ctx_func_ptr_), KPC(this));
+    }
+    (void)try_gc_retain_ctx_func_();
 
     if (NULL != tlog_) {
       print_trace_log_if_necessary_();
