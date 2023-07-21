@@ -156,7 +156,7 @@ private:
 
   void push_async_task_into_thread_pool_(ObLogExternalStorageIOTask *io_task);
 
-  void destroy_and_init_new_thread_pool_(const int64_t concurrency);
+  int resize_(const int64_t concurrency);
 
   bool check_need_resize_(const int64_t concurrency) const;
 
