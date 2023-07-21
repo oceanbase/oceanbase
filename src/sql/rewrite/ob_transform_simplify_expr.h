@@ -167,36 +167,49 @@ private:
 
   int convert_case_when_predicate(ObDMLStmt *stmt, bool &trans_happened);
   int convert_case_when_predicate(ObRawExpr *&expr, 
-                                  const bool &is_scala_group_by,
+                                  const bool is_scala_group_by,
                                   bool &trans_happened);
-  int inner_convert_case_when_predicate(ObRawExpr *&expr, bool &trans_happened);
-  int check_inner_convert_case_when_validity(
-                                      ObCaseOpRawExpr *&case_expr,
-                                      int64_t &first_true_non_calc_idx,
-                                      bool &is_true,
-                                      bool &is_uncalculable,
-                                      ObIArray<ObRawExpr*> &false_exprs,
-                                      ObIArray<ObRawExpr*> &null_exprs,
-                                      bool &is_valid);
+  int convert_case_when_predicate_by_when_exprs(
+                                      ObRawExpr *&expr, 
+                                      bool &trans_happened);
+  int check_when_exprs_validity(
+                  const ObRawExpr *when_expr,
+                  bool &is_true,
+                  bool &is_uncalc,
+                  bool &is_false_or_null);
 
-  int do_convert_case_when_predicate(ObRawExpr *&parent_expr,
-                                     ObRawExpr *&case_expr,
-                                     ObRawExpr *&sibling_expr,
-                                     const bool &case_at_left,
-                                     bool &trans_happened);
+  int rewrite_case_when_expr(ObRawExpr *&expr,
+                            const int64_t first_non_false_idx,
+                            const bool is_true,
+                            const bool is_uncalc,
+                            bool &is_happened);
 
-  int check_convert_case_when_validity(ObRawExpr *&parent_expr,
+  int convert_case_when_predicate_by_then_exprs(
+                                      ObRawExpr *&parent_expr,
+                                      ObRawExpr *&case_expr,
+                                      ObRawExpr *&sibling_expr,
+                                      const bool case_at_left,
+                                      bool &trans_happened);
+
+  int check_convert_case_when_by_then_exprs_validity(
+                                      ObRawExpr *&parent_expr,
                                       ObCaseOpRawExpr *&case_expr,
                                       ObRawExpr *&sibling_expr,
-                                      const bool &case_at_left,
-                                      int64_t &true_null_non_static_idx,
-                                      bool &is_true,
-                                      bool &is_null,
-                                      ObRawExpr *&true_null_non_static_expr,
+                                      const bool case_at_left,
+                                      bool &is_uncalculable,
+                                      int64_t &true_null_uncalc_idx,
+                                      ObRawExpr *&true_null_uncalc_expr,
                                       ObIArray<ObRawExpr*> &false_exprs,
                                       bool &is_valid);
+  int build_rewrite_expr(ObCaseOpRawExpr *case_expr,
+                         const int64_t true_null_uncalc_idx,
+                         ObRawExpr *true_null_uncalc_expr,
+                         ObRawExpr *&rewrite_expr);
+  int build_nvl_expr(ObRawExpr *expr, ObRawExpr *&nvl_expr, const bool is_true);
+  int add_constraint_for_convert_case_when(
+                                const ObIArray<ObRawExpr *> &false_exprs,
+                                ObRawExpr *true_expr);
 };
-
 }
 }
 
