@@ -83,6 +83,7 @@ int ObRawExprFactory::create_raw_expr<ObOpRawExpr>(ObItemType expr_type, ObOpRaw
     GENERATE_CASE(T_FUN_PL_ASSOCIATIVE_INDEX, ObPLAssocIndexRawExpr);
     GENERATE_CASE(T_OBJ_ACCESS_REF, ObObjAccessRawExpr);
     GENERATE_CASE(T_OP_MULTISET, ObMultiSetRawExpr);
+    GENERATE_CASE(T_OP_COLL_PRED, ObCollPredRawExpr);
     GENERATE_DEFAULT();
   }
   return ret;
