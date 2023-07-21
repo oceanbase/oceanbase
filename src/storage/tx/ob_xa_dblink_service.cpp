@@ -678,7 +678,9 @@ int ObXAService::recover_tx_for_dblink_callback(const ObTransID &tx_id,
       } else {
         // do nothing
       }
-      xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
+      if (OB_SUCCESS != ret) {
+        xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
+      }
     }
   }
   TRANS_LOG(INFO, "recover tx for dblink callback", K(ret), K(tx_id));
@@ -698,11 +700,14 @@ int ObXAService::revert_tx_for_dblink_callback(ObTxDesc *&tx_desc)
     if (NULL == xa_ctx) {
       ret = ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "xa transaction context is null", K(ret), K(tx_id));
-    } else if (OB_FAIL(xa_ctx->revert_tx_for_dblink_callback(tx_desc))) {
-      TRANS_LOG(WARN, "fail to revert tx for dblink callback", K(ret), K(tx_id));
     } else {
-      // NOTE that tx_desc is null currently
-      // do nothing
+      if (OB_FAIL(xa_ctx->revert_tx_for_dblink_callback(tx_desc))) {
+        TRANS_LOG(WARN, "fail to revert tx for dblink callback", K(ret), K(tx_id));
+      } else {
+        // NOTE that tx_desc is null currently
+        // do nothing
+      }
+      xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
     }
   }
   TRANS_LOG(INFO, "revert tx for dblink callback", K(ret), K(tx_id));
