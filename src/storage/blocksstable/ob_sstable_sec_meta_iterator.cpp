@@ -201,6 +201,7 @@ int ObSSTableSecMetaIterator::open(
 int ObSSTableSecMetaIterator::get_next(ObDataMacroBlockMeta &macro_meta)
 {
   int ret = OB_SUCCESS;
+  row_.reuse();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Secondary meta iterator not inited", K(ret));
