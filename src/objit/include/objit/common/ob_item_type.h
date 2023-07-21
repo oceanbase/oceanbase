@@ -2248,10 +2248,12 @@ typedef enum ObItemType
   T_PARTITION_LIST_ELEMENT,
   T_PARTITION_RANGE_ELEMENT,
 
-  T_CONSTR_LOB_META_SIZE,
-  T_LOB_META_SIZE,
+  T_CONSTR_LOB_CHUNK_SIZE,
+  T_LOB_CHUNK_SIZE,
 
   T_ALTER_SYSTEM_KILL, // used to support kill session in oracle
+
+  T_LOB_STORAGE_CLAUSE,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
