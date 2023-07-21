@@ -2530,26 +2530,47 @@ int ObTransformSimplifyExpr::try_remove_ora_decode(ObRawExpr *&expr,
 
 /***
  * EXPLANATION:
- * Convert case_when predicate recursively 
-   expr = case when cond1 then exp1
-            when cond2 then exp2
-            ...
-            when condk then expk
-            ...
-            when condm then expm
-            else expn
-          end op const_value
+ * Rewrite case_when predicate recursively for all relation exprs
+ * Focus on two transformer format:
+ * 1. According to when exprs
+    FORMAT:
+    expr = case when cond1 then expr1
+                when cond2 then expr2
+                ...
+                when condk then exprk
+                ...
+                when condm then exprm
+                else exprn
+            end;
+    PRECONDITIONS:
+    a. Assume condk is TRUE/UNCALCULABLE, cond1 to cond(k-1) is FALSE/NULL
+    b. IF condk is TRUE, then expr can be rewritten to exprk
+    c. IF condk is UNCALCULABLE, then cond1 to cond(k-1) can be removed from expr
+       (if k = 1, don't need rewrite)
+    d. IF k == n (i.e., cond1 to condm is FALSE/NULL), rewrite expr to exprn (default_expr)
 
- * PRECONDITIONS:
- * 1. op is is_common_comparison_op
- * 2. const_value is static_const_expr
- * 3. IF {exp1 ~ expn} is all calculable
- *    => 3.1 IF {exp1 ~ expn} op const_value is false, then expr can be rewritten to false
- *    => 3.2 IF only one of {exp1 ~ expn} op const_value is true (assume expk), then expr can be rewritten to 
-             lnnvl(cond1) and ... and lnnvl(condk-1) and condk. (If k == n, condk can be ignored.)
- * 4. IF only one of {exp1 ~ expn} is not calculable (assume expk), and ({exp1 ~ expn} \ expk) op const_value is false, then 
-      expr can be rewritten to lnnvl(cond1) and .. and lnnvl(condk-1) and condk and expk op const_value.
-      (If k == n, condk can be ignored.)
+ * 2. According to then exprs
+    FORMAT:
+    expr = case when cond1 then expr1
+              when cond2 then expr2
+              ...
+              when condk then exprk
+              ...
+              when condm then exprm
+              else exprn
+            end op const_value
+
+    PRECONDITIONS:
+    a. Assume op is common_comparison_op
+    b. Assume const_value is static_const_expr
+    c. IF {expr1 ~ exprn} is all calculable
+        => 3.1 IF {expr1 ~ exprn} op const_value is all FALSE, then expr can be rewritten to FALSE 
+        => 3.2 IF only one of {expr1 ~ exprn} op const_value is TRUE (i.e., exprk), then expr can be rewritten to 
+              lnnvl(cond1) and ... and lnnvl(condk-1) and condk. (If k == n, condk is ignored.)
+    d. IF only one of {expr1 ~ exprn} is UNCALCULABLE/NULL (i.e., exprk), 
+          and ({expr1 ~ exprn} \ exprk) op const_value is all false, then 
+          expr can be rewritten to lnnvl(cond1) and .. and lnnvl(condk-1) and condk and (exprk op const_value).
+          (If k == n, condk is ignored.)
  **/
 int ObTransformSimplifyExpr::convert_case_when_predicate(ObDMLStmt *stmt, 
                                                          bool &trans_happened) {
@@ -2587,10 +2608,11 @@ int ObTransformSimplifyExpr::convert_case_when_predicate(ObDMLStmt *stmt,
 
 
 // /**
-//  * @brief convert the case when predicate at the parent of expr OR inner convert case when predicate
+//  * @brief convert the case when predicate at the parent expr
+//               AND do inner convert case when predicate
 //  * @param[in][out] expr: current expr 
 //  * @param[in] is_sacla_group_by: this stmt is scala group by or not
-//  * @param[in][out] trans_happened: whether convert is happened
+//  * @param[in][out] trans_happened: whether rewrite is happened
 //  */
 int ObTransformSimplifyExpr::convert_case_when_predicate(
                                     ObRawExpr *&expr,
@@ -2605,7 +2627,8 @@ int ObTransformSimplifyExpr::convert_case_when_predicate(
     LOG_WARN("unexpected null", K(expr), K(ret));
   } else if (IS_COMMON_COMPARISON_OP(expr->get_expr_type())) {
     ObOpRawExpr *op_expr = NULL;
-    ObRawExpr *child_0 = NULL, *child_1 = NULL;
+    ObRawExpr *child_0 = NULL;
+    ObRawExpr *child_1 = NULL;
     if (OB_FALSE_IT(op_expr = static_cast<ObOpRawExpr *>(expr))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to cast to OpRawExpr", K(ret), K(expr));
@@ -2619,7 +2642,8 @@ int ObTransformSimplifyExpr::convert_case_when_predicate(
     } else {
       bool is_case_at_left = false;
       bool is_case_cmp_const = false;
-      ObRawExpr *case_expr = NULL, *sibling_expr = NULL;
+      ObRawExpr *case_expr = NULL;
+      ObRawExpr *sibling_expr = NULL;
       if ((T_OP_CASE == child_0->get_expr_type()) 
           && child_1->is_static_const_expr()) {
         is_case_at_left = true;
@@ -2650,7 +2674,6 @@ int ObTransformSimplifyExpr::convert_case_when_predicate(
       }
     }
   } else if (T_OP_CASE == expr->get_expr_type()) {
-    // first `when expr` is true, case_when can be rewritten to first `then expr`
     if (is_scala_group_by && expr->has_flag(CNT_AGG)) {
       /* do nothing for scala group by */
     } else if (OB_FAIL(inner_convert_case_when_predicate(expr, is_happened))) {
@@ -2729,7 +2752,7 @@ int ObTransformSimplifyExpr::inner_convert_case_when_predicate(ObRawExpr *&expr,
     ObSEArray<ObRawExpr *, 2> when_exprs;
     ObSEArray<ObRawExpr *, 2> then_exprs;
     bool has_trans = false;
-    if (-1 == first_true_non_calc_idx) {
+    if (OB_LIKELY(-1 == first_true_non_calc_idx)) {
       ObRawExpr *default_expr = NULL;
       if (OB_ISNULL(default_expr = case_expr->get_default_param_expr())) {
         ret = OB_ERR_UNEXPECTED;
@@ -2933,14 +2956,15 @@ int ObTransformSimplifyExpr::do_convert_case_when_predicate(
   if (OB_ISNULL(parent_expr) || OB_ISNULL(case_when_expr) || OB_ISNULL(sibling_expr) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param null", K(ret), K(parent_expr), K(case_expr), K(sibling_expr), K(ctx_));
-  } else if (T_OP_CASE != case_when_expr->get_expr_type()) {
+  } else if (OB_UNLIKELY(T_OP_CASE != case_when_expr->get_expr_type())) {
     /* do nothing */
   } else if (OB_FALSE_IT(case_expr = static_cast<ObCaseOpRawExpr *>(case_when_expr))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to convert to case expr", K(ret), K(case_when_expr));
   } else if (OB_UNLIKELY(case_expr->get_when_expr_size() != case_expr->get_then_expr_size())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("incorrect param of case when", K(ret), K(case_expr->get_when_expr_size()), K(case_expr->get_then_expr_size()));
+    LOG_WARN("incorrect param of case when", K(ret), K(case_expr->get_when_expr_size()), 
+                                                     K(case_expr->get_then_expr_size()));
   } else if (OB_UNLIKELY(case_expr->get_when_expr_size() < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("incorrect param of case when", K(ret), K(case_expr->get_when_expr_size()));
@@ -2962,12 +2986,15 @@ int ObTransformSimplifyExpr::do_convert_case_when_predicate(
       /***  first step
        *  build rewrite_expr according false_exprs.count()
        *  1. if false_exprs.count() == then_expr_size() + 1 ==> false;
-       *  2. if false_exprs.count() == then_expr_size() ==> lnnvl(cond1) and lnnvl(cond2) and ... and lnnvl(condk-1) and condk and exprk
+       *  2. if false_exprs.count() == then_expr_size() ==> 
+                    lnnvl(cond1) and lnnvl(cond2) and ... and lnnvl(condk-1) and condk and exprk
       **/
       ObRawExpr *rewrite_expr = NULL;
-      if (-1 == true_null_non_static_idx && false_exprs.count() == case_expr->get_then_expr_size() + 1) {
+      if (-1 == true_null_non_static_idx &&  
+            false_exprs.count() == case_expr->get_then_expr_size() + 1) {
         // rewrite case_when_expr to false
-        if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_, rewrite_expr, false))) {
+        if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_, 
+                                                            rewrite_expr, false))) {
           LOG_WARN("failed to build const bool expr", K(ret));
         }
       } else {
@@ -3006,7 +3033,8 @@ int ObTransformSimplifyExpr::do_convert_case_when_predicate(
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(build_exprs.push_back(true_null_non_static_expr))) {
             LOG_WARN("failed to push back build_exprs", K(ret));
-          } else if (OB_FAIL(ObRawExprUtils::build_and_expr(*ctx_->expr_factory_, build_exprs, rewrite_expr))) {
+          } else if (OB_FAIL(ObRawExprUtils::build_and_expr(*ctx_->expr_factory_, 
+                                                            build_exprs, rewrite_expr))) {
               // build rewrite expr
               LOG_WARN("failed to build and exprs", K(ret));
           }
@@ -3022,7 +3050,8 @@ int ObTransformSimplifyExpr::do_convert_case_when_predicate(
       */
       ObRawExpr *constraint_expr = NULL;
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObRawExprUtils::build_or_exprs(*ctx_->expr_factory_, false_exprs, constraint_expr))) {
+      } else if (OB_FAIL(ObRawExprUtils::build_or_exprs(*ctx_->expr_factory_, 
+                                                        false_exprs, constraint_expr))) {
         LOG_WARN("failed to build or expr", K(ret));
       } else if (OB_FAIL(constraint_expr->formalize(ctx_->session_info_))) {
         LOG_WARN("failed to formalize expr", K(ret), K(constraint_expr));
@@ -3083,6 +3112,7 @@ int ObTransformSimplifyExpr::check_convert_case_when_validity(
   is_valid = false;
   true_null_non_static_idx = -1;
   true_null_non_static_expr = NULL;
+  false_exprs.reset();
 
   if (OB_ISNULL(parent_expr) || OB_ISNULL(case_expr) || OB_ISNULL(sibling_expr)) {
     ret = OB_ERR_UNEXPECTED;
