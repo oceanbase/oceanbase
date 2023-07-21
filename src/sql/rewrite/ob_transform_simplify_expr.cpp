@@ -2307,6 +2307,7 @@ int ObTransformSimplifyExpr::remove_false_true(ObRawExpr *expr,
 int ObTransformSimplifyExpr::remove_ora_decode(ObDMLStmt *stmt, bool &trans_happened)
 {
   int ret = OB_SUCCESS;
+  trans_happened = false;
   ObSEArray<ObRawExpr *, 2> old_exprs;
   ObSEArray<ObRawExpr *, 2> new_exprs;
   ObSEArray<ObRawExpr *, 16> relation_exprs;
