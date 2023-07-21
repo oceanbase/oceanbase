@@ -829,7 +829,8 @@ public:
     OB_UNIS_VERSION(1);
   };
 
-  TO_STRING_KV(K(dup_ls_meta_), K(lease_log_rec_scn_), K(start_replay_scn_));
+  TO_STRING_KV(K(dup_ls_meta_), K(lease_log_rec_scn_), K(start_replay_scn_),
+               K(readable_ckpt_base_scn_is_accurate_));
 
 public:
   ObDupTableLSCheckpoint() { reset(); }
@@ -856,6 +857,7 @@ public:
     dup_ls_meta_.reset();
     lease_log_rec_scn_.reset();
     start_replay_scn_.reset();
+    readable_ckpt_base_scn_is_accurate_ = true;
   }
 
 private:
@@ -863,6 +865,11 @@ private:
   ObLSDupTableMeta dup_ls_meta_;
   share::SCN lease_log_rec_scn_;
   share::SCN start_replay_scn_;
+  // ckpt_base_scn means, when replay dup log with base_scn,
+  // this node cotain all readable set the same with leader.
+  // but dup tale log can not write all readable set with the limit of size
+  // we use this bool value to check base scn hold correct messages
+  bool readable_ckpt_base_scn_is_accurate_;
 };
 
 /*******************************************************
@@ -894,16 +901,19 @@ struct DupTableStatLog
   int64_t lease_addr_cnt_;
   int64_t readable_cnt_;
   int64_t all_tablet_set_cnt_;
+  int64_t logging_readable_cnt_;
 
-  TO_STRING_KV(K(lease_addr_cnt_), K(readable_cnt_), K(all_tablet_set_cnt_));
+  TO_STRING_KV(K(lease_addr_cnt_), K(readable_cnt_), K(all_tablet_set_cnt_),
+               K(logging_readable_cnt_));
 
   DupTableStatLog() { reset(); }
 
   void reset()
   {
-    lease_addr_cnt_ = 0;
-    readable_cnt_ = 0;
-    all_tablet_set_cnt_ = 0;
+    lease_addr_cnt_ = -1;
+    readable_cnt_ = -1;
+    all_tablet_set_cnt_ = -1;
+    logging_readable_cnt_ = -1;
   }
 
   OB_UNIS_VERSION(1);
