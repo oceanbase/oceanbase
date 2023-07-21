@@ -5193,6 +5193,7 @@ int ObSelectLogPlan::check_win_func_need_sort(const ObLogicalOperator &top,
     part_cnt = 0;
   } else if (!need_sort || 0 >= part_cnt) {
     /* need not hash sort */
+    part_cnt = 0;
   } else if (OB_FAIL(ObOptimizerUtil::check_need_sort(win_func_helper.sort_keys_,
                                                       top.get_op_ordering(),
                                                       top.get_fd_item_set(),
@@ -5929,6 +5930,7 @@ int ObSelectLogPlan::create_none_dist_win_func(ObLogicalOperator *top,
   bool single_part_parallel = false;
   const ObIArray<ObWinFunRawExpr*> &win_func_exprs = win_func_helper.ordered_win_func_exprs_;
   const ObIArray<OrderItem> &sort_keys = win_func_helper.sort_keys_;
+  bool is_local_order = false;
   if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -5949,8 +5951,10 @@ int ObSelectLogPlan::create_none_dist_win_func(ObLogicalOperator *top,
                           K(win_func_helper.force_hash_sort_), K(win_func_helper.force_normal_sort_));
       need_normal_sort = !win_func_helper.force_hash_sort_;
       need_hash_sort = need_sort && part_cnt > 0 && !win_func_helper.force_normal_sort_;
+      is_local_order = top->get_is_local_order();
       if (!top->is_distributed() || single_part_parallel || is_partition_wise) {
         exch_info.dist_method_ = ObPQDistributeMethod::NONE;
+        is_local_order &= top->is_single() || (top->is_distributed() && top->is_exchange_allocated());
       }
     }
   }
@@ -5958,7 +5962,7 @@ int ObSelectLogPlan::create_none_dist_win_func(ObLogicalOperator *top,
   if (OB_SUCC(ret) && need_normal_sort) {
     ObLogicalOperator *normal_sort_top= top;
     if (OB_FAIL(allocate_sort_and_exchange_as_top(normal_sort_top, exch_info, sort_keys, need_sort,
-                                                  prefix_pos, top->get_is_local_order()))) {
+                                                  prefix_pos, is_local_order))) {
       LOG_WARN("failed to allocate sort and exchange as top", K(ret));
     } else if (OB_FAIL(allocate_window_function_as_top(WinDistAlgo::WIN_DIST_NONE,
                                                        win_func_exprs,
@@ -5979,7 +5983,7 @@ int ObSelectLogPlan::create_none_dist_win_func(ObLogicalOperator *top,
     if (OB_FAIL(create_hash_sortkey(part_cnt, sort_keys, hash_sortkey))) {
       LOG_WARN("failed to create hash sort key", K(ret), K(part_cnt), K(sort_keys));
     } else if (OB_FAIL(allocate_sort_and_exchange_as_top(hash_sort_top, exch_info, sort_keys, need_sort,
-                                                         prefix_pos, top->get_is_local_order(),
+                                                         prefix_pos, is_local_order,
                                                          NULL, /* topn_expr */
                                                          false, /* is_fetch_with_ties */
                                                          &hash_sortkey))) {
