@@ -274,10 +274,10 @@ public:
   bool has_nested_sql() const { return has_nested_sql_; }
   void set_session_id(uint64_t v) { session_id_ = v; }
   uint64_t get_session_id() const { return session_id_; }
-  void set_contain_oracle_trx_level_temporary_table() { contain_oracle_trx_level_temporary_table_ = true; }
-  bool is_contain_oracle_trx_level_temporary_table() const { return contain_oracle_trx_level_temporary_table_; }
-  void set_contain_oracle_session_level_temporary_table() { contain_oracle_session_level_temporary_table_ = true; }
-  bool is_contain_oracle_session_level_temporary_table() const { return contain_oracle_session_level_temporary_table_; }
+  common::ObIArray<uint64_t> &get_gtt_trans_scope_ids() { return gtt_trans_scope_ids_; }
+  common::ObIArray<uint64_t> &get_gtt_session_scope_ids() { return gtt_session_scope_ids_; }
+  bool is_contain_oracle_trx_level_temporary_table() const { return gtt_trans_scope_ids_.count() > 0; }
+  bool is_contain_oracle_session_level_temporary_table() const { return gtt_session_scope_ids_.count() > 0; }
   bool contains_temp_table() const {return 0 != session_id_; }
   void set_returning(bool is_returning) { is_returning_ = is_returning; }
   bool is_returning() const { return is_returning_; }
@@ -562,8 +562,10 @@ private:
   bool contain_table_scan_; //是否包含主键扫描
   bool has_nested_sql_; // 是否可能执行嵌套语句
   uint64_t  session_id_; //当计划包含临时表时记录table_schema->session_id, 用于判断计划能否重用
-  bool contain_oracle_trx_level_temporary_table_;
-  bool contain_oracle_session_level_temporary_table_;
+  bool contain_oracle_trx_level_temporary_table_; // not used
+  bool contain_oracle_session_level_temporary_table_; // not used
+  common::ObFixedArray<uint64_t, common::ObIAllocator> gtt_session_scope_ids_;
+  common::ObFixedArray<uint64_t, common::ObIAllocator> gtt_trans_scope_ids_;
 
   //for outline use
   ObOutlineState outline_state_;

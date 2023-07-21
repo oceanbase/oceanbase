@@ -281,6 +281,9 @@ int ObMPBase::create_session(ObSMConnection *conn, ObSQLSessionInfo *&sess_info)
       } else {
         sess_info->set_ssl_cipher("");
       }
+
+      sess_info->gen_gtt_session_scope_unique_id();
+      sess_info->gen_gtt_trans_scope_unique_id();
     }
   }
   return ret;

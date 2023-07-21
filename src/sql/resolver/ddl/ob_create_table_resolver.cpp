@@ -56,6 +56,7 @@ ObCreateTableResolver::ObCreateTableResolver(ObResolverParams &params)
       column_name_set_(),
       if_not_exist_(false),
       is_oracle_temp_table_(false),
+      is_temp_table_pk_added_(false),
       index_arg_(),
       current_index_name_set_(),
       cur_udt_set_id_(0)
@@ -402,6 +403,7 @@ int ObCreateTableResolver::add_pk_key_for_oracle_temp_table(ObArray<ObColumnReso
     if (OB_FAIL(add_primary_key_part(key_name, stats, pk_data_length))) {
       SQL_RESV_LOG(WARN, "add primary key part failed", K(ret), K(key_name));
     }
+    is_temp_table_pk_added_ = true;
   }
   return ret;
 }

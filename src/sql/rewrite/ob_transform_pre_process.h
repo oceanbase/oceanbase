@@ -282,7 +282,8 @@ struct DistinctObjMeta
 	 */
 	int transform_for_temporary_table(ObDMLStmt *&stmt, bool &trans_happened);
 	int add_filter_for_temporary_table(ObDMLStmt &stmt,
-	                                   const TableItem &table_item);
+	                                   const TableItem &table_item,
+                                     bool is_trans_scope_temp_table);
 	int collect_all_tableitem(ObDMLStmt *stmt,
                             TableItem *table_item,
                             common::ObArray<TableItem*> &table_item_list);

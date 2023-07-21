@@ -401,6 +401,7 @@
 #include "sql/engine/expr/ob_expr_xml_serialize.h"
 #include "sql/engine/expr/ob_expr_xmlcast.h"
 #include "sql/engine/expr/ob_expr_update_xml.h"
+#include "sql/engine/expr/ob_expr_temp_table_ssid.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1305,6 +1306,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprXmlSerialize);
   REG_OP_ORCL(ObExprXmlcast);
   REG_OP_ORCL(ObExprUpdateXml);
+  REG_OP_ORCL(ObExprTempTableSSID);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

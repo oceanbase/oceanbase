@@ -2199,6 +2199,8 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
                                                 K(res));
         }
       }
+    } else if (stmt.get_oracle_temp_table_type() == share::schema::TMP_TABLE_ORA_TRX) {
+      //do nothing
     } else {
       ObSqlString sql;
       int64_t affect_rows = 0;
@@ -2206,14 +2208,15 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
       uint64_t tenant_id = stmt.get_tenant_id();
       ObString db_name = stmt.get_database_name();
       ObString tab_name = stmt.get_table_name();
-      int64_t session_id = my_session->get_sessid_for_table();
+      uint64_t unique_id = my_session->get_gtt_session_scope_unique_id();
+
       if (OB_FAIL(oracle_sql_proxy.init(GCTX.sql_proxy_->get_pool()))) {
         LOG_WARN("init oracle sql proxy failed", K(ret));
       } else if (OB_FAIL(sql.assign_fmt("DELETE FROM \"%.*s\".\"%.*s\" WHERE "
                                         "%s = %ld",
                                         db_name.length(), db_name.ptr(),
                                         tab_name.length(), tab_name.ptr(),
-                                        OB_HIDDEN_SESSION_ID_COLUMN_NAME, session_id))) {
+                                        OB_HIDDEN_SESSION_ID_COLUMN_NAME, unique_id))) {
         LOG_WARN("fail to assign sql", K(ret));
       } else if (OB_FAIL(oracle_sql_proxy.write(tenant_id, sql.ptr(), affect_rows))) {
         LOG_WARN("execute sql failed", K(ret), K(sql), K(affect_rows));

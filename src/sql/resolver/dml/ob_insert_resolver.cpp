@@ -443,6 +443,7 @@ int ObInsertResolver::resolve_insert_field(const ParseNode &insert_into, TableIt
         //oracle临时表各session不会创建自己的私有对象只能在数据增加时设置标记
         session_info_->set_has_temp_table_flag();
         set_is_oracle_tmp_table(true);
+        set_oracle_tmp_table_type(table_schema->is_oracle_sess_tmp_table() ? 0 : 1);
       }
     }
   }

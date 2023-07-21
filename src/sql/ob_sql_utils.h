@@ -627,6 +627,25 @@ public:
   static int print_identifier_require_quotes(ObCollationType collation_type,
                                              const ObString &ident,
                                              bool &require);
+
+  static int64_t get_next_ts(int64_t &old_ts) {
+    int64_t next_ts = common::OB_INVALID_TIMESTAMP;
+
+    while (true) {
+      int64_t origin_ts = ATOMIC_LOAD(&old_ts);
+      int64_t now = ObClockGenerator::getClock();
+      next_ts = (now > origin_ts) ? now : (origin_ts + 1);
+      if (origin_ts == ATOMIC_VCAS(&old_ts, origin_ts, next_ts)) {
+        break;
+      } else {
+        PAUSE();
+      }
+    };
+    return next_ts;
+  }
+  static int64_t combine_server_id(int64_t ts, uint64_t server_id) {
+    return (ts & ((1LL << 43) - 1LL)) | ((server_id & 0xFFFF) << 48);
+  }
 private:
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString &name,
                               const bool check_for_path_char, const int64_t max_ident_len);
