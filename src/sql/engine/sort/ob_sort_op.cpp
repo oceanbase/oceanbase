@@ -520,7 +520,6 @@ int ObSortOp::inner_get_next_batch(const int64_t max_row_cnt)
     } else if (topn_cnt <= 0) {
       brs_.end_ = true;
       brs_.size_ = 0;
-      ret = OB_ITER_END;
     } else if (MY_SPEC.prefix_pos_ > 0) {
       if (OB_FAIL(init_prefix_sort(tenant_id, row_count, true, topn_cnt))) {
         LOG_WARN("failed to init batch prefix sort", K(ret));
@@ -530,14 +529,14 @@ int ObSortOp::inner_get_next_batch(const int64_t max_row_cnt)
         LOG_WARN("failed to init batch sort", K(ret));
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !brs_.end_) {
       if (OB_FAIL(process_sort_batch())) {
         LOG_WARN("process sort failed", K(ret));
       }
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !brs_.end_) {
     clear_evaluated_flag();
     if (OB_FAIL((this->*read_batch_func_)(std::min(max_row_cnt, MY_SPEC.max_batch_size_)))) {
       LOG_WARN("get next row failed");
