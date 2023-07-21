@@ -243,7 +243,11 @@ int ObTabletBindingHelper::modify_tablet_binding_new_mds(
     }
   } else if (OB_FALSE_IT(tablet = tablet_handle.get_obj())) {
   } else if (CLICK_FAIL(tablet->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), data))) {
-    LOG_WARN("failed to get ddl data", K(ret));
+    if (OB_ERR_SHARED_LOCK_CONFLICT == ret && !replay_scn.is_valid()) {
+      ret = OB_EAGAIN;
+    } else {
+      LOG_WARN("failed to get ddl data", K(ret));
+    }
   } else if (CLICK_FAIL(op(data))) {
     LOG_WARN("failed to operate on mds", K(ret));
   } else {
