@@ -2095,6 +2095,8 @@ public:
   ObDropTableArg(const ObDropTableArg &other) = delete;
   virtual ~ObDropTableArg() { tables_.reset(); }
   virtual bool is_allow_when_upgrade() const { return true; }
+
+  int assign(const ObDropTableArg& other);
   DECLARE_TO_STRING;
 
   uint64_t tenant_id_;
@@ -2108,6 +2110,7 @@ public:
   bool is_add_to_scheduler_;
   bool force_drop_;
   lib::Worker::CompatMode compat_mode_;
+  common::ObArenaAllocator allocator_;
 };
 
 struct ObOptimizeTableArg : public ObDDLArg

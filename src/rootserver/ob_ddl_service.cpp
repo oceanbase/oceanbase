@@ -19336,7 +19336,6 @@ int ObDDLService::collect_temporary_tables_in_session(const ObDropTableArg &cons
           } else if (need_collect) {
             found = true; // session_id should not across tenant
             database_schema = NULL;
-            table_item.table_name_ = table_schema->get_table_name_str();
             table_item.mode_ = table_schema->get_name_case_mode();
             if (OB_FAIL(schema_guard.get_database_schema(*tenant_id, table_schema->get_database_id(), database_schema))) {
               LOG_WARN("failed to get database schema", K(ret), "tenant_id", tenant_id);
@@ -19345,8 +19344,11 @@ int ObDDLService::collect_temporary_tables_in_session(const ObDropTableArg &cons
               LOG_WARN("database schema is null", K(ret));
             } else if (database_schema->is_in_recyclebin() || table_schema->is_in_recyclebin()) {
               LOG_INFO("skip table schema in recyclebin", K(*table_schema));
-            } else if (FALSE_IT(table_item.database_name_ = database_schema->get_database_name_str())) {
-              //impossible
+            } else if (OB_FAIL(ob_write_string(drop_table_arg.allocator_, database_schema->get_database_name_str(),
+                                                                                            table_item.database_name_))
+                    || OB_FAIL(ob_write_string(drop_table_arg.allocator_, table_schema->get_table_name_str(),
+                                                                                            table_item.table_name_))) {
+              LOG_WARN("Can not malloc space for table/db name", K(ret));
             } else if (OB_FAIL(drop_table_arg.tables_.push_back(table_item))) {
               LOG_WARN("failed to add table item!", K(table_item), K(ret));
             } else {
