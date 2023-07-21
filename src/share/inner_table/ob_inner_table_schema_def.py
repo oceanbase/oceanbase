@@ -12285,6 +12285,8 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12418: __all_virtual_cgroup_info
 # 12419: __all_virtual_cgroup_config
 
+# 12420: __all_virtual_flt_config
+
 #
 # 余留位置
 #
@@ -12664,6 +12666,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15399', all_def_keyword
 # 15401: __all_virtual_data_activity_metrics
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15402', all_def_keywords['__all_ls']))
+# 15403: __all_virtual_flt_config
 # 余留位置
 
 ################################################################################
@@ -27980,6 +27983,7 @@ def_table_schema(
   FROM OCEANBASE.__ALL_VIRTUAL_TENANT_EVENT_HISTORY
   """.replace("\n", " ")
 )
+# 21449: GV$OB_FLT_TRACE_CONFIG
 
 #
 # 余留位置
@@ -51908,6 +51912,7 @@ def_table_schema(
   FROM SYS.ALL_VIRTUAL_LS_LOG_RESTORE_STATUS;
   """.replace("\n", " ")
 )
+# 28195: GV$OB_FLT_TRACE_CONFIG
 
 ################################################################################
 # Lob Table (50000, 70000)
