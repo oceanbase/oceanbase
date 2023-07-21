@@ -210,6 +210,7 @@ int ObColumnRedefinitionTask::check_build_single_replica(bool &is_end)
 {
   int ret = OB_SUCCESS;
   is_end = false;
+  TCRLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObColumnRedefinitionTask has not been inited", K(ret));
