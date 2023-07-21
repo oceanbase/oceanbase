@@ -167,10 +167,10 @@ private:
 
   int convert_case_when_predicate(ObDMLStmt *stmt, bool &trans_happened);
   int convert_case_when_predicate(ObRawExpr *&expr, 
-                                  const bool &is_scala_group_by,
+                                  const bool is_scala_group_by,
                                   bool &trans_happened);
-  int inner_convert_case_when_predicate(ObRawExpr *&expr, bool &trans_happened);
-  int check_inner_convert_case_when_validity(
+  int convert_when_exprs_case_when_predicate(ObRawExpr *&expr, bool &trans_happened);
+  int check_convert_when_exprs_case_when_validity(
                                       ObCaseOpRawExpr *&case_expr,
                                       int64_t &first_true_non_calc_idx,
                                       bool &is_true,
@@ -179,16 +179,16 @@ private:
                                       ObIArray<ObRawExpr*> &null_exprs,
                                       bool &is_valid);
 
-  int do_convert_case_when_predicate(ObRawExpr *&parent_expr,
+  int convert_then_exprs_case_when_predicate(ObRawExpr *&parent_expr,
                                      ObRawExpr *&case_expr,
                                      ObRawExpr *&sibling_expr,
-                                     const bool &case_at_left,
+                                     const bool case_at_left,
                                      bool &trans_happened);
 
-  int check_convert_case_when_validity(ObRawExpr *&parent_expr,
+  int check_convert_then_exprs_case_when_validity(ObRawExpr *&parent_expr,
                                       ObCaseOpRawExpr *&case_expr,
                                       ObRawExpr *&sibling_expr,
-                                      const bool &case_at_left,
+                                      const bool case_at_left,
                                       int64_t &true_null_non_static_idx,
                                       bool &is_true,
                                       bool &is_null,
