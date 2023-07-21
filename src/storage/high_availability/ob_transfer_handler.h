@@ -211,6 +211,9 @@ private:
       const uint64_t tenant_id,
       const share::ObLSID &ls_id);
   int record_server_event_(const int32_t ret, const int64_t round, const share::ObTransferTaskInfo &task_info) const;
+  int clear_prohibit_medium_flag_(const share::ObLSID &ls_id);
+  int stop_ls_schedule_medium_(const share::ObLSID &ls_id, bool &succ_stop);
+
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
   static const int64_t KILL_TX_MAX_RETRY_TIMES = 3;
