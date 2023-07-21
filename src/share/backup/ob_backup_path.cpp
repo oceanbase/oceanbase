@@ -460,6 +460,59 @@ int ObBackupPath::join_tenant_meta_index_file(const ObBackupDataType &backup_typ
   return ret;
 }
 
+// param case: file_name -> 'checkpoint_info', checkpoint -> 1632889932327676777, type -> ARCHIVE
+// result : oss://backup/[file_name].[checkpoint].obarc
+int ObBackupPath::join_checkpoint_info_file(const common::ObString &file_name, const uint64_t checkpoint, const ObBackupFileSuffix &type)
+{
+  int ret = OB_SUCCESS;
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (file_name.length() <= 0 ) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(file_name));
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "/%.*s", file_name.length(), file_name.ptr()))) {
+    LOG_WARN("failed to join file name", K(ret), K(file_name), K(*this));
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, ".%lu", checkpoint))) {
+    LOG_WARN("failed to join checkpoint", K(ret), K(checkpoint), K(*this));
+  } else if (OB_FAIL(add_backup_suffix(type))) {
+    LOG_WARN("failed to add backup file suffix", K(ret), K(type), K(*this));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
+  }
+  return ret;
+}
+
+// param case: entry_d_name -> 'checkpoint_info.1678226622262333112.obarc', file_name -> 'checkpoint_info', type -> ARCHIVE
+// result : checkpoint -> 1678226622262333112
+int ObBackupPath::parse_checkpoint(const common::ObString &entry_d_name, const common::ObString &file_name, const ObBackupFileSuffix &type, uint64_t &checkpoint)
+{
+  int ret = OB_SUCCESS;
+  checkpoint = 0;
+  ObBackupPath tmp_path; //format string for sscanf
+  char tmp_file_name[OB_MAX_FILE_NAME_LENGTH] = { 0 };
+  if (entry_d_name.length() <= 0 || file_name.length() <= 0 || type > ObBackupFileSuffix::BACKUP || type < ObBackupFileSuffix::NONE) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(entry_d_name), K(file_name));
+  } else if (OB_FAIL(databuff_printf(tmp_file_name, sizeof(tmp_file_name), "%s.%%lu", file_name.ptr()))) {
+    LOG_WARN("failed to join tmp file name", K(ret), K(file_name));
+  } else if (OB_FAIL(tmp_path.init(tmp_file_name))) {
+    LOG_WARN("failed to init tmp path", K(ret), K(tmp_file_name));
+  } else if (OB_FAIL(tmp_path.add_backup_suffix(type))) {
+    LOG_WARN("failed to add backup file suffix", K(ret), K(type), K(tmp_path));
+  } else if (OB_FAIL(tmp_path.trim_right_backslash())) {
+    OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
+  } else if (1 == sscanf(entry_d_name.ptr(), tmp_path.get_ptr(), &checkpoint)) {
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+      OB_LOG(INFO, "succeed to get checkpoint scn", K(ret), K(entry_d_name), K(checkpoint), K(tmp_path));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "failed to get checkpoint", K(ret), K(entry_d_name), K(file_name), K(type), K(checkpoint), K(tmp_path));
+  }
+  return ret;
+}
+
 common::ObString ObBackupPath::get_obstr() const
 {
   return ObString(cur_pos_, path_);

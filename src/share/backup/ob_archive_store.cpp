@@ -19,6 +19,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/utility.h"
 #include "share/backup/ob_archive_path.h"
+#include "share/backup/ob_archive_checkpoint_mgr.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -838,15 +839,35 @@ int ObArchiveStore::is_piece_checkpoint_file_exist(const int64_t dest_id, const 
 int ObArchiveStore::read_piece_checkpoint(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const int64_t file_id, ObPieceCheckpointDesc &desc) const
 {
   int ret = OB_SUCCESS;
-  ObBackupPath full_path;
+  ObBackupPath dir_path;
+  ObBackupPath meta_full_path;
   const ObBackupDest &dest = get_backup_dest();
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObArchiveStore not init", K(ret));
-  } else if (OB_FAIL(ObArchivePathUtil::get_piece_checkpoint_file_path(dest, dest_id, round_id, piece_id, file_id, full_path))) {
-    LOG_WARN("failed to get piece checkpoint file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(file_id));
-  } else if (OB_FAIL(read_single_file(full_path.get_ptr(), desc))) {
-    LOG_WARN("failed to read single file", K(ret), K(full_path), K(dest_id), K(round_id), K(piece_id));
+  } else {
+    ObArchiveCheckpointMgr mgr;
+    uint64_t max_checkpoint_scn = 0;
+    if (OB_FAIL(ObArchivePathUtil::get_piece_checkpoint_file_path(dest, dest_id, round_id, piece_id, 0, meta_full_path))) {
+      LOG_WARN("failed to get checkpoint meta file path", K(ret), K(dest), K(round_id), K(dest_id), K(piece_id));
+    } else if (OB_FAIL(read_single_file(meta_full_path.get_ptr(), desc))) {
+      LOG_WARN("failed to read mate file", K(ret), K(meta_full_path));
+    } else if (OB_FAIL(ObArchivePathUtil::get_piece_checkpoint_dir_path(dest, dest_id, round_id, piece_id, dir_path))) {
+      LOG_WARN("failed to get piece checkpoint dir path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id));
+    } else if (OB_FAIL(mgr.init(dir_path, OB_STR_CHECKPOINT_FILE_NAME, ObBackupFileSuffix::ARCHIVE, get_storage_info()))) {
+      LOG_WARN("failed to init ObArchiveCheckPointMgr", K(ret), K(dir_path));
+    } else if (OB_FAIL(mgr.read(max_checkpoint_scn))) {
+      LOG_WARN("failed to read checkpoint scn", K(ret), K(max_checkpoint_scn));
+    } else if (0 == max_checkpoint_scn) {
+      //do nothing
+    } else if (OB_FAIL(desc.checkpoint_scn_.convert_for_inner_table_field(max_checkpoint_scn))) {
+      LOG_WARN("failed to set checkpoint scn", K(ret), K(max_checkpoint_scn));
+    } else if (OB_FAIL(desc.max_scn_.convert_for_inner_table_field(max_checkpoint_scn))) {
+      LOG_WARN("failed to set max scn", K(ret), K(max_checkpoint_scn));
+    }
+    if (OB_SUCC(ret)) {
+      FLOG_INFO("succeed to read checkpoint desc.", K(desc));
+    }
   }
   return ret;
 }
@@ -855,14 +876,32 @@ int ObArchiveStore::write_piece_checkpoint(const int64_t dest_id, const int64_t 
 {
   int ret = OB_SUCCESS;
   ObBackupPath full_path;
+  ObBackupPath dir_path;
   const ObBackupDest &dest = get_backup_dest();
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObArchiveStore not init", K(ret));
-  } else if (OB_FAIL(ObArchivePathUtil::get_piece_checkpoint_file_path(dest, dest_id, round_id, piece_id, file_id, full_path))) {
-    LOG_WARN("failed to get piece checkpoint file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(file_id));
-  } else if (OB_FAIL(write_single_file(full_path.get_ptr(), desc))) {
-    LOG_WARN("failed to write single file", K(ret), K(full_path));
+  } else {
+    ObArchiveCheckpointMgr mgr;
+    bool meta_is_exist = false;
+    if (OB_FAIL(is_piece_checkpoint_file_exist(dest_id, round_id, piece_id, 0, meta_is_exist))) {
+      LOG_WARN("failed to check checkpoint meta file exist.", K(ret));
+    } else if (!meta_is_exist) {
+      if (OB_FAIL(ObArchivePathUtil::get_piece_checkpoint_file_path(dest, dest_id, round_id, piece_id, 0, full_path))) {
+        LOG_WARN("failed to get piece checkpoint meta file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id));
+      } else if (OB_FAIL(write_single_file(full_path.get_ptr(), desc))) {
+        LOG_WARN("failed to write checkpoint index file", K(ret), K(desc), K(full_path));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      //do noting
+    } else if (OB_FAIL(ObArchivePathUtil::get_piece_checkpoint_dir_path(dest, dest_id, round_id, piece_id, dir_path))) {
+      LOG_WARN("failed to get piece checkpoint dir path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id));
+    } else if (OB_FAIL(mgr.init(dir_path, OB_STR_CHECKPOINT_FILE_NAME, ObBackupFileSuffix::ARCHIVE, get_storage_info()))) {
+      LOG_WARN("failed to init ObArchiveCheckPointMgr", K(ret), K(dir_path));
+    } else if (OB_FAIL(mgr.write(desc.checkpoint_scn_.get_val_for_inner_table_field()))) {
+      LOG_WARN("failed to write checkpoint info", K(ret), K(desc));
+    }
   }
   return ret;
 }
