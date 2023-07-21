@@ -1012,7 +1012,7 @@ int ObSchemaPrinter::print_ordinary_index_column_expr(const ObColumnSchemaV2 &co
   if (OB_FAIL(column.get_cur_default_value().get_string(expr_def))) {
     LOG_WARN("get expr def from current default value failed", K(ret), K(column.get_cur_default_value()));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                                     is_last ? "%.*s)" : "%.*s ",
+                                     is_last ? "%.*s)" : "%.*s, ",
                                      expr_def.length(),
                                      expr_def.ptr()))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print index column expr", K(ret), K(expr_def));
