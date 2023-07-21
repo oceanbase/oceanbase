@@ -9303,6 +9303,8 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem &table_it
             if (OB_FAIL(col_expr->set_enum_set_values(select_expr->get_enum_set_values()))) {
               LOG_WARN("failed to set_enum_set_values", K(ret));
             }
+          } else if (ob_is_geometry(select_expr->get_data_type()) && !select_expr->is_column_ref_expr()) {
+            col_expr->set_srs_id(OB_DEFAULT_COLUMN_SRS_ID);
           }
           is_break = true;
 
