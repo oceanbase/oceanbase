@@ -815,8 +815,10 @@ int ObMergeJoinOp::calc_equal_conds(int64_t &cmp_res)
        OB_SUCC(ret) && 0 == cmp_res && i < MY_SPEC.equal_cond_infos_.count();
        i++) {
     const ObMergeJoinSpec::EqualConditionInfo &equal_cond = MY_SPEC.equal_cond_infos_.at(i);
-    ObExpr *l_expr = equal_cond.expr_->args_[0];
-    ObExpr *r_expr = equal_cond.expr_->args_[1];
+    ObExpr *l_expr = equal_cond.is_opposite_ ? equal_cond.expr_->args_[1]
+                                             : equal_cond.expr_->args_[0];
+    ObExpr *r_expr = equal_cond.is_opposite_ ? equal_cond.expr_->args_[0]
+                                             : equal_cond.expr_->args_[1];
     ObDatum *l_datum = NULL;
     ObDatum *r_datum = NULL;
     if (OB_FAIL(l_expr->eval(eval_ctx_, l_datum))
@@ -832,9 +834,6 @@ int ObMergeJoinOp::calc_equal_conds(int64_t &cmp_res)
         } else if (cmp_ret != 0) {
           cmp_res = cmp_ret;
           cmp_res *= MY_SPEC.merge_directions_.at(i);
-          if (equal_cond.is_opposite_) {
-            cmp_res *= -1;
-          }
         }
       }
     }
