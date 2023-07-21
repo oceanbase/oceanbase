@@ -1785,6 +1785,7 @@ int ObMultiVersionSchemaService::broadcast_tenant_schema(
   }
   ObArray<ObSimpleTableSchemaV2> simple_table_schemas;
   ObSchemaMgr *schema_mgr_for_cache = NULL;
+  const bool refresh_full_schema = true;
   if (FAILEDx(convert_to_simple_schema(table_schemas, simple_table_schemas))) {
     LOG_WARN("failed to convert", KR(ret), K(tenant_id));
   } else if (OB_FAIL(schema_mgr_for_cache_map_.get_refactored(
@@ -1793,7 +1794,7 @@ int ObMultiVersionSchemaService::broadcast_tenant_schema(
   } else if (OB_ISNULL(schema_mgr_for_cache)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_mgr is null", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_mgr_for_cache->add_tables(simple_table_schemas))) {
+  } else if (OB_FAIL(schema_mgr_for_cache->add_tables(simple_table_schemas, refresh_full_schema))) {
     LOG_WARN("failed to add tables", KR(ret), K(tenant_id));
   } else if (FALSE_IT(schema_mgr_for_cache->set_schema_version(
              OB_CORE_SCHEMA_VERSION + 1))) {

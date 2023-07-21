@@ -222,6 +222,7 @@ int ObLSCreator::create_user_ls(
   }
   const int64_t cost = ObTimeUtility::current_time() - start_time;
   LOG_INFO("finish to create log stream", KR(ret), K_(id), K_(tenant_id), K(cost));
+  LS_EVENT_ADD(tenant_id_, id_, "create_ls_finish", ret, paxos_replica_num, "", K(cost));
   return ret;
 }
 
@@ -291,6 +292,7 @@ int ObLSCreator::create_tenant_sys_ls(
 
   const int64_t cost = ObTimeUtility::current_time() - start_time;
   LOG_INFO("finish to create log stream", KR(ret), K_(id), K_(tenant_id), K(cost));
+  LS_EVENT_ADD(tenant_id_, id_, "create_ls_finish", ret, paxos_replica_num, "", K(cost));
   return ret;
 }
 
@@ -491,6 +493,7 @@ int ObLSCreator::check_create_ls_result_(const int64_t rpc_count,
       LOG_WARN("success count less than majority", KR(ret), K(paxos_replica_num),
                K(member_list));
     }
+    LS_EVENT_ADD(tenant_id_, id_, "create_ls", ret, paxos_replica_num, member_list);
   }
   return ret;
 }
@@ -656,6 +659,7 @@ int ObLSCreator::check_set_memberlist_result_(const int64_t rpc_count,
                             const int64_t paxos_replica_num)
 {
   int ret = OB_SUCCESS;
+  int64_t success_cnt = 0;
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
@@ -665,7 +669,6 @@ int ObLSCreator::check_set_memberlist_result_(const int64_t rpc_count,
       LOG_WARN("rpc count not equal to result count", KR(ret), K(rpc_count),
           K(return_code_array), "arg count", set_member_list_proxy_.get_args().count());
   } else {
-    int64_t success_cnt = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); ++i) {
       if (OB_SUCCESS != return_code_array.at(i)) {
         LOG_WARN("rpc is failed", KR(ret), K(return_code_array.at(i)), K(i));
@@ -687,6 +690,7 @@ int ObLSCreator::check_set_memberlist_result_(const int64_t rpc_count,
                K(paxos_replica_num));
     }
   }
+  LS_EVENT_ADD(tenant_id_, id_, "set_ls_member_list", ret, paxos_replica_num, success_cnt);
   return ret;
 }
 

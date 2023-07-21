@@ -40,6 +40,8 @@ ObTabletTableStore::ObTabletTableStore()
     ddl_sstables_(),
     meta_major_tables_(),
     memtables_(),
+    ddl_mem_sstables_(),
+    memtables_lock_(),
     is_ready_for_read_(false),
     is_inited_(false)
 {
@@ -867,6 +869,7 @@ int ObTabletTableStore::get_table(const ObITable::TableKey &table_key, ObITable 
     }
 
     if (table_key.is_memtable()) {
+      common::SpinRLockGuard guard(memtables_lock_);
       if (OB_FAIL(memtables_.find(table_key, table))) {
         LOG_WARN("fail to get memtable", K(ret), K(table_key), K_(memtables));
       }
@@ -895,7 +898,7 @@ int ObTabletTableStore::get_read_tables(
     const bool allow_no_ready_read) const
 {
   int ret = OB_SUCCESS;
-
+  common::SpinRLockGuard guard(memtables_lock_);
   if (OB_UNLIKELY(snapshot_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(snapshot_version));
@@ -973,6 +976,7 @@ int ObTabletTableStore::get_memtables(
     common::ObIArray<storage::ObITable *> &memtables,
     const bool need_active) const
 {
+  common::SpinRLockGuard guard(memtables_lock_);
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < memtables_.count(); ++i) {
     if (OB_ISNULL(memtables_[i])) {
@@ -990,6 +994,7 @@ int ObTabletTableStore::get_memtables(
 int ObTabletTableStore::update_memtables(const common::ObIArray<storage::ObITable *> &memtables)
 {
   int ret = OB_SUCCESS;
+  common::SpinWLockGuard guard(memtables_lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -1001,6 +1006,7 @@ int ObTabletTableStore::update_memtables(const common::ObIArray<storage::ObITabl
 
 int ObTabletTableStore::clear_memtables()
 {
+  common::SpinWLockGuard guard(memtables_lock_);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1014,6 +1020,7 @@ int ObTabletTableStore::clear_memtables()
 int ObTabletTableStore::get_first_frozen_memtable(ObITable *&table) const
 {
   int ret = OB_SUCCESS;
+  common::SpinRLockGuard guard(memtables_lock_);
   for (int64_t i = 0; OB_SUCC(ret) && i < memtables_.count(); ++i) {
     if (OB_ISNULL(memtables_[i])) {
       ret = OB_ERR_UNEXPECTED;

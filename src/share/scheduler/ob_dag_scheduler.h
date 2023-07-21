@@ -945,9 +945,11 @@ private:
   int64_t work_thread_num_;
   int64_t default_work_thread_num_;
   int64_t total_running_task_cnt_;
+  int64_t scheduled_task_cnt_; // interval scheduled task count
   int64_t running_task_cnts_[ObDagPrio::DAG_PRIO_MAX];
   int64_t low_limits_[ObDagPrio::DAG_PRIO_MAX]; // wait to delete
   int64_t up_limits_[ObDagPrio::DAG_PRIO_MAX]; // wait to delete
+  int64_t scheduled_task_cnts_[ObDagType::DAG_TYPE_MAX]; // interval scheduled dag count
   int64_t dag_cnts_[ObDagType::DAG_TYPE_MAX];
   int64_t dag_net_cnts_[ObDagNetType::DAG_NET_TYPE_MAX];
   common::ObFIFOAllocator allocator_;

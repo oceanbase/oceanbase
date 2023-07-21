@@ -210,6 +210,7 @@ int ObColumnRedefinitionTask::check_build_single_replica(bool &is_end)
 {
   int ret = OB_SUCCESS;
   is_end = false;
+  TCRLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObColumnRedefinitionTask has not been inited", K(ret));
@@ -327,9 +328,10 @@ int ObColumnRedefinitionTask::copy_table_indexes()
             } else if (OB_ISNULL(index_schema)) {
               ret = OB_ERR_SYS;
               LOG_WARN("error sys, index schema must not be nullptr", K(ret), K(tenant_id_), K(index_ids.at(i)));
-            } else if (index_schema->can_read_index()) {
-              // index is already built
+            } else if (is_final_index_status(index_schema->get_index_status())) {
+              // index status is final
               need_rebuild_index = false;
+              LOG_INFO("index status is final", K(ret), K(task_id_), K(index_id), K(need_rebuild_index));
             } else {
               create_index_arg.index_type_ = index_schema->get_index_type();
               ObCreateDDLTaskParam param(tenant_id_,

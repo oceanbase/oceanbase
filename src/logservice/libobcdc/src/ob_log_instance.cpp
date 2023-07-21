@@ -152,6 +152,7 @@ ObLogInstance::ObLogInstance() :
     trans_task_pool_alloc_(),
     start_tstamp_ns_(0),
     is_schema_split_mode_(true),
+    enable_filter_sys_tenant_(false),
     drc_message_factory_binlog_record_type_(),
     working_mode_(WorkingMode::UNKNOWN_MODE),
     refresh_mode_(RefreshMode::UNKNOWN_REFRSH_MODE),
@@ -597,6 +598,7 @@ int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
         "working_mode", print_working_mode(working_mode_),
         "refresh_mode", print_refresh_mode(refresh_mode_),
         "fetching_mode", print_fetching_mode(fetching_mode_),
+        K_(enable_filter_sys_tenant),
         K(err_cb));
   }
 
@@ -722,7 +724,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   const bool enable_ssl_client_authentication = (1 == TCONF.ssl_client_authentication);
   const bool enable_sort_by_seq_no = (1 == TCONF.enable_output_trans_order_by_sql_operation);
   const int64_t redo_dispatcher_mem_limit = TCONF.redo_dispatcher_memory_limit.get();
-
+  enable_filter_sys_tenant_ = (0 != TCONF.enable_filter_sys_tenant);
 
   drc_message_factory_binlog_record_type_.assign(drc_message_factory_binlog_record_type_str,
       strlen(drc_message_factory_binlog_record_type_str));
@@ -743,10 +745,6 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     } else {
       refresh_mode_ = refresh_mode;
 
-      if (is_data_dict_refresh_mode(refresh_mode_)) {
-        TCONF.enable_filter_sys_tenant = true;
-      }
-
       LOG_INFO("set refresh mode", K(refresh_mode_str), K(refresh_mode_), "refresh_mode", print_refresh_mode(refresh_mode_));
     }
   }
@@ -760,7 +758,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
       fetching_mode_ = fetching_mode;
       if (is_direct_fetching_mode(fetching_mode_)) {
         // don't fetch sys tenant in direct fetching mode
-        TCONF.enable_filter_sys_tenant = true;
+        enable_filter_sys_tenant_ = true;
       }
       LOG_INFO("set fetching mode", K(fetching_mode_str), K(fetching_mode_), "fetching_mode",
       print_fetching_mode(fetching_mode_));
@@ -809,27 +807,6 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     }
   }
 
-  // init ObClockGenerator
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(common::ObClockGenerator::init())) {
-      LOG_ERROR("failed to init ob clock generator", KR(ret));
-    }
-  }
-
-  INIT(log_entry_task_pool_, ObLogEntryTaskPool, TCONF.log_entry_task_prealloc_count);
-
-  INIT(store_service_, RocksDbStoreService, store_service_path);
-
-  INIT(br_pool_, ObLogBRPool, TCONF.binlog_record_prealloc_count);
-
-  INIT(trans_ctx_mgr_, ObLogTransCtxMgr, max_cached_trans_ctx_count, TCONF.sort_trans_participants);
-
-  INIT(meta_manager_, ObLogMetaManager, &obj2str_helper_, enable_output_hidden_primary_key);
-
-  INIT(resource_collector_, ObLogResourceCollector,
-      TCONF.resource_collector_thread_num, TCONF.resource_collector_thread_num_for_br, DEFAULT_QUEUE_SIZE,
-      br_pool_, trans_ctx_mgr_, meta_manager_, store_service_, err_handler);
-
   // init oblog version，e.g. 2.2.1
   if (OB_SUCC(ret)) {
     if (OB_FAIL(init_obcdc_version_components_())) {
@@ -852,6 +829,27 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
       LOG_ERROR("check_observer_version_valid_ fail", KR(ret));
     }
   }
+
+  // init ObClockGenerator
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(common::ObClockGenerator::init())) {
+      LOG_ERROR("failed to init ob clock generator", KR(ret));
+    }
+  }
+
+  INIT(log_entry_task_pool_, ObLogEntryTaskPool, TCONF.log_entry_task_prealloc_count);
+
+  INIT(store_service_, RocksDbStoreService, store_service_path);
+
+  INIT(br_pool_, ObLogBRPool, TCONF.binlog_record_prealloc_count);
+
+  INIT(trans_ctx_mgr_, ObLogTransCtxMgr, max_cached_trans_ctx_count, TCONF.sort_trans_participants);
+
+  INIT(meta_manager_, ObLogMetaManager, &obj2str_helper_, enable_output_hidden_primary_key);
+
+  INIT(resource_collector_, ObLogResourceCollector,
+      TCONF.resource_collector_thread_num, TCONF.resource_collector_thread_num_for_br, DEFAULT_QUEUE_SIZE,
+      br_pool_, trans_ctx_mgr_, meta_manager_, store_service_, err_handler);
 
   INIT(tenant_mgr_, ObLogTenantMgr, enable_oracle_mode_match_case_sensitive, refresh_mode_);
 
@@ -1019,20 +1017,20 @@ int ObLogInstance::check_sync_mode_()
     is_tenant_sync_mode_ = true;
 
     if (! is_data_dict_refresh_mode(refresh_mode_)) {
-      LOG_WARN("[NOTICE] detect tenant_sync mode but not using data_dict, will force to data_dict_refresh_mode");
+      LOG_WARN("[NOTICE] detect tenant_sync mode but not using data_dict, will force refresh_mode to data_dict");
       refresh_mode_ = RefreshMode::DATA_DICT;
+      enable_filter_sys_tenant_ = true;
     }
   } else if (OB_UNLIKELY((OB_ISNULL(TCONF.cluster_url.str())) || OB_ISNULL(TCONF.rootserver_list.str())
       || OB_ISNULL(TCONF.cluster_user.str())
       || OB_ISNULL(TCONF.cluster_password.str()))) {
     if (is_integrated_fetching_mode(fetching_mode_)) {
       ret = OB_INVALID_CONFIG;
-      LOG_ERROR("invalid config for cluster_sync_mode", KR(ret));
+      LOG_ERROR("invalid config for cluster_sync_mode, integrated_mode but cluster_user info is not valid", KR(ret));
     }
   }
   LOG_INFO("[WORK_MODE]", K_(is_tenant_sync_mode),
       "working_mode", print_working_mode(working_mode_),
-      "refresh_mode", print_refresh_mode(refresh_mode_),
       "fetching_mode", print_fetching_mode(fetching_mode_));
 
   return ret;
@@ -1410,7 +1408,7 @@ void ObLogInstance::stop()
 
 void ObLogInstance::do_stop_(const char *stop_reason)
 {
-  if (inited_ && is_running_) {
+  if (inited_) {
 
     mark_stop_flag(stop_reason);
 
@@ -1468,7 +1466,7 @@ int ObLogInstance::get_tenant_ids(std::vector<uint64_t> &tenant_ids)
 
 void ObLogInstance::mark_stop_flag(const char *stop_reason)
 {
-  if (inited_ && is_running_) {
+  if (inited_) {
     if (OB_ISNULL(stop_reason)) {
       stop_reason = "UNKNOWN";
     }
@@ -2797,7 +2795,25 @@ int ObLogInstance::init_ob_cluster_version_()
     LOG_ERROR("ObClusterVersion init fail", KR(ret), K(min_observer_version));
   } else {
     LOG_INFO("OceanBase cluster version init succ", "cluster_version", ObClusterVersion::get_instance());
+    if (min_observer_version < CLUSTER_VERSION_4_1_0_0) {
+      // OB 4.0 only support online schema
+      refresh_mode_ = RefreshMode::ONLINE;
+    } else if (min_observer_version >= CLUSTER_VERSION_4_1_0_0) {
+      // For OB Version greater than 4.1:
+      // 1. tenant_sync_mode must use data_dict for OB 4.2
+      // 2. suggest use data_dict for OB 4.1 in case of upgrade to OB 4.2 and transfer may lose
+      // logstream in online_schema mode
+      // 3. use refresh_mode as user configured if skip_ob_version_compat_check
+      if ((0 == TCONF.skip_ob_version_compat_check) || is_tenant_sync_mode_) {
+        refresh_mode_ = RefreshMode::DATA_DICT;
+      }
+    }
   }
+
+  if (OB_SUCC(ret) && is_data_dict_refresh_mode(refresh_mode_)) {
+    enable_filter_sys_tenant_ = true;
+  }
+  LOG_INFO("[WORK_MODE]", "refresh_mode", print_refresh_mode(refresh_mode_));
 
   return ret;
 }
@@ -2868,13 +2884,14 @@ int ObLogInstance::check_observer_version_valid_()
   int ret = OB_SUCCESS;
 
   const uint64_t ob_version = GET_MIN_CLUSTER_VERSION();
+  const bool skip_ob_version_compat_check = (0 != TCONF.skip_ob_version_compat_check);
   uint32_t ob_major = 0;
   uint16_t ob_minor = 0;
   uint8_t  ob_major_patch = 0;
   uint8_t  ob_minor_patch = 0;
   cal_version_components_(ob_version, ob_major, ob_minor, ob_major_patch, ob_minor_patch);
 
-  if (0 != TCONF.skip_ob_version_compat_check) {
+  if (skip_ob_version_compat_check) {
     _LOG_INFO("skip_ob_version_compat_check is true, skip check, observer_version(%u.%hu.%hu.%hu)",
         ob_major, ob_minor, ob_major_patch, ob_minor_patch);
   } else if (OB_FAIL(check_ob_version_legal_(ob_version))) {
@@ -2882,6 +2899,9 @@ int ObLogInstance::check_observer_version_valid_()
         ob_major, ob_minor, ob_major_patch, ob_minor_patch);
     ret = OB_SUCCESS;
   } else if (is_integrated_fetching_mode(fetching_mode_)) {
+    if (ob_version > CLUSTER_VERSION_4_2_0_0 && is_online_refresh_mode(refresh_mode_)) {
+      LOG_WARN("RUNNING ONLINE REFRESH MODE IS NOT SUGESSTED FOR OB VERSION 4.2 OR UPPER!");
+    }
     if ((oblog_major_ < 4 || ob_major < 4)) {
       ret = OB_VERSION_NOT_MATCH;
       _LOG_ERROR("obcdc_version(%u.%hu.%hu.%hu) don't support observer_version(%u.%hu.%hu.%hu)",

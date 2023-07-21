@@ -39,46 +39,6 @@ namespace oceanbase
 {
 namespace share
 {
-const char* LS_STATUS_ARRAY[] =
-{
-  "CREATING",
-  "CREATED",
-  "NORMAL",
-  "DROPPING",
-  "TENANT_DROPPING",
-  "WAIT_OFFLINE",
-  "CREATE_ABORT",
-  "PRE_TENANT_DROPPING"
-};
-
-ObLSStatus str_to_ls_status(const ObString &status_str)
-{
-  ObLSStatus ret_status = OB_LS_EMPTY;
-  if (status_str.empty()) {
-    ret_status = OB_LS_EMPTY;
-  } else {
-    for (int64_t i = 0; i < ARRAYSIZEOF(LS_STATUS_ARRAY); i++) {
-      if (0 == status_str.case_compare(LS_STATUS_ARRAY[i])) {
-        ret_status = static_cast<ObLSStatus>(i);
-        break;
-      }
-    }
-  }
-  return ret_status;
-}
-
-const char* ls_status_to_str(const ObLSStatus &status)
-{
-  const char* str = "UNKNOWN";
-
-  if (OB_UNLIKELY(OB_LS_EMPTY == status)) {
-    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid log stream status", K(status));
-  } else {
-    str = LS_STATUS_ARRAY[status];
-  }
-  return str;
-}
-
 OB_SERIALIZE_MEMBER(ObMemberListFlag, flag_);
 
 int64_t ObMemberListFlag::to_string(char *buf, const int64_t buf_len) const
@@ -98,7 +58,7 @@ bool ObLSStatusInfo::is_valid() const
          && (ls_id_.is_sys_ls()
              || (OB_INVALID_ID != ls_group_id_
                  && OB_INVALID_ID != unit_group_id_))
-         && share::OB_LS_EMPTY != status_
+         && !ls_is_invalid_status(status_)
          && flag_.is_valid();
 }
 
@@ -124,7 +84,7 @@ int ObLSStatusInfo::init(const uint64_t tenant_id,
   if (OB_UNLIKELY(!id.is_valid()
         || !flag.is_valid()
         || OB_INVALID_TENANT_ID == tenant_id
-        || OB_LS_EMPTY == status)) {
+        || ls_is_invalid_status(status))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(id), K(ls_group_id),
               K(status), K(unit_group_id), K(flag));
@@ -160,62 +120,6 @@ int ObLSStatusInfo::assign(const ObLSStatusInfo &other)
     }
   }
   return ret;
-}
-
-bool ls_is_empty_status(const ObLSStatus &status)
-{
-  return OB_LS_EMPTY == status;
-}
-
-bool ls_is_creating_status(const ObLSStatus &status)
-{
-  return OB_LS_CREATING == status;
-}
-
-bool ls_is_created_status(const ObLSStatus &status)
-{
-  return OB_LS_CREATED == status;
-}
-
-bool ls_is_normal_status(const ObLSStatus &status)
-{
-  return OB_LS_NORMAL == status;
-}
-
-bool ls_is_tenant_dropping_status(const ObLSStatus &status)
-{
-  return OB_LS_TENANT_DROPPING == status;
-}
-
-bool ls_is_dropping_status(const ObLSStatus &status)
-{
-  return OB_LS_DROPPING == status;
-}
-
-bool ls_is_wait_offline_status(const ObLSStatus &status)
-{
-  return OB_LS_WAIT_OFFLINE == status;
-}
-bool ls_is_create_abort_status(const ObLSStatus &status)
-{
-  return OB_LS_CREATE_ABORT == status;
-}
-
-bool ls_need_create_abort_status(const ObLSStatus &status)
-{
-  return OB_LS_CREATING == status || OB_LS_CREATED == status;
-}
-
-bool ls_is_pre_tenant_dropping_status(const ObLSStatus &status)
-{
-  return OB_LS_PRE_TENANT_DROPPING == status;
-}
-
-bool is_valid_status_in_ls(const ObLSStatus &status)
-{
-  return OB_LS_CREATING == status || OB_LS_NORMAL == status
-         || OB_LS_DROPPING == status || OB_LS_TENANT_DROPPING == status
-         || OB_LS_PRE_TENANT_DROPPING == status;
 }
 
 
@@ -274,6 +178,8 @@ int ObLSStatusOperator::create_new_ls(const ObLSStatusInfo &ls_info,
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
   ObLSFlagStr flag_str;
+  common::ObSqlString sql;
+  const char *table_name = OB_ALL_LS_STATUS_TNAME;
   if (OB_UNLIKELY(!ls_info.is_valid()
                   || !working_sw_status.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -300,8 +206,6 @@ int ObLSStatusOperator::create_new_ls(const ObLSStatusInfo &ls_info,
   if (OB_FAIL(ret)) {
   } else {
     ObDMLSqlSplicer dml_splicer;
-    common::ObSqlString sql;
-    const char *table_name = OB_ALL_LS_STATUS_TNAME;
     if (OB_FAIL(dml_splicer.add_pk_column("tenant_id", ls_info.tenant_id_))
       || OB_FAIL(dml_splicer.add_pk_column("ls_id", ls_info.ls_id_.id()))
       || OB_FAIL(dml_splicer.add_column("status", ls_status_to_str(ls_info.status_)))
@@ -322,6 +226,8 @@ int ObLSStatusOperator::create_new_ls(const ObLSStatusInfo &ls_info,
       LOG_WARN("failed to update tenant max ls id", KR(ret), K(ls_info));
     }
   }
+
+  ALL_LS_EVENT_ADD(ls_info.tenant_id_, ls_info.ls_id_, "create_new_ls", ret, sql);
   return ret;
 }
 
@@ -332,6 +238,7 @@ int ObLSStatusOperator::drop_ls(const uint64_t &tenant_id,
 {
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
+  common::ObSqlString sql;
   if (OB_UNLIKELY(!ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id
                   || !working_sw_status.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -343,7 +250,6 @@ int ObLSStatusOperator::drop_ls(const uint64_t &tenant_id,
     ret = OB_NEED_RETRY;
     LOG_WARN("tenant not in specified switchover status", K(tenant_id), K(working_sw_status), K(tenant_info));
   } else {
-    common::ObSqlString sql;
     if (OB_FAIL(sql.assign_fmt("DELETE from %s where ls_id = %ld and tenant_id = %lu",
                                OB_ALL_LS_STATUS_TNAME, ls_id.id(), tenant_id))) {
       LOG_WARN("failed to assign sql", KR(ret), K(ls_id), K(sql));
@@ -351,6 +257,7 @@ int ObLSStatusOperator::drop_ls(const uint64_t &tenant_id,
       LOG_WARN("failed to exec write", KR(ret), K(tenant_id), K(ls_id), K(sql));
     }
   }
+  ALL_LS_EVENT_ADD(tenant_id, ls_id, "drop_ls", ret, sql);
   return ret;
 }
 
@@ -383,13 +290,13 @@ int ObLSStatusOperator::update_ls_primary_zone(
 {
   UNUSEDx(zone_priority);
   int ret = OB_SUCCESS;
+  common::ObSqlString sql;
   if (OB_UNLIKELY(!ls_id.is_valid()
                   || primary_zone.is_empty()
                   || OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid_argument", KR(ret), K(ls_id), K(primary_zone), K(tenant_id));
   } else {
-    common::ObSqlString sql;
     if (OB_FAIL(sql.assign_fmt("UPDATE %s set primary_zone = '%s' where ls_id "
                                "= %ld and tenant_id = %lu",
                                OB_ALL_LS_STATUS_TNAME, primary_zone.ptr(),
@@ -400,6 +307,7 @@ int ObLSStatusOperator::update_ls_primary_zone(
       LOG_WARN("failed to exec write", KR(ret), K(ls_id), K(sql), K(tenant_id));
     }
   }
+  ALL_LS_EVENT_ADD(tenant_id, ls_id, "update_ls_primary_zone", ret, sql);
   return ret;
 }
 
@@ -412,8 +320,8 @@ int ObLSStatusOperator::update_ls_status(
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!id.is_valid()
-                  || OB_LS_EMPTY == new_status
-                  || OB_LS_EMPTY == old_status
+                  || ls_is_invalid_status(new_status)
+                  || ls_is_invalid_status(old_status)
                   || OB_INVALID_TENANT_ID == tenant_id
                   || !switch_status.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -450,8 +358,8 @@ int ObLSStatusOperator::update_ls_status_in_trans(
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
   if (OB_UNLIKELY(!id.is_valid()
-                  || OB_LS_EMPTY == new_status
-                  || OB_LS_EMPTY == old_status
+                  || ls_is_invalid_status(new_status)
+                  || ls_is_invalid_status(old_status)
                   || OB_INVALID_TENANT_ID == tenant_id
                   || !switch_status.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -492,6 +400,7 @@ int ObLSStatusOperator::update_ls_status_in_trans(
     } else if (OB_FAIL(exec_write(tenant_id, sql, this, trans))) {
       LOG_WARN("failed to exec write", KR(ret), K(tenant_id), K(id), K(sql));
     }
+    ALL_LS_EVENT_ADD(tenant_id, id, "update_ls_status", ret, sql);
   }
   return ret;
 }
@@ -527,6 +436,7 @@ int ObLSStatusOperator::alter_ls_group_id(const uint64_t tenant_id, const ObLSID
     } else if (OB_FAIL(exec_write(tenant_id, sql, this, client))) {
       LOG_WARN("failed to exec write", KR(ret), K(tenant_id), K(id), K(sql));
     }
+    ALL_LS_EVENT_ADD(tenant_id, id, "alter_ls_group", ret, sql);
   }
   return ret;
 }
@@ -538,7 +448,7 @@ int ObLSStatusOperator::update_init_member_list(
 {
   int ret = OB_SUCCESS;
   bool is_compatible_with_readonly_replica = false;
-  ObSqlString learner_list_sub_sql;
+  common::ObSqlString sql;
   if (OB_UNLIKELY(!id.is_valid()
                   || !member_list.is_valid()
                   || OB_INVALID_TENANT_ID == tenant_id)) {
@@ -550,11 +460,11 @@ int ObLSStatusOperator::update_init_member_list(
     LOG_WARN("failed to check data version for read-only replica", KR(ret),
              "exec_tenant_id", ObLSLifeIAgent::get_exec_tenant_id(tenant_id));
   } else {
-    common::ObSqlString sql;
     ObSqlString visible_member_list;
     ObString hex_member_list;
     ObSqlString visible_learner_list;
     ObString hex_learner_list;
+    ObSqlString learner_list_sub_sql;
     ObArenaAllocator allocator("MemberList");
     if (OB_FAIL(get_visible_member_list_str_(member_list, allocator, visible_member_list, arb_member))) {
       LOG_WARN("failed to get visible member list", KR(ret), K(member_list));
@@ -590,6 +500,7 @@ int ObLSStatusOperator::update_init_member_list(
       LOG_WARN("failed to exec write", KR(ret), K(id), K(sql));
     }
   }
+  ALL_LS_EVENT_ADD(tenant_id, id, "update_ls_init_member_list", ret, sql);
   return ret;
 }
 

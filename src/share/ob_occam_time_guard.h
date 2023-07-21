@@ -598,7 +598,8 @@ struct TimeGuardFactory
                                                                   __LINE__,\
                                                                   "["#mod"] ")
 #define CLICK() ({ static_assert(__LINE__ >= 0 && __LINE__ <= UINT16_MAX, "line num greater than 65535"); (__time_guard__.click(__LINE__));})
-#define CLICK_FAIL(stmt) OB_UNLIKELY(CLICK() && OB_FAIL(stmt))
+#define CLICK_FAIL(stmt) (CLICK(), OB_FAIL(stmt))
+#define CLICK_TMP_FAIL(stmt) (CLICK(), OB_TMP_FAIL(stmt))
 
 }// namespace occam
 }// namespace common

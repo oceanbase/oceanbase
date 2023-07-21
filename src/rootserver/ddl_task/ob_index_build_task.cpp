@@ -852,6 +852,12 @@ int ObIndexBuildTask::check_build_single_replica(bool &is_end)
   return ret;
 }
 
+bool ObIndexBuildTask::is_sstable_complete_task_submitted()
+{
+  TCRLockGuard guard(lock_);
+  return is_sstable_complete_task_submitted_;
+}
+
 int ObIndexBuildTask::wait_data_complement()
 {
   int ret = OB_SUCCESS;
@@ -868,7 +874,7 @@ int ObIndexBuildTask::wait_data_complement()
   bool is_request_end = false;
 
   // submit a job to complete sstable for the index table on snapshot_version
-  if (OB_SUCC(ret) && !state_finished && !is_sstable_complete_task_submitted_) {
+  if (OB_SUCC(ret) && !state_finished && !is_sstable_complete_task_submitted()) {
     bool need_exec_new_inner_sql = false;
     if (OB_FAIL(reap_old_replica_build_task(need_exec_new_inner_sql))) {
       if (OB_EAGAIN == ret) {
@@ -885,7 +891,7 @@ int ObIndexBuildTask::wait_data_complement()
 
   DEBUG_SYNC(CREATE_INDEX_REPLICA_BUILD);
 
-  if (OB_SUCC(ret) && !state_finished && is_sstable_complete_task_submitted_) {
+  if (OB_SUCC(ret) && !state_finished && is_sstable_complete_task_submitted()) {
     if (OB_FAIL(check_build_single_replica(is_request_end))) {
       LOG_WARN("fail to check build single replica", K(ret));
     } else if (is_request_end) {

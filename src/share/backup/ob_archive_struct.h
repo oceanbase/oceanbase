@@ -29,8 +29,6 @@ namespace share
 // Initial round id for new round.
 const int64_t OB_START_LOG_ARCHIVE_ROUND_ID = 0;
 
-// TODO: replace to real scn type later.
-
 // archive state machine
 struct ObArchiveRoundState
 {

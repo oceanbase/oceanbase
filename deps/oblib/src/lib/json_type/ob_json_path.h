@@ -115,8 +115,6 @@ typedef struct ObPathArrayRange
   bool    is_last_index_from_end_;
 } ObPathArrayRange;
 
-using ObMultiArrayPointers = ObVector<ObPathArrayRange*>;
-using MultiArrayIterator = ObMultiArrayPointers::const_iterator;
 class ObJsonPath;
 class ObJsonPathFilterNode;
 
@@ -160,8 +158,21 @@ typedef struct ObPathCondition
   ObJsonPathFilterNode* cond_right_;
 }ObPathCondition;
 
-typedef struct ObPathNodeContent
+typedef PageArena<ObPathArrayRange*, ModulePageAllocator> PathArrayRangeArena;
+using ObMultiArrayPointers = ObVector<ObPathArrayRange*, PathArrayRangeArena>;
+using MultiArrayIterator = ObMultiArrayPointers::const_iterator;
+class ObPathNodeContent
 {
+private:
+  static const int64_t DEFAULT_PAGE_SIZE = (1LL << 10); // 1kb
+public:
+  ObPathNodeContent(ObIAllocator *allocator)
+      : page_allocator_(*allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
+        mode_arena_(DEFAULT_PAGE_SIZE, page_allocator_),
+        multi_array_(&mode_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR) {}
+
+  ModulePageAllocator page_allocator_;
+  PathArrayRangeArena mode_arena_;
   ObPathMember member_;              // JPN_MEMBER
   ObPathArrayCell array_cell_;       // JPN_ARRAY_CELL
   ObPathArrayRange array_range_;     // JPN_ARRAY_RANGE
@@ -169,7 +180,7 @@ typedef struct ObPathNodeContent
   ObMultiArrayPointers multi_array_;   //JPN_MULTIPLE_ARRAY,
   ObPathComparison comp_;
   ObPathCondition cond_;
-} ObPathNodeContent;
+};
 
 // for [*] and [ to ], log actual range
 // example: for size 5 array, [*] should change to [0, 5)
@@ -199,14 +210,12 @@ private:
 class ObJsonPathNode 
 {
 public:
-  ObJsonPathNode() : node_content_() {}
+  ObJsonPathNode(ObIAllocator *allocator) : node_content_(allocator) {}
   virtual ~ObJsonPathNode();
   virtual ObJsonPathNodeType get_node_type() const;
-  virtual ObPathNodeContent get_node_content() const;
   virtual bool is_autowrap() const = 0;
   virtual int node_to_string(ObJsonBuffer&,  bool is_mysql, bool is_next_array) = 0;
   TO_STRING_KV(K_(node_type));
-protected:
   ObJsonPathNodeType node_type_;
   ObPathNodeContent node_content_;
 };
@@ -214,15 +223,15 @@ protected:
 class ObJsonPathBasicNode : public ObJsonPathNode
 {
 public:
-  ObJsonPathBasicNode() {}
+  ObJsonPathBasicNode(ObIAllocator *allocator): ObJsonPathNode(allocator) {}
   virtual ~ObJsonPathBasicNode() {}
-  explicit ObJsonPathBasicNode(ObString &keyname);                  // JPN_MEMBER
-  ObJsonPathBasicNode(const char* name, uint64_t len);             // JPN_MEMBER
-  explicit ObJsonPathBasicNode(uint64_t index);                    // JPN_ARRAY_CELL
-  ObJsonPathBasicNode(uint64_t idx, bool is_from_end);
-  ObJsonPathBasicNode(uint64_t first_idx, uint64_t last_idx);      // JPN_ARRAY_RANGE
-  ObJsonPathBasicNode(uint64_t, bool, uint64_t, bool);
-  ObJsonPathBasicNode(ObPathArrayRange* o_array);
+  explicit ObJsonPathBasicNode(ObIAllocator *allocator, ObString &keyname);                  // JPN_MEMBER
+  ObJsonPathBasicNode(ObIAllocator *allocator, const char* name, uint64_t len);             // JPN_MEMBER
+  explicit ObJsonPathBasicNode(ObIAllocator *allocator, uint64_t index);                    // JPN_ARRAY_CELL
+  ObJsonPathBasicNode(ObIAllocator *allocator, uint64_t idx, bool is_from_end);
+  ObJsonPathBasicNode(ObIAllocator *allocator, uint64_t first_idx, uint64_t last_idx);      // JPN_ARRAY_RANGE
+  ObJsonPathBasicNode(ObIAllocator *allocator, uint64_t, bool, uint64_t, bool);
+  ObJsonPathBasicNode(ObIAllocator *allocator, ObPathArrayRange* o_array);
   int init(ObJsonPathNodeType cur_node_type, bool is_mysql);
   bool is_autowrap() const;
   bool is_multi_array_autowrap() const;
@@ -243,22 +252,24 @@ public:
 class ObJsonPathFuncNode : public ObJsonPathNode
 {
   public:
-  ObJsonPathFuncNode() {}
+  ObJsonPathFuncNode(ObIAllocator *allocator): ObJsonPathNode(allocator) {}
   virtual ~ObJsonPathFuncNode() {}
   int init(const char* name, uint64_t len);
   bool is_autowrap() const;
   int node_to_string(ObJsonBuffer& str,  bool is_mysql, bool is_next_array);
 };
 
-using ObFilterArrayPointers = ObVector<ObJsonPathFilterNode*>;
+typedef PageArena<char, ModulePageAllocator> JsonCharArrayArena;
+typedef ObVector<char, JsonCharArrayArena> ObCharArrayPointers;
+typedef PageArena<ObJsonPathFilterNode*, ModulePageAllocator> JsonPathFilterArena;
+typedef ObVector<ObJsonPathFilterNode*, JsonPathFilterArena> ObFilterArrayPointers;
 using ObFilterArrayIterator = ObFilterArrayPointers::iterator;
-using ObCharArrayPointers = ObVector<char>;
 using ObCharArrayIterator = ObCharArrayPointers::iterator;
 
 class ObJsonPathFilterNode : public ObJsonPathNode
 {
   public:
-  ObJsonPathFilterNode() {}
+  ObJsonPathFilterNode(ObIAllocator *allocator): ObJsonPathNode(allocator) {}
   virtual ~ObJsonPathFilterNode() {}
   bool is_autowrap() const;
   int comp_half_to_string(ObJsonBuffer& str, bool is_left);
@@ -392,13 +403,20 @@ public:
     ObPathCacheStat(ObPathParseStat state, int idx) : state_(state), index_(idx) {};
     ObPathCacheStat(const ObPathCacheStat& stat) : state_(stat.state_), index_(stat.index_) {}
   };
-
-  typedef ObVector<ObJsonPath*> ObJsonPathPointers;
-  typedef ObVector<ObPathCacheStat> ObPathCacheStatArr;
+  typedef PageArena<ObJsonPath*, ModulePageAllocator> JsonPathArena;
+  typedef PageArena<ObPathCacheStat, ModulePageAllocator> PathCacheStatArena;
+  typedef ObVector<ObJsonPath*, JsonPathArena> ObJsonPathPointers;
+  typedef ObVector<ObPathCacheStat, PathCacheStatArena> ObPathCacheStatArr;
+  static const int64_t DEFAULT_PAGE_SIZE = (1LL << 10); // 1kb
 
 public:
-  ObJsonPathCache() : allocator_(NULL) {};
-  ObJsonPathCache(common::ObIAllocator *allocator);
+  ObJsonPathCache(common::ObIAllocator *allocator) :
+        allocator_(allocator),
+        page_allocator_(*allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
+        path_cache_arena_(DEFAULT_PAGE_SIZE, page_allocator_),
+        path_arena_(DEFAULT_PAGE_SIZE, page_allocator_),
+        path_arr_ptr_(&path_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
+        stat_arr_(&path_cache_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR) {}
   ~ObJsonPathCache() {};
 
   ObJsonPath* path_at(size_t idx);
@@ -418,9 +436,12 @@ private:
   int fill_empty(size_t reserve_size);
 
 private:
+  common::ObIAllocator *allocator_;
+  ModulePageAllocator page_allocator_;
+  PathCacheStatArena path_cache_arena_;
+  JsonPathArena      path_arena_;
   ObJsonPathPointers path_arr_ptr_;
   ObPathCacheStatArr stat_arr_;
-  common::ObIAllocator *allocator_;
 };
 
 using ObPathCacheStat = ObJsonPathCache::ObPathCacheStat;

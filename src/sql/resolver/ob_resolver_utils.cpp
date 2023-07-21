@@ -2064,13 +2064,18 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
     val.set_result_flag(NOT_NULL_FLAG);
     switch (node->type_) {
     case T_HEX_STRING: {
-      ObString str_val;
-      str_val.assign_ptr(const_cast<char *>(node->str_value_), static_cast<int32_t>(node->str_len_));
-      val.set_hex_string(str_val);
-      val.set_collation_level(CS_LEVEL_COERCIBLE);
-      val.set_scale(0);
-      val.set_length(static_cast<int32_t>(node->str_len_));
-      val.set_param_meta(val.get_meta());
+      if (node->str_len_ > OB_MAX_LONGTEXT_LENGTH) {
+        ret = OB_ERR_INVALID_INPUT_ARGUMENT;
+        LOG_WARN("input str len is over size", K(ret), K(node->str_len_));
+      } else {
+        ObString str_val;
+        str_val.assign_ptr(const_cast<char *>(node->str_value_), static_cast<int32_t>(node->str_len_));
+        val.set_hex_string(str_val);
+        val.set_collation_level(CS_LEVEL_COERCIBLE);
+        val.set_scale(0);
+        val.set_length(static_cast<int32_t>(node->str_len_));
+        val.set_param_meta(val.get_meta());
+      }
       break;
     }
     case T_VARCHAR:
@@ -2114,7 +2119,10 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
 //          val.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 //          LOG_DEBUG("oracle use default cs_type", K(val), K(connection_collation));
 //        } else if (0 == node->num_child_) {
-        if (0 == node->num_child_) {
+        if (node->str_len_ > OB_MAX_LONGTEXT_LENGTH) {
+          ret = OB_ERR_INVALID_INPUT_ARGUMENT;
+          LOG_WARN("input str len is over size", K(ret), K(node->str_len_));
+        } else if (0 == node->num_child_) {
           // for STRING without collation, e.g. show tables like STRING;
           if (lib::is_mysql_mode() && is_nchar) {
             ObString charset(strlen("utf8mb4"), "utf8mb4");

@@ -323,6 +323,7 @@ private:
 public:
   int64_t                   start_tstamp_ns_;
   bool                      is_schema_split_mode_;
+  bool                      enable_filter_sys_tenant_;
   std::string               drc_message_factory_binlog_record_type_;
   WorkingMode               working_mode_;
   RefreshMode               refresh_mode_;

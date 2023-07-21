@@ -134,7 +134,6 @@ static int record_piece_checkpoint(const ObTenantArchivePieceAttr &piece_info, c
     && ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE == piece_info.file_status_)) {
   } else {
     // persist piece checkpoint
-    // TODO: change overwrite to append
     ObPieceCheckpointDesc checkpoint_desc;
     checkpoint_desc.tenant_id_ = piece_info.key_.tenant_id_;
     checkpoint_desc.dest_id_ = piece_info.key_.dest_id_;

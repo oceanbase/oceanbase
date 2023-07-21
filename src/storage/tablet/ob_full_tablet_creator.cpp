@@ -25,14 +25,14 @@ namespace storage
 {
 ObFullTabletCreator::ObFullTabletCreator()
   : is_inited_(false),
-    mstx_allocator_(),
     tiny_allocator_(),
     transform_head_(),
     transform_tail_(),
     wait_create_tablets_cnt_(0),
     created_tablets_cnt_(0),
     persist_queue_cnt_(0),
-    mutex_()
+    mutex_(),
+    mstx_mem_ctx_(nullptr)
 {
 }
 
@@ -45,14 +45,22 @@ int ObFullTabletCreator::init(const uint64_t tenant_id)
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTenantMetaMemMgr has been initialized", K(ret));
-  } else if (OB_FAIL(mstx_allocator_.init(lib::ObMallocAllocator::get_instance(),
-      OB_MALLOC_NORMAL_BLOCK_SIZE, ObMemAttr(tenant_id, "MSTXAllocator", ObCtxIds::DEFAULT_CTX_ID)))) {
-    LOG_WARN("fail to init tenant mstx allocator", K(ret));
   } else if (OB_FAIL(tiny_allocator_.init(lib::ObMallocAllocator::get_instance(),
       OB_MALLOC_NORMAL_BLOCK_SIZE/2, ObMemAttr(tenant_id, "TinyAllocator", ObCtxIds::DEFAULT_CTX_ID)))) {
     LOG_WARN("fail to init tenant tiny allocator", K(ret));
   } else {
-    is_inited_ = true;
+    ContextParam param;
+    param.set_mem_attr(tenant_id, "MSTXCTX", common::ObCtxIds::DEFAULT_CTX_ID)
+      .set_ablock_size(64L << 10)
+      .set_properties(ALLOC_THREAD_SAFE);
+    if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(mstx_mem_ctx_, param))) {
+      LOG_WARN("fail to create entity", K(ret));
+    } else if (nullptr == mstx_mem_ctx_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("memory entity is null", K(ret));
+    } else {
+      is_inited_ = true;
+    }
   }
   if (OB_UNLIKELY(!is_inited_)) {
     reset();
@@ -67,8 +75,11 @@ void ObFullTabletCreator::reset()
   persist_queue_cnt_ = 0;
   wait_create_tablets_cnt_ = 0;
   created_tablets_cnt_ = 0;
-  mstx_allocator_.reset();
   tiny_allocator_.reset();
+  if (NULL != mstx_mem_ctx_) {
+    DESTROY_CONTEXT(mstx_mem_ctx_);
+    mstx_mem_ctx_ = nullptr;
+  }
   is_inited_ = false;
 }
 
@@ -114,8 +125,8 @@ int ObFullTabletCreator::throttle_tablet_creation()
         const int64_t wait_create_tablets_cnt = ATOMIC_LOAD(&wait_create_tablets_cnt_);
         LOG_WARN("prepare create tablet timeout",
             K_(created_tablets_cnt), K_(persist_queue_cnt), K(wait_create_tablets_cnt), K(hanging_tablets_cnt), K(limit_size),
-            K(mstx_allocator_.total()), K(mstx_allocator_.used()),
-            K(tiny_allocator_.total()), K(tiny_allocator_.used()));
+            K(tiny_allocator_.total()), K(tiny_allocator_.used()),
+            K(mstx_mem_ctx_->hold()), K(mstx_mem_ctx_->used()));
       }
     }
   } while (need_wait);
@@ -128,9 +139,10 @@ int ObFullTabletCreator::create_tablet(ObTabletHandle &tablet_handle)
   ObTablet *tablet = nullptr;
   ObArenaAllocator *allocator = nullptr;
   ObMetaDiskAddr mem_addr;
-  const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE - FIFO_START_OFFSET;
+  const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE;
 
-  if (OB_ISNULL(allocator = OB_NEWx(ObArenaAllocator, (&tiny_allocator_), mstx_allocator_, page_size))) {
+  if (OB_ISNULL(allocator = OB_NEWx(
+      ObArenaAllocator, (&tiny_allocator_), mstx_mem_ctx_->get_malloc_allocator(), page_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new arena allocator", K(ret));
   /* TODO(zhuixin.gsy) rm these set_xx after merge master*/
@@ -259,8 +271,8 @@ int ObFullTabletCreator::persist_tablet()
     const int64_t wait_create_tablets_cnt = ATOMIC_LOAD(&wait_create_tablets_cnt_);
     FLOG_INFO("Finish persist task one round", K(persist_tablets_cnt), K(error_tablets_cnt), K(retry_tablets_cnt),
         K_(created_tablets_cnt), K_(persist_queue_cnt), K(wait_create_tablets_cnt), K(hanging_tablets_cnt),
-        K(mstx_allocator_.total()), K(mstx_allocator_.used()),
-        K(tiny_allocator_.total()), K(tiny_allocator_.used()));
+        K(tiny_allocator_.total()), K(tiny_allocator_.used()),
+        K(mstx_mem_ctx_->hold()), K(mstx_mem_ctx_->used()));
   }
   return ret;
 }

@@ -418,7 +418,9 @@ int ObLinkScanOp::inner_get_next_batch(const int64_t max_row_cnt)
         const ObIArray<ObExpr *> &output = spec_.output_;
         for (int64_t i = 0; OB_SUCC(ret) && i < output.count(); i++) {
           ObExpr *expr = output.at(i);
-          if (T_QUESTIONMARK != expr->type_ &&
+          if (!expr->is_const_expr() &&
+              T_FUN_SYS_REMOVE_CONST != expr->type_ &&
+              T_QUESTIONMARK != expr->type_ &&
               (ob_is_string_or_lob_type(expr->datum_meta_.type_) ||
               ob_is_raw(expr->datum_meta_.type_) || ob_is_json(expr->datum_meta_.type_))) {
             ObDatum &datum = expr->locate_expr_datum(eval_ctx_);

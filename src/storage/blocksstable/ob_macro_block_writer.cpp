@@ -165,6 +165,7 @@ int ObMicroBlockBufferHelper::check_micro_block_checksum(
   } else {
     int64_t new_checksum = 0;
     for (int64_t it = 0; OB_SUCC(ret) && it != micro_reader->row_count(); ++it) {
+      check_datum_row_.reuse();
       if (OB_FAIL(micro_reader->get_row(it, check_datum_row_))) {
         STORAGE_LOG(WARN, "get_row failed", K(ret), K(it), K(*data_store_desc_));
       } else {
@@ -216,6 +217,7 @@ void ObMicroBlockBufferHelper::print_micro_block_row(ObIMicroBlockReader *micro_
   } else {
     int64_t new_checksum = 0;
     for (int64_t it = 0; OB_SUCC(ret) && it != micro_reader->row_count(); ++it) {
+      check_datum_row_.reuse();
       if (OB_FAIL(micro_reader->get_row(it, check_datum_row_))) {
         STORAGE_LOG(WARN, "get_row failed", K(ret), K(it), K(*data_store_desc_));
       } else {

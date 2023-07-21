@@ -269,6 +269,7 @@ int ObTableRedefinitionTask::check_build_replica_timeout()
 int ObTableRedefinitionTask::check_build_replica_end(bool &is_end)
 {
   int ret = OB_SUCCESS;
+  TCWLockGuard guard(lock_);
   if (INT64_MAX == complete_sstable_job_ret_code_) {
     // not complete
   } else if (OB_SUCCESS != complete_sstable_job_ret_code_) {
@@ -327,7 +328,7 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
     LOG_WARN("unexpected snapshot", K(ret), KPC(this));
   }
 
-  if (OB_SUCC(ret) && !is_build_replica_end && 0 == build_replica_request_time_) {
+  if (OB_SUCC(ret) && !is_build_replica_end && 0 == get_build_replica_request_time()) {
     bool need_exec_new_inner_sql = false;
     if (OB_FAIL(reap_old_replica_build_task(need_exec_new_inner_sql))) {
       if (OB_EAGAIN == ret) {
@@ -340,6 +341,7 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
     } else if (OB_FAIL(send_build_replica_request())) {
       LOG_WARN("fail to send build replica request", K(ret));
     } else {
+      TCWLockGuard guard(lock_);
       build_replica_request_time_ = ObTimeUtility::current_time();
     }
   }
@@ -461,9 +463,10 @@ int ObTableRedefinitionTask::copy_table_indexes()
             } else if (OB_ISNULL(index_schema)) {
               ret = OB_ERR_SYS;
               LOG_WARN("error sys, index schema must not be nullptr", K(ret), K(index_ids.at(i)));
-            } else if (index_schema->can_read_index()) {
-              // index is already built
+            } else if (is_final_index_status(index_schema->get_index_status())) {
+              // index status is final
               need_rebuild_index = false;
+              LOG_INFO("index status is final", K(ret), K(task_id_), K(index_id), K(need_rebuild_index));
             } else {
               create_index_arg.index_type_ = index_schema->get_index_type();
               ObCreateDDLTaskParam param(tenant_id_,

@@ -205,6 +205,7 @@ public:
   int schedule_load_bloomfilter(const blocksstable::MacroBlockId &macro_id);
   static bool check_tx_table_ready(ObLS &ls, const share::SCN &check_scn);
   static int check_ls_state(ObLS &ls, bool &need_merge);
+  static int check_ls_state_in_major(ObLS &ls, bool &need_merge);
   template <class T>
   static int schedule_tablet_minor_merge(
       ObLSHandle &ls_handle,
@@ -239,6 +240,17 @@ private:
       ObLSHandle &ls_handle,
       bool &all_ls_weak_read_ts_ready,
       int64_t &schedule_tablet_cnt);
+  OB_INLINE int schedule_tablet_medium(
+    ObLSHandle &ls_handle,
+    ObTabletHandle &tablet_handle,
+    const int64_t major_frozen_scn,
+    const share::SCN &weak_read_ts,
+    const bool could_major_merge,
+    const bool enable_adaptive_compaction,
+    compaction::ObLSLocality ls_locality,
+    int64_t &merge_version,
+    bool &is_leader,
+    bool &tablet_merge_finish);
   int schedule_ls_minor_merge(
       ObLSHandle &ls_handle,
       int64_t &schedule_tablet_cnt);

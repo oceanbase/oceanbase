@@ -2351,20 +2351,26 @@ int ObTablet::auto_get_read_tables(
     const bool allow_no_ready_read)
 {
   int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = tablet_meta_.ls_id_;
+  const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
   iter.table_store_iter_.reset();
   bool succ_get_src_tables = false;
+
   if (OB_UNLIKELY(tablet_meta_.has_transfer_table())) {
     if (OB_FAIL(get_src_tablet_read_tables_(snapshot_version, allow_no_ready_read, iter, succ_get_src_tables))) {
-      LOG_WARN("failed to get src ls read tables", K(ret), K(snapshot_version), K(tablet_meta_));
+      LOG_WARN("failed to get src ls read tables", K(ret), K(ls_id), K(tablet_id),
+          K(snapshot_version), "has_transfer_table", tablet_meta_.has_transfer_table());
     } else {
-      LOG_INFO("get read tables during transfer", K(snapshot_version), K(iter.table_store_iter_.table_ptr_array_));
+      FLOG_INFO("get read tables during transfer",K(ret), K(ls_id), K(tablet_id),
+          K(snapshot_version), "has_transfer_table", tablet_meta_.has_transfer_table(),
+          K(iter.table_store_iter_.table_ptr_array_));
     }
   }
   if (OB_FAIL(ret)) {
   } else {
     bool allow_not_ready = succ_get_src_tables ? true : allow_no_ready_read;
     if (OB_FAIL(get_read_tables_(snapshot_version, iter.table_store_iter_, iter.table_store_iter_.table_store_handle_, allow_not_ready))) {
-      LOG_WARN("failed to get read tables from table store", K(ret), K(*this));
+      LOG_WARN("failed to get read tables from table store", K(ret), K(ls_id), K(tablet_id));
     }
   }
   return ret;

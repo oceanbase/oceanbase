@@ -2241,3 +2241,9 @@ int ObDDLRedefinitionTask::reap_old_replica_build_task(bool &need_exec_new_inner
   }
   return ret;
 }
+
+int64_t ObDDLRedefinitionTask::get_build_replica_request_time()
+{
+  TCRLockGuard guard(lock_);
+  return build_replica_request_time_;
+}

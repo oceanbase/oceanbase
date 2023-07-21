@@ -588,9 +588,7 @@ int ObPrimaryStandbyService::switch_to_standby_prepare_ls_status_(
     ObAllTenantInfo &new_tenant_info)
 {
   int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
   ObLSAttr sys_ls_attr;
-  share::ObLSAttrOperator ls_operator(tenant_id, sql_proxy_);
   share::schema::ObSchemaGetterGuard schema_guard;
   const share::schema::ObTenantSchema *tenant_schema = NULL;
   int64_t new_switchover_epoch = OB_INVALID_VERSION;

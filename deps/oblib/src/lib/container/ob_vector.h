@@ -148,7 +148,7 @@ public:
   int remove_if(const ValueType &value, Predicate predicate);
   template <typename ValueType, typename Predicate>
   int remove_if(const ValueType &value, Predicate predicate, value_type &removed_value);
-  int reserve(int32_t size) { return expand(size); }
+  int reserve(int64_t size) { return expand(size); }
   void clear();
   inline void reset() { mem_end_ = mem_begin_; }
   int64_t to_string(char *buf, const int64_t buf_len) const;

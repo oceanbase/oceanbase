@@ -389,7 +389,7 @@ int ObTabletDDLKvMgr::get_rec_scn(SCN &rec_scn)
     if (OB_SUCC(ret)) {
       const ObTabletMeta &tablet_meta = tablet_handle.get_obj()->get_tablet_meta();
       const SCN start_scn = get_start_scn();
-      if (start_scn.is_valid_and_not_min() && start_scn != tablet_meta.ddl_start_scn_) {
+      if (start_scn.is_valid_and_not_min() && start_scn > tablet_meta.ddl_start_scn_) {
         // has a latest start log and not flushed to tablet meta, keep it
         rec_scn = SCN::min(rec_scn, start_scn);
       }

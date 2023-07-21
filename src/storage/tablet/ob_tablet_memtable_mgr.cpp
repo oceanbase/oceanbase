@@ -575,7 +575,6 @@ int ObTabletMemtableMgr::get_memtable_for_replay(SCN replay_scn,
       } else if (replay_scn <= clog_checkpoint_scn) {
         // no need to replay the log
         ret = OB_NO_NEED_UPDATE;
-        LOG_INFO("no need to replay the log", K(ret), K(ls_id), K(tablet_id_), K(replay_scn), K(clog_checkpoint_scn));
       } else {
         ret = OB_ENTRY_NOT_EXIST;
         LOG_WARN("fail to get memtable for replay", K(ret), K(ls_id), K(tablet_id_), K(replay_scn), K(clog_checkpoint_scn), K(memtable_tail_ - memtable_head_));

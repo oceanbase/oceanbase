@@ -2215,6 +2215,9 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
           str.assign_ptr(data, static_cast<ObString::obstr_size_t>(length));
         }
         if (OB_FAIL(ret)) {
+        } else if (length > OB_MAX_LONGTEXT_LENGTH) {
+          ret = OB_ERR_INVALID_INPUT_ARGUMENT;
+          LOG_WARN("input param len is over size", K(ret), K(length));
         } else if (MYSQL_TYPE_OB_NVARCHAR2 == type
                   || MYSQL_TYPE_OB_NCHAR == type) {
           OZ(copy_or_convert_str(allocator, cur_cs_type, ncs_type, str, dst));

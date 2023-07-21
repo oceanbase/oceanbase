@@ -64,6 +64,7 @@ ObStorageTableGuard::~ObStorageTableGuard()
     common::ObWaitEventGuard wait_guard(common::ObWaitEventIds::MEMSTORE_MEM_PAGE_ALLOC_WAIT, timeout, 0, 0, left_interval);
 
     reset();
+    int ret = OB_SUCCESS;
     int tmp_ret = OB_SUCCESS;
     bool has_sleep = false;
     int64_t sleep_time = 0;
@@ -86,15 +87,24 @@ ObStorageTableGuard::~ObStorageTableGuard()
               break;
             }
           }
-          //because left_interval and SLEEP_INTERVAL_PER_TIME both are greater than
-          //zero, so it's safe to convert to uint32_t, be careful with comparation between int and uint
           int64_t expected_wait_time = memstore_allocator->expected_wait_time(seq);
-          if (expected_wait_time == 0) {
+          if (expected_wait_time < 0) {
+            LOG_ERROR("expected wait time should not smaller than 0", K(expected_wait_time), K(seq), K(clock), K(left_interval));
+          }
+          if (expected_wait_time <= 0) {
             break;
           }
-          uint32_t sleep_interval =
-            static_cast<uint32_t>(min(min(left_interval, SLEEP_INTERVAL_PER_TIME), expected_wait_time));
+          int64_t sleep_interval = min(min(left_interval, SLEEP_INTERVAL_PER_TIME), expected_wait_time);
           // don't use ob_usleep, as we are already in the scope of 'wait_guard'
+          if (sleep_interval < 0) {
+            LOG_ERROR("sleep interval should not smaller than 0", K(expected_wait_time), K(seq), K(clock), K(left_interval));
+          }
+          if (sleep_interval > 10 * 60 * 1000 * 1000L) {
+            LOG_WARN("sleep interval greater than 10 minutes, pay attention", K(expected_wait_time), K(seq), K(clock), K(left_interval));
+          }
+          if (sleep_interval <= 0) {
+            break;
+          }
           ::usleep(sleep_interval);
           sleep_time += sleep_interval;
           time++;

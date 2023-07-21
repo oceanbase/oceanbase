@@ -130,12 +130,17 @@ int ObPLCodeGenerateVisitor::visit(const ObPLStmtBlock &s)
           }
         }
       } else if (NULL != exit.get_v()) { //如果没有eh，调到BLOCK自己的exit分支
-        if (OB_FAIL(generator_.get_helper().create_br(exit))) {
+        if (NULL == generator_.get_current().get_v()) {
+          // do nothing...
+        } else if (OB_FAIL(generator_.get_helper().create_br(exit))) {
           LOG_WARN("failed to create br", K(ret));
+        }
+        if (OB_FAIL(ret)) {
         } else if (OB_FAIL(generator_.set_current(exit))) {
           LOG_WARN("failed to set current", K(ret));
         } else { /*do nothing*/ }
       } else { /*do nothing*/ }
+
       if (OB_SUCC(ret) && NULL != exit.get_v()) {
         if (OB_FAIL(generator_.reset_label())) {
           LOG_WARN("failed to reset label", K(ret));

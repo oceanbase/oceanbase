@@ -575,9 +575,11 @@ public:
   int get_tablegroup_ids_in_tenant(const uint64_t tenant_id,
                                    common::ObIArray<uint64_t> &tablegroup_id_array);
   // table
-  int add_tables(const common::ObIArray<ObSimpleTableSchemaV2> &table_schemas);
+  int add_tables(const common::ObIArray<ObSimpleTableSchemaV2> &table_schemas,
+                 const bool refresh_full_schema = false);
   int del_tables(const common::ObIArray<ObTenantTableId> &tables);
-  int add_table(const ObSimpleTableSchemaV2 &table_schema);
+  int add_table(const ObSimpleTableSchemaV2 &table_schema,
+                common::ObArrayWrap<int64_t> *cost_array = NULL);
   int del_table(const ObTenantTableId table);
   int remove_aux_table(const ObSimpleTableSchemaV2 &schema_to_del);
   int get_table_schema(const uint64_t tenant_id,
@@ -893,6 +895,9 @@ private:
   int get_database_statistics(ObSchemaStatisticsInfo &schema_info) const;
   int get_tablegroup_statistics(ObSchemaStatisticsInfo &schema_info) const;
   int get_table_statistics(ObSchemaStatisticsInfo &schema_info) const;
+
+  int reserved_mem_for_tables_(
+      const common::ObIArray<share::schema::ObSimpleTableSchemaV2> &table_schemas);
 private:
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator &allocator_;

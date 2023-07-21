@@ -652,16 +652,16 @@ int ObMySQLResultImpl::get_ob_type(ObObjType &ob_type, obmysql::EMySQLFieldType 
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_FLOAT:
       if (is_unsigned_type) {
-        ob_type = ObFloatType;
-      } else {
         ob_type = ObUFloatType;
+      } else {
+        ob_type = ObFloatType;
       }
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_DOUBLE:
       if (is_unsigned_type) {
-        ob_type = ObDoubleType;
-      } else {
         ob_type = ObUDoubleType;
+      } else {
+        ob_type = ObDoubleType;
       }
       break;
     case obmysql::EMySQLFieldType::MYSQL_TYPE_TIMESTAMP:

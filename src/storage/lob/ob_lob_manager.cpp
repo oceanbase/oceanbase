@@ -3263,7 +3263,9 @@ int ObLobManager::build_lob_param(ObLobAccessParam& param,
         } else if (OB_FAIL(lob.get_location_info(location_info))) {
           LOG_WARN("failed to get location info", K(ret), K(lob));
         } else {
-          if (OB_ISNULL(param.tx_desc_) || param.tx_desc_->get_tx_id().get_id() == tx_info->tx_id_) {
+          if (OB_ISNULL(param.tx_desc_) ||
+              param.tx_desc_->get_tx_id().get_id() == tx_info->tx_id_ || // read in same tx
+              (tx_info->tx_id_ == 0 && tx_info->scn_ == -1 && tx_info->version_ > 0)) { // read not in tx
             param.snapshot_.core_.version_.convert_for_tx(tx_info->version_);
             param.snapshot_.core_.tx_id_ = tx_info->tx_id_;
             param.snapshot_.core_.scn_ = tx_info->scn_;

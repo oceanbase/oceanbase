@@ -1531,6 +1531,7 @@ ObTenantDagScheduler::ObTenantDagScheduler()
     work_thread_num_(0),
     default_work_thread_num_(0),
     total_running_task_cnt_(0),
+    scheduled_task_cnt_(0),
     tg_id_(-1)
 {
 }
@@ -1607,6 +1608,7 @@ int ObTenantDagScheduler::init(
     check_period_ = check_period;
     loop_waiting_dag_list_period_ = loop_waiting_list_period;
     MEMSET(dag_cnts_, 0, sizeof(dag_cnts_));
+    MEMSET(scheduled_task_cnts_, 0, sizeof(scheduled_task_cnts_));
     MEMSET(dag_net_cnts_, 0, sizeof(dag_net_cnts_));
     MEMSET(running_task_cnts_, 0, sizeof(running_task_cnts_));
 
@@ -1705,8 +1707,10 @@ void ObTenantDagScheduler::destroy()
     total_worker_cnt_ = 0;
     work_thread_num_ = 0;
     total_running_task_cnt_ = 0;
+    scheduled_task_cnt_ = 0;
     MEMSET(running_task_cnts_, 0, sizeof(running_task_cnts_));
     MEMSET(dag_cnts_, 0, sizeof(dag_cnts_));
+    MEMSET(scheduled_task_cnts_, 0, sizeof(scheduled_task_cnts_));
     MEMSET(dag_net_cnts_, 0, sizeof(dag_net_cnts_));
     waiting_workers_.reset();
     running_workers_.reset();
@@ -1896,15 +1900,19 @@ int ObTenantDagScheduler::add_dag(
 void ObTenantDagScheduler::dump_dag_status()
 {
   if (REACH_TENANT_TIME_INTERVAL(DUMP_DAG_STATUS_INTERVAL)) {
+    int64_t scheduled_task_cnt = 0;
     int64_t running_task[ObDagPrio::DAG_PRIO_MAX];
     int64_t low_limits[ObDagPrio::DAG_PRIO_MAX];
     int64_t up_limits[ObDagPrio::DAG_PRIO_MAX];
     int64_t dag_count[ObDagType::DAG_TYPE_MAX];
+    int64_t scheduled_task_count[ObDagType::DAG_TYPE_MAX];
     int64_t dag_net_count[ObDagNetType::DAG_NET_TYPE_MAX];
     int64_t ready_dag_count[ObDagPrio::DAG_PRIO_MAX];
     int64_t waiting_dag_count[ObDagPrio::DAG_PRIO_MAX];
     {
       ObThreadCondGuard guard(scheduler_sync_);
+      scheduled_task_cnt = scheduled_task_cnt_;
+      scheduled_task_cnt_ = 0;
       for (int64_t i = 0; i < ObDagPrio::DAG_PRIO_MAX; ++i) {
         running_task[i] = running_task_cnts_[i];
         low_limits[i] = low_limits_[i];
@@ -1914,7 +1922,9 @@ void ObTenantDagScheduler::dump_dag_status()
       }
       for (int64_t i = 0; i < ObDagType::DAG_TYPE_MAX; ++i) {
         dag_count[i] = dag_cnts_[i];
+        scheduled_task_count[i] = scheduled_task_cnts_[i];
       }
+      MEMSET(scheduled_task_cnts_, 0, sizeof(scheduled_task_cnts_));
       COMMON_LOG(INFO, "dump_dag_status", K_(dag_cnt), "map_size", dag_map_.size());
     }
     {
@@ -1938,13 +1948,14 @@ void ObTenantDagScheduler::dump_dag_status()
     }
     for (int64_t i = 0; i < ObDagType::DAG_TYPE_MAX; ++i) {
       COMMON_LOG(INFO, "dump_dag_status", "type", OB_DAG_TYPES[i], "dag_count", dag_count[i]);
+      COMMON_LOG(INFO, "dump_dag_status", "type", OB_DAG_TYPES[i], "scheduled_task_count", scheduled_task_count[i]);
     }
     for (int64_t i = 0; i < ObDagNetType::DAG_NET_TYPE_MAX; ++i) {
       COMMON_LOG(INFO, "dump_dag_status[DAG_NET]", "type", OB_DAG_NET_TYPES[i].dag_net_type_str_,
-          "dag_count", dag_net_count[i]);
+          "dag_net_count", dag_net_count[i]);
     }
 
-    COMMON_LOG(INFO, "dump_dag_status", K_(total_worker_cnt), K_(total_running_task_cnt), K_(work_thread_num));
+    COMMON_LOG(INFO, "dump_dag_status", K_(total_worker_cnt), K_(total_running_task_cnt), K_(work_thread_num), K(scheduled_task_cnt));
   }
 
 }
@@ -2191,14 +2202,9 @@ int ObTenantDagScheduler::check_ls_compaction_dag_exist_with_cancel(
       ObIDag *head = dag_list_[READY_DAG_LIST].get_head(ObIDag::MergeDagPrio[i]);
       ObIDag *cur = head->get_next();
       while (head != cur) {
-        if (ObDagType::DAG_TYPE_MDS_TABLE_MERGE == cur->get_type()) {
-          // TODO (bowen.gbw) : make ObMdsTableMergeDag inherit from ObTabletMergeDag
-        const mds::ObMdsTableMergeDag *mds_dag = static_cast<const mds::ObMdsTableMergeDag *>(cur);
-          cancel_flag = (ls_id == mds_dag->get_param().ls_id_);
-        } else {
-          dag = static_cast<compaction::ObTabletMergeDag *>(cur);
-          cancel_flag = (ls_id == dag->get_ls_id());
-        }
+        dag = static_cast<compaction::ObTabletMergeDag *>(cur);
+        cancel_flag = (ls_id == dag->get_ls_id());
+
         if (cancel_flag) {
           if (cur->get_dag_status() == ObIDag::DAG_STATUS_READY) {
             cancel_dag = cur;
@@ -2982,6 +2988,8 @@ int ObTenantDagScheduler::schedule_one(const int64_t priority)
   if (OB_SUCC(ret) && NULL != worker) {
     ++running_task_cnts_[priority];
     ++total_running_task_cnt_;
+    ++scheduled_task_cnt_;
+    ++scheduled_task_cnts_[worker->get_task()->get_dag()->get_type()];
     running_workers_.add_last(worker, priority);
     if (task != NULL) {
       COMMON_LOG(INFO, "schedule one task", KP(task), "priority", OB_DAG_PRIOS[priority].dag_prio_str_,

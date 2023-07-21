@@ -289,26 +289,34 @@ int ObIndexBlockScanEstimator::prefetch_index_block_data(
     ObMicroBlockDataHandle &micro_handle)
 {
   int ret = OB_SUCCESS;
+  bool found = false;
+  const MacroBlockId &macro_id = micro_index_info.get_macro_id();
+  const int64_t offset = micro_index_info.get_block_offset();
+  const int64_t size = micro_index_info.get_block_size();
+  ObIMicroBlockCache *cache = nullptr;
   if (micro_index_info.is_data_block()) {
-    if (OB_FAIL(blocksstable::ObStorageCacheSuite::get_instance().get_block_cache().prefetch(
-        tenant_id_,
-        micro_index_info.get_macro_id(),
-        micro_index_info,
-        context_.query_flag_,
-        micro_handle.io_handle_))) {
-      STORAGE_LOG(WARN, "Failed to prefetch data micro block", K(ret), K(micro_index_info));
-    }
-  } else if (OB_FAIL(blocksstable::ObStorageCacheSuite::get_instance().get_index_block_cache().prefetch(
-      tenant_id_,
-      micro_index_info.get_macro_id(),
-      micro_index_info,
-      context_.query_flag_,
-      micro_handle.io_handle_))) {
-    STORAGE_LOG(WARN, "Failed to prefetch data micro block", K(ret), K(micro_index_info));
+    cache = &blocksstable::ObStorageCacheSuite::get_instance().get_block_cache();
+  } else {
+    cache = &blocksstable::ObStorageCacheSuite::get_instance().get_index_block_cache();
   }
-
-  if (OB_SUCC(ret)) {
-    if (ObSSTableMicroBlockState::UNKNOWN_STATE == micro_handle.block_state_) {
+  if (OB_ISNULL(cache)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected null block cache", K(ret), KP(cache));
+  } else if (OB_FAIL(cache->get_cache_block(
+      tenant_id_, macro_id, offset, size, micro_handle.cache_handle_))) {
+    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+      STORAGE_LOG(WARN, "Fail to get cache block", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+    }
+  } else {
+    found = true;
+    micro_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_CACHE;
+  }
+  if (OB_SUCC(ret) && !found) {
+    if (OB_FAIL(cache->prefetch(tenant_id_, macro_id, micro_index_info, context_.query_flag_, micro_handle.io_handle_))) {
+      STORAGE_LOG(WARN, "Failed to prefetch data micro block", K(ret), K(micro_index_info));
+    } else if (ObSSTableMicroBlockState::UNKNOWN_STATE == micro_handle.block_state_) {
       micro_handle.tenant_id_ = tenant_id_;
       micro_handle.macro_block_id_ = micro_index_info.get_macro_id();
       micro_handle.block_state_ = ObSSTableMicroBlockState::IN_BLOCK_IO;

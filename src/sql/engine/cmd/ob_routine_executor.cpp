@@ -129,7 +129,15 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
             if (expr->get_is_pl_mock_default_expr()) {
               param.set_is_pl_mock_default_param(true);
             }
-            if (ob_is_xml_sql_type(param.get_type(), param.get_udt_subschema_id())) {
+            if (param.is_pl_extend()) {
+              const ObExprOperator *op = expr->get_expr_items().at(0).get_expr_operator();
+              if (OB_ISNULL(op)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected expr operator", K(ret));
+              } else {
+                param.set_udt_id(op->get_result_type().get_expr_udt_id());
+              }
+            } else if (ob_is_xml_sql_type(param.get_type(), param.get_udt_subschema_id())) {
               // convert call procedure input sql udt types to pl extend (only xmltype supported currently)
               bool is_strict = is_strict_mode(ctx.get_my_session()->get_sql_mode());
               const ObDataTypeCastParams dtc_params =

@@ -425,6 +425,7 @@ int ObMacroBlockRowBareIterator::open(
 int ObMacroBlockRowBareIterator::get_next_row(const ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
+  row_.reuse();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Iterator not inited", K(ret));

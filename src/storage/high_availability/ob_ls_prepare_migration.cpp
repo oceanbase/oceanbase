@@ -1223,7 +1223,7 @@ int ObStartPrepareMigrationTask::wait_transfer_tablets_ready_()
         //do nothing
       } else if (tablet->get_tablet_meta().tablet_id_.is_ls_inner_tablet()) {
         //do nothing
-      } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(true/*get_commit*/, tablet, user_data))) {
+      } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(false/*get_commit*/, tablet, user_data))) {
         LOG_WARN("failed to get tablet status", K(ret), KPC(tablet));
       } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
           && ObTabletStatus::TRANSFER_OUT_DELETED != user_data.tablet_status_) {
@@ -1263,7 +1263,7 @@ int ObStartPrepareMigrationTask::wait_transfer_out_tablet_ready_(
   } else if (OB_ISNULL(tablet) || OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("wait transfer out tablet ready get invalid argument", K(ret), KP(tablet), KP(ls));
-  } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(true/*get_commit*/, tablet, user_data))) {
+  } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(false/*get_commit*/, tablet, user_data))) {
     LOG_WARN("failed to get tablet status", K(ret), KPC(tablet));
   } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
       && ObTabletStatus::TRANSFER_OUT_DELETED != user_data.tablet_status_) {
@@ -1333,7 +1333,7 @@ int ObStartPrepareMigrationTask::wait_transfer_out_tablet_ready_(
             || ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_WAIT == status
             || ObMigrationStatus::OB_MIGRATION_STATUS_ADD_WAIT == status)
           && dest_tablet->get_tablet_meta().has_transfer_table()) {
-      } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(true/*get_commit*/, dest_tablet, dest_user_data))) {
+      } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(false/*get_commit*/, dest_tablet, dest_user_data))) {
         LOG_WARN("failed to get tablet status", K(ret), KPC(dest_tablet));
       } else if (ObTabletStatus::TRANSFER_IN != dest_user_data.tablet_status_
           || dest_tablet->get_tablet_meta().transfer_info_.transfer_seq_ != tablet->get_tablet_meta().transfer_info_.transfer_seq_ + 1

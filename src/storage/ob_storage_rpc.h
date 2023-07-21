@@ -348,7 +348,7 @@ public:
   storage::ObCopyTabletStatus::STATUS status_;
   int64_t sstable_count_;
   ObMigrationTabletParam tablet_meta_;
-  uint64_t version_;
+  uint64_t version_; // source observer version.
 };
 
 // Leader notify follower to restore some tablets.

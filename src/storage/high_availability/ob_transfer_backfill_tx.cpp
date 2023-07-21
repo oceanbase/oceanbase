@@ -119,7 +119,7 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
         LOG_WARN("tablet should not be NULL", K(ret), KP(tablet));
       } else if (tablet->get_tablet_meta().tablet_id_.is_ls_inner_tablet()) {
         //do nothing
-      } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(true/*get_commit*/, tablet, user_data))) {
+      } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(false/*get_commit*/, tablet, user_data))) {
         if (OB_EMPTY_RESULT == ret || OB_ERR_SHARED_LOCK_CONFLICT == ret) { // needs to delete this judgment after ObLSTabletIterator optimization
           LOG_INFO("committed tablet_status does not exist", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
           ret = OB_SUCCESS;
@@ -226,7 +226,7 @@ int ObTransferWorkerMgr::check_source_tablet_ready_(
   SCN max_decided_scn;
   ObTabletCreateDeleteMdsUserData user_data;
   ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-
+  bool need_check_tablet = false;
   is_ready = false;
   if (!ls_id.is_valid() || !tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -246,12 +246,25 @@ int ObTransferWorkerMgr::check_source_tablet_ready_(
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(ls_id));
   } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
     LOG_WARN("failed to get migration status", K(ret), KPC(ls));
-  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status
+      && ObMigrationStatus::OB_MIGRATION_STATUS_GC != migration_status) {
     LOG_INFO("[TRANSFER_BACKFILL]source ls is not in migration none", K(ls_id), K(migration_status));
   } else if (OB_FAIL(ls->get_max_decided_scn(max_decided_scn))) {
-    LOG_WARN("failed to get source ls max decided scn", K(ret), KPC(ls));
+    if (OB_STATE_NOT_MATCH == ret && ObMigrationStatus::OB_MIGRATION_STATUS_GC == migration_status) {
+      LOG_INFO("the migration status of the log stream is OB_MIGRATION_STATUS_GC", K(ret), KPC(ls));
+      need_check_tablet = true;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get source ls max decided scn", K(ret), KPC(ls));
+    }
   } else if (max_decided_scn < transfer_info.transfer_start_scn_) {
-    LOG_INFO("[TRANSFER_BACKFILL]src ls max decided scn is smaller than transfer start scn, need wait", K(ls_id), K(tablet_id), K(max_decided_scn), K(transfer_info));
+    LOG_INFO("[TRANSFER_BACKFILL]src ls max decided scn is smaller than transfer start scn, need wait",
+      K(ls_id), K(tablet_id), K(max_decided_scn), K(transfer_info));
+  } else {
+    need_check_tablet = true;
+  }
+
+  if (OB_FAIL(ret) || !need_check_tablet) {
   } else if (OB_FAIL(ls->ha_get_tablet(tablet_id, tablet_handle))) {
     if (OB_TABLET_NOT_EXIST == ret) {
       LOG_INFO("[TRANSFER_BACKFILL]source tablet not exist", K(ls_id), K(tablet_id));
@@ -264,7 +277,7 @@ int ObTransferWorkerMgr::check_source_tablet_ready_(
     LOG_WARN("tablet should not be NULL", K(ret), K(ls_id), K(tablet_id));
   } else if (tablet->is_empty_shell()) {
     LOG_INFO("[TRANSFER_BACKFILL]source tablet is empty shell", K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(true/*get_commit*/, tablet, user_data))) {
+  } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(false/*get_commit*/, tablet, user_data))) {
     LOG_WARN("failed to get tablet status", K(ret), K(ls_id), KPC(tablet));
   } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
              && ObTabletStatus::TRANSFER_OUT_DELETED != user_data.tablet_status_ ) {
@@ -1448,9 +1461,9 @@ int ObTransferReplaceTableTask::get_source_tablet_tables_(
   } else if (tablet->is_empty_shell()) {
     ret = OB_EAGAIN;
     LOG_WARN("transfer src tablet should not be empty shell, task need to retry", K(ret), KPC(tablet), "ls_id", ctx_->src_ls_id_);
-  } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(true/*get_commit*/, tablet_handle, src_user_data))) {
+  } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(false/*get_commit*/, tablet_handle, src_user_data))) {
     LOG_WARN("failed to get src user data", K(ret), K(tablet_handle), KPC(tablet));
-  } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(true/*get_commit*/, dest_tablet, dest_user_data))) {
+  } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(false/*get_commit*/, dest_tablet, dest_user_data))) {
     LOG_WARN("failed to get src user data", K(ret), K(tablet_handle), KPC(tablet));
   } else if (FALSE_IT(src_transfer_seq = tablet->get_tablet_meta().transfer_info_.transfer_seq_)) {
   } else if (FALSE_IT(dest_transfer_seq = dest_tablet->get_tablet_meta().transfer_info_.transfer_seq_)) {
@@ -1543,7 +1556,6 @@ int ObTransferReplaceTableTask::check_tablet_after_replace_(ObLS *ls, const comm
     LOG_WARN("fetch table store fail", K(ret), KPC(tablet));
   } else if (tablet->get_tablet_meta().ha_status_.is_restore_status_full()
              && wrapper.get_member()->get_major_sstables().empty()) {
-    // TODO(wangxiaohui.wxh), consider index tablet, major is generated when replay commit log.
     // In case of restore, if restore status is FULL, major sstable must be exist after replace.
     ret = OB_INVALID_TABLE_STORE;
     LOG_WARN("tablet should be exist major sstable", K(ret), KPC(tablet));
@@ -1577,7 +1589,7 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
     LOG_WARN("ls should not be nullptr", K(ret));
   } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
     LOG_WARN("failed to get migration status", K(ret), KPC(ls));
-  } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(true/*get_commit*/, tablet, user_data))) {
+  } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(false/*get_commit*/, tablet, user_data))) {
     LOG_WARN("failed to get tablet status", K(ret), KPC(ls));
   } else if (OB_FAIL(tablet->fetch_table_store(dest_wrapper))) {
     LOG_WARN("failed to fetch table store", K(ret), KPC(tablet));
@@ -1659,7 +1671,7 @@ int ObTransferReplaceTableTask::do_replace_logical_tables_(ObLS *ls)
       } else if (tablet_id.is_ls_inner_tablet()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("inner tablet cannot transfer", KR(ret), K(tablet_id), KPC(this));
-      } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(true/*get_commit*/, tablet, user_data))) {
+      } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(false/*get_commit*/, tablet, user_data))) {
         LOG_WARN("failed to get tablet status", K(ret), K(tablet_handle));
       } else if (ObTabletStatus::TRANSFER_IN != user_data.tablet_status_ && !in_migration) {
         ret = OB_UNEXPECTED_TABLET_STATUS;

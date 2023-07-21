@@ -1896,7 +1896,6 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
             LOG_INFO("transfer table is not replaced", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
             usleep(100 * 1000); // wait 100ms
           } else {
-            // TODO:(wangxiaohui.wxh): make sure clog checkpoint scn of tablet is over consistent_scn
             break;
           }
         }

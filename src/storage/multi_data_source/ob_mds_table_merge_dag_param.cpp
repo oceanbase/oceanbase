@@ -12,8 +12,6 @@
 
 #include "storage/multi_data_source/ob_mds_table_merge_dag_param.h"
 
-using namespace oceanbase::common;
-
 namespace oceanbase
 {
 namespace storage
@@ -21,8 +19,7 @@ namespace storage
 namespace mds
 {
 ObMdsTableMergeDagParam::ObMdsTableMergeDagParam()
-  : ls_id_(),
-    tablet_id_(),
+  : ObTabletMergeDagParam(),
     flush_scn_(share::SCN::invalid_scn()),
     generate_ts_(0)
 {

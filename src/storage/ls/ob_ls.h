@@ -94,6 +94,18 @@ struct ObLSVTInfo
   share::SCN tablet_change_checkpoint_scn_;
   share::SCN transfer_scn_;
   bool tx_blocked_;
+  TO_STRING_KV(K_(ls_id),
+               K_(replica_type),
+               K_(ls_state),
+               K_(migrate_status),
+               K_(tablet_count),
+               K_(weak_read_scn),
+               K_(checkpoint_scn),
+               K_(checkpoint_lsn),
+               K_(rebuild_seq),
+               K_(tablet_change_checkpoint_scn),
+               K_(transfer_scn),
+               K_(tx_blocked));
 };
 
 // 诊断虚表统计信息
@@ -316,7 +328,7 @@ public:
   // get tablet but don't check user_data while replaying clog, because user_data may not exist.
   int replay_get_tablet_no_check(
       const common::ObTabletID &tablet_id,
-      const SCN &scn,
+      const share::SCN &scn,
       ObTabletHandle &tablet_handle) const;
 
   int flush_if_need(const bool need_flush);
@@ -788,12 +800,16 @@ public:
       const ObUpdateTableStoreParam &param,
       ObTabletHandle &handle);
   int update_tablet_table_store(
-      const int64_t rebuild_seq,
+      const int64_t ls_rebuild_seq,
       const ObTabletHandle &old_tablet_handle,
       const ObIArray<storage::ObITable *> &tables);
   int build_ha_tablet_new_table_store(
       const ObTabletID &tablet_id,
       const ObBatchUpdateTableStoreParam &param);
+  int build_new_tablet_from_mds_table(
+      const int64_t ls_rebuild_seq,
+      const common::ObTabletID &tablet_id,
+      const share::SCN &flush_scn);
   int try_update_uppder_trans_version();
   int diagnose(DiagnoseInfo &info) const;
 

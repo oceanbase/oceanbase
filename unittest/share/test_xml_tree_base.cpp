@@ -99,7 +99,12 @@ public:
     return ret;
   }
 
-  int get_ns_value(ObString &ns_value) {
+  int get_ns_value(ObStack<ObIMulModeBase*>& stk, ObString &ns_value)
+  {
+    return 0;
+  }
+
+  int get_ns_value(const ObString& prefix, ObString& ns_value) {
     return 0;
   }
 
@@ -665,7 +670,7 @@ TEST_F(TestXmlTreeBase, tree_iterator)
   // just scan root
   {
     // init tree_iterator
-    IntContainer::tree_iterator iter_pre(&root, scan_type::PRE_ORDER);
+    IntContainer::tree_iterator iter_pre(&root, scan_type::PRE_ORDER, &allocator);
 
     ret = iter_pre.start();
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -715,7 +720,7 @@ TEST_F(TestXmlTreeBase, tree_iterator)
 
   // pre order scan tree
   {  // init tree_iterator
-    IntContainer::tree_iterator iter_pre(&root, scan_type::PRE_ORDER);
+    IntContainer::tree_iterator iter_pre(&root, scan_type::PRE_ORDER, &allocator);
 
     ret = iter_pre.start();
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -733,7 +738,7 @@ TEST_F(TestXmlTreeBase, tree_iterator)
   // post order scan tree
   {
     // init tree_iterator
-    IntContainer::tree_iterator iter_post(&root, scan_type::POST_ORDER);
+    IntContainer::tree_iterator iter_post(&root, scan_type::POST_ORDER, &allocator);
 
     ret = iter_post.start();
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -944,26 +949,37 @@ TEST_F(TestXmlTreeBase, reader)
     seek_info.key_ = key3;
 
     ObMulModeReader reader(&element, seek_info);
-    ObArray<ObIMulModeBase*> result1;
+    ObIMulModeBase* node = nullptr;
+    ObString key;
+    ObString prefix;
 
-    ASSERT_EQ(reader.get_children_nodes(result1), OB_SUCCESS);
-    ASSERT_EQ(result1.size(), 3);
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key3"));
+    prefix = node->get_prefix();
+    ASSERT_EQ(std::string(prefix.ptr(), prefix.length()), std::string("value3"));
 
-    for (int64_t pos = 0; pos < result1.count(); ++pos) {
-      ObXmlElement* tmp = static_cast<ObXmlElement*>(result1.at(pos));
-      cout << tmp->tag_info_.ptr_ << ", "
-          << tmp->prefix_.ptr_ << endl;
-    }
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key3"));
+    prefix = node->get_prefix();
+    ASSERT_EQ(std::string(prefix.ptr(), prefix.length()), std::string("value3_1"));
+
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key3"));
+    prefix = node->get_prefix();
+    ASSERT_EQ(std::string(prefix.ptr(), prefix.length()), std::string("value3_2"));
+
+    ASSERT_EQ(reader.next(node), OB_ITER_END);
   }
 
   {
     ObPathSeekInfo seek_info;
     seek_info.type_ = SimpleSeekType::POST_SCAN_TYPE;
 
-    ObMulModeReader reader(&element, seek_info);
     ObArray<ObIMulModeBase*> result1;
-
-    ASSERT_EQ(reader.get_children_nodes(result1), OB_SUCCESS);
+    ASSERT_EQ(element.get_descendant(result1, POST_ORDER), OB_SUCCESS);
     ASSERT_EQ(result1.size(), 11);
 
     for (int64_t pos = 0; pos < result1.count(); ++pos) {
@@ -977,10 +993,9 @@ TEST_F(TestXmlTreeBase, reader)
     ObPathSeekInfo seek_info;
     seek_info.type_ = SimpleSeekType::PRE_SCAN_TYPE;
 
-    ObMulModeReader reader(&element, seek_info);
     ObArray<ObIMulModeBase*> result1;
 
-    ASSERT_EQ(reader.get_children_nodes(result1), OB_SUCCESS);
+    ASSERT_EQ(element.get_descendant(result1, PRE_ORDER), OB_SUCCESS);
     ASSERT_EQ(result1.size(), 11);
 
     cout << "pre scan type..." << endl;
@@ -993,20 +1008,58 @@ TEST_F(TestXmlTreeBase, reader)
 
   {
     ObPathSeekInfo seek_info;
-    seek_info.type_ = SimpleSeekType::ALL_ARR_TYPE;
+    seek_info.type_ = SimpleSeekType::ALL_KEY_TYPE;
 
     ObMulModeReader reader(&element, seek_info);
-    ObArray<ObIMulModeBase*> result1;
 
-    ASSERT_EQ(reader.get_children_nodes(result1), OB_SUCCESS);
-    ASSERT_EQ(result1.size(), 7);
+    ObIMulModeBase* node = nullptr;
+    ObString key;
+    ObString prefix;
 
-    cout << "children scan type..." << endl;
-    for (int64_t pos = 0; pos < result1.count(); ++pos) {
-      ObXmlElement* tmp = static_cast<ObXmlElement*>(result1.at(pos));
-      cout << tmp->tag_info_.ptr_ << ", "
-          << tmp->prefix_.ptr_ << endl;
-    }
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key1"));
+    prefix = node->get_prefix();
+    ASSERT_EQ(std::string(prefix.ptr(), prefix.length()), std::string("value1"));
+
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key2"));
+    prefix = node->get_prefix();
+    ASSERT_EQ(std::string(prefix.ptr(), prefix.length()), std::string("value2"));
+
+
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key3"));
+    prefix = node->get_prefix();
+    ASSERT_EQ(std::string(prefix.ptr(), prefix.length()), std::string("value3"));
+
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key3"));
+    prefix = node->get_prefix();
+    ASSERT_EQ(std::string(prefix.ptr(), prefix.length()), std::string("value3_1"));
+
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key3"));
+    prefix = node->get_prefix();
+    ASSERT_EQ(std::string(prefix.ptr(), prefix.length()), std::string("value3_2"));
+
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("key4"));
+    prefix = node->get_prefix();
+    ASSERT_EQ(std::string(prefix.ptr(), prefix.length()), std::string("value4"));
+
+    ASSERT_EQ(reader.next(node), OB_SUCCESS);
+    ASSERT_EQ(node->get_key(key), OB_SUCCESS);
+    ASSERT_EQ(std::string(key.ptr(), key.length()), std::string("element_key"));
+    prefix = node->get_prefix();
+    ASSERT_EQ(std::string(prefix.ptr(), prefix.length()), std::string("value"));
+
+    ASSERT_EQ(reader.next(node), OB_ITER_END);
   }
 }
 
@@ -1118,6 +1171,41 @@ TEST_F(TestXmlTreeBase, lazy_sort)
   for (int i = 0; i < 7; i++) {
     ASSERT_EQ(element.children_->at(i), element.sorted_children_->at(i));
   }
+}
+
+TEST_F(TestXmlTreeBase, stack_abc)
+{
+  ObArenaAllocator allocator(ObModIds::TEST);
+
+  ObStack<ObString*> stk(&allocator);
+
+  ObString key1("key1");
+  ObString key2("key2");
+  ObString key3("key3");
+
+  ASSERT_EQ(stk.push(&key1), 0);
+
+
+  for (int i = 0; i < 1000; i++) {
+    ASSERT_EQ(stk.push(&key1), 0);
+    ASSERT_EQ(stk.push(&key2), 0);
+    ASSERT_EQ(stk.push(&key3), 0);
+  }
+
+  ASSERT_EQ(stk.size(), 1000 * 3 + 1);
+
+  for (int i = 0; i < 1000 ; ++i) {
+    stk.pop();
+    stk.pop();
+    stk.pop();
+  }
+
+  ASSERT_EQ(stk.size(), 1);
+
+  stk.pop();
+
+  ASSERT_EQ(stk.size(), 0);
+
 }
 
 } // namespace common

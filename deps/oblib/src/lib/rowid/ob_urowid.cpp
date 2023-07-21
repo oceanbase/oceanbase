@@ -165,7 +165,7 @@ int ObURowIDData::inner_get_pk_value<ObURowIDType>(const uint8_t *rowid_buf,
                                                  int64_t & pos,                \
                                                  ObObj & pk_val) {             \
     int ret = OB_SUCCESS;                                                      \
-    if (OB_LIKELY(sizeof(ObNumberDesc) + pos <= rowid_buf_len)) {                  \
+    if (OB_LIKELY(sizeof(ObNumberDesc) + pos <= rowid_buf_len)) {              \
       ObNumberDesc num_desc =                                                  \
           *(reinterpret_cast<const ObNumberDesc *>(rowid_buf + pos));          \
       pos += sizeof(ObNumberDesc);                                             \
@@ -175,6 +175,10 @@ int ObURowIDData::inner_get_pk_value<ObURowIDType>(const uint8_t *rowid_buf,
         const uint32_t *digits = reinterpret_cast<const uint32_t *>(rowid_buf + pos); \
         pos += digits_len;                                                     \
         pk_val.set_##type(num_desc, const_cast<uint32_t *>(digits));           \
+        if (OB_FAIL(pk_val.get_number().sanity_check())) {                     \
+          ret = OB_INVALID_ROWID;                                               \
+          COMMON_LOG(WARN, "invalid rowid", K(ret));                           \
+        }                                                                      \
       } else {                                                                 \
         ret = OB_INVALID_ROWID;                                                \
       }                                                                        \
@@ -749,18 +753,23 @@ int ObURowIDData::inner_set_pk_value<ObURowIDType>(const ObObj &pk_val, uint8_t 
                                                  uint8_t *buffer, const int64_t buf_len,   \
                                                  int64_t &pos) {                           \
     int ret = OB_SUCCESS;                                                                  \
-    int64_t needed_size =                                                                  \
-        1 + sizeof(ObNumberDesc) + sizeof(uint32_t) * pk_val.get_number_digit_length();    \
-    OB_ASSERT(NULL != buffer);                                                             \
-    OB_ASSERT(obj_type == pk_val.get_type());                                              \
-    OB_ASSERT(pos + needed_size <= buf_len && pos >= 0);                                   \
-    buffer[pos++] = static_cast<uint8_t>(obj_type);                                        \
-    *(reinterpret_cast<ObNumberDesc *>(buffer + pos)) =                                    \
-        pk_val.get_number_desc();                                                          \
-    pos += sizeof(ObNumberDesc);                                                           \
-    MEMCPY(buffer + pos, pk_val.get_number_digits(),                                       \
-           pk_val.get_number_digit_length() * sizeof(uint32_t));                           \
-    pos += sizeof(uint32_t) * pk_val.get_number_digit_length();                            \
+    if (OB_FAIL(pk_val.get_number().sanity_check())) {                                     \
+      ret = OB_INVALID_NUMERIC;                                                            \
+      COMMON_LOG(WARN, "invalid number", K(ret));                                          \
+    } else {                                                                               \
+      int64_t needed_size =                                                                \
+          1 + sizeof(ObNumberDesc) + sizeof(uint32_t) * pk_val.get_number_digit_length();  \
+      OB_ASSERT(NULL != buffer);                                                           \
+      OB_ASSERT(obj_type == pk_val.get_type());                                            \
+      OB_ASSERT(pos + needed_size <= buf_len && pos >= 0);                                 \
+      buffer[pos++] = static_cast<uint8_t>(obj_type);                                      \
+      *(reinterpret_cast<ObNumberDesc *>(buffer + pos)) =                                  \
+          pk_val.get_number_desc();                                                        \
+      pos += sizeof(ObNumberDesc);                                                         \
+      MEMCPY(buffer + pos, pk_val.get_number_digits(),                                     \
+            pk_val.get_number_digit_length() * sizeof(uint32_t));                          \
+      pos += sizeof(uint32_t) * pk_val.get_number_digit_length();                          \
+    }                                                                                      \
     return ret;                                                                            \
   }
 
