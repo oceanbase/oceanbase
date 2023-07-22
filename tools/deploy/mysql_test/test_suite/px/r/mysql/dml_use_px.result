@@ -364,7 +364,7 @@ Outputs & filters:
       range_cond([t_p4.c1 >= 5])
   9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       affinitize
- 10 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; MAX),
@@ -420,7 +420,7 @@ Outputs & filters:
       range_key([t_p4.c1]), range(MIN ; MAX)always true
   9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       affinitize
- 10 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; MAX),
@@ -462,7 +462,7 @@ Outputs & filters:
       range_key([t_p4.c1]), range(MIN ; MAX)always true
   9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       affinitize
- 10 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; MAX),

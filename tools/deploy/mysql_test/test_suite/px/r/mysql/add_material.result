@@ -106,7 +106,7 @@ Outputs & filters:
       range_key([b.c1]), range(MIN ; MAX)always true
  12 - output([a.c1], [a.c2]), filter(nil), rowset=256
       affinitize
- 13 - output([a.c1], [a.c2], [PARTITION_ID]), filter(nil), rowset=256
+ 13 - output([a.c1], [a.c2]), filter(nil), rowset=256
       access([a.c1], [a.c2]), partitions(p[0-9])
       is_index_back=false, is_global_index=false,
       range_key([a.c1]), range(MIN ; MAX)always true

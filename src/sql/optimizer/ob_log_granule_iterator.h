@@ -41,7 +41,6 @@ public:
   const char *get_name() const;
 
   virtual int est_cost() override;
-  virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   void set_tablet_size(int64_t tablet_size) { tablet_size_ = tablet_size; };
   int64_t get_tablet_size() { return tablet_size_; }
   uint64_t get_flag() {
@@ -79,6 +78,7 @@ public:
   int64_t get_repartition_ref_table_id() { return repartition_ref_table_id_; }
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
+  virtual int allocate_expr_post(ObAllocExprContext &ctx) override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGranuleIterator);
   int64_t tablet_size_;
