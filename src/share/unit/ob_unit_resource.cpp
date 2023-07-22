@@ -191,7 +191,7 @@ int ObUnitResource::init_and_check_iops_(const ObUnitResource &user_spec)
   const int64_t unit_min_iops = UNIT_MIN_IOPS;
   // max_iops and min_iops are not specified, auto configure by min_cpu
   if (! user_spec.is_max_iops_valid() && ! user_spec.is_min_iops_valid()) {
-    max_iops_ = get_default_iops(min_cpu_);
+    max_iops_ = get_default_iops();
     min_iops_ = max_iops_;
 
     // if iops_weight is not specified, auto configure by min_cpu
@@ -664,7 +664,7 @@ int ObUnitResource::gen_sys_tenant_default_unit_resource()
     min_cpu_ = GCONF.get_sys_tenant_default_min_cpu();
     // SYS tenant log_disk_size keep same with memory size
     log_disk_size_ = max(memory_size_, UNIT_MIN_LOG_DISK_SIZE);
-    max_iops_ = get_default_iops(min_cpu_);
+    max_iops_ = get_default_iops();
     min_iops_ = max_iops_;
     iops_weight_ = get_default_iops_weight(min_cpu_);
 
