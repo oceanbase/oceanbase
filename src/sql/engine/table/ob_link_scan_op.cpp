@@ -332,7 +332,7 @@ int ObLinkScanOp::fetch_row()
           (MY_SPEC.select_exprs_.empty() ? spec_.output_ : MY_SPEC.select_exprs_);
     for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); i++) {
       ObExpr *expr = select_exprs.at(i);
-      if (!expr->is_const_expr()) {
+      if (!expr->is_const_expr() && T_FUN_SYS_REMOVE_CONST != expr->type_) {
         ObObj value;
         ObObj new_value;
         ObObj *res_obj = &value;
@@ -415,12 +415,15 @@ int ObLinkScanOp::inner_get_next_batch(const int64_t max_row_cnt)
         const ObIArray<ObExpr *> &output = spec_.output_;
         for (int64_t i = 0; OB_SUCC(ret) && i < output.count(); i++) {
           ObExpr *expr = output.at(i);
-          LOG_WARN("lcqlog", KPC(expr), K(ret));
-          if (!expr->is_const_expr() &&
-              T_FUN_SYS_REMOVE_CONST != expr->type_ &&
-              T_QUESTIONMARK != expr->type_ &&
-              (ob_is_string_or_lob_type(expr->datum_meta_.type_) ||
-              ob_is_raw(expr->datum_meta_.type_) || ob_is_json(expr->datum_meta_.type_))) {
+          if (T_FUN_SYS_REMOVE_CONST == expr->type_) {
+            ObDatum *datum = NULL;
+            if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
+              LOG_WARN("expr evaluate failed", K(ret), KPC(expr));
+            }
+          } else if (!expr->is_const_expr() &&
+                    T_QUESTIONMARK != expr->type_ &&
+                    (ob_is_string_or_lob_type(expr->datum_meta_.type_) ||
+                    ob_is_raw(expr->datum_meta_.type_) || ob_is_json(expr->datum_meta_.type_))) {
             ObDatum &datum = expr->locate_expr_datum(eval_ctx_);
             char *buf = NULL;
             if (OB_ISNULL(buf = expr->get_str_res_mem(eval_ctx_, datum.len_))) {
