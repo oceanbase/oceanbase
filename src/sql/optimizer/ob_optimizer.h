@@ -207,8 +207,11 @@ namespace sql
                                      const ObSQLSessionInfo &session,
                                      bool &is_use_pdml);
     int check_is_heap_table(const ObDMLStmt &stmt);
-    int check_unique_index(const common::ObIArray<ObColumnRefRawExpr*> &column_exprs,
-                           bool &has_unique_index) const;
+
+    int check_merge_stmt_is_update_index_rowkey(const ObSQLSessionInfo &session,
+                                                const ObDMLStmt &stmt,
+                                                const ObIArray<uint64_t> &index_ids,
+                                                bool &is_update);
     int extract_column_usage_info(const ObDMLStmt &stmt);
     int analyze_one_expr(const ObDMLStmt &stmt, const ObRawExpr *expr);
     int add_column_usage_arg(const ObDMLStmt &stmt,

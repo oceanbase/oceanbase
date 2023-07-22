@@ -24,6 +24,7 @@ namespace sql
 #define PDML_DISABLED_BY_NESTED_SQL "PDML disabled because the modified table has foreign key/trigger/user defined function"
 #define PDML_DISABLED_BY_LOCAL_UK "PDML disabled because the modified table has local unique index"
 #define PDML_DISABLED_BY_GLOBAL_UK "PDML disabled because the modified table has global unique index in merge into statement"
+#define PDML_DISABLE_BY_MERGE_UPDATE_PK "PDML disabled because the merge statement update primary key or unique index key"
 #define PDML_DISABLED_BY_IGNORE "PDML disabled because it is an dml ignore query"
 #define PDML_DISABLED_BY_UPDATE_NOW "PDML disabled by update now"
 #define PARALLEL_ENABLED_BY_GLOBAL_HINT "Degree of Parallelism is %ld because of hint"
