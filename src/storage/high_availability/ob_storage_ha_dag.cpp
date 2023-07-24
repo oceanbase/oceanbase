@@ -422,7 +422,6 @@ int ObStorageHADagUtils::check_self_is_valid_member(
   int64_t paxos_replica_num = 0;
   const ObAddr &self_addr = GCONF.self_addr_;
   is_valid_member = false;
-
   if (!ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check self in member list get invalid argument", K(ret), K(ls_id));
@@ -434,12 +433,10 @@ int ObStorageHADagUtils::check_self_is_valid_member(
   } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log handler should not be NULL", K(ret));
-  } else if (OB_FAIL(log_handler->get_paxos_member_list(member_list, paxos_replica_num))) {
-    LOG_WARN("failed to get paxos member list", K(ret));
+  } else if (OB_FAIL(log_handler->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list))) {
+    LOG_WARN("failed to get paxos member list and learner list", K(ret));
   } else if (member_list.contains(self_addr)) {
     is_valid_member = true;
-  } else if (OB_FAIL(log_handler->get_global_learner_list(learner_list))) {
-    LOG_WARN("failed to get learner member list", K(ret));
   } else if (!learner_list.contains(self_addr)) {
     is_valid_member = false;
   } else {

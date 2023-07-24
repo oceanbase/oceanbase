@@ -457,12 +457,13 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       LOG_WARN("failed to stop ls schedule medium", K(ret), K(task_info));
     } else if (OB_FAIL(lock_src_and_dest_ls_member_list_(task_info, task_info.src_ls_id_, task_info.dest_ls_id_))) {
       LOG_WARN("failed to lock src and dest ls member list", K(ret), K(task_info));
+    } // The transaction can only be killed after checking the tablet, so as to avoid too long writing ban time.
+    else if (OB_FAIL(check_start_status_transfer_tablets_(task_info))) {
+      LOG_WARN("failed to check start status transfer tablets", K(ret), K(task_info));
     } else if (!enable_kill_trx && OB_FAIL(check_src_ls_has_active_trans_(task_info.src_ls_id_))) {
       LOG_WARN("failed to check src ls active trans", K(ret), K(task_info));
     } else if (OB_FAIL(block_and_kill_tx_(task_info, enable_kill_trx, timeout_ctx))) {
       LOG_WARN("failed to block and kill tx", K(ret), K(task_info));
-    } else if (OB_FAIL(check_start_status_transfer_tablets_(task_info))) {
-      LOG_WARN("failed to check start status transfer tablets", K(ret), K(task_info));
     } else if (OB_FAIL(reset_timeout_for_trans_(timeout_ctx))) {
       LOG_WARN("failed to reset timeout for trans", K(ret));
     } else if (OB_FAIL(do_trans_transfer_start_(task_info, timeout_ctx, trans))) {
