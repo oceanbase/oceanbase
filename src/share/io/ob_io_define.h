@@ -43,6 +43,31 @@ enum class ObIOMode : uint8_t
 const char *get_io_mode_string(const ObIOMode mode);
 ObIOMode get_io_mode_enum(const char *mode_string);
 
+enum ObIOModule {
+  SLOG_IO = 20000,
+  CALIBRATION_IO = 20001,
+  DETECT_IO = 20002,
+  DIRECT_LOAD_IO = 20003,
+  SHARED_BLOCK_RW_IO = 20004,
+  SSTABLE_WHOLE_SCANNER_IO = 20005,
+  INSPECT_BAD_BLOCK_IO = 20006,
+  SSTABLE_INDEX_BUILDER_IO = 20007,
+  BACKUP_READER_IO = 20008,
+  BLOOM_FILTER_IO = 20009,
+  SHARED_MACRO_BLOCK_MGR_IO = 20010,
+  INDEX_BLOCK_TREE_CURSOR_IO = 20011,
+  MICRO_BLOCK_CACHE_IO = 20012,
+  ROOT_BLOCK_IO = 20013,
+  TMP_PAGE_CACHE_IO = 20014,
+  INDEX_BLOCK_MICRO_ITER_IO = 20015,
+  HA_COPY_MACRO_BLOCK_IO = 20016,
+  LINKED_MACRO_BLOCK_IO = 20017,
+  HA_MACRO_BLOCK_WRITER_IO = 20018,
+  TMP_TENANT_MEM_BLOCK_IO = 20019,
+  MAX_IO = 20020
+};
+
+const char *get_io_sys_group_name(ObIOModule module);
 struct ObIOFlag final
 {
 public:
@@ -52,9 +77,11 @@ public:
   bool is_valid() const;
   void set_mode(ObIOMode mode);
   ObIOMode get_mode() const;
+  void set_group_id(ObIOModule module);
   void set_group_id(int64_t group_id);
   void set_wait_event(int64_t wait_event_id);
   int64_t get_group_id() const;
+  ObIOModule get_io_module() const;
   int64_t get_wait_event() const;
   void set_read();
   bool is_read() const;

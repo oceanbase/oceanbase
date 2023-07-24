@@ -481,7 +481,7 @@ int ObInnerSqlRpcP::set_session_param_to_conn(
 ResourceGroupGuard::ResourceGroupGuard(const int32_t group_id)
   : group_change_(false), old_group_id_(0)
 {
-  if (group_id >= RESOURCE_GROUP_START_ID) {
+  if (is_user_group(group_id)) {
     old_group_id_ = THIS_WORKER.get_group_id();
     THIS_WORKER.set_group_id(group_id);
     group_change_ = true;

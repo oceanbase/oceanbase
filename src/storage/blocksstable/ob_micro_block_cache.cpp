@@ -873,6 +873,7 @@ int ObIMicroBlockCache::prefetch(
     ObMacroBlockReadInfo read_info;
     read_info.macro_block_id_ = macro_id;
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+    read_info.io_desc_.set_group_id(ObIOModule::MICRO_BLOCK_CACHE_IO);
     read_info.io_callback_ = &callback;
     read_info.offset_ = idx_row.get_block_offset();
     read_info.size_ = idx_row.get_block_size();
@@ -917,6 +918,7 @@ int ObIMicroBlockCache::prefetch(
     ObMacroBlockReadInfo read_info;
     read_info.macro_block_id_ = macro_id;
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+    read_info.io_desc_.set_group_id(ObIOModule::MICRO_BLOCK_CACHE_IO);
     read_info.io_callback_ = &callback;
     read_info.offset_ = offset;
     read_info.size_ = size;
@@ -1028,6 +1030,7 @@ int ObDataMicroBlockCache::load_block(
   } else {
     macro_read_info.macro_block_id_ = micro_block_id.macro_id_;
     macro_read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+    macro_read_info.io_desc_.set_group_id(ObIOModule::MICRO_BLOCK_CACHE_IO);
     macro_read_info.offset_ = micro_block_id.offset_;
     macro_read_info.size_ = micro_block_id.size_;
     if (OB_FAIL(ObBlockManager::read_block(macro_read_info, macro_handle))) {
@@ -1140,6 +1143,7 @@ int ObIndexMicroBlockCache::load_block(
   } else {
     macro_read_info.macro_block_id_ = micro_block_id.macro_id_;
     macro_read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+    macro_read_info.io_desc_.set_group_id(ObIOModule::MICRO_BLOCK_CACHE_IO);
     macro_read_info.offset_ = micro_block_id.offset_;
     macro_read_info.size_ = micro_block_id.size_;
     if (OB_FAIL(ObBlockManager::read_block(macro_read_info, macro_handle))) {

@@ -397,6 +397,7 @@ int ObTmpPageCache::read_io(const ObTmpBlockIOInfo &io_info, ObITmpPageIOCallbac
   read_info.io_callback_ = &callback;
   read_info.offset_ = io_info.offset_;
   read_info.size_ = io_info.size_;
+  read_info.io_desc_.set_group_id(ObIOModule::TMP_PAGE_CACHE_IO);
   if (OB_FAIL(ObBlockManager::async_read_block(read_info, handle))) {
     STORAGE_LOG(WARN, "fail to async read block", K(ret), K(read_info));
   }
@@ -1376,6 +1377,7 @@ int ObTmpTenantMemBlockManager::write_io(
     write_info.buffer_ = io_info.buf_;
     write_info.offset_ = ObTmpMacroBlock::get_header_padding();
     write_info.size_ = io_info.size_;
+    write_info.io_desc_.set_group_id(ObIOModule::TMP_TENANT_MEM_BLOCK_IO);
     if (OB_FAIL(ObBlockManager::async_write_block(write_info, handle))) {
       STORAGE_LOG(WARN, "Fail to async write block", K(ret), K(write_info), K(handle));
     } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(handle.get_macro_id()))) {

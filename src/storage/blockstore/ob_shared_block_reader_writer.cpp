@@ -904,6 +904,7 @@ int ObSharedBlockReaderWriter::async_read(
   ObMacroBlockReadInfo macro_read_info;
   ObMacroBlockHandle macro_handle;
   macro_read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
+  macro_read_info.io_desc_.set_group_id(ObIOModule::SHARED_BLOCK_RW_IO);
   macro_read_info.io_callback_ = read_info.io_callback_;
   if (OB_UNLIKELY(!read_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;

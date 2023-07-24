@@ -207,7 +207,7 @@ int ObDirectLoadTmpFileIOHandle::aio_read(char *buf, int64_t size)
   } else {
     io_info_.size_ = size;
     io_info_.buf_ = buf;
-    io_info_.io_desc_.set_group_id(THIS_WORKER.get_group_id());
+    io_info_.io_desc_.set_group_id(ObIOModule::DIRECT_LOAD_IO);
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_read(io_info_, file_io_handle_))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -230,7 +230,7 @@ int ObDirectLoadTmpFileIOHandle::aio_pread(char *buf, int64_t size, int64_t offs
   } else {
     io_info_.size_ = size;
     io_info_.buf_ = buf;
-    io_info_.io_desc_.set_group_id(THIS_WORKER.get_group_id());
+    io_info_.io_desc_.set_group_id(ObIOModule::DIRECT_LOAD_IO);
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_pread(io_info_, offset, file_io_handle_))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -253,7 +253,7 @@ int ObDirectLoadTmpFileIOHandle::read(char *buf, int64_t &size, int64_t timeout_
   } else {
     io_info_.size_ = size;
     io_info_.buf_ = buf;
-    io_info_.io_desc_.set_group_id(THIS_WORKER.get_group_id());
+    io_info_.io_desc_.set_group_id(ObIOModule::DIRECT_LOAD_IO);
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.read(io_info_, timeout_ms, file_io_handle_))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -278,7 +278,7 @@ int ObDirectLoadTmpFileIOHandle::pread(char *buf, int64_t &size, int64_t offset,
   } else {
     io_info_.size_ = size;
     io_info_.buf_ = buf;
-    io_info_.io_desc_.set_group_id(THIS_WORKER.get_group_id());
+    io_info_.io_desc_.set_group_id(ObIOModule::DIRECT_LOAD_IO);
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(io_info_, offset, timeout_ms, file_io_handle_))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -303,7 +303,7 @@ int ObDirectLoadTmpFileIOHandle::aio_write(char *buf, int64_t size)
   } else {
     io_info_.size_ = size;
     io_info_.buf_ = buf;
-    io_info_.io_desc_.set_group_id(THIS_WORKER.get_group_id());
+    io_info_.io_desc_.set_group_id(ObIOModule::DIRECT_LOAD_IO);
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_INDEX_BUILD_WRITE);
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_write(io_info_, file_io_handle_))) {
       LOG_WARN("fail to do aio write to tmp file", KR(ret), K_(io_info));
@@ -324,7 +324,7 @@ int ObDirectLoadTmpFileIOHandle::write(char *buf, int64_t size, int64_t timeout_
   } else {
     io_info_.size_ = size;
     io_info_.buf_ = buf;
-    io_info_.io_desc_.set_group_id(THIS_WORKER.get_group_id());
+    io_info_.io_desc_.set_group_id(ObIOModule::DIRECT_LOAD_IO);
     io_info_.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_INDEX_BUILD_WRITE);
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.write(io_info_, timeout_ms))) {
       LOG_WARN("fail to do write to tmp file", KR(ret), K_(io_info));

@@ -820,7 +820,7 @@ int ObResourceManagerProxy::check_iops_validity(
       uint64_t total_min = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < directives.count(); ++i) {
         ObPlanDirective &cur_directive = directives.at(i);
-        if (cur_directive.group_id_ < RESOURCE_GROUP_START_ID) {
+        if (OB_UNLIKELY(!is_user_group(cur_directive.group_id_))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected group id", K(cur_directive));
         } else if (OB_UNLIKELY(!cur_directive.is_valid())) {

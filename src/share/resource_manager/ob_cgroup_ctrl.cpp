@@ -755,7 +755,7 @@ int ObCgroupCtrl::reset_group_iops(const uint64_t tenant_id,
     } else {
       LOG_WARN("fail get group id", K(ret), K(group_id), K(group_name));
     }
-  } else if (group_id < RESOURCE_GROUP_START_ID) {
+  } else if (OB_UNLIKELY(!is_user_group(group_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid group id", K(ret), K(group_id), K(group_name));
   } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(tenant_id, tenant_holder))) {
@@ -790,7 +790,7 @@ int ObCgroupCtrl::delete_group_iops(const uint64_t tenant_id,
     } else {
       LOG_WARN("fail get group id", K(ret), K(group_id), K(group_name));
     }
-  } else if (group_id < RESOURCE_GROUP_START_ID) {
+  } else if (OB_UNLIKELY(!is_user_group(group_id))) {
     //OTHER_GROUPS and all cannot be deleted
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid group id", K(ret), K(group_id), K(group_name));
