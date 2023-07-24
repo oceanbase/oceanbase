@@ -165,7 +165,7 @@ int ObSysTableChecker::init_sys_table_name_map()
           } else if (OB_FAIL(sys_table_name_map_.set_refactored(key, value))) {
             LOG_WARN("fail to set table name array", K(ret), K(key), K(table));
           } else {
-            LOG_INFO("set tenant space table name", K(key), K(table));
+            LOG_INFO("set tenant space table name", K(key), K(table), "strlen", table_name.length());
           }
         } else if (OB_SUCCESS == ret) {
           if (OB_ISNULL(value)) {
@@ -268,7 +268,7 @@ int ObSysTableChecker::check_sys_table_name(
         is_system_table = (value->at(i) == table);
       }
     }
-    LOG_DEBUG("check sys table name", K(ret), K(key), K(table));
+    LOG_TRACE("check sys table name", K(ret), K(key), K(table), "strlen", table_name.length());
   }
   return ret;
 }

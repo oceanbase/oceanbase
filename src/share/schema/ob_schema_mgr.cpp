@@ -2829,58 +2829,76 @@ int ObSchemaMgr::get_table_schema(const uint64_t tenant_id, const uint64_t datab
     const uint64_t session_id, const ObString& table_name, const ObSimpleTableSchemaV2*& table_schema) const
 {
   int ret = OB_SUCCESS;
-  bool is_system_table = false;
   table_schema = NULL;
 
   if (!check_inner_stat()) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
+    LOG_WARN("not init", KR(ret));
   } else if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == database_id || table_name.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(database_id), K(table_name));
-  } else if (OB_FAIL(ObSysTableChecker::is_sys_table_name(database_id, table_name, is_system_table))) {
-    LOG_WARN("fail to check if table is system table", K(ret), K(database_id), K(table_name));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(database_id), K(table_name));
   } else if (OB_INVALID_TENANT_ID != tenant_id_ && OB_SYS_TENANT_ID != tenant_id_ && tenant_id_ != tenant_id) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tenant_id not matched", K(ret), K(tenant_id), K_(tenant_id));
+    LOG_WARN("tenant_id not matched", KR(ret), K(tenant_id), K_(tenant_id));
   } else {
     ObSimpleTableSchemaV2* tmp_schema = NULL;
     ObNameCaseMode mode = OB_NAME_CASE_INVALID;
-    if (OB_SYS_TENANT_ID == tenant_id_ || is_system_table) {
-      // Scenarios for special handling of user tenant system tables
+    if (OB_SYS_TENANT_ID == tenant_id_) {
       mode = OB_ORIGIN_AND_INSENSITIVE;
     } else if (OB_FAIL(get_tenant_name_case_mode(tenant_id, mode))) {
-      LOG_WARN("fail to get_tenant_name_case_mode", K(tenant_id), K(ret));
+      LOG_WARN("fail to get_tenant_name_case_mode", K(tenant_id), KR(ret));
     } else if (OB_NAME_CASE_INVALID == mode) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid case mode", K(ret), K(mode));
+      LOG_WARN("invalid case mode", KR(ret), K(mode));
     }
     if (OB_SUCC(ret)) {
-      // issue/48358895
-      // sys table mode must be OB_ORIGIN_AND_INSENSITIVE
-      const ObTableSchemaHashWrapper table_name_wrapper(
-          tenant_id, database_id, session_id, mode, table_name, is_system_table);
+      const ObTableSchemaHashWrapper table_name_wrapper(tenant_id, database_id, session_id, mode, table_name);
       int hash_ret = table_name_map_.get_refactored(table_name_wrapper, tmp_schema);
       if (OB_SUCCESS == hash_ret) {
         if (OB_ISNULL(tmp_schema)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("NULL ptr", K(ret), K(tmp_schema));
+          LOG_WARN("NULL ptr", KR(ret));
         } else {
           table_schema = tmp_schema;
         }
       } else if (OB_HASH_NOT_EXIST == hash_ret && 0 != session_id && OB_INVALID_ID != session_id) {
         // If session_id != 0, the search just now is based on the possible match of the temporary table.
         // If it is not found, then it will be searched according to session_id = 0, which is the normal table.
-        const ObTableSchemaHashWrapper table_name_wrapper2(
-            tenant_id, database_id, 0, mode, table_name, is_system_table);
-        hash_ret = table_name_map_.get_refactored(table_name_wrapper2, tmp_schema);
+        const ObTableSchemaHashWrapper table_name_wrapper1(tenant_id, database_id, 0, mode, table_name);
+        hash_ret = table_name_map_.get_refactored(table_name_wrapper1, tmp_schema);
         if (OB_SUCCESS == hash_ret) {
           if (OB_ISNULL(tmp_schema)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("NULL ptr", K(ret), K(tmp_schema));
+            LOG_WARN("NULL ptr", KR(ret));
           } else {
             table_schema = tmp_schema;
           }
+        }
+      }
+      // restrict creating duplicate table with existed inner table
+      if (OB_SUCC(ret) && OB_ISNULL(table_schema)) {
+        bool is_system_table = false;
+        if (OB_FAIL(ObSysTableChecker::is_sys_table_name(database_id, table_name, is_system_table))) {
+          LOG_WARN("fail to check if table is system table", KR(ret), K(tenant_id), K(database_id), K(table_name));
+        } else if (is_system_table) {
+          // Inner table's ObTableSchemaHashWrapper is stored with OB_ORIGIN_AND_INSENSITIVE. Actually,
+          // 1. For inner table in mysql database, comparision is insensitive.
+          // 2. For inner table in oracle database, comparision is sensitive.
+          // issue/48358895
+          // sys table mode must be OB_ORIGIN_AND_INSENSITIVE
+          const ObTableSchemaHashWrapper table_name_wrapper2(
+              tenant_id, database_id, 0, OB_ORIGIN_AND_INSENSITIVE, table_name, is_system_table);
+          hash_ret = table_name_map_.get_refactored(table_name_wrapper2, tmp_schema);
+          if (OB_SUCCESS == hash_ret) {
+            if (OB_ISNULL(tmp_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("NULL ptr", KR(ret));
+            } else {
+              table_schema = tmp_schema;
+            }
+          }
+        } else {
+          // not system table
         }
       }
     }

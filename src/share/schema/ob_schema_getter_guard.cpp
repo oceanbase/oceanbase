@@ -922,7 +922,9 @@ int ObSchemaGetterGuard::get_table_id(uint64_t tenant_id, uint64_t database_id, 
           "schema_mgr_tenant_id",
           mgr->get_tenant_id());
     } else {
-      if (TEMP_TABLE_TYPE == check_type && false == simple_table->is_tmp_table()) {
+      if (TEMP_TABLE_TYPE == check_type
+          && !is_inner_table(simple_table->get_table_id())
+          && false == simple_table->is_tmp_table()) {
         // temporary table is not finded.
         LOG_DEBUG("request for temporary table but non-temporary table returned",
             K(session_id_),
