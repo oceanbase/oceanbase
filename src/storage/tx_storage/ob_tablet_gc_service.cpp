@@ -287,7 +287,7 @@ int ObTabletGCHandler::disable_gc()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(gc_lock_.trylock())) {
-    ret = OB_EAGAIN;
+    ret = OB_TABLET_GC_LOCK_CONFLICT;
     LOG_WARN("try lock failed, please retry later", K(ret));
   }
 
@@ -303,7 +303,7 @@ int ObTabletGCHandler::set_tablet_change_checkpoint_scn(const share::SCN &scn)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(gc_lock_.trylock())) {
-    ret = OB_EAGAIN;
+    ret = OB_TABLET_GC_LOCK_CONFLICT;
     LOG_WARN("try lock failed, please retry later", K(ret));
   } else {
     if (OB_FAIL(ls_->set_tablet_change_checkpoint_scn(scn))) {
@@ -701,7 +701,7 @@ int ObTabletGCHandler::offline()
     STORAGE_LOG(INFO, "tablet gc handler not finish, retry", KR(ret), KPC(this), KPC(ls_), K(ls_->get_ls_meta()));
   } else if (OB_FAIL(gc_lock_.trylock())) {
     // make sure 'gc_lock_' is not using.
-    ret = OB_EAGAIN;
+    ret = OB_TABLET_GC_LOCK_CONFLICT;
     LOG_WARN("tablet gc handler not finish, retry", K(ret));
   } else {
     gc_lock_.unlock();
