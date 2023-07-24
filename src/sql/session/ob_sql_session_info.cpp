@@ -181,6 +181,7 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       dblink_context_(this),
       sql_req_level_(0),
       expect_group_id_(OB_INVALID_ID),
+      group_id_not_expected_(false),
       gtt_session_scope_unique_id_(0),
       gtt_trans_scope_unique_id_(0)
 {
