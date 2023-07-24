@@ -354,7 +354,7 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
         } else if (OB_FAIL(ctx_.get_result(result))) {
           LOG_WARN("failed to get result", K(ret), K(ctx_));
         } else if (ctx_.is_failed()) {
-          bool is_in_member_list = false;
+          bool is_valid_member = false;
           if (ObMigrationOpType::REBUILD_LS_OP == ctx_.arg_.type_) {
             if (ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD != current_migration_status
                 && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != current_migration_status
@@ -365,12 +365,12 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
               need_update_status = false;
               LOG_INFO("current migration status is none, no need update migration status",
                   K(current_migration_status), K(ctx_));
-            } else if (OB_FAIL(ObStorageHADagUtils::check_self_in_member_list(ls->get_ls_id(), is_in_member_list))) {
-              LOG_WARN("failed to check self in member list", K(ret), K(ctx_));
+            } else if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member(ls->get_ls_id(), is_valid_member))) {
+              LOG_WARN("failed to check self is valid member", K(ret), K(ctx_));
             } else if (OB_FAIL(ObStorageHAUtils::check_ls_deleted(ls->get_ls_id(), is_ls_deleted))) {
               LOG_WARN("failed to get ls status from inner table", K(ret), KPC(ls));
             } else if (OB_FAIL(ObMigrationStatusHelper::trans_rebuild_fail_status(
-                current_migration_status, is_in_member_list, is_ls_deleted, new_migration_status))) {
+                current_migration_status, is_valid_member, is_ls_deleted, new_migration_status))) {
               LOG_WARN("failed to trans rebuild fail status", K(ret), K(ctx_));
             }
           } else if (OB_FAIL(ObMigrationStatusHelper::trans_fail_status(current_migration_status, new_migration_status))) {
@@ -1188,7 +1188,7 @@ int ObStartCompleteMigrationTask::change_member_list_with_retry_()
   int tmp_ret = OB_SUCCESS;
   static const int64_t CHANGE_MEMBER_LIST_RETRY_INTERVAL = 2_s;
   int64_t retry_times = 0;
-  bool is_in_member_list = false;
+  bool is_valid_member = false;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start complete migration task do not init", K(ret));
@@ -1206,13 +1206,13 @@ int ObStartCompleteMigrationTask::change_member_list_with_retry_()
 
       if (OB_FAIL(ret)) {
         //overwrite ret
-        if (OB_FAIL(ObStorageHADagUtils::check_self_in_member_list(ctx_->arg_.ls_id_, is_in_member_list))) {
-          LOG_WARN("failed to check self in member list", K(ret), KPC(ctx_));
-        } else if (is_in_member_list) {
+        if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member(ctx_->arg_.ls_id_, is_valid_member))) {
+          LOG_WARN("failed to check self is valid member", K(ret), KPC(ctx_));
+        } else if (is_valid_member) {
           break;
         } else {
           ret = OB_EAGAIN;
-          LOG_WARN("self ls is not in member list, need retry", K(ret), "ls_id", ctx_->arg_.ls_id_);
+          LOG_WARN("self ls is not valid member, need retry", K(ret), "ls_id", ctx_->arg_.ls_id_);
         }
       }
 

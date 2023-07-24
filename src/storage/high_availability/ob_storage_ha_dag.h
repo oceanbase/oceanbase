@@ -125,9 +125,9 @@ public:
   static int get_ls(
       const share::ObLSID &ls_id,
       ObLSHandle &ls_handle);
-  static int check_self_in_member_list(
+  static int check_self_is_valid_member(
       const share::ObLSID &ls_id,
-      bool &is_in_member_list);
+      bool &is_valid_member);
 };
 
 class ObHATabletGroupCtx
