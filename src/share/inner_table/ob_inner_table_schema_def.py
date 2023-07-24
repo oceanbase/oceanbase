@@ -12554,7 +12554,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15303', all_def_keywords['__all_virtual_arbitration_member_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304', all_def_keywords['__all_virtual_arbitration_service_status'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keywords['__all_virtual_obj_lock']))
-
+# 15306: __all_virtual_session_info
 #######################################################################
 # oracle agent table index is defined after the System table Index area
 #######################################################################
@@ -27984,6 +27984,8 @@ def_table_schema(
   """.replace("\n", " ")
 )
 # 21449: GV$OB_FLT_TRACE_CONFIG
+# 21459：GV$OB_SESSION
+# 21460：V$OB_SESSION
 
 #
 # 余留位置
@@ -51913,6 +51915,8 @@ def_table_schema(
   """.replace("\n", " ")
 )
 # 28195: GV$OB_FLT_TRACE_CONFIG
+# 28196: GV$OB_SESSION
+# 28197: V$OB_SESSION
 
 ################################################################################
 # Lob Table (50000, 70000)
