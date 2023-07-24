@@ -42,10 +42,13 @@ public:
   virtual obrpc::ObDDLArg &get_ddl_arg() { return truncate_table_arg_; }
   void set_truncate_oracle_temp_table() { is_truncate_oracle_temp_table_ = true; }
   bool is_truncate_oracle_temp_table() { return is_truncate_oracle_temp_table_; }
+  void set_oracle_temp_table_type(share::schema::ObTableType oracle_temp_table_type) { oracle_temp_table_type_ = oracle_temp_table_type; }
+  share::schema::ObTableType get_oracle_temp_table_type() { return oracle_temp_table_type_; }
   TO_STRING_KV(K_(stmt_type),K_(truncate_table_arg));
 private:
   obrpc::ObTruncateTableArg truncate_table_arg_;
   bool is_truncate_oracle_temp_table_;
+  share::schema::ObTableType oracle_temp_table_type_;
   DISALLOW_COPY_AND_ASSIGN(ObTruncateTableStmt);
 };
 

@@ -644,7 +644,7 @@ int ObTabletBackfillTXTask::get_backfill_tx_minor_sstables_(
     LOG_WARN("tablet backfill tx task do not init", K(ret));
   } else if (OB_ISNULL(tablet)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get backfll tx memtables get invalid argument", K(ret), KP(tablet));
+    LOG_WARN("get backfll tx minor sstable get invalid argument", K(ret), KP(tablet));
   } else if (OB_FAIL(tablet->get_mini_minor_sstables(minor_table_iter))) {
     LOG_WARN("failed to get mini  minor sstables", K(ret));
   } else {

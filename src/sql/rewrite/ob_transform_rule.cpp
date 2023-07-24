@@ -381,7 +381,6 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stm
     ctx_->eval_cost_ = true;
     ParamStore &param_store = ctx_->exec_ctx_->get_physical_plan_ctx()->get_param_store_for_update();
     ObDMLStmt *root_stmt = NULL;
-    lib::MemoryContext mem_context = nullptr;
     lib::ContextParam param;
     ObTransformerImpl trans(ctx_);
     param.set_mem_attr(ctx_->session_info_->get_effective_tenant_id(),
@@ -393,48 +392,43 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stm
       LOG_WARN("failed to prepare eval cost stmt", K(ret));
     } else if (OB_FAIL(trans.transform_heuristic_rule(reinterpret_cast<ObDMLStmt*&>(root_stmt)))) {
       LOG_WARN("failed to transform heuristic rule", K(ret));
-    } else if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, param))) {
-      LOG_WARN("failed to create memory entity", K(ret));
-    } else if (OB_ISNULL(mem_context)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to create memory entity", K(ret));
     } else {
       LOG_DEBUG("get transformed heuristic rule stmt when evaluate_cost", K(*root_stmt));
-      HEAP_VAR(ObOptimizerContext, optctx,
-               ctx_->session_info_,
-               ctx_->exec_ctx_,
-               ctx_->sql_schema_guard_,
-               ctx_->opt_stat_mgr_,
-               mem_context->get_arena_allocator(),
-               &ctx_->exec_ctx_->get_physical_plan_ctx()->get_param_store(),
-               *ctx_->self_addr_,
-               GCTX.srv_rpc_proxy_,
-               stmt->get_query_ctx()->get_global_hint(),
-               *ctx_->expr_factory_,
-               root_stmt,
-               false,
-               ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx()) {
-        //optctx.set_only_ds_basic_stat(true);
-        ObOptimizer optimizer(optctx);
-        ObLogPlan *plan = NULL;
-        if (OB_FAIL(optimizer.get_optimization_cost(*root_stmt, plan, plan_cost))) {
-          LOG_WARN("failed to get optimization cost", K(ret));
-        } else if (NULL == check_ctx) {
-          // do nothing
-        } else if (OB_FAIL(is_expected_plan(plan, check_ctx, is_trans_stmt, is_expected))) {
-          LOG_WARN("failed to check transformed plan", K(ret));
+      CREATE_WITH_TEMP_CONTEXT(param) {
+        HEAP_VAR(ObOptimizerContext, optctx,
+                ctx_->session_info_,
+                ctx_->exec_ctx_,
+                ctx_->sql_schema_guard_,
+                ctx_->opt_stat_mgr_,
+                CURRENT_CONTEXT->get_arena_allocator(),
+                &ctx_->exec_ctx_->get_physical_plan_ctx()->get_param_store(),
+                *ctx_->self_addr_,
+                GCTX.srv_rpc_proxy_,
+                stmt->get_query_ctx()->get_global_hint(),
+                *ctx_->expr_factory_,
+                root_stmt,
+                false,
+                ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx()) {
+          //optctx.set_only_ds_basic_stat(true);
+          ObOptimizer optimizer(optctx);
+          ObLogPlan *plan = NULL;
+          if (OB_FAIL(optimizer.get_optimization_cost(*root_stmt, plan, plan_cost))) {
+            LOG_WARN("failed to get optimization cost", K(ret));
+          } else if (NULL == check_ctx) {
+            // do nothing
+          } else if (OB_FAIL(is_expected_plan(plan, check_ctx, is_trans_stmt, is_expected))) {
+            LOG_WARN("failed to check transformed plan", K(ret));
+          }
         }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(eval_cost_helper.recover_context(*ctx_->exec_ctx_->get_physical_plan_ctx(),
-                                                   *ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx(), 
-                                                   *ctx_))) {
-        LOG_WARN("failed to recover context", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::free_stmt(*ctx_->stmt_factory_, root_stmt))) {
-        LOG_WARN("failed to free stmt", K(ret));
-      } else {
-        DESTROY_CONTEXT(mem_context);
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(eval_cost_helper.recover_context(*ctx_->exec_ctx_->get_physical_plan_ctx(),
+                                                      *ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx(),
+                                                      *ctx_))) {
+            LOG_WARN("failed to recover context", K(ret));
+          } else if (OB_FAIL(ObTransformUtils::free_stmt(*ctx_->stmt_factory_, root_stmt))) {
+            LOG_WARN("failed to free stmt", K(ret));
+          }
+        }
       }
     }
   }

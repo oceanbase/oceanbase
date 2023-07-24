@@ -24,6 +24,7 @@
 #include "lib/utility/ob_tracepoint.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "ob_storage_ha_utils.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 using namespace oceanbase::transaction;
 using namespace oceanbase::share;
@@ -418,6 +419,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   ObTimeoutCtx timeout_ctx;
   ObMySQLTransaction trans;
   bool enable_kill_trx = false;
+  bool succ_stop_medium = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -451,6 +453,8 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       enable_kill_trx = tenant_config->_enable_balance_kill_transaction;
     }
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(stop_ls_schedule_medium_(task_info.src_ls_id_, succ_stop_medium))) {
+      LOG_WARN("failed to stop ls schedule medium", K(ret), K(task_info));
     } else if (OB_FAIL(lock_src_and_dest_ls_member_list_(task_info, task_info.src_ls_id_, task_info.dest_ls_id_))) {
       LOG_WARN("failed to lock src and dest ls member list", K(ret), K(task_info));
     } else if (!enable_kill_trx && OB_FAIL(check_src_ls_has_active_trans_(task_info.src_ls_id_))) {
@@ -466,8 +470,15 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
     } else {
       DEBUG_SYNC(BEFORE_TRANSFER_START_COMMIT);
     }
+
     if (OB_TMP_FAIL(commit_trans_(ret, trans))) {
       LOG_WARN("failed to commit trans", K(tmp_ret), K(ret));
+      if (OB_SUCCESS == ret) {
+        ret = tmp_ret;
+      }
+    }
+    if (succ_stop_medium && OB_TMP_FAIL(clear_prohibit_medium_flag_(task_info.src_ls_id_))) {
+      LOG_WARN("failed to clear prohibit schedule medium flag", K(tmp_ret), K(ret), K(task_info));
       if (OB_SUCCESS == ret) {
         ret = tmp_ret;
       }
@@ -1931,6 +1942,27 @@ int ObTransferHandler::offline()
 void ObTransferHandler::online()
 {
   transfer_worker_mgr_.reset_task_id();
+}
+
+int ObTransferHandler::stop_ls_schedule_medium_(const share::ObLSID &ls_id, bool &succ_stop)
+{
+  int ret = OB_SUCCESS;
+  succ_stop = false;
+  if (OB_FAIL(MTL(ObTenantTabletScheduler*)->stop_ls_schedule_medium(ls_id))) {
+    LOG_WARN("failed to resume ls schedule medium", K(ret), K(ls_id));
+  } else {
+    succ_stop = true;
+  }
+  return ret;
+}
+
+int ObTransferHandler::clear_prohibit_medium_flag_(const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(MTL(ObTenantTabletScheduler*)->clear_prohibit_medium_flag(ls_id, ProhibitMediumTask::TRANSFER))) {
+    LOG_WARN("failed to clear prohibit schedule medium flag", K(ret), K(ls_id));
+  }
+  return ret;
 }
 }
 }

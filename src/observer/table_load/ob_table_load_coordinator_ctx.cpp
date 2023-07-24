@@ -28,6 +28,7 @@ ObTableLoadCoordinatorCtx::ObTableLoadCoordinatorCtx(ObTableLoadTableCtx *ctx)
     allocator_("TLD_CoordCtx"),
     task_scheduler_(nullptr),
     exec_ctx_(nullptr),
+    sequence_schema_(&allocator_),
     last_trans_gid_(1024),
     next_session_id_(0),
     status_(ObTableLoadStatusType::NONE),

@@ -55,6 +55,8 @@ public:
   int join_meta_info_turn_and_retry(const int64_t turn_id, const int64_t retry_id);
   int join_tenant_macro_range_index_file(const share::ObBackupDataType &type, const int64_t retry_id);
   int join_tenant_meta_index_file(const share::ObBackupDataType &type, const int64_t retry_id, const bool is_sec_meta);
+  int join_checkpoint_info_file(const common::ObString &path, const uint64_t checkpoint, const ObBackupFileSuffix &type);
+  static int parse_checkpoint(const common::ObString &entry_d_name, const common::ObString &file_name, const ObBackupFileSuffix &type, uint64_t &checkpoint);
   int add_backup_suffix(const ObBackupFileSuffix &type);
 
   const char *get_ptr() const { return path_; }

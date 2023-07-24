@@ -34,7 +34,7 @@ static int64_t eh_decode(char* b, int64_t s)
   if (s >= bytes) {
     easy_head_t* h = (typeof(h))b;
     uint32_t len = rk_bswap32(h->len_);
-    const uint32_t max_size = 64 * 1024 * 1024; // max packet size, 64MB
+    const uint32_t max_size = INT32_MAX;
     if (h->magic_ != EASY_HEADER_MAGIC || len > max_size) {
       int err = PNIO_ERROR;
       bytes = -1;

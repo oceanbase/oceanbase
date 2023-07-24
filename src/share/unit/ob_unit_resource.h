@@ -309,10 +309,10 @@ public:
     return memory_size * MEMORY_TO_LOG_DISK_FACTOR;
   }
 
-  // get default IOPS based on CPU
-  static int64_t get_default_iops(const double cpu)
+  // default IOPS = INT64_MAX
+  static int64_t get_default_iops()
   {
-    return static_cast<int64_t>(cpu * CPU_TO_IOPS_FACTOR);
+    return INT64_MAX;
   }
 
   // get default IOPS_WEIGHT based on CPU

@@ -121,15 +121,6 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(transform_for_temporary_table(stmt, is_happened))) {
-        LOG_WARN("failed to transform for temporary table", K(ret));
-      } else {
-        trans_happened |= is_happened;
-        OPT_TRACE("transform for temporary table:", is_happened);
-        LOG_TRACE("succeed to transform for temporary table", K(is_happened), K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
       if (OB_FAIL(transform_for_rls_table(stmt, is_happened))) {
         LOG_WARN("failed to transform for rls table", K(ret));
       } else {
@@ -144,6 +135,15 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
         trans_happened |= is_happened;
         OPT_TRACE("transform for merge into:", is_happened);
         LOG_TRACE("succeed to transform for merge into", K(is_happened), K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(transform_for_temporary_table(stmt, is_happened))) {
+        LOG_WARN("failed to transform for temporary table", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        OPT_TRACE("transform for temporary table:", is_happened);
+        LOG_TRACE("succeed to transform for temporary table", K(is_happened), K(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -2994,7 +2994,7 @@ int ObTransformPreProcess::transform_for_temporary_table(ObDMLStmt *&stmt,
           ObSelectStmt *ref_query = NULL;
           TableItem *child_table = NULL;
           if (stmt->is_single_table_stmt()) {
-            if (OB_FAIL(add_filter_for_temporary_table(*stmt, *table_item))) {
+            if (OB_FAIL(add_filter_for_temporary_table(*stmt, *table_item, table_schema->is_oracle_trx_tmp_table()))) {
               LOG_WARN("add filter for temporary table failed", K(ret));
             } else {
               trans_happened = true;
@@ -3015,7 +3015,7 @@ int ObTransformPreProcess::transform_for_temporary_table(ObDMLStmt *&stmt,
                      || OB_ISNULL(child_table = ref_query->get_table_item(0))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected view table", K(ret), K(*view_table));
-          } else if (OB_FAIL(add_filter_for_temporary_table(*ref_query, *child_table))) {
+          } else if (OB_FAIL(add_filter_for_temporary_table(*ref_query, *child_table, table_schema->is_oracle_trx_tmp_table()))) {
             LOG_WARN("add filter for temporary table failed", K(ret));
           } else {
             trans_happened = true;
@@ -3050,26 +3050,22 @@ int ObTransformPreProcess::transform_for_temporary_table(ObDMLStmt *&stmt,
 
 //为stmt->where添加session_id = xxx
 int ObTransformPreProcess::add_filter_for_temporary_table(ObDMLStmt &stmt,
-                                                          const TableItem &table_item)
+                                                          const TableItem &table_item,
+                                                          bool is_trans_scope_temp_table)
 {
   int ret = OB_SUCCESS;
   ObRawExpr *equal_expr = NULL;
-  ObConstRawExpr *expr_const = NULL;
+  ObConstRawExpr *temp_table_type = NULL;
   ObColumnRefRawExpr *expr_col = NULL;
+  ObSysFunRawExpr *expr_temp_table_ssid = NULL;
   if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("some parameter is NULL", K(ret), K(ctx_));
   }
-   else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_UINT64, expr_const))) {
-    LOG_WARN("create const raw expr failed", K(ret));
-  } else if (OB_ISNULL(expr_const)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null", K(expr_col), K(expr_const), K(ret));
-  } else {
-    ObObj sid_obj;
+
+  //build column expr
+  if (OB_SUCC(ret)) {
     ColumnItem *exist_col_item = NULL;
-    sid_obj.set_int(ctx_->session_info_->get_sessid_for_table());
-    expr_const->set_value(sid_obj);
     if (NULL != (exist_col_item = stmt.get_column_item(table_item.table_id_, OB_HIDDEN_SESSION_ID_COLUMN_NAME))) {
       expr_col = exist_col_item->expr_;
     } else {
@@ -3086,7 +3082,7 @@ int ObTransformPreProcess::add_filter_for_temporary_table(ObDMLStmt &stmt,
         expr_col->set_column_name(OB_HIDDEN_SESSION_ID_COLUMN_NAME);
         expr_col->set_ref_id(table_item.table_id_, OB_HIDDEN_SESSION_ID_COLUMN_ID);
         expr_col->set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-        expr_col->set_collation_level(CS_LEVEL_SYSCONST);
+        expr_col->set_collation_level(CS_LEVEL_IMPLICIT);
         expr_col->set_result_type(result_type);
         column_item.expr_ = expr_col;
         column_item.table_id_ = expr_col->get_table_id();
@@ -3099,16 +3095,51 @@ int ObTransformPreProcess::add_filter_for_temporary_table(ObDMLStmt &stmt,
         }
       }
     }
-    if (OB_FAIL(ret)) {
-      //do nothing
-    } else if (OB_FAIL(ObRawExprUtils::create_equal_expr(*(ctx_->expr_factory_),
-                                                        ctx_->session_info_,
-                                                        expr_const,
-                                                        expr_col,
-                                                        equal_expr))) {
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_INT, temp_table_type))) {
+      LOG_WARN("create const raw expr failed", K(ret));
+    } else if (OB_ISNULL(temp_table_type)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr temp table ssid", K(ret));
+    } else {
+      ObObj val;
+      val.set_int(is_trans_scope_temp_table ? 1 : 0);
+      temp_table_type->set_value(val);
+    }
+  }
+
+  //build session id expr
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_FUN_GET_TEMP_TABLE_SESSID, expr_temp_table_ssid))) {
+      LOG_WARN("create const raw expr failed", K(ret));
+    } else if (OB_ISNULL(expr_temp_table_ssid)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr temp table ssid", K(ret));
+    } else {
+      expr_temp_table_ssid->set_func_name(N_TEMP_TABLE_SSID);
+      if (OB_FAIL(expr_temp_table_ssid->add_param_expr(temp_table_type))) {
+        LOG_WARN("fail to add param expr", K(ret));
+      }
+    }
+  }
+
+  //build equal expr
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObRawExprUtils::create_equal_expr(*(ctx_->expr_factory_),
+                                                  ctx_->session_info_,
+                                                  expr_temp_table_ssid,
+                                                  expr_col,
+                                                  equal_expr))) {
       LOG_WARN("Creation of equal expr for outer stmt fails", K(ret));
     }
-    if (OB_FAIL(stmt.get_condition_exprs().push_back(equal_expr))) {
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(equal_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("fail to formalize expr", K(ret));
+    } else if (OB_FAIL(stmt.get_condition_exprs().push_back(equal_expr))) {
       LOG_WARN("failed to push back new filter", K(ret));
     } else {
       LOG_TRACE("add new filter succeed", K(stmt.get_condition_exprs()), K(*equal_expr));

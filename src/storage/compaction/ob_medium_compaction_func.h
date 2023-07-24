@@ -99,7 +99,7 @@ protected:
       ObLS &ls,
       ObTablet &tablet,
       const ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
-      ObIAllocator &allocator,
+      ObArenaAllocator &allocator,
       ObMediumCompactionInfo &medium_info,
       ObGetMergeTablesResult &result,
       int64_t &schema_version);
@@ -107,10 +107,18 @@ protected:
       ObLS &ls,
       ObTablet &tablet,
       const ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
-      ObIAllocator &allocator,
+      ObArenaAllocator &allocator,
       ObMediumCompactionInfo &medium_info,
       ObGetMergeTablesResult &result,
       int64_t &schema_version);
+  static int switch_to_choose_medium_snapshot(
+    ObArenaAllocator &allocator,
+    ObLS &ls,
+    ObTablet &tablet,
+    const int64_t freeze_version,
+    ObMediumCompactionInfo &medium_info,
+    int64_t &schema_version);
+
   static int check_need_merge_and_schedule(
       ObLS &ls,
       ObTablet &tablet,
@@ -121,8 +129,9 @@ protected:
       const int64_t max_reserved_snapshot,
       ObMediumCompactionInfo &medium_info,
       ObGetMergeTablesResult &result);
-  int choose_medium_schema_version(
-      const ObMediumCompactionInfo &medium_info,
+  static int choose_medium_schema_version(
+      common::ObArenaAllocator &allocator,
+      const int64_t medium_snapshot,
       ObTablet &tablet,
       int64_t &schema_version);
   int get_max_reserved_snapshot(int64_t &max_reserved_snapshot);
@@ -139,7 +148,7 @@ protected:
       ObLS &ls,
       ObTablet &tablet,
       const ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
-      ObIAllocator &allocator,
+      ObArenaAllocator &allocator,
       ObMediumCompactionInfo &medium_info,
       ObGetMergeTablesResult &result,
       int64_t &schema_version);

@@ -4111,9 +4111,36 @@ int ObDMLResolver::resolve_table_column_expr(const ObQualifiedName &q_name, ObRa
     LOG_WARN("session info is null", K_(session_info), K(get_stmt()));
   } else {
     const TableItem *table_item = NULL;
-    if (OB_FAIL(column_namespace_checker_.check_table_column_namespace(q_name, table_item,
+    if (lib::is_oracle_mode() && 0 == get_stmt()->get_table_size()
+        && q_name.tbl_name_.empty() && 0 == q_name.col_name_.case_compare("DUMMY")) {
+      ObConstRawExpr *c_expr = NULL;
+      const char *ptr_value = "X";
+      ObString string_value(ptr_value);
+      if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*params_.expr_factory_, ObCharType,
+                  ptr_value, session_info_->get_nls_collation(), c_expr))) {
+        LOG_WARN("fail to create const string c_expr", K(ret));
+      } else {
+        ObSysFunRawExpr *cast_expr = NULL;
+        ObExprResType res_type;
+        res_type.set_type(ObVarcharType);
+        res_type.set_length(1);
+        res_type.set_length_semantics(LS_BYTE);
+        res_type.set_collation_level(CS_LEVEL_IMPLICIT);
+        res_type.set_collation_type(session_info_->get_nls_collation());
+        if (OB_FAIL(ObRawExprUtils::create_cast_expr(*params_.expr_factory_, c_expr,
+                    res_type, cast_expr, session_info_))) {
+          LOG_WARN("create cast expr for dummy failed", K(ret));
+        } else if (OB_FAIL(cast_expr->clear_flag(IS_INNER_ADDED_EXPR))) {
+          LOG_WARN("failed to clear flag for cast expr", K(ret));
+        } else if (OB_FAIL(cast_expr->formalize(session_info_))) {
+          LOG_WARN("failed to formalize cast expr", K(ret));
+        } else {
+          real_ref_expr = cast_expr;
+        }
+      }
+    } else if (OB_FAIL(column_namespace_checker_.check_table_column_namespace(q_name, table_item,
                                                                        get_stmt()->is_insert_all_stmt()))) {
-      LOG_WARN_IGNORE_COL_NOTFOUND(ret, "column don't found in table", K(ret), K(q_name));
+      LOG_WARN_IGNORE_COL_NOTFOUND(ret, "column not found in table", K(ret), K(q_name));
     } else if (table_item->is_joined_table()) {
       const JoinedTable &joined_table = static_cast<const JoinedTable&>(*table_item);
       if (OB_FAIL(resolve_join_table_column_item(joined_table, q_name.col_name_, real_ref_expr))) {
@@ -9303,6 +9330,8 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem &table_it
             if (OB_FAIL(col_expr->set_enum_set_values(select_expr->get_enum_set_values()))) {
               LOG_WARN("failed to set_enum_set_values", K(ret));
             }
+          } else if (ob_is_geometry(select_expr->get_data_type()) && !select_expr->is_column_ref_expr()) {
+            col_expr->set_srs_id(OB_DEFAULT_COLUMN_SRS_ID);
           }
           is_break = true;
 

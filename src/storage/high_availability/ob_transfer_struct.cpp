@@ -316,11 +316,11 @@ int ObTXTransferUtils::get_tablet_status_(
   bool unused_committed_flag = false;
   if (get_commit) {
     if (OB_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
-      LOG_WARN("failed to get tx data", K(ret), KPC(tablet), K(user_data));
+      LOG_WARN("failed to get committed tablet status", K(ret), KPC(tablet), K(user_data));
     }
   } else {
     if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, unused_committed_flag))) {
-      LOG_WARN("failed to get tx data", K(ret), KPC(tablet), K(user_data));
+      LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet), K(user_data));
     }
   }
   return ret;

@@ -612,7 +612,7 @@ bool ObTransformTempTable::is_similar_stmt(ObSelectStmt& stmt,
 {
   bool bret = false;
   if (stmt.is_set_stmt()) {
-    bret = QueryRelation::QUERY_EQUAL == relation;
+    bret = QueryRelation::QUERY_EQUAL == relation && map_info.is_order_equal_;;
   } else if (stmt.get_table_size() < 2) {
     if (stmt.get_group_expr_size() > 0 ||
         stmt.get_rollup_expr_size() > 0) {

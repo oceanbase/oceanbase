@@ -22,13 +22,15 @@ namespace sql
 
 ObTruncateTableStmt::ObTruncateTableStmt(common::ObIAllocator *name_pool)
     : ObDDLStmt(name_pool, stmt::T_TRUNCATE_TABLE),
-      is_truncate_oracle_temp_table_(false)
+      is_truncate_oracle_temp_table_(false),
+      oracle_temp_table_type_(share::schema::MAX_TABLE_TYPE)
 {
 }
 
 ObTruncateTableStmt::ObTruncateTableStmt()
     : ObDDLStmt(stmt::T_TRUNCATE_TABLE),
-      is_truncate_oracle_temp_table_(false)
+      is_truncate_oracle_temp_table_(false),
+      oracle_temp_table_type_(share::schema::MAX_TABLE_TYPE)
 {
 }
 
@@ -48,4 +50,3 @@ void ObTruncateTableStmt::set_table_name(const common::ObString &table_name)
 
 } //namespace sql
 } //namespace oceanbase
-

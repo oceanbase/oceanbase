@@ -2069,6 +2069,12 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
               LOG_WARN("alias name too long", K(ret), K(select_item.alias_name_));
             }
           }
+        } else if (is_oracle_mode() && 0 == select_stmt->get_table_size()
+                   && 0 == select_item.expr_name_.case_compare("DUMMY")) {
+          const char *ptr_name = "DUMMY";
+          ObString string_name(ptr_name);
+          select_item.alias_name_ = string_name;
+          select_item.is_real_alias_ = true;
         } else {
           if (params_.is_prepare_protocol_
               || !session_info_->get_local_ob_enable_plan_cache()
@@ -2607,26 +2613,39 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
         // (select * from dual) is legitimate for oracle ==> output: X
         ObConstRawExpr *c_expr = NULL;
         const char *ptr_value = "X";
-        const char *ptr_name = "D";
+        const char *ptr_name = "DUMMY";
         ObString string_value(1, ptr_value);
-        ObString string_name(1, ptr_name);
+        ObString string_name(ptr_name);
         if (select_stmt->has_group_by() || has_group_by_clause()) {
           ret = OB_ERR_WRONG_FIELD_WITH_GROUP;
           LOG_DEBUG("not a GROUP BY expression", K(ret));
-        } else if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_VARCHAR, c_expr))) {
-          LOG_WARN("fail to create const raw c_expr", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*params_.expr_factory_,
+                   ObCharType,ptr_value, session_info_->get_nls_collation(), c_expr))){
+          LOG_WARN("fail to create const string c_expr", K(ret));
         } else {
-          ObObj obj;
-          obj.set_string(ObVarcharType, string_value);
-          obj.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-          c_expr->set_value(obj);
-          select_item.expr_ = c_expr;
-          select_item.expr_name_ = string_name;
-          select_item.alias_name_ = string_name;
-          select_item.is_real_alias_ = true;
-          if (OB_FAIL(select_stmt->add_select_item(select_item))) {
-            LOG_WARN("failed to add select item", K(ret));
-          } else {/*do nothing*/}
+          ObSysFunRawExpr *cast_expr = NULL;
+          ObExprResType res_type;
+          res_type.set_type(ObVarcharType);
+          res_type.set_length(1);
+          res_type.set_length_semantics(LS_BYTE);
+          res_type.set_collation_level(CS_LEVEL_IMPLICIT);
+          res_type.set_collation_type(session_info_->get_nls_collation());
+          if (OB_FAIL(ObRawExprUtils::create_cast_expr(*params_.expr_factory_, c_expr,
+                      res_type, cast_expr, session_info_))) {
+            LOG_WARN("create cast expr for dummy failed", K(ret));
+          } else if (OB_FAIL(cast_expr->clear_flag(IS_INNER_ADDED_EXPR))) {
+            LOG_WARN("failed to clear flag for cast expr", K(ret));
+          } else if (OB_FAIL(cast_expr->formalize(session_info_))) {
+            LOG_WARN("failed to formalize cast expr", K(ret));
+          } else {
+            select_item.expr_ = cast_expr;
+            select_item.expr_name_ = string_name;
+            select_item.alias_name_ = string_name;
+            select_item.is_real_alias_ = true;
+            if (OB_FAIL(select_stmt->add_select_item(select_item))) {
+              LOG_WARN("failed to add select item", K(ret));
+            } else {/*do nothing*/}
+          }
         }
       }
       if (OB_SUCC(ret) && !is_oracle_mode() && !params_.has_cte_param_list_) {

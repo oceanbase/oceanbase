@@ -1925,7 +1925,8 @@ int ObPlanCacheValue::match_dep_schema(const ObPlanCacheCtx &pc_ctx,
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid null table schema",
                  K(ret), K(i), K(schema_array.at(i)), K(stored_schema_objs_.at(i)));
-      } else if (schema_array.at(i).is_tmp_table_) { // check for tmp table
+      } else if (TMP_TABLE == schema_array.at(i).table_type_
+                 && schema_array.at(i).is_tmp_table_) { // check for mysql tmp table
         // 如果包含临时表
         // 临时表也是同名表的一种特殊情况，但是这里用sessid_来区分了该pcv是否包含临时计划，
         // sessid_不为0，则是包含临时表的pocv，否则是普通表的pcv

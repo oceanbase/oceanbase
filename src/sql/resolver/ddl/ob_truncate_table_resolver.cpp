@@ -128,6 +128,7 @@ int ObTruncateTableResolver::resolve(const ParseNode &parser_tree)
       truncate_table_stmt->set_is_add_scheduler(is_add_to_scheduler);
       if (orig_table_schema->is_oracle_tmp_table()) {
         truncate_table_stmt->set_truncate_oracle_temp_table();
+        truncate_table_stmt->set_oracle_temp_table_type(orig_table_schema->get_table_type());
       }
       if (orig_table_schema->is_mysql_tmp_table()) {
         is_mysql_tmp_table = true; 

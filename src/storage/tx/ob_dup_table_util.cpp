@@ -350,7 +350,7 @@ int ObDupTabletScanTask::execute_for_dup_ls_()
     }
     // refresh dup_table_ls on leader and follower
 
-    if (!cur_ls_ptr->get_dup_table_ls_handler()->has_dup_tablet()) {
+    if (!cur_ls_ptr->get_dup_table_ls_handler()->check_tablet_set_exist()) {
       // do nothing
     } else if (OB_FAIL(dup_loop_worker_->append_dup_table_ls(cur_ls_ptr->get_ls_id()))) {
       DUP_TABLE_LOG(WARN, "refresh dup_table ls failed", K(ret));
@@ -1218,7 +1218,7 @@ int ObDupTableLSHandler::replay(const void *buffer,
     if (OB_NOT_NULL(log_operator_)) {
       log_operator_->reuse();
     }
-  } else if (no_dup_tablet_before_replay && has_dup_tablet()
+  } else if (no_dup_tablet_before_replay && check_tablet_set_exist()
              && OB_TMP_FAIL(
                  MTL(ObTransService *)->get_dup_table_loop_worker().append_dup_table_ls(ls_id_))) {
     DUP_TABLE_LOG(WARN, "refresh dup table ls failed", K(tmp_ret), K(ls_id_), K(lsn), K(ts_ns));

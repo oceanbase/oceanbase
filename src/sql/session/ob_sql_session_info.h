@@ -780,6 +780,14 @@ public:
   int drop_reused_oracle_temp_tables();
   int delete_from_oracle_temp_tables(const obrpc::ObDropTableArg &const_drop_table_arg);
 
+  //To generate an unique key for Oracle Global Temporary Table
+  int64_t get_gtt_session_scope_unique_id() const { return gtt_session_scope_unique_id_; }
+  int64_t get_gtt_trans_scope_unique_id() const { return gtt_trans_scope_unique_id_; }
+  void gen_gtt_session_scope_unique_id();
+  void gen_gtt_trans_scope_unique_id();
+  common::ObIArray<uint64_t> &get_gtt_session_scope_ids() { return gtt_session_scope_ids_; }
+  common::ObIArray<uint64_t> &get_gtt_trans_scope_ids() { return gtt_trans_scope_ids_; }
+
   void set_for_trigger_package(bool value) { is_for_trigger_package_ = value; }
   bool is_for_trigger_package() const { return is_for_trigger_package_; }
   void set_trans_type(transaction::ObTxClass t) { trans_type_ = t; }
@@ -1397,6 +1405,13 @@ private:
   // This situation is unexpected and will report a warning to user.
   bool group_id_not_expected_;
   ObOptimizerTraceImpl optimizer_tracer_;
+  //For Oracle Global Temporary Table
+  //unique key: obs_id(16bit) + timestamp(48bit)
+  int64_t gtt_session_scope_unique_id_;
+  int64_t gtt_trans_scope_unique_id_;
+  //storing table ids of accessed gtts in the session
+  common::ObSEArray<uint64_t, 1> gtt_session_scope_ids_;
+  common::ObSEArray<uint64_t, 1> gtt_trans_scope_ids_;
 };
 
 inline bool ObSQLSessionInfo::is_terminate(int &ret) const

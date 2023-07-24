@@ -92,12 +92,13 @@ int ObBackupSerializeHeaderWrapper::deserialize(const char *buf, const int64_t d
     LOG_WARN("serializer is null", K(ret));
   } else {
     const ObBackupCommonHeader *common_header = reinterpret_cast<const ObBackupCommonHeader*>(buf);
-    int64_t pos = common_header->header_length_;
+    int64_t header_len = common_header->header_length_;
     uint16_t data_type = common_header->data_type_;
     uint16_t version = common_header->data_version_;
+    pos = pos + header_len;
     if (OB_FAIL(common_header->check_header_checksum())) {
       LOG_WARN("failed to check common header", K(ret));
-    } else if (common_header->data_zlength_ > data_len - pos) {
+    } else if (common_header->data_zlength_ > data_len - header_len) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("buf size is too small", K(ret), K(data_len), K(*common_header));
     } else if (data_type != get_data_type()) {
@@ -106,9 +107,9 @@ int ObBackupSerializeHeaderWrapper::deserialize(const char *buf, const int64_t d
     } else if (version != get_data_version()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("data version not match", K(ret), K(*common_header), K(get_data_version()));
-    } else if (OB_FAIL(common_header->check_data_checksum(buf + pos, common_header->data_zlength_))) {
+    } else if (OB_FAIL(common_header->check_data_checksum(buf + header_len, common_header->data_zlength_))) {
       LOG_WARN("failed to check checksum", K(ret), K(*common_header));
-    } else if (OB_FAIL(serializer_->deserialize(buf, pos + common_header->data_zlength_, pos))) {
+    } else if (OB_FAIL(serializer_->deserialize(buf, header_len + common_header->data_zlength_, pos))) {
       LOG_WARN("failed to do deserialize", K(ret), K(*common_header));
     } else if (!serializer_->is_valid()) {
       ret = OB_ERR_UNEXPECTED;

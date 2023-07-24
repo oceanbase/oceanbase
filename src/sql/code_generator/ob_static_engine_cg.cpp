@@ -6747,31 +6747,39 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
       LOG_DEBUG("is contain global index or dep base table", K(has_dep_table));
       phy_plan.set_is_dep_base_table(has_dep_table);
 
+      ObArray<uint64_t> gtt_trans_scope_ids;
+      ObArray<uint64_t> gtt_session_scope_ids;
       for (int64_t i = 0; OB_SUCC(ret) && i < dependency_table->count(); i++) {
         if (DEPENDENCY_TABLE == dependency_table->at(i).object_type_) {
           const ObTableSchema *table_schema = NULL;
-          if (OB_FAIL(schema_guard->get_table_schema(
-              MTL_ID(),
-              dependency_table->at(i).get_object_id(),
-              table_schema))) {
-            LOG_WARN("fail to get table schema", K(ret), "table_id", dependency_table->at(i).get_object_id());
+          int64_t object_id = dependency_table->at(i).get_object_id();
+          if (OB_FAIL(schema_guard->get_table_schema(my_session->get_effective_tenant_id(),
+                                                     object_id, table_schema))) {
+            LOG_WARN("fail to get table schema", K(ret), K(object_id));
           } else if (OB_ISNULL(table_schema)) {
             ret = OB_TABLE_NOT_EXIST;
-            LOG_WARN("fail to get table schema", K(ret), "table_id", dependency_table->at(i).get_object_id());
+            LOG_WARN("fail to get table schema", K(ret), K(object_id));
           } else {
             if (table_schema->is_oracle_trx_tmp_table()) {
-              phy_plan.set_contain_oracle_trx_level_temporary_table();
-            }
-            if (table_schema->is_oracle_sess_tmp_table()) {
-              phy_plan.set_contain_oracle_session_level_temporary_table();
-            }
-            if (table_schema->is_mysql_tmp_table()) {
-              phy_plan.set_session_id(table_schema->get_session_id());
+             if (OB_FAIL(gtt_trans_scope_ids.push_back(object_id))) {
+               LOG_WARN("fail to push back", K(ret));
+             }
+            } else if (table_schema->is_oracle_sess_tmp_table()) {
+              if (OB_FAIL(gtt_session_scope_ids.push_back(object_id))) {
+                LOG_WARN("fail to push back", K(ret));
+              }
             }
             LOG_DEBUG("plan contain temporary table",
                       "trx level", table_schema->is_oracle_trx_tmp_table(),
                       "session level", table_schema->is_oracle_sess_tmp_table());
           }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(phy_plan.get_gtt_trans_scope_ids().assign(gtt_trans_scope_ids))) {
+          LOG_WARN("fail to assign array", K(ret));
+        } else if (OB_FAIL(phy_plan.get_gtt_session_scope_ids().assign(gtt_session_scope_ids))) {
+          LOG_WARN("fail to assign array", K(ret));
         }
       }
     }

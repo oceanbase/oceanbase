@@ -1062,4 +1062,5 @@
 #define N_XMLCAST                           "xmlcast"
 #define N_UPDATEXML                         "updatexml"
 #define N_NLS_INITCAP                       "nls_initcap"
+#define N_TEMP_TABLE_SSID                   "temp_table_ssid"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

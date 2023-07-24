@@ -413,6 +413,7 @@ const char *const OB_STR_CLUSTER_VERSION = "cluster_version";
 const char *const OB_BACKUP_SUFFIX=".obbak";
 const char *const OB_ARCHIVE_SUFFIX=".obarc";
 const char *const OB_STR_MIN_RESTORE_SCN_DISPLAY = "min_restore_scn_display";
+const char *const OB_STR_CHECKPOINT_FILE_NAME = "checkpoint_info";
 
 enum ObBackupFileType
 {
