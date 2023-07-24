@@ -1920,7 +1920,10 @@ int ObRawExprDeduceType::check_median_percentile_param(ObAggFunRawExpr &expr)
     LOG_WARN("get unexpected null", K(ret), K(expr));
   } else if (T_FUN_GROUP_PERCENTILE_CONT == expr_type ||
              T_FUN_GROUP_PERCENTILE_DISC == expr_type) {
-    if (!expr.get_param_expr(0)->is_const_expr()) {
+    if (expr.get_param_expr(0)->get_result_type().is_user_defined_sql_type()) {
+      ret = OB_ERR_INVALID_XML_DATATYPE;
+      LOG_USER_ERROR(OB_ERR_INVALID_XML_DATATYPE, "NUMBER", "ANYDATA");
+    } else if (!expr.get_param_expr(0)->is_const_expr()) {
       ret = OB_ERR_ARGUMENT_SHOULD_CONSTANT;
       LOG_WARN("Argument should be a constant.", K(ret));
     } else if (!ob_is_numeric_type(expr.get_param_expr(0)->get_result_type().get_type())) {
@@ -1985,7 +1988,8 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
       } else if ((ob_is_user_defined_sql_type(param_expr->get_data_type())
                     || ob_is_user_defined_pl_type(param_expr->get_data_type()))
                  && (expr.get_expr_type() == T_FUN_MAX
-                     || expr.get_expr_type() == T_FUN_MIN)) {
+                     || expr.get_expr_type() == T_FUN_MIN
+                     || expr.get_expr_type() == T_FUN_GROUPING)) {
         // other udt types not run here, xmltype does not have order or map member function for compare
         ret = OB_ERR_NO_ORDER_MAP_SQL;
         LOG_WARN("does not have order or map member function for compare",

@@ -323,8 +323,13 @@ int ObExprFuncPartHash::eval_oracle_part_hash(
     } else if (d->is_null()) {
       // do nothing
     } else if (!is_oracle_supported_type(arg.datum_meta_.type_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("wrong type", K(ret), K(arg.datum_meta_));
+      if (ob_is_user_defined_sql_type(arg.datum_meta_.type_)) {
+        ret = OB_ERR_INVALID_XML_DATATYPE;
+        LOG_USER_ERROR(OB_ERR_INVALID_XML_DATATYPE, "-", "ANYDATA");
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("wrong type", K(ret), K(arg.datum_meta_));
+      }
     } else {
       if (ObCharType == arg.datum_meta_.type_
           || ObNCharType == arg.datum_meta_.type_) {
