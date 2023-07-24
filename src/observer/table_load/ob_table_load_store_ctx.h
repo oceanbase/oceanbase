@@ -121,6 +121,7 @@ public:
   int commit_autoinc_value();
 public:
   ObTableLoadTableCtx * const ctx_;
+  common::ObArenaAllocator allocator_;
   common::ObArray<table::ObTableLoadLSIdAndPartitionId> ls_partition_ids_;
   common::ObArray<table::ObTableLoadLSIdAndPartitionId> target_ls_partition_ids_;
   storage::ObDirectLoadTableDataDesc table_data_desc_;
@@ -165,7 +166,6 @@ private:
   typedef common::ObLinkHashMap<table::ObTableLoadSegmentID, SegmentCtx> SegmentCtxMap;
 private:
   ObTableLoadObjectAllocator<ObTableLoadStoreTrans> trans_allocator_; // 多线程安全
-  common::ObArenaAllocator allocator_;
   lib::ObMutex op_lock_;
   mutable obsys::ObRWLock status_lock_;
   table::ObTableLoadStatusType status_;

@@ -37,6 +37,7 @@ using namespace share;
 
 ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
   : ctx_(ctx),
+    allocator_("TLD_StoreCtx", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx->param_.tenant_id_),
     task_scheduler_(nullptr),
     merger_(nullptr),
     insert_table_ctx_(nullptr),
@@ -45,8 +46,8 @@ ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
     fast_heap_table_ctx_(nullptr),
     tmp_file_mgr_(nullptr),
     error_row_handler_(nullptr),
+    sequence_schema_(&allocator_),
     next_session_id_(0),
-    allocator_("TLD_StoreCtx", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx->param_.tenant_id_),
     status_(ObTableLoadStatusType::NONE),
     error_code_(OB_SUCCESS),
     is_inited_(false)
