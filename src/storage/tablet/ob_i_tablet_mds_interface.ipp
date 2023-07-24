@@ -193,7 +193,6 @@ inline int ObITabletMdsInterface::get_mds_data_from_tablet<ObTabletCreateDeleteM
       int64_t pos = 0;
       if (user_data.empty()) {
         ret = OB_EMPTY_RESULT;
-        MDS_LOG_GET(WARN, "data on tablet is empty", K(ret), KPC(kv));
       } else if (CLICK_FAIL(data.deserialize(user_data.ptr(), user_data.length(), pos))) {
         MDS_LOG_GET(WARN, "failed to deserialize", K(user_data),
                     "user_data_length", user_data.length(),
@@ -543,7 +542,11 @@ int ObITabletMdsInterface::get_snapshot(OP &&read_op,
         return read_op(data);
       };
       if (CLICK_FAIL(get_mds_data_from_tablet<T>(func))) {
-        MDS_LOG_GET(WARN, "failed to get snapshot data from tablet");
+        if (OB_EMPTY_RESULT == ret) {
+          // read nothing from tablet, maybe this is not an error
+        } else {
+          MDS_LOG_GET(WARN, "failed to get snapshot data from tablet");
+        }
       }
     }
   }
@@ -584,7 +587,11 @@ int ObITabletMdsInterface::get_snapshot(const Key &key,
         return read_op(data);
       };
       if (CLICK_FAIL(get_mds_data_from_tablet<Value>(func))) {
-        MDS_LOG_GET(WARN, "failed to get latest data from tablet");
+        if (OB_EMPTY_RESULT == ret) {
+          // read nothing from tablet, maybe this is not an error
+        } else {
+          MDS_LOG_GET(WARN, "failed to get snapshot data from tablet");
+        }
       }
     }
   }

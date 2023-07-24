@@ -1958,7 +1958,7 @@ int ObLSTabletService::inner_table_scan(
     const int64_t timeout = param.timeout_ - current_time;
     if (OB_UNLIKELY(timeout <= 0)) {
       ret = OB_TIMEOUT;
-      LOG_WARN("table scan timeout", K(ret), K(current_time), "table_scan_param_timeout", param.timeout_);
+      LOG_WARN("table scan timeout", K(ret), K(current_time), "table_scan_param_timeout", param.timeout_, K(lbt()));
     } else if (OB_FAIL(tablet_handle.get_obj()->check_snapshot_readable_with_cache(snapshot_version, timeout))) {
       LOG_WARN("failed to check snapshot readable", K(ret), K(snapshot_version), K(timeout));
     } else if (param.need_switch_param_) {

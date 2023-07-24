@@ -3596,6 +3596,9 @@ int ObTablet::build_migration_tablet_param(
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else {
+    // allocator
+    mig_tablet_param.allocator_.set_attr(ObMemAttr(MTL_ID(), "MigTabletParam", ObCtxIds::DEFAULT_CTX_ID));
+
     mig_tablet_param.ls_id_ = tablet_meta_.ls_id_;
     mig_tablet_param.tablet_id_ = tablet_meta_.tablet_id_;
     mig_tablet_param.data_tablet_id_ = tablet_meta_.data_tablet_id_;
@@ -3622,7 +3625,6 @@ int ObTablet::build_migration_tablet_param(
     mig_tablet_param.mds_checkpoint_scn_ = tablet_meta_.mds_checkpoint_scn_;
     mig_tablet_param.transfer_info_ = tablet_meta_.transfer_info_;
     mig_tablet_param.is_empty_shell_ = is_empty_shell();
-
 
     ObArenaAllocator arena_allocator("BuildMigParam");
     const ObStorageSchema *storage_schema = nullptr;
@@ -4676,6 +4678,9 @@ int ObTablet::build_transfer_tablet_param(
 {
   int ret = OB_SUCCESS;
   mig_tablet_param.reset();
+  // allocator
+  mig_tablet_param.allocator_.set_attr(ObMemAttr(MTL_ID(), "MigTabletParam", ObCtxIds::DEFAULT_CTX_ID));
+
   ObTabletCreateDeleteMdsUserData user_data;
   share::SCN max_data_scn;
   ObTabletMdsData mds_table_data;
@@ -4726,6 +4731,7 @@ int ObTablet::build_transfer_tablet_param(
     mig_tablet_param.ddl_data_format_version_ = tablet_meta_.ddl_data_format_version_;
     mig_tablet_param.mds_checkpoint_scn_ = user_data.transfer_scn_;
     mig_tablet_param.report_status_.reset();
+
     const int64_t transfer_seq = tablet_meta_.transfer_info_.transfer_seq_ + 1;
 
     if (OB_FAIL(mig_tablet_param.transfer_info_.init(tablet_meta_.ls_id_, user_data.transfer_scn_, transfer_seq))) {
