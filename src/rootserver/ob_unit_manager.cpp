@@ -1715,7 +1715,7 @@ int ObUnitManager::get_to_be_deleted_unit_group(
           }
         } else {
           ret = OB_OP_NOT_ALLOW;
-          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "delete unit group which is not belong to this tenant");
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "delete unit group which does not belong to this tenant");
         }
       }
     } else {
@@ -2013,7 +2013,7 @@ int ObUnitManager::alter_resource_tenant(
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "rollback shrink pool unit num combined with deleting unit");
     } else if (OB_FAIL(rollback_tenant_shrink_pools_unit_num(
             tenant_id, *pools, new_unit_num))) {
-      LOG_WARN("fail to rollbakc shrink pool unit num", K(ret), K(new_unit_num));
+      LOG_WARN("fail to rollback shrink pool unit num", K(ret), K(new_unit_num));
     }
   } else if (!ObShareUtil::is_tenant_enable_rebalance(tenant_id)) {
     ret = OB_OP_NOT_ALLOW;
