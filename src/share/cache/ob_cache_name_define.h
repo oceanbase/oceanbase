@@ -17,6 +17,7 @@ namespace oceanbase {
 namespace share {
 const char* const OB_LOCATION_CACHE_NAME = "location_cache";
 const char* const OB_SCHEMA_CACHE_NAME = "schema_cache";
+const char* const OB_SCHEMA_HISTORY_CACHE_NAME = "schema_history_cache";
 }  // end namespace share
 }  // end namespace oceanbase
 

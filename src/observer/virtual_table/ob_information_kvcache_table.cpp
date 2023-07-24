@@ -138,6 +138,9 @@ int ObInfoSchemaKvCacheTable::inner_get_next_row(ObNewRow*& row)
         } else if (0 == strcmp(inst->status_.config_->cache_name_, "schema_cache")) {
           inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::SCHEMA_CACHE_MISS);
           inst->status_.total_hit_cnt_.set(GLOBAL_EVENT_GET(ObStatEventIds::SCHEMA_CACHE_HIT));
+        } else if (0 == strcmp(inst->status_.config_->cache_name_, "schema_history_cache")) {
+          inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::SCHEMA_HISTORY_CACHE_MISS);
+          inst->status_.total_hit_cnt_.set(GLOBAL_EVENT_GET(ObStatEventIds::SCHEMA_HISTORY_CACHE_HIT));
         } else if (0 == strcmp(inst->status_.config_->cache_name_, "clog_cache")) {
           inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::CLOG_CACHE_MISS);
           inst->status_.total_hit_cnt_.set(GLOBAL_EVENT_GET(ObStatEventIds::CLOG_CACHE_HIT));

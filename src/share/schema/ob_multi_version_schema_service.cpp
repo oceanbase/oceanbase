@@ -456,6 +456,7 @@ int ObMultiVersionSchemaService::get_schema(const ObSchemaMgr* mgr, const ObRefr
 
   const bool is_lazy = NULL == mgr;
   uint64_t tenant_id = extract_tenant_id(schema_id);
+  bool update_history_cache = false;
   if (TENANT_SCHEMA == schema_type || SYS_VARIABLE_SCHEMA == schema_type) {
     tenant_id = schema_id;
   }
@@ -536,62 +537,76 @@ int ObMultiVersionSchemaService::get_schema(const ObSchemaMgr* mgr, const ObRefr
         }
         if (OB_SUCC(ret) && !not_exist) {
           int i = 0;
+          int64_t precise_version = OB_INVALID_VERSION;
           for (; i < val.valid_cnt_; ++i) {
             if (val.versions_[i] <= schema_version) {
               break;
             }
           }
           if (i < val.valid_cnt_) {
-            const int64_t precise_version = val.versions_[i];
             if (0 == i && val.is_deleted_) {
               not_exist = true;
               LOG_INFO("schema has been deleted under specified version",
-                  K(ret),
+                  KR(ret),
                   K(key),
                   K(val),
                   K(schema_version),
                   K(precise_version));
             } else {
               // Access cache with accurate version
-              if (OB_FAIL(schema_cache_.get_schema(schema_type,
-                      // Fetch_schema_id cannot be used here
-                      schema_id,
-                      precise_version,
-                      handle,
-                      schema))) {
-                if (ret != OB_ENTRY_NOT_EXIST) {
-                  LOG_WARN("get schema from cache failed", K(key), K(schema_version), K(precise_version), K(ret));
-                } else {
-                  ret = OB_SUCCESS;
-                }
-              } else {
-                // Accurate version hits, return directly
-                LOG_DEBUG("precise version hit",
-                    K(key),
-                    K(schema_version),
-                    K(precise_version),
-                    K(fetch_tenant_id),
-                    K(schema_id),
-                    "schema_type",
-                    schema_type_str(schema_type));
-                has_hit = true;
-              }
+              precise_version = val.versions_[i];
             }
           } else if (schema_version < val.min_version_) {
             not_exist = true;
-            LOG_INFO("schema has not been created under specified version", K(ret), K(key), K(val), K(schema_version));
+            LOG_INFO("schema has not been created under specified version", KR(ret), K(key), K(val), K(schema_version));
+          } else if (schema_version == val.min_version_) {
+            precise_version = val.min_version_;
+            LOG_INFO("use min schema version as precise schema version", KR(ret), K(key), K(val), K(schema_version));
           } else {
-            // i >= cnt
-            // Older than the cached version, this situation is considered to be a very rare scenario,
-            // the "two" in the 28 theory
-            // directly uses the given schema_version to look up the table
-            LOG_INFO("precise version not founded since schema version is too old, "
-                     "will retrieve it from inner table",
-                K(key),
-                K(val),
-                K(schema_version),
-                "schema_type",
-                schema_type_str(schema_type));
+            // i >= cnt && schema_version > val.min_version_
+            // can't hit latest schema history, try use discrete schema version relationship cache.
+            if (OB_FAIL(
+                    schema_cache_.get_schema_history_cache(schema_type, schema_id, schema_version, precise_version))) {
+              if (OB_ENTRY_NOT_EXIST != ret) {
+                LOG_WARN("get schema history cache failed", KR(ret), K(schema_type), K(schema_id), K(schema_version));
+              } else {
+                ret = OB_SUCCESS;
+                update_history_cache = true;
+                LOG_INFO("precise version not founded since schema version is too old, "
+                         "will retrieve it from inner table",
+                    KR(ret),
+                    K(key),
+                    K(val),
+                    K(schema_version),
+                    "schema_type",
+                    schema_type_str(schema_type));
+              }
+            }
+          }
+
+          // try use precise_version
+          if (OB_SUCC(ret) && precise_version > 0) {
+            if (OB_FAIL(schema_cache_.get_schema(schema_type,
+                    schema_id,
+                    precise_version,
+                    handle,
+                    schema))) {
+              if (ret != OB_ENTRY_NOT_EXIST) {
+                LOG_WARN("get schema from cache failed", KR(ret), K(key), K(schema_version), K(precise_version));
+              } else {
+                ret = OB_SUCCESS;
+              }
+            } else {
+              LOG_TRACE("precise version hit",
+                  K(key),
+                  K(schema_version),
+                  K(precise_version),
+                  K(fetch_tenant_id),
+                  K(schema_id),
+                  "schema_type",
+                  schema_type_str(schema_type));
+              has_hit = true;
+            }
           }
         }
       }
@@ -831,11 +846,19 @@ int ObMultiVersionSchemaService::get_schema(const ObSchemaMgr* mgr, const ObRefr
           if (OB_FAIL(schema_cache_.put_and_fetch_schema(
                   schema_type, schema_id, precise_version, *tmp_schema, handle, schema))) {
             LOG_WARN("put and fetch schema failed",
+                KR(ret),
                 K(schema_type),
                 K(schema_id),
                 K(precise_version),
+                K(schema_version));
+          } else if (update_history_cache && OB_FAIL(schema_cache_.put_schema_history_cache(
+                                                 schema_type, schema_id, schema_version, precise_version))) {
+            LOG_WARN("fail to put schema history cache",
+                KR(ret),
+                K(schema_type),
+                K(schema_id),
                 K(schema_version),
-                KR(ret));
+                K(precise_version));
           }
         }
       }

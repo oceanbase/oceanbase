@@ -63,6 +63,19 @@ public:
   const ObSchema* schema_;
 };
 
+class ObSchemaHistoryCacheValue : public common::ObIKVCacheValue {
+public:
+  ObSchemaHistoryCacheValue();
+  ObSchemaHistoryCacheValue(const int64_t schema_version);
+  virtual ~ObSchemaHistoryCacheValue()
+  {}
+  virtual int64_t size() const;
+  virtual int deep_copy(char *buf, int64_t buf_len, ObIKVCacheValue *&value) const;
+  TO_STRING_KV(K_(schema_version));
+
+  int64_t schema_version_;
+};
+
 class ObSchemaCache {
   static const int64_t OB_SCHEMA_CACHE_SYS_CACHE_MAP_BUCKET_NUM = 512;
 
@@ -78,6 +91,10 @@ public:
   int put_and_fetch_schema(ObSchemaType schema_type, uint64_t schema_id, int64_t schema_version, const ObSchema& schema,
       common::ObKVCacheHandle& handle, const ObSchema*& new_schema);
   const ObTableSchema* get_all_core_table() const;
+  int get_schema_history_cache(const ObSchemaType schema_type, const uint64_t schema_id, const int64_t schema_version,
+      int64_t& precise_schema_version);
+  int put_schema_history_cache(const ObSchemaType schema_type, const uint64_t schema_id, const int64_t schema_version,
+      const int64_t precise_schema_version);
 
 private:
   bool check_inner_stat() const;
@@ -90,10 +107,12 @@ private:
   typedef common::hash::ObHashMap<ObSchemaCacheKey, const ObSchemaCacheValue*, common::hash::ReadWriteDefendMode>
       NoSwapCache;
   typedef common::ObKVCache<ObSchemaCacheKey, ObSchemaCacheValue> KVCache;
+  typedef common::ObKVCache<ObSchemaCacheKey, ObSchemaHistoryCacheValue> HistoryCache;
 
   lib::MemoryContext mem_context_;
   NoSwapCache sys_cache_;
   KVCache cache_;
+  HistoryCache history_cache_;
   bool is_inited_;
   ObTableSchema all_core_table_;
 

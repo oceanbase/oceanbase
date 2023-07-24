@@ -365,6 +365,11 @@ STAT_EVENT_ADD_DEF(
 STAT_EVENT_ADD_DEF(
     TMP_BLOCK_CACHE_MISS, "tmp block cache miss", ObStatClassIds::CACHE, "tmp block cache miss", 50052, true, true)
 
+STAT_EVENT_ADD_DEF(SCHEMA_HISTORY_CACHE_HIT, "schema history cache hit", ObStatClassIds::CACHE,
+    "schema cache history hit", 50057, false, true)
+STAT_EVENT_ADD_DEF(SCHEMA_HISTORY_CACHE_MISS, "schema history cache miss", ObStatClassIds::CACHE,
+    "schema cache history miss", 50058, false, true)
+
 // STORAGE
 // STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_READS, "MEMSTORE_LOGICAL_READS", STORAGE, "MEMSTORE_LOGICAL_READS")
 // STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_BYTES, "MEMSTORE_LOGICAL_BYTES", STORAGE, "MEMSTORE_LOGICAL_BYTES")
