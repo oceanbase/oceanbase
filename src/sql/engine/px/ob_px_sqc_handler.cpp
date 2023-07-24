@@ -40,8 +40,14 @@ int ObPxWorkNotifier::wait_all_worker_start()
    * 如果丢了信号，则wait一段时间，
    * 如果未丢信号量，则是直接被唤醒。
    */
-  while (start_worker_count_ != expect_worker_count_) {
+  bool is_interrupted = false;
+  int64_t cnt = 1;
+  while (start_worker_count_ != expect_worker_count_ && !is_interrupted) {
     cond_.wait(wait_key, wait_us);
+    // check status after at most 1 second.
+    if (0 == (cnt++ % 32)) {
+      is_interrupted = IS_INTERRUPTED();
+    }
   }
   return ret;
 }
@@ -135,14 +141,14 @@ ObPxSqcHandler *ObPxSqcHandler::get_sqc_handler()
   return op_reclaim_alloc(ObPxSqcHandler);
 }
 
-void ObPxSqcHandler::release_handler(ObPxSqcHandler *sqc_handler)
+void ObPxSqcHandler::release_handler(ObPxSqcHandler *sqc_handler, int &report_ret)
 {
   bool all_released = false;
   if (OB_ISNULL(sqc_handler)) {
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "Get null sqc handler", K(sqc_handler));
   } else if (FALSE_IT(sqc_handler->release(all_released))) {
   } else if (all_released) {
-    IGNORE_RETURN sqc_handler->destroy_sqc();
+    IGNORE_RETURN sqc_handler->destroy_sqc(report_ret);
     sqc_handler->reset();
     op_reclaim_free(sqc_handler);
   }
@@ -301,10 +307,11 @@ bool ObPxSqcHandler::all_task_success()
   return bret;
 }
 
-int ObPxSqcHandler::destroy_sqc()
+int ObPxSqcHandler::destroy_sqc(int &report_ret)
 {
   int ret = OB_SUCCESS;
   int end_ret = OB_SUCCESS;
+  report_ret = OB_SUCCESS;
   sub_coord_->destroy_first_buffer_cache();
   // end_ret_记录的错误时SQC end process的时候发生的错误，该时刻语句已经执行完成，收尾工作发生了
   // 问题。相比起事务的错误码，收尾的错误码优先级更低。
@@ -326,7 +333,8 @@ int ObPxSqcHandler::destroy_sqc()
      * 了。有任何一个标记启动的sqc不report，qc都会一直等待直到超时。
      */
     if (OB_FAIL(sub_coord_->report_sqc_finish(end_ret))) {
-      LOG_WARN("fail report sqc to qc", K(ret));
+      LOG_WARN("fail report sqc to qc", K(ret), K(end_ret_));
+      report_ret = ret;
     }
     ObPxSqcMeta &sqc = sqc_init_args_->sqc_;
     LOG_TRACE("sqc send report to qc", K(sqc));
@@ -370,6 +378,7 @@ int ObPxSqcHandler::link_qc_sqc_channel()
 void ObPxSqcHandler::check_interrupt()
 {
   if (OB_UNLIKELY(IS_INTERRUPTED())) {
+    has_interrupted_ = true;
     // 中断错误处理
     ObInterruptCode code = GET_INTERRUPT_CODE();
     int ret = code.code_;

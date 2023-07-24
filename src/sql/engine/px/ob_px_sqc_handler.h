@@ -64,12 +64,13 @@ public:
   ObPxSqcHandler() :
     mem_context_(NULL), tenant_id_(UINT64_MAX), reserved_px_thread_count_(0), process_flags_(0),
     end_ret_(OB_SUCCESS), reference_count_(1), notifier_(nullptr), exec_ctx_(nullptr),
-    des_phy_plan_(nullptr), sqc_init_args_(nullptr), sub_coord_(nullptr), rpc_level_(INT32_MAX) {
+    des_phy_plan_(nullptr), sqc_init_args_(nullptr), sub_coord_(nullptr), rpc_level_(INT32_MAX),
+    has_interrupted_(false) {
   }
   ~ObPxSqcHandler() = default;
   static constexpr const char *OP_LABEL = ObModIds::ObModIds::OB_SQL_SQC_HANDLER;
   static ObPxSqcHandler *get_sqc_handler();
-  static void release_handler(ObPxSqcHandler *sqc_handler);
+  static void release_handler(ObPxSqcHandler *sqc_handler, int &report_ret);
   void reset() ;
   void release(bool &all_released) {
     int64_t reference_count = ATOMIC_AAF(&reference_count_, -1);
@@ -124,12 +125,13 @@ public:
   int64_t get_rpc_level() { return rpc_level_; }
   void set_rpc_level(int64_t level) { rpc_level_ = level; }
   int thread_count_auto_scaling(int64_t &reserved_px_thread_count);
+  bool has_interrupted() const { return has_interrupted_; }
   TO_STRING_KV(K_(tenant_id), K_(reserved_px_thread_count), KP_(notifier),
       K_(exec_ctx), K_(des_phy_plan), K_(sqc_init_args), KP_(sub_coord), K_(rpc_level));
 
 private:
   void init_flt_content();
-  int destroy_sqc();
+  int destroy_sqc(int &report_ret);
 private:
   lib::MemoryContext mem_context_;
   uint64_t tenant_id_;
@@ -145,6 +147,15 @@ private:
   ObPxSubCoord *sub_coord_;
   trace::FltTransCtx flt_ctx_;
   int64_t rpc_level_;
+  /* At first， sqc must wait for all workers start, and then check whether it is interrupted.
+   * If so, sqc will broadcast interruption to all workers in case that some workers have not registered interruption when qc send interruption.
+   * Then we find that sqc may hang at waiting for all workers start, so sqc check whether interrupted while waiting now.
+   * This change makes that if worker starts after sqc broadcast interruption, it will miss the interruption.
+   * So we add has_interrupted_ in sqc_handler.
+   * 1. sqc set has_interrupted_ = true before broadcast interruption.
+   * 2. worker register interruption first, then check has_interrupted_, skip execution if has_interrupted_ = true.
+   */
+  bool has_interrupted_;
 };
 
 }
