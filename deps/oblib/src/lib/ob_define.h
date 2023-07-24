@@ -1385,11 +1385,11 @@ const char* const OB_LOG_ELLIPSIS = "...";
 const char *const DEFAULT_REGION_NAME = "default_region";
 
 // The connect attribute key value prefix that the obproxy transparently transmits to the observer
-const char *const OB_PROXY_TRANSPARENT_TRANSMIT_PREFIX__ = "__proxy_dont_care_prefix__";
+const char *const OB_PROXY_TRANSPARENT_TRANSMIT_PREFIX__ = "__ob_client_";
 
 // The connect attribute key that the proxy transparently transmits to the observer,
 // in order to prevent the sql request thread from deadlocking (such as dblink sql request)
-const char *const OB_SQL_REQUEST_LEVEL = "__proxy_dont_care_prefix__sql_request_level";
+const char *const OB_SQL_REQUEST_LEVEL = "__ob_client_sql_request_level";
 
 // The connect attribute value that the proxy transparently transmits to the observer,
 // in order to prevent the sql request thread from deadlocking (such as dblink sql request)
