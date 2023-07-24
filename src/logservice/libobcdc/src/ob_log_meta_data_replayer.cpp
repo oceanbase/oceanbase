@@ -119,6 +119,8 @@ int ObLogMetaDataReplayer::replay(
           if (OB_FAIL(handle_ls_op_trans_(start_timestamp_ns, tenant_info, *part_trans_task, replay_info_stat))) {
             LOG_ERROR("handle_ls_op_trans_ failed", KR(ret), K(tenant_id), K(start_timestamp_ns), K(tenant_info),
                 KPC(part_trans_task));
+          } else {
+            LOG_TRACE("handle_ls_op_trans_ succ", K(tenant_id), KPC(part_trans_task), K(tenant_info));
           }
         } else if (part_trans_task->is_offline_ls_task()) {
           is_done = true;
@@ -200,12 +202,19 @@ int ObLogMetaDataReplayer::handle_ls_op_trans_(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("PartTransTask is not ls op trans, unexpected", KR(ret), K(part_trans_task));
   } else {
+    const int64_t part_trans_commit_version = part_trans_task.get_trans_commit_version();
     replay_info_stat.ls_op_part_trans_task_count_++;
-    const share::ObLSAttr &ls_atrr = part_trans_task.get_ls_attr();
-
-    if (OB_FAIL(tenant_info.incremental_data_update(ls_atrr))) {
-      LOG_ERROR("tenant_info incremental_data_update failed", KR(ret), K(part_trans_task), K(tenant_info),
-          K(ls_atrr));
+    const share::ObLSAttr &ls_attr = part_trans_task.get_ls_attr();
+    if (part_trans_commit_version <= start_timestamp_ns) {
+      if (OB_FAIL(tenant_info.incremental_data_update(ls_attr))) {
+        LOG_ERROR("tenant_info incremental_data_update failed", KR(ret), K(part_trans_task), K(tenant_info),
+            K(ls_attr));
+      }
+    } else {
+      ISTAT("ignore LS_OP_TRANS PartTransTask which trans commit verison is greater than start_timestamp_ns",
+          "tenant_id", part_trans_task.get_tenant_id(),
+          "trans_id", part_trans_task.get_trans_id(),
+          K(ls_attr), K(part_trans_commit_version), K(start_timestamp_ns));
     }
   }
 
