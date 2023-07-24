@@ -5709,7 +5709,8 @@ int ret = OB_SUCCESS;
         }
       }
     } else {
-      if (ObNumberTC == child_tc || ObIntTC == child_tc || ObUIntTC == child_tc) {
+      if (ObIntTC == child_tc || ObUIntTC == child_tc) {
+        //TODO: need to be supplemented for the conversion from number to number
         if (child_tc == dst_tc || ObNumberTC == dst_tc) {
           ObAccuracy lossless_acc = child_type.get_accuracy();
           if ((dst_acc.get_scale() >= 0 &&
@@ -5819,7 +5820,8 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
         }
       }
     } else {
-      if (ObNumberTC == child_tc || ObIntTC == child_tc || ObUIntTC == child_tc) {
+      if (ObIntTC == child_tc || ObUIntTC == child_tc) {
+        //TODO: need to be supplemented for the conversion from number to number
         if (child_tc == dst_tc || ObNumberTC == dst_tc) {
           ObAccuracy lossless_acc = child_type.get_accuracy();
           if ((dst_acc.get_scale() >= 0 &&
