@@ -104,10 +104,17 @@ int ObExprMultiSet::calc_result_type2(ObExprResType &type,
         CK (cnt < ca->get_actual_count()); \
         if (OB_SUCC(ret)) { \
           elem = static_cast<ObObj *>(ca->get_data()) + i; \
+          dst[cnt + offset].set_null();       \
           if (OB_NOT_NULL(elem)) { \
-            if (OB_FAIL(deep_copy_obj(*coll_allocator, *elem, dst[cnt + offset]))) { \
+            if (elem->is_pl_extend() &&  \
+                elem->get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) { \
+              if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*coll_allocator, *elem, dst[cnt + offset], true))) { \
+                LOG_WARN("fail to fill obobj", K(*elem), K(ret)); \
+              } \
+            } else if (OB_FAIL(deep_copy_obj(*coll_allocator, *elem, dst[cnt + offset]))) { \
               LOG_WARN("fail to fill obobj", K(*elem), K(ret)); \
-            } else { \
+            } \
+            if (OB_SUCC(ret)) {  \
               cnt++; \
             } \
           } else { \
@@ -238,25 +245,24 @@ int ObExprMultiSet::calc_ms_one_distinct(common::ObIAllocator *coll_allocator,
     }
     CK (res_cnt > 0);
     if (OB_SUCC(ret)) {
-      // 计算结果大于100，且有效数据是超过50%，拷贝有效数据到新的内存，释放老内存
-      // 这两个数字是拍脑袋想出来的，主要目的是希望节省内存。
-      if ((res_cnt < count / 2) && (count > 100)) {
-        data_arr = static_cast<ObObj *>(coll_allocator->alloc(res_cnt * sizeof(ObObj)));
-        if (OB_ISNULL(data_arr)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("allocate result obobj array failed, size is: ", K(res_cnt));
-        } else {
-          for (int64_t i = 0; i < res_cnt; ++i) {
-            if (OB_FAIL(deep_copy_obj(*coll_allocator, objs[i], data_arr[i]))) {
+      data_arr = static_cast<ObObj *>(coll_allocator->alloc(res_cnt * sizeof(ObObj)));
+      if (OB_ISNULL(data_arr)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate result obobj array failed, size is: ", K(res_cnt));
+      } else {
+        for (int64_t i = 0; i < res_cnt; ++i) {
+          data_arr[i].set_null();
+          if (objs[i].is_pl_extend() &&
+              objs[i].get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
+            if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(*coll_allocator, objs[i], data_arr[i], true))) {
               LOG_WARN("copy obobj failed.", K(ret));
             }
+          } else if (OB_FAIL(deep_copy_obj(*coll_allocator, objs[i], data_arr[i]))) {
+            LOG_WARN("copy obobj failed.", K(ret));
           }
         }
-        elem_count = res_cnt;
-      } else {
-        data_arr = objs;
-        elem_count = res_cnt;
       }
+      elem_count = res_cnt;
     }
   }
   return ret;
@@ -339,7 +345,12 @@ int ObExprMultiSet::calc_ms_all_impl(common::ObIAllocator *coll_allocator,
         #define COPY_ELEM(iscopy) \
         do{ \
           if (iscopy) { \
-            OZ (common::deep_copy_obj(*coll_allocator, *elem, data_arr[index])); \
+            data_arr[index].set_null();  \
+            if (elem->is_pl_extend() && elem->get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) { \
+              OZ (pl::ObUserDefinedType::deep_copy_obj(*coll_allocator, *elem, data_arr[index], true)); \
+            } else {  \
+              OZ (common::deep_copy_obj(*coll_allocator, *elem, data_arr[index])); \
+            }  \
             ++index; \
           }\
         } while(0)
