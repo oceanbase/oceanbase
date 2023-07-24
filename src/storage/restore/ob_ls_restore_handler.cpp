@@ -410,7 +410,7 @@ int ObLSRestoreHandler::check_meta_tenant_normal_(bool &is_normal)
     LOG_WARN("failed to get schema guard", K(ret), K(meta_tenant_id));
   } else if (OB_FAIL(schema_guard.get_tenant_info(meta_tenant_id, tenant_schema))) {
     LOG_WARN("failed to get tenant info", K(ret), K(meta_tenant_id));
-  } else if (tenant_schema->is_normal()) {
+  } else if (OB_NOT_NULL(tenant_schema) && tenant_schema->is_normal()) {
     is_normal = true;
   }
   return ret;

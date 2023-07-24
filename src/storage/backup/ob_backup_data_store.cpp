@@ -77,7 +77,7 @@ bool ObBackupDeletedTabletToLSDesc::is_valid() const
  *------------------------------ObExternTenantLocalityInfo----------------------------
  */
 OB_SERIALIZE_MEMBER(ObExternTenantLocalityInfoDesc, tenant_id_, backup_set_id_, cluster_id_, compat_mode_,
-    tenant_name_, cluster_name_, locality_, primary_zone_, sys_time_zone_);
+    tenant_name_, cluster_name_, locality_, primary_zone_, sys_time_zone_, sys_time_zone_wrap_);
 
 bool ObExternTenantLocalityInfoDesc::is_valid() const
 {
@@ -188,7 +188,8 @@ int ObBackupSetFilter::func(const dirent *entry)
   const char *end_success_str = "end_success";
   const char *backup_set_str = "backup_set";
   const char *find_pos = nullptr;
-  if (!bs_placeholder_name.prefix_match(backup_set_str)) {
+  if (backup_set_name_array_.count() >= OB_MAX_BACKUP_SET_NUM) { // list upper limit //TODO(chongrong.th) add new error code
+  } else if (!bs_placeholder_name.prefix_match(backup_set_str)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid backup set dier prefix", K(ret), K(bs_placeholder_name));
   } else if (OB_ISNULL(find_pos = STRSTR(bs_placeholder_name.ptr(), end_success_str))) {
@@ -823,6 +824,78 @@ int ObBackupDataStore::get_max_backup_set_file_info(const common::ObString &pass
           } else {
             output_desc = backup_set_file;
             break;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupDataStore::get_backup_sys_time_zone_wrap(common::ObTimeZoneInfoWrap & time_zone_wrap)
+{
+  int ret = OB_SUCCESS;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDataStore not init", K(ret));
+  } else {
+    ObBackupIoAdapter util;
+    ObBackupSetFilter op;
+    share::ObBackupPath tenant_backup_placeholder_dir_path;
+    const ObBackupStorageInfo *storage_info = get_storage_info();
+    op.reset();
+    ObSArray<share::ObBackupSetDesc> backup_set_desc_array;
+    if (OB_FAIL(share::ObBackupPathUtil::get_backup_sets_dir_path(get_backup_dest(),
+        tenant_backup_placeholder_dir_path))) {
+      LOG_WARN("fail to get simple backup placeholder dir", K(ret));
+    } else if (OB_FAIL(util.list_files(tenant_backup_placeholder_dir_path.get_obstr(), storage_info, op))) {
+      LOG_WARN("fail to list files", K(ret), K(tenant_backup_placeholder_dir_path));
+    } else if (OB_FAIL(op.get_backup_set_array(backup_set_desc_array))) {
+      LOG_WARN("fail to get backup set name array", K(ret), K(op));
+    } else {
+      ObBackupSetDescComparator cmp;
+      HEAP_VARS_2((storage::ObExternTenantLocalityInfoDesc, locality_info),
+                  (storage::ObExternBackupSetInfoDesc, backup_set_info)) {
+        std::sort(backup_set_desc_array.begin(), backup_set_desc_array.end(), cmp);
+        for (int64_t i = backup_set_desc_array.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+          const share::ObBackupSetDesc &backup_set_desc = backup_set_desc_array.at(i);
+          backup_desc_.backup_set_id_ = backup_set_desc.backup_set_id_;
+          backup_desc_.backup_type_.type_ = backup_set_desc.backup_type_.type_;
+          backup_set_dest_.reset();
+          if (OB_FAIL(ObBackupPathUtil::construct_backup_set_dest(
+              get_backup_dest(), backup_desc_, backup_set_dest_))) {
+            LOG_WARN("fail to construct backup set dest", K(ret));
+          } else if (OB_FAIL(read_tenant_locality_info(locality_info))) {
+            if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+              LOG_WARN("backup set info not exist", K(ret), K(backup_set_desc));
+              ret = OB_SUCCESS;
+              continue;
+            } else {
+              LOG_WARN("fail to read backup set info", K(ret), K(backup_set_desc));
+            }
+          } else if (OB_FAIL(read_backup_set_info(backup_set_info))) {
+            if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+              LOG_WARN("backup set info not exist", K(ret), K(backup_set_desc));
+              ret = OB_SUCCESS;
+              continue;
+            } else {
+              LOG_WARN("fail to read backup set info", K(ret), K(backup_set_desc));
+            }
+          } else if (backup_set_info.backup_set_file_.tenant_compatible_ < DATA_VERSION_4_2_0_0) {
+            const char *time_zone = "+08:00";
+            int32_t offset = 0;
+            int ret_more = OB_SUCCESS;
+            bool is_oracle_mode = locality_info.compat_mode_ == lib::Worker::CompatMode::ORACLE;
+            if (OB_FAIL(ObTimeConverter::str_to_offset(time_zone,
+                                                       offset,
+                                                       ret_more,
+                                                       is_oracle_mode))) {
+              LOG_WARN("invalid time zone offset", K(ret), K(time_zone), K(offset), K(is_oracle_mode));
+            } else {
+              time_zone_wrap.set_tz_info_offset(offset);
+            }
+          } else if (OB_FAIL(time_zone_wrap.deep_copy(locality_info.sys_time_zone_wrap_))) {
+            LOG_WARN("failed to deep copy time zone wrap", K(ret), K(locality_info));
           }
         }
       }

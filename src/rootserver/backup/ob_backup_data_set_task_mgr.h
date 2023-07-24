@@ -73,26 +73,34 @@ private:
   int backup_data_();
   int do_backup_data_(ObArray<share::ObBackupLSTaskAttr> &ls_task, int64_t &finish_cnt, 
       share::ObBackupLSTaskAttr *& build_index_attr);
+  int backup_data_finish_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
+                          const ObBackupLSTaskAttr &build_index_attr);
   int build_index_(share::ObBackupLSTaskAttr *build_index_attr, bool &finish_build_index);
-  int check_change_task_turn_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, bool &need_change_turn, 
-      ObIArray<storage::ObBackupDataTabletToLSInfo> &tablets_to_ls, ObIArray<share::ObLSID> &new_ls_array);
-  int change_task_turn_(ObIArray<share::ObBackupLSTaskAttr> &ls_task, 
-      ObIArray<storage::ObBackupDataTabletToLSInfo> &tablets_to_ls, ObIArray<share::ObLSID> &new_ls_array);
+  int check_need_change_turn_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, bool &need_change_turn,
+      ObIArray<storage::ObBackupDataTabletToLSInfo> &tablets_to_ls);
+  int change_turn_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
+                   const ObBackupLSTaskAttr &build_index_attr,
+                   ObIArray<storage::ObBackupDataTabletToLSInfo> &tablets_to_ls);
+  int change_task_turn_(const ObIArray<share::ObBackupLSTaskAttr> &ls_task,
+      const ObIArray<storage::ObBackupDataTabletToLSInfo> &tablets_to_ls);
+  int filter_new_ls_from_tablet_info_(const ObIArray<ObBackupLSTaskAttr> &ls_task,
+                                      const ObIArray<storage::ObBackupDataTabletToLSInfo> &tablets_to_ls,
+                                      ObIArray<ObLSID> &new_ls_array);
   int get_next_turn_id_(int64_t &next_turn_id);
   int get_change_turn_tablets_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, 
-      ObIArray<storage::ObBackupDataTabletToLSInfo> &tablet_to_ls, ObIArray<share::ObLSID> &new_ls_ids);
+                               ObIArray<storage::ObBackupDataTabletToLSInfo> &tablet_to_ls);
   int get_tablets_of_deleted_ls_(
       const ObIArray<ObBackupLSTaskAttr> &ls_tasks, common::hash::ObHashSet<ObBackupSkipTabletAttr> &skip_tablets);
   int do_get_change_turn_tablets_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, 
       const common::hash::ObHashSet<ObBackupSkipTabletAttr> &skip_tablets,
-      ObIArray<storage::ObBackupDataTabletToLSInfo> &tablet_to_ls, ObIArray<share::ObLSID> &new_ls_ids);
+      ObIArray<storage::ObBackupDataTabletToLSInfo> &tablet_to_ls);
   int construct_cur_ls_set_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, 
       common::hash::ObHashSet<share::ObLSID> &ls_id_set);
-  int get_change_turn_ls_(ObIArray<share::ObBackupLSTaskAttr> &ls_task, 
+  int get_change_turn_ls_(const ObIArray<share::ObBackupLSTaskAttr> &ls_task,
       const ObIArray<storage::ObBackupDataTabletToLSInfo> &tablets_to_ls,
-      ObIArray<share::ObBackupLSTaskAttr *> &need_change_turn_ls_tasks);
+      ObIArray<const share::ObBackupLSTaskAttr *> &need_change_turn_ls_tasks);
   int update_inner_task_(const ObIArray<share::ObLSID> &new_ls_ids, 
-      const ObIArray<share::ObBackupLSTaskAttr *> &need_change_turn_ls_tasks);
+      const ObIArray<const share::ObBackupLSTaskAttr *> &need_change_turn_ls_tasks);
   int convert_task_type_(const ObIArray<share::ObBackupLSTaskAttr> &ls_task);
   int backup_completing_log_();
   int do_backup_completing_log_(ObArray<share::ObBackupLSTaskAttr> &ls_task, int64_t &finish_cnt);
@@ -110,7 +118,7 @@ private:
   int write_log_format_file_();
 
   int write_extern_ls_info_(const ObArray<share::ObBackupLSTaskAttr> &ls_tasks);
-  int write_tablet_to_ls_infos_(const ObIArray<storage::ObBackupDataTabletToLSInfo> &tablets_to_ls);
+  int write_or_update_tablet_to_ls_(ObIArray<storage::ObBackupDataTabletToLSInfo> &tablets_to_ls);
   
   int set_backup_set_files_failed_(ObMySQLTransaction &trans);
   int advance_status_(ObMySQLTransaction &trans, const share::ObBackupStatus &next_status, const int result = OB_SUCCESS,

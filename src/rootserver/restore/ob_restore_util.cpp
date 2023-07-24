@@ -369,6 +369,16 @@ int ObRestoreUtil::fill_restore_scn_(const obrpc::ObPhysicalRestoreTenantArg &ar
           job.set_restore_scn(min_restore_scn);
         }
       }
+    } else if (!arg.restore_timestamp_.empty()) {
+      SCN restore_scn = SCN::min_scn();
+      common::ObTimeZoneInfoWrap time_zone_wrap;
+      if (OB_FAIL(get_backup_sys_time_zone_(tenant_path_array, time_zone_wrap))) {
+        LOG_WARN("failed to get backup sys time zone", K(ret), K(tenant_path_array));
+      } else if (OB_FAIL(convert_restore_timestamp_to_scn_(arg.restore_timestamp_, time_zone_wrap, restore_scn))) {
+        LOG_WARN("failed to convert restore timestamp to scn", K(ret));
+      } else {
+        job.set_restore_scn(restore_scn);
+      }
     } else {
       int64_t round_id = 0;
       int64_t piece_id = 0;
@@ -955,6 +965,52 @@ int ObRestoreUtil::check_physical_restore_finish(
         is_finish = true;
         is_failed = 0 == STRCMP(status_str, "FAIL");
       }
+    }
+  }
+  return ret;
+}
+
+int ObRestoreUtil::convert_restore_timestamp_to_scn_(
+    const ObString &timestamp,
+    const common::ObTimeZoneInfoWrap &time_zone_wrap,
+    share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  uint64_t scn_value = 0;
+  const ObTimeZoneInfo *time_zone_info = time_zone_wrap.get_time_zone_info();
+  if (timestamp.empty() || !time_zone_wrap.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid time zone wrap", K(ret));
+  } else if (OB_FAIL(ObTimeConverter::str_to_scn_value(timestamp, time_zone_info, time_zone_info, ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT, true/*oracle mode*/, scn_value))) {
+    LOG_WARN("failed to str to scn value", K(ret), K(timestamp), K(time_zone_info));
+  } else if (OB_FAIL(scn.convert_for_sql(scn_value))) {
+    LOG_WARN("failed to convert for sql scn", K(ret), K(scn_value));
+  }
+  return ret;
+}
+
+int ObRestoreUtil::get_backup_sys_time_zone_(
+    const ObIArray<ObString> &tenant_path_array,
+    common::ObTimeZoneInfoWrap &time_zone_wrap)
+{
+  int ret = OB_SUCCESS;
+  ARRAY_FOREACH_X(tenant_path_array, i, cnt, OB_SUCC(ret)) {
+    const ObString &tenant_path = tenant_path_array.at(i);
+    storage::ObBackupDataStore store;
+    share::ObBackupDest backup_dest;
+    ObBackupFormatDesc format_desc;
+    if (OB_FAIL(backup_dest.set(tenant_path.ptr()))) {
+      LOG_WARN("fail to set backup dest", K(ret), K(tenant_path));
+    } else if (OB_FAIL(store.init(backup_dest))) {
+      LOG_WARN("failed to init backup store", K(ret), K(tenant_path));
+    } else if (OB_FAIL(store.read_format_file(format_desc))) {
+      LOG_WARN("failed to read format file", K(ret), K(store));
+    } else if (ObBackupDestType::DEST_TYPE_BACKUP_DATA != format_desc.dest_type_) {
+      LOG_INFO("skip log dir", K(tenant_path), K(format_desc));
+    } else if (OB_FAIL(store.get_backup_sys_time_zone_wrap(time_zone_wrap))) {
+      LOG_WARN("fail to get locality_info", K(ret));
+    } else {
+      break;
     }
   }
   return ret;

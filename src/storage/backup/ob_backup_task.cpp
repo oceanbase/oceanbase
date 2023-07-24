@@ -357,7 +357,7 @@ int ObLSBackupMetaDagNet::start_running()
   } else if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag scheduler must not be NULL", K(ret));
-  } else if (param_.convert_to(init_param)) {
+  } else if (OB_FAIL(param_.convert_to(init_param))) {
     LOG_WARN("failed to convert to init param", K(ret));
   } else if (OB_FALSE_IT(init_param.backup_stage_ = start_stage_)) {
   } else if (OB_FAIL(inner_init_before_run_())) {
