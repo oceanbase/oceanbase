@@ -146,7 +146,12 @@ bool ObStorageMetaValue::is_valid() const
 
 int64_t ObStorageMetaValue::size() const
 {
-  return sizeof(*this) + obj_->get_deep_copy_size();
+  int64_t len = sizeof(*this);
+#if __aarch64__
+  len += ObSSTable::AARCH64_CP_BUF_ALIGN;
+#endif
+  len +=  obj_->get_deep_copy_size();
+  return len;
 }
 
 int ObStorageMetaValue::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const
@@ -161,8 +166,14 @@ int ObStorageMetaValue::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheVa
     LOG_WARN("invalid storage meta cache value", K(ret));
   } else {
     char *new_buf = buf + sizeof(ObStorageMetaValue);
-    pvalue = new (buf) ObStorageMetaValue();
-    if (OB_FAIL(obj_->deep_copy(new_buf, buf_len - sizeof(ObStorageMetaValue), pvalue->obj_))) {
+    int64_t pos = sizeof(ObStorageMetaValue);
+#if __aarch64__
+    new_buf = reinterpret_cast<char *>(common::upper_align(
+        reinterpret_cast<int64_t>(new_buf), ObSSTable::AARCH64_CP_BUF_ALIGN));
+    pos = reinterpret_cast<int64_t>(new_buf) - reinterpret_cast<int64_t>(buf);
+#endif
+  pvalue = new (buf) ObStorageMetaValue();
+    if (OB_FAIL(obj_->deep_copy(new_buf, buf_len - pos, pvalue->obj_))) {
       LOG_WARN("fail to deep copy storage meta object", K(ret), KP(buf), K(buf_len));
     } else {
       pvalue->type_ = type_;

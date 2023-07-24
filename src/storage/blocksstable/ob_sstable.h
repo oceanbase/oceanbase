@@ -227,6 +227,7 @@ public:
       K_(max_merged_trans_version), K_(data_macro_block_count), K_(nested_size),
       K_(nested_offset), K_(contain_uncommitted_row), K_(filled_tx_scn), KPC_(meta), K_(valid_for_reading));
 
+  static const int64_t AARCH64_CP_BUF_ALIGN = 8;
 private:
   int check_valid_for_reading();
   int add_used_size() const;
