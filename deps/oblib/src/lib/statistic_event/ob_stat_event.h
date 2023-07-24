@@ -239,6 +239,9 @@ STAT_EVENT_ADD_DEF(SECONDARY_META_CACHE_HIT, "secondary meta cache hit", ObStatC
 STAT_EVENT_ADD_DEF(SECONDARY_META_CACHE_MISS, "secondary meta cache miss", ObStatClassIds::CACHE, "secondary meta cache miss", 50054, true, true)
 
 
+STAT_EVENT_ADD_DEF(SCHEMA_HISTORY_CACHE_HIT, "schema history cache hit", ObStatClassIds::CACHE, "schema cache history hit", 50061, false, true)
+STAT_EVENT_ADD_DEF(SCHEMA_HISTORY_CACHE_MISS, "schema history cache miss", ObStatClassIds::CACHE, "schema cache history miss", 50062, false, true)
+
 // STORAGE
 //STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_READS, "MEMSTORE_LOGICAL_READS", STORAGE, "MEMSTORE_LOGICAL_READS")
 //STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_BYTES, "MEMSTORE_LOGICAL_BYTES", STORAGE, "MEMSTORE_LOGICAL_BYTES")
