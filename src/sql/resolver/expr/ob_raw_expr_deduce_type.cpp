@@ -3252,7 +3252,11 @@ int ObRawExprDeduceType::add_implicit_cast(ObAggFunRawExpr &parent,
                (parent.get_expr_type() == T_FUN_REGR_SXY && i == 1) ||
                (parent.get_expr_type() == T_FUN_JSON_OBJECTAGG && i == 1) ||
                (parent.get_expr_type() == T_FUN_ORA_JSON_OBJECTAGG && i > 0) ||
-               (parent.get_expr_type() == T_FUN_ORA_XMLAGG && i > 0)) {
+               (parent.get_expr_type() == T_FUN_ORA_XMLAGG && i > 0) ||
+               ((parent.get_expr_type() == T_FUN_SUM ||
+                 parent.get_expr_type() == T_FUN_AVG ||
+                 parent.get_expr_type() == T_FUN_COUNT) &&
+                 child_ptr->get_expr_type() == T_FUN_SYS_OP_OPNSIZE)) {
       //do nothing
     } else if (parent.get_expr_type() == T_FUN_WM_CONCAT ||
                parent.get_expr_type() == T_FUN_KEEP_WM_CONCAT ||

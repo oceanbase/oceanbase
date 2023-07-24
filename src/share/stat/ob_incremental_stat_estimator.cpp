@@ -679,6 +679,7 @@ int ObIncrementalStatEstimator::derive_global_histogram(ObIArray<ObHistogram> &a
     ObTopKFrequencyHistograms *top_k_fre_hist = new (ptr) ObTopKFrequencyHistograms();
     top_k_fre_hist->set_window_size(1000);
     top_k_fre_hist->set_item_size(256);
+    top_k_fre_hist->set_is_topk_hist_need_des_row(true);
     for (int64_t i = 0; OB_SUCC(ret) && i < all_part_histograms.count(); ++i) {
       if (all_part_histograms.at(i).is_valid()) {
         if (all_part_histograms.at(i).get_type() == ObHistType::FREQUENCY ||

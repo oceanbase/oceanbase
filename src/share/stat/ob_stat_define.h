@@ -577,13 +577,15 @@ struct ObTableStatParam {
 
 struct ObOptStat
 {
+  ObOptStat() : table_stat_(NULL), column_stats_() {
+    column_stats_.set_attr(lib::ObMemAttr(MTL_ID(), "ObOptStat"));
+  }
+  virtual ~ObOptStat();
   ObOptTableStat *table_stat_;
   // turn the column stat into pointer
   ObArray<ObOptColumnStat *> column_stats_;
-
-  virtual ~ObOptStat();
-
-  TO_STRING_KV("","");
+  TO_STRING_KV(K(table_stat_),
+               K(column_stats_.count()));
 };
 
 struct ObHistogramParam
