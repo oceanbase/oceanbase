@@ -6714,6 +6714,7 @@ int ObTransformPreProcess::check_skip_child_select_view(const ObIArray<ObParentD
       LOG_WARN("failed to get table item", K(ret));
     } else if (basic_table_item->is_basic_table() && view_table_item->is_generated_table()) {
       if (OB_NOT_NULL(view_table_item->ref_query_) &&
+          view_table_item->ref_query_->get_table_size() > 0 &&
           OB_NOT_NULL(view_table_item->ref_query_->get_table_item(0)) &&
           basic_table_item->table_id_ == view_table_item->ref_query_->get_table_item(0)->table_id_) {
         skip_for_view_table = true;
