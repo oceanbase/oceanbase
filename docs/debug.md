@@ -87,7 +87,7 @@ We need `102000042023061314`.
 
 Then we search `102000042023061314` the oceanbase rpm website like below.
 
-![image](https://github.com/hnwyllmm1/oceanbase/assets/90242350/6137bdb0-d020-4850-ac85-e2aa495a6bb5)
+![download debug info package](images/download-debug-info-package.png)
 
 Here is a rpm website list.
 - [x86_64 for el7](http://mirrors.aliyun.com/oceanbase/community/stable/el/7/x86_64/)
@@ -160,7 +160,7 @@ Reading symbols from usr/lib/debug/home/admin/oceanbase/bin/observer.debug...
 
 Let's run the debug command again and we can get detail information.
 
-```
+```bash
 (gdb) bt
 #0  0x00007fb6e9c36d62 in pthread_cond_timedwait@@GLIBC_2.3.2 () from /lib64/libpthread.so.0
 #1  0x00007fb6f9f44862 in ob_pthread_cond_timedwait (__cond=0x7fb6fb1d5340, __mutex=0x7fb6fb1d5318, __abstime=0x7fb6b3ed41d0)
