@@ -606,6 +606,16 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt *root_stmt,
     ctx.is_multi_join_cond_ = is_multi_join_cond;
     need_check_cost = true;
     is_valid = true;
+    // when right table is from "dual", ban cost checking for adding distinct
+    bool query_from_dual = false;
+    ObSelectStmt *right_table_ref_query = NULL;
+    if (OB_ISNULL(right_table_ref_query = right_table->ref_query_)) {
+      // do nothing
+    } else if (OB_FAIL(check_query_from_dual(right_table_ref_query, query_from_dual))) {
+      LOG_WARN("failed to check union all dual form", K(ret));
+    } else if (query_from_dual) {
+      need_check_cost = false;
+    }
   } else if (cmp_join_conds_count == 1 && other_conds_count == 0 && can_add_deduplication) {
     // TO_AGGR_INNER : for cases when there is one and only one compare-join-condition
     is_valid = true;
@@ -639,6 +649,52 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt *root_stmt,
   }
   return ret;
 }
+
+int ObTransformSemiToInner::check_query_from_dual(ObSelectStmt *stmt, bool& query_from_dual/*=false*/) {
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt*, 4> child_stmts;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(stmt));
+  } else if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+    LOG_WARN("failed to get child stmts");
+  } else if (stmt->get_table_items().count() == 0 && child_stmts.count() == 0) {
+    query_from_dual = true;
+  } else {
+    bool temp_flag = true;
+    // check table items
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_items().count() && temp_flag; i++) {
+      TableItem *table_item = stmt->get_table_items().at(i);
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(table_item));
+      } else if (!(table_item->is_temp_table() || table_item->is_generated_table())) {
+        temp_flag = false;
+      } else if (table_item->is_temp_table()) {
+        // stmt referenced in temp table need to be checked
+        ObSelectStmt *temp_stmt = NULL;
+        if (OB_ISNULL(temp_stmt = table_item->ref_query_)) {
+          LOG_WARN("unexpected null", K(ret), K(temp_stmt));
+        } else if (temp_stmt->has_recursive_cte()) {
+          temp_flag = false;
+        } else if (OB_FAIL(child_stmts.push_back(table_item->ref_query_))) {
+          LOG_WARN("failed to push back stmt");
+        }
+      }
+    }
+    // check stmts
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count() && temp_flag; i++) {
+      ObSelectStmt *child_stmt = child_stmts.at(i);
+      temp_flag = false;
+      if (OB_FAIL(SMART_CALL(check_query_from_dual(child_stmt, temp_flag)))) {
+        LOG_WARN("failed to check query from dual");
+      }
+    }
+    query_from_dual = temp_flag;
+  }
+  return ret;
+}
+
 
 /**
  * @brief collect_unique_property_of_from_items
