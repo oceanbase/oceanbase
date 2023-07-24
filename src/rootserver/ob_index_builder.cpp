@@ -1686,7 +1686,11 @@ int ObIndexBuilder::generate_schema(const ObCreateIndexArg& arg, const int64_t f
           ret = OB_ERR_JSON_USED_AS_KEY;
           LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, sort_item.column_name_.length(), sort_item.column_name_.ptr());
           LOG_WARN("JSON column cannot be used in key specification.", K(arg.index_type_), K(ret));
-        } else if (data_column->is_string_type()) {
+        } else if (data_column->get_meta_type().is_enum_or_set()) {
+          ret = OB_ERR_WRONG_KEY_COLUMN;
+          LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
+          LOG_WARN("index on enum/set column is not supported", K(ret));
+	} else if (data_column->is_string_type()) {
           int64_t length = 0;
           if (data_column->is_fulltext_column()) {
             if (!is_ctxcat_added) {
