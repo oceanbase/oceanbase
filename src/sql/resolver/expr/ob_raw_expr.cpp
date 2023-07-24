@@ -763,6 +763,31 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
   return ret;
 }
 
+int ObRawExpr::find_column_ref_dfs(ObRawExpr *&column_ref_expr)
+{
+  int ret = OB_SUCCESS;
+  if (is_column_ref_expr()) {
+    column_ref_expr = this;
+  } else {
+    int64_t child_cnt = get_children_count();
+    column_ref_expr = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_cnt; i++) {
+      ObRawExpr *expr = get_param_expr(i);
+      if (nullptr == expr) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is nullptr", K(ret));
+      } else if (OB_FAIL(expr->find_column_ref_dfs(column_ref_expr))) {
+        LOG_WARN("fail to find column ref", K(ret));
+      } else if (column_ref_expr != nullptr) {
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+
+
 /**
  * @brief 判断Oracle的系统函数是不是pure的，用于创建生成列或函数索引时的检查
  * @return
@@ -2506,7 +2531,6 @@ int ObOpRawExpr::get_subquery_comparison_name(const ObString &symbol,
   }
   return ret;
 }
-
 void ObOpRawExpr::set_expr_type(ObItemType type)
 {
   type_ = type;

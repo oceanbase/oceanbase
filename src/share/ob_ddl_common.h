@@ -226,16 +226,36 @@ struct ObColumnNameInfo final
 {
 public:
   ObColumnNameInfo()
-    : column_name_(), is_shadow_column_(false)
+    : is_inited_(false),
+      column_name_(),
+      column_type_(),
+      extended_type_info_(),
+      is_shadow_column_(false),
+      is_cast_(false)
   {}
-  ObColumnNameInfo(const ObString &column_name, const bool is_shadow_column)
-    : column_name_(column_name), is_shadow_column_(is_shadow_column)
+  ObColumnNameInfo(const ObString &column_name,
+                   const ColumnType &column_type,
+                   const bool is_shadow_column)
+    : column_name_(column_name),
+      column_type_(column_type),
+      extended_type_info_(),
+      is_shadow_column_(is_shadow_column),
+      is_cast_(false)
   {}
   ~ObColumnNameInfo() = default;
-  TO_STRING_KV(K_(column_name), K_(is_shadow_column));
+  TO_STRING_KV(K_(column_name), K_(column_type), K_(extended_type_info), K_(is_shadow_column), K_(is_cast));
+  int init(const ObString &column_name,
+           const ColumnType &column_type,
+           const bool is_shadow_column,
+           const ObIArray<common::ObString> &extended_type_info,
+           common::ObArenaAllocator &allocator);
 public:
+  bool is_inited_;
   ObString column_name_;
+  ColumnType column_type_;
+  ObArray<common::ObString> extended_type_info_;
   bool is_shadow_column_;
+  bool is_cast_;
 };
 
 class ObColumnNameMap final {
@@ -313,7 +333,8 @@ public:
                                                  const share::schema::ObTableSchema &source_table_schema,
                                                  ObArray<ObColumnNameInfo> &insert_column_names,
                                                  ObArray<ObColumnNameInfo> &column_names,
-                                                 ObArray<int64_t> &select_column_ids);
+                                                 ObArray<int64_t> &select_column_ids,
+                                                 common::ObArenaAllocator &allocator);
 
   static int generate_build_replica_sql(
       const uint64_t tenant_id,
@@ -328,6 +349,8 @@ public:
       const bool use_schema_version_hint_for_src_table,
       const ObColumnNameMap *col_name_map,
       ObSqlString &sql_string);
+  static int set_column_info_is_cast(const ObArray<ObColumnNameInfo> &insert_column_names,
+                                     ObArray<ObColumnNameInfo> &column_names);
 
   static int get_tablet_leader_addr(
       share::ObLocationService *location_service,
@@ -423,6 +446,7 @@ private:
       const bool with_origin_name,
       const bool with_alias_name,
       const bool with_comma,
+      const bool is_cast,
       ObSqlString &sql_string);
   static int generate_order_by_str(
       const ObIArray<int64_t> &select_column_ids,
