@@ -739,9 +739,17 @@ int ObMallocAllocator::recycle_tenant_allocator(uint64_t tenant_id)
         char first_label[AOBJECT_LABEL_SIZE + 1] = {'\0'};
         bool has_unfree = ctx_allocator->check_has_unfree(first_label);
         if (has_unfree) {
-          LOG_ERROR("tenant memory leak!!!", K(tenant_id), K(ctx_id),
-                    "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id),
-                    "label", first_label);
+          if (ObCtxIds::GLIBC == ctx_id
+              && 0 == strncmp("Pl", first_label, 2)
+              && pl_leaked_times_++ < 10) {
+            LOG_WARN("tenant memory leak!!!", K(tenant_id), K(ctx_id),
+                     "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id),
+                     "label", first_label);
+          } else {
+            LOG_ERROR("tenant memory leak!!!", K(tenant_id), K(ctx_id),
+                      "ctx_name", get_global_ctx_info().get_ctx_name(ctx_id),
+                      "label", first_label);
+          }
           tas[ctx_id] = ctx_allocator;
         }
       }

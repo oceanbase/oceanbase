@@ -61,6 +61,7 @@ void *ob_malloc_retry(size_t size)
   do {
     ObMemAttr attr = ObMallocHookAttrGuard::get_tl_mem_attr();
     SET_USE_500(attr);
+    attr.ctx_id_ = ObCtxIds::GLIBC;
     ptr = ob_malloc(size, attr);
     if (OB_ISNULL(ptr)) {
       attr.tenant_id_ = OB_SERVER_TENANT_ID;
