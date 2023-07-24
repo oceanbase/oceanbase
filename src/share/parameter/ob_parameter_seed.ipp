@@ -227,10 +227,10 @@ DEF_STR_WITH_CHECKER(tableapi_transport_compress_func, OB_CLUSTER_PARAMETER, "no
                      common::ObConfigCompressFuncChecker,
                      "compressor used for tableAPI query result. Values: none, lz4_1.0, snappy_1.0, zlib_1.0, zstd_1.0 zstd 1.3.8",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(_sort_area_size, OB_TENANT_PARAMETER, "128M", "[2M,]",
+DEF_CAP(_sort_area_size, OB_TENANT_PARAMETER, "32M", "[2M,]",
         "size of maximum memory that could be used by SORT. Range: [2M,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(_hash_area_size, OB_TENANT_PARAMETER, "100M", "[4M,]",
+DEF_CAP(_hash_area_size, OB_TENANT_PARAMETER, "32M", "[4M,]",
         "size of maximum memory that could be used by HASH JOIN. Range: [4M,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
@@ -358,7 +358,7 @@ DEF_INT(default_progressive_merge_num, OB_TENANT_PARAMETER, "0", "[0,)",
          "default progressive_merge_num when tenant create table"
          "Range:[0,)",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(_parallel_min_message_pool, OB_TENANT_PARAMETER, "64M", "[16M, 8G]",
+DEF_CAP(_parallel_min_message_pool, OB_TENANT_PARAMETER, "16M", "[16M, 8G]",
         "DTL message buffer pool reserve the mininum size after extend the size. Range: [16M,8G]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_DBL(_parallel_server_sleep_time, OB_TENANT_PARAMETER, "1", "[0, 2000]",

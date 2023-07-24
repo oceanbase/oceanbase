@@ -77,7 +77,7 @@ private:
   uint64_t tenant_id_;
   int64_t size_per_buffer_;
   int64_t seqno_;
-  static const int64_t MAX_CAPACITY = 1024;
+  static const int64_t MAX_CAPACITY = 128;
   common::ObLightyQueue free_queue_;
   common::ObFIFOAllocator allocator_;
 
