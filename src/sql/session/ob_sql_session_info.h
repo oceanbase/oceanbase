@@ -887,6 +887,11 @@ public:
                          uint64_t seq_id,
                          const share::ObSequenceValue &value);
 
+  int drop_sequence_value_if_exists(uint64_t tenant_id, uint64_t seq_id);
+  void reuse_all_sequence_value()
+  {
+    sequence_currval_map_.reuse();
+  }
   int get_context_values(const common::ObString &context_name,
                         const common::ObString &attribute,
                         common::ObString &value,
@@ -940,6 +945,7 @@ public:
   ObErrorSyncSysVarEncoder &get_error_sync_sys_var_encoder() { return error_sync_sys_var_encoder_;}
   ObSequenceCurrvalEncoder &get_sequence_currval_encoder() { return sequence_currval_encoder_; }
   ObContextsMap &get_contexts_map() { return contexts_map_; }
+  ObSequenceCurrvalMap &get_sequence_currval_map() { return sequence_currval_map_; }
   int get_mem_ctx_alloc(common::ObIAllocator *&alloc);
   int update_sess_sync_info(const SessionSyncInfoType sess_sync_info_type,
                                 const char *buf, const int64_t length, int64_t &pos);

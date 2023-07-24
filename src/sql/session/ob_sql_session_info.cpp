@@ -2090,7 +2090,26 @@ int ObSQLSessionInfo::set_sequence_value(uint64_t tenant_id,
   } else if (OB_FAIL(sequence_currval_map_.set_refactored(seq_id, value, overwrite_exits))) {
     LOG_WARN("fail get seq", K(tenant_id), K(seq_id), K(ret));
   } else {
-    // ok
+    sequence_currval_encoder_.is_changed_ = true;
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::drop_sequence_value_if_exists(uint64_t tenant_id, uint64_t seq_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id ||
+      OB_INVALID_ID == seq_id)) {
+    LOG_WARN("invalid args", K(tenant_id), K(seq_id), K(ret));
+  } else if (OB_FAIL(sequence_currval_map_.erase_refactored(seq_id))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      LOG_INFO("drop sequence value not exists", K(ret),  K(tenant_id), K(seq_id));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("drop sequence value failed", K(ret), K(tenant_id), K(seq_id));
+    }
+  } else {
+    sequence_currval_encoder_.is_changed_ = true;
   }
   return ret;
 }
@@ -2932,6 +2951,50 @@ int64_t ObAppCtxInfoEncoder::get_serialize_size(ObSQLSessionInfo& sess) const
   }
   return len;
 }
+
+int ObSequenceCurrvalEncoder::serialize(ObSQLSessionInfo &sess, char *buf, const int64_t buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  ObSequenceCurrvalMap &map = sess.get_sequence_currval_map();
+  OB_UNIS_ENCODE(map.size());
+  int64_t count = 0;
+  for (auto it = map.begin(); OB_SUCC(ret) && it != map.end(); ++it, ++count) {
+    OB_UNIS_ENCODE(it->first);
+    OB_UNIS_ENCODE(it->second);
+  }
+  CK (count == map.size());
+  return ret;
+}
+
+int ObSequenceCurrvalEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t map_size = 0;
+  OB_UNIS_DECODE(map_size);
+  ObSequenceCurrvalMap &map = sess.get_sequence_currval_map();
+  OX (sess.reuse_all_sequence_value());
+  uint64_t seq_id = 0;
+  ObSequenceValue seq_val;
+  for (int64_t i = 0; OB_SUCC(ret) && i < map_size; ++i) {
+    OB_UNIS_DECODE(seq_id);
+    OB_UNIS_DECODE(seq_val);
+    OZ (map.set_refactored(seq_id, seq_val, true /*overwrite_exits*/));
+  }
+  return ret;
+}
+
+int64_t ObSequenceCurrvalEncoder::get_serialize_size(ObSQLSessionInfo& sess) const
+{
+  int64_t len = 0;
+  ObSequenceCurrvalMap &map = sess.get_sequence_currval_map();
+  OB_UNIS_ADD_LEN(map.size());
+  for (auto it = map.begin(); it != map.end(); ++it) {
+    OB_UNIS_ADD_LEN(it->first);
+    OB_UNIS_ADD_LEN(it->second);
+  }
+  return len;
+}
+
 OB_DEF_SERIALIZE(ObInnerContextMap)
 {
   int ret = OB_SUCCESS;
@@ -2996,27 +3059,6 @@ OB_DEF_SERIALIZE_SIZE(ObContextUnit)
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               attribute_,
               value_);
-  return len;
-}
-
-int ObSequenceCurrvalEncoder::serialize(ObSQLSessionInfo &sess, char *buf, const int64_t buf_len, int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  // TO DO
-  return ret;
-}
-
-int ObSequenceCurrvalEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t data_len, int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  // TO DO
-  return ret;
-}
-
-int64_t ObSequenceCurrvalEncoder::get_serialize_size(ObSQLSessionInfo& sess) const
-{
-  int64_t len = 0;
-  // TO Do
   return len;
 }
 
