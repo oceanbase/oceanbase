@@ -2384,6 +2384,18 @@ int ObCreateTableResolver::set_table_option_to_schema(ObTableSchema &table_schem
       }
     }
 
+    if (OB_SUCC(ret) && table_schema.get_compressor_type() == ObCompressorType::ZLIB_LITE_COMPRESSOR) {
+      uint64_t tenant_data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret));
+      } else if (tenant_data_version < DATA_VERSION_4_2_0_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("tenant version is less than 4.2, zlib_lite compress method is not supported",
+                 K(ret), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.2, zlib_lite");
+      }
+    }
+
     if (OB_SUCC(ret) && table_schema.is_external_table()) {
       if (table_schema.get_external_file_format().empty()
           || table_schema.get_external_file_location().empty()) {
