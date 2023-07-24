@@ -145,15 +145,16 @@ TEST(TestLogExternalStorageHandler, test_log_external_storage_handler)
 
   // 测试invalid argument
   EXPECT_EQ(OB_INVALID_ARGUMENT, handler.start(-1));
-  EXPECT_EQ(OB_INVALID_ARGUMENT, handler.start(ObLogExternalStorageHandler::CONCURRENCY_LIMIT+1));
+  // 当concurrency超过最大并发度时，以最大并发度为准
+  EXPECT_NE(OB_INVALID_ARGUMENT, handler.start(ObLogExternalStorageHandler::CONCURRENCY_LIMIT+1));
+  EXPECT_EQ(ObLogExternalStorageHandler::CONCURRENCY_LIMIT, handler.concurrency_);
+  EXPECT_EQ(ObLogExternalStorageHandler::CONCURRENCY_LIMIT*ObLogExternalStorageHandler::CAPACITY_COEFFICIENT,
+            handler.capacity_);
+  EXPECT_EQ(true, handler.is_running_);
 
-  // start 成功
+  // 重复start
   const int64_t concurrency = 16;
   EXPECT_EQ(OB_SUCCESS, handler.start(concurrency));
-  EXPECT_EQ(true, handler.is_running_);
-  EXPECT_EQ(concurrency, handler.concurrency_);
-  EXPECT_EQ(concurrency*ObLogExternalStorageHandler::CAPACITY_COEFFICIENT,
-            handler.capacity_);
 
   // 验证读取——invalid argument
   {
@@ -178,15 +179,19 @@ TEST(TestLogExternalStorageHandler, test_log_external_storage_handler)
     EXPECT_EQ(OB_INVALID_ARGUMENT, handler.resize(invalid_concurrency, 0));
     int64_t invalid_timeout_us = 0;
     EXPECT_EQ(OB_INVALID_ARGUMENT, handler.resize(concurrency, invalid_timeout_us));
+
   }
 
   // 验证私有函数
   {
-    // 验证is_valid_concurrency_
+    EXPECT_EQ(OB_SUCCESS, handler.resize_(16));
+    // 验证is_valid_concurrency_为false
     int64_t invalid_concurrency = -1;
     EXPECT_EQ(false, handler.is_valid_concurrency_(invalid_concurrency));
+
+    // 当并发度超过128时，会将concurrency_设置为128.
     invalid_concurrency = ObLogExternalStorageHandler::CONCURRENCY_LIMIT + 1;
-    EXPECT_EQ(false, handler.is_valid_concurrency_(invalid_concurrency));
+    EXPECT_EQ(true, handler.is_valid_concurrency_(invalid_concurrency));
 
     // 验证get_async_task_count_
     // 单个任务最小2M, 在concurrency足够的情况下，最多存在8个异步任务
@@ -217,6 +222,12 @@ TEST(TestLogExternalStorageHandler, test_log_external_storage_handler)
     EXPECT_EQ(OB_SUCCESS, handler.resize(new_concurrency));
     EXPECT_EQ(new_concurrency, handler.concurrency_);
     EXPECT_EQ(new_concurrency*ObLogExternalStorageHandler::CAPACITY_COEFFICIENT,
+              handler.capacity_);
+
+    new_concurrency = 129;
+    EXPECT_EQ(OB_SUCCESS, handler.resize(new_concurrency));
+    EXPECT_EQ(ObLogExternalStorageHandler::CONCURRENCY_LIMIT, handler.concurrency_);
+    EXPECT_EQ(ObLogExternalStorageHandler::CONCURRENCY_LIMIT*ObLogExternalStorageHandler::CAPACITY_COEFFICIENT,
               handler.capacity_);
     new_concurrency = 0;
     EXPECT_EQ(OB_SUCCESS, handler.resize(new_concurrency));
@@ -342,7 +353,7 @@ TEST(TestLogExternalStorageHandler, test_oss_object)
     for (int i = 0; i < total_oss_object; i++) {
       bool exist = false;
       int64_t real_read_size = 0;
-      // farm环境写oss太慢了，暂时先单测不运行
+     // farm环境写oss太慢了，暂时先单测不运行
      // if (OB_FAIL(generate_oss_data(uris[i].c_str(), oss_path,  buf_self_pread, buf_len))) {
      //   CLOG_LOG(ERROR, "oss can not access", K(uris[i].c_str()), K(oss_path), K(exist));
      // } else {
