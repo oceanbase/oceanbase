@@ -62,6 +62,7 @@ public:
   inline const BlockAllocatorT &get_block_allocator() const { return block_alloc_; }
   void set_tenant_id(int64_t tenant_id) { block_alloc_.set_tenant_id(tenant_id); }
   void set_ctx_id(int64_t ctx_id) { block_alloc_.set_ctx_id(ctx_id); }
+  void set_label(const lib::ObLabel &label) { block_alloc_.set_label(label); };
 
   virtual bool empty() const;
 

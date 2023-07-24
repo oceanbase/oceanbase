@@ -427,9 +427,9 @@ public:
   PartitionIdCalcType get_partition_id_calc_type() { return calc_type_; }
   void set_fixed_id(ObObjectID fixed_id) { fixed_id_ = fixed_id; }
   ObObjectID get_fixed_id() { return fixed_id_; }
-  const ObIArray<ObPxTabletRange> &get_partition_ranges() const { return part_ranges_; }
-  int set_partition_ranges(const ObIArray<ObPxTabletRange> &part_ranges);
-  int add_partition_range(ObPxTabletRange &part_range);
+  const Ob2DArray<ObPxTabletRange> &get_partition_ranges() const { return part_ranges_; }
+  int set_partition_ranges(const Ob2DArray<ObPxTabletRange> &part_ranges,
+                           char *buf = NULL, int64_t max_size = 0);
   int fill_px_batch_info(
       ObBatchRescanParams &params,
       int64_t batch_id,
@@ -602,7 +602,7 @@ protected:
   ObObjectID fixed_id_;    // fixed part id or fixed subpart ids
 
   // sample result
-  ObSEArray<ObPxTabletRange, 1> part_ranges_;
+  Ob2DArray<ObPxTabletRange> part_ranges_;
   int64_t check_status_times_;
   ObIVirtualTableIteratorFactory *vt_ift_;
 

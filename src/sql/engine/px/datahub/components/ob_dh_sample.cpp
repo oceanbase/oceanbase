@@ -183,10 +183,13 @@ int ObDynamicSampleWholeMsg::assign(const ObDynamicSampleWholeMsg &other, common
   if (OB_FAIL(part_ranges_.reserve(other.part_ranges_.count()))) {
     LOG_WARN("reserve partition ranges failed", K(ret), K(other.part_ranges_.count()));
   }
+  char *buf = NULL;
+  int64_t size = 0;
+  int64_t pos = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < other.part_ranges_.count(); ++i) {
     const ObPxTabletRange &cur_part_range = other.part_ranges_.at(i);
     ObPxTabletRange tmp_part_range;
-    if (OB_FAIL(tmp_part_range.deep_copy_from(cur_part_range, *allocator))) {
+    if (OB_FAIL(tmp_part_range.deep_copy_from<true>(cur_part_range, *allocator, buf, size, pos))) {
       LOG_WARN("deep copy partition range failed", K(ret), K(cur_part_range), K(i));
     } else if (OB_FAIL(part_ranges_.push_back(tmp_part_range))) {
       LOG_WARN("push back partition range failed", K(ret), K(tmp_part_range), K(i));
