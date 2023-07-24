@@ -689,6 +689,7 @@ int ObMySQLUtil::time_cell_str(
       } else {
         int ob_time_day = ob_time.parts_[DT_DATE] + ob_time.parts_[DT_HOUR] / 24;
         int ob_time_hour = ob_time.parts_[DT_HOUR] % 24;
+        int8_t is_negative = (DT_MODE_NEG & ob_time.mode_) ? 1 : 0;
         if (ob_time.parts_[DT_USEC]) {
           timelen = 12;
         } else if (ob_time_day || ob_time_hour || ob_time.parts_[DT_MIN] || ob_time.parts_[DT_SEC]) {
@@ -702,7 +703,7 @@ int ObMySQLUtil::time_cell_str(
         }
 
         if(timelen > 0 && OB_SUCC(ret)) {
-          if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(DT_MODE_NEG & ob_time.mode_), pos))) {//is_negative(1)
+          if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(is_negative), pos))) {//is_negative(1)
             LOG_WARN("fail to store int", K(ret));
           } else if (OB_FAIL(ObMySQLUtil::store_int4(buf, len, static_cast<int32_t>(ob_time_day), pos))) {//days(4)
             LOG_WARN("fail to store int", K(ret));
