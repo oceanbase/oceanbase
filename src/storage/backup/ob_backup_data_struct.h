@@ -461,7 +461,7 @@ struct ObBackupMacroBlockIDMapping final {
   ObBackupMacroBlockIDMapping();
   ~ObBackupMacroBlockIDMapping();
   void reuse();
-  int prepare_tablet_sstable(
+  int prepare_tablet_sstable(const uint64_t tenant_id,
       const storage::ObITable::TableKey &table_key, const common::ObIArray<blocksstable::ObLogicMacroBlockId> &list);
   TO_STRING_KV(K_(table_key), K_(id_pair_list));
   storage::ObITable::TableKey table_key_;

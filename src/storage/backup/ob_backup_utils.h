@@ -99,7 +99,7 @@ public:
   ~ObBackupTabletStat();
   int init(const uint64_t tenant_id, const int64_t backup_set_id, const share::ObLSID &ls_id,
       const share::ObBackupDataType &backup_data_type);
-  int prepare_tablet_sstables(const share::ObBackupDataType &backup_data_type, const common::ObTabletID &tablet_id,
+  int prepare_tablet_sstables(const uint64_t tenant_id, const share::ObBackupDataType &backup_data_type, const common::ObTabletID &tablet_id,
       const storage::ObTabletHandle &tablet_handle, const common::ObIArray<storage::ObITable *> &sstable_array);
   int mark_items_pending(
       const share::ObBackupDataType &backup_data_type, const common::ObIArray<ObBackupProviderItem> &items);
@@ -148,7 +148,7 @@ class ObBackupTabletHolder final {
 public:
   ObBackupTabletHolder();
   ~ObBackupTabletHolder();
-  int init(const share::ObLSID &ls_id);
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id);
   int hold_tablet(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle);
   int get_tablet(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle);
   int release_tablet(const common::ObTabletID &tablet_id);
