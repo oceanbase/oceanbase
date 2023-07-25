@@ -582,7 +582,12 @@ OB_INLINE int ObStorageDatum::from_buf_enhance(const char *buf, const int64_t bu
   } else {
     reuse();
     len_ = static_cast<uint32_t>(buf_len);
-    if (buf_len > 0) {
+    if (sizeof(uint64_t) == buf_len) {
+      // To maintain the same processing method as other micro-block formats,
+      // we perform a deep copy on columns with a length of 8 bytes in flat micro-block format.
+      // see ObClusterColumnReader::read_column_from_buf
+      MEMCPY(no_cv(ptr_), buf, sizeof(uint64_t));
+    } else if (buf_len > 0) {
       ptr_ = buf;
     }
   }
