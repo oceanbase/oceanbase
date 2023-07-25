@@ -999,7 +999,6 @@ bool ObCopyTableKeyInfo::operator ==(const ObCopyTableKeyInfo &other) const
 OB_SERIALIZE_MEMBER(ObCopyTableKeyInfo, src_table_key_, dest_table_key_);
 
 /******************ObCopyMacroRangeInfo*********************/
-//TODO(yanfeng) check endkey in 4.1
 ObCopyMacroRangeInfo::ObCopyMacroRangeInfo()
   : start_macro_block_id_(),
     end_macro_block_id_(),

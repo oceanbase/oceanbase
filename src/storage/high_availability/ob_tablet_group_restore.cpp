@@ -1854,7 +1854,6 @@ int ObTabletRestoreDag::init(
     tablet_restore_ctx_.is_leader_ = param.is_leader_;
     tablet_restore_ctx_.meta_index_store_ = param.meta_index_store_;
     tablet_restore_ctx_.second_meta_index_store_ = param.second_meta_index_store_;
-    // TODO: yanfeng make sure this is right
     tablet_restore_ctx_.replica_type_ = REPLICA_TYPE_FULL;
     tablet_restore_ctx_.ha_table_info_mgr_ = param.ha_table_info_mgr_;
     tablet_restore_ctx_.need_check_seq_ = param.need_check_seq_;

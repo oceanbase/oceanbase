@@ -47,7 +47,7 @@ class ObLogStreamService;
 namespace obrpc
 {
 
-//TODO(yanfeng) need use tenant module replace it in 4.1, currently use 509 tenant
+//TODO(yanfeng) need use tenant module replace it in 4.3, currently use 509 tenant
 
 struct ObCopyMacroBlockArg
 {
