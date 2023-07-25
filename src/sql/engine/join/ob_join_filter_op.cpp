@@ -178,7 +178,7 @@ int ObJoinFilterOpInput::init_shared_msgs(
           px_sequence_id_, 0/*task_id*/, tenant_id, timeout_ts, register_dm_info_))) {
         LOG_WARN("fail to init msg", K(ret));
       } else if (OB_FAIL(construct_msg_details(spec, sqc_proxy, config_, *msg_ptr, sqc_count))) {
-        LOG_WARN("fail to construct msg details", K(ret));
+        LOG_WARN("fail to construct msg details", K(ret), K(tenant_id));
       } else if (OB_FAIL(array_ptr->push_back(msg_ptr))) {
         LOG_WARN("fail to push back array ptr", K(ret));
       }
@@ -211,6 +211,7 @@ int ObJoinFilterOpInput::construct_msg_details(
       ObPxSQCProxy::SQCP2PDhMap &dh_map = sqc_proxy->get_p2p_dh_map();
       if (OB_FAIL(bf_msg.bloom_filter_.init(spec.filter_len_,
           bf_msg.get_allocator(),
+          bf_msg.get_tenant_id(),
           config.bloom_filter_ratio_))) {
         LOG_WARN("failed to init bloom filter", K(ret));
       } else if (!spec.is_shared_join_filter() || !spec.is_shuffle_) {

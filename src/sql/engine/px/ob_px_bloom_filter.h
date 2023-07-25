@@ -41,6 +41,7 @@ struct BloomFilterReceiveCount
 
 struct BloomFilterIndex
 {
+  int assign(const BloomFilterIndex &other);
   BloomFilterIndex() : channel_id_(0), begin_idx_(0), end_idx_(0) {}
   BloomFilterIndex(int64_t channel_id, int64_t beigin_idx, int64_t end_idx) :
       channel_id_(channel_id), begin_idx_(beigin_idx),
@@ -48,7 +49,7 @@ struct BloomFilterIndex
   int64_t channel_id_;// join filter send channel id
   int64_t begin_idx_; // join filter begin position in full bloom filter
   int64_t end_idx_;   // join filter end position in full bloom filter
-  ObArray<int64_t> channel_ids_;
+  ObFixedArray<int64_t, common::ObIAllocator> channel_ids_;
   TO_STRING_KV(K_(begin_idx), K_(end_idx), K_(channel_id), K_(channel_ids));
 };
 
@@ -58,7 +59,7 @@ OB_UNIS_VERSION_V(1);
 public:
   ObPxBloomFilter();
   virtual ~ObPxBloomFilter() {};
-  int init(int64_t data_length, common::ObIAllocator &allocator, double fpp = 0.01);
+  int init(int64_t data_length, common::ObIAllocator &allocator, int64_t tenant_id, double fpp = 0.01);
   int init(const ObPxBloomFilter *filter);
   void reset_filter();
   inline int might_contain(uint64_t hash, bool &is_match) {
@@ -90,8 +91,9 @@ public:
   typedef int (ObPxBloomFilter::*GetFunc)(uint64_t hash, bool &is_match);
   int generate_receive_count_array(int64_t piece_size);
   void reset();
-  int assign(const ObPxBloomFilter &filter);
+  int assign(const ObPxBloomFilter &filter, int64_t tenant_id);
   int regenerate();
+  void set_allocator_attr(int64_t tenant_id);
   TO_STRING_KV(K_(data_length), K_(bits_count), K_(fpp), K_(hash_func_count), K_(is_inited),
       K_(bits_array_length), K_(true_count));
 private:

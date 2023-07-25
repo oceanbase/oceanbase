@@ -254,6 +254,9 @@ int ObRFBloomFilterMsg::generate_receive_count_array(int64_t piece_size, int64_t
   int64_t bits_array_length = ceil((double)bloom_filter_.get_bits_count() / 64);
   int64_t count = ceil(bits_array_length / (double)piece_size);
   int64_t begin_idx = 0;
+  if (OB_FAIL(receive_count_array_.init(count))) {
+    LOG_WARN("fail to init receive_count_array_", K(ret));
+  }
   for (int i = 0; OB_SUCC(ret) && i < count; ++i) {
     begin_idx = i * piece_size;
     if (begin_idx >= bits_array_length) {
@@ -392,9 +395,23 @@ int ObRFBloomFilterMsg::assign(const ObP2PDatahubMsgBase &msg)
     LOG_WARN("failed to assign base data", K(ret));
   } else if (OB_FAIL(next_peer_addrs_.assign(other_msg.next_peer_addrs_))) {
     LOG_WARN("fail to assign bf msg", K(ret));
-  } else if (OB_FAIL(bloom_filter_.assign(other_msg.bloom_filter_))) {
+  } else if (OB_FAIL(bloom_filter_.assign(other_msg.bloom_filter_, msg.get_tenant_id()))) {
     LOG_WARN("fail to assign bf msg", K(ret));
-  } else if (OB_FAIL(filter_indexes_.assign(other_msg.filter_indexes_))) {
+  } else if (OB_FAIL(filter_indexes_.prepare_allocate(other_msg.filter_indexes_.count()))) {
+    LOG_WARN("failed to prepare_allocate filter indexes", K(ret));
+  } else {
+    // The reason we don't use filter_indexes_.assign(other_msg.filter_indexes_) here is that:
+    // channel_ids_ is an ObFixedArray in BloomFilterIndex, we need to set allocator before assign channel_ids_
+    for (int64_t i = 0; i < other_msg.filter_indexes_.count() && OB_SUCC(ret); ++i) {
+      filter_indexes_.at(i).channel_ids_.set_allocator(&allocator_);
+      const BloomFilterIndex &other_filter_index = other_msg.filter_indexes_.at(i);
+      if (OB_FAIL(filter_indexes_.at(i).assign(other_filter_index))) {
+        LOG_WARN("fail to assign BloomFilterIndex", K(ret));
+      }
+    }
+  }
+
+  if (OB_FAIL(filter_indexes_.assign(other_msg.filter_indexes_))) {
     LOG_WARN("failed to assign filter indexes", K(ret));
   }
   return ret;
@@ -722,6 +739,9 @@ int ObRFBloomFilterMsg::broadcast(ObIArray<ObAddr> &target_addrs,
         auto addr_filter_idx = filter_indexes_.at(cur_idx);
         msg.bloom_filter_.set_begin_idx(addr_filter_idx.begin_idx_);
         msg.bloom_filter_.set_end_idx(addr_filter_idx.end_idx_);
+        if (OB_FAIL(msg.next_peer_addrs_.init(addr_filter_idx.channel_ids_.count()))) {
+          LOG_WARN("fail to init next_peer_addrs_", K(ret));
+        }
         for (int i = 0; OB_SUCC(ret) && i < addr_filter_idx.channel_ids_.count(); ++i) {
           if (OB_FAIL(msg.next_peer_addrs_.push_back(
               target_addrs.at(addr_filter_idx.channel_ids_.at(i))))) {
@@ -757,6 +777,11 @@ int ObRFBloomFilterMsg::generate_filter_indexes(
   int64_t group_addr_cnt = each_group_size > addr_cnt ?
         addr_cnt : each_group_size;
   BloomFilterIndex filter_index;
+  ObSEArray<BloomFilterIndex *, 64> tmp_filter_indexes;
+  lib::ObMemAttr attr(tenant_id_, "TmpBFIdxAlloc");
+  common::ObArenaAllocator tmp_allocator(attr);
+  filter_index.channel_ids_.set_allocator(&tmp_allocator);
+  BloomFilterIndex *filter_index_ptr = nullptr;
   for (int i = 0; OB_SUCC(ret) && i < count; ++i) {
     start_idx = i * piece_size;
     end_idx = (i + 1) * piece_size;
@@ -783,10 +808,33 @@ int ObRFBloomFilterMsg::generate_filter_indexes(
       } else {
         filter_index.channel_id_ = (i % group_addr_cnt) + pos;
       }
+      if (OB_FAIL(filter_index.channel_ids_.init(min(addr_cnt, pos + group_addr_cnt) - pos + 1))) {
+        LOG_WARN("failed to init channel_ids_");
+      }
       for (int k = pos; OB_SUCC(ret) && k < addr_cnt && k < pos + group_addr_cnt; ++k) {
         OZ(filter_index.channel_ids_.push_back(k));
       }
-      OZ(filter_indexes_.push_back(filter_index));
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(filter_index_ptr = OB_NEWx(BloomFilterIndex, &tmp_allocator))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc BloomFilterIndex");
+      } else if (FALSE_IT(filter_index_ptr->channel_ids_.set_allocator(&tmp_allocator))) {
+      } else if (OB_FAIL(filter_index_ptr->assign(filter_index))) {
+        LOG_WARN("failed to assign");
+      } else if (OB_FAIL(tmp_filter_indexes.push_back(filter_index_ptr))) {
+        LOG_WARN("failed to push_back");
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(filter_indexes_.prepare_allocate(tmp_filter_indexes.count()))) {
+    LOG_WARN("failed to prepare_allocate filter_indexes_");
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_filter_indexes.count(); ++i) {
+      filter_indexes_.at(i).channel_ids_.set_allocator(&allocator_);
+      if (OB_FAIL(filter_indexes_.at(i).assign(*tmp_filter_indexes.at(i)))) {
+        LOG_WARN("failed to assign filter_indexes", K(i));
+      }
     }
   }
   return ret;

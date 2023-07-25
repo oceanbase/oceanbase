@@ -35,6 +35,21 @@ using namespace obrpc;
 #define LOG_HASH_COUNT 2        // = log2(FIXED_HASH_COUNT)
 #define WORD_SIZE 64            // WORD_SIZE * FIXED_HASH_COUNT = BF_BLOCK_SIZE
 
+// before assign, please set allocator for channel_ids_ first
+int BloomFilterIndex::assign(const BloomFilterIndex &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    channel_id_ = other.channel_id_;
+    begin_idx_ = other.begin_idx_;
+    end_idx_ = other.end_idx_;
+    if (OB_FAIL(channel_ids_.assign(other.channel_ids_))) {
+      LOG_WARN("failed to assign channel_ids_");
+    }
+  }
+  return ret;
+}
+
 ObPxBloomFilter::ObPxBloomFilter() : data_length_(0), bits_count_(0), fpp_(0.0),
     hash_func_count_(0), is_inited_(false), bits_array_length_(0),
     bits_array_(NULL), true_count_(0), begin_idx_(0), end_idx_(0), allocator_(),
@@ -43,9 +58,10 @@ ObPxBloomFilter::ObPxBloomFilter() : data_length_(0), bits_count_(0), fpp_(0.0),
 
 }
 
-int ObPxBloomFilter::init(int64_t data_length, ObIAllocator &allocator, double fpp /*= 0.01 */)
+int ObPxBloomFilter::init(int64_t data_length, ObIAllocator &allocator, int64_t tenant_id, double fpp /*= 0.01 */)
 {
   int ret = OB_SUCCESS;
+  set_allocator_attr(tenant_id);
   data_length = max(data_length, 1);
   if (fpp <= 0) {
     ret = OB_ERR_UNEXPECTED;
@@ -78,9 +94,10 @@ int ObPxBloomFilter::init(int64_t data_length, ObIAllocator &allocator, double f
   return ret;
 }
 
-int ObPxBloomFilter::assign(const ObPxBloomFilter &filter)
+int ObPxBloomFilter::assign(const ObPxBloomFilter &filter, int64_t tenant_id)
 {
   int ret = OB_SUCCESS;
+  set_allocator_attr(tenant_id);
   data_length_ = filter.data_length_;
   bits_count_ = filter.bits_count_;
   fpp_ = filter.fpp_;
@@ -102,6 +119,12 @@ int ObPxBloomFilter::assign(const ObPxBloomFilter &filter)
     MEMCPY(bits_array_, filter.bits_array_, sizeof(int64_t) * bits_array_length_);
   }
   return ret;
+}
+
+void ObPxBloomFilter::set_allocator_attr(int64_t tenant_id)
+{
+  ObMemAttr attr(tenant_id, "PxBfAlloc", ObCtxIds::DEFAULT_CTX_ID);
+  allocator_.set_attr(attr);
 }
 
 int ObPxBloomFilter::init(const ObPxBloomFilter *filter)
