@@ -1365,7 +1365,7 @@ int ObSqlPlan::get_operator_prefix(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
       }
       buf_len = plan_level * 25;
       pos = 0;
-      if (plan_level > 0) {
+      if (OB_SUCC(ret) && plan_level > 0) {
         buf = static_cast<char*>(allocator_.alloc(buf_len));
         if (OB_ISNULL(buf)) {
           ret = OB_ERR_UNEXPECTED;
@@ -1404,8 +1404,12 @@ int ObSqlPlan::get_operator_prefix(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
           ret = BUF_PRINTF("  ");
         }
       }
-      ObString prefix(pos, buf);
-      format_helper.operator_prefix_.push_back(prefix);
+      if (OB_SUCC(ret)) {
+        ObString prefix(pos, buf);
+        if (OB_FAIL(format_helper.operator_prefix_.push_back(prefix))) {
+          LOG_WARN("failed to push back prefix", K(ret));
+        }
+      }
     }
   }
   return ret;
