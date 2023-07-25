@@ -31,6 +31,7 @@ public:
 
 public:
   int get_config_version_and_transfer_scn(
+      const bool need_get_config_version,
       palf::LogConfigVersion &config_version,
       share::SCN &transfer_scn);
   int add_member(const common::ObMember &member,
@@ -50,7 +51,16 @@ private:
   int get_leader_config_version_and_transfer_scn_(
       palf::LogConfigVersion &leader_config_version,
       share::SCN &leader_transfer_scn);
-  int check_ls_transfer_scn_(const share::SCN &transfer_scn);
+  int get_config_version_and_transfer_scn_(
+      const bool need_get_config_version,
+      const common::ObAddr &addr,
+      palf::LogConfigVersion &config_version,
+      share::SCN &transfer_scn);
+  int check_ls_transfer_scn_(const share::SCN &transfer_scn, bool &is_match);
+  int get_ls_member_list_(common::ObIArray<common::ObAddr> &addr_list);
+  int check_ls_transfer_scn_validity_(palf::LogConfigVersion &leader_config_version);
+  int check_ls_transfer_scn_validity_for_primary_(palf::LogConfigVersion &leader_config_version);
+  int check_ls_transfer_scn_validity_for_standby_(palf::LogConfigVersion &leader_config_version);
 private:
   bool is_inited_;
   storage::ObLS *ls_;

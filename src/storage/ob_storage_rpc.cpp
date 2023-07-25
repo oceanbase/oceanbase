@@ -931,7 +931,8 @@ OB_SERIALIZE_MEMBER(ObCheckTransferTabletBackfillRes, backfill_finished_);
 
 ObStorageChangeMemberArg::ObStorageChangeMemberArg()
   : tenant_id_(OB_INVALID_ID),
-    ls_id_()
+    ls_id_(),
+    need_get_config_version_(true)
 {
 }
 
@@ -947,7 +948,7 @@ void ObStorageChangeMemberArg::reset()
   ls_id_.reset();
 }
 
-OB_SERIALIZE_MEMBER(ObStorageChangeMemberArg, tenant_id_, ls_id_);
+OB_SERIALIZE_MEMBER(ObStorageChangeMemberArg, tenant_id_, ls_id_, need_get_config_version_);
 
 ObStorageChangeMemberRes::ObStorageChangeMemberRes()
   : config_version_(),
@@ -2752,6 +2753,7 @@ int ObStorageGetConfigVersionAndTransferScnP::process()
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = arg_.tenant_id_;
   const share::ObLSID &ls_id = arg_.ls_id_;
+  const bool need_get_config_version = arg_.need_get_config_version_;
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
     ObLSService *ls_service = NULL;
@@ -2765,7 +2767,8 @@ int ObStorageGetConfigVersionAndTransferScnP::process()
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log stream should not be NULL", KR(ret), K(arg_), KP(ls));
-    } else if (OB_FAIL(ls->get_config_version_and_transfer_scn(result_.config_version_,
+    } else if (OB_FAIL(ls->get_config_version_and_transfer_scn(need_get_config_version,
+                                                               result_.config_version_,
                                                                result_.transfer_scn_))) {
       LOG_WARN("failed to get config version and transfer scn", K(ret), K(tenant_id), K(ls_id));
     } else {
@@ -3532,6 +3535,7 @@ int ObStorageRpc::get_config_version_and_transfer_scn(
     const uint64_t tenant_id,
     const ObStorageHASrcInfo &src_info,
     const share::ObLSID &ls_id,
+    const bool need_get_config_version,
     palf::LogConfigVersion &config_version,
     share::SCN &transfer_scn)
 {
@@ -3549,6 +3553,7 @@ int ObStorageRpc::get_config_version_and_transfer_scn(
     ObStorageChangeMemberRes res;
     arg.tenant_id_ = tenant_id;
     arg.ls_id_ = ls_id;
+    arg.need_get_config_version_ = need_get_config_version;
     const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
     if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_)
                            .by(tenant_id)
