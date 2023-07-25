@@ -271,6 +271,9 @@ int ObParallelMergeInfo::init(
         ret = deep_copy_list(allocator, other.parallel_store_rowkey_list_, parallel_store_rowkey_list_);
       } else if (PARALLEL_INFO_VERSION_V1 == compat_) {
         ret = deep_copy_list(allocator, other.parallel_datum_rowkey_list_, parallel_datum_rowkey_list_);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid compat version", KR(ret), K_(compat));
       }
       if (OB_FAIL(ret)) {
         destroy();
@@ -290,12 +293,20 @@ int ObParallelMergeInfo::deep_copy_datum_rowkey(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid idx", KR(ret), K(idx), K_(list_size));
   } else if (PARALLEL_INFO_VERSION_V0 == compat_) {
-    if (OB_FAIL(rowkey.from_rowkey(parallel_store_rowkey_list_[idx].get_rowkey()/*src*/, input_allocator))) {
-      STORAGE_LOG(WARN, "failed to deep copy end key", K(ret), K(idx), K(parallel_store_rowkey_list_[idx]));
+    ObDatumRowkeyHelper rowkey_helper;
+    ObDatumRowkey tmp_datum_rowkey;
+    if (OB_FAIL(rowkey_helper.convert_datum_rowkey(parallel_store_rowkey_list_[idx].get_rowkey()/*src*/, tmp_datum_rowkey/*dst*/))) {
+      STORAGE_LOG(WARN, "failed to convert to datum rowkey", K(ret), K(idx), K(parallel_store_rowkey_list_[idx]));
+    } else if (OB_FAIL(tmp_datum_rowkey.deep_copy(rowkey/*dst*/, input_allocator))) {
+      STORAGE_LOG(WARN, "failed to deep copy datum rowkey", KR(ret), K(tmp_datum_rowkey));
     }
-  } else if (PARALLEL_INFO_VERSION_V1 == compat_
-      && OB_FAIL(parallel_datum_rowkey_list_[idx].deep_copy(rowkey/*dst*/, input_allocator))) {
-    STORAGE_LOG(WARN, "failed to deep copy end key", K(ret), K(idx), K(parallel_datum_rowkey_list_[idx]));
+  } else if (PARALLEL_INFO_VERSION_V1 == compat_) {
+    if (OB_FAIL(parallel_datum_rowkey_list_[idx].deep_copy(rowkey/*dst*/, input_allocator))) {
+      STORAGE_LOG(WARN, "failed to deep copy end key", K(ret), K(idx), K(parallel_datum_rowkey_list_[idx]));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid compat version", KR(ret), K_(compat));
   }
   return ret;
 }
@@ -348,7 +359,7 @@ const char *ObMediumCompactionInfo::get_compaction_type_str(enum ObCompactionTyp
 }
 
 ObMediumCompactionInfo::ObMediumCompactionInfo()
-  : medium_compat_version_(MEIDUM_COMPAT_VERSION_V2),
+  : medium_compat_version_(MEDIUM_COMPAT_VERSION_V2),
     compaction_type_(COMPACTION_TYPE_MAX),
     contain_parallel_range_(false),
     medium_merge_reason_(ObAdaptiveMergePolicy::NONE),
@@ -405,8 +416,8 @@ bool ObMediumCompactionInfo::is_valid() const
       && data_version_ > 0
       && storage_schema_.is_valid()
       && parallel_merge_info_.is_valid()
-      && (MEIDUM_COMPAT_VERSION == medium_compat_version_
-        || (MEIDUM_COMPAT_VERSION_V2 == medium_compat_version_ && last_medium_snapshot_ != 0));
+      && (MEDIUM_COMPAT_VERSION == medium_compat_version_
+        || (MEDIUM_COMPAT_VERSION_V2 == medium_compat_version_ && last_medium_snapshot_ != 0));
 }
 
 void ObMediumCompactionInfo::reset()
@@ -464,7 +475,7 @@ int ObMediumCompactionInfo::serialize(char *buf, const int64_t buf_len, int64_t 
           OB_UNIS_ENCODE,
           parallel_merge_info_);
     }
-    if (OB_SUCC(ret) && MEIDUM_COMPAT_VERSION_V2 == medium_compat_version_) {
+    if (OB_SUCC(ret) && MEDIUM_COMPAT_VERSION_V2 == medium_compat_version_) {
       LST_DO_CODE(
         OB_UNIS_ENCODE,
         last_medium_snapshot_);
@@ -501,7 +512,7 @@ int ObMediumCompactionInfo::deserialize(
       clear_parallel_range();
       LOG_DEBUG("ObMediumCompactionInfo::deserialize", K(ret), K(buf), K(data_len), K(pos));
     }
-    if (OB_SUCC(ret) && MEIDUM_COMPAT_VERSION_V2 == medium_compat_version_) {
+    if (OB_SUCC(ret) && MEDIUM_COMPAT_VERSION_V2 == medium_compat_version_) {
       LST_DO_CODE(
         OB_UNIS_DECODE,
         last_medium_snapshot_);
@@ -523,7 +534,7 @@ int64_t ObMediumCompactionInfo::get_serialize_size() const
   if (contain_parallel_range_) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, parallel_merge_info_);
   }
-  if (MEIDUM_COMPAT_VERSION_V2 == medium_compat_version_) {
+  if (MEDIUM_COMPAT_VERSION_V2 == medium_compat_version_) {
     LST_DO_CODE(
       OB_UNIS_ADD_LEN,
       last_medium_snapshot_);

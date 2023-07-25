@@ -679,7 +679,7 @@ int ObMediumCompactionInfoList::check_medium_info_and_last_major(
 {
   int ret = OB_SUCCESS;
   if (nullptr != last_major_sstable
-      && ObMediumCompactionInfo::MEIDUM_COMPAT_VERSION_V2 == medium_info.medium_compat_version_
+      && ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2 == medium_info.medium_compat_version_
       && medium_info.medium_snapshot_ > last_major_sstable->get_snapshot_version()) {
     if (medium_info.from_cur_cluster()) { // same cluster_id & same tenant_id
       if (OB_UNLIKELY(medium_info.last_medium_snapshot_ != last_major_sstable->get_snapshot_version())) {

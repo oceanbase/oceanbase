@@ -209,8 +209,8 @@ public:
   void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;
   int64_t to_string(char* buf, const int64_t buf_len) const;
 public:
-  static const int64_t MEIDUM_COMPAT_VERSION = 1;
-  static const int64_t MEIDUM_COMPAT_VERSION_V2 = 2;
+  static const int64_t MEDIUM_COMPAT_VERSION = 1;
+  static const int64_t MEDIUM_COMPAT_VERSION_V2 = 2;
 
 private:
   static const int32_t SCS_ONE_BIT = 1;

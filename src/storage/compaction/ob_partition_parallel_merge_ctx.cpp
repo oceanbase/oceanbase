@@ -160,7 +160,7 @@ int ObParallelMergeCtx::init(const compaction::ObMediumCompactionInfo &medium_in
       concurrent_cnt_ = paral_info.get_size() + 1;
       parallel_type_ = PARALLEL_MAJOR;
       is_inited_ = true;
-      STORAGE_LOG(INFO, "success to init parallel merge ctx", KPC(this));
+      STORAGE_LOG(INFO, "success to init parallel merge ctx from medium_info", K(ret), KPC(this), K(paral_info));
     }
   }
   return ret;
