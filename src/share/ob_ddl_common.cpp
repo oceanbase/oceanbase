@@ -36,42 +36,6 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::obrpc;
 using namespace oceanbase::sql;
 
-int ObColumnNameInfo::init(const ObString &column_name,
-                           const ColumnType &column_type,
-                           const bool is_shadow_column,
-                           const ObIArray<common::ObString> &extended_type_info,
-                           common::ObArenaAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("not init", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < extended_type_info.count(); i++) {
-      void *buf = nullptr;
-      ObString info;
-      ObString new_info;
-      if (OB_FAIL(extended_type_info.at(i, info))) {
-        LOG_WARN("fail to get extended type info", K(ret), K(i));
-      } else if (OB_FAIL(ob_write_string(allocator, info, new_info))) {
-        LOG_WARN("fail to ob_write_string", K(ret), K(info));
-      } else if (OB_FAIL(extended_type_info_.push_back(new_info))) {
-        LOG_WARN("fail to push back extended type info", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ob_write_string(allocator, column_name, column_name_))) {
-        LOG_WARN("fail to ob write string", K(ret), K(column_name));
-      } else {
-        column_type_ = column_type;
-        is_shadow_column_ = is_shadow_column;
-        is_inited_ = true;
-      }
-    }
-  }
-  return ret;
-}
-
 int ObColumnNameMap::init(const ObTableSchema &orig_table_schema,
                           const AlterTableSchema &alter_table_schema)
 {
@@ -388,13 +352,7 @@ int ObDDLUtil::generate_column_name_str(
     bool with_comma = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_names.count(); ++i) {
       if (use_heap_table_ddl_plan && column_names.at(i).column_name_ == OB_HIDDEN_PK_INCREMENT_COLUMN_NAME) {
-      } else if (OB_FAIL(generate_column_name_str(column_names.at(i),
-                                                  is_oracle_mode,
-                                                  with_origin_name,
-                                                  with_alias_name,
-                                                  with_comma,
-                                                  column_names.at(i).is_cast_,
-                                                  sql_string))) {
+      } else if (OB_FAIL(generate_column_name_str(column_names.at(i), is_oracle_mode, with_origin_name, with_alias_name, with_comma, sql_string))) {
         LOG_WARN("generate column name string failed", K(ret));
       } else {
         with_comma = true;
@@ -437,7 +395,6 @@ int ObDDLUtil::generate_column_name_str(
     const bool with_origin_name,
     const bool with_alias_name,
     const bool with_comma,
-    const bool is_cast,
     ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
@@ -450,14 +407,8 @@ int ObDDLUtil::generate_column_name_str(
   }
   // append original column name
   if (OB_SUCC(ret) && with_origin_name) {
-    if (is_cast) {
-      if (OB_FAIL(sql_string.append_fmt("cast(%s%.*s%s as unsigned)", split_char, column_name_info.column_name_.length(), column_name_info.column_name_.ptr(), split_char))) {
-        LOG_WARN("append origin column name failed", K(ret));
-      }
-    } else {
-      if (OB_FAIL(sql_string.append_fmt("%s%.*s%s", split_char, column_name_info.column_name_.length(), column_name_info.column_name_.ptr(), split_char))) {
-        LOG_WARN("append origin column name failed", K(ret));
-      }
+    if (OB_FAIL(sql_string.append_fmt("%s%.*s%s", split_char, column_name_info.column_name_.length(), column_name_info.column_name_.ptr(), split_char))) {
+      LOG_WARN("append origin column name failed", K(ret));
     }
   }
   // append AS
@@ -501,8 +452,7 @@ int ObDDLUtil::generate_spatial_index_column_names(const ObTableSchema &dest_tab
                                                    const ObTableSchema &source_table_schema,
                                                    ObArray<ObColumnNameInfo> &insert_column_names,
                                                    ObArray<ObColumnNameInfo> &column_names,
-                                                   ObArray<int64_t> &select_column_ids,
-                                                   common::ObArenaAllocator &allocator)
+                                                   ObArray<int64_t> &select_column_ids)
 {
   int ret = OB_SUCCESS;
   if (dest_table_schema.is_spatial_index()) {
@@ -518,25 +468,16 @@ int ObDDLUtil::generate_spatial_index_column_names(const ObTableSchema &dest_tab
         if (OB_ISNULL(column_schema = dest_table_schema.get_column_schema(col_id))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
-        } else {
-          ObColumnNameInfo column_name_info;
-          if (OB_FAIL(column_name_info.init(column_schema->get_column_name_str(),
-                                            column_schema->get_data_type(),
-                                            false,
-                                            column_schema->get_extended_type_info(),
-                                            allocator))) {
-            LOG_WARN("fail to init column_name_info", K(ret));
-          } else if (OB_FAIL(insert_column_names.push_back(column_name_info))) {
-            LOG_WARN("push back insert column name failed", K(ret));
-          } else if (OB_FAIL(column_names.push_back(column_name_info))) {
-            LOG_WARN("push back column name failed", K(ret));
-          } else if (OB_FAIL(select_column_ids.push_back(col_id))) {
-            LOG_WARN("push back select column id failed", K(ret), K(col_id));
-          } else if (OB_NOT_NULL(column_schema = source_table_schema.get_column_schema(col_id))
-                    && !column_schema->is_rowkey_column()
-                    && geo_col_id == OB_INVALID_ID) {
-            geo_col_id = column_schema->get_geo_col_id();
-          }
+        } else if (OB_FAIL(insert_column_names.push_back(ObColumnNameInfo(column_schema->get_column_name_str(), false)))) {
+          LOG_WARN("push back insert column name failed", K(ret));
+        } else if (OB_FAIL(column_names.push_back(ObColumnNameInfo(column_schema->get_column_name_str(), false)))) {
+          LOG_WARN("push back rowkey column name failed", K(ret));
+        } else if (OB_FAIL(select_column_ids.push_back(col_id))) {
+          LOG_WARN("push back select column id failed", K(ret), K(col_id));
+        } else if (OB_NOT_NULL(column_schema = source_table_schema.get_column_schema(col_id))
+                   && !column_schema->is_rowkey_column()
+                   && geo_col_id == OB_INVALID_ID) {
+          geo_col_id = column_schema->get_geo_col_id();
         }
       }
       if (OB_SUCC(ret)) {
@@ -546,54 +487,10 @@ int ObDDLUtil::generate_spatial_index_column_names(const ObTableSchema &dest_tab
         } else if (OB_ISNULL(column_schema = source_table_schema.get_column_schema(geo_col_id))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
-        } else {
-          ObColumnNameInfo column_name_info;
-          if (OB_FAIL(column_name_info.init(column_schema->get_column_name_str(),
-                                            column_schema->get_data_type(),
-                                            false,
-                                            column_schema->get_extended_type_info(),
-                                            allocator))) {
-            LOG_WARN("fail to init column_name_info", K(ret));
-          } else if (OB_FAIL(column_names.push_back(column_name_info))) {
-            LOG_WARN("push back geo column name failed", K(ret));
-          } else if (OB_FAIL(select_column_ids.push_back(geo_col_id))) {
-            LOG_WARN("push back select column id failed", K(ret), K(geo_col_id));
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDDLUtil::set_column_info_is_cast(const ObArray<ObColumnNameInfo> &insert_column_names,
-                                       ObArray<ObColumnNameInfo> &column_names)
-{
-  int ret = OB_SUCCESS;
-  if (column_names.count() != insert_column_names.count()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("column names count not equal insert column names count", K(ret), K(column_names.count()), K(insert_column_names.count()));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_names.count(); i++) {
-      if (ob_is_enum_or_set_type(column_names.at(i).column_type_) && column_names.at(i).column_type_ == insert_column_names.at(i).column_type_) {
-        const ObArray<common::ObString> &extended_type_info = column_names.at(i).extended_type_info_;
-        const ObArray<common::ObString> &insert_extended_type_info = insert_column_names.at(i).extended_type_info_;
-        if (extended_type_info.count() != insert_extended_type_info.count()) {
-          LOG_INFO("set column item cnt not equal", K(ret),
-                                                    K(extended_type_info.count()),
-                                                    K(insert_extended_type_info.count()));
-        } else {
-          bool have_empty_item = false;
-          bool all_equal = true;
-          for (int64_t j = 0; OB_SUCC(ret) && j < extended_type_info.count(); j++) {
-            if (extended_type_info.at(j) != insert_extended_type_info.at(j)) {
-              all_equal = false;
-              break;
-            } else if (extended_type_info.at(j) == "") {
-              have_empty_item = true;
-            }
-          }
-          column_names.at(i).is_cast_ = (have_empty_item && all_equal);
+        } else if (OB_FAIL(column_names.push_back(ObColumnNameInfo(column_schema->get_column_name_str(), false)))) {
+          LOG_WARN("push back geo column name failed", K(ret));
+        } else if (OB_FAIL(select_column_ids.push_back(geo_col_id))) {
+          LOG_WARN("push back select column id failed", K(ret), K(geo_col_id));
         }
       }
     }
@@ -643,10 +540,9 @@ int ObDDLUtil::generate_build_replica_sql(
   } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(tenant_id, data_table_id, oracle_mode))) {
     LOG_WARN("check if oracle mode failed", K(ret), K(data_table_id));
   } else {
-    common::ObArenaAllocator allocator;
     ObArray<ObColDesc> column_ids;
-    ObArray<ObColumnNameInfo> column_names; // 这是源表的列名和列类型
-    ObArray<ObColumnNameInfo> insert_column_names; // 这是目的表的列名和列类型
+    ObArray<ObColumnNameInfo> column_names;
+    ObArray<ObColumnNameInfo> insert_column_names;
     ObArray<ObColumnNameInfo> rowkey_column_names;
     ObArray<int64_t> select_column_ids;
     ObArray<int64_t> order_column_ids;
@@ -656,7 +552,7 @@ int ObDDLUtil::generate_build_replica_sql(
     // get dest table column names
     if (dest_table_schema->is_spatial_index()) {
       if (OB_FAIL(ObDDLUtil::generate_spatial_index_column_names(*dest_table_schema, *source_table_schema, insert_column_names,
-                                                                 column_names, select_column_ids, allocator))) {
+                                                                 column_names, select_column_ids))) {
         LOG_WARN("generate spatial index column names failed", K(ret));
       }
     } else if (OB_FAIL(dest_table_schema->get_column_ids(column_ids))) {
@@ -664,7 +560,6 @@ int ObDDLUtil::generate_build_replica_sql(
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
         const ObColumnSchemaV2 *column_schema = nullptr;
-        const ObColumnSchemaV2 *orig_column_schema = nullptr;
         ObString orig_column_name;
         is_shadow_column = column_ids.at(i).col_id_ >= OB_MIN_SHADOW_COLUMN_ID;
         const int64_t col_id = is_shadow_column ? column_ids.at(i).col_id_ - OB_MIN_SHADOW_COLUMN_ID : column_ids.at(i).col_id_;
@@ -675,40 +570,21 @@ int ObDDLUtil::generate_build_replica_sql(
           // do nothing
         } else if (column_schema->is_generated_column()) {
           // cannot insert to generated columns.
-        } else if (OB_ISNULL(orig_column_schema = source_table_schema->get_column_schema(col_id))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
-        } else if (nullptr == col_name_map && OB_FALSE_IT(orig_column_name.assign_ptr(orig_column_schema->get_column_name_str().ptr(), orig_column_schema->get_column_name_str().length()))) {
-        } else if (nullptr != col_name_map && OB_FAIL(col_name_map->get_orig_column_name(orig_column_schema->get_column_name_str(), orig_column_name))) {
+        } else if (nullptr == col_name_map && OB_FALSE_IT(orig_column_name.assign_ptr(column_schema->get_column_name_str().ptr(), column_schema->get_column_name_str().length()))) {
+        } else if (nullptr != col_name_map && OB_FAIL(col_name_map->get_orig_column_name(column_schema->get_column_name_str(), orig_column_name))) {
           if (OB_ENTRY_NOT_EXIST == ret) {
             // newly added column cannot be selected from source table.
             ret = OB_SUCCESS;
           } else {
             LOG_WARN("failed to get orig column name", K(ret));
           }
-        } else {
-          ObColumnNameInfo orig_column_name_info;
-          ObColumnNameInfo insert_column_name_info;
-          if (OB_FAIL(orig_column_name_info.init(orig_column_name,
-                                                 orig_column_schema->get_data_type(),
-                                                 is_shadow_column,
-                                                 orig_column_schema->get_extended_type_info(),
-                                                 allocator))) {
-            LOG_WARN("fail to init orig_column_name_info", K(ret));
-          } else if (OB_FAIL(insert_column_name_info.init(column_schema->get_column_name_str(),
-                                                          column_schema->get_data_type(),
-                                                          is_shadow_column,
-                                                          column_schema->get_extended_type_info(),
-                                                          allocator))) {
-            LOG_WARN("fail to init insert_column_name_info", K(ret));
-          } else if (OB_FAIL(column_names.push_back(orig_column_name_info))) { // 这里应该放源表的列名和列类型
-            LOG_WARN("fail to push back column name", K(ret));
-          } else if (OB_FAIL(select_column_ids.push_back(col_id))) {
-            LOG_WARN("push back select column id failed", K(ret), K(col_id));
-          } else if (!is_shadow_column) {
-            if (OB_FAIL(insert_column_names.push_back(insert_column_name_info))) { // 这里放目的表的列名和列类型
-              LOG_WARN("push back insert column name failed", K(ret));
-            }
+        } else if (OB_FAIL(column_names.push_back(ObColumnNameInfo(orig_column_name, is_shadow_column)))) {
+          LOG_WARN("fail to push back column name", K(ret));
+        } else if (OB_FAIL(select_column_ids.push_back(col_id))) {
+          LOG_WARN("push back select column id failed", K(ret), K(col_id));
+        } else if (!is_shadow_column) {
+          if (OB_FAIL(insert_column_names.push_back(ObColumnNameInfo(column_schema->get_column_name_str(), is_shadow_column)))) {
+            LOG_WARN("push back insert column name failed", K(ret));
           }
         }
       }
@@ -747,14 +623,11 @@ int ObDDLUtil::generate_build_replica_sql(
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < extra_column_ids.count(); ++i) {
           const ObColumnSchemaV2 *column_schema = nullptr;
-          const ObColumnSchemaV2 *dest_column_schema = nullptr;
           ObString orig_column_name;
-          ColumnType orig_column_type;
           const int64_t col_id = extra_column_ids.at(i);
           if (OB_ISNULL(column_schema = source_table_schema->get_column_schema(col_id))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
-          } else if (FALSE_IT(dest_column_schema = dest_table_schema->get_column_schema(col_id))) {
           } else if (is_contain(select_column_ids, col_id)) {
             // do nothing
           } else if (nullptr == col_name_map && OB_FALSE_IT(orig_column_name.assign_ptr(column_schema->get_column_name_str().ptr(), column_schema->get_column_name_str().length()))) {
@@ -765,27 +638,10 @@ int ObDDLUtil::generate_build_replica_sql(
             } else {
               LOG_WARN("failed to get orig column name", K(ret));
             }
-          } else if (OB_FALSE_IT(orig_column_type = column_schema->get_data_type())) {
-            // do nothing
-          } else {
-            ObColumnNameInfo orig_column_name_info;
-            ObColumnNameInfo dest_column_name_info;
-            if (OB_FAIL(orig_column_name_info.init(orig_column_name, orig_column_type, false, column_schema->get_extended_type_info(), allocator))) {
-              LOG_WARN("fail to init column name info", K(ret));
-            } else if (dest_column_schema != nullptr) {
-              if (OB_FAIL(dest_column_name_info.init(dest_column_schema->get_column_name_str(),
-                                                            dest_column_schema->get_data_type(),
-                                                            false, dest_column_schema->get_extended_type_info(),
-                                                            allocator))) {
-                LOG_WARN("fail to init column name info", K(ret));
-              } else if (OB_FAIL(insert_column_names.push_back(dest_column_name_info))) { // 这里应该放目的表的列名和列类型
-                LOG_WARN("push back insert column name failed", K(ret));
-              }
-            }
-            if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(column_names.push_back(orig_column_name_info))) { // 这里应该放源表的列名和列类型
-              LOG_WARN("fail to push back column name", K(ret));
-            }
+          } else if (OB_FAIL(column_names.push_back(ObColumnNameInfo(orig_column_name, false)))) {
+            LOG_WARN("fail to push back column name", K(ret));
+          } else if (OB_FAIL(insert_column_names.push_back(ObColumnNameInfo(column_schema->get_column_name_str(), false)))) {
+            LOG_WARN("push back insert column name failed", K(ret));
           }
         }
       }
@@ -808,15 +664,10 @@ int ObDDLUtil::generate_build_replica_sql(
           LOG_WARN("error unexpected, column schema must not be nullptr", K(ret), K(col_id));
         } else if (column_schema->is_generated_column() && !dest_table_schema->is_spatial_index()) {
           // generated columns cannot be row key.
-        } else {
-          ObColumnNameInfo column_name_info;
-          if (OB_FAIL(column_name_info.init(column_schema->get_column_name_str(), column_schema->get_data_type(), is_shadow_column, column_schema->get_extended_type_info(), allocator))) {
-            LOG_WARN("fail to init column name info", K(ret));
-          } else if (OB_FAIL(rowkey_column_names.push_back(column_name_info))) {
-            LOG_WARN("fail to push back rowkey column name", K(ret));
-          } else if (OB_FAIL(order_column_ids.push_back(col_id))) {
-            LOG_WARN("push back order column id failed", K(ret), K(col_id));
-          }
+        } else if (OB_FAIL(rowkey_column_names.push_back(ObColumnNameInfo(column_schema->get_column_name_str(), is_shadow_column)))) {
+          LOG_WARN("fail to push back rowkey column name", K(ret));
+        } else if (OB_FAIL(order_column_ids.push_back(col_id))) {
+          LOG_WARN("push back order column id failed", K(ret), K(col_id));
         }
       }
     }
@@ -855,14 +706,7 @@ int ObDDLUtil::generate_build_replica_sql(
         } else {
           source_database_name = db_schema->get_database_name_str();
         }
-        // column_names : 放的是源表的列信息
-        // insert_column_names: 放的是目的表的列信息
-        if (OB_FAIL(ret)) {
-        } else if (column_names.count() == insert_column_names.count()) {
-          if (OB_FAIL(set_column_info_is_cast(insert_column_names, column_names))) {
-            LOG_WARN("fail to set column info is cast", K(ret));
-          }
-        }
+
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(generate_column_name_str(column_names, oracle_mode, true/*with origin name*/, true/*with alias name*/, use_heap_table_ddl_plan, query_column_sql_string))) {
           LOG_WARN("fail to generate column name str", K(ret));

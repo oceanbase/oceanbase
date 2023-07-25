@@ -625,18 +625,16 @@ int ObLogTableScan::generate_ddl_output_column_ids()
     if (opt_ctx.is_online_ddl() &&
         stmt::T_INSERT == opt_ctx.get_session_info()->get_stmt_type()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < get_output_exprs().count(); ++i) {
-        ObRawExpr *output_expr = get_output_exprs().at(i);
-        ObRawExpr *column_ref_expr = nullptr;
+        const ObRawExpr *output_expr = get_output_exprs().at(i);
         if (OB_ISNULL(output_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("output_expr is nullptr", K(ret));
-        } else if (OB_FAIL(output_expr->find_column_ref_dfs(column_ref_expr))) { // 这个函数是针对cast表达式列的情况
-          LOG_WARN("fail to find column ref", K(ret), KPC(output_expr));
-        } else if (OB_ISNULL(column_ref_expr)) {
+        } else if (!output_expr->is_column_ref_expr()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("output expr is not column ref", K(ret), KPC(output_expr));
         } else {
-          const ObColumnRefRawExpr *output_col = static_cast<const ObColumnRefRawExpr*>(column_ref_expr);
+          const ObColumnRefRawExpr *output_col = static_cast<const ObColumnRefRawExpr*>(
+                                                  output_expr);
           if (OB_FAIL(ddl_output_column_ids_.push_back(output_col->get_column_id()))) {
             LOG_WARN("store ddl output column id failed", K(ret));
           }

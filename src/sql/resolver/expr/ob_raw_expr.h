@@ -1709,7 +1709,7 @@ public:
   // children are visited in get_param_expr() return order.
   int preorder_accept(ObRawExprVisitor &visitor);
   int postorder_accept(ObRawExprVisitor &visitor);
-  int find_column_ref_dfs(ObRawExpr *&column_ref_expr);
+
   virtual int do_visit(ObRawExprVisitor &visitor) = 0;
 
   // skip visit child for expr visitor. (ObSetIterRawExpr)
