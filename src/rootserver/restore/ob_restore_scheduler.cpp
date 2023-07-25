@@ -1050,10 +1050,14 @@ int ObRestoreService::create_all_ls_(
     common::ObMySQLTransaction trans;
     const int64_t exec_tenant_id = ObLSLifeIAgent::get_exec_tenant_id(tenant_id_);
 
-    ObTenantLSInfo tenant_stat(sql_proxy_, &tenant_schema, tenant_id_);
     if (OB_FAIL(trans.start(sql_proxy_, exec_tenant_id))) {
       LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
     } else {
+      //must be in trans
+      //Multiple LS groups will be created here.
+      //In order to ensure that each LS group can be evenly distributed in the unit group,
+      //it is necessary to read the distribution of LS groups within the transaction.
+      ObTenantLSInfo tenant_stat(sql_proxy_, &tenant_schema, tenant_id_, &trans);
       for (int64_t i = 0; OB_SUCC(ret) && i < ls_attr_array.count(); ++i) {
         const ObLSAttr &ls_info = ls_attr_array.at(i);
         ObLSFlag ls_flag = ls_info.get_ls_flag();

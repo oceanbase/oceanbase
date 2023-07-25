@@ -1038,47 +1038,56 @@ int ObRecoveryLSService::do_ls_balance_task_()
   ObBalanceTaskHelper ls_balance_task;
   ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
   ObAllTenantInfo tenant_info;
+  bool has_next_task = true;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
   } else if (OB_ISNULL(proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql can't null", K(ret), K(proxy_));
-  } else if (FALSE_IT(ret = ObBalanceTaskHelperTableOperator::pop_task(tenant_id_,
-          *proxy_, ls_balance_task))) {
-  } else if (OB_ENTRY_NOT_EXIST == ret) {
-    ret = OB_SUCCESS;
-  } else if (OB_FAIL(ret)) {
-    LOG_WARN("failed to pop task", KR(ret), K(tenant_id_));
   } else if (OB_ISNULL(tenant_info_loader)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mtl pointer is null", KR(ret), KP(tenant_info_loader));
-  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
-    LOG_WARN("get_tenant_info failed", K(ret));
-  } else if (tenant_info.get_standby_scn() >= ls_balance_task.get_operation_scn()) {
-    const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
-    START_TRANSACTION(proxy_, exec_tenant_id)
-    if (FAILEDx(ObBalanceTaskHelperTableOperator::remove_task(tenant_id_,
-            ls_balance_task.get_operation_scn(), trans))) {
-      LOG_WARN("failed to remove task", KR(ret), K(tenant_id_), K(ls_balance_task));
-    } else if (ls_balance_task.get_task_op().is_ls_alter()) {
-      if (OB_FAIL(do_ls_balance_alter_task_(ls_balance_task, trans))) {
-        LOG_WARN("failed to do ls alter task", KR(ret), K(ls_balance_task));
-      }
-    } else if (ls_balance_task.get_task_op().is_transfer_begin()
-        || ls_balance_task.get_task_op().is_transfer_end()) {
-      //nothing
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls balance task op is unexpected", KR(ret), K(ls_balance_task));
-    }
-    END_TRANSACTION(trans)
-    LOG_INFO("task can be remove", KR(ret), K(ls_balance_task));
-  } else {
-    if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) { // 10s
-      LOG_INFO("can not remove ls balance task helper", K(ls_balance_task), K(tenant_info));
-    }
   }
+  while (OB_SUCC(ret) && has_next_task) {
+    ret = ObBalanceTaskHelperTableOperator::pop_task(tenant_id_,
+          *proxy_, ls_balance_task);
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      has_next_task = false;
+    } else if (OB_FAIL(ret)) {
+      LOG_WARN("failed to get balance task", KR(ret), K(tenant_id_));
+    } else if (has_set_stop()) {
+      ret = OB_IN_STOP_STATE;
+      LOG_WARN("thread is in stop state", KR(ret));
+    } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
+      LOG_WARN("get_tenant_info failed", K(ret));
+    } else if (tenant_info.get_standby_scn() >= ls_balance_task.get_operation_scn()) {
+      const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
+      START_TRANSACTION(proxy_, exec_tenant_id)
+      if (FAILEDx(ObBalanceTaskHelperTableOperator::remove_task(tenant_id_,
+              ls_balance_task.get_operation_scn(), trans))) {
+        LOG_WARN("failed to remove task", KR(ret), K(tenant_id_), K(ls_balance_task));
+      } else if (ls_balance_task.get_task_op().is_ls_alter()) {
+        if (OB_FAIL(do_ls_balance_alter_task_(ls_balance_task, trans))) {
+          LOG_WARN("failed to do ls alter task", KR(ret), K(ls_balance_task));
+        }
+      } else if (ls_balance_task.get_task_op().is_transfer_begin()
+          || ls_balance_task.get_task_op().is_transfer_end()) {
+        //nothing
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls balance task op is unexpected", KR(ret), K(ls_balance_task));
+      }
+      END_TRANSACTION(trans)
+      LOG_INFO("task can be remove", KR(ret), K(ls_balance_task));
+    } else {
+      if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) { // 10s
+        LOG_INFO("can not remove ls balance task helper", K(ls_balance_task), K(tenant_info));
+      }
+      has_next_task = false;
+    }
+  }//end while
   return ret;
 }
 
@@ -1111,7 +1120,7 @@ int ObRecoveryLSService::do_ls_balance_alter_task_(const share::ObBalanceTaskHel
     } else {
       ObTenantLSInfo tenant_info(proxy_, &tenant_schema, tenant_id_);
       if (OB_FAIL(ObLSServiceHelper::process_alter_ls(ls_balance_task.get_src_ls(), status_info.ls_group_id_,
-              ls_balance_task.get_ls_group_id(), tenant_info, trans))) {
+              ls_balance_task.get_ls_group_id(), status_info.unit_group_id_, tenant_info, trans))) {
         LOG_WARN("failed to process alter ls", KR(ret), K(ls_balance_task), K(status_info));
       }
     }

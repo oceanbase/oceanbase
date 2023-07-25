@@ -87,6 +87,8 @@ private:
   int try_force_drop_tenant_(
       const share::schema::ObTenantSchema &tenant_schema);
   int try_create_ls_(const share::schema::ObTenantSchema &tenant_schema);
+  //ls group maybe has more than one unit group, need fix
+  int try_modify_ls_unit_group_(const share::schema::ObTenantSchema &tenant_schema);
 public:
   //restore_service need create init ls too
   static int do_create_user_ls(const share::schema::ObTenantSchema &tenant_schema,

@@ -171,6 +171,10 @@ public:
   {
     return primary_zone_;
   }
+  ObLSGroupInfoArray& get_ls_group_array()
+  {
+    return ls_group_array_;
+  }
   TO_STRING_KV(K_(tenant_id), K_(is_load), K_(status_array), K_(unit_group_array),
       K_(ls_group_array), K_(primary_zone));
 private:
@@ -240,6 +244,7 @@ public:
   static int process_alter_ls(const share::ObLSID &ls_id,
       const uint64_t &old_ls_group_id,
       const uint64_t &new_ls_group_id,
+      const uint64_t &old_unit_group_id,
       ObTenantLSInfo& tenant_ls_info,
       common::ObISQLClient &sql_proxy);
 private:
@@ -250,6 +255,14 @@ private:
   static int balance_ls_group_between_unit_group_(
      ObTenantLSInfo& tenant_ls_info,
      const int64_t min_index, const int64_t max_index);
+  static int try_shrink_standby_unit_group_(
+      ObTenantLSInfo& tenant_ls_info,
+      int64_t &task_cnt);
+  static int try_update_ls_unit_group_(
+      ObTenantLSInfo& tenant_ls_info,
+      const uint64_t ls_group_id,
+      ObUnitGroupInfo &src_info,
+      ObUnitGroupInfo &dest_info);
 };
 
 

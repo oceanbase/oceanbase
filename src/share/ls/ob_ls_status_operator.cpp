@@ -409,6 +409,7 @@ int ObLSStatusOperator::update_ls_status_in_trans(
 int ObLSStatusOperator::alter_ls_group_id(const uint64_t tenant_id, const ObLSID &id,
                        const uint64_t old_ls_group_id,
                        const uint64_t new_ls_group_id,
+                       const uint64_t old_unit_group_id,
                        const uint64_t new_unit_group_id,
                        ObISQLClient &client)
 {
@@ -416,27 +417,61 @@ int ObLSStatusOperator::alter_ls_group_id(const uint64_t tenant_id, const ObLSID
   if (OB_UNLIKELY(!id.is_valid()
                   || OB_INVALID_ID == old_ls_group_id
                   || OB_INVALID_ID == new_ls_group_id
+                  || OB_INVALID_ID == old_unit_group_id
                   || OB_INVALID_ID == new_unit_group_id
                   || OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid_argument", KR(ret), K(id), K(new_ls_group_id),
-              K(old_ls_group_id), K(tenant_id));
+              K(old_ls_group_id), K(tenant_id), K(old_unit_group_id));
   } else {
-    //init_member_list is no need after create success
     common::ObSqlString sql;
     const uint64_t exec_tenant_id =
       ObLSLifeIAgent::get_exec_tenant_id(tenant_id);
-    if (OB_FAIL(sql.assign_fmt("UPDATE %s set ls_group_id = %lu, unit_group_id = %lu "
-                               " where ls_id = %ld and tenant_id = %lu and ls_group_id = %lu",
+    if (OB_FAIL(sql.assign_fmt("UPDATE %s set ls_group_id = %lu, unit_group_id = %lu where ls_id = %ld"
+                               " and tenant_id = %lu and ls_group_id = %lu and unit_group_id = %lu",
                                OB_ALL_LS_STATUS_TNAME,
                                new_ls_group_id, new_unit_group_id, id.id(),
-                               tenant_id, old_ls_group_id))) {
+                               tenant_id, old_ls_group_id, old_unit_group_id))) {
       LOG_WARN("failed to assign sql", KR(ret), K(id), K(new_ls_group_id),
-               K(old_ls_group_id), K(tenant_id), K(sql));
+               K(old_ls_group_id), K(tenant_id), K(sql), K(old_unit_group_id));
     } else if (OB_FAIL(exec_write(tenant_id, sql, this, client))) {
       LOG_WARN("failed to exec write", KR(ret), K(tenant_id), K(id), K(sql));
     }
     ALL_LS_EVENT_ADD(tenant_id, id, "alter_ls_group", ret, sql);
+  }
+  return ret;
+}
+
+int ObLSStatusOperator::alter_unit_group_id(const uint64_t tenant_id, const ObLSID &id,
+                       const uint64_t ls_group_id,
+                       const uint64_t old_unit_group_id,
+                       const uint64_t new_unit_group_id,
+                       ObISQLClient &client)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!id.is_valid()
+                  || OB_INVALID_ID == ls_group_id
+                  || OB_INVALID_ID == old_unit_group_id
+                  || OB_INVALID_ID == new_unit_group_id
+                  || OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid_argument", KR(ret), K(id), K(ls_group_id),
+              K(tenant_id), K(old_unit_group_id));
+  } else {
+    common::ObSqlString sql;
+    const uint64_t exec_tenant_id =
+      ObLSLifeIAgent::get_exec_tenant_id(tenant_id);
+    if (OB_FAIL(sql.assign_fmt("UPDATE %s set unit_group_id = %lu where ls_id = %ld"
+                               " and tenant_id = %lu and ls_group_id = %lu and unit_group_id = %lu",
+                               OB_ALL_LS_STATUS_TNAME,
+                               new_unit_group_id, id.id(), tenant_id,
+                               ls_group_id, old_unit_group_id))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(id), K(ls_group_id),
+               K(tenant_id), K(sql), K(old_unit_group_id));
+    } else if (OB_FAIL(exec_write(tenant_id, sql, this, client))) {
+      LOG_WARN("failed to exec write", KR(ret), K(tenant_id), K(id), K(sql));
+    }
+    ALL_LS_EVENT_ADD(tenant_id, id, "alter_unit_group", ret, sql);
   }
   return ret;
 }

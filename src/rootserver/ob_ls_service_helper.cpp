@@ -513,7 +513,8 @@ int ObLSServiceHelper::process_status_to_steady(
         //or ls status not equal, no need to next
       } else if (machine.ls_info_.ls_is_normal() && machine.ls_info_.get_ls_group_id() != machine.status_info_.ls_group_id_) {
         if (OB_TMP_FAIL(process_alter_ls(machine.ls_id_, machine.status_info_.ls_group_id_,
-                machine.ls_info_.get_ls_group_id(), tenant_ls_info, *GCTX.sql_proxy_))) {
+                machine.ls_info_.get_ls_group_id(), machine.status_info_.unit_group_id_,
+                tenant_ls_info, *GCTX.sql_proxy_))) {
           LOG_WARN("failed to process alter ls", KR(ret), KR(tmp_ret), K(machine));
           ret = OB_SUCC(ret) ? tmp_ret : ret;
         }
@@ -695,6 +696,7 @@ int ObLSServiceHelper::revision_to_equal_status_(const ObLSStatusMachineParamete
 int ObLSServiceHelper::process_alter_ls(const share::ObLSID &ls_id,
                        const uint64_t &old_ls_group_id,
                        const uint64_t &new_ls_group_id,
+                       const uint64_t &old_unit_group_id,
                        ObTenantLSInfo& tenant_info,
                        ObISQLClient &sql_proxy)
 {
@@ -702,9 +704,10 @@ int ObLSServiceHelper::process_alter_ls(const share::ObLSID &ls_id,
   const uint64_t tenant_id = tenant_info.get_tenant_id();;
   uint64_t unit_group_id = OB_INVALID_ID;
   if (OB_UNLIKELY(!ls_id.is_valid() || OB_INVALID_ID == old_ls_group_id || OB_INVALID_ID == new_ls_group_id
-        || old_ls_group_id == new_ls_group_id)) {
+        || old_ls_group_id == new_ls_group_id || OB_INVALID_ID == old_unit_group_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(old_ls_group_id), K(new_ls_group_id));
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(old_ls_group_id),
+        K(new_ls_group_id), K(old_unit_group_id));
   } else if (OB_FAIL(tenant_info.gather_stat())) {
     LOG_WARN("failed to gather stat", KR(ret));
   } else {
@@ -730,12 +733,12 @@ int ObLSServiceHelper::process_alter_ls(const share::ObLSID &ls_id,
     ObLSStatusOperator status_op;
     if (FAILEDx(status_op.alter_ls_group_id(
             tenant_id, ls_id, old_ls_group_id, new_ls_group_id,
-            unit_group_id, sql_proxy))) {
+            old_unit_group_id, unit_group_id, sql_proxy))) {
       LOG_WARN("failed to update ls group id", KR(ret), K(new_ls_group_id), K(old_ls_group_id),
-               K(unit_group_id), K(tenant_info));
+               K(unit_group_id), K(tenant_info), K(old_unit_group_id));
     }
     LOG_INFO("[LS_MGR] alter ls group id", KR(ret), K(old_ls_group_id),
-        K(new_ls_group_id), K(unit_group_id));
+        K(new_ls_group_id), K(unit_group_id), K(old_unit_group_id));
   }
   return ret;
 }
@@ -828,8 +831,13 @@ int ObLSServiceHelper::create_new_ls_in_trans(
 int ObLSServiceHelper::balance_ls_group(ObTenantLSInfo& tenant_ls_info)
 {
   int ret = OB_SUCCESS;
+  int64_t task_cnt = 0;
   if (OB_FAIL(tenant_ls_info.gather_stat())) {
     LOG_WARN("failed to gather stat", KR(ret));
+  } else if (OB_FAIL(try_shrink_standby_unit_group_(tenant_ls_info, task_cnt))) {
+    LOG_WARN("failed to shrink standby unit group", KR(ret), K(tenant_ls_info));
+  } else if (0 != task_cnt) {
+    LOG_INFO("has unit group need deleting, can not balance", K(task_cnt));
   } else {
     int64_t min_count = INT64_MAX, min_index = OB_INVALID_INDEX_INT64;
     int64_t max_count = 0, max_index = OB_INVALID_INDEX_INT64;
@@ -879,35 +887,108 @@ int ObLSServiceHelper::balance_ls_group_between_unit_group_(ObTenantLSInfo& tena
   } else {
     ObUnitGroupInfo &dest_info = tenant_ls_info.get_unit_group_array().at(min_index);
     ObUnitGroupInfo &src_info = tenant_ls_info.get_unit_group_array().at(max_index);
-    const uint64_t tenant_id = tenant_ls_info.get_tenant_id();
     const int64_t ls_group_count = src_info.ls_group_ids_.count();
     if (ls_group_count < 1) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("src info is unexpected", KR(ret), K(ls_group_count), K(src_info));
     } else {
       const uint64_t ls_group_id = src_info.ls_group_ids_.at(ls_group_count - 1);
-      ObLSGroupInfo ls_group_info;
-      if (OB_FAIL(tenant_ls_info.get_ls_group_info(ls_group_id, ls_group_info))) {
-        LOG_WARN("failed to get ls group_info", KR(ret), K(ls_group_id));
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < ls_group_info.ls_ids_.count(); ++j) {
-          share::ObLSStatusOperator status_op;
-          ObLSID ls_id = ls_group_info.ls_ids_.at(j);
-          if (OB_FAIL(status_op.alter_ls_group_id(tenant_id, ls_id,
-                  ls_group_id, ls_group_id,
-                  dest_info.unit_group_id_, *GCTX.sql_proxy_))) {
-            LOG_WARN("failed to alter unit group", KR(ret), K(tenant_id), K(ls_id), K(ls_group_id),
-                K(src_info), K(dest_info));
-          }
-        }
-        LOG_INFO("[LS_MGR]balance ls group to unit group", KR(ret), K(ls_group_id), K(src_info), K(dest_info));
-      }
-      if (FAILEDx(src_info.ls_group_ids_.remove(ls_group_count - 1))) {
-        LOG_WARN("failed to remove", KR(ret), K(ls_group_count), K(dest_info));
-      } else if (OB_FAIL(dest_info.ls_group_ids_.push_back(ls_group_id))) {
-        LOG_WARN("failed to push back", KR(ret), K(ls_group_id), K(src_info));
+      if (OB_FAIL(try_update_ls_unit_group_(tenant_ls_info, ls_group_id, src_info, dest_info))) {
+        LOG_WARN("failed to update ls unit group", KR(ret), K(tenant_ls_info), K(ls_group_id), K(src_info), K(dest_info));
       }
     }
+  }
+  return ret;
+}
+
+int ObLSServiceHelper::try_update_ls_unit_group_(
+    ObTenantLSInfo& tenant_ls_info,
+      const uint64_t ls_group_id,
+      ObUnitGroupInfo &src_info,
+      ObUnitGroupInfo &dest_info)
+{
+  int ret = OB_SUCCESS;
+  int64_t index = OB_INVALID_INDEX_INT64;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ptr is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_UNLIKELY(!tenant_ls_info.is_valid()
+        || OB_INVALID_ID == ls_group_id || !src_info.is_valid() || !dest_info.is_valid()
+        || src_info == dest_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_ls_info), K(ls_group_id), K(src_info), K(dest_info));
+  } else if (!has_exist_in_array(src_info.ls_group_ids_, ls_group_id, &index)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ls group not in src unit group", KR(ret), K(ls_group_id), K(src_info));
+  } else {
+    ObLSGroupInfo ls_group_info;
+    const uint64_t tenant_id = tenant_ls_info.get_tenant_id();
+    if (OB_FAIL(tenant_ls_info.get_ls_group_info(ls_group_id, ls_group_info))) {
+      LOG_WARN("failed to get ls group_info", KR(ret), K(ls_group_id));
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && j < ls_group_info.ls_ids_.count(); ++j) {
+        share::ObLSStatusOperator status_op;
+        ObLSID ls_id = ls_group_info.ls_ids_.at(j);
+        if (OB_FAIL(status_op.alter_unit_group_id(tenant_id, ls_id,
+                ls_group_id, src_info.unit_group_id_,
+                dest_info.unit_group_id_, *GCTX.sql_proxy_))) {
+          LOG_WARN("failed to alter unit group", KR(ret), K(tenant_id), K(ls_id), K(ls_group_id),
+              K(src_info), K(dest_info));
+        }
+      }
+      LOG_INFO("[LS_MGR]balance ls group to unit group", KR(ret), K(ls_group_id), K(src_info), K(dest_info));
+    }
+    if (FAILEDx(src_info.ls_group_ids_.remove(index))) {
+      LOG_WARN("failed to remove", KR(ret), K(index), K(src_info));
+    } else if (OB_FAIL(dest_info.ls_group_ids_.push_back(ls_group_id))) {
+      LOG_WARN("failed to push back", KR(ret), K(ls_group_id), K(src_info));
+    }
+  }
+  return ret;
+
+}
+
+int ObLSServiceHelper::try_shrink_standby_unit_group_(
+    ObTenantLSInfo& tenant_ls_info, int64_t &task_cnt)
+{
+  int ret = OB_SUCCESS;
+  task_cnt = 0;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ptr is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_UNLIKELY(!tenant_ls_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant info is invalid", KR(ret), K(tenant_ls_info));
+  } else {
+    ObUnitGroupInfoArray &unit_group_array = tenant_ls_info.get_unit_group_array();
+    for (int64_t i = 0; OB_SUCC(ret) && i < unit_group_array.count() && task_cnt == 0; ++i) {
+      ObUnitGroupInfo &unit_group_info = unit_group_array.at(i);
+      if (share::ObUnit::UNIT_STATUS_ACTIVE != unit_group_info.unit_status_) {
+        FLOG_INFO("has unit is in deleting status, need alter unit group id", K(unit_group_info));
+        if (unit_group_info.ls_group_ids_.count() > 0) {
+          task_cnt = 1;
+          int64_t unit_group_index = OB_INVALID_INDEX_INT64;
+          //for each ls group, get new unit group, process ls group one by one
+          for (int64_t j = 0; OB_SUCC(ret) && j < unit_group_info.ls_group_ids_.count(); ++j) {
+            if (OB_FAIL(tenant_ls_info.get_next_unit_group(unit_group_index))) {
+              LOG_WARN("failed to get next unit group", KR(ret), K(tenant_ls_info));
+            } else if (OB_UNLIKELY(OB_INVALID_INDEX_INT64 == unit_group_index
+                  || unit_group_index >= unit_group_array.count())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("failed to next unit group", KR(ret), K(unit_group_index), K(tenant_ls_info));
+            } else {
+              ObUnitGroupInfo &dest_info = unit_group_array.at(unit_group_index);
+              const uint64_t ls_group_id = unit_group_info.ls_group_ids_.at(j);
+              if (OB_FAIL(try_update_ls_unit_group_(tenant_ls_info, ls_group_id,
+                      unit_group_info, dest_info))) {
+                LOG_WARN("failed to update ls unit group", KR(ret), K(ls_group_id),
+                    K(unit_group_info), K(dest_info), K(tenant_ls_info));
+              }
+            }
+          }//end for j
+        }
+      }
+    }//end for i
   }
   return ret;
 }

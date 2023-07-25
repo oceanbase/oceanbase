@@ -254,7 +254,6 @@ inline bool is_schema_error(int err)
     case OB_SCHEMA_ERROR:
     case OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH:
     case OB_ERR_REMOTE_SCHEMA_NOT_FULL:
-    case OB_PARTITION_IS_BLOCKED:
     case OB_ERR_SP_ALREADY_EXISTS:
     case OB_ERR_SP_DOES_NOT_EXIST:
     case OB_OBJECT_NAME_NOT_EXIST:
