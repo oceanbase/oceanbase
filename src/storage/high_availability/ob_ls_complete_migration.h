@@ -172,10 +172,10 @@ public:
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObStartCompleteMigrationTask"), KP(this), KPC(ctx_));
 private:
+  int get_wait_timeout_(int64_t &timeout);
   int wait_log_sync_();
   int wait_log_replay_sync_();
   int wait_transfer_table_replace_();
-  int wait_trans_tablet_explain_data_();
   int change_member_list_with_retry_();
   int change_member_list_();
   int get_ls_transfer_scn_(
@@ -193,10 +193,12 @@ private:
   int check_all_tablet_ready_();
   int check_tablet_ready_(
       const common::ObTabletID &tablet_id,
-      ObLS *ls);
+      ObLS *ls,
+      const int64_t timeout);
   int check_tablet_transfer_table_ready_(
       const common::ObTabletID &tablet_id,
-      ObLS *ls);
+      ObLS *ls,
+      const int64_t timeout);
   int inner_check_tablet_transfer_table_ready_(
       const common::ObTabletID &tablet_id,
       ObLS *ls,
@@ -208,9 +210,13 @@ private:
   int check_ls_and_task_status_(
       ObLS *ls);
   int record_server_event_();
+  int init_timeout_ctx_(
+      const int64_t timeout,
+      ObTimeoutCtx &timeout_ctx);
 
 private:
   static const int64_t IS_REPLAY_DONE_THRESHOLD_US = 3L * 1000 * 1000L;
+  static const int64_t CHECK_CONDITION_INTERVAL = 200_ms;
   bool is_inited_;
   ObLSHandle ls_handle_;
   ObLSCompleteMigrationCtx *ctx_;
