@@ -278,6 +278,9 @@ OB_INLINE int ObTableMergeOp::close_table_for_each()
     if (OB_NOT_NULL(merge_ctdef.ins_ctdef_)) {
       const ObInsCtDef &ins_ctdef = *merge_ctdef.ins_ctdef_;
       ObInsRtDef &ins_rtdef = merge_rtdef.ins_rtdef_;
+      if (OB_NOT_NULL(ins_rtdef.das_rtdef_.table_loc_)) {
+        ins_rtdef.das_rtdef_.table_loc_->is_writing_ = false;
+      }
       if (OB_FAIL(ObDMLService::process_after_stmt_trigger(ins_ctdef, ins_rtdef, dml_rtctx_,
                                                            ObDmlEventType::DE_INSERTING))) {
         LOG_WARN("process after stmt trigger failed", K(ret));
@@ -286,6 +289,9 @@ OB_INLINE int ObTableMergeOp::close_table_for_each()
     if (OB_SUCC(ret) && OB_NOT_NULL(merge_ctdef.upd_ctdef_)) {
       const ObUpdCtDef &upd_ctdef = *merge_ctdef.upd_ctdef_;
       ObUpdRtDef &upd_rtdef = merge_rtdef.upd_rtdef_;
+      if (OB_NOT_NULL(upd_rtdef.dupd_rtdef_.table_loc_)) {
+        upd_rtdef.dupd_rtdef_.table_loc_->is_writing_ = false;
+      }
       if (OB_FAIL(ObDMLService::process_after_stmt_trigger(upd_ctdef, upd_rtdef, dml_rtctx_,
                                                            ObDmlEventType::DE_UPDATING))) {
         LOG_WARN("process after stmt trigger failed", K(ret));
@@ -294,6 +300,9 @@ OB_INLINE int ObTableMergeOp::close_table_for_each()
     if (OB_SUCC(ret) && OB_NOT_NULL(merge_ctdef.del_ctdef_)) {
       const ObDelCtDef &del_ctdef = *merge_ctdef.del_ctdef_;
       ObDelRtDef &del_rtdef = merge_rtdef.del_rtdef_;
+      if (OB_NOT_NULL(del_rtdef.das_rtdef_.table_loc_)) {
+        del_rtdef.das_rtdef_.table_loc_->is_writing_ = false;
+      }
       if (OB_FAIL(ObDMLService::process_after_stmt_trigger(del_ctdef, del_rtdef, dml_rtctx_,
                                                            ObDmlEventType::DE_DELETING))) {
         LOG_WARN("process after stmt trigger failed", K(ret));
