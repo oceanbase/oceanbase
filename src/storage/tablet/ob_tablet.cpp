@@ -2161,6 +2161,9 @@ int ObTablet::build_migration_tablet_param(
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else {
+    // allocator
+    mig_tablet_param.allocator_.set_attr(ObMemAttr(MTL_ID(), "MigTabletParam", ObCtxIds::DEFAULT_CTX_ID));
+
     mig_tablet_param.ls_id_ = tablet_meta_.ls_id_;
     mig_tablet_param.tablet_id_ = tablet_meta_.tablet_id_;
     mig_tablet_param.data_tablet_id_ = tablet_meta_.data_tablet_id_;

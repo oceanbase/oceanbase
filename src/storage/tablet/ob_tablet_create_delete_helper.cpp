@@ -1305,10 +1305,14 @@ int ObTabletCreateDeleteHelper::do_abort_remove_tablet(
     if (trans_flags.for_replay_) {
       // if tablet is NORMAL, and meets abort remove procedure when replaying, we should not consider it illegal
       if (ObTabletStatus::NORMAL == tx_data.tablet_status_ && ObTabletCommon::FINAL_TX_ID == tx_data.tx_id_) {
-        LOG_INFO("tablet is in NORMAL status, do nothing", K(ret), K(key), K(trans_flags));
+        LOG_INFO("tablet is in NORMAL status, maybe already finished abort remove procedure, do nothing",
+            K(ret), K(key), K(trans_flags), K(tx_data));
+      } else if (ObTabletStatus::DELETING == tx_data.tablet_status_ && trans_flags.scn_ <= tx_data.tx_scn_) {
+        LOG_INFO("tablet is in DELETING status, but scn is smaller than that in current tx data, skip it",
+            K(ret), K(key), K(trans_flags), K(tx_data));
       } else {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tablet is not valid, and not in NORMAL status", K(ret), K(key), K(trans_flags));
+        LOG_WARN("tablet is not valid", K(ret), K(key), K(trans_flags), K(tx_data));
       }
     } else {
       // For leader, we may encounter such disorder:
