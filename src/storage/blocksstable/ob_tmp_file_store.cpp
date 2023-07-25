@@ -569,9 +569,16 @@ int ObTmpMacroBlock::give_back_buf_into_cache(const bool is_wash)
   SpinWLockGuard guard(lock_);
   if (OB_FAIL(ObTmpBlockCache::get_instance().put_block(key, handle_))) {
     STORAGE_LOG(WARN, "fail to put block into block cache", K(ret), K(key));
-  // set block status disked in lock_ to avoid concurrency issues.
-  } else if (is_wash && OB_FAIL(check_and_set_status(BlockStatus::WASHING, BlockStatus::DISKED))) {
-    STORAGE_LOG(WARN, "fail to check and set status", K(ret), K(key));
+  }
+  if (is_wash) {// set block status disked in lock_ to avoid concurrency issues.
+    if (OB_FAIL(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(check_and_set_status(BlockStatus::WASHING, BlockStatus::MEMORY))) {
+        STORAGE_LOG(ERROR, "fail to rollback block status", K(ret), K(tmp_ret), K(key), KPC(this));
+      }
+    } else if (OB_FAIL(check_and_set_status(BlockStatus::WASHING, BlockStatus::DISKED))) {
+      STORAGE_LOG(WARN, "fail to check and set status", K(ret), K(key), KPC(this));
+    }
   }
   return ret;
 }
@@ -993,7 +1000,9 @@ int ObTmpTenantFileStore::alloc(const int64_t dir_id, const uint64_t tenant_id, 
       if (OB_SUCC(ret)) {
         if (alloc_size > max_cont_size_per_block) {
           if (OB_FAIL(alloc_macro_block(dir_id, tenant_id, t_mblk))) {
-            STORAGE_LOG(WARN, "cannot allocate a tmp macro block", K(ret), K(dir_id), K(tenant_id));
+            if (OB_SIZE_OVERFLOW != ret) {
+              STORAGE_LOG(WARN, "cannot allocate a tmp macro block", K(ret), K(dir_id), K(tenant_id));
+            }
           } else if (OB_ISNULL(t_mblk)) {
             ret = OB_ERR_NULL_VALUE;
             STORAGE_LOG(WARN, "block alloced is NULL", K(ret), K(dir_id), K(tenant_id));
@@ -1011,7 +1020,9 @@ int ObTmpTenantFileStore::alloc(const int64_t dir_id, const uint64_t tenant_id, 
         } else if (OB_FAIL(tmp_mem_block_manager_.alloc_extent(dir_id, tenant_id, alloc_size, extent))) {
           if (OB_STATE_NOT_MATCH == ret) {
             if (OB_FAIL(alloc_macro_block(dir_id, tenant_id, t_mblk))) {
-              STORAGE_LOG(WARN, "cannot allocate a tmp macro block", K(ret), K(dir_id), K(tenant_id));
+              if (OB_SIZE_OVERFLOW != ret) {
+                STORAGE_LOG(WARN, "cannot allocate a tmp macro block", K(ret), K(dir_id), K(tenant_id));
+              }
             } else if (OB_ISNULL(t_mblk)) {
               ret = OB_ERR_UNEXPECTED;
               STORAGE_LOG(WARN, "unexpected error, t_mblk is nullptr", K(ret), KP(t_mblk));
@@ -1132,19 +1143,23 @@ int ObTmpTenantFileStore::free_macro_block(ObTmpMacroBlock *&t_mblk)
     STORAGE_LOG(WARN, "invalid argument", K(ret));
   } else if (OB_FAIL(tmp_block_manager_.free_macro_block(t_mblk->get_block_id()))) {
     STORAGE_LOG(WARN, "fail to free tmp macro block for block manager", K(ret));
-  } else if (t_mblk->is_memory() && OB_FAIL(tmp_mem_block_manager_.check_and_free_mem_block(t_mblk))) {
-    STORAGE_LOG(WARN, "fail to check and free mem block", K(ret));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (t_mblk->is_washing() &&
-      OB_FAIL(tmp_mem_block_manager_.wait_write_finish(t_mblk->get_block_id(), ObTmpTenantMemBlockManager::get_default_timeout_ms()))) {
-    STORAGE_LOG(WARN, "fail to wait write io finish", K(ret), K(t_mblk));
   } else {
-    ObTaskController::get().allow_next_syslog();
-    STORAGE_LOG(INFO, "finish to free a block", K(ret), K(*t_mblk));
-    t_mblk->~ObTmpMacroBlock();
-    allocator_.free(t_mblk);
+    while (OB_SUCC(ret) && !t_mblk->is_disked()) {
+      if (t_mblk->is_memory() && OB_FAIL(tmp_mem_block_manager_.check_and_free_mem_block(t_mblk))) {
+        STORAGE_LOG(WARN, "fail to check and free mem block", K(ret), KPC(t_mblk));
+      } else if (t_mblk->is_washing() &&
+          OB_FAIL(tmp_mem_block_manager_.wait_write_finish(t_mblk->get_block_id(),
+              ObTmpTenantMemBlockManager::get_default_timeout_ms()))) {
+        STORAGE_LOG(WARN, "fail to wait write io finish", K(ret), KPC(t_mblk));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObTaskController::get().allow_next_syslog();
+      STORAGE_LOG(INFO, "finish to free a block", K(ret), KPC(t_mblk));
+      t_mblk->~ObTmpMacroBlock();
+      allocator_.free(t_mblk);
+      t_mblk = nullptr;
+    }
   }
   return ret;
 }
@@ -1159,7 +1174,7 @@ int ObTmpTenantFileStore::alloc_macro_block(const int64_t dir_id, const uint64_t
     STORAGE_LOG(WARN, "ObTmpMacroBlockManager has not been inited", K(ret));
   } else if (tmp_mem_block_manager_.check_block_full()) {
     ret = OB_SIZE_OVERFLOW;
-    STORAGE_LOG(WARN, "mem block is full", K(ret), K(tenant_id), K(dir_id));
+    STORAGE_LOG(DEBUG, "mem block is full", K(ret), K(tenant_id), K(dir_id));
   } else if (OB_FAIL(tmp_block_manager_.alloc_macro_block(dir_id, tenant_id, t_mblk))) {
     STORAGE_LOG(WARN, "cannot allocate a tmp macro block", K(ret), K(dir_id), K(tenant_id));
   } else if (OB_ISNULL(t_mblk)) {
@@ -1676,6 +1691,30 @@ int ObTmpFileStore::dec_page_cache_num(const uint64_t tenant_id, const int64_t n
     STORAGE_LOG(WARN, "fail to get tmp tenant file store", K(ret), K(tenant_id));
   } else {
     store_handle.get_tenant_store()->dec_page_cache_num(num);
+  }
+  return ret;
+}
+
+int ObTmpFileStore::get_page_cache_num(const uint64_t tenant_id, int64_t &num)
+{
+  int ret = OB_SUCCESS;
+  ObTmpTenantFileStoreHandle store_handle;
+  if (OB_FAIL(get_store(tenant_id, store_handle))) {
+    STORAGE_LOG(WARN, "fail to get tmp tenant file store", K(ret), K(tenant_id));
+  } else {
+    num = store_handle.get_tenant_store()->get_page_cache_num();
+  }
+  return ret;
+}
+
+int ObTmpFileStore::get_block_cache_num(const uint64_t tenant_id, int64_t &num)
+{
+  int ret = OB_SUCCESS;
+  ObTmpTenantFileStoreHandle store_handle;
+  if (OB_FAIL(get_store(tenant_id, store_handle))) {
+    STORAGE_LOG(WARN, "fail to get tmp tenant file store", K(ret), K(tenant_id));
+  } else {
+    num = store_handle.get_tenant_store()->get_block_cache_num();
   }
   return ret;
 }

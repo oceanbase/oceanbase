@@ -285,7 +285,7 @@ public:
     void reset_io();
     int broadcast();
     OB_INLINE ObTmpMacroBlock& get_block() { return block_; };
-    TO_STRING_KV(K_(block), K_(block_handle), K_(ref_cnt));
+    TO_STRING_KV(K_(block), K_(block_handle), K_(ref_cnt), K_(ret_code));
 
   private:
     void destroy();
@@ -296,7 +296,7 @@ public:
     ObThreadCond cond_;
     ObIAllocator &allocator_;
     volatile int64_t ref_cnt_;
-
+    int64_t ret_code_;
   private:
     DISALLOW_COPY_AND_ASSIGN(IOWaitInfo);
   };
@@ -331,7 +331,6 @@ public:
   int alloc_block_all_pages(ObTmpMacroBlock *t_mblk, ObTmpFileExtent &extent);
   int free_macro_block(const int64_t block_id);
   int wash_block(const int64_t block_id, ObIOWaitInfoHandle &handle);
-  int erase_block_from_map(const int64_t block_id);
   int cleanup();
   int add_macro_block(ObTmpMacroBlock *&t_mblk);
   int wait_write_finish(const int64_t block_id, const int64_t timeout_ms);
