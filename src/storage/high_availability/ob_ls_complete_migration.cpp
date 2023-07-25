@@ -1765,7 +1765,13 @@ int ObStartCompleteMigrationTask::inner_check_tablet_transfer_table_ready_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("src ls should not be NULL", K(ret), KPC(tablet), KP(src_ls));
   } else if (OB_FAIL(src_ls->get_max_decided_scn(scn))) {
-    LOG_WARN("failed to get max decided scn", K(ret), KPC(src_ls));
+    if (OB_STATE_NOT_MATCH == ret) {
+      //src ls not ready, need check again
+      need_check_again = true;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get max decided scn", K(ret), KPC(src_ls));
+    }
   } else if (scn <= tablet->get_tablet_meta().transfer_info_.transfer_start_scn_) {
     need_check_again = true;
     if (REACH_TENANT_TIME_INTERVAL(5 * 1000 * 1000/*5s*/)) {

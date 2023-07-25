@@ -275,7 +275,7 @@ int ObMigrationDagNet::init_by_param(const ObIDagInitParam *param)
     LOG_WARN("failed to init ha table key mgr", K(ret), KPC(init_param));
   } else if (OB_FAIL(ctx_->tablet_group_mgr_.init())) {
     LOG_WARN("failed to init tablet group mgr", K(ret), KPC(init_param));
-  } else if (OB_FAIL(ctx_->tablet_simple_info_map_.create(MAX_BUCKET_NUM, "DataHATask"))) {
+  } else if (OB_FAIL(ctx_->tablet_simple_info_map_.create(MAX_BUCKET_NUM, "SHATaskBucket", "SHATaskNode", MTL_ID()))) {
     LOG_WARN("failed to create tablet simple info map", K(ret));
   } else {
     ctx_->tenant_id_ = MTL_ID();

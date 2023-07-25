@@ -779,7 +779,14 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
   } else if (OB_FAIL(get_merge_type_(sstable_param, merge_type))) {
     LOG_WARN("failed to get merge type", K(ret), KPC(sstable_param));
   } else if (OB_FAIL(ls_->ha_get_tablet(tablet_id, tablet_handle))) {
-    LOG_WARN("failed to do ha get tablet", K(ret), K(tablet_id));
+    if (OB_TABLET_NOT_EXIST == ret) {
+      //overwrite ret
+      if (OB_FAIL(tablet_copy_finish_task_->set_tablet_status(ObCopyTabletStatus::TABLET_NOT_EXIST))) {
+        LOG_WARN("failed to set tablet status", K(ret), K(tablet_id));
+      }
+    } else {
+      LOG_WARN("failed to do ha get tablet", K(ret), K(tablet_id));
+    }
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_id));
