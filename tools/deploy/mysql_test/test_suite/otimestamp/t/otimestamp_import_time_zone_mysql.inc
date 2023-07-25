@@ -8,24 +8,42 @@
 
 connect (conn_admin_tz, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
 connection conn_admin_tz;
-set session ob_query_timeout = 20000000;
-select count(*) c1 from oceanbase.__all_tenant_time_zone;
-select count(*) c1 from oceanbase.__all_tenant_time_zone_name;
-select count(*) c1 from oceanbase.__all_tenant_time_zone_transition;
-select count(*) c1 from oceanbase.__all_tenant_time_zone_transition_type;
-delete from oceanbase.__all_tenant_time_zone;
-delete from oceanbase.__all_tenant_time_zone_name;
-delete from oceanbase.__all_tenant_time_zone_transition;
-delete from oceanbase.__all_tenant_time_zone_transition_type;
-alter system change tenant mysql ;
-sleep 2;
+alter system change tenant mysql;
 
---source mysql_test/test_suite/time_zone/t/time_zone_info.sql
+connect (conn_mysql,$OBMYSQL_MS0,root@mysql,,*NO-ONE*,$OBMYSQL_PORT);
+connection conn_mysql;
 
-sleep 10;
-disconnect conn_admin_tz;
-connection default;
+--error 0, 1298
+set time_zone = 'Asia/Shanghai';
+let $result= query_get_value(select @@time_zone as c1 from dual, c1, 1);
+if ($result != 'Asia/Shanghai')
+{
+  connection conn_admin_tz;
+  --source mysql_test/test_suite/time_zone/t/time_zone_info.sql
+  --disable_query_log
+  --disable_result_log
+  sleep 5;
+  let $test_count=1;
+  connection conn_mysql;
+  while ($test_count < 30)
+  {
+    --error 0, 1298
+    set time_zone = 'Asia/Shanghai';
+    let $result= query_get_value(select @@time_zone as c1 from dual, c1, 1);
+    if ($result != 'Asia/Shanghai') {
+      sleep 1;
+      inc $test_count;
+    }
+    if ($result == 'Asia/Shanghai') {
+      let $test_count = 30;
+    }
+  }
+}
 
 --enable_query_log
+disconnect conn_admin_tz;
+disconnect conn_mysql;
+connection default;
+
 --enable_result_log
 --enable_warnings

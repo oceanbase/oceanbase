@@ -1,4 +1,4 @@
-#owner: dachuan.sdc
+#owner: baixian.zr
 #owner group: SQL3
 --error 1305
 select SYS_CONNECT_BY_PATH(2,1) from dual;

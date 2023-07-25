@@ -539,7 +539,8 @@ int ObRFBloomFilterMsg::might_contain_batch(
                         is_batch_seed);
       }
     }
-    if (OB_FAIL(ObBitVector::flip_foreach(skip, batch_size,
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObBitVector::flip_foreach(skip, batch_size,
           [&](int64_t idx) __attribute__((always_inline)) {
             bloom_filter_.prefetch_bits_block(hash_values[idx]); return OB_SUCCESS;
           }))) {
