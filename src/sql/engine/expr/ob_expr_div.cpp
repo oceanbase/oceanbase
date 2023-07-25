@@ -802,7 +802,8 @@ int ObExprDiv::cg_expr(ObExprCGCtx &op_cg_ctx,
     }
   }
 
-  if (OB_ISNULL(op_cg_ctx.session_)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(op_cg_ctx.session_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected session is null", K(ret));
   } else {
