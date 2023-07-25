@@ -728,6 +728,7 @@ int ObTransformConstPropagate::collect_equal_pair_from_pullup(ObDMLStmt *stmt,
       ObRawExpr *select_expr = child_stmt->get_select_items().at(j).expr_;
       ExprConstInfo equal_info;
       equal_info.can_pullup_ = !is_null_side;
+      equal_info.mem_equal_ = true;
       const uint64_t column_id = j + OB_APP_MIN_COLUMN_ID;
       if (OB_ISNULL(select_expr)) {
         ret = OB_ERR_UNEXPECTED;
@@ -754,8 +755,9 @@ int ObTransformConstPropagate::collect_equal_pair_from_pullup(ObDMLStmt *stmt,
         }
       } else if (NULL == equal_info.const_expr_) {
         // handle const info pull up
-        // case3: select * from (select c1 as a from t1 where c1 = 1) v, t2 where v.a = t2.c1; =>
-        //        select * from (select c1 as a from t1 where c1 = 1) v, t2 where 1 = t2.c1;
+        // case3: select * from (select c1 as a from t1 where c1 = '1') v, t2 where v.a = t2.c1; =>
+        //        select * from (select c1 as a from t1 where c1 = '1') v, t2 where '1' = t2.c1;
+        equal_info.mem_equal_ = false;
         if (OB_FAIL(collect_from_pullup_const_infos(child_stmt, select_expr, equal_info))) {
           LOG_WARN("failed to get expr from pullup const info", K(ret));
         }
@@ -1143,8 +1145,13 @@ int ObTransformConstPropagate::replace_internal(ObRawExpr *&cur_expr,
       LOG_WARN("invalid expr", K(ret));
     } else if (cur_expr != column_expr) {
       // do nothing
+    } else if (expr_const_infos.at(i).mem_equal_) {
+      can_replace = true;
     } else if (OB_FAIL(check_can_replace(cur_expr, parent_exprs, used_in_compare, can_replace))) {
       LOG_WARN("failed to check can replace", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (!can_replace) {
       // do nothing
     } else if (OB_FAIL(check_need_cast_when_replace(cur_expr, parent_exprs, need_cast))) {

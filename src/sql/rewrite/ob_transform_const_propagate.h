@@ -50,6 +50,7 @@ private:
       equal_infos_(),
       need_add_constraint_(PRE_CALC_RESULT_NONE),
       can_pullup_(false),
+      mem_equal_(false),
       is_used_(false),
       is_complex_const_info_(false),
       multi_const_exprs_(),
@@ -67,6 +68,7 @@ private:
     common::ObSEArray<ObPCParamEqualInfo, 2> equal_infos_;
     PreCalcExprExpectResult need_add_constraint_;
     bool can_pullup_;
+    bool mem_equal_; //param expr mem is const expr.
     bool is_used_;
     //record or/in predicate const exprs
     bool is_complex_const_info_;
@@ -80,6 +82,7 @@ private:
                  K_(equal_infos),
                  K_(need_add_constraint),
                  K_(can_pullup),
+                 K_(mem_equal),
                  K_(is_used),
                  K_(is_complex_const_info),
                  K_(multi_const_exprs),
