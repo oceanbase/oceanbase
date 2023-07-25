@@ -685,7 +685,7 @@ int ObOptimizer::check_whether_contain_nested_sql(const ObDMLStmt &stmt)
     if (OB_FAIL(del_upd_stmt->get_dml_table_infos(table_infos))) {
       LOG_WARN("failed to get dml table infos", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && !ctx_.contain_nested_sql() && i < table_infos.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_infos.count(); ++i) {
       const ObDmlTableInfo* table_info = table_infos.at(i);
       ObSchemaGetterGuard *schema_guard = ctx_.get_schema_guard();
       const ObTableSchema *table_schema = nullptr;
