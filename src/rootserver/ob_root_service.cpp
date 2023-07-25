@@ -9815,7 +9815,6 @@ int ObRootService::clean_global_context()
 int ObRootService::admin_set_backup_config(const obrpc::ObAdminSetConfigArg &arg)
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("succeed received backup config arg", K(arg));
   if (!arg.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid backup config arg", K(ret));
