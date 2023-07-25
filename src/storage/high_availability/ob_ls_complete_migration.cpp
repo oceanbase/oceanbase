@@ -23,6 +23,7 @@
 #include "ob_storage_ha_utils.h"
 #include "storage/high_availability/ob_transfer_service.h"
 #include "storage/high_availability/ob_rebuild_service.h"
+#include "observer/omt/ob_tenant.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -298,6 +299,10 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
       LOG_WARN("failed to update migration status", K(tmp_ret), K(ret), K(ctx_));
     }
 
+    if (OB_SUCCESS != (tmp_ret = report_ls_meta_table_(ls))) {
+      LOG_WARN("failed to report ls meta table", K(tmp_ret), K(ret), K(ctx_));
+    }
+
     if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
       tmp_ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls migration handler should not be NULL", K(tmp_ret), K(ctx_));
@@ -321,6 +326,8 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
   static const int64_t UPDATE_MIGRATION_STATUS_INTERVAL_MS = 100 * 1000; //100ms
   ObTenantDagScheduler *scheduler = nullptr;
   int32_t result = OB_SUCCESS;
+  share::ObTenantBase *tenant_base = MTL_CTX();
+  omt::ObTenant *tenant = nullptr;
 
   DEBUG_SYNC(BEFORE_COMPLETE_MIGRATION_UPDATE_STATUS);
 
@@ -333,6 +340,10 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
+  } else if (OB_ISNULL(tenant_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant base should not be NULL", K(ret), KP(tenant_base));
+  } else if (FALSE_IT(tenant = static_cast<omt::ObTenant *>(tenant_base))) {
   } else {
     while (!is_finish) {
       ObMigrationStatus current_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
@@ -347,6 +358,10 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
       } else if (scheduler->has_set_stop()) {
         ret = OB_SERVER_IS_STOPPING;
         LOG_WARN("tenant dag scheduler has set stop, stop migration dag net", K(ret), K(ctx_));
+        break;
+      } else if (tenant->has_stopped()) {
+        ret = OB_TENANT_HAS_BEEN_DROPPED;
+        LOG_WARN("tenant has been stopped, stop migration dag net", K(ret), K(ctx_));
         break;
       } else {
         if (OB_FAIL(ls->get_migration_status(current_migration_status))) {
@@ -388,8 +403,6 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
           LOG_WARN("failed to clear ls saved info", K(ret), KPC(ls));
         } else if (OB_FAIL(ls->set_migration_status(new_migration_status, ctx_.rebuild_seq_))) {
           LOG_WARN("failed to set migration status", K(ret), K(current_migration_status), K(new_migration_status), K(ctx_));
-        } else if (OB_FAIL(ObStorageHAUtils::report_ls_meta_table(ctx_.tenant_id_, ls->get_ls_id(), new_migration_status))) {
-          LOG_WARN("failed to report ls meta table", K(ret), K(ctx_));
         } else {
           is_finish = true;
         }
@@ -414,6 +427,44 @@ int ObLSCompleteMigrationDagNet::deal_with_cancel()
     LOG_WARN("ls complete migration dag net do not init", K(ret));
   } else if (OB_FAIL(ctx_.set_result(result, need_retry))) {
     LOG_WARN("failed to set result", K(ret), KPC(this));
+  }
+  return ret;
+}
+
+int ObLSCompleteMigrationDagNet::report_ls_meta_table_(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  ObMigrationStatus status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+  const int64_t MAX_RETRY_NUM = 3;
+  const int64_t REPORT_INTERVAL = 200_ms;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls complete migration dag net do not init", K(ret));
+  } else if (OB_ISNULL(ls)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("update migration status get invalid argument", K(ret), KP(ls));
+  } else if (OB_FAIL(ls->get_migration_status(status))) {
+    LOG_WARN("failed to get migration status", K(ret), KPC(ls));
+  } else {
+    for (int64_t i = 0; i < MAX_RETRY_NUM; ++i) {
+      //overwrite ret
+      if (OB_FAIL(ObStorageHAUtils::report_ls_meta_table(ctx_.tenant_id_, ctx_.arg_.ls_id_, status))) {
+        LOG_WARN("failed to report ls meta table", K(ret), K(ctx_));
+      } else {
+        break;
+      }
+      if (OB_FAIL(ret)) {
+        ob_usleep(REPORT_INTERVAL);
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      //do nothing
+    } else if (OB_FAIL(GCTX.ob_service_->submit_ls_update_task(ctx_.tenant_id_, ctx_.arg_.ls_id_))) {
+      //overwrite ret
+      LOG_WARN("failed to submit ls update task", K(ret), K(ctx_));
+    }
   }
   return ret;
 }

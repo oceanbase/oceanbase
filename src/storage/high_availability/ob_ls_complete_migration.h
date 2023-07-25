@@ -94,6 +94,7 @@ public:
 private:
   int start_running_for_migration_();
   int update_migration_status_(ObLS *ls);
+  int report_ls_meta_table_(ObLS *ls);
   int report_result_();
 
 private:
