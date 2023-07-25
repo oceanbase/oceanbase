@@ -27878,10 +27878,9 @@ def_table_schema(
           (CASE
                WHEN A.LS_ID = 1 THEN 0
                ELSE B.CREATE_SCN END) AS CREATE_SCN
-    FROM OCEANBASE.__ALL_VIRTUAL_LS_STATUS AS A
+    FROM OCEANBASE.DBA_OB_LS AS A
          FULL JOIN OCEANBASE.__ALL_LS AS B
               ON A.LS_ID = B.LS_ID
-    WHERE A.TENANT_ID = EFFECTIVE_TENANT_ID();
   """.replace("\n", " "),
 )
 
@@ -27914,9 +27913,9 @@ def_table_schema(
           (CASE
                WHEN A.LS_ID = 1 THEN 0
                ELSE B.CREATE_SCN END) AS CREATE_SCN
-    FROM OCEANBASE.__ALL_VIRTUAL_LS_STATUS AS A
+    FROM OCEANBASE.CDB_OB_LS AS A
          FULL JOIN OCEANBASE.__ALL_VIRTUAL_LS AS B
-              ON A.LS_ID = B.LS_ID AND A.TENANT_ID = B.TENANT_ID;
+              ON A.LS_ID = B.LS_ID AND A.TENANT_ID = B.TENANT_ID
   """.replace("\n", " "),
 )
 
@@ -45841,10 +45840,9 @@ def_table_schema(
           (CASE
                WHEN A.LS_ID = 1 THEN 0
                ELSE B.CREATE_SCN END) AS CREATE_SCN
-    FROM SYS.ALL_VIRTUAL_LS_STATUS A
+    FROM SYS.DBA_OB_LS A
          FULL JOIN SYS.ALL_VIRTUAL_LS_REAL_AGENT B
               ON A.LS_ID = B.LS_ID
-    WHERE A.TENANT_ID = EFFECTIVE_TENANT_ID();
   """.replace("\n", " "),
 )
 def_table_schema(
