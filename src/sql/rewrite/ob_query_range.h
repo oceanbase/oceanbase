@@ -97,7 +97,9 @@ private:
         range_optimizer_max_mem_size_(100*1024*1024),
         exec_ctx_(exec_ctx),
         expr_constraints_(expr_constraints),
-        params_(params)
+        params_(params),
+        use_in_optimization_(false),
+        row_in_offsets_()
     {
     }
     ~ObQueryRangeCtx()
@@ -117,6 +119,8 @@ private:
     const ParamsIArray *params_;
     common::ObSEArray<const ObRawExpr *, 16> final_exprs_;
     ObSEArray<ObKeyPartPos*, 8> key_part_pos_array_;
+    bool use_in_optimization_;
+    ObSEArray<int64_t, 4> row_in_offsets_;
   };
 public:
   enum ObQueryRangeState
@@ -506,8 +510,9 @@ private:
                            ObExecContext *exec_ctx,
                            ExprConstrantArray *expr_constraints,
                            const ParamsIArray *params,
-                           const bool phy_rowid_for_table_loc = false,
-                           const bool ignore_calc_failure = true);
+                           const bool phy_rowid_for_table_loc,
+                           const bool ignore_calc_failure,
+                           const bool use_in_optimization);
   void destroy_query_range_ctx(common::ObIAllocator &allocator);
   int add_expr_offsets(ObIArray<int64_t> &cur_pos, const ObKeyPart *cur_key);
   int extract_valid_exprs(const ExprIArray &root_exprs,
@@ -595,7 +600,6 @@ private:
   int preliminary_extract(const ObRawExpr *node,
                           ObKeyPart *&out_key_part,
                           const common::ObDataTypeCastParams &dtc_params,
-                          const bool use_in_optimization,
                           const bool is_single_in = false);
   int pre_extract_basic_cmp(const ObRawExpr *node,
                             ObKeyPart *&out_key_part,
@@ -620,14 +624,20 @@ private:
                                 const ObDataTypeCastParams &dtc_params);
   int pre_extract_in_op(const ObOpRawExpr *b_expr,
                         ObKeyPart *&out_key_part,
+                        const ObDataTypeCastParams &dtc_params,
+                        const bool is_single_in);
+  int pre_extract_in_op_with_opt(const ObOpRawExpr *b_expr,
+                        ObKeyPart *&out_key_part,
                         const common::ObDataTypeCastParams &dtc_params);
+  int check_row_in_need_in_optimization(const ObOpRawExpr *b_expr,
+                                        const bool is_single_in,
+                                        bool &use_in_optimization);
   int pre_extract_not_in_op(const ObOpRawExpr *b_expr,
                             ObKeyPart *&out_key_part,
                             const ObDataTypeCastParams &dtc_params);
   int pre_extract_and_or_op(const ObOpRawExpr *m_expr,
                             ObKeyPart *&out_key_part,
-                            const common::ObDataTypeCastParams &dtc_params,
-                            const bool use_in_optimization);
+                            const common::ObDataTypeCastParams &dtc_params);
   int pre_extract_const_op(const ObRawExpr *node,
                            ObKeyPart *&out_key_part);
   int pre_extract_geo_op(const ObOpRawExpr *geo_expr,
@@ -677,7 +687,6 @@ private:
   int is_key_part(const ObKeyPartId &id, ObKeyPartPos *&pos, bool &is_key_part);
   int split_general_or(ObKeyPart *graph, ObKeyPartList &or_storage);
   int split_or(ObKeyPart *graph, ObKeyPartList &or_list);
-  int split_and(ObKeyPart *and_graph, ObKeyPartList &and_list);
   int deal_not_align_keypart(ObKeyPart *l_key_part,
                              ObKeyPart *r_key_part,
                              ObKeyPart *&rest);
@@ -694,8 +703,6 @@ private:
                              ObKeyPart *&result);
 //  int link_item(ObKeyPart *l_gt, ObKeyPart *r_gt);
   int do_key_part_node_and(ObKeyPart *l_key_part, ObKeyPart *r_key_part, ObKeyPart *&res_key_part);
-  int try_link_and_next(ObKeyPart *l_key_part, ObKeyPart *r_key_part,
-                        ObKeyPart *&res_key_part, bool &is_happened);
   int deep_copy_key_part_and_items(const ObKeyPart *src_key_part, ObKeyPart *&dest_key_part);
   int deep_copy_expr_final_info(const ObIArray<ExprFinalInfo> &final_info);
   int shallow_copy_expr_final_info(const ObIArray<ExprFinalInfo> &final_info);
@@ -703,10 +710,6 @@ private:
                                 ObKeyPartList &r_array,
                                 ObKeyPartList &res_array);
   int and_range_graph(ObKeyPartList &ranges, ObKeyPart *&out_key_part);
-  int rebuild_in_graph(ObKeyPart *&out_key_part);
-  int do_in_key_and(ObKeyPart *l_cur_gt, ObKeyPart *r_cur_gt,
-                    ObKeyPart *&r_and_next, ObKeyPart *&tmp_result);
-  int do_in_key_and_next(ObKeyPart *&and_next, ObKeyPart *&tmp_in_result);
 
   int do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart *&res_gt);
   int do_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart *&res_gt);
@@ -717,7 +720,6 @@ private:
                            const common::ObDataTypeCastParams &dtc_params);
   int or_single_head_graphs(ObKeyPartList &or_list, ObExecContext *exec_ctx,
                             const common::ObDataTypeCastParams &dtc_params, bool is_in_or = false);
-  int align_in_keys(ObKeyPart *cur1, ObKeyPart *cur2, const bool has_and_next = true);
   int union_in_with_in(ObKeyPartList &or_list,
                        ObKeyPart *cur1,
                        ObKeyPart *cur2,
