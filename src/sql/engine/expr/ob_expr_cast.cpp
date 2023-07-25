@@ -657,7 +657,8 @@ int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type, ObExprResTyp
     } else if (dst_type.is_user_defined_sql_type()) {
       dst_type.set_subschema_id(ObXMLSqlType);
     }
-  } else if (src_type.is_null()) {
+  } else if (src_type.is_null() || src_type.is_character_type()) {
+    // null or chararcter type can cast to xmltype (other udt types are not supported yet)
     if (dst_type.get_type() == ObUserDefinedSQLType) {
       dst_type.set_sql_udt(ObXMLSqlType);
     }

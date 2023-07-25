@@ -241,6 +241,9 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
     type.set_collation_type(types[1].get_collation_type());
     type.set_collation_level(common::CS_LEVEL_IMPLICIT);
     type.set_accuracy(types[2].get_accuracy());
+    if (type.get_type() == ObUserDefinedSQLType) {
+      type.set_subschema_id(types[2].get_accuracy().get_accuracy());
+    }
     if (types[3].is_not_null_for_read()) {
       type.set_result_flag(NOT_NULL_FLAG | NOT_NULL_WRITE_FLAG);
     }

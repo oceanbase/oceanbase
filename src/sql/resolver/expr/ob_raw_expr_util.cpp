@@ -3916,6 +3916,20 @@ const ObColumnRefRawExpr *ObRawExprUtils::get_column_ref_expr_recursively(const 
   return res;
 }
 
+ObRawExpr *ObRawExprUtils::get_sql_udt_type_expr_recursively(ObRawExpr *expr)
+{
+  ObRawExpr *res = NULL;
+  if (OB_ISNULL(expr)) {
+  } else if (ob_is_user_defined_sql_type(expr->get_result_type().get_type())) {
+    res = expr;
+  } else {
+    for (int i = 0; OB_ISNULL(res) && i < expr->get_param_count(); i++) {
+      res = get_sql_udt_type_expr_recursively(expr->get_param_expr(i));
+    }
+  }
+  return res;
+}
+
 ObRawExpr *ObRawExprUtils::skip_implicit_cast(ObRawExpr *e)
 {
   ObRawExpr *res = e;
@@ -4389,7 +4403,9 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
                                               expr_factory,
                                               col_ref.get_data_type(),
                                               col_ref.get_collation_type(),
-                                              col_ref.get_accuracy().get_accuracy(),
+                                              (col_ref.get_data_type() != ObUserDefinedSQLType)
+                                                ? col_ref.get_accuracy().get_accuracy()
+                                                : col_ref.get_subschema_id(),
                                               !col_ref.is_not_null_for_write(),
                                               &column_conv_info,
                                               &col_ref.get_enum_set_values(),
