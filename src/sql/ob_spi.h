@@ -187,7 +187,8 @@ private:
   int end_nested_session(ObSQLSessionInfo &session);
   int alloc_saved_value(sql::ObSQLSessionInfo::StmtSavedValue *&session_value);
 public:
-  static int check_nested_stmt_legal(ObExecContext &exec_ctx, stmt::StmtType stmt_type, bool for_update = false);
+  static int is_set_global_var(ObSQLSessionInfo &session, const ObString &sql, bool &has_global_variable);
+  static int check_nested_stmt_legal(ObExecContext &exec_ctx, const ObString &sql, stmt::StmtType stmt_type, bool for_update = false);
   int start_trans(ObExecContext &ctx);
   int set_cursor_env(ObSQLSessionInfo &session);
   int reset_cursor_env(ObSQLSessionInfo &session);
@@ -195,7 +196,7 @@ public:
                         stmt::StmtType type = stmt::StmtType::T_NONE,
                         bool is_for_update = false);
   void end_cursor_stmt(pl::ObPLExecCtx *pl_ctx, int &result);
-  int start_nested_stmt_if_need(pl::ObPLExecCtx *pl_ctx, stmt::StmtType stmt_type, bool for_update);
+  int start_nested_stmt_if_need(pl::ObPLExecCtx *pl_ctx, const ObString &sql, stmt::StmtType stmt_type, bool for_update);
   void end_nested_stmt_if_need(pl::ObPLExecCtx *pl_ctx, int &result);
 private:
   bool is_inited_;
