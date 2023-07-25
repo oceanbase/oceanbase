@@ -537,7 +537,6 @@ int ObDDLService::create_index_table(
   ObMySQLTransaction &sql_trans)
 {
   int ret = OB_SUCCESS;
-  const ObString *ddl_stmt_str = &arg.ddl_stmt_str_;
   uint64_t new_table_id = table_schema.get_table_id(); // You can specify the data table id to build an index
   uint64_t tenant_id = table_schema.get_tenant_id();
   ObSchemaService *schema_service = NULL;
@@ -575,9 +574,11 @@ int ObDDLService::create_index_table(
       } else {} // no more to do
     }
     if (OB_SUCC(ret)) {
+      // For create index operation, generate ddl_stmt_str when index enables, but
+      // for alter table add index operation, keep generating ddl_stmt_str same as 3.x while generating index schema.
       if (OB_FAIL(create_table_in_trans(table_schema,
-              ddl_stmt_str, &sql_trans, schema_guard, true/*need_check_tablet_cnt*/))) {
-        LOG_WARN("create_table_in_trans failed", KR(ret), K(ddl_stmt_str), K(table_schema));
+              nullptr/* ddl_stmt_str */, &sql_trans, schema_guard, true/*need_check_tablet_cnt*/))) {
+        LOG_WARN("create_table_in_trans failed", KR(ret), K(arg), K(table_schema));
       }
     }
   }
@@ -9607,7 +9608,8 @@ int ObDDLService::update_global_index(ObAlterTableArg &arg,
                   index_table_schema->get_table_id(),
                   INDEX_STATUS_UNUSABLE,
                   orig_table_schema.get_in_offline_ddl_white_list(),
-                  trans))) {
+                  trans,
+                  nullptr /* ddl_stmt_str */))) {
               LOG_WARN("update_index_status failed", K(index_table_schema->get_data_table_id()));
             }
           } else {
@@ -20367,6 +20369,7 @@ int ObDDLService::update_index_status(const obrpc::ObUpdateIndexStatusArg &arg)
     ObDDLSQLTransaction trans(schema_service_);
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     int64_t refreshed_schema_version = 0;
+    const ObString *ddl_stmt_str = arg.ddl_stmt_str_.empty() ? nullptr : &arg.ddl_stmt_str_;
     if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (is_available_index_status(new_status) && !table->is_unavailable_index()) {
@@ -20376,7 +20379,7 @@ int ObDDLService::update_index_status(const obrpc::ObUpdateIndexStatusArg &arg)
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else if (OB_FAIL(ddl_operator.update_index_status(
                tenant_id, table->get_data_table_id(), table_id,
-               new_status, arg.in_offline_ddl_white_list_, trans))) {
+               new_status, arg.in_offline_ddl_white_list_, trans, ddl_stmt_str))) {
     }
 
     if (OB_SUCC(ret) && arg.task_id_ != 0) {

@@ -3796,7 +3796,8 @@ int ObDDLOperator::update_index_status(
     const uint64_t index_table_id,
     const share::schema::ObIndexStatus status,
     const bool in_offline_ddl_white_list,
-    common::ObMySQLTransaction &trans)
+    common::ObMySQLTransaction &trans,
+    const common::ObString *ddl_stmt_str)
 {
   int ret = OB_SUCCESS;
   int64_t new_schema_version = OB_INVALID_VERSION;
@@ -3825,7 +3826,7 @@ int ObDDLOperator::update_index_status(
     LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
   } else if (FALSE_IT(copy_data_table_schema.set_in_offline_ddl_white_list(in_offline_ddl_white_list))) {
   } else if (OB_FAIL(schema_service->get_table_sql_service().update_index_status(
-      copy_data_table_schema, index_table_id, status, new_schema_version, trans))) {
+      copy_data_table_schema, index_table_id, status, new_schema_version, trans, ddl_stmt_str))) {
     LOG_WARN("update index status failed",
         K(ret), K(data_table_id), K(index_table_id), K(status));
   }
