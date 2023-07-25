@@ -12554,7 +12554,6 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15303', all_def_keywords['__all_virtual_arbitration_member_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304', all_def_keywords['__all_virtual_arbitration_service_status'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keywords['__all_virtual_obj_lock']))
-# 15306: __all_virtual_session_info
 #######################################################################
 # oracle agent table index is defined after the System table Index area
 #######################################################################
@@ -12669,6 +12668,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15402', all_def_ke
 # 15403: __all_virtual_flt_config
 
 # 15404: __all_virtual_tenant_scheduler_job_run_detail
+# 15405: __all_virtual_session_info
 # 余留位置
 
 ################################################################################
