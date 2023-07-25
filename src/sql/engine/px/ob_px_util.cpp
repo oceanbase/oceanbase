@@ -3803,6 +3803,11 @@ bool ObVirtualTableErrorWhitelist::should_ignore_vtable_error(int error_code)
     CASE_IGNORE_ERR_HELPER(OB_RPC_POST_ERROR)
     CASE_IGNORE_ERR_HELPER(OB_TENANT_NOT_IN_SERVER)
     default: {
+      if (is_schema_error(error_code)) {
+        should_ignore = true;
+        const int ret = error_code;
+        LOG_WARN("ignore schema error", KR(ret));
+      }
       break;
     }
   }
