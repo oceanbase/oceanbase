@@ -246,8 +246,8 @@ public:
   void switch_append_to_flashback(PalfHandleImplGuard &leader, int64_t &mode_version);
   void switch_flashback_to_append(PalfHandleImplGuard &leader, int64_t &mode_version);
   void set_disk_options_for_throttling(PalfEnvImpl &palf_env_impl);
-  bool is_degraded(const PalfHandleImplGuard &leader, const int64_t degraded_server_idx);
-  bool is_upgraded(PalfHandleImplGuard &leader, const int64_t palf_id);
+  virtual bool is_degraded(const PalfHandleImplGuard &leader, const int64_t degraded_server_idx);
+  virtual bool is_upgraded(PalfHandleImplGuard &leader, const int64_t palf_id);
   int wait_until_disk_space_to(const int64_t server_id, const int64_t expect_log_disk_space);
   int update_server_log_disk(const int64_t log_disk_size);
 public:

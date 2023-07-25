@@ -1445,9 +1445,10 @@ bool ObSimpleLogClusterTestEnv::is_upgraded(PalfHandleImplGuard &leader, const i
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, palf_id));
     common::GlobalLearnerList degraded_learner_list;
     leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list);
-    has_upgraded = (0 == degraded_learner_list.get_member_number());
+    const bool is_config_change_done = (LogConfigMgr::ConfigChangeState::INIT == leader.palf_handle_impl_->config_mgr_.state_);
+    has_upgraded = (0 == degraded_learner_list.get_member_number() && is_config_change_done);
     sleep(1);
-    PALF_LOG(INFO, "wait upgrade");
+    PALF_LOG(INFO, "wait upgrade", K(palf_id));
   }
   return has_upgraded;
 }

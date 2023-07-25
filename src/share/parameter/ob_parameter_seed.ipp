@@ -589,6 +589,11 @@ DEF_INT(_log_writer_parallelism, OB_TENANT_PARAMETER, "3",
        "the number of parallel log writer threads that can be used to write redo log entries to disk. ",
        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 
+DEF_TIME(_ls_gc_wait_readonly_tx_time, OB_TENANT_PARAMETER, "24h",
+        "[0s,)",
+        "The maximum waiting time for residual read-only transaction before executing log stream garbage collecting。The default value is 24h. Range: [0s,  +∞)."
+        "Log stream garbage collecting will no longer wait for readonly transaction when the tenant is dropped. ",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(standby_db_preferred_upstream_log_region, OB_TENANT_PARAMETER, "",
        "The preferred upstream log region for Standby db. "
        "The Standby db will give priority to the preferred upstream log region to fetch log. "

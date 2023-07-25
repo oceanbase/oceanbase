@@ -428,7 +428,6 @@ int ObLSRecoveryReportor::update_replayable_point_from_tenant_info_()
 int ObLSRecoveryReportor::update_replayable_point_from_meta_()
 {
   int ret = OB_SUCCESS;
-  SCN replayable_point;
   ObLSIterator *iter = NULL;
   common::ObSharedGuard<ObLSIterator> guard;
   ObLSService *ls_svr = MTL(ObLSService *);
@@ -444,6 +443,7 @@ int ObLSRecoveryReportor::update_replayable_point_from_meta_()
     ObLS *ls = nullptr;
     SCN max_replayable_point;
     while (OB_SUCC(iter->get_next(ls))) {
+      SCN replayable_point;
       if (OB_ISNULL(ls)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("ls is null", KR(ret), KP(ls));
@@ -455,8 +455,8 @@ int ObLSRecoveryReportor::update_replayable_point_from_meta_()
     }
     if (OB_ITER_END == ret) {
       logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
-      if (OB_FAIL(log_service->update_replayable_point(replayable_point))) {
-        LOG_WARN("logservice update_replayable_point failed", KR(ret), K(replayable_point));
+      if (OB_FAIL(log_service->update_replayable_point(max_replayable_point))) {
+        LOG_WARN("logservice update_replayable_point failed", KR(ret), K(max_replayable_point));
       } else {
         // do nothing
       }

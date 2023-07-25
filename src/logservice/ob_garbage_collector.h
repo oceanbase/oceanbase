@@ -102,11 +102,14 @@ struct GCDiagnoseInfo
   ~GCDiagnoseInfo() { reset(); }
   LSGCState gc_state_;
   int64_t gc_start_ts_;
+  int64_t block_tx_ts_;
   TO_STRING_KV(K(gc_state_),
-               K(gc_start_ts_));
+               K(gc_start_ts_),
+               K(block_tx_ts_));
   void reset() {
     gc_state_ = LSGCState::INVALID_LS_GC_STATE;
     gc_start_ts_ = OB_INVALID_TIMESTAMP;
+    block_tx_ts_ = OB_INVALID_TIMESTAMP;
   }
 };
 
@@ -244,9 +247,11 @@ public:
   int init(storage::ObLS *ls);
   void reset();
   void execute_pre_gc_process(ObGarbageCollector::LSStatus &ls_status);
+  int execute_pre_remove();
   int check_ls_can_offline(const share::ObLSStatus &ls_status);
   int gc_check_invalid_member_seq(const int64_t gc_seq, bool &need_gc);
   static bool is_valid_ls_gc_state(const LSGCState &state);
+
   int diagnose(GCDiagnoseInfo &diagnose_info) const;
 
   // for replay
@@ -266,7 +271,9 @@ public:
   virtual int flush(share::SCN &scn) override;
 
   TO_STRING_KV(K(is_inited_),
-               K(gc_seq_invalid_member_));
+               K(gc_seq_invalid_member_),
+               K(gc_start_ts_),
+               K(block_tx_ts_));
 
 private:
   typedef common::SpinRWLock RWLock;
@@ -302,6 +309,7 @@ private:
   };
 
 private:
+  const int64_t MAX_WAIT_TIME_US_FOR_READONLY_TX = 10 * 60 * 1000 * 1000L;//10 min
   const int64_t LS_CLOG_ALIVE_TIMEOUT_US = 100 * 1000; //100ms
   const int64_t GET_GTS_TIMEOUT_US = 10L * 1000 * 1000; //10s
   int get_gts_(const int64_t timeout_us, share::SCN &gts_scn);
@@ -321,7 +329,7 @@ private:
       bool &is_tenant_dropping_or_dropped);
   int get_tenant_readable_scn_(share::SCN &readable_scn);
   int check_if_tenant_in_archive_(bool &in_archive);
-  void submit_log_(const ObGCLSLOGType log_type);
+  int submit_log_(const ObGCLSLOGType log_type, bool &is_success);
   void update_ls_gc_state_after_submit_log_(const ObGCLSLOGType log_type,
                                             const share::SCN &scn);
   void block_ls_transfer_in_(const share::SCN &block_scn);
@@ -329,12 +337,14 @@ private:
   int get_palf_role_(common::ObRole &role);
   void handle_gc_ls_dropping_(const ObGarbageCollector::LSStatus &ls_status);
   void handle_gc_ls_offline_(ObGarbageCollector::LSStatus &ls_status);
+  void set_block_tx_if_necessary_();
 private:
   bool is_inited_;
   RWLock rwlock_; //for leader revoke/takeover submit log
   storage::ObLS *ls_;
   int64_t gc_seq_invalid_member_; //缓存gc检查当前ls不在成员列表时的轮次
   int64_t gc_start_ts_;
+  int64_t block_tx_ts_;
 };
 
 } // namespace logservice

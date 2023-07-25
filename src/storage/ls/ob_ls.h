@@ -697,6 +697,11 @@ public:
   // @return other, there is something wrong or there is some tx not cleaned up.
   // int check_all_tx_clean_up() const;
   CONST_DELEGATE_WITH_RET(ls_tx_svr_, check_all_tx_clean_up, int);
+  // check whether all readonly tx of this ls is cleaned up.
+  // @return OB_SUCCESS, all the readonly tx of this ls cleaned up
+  // @return other, there is something wrong or there is some readonly tx not cleaned up.
+  // int check_all_readonly_tx_clean_up() const;
+  CONST_DELEGATE_WITH_RET(ls_tx_svr_, check_all_readonly_tx_clean_up, int);
   // block new tx in for ls.
   // @return OB_SUCCESS, ls is blocked
   // @return other, there is something wrong.
