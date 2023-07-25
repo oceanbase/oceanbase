@@ -12667,6 +12667,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15399', all_def_keyword
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15402', all_def_keywords['__all_ls']))
 # 15403: __all_virtual_flt_config
+
+# 15404: __all_virtual_tenant_scheduler_job_run_detail
 # 余留位置
 
 ################################################################################
@@ -51917,6 +51919,7 @@ def_table_schema(
 # 28195: GV$OB_FLT_TRACE_CONFIG
 # 28196: GV$OB_SESSION
 # 28197: V$OB_SESSION
+# 28198: DBA_SCHEDULER_JOB_RUN_DETAILS
 
 ################################################################################
 # Lob Table (50000, 70000)
