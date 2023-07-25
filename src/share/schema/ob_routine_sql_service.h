@@ -77,7 +77,10 @@ private:
   int del_package(common::ObISQLClient &sql_client,
                   const ObPackageInfo &package_info,
                   int64_t new_schema_version);
-  int gen_routine_dml(const uint64_t exec_tenant_id, const ObRoutineInfo &routine_info, ObDMLSqlSplicer &dml);
+  int gen_routine_dml(const uint64_t exec_tenant_id,
+                      const ObRoutineInfo &routine_info,
+                      ObDMLSqlSplicer &dml,
+                      bool is_replace = false);
   int del_routine(common::ObISQLClient &sql_client,
                   const ObRoutineInfo &routine_info,
                   int64_t new_schema_version);

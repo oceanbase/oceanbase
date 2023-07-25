@@ -212,6 +212,19 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                     cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
                     break;
                   }
+                  case (SQL_DATA_ACCESS): {
+                    if (routine_info->is_no_sql()) {
+                      cells[col_idx].set_varchar("NO_SQL");
+                    } else if (routine_info->is_reads_sql_data()) {
+                      cells[col_idx].set_varchar("READS_SQL_DATA");
+                    } else if (routine_info->is_modifies_sql_data()) {
+                      cells[col_idx].set_varchar("MODIFIES_SQL_DATA");
+                    } else {
+                      cells[col_idx].set_varchar("CONTAINS_SQL");
+                    }
+                    cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+                    break;
+                  }
 
 #define COLUMN_SET_WITH_TYPE(COL_NAME, TYPE, VALUE) \
 case (COL_NAME): {    \
@@ -224,7 +237,6 @@ case (COL_NAME): {    \
                   COLUMN_SET_WITH_TYPE(TYPE, varchar, ROUTINE_PROCEDURE_TYPE == routine_info->get_routine_type() ? "PROCEDURE" : "FUNCTION")
                   COLUMN_SET_WITH_TYPE(SPECIFIC_NAME, varchar, routine_info->get_routine_name())
                   COLUMN_SET_WITH_TYPE(LANGUAGE, varchar, "SQL")
-                  COLUMN_SET_WITH_TYPE(SQL_DATA_ACCESS, varchar, "CONTAINS_SQL")
                   COLUMN_SET_WITH_TYPE(IS_DETERMINISTIC, varchar, routine_info->is_deterministic() ? "YES" : "NO")
                   COLUMN_SET_WITH_TYPE(SECURITY_TYPE, varchar, routine_info->is_invoker_right() ? "INVOKER" : "DEFINER")
                   COLUMN_SET_WITH_TYPE(BODY, varchar, routine_info->get_routine_body())
