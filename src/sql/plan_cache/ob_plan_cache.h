@@ -412,7 +412,8 @@ private:
   int construct_plan_cache_key(ObPlanCacheCtx &plan_ctx, ObLibCacheNameSpace ns);
   static int construct_plan_cache_key(ObSQLSessionInfo &session,
                                       ObLibCacheNameSpace ns,
-                                      ObPlanCacheKey &pc_key);
+                                      ObPlanCacheKey &pc_key,
+                                      bool is_weak);
   /**
    * @brief wether jit compilation is needed in this sql
    *
