@@ -29,6 +29,7 @@ public:
                                       ObUDRItemMgr::UDRItemRefGuard &item_guard);
   static int match_udr_item(const ObString &pattern,
                             const ObSQLSessionInfo &session_info,
+                            ObExecContext &ectx,
                             ObIAllocator &allocator,
                             ObUDRItemMgr::UDRItemRefGuard &guard,
                             PatternConstConsList *cst_cons_list = nullptr);
