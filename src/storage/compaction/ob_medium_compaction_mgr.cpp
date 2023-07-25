@@ -170,6 +170,7 @@ int ObTabletMediumCompactionInfoRecorder::inner_replay_clog(
   } else if (!replay_medium_info.from_cur_cluster()
       && replay_medium_info.is_medium_compaction()) {
     // throw medium compaction clog from other cluster
+    ret = OB_NO_NEED_UPDATE;  // not update max_saved_version_
   } else if (FALSE_IT(replay_medium_info.set_sync_finish(true))) {
   } else if (OB_FAIL(tmp_tablet_handle.get_obj()->save_multi_source_data_unit(&replay_medium_info,
       scn, true/*for replay*/, memtable::MemtableRefOp::NONE))) {

@@ -239,10 +239,10 @@ int ObMediumCompactionScheduleFunc::schedule_next_medium_primary_cluster(
     // do nothing
   } else if (OB_FAIL(tablet_.get_max_sync_medium_scn(max_sync_medium_scn))) { // check info in memory
     LOG_WARN("failed to get max sync medium scn", K(ret), K(max_sync_medium_scn));
-  } else if (is_major && schedule_major_snapshot > max_sync_medium_scn) {
-    schedule_medium_flag = true;
   } else if (nullptr != last_major && last_major->get_snapshot_version() < max_sync_medium_scn) {
     // do nothing
+  } else if (is_major && schedule_major_snapshot > max_sync_medium_scn) {
+    schedule_medium_flag = true;
   } else if (OB_FAIL(ObAdaptiveMergePolicy::get_adaptive_merge_reason(tablet_, adaptive_merge_reason))) {
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("failed to get meta merge priority", K(ret), KPC(this));
