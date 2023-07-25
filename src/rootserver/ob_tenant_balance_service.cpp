@@ -67,55 +67,6 @@ void ObTenantBalanceService::destroy()
   inited_ = false;
 }
 
-int ObTenantBalanceService::wait_tenant_and_version_ready_()
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
-  } else if (OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema ptr is null", KR(ret), KP(GCTX.schema_service_));
-  } else {
-    bool is_ready = false;
-    uint64_t tenant_data_version = 0;
-    while (!is_ready && !has_set_stop()) {
-      ret = OB_SUCCESS;
-      share::schema::ObSchemaGetterGuard schema_guard;
-      const share::schema::ObTenantSchema *tenant_schema = NULL;
-
-      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
-        LOG_WARN("failed to get min data version", KR(ret), K(tenant_id_));
-      } else if (tenant_data_version < DATA_VERSION_4_2_0_0) {
-        ret = OB_NEED_WAIT;
-        WSTAT("tenant version not target, need wait", KR(ret), K(tenant_data_version));
-      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
-        LOG_WARN("fail to get schema guard", KR(ret));
-      } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, tenant_schema))) {
-        LOG_WARN("failed to get tenant ids", KR(ret), K(tenant_id_));
-      } else if (OB_ISNULL(tenant_schema)) {
-        ret = OB_TENANT_NOT_EXIST;
-        LOG_WARN("tenant not exist", KR(ret), K(tenant_id_));
-      } else if (!tenant_schema->is_normal()) {
-        ret = OB_NEED_WAIT;
-        WSTAT("tenant schema not ready, no need tenant balance", KR(ret), KPC(tenant_schema));
-      } else {
-        is_ready = true;
-      }
-
-      if (! is_ready) {
-        idle(10 * 1000 *1000);
-      }
-    }
-
-    if (has_set_stop()) {
-      WSTAT("thread has been stopped", K(is_ready), K(tenant_id_));
-      ret = OB_IN_STOP_STATE;
-    }
-  }
-  return ret;
-}
-
 int ObTenantBalanceService::balance_primary_zone_()
 {
   int ret = OB_SUCCESS;
