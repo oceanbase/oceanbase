@@ -1784,10 +1784,13 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
           int64_t start_time = ObTimeUtility::current_time();
           while (OB_SUCC(ret)) {
             DEBUG_SYNC(BEFORE_PARELLEL_TRUNCATE);
-            if (OB_FAIL(common_rpc_proxy->truncate_table_v2(truncate_table_arg, res))) {
+            if (ctx.get_timeout() < 0) {
+              ret = OB_TIMEOUT;
+              LOG_WARN("paralle truncate table is already timeout", KR(ret), K(start_time), K(ObTimeUtility::current_time()), K(ctx.get_abs_timeout()));
+            } else if (OB_FAIL(common_rpc_proxy->truncate_table_v2(truncate_table_arg, res))) {
               LOG_WARN("rpc proxy truncate table failed", K(ret));
-              if ((OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TIMEOUT == ret || OB_NOT_MASTER == ret
-                    || OB_RS_NOT_MASTER == ret || OB_RS_SHUTDOWN == ret || OB_TENANT_NOT_IN_SERVER == ret) && ctx.get_timeout() > 0) {
+              if (OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TIMEOUT == ret || OB_NOT_MASTER == ret
+                    || OB_RS_NOT_MASTER == ret || OB_RS_SHUTDOWN == ret || OB_TENANT_NOT_IN_SERVER == ret) {
                 ob_usleep(1 * 1000 * 1000);
                 // retry
                 ret = OB_SUCCESS;
