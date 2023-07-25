@@ -681,9 +681,9 @@ int ObTenantTabletScheduler::schedule_tablet_meta_major_merge(
         LOG_WARN("failed to get meta merge tables", K(ret), K(param), K(tablet_id));
       }
     } else if (tablet_handle.get_obj()->get_multi_version_start() > result.merge_version_) {
-      ret = OB_SNAPSHOT_DISCARDED;
-      LOG_ERROR("multi version data is discarded, should not compaction now", K(ret),
-        K(ls_id), K(tablet_id), K(result.merge_version_));
+      ret = OB_NO_NEED_MERGE;
+      LOG_WARN("multi version data is discarded, no need meta merge", K(ret),
+          K(ls_id), K(tablet_id), K(result.merge_version_));
     } else {
       ObTabletMergeDagParam dag_param(META_MAJOR_MERGE, ls_id, tablet_id);
       if (OB_FAIL(schedule_merge_execute_dag<ObTabletMergeExecuteDag>(dag_param, ls_handle, tablet_handle, result))) {
