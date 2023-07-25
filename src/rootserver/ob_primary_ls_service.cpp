@@ -27,6 +27,7 @@
 #include "observer/ob_server_struct.h"//GCTX
 #include "rootserver/ob_tenant_recovery_reportor.h"//update_ls_recovery
 #include "rootserver/ob_tenant_role_transition_service.h"
+#include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"  //ObLSHandle
@@ -2131,9 +2132,11 @@ void ObPrimaryLSService::do_work()
             LOG_WARN("failed to process tenant", KR(ret), KR(tmp_ret), K(tenant_id_));
           }
 
-          if (OB_SUCCESS != (tmp_ret = report_sys_ls_recovery_stat_())) {
-            //ignore error of report, no need wakeup
-            LOG_WARN("failed to report sys ls recovery stat", KR(ret), KR(tmp_ret), K(tenant_id_));
+          if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) {
+            if (OB_SUCCESS != (tmp_ret = report_sys_ls_recovery_stat_())) {
+              //ignore error of report, no need wakeup
+              LOG_WARN("failed to report sys ls recovery stat", KR(ret), KR(tmp_ret), K(tenant_id_));
+            }
           }
         }
       }//for schema guard, must be free
@@ -2204,10 +2207,10 @@ int ObPrimaryLSService::process_meta_tenant_(const share::schema::ObTenantSchema
 
     if (OB_SUCC(ret) && !is_sys_tenant(tenant_id_)) {
       int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = gather_tenant_recovery_stat_())) {
-        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      if (OB_TMP_FAIL(gather_tenant_recovery_stat_())) {
         LOG_WARN("failed to gather tenant recovery stat", KR(ret), KR(tmp_ret));
       }
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
   return ret;

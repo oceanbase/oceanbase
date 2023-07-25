@@ -122,7 +122,7 @@ void ObTenantRecoveryReportor::run2()
     LOG_WARN("not init", KR(ret));
   } else {
     ObThreadCondGuard guard(get_cond());
-    const int64_t idle_time = ObTenantRoleTransitionConstants::TENANT_INFO_REFRESH_TIME_US;
+    int64_t idle_time = ObTenantRoleTransitionConstants::TENANT_INFO_REFRESH_TIME_US;
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
     while (!stop_) {
       if (OB_ISNULL(GCTX.schema_service_)) {
@@ -145,6 +145,13 @@ void ObTenantRecoveryReportor::run2()
       if (OB_SUCCESS != (tmp_ret = update_replayable_point_())) {
         LOG_WARN("failed to update_replayable_point", KR(tmp_ret));
       }
+
+      if (MTL_GET_TENANT_ROLE() == share::ObTenantRole::PRIMARY_TENANT) {
+        idle_time = 10 * 1000 * 1000L;
+      } else {
+        idle_time = ObTenantRoleTransitionConstants::TENANT_INFO_REFRESH_TIME_US;
+      }
+
       if (!stop_) {
         get_cond().wait_us(idle_time);
       }
