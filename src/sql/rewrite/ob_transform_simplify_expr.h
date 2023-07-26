@@ -169,30 +169,33 @@ private:
   int convert_case_when_predicate(ObRawExpr *&expr, 
                                   const bool is_scala_group_by,
                                   bool &trans_happened);
-  int convert_when_exprs_case_when_predicate(ObRawExpr *&expr, bool &trans_happened);
-  int check_convert_when_exprs_case_when_validity(
+  int convert_case_when_predicate_by_when_exprs(
+                                      ObRawExpr *&expr, 
+                                      bool &trans_happened);
+  int check_convert_case_when_by_when_exprs_validity(
                                       ObCaseOpRawExpr *&case_expr,
-                                      int64_t &first_true_non_calc_idx,
+                                      bool &has_null,
                                       bool &is_true,
                                       bool &is_uncalculable,
-                                      ObIArray<ObRawExpr*> &false_exprs,
-                                      ObIArray<ObRawExpr*> &null_exprs,
+                                      int64_t &first_true_non_calc_idx,
+                                      ObIArray<ObRawExpr*> &false_null_exprs,
                                       bool &is_valid);
 
-  int convert_then_exprs_case_when_predicate(ObRawExpr *&parent_expr,
+  int convert_case_when_predicate_by_then_exprs(
+                                     ObRawExpr *&parent_expr,
                                      ObRawExpr *&case_expr,
                                      ObRawExpr *&sibling_expr,
                                      const bool case_at_left,
                                      bool &trans_happened);
 
-  int check_convert_then_exprs_case_when_validity(ObRawExpr *&parent_expr,
+  int check_convert_case_when_by_then_exprs_validity(
+                                      ObRawExpr *&parent_expr,
                                       ObCaseOpRawExpr *&case_expr,
                                       ObRawExpr *&sibling_expr,
                                       const bool case_at_left,
-                                      int64_t &true_null_non_static_idx,
-                                      bool &is_true,
-                                      bool &is_null,
-                                      ObRawExpr *&true_null_non_static_expr,
+                                      bool &is_uncalculable,
+                                      int64_t &true_null_uncalc_idx,
+                                      ObRawExpr *&true_null_uncalc_expr,
                                       ObIArray<ObRawExpr*> &false_exprs,
                                       bool &is_valid);
 };
