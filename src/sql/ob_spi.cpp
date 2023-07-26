@@ -6929,6 +6929,7 @@ int ObSPIService::fill_cursor(ObResultSet &result_set, ObSPICursor *cursor)
               LOG_WARN("failed to copy pl extend", K(ret));
             } else {
               obj = tmp;
+              cursor->complex_objs_.push_back(tmp);
             }
           }
         }

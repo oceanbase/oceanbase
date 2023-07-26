@@ -13672,6 +13672,8 @@ int ObPLResolver::resolve_stmt_list(const ObStmtNodeTree *node,
     }
     if (OB_SUCC(ret)) {
       set_current(*parent);
+    } else if (block != NULL) {
+      block->reset();
     }
   }
   return ret;

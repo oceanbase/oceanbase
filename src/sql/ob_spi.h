@@ -43,11 +43,19 @@ struct ObSPICursor
   ObSPICursor(ObIAllocator &allocator) :
     row_store_(), row_desc_(), allocator_(&allocator), cur_(0), fields_(allocator) {}
 
+  ~ObSPICursor()
+  {
+    for (int64_t i = 0; i < complex_objs_.count(); ++i) {
+      (void)(pl::ObUserDefinedType::destruct_obj(complex_objs_.at(i)));
+    }
+  }
+
   ObRARowStore row_store_;
   ObArray<ObDataType> row_desc_; //ObRowStore里数据自带的Meta可能是T_NULL，所以这里自备一份
   ObIAllocator* allocator_;
   int64_t cur_;
   common::ColumnsFieldArray fields_;
+  ObArray<ObObj> complex_objs_;
 };
 
 struct ObSPIOutParams
