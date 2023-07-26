@@ -6371,10 +6371,14 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
       if (OB_SUCC(ret)) {
         LOG_DEBUG("same type directyly copy", K(obj), K(tmp_obj), K(result_types[i]), K(i));
       }
-    } else if (!(obj.is_pl_extend() || obj.is_user_defined_sql_type() || obj.is_null())
+    } else if (!(obj.is_pl_extend()
+                 || obj.is_user_defined_sql_type()
+                 || (obj.is_null() && current_type.at(i).get_meta_type().is_user_defined_sql_type()))
                && result_types[i].get_meta_type().is_ext()) {
-      // sql udt or null can cast to pl extend
-      // example: select extract(xmlparse(document '<a>a</a>'), '/b') into xml_data from dual;
+      // sql udt can cast to pl extend, null from sql udt type can cast to pl extend(xmltype)
+      // but null may not cast to other pl extends (return error 4016 in store_datums)
+      // support: select extract(xmlparse(document '<a>a</a>'), '/b') into xml_data from dual;
+      // not support: select null into xml_data from dual;
       ret = OB_ERR_INTO_EXPR_ILLEGAL;
       LOG_WARN("PLS-00597: expression 'string' in the INTO list is of wrong type", K(ret));
     } else {
