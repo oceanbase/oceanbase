@@ -326,7 +326,6 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
     if (need_padding_) {
       padding_allocator_.reuse();
     }
-    reuse_lob_locator();
     while (OB_SUCC(ret)) {
       if (access_ctx_->is_limit_end()) {
         ret = OB_ITER_END;
@@ -450,7 +449,6 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
     if (need_padding_) {
       padding_allocator_.reuse();
     }
-    reuse_lob_locator();
     while (OB_SUCC(ret) && !vector_store->is_end()) {
       bool can_batch = false;
       if (access_ctx_->is_limit_end()) {
@@ -555,7 +553,6 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
       int64_t batch_size = max(1, access_param_->op_->get_batch_size());
       access_param_->op_->get_eval_ctx().reuse(batch_size);
     }
-    reuse_lob_locator();
     while (OB_SUCC(ret) && !agg_row_store->is_end()) {
       bool can_batch = false;
       // clear evaluated flag for every row
@@ -1341,6 +1338,8 @@ bool ObMultipleMerge::need_read_lob_columns(const blocksstable::ObDatumRow &row)
 int ObMultipleMerge::handle_lob_before_fuse_row()
 {
   int ret = OB_SUCCESS;
+  // reuse lob locator every row because output filter shared common expr is already fixed
+  reuse_lob_locator();
   // Notice: should not  change behavior dynamicly by min cluster version:
   // for example, while running in 4.0 compat mode, the min cluster version changes to 4.1
   // but lob_locator_helper is not initialized.
