@@ -159,6 +159,7 @@ void TestCreateExecutor::fake_ctx_init_common(ObTableCtx &fake_ctx, ObTableSchem
   fake_ctx.database_id_ = table_schema->get_database_id();
   fake_ctx.table_name_ = table_schema->get_table_name();
   fake_ctx.ref_table_id_ = table_schema->get_table_id();
+  fake_ctx.index_table_id_ = fake_ctx.ref_table_id_;
   fake_ctx.index_tablet_id_ = table_schema->get_table_id();
   fake_ctx.sess_guard_.sess_node_val_ = &g_sess_node_val;
   g_sess_node_val.is_inited_ = true;

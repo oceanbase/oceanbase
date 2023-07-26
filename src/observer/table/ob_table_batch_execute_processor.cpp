@@ -445,7 +445,7 @@ int ObTableBatchExecuteP::multi_delete()
     LOG_WARN("fail to start readonly transaction", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
-  } else if (ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_DELETE>(tb_ctx_, cache_guard, spec)) {
+  } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_DELETE>(tb_ctx_, cache_guard, spec))) {
     LOG_WARN("fail to get or create spec", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_operation.count(); ++i) {
@@ -571,9 +571,9 @@ int ObTableBatchExecuteP::multi_insert()
     LOG_WARN("fail to start readonly transaction", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
-  } else if (ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_INSERT>(tb_ctx_,
-                                                                         cache_guard,
-                                                                         spec)) {
+  } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_INSERT>(tb_ctx_,
+                                                                                 cache_guard,
+                                                                                 spec))) {
     LOG_WARN("fail to get or create spec", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_operation.count(); ++i) {
@@ -627,9 +627,9 @@ int ObTableBatchExecuteP::multi_replace()
     LOG_WARN("fail to start readonly transaction", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
-  } else if (ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_REPLACE>(tb_ctx_,
-                                                                          cache_guard,
-                                                                          spec)) {
+  } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_REPLACE>(tb_ctx_,
+                                                                                  cache_guard,
+                                                                                  spec))) {
     LOG_WARN("fail to get or create spec", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_operation.count(); ++i) {

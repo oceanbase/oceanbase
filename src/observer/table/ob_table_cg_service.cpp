@@ -58,15 +58,15 @@ int ObTableExprCgService::build_generated_column_expr(ObTableCtx &ctx,
     ObRawExpr *gen_expr = nullptr;
     if (OB_FAIL(schema_checker.init(schema_guard))) {
       LOG_WARN("fail to init schema checker", K(ret));
-    } else if(OB_FAIL(ObRawExprUtils::build_generated_column_expr(expr_str,
-                                                                  expr_factory,
-                                                                  sess_info,
-                                                                  gen_expr,
-                                                                  columns,
-                                                                  table_schema,
-                                                                  false, /* allow_sequence */
-                                                                  nullptr,
-                                                                  &schema_checker))) {
+    } else if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(expr_str,
+                                                                   expr_factory,
+                                                                   sess_info,
+                                                                   gen_expr,
+                                                                   columns,
+                                                                   table_schema,
+                                                                   false, /* allow_sequence */
+                                                                   nullptr,
+                                                                   &schema_checker))) {
       LOG_WARN("fail to build generated expr", K(ret), K(expr_str), K(ctx));
     } else if (OB_ISNULL(gen_expr)) {
       ret = OB_ERR_UNEXPECTED;
@@ -642,22 +642,20 @@ int ObTableExprCgService::write_datum(ObTableCtx &ctx,
         if (OB_ISNULL(write_expr)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("column conv expr below auto inc expr is null", K(ret));
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        // 用于生成自增主键冲突的列引用表达式，在write_datum时刷值
-        ObExpr *auto_inc_ref_col_expr = write_expr->args_[4];
-        if (OB_ISNULL(auto_inc_ref_col_expr)) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("auto_inc_ref_col_expr is null", K(ret));
         } else {
-          ObDatum &datum = auto_inc_ref_col_expr->locate_datum_for_write(eval_ctx);
-          if (OB_FAIL(datum.from_obj(obj))) {
-            LOG_WARN("fail to convert object from datum", K(ret), K(obj));
+          // 用于生成自增主键冲突的列引用表达式，在write_datum时刷值
+          ObExpr *auto_inc_ref_col_expr = write_expr->args_[4];
+          if (OB_ISNULL(auto_inc_ref_col_expr)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("auto_inc_ref_col_expr is null", K(ret));
           } else {
-            auto_inc_ref_col_expr->get_eval_info(eval_ctx).evaluated_ = true;
-            auto_inc_ref_col_expr->get_eval_info(eval_ctx).projected_ = true;
+            ObDatum &datum = auto_inc_ref_col_expr->locate_datum_for_write(eval_ctx);
+            if (OB_FAIL(datum.from_obj(obj))) {
+              LOG_WARN("fail to convert object from datum", K(ret), K(obj));
+            } else {
+              auto_inc_ref_col_expr->get_eval_info(eval_ctx).evaluated_ = true;
+              auto_inc_ref_col_expr->get_eval_info(eval_ctx).projected_ = true;
+            }
           }
         }
       }
@@ -699,23 +697,34 @@ int ObTableExprCgService::refresh_rowkey_exprs_frame(ObTableCtx &ctx,
                                                      const ObIArray<ObObj> &rowkey)
 {
   int ret = OB_SUCCESS;
-  int64_t schema_rowkey_cnt = ctx.get_table_schema()->get_rowkey_column_num();
+  const int64_t schema_rowkey_cnt = ctx.get_table_schema()->get_rowkey_column_num();
+  const int64_t entity_rowkey_cnt = rowkey.count();
   ObEvalCtx eval_ctx(ctx.get_exec_ctx());
-  bool is_full_filled = schema_rowkey_cnt == rowkey.count();
+  bool is_full_filled = schema_rowkey_cnt == entity_rowkey_cnt;
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < schema_rowkey_cnt; i++) {
+  // 不存在自增列的情况下，按照用户的值填datum
+  // 存在自增列，用户填了值的情况下，使用用户的值刷datum
+  // 存在自增列，用户没有填值的情况下，使用null obj刷datum
+  // idx 是为了在主键中存在自增列是为了解决使用i访问obj_ptr会出现访问越界的问题，因为在主键存在自增列场景下，用户可以
+  // 不填自增列值，这时rowkey中的obj数量少于schema上的rowkey数量
+  for (int64_t i = 0, idx = 0; OB_SUCC(ret) && i < schema_rowkey_cnt; i++) {
     const ObExpr *expr = exprs.at(i);
     if (OB_ISNULL(expr)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("expr is null", K(ret));
-    } else if (ctx.has_auto_inc() && !is_full_filled && expr->type_ == T_FUN_COLUMN_CONV) {
+    } else if (ctx.has_auto_inc() && !is_full_filled && expr->type_ == T_FUN_COLUMN_CONV) { // 自增列，用户未填值
       ObObj null_obj;
       null_obj.set_null();
       if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, null_obj))) {
         LOG_WARN("fail to write datum", K(ret), K(rowkey.at(i)), K(*expr));
       }
-    } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, rowkey.at(i)))) {
+    } else if (idx >= entity_rowkey_cnt) {
+      ret = OB_INDEX_OUT_OF_RANGE;
+      LOG_WARN("idx out of range", K(ret), K(idx), K(entity_rowkey_cnt));
+    } else if (OB_FAIL(write_datum(ctx, ctx.get_allocator(), *expr, eval_ctx, rowkey.at(idx)))) {
       LOG_WARN("fail to write datum", K(ret), K(rowkey.at(i)), K(*expr));
+    } else {
+      idx++;
     }
   }
 
@@ -2472,7 +2481,9 @@ int ObTableSpecCgService::generate_spec(ObIAllocator &alloc,
 
   if (OB_FAIL(ObTableDmlCgService::generate_replace_ctdef(ctx, alloc, ctdef))) {
     LOG_WARN("fail to generate replace ctdef", K(ret));
-  } else if (ObTableDmlCgService::generate_conflict_checker_ctdef(ctx, alloc, spec.get_conflict_checker_ctdef())) {
+  } else if (OB_FAIL(ObTableDmlCgService::generate_conflict_checker_ctdef(ctx,
+                                                                          alloc,
+                                                                          spec.get_conflict_checker_ctdef()))) {
     LOG_WARN("fail to generate conflict checker ctdef", K(ret));
   }
 
@@ -2494,9 +2505,9 @@ int ObTableSpecCgService::generate_spec(ObIAllocator &alloc,
   } else {
     const ObIArray<ObRawExpr *> &exprs = ctx.get_old_row_exprs();
     ObStaticEngineCG cg(ctx.get_cur_cluster_version());
-    if (ObTableDmlCgService::generate_conflict_checker_ctdef(ctx,
-                                                             alloc,
-                                                             spec.get_conflict_checker_ctdef())) {
+    if (OB_FAIL(ObTableDmlCgService::generate_conflict_checker_ctdef(ctx,
+                                                                     alloc,
+                                                                     spec.get_conflict_checker_ctdef()))) {
       LOG_WARN("fail to generate conflict checker ctdef", K(ret));
     } else if (OB_FAIL(cg.generate_rt_exprs(exprs,
                                             spec.get_all_saved_exprs()))) {

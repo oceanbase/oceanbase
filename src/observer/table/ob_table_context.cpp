@@ -312,17 +312,26 @@ int ObTableCtx::adjust_rowkey()
 {
   int ret = OB_SUCCESS;
   ObRowkey rowkey = entity_->get_rowkey();
-  // 原定是用户在自增场景下主键可不传数据，而目前的实现是主键传0为自增，暂时保留校验修改
+
   if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret));
   } else {
+    const int64_t schema_rowkey_cnt = table_schema_->get_rowkey_column_num();
+    const int64_t entity_rowkey_cnt = rowkey.get_obj_cnt();
     bool has_auto_inc = false; // only one auto increment column in a table
+    bool is_full_filled = entity_rowkey_cnt == schema_rowkey_cnt; // 是否把主键值填全，存在自增列场景下可以不填全
     const ObRowkeyInfo &rowkey_info = table_schema_->get_rowkey_info();
     const ObColumnSchemaV2 *col_schema = nullptr;
     uint64_t column_id = OB_INVALID_ID;
     ObObj *obj_ptr = rowkey.get_obj_ptr();
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_schema_->get_rowkey_column_num(); i++) {
+    // 不存在自增列的情况下，全部校验
+    // 存在自增列情况下，用户填了值，全部校验
+    // 存在自增列情况下，用户没有填值，自增列不校验，其他列校验
+    // idx 是为了在主键中存在自增列是为了解决使用i访问obj_ptr会出现访问越界的问题，因为在主键存在自增列场景下，用户可以
+    // 不填自增列值，这时rowkey中的obj数量少于schema上的rowkey数量
+    for (int64_t i = 0, idx = 0; OB_SUCC(ret) && i < schema_rowkey_cnt; i++) {
+      bool need_check = true;
       if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
         LOG_WARN("fail to get column id", K(ret), K(i));
       } else if (OB_ISNULL(col_schema = table_schema_->get_column_schema(column_id))) {
@@ -333,18 +342,29 @@ int ObTableCtx::adjust_rowkey()
         if (col_schema->is_part_key_column()) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("auto increment column could not be partition column", K(ret), K(*col_schema));
+        } else if (!is_full_filled) { // 当前列是自增列，但是用户没有填值，不需要校验
+          need_check = false;
         }
-      } else if (OB_FAIL(adjust_column(*col_schema, obj_ptr[i]))) {
-        LOG_WARN("fail to adjust column", K(ret), K(obj_ptr[i]));
+      }
+
+      if (OB_SUCC(ret) && need_check) {
+        if (idx >= entity_rowkey_cnt) {
+          ret = OB_INDEX_OUT_OF_RANGE;
+          LOG_WARN("idx out of range", K(ret), K(idx), K(entity_rowkey_cnt));
+        } else if (OB_FAIL(adjust_column(*col_schema, obj_ptr[idx]))) { // [c1][c2][c3] [c1][c3]
+          LOG_WARN("fail to adjust column", K(ret), K(obj_ptr[idx]));
+        } else {
+          idx++;
+        }
       }
     }
 
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (!has_auto_inc && rowkey.get_obj_cnt() != table_schema_->get_rowkey_column_num()) {
+    } else if (!has_auto_inc && entity_rowkey_cnt != schema_rowkey_cnt) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("entity rowkey count mismatch table schema rowkey count",
-           K(ret), K(rowkey.get_obj_cnt()), K(table_schema_->get_rowkey_column_num()));
+           K(ret), K(entity_rowkey_cnt), K(schema_rowkey_cnt));
     }
   }
 
