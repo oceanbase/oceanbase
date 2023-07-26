@@ -154,14 +154,17 @@ int ObLSDupTabletsMgr::CollectTabletsHandler::operator()(
 //******  DupTabletSet & DupTabletLog
 //**********************************************************************
 
-int DupTabletChangeMap::create(int64_t bucket_num)
+int DupTabletChangeMap::create(const uint64_t tenant_id, const int64_t bucket_num)
 {
   int ret = OB_SUCCESS;
-  if (!dup_set_attr_.common_header_.is_valid()) {
+  ObMemAttr attr(tenant_id, "DupTabletHash");
+
+  if (!dup_set_attr_.common_header_.is_valid() || tenant_id <= OB_INVALID_TENANT_ID) {
     ret = OB_ERR_UNEXPECTED;
-    DUP_TABLE_LOG(WARN, "invalid unique_id", K(ret), K(dup_set_attr_));
-  } else if (OB_FAIL(DupTabletIdMap::create(bucket_num, "DupTabletHash"))) {
-    DUP_TABLE_LOG(WARN, "create dup tablet id map failed", K(ret), K(dup_set_attr_), K(bucket_num));
+    DUP_TABLE_LOG(WARN, "invalid unique_id or tenant_id", K(ret), K(dup_set_attr_), K(tenant_id));
+  } else if (OB_FAIL(DupTabletIdMap::create(bucket_num, attr))) {
+    DUP_TABLE_LOG(WARN, "create dup tablet id map failed", K(ret), K(dup_set_attr_),
+                  K(bucket_num), K(tenant_id));
   }
 
   return ret;
@@ -344,6 +347,7 @@ int ObLSDupTabletsMgr::init_free_tablet_pool_()
   int ret = OB_SUCCESS;
 
   destroy_free_tablet_pool_();
+  const uint64_t tenant_id = MTL_ID();
 
   for (int i = 0; i < RESERVED_FREE_SET_COUNT && OB_SUCC(ret); i++) {
     DupTabletChangeMap *tmp_map_ptr = nullptr;
@@ -352,7 +356,7 @@ int ObLSDupTabletsMgr::init_free_tablet_pool_()
       ret = OB_ALLOCATE_MEMORY_FAILED;
       // } else if (OB_FALSE_IT(extra_free_set_alloc_count_++)) {
     } else if (OB_FALSE_IT(new (tmp_map_ptr) DupTabletChangeMap(i + 1))) {
-    } else if (OB_FAIL(tmp_map_ptr->create(1024))) {
+    } else if (OB_FAIL(tmp_map_ptr->create(tenant_id, 1024))) {
       DUP_TABLE_LOG(WARN, "create dup_tablet hash map", K(ret));
     } else if (false == (free_set_pool_.add_last(tmp_map_ptr))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1922,13 +1926,14 @@ int ObLSDupTabletsMgr::alloc_extra_free_tablet_set_()
   int ret = OB_SUCCESS;
 
   DupTabletChangeMap *tmp_map_ptr = nullptr;
+  const uint64_t tenant_id = MTL_ID();
   if (OB_ISNULL(tmp_map_ptr = static_cast<DupTabletChangeMap *>(
                     share::mtl_malloc(sizeof(DupTabletChangeMap), "DupTabletMap")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_FALSE_IT(extra_free_set_alloc_count_++)) {
   } else if (OB_FALSE_IT(new (tmp_map_ptr) DupTabletChangeMap(RESERVED_FREE_SET_COUNT
                                                               + extra_free_set_alloc_count_))) {
-  } else if (OB_FAIL(tmp_map_ptr->create(1024))) {
+  } else if (OB_FAIL(tmp_map_ptr->create(tenant_id, 1024))) {
     DUP_TABLE_LOG(WARN, "create dup_tablet hash map", K(ret));
   } else if (false == (free_set_pool_.add_last(tmp_map_ptr))) {
     ret = OB_ERR_UNEXPECTED;
