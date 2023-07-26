@@ -458,7 +458,8 @@ struct ObExchangeInfo
     sample_type_(NOT_INIT_SAMPLE_TYPE),
     parallel_(ObGlobalHint::UNSET_PARALLEL),
     server_cnt_(0),
-    server_list_()
+    server_list_(),
+    is_related_pair_(false)
   {
     repartition_table_id_ = 0;
   }
@@ -521,6 +522,14 @@ struct ObExchangeInfo
   int64_t parallel_;
   int64_t server_cnt_;
   common::ObSEArray<common::ObAddr, 4> server_list_;
+  /**
+    When data volume of left table in NLJ is small, there is a task skew due to small granule count.
+    Therefore, we insert random shuffle above left table to achieve load balancing. Exchange operator
+    splits DFO into two, and DFO with NLJ is purely computing and scheduled to QC machine. So, data
+    in left table will be sent to NLJ operator via network. To minimize network transmission, we
+    schedule DFO with NLJ on machines where left table data is located.
+  */
+  bool is_related_pair_;
 
   TO_STRING_KV(K_(is_remote),
                K_(is_task_order),
@@ -547,7 +556,8 @@ struct ObExchangeInfo
                K_(sample_type),
                K_(parallel),
                K_(server_cnt),
-               K_(server_list));
+               K_(server_list),
+               K_(is_related_pair));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExchangeInfo);
 };

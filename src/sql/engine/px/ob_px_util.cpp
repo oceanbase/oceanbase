@@ -890,6 +890,33 @@ int ObPXServerAddrUtil::alloc_by_reference_child_distribution(
   return ret;
 }
 
+int ObPXServerAddrUtil::alloc_by_reference_child_distribution(
+    const ObIArray<ObTableLocation> *table_locations,
+    ObExecContext &exec_ctx,
+    ObDfo &parent)
+{
+  int ret = OB_SUCCESS;
+  ObDfo *reference_child = nullptr;
+  bool found = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < parent.get_child_count() && !found; i++) {
+    OZ (parent.get_child_dfo(i, reference_child));
+    if (reference_child->get_dfo_id() == parent.get_reference_dfo_id()) {
+      found = true;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (!found) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get reference_child", K(ret), K(parent.get_reference_dfo_id()));
+    } else if (alloc_by_data_distribution(table_locations, exec_ctx, *reference_child)) {
+      LOG_WARN("failed to alloc by data", K(ret));
+    } else if (OB_FAIL(alloc_by_child_distribution(*reference_child, parent))) {
+      LOG_WARN("failed to alloc by child distribution", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObPXServerAddrUtil::check_partition_wise_location_valid(DASTabletLocIArray &tsc_locations)
 {
   int ret = OB_SUCCESS;

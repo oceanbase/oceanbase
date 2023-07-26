@@ -87,6 +87,8 @@ public:
   int64_t repartition_table_id_; // for pkey, target table location id
   ObExpr *wf_hybrid_aggr_status_expr_;
   common::ObFixedArray<int64_t, common::ObIAllocator> wf_hybrid_pby_exprs_cnt_array_;
+  // for random shuffle in nlj and spf
+  bool is_related_pair_;
 };
 
 class ObPxTransmitOp : public ObTransmitOp

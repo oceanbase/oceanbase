@@ -3414,3 +3414,84 @@ select /*+ no_rewrite*/ * from t1 where exists (select /*+no_unnest */ 1 from t3
 | 26 |    9 |   17 |   17 |
 | 28 |    3 |   18 |   18 |
 +----+------+------+------+
+
+drop table if exists rf_t1, rf_t2;
+CREATE TABLE rf_t1 (c1 INT, c2 INT);
+CREATE TABLE rf_t2 (c1 INT PRIMARY KEY, c2 INT);
+insert into rf_t1 values(1, 1),(2, 2),(3, 3),(4, 4),(5, 5);
+insert into rf_t2 values(1, 1),(2, 2),(3, 3),(4, 4),(5, 5);
+
+explain SELECT /*+NO_REWRITE, parallel(1)*/ c1 FROM rf_t1 WHERE c2 > (SELECT MAX(c2) FROM rf_t2 WHERE rf_t1.c1>rf_t2.c1);
+Query Plan
+=================================================================
+|ID|OPERATOR                        |NAME |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |SUBPLAN FILTER                  |     |2       |93          |
+|1 |├─TABLE FULL SCAN               |rf_t1|5       |2           |
+|2 |└─SCALAR GROUP BY               |     |1       |19          |
+|3 |  └─DISTRIBUTED TABLE RANGE SCAN|rf_t2|2       |19          |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([rf_t1.c1]), filter([rf_t1.c2 > subquery(1)]), rowset=256
+      exec_params_([rf_t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=256
+      access([rf_t1.c1], [rf_t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([rf_t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([T_FUN_MAX(T_FUN_MAX(rf_t2.c2))]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_MAX(T_FUN_MAX(rf_t2.c2))])
+  3 - output([T_FUN_MAX(rf_t2.c2)]), filter(nil), rowset=256
+      access([rf_t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([rf_t2.c1]), range(MIN ; MAX)always true,
+      range_cond([:0 > rf_t2.c1])
+explain SELECT /*+NO_REWRITE, parallel(2)*/ c1 FROM rf_t1 WHERE c2 > (SELECT MAX(c2) FROM rf_t2 WHERE rf_t1.c1>rf_t2.c1);
+Query Plan
+========================================================================
+|ID|OPERATOR                            |NAME    |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |PX COORDINATOR                      |        |2       |50          |
+|1 |└─EXCHANGE OUT DISTR                |:EX10001|2       |50          |
+|2 |  └─SUBPLAN FILTER                  |        |2       |49          |
+|3 |    ├─EXCHANGE IN DISTR             |        |5       |4           |
+|4 |    │ └─EXCHANGE OUT DISTR (RANDOM) |:EX10000|5       |3           |
+|5 |    │   └─PX BLOCK ITERATOR         |        |5       |1           |
+|6 |    │     └─TABLE FULL SCAN         |rf_t1   |5       |1           |
+|7 |    └─SCALAR GROUP BY               |        |1       |19          |
+|8 |      └─DISTRIBUTED TABLE RANGE SCAN|rf_t2   |2       |19          |
+========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(rf_t1.c1)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(rf_t1.c1)]), filter(nil), rowset=256
+      dop=2
+  2 - output([rf_t1.c1]), filter([rf_t1.c2 > subquery(1)]), rowset=256
+      exec_params_([rf_t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  3 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=256
+  4 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=256
+      dop=2
+  5 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=256
+  6 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=256
+      access([rf_t1.c1], [rf_t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([rf_t1.__pk_increment]), range(MIN ; MAX)always true
+  7 - output([T_FUN_MAX(T_FUN_MAX(rf_t2.c2))]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_MAX(T_FUN_MAX(rf_t2.c2))])
+  8 - output([T_FUN_MAX(rf_t2.c2)]), filter(nil), rowset=256
+      access([rf_t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([rf_t2.c1]), range(MIN ; MAX)always true,
+      range_cond([:0 > rf_t2.c1])
+
+SELECT /*+NO_REWRITE, parallel(2)*/ c1 FROM rf_t1 WHERE c2 > (SELECT MAX(c2) FROM rf_t2 WHERE rf_t1.c1>rf_t2.c1);
++------+
+| c1   |
++------+
+|    2 |
+|    3 |
+|    4 |
+|    5 |
++------+
+
+drop table if exists rf_t1, rf_t2;

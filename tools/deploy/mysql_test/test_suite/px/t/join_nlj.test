@@ -33,4 +33,20 @@ insert into orders values(314268, 314268, 678, "192.168.1.8");
 #explain select t1.pname,t2.oid,t2.amount from product t1,orders t2 where t2.oid = 314265 and t1.pid=t2.pid;
 select t1.pname,t2.oid,t2.amount from product t1,orders t2 where t2.oid = 314265 and t1.pid=t2.pid;
 
+# 右表为das时, 左侧使用random shuffle来负载均衡, 但dop为1时不使用此规则
+--disable_warnings
+drop table if exists rf_t1, rf_t2;
+CREATE TABLE rf_t1 (c1 INT, c2 INT);
+CREATE TABLE rf_t2 (c1 INT PRIMARY KEY, c2 INT);
+--enable_warnings
 
+insert into rf_t1 values(1, 1),(2, 2),(3, 3),(4, 4),(5, 5);
+insert into rf_t2 values(1, 1),(2, 2),(3, 3),(4, 4),(5, 5);
+
+explain select /*+parallel(1), leading(rf_t1), use_nl(rf_t1, rf_t2) */ * from rf_t1 join rf_t2 on rf_t1.c1 = rf_t2.c1;
+explain select /*+parallel(2), leading(rf_t1), use_nl(rf_t1, rf_t2) */ * from rf_t1 join rf_t2 on rf_t1.c1 = rf_t2.c1;
+
+--sorted_result
+select /*+parallel(2), leading(rf_t1), use_nl(rf_t1, rf_t2) */ * from rf_t1 join rf_t2 on rf_t1.c1 = rf_t2.c1;
+
+drop table if exists rf_t1, rf_t2;

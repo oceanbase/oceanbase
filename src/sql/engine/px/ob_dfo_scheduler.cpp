@@ -1409,7 +1409,13 @@ int ObParallelDfoScheduler::schedule_pair(ObExecContext &exec_ctx,
         // sqc。
         //
         // 下面只实现了第一种、第二种情况，第三种需求不明确，列为 TODO
-        if (parent.has_scan_op() || parent.has_dml_op()) { // 参考 Partial Partition Wise Join
+        if (common::OB_INVALID_ID != parent.get_reference_dfo_id() &&
+            OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(
+                        coord_info_.pruning_table_location_,
+                        exec_ctx,
+                        parent))) {
+          LOG_WARN("fail alloc addr by reference child distribution", K(parent), K(child), K(ret));
+        } else if (parent.has_scan_op() || parent.has_dml_op()) { // 参考 Partial Partition Wise Join
           // 当DFO中存在TSC或者pdml中的global index maintain op：
           // 1. 当存在TSC情况下，sqcs的location信息使用tsc表的location信息
           // 2. 当是pdml、dml+px情况下，sqcs的locations信息使用DML对应的表的locations

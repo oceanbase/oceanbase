@@ -59,7 +59,8 @@ public:
       need_null_aware_shuffle_(false),
       is_old_unblock_mode_(true),
       sample_type_(NOT_INIT_SAMPLE_TYPE),
-      in_server_cnt_(0)
+      in_server_cnt_(0),
+      is_related_pair_(false)
   {
     repartition_table_id_ = 0;
   }
@@ -187,6 +188,8 @@ public:
                             const ObIArray<ObRawExpr *> &keys);
   inline void set_in_server_cnt(int64_t in_server_cnt) {  in_server_cnt_ = in_server_cnt;  }
   inline int64_t get_in_server_cnt() {  return in_server_cnt_;  }
+  inline void set_is_related_pair(bool is_related_pair) { is_related_pair_ = is_related_pair; }
+  inline bool is_related_pair() const { return is_related_pair_; }
 private:
   int prepare_px_pruning_param(ObLogicalOperator *op, int64_t &count,
       common::ObIArray<const ObDMLStmt *> &stmts, common::ObIArray<int64_t> &drop_expr_idxs);
@@ -263,6 +266,7 @@ private:
   ObPxSampleType sample_type_;
   // -end pkey range/range
   int64_t in_server_cnt_; // for producer, need use exchange in server cnt to compute cost
+  bool is_related_pair_; // for random shuffle in nlj and spf
   DISALLOW_COPY_AND_ASSIGN(ObLogExchange);
 };
 } // end of namespace sql

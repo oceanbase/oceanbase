@@ -4626,8 +4626,17 @@ int ObLogPlan::compute_join_exchange_info(JoinPath &join_path,
     if (join_path.right_path_->is_sharding() && !join_path.right_path_->contain_fake_cte()) {
       right_exch_info.dist_method_ = ObPQDistributeMethod::LOCAL;
     }
-  } else if (DistAlgo::DIST_NONE_ALL == join_path.join_dist_algo_ ||
-             DistAlgo::DIST_ALL_NONE == join_path.join_dist_algo_) {
+  } else if (DistAlgo::DIST_NONE_ALL == join_path.join_dist_algo_
+             && JoinAlgo::NESTED_LOOP_JOIN == join_path.join_algo_
+             && join_path.right_path_->is_access_path()
+             && get_optimizer_context().get_parallel() > 1) {
+    /*
+      When the data volume is small, the GI operator can only divide a small number of granules, resulting in 
+      task skew. We insert a random shuffle operator on GI to shuffle the data and achieve load balancing.
+    */
+    left_exch_info.dist_method_ = ObPQDistributeMethod::RANDOM;
+    left_exch_info.is_related_pair_ = true;
+  } else if (DistAlgo::DIST_ALL_NONE == join_path.join_dist_algo_) {
     // do nothing
   } else { /*do nothing*/ }
 
@@ -7856,6 +7865,8 @@ int ObLogPlan::allocate_exchange_as_top(ObLogicalOperator *&top,
     producer->set_to_producer();
     consumer->set_to_consumer();
     producer->set_sample_type(exch_info.sample_type_);
+    consumer->set_is_related_pair(exch_info.is_related_pair_);
+    producer->set_is_related_pair(exch_info.is_related_pair_);
     if (OB_FAIL(producer->set_exchange_info(exch_info))) {
       LOG_WARN("failed to set exchange info", K(ret));
     } else if (OB_FAIL(producer->compute_property())) {
@@ -9116,7 +9127,24 @@ int ObLogPlan::create_subplan_filter_plan(ObLogicalOperator *&top,
   }
   if (OB_SUCC(ret)) {
     ObExchangeInfo exch_info;
-    if (DistAlgo::DIST_BASIC_METHOD == dist_algo ||
+    if (DistAlgo::DIST_NONE_ALL == dist_algo && get_optimizer_context().get_parallel() > 1) {
+        exch_info.dist_method_ = ObPQDistributeMethod::RANDOM;
+        exch_info.is_related_pair_ = true;
+        if (OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
+          LOG_WARN("failed to allocate exchange as top");
+        } else if (OB_FAIL(allocate_subplan_filter_as_top(top,
+                                                          subquery_ops,
+                                                          query_ref_exprs,
+                                                          params,
+                                                          onetime_exprs,
+                                                          initplan_idxs,
+                                                          onetime_idxs,
+                                                          filters,
+                                                          dist_algo,
+                                                          is_update_set))) {
+          LOG_WARN("failed to allocate subplan filter as top", K(ret));
+        }
+    } else if (DistAlgo::DIST_BASIC_METHOD == dist_algo ||
         DistAlgo::DIST_PARTITION_WISE == dist_algo ||
         DistAlgo::DIST_NONE_ALL == dist_algo) {
       // is basic or is_partition_wise
