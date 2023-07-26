@@ -1392,6 +1392,7 @@ int ObResolverUtils::resolve_synonym_object_recursively(ObSchemaChecker &schema_
   int ret = OB_SUCCESS;
   uint64_t synonym_id = OB_INVALID_ID;
   bool exist_with_synonym = false;
+  bool exist_non_syn_object = false;
   if (OB_FAIL(schema_checker.get_synonym_schema(
       tenant_id, database_id, synonym_name, object_database_id,
       synonym_id, object_name, exist_with_synonym, search_public_schema))) {
@@ -1404,9 +1405,12 @@ int ObResolverUtils::resolve_synonym_object_recursively(ObSchemaChecker &schema_
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to add synonym id to synonym checker",
-                 K(ret), K(tenant_id), K(database_id), K(synonym_name));
+                K(ret), K(tenant_id), K(database_id), K(synonym_name));
       }
-    } else {
+    } else if (OB_FAIL(schema_checker.check_exist_same_name_object_with_synonym(tenant_id,
+                                                                                database_id,
+                                                                                object_name,
+                                                                                exist_non_syn_object)) || !exist_non_syn_object) {
       OZ (SMART_CALL(resolve_synonym_object_recursively(
         schema_checker, synonym_checker, tenant_id,
         object_database_id, object_name, object_database_id, object_name, exist_with_synonym,
