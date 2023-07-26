@@ -2017,8 +2017,14 @@ int ObAlterTableResolver::resolve_drop_index(const ParseNode &node)
                                                                true /* index table */,
                                                                index_table_schema))) {
             if (OB_TABLE_NOT_EXIST == ret) {
-              LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(alter_table_stmt->get_org_database_name()),
-                             to_cstring(alter_table_stmt->get_org_table_name()));
+              if (is_mysql_mode()) {
+                ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
+                LOG_WARN("index does not exist", K(ret), K(drop_index_name));
+                LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, drop_index_name.length(), drop_index_name.ptr());
+              } else {
+                LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(alter_table_stmt->get_org_database_name()),
+                              to_cstring(alter_table_stmt->get_org_table_name()));
+              }
             }
             LOG_WARN("fail to get index table schema", K(ret));
           } else if (OB_ISNULL(index_table_schema)) {

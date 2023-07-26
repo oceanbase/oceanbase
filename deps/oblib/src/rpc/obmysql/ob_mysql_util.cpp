@@ -475,30 +475,44 @@ int ObMySQLUtil::datetime_cell_str(
       if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(val, tz_info, ob_time))) {
         LOG_WARN("convert usec ", K(ret));
       } else {
-        timelen = 11;
+        if (ob_time.parts_[DT_USEC]) {
+          timelen = 11;
+        } else if (ob_time.parts_[DT_HOUR] || ob_time.parts_[DT_MIN] || ob_time.parts_[DT_SEC]) {
+          timelen = 7;
+        } else if (ob_time.parts_[DT_YEAR] || ob_time.parts_[DT_MON] || ob_time.parts_[DT_MDAY]) {
+          timelen = 4;
+        } else {
+          timelen = 0;
+        }
+
         if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, timelen, pos))) {
           LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(
-            ObMySQLUtil::store_int2(buf, len, static_cast<int16_t>(ob_time.parts_[DT_YEAR]), pos))) {
-          LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(
-            ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MON]), pos))) {
-          LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(
-            ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MDAY]), pos))) {
-          LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(
-            ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_HOUR]), pos))) {
-          LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(
-            ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MIN]), pos))) {
-          LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(
-            ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_SEC]), pos))) {
-          LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
-        } else if (OB_FAIL(
-            ObMySQLUtil::store_int4(buf, len, static_cast<int32_t>(ob_time.parts_[DT_USEC]), pos))) {
-          LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
+        }
+
+        if(timelen > 0 && OB_SUCC(ret)) {
+          if (OB_FAIL(ObMySQLUtil::store_int2(buf, len, static_cast<int16_t>(ob_time.parts_[DT_YEAR]), pos))) {
+            LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
+          } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MON]), pos))) {
+            LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
+          } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MDAY]), pos))) {
+            LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
+          }
+        }
+
+        if(timelen > 4 && OB_SUCC(ret)) {
+          if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_HOUR]), pos))) {
+            LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
+          } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MIN]), pos))) {
+            LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
+          } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_SEC]), pos))) {
+            LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
+          }
+        }
+
+        if(timelen > 7 && OB_SUCC(ret)) {
+          if (OB_FAIL(ObMySQLUtil::store_int4(buf, len, static_cast<int32_t>(ob_time.parts_[DT_USEC]), pos))) {
+            LOG_WARN("failed to store int", K(len), K(timelen), K(pos), K(ret));
+          }
         }
       }
     } else {
@@ -673,23 +687,39 @@ int ObMySQLUtil::time_cell_str(
       if (OB_FAIL(ObTimeConverter::time_to_ob_time(val, ob_time))) {
         LOG_WARN("convert usec to timestamp failed", K(ret));
       } else {
-        timelen = 12;
         int ob_time_day = ob_time.parts_[DT_DATE] + ob_time.parts_[DT_HOUR] / 24;
         int ob_time_hour = ob_time.parts_[DT_HOUR] % 24;
+        int8_t is_negative = (DT_MODE_NEG & ob_time.mode_) ? 1 : 0;
+        if (ob_time.parts_[DT_USEC]) {
+          timelen = 12;
+        } else if (ob_time_day || ob_time_hour || ob_time.parts_[DT_MIN] || ob_time.parts_[DT_SEC]) {
+          timelen = 8;
+        } else {
+          timelen = 0;
+        }
+
         if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, timelen, pos))) {//length
           LOG_WARN("fail to store int", K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(DT_MODE_NEG & ob_time.mode_), pos))) {//is_negative(1)
-          LOG_WARN("fail to store int", K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int4(buf, len, static_cast<int32_t>(ob_time_day), pos))) {//days(4)
-          LOG_WARN("fail to store int", K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time_hour), pos))) {//hour(1)
-          LOG_WARN("fail to store int", K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MIN]), pos))) {//minute(1)
-          LOG_WARN("fail to store int", K(ret));
-        } else if ( OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_SEC]), pos))) {//second(1)
-          LOG_WARN("fail to store int", K(ret));
-        } else if (OB_FAIL(ObMySQLUtil::store_int4(buf, len, static_cast<int32_t>(ob_time.parts_[DT_USEC]), pos))) {//micro-second(4)
-          LOG_WARN("fail to store int", K(ret));
+        }
+
+        if(timelen > 0 && OB_SUCC(ret)) {
+          if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(is_negative), pos))) {//is_negative(1)
+            LOG_WARN("fail to store int", K(ret));
+          } else if (OB_FAIL(ObMySQLUtil::store_int4(buf, len, static_cast<int32_t>(ob_time_day), pos))) {//days(4)
+            LOG_WARN("fail to store int", K(ret));
+          } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time_hour), pos))) {//hour(1)
+            LOG_WARN("fail to store int", K(ret));
+          } else if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_MIN]), pos))) {//minute(1)
+            LOG_WARN("fail to store int", K(ret));
+          } else if ( OB_FAIL(ObMySQLUtil::store_int1(buf, len, static_cast<int8_t>(ob_time.parts_[DT_SEC]), pos))) {//second(1)
+            LOG_WARN("fail to store int", K(ret));
+          }
+        }
+
+        if(timelen > 8 && OB_SUCC(ret)) {
+          if (OB_FAIL(ObMySQLUtil::store_int4(buf, len, static_cast<int32_t>(ob_time.parts_[DT_USEC]), pos))) {//micro-second(4)
+            LOG_WARN("fail to store int", K(ret));
+          }
         }
       }
     } else {

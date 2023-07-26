@@ -738,6 +738,8 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
     const ObPhyPlanHint &phy_plan_hint = plan.get_phy_plan_hint();
     ObConsistencyLevel consistency = INVALID_CONSISTENCY;
     my_session_->set_cur_phy_plan(const_cast<ObPhysicalPlan*>(&plan));
+    part_ranges_.set_tenant_id(my_session_->get_effective_tenant_id());
+    part_ranges_.set_label("PxTabletRangArr");
     if (OB_UNLIKELY(phy_plan_hint.query_timeout_ > 0)) {
       plan_timeout = phy_plan_hint.query_timeout_;
     } else {
@@ -796,12 +798,8 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
   return ret;
 }
 
-int ObExecContext::add_partition_range(ObPxTabletRange &part_range)
-{
-  return part_ranges_.push_back(part_range);
-}
-
-int ObExecContext::set_partition_ranges(const ObIArray<ObPxTabletRange> &part_ranges)
+int ObExecContext::set_partition_ranges(const Ob2DArray<ObPxTabletRange> &part_ranges,
+                                        char *buf, int64_t size)
 {
   int ret = OB_SUCCESS;
   part_ranges_.reset();
@@ -809,10 +807,13 @@ int ObExecContext::set_partition_ranges(const ObIArray<ObPxTabletRange> &part_ra
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("part ranges is empty", K(ret), K(part_ranges.count()));
   } else {
+    int64_t pos = 0;
     ObPxTabletRange tmp_range;
     for (int64_t i = 0; OB_SUCC(ret) && i < part_ranges.count(); ++i) {
       const ObPxTabletRange &cur_range = part_ranges.at(i);
-      if (OB_FAIL(tmp_range.deep_copy_from(cur_range, get_allocator()))) {
+      if (0 == size && OB_FAIL(tmp_range.deep_copy_from<true>(cur_range, get_allocator(), buf, size, pos))) {
+        LOG_WARN("deep copy partition range failed", K(ret), K(cur_range));
+      } else if (0 != size && OB_FAIL(tmp_range.deep_copy_from<false>(cur_range, get_allocator(), buf, size, pos))) {
         LOG_WARN("deep copy partition range failed", K(ret), K(cur_range));
       } else if (OB_FAIL(part_ranges_.push_back(tmp_range))) {
         LOG_WARN("push back partition range failed", K(ret), K(tmp_range));

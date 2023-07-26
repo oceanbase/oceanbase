@@ -182,6 +182,22 @@ public:
   inline void update_to_follower_role();
   bool learner_list_is_equal(const common::GlobalLearnerList &a, const common::GlobalLearnerList &b) const;
 private:
+  // construct learner addr from a string in IPV$ or IPV6 format
+  // @params[in]  input_string: the input
+  // @params[out] the_count_of_colon_already_parsed: how many colon is parsed in this function
+  // @params[out] learner_addr: the parsing result(ip:port)
+  static int parse_addr_from_learner_string_(
+             const ObString &input_string,
+             int64_t &the_count_of_colon_already_parsed,
+             ObAddr &learner_addr);
+
+  // construct negative or positive integer from string
+  // @params[in]  input_text: the input
+  // @params[out] output_value: the result
+  static int parsing_int_from_string_(
+             const ObString &input_text,
+             int64_t &output_value);
+private:
   int64_t create_time_us_;               // store utc time
   int64_t modify_time_us_;               // store utc time
   // location-related infos

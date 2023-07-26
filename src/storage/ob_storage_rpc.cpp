@@ -1990,6 +1990,8 @@ int ObCheckStartTransferTabletsP::process()
   return ret;
 }
 
+// In addition to the tablet in the recovery process, if the major sstable does not exist on the tablet, the transfer start will fail.
+// For tablets with ddl sstable, you need to wait for ddl merge to complete
 int ObCheckStartTransferTabletsP::check_transfer_out_tablet_sstable_(const ObTablet *tablet)
 {
   int ret = OB_SUCCESS;
@@ -2004,8 +2006,9 @@ int ObCheckStartTransferTabletsP::check_transfer_out_tablet_sstable_(const ObTab
     // do nothing
   } else if (OB_FAIL(tablet->get_ddl_sstables(ddl_iter))) {
     LOG_WARN("failed to get ddl sstable", K(ret));
-  } else if (ddl_iter.is_valid()) {
-    // do nothing
+  } else if (ddl_iter.is_valid()) { // indicates the existence of ddl sstable
+    ret = OB_MAJOR_SSTABLE_NOT_EXIST;
+    LOG_WARN("major sstable do not exit, need to wait ddl merge", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
   } else if (tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
     ret = OB_INVALID_TABLE_STORE;
     LOG_WARN("neither major sstable nor ddl sstable exists", K(ret), K(ddl_iter));

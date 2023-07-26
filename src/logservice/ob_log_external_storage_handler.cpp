@@ -141,8 +141,6 @@ int ObLogExternalStorageHandler::resize(const int64_t new_concurrency,
     } else if (!is_running_) {
       ret = OB_NOT_RUNNING;
       CLOG_LOG(WARN, "ObLogExternalStorageHandler not running", KPC(this), K(new_concurrency), K(timeout_us));
-    } else if (new_concurrency == concurrency_) {
-      CLOG_LOG(TRACE, "no need resize", KPC(this), K(new_concurrency));
     } else {
       do {
         ret = resize_(new_concurrency);
@@ -151,9 +149,7 @@ int ObLogExternalStorageHandler::resize(const int64_t new_concurrency,
         }
       } while (OB_FAIL(ret));
       time_guard.click("after create new thread pool");
-      concurrency_ = new_concurrency;
-      capacity_ = CAPACITY_COEFFICIENT * new_concurrency;
-      CLOG_LOG(INFO, "ObLogExternalStorageHandler resize success", K(new_concurrency));
+      CLOG_LOG(INFO, "ObLogExternalStorageHandler resize success", KPC(this), K(new_concurrency));
     }
   }
   return ret;
@@ -244,7 +240,7 @@ int64_t ObLogExternalStorageHandler::get_recommend_concurrency_in_single_file() 
 
 bool ObLogExternalStorageHandler::is_valid_concurrency_(const int64_t concurrency) const
 {
-  return 0 <= concurrency && CONCURRENCY_LIMIT >= concurrency;
+  return 0 <= concurrency;
 }
 
 int64_t ObLogExternalStorageHandler::get_async_task_count_(const int64_t total_size) const
@@ -400,13 +396,15 @@ int ObLogExternalStorageHandler::resize_(const int64_t new_concurrency)
 {
   int ret = OB_SUCCESS;
   ObTimeGuard time_guard("resize impl", 10 * 1000);
-
-  if (OB_FAIL(ObSimpleThreadPool::set_thread_count(new_concurrency))) {
-    CLOG_LOG(WARN, "set_thread_count failed", K(new_concurrency), KPC(this));
+  int64_t real_concurrency = MIN(new_concurrency, CONCURRENCY_LIMIT);
+  if (real_concurrency == concurrency_) {
+    CLOG_LOG(TRACE, "no need resize_", K(new_concurrency), K(real_concurrency), KPC(this));
+  } else if (OB_FAIL(ObSimpleThreadPool::set_thread_count(real_concurrency))) {
+    CLOG_LOG(WARN, "set_thread_count failed", K(new_concurrency), KPC(this), K(real_concurrency));
   } else {
-    CLOG_LOG_RET(INFO, OB_SUCCESS, "resize_ success", K(time_guard), KPC(this), K(new_concurrency));
-    concurrency_ = new_concurrency;
-    capacity_ = CAPACITY_COEFFICIENT * new_concurrency;
+    CLOG_LOG_RET(INFO, OB_SUCCESS, "resize_ success", K(time_guard), KPC(this), K(new_concurrency), K(real_concurrency));
+    concurrency_ = real_concurrency;
+    capacity_ = CAPACITY_COEFFICIENT * real_concurrency;
   }
   time_guard.click("set thread count");
   return ret;

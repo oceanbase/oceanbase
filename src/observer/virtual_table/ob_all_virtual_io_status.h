@@ -97,6 +97,8 @@ public:
   ObAllVirtualIOQuota();
   virtual ~ObAllVirtualIOQuota();
   int init(const common::ObAddr &addr);
+  int record_user_group(const uint64_t tenant_id, ObIOUsage &io_usage, const ObTenantIOConfig &io_config);
+  int record_sys_group(const uint64_t tenant_id, ObSysIOUsage &sys_io_usage);
   virtual void reset() override;
   virtual int inner_get_next_row(common::ObNewRow *&row) override;
 private:

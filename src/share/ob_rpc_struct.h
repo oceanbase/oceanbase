@@ -4890,7 +4890,8 @@ public:
                K_(with_restore_scn),
                K_(encrypt_key),
                K_(kms_uri),
-               K_(kms_encrypt_key));
+               K_(kms_encrypt_key),
+               K_(restore_timestamp));
 
   common::ObString tenant_name_;
   common::ObString uri_;
@@ -4905,6 +4906,7 @@ public:
   common::ObString encrypt_key_;
   common::ObString kms_uri_;
   common::ObString kms_encrypt_key_;
+  common::ObString restore_timestamp_;
 };
 
 struct ObServerZoneArg

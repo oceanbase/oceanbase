@@ -1956,12 +1956,12 @@ COUNT '(' opt_all '*' ')' OVER new_generalized_window_clause
   malloc_non_terminal_node($$, result->malloc_pool_, T_WIN_FUN_NTH_VALUE, 4, $3, $5, $7, $8);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $10);
 }
-| TOP_K_FRE_HIST '(' bit_expr ',' bit_expr  ','  bit_expr ')' OVER new_generalized_window_clause
+| TOP_K_FRE_HIST '(' DECIMAL_VAL ',' bit_expr  ','  INTNUM ')' OVER new_generalized_window_clause
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_TOP_FRE_HIST, 3, $3, $5, $7);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $10);
 }
-| HYBRID_HIST '(' bit_expr ',' bit_expr ')' OVER new_generalized_window_clause
+| HYBRID_HIST '(' bit_expr ',' INTNUM ')' OVER new_generalized_window_clause
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_HYBRID_HIST, 2, $3, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $8);
@@ -2358,11 +2358,11 @@ MOD '(' expr ',' expr ')'
   merge_nodes(group_concat_exprs, result, T_EXPR_LIST, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_GROUP_CONCAT, 4, $3, group_concat_exprs, $5, $6);
 }
-| TOP_K_FRE_HIST '(' bit_expr ',' bit_expr  ','  bit_expr ')'
+| TOP_K_FRE_HIST '(' DECIMAL_VAL ',' bit_expr  ','  INTNUM ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_TOP_FRE_HIST, 3, $3, $5, $7);
 }
-| HYBRID_HIST '(' bit_expr ',' bit_expr ')'
+| HYBRID_HIST '(' bit_expr ',' INTNUM ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_HYBRID_HIST, 2, $3, $5);
 }

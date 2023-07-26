@@ -290,12 +290,12 @@ int ObTransformDBlink::inner_reverse_link_table(ObDMLStmt *stmt, uint64_t target
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (has_invalid_link_expr(*stmt, has_invalid_expr)) {
+  } else if (OB_FAIL(has_invalid_link_expr(*stmt, has_invalid_expr))) {
     LOG_WARN("failed to check stmt has invalid link expr", K(ret));
   } else if (has_invalid_expr) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("dblink write udf or user variable not supported", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dblink write udf or user variable");
+    LOG_WARN("dblink write with special expr not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dblink write with user defined function/variable/type");
   } else if (OB_FAIL(reverse_link_tables(stmt->get_table_items(), target_dblink_id))) {
     LOG_WARN("failed to reverse link table", K(ret));
   } else if (OB_FAIL(formalize_link_table(stmt))) {
@@ -460,14 +460,50 @@ int ObTransformDBlink::pack_link_table(ObDMLStmt *stmt, bool &trans_happened)
 int ObTransformDBlink::has_invalid_link_expr(ObDMLStmt &stmt, bool &has_invalid_expr)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(stmt.has_special_expr(CNT_PL_UDF, has_invalid_expr))) {
-    LOG_WARN("failed to check stmt has special expr", K(ret));
-  } else if (has_invalid_expr) {
-  } else if (OB_FAIL(stmt.has_special_expr(CNT_SO_UDF, has_invalid_expr))) {
-    LOG_WARN("failed to check stmt has special expr", K(ret));
-  } else if (has_invalid_expr) {
-  } else if (OB_FAIL(stmt.has_special_expr(CNT_USER_VARIABLE, has_invalid_expr))) {
-    LOG_WARN("failed to check stmt has special expr", K(ret));
+  ObSEArray<ObRawExpr*, 16> exprs;
+  has_invalid_expr = false;
+  if (OB_FAIL(stmt.get_relation_exprs(exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !has_invalid_expr && i < exprs.count(); i++) {
+      bool is_valid = false;
+      if (OB_FAIL(check_link_expr_valid(exprs.at(i), is_valid))) {
+        LOG_WARN("failed to check link expr valid", KPC(exprs.at(i)), K(ret));
+      } else if (!is_valid) {
+        has_invalid_expr = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformDBlink::check_link_expr_valid(ObRawExpr *expr, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else if (expr->has_flag(CNT_PL_UDF) ||
+             expr->has_flag(CNT_SO_UDF) ||
+             expr->has_flag(CNT_USER_VARIABLE)) {
+    // special flag is invalid
+  } else if (T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == expr->get_expr_type() ||
+             T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE == expr->get_expr_type() ||
+             T_FUN_SYS_ESTIMATE_NDV == expr->get_expr_type()) {
+    // special function is invalid
+  } else if (expr->get_result_type().is_ext()) {
+    // special type is invalid
+  } else {
+    is_valid = true;
+  }
+
+  if (OB_SUCC(ret) && !is_valid) {
+    LOG_DEBUG("expr should not appear in the link stmt", KPC(expr));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < expr->get_param_count(); i++) {
+    ret = SMART_CALL(check_link_expr_valid(expr->get_param_expr(i), is_valid));
   }
   return ret;
 }
@@ -1115,7 +1151,7 @@ int ObTransformDBlink::get_from_item_idx(ObDMLStmt *stmt,
     table_ids.reuse();
     if (OB_FAIL(ObTransformUtils::get_rel_ids_from_table(
                         stmt,
-                        stmt->get_table_item_by_id(stmt->get_from_item(i).table_id_),
+                        stmt->get_table_item(stmt->get_from_item(i)),
                         table_ids))) {
       LOG_WARN("failed to get rel ids", K(ret));
     } else if (!table_ids.overlap(expr->get_relation_ids())) {
@@ -1210,13 +1246,15 @@ int ObTransformDBlink::has_none_pushdown_expr(ObRawExpr* expr,
 {
   int ret = OB_SUCCESS;
   has = false;
+  bool is_valid = true;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null expr", K(ret));
+  } else if (OB_FAIL(check_link_expr_valid(expr, is_valid))) {
+    LOG_WARN("failed to check link expr valid", K(ret));
+  } else if (!is_valid) {
+    has = true;
   } else if (expr->has_flag(CNT_ROWNUM) ||
-             expr->has_flag(CNT_PL_UDF) ||
-             expr->has_flag(CNT_SO_UDF) ||
-             expr->has_flag(CNT_USER_VARIABLE) ||
              expr->has_flag(CNT_SEQ_EXPR)) {
     has = true;
   } else if (expr->has_flag(IS_SUB_QUERY)) {
@@ -1408,7 +1446,7 @@ int ObTransformDBlink::formalize_select_item(ObDMLStmt *stmt)
     for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); ++i) {
       SelectItem &select_item = select_items.at(i);
       bool need_new_alias = false;
-      if (lib::is_oracle_mode() && !select_item.is_real_alias_ &&
+      if (lib::is_oracle_mode() &&
           select_item.alias_name_.length() > MAX_COLUMN_NAME_LENGTH_ORACLE_11_g) {
         // for compatibility with Oracle 11 g,
         // rename the overlength expr.
@@ -1473,19 +1511,57 @@ int ObTransformDBlink::formalize_bool_select_expr(ObDMLStmt *stmt)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
   } else if (stmt->is_select_stmt()) {
+    // formalize bool select expr p like `a > b` as
+    // case when p then 1 when not p then 0 else null
     ObSelectStmt *select_stmt = static_cast<ObSelectStmt *>(stmt);
     ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
     for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); ++i) {
       SelectItem &select_item = select_items.at(i);
+      ObCaseOpRawExpr *case_when_expr = NULL;
+      ObRawExpr *bool_expr = select_item.expr_;
+      ObRawExpr *not_expr = NULL;
+      ObConstRawExpr *one_expr = NULL;
+      ObConstRawExpr *zero_expr = NULL;
+      ObRawExpr *null_expr = NULL;
       bool is_bool_expr = false;
       if (OB_ISNULL(select_item.expr_)) {
         LOG_WARN("unexpected select item", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::check_is_bool_expr(select_item.expr_, is_bool_expr))) {
         LOG_WARN("failed to check is bool expr", K(ret));
-      } else if (is_bool_expr) {
-        // TODO : BOOL SELECT ITEM NOT SUPPORTED IN ORACLE MODE
+      } else if (!is_bool_expr) {
+        // do nothing
+      } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx_->expr_factory_,
+                                                              ObIntType,
+                                                              1,
+                                                              one_expr))) {
+        LOG_WARN("failed to build const number expr", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_not_expr(*ctx_->expr_factory_,
+                                                        bool_expr,
+                                                        not_expr))) {
+        LOG_WARN("failed to build not expr", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx_->expr_factory_,
+                                                              ObIntType,
+                                                              0,
+                                                              zero_expr))) {
+        LOG_WARN("failed to build const number expr", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx_->expr_factory_, null_expr))) {
+        LOG_WARN("faile to build null expr", K(ret));
+      } else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_OP_CASE, case_when_expr))) {
+        LOG_WARN("create case expr failed", K(ret));
+      } else if (OB_ISNULL(case_when_expr)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("bool select item for oracle dblink not supported", K(ret));
+        LOG_WARN("get unexpected null", K(ret), K(case_when_expr));
+      } else if (OB_FAIL(case_when_expr->add_when_param_expr(bool_expr))) {
+        LOG_WARN("failed to add when param expr", K(ret));
+      } else if (OB_FAIL(case_when_expr->add_then_param_expr(one_expr))) {
+        LOG_WARN("failed to add then expr", K(ret));
+      } else if (OB_FAIL(case_when_expr->add_when_param_expr(not_expr))) {
+        LOG_WARN("failed to add when param expr", K(ret));
+      } else if (OB_FAIL(case_when_expr->add_then_param_expr(zero_expr))) {
+        LOG_WARN("failed to add then expr", K(ret));
+      } else {
+        case_when_expr->set_default_param_expr(null_expr);
+        select_item.expr_ = case_when_expr;
       }
     }
   }

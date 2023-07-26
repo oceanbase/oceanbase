@@ -57,6 +57,76 @@ ObIOMode oceanbase::common::get_io_mode_enum(const char *mode_string)
   return mode;
 }
 
+const char *oceanbase::common::get_io_sys_group_name(ObIOModule module)
+{
+  const char *ret_name = "UNKNOWN";
+  switch (module) {
+    case ObIOModule::SLOG_IO:
+      ret_name = "SLOG_IO";
+      break;
+    case ObIOModule::CALIBRATION_IO:
+      ret_name = "CALIBRATION_IO";
+      break;
+    case ObIOModule::DETECT_IO:
+      ret_name = "DETECT_IO";
+      break;
+    case ObIOModule::DIRECT_LOAD_IO:
+      ret_name = "DIRECT_LOAD_IO";
+      break;
+    case ObIOModule::SHARED_BLOCK_RW_IO:
+      ret_name = "SHARED_BLOCK_ReaderWriter_IO";
+      break;
+    case ObIOModule::SSTABLE_WHOLE_SCANNER_IO:
+      ret_name = "SSTABLE_WHOLE_SCANNER_IO";
+      break;
+    case ObIOModule::INSPECT_BAD_BLOCK_IO:
+      ret_name = "INSPECT_BAD_BLOCK_IO";
+      break;
+    case ObIOModule::SSTABLE_INDEX_BUILDER_IO:
+      ret_name = "SSTABLE_INDEX_BUILDER_IO";
+      break;
+    case ObIOModule::BACKUP_READER_IO:
+      ret_name = "BACKUP_READER_IO";
+      break;
+    case ObIOModule::BLOOM_FILTER_IO:
+      ret_name = "BLOOM_FILTER_IO";
+      break;
+    case ObIOModule::SHARED_MACRO_BLOCK_MGR_IO:
+      ret_name = "SHARED_MACRO_BLOCK_MGR_IO";
+      break;
+    case ObIOModule::INDEX_BLOCK_TREE_CURSOR_IO:
+      ret_name = "INDEX_BLOCK_TREE_CURSOR_IO";
+      break;
+    case ObIOModule::MICRO_BLOCK_CACHE_IO:
+      ret_name = "MICRO_BLOCK_CACHE_IO";
+      break;
+    case ObIOModule::ROOT_BLOCK_IO:
+      ret_name = "ROOT_BLOCK_IO";
+      break;
+    case ObIOModule::TMP_PAGE_CACHE_IO:
+      ret_name = "TMP_PAGE_CACHE_IO";
+      break;
+    case ObIOModule::INDEX_BLOCK_MICRO_ITER_IO:
+      ret_name = "INDEX_BLOCK_MICRO_ITER_IO";
+      break;
+    case ObIOModule::HA_COPY_MACRO_BLOCK_IO:
+      ret_name = "HA_COPY_MACRO_BLOCK_IO";
+      break;
+    case ObIOModule::LINKED_MACRO_BLOCK_IO:
+      ret_name = "LINKED_MACRO_BLOCK_IO";
+      break;
+    case ObIOModule::HA_MACRO_BLOCK_WRITER_IO:
+      ret_name = "HA_MACRO_BLOCK_WRITER_IO";
+      break;
+    case ObIOModule::TMP_TENANT_MEM_BLOCK_IO:
+      ret_name = "TMP_TENANT_MEM_BLOCK_IO";
+      break;
+    default:
+      break;
+  }
+  return ret_name;
+}
+
 /******************             IOFlag              **********************/
 ObIOFlag::ObIOFlag()
   : flag_(0)
@@ -91,6 +161,11 @@ ObIOMode ObIOFlag::get_mode() const
   return static_cast<ObIOMode>(mode_);
 }
 
+void ObIOFlag::set_group_id(ObIOModule module)
+{
+  group_id_ = THIS_WORKER.get_group_id() != 0 ? THIS_WORKER.get_group_id() : static_cast<int64_t>(module);
+}
+
 void ObIOFlag::set_group_id(int64_t group_id)
 {
   group_id_ = group_id;
@@ -104,6 +179,11 @@ void ObIOFlag::set_wait_event(int64_t wait_event_id)
 int64_t ObIOFlag::get_group_id() const
 {
   return group_id_;
+}
+
+ObIOModule ObIOFlag::get_io_module() const
+{
+  return static_cast<ObIOModule>(group_id_);
 }
 
 int64_t ObIOFlag::get_wait_event() const
@@ -435,8 +515,8 @@ int64_t ObIORequest::get_group_id() const
 uint64_t ObIORequest::get_io_usage_index()
 {
   uint64_t index = 0;
-  if (get_group_id() < RESOURCE_GROUP_START_ID) {
-    //other group , do nothing
+  if (!is_user_group(get_group_id())) {
+    //other group or sys group , do nothing
   } else {
     index = tenant_io_mgr_.get_ptr()->get_usage_index(get_group_id());
   }
@@ -630,7 +710,11 @@ void ObIORequest::finish(const ObIORetCode &ret_code)
       ret_code_ = ret_code;
       is_finished_ = true;
       if (OB_NOT_NULL(tenant_io_mgr_.get_ptr())) {
-        tenant_io_mgr_.get_ptr()->io_usage_.accumulate(*this);
+        if (get_group_id() > USER_RESOURCE_GROUP_END_ID) {
+          tenant_io_mgr_.get_ptr()->io_backup_usage_.accumulate(*this);
+        } else {
+          tenant_io_mgr_.get_ptr()->io_usage_.accumulate(*this);
+        }
         tenant_io_mgr_.get_ptr()->io_usage_.record_request_finish(*this);
       }
       if (OB_UNLIKELY(OB_SUCCESS != ret_code_.io_ret_)) {
@@ -1189,7 +1273,7 @@ int ObTenantIOConfig::parse_group_config(const char *config_str)
 int ObTenantIOConfig::add_single_group_config(const uint64_t tenant_id, const int64_t group_id, int64_t min_percent, int64_t max_percent, int64_t weight_percent)
 {
   int ret = OB_SUCCESS;
-  if (group_id < RESOURCE_GROUP_START_ID || !is_valid_tenant_id(tenant_id) ||
+  if (OB_UNLIKELY(!is_user_group(group_id)) || !is_valid_tenant_id(tenant_id) ||
       min_percent < 0 || min_percent > 100 ||
       max_percent < 0 || max_percent > 100 ||
       weight_percent < 0 || weight_percent > 100 ||

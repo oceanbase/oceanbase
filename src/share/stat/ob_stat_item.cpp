@@ -253,7 +253,7 @@ int ObStatTopKHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
                                   err_rate,
                                   col_param_->column_name_.length(),
                                   col_param_->column_name_.ptr(),
-                                  bkt_num))) {
+                                  col_param_->bucket_num_))) {
         LOG_WARN("failed to print buf topk hist expr", K(ret));
       }
     }

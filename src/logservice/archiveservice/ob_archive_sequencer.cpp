@@ -216,7 +216,7 @@ bool GenFetchTaskFunctor::operator()(const ObLSID &id, ObLSArchiveTask *ls_archi
   } else {
     LSN lsn = seq_lsn;
     LSN end_lsn;
-    while (lsn <= commit_lsn) {
+    while (lsn <= commit_lsn && OB_SUCC(ret)) {
       ObArchiveLogFetchTask *task = NULL;
       cal_end_lsn_(lsn, fetch_lsn, commit_lsn, end_lsn);
       if (end_lsn <= lsn) {

@@ -525,6 +525,7 @@ int ObIOUsage::refresh_group_num(const int64_t group_num)
   }
   return ret;
 }
+
 void ObIOUsage::accumulate(ObIORequest &req)
 {
   if (req.time_log_.return_ts_ > 0) {
@@ -593,6 +594,113 @@ int64_t ObIOUsage::to_string(char* buf, const int64_t buf_len) const
   BUF_PRINTF("]");
   J_OBJ_END();
   return pos;
+}
+
+/******************             ObSysIOUsage              **********************/
+ObSysIOUsage::ObSysIOUsage()
+  : io_stats_(),
+    io_estimators_(),
+    group_avg_iops_(),
+    group_avg_byte_(),
+    group_avg_rt_us_()
+{
+
+}
+
+ObSysIOUsage::~ObSysIOUsage()
+{
+
+}
+
+int ObSysIOUsage::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(io_stats_.reserve(SYS_RESOURCE_GROUP_CNT)) ||
+             OB_FAIL(io_estimators_.reserve(SYS_RESOURCE_GROUP_CNT)) ||
+             OB_FAIL(group_avg_iops_.reserve(SYS_RESOURCE_GROUP_CNT)) ||
+             OB_FAIL(group_avg_byte_.reserve(SYS_RESOURCE_GROUP_CNT)) ||
+             OB_FAIL(group_avg_rt_us_.reserve(SYS_RESOURCE_GROUP_CNT))) {
+    LOG_WARN("reserver group failed", K(ret), K(SYS_RESOURCE_GROUP_CNT));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < SYS_RESOURCE_GROUP_CNT; ++i) {
+      ObSEArray<ObIOStat, SYS_RESOURCE_GROUP_CNT> cur_stat_array;
+      ObSEArray<ObIOStatDiff, SYS_RESOURCE_GROUP_CNT> cur_estimators_array;
+      ObSEArray<double, SYS_RESOURCE_GROUP_CNT> cur_avg_iops;
+      ObSEArray<double, SYS_RESOURCE_GROUP_CNT> cur_avg_byte;
+      ObSEArray<double, SYS_RESOURCE_GROUP_CNT> cur_avg_rt_us;
+
+      if (OB_FAIL(cur_stat_array.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
+          OB_FAIL(cur_estimators_array.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
+          OB_FAIL(cur_avg_iops.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
+          OB_FAIL(cur_avg_byte.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
+          OB_FAIL(cur_avg_rt_us.reserve(static_cast<int>(ObIOMode::MAX_MODE)))) {
+        LOG_WARN("reserver group failed", K(ret), K(SYS_RESOURCE_GROUP_CNT));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOMode::MAX_MODE); ++j) {
+          ObIOStat cur_stat;
+          ObIOStatDiff cur_diff;
+          if (OB_FAIL(cur_stat_array.push_back(cur_stat))) {
+            LOG_WARN("push stat failed", K(ret), K(i), K(j));
+          } else if (OB_FAIL(cur_estimators_array.push_back(cur_diff))) {
+            LOG_WARN("push estimator failed", K(ret), K(i), K(j));
+          } else if (OB_FAIL(cur_avg_iops.push_back(0))) {
+            LOG_WARN("push avg_iops failed", K(ret), K(i), K(j));
+          } else if (OB_FAIL(cur_avg_byte.push_back(0))) {
+            LOG_WARN("push avg_byte failed", K(ret), K(i), K(j));
+          } else if (OB_FAIL(cur_avg_rt_us.push_back(0))) {
+            LOG_WARN("push avg_rt failed", K(ret), K(i), K(j));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(io_stats_.push_back(cur_stat_array))) {
+          LOG_WARN("push stat array failed", K(ret), K(i));
+        } else if (OB_FAIL(io_estimators_.push_back(cur_estimators_array))) {
+          LOG_WARN("push estimator array failed", K(ret), K(i));
+        } else if (OB_FAIL(group_avg_iops_.push_back(cur_avg_iops))) {
+          LOG_WARN("push avg_iops array failed", K(ret), K(i));
+        } else if (OB_FAIL(group_avg_byte_.push_back(cur_avg_byte))) {
+          LOG_WARN("push avg_byte array failed", K(ret), K(i));
+        } else if (OB_FAIL(group_avg_rt_us_.push_back(cur_avg_rt_us))) {
+          LOG_WARN("push avg_rt array failed", K(ret), K(i));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+void ObSysIOUsage::accumulate(ObIORequest &req)
+{
+  if (OB_UNLIKELY(!is_sys_group(req.get_group_id()))) {
+    // ignore
+  } else if (req.time_log_.return_ts_ > 0) {
+    const int64_t idx = req.get_group_id() - SYS_RESOURCE_GROUP_START_ID;
+    const int64_t device_delay = get_io_interval(req.time_log_.return_ts_, req.time_log_.submit_ts_);
+    io_stats_.at(idx).at(static_cast<int>(req.get_mode()))
+      .accumulate(1, req.io_size_, device_delay);
+  }
+}
+
+void ObSysIOUsage::calculate_io_usage()
+{
+  for (int64_t i = 0; i < SYS_RESOURCE_GROUP_CNT; ++i) {
+    for (int64_t j = 0; j < static_cast<int>(ObIOMode::MAX_MODE); ++j) {
+      ObIOStatDiff &cur_io_estimator = io_estimators_.at(i).at(j);
+      ObIOStat &cur_io_stat = io_stats_.at(i).at(j);
+      cur_io_estimator.diff(cur_io_stat,
+                            group_avg_iops_.at(i).at(j),
+                            group_avg_byte_.at(i).at(j),
+                            group_avg_rt_us_.at(i).at(j));
+    }
+  }
+}
+
+void ObSysIOUsage::get_io_usage(SysAvgItems &avg_iops, SysAvgItems &avg_bytes, SysAvgItems &avg_rt_us)
+{
+  avg_iops.assign(group_avg_iops_);
+  avg_bytes.assign(group_avg_byte_);
+  avg_rt_us.assign(group_avg_rt_us_);
 }
 
 /******************             CpuUsage              **********************/
@@ -1002,7 +1110,7 @@ int ObIOSender::enqueue_request(ObIORequest &req)
       } else {
         uint64_t index = INT_MAX64;
         const int64_t group_id = tmp_req->get_group_id();
-        if (group_id < RESOURCE_GROUP_START_ID) { //other
+        if (!is_user_group(group_id)) { //other
           tmp_phy_queue = &(io_group_queues->other_phy_queue_);
         } else if (OB_FAIL(req.tenant_io_mgr_.get_ptr()->get_group_index(group_id, index))) {
           // 防止删除group、新建group等情况发生时在途req无法找到对应的group
@@ -2948,7 +3056,7 @@ int ObIOFaultDetector::record_read_failure(const ObIORequest &req)
     LOG_WARN("alloc RetryTask failed", K(ret));
   } else {
     retry_task->io_info_ = req.io_info_;
-    retry_task->io_info_.flag_.set_group_id(0);
+    retry_task->io_info_.flag_.set_group_id(ObIOModule::DETECT_IO);
     retry_task->io_info_.callback_ = nullptr;
     retry_task->timeout_ms_ = 5000L; // 5s
     if (OB_FAIL(TG_PUSH_TASK(TGDefIDs::IO_HEALTH, retry_task))) {

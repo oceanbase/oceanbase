@@ -169,7 +169,19 @@ const int64_t OB_MAX_SPAN_LENGTH = 1024;
 const int64_t OB_MAX_SPAN_TAG_LENGTH = 8 * 1024L;
 const int64_t OB_MAX_REF_TYPE_LENGTH = 10;
 const int64_t OB_MAX_LS_FLAG_LENGTH = 2048;
-const int64_t RESOURCE_GROUP_START_ID = 10000;
+const int64_t USER_RESOURCE_GROUP_START_ID = 10000;
+const int64_t USER_RESOURCE_GROUP_END_ID = 19999;
+const int64_t SYS_RESOURCE_GROUP_START_ID = 20000;
+const int64_t SYS_RESOURCE_GROUP_CNT = 21; //accord ObIOModule
+OB_INLINE bool is_user_group(const int64_t group_id)
+{
+  return group_id >= USER_RESOURCE_GROUP_START_ID && group_id <= USER_RESOURCE_GROUP_END_ID;
+}
+
+OB_INLINE bool is_sys_group(const int64_t group_id)
+{
+  return group_id >= SYS_RESOURCE_GROUP_START_ID && group_id <= SYS_RESOURCE_GROUP_START_ID + SYS_RESOURCE_GROUP_CNT;
+}
 
 // See ObDeviceHealthStatus for more information
 const int64_t OB_MAX_DEVICE_HEALTH_STATUS_STR_LENGTH = 20;
@@ -1373,11 +1385,11 @@ const char* const OB_LOG_ELLIPSIS = "...";
 const char *const DEFAULT_REGION_NAME = "default_region";
 
 // The connect attribute key value prefix that the obproxy transparently transmits to the observer
-const char *const OB_PROXY_TRANSPARENT_TRANSMIT_PREFIX__ = "__proxy_dont_care_prefix__";
+const char *const OB_PROXY_TRANSPARENT_TRANSMIT_PREFIX__ = "__ob_client_";
 
 // The connect attribute key that the proxy transparently transmits to the observer,
 // in order to prevent the sql request thread from deadlocking (such as dblink sql request)
-const char *const OB_SQL_REQUEST_LEVEL = "__proxy_dont_care_prefix__sql_request_level";
+const char *const OB_SQL_REQUEST_LEVEL = "__ob_client_sql_request_level";
 
 // The connect attribute value that the proxy transparently transmits to the observer,
 // in order to prevent the sql request thread from deadlocking (such as dblink sql request)

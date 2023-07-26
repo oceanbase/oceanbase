@@ -1401,6 +1401,7 @@ int ObDRWorker::LocalityAlignment::try_get_readonly_all_server_locality_alignmen
       } else if (OB_SUCCESS == tmp_ret) {
         add_replica_task_.zone_ = zone;
         add_replica_task_.dst_server_ = unit_info.unit_.server_;
+        add_replica_task_.member_time_us_ = ObTimeUtility::current_time();
         add_replica_task_.unit_id_ = unit_info.unit_.unit_id_;
         add_replica_task_.unit_group_id_ = ls_status_info->unit_group_id_;
         add_replica_task_.replica_type_ = REPLICA_TYPE_READONLY;

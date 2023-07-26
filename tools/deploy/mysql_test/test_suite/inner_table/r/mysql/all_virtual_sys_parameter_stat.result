@@ -293,6 +293,7 @@ _io_callback_thread_count
 _lcl_op_interval
 _load_tde_encrypt_engine
 _log_writer_parallelism
+_ls_migration_wait_completing_timeout
 _max_elr_dependent_trx_count
 _max_malloc_sample_interval
 _max_rpc_packet_size

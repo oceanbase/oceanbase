@@ -874,6 +874,7 @@ int ObSSTableIndexBuilder::rewrite_small_sstable(ObSSTableMergeRes &res)
   read_info.offset_ = 0;
   read_info.size_ = upper_align(roots_[0]->last_macro_size_, DIO_READ_ALIGN_SIZE);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
+  read_info.io_desc_.set_group_id(ObIOModule::SSTABLE_INDEX_BUILDER_IO);
   const int64_t io_timeout_ms = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
 
   if (OB_FAIL(ObBlockManager::async_read_block(read_info, read_handle))) {
@@ -957,6 +958,7 @@ int ObSSTableIndexBuilder::load_single_macro_block(
   read_info.offset_ = 0;
   read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
+  read_info.io_desc_.set_group_id(ObIOModule::SSTABLE_INDEX_BUILDER_IO);
   const int64_t io_timeout_ms = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
 
   if (OB_FAIL(ObBlockManager::async_read_block(read_info, read_handle))) {

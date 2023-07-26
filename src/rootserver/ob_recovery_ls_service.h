@@ -78,7 +78,7 @@ class ObRecoveryLSService : public ObTenantThreadHelper
 {
 public:
   ObRecoveryLSService() : inited_(false), tenant_id_(OB_INVALID_TENANT_ID), proxy_(NULL),
-  restore_proxy_(), primary_is_avaliable_(true) {}
+  restore_proxy_(), last_report_ts_(OB_INVALID_TIMESTAMP), primary_is_avaliable_(true) {}
   virtual ~ObRecoveryLSService() {}
   int init();
   void destroy();
@@ -145,6 +145,7 @@ private:
   uint64_t tenant_id_;
   common::ObMySQLProxy *proxy_;
   ObLogRestoreProxyUtil restore_proxy_;
+  int64_t last_report_ts_;
   bool primary_is_avaliable_;
 };
 }

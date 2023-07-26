@@ -46,6 +46,7 @@
 #include "storage/tx_storage/ob_ls_handle.h"  //ObLSHandle
 #include "storage/tx/ob_multi_data_source.h" //ObTxBufferNode
 #include "share/ob_log_restore_proxy.h"  // ObLogRestoreProxyUtil
+#include "share/ob_occam_time_guard.h"//ObTimeGuard
 #include "src/rootserver/ob_rs_event_history_table_operator.h"
 
 namespace oceanbase
@@ -91,6 +92,7 @@ int ObRecoveryLSService::init()
   } else {
     tenant_id_ = MTL_ID();
     proxy_ = GCTX.sql_proxy_;
+    last_report_ts_ = OB_INVALID_TIMESTAMP;
     inited_ = true;
   }
 
@@ -105,6 +107,7 @@ void ObRecoveryLSService::destroy()
   tenant_id_ = OB_INVALID_TENANT_ID;
   proxy_ = NULL;
   restore_proxy_.destroy();
+  last_report_ts_ = OB_INVALID_TIMESTAMP;
   primary_is_avaliable_= true;
 }
 
@@ -121,6 +124,7 @@ void ObRecoveryLSService::do_work()
     int tmp_ret = OB_SUCCESS;
     int64_t idle_time_us = 100 * 1000L;
     SCN start_scn;
+    last_report_ts_ = OB_INVALID_TIMESTAMP;
     uint64_t thread_idx = get_thread_idx();
     if (0 != thread_idx) {
       if (OB_FAIL(init_palf_handle_guard_(palf_handle_guard))) {
@@ -324,7 +328,8 @@ int ObRecoveryLSService::process_ls_log_(
         last_sync_scn = sync_scn;
       }
 
-      if (last_sync_scn.is_valid() && (OB_FAIL(ret) || REACH_TENANT_TIME_INTERVAL(100 * 1000))) {
+      if (last_sync_scn.is_valid() && (OB_FAIL(ret) || OB_INVALID_TIMESTAMP == last_report_ts_
+            || ObTimeUtility::current_time() - last_report_ts_ > 100 * 1000)) {
         //if ls_operator can not process, need to report last sync scn
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(report_sys_ls_recovery_stat_(last_sync_scn, false,
@@ -926,6 +931,7 @@ int ObRecoveryLSService::report_sys_ls_recovery_stat_in_trans_(
     const char* comment)
 {
   int ret = OB_SUCCESS;
+  TIMEGUARD_INIT(RECOVERY_LS, 100_ms, 10_s);
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
@@ -953,11 +959,17 @@ int ObRecoveryLSService::report_sys_ls_recovery_stat_in_trans_(
     } else if (OB_FAIL(construct_sys_ls_recovery_stat_based_on_sync_scn_(sync_scn, ls_recovery_stat,
         tenant_info))) {
       LOG_WARN("failed to construct ls recovery stat", KR(ret), K(sync_scn), K(tenant_info));
-    } else if (OB_FAIL(ObLSRecoveryReportor::update_sys_ls_recovery_stat_and_tenant_info(
+    }
+    CLICK();
+
+    if (FAILEDx(ObLSRecoveryReportor::update_sys_ls_recovery_stat_and_tenant_info(
             ls_recovery_stat, tenant_info.get_tenant_role(), only_update_readable_scn, trans))) {
       LOG_WARN("failed to update sys ls recovery stat", KR(ret),
           K(ls_recovery_stat), K(tenant_info));
+    } else {
+      last_report_ts_ = ObTimeUtility::current_time();
     }
+    CLICK();
     FLOG_INFO("report sys ls recovery stat", KR(ret), K(sync_scn), K(only_update_readable_scn),
         K(tenant_info), K(ls_recovery_stat), K(comment));
   }

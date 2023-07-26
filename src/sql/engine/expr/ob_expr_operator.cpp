@@ -804,7 +804,12 @@ int ObExprOperator::aggregate_charsets(
     ObObjMeta coll;
     for (int i = 0; OB_SUCC(ret) && i < param_num; ++i) {
       coll.reset();
-      coll.set_collation_type(types[i].get_collation_type());
+      // issue:49962420 The xml type calls get_collation_type() to return the result of binary, here is set to utf8
+      if (type.is_string_type() && types[i].is_xml_sql_type()) {
+        coll.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_BIN);
+      } else {
+        coll.set_collation_type(types[i].get_collation_type());
+      }
       coll.set_collation_level(types[i].get_collation_level());
       ret = coll_types.push_back(coll);
     } // end for

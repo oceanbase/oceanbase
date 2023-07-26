@@ -455,7 +455,7 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
                                                      waiting_destroy))) {
       LOG_WARN("check ls waiting safe destroy failed", K(ret), K(arg));
     } else if (waiting_destroy) {
-      ret = OB_EAGAIN;
+      ret = OB_LS_WAITING_SAFE_DESTROY;
       LOG_WARN("ls waiting for destroy, need retry later", K(ret), K(arg));
     } else if (OB_FAIL(inner_create_ls_(arg.get_ls_id(),
                                         migration_status,
@@ -1067,7 +1067,7 @@ int ObLSService::create_ls_for_ha(
                                                      waiting_destroy))) {
       LOG_WARN("check ls waiting safe destroy failed", K(ret), K(arg));
     } else if (waiting_destroy) {
-      ret = OB_EAGAIN;
+      ret = OB_LS_WAITING_SAFE_DESTROY;
       LOG_WARN("ls waiting for destroy, need retry later", K(ret), K(arg));
     } else if (OB_FAIL(ObMigrationStatusHelper::trans_migration_op(arg.type_, migration_status))) {
       LOG_WARN("failed to trans migration op", K(ret), K(arg), K(task_id));

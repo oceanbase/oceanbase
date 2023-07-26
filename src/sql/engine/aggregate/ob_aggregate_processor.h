@@ -931,6 +931,7 @@ private:
   int init_topk_fre_histogram_item(const ObAggrInfo &aggr_info,
                                     ObTopKFrequencyHistograms *topk_fre_hist);
   int get_top_k_fre_hist_result(ObTopKFrequencyHistograms &top_k_fre_hist,
+                                const ObObjMeta &obj_meta,
                                 bool has_lob_header,
                                 ObDatum &result_datum);
 
@@ -961,7 +962,7 @@ private:
 
   int check_key_valid(common::hash::ObHashSet<ObString> &view_key_names, const ObString& key);
 
-  int shadow_truncate_string_for_hybird_hist(const ObObjMeta obj_meta, ObDatum &datum);
+  int shadow_truncate_string_for_hist(const ObObjMeta obj_meta, ObDatum &datum);
 
   OB_INLINE void clear_op_evaluated_flag()
   {

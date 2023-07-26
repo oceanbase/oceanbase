@@ -263,7 +263,7 @@ TEST_F(TestLSService, ls_safe_destroy)
   // 4. create again and check waiting = true
   LOG_INFO("TestLSService::ls_safe_destroy 1.4");
   LOG_INFO("create_ls", K(arg), K(id_104));
-  ASSERT_EQ(OB_EAGAIN, ls_svr->create_ls(arg));
+  ASSERT_EQ(OB_LS_WAITING_SAFE_DESTROY, ls_svr->create_ls(arg));
   ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_waiting_safe_destroy(id_104, waiting));
   ASSERT_TRUE(waiting);
 

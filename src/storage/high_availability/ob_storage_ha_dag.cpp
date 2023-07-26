@@ -409,9 +409,9 @@ int ObStorageHADagUtils::get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handl
   return ret;
 }
 
-int ObStorageHADagUtils::check_self_in_member_list(
+int ObStorageHADagUtils::check_self_is_valid_member(
     const share::ObLSID &ls_id,
-    bool &is_in_member_list)
+    bool &is_valid_member)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -421,8 +421,7 @@ int ObStorageHADagUtils::check_self_in_member_list(
   common::GlobalLearnerList learner_list;
   int64_t paxos_replica_num = 0;
   const ObAddr &self_addr = GCONF.self_addr_;
-  is_in_member_list = false;
-
+  is_valid_member = false;
   if (!ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check self in member list get invalid argument", K(ret), K(ls_id));
@@ -434,17 +433,22 @@ int ObStorageHADagUtils::check_self_in_member_list(
   } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log handler should not be NULL", K(ret));
-  } else if (OB_FAIL(log_handler->get_paxos_member_list(member_list, paxos_replica_num))) {
-    LOG_WARN("failed to get paxos member list", K(ret));
+  } else if (OB_FAIL(log_handler->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list))) {
+    LOG_WARN("failed to get paxos member list and learner list", K(ret));
   } else if (member_list.contains(self_addr)) {
-    is_in_member_list = true;
-  } else if (OB_FAIL(log_handler->get_global_learner_list(learner_list))) {
-    LOG_WARN("failed to get learner member list", K(ret));
-  } else if (learner_list.contains(self_addr)) {
-    is_in_member_list = true;
+    is_valid_member = true;
+  } else if (!learner_list.contains(self_addr)) {
+    is_valid_member = false;
   } else {
-    is_in_member_list = false;
-    LOG_INFO("self is not in member list", K(ret), K(member_list), K(learner_list), K(self_addr), K(ls_id));
+    ObMember member;
+    if (OB_FAIL(learner_list.get_learner_by_addr(self_addr, member))) {
+      LOG_WARN("failed to get_learner_by_addr", K(ret));
+    } else if (member.is_migrating()) {
+      is_valid_member = false;
+      LOG_INFO("self is not valid member", K(ret), K(member), K(member_list), K(learner_list), K(self_addr), K(ls_id));
+    } else {
+      is_valid_member = true;
+    }
   }
   return ret;
 }

@@ -2536,10 +2536,34 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
         // resolve datetime
         if (OB_ISNULL(parse_tree.children_[2])) {
           stmt->get_rpc_arg().with_restore_scn_ = false;
-        } else if (OB_FAIL(resolve_restore_until(*parse_tree.children_[2], session_info_,
-                                                 stmt->get_rpc_arg().restore_scn_,
-                                                 stmt->get_rpc_arg().with_restore_scn_))) {
-          LOG_WARN("failed to resolve restore until", KR(ret), KP(parse_tree.children_[2]));
+        } else {
+          const ParseNode *time_node = parse_tree.children_[2];
+          if (OB_UNLIKELY(T_PHYSICAL_RESTORE_UNTIL != time_node->type_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("type is not T_PHYSICAL_RESTORE_UNTIL", "type", get_type_name(time_node->type_));
+          } else if (OB_ISNULL(time_node->children_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("children should not be null");
+          } else if (OB_UNLIKELY(2 != time_node->num_child_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("num of children not match", K(ret), "child_num", time_node->num_child_);
+          } else if (OB_ISNULL(time_node->children_[0]) || OB_ISNULL(time_node->children_[1])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("children should not be null", KP(time_node->children_[0]), KP(time_node->children_[1]));
+          } else if (0/*timestamp*/ == time_node->children_[0]->value_) {
+            stmt->get_rpc_arg().restore_timestamp_.assign_ptr(time_node->children_[1]->str_value_, time_node->children_[1]->str_len_);
+            stmt->get_rpc_arg().with_restore_scn_ = false;
+          } else if (1/*timestamp*/ == time_node->children_[0]->value_) {
+            if (share::OB_BASE_SCN_TS_NS >= time_node->children_[1]->value_) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_USER_ERROR(OB_INVALID_ARGUMENT, "until scn, it should be positive integer");
+              LOG_WARN("until scn, it should be positive integer", KR(ret), K(time_node->children_[1]->value_));
+            } else if (OB_FAIL(stmt->get_rpc_arg().restore_scn_.convert_for_sql(time_node->children_[1]->value_))) {
+              LOG_WARN("failed to convert scn", K(ret));
+            } else {
+              stmt->get_rpc_arg().with_restore_scn_ = true;
+            }
+          }
         }
       }
 

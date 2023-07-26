@@ -61,7 +61,7 @@ public:
   int64_t expect_range_count_;
   ObSEArray<uint64_t, 1> tablet_ids_;
   ObPxSampleType sample_type_;
-  ObSEArray<ObPxTabletRange, 1> part_ranges_;
+  Ob2DArray<ObPxTabletRange> part_ranges_;
   ObArray<ObChunkDatumStore *> row_stores_;
   ObArenaAllocator arena_; // for deserialize
   common::ObSpinLock spin_lock_; // for merge piece msg
@@ -83,7 +83,7 @@ public:
   INHERIT_TO_STRING_KV("meta", ObDatahubWholeMsg<dtl::ObDtlMsgType::DH_DYNAMIC_SAMPLE_WHOLE_MSG>,
                        K_(op_id), K_(part_ranges));
 public:
-  common::ObSEArray<ObPxTabletRange, OB_DEFAULT_SE_ARRAY_COUNT> part_ranges_;
+  common::Ob2DArray<ObPxTabletRange> part_ranges_;
   common::ObArenaAllocator assign_allocator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDynamicSampleWholeMsg);

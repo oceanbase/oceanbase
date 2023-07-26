@@ -124,6 +124,13 @@ private:
              const share::ObBackupSetPath & backup_set_path,
              share::ObPhysicalRestoreJob &job);
   static int check_backup_set_version_match_(share::ObBackupSetFileDesc &backup_file_desc);
+  static int get_backup_sys_time_zone_(
+      const ObIArray<ObString> &tenant_path_array,
+      common::ObTimeZoneInfoWrap &time_zone_wrap);
+  static int convert_restore_timestamp_to_scn_(
+      const ObString &timestamp,
+      const common::ObTimeZoneInfoWrap &time_zone_wrap,
+      share::SCN &scn);
   static int get_encrypt_backup_dest_format_str(
       const ObArray<ObString> &original_dest_list,
       common::ObArenaAllocator &allocator,
@@ -136,7 +143,6 @@ private:
   static int fill_encrypt_info_(
       const obrpc::ObPhysicalRestoreTenantArg &arg,
       share::ObPhysicalRestoreJob &job);
-
   DISALLOW_COPY_AND_ASSIGN(ObRestoreUtil);
 };
 

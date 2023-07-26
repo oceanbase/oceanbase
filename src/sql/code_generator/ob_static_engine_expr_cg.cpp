@@ -1446,7 +1446,9 @@ ObStaticEngineExprCG::ObExprBatchSize ObStaticEngineExprCG::get_expr_execute_siz
       size = ObExprBatchSize::one;
       break;
     }
-    if (is_large_data(raw_exprs.at(i)->get_data_type())) {
+    if (is_large_data(raw_exprs.at(i)->get_data_type()) &&
+        raw_exprs.at(i)->get_expr_type() != T_FUN_TOP_FRE_HIST &&
+        raw_exprs.at(i)->get_expr_type() != T_FUN_HYBRID_HIST) {
       // 1. batchsize should be scale down when longtext/mediumtext/lob shows up
       // 2. keep searching
       size = ObExprBatchSize::small;

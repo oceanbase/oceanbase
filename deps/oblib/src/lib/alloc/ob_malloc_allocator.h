@@ -160,6 +160,7 @@ public:
 #endif
 public:
   bool force_explict_500_malloc_ = false;
+  bool pl_leaked_times_ = 0;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMallocAllocator);
   class BucketLock

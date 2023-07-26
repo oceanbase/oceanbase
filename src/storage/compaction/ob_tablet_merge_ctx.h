@@ -239,6 +239,7 @@ struct ObTabletMergeCtx
   int64_t rebuild_seq_;
   uint64_t data_version_;
   ObTransNodeDMLStat tnode_stat_; // collect trans node dml stat on memtable, only worked in mini compaction.
+  bool need_parallel_minor_merge_;
 
   TO_STRING_KV(K_(param), K_(sstable_version_range), K_(create_snapshot_version),
                K_(is_full_merge), K_(merge_level),
@@ -251,7 +252,8 @@ struct ObTabletMergeCtx
                K_(scn_range), K_(merge_scn), K_(read_base_version),
                K_(ls_handle), K_(tablet_handle),
                KPC_(merge_progress),
-               KPC_(compaction_filter), K_(time_guard), K_(rebuild_seq), K_(data_version));
+               KPC_(compaction_filter), K_(time_guard), K_(rebuild_seq), K_(data_version),
+               K_(need_parallel_minor_merge));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletMergeCtx);
 };

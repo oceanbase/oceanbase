@@ -2530,21 +2530,31 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("extra_ is NULL", K(ret), K(aggr_cell));
       } else if (OB_UNLIKELY(stored_row.cnt_ != 1 ||
-                      aggr_info.param_exprs_.count() != 1 ||
-                      OB_ISNULL(aggr_info.param_exprs_.at(0)))) {
+                             aggr_info.param_exprs_.count() != 1) ||
+                 OB_ISNULL(aggr_info.param_exprs_.at(0)) ||
+                 OB_ISNULL(aggr_info.param_exprs_.at(0)->basic_funcs_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected error", K(ret), K(stored_row.cnt_), K(aggr_info));
       } else if (OB_FAIL(init_topk_fre_histogram_item(aggr_info, &(extra->topk_fre_hist_)))) {
         LOG_WARN("failed to init topk fre histogram", K(ret));
-      } else {
+      } else if (extra->topk_fre_hist_.is_need_merge_topk_hist()) {
         ObObj obj;
         if (OB_FAIL(stored_row.cells()[0].to_obj(obj, aggr_info.param_exprs_.at(0)->obj_meta_))) {
           LOG_WARN("failed to obj", K(ret));
-        } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
-          LOG_WARN("fail to truncate string", K(ret));
-        } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(obj))) {
+        } else if (OB_FAIL(extra->topk_fre_hist_.merge_distribute_top_k_fre_items(obj))) {
           LOG_WARN("failed to process row", K(ret));
-        } else {/*do nothing*/}
+        }
+      } else if (OB_FAIL(shadow_truncate_string_for_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
+                                                         const_cast<ObDatum &>(stored_row.cells()[0])))) {
+        LOG_WARN("failed to shadow truncate string for hist", K(ret));
+      } else {
+        ObExprHashFuncType hash_func = aggr_info.param_exprs_.at(0)->basic_funcs_->murmur_hash_;
+        uint64_t datum_value = 0;
+        if (OB_FAIL(hash_func(stored_row.cells()[0], datum_value, datum_value))) {
+          LOG_WARN("fail to do hash", K(ret));
+        } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(datum_value, stored_row.cells()[0]))) {
+          LOG_WARN("failed to process row", K(ret));
+        }
       }
       break;
     }
@@ -2980,19 +2990,29 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("extra_ is NULL", K(ret), K(aggr_cell));
       } else if (OB_UNLIKELY(stored_row.cnt_ != 1 ||
-                      aggr_info.param_exprs_.count() != 1 ||
-                      OB_ISNULL(aggr_info.param_exprs_.at(0)))) {
+                             aggr_info.param_exprs_.count() != 1 ||
+                 OB_ISNULL(aggr_info.param_exprs_.at(0))) ||
+                 OB_ISNULL(aggr_info.param_exprs_.at(0)->basic_funcs_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected error", K(ret), K(stored_row.cnt_), K(aggr_info));
-      } else {
+      } else if (extra->topk_fre_hist_.is_need_merge_topk_hist()) {
         ObObj obj;
         if (OB_FAIL(stored_row.cells()[0].to_obj(obj, aggr_info.param_exprs_.at(0)->obj_meta_))) {
           LOG_WARN("failed to obj", K(ret));
-        } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
-          LOG_WARN("fail to truncate string", K(ret));
-        } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(obj))) {
+        } else if (OB_FAIL(extra->topk_fre_hist_.merge_distribute_top_k_fre_items(obj))) {
           LOG_WARN("failed to process row", K(ret));
-        } else {/*do nothing*/}
+        }
+      } else if (OB_FAIL(shadow_truncate_string_for_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
+                                                         const_cast<ObDatum &>(stored_row.cells()[0])))) {
+        LOG_WARN("failed to shadow truncate string for hist", K(ret));
+      } else {
+        ObExprHashFuncType hash_func = aggr_info.param_exprs_.at(0)->basic_funcs_->murmur_hash_;
+        uint64_t datum_value = 0;
+        if (OB_FAIL(hash_func(stored_row.cells()[0], datum_value, datum_value))) {
+          LOG_WARN("fail to do hash", K(ret));
+        } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(datum_value, stored_row.cells()[0]))) {
+          LOG_WARN("failed to process row", K(ret));
+        }
       }
       break;
     }
@@ -3811,7 +3831,10 @@ int ObAggregateProcessor::collect_aggr_result(
       if (OB_ISNULL(extra)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("extra info is null", K(ret));
-      } else if (OB_FAIL(get_top_k_fre_hist_result(extra->topk_fre_hist_, has_lob_header, result))) {
+      } else if (OB_FAIL(get_top_k_fre_hist_result(extra->topk_fre_hist_,
+                                                   aggr_info.param_exprs_.at(0)->obj_meta_,
+                                                   has_lob_header,
+                                                   result))) {
         LOG_WARN("failed to get topk fre hist result", K(ret));
       } else {
       }
@@ -4857,14 +4880,24 @@ int ObAggregateProcessor::top_fre_hist_calc_batch(
     if (datum->is_null()) {
       continue;
     }
-    ObObj obj;
-    if (OB_FAIL(datum->to_obj(obj, obj_meta))) {
-      LOG_WARN("failed to obj", K(ret));
-    } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
-      LOG_WARN("fail to truncate string", K(ret));
-    } else if (OB_FAIL(extra_info->topk_fre_hist_.add_top_k_frequency_item(obj))) {
-      LOG_WARN("failed to process row", K(ret));
-    } else {/*do nothing*/}
+    if (extra_info->topk_fre_hist_.is_need_merge_topk_hist()) {//merge
+      ObObj obj;
+      if (OB_FAIL(datum->to_obj(obj, obj_meta))) {
+        LOG_WARN("failed to obj", K(ret));
+      } else if (OB_FAIL(extra_info->topk_fre_hist_.merge_distribute_top_k_fre_items(obj))) {
+        LOG_WARN("failed to process row", K(ret));
+      }
+    } else if (OB_FAIL(shadow_truncate_string_for_hist(obj_meta, *datum))) {
+      LOG_WARN("failed to shadow truncate string for hist", K(ret));
+    } else {
+      ObExprHashFuncType hash_func = aggr_info.param_exprs_.at(0)->basic_funcs_->murmur_hash_;
+      uint64_t datum_value = 0;
+      if (OB_FAIL(hash_func(*datum, datum_value, datum_value))) {
+        LOG_WARN("fail to do hash", K(ret));
+      } else if (OB_FAIL(extra_info->topk_fre_hist_.add_top_k_frequency_item(datum_value, *datum))) {
+        LOG_WARN("failed to process row", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -5958,13 +5991,15 @@ int ObAggregateProcessor::get_pl_agg_udf_result(const ObAggrInfo &aggr_info,
 }
 
 int ObAggregateProcessor::get_top_k_fre_hist_result(ObTopKFrequencyHistograms &top_k_fre_hist,
+                                                    const ObObjMeta &obj_meta,
                                                     bool has_lob_header,
                                                     ObDatum &result_datum)
 {
   int ret = OB_SUCCESS;
-  if (top_k_fre_hist.has_bucket()) {
+  if (top_k_fre_hist.has_bucket() ||
+      (top_k_fre_hist.is_by_pass() && !top_k_fre_hist.is_need_merge_topk_hist())) {
     //sort and reserve topk item
-    if (OB_FAIL(top_k_fre_hist.create_topk_fre_items())) {
+    if (OB_FAIL(top_k_fre_hist.create_topk_fre_items(&obj_meta))) {
       LOG_WARN("failed to adjust frequency sort", K(ret));
     } else {
       char *buf = NULL;
@@ -6061,9 +6096,9 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
         LOG_WARN("get unexpected null", K(ret), K(stored_row));
       } else if (stored_row->cells()[0].is_null()) {
         ++ null_count;
-      } else if (OB_FAIL(shadow_truncate_string_for_hybird_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
-                                                                const_cast<ObDatum &>(stored_row->cells()[0])))) {
-        LOG_WARN("failed to shadow truncate string for hybird hist", K(ret));
+      } else if (OB_FAIL(shadow_truncate_string_for_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
+                                                         const_cast<ObDatum &>(stored_row->cells()[0])))) {
+        LOG_WARN("failed to shadow truncate string for hist", K(ret));
       } else if (OB_FAIL(prev_row.save_store_row(*stored_row))) {
         LOG_WARN("failed to deep copy limit last rows", K(ret));
       } else {
@@ -6080,9 +6115,9 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
       if (OB_ISNULL(stored_row) || OB_UNLIKELY(stored_row->cnt_ != 1)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(stored_row));
-      } else if (OB_FAIL(shadow_truncate_string_for_hybird_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
-                                                                const_cast<ObDatum &>(stored_row->cells()[0])))) {
-        LOG_WARN("failed to shadow truncate string for hybrid hist", K(ret));
+      } else if (OB_FAIL(shadow_truncate_string_for_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
+                                                         const_cast<ObDatum &>(stored_row->cells()[0])))) {
+        LOG_WARN("failed to shadow truncate string for hist", K(ret));
       } else if (OB_FAIL(check_rows_equal(prev_row, *stored_row, aggr_info, is_equal))) {
         LOG_WARN("failed to is order by item equal with prev row", K(ret));
       } else if (is_equal) {
@@ -6152,8 +6187,8 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
   return ret;
 }
 
-int ObAggregateProcessor::shadow_truncate_string_for_hybird_hist(const ObObjMeta obj_meta,
-                                                                 ObDatum &datum)
+int ObAggregateProcessor::shadow_truncate_string_for_hist(const ObObjMeta obj_meta,
+                                                          ObDatum &datum)
 {
   int ret = OB_SUCCESS;
   if (ObColumnStatParam::is_valid_opt_col_type(obj_meta.get_type()) && obj_meta.is_string_type() && !datum.is_null()) {
@@ -6164,7 +6199,7 @@ int ObAggregateProcessor::shadow_truncate_string_for_hybird_hist(const ObObjMeta
       LOG_WARN("get unexpected error", K(ret), K(obj_meta), K(datum), K(truncated_str_len));
     } else {
       datum.set_string(str.ptr(), static_cast<uint32_t>(truncated_str_len));
-      LOG_TRACE("Succeed to shadow truncate string for hybird hist", K(datum));
+      LOG_TRACE("Succeed to shadow truncate string for hist", K(datum));
     }
   }
   return ret;
