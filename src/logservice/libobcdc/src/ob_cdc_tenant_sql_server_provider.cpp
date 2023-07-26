@@ -42,7 +42,7 @@ int ObCDCTenantSQLServerProvider::init(IObLogSysTableHelper &systable_helper)
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("tenant_sql_server_provider already inited", KR(ret), K_(is_inited));
-  } else if (tenant_server_map_.init(ObModIds::OB_SQL_CONNECTION_POOL)) {
+  } else if (OB_FAIL(tenant_server_map_.init(ObModIds::OB_SQL_CONNECTION_POOL))) {
     LOG_ERROR("tenant_server_map_ init failed", KR(ret));
   } else {
     systable_helper_ = &systable_helper;

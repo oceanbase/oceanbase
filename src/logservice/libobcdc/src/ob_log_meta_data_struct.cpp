@@ -366,7 +366,7 @@ int ObDictTenantInfo::get_table_metas_in_tenant(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_ERROR("ObDictTenantInfo has not been initialized", KR(ret));
-  } else if (table_map_.for_each(table_metas_getter)) {
+  } else if (OB_FAIL(table_map_.for_each(table_metas_getter))) {
     LOG_ERROR("table_map_ for_each failed", KR(ret));
   } else {}
 

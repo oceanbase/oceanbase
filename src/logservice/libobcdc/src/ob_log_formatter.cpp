@@ -1482,10 +1482,10 @@ int ObLogFormatter::fill_orig_default_value_(
             LOG_ERROR("allocate memory for ObString fail", K(sizeof(ObString)));
             ret = OB_ALLOCATE_MEMORY_FAILED;
           } else if (OB_ISNULL(orig_default_value_str)) {
-            LOG_ERROR("orig_default_value_str is null", K(usr_column_index),
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("orig_default_value_str is null", KR(ret), K(usr_column_index),
                 K(table_id), "table_name", simple_table_schema->get_table_name(),
                 KPC(column_schema_info));
-            ret = OB_ERR_UNEXPECTED;
           // For varchar:
           // 1. the default value is NULL, which should be set to NULL
           // 2. The default value is an empty string, which should be set to ''
