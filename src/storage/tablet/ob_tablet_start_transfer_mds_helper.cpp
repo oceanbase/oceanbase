@@ -926,7 +926,7 @@ int ObTabletStartTransferInHelper::check_transfer_src_tablets_(
       bool need_rebuild = false;
       if (!for_replay) {
         // do nothing
-      } else if (OB_SUCCESS != (tmp_ret = OB_FAIL(ObStorageHAUtils::check_transfer_ls_can_rebuild(scn, need_rebuild)))) {
+      } else if (OB_SUCCESS != (tmp_ret = ObStorageHAUtils::check_transfer_ls_can_rebuild(scn, need_rebuild))) {
         LOG_WARN("failed to check transfer ls can rebuild", K(tmp_ret), K(scn), K(tx_start_transfer_in_info));
       } else if (need_rebuild && OB_SUCCESS != (tmp_ret = set_dest_ls_rebuild_(tx_start_transfer_in_info.dest_ls_id_))) {
         LOG_WARN("failed to set dest ls rebuild", K(tmp_ret), K(tx_start_transfer_in_info));
