@@ -5550,7 +5550,11 @@ OB_DEF_DESERIALIZE(ObBasePartition)
   }
 
   LST_DO_CODE(OB_UNIS_DECODE, tenant_id_, table_id_, part_id_,
-              schema_version_, name, high_bound_val, status_);
+              schema_version_, name);
+  if (FAILEDx(high_bound_val.deserialize(buf, data_len, pos, true))) {
+    LOG_WARN("fail to deserialize high_bound_val", KR(ret));
+  }
+  LST_DO_CODE(OB_UNIS_DECODE, status_);
   if (OB_FAIL(ret)) {
     LOG_WARN("Fail to deserialize data, ", K(ret));
   } else if (OB_FAIL(deep_copy_str(name, name_))) {
@@ -5594,11 +5598,13 @@ OB_DEF_DESERIALIZE(ObBasePartition)
               part_idx_,
               is_empty_partition_name_,
               tablespace_id_,
-              partition_type_,
-              low_bound_val,
-              tablet_id_);
+              partition_type_);
+  if (FAILEDx(low_bound_val.deserialize(buf, data_len, pos, true))) {
+    LOG_WARN("fail to deserialze low_bound_val", KR(ret));
+  }
+  LST_DO_CODE(OB_UNIS_DECODE, tablet_id_);
   if (OB_SUCC(ret) && OB_FAIL(set_low_bound_val(low_bound_val))) {
-    LOG_WARN("Fail to deep copy high_bound_val", K(ret), K(low_bound_val));
+    LOG_WARN("Fail to deep copy low_bound_val", K(ret), K(low_bound_val));
   }
   return ret;
 }
