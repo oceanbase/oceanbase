@@ -1338,25 +1338,29 @@ void ObTenantIOManager::print_io_status()
     }
 
     // MOCK SYS GROUPS
-    for (int64_t j = 0; j < SYS_RESOURCE_GROUP_CNT; ++j) {
-      ObIOModule module = static_cast<ObIOModule>(SYS_RESOURCE_GROUP_START_ID + j);
-      if (sys_avg_size.at(j).at(static_cast<int>(ObIOMode::READ)) > std::numeric_limits<double>::epsilon()) {
-        snprintf(io_status, sizeof(io_status), "sys_group_name: %s, mode:  read, size: %10.2f, iops: %8.2f, rt: %8.2f",
-                 get_io_sys_group_name(module),
-                 sys_avg_size.at(j).at(static_cast<int>(ObIOMode::READ)),
-                 sys_avg_iops.at(j).at(static_cast<int>(ObIOMode::READ)),
-                 sys_avg_rt.at(j).at(static_cast<int>(ObIOMode::READ)));
-        LOG_INFO("[IO STATUS SYS]", K_(tenant_id), KCSTRING(io_status));
-        need_print_io_config = true;
-      }
-      if (sys_avg_size.at(j).at(static_cast<int>(ObIOMode::WRITE)) > std::numeric_limits<double>::epsilon()) {
-        snprintf(io_status, sizeof(io_status), "sys_group_name: %s, mode: write, size: %10.2f, iops: %8.2f, rt: %8.2f",
-                 get_io_sys_group_name(module),
-                 sys_avg_size.at(j).at(static_cast<int>(ObIOMode::WRITE)),
-                 sys_avg_iops.at(j).at(static_cast<int>(ObIOMode::WRITE)),
-                 sys_avg_rt.at(j).at(static_cast<int>(ObIOMode::WRITE)));
-        LOG_INFO("[IO STATUS SYS]", K_(tenant_id), KCSTRING(io_status));
-        need_print_io_config = true;
+    for (int64_t j = 0; j < sys_avg_size.count(); ++j) {
+      if (j >= sys_avg_size.count() || j >= sys_avg_iops.count() || j >= sys_avg_rt.count()) {
+        //ignore
+      } else {
+        ObIOModule module = static_cast<ObIOModule>(SYS_RESOURCE_GROUP_START_ID + j);
+        if (sys_avg_size.at(j).at(static_cast<int>(ObIOMode::READ)) > std::numeric_limits<double>::epsilon()) {
+          snprintf(io_status, sizeof(io_status), "sys_group_name: %s, mode:  read, size: %10.2f, iops: %8.2f, rt: %8.2f",
+                   get_io_sys_group_name(module),
+                   sys_avg_size.at(j).at(static_cast<int>(ObIOMode::READ)),
+                   sys_avg_iops.at(j).at(static_cast<int>(ObIOMode::READ)),
+                   sys_avg_rt.at(j).at(static_cast<int>(ObIOMode::READ)));
+          LOG_INFO("[IO STATUS SYS]", K_(tenant_id), KCSTRING(io_status));
+          need_print_io_config = true;
+        }
+        if (sys_avg_size.at(j).at(static_cast<int>(ObIOMode::WRITE)) > std::numeric_limits<double>::epsilon()) {
+          snprintf(io_status, sizeof(io_status), "sys_group_name: %s, mode: write, size: %10.2f, iops: %8.2f, rt: %8.2f",
+                   get_io_sys_group_name(module),
+                   sys_avg_size.at(j).at(static_cast<int>(ObIOMode::WRITE)),
+                   sys_avg_iops.at(j).at(static_cast<int>(ObIOMode::WRITE)),
+                   sys_avg_rt.at(j).at(static_cast<int>(ObIOMode::WRITE)));
+          LOG_INFO("[IO STATUS SYS]", K_(tenant_id), KCSTRING(io_status));
+          need_print_io_config = true;
+        }
       }
     }
 
