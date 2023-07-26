@@ -387,6 +387,7 @@ int ObTableLoadCoordinatorCtx::generate_autoinc_params(AutoincParam &autoinc_par
           // don't keep intra-partition value asc order when partkey column is auto inc
           autoinc_param.part_value_no_order_ = true;
         }
+        autoinc_param.autoinc_version_ = table_schema->get_truncate_version();
       }
     }
   }

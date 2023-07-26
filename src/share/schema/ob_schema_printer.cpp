@@ -1532,7 +1532,7 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
     if (OB_FAIL(share::ObAutoincrementService::get_instance().get_sequence_value(
           table_schema.get_tenant_id(), table_schema.get_table_id(),
           table_schema.get_autoinc_column_id(), table_schema.is_order_auto_increment_mode(),
-          auto_increment))) {
+          table_schema.get_truncate_version(), auto_increment))) {
       SHARE_SCHEMA_LOG(WARN, "fail to get auto_increment value", K(ret));
     } else if (auto_increment > 0) {
       if (table_schema.get_auto_increment() > auto_increment) {
@@ -2008,6 +2008,7 @@ int ObSchemaPrinter::print_table_definition_table_options(
                          table_schema.get_table_id(),
                          table_schema.get_autoinc_column_id(),
                          table_schema.is_order_auto_increment_mode(),
+                         table_schema.get_truncate_version(),
                          auto_increment))) {
       OB_LOG(WARN, "fail to get auto_increment value", K(ret));
     } else if (auto_increment > 0) {
@@ -4317,7 +4318,7 @@ int ObSchemaPrinter::print_compound_instead_trigger_definition(const ObTriggerIn
   return ret;
 }
 
-int ObSchemaPrinter::print_trigger_status(const ObTriggerInfo &trigger_info, 
+int ObSchemaPrinter::print_trigger_status(const ObTriggerInfo &trigger_info,
                                           char *buf, int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;

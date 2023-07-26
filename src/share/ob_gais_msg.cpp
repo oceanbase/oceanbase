@@ -27,13 +27,13 @@ namespace share
 // ObGAISNextAutoIncValReq
 OB_SERIALIZE_MEMBER(ObGAISNextAutoIncValReq,
                     autoinc_key_, offset_, increment_, base_value_, max_value_, desired_cnt_,
-                    cache_size_, sender_);
+                    cache_size_, sender_, autoinc_version_);
 
 // ObGAISAutoIncKeyArg
-OB_SERIALIZE_MEMBER(ObGAISAutoIncKeyArg, autoinc_key_, sender_);
+OB_SERIALIZE_MEMBER(ObGAISAutoIncKeyArg, autoinc_key_, sender_, autoinc_version_);
 
 // ObGAISPushAutoIncValReq
-OB_SERIALIZE_MEMBER(ObGAISPushAutoIncValReq, autoinc_key_, base_value_, max_value_, sender_);
+OB_SERIALIZE_MEMBER(ObGAISPushAutoIncValReq, autoinc_key_, base_value_, max_value_, sender_, autoinc_version_);
 
 int ObGAISNextAutoIncValReq::init(const AutoincKey &autoinc_key,
                                   const uint64_t offset,
@@ -42,7 +42,8 @@ int ObGAISNextAutoIncValReq::init(const AutoincKey &autoinc_key,
                                   const uint64_t max_value,
                                   const uint64_t desired_cnt,
                                   const uint64_t cache_size,
-                                  const common::ObAddr &sender)
+                                  const common::ObAddr &sender,
+                                  const int64_t &autoinc_version)
 {
   int ret = OB_SUCCESS;
   if (!is_valid_tenant_id(autoinc_key.tenant_id_) || max_value <= 0 ||
@@ -60,11 +61,12 @@ int ObGAISNextAutoIncValReq::init(const AutoincKey &autoinc_key,
     desired_cnt_ = desired_cnt;
     cache_size_ = cache_size;
     sender_ = sender;
+    autoinc_version_ = get_modify_autoinc_version(autoinc_version);
   }
   return ret;
 }
 
-int ObGAISAutoIncKeyArg::init(const AutoincKey &autoinc_key,  const common::ObAddr &sender)
+int ObGAISAutoIncKeyArg::init(const AutoincKey &autoinc_key, const common::ObAddr &sender, const int64_t autoinc_version)
 {
   int ret = OB_SUCCESS;
   if (!is_valid_tenant_id(autoinc_key.tenant_id_) || !sender.is_valid()) {
@@ -73,6 +75,7 @@ int ObGAISAutoIncKeyArg::init(const AutoincKey &autoinc_key,  const common::ObAd
   } else {
     autoinc_key_ = autoinc_key;
     sender_ = sender;
+    autoinc_version_ = get_modify_autoinc_version(autoinc_version);
   }
   return ret;
 }
@@ -80,7 +83,8 @@ int ObGAISAutoIncKeyArg::init(const AutoincKey &autoinc_key,  const common::ObAd
 int ObGAISPushAutoIncValReq::init(const AutoincKey &autoinc_key,
                                   const uint64_t base_value,
                                   const uint64_t max_value,
-                                  const common::ObAddr &sender)
+                                  const common::ObAddr &sender,
+                                  const int64_t &autoinc_version)
 {
   int ret = OB_SUCCESS;
   if (!is_valid_tenant_id(autoinc_key.tenant_id_) ||
@@ -92,10 +96,10 @@ int ObGAISPushAutoIncValReq::init(const AutoincKey &autoinc_key,
     base_value_ = base_value;
     max_value_ = max_value;
     sender_ = sender;
+    autoinc_version_ = get_modify_autoinc_version(autoinc_version);
   }
   return ret;
 }
 
 } // share
 } // oceanbase
-
