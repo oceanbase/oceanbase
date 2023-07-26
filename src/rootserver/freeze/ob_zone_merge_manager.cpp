@@ -14,6 +14,7 @@
 
 #include "rootserver/freeze/ob_zone_merge_manager.h"
 
+#include "share/config/ob_server_config.h"
 #include "share/ob_freeze_info_proxy.h"
 #include "share/ob_zone_merge_table_operator.h"
 #include "share/ob_global_merge_table_operator.h"
@@ -570,7 +571,8 @@ int ObZoneMergeManagerBase::check_need_broadcast(
     LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(frozen_scn));
   } else if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret), K_(tenant_id));
-  } else if (global_merge_info_.frozen_scn() < frozen_scn) {
+  } else if ((global_merge_info_.frozen_scn() < frozen_scn)
+             && GCONF.enable_major_freeze) { // require enable_major_freeze = true
     need_broadcast = true;
   }
   return ret;
