@@ -111,7 +111,7 @@ public:
       need_end_nested_stmt_(EST_NEED_NOT),
       mem_context_(nullptr),
       mem_context_destroy_guard_(mem_context_),
-      allocator_(ObModIds::OB_PL_TEMP),
+      allocator_(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       result_set_(NULL),
       sql_ctx_(),
       schema_guard_(share::schema::ObSchemaMgrItem::MOD_SPI_RESULT_SET),

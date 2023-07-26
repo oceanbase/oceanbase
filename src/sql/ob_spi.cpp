@@ -3505,6 +3505,13 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
               spi_result->end_cursor_stmt(ctx, ret);
               if (!need_destruct && OB_SUCCESS != ret) {
                 need_destruct = true;
+                if (OB_NOT_NULL(spi_result->get_result_set())) {
+                  // 此分支所有错误码都被吞掉，最终返回最初的错误码
+                  int close_ret = spi_result->close_result_set();
+                  if (OB_SUCCESS != close_ret) {
+                    LOG_WARN("close mysql result set failed", K(ret), K(close_ret));
+                  }
+                }
               }
             }
             if (need_destruct) {
