@@ -372,6 +372,8 @@ public:
   static bool is_all_column_exprs(const common::ObIArray<ObRawExpr*> &exprs);
   static int extract_set_op_exprs(const ObRawExpr *raw_expr,
                                   common::ObIArray<ObRawExpr*> &set_op_exprs);
+  static int extract_set_op_exprs(const ObIArray<ObRawExpr*> &exprs,
+                                  common::ObIArray<ObRawExpr*> &set_op_exprs);
   /// extract column exprs from the raw expr
   static int extract_column_exprs(const ObRawExpr *raw_expr,
                                   common::ObIArray<ObRawExpr*> &column_exprs,
