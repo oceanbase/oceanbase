@@ -432,9 +432,11 @@ int ObTransformJoinLimitPushDown::check_cartesian(ObSelectStmt *stmt,
       if (OB_ISNULL(cond)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (cond->has_flag(CNT_SUB_QUERY)) {
+      } else if (cond->has_flag(CNT_SUB_QUERY) ||
+                 cond->has_flag(CNT_RAND_FUNC) ||
+                 cond->has_flag(CNT_STATE_FUNC)) {
         is_cond_valid = false;
-        OPT_TRACE("condition has subquery");
+        OPT_TRACE("condition has subquery/rand func/state func");
       } else if (OB_FAIL(ObRawExprUtils::extract_table_ids(cond,
                                                           where_table_ids))) {
         LOG_WARN("failed to extract table ids", K(ret));
