@@ -524,7 +524,10 @@ int ObOptColumnStat::merge_obj(const ObObj &obj)
       hash_value = obj.is_string_type() ?
                    obj.varchar_hash(obj.get_collation_type(), hash_value) :
                    obj.hash(hash_value);
-      if (OB_FAIL(ObAggregateProcessor::llc_add_value(hash_value, llc_bitmap_, llc_bitmap_size_))) {
+      if (OB_UNLIKELY(llc_bitmap_ == NULL || llc_bitmap_size_ == 0)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("get invalid llc_bitmap", K(ret));
+      } else if (OB_FAIL(ObAggregateProcessor::llc_add_value(hash_value, llc_bitmap_, llc_bitmap_size_))) {
         LOG_WARN("fail to calc llc", K(ret));
       }
       //don't need to get call ObGlobalNdvEval::get_ndv_from_llc here, call it later.

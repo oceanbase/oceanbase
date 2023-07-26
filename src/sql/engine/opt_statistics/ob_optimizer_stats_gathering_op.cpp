@@ -105,6 +105,7 @@ void ObOptimizerStatsGatheringOp::reset()
   table_stats_map_.destroy();
   column_stats_map_.destroy();
   part_map_.destroy();
+  piece_msg_.reset();
   arena_.reset();
 }
 
