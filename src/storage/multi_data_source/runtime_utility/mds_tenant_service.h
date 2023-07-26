@@ -130,8 +130,10 @@ struct ObTenantMdsTimer
   void stop();
   void wait();
   void try_recycle_mds_table_task();
+  void dump_special_mds_table_status_task();
   TO_STRING_KV(KP(this), K_(recycle_task_handle))
   common::ObOccamTimerTaskRAIIHandle recycle_task_handle_;
+  common::ObOccamTimerTaskRAIIHandle dump_special_mds_table_status_task_handle_;
   common::ObOccamTimer timer_;
 private:
   int process_with_tablet_(ObTablet &tablet);
@@ -166,10 +168,15 @@ public:
   /*******************debug for memoy leak************************/
   template <typename OP>
   void update_mem_leak_debug_info(void *obj, OP &&op) {
+#ifdef ENABLE_DEBUG_MDS_MEM_LEAK
     int ret = OB_SUCCESS;
     if (OB_FAIL(memory_leak_debug_map_.operate(ObIntWarp((int64_t)obj), op))) {
       MDS_LOG(WARN, "fail to update mem check debug info", KR(ret), KP(obj));
     }
+#else
+    UNUSED(obj);
+    UNUSED(op);
+#endif
   }
   void record_alloc_backtrace(void *obj,
                               const char *tag,

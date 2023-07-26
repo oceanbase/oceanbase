@@ -86,7 +86,6 @@ public:
   ls_id_(),
   tablet_id_(),
   flushing_scn_(),
-  last_flushed_scn_(share::SCN::min_scn()),
   last_inner_recycled_scn_(share::SCN::min_scn()),
   rec_scn_(share::SCN::max_scn()),
   total_node_cnt_(0),
@@ -146,7 +145,8 @@ public:
   share::ObLSID get_ls_id() const;
   int64_t get_node_cnt() const;
   virtual share::SCN get_rec_scn();
-  virtual int flush(share::SCN recycle_scn, bool need_freeze = true) = 0;
+  virtual int dump_status() const = 0;
+  virtual int flush(share::SCN need_advanced_rec_scn_lower_limit) = 0;
   virtual ObTabletID get_tablet_id() const;
   virtual bool is_flushing() const;
   virtual int fill_virtual_info(ObIArray<MdsNodeInfoForVirtualTable> &mds_node_info_array) const = 0;
@@ -190,7 +190,6 @@ protected:
   template <int N>
   void report_flush_event_(const char (&event_str)[N],
                            share::SCN flush_scn,
-                           bool need_freeze,
                            const char *file = __builtin_FILE(),
                            const uint32_t line = __builtin_LINE(),
                            const char *function_name = __builtin_FUNCTION()) {
@@ -200,7 +199,7 @@ protected:
     char stack_buffer[buffer_size] = { 0 };
     int64_t pos = 0;
     if (FALSE_IT(databuff_printf(stack_buffer, buffer_size, pos,
-                                "flush_scn:%s, need_freeze:%s", to_cstring(flush_scn), to_cstring(need_freeze)))) {
+                                "flush_scn:%s", to_cstring(flush_scn)))) {
     } else {
       event.record_thread_info_();
       event.info_str_.assign(stack_buffer, pos);
@@ -262,23 +261,24 @@ protected:
     init_ts_(0),
     last_reset_ts_(0),
     remove_ts_(0),
+    last_flush_ts_(0),
     init_trace_id_(),
     remove_trace_id_() {}
     TO_STRING_KV(KP_(do_init_tablet_pointer), KP_(do_remove_tablet_pointer), KTIME_(init_ts), KTIME_(last_reset_ts),
-                 KTIME_(remove_ts), K_(init_trace_id), K_(remove_trace_id));
+                 KTIME_(remove_ts), KTIME_(last_flush_ts), K_(init_trace_id), K_(remove_trace_id));
     ObTabletPointer *do_init_tablet_pointer_;// can not be accessed, jsut record it to debug
     ObTabletPointer *do_remove_tablet_pointer_;// can not be accessed, jsut record it to debug
     int64_t init_ts_;
     int64_t last_reset_ts_;
     int64_t remove_ts_;
+    int64_t last_flush_ts_;
     ObCurTraceId::TraceId init_trace_id_;
     ObCurTraceId::TraceId remove_trace_id_;
-  } debug_info_;// 40B
+  } debug_info_;// 112B
   mutable State state_;
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   share::SCN flushing_scn_;// To tell if this mds table is flushing
-  share::SCN last_flushed_scn_;// To filter repeated flush operation
   share::SCN last_inner_recycled_scn_;// To filter repeated release operation
   share::SCN rec_scn_;// To CLOG to recycle
   int64_t total_node_cnt_;// To tell if this mds table is safety to destroy

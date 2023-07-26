@@ -135,7 +135,7 @@ MdsRow<K, V>::~MdsRow()// all mds nodes lived with RAII, owned by MdsRow
 {
   MdsWLockGuard lg(MdsRowBase<K, V>::lock_);
   if (!sorted_list_.empty()) {
-    MDS_LOG_RET(WARN, OB_INVALID_ARGUMENT, "release mds mode when mds row destructed", K(*this));
+    MDS_LOG_RET(WARN, OB_SUCCESS, "release mds mode when mds row destructed", K(*this));
     sorted_list_.for_each_node_from_tail_to_head_until_true(
       [this](const UserMdsNode<K, V> &node) {
         UserMdsNode<K, V> &cast_node = const_cast<UserMdsNode<K, V> &>(node);

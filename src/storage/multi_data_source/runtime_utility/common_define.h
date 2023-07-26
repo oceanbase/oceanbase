@@ -167,6 +167,7 @@ enum LogPhase
   SCAN,
   FLUSH,
   GC,
+  FREEZE,
   NONE
 };
 
@@ -208,6 +209,9 @@ do {\
     case mds::LogPhase::GC:\
       oceanbase::common::databuff_printf(joined_info, joined_length, pos, "[GC]%s", info);\
       break;\
+    case mds::LogPhase::FREEZE:\
+      oceanbase::common::databuff_printf(joined_info, joined_length, pos, "[FREEZE]%s", info);\
+      break;\
     case mds::LogPhase::NONE:\
       oceanbase::common::databuff_printf(joined_info, joined_length, pos, "[NONE]%s", info);\
       break;\
@@ -229,6 +233,7 @@ do {\
 #define MDS_LOG_FLUSH(level, info, args...) _MDS_LOG_PHASE(level, mds::LogPhase::FLUSH, info, ##args)
 #define MDS_LOG_GC(level, info, args...) _MDS_LOG_PHASE(level, mds::LogPhase::GC, info, ##args)
 #define MDS_LOG_NONE(level, info, args...) _MDS_LOG_PHASE(level, mds::LogPhase::NONE, info, ##args)
+#define MDS_LOG_FREEZE(level, info, args...) _MDS_LOG_PHASE(level, mds::LogPhase::FREEZE, info, ##args)
 
 // flag is needed to rollback logic
 #define MDS_FAIL_FLAG(stmt, flag) (CLICK_FAIL(stmt) || FALSE_IT(flag = true))

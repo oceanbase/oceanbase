@@ -209,6 +209,16 @@ int ObTenantMdsService::mtl_start(ObTenantMdsService *&mds_service)
     }
   ))) {
     MDS_LOG(ERROR, "fail to register recycle timer task to timer", KR(ret), KPC(mds_service));
+  } else if (MDS_FAIL(mds_service->mds_timer_.timer_.schedule_task_repeat(
+    mds_service->mds_timer_.dump_special_mds_table_status_task_handle_,
+    15_s,
+    [mds_service]() -> bool {
+      ObCurTraceId::init(GCONF.self_addr_);
+      mds_service->mds_timer_.dump_special_mds_table_status_task();
+      return false;// won't stop until tenant exit
+    }
+  ))) {
+    MDS_LOG(ERROR, "fail to register dump mds table status task to timer", KR(ret), KPC(mds_service));
   }
   return ret;
 }
@@ -217,6 +227,7 @@ void ObTenantMdsService::mtl_stop(ObTenantMdsService *&mds_service)
 {
   if (nullptr != mds_service) {
     mds_service->mds_timer_.recycle_task_handle_.stop();
+    mds_service->mds_timer_.dump_special_mds_table_status_task_handle_.stop();
   }
 }
 
@@ -224,6 +235,7 @@ void ObTenantMdsService::mtl_wait(ObTenantMdsService *&mds_service)
 {
   if (nullptr != mds_service) {
     mds_service->mds_timer_.recycle_task_handle_.wait();
+    mds_service->mds_timer_.dump_special_mds_table_status_task_handle_.wait();
   }
 }
 
@@ -237,6 +249,45 @@ void ObTenantMdsTimer::try_recycle_mds_table_task()
       (void) this->process_with_tablet_(tablet);
       return OB_SUCCESS;// keep doing ignore error
     });
+    return OB_SUCCESS;// keep doing ignore error
+  });
+  #undef PRINT_WRAPPER
+}
+
+void ObTenantMdsTimer::dump_special_mds_table_status_task()
+{
+  #define PRINT_WRAPPER KR(ret), KPC(this)
+  MDS_TG(1_s);
+  ObCurTraceId::init(GCONF.self_addr_);
+  ObTenantMdsService::for_each_ls_in_tenant([this](ObLS &ls) -> int {
+    int ret = OB_SUCCESS;
+    MDS_TG(1_s);
+    MdsTableMgrHandle mds_table_mge_handle;
+    share::SCN ls_mds_freezing_scn;
+    if (MDS_FAIL(ls.get_mds_table_mgr(mds_table_mge_handle))) {
+      MDS_LOG_NONE(WARN, "fail to get mds table mgr");
+    } else if (FALSE_IT(ls_mds_freezing_scn = mds_table_mge_handle.get_mds_table_mgr()->get_freezing_scn())) {
+    } else {
+      ObTenantMdsService::for_each_mds_table_in_ls(ls, [this, ls_mds_freezing_scn](ObTablet &tablet) -> int {
+        int ret = OB_SUCCESS;
+        MDS_TG(1_s);
+        MdsTableHandle mds_table_handle;
+        share::SCN rec_scn;
+        const ObTablet::ObTabletPointerHandle &pointer_handle = tablet.get_pointer_handle();
+        ObMetaPointer<oceanbase::storage::ObTablet> *resource_ptr = pointer_handle.get_resource_ptr();
+        ObTabletPointer *tablet_pointer = dynamic_cast<ObTabletPointer *>(resource_ptr);
+        if (OB_FAIL(tablet_pointer->get_mds_table(mds_table_handle))) {
+          if (OB_ENTRY_NOT_EXIST != ret) {
+            MDS_LOG_NONE(WARN, "fail to get mds table", K(tablet.get_tablet_meta().tablet_id_));
+          }
+        } else if (OB_FAIL(mds_table_handle.get_rec_scn(rec_scn))) {
+          MDS_LOG_NONE(WARN, "fail to get mds table rec_scn", K(tablet.get_tablet_meta().tablet_id_));
+        } else if (rec_scn <= ls_mds_freezing_scn) {
+          mds_table_handle.dump_status();
+        }
+        return OB_SUCCESS;// keep doing ignore error
+      });
+    };
     return OB_SUCCESS;// keep doing ignore error
   });
   #undef PRINT_WRAPPER
@@ -303,7 +354,7 @@ int ObTenantMdsService::for_each_tablet_in_ls(ObLS &ls, const ObFunction<int(ObT
         ret = OB_ERR_UNEXPECTED;
         MDS_LOG_NONE(WARN, "tablet should not be NULL", KPC(tablet));
       } else if (tablet->get_tablet_meta().tablet_id_.is_ls_inner_tablet()) {
-        // FIXME: threr is no mds table on ls inner tablet yet, but there will be
+        // FIXME: there is no mds table on ls inner tablet yet, but there will be
       } else {
         op(*tablet);
       }
