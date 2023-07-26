@@ -2470,8 +2470,7 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
       } else if (OB_FAIL(get_user_type(pl_type.get_user_type_id(), user_type))) {
         LOG_WARN("failed to get user type", K(ret), KPC(user_type));
       } else if (OB_ISNULL(user_type) || !user_type->is_object_type()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected user type", K(ret), KPC(user_type));
+        // do nothing ...
       } else if (OB_ISNULL(record_type = static_cast<const ObRecordType*>(user_type))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected record type", K(ret), KPC(record_type), KPC(user_type));
