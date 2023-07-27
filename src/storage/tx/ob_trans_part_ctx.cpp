@@ -6386,12 +6386,12 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
         TRANS_LOG(WARN, "init tx buffer node failed", KR(ret), K(data_source_type), K(*this));
       } else if (OB_FAIL(tmp_array.push_back(node))) {
         TRANS_LOG(WARN, "push back notify node  failed", KR(ret));
-#ifndef OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
+//#ifndef OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
       } else if (tmp_array.get_serialize_size() > ObTxMultiDataSourceLog::MAX_MDS_LOG_SIZE
                  && !node.allow_to_use_mds_big_segment()) {
         ret = OB_LOG_TOO_LARGE;
         TRANS_LOG(WARN, "too large mds buf node", K(ret), K(tmp_array.get_serialize_size()));
-#endif
+//#endif
       } else if (OB_FAIL(mds_cache_.insert_mds_node(node))) {
         TRANS_LOG(WARN, "register multi source data failed", KR(ret), K(data_source_type),
                   K(*this));
