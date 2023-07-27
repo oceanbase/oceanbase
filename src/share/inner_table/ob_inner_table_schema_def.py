@@ -5748,6 +5748,8 @@ def_table_schema(
   ],
 )
 
+# 474 : __all_tenant_scheduler_job_classes
+
 #
 # 余留位置
 
@@ -12287,6 +12289,8 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 
 # 12420: __all_virtual_flt_config
 
+# 12421: __all_virtual_tenant_scheduler_job_class
+
 #
 # 余留位置
 #
@@ -12668,7 +12672,11 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15402', all_def_ke
 # 15403: __all_virtual_flt_config
 
 # 15404: __all_virtual_tenant_scheduler_job_run_detail
+
 # 15405: __all_virtual_session_info
+
+# 15406: __all_virtual_tenant_scheduler_job_class
+
 # 余留位置
 
 ################################################################################
@@ -45880,6 +45888,8 @@ def_table_schema(
   """.replace("\n", " ")
 )
 
+# 25260: DBA_SCHEDULER_JOB_RUN_DETAILS
+# 25261: DBA_SCHEDULER_JOB_CLASSES
 #
 # 余留位置
 
@@ -51917,7 +51927,6 @@ def_table_schema(
 # 28195: GV$OB_FLT_TRACE_CONFIG
 # 28196: GV$OB_SESSION
 # 28197: V$OB_SESSION
-# 28198: DBA_SCHEDULER_JOB_RUN_DETAILS
 
 ################################################################################
 # Lob Table (50000, 70000)
