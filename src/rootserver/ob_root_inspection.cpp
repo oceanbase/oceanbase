@@ -203,7 +203,10 @@ int ObTenantChecker::check_garbage_tenant_(bool &passed)
     for (int64_t i = 0; OB_SUCC(ret) && i < result.tenant_schema_versions_.count(); i++) {
       TenantIdAndSchemaVersion &tenant = result.tenant_schema_versions_.at(i);
       int tmp_ret = OB_SUCCESS;
-      if (!ObSchemaService::is_formal_version(tenant.schema_version_)) {
+      if (!GCTX.root_service_->is_full_service()) {
+        ret = OB_CANCELED;
+        LOG_WARN("rs is not in full service", KR(ret));
+      } else if (!ObSchemaService::is_formal_version(tenant.schema_version_)) {
         const ObSimpleTenantSchema *tenant_schema = NULL;
         uint64_t tenant_id = tenant.tenant_id_;
         if (OB_SUCCESS != (tmp_ret = schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
@@ -212,12 +215,12 @@ int ObTenantChecker::check_garbage_tenant_(bool &passed)
           tmp_ret = OB_TENANT_NOT_EXIST;
         } else if (tenant_schema->is_restore()) {
           LOG_INFO("tenant is in restore", KPC(tenant_schema));
-        } else {
-          LOG_ERROR("tenant maybe create failed", K(tenant_id));
-          LOG_DBA_WARN(OB_ERR_ROOT_INSPECTION, "msg", "create tenant may fail",
+        } else if (tenant_schema->is_creating()) {
+          LOG_ERROR("the tenant may be in the process of creating, if the error reports continuously, please check", K(tenant_id));
+          LOG_DBA_WARN(OB_ERR_ROOT_INSPECTION, "msg", "the tenant may be in the process of creating, if the error reports continuously, please check",
                        K(tenant_id), "tenant_name", tenant_schema->get_tenant_name());
           ROOTSERVICE_EVENT_ADD("inspector", "tenant_checker",
-                                "info", "tenant maybe create failed",
+                                "info", "the tenant may be in the process of creating, if the error reports continuously, please check",
                                 "tenant_id", tenant_id,
                                 "tenant_name", tenant_schema->get_tenant_name_str());
         }
