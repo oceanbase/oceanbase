@@ -1069,7 +1069,7 @@ int ObTenantLSInfo::gather_all_ls_info_()
         const share::ObLSStatusInfo &info = status_info_array.at(i);
         if (info.ls_is_wait_offline()) {
           //ls is already offline, no need to process
-        } else if (FAILEDx(add_ls_status_info_(info))) {
+        } else if (OB_FAIL(add_ls_status_info_(info))) {
           LOG_WARN("failed to add ls status info", KR(ret), K(i), K(info));
         }
       }// end for

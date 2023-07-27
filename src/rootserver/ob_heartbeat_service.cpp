@@ -410,6 +410,7 @@ int ObHeartbeatService::prepare_whitelist_()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(is_inited_));
   } else if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql_proxy_ is null", KR(ret), KP(sql_proxy_));
   } else if (OB_FAIL(check_or_update_service_epoch_(epoch_id))) {
     LOG_WARN("fail to check or update service epoch", KR(ret), K(epoch_id));

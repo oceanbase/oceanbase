@@ -240,6 +240,7 @@ int ObLSRecoveryReportor::update_ls_recovery_stat_()
             storage::ObLSGetMod::RS_MOD))) {
       LOG_WARN("get log stream iter failed", KR(ret));
     } else if (OB_ISNULL(iter = guard.get_ptr())) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("iter is NULL", KR(ret));
     } else {
       int tmp_ret = OB_SUCCESS;
@@ -438,6 +439,7 @@ int ObLSRecoveryReportor::update_replayable_point_from_meta_()
           storage::ObLSGetMod::RS_MOD))) {
     LOG_WARN("get log stream iter failed", KR(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("iter is NULL", KR(ret));
   } else {
     ObLS *ls = nullptr;
