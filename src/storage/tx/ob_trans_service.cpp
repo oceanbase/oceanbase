@@ -730,7 +730,7 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
 
         time_guard.click("register in ctx begin");
         do {
-          if (OB_FAIL(register_mds_into_ctx(*(arg.tx_desc_), ls_id, type, buf, buf_len))) {
+          if (OB_FAIL(register_mds_into_ctx_(*(arg.tx_desc_), ls_id, type, buf, buf_len))) {
             TRANS_LOG(WARN, "register msd into ctx failed", K(ret));
             if (OB_EAGAIN == ret) {
               if (ObTimeUtil::current_time() >= tx_desc.expire_ts_) {
@@ -825,11 +825,11 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
   return ret;
 }
 
-int ObTransService::register_mds_into_ctx(ObTxDesc &tx_desc,
-                                     const ObLSID &ls_id,
-                                     const ObTxDataSourceType &type,
-                                     const char *buf,
-                                     const int64_t buf_len)
+int ObTransService::register_mds_into_ctx_(ObTxDesc &tx_desc,
+                                           const ObLSID &ls_id,
+                                           const ObTxDataSourceType &type,
+                                           const char *buf,
+                                           const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
   ObStoreCtx store_ctx;
@@ -847,20 +847,13 @@ int ObTransService::register_mds_into_ctx(ObTxDesc &tx_desc,
   } else if (OB_FAIL(get_write_store_ctx(tx_desc, snapshot, write_flag, store_ctx))) {
     TRANS_LOG(WARN, "get store ctx failed", KR(ret), K(tx_desc), K(ls_id));
   } else {
-    do {
-      memtable::ObMvccWriteGuard guard;
-      if (OB_FAIL(guard.write_auth(store_ctx))) {
-        TRANS_LOG(WARN, "write auth failed", KR(ret), K(tx_desc), K(ls_id));
-      } else {
-        ObPartTransCtx *ctx = store_ctx.mvcc_acc_ctx_.tx_ctx_;
-        if (OB_ISNULL(ctx)) {
-          ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(WARN, "unexpected null ptr", KR(ret), K(tx_desc), K(ls_id), K(type));
-        } else if (OB_FAIL(ctx->register_multi_data_source(type, buf, buf_len))) {
-          TRANS_LOG(WARN, "register multi source data failed", KR(ret), K(tx_desc), K(ls_id), K(type));
-        }
-      }
-    } while (0);
+    ObPartTransCtx *ctx = store_ctx.mvcc_acc_ctx_.tx_ctx_;
+    if (OB_ISNULL(ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "unexpected null ptr", KR(ret), K(tx_desc), K(ls_id), K(type));
+    } else if (OB_FAIL(ctx->register_multi_data_source(type, buf, buf_len))) {
+      TRANS_LOG(WARN, "register multi source data failed", KR(ret), K(tx_desc), K(ls_id), K(type));
+    }
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = revert_store_ctx(store_ctx))) {
       TRANS_LOG(WARN, "revert store ctx failed", KR(tmp_ret), K(tx_desc), K(ls_id), K(type));
