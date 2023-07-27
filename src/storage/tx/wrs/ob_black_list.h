@@ -380,6 +380,7 @@ private:
   int do_clean_up_();
   int get_info_from_result_(sqlclient::ObMySQLResult &result, ObBLKey &bl_key, ObLsInfo &ls_info);
   int64_t get_tenant_max_stale_time_(uint64_t tenant_id);
+  bool check_need_skip_leader_(const uint64_t tenant_id);
   void print_stat_();
 
 private:

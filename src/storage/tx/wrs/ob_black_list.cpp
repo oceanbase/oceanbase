@@ -243,7 +243,7 @@ int ObBLService::do_black_list_check_(sqlclient::ObMySQLResult *result)
     SCN gts_scn;
     if (OB_FAIL(get_info_from_result_(*result, bl_key, ls_info))) {
       TRANS_LOG(WARN, "get_info_from_result_ fail ", KR(ret), K(result));
-    } else if (ls_info.is_leader()) {
+    } else if (ls_info.is_leader() && check_need_skip_leader_(bl_key.get_tenant_id())) {
       // cannot add leader into blacklist
     } else if (ls_info.weak_read_scn_ == 0) {
       // log stream is initializing, should't be put into blacklist
@@ -272,6 +272,21 @@ int ObBLService::do_black_list_check_(sqlclient::ObMySQLResult *result)
   }
 
   return ret;
+}
+
+bool ObBLService::check_need_skip_leader_(const uint64_t tenant_id)
+{
+  bool need_skip = true;
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(tenant_id) {
+    if (!MTL_IS_PRIMARY_TENANT()) {
+      need_skip = false;
+    }
+  }
+  if (!need_skip) {
+    TRANS_LOG(INFO, "needn't skip leader", KR(ret), K(need_skip), K(tenant_id));
+  }
+  return need_skip;
 }
 
 int ObBLService::do_clean_up_()
