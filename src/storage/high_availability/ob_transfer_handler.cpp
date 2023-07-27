@@ -385,7 +385,6 @@ int ObTransferHandler::do_leader_transfer_()
 int ObTransferHandler::check_self_is_leader_(bool &is_leader)
 {
   int ret = OB_SUCCESS;
-  logservice::ObLogService *log_service = nullptr;
   ObRole role = ObRole::INVALID_ROLE;
   int64_t proposal_id = 0;
   const uint64_t tenant_id = MTL_ID();
@@ -394,12 +393,7 @@ int ObTransferHandler::check_self_is_leader_(bool &is_leader)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
-  } else if (!MTL_IS_PRIMARY_TENANT()) {
-    is_leader = false;
-  } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log service should not be NULL", K(ret), KP(log_service));
-  } else if (OB_FAIL(log_service->get_palf_role(ls_->get_ls_id(), role, proposal_id))) {
+  } else if (OB_FAIL(ls_->get_log_handler()->get_role(role, proposal_id))) {
     LOG_WARN("failed to get role", K(ret), KPC(ls_));
   } else if (is_strong_leader(role)) {
     is_leader = true;

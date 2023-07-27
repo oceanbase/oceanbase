@@ -686,7 +686,6 @@ int ObRebuildService::check_can_rebuild_(
 {
   int ret = OB_SUCCESS;
   can_rebuild = false;
-  logservice::ObLogService *log_service = nullptr;
   ObRole role;
   int64_t proposal_id = 0;
   const uint64_t tenant_id = MTL_ID();
@@ -709,10 +708,7 @@ int ObRebuildService::check_can_rebuild_(
     //primary will has this condition
     can_rebuild = false;
     LOG_INFO("ls cannot do rebuild", K(rebuild_ctx), K(is_primary), K(member_list));
-  } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log service should not be NULL", K(ret), KP(log_service));
-  } else if (OB_FAIL(log_service->get_palf_role(ls->get_ls_id(), role, proposal_id))) {
+  } else if (OB_FAIL(ls->get_log_handler()->get_role(role, proposal_id))) {
     LOG_WARN("failed to get role", K(ret), KPC(ls));
   } else if (is_strong_leader(role)) {
     can_rebuild = false;

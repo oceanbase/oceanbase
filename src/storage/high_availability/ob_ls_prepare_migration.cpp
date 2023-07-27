@@ -753,7 +753,6 @@ int ObStartPrepareMigrationTask::deal_with_local_ls_()
   ObLS *ls = nullptr;
   ObRole role;
   int64_t proposal_id = 0;
-  logservice::ObLogService *log_service = nullptr;
   ObLSSavedInfo saved_info;
 
   if (!is_inited_) {
@@ -764,10 +763,7 @@ int ObStartPrepareMigrationTask::deal_with_local_ls_()
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("log stream should not be NULL", K(ret), K(*ctx_));
-  } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log service should not be NULL", K(ret), KP(log_service));
-  } else if (OB_FAIL(log_service->get_palf_role(ctx_->arg_.ls_id_, role, proposal_id))) {
+  } else if (OB_FAIL(ls->get_log_handler()->get_role(role, proposal_id))) {
     LOG_WARN("failed to get role", K(ret), "arg", ctx_->arg_);
   } else if (is_strong_leader(role)) {
     if (ObMigrationOpType::REBUILD_LS_OP == ctx_->arg_.type_) {

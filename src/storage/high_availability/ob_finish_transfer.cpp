@@ -1008,15 +1008,19 @@ int ObTxFinishTransfer::post_check_logical_table_replaced_request_(const int64_t
 int ObTxFinishTransfer::check_self_ls_leader_(const share::ObLSID &ls_id, bool &is_leader)
 {
   int ret = OB_SUCCESS;
-  logservice::ObLogService *log_service = nullptr;
   ObRole role = ObRole::INVALID_ROLE;
   int64_t proposal_id = 0;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  const uint64_t tenant_id = MTL_ID();
   is_leader = false;
-  if (OB_ISNULL(log_service = MTL(logservice::ObLogService *))) {
+  if (OB_FAIL(get_ls_handle_(tenant_id, ls_id, ls_handle))) {
+    LOG_WARN("failed to get ls handle", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log service should not be NULL", K(ret), KP(log_service));
-  } else if (OB_FAIL(log_service->get_palf_role(ls_id, role, proposal_id))) {
-    LOG_WARN("failed to get role", K(ret), K(ls_id));
+    LOG_WARN("ls should not be NULL", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(ls->get_log_handler()->get_role(role, proposal_id))) {
+    LOG_WARN("failed to get role", K(ret), K(tenant_id), K(ls_id));
   } else if (is_strong_leader(role)) {
     is_leader = true;
   } else {
