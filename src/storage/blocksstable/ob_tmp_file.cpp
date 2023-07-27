@@ -622,6 +622,8 @@ int ObTmpFileExtent::try_sync_block()
   } else if (OB_FAIL(OB_TMP_FILE_STORE.wash_block(owner_->get_tenant_id(), block_id_, handle))) {
     // try to flush the block to the disk. If fails, do nothing.
     STORAGE_LOG(DEBUG, "fail to sync block", K(ret), K(owner_->get_tenant_id()), K(block_id_));
+  } else {
+    STORAGE_LOG(DEBUG, "succeed to sync wash block", K(block_id_));
   }
 
   return ret;
