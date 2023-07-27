@@ -876,7 +876,7 @@ int ObSlaveMapPkeyRangeIdxCalc::build_partition_range_channel_map(
           PartitionRangeChannelInfo *item = nullptr;
           if (OB_ISNULL(buf = exec_ctx_.get_allocator().alloc(sizeof(PartitionRangeChannelInfo)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
-          } else if (FALSE_IT(item = new (buf) PartitionRangeChannelInfo)) {
+          } else if (FALSE_IT(item = new (buf) PartitionRangeChannelInfo(exec_ctx_.get_allocator()))) {
           } else if (FALSE_IT(item->tablet_id_ = tmp_tablet_id)) {
           } else if (OB_FAIL(item->channels_.assign(tmp_channels))) {
             LOG_WARN("assign partition channels failed", K(ret));

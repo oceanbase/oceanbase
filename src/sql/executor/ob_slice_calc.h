@@ -819,9 +819,10 @@ public:
 private:
   struct PartitionRangeChannelInfo
   {
+    PartitionRangeChannelInfo(common::ObIAllocator &allocator) : channels_(allocator) { }
     int64_t tablet_id_;
     ObPxTabletRange::RangeCut range_cut_;
-    common::ObArray<int64_t> channels_;
+    common::ObFixedArray<int64_t, common::ObIAllocator> channels_;
 
     TO_STRING_KV(K(tablet_id_), K(range_cut_), K(channels_));
   };
