@@ -23,7 +23,6 @@
 
 // simple server
 #include "env/ob_simple_cluster_test_base.h"
-#include "env/ob_fast_bootstrap.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 
 using namespace oceanbase;

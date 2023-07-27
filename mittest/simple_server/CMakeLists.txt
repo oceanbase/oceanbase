@@ -29,6 +29,26 @@ function(errsim_ha_unittest_observer case)
   target_link_libraries(${case} PRIVATE gtest gmock observer_test oceanbase)
 endfunction()
 
+add_executable(test_simple_ob
+  EXCLUDE_FROM_ALL
+  test_ob_simple_cluster.cpp
+  env/ob_simple_server.cpp
+  env/ob_simple_server_restart_helper.cpp
+  env/ob_simple_cluster_test_base.cpp
+  )
+target_include_directories(test_simple_ob PUBLIC
+  ${CMAKE_SOURCE_DIR}/unittest ${CMAKE_SOURCE_DIR}/mittest)
+target_link_libraries(test_simple_ob
+  PRIVATE
+  -Wl,--start-group
+  oceanbase_static
+  ob_sql_static
+  ob_storage_static
+  -Wl,--end-group
+  -static-libgcc
+  -static-libstdc++
+  gtest
+  gmock)
 
 ob_unittest_observer(test_standby_balance test_standby_balance_ls_group.cpp)
 ob_unittest_observer(test_ls_recover test_ls_recover.cpp)
