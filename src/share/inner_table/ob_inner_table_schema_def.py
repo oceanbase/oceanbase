@@ -28008,6 +28008,8 @@ def_table_schema(
 # 21459：GV$OB_SESSION
 # 21460：V$OB_SESSION
 
+# 21461: GV$OB_PL_CACHE_OBJECT
+# 21462: V$OB_PL_CACHE_OBJECT
 #
 # 余留位置
 
@@ -51939,7 +51941,8 @@ def_table_schema(
 # 28195: GV$OB_FLT_TRACE_CONFIG
 # 28196: GV$OB_SESSION
 # 28197: V$OB_SESSION
-
+# 28198: GV$OB_PL_CACHE_OBJECT
+# 28199: V$OB_PL_CACHE_OBJECT
 ################################################################################
 # Lob Table (50000, 70000)
 ################################################################################
