@@ -203,15 +203,15 @@ namespace transaction
           ObTxMsg(TX_COMMIT),
           expire_ts_(OB_INVALID_TIMESTAMP),
           parts_()
-      {}
+      { commit_start_scn_.set_max(); }
       int64_t expire_ts_;
+      share::SCN commit_start_scn_;
       share::ObLSArray parts_;
       common::ObString app_trace_info_;
       bool is_valid() const;
-      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(expire_ts), K_(parts), K_(app_trace_info));
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(expire_ts), K_(commit_start_scn), K_(parts), K_(app_trace_info));
       OB_UNIS_VERSION(1);
     };
-
     struct ObTxCommitRespMsg : public ObTxMsg {
       ObTxCommitRespMsg() :
           ObTxMsg(TX_COMMIT_RESP)

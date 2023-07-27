@@ -208,6 +208,7 @@ int ObTransService::do_commit_tx_(ObTxDesc &tx,
                                          expire_ts,
                                          tx.trace_info_.get_app_trace_info(),
                                          tx.op_sn_,
+                                         SCN::max_scn(),
                                          commit_version,
                                          self_))
              || !commit_need_retry_(ret))) {
@@ -216,11 +217,18 @@ int ObTransService::do_commit_tx_(ObTxDesc &tx,
     } else {
       TRANS_LOG(TRACE, "local ls commit tx started", K(tx));
     }
-  } else if (OB_FAIL(do_commit_tx_slowpath_(tx))) {
-    TRANS_LOG(WARN, "commit tx slowpath fail", K(ret),
-              K_(tx.coord_id), K_(tx.commit_parts), K(tx));
   } else {
-    TRANS_LOG(TRACE, "remote commit started", K(tx), K_(self));
+    // get gts cache as commit start scn
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(ts_mgr_->get_gts(tenant_id_, NULL, tx.commit_start_scn_))) {
+      TRANS_LOG(WARN, "get gts cache fail", K(tmp_ret));
+    }
+    if (OB_FAIL(do_commit_tx_slowpath_(tx))) {
+      TRANS_LOG(WARN, "commit tx slowpath fail", K(ret),
+                K_(tx.coord_id), K_(tx.commit_parts), K(tx));
+    } else {
+      TRANS_LOG(TRACE, "remote commit started", K(tx), K_(self));
+    }
   }
   // start commit fail
   if (OB_FAIL(ret)) {
@@ -229,7 +237,7 @@ int ObTransService::do_commit_tx_(ObTxDesc &tx,
   return ret;
 }
 
-#define DELETED_UNRETRYABLE_ERROR(ret)  (OB_LS_IS_DELETED == ret)
+#define DELETED_UNRETRYABLE_ERROR(ret) (OB_LS_IS_DELETED == ret)
 /*
  * try send commit msg to coordinator, and register retry task
  * if msg send fail, the retry task will retry later
@@ -248,6 +256,8 @@ int ObTransService::do_commit_tx_slowpath_(ObTxDesc &tx)
     TRANS_LOG(WARN, "post tx commit msg fail", K(tmp_ret), K(tx), K(commit_msg));
     if (DELETED_UNRETRYABLE_ERROR(tmp_ret)) {
       ret = tx.commit_times_ > 0 ? OB_TRANS_UNKNOWN : OB_TRANS_KILLED;
+    } else {
+      // retryable error : location incorrect, server shutdown etc.
     }
   } else {
     post_succ = true;
@@ -258,6 +268,7 @@ int ObTransService::do_commit_tx_slowpath_(ObTxDesc &tx)
       OB_FAIL(register_commit_retry_task_(tx, post_succ ? INT64_MAX : POST_COMMIT_REQ_RETRY_INTERVAL))) {
     TRANS_LOG(WARN, "register retry commit task fail", K(ret), K(post_succ), K(tx));
   }
+
   TRANS_LOG(TRACE, "do commit tx slowpath", K(ret), K(post_succ), K(tx));
   return ret;
 }
@@ -492,6 +503,15 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
   case OB_TRANS_UNKNOWN:
     state = ObTxDesc::State::COMMIT_UNKNOWN;
     commit_out = result;
+    break;
+  case OB_TRANS_CTX_NOT_EXIST:
+    if (tx.commit_times_ <= 1) {
+      state = ObTxDesc::State::ROLLED_BACK;
+      commit_out = OB_TRANS_KILLED;
+    } else {
+      state = ObTxDesc::State::COMMIT_UNKNOWN;
+      commit_out = OB_TRANS_UNKNOWN;
+    }
     break;
   default:
     commit_fin = false;
@@ -1481,6 +1501,7 @@ int ObTransService::build_tx_commit_msg_(const ObTxDesc &tx, ObTxCommitMsg &msg)
   msg.cluster_id_ = tx.cluster_id_;
   msg.app_trace_info_ = tx.trace_info_.get_app_trace_info();
   msg.request_id_ = tx.op_sn_;
+  msg.commit_start_scn_ = tx.commit_start_scn_;
   if (OB_FAIL(msg.parts_.assign(tx.commit_parts_))) {
     TRANS_LOG(WARN, "assign parts fail", K(ret), K(tx));
   }
@@ -1729,6 +1750,7 @@ int ObTransService::handle_trans_commit_request(ObTxCommitMsg &msg,
                             msg.expire_ts_,
                             msg.app_trace_info_,
                             msg.request_id_,
+                            msg.commit_start_scn_,
                             commit_version,
                             msg.sender_addr_);
   result.reset();
@@ -1750,6 +1772,7 @@ int ObTransService::local_ls_commit_tx_(const ObTransID &tx_id,
                                         const int64_t &expire_ts,
                                         const common::ObString &app_trace_info,
                                         const int64_t &request_id,
+                                        const SCN commit_start_scn,
                                         SCN &commit_version,
                                         const common::ObAddr &caller)
 {
@@ -1760,10 +1783,15 @@ int ObTransService::local_ls_commit_tx_(const ObTransID &tx_id,
     TRANS_LOG(WARN, "get coordinator tx context fail", K(ret), K(tx_id), K(coord));
     if (OB_TRANS_CTX_NOT_EXIST == ret) {
       int tx_state = ObTxData::RUNNING;
-      if (OB_FAIL(get_tx_state_from_tx_table_(coord, tx_id, tx_state, commit_version))) {
+      share::SCN recycle_scn;
+      if (OB_FAIL(get_tx_state_from_tx_table_(coord, tx_id, tx_state, commit_version, recycle_scn))) {
         TRANS_LOG(WARN, "get tx state from tx table fail", K(ret), K(coord), K(tx_id));
         if (OB_TRANS_CTX_NOT_EXIST == ret) {
-          ret = OB_TRANS_KILLED; // presume abort
+          if (commit_start_scn > recycle_scn) {
+            ret = OB_TRANS_KILLED; // abort without persistent
+          } else {
+            // recycled, either committed or aborted
+          }
         }
       } else {
         switch (tx_state) {

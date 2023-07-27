@@ -467,6 +467,7 @@ protected:
   share::SCN commit_version_;        // Tx commit version
   int commit_out_;                   // the commit result
   int commit_times_;                 // times of sent commit request
+  share::SCN commit_start_scn_;      // scn of starting to commit
   /* internal abort cause */
   int16_t abort_cause_;              // Tx Aborted cause
   bool can_elr_;                     // can early lock release

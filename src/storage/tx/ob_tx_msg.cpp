@@ -28,35 +28,104 @@ OB_SERIALIZE_MEMBER(ObTxMsg,
                     timestamp_,
                     epoch_,
                     cluster_id_);
-OB_SERIALIZE_MEMBER_INHERIT(ObTxSubPrepareMsg, ObTxMsg, expire_ts_, xid_, parts_, app_trace_info_);
-OB_SERIALIZE_MEMBER_INHERIT(ObTxSubPrepareRespMsg, ObTxMsg, ret_);
-OB_SERIALIZE_MEMBER_INHERIT(ObTxSubCommitMsg, ObTxMsg, xid_);
-OB_SERIALIZE_MEMBER_INHERIT(ObTxSubCommitRespMsg, ObTxMsg, ret_);
-OB_SERIALIZE_MEMBER_INHERIT(ObTxSubRollbackMsg, ObTxMsg, xid_);
-OB_SERIALIZE_MEMBER_INHERIT(ObTxSubRollbackRespMsg, ObTxMsg, ret_);
-OB_SERIALIZE_MEMBER_INHERIT(ObTxCommitMsg, ObTxMsg, expire_ts_, parts_, app_trace_info_);
-OB_SERIALIZE_MEMBER_INHERIT(ObTxCommitRespMsg, ObTxMsg, ret_, commit_version_);
-OB_SERIALIZE_MEMBER_INHERIT(ObTxAbortMsg, ObTxMsg, reason_);
-OB_SERIALIZE_MEMBER_INHERIT(ObTxKeepaliveMsg, ObTxMsg, status_);
-OB_SERIALIZE_MEMBER_INHERIT(ObTxKeepaliveRespMsg, ObTxMsg, status_);
-OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareReqMsg, ObTxMsg, upstream_, app_trace_info_);
-OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareRespMsg, ObTxMsg, prepare_version_, prepare_info_array_);
-OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPreCommitReqMsg, ObTxMsg, commit_version_);
-OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPreCommitRespMsg, ObTxMsg, commit_version_);
-OB_SERIALIZE_MEMBER_INHERIT(Ob2pcCommitReqMsg, ObTxMsg, commit_version_, prepare_info_array_);
-OB_SERIALIZE_MEMBER_INHERIT(Ob2pcCommitRespMsg, ObTxMsg, commit_version_, commit_log_scn_);
-OB_SERIALIZE_MEMBER_INHERIT(Ob2pcAbortReqMsg, ObTxMsg, upstream_);
-OB_SERIALIZE_MEMBER_INHERIT(Ob2pcAbortRespMsg, ObTxMsg);
-OB_SERIALIZE_MEMBER_INHERIT(Ob2pcClearReqMsg, ObTxMsg, max_commit_log_scn_);
-OB_SERIALIZE_MEMBER_INHERIT(Ob2pcClearRespMsg, ObTxMsg);
-OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareRedoReqMsg, ObTxMsg, xid_, upstream_, app_trace_info_);
-OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareRedoRespMsg, ObTxMsg);
-OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareVersionReqMsg, ObTxMsg);
-OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareVersionRespMsg, ObTxMsg, prepare_version_, prepare_info_array_);
-OB_SERIALIZE_MEMBER_INHERIT(ObAskStateMsg, ObTxMsg, snapshot_);
-OB_SERIALIZE_MEMBER_INHERIT(ObAskStateRespMsg, ObTxMsg, state_info_array_);
-OB_SERIALIZE_MEMBER_INHERIT(ObCollectStateMsg, ObTxMsg, snapshot_);
-OB_SERIALIZE_MEMBER_INHERIT(ObCollectStateRespMsg, ObTxMsg, state_info_);
+// NOTICE: DO NOT MODIFY FOLLOING MACRO DEFINES, IT IS RESERVED FOR COMPATIBLE WITH OLD <= 4.1.2
+#define ObTxSubPrepareMsg_V1_MEMBERS expire_ts_, xid_, parts_, app_trace_info_
+#define ObTxSubPrepareRespMsg_V1_MEMBERS ret_
+#define ObTxSubCommitMsg_V1_MEMBERS xid_
+#define ObTxSubCommitRespMsg_V1_MEMBERS ret_
+#define ObTxSubRollbackMsg_V1_MEMBERS xid_
+#define ObTxSubRollbackRespMsg_V1_MEMBERS ret_
+#define ObTxCommitMsg_V1_MEMBERS expire_ts_, parts_, app_trace_info_
+#define ObTxCommitRespMsg_V1_MEMBERS ret_, commit_version_
+#define ObTxAbortMsg_V1_MEMBERS reason_
+#define ObTxKeepaliveMsg_V1_MEMBERS status_
+#define ObTxKeepaliveRespMsg_V1_MEMBERS status_
+#define Ob2pcPrepareReqMsg_V1_MEMBERS upstream_, app_trace_info_
+#define Ob2pcPrepareRespMsg_V1_MEMBERS prepare_version_, prepare_info_array_
+#define Ob2pcPreCommitReqMsg_V1_MEMBERS commit_version_
+#define Ob2pcPreCommitRespMsg_V1_MEMBERS commit_version_
+#define Ob2pcCommitReqMsg_V1_MEMBERS commit_version_, prepare_info_array_
+#define Ob2pcCommitRespMsg_V1_MEMBERS commit_version_, commit_log_scn_
+#define Ob2pcAbortReqMsg_V1_MEMBERS upstream_
+#define Ob2pcAbortRespMsg_V1_MEMBERS
+#define Ob2pcClearReqMsg_V1_MEMBERS max_commit_log_scn_
+#define Ob2pcClearRespMsg_V1_MEMBERS
+#define Ob2pcPrepareRedoReqMsg_V1_MEMBERS xid_, upstream_, app_trace_info_
+#define Ob2pcPrepareRedoRespMsg_V1_MEMBERS
+#define Ob2pcPrepareVersionReqMsg_V1_MEMBERS
+#define Ob2pcPrepareVersionRespMsg_V1_MEMBERS prepare_version_, prepare_info_array_
+#define ObAskStateMsg_V1_MEMBERS snapshot_
+#define ObAskStateRespMsg_V1_MEMBERS state_info_array_
+#define ObCollectStateMsg_V1_MEMBERS snapshot_
+#define ObCollectStateRespMsg_V1_MEMBERS state_info_
+
+#define CONCAT_REF(b) it_.b
+#define APPLY_FUNC_(f, ...) f(__VA_ARGS__)
+#define OB_TX_MSG_SERDE(CLZ, P_CLZ, ...)                                \
+  struct CLZ##_box { CLZ##_box(CLZ &x) : it_(x) {} CLZ &it_; OB_UNIS_VERSION(1); }; \
+  APPLY_FUNC_(OB_SERIALIZE_MEMBER, CLZ##_box, LST_DO(CONCAT_REF, (,), ##__VA_ARGS__)); \
+  int CLZ::serialize(SERIAL_PARAMS) const                               \
+  {                                                                     \
+    int ret = P_CLZ::serialize(buf, buf_len, pos);                      \
+    if (OB_SUCC(ret) && cluster_version_ <= CLUSTER_VERSION_4_1_0_1) {  \
+      LST_DO_CODE(OB_UNIS_ENCODE, CLZ ## _V1_MEMBERS);                  \
+    } else if (OB_SUCC(ret)) {                                          \
+      CLZ##_box x(const_cast<CLZ&>(*this));                             \
+      ret = x.serialize(buf, buf_len, pos);                             \
+    }                                                                   \
+    return ret;                                                         \
+  }                                                                     \
+  int CLZ::deserialize(DESERIAL_PARAMS) {                               \
+    int ret = OB_SUCCESS;                                               \
+    ret = P_CLZ::deserialize(buf, data_len, pos);                       \
+    if (OB_SUCC(ret) && cluster_version_ <= CLUSTER_VERSION_4_1_0_1) {  \
+      LST_DO_CODE(OB_UNIS_DECODE, CLZ ## _V1_MEMBERS);                  \
+    } else if (OB_SUCC(ret)) {                                          \
+      CLZ##_box x(*this);                                               \
+      ret = x.deserialize(buf, data_len, pos);                          \
+    }                                                                   \
+    return ret;                                                         \
+  }                                                                     \
+  int64_t CLZ::get_serialize_size() const {                             \
+    int64_t len = P_CLZ::get_serialize_size();                          \
+    if (cluster_version_ <= CLUSTER_VERSION_4_1_0_1) {                  \
+      LST_DO_CODE(OB_UNIS_ADD_LEN, CLZ ## _V1_MEMBERS);                 \
+    } else {                                                            \
+      CLZ##_box x(const_cast<CLZ&>(*this));                             \
+      len += x.get_serialize_size();                                    \
+    }                                                                   \
+    return len;                                                         \
+  }
+
+OB_TX_MSG_SERDE(ObTxSubPrepareMsg, ObTxMsg, expire_ts_, xid_, parts_, app_trace_info_);
+OB_TX_MSG_SERDE(ObTxSubPrepareRespMsg, ObTxMsg, ret_);
+OB_TX_MSG_SERDE(ObTxSubCommitMsg, ObTxMsg, xid_);
+OB_TX_MSG_SERDE(ObTxSubCommitRespMsg, ObTxMsg, ret_);
+OB_TX_MSG_SERDE(ObTxSubRollbackMsg, ObTxMsg, xid_);
+OB_TX_MSG_SERDE(ObTxSubRollbackRespMsg, ObTxMsg, ret_);
+OB_TX_MSG_SERDE(ObTxCommitMsg, ObTxMsg, expire_ts_, parts_, app_trace_info_, commit_start_scn_);
+OB_TX_MSG_SERDE(ObTxCommitRespMsg, ObTxMsg, ret_, commit_version_);
+OB_TX_MSG_SERDE(ObTxAbortMsg, ObTxMsg, reason_);
+OB_TX_MSG_SERDE(ObTxKeepaliveMsg, ObTxMsg, status_);
+OB_TX_MSG_SERDE(ObTxKeepaliveRespMsg, ObTxMsg, status_);
+OB_TX_MSG_SERDE(Ob2pcPrepareReqMsg, ObTxMsg, upstream_, app_trace_info_);
+OB_TX_MSG_SERDE(Ob2pcPrepareRespMsg, ObTxMsg, prepare_version_, prepare_info_array_);
+OB_TX_MSG_SERDE(Ob2pcPreCommitReqMsg, ObTxMsg, commit_version_);
+OB_TX_MSG_SERDE(Ob2pcPreCommitRespMsg, ObTxMsg, commit_version_);
+OB_TX_MSG_SERDE(Ob2pcCommitReqMsg, ObTxMsg, commit_version_, prepare_info_array_);
+OB_TX_MSG_SERDE(Ob2pcCommitRespMsg, ObTxMsg, commit_version_, commit_log_scn_);
+OB_TX_MSG_SERDE(Ob2pcAbortReqMsg, ObTxMsg, upstream_);
+OB_TX_MSG_SERDE(Ob2pcAbortRespMsg, ObTxMsg);
+OB_TX_MSG_SERDE(Ob2pcClearReqMsg, ObTxMsg, max_commit_log_scn_);
+OB_TX_MSG_SERDE(Ob2pcClearRespMsg, ObTxMsg);
+OB_TX_MSG_SERDE(Ob2pcPrepareRedoReqMsg, ObTxMsg, xid_, upstream_, app_trace_info_);
+OB_TX_MSG_SERDE(Ob2pcPrepareRedoRespMsg, ObTxMsg);
+OB_TX_MSG_SERDE(Ob2pcPrepareVersionReqMsg, ObTxMsg);
+OB_TX_MSG_SERDE(Ob2pcPrepareVersionRespMsg, ObTxMsg, prepare_version_, prepare_info_array_);
+OB_TX_MSG_SERDE(ObAskStateMsg, ObTxMsg, snapshot_);
+OB_TX_MSG_SERDE(ObAskStateRespMsg, ObTxMsg, state_info_array_);
+OB_TX_MSG_SERDE(ObCollectStateMsg, ObTxMsg, snapshot_);
+OB_TX_MSG_SERDE(ObCollectStateRespMsg, ObTxMsg, state_info_);
 
 OB_DEF_SERIALIZE_SIZE(ObTxRollbackSPMsg)
 {

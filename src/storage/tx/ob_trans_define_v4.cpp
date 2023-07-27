@@ -291,6 +291,7 @@ ObTxDesc::ObTxDesc()
     commit_version_(),
     commit_out_(-1),
     commit_times_(0),
+    commit_start_scn_(),
     abort_cause_(0),
     can_elr_(false),
     lock_(common::ObLatchIds::TX_DESC_LOCK),
@@ -337,6 +338,7 @@ int ObTxDesc::switch_to_idle()
   commit_version_.reset();
   commit_out_ = 0;
   commit_times_ = 0;
+  commit_start_scn_.set_min();
   abort_cause_ = 0;
   can_elr_ = false;
   commit_cb_ = NULL;
@@ -429,6 +431,7 @@ void ObTxDesc::reset()
   commit_version_.reset();
   commit_out_ = -1;
   commit_times_ = 0;
+  commit_start_scn_.set_min();
   abort_cause_ = 0;
   can_elr_ = false;
 
