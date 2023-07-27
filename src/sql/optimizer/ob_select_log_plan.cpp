@@ -1509,8 +1509,9 @@ int ObSelectLogPlan::create_hash_distinct_plan(ObLogicalOperator *&top,
                                               AggregateAlgo::HASH_AGGREGATE,
                                               distinct_exprs,
                                               distinct_helper.group_ndv_,
-                                              false,
-                                              true))) {
+                                              false, /* is_partition_wise */
+                                              true, /* is_push_down */
+                                              false /* is_partition_gi */))) {
     LOG_WARN("failed to allocate distinct as top", K(ret));
   } else if (OB_FAIL(get_grouping_style_exchange_info(distinct_exprs,
                                                       top->get_output_equal_sets(),
@@ -1602,8 +1603,10 @@ int ObSelectLogPlan::create_merge_distinct_plan(ObLogicalOperator *&top,
       OPT_TRACE("generate pushdown distinct plan");
       bool should_pullup_gi = false;
       bool top_is_local_order = false;
+      bool is_partition_gi = false;
       if (OB_FAIL(check_can_pullup_gi(*top, false, need_sort, should_pullup_gi))) {
         LOG_WARN("failed to check can pullup gi", K(ret));
+      } else if (OB_FALSE_IT(is_partition_gi = top->is_partition_wise())) {
       } else if (OB_FALSE_IT(top_is_local_order = top->get_is_local_order() && !should_pullup_gi)) {
       } else if ((need_sort || top_is_local_order) &&
                  OB_FAIL(allocate_sort_as_top(top,
@@ -1616,7 +1619,8 @@ int ObSelectLogPlan::create_merge_distinct_plan(ObLogicalOperator *&top,
                                                   distinct_exprs,
                                                   distinct_helper.group_ndv_,
                                                   should_pullup_gi,
-                                                  true))) {
+                                                  true,
+                                                  is_partition_gi))) {
         LOG_WARN("failed to allocate distinct as top", K(ret));
       } else {
         prefix_pos = 0;
@@ -1653,7 +1657,8 @@ int ObSelectLogPlan::allocate_distinct_as_top(ObLogicalOperator *&top,
               const ObIArray<ObRawExpr*> &distinct_exprs,
               const double total_ndv,
               const bool is_partition_wise,
-              const bool is_pushed_down)
+              const bool is_pushed_down,
+              const bool is_partition_gi)
 {
 int ret = OB_SUCCESS;
 ObLogDistinct *distinct_op = NULL;
@@ -1668,6 +1673,7 @@ LOG_ERROR("failed to allocate distinct operator", K(ret));
 distinct_op->set_child(ObLogicalOperator::first_child, top);
 distinct_op->set_algo_type(algo);
 distinct_op->set_push_down(is_pushed_down);
+distinct_op->set_is_partition_gi(is_partition_gi);
 distinct_op->set_total_ndv(total_ndv);
 distinct_op->set_is_partition_wise(is_partition_wise);
 distinct_op->set_force_push_down(FORCE_GPD & get_optimizer_context().get_aggregation_optimization_settings());

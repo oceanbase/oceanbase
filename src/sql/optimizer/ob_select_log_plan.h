@@ -204,7 +204,8 @@ private:
                                const ObIArray<ObRawExpr*> &distinct_exprs,
                                const double total_ndv,
                                const bool is_partition_wise = false,
-                               const bool is_pushed_down = false);
+                               const bool is_pushed_down = false,
+                               const bool is_partition_gi = false);
   /**
    *  @brief  GENERATE the PLAN tree FOR "SET" operator (UNION/INTERSECT/EXCEPT)
    *  Warning:
