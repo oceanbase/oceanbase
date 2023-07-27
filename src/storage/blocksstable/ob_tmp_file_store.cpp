@@ -1003,10 +1003,16 @@ int ObTmpTenantFileStore::alloc(const int64_t dir_id, const uint64_t tenant_id, 
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(alloc_size), K(block_size));
   } else {
+    const int64_t timeout_ts = THIS_WORKER.get_timeout_ts();
     ret = OB_STATE_NOT_MATCH;
     while (OB_STATE_NOT_MATCH == ret || OB_SIZE_OVERFLOW == ret) {
-      if (OB_FAIL(tmp_mem_block_manager_.cleanup())) {
-        STORAGE_LOG(WARN, "fail to try wash tmp macro block", K(ret), K(dir_id), K(tenant_id));
+      if (OB_UNLIKELY(timeout_ts <= ObTimeUtility::current_time())) {
+        ret = OB_TIMEOUT;
+        STORAGE_LOG(WARN, "it's timeout", K(ret), K(timeout_ts), K(ObTimeUtility::current_time()));
+      } else if (OB_FAIL(tmp_mem_block_manager_.cleanup())) {
+        if (OB_STATE_NOT_MATCH != ret) {
+          STORAGE_LOG(WARN, "fail to try wash tmp macro block", K(ret), K(dir_id), K(tenant_id));
+        }
       }
       SpinWLockGuard guard(lock_);
       if (OB_SUCC(ret)) {
