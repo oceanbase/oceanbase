@@ -368,13 +368,11 @@ int PalfHandleImpl::submit_log(
     SCN &scn)
 {
   int ret = OB_SUCCESS;
-  const int64_t curr_time_us = ObClockGenerator::getClock();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl is not inited");
   } else if (NULL == buf || buf_len <= 0 || buf_len > MAX_LOG_BODY_SIZE
-             || !ref_scn.is_valid()
-             || ref_scn.convert_to_ts() > curr_time_us + MAX_ALLOWED_SKEW_FOR_REF_US) {
+             || !ref_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K_(palf_id), KP(buf), K(buf_len), K(ref_scn));
   } else {
@@ -791,12 +789,11 @@ int PalfHandleImpl::change_access_mode(const int64_t proposal_id,
                                        const SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
-  const int64_t curr_time_us = common::ObTimeUtility::current_time();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (INVALID_PROPOSAL_ID == proposal_id ||
              INVALID_PROPOSAL_ID == mode_version ||
-             !ref_scn.is_valid() || ref_scn.convert_to_ts() > curr_time_us + MAX_ALLOWED_SKEW_FOR_REF_US ||
+             !ref_scn.is_valid() ||
              false == is_valid_access_mode(access_mode)) {
     // ref_scn is reasonable only when access_mode is APPEND
     // mode_version is the proposal_id of PALF when access_mode was applied
