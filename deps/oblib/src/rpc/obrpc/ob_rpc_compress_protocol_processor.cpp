@@ -17,6 +17,7 @@
 #include "lib/compress/ob_compressor_pool.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obrpc/ob_rpc_compress_struct.h"
+#include "lib/utility/utility.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

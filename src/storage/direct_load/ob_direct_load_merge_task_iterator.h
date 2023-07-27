@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "storage/blocksstable/ob_sstable.h"
 #include "storage/direct_load/ob_direct_load_merge_ctx.h"
 
 namespace oceanbase

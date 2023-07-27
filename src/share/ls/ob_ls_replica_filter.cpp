@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-
+#include "lib/allocator/page_arena.h"
 #include "share/ls/ob_ls_replica_filter.h"
 #include "share/ls/ob_ls_info.h" // ObLSReplica
 #include "share/ob_errno.h"

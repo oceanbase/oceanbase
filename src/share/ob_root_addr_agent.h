@@ -15,6 +15,7 @@
 
 #include "lib/net/ob_addr.h"
 #include "lib/utility/utility.h"
+#include "lib/container/ob_array_serialization.h"
 #include "lib/container/ob_iarray.h"
 #include "share/ob_cluster_role.h"                    // ObClusterRole
 #include "common/ob_role.h" //ObRole

@@ -13,6 +13,7 @@
 #include "rpc/obmysql/ob_easy_sql_request_operator.h"
 #include "rpc/ob_request.h"
 #include "rpc/obrpc/ob_rpc_opts.h"
+#include "lib/utility/utility.h"
 
 namespace oceanbase
 {

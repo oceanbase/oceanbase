@@ -41,6 +41,7 @@
 #include "pl/ob_pl_stmt.h"
 #include "pl/ob_pl_resolver.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
+#include "sql/resolver/dml/ob_insert_all_stmt.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
