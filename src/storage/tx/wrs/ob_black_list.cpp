@@ -295,9 +295,8 @@ int ObBLService::get_info_from_result_(sqlclient::ObMySQLResult &result, ObBLKey
   int64_t ls_role = -1;
   int64_t weak_read_scn = 0;
   int64_t migrate_status_int = -1;
-  int64_t tx_blocked = 0;
+  int64_t tx_blocked = -1;
   common::number::ObNumber weak_read_number;
-  common::number::ObNumber tx_blocked_number;
 
   (void)GET_COL_IGNORE_NULL(result.get_varchar, "svr_ip", ip);
   (void)GET_COL_IGNORE_NULL(result.get_int, "svr_port", port);
@@ -306,7 +305,7 @@ int ObBLService::get_info_from_result_(sqlclient::ObMySQLResult &result, ObBLKey
   (void)GET_COL_IGNORE_NULL(result.get_int, "role", ls_role);
   (void)GET_COL_IGNORE_NULL(result.get_number, "weak_read_scn", weak_read_number);
   (void)GET_COL_IGNORE_NULL(result.get_int, "migrate_status", migrate_status_int);
-  (void)GET_COL_IGNORE_NULL(result.get_number, "tx_blocked", tx_blocked_number);
+  (void)GET_COL_IGNORE_NULL(result.get_int, "tx_blocked", tx_blocked);
 
   ObLSID ls_id(id);
   common::ObAddr server;
@@ -317,15 +316,20 @@ int ObBLService::get_info_from_result_(sqlclient::ObMySQLResult &result, ObBLKey
     TRANS_LOG(WARN, "invalid server address", K(ip), K(port));
   } else if (OB_FAIL(weak_read_number.cast_to_int64(weak_read_scn))) {
     TRANS_LOG(WARN, "failed to cast int", K(ret), K(weak_read_number));
-  } else if (OB_FAIL(tx_blocked_number.cast_to_int64(tx_blocked))) {
-    TRANS_LOG(WARN, "failed to cast int", K(ret), K(tx_blocked_number));
   } else if (OB_FAIL(bl_key.init(server, tenant_id, ls_id))) {
     TRANS_LOG(WARN, "bl_key init fail", K(server), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(ls_info.init(ls_role, weak_read_scn, migrate_status, tx_blocked))) {
+  } else if (OB_FAIL(ls_info.init(ls_role, weak_read_scn, migrate_status, (1 == tx_blocked) ? true : false))) {
     TRANS_LOG(WARN, "ls_info init fail", K(ls_role), K(weak_read_scn), K(migrate_status), K(tx_blocked));
   }
-  if (tx_blocked) {
-    TRANS_LOG(INFO, "current ls is blocked, need to put blacklist", K(bl_key), K(ls_info));
+  if (OB_SUCC(ret)) {
+    if (1 == tx_blocked) {
+      TRANS_LOG(INFO, "current ls is blocked, need to put blacklist", K(bl_key), K(ls_info));
+    } else if (0 != tx_blocked) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "unexpected tx blocked", K(ret), K(tx_blocked), K(bl_key), K(ls_info));
+    } else {
+      // do nothing
+    }
   }
 
   return ret;

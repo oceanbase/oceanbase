@@ -103,8 +103,8 @@ int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
     STORAGE_LOG(DEBUG, "fail to generate weak read timestamp", KR(ret), K(max_stale_time));
     need_skip = true;
     ret = OB_SUCCESS;
-  } else if (OB_TS_MGR.get_gts(MTL_ID(), NULL, gts_scn)) {
-    TRANS_LOG(WARN, "get gts scn error", K(max_stale_time), K(*this));
+  } else if (OB_FAIL(OB_TS_MGR.get_gts(MTL_ID(), NULL, gts_scn))) {
+    TRANS_LOG(WARN, "get gts scn error", K(ret), K(max_stale_time), K(*this));
   } else if (OB_FAIL(ls.get_migration_status(status))
                   || ObMigrationStatus::OB_MIGRATION_STATUS_NONE == status ) {
     // check the weak read timestamp of the migrated ls

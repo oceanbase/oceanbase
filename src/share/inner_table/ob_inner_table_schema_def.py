@@ -10835,7 +10835,7 @@ def_table_schema(
   ('rebuild_seq', 'int'),
   ('tablet_change_checkpoint_scn', 'uint'),
   ('transfer_scn', 'uint'),
-  ('tx_blocked', 'uint'),
+  ('tx_blocked', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
