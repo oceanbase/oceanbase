@@ -5278,10 +5278,18 @@ int ObAlterTableResolver::resolve_drop_column(const ParseNode &node, ObReducedVi
         ObColumnSchemaHashWrapper col_key(column_name);
         if (OB_FAIL(reduced_visible_col_set.set_refactored(col_key))) {
           if (OB_HASH_EXIST == ret) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop the same column twice");
+            if (is_mysql_mode()) {
+              //In mysql mode, OB will check whether a column is dropped twice on rootserver
+              //So don't return error here
+              ret = OB_SUCCESS;
+            } else {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop the same column twice");
+            }
           }
-          SQL_RESV_LOG(WARN, "set col_key to hash set failed", K(ret), K(column_name));
+          if (OB_FAIL(ret)) {
+            SQL_RESV_LOG(WARN, "set col_key to hash set failed", K(ret), K(column_name));
+          }
         }
       }
     }
