@@ -56,13 +56,22 @@ int ObMvccValueIterator::init(ObMvccAccessCtx &ctx,
     }
   }
 
-  TRANS_LOG(TRACE, "value_iter.init", K(ret),
-            KPC(value),
-            KPC_(version_iter),
-            K(query_flag.is_read_latest()),
-            KPC(key),
-            K(ctx),
-            K(lbt()));
+  if (ctx_->get_tx_table_guards().during_transfer()) {
+    TRANS_LOG(INFO, "value_iter.init", K(ret),
+              KPC(value),
+              KPC_(version_iter),
+              K(query_flag),
+              KPC(key),
+              K(ctx));
+  } else {
+    TRANS_LOG(TRACE, "value_iter.init", K(ret),
+              KPC(value),
+              KPC_(version_iter),
+              K(query_flag.is_read_latest()),
+              KPC(key),
+              K(ctx),
+              K(lbt()));
+  }
   return ret;
 }
 

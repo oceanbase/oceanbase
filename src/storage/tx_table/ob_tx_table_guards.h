@@ -140,6 +140,7 @@ public:
       const bool need_row_latch);
   bool check_ls_offline();
   bool is_need_read_src(const share::SCN scn) const;
+  bool during_transfer() const;
   TO_STRING_KV(K_(tx_table_guard), K_(src_tx_table_guard), K_(transfer_start_scn));
 public:
   storage::ObTxTableGuard tx_table_guard_;

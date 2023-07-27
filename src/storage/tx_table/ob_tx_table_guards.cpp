@@ -320,6 +320,11 @@ bool ObTxTableGuards::is_need_read_src(const share::SCN scn) const
   return is_need;
 }
 
+bool ObTxTableGuards::during_transfer() const
+{
+  return src_tx_table_guard_.is_valid()
+    && transfer_start_scn_.is_valid();
+}
 
 } // end namespace oceanbase
 }
