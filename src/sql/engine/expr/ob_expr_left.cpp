@@ -75,7 +75,7 @@ int ObExprLeft::calc_result_type2(ObExprResType &type,
   } else if (OB_ISNULL(exec_ctx = session->get_cur_exec_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("exec context is NULL", K(ret));
-  } else if (exec_ctx->is_ps_prepare_stage()) {
+  } else if (session->is_varparams_sql_prepare()) {
     // the ps prepare stage does not do type deduction, and directly gives a default type.
     type.set_char();
     type.set_default_collation_type();

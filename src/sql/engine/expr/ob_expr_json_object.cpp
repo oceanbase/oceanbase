@@ -153,8 +153,8 @@ int ObExprJsonObject::calc_result_typeN(ObExprResType& type,
     ObExecContext* ctx = nullptr;
 
     bool is_deduce_input = true;
-    if (OB_NOT_NULL(session) && OB_NOT_NULL(ctx = session->get_cur_exec_ctx())) {
-      is_deduce_input = (!ctx->is_ps_prepare_stage());
+    if (OB_NOT_NULL(session)) {
+      is_deduce_input = (!session->is_varparams_sql_prepare());
     }
 
     for (int64_t i = 0; OB_SUCC(ret) && is_deduce_input && i < param_num; i += 2) {

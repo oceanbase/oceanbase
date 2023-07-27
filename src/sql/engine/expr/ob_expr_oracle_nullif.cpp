@@ -41,7 +41,7 @@ int ObExprOracleNullif::calc_result_type2(ObExprResType &type,
     //Oracle 不支持lob类型的 nullif比较
     exec_ctx = session->get_cur_exec_ctx();
     if (type1.is_null() || type1.is_lob()) {
-      if (OB_NOT_NULL(exec_ctx) && exec_ctx->is_ps_prepare_stage()) {
+      if (session->is_varparams_sql_prepare()) {
         type.set_null();
       } else {
         if (is_called_in_sql()) {
