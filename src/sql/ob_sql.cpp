@@ -1063,7 +1063,7 @@ int ObSql::do_real_prepare(const ObString &sql,
               && !(ObStmt::is_dml_write_stmt(stmt_type) && // returning into from oci not supported
                    static_cast<ObDelUpdStmt*>(basic_stmt)->get_returning_into_exprs().count() > 0)
               && enable_udr
-              && OB_FAIL(ObUDRUtils::match_udr_item(sql, session, allocator, item_guard))) {
+              && OB_FAIL(ObUDRUtils::match_udr_item(sql, session, ectx, allocator, item_guard))) {
       if (!ObSQLUtils::check_need_disconnect_parser_err(ret)) {
         ectx.set_need_disconnect(false);
       }
@@ -1083,7 +1083,7 @@ int ObSql::do_real_prepare(const ObString &sql,
                                                                   param_store,
                                                                   session.get_local_collation_connection()))) {
         LOG_WARN("parameterize syntax tree failed", K(ret));
-        if (OB_INVALID_ARGUMENT == ret) {
+        if (OB_INVALID_ARGUMENT == ret || OB_NOT_SUPPORTED == ret) {
           pc_ctx.ps_need_parameterized_ = false;
           ret = OB_SUCCESS;
         }

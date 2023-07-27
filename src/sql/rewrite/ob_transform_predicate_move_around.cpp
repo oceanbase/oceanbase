@@ -3215,12 +3215,20 @@ int ObTransformPredicateMoveAround::create_equal_exprs_for_insert(ObDelUpdStmt *
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("equal expr is null", K(ret));
       }
-
+      ObRawExpr *sharding_expr = NULL;
+      ObRawExprCopier copier(*ctx_->expr_factory_);
+      ObArray<ObRawExpr *> column_exprs;
       if (OB_FAIL(ret) || NULL == ret_expr) {
         //do nothing
       } else if (OB_FAIL(ret_expr->pull_relation_id())) {
         LOG_WARN("failed to pull relation id and levels", K(ret));
-      } else if (OB_FAIL(del_upd_stmt->get_sharding_conditions().push_back(ret_expr))) {
+      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(ret_expr, column_exprs))) {
+        LOG_WARN("extract column exprs failed", K(ret));
+      } else if (OB_FAIL(copier.add_skipped_expr(column_exprs))) {
+        LOG_WARN("add skipped expr failed", K(ret));
+      } else if (OB_FAIL(copier.copy(ret_expr, sharding_expr))) {
+        LOG_WARN("failed to copy expr", K(ret));
+      } else if (OB_FAIL(del_upd_stmt->get_sharding_conditions().push_back(sharding_expr))) {
         LOG_WARN("failed to add condition expr", K(ret));
       } else if (is_not_null && OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, constraints))) {
         LOG_WARN("failed to add param not null constraint", K(ret));

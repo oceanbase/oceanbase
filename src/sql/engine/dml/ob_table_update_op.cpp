@@ -255,6 +255,9 @@ OB_INLINE int ObTableUpdateOp::close_table_for_each()
     if (!upd_rtdefs_.at(i).empty()) {
       const ObUpdCtDef &primary_upd_ctdef = *MY_SPEC.upd_ctdefs_.at(i).at(0);
       ObUpdRtDef &primary_upd_rtdef = upd_rtdefs_.at(i).at(0);
+      if (OB_NOT_NULL(primary_upd_rtdef.dupd_rtdef_.table_loc_)) {
+        primary_upd_rtdef.dupd_rtdef_.table_loc_->is_writing_ = false;
+      }
       if (OB_FAIL(ObDMLService::process_after_stmt_trigger(primary_upd_ctdef,
                                                            primary_upd_rtdef,
                                                            dml_rtctx_,

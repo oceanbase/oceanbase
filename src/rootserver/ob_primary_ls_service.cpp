@@ -75,7 +75,7 @@ void ObPrimaryLSService::do_work()
     while (!has_set_stop()) {
       tenant_schema.reset();
       ObCurTraceId::init(GCONF.self_addr_);
-
+      DEBUG_SYNC(STOP_PRIMARY_LS_THREAD);
       if (OB_FAIL(get_tenant_schema(tenant_id_, tenant_schema))) {
         LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id_));
       } else {

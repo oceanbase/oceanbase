@@ -738,18 +738,19 @@ void ObBackupMacroBlockIDMapping::reuse()
   map_.reuse();
 }
 
-int ObBackupMacroBlockIDMapping::prepare_tablet_sstable(
+int ObBackupMacroBlockIDMapping::prepare_tablet_sstable(const uint64_t tenant_id,
     const storage::ObITable::TableKey &table_key, const common::ObIArray<blocksstable::ObLogicMacroBlockId> &list)
 {
   int ret = OB_SUCCESS;
   static const int64_t bucket_count = 1000;
+  lib::ObMemAttr mem_attr(tenant_id, ObModIds::BACKUP);
   if (!table_key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(table_key));
   } else if (map_.created()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("map is created before", K(ret));
-  } else if (OB_FAIL(map_.create(bucket_count, ObModIds::BACKUP))) {
+  } else if (OB_FAIL(map_.create(bucket_count, mem_attr))) {
     LOG_WARN("failed to create map", K(ret));
   } else {
     table_key_ = table_key;

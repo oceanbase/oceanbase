@@ -27,6 +27,8 @@ public:
   int init(const uint64_t tenant_id, const ObMigrationOpType::TYPE &type, storage::ObStorageRpc *storage_rpc);
   int choose_ob_src(const share::ObLSID &ls_id, const share::SCN &local_clog_checkpoint_scn,
       ObStorageHASrcInfo &src_info);
+  int get_ls_member_list(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      common::ObIArray<common::ObAddr> &addr_list);
 
 private:
   int get_ls_leader_(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &addr);

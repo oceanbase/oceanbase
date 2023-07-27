@@ -336,7 +336,7 @@ int ObLogExternalStorageIOTaskHandleAdapter::pread(const ObString &uri,
                                                    const int64_t read_buf_size,
                                                    int64_t &real_read_size)
 {
-  ObTimeGuard time_guard("oss pread", 100 * 1000);
+  ObTimeGuard time_guard("storage pread", 100 * 1000);
   int ret = OB_SUCCESS;
   real_read_size = 0;
   ObIODevice *io_device = NULL;

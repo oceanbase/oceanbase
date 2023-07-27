@@ -38,6 +38,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "pl/sys_package/ob_dbms_sql.h"
 #include "pl/ob_pl.h"
+#include "src/sql/dblink/ob_tm_service.h"
 
 namespace oceanbase
 {
@@ -225,9 +226,46 @@ int ObSPIResultSet::alloc_saved_value(sql::ObSQLSessionInfo::StmtSavedValue *&se
   return ret;
 }
 
-int ObSPIResultSet::check_nested_stmt_legal(ObExecContext &exec_ctx, stmt::StmtType stmt_type, bool for_update)
+int ObSPIResultSet::is_set_global_var(ObSQLSessionInfo &session, const ObString &sql, bool &has_global_variable)
 {
   int ret = OB_SUCCESS;
+  has_global_variable = false;
+  ObArenaAllocator allocator;
+  ParseResult parse_result;
+  ParseMode parse_mode = STD_MODE;
+  ObParser parser(allocator, session.get_sql_mode(), session.get_local_collation_connection());
+  if (sql.empty()) {
+  } else if (OB_FAIL(parser.parse(sql,
+                            parse_result,
+                            parse_mode,
+                            false/*is_batched_multi_stmt_split_on*/,
+                            false/*no_throw_parser_error*/,
+                            true))) {
+    LOG_WARN("generate syntax tree failed", K(sql), K(ret));
+  } else if (OB_NOT_NULL(parse_result.result_tree_) &&
+              parse_result.result_tree_->num_child_ > 0 &&
+              OB_NOT_NULL(parse_result.result_tree_->children_[0])) {
+    ParseNode *set_node = NULL;
+    ParseNode *parse_tree = parse_result.result_tree_->children_[0];
+    for (int64_t i = 0; OB_SUCC(ret) && !has_global_variable && i < parse_tree->num_child_; ++i) {
+      if (OB_ISNULL(set_node = parse_tree->children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("set node is NULL", K(ret));
+      } else if (OB_UNLIKELY(T_VAR_VAL != set_node->type_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("set_node->type_ must be T_VAR_VAL", K(ret), K(set_node->type_));
+      } else if (1 == set_node->value_) { // global var
+        has_global_variable = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSPIResultSet::check_nested_stmt_legal(ObExecContext &exec_ctx, const ObString &sql, stmt::StmtType stmt_type, bool for_update)
+{
+  int ret = OB_SUCCESS;
+  bool has_global_variable = false;
   stmt::StmtType parent_stmt_type = stmt::T_NONE;
   ObSqlCtx *sql_ctx = exec_ctx.get_sql_ctx();
   ObPLContext *pl_ctx = exec_ctx.get_pl_stack_ctx();
@@ -237,6 +275,9 @@ int ObSPIResultSet::check_nested_stmt_legal(ObExecContext &exec_ctx, stmt::StmtT
   } else {
     parent_stmt_type = sql_ctx->stmt_type_;
     LOG_DEBUG("check nested stmt legal", K(parent_stmt_type), K(pl_ctx->in_autonomous()), K(stmt_type));
+  }
+  if (stmt::T_VARIABLE_SET == stmt_type && OB_NOT_NULL(exec_ctx.get_my_session())) {
+    OZ (is_set_global_var(*exec_ctx.get_my_session(), sql, has_global_variable));
   }
   if (OB_SUCC(ret) && !pl_ctx->in_autonomous() && ObStmt::is_dml_stmt(parent_stmt_type)) {
     //only when parent stmt is dml or select, it can trigger a nested sql
@@ -262,7 +303,7 @@ int ObSPIResultSet::check_nested_stmt_legal(ObExecContext &exec_ctx, stmt::StmtT
       LOG_WARN("ORA-14551: cannot perform a DML operation inside a query",
                  K(ret), K(stmt_type), K(exec_ctx.get_sql_ctx()),
                  K(&exec_ctx), K(exec_ctx.get_my_session()->get_cur_exec_ctx()));
-    } else if (ObStmt::is_ddl_stmt(stmt_type, false) || ObStmt::is_tcl_stmt(stmt_type)) {
+    } else if (ObStmt::is_ddl_stmt(stmt_type, has_global_variable) || ObStmt::is_tcl_stmt(stmt_type)) {
       ret = lib::is_oracle_mode() ? OB_NOT_SUPPORTED : OB_ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG;
       LOG_WARN("ORA-14552: Cannot Perform a DDL Commit or Rollback Inside a Query or DML tips",
                K(ret), K(stmt_type), K(lbt()));
@@ -358,7 +399,7 @@ void ObSPIResultSet::end_cursor_stmt(ObPLExecCtx *pl_ctx, int &result)
   return;
 }
 
-int ObSPIResultSet::start_nested_stmt_if_need(ObPLExecCtx *pl_ctx, stmt::StmtType stmt_type, bool for_update)
+int ObSPIResultSet::start_nested_stmt_if_need(ObPLExecCtx *pl_ctx, const ObString &sql, stmt::StmtType stmt_type, bool for_update)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = NULL;
@@ -371,7 +412,7 @@ int ObSPIResultSet::start_nested_stmt_if_need(ObPLExecCtx *pl_ctx, stmt::StmtTyp
   } else if (OB_NOT_NULL(pl_ctx->exec_ctx_->get_pl_stack_ctx())
              && pl_ctx->exec_ctx_->get_pl_stack_ctx()->in_nested_sql_ctrl()) {
     // 嵌套的顶层语句一定是一个DML语句, 并且开启了事务, 此时走fast_select流程
-    OZ (check_nested_stmt_legal(*pl_ctx->exec_ctx_, stmt_type, for_update));
+    OZ (check_nested_stmt_legal(*pl_ctx->exec_ctx_, sql, stmt_type, for_update));
     OZ (begin_nested_session(*session));
     OX (session->set_query_start_time(ObTimeUtility::current_time()));
     OX (need_end_nested_stmt_ = EST_END_NESTED_SESSION);
@@ -1313,7 +1354,8 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("session ptr is null", K(ret));
     } else {
-      OZ (ObSPIResultSet::check_nested_stmt_legal(*(ctx->exec_ctx_), stmt::T_END_TRANS));
+      ObString sqlstr(sql);
+      OZ (ObSPIResultSet::check_nested_stmt_legal(*(ctx->exec_ctx_), sqlstr, stmt::T_END_TRANS));
       int64_t saved_query_start_time = my_session->get_query_start_time();
       my_session->set_query_start_time(ObTimeUtility::current_time());
       if (OB_SUCC(ret)) {
@@ -1432,8 +1474,9 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
   HEAP_VAR(ObSPIResultSet, spi_result) {
     stmt::StmtType stmt_type = stmt::T_NONE;
     bool is_diagnostics_stmt = false;
+    ObString sqlstr(sql);
     OZ (spi_result.init(*session));
-    OZ (spi_result.start_nested_stmt_if_need(ctx, static_cast<stmt::StmtType>(type), for_update));
+    OZ (spi_result.start_nested_stmt_if_need(ctx, sqlstr, static_cast<stmt::StmtType>(type), for_update));
 
     if (OB_SUCC(ret)) {
       int64_t row_count = 0;
@@ -1655,7 +1698,7 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
 
   HEAP_VAR(ObSPIResultSet, spi_result) {
     OZ (spi_result.init(*session));
-    OZ (spi_result.start_nested_stmt_if_need(ctx, static_cast<stmt::StmtType>(stmt_type), cursor.is_for_update()));
+    OZ (spi_result.start_nested_stmt_if_need(ctx, sql_stmt, static_cast<stmt::StmtType>(stmt_type), cursor.is_for_update()));
     if (OB_SUCC(ret)) {
       int64_t row_count = 0;
       ObQueryRetryCtrl retry_ctrl;
@@ -2600,7 +2643,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
         }
       }
       OX (session->set_stmt_type(saved_stmt_type));
-      OZ (spi_result.start_nested_stmt_if_need(ctx, stmt_type, for_update));
+      OZ (spi_result.start_nested_stmt_if_need(ctx, sql_str.string(), stmt_type, for_update));
 
       // Step2: execute dynamic SQL now!
       if (OB_FAIL(ret)) {
@@ -3472,8 +3515,9 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
         cursor->set_last_execute_time(ObTimeUtility::current_time());
       } else { //MySQL Cursor/Updated Cursor/Server Cursor(REF_CURSOR, PACKAGE CURSOR)
         HEAP_VAR(ObSPIResultSet, spi_result) {
+          ObString sqlstr(sql);
           OZ (spi_result.init(*session_info));
-          OZ (spi_result.start_nested_stmt_if_need(ctx, static_cast<stmt::StmtType>(type), for_update));
+          OZ (spi_result.start_nested_stmt_if_need(ctx, sqlstr, static_cast<stmt::StmtType>(type), for_update));
           int64_t old_query_start_time = session_info->get_query_start_time();
           // query_start_time_ set to 0 in begin_nested_session, here we reset it.
           session_info->set_query_start_time(ObTimeUtility::current_time());
@@ -3746,7 +3790,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
       uint64_t size = 0;
       OZ (session->get_tmp_table_size(size));
       OZ (spi_result.init(*ctx->exec_ctx_->get_my_session()));
-      OZ (spi_result.start_nested_stmt_if_need(ctx, static_cast<stmt::StmtType>(stmt_type), for_update),
+      OZ (spi_result.start_nested_stmt_if_need(ctx, sql_stmt, static_cast<stmt::StmtType>(stmt_type), for_update),
           sql_stmt, ps_sql, exec_params);
 
       if (OB_SUCC(ret)) {

@@ -61,8 +61,15 @@ public:
   {
     // 假设8M每秒的读取速度
     const int64_t sleep_us = read_buf_size / (8);
+    int ret = OB_SUCCESS;
     usleep(sleep_us);
-    real_read_size = read_buf_size;
+    if (offset == palf::PALF_PHY_BLOCK_SIZE) {
+      real_read_size = 0;
+    } else if (offset > palf::PALF_PHY_BLOCK_SIZE) {
+      ret = OB_FILE_LENGTH_INVALID;
+    } else {
+      real_read_size = read_buf_size;
+    }
     // while (true) {
     //   int64_t old_real_read_size = ATOMIC_LOAD(&real_read_size);
     //   int64_t new_real_read_size = old_real_read_size + read_buf_size;
@@ -165,8 +172,10 @@ TEST(TestLogExternalStorageHandler, test_log_external_storage_handler)
     EXPECT_EQ(OB_SUCCESS, handler.pread(uri, empty_storage_info, offset, read_buf, read_buf_size, real_read_size));
     int64_t invalid_offset = -1;
     EXPECT_EQ(OB_INVALID_ARGUMENT, handler.pread(uri, storage_info, invalid_offset, read_buf, read_buf_size, real_read_size));
-    invalid_offset = 100*1024*1024;
-    EXPECT_EQ(OB_INVALID_ARGUMENT, handler.pread(uri, storage_info, invalid_offset, read_buf, read_buf_size, real_read_size));
+    // 读偏移等于文件长度，返回成功，real_read_size=0
+    int64_t valid_offset = 64*1024*1024;
+    EXPECT_NE(OB_INVALID_ARGUMENT, handler.pread(uri, storage_info, valid_offset, read_buf, read_buf_size, real_read_size));
+    EXPECT_EQ(0, real_read_size);
     char *invalid_read_buf = NULL;
     EXPECT_EQ(OB_INVALID_ARGUMENT, handler.pread(uri, storage_info, offset, invalid_read_buf, read_buf_size, real_read_size));
     int64_t invalid_read_buf_size = 0;
@@ -215,6 +224,9 @@ TEST(TestLogExternalStorageHandler, test_log_external_storage_handler)
   // 验证公有函数
   {
     real_read_size = 0;
+    int64_t invalid_offset = 100*1024*1024;
+    EXPECT_EQ(OB_FILE_LENGTH_INVALID, handler.pread(uri, storage_info, invalid_offset, read_buf, read_buf_size, real_read_size));
+
     EXPECT_EQ(OB_SUCCESS, handler.pread(uri, storage_info, offset, read_buf, read_buf_size, real_read_size));
     EXPECT_EQ(read_buf_size, real_read_size);
     CLOG_LOG(INFO, "after first read", K(read_buf_size), K(real_read_size));

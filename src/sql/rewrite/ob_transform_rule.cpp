@@ -624,6 +624,9 @@ int ObTransformRule::need_transform(const common::ObIArray<ObParentDMLStmt> &par
   if (is_normal_disabled_transform(stmt)) {
     need_trans = false;
     OPT_TRACE("hierarchical query or insert query can not transform");
+  } else if (stmt.has_instead_of_trigger()) {
+    need_trans = false;
+    OPT_TRACE("stmt with instead of trigger can not transform");
   } else if (OB_FAIL(check_hint_status(stmt, need_trans))) {
     LOG_WARN("failed to check hint status", K(ret));
   }

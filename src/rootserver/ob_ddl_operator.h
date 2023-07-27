@@ -510,7 +510,8 @@ public:
               const uint64_t index_table_id,
               const share::schema::ObIndexStatus status,
               const bool in_offline_ddl_white_list,
-              common::ObMySQLTransaction &trans);
+              common::ObMySQLTransaction &trans,
+              const common::ObString *ddl_stmt_str);
 
   // tablespace
   virtual int create_tablespace(share::schema::ObTablespaceSchema &tablespace_schema,

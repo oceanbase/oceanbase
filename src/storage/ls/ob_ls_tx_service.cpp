@@ -228,6 +228,30 @@ int ObLSTxService::check_all_tx_clean_up() const
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_GC_CHECK_RD_TX);
+int ObLSTxService::check_all_readonly_tx_clean_up() const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
+  } else if (mgr_->get_total_active_readonly_request_count() > 0) {
+    ret = OB_EAGAIN;
+  } else {
+    TRANS_LOG(INFO, "wait_all_readonly_tx_cleaned_up cleaned up success", K_(ls_id));
+  }
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = EN_GC_CHECK_RD_TX ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        TRANS_LOG(INFO, "fake EN_GC_CHECK_RD_TX", K(ret));
+      }
+    }
+#endif
+  return ret;
+}
+
 int ObLSTxService::block_tx()
 {
   int ret = OB_SUCCESS;

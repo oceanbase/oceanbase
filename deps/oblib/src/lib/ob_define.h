@@ -183,6 +183,12 @@ OB_INLINE bool is_sys_group(const int64_t group_id)
   return group_id >= SYS_RESOURCE_GROUP_START_ID && group_id <= SYS_RESOURCE_GROUP_START_ID + SYS_RESOURCE_GROUP_CNT;
 }
 
+OB_INLINE bool is_valid_resource_group(const int64_t group_id)
+{
+  //other group or user group
+  return group_id == 0 || (group_id >= USER_RESOURCE_GROUP_START_ID && group_id <= USER_RESOURCE_GROUP_END_ID);
+}
+
 // See ObDeviceHealthStatus for more information
 const int64_t OB_MAX_DEVICE_HEALTH_STATUS_STR_LENGTH = 20;
 

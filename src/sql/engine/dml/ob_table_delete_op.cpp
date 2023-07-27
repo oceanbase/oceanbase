@@ -205,6 +205,9 @@ OB_INLINE int ObTableDeleteOp::close_table_for_each()
     if (!del_rtdefs_.at(i).empty()) {
       const ObDelCtDef &primary_del_ctdef = *MY_SPEC.del_ctdefs_.at(i).at(0);
       ObDelRtDef &primary_del_rtdef = del_rtdefs_.at(i).at(0);
+      if (OB_NOT_NULL(primary_del_rtdef.das_rtdef_.table_loc_)) {
+        primary_del_rtdef.das_rtdef_.table_loc_->is_writing_ = false;
+      }
       if (OB_FAIL(ObDMLService::process_after_stmt_trigger(primary_del_ctdef,
                                                            primary_del_rtdef,
                                                            dml_rtctx_,

@@ -483,9 +483,9 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
       medium_info.data_version_ = compat_version;
       int64_t schema_version = 0;
       if (medium_info.data_version_ < DATA_VERSION_4_2_0_0) {
-        medium_info.medium_compat_version_ = ObMediumCompactionInfo::MEIDUM_COMPAT_VERSION;
+        medium_info.medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION;
       } else {
-        medium_info.medium_compat_version_ = ObMediumCompactionInfo::MEIDUM_COMPAT_VERSION_V2;
+        medium_info.medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2;
       }
 
       if (OB_FAIL(choose_medium_scn[is_major](ls_, *tablet, merge_reason, allocator_, medium_info, result, schema_version))) {
@@ -888,7 +888,7 @@ int ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
   // for old version medium info, need generate old version schema
   if (FAILEDx(medium_info.storage_schema_.init(
           allocator, *table_schema, tablet.get_tablet_meta().compat_mode_, false/*skip_column_info*/,
-          ObMediumCompactionInfo::MEIDUM_COMPAT_VERSION_V2 == medium_info.medium_compat_version_
+          ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2 == medium_info.medium_compat_version_
               ? ObStorageSchema::STORAGE_SCHEMA_VERSION_V2
               : ObStorageSchema::STORAGE_SCHEMA_VERSION))) {
     LOG_WARN("failed to init storage schema", K(ret), K(schema_version));

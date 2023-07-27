@@ -12554,7 +12554,6 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15303', all_def_keywords['__all_virtual_arbitration_member_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304', all_def_keywords['__all_virtual_arbitration_service_status'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keywords['__all_virtual_obj_lock']))
-# 15306: __all_virtual_session_info
 #######################################################################
 # oracle agent table index is defined after the System table Index area
 #######################################################################
@@ -12667,6 +12666,9 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15399', all_def_keyword
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15402', all_def_keywords['__all_ls']))
 # 15403: __all_virtual_flt_config
+
+# 15404: __all_virtual_tenant_scheduler_job_run_detail
+# 15405: __all_virtual_session_info
 # 余留位置
 
 ################################################################################
@@ -27876,10 +27878,9 @@ def_table_schema(
           (CASE
                WHEN A.LS_ID = 1 THEN 0
                ELSE B.CREATE_SCN END) AS CREATE_SCN
-    FROM OCEANBASE.__ALL_VIRTUAL_LS_STATUS AS A
+    FROM OCEANBASE.DBA_OB_LS AS A
          FULL JOIN OCEANBASE.__ALL_LS AS B
               ON A.LS_ID = B.LS_ID
-    WHERE A.TENANT_ID = EFFECTIVE_TENANT_ID();
   """.replace("\n", " "),
 )
 
@@ -27912,9 +27913,9 @@ def_table_schema(
           (CASE
                WHEN A.LS_ID = 1 THEN 0
                ELSE B.CREATE_SCN END) AS CREATE_SCN
-    FROM OCEANBASE.__ALL_VIRTUAL_LS_STATUS AS A
+    FROM OCEANBASE.CDB_OB_LS AS A
          FULL JOIN OCEANBASE.__ALL_VIRTUAL_LS AS B
-              ON A.LS_ID = B.LS_ID AND A.TENANT_ID = B.TENANT_ID;
+              ON A.LS_ID = B.LS_ID AND A.TENANT_ID = B.TENANT_ID
   """.replace("\n", " "),
 )
 
@@ -45839,10 +45840,9 @@ def_table_schema(
           (CASE
                WHEN A.LS_ID = 1 THEN 0
                ELSE B.CREATE_SCN END) AS CREATE_SCN
-    FROM SYS.ALL_VIRTUAL_LS_STATUS A
+    FROM SYS.DBA_OB_LS A
          FULL JOIN SYS.ALL_VIRTUAL_LS_REAL_AGENT B
               ON A.LS_ID = B.LS_ID
-    WHERE A.TENANT_ID = EFFECTIVE_TENANT_ID();
   """.replace("\n", " "),
 )
 def_table_schema(
@@ -51917,6 +51917,7 @@ def_table_schema(
 # 28195: GV$OB_FLT_TRACE_CONFIG
 # 28196: GV$OB_SESSION
 # 28197: V$OB_SESSION
+# 28198: DBA_SCHEDULER_JOB_RUN_DETAILS
 
 ################################################################################
 # Lob Table (50000, 70000)

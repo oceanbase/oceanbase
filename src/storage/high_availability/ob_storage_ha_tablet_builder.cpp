@@ -2428,7 +2428,11 @@ int ObStorageHATabletBuilderUtil::build_table_with_minor_tables(
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
-  const bool need_tablet_meta_merge = true;
+  //TODO(muwei.ym) check this logical when remove remote logical minor sstable in 4.2 RC3
+  //minor tables array is empty which means
+  //1.src do not has any minor but has major which contains dest minor sstable range
+  //2.src has minor sstables but dest has same minor sstable
+  const bool need_tablet_meta_merge = minor_tables.empty() ? false : true;
   const bool update_ddl_sstable = false;
 
   if (OB_ISNULL(ls) || !tablet_id.is_valid() || OB_ISNULL(src_tablet_meta)) {

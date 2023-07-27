@@ -2434,7 +2434,8 @@ int ObTableSqlService::update_index_status(
     const uint64_t index_table_id,
     const ObIndexStatus status,
     const int64_t new_schema_version,
-    common::ObISQLClient &sql_client)
+    common::ObISQLClient &sql_client,
+    const common::ObString *ddl_stmt_str)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -2495,11 +2496,12 @@ int ObTableSqlService::update_index_status(
   if (OB_SUCC(ret)) {
     ObSchemaOperation opt;
     opt.tenant_id_ = tenant_id;
-    opt.database_id_ = 0;
-    opt.tablegroup_id_ = 0;
+    opt.database_id_ = index_schema.get_database_id();
+    opt.tablegroup_id_ = index_schema.get_tablegroup_id();
     opt.table_id_ = index_table_id;
     opt.op_type_ = index_schema.is_global_index_table() ? OB_DDL_MODIFY_GLOBAL_INDEX_STATUS : OB_DDL_MODIFY_INDEX_STATUS;
     opt.schema_version_ = new_schema_version;
+    opt.ddl_stmt_str_ = ddl_stmt_str ? *ddl_stmt_str : ObString();
     if (OB_FAIL(log_operation_wrapper(opt, sql_client))) {
       LOG_WARN("log operation failed", K(opt), K(ret));
     }

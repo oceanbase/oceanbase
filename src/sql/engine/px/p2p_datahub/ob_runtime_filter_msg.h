@@ -37,8 +37,8 @@ public:
     SECOND_LEVEL
   };
   ObRFBloomFilterMsg() : phase_(), bloom_filter_(),
-      next_peer_addrs_(), expect_first_phase_count_(0),
-      piece_size_(0), filter_indexes_(), receive_count_array_(),
+      next_peer_addrs_(allocator_), expect_first_phase_count_(0),
+      piece_size_(0), filter_indexes_(allocator_), receive_count_array_(allocator_),
       filter_idx_(nullptr), create_finish_(nullptr), need_send_msg_(true), is_finish_regen_(false) {}
   ~ObRFBloomFilterMsg() { destroy(); }
   virtual int assign(const ObP2PDatahubMsgBase &) final;
@@ -91,11 +91,11 @@ int generate_receive_count_array(int64_t piece_size, int64_t cur_begin_idx);
 public:
   ObSendBFPhase phase_;
   ObPxBloomFilter bloom_filter_;
-  common::ObSArray<common::ObAddr> next_peer_addrs_;
+  common::ObFixedArray<common::ObAddr, common::ObIAllocator> next_peer_addrs_;
   int64_t expect_first_phase_count_;
   int64_t piece_size_;
-  common::ObArray<BloomFilterIndex> filter_indexes_;
-  common::ObArray<BloomFilterReceiveCount> receive_count_array_;
+  common::ObFixedArray<BloomFilterIndex, common::ObIAllocator> filter_indexes_;
+  common::ObFixedArray<BloomFilterReceiveCount, common::ObIAllocator> receive_count_array_;
   int64_t *filter_idx_; //for shared msg
   bool *create_finish_; //for shared msg
   bool need_send_msg_;  //for shared msg, when drain_exch, msg is not need to be sent

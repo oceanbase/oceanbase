@@ -328,11 +328,26 @@ public:
   * @param[in] ls_id
    * @param[in] old_ls_group_id
    * @param[in] new_ls_group_id
-   * @param[in] unit_group_id : the new ls group's target unit group
+   * @param[in] old_unit_group_id : the ls group's unit group
+   * @param[in] new_unit_group_id : the new ls group's target unit group
    * @param[in] client*/
   int alter_ls_group_id(const uint64_t tenant_id, const ObLSID &id,
                        const uint64_t old_ls_group_id,
                        const uint64_t new_ls_group_id,
+                       const uint64_t old_unit_group_id,
+                       const uint64_t new_unit_group_id,
+                       ObISQLClient &client);
+   /*
+   * description: update ls's unit group id
+   * @param[in] tenant_id
+   * @param[in] ls_id
+   * @param[in] ls_group_id
+   * @param[in] old_unit_group_id
+   * @param[in] new_unit_group_id : the new ls group's target unit group
+   * @param[in] client*/
+  int alter_unit_group_id(const uint64_t tenant_id, const ObLSID &id,
+                       const uint64_t ls_group_id,
+                       const uint64_t old_unit_group_id,
                        const uint64_t new_unit_group_id,
                        ObISQLClient &client);
 

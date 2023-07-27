@@ -148,7 +148,7 @@ int ObRpcLSMigrateReplicaP::process()
       migration_op_arg.data_src_ = arg_.data_source_;
       migration_op_arg.dst_ = arg_.dst_;
       migration_op_arg.ls_id_ = arg_.ls_id_;
-      //TODO(muwei.ym) need check priority
+      //TODO(muwei.ym) need check priority in 4.2 RC3
       migration_op_arg.priority_ = ObMigrationOpPriority::PRIO_HIGH;
       migration_op_arg.paxos_replica_number_ = arg_.paxos_replica_number_;
       migration_op_arg.src_ = arg_.src_;
@@ -198,7 +198,7 @@ int ObRpcLSAddReplicaP::process()
       migration_op_arg.data_src_ = arg_.data_source_;
       migration_op_arg.dst_ = arg_.dst_;
       migration_op_arg.ls_id_ = arg_.ls_id_;
-      //TODO(muwei.ym) need check priority
+      //TODO(muwei.ym) need check priority in 4.2 RC3
       migration_op_arg.priority_ = ObMigrationOpPriority::PRIO_HIGH;
       migration_op_arg.paxos_replica_number_ = arg_.new_paxos_replica_number_;
       migration_op_arg.src_ = arg_.data_source_;

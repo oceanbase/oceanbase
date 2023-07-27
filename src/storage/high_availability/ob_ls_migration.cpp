@@ -275,7 +275,7 @@ int ObMigrationDagNet::init_by_param(const ObIDagInitParam *param)
     LOG_WARN("failed to init ha table key mgr", K(ret), KPC(init_param));
   } else if (OB_FAIL(ctx_->tablet_group_mgr_.init())) {
     LOG_WARN("failed to init tablet group mgr", K(ret), KPC(init_param));
-  } else if (OB_FAIL(ctx_->tablet_simple_info_map_.create(MAX_BUCKET_NUM, "DataHATask"))) {
+  } else if (OB_FAIL(ctx_->tablet_simple_info_map_.create(MAX_BUCKET_NUM, "SHATaskBucket", "SHATaskNode", MTL_ID()))) {
     LOG_WARN("failed to create tablet simple info map", K(ret));
   } else {
     ctx_->tenant_id_ = MTL_ID();
@@ -1015,7 +1015,6 @@ int ObStartMigrationTask::try_remove_member_list_()
     } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log stream should not be NULL", KR(ret), K(*ctx_), KP(ls));
-      // TODO: muwei make sure this is right
     } else if (self_addr != ctx_->arg_.src_.get_server()
         || self_addr != ctx_->arg_.dst_.get_server()) {
       ret = OB_INVALID_ARGUMENT;
@@ -1104,15 +1103,6 @@ int ObStartMigrationTask::deal_with_local_ls_()
     } else {
       ctx_->local_clog_checkpoint_scn_ = local_ls_meta.get_clog_checkpoint_scn();
       ctx_->local_rebuild_seq_ = local_ls_meta.get_rebuild_seq();
-      common::ObReplicaType replica_type = ctx_->arg_.dst_.get_replica_type();
-      // TODO: muwei make sure this is right
-      common::ObReplicaType local_replica_type = REPLICA_TYPE_FULL;
-      if (local_replica_type != replica_type
-          && !ObReplicaTypeCheck::change_replica_op_allow(local_replica_type, replica_type)) {
-        ret = OB_OP_NOT_ALLOW;
-        STORAGE_LOG(WARN, "change replica op not allow", K(ret),
-                    K(local_replica_type), K(replica_type), K(*ctx_));
-      }
     }
   }
   return ret;
@@ -1440,8 +1430,7 @@ int ObStartMigrationTask::check_ls_need_copy_data_(bool &need_copy)
   } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (ObMigrationOpType::CHANGE_LS_OP == ctx_->arg_.type_ &&
-      // TODO: muwei make sure this is right
-      ObReplicaTypeCheck::is_readable_replica(REPLICA_TYPE_FULL)) {
+      ObReplicaTypeCheck::is_readable_replica(ctx_->arg_.src_.get_replica_type())) {
     //no need generate copy task, only change member
     need_copy = false;
     LOG_INFO("no need change replica no need copy task", "src_type", ctx_->arg_.src_.get_replica_type(),

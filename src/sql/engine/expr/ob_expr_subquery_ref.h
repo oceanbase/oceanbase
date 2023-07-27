@@ -68,7 +68,7 @@ public:
   public:
     ExtraInfo(common::ObIAllocator &alloc, ObExprOperatorType type)
       : ObIExprExtraInfo(alloc, type),
-        is_cursor_(false), row_desc_(alloc) {}
+        is_cursor_(false), scalar_result_type_(alloc), row_desc_(alloc) {}
     virtual ~ExtraInfo() { row_desc_.destroy(); }
     void reset();
     int assign(const ExtraInfo &other);

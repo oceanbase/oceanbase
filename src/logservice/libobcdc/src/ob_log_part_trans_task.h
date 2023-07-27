@@ -285,6 +285,7 @@ private:
       const TableSchemaInfo *tb_schema_info,
       const ObTimeZoneInfoWrap *tz_info_wrap,
       const bool enable_output_hidden_primary_key);
+  int deep_copy_encoded_column_value_(blocksstable::ObStorageDatum &datum);
   // 1. get column_id and column_schema_info for user table;
   // 2. get column_id for all_ddl_operation_table
   int get_column_info_(

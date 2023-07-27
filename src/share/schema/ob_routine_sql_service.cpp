@@ -479,7 +479,8 @@ int ObRoutineSqlService::gen_package_dml(
 int ObRoutineSqlService::gen_routine_dml(
     const uint64_t exec_tenant_id,
     const ObRoutineInfo &routine_info,
-    ObDMLSqlSplicer &dml)
+    ObDMLSqlSplicer &dml,
+    bool is_replace)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
@@ -518,7 +519,7 @@ int ObRoutineSqlService::gen_routine_dml(
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(dml.add_gmt_create())
+  } else if ((!is_replace && OB_FAIL(dml.add_gmt_create()))
       || OB_FAIL(dml.add_gmt_modified())) {
     LOG_WARN("add column failed", K(ret));
   }
@@ -601,7 +602,7 @@ int ObRoutineSqlService::add_routine(ObISQLClient &sql_client,
   const uint64_t tenant_id = routine_info.get_tenant_id();
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   ObDMLSqlSplicer dml;
-  if (OB_FAIL(gen_routine_dml(exec_tenant_id, routine_info, dml))) {
+  if (OB_FAIL(gen_routine_dml(exec_tenant_id, routine_info, dml, is_replace))) {
     LOG_WARN("gen table dml failed", K(ret));
   } else {
     ObDMLExecHelper exec(sql_client, exec_tenant_id);

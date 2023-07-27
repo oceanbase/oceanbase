@@ -95,6 +95,10 @@ private:
 class ObTabletCreator
 {
 public:
+// 1. BATCH_ARG_SIZE cannot be too large to cause get_serialize_size to take too long
+// 2. BATCH_ARG_SIZE cannot be more than multi-trans buffer limit (1.5M)
+const static int64_t BATCH_ARG_SIZE = 1024 * 1024;  // 1M
+
   ObTabletCreator(
       const uint64_t tenant_id,
       const share::SCN &major_frozen_scn,

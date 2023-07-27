@@ -2205,7 +2205,7 @@ int ObTabletTableStore::combine_ha_minor_sstables_(
     common::ObIArray<ObITable *> &new_minor_sstables)
 {
   int ret = OB_SUCCESS;
-  //TODO(muwei.ym) remove logical sstable in master
+  //TODO(muwei.ym) remove logical sstable in 4.2 RC3
   //1.ha now will not reuse minor sstable so it need add minor sstable which is from src and end_scn <= clog_checkpoint_scn
   //2.old store minor sstables contains remote logical sstable and after clog_checkpoint_scn sstables.
   SCN max_copy_end_scn;

@@ -156,7 +156,6 @@ public:
   void set_io_desc(const common::ObIOFlag &io_desc);
   int check_and_set_status(const BlockStatus old_block_status, const BlockStatus new_block_status);
   OB_INLINE int get_block_status() const { return ATOMIC_LOAD(&block_status_); }
-  OB_INLINE void set_block_status(BlockStatus block_status) { ATOMIC_SET(&block_status_, block_status); }
   OB_INLINE bool is_memory() const { return ATOMIC_LOAD(&block_status_) == MEMORY; }
   OB_INLINE bool is_disked() const { return ATOMIC_LOAD(&block_status_) == DISKED; }
   OB_INLINE bool is_washing() const { return ATOMIC_LOAD(&block_status_) == WASHING; }
@@ -264,6 +263,8 @@ public:
   OB_INLINE void dec_block_cache_num(const int64_t num) {
     ATOMIC_FAS(&block_cache_num_, num);
   };
+  OB_INLINE int64_t get_page_cache_num() const { return ATOMIC_LOAD(&page_cache_num_); }
+  OB_INLINE int64_t get_block_cache_num() const { return ATOMIC_LOAD(&block_cache_num_); }
   void inc_ref();
   int64_t dec_ref();
 
@@ -274,7 +275,6 @@ private:
   int free_macro_block(ObTmpMacroBlock *&t_mblk);
   int alloc_macro_block(const int64_t dir_id, const uint64_t tenant_id, ObTmpMacroBlock *&t_mblk);
   int64_t get_memory_limit(const uint64_t tenant_id) const;
-
 
 private:
   static const uint64_t IO_LIMIT = 4 * 1024L * 1024L * 1024L;
@@ -351,6 +351,8 @@ public:
   int dec_page_cache_num(const uint64_t tenant_id, const int64_t num);
   int inc_block_cache_num(const uint64_t tenant_id, const int64_t num);
   int dec_block_cache_num(const uint64_t tenant_id, const int64_t num);
+  int get_page_cache_num(const uint64_t tenant_id, int64_t &num);
+  int get_block_cache_num(const uint64_t tenant_id, int64_t &num);
 private:
   ObTmpFileStore();
   ~ObTmpFileStore();

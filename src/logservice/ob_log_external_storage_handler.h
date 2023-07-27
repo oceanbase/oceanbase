@@ -92,6 +92,7 @@ public:
   //   OB_BACKUP_PERMISSION_DENIED, permission denied.
   //   OB_BACKUP_FILE_NOT_EXIST, uri not exist.
   //   OB_OSS_ERROR, oss error.
+  //   OB_FILE_LENGTH_INVALID, read offset is greater than file size.
   //   OB_NOT_INIT
   //   OB_NOT_RUNNING
   //

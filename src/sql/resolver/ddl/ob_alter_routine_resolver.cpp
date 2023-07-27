@@ -121,6 +121,20 @@ int ObAlterRoutineResolver::resolve_clause_list(
           } else if (SP_DEFINER == child->value_) {
             crt_routine_arg.routine_info_.clear_invoker_right();
           }
+        } else if (T_COMMENT == child->type_ && lib::is_mysql_mode()) {
+          ObString routine_comment;
+          OX (routine_comment = ObString(child->str_len_, child->str_value_));
+          OZ (crt_routine_arg.routine_info_.set_comment(routine_comment));
+        } else if (T_SP_DATA_ACCESS == child->type_ && lib::is_mysql_mode()) {
+          if (SP_NO_SQL == child->value_) {
+            crt_routine_arg.routine_info_.set_no_sql();
+          } else if (SP_READS_SQL_DATA == child->value_) {
+            crt_routine_arg.routine_info_.set_reads_sql_data();
+          } else if (SP_MODIFIES_SQL_DATA == child->value_) {
+            crt_routine_arg.routine_info_.set_modifies_sql_data();
+          } else if (SP_CONTAINS_SQL == child->value_) {
+            crt_routine_arg.routine_info_.set_contains_sql();
+          }
         } else {
           // do nothing
           /* Currently, ob only support SQL SECURITY and LANGUAGE SQL opt clause,

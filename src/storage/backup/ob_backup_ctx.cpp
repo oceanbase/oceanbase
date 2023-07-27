@@ -850,7 +850,7 @@ int ObLSBackupCtx::open(
   } else if (OB_FAIL(tablet_stat_.init(
                  param.tenant_id_, param.backup_set_desc_.backup_set_id_, param.ls_id_, backup_data_type))) {
     LOG_WARN("failed to init tablet stat", K(ret), K(param), K(backup_data_type));
-  } else if (OB_FAIL(tablet_holder_.init(param.ls_id_))) {
+  } else if (OB_FAIL(tablet_holder_.init(param.tenant_id_, param.ls_id_))) {
     LOG_WARN("failed to init tablet holder", K(ret), K(param));
   } else if (OB_FAIL(stat_mgr_.init(param.backup_dest_, param.backup_set_desc_, param.tenant_id_, param.ls_id_))) {
     LOG_WARN("failed to init stat", K(ret));

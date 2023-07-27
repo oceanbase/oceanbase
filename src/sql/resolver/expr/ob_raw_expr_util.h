@@ -466,6 +466,7 @@ public:
 
   static ObRawExpr *skip_inner_added_expr(ObRawExpr *expr);
   static const ObColumnRefRawExpr *get_column_ref_expr_recursively(const ObRawExpr *expr);
+  static ObRawExpr *get_sql_udt_type_expr_recursively(ObRawExpr *expr);
 
   static int create_to_type_expr(ObRawExprFactory &expr_factory,
                                  ObRawExpr *src_expr,

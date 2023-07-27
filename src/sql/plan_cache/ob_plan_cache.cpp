@@ -627,7 +627,8 @@ int ObPlanCache::construct_fast_parser_result(common::ObIAllocator &allocator,
         &(pc_ctx.exec_ctx_.get_physical_plan_ctx()->get_param_store_for_update());
     if (OB_FAIL(construct_plan_cache_key(*pc_ctx.sql_ctx_.session_info_,
                                          ObLibCacheNameSpace::NS_CRSR,
-                                         fp_result.pc_key_))) {
+                                         fp_result.pc_key_,
+                                         pc_ctx.sql_ctx_.is_protocol_weak_read_))) {
       LOG_WARN("failed to construct plan cache key", K(ret));
     } else if (enable_exact_mode) {
       (void)fp_result.pc_key_.name_.assign_ptr(raw_sql.ptr(), raw_sql.length());
@@ -1799,7 +1800,8 @@ int ObPlanCache::construct_plan_cache_key(ObPlanCacheCtx &plan_ctx, ObLibCacheNa
     LOG_WARN("session info is null");
   } else if (OB_FAIL(construct_plan_cache_key(*session,
                                               ns,
-                                              plan_ctx.fp_result_.pc_key_))) {
+                                              plan_ctx.fp_result_.pc_key_,
+                                              plan_ctx.sql_ctx_.is_protocol_weak_read_))) {
     LOG_WARN("failed to construct plan cache key", K(ret));
   } else {
     plan_ctx.key_ = &(plan_ctx.fp_result_.pc_key_);
@@ -1809,7 +1811,8 @@ int ObPlanCache::construct_plan_cache_key(ObPlanCacheCtx &plan_ctx, ObLibCacheNa
 
 OB_INLINE int ObPlanCache::construct_plan_cache_key(ObSQLSessionInfo &session,
                                                     ObLibCacheNameSpace ns,
-                                                    ObPlanCacheKey &pc_key)
+                                                    ObPlanCacheKey &pc_key,
+                                                    bool is_weak)
 {
   int ret = OB_SUCCESS;
   uint64_t database_id = OB_INVALID_ID;
@@ -1818,8 +1821,8 @@ OB_INLINE int ObPlanCache::construct_plan_cache_key(ObSQLSessionInfo &session,
   pc_key.namespace_ = ns;
   pc_key.sys_vars_str_ = session.get_sys_var_in_pc_str();
   pc_key.config_str_ = session.get_config_in_pc_str();
+  pc_key.is_weak_read_ = is_weak;
   return ret;
-
 }
 
 int ObPlanCache::need_late_compile(ObPhysicalPlan *plan,

@@ -657,7 +657,7 @@ public:
   DELEGATE_WITH_RET(member_list_service_, replace_member, int);
   DELEGATE_WITH_RET(member_list_service_, replace_member_with_learner, int);
   DELEGATE_WITH_RET(member_list_service_, get_config_version_and_transfer_scn, int);
-  DELEGATE_WITH_RET(log_handler_, add_learner, int); //TODO(yanfeng): fix it
+  DELEGATE_WITH_RET(log_handler_, add_learner, int);
   DELEGATE_WITH_RET(log_handler_, replace_learners, int);
   DELEGATE_WITH_RET(block_tx_service_, ha_block_tx, int);
   DELEGATE_WITH_RET(block_tx_service_, ha_kill_tx, int);
@@ -697,6 +697,11 @@ public:
   // @return other, there is something wrong or there is some tx not cleaned up.
   // int check_all_tx_clean_up() const;
   CONST_DELEGATE_WITH_RET(ls_tx_svr_, check_all_tx_clean_up, int);
+  // check whether all readonly tx of this ls is cleaned up.
+  // @return OB_SUCCESS, all the readonly tx of this ls cleaned up
+  // @return other, there is something wrong or there is some readonly tx not cleaned up.
+  // int check_all_readonly_tx_clean_up() const;
+  CONST_DELEGATE_WITH_RET(ls_tx_svr_, check_all_readonly_tx_clean_up, int);
   // block new tx in for ls.
   // @return OB_SUCCESS, ls is blocked
   // @return other, there is something wrong.

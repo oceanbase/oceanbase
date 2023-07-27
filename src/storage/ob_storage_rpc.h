@@ -47,7 +47,7 @@ class ObLogStreamService;
 namespace obrpc
 {
 
-//TODO(yanfeng) need use tenant module replace it in 4.1, currently use 509 tenant
+//TODO(yanfeng) need use tenant module replace it in 4.3, currently use 509 tenant
 
 struct ObCopyMacroBlockArg
 {
@@ -580,9 +580,10 @@ public:
   ~ObStorageChangeMemberArg() {}
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(tenant_id), K_(ls_id));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(need_get_config_version));
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
+  bool need_get_config_version_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageChangeMemberArg);
 };
@@ -1166,6 +1167,7 @@ public:
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
+      const bool need_get_config_version,
       palf::LogConfigVersion &config_version,
       share::SCN &transfer_scn) = 0;
   virtual int block_tx(
@@ -1291,6 +1293,7 @@ public:
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
+      const bool need_get_config_version,
       palf::LogConfigVersion &config_version,
       share::SCN &transfer_scn);
   virtual int block_tx(

@@ -1107,11 +1107,12 @@ int ObTransferHandler::get_start_transfer_out_scn_(
           break;
         }
       }
-
       if (OB_FAIL(ret)) {
-        //TODO(muwei.ym) need check can retry
+        //TODO(muwei.ym) need check can retry in 4.2 RC3
         ret = OB_SUCCESS;
       }
+
+      ob_usleep(OB_CHECK_START_SCN_READY_INTERVAL);
     }
 
     if (OB_SUCC(ret)) {
@@ -1171,6 +1172,7 @@ int ObTransferHandler::wait_src_ls_replay_to_start_scn_(
       if (timeout_ctx.is_timeouted()) {
         ret = OB_TIMEOUT;
         LOG_WARN("already timeout", K(ret), K(task_info));
+        break;
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < member_addr_list.count(); ++i) {
           const ObAddr &replica_addr = member_addr_list.at(i);
@@ -1208,12 +1210,10 @@ int ObTransferHandler::wait_src_ls_replay_to_start_scn_(
       }
 
       if (OB_FAIL(ret)) {
-        //TODO(muwei.ym) need retry
+        //TODO(muwei.ym) check need retry in 4.2 RC3
       }
 
-      if (OB_SUCC(ret)) {
-        ob_usleep(OB_CHECK_START_SCN_READY_INTERVAL);
-      }
+      ob_usleep(OB_CHECK_START_SCN_READY_INTERVAL);
     }
   }
 

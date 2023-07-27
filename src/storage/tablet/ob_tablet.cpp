@@ -3013,6 +3013,7 @@ int ObTablet::choose_and_save_storage_schema(
   const ObTabletID &tablet_id = tablet_meta_.tablet_id_;
 
   const ObStorageSchema *chosen_schema = &tablet_schema;
+  ObStorageSchema *tmp_storage_schema = nullptr;
 
   int64_t tablet_schema_version = 0;
   int64_t param_schema_version = 0;
@@ -3029,9 +3030,21 @@ int ObTablet::choose_and_save_storage_schema(
     LOG_WARN("failed to get stored column count from schema", KR(ret), K(ls_id), K(tablet_id), K(param_schema));
   } else if ((tablet_schema_version > param_schema_version && tablet_schema_stored_col_cnt < param_schema_stored_col_cnt)
           || (tablet_schema_version < param_schema_version && tablet_schema_stored_col_cnt > param_schema_stored_col_cnt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("less column cnt with larger schema version", K(ret), K(ls_id), K(tablet_id), K(tablet_schema_version),
-        K(param_schema_version), K(tablet_schema_stored_col_cnt), K(param_schema_stored_col_cnt), K(tablet_schema), K(param_schema));
+    /* The tablet schema may have come from a previous memtable, and its schema version may belong to other tables.
+     * Therefore, we should update the tablet schema with the larger schema version and a larger column count. */
+
+    if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, tmp_storage_schema))) {
+      LOG_WARN("failed to alloc mem for tmp storage schema", K(ret), K(param_schema), K(tablet_schema));
+    } else if (OB_FAIL(tmp_storage_schema->init(allocator, param_schema, true/*column_info_simplified*/))) {
+      LOG_WARN("failed to init storage schema", K(ret), K(param_schema));
+      allocator.free(tmp_storage_schema);
+      tmp_storage_schema = nullptr;
+    } else {
+      tmp_storage_schema->column_cnt_ = MAX(tablet_schema_stored_col_cnt, param_schema_stored_col_cnt);
+      tmp_storage_schema->store_column_cnt_ = MAX(tablet_schema_stored_col_cnt, param_schema_stored_col_cnt);
+      tmp_storage_schema->schema_version_ = MAX(tablet_schema_version, param_schema_version);
+      chosen_schema = tmp_storage_schema;
+    }
   } else if (tablet_schema_version > param_schema_version
          || (tablet_schema_version == param_schema_version && tablet_schema_stored_col_cnt >= param_schema_stored_col_cnt)) {
     // use tablet schema
@@ -3051,7 +3064,7 @@ int ObTablet::choose_and_save_storage_schema(
   } else {
     ALLOC_AND_INIT(allocator, storage_schema_addr_, *chosen_schema, true/*skip_column_info*/);
   }
-
+  ObTablet::free_storage_schema(allocator, tmp_storage_schema);
   return ret;
 }
 

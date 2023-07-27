@@ -188,7 +188,7 @@ int ObPLCacheMgr::add_pl_cache(ObPlanCache *lib_cache, ObILibCacheObject *pl_obj
 int ObPLCacheMgr::cache_evict_all_pl(ObPlanCache *lib_cache)
 {
   int ret = OB_SUCCESS;
-  PL_CACHE_LOG(DEBUG, "cache evict all pl cache start");
+  PL_CACHE_LOG(TRACE, "cache evict all pl cache start");
   if (OB_ISNULL(lib_cache)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lib cache is null");
@@ -198,7 +198,7 @@ int ObPLCacheMgr::cache_evict_all_pl(ObPlanCache *lib_cache)
     if (OB_FAIL(lib_cache->foreach_cache_evict(get_ids_op))) {
       PL_CACHE_LOG(WARN, "failed to foreach cache evict", K(ret));
     }
-    PL_CACHE_LOG(DEBUG, "cache evict all pl end", K(to_evict_keys));
+    PL_CACHE_LOG(TRACE, "cache evict all pl end");
   }
 
   return ret;

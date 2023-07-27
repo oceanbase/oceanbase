@@ -182,9 +182,12 @@ int ObLogExternalStorageHandler::pread(const common::ObString &uri,
     CLOG_LOG(WARN, "ObLogExternalStorageHandler invalid argument", K(uri), K(storage_info), K(offset), KP(buf), K(read_buf_size));
   } else if (OB_FAIL(handle_adapter_->get_file_size(uri, storage_info, file_size))) {
     CLOG_LOG(WARN, "get_file_size failed", K(uri), K(storage_info), K(offset), KP(buf), K(read_buf_size));
-  } else if (offset >= file_size) {
-    ret = OB_INVALID_ARGUMENT;
+  } else if (offset > file_size) {
+    ret = OB_FILE_LENGTH_INVALID;
     CLOG_LOG(WARN, "read position lager than file size, invalid argument", K(file_size), K(offset), K(uri));
+  } else if (offset == file_size) {
+    real_read_size = 0;
+    CLOG_LOG(TRACE, "read position equal to file size, no need read data", K(file_size), K(offset), K(uri));
   } else if (FALSE_IT(time_guard.click("after get file size"))) {
     // NB: limit read size.
   } else if (FALSE_IT(real_read_buf_size = std::min(file_size - offset, read_buf_size))) {

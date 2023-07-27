@@ -1012,7 +1012,7 @@ int ObTenantIOManager::modify_io_config(const uint64_t group_id,
   } else {
     uint64_t index = INT64_MAX;
     DRWLock::WRLockGuard guard(io_config_lock_);
-    if (OB_UNLIKELY(!is_user_group(group_id))) {
+    if (OB_UNLIKELY(!is_valid_resource_group(group_id))) {
       ret = OB_INVALID_CONFIG;
       LOG_WARN("invalid group id", K(ret), K(tenant_id_), K(group_id));
     } else if (min_percent < 0 || min_percent > 100 ||

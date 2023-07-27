@@ -2016,12 +2016,31 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
           LOG_DEBUG("debug trigger normal column", K(ret), K(is_instead_of),
               K(dml_ctdef.old_row_.count()), K(dml_ctdef.new_row_.count()));
           if (ObTriggerEvents::is_insert_event(dml_event)) {
-            new_expr = dml_ctdef.new_row_.at(col_idx);
+            if (OB_UNLIKELY(col_idx < 0) ||
+                OB_UNLIKELY(col_idx >= dml_ctdef.new_row_.count())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected col idx", K(col_idx), K(dml_ctdef.new_row_));
+            } else {
+              new_expr = dml_ctdef.new_row_.at(col_idx);
+            }
           } else if (ObTriggerEvents::is_update_event(dml_event)) {
-            new_expr = dml_ctdef.new_row_.at(col_idx);
-            old_expr = dml_ctdef.old_row_.at(col_idx);
+            if (OB_UNLIKELY(col_idx < 0) ||
+                OB_UNLIKELY(col_idx >= dml_ctdef.new_row_.count()) ||
+                OB_UNLIKELY(col_idx >= dml_ctdef.old_row_.count())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected col idx", K(col_idx), K(dml_ctdef.new_row_), K(dml_ctdef.old_row_));
+            } else {
+              new_expr = dml_ctdef.new_row_.at(col_idx);
+              old_expr = dml_ctdef.old_row_.at(col_idx);
+            }
           } else if (ObTriggerEvents::is_delete_event(dml_event)) {
-            old_expr = dml_ctdef.old_row_.at(col_idx);
+            if (OB_UNLIKELY(col_idx < 0) ||
+                OB_UNLIKELY(col_idx >= dml_ctdef.old_row_.count())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected col idx", K(col_idx), K(dml_ctdef.old_row_));
+            } else {
+              old_expr = dml_ctdef.old_row_.at(col_idx);
+            }
           } else {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected status: not supported dml type",

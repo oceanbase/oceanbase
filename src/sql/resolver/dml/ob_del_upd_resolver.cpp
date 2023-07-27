@@ -720,9 +720,22 @@ int ObDelUpdResolver::add_assignment(common::ObIArray<ObTableAssignment> &assign
     //For generated column, when cascaded column is updated, the generated column will be updated with new column
     ObRawExprCopier copier(*params_.expr_factory_);
     for (int64_t i = 0; OB_SUCC(ret) && i < table_assign->assignments_.count(); ++i) {
-      if (OB_FAIL(copier.add_replaced_expr(table_assign->assignments_.at(i).column_expr_,
-                                           table_assign->assignments_.at(i).expr_))) {
-        LOG_WARN("failed to add replaced expr", K(ret));
+      if (!table_assign->assignments_.at(i).column_expr_->is_xml_column()) {
+        if (OB_FAIL(copier.add_replaced_expr(table_assign->assignments_.at(i).column_expr_,
+                                            table_assign->assignments_.at(i).expr_))) {
+          LOG_WARN("failed to add replaced expr", K(ret));
+        }
+      } else {
+        // is generated column and ref column is xmltype, generated column ref hiddlen column actually
+        // udt column replace is done in pre transfrom but here generate column need replace
+        const ObRawExpr *from_expr = ObRawExprUtils::get_sql_udt_type_expr_recursively(assign.expr_);
+        const ObRawExpr *to_expr = table_assign->assignments_.at(i).expr_;
+        if (OB_ISNULL(from_expr)) { // do nonthing
+        } else {
+          if (OB_FAIL(copier.add_replaced_expr(from_expr, to_expr))) {
+            LOG_WARN("failed to add replaced expr", K(ret));
+          }
+        }
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < get_stmt()->get_subquery_expr_size(); ++i) {

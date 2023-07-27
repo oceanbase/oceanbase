@@ -4410,6 +4410,19 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
         } else if (OB_FAIL(generated_column.add_cascaded_column_id(col_schema->get_column_id()))) {
           LOG_WARN("add cascaded column id to generated column failed", K(ret));
         } else {
+          if (col_schema->get_udt_set_id() > 0) {
+            ObSEArray<ObColumnSchemaV2 *, 1> hidden_cols;
+            if (OB_FAIL(tbl_schema.get_column_schema_in_same_col_group(col_schema->get_column_id(), col_schema->get_udt_set_id(), hidden_cols))) {
+              LOG_WARN("get column schema in same col group failed", K(ret), K(col_schema->get_udt_set_id()));
+            } else {
+              for (int i = 0; i < hidden_cols.count() && OB_SUCC(ret); i++) {
+                uint64_t cascaded_column_id = hidden_cols.at(i)->get_column_id();
+                if (OB_FAIL(generated_column.add_cascaded_column_id(cascaded_column_id))) {
+                  LOG_WARN("add cascaded column id to generated column failed", K(ret), K(cascaded_column_id));
+                }
+              }
+            }
+          }
           col_schema->add_column_flag(GENERATED_DEPS_CASCADE_FLAG);
           OZ (real_exprs.push_back(q_name.ref_expr_));
         }

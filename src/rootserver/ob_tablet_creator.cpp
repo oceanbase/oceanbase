@@ -269,7 +269,8 @@ int ObTabletCreator::add_create_tablet_arg(const ObTabletCreatorArg &arg)
   }
 
   if (OB_FAIL(ret)) {
-  } else if (batch_arg->arg_.get_serialize_size() > transaction::ObTxMultiDataSourceLog::MAX_MDS_LOG_SIZE) {
+  } else if (batch_arg->arg_.get_serialize_size() > BATCH_ARG_SIZE) {
+    LOG_INFO("batch arg is more than 1M", KR(ret), K(batch_arg->arg_.tablets_.count()), K(batch_arg->arg_));
     void *arg_buf = allocator_.alloc(sizeof(ObBatchCreateTabletHelper));
     ObBatchCreateTabletHelper *new_arg = NULL;
     if (OB_ISNULL(arg_buf)) {
@@ -318,7 +319,6 @@ int ObTabletCreator::execute()
         LOG_WARN("batch arg not be null", KR(ret));
       } else {
         while (OB_SUCC(ret) && OB_NOT_NULL(batch_arg)) {
-          LOG_INFO("generate create arg", KPC(batch_arg), K(lbt()));
           int64_t buf_len = batch_arg->arg_.get_serialize_size();
           int64_t pos = 0;
           char *buf = (char*)allocator_.alloc(buf_len);
@@ -331,6 +331,7 @@ int ObTabletCreator::execute()
             LOG_WARN("fail to set timeout ctx", KR(ret), K(default_timeout_ts));
           } else {
             do {
+              LOG_INFO("generate create arg", K(buf_len), K(batch_arg->arg_.tablets_.count()), K(batch_arg->arg_));
               if (ctx.is_timeouted()) {
                 ret = OB_TIMEOUT;
                 LOG_WARN("already timeout", KR(ret), K(ctx));

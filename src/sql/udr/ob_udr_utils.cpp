@@ -21,6 +21,7 @@ namespace sql
 
 int ObUDRUtils::match_udr_item(const ObString &pattern,
                                const ObSQLSessionInfo &session_info,
+                               ObExecContext &ectx,
                                ObIAllocator &allocator,
                                ObUDRItemMgr::UDRItemRefGuard &guard,
                                PatternConstConsList *cst_cons_list)
@@ -49,6 +50,9 @@ int ObUDRUtils::match_udr_item(const ObString &pattern,
     } else if (guard.is_valid()) {
       LOG_TRACE("succ to match rewrite rule item", KPC(guard.get_ref_obj()));
     }
+  }
+  if (OB_FAIL(ret) && !ObSQLUtils::check_need_disconnect_parser_err(ret)) {
+    ectx.set_need_disconnect(false);
   }
   return ret;
 }
@@ -251,7 +255,7 @@ int ObUDRUtils::match_udr_and_refill_ctx(const ObString &pattern,
   if (enable_udr && !(pc_ctx.is_inner_sql() || PC_PL_MODE == pc_ctx.mode_)) {
     ObIAllocator &allocator = result.get_mem_pool();
     PatternConstConsList cst_cons_list;
-    if (OB_FAIL(match_udr_item(pattern, session, allocator, item_guard, &cst_cons_list))) {
+    if (OB_FAIL(match_udr_item(pattern, session, ectx, allocator, item_guard, &cst_cons_list))) {
       LOG_WARN("failed to match user defined rewrite rule", K(ret));
     } else if (!cst_cons_list.empty()
       && OB_FAIL(cons_udr_const_cons_list(cst_cons_list, pc_ctx))) {
@@ -267,10 +271,6 @@ int ObUDRUtils::match_udr_and_refill_ctx(const ObString &pattern,
     } else {
       is_match_udr = true;
       LOG_TRACE("succ to match user-defined rule", K(ret));
-    }
-    if (OB_SUCCESS != ret
-      && !ObSQLUtils::check_need_disconnect_parser_err(ret)) {
-      ectx.set_need_disconnect(false);
     }
   }
   return ret;

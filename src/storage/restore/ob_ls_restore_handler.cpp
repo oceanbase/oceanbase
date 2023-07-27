@@ -1079,7 +1079,6 @@ int ObILSRestoreState::follower_fill_tablet_group_restore_arg_(
       LOG_WARN("fail to set src replica type", K(ret), K(leader));
     } else if (OB_FAIL(tablet_group_restore_arg.src_.set_member(ObMember(leader.get_server(), 0/*invalid timestamp is ok*/)))) {
       LOG_WARN("fail to set src member", K(ret));
-      // TODO: muwei use the right replica type
     } else if (OB_FAIL(tablet_group_restore_arg.dst_.set_replica_type(REPLICA_TYPE_FULL))) {
       LOG_WARN("fail to set dst replica type", K(ret));
     } else if (OB_FAIL(tablet_group_restore_arg.dst_.set_member(ObMember(GCTX.self_addr(), 0/*invalid timestamp is ok*/)))) {
@@ -1854,7 +1853,6 @@ int ObLSRestoreSysTabletState::follower_fill_ls_restore_arg_(ObLSRestoreArg &arg
     LOG_WARN("fail to set src replica type", K(ret), K(leader));
   } else if (OB_FAIL(arg.src_.set_member(ObMember(leader.get_server(), 0/*invalid timestamp is ok*/)))) {
     LOG_WARN("fail to set src member", K(ret));
-    // TODO: muwei use the right replica type
   } else if (OB_FAIL(arg.dst_.set_replica_type(REPLICA_TYPE_FULL))) {
     LOG_WARN("fail to set dst replica type", K(ret));
   } else if (OB_FAIL(arg.dst_.set_member(ObMember(GCTX.self_addr(), 0/*invalid timestamp is ok*/)))) {

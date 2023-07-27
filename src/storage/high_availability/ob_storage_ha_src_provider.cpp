@@ -98,6 +98,26 @@ int ObStorageHASrcProvider::choose_ob_src(const share::ObLSID &ls_id, const SCN 
   return ret;
 }
 
+int ObStorageHASrcProvider::get_ls_member_list(const uint64_t tenant_id,
+    const share::ObLSID &ls_id, common::ObIArray<common::ObAddr> &addr_list)
+{
+  int ret = OB_SUCCESS;
+  addr_list.reset();
+  common::ObAddr leader_addr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("start migration task do not init", K(ret));
+  } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(get_ls_leader_(tenant_id_, ls_id, leader_addr))) {
+    LOG_WARN("failed to get ls leader", K(ret), K_(tenant_id), K(ls_id));
+  } else if (OB_FAIL(fetch_ls_member_list_(tenant_id_, ls_id, leader_addr, addr_list))) {
+    LOG_WARN("failed to fetch ls leader member list", K(ret), K_(tenant_id), K(ls_id), K(leader_addr));
+  }
+  return ret;
+}
+
 int ObStorageHASrcProvider::get_ls_leader_(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader)
 {
   int ret = OB_SUCCESS;

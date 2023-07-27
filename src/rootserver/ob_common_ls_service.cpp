@@ -92,6 +92,11 @@ void ObCommonLSService::do_work()
         } else if (OB_TMP_FAIL(try_create_ls_(user_tenant_schema))) {
           LOG_WARN("failed to create ls", KR(ret), KR(tmp_ret), K(user_tenant_schema));
         }
+        if (OB_SUCC(ret) && !user_tenant_schema.is_dropping()) {
+          if (OB_TMP_FAIL(try_modify_ls_unit_group_(user_tenant_schema))) {
+            LOG_WARN("failed to modify ls unit group", KR(ret), KR(tmp_ret), K(user_tenant_schema));
+          }
+        }
       }
 
       if (OB_TMP_FAIL(ObBalanceLSPrimaryZone::try_update_sys_ls_primary_zone(tenant_id_))) {
@@ -147,6 +152,56 @@ int ObCommonLSService::try_create_ls_(const share::schema::ObTenantSchema &tenan
   }
   return ret;
 }
+//不管是主库还是备库都有概率存在一个日志流组内的日志流记录的unit_group不一致的情况
+//所有的日志流都对齐日志流id最小的日志流,虽然不是最优，但是可以保证最终一致性
+int ObCommonLSService::try_modify_ls_unit_group_(
+    const share::schema::ObTenantSchema &tenant_schema)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = tenant_schema.get_tenant_id();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ptr is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (!is_user_tenant(tenant_id) || !tenant_schema.is_valid()
+             || tenant_schema.is_dropping()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant is invalid", KR(ret), K(tenant_id), K(tenant_schema));
+  } else {
+    ObTenantLSInfo tenant_info(GCTX.sql_proxy_, &tenant_schema, tenant_id);
+    share::ObLSStatusOperator status_op;
+    if (OB_FAIL(tenant_info.gather_stat())) {
+      LOG_WARN("failed to gather stat", KR(ret));
+    } else {
+      ObLSGroupInfoArray &ls_group_array = tenant_info.get_ls_group_array();
+      int64_t index = 0;//no used
+      share::ObLSStatusInfo ls_status;
+      for (int64_t i = 0; OB_SUCC(ret) && i < ls_group_array.count(); ++i) {
+        const uint64_t unit_group_id = ls_group_array.at(i).unit_group_id_;
+        const uint64_t ls_group_id = ls_group_array.at(i).ls_group_id_;
+        const ObArray<share::ObLSID> &ls_ids = ls_group_array.at(i).ls_ids_;
+        for (int64_t j = 0; OB_SUCC(ret) && j < ls_ids.count(); ++j) {
+          const share::ObLSID ls_id = ls_ids.at(j);
+          if (OB_FAIL(tenant_info.get_ls_status_info(ls_id, ls_status, index))) {
+            LOG_WARN("failed to get ls status info", KR(ret), K(ls_id));
+          } else if (ls_status.unit_group_id_ != unit_group_id) {
+            FLOG_INFO("ls group has different unit group id, need process", K(ls_status), K(unit_group_id));
+            if (OB_FAIL(status_op.alter_unit_group_id(tenant_id, ls_id, ls_group_id,
+                    ls_status.unit_group_id_, unit_group_id, *GCTX.sql_proxy_))) {
+              LOG_WARN("failed to alter unit group", KR(ret), K(tenant_id), K(ls_id),
+                  K(ls_group_id), K(unit_group_id), K(ls_status));
+
+            }
+          }
+        }//end for j
+      }//end for i
+    }
+  }
+  return ret;
+}
+
 int ObCommonLSService::do_create_user_ls(
     const share::schema::ObTenantSchema &tenant_schema,
     const share::ObLSStatusInfo &info, const SCN &create_scn,

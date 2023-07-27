@@ -435,6 +435,9 @@ OB_INLINE int ObTableInsertOp::close_table_for_each()
     if (!ins_rtdefs_.at(i).empty()) {
       const ObInsCtDef &primary_ins_ctdef = *MY_SPEC.ins_ctdefs_.at(i).at(0);
       ObInsRtDef &primary_ins_rtdef = ins_rtdefs_.at(i).at(0);
+      if (OB_NOT_NULL(primary_ins_rtdef.das_rtdef_.table_loc_)) {
+        primary_ins_rtdef.das_rtdef_.table_loc_->is_writing_ = false;
+      }
       if (OB_FAIL(ObDMLService::process_after_stmt_trigger(primary_ins_ctdef,
                                                            primary_ins_rtdef,
                                                            dml_rtctx_,

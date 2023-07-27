@@ -97,7 +97,6 @@ private:
   int persist_job_and_task_(const share::ObBalanceJob &job,
                             ObArray<share::ObBalanceTask> &tasks);
   int construct_dependency_of_each_task_(ObArray<share::ObBalanceTask> &tasks);
-  int wait_tenant_and_version_ready_();
   int lock_and_check_balance_job_(common::ObMySQLTransaction &trans, const uint64_t tenant_id);
   int balance_primary_zone_();
   int try_update_job_comment_(const share::ObBalanceJob &job, const common::ObSqlString &comment);

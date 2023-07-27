@@ -1839,10 +1839,16 @@ int ObRawExprUtils::check_deterministic_single(const ObRawExpr *expr,
   CK (OB_NOT_NULL(expr));
   if (OB_SUCC(ret) && ObResolverUtils::DISABLE_CHECK != check_status) {
     if (is_oracle_mode()
-        && (T_FUN_SYS_DEFAULT == expr->get_expr_type()
-           || T_OP_IS == expr->get_expr_type())) {
+        && (ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status
+            || ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status)
+        && T_OP_IS == expr->get_expr_type()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Use special functions in generated columns");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Use ISNULL() in generated column or functional index");
+      LOG_WARN("special function is not suppored in generated column", K(ret), KPC(expr));
+    } else if (is_oracle_mode()
+              && T_FUN_SYS_DEFAULT == expr->get_expr_type()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Use DEFAULT() in generated column or functional index or check constraint");
       LOG_WARN("special function is not suppored in generated column", K(ret), KPC(expr));
     } else if (expr->is_sys_func_expr()) {
       bool is_non_pure_func = false;
@@ -3910,6 +3916,20 @@ const ObColumnRefRawExpr *ObRawExprUtils::get_column_ref_expr_recursively(const 
   return res;
 }
 
+ObRawExpr *ObRawExprUtils::get_sql_udt_type_expr_recursively(ObRawExpr *expr)
+{
+  ObRawExpr *res = NULL;
+  if (OB_ISNULL(expr)) {
+  } else if (ob_is_user_defined_sql_type(expr->get_result_type().get_type())) {
+    res = expr;
+  } else {
+    for (int i = 0; OB_ISNULL(res) && i < expr->get_param_count(); i++) {
+      res = get_sql_udt_type_expr_recursively(expr->get_param_expr(i));
+    }
+  }
+  return res;
+}
+
 ObRawExpr *ObRawExprUtils::skip_implicit_cast(ObRawExpr *e)
 {
   ObRawExpr *res = e;
@@ -4383,7 +4403,9 @@ int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
                                               expr_factory,
                                               col_ref.get_data_type(),
                                               col_ref.get_collation_type(),
-                                              col_ref.get_accuracy().get_accuracy(),
+                                              (col_ref.get_data_type() != ObUserDefinedSQLType)
+                                                ? col_ref.get_accuracy().get_accuracy()
+                                                : col_ref.get_subschema_id(),
                                               !col_ref.is_not_null_for_write(),
                                               &column_conv_info,
                                               &col_ref.get_enum_set_values(),

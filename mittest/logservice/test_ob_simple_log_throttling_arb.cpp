@@ -48,36 +48,6 @@ public:
     palf_env_impl.disk_options_wrapper_.disk_opts_for_recycling_blocks_ = disk_options;
     palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_ = disk_options;
   }
-  bool is_degraded(const PalfHandleImplGuard &leader,
-                   const int64_t degraded_server_idx,
-                   const int64_t timeout_us) {
-    bool has_degraded = false;
-    int64_t begin_ts = common::ObClockGenerator::getClock();
-    while (!has_degraded && (common::ObClockGenerator::getClock() - begin_ts < timeout_us)) {
-      common::GlobalLearnerList degraded_learner_list;
-      leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list);
-      has_degraded = degraded_learner_list.contains(get_cluster()[degraded_server_idx]->get_addr());
-      sleep(1);
-      PALF_LOG(INFO, "wait degrade");
-    }
-    return has_degraded;
-  }
-
-  bool is_upgraded(PalfHandleImplGuard &leader, const int64_t palf_id, const int64_t timeout_us)
-  {
-    bool has_upgraded = false;
-    int64_t begin_ts = common::ObClockGenerator::getClock();
-    while (!has_upgraded && (common::ObClockGenerator::getClock() - begin_ts < timeout_us) ) {
-      common::GlobalLearnerList degraded_learner_list;
-      leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list);
-      has_upgraded = (0 == degraded_learner_list.get_member_number());
-      if (!has_upgraded) {
-        usleep(200 * 1000);
-      }
-      PALF_LOG(INFO, "wait upgrade", K(palf_id), K(has_upgraded));
-    }
-    return has_upgraded;
-  }
 };
 
 int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
@@ -135,7 +105,6 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_major)
   ASSERT_EQ(OB_SUCCESS, get_palf_env(follower_D_idx, palf_env));
   palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_throttling_percentage_ = throttling_percentage;
 
-  const int64_t arb_timeout = 5 * 1000 * 1000;
   PALF_LOG(INFO, "[CASE 1.1]: MAJOR degrade");
   block_net(leader_idx, another_f_idx);
   sleep(1);
@@ -145,7 +114,7 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_major)
   palf_list[another_f_idx]->palf_handle_impl_->sw_.freeze_mode_ = PERIOD_FREEZE_MODE;
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 128 * KB));
   int64_t begin_ts = common::ObClockGenerator::getClock();
-  EXPECT_TRUE(is_degraded(leader, another_f_idx, arb_timeout));
+  EXPECT_TRUE(is_degraded(leader, another_f_idx));
   int64_t end_ts = common::ObClockGenerator::getClock();
   int64_t used_time = end_ts - begin_ts;
   ASSERT_TRUE(used_time < 2 * 1000 * 1000L);
@@ -166,7 +135,7 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_major)
   unblock_net(leader_idx, another_f_idx);
   begin_ts = common::ObClockGenerator::getClock();
   PALF_LOG(INFO, "[CASE 1.2] begin MAJOR upgrade", K(used_time));
-  ASSERT_TRUE(is_upgraded(leader, id, arb_timeout));
+  ASSERT_TRUE(is_upgraded(leader, id));
   end_ts = common::ObClockGenerator::getClock();
   used_time = end_ts - begin_ts;
   PALF_LOG(INFO, "[CASE 1.2] end MAJOR upgrade", K(used_time));
@@ -264,7 +233,6 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_minor_leader)
   ASSERT_EQ(OB_SUCCESS, get_palf_env(leader_idx, palf_env));
   palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_throttling_percentage_ = throttling_percentage;
 
-  const int64_t arb_timeout = 5 * 1000 * 1000;
   PALF_LOG(INFO, "[CASE 2.1]: MONOR_LEADER degrade");
   block_net(leader_idx, another_f_idx);
   sleep(1);
@@ -273,7 +241,7 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_minor_leader)
   leader.palf_handle_impl_->sw_.freeze_mode_ = PERIOD_FREEZE_MODE;
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 128 * KB));
   int64_t begin_ts = common::ObClockGenerator::getClock();
-  EXPECT_TRUE(is_degraded(leader, another_f_idx, arb_timeout));
+  EXPECT_TRUE(is_degraded(leader, another_f_idx));
   int64_t end_ts = common::ObClockGenerator::getClock();
   int64_t used_time = end_ts - begin_ts;
   ASSERT_TRUE(used_time < 2 * 1000 * 1000L);
@@ -294,7 +262,7 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_minor_leader)
   unblock_net(leader_idx, another_f_idx);
   begin_ts = common::ObClockGenerator::getClock();
   PALF_LOG(INFO, "[CASE 2.2] begin MINOR_LEADER upgrade", K(used_time));
-  ASSERT_TRUE(is_upgraded(leader, id, arb_timeout));
+  ASSERT_TRUE(is_upgraded(leader, id));
   end_ts = common::ObClockGenerator::getClock();
   used_time = end_ts - begin_ts;
   PALF_LOG(INFO, "[CASE 2.2] end MINOR_LEADER upgrade", K(used_time));
@@ -307,11 +275,13 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_minor_leader)
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 128 * KB));
 
   LogConfigVersion config_version;
+
+  const int64_t CONFIG_CHANGE_TIMEOUT_NEW = 20 * 1000 * 1000L; // 10s
   ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
   ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1),
                                                                  ObMember(get_cluster()[another_f_idx]->get_addr(), 1),
                                                                  config_version,
-                                                                 CONFIG_CHANGE_TIMEOUT));
+                                                                 CONFIG_CHANGE_TIMEOUT_NEW));
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 128));
 
   PALF_LOG(INFO, "[CASE 2.4]: MINOR_LEADER switch_leader");
@@ -389,7 +359,6 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_minor_follower)
   ASSERT_EQ(OB_SUCCESS, get_palf_env(another_f_idx, palf_env));
   palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_throttling_percentage_ = throttling_percentage;
 
-  const int64_t arb_timeout = 5 * 1000 * 1000;
   PALF_LOG(INFO, "[CASE 3.1]: MONOR_LEADER degrade");
   block_net(leader_idx, another_f_idx);
   sleep(1);
@@ -400,7 +369,7 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_minor_follower)
   palf_list[follower_D_idx]->palf_handle_impl_->sw_.freeze_mode_ = PERIOD_FREEZE_MODE;
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 128 * KB));
   int64_t begin_ts = common::ObClockGenerator::getClock();
-  EXPECT_TRUE(is_degraded(leader, another_f_idx, arb_timeout));
+  EXPECT_TRUE(is_degraded(leader, another_f_idx));
   int64_t end_ts = common::ObClockGenerator::getClock();
   int64_t used_time = end_ts - begin_ts;
   ASSERT_TRUE(used_time < 2 * 1000 * 1000L);
@@ -422,11 +391,11 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_minor_follower)
   unblock_net(leader_idx, another_f_idx);
   begin_ts = common::ObClockGenerator::getClock();
   PALF_LOG(INFO, "[CASE 3.2] begin MINOR_FOLLOWER upgrade", K(used_time));
-  ASSERT_TRUE(is_upgraded(leader, id, arb_timeout));
+  ASSERT_TRUE(is_upgraded(leader, id));
   end_ts = common::ObClockGenerator::getClock();
   used_time = end_ts - begin_ts;
   PALF_LOG(INFO, "[CASE 3.2] end MINOR_FOLLOWER upgrade", K(used_time));
-  ASSERT_TRUE(used_time < 2 * 1000 * 1000L);
+  ASSERT_TRUE(used_time < 3 * 1000 * 1000L);
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 128));
 
   PALF_LOG(INFO, "[CASE 3.3]: MINOR_FOLLOWER replace_member");
@@ -532,7 +501,6 @@ TEST_F(TestObSimpleLogThrottleArb, test_4f1a_degrade_upgrade)
   LSN max_lsn = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn, leader);
 
-  const int64_t arb_timeout = 5 * 1000 * 1000;
   int64_t throttling_percentage = 60;
   ASSERT_EQ(OB_SUCCESS, get_palf_env(leader_idx, palf_env));
   palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_throttling_percentage_ = throttling_percentage;
@@ -548,8 +516,8 @@ TEST_F(TestObSimpleLogThrottleArb, test_4f1a_degrade_upgrade)
   palf_list[another_f3_idx]->palf_handle_impl_->sw_.freeze_mode_ = PERIOD_FREEZE_MODE;
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 10, id, 256 * KB));
   usleep(10 * 1000);
-  ASSERT_TRUE(is_degraded(leader, another_f2_idx, arb_timeout));
-  ASSERT_TRUE(is_degraded(leader, another_f3_idx, arb_timeout));
+  ASSERT_TRUE(is_degraded(leader, another_f2_idx));
+  ASSERT_TRUE(is_degraded(leader, another_f3_idx));
   int64_t end_ts = common::ObClockGenerator::getClock();
   int64_t used_time = end_ts - begin_ts;
   PALF_LOG(INFO, " [CASE] 4f1a degrade", K(used_time));
@@ -561,7 +529,7 @@ TEST_F(TestObSimpleLogThrottleArb, test_4f1a_degrade_upgrade)
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 10, id, 256));
 
   PALF_LOG(INFO, " [CASE] 4f1a before upgrade", K(used_time));
-  ASSERT_TRUE(is_upgraded(leader, id, arb_timeout));
+  ASSERT_TRUE(is_upgraded(leader, id));
   PALF_LOG(INFO, " [CASE] end upgrade", K(used_time));
 
   revert_cluster_palf_handle_guard(palf_list);

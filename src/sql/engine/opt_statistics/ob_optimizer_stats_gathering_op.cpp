@@ -145,15 +145,19 @@ int ObOptimizerStatsGatheringOp::inner_open()
   } else {
     arena_.set_tenant_id(tenant_id_);
     piece_msg_.set_tenant_id(tenant_id_);
-    if (OB_FAIL(table_stats_map_.create(DEFAULT_HASH_MAP_BUCKETS_COUNT,
+    // map size = max(part num + subpart num, 100)
+    int64_t map_size = tab_schema->get_all_part_num() + (MY_SPEC.is_two_level_part() ?
+                                                         tab_schema->get_partition_num() : 0);
+    map_size = map_size < DEFAULT_HASH_MAP_BUCKETS_COUNT ? DEFAULT_HASH_MAP_BUCKETS_COUNT : map_size;
+    if (OB_FAIL(table_stats_map_.create(map_size,
         "TabStatBucket",
         "TabStatNode"))) {
       LOG_WARN("fail to create table stats map", K(ret));
-    } else if (OB_FAIL(osg_col_stats_map_.create(DEFAULT_HASH_MAP_BUCKETS_COUNT,
+    } else if (OB_FAIL(osg_col_stats_map_.create(map_size,
         "ColStatBucket",
         "ColStatNode"))) {
       LOG_WARN("fail to create column stats map", K(ret));
-    } else if (OB_FAIL(part_map_.create(DEFAULT_HASH_MAP_BUCKETS_COUNT,
+    } else if (OB_FAIL(part_map_.create(map_size,
         "PartMapBucket",
         "PartMapNode"))) {
       LOG_WARN("fail to create part map", K(ret));
@@ -161,6 +165,8 @@ int ObOptimizerStatsGatheringOp::inner_open()
                OB_FAIL(pl::ObDbmsStats::get_table_partition_map(*tab_schema, part_map_))) {
       LOG_WARN("fail to init part map", K(ret));
     }
+    LOG_TRACE("succeed to open optmizer_stats_gathering op",
+              K(ret), K(map_size), K(MY_SPEC.column_ids_.count()), K(MY_SPEC.table_id_));
   }
   return ret;
 }
