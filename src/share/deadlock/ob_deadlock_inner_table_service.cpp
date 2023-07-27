@@ -89,6 +89,7 @@ int ObDeadLockInnerTableService::insert(const ObDetectorInnerReportInfo &inner_i
                                       LIMIT_VARCHAR_LEN, extra_info_if_exist(extra_values, 2)))) {
     DETECT_LOG(WARN, "format sql fail", KR(ret), K(sql));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
     DETECT_LOG(WARN, "sql_proxy_ not init yet, report abort", KR(ret), K(sql));
   } else if (CLICK() && OB_FAIL(GCTX.sql_proxy_->write(exec_tenant_id,
                                                              sql.ptr(),

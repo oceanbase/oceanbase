@@ -150,14 +150,14 @@ int ObDbmsStatsLockUnlock::get_stats_history_sql(ObExecContext &ctx,
   need_update_lock = false;
   if (OB_FAIL(gen_partition_list(param, partition_list, all_partition_ids))) {
     LOG_WARN("failed to append sql stmt", K(ret), K(raw_sql));
-  } else if (lock_str.append_fmt("(%s%s)",
+  } else if (OB_FAIL(lock_str.append_fmt("(%s%s)",
                                  specify_part ? "partition_id in" : "1",
-                                 specify_part ? partition_list.ptr() : "")) {
+                                 specify_part ? partition_list.ptr() : ""))) {
     LOG_WARN("failed to append fmt", K(ret));
-  } else if (unlock_str.append_fmt("(stattype_locked & %u %s%s)",
+  } else if (OB_FAIL(unlock_str.append_fmt("(stattype_locked & %u %s%s)",
                                     param.stattype_,
                                     specify_part ? "and partition_id in" : "",
-                                    specify_part ? partition_list.ptr() : "")) {
+                                    specify_part ? partition_list.ptr() : ""))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else {//specify table
     if (OB_FAIL(raw_sql.append_fmt(GET_LOCKED_PARTITION_STAT,

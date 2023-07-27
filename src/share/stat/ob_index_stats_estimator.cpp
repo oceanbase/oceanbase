@@ -256,7 +256,7 @@ int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
   } else if (OB_UNLIKELY(index_param.is_global_index_ && gather_part_ids.count() != 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(index_param.is_global_index_), K(gather_part_ids.count()));
-  } else if (mgr.get_table_stat(data_param.tenant_id_, data_param.table_id_, gather_part_ids, data_table_stats)) {
+  } else if (OB_FAIL(mgr.get_table_stat(data_param.tenant_id_, data_param.table_id_, gather_part_ids, data_table_stats))) {
     LOG_WARN("failed to get table stat", K(ret));
   } else if (index_param.need_estimate_block_ &&
              OB_FAIL(partition_id_block_map.create(10000,

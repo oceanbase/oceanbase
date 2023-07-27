@@ -216,7 +216,7 @@ int ObLogRestoreProxyUtil::init(const uint64_t tenant_id,
   } else if (OB_FAIL(server_prover_.init(server_list))) {
     LOG_WARN("server_prover_ init failed", K(tenant_id), K(server_list));
   } else if (FALSE_IT(connection_.set_server_provider(&server_prover_))) {
-  } else if (TG_CREATE_TENANT(lib::TGDefIDs::LogMysqlPool, tg_id_)) {
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::LogMysqlPool, tg_id_))) {
     LOG_ERROR("create connection pool timer pool failed");
   } else if (OB_FAIL(TG_START(tg_id_))) {
     LOG_ERROR("TG_START failed");

@@ -103,7 +103,7 @@ int ObLSRestoreStatus::deserialize(const char *buf, const int64_t len, int64_t &
       || OB_UNLIKELY(pos < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(buf), K(len), K(pos));
-  } else if (serialization::decode_i8(buf, len, new_pos, (int8_t*)(&status_))) {
+  } else if (OB_FAIL(serialization::decode_i8(buf, len, new_pos, (int8_t*)(&status_)))) {
     LOG_WARN("failed to decode log stream restore status", K(ret), K(len), K(new_pos));
   } else {
     pos = new_pos;

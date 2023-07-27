@@ -198,7 +198,7 @@ int ObOptStatService::load_column_stat_and_put_cache(const uint64_t tenant_id,
     LOG_WARN("col stat service has not been initialized.", K(ret));
   } else if (keys.empty()) {
     //do nothing
-  } else if (init_key_column_stats(arena, keys, key_column_stats)) {
+  } else if (OB_FAIL(init_key_column_stats(arena, keys, key_column_stats))) {
     LOG_WARN("failed to init key column stats", K(ret));
   } else if (OB_FAIL(sql_service_.fetch_column_stat(tenant_id, arena, key_column_stats))) {
     LOG_WARN("failed to fetch column stat", K(ret));

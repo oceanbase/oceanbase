@@ -4339,7 +4339,7 @@ static int time_date(const ObObjType expect_type, ObObjCastParams &params,
     if (OB_FAIL(ObTimeConverter::time_to_datetime(in.get_time(), params.cur_time_, tz_info,
                                                   datetime_value, ObDateTimeType))) {
       LOG_WARN("time to datetime failed", K(ret), K(in), K(params.cur_time_));
-    } else if (ObTimeConverter::datetime_to_date(datetime_value, NULL, value)) {
+    } else if (OB_FAIL(ObTimeConverter::datetime_to_date(datetime_value, NULL, value))) {
       LOG_WARN("date to datetime failed", K(ret), K(datetime_value));
     } else {
       out.set_date(value);
@@ -6070,7 +6070,7 @@ static int text_text(const ObObjType expect_type, ObObjCastParams &params,
       // for pl, should not get null for lob locator, return empty full tmp lob
       out = tmp_out; // copy meta
       out.set_lob_value(expect_type, row_str.ptr(), row_str.length());
-    } else if (tmp_out.get_string(res_str)) {
+    } else if (OB_FAIL(tmp_out.get_string(res_str))) {
       LOG_WARN("Failed to get string from tmp obj", K(ret), K(tmp_out));
     } else {
       bool has_lob_header = (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0 && (expect_type != ObTinyTextType));

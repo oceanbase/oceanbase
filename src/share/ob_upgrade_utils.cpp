@@ -164,8 +164,8 @@ int ObUpgradeUtils::check_rs_job_exist(ObRsJobType job_type, bool &exist)
     } else if (OB_ISNULL(GCTX.sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sql_proxy is null", K(ret));
-    } else if (sql.assign_fmt("SELECT floor(count(*)) as count FROM %s WHERE job_type = '%s'",
-                              OB_ALL_ROOTSERVICE_JOB_TNAME, ObRsJobTableOperator::get_job_type_str(job_type))) {
+    } else if (OB_FAIL(sql.assign_fmt("SELECT floor(count(*)) as count FROM %s WHERE job_type = '%s'",
+                              OB_ALL_ROOTSERVICE_JOB_TNAME, ObRsJobTableOperator::get_job_type_str(job_type)))) {
       LOG_WARN("fail to assign sql", K(ret));
     } else if (OB_FAIL(GCTX.sql_proxy_->read(res, sql.ptr()))) {
       LOG_WARN("fail to execute sql", K(ret), K(sql));
@@ -203,9 +203,9 @@ int ObUpgradeUtils::check_rs_job_success(ObRsJobType job_type, bool &success)
     } else if (OB_ISNULL(GCTX.sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sql_proxy is null", K(ret));
-    } else if (sql.assign_fmt("SELECT floor(count(*)) as count FROM %s "
+    } else if (OB_FAIL(sql.assign_fmt("SELECT floor(count(*)) as count FROM %s "
                               "WHERE job_type = '%s' and job_status = 'SUCCESS'",
-                              OB_ALL_ROOTSERVICE_JOB_TNAME, ObRsJobTableOperator::get_job_type_str(job_type))) {
+                              OB_ALL_ROOTSERVICE_JOB_TNAME, ObRsJobTableOperator::get_job_type_str(job_type)))) {
       LOG_WARN("fail to assign sql", K(ret));
     } else if (OB_FAIL(GCTX.sql_proxy_->read(res, sql.ptr()))) {
       LOG_WARN("fail to execute sql", K(ret), K(sql));
