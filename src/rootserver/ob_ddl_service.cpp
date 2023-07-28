@@ -30683,7 +30683,7 @@ int ObDDLService::drop_index_to_recyclebin(const ObTableSchema &table_schema) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
-    } else if (schema_guard.get_table_schema(tenant_id, table_schema.get_data_table_id(), data_table_schema)) {
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_schema.get_data_table_id(), data_table_schema))) {
       LOG_WARN("get table schema failed", K(ret), K(tenant_id));
     } else if (OB_ISNULL(data_table_schema)) {
       ret = OB_ERR_UNEXPECTED;
