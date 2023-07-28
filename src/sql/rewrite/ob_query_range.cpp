@@ -1422,7 +1422,7 @@ int ObQueryRange::get_const_key_part(const ObRawExpr *l_expr,
   if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr) || (OB_ISNULL(escape_expr) && T_OP_LIKE == cmp_type)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument.", K(ret), KP(l_expr), KP(r_expr));
-  } else if (l_expr->cnt_param_expr() || r_expr->cnt_param_expr()) {
+  } else if (!l_expr->is_immutable_const_expr() || !r_expr->is_immutable_const_expr()) {
     GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
   } else {
     ObObj l_val;
@@ -1527,7 +1527,7 @@ int ObQueryRange::get_rowid_key_part(const ObRawExpr *l_expr,
       c_type = cmp_type;
       calc_urowid_expr = l_expr;
     }
-    if (const_expr->cnt_param_expr()) {
+    if (!const_expr->is_immutable_const_expr()) {
       query_range_ctx_->need_final_extract_ = true;
     }
     if (OB_SUCC(ret)) {
@@ -1557,7 +1557,7 @@ int ObQueryRange::get_rowid_key_part(const ObRawExpr *l_expr,
       ObKeyPart *tmp_key_part = NULL;
       ObKeyPartList key_part_list;
       ObObj val;
-      if (!const_expr->cnt_param_expr()) {
+      if (const_expr->is_immutable_const_expr()) {
         val = const_val;
       } else {
         if (OB_FAIL(get_final_expr_val(const_expr, val))) {
@@ -1722,7 +1722,7 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
       const_expr = r_expr;
       c_type = cmp_type;
     }
-    if (const_expr->cnt_param_expr()) {
+    if (!const_expr->is_immutable_const_expr()) {
       query_range_ctx_->need_final_extract_ = true;
     }
     ObKeyPartId id(column_item->get_table_id(), column_item->get_column_id());
@@ -1751,11 +1751,10 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
       out_key_part->id_ = id;
       out_key_part->pos_ = *pos;
       out_key_part->null_safe_ = (T_OP_NSEQ == c_type);
-      if ((!const_expr->cnt_param_expr()
+      if (const_expr->is_immutable_const_expr()
           || (!const_expr->has_flag(CNT_DYNAMIC_PARAM)
               && T_OP_LIKE == c_type
-              && NULL != query_range_ctx_->params_))
-          && !const_expr->has_flag(CNT_LAST_INSERT_ID)) {
+              && NULL != query_range_ctx_->params_)) {
         val = const_val;
       } else {
         if (OB_FAIL(get_final_expr_val(const_expr, val))) {
@@ -1775,14 +1774,15 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
             LOG_WARN("failed to get calculable expr val", K(ret));
           } else if (!is_valid) {
             GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
-          } else if (const_expr->cnt_param_expr() || escape_expr->cnt_param_expr()) {
+          } else if (!const_expr->is_immutable_const_expr() ||
+                     !escape_expr->is_immutable_const_expr()) {
             if (OB_FAIL(out_key_part->create_like_key())) {
               LOG_WARN("create like key part failed", K(ret));
             } else if (OB_FAIL(get_final_expr_val(const_expr, out_key_part->like_keypart_->pattern_))) {
               LOG_WARN("failed to get final expr idx", K(ret));
             } else if (OB_FAIL(get_final_expr_val(escape_expr, out_key_part->like_keypart_->escape_))) {
               LOG_WARN("failed to get final expr idx", K(ret));
-            } else if (escape_expr->cnt_param_expr()) {
+            } else if (!escape_expr->is_immutable_const_expr()) {
               query_range_ctx_->need_final_extract_ = true;
             } else {
               // do nothing
@@ -2894,8 +2894,7 @@ int ObQueryRange::get_multi_in_key_part(const ObOpRawExpr *l_expr,
                 // TO HANDLE: (c1, 1) in ((1,2), (1,1))
                 ret = OB_SUCCESS;
                 const ObRawExpr *l_param = l_expr->get_param_expr(j);
-                if (!l_param->is_const_expr() ||
-                    l_param->cnt_param_expr() || const_expr->cnt_param_expr()) {
+                if (!l_param->is_immutable_const_expr() || !const_expr->is_immutable_const_expr()) {
                   ret = not_key_idx.push_back(j);
                 } else if (OB_FAIL(check_const_val_valid(l_param,
                                                          const_expr,
@@ -3128,7 +3127,7 @@ int ObQueryRange::get_param_value(ObInKeyPart *in_key,
   } else {
     ObObj val;
     bool is_valid = false;
-    if (!const_expr->cnt_param_expr()) {
+    if (const_expr->is_immutable_const_expr()) {
       if (OB_FAIL(get_calculable_expr_val(const_expr, val, is_valid))) {
         LOG_WARN("failed to get calculable expr val", K(ret));
       } else if (!is_valid) {
@@ -3537,7 +3536,7 @@ int ObQueryRange::pre_extract_const_op(const ObRawExpr *c_expr,
     bool is_valid = false;
     bool b_val = false;
     query_range_ctx_->cur_expr_is_precise_ = false;
-    if (c_expr->cnt_param_expr()) {
+    if (!c_expr->is_immutable_const_expr()) {
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     } else if (OB_FAIL(get_calculable_expr_val(c_expr, val, is_valid))) {
       LOG_WARN("failed to get calculable expr val", K(ret));
@@ -3647,7 +3646,7 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
           is_cellid_col = true;
         }
         if (OB_SUCC(ret)) {
-          if (const_item->cnt_param_expr()) {
+          if (!const_item->is_immutable_const_expr()) {
             query_range_ctx_->need_final_extract_ = true;
           }
           ObKeyPartId key_part_id(column_item->get_table_id(),
@@ -3692,7 +3691,7 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
             } else if (!is_valid) {
               GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
             } else {
-              if (const_item->cnt_param_expr()) {
+              if (!const_item->is_immutable_const_expr()) {
                 ObObj val;
                 out_key_part->geo_keypart_->geo_type_ = op_type;
                 if (OB_FAIL(get_final_expr_val(const_item, out_key_part->geo_keypart_->wkb_))) {

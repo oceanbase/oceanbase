@@ -1711,18 +1711,21 @@ public:
   int add_child_flags(const ObExprInfo &flags);
   bool has_flag(ObExprInfoFlag flag) const;
   int clear_flag(int32_t flag);
-  /**                                                   +-is_static_scalar_const_expr
-   *                               （1、1+2、sysdate）   ｜     （1，not for[1,2,3])
+  /**                                                   +-is_immutable_const_expr-+
+   *                               （1、1+2、sysdate）   ｜        (1、1+2)
    *                             +-is_static_const_expr-+
    *                             |
    * is_const_or_calculable_expr-+
    *    (1、1+2、2+？、sysdate）   |
    *                             +-is_dynamic_const_expr
    *                                 （2 + ？）
+   * immutable const: is const for all queries
+   * static const: is const in a query sql
+   * dynamic const: is const in a query block
    */
   bool is_param_expr() const;
-  bool cnt_param_expr() const;
   bool is_const_expr() const;
+  bool is_immutable_const_expr() const;
   bool is_static_const_expr() const;
   bool is_static_scalar_const_expr() const;
   bool is_dynamic_const_expr() const;
@@ -1966,14 +1969,15 @@ inline bool ObRawExpr::is_param_expr() const
   return has_flag(IS_STATIC_PARAM) || has_flag(IS_DYNAMIC_PARAM);
 }
 
-inline bool ObRawExpr::cnt_param_expr() const
-{
-  return has_flag(CNT_STATIC_PARAM) || has_flag(CNT_DYNAMIC_PARAM);
-}
-
 inline bool ObRawExpr::is_const_expr() const
 {
   return has_flag(IS_CONST) || has_flag(IS_CONST_EXPR);
+}
+
+inline bool ObRawExpr::is_immutable_const_expr() const
+{
+  // todo: support recognize 1+1 by introducing new expr flag like IS_MUTABLE_FUNC
+  return is_const_raw_expr() && !is_param_expr();
 }
 
 inline bool ObRawExpr::is_static_const_expr() const
