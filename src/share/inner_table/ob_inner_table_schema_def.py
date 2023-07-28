@@ -5749,6 +5749,13 @@ def_table_schema(
 )
 
 # 474 : __all_tenant_scheduler_job_classes
+# 475 : __all_recover_table_job
+# 476 : __all_recover_table_job_history
+# 477 : __all_import_table_job
+# 478 : __all_import_table_job_history
+# 479 : __all_import_table_task
+# 480 : __all_import_table_task_history
+# 481 : __all_import_stmt_exec_history
 
 #
 # 余留位置
@@ -12291,6 +12298,14 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 
 # 12421: __all_virtual_tenant_scheduler_job_class
 
+# 12422: __all_virtual_recover_table_job
+# 12423: __all_virtual_recover_table_job_history
+# 12424: __all_virtual_import_table_job
+# 12425: __all_virtual_import_table_job_history
+# 12426: __all_virtual_import_table_task
+# 12427: __all_virtual_import_table_task_history
+# 12428: __all_virtual_import_stmt_exec_history
+
 #
 # 余留位置
 #
@@ -12558,6 +12573,15 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15303', all_def_keywords['__all_virtual_arbitration_member_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304', all_def_keywords['__all_virtual_arbitration_service_status'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keywords['__all_virtual_obj_lock']))
+
+# 15306: __all_virtual_recover_table_job
+# 15307: __all_virtual_recover_table_job_history
+# 15308: __all_virtual_import_table_job
+# 15309: __all_virtual_import_table_job_history
+# 15310: __all_virtual_import_table_task
+# 15311: __all_virtual_import_table_task_history
+# 15312: __all_virtual_import_stmt_exec_history
+
 #######################################################################
 # oracle agent table index is defined after the System table Index area
 #######################################################################
@@ -28010,6 +28034,22 @@ def_table_schema(
 
 # 21461: GV$OB_PL_CACHE_OBJECT
 # 21462: V$OB_PL_CACHE_OBJECT
+
+# 21463: CDB_OB_RECOVER_TABLE_JOBS
+# 21464: DBA_OB_RECOVER_TABLE_JOBS
+# 21465: CDB_OB_RECOVER_TABLE_JOB_HISTORY
+# 21466: DBA_OB_RECOVER_TABLE_JOB_HISTORY
+# 21467: CDB_OB_IMPORT_TABLE_JOBS
+# 21468: DBA_OB_IMPORT_TABLE_JOBS
+# 21469: CDB_OB_IMPORT_TABLE_JOB_HISTORY
+# 21470: DBA_OB_IMPORT_TABLE_JOB_HISTORY
+# 21471: CDB_OB_IMPORT_TABLE_TASKS
+# 21472: DBA_OB_IMPORT_TABLE_TASKS
+# 21473: CDB_OB_IMPORT_TABLE_TASK_HISTORY
+# 21474: DBA_OB_IMPORT_TABLE_TASK_HISTORY
+# 21475: CDB_OB_IMPORT_STMT_EXEC_HISTORY
+# 21476: DBA_OB_IMPORT_STMT_EXEC_HISTORY
+
 #
 # 余留位置
 
@@ -45904,7 +45944,15 @@ def_table_schema(
 
 # 25260: DBA_SCHEDULER_JOB_RUN_DETAILS
 # 25261: DBA_SCHEDULER_JOB_CLASSES
-#
+
+# 25262: DBA_OB_RECOVER_TABLE_JOBS
+# 25263: DBA_OB_RECOVER_TABLE_JOB_HISTORY
+# 25264: DBA_OB_IMPORT_TABLE_JOBS
+# 25265: DBA_OB_IMPORT_TABLE_JOB_HISTORY
+# 25266: DBA_OB_IMPORT_TABLE_TASKS
+# 25267: DBA_OB_IMPORT_TABLE_TASK_HISTORY
+# 25268: DBA_OB_IMPORT_STMT_EXEC_HISTORY
+
 # 余留位置
 
 #### End Data Dictionary View
