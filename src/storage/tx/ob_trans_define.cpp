@@ -907,7 +907,7 @@ int ObTxMDSCache::insert_mds_node(const ObTxBufferNode &buf_node)
   if (!buf_node.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "insert MDS buf node", K(ret));
-  } else if (mds_list_.push_back(buf_node)) {
+  } else if (OB_FAIL(mds_list_.push_back(buf_node))) {
     TRANS_LOG(WARN, "push back MDS buf node", K(ret));
   } else {
     unsubmitted_size_ += buf_node.get_serialize_size();

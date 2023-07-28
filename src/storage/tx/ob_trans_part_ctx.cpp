@@ -4349,7 +4349,7 @@ int ObPartTransCtx::replay_one_part_of_big_segment(const palf::LSN &offset,
   } else if (!need_replay) {
     TRANS_LOG(INFO, "need not replay log", K(timestamp), K(offset), K(*this));
     // no need to replay
-  } else if (update_replaying_log_no_(timestamp, part_log_no)) {
+  } else if (OB_FAIL(update_replaying_log_no_(timestamp, part_log_no))) {
     TRANS_LOG(WARN, "update replaying log no failed", K(ret), K(timestamp), K(part_log_no));
   }
 
@@ -4662,7 +4662,7 @@ int ObPartTransCtx::replay_active_info(const ObTxActiveInfoLog &log,
   } else if (!need_replay) {
     TRANS_LOG(INFO, "need not replay log", K(log), K(timestamp), K(offset), K(*this));
     // no need to replay
-  } else if (update_replaying_log_no_(timestamp, part_log_no)) {
+  } else if (OB_FAIL(update_replaying_log_no_(timestamp, part_log_no))) {
     TRANS_LOG(WARN, "update replaying log no failed", K(ret), K(timestamp), K(part_log_no));
   } else if (OB_FAIL(set_scheduler_(log.get_scheduler()))) {
     TRANS_LOG(WARN, "set scheduler error", K(ret), K(log), K(*this));
@@ -4719,7 +4719,7 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
   } else if (!need_replay) {
     TRANS_LOG(INFO, "need not replay log", K(commit_info_log), K(timestamp), K(offset), K(*this));
     // no need to replay
-  } else if (update_replaying_log_no_(timestamp, part_log_no)) {
+  } else if (OB_FAIL(update_replaying_log_no_(timestamp, part_log_no))) {
     TRANS_LOG(WARN, "update replaying log no failed", K(ret), K(timestamp), K(part_log_no));
   } else if (OB_FAIL(exec_info_.redo_lsns_.assign(commit_info_log.get_redo_lsns()))) {
     TRANS_LOG(WARN, "set redo log offsets error", K(commit_info_log), K(*this));
@@ -4832,7 +4832,7 @@ int ObPartTransCtx::replay_prepare(const ObTxPrepareLog &prepare_log,
   } else if (!need_replay) {
     TRANS_LOG(INFO, "need not replay log", K(prepare_log), K(timestamp), K(offset), K(*this));
     // no need to replay
-  } else if (update_replaying_log_no_(timestamp, part_log_no)) {
+  } else if (OB_FAIL(update_replaying_log_no_(timestamp, part_log_no))) {
     TRANS_LOG(WARN, "update replaying log no failed", K(ret), K(timestamp), K(part_log_no));
   } else if (OB_FAIL(exec_info_.incremental_participants_.assign(
                  prepare_log.get_incremental_participants()))) {
@@ -4914,7 +4914,7 @@ int ObPartTransCtx::replay_commit(const ObTxCommitLog &commit_log,
     // TODO insert_into_tx_table before need_replay and give it the ability to retry
     TRANS_LOG(INFO, "need not replay log", K(commit_log), K(timestamp), K(offset), K(*this));
     // no need to replay
-  } else if (update_replaying_log_no_(timestamp, part_log_no)) {
+  } else if (OB_FAIL(update_replaying_log_no_(timestamp, part_log_no))) {
     TRANS_LOG(WARN, "update replaying log no failed", K(ret), K(timestamp), K(part_log_no));
   } else if (OB_FAIL(exec_info_.incremental_participants_.assign(
                  commit_log.get_incremental_participants()))) {
@@ -5035,7 +5035,7 @@ int ObPartTransCtx::replay_clear(const ObTxClearLog &clear_log,
     if (OB_FAIL(trans_clear_())) {
       TRANS_LOG(WARN, "transaction clear error", KR(ret), "context", *this);
     }
-  } else if (update_replaying_log_no_(timestamp, part_log_no)) {
+  } else if (OB_FAIL(update_replaying_log_no_(timestamp, part_log_no))) {
     TRANS_LOG(WARN, "update replaying log no failed", K(ret), K(timestamp), K(part_log_no));
   } else if (OB_FAIL(exec_info_.incremental_participants_.assign(
                  clear_log.get_incremental_participants()))) {
@@ -5112,7 +5112,7 @@ int ObPartTransCtx::replay_abort(const ObTxAbortLog &abort_log,
   } else if (!need_replay) {
     TRANS_LOG(INFO, "need not replay log", K(abort_log), K(timestamp), K(offset), K(*this));
     // no need to replay,
-  } else if (update_replaying_log_no_(timestamp, part_log_no)) {
+  } else if (OB_FAIL(update_replaying_log_no_(timestamp, part_log_no))) {
     TRANS_LOG(WARN, "update replaying log no failed", K(ret), K(timestamp), K(part_log_no));
   } else {
     if (OB_SUCC(ret)) {
@@ -5219,7 +5219,7 @@ int ObPartTransCtx::replay_multi_data_source(const ObTxMultiDataSourceLog &log,
   } else if (!need_replay || repeat_replay) {
     TRANS_LOG(INFO, "need not replay log", K(need_replay), K(repeat_replay), K(log), K(timestamp), K(lsn), K(*this));
     // no need to replay
-  } else if (update_replaying_log_no_(timestamp, part_log_no)) {
+  } else if (OB_FAIL(update_replaying_log_no_(timestamp, part_log_no))) {
     TRANS_LOG(WARN, "update replaying log no failed", K(ret), K(timestamp), K(part_log_no));
   // TODO: We need filter the replay of mds array after recovered from the tx_ctx_table
   //} else if (OB_FAIL(deep_copy_mds_array(log.get_data(), false))) {
@@ -5312,7 +5312,7 @@ int ObPartTransCtx::replay_record(const ObTxRecordLog &log,
   } else if (!need_replay) {
     TRANS_LOG(INFO, "need not replay log", K(log), K(timestamp), K(lsn), K(*this));
     // no need to replay
-  } else if (update_replaying_log_no_(timestamp, part_log_no)) {
+  } else if (OB_FAIL(update_replaying_log_no_(timestamp, part_log_no))) {
     TRANS_LOG(WARN, "update replaying log no failed", K(ret), K(timestamp), K(part_log_no));
   } else {
     reset_redo_lsns_();

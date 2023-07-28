@@ -309,7 +309,7 @@ int ObDupTableLSTsSyncMgr::update_ts_info_(const common::ObAddr &addr,
   tmp_ts_info.update(ts_info);
 
   if (OB_FAIL(ret)) {
-  } else if (ts_info_cache_.set_refactored(addr, tmp_ts_info, 1)) {
+  } else if (OB_FAIL(ts_info_cache_.set_refactored(addr, tmp_ts_info, 1))) {
     DUP_TABLE_LOG(WARN, "set ts info failed", K(ret));
   }
   DUP_TABLE_LOG(DEBUG, "update ts info", K(ret), K(addr), K(tmp_ts_info));
