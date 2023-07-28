@@ -26,6 +26,9 @@ using namespace share;
 namespace storage
 {
 
+//errsim def
+ERRSIM_POINT_DEF(PHYSICAL_COPY_TASK_GET_TABLET_FAILED);
+
 /******************ObPhysicalCopyCtx*********************/
 ObPhysicalCopyCtx::ObPhysicalCopyCtx()
   : lock_(),
@@ -780,6 +783,17 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
     LOG_WARN("failed to get merge type", K(ret), KPC(sstable_param));
   } else if (OB_FAIL(ls_->ha_get_tablet(tablet_id, tablet_handle))) {
     LOG_WARN("failed to do ha get tablet", K(ret), K(tablet_id));
+  }
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = PHYSICAL_COPY_TASK_GET_TABLET_FAILED ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake PHYSICAL_COPY_TASK_GET_TABLET_FAILED", K(ret));
+      }
+    }
+#endif
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_id));

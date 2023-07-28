@@ -23,6 +23,8 @@ using namespace oceanbase;
 using namespace share;
 using namespace storage;
 
+ERRSIM_POINT_DEF(CHECK_CAN_REBUILD);
+
 ObLSRebuildCtx::ObLSRebuildCtx()
   : ls_id_(),
     type_(),
@@ -716,6 +718,14 @@ int ObRebuildService::check_can_rebuild_(
   } else {
     can_rebuild = true;
   }
+
+#ifdef ERRSIM
+  if (OB_FAIL(ret)) {
+    //do nothing
+  } else {
+    can_rebuild = CHECK_CAN_REBUILD ? false: true;
+  }
+#endif
   return ret;
 }
 

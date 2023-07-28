@@ -1007,11 +1007,10 @@ int ObLSMigrationHandler::check_can_skip_prepare_status_(bool &can_skip)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls migration handler do not init", K(ret));
-  //} else if (OB_FAIL(get_ls_migration_task_(task))) {
-  //  LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
-  //} else if (ObMigrationOpType::REBUILD_LS_OP == task.arg_.type_) {
-  //  can_skip = false;
-  // TODO(muwei.ym) Open IT in 4.3 and the condition should change to migration status rebuild flag setted.
+  } else if (OB_FAIL(get_ls_migration_task_(task))) {
+    LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
+  } else if (ObMigrationOpType::REBUILD_LS_OP == task.arg_.type_) {
+    can_skip = false;
   } else {
     can_skip = true;
   }

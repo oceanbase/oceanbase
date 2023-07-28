@@ -25,6 +25,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "ob_storage_ha_utils.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "ob_rebuild_service.h"
 
 using namespace oceanbase::transaction;
 using namespace oceanbase::share;
@@ -49,6 +50,7 @@ ERRSIM_POINT_DEF(EN_START_TRANSFER_IN_FAILED);
 ERRSIM_POINT_DEF(EN_UPDATE_ALL_TABLET_TO_LS_FAILED);
 ERRSIM_POINT_DEF(EN_UPDATE_TRANSFER_TASK_FAILED);
 ERRSIM_POINT_DEF(EN_START_CAN_NOT_RETRY);
+ERRSIM_POINT_DEF(EN_MAKE_SRC_LS_REBUILD);
 
 ObTransferHandler::ObTransferHandler()
   : is_inited_(false),
@@ -495,6 +497,16 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   } else {
     if (OB_FAIL(report_to_meta_table_(task_info))) {
       LOG_WARN("failed to report to meta table", K(ret), K(task_info));
+    } else {
+#ifdef ERRSIM
+      bool is_src_ls_rebuild = EN_MAKE_SRC_LS_REBUILD ? false: true;
+      ObRebuildService *rebuild_service = MTL(ObRebuildService*);
+      ObLSRebuildType type(ObLSRebuildType::TRANSFER);
+      if (!is_src_ls_rebuild) {
+      } else if (OB_FAIL(rebuild_service->add_rebuild_ls(task_info.src_ls_id_, type))) {
+        LOG_WARN("failed to add rebuild ls", K(ret), K(task_info));
+      }
+#endif
     }
   }
   if (OB_SUCCESS != (tmp_ret = record_server_event_(ret, round_, task_info))) {
