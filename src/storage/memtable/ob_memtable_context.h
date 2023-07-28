@@ -315,7 +315,7 @@ public:
   virtual int try_elr_when_lock_for_write(
       const uint32_t descriptor, const int64_t version, const ObMemtableKey* key, const ObMvccRow& row) override;
   virtual void inc_lock_for_read_retry_count() override;
-  virtual int row_compact(ObMvccRow* value, const int64_t snapshot_version) override;
+  virtual int row_compact(ObMemtable* memtable, ObMvccRow* value, const int64_t snapshot_version) override;
   virtual const char* log_conflict_ctx(const uint32_t descriptor) override;
   virtual int read_lock_yield() override;
   virtual int write_lock_yield() override;

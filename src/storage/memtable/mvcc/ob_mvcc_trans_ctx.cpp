@@ -1179,10 +1179,10 @@ int ObMvccRowCallback::trans_commit(const bool for_replay)
           if (value_.need_compact(for_read, for_replay)) {
             if (for_replay) {
               if (0 != ctx_.get_read_snapshot() && INT64_MAX != ctx_.get_read_snapshot()) {
-                ctx_.row_compact(&value_, ctx_.get_read_snapshot());
+                ctx_.row_compact(memtable_, &value_, ctx_.get_read_snapshot());
               }
             } else {
-              ctx_.row_compact(&value_, INT64_MAX - 100);
+              ctx_.row_compact(memtable_, &value_, INT64_MAX - 100);
             }
           }
           ctx_.after_link_trans_node(&key_, &value_);

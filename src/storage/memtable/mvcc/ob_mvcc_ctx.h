@@ -76,10 +76,11 @@ public:  // for mvcc engine invoke
   virtual int add_crc(const void* key, ObMvccRow* value, ObMvccTransNode* tnode, int64_t data_size) = 0;
   virtual int add_crc2(ObMvccRow* value, ObMvccTransNode* tnode, int64_t data_size) = 0;
   virtual int add_crc4(ObMvccRow* value, ObMvccTransNode* tnode, int64_t data_size, const int64_t log_ts) = 0;
-  virtual int row_compact(ObMvccRow* value, const int64_t snapshot_version)
+  virtual int row_compact(ObMemtable* memtable,  ObMvccRow* value, const int64_t snapshot_version)
   {
     UNUSED(value);
     UNUSED(snapshot_version);
+    UNUSED(memtable);
     return common::OB_SUCCESS;
   }
   virtual const char* log_conflict_ctx(const uint32_t descriptor)

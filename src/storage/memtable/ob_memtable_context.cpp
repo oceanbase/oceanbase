@@ -402,16 +402,13 @@ void ObMemtableCtx::on_tsc_retry(const ObMemtableKey& key)
   }
 }
 
-int ObMemtableCtx::row_compact(ObMvccRow* value, const int64_t snapshot_version)
+int ObMemtableCtx::row_compact(ObMemtable* memtable, ObMvccRow* value, const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(value)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "value is NULL");
-  } else if (NULL == get_active_mt()) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "host not set", K(ret), K(value), K(snapshot_version), K(*this), K(lbt()));
-  } else if (!data_relocated_ && OB_FAIL(get_active_mt()->row_compact(value, snapshot_version))) {
+  } else if (!data_relocated_ && OB_FAIL(memtable->row_compact(value, snapshot_version))) {
     TRANS_LOG(WARN, "row_compact fail", K(ret), K(value), K(snapshot_version));
   } else {
     // do nothing
