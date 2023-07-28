@@ -538,10 +538,6 @@ int ObDDLRetryTask::check_health()
   } else if (OB_FAIL(refresh_schema_version())) {
     LOG_WARN("refresh schema version failed", K(ret));
   }
-  if (ObDDLTaskStatus::FAIL == static_cast<ObDDLTaskStatus>(task_status_)
-      || ObDDLTaskStatus::SUCCESS == static_cast<ObDDLTaskStatus>(task_status_)) {
-    ret = OB_SUCCESS; // allow clean up
-  }
   return ret;
 }
 

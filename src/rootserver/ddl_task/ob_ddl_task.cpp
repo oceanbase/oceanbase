@@ -1058,7 +1058,7 @@ int ObDDLTask::refresh_schema_version()
     int64_t refreshed_schema_version = 0;
     if (OB_FAIL(schema_service.get_tenant_refreshed_schema_version(tenant_id_, refreshed_schema_version))) {
       LOG_WARN("get refreshed schema version failed", K(ret), K(tenant_id_));
-    } else if (refreshed_schema_version < schema_version_) {
+    } else if (!ObSchemaService::is_formal_version(refreshed_schema_version) || refreshed_schema_version < schema_version_) {
       ret = OB_SCHEMA_EAGAIN;
       if (REACH_TIME_INTERVAL(1000L * 1000L)) {
         LOG_INFO("tenant schema not refreshed to the target version", K(ret), K(tenant_id_), K(schema_version_), K(refreshed_schema_version));
