@@ -1511,6 +1511,12 @@ int ObMemtableCtx::truncate_to(const int32_t sql_no)
   return ret;
 }
 
+bool ObMemtableCtx::is_logging_big_row()
+{
+  ObByteLockGuard guard(lock_);
+  return log_gen_.is_logging_big_row();
+}
+
 bool ObMemtableCtx::is_all_redo_submitted()
 {
   ObByteLockGuard guard(lock_);

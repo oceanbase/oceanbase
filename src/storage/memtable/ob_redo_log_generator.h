@@ -48,6 +48,7 @@ public:
   {
     return generate_data_size_;
   }
+  bool is_logging_big_row() const;
 
 private:
   bool big_row_log_fully_filled() const;

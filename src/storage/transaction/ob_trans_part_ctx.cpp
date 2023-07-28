@@ -893,7 +893,7 @@ int ObPartTransCtx::end_task(
     {
       CtxTransTableLockGuard guard(lock_, trans_table_seqlock_);
 
-      if (is_sp_trans_() && is_rollback && is_logging_()) {
+      if (is_sp_trans_() && is_rollback && (is_logging_() || mt_ctx_.is_logging_big_row())) {
         if (++cnt > MAX_END_STMT_RETRY_TIMES) {
           need_retry = false;
           ret = OB_TRANS_NEED_ROLLBACK;
@@ -10941,13 +10941,17 @@ int ObPartTransCtx::rollback_to_(const int32_t sql_no)
   uint64_t checksum = 0;
   int64_t checksum_log_ts = 0;
 
-  if (OB_FAIL(mt_ctx_.rollback_to(sql_no,
-          false, /*for replay*/
-          need_write_log,
-          max_durable_log_ts_,
-          has_calc_checksum,
-          checksum,
-          checksum_log_ts))) {
+  if (mt_ctx_.is_logging_big_row()) {
+    ret = OB_TRANS_STMT_NEED_RETRY;
+    TRANS_LOG(
+        WARN, "rollback to encounter logging big row", K(ret), K(sql_no), K(need_write_log), K(curr_sql_no), K(*this));
+  } else if (OB_FAIL(mt_ctx_.rollback_to(sql_no,
+                 false, /*for replay*/
+                 need_write_log,
+                 max_durable_log_ts_,
+                 has_calc_checksum,
+                 checksum,
+                 checksum_log_ts))) {
     TRANS_LOG(WARN, "rollback to sql no error", K(ret), K(sql_no), K(need_write_log), K(max_durable_sql_no_), K(*this));
   } else if (need_write_log) {
     bool has_redo_log = false;

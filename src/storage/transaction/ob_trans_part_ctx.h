@@ -627,7 +627,7 @@ private:
   static const int64_t REPLAY_PRINT_TRACE_THRESHOLD = 10 * 1000;      // 10 ms
   static const int64_t REDO_SYNC_TASK_RETRY_INTERVAL_US = 10 * 1000;  // 10ms
   static const int64_t END_STMT_SLEEP_US = 10 * 1000;                 // 10ms
-  static const int64_t MAX_END_STMT_RETRY_TIMES = 100;
+  static const int64_t MAX_END_STMT_RETRY_TIMES = 500;
   static const uint64_t MAX_PREV_LOG_IDS_COUNT = 80000;
 private:
   bool is_inited_;

@@ -237,6 +237,11 @@ bool ObRedoLogGenerator::big_row_log_fully_filled() const
   return big_row_size_ - generate_big_row_pos_ <= 0;
 }
 
+bool ObRedoLogGenerator::is_logging_big_row() const
+{
+  return NULL != big_row_buf_;
+}
+
 int ObRedoLogGenerator::fill_redo_log(char* buf, const int64_t buf_len, int64_t& buf_pos)
 {
   int ret = OB_SUCCESS;
@@ -256,17 +261,27 @@ int ObRedoLogGenerator::fill_redo_log(char* buf, const int64_t buf_len, int64_t&
       ob_free(big_row_buf_);
       big_row_buf_ = NULL;
     }
-    // there is data in big_row_buf, fill_redo_log should first copy data from it
-  } else if (OB_FAIL(fill_big_row_redo_(buf, buf_len, buf_pos, generate_data_size_))) {
-    if (OB_EAGAIN != ret) {
-      TRANS_LOG(WARN, "fill big row redo error", K(ret), KP(buf), K(buf_len), K(buf_pos));
-    }
   } else {
-    // after filling the last redo log of big row, now matter
-    // how much memory left, we don't serialize the following rows.
-    // in doing this, the release of big row buffer and
-    // modification of consumer_cursor_ would be more convenient.
-    ret = OB_EAGAIN;
+#ifdef ERRSIM
+    ret = E(EventTable::EN_IGNORE_WRITE_NEXT_LOB_LOG) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      ret = OB_SUCCESS;
+      TRANS_LOG(WARN, "ERRSIM, fill next lob redo", K(ret));
+      return ret;
+    }
+#endif
+    // there is data in big_row_buf, fill_redo_log should first copy data from it
+    if (OB_FAIL(fill_big_row_redo_(buf, buf_len, buf_pos, generate_data_size_))) {
+      if (OB_EAGAIN != ret) {
+        TRANS_LOG(WARN, "fill big row redo error", K(ret), KP(buf), K(buf_len), K(buf_pos));
+      }
+    } else {
+      // after filling the last redo log of big row, now matter
+      // how much memory left, we don't serialize the following rows.
+      // in doing this, the release of big row buffer and
+      // modification of consumer_cursor_ would be more convenient.
+      ret = OB_EAGAIN;
+    }
   }
   if (OB_SUCC(ret)) {
     ObMemtableMutatorWriter mmw;

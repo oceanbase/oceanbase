@@ -455,6 +455,7 @@ public:
       const int64_t max_durable_log_ts, bool& has_calc_checksum, uint64_t& checksum, int64_t& checksum_log_ts);
   int truncate_to(const int32_t sql_no);
   bool is_all_redo_submitted();
+  bool is_logging_big_row();
   bool is_for_replay() const
   {
     return trans_mgr_.is_for_replay();

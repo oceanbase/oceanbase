@@ -1462,8 +1462,8 @@ int ObMvccRowCallback::fetch_rollback_data_size(int64_t& rollback_data_size)
   } else if (INT64_MAX == log_ts_) {
     rollback_data_size = data_size_;
   } else {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "unexpected log id", K(log_ts_), K(*this));
+    // for big row, there may data size with 0
+    rollback_data_size = 0;
   }
 
   return ret;
