@@ -1040,6 +1040,8 @@ int ObStartTransferBackfillTXTask::generate_transfer_backfill_tx_dags_()
         LOG_WARN("failed to create first task", K(ret));
       } else if (OB_FAIL(tablet_backfill_tx_dag->add_child(*finish_backfill_tx_dag))) {
         LOG_WARN("failed to add child dag", K(ret), K(*ctx_));
+      } else if (OB_FAIL(finish_backfill_tx_dag->create_first_task())) {
+        LOG_WARN("failed to create first task", K(ret));
       } else if (OB_FAIL(scheduler->add_dag(tablet_backfill_tx_dag))) {
         LOG_WARN("failed to add tablet backfill tx dag", K(ret), K(*tablet_backfill_tx_dag));
         if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
@@ -1050,15 +1052,12 @@ int ObStartTransferBackfillTXTask::generate_transfer_backfill_tx_dags_()
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(finish_backfill_tx_dag->create_first_task())) {
-      LOG_WARN("failed to create first task", K(ret));
     } else if (OB_FAIL(scheduler->add_dag(finish_backfill_tx_dag))) {
       LOG_WARN("failed to add finish backfill tx dag", K(ret), K(*finish_backfill_tx_dag));
       if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
         LOG_WARN("Fail to add task", K(ret));
         ret = OB_EAGAIN;
       }
-
       if (OB_NOT_NULL(tablet_backfill_tx_dag)) {
         if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(tablet_backfill_tx_dag, backfill_tx_dag))) {
           LOG_WARN("failed to cancel tablet backfill tx dag", K(tmp_ret), KPC(backfill_tx_dag));
