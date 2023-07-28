@@ -1240,6 +1240,45 @@ int ObTabletStartTransferInHelper::on_replay(
   return ret;
 }
 
+int ObTabletStartTransferInHelper::check_transfer_ls_migration_status_(const ObTXStartTransferInInfo &tx_start_transfer_in_info)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle dest_ls_handle;
+  ObLSHandle src_ls_handle;
+  ObLS *dest_ls = NULL;
+  ObLS *src_ls = NULL;
+  ObLSService* ls_srv = nullptr;
+  ObMigrationStatus migrate_status;
+  if (!tx_start_transfer_in_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("create transfer in tablet get invalid argument", K(ret), K(tx_start_transfer_in_info));
+  } else if (OB_ISNULL(ls_srv = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ls srv should not be NULL", K(ret), KP(ls_srv));
+  } else if (OB_FAIL(ls_srv->get_ls(tx_start_transfer_in_info.src_ls_id_, src_ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("failed to get ls", KR(ret), "src_ls_id", tx_start_transfer_in_info.src_ls_id_);
+  } else if (OB_ISNULL(src_ls = src_ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is NULL", KR(ret), KP(src_ls));
+  } else if (OB_FAIL(src_ls->get_migration_status(migrate_status))) {
+    LOG_WARN("failed to get migration status", KR(ret), "src_ls_id", src_ls->get_ls_id());
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_GC == migrate_status) {
+    ret = OB_LS_WAITING_SAFE_DESTROY;
+    LOG_WARN("the migration status of transfer src_ls is OB_MIGRATION_STATUS_GC", KR(ret), "src_ls_id", src_ls->get_ls_id());
+  } else if (OB_FAIL(ls_srv->get_ls(tx_start_transfer_in_info.dest_ls_id_, dest_ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("failed to get ls", KR(ret), "dest_ls_id", tx_start_transfer_in_info.dest_ls_id_);
+  } else if (OB_ISNULL(dest_ls = dest_ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is NULL", KR(ret), KP(dest_ls));
+  } else if (OB_FAIL(dest_ls->get_migration_status(migrate_status))) {
+    LOG_WARN("failed to get migration status", KR(ret), KP(dest_ls), "dest_ls_id", dest_ls->get_ls_id());
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_GC == migrate_status) {
+    ret = OB_LS_WAITING_SAFE_DESTROY;
+    LOG_WARN("the migration status of transfer dest_ls is OB_MIGRATION_STATUS_GC", KR(ret), "dest_ls_id", dest_ls->get_ls_id());
+  }
+  return ret;
+}
+
 int ObTabletStartTransferInHelper::on_replay_success_(
     const share::SCN &scn,
     const ObTXStartTransferInInfo &tx_start_transfer_in_info,
@@ -1270,6 +1309,8 @@ int ObTabletStartTransferInHelper::on_replay_success_(
     LOG_WARN("on replay success get invalid argument", K(ret), K(scn), K(tx_start_transfer_in_info));
   } else if (CLICK_FAIL(check_transfer_dest_tablets_(tx_start_transfer_in_info, for_replay))) {
     LOG_WARN("failed to check transfer dest tablets", K(ret), K(tx_start_transfer_in_info));
+  } else if (CLICK_FAIL(check_transfer_ls_migration_status_(tx_start_transfer_in_info))) {
+    LOG_WARN("failed to check transfer ls migration status", K(ret), K(tx_start_transfer_in_info));
   } else if (CLICK_FAIL(create_transfer_in_tablets_(scn, for_replay, tx_start_transfer_in_info, ctx))) {
     LOG_WARN("failed to create transfer in tablets", K(ret), K(tx_start_transfer_in_info));
   }

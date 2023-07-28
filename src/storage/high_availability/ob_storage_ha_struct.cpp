@@ -388,7 +388,7 @@ int ObMigrationStatusHelper::set_ls_migrate_gc_status_(
   const ObMigrationStatus migrate_GC_status = ObMigrationStatus::OB_MIGRATION_STATUS_GC;
   if (!not_in_member_list_scene || ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
     // do nothing
-  } else if (OB_FAIL(ls.get_log_handler()->offline())) {
+  } else if (OB_FAIL(ls.get_log_handler()->disable_sync())) {
     LOG_WARN("failed to disable replay", K(ret));
   } else if (OB_FAIL(ls.set_migration_status(migrate_GC_status, ls.get_ls_meta().get_rebuild_seq()))) {
     LOG_WARN("failed to set migration status", K(ret));

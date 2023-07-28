@@ -192,6 +192,7 @@ private:
       bool &can_skip);
   static int set_dest_ls_rebuild_(
       const share::ObLSID &dest_ls_id);
+  static int check_transfer_ls_migration_status_(const ObTXStartTransferInInfo &tx_start_transfer_in_info);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletStartTransferInHelper);
