@@ -1206,6 +1206,19 @@ int ObIndexBuildTask::update_index_status_in_schema(const ObTableSchema &index_s
     arg.in_offline_ddl_white_list_ = index_schema.get_table_state_flag() != TABLE_STATE_NORMAL;
     int64_t ddl_rpc_timeout = 0;
     int64_t table_id = index_schema.get_table_id();
+    if (INDEX_STATUS_AVAILABLE == new_status) {
+      const bool is_create_index_syntax = create_index_arg_.ddl_stmt_str_.trim().prefix_match_ci("create");
+      if (create_index_arg_.ddl_stmt_str_.empty()) {
+        // alter table syntax.
+      } else if (OB_UNLIKELY(!is_create_index_syntax)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected err", K(ret), "ddl_stmt_str", create_index_arg_.ddl_stmt_str_, K(create_index_arg_));
+      } else {
+        // For create index syntax, create_index_arg_ will record the user sql, and generate the ddl_stmt_str when anabling index.
+        // For alter table add index syntax, create_index_arg_ will not record the user sql, and generate the ddl_stmt_str when generating index schema.
+        arg.ddl_stmt_str_ = create_index_arg_.ddl_stmt_str_;
+      }
+    }
 
     DEBUG_SYNC(BEFORE_UPDATE_GLOBAL_INDEX_STATUS);
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, table_id, ddl_rpc_timeout))) {
@@ -1213,7 +1226,7 @@ int ObIndexBuildTask::update_index_status_in_schema(const ObTableSchema &index_s
     } else if (OB_FAIL(root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(ddl_rpc_timeout).update_index_status(arg))) {
       LOG_WARN("update index status failed", K(ret), K(arg));
     } else {
-      LOG_INFO("notify index status changed finish", K(new_status), K(index_table_id_));
+      LOG_INFO("notify index status changed finish", K(new_status), K(index_table_id_), K(ddl_rpc_timeout), "ddl_stmt_str", arg.ddl_stmt_str_);
     }
   }
   return ret;
@@ -1291,7 +1304,8 @@ int ObIndexBuildTask::clean_on_failed()
           index_name = "__fake";
         } else if (OB_FAIL(index_schema->get_index_name(index_name))) {
           LOG_WARN("get index name failed", K(ret));
-        } else if (0 == parent_task_id_) {
+        } else if (0 == parent_task_id_
+          && !create_index_arg_.ddl_stmt_str_.trim().prefix_match_ci("create")) {
           // generate ddl_stmt if it is not a child task.
           if (is_oracle_mode) {
             if (OB_FAIL(drop_index_sql.append_fmt("drop index \"%.*s\"", index_name.length(), index_name.ptr()))) {
