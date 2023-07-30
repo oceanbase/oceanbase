@@ -131,7 +131,7 @@ int ObTxCtxTableInfo::deserialize(const char *buf,
   } else if (OB_FAIL(header.deserialize(buf, buf_len, pos))) {
     TRANS_LOG(WARN, "deserialize header fail", K(buf_len), K(pos), K(ret));
   } else if (OB_FAIL(deserialize_(buf, buf_len, pos, tx_data_table))) {
-    TRANS_LOG(INFO, "deserialize_ fail", "buf_len", buf_len, K(pos), K(ret));
+    TRANS_LOG(WARN, "deserialize_ fail", "buf_len", buf_len, K(pos), K(ret));
   }
   return ret;
 }
@@ -230,7 +230,7 @@ int ObTxCtxTableMeta::serialize_(char* buf, const int64_t buf_len, int64_t &pos)
   } else if (OB_FAIL(serialization::encode_vi32(buf, buf_len, pos, row_idx_))) {
     TRANS_LOG(WARN, "encode row_idx fail", K(buf_len), K(pos), K(ret));
   } else {
-    TRANS_LOG(INFO, "ObTxCtxTableMeta encode succ", K(buf_len), K(pos));
+    TRANS_LOG(DEBUG, "ObTxCtxTableMeta encode succ", K(buf_len), K(pos));
   }
   return ret;
 }
@@ -243,7 +243,7 @@ int ObTxCtxTableMeta::deserialize(const char *buf, const int64_t buf_len, int64_
   if (OB_FAIL(header.deserialize(buf, buf_len, pos))) {
     TRANS_LOG(WARN, "deserialize header fail", K(buf_len), K(pos), K(ret));
   } else if (OB_FAIL(deserialize_(buf, buf_len, pos))) {
-    TRANS_LOG(INFO, "deserialize_ fail", "buf_len", buf_len, K(pos), K(ret));
+    TRANS_LOG(WARN, "deserialize_ fail", "buf_len", buf_len, K(pos), K(ret));
   }
   return ret;
 }
