@@ -1340,6 +1340,9 @@ int ObDupTableLSHandler::switch_to_leader()
     if (OB_NO_NEED_UPDATE == ret) {
       ret = OB_SUCCESS;
     }
+  } else if (dup_ls_ckpt_.is_useful_meta() && !is_inited()) {
+    ret = OB_LS_NEED_REVOKE;
+    DUP_TABLE_LOG(WARN, "switch to leader failed  without ckpt recovery", K(ret), KPC(this));
   } else if (OB_FAIL(leader_takeover_(is_resume))) {
     DUP_TABLE_LOG(WARN, "leader takeover failed for dup table", K(ret), KPC(this));
   }
@@ -1463,6 +1466,9 @@ int ObDupTableLSHandler::set_dup_table_ls_meta(
                   KPC(this));
   } else if (need_flush_slog && OB_FAIL(dup_ls_ckpt_.flush())) {
     DUP_TABLE_LOG(WARN, "flush slog failed", K(ret), K(need_flush_slog), K(dup_ls_meta), KPC(this));
+  } else if (dup_ls_ckpt_.is_useful_meta() && OB_FAIL(init(true/*is_dup_table*/))) {
+    DUP_TABLE_LOG(WARN, "init dup table ls handler in recovery  failed", K(ret), KPC(this));
+    ret = OB_SUCCESS;
   }
 
   return ret;
