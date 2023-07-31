@@ -3776,9 +3776,9 @@ int ObLogPlan::inner_remove_redundancy_pred(ObIArray<ObRawExpr*> &join_pred,
                    right_table.is_superset(right_expr->get_relation_ids()))) {
         // the pred does not join the given two tables,
         // decide whether remove this qual later
-      } else if (ObOptimizerUtil::is_expr_equivalent(left_expr,
-                                                     right_expr,
-                                                     equal_sets)) {
+      } else if (ObOptimizerUtil::in_same_equalset(left_expr,
+                                                   right_expr,
+                                                   equal_sets)) {
         // remove preds which is equation between two exprs in the same equal sets
         has_checked.at(i) = true;
         OPT_TRACE("remove redundancy join condition:", cur_expr);

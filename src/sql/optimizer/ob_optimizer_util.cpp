@@ -509,6 +509,23 @@ bool ObOptimizerUtil::is_same_ordering(const common::ObIArray<OrderItem> &orderi
   return is_same;
 }
 
+bool ObOptimizerUtil::in_same_equalset(const ObRawExpr *from,
+                                       const ObRawExpr *to,
+                                       const EqualSets &equal_sets)
+{
+  bool found = false;
+  int64_t N = equal_sets.count();
+  for (int64_t i = 0; !found && i < N; ++i) {
+    if (OB_ISNULL(equal_sets.at(i))) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "get null equal set");
+    } else if (find_equal_expr(*equal_sets.at(i), from) &&
+               find_equal_expr(*equal_sets.at(i), to)) {
+      found = true;
+    }
+  }
+  return found;
+}
+
 bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
                                          const ObRawExpr *to,
                                          const EqualSets &equal_sets)
