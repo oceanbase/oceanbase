@@ -681,6 +681,11 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
     if (TMP_TABLE_ORA_TRX == table_type && !get_is_deserialized()) {
       gtt_trans_scope_ids_.reuse();
       gen_gtt_trans_scope_unique_id();
+      if (gtt_session_scope_ids_.count() == 0) {
+        if (OB_FAIL(set_session_temp_table_used(false))) {
+          LOG_WARN("fail to set session temp table unused", K(ret));
+        }
+      }
     }
   }
   return ret;

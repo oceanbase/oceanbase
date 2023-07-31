@@ -4464,18 +4464,24 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
       }
     }
     if (OB_SUCC(ret) && NULL != phy_plan && !session.get_is_deserialized() && !session.is_inner()) {
-      if (phy_plan->is_contain_oracle_session_level_temporary_table()
-          || phy_plan->is_contain_oracle_trx_level_temporary_table()
-          || phy_plan->contains_temp_table()) {
-        bool is_already_set = false;
-        if (OB_FAIL(session.get_session_temp_table_used(is_already_set))) {
-          LOG_WARN("fail to get session temp table used", K(ret));
-        } else if (is_already_set) {
-          //do nothing
-        } else if (OB_FAIL(session.set_session_temp_table_used(true))) {
-          LOG_WARN("fail to set session temp table used", K(ret));
+      bool has_session_tmp_table = phy_plan->is_contain_oracle_session_level_temporary_table()
+        || phy_plan->contains_temp_table();
+      bool has_txn_tmp_table = phy_plan->is_contain_oracle_trx_level_temporary_table();
+      if (has_session_tmp_table || has_txn_tmp_table) {
+        if (session.is_txn_free_route_temp()) {
+          ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;
+          LOG_WARN("access temp table is supported to be executed on txn temporary node", KR(ret), K(session.get_txn_free_route_ctx()));
+        } else {
+          bool is_already_set = false;
+          if (OB_FAIL(session.get_session_temp_table_used(is_already_set))) {
+            LOG_WARN("fail to get session temp table used", K(ret));
+          } else if (is_already_set) {
+            //do nothing
+          } else if (OB_FAIL(session.set_session_temp_table_used(true))) {
+            LOG_WARN("fail to set session temp table used", K(ret));
+          }
+          LOG_DEBUG("plan contain oracle session level temporary table detected", K(is_already_set));
         }
-        LOG_DEBUG("plan contain oracle session level temporary table detected", K(is_already_set));
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(append_array_no_dup(session.get_gtt_session_scope_ids(),
