@@ -1029,11 +1029,9 @@ int ObSql::do_real_prepare(const ObString &sql,
                                                                   parse_result.result_tree_,
                                                                   param_store,
                                                                   session.get_local_collation_connection()))) {
-        LOG_WARN("parameterize syntax tree failed", K(ret));
-        if (OB_INVALID_ARGUMENT == ret) {
-          pc_ctx.ps_need_parameterized_ = false;
-          ret = OB_SUCCESS;
-        }
+        LOG_INFO("parameterize syntax tree failed", K(ret));
+        pc_ctx.ps_need_parameterized_ = false;
+        ret = OB_SUCCESS;
       }
       if (OB_SUCC(ret)) {
         if (!pc_ctx.ps_need_parameterized_) {

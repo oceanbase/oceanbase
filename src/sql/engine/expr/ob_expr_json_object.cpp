@@ -53,7 +53,7 @@ int ObExprJsonObject::calc_result_typeN(ObExprResType& type,
     ret = OB_ERR_PARAM_SIZE;
     const ObString name = "json_object";
     LOG_USER_ERROR(OB_ERR_PARAM_SIZE, name.length(), name.ptr());
-  } else if (lib::is_mysql_mode() && exec_ctx->is_ps_prepare_stage()) {
+  } else if (lib::is_mysql_mode() && session->is_varparams_sql_prepare()) {
     // the ps prepare stage does not do type deduction, and directly gives a default type.
     type.set_json();
     type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
