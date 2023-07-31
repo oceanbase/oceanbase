@@ -542,3 +542,12 @@ int ObTableApiExecuteP::process_increment()
   ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
   return ret;
 }
+
+int ObTableApiExecuteP::before_response()
+{
+  // NOTE: when check_timeout failed, the result.entity_ is null, and serialize result cause coredump
+  if (!did_async_end_trans() && OB_ISNULL(result_.get_entity())) {
+    result_.set_entity(result_entity_);
+  }
+  return ObTableRpcProcessor::before_response();
+}
