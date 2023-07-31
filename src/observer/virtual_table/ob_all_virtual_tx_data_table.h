@@ -78,6 +78,7 @@ private:
   int64_t sstable_array_pos_;
   ObSharedGuard<storage::ObLSIterator> ls_iter_guard_;
   ObTabletHandle tablet_handle_;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper_;
   ObMemtableMgrHandle mgr_handle_;
   common::ObSEArray<ObTableHandleV2, 1> memtable_handles_;
   common::ObSEArray<ObITable *, 8> sstable_handles_;

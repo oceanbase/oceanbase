@@ -40,6 +40,7 @@ public:
   ObTabletMemberWrapper();
   ~ObTabletMemberWrapper() = default;
 public:
+  void reset();
   bool is_valid() const;
   int get_member(const T *&t) const;
   const T *get_member() const;
@@ -60,6 +61,13 @@ ObTabletMemberWrapper<T, U>::ObTabletMemberWrapper()
     secondary_meta_handle_()
 {
 }
+
+template <typename T, typename U>
+void ObTabletMemberWrapper<T, U>::reset()
+{
+  ptr_ = nullptr;
+  secondary_meta_handle_.reset();
+};
 
 template <typename T, typename U>
 bool ObTabletMemberWrapper<T, U>::is_valid() const
