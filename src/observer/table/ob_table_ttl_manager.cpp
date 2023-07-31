@@ -115,7 +115,7 @@ int ObTTLManager::scan_all_tenanat_handle_event()
                               iter != ttl_tenant_parts_map_.end() && OB_SUCC(ret); ++iter) {
       tenant_id = iter->first;
       tenant_info = iter->second;
-      if (tenant_info->need_check_ && OB_FAIL(check_tenants.push_back(tenant_id))) {
+      if (tenant_info->check_status_ == NEED_CHECK && OB_FAIL(check_tenants.push_back(tenant_id))) {
         // after observer restart, need check tenant even when cancel and move state
         LOG_WARN("fail to push back check tenants", K(ret));
       }
@@ -433,7 +433,7 @@ int ObTTLManager::proc_rs_cmd(uint64_t tenant_id, uint64_t task_id,
     } else if (OB_ISNULL(tenant_info = get_tenant_info(tenant_id, create_if_not_exists))) {
       ret = OB_ENTRY_NOT_EXIST;
       LOG_WARN("fail to get ttl tenant info", K(tenant_id), K(create_if_not_exists));
-    } else if (tenant_info->need_check_) {
+    } else if (tenant_info->check_status_ == NEED_CHECK) {
       ret = OB_EAGAIN;
       LOG_INFO("tenant info need check, please resend message later", KPC(tenant_info), K(expected_state));
     } else if (OB_UNLIKELY(tenant_info->task_id_ != OB_INVALID_ID && tenant_info->task_id_ != task_id)) {
@@ -448,7 +448,7 @@ int ObTTLManager::proc_rs_cmd(uint64_t tenant_id, uint64_t task_id,
         tenant_info->task_id_ = task_id;
         tenant_info->is_usr_trigger_ = is_usr_trigger;
         tenant_info->state_ = expected_state;
-        tenant_info->need_check_ = true;
+        tenant_info->check_status_ = NEED_CHECK;
         tenant_info->is_dirty_ = true;
          if (OB_TTL_TASK_MOVING == expected_state) {
           // after restart, rs send moving means all tasks was finished or canceled
@@ -475,14 +475,14 @@ int ObTTLManager::proc_rs_cmd(uint64_t tenant_id, uint64_t task_id,
   return ret;
 }
 
-void ObTTLManager::mark_tenant_need_check(uint64_t tenant_id)
+void ObTTLManager::mark_tenant_need_check(uint64_t tenant_id, bool report_error)
 {
   int ret = OB_SUCCESS;
-  ObTTLTenantInfo* tenant_info = NULL;
-  if (common::ObTTLUtil::check_can_process_tenant_tasks(tenant_id)) {
-    common::ObSpinLockGuard guard(lock_);
-    if (OB_NOT_NULL(tenant_info = get_tenant_info(tenant_id, false))) {
-      tenant_info->need_check_ = true;
+
+  ObTenanCheckStatusOp check_stauts_op(NEED_CHECK);
+  if (OB_FAIL(ttl_tenant_parts_map_.atomic_refactored(tenant_id, check_stauts_op))) {
+    if (ret != OB_HASH_NOT_EXIST && report_error) {
+      LOG_WARN("fail to change check tenant status", KR(ret), K(tenant_id));
     }
   }
   
@@ -492,8 +492,6 @@ void ObTTLManager::mark_tenant_need_check(uint64_t tenant_id)
 void ObTTLManager::on_leader_active(const ObPartitionKey& pkey)
 {
   int ret = OB_SUCCESS;
-  ObTTLPara para;
-  bool can_ttl = false;
   uint64_t tenant_id = pkey.get_tenant_id();
   if (!is_init_) {
     ret = OB_NOT_INIT;
@@ -502,12 +500,9 @@ void ObTTLManager::on_leader_active(const ObPartitionKey& pkey)
     // do nothing
   } else if(OB_SYS_TENANT_ID == tenant_id) {
     // do nothing
-  } else if (!common::ObTTLUtil::check_can_process_tenant_tasks(tenant_id)) {
-    //do nothing
-  } else if (OB_FAIL(check_partition_can_gen_ttl(pkey, para, can_ttl))) {
-    LOG_WARN("fail to check partition can ttl", K(ret), K(pkey), K(para));
-  } else if (can_ttl) {
-    mark_tenant_need_check(tenant_id);
+  } else {
+    // not report error to ensure leader active
+    mark_tenant_need_check(tenant_id, false);
   } 
 }
 
@@ -622,6 +617,7 @@ int ObTTLManager::generate_one_partition_task(ObTTLTaskInfo& task_info, ObTTLPar
   return ret;
 }
 
+
 void ObTTLManager::mark_tenant_checked(uint64_t tenant_id)
 {
   common::ObSpinLockGuard guard(lock_);
@@ -629,7 +625,7 @@ void ObTTLManager::mark_tenant_checked(uint64_t tenant_id)
   if (OB_ISNULL(tenant_info)) {
     LOG_WARN("fail to get ttl tenant info", K(tenant_id));
   } else {
-    tenant_info->need_check_ = false;
+    tenant_info->check_status_ = NO_NEED_CHECK;
   }
 }
 
@@ -1517,7 +1513,7 @@ int ObTTLManager::check_and_reset_droped_tenant()
         LOG_WARN("fail to check tenant exists", K(ret), K(tenant_id)); 
       } else if (tenant_not_exist) {
         tenant_info->is_dirty_ = false; // no need to scan and sync sys table
-        tenant_info->need_check_ = false; // no need to check partitions
+        tenant_info->check_status_ = NO_NEED_CHECK; // no need to check partitions
         tenant_info->rsp_time_ == OB_INVALID_ID; // no need response
         tenant_info->state_ = OB_TTL_TASK_INVALID;
         tenant_info->is_droped_ = true; 
@@ -1709,4 +1705,13 @@ int ObTTLManager::refresh_partition_task(ObTTLTaskCtx &ttl_task, bool refresh_st
   }
 
   return ret;
+}
+
+void ObTTLManager::ObTenanCheckStatusOp::operator()(hash::HashMapPair<int64_t, ObTTLTenantInfo*> &entry)
+{
+  ObTTLTenantInfo *tenant_info = entry.second;
+  // not report error here to ensure leader active
+  if (OB_NOT_NULL(tenant_info)) {
+    tenant_info->check_status_ = target_status_;
+  }
 }
