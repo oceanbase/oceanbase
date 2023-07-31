@@ -5234,7 +5234,7 @@ int ObDbmsStats::gather_database_stats_job_proc(sql::ObExecContext &ctx,
 int ObDbmsStats::gather_database_table_stats(sql::ObExecContext &ctx, ObAutoGatherStatsParams &auto_gather_params)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<int64_t, 64> table_ids;
+  ObSEArray<int64_t, 128> table_ids;
   ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   ObSQLSessionInfo *session = ctx.get_my_session();
   uint64_t tenant_id = OB_INVALID_ID;
@@ -5250,31 +5250,11 @@ int ObDbmsStats::gather_database_table_stats(sql::ObExecContext &ctx, ObAutoGath
       tmp_succeed = auto_gather_params.succeed_cnt_;
       if (OB_FAIL(ObBasicStatsEstimator::get_need_stats_tables(ctx, tenant_id, table_ids, slice_cnt))) {
         LOG_WARN("failed to get tables that need gather stats", K(ret));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
-          const ObTableSchema *table_schema = NULL;
-          int64_t table_id = table_ids.at(i);
-          bool is_valid = false;
-          if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(*schema_guard,
-                                                            tenant_id,
-                                                            table_id,
-                                                            is_valid))) {
-            LOG_WARN("failed to check sy table validity", K(ret));
-          } else if (!is_valid) {
-            // only gather statistics for following tables:
-            // 1. user table
-            // 2. valid sys table
-            // 3. virtual table
-          } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
-            LOG_WARN("failed to get table schema", K(ret));
-          } else if (OB_ISNULL(table_schema)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(ret));
-          } else if (OB_FAIL(do_gather_table_stats(ctx, table_schema, tenant_id, auto_gather_params))) {
-            LOG_WARN("failed to gather table stats", K(ret));
-          }
-        }
+      } else if (OB_FAIL(do_gather_tables_stats(ctx, *schema_guard, tenant_id, table_ids, auto_gather_params))) {
+        LOG_WARN("failed to gather table stats", K(ret));
       }
+      LOG_INFO("succeed to gather table stats", K(ret), K(table_ids.count()), K(slice_cnt),
+              K(tmp_succeed), K(auto_gather_params.succeed_cnt_), K(auto_gather_params.duration_time_));
       // case that we can break the loop:
       // 1. #table_ids < slice_cnt, which means that we have fetched all the tables we need to gather stats
       // 2. duration_time_ = -1, and has reached the ob_query_timeout session variable limit
@@ -5283,21 +5263,62 @@ int ObDbmsStats::gather_database_table_stats(sql::ObExecContext &ctx, ObAutoGath
             (auto_gather_params.succeed_cnt_ - tmp_succeed) != 0 &&
             ((auto_gather_params.duration_time_ == -1 && THIS_WORKER.get_timeout_remain() > 0) ||
             (ObTimeUtility::current_time() - auto_gather_params.start_time_) < auto_gather_params.duration_time_));
+    // gather virtual table stats
+    ObSEArray<uint64_t, 256> all_table_ids;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(schema_guard->get_table_ids_in_tenant(tenant_id, all_table_ids))){
+      LOG_WARN("failed to get virtual table ids in tenant", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < all_table_ids.count(); ++i) {
+        int64_t table_id = static_cast<int64_t>(all_table_ids.at(i));
+        if (is_virtual_table(table_id) && !ObDbmsStatsUtils::is_no_stat_virtual_table(table_id) &&
+            OB_FAIL(do_gather_table_stats(ctx, *schema_guard, table_id, tenant_id, auto_gather_params))) {
+          LOG_WARN("failed to gather virtual table stats", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDbmsStats::do_gather_tables_stats(sql::ObExecContext &ctx,
+                                        ObSchemaGetterGuard &schema_guard,
+                                        const uint64_t tenant_id,
+                                        const ObIArray<int64_t> &table_ids,
+                                        ObAutoGatherStatsParams &auto_gather_params)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
+    if (OB_FAIL(do_gather_table_stats(ctx, schema_guard, table_ids.at(i), tenant_id, auto_gather_params))) {
+      LOG_WARN("failed to gather table stats", K(ret));
+    }
   }
   return ret;
 }
 
 int ObDbmsStats::do_gather_table_stats(sql::ObExecContext &ctx,
-                                       const ObTableSchema *table_schema,
+                                       ObSchemaGetterGuard &schema_guard,
+                                       const int64_t table_id,
                                        const uint64_t tenant_id,
                                        ObAutoGatherStatsParams &auto_gather_params)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(table_schema)) {
+  bool is_valid = false;
+  const ObTableSchema *table_schema = NULL;
+  if (OB_FAIL(ObDbmsStatsUtils::check_is_stat_table(schema_guard, tenant_id, table_id, is_valid))) {
+    LOG_WARN("failed to check sy table validity", K(ret));
+  } else if (!is_valid) {
+    // only gather statistics for following tables:
+    // 1. user table
+    // 2. valid sys table
+    // 3. virtual table
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else {
-    StatTable stat_table(table_schema->get_database_id(), table_schema->get_table_id());
+    StatTable stat_table(table_schema->get_database_id(), table_id);
     double stale_percent_threshold = OPT_DEFAULT_STALE_PERCENT;
     if (OB_FAIL(get_table_stale_percent_threshold(ctx,
                                                   tenant_id,

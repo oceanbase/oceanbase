@@ -458,10 +458,15 @@ public:
                                          ObAutoGatherStatsParams &auto_gather_params);
 
   static int do_gather_table_stats(sql::ObExecContext &ctx,
-                                   const ObTableSchema *table_schema,
+                                   ObSchemaGetterGuard &schema_guard,
+                                   const int64_t table_id,
                                    const uint64_t tenant_id,
                                    ObAutoGatherStatsParams &auto_gather_params);
-
+  static int do_gather_tables_stats(sql::ObExecContext &ctx,
+                                    ObSchemaGetterGuard &schema_guard,
+                                    const uint64_t tenant_id,
+                                    const ObIArray<int64_t> &table_ids,
+                                    ObAutoGatherStatsParams &auto_gather_params);
   static int get_table_stale_percent(sql::ObExecContext &ctx,
                                      const uint64_t tenant_id,
                                      const share::schema::ObTableSchema &table_schema,
