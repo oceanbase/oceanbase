@@ -189,6 +189,22 @@ select 1 from t1 where case when 1 > 2 then c1
                             else c4 
                         end > 1;
 
+--echo
+--echo == case 17: debug  
+select /*+no_rewrite*/ 1 from t1 where case when 1 > 2 then c1
+                            when 2 > 3 then c2
+                            when c1 > 2 then c3 
+                            when c2 > 2 then c4
+                            when c3 > 2 then c4
+                            else c4 
+                        end > 1;
+select 1 from t1 where case when 1 > 2 then c1
+                            when 2 > 3 then c2
+                            when c1 > 2 then c3 
+                            when c2 > 2 then c4
+                            when c3 > 2 then c4
+                            else c4 
+                        end > 1;
 
 --echo **************************** convert then exprs test **************************** 
 --echo

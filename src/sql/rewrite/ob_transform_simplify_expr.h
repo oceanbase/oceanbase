@@ -175,18 +175,14 @@ private:
   int check_when_exprs_validity(
                   const ObRawExpr *when_expr,
                   bool &is_true,
-                  bool &is_null,
-                  bool &is_false,
-                  bool &is_uncalc);
-  int add_false_or_null_constraint(const ObIArray<ObRawExpr *> &false_null_exprs,
-                                   const bool has_null);
-  int add_true_constraint(ObCaseOpRawExpr *case_expr, 
-                          int64_t first_non_false_idx);
+                  bool &is_uncalc,
+                  bool &is_false_or_null);
 
-  int assign_case_when_expr(ObCaseOpRawExpr *&case_expr,
-                            const int64_t first_non_false_idx);
-  int assign_case_when_expr(ObRawExpr *&expr,
-                            const int64_t first_non_false_idx);
+  int rewrite_case_when_expr(ObRawExpr *&expr,
+                            const int64_t first_non_false_idx,
+                            const bool is_true,
+                            const bool is_uncalc,
+                            bool &is_happened);
 
   int convert_case_when_predicate_by_then_exprs(
                                       ObRawExpr *&parent_expr,
@@ -209,9 +205,12 @@ private:
                          const int64_t true_null_uncalc_idx,
                          ObRawExpr *true_null_uncalc_expr,
                          ObRawExpr *&rewrite_expr);
+
   int add_false_or_false_constraint(const ObIArray<ObRawExpr *> &false_exprs);
-  int add_true_and_null_constraint(bool is_uncalc,
-                                   ObRawExpr *true_null_expr);
+  int add_true_and_true_constraint(const ObIArray<ObRawExpr *> &true_exprs);
+  int add_true_constraint(ObRawExpr *true_expr);
+
+  int build_nvl_expr(ObRawExpr *expr, ObRawExpr *&nvl_expr, const bool is_true);
 };
 }
 }
