@@ -94,6 +94,12 @@ private:
   typedef common::hash::ObHashMap<ObPartitionKey, ObTTLTaskCtx*> PartTasksMap;
   typedef PartTasksMap::iterator ttl_parts_iterator;
 
+  enum ObTenantCheckStatus
+  {
+    NO_NEED_CHECK = 0,
+    NEED_CHECK = 1
+  };
+
   struct ObTTLTenantInfo
   {
   public:
@@ -102,7 +108,7 @@ private:
                         tenant_id_(OB_INVALID_ID),
                         task_id_(OB_INVALID_ID),
                         is_usr_trigger_(false),
-                        need_check_(false),
+                        check_status_(NO_NEED_CHECK),
                         is_dirty_(false),
                         ttl_continue_(true),
                         cmd_type_(obrpc::ObTTLRequestArg::TTL_INVALID_TYPE),
@@ -119,7 +125,7 @@ private:
     TO_STRING_KV(K_(tenant_id),
                  K_(task_id),
                  K_(is_usr_trigger),
-                 K_(need_check),
+                 K_(check_status),
                  K_(is_dirty),
                  K_(ttl_continue),
                  K_(cmd_type),
@@ -134,7 +140,7 @@ private:
       uint64_t                          tenant_id_;
       uint64_t                          task_id_;
       bool                              is_usr_trigger_;
-      bool                              need_check_; /*need scan partition & check*/
+      ObTenantCheckStatus               check_status_; /*need scan partition & check*/
       bool                              is_dirty_;  /*need check the current ctx task*/
       bool                              ttl_continue_;
       obrpc::ObTTLRequestArg::TTLRequestType         cmd_type_;
@@ -142,6 +148,20 @@ private:
       common::ObTTLTaskStatus           state_;
       bool                              is_droped_;   // tenant is droped
       bool                              is_finished_; // all delete task is finished (or canceled)
+  };
+
+  // atomic tenant check status modification callback
+  class ObTenanCheckStatusOp
+  {
+  public:
+    void operator()(hash::HashMapPair<int64_t, ObTTLTenantInfo*> &entry);
+
+    explicit ObTenanCheckStatusOp(ObTenantCheckStatus target_status)
+    : target_status_(target_status)
+    {}
+
+  private:
+    ObTenantCheckStatus target_status_;
   };
 
   typedef common::hash::ObHashMap<int64_t, ObTTLTenantInfo*> TenantPartsMap;
@@ -162,7 +182,7 @@ private:
   int check_partition_can_gen_ttl(const ObPartitionKey& pkey,
                                   ObTTLPara &para, bool& can_ttl);
   int check_and_do_rsp(uint64_t tenant_id);
-  void mark_tenant_need_check(uint64_t tenant_id);
+  void mark_tenant_need_check(uint64_t tenant_id, bool report_error = true);
   void mark_tenant_rsp(uint64_t tenant_id, int64_t rsp_time);
   virtual int generate_ttl_dag(ObTTLTaskInfo& task_info, ObTTLPara& para);
   int response_ttl_cmd(const uint64_t& tenant_id, const uint64_t& task_id,
