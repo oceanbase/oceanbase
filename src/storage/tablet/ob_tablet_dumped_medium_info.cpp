@@ -342,9 +342,10 @@ int ObTabletDumpedMediumInfo::deserialize(common::ObIAllocator &allocator, const
     }
 
     if (OB_FAIL(ret)) {
-      for (int64_t i = 0; i < medium_info_list_.count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < medium_info_list_.count(); ++i) {
         compaction::ObMediumCompactionInfo *medium_info = medium_info_list_[i];
         if (OB_ISNULL(medium_info)) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("medium info kv is null", KP(medium_info), K(i));
         } else {
           medium_info->reset();
