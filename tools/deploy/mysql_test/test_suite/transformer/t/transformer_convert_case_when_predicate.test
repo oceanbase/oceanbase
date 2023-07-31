@@ -16,10 +16,21 @@ DROP DATABASE IF EXISTS DB_CONVERT_CASE_WHEN;
 CREATE DATABASE DB_CONVERT_CASE_WHEN;
 USE DB_CONVERT_CASE_WHEN;
 
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings
 create table t1(c1 int, c2 int, c3 int, c4 int, c5 int, c6 int);
 create table t2(c1 int, c2 int, c3 int);
+create table t3(c1 int, c2 varchar(64), c3 varchar(64));
 
 insert/*trace*/ into t1 values(1,1,1,1,1,1), (2,2,2,2,2,2), (3,3,3,3,3,3), (4,4,4,4,4,4), (5,5,5,5,5,5);
+insert/*trace*/ into t2 values(NULL, NULL, NULL);
+insert/*trace*/ into t3 values(1, "aaa", "is_aaa"), (2, "bbb", "is_bbb"), (3, "ccc", "is_ccc"), (4,"ddd", "is_ddd");
+
+--disable_warnings
+drop table if exists is_c1;
+--enable_warnings
+create table is_c1(c1 int);
 
 # disable plan cache
 set ob_enable_plan_cache = 0;
@@ -390,3 +401,6 @@ select 1 from t1 where case when c1 > 0 then 1
                             when c3 > 0 then 3
                             else 3
                         end > 4;
+
+USE DB_CONVERT_CASE_WHEN;
+drop database DB_CONVERT_CASE_WHEN;

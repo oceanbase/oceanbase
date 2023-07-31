@@ -205,12 +205,10 @@ private:
                          const int64_t true_null_uncalc_idx,
                          ObRawExpr *true_null_uncalc_expr,
                          ObRawExpr *&rewrite_expr);
-
-  int add_false_or_false_constraint(const ObIArray<ObRawExpr *> &false_exprs);
-  int add_true_and_true_constraint(const ObIArray<ObRawExpr *> &true_exprs);
-  int add_true_constraint(ObRawExpr *true_expr);
-
   int build_nvl_expr(ObRawExpr *expr, ObRawExpr *&nvl_expr, const bool is_true);
+  int add_constraint_for_convert_case_when(
+                                const ObIArray<ObRawExpr *> &false_exprs,
+                                ObRawExpr *true_expr);
 };
 }
 }
