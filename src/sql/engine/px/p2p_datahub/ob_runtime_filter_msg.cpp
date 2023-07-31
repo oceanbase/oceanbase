@@ -410,10 +410,6 @@ int ObRFBloomFilterMsg::assign(const ObP2PDatahubMsgBase &msg)
       }
     }
   }
-
-  if (OB_FAIL(filter_indexes_.assign(other_msg.filter_indexes_))) {
-    LOG_WARN("failed to assign filter indexes", K(ret));
-  }
   return ret;
 }
 
