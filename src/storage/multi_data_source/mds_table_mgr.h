@@ -42,6 +42,7 @@ public:
 
   int init(ObLS *ls);
   int reset();
+  void offline();
   void destroy();
   int register_to_mds_table_mgr(MdsTableBase *p_mds_table);
   int unregister_from_mds_table_mgr(MdsTableBase *p_mds_table);
@@ -66,7 +67,7 @@ public: // getter and setter
   int64_t get_ref() { return ATOMIC_LOAD(&ref_cnt_); }
 
 private:
-  int first_scan_to_get_max_min_rec_scn_(share::SCN &max_rec_scn, share::SCN &min_rec_scn);
+  int first_scan_to_get_min_rec_scn_(share::SCN &min_rec_scn);
   int second_scan_to_do_flush_(share::SCN min_rec_scn);
 
 private:

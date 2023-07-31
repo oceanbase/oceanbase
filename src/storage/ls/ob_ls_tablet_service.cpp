@@ -177,6 +177,7 @@ int ObLSTabletService::offline()
     if (OB_FAIL(tablet_id_set_.foreach(clean_mem_op))) {
       LOG_WARN("fail to clean memtables", K(ret), K(clean_mem_op.cur_tablet_id_));
     }
+    mds_table_mgr_.offline();
   }
   return ret;
 }
