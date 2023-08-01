@@ -855,7 +855,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
     }
     //deal with drop column affer drop constraint (mysql mode)
     if (OB_SUCC(ret) && lib::is_mysql_mode() && drop_col_act_position_list.count() > 0) {
-      for (uint64_t i = 0; i < drop_col_act_position_list.count(); ++i) {
+      for (uint64_t i = 0; OB_SUCC(ret) && i < drop_col_act_position_list.count(); ++i) {
         if (OB_FAIL(resolve_drop_column_nodes_for_mysql(*node.children_[drop_col_act_position_list.at(i)], reduced_visible_col_set))) {
           SQL_RESV_LOG(WARN, "Resolve drop column error!", K(ret));
         }
