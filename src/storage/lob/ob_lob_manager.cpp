@@ -60,7 +60,7 @@ int ObLobManager::init()
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObLobManager init twice.", K(ret));
-  } else if (allocator_.init(common::ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, mem_attr)) {
+  } else if (OB_FAIL(allocator_.init(common::ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, mem_attr))) {
     LOG_WARN("init allocator failed.", K(ret));
   } else if (OB_FAIL(lob_ctxs_.create(DEFAULT_LOB_META_BUCKET_CNT, &allocator_))) {
     LOG_WARN("Init lob meta maps falied.", K(ret));
