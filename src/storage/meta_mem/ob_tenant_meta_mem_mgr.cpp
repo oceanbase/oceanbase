@@ -90,7 +90,7 @@ void ObTenantMetaMemMgr::TabletGCTask::runTimerTask()
   int ret = OB_SUCCESS;
   bool all_tablet_cleaned = false;
   if (OB_FAIL(t3m_->gc_tablets_in_queue(all_tablet_cleaned))) {
-    LOG_WARN("fail to gc tables in queue", K(ret));
+    LOG_WARN("fail to gc tablets in queue", K(ret));
   }
 }
 

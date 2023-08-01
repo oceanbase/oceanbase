@@ -94,20 +94,42 @@ int ObTabletMergeInfo::init(const ObTabletMergeCtx &ctx, bool need_check)
       block_ctxs_[i] = NULL;
     }
     bloomfilter_block_id_.reset();
-    sstable_merge_info_.tenant_id_ = MTL_ID();
-    sstable_merge_info_.ls_id_ = ctx.param_.ls_id_;
-    sstable_merge_info_.tablet_id_ = ctx.param_.tablet_id_;
-    sstable_merge_info_.compaction_scn_ = ctx.get_compaction_scn();
-    sstable_merge_info_.merge_start_time_ = ObTimeUtility::fast_current_time();
-    sstable_merge_info_.merge_type_ = ctx.is_tenant_major_merge_ ? MAJOR_MERGE : ctx.param_.merge_type_;
-    sstable_merge_info_.progressive_merge_round_ = ctx.progressive_merge_round_;
-    sstable_merge_info_.progressive_merge_num_ = ctx.progressive_merge_num_;
-    sstable_merge_info_.concurrent_cnt_ = ctx.get_concurrent_cnt();
-    sstable_merge_info_.is_full_merge_ = ctx.is_full_merge_;
+    build_sstable_merge_info(ctx);
     is_inited_ = true;
   }
 
   return ret;
+}
+
+int ObTabletMergeInfo::init(const ObTabletMergeCtx &ctx, const share::SCN &mds_table_flush_scn)
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("cannot init twice", K(ret));
+  } else {
+    bloomfilter_block_id_.reset();
+    build_sstable_merge_info(ctx);
+    sstable_merge_info_.compaction_scn_ = mds_table_flush_scn.get_val_for_tx();
+    sstable_merge_info_.merge_type_ = ObMergeType::MDS_TABLE_MERGE;
+    is_inited_ = true;
+  }
+
+  return ret;
+}
+
+void ObTabletMergeInfo::build_sstable_merge_info(const ObTabletMergeCtx &ctx)
+{
+  sstable_merge_info_.tenant_id_ = MTL_ID();
+  sstable_merge_info_.ls_id_ = ctx.param_.ls_id_;
+  sstable_merge_info_.tablet_id_ = ctx.param_.tablet_id_;
+  sstable_merge_info_.compaction_scn_ = ctx.get_compaction_scn();
+  sstable_merge_info_.merge_start_time_ = ObTimeUtility::fast_current_time();
+  sstable_merge_info_.merge_type_ = ctx.is_tenant_major_merge_ ? ObMergeType::MAJOR_MERGE : ctx.param_.merge_type_;
+  sstable_merge_info_.progressive_merge_round_ = ctx.progressive_merge_round_;
+  sstable_merge_info_.progressive_merge_num_ = ctx.progressive_merge_num_;
+  sstable_merge_info_.concurrent_cnt_ = ctx.get_concurrent_cnt();
+  sstable_merge_info_.is_full_merge_ = ctx.is_full_merge_;
 }
 
 int ObTabletMergeInfo::add_macro_blocks(

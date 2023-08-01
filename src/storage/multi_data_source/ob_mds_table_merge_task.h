@@ -17,6 +17,11 @@
 
 namespace oceanbase
 {
+namespace compaction
+{
+class ObTabletMergeCtx;
+}
+
 namespace storage
 {
 namespace mds
@@ -34,6 +39,8 @@ public:
   virtual int process() override;
 
   int init();
+private:
+  void set_merge_finish_time(compaction::ObTabletMergeCtx &ctx);
 private:
   bool is_inited_;
   ObMdsTableMergeDag *mds_merge_dag_;

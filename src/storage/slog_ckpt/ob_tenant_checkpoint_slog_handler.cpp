@@ -18,6 +18,7 @@
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "storage/ob_super_block_struct.h"
+#include "storage/slog/ob_storage_log_reader.h"
 #include "storage/slog/ob_storage_log_replayer.h"
 #include "storage/slog/ob_storage_log.h"
 #include "storage/slog/ob_storage_logger_manager.h"

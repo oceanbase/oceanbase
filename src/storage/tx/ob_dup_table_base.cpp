@@ -12,6 +12,7 @@
 #include "ob_dup_table_base.h"
 #include "ob_dup_table_lease.h"
 #include "ob_dup_table_tablets.h"
+#include "storage/slog/ob_storage_logger.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"

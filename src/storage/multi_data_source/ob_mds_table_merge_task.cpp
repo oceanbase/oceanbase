@@ -90,6 +90,8 @@ int ObMdsTableMergeTask::process()
     } else if (ls->is_offline()) {
       ret = OB_CANCELED;
       LOG_INFO("ls offline, skip merge", K(ret), K(ctx));
+    } else if (OB_FAIL(ctx.get_merge_info().init(ctx, flush_scn))) {
+      LOG_WARN("failed to init merge info", K(ret), K(ls_id), K(tablet_id), K(flush_scn), K(ctx));
     } else if (FALSE_IT(ctx.time_guard_.click(ObCompactionTimeGuard::DAG_WAIT_TO_SCHEDULE))) {
     } else if (MDS_FAIL(ls->get_tablet(tablet_id, ctx.tablet_handle_, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
       LOG_WARN("failed to get tablet", K(ret), K(ls_id), K(tablet_id));
@@ -114,10 +116,17 @@ int ObMdsTableMergeTask::process()
       }
     }
     ctx.time_guard_.click(ObCompactionTimeGuard::DAG_FINISH);
+    set_merge_finish_time(ctx);
     (void)ctx.collect_running_info();
   }
 
   return ret;
+}
+
+void ObMdsTableMergeTask::set_merge_finish_time(compaction::ObTabletMergeCtx &ctx)
+{
+  ObSSTableMergeInfo &sstable_merge_info = ctx.get_merge_info().get_sstable_merge_info();
+  sstable_merge_info.merge_finish_time_ = ObTimeUtility::fast_current_time();
 }
 } // namespace mds
 } // namespace storage
