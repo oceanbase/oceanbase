@@ -72,6 +72,8 @@ public:
     }
     return ret;
   }
+
+  bool get_is_min(){return is_min_;}
   TO_STRING_KV(K_(is_min), K_(cmp_fun), K_(result_datum));
 private:
   bool is_min_;

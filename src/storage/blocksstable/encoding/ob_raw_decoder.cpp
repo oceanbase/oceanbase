@@ -194,6 +194,53 @@ struct RawFixDecoderArrayInit
 static bool raw_fix_batch_decode_funcs_inited
     = ObNDArrayIniter<RawFixDecoderArrayInit, 2, 4, 4, 3>::apply();
 
+//Fast Min/Max for UIntSC / IntSC
+template <bool IS_SIGNED_SC, int32_t STORE_LEN_TAG, int32_t DATUM_LEN_TAG, int32_t STORE_CLASS>
+struct RawFixIntGetMinMaxFunc_T
+{
+  static void raw_fix_int_get_min_or_max_func(
+      const int64_t col_len,
+      const char *base_data,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      bool is_min,
+      ObDatum &datum)
+  {
+    UNUSED(col_len);
+    typedef typename ObEncodingTypeInference<IS_SIGNED_SC, STORE_LEN_TAG>::Type StoreType;
+    typedef typename ObEncodingTypeInference<IS_SIGNED_SC, DATUM_LEN_TAG>::Type DatumType;
+    const StoreType *input = reinterpret_cast<const StoreType *>(base_data);
+    int64_t tmp = input[row_ids[0]];
+    for (int64_t i = 1; i < row_cap; i++) {
+      const int64_t row_id = row_ids[i];
+      if((is_min && input[row_id] < tmp) || (!is_min && input[row_id] > tmp)){
+        tmp = input[row_id];
+      }
+    }
+    *reinterpret_cast<DatumType *>(const_cast<char *>(datum.ptr_)) = tmp;
+    datum.pack_ = sizeof(DatumType);
+  }
+};
+//Fast Min/Max for UIntSC / IntSC
+ 
+
+// Initialize fast int get min or max func family while compiling
+static ObMultiDimArray_T<raw_fix_int_get_min_or_max_func, 2, 4, 4, 3> raw_fix_int_get_min_or_max_funcs;
+
+template <int32_t IS_SIGNED_SC, int32_t STORE_LEN_TAG, int32_t DATUM_LEN_TAG, int32_t STORE_CLASS>
+struct RawFixIntGetMinMaxArrayInit
+{
+  bool operator()()
+  {
+    raw_fix_int_get_min_or_max_funcs[IS_SIGNED_SC][STORE_LEN_TAG][DATUM_LEN_TAG][STORE_CLASS]
+        = &(RawFixIntGetMinMaxFunc_T<IS_SIGNED_SC, STORE_LEN_TAG, DATUM_LEN_TAG, STORE_CLASS>::raw_fix_int_get_min_or_max_func);
+    return true;
+  }
+};
+
+static bool raw_fix_int_get_min_or_max_funcs_inited
+    = ObNDArrayIniter<RawFixIntGetMinMaxArrayInit, 2, 4, 4, 3>::apply();
+
 
 static ObMultiDimArray_T<raw_var_batch_decode_func, 3, 2, 2, 2, 2> var_batch_decode_funcs;
 
@@ -659,6 +706,43 @@ int ObRawDecoder::get_null_count(
   }
   return ret;
 }
+
+int ObRawDecoder::get_aggregate_result(
+      const ObColumnDecoderCtx &ctx,
+      const ObIRowIndex *row_index,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      ObMicroBlockAggInfo<ObDatum> &agg_info,
+      ObDatum *datum_buf) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Raw decoder not inited", K(ret));
+  } else if (fast_agg_valid(ctx)) {
+    // Optimized decode for byte-packing data
+    const ObObjType store_type = ctx.col_header_->get_store_obj_type();
+    const ObObjTypeStoreClass store_class = get_store_class_map()[ob_obj_type_class(store_type)];
+    const ObObjDatumMapType map_type = ObDatum::get_obj_datum_map_type(store_type);
+      // Only need store_len for UIntSC/IntSC
+    uint32_t store_len = ctx.col_header_->length_ > 8 ? 0 : ctx.col_header_->length_;
+    raw_fix_int_get_min_or_max_func get_min_or_max_func = raw_fix_int_get_min_or_max_funcs
+        [ObIntSC == store_class
+            && ctx.col_header_->length_ == get_type_size_map()[store_type]]
+        [get_value_len_tag_map()[store_len]]
+        [get_value_len_tag_map()[get_datum_store_len(map_type)]]
+        [get_store_class_tag_map()[store_class]];
+      get_min_or_max_func(ctx.col_header_->length_, meta_data_, row_ids, row_cap, agg_info.get_is_min(), datum_buf[0]);
+    if (OB_FAIL(agg_info.update_min_or_max(datum_buf[0]))){
+      LOG_WARN("Failed to update_min_or_max");
+    }
+  } else {
+    if(OB_FAIL(ObIColumnDecoder::get_aggregate_result(ctx, row_index, row_ids, row_cap, agg_info,datum_buf))){
+      LOG_WARN("Fail to get min/max from column decoder");
+    }
+  }
+  return ret;
+}
 int ObRawDecoder::get_is_null_bitmap(
     const ObColumnDecoderCtx &col_ctx,
     const unsigned char* col_data,
@@ -682,6 +766,25 @@ int ObRawDecoder::get_is_null_bitmap(
     }
   }
   return ret;
+}
+
+bool ObRawDecoder::fast_agg_valid(const ObColumnDecoderCtx &ctx) const
+{
+  bool valid = false;
+  const ObColumnHeader *col_header = ctx.col_header_;
+  const ObObjTypeStoreClass store_class =
+      get_store_class_map()[ob_obj_type_class(ctx.col_header_->get_store_obj_type())];
+  if (col_header->is_fix_length()) {
+    valid = !col_header->is_bit_packing()
+        && !col_header->has_extend_value()
+        && ((ObIntSC == store_class || ObUIntSC == store_class))
+        && raw_fix_batch_decode_funcs_inited;
+    if (valid) {
+      uint32_t store_size = col_header->length_;
+      valid = (store_size == 1 || store_size == 2 || store_size == 4 || store_size == 8);
+    }
+  }
+  return valid;
 }
 
 int ObRawDecoder::comparison_operator(

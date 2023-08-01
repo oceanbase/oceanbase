@@ -2144,34 +2144,17 @@ int ObMicroBlockDecoder::get_min_or_max(
 {
   int ret = OB_SUCCESS;
   decoder_allocator_.reuse();
-  STORAGE_LOG(INFO, "resue allocator sucessful");
-  common::ObObj cell;
-  STORAGE_LOG(INFO, "before get",K(col_header_->type_),K(*ctxs_[col_id]),K(row_index_),K(row_ids),K(row_cap),K(agg_info));
-  if (OB_FAIL(decoders_[col_id].decoder_->get_min_or_max(*ctxs_[col_id],row_index_,row_ids,row_cap,cell,agg_info.get_is_min()))){
-    LOG_WARN("Failed to get obj", K(ret), K(col_id), K(row_cap));
-  } else if (OB_FAIL(datum_buf[0].from_obj(cell))){
-    LOG_WARN("Failed to trans to datum", K(ret), K(cell), K(datum_buf[0]));
-  } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[0]))) {
-    LOG_WARN("fail to update_min_or_max", K(ret), K(datum_buf[0]), K(agg_info));
+  ObColumnDecoder* column_decoder = nullptr;
+  if (OB_ISNULL(column_decoder = decoders_ + col_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Null pointer of column decoder", K(ret));
   } else {
-    LOG_DEBUG("update min/max", K(0), K(datum_buf[0]), K(agg_info));
+    if (OB_FAIL(decoders_[col_id].decoder_->get_aggregate_result(*column_decoder->ctx_,row_index_,row_ids,row_cap,agg_info,datum_buf))){
+      LOG_WARN("Failed to get aggregate_result", K(ret), K(col_id), K(row_cap));
+    } else {
+      LOG_DEBUG("update min/max", K(0), K(agg_info));
+    }
   }
-    
-
-  // if (OB_FAIL(get_col_datums(col_id, row_ids, cell_datas, row_cap, datum_buf))) {
-  //   LOG_WARN("Failed to get col datums", K(ret), K(col_id), K(row_cap));
-  // } else {
-  //   for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
-  //     if (datum_buf[i].is_nop()) {
-  //       ret = OB_ERR_UNEXPECTED;
-  //       LOG_WARN("unexpected datum, can not process in batch", K(ret), K(i));
-  //     } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))) {
-  //       LOG_WARN("fail to update_min_or_max", K(ret), K(i), K(datum_buf[i]), K(agg_info));
-  //     } else {
-  //       LOG_DEBUG("update min/max", K(i), K(datum_buf[i]), K(agg_info));
-  //     }
-  //   }
-  // }
   return ret;
 }
 

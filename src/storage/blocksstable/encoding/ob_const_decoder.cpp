@@ -271,6 +271,122 @@ int ObConstDecoder::get_null_count(
   return ret;
 }
 
+int ObConstDecoder::get_aggregate_result(
+    const ObColumnDecoderCtx &ctx,
+    const ObIRowIndex *row_index,
+    const int64_t *row_ids,
+    const int64_t row_cap,
+    ObMicroBlockAggInfo<ObDatum> &agg_info,
+    ObDatum *datum_buf) const 
+{
+  UNUSEDx(row_index);
+  int ret = OB_SUCCESS;
+  const int64_t count = meta_header_->count_;
+  const int64_t const_ref = meta_header_->const_ref_;
+  const ObIntArrayFuncTable &row_id_arr
+      = ObIntArrayFuncTable::instance(meta_header_->row_id_byte_);
+  bool const_nu = false;
+  const int64_t dict_meta_length = ctx.col_header_->length_ - meta_header_->offset_;
+  int64_t dict_count = dict_decoder_.get_dict_header()->count_;
+  if (const_ref == dict_count) {
+    // Const value is null
+    LOG_INFO("No const", K(ret));
+    const_nu = true;
+  } else {
+    // Const value is not null
+    ObDictDecoderIterator dict_iter = dict_decoder_.begin(&ctx, dict_meta_length);
+    ObObj& const_obj = *(dict_iter + meta_header_->const_ref_);
+    if (const_obj.is_fixed_len_char_type() && nullptr != ctx.col_param_) {
+      if (OB_FAIL(storage::pad_column(ctx.col_param_->get_accuracy(),
+                  *ctx.allocator_, const_obj))) {
+        LOG_WARN("Failed to pad column", K(ret));
+      } else {
+      }
+    }
+    if (OB_FAIL(datum_buf[0].from_obj(const_obj))){
+      LOG_WARN("Failed to trans to datum");
+    } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[0]))){
+      LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[0]), K(agg_info));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObDictDecoderIterator begin_it = dict_decoder_.begin(&ctx, dict_meta_length);
+    ObDictDecoderIterator end_it = dict_decoder_.end(&ctx, dict_meta_length);
+    ObDictDecoderIterator trav_it = begin_it;
+    if(row_cap == ctx.micro_block_header_->row_count_){
+      int64_t i = 1;
+      while (OB_SUCC(ret) && trav_it != end_it) {
+        if (OB_UNLIKELY(((*trav_it).is_null_oracle() && lib::is_oracle_mode())
+                        || ((*trav_it).is_null() && lib::is_mysql_mode()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("There should not be null object in dictionary", K(ret));
+        } else if (OB_FAIL(datum_buf[i].from_obj(*trav_it))){
+          LOG_WARN("Failed to trans to datum");
+        } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))){
+          LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[i]), K(agg_info));
+        }
+        ++trav_it;
+        ++i;
+      }
+    } else {
+      int64_t row_id = 0;
+      int64_t except_table_pos = 0;
+      const int64_t dict_meta_length = ctx.col_header_->length_ - meta_header_->offset_;
+      int64_t next_except_row_id = row_id_arr.at_(meta_header_->payload_ + count, except_table_pos);
+      bool monotonic_inc = true;
+      if (row_cap > 1) {
+        monotonic_inc = row_ids[1] > row_ids[0];
+      }
+      int64_t step = monotonic_inc ? 1 : -1;
+      int64_t trav_idx = monotonic_inc ? 0 : row_cap - 1;
+      int64_t trav_cnt = 0;
+      int64_t i =1;
+      common::ObObj cell;
+      uint32_t ref;
+      while (trav_cnt < row_cap) {
+        row_id = row_ids[trav_idx];
+        uint32_t *curr_ref =  &ref ;
+        if (except_table_pos == count || row_id < next_except_row_id) {
+        } else if (row_id == next_except_row_id) {
+          *curr_ref = reinterpret_cast<const uint8_t *>(meta_header_->payload_)[except_table_pos];
+          ++except_table_pos;
+          if (except_table_pos < count) {
+            next_except_row_id = row_id_arr.at_(meta_header_->payload_ + count, except_table_pos);
+          }
+          cell = *(begin_it + *curr_ref);
+          if (OB_FAIL(datum_buf[i].from_obj(cell))){
+            LOG_WARN("Failed to trans to datum");
+          } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))){
+            LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[i]), K(agg_info));
+          }
+        } else {
+          except_table_pos = row_id_arr.lower_bound_(
+                meta_header_->payload_ + count, 0, count, row_id);
+          next_except_row_id = row_id_arr.at_(meta_header_->payload_ + count, except_table_pos);
+          if (except_table_pos == count || row_id != next_except_row_id) {
+          } else {
+            *curr_ref = reinterpret_cast<const uint8_t *>(meta_header_->payload_)[except_table_pos];
+            ++except_table_pos;
+            if (except_table_pos < count) {
+              next_except_row_id = row_id_arr.at_(meta_header_->payload_ + count, except_table_pos);
+            }
+            cell = *(begin_it + *curr_ref);
+            if (OB_FAIL(datum_buf[i].from_obj(cell))){
+              LOG_WARN("Failed to trans to datum");
+            } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))){
+              LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[i]), K(agg_info));
+            }
+          }
+        }
+        ++trav_cnt;
+        ++i;
+        trav_idx += step;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObConstDecoder::pushdown_operator(
     const sql::ObPushdownFilterExecutor *parent,
     const ObColumnDecoderCtx &col_ctx,
