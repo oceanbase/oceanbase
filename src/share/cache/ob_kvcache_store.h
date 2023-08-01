@@ -53,6 +53,14 @@ protected:
   virtual bool mb_status_match(ObKVCacheInst &inst,
       const enum ObKVCachePolicy policy, MBWrapper *mb_wrapper) = 0;
   virtual int64_t get_block_size() const = 0;
+private:
+  int alloc_kvpair_without_retry(
+      ObKVCacheInst &inst,
+      const int64_t key_size,
+      const int64_t value_size,
+      ObKVCachePair *&kvpair,
+      MBWrapper *&mb_wrapper,
+      const enum ObKVCachePolicy policy);
 };
 
 class ObKVCacheStore : public ObIKVCacheStore<ObKVMemBlockHandle>,
@@ -278,6 +286,28 @@ int ObIKVCacheStore<MBWrapper>::store(
 
 template <typename MBWrapper>
 int ObIKVCacheStore<MBWrapper>::alloc_kvpair(
+    ObKVCacheInst &inst,
+    const int64_t key_size,
+    const int64_t value_size,
+    ObKVCachePair *&kvpair,
+    MBWrapper *&mb_wrapper,
+    const enum ObKVCachePolicy policy)
+{
+  int ret = OB_SUCCESS;
+  int64_t tenant_id = inst.tenant_id_;
+  ret = alloc_kvpair_without_retry(inst, key_size, value_size, kvpair, mb_wrapper, policy);
+  if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+    int64_t washed_size = ObMallocAllocator::get_instance()->sync_wash(tenant_id, 0, INT64_MAX);
+    if (washed_size > 0) {
+      ret = alloc_kvpair_without_retry(inst, key_size, value_size, kvpair, mb_wrapper, policy);
+      COMMON_LOG(INFO, "[MEM][WASH] sync wash succeed", K(ret), K(tenant_id), K(washed_size));
+    }
+  }
+  return ret;
+}
+
+template <typename MBWrapper>
+int ObIKVCacheStore<MBWrapper>::alloc_kvpair_without_retry(
     ObKVCacheInst &inst,
     const int64_t key_size,
     const int64_t value_size,
