@@ -283,12 +283,26 @@ int ObConstDecoder::get_aggregate_result(
   int ret = OB_SUCCESS;
   const int64_t count = meta_header_->count_;
   const int64_t const_ref = meta_header_->const_ref_;
-  const ObIntArrayFuncTable &row_id_arr
-      = ObIntArrayFuncTable::instance(meta_header_->row_id_byte_);
   bool const_nu = false;
   const int64_t dict_meta_length = ctx.col_header_->length_ - meta_header_->offset_;
-  int64_t dict_count = dict_decoder_.get_dict_header()->count_;
-  if (const_ref == dict_count) {
+  if(0 ==count){
+    ObObj const_obj;
+    if(OB_FAIL(decode_without_dict(ctx, const_obj))){
+      LOG_WARN("Failed to decode without dict");
+    }
+    else if (const_obj.is_fixed_len_char_type() && nullptr != ctx.col_param_) {
+      if (OB_FAIL(storage::pad_column(ctx.col_param_->get_accuracy(),
+                  *ctx.allocator_, const_obj))) {
+        LOG_WARN("Failed to pad column", K(ret));
+      } else {
+      }
+    }
+    if (OB_FAIL(datum_buf[0].from_obj(const_obj))){
+      LOG_WARN("Failed to trans to datum");
+    } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[0]))){
+      LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[0]), K(agg_info));
+    }
+  } else if (const_ref ==  dict_decoder_.get_dict_header()->count_) {
     // Const value is null
     LOG_INFO("No const", K(ret));
     const_nu = true;
@@ -309,7 +323,8 @@ int ObConstDecoder::get_aggregate_result(
       LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[0]), K(agg_info));
     }
   }
-  if (OB_SUCC(ret)) {
+
+  if (OB_SUCC(ret) && count > 0) {
     ObDictDecoderIterator begin_it = dict_decoder_.begin(&ctx, dict_meta_length);
     ObDictDecoderIterator end_it = dict_decoder_.end(&ctx, dict_meta_length);
     ObDictDecoderIterator trav_it = begin_it;
@@ -329,6 +344,8 @@ int ObConstDecoder::get_aggregate_result(
         ++i;
       }
     } else {
+      const ObIntArrayFuncTable &row_id_arr
+          = ObIntArrayFuncTable::instance(meta_header_->row_id_byte_);
       int64_t row_id = 0;
       int64_t except_table_pos = 0;
       const int64_t dict_meta_length = ctx.col_header_->length_ - meta_header_->offset_;

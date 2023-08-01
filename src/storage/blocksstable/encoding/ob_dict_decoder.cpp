@@ -668,11 +668,11 @@ int ObDictDecoder::get_aggregate_result(
           }
         } else {
           decode(ctx.obj_meta_, cell, ref, ctx.col_header_->length_);
-            if (OB_FAIL(datum_buf[i].from_obj(cell))){
-              LOG_WARN("Failed to trans to datum");
-            } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))){
-              LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[i]), K(agg_info));
-            }
+          if (OB_FAIL(datum_buf[i].from_obj(cell))){
+            LOG_WARN("Failed to trans to datum");
+          } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))){
+            LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[i]), K(agg_info));
+          }
         }
       }
     }
