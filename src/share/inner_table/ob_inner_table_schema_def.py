@@ -5815,7 +5815,7 @@ def_table_schema(
   in_tenant_space = True,
 
   normal_columns = [
-  ('type', 'varchar:COLUMN_TYPE_LENGTH'),
+  ('type', 'varchar:OB_MAX_VARCHAR_LENGTH'),
   ('collation', 'varchar:MAX_COLLATION_LENGTH', 'true'),
   ('null', 'varchar:COLUMN_NULLABLE_LENGTH'),
   ('key', 'varchar:COLUMN_KEY_LENGTH'),
@@ -9420,7 +9420,7 @@ def_table_schema(
   ('ORDINAL_POSITION', 'uint', 'false', '0'),
   ('COLUMN_DEFAULT', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'true'),
   ('IS_NULLABLE', 'varchar:COLUMN_NULLABLE_LENGTH',  'false', ''),
-  ('DATA_TYPE', 'varchar:COLUMN_TYPE_LENGTH',  'false', ''),
+  ('DATA_TYPE', 'varchar:OB_MAX_VARCHAR_LENGTH',  'false', ''),
   ('CHARACTER_MAXIMUM_LENGTH', 'uint', 'true'),
   ('CHARACTER_OCTET_LENGTH', 'uint', 'true'),
   ('NUMERIC_PRECISION', 'uint', 'true'),
@@ -9428,7 +9428,7 @@ def_table_schema(
   ('DATETIME_PRECISION', 'uint', 'true'),
   ('CHARACTER_SET_NAME', 'varchar:MAX_CHARSET_LENGTH', 'true'),
   ('COLLATION_NAME', 'varchar:MAX_COLLATION_LENGTH', 'true'),
-  ('COLUMN_TYPE', 'varchar:COLUMN_TYPE_LENGTH'),
+  ('COLUMN_TYPE', 'varchar:OB_MAX_VARCHAR_LENGTH'),
   ('COLUMN_KEY', 'varchar:MAX_COLUMN_KEY_LENGTH', 'false', ''),
   ('EXTRA', 'varchar:COLUMN_EXTRA_LENGTH', 'false', ''),
   ('PRIVILEGES', 'varchar:MAX_COLUMN_PRIVILEGE_LENGTH', 'false', ''),

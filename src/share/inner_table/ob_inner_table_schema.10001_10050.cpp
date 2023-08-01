@@ -444,7 +444,7 @@ int ObInnerTableSchema::tenant_virtual_table_column_schema(ObTableSchema &table_
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      COLUMN_TYPE_LENGTH, //column_length
+      OB_MAX_VARCHAR_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
