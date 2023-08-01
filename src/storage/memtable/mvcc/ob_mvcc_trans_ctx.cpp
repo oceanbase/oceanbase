@@ -59,22 +59,29 @@ void RedoDataNode::set(const ObMemtableKey *key,
   column_cnt_ = column_cnt;
 }
 
-void TableLockRedoDataNode::set(
+int TableLockRedoDataNode::set(
     const ObMemtableKey *key,
     const oceanbase::transaction::tablelock::ObTableLockOp &lock_op,
     const common::ObTabletID &tablet_id,
     ObITransCallback *callback)
 {
-  key_.encode(*key);
-  lock_id_ = lock_op.lock_id_;
-  owner_id_ = lock_op.owner_id_;
-  lock_mode_ = lock_op.lock_mode_;
-  lock_op_type_ = lock_op.op_type_;
-  seq_no_ = lock_op.lock_seq_no_;
-  callback_ = callback;
-  tablet_id_ = tablet_id;
-  create_timestamp_ = lock_op.create_timestamp_;
-  create_schema_version_ = lock_op.create_schema_version_;
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(key) || !lock_op.is_valid() || !tablet_id.is_valid() || OB_ISNULL(callback)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(ERROR, "invalid argument", K(ret), KP(key), K(lock_op), K(tablet_id), KP(callback));
+  } else {
+    key_.encode(*key);
+    lock_id_ = lock_op.lock_id_;
+    owner_id_ = lock_op.owner_id_;
+    lock_mode_ = lock_op.lock_mode_;
+    lock_op_type_ = lock_op.op_type_;
+    seq_no_ = lock_op.lock_seq_no_;
+    callback_ = callback;
+    tablet_id_ = tablet_id;
+    create_timestamp_ = lock_op.create_timestamp_;
+    create_schema_version_ = lock_op.create_schema_version_;
+  }
+  return ret;
 }
 
 void ObITransCallback::set_scn(const SCN scn)
