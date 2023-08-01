@@ -191,7 +191,7 @@ int ObExprGeomWkb::eval_geom_wkb(const ObExpr &expr,
       ObLobLocatorV2 lob(res_wkb, expr.obj_meta_.has_lob_header());
       if (OB_FAIL(lob.get_inrow_data(res_wkb))) {
         LOG_WARN("failed to get inrow data", K(ret), K(lob));
-      } else if (ObGeoTypeUtil::get_wkb_from_swkb(res_wkb, wkb, offset)) {
+      } else if (OB_FAIL(ObGeoTypeUtil::get_wkb_from_swkb(res_wkb, wkb, offset))) {
         LOG_WARN("failed to get wkb from swkb", K(ret));
       } else {
         MEMMOVE(res_wkb.ptr(), res_wkb.ptr() + offset, res_wkb.length() - offset);

@@ -6291,6 +6291,7 @@ int ObResolverUtils::check_pk_idx_duplicate(const ObTableSchema &table_schema,
     if (OB_FAIL(rowkey.get_column_id(rowkey_idx, column_id))) {
       LOG_WARN("fail to get column id", K(ret));
     } else if (OB_ISNULL(column = table_schema.get_column_schema(column_id))) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to get column schema", K(ret), K(column_id), K(rowkey));
     } else if (column->is_hidden()) {
       // skip hidden pk col

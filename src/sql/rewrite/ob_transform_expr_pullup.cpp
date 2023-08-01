@@ -527,7 +527,7 @@ int ObTransformExprPullup::search_expr_cannot_pullup(ObRawExpr *expr,
     if (OB_FAIL(expr_cannot_pullup.push_back(expr))) {
       LOG_WARN("fail to push back expr", K(ret));
     }
-  } else if (expr_map.get_ref_count(expr, ref_count)) {
+  } else if (OB_FAIL(expr_map.get_ref_count(expr, ref_count))) {
     LOG_WARN("failed to get expr ref count", K(ret));
   } else if (ref_count > 1)  {
     if (OB_FAIL(expr_cannot_pullup.push_back(expr))) {

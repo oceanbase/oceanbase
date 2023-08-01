@@ -150,7 +150,7 @@ int ObExprTzOffset::eval_tz_offset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
                           res_str_utf8, ObCharset::get_system_collation(),
                           res_str, out_cs_type, calc_alloc))) {
       LOG_WARN("convert string coll failed", K(ret), K(res_str_utf8), K(out_cs_type));
-    } else if (ObExprUtil::deep_copy_str(res_str, res_str, res_alloc)) {
+    } else if (OB_FAIL(ObExprUtil::deep_copy_str(res_str, res_str, res_alloc))) {
       LOG_WARN("copy str failed", K(ret));
     } else {
       res.set_string(res_str);

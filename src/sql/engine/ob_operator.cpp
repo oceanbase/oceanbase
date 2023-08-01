@@ -1480,6 +1480,7 @@ inline int ObOperator::init_dummy_mem_context(uint64_t tenant_id)
     if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(dummy_mem_context_, param))) {
       SQL_ENG_LOG(WARN, "create entity failed", K(ret));
     } else if (OB_ISNULL(dummy_mem_context_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       SQL_ENG_LOG(WARN, "mem entity is null", K(ret));
     }
   }

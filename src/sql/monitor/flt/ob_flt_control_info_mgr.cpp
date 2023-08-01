@@ -269,7 +269,7 @@ int ObFLTControlInfoManager::set_control_info(sql::ObExecContext &ctx)
       if (OB_ISNULL(sql_proxy)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sql_proxy is null", K(ret));
-      } else if (sql.assign_fmt("ALTER SYSTEM SET `_trace_control_info` = '%s'", trace_info.ptr())) {
+      } else if (OB_FAIL(sql.assign_fmt("ALTER SYSTEM SET `_trace_control_info` = '%s'", trace_info.ptr()))) {
         LOG_WARN("failed to set trace control info", K(ret));
       } else if (OB_FAIL(sql_proxy->write(tenant_id_, sql.ptr(), affected_rows))) {
         LOG_WARN("execute sql failed", K(ret), K(sql));

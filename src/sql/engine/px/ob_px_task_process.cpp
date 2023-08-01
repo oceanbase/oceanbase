@@ -77,6 +77,7 @@ int ObPxTaskProcess::check_inner_stat()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("phy plan ctx is NULL", K(ret), K(exec_ctx));
   } else if (OB_ISNULL(arg_.get_sqc_handler())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sqc hanlder is null", K(ret));
   } else {
     // 为了尽快确定任务超时，启动 task 的超时时间很短，10ms 左右

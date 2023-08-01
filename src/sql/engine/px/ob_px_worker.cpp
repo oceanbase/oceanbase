@@ -233,6 +233,7 @@ void PxWorkerFunctor::operator ()()
       ObThreadLogLevelUtils::clear();
     }
   } else if (OB_ISNULL(sqc_handler)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("Unexpected null sqc handler", K(sqc_handler));
   } else {
     LOG_WARN("already interrupted");

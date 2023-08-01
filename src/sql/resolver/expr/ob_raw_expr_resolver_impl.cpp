@@ -1158,6 +1158,7 @@ int ObRawExprResolverImpl::process_multiset_node(const ParseNode *node, ObRawExp
   } else if (OB_FAIL(process_operator_node(node, expr))) {
     LOG_WARN("process node failed.", K(ret));
   } else if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
   } else {
     if (T_OP_MULTISET == node->type_) {
@@ -1682,7 +1683,7 @@ int ObRawExprResolverImpl::process_sys_connect_by_path_node(const ParseNode *nod
   } else if (OB_UNLIKELY(false == is_sys_connect_by_path_expr_valid_scope(ctx_.current_scope_))) {
     ret = OB_ERR_CBY_CONNECT_BY_PATH_NOT_ALLOWED;
     LOG_WARN("Connect by path not allowed here", K(ret));
-  }  else if (ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_CONNECT_BY_PATH, path_expr)) {
+  }  else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_CONNECT_BY_PATH, path_expr))) {
     LOG_WARN("fail to create raw expr", K(ret));
   } else if (OB_ISNULL(path_expr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3282,6 +3283,7 @@ int ObRawExprResolverImpl::process_between_node(const ParseNode *node, ObRawExpr
       if (OB_FAIL(recursive_resolve(node->children_[i], btw_params[i]))) {
         SQL_RESV_LOG(WARN, "resolve child expr failed", K(ret), K(i));
       } else if (OB_ISNULL(btw_params[i])) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(i));
       }
     }
@@ -3291,6 +3293,7 @@ int ObRawExprResolverImpl::process_between_node(const ParseNode *node, ObRawExpr
     } else if (OB_FAIL(recursive_resolve(node->children_[0], btw_params[BTW_PARAM_NUM]))) {
       SQL_RESV_LOG(WARN, "resolve child expr failed", K(ret), K(BTW_PARAM_NUM));
     } else if (OB_ISNULL(btw_params[BTW_PARAM_NUM])) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret), K(BTW_PARAM_NUM));
     }
     if (OB_SUCC(ret) && lib::is_mysql_mode()) {

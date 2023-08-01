@@ -381,7 +381,7 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
             ret = OB_SUCCESS;
             res.set_null();
           }
-        } else if (ObJsonExprHelper::pack_json_str_res(expr, ctx, res, res_string)) {
+        } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, res_string))) {
           LOG_WARN("fail to pack ressult.", K(ret));
         }
       }

@@ -2049,6 +2049,7 @@ int LogLeadingHint::init_leading_info_from_ordered_hint(const ObDMLStmt &stmt)
         LOG_WARN("failed to init leading infos from table.", K(ret));
       }
     } else if (OB_ISNULL(semi_info = semi_infos.at(i - from_items.count()))) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null semi info", K(ret));
     } else if (OB_FAIL(leading_info.right_table_set_.add_member(
                                     stmt.get_table_bit_index(semi_info->right_table_id_)))) {

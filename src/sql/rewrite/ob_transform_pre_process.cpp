@@ -2860,6 +2860,7 @@ int ObTransformPreProcess::recursive_replace_func_is_serving_tenant(ObDMLStmt &s
                 ret = OB_INVALID_ARGUMENT;
                 LOG_WARN("convert server addr to ip failed", K(ret), K(i), K(server));
               } else if (OB_ISNULL(row_op) || OB_ISNULL(ip_expr) || OB_ISNULL(port_expr)) {
+                ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("expr is null", K(row_op), K(ip_expr), K(port_expr));
               } else {
                 ip_obj.set_varchar(ObString(ip_buf));
@@ -7954,7 +7955,7 @@ int ObTransformPreProcess::mock_select_list_for_ins_select(ObDMLStmt &batch_stmt
   } else if (OB_ISNULL(param_store = &plan_ctx->get_param_store())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param store is null", K(ret));
-  } else if (batch_stmt.get_child_stmt_size(child_size)) {
+  } else if (OB_FAIL(batch_stmt.get_child_stmt_size(child_size))) {
     LOG_WARN("get child size failed", K(ret));
   } else if (child_size > 0) {
     ret = OB_BATCHED_MULTI_STMT_ROLLBACK;

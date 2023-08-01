@@ -536,10 +536,10 @@ int ObTransformDBlink::collect_link_table(ObDMLStmt *stmt,
     if (OB_ISNULL(semi_info = stmt->get_semi_infos().at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null stmt", K(ret));
-    } else if (inner_collect_link_table(stmt,
+    } else if (OB_FAIL(inner_collect_link_table(stmt,
                                         semi_info,
                                         helpers,
-                                        all_table_from_one_dblink)) {
+                                        all_table_from_one_dblink))) {
       LOG_WARN("failed to collect link table", K(ret));
     }
   }

@@ -43,6 +43,7 @@ public:
       if (OB_FAIL(copy(input_exprs.at(i), temp_expr))) {
         SQL_RESV_LOG(WARN, "failed to copy expr", K(ret));
       } else if (OB_ISNULL(temp_expr)) {
+        ret = common::OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "null expr", K(ret));
       } else {
         T cast_expr = static_cast<T>(temp_expr);

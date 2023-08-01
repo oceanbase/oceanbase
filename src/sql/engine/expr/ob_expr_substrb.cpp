@@ -451,7 +451,7 @@ int ObExprSubstrb::calc_substrb_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
         } else {
           output_result.set_result();
         }
-      } else if (output_result.init(result_byte_len)) {
+      } else if (OB_FAIL(output_result.init(result_byte_len))) {
         LOG_WARN("Lob: init stringtext result failed", K(ret));
       } else if (OB_FAIL(output_result.get_reserved_buffer(buf, buf_size))) {
         LOG_WARN("Lob: stringtext result reserve buffer failed", K(ret));

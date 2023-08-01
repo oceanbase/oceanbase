@@ -523,7 +523,7 @@ int ObExprJsonQuery::set_result(ObObjType dst_type,
     ObIJsonBase *jb_res_bin = NULL;
     if (OB_FAIL(ret)) {
       LOG_WARN("json extarct get results failed", K(ret));
-    } else if (ObJsonBaseFactory::transform(allocator, jb_res, ObJsonInType::JSON_BIN, jb_res_bin)) { // to BIN
+    } else if (OB_FAIL(ObJsonBaseFactory::transform(allocator, jb_res, ObJsonInType::JSON_BIN, jb_res_bin))) { // to BIN
       LOG_WARN("fail to transform to tree", K(ret));
     } else if (OB_FAIL(jb_res_bin->get_raw_binary(raw_str, allocator))) {
       LOG_WARN("json extarct get result binary failed", K(ret));

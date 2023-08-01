@@ -1135,9 +1135,9 @@ int ObTransformSubqueryCoalesce::merge_any_all_subqueries(ObQueryRefRawExpr *any
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("any/all exprs are not valid", K(ret), K(expr_factory), K(stmt_factory),
              K(any_query_ref), K(all_query_ref), K(any_stmt), K(all_stmt));
-  } else if (ObRawExprCopier::copy_expr_node(*expr_factory,
+  } else if (OB_FAIL(ObRawExprCopier::copy_expr_node(*expr_factory,
                                              trans_param.any_expr_,
-                                             new_any_all_query)) {
+                                             new_any_all_query))) {
     LOG_WARN("failed to copy expr node", K(ret));
   } else if (OB_FAIL(expr_factory->create_raw_expr(T_REF_QUERY, new_query_ref))) {
     LOG_WARN("failed to create query ref expr", K(ret));

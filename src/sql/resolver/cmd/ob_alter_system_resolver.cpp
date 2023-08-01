@@ -4514,7 +4514,7 @@ int resolve_restore_until(const ParseNode &time_node,
                                                          time_val))) {
       ret = OB_ERR_WRONG_VALUE;
       LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIMESTAMP", to_cstring(time_str));
-    } else if (recovery_until_scn.convert_for_sql(time_val)) {
+    } else if (OB_FAIL(recovery_until_scn.convert_for_sql(time_val))) {
       LOG_WARN("fail to set scn", K(ret));
     } else {
       with_restore_scn = true;

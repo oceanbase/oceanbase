@@ -279,7 +279,7 @@ int ObLogSubPlanFilter::get_re_est_cost_infos(const EstimateCostInfo &param,
     if (OB_ISNULL(child)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("set operator i-th child is null", K(ret), K(i));
-    } else if (cur_param.assign(param)) {
+    } else if (OB_FAIL(cur_param.assign(param))) {
       LOG_WARN("failed to assign param", K(ret));
     } else if (0 != i && OB_FALSE_IT(cur_param.need_row_count_ = -1)) {
     } else if (OB_FAIL(SMART_CALL(get_child(i)->re_est_cost(cur_param, cur_child_card, cur_child_cost)))) {

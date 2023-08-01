@@ -801,7 +801,7 @@ static OB_INLINE int common_int_number(const ObExpr &expr,
   ObObjType out_type = expr.datum_meta_.type_;
   if ((ObUNumberType == out_type) && CAST_FAIL(numeric_negative_check(in_val))) {
     LOG_WARN("numeric_negative_check faield", K(ret), K(in_val));
-  } else if (nmb.from(in_val, alloc)) {
+  } else if (OB_FAIL(nmb.from(in_val, alloc))) {
     LOG_WARN("nmb.from failed", K(ret), K(in_val));
   }
   return ret;
@@ -6005,7 +6005,7 @@ CAST_FUNC_NAME(time, date)
       if (OB_FAIL(ObTimeConverter::time_to_datetime(in_val, cur_time, session->get_timezone_info(),
                     datetime_value, ObDateTimeType))) {
         LOG_WARN("datetime_to_date failed", K(ret), K(cur_time));
-      } else if (ObTimeConverter::datetime_to_date(datetime_value, NULL, out_val)) {
+      } else if (OB_FAIL(ObTimeConverter::datetime_to_date(datetime_value, NULL, out_val))) {
         LOG_WARN("date to datetime failed", K(ret), K(datetime_value));
       } else {
         res_datum.set_date(out_val);

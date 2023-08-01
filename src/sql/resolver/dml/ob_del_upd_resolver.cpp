@@ -606,6 +606,7 @@ int ObDelUpdResolver::resolve_additional_assignments(ObIArray<ObTableAssignment>
             LOG_WARN("no column expr returned", K(ret));
           } else if (OB_ISNULL(col_item = stmt->get_column_item_by_id(
               table_item->table_id_, col_exprs.at(0)->get_column_id()))) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get column item failed", K(ret));
           } else {
             assignment.column_expr_ = col_item->expr_;
@@ -3597,9 +3598,11 @@ int ObDelUpdResolver::build_hidden_pk_assignment(ObTableAssignment &ta,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("no column expr returned", K(ret));
       } else if (OB_ISNULL(col_expr = col_exprs.at(0))) {
-
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("no column expr returned", K(ret));
       } else if (OB_ISNULL(col_item = stmt->get_column_item_by_id(table_item->table_id_,
                                                                   col_exprs.at(0)->get_column_id()))) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get column item failed", K(ret),
                  "table_id", table_item->table_id_,
                  "column_id", col_exprs.at(0)->get_column_id());

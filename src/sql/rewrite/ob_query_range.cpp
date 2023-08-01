@@ -8648,6 +8648,7 @@ int ObQueryRange::add_prefix_pattern_constraint(const ObRawExpr *expr)
   if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(expr, expr))) {
     LOG_WARN("fail to get real expr", K(ret));
   } else if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (T_FUN_SYS_PREFIX_PATTERN == expr->get_expr_type()) {
     ObExprConstraint cons(const_cast<ObRawExpr*>(expr), PreCalcExprExpectResult::PRE_CALC_RESULT_NOT_NULL);

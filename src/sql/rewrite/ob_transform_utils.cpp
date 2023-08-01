@@ -484,6 +484,7 @@ int ObTransformUtils::is_columns_unique(const ObIArray<ObRawExpr *> &exprs,
           LOG_WARN("failed to get table schema", K(ret),
                    "index_id", simple_index_infos.at(i).table_id_);
         } else if (OB_ISNULL(index_schema)) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("index schema should not be null", K(ret));
         } else if (index_schema->is_unique_index() && index_schema->get_index_column_num() > 0) {
           const ObIndexInfo &index_info = index_schema->get_index_info();
@@ -634,6 +635,7 @@ int ObTransformUtils::create_new_column_expr(ObTransformerCtx *ctx,
   } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_REF_COLUMN, new_column_ref))) {
     LOG_WARN("failed to create a new column ref expr", K(ret));
   } else if (OB_ISNULL(new_column_ref)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("new_column_ref should not be null", K(ret));
   } else if (OB_FAIL(is_expr_not_null(ctx,
                                       table_item.ref_query_,

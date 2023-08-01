@@ -119,6 +119,7 @@ public:
     } else if (OB_FAIL(params_.stmt_factory_->create_stmt(stmt))) {
       SQL_RESV_LOG(WARN, "create stmt failed", K(ret));
     } else if (OB_ISNULL(stmt)) {
+      ret = common::OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "create stmt success, but stmt is null");
     } else {
       stmt_ = stmt;

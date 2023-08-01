@@ -127,6 +127,7 @@ int ObExprSysConnectByPath::eval_sys_connect_by_path(const ObExpr &expr,
       ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
       LOG_WARN("sys cnnt by path result too long", K(ret), K(res_length));
     } else if (OB_ISNULL(res_buf = expr.get_str_res_mem(ctx, res_length))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate failed", K(ret));
     } else {
       memcpy(res_buf, parent_path.ptr(), parent_path.length());

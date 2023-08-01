@@ -87,7 +87,7 @@ int ObExprSleep::get_usec(const number::ObNumber &nmb, int64_t &value, ObIAlloca
       LOG_WARN("copy nmb failed", K(ret), K(nmb));
     } else if (OB_FAIL(tmp_nmb.round(SCALE_OF_SECOND))) {
       LOG_WARN("round nmb failed", K(ret), K(tmp_nmb));
-    } else if (tmp_nmb.mul(other, res, alloc)) {
+    } else if (OB_FAIL(tmp_nmb.mul(other, res, alloc))) {
       LOG_WARN("mul op failed", K(ret), K(other), K(tmp_nmb));
     } else if (!res.is_valid_uint64(tmp)) { //based on the behaviour of mysql.
       ret = OB_INVALID_ARGUMENT;

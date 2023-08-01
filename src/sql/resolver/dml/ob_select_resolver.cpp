@@ -2451,7 +2451,7 @@ int ObSelectResolver::resolve_star_for_table_groups()
               //如果是only full group by，所有target list中的列都必须检查是否满足group约束
               if (OB_FAIL(standard_group_checker_.add_unsettled_column(item.expr_))) {
                 LOG_WARN("add unsettled column failed", K(ret));
-              } else if (standard_group_checker_.add_unsettled_expr(item.expr_)) {
+              } else if (OB_FAIL(standard_group_checker_.add_unsettled_expr(item.expr_))) {
                 LOG_WARN("add unsettled expr failed", K(ret));
               }
               //对于select * from t1 group by c1, c2;这样的语句，*展开就是column，所以表达式以及表达式引用到的列都是自己
@@ -2608,8 +2608,8 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
         if (!is_in_exists_subquery()) {
           ret = OB_ERR_NO_TABLES_USED;
           LOG_WARN("No tables used");
-        } else if (ObRawExprUtils::build_const_int_expr(*params_.expr_factory_,
-                                                        ObIntType, 1, c_expr)) {
+        } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*params_.expr_factory_,
+                                                        ObIntType, 1, c_expr))) {
           LOG_WARN("fail to build const int expr", K(ret));
         } else if (OB_FALSE_IT(select_item.expr_ = c_expr)) {
         } else if (OB_FAIL(select_stmt->add_select_item(select_item))) {
@@ -5579,7 +5579,7 @@ int ObSelectResolver::resolve_win_func_exprs(ObRawExpr *&expr, common::ObIArray<
           LOG_WARN("failed to handle compat with mysql ntile.", K(ret));
         } else if (OB_ISNULL(final_win_expr = select_stmt->get_same_win_func_item(win_expr))) {
           ret = select_stmt->add_window_func_expr(win_expr);
-        } else if (ObRawExprUtils::replace_ref_column(expr, win_exprs.at(i), final_win_expr)) {
+        } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, win_exprs.at(i), final_win_expr))) {
           LOG_WARN("failed to replace ref column.", K(ret), K(*win_exprs.at(i)));
         } else {/*do nothing.*/}
       }

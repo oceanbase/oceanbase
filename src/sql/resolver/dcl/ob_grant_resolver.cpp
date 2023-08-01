@@ -1880,7 +1880,7 @@ int ObGrantResolver::resolve_obj_priv_list_ora(
       } else if (OB_ISNULL(priv_type_node = role_sys_obj_all_col_priv->children_[0])) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("priv_type_node is NULL", K(ret));
-      } else if (trans_ora_sys_priv_to_obj(priv_type_node)) {
+      } else if (OB_FAIL(trans_ora_sys_priv_to_obj(priv_type_node))) {
         // For compatibility with 2_2_1 on backup
         LOG_WARN("failed to trans_ora_sys_priv_to_obj", K(ret));
       } else if (FALSE_IT(opt_colnames_node = role_sys_obj_all_col_priv->children_[1])) {

@@ -50,7 +50,7 @@ int ObLogSubPlanScan::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to generate access exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, access_exprs_))) {
     LOG_WARN("failed to append exprs", K(ret));
-  } else if (ObLogicalOperator::get_op_exprs(all_exprs)) {
+  } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
     LOG_WARN("failed to append op exprs", K(ret));
   } else { /*do nothing*/ }
 

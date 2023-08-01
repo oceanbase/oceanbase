@@ -6484,7 +6484,7 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
               ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
               LOG_WARN("result of json_arrar is too long", K(ret), K(json_array_buf.length()),
                                                                   K(OB_MAX_PACKET_LENGTH));
-            } else if (json_array_buf.append(",")) {
+            } else if (OB_FAIL(json_array_buf.append(","))) {
               LOG_WARN("fail to append comma", K(ret));
             }
           }
@@ -6893,7 +6893,7 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
                 ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
                 LOG_WARN("result of json_objectagg is too long", K(ret), K(json_object_buf.length()),
                                                                 K(OB_MAX_PACKET_LENGTH));
-              } else if (json_object_buf.append(",")) {
+              } else if (OB_FAIL(json_object_buf.append(","))) {
                 LOG_WARN("fail to append comma", K(ret));
               }
             }

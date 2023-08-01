@@ -820,7 +820,7 @@ int ObGranuleIteratorOp::get_gi_task_consumer_node(ObOperator *cur,
             PHY_BLOCK_SAMPLE_SCAN == first_child->get_spec().type_ ||
             PHY_ROW_SAMPLE_SCAN == first_child->get_spec().type_) {
     child = first_child;
-  } else if (get_gi_task_consumer_node(first_child, child)) {
+  } else if (OB_FAIL(get_gi_task_consumer_node(first_child, child))) {
     LOG_WARN("failed to get gi task consumer node", K(ret));
   }
   if (OB_SUCC(ret) && OB_ISNULL(child)) {

@@ -415,7 +415,7 @@ int ObSQLUtils::calc_const_or_calculable_expr(
     if (OB_SUCC(ret) && !is_valid) {
       if (NULL == constraints) {
         // do nothing
-      } else if (add_calc_failure_constraint(raw_expr, *constraints)) {
+      } else if (OB_FAIL(add_calc_failure_constraint(raw_expr, *constraints))) {
         LOG_WARN("failed to add calc failure constraint", K(ret));
       }
     }
