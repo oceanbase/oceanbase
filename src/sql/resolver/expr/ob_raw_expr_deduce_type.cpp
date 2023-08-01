@@ -2485,6 +2485,8 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
           } else {
             // json or max, do nothing
           }
+        } else if (ob_is_real_type(res_type.get_type())) {
+          res_type.set_double();
         } else {}
         ObCastMode def_cast_mode = CM_NONE;
         ObRawExpr *cast_expr = NULL;
