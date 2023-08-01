@@ -236,6 +236,12 @@ public:
     h ^= h >> 33;
     return h;
   }
+  static int32_t get_blk_size(int32_t slice_size, int32_t slice_cnt)
+  {
+    int32_t isize = (int32_t)lib::align_up2(sizeof(Item) + slice_size, 16);
+    int32_t blk_size = (isize + sizeof(void*)) * slice_cnt + sizeof(ObBlockSlicer);
+    return blk_size;
+  }
   Item* alloc_item() {
     Item* ret = NULL;
     ret = alloc_stock()? (Item*)flist_.pop(): NULL;

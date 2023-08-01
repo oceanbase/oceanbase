@@ -97,7 +97,7 @@ int64_t ObTenantSQLSessionMgr::SessionPool::count() const
 
 ObTenantSQLSessionMgr::ObTenantSQLSessionMgr(const int64_t tenant_id)
   : tenant_id_(tenant_id),
-    session_allocator_(lib::ObMemAttr(tenant_id, "SQLSessionInfo"), MTL_CPU_COUNT())
+    session_allocator_(lib::ObMemAttr(tenant_id, "SQLSessionInfo"), MTL_CPU_COUNT(), 4)
 {}
 
 ObTenantSQLSessionMgr::~ObTenantSQLSessionMgr()
@@ -106,7 +106,7 @@ ObTenantSQLSessionMgr::~ObTenantSQLSessionMgr()
 int ObTenantSQLSessionMgr::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(session_pool_.init(MTL_IS_MINI_MODE() ? 32 : SessionPool::POOL_CAPACIPY))) {
+  if (OB_FAIL(session_pool_.init(SessionPool::POOL_CAPACIPY))) {
     LOG_WARN("fail to init session pool", K(tenant_id_), K(ret));
   }
   return ret;
