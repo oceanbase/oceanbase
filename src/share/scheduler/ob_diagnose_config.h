@@ -63,7 +63,7 @@ static constexpr ObDiagnoseInfoStruct OB_SUSPECT_INFO_TYPES[] = {
   {2, false, "memtable rec_scn not stable", {"rec_scn", "max_consequent_callbacked_scn"}},
   {5, false, "memtable not ready for flush",
     {"is_frozen_memtable", "get_write_ref", "get_unsynced_cnt", "current_right_boundary", "get_end_scn"}},
-  {3, false, "memtable can not create dag successfully", {"error_code", "has been ready for flush time", "read for flush time"}},
+  {3, false, "memtable can not create dag successfully", {"error_code", "has been ready for flush time", "ready for flush time"}},
   {2, false, "invalid data version to schedule medium merge", {"curr_data_version", "target_data_version"}},
   {1, false, "refresh ls locality cache failed", {"errno"}},
   {1, true, "maybe bad case: locality change and leader change", {"leader_exist"}},

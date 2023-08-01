@@ -374,6 +374,12 @@ int ObIDiagnoseInfoMgr::add_with_no_lock(const int64_t key, ObIDiagnoseInfo *inf
   } else if (info_map_.created()) {
     if (OB_FAIL(info_map_.set_refactored(key, info))) {
       STORAGE_LOG(WARN, "failed to set info into map", K(ret), K(key));
+      if (OB_ISNULL(info_list_.remove(info))) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(ERROR, "failed to remove info from list", K(ret));
+        // unexpected
+        ob_abort();
+      }
     }
   }
 
@@ -443,7 +449,7 @@ int ObIDiagnoseInfoMgr::purge_with_rw_lock(bool batch_purge)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_UNLIKELY(OB_ISNULL(info_list_.remove(iter)))) {
+      if (OB_ISNULL(info_list_.remove(iter))) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(ERROR, "failed to remove info from list", K(ret));
         // unexpected
