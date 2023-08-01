@@ -12574,14 +12574,6 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15303'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304', all_def_keywords['__all_virtual_arbitration_service_status'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keywords['__all_virtual_obj_lock']))
 
-# 15306: __all_virtual_recover_table_job
-# 15307: __all_virtual_recover_table_job_history
-# 15308: __all_virtual_import_table_job
-# 15309: __all_virtual_import_table_job_history
-# 15310: __all_virtual_import_table_task
-# 15311: __all_virtual_import_table_task_history
-# 15312: __all_virtual_import_stmt_exec_history
-
 #######################################################################
 # oracle agent table index is defined after the System table Index area
 #######################################################################
@@ -12700,6 +12692,14 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15402', all_def_ke
 # 15405: __all_virtual_session_info
 
 # 15406: __all_virtual_tenant_scheduler_job_class
+
+# 15407: __all_virtual_recover_table_job
+# 15408: __all_virtual_recover_table_job_history
+# 15409: __all_virtual_import_table_job
+# 15410: __all_virtual_import_table_job_history
+# 15411: __all_virtual_import_table_task
+# 15412: __all_virtual_import_table_task_history
+# 15413: __all_virtual_import_stmt_exec_history
 
 # 余留位置
 
