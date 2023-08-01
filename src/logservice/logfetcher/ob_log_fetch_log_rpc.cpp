@@ -937,6 +937,8 @@ int FetchLogARpc::launch_async_rpc_(RpcRequest &rpc_req,
       // You can't continue to manipulate the related structures afterwards
       rpc_send_succeed = true;
     } else {
+      LOG_ERROR("send async stream fetch log rpc fail", KR(ret), K(svr_), K(rpc_req), K(launch_by_cb));
+
       int64_t start_proc_time = get_timestamp();
 
       // First reset the ret return value
@@ -953,8 +955,6 @@ int FetchLogARpc::launch_async_rpc_(RpcRequest &rpc_req,
       ObRpcResultCode rcode;
       rcode.rcode_ = err_code;
       (void)snprintf(rcode.msg_, sizeof(rcode.msg_), "send async stream fetch log rpc fail");
-
-      LOG_ERROR("send async stream fetch log rpc fail", KR(ret), K(svr_), K(rpc_req), K(launch_by_cb));
 
       // RPC send failure, uniformly considered to be a problem of the observer, directly generated RPC results
       bool rpc_stopped = true;

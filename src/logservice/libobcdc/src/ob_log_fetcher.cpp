@@ -111,7 +111,11 @@ int ObLogFetcher::init(
     // Before the Fetcher module is initialized, the following configuration items need to be loaded
     configure(cfg);
     const common::ObRegion prefer_region(cfg.region.str());
-    const bool is_tenant_mode = TCTX.is_tenant_sync_mode();
+
+    // currently, libobcdc would output error log is is_tenant_mode is true and tenant_id is invalid.
+    // TODO: enable tenant_mode querying gv$ob_log_stat;
+    // const bool is_tenant_mode = TCTX.is_tenant_sync_mode();
+    const bool is_tenant_mode = false;
 
     if (is_integrated_fetching_mode(fetching_mode) && OB_FAIL(log_route_service_.init(
         proxy,
