@@ -5967,7 +5967,33 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
             LOG_WARN("read result error", K(ret), K(row_count), K(for_cursor));
           }
         } else {
-          if (for_dbms_sql) {
+          if (OB_SUCC(ret) && !for_cursor) { //如果不是cursor，into只能返回一行，需要检查返回多行报错
+            ObNewRow tmp_row;
+            int64_t cnt = row_count;
+            if (OB_FAIL(ob_write_row(*allocator, current_row, tmp_row))) {
+              LOG_WARN("copy current row fail.", K(ret));
+            } else {
+              ObNewRow tmp_row2;
+              current_row = tmp_row;
+              if (OB_FAIL(fetch_row(result_set, is_streaming, cnt, tmp_row2))) {
+                if (OB_ITER_END == ret) {
+                  ret = OB_SUCCESS;
+                } else {
+                  LOG_WARN("read result error", K(ret));
+                }
+              } else {
+                ret = OB_ERR_TOO_MANY_ROWS;
+              }
+            }
+            // If a SELECT INTO statement without a BULK COLLECT clause returns multiple rows,
+            // PL/SQL raises the predefined exception TOO_MANY_ROWS and SQL%ROWCOUNT returns 1,
+            // not the actual number of rows that satisfy the query.
+            implicit_cursor->set_rowcount(1);
+          }
+
+          if (OB_FAIL(ret)) {
+            // do nothing
+          } else if (for_dbms_sql) {
             //DBMS_SQL包的FETCH不需要检查
           } else if (NULL != out_using_params) {
             ObCastCtx cast_ctx(allocator, &dtc_params, cast_mode, cast_coll_type);
@@ -5993,22 +6019,6 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
             OZ (store_into_result(ctx, cast_ctx, current_row, into_exprs, column_types, type_count,
                              into_count, exprs_not_null, pl_integer_ranges, return_types, return_type_count,
                              actual_column_count, row_desc, is_type_record));
-          }
-
-          if (OB_SUCC(ret) && !for_cursor) { //如果不是cursor，into只能返回一行，需要检查返回多行报错
-            if (OB_FAIL(fetch_row(result_set, is_streaming, row_count, current_row))) {
-              if (OB_ITER_END == ret) {
-                ret = OB_SUCCESS;
-              } else {
-                LOG_WARN("read result error", K(ret));
-              }
-            } else {
-              ret = OB_ERR_TOO_MANY_ROWS;
-            }
-            // If a SELECT INTO statement without a BULK COLLECT clause returns multiple rows,
-            // PL/SQL raises the predefined exception TOO_MANY_ROWS and SQL%ROWCOUNT returns 1,
-            // not the actual number of rows that satisfy the query.
-            implicit_cursor->set_rowcount(1);
           }
         }
       }
