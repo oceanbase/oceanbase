@@ -153,6 +153,7 @@ public:
     {
       return common::OB_INVALID_TIMESTAMP != renew_time_;
     }
+    int assign(ObPartLoc &other);
     TO_STRING_KV(K_(scan_ranges),
                  K_(part_key_ref_id),
                  K_(value_ref_id),
