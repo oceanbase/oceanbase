@@ -485,6 +485,9 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
             case T_TEMPORARY:
               if (create_table_node->children_[5] != NULL) { //临时表不支持分区
                 ret = OB_ERR_TEMPORARY_TABLE_WITH_PARTITION;
+              } else if (lib::is_mysql_mode()) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "MySQL compatible temporary table");
               } else {
                 is_temporary_table = true;
                 is_oracle_temp_table_ = (is_mysql_mode == false);
