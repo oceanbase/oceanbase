@@ -84,9 +84,9 @@ public:
   ~ObGranuleIteratorSpec() {}
 
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec,
-                       K_(ref_table_id), K_(tablet_size), K_(affinitize), K_(access_all));
+                       K_(index_table_id), K_(tablet_size), K_(affinitize), K_(access_all));
 
-  void set_related_id(uint64_t ref_id) { ref_table_id_ = ref_id; }
+  void set_related_id(uint64_t index_id) { index_table_id_ = index_id; }
   void set_tablet_size(int64_t tablet_size) { tablet_size_ = tablet_size; }
   int64_t get_tablet_size() { return tablet_size_; }
 
@@ -104,7 +104,7 @@ public:
   // 目前同时保留了这两个结构，4.2上可以直接删除pw_op_tscs_和所有引用到的地方
   inline bool full_partition_wise() const { return partition_wise_join_ && (!affinitize_ || pw_op_tscs_.count() > 1 || pw_dml_tsc_ids_.count() > 1); }
 public:
-  uint64_t ref_table_id_;
+  uint64_t index_table_id_;
   int64_t tablet_size_;
   // affinitize用于表示线程和任务是否有进行绑定。
   bool affinitize_;
