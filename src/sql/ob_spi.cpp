@@ -4580,7 +4580,8 @@ int ObSPIService::spi_raise_application_error(pl::ObPLExecCtx *ctx,
                                               const ObSqlExpression *errmsg_expr)
 {
   int ret = OB_SUCCESS;
-  ObObjParam result;
+  ObObjParam errcode_result;
+  ObObjParam errmsg_result;
   ObPLSqlCodeInfo *sqlcode_info = NULL;
   ObSQLSessionInfo *session_info = NULL;
   CK (OB_NOT_NULL(ctx), ctx->valid());
@@ -4597,18 +4598,18 @@ int ObSPIService::spi_raise_application_error(pl::ObPLExecCtx *ctx,
     OZ (spi_convert(ctx->exec_ctx_->get_my_session(), ctx->allocator_, tmp, expected_type, result)); \
   } while(0)
 
-   CALC(errcode_expr, int32, result);
-   OX (sqlcode_info->set_sqlcode(result.get_int32()));
-   CALC(errmsg_expr, varchar, result);
-   OX (sqlcode_info->set_sqlmsg(result.get_string()));
+   CALC(errcode_expr, int32, errcode_result);
+   CALC(errmsg_expr, varchar, errmsg_result);
+   OX (sqlcode_info->set_sqlcode(errcode_result.get_int32()));
+   OX (sqlcode_info->set_sqlmsg(errmsg_result.get_string()));
   
   if (OB_SUCC(ret)) {
     if (sqlcode_info->get_sqlcode() <= OB_MAX_RAISE_APPLICATION_ERROR
         && sqlcode_info->get_sqlcode() >= OB_MIN_RAISE_APPLICATION_ERROR) {
       ObString convert_sqlmsg;
       OZ (ObCharset::charset_convert(*ctx->allocator_,
-                                     result.get_string(),
-                                     result.get_collation_type(),
+                                     errmsg_result.get_string(),
+                                     errmsg_result.get_collation_type(),
                                      session_info->get_local_collation_connection(),
                                      convert_sqlmsg));
       if (OB_SUCC(ret)) {
