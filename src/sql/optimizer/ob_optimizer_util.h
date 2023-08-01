@@ -136,6 +136,10 @@ public:
                                const common::ObIArray<OrderItem> &ordering2,
                                const EqualSets &equal_sets);
 
+  static bool in_same_equalset(const ObRawExpr *from,
+                               const ObRawExpr *to,
+                               const EqualSets &equal_sets);
+
   static bool is_expr_equivalent(const ObRawExpr *from,
                                  const ObRawExpr *to,
                                  const EqualSets &equal_sets);
