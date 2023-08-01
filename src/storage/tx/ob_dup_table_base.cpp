@@ -265,6 +265,17 @@ int ObDupTableLSCheckpoint::ObLSDupTableMeta::copy(const ObLSDupTableMeta &dup_l
   return ret;
 }
 
+bool ObDupTableLSCheckpoint::is_useful_meta() const
+{
+  SpinRLockGuard r_guard(ckpt_rw_lock_);
+  bool useful =
+      dup_ls_meta_.is_valid()
+      && (!dup_ls_meta_.lease_item_array_.empty() || dup_ls_meta_.lease_log_applied_scn_.is_valid()
+          || dup_ls_meta_.readable_tablets_base_scn_.is_valid()
+          || dup_ls_meta_.readable_tablets_min_base_applied_scn_.is_valid());
+  return useful;
+}
+
 int ObDupTableLSCheckpoint::get_dup_ls_meta(ObLSDupTableMeta &dup_ls_meta_replica) const
 {
   int ret = OB_SUCCESS;
@@ -728,31 +739,19 @@ int ObDupTableLogOperator::sync_log_succ_(const bool for_replay)
   ObDupTableLSCheckpoint::ObLSDupTableMeta tmp_dup_ls_meta;
 
   if (OB_SUCC(ret)) {
-    if (stat_log_.readable_cnt_ == all_readable_set_cnt) {
-      contain_all_readable = true;
-    }
-    if (OB_FAIL(dup_ls_ckpt_->get_dup_ls_meta(tmp_dup_ls_meta))) {
-      DUP_TABLE_LOG(WARN, "get ls meta filed", K(ret), KPC(this));
-    } else if (!tmp_dup_ls_meta.readable_tablets_base_scn_.is_valid()) {
-      // not valid base scn, do nothing
-    } else if (logging_scn_ != tmp_dup_ls_meta.readable_tablets_base_scn_) {
-      // not need check when replay log scn not equal to base scn
-    } else if (0 > stat_log_.logging_readable_cnt_) {
+    if (stat_log_.logging_readable_cnt_ >= 0) {
+      logging_readable_cnt = stat_log_.logging_readable_cnt_;
+    } else {
       // for each logging id to check contain all readable
       for (int64_t i = 0; i < logging_tablet_set_ids_.count(); i++) {
         if (logging_tablet_set_ids_.at(i).is_readable_set()) {
           logging_readable_cnt++;
         }
       }
-      if (logging_readable_cnt != all_readable_set_cnt) {
-        contain_all_readable = false;
-      } else {
-        contain_all_readable = true;
-      }
-    } else if (stat_log_.logging_readable_cnt_ == all_readable_set_cnt) {
+    }
+    if (stat_log_.readable_cnt_ > 0 && logging_readable_cnt > 0
+        && stat_log_.readable_cnt_ == logging_readable_cnt) {
       contain_all_readable = true;
-    } else {
-      contain_all_readable = false;
     }
     if (!contain_all_readable) {
       DUP_TABLE_LOG(DEBUG, "this tablet log not contain all readable set", K(ret), K(logging_scn_),

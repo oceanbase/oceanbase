@@ -3376,7 +3376,7 @@ int ObSchemaGetterGuard::check_single_table_priv(const ObSessionPrivInfo &sessio
           if (OB_FAIL(get_user_info(tenant_id, session_priv.user_id_, user_info))) {
             LOG_WARN("failed to get user info", KR(ret), K(tenant_id), K(session_priv.user_id_));
           } else if (NULL == user_info) {
-            ret = OB_ERR_UNEXPECTED;
+            ret = OB_USER_NOT_EXIST;
             LOG_WARN("user info is null", KR(ret), K(session_priv.user_id_));
           } else {
             const ObSEArray<uint64_t, 8> &role_id_array = user_info->get_role_id_array();
@@ -3473,7 +3473,12 @@ int ObSchemaGetterGuard::check_db_priv(const ObSessionPrivInfo &session_priv,
       const ObUserInfo *user_info = NULL;
       //bool is_grant_role = false;
       OZ (get_user_info(tenant_id, session_priv.user_id_, user_info), session_priv.user_id_);
-      CK (OB_NOT_NULL(user_info));
+      if (OB_SUCC(ret)) {
+        if (NULL == user_info) {
+          ret = OB_USER_NOT_EXIST;
+          LOG_WARN("user info is null", KR(ret), K(session_priv.user_id_));
+        }
+      }
       if (OB_SUCC(ret)) {
         const ObSEArray<uint64_t, 8> &role_id_array = user_info->get_role_id_array();
         for (int i = 0; OB_SUCC(ret) && i < role_id_array.count(); ++i) {

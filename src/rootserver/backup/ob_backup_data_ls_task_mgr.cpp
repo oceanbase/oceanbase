@@ -382,11 +382,17 @@ int ObBackupDataLSTaskMgr::redo_ls_task(
 int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
 {
   int ret = OB_SUCCESS;
+  bool is_ls_dropped = false;
   if (OB_ISNULL(job_attr_) || OB_ISNULL(ls_attr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[DATA_BACKUP]attr should not be null", K(ret), KP_(job_attr), KP_(ls_attr));
-  } else if (OB_SUCCESS == ls_attr_->result_ || OB_LS_NOT_EXIST == ls_attr_->result_ || OB_NO_TABLET_NEED_BACKUP == ls_attr_->result_) {
+  } else if (OB_SUCCESS == ls_attr_->result_ || OB_NO_TABLET_NEED_BACKUP == ls_attr_->result_) {
     finish_cnt++;
+  } else if (OB_LS_NOT_EXIST == ls_attr_->result_ && OB_FAIL(check_ls_is_dropped(*ls_attr_, *sql_proxy_, is_ls_dropped))) {
+    LOG_WARN("failed to check ls is dropped", K(ret), KPC(ls_attr_));
+  } else if (is_ls_dropped) {
+    finish_cnt++;
+    LOG_INFO("[BACKUP_DATA]ls has been dropped", KPC(ls_attr_));
   } else {
     bool ls_can_retry = true;
     int64_t next_retry_id = ls_attr_->retry_id_ + 1;

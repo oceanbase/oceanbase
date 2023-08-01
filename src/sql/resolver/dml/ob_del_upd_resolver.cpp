@@ -282,7 +282,10 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
               OZ (target_list.push_back(column_items.at(i).get_expr()));
             }
             OZ (expand_record_to_columns(*assign_list.children_[0], value_list));
-            CK (target_list.count() == value_list.count());
+            if (OB_SUCC(ret) && target_list.count() != value_list.count()) {
+              ret = OB_ERR_TOO_MANY_VALUES;
+              LOG_WARN("too many values", K(ret), K(target_list.count()), K(value_list.count()));
+            }
           }
         }
       }

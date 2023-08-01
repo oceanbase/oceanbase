@@ -186,14 +186,16 @@ public:
   common::ObIArray<ObTmpFileExtent *> &get_extents() { return using_extents_; }
   ObTmpBlockValueHandle &get_handle() { return handle_; }
   bool is_empty() const { return page_buddy_.is_empty(); }
-  int close(bool &is_all_close);
+  int seal(bool &is_sealed);
   int is_extents_closed(bool &is_extents_closed);
   int give_back_buf_into_cache(const bool is_wash = false);
 
   TO_STRING_KV(KP_(buffer), K_(page_buddy), K_(handle), K_(macro_block_handle), K_(tmp_file_header),
       K_(io_desc), K_(block_status), K_(is_inited), K_(alloc_time), K_(access_time));
 private:
-   static const int64_t DEFAULT_PAGE_SIZE;
+  bool is_sealed() const { return ATOMIC_LOAD(&is_sealed_); }
+private:
+  static const int64_t DEFAULT_PAGE_SIZE;
   char *buffer_;
   ObTmpFilePageBuddy page_buddy_;
   ObTmpBlockValueHandle handle_;
@@ -203,6 +205,7 @@ private:
   common::ObIOFlag io_desc_;
   common::SpinRWLock lock_;
   BlockStatus block_status_;
+  bool is_sealed_;
   bool is_inited_;
   int64_t alloc_time_;
   int64_t access_time_;

@@ -363,7 +363,8 @@ int ObLogTimeZoneInfoGetter::refresh_all_tenant_timezone_info_()
   if (OB_FAIL(tenant_mgr_->get_all_tenant_ids(all_tenant_ids))) {
     LOG_WARN("fail to get all tenant ids", KR(ret));
   } else if (OB_ISNULL(mysql_proxy_)) {
-    LOG_ERROR("mysql_proxy_ is null", K(mysql_proxy_));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("mysql_proxy_ is null", KR(ret), K(mysql_proxy_));
   } else {
     for (int64_t idx = 0; OB_SUCC(ret) && idx < all_tenant_ids.size(); idx++) {
       const uint64_t tenant_id = all_tenant_ids[idx];

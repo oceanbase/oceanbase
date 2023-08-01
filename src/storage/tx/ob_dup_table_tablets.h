@@ -361,7 +361,7 @@ public:
     DupTabletIdMap::destroy();
   }
 
-  int create(int64_t bucket_num);
+  int create(const uint64_t tenant_id, const int64_t bucket_num);
 
   DupTabletSetChangeStatus *get_change_status()
   {

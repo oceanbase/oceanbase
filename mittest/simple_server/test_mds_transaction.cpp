@@ -23,7 +23,6 @@
 #include "lib/utility/serialization.h"
 #include "share/cache/ob_kv_storecache.h"
 #include "env/ob_simple_cluster_test_base.h"
-#include "env/ob_fast_bootstrap.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "storage/multi_data_source/mds_table_handle.h"
 #include "storage/tx_storage/ob_ls_handle.h"

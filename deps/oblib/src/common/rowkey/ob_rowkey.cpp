@@ -294,7 +294,7 @@ int ObRowkey::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
   return ret;
 }
 
-int ObRowkey::deserialize(const char *buf, const int64_t buf_len, int64_t &pos)
+int ObRowkey::deserialize(const char *buf, const int64_t buf_len, int64_t &pos, bool check_zero  /*= false*/)
 {
   int ret = OB_SUCCESS;
   int64_t obj_cnt = 0;
@@ -332,6 +332,9 @@ int ObRowkey::deserialize(const char *buf, const int64_t buf_len, int64_t &pos)
                    KP(buf), K(buf_len), K(pos), K(obj_cnt), K(ret));
       }
     }
+  } else if (check_zero && obj_cnt == 0) {
+    // Prevent the reserved obj array not aware the obj is empty when obj_cnt = 0
+    obj_cnt_ = obj_cnt;
   }
   return ret;
 }

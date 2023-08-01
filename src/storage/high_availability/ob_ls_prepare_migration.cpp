@@ -725,10 +725,13 @@ int ObStartPrepareMigrationTask::process()
     LOG_WARN("failed to deal with local ls", K(ret), K(*ctx_));
   } else if (OB_FAIL(wait_transfer_tablets_ready_())) {
     LOG_WARN("failed to wait transfer tablets ready", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(wait_log_replay_sync_())) {
-    LOG_WARN("failed to wait log replay sync", K(ret), KPC(ctx_));
   } else if (OB_FAIL(remove_local_incomplete_tablets_())) {
     LOG_WARN("failed to remove local incomplete tablets", K(ret), KPC(ctx_));
+  }
+  //TODO(muwei.ym) delete it in 4.2 RC3
+  /*
+  else if (OB_FAIL(wait_log_replay_sync_())) {
+    LOG_WARN("failed to wait log replay sync", K(ret), KPC(ctx_));
   } else if (OB_FAIL(wait_ls_checkpoint_scn_push_())) {
     LOG_WARN("failed to wait ls checkpoint ts push", K(ret), KPC(ctx_));
   } else if (OB_FAIL(prepare_backfill_tx_tablets_())) {
@@ -736,6 +739,7 @@ int ObStartPrepareMigrationTask::process()
   } else if (OB_FAIL(generate_prepare_migration_dags_())) {
     LOG_WARN("failed to generate prepare migration dags", K(ret), KPC(ctx_));
   }
+  */
 
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
@@ -753,7 +757,6 @@ int ObStartPrepareMigrationTask::deal_with_local_ls_()
   ObLS *ls = nullptr;
   ObRole role;
   int64_t proposal_id = 0;
-  logservice::ObLogService *log_service = nullptr;
   ObLSSavedInfo saved_info;
 
   if (!is_inited_) {
@@ -764,10 +767,7 @@ int ObStartPrepareMigrationTask::deal_with_local_ls_()
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("log stream should not be NULL", K(ret), K(*ctx_));
-  } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log service should not be NULL", K(ret), KP(log_service));
-  } else if (OB_FAIL(log_service->get_palf_role(ctx_->arg_.ls_id_, role, proposal_id))) {
+  } else if (OB_FAIL(ls->get_log_handler()->get_role(role, proposal_id))) {
     LOG_WARN("failed to get role", K(ret), "arg", ctx_->arg_);
   } else if (is_strong_leader(role)) {
     if (ObMigrationOpType::REBUILD_LS_OP == ctx_->arg_.type_) {
@@ -999,6 +999,8 @@ int ObStartPrepareMigrationTask::generate_prepare_migration_dags_()
         LOG_WARN("failed to create first task", K(ret));
       } else if (OB_FAIL(tablet_backfill_tx_dag->add_child(*finish_backfill_tx_dag))) {
         LOG_WARN("failed to add child dag", K(ret), K(*ctx_));
+      } else if (OB_FAIL(finish_backfill_tx_dag->create_first_task())) {
+        LOG_WARN("failed to create first task", K(ret));
       } else if (OB_FAIL(scheduler->add_dag(tablet_backfill_tx_dag))) {
         LOG_WARN("failed to add tablet backfill tx dag", K(ret), K(*tablet_backfill_tx_dag));
         if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
@@ -1009,8 +1011,6 @@ int ObStartPrepareMigrationTask::generate_prepare_migration_dags_()
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(finish_backfill_tx_dag->create_first_task())) {
-      LOG_WARN("failed to create first task", K(ret));
     } else if (OB_FAIL(scheduler->add_dag(finish_backfill_tx_dag))) {
       LOG_WARN("failed to add finish backfill tx dag", K(ret), K(*finish_backfill_tx_dag));
       if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {

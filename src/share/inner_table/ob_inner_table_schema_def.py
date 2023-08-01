@@ -5748,6 +5748,15 @@ def_table_schema(
   ],
 )
 
+# 474 : __all_tenant_scheduler_job_classes
+# 475 : __all_recover_table_job
+# 476 : __all_recover_table_job_history
+# 477 : __all_import_table_job
+# 478 : __all_import_table_job_history
+# 479 : __all_import_table_task
+# 480 : __all_import_table_task_history
+# 481 : __all_import_stmt_exec_history
+
 #
 # 余留位置
 
@@ -10833,7 +10842,7 @@ def_table_schema(
   ('rebuild_seq', 'int'),
   ('tablet_change_checkpoint_scn', 'uint'),
   ('transfer_scn', 'uint'),
-  ('tx_blocked', 'uint'),
+  ('tx_blocked', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -12287,6 +12296,16 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 
 # 12420: __all_virtual_flt_config
 
+# 12421: __all_virtual_tenant_scheduler_job_class
+
+# 12422: __all_virtual_recover_table_job
+# 12423: __all_virtual_recover_table_job_history
+# 12424: __all_virtual_import_table_job
+# 12425: __all_virtual_import_table_job_history
+# 12426: __all_virtual_import_table_task
+# 12427: __all_virtual_import_table_task_history
+# 12428: __all_virtual_import_stmt_exec_history
+
 #
 # 余留位置
 #
@@ -12554,6 +12573,15 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15303', all_def_keywords['__all_virtual_arbitration_member_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304', all_def_keywords['__all_virtual_arbitration_service_status'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keywords['__all_virtual_obj_lock']))
+
+# 15306: __all_virtual_recover_table_job
+# 15307: __all_virtual_recover_table_job_history
+# 15308: __all_virtual_import_table_job
+# 15309: __all_virtual_import_table_job_history
+# 15310: __all_virtual_import_table_task
+# 15311: __all_virtual_import_table_task_history
+# 15312: __all_virtual_import_stmt_exec_history
+
 #######################################################################
 # oracle agent table index is defined after the System table Index area
 #######################################################################
@@ -12668,7 +12696,11 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15402', all_def_ke
 # 15403: __all_virtual_flt_config
 
 # 15404: __all_virtual_tenant_scheduler_job_run_detail
+
 # 15405: __all_virtual_session_info
+
+# 15406: __all_virtual_tenant_scheduler_job_class
+
 # 余留位置
 
 ################################################################################
@@ -19231,6 +19263,7 @@ def_table_schema(
     CAST(CASE WHEN D.DATABASE_NAME = '__recyclebin' THEN I.TABLE_NAME
         ELSE SUBSTR(I.TABLE_NAME, 7 + POSITION('_' IN SUBSTR(I.TABLE_NAME, 7)))
         END AS CHAR(128)) AS INDEX_NAME,
+    CAST(DT.TABLE_NAME AS CHAR(128)) AS TABLE_NAME,
 
     CAST(CASE I.PART_LEVEL
          WHEN 2 THEN 'YES'
@@ -19286,6 +19319,8 @@ def_table_schema(
     CAST(NULL AS CHAR(3)) AS ORPHANED_ENTRIES
     FROM
     OCEANBASE.__ALL_VIRTUAL_TABLE I
+    JOIN OCEANBASE.__ALL_VIRTUAL_TABLE DT
+    ON I.TENANT_ID = DT.TENANT_ID AND I.DATA_TABLE_ID = DT.TABLE_ID
     JOIN OCEANBASE.__ALL_VIRTUAL_DATABASE D
     ON I.TENANT_ID = D.TENANT_ID
        AND I.DATABASE_ID = D.DATABASE_ID
@@ -19324,6 +19359,7 @@ def_table_schema(
     CAST(CASE WHEN D.DATABASE_NAME = '__recyclebin' THEN I.TABLE_NAME
         ELSE SUBSTR(I.TABLE_NAME, 7 + POSITION('_' IN SUBSTR(I.TABLE_NAME, 7)))
         END AS CHAR(128)) AS INDEX_NAME,
+    CAST(DT.TABLE_NAME AS CHAR(128)) AS TABLE_NAME,
     CAST(PART.PART_NAME AS CHAR(128)) PARTITION_NAME,
     CAST(PART.SUB_PART_NAME AS CHAR(128))  SUBPARTITION_NAME,
     CAST(CASE WHEN length(PART.HIGH_BOUND_VAL) > 0 THEN PART.HIGH_BOUND_VAL
@@ -19366,6 +19402,8 @@ def_table_schema(
     CAST(NULL AS CHAR(6)) AS DOMIDX_OPSTATUS,
     CAST(NULL AS CHAR(1000)) AS PARAMETERS
     FROM OCEANBASE.__ALL_VIRTUAL_TABLE I
+    JOIN OCEANBASE.__ALL_VIRTUAL_TABLE DT
+    ON I.TENANT_ID = DT.TENANT_ID AND I.DATA_TABLE_ID = DT.TABLE_ID
     JOIN OCEANBASE.__ALL_VIRTUAL_DATABASE D
     ON I.TENANT_ID = D.TENANT_ID
        AND I.DATABASE_ID = D.DATABASE_ID
@@ -20486,6 +20524,7 @@ def_table_schema(
     CAST(CASE WHEN D.DATABASE_NAME = '__recyclebin' THEN I.TABLE_NAME
         ELSE SUBSTR(I.TABLE_NAME, 7 + POSITION('_' IN SUBSTR(I.TABLE_NAME, 7)))
         END AS CHAR(128)) AS INDEX_NAME,
+    CAST(DT.TABLE_NAME AS CHAR(128)) AS TABLE_NAME,
 
     CAST(CASE I.PART_LEVEL
          WHEN 2 THEN 'YES'
@@ -20541,6 +20580,8 @@ def_table_schema(
     CAST(NULL AS CHAR(3)) AS ORPHANED_ENTRIES
     FROM
     OCEANBASE.__ALL_TABLE I
+    JOIN OCEANBASE.__ALL_TABLE DT
+    ON I.TENANT_ID = DT.TENANT_ID AND I.DATA_TABLE_ID = DT.TABLE_ID
     JOIN OCEANBASE.__ALL_DATABASE D
     ON I.TENANT_ID = D.TENANT_ID
        AND I.DATABASE_ID = D.DATABASE_ID
@@ -20581,6 +20622,7 @@ def_table_schema(
     CAST(CASE WHEN D.DATABASE_NAME = '__recyclebin' THEN I.TABLE_NAME
         ELSE SUBSTR(I.TABLE_NAME, 7 + POSITION('_' IN SUBSTR(I.TABLE_NAME, 7)))
         END AS CHAR(128)) AS INDEX_NAME,
+    CAST(DT.TABLE_NAME AS CHAR(128)) AS TABLE_NAME,
     CAST(PART.PART_NAME AS CHAR(128)) PARTITION_NAME,
     CAST(PART.SUB_PART_NAME AS CHAR(128))  SUBPARTITION_NAME,
     CAST(CASE WHEN length(PART.HIGH_BOUND_VAL) > 0 THEN PART.HIGH_BOUND_VAL
@@ -20623,6 +20665,8 @@ def_table_schema(
     CAST(NULL AS CHAR(6)) AS DOMIDX_OPSTATUS,
     CAST(NULL AS CHAR(1000)) AS PARAMETERS
     FROM OCEANBASE.__ALL_TABLE I
+    JOIN OCEANBASE.__ALL_TABLE DT
+    ON I.TENANT_ID = DT.TENANT_ID AND I.DATA_TABLE_ID = DT.TABLE_ID
     JOIN OCEANBASE.__ALL_DATABASE D
     ON I.TENANT_ID = D.TENANT_ID
        AND I.DATABASE_ID = D.DATABASE_ID
@@ -27987,6 +28031,24 @@ def_table_schema(
 # 21449: GV$OB_FLT_TRACE_CONFIG
 # 21459：GV$OB_SESSION
 # 21460：V$OB_SESSION
+
+# 21461: GV$OB_PL_CACHE_OBJECT
+# 21462: V$OB_PL_CACHE_OBJECT
+
+# 21463: CDB_OB_RECOVER_TABLE_JOBS
+# 21464: DBA_OB_RECOVER_TABLE_JOBS
+# 21465: CDB_OB_RECOVER_TABLE_JOB_HISTORY
+# 21466: DBA_OB_RECOVER_TABLE_JOB_HISTORY
+# 21467: CDB_OB_IMPORT_TABLE_JOBS
+# 21468: DBA_OB_IMPORT_TABLE_JOBS
+# 21469: CDB_OB_IMPORT_TABLE_JOB_HISTORY
+# 21470: DBA_OB_IMPORT_TABLE_JOB_HISTORY
+# 21471: CDB_OB_IMPORT_TABLE_TASKS
+# 21472: DBA_OB_IMPORT_TABLE_TASKS
+# 21473: CDB_OB_IMPORT_TABLE_TASK_HISTORY
+# 21474: DBA_OB_IMPORT_TABLE_TASK_HISTORY
+# 21475: CDB_OB_IMPORT_STMT_EXEC_HISTORY
+# 21476: DBA_OB_IMPORT_STMT_EXEC_HISTORY
 
 #
 # 余留位置
@@ -45880,7 +45942,17 @@ def_table_schema(
   """.replace("\n", " ")
 )
 
-#
+# 25260: DBA_SCHEDULER_JOB_RUN_DETAILS
+# 25261: DBA_SCHEDULER_JOB_CLASSES
+
+# 25262: DBA_OB_RECOVER_TABLE_JOBS
+# 25263: DBA_OB_RECOVER_TABLE_JOB_HISTORY
+# 25264: DBA_OB_IMPORT_TABLE_JOBS
+# 25265: DBA_OB_IMPORT_TABLE_JOB_HISTORY
+# 25266: DBA_OB_IMPORT_TABLE_TASKS
+# 25267: DBA_OB_IMPORT_TABLE_TASK_HISTORY
+# 25268: DBA_OB_IMPORT_STMT_EXEC_HISTORY
+
 # 余留位置
 
 #### End Data Dictionary View
@@ -51917,8 +51989,8 @@ def_table_schema(
 # 28195: GV$OB_FLT_TRACE_CONFIG
 # 28196: GV$OB_SESSION
 # 28197: V$OB_SESSION
-# 28198: DBA_SCHEDULER_JOB_RUN_DETAILS
-
+# 28198: GV$OB_PL_CACHE_OBJECT
+# 28199: V$OB_PL_CACHE_OBJECT
 ################################################################################
 # Lob Table (50000, 70000)
 ################################################################################

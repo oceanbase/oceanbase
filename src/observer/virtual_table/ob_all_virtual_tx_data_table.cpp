@@ -29,6 +29,7 @@ ObAllVirtualTxDataTable::ObAllVirtualTxDataTable()
       sstable_array_pos_(-1),
       ls_iter_guard_(),
       tablet_handle_(),
+      table_store_wrapper_(),
       mgr_handle_(),
       memtable_handles_(),
       sstable_handles_()
@@ -162,7 +163,7 @@ int ObAllVirtualTxDataTable::get_next_tx_data_table_(ObITable *&tx_data_table)
     sstable_handles_.reset();
     tablet_handle_.reset();
     mgr_handle_.reset();
-    ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+    table_store_wrapper_.reset();
 
     if (OB_FAIL(ls_iter_guard_->get_next(ls))) {
       if (OB_ITER_END != ret) {
@@ -177,10 +178,10 @@ int ObAllVirtualTxDataTable::get_next_tx_data_table_(ObITable *&tx_data_table)
     } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet(LS_TX_DATA_TABLET, tablet_handle_))) {
       SERVER_LOG(WARN, "fail to get tx data tablet", KR(ret));
     } else if (FALSE_IT(tablet = tablet_handle_.get_obj())) {
-    } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
+    } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper_))) {
       SERVER_LOG(WARN, "fail to fetch table store", K(ret));
     } else if (OB_FAIL(
-        table_store_wrapper.get_member()->get_minor_sstables().get_all_tables(sstable_handles_))) {
+        table_store_wrapper_.get_member()->get_minor_sstables().get_all_tables(sstable_handles_))) {
       SERVER_LOG(WARN, "fail to get sstable handles", KR(ret));
     } else {
       // iterate from the newest memtable in memtable handles

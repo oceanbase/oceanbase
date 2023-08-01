@@ -1514,6 +1514,7 @@ int ObRootService::schedule_self_check_task()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (task_queue_.exist_timer_task(self_check_task_)) {
+    // ignore error
     LOG_WARN("already have one self_check_task, ignore this");
   } else if (OB_FAIL(task_queue_.add_timer_task(self_check_task_, delay, did_repeat))) {
     LOG_WARN("fail to add timer task", K(ret));
@@ -1531,6 +1532,7 @@ int ObRootService::schedule_update_rs_list_task()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (task_queue_.exist_timer_task(update_rs_list_timer_task_)) {
+    // ignore error
     LOG_WARN("already have one update rs list timer task , ignore this");
   } else if (OB_FAIL(task_queue_.add_timer_task(update_rs_list_timer_task_,
                                                 ObUpdateRsListTimerTask::RETRY_INTERVAL,
@@ -1550,7 +1552,8 @@ int ObRootService::schedule_update_all_server_config_task()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
   } else if (task_queue_.exist_timer_task(update_all_server_config_task_)) {
-    LOG_WARN("already have one update rs list timer task , ignore this");
+    // ignore error
+    LOG_WARN("already have one update_all_server_config task , ignore this");
   } else if (OB_FAIL(task_queue_.add_timer_task(
       update_all_server_config_task_,
       ALL_SERVER_SCHEDULE_ERROR ? (ObUpdateAllServerConfigTask::RETRY_INTERVAL / 2) : ObUpdateAllServerConfigTask::RETRY_INTERVAL,
@@ -1571,6 +1574,7 @@ int ObRootService::schedule_load_ddl_task()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (task_queue_.exist_timer_task(load_ddl_task_)) {
+    // ignore error
     LOG_WARN("load ddl task already exist", K(ret));
   } else if (OB_FAIL(task_queue_.add_timer_task(load_ddl_task_, delay, did_repeat))) {
     LOG_WARN("fail to add timer task", K(ret));
@@ -1589,6 +1593,7 @@ int ObRootService::schedule_refresh_io_calibration_task()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (task_queue_.exist_timer_task(refresh_io_calibration_task_)) {
+    // ignore error
     LOG_WARN("refresh io calibration task already exist", K(ret));
   } else if (OB_FAIL(task_queue_.add_timer_task(refresh_io_calibration_task_, delay, did_repeat))) {
     LOG_WARN("fail to add timer task", K(ret));

@@ -338,7 +338,7 @@ int ObErrorInfo::del_error(ObISQLClient &sql_client)
   if (ERROR_STATUS_NO_ERROR != error_info.get_error_status()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("delete error info unexpected.", K(ret), K(error_info));
-  } else if (sql.assign_fmt("delete FROM %s WHERE obj_id = %ld \
+  } else if (OB_FAIL(sql.assign_fmt("delete FROM %s WHERE obj_id = %ld \
                                                   AND tenant_id = %ld  \
                                                   AND obj_seq = %ld \
                                                   AND obj_type = %ld", 
@@ -346,7 +346,7 @@ int ObErrorInfo::del_error(ObISQLClient &sql_client)
              error_info.extract_obj_id(),
              error_info.extract_tenant_id(),
              error_info.get_obj_seq(),
-             error_info.get_obj_type())) {
+             error_info.get_obj_type()))) {
     LOG_WARN("delete from __all_error table failed.", K(ret));
   } else {
     if (OB_FAIL(sql_client.write(exec_tenant_id, sql.ptr(), affected_rows))) {
@@ -367,7 +367,7 @@ int ObErrorInfo::get_error_obj_seq(common::ObISQLClient &sql_client,
   if (false == error_info.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error info is invalid", K(ret));
-  } else if (sql.assign_fmt("SELECT obj_id, obj_seq FROM %s WHERE obj_id = %ld  \
+  } else if (OB_FAIL(sql.assign_fmt("SELECT obj_id, obj_seq FROM %s WHERE obj_id = %ld  \
                                                                   AND tenant_id= %ld \
                                                                   AND obj_seq = %ld\
                                                                   AND obj_type = %ld",
@@ -375,7 +375,7 @@ int ObErrorInfo::get_error_obj_seq(common::ObISQLClient &sql_client,
              error_info.extract_obj_id(),
              error_info.extract_tenant_id(),
              error_info.get_obj_seq(),
-             error_info.get_obj_type())) {
+             error_info.get_obj_type()))) {
     // do nothing
     LOG_WARN("assign select object sequence failed.", K(ret));
   } else {

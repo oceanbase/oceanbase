@@ -836,6 +836,8 @@ public:
   ObDupTableLSCheckpoint() { reset(); }
   void default_init(const share::ObLSID &ls_id) { dup_ls_meta_.ls_id_ = ls_id; }
 
+  bool is_useful_meta() const;
+
   int get_dup_ls_meta(ObLSDupTableMeta &dup_ls_meta) const;
   int set_dup_ls_meta(const ObLSDupTableMeta &dup_ls_meta);
   share::SCN get_lease_log_rec_scn() const;

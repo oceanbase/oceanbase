@@ -962,7 +962,9 @@ private:
 
   int check_key_valid(common::hash::ObHashSet<ObString> &view_key_names, const ObString& key);
 
-  int shadow_truncate_string_for_hist(const ObObjMeta obj_meta, ObDatum &datum);
+  int shadow_truncate_string_for_hist(const ObObjMeta obj_meta,
+                                      ObDatum &datum,
+                                      int32_t *origin_str_len = NULL);
 
   OB_INLINE void clear_op_evaluated_flag()
   {

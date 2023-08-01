@@ -65,11 +65,11 @@ namespace share
   } while (OB_FAIL(ret) && retry_time++ < server_prover_.get_server_count() - 1);
 
 
-ObLogRestoreMySQLProvider::ObLogRestoreMySQLProvider() : server_list_() {}
+ObLogRestoreMySQLProvider::ObLogRestoreMySQLProvider() : server_list_(), lock_() {}
 
 ObLogRestoreMySQLProvider::~ObLogRestoreMySQLProvider()
 {
-  server_list_.reset();
+  destroy();
 }
 
 int ObLogRestoreMySQLProvider::init(const common::ObIArray<common::ObAddr> &server_list)
@@ -80,6 +80,7 @@ int ObLogRestoreMySQLProvider::init(const common::ObIArray<common::ObAddr> &serv
 int ObLogRestoreMySQLProvider::set_restore_source_server(const common::ObIArray<common::ObAddr> &server_list)
 {
   int ret = OB_SUCCESS;
+  WLockGuard guard(lock_);
   if (OB_UNLIKELY(server_list.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(server_list));
@@ -90,15 +91,20 @@ int ObLogRestoreMySQLProvider::set_restore_source_server(const common::ObIArray<
 }
 void ObLogRestoreMySQLProvider::destroy()
 {
+  WLockGuard guard(lock_);
   server_list_.reset();
 }
 
 int ObLogRestoreMySQLProvider::get_server(const int64_t svr_idx, common::ObAddr &server)
 {
+  RLockGuard guard(lock_);
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(svr_idx < 0 || svr_idx >= server_list_.count())) {
+  if (OB_UNLIKELY(svr_idx < 0)) {
     ret = OB_INVALID_INDEX;
     LOG_WARN("get_server invalid index", K(svr_idx));
+  } else if (OB_UNLIKELY(svr_idx >= server_list_.count())) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("svr_idx out of range", K(svr_idx), K(server_list_));
   } else {
     server = server_list_.at(svr_idx);
   }
@@ -107,6 +113,7 @@ int ObLogRestoreMySQLProvider::get_server(const int64_t svr_idx, common::ObAddr 
 
 int64_t ObLogRestoreMySQLProvider::get_server_count() const
 {
+  RLockGuard guard(lock_);
   return server_list_.count();
 }
 
@@ -209,7 +216,7 @@ int ObLogRestoreProxyUtil::init(const uint64_t tenant_id,
   } else if (OB_FAIL(server_prover_.init(server_list))) {
     LOG_WARN("server_prover_ init failed", K(tenant_id), K(server_list));
   } else if (FALSE_IT(connection_.set_server_provider(&server_prover_))) {
-  } else if (TG_CREATE_TENANT(lib::TGDefIDs::LogMysqlPool, tg_id_)) {
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::LogMysqlPool, tg_id_))) {
     LOG_ERROR("create connection pool timer pool failed");
   } else if (OB_FAIL(TG_START(tg_id_))) {
     LOG_ERROR("TG_START failed");

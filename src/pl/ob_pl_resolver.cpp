@@ -10452,6 +10452,14 @@ int ObPLResolver::check_local_variable_read_only(
   CK (OB_NOT_NULL(symbol_table = ns.get_symbol_table()));
   OV (OB_NOT_NULL(var = symbol_table->get_symbol(var_idx)), OB_ERR_UNEXPECTED, K(var_idx));
   if (OB_SUCC(ret)) {
+#define GET_TRIGGER_INFO  \
+  ObSchemaChecker schema_checker; \
+  const ObTriggerInfo *trg_info = NULL; \
+  const uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();  \
+  OZ (schema_checker.init(resolve_ctx_.schema_guard_)); \
+  OZ (schema_checker.get_trigger_info(tenant_id, ns.get_db_name(), ns.get_package_name(), trg_info)); \
+  CK (OB_NOT_NULL(trg_info));
+
     // check type udf member function attr readable. etc: a := 5; when a is type object attr
     // and this stmt is inside a object member function, it is not applicable.
     // note: this statement is avaiable inside a member procedure
@@ -10474,28 +10482,61 @@ int ObPLResolver::check_local_variable_read_only(
         }
       } else {
         if (lib::is_mysql_mode()) {
-          ret = OB_ERR_TRIGGER_CANT_CHANGE_ROW;
-          if (0 == var->get_name().case_compare("NEW")) {
-            LOG_WARN("can not update NEW row in after trigger", K(var->get_name()), K(ret));
-            LOG_MYSQL_USER_ERROR(OB_ERR_TRIGGER_CANT_CHANGE_ROW, "NEW", "after ");
+          if (0 == var->get_name().case_compare("NEW")
+              && (TgTimingEvent::TG_AFTER_DELETE == resolve_ctx_.params_.tg_timing_event_
+                  || TgTimingEvent::TG_BEFORE_DELETE == resolve_ctx_.params_.tg_timing_event_)) {
+            ret = OB_ERR_TRIGGER_NO_SUCH_ROW;
+            LOG_WARN("There is no NEW row in on DELETE trigger", K(ret), K(resolve_ctx_.params_.tg_timing_event_));
+            LOG_USER_ERROR(OB_ERR_TRIGGER_NO_SUCH_ROW, "NEW", "DELETE");
           } else {
-            LOG_WARN("can not update OLD row in trigger", K(var->get_name()), K(ret));
-            LOG_MYSQL_USER_ERROR(OB_ERR_TRIGGER_CANT_CHANGE_ROW, "OLD", "");
+            ret = OB_ERR_TRIGGER_CANT_CHANGE_ROW;
+            if (0 == var->get_name().case_compare("NEW")) {
+              LOG_WARN("can not update NEW row in after trigger", K(var->get_name()), K(ret));
+              LOG_MYSQL_USER_ERROR(OB_ERR_TRIGGER_CANT_CHANGE_ROW, "NEW", "after ");
+            } else {
+              LOG_WARN("can not update OLD row in trigger", K(var->get_name()), K(ret));
+              LOG_MYSQL_USER_ERROR(OB_ERR_TRIGGER_CANT_CHANGE_ROW, "OLD", "");
+            }
           }
         } else if (resolve_ctx_.session_info_.is_for_trigger_package() && lib::is_oracle_mode()) {
-          if (0 == var->get_name().case_compare(":NEW")) {
-            ret = OB_ERR_TRIGGER_CANT_CHANGE_ROW;
-            LOG_WARN("can not change NEW row in instead of trigger", K(var->get_name()), K(ret));
-          } else {
-            ret = OB_ERR_TRIGGER_CANT_CHANGE_OLD_ROW;
-            LOG_WARN("can not change OLD row in trigger", K(var->get_name()), K(ret));
+          GET_TRIGGER_INFO;
+          if (OB_FAIL(ret)) {
+          } else if (var->get_name().prefix_match(":")) {
+            ObString tmp(var->get_name().length() - 1, var->get_name().ptr() + 1);
+            if (0 == trg_info->get_ref_new_name().case_compare(tmp)) {
+              ret = OB_ERR_TRIGGER_CANT_CHANGE_ROW;
+              LOG_WARN("can not change NEW row in trigger", K(var->get_name()), K(ret));
+            } else if (0 == trg_info->get_ref_old_name().case_compare(tmp)) {
+              ret = OB_ERR_TRIGGER_CANT_CHANGE_OLD_ROW;
+              LOG_WARN("can not change OLD row in trigger", K(var->get_name()), K(ret));
+            }
           }
-        } else { 
+        } else {
           ret = OB_ERR_VARIABLE_IS_READONLY;
           LOG_WARN("variable is read only", K(ret), K(var_idx), KPC(var));
         }
       }
+    } else if (resolve_ctx_.session_info_.is_for_trigger_package()) {
+      if (lib::is_oracle_mode()) {
+        GET_TRIGGER_INFO;
+        if (OB_SUCC(ret) && trg_info->has_delete_event()) {
+          if (var->get_name().prefix_match(":")) {
+            ObString tmp(var->get_name().length() - 1, var->get_name().ptr() + 1);
+            if (0 == trg_info->get_ref_new_name().case_compare(tmp)) {
+              ret = OB_ERR_TRIGGER_CANT_CHANGE_ROW;
+              LOG_WARN("cannot change NEW values for this trigger type", K(var->get_name()), K(ret));
+            }
+          }
+        }
+      } else if (0 == var->get_name().case_compare("NEW") && lib::is_mysql_mode()
+                 && (TgTimingEvent::TG_AFTER_DELETE == resolve_ctx_.params_.tg_timing_event_
+                     || TgTimingEvent::TG_BEFORE_DELETE == resolve_ctx_.params_.tg_timing_event_)) {
+        ret = OB_ERR_TRIGGER_NO_SUCH_ROW;
+        LOG_WARN("there is no NEW row in on DELETE trigger", K(ret), K(resolve_ctx_.params_.tg_timing_event_));
+        LOG_USER_ERROR(OB_ERR_TRIGGER_NO_SUCH_ROW, "NEW", "DELETE");
+      }
     }
+#undef GET_TRIGGER_INFO
   }
   return ret;
 }
@@ -13631,6 +13672,8 @@ int ObPLResolver::resolve_stmt_list(const ObStmtNodeTree *node,
     }
     if (OB_SUCC(ret)) {
       set_current(*parent);
+    } else if (block != NULL) {
+      block->reset();
     }
   }
   return ret;

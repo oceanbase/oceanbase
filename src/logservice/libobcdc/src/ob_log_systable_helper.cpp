@@ -676,7 +676,7 @@ int IObLogSysTableHelper::BatchSQLQuery::parse_record_from_row_(common::ObIArray
   if (OB_UNLIKELY(! sql_addr.set_ip_addr(svr_ip, static_cast<int32_t>(sql_port)))) {
     ret = OB_INVALID_DATA;
     LOG_ERROR("invalid rpc_addr query from server", KR(ret), K(svr_ip), K(rpc_port), K(sql_port));
-  } else if (records.push_back(sql_addr)) {
+  } else if (OB_FAIL(records.push_back(sql_addr))) {
     LOG_ERROR("push_back sql_addr into tenant_server_list failed", KR(ret), K(svr_ip), K(rpc_port), K(sql_port));
   }
 
@@ -1343,9 +1343,9 @@ int ObLogSysTableHelper::do_query_(MySQLQueryBase &query)
     LOG_ERROR("not init");
     ret = OB_NOT_INIT;
   } else if (OB_ISNULL(mysql_conns_) || OB_ISNULL(next_svr_idx_array_)) {
-    LOG_ERROR("invalid mysql_conns_ or next_svr_idx_array_", K(mysql_conns_),
-        K(next_svr_idx_array_));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid mysql_conns_ or next_svr_idx_array_", KR(ret), K(mysql_conns_),
+        K(next_svr_idx_array_));
   } else if (OB_ISNULL(svr_provider_)) {
     LOG_ERROR("invalid svr provider or config", K(svr_provider_));
     ret = OB_ERR_UNEXPECTED;

@@ -26,6 +26,9 @@ using namespace share;
 namespace storage
 {
 
+//errsim def
+ERRSIM_POINT_DEF(PHYSICAL_COPY_TASK_GET_TABLET_FAILED);
+
 /******************ObPhysicalCopyCtx*********************/
 ObPhysicalCopyCtx::ObPhysicalCopyCtx()
   : lock_(),
@@ -779,14 +782,18 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
   } else if (OB_FAIL(get_merge_type_(sstable_param, merge_type))) {
     LOG_WARN("failed to get merge type", K(ret), KPC(sstable_param));
   } else if (OB_FAIL(ls_->ha_get_tablet(tablet_id, tablet_handle))) {
-    if (OB_TABLET_NOT_EXIST == ret) {
-      //overwrite ret
-      if (OB_FAIL(tablet_copy_finish_task_->set_tablet_status(ObCopyTabletStatus::TABLET_NOT_EXIST))) {
-        LOG_WARN("failed to set tablet status", K(ret), K(tablet_id));
+    LOG_WARN("failed to do ha get tablet", K(ret), K(tablet_id));
+  }
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = PHYSICAL_COPY_TASK_GET_TABLET_FAILED ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake PHYSICAL_COPY_TASK_GET_TABLET_FAILED", K(ret));
       }
-    } else {
-      LOG_WARN("failed to do ha get tablet", K(ret), K(tablet_id));
     }
+#endif
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_id));
@@ -862,7 +869,14 @@ int ObSSTableCopyFinishTask::prepare_sstable_index_builder_(
   } else if (0 == sstable_param->basic_meta_.data_macro_block_count_) {
     LOG_INFO("sstable is empty, no need build sstable index builder", K(ret), K(tablet_id), KPC(sstable_param));
   } else if (OB_FAIL(prepare_data_store_desc_(ls_id, tablet_id, sstable_param, cluster_version, desc))) {
-    LOG_WARN("failed to prepare data store desc", K(ret), K(tablet_id), K(cluster_version));
+    if (OB_TABLET_NOT_EXIST == ret) {
+      //overwrite ret
+      if (OB_FAIL(tablet_copy_finish_task_->set_tablet_status(ObCopyTabletStatus::TABLET_NOT_EXIST))) {
+        LOG_WARN("failed to set tablet status", K(ret), K(tablet_id));
+      }
+    } else {
+      LOG_WARN("failed to prepare data store desc", K(ret), K(tablet_id), K(cluster_version));
+    }
   } else if (OB_FAIL(sstable_index_builder_.init(
       desc,
       nullptr, // macro block flush callback, default value is nullptr

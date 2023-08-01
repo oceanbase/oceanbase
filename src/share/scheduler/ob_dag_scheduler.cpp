@@ -479,7 +479,7 @@ int ObIDag::add_child(ObIDag &child)
     if (OB_NOT_NULL(child.get_dag_net())) { // already belongs to other dag_net
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "child's dag net is not null", K(ret), K(child));
-    } else if (child.deep_copy_children(get_child_nodes())) {
+    } else if (OB_FAIL(child.deep_copy_children(get_child_nodes()))) {
       COMMON_LOG(WARN, "failed to deep copy child", K(ret), K(child));
     } else if (OB_FAIL(dag_net_->add_dag_into_dag_net(child))) {
       COMMON_LOG(WARN, "failed to add dag into dag net", K(ret), K(child), KPC(dag_net_));

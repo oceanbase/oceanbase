@@ -92,6 +92,7 @@ public:
 	    task_id_(0)
 	{ }
 	virtual ~ObGranuleTaskInfo() { }
+  int assign(const ObGranuleTaskInfo &other);
 	TO_STRING_KV(K_(ranges), K_(ss_ranges), K_(task_id));
 public:
   common::ObSEArray<common::ObNewRange, 1> ranges_;

@@ -926,7 +926,7 @@ int ObTabletStartTransferInHelper::check_transfer_src_tablets_(
       bool need_rebuild = false;
       if (!for_replay) {
         // do nothing
-      } else if (OB_SUCCESS != (tmp_ret = OB_FAIL(ObStorageHAUtils::check_transfer_ls_can_rebuild(scn, need_rebuild)))) {
+      } else if (OB_SUCCESS != (tmp_ret = ObStorageHAUtils::check_transfer_ls_can_rebuild(scn, need_rebuild))) {
         LOG_WARN("failed to check transfer ls can rebuild", K(tmp_ret), K(scn), K(tx_start_transfer_in_info));
       } else if (need_rebuild && OB_SUCCESS != (tmp_ret = set_dest_ls_rebuild_(tx_start_transfer_in_info.dest_ls_id_))) {
         LOG_WARN("failed to set dest ls rebuild", K(tmp_ret), K(tx_start_transfer_in_info));
@@ -1023,7 +1023,7 @@ int ObTabletStartTransferInHelper::create_transfer_in_tablets_(
   ObLS *dest_ls = NULL;
   ObLSService* ls_srv = nullptr;
   ObArray<ObTabletID> tablet_id_array;
-
+  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   if ((!scn.is_valid() && for_replay) || !tx_start_transfer_in_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create transfer in tablet get invalid argument", K(ret), K(scn), K(tx_start_transfer_in_info));
@@ -1035,6 +1035,11 @@ int ObTabletStartTransferInHelper::create_transfer_in_tablets_(
   } else if (OB_ISNULL(dest_ls = dest_ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is NULL", KR(ret), KP(dest_ls));
+  } else if (CLICK_FAIL(dest_ls->get_migration_status(migration_status))) {
+    LOG_WARN("failed to get migration status", KR(ret), KP(dest_ls), "dest_ls_id", dest_ls->get_ls_id());
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_GC == migration_status) {
+    ret = OB_LS_WAITING_SAFE_DESTROY;
+    LOG_WARN("the migration status of transfer dest_ls is OB_MIGRATION_STATUS_GC", KR(ret), "dest_ls_id", dest_ls->get_ls_id());
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.tablet_meta_list_.count(); ++i) {
       MDS_TG(10_ms);

@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "storage/blocksstable/ob_sstable.h"
 #include "share/table/ob_table_load_define.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
 #include "storage/direct_load/ob_direct_load_dml_row_handler.h"

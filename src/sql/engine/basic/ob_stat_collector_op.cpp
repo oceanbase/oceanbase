@@ -336,15 +336,20 @@ int ObStatCollectorOp::split_partition_range()
         }
       }
     }
-    if (OB_SUCC(ret) && OB_LIKELY(datum_len_sum > 0)) {
+    if (OB_SUCC(ret)) {
       void *buf = NULL;
-      if (OB_ISNULL(ctx_.get_sqc_handler())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sqc handler is null", K(ret));
-      } else if (OB_ISNULL(buf = ctx_.get_sqc_handler()->get_safe_allocator().alloc(datum_len_sum))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate memory failed", K(ret), K(datum_len_sum));
-      } else {
+      if (OB_LIKELY(datum_len_sum > 0)) {
+        if (OB_ISNULL(ctx_.get_sqc_handler())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sqc handler is null", K(ret));
+        } else if (OB_ISNULL(buf = ctx_.get_sqc_handler()->get_safe_allocator().alloc(datum_len_sum))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret), K(datum_len_sum));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(ctx_.set_partition_ranges(tmp_part_ranges,
+                                                        static_cast<char*>(buf), datum_len_sum))) {
+        LOG_WARN("set partition ranges failed", K(ret));
       }
     }
   }

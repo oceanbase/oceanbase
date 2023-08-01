@@ -1739,6 +1739,7 @@ void ObPartitionMergeDumper::print_error_info(const int err_no,
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Unexpected null macro block", K(ret), KPC(macro_desc), KPC(cur_iter));
       } else if (OB_ISNULL(curr_row)) {
+        ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "merge iter content: ", K(midx), K(cur_iter->get_table()->get_key()),
                     KPC(macro_desc));
       } else {

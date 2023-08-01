@@ -512,13 +512,13 @@ int MdsTableHandle::for_each_unit_from_small_key_to_big_from_old_node_to_new_to_
   return ret;
 }
 
-inline int MdsTableHandle::flush(share::SCN recycle_scn, bool need_freeze)
+inline int MdsTableHandle::flush(share::SCN need_advanced_rec_scn_lower_limit)
 {
   int ret = OB_SUCCESS;
   // return ret;// FIXME: for lixia test, will block CLOG recycle
 #ifndef TEST_MDS_TRANSACTION
   CHECK_MDS_TABLE_INIT();
-  ret = p_mds_table_base_->flush(recycle_scn, need_freeze);
+  ret = p_mds_table_base_->flush(need_advanced_rec_scn_lower_limit);
 #endif
   return ret;
 }
@@ -545,6 +545,14 @@ inline int MdsTableHandle::get_rec_scn(share::SCN &rec_scn) const
   int ret = OB_SUCCESS;
   CHECK_MDS_TABLE_INIT();
   rec_scn = p_mds_table_base_->get_rec_scn();
+  return ret;
+}
+
+inline int MdsTableHandle::dump_status() const
+{
+  int ret = OB_SUCCESS;
+  CHECK_MDS_TABLE_INIT();
+  p_mds_table_base_->dump_status();
   return ret;
 }
 

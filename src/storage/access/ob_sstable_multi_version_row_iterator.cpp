@@ -313,7 +313,7 @@ int ObSSTableMultiVersionRowMultiScanner::inner_open(
       }
 
       if (OB_FAIL(ret)) {
-      } else if (ObSSTableRowMultiScanner::inner_open(iter_param, access_ctx, table, &multi_version_ranges_)) {
+      } else if (OB_FAIL(ObSSTableRowMultiScanner::inner_open(iter_param, access_ctx, table, &multi_version_ranges_))) {
         LOG_WARN("failed to open scanner", K(ret));
       }
     }

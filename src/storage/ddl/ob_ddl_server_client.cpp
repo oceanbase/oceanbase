@@ -47,7 +47,7 @@ int ObDDLServerClient::create_hidden_table(const obrpc::ObCreateHiddenTableArg &
     } else {
       break;
     }
-    if (OB_FAIL(ret) && (OB_EAGAIN == ret || OB_TRANS_KILLED == ret)) {
+    if (OB_FAIL(ret) && is_ddl_stmt_packet_retry_err(ret)) {
       ob_usleep(retry_interval);
       if (OB_FAIL(THIS_WORKER.check_status())) { // overwrite ret
         LOG_WARN("failed to check status", K(ret));

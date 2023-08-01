@@ -13,6 +13,7 @@
 #ifndef STORAGE_MULTI_DATA_SOURCE_MDS_TABLE_IMPL_IPP
 #define STORAGE_MULTI_DATA_SOURCE_MDS_TABLE_IMPL_IPP
 
+#include "ob_clock_generator.h"
 #include "storage/multi_data_source/mds_table_base.h"
 #ifndef STORAGE_MULTI_DATA_SOURCE_MDS_TABLE_IMPL_H_IPP
 #define STORAGE_MULTI_DATA_SOURCE_MDS_TABLE_IMPL_H_IPP
@@ -825,7 +826,7 @@ int MdsTableImpl<MdsTableType>::is_locked_by_others(int64_t unit_id,
     if (OB_ITER_END == (ret = unit_tuple_.for_each(helper))) {
       ret = OB_SUCCESS;
     } else if (OB_FAIL(ret)) {
-      MDS_LOG(WARN, "fail to set", KR(ret));
+      MDS_LOG(WARN, "fail to call is_locked_by_others", KR(ret));
     } else {
       ret = OB_OBJ_TYPE_ERROR;
       MDS_LOG(WARN, "not found in tuple", KR(ret));
@@ -910,83 +911,81 @@ struct CountUnDumpdedNodesBelowDoFlushScn// To filter unnecessary flush operatio
   const share::SCN &do_flush_scn_;
 };
 template <typename MdsTableType>
-int MdsTableImpl<MdsTableType>::flush(share::SCN recycle_scn, bool need_freeze)
+int MdsTableImpl<MdsTableType>::calculate_flush_scn_and_need_dumped_nodes_cnt_(share::SCN need_advanced_rec_scn_lower_limit,
+                                                                               share::SCN &do_flush_scn,
+                                                                               int64_t &need_dumped_nodes_cnt)
 {
-  #define PRINT_WRAPPER KR(ret), K(*this), K(recycle_scn), K(need_freeze),\
-                        K(ls_max_consequent_callbacked_scn), K(do_flush_scn), K(temp_flushing_scn), K(undump_node_cnt)
+  #define PRINT_WRAPPER KR(ret), K(*this), K(need_advanced_rec_scn_lower_limit), K(do_flush_scn), \
+          K(need_dumped_nodes_cnt)
   MDS_TG(100_ms);
   int ret = OB_SUCCESS;
+  share::SCN calculated_flush_scn;
   share::SCN ls_max_consequent_callbacked_scn = share::SCN::max_scn();
+#ifndef UNITTEST_DEBUG
+    if (MDS_FAIL(get_ls_max_consequent_callbacked_scn_(ls_max_consequent_callbacked_scn))) {
+      MDS_LOG_FLUSH(WARN, "fail to get ls_max_consequent_callbacked_scn");
+    } else if (ls_max_consequent_callbacked_scn.is_max()) {
+      ret = OB_ERR_UNEXPECTED;
+      MDS_LOG_FLUSH(ERROR, "invalid ls max consequent callbacked scn");
+    } else {
+      do_flush_scn = ls_max_consequent_callbacked_scn;
+    }
+#else
+    do_flush_scn = need_advanced_rec_scn_lower_limit;
+#endif
+    if (OB_SUCC(ret)) {
+      RecalculateFlushScnCauseOnlySuppportDumpCommittedNodeOP op1(do_flush_scn);// recalculate flush scn
+      CountUnDumpdedNodesBelowDoFlushScn op2(need_dumped_nodes_cnt, do_flush_scn);// count nodes need dump
+      if (MDS_FAIL(for_each_scan_row(op1))) {
+        MDS_LOG_FLUSH(WARN, "for each to calculate flush scn failed");
+      } else if (MDS_FAIL(for_each_scan_row(op2))) {
+        MDS_LOG_FLUSH(WARN, "for each to count undumped nodes failed");
+      }
+    }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+template <typename MdsTableType>
+int MdsTableImpl<MdsTableType>::flush(share::SCN need_advanced_rec_scn_lower_limit)
+{// if rec_scn below this limit, need generate dag and try hard to advance it
+  #define PRINT_WRAPPER KR(ret), K(*this), K(need_advanced_rec_scn_lower_limit), K(do_flush_scn), K(undump_node_cnt)
+  MDS_TG(100_ms);
+  int ret = OB_SUCCESS;
   share::SCN do_flush_scn;// this scn is defined for calculation
-  share::SCN temp_flushing_scn;
   int64_t undump_node_cnt = 0;
   MdsWLockGuard lg(lock_);
-  if (need_freeze) {
-    // if need_freeze is true, decide a flushing_scn
-    if (!recycle_scn.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      MDS_LOG_FLUSH(WARN, "invalid recycle scn");
-    } else if (last_flushed_scn_.is_valid() && last_flushed_scn_ >= recycle_scn) {
-      // skip freeze if this flushed_scn >= recycle_scn
-      MDS_LOG_FLUSH(INFO, "no need do freeze action cause a not-less-than version has been flushed");
-    } else if (flushing_scn_.is_valid()) {
-      // skip freeze if this mds table is flushing
-      MDS_LOG_FLUSH(DEBUG, "no need do freeze action cause another flush dag is running");
-    } else {
-      // do freeze mds table
+  if (!need_advanced_rec_scn_lower_limit.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    MDS_LOG_FLUSH(WARN, "invalid recycle scn");
+  } else if (flushing_scn_.is_valid()) {
+    MDS_LOG_FLUSH(TRACE, "no need do flush cause another flush dag is running");
+  } else if (get_rec_scn().is_max()) {
+    MDS_LOG_FLUSH(TRACE, "no need do flush cause rec_scn is MAX already");
+  } else if (need_advanced_rec_scn_lower_limit < get_rec_scn()) {// no need dump this mds table to advance rec_scn
+    MDS_LOG_FLUSH(TRACE, "no need do flush need_advanced_rec_scn_lower_limit less than rec_scn");
+  } else if (MDS_FAIL(calculate_flush_scn_and_need_dumped_nodes_cnt_(need_advanced_rec_scn_lower_limit,
+                                                                     do_flush_scn,
+                                                                     undump_node_cnt))) {
+    MDS_LOG_FLUSH(WARN, "fail to call calculate_flush_scn_and_need_dumped_nodes_cnt_");
+  } else if (undump_node_cnt == 0) {// no need do flush actually
+    // mds_ckpt_scn on tablet won't be advanced,
+    // replay will cost more time after restart process, but saved cpu and io for dump dag
+    MDS_LOG_FLUSH(INFO, "no undump nodes below do flush scn, directly advance rec_scn");
+    flushing_scn_ = do_flush_scn;// will be resetted in on_flush_()
+    on_flush_(do_flush_scn, OB_SUCCESS);
+  } else {
 #ifndef UNITTEST_DEBUG
-      if (MDS_FAIL(get_ls_max_consequent_callbacked_scn_(ls_max_consequent_callbacked_scn))) {
-        MDS_LOG_FLUSH(WARN, "fail to get ls_max_consequent_callbacked_scn");
-      } else if (ls_max_consequent_callbacked_scn.is_max()) {
-        ret = OB_ERR_UNEXPECTED;
-        MDS_LOG_FLUSH(ERROR, "invalid ls max consequent callbacked scn");
-      } else {
-        do_flush_scn = ls_max_consequent_callbacked_scn;
-      }
-#else
-      do_flush_scn = recycle_scn;
-#endif
-      if (OB_SUCC(ret)) {
-        RecalculateFlushScnCauseOnlySuppportDumpCommittedNodeOP op1(do_flush_scn);
-        CountUnDumpdedNodesBelowDoFlushScn op2(undump_node_cnt, do_flush_scn);
-        if (MDS_FAIL(for_each_scan_row(op1))) {
-          MDS_LOG_FLUSH(WARN, "for each to calculate flush scn failed");
-        } else if (MDS_FAIL(for_each_scan_row(op2))) {
-          MDS_LOG_FLUSH(WARN, "for each to count undumped nodes failed");
-        } else if (undump_node_cnt != 0) {
-          temp_flushing_scn = do_flush_scn;// will do flush operation
-        } else {// no need do flush actually
-          // mds_ckpt_scn on tablet won't be advanced,
-          // replay will cost more time after restart process, but saved cpu and io for dump dag
-          MDS_LOG_FLUSH(INFO, "no undump nodes below do flush scn, directly advance rec_scn");
-          flushing_scn_ = do_flush_scn;// will be resetted in on_flush_()
-          on_flush_(do_flush_scn, OB_SUCCESS);
-        }
-      }
-    }
-  }
-
-  if (OB_SUCC(ret) &&
-      (flushing_scn_.is_valid() || // need_freeze is false, not calculate temp_flushing_scn, but need generate dag
-       temp_flushing_scn.is_valid())) {// need_freeze is true, calculated a temp flushing scn
-    if (flushing_scn_.is_valid() && temp_flushing_scn.is_valid()) {// can not both be valid
-      MDS_LOG_FLUSH(ERROR, "both flushing_scn_ and temp_flushing_scn is valid");
+    if (MDS_FAIL(merge(do_flush_scn))) {
+      MDS_LOG_FLUSH(WARN, "failed to commit merge mds table dag");
     } else {
-    // if we get a valid flushing_scn, schedule mini merge
-#ifndef UNITTEST_DEBUG
-      share::SCN do_merge_scn = temp_flushing_scn.is_valid() ? temp_flushing_scn : flushing_scn_;
-      if (MDS_FAIL(merge(do_merge_scn))) {
-        MDS_LOG_FLUSH(WARN, "failed to merge mds table");
-      } else {
-        if (temp_flushing_scn.is_valid()) {
-          flushing_scn_ = temp_flushing_scn;// if and only if calculated valid temp_flushing_scn(need_freeze is true) and generate dag success, set flushing_scn
-        }
-        report_flush_event_("DO_FLUSH", flushing_scn_, need_freeze);
-      }
-#else
-      flushing_scn_ = temp_flushing_scn;
-#endif
+      flushing_scn_ = do_flush_scn;
+      report_flush_event_("DO_FLUSH", flushing_scn_);
+      debug_info_.last_flush_ts_ = ObClockGenerator::getClock();
     }
+#else
+    flushing_scn_ = do_flush_scn;
+#endif
   }
   MDS_LOG_FLUSH(DEBUG, "call flush mds_table");
   return ret;
@@ -1070,7 +1069,6 @@ void MdsTableImpl<MdsTableType>::on_flush_(const share::SCN &flush_scn, const in
       MDS_LOG_FLUSH(ERROR, "flush version mismatch!");
     }
   } else {
-    last_flushed_scn_ = flushing_scn_;
     flushing_scn_.reset();
     bool need_retry = false;
     do {
@@ -1081,9 +1079,8 @@ void MdsTableImpl<MdsTableType>::on_flush_(const share::SCN &flush_scn, const in
         MDS_LOG_FLUSH(WARN, "fail to do on flush");// record row lock guard may failed, cause lock guard array may meet extended failed cause memory not enough, but retry will make it success
       } else {
         share::SCN new_rec_scn = op.rec_scn_;
-        OB_ASSERT(new_rec_scn >= last_flushed_scn_);
         try_advance_rec_scn(new_rec_scn);
-        report_on_flush_event_("ON_FLUSH", last_flushed_scn_);
+        report_on_flush_event_("ON_FLUSH", flush_scn);
       }
     } while (need_retry && !FALSE_IT(PAUSE()));// here will release all rows lock
   }
@@ -1453,13 +1450,23 @@ int MdsTableImpl<MdsTableType>::forcely_reset_mds_table(const char *reason)
   } else {
     debug_info_.last_reset_ts_ = ObClockGenerator::getCurrentTime();
     flushing_scn_.reset();
-    last_flushed_scn_ = share::SCN::min_scn();
     last_inner_recycled_scn_ = share::SCN::min_scn();
     rec_scn_ = share::SCN::max_scn();
     ATOMIC_STORE(&total_node_cnt_, 0);
     MDS_LOG_GC(INFO, "forcely release all mds nodes");
   }
   return ret;
+  #undef PRINT_WRAPPER
+}
+
+template <typename MdsTableType>
+inline int MdsTableImpl<MdsTableType>::dump_status() const
+{
+  #define PRINT_WRAPPER K(*this)
+  MDS_TG(10_ms);
+  MdsWLockGuard lg(lock_);
+  MDS_LOG_NONE(INFO, "dump mds table status");
+  return OB_SUCCESS;
   #undef PRINT_WRAPPER
 }
 

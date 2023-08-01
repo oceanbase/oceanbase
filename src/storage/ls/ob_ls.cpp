@@ -1237,21 +1237,29 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
   } else if (OB_FAIL(ls_tx_svr_.check_tx_blocked(tx_blocked))) {
     LOG_WARN("check tx ls state error", K(ret),KPC(this));
   } else {
-    ls_info.ls_id_ = ls_meta_.ls_id_;
-    ls_info.replica_type_ = ls_meta_.get_replica_type();
-    ls_info.ls_state_ = role;
-    ls_info.migrate_status_ = migrate_status;
-    ls_info.tablet_count_ = ls_tablet_svr_.get_tablet_count();
-    ls_info.weak_read_scn_ = ls_wrs_handler_.get_ls_weak_read_ts();
-    ls_info.need_rebuild_ = is_need_rebuild;
-    ls_info.checkpoint_scn_ = ls_meta_.get_clog_checkpoint_scn();
-    ls_info.checkpoint_lsn_ = ls_meta_.get_clog_base_lsn().val_;
-    ls_info.rebuild_seq_ = ls_meta_.get_rebuild_seq();
-    ls_info.tablet_change_checkpoint_scn_ = ls_meta_.get_tablet_change_checkpoint_scn();
-    ls_info.transfer_scn_ = ls_meta_.get_transfer_scn();
-    ls_info.tx_blocked_ = tx_blocked;
-    if (tx_blocked) {
-      TRANS_LOG(INFO, "current ls is blocked", K(ls_info));
+    // The readable point of the primary tenant is weak read ts,
+    // and the readable point of the standby tenant is readable scn
+    if (MTL_IS_PRIMARY_TENANT()) {
+      ls_info.weak_read_scn_ = ls_wrs_handler_.get_ls_weak_read_ts();
+    } else if (OB_FAIL(get_ls_replica_readable_scn(ls_info.weak_read_scn_))) {
+      TRANS_LOG(WARN, "get ls replica readable scn fail", K(ret), KPC(this));
+    }
+    if (OB_SUCC(ret)) {
+      ls_info.ls_id_ = ls_meta_.ls_id_;
+      ls_info.replica_type_ = ls_meta_.get_replica_type();
+      ls_info.ls_state_ = role;
+      ls_info.migrate_status_ = migrate_status;
+      ls_info.tablet_count_ = ls_tablet_svr_.get_tablet_count();
+      ls_info.need_rebuild_ = is_need_rebuild;
+      ls_info.checkpoint_scn_ = ls_meta_.get_clog_checkpoint_scn();
+      ls_info.checkpoint_lsn_ = ls_meta_.get_clog_base_lsn().val_;
+      ls_info.rebuild_seq_ = ls_meta_.get_rebuild_seq();
+      ls_info.tablet_change_checkpoint_scn_ = ls_meta_.get_tablet_change_checkpoint_scn();
+      ls_info.transfer_scn_ = ls_meta_.get_transfer_scn();
+      ls_info.tx_blocked_ = tx_blocked;
+      if (tx_blocked) {
+        TRANS_LOG(INFO, "current ls is blocked", K(ls_info));
+      }
     }
   }
   return ret;

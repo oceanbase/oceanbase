@@ -35,6 +35,7 @@ void ObStmtMapInfo::reset()
   is_group_equal_ = false;
   having_map_.reset();
   is_having_equal_ = false;
+  is_order_equal_ = false;
   select_item_map_.reset();
   is_select_item_equal_ = false;
   is_distinct_equal_ = false;
@@ -70,6 +71,7 @@ int ObStmtMapInfo::assign(const ObStmtMapInfo& other)
     is_cond_equal_ = other.is_cond_equal_;
     is_group_equal_ = other.is_group_equal_;
     is_having_equal_ = other.is_having_equal_;
+    is_order_equal_ = other.is_order_equal_;
     is_select_item_equal_ = other.is_select_item_equal_;
     is_distinct_equal_ = other.is_distinct_equal_;
   }
@@ -602,12 +604,13 @@ int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
       second_count = second->get_order_item_size();
       if (0 == first_count && 0 == second_count) {
         map_info.is_order_equal_ = true;
+      } else if (first_count != second_count) {
+        // do nothing
       } else if (OB_FAIL(compute_orderby_map(first_sel,
                                              second_sel,
                                              first_sel->get_order_items(),
                                              second_sel->get_order_items(),
                                              map_info,
-                                             map_info.order_map_,
                                              match_count))) {
         LOG_WARN("failed to compute order item map", K(ret));
       } else if (match_count == first_count && match_count == second_count) {
@@ -766,42 +769,31 @@ int ObStmtComparer::compute_orderby_map(const ObDMLStmt *first,
                                         const ObIArray<OrderItem> &first_orders,
                                         const ObIArray<OrderItem> &second_orders,
                                         ObStmtMapInfo &map_info,
-                                        ObIArray<int64_t> &order_map,
                                         int64_t &match_count)
 {
   int ret = OB_SUCCESS;
-  ObSqlBitSet<> matched_items;
   ObStmtCompareContext context(first, second, map_info, &first->get_query_ctx()->calculable_items_);
   match_count = 0;
+  bool first_match_all = true;
   if (OB_ISNULL(first) || OB_ISNULL(second) || OB_ISNULL(first->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(first), K(second), K(ret));
-  } else if (OB_FAIL(order_map.prepare_allocate(first_orders.count()))) {
-    LOG_WARN("failed to preallocate array", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < first_orders.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && first_match_all && i < first_orders.count() && i < second_orders.count(); ++i) {
       bool is_match = false;
-      order_map.at(i) = OB_INVALID_ID;
-      for (int64_t j = 0; OB_SUCC(ret) && !is_match && j < second_orders.count(); ++j) {
-        if (matched_items.has_member(j)) {
-          // do nothing
-        } else if (first_orders.at(i).order_type_ != second_orders.at(i).order_type_) {
-          // do nothing
-        } else if (OB_FAIL(is_same_condition(first_orders.at(i).expr_,
-                                             second_orders.at(j).expr_,
-                                             context,
-                                             is_match))) {
-          LOG_WARN("failed to check is condition equal", K(ret));
-        } else if (!is_match) {
-          // do nothing
-        } else if (OB_FAIL(append(map_info.equal_param_map_, context.equal_param_info_))) {
-          LOG_WARN("failed to append exprs", K(ret));
-        } else if (OB_FAIL(matched_items.add_member(j))) {
-          LOG_WARN("failed to add member", K(ret));
-        } else {
-          match_count++;
-          order_map.at(i) = j;
-        }
+      if (first_orders.at(i).order_type_ != second_orders.at(i).order_type_) {
+        first_match_all = false;
+      } else if (OB_FAIL(is_same_condition(first_orders.at(i).expr_,
+                                           second_orders.at(i).expr_,
+                                           context,
+                                           is_match))) {
+        LOG_WARN("failed to check is condition equal", K(ret));
+      } else if (!is_match) {
+        first_match_all = false;
+      } else if (OB_FAIL(append(map_info.equal_param_map_, context.equal_param_info_))) {
+        LOG_WARN("failed to append exprs", K(ret));
+      } else {
+        match_count++;
       }
     }
   }
@@ -1304,12 +1296,13 @@ int ObStmtComparer::compare_set_stmt(const ObSelectStmt *first,
       int64_t match_count = 0;
       if (0 == first_count && 0 == second_count) {
         map_info.is_order_equal_ = true;
+      } else if (first_count != second_count) {
+        // do nothing
       } else if (OB_FAIL(compute_orderby_map(first,
                                              second,
                                              first->get_order_items(),
                                              second->get_order_items(),
                                              map_info,
-                                             map_info.order_map_,
                                              match_count))) {
         LOG_WARN("failed to compute order item map", K(ret));
       } else if (match_count == first_count && match_count == second_count) {

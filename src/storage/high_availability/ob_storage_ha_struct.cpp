@@ -331,6 +331,7 @@ int ObMigrationStatusHelper::check_transfer_dest_ls_status_for_ls_gc(
     const ObLSID &transfer_ls_id,
     const ObTabletID &tablet_id,
     const bool not_in_member_list_scene,
+    const ObMigrationStatus &cur_migration_status,
     bool &allow_gc)
 {
   int ret = OB_SUCCESS;
@@ -338,7 +339,7 @@ int ObMigrationStatusHelper::check_transfer_dest_ls_status_for_ls_gc(
   ObLS *dest_ls = nullptr;
   ObLSHandle ls_handle;
   allow_gc = false;
-  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+  ObMigrationStatus dest_ls_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   if (!transfer_ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls id is invalid", K(ret), K(transfer_ls_id));
@@ -356,15 +357,15 @@ int ObMigrationStatusHelper::check_transfer_dest_ls_status_for_ls_gc(
   } else if (OB_ISNULL(dest_ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(dest_ls), K(transfer_ls_id));
-  } else if (OB_FAIL(dest_ls->get_migration_status(migration_status))) {
+  } else if (OB_FAIL(dest_ls->get_migration_status(dest_ls_status))) {
     LOG_WARN("failed to get migration status", K(ret), KPC(dest_ls));
-  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status
-      && ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_WAIT != migration_status
-      && ObMigrationStatus::OB_MIGRATION_STATUS_ADD_WAIT != migration_status
-      && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != migration_status) {
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != dest_ls_status
+      && ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_WAIT != dest_ls_status
+      && ObMigrationStatus::OB_MIGRATION_STATUS_ADD_WAIT != dest_ls_status
+      && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != dest_ls_status) {
     allow_gc = true;
-    LOG_INFO("transfer dest ls check transfer status passed", K(ret), K(transfer_ls_id), K(migration_status));
-  } else if (not_in_member_list_scene) {
+    LOG_INFO("transfer dest ls check transfer status passed", K(ret), K(transfer_ls_id), K(dest_ls_status), K(cur_migration_status));
+  } else if (not_in_member_list_scene || ObMigrationStatus::OB_MIGRATION_STATUS_GC == cur_migration_status) {
     if (OB_FAIL(check_transfer_dest_tablet_for_ls_gc(dest_ls, tablet_id, allow_gc))) {
       LOG_WARN("failed to check transfer dest tablet", K(ret), KPC(dest_ls), K(tablet_id));
     }
@@ -387,7 +388,7 @@ int ObMigrationStatusHelper::set_ls_migrate_gc_status_(
   const ObMigrationStatus migrate_GC_status = ObMigrationStatus::OB_MIGRATION_STATUS_GC;
   if (!not_in_member_list_scene || ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
     // do nothing
-  } else if (OB_FAIL(ls.get_log_handler()->offline())) {
+  } else if (OB_FAIL(ls.get_log_handler()->disable_sync())) {
     LOG_WARN("failed to disable replay", K(ret));
   } else if (OB_FAIL(ls.set_migration_status(migrate_GC_status, ls.get_ls_meta().get_rebuild_seq()))) {
     LOG_WARN("failed to set migration status", K(ret));
@@ -459,11 +460,11 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_(
           && ObTabletStatus::TRANSFER_OUT_DELETED != user_data.tablet_status_) {
         // do nothing
       } else if (OB_FAIL(check_transfer_dest_ls_status_for_ls_gc(
-          user_data.transfer_ls_id_, tablet->get_tablet_meta().tablet_id_, not_in_member_list_scene, allow_gc))) {
+          user_data.transfer_ls_id_, tablet->get_tablet_meta().tablet_id_, not_in_member_list_scene, migration_status, allow_gc))) {
         LOG_WARN("failed to check ls transfer tablet", K(ret), K(ls), K(user_data));
       } else if (!allow_gc) {
         LOG_INFO("The ls is not allowed to be GC because it is also dependent on other ls", K(user_data),
-            K(ls_id), "tablet_id", tablet->get_tablet_meta().tablet_id_);
+            K(ls_id), "tablet_id", tablet->get_tablet_meta().tablet_id_, K(migration_status), K(not_in_member_list_scene));
         break;
       }
     }

@@ -519,7 +519,7 @@ double ObTenantIOClock::get_weight_scale(const int64_t queue_index)
 
 int64_t ObTenantIOClock::calc_iops(const int64_t iops, const int64_t percentage)
 {
-  return max(1, static_cast<int64_t>(static_cast<double>(iops) * percentage / 100));
+  return static_cast<double>(iops) / 100 * percentage >= INT64_MAX ? INT64_MAX : static_cast<int64_t>(static_cast<double>(iops) / 100 * percentage);
 }
 
 int64_t ObTenantIOClock::calc_weight(const int64_t weight, const int64_t percentage)

@@ -61,7 +61,7 @@ int ObRestoreType::deserialize(const char *buf, const int64_t len, int64_t &pos)
       || OB_UNLIKELY(pos < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(buf), K(len), K(pos));
-  } else if (serialization::decode_i8(buf, len, new_pos, (int8_t*)(&type_))) {
+  } else if (OB_FAIL(serialization::decode_i8(buf, len, new_pos, (int8_t*)(&type_)))) {
     LOG_WARN("failed to decode restore type", K(ret), K(len), K(new_pos));
   } else {
     pos = new_pos;

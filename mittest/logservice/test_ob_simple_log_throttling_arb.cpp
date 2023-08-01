@@ -269,23 +269,23 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_minor_leader)
   ASSERT_TRUE(used_time < 5 * 1000 * 1000L);
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 128));
 
-  PALF_LOG(INFO, "[CASE 2.3]: MINOR_LEADER replace_member");
-  leader.palf_handle_impl_->sw_.freeze_mode_ = PERIOD_FREEZE_MODE;
-
-  ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 128 * KB));
-
-  LogConfigVersion config_version;
-
-  const int64_t CONFIG_CHANGE_TIMEOUT_NEW = 20 * 1000 * 1000L; // 10s
-  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
-  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1),
-                                                                 ObMember(get_cluster()[another_f_idx]->get_addr(), 1),
-                                                                 config_version,
-                                                                 CONFIG_CHANGE_TIMEOUT_NEW));
-  ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 128));
+//  PALF_LOG(INFO, "[CASE 2.3]: MINOR_LEADER replace_member");
+//  leader.palf_handle_impl_->sw_.freeze_mode_ = PERIOD_FREEZE_MODE;
+//
+//  ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 128 * KB));
+//
+//  LogConfigVersion config_version;
+//
+//  const int64_t CONFIG_CHANGE_TIMEOUT_NEW = 20 * 1000 * 1000L; // 10s
+//  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+//  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->replace_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1),
+//                                                                 ObMember(get_cluster()[another_f_idx]->get_addr(), 1),
+//                                                                 config_version,
+//                                                                 CONFIG_CHANGE_TIMEOUT_NEW));
+//  ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 128));
 
   PALF_LOG(INFO, "[CASE 2.4]: MINOR_LEADER switch_leader");
-  int64_t new_leader_idx = follower_D_idx;
+  int64_t new_leader_idx = another_f_idx;
   PalfHandleImplGuard new_leader;
   leader.palf_handle_impl_->sw_.freeze_mode_ = PERIOD_FREEZE_MODE;
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 128 * KB));

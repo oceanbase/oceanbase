@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SERVER_OMT
 #include "ob_tenant_srs_mgr.h"
+#include "share/ob_thread_mgr.h"
 #include "lib/thread/thread_mgr.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_getter_guard.h"

@@ -18,6 +18,7 @@
 #include "lib/ob_define.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/utility/serialization.h"
+#include "common/ob_clock_generator.h"
 
 using namespace oceanbase::rpc::frame;
 using namespace oceanbase::common::serialization;

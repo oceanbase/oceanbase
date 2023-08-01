@@ -5,6 +5,7 @@
 #pragma once
 
 #include "lib/lock/ob_mutex.h"
+#include "storage/blocksstable/ob_sstable.h"
 #include "observer/table_load/ob_table_load_table_compactor.h"
 #include "share/table/ob_table_load_define.h"
 #include "storage/direct_load/ob_direct_load_merge_ctx.h"

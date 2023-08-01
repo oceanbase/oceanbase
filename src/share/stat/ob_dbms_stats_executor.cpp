@@ -320,7 +320,8 @@ int ObDbmsStatsExecutor::set_column_stats(ObExecContext &ctx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(col_stat_handle.stat_), K(ret));
     } else if (OB_ISNULL(col_stat = OB_NEWx(ObOptColumnStat, alloc, (*alloc)))) {
-      LOG_WARN("failed to create column stat");
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to create column stat", K(ret));
     } else if (OB_FAIL(col_stat->deep_copy(*col_stat_handle.stat_))) {
       LOG_WARN("failed to deep copy", K(ret));
     } else {//reset base infos

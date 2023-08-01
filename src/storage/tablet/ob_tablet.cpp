@@ -2282,6 +2282,7 @@ int ObTablet::get_src_tablet_read_tables_(
   ObTabletCreateDeleteMdsUserData user_data;
   ObLSTabletService *tablet_service = nullptr;
   ObLSTabletService::AllowToReadMgr::AllowToReadInfo read_info;
+  SCN max_decided_scn;
   if (OB_UNLIKELY(snapshot_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), K(snapshot_version));
@@ -2310,6 +2311,12 @@ int ObTablet::get_src_tablet_read_tables_(
     } else {
       LOG_WARN("failed to check allow to read", K(ret), "ls_id", ls->get_ls_id(), "tablet_id", tablet_meta_.tablet_id_, K(user_data));
     }
+  } else if (OB_FAIL(ls->get_max_decided_scn(max_decided_scn))) {
+    LOG_WARN("failed to log stream get decided scn", K(ret), "ls_id", ls->get_ls_id());
+  } else if (max_decided_scn < user_data.transfer_scn_) {
+    ret = OB_REPLICA_NOT_READABLE;
+    LOG_WARN("src ls max decided scn is smaller than transfer start scn, replica unreadable",
+      K(ret), "ls_id", ls->get_ls_id(), "tablet_id", tablet_meta_.tablet_id_, K(max_decided_scn), K(user_data));
   } else if (OB_FAIL(ls->get_tablet(tablet_meta_.tablet_id_, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     LOG_WARN("failed to get tablet", K(ret), "ls_id", ls->get_ls_id(), "tablet_id", tablet_meta_.tablet_id_);
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {

@@ -2210,9 +2210,12 @@ int ObTabletTableStore::combine_ha_minor_sstables_(
   //2.old store minor sstables contains remote logical sstable and after clog_checkpoint_scn sstables.
   SCN max_copy_end_scn;
   max_copy_end_scn.set_min();
+  ObArray<ObITable *> tmp_minor_sstables;
+  const SCN clog_checkpoint_scn = tablet.get_clog_checkpoint_scn();
+
   for (int64_t i = 0; OB_SUCC(ret) && i < need_add_minor_sstables.count(); ++i) {
     ObITable *table = need_add_minor_sstables.at(i);
-    if (OB_FAIL(new_minor_sstables.push_back(table))) {
+    if (OB_FAIL(tmp_minor_sstables.push_back(table))) {
       LOG_WARN("failed to push table into array", K(ret), KPC(table));
     } else {
       max_copy_end_scn = table->get_end_scn();
@@ -2229,10 +2232,25 @@ int ObTabletTableStore::combine_ha_minor_sstables_(
       }
     } else if (table->get_end_scn() <= max_copy_end_scn) {
       //do nothing
-    } else if (OB_FAIL(new_minor_sstables.push_back(table))) {
+    } else if (OB_FAIL(tmp_minor_sstables.push_back(table))) {
       LOG_WARN("failed to push table into array", K(ret), KPC(table));
     }
   }
+
+  if (OB_SUCC(ret)) {
+    //TODO(muwei.ym) remove compare with clog checkpoint scn in 4.2 RC3
+    if (tmp_minor_sstables.empty()) {
+      //do nothing
+    } else if (OB_FAIL(ObTableStoreUtil::sort_minor_tables(tmp_minor_sstables))) {
+      LOG_WARN("failed to sort minor tables", K(ret), K(tmp_minor_sstables));
+    } else if (clog_checkpoint_scn > tmp_minor_sstables.at(tmp_minor_sstables.count() - 1)->get_end_scn()) {
+      FLOG_INFO("tablet clog checkpoint scn is bigger than all minor sstables end scn, no need to keep it",
+          K(clog_checkpoint_scn), K(tmp_minor_sstables), K(major_tables_));
+    } else if (OB_FAIL(new_minor_sstables.assign(tmp_minor_sstables))) {
+      LOG_WARN("failed to assign minor sstables", K(ret), K(tmp_minor_sstables));
+    }
+  }
+
   return ret;
 }
 

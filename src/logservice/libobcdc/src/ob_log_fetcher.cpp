@@ -138,47 +138,53 @@ int ObLogFetcher::init(
       LOG_ERROR("init cluster_id_filter fail", KR(ret));
     } else if (OB_FAIL(part_trans_resolver_factory_.init(*task_pool, *log_entry_task_pool, *dispatcher_, cluster_id_filter_))) {
       LOG_ERROR("init part trans resolver factory fail", KR(ret));
-    } else if (large_buffer_pool_.init("ObLogFetcher", 1L * 1024 * 1024 * 1024)) {
+    } else if (OB_FAIL(large_buffer_pool_.init("ObLogFetcher", 1L * 1024 * 1024 * 1024))) {
       LOG_ERROR("init large buffer pool failed", KR(ret));
-    } else if (log_ext_handler_.init()) {
+    } else if (OB_FAIL(log_ext_handler_.init())) {
       LOG_ERROR("init log ext handler failed", KR(ret));
-    } else if (OB_FAIL(ls_fetch_mgr_.init(max_cached_ls_fetch_ctx_count,
-            progress_controller_,
-            part_trans_resolver_factory_,
-            static_cast<void *>(this)))) {
+    } else if (OB_FAIL(ls_fetch_mgr_.init(
+        max_cached_ls_fetch_ctx_count,
+        progress_controller_,
+        part_trans_resolver_factory_,
+        static_cast<void *>(this)))) {
       LOG_ERROR("init part fetch mgr fail", KR(ret));
     } else if (OB_FAIL(rpc_.init(cfg.io_thread_num))) {
       LOG_ERROR("init rpc handler fail", KR(ret));
-    } else if (OB_FAIL(start_lsn_locator_.init(cfg.start_lsn_locator_thread_num,
-            cfg.start_lsn_locator_locate_count,
-            fetching_mode,
-            archive_dest,
-            rpc_, *err_handler))) {
+    } else if (OB_FAIL(start_lsn_locator_.init(
+        cfg.start_lsn_locator_thread_num,
+        cfg.start_lsn_locator_locate_count,
+        fetching_mode,
+        archive_dest,
+        rpc_, *err_handler))) {
       LOG_ERROR("init start log id locator fail", KR(ret));
-    } else if (OB_FAIL(idle_pool_.init(cfg.idle_pool_thread_num,
-            *err_handler,
-            stream_worker_,
-            start_lsn_locator_))) {
+    } else if (OB_FAIL(idle_pool_.init(
+        cfg.idle_pool_thread_num,
+        *err_handler,
+        stream_worker_,
+        start_lsn_locator_))) {
       LOG_ERROR("init idle pool fail", KR(ret));
-    } else if (OB_FAIL(dead_pool_.init(cfg.dead_pool_thread_num,
-            static_cast<void *>(this),
-            ls_fetch_mgr_,
-            *err_handler))) {
+    } else if (OB_FAIL(dead_pool_.init(
+        cfg.dead_pool_thread_num,
+        static_cast<void *>(this),
+        ls_fetch_mgr_,
+        *err_handler))) {
       LOG_ERROR("init dead pool fail", KR(ret));
-    } else if (OB_FAIL(stream_worker_.init(cfg.stream_worker_thread_num,
-            cfg.timer_task_count_upper_limit,
-            static_cast<void *>(this),
-            idle_pool_,
-            dead_pool_,
-            *err_handler))) {
+    } else if (OB_FAIL(stream_worker_.init(
+        cfg.stream_worker_thread_num,
+        cfg.timer_task_count_upper_limit,
+        static_cast<void *>(this),
+        idle_pool_,
+        dead_pool_,
+        *err_handler))) {
       LOG_ERROR("init stream worker fail", KR(ret));
     } else if (OB_FAIL(fs_container_mgr_.init(
-            cfg.svr_stream_cached_count,
-            cfg.fetch_stream_cached_count,
-            cfg.rpc_result_cached_count,
-            rpc_,
-            stream_worker_,
-            progress_controller_))) {
+        cfg.svr_stream_cached_count,
+        cfg.fetch_stream_cached_count,
+        cfg.rpc_result_cached_count,
+        rpc_,
+        stream_worker_,
+        progress_controller_))) {
+      LOG_ERROR("init fs_container_mgr_ failed", KR(ret));
     } else {
       paused_ = false;
       pause_time_ = OB_INVALID_TIMESTAMP;

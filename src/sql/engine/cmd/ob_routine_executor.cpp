@@ -129,7 +129,7 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
             if (expr->get_is_pl_mock_default_expr()) {
               param.set_is_pl_mock_default_param(true);
             }
-            if (param.is_pl_extend()) {
+            if (param.is_pl_extend() && !IS_CONST_TYPE(expr->get_expr_items().at(0).get_item_type())) {
               const ObExprOperator *op = expr->get_expr_items().at(0).get_expr_operator();
               if (OB_ISNULL(op)) {
                 ret = OB_ERR_UNEXPECTED;

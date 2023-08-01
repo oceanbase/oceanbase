@@ -3615,13 +3615,7 @@ int ObDMLResolver::resolve_table_drop_oracle_temp_table(TableItem *&table_item)
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("get table schema failed", K_(table_item->table_name), K(ret));
     } else if (OB_NOT_NULL(table_schema) && table_schema->is_oracle_tmp_table()) {
-      if (OB_FAIL(session_info_->drop_reused_oracle_temp_tables())) {
-        LOG_WARN("fail to drop reused oracle temporary tables", K(ret));
-      } else {
-        session_info_->set_has_temp_table_flag();
-        LOG_DEBUG("succeed to drop oracle temporary table in case of session id reused",
-                  K(session_info_->get_sessid_for_table()));
-      }
+      session_info_->set_has_temp_table_flag();
     }
   }
   return ret;

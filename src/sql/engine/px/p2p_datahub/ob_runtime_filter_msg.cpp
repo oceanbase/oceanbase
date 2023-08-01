@@ -410,10 +410,6 @@ int ObRFBloomFilterMsg::assign(const ObP2PDatahubMsgBase &msg)
       }
     }
   }
-
-  if (OB_FAIL(filter_indexes_.assign(other_msg.filter_indexes_))) {
-    LOG_WARN("failed to assign filter indexes", K(ret));
-  }
   return ret;
 }
 
@@ -967,8 +963,11 @@ int ObRFRangeFilterMsg::get_min(ObCmpFunc &func, ObDatum &l, ObDatum &r, int64_t
   int ret = OB_SUCCESS;
   int cmp = 0;
   // when [null, null] merge [a, b], the expect result in mysql mode is [null, b]
-  // the lower bound l, with ptr==NULL and null_==true, should not be covered by a
-  if (is_empty_ || (OB_ISNULL(l.ptr_) && !l.is_null())) {
+  // the lower bound l, with ptr==NULL and null_==true, should not be covered by a.
+  //
+  // the reason we remove the OB_ISNULL(l.ptr_) condition is that when l is a empty char with l.ptr=0x0 and
+  // l.len=0 and null_=false, it should not be corver by r directly
+  if (is_empty_) {
     if (OB_FAIL(dynamic_copy_cell(r, l, cell_size))) {
       LOG_WARN("fail to deep copy datum");
     }

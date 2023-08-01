@@ -248,29 +248,33 @@ int ObLSMap::del_ls(const share::ObLSID &ls_id)
     LOG_WARN("ObLSMap not init", K(ret), K(ls_id));
   } else {
     int64_t pos = ls_id.hash() % BUCKETS_CNT;
-    //remove ls from map
-    ObQSyncLockWriteGuard guard(buckets_lock_[pos]);
-    ls = ls_buckets_[pos];
-    while (OB_NOT_NULL(ls)) {
-      if (ls->get_ls_id() == ls_id) {
-        break;
-      } else {
-        prev = ls;
-        ls = (ObLS *)ls->next_;
+    // deal with the deadlock problem:
+    //
+    {
+      //remove ls from map
+      ObQSyncLockWriteGuard guard(buckets_lock_[pos]);
+      ls = ls_buckets_[pos];
+      while (OB_NOT_NULL(ls)) {
+        if (ls->get_ls_id() == ls_id) {
+          break;
+        } else {
+          prev = ls;
+          ls = (ObLS *)ls->next_;
+        }
       }
-    }
 
-    if (OB_ISNULL(ls)) {
-      ret = OB_LS_NOT_EXIST;
-    } else {
-      LOG_INFO("ls service del ls", K(ls_id),
-               KP(ls), "ref", ls->get_ref_mgr().get_total_ref_cnt());
-      if (OB_ISNULL(prev)) {
-        ls_buckets_[pos] = (ObLS *)ls->next_;
+      if (OB_ISNULL(ls)) {
+        ret = OB_LS_NOT_EXIST;
       } else {
-        prev->next_ = ls->next_;
+        LOG_INFO("ls service del ls", K(ls_id),
+                 KP(ls), "ref", ls->get_ref_mgr().get_total_ref_cnt());
+        if (OB_ISNULL(prev)) {
+          ls_buckets_[pos] = (ObLS *)ls->next_;
+        } else {
+          prev->next_ = ls->next_;
+        }
+        ls->next_ = NULL;
       }
-      ls->next_ = NULL;
       del_ls_impl(ls);
     }
   }

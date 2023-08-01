@@ -828,7 +828,7 @@ int ObEstimatePercentPrefs::check_pref_value_validity(ObTableStatParam *param/*d
       double dst_val = 0.0;
       if (OB_FAIL(ObObjCaster::to_type(ObNumberType, cast_ctx, src_obj, dest_obj))) {
         LOG_WARN("failed to type", K(ret), K(src_obj));
-      } else if (ObDbmsStatsUtils::cast_number_to_double(dest_obj.get_number(), dst_val)) {
+      } else if (OB_FAIL(ObDbmsStatsUtils::cast_number_to_double(dest_obj.get_number(), dst_val))) {
         LOG_WARN("failed to cast number to double", K(ret), K(src_obj));
       } else if (dst_val < 0.000001 || dst_val > 100.0) {
         ret = OB_ERR_DBMS_STATS_PL;
@@ -1007,7 +1007,7 @@ int ObStalePercentPrefs::check_pref_value_validity(ObTableStatParam *param/*defa
     double dst_val = 0.0;
     if (OB_FAIL(ObObjCaster::to_type(ObNumberType, cast_ctx, src_obj, dest_obj))) {
       LOG_WARN("failed to type", K(ret), K(src_obj));
-    } else if (ObDbmsStatsUtils::cast_number_to_double(dest_obj.get_number(), dst_val)) {
+    } else if (OB_FAIL(ObDbmsStatsUtils::cast_number_to_double(dest_obj.get_number(), dst_val))) {
       LOG_WARN("failed to cast number to double", K(ret), K(src_obj));
     } else if (dst_val < 0) {
       ret = OB_ERR_DBMS_STATS_PL;

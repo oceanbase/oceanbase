@@ -3505,6 +3505,13 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
               spi_result->end_cursor_stmt(ctx, ret);
               if (!need_destruct && OB_SUCCESS != ret) {
                 need_destruct = true;
+                if (OB_NOT_NULL(spi_result->get_result_set())) {
+                  // 此分支所有错误码都被吞掉，最终返回最初的错误码
+                  int close_ret = spi_result->close_result_set();
+                  if (OB_SUCCESS != close_ret) {
+                    LOG_WARN("close mysql result set failed", K(ret), K(close_ret));
+                  }
+                }
               }
             }
             if (need_destruct) {
@@ -6371,10 +6378,14 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
       if (OB_SUCC(ret)) {
         LOG_DEBUG("same type directyly copy", K(obj), K(tmp_obj), K(result_types[i]), K(i));
       }
-    } else if (!(obj.is_pl_extend() || obj.is_user_defined_sql_type() || obj.is_null())
+    } else if (!(obj.is_pl_extend()
+                 || obj.is_user_defined_sql_type()
+                 || (obj.is_null() && current_type.at(i).get_meta_type().is_user_defined_sql_type()))
                && result_types[i].get_meta_type().is_ext()) {
-      // sql udt or null can cast to pl extend
-      // example: select extract(xmlparse(document '<a>a</a>'), '/b') into xml_data from dual;
+      // sql udt can cast to pl extend, null from sql udt type can cast to pl extend(xmltype)
+      // but null may not cast to other pl extends (return error 4016 in store_datums)
+      // support: select extract(xmlparse(document '<a>a</a>'), '/b') into xml_data from dual;
+      // not support: select null into xml_data from dual;
       ret = OB_ERR_INTO_EXPR_ILLEGAL;
       LOG_WARN("PLS-00597: expression 'string' in the INTO list is of wrong type", K(ret));
     } else {
@@ -6925,6 +6936,7 @@ int ObSPIService::fill_cursor(ObResultSet &result_set, ObSPICursor *cursor)
               LOG_WARN("failed to copy pl extend", K(ret));
             } else {
               obj = tmp;
+              cursor->complex_objs_.push_back(tmp);
             }
           }
         }

@@ -108,6 +108,7 @@ private:
       const share::ObLSID &transfer_ls_id,
       const ObTabletID &tablet_id,
       const bool not_in_member_list_scene,
+      const ObMigrationStatus &cur_status,
       bool &allow_gc);
   static int check_transfer_dest_tablet_for_ls_gc(ObLS *ls, const ObTabletID &tablet_id, bool &allow_gc);
   static bool check_migration_status_is_fail_(const ObMigrationStatus &cur_status);

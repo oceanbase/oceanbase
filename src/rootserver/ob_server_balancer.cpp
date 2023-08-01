@@ -4607,9 +4607,9 @@ int ObServerBalancer::make_single_wild_server_empty_by_units(
       // sort cannot fail
     } else if (OB_FAIL(cmp.get_ret())) {
       LOG_WARN("fail to sort", K(ret));
-    } else if (try_balance_single_unit_by_cm(
+    } else if (OB_FAIL(try_balance_single_unit_by_cm(
           unit_load, available_server_loads, task_array,
-          excluded_servers, pool_occupation, do_balance)) {
+          excluded_servers, pool_occupation, do_balance))) {
       LOG_WARN("fail to try balance single unit by cmp and memory", K(ret));
     } else if (do_balance) {
       // do execute balance according to cpu and memory, no more to do

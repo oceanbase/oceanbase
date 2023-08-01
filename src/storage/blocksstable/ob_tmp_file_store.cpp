@@ -420,6 +420,7 @@ ObTmpMacroBlock::ObTmpMacroBlock()
     tmp_file_header_(),
     io_desc_(),
     block_status_(MAX),
+    is_sealed_(false),
     is_inited_(false),
     alloc_time_(0),
     access_time_(0)
@@ -465,21 +466,24 @@ void ObTmpMacroBlock::destroy()
   buffer_ = NULL;
   handle_.reset();
   ATOMIC_STORE(&block_status_, MAX);
+  is_sealed_ = false;
   alloc_time_ = 0;
   ATOMIC_STORE(&access_time_, 0);
+  is_inited_ = false;
 }
 
-int ObTmpMacroBlock::close(bool &is_all_close)
+int ObTmpMacroBlock::seal(bool &is_sealed)
 {
   int ret = OB_SUCCESS;
-  is_all_close = true;
+  is_sealed = false;
   if (IS_NOT_INIT) {
-    is_all_close = false;
-    STORAGE_LOG(WARN, "ObTmpMacroBlock has not been inited");
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObTmpMacroBlock has not been inited", K(ret), KPC(this));
   } else {
     ObTmpFileExtent *tmp = NULL;
     SpinWLockGuard guard(lock_);
-    for (int32_t i = 0; OB_SUCC(ret) && i < using_extents_.count() && is_all_close; i++) {
+    bool is_all_closed = using_extents_.count() == 0 ? false : true;
+    for (int32_t i = 0; OB_SUCC(ret) && i < using_extents_.count() && is_all_closed; ++i) {
       tmp = using_extents_.at(i);
       if (NULL != tmp && !tmp->is_closed()) {
         uint8_t start_id = ObTmpFilePageBuddy::MAX_PAGE_NUMS;
@@ -497,18 +501,23 @@ int ObTmpMacroBlock::close(bool &is_all_close)
           }
           if (OB_FAIL(ret)) {
             tmp->unclose(page_nums);
-            is_all_close = false;
+            is_all_closed = false;
           }
         } else {
-          is_all_close = false;
+          is_all_closed = false;
         }
       }
+    }
+    if (OB_SUCC(ret) && is_all_closed) {
+      is_sealed = true;
+      ATOMIC_SET(&is_sealed_, true);
     }
   }
   return ret;
 }
 
-int ObTmpMacroBlock::is_extents_closed(bool &is_extents_closed) {
+int ObTmpMacroBlock::is_extents_closed(bool &is_extents_closed)
+{
   int ret = OB_SUCCESS;
   is_extents_closed = true;
   if (IS_NOT_INIT) {
@@ -516,9 +525,10 @@ int ObTmpMacroBlock::is_extents_closed(bool &is_extents_closed) {
     STORAGE_LOG(WARN, "ObTmpMacroBlock has not been inited");
   } else {
     SpinRLockGuard guard(lock_);
+    is_extents_closed = using_extents_.count() == 0 ? false : true;
     for (int64_t i = 0; i< using_extents_.count(); ++i) {
       if (!using_extents_.at(i)->is_closed()) {
-        STORAGE_LOG(DEBUG, "the tmp macro block's extents is not all closed", K(ret), K(tmp_file_header_.block_id_));
+        STORAGE_LOG(DEBUG, "the tmp macro block's extents is not all closed", K(tmp_file_header_.block_id_));
         is_extents_closed = false;
         break;
       }
@@ -587,12 +597,13 @@ int ObTmpMacroBlock::alloc_all_pages(ObTmpFileExtent &extent)
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(lock_);
+  const bool sealed = is_sealed();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpMacroBlock has not been inited", K(ret));
-  } else if (!is_memory()) {
+  } else if (OB_UNLIKELY(!is_memory() || sealed)) {
     ret = OB_STATE_NOT_MATCH;
-    STORAGE_LOG(WARN, "the block is not in memory", K(ret), K(ATOMIC_LOAD(&block_status_)));
+    STORAGE_LOG(WARN, "the block is not in memory", K(ret), K(ATOMIC_LOAD(&block_status_)), K(sealed));
   } else if (OB_FAIL(page_buddy_.alloc_all_pages())) {
     STORAGE_LOG(WARN, "Fail to allocate the tmp extent", K(ret), K_(tmp_file_header), K_(page_buddy));
   } else {
@@ -620,12 +631,13 @@ int ObTmpMacroBlock::alloc(const uint8_t page_nums, ObTmpFileExtent &extent)
   uint8_t start_page_id = extent.get_start_page_id();
   uint8_t alloced_page_nums = 0;
   SpinWLockGuard guard(lock_);
+  const bool sealed = is_sealed();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpMacroBlock has not been inited", K(ret));
-  } else if (!is_memory()) {
+  } else if (OB_UNLIKELY(!is_memory() || sealed)) {
     ret = OB_STATE_NOT_MATCH;
-    STORAGE_LOG(WARN, "the block is not in memory", K(ret), K(ATOMIC_LOAD(&block_status_)));
+    STORAGE_LOG(WARN, "the block is not in memory", K(ret), K(ATOMIC_LOAD(&block_status_)), K(sealed));
   } else if (OB_FAIL(page_buddy_.alloc(page_nums, start_page_id, alloced_page_nums))) {
     STORAGE_LOG(WARN, "Fail to allocate the tmp extent", K(ret), K_(tmp_file_header), K_(page_buddy));
   } else {
@@ -696,7 +708,7 @@ int64_t ObTmpMacroBlock::get_used_page_nums() const
   SpinRLockGuard guard(lock_);
   int64_t used_page_nums = 0;
   for (int64_t i = using_extents_.count() - 1; i >= 0; --i) {
-    used_page_nums += std::ceil(using_extents_.at(i)->get_offset() / DEFAULT_PAGE_SIZE);
+    used_page_nums += std::ceil((1.0 * using_extents_.at(i)->get_offset()) / DEFAULT_PAGE_SIZE);
   }
   return used_page_nums;
 }
@@ -991,10 +1003,16 @@ int ObTmpTenantFileStore::alloc(const int64_t dir_id, const uint64_t tenant_id, 
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(alloc_size), K(block_size));
   } else {
+    const int64_t timeout_ts = THIS_WORKER.get_timeout_ts();
     ret = OB_STATE_NOT_MATCH;
     while (OB_STATE_NOT_MATCH == ret || OB_SIZE_OVERFLOW == ret) {
-      if (OB_FAIL(tmp_mem_block_manager_.cleanup())) {
-        STORAGE_LOG(WARN, "fail to try wash tmp macro block", K(ret), K(dir_id), K(tenant_id));
+      if (OB_UNLIKELY(timeout_ts <= ObTimeUtility::current_time())) {
+        ret = OB_TIMEOUT;
+        STORAGE_LOG(WARN, "it's timeout", K(ret), K(timeout_ts), K(ObTimeUtility::current_time()));
+      } else if (OB_FAIL(tmp_mem_block_manager_.cleanup())) {
+        if (OB_STATE_NOT_MATCH != ret) {
+          STORAGE_LOG(WARN, "fail to try wash tmp macro block", K(ret), K(dir_id), K(tenant_id));
+        }
       }
       SpinWLockGuard guard(lock_);
       if (OB_SUCC(ret)) {
@@ -1364,9 +1382,8 @@ int ObTmpTenantFileStore::write(const ObTmpBlockIOInfo &io_info)
     block->set_io_desc(io_info.io_desc_);
     MEMCPY(block->get_buffer() + io_info.offset_, io_info.buf_, io_info.size_);
   } else {
-    // Skip washing and disked status
-    // Won't change io_info for retry alloc block.
-    ret = OB_EAGAIN;
+    // The washing and disked block shouldn't write data, Otherwise, it will cause data corrupt.
+    ret = OB_NOT_SUPPORTED;
     STORAGE_LOG(WARN, "block status is not correct", K(ret), K(io_info));
   }
   return ret;
@@ -1416,6 +1433,8 @@ int ObTmpTenantFileStore::sync_block(const int64_t block_id,
     //do nothing
   } else if (OB_FAIL(tmp_mem_block_manager_.wash_block(block_id, handle))) {
     STORAGE_LOG(WARN, "wash block failed", K(ret), K(block_id));
+  } else {
+    STORAGE_LOG(DEBUG, "succeed to sync block", K(block_id));
   }
   return ret;
 }

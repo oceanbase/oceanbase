@@ -2364,6 +2364,102 @@ int ObSchemaChecker::get_object_type_with_view_info(ObIAllocator* allocator,
   return ret;
 }
 
+int ObSchemaChecker::check_exist_same_name_object_with_synonym(const uint64_t tenant_id,
+                                     uint64_t database_id,
+                                     const common::ObString &object_name,
+                                     bool &exist)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  common::ObString database_name;
+  const ObDatabaseSchema  *db_schema = NULL;
+  const share::schema::ObTableSchema *table_schema = NULL;
+  if (OB_FAIL(get_database_schema(tenant_id, database_id, db_schema))) {
+    LOG_WARN("fail to get db schema", K(ret));
+  } else if (OB_NOT_NULL(db_schema)) {
+    database_name = db_schema->get_database_name();
+    ret = get_table_schema(tenant_id, database_name, object_name, false, table_schema);
+    if (OB_TABLE_NOT_EXIST == ret) {
+      if (lib::is_oracle_mode()) {
+        ret = get_idx_schema_by_origin_idx_name(tenant_id, database_id, object_name, table_schema);
+        if (OB_SUCC(ret)) {
+          if (table_schema == NULL) {
+            ret = OB_TABLE_NOT_EXIST;
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_NOT_NULL(table_schema)) {
+      exist = true;
+    }
+
+    //check sequence
+    if (OB_TABLE_NOT_EXIST == ret) {
+      uint64_t sequence_id = 0;
+      if (OB_FAIL(get_sequence_id(tenant_id, database_name, object_name, sequence_id))) {
+        if (OB_ERR_SEQ_NOT_EXIST == ret) {
+          ret = OB_TABLE_NOT_EXIST;
+        }
+      } else {
+        exist = true;
+      }
+    }
+    //check procedure/function
+    if (OB_TABLE_NOT_EXIST == ret) {
+      uint64_t routine_id = 0;
+      bool is_proc = false;
+      if (OB_FAIL(get_routine_id(tenant_id, database_name, object_name, routine_id, is_proc))) {
+        if (OB_ERR_SP_DOES_NOT_EXIST == ret) {
+          ret = OB_TABLE_NOT_EXIST;
+        }
+      } else {
+        exist = true;
+      }
+    }
+    //check package
+    if (OB_TABLE_NOT_EXIST == ret) {
+      uint64_t package_id = 0;
+      int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
+                                                      : COMPATIBLE_MYSQL_MODE;
+      if (OB_FAIL(get_package_id(tenant_id, database_name, object_name,
+                                  compatible_mode, package_id))) {
+        if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
+          if (OB_FAIL(get_package_id(OB_SYS_TENANT_ID,
+                                      OB_SYS_DATABASE_ID,
+                                      object_name,
+                                      compatible_mode,
+                                      package_id))) {
+            if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
+              ret = OB_TABLE_NOT_EXIST;
+            }
+          } else {
+            exist = true;
+          }
+        }
+      } else {
+        exist = true;
+      }
+    }
+
+    //check type
+    if (OB_TABLE_NOT_EXIST == ret) {
+      uint64_t udt_id = 0;
+      if (OB_FAIL(get_udt_id(tenant_id, database_name, object_name, udt_id))) {
+        if (OB_ERR_SP_DOES_NOT_EXIST == ret) {
+        ret = OB_TABLE_NOT_EXIST;
+        }
+      } else {
+        exist = true;
+      }
+    }
+  }
+  if (OB_TABLE_NOT_EXIST == ret) {
+    ret = OB_SUCCESS;
+  }
+
+  return ret;
+}
+
 int ObSchemaChecker::get_object_type(const uint64_t tenant_id,
                                      const common::ObString &database_name,
                                      const common::ObString &table_name,

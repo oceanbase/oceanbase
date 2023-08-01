@@ -16,6 +16,7 @@
 #define OCEANBASE_LIBOBCDC_SERVER_ENDPOINT_ACCESS_INFO_H__
 
 #include "lib/net/ob_addr.h"
+#include "lib/container/ob_array_serialization.h"
 
 namespace oceanbase
 {

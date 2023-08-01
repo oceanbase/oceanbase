@@ -351,7 +351,7 @@ int ObTabletLSService::renew_cache_(
   } else if (tablet_ls_caches.empty()) {
     ret = OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST;
     LOG_WARN("tablet ls mapping not exist in inner table", KR(ret), K(tenant_id), K(tablet_id));
-  } else if (tablet_cache.assign(tablet_ls_caches.at(0))) {
+  } else if (OB_FAIL(tablet_cache.assign(tablet_ls_caches.at(0)))) {
     LOG_WARN("assign failed", KR(ret), K(tablet_ls_caches));
   } else {
     FLOG_INFO("[TABLET_LOCATION]success to renew tablet cache", K(tablet_cache));

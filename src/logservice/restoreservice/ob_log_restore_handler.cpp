@@ -1034,7 +1034,7 @@ int RestoreStatusInfo::restore_sync_status_to_string(char *str_buf, const int64_
     || sync_status_ >= RestoreSyncStatus::MAX_RESTORE_SYNC_STATUS) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid restore status", K(sync_status_));
-  } else if (databuff_printf(str_buf, str_len, "%s", restore_status_str[int(sync_status_)])) {
+  } else if (OB_FAIL(databuff_printf(str_buf, str_len, "%s", restore_status_str[int(sync_status_)]))) {
     CLOG_LOG(WARN, "databuff printf restore status str failed", K(sync_status_));
   }
   return ret;

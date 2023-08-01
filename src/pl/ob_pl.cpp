@@ -2569,8 +2569,10 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
     if (!obj.is_pl_extend()) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "generic paramter has a non composite input value");
+    } else if (OB_ISNULL(composite = reinterpret_cast<ObPLComposite*>(obj.get_ext()))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "generic parameter has null value pointer");
     }
-    CK (OB_NOT_NULL(composite = reinterpret_cast<ObPLComposite*>(obj.get_ext())));
     if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(session->get_pl_context())
           && OB_NOT_NULL(session->get_pl_context()->get_current_ctx())) {

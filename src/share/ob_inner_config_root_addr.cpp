@@ -11,12 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SHARE
-
-#include "share/ob_inner_config_root_addr.h"
-
 #include "lib/string/ob_sql_string.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "config/ob_server_config.h"
+#include "share/ob_inner_config_root_addr.h"
 #include "observer/ob_server_struct.h"
 #include "common/ob_timeout_ctx.h"
 #include "rootserver/ob_root_utils.h"

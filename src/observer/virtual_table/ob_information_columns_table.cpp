@@ -94,12 +94,12 @@ int ObInfoSchemaColumnsTable::inner_get_next_row(common::ObNewRow *&row)
       } else if (OB_UNLIKELY(NULL == (tmp_ptr = static_cast<char *>(allocator_->alloc(
                              OB_MAX_SYS_PARAM_NAME_LENGTH))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        SERVER_LOG(ERROR, "fail to alloc memory", K(ret));
+        SERVER_LOG(WARN, "fail to alloc memory", K(ret));
       } else if (FALSE_IT(data_type_str_ = static_cast<char *>(tmp_ptr))) {
       } else if (OB_UNLIKELY(NULL == (tmp_ptr = static_cast<char *>(allocator_->alloc(
                              OB_MAX_SYS_PARAM_NAME_LENGTH))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        SERVER_LOG(ERROR, "fail to alloc memory", K(ret));
+        SERVER_LOG(WARN, "fail to alloc memory", K(ret));
       } else {
         column_type_str_ = static_cast<char *>(tmp_ptr);
         column_type_str_len_ = OB_MAX_SYS_PARAM_NAME_LENGTH;
@@ -288,7 +288,7 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
                                                      last_db_schema_idx,
                                                      i,
                                                      is_filter_table_schema))) {
-        SERVER_LOG(ERROR, "fail to iterate all table columns. ", K(ret));
+        SERVER_LOG(WARN, "fail to iterate all table columns. ", K(ret));
       }
     }
   }
@@ -446,14 +446,14 @@ int ObInfoSchemaColumnsTable::get_type_str(
                                OB_MAX_SYS_PARAM_NAME_LENGTH,
                                OB_MAX_EXTENDED_TYPE_INFO_LENGTH))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        SERVER_LOG(ERROR, "fail to alloc memory", K(ret));
+        SERVER_LOG(WARN, "fail to alloc memory", K(ret));
       } else if (FALSE_IT(data_type_str_ = static_cast<char *>(tmp_ptr))) {
       } else if (OB_UNLIKELY(NULL == (tmp_ptr = static_cast<char *>(allocator_->realloc(
                                column_type_str_,
                                OB_MAX_SYS_PARAM_NAME_LENGTH,
                                OB_MAX_EXTENDED_TYPE_INFO_LENGTH))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        SERVER_LOG(ERROR, "fail to alloc memory", K(ret));
+        SERVER_LOG(WARN, "fail to alloc memory", K(ret));
       } else {
         pos = 0;
         column_type_str_ = static_cast<char *>(tmp_ptr);
@@ -548,7 +548,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
               int64_t pos = 0;
               if (OB_UNLIKELY(NULL == (buf = static_cast<char*>(allocator_->alloc(buf_len))))) {
                 ret = OB_ALLOCATE_MEMORY_FAILED;
-                SERVER_LOG(ERROR, "fail to allocate memory", K(ret));
+                SERVER_LOG(WARN, "fail to allocate memory", K(ret));
               } else if (def_obj.is_bit()) {
                 if (OB_FAIL(def_obj.print_varchar_literal(buf, buf_len, pos, TZ_INFO(session_)))) {
                   SERVER_LOG(WARN, "fail to print varchar literal", K(ret), K(def_obj), K(buf_len), K(pos), K(buf));
@@ -570,7 +570,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
                            K(ret), K(def_obj));
               } else if (OB_ISNULL(res_cell)) {
                 ret = OB_ERR_UNEXPECTED;
-                SERVER_LOG(ERROR, "succ to cast to ObVarcharType, but res_cell is NULL",
+                SERVER_LOG(WARN, "succ to cast to ObVarcharType, but res_cell is NULL",
                            K(ret), K(def_obj));
               } else {
                 cells[cell_idx] = *res_cell;
@@ -954,7 +954,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
               int64_t pos = 0;
               if (OB_UNLIKELY(NULL == (buf = static_cast<char*>(allocator_->alloc(buf_len))))) {
                 ret = OB_ALLOCATE_MEMORY_FAILED;
-                SERVER_LOG(ERROR, "fail to allocate memory", K(ret));
+                SERVER_LOG(WARN, "fail to allocate memory", K(ret));
               } else if (column_item.default_value_.is_bit()) {
                 if (OB_FAIL(column_item.default_value_.print_varchar_literal(buf, buf_len, pos, TZ_INFO(session_)))) {
                   SERVER_LOG(WARN, "fail to print varchar literal", K(ret), K(column_item.default_value_), K(buf_len), K(pos), K(buf));
@@ -980,7 +980,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
                            K(ret), K(column_item.default_value_));
               } else if (OB_ISNULL(res_cell)) {
                 ret = OB_ERR_UNEXPECTED;
-                SERVER_LOG(ERROR, "succ to cast to ObVarcharType, but res_cell is NULL",
+                SERVER_LOG(WARN, "succ to cast to ObVarcharType, but res_cell is NULL",
                            K(ret), K(column_item.default_value_));
               } else {
                 cells[cell_idx] = *res_cell;

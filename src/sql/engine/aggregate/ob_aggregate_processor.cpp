@@ -4877,6 +4877,7 @@ int ObAggregateProcessor::top_fre_hist_calc_batch(
   for (auto it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
     uint64_t nth_row = selector.get_batch_index(it);
     ObDatum *datum = arg_datums.at(nth_row);
+    int32_t origin_str_len = 0;
     if (datum->is_null()) {
       continue;
     }
@@ -4887,7 +4888,7 @@ int ObAggregateProcessor::top_fre_hist_calc_batch(
       } else if (OB_FAIL(extra_info->topk_fre_hist_.merge_distribute_top_k_fre_items(obj))) {
         LOG_WARN("failed to process row", K(ret));
       }
-    } else if (OB_FAIL(shadow_truncate_string_for_hist(obj_meta, *datum))) {
+    } else if (OB_FAIL(shadow_truncate_string_for_hist(obj_meta, *datum, &origin_str_len))) {
       LOG_WARN("failed to shadow truncate string for hist", K(ret));
     } else {
       ObExprHashFuncType hash_func = aggr_info.param_exprs_.at(0)->basic_funcs_->murmur_hash_;
@@ -4896,6 +4897,15 @@ int ObAggregateProcessor::top_fre_hist_calc_batch(
         LOG_WARN("fail to do hash", K(ret));
       } else if (OB_FAIL(extra_info->topk_fre_hist_.add_top_k_frequency_item(datum_value, *datum))) {
         LOG_WARN("failed to process row", K(ret));
+      } else if (origin_str_len > 0) {
+        if (OB_UNLIKELY(!ObColumnStatParam::is_valid_opt_col_type(obj_meta.get_type()) ||
+                        !obj_meta.is_string_type())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(ret), K(obj_meta), K(origin_str_len), K(datum));
+        } else {
+          const ObString &str = datum->get_string();
+          datum->set_string(str.ptr(), static_cast<uint32_t>(origin_str_len));
+        }
       }
     }
   }
@@ -6188,7 +6198,8 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
 }
 
 int ObAggregateProcessor::shadow_truncate_string_for_hist(const ObObjMeta obj_meta,
-                                                          ObDatum &datum)
+                                                          ObDatum &datum,
+                                                          int32_t *origin_str_len/*default null*/)
 {
   int ret = OB_SUCCESS;
   if (ObColumnStatParam::is_valid_opt_col_type(obj_meta.get_type()) && obj_meta.is_string_type() && !datum.is_null()) {
@@ -6199,6 +6210,9 @@ int ObAggregateProcessor::shadow_truncate_string_for_hist(const ObObjMeta obj_me
       LOG_WARN("get unexpected error", K(ret), K(obj_meta), K(datum), K(truncated_str_len));
     } else {
       datum.set_string(str.ptr(), static_cast<uint32_t>(truncated_str_len));
+      if (origin_str_len != NULL && static_cast<int32_t>(truncated_str_len) < str.length()) {
+        *origin_str_len = str.length();
+      }
       LOG_TRACE("Succeed to shadow truncate string for hist", K(datum));
     }
   }

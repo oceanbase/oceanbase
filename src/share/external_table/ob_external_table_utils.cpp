@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX SQL
+#include "share/external_table/ob_external_table_file_mgr.h"
 #include "share/external_table/ob_external_table_utils.h"
 
 #include "common/ob_range.h"

@@ -1879,10 +1879,10 @@ int ObConstraintTask::check_health()
       switch_status(new_status, false, ret);
       LOG_WARN("switch status to build_failed", K(ret), K(old_status), K(new_status));
     }
-  }
-  if (ObDDLTaskStatus::FAIL == static_cast<ObDDLTaskStatus>(task_status_)
-      || ObDDLTaskStatus::SUCCESS == static_cast<ObDDLTaskStatus>(task_status_)) {
-    ret = OB_SUCCESS; // allow clean up
+    if (ObDDLTaskStatus::FAIL == static_cast<ObDDLTaskStatus>(task_status_)
+        || ObDDLTaskStatus::SUCCESS == static_cast<ObDDLTaskStatus>(task_status_)) {
+      ret = OB_SUCCESS; // allow clean up
+    }
   }
   return ret;
 }

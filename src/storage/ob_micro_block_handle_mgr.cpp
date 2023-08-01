@@ -234,7 +234,8 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
     ret = OB_NOT_INIT;
     LOG_WARN("Block handle manager is not inited", K(ret));
   } else if (OB_ISNULL(idx_header)) {
-    LOG_WARN("invalid argument", K(ret));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpect null index header", K(ret));
   } else {
     if (is_multi_) {
       if (is_ordered_) {

@@ -1148,7 +1148,9 @@ void ObDASLocationRouter::refresh_location_cache(bool is_nonblock, int err_no)
   if (is_master_changed_error(err_no)
       || is_partition_change_error(err_no)
       || is_get_location_timeout_error(err_no)
-      || is_server_down_error(err_no)) {
+      || is_server_down_error(err_no)
+      || is_has_no_readable_replica_err(err_no)
+      || is_unit_migrate(err_no)) {
     // Refresh tablet ls mapping and ls locations according to err_no.
     //
     // The timeout has been set inner the interface when renewing location synchronously.

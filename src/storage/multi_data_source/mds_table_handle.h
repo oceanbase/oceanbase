@@ -100,7 +100,7 @@ public:
   template <typename DUMP_OP, ENABLE_IF_LIKE_FUNCTION(DUMP_OP, int(const MdsDumpKV &))>
   int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(DUMP_OP &&for_each_op,
                                                                        const bool for_flush) const;
-  int flush(share::SCN recycle_scn, bool need_freeze = true);
+  int flush(share::SCN need_advanced_rec_scn_lower_limit);
   int is_flushing(bool &is_flushing) const;
   void on_flush(const share::SCN &flush_scn, const int flush_ret);
   int try_recycle(const share::SCN &recycle_scn);// release nodes
@@ -108,6 +108,7 @@ public:
   int get_ref_cnt(int64_t &ref_cnt) const;
   int get_node_cnt(int64_t &valid_cnt) const;
   int get_rec_scn(share::SCN &rec_scn) const;
+  int dump_status() const;
   bool is_valid() const;
   void reset();
   MdsTableBase *get_mds_table_ptr() { return p_mds_table_base_.ptr(); }

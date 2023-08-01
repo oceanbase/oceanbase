@@ -50,7 +50,13 @@ public:
   int end_refresh() override;
 
 private:
+  typedef common::SpinRWLock RWLock;
+  typedef common::SpinRLockGuard  RLockGuard;
+  typedef common::SpinWLockGuard  WLockGuard;
+
+private:
   common::ObArray<common::ObAddr> server_list_;
+  mutable RWLock lock_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogRestoreMySQLProvider);

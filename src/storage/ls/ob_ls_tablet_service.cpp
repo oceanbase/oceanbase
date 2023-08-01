@@ -177,6 +177,7 @@ int ObLSTabletService::offline()
     if (OB_FAIL(tablet_id_set_.foreach(clean_mem_op))) {
       LOG_WARN("fail to clean memtables", K(ret), K(clean_mem_op.cur_tablet_id_));
     }
+    mds_table_mgr_.offline();
   }
   return ret;
 }
@@ -6129,7 +6130,12 @@ int ObLSTabletService::get_max_tablet_transfer_scn(share::SCN &transfer_scn)
           LOG_WARN("failed to get tablet", K(ret), K(key));
       } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_tablet_status(
           share::SCN::max_scn(), mds_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
-        LOG_WARN("failed to get mds table", KR(ret), K(tablet_handle));
+        if (OB_EMPTY_RESULT == ret || OB_ERR_SHARED_LOCK_CONFLICT == ret) {
+          LOG_INFO("committed tablet_status does not exist", K(ret), K(key));
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get mds table", KR(ret), K(key));
+        }
       } else if (share::SCN::invalid_scn() == mds_data.transfer_scn_) {
         // do nothing
       } else {

@@ -17,6 +17,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/net/ob_addr.h"
+#include "lib/container/ob_se_array.h"
 
 namespace oceanbase
 {

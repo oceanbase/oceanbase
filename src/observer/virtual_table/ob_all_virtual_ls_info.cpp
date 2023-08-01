@@ -186,18 +186,14 @@ int ObAllVirtualLSInfo::process_curr_tenant(ObNewRow *&row)
           cur_row_.cells_[i].set_int(ls_info.rebuild_seq_);
           break;
         case OB_APP_MIN_COLUMN_ID + 13:
-          // clog_checkpoint_ts
-          cur_row_.cells_[i].set_uint64(!ls_info.tablet_change_checkpoint_scn_.is_valid() ? 0 : ls_info.tablet_change_checkpoint_scn_.get_val_for_tx());
-          break;
-        case OB_APP_MIN_COLUMN_ID + 14:
           // tablet_change_checkpoint_scn
           cur_row_.cells_[i].set_uint64(!ls_info.tablet_change_checkpoint_scn_.is_valid() ? 0 : ls_info.tablet_change_checkpoint_scn_.get_val_for_inner_table_field());
           break;
-        case OB_APP_MIN_COLUMN_ID + 15:
+        case OB_APP_MIN_COLUMN_ID + 14:
           // transfer_scn
           cur_row_.cells_[i].set_uint64(!ls_info.transfer_scn_.is_valid() ? 0 : ls_info.transfer_scn_.get_val_for_inner_table_field());
           break;
-        case OB_APP_MIN_COLUMN_ID + 16:
+        case OB_APP_MIN_COLUMN_ID + 15:
           // tx blocked
           cur_row_.cells_[i].set_int(ls_info.tx_blocked_);
           break;

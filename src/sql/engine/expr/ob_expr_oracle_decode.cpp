@@ -380,7 +380,7 @@ int ObExprOracleDecode::calc_result_type_for_literal(ObExprResType &type,
       // 兼容ORACLE: 忽略掉calc_type阶段的计算错误, 在实际计算时再报
       ret = OB_SUCCESS;
     } else if (result.is_null()) {
-      // do nothing ...
+      type.set_length(0);
     } else if (!result.is_string_type()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("decode calc literal result is not string", K(ret));

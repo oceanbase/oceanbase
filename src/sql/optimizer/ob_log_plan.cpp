@@ -2064,17 +2064,21 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
   ObFollowerFirstFeedbackType follower_first_feedback = FFF_HIT_MIN;
   int64_t route_policy_type = 0;
   bool proxy_priority_hit_support = false;
-  if (OB_ISNULL(session)) {
+  ObSqlCtx *sql_ctx = exec_ctx.get_sql_ctx();
+  bool use_weak_ignore_retry = false;
+  if (OB_ISNULL(session) || OB_ISNULL(sql_ctx)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("session is NULL", K(ret), K(session));
+    LOG_ERROR("get unexpected NULL", K(ret), K(session), K(sql_ctx));
   } else if (OB_FAIL(session->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy_type))) {
     LOG_WARN("fail to get sys variable", K(ret));
   } else {
     proxy_priority_hit_support = session->get_proxy_cap_flags().is_priority_hit_support();
+    // explain may retry to check outline validation
+    use_weak_ignore_retry = (sql_ctx->first_plan_hash_ != 0 && !sql_ctx->first_outline_data_.empty());
   }
 
   if (OB_FAIL(ret)) {
-  } else if (is_weak && !exec_ctx.get_my_session()->get_is_in_retry()) {
+  } else if (is_weak && (!session->get_is_in_retry() || use_weak_ignore_retry)) {
     int64_t max_read_stale_time = exec_ctx.get_my_session()->get_ob_max_read_stale_time();
     uint64_t tenant_id = exec_ctx.get_my_session()->get_effective_tenant_id();
     if (OB_FAIL(ObLogPlan::weak_select_replicas(local_server,
@@ -3772,9 +3776,9 @@ int ObLogPlan::inner_remove_redundancy_pred(ObIArray<ObRawExpr*> &join_pred,
                    right_table.is_superset(right_expr->get_relation_ids()))) {
         // the pred does not join the given two tables,
         // decide whether remove this qual later
-      } else if (ObOptimizerUtil::is_expr_equivalent(left_expr,
-                                                     right_expr,
-                                                     equal_sets)) {
+      } else if (ObOptimizerUtil::in_same_equalset(left_expr,
+                                                   right_expr,
+                                                   equal_sets)) {
         // remove preds which is equation between two exprs in the same equal sets
         has_checked.at(i) = true;
         OPT_TRACE("remove redundancy join condition:", cur_expr);
@@ -12837,9 +12841,14 @@ int ObLogPlan::create_for_update_plan(ObLogicalOperator *&top,
   int ret = OB_SUCCESS;
   bool is_multi_part_dml = false;
   bool is_result_local = false;
+  ObExchangeInfo exch_info;
   if (OB_ISNULL(top) || OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (skip_locked &&
+      top->is_distributed() &&
+      OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
+    LOG_WARN("fail to allocate exchange op", K(ret), K(skip_locked));
   } else if (OB_FAIL(check_need_multi_partition_dml(*get_stmt(),
                                                     *top,
                                                     index_dml_infos,

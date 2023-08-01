@@ -17,6 +17,7 @@
 #include <lib/ob_define.h>
 #include <lib/net/ob_addr.h>
 #include "lib/atomic/ob_atomic.h"
+#include "lib/container/ob_array_serialization.h"
 
 namespace oceanbase {
 

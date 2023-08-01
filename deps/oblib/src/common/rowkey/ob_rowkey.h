@@ -101,7 +101,7 @@ public:
 
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int64_t get_serialize_size(void) const;
-  int deserialize(const char *buf, const int64_t buf_len, int64_t &pos);
+  int deserialize(const char *buf, const int64_t buf_len, int64_t &pos, bool check_zero = false);
 
   int serialize_objs(char *buf, const int64_t buf_len, int64_t &pos) const;
   int64_t get_serialize_objs_size(void) const;

@@ -72,7 +72,7 @@ public:
                         bool &async_resp_used,
                         ObPsStmtId &inner_stmt_id);
   int response_query_header(sql::ObSQLSessionInfo &session,
-                            ObResultSet &result,
+                            sql::ObResultSet &result,
                             bool need_flush_buffer = false);
   int response_param_query_header(sql::ObSQLSessionInfo &session,
                                 const ColumnsFieldIArray *fields,

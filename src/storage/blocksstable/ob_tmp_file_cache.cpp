@@ -1137,6 +1137,7 @@ int ObTmpTenantMemBlockManager::cleanup()
     } else if (OB_FAIL(t_mblk_map_.foreach_refactored(op))) {
       STORAGE_LOG(WARN, "choose blks failed", K(ret));
     } else {
+      const int64_t candidate_cnt = heap.count();
       bool wash_success = false;
       while (OB_SUCC(ret) && heap.count() > 0 && !wash_success) {
         const BlockInfo info = heap.top();
@@ -1145,6 +1146,7 @@ int ObTmpTenantMemBlockManager::cleanup()
           STORAGE_LOG(WARN, "fail to wash", K(ret), K_(tenant_id), K(info.block_id_));
         } else {
           wash_success = handle.is_valid();
+          STORAGE_LOG(DEBUG, "succeed to wash block for cleanup", K(info));
         }
 
         if (OB_SUCC(ret)) {
@@ -1155,6 +1157,7 @@ int ObTmpTenantMemBlockManager::cleanup()
       }
       if (OB_SUCC(ret) && !wash_success) {
         ret = OB_STATE_NOT_MATCH;
+        STORAGE_LOG(WARN, "fail to cleanup", K(ret), K(t_mblk_map_.size()), K(candidate_cnt));
       }
     }
   }
@@ -1217,6 +1220,7 @@ int ObTmpTenantMemBlockManager::ChooseBlocksMapOp::operator () (oceanbase::commo
       STORAGE_LOG(WARN, "insert block to array failed", K(ret));
     }
   }
+  STORAGE_LOG(DEBUG, "choose one block", K(ret), KPC(blk));
   return ret;
 }
 
@@ -1270,7 +1274,7 @@ int ObTmpTenantMemBlockManager::refresh_dir_to_blk_map(const int64_t dir_id,
 int ObTmpTenantMemBlockManager::get_block_and_set_washing(int64_t block_id, ObTmpMacroBlock *&m_blk)
 {
   int ret = OB_SUCCESS;
-  bool is_closed = false;
+  bool is_sealed = false;
   uint64_t hash_val = 0;
   hash_val = murmurhash(&block_id, sizeof(block_id), hash_val);
   ObBucketHashRLockGuard lock_guard(map_lock_, hash_val);
@@ -1291,11 +1295,11 @@ int ObTmpTenantMemBlockManager::get_block_and_set_washing(int64_t block_id, ObTm
     }
     // refresh ret can be ignored. overwrite the ret.
     ret = OB_STATE_NOT_MATCH;
-  } else if (OB_FAIL(m_blk->close(is_closed))) {
-    STORAGE_LOG(WARN, "fail to close block", K(ret), K(*m_blk));
-  } else if (!is_closed) {
+  } else if (OB_FAIL(m_blk->seal(is_sealed))) {
+    STORAGE_LOG(WARN, "fail to seal block", K(ret), K(*m_blk));
+  } else if (OB_UNLIKELY(!is_sealed)) {
     ret = OB_STATE_NOT_MATCH;
-    STORAGE_LOG(WARN, "the block has some unclosed extents", K(ret), K(*m_blk));
+    STORAGE_LOG(WARN, "the block has some unclosed extents", K(ret), K(is_sealed), K(*m_blk));
   } else if (OB_UNLIKELY(0 == m_blk->get_used_page_nums())) {
     ret = OB_STATE_NOT_MATCH;
     STORAGE_LOG(WARN, "the block write has not been finished", K(ret), K(*m_blk));

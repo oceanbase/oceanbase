@@ -135,7 +135,7 @@ MdsRow<K, V>::~MdsRow()// all mds nodes lived with RAII, owned by MdsRow
 {
   MdsWLockGuard lg(MdsRowBase<K, V>::lock_);
   if (!sorted_list_.empty()) {
-    MDS_LOG_RET(WARN, OB_INVALID_ARGUMENT, "release mds mode when mds row destructed", K(*this));
+    MDS_LOG_RET(WARN, OB_SUCCESS, "release mds mode when mds row destructed", K(*this));
     sorted_list_.for_each_node_from_tail_to_head_until_true(
       [this](const UserMdsNode<K, V> &node) {
         UserMdsNode<K, V> &cast_node = const_cast<UserMdsNode<K, V> &>(node);
@@ -538,16 +538,18 @@ int MdsRow<K, V>::scan_dump_node_from_tail_to_head(DUMP_OP &&op,
       bool need_break = false;
       MDS_TG(5_ms);
       OB_ASSERT(!node.is_aborted_());// should not see aborted node, cause it is deleted immediatly
+      if (!node.is_dumped_()) {
+        has_meet_undump_node = true;// this is a barrier, mark it to defense
+      }
       if (!node.is_committed_()) {
         if (node.redo_scn_.is_valid() && !flush_scn.is_max()) {
           OB_ASSERT(node.redo_scn_ > flush_scn);// defense
         }
         need_break = true;
-      } else if (node.is_dumped_()) {// just skip it
+      } else if (node.is_dumped_() && for_flush) {// just skip it
         // all nodes before first undumped node should be dumped status,(reverse scan order)
         // and all nodes after first undumped node should be undemped status(reverse scan order)
         OB_ASSERT(has_meet_undump_node == false);// defense
-      } else if (FALSE_IT(has_meet_undump_node = true)) {// this is a barrier, mark it to defense
       } else if (!check_node_scn_beflow_flush(node, flush_scn)) {
         need_break = true;
       } else if (MDS_FAIL(dump_kv.v_.init(mds_table_id,

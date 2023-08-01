@@ -127,7 +127,7 @@ int ObParallelMergeInfo::deserialize(
         for (int i = 0; OB_SUCC(ret) && i < list_size_; ++i) {
           if (OB_FAIL(tmp_datum_rowkey.deserialize(buf, data_len, pos))) {
             LOG_WARN("failed to decode datum rowkey", K(ret), K(i), K(list_size_), K(data_len), K(pos));
-          } else if (tmp_datum_rowkey.deep_copy(parallel_datum_rowkey_list_[i] /*dst*/, allocator)) {
+          } else if (OB_FAIL(tmp_datum_rowkey.deep_copy(parallel_datum_rowkey_list_[i] /*dst*/, allocator))) {
             LOG_WARN("failed to deep copy datum rowkey", KR(ret), K(i), K(tmp_datum_rowkey));
           }
         } // end of for

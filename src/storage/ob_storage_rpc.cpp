@@ -1679,8 +1679,8 @@ int ObFetchLSInfoP::process()
           migration_status, KPC(ls));
     } else if (OB_FAIL(ObStorageHAUtils::get_server_version(result_.version_))) {
       LOG_WARN("failed to get server version", K(ret), K_(arg));
-    } else if (OB_FAIL(MTL(logservice::ObLogService*)->get_palf_role(ls->get_ls_id(), role, proposal_id))) {
-      STORAGE_LOG(WARN, "failed to get palf role", K(ret), K(arg_), "meta package", result_.ls_meta_package_);
+    } else if (OB_FAIL(log_handler->get_role(role, proposal_id))) {
+      LOG_WARN("failed to get role", K(ret), K(arg_));
     } else if (is_strong_leader(role)) {
       result_.is_log_sync_ = true;
     } else if (OB_FAIL(log_handler->is_in_sync(is_log_sync, is_need_rebuild))) {

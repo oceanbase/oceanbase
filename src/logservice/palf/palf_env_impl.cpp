@@ -710,7 +710,7 @@ int PalfEnvImpl::try_recycle_blocks()
     constexpr int64_t MB = 1024 * 1024LL;
     const int64_t print_error_log_disk_size =
         disk_opts_for_stopping_writing.log_disk_usage_limit_size_
-        * disk_opts_for_stopping_writing.log_disk_utilization_threshold_;
+        * disk_opts_for_stopping_writing.log_disk_utilization_threshold_ / 100LL;
     const bool need_print_error_log =
         print_error_log_disk_size > total_used_size_byte ? false : true;
 
