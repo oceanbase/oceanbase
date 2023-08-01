@@ -641,10 +641,18 @@ TEST_F(TestConstDecoder, batch_decode_to_datum_test_without_expection)
   }
 }
 
+
+TEST_F(TestConstDecoder, get_min_or_max)
+{
+  agg_min_or_max_test();
+
+}
+
 TEST_F(TestConstDecoder, batch_decode_to_datum_test_with_expection)
 {
   batch_decode_to_datum_test();
 }
+
 
 // TEST_F(TestConstDecoder, batch_get_row_perf_test)
 // {

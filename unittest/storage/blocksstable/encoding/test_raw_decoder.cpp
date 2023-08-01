@@ -199,6 +199,7 @@ class TestRawDecoder : public ::testing::Test
 {
 public:
   static const int64_t ROWKEY_CNT = 2;
+
   static const int64_t COLUMN_CNT = ObExtendType - 1 + 7;
 
   static const int64_t ROW_CNT = 64;
@@ -851,6 +852,69 @@ TEST_F(TestRawDecoder, opt_batch_decode_to_datum)
       ASSERT_TRUE(ObDatum::binary_equal(datum_cast_from_obj, datums[j]));
     }
   }
+}
+
+TEST_F(TestRawDecoder, get_min_or_max){
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator_, full_column_cnt_));
+
+  for (int64_t i = 0; i < ROW_CNT ; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(row));
+    for (int64_t j = 0; j < full_column_cnt_; ++j) {
+      // Generate data for var_length
+      if (col_descs_[j].col_type_.get_type() == ObVarcharType) {
+        ObStorageDatum &datum = row.storage_datums_[j];
+        datum.len_ = i < datum.len_ ? i : datum.len_;
+      }
+    }
+    ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
+  }
+
+  const_cast<bool &>(encoder_.ctx_.encoder_opt_.enable_bit_packing_) = false;
+
+  char *buf = NULL;
+  int64_t size = 0;
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
+  ObMicroBlockDecoder decoder;
+  ObMicroBlockData data(encoder_.get_data().data(), encoder_.get_data().pos());
+  ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_));
+  const ObRowHeader *row_header = nullptr;
+  int64_t row_len = 0;
+  const char *row_data = nullptr;
+  const char *cell_datas[ROW_CNT];
+  void *datum_buf_1 = allocator_.alloc(sizeof(int8_t) * 128 * ROW_CNT);
+  void *datum_buf_2 = allocator_.alloc(sizeof(int8_t) * 128);
+  int64_t sum_time_n = 0;
+  for (int64_t i = 0; i < full_column_cnt_ -11; ++i) {
+    if (i >= ROWKEY_CNT && i < read_info_.get_rowkey_count()) {
+      continue;
+    }
+    int32_t col_offset = i;
+    LOG_INFO("Current col: ", K(i), K(col_descs_.at(i)),  K(*decoder.decoders_[col_offset].ctx_));
+    ObDatum datums[ROW_CNT];
+    ObStorageDatum result_datum;
+    result_datum.set_null();
+    ObObjType type = decoder.decoders_[col_offset].ctx_->obj_meta_.get_type();
+    ObDatumCmpFuncType cmp_fun = ObDatumFuncs::get_nullsafe_cmp_func(type,
+                                                      type,
+                                                      NULL_FIRST,
+                                                      decoder.decoders_[col_offset].ctx_->obj_meta_.get_collation_type(),
+                                                      SCALE_UNKNOWN_YET,
+                                                      false, false);
+    ObMicroBlockAggInfo<ObDatum> agg_info(true,cmp_fun,result_datum);
+    int64_t row_ids[ROW_CNT];
+    for (int64_t j = 0; j < ROW_CNT; ++j) {
+      datums[j].ptr_ = reinterpret_cast<char *>(datum_buf_1) + j * 128;
+      row_ids[j] = j;
+    }
+    int64_t start_time = ObTimeUtility::current_time();
+    ASSERT_EQ(OB_SUCCESS, decoder.get_min_or_max(col_offset,row_ids, cell_datas, ROW_CNT-1, datums,agg_info));
+    int64_t end_time = ObTimeUtility::current_time();
+    STORAGE_LOG(INFO,"get min/max time_new:",K(end_time-start_time),K(agg_info.result_datum_));
+    sum_time_n += (end_time-start_time);
+  }
+  double avg_time_n = sum_time_n*1.0/(full_column_cnt_-11);
+  STORAGE_LOG(INFO,"get min/max time for all cols with decoder tpye:",K(decoder.col_header_->type_),K(avg_time_n));
 }
 
 } // end namespace blocksstable
