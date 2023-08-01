@@ -1230,8 +1230,13 @@ int ObWindowFunctionOp::init()
             LOG_WARN("add func failed", K(ret));
           } else {
             LOG_DEBUG("add func succ", KPC(wf_cell));
+            wf_cell = NULL;
           }
         }
+      }
+      if (OB_UNLIKELY(NULL != wf_cell)) {
+        wf_cell->~WinFuncCell();
+        wf_cell = NULL;
       }
       if (OB_SUCC(ret) && MY_SPEC.is_participator()) {
         if (wf_info.can_push_down_) {
