@@ -182,6 +182,11 @@ int ObTabletMdsData::init(
     extra_medium_info_.last_compaction_type_ = base_data.extra_medium_info_.last_compaction_type_;
     extra_medium_info_.last_medium_scn_ = base_data.extra_medium_info_.last_medium_scn_;
     extra_medium_info_.wait_check_flag_ = base_data.extra_medium_info_.wait_check_flag_;
+
+    LOG_INFO("succeeded to init medium info list", K(ret),
+        "mds_table_medium_info", mds_table_data.medium_info_list_,
+        "base_medium_info", base_data.medium_info_list_,
+        K(finish_medium_scn), K_(medium_info_list), K_(extra_medium_info));
   }
 
   if (OB_FAIL(ret)) {
@@ -552,7 +557,9 @@ int ObTabletMdsData::init_medium_info_list(
   }
 
   if (OB_SUCC(ret)) {
-    LOG_INFO("succeeded to init medium info list", K(ret), KPC(old_medium_info_list), K(finish_medium_scn), K(merge_type),
+    LOG_INFO("succeeded to init medium info list", K(ret),
+        KPC(old_medium_info_list), K(old_extra_medium_info),
+        K(finish_medium_scn), K(merge_type),
         KPC(cur_medium_info_list), K_(extra_medium_info));
   }
 
@@ -593,7 +600,11 @@ int ObTabletMdsData::init_medium_info_list(
       || old_extra_medium_info.last_medium_scn_ < full_memory_medium_info_list.extra_medium_info_.last_medium_scn_) {
       extra_medium_info_.last_compaction_type_ = full_memory_medium_info_list.extra_medium_info_.last_compaction_type_;
       extra_medium_info_.last_medium_scn_ = full_memory_medium_info_list.extra_medium_info_.last_medium_scn_;
-      extra_medium_info_.wait_check_flag_ = true;
+      if (0 == full_memory_medium_info_list.extra_medium_info_.last_medium_scn_) {
+        extra_medium_info_.wait_check_flag_ = false;
+      } else {
+        extra_medium_info_.wait_check_flag_ = true;
+      }
     } else {
       extra_medium_info_.last_compaction_type_ = old_extra_medium_info.last_compaction_type_;
       extra_medium_info_.last_medium_scn_ = old_extra_medium_info.last_medium_scn_;
@@ -602,8 +613,9 @@ int ObTabletMdsData::init_medium_info_list(
   }
 
   if (OB_SUCC(ret)) {
-    LOG_INFO("succeeded to init medium info list", K(ret), KPC(old_medium_info_list), K(old_extra_medium_info), K(full_memory_medium_info_list),
-        K(finish_medium_scn), K(old_extra_medium_info),
+    LOG_INFO("succeeded to init medium info list", K(ret),
+        KPC(old_medium_info_list), K(old_extra_medium_info),
+        K(full_memory_medium_info_list), K(finish_medium_scn),
         KPC(cur_medium_info_list), K_(extra_medium_info));
   }
 
