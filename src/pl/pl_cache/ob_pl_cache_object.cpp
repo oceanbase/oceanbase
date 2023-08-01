@@ -58,7 +58,7 @@ int ObPLCacheObject::set_params_info(const ParamStore &params)
         LOG_WARN("fail to get ext obj data type", K(ret));
       } else {
         param_info.ext_real_type_ = data_type.get_obj_type();
-        param_info.scale_ = data_type.get_meta_type().get_scale();
+        param_info.scale_ = data_type.get_scale();
       }
       LOG_DEBUG("ext params info", K(data_type), K(param_info), K(params.at(i)));
     } else {
