@@ -1755,6 +1755,7 @@ constexpr int OB_ERR_MALFORMED_PS_PACKET = -9747;
 constexpr int OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK = -9748;
 constexpr int OB_ERR_OBJECT_NOT_EXIST = -9749;
 constexpr int OB_ERR_TABLE_OUT_OF_RANGE = -9750;
+constexpr int OB_ERR_WRONG_USAGE = -9751;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -3858,6 +3859,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK__USER_ERROR_MSG "View's SELECT contains a variable or parameter"
 #define OB_ERR_OBJECT_NOT_EXIST__USER_ERROR_MSG "object does not exist"
 #define OB_ERR_TABLE_OUT_OF_RANGE__USER_ERROR_MSG "PL/SQL: index for PL/SQL table out of range for host language array"
+#define OB_ERR_WRONG_USAGE__USER_ERROR_MSG "Incorrect usage of %s"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -5961,6 +5963,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9748, View's SELECT contains a variable or parameter"
 #define OB_ERR_OBJECT_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-06564: object does not exist"
 #define OB_ERR_TABLE_OUT_OF_RANGE__ORA_USER_ERROR_MSG "ORA-06513: PL/SQL: index for PL/SQL table out of range for host language array"
+#define OB_ERR_WRONG_USAGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9751, Incorrect usage of %s"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -5971,7 +5974,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2099];
+extern int g_all_ob_errnos[2100];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

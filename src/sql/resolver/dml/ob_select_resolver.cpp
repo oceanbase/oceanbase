@@ -1283,6 +1283,7 @@ int ObSelectResolver::resolve_query_options(const ParseNode *node)
 {
   int ret = OB_SUCCESS;
   bool is_set_distinct = false;
+  bool is_set_all = false;
   ObSelectStmt *select_stmt = get_select_stmt();
   if (OB_ISNULL(select_stmt)) {
     ret = OB_NOT_INIT;
@@ -1298,6 +1299,8 @@ int ObSelectResolver::resolve_query_options(const ParseNode *node)
       option_node = node->children_[i];
       if (option_node->type_ == T_DISTINCT) {
         is_set_distinct = true;
+      } else if (option_node->type_ == T_ALL) {
+        is_set_all = true;
       } else if (option_node->type_ == T_FOUND_ROWS) {
         if (has_calc_found_rows_) {
           has_calc_found_rows_ = false;
@@ -1311,7 +1314,10 @@ int ObSelectResolver::resolve_query_options(const ParseNode *node)
   }
   if (OB_SUCC(ret)) {
     //默认为all
-    if (is_set_distinct) {
+    if (is_set_all && is_set_distinct) {
+      ret = OB_ERR_WRONG_USAGE;
+      LOG_USER_ERROR(OB_ERR_WRONG_USAGE, "ALL and DISTINCT");
+    } else if (is_set_distinct) {
       select_stmt->assign_distinct();
     } else {
       select_stmt->assign_all();

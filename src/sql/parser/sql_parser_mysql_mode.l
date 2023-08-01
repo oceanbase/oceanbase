@@ -702,6 +702,12 @@ X'([0-9A-F])*'|0X([0-9A-F])+ {
       yyerror(yylloc, yyextra, "hex string contain an even number of digits\n");
       return PARSER_SYNTAX_ERROR;
     }
+  } else {
+    // Values written using 0xval notation NOTE: 0Xval (use upper case 'X') notation is illegal in MySQL
+    if (yytext[1] == 'X') {
+      yyerror(yylloc, yyextra, "hex string with leading '0X' (use upper case 'X') is illegal\n");
+      return PARSER_SYNTAX_ERROR;
+    }
   }
   ParseNode *node = NULL;
   ParseResult *p = (ParseResult *)yyextra;
@@ -738,6 +744,12 @@ B'([01])*'|0B([01])+ {
   if(src[len - 1] == '\'')
   {
     --len;
+  } else {
+    // Values written using 0bval notation NOTE: 0Bval (use upper case 'B') notation is illegal in MySQL
+    if (yytext[1] == 'B') {
+      yyerror(yylloc, yyextra, "bit string with leading '0B' (use upper case 'B') is illegal\n");
+      return PARSER_SYNTAX_ERROR;
+    }
   }
   ParseNode *node = NULL;
   ParseResult *p = (ParseResult *)yyextra;
