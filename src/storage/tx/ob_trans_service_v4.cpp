@@ -67,6 +67,7 @@ int ObTransService::create_ls(const share::ObLSID &ls_id,
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(ls_id));
   } else if (OB_ISNULL(tx_table = ls.get_tx_table())) {
+    ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "get tx table fail", K(ret), K(ls_id));
   } else if (OB_FAIL(tx_ctx_mgr_.create_ls(tenant_id_,
                                            ls_id,
