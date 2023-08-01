@@ -78,6 +78,7 @@ private:
   int fail();
   int success();
   int set_schema_available();
+  int rollback_schema();
   int check_update_autoinc_end(bool &is_end);
   int check_health();
 private:

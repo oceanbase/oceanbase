@@ -96,7 +96,7 @@ int ObUpdateAutoincSequenceTask::process()
           LOG_WARN("set trx timeout failed", K(ret));
         } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
           LOG_WARN("set timeout failed", K(ret));
-        } else if (OB_FAIL(sql.assign_fmt("SELECT /*+no_rewrite*/ CAST(MAX(%s) AS SIGNED) AS MAX_VALUE FROM %s.%s",
+        } else if (OB_FAIL(sql.assign_fmt("SELECT /*+no_rewrite*/ CAST(MAX(`%s`) AS SIGNED) AS MAX_VALUE FROM `%s`.`%s`",
                                     column_schema->get_column_name(),
                                     db_schema->get_database_name(),
                                     table_schema->get_table_name()))) {
@@ -456,10 +456,46 @@ int ObModifyAutoincTask::set_schema_available()
   return ret;
 }
 
+int ObModifyAutoincTask::rollback_schema()
+{
+  int ret = OB_SUCCESS;
+  int64_t tablet_count = 0;
+  int64_t rpc_timeout = 0;
+  ObRootService *root_service = GCTX.root_service_;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObModifyAutoincTask has not been inited", K(ret));
+  } else if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else {
+    ObArenaAllocator allocator;
+    SMART_VAR(ObAlterTableArg, alter_table_arg) {
+      if (OB_FAIL(deep_copy_table_arg(allocator, alter_table_arg_, alter_table_arg))) {
+        LOG_WARN("deep copy table arg failed", K(ret));
+      } else {
+        ObSArray<uint64_t> unused_ids;
+        alter_table_arg.ddl_task_type_ = share::UPDATE_AUTOINC_SCHEMA;
+        alter_table_arg.alter_table_schema_.set_tenant_id(tenant_id_);
+        alter_table_arg.alter_table_schema_.reset_column_info();
+        if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, object_id_, rpc_timeout))) {
+          LOG_WARN("get rpc timeout failed", K(ret));
+        } else if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).
+            execute_ddl_task(alter_table_arg, unused_ids))) {
+          LOG_WARN("alter table failed", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObModifyAutoincTask::fail()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(unlock_table())) {
+  if (OB_FAIL(rollback_schema())) {
+    LOG_WARN("fail to set schema available", K(ret));
+  } else if (OB_FAIL(unlock_table())) {
     LOG_WARN("fail to unlock table", K(ret));
   } else if (OB_FAIL(cleanup())) {
     LOG_WARN("clean up failed", K(ret));
