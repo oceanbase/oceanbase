@@ -458,7 +458,7 @@ struct ObLogPlanHint
   bool pushdown_distinct() const { return has_enable_hint(T_DISTINCT_PUSHDOWN); }
   bool no_pushdown_distinct() const { return has_disable_hint(T_DISTINCT_PUSHDOWN); }
   bool use_distributed_dml() const { return has_enable_hint(T_USE_DISTRIBUTED_DML); }
-  bool no_use_distributed_dml() const { return has_disable_hint(T_NO_USE_DISTRIBUTED_DML); }
+  bool no_use_distributed_dml() const { return has_disable_hint(T_USE_DISTRIBUTED_DML); }
 
   const ObWindowDistHint *get_window_dist() const;
 

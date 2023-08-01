@@ -12698,7 +12698,11 @@ int ObDMLResolver::resolve_transform_hint(const ParseNode &hint_node,
     case T_NO_PUSH_LIMIT:
     case T_NO_REWRITE:
     case T_PULLUP_EXPR:
-    case T_NO_PULLUP_EXPR: {
+    case T_NO_PULLUP_EXPR:
+    case T_AGGR_FIRST_UNNEST:
+    case T_NO_AGGR_FIRST_UNNEST:
+    case T_JOIN_FIRST_UNNEST:
+    case T_NO_JOIN_FIRST_UNNEST: {
       if (OB_FAIL(resolve_normal_transform_hint(hint_node, trans_hint))) {
         LOG_WARN("failed to resolve hint with qb name param.", K(ret));
       }

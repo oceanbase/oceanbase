@@ -431,7 +431,8 @@ private:
   {
     return TEMP_TABLE_OPTIMIZATION == transformer_type_ // move trans loc in transform rule
            || POST_PROCESS == transformer_type_ // need not move trans loc
-           || PRE_PROCESS == transformer_type_; // need not move trans loc
+           || PRE_PROCESS == transformer_type_ // need not move trans loc
+           || AGGR_SUBQUERY == transformer_type_; // move trans loc in transform rule
   }
 
   bool skip_adjust_qb_name() const   // qb name adjust by transform rule

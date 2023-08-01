@@ -1559,17 +1559,10 @@ int ObTransformGroupByPushdown::construct_transform_hint(ObDMLStmt &stmt, void *
     hint->set_qb_name(ctx_->src_qb_name_);
     for (int64_t i = 0; OB_SUCC(ret) && i < transed_tables->count(); ++i) {
       ObSEArray<ObTableInHint, 4> single_or_joined_hint_table;
-      for (int64_t j = 0; OB_SUCC(ret) && j < transed_tables->at(i).count(); ++j) {
-        TableItem *table = transed_tables->at(i).at(j);
-        if (OB_ISNULL(table)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(single_or_joined_hint_table.push_back(ObTableInHint(table->qb_name_,
-                                              table->database_name_, table->get_object_name())))) {
-          LOG_WARN("failed to push back hint table", K(ret));
-        }
-      }
-      if (OB_SUCC(ret) && OB_FAIL(hint->get_tb_name_list().push_back(single_or_joined_hint_table))) {
+      if (OB_FAIL(ObTransformUtils::get_sorted_table_hint(transed_tables->at(i),
+                                                          single_or_joined_hint_table))) {
+        LOG_WARN("failed to get table hint", K(ret));
+      } else if (OB_FAIL(hint->get_tb_name_list().push_back(single_or_joined_hint_table))) {
         LOG_WARN("failed to push back table name list", K(ret));
       }
     }

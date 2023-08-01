@@ -1777,6 +1777,8 @@ public:
                                             ObRawExpr *expr,
                                             ObIArray<ObRawExpr*> &exprs,
                                             bool &trans_happened);
+    // used to stable outline
+  static int get_sorted_table_hint(ObSEArray<TableItem *, 4> &tables, ObIArray<ObTableInHint> &table_hints);
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,

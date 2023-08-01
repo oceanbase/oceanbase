@@ -44,9 +44,6 @@ public:
                                  bool &trans_happened) override;
 protected:
   virtual int check_hint_status(const ObDMLStmt &stmt, bool &need_trans) override;
-  virtual int transform_one_stmt_with_outline(common::ObIArray<ObParentDMLStmt> &parent_stmts,
-                                              ObDMLStmt *&stmt,
-                                              bool &trans_happened) override;
   virtual int construct_transform_hint(ObDMLStmt &stmt, void *trans_params) override;
 private:
 
@@ -96,16 +93,18 @@ private:
 
   struct TransStmtInfo {
     TransStmtInfo()
-    : qb_name_(), unnest_(nullptr) {}
+    : qb_name_(), unnest_(nullptr), pullup_strategy_(AGGR_FIRST) {}
     int assign(const TransStmtInfo& other)
     {
       qb_name_ = other.qb_name_;
       unnest_ = other.unnest_;
+      pullup_strategy_ = other.pullup_strategy_;
       return common::OB_SUCCESS;
     }
-    TO_STRING_KV(K_(qb_name), KPC_(unnest));
+    TO_STRING_KV(K_(qb_name), KPC_(unnest), K_(pullup_strategy));
     common::ObString qb_name_;
     const ObHint *unnest_;
+    int64_t pullup_strategy_;
   };
 
   int do_transform(ObDMLStmt *&stmt, bool &trans_happened);
@@ -269,16 +268,19 @@ private:
   int transform_with_aggr_first_for_having(ObDMLStmt *&stmt, bool &trans_happened);
   int check_hint_allowed_unnest(ObDMLStmt &stmt,
                                 ObSelectStmt &subquery,
+                                const int64_t hint_loc,
+                                const int64_t pullup_strategy,
                                 bool &allowed);
-  int add_trans_stmt_info(ObSelectStmt &subquery);
+  int add_trans_stmt_info(ObSelectStmt &subquery, int64_t flag);
   int check_limit_validity(ObSelectStmt &subquery, 
                            bool &add_limit_constraints,
                            int64_t &limit_value, 
                            bool &is_valid);
   int add_constraints_for_limit(TransformParam &param);
 
-  int convert_limit_as_aggr(ObSelectStmt *subquery,
-                            TransformParam &trans_param);
+  int convert_limit_as_aggr(ObSelectStmt *subquery, TransformParam &trans_param);
+  ObHint* get_sub_unnest_hint(ObSelectStmt &subquery, int64_t pullup_strategy);
+  ObItemType get_unnest_strategy(int64_t pullup_strategy);
 private:
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> no_rewrite_exprs_;
   common::ObSEArray<TransStmtInfo, 4, common::ModulePageAllocator, true> trans_stmt_infos_;

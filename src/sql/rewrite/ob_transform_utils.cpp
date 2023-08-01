@@ -12041,6 +12041,32 @@ int ObTransformUtils::construct_trans_tables(const ObDMLStmt *stmt,
   return ret;
 }
 
+int ObTransformUtils::get_sorted_table_hint(ObSEArray<TableItem *, 4> &tables,
+                                            ObIArray<ObTableInHint> &table_hints) {
+  int ret = OB_SUCCESS;
+  if (tables.count() > 1) {
+    auto cmp_func = [](TableItem* a, TableItem* b) {
+      if (OB_ISNULL(a) || OB_ISNULL(b)) {
+        return false;
+      } else {
+        return a->table_id_ > b->table_id_;
+      }
+    };
+    std::sort(tables.begin(), tables.end(), cmp_func);
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
+    TableItem *table = tables.at(i);
+    if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(table_hints.push_back(
+               ObTableInHint(table->qb_name_, table->database_name_, table->get_object_name())))) {
+      LOG_WARN("failed to push back hint table", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTransformUtils::construct_trans_table(const ObDMLStmt *stmt,
                                               const TableItem *table,
                                               ObIArray<TableItem *> &trans_tables)

@@ -435,6 +435,8 @@ public:
   bool is_view_merge_hint() const { return HINT_VIEW_MERGE == hint_class_; }
   bool is_pred_deduce_hint() const { return T_PRED_DEDUCE == hint_type_; }
   bool is_unnest_hint() const { return T_UNNEST == hint_type_; }
+  bool is_aggr_first_unnest_hint() const { return T_AGGR_FIRST_UNNEST == hint_type_; }
+  bool is_join_first_unnest_hint() const { return T_JOIN_FIRST_UNNEST == hint_type_; }
   bool is_coalesce_sq_hint() const { return HINT_COALESCE_SQ == hint_class_; }
   bool is_materialize_hint() const { return HINT_MATERIALIZE == hint_class_; }
   bool is_semi_to_inner_hint() const { return HINT_SEMI_TO_INNER == hint_class_; }

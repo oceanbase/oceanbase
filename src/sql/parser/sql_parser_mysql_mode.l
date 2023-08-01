@@ -1100,6 +1100,10 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>NO_WIN_MAGIC { return NO_WIN_MAGIC; }
 <hint>PULLUP_EXPR { return PULLUP_EXPR; }
 <hint>NO_PULLUP_EXPR { return NO_PULLUP_EXPR; }
+<hint>AGGR_FIRST_UNNEST { return AGGR_FIRST_UNNEST; }
+<hint>NO_AGGR_FIRST_UNNEST { return NO_AGGR_FIRST_UNNEST; }
+<hint>JOIN_FIRST_UNNEST { return JOIN_FIRST_UNNEST; }
+<hint>NO_JOIN_FIRST_UNNEST { return NO_JOIN_FIRST_UNNEST; }
 <hint>OPT_PARAM { return OPT_PARAM; }
 <hint>OB_DDL_SCHEMA_VERSION { return OB_DDL_SCHEMA_VERSION; }
 <hint>DYNAMIC_SAMPLING { return DYNAMIC_SAMPLING; }
