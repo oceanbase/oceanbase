@@ -1239,7 +1239,7 @@ int ObTransformJoinElimination::left_join_can_be_eliminated(ObDMLStmt *stmt,
         } else if (got_result) {
           can_be_eliminated = value.is_false();
           // add constraints
-          if (condition->is_static_const_expr()) {
+          if (can_be_eliminated) {
             if (OB_FAIL(ObTransformUtils::add_param_bool_constraint(ctx_, condition, false))) {
               LOG_WARN("failed to add param bool constraint", K(ret));
             }

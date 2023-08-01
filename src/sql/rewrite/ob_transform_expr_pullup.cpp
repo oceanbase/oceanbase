@@ -269,7 +269,7 @@ int ObExprNodeMap::add_expr_map(ObRawExpr *expr)
   bool is_exist = false;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (expr->is_const_or_param_expr()) {
+  } else if (expr->is_const_expr()) {
     // do nothing
   } else {
     ExprCounter counter;
