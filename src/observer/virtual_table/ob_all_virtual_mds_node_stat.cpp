@@ -5,6 +5,7 @@
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_print_utils.h"
 #include "share/ob_ls_id.h"
+#include "share/rc/ob_tenant_base.h"
 #include "storage/multi_data_source/runtime_utility/common_define.h"
 #include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
 #include "storage/tablet/ob_tablet.h"
@@ -30,7 +31,7 @@ int ObAllVirtualMdsNodeStat::inner_get_next_row(common::ObNewRow *&row)
       char *temp_buffer = nullptr;
       char *to_string_buffer = nullptr;
       constexpr int64_t BUFFER_SIZE = 32_MB;
-      if (OB_ISNULL(temp_buffer = (char *)ob_malloc(BUFFER_SIZE, "VirMdsStat"))) {
+      if (OB_ISNULL(temp_buffer = (char *)mtl_malloc(BUFFER_SIZE, "VirMdsStat"))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         MDS_LOG(WARN, "fail to alloc buffer", K(MTL_ID()), K(*this));
       } else {
@@ -82,7 +83,7 @@ int ObAllVirtualMdsNodeStat::inner_get_next_row(common::ObNewRow *&row)
           scanner_it_ = scanner_.begin();
           start_to_read_ = true;
         }
-        ob_free(temp_buffer);
+        mtl_free(temp_buffer);
       }
     }
   }
