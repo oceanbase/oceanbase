@@ -8147,7 +8147,7 @@ int ObPLResolver::build_raw_expr(const ParseNode *node,
     } else {
       // do nothing
     }
-    if (OB_SUCCESS == tmp_ret) {
+    if (OB_SUCCESS == tmp_ret && !columns.at(0).col_name_.empty()) {
     // we don't want the ret code to be cover intendedly
       if (OB_SUCCESS != (tmp_ret = ns.resolve_symbol(columns.at(0).col_name_,
                                           type,

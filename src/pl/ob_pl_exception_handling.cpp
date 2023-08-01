@@ -411,7 +411,7 @@ int ObPLEH::match_action_value(const ObPLConditionValue *action, const ObPLCondi
       break;
     }
     case SQL_EXCEPTION: {
-      precedence = eh_classify_exception(exception->sql_state_) == SQL_EXCEPTION ? SQL_EXCEPTION : INVALID_TYPE;
+      precedence = (eh_classify_exception(exception->sql_state_) == SQL_EXCEPTION) && !is_internal_error(exception->error_code_) ? SQL_EXCEPTION : INVALID_TYPE;
       break;
     }
     case SQL_WARNING: {

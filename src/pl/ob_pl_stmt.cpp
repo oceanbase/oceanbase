@@ -1654,33 +1654,28 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
   }
     break;
   case PKG_NS: {
-    if (lib::is_mysql_mode()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("package is not supported in Mysql mode", K(type), K(ret));
-    } else {
-      int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
-                                                      : COMPATIBLE_MYSQL_MODE;
-      uint64_t tenant_id = session_info.get_effective_tenant_id();
-      uint64_t package_id = OB_INVALID_ID;
+    int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
+                                                    : COMPATIBLE_MYSQL_MODE;
+    uint64_t tenant_id = session_info.get_effective_tenant_id();
+    uint64_t package_id = OB_INVALID_ID;
 
-      if (OB_FAIL(schema_guard.get_package_id(tenant_id, parent_id, name, share::schema::PACKAGE_TYPE,
-                                              compatible_mode, package_id))) {
-        LOG_WARN("get package id failed", K(ret));
-      } else if (OB_INVALID_ID == package_id) {
-        if (is_oceanbase_sys_database_id(parent_id)) {
-          if (OB_FAIL(schema_guard.get_package_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID,
-              name, share::schema::PACKAGE_TYPE, compatible_mode, package_id))) {
-            LOG_WARN("get package id failed", K(ret));
-          }
+    if (OB_FAIL(schema_guard.get_package_id(tenant_id, parent_id, name, share::schema::PACKAGE_TYPE,
+                                            compatible_mode, package_id))) {
+      LOG_WARN("get package id failed", K(ret));
+    } else if (OB_INVALID_ID == package_id) {
+      if (is_oceanbase_sys_database_id(parent_id)) {
+        if (OB_FAIL(schema_guard.get_package_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID,
+            name, share::schema::PACKAGE_TYPE, compatible_mode, package_id))) {
+          LOG_WARN("get package id failed", K(ret));
         }
       }
-      if (OB_SUCC(ret)) {
-        if (OB_INVALID_ID == package_id) {
-          type = ObPLExternalNS::INVALID_VAR;
-          LOG_WARN("package not exist", K(ret), K(parent_id), K(name));
-        } else {
-          var_idx = static_cast<int64_t>(package_id);
-        }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_INVALID_ID == package_id) {
+        type = ObPLExternalNS::INVALID_VAR;
+        LOG_WARN("package not exist", K(ret), K(parent_id), K(name));
+      } else {
+        var_idx = static_cast<int64_t>(package_id);
       }
     }
   }
@@ -1689,7 +1684,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
     if (lib::is_mysql_mode()
         && get_tenant_id_by_object_id(parent_id) != OB_SYS_TENANT_ID
         && session_info.get_effective_tenant_id() != OB_SYS_TENANT_ID) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_NOT_SUPPORTED;
       LOG_WARN("package is not supported in Mysql mode", K(type), K(ret));
     } else {
       const share::schema::ObPackageInfo *package_info_resolve = NULL;
