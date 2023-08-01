@@ -369,7 +369,7 @@ int ObTableLoadTransBucketWriter::get_load_bucket(SessionContext &session_ctx,
                                                   const ObTableLoadPartitionId &partition_id,
                                                   ObTableLoadBucket *&load_bucket)
 {
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(get_part_bucket_time_us);
+  OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, get_part_bucket_time_us);
   int ret = OB_SUCCESS;
   load_bucket = nullptr;
   if (OB_UNLIKELY(!is_partitioned_)) {

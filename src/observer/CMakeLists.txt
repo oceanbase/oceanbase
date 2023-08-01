@@ -200,6 +200,7 @@ ob_set_subtarget(ob_server table_load
   table_load/ob_table_load_instance.cpp
   table_load/ob_table_load_multiple_heap_table_compactor.cpp
   table_load/ob_table_load_redef_table.cpp
+  table_load/ob_table_load_stat.cpp
 )
 
 ob_set_subtarget(ob_server virtual_table

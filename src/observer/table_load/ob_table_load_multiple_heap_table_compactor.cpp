@@ -89,7 +89,7 @@ public:
   }
   int process() override
   {
-    OB_TABLE_LOAD_STATISTICS_TIME_COST(table_compactor_time_us);
+    OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, table_compactor_time_us);
     int ret = OB_SUCCESS;
     // alloc dir id
     if (OB_FAIL(mem_ctx_->file_mgr_->alloc_dir(index_dir_id_))) {
