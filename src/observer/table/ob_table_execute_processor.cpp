@@ -397,3 +397,12 @@ ObTableAPITransCb *ObTableApiExecuteP::new_callback(rpc::ObRequest *req)
   }
   return cb;
 }
+
+int ObTableApiExecuteP::before_response(int error_code)
+{
+  // NOTE: when check_timeout failed, the result.entity_ is null, and serialize result cause coredump
+  if (!did_async_end_trans() && OB_ISNULL(result_.get_entity())) {
+    result_.set_entity(result_entity_);
+  }
+  return ObTableRpcProcessor::before_response(error_code);
+}
