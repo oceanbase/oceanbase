@@ -1682,7 +1682,7 @@ void ObBlockManager::InspectBadBlockTask::inspect_bad_block()
         LOG_WARN("fail to get macro block info", K(ret), K(macro_id), K(last_macro_idx_));
       } else if (!block_info.is_free_ && block_info.ref_cnt_ > 0
       #ifdef ERRSIM
-                && (begin_time - block_info.access_time_) > 0) {
+                && (begin_time - block_info.access_time_) > 10_s) {
         LOG_INFO("errsim bad block: start check macro block", K(block_info));
       #else
                 && (begin_time - block_info.access_time_) > ACCESS_TIME_INTERVAL) {
