@@ -3779,13 +3779,13 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                                               time_record,
                                               ret,
                                               session_info->get_current_execution_id(),
-                                              OB_INVALID_ID, // ps stmt id FIXME@hr351303
+                                              cursor.is_ps_cursor() ? cursor.get_id() : OB_INVALID_ID,
                                               max_wait_desc,
                                               total_wait_desc,
                                               exec_record,
                                               exec_timestamp,
                                               true,
-                                              exec_params.count() > 0 ? ps_sql : sql_str,
+                                              (exec_params.count() > 0 || cursor.is_ps_cursor()) ? ps_sql : sql_str,
                                               true);
         session_info->get_raw_audit_record().exec_record_ = record_bk;
         session_info->get_raw_audit_record().try_cnt_ = try_cnt;
@@ -3876,13 +3876,13 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                                                   time_record,
                                                   ret,
                                                   session_info->get_current_execution_id(),
-                                                  OB_INVALID_ID, // ps stmt id FIXME@hr351303
+                                                  cursor.is_ps_cursor() ? cursor.get_id() : OB_INVALID_ID,
                                                   max_wait_desc,
                                                   total_wait_desc,
                                                   exec_record,
                                                   exec_timestamp,
                                                   true,
-                                                  exec_params.count() > 0 ? ps_sql : sql_str,
+                                                  (exec_params.count() > 0 || cursor.is_ps_cursor()) ? ps_sql : sql_str,
                                                   true);
             session_info->get_raw_audit_record().exec_record_ = record_bk;
             session_info->get_raw_audit_record().try_cnt_ = retry_cnt;
