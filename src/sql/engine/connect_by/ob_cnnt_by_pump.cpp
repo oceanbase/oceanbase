@@ -148,7 +148,8 @@ int ObConnectByOpPump::push_back_store_row()
     LOG_WARN("deep copy row failed", K(ret));
   } else if (OB_FAIL(datum_store_.add_row(*dst_row))) {
     LOG_WARN("datum store add row failed", K(ret));
-  } else if (OB_NOT_NULL(dst_row)) {
+  }
+  if (OB_NOT_NULL(dst_row)) {
     allocator_.free(const_cast<ObChunkDatumStore::StoredRow *>(dst_row));
     dst_row = NULL;
   }
