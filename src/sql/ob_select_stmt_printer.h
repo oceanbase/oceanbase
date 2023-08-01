@@ -59,7 +59,7 @@ public:
   virtual int do_print();
   static int remove_double_quotation_for_string(ObString &alias_string, ObIAllocator &allocator);
   void set_column_list(common::ObIArray<common::ObString> *column_list) { column_list_ = column_list; }
-
+  static int set_synonym_name_recursively(ObRawExpr * cur_expr, const ObDMLStmt *stmt);
   bool need_print_alias() const { return force_col_alias_ || (is_root_stmt() && print_params_.print_origin_stmt_); }
 
 private:
