@@ -117,7 +117,7 @@ public:
   // check status on serialized medium list
   OB_INLINE bool could_schedule_next_round() const
   {
-    return !wait_check_flag_ && medium_info_list_.is_empty();
+    return get_wait_check_medium_scn() == 0 && medium_info_list_.is_empty();
   }
   const ObMediumCompactionInfo *get_next_schedule_medium_info(const int64_t last_major_snapshot) const;
   OB_INLINE ObMediumCompactionInfo::ObCompactionType get_last_compaction_type() const
