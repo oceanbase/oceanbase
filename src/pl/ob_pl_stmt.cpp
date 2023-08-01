@@ -1374,10 +1374,10 @@ int ObPLExternalNS::search_in_standard_package(const common::ObString &name,
       if (OB_FAIL(package_manager.get_package_type(resolve_ctx_,
                                                    standard_package_id,
                                                    name,
-                                                   user_type))) {
+                                                   user_type,
+                                                   false))) {
         if (OB_ERR_SP_UNDECLARED_TYPE == ret) {
           LOG_INFO("get standard package type not exist!", K(ret), K(standard_package_id), K(name));
-          ob_reset_tsi_warning_buffer();
           type = ObPLExternalNS::INVALID_VAR;
           ret = OB_SUCCESS;
         } else {
@@ -1715,10 +1715,10 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
             if (OB_FAIL(package_manager.get_package_type(resolve_ctx_,
                                                          parent_id,
                                                          name,
-                                                         user_type))) {
+                                                         user_type,
+                                                         false))) {
               LOG_WARN("failed to get package type", K(ret), K(parent_id), K(name));
               if (OB_ERR_SP_UNDECLARED_TYPE == ret) {
-                ob_reset_tsi_warning_buffer();
                 type = ObPLExternalNS::INVALID_VAR;
                 ret = OB_SUCCESS;
               }

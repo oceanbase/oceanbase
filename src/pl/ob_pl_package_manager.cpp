@@ -439,8 +439,11 @@ int ObPLPackageManager::get_package_var(const ObPLResolveCtx &resolve_ctx, uint6
   return ret;
 }
 
-int ObPLPackageManager::get_package_type(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
-                                         const ObString &type_name, const ObUserDefinedType *&user_type)
+int ObPLPackageManager::get_package_type(const ObPLResolveCtx &resolve_ctx,
+                                         uint64_t package_id,
+                                         const ObString &type_name,
+                                         const ObUserDefinedType *&user_type,
+                                         bool log_user_error)
 {
   int ret = OB_SUCCESS;
   user_type = NULL;
@@ -461,7 +464,9 @@ int ObPLPackageManager::get_package_type(const ObPLResolveCtx &resolve_ctx, uint
       } else if (OB_ISNULL(user_type)) {
         ret = OB_ERR_SP_UNDECLARED_TYPE;
         LOG_WARN("package type not found", K(package_id), K(type_name), K(ret));
-        LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_TYPE, type_name.length(), type_name.ptr());
+        if (log_user_error) {
+          LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_TYPE, type_name.length(), type_name.ptr());
+        } else {}
       } else {}
     }
   }
