@@ -371,6 +371,7 @@ public:
   ObTableOperationType::Type type() const { return operation_type_; }
   int get_entity(const ObITableEntity *&entity) const;
   int get_entity(ObITableEntity *&entity);
+  ObITableEntity *get_entity() { return entity_; }
   int64_t get_affected_rows() const { return affected_rows_; }
 
   void set_entity(ObITableEntity &entity) { entity_ = &entity; }

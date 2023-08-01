@@ -45,6 +45,7 @@ protected:
   table::ObTableAPITransCb *new_callback(rpc::ObRequest *req) override;
   virtual void audit_on_finish() override;
   virtual uint64_t get_request_checksum() override;
+  virtual int before_response(int error_code) override;
 
 private:
   int init_tb_ctx();
