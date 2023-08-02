@@ -29,6 +29,7 @@ const ObColumnHeader::Type ObColumnEqualEncoder::type_;
 ObColumnEqualEncoder::ObColumnEqualEncoder()
   : ref_col_idx_(-1), exc_row_ids_(), store_class_(ObMaxSC), ref_ctx_(NULL)
 {
+  exc_row_ids_.set_attr(ObMemAttr(MTL_ID(), "ColEqEncoder"));
 }
 
 ObColumnEqualEncoder::~ObColumnEqualEncoder()
