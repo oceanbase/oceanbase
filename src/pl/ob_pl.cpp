@@ -955,6 +955,13 @@ int ObPLContext::set_exec_env(ObPLFunction &routine)
     OZ (routine.get_exec_env().store(*session_info_));
     OX (need_reset_exec_env_ = true);
   }
+
+  // always restore sql_mode in mysql mode,
+  // because sql_mode may be change inside PL.
+  if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+    OX(need_reset_exec_env_ = true);
+  }
+
   return ret;
 }
 
