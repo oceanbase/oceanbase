@@ -37,6 +37,11 @@
     value: True
     when_come_from: [4.0.0.0, 4.1.0.0-100000192023032010]
 
+- version: 4.2.0.0-100000152023080109   # 4.2 RC2版本 不能作为目标版本
+  can_be_upgraded_to:
+    - 4.2.0.0
+  deprecated: True
+
 - version: 4.2.0.0
   can_be_upgraded_to:
       - 4.3.0.0
