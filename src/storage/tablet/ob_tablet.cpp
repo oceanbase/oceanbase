@@ -1377,7 +1377,7 @@ int ObTablet::deserialize(
   } else if (OB_FAIL(serialization::decode_i32(buf, len, new_pos, (int32_t *)&length_))) {
     LOG_WARN("failed to deserialize tablet meta's length", K(ret), K(len), K(new_pos));
   } else if (TABLET_VERSION_V2 != version_) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_NOT_SUPPORTED;
     LOG_WARN("invalid version", K(ret), K_(version));
   } else {
     if (OB_UNLIKELY(length_ > len - pos)) {

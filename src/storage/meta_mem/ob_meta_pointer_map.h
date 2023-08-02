@@ -564,7 +564,7 @@ int ObMetaPointerMap<Key, T>::load_meta_obj(
     if (OB_SUCC(ret)) {
       t->tablet_addr_ = load_addr;
       if (OB_FAIL(meta_pointer->deserialize(buf, buf_len, t))) {
-        STORAGE_LOG(ERROR, "fail to deserialize object", K(ret), K(key), KPC(meta_pointer));
+        STORAGE_LOG(WARN, "fail to deserialize object", K(ret), K(key), KPC(meta_pointer));
       }
     }
   }
