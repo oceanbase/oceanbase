@@ -6966,18 +6966,28 @@ int ObPartTransCtx::supplement_undo_actions_if_exist_()
   int ret = OB_SUCCESS;
 
   ObTxTable *tx_table = nullptr;
+  ObTxDataGuard guard;
   ObTxDataGuard tmp_tx_data_guard;
   tmp_tx_data_guard.reset();
   ctx_tx_data_.get_tx_table(tx_table);
+  const ObTxData *tx_data = nullptr;
 
-  if (OB_FAIL(ctx_tx_data_.deep_copy_tx_data_out(tmp_tx_data_guard))) {
-    TRANS_LOG(WARN, "deep copy tx data in ctx tx data failed.", KR(ret), K(ctx_tx_data_), KPC(this));
-  } else if (OB_FAIL(tx_table->supplement_undo_actions_if_exist(tmp_tx_data_guard.tx_data()))) {
+  if (OB_FAIL(ctx_tx_data_.get_tx_data(guard))) {
+    TRANS_LOG(ERROR, "get tx data from ctx tx data failed", KR(ret));
+  } else if (OB_NOT_NULL(guard.tx_data()->undo_status_list_.head_)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "invalid ctx tx data", KR(ret), KPC(tx_data));
+  } else if (OB_FAIL(ctx_tx_data_.deep_copy_tx_data_out(tmp_tx_data_guard))) {
+    TRANS_LOG(WARN, "deep copy tx data in ctx tx data failed.", KR(ret),
+              K(ctx_tx_data_), KPC(this));
+  } else if (OB_FAIL(tx_table->supplement_undo_actions_if_exist(
+                 tmp_tx_data_guard.tx_data()))) {
     TRANS_LOG(
       WARN,
       "supplement undo actions to a tx data when replaying a transaction from the middle failed.",
       KR(ret), K(ctx_tx_data_), KPC(this));
-  } else if (OB_FAIL(ctx_tx_data_.replace_tx_data(tmp_tx_data_guard.tx_data()))) {
+  } else if (OB_FAIL(
+                 ctx_tx_data_.replace_tx_data(tmp_tx_data_guard.tx_data()))) {
     TRANS_LOG(WARN, "replace tx data in ctx tx data failed.", KR(ret), K(ctx_tx_data_), KPC(this));
   }
 

@@ -523,10 +523,10 @@ public:
 private:
   bool is_leak_debug_ = false;
 
+#undef OB_SLICE_LBT_BUFF_LENGTH
+
 #endif
 
-#undef OB_SLICE_LBT_BUFF_LENGTH
-#undef OB_ENABLE_SLICE_ALLOC_LEAK_DEBUG
 /******************************************** debug code *********************************************/
 
 };
