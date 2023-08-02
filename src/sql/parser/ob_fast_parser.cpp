@@ -394,9 +394,7 @@ int ObFastParserBase::process_interval()
     int next_pos = is_interval_pricision_with_space(raw_sql_.cur_pos_); \
     if (-1 != next_pos) { \
       raw_sql_.cur_pos_ = next_pos; \
-      if (!is_second) { \
-        back_pos = raw_sql_.cur_pos_; \
-      } \
+      back_pos = raw_sql_.cur_pos_; \
       ch = raw_sql_.char_at(raw_sql_.cur_pos_); \
       while (IS_MULTI_SPACE(raw_sql_.cur_pos_, byte_len)) { \
         ch = raw_sql_.scan(byte_len); \
