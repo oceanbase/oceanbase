@@ -344,7 +344,7 @@ int ObSelectStmt::create_select_list_for_set_stmt(ObRawExprFactory &expr_factory
       res_type.reset();
       new_select_item.alias_name_ = child_select_item.alias_name_;
       new_select_item.expr_name_ = child_select_item.expr_name_;
-      new_select_item.is_real_alias_ = true;
+      new_select_item.is_real_alias_ = child_select_item.is_real_alias_ || child_select_item.expr_->is_column_ref_expr();
       res_type = child_select_item.expr_->get_result_type();
       if (OB_FAIL(ObRawExprUtils::make_set_op_expr(expr_factory, i, set_op_type, res_type,
                                                    NULL, new_select_item.expr_))) {

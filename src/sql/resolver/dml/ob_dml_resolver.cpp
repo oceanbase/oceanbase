@@ -14380,14 +14380,17 @@ int ObDMLResolver::resolve_cte_table(
   const ParseNode *table_node = &parse_tree;
   const ParseNode *alias_node = nullptr;
   const ParseNode *transpose_node = nullptr;
+  const ParseNode *part_node = nullptr;
   ObString alias_name;
   ObString old_cte_table_name;
   //TODO 存在同一张表有两个hint的情况，目前实现先忽略后面的hint
   if (T_ORG == parse_tree.type_) {
     table_node = parse_tree.children_[0];
+    part_node = parse_tree.children_[2];
   } else if (T_ALIAS == parse_tree.type_) {
     table_node = parse_tree.children_[0];
     alias_node = parse_tree.children_[1];
+    part_node = parse_tree.children_[3];
     if (parse_tree.num_child_ >= 7) {
       transpose_node = parse_tree.children_[6];
     }
@@ -14405,6 +14408,9 @@ int ObDMLResolver::resolve_cte_table(
         LOG_WARN("param is null");
       } else if (OB_ISNULL(node = CTE_table_item->node_)) {
         LOG_WARN("CTE table's parser node can not be NULL");
+      } else if (is_oracle_mode() && OB_NOT_NULL(part_node)) {
+        ret = OB_ERR_PARTITION_EXTENDED_ON_VIEW;
+        LOG_WARN("partition extended only be used with tables and editioning views", K(ret));
       } else if (OB_ISNULL(table_item = dml_stmt->create_table_item(*allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("create table item failed", K(ret));
