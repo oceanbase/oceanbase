@@ -1225,6 +1225,9 @@ int ObStartPrepareMigrationTask::wait_transfer_tablets_ready_()
         //do nothing
       } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(false/*get_commit*/, tablet, user_data))) {
         LOG_WARN("failed to get tablet status", K(ret), KPC(tablet));
+        if (OB_EMPTY_RESULT == ret) {
+          ret = OB_SUCCESS;
+        }
       } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
           && ObTabletStatus::TRANSFER_OUT_DELETED != user_data.tablet_status_) {
         //do nothing

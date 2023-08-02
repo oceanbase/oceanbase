@@ -1039,6 +1039,8 @@ int ObLSRebuildMgr::generate_rebuild_task_()
       //overwrite ret
       if (OB_FAIL(ls->get_log_handler()->get_election_leader(leader_addr))) {
         LOG_WARN("failed to get election leader", K(ret), KPC(ls), K(tenant_id));
+      } else {
+        paxos_replica_num = 1;
       }
     } else {
       //TODO(muwei.ym) do not use leader as src in 4.3
