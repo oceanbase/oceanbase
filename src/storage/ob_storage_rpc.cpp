@@ -1732,8 +1732,9 @@ int ObFetchLSMetaInfoP::process()
       LOG_WARN("failed to get ls meta package", K(ret), K(arg_));
     } else if (OB_FAIL(ObStorageHAUtils::get_server_version(result_.version_))) {
       LOG_WARN("failed to get server version", K(ret), K_(arg));
-    } else if (OB_FAIL(check_has_transfer_logical_table_(ls))) {
-      LOG_WARN("failed to check has transfer logical table", K(ret), KP(ls));
+    } else {
+      // TODO(yangyi.yyy): do not check transfer table for now, fix in 4.3
+      result_.has_transfer_table_ = false;
     }
   }
   return ret;
