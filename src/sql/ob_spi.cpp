@@ -6870,9 +6870,15 @@ int ObSPIService::store_datums(ObObj &dest_addr, const ObIArray<ObObj> &obj_arra
       } else {
         ObPLComposite *composite = reinterpret_cast<ObPLComposite*>(dest_addr.get_ext());
         ObPLRecord *record = NULL;
-        if (NULL == composite || !composite->is_record()) {
+        if (NULL == composite) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected composite to store datum", KPC(composite), K(dest_addr), K(obj_array), K(ret));
+        } else if (!composite->is_record()) {
+          // user_defined_sql_type can be cast into pl_extend, so it cannot be blocked in the front,
+          // but it is not allowed to be written into varray.
+          // Inserting user_defined_sql_type into the PL_VARRAY_TYPE type will take this part of the logic.
+          ret = OB_ERR_INTO_EXPR_ILLEGAL;
+          LOG_WARN("PLS-00597: expression 'string' in the INTO list is of wrong type", K(ret));
         } else if (OB_ISNULL(record = static_cast<ObPLRecord*>(composite))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected record to store datum", KPC(record), KPC(composite), K(ret));
