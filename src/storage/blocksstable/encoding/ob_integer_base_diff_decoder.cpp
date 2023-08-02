@@ -658,7 +658,7 @@ int ObIntegerBaseDiffDecoder::get_aggregate_result(
           row_id = row_ids[i];
           value = 0;
           MEMCPY(&value, col_data + data_offset + row_id * header_->length_, header_->length_);
-          if((is_min && value < res_value) || (!is_min && value > res_value)){
+          if (( is_min && value < res_value) || (!is_min && value > res_value)){
             res_value = value;
           }
         }

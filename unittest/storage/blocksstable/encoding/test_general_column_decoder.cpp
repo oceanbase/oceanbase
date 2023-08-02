@@ -46,6 +46,13 @@ public:
   virtual ~TestRLEDecoder() {}
 };
 
+class TestConstDecoder : public TestColumnDecoder
+{
+public:
+  TestConstDecoder() : TestColumnDecoder(ObColumnHeader::Type::RLE) {}
+  virtual ~TestConstDecoder() {}
+};
+
 class TestIntBaseDiffDecoder : public TestColumnDecoder
 {
 public:
@@ -131,19 +138,55 @@ public:
 //   batch_decode_to_datum_test();
 // }
 
-TEST_F(TestDictDecoder, get_min_or_max_test)
+TEST_F(TestDictDecoder, get_min_or_max_test_tt)
 {
-  agg_min_or_max_test();
+  agg_min_or_max_test(true, true);
+}
+TEST_F(TestDictDecoder, get_min_or_max_test_ft)
+{
+  agg_min_or_max_test(false, true);
+}
+TEST_F(TestDictDecoder, get_min_or_max_test_tf)
+{
+  agg_min_or_max_test(true, false);
+}
+TEST_F(TestDictDecoder, get_min_or_max_test_ff)
+{
+  agg_min_or_max_test(false, false);
 }
 
-TEST_F(TestRLEDecoder, get_min_or_max_test)
+TEST_F(TestRLEDecoder, get_min_or_max_test_tt)
 {
-  agg_min_or_max_test();
+  agg_min_or_max_test(true, true);
+}
+TEST_F(TestRLEDecoder, get_min_or_max_test_ft)
+{
+  agg_min_or_max_test(false, true);
+}
+TEST_F(TestRLEDecoder, get_min_or_max_test_tf)
+{
+  agg_min_or_max_test(true, false);
+}
+TEST_F(TestRLEDecoder, get_min_or_max_test_ff)
+{
+  agg_min_or_max_test(false, false);
 }
 
-TEST_F(TestIntBaseDiffDecoder, get_min_or_max_test)
+TEST_F(TestIntBaseDiffDecoder, get_min_or_max_test_tt)
 {
-  agg_min_or_max_test();
+  agg_min_or_max_test(true, true);
+}
+TEST_F(TestIntBaseDiffDecoder, get_min_or_max_test_ft)
+{
+  agg_min_or_max_test(false, true);
+}
+TEST_F(TestIntBaseDiffDecoder, get_min_or_max_test_tf)
+{
+  agg_min_or_max_test(true, false);
+}
+TEST_F(TestIntBaseDiffDecoder, get_min_or_max_test_ff)
+{
+  agg_min_or_max_test(false, false);
 }
 // TEST_F(TestDictDecoder, batch_decode_perf_test)
 // {

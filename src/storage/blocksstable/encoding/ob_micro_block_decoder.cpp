@@ -2149,8 +2149,8 @@ int ObMicroBlockDecoder::get_min_or_max(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Null pointer of column decoder", K(ret));
   } else {
-    if (OB_FAIL(decoders_[col_id].decoder_
-        ->get_aggregate_result(*column_decoder->ctx_,row_ids,row_cap,agg_info,datum_buf))){
+    if (OB_FAIL(decoders_[col_id].decoder_->get_aggregate_result(
+          *column_decoder->ctx_,row_ids,row_cap,agg_info,datum_buf))){
       LOG_WARN("Unsupported encoding type to get aggregate result", K(ret), K(col_id), K(row_cap));
       if (OB_FAIL(get_col_datums(col_id, row_ids, cell_datas, row_cap, datum_buf))) {
         LOG_WARN("Failed to get col datums", K(ret), K(col_id), K(row_cap));

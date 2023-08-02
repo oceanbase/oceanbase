@@ -284,7 +284,7 @@ int ObConstDecoder::get_aggregate_result(
   const int64_t dict_meta_length = ctx.col_header_->length_ - meta_header_->offset_;
   if(0 ==count){
     ObObj const_obj;
-    if(OB_FAIL(decode_without_dict(ctx, const_obj))){
+    if (OB_FAIL(decode_without_dict(ctx, const_obj))){
       LOG_WARN("Failed to decode without dict",K(ret),K(ctx));
     } else if (const_obj.is_fixed_len_char_type() && nullptr != ctx.col_param_) {
       if (OB_FAIL(storage::pad_column(ctx.col_param_->get_accuracy(),
