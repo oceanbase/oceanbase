@@ -41,9 +41,10 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
   if (OB_UNLIKELY(T_VARIABLE_SET != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parse_tree.type_ must be T_VARIABLE_SET", K(ret), K(parse_tree.type_));
-  } else if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_)) {
+  } else if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_) || OB_ISNULL(schema_checker_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("session_info_ or allocator_ is NULL", K(ret), K(session_info_), K(allocator_));
+    LOG_ERROR("session_info_ or allocator_ is NULL", K(ret), K(session_info_), K(allocator_),
+              K(schema_checker_));
   } else if (OB_ISNULL(variable_set_stmt = create_stmt<ObVariableSetStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create variable set stmt failed", K(ret));
@@ -183,6 +184,19 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
             }
           }
         }
+      }
+    }
+
+    /* set global variable need 'alter system' priv*/
+    if (OB_SUCC(ret) &&
+        ObSchemaChecker::is_ora_priv_check() && variable_set_stmt->has_global_variable()) {
+      if (OB_FAIL(schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
+                                                      session_info_->get_priv_user_id(),
+                                                      ObString(""),
+                                                      stmt::T_VARIABLE_SET,
+                                                      session_info_->get_enable_role_array()))) {
+        LOG_WARN("failed to check privilege", K(session_info_->get_effective_tenant_id()),
+                                              K(session_info_->get_priv_user_id()));
       }
     }
   }
