@@ -69,7 +69,11 @@ int CodecDeflateQpl::init(qpl_path_t path, QplAllocator &allocator)
     qpl_job * qpl_job_ptr = (qpl_job *)(jobs_buffer_ + index * job_size);
     int status = qpl_init_job(path, qpl_job_ptr); 
     if (status != QPL_STS_OK) {
+      FILE *fp = fopen("qpl.log", "a+");
       job_pool_ready_ = false;
+      fprintf(fp, "qpl init job return %d\n", status);
+      fflush(fp);
+      fclose(fp);
       
       for (uint32_t i = 0; i < index; i++) {
         qpl_fini_job(job_ptr_pool_[i]);
@@ -231,12 +235,13 @@ int32_t CodecDeflateQpl::do_decompress_data(const char * source, uint32_t source
 int qpl_init(QplAllocator &allocator)
 {
   int ret = 0;
-  CodecDeflateQpl &hardware_qpl = CodecDeflateQpl::get_hardware_instance();
-  ret = hardware_qpl.init(qpl_path_hardware, allocator);
-  if (ret == 0) {
-    CodecDeflateQpl &software_qpl = CodecDeflateQpl::get_software_instance();
-    ret = software_qpl.init(qpl_path_software, allocator);
+  CodecDeflateQpl &software_qpl = CodecDeflateQpl::get_software_instance();
+  ret = software_qpl.init(qpl_path_software, allocator);
+  if (0 == ret) {
+    CodecDeflateQpl &hardware_qpl = CodecDeflateQpl::get_hardware_instance();
+    ret = hardware_qpl.init(qpl_path_hardware, allocator);
   }
+
   return ret;
 }
 
@@ -277,6 +282,10 @@ int32_t qpl_decompress(const char* source, char* dest, int input_size, int max_o
   return res;
 }
 
+bool qpl_hardware_enabled()
+{
+  return CodecDeflateQpl::get_hardware_instance().is_job_pool_ready();
+}
 
 }//namespace ZLIB_LITE
 }//namespace common

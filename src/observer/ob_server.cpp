@@ -2123,7 +2123,6 @@ int ObServer::init_interrupt()
   return ret;
 }
 
-FILE *fp = fopen("1.txt", "w");
 int ObServer::init_zlib_lite_compressor()
 {
   int ret = OB_SUCCESS;
