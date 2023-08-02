@@ -168,7 +168,7 @@ public:
                K_(xa_branch_count), K_(xa_ref_count), K_(lock_grant),
                K_(is_tightly_coupled), K_(lock_xid), K_(xa_stmt_info),
                K_(is_terminated), K_(executing_xid), "uref", get_uref(),
-               K_(has_tx_level_temp_table));
+               K_(has_tx_level_temp_table), K_(local_lock_level));
 private:
   int register_timeout_task_(const int64_t interval_us);
   int unregister_timeout_task_();
@@ -307,6 +307,26 @@ private:
   // if dblink trans, record dblink client
   ObDBLinkClientArray dblink_client_array_;
   bool has_tx_level_temp_table_;
+  // local_lock_level is used with is_executing_, executing_xid_
+  // the rules are as follows:
+  // 1. if there are no executing statements,
+  //    is_executing is false
+  //    executing_xid is empty
+  //    local_lock_level is -1
+  // 2. if temp scheduler acquires the global lock,
+  //    |     | temp | original |
+  //    | --- | --- | --- |
+  //    | is_executing | true | true |
+  //    | executing_xid | xid | xid |
+  //    | local_lock_level | 0 | -1 |
+  // 3. when try to acquire the global lock and find that the is_executing is true
+  //    3.1 if executing_xid is not equal to the xid in session, return stmt_retry
+  //    3.2 if executing_xid is equal to the xid in session, increment the local_lock_level
+  //        and return success
+  // 4. when release the global lock and find that is_executing is true
+  //    4.1 if local_lock_level > 0, decrease the local_lock_level
+  //    4.2 if local_lock_level == 0, execute the normal global lock release processing
+  int64_t local_lock_level_;
 };
 
 }//transaction
