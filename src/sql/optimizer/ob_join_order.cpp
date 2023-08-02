@@ -137,13 +137,19 @@ int ObJoinOrder::compute_table_location_for_paths(
           } else if (OB_FAIL(get_plan()->get_optimizer_context().get_table_partition_info_list().push_back(
                          table_partition_info))) {
             LOG_WARN("failed to push back table partition info", K(ret));
-          } else if (OB_FAIL(tbl_part_infos.push_back(table_partition_info))) {
-            LOG_WARN("failed to push back table partition info", K(ret));
           } else {
             path->table_partition_info_ = table_partition_info;
           }
         }
       }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(path->table_partition_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(i));
+    } else if (OB_FAIL(add_var_to_array_no_dup(tbl_part_infos, path->table_partition_info_))) {
+      LOG_WARN("failed to add table partition info", K(ret));
     }
   }
   return ret;
@@ -3020,6 +3026,18 @@ int ObJoinOrder::try_pruning_base_table_access_path(
   bool need_prune = false;
   int64_t base_path_pos = OB_INVALID_INDEX;
   AccessPath *ap = NULL;
+  ObRawExpr *index_keys_head = NULL;
+  int64_t range_prefix_count_base = 0;
+  if (OB_UNLIKELY(access_paths.empty()) || OB_ISNULL(ap = access_paths.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected params", K(ret), K(access_paths.count()), K(ap));
+  } else if (ap->index_keys_.empty() || NULL == (index_keys_head = ap->index_keys_.at(0)) ||
+             !index_keys_head->is_column_ref_expr()) {
+    /* do notning */
+  } else if (OB_HIDDEN_SESSION_ID_COLUMN_ID == static_cast<ObColumnRefRawExpr *>(index_keys_head)->get_column_id()) {
+    // is oracle temporary table, ignore session id column
+    range_prefix_count_base = 1;
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
     if (OB_ISNULL(ap = access_paths.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -3027,7 +3045,8 @@ int ObJoinOrder::try_pruning_base_table_access_path(
     } else if (ap->ref_table_id_ == ap->index_id_) {
       base_path_pos = i;
     } else {
-      need_prune |= ap->range_prefix_count_ > 0 && ap->query_range_row_count_ < PRUNING_ROW_COUNT_THRESHOLD;
+      need_prune |=
+          ap->range_prefix_count_ > range_prefix_count_base && ap->query_range_row_count_ < PRUNING_ROW_COUNT_THRESHOLD;
     }
   }
 
@@ -3036,7 +3055,7 @@ int ObJoinOrder::try_pruning_base_table_access_path(
         OB_ISNULL(ap = access_paths.at(base_path_pos))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected pos or access path", K(ret), K(base_path_pos), K(access_paths.count()), K(ap));
-    } else if (ap->range_prefix_count_ > 0) {
+    } else if (ap->range_prefix_count_ > range_prefix_count_base) {
       /* do nothing */
     } else if (OB_FAIL(access_paths.remove(base_path_pos))) {
       LOG_WARN("failed to remove access path", K(ret), K(base_path_pos));
@@ -5146,10 +5165,18 @@ int ObJoinOrder::extract_hashjoin_conditions(const ObIArray<ObRawExpr*>& join_qu
     ObIArray<ObRawExpr*>& other_join_conditions)
 {
   int ret = OB_SUCCESS;
-  if (join_quals.count() > 0) {
-    ObRawExpr* cur_expr = NULL;
-    ObRawExpr* left_expr = NULL;
-    ObRawExpr* right_expr = NULL;
+  const ObSQLSessionInfo *session_info = NULL;
+  if (join_quals.empty()) {
+    /* do nothing */
+  } else if (OB_ISNULL(get_plan()) ||
+             OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null param", K(ret), K(get_plan()), K(session_info));
+  } else {
+    ObRawExpr *cur_expr = NULL;
+    ObRawExpr *left_expr = NULL;
+    ObRawExpr *right_expr = NULL;
+    const bool use_static_engine = session_info->use_static_typing_engine();
     for (int64_t i = 0; OB_SUCC(ret) && i < join_quals.count(); ++i) {
       cur_expr = join_quals.at(i);
       if (OB_ISNULL(cur_expr)) {
@@ -5159,8 +5186,8 @@ int ObJoinOrder::extract_hashjoin_conditions(const ObIArray<ObRawExpr*>& join_qu
                                                          OB_ISNULL(right_expr = cur_expr->get_param_expr(1)))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("join qual should not be NULL", K(*cur_expr), K(left_expr), K(right_expr), K(ret));
-      } else if (cur_expr->has_flag(IS_JOIN_COND) && T_OP_ROW != left_expr->get_expr_type() &&
-                 T_OP_ROW != right_expr->get_expr_type() &&
+      } else if (cur_expr->has_flag(IS_JOIN_COND) && (!cur_expr->has_flag(CNT_ROWNUM) || use_static_engine) &&
+                 T_OP_ROW != left_expr->get_expr_type() && T_OP_ROW != right_expr->get_expr_type() &&
                  ((left_expr->get_relation_ids().is_subset(left_tables) &&
                       right_expr->get_relation_ids().is_subset(right_tables)) ||
                      (left_expr->get_relation_ids().is_subset(right_tables) &&

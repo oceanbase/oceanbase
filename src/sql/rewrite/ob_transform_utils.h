@@ -756,6 +756,8 @@ public:
 
   static int replace_with_groupby_exprs(ObSelectStmt* select_stmt, ObRawExpr*& expr);
 
+  static int check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr *> &select_exprs, bool &is_valid);
+
   static int check_index_part_cond(
       ObTransformerCtx &ctx, ObDMLStmt &stmt, ObRawExpr *left_expr, ObRawExpr *right_expr, bool &is_valid);
 

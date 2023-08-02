@@ -7675,6 +7675,22 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt* select_stmt, ObRa
   return ret;
 }
 
+int ObTransformUtils::check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr *> &select_exprs, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < select_exprs.count(); ++i) {
+    ObRawExpr *expr = select_exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (expr->has_flag(CNT_ROWNUM) || expr->has_flag(CNT_PSEUDO_COLUMN) || expr->has_flag(CNT_SUB_QUERY)) {
+      is_valid = false;
+    }
+  }
+  return ret;
+}
+
 int ObTransformUtils::check_index_part_cond(
     ObTransformerCtx &ctx, ObDMLStmt &stmt, ObRawExpr *left_expr, ObRawExpr *right_expr, bool &is_valid)
 {

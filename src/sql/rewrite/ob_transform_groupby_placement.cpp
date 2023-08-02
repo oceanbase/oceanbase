@@ -558,6 +558,8 @@ int ObTransformGroupByPlacement::do_groupby_push_down(ObSelectStmt* stmt, ObIArr
     LOG_WARN("failed to create stmt", K(ret));
   } else if (OB_FAIL(trans_stmt->deep_copy(*ctx_->stmt_factory_, *ctx_->expr_factory_, *stmt))) {
     LOG_WARN("failed to deep copy stmt", K(ret));
+  } else {
+    trans_stmt->get_deduced_exprs().reuse();  // remove deduced exprs
   }
   /// maintain tables on outer join null side
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_size(); ++i) {
@@ -901,7 +903,6 @@ int ObTransformGroupByPlacement::transform_groupby_push_down(ObSelectStmt* stmt,
     }
   }
   if (OB_SUCC(ret)) {
-    stmt->get_deduced_exprs().reuse();  // remove deduced exprs after transform
     if (OB_FAIL(stmt->rebuild_tables_hash())) {
       LOG_WARN("failed to rebuild table hashes", K(ret));
     } else if (OB_FAIL(stmt->update_column_item_rel_id())) {

@@ -56,10 +56,6 @@ private:
   int check_select_item_push_down(ObSelectStmt* select_stmt, ObSelectStmt* view_stmt,
       common::ObIArray<int64_t>& select_offset, common::ObIArray<SelectItem>& const_select_items, bool& can_be);
 
-  int check_select_item_subquery(ObSelectStmt &select_stmt,
-                                 ObSelectStmt &view,
-                                 bool &can_be);
-
   int adjust_stmt_hints(ObSelectStmt* select_stmt, ObSelectStmt* view_stmt);
 
   int replace_stmt_exprs(ObDMLStmt* parent_stmt, ObSelectStmt* child_stmt, uint64_t table_id);

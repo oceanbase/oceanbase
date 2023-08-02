@@ -283,6 +283,8 @@ int ObTransformViewMerge::check_basic_validity(ObDMLStmt* parent_stmt, ObSelectS
   can_be = false;
   bool has_rownum_expr = false;
   bool has_ref_assign_user_var = false;
+  bool is_select_expr_valid = false;
+  ObSEArray<ObRawExpr *, 8> select_exprs;
   if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -299,6 +301,12 @@ int ObTransformViewMerge::check_basic_validity(ObDMLStmt* parent_stmt, ObSelectS
   } else if (OB_FAIL(child_stmt->has_rownum(has_rownum_expr))) {
     LOG_WARN("failed to check has rownum expr", K(ret));
   } else if (has_rownum_expr) {
+    can_be = false;
+  } else if (OB_FAIL(child_stmt->get_select_exprs(select_exprs))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::check_expr_valid_for_stmt_merge(select_exprs, is_select_expr_valid))) {
+    LOG_WARN("failed to check select expr valid", K(ret));
+  } else if (!is_select_expr_valid) {
     can_be = false;
   } else if (0 == child_stmt->get_from_item_size()) {
     can_be = parent_stmt->is_single_table_stmt() && !parent_stmt->is_hierarchical_query();
@@ -339,15 +347,6 @@ int ObTransformViewMerge::check_can_be_unnested(
     LOG_WARN("failed to check", K(ret));
   } else if (!can_be) {
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && can_be && i < child_stmt->get_select_item_size(); i++) {
-      ObRawExpr* expr = child_stmt->get_select_item(i).expr_;
-      if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("NULL expr", K(ret));
-      } else if (expr->has_flag(CNT_SUB_QUERY)) {
-        can_be = false;
-      }
-    }
     if (OB_SUCC(ret) && can_be) {
       bool has_rand = false;
       if (OB_FAIL(child_stmt->has_rand(has_rand))) {

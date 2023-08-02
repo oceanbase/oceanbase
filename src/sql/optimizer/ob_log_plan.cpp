@@ -6266,9 +6266,23 @@ int ObLogPlan::adjust_stmt_onetime_exprs(ObIArray<std::pair<int64_t, ObRawExpr*>
       }
     }
     if (OB_SUCC(ret) && !new_exprs.empty()) {
+      ObSEArray<ObRawExpr *, 64> all_exprs;
       if (OB_FAIL(get_stmt()->replace_inner_stmt_expr(old_exprs, new_exprs))) {
         LOG_WARN("failed to replace inner stmt expr", K(ret));
-      } else { /*do nothing*/
+      } else if (OB_FAIL(get_stmt()->get_relation_exprs(all_exprs))) {
+        LOG_WARN("failed to get relation exprs", K(ret));
+      } else {
+        ObRawExpr *expr = NULL;
+        for (int64_t i = 0; OB_SUCC(ret) && i < all_exprs.count(); ++i) {
+          if (OB_ISNULL(expr = all_exprs.at(i))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexepect null", K(ret));
+          } else if (!expr->has_flag(CNT_SUB_QUERY)) {
+            /* do nothing */
+          } else if (OB_FAIL(expr->extract_info())) {
+            LOG_WARN("failed to extract info", K(ret));
+          }
+        }
       }
     }
   }

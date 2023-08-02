@@ -143,11 +143,10 @@ int ObAggregateProcessor::AggrCell::collect_result(
   aggr_info.expr_->get_eval_info(eval_ctx).evaluated_ = true;
   // sum(count(*)) should return same type as count(*), which is bigint in mysql mode
   if (!share::is_oracle_mode() && T_FUN_COUNT_SUM == aggr_info.get_expr_type()) {
-    if (ObIntTC == tc && is_tiny_num_used_) {
-      result.set_int(tiny_num_int_);
-    } else {
+    result.set_int(tiny_num_int_);
+    if (ObIntTC != tc) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("count sum should be int", K(ret), K(tc), K(is_tiny_num_used_));
+      LOG_WARN("count sum should be int", K(ret), K(tc), K(is_tiny_num_used_), K(tiny_num_int_));
     }
   } else if (is_tiny_num_used_ && (ObIntTC == tc || ObUIntTC == tc)) {
     ObNumStackAllocator<2> tmp_alloc;

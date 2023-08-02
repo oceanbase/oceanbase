@@ -1582,24 +1582,27 @@ Outputs & filters:
 
 ***************   Case 72   ***************
 SQL: select * from (select c1, c2, c1 in (select c1+2 from t1), c1 = all(select c1 from t1) from t1) as v; 
-=======================================
-|ID|OPERATOR      |NAME|EST. ROWS|COST|
----------------------------------------
-|0 |SUBPLAN FILTER|    |100      |4309|
-|1 | TABLE SCAN   |t1  |100      |90  |
-|2 | TABLE SCAN   |t1  |100      |88  |
-|3 | TABLE SCAN   |t1  |100      |88  |
-=======================================
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |SUBPLAN SCAN   |v   |100      |4323|
+|1 | SUBPLAN FILTER|    |100      |4309|
+|2 |  TABLE SCAN   |t1  |100      |90  |
+|3 |  TABLE SCAN   |t1  |100      |88  |
+|4 |  TABLE SCAN   |t1  |100      |88  |
+========================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c1 = ANY(subquery(1))], [t1.c1 = ALL(subquery(2))]), filter(nil), 
+  0 - output([v.c1], [v.c2], [v.c1 in (select c1+2 from t1)], [v.c1 = all(select c1 from t1)]), filter(nil),
+      access([v.c1], [v.c2], [v.c1 in (select c1+2 from t1)], [v.c1 = all(select c1 from t1)])
+  1 - output([t1.c1], [t1.c2], [t1.c1 = ANY(subquery(1))], [t1.c1 = ALL(subquery(2))]), filter(nil),
       exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1], [2])
-  1 - output([t1.c1], [t1.c2]), filter(nil), 
+  2 - output([t1.c1], [t1.c2]), filter(nil),
       access([t1.c1], [t1.c2]), partitions(p0)
-  2 - output([t1.c1 + ?]), filter(nil), 
+  3 - output([t1.c1 + ?]), filter(nil),
       access([t1.c1]), partitions(p0)
-  3 - output([t1.c1]), filter(nil), 
+  4 - output([t1.c1]), filter(nil),
       access([t1.c1]), partitions(p0)
 
 ***************   Case 73   ***************
@@ -1626,24 +1629,27 @@ Outputs & filters:
 
 ***************   Case 74   ***************
 SQL: select * from vv1; 
-=======================================
-|ID|OPERATOR      |NAME|EST. ROWS|COST|
----------------------------------------
-|0 |SUBPLAN FILTER|    |100      |4309|
-|1 | TABLE SCAN   |t1  |100      |90  |
-|2 | TABLE SCAN   |t1  |100      |88  |
-|3 | TABLE SCAN   |t1  |100      |88  |
-=======================================
+========================================
+|ID|OPERATOR       |NAME|EST. ROWS|COST|
+----------------------------------------
+|0 |SUBPLAN SCAN   |vv1 |100      |4323|
+|1 | SUBPLAN FILTER|    |100      |4309|
+|2 |  TABLE SCAN   |t1  |100      |90  |
+|3 |  TABLE SCAN   |t1  |100      |88  |
+|4 |  TABLE SCAN   |t1  |100      |88  |
+========================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c1 = ANY(subquery(1))], [t1.c1 = ALL(subquery(2))]), filter(nil), 
+  0 - output([vv1.c], [vv1.d], [vv1.e], [vv1.f]), filter(nil),
+      access([vv1.c], [vv1.d], [vv1.e], [vv1.f])
+  1 - output([t1.c1], [t1.c2], [t1.c1 = ANY(subquery(1))], [t1.c1 = ALL(subquery(2))]), filter(nil),
       exec_params_(nil), onetime_exprs_(nil), init_plan_idxs_([1], [2])
-  1 - output([t1.c1], [t1.c2]), filter(nil), 
+  2 - output([t1.c1], [t1.c2]), filter(nil),
       access([t1.c1], [t1.c2]), partitions(p0)
-  2 - output([t1.c1 + 2]), filter(nil), 
+  3 - output([t1.c1 + 2]), filter(nil),
       access([t1.c1]), partitions(p0)
-  3 - output([t1.c1]), filter(nil), 
+  4 - output([t1.c1]), filter(nil),
       access([t1.c1]), partitions(p0)
 
 ***************   Case 75   ***************

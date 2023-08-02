@@ -418,7 +418,7 @@ int ObLogInsertAll::remove_const_expr(const ObIArray<ObRawExpr*>& old_exprs, ObI
     if (OB_ISNULL(old_exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null");
-    } else if (old_exprs.at(i)->has_const_or_const_expr_flag()) {
+    } else if (old_exprs.at(i)->has_const_or_const_expr_flag() && !old_exprs.at(i)->has_flag(CNT_EXEC_PARAM)) {
       /*do nothing */
     } else if (OB_FAIL(new_exprs.push_back(old_exprs.at(i)))) {
       LOG_WARN("failed to push back old exprs", K(ret));
