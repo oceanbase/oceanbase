@@ -2136,11 +2136,21 @@ int ObRawExprResolverImpl::resolve_right_node_of_obj_access_idents(const ParseNo
 {
   int ret = OB_SUCCESS;
   if (T_OBJ_ACCESS_REF == right_node.type_) {
-    // example: a(1).b(1), here, we resolve '.b(1)'
-    OZ (resolve_obj_access_idents(right_node, q_name), K(q_name));
+    if (right_node.children_[0] != NULL && T_EXPR_LIST == right_node.children_[0]->type_) {
+      // example: a(1)(2).count, here, we resolve '(2).count' which '(2)' is 'children_[0]' and '.count' is 'children_[1]'
+      CK (2 == right_node.num_child_);
+      CK (OB_NOT_NULL(right_node.children_[0]));
+      CK (OB_NOT_NULL(right_node.children_[1]));
+      OZ (resolve_right_node_of_obj_access_idents(*(right_node.children_[0]), q_name));
+      OZ (resolve_obj_access_idents(*(right_node.children_[1]), q_name));
+    } else {
+      // example: a(1).b(1), here, we resolve '.b(1)'
+      OZ (resolve_obj_access_idents(right_node, q_name), K(q_name));
+    }
   } else {
     // example: a(1)(2) here, we resolve '(2)'
     const ParseNode *element_list = &right_node;
+    CK (T_EXPR_LIST == element_list->type_);
     CK (OB_LIKELY(!q_name.access_idents_.empty()));
     for (int64_t i = 0; OB_SUCC(ret) && i < element_list->num_child_; ++i) {
       ObObjAccessIdent &access_ident = q_name.access_idents_.at(q_name.access_idents_.count() - 1);
