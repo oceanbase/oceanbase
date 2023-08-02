@@ -258,6 +258,16 @@ int ObTransformSimplifySubquery::is_subquery_to_expr_valid(const ObSelectStmt *s
              && !stmt->is_set_stmt()) {
     is_valid = true;
   }
+  if (OB_SUCC(ret) && is_valid) {
+    if (OB_ISNULL(stmt->get_select_item(0).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("stmt is null", K(ret), K(stmt));
+    } else if (stmt->get_select_item(0).expr_->is_const_expr()) {
+      // do nothing
+    } else if (stmt->get_select_item(0).expr_->has_flag(CNT_PL_UDF)) {
+      is_valid = false;
+    }
+  }
   return ret;
 }
 

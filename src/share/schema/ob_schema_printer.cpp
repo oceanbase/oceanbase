@@ -5066,6 +5066,9 @@ int ObSchemaPrinter::print_view_define_str(char* buf,
         while (cursor < end) {
           if (*cursor == '\\' && cursor + 1 < end && *(cursor + 1) == c) {
             cursor += 2;
+          } else if (*cursor == '\\' && cursor + 1 < end &&
+                     *(cursor + 1) == '\\') {
+            cursor += 2;
           } else if (*cursor == c) {
             break;
           } else {
