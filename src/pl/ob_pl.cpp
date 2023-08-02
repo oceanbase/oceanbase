@@ -2405,10 +2405,6 @@ int ObPLExecState::final(int ret)
             ctx_.exec_ctx_->get_my_session()))) {
           LOG_WARN("failed to destruct pl object", K(i), K(tmp_ret));
         }
-      } else if (OB_NOT_NULL(ctx_.exec_ctx_) && OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx())) {
-        if (OB_SUCCESS != (tmp_ret = ctx_.exec_ctx_->get_pl_ctx()->add(get_params().at(i)))) {
-          LOG_WARN("failed to add allocator to pl ctx", K(tmp_ret), K(i));
-        }
       }
     } else if (func_.get_variables().at(i).is_cursor_type()
       && func_.get_out_args().has_member(i) && !func_.get_in_args().has_member(i)) {
