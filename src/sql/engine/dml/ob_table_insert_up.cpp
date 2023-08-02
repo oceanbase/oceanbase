@@ -461,6 +461,9 @@ int ObTableInsertUp::do_table_insert_up(ObExecContext& ctx) const
         duplicated_rows = NULL;
         cur_affected = 0;
         NG_TRACE_TIMES(2, insertup_start_insert_row);
+        for (int64_t i = 0; i < insert_row->projector_size_; i++) {
+          insert_update_ctx->insert_row_.cells_[i] = insert_row->get_cell(i);
+        }
         ret = partition_service->insert_row(my_session->get_trans_desc(),
             insert_update_ctx->dml_param_,
             *pkey,
