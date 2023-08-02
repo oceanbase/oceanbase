@@ -1285,6 +1285,9 @@ int ObMigrationTabletParam::assign(const ObMigrationTabletParam &param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("migration tablet param is invalid", K(ret), K(param));
   } else {
+    // allocator
+    allocator_.set_attr(ObMemAttr(MTL_ID(), "MigTabletParam", ObCtxIds::DEFAULT_CTX_ID));
+
     is_empty_shell_ = param.is_empty_shell_;
     ls_id_ = param.ls_id_;
     tablet_id_ = param.tablet_id_;
