@@ -319,9 +319,19 @@ int ObExprToBinaryFloat::calc_result_typeN(ObExprResType &type,
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
-  } else if (OB_UNLIKELY(param_num > 1)) {
+  } else if (OB_UNLIKELY(param_num != 1)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param_num) , K(types));
+  } else if (ObTinyIntType == types[0].get_type()) {
+    // oracle compatible
+    ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+    LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, 15, "TO_BINARY_FLOAT");
+    LOG_WARN("wrong number or types of arguments in function", K(ret), K(types[0].get_type()));
+  } else if (ObExtendType == types[0].get_type()) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("inconsistent datatypes", K(ret),
+             "expected_type_class", ob_obj_type_class(ObFloatType),
+             "got", ob_obj_type_class(types[0].get_type()));
   } else if (OB_FAIL(ObExprToNumberBase::calc_result_typeN(type, types, param_num, type_ctx))) {
     LOG_WARN("fail to calc_result_typeN", K(ret));
   } else if (OB_FAIL(ObObjCaster::can_cast_in_oracle_mode(ObFloatType, CS_TYPE_BINARY,
@@ -386,9 +396,19 @@ int ObExprToBinaryDouble::calc_result_typeN(ObExprResType &type,
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
-  } else if (OB_UNLIKELY(param_num > 1)) {
+  } else if (OB_UNLIKELY(param_num != 1)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param_num) , K(types));
+  } else if (ObTinyIntType == types[0].get_type()) {
+    // oracle compatible
+    ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+    LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, 16, "TO_BINARY_DOUBLE");
+    LOG_WARN("wrong number or types of arguments in function", K(ret), K(types[0].get_type()));
+  } else if (ObExtendType == types[0].get_type()) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("inconsistent datatypes", K(ret),
+             "expected_type_class", ob_obj_type_class(ObDoubleType),
+             "got", ob_obj_type_class(types[0].get_type()));
   } else if (OB_FAIL(ObExprToNumberBase::calc_result_typeN(type, types, param_num, type_ctx))) {
     LOG_WARN("fail to calc_result_typeN", K(ret));
   } else if (OB_FAIL(ObObjCaster::can_cast_in_oracle_mode(ObDoubleType, CS_TYPE_BINARY,
