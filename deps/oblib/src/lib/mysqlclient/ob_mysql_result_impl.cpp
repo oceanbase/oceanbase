@@ -23,6 +23,7 @@
 #include "common/ob_zerofill_info.h"
 #include "lib/timezone/ob_timezone_info.h"
 #include "lib/string/ob_hex_utils_base.h"
+#include "lib/mysqlclient/ob_dblink_error_trans.h"
 
 namespace oceanbase
 {
@@ -143,7 +144,33 @@ int ObMySQLResultImpl::next()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("result must not be null", K(ret));
   } else if (OB_ISNULL(cur_row_ = mysql_fetch_row(result_))) {
-    ret = OB_ITER_END;
+    MYSQL *stmt_handler = stmt_.get_stmt_handler();
+    if (OB_ISNULL(stmt_handler)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr", K(ret));
+    } else {
+      ret = -mysql_errno(stmt_handler);
+      const char *errmsg = mysql_error(stmt_handler);
+      ObMySQLConnection *conn = stmt_.get_connection();
+      if (0 == ret) {
+        ret = OB_ITER_END;
+      } else if (OB_ISNULL(conn)) {
+        int tmp_ret = ret;
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ptr", K(errmsg), K(tmp_ret), K(ret));
+      } else if (OB_INVALID_ID != conn->get_dblink_id()) {
+        LOG_WARN("dblink connection error", K(ret),
+                                            KP(conn),
+                                            K(conn->get_dblink_id()),
+                                            K(conn->get_sessid()),
+                                            K(conn->usable()),
+                                            K(conn->ping()));
+        TRANSLATE_CLIENT_ERR(ret, errmsg);
+        if (ObMySQLStatement::is_need_disconnect_error(ret)) {
+          conn->set_usable(false);
+        }
+      }
+    }
   } else if (OB_ISNULL(cur_row_result_lengths_ = mysql_fetch_lengths(result_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("calling is out of sync", K(ret));
