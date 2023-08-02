@@ -376,12 +376,11 @@ static const char* ref_info_type_strs[] = {
   "SCHEMA_RECORDER",
   "SPI_RESULT_SET",
   "PL_PREPARE_RESULT",
-  "PARTITION_BALANCE",
-  "MOD_MAX",
+  "PARTITION_BALANCE"
 };
 
 int ObSchemaMgrCache::get_ref_info_type_str_(const int64_t &index, const char *&type_str) {
-  STATIC_ASSERT(ARRAYSIZEOF(ref_info_type_strs) == (int64_t)ObSchemaMgrItem::Mod::MOD_MAX + 1,
+  STATIC_ASSERT(ARRAYSIZEOF(ref_info_type_strs) == (int64_t)ObSchemaMgrItem::Mod::MOD_MAX,
                 "type string array size mismatch with enum Mod count");
   int ret = OB_SUCCESS;
   int type_str_len = ARRAYSIZEOF(ref_info_type_strs);
