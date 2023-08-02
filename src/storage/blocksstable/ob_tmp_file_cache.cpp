@@ -655,7 +655,7 @@ void ObTmpFileMemTask::runTimerTask()
 
 ObTmpTenantMemBlockManager::IOWaitInfo::IOWaitInfo(
     ObMacroBlockHandle &block_handle, ObTmpMacroBlock &block, ObIAllocator &allocator)
-  : block_handle_(block_handle), block_(block), allocator_(allocator), ref_cnt_(0), ret_code_(OB_SUCCESS)
+  : block_handle_(&block_handle), block_(block), allocator_(allocator), ref_cnt_(0), ret_code_(OB_SUCCESS)
 {
 }
 
@@ -713,7 +713,7 @@ int ObTmpTenantMemBlockManager::IOWaitInfo::exec_wait(int64_t io_timeout_ms)
   ObThreadCondGuard guard(cond_);
   if (OB_FAIL(guard.get_ret())) {
     STORAGE_LOG(ERROR, "lock io request condition failed", K(ret), K(block_.get_block_id()));
-  } else if (OB_FAIL(block_handle_.wait(io_timeout_ms))) {
+  } else if (OB_NOT_NULL(block_handle_) && OB_FAIL(block_handle_->wait(io_timeout_ms))) {
     STORAGE_LOG(WARN, "wait handle wait io failed", K(ret), K(block_.get_block_id()));
   }
   reset_io();
@@ -740,7 +740,7 @@ ObTmpTenantMemBlockManager::IOWaitInfo::~IOWaitInfo()
 void ObTmpTenantMemBlockManager::IOWaitInfo::destroy()
 {
   ret_code_ = OB_SUCCESS;
-  block_handle_.get_io_handle().reset();
+  reset_io();
   if (0 != ATOMIC_LOAD(&ref_cnt_)) {
     int ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "unexpected error, ref cnt isn't zero", K(ret), KPC(this));
@@ -749,7 +749,10 @@ void ObTmpTenantMemBlockManager::IOWaitInfo::destroy()
 
 void ObTmpTenantMemBlockManager::IOWaitInfo::reset_io()
 {
-  block_handle_.get_io_handle().reset();
+  if (OB_NOT_NULL(block_handle_)) {
+    block_handle_->get_io_handle().reset();
+    block_handle_ = nullptr;
+  }
 }
 
 ObTmpTenantMemBlockManager::ObIOWaitInfoHandle::ObIOWaitInfoHandle()
@@ -1450,9 +1453,12 @@ int ObTmpTenantMemBlockManager::exec_wait()
       if (OB_ISNULL(wait_info = static_cast<IOWaitInfo*>(node))) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(ERROR, "unexpected error, wait info is nullptr", K(ret), KP(node));
+      } else if (OB_ISNULL(wait_info->block_handle_)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(ERROR, "unexpected error, macro handle in wait info is nullptr", K(ret), KPC(wait_info));
       } else {
         ObTmpMacroBlock &blk = wait_info->get_block();
-        const MacroBlockId &macro_id = wait_info->block_handle_.get_macro_id();
+        const MacroBlockId &macro_id = wait_info->block_handle_->get_macro_id();
         const int64_t block_id = blk.get_block_id();
         const int64_t free_page_nums = blk.get_free_page_nums();
         if (OB_FAIL(wait_info->exec_wait(io_timeout_ms))) {
