@@ -45,7 +45,6 @@ class ObRemoteSourceGuard;
 class ObRemoteLogParent;
 class ObLogRestoreService;
 class ObLogRestoreAllocator;
-class ObLogRestoreController;
 using oceanbase::share::ObLSID;
 using oceanbase::palf::LSN;
 // Remote fetch log worker
@@ -57,7 +56,6 @@ public:
 
   int init(const uint64_t tenant_id,
       ObLogRestoreAllocator *allocator,
-      ObLogRestoreController *restore_controller,
       ObLogRestoreService *restore_service,
       storage::ObLSService *ls_svr);
   void destroy();
@@ -84,7 +82,6 @@ private:
   int submit_entries_(ObFetchLogTask &task);
   int submit_log_(const ObLSID &id, const int64_t proposal_id, const LSN &lsn,
       const share::SCN &scn, const char *buf, const int64_t buf_size);
-  int wait_restore_quota_(const int64_t size, bool &done);
   void mark_if_to_end_(ObFetchLogTask &task, const share::SCN &upper_limit_scn, const share::SCN &scn);
   int try_retire_(ObFetchLogTask *&task);
   void try_update_location_info_(const ObFetchLogTask &task, ObRemoteLogGroupEntryIterator &iter);
@@ -105,7 +102,6 @@ private:
 private:
   bool inited_;
   uint64_t tenant_id_;
-  ObLogRestoreController *restore_controller_;
   ObLogRestoreService *restore_service_;
   storage::ObLSService *ls_svr_;
   common::ObLightyQueue task_queue_;

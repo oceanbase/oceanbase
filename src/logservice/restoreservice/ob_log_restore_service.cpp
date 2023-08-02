@@ -67,17 +67,15 @@ int ObLogRestoreService::init(rpc::frame::ObReqTransport *transport,
     LOG_WARN("invalid argument", K(ret), K(transport), K(ls_svr), K(log_service));
   } else if (OB_FAIL(proxy_.init(transport))) {
     LOG_WARN("proxy_ init failed", K(ret));
-  } else if (OB_FAIL(restore_controller_.init(tenant_id, log_service))) {
-    LOG_WARN("restore_controller_ init failed");
   } else if (OB_FAIL(location_adaptor_.init(tenant_id, ls_svr))) {
     LOG_WARN("location_adaptor_ init failed", K(ret));
   } else if (OB_FAIL(archive_driver_.init(tenant_id, ls_svr, log_service, &fetch_log_worker_))) {
     LOG_WARN("archive_driver_ init failed");
-  } else if (OB_FAIL(net_driver_.init(tenant_id, &restore_controller_, ls_svr, log_service))) {
+  } else if (OB_FAIL(net_driver_.init(tenant_id, ls_svr, log_service))) {
     LOG_WARN("net_driver_ init failed");
   } else if (OB_FAIL(fetch_log_impl_.init(tenant_id, &archive_driver_, &net_driver_))) {
     LOG_WARN("fetch_log_impl_ init failed", K(ret));
-  } else if (OB_FAIL(fetch_log_worker_.init(tenant_id, &allocator_, &restore_controller_, this, ls_svr))) {
+  } else if (OB_FAIL(fetch_log_worker_.init(tenant_id, &allocator_, this, ls_svr))) {
     LOG_WARN("fetch_log_worker_ init failed", K(ret));
   } else if (OB_FAIL(error_reporter_.init(tenant_id, ls_svr))) {
     LOG_WARN("error_reporter_ init failed", K(ret));
@@ -99,7 +97,6 @@ void ObLogRestoreService::destroy()
   fetch_log_worker_.destroy();
   stop();
   wait();
-  restore_controller_.destroy();
   location_adaptor_.destroy();
   archive_driver_.destroy();
   net_driver_.destroy();
@@ -183,8 +180,6 @@ void ObLogRestoreService::do_thread_task_()
       share::ObLogRestoreSourceItem source;
       bool source_exist = false;
 
-      update_restore_quota_();
-
       if (OB_FAIL(update_upstream_(source, source_exist))) {
         LOG_WARN("update_upstream_ failed");
       } else if (source_exist) {
@@ -204,11 +199,6 @@ void ObLogRestoreService::do_thread_task_()
     refresh_error_context_();
     set_compressor_type_();
   }
-}
-
-void ObLogRestoreService::update_restore_quota_()
-{
-  (void)restore_controller_.update_quota();
 }
 
 int ObLogRestoreService::update_upstream_(share::ObLogRestoreSourceItem &source, bool &source_exist)

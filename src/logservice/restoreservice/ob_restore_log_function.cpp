@@ -23,7 +23,6 @@
 #include "ob_log_restore_handler.h"      // ObLogRestoreHandler
 #include "storage/tx_storage/ob_ls_handle.h"     // ObLSHandle
 #include "storage/tx_storage/ob_ls_service.h"    // ObLSService
-#include "ob_log_restore_controller.h"           // ObLogRestoreController
 
 namespace oceanbase
 {
@@ -60,7 +59,6 @@ void ObRestoreLogFunction::destroy()
 }
 
 int ObRestoreLogFunction::init(const uint64_t tenant_id,
-    ObLogRestoreController *controller,
     storage::ObLSService *ls_svr)
 {
   int ret = OB_SUCCESS;
@@ -68,13 +66,11 @@ int ObRestoreLogFunction::init(const uint64_t tenant_id,
     ret = OB_INIT_TWICE;
     CLOG_LOG(WARN, "ObRestoreLogFunction init twice", K(inited_));
   } else if (OB_UNLIKELY(tenant_id == OB_INVALID_TENANT_ID
-        || NULL == controller
         || NULL == ls_svr)) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", K(tenant_id), K(controller), K(ls_svr));
+    CLOG_LOG(WARN, "invalid argument", K(tenant_id), K(ls_svr));
   } else {
     tenant_id_ = tenant_id;
-    controller_ = controller;
     ls_svr_ = ls_svr;
     inited_ = true;
   }
@@ -85,7 +81,6 @@ void ObRestoreLogFunction::reset()
 {
   inited_ = false;
   tenant_id_ = OB_INVALID_TENANT_ID;
-  controller_ = NULL;
   ls_svr_ = NULL;
 }
 
@@ -103,7 +98,6 @@ int ObRestoreLogFunction::handle_group_entry(
 {
   UNUSED(tenant_id);
   int ret = OB_SUCCESS;
-  bool quota_done = false;
   const int64_t size = group_entry.get_serialize_size();
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -115,33 +109,9 @@ int ObRestoreLogFunction::handle_group_entry(
         || NULL == buffer)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(id), K(proposal_id), K(group_start_lsn), K(group_entry), K(buffer));
-  } else if (OB_FAIL(wait_restore_quota_(size, quota_done, stop_flag))) {
-    LOG_WARN("wait restore quota failed", K(group_entry), K(group_start_lsn));
-  } else if (! quota_done) {
-    ret = OB_IN_STOP_STATE;
-    LOG_WARN("get quota failed", K(quota_done), K(group_entry), K(group_start_lsn));
   } else if (OB_FAIL(process_(id, proposal_id, group_start_lsn, group_entry.get_scn(),
           buffer, group_entry.get_serialize_size(), stop_flag))) {
     CLOG_LOG(WARN, "process failed", K(id), K(group_start_lsn), K(group_entry), K(buffer));
-  }
-  return ret;
-}
-
-int ObRestoreLogFunction::wait_restore_quota_(const int64_t size, bool &done, volatile bool &stop_flag)
-{
-  int ret = OB_SUCCESS;
-  done = false;
-  while (OB_SUCC(ret) && !done && !stop_flag) {
-    if (OB_FAIL(controller_->get_quota(size, done))) {
-      LOG_WARN("get quota failed");
-    } else if (! done) {
-      if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
-        LOG_INFO("clog disk is not enough, just wait", K(size));
-      } else {
-        LOG_TRACE("get quota succ", K(size));
-      }
-      usleep(100 * 1000L);  // if get quota not done, sleep 100ms
-    }
   }
   return ret;
 }

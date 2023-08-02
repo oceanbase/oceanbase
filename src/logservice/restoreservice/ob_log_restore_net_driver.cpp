@@ -22,7 +22,6 @@
 #include "share/ob_ls_id.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/tx_storage/ob_ls_service.h"    // ObLSService
-#include "ob_log_restore_controller.h"      // ObLogRestoreController
 #include "logservice/ob_log_service.h"      // ObLogService
 #include "share/restore/ob_log_restore_source.h"   // ObLogRestoreSourceType
 #include "logservice/logfetcher/ob_log_fetcher.h"  // ObLogFetcher
@@ -71,18 +70,16 @@ ObLogRestoreNetDriver::~ObLogRestoreNetDriver()
 }
 
 int ObLogRestoreNetDriver::init(const uint64_t tenant_id,
-    ObLogRestoreController *controller,
     ObLSService *ls_svr,
     ObLogService *log_service)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_id == OB_INVALID_TENANT_ID
-        || NULL == controller
         || NULL == ls_svr)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(tenant_id), K(controller), K(ls_svr));
-  } else if (OB_FAIL(restore_function_.init(tenant_id, controller, ls_svr))) {
-    LOG_WARN("restore_function_ init failed", K(tenant_id), K(controller), K(ls_svr));
+    LOG_WARN("invalid argument", K(tenant_id), K(ls_svr));
+  } else if (OB_FAIL(restore_function_.init(tenant_id, ls_svr))) {
+    LOG_WARN("restore_function_ init failed", K(tenant_id), K(ls_svr));
   } else if (OB_FAIL(error_handler_.init(ls_svr))) {
     LOG_WARN("error_handler_ init failed");
   } else if (OB_FAIL(cfg_.init())) {
