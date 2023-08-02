@@ -275,8 +275,8 @@ int ObLSMap::del_ls(const share::ObLSID &ls_id)
         }
         ls->next_ = NULL;
       }
-      del_ls_impl(ls);
     }
+    del_ls_impl(ls);
   }
 
   return ret;
