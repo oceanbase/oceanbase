@@ -737,7 +737,7 @@ int ObLobMetaManager::update(ObLobAccessParam& param, ObLobMetaInfo& old_row, Ob
   return ret;
 }
 
-int ObLobMetaManager::fetch_lob_id(const ObLobAccessParam& param, uint64_t &lob_id)
+int ObLobMetaManager::fetch_lob_id(ObLobAccessParam& param, uint64_t &lob_id)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(persistent_lob_adapter_.fetch_lob_id(param, lob_id))) {

@@ -164,7 +164,7 @@ public:
   // specified range update
   int update(ObLobAccessParam& param, ObLobMetaInfo& old_row, ObLobMetaInfo& new_row);
   // fetch lob id
-  int fetch_lob_id(const ObLobAccessParam& param, uint64_t &lob_id);
+  int fetch_lob_id(ObLobAccessParam& param, uint64_t &lob_id);
   TO_STRING_KV("[LOB]", "meta mngr");
 private:
   // lob adaptor
