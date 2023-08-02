@@ -2429,14 +2429,16 @@ int ObPLExecState::final(int ret)
       }
     }
   }
-  // inner call inout参数会深拷一份, 执行异常时需要释放
+  // 1. inner call inout参数会深拷一份, 执行异常时需要释放
+  // 2. inner call 纯out属性复杂数据类型参数, 会生成一个新的obj, 执行失败时会抛出异常, 不会走到geneate_out_param里面的释放内存逻辑
+  // 需要提前释放内存
   for (int64_t i = 0; OB_SUCCESS != ret && inner_call_ && !func_.is_function() && i < func_.get_arg_count(); ++i) {
     if (OB_NOT_NULL(ctx_.nocopy_params_) &&
         ctx_.nocopy_params_->count() > i &&
         OB_INVALID_INDEX == ctx_.nocopy_params_->at(i) &&
         func_.get_variables().at(i).is_composite_type() &&
         i < get_params().count() && get_params().at(i).is_ext()) {
-      if (func_.get_in_args().has_member(i) && func_.get_out_args().has_member(i)) {
+      if (func_.get_out_args().has_member(i)) {
         if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(get_params().at(i),
             ctx_.exec_ctx_->get_my_session()))) {
           LOG_WARN("failed to destruct pl object", K(i), K(tmp_ret));
