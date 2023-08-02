@@ -656,7 +656,10 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
   auto &snapshot = das_ctx.get_snapshot();
   if (cl == ObConsistencyLevel::WEAK || cl == ObConsistencyLevel::FROZEN) {
     SCN snapshot_version = SCN::min_scn();
+    const bool local_single_ls = plan->is_local_plan() &&
+                                 OB_PHY_PLAN_LOCAL == plan->get_location_type();
     if (OB_FAIL(txs->get_weak_read_snapshot_version(session->get_ob_max_read_stale_time(),
+                                                    local_single_ls,
                                                     snapshot_version))) {
       TRANS_LOG(WARN, "get weak read snapshot fail", KPC(txs));
       int64_t stale_time = session->get_ob_max_read_stale_time();
