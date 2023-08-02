@@ -1000,6 +1000,41 @@ int ObDupTableLSHandler::try_to_confirm_tablets_(const share::SCN &confirm_scn)
   return ret;
 }
 
+int ObDupTableLSHandler::recover_ckpt_into_memory_()
+{
+  int ret = OB_SUCCESS;
+
+  if (dup_ls_ckpt_.is_useful_meta()) {
+    const bool is_dup_table = true;
+    if (OB_SUCC(ret) && OB_FAIL(init(is_dup_table))) {
+      if (OB_INIT_TWICE == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        DUP_TABLE_LOG(WARN, "init dup ls handler failed", K(ret), KPC(this));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ObDupTableLSCheckpoint::ObLSDupTableMeta dup_ls_meta;
+      if (OB_ISNULL(lease_mgr_ptr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        DUP_TABLE_LOG(WARN, "unexpected lease mgr ptr after inited", K(ret), KPC(lease_mgr_ptr_),
+                      KPC(this));
+      } else if (OB_FAIL(dup_ls_ckpt_.get_dup_ls_meta(dup_ls_meta))) {
+        DUP_TABLE_LOG(WARN, "copy a dup table ls meta failed", K(ret), K(dup_ls_meta),
+                      K(dup_ls_ckpt_));
+      } else if (OB_FAIL(lease_mgr_ptr_->recover_lease_from_ckpt(dup_ls_meta))) {
+        DUP_TABLE_LOG(WARN, "recover lease array failed", K(ret), KPC(this), KPC(lease_mgr_ptr_));
+      }
+    }
+  } else {
+    DUP_TABLE_LOG(DEBUG, "unuseful dup table checkpoint, no need to recover", K(ret), K(ls_id_),
+                  K(dup_ls_ckpt_));
+  }
+
+  return ret;
+}
+
 int ObDupTableLSHandler::unblock_confirm_with_prepare_scn(
     const share::SCN &dup_tablet_change_snapshot,
     const share::SCN &redo_scn)

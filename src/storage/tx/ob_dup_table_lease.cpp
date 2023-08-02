@@ -673,6 +673,37 @@ int ObDupTableLSLeaseMgr::get_lease_mgr_stat(FollowerLeaseMgrStatArr &collect_ar
   return ret;
 }
 
+int ObDupTableLSLeaseMgr::recover_lease_from_ckpt(
+    const ObDupTableLSCheckpoint::ObLSDupTableMeta &dup_ls_meta)
+{
+  int ret = OB_SUCCESS;
+
+  SpinWLockGuard guard(lease_lock_);
+
+  if (!dup_ls_meta.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    DUP_TABLE_LOG(WARN, "invalid argument", K(ret), K(dup_ls_meta));
+  } else {
+    DupTableLeaderLeaseInfo leader_lease_info;
+    for (int i = 0; i < dup_ls_meta.lease_item_array_.count() && OB_SUCC(ret); i++) {
+      leader_lease_info.reset();
+      leader_lease_info.confirmed_lease_info_ = dup_ls_meta.lease_item_array_[i].durable_lease_;
+      // lease expired ts will be updated in leader_takeover
+      leader_lease_info.lease_expired_ts_ =
+          leader_lease_info.confirmed_lease_info_.lease_interval_us_
+          + leader_lease_info.confirmed_lease_info_.request_ts_;
+      if (OB_FAIL(leader_lease_map_.set_refactored(
+              dup_ls_meta.lease_item_array_[i].log_header_.get_lease_owner(), leader_lease_info,
+              1))) {
+        DUP_TABLE_LOG(WARN, "insert into leader lease map failed ", K(ret), K(i),
+                      K(dup_ls_meta.lease_item_array_[i]), K(leader_lease_info));
+      }
+    }
+  }
+
+  return ret;
+}
+
 void ObDupTableLSLeaseMgr::update_request_ts_(int64_t loop_start_time)
 {
   // set self_request_ts_ = 0 when replay lease log success

@@ -30,6 +30,7 @@ namespace transaction
 
 class ObDupTableLSHandler;
 class ObDupTableLeaseRequest;
+class ObLSDupTableMeta;
 
 class ObDupTableLSLeaseMgr
 {
@@ -95,6 +96,7 @@ public:
 
   int get_lease_mgr_stat(FollowerLeaseMgrStatArr &collect_arr);
 
+  int recover_lease_from_ckpt(const ObDupTableLSCheckpoint::ObLSDupTableMeta &dup_ls_meta);
 private:
   bool can_grant_lease_(const common::ObAddr &addr,
                         const share::SCN &local_max_applyed_scn,

@@ -231,6 +231,8 @@ private:
 
   int try_to_confirm_tablets_(const share::SCN &confirm_ts);
 
+  int recover_ckpt_into_memory_();
+
 private:
   share::ObLSID ls_id_;
 
