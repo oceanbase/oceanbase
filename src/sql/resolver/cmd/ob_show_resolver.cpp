@@ -433,36 +433,20 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                                                   show_db_id,
                                                   show_db_name))) {
               LOG_WARN("fail to resolve show database", K(ret), K(real_tenant_id));
-            } else if (OB_FAIL(stmt_need_privs.need_privs_.init(2))) {
-              LOG_WARN("fail to init need privs array", K(ret));
-            } else {
-              ObNeedPriv need_priv;
-              need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
-              need_priv.priv_set_ = OB_PRIV_DB_ACC;
-              stmt_need_privs.need_privs_.push_back(need_priv);
-
-              need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
-              need_priv.priv_set_ = OB_PRIV_DB_ACC;
-              need_priv.db_ = show_db_name;
-              stmt_need_privs.need_privs_.push_back(need_priv);
-
-              if (OB_FAIL(schema_checker_->check_priv_or(session_priv, stmt_need_privs))) {
-                if (OB_ERR_NO_DB_PRIVILEGE == ret) {
-                  LOG_USER_ERROR(OB_ERR_NO_DB_PRIVILEGE, session_priv.user_name_.length(), session_priv.user_name_.ptr(),
-                                 session_priv.host_name_.length(),session_priv.host_name_.ptr(),
-                                 show_db_name.length(), show_db_name.ptr());
-                } else {
-                  LOG_WARN("fail to check priv", K(ret));
-                }
+            } else if (OB_FAIL(schema_checker_->check_db_access(session_priv, show_db_name))) {
+              if (OB_ERR_NO_DB_PRIVILEGE == ret) {
+                LOG_USER_ERROR(OB_ERR_NO_DB_PRIVILEGE, session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                               session_priv.host_name_.length(),session_priv.host_name_.ptr(),
+                               show_db_name.length(), show_db_name.ptr());
               } else {
-                if (NULL != parse_tree.children_[0]) {
-                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_CREATE_DATABASE_EXISTS);
-                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_CREATE_DATABASE_EXISTS, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_CREATE_DATABASE_TNAME, show_db_id);
-                } else {
-                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_CREATE_DATABASE);
-                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_CREATE_DATABASE, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_CREATE_DATABASE_TNAME, show_db_id);
-                }
+                LOG_WARN("fail to check priv", K(ret));
               }
+            } else if (NULL != parse_tree.children_[0]) {
+              GEN_SQL_STEP_1(ObShowSqlSet::SHOW_CREATE_DATABASE_EXISTS);
+              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_CREATE_DATABASE_EXISTS, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_CREATE_DATABASE_TNAME, show_db_id);
+            } else {
+              GEN_SQL_STEP_1(ObShowSqlSet::SHOW_CREATE_DATABASE);
+              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_CREATE_DATABASE, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_CREATE_DATABASE_TNAME, show_db_id);
             }
           }
         }();
