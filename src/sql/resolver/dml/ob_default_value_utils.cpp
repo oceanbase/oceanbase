@@ -141,21 +141,57 @@ int ObDefaultValueUtils::resolve_default_function(ObRawExpr *&expr, ObStmtScope 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(expr), K(fun_expr->get_expr_type()),
                  K(fun_expr->get_param_count()));
-  } else if (OB_UNLIKELY(fun_expr->get_param_expr(0)->get_expr_type() != T_REF_COLUMN)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid default function, the first child is not column_ref", K(expr));
   } else if (OB_ISNULL(stmt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid stmt", K(stmt_));
   } else {
     ColumnItem *column_item = NULL;
-    ObColumnRefRawExpr *column_expr = static_cast<ObColumnRefRawExpr*>(fun_expr->get_param_expr(0));
-    if (OB_ISNULL(column_expr)
-        || (OB_ISNULL((column_item = stmt_->get_column_item_by_id(column_expr->get_table_id(),
-                                                                column_expr->get_column_id()))))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to get column item");
+    ObColumnRefRawExpr *column_expr = NULL;
+    if (fun_expr->get_param_expr(0)->is_exec_param_expr()) {
+      ObExecParamRawExpr* exec_param = static_cast<ObExecParamRawExpr*>(fun_expr->get_param_expr(0));
+      if (OB_ISNULL(exec_param) || OB_ISNULL(exec_param->get_ref_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("exec_param is null", K(ret));
+      } else if (OB_UNLIKELY(exec_param->get_ref_expr()->get_expr_type() != T_REF_COLUMN)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ref expr of default is not column_ref", K(ret), K(*exec_param->get_ref_expr()));
+      } else {
+        column_expr = static_cast<ObColumnRefRawExpr*>(exec_param->get_ref_expr());
+      }
     } else {
+      if (OB_UNLIKELY(fun_expr->get_param_expr(0)->get_expr_type() != T_REF_COLUMN)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid default function, the first child is not column_ref", K(*expr), K(lbt()));
+      } else {
+        column_expr = static_cast<ObColumnRefRawExpr*>(fun_expr->get_param_expr(0));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(column_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column_expr is null", K(ret));
+      } else {
+        for (ObDMLResolver *cur_resolver = resolver_; OB_SUCC(ret) && cur_resolver != NULL;
+             cur_resolver = cur_resolver->get_parent_namespace_resolver()) {
+          if (OB_ISNULL(cur_resolver->get_stmt())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("resolver get stmt is null", K(ret));
+          } else {
+            column_item = cur_resolver->get_stmt()->get_column_item_by_id(column_expr->get_table_id(),
+                                                                        column_expr->get_column_id());
+            if (column_item != NULL) {
+              break;
+            }
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(column_item)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get column item", K(*column_expr), K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
       if (column_item->get_column_type()->is_timestamp()) {
         if (OB_FAIL(build_default_expr_for_timestamp(column_item, expr))) {
           LOG_WARN("fail to build default expr for timestamp", K(ret));
