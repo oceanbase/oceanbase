@@ -4759,7 +4759,7 @@ int ObSelectResolver::resolve_into_clause(const ParseNode *node)
     } else if (OB_ISNULL(select_stmt)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("select stmt is NULL", K(ret));
-    } else if (OB_UNLIKELY(get_current_level() != 0)) { //in subquery
+    } else if (OB_UNLIKELY(is_sub_stmt_)) { //in subquery
       ret = OB_INAPPROPRIATE_INTO;
       LOG_WARN("select into can not in subquery", K(ret));
     } else if (OB_UNLIKELY(is_in_set_query())) {
