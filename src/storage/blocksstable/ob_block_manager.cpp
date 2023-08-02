@@ -1552,6 +1552,8 @@ int ObBlockManager::extend_file_size_if_need()
   int64_t reserved_size = 4 * 1024 * 1024 * 1024L; //default RESERVED_DISK_SIZE -> 4G
 
   if (OB_ISNULL(io_device_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("block manager hasn't inited", K(ret), KP(io_device_));
   } else if (OB_FAIL(SLOGGERMGR.get_reserved_size(reserved_size))) {
     LOG_WARN("Fail to get reserved size", K(ret));
   } else if (!check_can_be_extend(reserved_size)) {

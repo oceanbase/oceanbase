@@ -1483,7 +1483,7 @@ int ObTmpTenantMemBlockManager::exec_wait()
               OB_TMP_FILE_STORE.dec_block_cache_num(tenant_id_, 1);
               ObTaskController::get().allow_next_syslog();
               STORAGE_LOG(INFO, "succeed to wash a block", K(block_id), K(macro_id),
-                  "free_page_nums:", free_page_nums, K(t_mblk_map_.size()));
+                  K(free_page_nums), K(t_mblk_map_.size()));
             }
           }
         }

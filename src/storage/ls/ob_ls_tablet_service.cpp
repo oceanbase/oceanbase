@@ -3671,7 +3671,8 @@ int ObLSTabletService::check_old_row_legitimacy(
       if (OB_TMP_FAIL(check_real_leader_for_4377_(run_ctx.store_ctx_.ls_id_))) {
         ret = tmp_ret;
         LOG_WARN("check real leader for 4377 found exception", K(ret), K(old_row), K(data_table));
-      } else if (OB_TMP_FAIL(check_need_rollback_in_transfer_for_4377_(run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_,
+      } else if (nullptr != run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_
+          && OB_TMP_FAIL(check_need_rollback_in_transfer_for_4377_(run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_,
                                                                        data_tablet_handle))) {
         ret = tmp_ret;
         LOG_WARN("check need rollback in transfer for 4377 found exception", K(ret), K(old_row), K(data_table));
@@ -6267,6 +6268,7 @@ int ObLSTabletService::check_need_rollback_in_transfer_for_4377_(const transacti
   bool unused_committed_flag = false;
 
   if (OB_ISNULL(tx_desc)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx_desc is null when check 4377", K(ret));
   } else if (OB_FAIL(data_tablet_handle.get_obj()->ObITabletMdsInterface::get_latest_tablet_status(
                user_data, unused_committed_flag))) {

@@ -231,14 +231,18 @@ int ObTenantMetaObjPool<T>::acquire(T *&t)
       ob_usleep(1);
       void *free_obj = nullptr;
       if (OB_FAIL((*wash_func_)(typeid(T), free_obj))) {
-        STORAGE_LOG(WARN, "wash function fail", K(ret));
+        if (OB_ITER_END != ret) {
+          STORAGE_LOG(WARN, "wash function fail", K(ret));
+        }
       } else {
         t = static_cast<T *>(free_obj);
       }
     }
-    if (OB_ISNULL(t)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(WARN, "no object could be acquired", K(ret));
+    if (OB_SUCC(ret) || OB_ITER_END == ret) {
+      if (OB_ISNULL(t)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(DEBUG, "no object could be acquired", K(ret));
+      }
     }
   }
   return ret;
