@@ -32,6 +32,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "share/config/ob_server_config.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "sql/resolver/dml/ob_insert_all_stmt.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
@@ -5346,6 +5347,12 @@ int ObTransformPreProcess::transform_arg_case_expr(ObRawExprFactory &expr_factor
       LOG_WARN("failed to add param expr", K(ret));
     }
   } // for end
+  ObRawExpr* tmp_case_expr = static_cast<ObRawExpr*>(new_case_expr);
+  if (OB_SUCC(ret) &&
+      !case_expr->is_called_in_sql() &&
+      OB_FAIL(ObRawExprUtils::set_call_in_pl(tmp_case_expr))) {
+    LOG_WARN("failed to set call_in_pl flag", K(ret));
+  }
   if (OB_SUCC(ret)) {
     new_case_expr->set_default_param_expr(case_expr->get_default_param_expr());
     if (OB_FAIL(new_case_expr->formalize(&session))) {
