@@ -6556,6 +6556,13 @@ int ObSelectResolver::recursive_check_grouping_columns(ObSelectStmt *stmt, ObRaw
     } else if (c_expr->is_nested_aggr()) {
       ret = OB_ERR_GROUP_FUNC_NOT_ALLOWED;
       LOG_WARN("group_id shouldn't be nested", K(ret));
+    } else if (stmt->get_group_expr_size() == 0 &&
+               stmt->get_rollup_expr_size() == 0 &&
+               stmt->get_grouping_sets_items_size() == 0 &&
+               stmt->get_rollup_items_size() == 0 &&
+               stmt->get_cube_items_size() == 0) {
+      ret = OB_ERR_GROUPING_FUNC_WITHOUT_GROUP_BY;
+      LOG_WARN("GROUPING function only supported with GROUP BY CUBE or ROLLUP", K(ret));
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {

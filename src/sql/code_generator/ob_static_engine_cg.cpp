@@ -5711,9 +5711,8 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
     ObSEArray<int64_t,10> group_id_array;
     if (OB_SUCC(ret) && T_FUN_GROUP_ID == raw_expr.get_expr_type()) {
       if (OB_ISNULL(group_exprs)) {
-        // oracle raise error: ORA-30481: GROUPING function only supported with GROUP BY CUBE or ROLLUP
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("grouping_id shouldn't appear if there were no groupby");
+        ret = OB_ERR_GROUPING_FUNC_WITHOUT_GROUP_BY;
+        LOG_WARN("grouping_id shouldn't appear if there were no groupby", K(ret));
       } else if (OB_NOT_NULL(rollup_exprs) && rollup_exprs->count() + group_exprs->count() > 0) {
         for (int64_t i = 0; OB_SUCC(ret) && i < rollup_exprs->count(); i++) {
           if (has_exist_in_array(*group_exprs, rollup_exprs->at(i))){

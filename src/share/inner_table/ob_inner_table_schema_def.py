@@ -12848,7 +12848,8 @@ def_table_schema(
          CAST(V.INDEX_TYPE AS      CHAR(16))     AS INDEX_TYPE,
          CAST(V.COMMENT AS         CHAR(16))     AS COMMENT,
          CAST(V.INDEX_COMMENT AS   CHAR(1024))   AS INDEX_COMMENT,
-         CAST(V.IS_VISIBLE AS      CHAR(3))      AS IS_VISIBLE
+         CAST(V.IS_VISIBLE AS      CHAR(3))      AS IS_VISIBLE,
+         V.EXPRESSION                            AS EXPRESSION
   FROM   (SELECT db.database_name                                              AS TABLE_SCHEMA,
                  t.table_name                                                  AS TABLE_NAME,
                  CASE WHEN i.index_type IN (2,4,8) THEN 0 ELSE 1 END           AS NON_UNIQUE,
@@ -12862,7 +12863,8 @@ def_table_schema(
                  i.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END)END      AS INDEX_TYPE,
                  t.comment                                                     AS COMMENT,
                  i.comment                                                     AS INDEX_COMMENT,
-                 CASE WHEN (i.index_attributes_set & 1) THEN 'NO' ELSE 'YES' END AS IS_VISIBLE
+                 CASE WHEN (i.index_attributes_set & 1) THEN 'NO' ELSE 'YES' END AS IS_VISIBLE,
+                 d_col2.cur_default_value_v2                                     AS EXPRESSION
           FROM   oceanbase.__all_table i
           JOIN   oceanbase.__all_table t
           ON     i.data_table_id=t.table_id
@@ -12884,6 +12886,14 @@ def_table_schema(
           AND   i.tenant_id = d_col.tenant_id
           AND   (case when (c.is_hidden = 1 and substr(c.column_name, 1, 8) = '__substr') then
                    substr(c.column_name, 8 + instr(substr(c.column_name, 8), '_')) else 0 end) = d_col.column_id
+          LEFT JOIN oceanbase.__all_column d_col2
+          ON    i.data_table_id = d_col2.table_id
+          AND   i.tenant_id = d_col2.tenant_id
+          AND   c.column_id = d_col2.column_id
+          AND   d_col2.cur_default_value_v2 is not null
+          AND   d_col2.is_hidden = 1
+          AND   (d_col2.column_flags & (0x1 << 0) = 1 or d_col2.column_flags & (0x1 << 1) = 1)
+          AND   substr(d_col2.column_name, 1, 6) = 'SYS_NC'
         UNION ALL
           SELECT  db.database_name  AS TABLE_SCHEMA,
                   t.table_name      AS TABLE_NAME,
@@ -12898,7 +12908,8 @@ def_table_schema(
                     CASE WHEN t.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END) END AS INDEX_TYPE,
                   t.comment        AS COMMENT,
                   t.comment        AS INDEX_COMMENT,
-                  'YES'            AS IS_VISIBLE
+                  'YES'            AS IS_VISIBLE,
+                  NULL             AS EXPRESSION
           FROM   oceanbase.__all_table t
           JOIN   oceanbase.__all_column c
           ON     t.table_id=c.table_id
@@ -12925,7 +12936,8 @@ def_table_schema(
                 i.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END)END    AS INDEX_TYPE,
               t.comment                                                     AS COMMENT,
               i.comment                                                     AS INDEX_COMMENT,
-              CASE WHEN (i.index_attributes_set & 1) THEN 'NO' ELSE 'YES' END AS IS_VISIBLE
+              CASE WHEN (i.index_attributes_set & 1) THEN 'NO' ELSE 'YES' END AS IS_VISIBLE,
+              d_col2.cur_default_value_v2                                   AS EXPRESSION
           FROM   oceanbase.__ALL_VIRTUAL_CORE_ALL_TABLE i
           JOIN   oceanbase.__ALL_VIRTUAL_CORE_ALL_TABLE t
           ON     i.data_table_id=t.table_id
@@ -12945,6 +12957,14 @@ def_table_schema(
           AND   i.tenant_id = d_col.tenant_id
           AND   (case when (c.is_hidden = 1 and substr(c.column_name, 1, 8) = '__substr') then
                    substr(c.column_name, 8 + instr(substr(c.column_name, 8), '_')) else 0 end) = d_col.column_id
+          LEFT JOIN oceanbase.__ALL_VIRTUAL_CORE_COLUMN_TABLE d_col2
+          ON    i.data_table_id = d_col2.table_id
+          AND   i.tenant_id = d_col2.tenant_id
+          AND   c.column_id = d_col2.column_id
+          AND   d_col2.cur_default_value_v2 is not null
+          AND   d_col2.is_hidden = 1
+          AND   (d_col2.column_flags & (0x1 << 0) = 1 or d_col2.column_flags & (0x1 << 1) = 1)
+          AND   substr(d_col2.column_name, 1, 6) = 'SYS_NC'
         UNION ALL
           SELECT db.database_name  AS TABLE_SCHEMA,
                   t.table_name      AS TABLE_NAME,
@@ -12959,7 +12979,8 @@ def_table_schema(
                     CASE WHEN t.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END) END AS INDEX_TYPE,
                   t.comment        AS COMMENT,
                   t.comment        AS INDEX_COMMENT,
-                  'YES'            AS IS_VISIBLE
+                  'YES'            AS IS_VISIBLE,
+                  NULL             AS EXPRESSION
           FROM   oceanbase.__ALL_VIRTUAL_CORE_ALL_TABLE t
           JOIN   oceanbase.__ALL_VIRTUAL_CORE_COLUMN_TABLE c
           ON     t.table_id=c.table_id
@@ -51787,7 +51808,7 @@ def_table_schema(
           CAST(COMPLETED_TABLE_COUNT AS NUMBER) AS COMPLETED_TABLE_COUNT,
           CAST(RUNNING_TABLE_OWNER AS VARCHAR2(128)) AS RUNNING_TABLE_OWNER,
           CAST(RUNNING_TABLE_NAME AS VARCHAR2(256)) AS RUNNING_TABLE_NAME,
-          CAST(RUNNING_TABLE_DURATION_TIME AS VARCHAR2(256)) AS RUNNING_TABLE_DURATION_TIME
+          CAST(RUNNING_TABLE_DURATION_TIME AS NUMBER) AS RUNNING_TABLE_DURATION_TIME
         FROM SYS.ALL_VIRTUAL_OPT_STAT_GATHER_MONITOR
 """.replace("\n", " ")
 )
