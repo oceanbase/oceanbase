@@ -8825,6 +8825,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
   }
 
   if (OB_SUCC(ret)) {
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "S2Adapter"));
     // build s2 object from wkb
     if (OB_FAIL(ObGeoTypeUtil::get_type_from_wkb((buffer_geo.empty() ? wkb_str : buffer_geo), geo_type))) {
       LOG_WARN("fail to get geo type by wkb", K(ret));
@@ -8944,6 +8945,7 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
   }
 
   if (OB_SUCC(ret)) {
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "S2Adapter"));
     // build s2 object from wkb
     if (OB_FAIL(s2object->init((buffer_geo.empty() ? wkb_str : buffer_geo), srs_bound))) {
       LOG_WARN("Init s2object failed", K(ret));
