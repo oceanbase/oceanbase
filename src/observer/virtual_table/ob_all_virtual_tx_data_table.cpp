@@ -154,7 +154,7 @@ int ObAllVirtualTxDataTable::get_next_tx_data_table_(ObITable *&tx_data_table)
   // memtable_array_pos_ < 0 && sstable_array_pos_ < 0 means all the tx data memtables of this logstream have been
   // disposed or the first time get_next_tx_data_memtable() is invoked,  when get_next_tx_data_table_ is invoked the
   // first time, memtable_array_pos_ and memtable_array_.count() are both -1
-  if (memtable_array_pos_ < 0 && sstable_array_pos_ < 0) {
+  while (OB_SUCC(ret) && memtable_array_pos_ < 0 && sstable_array_pos_ < 0) {
     ObLS *ls = nullptr;
     ObTablet *tablet = nullptr;
     ObIMemtableMgr *memtable_mgr = nullptr;
@@ -180,14 +180,22 @@ int ObAllVirtualTxDataTable::get_next_tx_data_table_(ObITable *&tx_data_table)
     } else if (FALSE_IT(tablet = tablet_handle_.get_obj())) {
     } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper_))) {
       SERVER_LOG(WARN, "fail to fetch table store", K(ret));
-    } else if (OB_FAIL(
-        table_store_wrapper_.get_member()->get_minor_sstables().get_all_tables(sstable_handles_))) {
+    } else if (OB_FAIL(table_store_wrapper_.get_member()->get_minor_sstables().get_all_tables(sstable_handles_))) {
       SERVER_LOG(WARN, "fail to get sstable handles", KR(ret));
     } else {
       // iterate from the newest memtable in memtable handles
       memtable_array_pos_ = memtable_handles_.count() - 1;
       // iterate from the newest sstable in sstable handles
       sstable_array_pos_ = sstable_handles_.count() - 1;
+      if (memtable_array_pos_ < 0 && sstable_array_pos_ < 0) {
+        SERVER_LOG(INFO,
+                   "empty logstream. may be offlined",
+                   KR(ret),
+                   K(ls_id_),
+                   K(addr_),
+                   K(memtable_array_pos_),
+                   K(sstable_array_pos_));
+      }
     }
   }
 
@@ -197,10 +205,8 @@ int ObAllVirtualTxDataTable::get_next_tx_data_table_(ObITable *&tx_data_table)
   } else if (sstable_array_pos_ >= 0) {
     tx_data_table = sstable_handles_[sstable_array_pos_--];
   } else {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "get next tx data table failed.", KR(ret), K(ls_id_), K(addr_));
+    ret = OB_ITER_END;
   }
-
 
   return ret;
 }
