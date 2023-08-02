@@ -1408,7 +1408,7 @@ int ObResolverUtils::resolve_synonym_object_recursively(ObSchemaChecker &schema_
                 K(ret), K(tenant_id), K(database_id), K(synonym_name));
       }
     } else if (OB_FAIL(schema_checker.check_exist_same_name_object_with_synonym(tenant_id,
-                                                                                database_id,
+                                                                                object_database_id,
                                                                                 object_name,
                                                                                 exist_non_syn_object)) || !exist_non_syn_object) {
       OZ (SMART_CALL(resolve_synonym_object_recursively(
