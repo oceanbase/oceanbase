@@ -590,16 +590,6 @@ protected:
                                  const ObRawExpr *col_expr,
                                  bool &res);
 
-
-  int resolve_range_partition_elements(ParseNode *node,
-                                       const bool is_subpartition,
-                                       const share::schema::ObPartitionFuncType part_type,
-                                       common::ObIArray<ObRawExpr *> &range_value_exprs,
-                                       common::ObIArray<share::schema::ObPartition> &partitions,
-                                       common::ObIArray<share::schema::ObSubPartition> &subpartitions,
-                                       int64_t &expr_num,
-                                       const bool &in_tablegroup = false);
-
   int resolve_range_value_exprs(ParseNode *expr_list_node,
                                 const share::schema::ObPartitionFuncType part_type,
                                 const common::ObString &partition_name,

@@ -4113,7 +4113,7 @@ int ObResolverUtils::resolve_partition_expr(ObResolverParams &params,
               || is_list_part(part_func_type) || PARTITION_FUNC_TYPE_KEY == part_func_type) {
         if (OB_FAIL(check_expr_valid_for_partition(
             *part_expr, *params.session_info_, part_func_type, tbl_schema))) {
-          LOG_WARN("check_valid_column_for_hash or range func failed", K(ret));
+          LOG_WARN("check_valid_column_for_hash or range func failed", K(ret), KPC(part_expr));
         }
       }
     }
