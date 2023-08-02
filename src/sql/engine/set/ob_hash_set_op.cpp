@@ -169,7 +169,7 @@ int ObHashSetOp::build_hash_table(bool from_child)
         hp_infras_.get_cur_part_row_cnt(InputSide::RIGHT)))) {
       LOG_WARN("failed to init hash table", K(ret));
     } else if (OB_FAIL(sql_mem_processor_.init(
-                  &mem_context_->get_allocator(),
+                  &mem_context_->get_malloc_allocator(),
                   ctx_.get_my_session()->get_effective_tenant_id(),
                   hp_infras_.get_cur_part_file_size(InputSide::RIGHT),
                   spec_.type_,
@@ -222,7 +222,7 @@ int ObHashSetOp::build_hash_table_from_left(bool from_child)
         hp_infras_.get_cur_part_row_cnt(InputSide::LEFT)))) {
       LOG_WARN("failed to init hash table", K(ret));
     } else if (OB_FAIL(sql_mem_processor_.init(
-                  &mem_context_->get_allocator(),
+                  &mem_context_->get_malloc_allocator(),
                   ctx_.get_my_session()->get_effective_tenant_id(),
                   hp_infras_.get_cur_part_file_size(InputSide::LEFT),
                   spec_.type_,
@@ -274,7 +274,7 @@ int ObHashSetOp::build_hash_table_from_left_batch(bool from_child, const int64_t
         hp_infras_.get_cur_part_row_cnt(InputSide::LEFT)))) {
       LOG_WARN("failed to init hash table", K(ret));
     } else if (OB_FAIL(sql_mem_processor_.init(
-                  &mem_context_->get_allocator(),
+                  &mem_context_->get_malloc_allocator(),
                   ctx_.get_my_session()->get_effective_tenant_id(),
                   hp_infras_.get_cur_part_file_size(InputSide::LEFT),
                   spec_.type_,
@@ -334,7 +334,7 @@ int ObHashSetOp::init_hash_partition_infras()
       &ctx_, get_spec().px_est_size_factor_, est_rows, est_rows))) {
     LOG_WARN("failed to get px size", K(ret));
   } else if (OB_FAIL(sql_mem_processor_.init(
-                  &mem_context_->get_allocator(),
+                  &mem_context_->get_malloc_allocator(),
                   ctx_.get_my_session()->get_effective_tenant_id(),
                   est_rows * get_spec().width_,
                   get_spec().type_,
