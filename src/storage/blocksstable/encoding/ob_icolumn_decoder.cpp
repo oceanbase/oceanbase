@@ -267,34 +267,27 @@ int ObIColumnDecoder::get_null_count_from_extend_value(
 
 int ObIColumnDecoder::get_aggregate_result(
   const ObColumnDecoderCtx &ctx,
-  const ObIRowIndex *row_index,
   const int64_t *row_ids,
   const int64_t row_cap,
   ObMicroBlockAggInfo<ObDatum> &agg_info,
   ObDatum *datum) const
 {
   int ret = OB_SUCCESS;
-  ObObj cell;
-  sql::ObWhiteFilterOperatorType op_type = sql::WHITE_OP_LT;
-  bool const_nu = false;
-  const char *row_data = NULL;
-  int64_t row_len = 0;
-  int64_t row_id = 0;
-  for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
-    row_id = row_ids[i];
-    if (OB_FAIL(row_index->get(row_id, row_data, row_len))) {
-      LOG_WARN("get row data failed", K(ret), K(row_id));
-    }
-    ObBitStream bs(reinterpret_cast<unsigned char *>(const_cast<char *>(row_data)), row_len);
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(decode(const_cast<ObColumnDecoderCtx &>(ctx), cell, row_id, bs, row_data, row_len))) {
-      LOG_WARN("Failed to decode cell", K(ret));
-    } else  if(OB_FAIL(datum[i].from_obj(cell))){
-      LOG_WARN("Failed to get datum from obj");
-    } else if (OB_FAIL(agg_info.update_min_or_max(datum[i]))){
-      LOG_WARN("Failed to update_min_or_max");
-    }
-    }
+  switch (ctx.col_header_->type_){
+    //supported type
+    case ObColumnHeader::RAW :
+    case ObColumnHeader::DICT :
+    case ObColumnHeader::RLE :
+    case ObColumnHeader::CONST :
+    case ObColumnHeader::INTEGER_BASE_DIFF: break;
+    //unsupported type
+    case ObColumnHeader::STRING_DIFF:
+    case ObColumnHeader::STRING_PREFIX:
+    case ObColumnHeader::HEX_PACKING:
+    case ObColumnHeader::COLUMN_EQUAL:
+    case ObColumnHeader::COLUMN_SUBSTR: 
+    ret = OB_NOT_SUPPORTED;
+  }
   return ret;
 }
 

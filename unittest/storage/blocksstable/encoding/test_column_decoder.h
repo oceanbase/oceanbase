@@ -1034,7 +1034,7 @@ void TestColumnDecoder::agg_min_or_max_test()
     ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
   }
   for (int64_t i = ROW_CNT - 2; i < ROW_CNT; ++i) {
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed0, row));
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed1, row));
     ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
   }
 
@@ -1079,7 +1079,7 @@ void TestColumnDecoder::agg_min_or_max_test()
     LOG_INFO("Current col: ", K(i), K(col_descs_.at(i).col_id_),  
         K(*decoder.decoders_[col_offset].ctx_),K(datums->len_));
     int64_t start_time = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, decoder.get_min_or_max(i , row_ids, cell_datas, ROW_CNT-1, datums, agg_info));    
+    ASSERT_EQ(OB_SUCCESS, decoder.get_min_or_max(i , row_ids, cell_datas, ROW_CNT, datums, agg_info));    
     int64_t end_time = ObTimeUtility::current_time();
     STORAGE_LOG(INFO,"get min/max time_new:",K(end_time-start_time),K(agg_info.result_datum_));
     sum_time_n += (end_time-start_time);
@@ -1111,9 +1111,9 @@ void TestColumnDecoder::agg_min_or_max_test()
     ASSERT_EQ(OB_SUCCESS, decoder.decoders_[col_offset].batch_decode(decoder.row_index_,
                             row_ids,
                             cell_datas,
-                            ROW_CNT-1,
+                            ROW_CNT,
                             datums));
-    for(int i = 0;i<ROW_CNT-1;++i){
+    for(int i = 0;i<ROW_CNT;++i){
       agg_info.update_min_or_max(datums[i]);
     } 
     int64_t end_time = ObTimeUtility::current_time();

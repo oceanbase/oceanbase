@@ -122,13 +122,11 @@ int ObRLEDecoder::get_null_count(
 
 int ObRLEDecoder::get_aggregate_result(
     const ObColumnDecoderCtx &ctx,
-    const ObIRowIndex *row_index,
     const int64_t *row_ids,
     const int64_t row_cap,
     ObMicroBlockAggInfo<ObDatum> &agg_info,
     ObDatum *datum_buf) const
 {
-  UNUSEDx(row_index);
   int ret = OB_SUCCESS;
   const int64_t dict_count = dict_decoder_.get_dict_header()->count_;
   const int64_t dict_meta_length = ctx.col_header_->length_ - meta_header_->offset_;
@@ -139,7 +137,7 @@ int ObRLEDecoder::get_aggregate_result(
       int64_t i =0;
       while (OB_SUCC(ret) && traverse_it != end_it) {
         if (OB_FAIL(datum_buf[i].from_obj(*traverse_it))){
-          LOG_WARN("Failed to trans to datum");
+          LOG_WARN("Failed to trans to datum",K(ret),K(*traverse_it));
         } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))){
           LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[i]), K(agg_info));
         }
@@ -168,7 +166,7 @@ int ObRLEDecoder::get_aggregate_result(
       int64_t trav_idx = monotonic_inc ? 0 : row_cap - 1;
       int64_t trav_cnt = 0;
       ObDictDecoderIterator begin_it = dict_decoder_.begin(&ctx, dict_meta_length);
-      while (trav_cnt < row_cap) {
+      while (OB_SUCC(ret) && trav_cnt < row_cap) {
         row_id = row_ids[trav_idx];
         if (ref_table_pos == ref_count || row_id < next_ref_row_id) {
         } else if (row_id == next_ref_row_id) {
@@ -179,7 +177,7 @@ int ObRLEDecoder::get_aggregate_result(
           curr_ref = ref_array.at_(meta_header_->payload_ + ref_offset_, ref_table_pos - 1);
           cell = *(begin_it + curr_ref);
           if (OB_FAIL(datum_buf[trav_cnt].from_obj(cell))){
-            LOG_WARN("Failed to trans to datum");
+            LOG_WARN("Failed to trans to datum",K(ret),K(cell));
           } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[trav_cnt]))){
             LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[trav_cnt]), K(agg_info));
           }
@@ -192,7 +190,7 @@ int ObRLEDecoder::get_aggregate_result(
           curr_ref = ref_array.at_(meta_header_->payload_ + ref_offset_, ref_table_pos - 1);
           cell = *(begin_it + curr_ref);
           if (OB_FAIL(datum_buf[trav_cnt].from_obj(cell))){
-            LOG_WARN("Failed to trans to datum");
+            LOG_WARN("Failed to trans to datum",K(ret),K(cell));
           } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[trav_cnt]))){
             LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[trav_cnt]), K(agg_info));
           }

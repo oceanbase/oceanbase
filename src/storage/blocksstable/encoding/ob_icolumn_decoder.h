@@ -201,7 +201,6 @@ public:
 
   virtual int get_aggregate_result(
       const ObColumnDecoderCtx &ctx,
-      const ObIRowIndex *row_index,
       const int64_t *row_ids,
       const int64_t row_cap,
       ObMicroBlockAggInfo<ObDatum> &agg_info,

@@ -602,7 +602,6 @@ int ObIntegerBaseDiffDecoder::get_null_count(
 }
 int ObIntegerBaseDiffDecoder::get_aggregate_result(
       const ObColumnDecoderCtx &ctx,
-      const ObIRowIndex *row_index,
       const int64_t *row_ids,
       const int64_t row_cap,
       ObMicroBlockAggInfo<ObDatum> &agg_info,
@@ -610,13 +609,12 @@ int ObIntegerBaseDiffDecoder::get_aggregate_result(
 {
   int ret = OB_SUCCESS;
   uint32_t datum_len = 0;
+
   if (OB_FAIL(get_uint_data_datum_len(
       ObDatum::get_obj_datum_map_type(ctx.obj_meta_.get_type()),
       datum_len))) {
     LOG_WARN("Failed to get datum length of int/uint data", K(ret));
-  }
-  ObObj cell;
-  if(agg_info.get_is_min() && (row_cap == ctx.micro_block_header_->row_count_)){
+  } else if (agg_info.get_is_min() && (row_cap == ctx.micro_block_header_->row_count_)){
     MEMCPY(const_cast<char *>(datum_buf[0].ptr_), &base_, datum_len);
     datum_buf[0].pack_ = datum_len;
     if (OB_FAIL(agg_info.update_min_or_max(datum_buf[0]))){
@@ -635,9 +633,8 @@ int ObIntegerBaseDiffDecoder::get_aggregate_result(
         LOG_WARN("Failed to set null datums from fixed data", K(ret), K(ctx));
       }
     }
-
     if (OB_FAIL(ret)) {
-    }  else if (ctx.is_bit_packing()) {
+    } else if (ctx.is_bit_packing()) {
       if (OB_FAIL(batch_get_bitpacked_values(
           ctx, row_ids, row_cap, datum_len, data_offset, datum_buf))) {
         LOG_WARN("Failed to batch unpack delta values", K(ret), K(ctx));

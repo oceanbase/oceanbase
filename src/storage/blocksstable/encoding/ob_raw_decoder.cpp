@@ -709,7 +709,6 @@ int ObRawDecoder::get_null_count(
 
 int ObRawDecoder::get_aggregate_result(
       const ObColumnDecoderCtx &ctx,
-      const ObIRowIndex *row_index,
       const int64_t *row_ids,
       const int64_t row_cap,
       ObMicroBlockAggInfo<ObDatum> &agg_info,
@@ -734,12 +733,11 @@ int ObRawDecoder::get_aggregate_result(
         [get_store_class_tag_map()[store_class]];
       get_min_or_max_func(ctx.col_header_->length_, meta_data_, row_ids, row_cap, agg_info.get_is_min(), datum_buf[0]);
     if (OB_FAIL(agg_info.update_min_or_max(datum_buf[0]))){
-      LOG_WARN("Failed to update_min_or_max");
+      LOG_WARN("Failed to update_min_or_max",K(ret),K(datum_buf[0]));
     }
   } else {
-    if(OB_FAIL(ObIColumnDecoder::get_aggregate_result(ctx, row_index, row_ids, row_cap, agg_info,datum_buf))){
-      LOG_WARN("Fail to get min/max from column decoder");
-    }
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Unsupported store class in raw encoding",K(ret));
   }
   return ret;
 }
