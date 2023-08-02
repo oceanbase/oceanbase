@@ -76,9 +76,13 @@ int ObExprToNumberBase::calc_result_typeN(ObExprResType &type,
       if (param_num == 3) {
         types[2].set_calc_type_default_varchar();
       }
-      type.set_type(ObNumberType);
-      type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
-      type.set_precision(PRECISION_UNKNOWN_YET);
+      if (types[0].is_null()) {
+        type.set_null();
+      } else {
+        type.set_type(ObNumberType);
+        type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
+        type.set_precision(PRECISION_UNKNOWN_YET);
+      }
     }
   }
   return ret;
@@ -325,7 +329,11 @@ int ObExprToBinaryFloat::calc_result_typeN(ObExprResType &type,
     LOG_WARN("input type can not cast to binary_float", K(types[0].get_type()), K(ret));
   } else {
     types[0].set_calc_type(ObFloatType);
-    type.set_type(ObFloatType);
+    if (types[0].is_null()) {
+      type.set_null();
+    } else {
+      type.set_type(ObFloatType);
+    }
   }
   return ret;
 }
@@ -388,7 +396,11 @@ int ObExprToBinaryDouble::calc_result_typeN(ObExprResType &type,
     LOG_WARN("input type can not cast to binary_double", K(types[0].get_type()), K(ret));
   } else {
     types[0].set_calc_type(ObDoubleType);
-    type.set_type(ObDoubleType);
+    if (types[0].is_null()) {
+      type.set_null();
+    } else {
+      type.set_type(ObDoubleType);
+    }
   }
   return ret;
 }
