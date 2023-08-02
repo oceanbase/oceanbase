@@ -93,6 +93,7 @@ int ObRecoveryLSService::init()
     tenant_id_ = MTL_ID();
     proxy_ = GCTX.sql_proxy_;
     last_report_ts_ = OB_INVALID_TIMESTAMP;
+    restore_status_.reset();
     inited_ = true;
   }
 
@@ -109,6 +110,33 @@ void ObRecoveryLSService::destroy()
   restore_proxy_.destroy();
   last_report_ts_ = OB_INVALID_TIMESTAMP;
   primary_is_avaliable_= true;
+  restore_status_.reset();
+}
+
+int ObRecoveryLSService::get_sys_restore_status(logservice::RestoreStatusInfo &restore_status)
+{
+  int ret = OB_SUCCESS;
+  palf::PalfHandleGuard palf_handle_guard;
+  palf::LSN report_lsn;
+  SCN report_scn;
+  if (has_set_stop()) {
+    ret = OB_IN_STOP_STATE;
+    LOG_WARN("thread is in stop state");
+  } else if (!restore_status_.is_valid()) {
+    LOG_INFO("restore status is invalid", K(restore_status_));
+  } else if (OB_FAIL(restore_status.assign(restore_status_))) {
+    LOG_WARN("restore status assign failed", K(restore_status_));
+  } else if (OB_FAIL(init_palf_handle_guard_(palf_handle_guard))) {
+    LOG_WARN("init palf handle guard failed");
+  } else if (OB_FAIL(palf_handle_guard.get_end_lsn(report_lsn))) {
+    LOG_WARN("fail to get end lsn");
+  } else if (OB_FAIL(palf_handle_guard.get_end_scn(report_scn))) {
+    LOG_WARN("fail to get end scn");
+  } else {
+    restore_status.sync_lsn_ = report_lsn.val_;
+    restore_status.sync_scn_ = report_scn;
+  }
+  return ret;
 }
 
 void ObRecoveryLSService::do_work()
@@ -149,6 +177,7 @@ void ObRecoveryLSService::do_work()
         LOG_WARN("tenant info is primary", KR(ret), K(tenant_info));
       } else if (OB_FAIL(check_can_do_recovery_(tenant_id_))) {
         LOG_WARN("can not do recovery now", KR(ret), K(tenant_id_));
+        restore_status_.reset();
       } else if (0 == thread_idx) {
         idle_time_us = 10 * 1000 * 1000L;
         DEBUG_SYNC(STOP_RECOVERY_LS_THREAD0);
@@ -203,10 +232,11 @@ void ObRecoveryLSService::do_work()
         }
       }//end thread1
       LOG_INFO("[LS_RECOVERY] finish one round", KR(ret), KR(tmp_ret),
-               K(start_scn), K(thread_idx), K(tenant_info), K(idle_time_us));
+               K(start_scn), K(thread_idx), K(tenant_info), K(idle_time_us), K_(restore_status));
       idle(idle_time_us);
       ret = OB_SUCCESS;
     }//end while
+    restore_status_.reset();
   }
 }
 
@@ -297,6 +327,7 @@ int ObRecoveryLSService::process_ls_log_(
           LOG_WARN("SYS LS has recovered to the recovery_until_scn, need stop iterate SYS LS log",
                    KR(ret), K(sync_scn), K(tenant_info), K(log_entry), K(target_lsn), K(start_scn));
           start_scn.reset();
+          restore_status_.reset(); // need to reset restore status if iterate to recovery end
         }
       } else if (OB_FAIL(header.deserialize(log_buf, HEADER_SIZE, log_pos))) {
         LOG_WARN("failed to deserialize", KR(ret), K(HEADER_SIZE));
@@ -406,7 +437,7 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
         for (int64_t i = 0; OB_SUCC(ret) && i < source_data.count(); ++i) {
           const ObTxBufferNode &node = source_data.at(i);
           if (ObTxDataSourceType::STANDBY_UPGRADE == node.get_data_source_type()) {
-            if (OB_FAIL(process_upgrade_log_(node))) {
+            if (OB_FAIL(process_upgrade_log_(sync_scn, node))) {
               LOG_WARN("failed to process_upgrade_log_", KR(ret), K(node));
             }
           } else if (ObTxDataSourceType::LS_TABLE != node.get_data_source_type()
@@ -442,14 +473,15 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
   return ret;
 }
 
-int ObRecoveryLSService::process_upgrade_log_(const ObTxBufferNode &node)
+int ObRecoveryLSService::process_upgrade_log_(
+    const share::SCN &sync_scn, const ObTxBufferNode &node)
 {
   int ret = OB_SUCCESS;
   uint64_t standby_data_version = 0;
 
-  if (!node.is_valid()) {
+  if (!node.is_valid() || !sync_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("node is invalid", KR(ret), K(node));
+    LOG_WARN("node is invalid", KR(ret), K(node), K(sync_scn));
   } else {
     ObStandbyUpgrade primary_data_version;
     int64_t pos = 0;
@@ -472,6 +504,10 @@ int ObRecoveryLSService::process_upgrade_log_(const ObTxBufferNode &node)
         if (REACH_TIME_INTERVAL(30 * 60 * 1000 * 1000)) { // 30min
           LOG_ERROR("standby version is not new enough to recover primary clog", KR(ret),
                    K(primary_data_version), K(standby_data_version));
+        }
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(init_restore_status(sync_scn, OB_ERR_RESTORE_STANDBY_VERSION_LAG))) {
+          LOG_WARN("failed to init restore status", KR(tmp_ret), K(sync_scn));
         }
       }
     }
@@ -713,6 +749,10 @@ int ObRecoveryLSService::process_ls_table_in_trans_(const transaction::ObTxBuffe
       if (share::is_ls_tenant_drop_pre_op(ls_attr.get_ls_operation_type())) {
         ret = OB_ITER_STOP;
         LOG_WARN("can not process ls operator after tenant dropping", K(ls_attr));
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(init_restore_status(sync_scn, OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED))) {
+          LOG_WARN("failed to init restore status", KR(tmp_ret), K(sync_scn), KR(tmp_ret));
+        }
       } else if (share::is_ls_tenant_drop_op(ls_attr.get_ls_operation_type())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls recovery must stop while pre tenant dropping", KR(ret), K(ls_attr));
@@ -750,6 +790,7 @@ int ObRecoveryLSService::check_valid_to_operator_ls_(const SCN &sync_scn)
       ret = OB_NEED_WAIT;
       LOG_WARN("can not process ls operator, need wait other ls sync", KR(ret),
           K(user_scn), K(sync_scn));
+      restore_status_.reset();
     }
   }
 
@@ -968,6 +1009,10 @@ int ObRecoveryLSService::report_sys_ls_recovery_stat_in_trans_(
           K(ls_recovery_stat), K(tenant_info));
     } else {
       last_report_ts_ = ObTimeUtility::current_time();
+      if (!only_update_readable_scn) {
+        //如果汇报了sync_scn，需要把restore_status重置掉
+        restore_status_.reset();
+      }
     }
     CLICK();
     FLOG_INFO("report sys ls recovery stat", KR(ret), K(sync_scn), K(only_update_readable_scn),
@@ -1318,6 +1363,47 @@ int ObRecoveryLSService::update_source_inner_table_(char *buf,
       LOG_WARN("fill update source value sql failed", K(item));
     } else if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
       LOG_WARN("failed to exec sql", K(sql), K_(tenant_id));
+    }
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::init_restore_status(const share::SCN &sync_scn, int err_code)
+{
+  int ret = OB_SUCCESS;
+  if (!sync_scn.is_valid() || OB_SUCCESS == err_code) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KR(err_code), K(sync_scn));
+  } else {
+    palf::LSN start_lsn(0);
+    ObSqlString sync_comment;
+    RestoreSyncStatus sync_status;
+    ObLSService *ls_svr = MTL(ObLSService *);
+    ObLSHandle ls_handle;
+    if (OB_FAIL(ls_svr->get_ls(SYS_LS, ls_handle, storage::ObLSGetMod::RS_MOD))) {
+      LOG_WARN("failed to get ls", KR(ret));
+    } else {
+      ObLogHandler *log_handler = NULL;
+      ObLogRestoreHandler *restore_handler = NULL;
+      ObLS *ls = NULL;
+      palf::LSN start_lsn;
+      if (OB_ISNULL(ls = ls_handle.get_ls()) || OB_ISNULL(log_handler = ls->get_log_handler())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls or log handle is null", KR(ret), KP(ls), KP(log_handler));
+      } else if (OB_FAIL(log_handler->locate_by_scn_coarsely(sync_scn, start_lsn))) {
+        LOG_WARN("failed to locate lsn", KR(ret), K(sync_scn));
+      } else if (OB_ISNULL(restore_handler = ls->get_log_restore_handler())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get restore handler", KR(ret), K(sync_scn));
+      } else if (OB_FAIL(restore_handler->get_restore_sync_status(err_code,
+                                                                  ObLogRestoreErrorContext::ErrorType::FETCH_LOG,
+                                                                  sync_status))) {
+        LOG_WARN("fail to get error code and message", KR(ret), K(sync_scn), K_(restore_status));
+      } else if (OB_FAIL(restore_status_.set(SYS_LS, start_lsn, sync_scn, err_code, sync_status))) {
+        LOG_WARN("failed to init restore status", KR(ret), K(start_lsn), K(err_code), K(sync_scn));
+      } else {
+        LOG_TRACE("init sys restore status success", K(restore_status_));
+      }
     }
   }
   return ret;

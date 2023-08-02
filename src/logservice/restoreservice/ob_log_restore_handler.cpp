@@ -58,7 +58,7 @@ const char *restore_comment_str[static_cast<int>(RestoreSyncStatus::MAX_RESTORE_
   "Log source is unreachable, the log source access point may be unavailable",
   "Fetch log time out",
   "Restore suspend, the standby has synchronized to recovery until scn",
-  "Standby binary version is lower than primary data version, standby need upgrade",
+  "Standby binary version is lower than primary data version, standby need to upgrade",
   "Primary tenant has been dropped",
   "Unexpected exceptions",
 };
@@ -927,8 +927,8 @@ int ObLogRestoreHandler::get_ls_restore_status_info(RestoreStatusInfo &restore_s
     CLOG_LOG(WARN, "fail to get restore error");
   } else if (error_exist) {
     CLOG_LOG(TRACE, "start to mark restore sync error", K(trace_id), K(ret_code), K(context_.error_context_.error_type_));
-    if (OB_FAIL(get_err_code_and_message_(ret_code, context_.error_context_.error_type_, sync_status))) {
-      CLOG_LOG(WARN, "fail to get err code and message", K(ret_code), K(context_.error_context_.error_type_), K(sync_status));
+    if (OB_FAIL(get_restore_sync_status(ret_code, context_.error_context_.error_type_, sync_status))) {
+      CLOG_LOG(WARN, "fail to get sync status", K(ret_code), K(context_.error_context_.error_type_), K(sync_status));
     } else {
       restore_status_info.sync_status_ = sync_status;
     }
@@ -944,8 +944,8 @@ int ObLogRestoreHandler::get_ls_restore_status_info(RestoreStatusInfo &restore_s
     restore_status_info.err_code_ = ret_code;
     restore_status_info.sync_lsn_ = lsn.val_;
     restore_status_info.sync_scn_ = scn;
-    if (OB_FAIL(restore_status_info.comment_.assign_fmt("%s", restore_comment_str[int(restore_status_info.sync_status_)]))) {
-      CLOG_LOG(WARN, "fail to assign comment", K(sync_status));
+    if (OB_FAIL(restore_status_info.get_restore_comment())) {
+      CLOG_LOG(WARN, "fail to get comment", K(sync_status));
     } else {
       CLOG_LOG(TRACE, "success to get error code and message", K(restore_status_info));
     }
@@ -953,7 +953,7 @@ int ObLogRestoreHandler::get_ls_restore_status_info(RestoreStatusInfo &restore_s
   return ret;
 }
 
-int ObLogRestoreHandler::get_err_code_and_message_(int ret_code,
+int ObLogRestoreHandler::get_restore_sync_status(int ret_code,
     ObLogRestoreErrorContext::ErrorType error_type,
     RestoreSyncStatus &sync_status)
 {
@@ -1014,6 +1014,27 @@ RestoreStatusInfo::RestoreStatusInfo()
   comment_.reset();
 }
 
+int RestoreStatusInfo::set(const share::ObLSID &ls_id,
+           const palf::LSN &lsn, const share::SCN &scn, int err_code,
+           const RestoreSyncStatus sync_status)
+{
+  int ret = OB_SUCCESS;
+  if (!ls_id.is_valid() || !lsn.is_valid() || !scn.is_valid() || OB_SUCCESS == err_code) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", KR(ret), K(ls_id), K(lsn), K(scn), K(err_code));
+  } else {
+    ls_id_ = ls_id.id();
+    sync_scn_= scn;
+    sync_lsn_ = lsn.val_;
+    sync_status_ = sync_status;
+    err_code_ = err_code;
+    if (OB_FAIL(get_restore_comment())) {
+      CLOG_LOG(WARN, "failed to assign comment", KR(ret), K(sync_status));
+    }
+  }
+  return ret;
+}
+
 void RestoreStatusInfo::reset()
 {
   ls_id_ = share::ObLSID::INVALID_LS_ID;
@@ -1036,6 +1057,31 @@ int RestoreStatusInfo::restore_sync_status_to_string(char *str_buf, const int64_
     CLOG_LOG(WARN, "invalid restore status", K(sync_status_));
   } else if (OB_FAIL(databuff_printf(str_buf, str_len, "%s", restore_status_str[int(sync_status_)]))) {
     CLOG_LOG(WARN, "databuff printf restore status str failed", K(sync_status_));
+  }
+  return ret;
+}
+
+int RestoreStatusInfo::get_restore_comment()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(comment_.assign_fmt("%s", restore_comment_str[int(sync_status_)]))) {
+    CLOG_LOG(WARN, "fail to assign comment", K_(sync_status));
+  } else {
+    CLOG_LOG(TRACE, "success to get restore status comment", K_(sync_status));
+  }
+  return ret;
+}
+
+int RestoreStatusInfo::assign(const RestoreStatusInfo &other)
+{
+  int ret = OB_SUCCESS;
+  ls_id_ = other.ls_id_;
+  sync_lsn_ = other.sync_lsn_;
+  sync_scn_ = other.sync_scn_;
+  sync_status_ = other.sync_status_;
+  err_code_ = other.err_code_;
+  if (OB_FAIL(comment_.assign(other.comment_))) {
+    CLOG_LOG(WARN, "fail to assign comment");
   }
   return ret;
 }

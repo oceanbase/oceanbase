@@ -99,6 +99,11 @@ public:
   bool is_valid() const;
   void reset();
   int restore_sync_status_to_string(char *str_buf, const int64_t str_len);
+  int set(const share::ObLSID &ls_id,
+           const palf::LSN &lsn, const share::SCN &scn, int err_code,
+           const RestoreSyncStatus sync_status);
+  int get_restore_comment();
+  int assign(const RestoreStatusInfo &other);
   TO_STRING_KV(K_(ls_id), K_(sync_lsn), K_(sync_scn), K_(sync_status), K_(err_code), K_(comment));
 
 public:
@@ -230,6 +235,7 @@ public:
   int diagnose(RestoreDiagnoseInfo &diagnose_info) const;
   int refresh_error_context();
   int get_ls_restore_status_info(RestoreStatusInfo &restore_status_info);
+  int get_restore_sync_status(int ret_code, const ObLogRestoreErrorContext::ErrorType error_type, RestoreSyncStatus &sync_status);
   TO_STRING_KV(K_(is_inited), K_(is_in_stop_state), K_(id), K_(proposal_id), K_(role), KP_(parent), K_(context), K_(restore_context));
 
 private:
@@ -243,7 +249,6 @@ private:
   int check_restore_to_newest_from_archive_(ObLogArchivePieceContext &piece_context,
       const palf::LSN &end_lsn, const share::SCN &end_scn, share::SCN &archive_scn);
   bool restore_to_end_unlock_() const;
-  int get_err_code_and_message_(int ret_code, ObLogRestoreErrorContext::ErrorType error_type, RestoreSyncStatus &err_type);
 
 private:
   ObRemoteLogParent *parent_;
