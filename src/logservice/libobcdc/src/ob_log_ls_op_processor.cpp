@@ -43,6 +43,13 @@ int ObLogLSOpProcessor::process_ls_op(
   } else if (share::is_ls_create_end_op(ls_attr.get_ls_operation_type())) {
     LOG_INFO("[LS_PROCESSOR] ls create end operation", K(tenant_id), K(lsn), K(start_tstamp_ns), K(ls_attr));
     //create new ls;
+    if (TCONF.test_mode_on) {
+      const int64_t block_add_ls_usec = TCONF.test_mode_block_add_ls_sec * _SEC_;
+      if (0 < block_add_ls_usec) {
+        ob_usleep(block_add_ls_usec);
+        LOG_INFO("[TEST_MODE] block add ls", K(ls_attr), K(block_add_ls_usec));
+      }
+    }
     if (OB_FAIL(create_new_ls_(tenant, start_tstamp_ns, ls_attr))) {
       LOG_ERROR("failed to create new ls", KR(ret), K(tenant_id), K(lsn), K(start_tstamp_ns), K(ls_attr));
     }

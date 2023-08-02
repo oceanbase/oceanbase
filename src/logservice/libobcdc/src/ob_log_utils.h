@@ -642,6 +642,9 @@ int read_from_file(const char *file_path, char *buf, const int64_t buf_len);
   do {\
     if (OB_SUCC(ret)) \
     { \
+      int64_t _retry_func_on_error_last_print_time = common::ObClockGenerator::getClock();\
+      int64_t _retry_func_on_error_cur_print_time = 0;\
+      const int64_t _PRINT_RETRY_FUNC_INTERVAL = 10 * _SEC_;\
       ret = (err_no); \
       while ((err_no) == ret && ! (stop_flag)) \
       { \
@@ -649,6 +652,12 @@ int read_from_file(const char *file_path, char *buf, const int64_t buf_len);
         ret = (var).func(args); \
         if (err_no == ret) { \
           ob_usleep(sleep_ms); \
+        }\
+        _retry_func_on_error_cur_print_time = common::ObClockGenerator::getClock();\
+        if (_retry_func_on_error_cur_print_time - _retry_func_on_error_last_print_time >= _PRINT_RETRY_FUNC_INTERVAL) {\
+          _OBLOG_LOG(INFO, "It has been %ld us since last print, last_print_time=%ld, func_name=%s", \
+              _PRINT_RETRY_FUNC_INTERVAL, _retry_func_on_error_last_print_time, #func);\
+          _retry_func_on_error_last_print_time = _retry_func_on_error_cur_print_time;\
         }\
       } \
       if ((stop_flag)) \
