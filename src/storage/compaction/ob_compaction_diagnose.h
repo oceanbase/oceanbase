@@ -439,8 +439,11 @@ private:
   int get_next_tablet(ObLSID &ls_id);
   void release_last_tenant();
   int gen_ls_check_status(const ObLSID &ls_id, const int64_t compaction_scn, ObLSCheckStatus &ls_status);
-  int diagnose_ls_merge(
-      const ObMergeType merge_type,
+  void diagnose_tenant_ls(
+      const bool diagnose_major_flag,
+      const bool weak_read_ts_ready,
+      const int64_t compaction_scn,
+      const bool is_leader,
       const ObLSID &ls_id);
   int diagnose_tablet_mini_merge(const ObLSID &ls_id, ObTablet &tablet);
   int diagnose_tablet_minor_merge(const ObLSID &ls_id, ObTablet &tablet);
