@@ -173,6 +173,22 @@ public:
       const common::ObIArray<common::ObTabletID> &tablet_ids,
       common::ObIArray<ObTabletLSCache> &tablet_ls_caches);
 
+  // Gets ObTabletLSPair according to ObTableIDs
+  //
+  // @param [in] sql_proxy, ObMySQLProxy or ObMySQLTransaction
+  // @param [in] tenant_id, tenant for query
+  // @param [in] tablet_ids, ObTabletIDs for query (no duplicate values)
+  // @param [out] tablet_ls_pairs, array of <TabletID, LSID>
+  // @return OB_SUCCESS if success;
+  //         OB_ITEM_NOT_MATCH if tablet_ids have duplicates or
+  //         tablet_id which is not recorded in __all_tablet_to_ls;
+  //         Other error according to unexpected situation
+  static int batch_get_tablet_ls_pairs(
+      common::ObISQLClient &sql_proxy,
+      const uint64_t tenant_id,
+      const ObIArray<common::ObTabletID> &tablet_ids,
+      ObIArray<ObTabletLSPair> &tablet_ls_pairs);
+
   const static int64_t MAX_BATCH_COUNT = 200;
 private:
   static int inner_batch_get_(
@@ -196,6 +212,13 @@ private:
       const int64_t start_idx,
       const int64_t end_idx,
       common::ObIArray<ObTabletLSCache> &tablet_ls_caches);
+  static int inner_batch_get_(
+      common::ObISQLClient &sql_proxy,
+      const uint64_t tenant_id,
+      const ObIArray<common::ObTabletID> &tablet_ids,
+      const int64_t start_idx,
+      const int64_t end_idx,
+      ObIArray<ObTabletLSPair> &tablet_ls_pairs);
 
   static int inner_batch_update_by_sql_(
       common::ObISQLClient &sql_proxy,

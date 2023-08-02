@@ -677,5 +677,39 @@ int ObTabletToLSTableOperator::construct_results_(
   return ret;
 }
 
+int ObTabletToLSTableOperator::batch_get_tablet_ls_pairs(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const ObIArray<common::ObTabletID> &tablet_ids,
+    ObIArray<ObTabletLSPair> &tablet_ls_pairs)
+{
+  int ret = OB_SUCCESS;
+  BATCH_GET(sql_proxy, tenant_id, tablet_ids, tablet_ls_pairs);
+  if (OB_SUCC(ret) && OB_UNLIKELY(tablet_ls_pairs.count() != tablet_ids.count())) {
+    ret = OB_ITEM_NOT_MATCH;
+    LOG_WARN("count of tablet_ls_pairs and tablet_ids do not match,"
+        " there may be duplicates or nonexistent values in tablet_ids",
+        KR(ret), "tablet_ids count", tablet_ids.count(), "tablet_ls_pairs count",
+        tablet_ls_pairs.count(), K(tenant_id), K(tablet_ids), K(tablet_ls_pairs));
+  }
+  return ret;
+}
+
+int ObTabletToLSTableOperator::inner_batch_get_(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const ObIArray<common::ObTabletID> &tablet_ids,
+    const int64_t start_idx,
+    const int64_t end_idx,
+    ObIArray<ObTabletLSPair> &tablet_ls_pairs)
+{
+  int ret = OB_SUCCESS;
+  const char *query_column_str = "tablet_id, ls_id";
+  const bool keep_order = false;
+  INNER_BATCH_GET(sql_proxy, tenant_id, tablet_ids, start_idx, end_idx,
+      query_column_str, keep_order, tablet_ls_pairs);
+  return ret;
+}
+
 } // end namespace share
 } // end namespace oceanbase

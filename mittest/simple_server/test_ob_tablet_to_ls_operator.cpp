@@ -427,6 +427,14 @@ TEST_F(TestTabletToLSOperatorBatchGet, test_batch_get)
     ASSERT_TRUE(common::has_exist_in_array(tablet_ids, tablet_ls_caches.at(idx).get_tablet_id()));
   }
 
+  // test batch_get_tablet_ls_pairs
+  ObArray<ObTabletLSPair> tablet_ls_pairs;
+  ASSERT_EQ(OB_SUCCESS, ObTabletToLSTableOperator::batch_get_tablet_ls_pairs(sql_proxy, tenant_id, tablet_ids, tablet_ls_pairs));
+  ASSERT_TRUE(tablet_ids.count() == tablet_ls_pairs.count());
+  ARRAY_FOREACH(tablet_ls_pairs, idx) {
+    ASSERT_TRUE(common::has_exist_in_array(tablet_ids, tablet_ls_caches.at(idx).get_tablet_id()));
+  }
+
 }
 
 } // share
