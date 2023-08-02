@@ -2900,9 +2900,15 @@ int ObSPIService::spi_cursor_init(ObPLExecCtx *ctx, int64_t cursor_index)
     // we should alloc it in open stmt
     if (obj.is_ref_cursor_type()) {
       if (!obj.is_null()) {
-        // what's happened?
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ref cursor is not null before init", K(ret));
+        ObPLCursorInfo *cursor_info = NULL;
+        CK (obj.is_pl_extend());
+        CK (PL_REF_CURSOR_TYPE == obj.get_meta().get_extend_type());
+        if (OB_SUCC(ret)
+            && obj.get_ext() != 0
+            && OB_NOT_NULL(cursor_info = reinterpret_cast<ObPLCursorInfo *>(obj.get_ext()))) {
+          CK (!cursor_info->isopen());
+          CK (0 == cursor_info->get_ref_count());
+        }
       } else {
         // init as null
         obj.set_extend(static_cast<int64_t>(0), PL_REF_CURSOR_TYPE);
