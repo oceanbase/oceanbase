@@ -77,9 +77,7 @@ int ObUDRProcessor::sync_rule_from_inner_table()
     LOG_WARN("get unexpected null", K(ret), K(task_exec_ctx), K(common_rpc));
   } else {
     sync_udr_arg.tenant_id_ = session->get_effective_tenant_id();
-    if (OB_FAIL(common_rpc->by(sync_udr_arg.tenant_id_)
-                           .as(sync_udr_arg.tenant_id_)
-                           .admin_sync_rewrite_rules(sync_udr_arg))) {
+    if (OB_FAIL(common_rpc->admin_sync_rewrite_rules(sync_udr_arg))) {
       LOG_WARN("sync rewrite rules rpc failed ", K(ret), "rpc_arg", sync_udr_arg);
     }
   }
