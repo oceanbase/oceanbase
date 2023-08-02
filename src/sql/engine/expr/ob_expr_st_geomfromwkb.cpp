@@ -31,7 +31,7 @@ namespace sql
 
 ObIExprSTGeomFromWKB::ObIExprSTGeomFromWKB(common::ObIAllocator &alloc, ObExprOperatorType type,
                                            const char *name, int32_t param_num, ObValidForGeneratedColFlag valid_for_generated_col, int32_t dimension)
-  : ObFuncExprOperator(alloc, type, name, param_num, valid_for_generated_col, NOT_VALID_FOR_GENERATED_COL, dimension)
+  : ObFuncExprOperator(alloc, type, name, param_num, valid_for_generated_col, dimension)
 {
 }
 
