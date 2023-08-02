@@ -668,6 +668,10 @@ int ObDMLStmtPrinter::print_json_table_nested_column(const TableItem *table_item
       } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_EXISTS)) {
         // to print returning type
         OZ (print_json_return_type(col_info.res_type_, col_info.data_type_));
+        if (OB_SUCC(ret) && col_info.truncate_) {
+          DATA_PRINTF(" truncate");
+        }
+
         DATA_PRINTF(" exists");
         if (OB_SUCC(ret) && col_info.path_.length() > 0) {
           DATA_PRINTF(" path \'%.*s\'", LEN_AND_PTR(col_info.path_));
@@ -696,6 +700,11 @@ int ObDMLStmtPrinter::print_json_table_nested_column(const TableItem *table_item
         if (cast_type != ObJsonType){
           DATA_PRINTF(" format json");
         }
+
+        if (OB_SUCC(ret) && col_info.truncate_) {
+          DATA_PRINTF(" truncate");
+        }
+
         if (OB_FAIL(ret)) {
         } else if (col_info.allow_scalar_ == 0) {
           DATA_PRINTF(" allow scalars");

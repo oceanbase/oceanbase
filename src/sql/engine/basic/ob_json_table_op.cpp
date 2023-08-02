@@ -886,9 +886,9 @@ int JtFuncHelpler::cast_to_res(JtScanCtx* ctx, ObIJsonBase* js_val, JtColNode& c
     case ObHexStringType:
     case ObLongTextType: {
       ObString val;
-      bool is_quote = (col_info.col_type_ == COL_TYPE_QUERY && js_val->json_type() == ObJsonNodeType::J_STRING);
+      bool is_quote = (col_info.col_type_ == COL_TYPE_QUERY && OB_NOT_NULL(js_val) && js_val->json_type() == ObJsonNodeType::J_STRING);
       ret = cast_to_string(&col_node, &ctx->row_alloc_, js_val, in_coll_type, dst_coll_type,
-                           accuracy, dst_type, val, is_truncate, is_quote, ctx->is_const_input_);
+                          accuracy, dst_type, val, is_truncate, is_quote, ctx->is_const_input_);
       if (OB_FAIL(ret) && enable_error) {
         int tmp_ret = set_error_val(ctx, col_node, ret);
         if (tmp_ret != OB_SUCCESS) {
@@ -1673,6 +1673,9 @@ int JtColNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_value
         if (hit.size() > 1) {
           ret = OB_ERR_JSON_VALUE_NO_SCALAR;
           SET_COVER_ERROR(ctx, ret);
+        } else if (hit[0]->json_type() == ObJsonNodeType::J_NULL) {
+          need_cast_res = false;
+          col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
         } else if (!ob_is_json(col_expr->datum_meta_.type_)
                   && (hit[0]->json_type() == ObJsonNodeType::J_ARRAY || hit[0]->json_type() == ObJsonNodeType::J_OBJECT)) {
           ret = OB_ERR_JSON_VALUE_NO_SCALAR;
@@ -1741,7 +1744,8 @@ int JtColNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_value
       }
     }
   } else if (col_type == COL_TYPE_EXISTS || col_type == COL_TYPE_QUERY || col_type == COL_TYPE_VALUE) {
-    if (is_null_result_ || (curr_ && curr_->json_type() == ObJsonNodeType::J_NULL && !curr_->is_real_json_null(curr_))) {
+    if (!need_cast_res) {
+    } else if (is_null_result_ || (curr_ && curr_->json_type() == ObJsonNodeType::J_NULL && !curr_->is_real_json_null(curr_))) {
       if (!need_pro_emtpy) {
         col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
       } else if (OB_FAIL(set_val_on_empty(ctx, need_cast_res))) {
@@ -1751,8 +1755,7 @@ int JtColNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_value
       } else if (OB_FAIL(JtFuncHelpler::cast_to_res(ctx, iter_, *this, false))) {
         LOG_WARN("failed set to res type", K(ret));
       }
-    } else if (need_cast_res
-               && OB_FAIL(JtFuncHelpler::cast_to_res(ctx, curr_, *this))) {
+    } else if (OB_FAIL(JtFuncHelpler::cast_to_res(ctx, curr_, *this))) {
       LOG_WARN("failed to do cast to res type", K(ret));
     }
 
@@ -1828,8 +1831,14 @@ int JtScanNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_valu
     is_sub_evaled_ = false;
     is_nested_evaled_ = false;
     in_ = in;
-    if (!OB_ISNULL(in_) && OB_ISNULL(in_->get_allocator())) {
-      in_->set_allocator(&ctx->row_alloc_);
+    if (OB_NOT_NULL(in_)) {
+      if (OB_ISNULL(in_->get_allocator())) {
+        in_->set_allocator(&ctx->row_alloc_);
+      }
+
+      if (in->json_type() == ObJsonNodeType::J_NULL) {
+        in = in_ = nullptr;
+      }
     }
     if (OB_ISNULL(in)) {
       total_ = 1;
@@ -2644,6 +2653,8 @@ int ObJsonTableOp::inner_close()
   if (OB_NOT_NULL(def_root_)) {
     def_root_->destroy();
   }
+
+  jt_ctx_.row_alloc_.clear();
   return ret;
 }
 

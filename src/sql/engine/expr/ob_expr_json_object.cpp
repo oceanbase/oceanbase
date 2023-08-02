@@ -248,184 +248,107 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
   INIT_SUCC(ret);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-  ObJsonBuffer res_str(&temp_allocator);
+  ObJsonBuffer string_buffer(&temp_allocator);
   ObObjType val_type;
   ObCollationType value_cs_type;
-  uint8_t format_type = OB_JSON_ON_STRICT_IMPLICIT;
+
   bool is_column = false;
-  common::hash::ObHashSet<ObString> view_key_names;
   ObJsonObject j_obj(&temp_allocator);
   ObIJsonBase *j_base = &j_obj;
   ObJsonBuffer jbuf(&temp_allocator);
 
   // parse null type
   uint8_t null_type = OB_JSON_ON_NULL_IMPLICIT;
-  if (OB_SUCC(ret)) {
-    ret = get_clause(expr, ctx, expr.arg_cnt_ - 4, null_type, OB_JSON_ON_NULL_NUM);
+  if (OB_SUCC(ret)
+      && OB_FAIL(eval_option_clause_value(expr.args_[expr.arg_cnt_ - 4], ctx, null_type, OB_JSON_ON_NULL_NUM))) {
+    LOG_WARN("fail to eval option", K(ret), K(expr.arg_cnt_));
   }
 
   // parse returning type
   ObObjType dst_type;
   int32_t dst_len = OB_MAX_TEXT_LENGTH;
-  if (OB_SUCC(ret)) {
-    ret = ObJsonExprHelper::get_dest_type(expr, expr.arg_cnt_ - 3, ctx, dst_type, dst_len);
+  int64_t opt_res_type = 0;
+  ObDatum *datum_res_type = nullptr;
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(OB_FAIL(expr.args_[expr.arg_cnt_ - 3]->eval(ctx, datum_res_type)))) {
+      LOG_WARN("eval json arg failed", K(ret));
+  } else {
+    opt_res_type = datum_res_type->get_int();
+    if (opt_res_type == 0) {
+      dst_type = ObJsonType;
+    } else if (OB_FAIL(ObJsonExprHelper::eval_and_check_res_type(opt_res_type, dst_type, dst_len))) {
+      LOG_WARN("fail to check returning type", K(ret));
+    }
   }
 
-    // parse strict type
+  // parse strict type
   uint8_t strict_type = OB_JSON_ON_STRICT_IMPLICIT;
-  if (OB_SUCC(ret)) {
-    ret = get_clause(expr, ctx, expr.arg_cnt_ - 2, strict_type, OB_JSON_ON_STRICT_NUM);
+  if (OB_SUCC(ret)
+      && OB_FAIL(eval_option_clause_value(expr.args_[expr.arg_cnt_ - 2], ctx, strict_type, OB_JSON_ON_STRICT_NUM))) {
+    LOG_WARN("fail to eval option", K(ret), K(expr.arg_cnt_));
   }
 
   // parse unique type
   uint8_t unique_type = OB_JSON_ON_UNIQUE_IMPLICIT;
-  if (OB_SUCC(ret)) {
-    ret = get_clause(expr, ctx, expr.arg_cnt_ - 1, unique_type, OB_JSON_ON_UNIQUE_NUM);
+  if (OB_SUCC(ret)
+      && OB_FAIL(eval_option_clause_value(expr.args_[expr.arg_cnt_ - 1], ctx, unique_type, OB_JSON_ON_UNIQUE_NUM))) {
+    LOG_WARN("fail to eval option", K(ret), K(expr.arg_cnt_));
   }
 
-  if (OB_FAIL(res_str.append("{"))) {
-    LOG_WARN("symbol write fail");
-  }
-  int64_t size_set= (expr.arg_cnt_ - 4) / 3;
-  int64_t bucket_num = (size_set / 2) + 1;
-  if (size_set > 0 && OB_FAIL(view_key_names.create(bucket_num))) {
-    LOG_WARN("init hash failed", K(ret), K(bucket_num));
-  }
+  bool is_strict = (strict_type == OB_JSON_ON_STRICT_USE);
+  bool is_null_absent = (null_type == OB_JSON_ON_NULL_ABSENT);
+  bool is_key_unique = (unique_type == OB_JSON_ON_UNIQUE_USE || (dst_type == ObJsonType && opt_res_type > 0));
+
   for (int32 i = 0; OB_SUCC(ret) && i < expr.arg_cnt_ - 4; i += 3) {
-    ObExpr *arg = expr.args_[i];
-    ObDatum *json_datum = NULL;
-    ObObjType key_type = expr.args_[i]->datum_meta_.type_;
-    if (OB_FAIL(arg->eval(ctx, json_datum))) {
+    uint8_t format_type = OB_JSON_ON_STRICT_IMPLICIT;
+
+    ObExpr *arg_key = expr.args_[i];
+    ObExpr *arg_value = expr.args_[i + 1];
+    ObExpr *arg_opt = expr.args_[i + 2];
+
+    ObObjType key_data_type = arg_key->datum_meta_.type_;
+    ObObjType value_data_type = arg_value->datum_meta_.type_;
+
+    ObDatum *datum_key = nullptr;
+    if (OB_FAIL(arg_key->eval(ctx, datum_key))) {
       LOG_WARN("failed: eval json args datum failed", K(ret));
-    } else if (json_datum->is_null()) {
+    } else if (datum_key->is_null() || key_data_type == ObNullType) {
       ret = OB_ERR_JSON_DOCUMENT_NULL_KEY;
       LOG_USER_ERROR(OB_ERR_JSON_DOCUMENT_NULL_KEY);
-      LOG_WARN("failed:json key is null", K(ret));
-    } else if (!ob_is_string_type(key_type) && key_type != ObJsonType) {
+    } else if (!(ob_is_extend(key_data_type)
+                 || ob_is_json(key_data_type)
+                 || ob_is_raw(key_data_type)
+                 || ob_is_string_type(key_data_type))) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
-    }
-    if (OB_SUCC(ret)) {
-      ret = get_clause(expr, ctx, i + 2, format_type, OB_JSON_ON_STRICT_NUM);
-    }
-    ObExpr *val_expr = expr.args_[i + 1];
-    val_type = val_expr->datum_meta_.type_;
-    bool can_only_be_null = false;
-    if (OB_SUCC(ret) && format_type
-      && (!ObJsonExprHelper::is_convertible_to_json(val_type) || val_type == ObJsonType)) {
-      if (val_type == ObObjType::ObNumberType) {
-        can_only_be_null = true;
+      LOG_WARN("data type not legal for key type", K(ret), K(i), K(key_data_type));
+    } else if ((!ob_is_string_type(key_data_type) && key_data_type != ObJsonType)) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("data type not legal for key type", K(ret), K(i), K(key_data_type));
+    } else if (OB_FAIL(eval_option_clause_value(arg_opt, ctx, format_type, OB_JSON_ON_STRICT_NUM))) {
+      LOG_WARN("fail to eval option", K(ret), K(i));
+    } else {
+      ObIJsonBase *j_val = nullptr;
+      ObString key = datum_key->get_string();
+      bool is_format_json = format_type > 0;
+
+      if (OB_FAIL(ObJsonExprHelper::eval_oracle_json_val(
+                    arg_value, ctx, &temp_allocator, j_val, is_format_json, is_strict, false))) {
+        LOG_WARN("failed to get json value node.", K(ret), K(value_data_type), K(i));
       } else {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "CHAR", ob_obj_type_str(val_type));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      ObString key = json_datum->get_string();
-      bool is_null = false;
-      if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(arg, ctx, temp_allocator, key, is_null))) {
-        LOG_WARN("fail to get real data.", K(ret), K(key));
-      } else if (dst_type == ObJsonType) {
-        ObIJsonBase *j_val = NULL;
-        uint32_t parse_flag = (strict_type == OB_JSON_ON_STRICT_IMPLICIT) ?
-                                ObJsonParser::JSN_STRICT_FLAG : ObJsonParser::JSN_RELAXED_FLAG;
-        if (OB_FAIL(ObJsonExprHelper::get_json_val(expr, ctx, &temp_allocator, i+1, j_val, false, format_type, parse_flag))) {
-          ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
-          LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
-        } else if (can_only_be_null && j_val->json_type() != ObJsonNodeType::J_NULL) {
-          ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "CHAR", ob_obj_type_str(val_type));
-        } else if (j_val->json_type() == ObJsonNodeType::J_NULL && null_type == OB_JSON_ON_NULL_ABSENT) {
-          ObString key = json_datum->get_string();
-          if (unique_type == OB_JSON_ON_UNIQUE_USE && OB_FAIL(check_key_valid(view_key_names, key))) {
-            LOG_WARN("duplicate key fail");
-          }
-        // do nothing
-        } else if (OB_FAIL(check_key_valid(view_key_names, key))) {
-          LOG_WARN("duplicate key fail");
-        } else if (OB_FAIL(j_base->object_add(key, j_val))) {
-          if (ret == OB_ERR_JSON_DOCUMENT_NULL_KEY) {
-            LOG_USER_ERROR(OB_ERR_JSON_DOCUMENT_NULL_KEY);
-          }
-          LOG_WARN("failed: append json object kv", K(ret));
-        }
-      } else {
-        ObJsonString ob_str(key.ptr(), key.length());
-        ObDatum *j_datum = NULL;
-        bool t_is_null = false;
-        if (OB_FAIL(get_ora_json_doc(expr, ctx, i+1, j_datum, t_is_null))) {
-          LOG_WARN("get value json doc fail", K(ret), K(j_datum));
-        } else if (can_only_be_null && !t_is_null) {
-          ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "CHAR", ob_obj_type_str(val_type));
-        } else if (t_is_null && null_type == OB_JSON_ON_NULL_ABSENT) {
-          ObString key = json_datum->get_string();
-          if (unique_type == OB_JSON_ON_UNIQUE_USE && OB_FAIL(check_key_valid(view_key_names, key))) {
-            LOG_WARN("duplicate key fail");
-          }
-          // do nothing only check
-        } else if (t_is_null && null_type <= 1) {
-          if (OB_SUCC(ret) && i > 0 && res_str.length() > 1) {
-            if (OB_FAIL(res_str.append(","))) {
-              LOG_WARN("comma write fail");
-            }
-          }
-          if (OB_SUCC(ret)) {
-            if (unique_type == OB_JSON_ON_UNIQUE_USE && OB_FAIL(check_key_valid(view_key_names, key))) {
-              LOG_WARN("duplicate key fail");
-            } else if (OB_FAIL(ob_str.print(res_str, true))) {
-              LOG_WARN("fail to print json node", K(ret));
-            } else if (OB_FAIL(res_str.append(":"))) {
-              LOG_WARN("colon write fail");
-            } else if (OB_FAIL(res_str.append("null"))) {
-              LOG_WARN("null write fail");
-            }
-          }
-        } else {
-          if (OB_SUCC(ret) && i > 0 && res_str.length() > 1) {
-            if (res_str.append(",")) {
-              LOG_WARN("comma write fail");
-            }
-          }
-          if (OB_SUCC(ret)) {
-            if (unique_type == OB_JSON_ON_UNIQUE_USE && OB_FAIL(check_key_valid(view_key_names, key))) {
-              LOG_WARN("duplicate key fail");
-            } else if (OB_FAIL(ob_str.print(res_str, true))) {
-              LOG_WARN("fail to print json node", K(ret));
-            } else if (OB_FAIL(res_str.append(":"))) {
-              LOG_WARN("colon write fail");
-            }
-          }
-          if (OB_SUCC(ret)) {
-            value_cs_type = expr.args_[i + 1]->datum_meta_.cs_type_;
-            if (ObJsonExprHelper::is_convertible_to_json(val_type) || ob_is_raw(val_type)) {
-              if (OB_FAIL(ObJsonExprHelper::transform_convertible_2String(*expr.args_[i + 1], ctx, *j_datum,
-                                                           val_type, value_cs_type, res_str,
-                                                           expr.args_[i + 1]->obj_meta_.has_lob_header(), format_type,
-                                                           strict_type == OB_JSON_ON_STRICT_USE, i + 1))) {
-                LOG_WARN("fail to transfrom to string");
-              }
-            } else {
-              ObScale scale = expr.args_[i + 1]->datum_meta_.scale_;
-              const ObTimeZoneInfo *tz_info = get_timezone_info(ctx.exec_ctx_.get_my_session());
-              if (OB_FAIL(ObJsonExprHelper::transform_scalar_2String(ctx, *j_datum, val_type, scale, tz_info, res_str))) {
-                LOG_WARN("Fail to transformer string");
-              }
-            }
-          }
-          if (OB_SUCC(ret) && res_str.length() > OB_MAX_PACKET_LENGTH) {
-            ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
-            LOG_WARN("result of json_objectagg is too long", K(ret), K(res_str.length()),
-                                                            K(OB_MAX_PACKET_LENGTH));
-          }
+        bool is_key_already_exist = (j_obj.get_value(key) != nullptr);
+        bool is_overwrite = (is_key_unique || dst_type == ObJsonType);
+        if (is_key_already_exist && is_key_unique) {
+          ret = OB_ERR_DUPLICATE_KEY;
+          LOG_WARN("Found duplicate key inserted before!", K(key), K(ret));
+        } else if (is_null_absent && j_val->json_type() == ObJsonNodeType::J_NULL) {
+        } else if (OB_FAIL(j_obj.add(key, static_cast<ObJsonNode*>(j_val), false, false, is_overwrite))) {
+          LOG_WARN("failed to get json value node.", K(ret), K(val_type));
         }
       }
     }
   }
-  if (OB_FAIL(ret)) {
-    LOG_WARN("return value fail", K(ret));
-  } else if (OB_FAIL(res_str.append("}"))) {
-    LOG_WARN("symbol write fail");
-  } else {
+
+  if (OB_SUCC(ret)) {
     if (dst_type == ObJsonType) {
       ObString raw_bin;
       if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
@@ -434,18 +357,23 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
         LOG_WARN("fail to pack json result", K(ret), K(raw_bin));
       }
     } else {
-      if (dst_type == ObVarcharType && res_str.string().length()  > dst_len) {
+      if (OB_FAIL(string_buffer.reserve(j_obj.get_serialize_size()))) {
+        LOG_WARN("fail to reserve string.", K(ret), K(j_obj.get_serialize_size()));
+      } else if (OB_FAIL(j_base->print(string_buffer, false, false))) {
+        LOG_WARN("fail to transform to string.", K(ret), K(string_buffer.length()));
+      } else if (dst_type == ObVarcharType && string_buffer.length()  > dst_len) {
         char res_ptr[OB_MAX_DECIMAL_PRECISION] = {0};
         if (OB_ISNULL(ObCharset::lltostr(dst_len, res_ptr, 10, 1))) {
           LOG_WARN("dst_len fail to string.", K(ret));
         }
         ret = OB_OPERATE_OVERFLOW;
         LOG_USER_ERROR(OB_OPERATE_OVERFLOW, res_ptr, "json_object");
-      } else {
-        ret = set_result(dst_type, res_str.string(), &temp_allocator, ctx, expr, res, strict_type, unique_type);
+      } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, string_buffer.string()))) {
+        LOG_WARN("fail to pack json result", K(ret));
       }
     }
   }
+
   return ret;
 }
 
@@ -506,14 +434,13 @@ int ObExprJsonObject::get_ora_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
   return ret;
 }
 
-int ObExprJsonObject::get_clause(const ObExpr &expr,
-                                ObEvalCtx &ctx,
-                                uint8_t index,
-                                uint8_t &type,
-                                int64_t size_para)
+int ObExprJsonObject::eval_option_clause_value(ObExpr *expr,
+                                               ObEvalCtx &ctx,
+                                               uint8_t &type,
+                                               int64_t size_para)
 {
   INIT_SUCC(ret);
-  ObExpr *json_arg = expr.args_[index];
+  ObExpr *json_arg = expr;
   ObObjType val_type = json_arg->datum_meta_.type_;
   ObDatum *json_datum = NULL;
   if (OB_FAIL(json_arg->eval(ctx, json_datum))) {

@@ -860,10 +860,11 @@ JSON_QUERY '(' js_doc_expr ',' js_literal opt_js_query_returning_type opt_scalar
 int ObDMLResolver::transform_dot_notation2_json_query(ParseNode &node, const ObString &sql_str)
 {
   INIT_SUCC(ret);
-  int64_t alloc_vec_size = sizeof(ParseNode *) * 10;
+  int64_t alloc_vec_size = sizeof(ParseNode *) * 11;
   ParseNode **param_vec = NULL;     // children_
   ParseNode *opt_node = NULL;       // clause node
   ParseNode *ret_node = NULL;       // returning node
+  ParseNode *truncate_node = NULL;       // truncate node
   ParseNode *path_node = NULL;      // path node
   ParseNode *table_node = NULL;     // table node
   ParseNode *tmp_node = NULL;       // json doc node
@@ -959,7 +960,7 @@ int ObDMLResolver::transform_dot_notation2_json_query(ParseNode &node, const ObS
     param_vec[2] = ret_node;       // return type pos is 2 in json value clause
   }
   // opt_scalars opt_pretty opt_ascii opt_wrapper opt_query_on_error_or_empty_or_mismatch 7
-  for (int8_t i = 3; OB_SUCC(ret) && i < 10; i++) {
+  for (int8_t i = 3; OB_SUCC(ret) && i < 11; i++) {
     opt_node = NULL;
     if (OB_ISNULL(opt_node = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -972,12 +973,14 @@ int ObDMLResolver::transform_dot_notation2_json_query(ParseNode &node, const ObS
       } else {
         int8_t val = 0;
         if (i == 3) {
+          val = 0;
+        } else if (i == 4) {
           val = 2;
-        } else if (i == 7) {
+        } else if (i == 8) {
           val = 1;
-        } else if (i == 8 || i == 6) {
+        } else if (i == 9 || i == 7) {
           val = 5;
-        } else if (i == 9) {
+        } else if (i == 10) {
           val = 3; // mismatch default is 3 from dot notation
         }
         opt_node->value_ = val;
@@ -989,7 +992,7 @@ int ObDMLResolver::transform_dot_notation2_json_query(ParseNode &node, const ObS
   }
   // create json query node
   if (OB_SUCC(ret)) {
-    node.num_child_ = 10;
+    node.num_child_ = 11;
     node.type_ = T_FUN_SYS_JSON_QUERY;
     node.children_ = param_vec;
   }
@@ -8574,15 +8577,14 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
     LOG_WARN("table def is null", K(ret), KP(table_def));
   } else if (OB_FAIL(get_json_table_column_by_id(table_item->table_id_, root_col_def))) {
     LOG_WARN("internal error find jt column failed", K(ret));
-  } else if ((col_type == COL_TYPE_EXISTS && parse_tree.num_child_ != 4) ||
+  } else if ((col_type == COL_TYPE_EXISTS && parse_tree.num_child_ != 5) ||
              (col_type == COL_TYPE_VALUE && parse_tree.num_child_ != 5) ||
-             ((col_type == COL_TYPE_QUERY || col_type == COL_TYPE_QUERY_JSON_COL) && parse_tree.num_child_ != 6) ||
+             ((col_type == COL_TYPE_QUERY || col_type == COL_TYPE_QUERY_JSON_COL) && parse_tree.num_child_ != 7) ||
              (col_type == COL_TYPE_ORDINALITY && parse_tree.num_child_ != 2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to resolve json table regular column", K(ret), K(parse_tree.num_child_), K(col_type));
   } else {
     void* buf = NULL;
-
     if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObDmlJtColDef)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
@@ -8604,8 +8606,9 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
           col_def->col_base_info_.col_type_ = COL_TYPE_ORDINALITY;
         }
       } else if (col_type == COL_TYPE_EXISTS) {
-        const ParseNode* path_node = parse_tree.children_[2];
-        const ParseNode* on_err_node = parse_tree.children_[3];
+        const ParseNode* path_node = parse_tree.children_[3];
+        const ParseNode* on_err_node = parse_tree.children_[4];
+        const ParseNode* truncate_node = parse_tree.children_[2];
 
         if (OB_FAIL(resolve_json_table_column_name_and_path(name_node, path_node, allocator_, col_def))) {
           LOG_WARN("failed to resolve json column name node or path node", K(ret));
@@ -8623,6 +8626,7 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
           } else {
             col_def->col_base_info_.on_error_ = error_node->value_;
             col_def->col_base_info_.on_empty_ = empty_node->value_;
+            col_def->col_base_info_.truncate_ = truncate_node->value_;
             col_def->col_base_info_.col_type_ = COL_TYPE_EXISTS;
 
             int jt_on_error = root_col_def->col_base_info_.on_error_;
@@ -8632,10 +8636,12 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
           }
         }
       } else if (col_type == COL_TYPE_QUERY || col_type == COL_TYPE_QUERY_JSON_COL) {
-        const ParseNode* scalar_node = parse_tree.children_[2];
-        const ParseNode* wrapper_node = parse_tree.children_[3];
-        const ParseNode* path_node = parse_tree.children_[4];
-        const ParseNode* on_err_node = parse_tree.children_[5];
+        const ParseNode* scalar_node = parse_tree.children_[3];
+        const ParseNode* wrapper_node = parse_tree.children_[4];
+        const ParseNode* path_node = parse_tree.children_[5];
+        const ParseNode* on_err_node = parse_tree.children_[6];
+
+        const ParseNode* truncate_node = parse_tree.children_[2];
 
 
         if (OB_ISNULL(on_err_node->children_[0])
@@ -8647,7 +8653,7 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
           LOG_WARN("failed to resolve json column name node or path node", K(ret));
         } else {
           col_def->col_base_info_.col_type_ = COL_TYPE_QUERY;
-          col_def->col_base_info_.truncate_ = 0;
+          col_def->col_base_info_.truncate_ = truncate_node->value_;
           col_def->col_base_info_.format_json_ = true;
           col_def->col_base_info_.allow_scalar_ = scalar_node->value_;
           col_def->col_base_info_.wrapper_ = wrapper_node->value_;

@@ -55,11 +55,10 @@ private:
   const static uint8_t OB_JSON_ON_UNIQUE_USE          = 1;
   const static uint8_t OB_JSON_ON_UNIQUE_IMPLICIT     = 0;
 
-  static int get_clause(const ObExpr &expr,
-                          ObEvalCtx &ctx,
-                          uint8_t index,
-                          uint8_t &type,
-                          int64_t size_para);
+  static int eval_option_clause_value(ObExpr *expr,
+                                      ObEvalCtx &ctx,
+                                      uint8_t &type,
+                                      int64_t size_para);
 
   static int get_ora_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
                           uint16_t index, ObDatum*& j_datum,

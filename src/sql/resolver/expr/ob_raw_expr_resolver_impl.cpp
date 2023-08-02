@@ -5357,7 +5357,7 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
   if(OB_SUCC(ret) && T_FUN_SYS_JSON_QUERY != node->type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node->type_ error");
-  } else if (OB_SUCC(ret) && 10 != node->num_child_) {
+  } else if (OB_SUCC(ret) && 11 != node->num_child_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("num_child_ error");
   }
@@ -5402,7 +5402,7 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
     LOG_WARN("invalid user.table.column, table.column, or column specification", K(ret));
   }
 
-  // [json_text][json_path][returning_type][scalars][pretty][ascii][wrapper][error_type][empty_type][mismatch]
+  // [json_text][json_path][returning_type][truncate][scalars][pretty][ascii][wrapper][error_type][empty_type][mismatch]
   for (int32_t i = 0; OB_SUCC(ret) && i < num; i++) {
     ObRawExpr *para_expr = NULL;
     CK(OB_NOT_NULL(node->children_[i]));
