@@ -943,11 +943,11 @@ int ObPersistentLobApator::inner_get_tablet(
   } else if (OB_ISNULL(ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret));
-  } else if (ls_handle.get_ls()->get_tablet_with_timeout(tablet_id,
-                                                         handle,
-                                                         param.timeout_,
-                                                         ObMDSGetTabletMode::READ_READABLE_COMMITED,
-                                                         param.snapshot_.core_.version_)) {
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_with_timeout(tablet_id,
+                                                                 handle,
+                                                                 param.timeout_,
+                                                                 ObMDSGetTabletMode::READ_READABLE_COMMITED,
+                                                                 param.snapshot_.core_.version_))) {
     LOG_WARN("fail to get tablet handle", K(ret), K(tablet_id), K(param));
   }
   return ret;
