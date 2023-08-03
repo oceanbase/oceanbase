@@ -747,7 +747,7 @@ inline int ObChunkDatumStore::dump_one_block(BlockBuffer *item)
   if (item->cur_pos_ <= 0) {
     LOG_WARN("unexpected: dump zero", K(item), K(item->cur_pos_));
   }
-  item->block->magic_ = Block::MAGIC;
+  item->block_->magic_ = Block::MAGIC;
   if (OB_FAIL(item->get_block()->unswizzling())) {
     LOG_WARN("convert block to copyable failed", K(ret));
   } else if (item->capacity() < min_block_size) {
@@ -764,17 +764,19 @@ inline int ObChunkDatumStore::dump_one_block(BlockBuffer *item)
                                       item->get_block()->blk_size_);
       tmp_dump_blk_->rows_ = item->get_block()->rows_;
       tmp_dump_blk_->get_buffer()->fast_advance(item->data_size() - BlockBuffer::HEAD_SIZE);
+      tmp_dump_blk_->checksum_ = tmp_dump_blk_->get_checksum();
       if (OB_FAIL(write_file(tmp_dump_blk_->get_buffer()->data(),
                              tmp_dump_blk_->get_buffer()->capacity()))) {
         LOG_WARN("write block to file failed");
       }
     }
+  } else if (FALSE_IT(item->block_->checksum_ = item->block_->get_checksum())) {
   } else if (OB_FAIL(write_file(item->data(), item->capacity()))) {
     LOG_WARN("write block to file failed");
   }
   if (OB_SUCC(ret)) {
     n_block_in_file_++;
-    LOG_DEBUG("RowStore Dumpped block", K_(item->block->rows),
+    LOG_DEBUG("RowStore Dumpped block", K_(item->block_->rows),
       K_(item->cur_pos), K(item->capacity()));
   }
   if (OB_LIKELY(nullptr != io_event_observer_)) {
@@ -2430,6 +2432,10 @@ int ObChunkDatumStore::Iterator::load_next_block(RowIterator& it)
           set_read_file_iter_end();
         } else {
           if (OB_FAIL(prefetch_next_blk())) {
+            if (OB_ITER_END == ret) {
+              // check position already, should not return OB_ITER_END
+              ret = OB_ERR_UNEXPECTED;
+            }
             LOG_WARN("prefetch next blk failed", K(ret));
           }
         }
@@ -2452,11 +2458,11 @@ int ObChunkDatumStore::Iterator::load_next_block(RowIterator& it)
         cur_chunk_n_blocks_ = store_->blocks_.get_size();
         cur_nth_blk_ += cur_chunk_n_blocks_;
         chunk_n_rows_ = store_->get_row_cnt_in_memory();
-        if (cur_nth_blk_ != store_->n_blocks_ - 1) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected status",
-                  K(ret), K(cur_nth_blk_), K(store_->n_blocks_), K(store_->blocks_.get_size()));
-        }
+      }
+      if (cur_nth_blk_ != store_->n_blocks_ - 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected status",
+                K(ret), K(cur_nth_blk_), K(store_->n_blocks_), K(store_->blocks_.get_size()));
       }
     }
   }
@@ -2485,10 +2491,10 @@ int ObChunkDatumStore::Iterator::read_next_blk()
       LOG_WARN("aio wait failed", K(ret));
     }
   }
-  if (OB_SUCC(ret) && !aio_blk_->magic_check()) {
+  if (OB_SUCC(ret) && (!aio_blk_->magic_check() || !aio_blk_->checksum_check())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("read corrupt data", K(ret), K(aio_blk_->magic_),
-             K(store_->file_size_), K(cur_iter_pos_));
+             K(store_->file_size_), K(cur_iter_pos_), K(aio_blk_->checksum_));
   }
   if (OB_SUCC(ret)) {
     // data block is larger than min block

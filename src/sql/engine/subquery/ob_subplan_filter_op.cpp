@@ -77,6 +77,11 @@ int ObSubQueryIterator::get_next_row()
   return ret;
 }
 
+void ObSubQueryIterator::drain_exch()
+{
+  op_.drain_exch();
+}
+
 int ObSubQueryIterator::rewind(const bool reset_onetime_plan /* = false */)
 {
   //根据subplan filter的语义，reset row iterator，其它的成员保持不变
@@ -1264,6 +1269,25 @@ int ObSubPlanFilterOp::prepare_onetime_exprs()
     eval_ctx_.set_batch_size(1);
     eval_ctx_.set_batch_idx(0);
     ret = prepare_onetime_exprs_inner();
+  }
+  /*
+     SPF
+      TSC
+      PX COORD
+        EXCHANGE (thread +1)
+
+    if PX COORD is onetime expr, SPF use extra thread calc it and release it until ITER_END，
+    A large number of threads are wasted when multiple onetime expr coexist
+    So we drain every onetime expr after calc
+  */
+  for (int64_t i = 1; OB_SUCC(ret) && i < child_cnt_; ++i) {
+    Iterator *iter = subplan_iters_.at(i - 1);
+    if (OB_ISNULL(iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subplan_iter is null", K(ret));
+    } else if (MY_SPEC.one_time_idxs_.has_member(i)) {
+      iter->drain_exch();
+    }
   }
   return ret;
 }
