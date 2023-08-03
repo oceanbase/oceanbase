@@ -1486,7 +1486,7 @@ int ObLS::finish_slog_replay()
   } else if (OB_FAIL(load_ls_inner_tablet())) {
     LOG_WARN("ls load inner tablet failed", K(ret), KPC(this));
   } else {
-    // do nothing
+    ls_tablet_svr_.enable_to_read();
   }
   return ret;
 }
