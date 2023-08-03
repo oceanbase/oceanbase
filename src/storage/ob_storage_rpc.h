@@ -471,6 +471,7 @@ protected:
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   int64_t last_send_time_;
   common::ObArenaAllocator allocator_;
+  static const int64_t FLUSH_TIME_INTERVAL = ObStorageRpcProxy::STREAM_RPC_TIMEOUT / 2;
 };
 
 class ObHAFetchMacroBlockP: public ObStorageStreamRpcP<OB_HA_FETCH_MACRO_BLOCK>

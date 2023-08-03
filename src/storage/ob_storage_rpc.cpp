@@ -749,11 +749,13 @@ template <typename Data>
 int ObStorageStreamRpcP<RPC_CODE>::fill_data(const Data &data)
 {
   int ret = OB_SUCCESS;
-
+  const int64_t curr_ts = ObTimeUtil::current_time();
   if (NULL == (this->result_.get_data())) {
     STORAGE_LOG(WARN, "fail to alloc migration data buffer.");
     ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (serialization::encoded_length(data) > this->result_.get_remain()) {
+  } else if (serialization::encoded_length(data) > this->result_.get_remain()
+      || (curr_ts - last_send_time_ >= FLUSH_TIME_INTERVAL
+          && this->result_.get_capacity() != this->result_.get_remain())) {
     LOG_INFO("flush", K(this->result_));
     if (OB_FAIL(flush_and_wait())) {
       STORAGE_LOG(WARN, "failed to flush_and_wait", K(ret));
@@ -775,13 +777,15 @@ template <ObRpcPacketCode RPC_CODE>
 int ObStorageStreamRpcP<RPC_CODE>::fill_buffer(blocksstable::ObBufferReader &data)
 {
   int ret = OB_SUCCESS;
-
+  const int64_t curr_ts = ObTimeUtil::current_time();
   if (NULL == (this->result_.get_data())) {
     STORAGE_LOG(WARN, "fail to alloc migration data buffer.");
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     while (OB_SUCC(ret) && data.remain() > 0) {
-      if (0 == this->result_.get_remain()) {
+      if (0 == this->result_.get_remain()
+          || (curr_ts - last_send_time_ >= FLUSH_TIME_INTERVAL
+              && this->result_.get_capacity() != this->result_.get_remain())) {
         if (OB_FAIL(flush_and_wait())) {
           STORAGE_LOG(WARN, "failed to flush_and_wait", K(ret));
         }
@@ -808,14 +812,16 @@ template <typename Data>
 int ObStorageStreamRpcP<RPC_CODE>::fill_data_list(ObIArray<Data> &data_list)
 {
   int ret = OB_SUCCESS;
-
+  const int64_t curr_ts = ObTimeUtil::current_time();
   if (NULL == (this->result_.get_data())) {
     STORAGE_LOG(WARN, "fail to alloc migration data buffer.");
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < data_list.count(); ++i) {
       Data &data = data_list.at(i);
-      if (data.get_serialize_size() > this->result_.get_remain()) {
+      if (data.get_serialize_size() > this->result_.get_remain()
+          || (curr_ts - last_send_time_ >= FLUSH_TIME_INTERVAL
+              && this->result_.get_capacity() != this->result_.get_remain())) {
         if (OB_FAIL(flush_and_wait())) {
           STORAGE_LOG(WARN, "failed to flush_and_wait", K(ret));
         }
@@ -1025,8 +1031,17 @@ int ObFetchTabletInfoP::process()
     ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
     ObCopyTabletInfoObProducer producer;
     ObCopyTabletInfo tablet_info;
-    const int64_t MAX_TABLET_NUM = 100;
+    int64_t max_tablet_num = 32;
     int64_t tablet_count = 0;
+
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      const int64_t tmp_max_tablet_num = tenant_config->_ha_tablet_info_batch_count;
+      if (0 != tmp_max_tablet_num) {
+        max_tablet_num = tmp_max_tablet_num;
+      }
+    }
+
     LOG_INFO("start to fetch tablet info", K(arg_));
 
     last_send_time_ = ObTimeUtility::current_time();
@@ -1074,7 +1089,7 @@ int ObFetchTabletInfoP::process()
           } else {
             STORAGE_LOG(WARN, "failed to get next tablet meta info", K(ret));
           }
-        } else if (tablet_count >= MAX_TABLET_NUM) {
+        } else if (tablet_count >= max_tablet_num) {
           if (this->result_.get_position() > 0 && OB_FAIL(flush_and_wait())) {
             LOG_WARN("failed to flush and wait", K(ret), K(tablet_info));
           } else {

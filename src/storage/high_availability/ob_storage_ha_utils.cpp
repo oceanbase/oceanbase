@@ -18,6 +18,8 @@
 #include "share/scn.h"
 #include "share/ob_version.h"
 #include "share/ob_cluster_version.h"
+#include "src/storage/ob_storage_rpc.h"
+#include "src/observer/omt/ob_tenant_config.h"
 
 using namespace oceanbase::share;
 
@@ -137,6 +139,19 @@ int ObStorageHAUtils::check_tablet_replica_checksum_(const uint64_t tenant_id, c
   }
   return ret;
 }
+
+int64_t ObStorageHAUtils::get_rpc_timeout()
+{
+  int64_t rpc_timeout = ObStorageRpcProxy::STREAM_RPC_TIMEOUT;
+  int64_t tmp_rpc_timeout = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    tmp_rpc_timeout = tenant_config->_ha_rpc_timeout;
+    rpc_timeout = std::max(rpc_timeout, tmp_rpc_timeout);
+  }
+  return rpc_timeout;
+}
+
 
 } // end namespace storage
 } // end namespace oceanbase

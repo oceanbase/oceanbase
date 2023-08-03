@@ -201,6 +201,8 @@ int ObCopyMacroBlockObReader::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(param));
   } else {
+    const int64_t rpc_timeout = ObStorageHAUtils::get_rpc_timeout();
+
     SMART_VAR(ObCopyMacroBlockRangeArg, arg) {
       if (OB_FAIL(macro_block_mem_context_.init())) {
         LOG_WARN("failed to init macro block memory context", K(ret));
@@ -226,7 +228,7 @@ int ObCopyMacroBlockObReader::init(
           LOG_ERROR("rpc arg must not larger than packet size", K(ret), K(arg.get_serialize_size()));
         } else if (OB_FAIL(param.svr_rpc_proxy_->to(param.src_info_.src_addr_).by(OB_DATA_TENANT_ID).dst_cluster_id(param.src_info_.cluster_id_)
                            .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
-                           .timeout(ObStorageRpcProxy::STREAM_RPC_TIMEOUT)
+                           .timeout(rpc_timeout)
                            .fetch_macro_block(arg, rpc_buffer_, handle_))) {
           LOG_WARN("failed to send fetch macro block rpc", K(param), K(ret));
         } else {
@@ -778,6 +780,7 @@ int ObCopyTabletInfoObReader::init(
     common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
+  int64_t rpc_timeout = FETCH_TABLET_INFO_TIMEOUT;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -788,7 +791,8 @@ int ObCopyTabletInfoObReader::init(
     LOG_WARN("invalid argument", K(ret), K(src_info), K(rpc_arg));
   } else if (OB_FAIL(rpc_reader_.init(bandwidth_throttle))) {
     LOG_WARN("fail to init tablet info rpc reader", K(ret));
-  } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID).timeout(FETCH_TABLET_INFO_TIMEOUT).dst_cluster_id(src_info.cluster_id_)
+  } else if (FALSE_IT(rpc_timeout = ObStorageHAUtils::get_rpc_timeout())) {
+  } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID).timeout(rpc_timeout).dst_cluster_id(src_info.cluster_id_)
                 .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
                 .fetch_tablet_info(rpc_arg, rpc_reader_.get_rpc_buffer(), rpc_reader_.get_handle()))) {
     LOG_WARN("failed to send fetch tablet info rpc", K(ret), K(src_info), K(rpc_arg));
@@ -1087,6 +1091,7 @@ int ObCopySSTableInfoObReader::init(
     common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
+  int64_t rpc_timeout = FETCH_TABLET_SSTABLE_INFO_TIMEOUT;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -1097,8 +1102,9 @@ int ObCopySSTableInfoObReader::init(
     LOG_WARN("invalid argument", K(ret), K(src_info), K(rpc_arg));
   } else if (OB_FAIL(rpc_reader_.init(bandwidth_throttle))) {
     LOG_WARN("fail to init tablet info rpc reader", K(ret));
+  } else if (FALSE_IT(rpc_timeout = ObStorageHAUtils::get_rpc_timeout())) {
   } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID)
-                .timeout(FETCH_TABLET_SSTABLE_INFO_TIMEOUT).dst_cluster_id(src_info.cluster_id_)
+                .timeout(rpc_timeout).dst_cluster_id(src_info.cluster_id_)
                 .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
                 .fetch_tablet_sstable_info(rpc_arg, rpc_reader_.get_rpc_buffer(), rpc_reader_.get_handle()))) {
     LOG_WARN("failed to send fetch tablet info rpc", K(ret), K(src_info), K(rpc_arg));
@@ -1964,6 +1970,7 @@ int ObCopySSTableMacroObReader::init(
     common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
+  int64_t rpc_timeout = FETCH_SSTABLE_MACRO_INFO_TIMEOUT;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -1974,8 +1981,9 @@ int ObCopySSTableMacroObReader::init(
     LOG_WARN("invalid argument", K(ret), K(src_info), K(rpc_arg));
   } else if (OB_FAIL(rpc_reader_.init(bandwidth_throttle))) {
     LOG_WARN("fail to init tablet info rpc reader", K(ret));
+  } else if (FALSE_IT(rpc_timeout = ObStorageHAUtils::get_rpc_timeout())) {
   } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID)
-                .timeout(FETCH_SSTABLE_MACRO_INFO_TIMEOUT).dst_cluster_id(src_info.cluster_id_)
+                .timeout(rpc_timeout).dst_cluster_id(src_info.cluster_id_)
                 .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
                 .fetch_sstable_macro_info(rpc_arg, rpc_reader_.get_rpc_buffer(), rpc_reader_.get_handle()))) {
     LOG_WARN("failed to send fetch tablet info rpc", K(ret), K(src_info), K(rpc_arg));
