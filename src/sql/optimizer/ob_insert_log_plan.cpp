@@ -71,10 +71,17 @@ int ObInsertLogPlan::generate_normal_raw_plan()
     if (OB_SUCC(ret) && insert_stmt->is_insert_up()) {
       ObSEArray<ObRawExpr*, 4> subquery;
       ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM> assign_exprs;
+      bool contain = false;
       if (OB_FAIL(insert_stmt->get_assignments_exprs(assign_exprs))) {
         LOG_WARN("failed to get assignment exprs", K(ret));
       } else if (OB_FAIL(ObOptimizerUtil::get_subquery_exprs(assign_exprs, subquery))) {
         LOG_WARN("failed to get subqueries", K(ret)) ;
+      } else if (OB_FAIL(check_contain_non_onetime_expr(subquery, contain))) {
+        LOG_WARN("check contain non onetime expr", K(ret));
+      } else if (contain) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "update values contain non onetime subquery");
+        LOG_WARN("update values contain non onetime subquery", K(ret));
       } else if (!subquery.empty() && OB_FAIL(candi_allocate_subplan_filter(subquery))) {
         LOG_WARN("failed to allocate subplan", K(ret));
       } else { /*do nothing*/ }
@@ -272,6 +279,43 @@ int ObInsertLogPlan::set_is_direct_insert() {
   return ret;
 }
 
+int ObInsertLogPlan::check_contain_non_onetime_expr(const ObRawExpr *expr, bool &contain)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (expr->has_flag(IS_SUB_QUERY)) {
+    if (!ObOptimizerUtil::find_item(get_onetime_query_refs(), expr)) {
+      contain = true;
+    }
+  } else if (expr->has_flag(CNT_SUB_QUERY)) {
+    if (ObOptimizerUtil::find_item(get_onetime_query_refs(), expr)) {
+      //do nothing
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && !contain && i < expr->get_param_count(); i++) {
+        if (OB_FAIL(SMART_CALL(check_contain_non_onetime_expr(expr->get_param_expr(i), contain)))) {
+          LOG_WARN("check contain non one time expr failed", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObInsertLogPlan::check_contain_non_onetime_expr(const ObIArray<ObRawExpr *> &exprs, bool &contain)
+{
+  int ret = OB_SUCCESS;
+  contain = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !contain && i < exprs.count(); i++) {
+    if (OB_FAIL(check_contain_non_onetime_expr(exprs.at(i), contain))) {
+      LOG_WARN("check contain non one time expr failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+
 int ObInsertLogPlan::check_need_online_stats_gather(bool &need_osg)
 {
   int ret = OB_SUCCESS;
@@ -329,10 +373,18 @@ int ObInsertLogPlan::allocate_insert_values_as_top(ObLogicalOperator *&top)
     LOG_WARN("failed to compute propery", K(ret));
   } else {
     if (NULL != top) {
-      values_op->add_child(top);
+      ret = values_op->add_child(top);
     }
     top = values_op;
-    if (!insert_stmt->get_subquery_exprs().empty() &&
+    bool contain = false;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(check_contain_non_onetime_expr(insert_stmt->get_values_vector(), contain))) {
+      LOG_WARN("check contain non onetime expr", K(ret));
+    } else if (contain) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert values contain non onetime subquery");
+      LOG_WARN("insert values contain non onetime subquery", K(ret));
+    } else if (!insert_stmt->get_subquery_exprs().empty() &&
         OB_FAIL(allocate_subplan_filter_as_top(top,
                                                insert_stmt->get_values_vector()))) {
       LOG_WARN("failed to allocate subplan filter as top", K(ret));

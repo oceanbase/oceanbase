@@ -119,6 +119,8 @@ protected:
                                       ObColumnRefRawExpr *column_expr,
                                       ObRawExpr *&column_conv_expr);
 
+  int check_contain_non_onetime_expr(const ObRawExpr *expr, bool &contain);
+  int check_contain_non_onetime_expr(const ObIArray<ObRawExpr *> &exprs, bool &contain);
 private:
   int generate_osg_share_info(OSGShareInfo *&info);
   int check_need_online_stats_gather(bool &need_osg);
