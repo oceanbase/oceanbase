@@ -270,25 +270,25 @@ int ObMemberListLockUtils::try_lock_config_change_(
   storage::ObStorageRpc storage_rpc;
   if (OB_FAIL(init_storage_rpc_(storage_svr_rpc_proxy, storage_rpc))) {
     LOG_WARN("failed to init storage rpc", K(ret));
-  } else if (OB_FAIL(try_lock_config_change_fallback_(lock_info, lock_timeout, storage_rpc))) {
+  } else if (OB_FAIL(inner_try_lock_config_change_(lock_info, lock_timeout, storage_rpc))) {
     LOG_WARN("failed to try lock config change fallback", K(ret), K(lock_info));
   } else {
     LOG_INFO("try lock config change fallback", K(lock_info), K(lock_timeout));
   }
   destory_storage_rpc_(storage_svr_rpc_proxy, storage_rpc);
-#ifdef ERRSIM
-  SERVER_EVENT_ADD("TRANSFER_LOCK", "LOCK_CONFIG_CHANGE",
+  if (OB_SUCC(ret)) {
+    SERVER_EVENT_ADD("TRANSFER_LOCK", "LOCK_CONFIG_CHANGE",
       "tenant_id", lock_info.tenant_id_,
       "ls_id", lock_info.ls_id_.id(),
       "task_id", lock_info.task_id_,
       "status", lock_info.status_.str(),
       "lock_owner", lock_info.lock_owner_,
       "lock_member_list", lock_info.comment_);
-#endif
+  }
   return ret;
 }
 
-int ObMemberListLockUtils::try_lock_config_change_fallback_(
+int ObMemberListLockUtils::inner_try_lock_config_change_(
     const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout,
     storage::ObStorageRpc &storage_rpc)
 {
@@ -377,15 +377,15 @@ int ObMemberListLockUtils::unlock_config_change_(
     LOG_INFO("unlock lock config change fallback", K(lock_info), K(lock_timeout));
   }
   destory_storage_rpc_(storage_svr_rpc_proxy, storage_rpc);
-#ifdef ERRSIM
-  SERVER_EVENT_ADD("TRANSFER_LOCK", "UNLOCK_CONFIG_CHANGE",
-      "tenant_id", lock_info.tenant_id_,
-      "ls_id", lock_info.ls_id_.id(),
-      "task_id", lock_info.task_id_,
-      "status", lock_info.status_.str(),
-      "lock_owner", lock_info.lock_owner_,
-      "unlock_member_list", lock_info.comment_);
-#endif
+  if (OB_SUCC(ret)) {
+    SERVER_EVENT_ADD("TRANSFER_LOCK", "UNLOCK_CONFIG_CHANGE",
+        "tenant_id", lock_info.tenant_id_,
+        "ls_id", lock_info.ls_id_.id(),
+        "task_id", lock_info.task_id_,
+        "status", lock_info.status_.str(),
+        "lock_owner", lock_info.lock_owner_,
+        "unlock_member_list", lock_info.comment_);
+  }
   return ret;
 }
 
@@ -596,15 +596,15 @@ int ObMemberListLockUtils::relock_before_unlock_(const ObTransferTaskLockInfo &l
   } else {
     LOG_WARN("relock before unlock", K(ret), K(lock_info));
   }
-#ifdef ERRSIM
-  SERVER_EVENT_ADD("TRANSFER_LOCK", "RELOCK_BEFORE_UNLOCK",
-                  "tenant_id", lock_info.tenant_id_,
-                  "ls_id", lock_info.ls_id_,
-                  "status", lock_info.status_,
-                  "inner_table_lock_owner", lock_info.lock_owner_,
-                  "palf_lock_owner", palf_lock_owner,
-                  "result", ret);
-#endif
+  if (OB_SUCC(ret)) {
+    SERVER_EVENT_ADD("TRANSFER_LOCK", "RELOCK_BEFORE_UNLOCK",
+                    "tenant_id", lock_info.tenant_id_,
+                    "ls_id", lock_info.ls_id_,
+                    "status", lock_info.status_,
+                    "inner_table_lock_owner", lock_info.lock_owner_,
+                    "palf_lock_owner", palf_lock_owner,
+                    "result", ret);
+  }
   return ret;
 }
 
