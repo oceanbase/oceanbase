@@ -132,7 +132,7 @@ int ObPxMultiPartInsertOp::process_row()
                                    eval_ctx_,
                                    ins_rtdef_.cur_row_num_,
                                    MY_SPEC.ins_ctdef_.column_infos_,
-                                   MY_SPEC.ins_ctdef_.das_ctdef_,
+                                   MY_SPEC.is_ignore_,
                                    MY_SPEC.ins_ctdef_.is_single_value_,
                                    *this));
   OZ(ObDMLService::filter_row_for_view_check(MY_SPEC.ins_ctdef_.view_check_exprs_, eval_ctx_, is_filtered));
