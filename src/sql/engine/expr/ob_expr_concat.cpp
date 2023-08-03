@@ -220,7 +220,7 @@ int ObExprConcat::calc_result_typeN(ObExprResType &type,
   } else {
     bool has_text = false;
     for (int64_t i = 0; !has_text && i < param_num; ++i) {
-      if (ObTinyTextType != types[i].get_type() && types[i].is_text()) {
+      if (ObTinyTextType != types[i].get_type() && types[i].is_lob()) {
         has_text = true;
       }
     }
