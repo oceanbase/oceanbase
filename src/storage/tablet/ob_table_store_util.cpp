@@ -644,7 +644,7 @@ int ObMemtableArray::assign(ObMemtableArray &dst_array) const
 {
   int ret = OB_SUCCESS;
   dst_array.count_ = count_;
-  for (int64_t i = 0; i < MEMTABLE_ARRAY_SIZE; ++i) {
+  for (int64_t i = 0; i < MAX_MEMSTORE_CNT; ++i) {
     dst_array.memtable_array_[i] = memtable_array_[i];
   }
   return ret;
@@ -674,7 +674,7 @@ int ObMemtableArray::build(
     } else if (FALSE_IT(memtable = reinterpret_cast<memtable::ObIMemtable *>(table))) {
     } else if (memtable->is_empty()) {
       FLOG_INFO("empty memtable discarded", KPC(memtable));
-    } else if (OB_UNLIKELY(count_ == MEMTABLE_ARRAY_SIZE)) {
+    } else if (OB_UNLIKELY(count_ == MAX_MEMSTORE_CNT)) {
       ret = OB_ARRAY_OUT_OF_RANGE;
       LOG_WARN("too many elements for memtable array", K(ret));
     } else {
@@ -708,7 +708,7 @@ int ObMemtableArray::rebuild(const common::ObIArray<ObITable *> &table_array)
     } else if (table->get_end_scn() < endscn) {
     } else if (exist_memtable_with_end_scn(table, endscn)) {
       FLOG_INFO("duplicated memtable with same end_scn discarded", KPC(table), K(endscn));
-    } else if (OB_UNLIKELY(count_ == MEMTABLE_ARRAY_SIZE)) {
+    } else if (OB_UNLIKELY(count_ == MAX_MEMSTORE_CNT)) {
       ret = OB_SIZE_OVERFLOW;
       LOG_WARN("too many elements for memtable array", K(ret));
     } else {
@@ -743,7 +743,7 @@ int ObMemtableArray::rebuild(
       } else if (table->get_end_scn() <= clog_checkpoint_scn) {
         FLOG_INFO("memtable end scn no greater than clog checkpoint scn, should be discarded", K(ret),
             "end_scn", table->get_end_scn(), K(clog_checkpoint_scn));
-      } else if (OB_UNLIKELY(count_ == MEMTABLE_ARRAY_SIZE)) {
+      } else if (OB_UNLIKELY(count_ == MAX_MEMSTORE_CNT)) {
         ret = OB_SIZE_OVERFLOW;
         LOG_WARN("too many elements for memtable array", K(ret));
       } else {

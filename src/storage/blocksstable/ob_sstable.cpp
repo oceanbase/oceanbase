@@ -73,7 +73,7 @@ ObSSTable::ObSSTable()
     meta_(nullptr)
 {
 #if defined(__x86_64__)
-  static_assert(sizeof(ObSSTable) <= 1280, "The size of ObSSTable will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObSSTable) <= 160, "The size of ObSSTable will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 

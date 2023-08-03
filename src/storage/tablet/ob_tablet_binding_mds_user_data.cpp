@@ -20,13 +20,13 @@ namespace oceanbase
 namespace storage
 {
 ObTabletBindingMdsUserData::ObTabletBindingMdsUserData()
-  : redefined_(false),
-    snapshot_version_(0),
+  : snapshot_version_(0),
     schema_version_(0),
     data_tablet_id_(),
     hidden_tablet_id_(),
     lob_meta_tablet_id_(),
-    lob_piece_tablet_id_()
+    lob_piece_tablet_id_(),
+    redefined_(false)
 {
 }
 

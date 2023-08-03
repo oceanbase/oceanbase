@@ -1841,8 +1841,7 @@ int ObLSTabletService::replay_create_tablet(
       if (tablet->is_empty_shell()) {
         pool_type = ObTabletPoolType::TP_NORMAL;
       } else {
-        const int64_t try_cache_size = sizeof(ObTablet)
-                                      + tablet->rowkey_read_info_->get_deep_copy_size();
+        const int64_t try_cache_size = tablet->get_try_cache_size();
         if (try_cache_size > ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
           pool_type = ObTabletPoolType::TP_LARGE;
         } else {

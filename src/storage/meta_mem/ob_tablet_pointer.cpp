@@ -47,6 +47,9 @@ ObTabletPointer::ObTabletPointer()
     ddl_kv_mgr_lock_(),
     old_version_chain_(nullptr)
 {
+#if defined(__x86_64__)
+  static_assert(sizeof(ObTabletPointer) == 576, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+#endif
 }
 
 ObTabletPointer::ObTabletPointer(
@@ -132,11 +135,9 @@ int ObTabletPointer::dump_meta_obj(ObMetaObjGuard<ObTablet> &guard, void *&free_
     const ObLSID ls_id = obj_.ptr_->tablet_meta_.ls_id_;
     const ObTabletID tablet_id = obj_.ptr_->tablet_meta_.tablet_id_;
     const int64_t wash_score = obj_.ptr_->get_wash_score();
-    const int64_t rowkey_info_size = nullptr == obj_.ptr_->rowkey_read_info_
-      ? 0 : obj_.ptr_->rowkey_read_info_->get_deep_copy_size();
     guard.get_obj(meta_obj);
     ObTablet *tmp_obj = obj_.ptr_;
-    if (OB_NOT_NULL(meta_obj.ptr_) && sizeof(ObTablet) + rowkey_info_size <= ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
+    if (OB_NOT_NULL(meta_obj.ptr_) && obj_.ptr_->get_try_cache_size() <= ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
       char *buf = reinterpret_cast<char*>(meta_obj.ptr_);
       const int64_t buf_len = ObMetaObjBufferHelper::get_buffer_header(buf).buf_len_;
       const int64_t cur_buf_len = ObMetaObjBufferHelper::get_buffer_header(reinterpret_cast<char*>(tmp_obj)).buf_len_;

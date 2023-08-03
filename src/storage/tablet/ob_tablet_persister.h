@@ -62,6 +62,11 @@ public:
   ObMetaDiskAddr auto_inc_seq_addr_;
   ObTabletCreateDeleteMdsUserData tablet_status_cache_;
   ObTabletBindingMdsUserData aux_tablet_info_cache_;
+  ObITable **ddl_kvs_;
+  int64_t ddl_kv_count_;
+  // memtable::ObIMemtable **memtables_;
+  memtable::ObIMemtable *memtables_[MAX_MEMSTORE_CNT];
+  int64_t memtable_count_;
   // If you want to add new member, make sure all member is assigned in 2 convert function.
   // ObTabletPersister::convert_tablet_to_mem_arg
   // ObTabletPersister::convert_tablet_to_disk_arg
@@ -113,7 +118,8 @@ private:
       ObTabletTransformArg &arg);
   static int convert_arg_to_tablet(
       const ObTabletTransformArg &arg,
-      ObTablet &tablet);
+      ObTablet &tablet,
+      ObArenaAllocator &allocator);
   static int transform(
       const ObTabletTransformArg &arg,
       char *buf,

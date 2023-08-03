@@ -61,13 +61,13 @@ public:
                 K_(is_old_mds));
 
 public:
-  bool redefined_;
   int64_t snapshot_version_; // if redefined it is max readable snapshot, else it is min readable snapshot.
   int64_t schema_version_;
   common::ObTabletID data_tablet_id_;
   common::ObTabletID hidden_tablet_id_;
   common::ObTabletID lob_meta_tablet_id_;
   common::ObTabletID lob_piece_tablet_id_;
+  bool redefined_;
   bool is_old_mds_;
 };
 } // namespace storage
