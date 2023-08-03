@@ -42,7 +42,6 @@ enum class RoleChangeReason
   ChangeLeaderToRevoke = 4, // 切主流程旧主从Leader变为Follower
   StopToRevoke = 5,// 选举leader调用stop接口后leader卸任
   AskToRevoke = 6,// 有人要求选举卸任(???)
-  PalfDisableVoteToRevoke = 7,// palf disable vote触发卸任
 };
 
 class ElectionProposer;

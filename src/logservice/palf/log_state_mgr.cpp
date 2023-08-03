@@ -231,9 +231,9 @@ bool LogStateMgr::is_state_changed()
       state_changed = follower_need_update_role_(new_leader, new_leader_epoch);
     }
   } else if (is_leader_reconfirm_()) {
-    state_changed = (leader_reconfirm_need_switch_() || false == is_allow_vote());
+    state_changed = (leader_reconfirm_need_switch_());
   } else if (is_leader_active_()) {
-    state_changed = (leader_active_need_switch_(is_error) || false == is_allow_vote());
+    state_changed = (leader_active_need_switch_(is_error));
   } else {}
   return state_changed;
 }
@@ -308,10 +308,6 @@ int LogStateMgr::switch_state()
         reset_broadcast_leader_();
       } else { }
     } else if (is_leader_reconfirm_()) {
-      if (false == is_allow_vote()
-          && OB_FAIL(election_->revoke(election::RoleChangeReason::PalfDisableVoteToRevoke))) {
-        PALF_LOG(WARN, "election revoke failed", K(ret), K_(palf_id));
-      }
       if (is_reconfirm_need_start_()) {
         ret = reconfirm_->reconfirm();
         if (OB_EAGAIN == ret) {
@@ -333,10 +329,6 @@ int LogStateMgr::switch_state()
         // do nothing
       }
     } else if (is_leader_active_()) {
-      if (false == is_allow_vote()
-          && OB_FAIL(election_->revoke(election::RoleChangeReason::PalfDisableVoteToRevoke))) {
-        PALF_LOG(WARN, "election revoke failed", K(ret), K_(palf_id));
-      }
       bool is_error = false;
       if (leader_active_need_switch_(is_error)) {
         ret = leader_active_to_follower_pending_();
@@ -655,11 +647,10 @@ int LogStateMgr::reconfirm_to_follower_pending_()
   } else {
     reset_status_();
     update_role_and_state_(FOLLOWER, PENDING);
-    PALF_REPORT_INFO_KV(K_(leader), K_(allow_vote));
+    PALF_REPORT_INFO_KV(K_(leader));
     plugins_->record_role_change_event(palf_id_, LEADER, ObReplicaState::RECONFIRM,
         FOLLOWER, ObReplicaState::PENDING, EXTRA_INFOS);
-    PALF_EVENT("reconfirm_to_follower_pending", palf_id_, K_(self), K_(leader), "is_allow_vote",
-        is_allow_vote(), K(lbt()));
+    PALF_EVENT("reconfirm_to_follower_pending", palf_id_, K_(self), K_(leader), K(lbt()));
   }
   return ret;
 }
@@ -671,7 +662,10 @@ int LogStateMgr::reconfirm_to_leader_active_()
   PALF_EVENT("reconfirm_to_leader_active begin", palf_id_, K_(self), K(reconfirm_stage_cost));
   ObMemberList member_list;
   int64_t replica_num = -1;
-  if (OB_FAIL(mm_->get_alive_member_list_with_arb(member_list, replica_num))) {
+  LogConfigVersion config_version;
+  if (OB_FAIL(mm_->get_config_version(config_version))) {
+    PALF_LOG(WARN, "get_config_version failed", K(ret), K_(palf_id));
+  } else if (OB_FAIL(mm_->get_alive_member_list_with_arb(member_list, replica_num))) {
     PALF_LOG(WARN, "get_alive_member_list_with_arb failed", K(ret), K_(palf_id));
   } else if (!member_list.contains(self_)) {
     PALF_LOG(ERROR, "curr_member_list doesn't contain self, revoke", K_(palf_id),
@@ -689,7 +683,7 @@ int LogStateMgr::reconfirm_to_leader_active_()
     }
     const int64_t reconfirm_to_active_cost = ObTimeUtility::current_time() - reconfirm_start_time_us_;
     PALF_EVENT("reconfirm_to_leader_active end", palf_id_, K(ret), K_(self), K(reconfirm_to_active_cost), K_(role), K_(state));
-    PALF_REPORT_INFO_KV(K(reconfirm_stage_cost), K(reconfirm_to_active_cost));
+    PALF_REPORT_INFO_KV(K(reconfirm_stage_cost), K(reconfirm_to_active_cost), K(config_version));
     plugins_->record_role_change_event(palf_id_, LEADER, ObReplicaState::RECONFIRM,
         LEADER, ObReplicaState::ACTIVE, EXTRA_INFOS);
   }

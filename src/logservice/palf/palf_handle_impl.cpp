@@ -1530,12 +1530,7 @@ int PalfHandleImpl::set_allow_vote_flag_(const bool allow_vote,
       flush_meta_cb_ctx.allow_vote_ = allow_vote;
       LogReplicaPropertyMeta replica_property_meta = log_engine_.get_log_meta().get_log_replica_property_meta();
       replica_property_meta.allow_vote_ = allow_vote;
-      if (false == allow_vote
-          && LEADER == state_mgr_.get_role()
-          && OB_FAIL(election_.revoke(RoleChangeReason::PalfDisableVoteToRevoke))
-          && OB_NOT_MASTER != ret) {  // ignore not master err code
-        PALF_LOG(WARN, "election revoke failed", K(ret), K_(palf_id));
-      } else if (OB_FAIL(log_engine_.submit_flush_replica_property_meta_task(flush_meta_cb_ctx, replica_property_meta))) {
+      if (OB_FAIL(log_engine_.submit_flush_replica_property_meta_task(flush_meta_cb_ctx, replica_property_meta))) {
         PALF_LOG(WARN, "submit_flush_replica_property_meta_task failed", K(ret), K(flush_meta_cb_ctx), K(replica_property_meta));
       } else {
         if (!allow_vote) {
@@ -1616,7 +1611,7 @@ int PalfHandleImpl::advance_base_info(const PalfBaseInfo &palf_base_info, const 
       PALF_LOG(INFO, "sw_ truncate_for_rebuild success", K(ret), KPC(this), K(palf_base_info));
     }
   }
-  PALF_EVENT("advance_base_info finished", palf_id_, KPC(this), K(palf_base_info), K(time_guard));
+  PALF_EVENT("advance_base_info finished", palf_id_, K(ret), KPC(this), K(palf_base_info), K(time_guard));
   plugins_.record_advance_base_info_event(palf_id_, palf_base_info);
   return ret;
 }
