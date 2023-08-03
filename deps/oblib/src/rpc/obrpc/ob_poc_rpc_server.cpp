@@ -246,6 +246,27 @@ int ObPocRpcServer::start(int port, int net_thread_count, frame::ObReqDeliver* d
   return ret;
 }
 
+int ObPocRpcServer::start_net_client(int net_thread_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(has_start_)) {
+    RPC_LOG(WARN, "client has already started!");
+  } else {
+    int count = 0;
+    const int listen_none = -1;
+    if ((count = pn_provision(listen_none, DEFAULT_PNIO_GROUP, net_thread_count)) != net_thread_count) {
+      ret = OB_ERR_SYS;
+      RPC_LOG(WARN, "pn_provision error", K(count), K(net_thread_count));
+    } else if((count = pn_provision(listen_none, RATELIMIT_PNIO_GROUP, net_thread_count)) != net_thread_count) {
+      ret = OB_ERR_SYS;
+      RPC_LOG(WARN, "pn_provision for RATELIMIT_PNIO_GROUP error", K(count), K(net_thread_count));
+    } else {
+      has_start_ = true;
+    }
+  }
+  return ret;
+}
+
 void ObPocRpcServer::stop()
 {
   for (uint64_t gid = 1; gid < END_GROUP; gid++) {

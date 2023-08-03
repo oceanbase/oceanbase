@@ -176,6 +176,8 @@ int ObLogRpc::init(const int64_t io_thread_num)
     LOG_ERROR("invalid argument", KR(ret), K(io_thread_num));
   } else if (OB_FAIL(init_client_id_())) {
     LOG_ERROR("init client identity failed", KR(ret));
+  } else if (OB_FAIL(global_poc_server.start_net_client(opt.rpc_io_cnt_))) {
+    LOG_ERROR("start net client failed", KR(ret), K(io_thread_num));
   } else if (OB_FAIL(net_client_.init(opt))) {
     LOG_ERROR("init net client fail", KR(ret), K(io_thread_num));
   } else if (OB_FAIL(reload_rpc_client_auth_method())) {
