@@ -388,10 +388,9 @@ public:
   class BlockBuffer;
   struct Block
   {
-    static const int32_t MAGIC = 0x719a288e;
-    static const int32_t DEFAULT_CHECKSUM = 0x3eebc74e;
+    static const int64_t MAGIC = 0xbc054e02d8536315;
     static const int32_t ROW_HEAD_SIZE = sizeof(StoredRow);
-    Block() : next_(0), blk_size_(0), rows_(0){}
+    Block() : magic_(0), blk_size_(0), rows_(0){}
 
     static int inline min_buf_size(const common::ObIArray<ObExpr*> &exprs,
                                    int64_t row_extend_size,
@@ -460,21 +459,6 @@ public:
     int unswizzling();
     int swizzling(int64_t *col_cnt);
     inline bool magic_check() { return MAGIC == magic_; }
-    inline bool checksum_check()
-    {
-      return get_checksum() == static_cast<int32_t> (checksum_);
-    }
-
-    int32_t get_checksum()
-    {
-      int32_t res = DEFAULT_CHECKSUM;
-
-#ifdef ENABLE_DEBUG_LOG
-      res = static_cast<int32_t> (ob_crc64(get_buffer()->data() + BlockBuffer::HEAD_SIZE,
-                                           get_buffer()->capacity() - BlockBuffer::HEAD_SIZE));
-#endif
-      return res;
-    }
     int get_store_row(int64_t &cur_pos, const StoredRow *&sr);
     inline Block* get_next() const { return next_; }
     inline bool is_empty() { return get_buffer()->is_empty(); }
@@ -490,10 +474,7 @@ public:
     friend class BlockBuffer;
     TO_STRING_KV(K_(magic), K_(blk_size), K_(rows));
     union{
-      struct {
-        int64_t magic_ : 32;
-        int64_t checksum_ : 32;
-      };
+      int64_t magic_;   //for dump
       Block* next_;      //for block list in mem
     };
     uint32 blk_size_;  /* current blk's size, for dump/read */
@@ -583,8 +564,8 @@ public:
     int init(char *buf, const int64_t buf_size);
     inline int64_t remain() const { return cap_ - cur_pos_; }
     inline char *data() { return data_; }
-    inline Block *get_block() { return block_; }
-    inline void set_block(Block *b) { block_ = b; }
+    inline Block *get_block() { return block; }
+    inline void set_block(Block *b) { block = b; }
     inline char *head() const { return data_ + cur_pos_; }
     inline int64_t capacity() const { return cap_; }
     inline void set_capacity(int64_t cap) { cap_ = cap; }
@@ -595,7 +576,7 @@ public:
     inline bool is_empty() const { return HEAD_SIZE >= cur_pos_; }
 
     inline void reset() { cur_pos_ = 0; cap_ = 0; data_ = NULL; }
-    inline void reuse() { cur_pos_ = 0; fast_advance(HEAD_SIZE); block_->rows_ = 0; }
+    inline void reuse() { cur_pos_ = 0; fast_advance(HEAD_SIZE); block->rows_ = 0; }
     inline int advance(int64_t size);
     inline void fast_advance(int64_t size) { cur_pos_ += size; }
     TO_STRING_KV(KP_(data), K_(cur_pos), K_(cap));
@@ -605,7 +586,7 @@ public:
   private:
     union {
       char *data_;
-      Block *block_;
+      Block *block;
     };
     int64_t cur_pos_;
     int64_t cap_;
