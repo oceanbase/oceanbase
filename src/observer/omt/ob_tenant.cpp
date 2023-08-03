@@ -867,7 +867,8 @@ void* ObTenant::wait(void* t)
   lib::set_thread_name("UnitGC");
   lib::Thread::update_loop_ts();
   tenant->handle_retry_req(true);
-  while (tenant->req_queue_.size() > 0) {
+  while (tenant->req_queue_.size() > 0
+    || (tenant->multi_level_queue_ != nullptr && tenant->multi_level_queue_->get_total_size() > 0)) {
     ob_usleep(10L * 1000L);
   }
   while (tenant->workers_.get_size() > 0) {
