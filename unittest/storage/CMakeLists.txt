@@ -87,6 +87,7 @@ storage_unittest(test_parallel_minor_dag)
 storage_dml_unittest(test_partition_range_splite)
 storage_dml_unittest(test_major_rows_merger)
 storage_dml_unittest(test_tablet tablet/test_tablet.cpp)
+storage_unittest(test_compaction_iter compaction/test_compaction_iter.cpp)
 
 #storage_dml_unittest(test_table_scan_pure_index_table)
 

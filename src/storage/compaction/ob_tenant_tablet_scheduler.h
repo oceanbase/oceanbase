@@ -37,6 +37,7 @@ class ObLS;
 class ObTablet;
 class ObITable;
 class ObTabletDDLKvMgr;
+class ObLSTabletService;
 enum ProhibitMediumTask
 {
   TRANSFER = 0,
@@ -59,7 +60,6 @@ private:
   bool enable_fast_freeze_;
 };
 
-
 // record ls_id/tablet_id
 class ObCompactionScheduleIterator
 {
@@ -67,53 +67,75 @@ public:
   ObCompactionScheduleIterator(
     const bool is_major,
     ObLSGetMod mod = ObLSGetMod::STORAGE_MOD,
-    const int64_t timeout_us = 0)
+    const int64_t batch_tablet_cnt = SCHEDULE_TABLET_BATCH_CNT)
     : mod_(mod),
-      report_scn_flag_(false),
       is_major_(is_major),
       scan_finish_(false),
       merge_finish_(false),
-      timeout_us_(timeout_us),
-      ls_idx_(0),
+      finish_cur_batch_(false),
+      report_scn_flag_(false),
+      ls_idx_(-1),
       tablet_idx_(0),
+      schedule_tablet_cnt_(0),
+      max_batch_tablet_cnt_(batch_tablet_cnt),
+      ls_tablet_svr_(nullptr),
       ls_ids_(),
       tablet_ids_()
-  {}
+  {
+    ls_ids_.set_attr(ObMemAttr(MTL_ID(), "CompIter"));
+    tablet_ids_.set_attr(ObMemAttr(MTL_ID(), "CompIter"));
+  }
   ~ObCompactionScheduleIterator() { reset(); }
   int build_iter();
   int get_next_ls(ObLSHandle &ls_handle);
-  int get_next_tablet(ObLSHandle &ls_handle, ObTabletHandle &tablet_handle);
+  int get_next_tablet(ObTabletHandle &tablet_handle);
   bool is_scan_finish() const { return scan_finish_; }
   bool tenant_merge_finish() const { return merge_finish_ & scan_finish_; }
-  void set_report_scn_flag() { report_scn_flag_ = true; }
-  bool need_report_scn() const { return report_scn_flag_; }
-  void update_merge_finish(bool merge_finish) {
+  void update_merge_finish(const bool merge_finish) {
     merge_finish_ &= merge_finish;
   }
+  void set_report_scn_flag() { report_scn_flag_ = true; }
+  bool need_report_scn() const { return report_scn_flag_; }
   void reset();
   bool is_valid() const;
   void skip_cur_ls()
   {
     ++ls_idx_;
     tablet_idx_ = -1;
+    ls_tablet_svr_ = nullptr;
     tablet_ids_.reuse();
   }
-  OB_INLINE int64_t to_string(char *buf, const int64_t buf_len) const;
+  void start_cur_batch()
+  {
+    schedule_tablet_cnt_ = 0;
+    finish_cur_batch_ = false;
+  }
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 private:
+  // virtual for unittest
+  virtual int get_cur_ls_handle(ObLSHandle &ls_handle);
+  virtual int get_tablet_ids();
+  virtual int get_tablet_handle(const ObTabletID &tablet_id, ObTabletHandle &tablet_handle);
+
   static const int64_t LS_ID_ARRAY_CNT = 10;
   static const int64_t TABLET_ID_ARRAY_CNT = 2000;
+  static const int64_t SCHEDULE_TABLET_BATCH_CNT = 50 * 1000L; // 5w
+
   ObLSGetMod mod_;
-  bool report_scn_flag_;
   bool is_major_;
   bool scan_finish_;
   bool merge_finish_;
+  bool finish_cur_batch_;
+  bool report_scn_flag_;
   int64_t timeout_us_;
   int64_t ls_idx_;
-  uint64_t tablet_idx_;
+  int64_t tablet_idx_;
+  int64_t schedule_tablet_cnt_;
+  int64_t max_batch_tablet_cnt_;
+  storage::ObLSTabletService *ls_tablet_svr_;
   common::ObSEArray<share::ObLSID, LS_ID_ARRAY_CNT> ls_ids_;
   common::ObSEArray<ObTabletID, TABLET_ID_ARRAY_CNT> tablet_ids_;
 };
-
 
 class ObTenantTabletScheduler
 {
@@ -243,8 +265,7 @@ private:
   int schedule_ls_medium_merge(
       int64_t &merge_version,
       ObLSHandle &ls_handle,
-      bool &all_ls_weak_read_ts_ready,
-      int64_t &schedule_tablet_cnt);
+      bool &all_ls_weak_read_ts_ready);
   OB_INLINE int schedule_tablet_medium(
     ObLSHandle &ls_handle,
     ObTabletHandle &tablet_handle,
@@ -258,8 +279,7 @@ private:
     bool &is_leader,
     bool &tablet_merge_finish);
   int schedule_ls_minor_merge(
-      ObLSHandle &ls_handle,
-      int64_t &schedule_tablet_cnt);
+      ObLSHandle &ls_handle);
   int try_remove_old_table(ObLS &ls);
   int restart_schedule_timer_task(
     const int64_t interval,

@@ -41,6 +41,12 @@ public:
       ObTablet &tablet,
       const int64_t major_frozen_scn = 0,
       const bool scheduler_called = false);
+  static int read_medium_info_from_list(
+      const ObMediumCompactionInfoList &medium_list,
+      const int64_t major_frozen_snapshot,
+      const int64_t last_major_snapshot,
+      ObMediumCompactionInfo::ObCompactionType &compaction_type,
+      int64_t &schedule_scn);
   static int get_palf_role(const share::ObLSID &ls_id, ObRole &role);
   static int get_table_schema_to_merge(
     ObMultiVersionSchemaService &schema_service,
