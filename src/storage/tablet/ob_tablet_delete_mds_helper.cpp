@@ -11,6 +11,7 @@
  */
 
 #include "storage/tablet/ob_tablet_delete_mds_helper.h"
+#include "lib/worker.h"
 #include "common/ob_tablet_id.h"
 #include "share/scn.h"
 #include "share/ob_rpc_struct.h"
@@ -228,11 +229,12 @@ int ObTabletDeleteMdsHelper::set_tablet_deleted_status(
   ObTablet *tablet = tablet_handle.get_obj();
   mds::MdsCtx &user_ctx = static_cast<mds::MdsCtx&>(ctx);
   ObTabletCreateDeleteMdsUserData data;
+  const int64_t timeout = THIS_WORKER.get_timeout_remain();
   if (OB_ISNULL(tablet)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet is null", K(ret), K(tablet_handle));
-  } else if (CLICK_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), data))) {
-    LOG_WARN("failed to get tablet status", K(ret));
+  } else if (CLICK_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), data, timeout))) {
+    LOG_WARN("failed to get tablet status", K(ret), K(timeout));
   } else {
     data.tablet_status_ = ObTabletStatus::DELETED;
     data.data_type_ = ObTabletMdsUserDataType::REMOVE_TABLET;
