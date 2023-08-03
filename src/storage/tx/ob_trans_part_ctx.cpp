@@ -6393,10 +6393,17 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
   bool need_write_log = false;
   CtxLockGuard guard(lock_);
   if (OB_FAIL(check_status_())) {
-  } else if(!busy_cbs_.is_empty()) {
+  } else if(is_logging_()) {
     ret = OB_NEED_RETRY;
+    // check cur leader and fast fail
+    int tmp_ret = OB_SUCCESS; bool leader = false; int64_t epoch = 0;
+    if (OB_TMP_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->get_role(leader, epoch))) {
+      TRANS_LOG(WARN, "get ls role failed", K(tmp_ret), K(trans_id_), K(ls_id_));
+    } else if (!leader) {
+      ret = OB_NOT_MASTER;
+    }
     TRANS_LOG(WARN, "rollback_to need retry because of logging", K(ret),
-              K(trans_id_), K(busy_cbs_.get_size()));
+              K(trans_id_), K(ls_id_), K(busy_cbs_.get_size()));
   } else if (op_sn < last_op_sn_) {
     ret = OB_TRANS_SQL_SEQUENCE_ILLEGAL;
   } else if (op_sn > last_op_sn_ && last_scn_ <= to_scn) {

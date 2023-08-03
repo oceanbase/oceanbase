@@ -2053,14 +2053,17 @@ int ObTransService::handle_sp_rollback_resp(const share::ObLSID &ls_id,
   ObTxDesc *tx = NULL;
   if (OB_FAIL(tx_desc_mgr_.get(tx_id, tx))) {
     TRANS_LOG(WARN, "get trans_desc fail", K(ret), K(tx_id));
+  } else if (tx->op_sn_ > request_id || tx->tx_id_ != tx_id) { // fast fail
+    TRANS_LOG(WARN, "receive stale rollback response message",
+              K(addr), K(status), K(request_id), K(result), K(tx_id), K(tx->tx_id_), K(tx->op_sn_));
   } else {
     ObSpinLockGuard guard(tx->lock_);
     if (tx->state_ != ObTxDesc::State::ROLLBACK_SAVEPOINT) {
       TRANS_LOG(WARN, "receive stale rollback response message",
                 K(addr), K(status), K(request_id), K(result), KPC(tx));
-    } else if (tx->op_sn_ > request_id) {
+    } else if (tx->tx_id_ != tx_id || tx->op_sn_ > request_id) {
       TRANS_LOG(WARN, "receive old rpc result msg",
-                K(ret), K_(tx->op_sn), K(request_id), K(tx_id));
+                K(ret), K_(tx->op_sn), K(request_id), K(tx_id), K(tx->tx_id_));
     } else if (status == OB_TRANS_RPC_TIMEOUT || common_retryable_error_(status)) {
       TRANS_LOG(WARN, "rollback savepoint on ls return an retryable error",
                 K(status), K(ls_id), K(tx_id), K(addr));
