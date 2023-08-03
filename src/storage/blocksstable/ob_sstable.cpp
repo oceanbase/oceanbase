@@ -640,7 +640,7 @@ int ObSSTable::scan_secondary_meta(
     } else if (OB_FAIL(iter->open(
         query_range, meta_type, *this, rowkey_read_info, allocator, is_reverse_scan, sample_step))) {
       LOG_WARN("Fail to open secondary meta iterator with range",
-          K(ret), K(query_range), K(meta_type), K_(meta), K(is_reverse_scan), K(sample_step));
+          K(ret), K(query_range), K(meta_type), K_(meta), K(is_reverse_scan), K(sample_step), KPC(this));
     } else {
       meta_iter = iter;
     }
