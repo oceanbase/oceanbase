@@ -2386,6 +2386,14 @@ int ObCreateTableResolver::set_table_option_to_schema(ObTableSchema &table_schem
     }
 
     if (OB_SUCC(ret)) {
+      if (compress_method_ == all_compressor_name[ZLIB_COMPRESSOR]) {
+        ret = OB_NOT_SUPPORTED;
+        SQL_RESV_LOG(WARN, "Not allowed to use zlib compressor!", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "zlib compressor");
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       table_schema.set_row_store_type(row_store_type_);
       table_schema.set_store_format(store_format_);
       table_schema.set_progressive_merge_round(progressive_merge_round);

@@ -387,6 +387,10 @@ int ObAlterTableResolver::set_table_options()
     //deep copy
     if (OB_FAIL(ret)) {
       //do nothing
+    } else if (compress_method_ == all_compressor_name[ZLIB_COMPRESSOR]) {
+      ret = OB_NOT_SUPPORTED;
+      SQL_RESV_LOG(WARN, "Not allowed to use zlib compressor!", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "zlib compressor");
     } else if (OB_FAIL(alter_table_schema.set_compress_func_name(compress_method_))) {
       SQL_RESV_LOG(WARN, "Write compress_method_ to alter_table_schema failed!", K(ret));
     } else if (OB_FAIL(alter_table_schema.set_comment(comment_))) {
