@@ -654,6 +654,10 @@ int ObMergeResolver::find_value_desc(ObInsertTableInfo &table_info,
     LOG_WARN("invalid index", K(idx), K(value_vector_cnt), K(value_desc.count()), K(ret));
   } else {
     column_ref = table_info.values_vector_.at(idx);
+    if (T_QUESTIONMARK == column_ref->get_expr_type()) {
+      OZ (column_ref->add_flag(IS_TABLE_ASSIGN));
+      OX (column_ref->set_result_type(value_desc.at(idx)->get_result_type()));
+    }
   }
   if (OB_ENTRY_NOT_EXIST == ret) {
     ret = OB_SUCCESS;
