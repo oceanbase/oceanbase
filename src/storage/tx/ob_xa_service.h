@@ -70,15 +70,18 @@ public:
   int xa_commit(const ObXATransID &xid,
                 const int64_t flags,
                 const int64_t xa_timeout_seconds,
-                bool &has_tx_level_temp_table);
+                bool &has_tx_level_temp_table,
+                ObTransID &tx_id);
   int xa_rollback(const ObXATransID &xid,
-                  const int64_t xa_timeout_seconds);
+                  const int64_t xa_timeout_seconds,
+                  ObTransID &tx_id);
   int xa_rollback_local(const ObXATransID &xid,
                         const ObTransID &tx_id,
                         const int64_t timeout_us,
                         const int64_t request_id);
   int xa_prepare(const ObXATransID &xid,
-                 const int64_t timeout_seconds);
+                 const int64_t timeout_seconds,
+                 ObTransID &tx_id);
   int local_xa_prepare(const ObXATransID &xid,
                        const ObTransID &trans_id,
                        const int64_t timeout_us);
@@ -209,7 +212,8 @@ private:
   int one_phase_xa_commit_(const ObXATransID &xid,
                            const int64_t timeout_us,
                            const int64_t request_id,
-                           bool &has_tx_level_temp_table);
+                           bool &has_tx_level_temp_table,
+                           ObTransID &tx_id);
   int xa_rollback_local_(const ObXATransID &xid,
                          const ObTransID &tx_id,
                          const int64_t timeout_us,
@@ -232,7 +236,8 @@ private:
   int two_phase_xa_commit_(const ObXATransID &xid,
                            const int64_t timeout_us,
                            const int64_t request_id,
-                           bool &has_tx_level_temp_table);
+                           bool &has_tx_level_temp_table,
+                           ObTransID &tx_id);
   int xa_rollback_for_pending_trans_(const ObXATransID &xid,
                                     const ObTransID &tx_id,
                                     const int64_t timeout_us,

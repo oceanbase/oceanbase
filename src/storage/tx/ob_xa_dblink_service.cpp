@@ -557,7 +557,8 @@ int ObXAService::commit_for_dblink_trans(ObTxDesc *&tx_desc)
       // if an error is returned in this phase, set this error to ret
       // step 3.1, two phase xa commit/rollback for local branch
       if (need_rollback) {
-        if (OB_SUCCESS != (tmp_ret = xa_rollback(xid, timeout_seconds))) {
+        ObTransID unused_tx_id;
+        if (OB_SUCCESS != (tmp_ret = xa_rollback(xid, timeout_seconds, unused_tx_id))) {
           TRANS_LOG(WARN, "xa rollback for local failed", K(tmp_ret), K(xid), K(tx_id));
           ret = tmp_ret;
         } else {
@@ -569,8 +570,9 @@ int ObXAService::commit_for_dblink_trans(ObTxDesc *&tx_desc)
         if (is_readonly_local_branch) {
           // do nothing
         } else {
+          ObTransID unused_tx_id;
           if (OB_SUCCESS != (tmp_ret = xa_commit(xid, ObXAFlag::TMNOFLAGS, timeout_seconds,
-                  has_tx_level_temp_table))) {
+                  has_tx_level_temp_table, unused_tx_id))) {
             TRANS_LOG(WARN, "xa rollback for local failed", K(tmp_ret), K(xid), K(tx_id),
                 K(has_tx_level_temp_table));
             ret = tmp_ret;
@@ -636,6 +638,7 @@ int ObXAService::rollback_for_dblink_trans(ObTxDesc *&tx_desc)
     } else {
       const int64_t timeout_seconds = 60;
       ObDBLinkClientArray &client_array = xa_ctx->get_dblink_client_array();
+      ObTransID unused_tx_id;
       // step 1, xa end for each participant
       // step 1.1, xa end for each dblink branch
       for (int i = 0; i < client_array.count(); i++) {
@@ -653,7 +656,7 @@ int ObXAService::rollback_for_dblink_trans(ObTxDesc *&tx_desc)
       }
       // step 2, xa rollback for each participant
       // step 2.1, xa rollback for local branch
-      if (OB_SUCCESS != (tmp_ret = xa_rollback(xid, timeout_seconds))) {
+      if (OB_SUCCESS != (tmp_ret = xa_rollback(xid, timeout_seconds, unused_tx_id))) {
         TRANS_LOG(WARN,"xa rollback for local failed", K(tmp_ret), K(xid), K(tx_id));
         ret = tmp_ret;
       }
