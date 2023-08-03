@@ -182,11 +182,17 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
     LOG_WARN("failed to alloc memory", K(ret));
   } else {
     new(record)pl::ObPLRecord(info->udt_id_, expr.arg_cnt_);
-    for (int64_t i = 0; i < expr.arg_cnt_; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
       if (objs[i].is_null() && info->elem_types_.at(i).is_ext()) {
         OZ (newx(ctx, record->get_element()[i], info->elem_types_.at(i).get_udt_id()));
       } else {
-        OX (record->get_element()[i] = objs[i]);
+        // param ObObj may have different accuracy with the argument, need conversion
+        OZ (ObSPIService::spi_convert(*session,
+                                      ctx.exec_ctx_.get_allocator(),
+                                      objs[i],
+                                      info->elem_types_.at(i),
+                                      record->get_element()[i],
+                                      false));
       }
       if (OB_SUCC(ret) &&
           (ObCharType == info->elem_types_.at(i).get_type() || ObNCharType == info->elem_types_.at(i).get_type())) {
