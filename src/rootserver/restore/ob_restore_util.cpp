@@ -29,6 +29,7 @@
 #include "storage/ls/ob_ls_meta_package.h"//ls_meta
 #include "share/backup/ob_archive_path.h"
 #include "share/ob_upgrade_utils.h"
+#include "share/ob_unit_table_operator.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase;
@@ -966,6 +967,37 @@ int ObRestoreUtil::check_physical_restore_finish(
         is_failed = 0 == STRCMP(status_str, "FAIL");
       }
     }
+  }
+  return ret;
+}
+
+int ObRestoreUtil::get_restore_tenant_cpu_count(
+    common::ObMySQLProxy &proxy, const uint64_t tenant_id, double &cpu_count)
+{
+  int ret = OB_SUCCESS;
+  share::ObUnitTableOperator unit_op;
+  common::ObArray<share::ObResourcePool> pools;
+  common::ObArray<uint64_t> unit_config_ids;
+  common::ObArray<ObUnitConfig> configs;
+  if (OB_FAIL(unit_op.init(proxy))) {
+    LOG_WARN("failed to init proxy", K(ret));
+  } else if (OB_FAIL(unit_op.get_resource_pools(tenant_id, pools))) {
+    LOG_WARN("failed to get resource pool", K(ret), K(tenant_id));
+  }
+  ARRAY_FOREACH(pools, i) {
+    if (OB_FAIL(unit_config_ids.push_back(pools.at(i).unit_config_id_))) {
+      LOG_WARN("failed to push back unit config", K(ret));
+    }
+  }
+  if (FAILEDx(unit_op.get_unit_configs(unit_config_ids, configs))) {
+    LOG_WARN("failed to get unit configs", K(ret));
+  }
+  double max_cpu = OB_MAX_CPU_NUM;
+  ARRAY_FOREACH(configs, i) {
+    max_cpu = std::min(max_cpu, configs.at(i).max_cpu());
+  }
+  if (OB_SUCC(ret)) {
+    cpu_count = max_cpu;
   }
   return ret;
 }
