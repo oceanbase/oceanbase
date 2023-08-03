@@ -217,6 +217,9 @@ public:
   int handle_trans_ask_state_resp(const ObAskStateRespMsg &msg);
   int handle_trans_collect_state(ObStateInfo &state_info, const SCN &snapshot);
   int handle_trans_collect_state_resp(const ObCollectStateRespMsg &msg);
+
+  // tx state check for 4377
+  int handle_ask_tx_state_for_4377(bool &is_alive);
 public:
   // thread safe
   int64_t to_string(char* buf, const int64_t buf_len) const;

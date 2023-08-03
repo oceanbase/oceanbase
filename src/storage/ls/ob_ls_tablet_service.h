@@ -514,6 +514,7 @@ private:
   static int check_real_leader_for_4377_(const ObLSID ls_id);
   static int check_need_rollback_in_transfer_for_4377_(const transaction::ObTxDesc *tx_desc,
                                                        ObTabletHandle &tablet_handle);
+  static int check_parts_tx_state_in_transfer_for_4377_(transaction::ObTxDesc *tx_desc);
   static int build_create_sstable_param_for_migration(
       const blocksstable::ObMigrationSSTableParam &migrate_sstable_param,
       ObTabletCreateSSTableParam &create_sstable_param);

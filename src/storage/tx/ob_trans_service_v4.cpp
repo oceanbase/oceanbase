@@ -3534,5 +3534,73 @@ bool ObTransService::is_ls_dropped_(const share::ObLSID ls_id) {
   }
   return bret;
 }
+
+int ObTransService::ask_tx_state_for_4377(const ObLSID ls_id,
+                                          const ObTransID tx_id,
+                                          bool &is_alive)
+{
+  int ret = OB_SUCCESS;
+
+  static const int64_t MAX_ALLOWED_ASK_STATE_FOR_4377_TIMES = 10 * 1000 * 1000; //10s
+  static const int64_t SLEEP_DURATION_FOR_ASK_STATE_FOR_4377 = 100 * 1000; //100ms
+  const int64_t start_ts = ObTimeUtility::current_time();
+  ObAskTxStateFor4377Msg msg;
+  ObAskTxStateFor4377RespMsg resp;
+  msg.tx_id_ = tx_id;
+  msg.ls_id_ = ls_id;
+
+  do {
+    if (OB_FAIL(rpc_->ask_tx_state_for_4377(msg, resp))) {
+      TRANS_LOG(WARN, "ask tx state for 4377 failed", K(ret));
+      if (OB_LS_IS_DELETED == ret) {
+        is_alive = false;
+        ret = OB_SUCCESS;
+        TRANS_LOG(WARN, "ls is deleted during ask tx state", K(ret), K(msg));
+      }
+    } else if (OB_FAIL(resp.ret_)) {
+      ret = resp.ret_;
+    } else {
+      is_alive = resp.is_alive_;
+    }
+
+    if (OB_FAIL(ret)) {
+      usleep(SLEEP_DURATION_FOR_ASK_STATE_FOR_4377);
+    }
+
+    if (OB_FAIL(ret) && ObTimeUtility::current_time() - start_ts >= MAX_ALLOWED_ASK_STATE_FOR_4377_TIMES) {
+      TRANS_LOG(WARN, "timeout for 4377 check", K(ret), K(ls_id), K(tx_id), K(start_ts));
+      ret = OB_TIMEOUT;
+    }
+  } while (OB_FAIL(ret) && OB_TIMEOUT != ret);
+
+  TRANS_LOG(INFO, "tx state check for 4377 finished", K(ls_id), K(tx_id), K(ret), K(is_alive));
+
+  return ret;
+}
+
+int ObTransService::handle_ask_tx_state_for_4377(const ObAskTxStateFor4377Msg &msg,
+                                                 bool &is_alive)
+{
+  int ret = OB_SUCCESS;
+  ObPartTransCtx *ctx = NULL;
+  is_alive = false;
+
+  if (OB_FAIL(get_tx_ctx_(msg.ls_id_, msg.tx_id_, ctx))) {
+    TRANS_LOG(WARN, "fail to get tx context", K(ret), K(msg));
+    if (OB_TRANS_CTX_NOT_EXIST == ret || OB_PARTITION_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      is_alive = false;
+      TRANS_LOG(WARN, "tx state is not exist for 4377", K(ret), K(msg));
+    }
+  } else if (OB_FAIL(ctx->handle_ask_tx_state_for_4377(is_alive))) {
+    TRANS_LOG(WARN, "fail to handle trans ask state resp", K(ret), K(msg));
+  }
+
+  if (OB_NOT_NULL(ctx)) {
+    revert_tx_ctx_(ctx);
+  }
+  TRANS_LOG(INFO, "handle ask tx state for 4377", K(ret), K(msg), K(is_alive));
+  return ret;
+}
 } // transaction
 } // ocenabase

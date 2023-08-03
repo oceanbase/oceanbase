@@ -581,6 +581,42 @@ int ObTransRpc::post_sub_response_msg_(const ObAddr &server, ObTxMsg &msg)
   return ret;
 }
 
+int ObTransRpc::ask_tx_state_for_4377(const ObAskTxStateFor4377Msg &msg,
+                                      ObAskTxStateFor4377RespMsg &resp)
+{
+  int ret = OB_SUCCESS;
+
+  uint64_t tenant_id = trans_service_->get_tenant_id();
+  int64_t cluster_id = GCONF.cluster_id;
+  ObAddr server;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    TRANS_LOG(WARN, "ObTransRpc not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!is_running_)) {
+    TRANS_LOG(WARN, "ObTransRpc is not running");
+    ret = OB_NOT_RUNNING;
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))
+             || OB_UNLIKELY(!msg.is_valid())) {
+    TRANS_LOG(WARN, "invalid argument", K(tenant_id), K(msg));
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(trans_service_->get_location_adapter()->nonblock_get_leader(cluster_id,
+                                                                                 tenant_id,
+                                                                                 msg.ls_id_,
+                                                                                 server))) {
+    TRANS_LOG(WARN, "get leader failed", KR(ret), K(msg), K(cluster_id), K(tenant_id));
+  } else {
+    ret = rpc_proxy_.
+      to(server).
+      by(tenant_id).
+      timeout(GCONF._ob_trans_rpc_timeout).
+      ask_tx_state_for_4377(msg, resp);
+    TRANS_LOG(WARN, "ask tx state for 4377 finished", KR(ret), K(msg), K(cluster_id));
+  }
+
+  return ret;
+}
+
 int ObTransRpc::post_standby_msg_(const ObAddr &server, ObTxMsg &msg)
 {
   int ret = OB_SUCCESS;
@@ -625,6 +661,30 @@ void ObTransRpc::statistics_()
     total_batch_msg_count_ = 0;
     last_stat_ts_ = cur_ts;
   }
+}
+
+int ObAskTxStateFor4377P::process()
+{
+  int ret = OB_SUCCESS;
+  bool is_alive = false;
+  transaction::ObAskTxStateFor4377Msg &msg = arg_;
+  transaction::ObAskTxStateFor4377RespMsg &resp = result_;
+  transaction::ObTransService *txs = MTL(transaction::ObTransService*);
+
+  if (OB_ISNULL(txs)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "fail to get trans service", K(ret));
+  } else if (OB_FAIL(txs->handle_ask_tx_state_for_4377(msg, is_alive))) {
+    TRANS_LOG(WARN, "handle ask tx state for 4377 failed", K(ret), K(msg));
+  } else {
+    TRANS_LOG(INFO, "handle ask tx state for 4377 succeed", K(ret), K(msg), K(resp));
+  }
+
+  resp.is_alive_ = is_alive;
+  resp.ret_ = ret;
+
+  // We rewrite the return code to distinguish the rpc error and txn error
+  return OB_SUCCESS;
 }
 
 } // transaction

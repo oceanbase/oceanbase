@@ -8052,5 +8052,29 @@ int ObPartTransCtx::handle_trans_collect_state_resp(const ObCollectStateRespMsg 
   return ret;
 }
 
+int ObPartTransCtx::handle_ask_tx_state_for_4377(bool &is_alive)
+{
+  int ret = OB_SUCCESS;
+  CtxLockGuard guard(lock_);
+
+  if (IS_NOT_INIT) {
+    is_alive = false;
+    TRANS_LOG(WARN, "ObPartTransCtx not inited");
+  } else {
+    if (exec_info_.state_ == ObTxState::ABORT) {
+      // Lost data read during transfer sources from reading aborted txn.
+      // Because of the strong log synchronization semantic of transfer, we can
+      // relay on the transfer src txn is already in a state of death with abort
+      // log synchronized.
+      is_alive = false;
+    } else {
+      is_alive = true;
+    }
+  }
+
+  TRANS_LOG(INFO, "handle ask tx state for 4377", K(ret), KPC(this), K(is_alive));
+  return ret;
+}
+
 } // namespace transaction
 } // namespace oceanbase
