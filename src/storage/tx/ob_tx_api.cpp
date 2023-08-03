@@ -1371,7 +1371,7 @@ int ObTransService::rollback_savepoint_(ObTxDesc &tx,
                                           savepoint,
                                           born_epoch,
                                           &tx,
-                                          expire_ts))) {
+                                          -1/*non-blocking*/))) {
       if (common_retryable_error_(ret)) {
         slowpath = true;
         TRANS_LOG(INFO, "fallback to msg driven rollback", K(ret), K(savepoint), K(p), K(tx));
