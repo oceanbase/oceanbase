@@ -28071,6 +28071,9 @@ def_table_schema(
 # 21475: CDB_OB_IMPORT_STMT_EXEC_HISTORY
 # 21476: DBA_OB_IMPORT_STMT_EXEC_HISTORY
 
+# 21477: GV$OB_DUMP_TENANT_INFO
+# 21478: V$OB_DUMP_TENANT_INFO
+
 #
 # 余留位置
 
@@ -52059,6 +52062,10 @@ def_table_schema(
 # 28197: V$OB_SESSION
 # 28198: GV$OB_PL_CACHE_OBJECT
 # 28199: V$OB_PL_CACHE_OBJECT
+
+# 28200: GV$OB_DUMP_TENANT_INFO
+# 28201: V$OB_DUMP_TENANT_INFO
+
 ################################################################################
 # Lob Table (50000, 70000)
 ################################################################################
