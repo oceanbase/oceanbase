@@ -108,9 +108,9 @@ public:
     return param_idxs_.at(idx);
   }
   int append_batch_rescan_param(const common::ObIArray<int64_t> &param_idxs,
-      const common::ObSEArray<common::ObObjParam, 8> &res_objs);
+      const sql::ObTMArray<common::ObObjParam> &res_objs);
   int append_batch_rescan_param(const common::ObIArray<int64_t> &param_idxs,
-      const common::ObSEArray<common::ObObjParam, 8> &res_objs,
+      const sql::ObTMArray<common::ObObjParam> &res_objs,
       const common::ObIArray<int64_t> &param_expr_idxs);
   void reset()
   {
@@ -132,7 +132,7 @@ public:
   int deep_copy_param(const common::ObObjParam &org_param, common::ObObjParam &new_param);
 public:
   common::ObArenaAllocator allocator_;
-  common::ObSArray<common::ObSEArray<common::ObObjParam, 8>> params_;
+  common::ObSArray<sql::ObTMArray<common::ObObjParam>> params_;
   common::ObSEArray<int64_t, 8> param_idxs_;
   common::ObSEArray<int64_t, 8> param_expr_idxs_;
   TO_STRING_KV(K(param_idxs_), K(params_), K_(param_expr_idxs));

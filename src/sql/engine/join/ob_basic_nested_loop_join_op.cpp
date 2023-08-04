@@ -77,7 +77,7 @@ int ObBasicNestedLoopJoinOp::prepare_rescan_params(bool is_group)
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   CK(OB_NOT_NULL(plan_ctx));
   ObObjParam *param = NULL;
-  common::ObSEArray<common::ObObjParam, 8> params;
+  sql::ObTMArray<common::ObObjParam> params;
   common::ObSArray<int64_t> param_idxs;
   common::ObSArray<int64_t> param_expr_idxs;
   ObBatchRescanCtl *batch_rescan_ctl = (get_spec().enable_px_batch_rescan_ && is_group)

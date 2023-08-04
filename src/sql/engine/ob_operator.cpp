@@ -1615,7 +1615,7 @@ int ObBatchRescanParams::deep_copy_param(const common::ObObjParam &org_param,
 }
 
 int ObBatchRescanParams::append_batch_rescan_param(const ObIArray<int64_t> &param_idxs,
-    const ObSEArray<common::ObObjParam, 8> &res_objs)
+    const ObTMArray<common::ObObjParam> &res_objs)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(params_.push_back(res_objs))) {
@@ -1632,7 +1632,7 @@ int ObBatchRescanParams::append_batch_rescan_param(const ObIArray<int64_t> &para
 }
 
 int ObBatchRescanParams::append_batch_rescan_param(const ObIArray<int64_t> &param_idxs,
-    const ObSEArray<ObObjParam, 8> &res_objs,
+    const ObTMArray<ObObjParam> &res_objs,
     const common::ObIArray<int64_t> &param_expr_idxs)
 {
   int ret = OB_SUCCESS;

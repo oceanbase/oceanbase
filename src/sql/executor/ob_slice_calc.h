@@ -324,7 +324,7 @@ protected:
   virtual int destroy() override;
 protected:
   // 存储同一个partition所对应的所有task id
-  typedef common::ObSEArray<int64_t, 8> TaskIdxArray;
+  typedef sql::ObTMArray<int64_t> TaskIdxArray;
   // pkey random情况下：数据可以发送到对应partition所在的SQC的任意一个task上，因此每一个partition都对应着
   // 一组task id
   // key: tablet_id
