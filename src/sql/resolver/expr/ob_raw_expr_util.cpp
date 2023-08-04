@@ -3148,6 +3148,21 @@ int ObRawExprUtils::extract_set_op_exprs(const ObRawExpr *raw_expr,
   return ret;
 }
 
+int ObRawExprUtils::extract_set_op_exprs(const ObIArray<ObRawExpr*> &exprs,
+                                         common::ObIArray<ObRawExpr*> &set_op_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    if (OB_ISNULL(exprs.at(i))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Expr is NULL", K(ret), K(i));
+    } else if (OB_FAIL(extract_set_op_exprs(exprs.at(i), set_op_exprs))) {
+      LOG_WARN("Failed to extract column exprs", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::extract_column_exprs(const ObRawExpr *raw_expr,
                                          ObIArray<ObRawExpr*> &column_exprs,
                                          bool need_pseudo_column)

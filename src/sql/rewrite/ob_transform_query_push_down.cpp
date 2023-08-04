@@ -414,6 +414,12 @@ int ObTransformQueryPushDown::is_select_item_same(ObSelectStmt *select_stmt,
       if (column_count == view_stmt->get_select_item_size()) {
         /*do nothing*/
       //if outer output is const expr, then inner output must be const expr, eg:select 1 from (select 2 from t1)
+      } else if (OB_FAIL(check_set_op_expr_reference(select_stmt, view_stmt,
+                                                     select_offset, is_same))) {
+        LOG_WARN("failed to check select item reference", K(ret));
+      } else if (!is_same) {
+        // view stmt is set stmt and outer output not contain all set op exprs in relation exprs of view
+        // eg: select 1, c1 from (select 2 c1, 3 c2 from t1 union all select 4, 5 from t2 order by union[2]) v
       } else if (const_select_items.count() == select_stmt->get_select_item_size()) {
         for (int64_t i = 0; OB_SUCC(ret) && is_same && i < view_stmt->get_select_item_size(); ++i) {
           ObRawExpr *select_expr = NULL;
@@ -434,6 +440,49 @@ int ObTransformQueryPushDown::is_select_item_same(ObSelectStmt *select_stmt,
       if (OB_SUCC(ret) && is_same && is_same_exactly) {
         select_offset.reset();
         const_select_items.reset();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformQueryPushDown::check_set_op_expr_reference(ObSelectStmt *select_stmt,
+                                                          ObSelectStmt *view_stmt,
+                                                          ObIArray<int64_t> &select_offset,
+                                                          bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  if (OB_ISNULL(select_stmt)|| OB_ISNULL(view_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("stmt is NULL", K(select_stmt), K(view_stmt), K(ret));
+  } else if (!view_stmt->is_set_stmt()) {
+    // do nothing
+  } else {
+    ObSEArray<ObRawExpr*, 4> relation_exprs;
+    ObSEArray<ObRawExpr*, 4> set_op_exprs;
+    ObBitSet<> selected_set_op_idx;
+    ObStmtExprGetter visitor;
+    visitor.set_relation_scope();
+    visitor.remove_scope(SCOPE_SELECT);
+    if (OB_FAIL(view_stmt->get_relation_exprs(relation_exprs, visitor))) {
+      LOG_WARN("failed to get relation exprs", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_set_op_exprs(relation_exprs,
+                                                            set_op_exprs))) {
+      LOG_WARN("failed to extract column ids", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_offset.count(); ++i) {
+      if (select_offset.at(i) != -1) {
+        selected_set_op_idx.add_member(select_offset.at(i));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < set_op_exprs.count(); ++i) {
+      ObSetOpRawExpr *expr = static_cast<ObSetOpRawExpr*>(set_op_exprs.at(i));
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null expr", K(ret), KPC(set_op_exprs.at(i)));
+      } else if (!selected_set_op_idx.has_member(expr->get_idx())) {
+        is_valid = false;
       }
     }
   }

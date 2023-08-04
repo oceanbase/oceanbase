@@ -74,6 +74,10 @@ private:
                           bool &is_same,
                           common::ObIArray<int64_t> &select_offset,
                           common::ObIArray<SelectItem> &const_select_items);
+  int check_set_op_expr_reference(ObSelectStmt *select_stmt,
+                                  ObSelectStmt *view_stmt,
+                                  common::ObIArray<int64_t> &select_offset,
+                                  bool &is_contain);
   int do_transform(ObSelectStmt *select_stmt,
                    ObSelectStmt *view_stmt,
                    bool need_distinct,
