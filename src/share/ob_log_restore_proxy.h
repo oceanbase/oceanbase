@@ -144,6 +144,8 @@ public:
   int get_tenant_info(ObTenantRole &role, schema::ObTenantStatus &status);
   // get the access_mode and max_scn of the specific LS in log restore source tenant
   int get_max_log_info(const ObLSID &id, palf::AccessMode &mode, SCN &scn);
+  // get ls from dba_ob_ls
+  int is_ls_existing(const ObLSID &id);
 private:
   bool is_user_changed_(const char *user_name, const char *user_password, const char *db_name);
   void destroy_tg_();
