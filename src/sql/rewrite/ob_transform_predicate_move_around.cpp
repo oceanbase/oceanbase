@@ -3174,6 +3174,8 @@ int ObTransformPredicateMoveAround::create_equal_exprs_for_insert(ObDelUpdStmt *
       }
       if (OB_FAIL(ret)) {
         //do nothing
+      } else if (source_exprs.at(i)->has_flag(CNT_SUB_QUERY)) {
+        //do nothing
       } else if (!ObOptimizerUtil::find_item(part_exprs, target_exprs.at(i))) {
         // do nothing
       } else if (!is_not_null) {
