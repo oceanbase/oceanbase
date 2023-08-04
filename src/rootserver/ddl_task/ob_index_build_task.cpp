@@ -706,6 +706,7 @@ int ObIndexBuildTask::release_snapshot(const int64_t snapshot)
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
       LOG_WARN("get table schema failed", K(ret), K(object_id_));
     } else if (OB_ISNULL(data_table_schema)) {
+      // ignore ret
       LOG_INFO("table not exist", K(ret), K(object_id_), K(target_object_id_), KP(data_table_schema));
     } else if (data_table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
                 OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
@@ -1528,7 +1529,7 @@ int ObIndexBuildTask::deserlize_params_from_message(const uint64_t tenant_id, co
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), KP(buf), K(data_len));
-  } else if (ObDDLTask::deserlize_params_from_message(tenant_id, buf, data_len, pos)) {
+  } else if (OB_FAIL(ObDDLTask::deserlize_params_from_message(tenant_id, buf, data_len, pos))) {
     LOG_WARN("ObDDLTask deserlize failed", K(ret));
   } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
     LOG_WARN("deserialize table failed", K(ret));

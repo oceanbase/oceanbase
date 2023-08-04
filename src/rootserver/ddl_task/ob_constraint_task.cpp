@@ -634,6 +634,7 @@ int ObConstraintTask::release_snapshot(const int64_t snapshot_version)
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, table_schema))) {
     LOG_WARN("get table schema failed", K(ret), K(object_id_));
   } else if (OB_ISNULL(table_schema)) {
+    // ignore ret
     LOG_INFO("table not exist", K(ret), K(object_id_), K(target_object_id_));
   } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, tablet_ids))) {
     if (OB_TABLE_NOT_EXIST == ret || OB_TENANT_NOT_EXIST == ret) {
