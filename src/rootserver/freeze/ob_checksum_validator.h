@@ -188,7 +188,6 @@ private:
                                       ObMergeTimeStatistics &merge_time_statistics);
   int check_cross_cluster_checksum(const share::schema::ObSimpleTableSchemaV2 &simple_schema,
                                    const share::SCN &frozen_scn);
-  void sort_tablet_ids(ObArray<ObTabletID> &tablet_ids);
   int check_column_checksum(const ObArray<share::ObTabletReplicaChecksumItem> &tablet_replica_checksum_items,
                             const ObArray<share::ObTabletChecksumItem> &tablet_checksum_items);
   bool is_first_tablet_in_sys_ls(const share::ObTabletReplicaChecksumItem &item) const;
@@ -207,6 +206,9 @@ private:
                                        const int64_t expected_epoch);
   int contains_first_tablet_in_sys_ls(const ObArray<share::ObTabletLSPair> &pairs,
                                       bool &is_containing) const;
+  int convert_array_to_map(const ObArray<share::ObTabletChecksumItem> &tablet_checksum_items,
+                           hash::ObHashMap<share::ObTabletLSPair, share::ObTabletChecksumItem> &tablet_checksum_items_map);
+  int construct_valid_tablet_checksum_item(share::ObTabletChecksumItem &tablet_checksum_item);
 
 private:
   const static int64_t MAX_BATCH_INSERT_COUNT = 100;

@@ -307,7 +307,6 @@ private:
       common::ObIArray<ObTabletReplicaChecksumItem> &items,
       const SCN &compaction_scn,
       int64_t &idx);
-
   static int check_table_all_tablets_ckm_status_(
       const uint64_t tenant_id,
       common::ObIArray<ObTabletLSPair> &tablet_pairs,
@@ -330,6 +329,10 @@ private:
 
   static void print_detail_tablet_replica_checksum(
       const common::ObIArray<ObTabletReplicaChecksumItem> &items);
+
+  static int convert_array_to_map(
+      const common::ObArray<ObTabletLSPair> &tablet_ls_pairs,
+      common::hash::ObHashMap<common::ObTabletID, ObTabletLSPair> &tablet_ls_pair_map);
 
 private:
   const static int64_t MAX_BATCH_COUNT = 99;

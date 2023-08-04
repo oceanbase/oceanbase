@@ -668,7 +668,6 @@ int ObCrossClusterTabletChecksumValidator::check_cross_cluster_checksum(
       } else if (OB_UNLIKELY(tablet_ids.count() < 1)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get tablet_ids of current table schema", KR(ret), K_(tenant_id), K(simple_schema));
-      } else if (FALSE_IT(sort_tablet_ids(tablet_ids))) {  // tablet_ids should be in order
       } else if (OB_FAIL(ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(tenant_id_,
                   simple_schema.get_table_id(), *sql_proxy_, tablet_ids, pairs))) {
         LOG_WARN("fail to get tablet_ls pairs", KR(ret), K_(tenant_id), "table_id",
@@ -708,58 +707,85 @@ int ObCrossClusterTabletChecksumValidator::check_cross_cluster_checksum(
   return ret;
 }
 
-void ObCrossClusterTabletChecksumValidator::sort_tablet_ids(ObArray<ObTabletID> &tablet_ids)
-{
-  std::sort(tablet_ids.begin(), tablet_ids.end());
-}
-
 int ObCrossClusterTabletChecksumValidator::check_column_checksum(
     const ObArray<ObTabletReplicaChecksumItem> &tablet_replica_checksum_items,
     const ObArray<ObTabletChecksumItem> &tablet_checksum_items)
 {
   int ret = OB_SUCCESS;
   int check_ret = OB_SUCCESS;
-  int cmp_ret = 0;
-  ObTabletChecksumItem tablet_checksum_item;
-  ObTabletReplicaChecksumItem tablet_replica_checksum_item;
-  int64_t i = 0;
-  int64_t j = 0;
-  int64_t tablet_checksum_item_cnt = tablet_checksum_items.count();
-  int64_t tablet_replica_checksum_item_cnt = tablet_replica_checksum_items.count();
-  while (OB_SUCC(ret) && (i < tablet_checksum_item_cnt) && (j < tablet_replica_checksum_item_cnt)) {
-    cmp_ret = 0;
-    tablet_checksum_item.reset();
-    if (OB_FAIL(tablet_checksum_item.assign(tablet_checksum_items.at(i)))) {
-      LOG_WARN("fail to assign tablet checksum item", KR(ret), K_(tenant_id), K(i));
-    } else {
-      do {
-        if (cmp_ret >= 0) { // iterator all tablet replica checksum util next different tablet.
-          tablet_replica_checksum_item.reset();
-          if (OB_FAIL(tablet_replica_checksum_item.assign(tablet_replica_checksum_items.at(j)))) {
-            LOG_WARN("fail to assign tablet replica checksum item", KR(ret), K_(tenant_id), K(j));
-          } else if (0 == (cmp_ret = tablet_checksum_item.compare_tablet(tablet_replica_checksum_item))) {
-            if (OB_FAIL(tablet_checksum_item.verify_tablet_column_checksum(tablet_replica_checksum_item))) {
-              if (OB_CHECKSUM_ERROR == ret) {
-                LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "ERROR! ERROR! ERROR! checksum error in cross-cluster checksum",
-                  K(tablet_checksum_item), K(tablet_replica_checksum_item));
-                check_ret = OB_CHECKSUM_ERROR;
-                ret = OB_SUCCESS; // continue checking next checksum
-              } else {
-                LOG_WARN("unexpected error in cross-cluster checksum", KR(ret),
-                  K(tablet_checksum_item), K(tablet_replica_checksum_item));
-              }
-            }
-          }
+  hash::ObHashMap<ObTabletLSPair, ObTabletChecksumItem> tablet_checksum_items_map;
+  if (OB_FAIL(tablet_checksum_items_map.create(500, "MFTatCkmMap", "MFTatCkmMap", tenant_id_))) {
+    LOG_WARN("fail to create tablet checksum items map", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(convert_array_to_map(tablet_checksum_items, tablet_checksum_items_map))) {
+    LOG_WARN("fail to convert array to map", KR(ret));
+  } else {
+    const int64_t tablet_replica_checksum_item_cnt = tablet_replica_checksum_items.count();
+    for (int64_t i = 0; (i < tablet_replica_checksum_item_cnt) && OB_SUCC(ret); ++i) {
+      const ObTabletReplicaChecksumItem &tablet_replica_checksum_item = tablet_replica_checksum_items.at(i);
+      ObTabletLSPair pair(tablet_replica_checksum_item.tablet_id_, tablet_replica_checksum_item.ls_id_);
+      ObTabletChecksumItem tablet_checksum_item;
+      // ObHashMap::get_refactored calls assign function of key_type and value_type.
+      // ObTabletChecksumItem::assign should ensure the item is valid, thus construct one valid item
+      if (OB_FAIL(construct_valid_tablet_checksum_item(tablet_checksum_item))) {
+        LOG_WARN("fail to construct valid tablet checksum item", KR(ret));
+      } else if (OB_FAIL(tablet_checksum_items_map.get_refactored(pair, tablet_checksum_item))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          // ignore ret and skip this tablet checksum. this may be caused by timeouted wait of tablet checksum
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get_refactored", KR(ret), K(pair));
         }
-        if (cmp_ret >= 0) {
-          ++j;
+      } else if (OB_FAIL(tablet_checksum_item.verify_tablet_column_checksum(tablet_replica_checksum_item))) {
+        if (OB_CHECKSUM_ERROR == ret) {
+          LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "ERROR! ERROR! ERROR! checksum error in cross-cluster checksum",
+            K(tablet_checksum_item), K(tablet_replica_checksum_item));
+          check_ret = OB_CHECKSUM_ERROR;
+          ret = OB_SUCCESS; // continue checking next checksum
+        } else {
+          LOG_WARN("unexpected error in cross-cluster checksum", KR(ret),
+            K(tablet_checksum_item), K(tablet_replica_checksum_item));
         }
-      } while ((cmp_ret >= 0) && (j < tablet_replica_checksum_item_cnt) && OB_SUCC(ret));
+      }
     }
-    ++i;
   }
   if (OB_CHECKSUM_ERROR == check_ret) {
     ret = OB_CHECKSUM_ERROR;
+  }
+  return ret;
+}
+
+int ObCrossClusterTabletChecksumValidator::convert_array_to_map(
+    const ObArray<ObTabletChecksumItem> &tablet_checksum_items,
+    hash::ObHashMap<ObTabletLSPair, ObTabletChecksumItem> &tablet_checksum_items_map)
+{
+  int ret = OB_SUCCESS;
+  const int64_t tablet_checksum_item_cnt = tablet_checksum_items.count();
+  for (int64_t i = 0; (i < tablet_checksum_item_cnt) && OB_SUCC(ret); ++i) {
+    const ObTabletChecksumItem &item = tablet_checksum_items.at(i);
+    ObTabletLSPair pair(item.tablet_id_, item.ls_id_);
+    if (OB_FAIL(tablet_checksum_items_map.set_refactored(pair, item, false/*overwrite*/))) {
+      LOG_WARN("fail to set_refactored", KR(ret), K(pair), K(item));
+    }
+  }
+  return ret;
+}
+
+int ObCrossClusterTabletChecksumValidator::construct_valid_tablet_checksum_item(
+    ObTabletChecksumItem &tablet_checksum_item)
+{
+  int ret = OB_SUCCESS;
+  ObTabletID fake_tablet_id(1);
+  ObLSID fake_ls_id(1);
+  ObTabletReplicaReportColumnMeta fake_column_meta;
+  tablet_checksum_item.tablet_id_ = fake_tablet_id;
+  tablet_checksum_item.ls_id_ = fake_ls_id;
+  ObArray<int64_t> fake_column_checksums;
+  if (OB_FAIL(fake_column_checksums.push_back(0))) {
+    LOG_WARN("fail to push back column checksums", KR(ret));
+  } else if (OB_FAIL(fake_column_meta.init(fake_column_checksums))) {
+    LOG_WARN("fail to init column meta", KR(ret));
+  } else if (OB_FAIL(tablet_checksum_item.column_meta_.assign(fake_column_meta))) {
+    LOG_WARN("fail to assign column meta", KR(ret), K(fake_column_meta));
   }
   return ret;
 }
