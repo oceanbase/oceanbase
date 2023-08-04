@@ -145,10 +145,7 @@ int ObOptimizerStatsGatheringOp::inner_open()
   } else {
     arena_.set_tenant_id(tenant_id_);
     piece_msg_.set_tenant_id(tenant_id_);
-    // map size = max(part num + subpart num, 100)
-    int64_t map_size = tab_schema->get_all_part_num() + (MY_SPEC.is_two_level_part() ?
-                                                         tab_schema->get_partition_num() : 0);
-    map_size = map_size < DEFAULT_HASH_MAP_BUCKETS_COUNT ? DEFAULT_HASH_MAP_BUCKETS_COUNT : map_size;
+    int64_t map_size = MY_SPEC.column_ids_.count();
     if (OB_FAIL(table_stats_map_.create(map_size,
         "TabStatBucket",
         "TabStatNode"))) {
@@ -157,13 +154,6 @@ int ObOptimizerStatsGatheringOp::inner_open()
         "ColStatBucket",
         "ColStatNode"))) {
       LOG_WARN("fail to create column stats map", K(ret));
-    } else if (OB_FAIL(part_map_.create(map_size,
-        "PartMapBucket",
-        "PartMapNode"))) {
-      LOG_WARN("fail to create part map", K(ret));
-    } else if (MY_SPEC.is_part_table() &&
-               OB_FAIL(pl::ObDbmsStats::get_table_partition_map(*tab_schema, part_map_))) {
-      LOG_WARN("fail to init part map", K(ret));
     }
     LOG_TRACE("succeed to open optmizer_stats_gathering op",
               K(ret), K(map_size), K(MY_SPEC.column_ids_.count()), K(MY_SPEC.table_id_));
@@ -288,43 +278,6 @@ int ObOptimizerStatsGatheringOp::build_piece_msg(ObOptStatsGatherPieceMsg &piece
   return ret;
 }
 
-// generate global part id, part id and subpart id(if necessary).
-int ObOptimizerStatsGatheringOp::generate_part_ids(PartIds &part_ids)
-{
-  int ret = OB_SUCCESS;
-  if (MY_SPEC.is_part_table()) {
-    ObObjectID partition_id = OB_INVALID_ID;
-    ObTabletID tablet_id;
-    if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(MY_SPEC.calc_part_id_expr_,
-                                                                 eval_ctx_,
-                                                                 partition_id,
-                                                                 tablet_id))) {
-      LOG_WARN("calc part and tablet id by expr failed", K(ret));
-    } else {
-      OSGPartInfo part_info;
-      part_ids.part_id_ = partition_id;
-      part_ids.global_part_id_ = -1;
-      if (!MY_SPEC.is_two_level_part()) {
-      } else if (OB_FAIL(part_map_.get_refactored(partition_id, part_info))) {
-        if (ret != OB_HASH_NOT_EXIST) {
-          LOG_WARN("fail to find hash map", K(ret));
-        } else {
-          LOG_WARN("fail to get first part id", K(ret), K(part_ids));
-        }
-      } else {
-        part_ids.first_part_id_ = part_info.part_id_;
-      }
-      LOG_TRACE("succeed to generate part ids", K(part_ids),
-                K(MY_SPEC.is_two_level_part()), K(partition_id), K(tablet_id));
-    }
-  } else {
-    part_ids.part_id_ = (int64_t)MY_SPEC.table_id_;
-    part_ids.global_part_id_ = (int64_t)MY_SPEC.table_id_;
-  }
-  return ret;
-}
-
-
 int ObOptimizerStatsGatheringOp::get_tab_stat_by_key(ObOptTableStat::Key &key, ObOptTableStat *&tab_stat)
 {
   int ret = OB_SUCCESS;
@@ -381,20 +334,24 @@ int ObOptimizerStatsGatheringOp::get_col_stat_by_key(ObOptColumnStat::Key &key, 
   return ret;
 }
 
-int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr,
-                                                   uint64_t column_id,
-                                                   PartIds &part_ids,
-                                                   StatItems &all_stats,
-                                                   int64_t &row_len)
+int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr, uint64_t column_id, int64_t &row_len)
 {
   int ret = OB_SUCCESS;
   ObDatum *datum = NULL;
   int64_t col_len  = 0;
+  ObOptOSGColumnStat *global_col_stat = NULL;
+  ObOptColumnStat::Key global_col_stats_key(tenant_id_, MY_SPEC.table_id_, MY_SPEC.table_id_, column_id);
+  if (MY_SPEC.is_part_table()) {
+    global_col_stats_key.partition_id_ = -1;
+  }
   if (OB_ISNULL(expr) || OB_ISNULL(expr->basic_funcs_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null pointer", K(ret));
-  } else if (OB_FAIL(get_col_stats_by_partinfo(part_ids, column_id, all_stats))) {
-    LOG_WARN("fail to get column stat", K(ret));
+  } else if (OB_FAIL(get_col_stat_by_key(global_col_stats_key, global_col_stat))) {
+    LOG_WARN("fail to get global table stat", K(ret));
+  } else if (OB_ISNULL(global_col_stat)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
   } else if (!ObColumnStatParam::is_valid_opt_col_type(expr->obj_meta_.get_type())) {
     // do nothing yet, shoul use the plain stats.
   } else if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
@@ -404,14 +361,58 @@ int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr,
     LOG_WARN("get unexpected null");
   } else if (OB_FAIL(ObExprSysOpOpnsize::calc_sys_op_opnsize(expr, datum, col_len))) {
     LOG_WARN("fail to calc sys op opnsize", K(ret));
-  } else if (OB_FAIL(set_col_stats(all_stats,
-                                   datum,
-                                   expr->obj_meta_,
-                                   expr->basic_funcs_->null_first_cmp_))) {
-    LOG_WARN("failed to set col stats");
+  } else if (OB_FALSE_IT(global_col_stat->col_stat_->set_stat_level(StatLevel::TABLE_LEVEL))) {
+  } else if (OB_FAIL(global_col_stat->update_column_stat_info(datum, expr->obj_meta_,
+                                                              expr->basic_funcs_->null_first_cmp_))) {
+    LOG_WARN("fail to set global column stat", K(ret));
   } else {
     row_len += col_len;
-    LOG_TRACE("succed to calc column stat", K(*expr), K(row_len), K(*datum));
+    LOG_TRACE("succed to calc column stat", KPC(expr), K(row_len), KPC(datum));
+  }
+  return ret;
+}
+
+int ObOptimizerStatsGatheringOp::calc_columns_stats(int64_t &row_len)
+{
+  int ret = OB_SUCCESS;
+  if (MY_SPEC.column_ids_.count() != MY_SPEC.col_conv_exprs_.count() + MY_SPEC.generated_column_exprs_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column ids doesn't match the output", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.col_conv_exprs_.count(); i++) {
+      uint64_t column_id = MY_SPEC.column_ids_.at(i);
+      if (OB_FAIL(calc_column_stats(MY_SPEC.col_conv_exprs_.at(i), column_id, row_len))) {
+        LOG_WARN("fail to calc column stats", K(ret));
+      }
+    }
+    //generated column
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.generated_column_exprs_.count(); i++) {
+      uint64_t column_id = MY_SPEC.column_ids_.at(i + MY_SPEC.col_conv_exprs_.count());
+      if (OB_FAIL(calc_column_stats(MY_SPEC.generated_column_exprs_.at(i), column_id, row_len))) {
+        LOG_WARN("fail to calc column stats", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOptimizerStatsGatheringOp::calc_table_stats(int64_t &row_len)
+{
+  int ret = OB_SUCCESS;
+  ObOptTableStat *global_tab_stat = NULL;
+  ObOptTableStat::Key global_key(tenant_id_, MY_SPEC.table_id_, (int64_t)MY_SPEC.table_id_);
+  if (MY_SPEC.is_part_table()) {
+    global_key.partition_id_ = -1;
+  }
+  if (OB_FAIL(get_tab_stat_by_key(global_key, global_tab_stat))) {
+    LOG_WARN("fail to get global table stat", K(ret));
+  } else if (OB_ISNULL(global_tab_stat)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    global_tab_stat->add_avg_row_size(row_len);
+    global_tab_stat->add_row_count(1);
+    global_tab_stat->set_object_type(StatLevel::TABLE_LEVEL);
   }
   return ret;
 }
@@ -419,142 +420,11 @@ int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr,
 int ObOptimizerStatsGatheringOp::calc_stats()
 {
   int ret = OB_SUCCESS;
-  StatItems all_stats;
-  PartIds part_ids;
-  if (MY_SPEC.column_ids_.count() != MY_SPEC.col_conv_exprs_.count() + MY_SPEC.generated_column_exprs_.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("column ids doesn't match the output", K(ret));
-  } else if (OB_FAIL(generate_part_ids(part_ids))) {
-    LOG_WARN("fail to generated part ids", K(ret));
-  } else if (OB_FAIL(get_tab_stats_by_partinfo(part_ids, all_stats))) {
-    LOG_WARN("fail to get table stat", K(ret));
-  } else {
-    int64_t row_len = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.col_conv_exprs_.count(); i++) {
-      uint64_t column_id = MY_SPEC.column_ids_.at(i);
-      if (OB_FAIL(calc_column_stats(MY_SPEC.col_conv_exprs_.at(i), column_id, part_ids, all_stats, row_len))) {
-        LOG_WARN("fail to calc column stats", K(ret));
-      }
-    }
-    //generated column
-    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.generated_column_exprs_.count(); i++) {
-      uint64_t column_id = MY_SPEC.column_ids_.at(i + MY_SPEC.col_conv_exprs_.count());
-      if (OB_FAIL(calc_column_stats(MY_SPEC.generated_column_exprs_.at(i), column_id,
-                                    part_ids, all_stats, row_len))) {
-        LOG_WARN("fail to calc column stats", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && OB_FAIL(set_tab_stats(all_stats, row_len))) {
-      LOG_WARN("fail to set col stats", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObOptimizerStatsGatheringOp::get_tab_stats_by_partinfo(PartIds &part_ids, StatItems &all_stats)
-{
-  int ret = OB_SUCCESS;
-  ObOptTableStat::Key global_key(tenant_id_, MY_SPEC.table_id_, part_ids.global_part_id_);
-  ObOptTableStat::Key part_key(tenant_id_, MY_SPEC.table_id_, part_ids.part_id_);
-  ObOptTableStat::Key first_part_key(tenant_id_, MY_SPEC.table_id_, part_ids.first_part_id_);
-  if (OB_FAIL(get_tab_stat_by_key(global_key, all_stats.global_tab_stat_))) {
-    LOG_WARN("fail to get global table stat", K(ret));
-  } else if (MY_SPEC.is_part_table() && OB_FAIL(get_tab_stat_by_key(part_key, all_stats.part_tab_stat_))) {
-    LOG_WARN("fail to get part table stat", K(ret));
-  } else if (MY_SPEC.is_two_level_part() && OB_FAIL(get_tab_stat_by_key(first_part_key, all_stats.first_part_tab_stat_))) {
-    LOG_WARN("fail to get first part table stat", K(ret));
-  }
-  return ret;
-}
-
-int ObOptimizerStatsGatheringOp::get_col_stats_by_partinfo(PartIds &part_ids, uint64_t column_id, StatItems &all_stats)
-{
-  int ret = OB_SUCCESS;
-  ObOptColumnStat::Key global_col_stats_key(tenant_id_, MY_SPEC.table_id_, part_ids.global_part_id_, column_id);
-  ObOptColumnStat::Key part_col_stats_key(tenant_id_, MY_SPEC.table_id_, part_ids.part_id_, column_id);
-  ObOptColumnStat::Key first_part_col_stats_key(tenant_id_, MY_SPEC.table_id_, part_ids.first_part_id_, column_id);
-  if (OB_FAIL(get_col_stat_by_key(global_col_stats_key, all_stats.global_col_stat_))) {
-    LOG_WARN("fail to get global table stat", K(ret));
-  } else if (MY_SPEC.is_part_table() && OB_FAIL(get_col_stat_by_key(part_col_stats_key, all_stats.part_col_stat_))) {
-    LOG_WARN("fail to get part table stat", K(ret));
-  } else if (MY_SPEC.is_two_level_part() && OB_FAIL(get_col_stat_by_key(first_part_col_stats_key, all_stats.first_part_col_stat_))) {
-    LOG_WARN("fail to get first part table stat", K(ret));
-  }
-  return ret;
-}
-
-int ObOptimizerStatsGatheringOp::set_col_stats(StatItems &all_stats,
-                                               ObDatum *datum,
-                                               const ObObjMeta &meta,
-                                               const ObDatumCmpFuncType cmp_func)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(datum) || OB_ISNULL(all_stats.global_col_stat_) || OB_ISNULL(all_stats.global_col_stat_->col_stat_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(all_stats.global_col_stat_), K(datum));
-  } else {
-    all_stats.global_col_stat_->col_stat_->set_stat_level(StatLevel::TABLE_LEVEL);
-    if (OB_FAIL(all_stats.global_col_stat_->update_column_stat_info(datum, meta, cmp_func))) {
-      LOG_WARN("fail to set global column stat", K(ret));
-    }
-  }
-  if (OB_SUCC(ret) && MY_SPEC.is_part_table()) {
-    if (OB_ISNULL(all_stats.part_col_stat_) || OB_ISNULL(all_stats.part_col_stat_->col_stat_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(all_stats.part_col_stat_));
-    } else {
-      all_stats.part_col_stat_->col_stat_->set_stat_level(StatLevel::PARTITION_LEVEL);
-      if (OB_FAIL(all_stats.part_col_stat_->update_column_stat_info(datum, meta, cmp_func))) {
-        LOG_WARN("fail to set part column stat", K(ret));
-      }
-    }
-  }
-  if (OB_SUCC(ret) && MY_SPEC.is_two_level_part()) {
-    if (OB_ISNULL(all_stats.first_part_col_stat_) || OB_ISNULL(all_stats.first_part_col_stat_->col_stat_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(all_stats.first_part_col_stat_));
-    } else {
-      all_stats.first_part_col_stat_->col_stat_->set_stat_level(StatLevel::PARTITION_LEVEL);
-      all_stats.part_col_stat_->col_stat_->set_stat_level(StatLevel::SUBPARTITION_LEVEL);
-      if (OB_FAIL(all_stats.first_part_col_stat_->update_column_stat_info(datum, meta, cmp_func))) {
-        LOG_WARN("fail to set first part column stat", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObOptimizerStatsGatheringOp::set_tab_stats(StatItems &all_stats, int64_t row_len)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(all_stats.global_tab_stat_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null");
-  } else {
-    all_stats.global_tab_stat_->add_avg_row_size(row_len);
-    all_stats.global_tab_stat_->add_row_count(1);
-    all_stats.global_tab_stat_->set_object_type(StatLevel::TABLE_LEVEL);
-  }
-  if (OB_SUCC(ret) && MY_SPEC.is_part_table()) {
-    if (OB_ISNULL(all_stats.part_tab_stat_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null");
-    } else {
-      all_stats.part_tab_stat_->add_avg_row_size(row_len);
-      all_stats.part_tab_stat_->add_row_count(1);
-      all_stats.part_tab_stat_->set_object_type(StatLevel::PARTITION_LEVEL);
-    }
-  }
-  if (OB_SUCC(ret) && MY_SPEC.is_two_level_part()) {
-    if (OB_ISNULL(all_stats.first_part_tab_stat_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null");
-    } else {
-      all_stats.first_part_tab_stat_->add_avg_row_size(row_len);
-      all_stats.first_part_tab_stat_->add_row_count(1);
-      all_stats.first_part_tab_stat_->set_object_type(StatLevel::PARTITION_LEVEL);
-      all_stats.part_tab_stat_->set_object_type(StatLevel::SUBPARTITION_LEVEL);
-    }
+  int64_t row_len = 0;
+  if (OB_FAIL(calc_columns_stats(row_len))) {
+    LOG_WARN("failed to calc column stats", K(ret));
+  } else if (OB_FAIL(calc_table_stats(row_len))) {
+    LOG_WARN("failed to calc table stats", K(ret));
   }
   return ret;
 }
@@ -734,50 +604,20 @@ int ObOptimizerStatsGatheringOp::generate_stat_param(ObTableStatParam &param)
       param.global_tablet_id_ = MY_SPEC.table_id_;
       param.part_stat_param_.need_modify_ = false;
       param.subpart_stat_param_.need_modify_ = false;
-    } else {
-      param.global_part_id_ = -1;
-      param.global_tablet_id_ = -1;
-    }
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.column_ids_.count(); i++) {
-      ObColumnStatParam col_param;
-      col_param.column_id_ = MY_SPEC.column_ids_.at(i);
-      const ObColumnSchemaV2 *col_schema =  nullptr;
-      if (OB_FAIL(schema_guard->get_column_schema(tenant_id_, MY_SPEC.table_id_, col_param.column_id_, col_schema))) {
-        LOG_WARN("can't get column schema", K(ret), K(tenant_id_), K(MY_SPEC.table_id_), K(col_param.column_id_));
-      } else if (OB_ISNULL(col_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("can't get column schema", K(ret), K(tenant_id_), K(MY_SPEC.table_id_), K(col_param.column_id_));
-      } else {
-        col_param.cs_type_ = col_schema->get_collation_type();
-      }
-      if (OB_SUCC(ret) && OB_FAIL(param.column_params_.push_back(col_param))) {
-        LOG_WARN("fail to push back column param", K(ret));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (MY_SPEC.is_part_table() && !MY_SPEC.is_two_level_part()) {
-      param.part_stat_param_.need_modify_ = true;
-      param.subpart_stat_param_.need_modify_ = false;
-    } else if (MY_SPEC.is_part_table() && MY_SPEC.is_two_level_part()){
-      //default is true
-    }
-    if (OB_SUCC(ret) && MY_SPEC.is_part_table()) {
-      FOREACH_X(it, part_map_, OB_SUCC(ret)) {
-        PartInfo tmp_part_info;
-        tmp_part_info.part_id_ = it->first;
-        tmp_part_info.tablet_id_ = it->second.tablet_id_;
-        if (it->first != it->second.part_id_) {
-          //subpart
-          if (OB_FAIL(param.subpart_infos_.push_back(tmp_part_info))) {
-            LOG_WARN("fail to push back part info", K(ret));
-          }
+      for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.column_ids_.count(); i++) {
+        ObColumnStatParam col_param;
+        col_param.column_id_ = MY_SPEC.column_ids_.at(i);
+        const ObColumnSchemaV2 *col_schema =  nullptr;
+        if (OB_FAIL(schema_guard->get_column_schema(tenant_id_, MY_SPEC.table_id_, col_param.column_id_, col_schema))) {
+          LOG_WARN("can't get column schema", K(ret), K(tenant_id_), K(MY_SPEC.table_id_), K(col_param.column_id_));
+        } else if (OB_ISNULL(col_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("can't get column schema", K(ret), K(tenant_id_), K(MY_SPEC.table_id_), K(col_param.column_id_));
         } else {
-          //first level parttion
-          if (OB_FAIL(param.part_infos_.push_back(tmp_part_info))) {
-            LOG_WARN("fail to push back part info", K(ret));
-          }
+          col_param.cs_type_ = col_schema->get_collation_type();
+        }
+        if (OB_SUCC(ret) && OB_FAIL(param.column_params_.push_back(col_param))) {
+          LOG_WARN("fail to push back column param", K(ret));
         }
       }
     }
