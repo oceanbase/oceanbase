@@ -432,18 +432,29 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       ObTransformRule::add_trans_type(disable_list, WIN_MAGIC);
     }
     if (func.contain_link_table_) {
-      disable_list |= (~ObTransformRule::ALL_HEURISTICS_RULES);
-
-      // Below rules might generate filter which contains constant values which has implicit types,
+      // some rules might generate filter which contains constant values which has implicit types,
       // which can not be printed in the link sql.
       // example：
       // create table t (c1 varchar(10), c2 char(10))
       // select * from t where c1 = 'a' and c2 = c1;
       // => select * from t where c1 = 'a' and c2 = implicit cast('a' as varchar);
-      ObTransformRule::add_trans_type(disable_list, PREDICATE_MOVE_AROUND);
-      ObTransformRule::add_trans_type(disable_list, CONST_PROPAGATE);
-      ObTransformRule::add_trans_type(disable_list, SIMPLIFY_EXPR);
-      ObTransformRule::add_trans_type(disable_list, SELECT_EXPR_PULLUP);
+      uint64_t dblink_enable_list = 0;
+      ObTransformRule::add_trans_type(dblink_enable_list, SIMPLIFY_DISTINCT);
+      ObTransformRule::add_trans_type(dblink_enable_list, SIMPLIFY_ORDERBY);
+      ObTransformRule::add_trans_type(dblink_enable_list, SIMPLIFY_LIMIT);
+      ObTransformRule::add_trans_type(dblink_enable_list, PROJECTION_PRUNING);
+      ObTransformRule::add_trans_type(dblink_enable_list, VIEW_MERGE);
+      ObTransformRule::add_trans_type(dblink_enable_list, COUNT_TO_EXISTS);
+      ObTransformRule::add_trans_type(dblink_enable_list, WHERE_SQ_PULL_UP);
+      ObTransformRule::add_trans_type(dblink_enable_list, SIMPLIFY_SUBQUERY);
+      ObTransformRule::add_trans_type(dblink_enable_list, QUERY_PUSH_DOWN);
+      ObTransformRule::add_trans_type(dblink_enable_list, ELIMINATE_OJ);
+      ObTransformRule::add_trans_type(dblink_enable_list, JOIN_ELIMINATION);
+      ObTransformRule::add_trans_type(dblink_enable_list, JOIN_LIMIT_PUSHDOWN);
+      ObTransformRule::add_trans_type(dblink_enable_list, LEFT_JOIN_TO_ANTI);
+      ObTransformRule::add_trans_type(dblink_enable_list, AGGR_SUBQUERY);
+      ObTransformRule::add_trans_type(dblink_enable_list, FASTMINMAX);
+      disable_list |= (~dblink_enable_list);
     }
     //dblink trace point
     if ((OB_E(EventTable::EN_GENERATE_PLAN_WITH_RECONSTRUCT_SQL) OB_SUCCESS) != OB_SUCCESS) {
