@@ -51,6 +51,16 @@ namespace share
     case OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH:                                                            \
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", query primary failed");               \
       break;                                                                                           \
+    case OB_IN_STOP_STATE:                                                                             \
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", primary is in stop state");           \
+      break;                                                                                           \
+    case OB_TENANT_NOT_EXIST:                                                                          \
+    case OB_TENANT_NOT_IN_SERVER:                                                                      \
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", primary tenant is not avaliable");    \
+      break;                                                                                           \
+    case OB_SERVER_IS_INIT:                                                                            \
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", primary server is initializing");     \
+      break;                                                                                           \
     case -ER_CONNECT_FAILED:                                                                           \
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", please check the network");           \
       break;                                                                                           \
@@ -59,10 +69,15 @@ namespace share
   }                                                                                                    \
 
 #define RESTORE_RETRY(arg)                                                                             \
-  int64_t retry_time = 0;                                                                              \
+  int64_t run_time = 1;                                                                                \
+  int tmp_ret = OB_SUCCESS;                                                                            \
   do {                                                                                                 \
     arg                                                                                                \
-  } while (OB_FAIL(ret) && retry_time++ < server_prover_.get_server_count() - 1);
+    if (OB_TMP_FAIL(ret) && run_time < server_prover_.get_server_count()) {                            \
+      LOG_WARN("restore proxy query failed, switch to next server", K(run_time), K(tmp_ret), K(ret));  \
+      ret = OB_SUCCESS;                                                                                \
+    }                                                                                                  \
+  } while (OB_TMP_FAIL(tmp_ret) && run_time++ < server_prover_.get_server_count());
 
 
 ObLogRestoreMySQLProvider::ObLogRestoreMySQLProvider() : server_list_(), lock_() {}
