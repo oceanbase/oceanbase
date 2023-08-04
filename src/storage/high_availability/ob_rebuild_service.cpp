@@ -18,6 +18,7 @@
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "observer/ob_server.h"
 #include "logservice/ob_log_service.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -845,25 +846,42 @@ int ObLSRebuildMgr::do_with_init_status_(const ObLSRebuildInfo &rebuild_info)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls rebuild mgr do not init", K(ret));
-  } else if (!rebuild_info.is_valid() || ObLSRebuildStatus::INIT != rebuild_info.status_) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("do with none status get invalid argument", K(ret), K(rebuild_info));
-  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(rebuild_info));
   } else {
-    ROOTSERVICE_EVENT_ADD("disaster_recovery", "start_rebuild_ls_replica",
-                          "tenant_id", tenant_id,
-                          "ls_id", rebuild_ctx_.ls_id_,
-                          "task_id", rebuild_ctx_.task_id_,
-                          "source", MYADDR,
-                          "destination", MYADDR,
-                          "comment", "");
+    if (!rebuild_info.is_valid() || ObLSRebuildStatus::INIT != rebuild_info.status_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("do with none status get invalid argument", K(ret), K(rebuild_info));
+    } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(rebuild_info));
+    } else {
+      ROOTSERVICE_EVENT_ADD("disaster_recovery", "start_rebuild_ls_replica",
+                            "tenant_id", tenant_id,
+                            "ls_id", rebuild_ctx_.ls_id_,
+                            "task_id", rebuild_ctx_.task_id_,
+                            "source", MYADDR,
+                            "destination", MYADDR,
+                            "comment", "");
+      DEBUG_SYNC(BEFORE_MIGRATION_DISABLE_VOTE);
 
-    if (OB_FAIL(ls->disable_vote(need_check_log_missing))) {
-      LOG_WARN("failed to disable vote", K(ret), KPC(ls), K(rebuild_info));
-    } else if (OB_FAIL(switch_next_status_(rebuild_info, ret))) {
-      LOG_WARN("failed to switch next status", K(ret), K(rebuild_info));
+      if (OB_FAIL(ls->disable_vote(need_check_log_missing))) {
+        LOG_WARN("failed to disable vote", K(ret), KPC(ls), K(rebuild_info));
+      }
+
+      if (OB_FAIL(ret)) {
+        SERVER_EVENT_ADD("storage_ha", "rebuild_disable_vote_failed",
+                         "tenant_id", tenant_id,
+                         "ls_id",  rebuild_ctx_.ls_id_.id(),
+                         "task_id", rebuild_ctx_.task_id_,
+                         "destination", MYADDR,
+                         "type", rebuild_info.type_,
+                         "result", ret,
+                         "REBUILD_LS_OP");
+      }
+    }
+
+    if (OB_SUCCESS != (tmp_ret = switch_next_status_(rebuild_info, ret))) {
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      LOG_WARN("failed to switch next status", K(ret), K(tmp_ret), K(rebuild_info));
       if (OB_SUCCESS != (tmp_ret = ls->enable_vote())) {
         LOG_ERROR("failed to enable vote", K(tmp_ret), K(ret), K(rebuild_info), K(rebuild_ctx_));
       }

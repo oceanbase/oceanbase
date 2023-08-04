@@ -1043,7 +1043,6 @@ int ObStartMigrationTask::deal_with_local_ls_()
   ObRole role;
   int64_t proposal_id = 0;
   ObLSMeta local_ls_meta;
-  DEBUG_SYNC(BEFORE_MIGRATION_DISABLE_VOTE);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start migration task do not init", K(ret));
