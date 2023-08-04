@@ -4427,9 +4427,14 @@ int ObOptimizerUtil::check_push_down_expr(const ObRelIds &table_ids,
         if (OB_ISNULL(cur_and_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr in and expr is null", K(ret));
-        } else if (!cur_and_expr->has_flag(CNT_SUB_QUERY)
-            && table_ids.is_superset(cur_and_expr->get_relation_ids())
-            && OB_FAIL(sub_exprs.at(i).push_back(cur_and_expr))) {
+        } else if (cur_and_expr->has_flag(CNT_SUB_QUERY)) {
+          //do nothing
+        } else if (!table_ids.is_superset(cur_and_expr->get_relation_ids())) {
+          //do nothing
+        } else if (cur_and_expr->get_relation_ids().is_empty() &&
+                  !cur_and_expr->is_const_expr()) {
+          //do nothing
+        } else if (OB_FAIL(sub_exprs.at(i).push_back(cur_and_expr))) {
           LOG_WARN("failed to push back expr", K(ret));
         } else { /* do nothing */ }
       }
@@ -4437,9 +4442,12 @@ int ObOptimizerUtil::check_push_down_expr(const ObRelIds &table_ids,
       } else if (sub_exprs.at(i).empty()){
         all_contain = false;
       }
-    } else if (cur_expr->has_flag(CNT_SUB_QUERY)
-        || !table_ids.is_superset(cur_expr->get_relation_ids())) {
-      // or expr 的子expr如果不是and expr, 则该expr需要只涉及到该表的列
+    } else if (cur_expr->has_flag(CNT_SUB_QUERY)) {
+      all_contain = false;
+    } else if (!table_ids.is_superset(cur_expr->get_relation_ids())) {
+      all_contain = false;
+    } else if (cur_expr->get_relation_ids().is_empty() &&
+              !cur_expr->is_const_expr()) {
       all_contain = false;
     } else if (OB_FAIL(sub_exprs.at(i).push_back(cur_expr))) {
       LOG_WARN("failed to push back expr", K(ret));
