@@ -510,6 +510,12 @@ int ObInsertResolver::resolve_insert_assign(const ParseNode &assign_list)
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(check_need_match_all_params(insert_stmt->get_insert_table_info().values_desc_,
+                                            insert_stmt->get_query_ctx()->need_match_all_params_))) {
+      LOG_WARN("check need match all params failed", K(ret));
+    }
+  }
   const ObIArray<ObColumnRefRawExpr*> &dep_cols = insert_stmt->get_insert_table_info().part_generated_col_dep_cols_;
   if (OB_SUCC(ret) && 0 != dep_cols.count()) {
     ColumnItem *col_item = NULL;
