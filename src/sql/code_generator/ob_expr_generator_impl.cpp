@@ -654,11 +654,6 @@ int ObExprGeneratorImpl::visit_simple_op(ObNonTerminalRawExpr &expr)
           rownum_op->set_op_id(static_cast<ObSysFunRawExpr&>(expr).get_op_id());
           break;
         }
-        case T_FUN_SYS_NULLIF: {
-          ObExprNullif *nullif_expr = static_cast<ObExprNullif *> (op);
-          ret = visit_nullif_expr(expr, nullif_expr);
-          break;
-        }
         case T_FUN_SYS_CAST: {
           ObExprCast *cast_op = static_cast<ObExprCast*>(op);
           const bool is_implicit = expr.has_flag(IS_INNER_ADDED_EXPR);
