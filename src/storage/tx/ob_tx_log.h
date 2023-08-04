@@ -274,6 +274,7 @@ public:
 private:
   //------------ For ob_admin
   int format_mutator_row_(const memtable::ObMemtableMutatorRow &row, share::ObAdminMutatorStringArg &arg);
+  int smart_dump_rowkey_(const ObStoreRowkey &rowkey, share::ObAdminMutatorStringArg &arg);
   int format_row_data_(const memtable::ObRowData &row_data, share::ObAdminMutatorStringArg &arg);
   //------------
 private:
