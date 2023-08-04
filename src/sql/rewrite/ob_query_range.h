@@ -590,7 +590,7 @@ private:
                        const ObExprResType &result_type,
                        ObKeyPart *&out_key_part,
                        const common::ObDataTypeCastParams &dtc_params);
-  int check_bound(ObKeyPart *key_part,
+  int check_row_bound(ObKeyPart *key_part,
                   const ObDataTypeCastParams &dtc_params,
                   const ObRawExpr *const_expr,
                   bool &is_bound_modified);
@@ -715,9 +715,11 @@ private:
   int do_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart *&res_gt);
   int link_or_graphs(ObKeyPartList &storage, ObKeyPart *&out_key_part);
   int definite_key_part(ObKeyPart *&key_part, ObExecContext &exec_ctx,
-                        const common::ObDataTypeCastParams &dtc_params);
+                        const common::ObDataTypeCastParams &dtc_params,
+                        bool &is_bound_modified);
   int replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx,
-                           const common::ObDataTypeCastParams &dtc_params);
+                            const common::ObDataTypeCastParams &dtc_params,
+                            bool &is_bound_modified);
   int or_single_head_graphs(ObKeyPartList &or_list, ObExecContext *exec_ctx,
                             const common::ObDataTypeCastParams &dtc_params, bool is_in_or = false);
   int union_in_with_in(ObKeyPartList &or_list,
