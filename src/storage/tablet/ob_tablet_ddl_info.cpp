@@ -49,7 +49,7 @@ void ObTabletDDLInfo::reset()
 int ObTabletDDLInfo::get(int64_t &schema_version, int64_t &schema_refreshed_ts)
 {
   int ret = OB_SUCCESS;
-  TCRLockGuard guard(rwlock_);
+  ObByteLockGuard guard(rwlock_);
   schema_version = ddl_schema_version_;
   schema_refreshed_ts = ddl_schema_refreshed_ts_;
   return ret;
@@ -59,7 +59,7 @@ int ObTabletDDLInfo::update(const int64_t schema_version,
                             int64_t &schema_refreshed_ts)
 {
   int ret = OB_SUCCESS;
-  TCWLockGuard guard(rwlock_);
+  ObByteLockGuard guard(rwlock_);
   if (schema_version <= 0 || !scn.is_valid_and_not_min()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(schema_version), K(scn));

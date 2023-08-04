@@ -113,7 +113,6 @@ int ObFullTabletCreator::throttle_tablet_creation()
     lib::ObMutexGuard guard(mutex_);
     if (total() < limit_size) {
       need_wait = false;
-      ATOMIC_DEC(&wait_create_tablets_cnt_);
     } else if (ObTimeUtility::fast_current_time() - start_time >= timeout) {
       ret = OB_EAGAIN;
       LOG_WARN("throttle tablet creation timeout", K(ret));
@@ -130,6 +129,7 @@ int ObFullTabletCreator::throttle_tablet_creation()
       }
     }
   } while (need_wait);
+  ATOMIC_DEC(&wait_create_tablets_cnt_);
   return ret;
 }
 
