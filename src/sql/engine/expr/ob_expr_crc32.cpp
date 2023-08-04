@@ -35,7 +35,7 @@ int ObExprCrc32::calc_result_type1(ObExprResType& type, ObExprResType& type1, Ob
   int ret = OB_SUCCESS;
   UNUSED(type_ctx);
   type.set_precision(10);
-  type.set_uint32();
+  type.set_uint64();
   if (OB_LIKELY(type1.is_not_null_for_read())) {
     type.set_result_flag(NOT_NULL_FLAG);
   }
