@@ -2187,6 +2187,7 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
         prepare_result.for_update_ = pl_prepare_result.result_set_->get_is_select_for_update();
         prepare_result.has_hidden_rowid_ = pl_prepare_result.result_set_->has_hidden_rowid();
         prepare_result.is_bulk_ = pl_prepare_result.result_set_->is_bulk();
+        prepare_result.has_link_table_ = pl_prepare_result.result_set_->is_link_table();
         if (OB_FAIL(ret)) {
         } else if (OB_NOT_NULL(prepare_result.record_type_)) {
           if (stmt::T_SELECT != prepare_result.type_) {

@@ -3932,6 +3932,9 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("forall support dml sql only", K(ret), K(sql_stmt->get_stmt_type()));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "not dml sql in forall");
+    } else if (sql_stmt->has_link_table()) {
+      ret = OB_ERR_FORALL_ON_REMOTE_TABLE;
+      LOG_WARN("FORALL INSERT/UPDATE/DELETE not support on remote tables", K(ret), K(sql_stmt->get_stmt_type()));
     }
     if (OB_SUCC(ret)) {
       // Restriction:
@@ -4730,6 +4733,7 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree, ObPLSql &
           static_sql.set_sql(prepare_result.route_sql_);
           static_sql.set_for_update(prepare_result.for_update_);
           static_sql.set_hidden_rowid(prepare_result.has_hidden_rowid_);
+          static_sql.set_link_table(prepare_result.has_link_table_);
         }
       }
 
