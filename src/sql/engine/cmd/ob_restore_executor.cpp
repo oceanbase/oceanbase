@@ -48,6 +48,7 @@ int ObPhysicalRestoreTenantExecutor::execute(
   const bool is_preview = stmt.get_is_preview();
   ObString first_stmt;
   ObObj value;
+  obrpc::Int64 job_id = OB_INVALID_ID;
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
     LOG_WARN("fail to get first stmt" , K(ret));
   } else {
@@ -72,7 +73,7 @@ int ObPhysicalRestoreTenantExecutor::execute(
       } else if (OB_ISNULL(common_rpc_proxy)){
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("common rpc proxy should not be null", K(ret));
-      } else if (OB_FAIL(common_rpc_proxy->physical_restore_tenant(restore_tenant_arg))) {
+      } else if (OB_FAIL(common_rpc_proxy->physical_restore_tenant(restore_tenant_arg, job_id))) {
         LOG_WARN("rpc proxy restore tenant failed", K(ret), "dst", common_rpc_proxy->get_server());
       }
       if (session_info->user_variable_exists(OB_RESTORE_SOURCE_NAME_SESSION_STR)) {
@@ -84,7 +85,7 @@ int ObPhysicalRestoreTenantExecutor::execute(
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(sync_wait_tenant_created_(ctx, restore_tenant_arg.tenant_name_))) {
+      } else if (OB_FAIL(sync_wait_tenant_created_(ctx, restore_tenant_arg.tenant_name_, job_id))) {
         LOG_WARN("failed to sync wait tenant created", K(ret));
       }
 
@@ -100,7 +101,8 @@ int ObPhysicalRestoreTenantExecutor::execute(
   return ret;
 }
 
-int ObPhysicalRestoreTenantExecutor::sync_wait_tenant_created_(ObExecContext &ctx, const ObString &tenant_name)
+int ObPhysicalRestoreTenantExecutor::sync_wait_tenant_created_(
+    ObExecContext &ctx, const ObString &tenant_name, const int64_t job_id)
 {
   int ret = OB_SUCCESS;
   const int64_t timeout = 10 * 60 * 1000 * 1000; // 10min
@@ -157,8 +159,8 @@ int ObPhysicalRestoreTenantExecutor::sync_wait_tenant_created_(ObExecContext &ct
       if (OB_ERR_INVALID_TENANT_NAME == ret || OB_EAGAIN == ret) {
         bool is_failed = false;
         bool is_finish = false;
-        if (OB_FAIL(ObRestoreUtil::check_physical_restore_finish(*sql_proxy, user_tenant_id, is_finish, is_failed))) {
-          LOG_WARN("failed to check physical restore finish", K(ret), K(user_tenant_id));
+        if (OB_FAIL(ObRestoreUtil::check_physical_restore_finish(*sql_proxy, job_id, is_finish, is_failed))) {
+          LOG_WARN("failed to check physical restore finish", K(ret), K(job_id));
         } else if (!is_finish) {
           sleep(1);
           LOG_DEBUG("restore not finish, wait later", K(ret), K(user_tenant_id));

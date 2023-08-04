@@ -692,7 +692,7 @@ public:
   int admin_set_tracepoint(const obrpc::ObAdminSetTPArg &arg);
   int admin_set_backup_config(const obrpc::ObAdminSetConfigArg &arg);
   /* physical restore */
-  int physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantArg &arg);
+  int physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantArg &arg, obrpc::Int64 &job_id);
   int check_restore_tenant_valid(const share::ObPhysicalRestoreJob &job_info,
       share::schema::ObSchemaGetterGuard &guard);
   int rebuild_index_in_restore(const obrpc::ObRebuildIndexInRestoreArg &arg);
