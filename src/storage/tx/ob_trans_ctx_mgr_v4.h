@@ -257,7 +257,7 @@ public:
 
   // Block this ObLSTxCtxMgr, it can no longer create new tx_ctx;
   // @param [out] is_all_tx_cleaned_up: set it to true, when all transactions are cleaned up;
-  int block(bool &is_all_tx_cleaned_up);
+  int block_tx(bool &is_all_tx_cleaned_up);
 
   // Block this ObLSTxCtxMgr, it can no longer create normal tx_ctx;
   // Allow create special tx_ctx, exp: mds_trans;
@@ -512,7 +512,7 @@ public:
   bool is_master() const { return is_master_(); }
 
   // check is blocked
-  bool is_blocked() const { return is_blocked_(); }
+  bool is_tx_blocked() const { return is_tx_blocked_(); }
 
   // Switch the prev_aggre_log_ts and aggre_log_ts during dump starts
   int refresh_aggre_rec_scn();
@@ -572,11 +572,11 @@ private:
     static const int64_t T_PENDING = 2;
     static const int64_t R_PENDING = 3;
     static const int64_t L_WORKING = 4;
-    static const int64_t F_BLOCKED = 5;
-    static const int64_t L_BLOCKED = 6;
+    static const int64_t F_TX_BLOCKED = 5;
+    static const int64_t L_TX_BLOCKED = 6;
     static const int64_t L_BLOCKED_NORMAL = 7;
-    static const int64_t T_BLOCKED_PENDING = 8;
-    static const int64_t R_BLOCKED_PENDING = 9;
+    static const int64_t T_TX_BLOCKED_PENDING = 8;
+    static const int64_t R_TX_BLOCKED_PENDING = 9;
     static const int64_t STOPPED = 10;
     static const int64_t END = 11;
     static const int64_t MAX = 12;
@@ -598,10 +598,10 @@ private:
         TCM_STATE_CASE_TO_STR(T_PENDING);
         TCM_STATE_CASE_TO_STR(R_PENDING);
         TCM_STATE_CASE_TO_STR(L_WORKING);
-        TCM_STATE_CASE_TO_STR(F_BLOCKED);
-        TCM_STATE_CASE_TO_STR(L_BLOCKED);
-        TCM_STATE_CASE_TO_STR(T_BLOCKED_PENDING);
-        TCM_STATE_CASE_TO_STR(R_BLOCKED_PENDING);
+        TCM_STATE_CASE_TO_STR(F_TX_BLOCKED);
+        TCM_STATE_CASE_TO_STR(L_TX_BLOCKED);
+        TCM_STATE_CASE_TO_STR(T_TX_BLOCKED_PENDING);
+        TCM_STATE_CASE_TO_STR(R_TX_BLOCKED_PENDING);
         TCM_STATE_CASE_TO_STR(L_BLOCKED_NORMAL);
         TCM_STATE_CASE_TO_STR(STOPPED);
         TCM_STATE_CASE_TO_STR(END);
@@ -623,7 +623,7 @@ private:
     static const int64_t SWL_CB_FAIL = 3;// start working log callback failed
     static const int64_t LEADER_TAKEOVER = 4;
     static const int64_t RESUME_LEADER = 5;
-    static const int64_t BLOCK = 6;
+    static const int64_t BLOCK_TX = 6;
     static const int64_t BLOCK_NORMAL = 7;
     static const int64_t STOP = 8;
     static const int64_t ONLINE = 9;
@@ -649,7 +649,7 @@ private:
         TCM_OP_CASE_TO_STR(SWL_CB_FAIL);
         TCM_OP_CASE_TO_STR(LEADER_TAKEOVER);
         TCM_OP_CASE_TO_STR(RESUME_LEADER);
-        TCM_OP_CASE_TO_STR(BLOCK);
+        TCM_OP_CASE_TO_STR(BLOCK_TX);
         TCM_OP_CASE_TO_STR(BLOCK_NORMAL);
         TCM_OP_CASE_TO_STR(STOP);
         TCM_OP_CASE_TO_STR(UNBLOCK_NORMAL);
@@ -684,23 +684,23 @@ private:
   { return is_master_(ATOMIC_LOAD(&state_)); }
   inline bool is_master_(int64_t state) const
   { return State::L_WORKING == state ||
-           State::L_BLOCKED == state ||
+           State::L_TX_BLOCKED == state ||
            State::L_BLOCKED_NORMAL == state; }
 
   inline bool is_follower_() const
   { return is_follower_(ATOMIC_LOAD(&state_)); }
   inline bool is_follower_(int64_t state) const
   { return State::F_WORKING == state ||
-           State::F_BLOCKED == state; }
+           State::F_TX_BLOCKED == state; }
 
-  inline bool is_blocked_() const
-  { return is_blocked_(ATOMIC_LOAD(&state_)); }
-  inline bool is_blocked_(int64_t state) const
+  inline bool is_tx_blocked_() const
+  { return is_tx_blocked_(ATOMIC_LOAD(&state_)); }
+  inline bool is_tx_blocked_(int64_t state) const
   {
-    return State::F_BLOCKED == state ||
-           State::L_BLOCKED == state ||
-           State::T_BLOCKED_PENDING == state ||
-           State::R_BLOCKED_PENDING == state;
+    return State::F_TX_BLOCKED == state ||
+           State::L_TX_BLOCKED == state ||
+           State::T_TX_BLOCKED_PENDING == state ||
+           State::R_TX_BLOCKED_PENDING == state;
   }
 
   inline bool is_normal_blocked_() const
@@ -716,7 +716,7 @@ private:
   inline bool is_t_pending_(int64_t state) const
   {
     return State::T_PENDING == state ||
-           State::T_BLOCKED_PENDING == state;
+           State::T_TX_BLOCKED_PENDING == state;
   }
 
   inline bool is_r_pending_() const
@@ -724,7 +724,7 @@ private:
   inline bool is_r_pending_(int64_t state) const
   {
     return State::R_PENDING == state ||
-           State::R_BLOCKED_PENDING == state;
+           State::R_TX_BLOCKED_PENDING == state;
   }
 
   inline bool is_pending_() const
@@ -955,7 +955,7 @@ public:
   // and returns whether there are still active transactions through out parameters;
   // @param [in] ls_id: the specifiied ls ID
   // @param [out] is_all_tx_cleaned_up, set it to true, when all transactions are cleaned up;
-  int block_ls(const share::ObLSID &ls_id, bool &is_all_tx_cleaned_up);
+  int block_tx(const share::ObLSID &ls_id, bool &is_all_tx_cleaned_up);
 
   // Traverse the specified ObLSTxCtxMgr and kill all transactions it holds;
   // @param [in] ls_id: the specifiied ls ID

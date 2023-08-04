@@ -124,7 +124,7 @@ int get_min_uncommit_tx_prepare_version(const share::ObLSID& ls_id, share::SCN &
 int kill_all_tx(const share::ObLSID &ls_id, const KillTransArg &arg,
     bool &is_all_tx_cleaned_up);
 
-int block_ls(const share::ObLSID &ls_id, bool &is_all_tx_cleaned_up);
+int block_tx(const share::ObLSID &ls_id, bool &is_all_tx_cleaned_up);
 
 int iterate_ls_id(ObLSIDIterator &ls_id_iter);
 

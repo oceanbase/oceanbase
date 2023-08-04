@@ -2354,7 +2354,7 @@ int ObTransService::kill_all_tx(const share::ObLSID &ls_id, const KillTransArg &
   return ret;
 }
 
-int ObTransService::block_ls(const share::ObLSID &ls_id, bool &is_all_tx_cleaned_up)
+int ObTransService::block_tx(const share::ObLSID &ls_id, bool &is_all_tx_cleaned_up)
 {
   int ret = OB_SUCCESS;
 
@@ -2367,7 +2367,7 @@ int ObTransService::block_ls(const share::ObLSID &ls_id, bool &is_all_tx_cleaned
   } else if (!ls_id.is_valid()) {
     TRANS_LOG(WARN, "invalid argument", K(ls_id));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(tx_ctx_mgr_.block_ls(ls_id, is_all_tx_cleaned_up))) {
+  } else if (OB_FAIL(tx_ctx_mgr_.block_tx(ls_id, is_all_tx_cleaned_up))) {
     TRANS_LOG(WARN, "block ls error", KR(ret), K(ls_id));
   } else {
     TRANS_LOG(INFO, "block ls_id success", K(ls_id), K(is_all_tx_cleaned_up));
