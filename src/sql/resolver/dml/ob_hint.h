@@ -92,6 +92,7 @@ struct ObOptParamHint
     DEF(USE_DEFAULT_OPT_STAT,)            \
     DEF(USE_FORCE_BLOCK_SAMPLE,)          \
     DEF(ENABLE_IN_RANGE_OPTIMIZATION,)    \
+    DEF(XSOLAPI_GENERATE_WITH_CLAUSE,)   \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
@@ -686,6 +687,8 @@ struct QbNameList {
   bool has_qb_name(const ObString &qb_name) const;
   bool is_equal(const ObIArray<ObSelectStmt*> &stmts) const;
   bool is_equal(const ObIArray<ObString> &qb_name_list) const;
+  bool is_subset(const ObIArray<ObSelectStmt*> &stmts) const;
+  bool is_subset(const ObIArray<ObString> &qb_name_list) const;
   bool empty() const { return qb_names_.empty(); }
   TO_STRING_KV(K_(qb_names));
   common::ObSEArray<ObString, 4, common::ModulePageAllocator, true> qb_names_;

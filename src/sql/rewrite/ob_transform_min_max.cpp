@@ -58,7 +58,8 @@ int ObTransformMinMax::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &par
   } else if (!stmt->is_select_stmt()) {
     //do nothing
     OPT_TRACE("not select stmt");
-  } else if (OB_FAIL(check_transform_validity(static_cast<ObSelectStmt *>(stmt),
+  } else if (OB_FAIL(check_transform_validity(*ctx_,
+                                              static_cast<ObSelectStmt *>(stmt),
                                               aggr_expr,
                                               is_valid))) {
     LOG_WARN("failed to check transform validity", K(ret));
@@ -75,7 +76,8 @@ int ObTransformMinMax::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &par
   return ret;
 }
 
-int ObTransformMinMax::check_transform_validity(ObSelectStmt *select_stmt,
+int ObTransformMinMax::check_transform_validity(ObTransformerCtx &ctx,
+                                                ObSelectStmt *select_stmt,
                                                 ObAggFunRawExpr *&aggr_expr,
                                                 bool &is_valid)
 {
@@ -99,7 +101,7 @@ int ObTransformMinMax::check_transform_validity(ObSelectStmt *select_stmt,
   } else if ((T_FUN_MAX != expr->get_expr_type() && T_FUN_MIN != expr->get_expr_type()) ||
              expr->get_real_param_count() != 1) {
     OPT_TRACE("aggr expr is not min/max expr");
-  } else if (OB_FAIL(is_valid_index_column(select_stmt, expr->get_param_expr(0), is_valid))) {
+  } else if (OB_FAIL(is_valid_index_column(ctx, select_stmt, expr->get_param_expr(0), is_valid))) {
     LOG_WARN("failed to check is valid index column", K(ret));
   } else if (!is_valid) {
     OPT_TRACE("aggr expr is not include index column");
@@ -275,7 +277,8 @@ int ObTransformMinMax::find_unexpected_having_expr(const ObAggFunRawExpr *aggr_e
   return ret;
 }
 
-int ObTransformMinMax::is_valid_index_column(const ObSelectStmt *stmt,
+int ObTransformMinMax::is_valid_index_column(ObTransformerCtx &ctx,
+                                             const ObSelectStmt *stmt,
                                              const ObRawExpr *expr,
                                              bool &is_valid)
 {
@@ -284,10 +287,10 @@ int ObTransformMinMax::is_valid_index_column(const ObSelectStmt *stmt,
   const ObColumnRefRawExpr *col_expr = NULL;
   bool is_match_index = false;
   ObArenaAllocator alloc;
-  EqualSets &equal_sets = ctx_->equal_sets_;
+  EqualSets &equal_sets = ctx.equal_sets_;
   ObSEArray<ObRawExpr *, 4> const_exprs;
   is_valid = false;
-  if (OB_ISNULL(stmt) || OB_ISNULL(expr) || OB_ISNULL(ctx_)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), K(stmt), K(expr));
   } else if (!expr->is_column_ref_expr()) {
@@ -303,7 +306,7 @@ int ObTransformMinMax::is_valid_index_column(const ObSelectStmt *stmt,
   } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(stmt->get_condition_exprs(),
                                                           const_exprs))) {
     LOG_WARN("failed to compute const equivalent exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::is_match_index(ctx_->sql_schema_guard_,
+  } else if (OB_FAIL(ObTransformUtils::is_match_index(ctx.sql_schema_guard_,
                                                       stmt,
                                                       col_expr,
                                                       is_match_index,

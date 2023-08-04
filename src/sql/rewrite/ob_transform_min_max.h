@@ -63,28 +63,29 @@ public:
   virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                  ObDMLStmt *&stmt,
                                  bool &trans_happened) override;
+  static int check_transform_validity(ObTransformerCtx &ctx,
+                                      ObSelectStmt *stmt,
+                                      ObAggFunRawExpr *&aggr_expr,
+                                      bool &is_valid);
+
 private:
-
-  int check_transform_validity(ObSelectStmt *stmt,
-                               ObAggFunRawExpr *&aggr_expr,
-                               bool &is_valid);
-
   int do_transform(ObSelectStmt *select_stmt, ObAggFunRawExpr *aggr_expr);
 
-  int is_valid_index_column(const ObSelectStmt *stmt,
-                            const ObRawExpr *expr,
-                            bool &is_expected_index);
+  static int is_valid_index_column(ObTransformerCtx &ctx,
+                                   const ObSelectStmt *stmt,
+                                   const ObRawExpr *expr,
+                                   bool &is_expected_index);
 
-  int is_valid_having(const ObSelectStmt *stmt,
-                      const ObAggFunRawExpr *column_aggr_expr,
-                      bool &is_expected);
+  static int is_valid_having(const ObSelectStmt *stmt,
+                             const ObAggFunRawExpr *column_aggr_expr,
+                             bool &is_expected);
 
-  int is_valid_aggr_expr(const ObSelectStmt &stmt,
-                         const ObRawExpr *expr,
-                         const ObAggFunRawExpr *aggr_expr,
-                         bool &is_valid);
+  static int is_valid_aggr_expr(const ObSelectStmt &stmt,
+                                const ObRawExpr *expr,
+                                const ObAggFunRawExpr *aggr_expr,
+                                bool &is_valid);
 
-  int find_unexpected_having_expr(const ObAggFunRawExpr *aggr_expr,
+  static int find_unexpected_having_expr(const ObAggFunRawExpr *aggr_expr,
                                   const ObRawExpr *cur_expr,
                                   bool &is_unexpected);
 
@@ -96,7 +97,7 @@ private:
    * @brief: check whether there is any valid select_item
    * request stmt has only one valid aggr expr, and select_items are exprs combainded const expr or that aggr_expr
    */
-  int is_valid_select_list(const ObSelectStmt &stmt, const ObAggFunRawExpr *aggr_expr, bool &is_valid);
+  static int is_valid_select_list(const ObSelectStmt &stmt, const ObAggFunRawExpr *aggr_expr, bool &is_valid);
   DISALLOW_COPY_AND_ASSIGN(ObTransformMinMax);
 };
 

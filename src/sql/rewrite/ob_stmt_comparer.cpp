@@ -1289,6 +1289,7 @@ int ObStmtComparer::compare_set_stmt(const ObSelectStmt *first,
         relation = QueryRelation::QUERY_LEFT_SUBSET;
       }
     }
+
     // check order by exprs
     if (OB_SUCC(ret) && QueryRelation::QUERY_UNCOMPARABLE != relation) {
       int64_t first_count = first->get_order_item_size();

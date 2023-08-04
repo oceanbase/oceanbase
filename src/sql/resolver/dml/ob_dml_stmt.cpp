@@ -3986,6 +3986,8 @@ int ObDMLStmt::collect_temp_table_infos(ObIArray<TempTableInfo> &temp_table_info
         if (table->ref_query_ == info.temp_table_query_) {
           if (OB_FAIL(info.table_items_.push_back(table))) {
             LOG_WARN("failed to push back table item", K(ret));
+          } else if (OB_FAIL(info.upper_stmts_.push_back(this))) {
+            LOG_WARN("failed to push back stmt", K(ret));
           } else {
             find = true;
           }
@@ -3998,6 +4000,8 @@ int ObDMLStmt::collect_temp_table_infos(ObIArray<TempTableInfo> &temp_table_info
           LOG_WARN("failed to collect temp table infos", K(ret));
         } else if (OB_FAIL(info.table_items_.push_back(table))) {
           LOG_WARN("failed to push back table item", K(ret));
+        } else if (OB_FAIL(info.upper_stmts_.push_back(this))) {
+          LOG_WARN("failed to push back stmt", K(ret));
         } else if (OB_FAIL(temp_table_infos.push_back(info))) {
           LOG_WARN("failed to push back temp table info", K(ret));
         }

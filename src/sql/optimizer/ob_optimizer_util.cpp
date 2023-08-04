@@ -6393,7 +6393,8 @@ int ObOptimizerUtil::pushdown_filter_into_subquery(const ObDMLStmt &parent_stmt,
                                                    ObIArray<ObRawExpr*> &pushdown_filters,
                                                    ObIArray<ObRawExpr*> &candi_filters,
                                                    ObIArray<ObRawExpr*> &remain_filters,
-                                                   bool &can_pushdown)
+                                                   bool &can_pushdown,
+                                                   bool check_match_index/* = true*/)
 {
   int ret = OB_SUCCESS;
   bool has_rownum = false;
@@ -6407,7 +6408,8 @@ int ObOptimizerUtil::pushdown_filter_into_subquery(const ObDMLStmt &parent_stmt,
                                              opt_ctx,
                                              pushdown_filters,
                                              candi_filters,
-                                             remain_filters))) {
+                                             remain_filters,
+                                             check_match_index))) {
       LOG_WARN("failed to check pushdown filter", K(ret));
     } else if (candi_filters.empty()) {
       //do thing
@@ -6424,6 +6426,8 @@ int ObOptimizerUtil::pushdown_filter_into_subquery(const ObDMLStmt &parent_stmt,
       LOG_WARN("failed to check stmt has rownum", K(ret));
     } else if (subquery.has_limit() || subquery.has_sequence() ||
                subquery.is_contains_assignment() ||
+               subquery.is_unpivot_select() ||
+               subquery.is_dblink_stmt() ||
                has_rollup || has_rownum) {
       //can not pushdown do nothing
     } else if (OB_FAIL(check_pushdown_filter(parent_stmt,
@@ -6431,7 +6435,8 @@ int ObOptimizerUtil::pushdown_filter_into_subquery(const ObDMLStmt &parent_stmt,
                                              opt_ctx,
                                              pushdown_filters,
                                              candi_filters,
-                                             remain_filters))) {
+                                             remain_filters,
+                                             check_match_index))) {
       LOG_WARN("failed to check pushdown filter", K(ret));
     } else if (candi_filters.empty()) {
       //do thing
@@ -6450,19 +6455,24 @@ int ObOptimizerUtil::check_pushdown_filter(const ObDMLStmt &parent_stmt,
                                            ObOptimizerContext &opt_ctx,
                                            ObIArray<ObRawExpr*> &pushdown_filters,
                                            ObIArray<ObRawExpr*> &candi_filters,
-                                           ObIArray<ObRawExpr*> &remain_filters)
+                                           ObIArray<ObRawExpr*> &remain_filters,
+                                           bool check_match_index/* = true*/)
 {
   int ret = OB_SUCCESS;
   bool is_valid = false;
   ObSEArray<ObRawExpr *, 4> common_exprs;
   if (!parent_stmt.is_set_stmt() && subquery.is_set_stmt()) {
     //如果子查询是set stmt，只需要检查是否有下推的谓词overlap index
-    if (OB_FAIL(check_pushdown_filter_overlap_index(parent_stmt,
-                                                    opt_ctx,
-                                                    pushdown_filters,
-                                                    candi_filters,
-                                                    remain_filters))) {
-      LOG_WARN("failed to check pushdown filter overlap index", K(ret));
+    if (check_match_index) {
+      if (OB_FAIL(check_pushdown_filter_overlap_index(parent_stmt,
+                                                      opt_ctx,
+                                                      pushdown_filters,
+                                                      candi_filters,
+                                                      remain_filters))) {
+        LOG_WARN("failed to check pushdown filter overlap index", K(ret));
+      }
+    } else {
+      ret = candi_filters.assign(pushdown_filters);
     }
   } else if (OB_FAIL(get_groupby_win_func_common_exprs(subquery,
                                                       common_exprs,
@@ -6486,7 +6496,8 @@ int ObOptimizerUtil::check_pushdown_filter(const ObDMLStmt &parent_stmt,
                                                   common_exprs,
                                                   pushdown_filters,
                                                   candi_filters,
-                                                  remain_filters))) {
+                                                  remain_filters,
+                                                  check_match_index))) {
       LOG_WARN("failed to check pushdown filter for subquery", K(ret));
     }
   }
@@ -6604,7 +6615,8 @@ int ObOptimizerUtil::check_pushdown_filter_for_subquery(const ObDMLStmt &parent_
                                                         ObIArray<ObRawExpr*> &common_exprs,
                                                         ObIArray<ObRawExpr*> &pushdown_filters,
                                                         ObIArray<ObRawExpr*> &candi_filters,
-                                                        ObIArray<ObRawExpr*> &remain_filters)
+                                                        ObIArray<ObRawExpr*> &remain_filters,
+                                                        bool check_match_index/* = true*/)
 {
   int ret = OB_SUCCESS;
   if (parent_stmt.is_set_stmt()) {
@@ -6644,7 +6656,8 @@ int ObOptimizerUtil::check_pushdown_filter_for_subquery(const ObDMLStmt &parent_
                      expr->has_flag(CNT_AGG) ||
                      expr->has_flag(CNT_SUB_QUERY)) {
             is_simple_expr = false;
-          } else if (OB_FAIL(ObTransformUtils::check_column_match_index(opt_ctx.get_root_stmt(),
+          } else if (check_match_index &&
+                     OB_FAIL(ObTransformUtils::check_column_match_index(opt_ctx.get_root_stmt(),
                                                                         &parent_stmt,
                                                                         opt_ctx.get_sql_schema_guard(),
                                                                         static_cast<ObColumnRefRawExpr*>(column_exprs.at(j)),
@@ -6675,7 +6688,7 @@ int ObOptimizerUtil::check_pushdown_filter_for_subquery(const ObDMLStmt &parent_
     }
     if (OB_FAIL(ret)) {
       //do nothing
-    } else if (!is_match_index) {
+    } else if (check_match_index && !is_match_index) {
       candi_filters.reset();
       ret = remain_filters.assign(pushdown_filters);
     }
@@ -8718,5 +8731,238 @@ int ObOptimizerUtil::is_in_range_optimization_enabled(const ObGlobalHint &global
   } else {
     is_enabled = session_info->is_in_range_optimization_enabled();
   }
+  return ret;
+}
+
+int ObOptimizerUtil::pushdown_and_rename_filter_into_subquery(const ObDMLStmt &parent_stmt,
+                                                              const ObSelectStmt &subquery,
+                                                              int64_t table_id,
+                                                              ObOptimizerContext &opt_ctx,
+                                                              ObIArray<ObRawExpr *> &input_filters,
+                                                              ObIArray<ObRawExpr *> &push_filters,
+                                                              ObIArray<ObRawExpr *> &remain_filters,
+                                                              bool check_match_index)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> candi_filters;
+  bool can_pushdown = false;
+  ObSQLSessionInfo *session_info = opt_ctx.get_session_info();
+  ObRawExprFactory &expr_factory = opt_ctx.get_expr_factory();
+  if (!input_filters.empty() &&
+      OB_FAIL(pushdown_filter_into_subquery(parent_stmt,
+                                            subquery,
+                                            opt_ctx,
+                                            input_filters,
+                                            candi_filters,
+                                            remain_filters,
+                                            can_pushdown,
+                                            check_match_index))) {
+    LOG_WARN("pushdown filters into left query failed", K(ret));
+  } else if (!candi_filters.empty() &&
+            OB_FAIL(rename_pushdown_filter(parent_stmt, subquery,
+                                           table_id, session_info,
+                                           expr_factory,
+                                           candi_filters,
+                                           push_filters))) {
+    LOG_WARN("failed to rename pushdown filter", K(ret));
+  }
+  for (int64_t i = 0 ; OB_SUCC(ret) && i < remain_filters.count(); i ++){
+    ObRawExpr *part_push_filter = NULL;
+    bool can_pushdown_all = false;
+    if (OB_FAIL(split_or_filter_into_subquery(parent_stmt,
+                                              subquery,
+                                              table_id,
+                                              opt_ctx,
+                                              remain_filters.at(i),
+                                              part_push_filter,
+                                              can_pushdown_all,
+                                              check_match_index))) {
+      LOG_WARN("failed to push part of the filter", K(ret));
+    } else if (OB_UNLIKELY(can_pushdown_all)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("can not push the whole remain filter", K(ret), KPC(remain_filters.at(i)));
+    } else if (NULL != part_push_filter &&
+               OB_FAIL(push_filters.push_back(part_push_filter))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  return ret;
+}
+
+/**
+ * If the filter is an or predicate,
+ * we try to push part of it into the subquery
+ * e.g.
+ *   select * from (select a, count(*) as cnt from t1 group by a) v where a = 1 and cnt = 1 or a = 2;
+ *   We can not push the whole filter `a = 1 and cnt = 1 or a = 2`,
+ *   But we can push `a = 1 or a = 2` into the subquery.
+*/
+int ObOptimizerUtil::split_or_filter_into_subquery(const ObDMLStmt &parent_stmt,
+                                                   const ObSelectStmt &subquery,
+                                                   int64_t table_id,
+                                                   ObOptimizerContext &opt_ctx,
+                                                   ObRawExpr *filter,
+                                                   ObRawExpr *&push_filter,
+                                                   bool &can_pushdown_all,
+                                                   bool check_match_index)
+{
+  int ret = OB_SUCCESS;
+  push_filter = NULL;
+  ObRawExprFactory &expr_factory = opt_ctx.get_expr_factory();
+  ObSQLSessionInfo *session_info = opt_ctx.get_session_info();
+  if (OB_ISNULL(filter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else if (T_OP_OR != filter->get_expr_type()) {
+    // do nothing
+  } else {
+    ObOpRawExpr *or_pred = static_cast<ObOpRawExpr *>(filter);
+    ObSEArray<ObIArray<ObRawExpr*> *, 4> or_filter_params;
+    ObSEArray<const ObDMLStmt *, 4> parent_stmts;
+    ObSEArray<const ObSelectStmt *, 4> subqueries;
+    ObSEArray<int64_t, 4> table_ids;
+    ObArenaAllocator tmp_allocator;
+    for (int64_t i = 0; OB_SUCC(ret) && i < or_pred->get_param_count(); ++i) {
+      ObRawExpr *cur_expr = or_pred->get_param_expr(i);
+      ObIArray<ObRawExpr*> *param_exprs = NULL;
+      void *ptr = NULL;
+      if (OB_ISNULL(cur_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null expr", K(ret), KPC(or_pred));
+      } else if (OB_ISNULL(ptr = tmp_allocator.alloc(sizeof(ObSEArray<ObRawExpr*, 4>)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (FALSE_IT((param_exprs = new (ptr)ObSEArray<ObRawExpr*, 4>()))) {
+      } else if (T_OP_AND == cur_expr->get_expr_type()) {
+        ObOpRawExpr *and_pred = static_cast<ObOpRawExpr *>(cur_expr);
+        if (OB_FAIL(param_exprs->assign(and_pred->get_param_exprs()))) {
+          LOG_WARN("failed to assgin predicates", K(ret));
+        }
+      } else {
+        if (OB_FAIL(param_exprs->push_back(cur_expr))) {
+          LOG_WARN("failed to push back predicate", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(or_filter_params.push_back(param_exprs))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (OB_FAIL(parent_stmts.push_back(&parent_stmt))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (OB_FAIL(subqueries.push_back(&subquery))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (OB_FAIL(table_ids.push_back(table_id))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) &&
+        OB_FAIL(split_or_filter_into_subquery(parent_stmts,
+                                              subqueries,
+                                              table_ids,
+                                              or_filter_params,
+                                              opt_ctx,
+                                              push_filter,
+                                              can_pushdown_all,
+                                              check_match_index))) {
+      LOG_WARN("failed to split or fitler", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < or_filter_params.count(); i ++) {
+      if (OB_NOT_NULL(or_filter_params.at(i))) {
+        or_filter_params.at(i)->~ObIArray();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::split_or_filter_into_subquery(ObIArray<const ObDMLStmt *> &parent_stmts,
+                                                   ObIArray<const ObSelectStmt *> &subqueries,
+                                                   ObIArray<int64_t> &table_ids,
+                                                   ObIArray<ObIArray<ObRawExpr *>*> &or_filter_params,
+                                                   ObOptimizerContext &opt_ctx,
+                                                   ObRawExpr *&push_filter,
+                                                   bool &can_pushdown_all,
+                                                   bool check_match_index)
+{
+  int ret = OB_SUCCESS;
+  push_filter = NULL;
+  ObRawExprFactory &expr_factory = opt_ctx.get_expr_factory();
+  ObSQLSessionInfo *session_info = opt_ctx.get_session_info();
+  can_pushdown_all = true;
+  bool have_push_filter = true;
+  ObSEArray<ObSEArray<ObRawExpr*, 4>, 2> final_push_filters;
+  if (OB_UNLIKELY(parent_stmts.count() != subqueries.count()) ||
+      OB_UNLIKELY(subqueries.count() != table_ids.count()) ||
+      OB_UNLIKELY(table_ids.count() != or_filter_params.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param count", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && have_push_filter && i < or_filter_params.count(); ++i) {
+    ObSEArray<ObRawExpr*, 4> push_filters;
+    ObSEArray<ObRawExpr*, 4> remain_filters;
+    bool can_push_to_where = false;
+    if (OB_ISNULL(parent_stmts.at(i)) ||
+        OB_ISNULL(subqueries.at(i)) ||
+        OB_ISNULL(or_filter_params.at(i)) ||
+        OB_UNLIKELY(or_filter_params.at(i)->empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null stmt", K(ret));
+    } else if (OB_FAIL(pushdown_filter_into_subquery(*parent_stmts.at(i),
+                                                     *subqueries.at(i),
+                                                     opt_ctx,
+                                                     *or_filter_params.at(i),
+                                                     push_filters,
+                                                     remain_filters,
+                                                     can_push_to_where,
+                                                     check_match_index))) {
+      LOG_WARN("failed to pushdown filter", K(ret));
+    } else if (push_filters.empty()){
+      // AND pred can not be pushed
+      have_push_filter = false;
+      can_pushdown_all = false;
+    } else {
+      // Part/All of AND pred can be pushed
+      can_pushdown_all &= remain_filters.empty();
+      if (OB_FAIL(final_push_filters.push_back(push_filters))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && have_push_filter) {
+    ObSEArray<ObRawExpr *, 4> rename_and_exprs;
+    ObRawExpr *new_or_expr = NULL;
+    for (int64_t i = 0 ; OB_SUCC(ret) && i < final_push_filters.count() ; i ++) {
+      ObSEArray<ObRawExpr*, 4> rename_exprs;
+      ObRawExpr *rename_and_expr = NULL;
+      if (OB_FAIL(rename_pushdown_filter(*parent_stmts.at(i),
+                                         *subqueries.at(i),
+                                         table_ids.at(i),
+                                         session_info,
+                                         expr_factory,
+                                         final_push_filters.at(i),
+                                         rename_exprs))) {
+        LOG_WARN("failed to rename push down preds", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_and_expr(expr_factory,
+                                                        rename_exprs,
+                                                        rename_and_expr))) {
+        LOG_WARN("failed to build and expr", K(ret));
+      } else if (OB_FAIL(rename_and_exprs.push_back(rename_and_expr))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObRawExprUtils::build_or_exprs(expr_factory,
+                                                      rename_and_exprs,
+                                                      new_or_expr))) {
+      LOG_WARN("failed to build and expr", K(ret));
+    } else if (OB_FAIL(new_or_expr->formalize(session_info))) {
+      LOG_WARN("failed to formalize expr", K(ret));
+    } else if (OB_FAIL(new_or_expr->pull_relation_id())) {
+      LOG_WARN("failed to pull relation id and levels", K(ret));
+    } else {
+      push_filter = new_or_expr;
+    }
+  }
+
   return ret;
 }

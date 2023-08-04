@@ -68,7 +68,7 @@ int ObTransformerImpl::transform(ObDMLStmt *&stmt)
     LOG_WARN("failed to do transform dblink write", K(ret));
   } else if (trans_happended) {
     //dml write query will be executed in remote, do not need transform
-  } else if (OB_FAIL(SMART_CALL(get_stmt_trans_info(stmt)))) {
+  } else if (OB_FAIL(SMART_CALL(get_stmt_trans_info(stmt, true)))) {
     LOG_WARN("get_stmt_trans_info failed", K(ret));
   } else if (OB_FAIL(do_transform_pre_precessing(stmt))) {
     LOG_WARN("failed to do transform pre_precessing", K(ret));
@@ -90,28 +90,24 @@ int ObTransformerImpl::transform(ObDMLStmt *&stmt)
   return ret;
 }
 
-int ObTransformerImpl::get_stmt_trans_info(ObDMLStmt *stmt)
+int ObTransformerImpl::get_stmt_trans_info(ObDMLStmt *stmt, bool is_root)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
-  } else if (stmt->is_select_stmt()) {
-    int64_t size = 0;
-    if (OB_FAIL(static_cast<ObSelectStmt *>(stmt)->get_set_stmt_size(size))) {
-      LOG_WARN("get set stmt size failed", K(ret));
-    } else if (size > ObTransformerImpl::MAX_SET_STMT_SIZE_OF_COSTED_BASED_RELUES) {
-      ctx_->is_set_stmt_oversize_ = true;
-    }
+  } else if (OB_FAIL(ObTransformUtils::check_stmt_contain_oversize_set_stmt(stmt, ctx_->is_set_stmt_oversize_))) {
+    LOG_WARN("failed to check set stmt oversize");
   }
-  if (OB_SUCC(ret) && !ctx_->is_set_stmt_oversize_) {
-    ObSEArray<ObSelectStmt*, 4> child_stmts;
-    if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
-      LOG_WARN("failed to get child stmts", K(ret));
+  if (OB_SUCC(ret) && !ctx_->is_set_stmt_oversize_ && is_root) {
+    ObArray<ObDMLStmt::TempTableInfo> temp_table_infos;
+    if (OB_FAIL(stmt->collect_temp_table_infos(temp_table_infos))) {
+      LOG_WARN("failed to collect temp table infos", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && !ctx_->is_set_stmt_oversize_&& i < child_stmts.count(); i++) {
-      if (OB_FAIL(SMART_CALL(get_stmt_trans_info(child_stmts.at(i))))) {
-        LOG_WARN("get_stmt_trans_info failed", K(ret));
+    for (int64_t i = 0; OB_SUCC(ret) && !ctx_->is_set_stmt_oversize_ && i < temp_table_infos.count(); i++) {
+      if (OB_FAIL(SMART_CALL(ObTransformUtils::check_stmt_contain_oversize_set_stmt(temp_table_infos.at(i).temp_table_query_,
+                                                                                    ctx_->is_set_stmt_oversize_)))) {
+        LOG_WARN("check_contain_oversize_set_stmt failed", K(ret));
       }
     }
   }

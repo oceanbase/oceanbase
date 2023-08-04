@@ -59,6 +59,27 @@ public:
   bool is_local_interm_result_;
 };
 
+typedef ObIArray<ObRawExpr *> ObRawExprCondition;
+struct TableInfo {
+    TableInfo()
+    :table_filters_(),
+    table_item_(NULL),
+    upper_stmt_(NULL)
+    {}
+
+    virtual ~TableInfo(){}
+
+    TO_STRING_KV(
+      K_(table_filters),
+      K_(table_item),
+      K_(upper_stmt)
+    );
+    ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> table_filters_;
+    ObSEArray<ObRawExprCondition *, 4, common::ModulePageAllocator, true> filter_conditions_;
+    TableItem *table_item_;
+    ObDMLStmt* upper_stmt_;
+  };
+
 class ObSqlTempTableInfo
 {
 public:
@@ -69,13 +90,34 @@ public:
   virtual ~ObSqlTempTableInfo() {}
 
   TO_STRING_KV(K_(temp_table_id),
-               K_(table_name));
+               K_(table_name),
+               K_(table_infos));
 
+  static int collect_temp_tables(ObIAllocator &allocator,
+                                 ObDMLStmt &stmt,
+                                 ObIArray<ObSqlTempTableInfo*> &temp_table_infos,
+                                 ObQueryCtx *query_ctx,
+                                 bool do_collect_filter);
+  static int collect_temp_table_filters(ObDMLStmt *stmt,
+                                        TableItem *table,
+                                        ObIArray<ObRawExpr*> &table_filters,
+                                        ObIArray<ObRawExprCondition*> &filter_conditions);
+  static int collect_table_filters_in_joined_table(JoinedTable *table,
+                                              uint64_t table_id,
+                                              const ObSqlBitSet<> &table_ids,
+                                              ObIArray<ObRawExpr*> &table_filters,
+                                              ObIArray<ObRawExprCondition*> &filter_conditions);
+  static int get_candi_exprs(const ObSqlBitSet<> &table_ids,
+                             ObIArray<ObRawExpr*> &exprs,
+                             ObIArray<ObRawExpr*> &candi_exprs,
+                             ObIArray<ObRawExprCondition*> &candi_conditions);
 public:
   uint64_t temp_table_id_;
   common::ObString table_name_;
   ObSelectStmt *table_query_;
   ObLogicalOperator *table_plan_;
+
+  ObSEArray<TableInfo, 8, common::ModulePageAllocator, true> table_infos_;
 };
 
 } /* ns sql*/

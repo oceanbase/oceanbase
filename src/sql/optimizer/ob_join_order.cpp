@@ -7461,22 +7461,15 @@ int ObJoinOrder::generate_normal_subquery_paths()
   } else if (OB_ISNULL(helper.child_stmt_ = table_item->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::pushdown_filter_into_subquery(*parent_stmt,
-                                                                    *helper.child_stmt_,
-                                                                    get_plan()->get_optimizer_context(),
-                                                                    get_restrict_infos(),
-                                                                    candi_pushdown_quals,
-                                                                    helper.filters_,
-                                                                    can_pushdown))) {
-    LOG_WARN("failed to pushdown filter into subquery", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::rename_pushdown_filter(*parent_stmt,
-                                                            *helper.child_stmt_,
-                                                            table_id_,
-                                                            session_info,
-                                                            *expr_factory,
-                                                            candi_pushdown_quals,
-                                                            helper.pushdown_filters_))) {
-    LOG_WARN("failed to rename pushdown filter", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::pushdown_and_rename_filter_into_subquery(*parent_stmt,
+                                                                               *helper.child_stmt_,
+                                                                               table_id_,
+                                                                               get_plan()->get_optimizer_context(),
+                                                                               get_restrict_infos(),
+                                                                               helper.pushdown_filters_,
+                                                                               helper.filters_,
+                                                                               /*check_match_index*/false))) {
+        LOG_WARN("failed to push down filter into subquery", K(ret));
   } else if (OB_FAIL(generate_subquery_paths(helper))) {
     LOG_WARN("failed to generate subquery path", K(ret));
   }

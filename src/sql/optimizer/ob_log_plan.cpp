@@ -10368,6 +10368,9 @@ int ObLogPlan::add_candidate_plan(ObIArray<CandidatePlan> &current_plans,
       should_add = false;
       OPT_TRACE("containt match all fake cte, but not remote plan, will not add plan");
     }
+  } else if (new_plan.plan_tree_->get_contains_match_all_fake_cte() &&
+             !new_plan.plan_tree_->is_remote()) {
+    should_add = false;
   }
   for (int64_t i = current_plans.count() - 1;
        OB_SUCC(ret) && should_add && i >= 0; --i) {

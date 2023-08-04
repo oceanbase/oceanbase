@@ -58,7 +58,6 @@ struct ObTransformerCtx
     happened_cost_based_trans_(0),
     equal_sets_(),
     ignore_semi_infos_(),
-    used_table_filters_(),
     temp_table_ignore_stmts_(),
     eval_cost_(false),
     trans_list_loc_(0),
@@ -116,8 +115,6 @@ struct ObTransformerCtx
   EqualSets equal_sets_;
   //记录semi to inner改写中，代价竞争失败的semi info，避免下一轮迭代重复检查代价
   ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> ignore_semi_infos_;
-  //记录temp table优化过程中使用过的table filter
-  ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> used_table_filters_;
   ObSEArray<ObSelectStmt*, 8, common::ModulePageAllocator, true> temp_table_ignore_stmts_;
   bool eval_cost_;
   /* used for hint and outline below */
@@ -377,6 +374,12 @@ protected:
   { return hint.get_normal_hint(hint_type_); }
   ObItemType get_hint_type() const  { return hint_type_; }
 
+  int deep_copy_temp_table(ObDMLStmt &stmt,
+                           ObStmtFactory &stmt_factory,
+                           ObRawExprFactory &expr_factory,
+                           ObIArray<ObSelectStmt*> &old_temp_table_stmts,
+                           ObIArray<ObSelectStmt*> &new_temp_table_stmts);
+
 private:
   // pre-order transformation
   int transform_pre_order(common::ObIArray<ObParentDMLStmt> &parent_stmts,
@@ -403,12 +406,6 @@ private:
                               ObDMLStmt *stmt,
                               ObDMLStmt *&orgin_stmt,
                               ObDMLStmt *&root_stmt);
-
-  int deep_copy_temp_table(ObDMLStmt &stmt,
-                           ObStmtFactory &stmt_factory,
-                           ObRawExprFactory &expr_factory,
-                           ObIArray<ObSelectStmt*> &old_temp_table_stmts,
-                           ObIArray<ObSelectStmt*> &new_temp_table_stmts);
 
   int evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stms,
                     ObDMLStmt *&stmt,

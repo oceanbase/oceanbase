@@ -739,6 +739,11 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
     }
+    case XSOLAPI_GENERATE_WITH_CLAUSE: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
+                                      || 0 == val.get_varchar().case_compare("false"));
+      break;
+    }
     default:
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;
@@ -1303,6 +1308,59 @@ bool QbNameList::is_equal(const ObIArray<ObString> &qb_name_list) const
     bool all_found = true;
     for (int i = 0; all_found && i < qb_name_list.count(); ++i) {
       if (!has_qb_name(qb_name_list.at(i))) {
+        all_found = false;
+      }
+    }
+    if (all_found) {
+      bret = true;
+    }
+  }
+  return bret;
+}
+
+bool QbNameList::is_subset(const ObIArray<ObSelectStmt*> &stmts) const
+{
+  bool bret = false;
+  if (qb_names_.count() <= stmts.count()) {
+    bool all_found = true;
+    for (int i = 0; all_found && i < qb_names_.count(); ++i) {
+      bool find = false;
+      ObString stmt_qb_name;
+      for (int j = 0; !find && j < stmts.count(); j ++) {
+        int ret = OB_SUCCESS;
+        if (OB_ISNULL(stmts.at(j))) {
+          LOG_WARN("unexpected null stmt");
+        } else if (OB_FAIL(stmts.at(j)->get_qb_name(stmt_qb_name))) {
+          LOG_WARN("failed to get qb name");
+        } else if (0 == stmt_qb_name.case_compare(qb_names_.at(i))) {
+          find = true;
+        }
+      }
+      if (!find) {
+        all_found = false;
+      }
+    }
+    if (all_found) {
+      bret = true;
+    }
+  }
+  return bret;
+}
+
+bool QbNameList::is_subset(const ObIArray<ObString> &qb_name_list) const
+{
+  bool bret = false;
+  if (qb_names_.count() <= qb_name_list.count()) {
+    bool all_found = true;
+    for (int i = 0; all_found && i < qb_names_.count(); ++i) {
+      bool find = false;
+      ObString stmt_qb_name;
+      for (int j = 0; !find && j < qb_name_list.count(); j ++) {
+        if (0 == qb_name_list.at(j).case_compare(qb_names_.at(i))) {
+          find = true;
+        }
+      }
+      if (!find) {
         all_found = false;
       }
     }

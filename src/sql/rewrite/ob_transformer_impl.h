@@ -42,7 +42,6 @@ class ObTransformerImpl
 {
   static const int64_t DEFAULT_ITERATION_COUNT = 10;
   static const int64_t MAX_RULE_COUNT = 64;
-  static const uint64_t MAX_SET_STMT_SIZE_OF_COSTED_BASED_RELUES = 5;
 public:
   ObTransformerImpl(ObTransformerCtx *ctx)
     : ctx_(ctx),
@@ -147,7 +146,7 @@ public:
 private:
 
   int collect_trans_stat(const ObTransformRule &rule);
-  int get_stmt_trans_info(ObDMLStmt *stmt);
+  int get_stmt_trans_info(ObDMLStmt *stmt, bool is_root);
   void print_trans_stat();
 
   int finalize_exec_params(ObDMLStmt *stmt);
