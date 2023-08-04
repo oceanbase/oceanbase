@@ -6392,7 +6392,9 @@ OB_DEF_DESERIALIZE(ObTableSchema)
 
     ObRowkey rowkey;
     rowkey.assign(obj_array, ROW_KEY_CNT);
-    LST_DO_CODE(OB_UNIS_DECODE, rowkey);
+    if (FAILEDx(rowkey.deserialize(buf, data_len, pos, true))) {
+      LOG_WARN("fail to deserialize transintion point rowkey", KR(ret));
+    }
 
     if (OB_FAIL(ret)) {
       LOG_WARN("Fail to deserialize data, ", K(ret));
@@ -6402,7 +6404,9 @@ OB_DEF_DESERIALIZE(ObTableSchema)
 
     obj_array[0].reset();
     rowkey.assign(obj_array, ROW_KEY_CNT);
-    LST_DO_CODE(OB_UNIS_DECODE, rowkey);
+    if (FAILEDx(rowkey.deserialize(buf, data_len, pos, true))) {
+      LOG_WARN("fail to deserialize interval range rowkey", KR(ret));
+    }
     if (OB_FAIL(ret)) {
       LOG_WARN("Fail to deserialize data, ", K(ret));
     } else if (OB_FAIL(set_interval_range(rowkey))) {
