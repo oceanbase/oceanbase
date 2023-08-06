@@ -18,6 +18,7 @@ using namespace oceanbase::lib;
 bool ObQuestionmarkEqualCtx::compare_const(const ObConstRawExpr &left,
                                            const ObConstRawExpr &right)
 {
+  int &ret = err_code_;
   bool bret = false;
   if (left.get_expr_type() != right.get_expr_type() ||
       left.get_result_type() != right.get_result_type() ||
@@ -38,7 +39,11 @@ bool ObQuestionmarkEqualCtx::compare_const(const ObConstRawExpr &left,
       ObPCParamEqualInfo equal_info;
       equal_info.first_param_idx_ = left.get_value().get_unknown();
       equal_info.second_param_idx_ = right.get_value().get_unknown();
-      err_code_ = equal_pairs_.push_back(equal_info);
+      if (equal_info.first_param_idx_ != equal_info.second_param_idx_) {
+        if (OB_FAIL(equal_pairs_.push_back(equal_info))) {
+          LOG_WARN("failed to push back equal_info", K(ret));
+        }
+      }
     }
   }
   return bret;
