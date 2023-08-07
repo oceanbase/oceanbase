@@ -431,6 +431,11 @@ double FilterCompare::get_selectivity(ObRawExpr *expr)
 {
   bool found = false;
   double selectivity = 1;
+  if (OB_NOT_NULL(expr) && T_FUN_LABEL_SE_LABEL_VALUE_CMP_LE == expr->get_expr_type()) {
+    // security filter should be calc firstly
+    found = true;
+    selectivity = -1.0;
+  }
   for (int64_t i = 0; !found && i < predicate_selectivities_.count(); i++) {
     if (predicate_selectivities_.at(i).expr_ == expr) {
       found = true;
