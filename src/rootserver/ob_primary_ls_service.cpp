@@ -140,14 +140,22 @@ int ObPrimaryLSService::set_tenant_dropping_status_(
     const common::ObIArray<ObLSStatusMachineParameter> &status_machine_array, int64_t &task_cnt)
 {
   int ret = OB_SUCCESS;
+  ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
+  } else if (OB_ISNULL(tenant_info_loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant_info_loader is null", KR(ret), KP(tenant_info_loader));
   } else {
     share::ObLSAttrOperator ls_operator(MTL_ID(), GCTX.sql_proxy_);
     const ObTenantSwitchoverStatus working_sw_status = share::NORMAL_SWITCHOVER_STATUS;
+    share::SCN tenant_sync_scn, sys_ls_target_scn;
+    tenant_sync_scn.set_invalid();
+    sys_ls_target_scn.set_invalid();
     for (int64_t i = 0; OB_SUCC(ret) && i < status_machine_array.count() && !has_set_stop(); ++i) {
       const share::ObLSAttr &attr = status_machine_array.at(i).ls_info_;
+      const share::ObLSStatusInfo &info = status_machine_array.at(i).status_info_;
       if (attr.get_ls_id().is_sys_ls()) {
         if (attr.ls_is_normal()) {
           if (OB_FAIL(ls_operator.update_ls_status(attr.get_ls_id(),
@@ -157,34 +165,50 @@ int ObPrimaryLSService::set_tenant_dropping_status_(
           task_cnt++;
           LOG_INFO("[PRIMARY_LS_SERVICE] set sys ls to pre tenant dropping", KR(ret), K(attr));
         }
+        if (OB_FAIL(ret)) {
+        } else if (!attr.ls_is_normal() && !attr.ls_is_pre_tenant_dropping()) {
+          // if attr is normal, it means that the status has been switched to pre_tenant_dropping in this round
+          // if attr is pre_tenant_dropping, it means that the status has been changed in a previous round
+          // the other attr is tenant_dropping, we should skip checking
+        } else if (OB_FAIL(ls_operator.get_pre_tenant_dropping_ora_rowscn(sys_ls_target_scn))) {
+          LOG_WARN("fail to get sys_ls_end_scn", KR(ret), K(tenant_id_));
+        } else if (OB_FAIL(tenant_info_loader->get_sync_scn(tenant_sync_scn))) {
+          LOG_WARN("get tenant_sync_scn failed", KR(ret));
+        } else if (OB_UNLIKELY(!tenant_sync_scn.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tenant_sync_scn not valid", KR(ret), K(tenant_sync_scn));
+        } else if (tenant_sync_scn < sys_ls_target_scn) {
+          ret = OB_NEED_WAIT;
+          LOG_WARN("wait some time, tenant_sync_scn cannot be smaller than sys_ls_target_scn", KR(ret),
+                  K(tenant_id_), K(tenant_sync_scn), K(sys_ls_target_scn));
+        }
         // find SYS LS
         break;
       }
     }//end for set sys ls change to pre tenant dropping
-
-    //TODO check all user ls is large than sys ls pre_tenant_dropping
     for (int64_t i = 0; OB_SUCC(ret) && i < status_machine_array.count() && !has_set_stop(); ++i) {
       const share::ObLSAttr &attr = status_machine_array.at(i).ls_info_;
-      if (attr.get_ls_id().is_sys_ls()) {
-        //no need process sys ls
-      } else if (attr.ls_is_creating()) {
-        //drop the status,
-        if (OB_FAIL(ls_operator.delete_ls(attr.get_ls_id(), attr.get_ls_status(), working_sw_status))) {
-          LOG_WARN("failed to remove ls not normal", KR(ret), K(attr));
-        }
-        LOG_INFO("[PRIMARY_LS_SERVICE] tenant is dropping, delete ls in creating", KR(ret), K(attr));
+      if (OB_UNLIKELY(!attr.is_valid()) || attr.get_ls_id().is_sys_ls()) {
+        // invalid attr might happens if the ls is deleted in __all_ls table but still exists in __all_ls_status table
+        // no need process sys ls
+      } else if (!attr.ls_is_tenant_dropping()) {
         task_cnt++;
-      } else {
-        //no matter the status is in normal or dropping
-        //may be the status in status info is created
-        if (!attr.ls_is_tenant_dropping()) {
-          task_cnt++;
+        if (attr.ls_is_creating()) {
+          if (OB_FAIL(ls_operator.delete_ls(attr.get_ls_id(), attr.get_ls_status(), working_sw_status))) {
+            LOG_WARN("failed to remove ls not normal", KR(ret), K(attr));
+          }
+          LOG_INFO("[PRIMARY_LS_SERVICE] tenant is dropping, delete ls in creating", KR(ret),
+              K(attr), K(tenant_sync_scn), K(sys_ls_target_scn));
+        } else if (!attr.ls_is_tenant_dropping()) {
+          //no matter the status is in normal or dropping
+          //may be the status in status info is created
           if (OB_FAIL(ls_operator.update_ls_status(
                   attr.get_ls_id(), attr.get_ls_status(),
                   share::OB_LS_TENANT_DROPPING, working_sw_status))) {
             LOG_WARN("failed to update ls status", KR(ret), K(attr));
           }
-          LOG_INFO("[PRIMARY_LS_SERVICE] set ls to tenant dropping", KR(ret), K(attr), K(i));
+          LOG_INFO("[PRIMARY_LS_SERVICE] set ls to tenant dropping", KR(ret), K(attr), K(i),
+              K(tenant_sync_scn), K(sys_ls_target_scn));
         }
       }
     }//end for

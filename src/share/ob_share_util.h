@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_SHARE_OB_SHARE_UTIL_H_
 #define OCEANBASE_SHARE_OB_SHARE_UTIL_H_
 #include "share/ob_define.h"
+#include "share/scn.h"
 namespace oceanbase
 {
 namespace common
@@ -67,6 +68,15 @@ public:
   static int parse_all_server_list(
     const ObArray<ObAddr> &excluded_server_list,
     ObArray<ObAddr> &config_all_server_list);
+  // get ora_rowscn from one row
+  // @params[in]: tenant_id, the table owner
+  // @params[in]: sql, the sql should be "select ORA_ROWSCN from xxx", where count() is 1
+  // @params[out]: the ORA_ROWSCN
+  static int get_ora_rowscn(
+    common::ObISQLClient &client,
+    const uint64_t tenant_id,
+    const ObSqlString &sql,
+    SCN &ora_rowscn);
 
   static bool is_tenant_enable_rebalance(const uint64_t tenant_id);
 };

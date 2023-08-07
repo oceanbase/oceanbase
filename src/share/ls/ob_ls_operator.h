@@ -336,6 +336,7 @@ public:
   static ObLSOperationType get_ls_operation_by_status(const ObLSStatus &ls_status);
   int get_ls_attr(const ObLSID &id, const bool for_update, common::ObISQLClient &client,
       ObLSAttr &ls_attr, bool only_existing_ls = true);
+  int get_pre_tenant_dropping_ora_rowscn(share::SCN &pre_tenant_dropping_ora_rowscn);
   /*
    * description: get all ls with snapshot 
    * @param[in] read_scn:the snapshot of read_version

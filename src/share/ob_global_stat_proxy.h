@@ -74,6 +74,9 @@ public:
 
   int update_current_data_version(const uint64_t current_data_version);
   int get_current_data_version(uint64_t &current_data_version);
+  static int get_target_data_version_ora_rowscn(
+    const uint64_t tenant_id,
+    share::SCN &target_data_version_ora_rowscn);
   int update_target_data_version(const uint64_t target_data_version);
   int get_target_data_version(const bool for_update, uint64_t &target_data_version);
 

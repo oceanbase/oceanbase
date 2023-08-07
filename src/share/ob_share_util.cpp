@@ -272,6 +272,42 @@ int ObShareUtil::parse_all_server_list(
   return ret;
 }
 
+int ObShareUtil::get_ora_rowscn(
+    common::ObISQLClient &client,
+    const uint64_t tenant_id,
+    const ObSqlString &sql,
+    SCN &ora_rowscn)
+{
+  int ret = OB_SUCCESS;
+  uint64_t ora_rowscn_val = 0;
+  ora_rowscn.set_invalid();
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    if (OB_FAIL(client.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), K(sql));
+    } else if (NULL == (result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get sql result", KR(ret));
+    } else if (OB_FAIL(result->next())) {
+      LOG_WARN("fail to get next row", KR(ret));
+    } else {
+      EXTRACT_INT_FIELD_MYSQL(*result, "ORA_ROWSCN", ora_rowscn_val, int64_t);
+      if (OB_FAIL(ora_rowscn.convert_for_inner_table_field(ora_rowscn_val))) {
+        LOG_WARN("fail to convert val to SCN", KR(ret), K(ora_rowscn_val));
+      }
+    }
+
+    int tmp_ret = OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      //nothing todo
+    } else if (OB_ITER_END != (tmp_ret = result->next())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get more row than one", KR(ret), KR(tmp_ret));
+    }
+  }
+  return ret;
+}
+
 bool ObShareUtil::is_tenant_enable_rebalance(const uint64_t tenant_id)
 {
   bool bret = false;
