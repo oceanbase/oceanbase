@@ -12306,6 +12306,8 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12427: __all_virtual_import_table_task_history
 # 12428: __all_virtual_import_stmt_exec_history
 
+# 12429: __all_virtual_data_activity_metrics
+
 #
 # 余留位置
 #
