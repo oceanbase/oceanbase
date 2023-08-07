@@ -105,7 +105,7 @@ int ObTxCtxMemtableMgr::create_memtable(const SCN last_replay_scn,
       LOG_WARN("tx ctx memtable register_common_checkpoint failed", K(ret), K(ls_id_));
     } else {
       LOG_INFO("tx ctx memtable mgr create memtable successfully",
-                K(ls_id_));
+               K(ls_id_), KPC(tx_ctx_memtable));
     }
   }
 

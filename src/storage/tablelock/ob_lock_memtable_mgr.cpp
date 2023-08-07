@@ -123,7 +123,7 @@ int ObLockMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
   } else if (OB_FAIL(ls_tx_svr->register_common_checkpoint(checkpoint::LOCK_MEMTABLE_TYPE, memtable))) {
     LOG_WARN("lock memtable register_common_checkpoint failed", K(ret), K(ls_id_));
   } else {
-    LOG_INFO("create lock memtable successfully", K_(ls_id), K(memtable));
+    LOG_INFO("create lock memtable successfully", K_(ls_id), K(memtable), KPC(this));
   }
 
   return ret;
