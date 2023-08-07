@@ -1032,17 +1032,16 @@ void TestColumnDecoder::agg_min_or_max_test(bool is_min,bool is_full_block)
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed0, row));
     ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
   }
-  for (int64_t i = ROW_CNT - 2; i < ROW_CNT; ++i) {
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed0, row));
+  for (int64_t i = ROW_CNT - 2; i < ROW_CNT-1; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed1, row));
     ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
   }
-
-  // // for (int64_t j = 0; j < full_column_cnt_; ++j) {
-  // //   row.storage_datums_[j].set_null();
-  // // }
-  // // for (int64_t i = ROW_CNT - 1; i < ROW_CNT; ++i) {
-  // //   ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
-  // // }
+  for (int64_t j = 0; j < full_column_cnt_; ++j) {
+    row.storage_datums_[j].set_null();
+  }
+  for (int64_t i = ROW_CNT - 1; i < ROW_CNT; ++i) {
+    ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
+  }
   char *buf = NULL;
   int64_t size = 0;
   ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));

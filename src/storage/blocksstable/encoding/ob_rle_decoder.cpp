@@ -132,18 +132,7 @@ int ObRLEDecoder::get_aggregate_result(
   const int64_t dict_meta_length = ctx.col_header_->length_ - meta_header_->offset_;
   if (dict_count > 0) {
     if(row_cap == ctx.micro_block_header_->row_count_){
-      ObDictDecoderIterator traverse_it = dict_decoder_.begin(&ctx, dict_meta_length);
-      ObDictDecoderIterator end_it = dict_decoder_.end(&ctx, dict_meta_length);
-      int64_t i =0;
-      while (OB_SUCC(ret) && traverse_it != end_it) {
-        if (OB_FAIL(datum_buf[i].from_obj(*traverse_it))){
-          LOG_WARN("Failed to trans to datum",K(ret),K(*traverse_it));
-        } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))){
-          LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[i]), K(agg_info));
-        }
-        ++traverse_it;
-        ++i;
-      }
+      dict_decoder_.get_aggregate_result(ctx, row_ids, row_cap, agg_info, datum_buf);
     } else {
       const ObIntArrayFuncTable &row_id_array
           = ObIntArrayFuncTable::instance(meta_header_->row_id_byte_);
@@ -152,6 +141,7 @@ int ObRLEDecoder::get_aggregate_result(
       const int64_t ref_count = meta_header_->count_;
 
       common::ObObj cell;
+      cell.set_meta_type(ctx.obj_meta_);
       // Generate dict refs with minimum binary search call
       int64_t row_id = 0;
       int64_t ref_table_pos = 0;
@@ -162,34 +152,26 @@ int ObRLEDecoder::get_aggregate_result(
       if (row_cap > 1) {
         monotonic_inc = row_ids[1] > row_ids[0];
       }
-      int64_t step = monotonic_inc ? 1 : -1;
+      const int64_t step = monotonic_inc ? 1 : -1;
       int64_t trav_idx = monotonic_inc ? 0 : row_cap - 1;
       int64_t trav_cnt = 0;
       ObDictDecoderIterator begin_it = dict_decoder_.begin(&ctx, dict_meta_length);
       while (OB_SUCC(ret) && trav_cnt < row_cap) {
         row_id = row_ids[trav_idx];
-        if (ref_table_pos == ref_count || row_id < next_ref_row_id) {
-        } else if (row_id == next_ref_row_id) {
-          ++ref_table_pos;
+        if (ref_table_pos != ref_count && row_id >= next_ref_row_id) {
+          if (row_id == next_ref_row_id) {
+            ++ref_table_pos;
+          } else {
+            ref_table_pos =
+                row_id_array.upper_bound_(meta_header_->payload_, 0, ref_count, row_id);          
+          }
           if (ref_table_pos < ref_count) {
             next_ref_row_id = row_id_array.at_(meta_header_->payload_, ref_table_pos);
-          }
+          }  
           curr_ref = ref_array.at_(meta_header_->payload_ + ref_offset_, ref_table_pos - 1);
-          cell = *(begin_it + curr_ref);
-          if (OB_FAIL(datum_buf[trav_cnt].from_obj(cell))){
-            LOG_WARN("Failed to trans to datum",K(ret),K(cell));
-          } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[trav_cnt]))){
-            LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[trav_cnt]), K(agg_info));
-          }
-        } else {
-          ref_table_pos =
-              row_id_array.upper_bound_(meta_header_->payload_, 0, ref_count, row_id);
-          if (ref_table_pos < ref_count) {
-            next_ref_row_id = row_id_array.at_(meta_header_->payload_, ref_table_pos);
-          }
-          curr_ref = ref_array.at_(meta_header_->payload_ + ref_offset_, ref_table_pos - 1);
-          cell = *(begin_it + curr_ref);
-          if (OB_FAIL(datum_buf[trav_cnt].from_obj(cell))){
+          if (OB_FAIL(dict_decoder_.decode(ctx.obj_meta_, cell, curr_ref, dict_meta_length))) {
+            LOG_WARN("failed to decode dict", K(ret), K(curr_ref));
+          } else if (OB_FAIL(datum_buf[trav_cnt].from_obj(cell))){
             LOG_WARN("Failed to trans to datum",K(ret),K(cell));
           } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[trav_cnt]))){
             LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[trav_cnt]), K(agg_info));

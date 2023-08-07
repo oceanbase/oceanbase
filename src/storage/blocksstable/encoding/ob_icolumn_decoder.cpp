@@ -272,22 +272,7 @@ int ObIColumnDecoder::get_aggregate_result(
   ObMicroBlockAggInfo<ObDatum> &agg_info,
   ObDatum *datum) const
 {
-  int ret = OB_SUCCESS;
-  switch (ctx.col_header_->type_){
-    //supported type
-    case ObColumnHeader::RAW :
-    case ObColumnHeader::DICT :
-    case ObColumnHeader::RLE :
-    case ObColumnHeader::CONST :
-    case ObColumnHeader::INTEGER_BASE_DIFF: break;
-    //unsupported type
-    case ObColumnHeader::STRING_DIFF:
-    case ObColumnHeader::STRING_PREFIX:
-    case ObColumnHeader::HEX_PACKING:
-    case ObColumnHeader::COLUMN_EQUAL:
-    case ObColumnHeader::COLUMN_SUBSTR: 
-    ret = OB_NOT_SUPPORTED;
-  }
+  int ret = OB_NOT_SUPPORTED;
   return ret;
 }
 

@@ -88,55 +88,55 @@ public:
   virtual ~TestStringPrefixDecoder() {}
 };
 
-// TEST_F(TestIntBaseDiffDecoder, filter_pushdown_comaprison_neg_test)
-// {
-//   filter_pushdown_comaprison_neg_test();
-// }
+TEST_F(TestIntBaseDiffDecoder, filter_pushdown_comaprison_neg_test)
+{
+  filter_pushdown_comaprison_neg_test();
+}
 
-// PUSHDOWN_GENERAL_TEST(TestRetroPDDecoder);
-// PUSHDOWN_GENERAL_TEST(TestDictDecoder);
-// PUSHDOWN_GENERAL_TEST(TestRLEDecoder);
-// PUSHDOWN_GENERAL_TEST(TestIntBaseDiffDecoder);
+PUSHDOWN_GENERAL_TEST(TestRetroPDDecoder);
+PUSHDOWN_GENERAL_TEST(TestDictDecoder);
+PUSHDOWN_GENERAL_TEST(TestRLEDecoder);
+PUSHDOWN_GENERAL_TEST(TestIntBaseDiffDecoder);
 
-// TEST_F(TestHexDecoder, basic_filter_pushdown_op_test_eq_ne_nu_nn)
-// {
-//   basic_filter_pushdown_eq_ne_nu_nn_test();
-// }
+TEST_F(TestHexDecoder, basic_filter_pushdown_op_test_eq_ne_nu_nn)
+{
+  basic_filter_pushdown_eq_ne_nu_nn_test();
+}
 
-// TEST_F(TestDictDecoder, batch_decode_to_datum_condense_test)
-// {
-//   batch_decode_to_datum_test(true);
-// }
+TEST_F(TestDictDecoder, batch_decode_to_datum_condense_test)
+{
+  batch_decode_to_datum_test(true);
+}
 
-// TEST_F(TestDictDecoder, batch_decode_to_datum_test)
-// {
-//   batch_decode_to_datum_test();
-// }
+TEST_F(TestDictDecoder, batch_decode_to_datum_test)
+{
+  batch_decode_to_datum_test();
+}
 
-// TEST_F(TestRLEDecoder, batch_decode_to_datum_test)
-// {
-//   batch_decode_to_datum_test();
-// }
+TEST_F(TestRLEDecoder, batch_decode_to_datum_test)
+{
+  batch_decode_to_datum_test();
+}
 
-// TEST_F(TestIntBaseDiffDecoder, batch_decode_to_datum_test)
-// {
-//   batch_decode_to_datum_test();
-// }
+TEST_F(TestIntBaseDiffDecoder, batch_decode_to_datum_test)
+{
+  batch_decode_to_datum_test();
+}
 
-// TEST_F(TestHexDecoder, batch_decode_to_datum_test)
-// {
-//   batch_decode_to_datum_test();
-// }
+TEST_F(TestHexDecoder, batch_decode_to_datum_test)
+{
+  batch_decode_to_datum_test();
+}
 
-// TEST_F(TestStringDiffDecoder, batch_decode_to_datum_test)
-// {
-//   batch_decode_to_datum_test();
-// }
+TEST_F(TestStringDiffDecoder, batch_decode_to_datum_test)
+{
+  batch_decode_to_datum_test();
+}
 
-// TEST_F(TestStringPrefixDecoder, batch_decode_to_datum_test)
-// {
-//   batch_decode_to_datum_test();
-// }
+TEST_F(TestStringPrefixDecoder, batch_decode_to_datum_test)
+{
+  batch_decode_to_datum_test();
+}
 
 TEST_F(TestDictDecoder, get_min_or_max_test_tt)
 {

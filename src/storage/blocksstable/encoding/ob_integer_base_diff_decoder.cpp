@@ -609,7 +609,6 @@ int ObIntegerBaseDiffDecoder::get_aggregate_result(
 {
   int ret = OB_SUCCESS;
   uint32_t datum_len = 0;
-
   if (OB_FAIL(get_uint_data_datum_len(
       ObDatum::get_obj_datum_map_type(ctx.obj_meta_.get_type()),
       datum_len))) {
@@ -652,7 +651,7 @@ int ObIntegerBaseDiffDecoder::get_aggregate_result(
       uint64_t res_value = 0;
       bool is_min = agg_info.get_is_min();
       for (int64_t i = 0; i < row_cap; ++i) {
-        if (ctx.has_extend_value() && datum_buf[i].is_null()) {
+        if (ctx.has_extend_value()) {
           // Skip
         } else {
           row_id = row_ids[i];

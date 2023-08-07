@@ -631,14 +631,12 @@ int ObDictDecoder::get_aggregate_result(
         LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[0]), K(agg_info));
       }
     } else {
-      int64_t i = 0;
-      for (; OB_SUCC(ret) && traverse_it != end_it; ++traverse_it){
+      for (int64_t i = 0; OB_SUCC(ret) && traverse_it != end_it; ++traverse_it, ++i ){
         if (OB_FAIL(datum_buf[i].from_obj(*traverse_it))){
           LOG_WARN("Failed to trans to datum",K(ret),K(*traverse_it));
         } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))){
           LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[i]), K(agg_info));
         }
-        ++i;
       }   
     }  
   } else {
@@ -649,9 +647,10 @@ int ObDictDecoder::get_aggregate_result(
     int64_t ref = 0;
     int64_t res_ref = 0;
     ObObj cell;
+    cell.set_meta_type(ctx.obj_meta_);
     ObBitmap ref_map(*ctx.allocator_);
     ref_map.init(count,false);
-    
+    const bool is_min = agg_info.get_is_min();
     for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
       row_id = row_ids[i];
       ref = 0;
@@ -660,18 +659,21 @@ int ObDictDecoder::get_aggregate_result(
       } else {
         if ((ref < count) && !ref_map.test(ref)){
           if (meta_header_->is_sorted_dict()){
-            if ((!agg_info.get_is_min() && res_ref < ref) 
-                || (agg_info.get_is_min() && res_ref > ref)){
-              decode(ctx.obj_meta_, cell, ref, ctx.col_header_->length_);
-              if (OB_FAIL(datum_buf[i].from_obj(cell))){
+            if ((!is_min && res_ref < ref) 
+                || (is_min && res_ref > ref)){
+              if(OB_FAIL(decode(ctx.obj_meta_, cell, ref, ctx.col_header_->length_))){
+                LOG_WARN("Failed to decode", K(ret), K(ref), K(ctx.obj_meta_));
+              } else if (OB_FAIL(datum_buf[i].from_obj(cell))){
                 LOG_WARN("Failed to trans to datum",K(ret),K(cell));
               } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))){
                 LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[i]), K(agg_info));
               }
+              res_ref = ref;
             }
           } else {
-            decode(ctx.obj_meta_, cell, ref, ctx.col_header_->length_);
-            if (OB_FAIL(datum_buf[i].from_obj(cell))){
+            if(OB_FAIL(decode(ctx.obj_meta_, cell, ref, ctx.col_header_->length_))){
+              LOG_WARN("Failed to decode", K(ret), K(ref), K(ctx.obj_meta_));
+            } else if (OB_FAIL(datum_buf[i].from_obj(cell))){
               LOG_WARN("Failed to trans to datum",K(ret),K(cell));
             } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))){
               LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[i]), K(agg_info));

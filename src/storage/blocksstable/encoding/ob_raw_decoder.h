@@ -52,12 +52,11 @@ typedef void (*fix_filter_func)(
             sql::ObBitVector &res);
 
 typedef void (*raw_fix_int_get_min_or_max_func)(
-            const int64_t col_len,
             const char *base_data,
             const int64_t *row_ids,
             const int64_t row_cap,
             bool is_min,
-            ObDatum &datum);
+            ObDatum &datum);        
 class ObRawDecoder : public ObIColumnDecoder
 {
 public:

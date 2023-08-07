@@ -199,14 +199,12 @@ template <bool IS_SIGNED_SC, int32_t STORE_LEN_TAG, int32_t DATUM_LEN_TAG, int32
 struct RawFixIntGetMinMaxFunc_T
 {
   static void raw_fix_int_get_min_or_max_func(
-      const int64_t col_len,
       const char *base_data,
       const int64_t *row_ids,
       const int64_t row_cap,
       bool is_min,
       ObDatum &datum)
   {
-    UNUSED(col_len);
     typedef typename ObEncodingTypeInference<IS_SIGNED_SC, STORE_LEN_TAG>::Type StoreType;
     typedef typename ObEncodingTypeInference<IS_SIGNED_SC, DATUM_LEN_TAG>::Type DatumType;
     const StoreType *input = reinterpret_cast<const StoreType *>(base_data);
@@ -731,7 +729,7 @@ int ObRawDecoder::get_aggregate_result(
         [get_value_len_tag_map()[store_len]]
         [get_value_len_tag_map()[get_datum_store_len(map_type)]]
         [get_store_class_tag_map()[store_class]];
-      get_min_or_max_func(ctx.col_header_->length_, meta_data_, row_ids, row_cap, agg_info.get_is_min(), datum_buf[0]);
+      get_min_or_max_func(meta_data_, row_ids, row_cap, agg_info.get_is_min(), datum_buf[0]);
     if (OB_FAIL(agg_info.update_min_or_max(datum_buf[0]))){
       LOG_WARN("Failed to update_min_or_max",K(ret),K(datum_buf[0]));
     }
