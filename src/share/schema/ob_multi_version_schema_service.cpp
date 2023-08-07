@@ -1783,10 +1783,14 @@ int ObMultiVersionSchemaService::broadcast_tenant_schema(
       LOG_INFO("add sys table schema", KR(ret), K(tenant_id), KPC(table_schema));
     }
   }
-  ObArray<ObSimpleTableSchemaV2> simple_table_schemas;
+  auto attr = SET_USE_500("BroFullSchema", ObCtxIds::SCHEMA_SERVICE);
+  ObArenaAllocator allocator(attr);
+  ObArray<ObSimpleTableSchemaV2*> simple_table_schemas(
+                  common::OB_MALLOC_NORMAL_BLOCK_SIZE,
+                  common::ModulePageAllocator(allocator));
   ObSchemaMgr *schema_mgr_for_cache = NULL;
   const bool refresh_full_schema = true;
-  if (FAILEDx(convert_to_simple_schema(table_schemas, simple_table_schemas))) {
+  if (FAILEDx(convert_to_simple_schema(allocator, table_schemas, simple_table_schemas))) {
     LOG_WARN("failed to convert", KR(ret), K(tenant_id));
   } else if (OB_FAIL(schema_mgr_for_cache_map_.get_refactored(
              tenant_id, schema_mgr_for_cache))) {

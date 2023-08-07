@@ -69,26 +69,25 @@ namespace schema
  *
  *********************************************************************/
 
-template<typename T>
+template<typename T, typename TABLE_SCHEMA>
 int ObSchemaRetrieveUtils::retrieve_table_schema(
     const uint64_t tenant_id,
     const bool check_deleted,
     T &result,
     ObIAllocator &allocator,
-    ObIArray<ObTableSchema *> &table_schema_array)
+    ObIArray<TABLE_SCHEMA *> &table_schema_array)
 {
   int ret = common::OB_SUCCESS;
   uint64_t prev_table_id = common::OB_INVALID_ID;
   ObArenaAllocator tmp_allocator(ObModIds::OB_TEMP_VARIABLES);
-  ObTableSchema table_schema(&tmp_allocator);
-  while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
+  TABLE_SCHEMA table_schema(&tmp_allocator);
+  while (OB_SUCC(ret) && OB_SUCC(result.next())) {
     table_schema.reset();
     tmp_allocator.reuse();
     bool is_deleted = false;
-    ObTableSchema *allocated_table_schema = NULL;
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(fill_table_schema(tenant_id, check_deleted, result, table_schema, is_deleted))) {
-      SHARE_SCHEMA_LOG(WARN, "fail to fill table schema. ", K(check_deleted), K(ret));
+    TABLE_SCHEMA *allocated_table_schema = NULL;
+    if (OB_FAIL(fill_table_schema(tenant_id, check_deleted, result, table_schema, is_deleted))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to fill table schema", KR(ret), K(check_deleted));
     } else if (table_schema.get_table_id() == prev_table_id) {
       ret = common::OB_SUCCESS;
     } else if (is_deleted) {
@@ -97,21 +96,21 @@ int ObSchemaRetrieveUtils::retrieve_table_schema(
                        "table_name", table_schema.get_table_name(),
                        "schema_version", table_schema.get_schema_version());
     } else if (OB_FAIL(ObSchemaUtils::alloc_schema(allocator, table_schema, allocated_table_schema))) {
-      SHARE_SCHEMA_LOG(WARN, "alloc_table_schema failed", K(ret));
+      SHARE_SCHEMA_LOG(WARN, "alloc_table_schema failed", KR(ret));
     } else if (OB_FAIL(table_schema_array.push_back(allocated_table_schema))) {
-      SHARE_SCHEMA_LOG(WARN, "failed to push back", K(ret));
+      SHARE_SCHEMA_LOG(WARN, "failed to push back", KR(ret));
 
       // free table schema allocated
       allocator.free(allocated_table_schema);
       allocated_table_schema = NULL;
     } else {
-      SHARE_SCHEMA_LOG(INFO, "retrieve table schema", K(table_schema), K(is_deleted), KR(ret));
+      SHARE_SCHEMA_LOG(INFO, "retrieve table schema", KR(ret), K(table_schema), K(is_deleted));
     }
     if (OB_FAIL(ret)) {
-      SHARE_SCHEMA_LOG(WARN, "retrieve table schema failed",
+      SHARE_SCHEMA_LOG(WARN, "retrieve table schema failed", KR(ret),
                        "table_id", table_schema.get_table_id(),
                        "schema_version", table_schema.get_schema_version(),
-                       K(prev_table_id), K(is_deleted), KR(ret));
+                       K(prev_table_id), K(is_deleted));
     }
     prev_table_id = table_schema.get_table_id();
   }
@@ -461,8 +460,9 @@ int ObSubPartSchemaRetrieveHelper<TABLE_SCHEMA>::get_table(
   }
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(OB_ISNULL(table) || table->get_table_id() != table_id)) {
-    ret = common::OB_ERR_UNEXPECTED;
-    SHARE_SCHEMA_LOG(ERROR, "cannot find table", K(ret), K(table_id), KPC(table));
+    // may occur when upgrade system tables
+    ret = common::OB_ENTRY_NOT_EXIST;
+    SHARE_SCHEMA_LOG(WARN, "cannot find table", K(ret), K(table_id), KPC(table));
   }
   return ret;
 }
@@ -565,8 +565,9 @@ int ObSchemaRetrieveHelper<TABLE_SCHEMA, SCHEMA>::get_table(
   }
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(OB_ISNULL(table) || table->get_table_id() != table_id)) {
-    ret = common::OB_ERR_UNEXPECTED;
-    SHARE_SCHEMA_LOG(ERROR, "cannot find table", K(ret), K(table_id), KPC(table));
+    // may occur when upgrade system tables
+    ret = common::OB_ENTRY_NOT_EXIST;
+    SHARE_SCHEMA_LOG(WARN, "cannot find table", K(ret), K(table_id), KPC(table));
   }
   return ret;
 }
@@ -1097,8 +1098,11 @@ int ObSchemaRetrieveUtils::fill_temp_table_schema(const uint64_t tenant_id, T &r
 
 template<typename T>
 int ObSchemaRetrieveUtils::fill_table_schema(
-    const uint64_t tenant_id, const bool check_deleted, T &result,
-    ObTableSchema &table_schema, bool &is_deleted)
+    const uint64_t tenant_id,
+    const bool check_deleted,
+    T &result,
+    ObTableSchema &table_schema,
+    bool &is_deleted)
 {
   int ret = common::OB_SUCCESS;
   table_schema.reset();
@@ -2830,7 +2834,6 @@ int ObSchemaRetrieveUtils::fill_sysvar_schema(const uint64_t tenant_id, T &resul
 RETRIEVE_SCHEMA_FUNC_DEFINE(user);
 RETRIEVE_SCHEMA_FUNC_DEFINE(database);
 RETRIEVE_SCHEMA_FUNC_DEFINE(tablegroup);
-RETRIEVE_SCHEMA_FUNC_DEFINE(table);
 RETRIEVE_SCHEMA_FUNC_DEFINE(outline);
 RETRIEVE_SCHEMA_FUNC_DEFINE(package);
 RETRIEVE_SCHEMA_FUNC_DEFINE(trigger);
@@ -3819,11 +3822,14 @@ int ObSchemaRetrieveUtils::fill_trigger_id(const uint64_t tenant_id, T &result,
 }
 
 template<typename T>
-int ObSchemaRetrieveUtils::fill_table_schema(const uint64_t tenant_id,
-                                             T &result,
-                                             ObSimpleTableSchemaV2 &table_schema,
-                                             bool &is_deleted)
+int ObSchemaRetrieveUtils::fill_table_schema(
+    const uint64_t tenant_id,
+    const bool check_deleted,
+    T &result,
+    ObSimpleTableSchemaV2 &table_schema,
+    bool &is_deleted)
 {
+  UNUSED(check_deleted);
   int ret = common::OB_SUCCESS;
   bool ignore_column_error = false;
   table_schema.reset();

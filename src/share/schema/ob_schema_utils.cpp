@@ -644,7 +644,6 @@ int ObSchemaUtils::batch_get_table_schemas_from_inner_table_(
   ObRefreshSchemaStatus schema_status;
   schema_status.tenant_id_ = tenant_id;
   int64_t schema_version = INT64_MAX - 1; // get latest schema
-  ObArray<ObSimpleTableSchemaV2> schema_array;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
@@ -657,20 +656,12 @@ int ObSchemaUtils::batch_get_table_schemas_from_inner_table_(
   } else if (OB_FAIL(schema_service->get_batch_tables(
       schema_status,
       sql_client,
+      allocator,
       schema_version,
       need_refresh_table_schema_keys,
-      schema_array))) {
+      table_schemas))) {
     LOG_WARN("get batch tables failed", KR(ret),
         K(schema_status), K(schema_version), K(need_refresh_table_schema_keys));
-  }
-  ARRAY_FOREACH(schema_array, idx) {
-    const ObSimpleTableSchemaV2 &table_schema = schema_array.at(idx);
-    ObSimpleTableSchemaV2 *new_table_schema = NULL;
-    if (OB_FAIL(alloc_schema(allocator, table_schema, new_table_schema))) {
-      LOG_WARN("fail to alloc schema", KR(ret), K(table_schema));
-    } else if (OB_FAIL(table_schemas.push_back(new_table_schema))) {
-      LOG_WARN("push back failed", KR(ret), KP(new_table_schema));
-    }
   }
   return ret;
 }

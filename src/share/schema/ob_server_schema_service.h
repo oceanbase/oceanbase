@@ -812,7 +812,7 @@ public:
     common::ObArray<ObSimpleTenantSchema> simple_tenant_schemas_; //new tenant
     common::ObArray<ObSimpleTenantSchema> alter_tenant_schemas_;
     common::ObArray<ObSimpleDatabaseSchema> simple_database_schemas_;
-    common::ObArray<ObSimpleTableSchemaV2> simple_table_schemas_;
+    common::ObArray<ObSimpleTableSchemaV2 *> simple_table_schemas_;
     common::ObArray<ObSimpleTablegroupSchema> simple_tablegroup_schemas_;
     common::ObArray<ObSimpleOutlineSchema> simple_outline_schemas_;
     common::ObArray<ObSimpleRoutineSchema> simple_routine_schemas_;
@@ -1155,11 +1155,13 @@ protected:
       const uint64_t tenant_id,
       const int64_t schema_version);
   int convert_to_simple_schema(
+      common::ObIAllocator &allocator,
       const common::ObIArray<ObTableSchema> &schemas,
-      common::ObIArray<ObSimpleTableSchemaV2> &simple_schemas);
+      common::ObIArray<ObSimpleTableSchemaV2 *> &simple_schemas);
   int convert_to_simple_schema(
+      common::ObIAllocator &allocator,
       const common::ObIArray<ObTableSchema *> &schemas,
-      common::ObIArray<ObSimpleTableSchemaV2> &simple_schemas);
+      common::ObIArray<ObSimpleTableSchemaV2 *> &simple_schemas);
   int convert_to_simple_schema(
       const ObTableSchema &schema,
       ObSimpleTableSchemaV2 &simple_schema);
