@@ -12,8 +12,8 @@
 
 #include "zlib_lite_adaptor.h"
 #include "codec_deflate_qpl.h"
-#include "deflate.h"
-#include "zlib.h"
+#include "zlib_lite_src/deflate.h"
+#include "zlib_lite_src/zlib.h"
 
 namespace oceanbase
 {

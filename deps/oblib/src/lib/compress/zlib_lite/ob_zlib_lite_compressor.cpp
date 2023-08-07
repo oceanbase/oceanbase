@@ -11,7 +11,7 @@
  */
 
 #include "ob_zlib_lite_compressor.h"
-#include "zlib_lite_src/zlib_lite_adaptor.h"
+#include "zlib_lite_adaptor.h"
 #include "lib/ob_errno.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/utility/utility.h"

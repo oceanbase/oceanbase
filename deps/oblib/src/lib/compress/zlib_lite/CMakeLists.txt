@@ -14,13 +14,13 @@ add_library(zlib_lite_objs OBJECT
   zlib_lite_src/trees.c
   zlib_lite_src/uncompr.c
   zlib_lite_src/zutil.c
-  zlib_lite_src/zlib_lite_adaptor.cpp)
+  zlib_lite_adaptor.cpp)
 
 # We can not put the file codec_deflate_qpl.cpp into zlib_lite_objs.
 # I got some link error messages like below:
 # ld.lld: error: relocation refers to a symbol in a discarded section: __clang_call_terminate
 add_library(zlib_lite_qpl
-  zlib_lite_src/codec_deflate_qpl.cpp)
+  codec_deflate_qpl.cpp)
 
 target_compile_options(zlib_lite_objs PRIVATE -fvisibility=hidden)
 
