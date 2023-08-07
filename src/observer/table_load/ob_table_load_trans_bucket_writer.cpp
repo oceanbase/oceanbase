@@ -8,6 +8,7 @@
 #include "observer/table_load/ob_table_load_trans_bucket_writer.h"
 #include "observer/table_load/ob_table_load_coordinator.h"
 #include "observer/table_load/ob_table_load_coordinator_ctx.h"
+#include "observer/table_load/ob_table_load_error_row_handler.h"
 #include "observer/table_load/ob_table_load_obj_cast.h"
 #include "observer/table_load/ob_table_load_partition_calc.h"
 #include "observer/table_load/ob_table_load_stat.h"
@@ -309,19 +310,56 @@ int ObTableLoadTransBucketWriter::write_for_partitioned(SessionContext &session_
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator("TLD_Misc", OB_MALLOC_NORMAL_BLOCK_SIZE, param_.tenant_id_);
-  ObTableLoadPartitionCalcContext calc_ctx(obj_rows, param_, allocator);
-  if (OB_FAIL(coordinator_ctx_->partition_calc_.calc(calc_ctx))) {
-    LOG_WARN("fail to calc partition", KR(ret));
+  const int64_t part_key_obj_count = coordinator_ctx_->partition_calc_.get_part_key_obj_count();
+  ObArray<ObTableLoadPartitionId> partition_ids;
+  ObArray<ObNewRow> part_keys;
+  ObArray<int64_t> row_idxs;
+  ObTableLoadErrorRowHandler *error_row_handler =
+        trans_ctx_->ctx_->store_ctx_->error_row_handler_;
+  partition_ids.set_block_allocator(common::ModulePageAllocator(allocator));
+  for (int64_t i = 0; OB_SUCC(ret) && i < obj_rows.count(); ++i) {
+    ObNewRow part_key;
+    part_key.count_ = part_key_obj_count;
+    part_key.cells_ = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * part_key_obj_count));
+    if (OB_ISNULL(part_key.cells_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", KR(ret));
+    } else if (OB_FAIL(coordinator_ctx_->partition_calc_.get_part_key(obj_rows.at(i), part_key))) {
+      LOG_WARN("fail to get part key", KR(ret));
+    } else if (OB_FAIL(coordinator_ctx_->partition_calc_.cast_part_key(part_key, allocator))) {
+      if (OB_FAIL(error_row_handler->handle_error_row(ret, part_key))) {
+        LOG_WARN("failed to handle error row", K(ret), K(part_key));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else if (OB_FAIL(part_keys.push_back(part_key))) {
+      LOG_WARN("fail to push back part key", KR(ret));
+    } else if (OB_FAIL(row_idxs.push_back(i))) {
+      LOG_WARN("fail to push back row idx", KR(ret));
+    }
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < calc_ctx.partition_ids_.count(); ++i) {
-    const ObTableLoadPartitionId &partition_id = calc_ctx.partition_ids_.at(i);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(coordinator_ctx_->partition_calc_.get_partition_by_row(part_keys, partition_ids))) {
+      LOG_WARN("fail to calc partition", KR(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_idxs.count(); ++i) {
+    const ObTableLoadPartitionId &partition_id = partition_ids.at(i);
+    const ObTableLoadObjRow &row = obj_rows.at(row_idxs.at(i));
     ObTableLoadBucket *load_bucket = nullptr;
     bool need_write = false;
-    if (OB_FAIL(get_load_bucket(session_ctx, partition_id, load_bucket))) {
+    if (OB_UNLIKELY(!partition_id.is_valid())) {
+      ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
+      if (OB_FAIL(error_row_handler->handle_error_row(ret, part_keys.at(i)))) {
+        LOG_WARN("failed to handle error row", K(ret), K(part_keys.at(i)));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else if (OB_FAIL(get_load_bucket(session_ctx, partition_id, load_bucket))) {
       LOG_WARN("fail to get partition bucket", KR(ret), K(session_ctx.session_id_),
                K(partition_id));
     } else if (OB_FAIL(load_bucket->add_row(
-                 partition_id.tablet_id_, obj_rows.at(i),
+                 partition_id.tablet_id_, row,
                  param_.column_count_, param_.batch_size_, need_write))) {
       LOG_WARN("fail to add row", KR(ret));
     } else if (need_write && OB_FAIL(write_load_bucket(session_ctx, load_bucket))) {
