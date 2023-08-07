@@ -364,7 +364,7 @@ int ObLSBackupMetaDagNet::start_running()
     LOG_WARN("failed to inner init before run", K(ret));
   } else if (OB_FAIL(dag_scheduler->alloc_dag(backup_meta_dag))) {
     LOG_WARN("failed to alloc backup meta dag", K(ret));
-  } else if (OB_FAIL(backup_meta_dag->init(param_.start_scn_, init_param, report_ctx_))) {
+  } else if (OB_FAIL(backup_meta_dag->init(param_.start_scn_, init_param, report_ctx_, ls_backup_ctx_))) {
     LOG_WARN("failed to init backup meta dag", K(ret), K_(param));
   } else if (OB_FAIL(backup_meta_dag->create_first_task())) {
     LOG_WARN("failed to create first task for child dag", K(ret), KPC(backup_meta_dag));
@@ -1098,14 +1098,16 @@ int ObLSBackupComplementLogDagNet::fill_dag_net_key(char *buf, const int64_t buf
 /* ObLSBackupMetaDag */
 
 ObLSBackupMetaDag::ObLSBackupMetaDag()
-    : share::ObIDag(ObDagType::DAG_TYPE_BACKUP_META), is_inited_(false), start_scn_(), param_(), report_ctx_()
+    : share::ObIDag(ObDagType::DAG_TYPE_BACKUP_META), is_inited_(false), start_scn_(), param_(), report_ctx_(),
+      ls_backup_ctx_(nullptr)
 {}
 
 ObLSBackupMetaDag::~ObLSBackupMetaDag()
 {}
 
 int ObLSBackupMetaDag::init(
-    const SCN &start_scn, const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx)
+    const SCN &start_scn, const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx,
+    ObLSBackupCtx &ls_backup_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -1119,6 +1121,7 @@ int ObLSBackupMetaDag::init(
   } else {
     start_scn_ = start_scn;
     report_ctx_ = report_ctx;
+    ls_backup_ctx_ = &ls_backup_ctx;
     is_inited_ = true;
   }
   return ret;
@@ -1133,7 +1136,7 @@ int ObLSBackupMetaDag::create_first_task()
     LOG_WARN("backup meta dag do not init", K(ret));
   } else if (OB_FAIL(alloc_task(task))) {
     LOG_WARN("failed to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(start_scn_, param_, report_ctx_))) {
+  } else if (OB_FAIL(task->init(start_scn_, param_, report_ctx_, *ls_backup_ctx_))) {
     LOG_WARN("failed to init task", K(ret), K_(start_scn), K_(param));
   } else if (OB_FAIL(add_task(*task))) {
     LOG_WARN("failed to add task", K(ret));
@@ -3457,14 +3460,16 @@ ObLSBackupMetaTask::ObLSBackupMetaTask()
       is_inited_(false),
       start_scn_(),
       param_(),
-      report_ctx_()
+      report_ctx_(),
+      ls_backup_ctx_(nullptr)
 {}
 
 ObLSBackupMetaTask::~ObLSBackupMetaTask()
 {}
 
 int ObLSBackupMetaTask::init(
-    const SCN &start_scn, const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx)
+    const SCN &start_scn, const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx,
+    ObLSBackupCtx &ls_backup_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -3478,6 +3483,7 @@ int ObLSBackupMetaTask::init(
   } else {
     start_scn_ = start_scn;
     report_ctx_ = report_ctx;
+    ls_backup_ctx_ = &ls_backup_ctx;
     is_inited_ = true;
   }
   return ret;
@@ -3532,6 +3538,9 @@ int ObLSBackupMetaTask::process()
   }
 #endif
   if (OB_FAIL(ret)) {
+    bool is_set = false;
+    ls_backup_ctx_->set_result_code(ret, is_set);
+    ls_backup_ctx_->set_finished();
     REPORT_TASK_RESULT(this->get_dag()->get_dag_id(), ret);
   }
   return ret;
@@ -3724,6 +3733,8 @@ int ObLSBackupPrepareTask::process()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("prepare task do not init", K(ret));
+  } else if (OB_SUCCESS != ls_backup_ctx_->get_result_code()) {
+    LOG_INFO("backup already failed, do nothing");
   } else if (OB_FAIL(may_need_advance_checkpoint_())) {
     LOG_WARN("may need advance checkpoint failed", K(ret), K_(param));
   } else if (OB_FAIL(prepare_backup_tx_table_filled_tx_scn_())) {

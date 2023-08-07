@@ -210,7 +210,8 @@ class ObLSBackupMetaDag : public share::ObIDag {
 public:
   ObLSBackupMetaDag();
   virtual ~ObLSBackupMetaDag();
-  int init(const share::SCN &start_scn, const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx);
+  int init(const share::SCN &start_scn, const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx,
+           ObLSBackupCtx &ls_backup_ctx);
   virtual int create_first_task() override;
   virtual bool operator==(const ObIDag &other) const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
@@ -225,6 +226,7 @@ private:
   share::SCN start_scn_;
   ObLSBackupDagInitParam param_;
   ObBackupReportCtx report_ctx_;
+  ObLSBackupCtx *ls_backup_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupMetaDag);
 };
 
@@ -397,7 +399,8 @@ class ObLSBackupMetaTask : public share::ObITask {
 public:
   ObLSBackupMetaTask();
   virtual ~ObLSBackupMetaTask();
-  int init(const share::SCN &start_scn, const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx);
+  int init(const share::SCN &start_scn, const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx,
+           ObLSBackupCtx &ls_backup_ctx);
   virtual int process() override;
 
 private:
@@ -410,6 +413,7 @@ private:
   share::SCN start_scn_;
   ObLSBackupDagInitParam param_;
   ObBackupReportCtx report_ctx_;
+  ObLSBackupCtx *ls_backup_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupMetaTask);
 };
 
