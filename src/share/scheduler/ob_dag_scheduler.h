@@ -269,8 +269,8 @@ public:
   {
     return DAG_STATUS_FINISH == dag_status || DAG_STATUS_ABORT == dag_status;
   }
-  bool has_set_stop() { return is_stop_; }
-  void set_stop() { is_stop_ = true; }
+  bool has_set_stop() { return ATOMIC_LOAD(&is_stop_); }
+  void set_stop() { ATOMIC_SET(&is_stop_, true); }
   ObIDagNet *get_dag_net() const { return dag_net_; }
   void set_dag_net(ObIDagNet &dag_net)
   {

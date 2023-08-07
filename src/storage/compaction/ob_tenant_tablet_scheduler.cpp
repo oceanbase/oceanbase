@@ -1734,7 +1734,7 @@ int ObCompactionScheduleIterator::get_tablet_ids()
 int ObCompactionScheduleIterator::get_tablet_handle(
   const ObTabletID &tablet_id, ObTabletHandle &tablet_handle)
 {
-  return ls_tablet_svr_->get_tablet(tablet_id, tablet_handle, 0/*timeout*/);
+  return ls_tablet_svr_->get_tablet(tablet_id, tablet_handle, 0/*timeout*/, ObMDSGetTabletMode::READ_ALL_COMMITED);
 }
 
 int64_t ObCompactionScheduleIterator::to_string(char *buf, const int64_t buf_len) const

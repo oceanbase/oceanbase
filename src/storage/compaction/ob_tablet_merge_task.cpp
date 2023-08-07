@@ -274,8 +274,8 @@ int ObBasicTabletMergeDag::get_tablet_and_compat_mode()
   } else if (OB_FAIL(ctx_->ls_handle_.get_ls()->get_tablet_svr()->get_tablet(
           tablet_id_,
           tmp_tablet_handle,
-          0,
-          ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+          0/*timeout*/,
+          ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("failed to get tablet", K(ret), K(ls_id_), K(tablet_id_));
   } else if (OB_FAIL(ObTabletMergeChecker::check_need_merge(ctx_->param_.merge_type_, *tmp_tablet_handle.get_obj()))) {
     if (OB_NO_NEED_MERGE != ret) {
@@ -758,8 +758,8 @@ int ObTabletMergeExecutePrepareTask::get_tablet_and_result()
   } else if (OB_FAIL(ctx_->ls_handle_.get_ls()->get_tablet(
             ctx_->param_.tablet_id_,
             ctx_->tablet_handle_,
-            0,
-            storage::ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+            0/*timeout*/,
+            storage::ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("failed to get tablet", K(ret), K(ctx_->param_));
   } else if (OB_FAIL(ObTabletMergeChecker::check_need_merge(ctx_->param_.merge_type_, *ctx_->tablet_handle_.get_obj()))) {
     if (OB_NO_NEED_MERGE != ret) {
@@ -947,8 +947,8 @@ int ObTabletMergePrepareTask::process()
   } else if (OB_FAIL(ctx->ls_handle_.get_ls()->get_tablet(
             ctx->param_.tablet_id_,
             ctx->tablet_handle_,
-            0,
-            storage::ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+            0/*timeout*/,
+            storage::ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("failed to get tablet", K(ret), K(ctx->param_));
   } else if (OB_FAIL(ObTabletMergeChecker::check_need_merge(ctx->param_.merge_type_, *ctx->tablet_handle_.get_obj()))) {
     if (OB_NO_NEED_MERGE != ret) {
