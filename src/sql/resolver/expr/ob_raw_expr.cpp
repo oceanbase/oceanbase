@@ -2756,10 +2756,7 @@ int ObObjAccessRawExpr::add_access_indexs(const ObIArray<pl::ObObjAccessIdx> &ac
       tmp_idx.var_index_ = get_param_count() + var_indexs_.count(); //外部变量的下标排在
       if (OB_FAIL(access_indexs_.push_back(tmp_idx))) {
         LOG_WARN("store access index failed", K(ret));
-      } else if (OB_ISNULL(access_idx.get_sysfunc_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("null param function", K(ret), K(access_idx.var_name_));
-      } else if (OB_FAIL(add_param_expr(access_idx.get_sysfunc_))) {
+      } else if (OB_NOT_NULL(access_idx.get_sysfunc_) && OB_FAIL(add_param_expr(access_idx.get_sysfunc_))) {
         LOG_WARN("Failed to add param expr", K(ret));
       } else { /*do nothing*/ }
     } else if (access_idx.is_ns()
