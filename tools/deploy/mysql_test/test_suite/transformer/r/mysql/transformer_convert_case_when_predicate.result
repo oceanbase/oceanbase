@@ -2005,8 +2005,8 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([t1.c1 > 0 OR t1.c2 > 0 AND lnnvl(cast(t1.c1 > 0, TINYINT(-1, 0))) AND t1.c2 
-      > 0]), rowset=256
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([t1.c1 > 0 OR t1.c2 > 0 AND CASE WHEN t1.c1 > 0 THEN 1 WHEN t1.c2 > 0 THEN 2 
+      ELSE 0 END > 1]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -2183,7 +2183,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([1]), filter([CASE WHEN 1 THEN 1 ELSE T_FUN_COUNT_SUM(T_FUN_COUNT(*)) END > 2]), rowset=256
       group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
-  1 - output([T_FUN_COUNT(*)]), filter([t1.c1 > 0 OR t1.c2 > 0 AND lnnvl(cast(t1.c1 > 0, TINYINT(-1, 0))) AND t1.c2 > 0]), rowset=256
+  1 - output([T_FUN_COUNT(*)]), filter([t1.c1 > 0 OR t1.c2 > 0 AND CASE WHEN t1.c1 > 0 THEN 1 WHEN t1.c2 > 0 THEN 2 ELSE 0 END > 1]), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -2473,11 +2473,11 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |TABLE FULL SCAN|t1  |1       |4           |
+|0 |TABLE FULL SCAN|t1  |3       |5           |
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([CASE WHEN t1.c1 > 0 THEN NULL ELSE 0 END = 0]), rowset=256
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([lnnvl(cast(t1.c1 > 0, TINYINT(-1, 0)))]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -2498,14 +2498,14 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |TABLE FULL SCAN|t1  |2       |5           |
+|0 |TABLE FULL SCAN|t1  |1       |5           |
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([CASE WHEN t1.c1 > 0 THEN 1 WHEN t1.c2 > 0 THEN 2 WHEN t1.c3 > 0 THEN 3 ELSE 
-      NULL END > 2]), rowset=256
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([t1.c3 > 0], [lnnvl(cast(t1.c1 > 0, TINYINT(-1, 0)))], [lnnvl(cast(t1.c2 > 0,
+       TINYINT(-1, 0)))]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 where case when c1 > 0 then 1
                             when c2 > 0 then 2
@@ -2543,6 +2543,55 @@ select /*+no_rewrite*/ * from t1 where case when c1 > 0 then 1
 | c1   | c2   | c3   | c4   | c5   | c6   |
 +------+------+------+------+------+------+
 +------+------+------+------+------+------+
+
+
+== case 14: false/null error at select expr
+EXPLAIN select /*+no_rewrite*/ case when c1 > 2 then 1 when null > 1 then 2 else 0 end > 1 from t1;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |5       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([CASE WHEN t1.c1 > 2 THEN 1 WHEN NULL > 1 THEN 2 ELSE 0 END > 1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/ case when c1 > 2 then 1 when null > 1 then 2 else 0 end > 1 from t1;
++-------------------------------------------------------------+
+| case when c1 > 2 then 1 when null > 1 then 2 else 0 end > 1 |
++-------------------------------------------------------------+
+|                                                           0 |
+|                                                           0 |
+|                                                           0 |
+|                                                           0 |
+|                                                           0 |
++-------------------------------------------------------------+
+EXPLAIN select case when c1 > 2 then 1 when null > 1 then 2 else 0 end > 1 from t1;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |5       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([CASE WHEN t1.c1 > 2 THEN 1 WHEN NULL > 1 THEN 2 ELSE 0 END > 1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select case when c1 > 2 then 1 when null > 1 then 2 else 0 end > 1 from t1;
++-------------------------------------------------------------+
+| case when c1 > 2 then 1 when null > 1 then 2 else 0 end > 1 |
++-------------------------------------------------------------+
+|                                                           0 |
+|                                                           0 |
+|                                                           0 |
+|                                                           0 |
+|                                                           0 |
++-------------------------------------------------------------+
 
 **************************** Joint when and then exprs test **************************** 
 
@@ -2649,7 +2698,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([1]), filter([t1.c1 > 0], [t1.c2 > 0 OR t1.c1 > t1.c2 AND t1.c1 > 5]), rowset=256
+  0 - output([1]), filter([t1.c1 > 0], [t1.c2 > 0 OR CASE WHEN t1.c1 > t1.c2 THEN t1.c1 ELSE 3 END > 5]), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -2707,7 +2756,7 @@ Outputs & filters:
 -------------------------------------
   0 - output([1]), filter(nil), rowset=256
       group([t1.c3]), agg_func(nil)
-  1 - output([t1.c3]), filter([t1.c1 > 0], [t1.c3 > 0], [t1.c3 > 4], [t1.c2 > 0 OR t1.c1 > t1.c2 AND t1.c1 > 5]), rowset=256
+  1 - output([t1.c3]), filter([t1.c1 > 0], [t1.c3 > 0], [t1.c3 > 4], [t1.c2 > 0 OR CASE WHEN t1.c1 > t1.c2 THEN t1.c1 ELSE 3 END > 5]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false,false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -2770,7 +2819,7 @@ Query Plan
 ==================================================================
 |ID|OPERATOR       |NAME                   |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |TABLE FULL SCAN|__all_virtual_plan_stat|39      |372         |
+|0 |TABLE FULL SCAN|__all_virtual_plan_stat|16      |150         |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -2841,7 +2890,7 @@ Query Plan
 ==================================================================
 |ID|OPERATOR       |NAME                   |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |TABLE FULL SCAN|__all_virtual_plan_stat|39      |372         |
+|0 |TABLE FULL SCAN|__all_virtual_plan_stat|16      |150         |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -2912,7 +2961,7 @@ Query Plan
 ==================================================================
 |ID|OPERATOR       |NAME                   |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |TABLE FULL SCAN|__all_virtual_plan_stat|39      |372         |
+|0 |TABLE FULL SCAN|__all_virtual_plan_stat|16      |150         |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -2975,7 +3024,7 @@ Query Plan
 ==================================================================
 |ID|OPERATOR       |NAME                   |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |TABLE FULL SCAN|__all_virtual_plan_stat|39      |372         |
+|0 |TABLE FULL SCAN|__all_virtual_plan_stat|16      |150         |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -3038,7 +3087,7 @@ Query Plan
 ==================================================================
 |ID|OPERATOR       |NAME                   |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |TABLE FULL SCAN|__all_virtual_plan_stat|39      |372         |
+|0 |TABLE FULL SCAN|__all_virtual_plan_stat|16      |150         |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -3102,7 +3151,7 @@ Query Plan
 ==================================================================
 |ID|OPERATOR       |NAME                   |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |TABLE FULL SCAN|__all_virtual_plan_stat|39      |372         |
+|0 |TABLE FULL SCAN|__all_virtual_plan_stat|16      |150         |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -3165,7 +3214,7 @@ Query Plan
 ==================================================================
 |ID|OPERATOR       |NAME                   |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |TABLE FULL SCAN|__all_virtual_plan_stat|39      |372         |
+|0 |TABLE FULL SCAN|__all_virtual_plan_stat|16      |150         |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -3193,13 +3242,13 @@ Query Plan
 ===============================================
 |ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------
-|0 |TABLE FULL SCAN|t1  |2       |5           |
+|0 |TABLE FULL SCAN|t1  |5       |5           |
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([CASE WHEN t1.c1 > 1 THEN 1 WHEN t1.c2 > 1 THEN NULL ELSE NULL END > 1]), rowset=256
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter(nil), startup_filter([0]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 where case when c1 > 1 then 1 when c2 > 1 then NULL end > 1;
 +------+------+------+------+------+------+
@@ -3229,7 +3278,7 @@ Query Plan
 ==================================================================
 |ID|OPERATOR       |NAME                   |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |TABLE FULL SCAN|__all_virtual_plan_stat|39      |372         |
+|0 |TABLE FULL SCAN|__all_virtual_plan_stat|16      |150         |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -3293,7 +3342,7 @@ Query Plan
 ==================================================================
 |ID|OPERATOR       |NAME                   |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |TABLE FULL SCAN|__all_virtual_plan_stat|39      |372         |
+|0 |TABLE FULL SCAN|__all_virtual_plan_stat|16      |150         |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -3356,7 +3405,7 @@ Query Plan
 ==================================================================
 |ID|OPERATOR       |NAME                   |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |TABLE FULL SCAN|__all_virtual_plan_stat|39      |372         |
+|0 |TABLE FULL SCAN|__all_virtual_plan_stat|16      |150         |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -3428,7 +3477,7 @@ Query Plan
 ==================================================================
 |ID|OPERATOR       |NAME                   |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |TABLE FULL SCAN|__all_virtual_plan_stat|39      |372         |
+|0 |TABLE FULL SCAN|__all_virtual_plan_stat|16      |150         |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -3499,7 +3548,7 @@ Query Plan
 ==================================================================
 |ID|OPERATOR       |NAME                   |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |TABLE FULL SCAN|__all_virtual_plan_stat|39      |372         |
+|0 |TABLE FULL SCAN|__all_virtual_plan_stat|16      |150         |
 ==================================================================
 Outputs & filters:
 -------------------------------------
@@ -3518,6 +3567,129 @@ select hit_count, sql_id, query_sql from oceanbase.V$OB_PLAN_CACHE_PLAN_STAT whe
 |         1 | C0AAFE143F3B0422D20F79461648D647 | select * from t1 where case when 1 > 1 then 1 when c2 > 2 then 2 when 3 > 3 then 3 else 4 end > 0 |
 +-----------+----------------------------------+---------------------------------------------------------------------------------------------------+
 expect generate 1 plan
+
+**************************** index scan test **************************** 
+set ob_enable_plan_cache = 0;
+create index t1c2 on t1(c2);
+
+== case 1
+EXPLAIN select /*+no_rewrite*/ * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else 0 end > 1;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |2       |5           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([CASE WHEN t1.c1 > 1 THEN 1 WHEN t1.c2 > 2 THEN 2 ELSE 0 END > 1]), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/ * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else 0 end > 1;
++------+------+------+------+------+------+
+| c1   | c2   | c3   | c4   | c5   | c6   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+EXPLAIN select * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else 0 end > 1;
+Query Plan
+====================================================
+|ID|OPERATOR        |NAME    |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(t1c2)|2       |13          |
+====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0)))]), rowset=256
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.c2], [t1.__pk_increment]), range(2,MAX ; MAX,MAX), 
+      range_cond([t1.c2 > 2])
+select * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else 0 end > 1;
++------+------+------+------+------+------+
+| c1   | c2   | c3   | c4   | c5   | c6   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+expect use range scan on index t1c2 
+
+== case 2
+EXPLAIN select /*+no_rewrite*/ * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 end > 1;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |2       |5           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([CASE WHEN t1.c1 > 1 THEN 1 WHEN t1.c2 > 2 THEN 2 ELSE NULL END > 1]), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/ * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 end > 1;
++------+------+------+------+------+------+
+| c1   | c2   | c3   | c4   | c5   | c6   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+EXPLAIN select * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 end > 1;
+Query Plan
+====================================================
+|ID|OPERATOR        |NAME    |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(t1c2)|2       |13          |
+====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0)))]), rowset=256
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.c2], [t1.__pk_increment]), range(2,MAX ; MAX,MAX), 
+      range_cond([t1.c2 > 2])
+select * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 end > 1;
++------+------+------+------+------+------+
+| c1   | c2   | c3   | c4   | c5   | c6   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+expect use range scan on index t1c2 
+
+== case 3
+EXPLAIN select /*+no_rewrite*/ * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else c3 end > 1;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |2       |5           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([CASE WHEN t1.c1 > 1 THEN 1 WHEN t1.c2 > 2 THEN 2 ELSE t1.c3 END > 1]), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/ * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else c3 end > 1;
++------+------+------+------+------+------+
+| c1   | c2   | c3   | c4   | c5   | c6   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+EXPLAIN select * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else c3 end > 1;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |2       |5           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([CASE WHEN t1.c1 > 1 THEN 1 WHEN t1.c2 > 2 THEN 2 ELSE t1.c3 END > 1]), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else c3 end > 1;
++------+------+------+------+------+------+
+| c1   | c2   | c3   | c4   | c5   | c6   |
++------+------+------+------+------+------+
++------+------+------+------+------+------+
+expect don't use range scan 
 end test
 USE DB_CONVERT_CASE_WHEN;
 drop database DB_CONVERT_CASE_WHEN;
