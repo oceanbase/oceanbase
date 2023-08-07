@@ -51,6 +51,8 @@ public:
   int32_t do_decompress_data(const char * source, uint32_t source_size, char * dest, uint32_t uncompressed_size);
   int32_t do_compress_data(const char * source, uint32_t source_size, char * dest, uint32_t dest_size);
 
+  const char *qpl_execute_path() const { return qpl_excute_path_; }
+
 private:
   qpl_job * acquire_job(uint32_t & job_id);
   void release_job(uint32_t job_id);

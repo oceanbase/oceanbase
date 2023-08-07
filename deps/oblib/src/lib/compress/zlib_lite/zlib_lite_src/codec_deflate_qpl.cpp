@@ -11,6 +11,7 @@
  */
 #ifdef ENABLE_QPL_COMPRESSION
 
+#include <string.h>
 #include <memory>
 #include "codec_deflate_qpl.h"
 
@@ -66,14 +67,12 @@ int CodecDeflateQpl::init(qpl_path_t path, QplAllocator &allocator)
   /// Initialize pool for storing all job object pointers
   /// Reallocate buffer by shifting address offset for each job object.
   for (uint32_t index = 0; index < MAX_JOB_NUMBER; ++index) {
+    new (job_ptr_locks_ + index) std::atomic_bool();
+
     qpl_job * qpl_job_ptr = (qpl_job *)(jobs_buffer_ + index * job_size);
     int status = qpl_init_job(path, qpl_job_ptr); 
     if (status != QPL_STS_OK) {
-      FILE *fp = fopen("qpl.log", "a+");
       job_pool_ready_ = false;
-      fprintf(fp, "qpl init job return %d\n", status);
-      fflush(fp);
-      fclose(fp);
       
       for (uint32_t i = 0; i < index; i++) {
         qpl_fini_job(job_ptr_pool_[i]);
@@ -85,9 +84,16 @@ int CodecDeflateQpl::init(qpl_path_t path, QplAllocator &allocator)
       job_ptr_pool_ = nullptr;
       allocator_.deallocate(job_ptr_locks_);
       job_ptr_locks_ = nullptr;
-      return -1;
+      return status;
     }
     job_ptr_pool_[index] = qpl_job_ptr;
+
+    // Even if we use the hardware_path as the parameter, the cloud-qpl may init with software
+    // if there is no hardware or something others unexpected.
+    // If cloud-qpl change the path, we can get the info from the qpl_job_ptr->data_ptr.path.
+    if (qpl_job_ptr->data_ptr.path != path) {
+      qpl_excute_path_ = (qpl_job_ptr->data_ptr.path == qpl_path_hardware) ? "Hardware" : "Software";
+    }
     unlock_job(index);
   }
     
@@ -240,6 +246,11 @@ int qpl_init(QplAllocator &allocator)
   if (0 == ret) {
     CodecDeflateQpl &hardware_qpl = CodecDeflateQpl::get_hardware_instance();
     ret = hardware_qpl.init(qpl_path_hardware, allocator);
+    if (QPL_STS_NO_MEM_ERR == ret) {
+      // If you do not install the usdm_drv, the cloud-qpl return this error code.
+      // But we can use software instead
+      ret = 0;
+    }
   }
 
   return ret;
@@ -284,7 +295,8 @@ int32_t qpl_decompress(const char* source, char* dest, int input_size, int max_o
 
 bool qpl_hardware_enabled()
 {
-  return CodecDeflateQpl::get_hardware_instance().is_job_pool_ready();
+  CodecDeflateQpl &hardware_qpl = CodecDeflateQpl::get_hardware_instance();
+  return hardware_qpl.is_job_pool_ready() && 0 == strcasecmp("Hardware", hardware_qpl.qpl_execute_path());
 }
 
 }//namespace ZLIB_LITE

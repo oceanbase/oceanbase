@@ -17,21 +17,21 @@
 
 namespace oceanbase
 {
-namespace common 
+namespace common
 {
 namespace ZLIB_LITE
 {
 
 class ObZlibLiteAdaptor;
-  
-class OB_PUBLIC_API ObZlibLiteCompressor : public ObCompressor {
+
+class ObZlibLiteCompressor : public ObCompressor {
 public:
   explicit ObZlibLiteCompressor();
   virtual ~ObZlibLiteCompressor();
 
   int  init();
   void deinit();
-  
+
   int compress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size,
         int64_t& dst_data_size) override;
 
@@ -48,8 +48,8 @@ public:
 private:
   ObZlibLiteAdaptor *adaptor_;
 };
-}
+} // namespace ZLIB_LITE
 
-} 
-} 
-#endif
+} // namespace common
+} // namespace oceanbase
+#endif // OCEANBASE_COMMON_COMPRESS_ZLIB_LITE_COMPRESSOR_H_
