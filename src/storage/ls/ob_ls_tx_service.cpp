@@ -267,6 +267,21 @@ int ObLSTxService::block_tx()
   return ret;
 }
 
+int ObLSTxService::block_all()
+{
+  int ret = OB_SUCCESS;
+  bool unused_is_all_tx_clean_up = false;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
+  } else if (OB_FAIL(mgr_->block_all(unused_is_all_tx_clean_up))) {
+    TRANS_LOG(WARN, "block all failed", K_(ls_id));
+  } else {
+    TRANS_LOG(INFO, "block all success", K_(ls_id));
+  }
+  return ret;
+}
+
 int ObLSTxService::kill_all_tx(const bool graceful)
 {
   int ret = OB_SUCCESS;
@@ -647,8 +662,8 @@ int ObLSTxService::prepare_offline(const int64_t start_ts)
   if (OB_ISNULL(mgr_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
-  } else if (OB_FAIL(mgr_->block_tx(unused_is_all_tx_clean_up))) {
-    TRANS_LOG(WARN, "block tx failed", K_(ls_id));
+  } else if (OB_FAIL(mgr_->block_all(unused_is_all_tx_clean_up))) {
+    TRANS_LOG(WARN, "block all failed", K_(ls_id));
   } else if (ObTimeUtility::current_time() > start_ts + WAIT_READONLY_REQUEST_US) {
     // dont care readonly request
   } else {
@@ -673,8 +688,8 @@ int ObLSTxService::offline()
   if (OB_ISNULL(mgr_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
-  } else if (OB_FAIL(mgr_->block_tx(unused_is_all_tx_clean_up))) {
-    TRANS_LOG(WARN, "block tx failed", K_(ls_id));
+  } else if (OB_FAIL(mgr_->block_all(unused_is_all_tx_clean_up))) {
+    TRANS_LOG(WARN, "block all failed", K_(ls_id));
   } else if (OB_FAIL(mgr_->kill_all_tx(graceful, unused_is_all_tx_clean_up))) {
     TRANS_LOG(WARN, "kill_all_tx failed", K_(ls_id));
   } else if (mgr_->get_tx_ctx_count() > 0) {

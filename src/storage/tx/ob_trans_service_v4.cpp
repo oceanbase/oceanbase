@@ -2375,6 +2375,27 @@ int ObTransService::block_tx(const share::ObLSID &ls_id, bool &is_all_tx_cleaned
   return ret;
 }
 
+int ObTransService::block_all(const share::ObLSID &ls_id, bool &is_all_tx_cleaned_up)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObTransService not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!is_running_)) {
+    TRANS_LOG(WARN, "ObTransService is not running");
+    ret = OB_NOT_RUNNING;
+  } else if (!ls_id.is_valid()) {
+    TRANS_LOG(WARN, "invalid argument", K(ls_id));
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(tx_ctx_mgr_.block_all(ls_id, is_all_tx_cleaned_up))) {
+    TRANS_LOG(WARN, "block all error", KR(ret), K(ls_id));
+  } else {
+    TRANS_LOG(INFO, "block all success", K(ls_id), K(is_all_tx_cleaned_up));
+  }
+  return ret;
+}
+
 int ObTransService::iterate_tx_ctx_mgr_stat(ObTxCtxMgrStatIterator &tx_ctx_mgr_stat_iter)
 {
   int ret = OB_SUCCESS;

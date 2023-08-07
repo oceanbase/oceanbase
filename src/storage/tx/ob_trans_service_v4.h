@@ -125,6 +125,8 @@ int kill_all_tx(const share::ObLSID &ls_id, const KillTransArg &arg,
     bool &is_all_tx_cleaned_up);
 
 int block_tx(const share::ObLSID &ls_id, bool &is_all_tx_cleaned_up);
+// block tx and readonly request
+int block_all(const share::ObLSID &ls_id, bool &is_all_tx_cleaned_up);
 
 int iterate_ls_id(ObLSIDIterator &ls_id_iter);
 
