@@ -90,6 +90,41 @@ int ObTableDirectLoadBeginExecutor::process()
         ret = OB_SUCCESS;
         client_task_ = nullptr;
       }
+    } else {
+      bool need_wait_finish = false;
+      ObTableLoadClientStatus wait_client_status;
+      ObTableLoadClientStatus client_status = client_task_->get_status();
+      switch (client_status) {
+        case ObTableLoadClientStatus::RUNNING:
+        case ObTableLoadClientStatus::COMMITTING:
+          if (arg_.force_create_) {
+            if (OB_FAIL(ObTableLoadClientService::abort_task(client_task_))) {
+              LOG_WARN("fail to abort client task", KR(ret));
+            } else {
+              need_wait_finish = true;
+              wait_client_status = ObTableLoadClientStatus::ABORT;
+            }
+          }
+          break;
+        case ObTableLoadClientStatus::COMMIT:
+        case ObTableLoadClientStatus::ABORT:
+          need_wait_finish = true;
+          wait_client_status = client_status;
+          break;
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected client status", KR(ret), KPC(client_task_), K(client_status));
+          break;
+      }
+      if (OB_SUCC(ret) && need_wait_finish) {
+        if (OB_FAIL(ObTableLoadClientService::wait_task_finish(client_task_, wait_client_status))) {
+          LOG_WARN("fail to wait client task finish", KR(ret), KPC(client_task_),
+                   K(wait_client_status));
+        } else {
+          ObTableLoadClientService::revert_task(client_task_);
+          client_task_ = nullptr;
+        }
+      }
     }
   }
 
@@ -321,6 +356,9 @@ int ObTableDirectLoadAbortExecutor::process()
   if (OB_FAIL(ObTableLoadClientService::get_task(key, client_task))) {
     LOG_WARN("fail to get client task", KR(ret), K(key));
   } else if (OB_FAIL(ObTableLoadClientService::abort_task(client_task))) {
+    LOG_WARN("fail to abort client task", KR(ret));
+  } else if (OB_FAIL(ObTableLoadClientService::wait_task_finish(client_task,
+                                                                ObTableLoadClientStatus::ABORT))) {
     LOG_WARN("fail to abort client task", KR(ret));
   }
   if (nullptr != client_task) {

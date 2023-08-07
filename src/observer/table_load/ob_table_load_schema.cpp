@@ -218,6 +218,7 @@ void ObTableLoadSchema::reset()
   column_descs_.reset();
   multi_version_column_descs_.reset();
   datum_utils_.reset();
+  cmp_funcs_.reset();
   partition_ids_.reset();
   allocator_.reset();
   is_inited_ = false;
@@ -327,7 +328,7 @@ int ObTableLoadSchema::prepare_col_desc(const ObTableSchema *table_schema, commo
   return ret;
 }
 
-int ObTableLoadSchema::init_cmp_funcs(const ObArray<ObColDesc> &col_descs,
+int ObTableLoadSchema::init_cmp_funcs(const ObIArray<ObColDesc> &col_descs,
                                       const bool is_oracle_mode)
 {
   int ret = OB_SUCCESS;

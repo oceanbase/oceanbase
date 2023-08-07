@@ -48,6 +48,8 @@ public:
   static int get_task(const ObTableLoadKey &key, ObTableLoadClientTask *&client_task);
   static int commit_task(ObTableLoadClientTask *client_task);
   static int abort_task(ObTableLoadClientTask *client_task);
+  static int wait_task_finish(ObTableLoadClientTask *client_task,
+                              table::ObTableLoadClientStatus client_status);
 
   int add_client_task(const ObTableLoadUniqueKey &key, ObTableLoadClientTask *client_task);
   int remove_client_task(const ObTableLoadUniqueKey &key, ObTableLoadClientTask *client_task);

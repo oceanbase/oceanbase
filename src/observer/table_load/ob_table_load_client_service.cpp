@@ -528,6 +528,40 @@ int ObTableLoadClientService::abort_task(ObTableLoadClientTask *client_task)
   return ret;
 }
 
+int ObTableLoadClientService::wait_task_finish(ObTableLoadClientTask *client_task,
+                                               ObTableLoadClientStatus client_status)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == client_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KPC(client_task));
+  } else if (OB_FAIL(client_task->check_status(client_status))) {
+    LOG_WARN("fail to check status", KR(ret), KPC(client_task), K(client_status));
+  } else {
+    ObTimeoutCtx ctx;
+    if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, 10LL * 1000 * 1000))) {
+      LOG_WARN("fail to set default timeout ctx", KR(ret));
+    }
+    while (OB_SUCC(ret)) {
+      if (ctx.is_timeouted()) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("timeouted", KR(ret), K(ctx));
+      } else {
+        ObTableLoadClientStatus client_status = client_task->get_status();
+        if (client_task->get_ref_count() > 2) {
+          // wait
+          ob_usleep(100LL * 1000);
+        } else if (OB_FAIL(remove_task(client_task))) {
+          LOG_WARN("fail to remove client task", KR(ret), KPC(client_task));
+        } else {
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadClientService::add_client_task(const ObTableLoadUniqueKey &key,
                                               ObTableLoadClientTask *client_task)
 {
