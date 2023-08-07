@@ -597,6 +597,29 @@ select * from t1 where case when 1 > 1 then 1 when c2 > 2 then 2 when 3 > 3 then
 select * from t1 where case when 1 > 1 then 1 when c2 > 2 then 2 when 3 > 3 then 3 else 4 end > 3;
 select hit_count, sql_id, query_sql from oceanbase.V$OB_PLAN_CACHE_PLAN_STAT where statement like "select * from t1 where case when ? > ? then ? when c2 > ? then ? when ? > ? then ? else ? end > ?";
 --echo expect generate 1 plan
+
+
+--echo **************************** index scan test **************************** 
+set ob_enable_plan_cache = 0;
+create index t1c2 on t1(c2);
+--echo
+--echo == case 1
+select /*+no_rewrite*/ * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else 0 end > 1;
+select * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else 0 end > 1;
+--echo expect use range scan on index t1c2 
+
+--echo
+--echo == case 2
+select /*+no_rewrite*/ * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 end > 1;
+select * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 end > 1;
+--echo expect use range scan on index t1c2 
+
+--echo
+--echo == case 3
+select /*+no_rewrite*/ * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else c3 end > 1;
+select * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else c3 end > 1;
+--echo expect don't use range scan 
+
 --echo end test
 
 USE DB_CONVERT_CASE_WHEN;
