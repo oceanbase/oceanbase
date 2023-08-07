@@ -12788,9 +12788,14 @@ int ObLogPlan::create_for_update_plan(ObLogicalOperator *&top,
   int ret = OB_SUCCESS;
   bool is_multi_part_dml = false;
   bool is_result_local = false;
+  ObExchangeInfo exch_info;
   if (OB_ISNULL(top) || OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (skip_locked &&
+      top->is_distributed() &&
+      OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
+    LOG_WARN("fail to allocate exchange op", K(ret), K(skip_locked));
   } else if (OB_FAIL(check_need_multi_partition_dml(*get_stmt(),
                                                     *top,
                                                     index_dml_infos,
