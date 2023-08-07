@@ -8100,6 +8100,9 @@ int ObPLCodeGenerator::generate_simple(ObPLFunction &pl_func)
     OZ (sql_info.generate(*sql_stmt, pl_func.get_expressions()));
     OZ (sql_infos.push_back(sql_info));
   }
+  if (OB_SUCC(ret) && ObTriggerInfo::is_trigger_body_package_id(pl_func.get_package_id())) {
+    OZ (pl_func.set_types(get_ast().get_user_type_table()));
+  }
 
   return ret;
 }

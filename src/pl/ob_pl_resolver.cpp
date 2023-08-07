@@ -1711,7 +1711,7 @@ int ObPLResolver::get_view_select_stmt(
     db_schema->get_database_name_str().length(), db_schema->get_database_name_str().ptr(),
     view_schema->get_table_name_str().length(), view_schema->get_table_name_str().ptr()));
   OZ (parser.parse(select_sql.string(), parse_result));
-  OZ (schema_checker.init(ctx.schema_guard_));
+  OZ (schema_checker.init(ctx.schema_guard_, ctx.session_info_.get_sessid()));
 
   OX (resolver_ctx.allocator_ = &(ctx.allocator_));
   OX (resolver_ctx.schema_checker_ = &schema_checker);
@@ -1785,7 +1785,7 @@ int ObPLResolver::build_record_type_by_view_schema(const ObPLResolveCtx &ctx,
     db_schema->get_database_name_str().length(), db_schema->get_database_name_str().ptr(),
     view_schema->get_table_name_str().length(), view_schema->get_table_name_str().ptr()));
   OZ (parser.parse(select_sql.string(), parse_result));
-  OZ (schema_checker.init(ctx.schema_guard_));
+  OZ (schema_checker.init(ctx.schema_guard_, ctx.session_info_.get_sessid()));
 
   OX (resolver_ctx.allocator_ = &(alloc));
   OX (resolver_ctx.schema_checker_ = &schema_checker);
@@ -5682,7 +5682,7 @@ int ObPLResolver::resolve_call(const ObStmtNodeTree *parse_tree, ObPLCallStmt *s
     if (OB_ISNULL(name_node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("the children of parse tree is NULL", K(name_node), K(ret));
-    } else if (OB_FAIL(schema_checker.init(resolve_ctx_.schema_guard_))) {
+    } else if (OB_FAIL(schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()))) {
       LOG_ERROR("schema checker init failed", K(ret));
     } else {
       ObString db_name;
@@ -10163,7 +10163,7 @@ int ObPLResolver::resolve_udf_info(
   CK (OB_NOT_NULL(udf_info.ref_expr_));
   CK (OB_NOT_NULL(current_block_));
   OX (func.set_external_state());
-  OZ (schema_checker.init(resolve_ctx_.schema_guard_));
+  OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()));
   OZ (ObRawExprUtils::rebuild_expr_params(udf_info, &expr_factory_, expr_params), K(udf_info), K(access_idxs));
   {
     ObPLMockSelfArg self(access_idxs, expr_params, expr_factory_);
@@ -10461,7 +10461,7 @@ int ObPLResolver::check_local_variable_read_only(
   ObSchemaChecker schema_checker; \
   const ObTriggerInfo *trg_info = NULL; \
   const uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();  \
-  OZ (schema_checker.init(resolve_ctx_.schema_guard_)); \
+  OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid())); \
   OZ (schema_checker.get_trigger_info(tenant_id, ns.get_db_name(), ns.get_package_name(), trg_info)); \
   CK (OB_NOT_NULL(trg_info));
 
@@ -12603,7 +12603,7 @@ int ObPLResolver::resolve_condition(const ObStmtNodeTree *parse_tree,
     ObString db_name;
     ObString package_name;
     ObString condition_name;
-    OZ (schema_checker.init(resolve_ctx_.schema_guard_));
+    OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()));
     OZ (ObResolverUtils::resolve_sp_access_name(schema_checker,
                                                resolve_ctx_.session_info_.get_effective_tenant_id(),
                                                resolve_ctx_.session_info_.get_database_name(),
@@ -13302,7 +13302,7 @@ int ObPLResolver::resolve_cursor(
     ObString db_name;
     ObString package_name;
     ObString cursor_name;
-    OZ (schema_checker.init(resolve_ctx_.schema_guard_));
+    OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()));
     OZ (ObResolverUtils::resolve_sp_access_name(
       schema_checker, resolve_ctx_.session_info_.get_effective_tenant_id(),
       resolve_ctx_.session_info_.get_database_name(),
@@ -15209,7 +15209,7 @@ int ObPLResolver::check_var_type(ObString &name, uint64_t db_id, ObSchemaType &s
     ObSynonymChecker synonym_checker;
     uint64_t object_db_id = OB_INVALID_ID;
     ObString object_name;
-    if (OB_FAIL(schema_checker.init(schema_guard))) {
+    if (OB_FAIL(schema_checker.init(schema_guard, resolve_ctx_.session_info_.get_sessid()))) {
       LOG_WARN("failed to init schema_checker", K(ret));
     } else if (OB_FAIL(ObResolverUtils::resolve_synonym_object_recursively(
                            schema_checker, synonym_checker, tenant_id,
@@ -15271,7 +15271,7 @@ int ObPLResolver::check_update_column(const ObPLBlockNS &ns, const ObIArray<ObOb
     ObSchemaChecker schema_checker;
     const ObTriggerInfo *trg_info = NULL;
     const uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();
-    OZ (schema_checker.init(resolve_ctx_.schema_guard_));
+    OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()));
     OZ (schema_checker.get_trigger_info(tenant_id,
                                         ns.get_db_name(),
                                         ns.get_package_name(),

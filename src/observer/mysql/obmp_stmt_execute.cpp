@@ -2010,7 +2010,7 @@ int ObMPStmtExecute::get_package_type_by_name(ObIAllocator &allocator,
   CK (OB_NOT_NULL(ctx_.session_info_));
   CK (OB_NOT_NULL(ctx_.session_info_->get_pl_engine()));
   if (OB_SUCC(ret) && OB_ISNULL(pl_type ))
-  OZ (schema_checker.init(*ctx_.schema_guard_));
+  OZ (schema_checker.init(*ctx_.schema_guard_, ctx_.session_info_->get_sessid()));
   OZ (schema_checker.get_package_info(ctx_.session_info_->get_effective_tenant_id(),
                                       type_info->relation_name_,
                                       type_info->package_name_,
