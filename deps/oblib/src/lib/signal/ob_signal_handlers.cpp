@@ -76,7 +76,7 @@ signal_handler_t &get_signal_handler()
   return (&tl_handler)->v_;
 }
 bool g_redirect_handler = false;
-static int g_coredump_num = 0;
+static __thread int g_coredump_num = 0;
 
 #define COMMON_FMT "timestamp=%ld, tid=%ld, tname=%s, trace_id=%lu-%lu-%lu-%lu, extra_info=(%s), lbt=%s"
 
@@ -157,8 +157,8 @@ void coredump_cb(int sig, siginfo_t *si, void *context)
     pid_t pid;
     close_socket_fd();
     ret = minicoredump(sig, GETTID(), pid);
-    send_request_and_wait(VERB_LEVEL_2,
-                          syscall(SYS_gettid)/*exclude_id*/);
+    //send_request_and_wait(VERB_LEVEL_2,
+    //                      syscall(SYS_gettid)/*exclude_id*/);
     // parent or fork failed
     timespec time = {0, 0};
     clock_gettime(CLOCK_REALTIME, &time);
