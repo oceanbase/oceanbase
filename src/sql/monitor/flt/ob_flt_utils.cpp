@@ -236,9 +236,7 @@ namespace sql
               LOG_WARN("failed to deserialize full link trace extra info",
                                         KP(buf), K(ret), K(pos), K(v_len));
             } else {
-              PRINT_WITH_TRACE_MODE(FLT, INFO, [&] {
-                _FLT_LOG(INFO, "%s", drv_span.span_info_.ptr());
-              }());
+              _FLT_LOG(INFO, "%s", drv_span.span_info_.ptr());
             }
             break;
           }

@@ -113,7 +113,7 @@ void flush_trace()
         span = next;
       }
     };
-    PRINT_WITH_TRACE_MODE(FLT, INFO, func());
+    func();
     trace.offset_ = trace.buffer_size_ / 2;
   }
 }
