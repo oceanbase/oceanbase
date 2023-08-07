@@ -1901,7 +1901,7 @@ int ObLogPlan::generate_cross_product_conflict_rule(ConflictDetector *cross_prod
               //do nothing
             } else if (OB_FAIL(used_infos.add_member(j))) {
               LOG_WARN("failed to add member", K(ret));
-            } else if (connect_tables.add_members(connect_infos.at(j))) {
+            } else if (OB_FAIL(connect_tables.add_members(connect_infos.at(j)))) {
               LOG_WARN("failed to add members", K(ret));
             }
           }
@@ -13271,11 +13271,11 @@ int ObLogPlan::compute_subplan_filter_repartition_distribution_info(ObLogicalOpe
                                                      right_keys,
                                                      null_safe_info))) {
       LOG_WARN("failed to get subplan filter equal key", K(ret));
-    } else if (compute_repartition_distribution_info(input_esets,
+    } else if (OB_FAIL(compute_repartition_distribution_info(input_esets,
                                                      left_keys,
                                                      right_keys,
                                                      *right_child,
-                                                     exch_info)) {
+                                                     exch_info))) {
       LOG_WARN("failed to compute repartition distribution info", K(ret));
     } else if (OB_FAIL(exch_info.server_list_.assign(max_parallel_child->get_server_list()))) {
       LOG_WARN("failed to assign server list", K(ret));

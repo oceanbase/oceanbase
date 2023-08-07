@@ -1505,20 +1505,33 @@ int ObRestoreService::reset_schema_status(const uint64_t tenant_id, common::ObMy
 int ObRestoreService::may_update_restore_concurrency_(const uint64_t new_tenant_id, const share::ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
-  const int64_t concurrency = job_info.get_concurrency();
-  const ObString &tenant_name = job_info.get_tenant_name();
+  double cpu_count = 0;
   int64_t ha_high_thread_score = 0;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(new_tenant_id));
-  if (tenant_config.is_valid()) {
-    ha_high_thread_score = tenant_config->ha_high_thread_score;
-  }
+  // restore concurrency controls the number of threads used by restore dag.
+  // if cpu number is less than 10, use the default value.
+  // if cpu number is between 10 ~ 100, let concurrency equals to the cpu number.
+  // if cpu number is exceed 100,  let concurrency equals to 100.
+  const int64_t LOW_CPU_LIMIT = 10;
+  const int64_t MAX_CPU_LIMIT = 100;
   if (!job_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(job_info));
-  } else if (0 == concurrency || 0 != ha_high_thread_score) {
-    LOG_INFO("do nothing", K(concurrency), K(ha_high_thread_score));
-  } else if (OB_FAIL(update_restore_concurrency_(tenant_name, new_tenant_id, concurrency))) {
-    LOG_WARN("failed to update restore concurrency", K(ret), K(job_info));
+  } else if (tenant_config.is_valid() && OB_FALSE_IT(ha_high_thread_score = tenant_config->ha_high_thread_score)) {
+  } else if (0 != ha_high_thread_score) {
+    LOG_INFO("ha high thread score has been set", K(ha_high_thread_score));
+  } else if (OB_FAIL(ObRestoreUtil::get_restore_tenant_cpu_count(*sql_proxy_, new_tenant_id, cpu_count))) {
+    LOG_WARN("failed to get restore tenant cpu count", K(ret), K(new_tenant_id));
+  } else {
+    int64_t concurrency = job_info.get_concurrency();
+    if (LOW_CPU_LIMIT < cpu_count && MAX_CPU_LIMIT >= cpu_count) {
+      concurrency = std::max(static_cast<int64_t>(cpu_count), concurrency);
+    } else if (MAX_CPU_LIMIT < cpu_count) {
+      concurrency = MAX_CPU_LIMIT;
+    }
+    if (OB_FAIL(update_restore_concurrency_(job_info.get_tenant_name(), new_tenant_id, concurrency))) {
+      LOG_WARN("failed to update restore concurrency", K(ret), K(job_info));
+    }
   }
   return ret;
 }

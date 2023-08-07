@@ -269,7 +269,7 @@ int ObTableLoadTaskThreadPoolScheduler::add_task(int64_t thread_idx, ObTableLoad
     if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, DEFAULT_TIMEOUT_US))) {
       LOG_WARN("fail to set default timeout ctx", KR(ret));
     } else {
-      OB_TABLE_LOAD_STATISTICS_TIME_COST(add_task_time_us);
+      OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, add_task_time_us);
       WorkerContext &worker_ctx = worker_ctx_array_[thread_idx];
       // LOG_WARN("table load add task begin", KP(this), K(thread_idx), "size", worker_ctx.task_queue_.size());
       if (OB_FAIL(worker_ctx.task_queue_.push(task, ctx.get_timeout()))) {

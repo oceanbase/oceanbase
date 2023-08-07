@@ -2681,6 +2681,7 @@ inline int ObSQLSessionInfo::init_mem_context(uint64_t tenant_id)
     if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       SQL_ENG_LOG(WARN, "create entity failed", K(ret));
     } else if (OB_ISNULL(mem_context_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       SQL_ENG_LOG(WARN, "mem entity is null", K(ret));
     }
   }
@@ -3117,11 +3118,11 @@ int ObAppInfoEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf, const
   ObSQLSessionInfo::ApplicationInfo app_info;
   if (OB_FAIL(app_info.deserialize(buf, length, pos))) {
     LOG_WARN("failed to deserialize application info.", K(ret), K(pos), K(length));
-  } else if (sess.set_client_info(app_info.client_info_)) {
+  } else if (OB_FAIL(sess.set_client_info(app_info.client_info_))) {
     LOG_WARN("failed to set client info", K(ret));
-  } else if (sess.set_action_name(app_info.action_name_)) {
+  } else if (OB_FAIL(sess.set_action_name(app_info.action_name_))) {
     LOG_WARN("failed to set action name", K(ret));
-  } else if (sess.set_module_name(app_info.module_name_)) {
+  } else if (OB_FAIL(sess.set_module_name(app_info.module_name_))) {
     LOG_WARN("failed to set module name", K(ret));
   } else {
     LOG_TRACE("get encoder app info", K(sess.get_client_app_info().module_name_),

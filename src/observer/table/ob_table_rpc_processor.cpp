@@ -400,6 +400,7 @@ int ObTableApiProcessorBase::setup_tx_snapshot_(transaction::ObTxDesc &trans_des
     SCN weak_read_snapshot;
     if (OB_FAIL(txs->get_weak_read_snapshot_version(
               -1, // system variable : max read stale time for user
+              false,
               weak_read_snapshot))) {
       LOG_WARN("fail to get weak read snapshot", K(ret));
     } else {

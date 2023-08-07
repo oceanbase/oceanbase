@@ -488,5 +488,23 @@ bool ObCollectStateRespMsg::is_valid() const
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObAskTxStateFor4377Msg, tx_id_, ls_id_);
+OB_SERIALIZE_MEMBER(ObAskTxStateFor4377RespMsg, is_alive_, ret_);
+
+bool ObAskTxStateFor4377Msg::is_valid() const
+{
+  bool ret = false;
+  if (tx_id_.is_valid()
+      && ls_id_.is_valid()) {
+    ret = true;
+  }
+  return ret;
+}
+
+bool ObAskTxStateFor4377RespMsg::is_valid() const
+{
+  return true;
+}
+
 } // transaction
 } // oceanbase

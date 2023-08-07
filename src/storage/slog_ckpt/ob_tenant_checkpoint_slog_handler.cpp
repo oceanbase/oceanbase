@@ -18,6 +18,7 @@
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "storage/ob_super_block_struct.h"
+#include "storage/slog/ob_storage_log_reader.h"
 #include "storage/slog/ob_storage_log_replayer.h"
 #include "storage/slog/ob_storage_log.h"
 #include "storage/slog/ob_storage_logger_manager.h"
@@ -833,33 +834,6 @@ int ObTenantCheckpointSlogHandler::replay_create_tablets_per_task(
   if (OB_SUCC(ret)) {
     inc_finished_replay_tablet_cnt(tablet_addr_arr.count());
   }
-  return ret;
-}
-
-int ObTenantCheckpointSlogHandler::enable_ls_read()
-{
-  int ret = OB_SUCCESS;
-  common::ObSharedGuard<ObLSIterator> ls_iter;
-  ObLS *ls = nullptr;
-
-  if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD))) {
-    LOG_WARN("fail to get log stream iter", K(ret));
-  } else {
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(ls_iter->get_next(ls))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-          break;
-        } else {
-          LOG_WARN("fail to get next log stream", K(ret));
-        }
-      } else {
-        ObLSLockGuard lock_ls(ls);
-        ls->enable_to_read();
-      }
-    }
-  }
-
   return ret;
 }
 

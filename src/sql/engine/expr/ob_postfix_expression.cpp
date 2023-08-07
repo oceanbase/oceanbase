@@ -517,6 +517,7 @@ int ObPostfixExpression::calc_result_row(ObExprCtx &expr_ctx, const common::ObNe
     if (OB_FAIL(ret)) {
       LOG_WARN("no memory or deep copy has failed", K(ret));
     } else if (OB_ISNULL(result_row.cells_)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("result row cells is null", K(ret));
     } else {
       result_row.cells_[0].set_type(ObMaxType);
@@ -596,6 +597,7 @@ int ObPostfixExpression::calc_result_row(ObExprCtx &expr_ctx, const common::ObNe
   if (OB_FAIL(ret)) {
     LOG_WARN("no memory or deep copy has failed", K(ret));
   } else if (OB_ISNULL(result_row.cells_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("result row cells is null", K(ret));
   } else {
     result_row.cells_[0].set_type(ObMaxType);

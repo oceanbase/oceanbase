@@ -54,7 +54,7 @@ private:
 private:
   /* palf lock config*/
   static int try_lock_config_change_(const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout);
-  static int try_lock_config_change_fallback_(const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout,
+  static int inner_try_lock_config_change_(const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout,
       storage::ObStorageRpc &storage_rpc);
   static int get_config_change_lock_stat_(const ObTransferTaskLockInfo &lock_info,
       int64_t &palf_lock_owner, bool &is_locked);

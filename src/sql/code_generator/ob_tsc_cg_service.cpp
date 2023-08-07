@@ -165,7 +165,7 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
                                                         tsc_ctdef.lookup_loc_meta_,
                                                         tsc_ctdef.calc_part_id_expr_))) {
           LOG_WARN("fail to generate calc part id expr", K(ret), KP(op.get_calc_part_id_expr()));
-        } else if (cg_.generate_rt_exprs(op.get_rowkey_exprs(), tsc_ctdef.global_index_rowkey_exprs_)) {
+        } else if (OB_FAIL(cg_.generate_rt_exprs(op.get_rowkey_exprs(), tsc_ctdef.global_index_rowkey_exprs_))) {
           LOG_WARN("fail to generate rowkey exprs", K(ret));
         }
       }

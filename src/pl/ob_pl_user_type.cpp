@@ -286,8 +286,7 @@ int ObUserDefinedType::deep_copy_obj(
 
   if (OB_SUCC(ret)) {
     switch (src.get_meta().get_extend_type()) {
-    case PL_CURSOR_TYPE:
-    case PL_REF_CURSOR_TYPE: {
+    case PL_CURSOR_TYPE: {
       OZ (ObRefCursorType::deep_copy_cursor(allocator, src, dst));
     }
       break;
@@ -319,6 +318,10 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session)
       OZ (cursor->close(*session));
       OX (cursor->~ObPLCursorInfo());
       OX (src.set_null());
+    }
+      break;
+    case PL_REF_CURSOR_TYPE: {
+      // do nothing
     }
       break;
     case PL_RECORD_TYPE: {
@@ -1993,7 +1996,7 @@ int ObPLCollection::update_first_impl()
 {
   int ret = OB_SUCCESS;
   if (!is_inited()) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_COLLECION_NULL;
     LOG_WARN("pl collection is not inited", K(ret));
   } else if (0 > count_) {
     ret = OB_ERR_UNEXPECTED;
@@ -2027,7 +2030,7 @@ int ObPLCollection::update_last_impl()
 {
   int ret = OB_SUCCESS;
   if (!is_inited()) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_COLLECION_NULL;
     LOG_WARN("pl collection is not inited", K(ret));
   } else if (0 > count_) {
     ret = OB_ERR_UNEXPECTED;

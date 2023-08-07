@@ -32,13 +32,16 @@ void ObBlockSlicer::print_leak_slice() {
     total--;
   }
 
+  LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "", K(limit), K(slice_size), K(isize), K(total), KP(istart));
+
   for (int32_t i = 0; i < total; i++) {
     Item *item = (Item *)(istart + i * isize);
     void *slice = (void *)(item + 1);
+    LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "", KP(item), KP(slice));
     if (flist_.is_in_queue(item)) {
       // this item has been freed
     } else {
-      LIB_LOG_RET(WARN, OB_SUCCESS, "leak info : ", KP(item), KP(slice));
+      LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "leak info : ", KP(item), KP(slice));
     }
   }
 }

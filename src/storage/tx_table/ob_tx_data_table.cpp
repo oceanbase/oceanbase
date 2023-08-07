@@ -1234,6 +1234,9 @@ int ObTxDataTable::supplement_undo_actions_if_exist(ObTxData *tx_data)
     }
   } else {
     // assign and reset to avoid deep copy
+    if (OB_NOT_NULL(tx_data->undo_status_list_.head_)) {
+      STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid undo status list", KPC(tx_data));
+    }
     tx_data->undo_status_list_ = tx_data_from_sstable.undo_status_list_;
     tx_data_from_sstable.undo_status_list_.reset();
   }

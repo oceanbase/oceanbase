@@ -606,6 +606,7 @@ int ObDelUpdResolver::resolve_additional_assignments(ObIArray<ObTableAssignment>
             LOG_WARN("no column expr returned", K(ret));
           } else if (OB_ISNULL(col_item = stmt->get_column_item_by_id(
               table_item->table_id_, col_exprs.at(0)->get_column_id()))) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get column item failed", K(ret));
           } else {
             assignment.column_expr_ = col_item->expr_;
@@ -3597,9 +3598,11 @@ int ObDelUpdResolver::build_hidden_pk_assignment(ObTableAssignment &ta,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("no column expr returned", K(ret));
       } else if (OB_ISNULL(col_expr = col_exprs.at(0))) {
-
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("no column expr returned", K(ret));
       } else if (OB_ISNULL(col_item = stmt->get_column_item_by_id(table_item->table_id_,
                                                                   col_exprs.at(0)->get_column_id()))) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get column item failed", K(ret),
                  "table_id", table_item->table_id_,
                  "column_id", col_exprs.at(0)->get_column_id());
@@ -3976,7 +3979,7 @@ int ObDelUpdResolver::add_select_list_for_set_stmt(ObSelectStmt &select_stmt)
       res_type.reset();
       new_select_item.alias_name_ = select_item.alias_name_;
       new_select_item.expr_name_ = select_item.expr_name_;
-      new_select_item.is_real_alias_ = true;
+      new_select_item.is_real_alias_ = select_item.is_real_alias_ || select_item.expr_->is_column_ref_expr();
       res_type = select_item.expr_->get_result_type();
       if (OB_FAIL(ObRawExprUtils::make_set_op_expr(*params_.expr_factory_, i, set_op_type, res_type,
                                                    session_info_, new_select_item.expr_))) {

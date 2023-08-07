@@ -394,9 +394,7 @@ int ObFastParserBase::process_interval()
     int next_pos = is_interval_pricision_with_space(raw_sql_.cur_pos_); \
     if (-1 != next_pos) { \
       raw_sql_.cur_pos_ = next_pos; \
-      if (!is_second) { \
-        back_pos = raw_sql_.cur_pos_; \
-      } \
+      back_pos = raw_sql_.cur_pos_; \
       ch = raw_sql_.char_at(raw_sql_.cur_pos_); \
       while (IS_MULTI_SPACE(raw_sql_.cur_pos_, byte_len)) { \
         ch = raw_sql_.scan(byte_len); \
@@ -1046,9 +1044,15 @@ int ObFastParserBase::process_hex_number(bool is_quote)
          * Values written using X'val' notation must contain an even number of digits or a syntax error occurs. To correct the problem, pad the value with a leading zero.
          * Values written using 0xval notation that contain an odd number of digits are treated as having an extra leading 0. For example, 0xaaa is interpreted as 0x0aaa.
          */
-        return OB_ERR_PARSER_SYNTAX;
         LOG_WARN("parser syntax error",
                  K(ret), K(str_len), K(raw_sql_.to_string()), K_(raw_sql_.cur_pos));
+        return OB_ERR_PARSER_SYNTAX;
+      }
+    } else {
+      // Values written using 0xval notation NOTE: 0Xval (use upper case 'X') notation is illegal in MySQL
+      if (!is_oracle_mode_ && raw_sql_.char_at(cur_token_begin_pos_ + 1) == 'X') {
+        LOG_WARN("parser syntax error", K(ret));
+        return OB_ERR_PARSER_SYNTAX;
       }
     }
     if (str_len > 0) {
@@ -1126,6 +1130,12 @@ int ObFastParserBase::process_binary(bool is_quote)
     int64_t dst_str_len = 0;
     if ('\'' == raw_sql_.char_at(raw_sql_.cur_pos_ - 1)) {
       --str_len;
+    } else {
+      // Values written using 0bval notation NOTE: 0Bval (use upper case 'B') notation is illegal in MySQL
+      if (!is_oracle_mode_ && raw_sql_.char_at(cur_token_begin_pos_ + 1) == 'B') {
+        LOG_WARN("parser syntax error", K(ret));
+        return OB_ERR_PARSER_SYNTAX;
+      }
     }
     if (str_len > 0) {
       dst_str_len = ob_parse_bit_string_len(str_len);

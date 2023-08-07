@@ -569,6 +569,13 @@ void ObMutatorTableLock::reset()
   create_schema_version_ = -1;
 }
 
+bool ObMutatorTableLock::is_valid() const
+{
+  return (lock_id_.is_valid() &&
+          is_lock_mode_valid(mode_) &&
+          is_op_type_valid(lock_type_));
+}
+
 int ObMutatorTableLock::copy(ObLockID &lock_id,
                              ObTableLockOwnerID &owner_id,
                              ObTableLockMode &lock_mode,
@@ -1030,6 +1037,9 @@ int ObMutatorWriter::append_table_lock_kv(
       } else {
         ret = OB_BUF_NOT_ENOUGH;
       }
+    } else if (!table_lock.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "mutator tablelock is invalid", K(ret), K(table_lock), KP(redo.callback_));
     } else if (OB_FAIL(table_lock.serialize(buf_.get_data(),
                                             row_capacity,
                                             tmp_pos))) {

@@ -1408,7 +1408,7 @@ int ObResolverUtils::resolve_synonym_object_recursively(ObSchemaChecker &schema_
                 K(ret), K(tenant_id), K(database_id), K(synonym_name));
       }
     } else if (OB_FAIL(schema_checker.check_exist_same_name_object_with_synonym(tenant_id,
-                                                                                database_id,
+                                                                                object_database_id,
                                                                                 object_name,
                                                                                 exist_non_syn_object)) || !exist_non_syn_object) {
       OZ (SMART_CALL(resolve_synonym_object_recursively(
@@ -4113,7 +4113,7 @@ int ObResolverUtils::resolve_partition_expr(ObResolverParams &params,
               || is_list_part(part_func_type) || PARTITION_FUNC_TYPE_KEY == part_func_type) {
         if (OB_FAIL(check_expr_valid_for_partition(
             *part_expr, *params.session_info_, part_func_type, tbl_schema))) {
-          LOG_WARN("check_valid_column_for_hash or range func failed", K(ret));
+          LOG_WARN("check_valid_column_for_hash or range func failed", K(ret), KPC(part_expr));
         }
       }
     }
@@ -6291,6 +6291,7 @@ int ObResolverUtils::check_pk_idx_duplicate(const ObTableSchema &table_schema,
     if (OB_FAIL(rowkey.get_column_id(rowkey_idx, column_id))) {
       LOG_WARN("fail to get column id", K(ret));
     } else if (OB_ISNULL(column = table_schema.get_column_schema(column_id))) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to get column schema", K(ret), K(column_id), K(rowkey));
     } else if (column->is_hidden()) {
       // skip hidden pk col

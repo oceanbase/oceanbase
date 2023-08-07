@@ -236,6 +236,7 @@ public:
                      const int64_t create_schema_version);
   virtual ~ObMutatorTableLock();
   void reset();
+  bool is_valid() const;
   int copy(transaction::tablelock::ObLockID &lock_id,
            transaction::tablelock::ObTableLockOwnerID &owner_id,
            transaction::tablelock::ObTableLockMode &lock_mode,
@@ -243,7 +244,6 @@ public:
            int64_t &seq_no,
            int64_t &create_timestamp,
            int64_t &create_schema_version) const;
-
   int serialize(char *buf, const int64_t buf_len, int64_t &pos);
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
 

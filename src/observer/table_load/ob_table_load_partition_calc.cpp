@@ -136,7 +136,7 @@ int ObTableLoadPartitionCalc::init_part_key_index(const ObTableSchema *table_sch
 
 int ObTableLoadPartitionCalc::calc(ObTableLoadPartitionCalcContext &ctx)
 {
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(calc_part_time_us);
+  OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, calc_part_time_us);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

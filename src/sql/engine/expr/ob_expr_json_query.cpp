@@ -61,7 +61,7 @@ int ObExprJsonQuery::calc_result_typeN(ObExprResType& type,
   UNUSED(type_ctx);
   INIT_SUCC(ret);
   common::ObArenaAllocator allocator;
-  if (OB_UNLIKELY(param_num != 10)) {
+  if (OB_UNLIKELY(param_num != 11)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("invalid param number", K(ret), K(param_num));
   } else {
@@ -133,7 +133,7 @@ int ObExprJsonQuery::calc_result_typeN(ObExprResType& type,
         }
       }
     }
-    // scalars  3, pretty  4, ascii  5, wrapper 6, error   7, empty  8, mismatch  9
+    // truncate 3  , scalars  4, pretty  5, ascii  6, wrapper 7, error 8, empty 9, mismatch 10
     for (int64_t i = 3; i < param_num && OB_SUCC(ret); ++i) {
       if (types_stack[i].get_type() == ObNullType) {
         ret = OB_ERR_UNEXPECTED;
@@ -145,7 +145,7 @@ int ObExprJsonQuery::calc_result_typeN(ObExprResType& type,
 
     // ASCII clause
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObJsonExprHelper::parse_asc_option(types_stack[5], types_stack[0], type, type_ctx))) {
+      if (OB_FAIL(ObJsonExprHelper::parse_asc_option(types_stack[6], types_stack[0], type, type_ctx))) {
         LOG_WARN("fail to parse asc option.", K(ret));
       }
     }
@@ -242,9 +242,9 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   uint8_t error_type = OB_JSON_ON_RESPONSE_IMPLICIT;
   ObDatum *error_val = NULL;
   if (OB_SUCC(ret) && !is_null_result) {
-    ret = get_clause_opt(expr, ctx, 7, is_cover_by_error, error_type, OB_JSON_ON_RESPONSE_COUNT);
+    ret = get_clause_opt(expr, ctx, 8, is_cover_by_error, error_type, OB_JSON_ON_RESPONSE_COUNT);
   } else if (is_cover_by_error) { // always get error option on error
-    int temp_ret = get_clause_opt(expr, ctx, 7, is_cover_by_error, error_type, OB_JSON_ON_RESPONSE_COUNT);
+    int temp_ret = get_clause_opt(expr, ctx, 8, is_cover_by_error, error_type, OB_JSON_ON_RESPONSE_COUNT);
     if (temp_ret != OB_SUCCESS) {
       ret = temp_ret;
       LOG_WARN("failed to get error option.", K(temp_ret));
@@ -254,7 +254,7 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   // parse wrapper
   uint8_t wrapper_type = OB_WRAPPER_IMPLICIT;
   if (OB_SUCC(ret)) {
-    ret = get_clause_opt(expr, ctx, 6, is_cover_by_error, wrapper_type, OB_WRAPPER_COUNT);
+    ret = get_clause_opt(expr, ctx, 7, is_cover_by_error, wrapper_type, OB_WRAPPER_COUNT);
   }
 
   if (OB_SUCC(ret) && j_path->get_last_node_type() > JPN_BEGIN_FUNC_FLAG
@@ -275,7 +275,7 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   uint8_t mismatch_type = OB_JSON_ON_MISMATCH_IMPLICIT;
   uint8_t mismatch_val = 7;
   if (OB_SUCC(ret) && !is_null_result) {
-    if (OB_FAIL(get_clause_opt(expr, ctx, 9, is_cover_by_error, mismatch_type, OB_JSON_ON_MISMATCH_COUNT))) {
+    if (OB_FAIL(get_clause_opt(expr, ctx, 10, is_cover_by_error, mismatch_type, OB_JSON_ON_MISMATCH_COUNT))) {
       LOG_WARN("failed to get mismatch option.", K(ret), K(mismatch_type));
     }
   }
@@ -341,7 +341,7 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
         // parse empty option
       uint8_t empty_type = OB_JSON_ON_RESPONSE_IMPLICIT;
       if (OB_SUCC(ret) && !is_null_result) {
-        ret = get_clause_opt(expr, ctx, 8, is_cover_by_error, empty_type, OB_JSON_ON_RESPONSE_COUNT);
+        ret = get_clause_opt(expr, ctx, 9, is_cover_by_error, empty_type, OB_JSON_ON_RESPONSE_COUNT);
       }
       if (OB_SUCC(ret) && OB_FAIL(get_empty_option(hits, is_cover_by_error, empty_type, is_null_result, is_null_json_obj, is_null_json_array))) {
         LOG_WARN("get empty type", K(ret));
@@ -523,7 +523,7 @@ int ObExprJsonQuery::set_result(ObObjType dst_type,
     ObIJsonBase *jb_res_bin = NULL;
     if (OB_FAIL(ret)) {
       LOG_WARN("json extarct get results failed", K(ret));
-    } else if (ObJsonBaseFactory::transform(allocator, jb_res, ObJsonInType::JSON_BIN, jb_res_bin)) { // to BIN
+    } else if (OB_FAIL(ObJsonBaseFactory::transform(allocator, jb_res, ObJsonInType::JSON_BIN, jb_res_bin))) { // to BIN
       LOG_WARN("fail to transform to tree", K(ret));
     } else if (OB_FAIL(jb_res_bin->get_raw_binary(raw_str, allocator))) {
       LOG_WARN("json extarct get result binary failed", K(ret));
@@ -550,15 +550,15 @@ int ObExprJsonQuery::get_clause_pre_asc_sca_opt(const ObExpr &expr, ObEvalCtx &c
   INIT_SUCC(ret);
     // parse pretty
   if (OB_SUCC(ret)) {
-    ret = get_clause_opt(expr, ctx, 4, is_cover_by_error, pretty_type, OB_JSON_PRE_ASC_COUNT);
+    ret = get_clause_opt(expr, ctx, 5, is_cover_by_error, pretty_type, OB_JSON_PRE_ASC_COUNT);
   }
   // parse ascii
   if (OB_SUCC(ret)) {
-    ret = get_clause_opt(expr, ctx, 5, is_cover_by_error, ascii_type, OB_JSON_PRE_ASC_COUNT);
+    ret = get_clause_opt(expr, ctx, 6, is_cover_by_error, ascii_type, OB_JSON_PRE_ASC_COUNT);
   }
   // parse scalars
   if (OB_SUCC(ret)) {
-    ret = get_clause_opt(expr, ctx, 3, is_cover_by_error, scalars_type, OB_JSON_SCALARS_COUNT);
+    ret = get_clause_opt(expr, ctx, 4, is_cover_by_error, scalars_type, OB_JSON_SCALARS_COUNT);
   }
   return ret;
 }

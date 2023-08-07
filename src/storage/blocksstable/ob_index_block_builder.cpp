@@ -984,7 +984,7 @@ int ObSSTableIndexBuilder::parse_macro_header(
   if (OB_UNLIKELY(buf_size <= 0) || OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "the argument is invalid", K(ret), K(buf_size), KP(buf));
-  } else if (common_header.deserialize(buf, buf_size, pos)) {
+  } else if (OB_FAIL(common_header.deserialize(buf, buf_size, pos))) {
     STORAGE_LOG(WARN, "fail to deserialize common header", K(ret), K(buf_size), KP(buf), K(pos));
   } else if (OB_FAIL(macro_header.deserialize(buf, buf_size, pos))) {
     STORAGE_LOG(WARN, "fail to deserialize macro header", K(ret), KP(buf), K(buf_size), K(pos));

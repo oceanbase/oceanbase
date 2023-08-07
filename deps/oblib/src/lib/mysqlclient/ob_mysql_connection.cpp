@@ -234,6 +234,15 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
       LOG_WARN("fail to connect to mysql server", K(get_sessid()), KCSTRING(host), KCSTRING(user), KCSTRING(db), K(port),
                "info", mysql_error(&mysql_), K(ret));
       if (OB_INVALID_ID != get_dblink_id()) {
+        LOG_WARN("dblink connection error", K(ret),
+                                            KP(this),
+                                            K(get_dblink_id()),
+                                            K(get_sessid()),
+                                            K(usable()),
+                                            K(user),
+                                            K(db),
+                                            K(host),
+                                            K(port));
         TRANSLATE_CLIENT_ERR_2(ret, false, mysql_error(&mysql_));
       }
     } else {

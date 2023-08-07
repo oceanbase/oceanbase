@@ -169,7 +169,7 @@ int ObAsyncExecuteResult::open(ObExecContext &ctx)
   if (OB_ISNULL(scanner_) || OB_ISNULL(plan_ctx) || OB_ISNULL(session)) {
     ret = OB_NOT_INIT;
     LOG_WARN("scanner is invalid", K(ret), K(scanner_), K(plan_ctx), K(session));
-  } else if (ObTaskExecutorCtxUtil::merge_task_result_meta(*plan_ctx, *scanner_)) {
+  } else if (OB_FAIL(ObTaskExecutorCtxUtil::merge_task_result_meta(*plan_ctx, *scanner_))) {
     LOG_WARN("merge task result meta failed", K(ret), KPC_(scanner));
   } else if (OB_FAIL(session->replace_user_variables(ctx, scanner_->get_session_var_map()))) {
     LOG_WARN("replace user variables failed", K(ret));

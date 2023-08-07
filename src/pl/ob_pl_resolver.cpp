@@ -8147,7 +8147,7 @@ int ObPLResolver::build_raw_expr(const ParseNode *node,
     } else {
       // do nothing
     }
-    if (OB_SUCCESS == tmp_ret) {
+    if (OB_SUCCESS == tmp_ret && !columns.at(0).col_name_.empty()) {
     // we don't want the ret code to be cover intendedly
       if (OB_SUCCESS != (tmp_ret = ns.resolve_symbol(columns.at(0).col_name_,
                                           type,
@@ -9810,7 +9810,8 @@ int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
      || OB_ERR_SP_WRONG_ARG_NUM == ret
      || OB_ERR_FUNCTION_UNKNOWN == ret
      || OB_ERR_SP_UNDECLARED_VAR == ret
-     || OB_ERR_INVALID_TYPE_FOR_OP == ret) {
+     || OB_ERR_INVALID_TYPE_FOR_OP == ret
+     || OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       OZ (resolve_record_construct(q_name, udf_info, user_type, expr));
     }
@@ -10498,7 +10499,9 @@ int ObPLResolver::check_local_variable_read_only(
               LOG_MYSQL_USER_ERROR(OB_ERR_TRIGGER_CANT_CHANGE_ROW, "OLD", "");
             }
           }
-        } else if (resolve_ctx_.session_info_.is_for_trigger_package() && lib::is_oracle_mode()) {
+        } else if (resolve_ctx_.session_info_.is_for_trigger_package()
+                   && lib::is_oracle_mode()
+                   && ObTriggerInfo::is_trigger_body_package_id(ns.get_package_id())) {
           GET_TRIGGER_INFO;
           if (OB_FAIL(ret)) {
           } else if (var->get_name().prefix_match(":")) {
@@ -10517,9 +10520,10 @@ int ObPLResolver::check_local_variable_read_only(
         }
       }
     } else if (resolve_ctx_.session_info_.is_for_trigger_package()) {
-      if (lib::is_oracle_mode()) {
+      if (ObTriggerInfo::is_trigger_body_package_id(ns.get_package_id()) && lib::is_oracle_mode()) {
         GET_TRIGGER_INFO;
-        if (OB_SUCC(ret) && trg_info->has_delete_event()) {
+        if (OB_SUCC(ret)
+            && (trg_info->has_delete_event() && !trg_info->has_update_event() && !trg_info->has_insert_event())) {
           if (var->get_name().prefix_match(":")) {
             ObString tmp(var->get_name().length() - 1, var->get_name().ptr() + 1);
             if (0 == trg_info->get_ref_new_name().case_compare(tmp)) {

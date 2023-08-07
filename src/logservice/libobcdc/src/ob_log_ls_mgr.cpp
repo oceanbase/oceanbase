@@ -593,7 +593,8 @@ int ObLogLSMgr::inc_ls_trans_count_on_serving(bool &is_serving,
     const logservice::TenantLSID &tls_id,
     const palf::LSN &commit_log_lsn,
     const bool print_ls_not_serve_info,
-    const int64_t timeout)
+    const int64_t timeout,
+    volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
 
@@ -640,7 +641,11 @@ int ObLogLSMgr::inc_ls_trans_count_on_serving(bool &is_serving,
                 tenant_id_, to_cstring(tls_id), to_cstring(commit_log_lsn));
           } else {}
         } else {
-          is_serving = true;
+          LOG_INFO("[INC_TRANS_COUNT] [FUTURE_LS] wait for future ls begin", K(tls_id));
+          constexpr int64_t retry_interval = 10 * _MSEC_;
+          RETRY_FUNC_ON_ERROR_WITH_USLEEP_MS(OB_ENTRY_NOT_EXIST, retry_interval, stop_flag, *this,
+              inc_trans_count_on_serving_, is_serving, tls_id, print_ls_not_serve_info);
+          LOG_INFO("[INC_TRANS_COUNT] [FUTURE_LS] wait for future ls end", K(tls_id));
         }
       } else {
         LOG_ERROR("inc_trans_count_on_serving_ failed", KR(ret), K(tls_id), K(is_serving));

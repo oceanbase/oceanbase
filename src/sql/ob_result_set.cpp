@@ -703,12 +703,20 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
     // 但是由于目前调度线程给主线程push完最后一个task结果之后, 调度线程不会用到exec_result_.close中释放的变量，
     // 因此目前这样写暂时是没有问题的。
     // 以后要修正这里的逻辑。
+
+    int old_errcode = ctx.get_errcode();
+    if (OB_SUCCESS == old_errcode) {
+      // record error code generated in open-phase for after stmt trigger
+      ctx.set_errcode(errcode);
+    }
     if (OB_ISNULL(exec_result_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("exec result is null", K(ret));
     } else if (OB_FAIL(exec_result_->close(ctx))) {
       SQL_LOG(WARN, "fail close main query", K(ret));
     }
+    // whether `close` is successful or not, restore ctx.errcode_
+    ctx.set_errcode(old_errcode);
     // 通知该plan的所有task删掉对应的中间结果
     int close_ret = OB_SUCCESS;
     ObPhysicalPlanCtx *plan_ctx = NULL;

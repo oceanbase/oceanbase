@@ -8648,6 +8648,7 @@ int ObQueryRange::add_prefix_pattern_constraint(const ObRawExpr *expr)
   if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(expr, expr))) {
     LOG_WARN("fail to get real expr", K(ret));
   } else if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (T_FUN_SYS_PREFIX_PATTERN == expr->get_expr_type()) {
     ObExprConstraint cons(const_cast<ObRawExpr*>(expr), PreCalcExprExpectResult::PRE_CALC_RESULT_NOT_NULL);
@@ -8824,6 +8825,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
   }
 
   if (OB_SUCC(ret)) {
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "S2Adapter"));
     // build s2 object from wkb
     if (OB_FAIL(ObGeoTypeUtil::get_type_from_wkb((buffer_geo.empty() ? wkb_str : buffer_geo), geo_type))) {
       LOG_WARN("fail to get geo type by wkb", K(ret));
@@ -8943,6 +8945,7 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
   }
 
   if (OB_SUCC(ret)) {
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "S2Adapter"));
     // build s2 object from wkb
     if (OB_FAIL(s2object->init((buffer_geo.empty() ? wkb_str : buffer_geo), srs_bound))) {
       LOG_WARN("Init s2object failed", K(ret));

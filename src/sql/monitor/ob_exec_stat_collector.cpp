@@ -81,6 +81,7 @@ int ObExecStatCollector::collect_plan_monitor_info(uint64_t job_id,
       if (OB_FAIL(monitor_info->get_operator_info_by_index(i, op_info))) {
         SQL_MONITOR_LOG(WARN, "fail to get operator info by index", K(ret), K(i));
       } else if (OB_ISNULL(op_info)) {
+        ret = OB_ERR_UNEXPECTED;
         SQL_MONITOR_LOG(WARN, "get invalie op_info", K(ret), K(op_info));
       } else if (OB_FAIL(op_info->set_job_id(job_id))) {
         SQL_MONITOR_LOG(WARN, "fail to set job id", K(ret), K(job_id));

@@ -1885,7 +1885,7 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
       SQL_PC_LOG(WARN, "invalid argument num for json_exists", K(ret), K(tree->num_child_));
     } else {
       const int64_t ARGS_NUMBER_FIVE = 5;
-      bool mark_arr[ARGS_NUMBER_FIVE] = {0, 0, 1, 1, 1};
+      bool mark_arr[ARGS_NUMBER_FIVE] = {0, 1, 1, 1, 1};
       if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_FIVE, sql_info))) {
         SQL_PC_LOG(WARN, "fail to mark json_exists arg", K(ret));
       }

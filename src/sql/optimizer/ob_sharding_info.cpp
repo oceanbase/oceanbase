@@ -193,6 +193,35 @@ int ObShardingInfo::is_compatible_partition_key(const ObIArray<ObSEArray<ObRawEx
   return ret;
 }
 
+int ObShardingInfo::is_compatible_partition_key(const ObShardingInfo &first_sharding,
+                                                const ObShardingInfo &second_sharding,
+                                                bool &is_compatible)
+{
+  int ret = OB_SUCCESS;
+  is_compatible = false;
+  ObSEArray<ObRawExpr*, 8> first_part_keys;
+  ObSEArray<ObRawExpr*, 8> second_part_keys;
+  if (OB_FAIL(first_sharding.get_all_partition_keys(first_part_keys, true))) {
+    LOG_WARN("failed to get sharding partition keys", K(ret));
+  } else if (OB_FAIL(second_sharding.get_all_partition_keys(second_part_keys, true))) {
+    LOG_WARN("failed to get sharding partition keys", K(ret));
+  } else if ((first_part_keys.count() != second_part_keys.count()) || first_part_keys.empty()) {
+    is_compatible = false;
+  } else {
+    is_compatible = true;
+    for (int64_t i = 0; OB_SUCC(ret) && is_compatible && i < first_part_keys.count(); i++) {
+      if (OB_ISNULL(first_part_keys.at(i)) || OB_ISNULL(second_part_keys.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(first_part_keys.at(i)), K(second_part_keys.at(i)), K(ret));
+      } else if (first_part_keys.at(i)->get_data_type() != second_part_keys.at(i)->get_data_type() ||
+                 first_part_keys.at(i)->get_collation_type() != second_part_keys.at(i)->get_collation_type()) {
+        is_compatible = false;
+      } else { /*do nothing*/ }
+    }
+  }
+  return ret;
+}
+
 int ObShardingInfo::is_join_key_cover_partition_key(const EqualSets &equal_sets,
                                                     const ObIArray<ObRawExpr *> &first_keys,
                                                     const ObIArray<ObShardingInfo *> &first_shardings,
@@ -967,6 +996,10 @@ int ObShardingInfo::is_sharding_equal(const ObShardingInfo *left_sharding,
   } else if (NULL == left_sharding->get_phy_table_location_info() &&
              NULL == right_sharding->get_phy_table_location_info()) {
     is_equal = true;
+  } else if (OB_FAIL(is_compatible_partition_key(*left_sharding, *right_sharding, is_equal))) {
+    LOG_WARN("failed to check if is comptiable keys", K(ret));
+  } else if (!is_equal) {
+    /* do nothing */
   } else  {
     PwjTable l_table;
     PwjTable r_table;

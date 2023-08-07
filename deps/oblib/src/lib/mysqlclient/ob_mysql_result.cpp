@@ -86,12 +86,20 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
   // format precision from others to oceanbase
   if (!lib::is_oracle_mode()) {
     switch (ob_type) {
-      case ObUNumberType:
-      case ObNumberType: { // for mysql decimal
-        if (2 == length) {
-          precision = 1;
+      case ObUNumberType:{
+        if (0 != scale) {
+          precision = length - 1;// remove length of decimal point
         } else {
-           precision = length - 1;
+          precision = length;
+        }
+        length = -1;
+        break;
+      }
+      case ObNumberType: {
+        if (0 != scale) {
+          precision = length - 2;// remove length of decimal point and sign(-/+)
+        } else {
+          precision = length - 1;// remove length of decimal point
         }
         length = -1;
         break;

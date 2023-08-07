@@ -1309,7 +1309,7 @@ int ObRADatumStore::finish_add_row()
       const bool finish_add = true;
       if (OB_FAIL(switch_block(min_size))) {
         LOG_WARN("write last block to file failed", K(ret), K(min_size));
-      } else if (switch_idx_block(finish_add)) {
+      } else if (OB_FAIL(switch_idx_block(finish_add))) {
         LOG_WARN("write last index block to file failed", K(ret), K(ret));
       } else if (OB_FAIL(get_timeout(timeout_ms))) {
         LOG_WARN("get timeout failed", K(ret));

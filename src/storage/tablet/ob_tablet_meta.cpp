@@ -40,14 +40,12 @@ ObTabletMeta::ObTabletMeta()
     tablet_id_(),
     data_tablet_id_(),
     ref_tablet_id_(),
-    has_next_tablet_(false),
     create_scn_(ObTabletMeta::INVALID_CREATE_SCN),
     start_scn_(),
     clog_checkpoint_scn_(),
     ddl_checkpoint_scn_(SCN::min_scn()),
     snapshot_version_(OB_INVALID_TIMESTAMP),
     multi_version_start_(OB_INVALID_TIMESTAMP),
-    compat_mode_(lib::Worker::CompatMode::INVALID),
     ha_status_(),
     report_status_(),
     table_store_flag_(),
@@ -61,6 +59,8 @@ ObTabletMeta::ObTabletMeta()
     mds_checkpoint_scn_(),
     transfer_info_(),
     create_schema_version_(0),
+    compat_mode_(lib::Worker::CompatMode::INVALID),
+    has_next_tablet_(false),
     is_inited_(false)
 {
 }
@@ -1285,6 +1285,9 @@ int ObMigrationTabletParam::assign(const ObMigrationTabletParam &param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("migration tablet param is invalid", K(ret), K(param));
   } else {
+    // allocator
+    allocator_.set_attr(ObMemAttr(MTL_ID(), "MigTabletParam", ObCtxIds::DEFAULT_CTX_ID));
+
     is_empty_shell_ = param.is_empty_shell_;
     ls_id_ = param.ls_id_;
     tablet_id_ = param.tablet_id_;

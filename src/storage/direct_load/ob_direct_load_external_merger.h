@@ -71,7 +71,7 @@ template <typename T, typename Compare>
 bool ObDirectLoadExternalMerger<T, Compare>::HeapCompare::operator()(const HeapItem &left_item,
                                                                      const HeapItem &right_item)
 {
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(external_heap_compare_time_us);
+  OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, external_heap_compare_time_us);
   int ret = common::OB_SUCCESS;
   bool bret = false;
   if (OB_ISNULL(compare_)) {

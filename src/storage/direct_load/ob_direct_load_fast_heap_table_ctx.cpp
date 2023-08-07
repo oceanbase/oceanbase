@@ -180,7 +180,7 @@ int ObDirectLoadFastHeapTableTabletContext::get_write_ctx(
 
 int ObDirectLoadFastHeapTableTabletContext::refresh_pk_cache()
 {
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(fast_heap_table_refresh_pk_cache);
+  OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, fast_heap_table_refresh_pk_cache);
   int ret = OB_SUCCESS;
   ObTabletAutoincrementService &auto_inc = ObTabletAutoincrementService::get_instance();
   pk_cache_.tablet_id_ = tablet_id_;

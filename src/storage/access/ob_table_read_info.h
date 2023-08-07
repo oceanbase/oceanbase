@@ -292,7 +292,7 @@ private:
 class ObRowkeyReadInfo final : public ObReadInfoStruct
 {
 public:
-  ObRowkeyReadInfo() : ObReadInfoStruct(true/*rowkey_mode*/) {}
+  ObRowkeyReadInfo();
   virtual ~ObRowkeyReadInfo() {}
 
   int init(

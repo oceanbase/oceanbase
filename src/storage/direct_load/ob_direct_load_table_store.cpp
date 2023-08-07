@@ -150,7 +150,7 @@ int ObDirectLoadTableStoreBucket::init(const ObDirectLoadTableStoreParam &param,
 int ObDirectLoadTableStoreBucket::append_row(const ObTabletID &tablet_id,
                                              const ObDatumRow &datum_row)
 {
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(table_store_bucket_append_row);
+  OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, table_store_bucket_append_row);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -256,7 +256,7 @@ int ObDirectLoadTableStore::new_bucket(ObDirectLoadTableStoreBucket *&bucket)
 int ObDirectLoadTableStore::get_bucket(const ObTabletID &tablet_id,
                                        ObDirectLoadTableStoreBucket *&bucket)
 {
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(table_store_get_bucket);
+  OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, table_store_get_bucket);
   int ret = OB_SUCCESS;
   bucket = nullptr;
   if (!param_.is_multiple_mode_) {
@@ -293,7 +293,7 @@ int ObDirectLoadTableStore::get_bucket(const ObTabletID &tablet_id,
 
 int ObDirectLoadTableStore::append_row(const ObTabletID &tablet_id, const ObDatumRow &datum_row)
 {
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(table_store_append_row);
+  OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, table_store_append_row);
   OB_TABLE_LOAD_STATISTICS_COUNTER(table_store_row_count);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {

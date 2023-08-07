@@ -162,6 +162,11 @@ public:
     OZ(result.deserialize(resp.ptr(), resp.length(), pos));
     return ret;
   }
+  int ask_tx_state_for_4377(const ObAskTxStateFor4377Msg &msg,
+                            ObAskTxStateFor4377RespMsg &resp)
+  {
+    return OB_SUCCESS;
+  }
   template<class MSG_RESULT_T>
   int send_msg_callback(const ObAddr &recv,
                         const ObTxMsg &msg,

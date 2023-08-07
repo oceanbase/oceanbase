@@ -2900,9 +2900,15 @@ int ObSPIService::spi_cursor_init(ObPLExecCtx *ctx, int64_t cursor_index)
     // we should alloc it in open stmt
     if (obj.is_ref_cursor_type()) {
       if (!obj.is_null()) {
-        // what's happened?
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ref cursor is not null before init", K(ret));
+        ObPLCursorInfo *cursor_info = NULL;
+        CK (obj.is_pl_extend());
+        CK (PL_REF_CURSOR_TYPE == obj.get_meta().get_extend_type());
+        if (OB_SUCC(ret)
+            && obj.get_ext() != 0
+            && OB_NOT_NULL(cursor_info = reinterpret_cast<ObPLCursorInfo *>(obj.get_ext()))) {
+          CK (!cursor_info->isopen());
+          CK (0 == cursor_info->get_ref_count());
+        }
       } else {
         // init as null
         obj.set_extend(static_cast<int64_t>(0), PL_REF_CURSOR_TYPE);
@@ -3779,13 +3785,13 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                                               time_record,
                                               ret,
                                               session_info->get_current_execution_id(),
-                                              OB_INVALID_ID, // ps stmt id FIXME@hr351303
+                                              cursor.is_ps_cursor() ? cursor.get_id() : OB_INVALID_ID,
                                               max_wait_desc,
                                               total_wait_desc,
                                               exec_record,
                                               exec_timestamp,
                                               true,
-                                              exec_params.count() > 0 ? ps_sql : sql_str,
+                                              (exec_params.count() > 0 || cursor.is_ps_cursor()) ? ps_sql : sql_str,
                                               true);
         session_info->get_raw_audit_record().exec_record_ = record_bk;
         session_info->get_raw_audit_record().try_cnt_ = try_cnt;
@@ -3876,13 +3882,13 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                                                   time_record,
                                                   ret,
                                                   session_info->get_current_execution_id(),
-                                                  OB_INVALID_ID, // ps stmt id FIXME@hr351303
+                                                  cursor.is_ps_cursor() ? cursor.get_id() : OB_INVALID_ID,
                                                   max_wait_desc,
                                                   total_wait_desc,
                                                   exec_record,
                                                   exec_timestamp,
                                                   true,
-                                                  exec_params.count() > 0 ? ps_sql : sql_str,
+                                                  (exec_params.count() > 0 || cursor.is_ps_cursor()) ? ps_sql : sql_str,
                                                   true);
             session_info->get_raw_audit_record().exec_record_ = record_bk;
             session_info->get_raw_audit_record().try_cnt_ = retry_cnt;
@@ -4580,7 +4586,8 @@ int ObSPIService::spi_raise_application_error(pl::ObPLExecCtx *ctx,
                                               const ObSqlExpression *errmsg_expr)
 {
   int ret = OB_SUCCESS;
-  ObObjParam result;
+  ObObjParam errcode_result;
+  ObObjParam errmsg_result;
   ObPLSqlCodeInfo *sqlcode_info = NULL;
   ObSQLSessionInfo *session_info = NULL;
   CK (OB_NOT_NULL(ctx), ctx->valid());
@@ -4597,18 +4604,18 @@ int ObSPIService::spi_raise_application_error(pl::ObPLExecCtx *ctx,
     OZ (spi_convert(ctx->exec_ctx_->get_my_session(), ctx->allocator_, tmp, expected_type, result)); \
   } while(0)
 
-   CALC(errcode_expr, int32, result);
-   OX (sqlcode_info->set_sqlcode(result.get_int32()));
-   CALC(errmsg_expr, varchar, result);
-   OX (sqlcode_info->set_sqlmsg(result.get_string()));
+   CALC(errcode_expr, int32, errcode_result);
+   CALC(errmsg_expr, varchar, errmsg_result);
+   OX (sqlcode_info->set_sqlcode(errcode_result.get_int32()));
+   OX (sqlcode_info->set_sqlmsg(errmsg_result.get_string()));
   
   if (OB_SUCC(ret)) {
     if (sqlcode_info->get_sqlcode() <= OB_MAX_RAISE_APPLICATION_ERROR
         && sqlcode_info->get_sqlcode() >= OB_MIN_RAISE_APPLICATION_ERROR) {
       ObString convert_sqlmsg;
       OZ (ObCharset::charset_convert(*ctx->allocator_,
-                                     result.get_string(),
-                                     result.get_collation_type(),
+                                     errmsg_result.get_string(),
+                                     errmsg_result.get_collation_type(),
                                      session_info->get_local_collation_connection(),
                                      convert_sqlmsg));
       if (OB_SUCC(ret)) {
@@ -5967,7 +5974,33 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
             LOG_WARN("read result error", K(ret), K(row_count), K(for_cursor));
           }
         } else {
-          if (for_dbms_sql) {
+          if (OB_SUCC(ret) && !for_cursor) { //如果不是cursor，into只能返回一行，需要检查返回多行报错
+            ObNewRow tmp_row;
+            int64_t cnt = row_count;
+            if (OB_FAIL(ob_write_row(*allocator, current_row, tmp_row))) {
+              LOG_WARN("copy current row fail.", K(ret));
+            } else {
+              ObNewRow tmp_row2;
+              current_row = tmp_row;
+              if (OB_FAIL(fetch_row(result_set, is_streaming, cnt, tmp_row2))) {
+                if (OB_ITER_END == ret) {
+                  ret = OB_SUCCESS;
+                } else {
+                  LOG_WARN("read result error", K(ret));
+                }
+              } else {
+                ret = OB_ERR_TOO_MANY_ROWS;
+              }
+            }
+            // If a SELECT INTO statement without a BULK COLLECT clause returns multiple rows,
+            // PL/SQL raises the predefined exception TOO_MANY_ROWS and SQL%ROWCOUNT returns 1,
+            // not the actual number of rows that satisfy the query.
+            implicit_cursor->set_rowcount(1);
+          }
+
+          if (OB_FAIL(ret)) {
+            // do nothing
+          } else if (for_dbms_sql) {
             //DBMS_SQL包的FETCH不需要检查
           } else if (NULL != out_using_params) {
             ObCastCtx cast_ctx(allocator, &dtc_params, cast_mode, cast_coll_type);
@@ -5993,22 +6026,6 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
             OZ (store_into_result(ctx, cast_ctx, current_row, into_exprs, column_types, type_count,
                              into_count, exprs_not_null, pl_integer_ranges, return_types, return_type_count,
                              actual_column_count, row_desc, is_type_record));
-          }
-
-          if (OB_SUCC(ret) && !for_cursor) { //如果不是cursor，into只能返回一行，需要检查返回多行报错
-            if (OB_FAIL(fetch_row(result_set, is_streaming, row_count, current_row))) {
-              if (OB_ITER_END == ret) {
-                ret = OB_SUCCESS;
-              } else {
-                LOG_WARN("read result error", K(ret));
-              }
-            } else {
-              ret = OB_ERR_TOO_MANY_ROWS;
-            }
-            // If a SELECT INTO statement without a BULK COLLECT clause returns multiple rows,
-            // PL/SQL raises the predefined exception TOO_MANY_ROWS and SQL%ROWCOUNT returns 1,
-            // not the actual number of rows that satisfy the query.
-            implicit_cursor->set_rowcount(1);
           }
         }
       }
@@ -6853,9 +6870,15 @@ int ObSPIService::store_datums(ObObj &dest_addr, const ObIArray<ObObj> &obj_arra
       } else {
         ObPLComposite *composite = reinterpret_cast<ObPLComposite*>(dest_addr.get_ext());
         ObPLRecord *record = NULL;
-        if (NULL == composite || !composite->is_record()) {
+        if (NULL == composite) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected composite to store datum", KPC(composite), K(dest_addr), K(obj_array), K(ret));
+        } else if (!composite->is_record()) {
+          // user_defined_sql_type can be cast into pl_extend, so it cannot be blocked in the front,
+          // but it is not allowed to be written into varray.
+          // Inserting user_defined_sql_type into the PL_VARRAY_TYPE type will take this part of the logic.
+          ret = OB_ERR_INTO_EXPR_ILLEGAL;
+          LOG_WARN("PLS-00597: expression 'string' in the INTO list is of wrong type", K(ret));
         } else if (OB_ISNULL(record = static_cast<ObPLRecord*>(composite))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected record to store datum", KPC(record), KPC(composite), K(ret));

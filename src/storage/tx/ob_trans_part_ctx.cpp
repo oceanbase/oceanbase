@@ -6966,18 +6966,28 @@ int ObPartTransCtx::supplement_undo_actions_if_exist_()
   int ret = OB_SUCCESS;
 
   ObTxTable *tx_table = nullptr;
+  ObTxDataGuard guard;
   ObTxDataGuard tmp_tx_data_guard;
   tmp_tx_data_guard.reset();
   ctx_tx_data_.get_tx_table(tx_table);
+  const ObTxData *tx_data = nullptr;
 
-  if (OB_FAIL(ctx_tx_data_.deep_copy_tx_data_out(tmp_tx_data_guard))) {
-    TRANS_LOG(WARN, "deep copy tx data in ctx tx data failed.", KR(ret), K(ctx_tx_data_), KPC(this));
-  } else if (OB_FAIL(tx_table->supplement_undo_actions_if_exist(tmp_tx_data_guard.tx_data()))) {
+  if (OB_FAIL(ctx_tx_data_.get_tx_data(guard))) {
+    TRANS_LOG(ERROR, "get tx data from ctx tx data failed", KR(ret));
+  } else if (OB_NOT_NULL(guard.tx_data()->undo_status_list_.head_)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "invalid ctx tx data", KR(ret), KPC(tx_data));
+  } else if (OB_FAIL(ctx_tx_data_.deep_copy_tx_data_out(tmp_tx_data_guard))) {
+    TRANS_LOG(WARN, "deep copy tx data in ctx tx data failed.", KR(ret),
+              K(ctx_tx_data_), KPC(this));
+  } else if (OB_FAIL(tx_table->supplement_undo_actions_if_exist(
+                 tmp_tx_data_guard.tx_data()))) {
     TRANS_LOG(
       WARN,
       "supplement undo actions to a tx data when replaying a transaction from the middle failed.",
       KR(ret), K(ctx_tx_data_), KPC(this));
-  } else if (OB_FAIL(ctx_tx_data_.replace_tx_data(tmp_tx_data_guard.tx_data()))) {
+  } else if (OB_FAIL(
+                 ctx_tx_data_.replace_tx_data(tmp_tx_data_guard.tx_data()))) {
     TRANS_LOG(WARN, "replace tx data in ctx tx data failed.", KR(ret), K(ctx_tx_data_), KPC(this));
   }
 
@@ -7133,10 +7143,17 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
   bool need_write_log = false;
   CtxLockGuard guard(lock_);
   if (OB_FAIL(check_status_())) {
-  } else if(!busy_cbs_.is_empty()) {
+  } else if(is_logging_()) {
     ret = OB_NEED_RETRY;
+    // check cur leader and fast fail
+    int tmp_ret = OB_SUCCESS; bool leader = false; int64_t epoch = 0;
+    if (OB_TMP_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->get_role(leader, epoch))) {
+      TRANS_LOG(WARN, "get ls role failed", K(tmp_ret), K(trans_id_), K(ls_id_));
+    } else if (!leader) {
+      ret = OB_NOT_MASTER;
+    }
     TRANS_LOG(WARN, "rollback_to need retry because of logging", K(ret),
-              K(trans_id_), K(busy_cbs_.get_size()));
+              K(trans_id_), K(ls_id_), K(busy_cbs_.get_size()));
   } else if (op_sn < last_op_sn_) {
     ret = OB_TRANS_SQL_SEQUENCE_ILLEGAL;
   } else if (op_sn > last_op_sn_ && last_scn_ <= to_scn) {
@@ -8039,6 +8056,30 @@ int ObPartTransCtx::handle_trans_collect_state_resp(const ObCollectStateRespMsg 
     }
   }
   TRANS_LOG(INFO, "handle trans collect state resp", K(ret), K(msg), KPC(this));
+  return ret;
+}
+
+int ObPartTransCtx::handle_ask_tx_state_for_4377(bool &is_alive)
+{
+  int ret = OB_SUCCESS;
+  CtxLockGuard guard(lock_);
+
+  if (IS_NOT_INIT) {
+    is_alive = false;
+    TRANS_LOG(WARN, "ObPartTransCtx not inited");
+  } else {
+    if (exec_info_.state_ == ObTxState::ABORT) {
+      // Lost data read during transfer sources from reading aborted txn.
+      // Because of the strong log synchronization semantic of transfer, we can
+      // relay on the transfer src txn is already in a state of death with abort
+      // log synchronized.
+      is_alive = false;
+    } else {
+      is_alive = true;
+    }
+  }
+
+  TRANS_LOG(INFO, "handle ask tx state for 4377", K(ret), KPC(this), K(is_alive));
   return ret;
 }
 

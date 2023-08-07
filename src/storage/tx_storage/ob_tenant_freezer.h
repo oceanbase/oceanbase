@@ -189,8 +189,16 @@ private:
   int check_and_freeze_normal_data_(ObTenantFreezeCtx &ctx);
   int check_and_freeze_tx_data_();
   int check_and_freeze_mds_table_();
-  int get_tenant_tx_data_mem_used_(int64_t &tenant_tx_data_mem_used);
-  int get_ls_tx_data_mem_used_(ObLS *ls, int64_t &ls_tx_data_mem_used);
+
+  int get_tenant_tx_data_mem_used_(int64_t &tenant_tx_data_frozen_mem_used,
+                                   int64_t &tenant_tx_data_active_mem_used,
+                                   bool for_statistic_print = false);
+
+  int get_ls_tx_data_memory_info_(ObLS *ls,
+                                  int64_t &ls_tx_data_frozen_mem_used,
+                                  int64_t &ls_tx_data_active_mem_used,
+                                  bool for_statistic_print = false);
+
 private:
   bool is_inited_;
   bool is_freezing_tx_data_;

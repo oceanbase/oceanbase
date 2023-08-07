@@ -23,6 +23,7 @@
 #include "observer/table/ob_htable_utils.h"
 #include "observer/table/ob_htable_filter_operator.h"
 #include "observer/table/ob_table_service.h"
+#include "storage/ls/ob_ls_tablet_service.h"
 #include <thread>
 #undef private
 #undef protected
@@ -42,6 +43,17 @@ const char* db = "test";
 const char* table_name = "batch_execute_test";
 const char* sys_root_pass = "";
 typedef char DefaultBuf[128];
+
+namespace oceanbase
+{
+namespace storage
+{
+int ObLSTabletService::check_parts_tx_state_in_transfer_for_4377_(transaction::ObTxDesc *)
+{
+  return OB_SUCCESS;
+}
+}
+}
 
 // create table if not exists batch_execute_test (C1 bigint primary key, C2 bigint, C3 varchar(100)) PARTITION BY KEY(C1) PARTITIONS 16
 class TestBatchExecute: public ::testing::Test

@@ -3567,7 +3567,7 @@ int ObIJsonBase::print_object(ObJsonBuffer &j_buf, uint64_t depth, bool is_prett
 
     if (OB_SUCC(ret)) {
       if (is_pretty && count > 0
-          && OB_FAIL(ObJsonBaseUtil::append_newline_and_indent(j_buf, depth -1))) {
+          && OB_FAIL(ObJsonBaseUtil::append_newline_and_indent(j_buf, depth - 1))) {
         LOG_WARN("fail to newline and indent", K(ret), K(is_pretty), K(depth));
       } else if (OB_FAIL(j_buf.append("}"))) {
         LOG_WARN("fail to append \"}\" to buffer", K(ret), K(is_pretty), K(depth));

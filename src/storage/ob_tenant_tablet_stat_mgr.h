@@ -361,7 +361,7 @@ private:
   static constexpr int64_t CHECK_INTERVAL = 120L * 1000L * 1000L; //120s
   static constexpr int64_t CHECK_RUNNING_TIME_INTERVAL = 120L * 1000L * 1000L; //120s
   static constexpr int64_t CHECK_SYS_STAT_INTERVAL = 10 * 1000LL * 1000LL; //10s
-  static constexpr int32_t DEFAULT_MAX_FREE_STREAM_CNT = 10000;
+  static constexpr int32_t DEFAULT_MAX_FREE_STREAM_CNT = 5000;
   static constexpr int32_t DEFAULT_UP_LIMIT_STREAM_CNT = 20000;
   static constexpr int32_t DEFAULT_BUCKET_NUM = 1000;
   static constexpr int32_t DEFAULT_MAX_PENDING_CNT = 40000;

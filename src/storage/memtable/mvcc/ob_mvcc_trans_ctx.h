@@ -69,10 +69,10 @@ struct RedoDataNode
 
 struct TableLockRedoDataNode
 {
-  void set(const ObMemtableKey *key,
-           const transaction::tablelock::ObTableLockOp &lock_op,
-           const common::ObTabletID &tablet_id,
-           ObITransCallback *callback);
+  int set(const ObMemtableKey *key,
+          const transaction::tablelock::ObTableLockOp &lock_op,
+          const common::ObTabletID &tablet_id,
+          ObITransCallback *callback);
   ObMemtableKey key_;
   int64_t seq_no_;
   ObITransCallback *callback_;

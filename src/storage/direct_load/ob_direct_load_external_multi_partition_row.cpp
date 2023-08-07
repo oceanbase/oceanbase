@@ -158,7 +158,7 @@ int ObDirectLoadConstExternalMultiPartitionRow::deep_copy(
 int ObDirectLoadConstExternalMultiPartitionRow::to_datums(ObStorageDatum *datums,
                                                           int64_t column_count) const
 {
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(transfer_datum_row_time_us);
+  OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, transfer_datum_row_time_us);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;

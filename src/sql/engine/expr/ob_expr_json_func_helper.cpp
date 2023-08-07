@@ -29,6 +29,46 @@ namespace oceanbase
 {
 namespace sql
 {
+static OB_INLINE int common_construct_otimestamp(const ObObjType type,
+                                                 const ObDatum &in_datum,
+                                                 ObOTimestampData &out_val)
+{
+  int ret = OB_SUCCESS;
+  if (ObTimestampTZType == type) {
+    out_val = in_datum.get_otimestamp_tz();
+  } else if (ObTimestampLTZType == type || ObTimestampNanoType == type) {
+    out_val = in_datum.get_otimestamp_tiny();
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid in type", K(ret), K(type));
+  }
+  return ret;
+}
+
+template <typename T>
+int get_otimestamp_from_datum(const T &datum, ObOTimestampData &in_val, ObObjType type);
+template <>
+int get_otimestamp_from_datum<ObDatum>(const ObDatum &datum, ObOTimestampData &in_val, ObObjType type)
+{
+  INIT_SUCC(ret);
+  if (ObTimestampTZType == type) {
+    in_val = datum.get_otimestamp_tz();
+  } else if (ObTimestampLTZType == type || ObTimestampNanoType == type) {
+    in_val = datum.get_otimestamp_tiny();
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid in type", K(ret), K(type));
+  }
+  return ret;
+}
+template <>
+int get_otimestamp_from_datum<ObObj>(const ObObj &datum, ObOTimestampData &in_val, ObObjType type)
+{
+  INIT_SUCC(ret);
+  in_val = datum.get_otimestamp_value();
+  return ret;
+}
+
 ObJsonInType ObJsonExprHelper::get_json_internal_type(ObObjType type)
 {
   return type == ObJsonType ? ObJsonInType::JSON_BIN : ObJsonInType::JSON_TREE;
@@ -117,6 +157,7 @@ int ObJsonExprHelper::get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
   }
   return ret;
 }
+
 
 int ObJsonExprHelper::get_json_val(const common::ObObj &data, ObExprCtx &ctx,
                                    bool is_bool, common::ObIAllocator *allocator,
@@ -262,6 +303,195 @@ int ObJsonExprHelper::get_json_val(const ObExpr &expr, ObEvalCtx &ctx,
                                                                     session->get_timezone_info(),
                                                                     session,
                                                                     j_base, to_bin))) {
+      LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
+    }
+  }
+  return ret;
+}
+
+int ObJsonExprHelper::eval_oracle_json_val(ObExpr *expr,
+                                           ObEvalCtx &ctx,
+                                           common::ObIAllocator *allocator,
+                                           ObIJsonBase*& j_base,
+                                           bool is_format_json,
+                                           bool is_strict,
+                                           bool is_bin)
+{
+  INIT_SUCC(ret);
+  ObDatum *json_datum = nullptr;
+  ObExpr *json_arg = expr;
+  ObObjType val_type = json_arg->datum_meta_.type_;
+  ObCollationType cs_type = json_arg->datum_meta_.cs_type_;
+  bool is_nchar = (val_type == ObNCharType || val_type == ObNVarchar2Type);
+  bool is_raw_type = val_type == ObRawType;
+
+  if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+    LOG_WARN("eval json arg failed", K(ret), K(val_type));
+  } else if (json_datum->is_null() || ob_is_null(val_type)) {
+    ObJsonNull *null_node = nullptr;
+    if (OB_ISNULL(null_node = OB_NEWx(ObJsonNull, allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed: alloscate jsonboolean", K(ret));
+    }
+    j_base = null_node;
+  } else if (json_arg->is_boolean_ == 1) {
+    ObJsonBoolean *bool_node = nullptr;
+    if (OB_ISNULL(bool_node = OB_NEWx(ObJsonBoolean, allocator, (json_datum->get_bool())))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed: alloscate jsonboolean", K(ret));
+    }
+    j_base = bool_node;
+  } else if (ObJsonExprHelper::is_convertible_to_json(val_type)) {
+    if (val_type == ObVarcharType
+        || val_type == ObCharType
+        || val_type == ObTinyTextType
+        || val_type == ObTextType
+        || val_type == ObMediumTextType
+        || val_type == ObLongTextType
+        || is_raw_type
+        || is_nchar) {
+
+      uint32_t parse_flag =  is_strict ? ObJsonParser::JSN_STRICT_FLAG : ObJsonParser::JSN_RELAXED_FLAG;
+      ObString j_str = json_datum->get_string();
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+                    allocator, val_type, cs_type, json_arg->obj_meta_.has_lob_header(), j_str))) {
+        LOG_WARN("fail to get real data.", K(ret), K(j_str));
+      } else if (!is_format_json || is_nchar || is_raw_type) {
+        if (is_raw_type) {
+          ObObj tmp_result;
+          ObObj obj;
+          ObCastCtx cast_ctx(allocator, NULL, CM_NONE, CS_TYPE_INVALID);
+
+          if (OB_FAIL(json_datum->to_obj(obj, expr->obj_meta_))) {
+            LOG_WARN("datum to obj fail", K(ret));
+          } else if (OB_FAIL(ObHexUtils::rawtohex(obj, cast_ctx, tmp_result))) {
+            LOG_WARN("fail to check json syntax", K(ret), K(expr->obj_meta_));
+          } else {
+            j_str = tmp_result.get_string();
+          }
+        }
+        ObJsonString* string_node = nullptr;
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(string_node = OB_NEWx(ObJsonString, allocator, j_str.ptr(), j_str.length()))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed: alloscate json string node", K(ret));
+        } else {
+          j_base = string_node;
+        }
+      } else {
+        if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, allocator, parse_flag))) {
+          if (!is_strict) {
+            ret = OB_SUCCESS;
+            ObJsonString* string_node = nullptr;
+            if (OB_ISNULL(string_node = OB_NEWx(ObJsonString, allocator, j_str.ptr(), j_str.length()))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed: alloscate json string node", K(ret));
+            }
+            j_base = string_node;
+          } else {
+            ret = OB_ERR_JSON_SYNTAX_ERROR;
+            LOG_WARN("fail to check json syntax", K(ret), K(j_str));
+          }
+        } else if (OB_FAIL(ObJsonBaseFactory::get_json_base( allocator, j_str,
+                                   ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_base, parse_flag))) {
+          LOG_WARN("failed: parse json string node", K(ret), K(j_str));
+        }
+      }
+    } else if (val_type == ObJsonType) {
+      ObJsonInType to_type = is_bin ? ObJsonInType::JSON_BIN : ObJsonInType::JSON_TREE;
+      ObString j_str = json_datum->get_string();
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+                    allocator, val_type, cs_type, json_arg->obj_meta_.has_lob_header(), j_str))) {
+        LOG_WARN("fail to get real data.", K(ret), K(j_str));
+      } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, ObJsonInType::JSON_BIN, to_type, j_base))) {
+        ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
+        LOG_WARN("fail to get json base", K(ret));
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Invalid argument", K(ret), K(val_type));
+    }
+
+    if (OB_SUCC(ret)) {
+
+      if (OB_FAIL(ObJsonBaseFactory::transform(allocator, j_base,
+                      is_bin ? ObJsonInType::JSON_BIN : ObJsonInType::JSON_TREE , j_base))) {
+        LOG_WARN("failed: json tree to bin", K(ret));
+      } else {
+        j_base->set_allocator(allocator);
+      }
+    }
+  } else {
+    ObBasicSessionInfo *session = ctx.exec_ctx_.get_my_session();
+    ObScale scale = json_arg->datum_meta_.scale_;
+    scale = (val_type == ObBitType) ? json_arg->datum_meta_.length_semantics_ : scale;
+    if (is_format_json) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("input type error", K(val_type));
+    } else if (OB_ISNULL(session)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session is NULL", K(ret));
+    } else if (val_type == ObIntervalDSType || val_type == ObIntervalYMType) {
+      // internal json type not support interval type using string type instead
+      int64_t len = 0;
+      char* string_buf = nullptr;
+      ObJsonString* string_node = nullptr;
+
+      if (OB_ISNULL(string_buf = static_cast<char*>(allocator->alloc(OB_CAST_TO_VARCHAR_MAX_LENGTH)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret));
+      } else if (ob_is_interval_ym(val_type)) {
+        ObIntervalYMValue in_val(json_datum->get_interval_nmonth());
+        if (OB_FAIL(ObTimeConverter::interval_ym_to_str(
+                      in_val, scale, string_buf, OB_CAST_TO_VARCHAR_MAX_LENGTH, len, true))) {
+          LOG_WARN("interval_ym_to_str failed", K(ret));
+        }
+      } else {
+        ObIntervalDSValue in_val(json_datum->get_interval_ds());
+        if (OB_FAIL(ObTimeConverter::interval_ds_to_str(
+                      in_val, scale, string_buf, OB_CAST_TO_VARCHAR_MAX_LENGTH, len, true))) {
+          LOG_WARN("interval_ym_to_str failed", K(ret));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(string_node = OB_NEWx(ObJsonString, allocator, (const char*)string_buf, len))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to create json string node", K(ret));
+      } else {
+        j_base = string_node;
+      }
+    } else if (val_type == ObTimestampTZType || val_type == ObTimestampLTZType) {
+      // internal json type not support time zone or local time zone type using string type instead
+      char* string_buf = nullptr;
+      int64_t len = 0;
+      ObJsonString* string_node = nullptr;
+
+      if (OB_ISNULL(string_buf = static_cast<char*>(allocator->alloc(OB_CAST_TO_VARCHAR_MAX_LENGTH)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret));
+      } else {
+        ObOTimestampData in_val;
+        ObScale scale = json_arg->datum_meta_.scale_;
+        const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
+        if (OB_FAIL(common_construct_otimestamp(val_type, *json_datum, in_val))) {
+          LOG_WARN("common_construct_otimestamp failed", K(ret));
+        } else if (OB_FAIL(ObTimeConverter::otimestamp_to_str(in_val, dtc_params, scale,
+                                                              val_type, string_buf, OB_CAST_TO_VARCHAR_MAX_LENGTH, len))) {
+          LOG_WARN("failed to convert otimestamp to string", K(ret));
+        } else if (OB_ISNULL(string_node = OB_NEWx(ObJsonString, allocator, (const char*)string_buf, len))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to create json string node", K(ret));
+        } else {
+          j_base = string_node;
+        }
+      }
+    } else if (OB_FAIL(ObJsonExprHelper::transform_scalar_2jsonBase(*json_datum, val_type,
+                                                                    allocator, scale,
+                                                                    session->get_timezone_info(),
+                                                                    session,
+                                                                    j_base,
+                                                                    is_bin))) {
       LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
     }
   }
@@ -448,46 +678,6 @@ int ObJsonExprHelper::is_json_zero(const ObString& data, int& result)
   } else {
     result = (tmp_result == 0) ? 0 : 1;
   }
-  return ret;
-}
-
-static OB_INLINE int common_construct_otimestamp(const ObObjType type,
-                                                 const ObDatum &in_datum,
-                                                 ObOTimestampData &out_val)
-{
-  int ret = OB_SUCCESS;
-  if (ObTimestampTZType == type) {
-    out_val = in_datum.get_otimestamp_tz();
-  } else if (ObTimestampLTZType == type || ObTimestampNanoType == type) {
-    out_val = in_datum.get_otimestamp_tiny();
-  } else {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid in type", K(ret), K(type));
-  }
-  return ret;
-}
-
-template <typename T>
-int get_otimestamp_from_datum(const T &datum, ObOTimestampData &in_val, ObObjType type);
-template <>
-int get_otimestamp_from_datum<ObDatum>(const ObDatum &datum, ObOTimestampData &in_val, ObObjType type)
-{
-  INIT_SUCC(ret);
-  if (ObTimestampTZType == type) {
-    in_val = datum.get_otimestamp_tz();
-  } else if (ObTimestampLTZType == type || ObTimestampNanoType == type) {
-    in_val = datum.get_otimestamp_tiny();
-  } else {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid in type", K(ret), K(type));
-  }
-  return ret;
-}
-template <>
-int get_otimestamp_from_datum<ObObj>(const ObObj &datum, ObOTimestampData &in_val, ObObjType type)
-{
-  INIT_SUCC(ret);
-  in_val = datum.get_otimestamp_value();
   return ret;
 }
 
@@ -1511,17 +1701,6 @@ int ObJsonExprHelper::parse_res_type(ObExprResType& type1,
     result_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
 
     result_type.set_collation_level(CS_LEVEL_IMPLICIT);
-    if (obj_type == ObVarcharType) {
-      result_type.set_full_length(VARCHAR2_DEFAULT_LEN, length_semantics);
-    } else if (obj_type == ObJsonType) {
-      result_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
-    } else if (obj_type == ObLongTextType && type1.get_collation_type() == CS_TYPE_BINARY) {
-      result_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-    }
-
-    if (ob_is_string_type(type1.get_type()) || ob_is_json(type1.get_type())) {
-      result_type.set_collation_level(CS_LEVEL_IMPLICIT);
-    }
   } else if (OB_FAIL(ObJsonExprHelper::get_cast_type(res_type, dst_type))) {
     LOG_WARN("get cast dest type failed", K(ret));
   } else if (OB_FAIL(ObJsonExprHelper::set_dest_type(type1, result_type, dst_type, type_ctx))) {

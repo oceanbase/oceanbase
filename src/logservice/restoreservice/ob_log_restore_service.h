@@ -23,7 +23,6 @@
 #include "ob_remote_error_reporter.h"                       // ObRemoteErrorReporter
 #include "ob_log_restore_allocator.h"                       // ObLogRestoreAllocator
 #include "ob_log_restore_scheduler.h"                       // ObLogRestoreScheduler
-#include "ob_log_restore_controller.h"                      // ObLogRestoreController
 #include "ob_log_restore_net_driver.h"                      // ObLogRestoreNetDriver
 #include "ob_log_restore_archive_driver.h"                  // ObLogRestoreArchiveDriver
 
@@ -73,7 +72,6 @@ public:
 private:
   void run1();
   void do_thread_task_();
-  void update_restore_quota_();
   int update_upstream_(share::ObLogRestoreSourceItem &source, bool &source_exist);
   void schedule_fetch_log_(share::ObLogRestoreSourceItem &source);
   void schedule_resource_(const share::ObLogRestoreSourceType &source_type);
@@ -90,7 +88,6 @@ private:
   int64_t last_update_restore_upper_limit_ts_;
   ObLSService *ls_svr_;
   ObLogResSvrRpc proxy_;
-  ObLogRestoreController restore_controller_;
   ObRemoteLocationAdaptor location_adaptor_;
   ObLogRestoreArchiveDriver archive_driver_;
   ObLogRestoreNetDriver net_driver_;

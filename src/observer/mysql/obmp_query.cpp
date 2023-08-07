@@ -326,7 +326,7 @@ int ObMPQuery::process()
               //FIXME qianfu NG_TRACE_EXT(set_disconnect, OB_ID(disconnect), true, OB_ID(pos), "multi stmt begin");
               if (OB_UNLIKELY(parse_stat.parse_fail_
                   && (i == parse_stat.fail_query_idx_)
-                  && (OB_ERR_PARSE_SQL != parse_stat.fail_ret_))) {
+                  && ObSQLUtils::check_need_disconnect_parser_err(parse_stat.fail_ret_))) {
                 // 进入本分支，说明在multi_query中的某条query parse失败，如果不是语法错，则进入该分支
                 // 如果当前query_count 为1， 则不断连接;如果大于1，
                 // 则需要在发错误包之后断连接，防止客户端一直在等接下来的回包
@@ -340,8 +340,10 @@ int ObMPQuery::process()
                 // 但是目前的代码实现难以在不同的线程处理同一个请求的回包，
                 // 因此这里只允许只有一个query的multi query请求异步回包。
                 force_sync_resp = queries.count() <= 1? false : true;
-                bool is_single_stmt = queries.count() <= 1? true : false;
-                ret = process_single_stmt(ObMultiStmtItem(true, i, queries.at(i), is_single_stmt),
+                // is_part_of_multi 表示当前sql是 multi stmt 中的一条，
+                // 原来的值默认为true，会影响单条sql的二次路由，现在改为用 queries.count() 判断。
+                bool is_part_of_multi = queries.count() > 1 ? true : false;
+                ret = process_single_stmt(ObMultiStmtItem(is_part_of_multi, i, queries.at(i)),
                                           session,
                                           has_more,
                                           force_sync_resp,

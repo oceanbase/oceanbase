@@ -40,11 +40,10 @@ int ObExprToBlob::calc_result_type1(ObExprResType &type,
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
 
-  if (ob_is_null(text.get_type())) {
-    type.set_null();
-  } else if (ob_is_blob(text.get_type(), text.get_collation_type())
-             || ob_is_raw(text.get_type())
-             || ob_is_string_tc(text.get_type())) {
+  if (ob_is_null(text.get_type())
+      || ob_is_blob(text.get_type(), text.get_collation_type())
+      || ob_is_raw(text.get_type())
+      || ob_is_string_tc(text.get_type())) {
     type.set_blob();
     type.set_collation_type(CS_TYPE_BINARY);
     if (ob_is_string_tc(text.get_type())) {

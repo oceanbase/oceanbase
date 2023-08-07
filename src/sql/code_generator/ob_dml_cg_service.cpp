@@ -806,6 +806,7 @@ int ObDmlCgService::generate_conflict_checker_ctdef(ObLogInsert &op,
     } else if (OB_FAIL(cg_.generate_calc_part_id_expr(*part_id_expr_for_lookup, nullptr, rt_part_id_expr))) {
       LOG_WARN("generate rt part_id_expr failed", K(ret), KPC(part_id_expr_for_lookup));
     } else if (OB_ISNULL(rt_part_id_expr)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rt part_id_expr for lookup is null", K(ret));
     } else if (OB_FAIL(constraint_raw_exprs.push_back(part_id_expr_for_lookup))) {
       LOG_WARN("fail to push part_id_expr to constraint_raw_exprs", K(ret));

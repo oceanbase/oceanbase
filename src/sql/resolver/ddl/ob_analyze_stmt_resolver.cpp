@@ -227,6 +227,7 @@ int ObAnalyzeStmtResolver::resolve_table_info(const ParseNode *table_node,
                                                        table_name, false, table_schema))){
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("null table schema", K(ret));
   } else if (OB_FAIL(pl::ObDbmsStats::init_column_stat_params(*allocator_,
                                                               *schema_checker_->get_schema_guard(),

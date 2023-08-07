@@ -72,6 +72,7 @@ int ObSSTableSecMetaIterator::open(
 {
   int ret = OB_SUCCESS;
   bool is_meta_root = false;
+  bool is_ddl_mem_sstable = false;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("Fail to open sstable secondary meta iterator", K(ret));
@@ -99,6 +100,7 @@ int ObSSTableSecMetaIterator::open(
 
   if (OB_FAIL(ret) || is_prefetch_end_) {
   } else if (sstable.is_ddl_mem_sstable()) {
+    is_ddl_mem_sstable = true;
     const ObMicroBlockData &root_block = sstable_meta_hdl_.get_sstable_meta().get_root_info().get_block_data();
     if (ObMicroBlockData::DDL_BLOCK_TREE != root_block.type_ || nullptr == root_block.buf_) {
       ret = OB_ERR_UNEXPECTED;
@@ -111,7 +113,12 @@ int ObSSTableSecMetaIterator::open(
                                                  true, //is_right_border,
                                                  curr_block_start_idx_,
                                                  curr_block_end_idx_))) {
-        LOG_WARN("locate range failed", K(ret));
+        if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
+          LOG_WARN("locate range failed", K(ret), K(query_range));
+        } else {
+          curr_block_idx_ = curr_block_end_idx_ + 1;
+          ret = OB_SUCCESS; // return OB_ITER_END on get_next() for get
+        }
       } else {
         const int64_t step = max(1, sample_step);
         step_cnt_ = !is_reverse_scan ? step : -step;
@@ -134,7 +141,7 @@ int ObSSTableSecMetaIterator::open(
   const int64_t request_col_cnt = rowkey_read_info.get_schema_rowkey_count()
            + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() + 1;
 
-  if (OB_SUCC(ret) && !is_prefetch_end_ && !is_meta_root) {
+  if (OB_SUCC(ret) && !is_prefetch_end_ && !is_meta_root && !is_ddl_mem_sstable) {
     bool start_key_beyond_range = false;
     bool end_key_beyond_range = false;
     if (is_reverse_scan) {
@@ -174,7 +181,7 @@ int ObSSTableSecMetaIterator::open(
     }
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) || is_ddl_mem_sstable) {
     // do nothing
   } else if (is_prefetch_end_) {
     is_inited_ = true;

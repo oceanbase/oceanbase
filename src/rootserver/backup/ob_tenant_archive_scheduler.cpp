@@ -730,12 +730,18 @@ int ObArchiveHandler::do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info
   ObDestRoundSummary summary;
   ObDestRoundCheckpointer checkpointer;
   SCN max_checkpoint_scn = SCN::min_scn();
+  bool can = false;
   if (OB_FAIL(ObTenantArchiveMgr::decide_piece_id(round_info.start_scn_, round_info.base_piece_id_, round_info.piece_switch_interval_, round_info.checkpoint_scn_, since_piece_id))) {
     LOG_WARN("failed to calc since piece id", K(ret), K(round_info));
   } else if (OB_FAIL(archive_table_op_.get_dest_round_summary(*sql_proxy_, round_info.dest_id_, round_info.round_id_, since_piece_id, summary))) {
     LOG_WARN("failed to get dest round summary.", K(ret), K(round_info), K(since_piece_id));
   } else if (OB_FAIL(get_max_checkpoint_scn_(tenant_id_, max_checkpoint_scn))) {
     LOG_WARN("failed to get limit scn.", K(ret));
+  } else if (OB_FAIL(check_can_do_archive(can))) {
+    LOG_WARN("failed to check can do archive", K(ret));
+  } else if (!can) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant can not do archive", K(ret), K_(tenant_id));
   } else if (OB_FAIL(checkpointer.init(&round_handler_, piece_generated_cb, round_checkpoint_cb, max_checkpoint_scn))) {
     LOG_WARN("failed to init checkpointer", K(ret), K(round_info));
   } else if (OB_FAIL(checkpointer.checkpoint(round_info, summary))) {

@@ -716,6 +716,7 @@ int ObTransService::get_ls_read_snapshot_version(const share::ObLSID &local_ls_i
 }
 
 int ObTransService::get_weak_read_snapshot_version(const int64_t max_read_stale_us_for_user,
+                                                   const bool local_single_ls,
                                                    SCN &snapshot)
 {
   int ret = OB_SUCCESS;
@@ -724,10 +725,16 @@ int ObTransService::get_weak_read_snapshot_version(const int64_t max_read_stale_
 
     // server weak read version
   if (!ObWeakReadUtil::enable_monotonic_weak_read(tenant_id_)) {
-    if (OB_FAIL(GCTX.weak_read_service_->get_server_version(tenant_id_, wrs_scn))) {
-      TRANS_LOG(WARN, "get server read snapshot fail", K(ret), KPC(this));
+    if (local_single_ls) {
+      if (OB_FAIL(GCTX.weak_read_service_->get_server_version(tenant_id_, wrs_scn))) {
+        TRANS_LOG(WARN, "get server read snapshot fail", K(ret), KPC(this));
+      }
+      monotinic_read = false;
+    } else {
+      if (OB_FAIL(GCTX.weak_read_service_->get_cluster_version(tenant_id_, wrs_scn))) {
+        TRANS_LOG(WARN, "get weak read snapshot fail", K(ret), KPC(this));
+      }
     }
-    monotinic_read = false;
     // wrs cluster version
   } else if (OB_FAIL(GCTX.weak_read_service_->get_cluster_version(tenant_id_, wrs_scn))) {
     TRANS_LOG(WARN, "get weak read snapshot fail", K(ret), KPC(this));
@@ -1364,7 +1371,7 @@ int ObTransService::rollback_savepoint_(ObTxDesc &tx,
                                           savepoint,
                                           born_epoch,
                                           &tx,
-                                          expire_ts))) {
+                                          -1/*non-blocking*/))) {
       if (common_retryable_error_(ret)) {
         slowpath = true;
         TRANS_LOG(INFO, "fallback to msg driven rollback", K(ret), K(savepoint), K(p), K(tx));

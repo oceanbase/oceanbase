@@ -84,7 +84,34 @@ int calc_convert_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
   if (OB_FAIL(expr.args_[0]->eval(ctx, child_res))) {
     LOG_WARN("eval arg 0 failed", K(ret));
   } else {
-    res_datum.set_datum(*child_res);
+    ObCollationType cs_type = expr.args_[0]->datum_meta_.cs_type_;
+    int64_t mbmaxlen = 1;
+    if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(cs_type, mbmaxlen))) {
+      LOG_WARN("fail to get mbmaxlen", K(cs_type), K(ret));
+    } else if (mbmaxlen > 1 && !child_res->is_null()) {
+      ObString checked_res;
+      bool is_null = false;
+      const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+      if (OB_ISNULL(session)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session is null", K(ret));
+      } else if (OB_FAIL(ObSQLUtils::check_well_formed_str(child_res->get_string(),
+                                                           cs_type,
+                                                           checked_res,
+                                                           is_null,
+                                                           is_strict_mode(session->get_sql_mode()),
+                                                           false))) {
+        LOG_WARN("check_well_formed_str failed", K(ret),
+                                                 K(child_res->get_string()),
+                                                 K(expr.datum_meta_));
+      } else if (is_null) {
+        res_datum.set_null();
+      } else {
+        res_datum.set_string(checked_res);
+      }
+    } else {
+      res_datum.set_datum(*child_res);
+    }
   }
   return ret;
 }

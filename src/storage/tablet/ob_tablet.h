@@ -515,6 +515,7 @@ private:
   static void dec_addr_ref_cnt(const ObMetaDiskAddr &addr);
   static int inc_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr, bool &inc_success);
   static void dec_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr);
+  int64_t get_try_cache_size() const;
 
 private:
   int inner_check_valid(const bool ignore_ha_status = false) const;
@@ -689,10 +690,9 @@ private:
 
 
   // memtable operation
-  int pull_memtables();
+  int pull_memtables(ObArenaAllocator &allocator, ObITable **&ddl_kvs_addr, int64_t &ddl_kv_count);
   int pull_memtables_without_ddl();
   int update_memtables();
-  int build_memtable();
   int build_memtable(common::ObIArray<ObTableHandleV2> &handle_array, const int64_t start_pos = 0);
   int rebuild_memtable(common::ObIArray<ObTableHandleV2> &handle_array);
   int rebuild_memtable(
@@ -700,13 +700,13 @@ private:
       common::ObIArray<ObTableHandleV2> &handle_array);
   int add_memtable(memtable::ObMemtable* const table);
   bool exist_memtable_with_end_scn(const ObITable *table, const share::SCN &end_scn);
-  int assign_memtables(const ObTablet &other_tablet);
+  int assign_memtables(memtable::ObIMemtable * const *memtables, const int64_t memtable_count);
+  int assign_ddl_kvs(ObITable * const *ddl_kvs, const int64_t ddl_kv_count);
   void reset_memtable();
-  int pull_ddl_memtables();
+  int pull_ddl_memtables(ObArenaAllocator &allocator, ObITable **&ddl_kvs_addr, int64_t &ddl_kv_count);
   void reset_ddl_memtables();
   int wait_release_memtables_();
 private:
-  static const int64_t MEMTABLE_ARRAY_SIZE = 16;
   // ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE
   // Array size is too large, need to shrink it if possible
   static const int64_t DDL_KV_ARRAY_SIZE = 64;
@@ -715,48 +715,54 @@ private:
 private:
   int32_t version_;
   int32_t length_;
-  volatile int64_t wash_score_ CACHE_ALIGNED;
-  volatile int64_t ref_cnt_ CACHE_ALIGNED;
-  ObTabletHandle next_tablet_guard_;
-  ObTabletMeta tablet_meta_;
+  volatile int64_t wash_score_;
+  ObTabletMdsData mds_data_;                                 // size: 440B, alignment: 8B
+  volatile int64_t ref_cnt_;
+  ObTabletHandle next_tablet_guard_;                         // size: 56B, alignment: 8B
+  ObTabletMeta tablet_meta_;                                 // size: 248, alignment: 8B
   ObRowkeyReadInfo *rowkey_read_info_;
   // in memory or disk
-  ObTabletComplexAddr<ObTabletTableStore> table_store_addr_;
+  ObTabletComplexAddr<ObTabletTableStore> table_store_addr_; // size: 48B, alignment: 8B
   // always in disk
-  ObTabletComplexAddr<ObStorageSchema> storage_schema_addr_;
-  // won't persist
-  memtable::ObIMemtable *memtables_[MEMTABLE_ARRAY_SIZE];
+  ObTabletComplexAddr<ObStorageSchema> storage_schema_addr_; // size: 48B, alignment: 8B
   int64_t memtable_count_;
-  ObITable *ddl_kvs_[DDL_KV_ARRAY_SIZE];
+  ObITable **ddl_kvs_;
   int64_t ddl_kv_count_;
-  ObTabletPointerHandle pointer_hdl_;
-  ObTabletHandle next_full_tablet_guard_;
-  ObArenaAllocator *allocator_;
-  ObMetaDiskAddr tablet_addr_;
+  ObTabletPointerHandle pointer_hdl_;                        // size: 24B, alignment: 8B
+  ObTabletHandle next_full_tablet_guard_;                    // size: 56B, alignment: 8B
+  ObMetaDiskAddr tablet_addr_;                               // size: 40B, alignment: 8B
   // NOTICE: these two pointers: memtable_mgr_ and log_handler_,
   // are considered as cache for tablet.
   // we keep it on tablet because we cannot get them in ObTablet::deserialize
   // through ObTabletPointerHandle.
   // may be some day will fix this issue, then the pointers have no need to exist.
+  // won't persist
+  memtable::ObIMemtable *memtables_[MAX_MEMSTORE_CNT];
+  ObArenaAllocator *allocator_;
+  mutable common::SpinRWLock memtables_lock_;                // size: 12B, alignment: 4B
   ObIMemtableMgr *memtable_mgr_;
   logservice::ObLogHandler *log_handler_;
-  ObTabletMdsData mds_data_;
-
-  mutable common::TCRWLock memtables_lock_; // protect memtable read and update
-  mutable common::SpinRWLock mds_cache_lock_;
-  ObTabletStatusCache tablet_status_cache_;
-  ObDDLInfoCache ddl_data_cache_;
 
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.
   // yuque :
   ObTablet *next_tablet_; // used in old_version_chain and tablet_gc_queue
+
   // whether hold ref cnt
   // when destroying tablet, only if hold_ref_cnt_ is true do we decrease meta blocks' ref cnt
   // we need to set it to true after increasing meta blocks' ref cnt or deserializing tablet
   bool hold_ref_cnt_;
   bool is_inited_;
+  mutable common::SpinRWLock mds_cache_lock_;                // size: 12B, alignment: 4B
+  ObTabletStatusCache tablet_status_cache_;                  // size: 24B, alignment: 8B
+  ObDDLInfoCache ddl_data_cache_;                            // size: 24B, alignment: 8B
 };
+
+inline int64_t ObTablet::get_try_cache_size() const
+{
+  return sizeof(ObTablet) + (OB_ISNULL(rowkey_read_info_) ? 0 : rowkey_read_info_->get_deep_copy_size())
+                          + (ddl_kv_count_ > 0 ? sizeof(ObITable *) * DDL_KV_ARRAY_SIZE : 0);
+}
 
 inline bool ObTablet::is_ls_inner_tablet() const
 {

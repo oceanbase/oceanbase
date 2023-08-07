@@ -50,7 +50,8 @@ public:
   ObTabletMergeInfo();
   virtual ~ObTabletMergeInfo();
 
-  int init(const ObTabletMergeCtx &ctx, bool need_check = true);
+  int init(const ObTabletMergeCtx &ctx, bool need_check = true); // for memtable dump/sstable merge
+  int init(const ObTabletMergeCtx &ctx, const share::SCN &mds_table_flush_scn); // for mds table dump
   int add_macro_blocks(const int64_t idx,
                        blocksstable::ObMacroBlocksWriteCtx *blocks_ctx,
                        const ObSSTableMergeInfo &sstable_merge_info);
@@ -70,6 +71,7 @@ private:
   int new_block_write_ctx(blocksstable::ObMacroBlocksWriteCtx *&ctx);
 
   static int record_start_tx_scn_for_tx_data(const ObTabletMergeCtx &ctx, ObTabletCreateSSTableParam &param);
+  void build_sstable_merge_info(const ObTabletMergeCtx &ctx);
 private:
   bool is_inited_;
   common::ObSpinLock lock_;

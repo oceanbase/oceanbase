@@ -2090,7 +2090,7 @@ int ObTruncateTableExecutor::check_use_parallel_truncate(const obrpc::ObTruncate
     LOG_WARN("table is not exist", K(ret), K(database_name), K(table_name));
   } else {
     use_parallel_truncate = (table_schema->get_autoinc_column_id() == 0 && compat_version >= DATA_VERSION_4_1_0_0)
-                            || compat_version >= DATA_VERSION_4_2_0_0;
+                            || compat_version >= DATA_VERSION_4_1_0_2;
   }
   return ret;
 }
@@ -2146,13 +2146,13 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
       } else {
         // new parallel truncate
         ObTimeoutCtx ctx;
-        if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF._ob_ddl_timeout))) {
+        if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, (static_cast<obrpc::ObRpcProxy*>(common_rpc_proxy))->timeout()))) {
           LOG_WARN("fail to set timeout ctx", K(ret));
         } else {
           int64_t start_time = ObTimeUtility::current_time();
           while (OB_SUCC(ret)) {
             DEBUG_SYNC(BEFORE_PARELLEL_TRUNCATE);
-            if (OB_FAIL(common_rpc_proxy->truncate_table_v2(truncate_table_arg, res))) {
+            if (OB_FAIL(common_rpc_proxy->timeout(ctx.get_timeout()).truncate_table_v2(truncate_table_arg, res))) {
               LOG_WARN("rpc proxy truncate table failed", K(ret));
               if ((OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TIMEOUT == ret || OB_NOT_MASTER == ret
                     || OB_RS_NOT_MASTER == ret || OB_RS_SHUTDOWN == ret || OB_TENANT_NOT_IN_SERVER == ret) && ctx.get_timeout() > 0) {

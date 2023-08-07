@@ -101,7 +101,7 @@ int ObDirectLoadMemChunk<T, Compare>::sort(Compare &compare)
 {
   int ret = common::OB_SUCCESS;
   if (item_list_.size() > 1) {
-    OB_TABLE_LOAD_STATISTICS_TIME_COST(memory_sort_item_time_us);
+    OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, memory_sort_item_time_us);
     std::sort(item_list_.begin(), item_list_.end(), compare);
     if (OB_FAIL(compare.get_error_code())) {
       ret = compare.get_error_code();
@@ -154,7 +154,7 @@ int ObDirectLoadMemChunk<T, Compare>::add_item(const T &item)
     } else if (allocator_.used() + item_size > buf_mem_limit_) {
       return OB_BUF_NOT_ENOUGH;
     } else {
-      OB_TABLE_LOAD_STATISTICS_TIME_COST(memory_add_item_time_us);
+      OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, memory_add_item_time_us);
       char *buf = nullptr;
       T *new_item = nullptr;
       if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(item_size)))) {

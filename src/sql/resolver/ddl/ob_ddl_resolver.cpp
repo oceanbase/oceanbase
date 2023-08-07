@@ -4532,10 +4532,12 @@ int ObDDLResolver::resolve_part_func(ObResolverParams &params,
       ObRawExpr *func_expr = NULL;
       for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++) {
         func_expr = NULL;
-        if (OB_ISNULL(node->children_[i])
-            || T_EXPR_LIST == node->children_[i]->type_) {
+        if (OB_ISNULL(node->children_[i])) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("node is null or node type error", K(ret));
+          LOG_WARN("node is null", K(ret));
+        } else if (OB_UNLIKELY(T_EXPR_LIST == node->children_[i]->type_)) {
+          ret = OB_ERR_PARTITION_FUNCTION_IS_NOT_ALLOWED;
+          LOG_WARN("row expr as partition function is not allowed for hash/range/list partition");
         } else if (OB_FAIL(ObResolverUtils::resolve_partition_expr(params,
                                                                    *(node->children_[i]),
                                                                    table_schema,
@@ -5716,108 +5718,6 @@ int ObDDLResolver::resolve_range_partition_elements(ParseNode *node,
                                                        range_value_exprs,
                                                        in_tablegroup))) {
             LOG_WARN("fail to resolve range partition element", K(ret));
-          }
-        }
-      }
-    }
-    if (OB_UNLIKELY(has_empty_name) &&
-        (stmt::T_CREATE_TABLE == stmt_->get_stmt_type() ||
-         stmt::T_CREATE_TABLEGROUP == stmt_->get_stmt_type() ||
-         stmt::T_CREATE_INDEX == stmt_->get_stmt_type())) {
-      if (OB_FAIL(create_name_for_empty_partition(is_subpartition, partitions, subpartitions))) {
-        LOG_WARN("failed to create name for empty [sub]partitions", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDDLResolver::resolve_range_partition_elements(ParseNode *node,
-                                                    const bool is_subpartition,
-                                                    const ObPartitionFuncType part_type,
-                                                    ObIArray<ObRawExpr *> &range_value_exprs,
-                                                    ObIArray<ObPartition> &partitions,
-                                                    ObIArray<ObSubPartition> &subpartitions,
-                                                    int64_t &expr_num,
-                                                    const bool &in_tablegroup)
-{
-  int ret = OB_SUCCESS;
-  expr_num = OB_INVALID_INDEX;
-  if (OB_ISNULL(node)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("node is null or stmt is null", K(ret), K(node));
-  } else {
-    int64_t partition_num = node->num_child_;
-    ParseNode *partition_expr_list = node;
-    ObPartition partition;
-    ObSubPartition subpartition;
-    bool has_empty_name = false;
-    for (int64_t i = 0; OB_SUCC(ret) && i < partition_num; i++) {
-      subpartition.reset();
-      partition.reset();
-      ParseNode *element_node = partition_expr_list->children_[i];
-      if (OB_ISNULL(element_node)
-          || OB_ISNULL(element_node->children_[PARTITION_ELEMENT_NODE])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("partition expr list node is null", K(ret), K(element_node));
-      } else if (element_node->type_ != T_PARTITION_RANGE_ELEMENT) {
-        ret = OB_ERR_PARSER_SYNTAX;
-        LOG_WARN("not a valid range partition define", K(element_node->type_));
-      } else if ((OB_ISNULL(element_node->children_[PARTITION_NAME_NODE])
-                  || OB_ISNULL(element_node->children_[PARTITION_NAME_NODE]->children_[NAMENODE]))
-                 && !is_oracle_mode()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("partition expr list node is null", K(ret), K(element_node));
-      } else {
-        ObString partition_name;
-        if (OB_NOT_NULL(element_node->children_[PARTITION_NAME_NODE])) {
-          ParseNode *partition_name_node = element_node->children_[PARTITION_NAME_NODE]->children_[NAMENODE];
-          partition_name.assign_ptr(partition_name_node->str_value_,
-                                    static_cast<int32_t>(partition_name_node->str_len_));
-        } else if (is_subpartition) {
-          subpartition.set_is_empty_partition_name(true);
-        } else {
-          partition.set_is_empty_partition_name(true);
-        }
-        ParseNode *expr_list_node = element_node->children_[PARTITION_ELEMENT_NODE];
-        if (partition_name.length() > OB_MAX_PARTITION_NAME_LENGTH) {
-          ret = OB_ERR_TOO_LONG_IDENT;
-        } else if (T_EXPR_LIST != expr_list_node->type_) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("expr_list_node->type_ is not T_EXPR_LIST", K(ret));
-        } else if (OB_INVALID_INDEX != expr_num
-                   && expr_num != expr_list_node->num_child_) {
-          ret = OB_ERR_PARTITION_COLUMN_LIST_ERROR;
-          LOG_WARN("Inconsistency in usage of column lists for partitioning near",
-                   K(ret), K(expr_num), "num_child", expr_list_node->num_child_);
-        } else {
-          if (OB_NOT_NULL(element_node->children_[PART_ID_NODE])) {
-            // PART_ID is deprecated in 4.0, we just ignore and show warnings here.
-            LOG_USER_WARN_ONCE(OB_NOT_SUPPORTED, "specify part_id");
-          }
-          if (is_subpartition) {
-            if (OB_FAIL(subpartition.set_part_name(partition_name))) {
-              LOG_WARN("Failed to set part name", K(ret));
-            } else if (OB_FAIL(subpartitions.push_back(subpartition))) {
-              LOG_WARN("fail to push back subpartition", KR(ret), K(subpartition));
-            }
-          } else {
-            if (OB_FAIL(partition.set_part_name(partition_name))) {
-              LOG_WARN("Failed to set part name", K(ret));
-            } else if (OB_FAIL(partitions.push_back(partition))) {
-              LOG_WARN("fail to push back partition", KR(ret), K(partition));
-            }
-          }
-          if (OB_FAIL(ret)) {
-            // do nothing
-          } else if (OB_FAIL(resolve_range_value_exprs(expr_list_node,
-                                                       part_type,
-                                                       partition_name,
-                                                       range_value_exprs,
-                                                       in_tablegroup))) {
-            LOG_WARN("fail to resolve range partition element", K(ret));
-          } else {
-            expr_num = expr_list_node->num_child_;
           }
         }
       }
@@ -9735,11 +9635,16 @@ int ObDDLResolver::resolve_range_partition_elements(ObPartitionedStmt *stmt,
       partition.reset();
       ObString partition_name;
       int64_t tablespace_id = OB_INVALID_ID;
-      if (OB_ISNULL(element_node = node->children_[i]) ||
-          OB_ISNULL(expr_list_node = element_node->children_[PARTITION_ELEMENT_NODE]) ||
-          OB_UNLIKELY(T_EXPR_LIST != expr_list_node->type_)) {
+      if (OB_ISNULL(element_node = node->children_[i])) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected node", K(ret), K(element_node), K(expr_list_node));
+        LOG_WARN("get unexpected node", K(ret), K(element_node));
+      } else if (element_node->type_ != T_PARTITION_RANGE_ELEMENT) {
+        ret = OB_ERR_PARSER_SYNTAX;
+        LOG_WARN("not a valid range partition define", K(element_node->type_));
+      } else if (OB_ISNULL(expr_list_node = element_node->children_[PARTITION_ELEMENT_NODE]) ||
+                 OB_UNLIKELY(T_EXPR_LIST != expr_list_node->type_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected node", K(expr_list_node));
       } else if (part_func_exprs.count() != expr_list_node->num_child_) {
         ret = OB_ERR_PARTITION_COLUMN_LIST_ERROR;
         LOG_WARN("Inconsistency in usage of column lists for partitioning near", K(ret));

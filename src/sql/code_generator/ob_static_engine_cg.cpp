@@ -2665,8 +2665,8 @@ int ObStaticEngineCG::generate_spec(ObLogGranuleIterator &op, ObGranuleIteratorS
   if (log_op_def::LOG_TABLE_SCAN == child_log_op->get_type()) {
     ObLogTableScan *log_tsc = NULL;
     log_tsc = static_cast<ObLogTableScan*>(child_log_op);
-    //这里拿ref_table_id的行为是为了和table scan拿partition service的行为一致
-    spec.set_related_id(log_tsc->get_ref_table_id());
+    //这里拿index_table_id和table_scan->get_loc_ref_table_id保持一致。
+    spec.set_related_id(log_tsc->get_index_table_id());
   }
   ObPhyPlanType execute_type = spec.plan_->get_plan_type();
   if (execute_type == OB_PHY_PLAN_LOCAL) {
@@ -5711,9 +5711,8 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
     ObSEArray<int64_t,10> group_id_array;
     if (OB_SUCC(ret) && T_FUN_GROUP_ID == raw_expr.get_expr_type()) {
       if (OB_ISNULL(group_exprs)) {
-        // oracle raise error: ORA-30481: GROUPING function only supported with GROUP BY CUBE or ROLLUP
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("grouping_id shouldn't appear if there were no groupby");
+        ret = OB_ERR_GROUPING_FUNC_WITHOUT_GROUP_BY;
+        LOG_WARN("grouping_id shouldn't appear if there were no groupby", K(ret));
       } else if (OB_NOT_NULL(rollup_exprs) && rollup_exprs->count() + group_exprs->count() > 0) {
         for (int64_t i = 0; OB_SUCC(ret) && i < rollup_exprs->count(); i++) {
           if (has_exist_in_array(*group_exprs, rollup_exprs->at(i))){

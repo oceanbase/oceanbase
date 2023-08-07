@@ -661,6 +661,7 @@ int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed(
       range.set_start_key(ObStoreRowkey::MIN_STORE_ROWKEY);
       range.set_end_key(ObStoreRowkey::MAX_STORE_ROWKEY);
       const bool is_major = medium_info.is_major_compaction();
+      lib::CompatModeGuard g(tablet->get_tablet_meta().compat_mode_);
       if (OB_FAIL(prepare_iter(result, table_iter))) {
         LOG_WARN("failed to get table iter", K(ret), K(range_array));
       } else if (OB_FAIL(input_range_array.push_back(range))) {
@@ -1120,54 +1121,67 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
     } else {
       ObITable *last_major = table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/);
       if (MTL(ObTenantTabletScheduler *)->could_major_merge_start() && OB_NOT_NULL(last_major)) {
-        ObArenaAllocator temp_allocator("GetMediumInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()); // for load medium info
-        const int64_t last_major_snapshot = last_major->get_snapshot_version();
         const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
         const ObLSID &ls_id = ls.get_ls_id();
-        const int64_t major_frozen_snapshot = 0 == input_major_snapshot ? MTL(ObTenantTabletScheduler *)->get_frozen_version() : input_major_snapshot;
-        ObMediumCompactionInfo::ObCompactionType compaction_type = ObMediumCompactionInfo::COMPACTION_TYPE_MAX;
-        int64_t schedule_scn = 0;
-        {
-          storage::ObTabletMediumInfoReader reader(tablet);
-          ObMediumCompactionInfoKey key;
-          ObMediumCompactionInfo medium_info;
-          if (OB_FAIL(reader.init(temp_allocator))) {
-            LOG_WARN("failed to init medium info reader", K(ret));
-          } else {
-            LOG_DEBUG("schedule tablet medium merge", K(ret), K(schedule_scn), K(major_frozen_snapshot), K(ls_id), K(tablet_id));
-            while (OB_SUCC(ret)) {
-              if (OB_FAIL(reader.get_next_medium_info(temp_allocator, key, medium_info))) {
-                if (OB_ITER_END == ret) {
-                  ret = OB_SUCCESS;
-                  break;
-                } else {
-                  LOG_WARN("failed to get medium info", K(ret));
-                }
-              } else if (key.get_medium_snapshot() <= last_major_snapshot) {
-                // finished, this medium info could recycle
-              } else {
-                if (medium_info.is_medium_compaction() || medium_info.medium_snapshot_ <= major_frozen_snapshot) {
-                  schedule_scn = medium_info.medium_snapshot_;
-                  compaction_type = (ObMediumCompactionInfo::ObCompactionType)medium_info.compaction_type_;
-                  LOG_TRACE("set schedule scn and compaction type", K(ret), K(ls_id), K(tablet_id),
-                      K(schedule_scn), K(compaction_type), K(major_frozen_snapshot));
-                }
-                break; // break when met one undo medium info
-              }
-              if (OB_SUCC(ret)) {
-                LOG_DEBUG("iter read medium info", K(ret), K(ls_id), K(tablet_id), K(medium_info));
-              }
-              medium_info.reset();
-            } // end of while
+        ObArenaAllocator temp_allocator("GetMediumInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()); // for load medium info
+        const ObMediumCompactionInfoList *medium_list = nullptr;
+        bool schedule_flag = false;
+        const int64_t inner_table_merged_version = MTL(ObTenantTabletScheduler *)->get_inner_table_merged_scn();
+
+        if (OB_FAIL(tablet.read_medium_info_list(temp_allocator, medium_list))) {
+          LOG_WARN("failed to load medium info list", K(ret), K(tablet));
+        } else if (ObMediumCompactionInfo::MAJOR_COMPACTION == medium_list->get_last_compaction_type()
+            && inner_table_merged_version < medium_list->get_last_compaction_scn()
+            && !MTL_IS_PRIMARY_TENANT()) { // for STANDBY/RESTORE TENANT
+          ObTabletCompactionScnInfo ret_info;
+          // for standby/restore tenant, need select inner_table to check RS status before schedule new round
+          if (!scheduler_called) { // should not visit inner table, wait for scheduler loop
+          } else if (OB_FAIL(get_status_from_inner_table(ls_id, tablet_id, ret_info))) {
+            LOG_WARN("failed to get status from inner tablet", K(ret), K(ls_id), K(tablet_id));
+          } else if (ret_info.could_schedule_next_round(medium_list->get_last_compaction_scn())) {
+            LOG_INFO("success to check RS major checksum validation finished", K(ret), K(ls_id), K(tablet_id));
+            schedule_flag = true;
           }
-        }// to make reader destruct to release mds unit lock
-        if (OB_FAIL(ret)) {
-        } else if (schedule_scn > 0 && OB_FAIL(check_need_merge_and_schedule(ls, tablet, schedule_scn, compaction_type))) {
-          LOG_WARN("failed to check medium merge", K(ret), K(ls_id), K(tablet_id), K(schedule_scn));
+        } else {
+          schedule_flag = true;
+        }
+        if (OB_FAIL(ret) || !schedule_flag) {
+        } else {
+          const int64_t major_frozen_snapshot = 0 == input_major_snapshot ? MTL(ObTenantTabletScheduler *)->get_frozen_version() : input_major_snapshot;
+          ObMediumCompactionInfo::ObCompactionType compaction_type = ObMediumCompactionInfo::COMPACTION_TYPE_MAX;
+          int64_t schedule_scn = 0;
+          if (OB_FAIL(read_medium_info_from_list(*medium_list, last_major->get_snapshot_version(),
+              major_frozen_snapshot, compaction_type, schedule_scn))) {
+          } else if (schedule_scn > 0 && OB_FAIL(check_need_merge_and_schedule(ls, tablet, schedule_scn, compaction_type))) {
+            LOG_WARN("failed to check medium merge", K(ret), K(ls_id), K(tablet_id), K(schedule_scn));
+          }
         }
       }
     }
 
+  return ret;
+}
+
+int ObMediumCompactionScheduleFunc::read_medium_info_from_list(
+  const ObMediumCompactionInfoList &medium_list,
+  const int64_t last_major_snapshot,
+  const int64_t major_frozen_snapshot,
+  ObMediumCompactionInfo::ObCompactionType &compaction_type,
+  int64_t &schedule_scn)
+{
+  int ret = OB_SUCCESS;
+  DLIST_FOREACH_X(info, medium_list.get_list(), OB_SUCC(ret)) {
+    if (info->medium_snapshot_ <= last_major_snapshot) {
+      // finished, this medium info could recycle
+    } else {
+      if (info->is_medium_compaction()
+          || info->medium_snapshot_ <= major_frozen_snapshot) {
+        schedule_scn = info->medium_snapshot_;
+        compaction_type = (ObMediumCompactionInfo::ObCompactionType)info->compaction_type_;
+      }
+      break; // found one unfinish medium info, loop end
+    }
+  }
   return ret;
 }
 

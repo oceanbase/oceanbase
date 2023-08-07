@@ -97,7 +97,7 @@ int64_t ObTenantSQLSessionMgr::SessionPool::count() const
 
 ObTenantSQLSessionMgr::ObTenantSQLSessionMgr(const int64_t tenant_id)
   : tenant_id_(tenant_id),
-    session_allocator_(lib::ObMemAttr(tenant_id, "SQLSessionInfo"), MTL_CPU_COUNT())
+    session_allocator_(lib::ObMemAttr(tenant_id, "SQLSessionInfo"), MTL_CPU_COUNT(), 4)
 {}
 
 ObTenantSQLSessionMgr::~ObTenantSQLSessionMgr()
@@ -106,7 +106,7 @@ ObTenantSQLSessionMgr::~ObTenantSQLSessionMgr()
 int ObTenantSQLSessionMgr::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(session_pool_.init(MTL_IS_MINI_MODE() ? 32 : SessionPool::POOL_CAPACIPY))) {
+  if (OB_FAIL(session_pool_.init(SessionPool::POOL_CAPACIPY))) {
     LOG_WARN("fail to init session pool", K(tenant_id_), K(ret));
   }
   return ret;
@@ -426,6 +426,14 @@ int ObSQLSessionMgr::create_session(const uint64_t tenant_id,
     ObFLTControlInfoManager mgr(tenant_id);
     if (OB_FAIL(mgr.init())) {
       LOG_WARN("failed to init full link control info", K(ret));
+      if (FALSE_IT(revert_session(tmp_sess))) {
+        LOG_ERROR("fail to free session", K(err), K(sessid), K(proxy_sessid));
+      } else if (OB_SUCCESS != (err = sessinfo_map_.del(Key(sessid)))) {
+        LOG_ERROR("fail to free session", K(err), K(sessid), K(proxy_sessid));
+      } else {
+        LOG_DEBUG("free session successfully in create session", K(err),
+            K(sessid), K(proxy_sessid));
+      }
     } else if (mgr.is_valid_tenant_config()) {
       tmp_sess->set_flt_control_info(mgr.get_control_info());
     }

@@ -325,6 +325,45 @@ TEST_F(TestObSimpleLogClusterRebuild, test_follower_rebuild)
   PALF_LOG(INFO, "end test follower_rebuild", K(id));
 }
 
+TEST_F(TestObSimpleLogClusterRebuild, test_leader_cannot_rebuild)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "test_leader_cannot_rebuild");
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  PALF_LOG(INFO, "start test_leader_cannot_rebuild", K(id));
+  int64_t leader_idx = 0;
+  unittest::PalfHandleImplGuard leader;
+  unittest::PalfHandleImplGuard *rebuild_server = NULL;
+  std::vector<PalfHandleImplGuard*> palf_list;
+  int64_t follower_idx1, follower_idx2;
+  palflite::PalfHandleLiteLeaderChanger leader_changer;
+  palf::PalfRoleChangeCbNode rc_cb_node(&leader_changer);
+  EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+  EXPECT_EQ(OB_SUCCESS, leader_changer.init(&(leader.palf_handle_impl_->election_)));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->role_change_cb_wrpper_.add_cb_impl(&rc_cb_node));
+
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
+
+  LSN base_lsn = LSN(0);
+  PalfBaseInfo base_info;
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_base_info(base_lsn, base_info));
+
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->disable_sync());
+  EXPECT_EQ(OB_STATE_NOT_MATCH, leader.palf_handle_impl_->advance_base_info(base_info, true));
+
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->disable_vote(false));
+  while(FOLLOWER != leader.palf_handle_impl_->state_mgr_.role_)
+  {
+    leader_changer.change_leader();
+  }
+  unittest::PalfHandleImplGuard new_leader;
+  int64_t new_leader_idx = 0;
+  EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
+  leader.reset();
+  new_leader.reset();
+  EXPECT_EQ(OB_SUCCESS, delete_paxos_group(id));
+  PALF_LOG(INFO, "end test_leader_cannot_rebuild", K(id));
+}
+
 } // end unittest
 } // end oceanbase
 

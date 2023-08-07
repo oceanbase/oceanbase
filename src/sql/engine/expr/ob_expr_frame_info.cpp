@@ -49,7 +49,7 @@ int ObExprFrameInfo::assign(const ObExprFrameInfo &other,
     LOG_WARN("failed to copy dynamic frames", K(ret));
   } else if (OB_FAIL(datum_frame_.assign(other.datum_frame_))) {
     LOG_WARN("failed to copy datum frame", K(ret));
-  } else if (const_frame_ptrs_.prepare_allocate(other.const_frame_ptrs_.count())) {
+  } else if (OB_FAIL(const_frame_ptrs_.prepare_allocate(other.const_frame_ptrs_.count()))) {
     LOG_WARN("failed to prepare allocate array", K(ret));
   } else {
     char *frame_mem = NULL;

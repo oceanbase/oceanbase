@@ -1841,8 +1841,7 @@ int ObLSTabletService::replay_create_tablet(
       if (tablet->is_empty_shell()) {
         pool_type = ObTabletPoolType::TP_NORMAL;
       } else {
-        const int64_t try_cache_size = sizeof(ObTablet)
-                                      + tablet->rowkey_read_info_->get_deep_copy_size();
+        const int64_t try_cache_size = tablet->get_try_cache_size();
         if (try_cache_size > ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
           pool_type = ObTabletPoolType::TP_LARGE;
         } else {
@@ -3671,8 +3670,12 @@ int ObLSTabletService::check_old_row_legitimacy(
       if (OB_TMP_FAIL(check_real_leader_for_4377_(run_ctx.store_ctx_.ls_id_))) {
         ret = tmp_ret;
         LOG_WARN("check real leader for 4377 found exception", K(ret), K(old_row), K(data_table));
-      } else if (OB_TMP_FAIL(check_need_rollback_in_transfer_for_4377_(run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_,
+      } else if (nullptr != run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_
+          && OB_TMP_FAIL(check_need_rollback_in_transfer_for_4377_(run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_,
                                                                        data_tablet_handle))) {
+        ret = tmp_ret;
+        LOG_WARN("check need rollback in transfer for 4377 found exception", K(ret), K(old_row), K(data_table));
+      } else if (OB_TMP_FAIL(check_parts_tx_state_in_transfer_for_4377_(run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_))) {
         ret = tmp_ret;
         LOG_WARN("check need rollback in transfer for 4377 found exception", K(ret), K(old_row), K(data_table));
       } else if (is_udf) {
@@ -6230,6 +6233,7 @@ int ObLSTabletService::ha_get_tablet(
   }
   return ret;
 }
+
 int ObLSTabletService::check_real_leader_for_4377_(const ObLSID ls_id)
 {
   int ret = OB_SUCCESS;
@@ -6267,6 +6271,7 @@ int ObLSTabletService::check_need_rollback_in_transfer_for_4377_(const transacti
   bool unused_committed_flag = false;
 
   if (OB_ISNULL(tx_desc)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx_desc is null when check 4377", K(ret));
   } else if (OB_FAIL(data_tablet_handle.get_obj()->ObITabletMdsInterface::get_latest_tablet_status(
                user_data, unused_committed_flag))) {
@@ -6309,6 +6314,49 @@ int ObLSTabletService::check_need_rollback_in_transfer_for_4377_(const transacti
       // There's no transfer after trans begin, still throw 4377 error
     }
   }
+  return ret;
+}
+
+int ObLSTabletService::check_parts_tx_state_in_transfer_for_4377_(transaction::ObTxDesc *tx_desc)
+{
+  int ret = OB_SUCCESS;
+  transaction::ObTransService *txs = MTL(transaction::ObTransService *);
+  transaction::ObTxPartList copy_parts;
+  bool is_alive = false;
+
+  if (OB_ISNULL(tx_desc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tx_desc is null", K(ret));
+  } else if (OB_FAIL(tx_desc->get_parts_copy(copy_parts))) {
+    TRANS_LOG(WARN, "get participants copy error", K(ret));
+  } else {
+    // Although we can verify whether transaction data is incomplete due to the
+    // transfer by checking the local tablet. While in the scenario where we
+    // validate the index table through the main table, we cannot discover
+    // whether the main table's txn data is incomplete due to the transfer by
+    // using the local index table. Furthermore, the local index table and the
+    // main table may not even locate on the same machine.
+    //
+    // Therefore, we choose to traverse all participant lists through RPC to
+    // confirm whether the txn context that could potentially participate in the
+    // transfer and has been terminated due to the transfer. In this scenario,
+    // we consider the occurrence of 4377 as misreporting, and we convert it
+    // into OB_TRANS_NEED_ROLLBACK to indicate the need to rollback the txn.
+    for (int64_t i = 0; OB_SUCC(ret) && i < copy_parts.count(); i++) {
+      ObLSID ls_id = copy_parts[i].id_;
+      is_alive = false;
+      if (OB_FAIL(txs->ask_tx_state_for_4377(ls_id,
+                                             tx_desc->get_tx_id(),
+                                             is_alive))) {
+        TRANS_LOG(WARN, "fail to ask tx state for 4377", K(tx_desc));
+      } else if (!is_alive) {
+        ret = OB_TRANS_NEED_ROLLBACK;
+        LOG_WARN("maybe meet transfer during kill tx, which can cause 4377 error, so we will rollback it",
+                 K(tx_desc));
+      }
+    }
+  }
+
   return ret;
 }
 

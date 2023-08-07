@@ -50,7 +50,7 @@ int64_t ObDirectLoadExternalRow::get_deep_copy_size() const
 int ObDirectLoadExternalRow::deep_copy(const ObDirectLoadExternalRow &src, char *buf,
                                        const int64_t len, int64_t &pos)
 {
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(external_row_deep_copy_time_us);
+  OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, external_row_deep_copy_time_us);
   int ret = OB_SUCCESS;
   const int64_t deep_copy_size = src.get_deep_copy_size();
   if (OB_UNLIKELY(!src.is_valid() || len - pos < deep_copy_size)) {
@@ -73,7 +73,7 @@ int ObDirectLoadExternalRow::deep_copy(const ObDirectLoadExternalRow &src, char 
 int ObDirectLoadExternalRow::from_datums(ObStorageDatum *datums, int64_t column_count,
                                          int64_t rowkey_column_count)
 {
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(transfer_external_row_time_us);
+  OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, transfer_external_row_time_us);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == datums || column_count < rowkey_column_count)) {
     ret = OB_INVALID_ARGUMENT;
@@ -106,7 +106,7 @@ int ObDirectLoadExternalRow::from_datums(ObStorageDatum *datums, int64_t column_
 
 int ObDirectLoadExternalRow::to_datums(ObStorageDatum *datums, int64_t column_count) const
 {
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(transfer_datum_row_time_us);
+  OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, transfer_datum_row_time_us);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -151,7 +151,7 @@ int ObDirectLoadExternalRow::get_rowkey(ObDatumRowkey &rowkey) const
 
 OB_DEF_SERIALIZE_SIMPLE(ObDirectLoadExternalRow)
 {
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(external_row_serialize_time_us);
+  OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, external_row_serialize_time_us);
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_ENCODE, rowkey_datum_array_, buf_size_);
   if (OB_SUCC(ret) && OB_NOT_NULL(buf_)) {
@@ -163,7 +163,7 @@ OB_DEF_SERIALIZE_SIMPLE(ObDirectLoadExternalRow)
 
 OB_DEF_DESERIALIZE_SIMPLE(ObDirectLoadExternalRow)
 {
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(external_row_deserialize_time_us);
+  OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, external_row_deserialize_time_us);
   int ret = OB_SUCCESS;
   reuse();
   LST_DO_CODE(OB_UNIS_DECODE, rowkey_datum_array_, buf_size_);
@@ -176,7 +176,7 @@ OB_DEF_DESERIALIZE_SIMPLE(ObDirectLoadExternalRow)
 
 OB_DEF_SERIALIZE_SIZE_SIMPLE(ObDirectLoadExternalRow)
 {
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(external_row_serialize_time_us);
+  OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, external_row_serialize_time_us);
   int64_t len = 0;
   LST_DO_CODE(OB_UNIS_ADD_LEN, rowkey_datum_array_, buf_size_);
   len += buf_size_;

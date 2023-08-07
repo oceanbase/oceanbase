@@ -1967,12 +1967,16 @@ int ObPlanCache::flush_plan_cache()
   } else if (OB_FAIL(dump_deleted_objs<DUMP_SQL>(deleted_objs, safe_timestamp))) {
     SQL_PC_LOG(WARN, "failed to get deleted sql objs", K(ret));
   } else {
-    LOG_INFO("Deleted Cache Objs", K(deleted_objs));
-    for (int64_t i = 0; i < deleted_objs.count(); i++) { // ignore error code and continue
-      if (OB_FAIL(ObCacheObjectFactory::destroy_cache_obj(true,
-                                                          deleted_objs.at(i).obj_id_,
-                                                          this))) {
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = OB_E(EventTable::EN_FLUSH_PC_NOT_CLEANUP_LEAK_MEM_ERROR) OB_SUCCESS;
+    if (OB_SUCCESS == tmp_ret) {
+      LOG_INFO("Deleted Cache Objs", K(deleted_objs));
+      for (int64_t i = 0; i < deleted_objs.count(); i++) { // ignore error code and continue
+        if (OB_FAIL(ObCacheObjectFactory::destroy_cache_obj(true,
+                                                            deleted_objs.at(i).obj_id_,
+                                                            this))) {
           LOG_WARN("failed to destroy cache obj", K(ret));
+        }
       }
     }
   }
@@ -1996,12 +2000,16 @@ int ObPlanCache::flush_plan_cache_by_sql_id(uint64_t db_id, common::ObString sql
   } else if (OB_FAIL(dump_deleted_objs<DUMP_SQL>(deleted_objs, safe_timestamp))) {
     SQL_PC_LOG(WARN, "failed to get deleted sql objs", K(ret));
   } else {
-    LOG_INFO("Deleted Cache Objs", K(deleted_objs));
-    for (int64_t i = 0; i < deleted_objs.count(); i++) { // ignore error code and continue
-      if (OB_FAIL(ObCacheObjectFactory::destroy_cache_obj(true,
-                                                          deleted_objs.at(i).obj_id_,
-                                                          this))) {
-          LOG_WARN("failed to destroy cache obj", K(ret));
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = OB_E(EventTable::EN_FLUSH_PC_NOT_CLEANUP_LEAK_MEM_ERROR) OB_SUCCESS;
+    if (OB_SUCCESS == tmp_ret) {
+      LOG_INFO("Deleted Cache Objs", K(deleted_objs));
+      for (int64_t i = 0; i < deleted_objs.count(); i++) { // ignore error code and continue
+        if (OB_FAIL(ObCacheObjectFactory::destroy_cache_obj(true,
+                                                            deleted_objs.at(i).obj_id_,
+                                                            this))) {
+            LOG_WARN("failed to destroy cache obj", K(ret));
+        }
       }
     }
   }
@@ -2024,12 +2032,16 @@ int ObPlanCache::flush_lib_cache()
   } else if (OB_FAIL(dump_deleted_objs<DUMP_ALL>(deleted_objs, safe_timestamp))) {
     SQL_PC_LOG(WARN, "failed to get deleted sql objs", K(ret));
   } else {
-    LOG_INFO("Deleted Cache Objs", K(deleted_objs));
-    for (int64_t i = 0; i < deleted_objs.count(); i++) { // ignore error code and continue
-      if (OB_FAIL(ObCacheObjectFactory::destroy_cache_obj(true,
-                                                          deleted_objs.at(i).obj_id_,
-                                                          this))) {
-          LOG_WARN("failed to destroy cache obj", K(ret));
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = OB_E(EventTable::EN_FLUSH_PC_NOT_CLEANUP_LEAK_MEM_ERROR) OB_SUCCESS;
+    if (OB_SUCCESS == tmp_ret) {
+      LOG_INFO("Deleted Cache Objs", K(deleted_objs));
+      for (int64_t i = 0; i < deleted_objs.count(); i++) { // ignore error code and continue
+        if (OB_FAIL(ObCacheObjectFactory::destroy_cache_obj(true,
+                                                            deleted_objs.at(i).obj_id_,
+                                                            this))) {
+            LOG_WARN("failed to destroy cache obj", K(ret));
+        }
       }
     }
   }
@@ -2050,12 +2062,16 @@ int ObPlanCache::flush_lib_cache_by_ns(const ObLibCacheNameSpace ns)
   } else if (OB_FAIL(dump_deleted_objs_by_ns(deleted_objs, safe_timestamp, ns))) {
     SQL_PC_LOG(ERROR, "failed to dump deleted objs by ns", K(ret));
   } else {
-    LOG_INFO("Deleted Cache Objs", K(deleted_objs));
-    for (int i = 0; i < deleted_objs.count(); i++) {  // ignore error code and continue
-      if (OB_FAIL(ObCacheObjectFactory::destroy_cache_obj(true,
-                                                          deleted_objs.at(i).obj_id_,
-                                                          this))) {
-        LOG_WARN("failed to destroy cache obj", K(ret));
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = OB_E(EventTable::EN_FLUSH_PC_NOT_CLEANUP_LEAK_MEM_ERROR) OB_SUCCESS;
+    if (OB_SUCCESS == tmp_ret) {
+      LOG_INFO("Deleted Cache Objs", K(deleted_objs));
+      for (int i = 0; i < deleted_objs.count(); i++) {  // ignore error code and continue
+        if (OB_FAIL(ObCacheObjectFactory::destroy_cache_obj(true,
+                                                            deleted_objs.at(i).obj_id_,
+                                                            this))) {
+          LOG_WARN("failed to destroy cache obj", K(ret));
+        }
       }
     }
   }
@@ -2077,12 +2093,16 @@ int ObPlanCache::flush_pl_cache()
   } else if (OB_FAIL(dump_deleted_objs<DUMP_PL>(deleted_objs, safe_timestamp))) {
     SQL_PC_LOG(ERROR, "failed to dump deleted pl objs", K(ret));
   } else {
-    LOG_INFO("Deleted Cache Objs", K(deleted_objs));
-    for (int i = 0; i < deleted_objs.count(); i++) {  // ignore error code and continue
-      if (OB_FAIL(ObCacheObjectFactory::destroy_cache_obj(true,
-                                                          deleted_objs.at(i).obj_id_,
-                                                          this))) {
-        LOG_WARN("failed to destroy cache obj", K(ret));
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = OB_E(EventTable::EN_FLUSH_PC_NOT_CLEANUP_LEAK_MEM_ERROR) OB_SUCCESS;
+    if (OB_SUCCESS == tmp_ret) {
+      LOG_INFO("Deleted Cache Objs", K(deleted_objs));
+      for (int i = 0; i < deleted_objs.count(); i++) {  // ignore error code and continue
+        if (OB_FAIL(ObCacheObjectFactory::destroy_cache_obj(true,
+                                                            deleted_objs.at(i).obj_id_,
+                                                            this))) {
+          LOG_WARN("failed to destroy cache obj", K(ret));
+        }
       }
     }
   }

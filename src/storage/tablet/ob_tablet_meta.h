@@ -148,21 +148,19 @@ public:
 public:
   int32_t version_;
   int32_t length_;
-  share::ObLSID ls_id_;
-  common::ObTabletID tablet_id_;
+  share::ObLSID ls_id_; // alignment: 8B, size: 8B
+  common::ObTabletID tablet_id_; // alignment: 8B, size: 8B
   common::ObTabletID data_tablet_id_;
   common::ObTabletID ref_tablet_id_;
-  bool has_next_tablet_;
-  share::SCN create_scn_;
+  share::SCN create_scn_; // alignment: 8B, size: 8B
   share::SCN start_scn_;
   share::SCN clog_checkpoint_scn_; // may less than last_minor->end_log_ts
   share::SCN ddl_checkpoint_scn_;
   // snapshot_version of last minor
   int64_t snapshot_version_;
   int64_t multi_version_start_;
-  lib::Worker::CompatMode compat_mode_;
   ObTabletHAStatus ha_status_;
-  ObTabletReportStatus report_status_;
+  ObTabletReportStatus report_status_; // alignment: 8B, size: 32B
   ObTabletTableStoreFlag table_store_flag_;
   share::SCN ddl_start_scn_;
   int64_t ddl_snapshot_version_;
@@ -176,11 +174,13 @@ public:
   int64_t max_serialized_medium_scn_; // abandon after 4.2
   share::SCN ddl_commit_scn_;
   share::SCN mds_checkpoint_scn_;
-  ObTabletTransferInfo transfer_info_;
+  ObTabletTransferInfo transfer_info_; // alignment: 8B, size: 32B
   int64_t create_schema_version_; // add after 4.2, record schema_version when first create tablet. NEED COMPAT
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.
   // yuque :
+  lib::Worker::CompatMode compat_mode_; // alignment: 1B, size: 4B
+  bool has_next_tablet_;
 
 private:
   int inner_check_(

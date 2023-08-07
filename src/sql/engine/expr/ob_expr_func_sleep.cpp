@@ -87,7 +87,7 @@ int ObExprSleep::get_usec(const number::ObNumber &nmb, int64_t &value, ObIAlloca
       LOG_WARN("copy nmb failed", K(ret), K(nmb));
     } else if (OB_FAIL(tmp_nmb.round(SCALE_OF_SECOND))) {
       LOG_WARN("round nmb failed", K(ret), K(tmp_nmb));
-    } else if (tmp_nmb.mul(other, res, alloc)) {
+    } else if (OB_FAIL(tmp_nmb.mul(other, res, alloc))) {
       LOG_WARN("mul op failed", K(ret), K(other), K(tmp_nmb));
     } else if (!res.is_valid_uint64(tmp)) { //based on the behaviour of mysql.
       ret = OB_INVALID_ARGUMENT;
@@ -110,6 +110,9 @@ int ObExprSleep::eval_sleep(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
   if (OB_FAIL(expr.eval_param_value(ctx, sec))) {
     LOG_WARN("eval arg failed", K(ret));
   } else if (sec->is_null()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sleep");
+    LOG_WARN("invalid arguments to sleep");
   } else if (OB_FAIL(get_usec(number::ObNumber(sec->get_number()), usec, calc_alloc))) {
     ret = OB_SUCCESS;
   } else {

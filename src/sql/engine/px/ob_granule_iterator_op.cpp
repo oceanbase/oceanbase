@@ -128,7 +128,7 @@ OB_DEF_SERIALIZE_SIZE(ObGIOpInput)
 }
 
 OB_SERIALIZE_MEMBER((ObGranuleIteratorSpec, ObOpSpec),
-                    ref_table_id_,
+                    index_table_id_,
                     tablet_size_,
                     affinitize_,
                     partition_wise_join_,
@@ -143,7 +143,7 @@ OB_SERIALIZE_MEMBER((ObGranuleIteratorSpec, ObOpSpec),
 
 ObGranuleIteratorSpec::ObGranuleIteratorSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
 : ObOpSpec(alloc, type),
-  ref_table_id_(OB_INVALID_ID),
+  index_table_id_(OB_INVALID_ID),
   tablet_size_(common::OB_DEFAULT_TABLET_SIZE),
   affinitize_(false),
   partition_wise_join_(false),
@@ -480,7 +480,7 @@ int ObGranuleIteratorOp::try_get_rows(const int64_t max_row_cnt)
       if (!is_vectorized()) {
         if (OB_FAIL(child_->get_next_row())) {
           LOG_DEBUG("failed to get new row", K(ret),
-                    K(MY_SPEC.affinitize_), K(MY_SPEC.ref_table_id_), K(worker_id_));
+                    K(MY_SPEC.affinitize_), K(MY_SPEC.index_table_id_), K(worker_id_));
           if (OB_ITER_END != ret) {
             LOG_WARN("try fetch task failed", K(ret));
           } else {
@@ -489,7 +489,7 @@ int ObGranuleIteratorOp::try_get_rows(const int64_t max_row_cnt)
           }
         } else {
           LOG_DEBUG("get new row", K(ret),
-                    K(MY_SPEC.affinitize_), K(MY_SPEC.ref_table_id_), K(worker_id_));
+                    K(MY_SPEC.affinitize_), K(MY_SPEC.index_table_id_), K(worker_id_));
           got_next_row = true;
         }
       } else {
@@ -820,7 +820,7 @@ int ObGranuleIteratorOp::get_gi_task_consumer_node(ObOperator *cur,
             PHY_BLOCK_SAMPLE_SCAN == first_child->get_spec().type_ ||
             PHY_ROW_SAMPLE_SCAN == first_child->get_spec().type_) {
     child = first_child;
-  } else if (get_gi_task_consumer_node(first_child, child)) {
+  } else if (OB_FAIL(get_gi_task_consumer_node(first_child, child))) {
     LOG_WARN("failed to get gi task consumer node", K(ret));
   }
   if (OB_SUCC(ret) && OB_ISNULL(child)) {
@@ -1030,7 +1030,7 @@ int ObGranuleIteratorOp::fetch_normal_pw_task_infos(const common::ObIArray<int64
 int ObGranuleIteratorOp::try_build_tablet2part_id_map()
 {
   int ret = OB_SUCCESS;
-  if (OB_INVALID_ID == MY_SPEC.ref_table_id_) {
+  if (OB_INVALID_ID == MY_SPEC.index_table_id_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("loc is unexpected", K(ret));
   } else if (tablet2part_id_map_.created()) {
@@ -1040,13 +1040,13 @@ int ObGranuleIteratorOp::try_build_tablet2part_id_map()
     LOG_WARN("get unexpected null", K(ret), K(ctx_));
   } else {
     const ObTableSchema *table_schema = NULL;
-    int64_t ref_table_id = MY_SPEC.ref_table_id_;
+    int64_t index_table_id = MY_SPEC.index_table_id_;
     if (OB_FAIL(ctx_.get_sql_ctx()->schema_guard_->get_table_schema(
-        MTL_ID(), ref_table_id, table_schema))) {
+        MTL_ID(), index_table_id, table_schema))) {
       LOG_WARN("fail to get table schema", K(ret));
     } else if (OB_ISNULL(table_schema)) {
       ret = OB_SCHEMA_ERROR;
-      LOG_WARN("null table schema", K(MTL_ID()), K(ref_table_id));
+      LOG_WARN("null table schema", K(MTL_ID()), K(index_table_id));
     } else if (PARTITION_LEVEL_TWO != table_schema->get_part_level()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected part level", K(ret));

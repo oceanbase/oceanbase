@@ -201,18 +201,20 @@ OB_INLINE int ObTableDeleteOp::open_table_for_each()
 OB_INLINE int ObTableDeleteOp::close_table_for_each()
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < del_rtdefs_.count(); ++i) {
-    if (!del_rtdefs_.at(i).empty()) {
-      const ObDelCtDef &primary_del_ctdef = *MY_SPEC.del_ctdefs_.at(i).at(0);
-      ObDelRtDef &primary_del_rtdef = del_rtdefs_.at(i).at(0);
-      if (OB_NOT_NULL(primary_del_rtdef.das_rtdef_.table_loc_)) {
-        primary_del_rtdef.das_rtdef_.table_loc_->is_writing_ = false;
-      }
-      if (OB_FAIL(ObDMLService::process_after_stmt_trigger(primary_del_ctdef,
-                                                           primary_del_rtdef,
-                                                           dml_rtctx_,
-                                                           ObDmlEventType::DE_DELETING))) {
-        LOG_WARN("process after stmt trigger failed", K(ret));
+  if (OB_SUCCESS == ctx_.get_errcode()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < del_rtdefs_.count(); ++i) {
+      if (!del_rtdefs_.at(i).empty()) {
+        const ObDelCtDef &primary_del_ctdef = *MY_SPEC.del_ctdefs_.at(i).at(0);
+        ObDelRtDef &primary_del_rtdef = del_rtdefs_.at(i).at(0);
+        if (OB_NOT_NULL(primary_del_rtdef.das_rtdef_.table_loc_)) {
+          primary_del_rtdef.das_rtdef_.table_loc_->is_writing_ = false;
+        }
+        if (OB_FAIL(ObDMLService::process_after_stmt_trigger(primary_del_ctdef,
+                                                             primary_del_rtdef,
+                                                             dml_rtctx_,
+                                                             ObDmlEventType::DE_DELETING))) {
+          LOG_WARN("process after stmt trigger failed", K(ret));
+        }
       }
     }
   }

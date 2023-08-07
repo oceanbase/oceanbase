@@ -376,6 +376,7 @@ int ObConflictChecker::build_base_conflict_map(
     if (OB_FAIL(build_rowkey(rowkey, checker_ctdef_.cst_ctdefs_.at(i)))) {
       LOG_WARN("fail to build rowkey", K(ret));
     } else if (OB_ISNULL(rowkey)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rowkey is null", K(ret));
     } else {
       ObConflictValue constraint_value;
@@ -790,6 +791,7 @@ int ObConflictChecker::build_data_table_range(ObNewRange &lookup_range)
     } else if (OB_FAIL(expr->eval(eval_ctx_, col_datum))) {
       LOG_WARN("failed to evaluate expr in rowkey", K(ret), K(i));
     } else if (OB_ISNULL(col_datum)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("evaluated column datum in rowkey is nullptr", K(ret), K(i));
     } else if (OB_FAIL(col_datum->to_obj(tmp_obj, expr->obj_meta_, expr->obj_datum_map_))) {
       LOG_WARN("convert datum to obj failed", K(ret));

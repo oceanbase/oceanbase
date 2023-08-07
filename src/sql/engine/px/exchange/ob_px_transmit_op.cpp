@@ -1014,6 +1014,7 @@ int ObPxTransmitOp::link_ch_sets(ObPxTaskChSet &ch_set,
         } else if (OB_FAIL(ObDtlChannelGroup::link_channel(ci, ch, dfc))) {
           LOG_WARN("fail link channel", K(ci), K(ret));
         } else if (OB_ISNULL(ch)) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail add qc channel", K(ret));
         } else if (OB_FAIL(channels.push_back(ch))) {
           failed_in_push_back_to_channels = true;

@@ -97,6 +97,8 @@ void ObXACtx::reset()
   }
   dblink_client_array_.reset();
   has_tx_level_temp_table_ = false;
+  local_lock_level_ = -1;
+  executing_xid_.reset();
   is_inited_ = false;
 }
 
@@ -992,6 +994,7 @@ int ObXACtx::process_end_stmt(const obrpc::ObXAEndStmtRPCRequest &req)
       TRANS_LOG(WARN, "xa release global lock failed", K(ret), K(xid), K(*this));
     } else {
       is_executing_ = false;
+      executing_xid_.reset();
     }
   }
   if (OB_TRANS_XA_BRANCH_FAIL == ret) {
@@ -1664,6 +1667,9 @@ int ObXACtx::xa_end(const ObXATransID &xid,
     // include branch fail
     TRANS_LOG(WARN, "check for execution failed", K(ret), K(xid), K(*this));
   } else {
+    if (is_executing_ && xid.all_equal_to(executing_xid_)) {
+      TRANS_LOG(ERROR, "unexpected local lock", K(xid), K(*this));
+    }
     if (ObXAFlag::contain_tmfail(flags) && !tx_desc_->need_rollback()) {
       if (OB_FAIL(MTL(ObTransService *)->abort_tx(*tx_desc_, ObTxAbortCause::IMPLICIT_ROLLBACK))) {
         TRANS_LOG(WARN, "abort tx fail", K(ret), K(*this));
@@ -1780,8 +1786,14 @@ int ObXACtx::start_stmt(const ObXATransID &xid, const uint32_t session_id)
   } else {
     // tightly coupled mode
     if (is_executing_) {
-      ret = OB_TRANS_STMT_NEED_RETRY;
-      TRANS_LOG(INFO, "another branch is executing stmt, try again", K(ret), K(*this));
+      if (xid.all_equal_to(executing_xid_)) {
+        local_lock_level_++;
+        TRANS_LOG(INFO, "acquire local lock repeatedly", K(xid), K_(local_lock_level), K(*this));
+        // return OB_SUCCESS;
+      } else {
+        ret = OB_TRANS_STMT_NEED_RETRY;
+        TRANS_LOG(INFO, "another branch is executing stmt, try again", K(ret), K(*this));
+      }
     } else {
       // this flag indicates that a branch is executing normal stmt
       is_executing_ = true;
@@ -1808,13 +1820,14 @@ int ObXACtx::start_stmt(const ObXATransID &xid, const uint32_t session_id)
       }
       if (OB_SUCC(ret)) {
         executing_xid_ = xid;
+        local_lock_level_ = 0;
       } else {
         is_executing_ = false;
       }
     }
   }
 
-  TRANS_LOG(INFO, "xa trans start stmt", K(ret), K(xid), K(*this));
+  TRANS_LOG(INFO, "xa trans start stmt", K(ret), K(xid), K_(trans_id), K_(is_terminated));
   return ret;
 }
 
@@ -1911,10 +1924,9 @@ int ObXACtx::end_stmt(const ObXATransID &xid)
 {
   int ret = OB_SUCCESS;
   const bool is_original = (GCTX.self_addr() == original_sche_addr_);
-  UNUSED(xid);
   ObLatchWGuard guard(lock_, common::ObLatchIds::XA_CTX_LOCK);
 
-  if (!xid.is_valid()) {
+  if (!xid.is_valid() || xid.empty()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argumrnt", K(ret), K(xid));
   } else if (OB_UNLIKELY(!is_inited_)) {
@@ -1923,11 +1935,28 @@ int ObXACtx::end_stmt(const ObXATransID &xid)
   } else if (is_exiting_) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "xa ctx is exiting", K(ret), K(*this));
+  } else if (OB_ISNULL(tx_desc_)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "trans descriptor is null", K(ret), K(xid), K(*this));
   } else if (!is_tightly_coupled_) {
     // do nothing
   } else if (OB_UNLIKELY(!is_executing_)) {
+    const ObGlobalTxType global_tx_type = tx_desc_->get_global_tx_type(xid);
+    if (ObGlobalTxType::DBLINK_TRANS == global_tx_type) {
+      TRANS_LOG(INFO, "xa ctx is not executing", K(ret), K(global_tx_type), K(*this));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "xa ctx is not executing", K(ret), K(global_tx_type), K(*this));
+    }
+  } else if (!xid.all_equal_to(executing_xid_)) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "xa ctx is not executing", K(ret), K(*this));
+    TRANS_LOG(ERROR, "unexpected local lock", K(ret), K(xid), K(*this));
+  } else if (is_executing_ && local_lock_level_ < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected local lock", K(ret), K(xid), K(*this));
+  } else if (is_executing_ && local_lock_level_ > 0) {
+    local_lock_level_--;
+    TRANS_LOG(INFO, "release local lock", K(xid), K_(local_lock_level), K(*this));
   } else {
     if (is_original) {
       // local
@@ -1942,7 +1971,7 @@ int ObXACtx::end_stmt(const ObXATransID &xid)
     }
   }
 
-  TRANS_LOG(INFO, "xa trans end stmt", K(ret), K(xid), K(*this));
+  TRANS_LOG(INFO, "xa trans end stmt", K(ret), K(xid), K_(trans_id), K_(is_terminated));
   return ret;
 }
 
@@ -1961,6 +1990,7 @@ int ObXACtx::end_stmt_local_(const ObXATransID &xid)
   } else {
     is_executing_ = false;
     executing_xid_.reset();
+    local_lock_level_ = -1;
     TRANS_LOG(INFO, "succeed to end stmt local", K(ret), K(xid));
   }
 
@@ -2029,6 +2059,7 @@ int ObXACtx::end_stmt_remote_(const ObXATransID &xid)
     } else {
       is_executing_ = false;
       executing_xid_.reset();
+      local_lock_level_ = -1;
       TRANS_LOG(INFO, "succeed to end stmt remote", K(xid), K(*this));
     }
   } else {
@@ -2310,6 +2341,7 @@ int ObXACtx::wait_start_stmt(const uint32_t session_id)
       TRANS_LOG(WARN, "fail to wait start stmt", K(ret), K(*this));
       is_executing_ = false;
       executing_xid_.reset();
+      local_lock_level_ = -1;
     } else if (OB_FAIL(create_xa_savepoint_if_need_(executing_xid_, session_id))) {
       TRANS_LOG(WARN, "check xa savepoint fail", K(ret), K(session_id), K(*this));
     } else {

@@ -30,14 +30,13 @@ class ObLSService;
 }
 namespace logservice
 {
-class ObLogRestoreController;
 class ObRestoreLogFunction : public logfetcher::ILogFetcherHandler
 {
 public:
   ObRestoreLogFunction();
   virtual ~ObRestoreLogFunction();
 public:
-  int init(const uint64_t tenant_id, ObLogRestoreController *controller, storage::ObLSService *ls_svr);
+  int init(const uint64_t tenant_id, storage::ObLSService *ls_svr);
   void destroy();
   void reset();
 
@@ -62,11 +61,9 @@ private:
       const int64_t buf_size,
       volatile bool &stop_flag);
 
-  int wait_restore_quota_(const int64_t size, bool &done, volatile bool &stop_flag);
 private:
   bool inited_;
   uint64_t tenant_id_;
-  ObLogRestoreController *controller_;
   storage::ObLSService *ls_svr_;
 };
 } // namespace logservice

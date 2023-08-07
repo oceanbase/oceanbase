@@ -271,7 +271,7 @@ int ObTableMergeOp::open_table_for_each()
 OB_INLINE int ObTableMergeOp::close_table_for_each()
 {
   int ret = OB_SUCCESS;
-  if (!merge_rtdefs_.empty()) {
+  if (!merge_rtdefs_.empty() && (OB_SUCCESS == ctx_.get_errcode())) {
     //only primary index table need to execute triggered
     const ObMergeCtDef &merge_ctdef = *MY_SPEC.merge_ctdefs_.at(0);
     ObMergeRtDef &merge_rtdef = merge_rtdefs_.at(0);

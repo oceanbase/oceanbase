@@ -63,6 +63,7 @@ public:
   ObPocRpcServer() : has_start_(false){}
   ~ObPocRpcServer() {}
   int start(int port, int net_thread_count, rpc::frame::ObReqDeliver* deliver);
+  int start_net_client(int net_thread_count);
   void stop();
   void wait();
   bool has_start() {return has_start_;}

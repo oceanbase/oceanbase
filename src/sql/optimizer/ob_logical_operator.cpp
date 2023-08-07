@@ -1676,7 +1676,7 @@ int ObLogicalOperator::mark_expr_produced(ObRawExpr *expr,
     ExprProducer new_expr_producer(expr, id_);
     new_expr_producer.producer_branch_ = branch_id;
     new_expr_producer.producer_id_ = producer_id;
-    if (gen_expr_ctx.add(new_expr_producer)) {
+    if (OB_FAIL(gen_expr_ctx.add(new_expr_producer))) {
       LOG_WARN("failed to add expr producer", K(ret));
     } else { /*do nothing*/ }
   } else {

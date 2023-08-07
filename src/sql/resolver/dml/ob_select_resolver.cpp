@@ -1283,6 +1283,7 @@ int ObSelectResolver::resolve_query_options(const ParseNode *node)
 {
   int ret = OB_SUCCESS;
   bool is_set_distinct = false;
+  bool is_set_all = false;
   ObSelectStmt *select_stmt = get_select_stmt();
   if (OB_ISNULL(select_stmt)) {
     ret = OB_NOT_INIT;
@@ -1298,6 +1299,8 @@ int ObSelectResolver::resolve_query_options(const ParseNode *node)
       option_node = node->children_[i];
       if (option_node->type_ == T_DISTINCT) {
         is_set_distinct = true;
+      } else if (option_node->type_ == T_ALL) {
+        is_set_all = true;
       } else if (option_node->type_ == T_FOUND_ROWS) {
         if (has_calc_found_rows_) {
           has_calc_found_rows_ = false;
@@ -1311,7 +1314,10 @@ int ObSelectResolver::resolve_query_options(const ParseNode *node)
   }
   if (OB_SUCC(ret)) {
     //默认为all
-    if (is_set_distinct) {
+    if (is_set_all && is_set_distinct) {
+      ret = OB_ERR_WRONG_USAGE;
+      LOG_USER_ERROR(OB_ERR_WRONG_USAGE, "ALL and DISTINCT");
+    } else if (is_set_distinct) {
       select_stmt->assign_distinct();
     } else {
       select_stmt->assign_all();
@@ -1708,6 +1714,8 @@ int ObSelectResolver::resolve_order_item(const ParseNode &sort_node, OrderItem &
        LOG_WARN("resolve sql expression failed", K(ret));
     } else if (OB_FAIL(resolve_literal_order_item(*(sort_node.children_[0]), order_item.expr_, order_item, select_stmt))) {
       LOG_WARN("fail to resolve literal order item", K(ret), K(*order_item.expr_));
+    } else if (OB_FAIL(resolve_shared_order_item(order_item, select_stmt))) {
+      LOG_WARN("failed to resolve shared order item", K(ret));
     } else { }
   }
   if (OB_SUCC(ret) && is_only_full_group_by_on(session_info_->get_sql_mode())) {
@@ -2445,7 +2453,7 @@ int ObSelectResolver::resolve_star_for_table_groups()
               //如果是only full group by，所有target list中的列都必须检查是否满足group约束
               if (OB_FAIL(standard_group_checker_.add_unsettled_column(item.expr_))) {
                 LOG_WARN("add unsettled column failed", K(ret));
-              } else if (standard_group_checker_.add_unsettled_expr(item.expr_)) {
+              } else if (OB_FAIL(standard_group_checker_.add_unsettled_expr(item.expr_))) {
                 LOG_WARN("add unsettled expr failed", K(ret));
               }
               //对于select * from t1 group by c1, c2;这样的语句，*展开就是column，所以表达式以及表达式引用到的列都是自己
@@ -2602,8 +2610,8 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
         if (!is_in_exists_subquery()) {
           ret = OB_ERR_NO_TABLES_USED;
           LOG_WARN("No tables used");
-        } else if (ObRawExprUtils::build_const_int_expr(*params_.expr_factory_,
-                                                        ObIntType, 1, c_expr)) {
+        } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*params_.expr_factory_,
+                                                        ObIntType, 1, c_expr))) {
           LOG_WARN("fail to build const int expr", K(ret));
         } else if (OB_FALSE_IT(select_item.expr_ = c_expr)) {
         } else if (OB_FAIL(select_stmt->add_select_item(select_item))) {
@@ -4751,7 +4759,7 @@ int ObSelectResolver::resolve_into_clause(const ParseNode *node)
     } else if (OB_ISNULL(select_stmt)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("select stmt is NULL", K(ret));
-    } else if (OB_UNLIKELY(get_current_level() != 0)) { //in subquery
+    } else if (OB_UNLIKELY(is_sub_stmt_)) { //in subquery
       ret = OB_INAPPROPRIATE_INTO;
       LOG_WARN("select into can not in subquery", K(ret));
     } else if (OB_UNLIKELY(is_in_set_query())) {
@@ -5573,7 +5581,7 @@ int ObSelectResolver::resolve_win_func_exprs(ObRawExpr *&expr, common::ObIArray<
           LOG_WARN("failed to handle compat with mysql ntile.", K(ret));
         } else if (OB_ISNULL(final_win_expr = select_stmt->get_same_win_func_item(win_expr))) {
           ret = select_stmt->add_window_func_expr(win_expr);
-        } else if (ObRawExprUtils::replace_ref_column(expr, win_exprs.at(i), final_win_expr)) {
+        } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, win_exprs.at(i), final_win_expr))) {
           LOG_WARN("failed to replace ref column.", K(ret), K(*win_exprs.at(i)));
         } else {/*do nothing.*/}
       }
@@ -6550,6 +6558,13 @@ int ObSelectResolver::recursive_check_grouping_columns(ObSelectStmt *stmt, ObRaw
     } else if (c_expr->is_nested_aggr()) {
       ret = OB_ERR_GROUP_FUNC_NOT_ALLOWED;
       LOG_WARN("group_id shouldn't be nested", K(ret));
+    } else if (stmt->get_group_expr_size() == 0 &&
+               stmt->get_rollup_expr_size() == 0 &&
+               stmt->get_grouping_sets_items_size() == 0 &&
+               stmt->get_rollup_items_size() == 0 &&
+               stmt->get_cube_items_size() == 0) {
+      ret = OB_ERR_GROUPING_FUNC_WITHOUT_GROUP_BY;
+      LOG_WARN("GROUPING function only supported with GROUP BY CUBE or ROLLUP", K(ret));
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
@@ -6586,6 +6601,39 @@ int ObSelectResolver::add_name_for_anonymous_view()
     }
   }
 
+  return ret;
+}
+
+int ObSelectResolver::resolve_shared_order_item(OrderItem &order_item, ObSelectStmt *select_stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> select_exprs;
+  ObRawExpr *expr = NULL;
+  bool find = false;
+  ObQuestionmarkEqualCtx cmp_ctx(false);
+  if (OB_ISNULL(select_stmt) ||
+      OB_ISNULL(params_.query_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null pointer", K(ret));
+  } else if (OB_FAIL(select_stmt->get_select_exprs(select_exprs))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else if (ObOptimizerUtil::find_item(select_exprs, order_item.expr_)) {
+    find = true;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !find && i < select_exprs.count(); ++i) {
+    if (OB_ISNULL(expr = select_exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (!expr->same_as(*order_item.expr_, &cmp_ctx)) {
+      cmp_ctx.equal_pairs_.reuse();
+    } else if (OB_FAIL(append(params_.query_ctx_->all_equal_param_constraints_,
+                              cmp_ctx.equal_pairs_))) {
+      LOG_WARN("failed to add equal constraint", K(ret));
+    } else {
+      order_item.expr_ = expr;
+      find = true;
+    }
+  }
   return ret;
 }
 

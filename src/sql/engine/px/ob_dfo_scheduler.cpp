@@ -572,6 +572,7 @@ int ObSerialDfoScheduler::do_schedule_dfo(ObExecContext &ctx, ObDfo &dfo) const
     if (OB_FAIL(ObDtlChannelGroup::link_channel(ci, ch))) {
       LOG_WARN("fail link channel", K(ci), K(ret));
     } else if (OB_ISNULL(ch)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail add qc channel", K(ret));
     } else {
       ch->set_qc_owner();
@@ -732,6 +733,7 @@ int ObParallelDfoScheduler::do_schedule_dfo(ObExecContext &exec_ctx, ObDfo &dfo)
     if (OB_FAIL(ObDtlChannelGroup::link_channel(ci, ch))) {
       LOG_WARN("fail link channel", K(ci), K(ret));
     } else if (OB_ISNULL(ch)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail add qc channel", K(ret));
     } else {
       ch->set_qc_owner();

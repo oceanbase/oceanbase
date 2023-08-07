@@ -16,6 +16,7 @@
 #include "storage/direct_load/ob_direct_load_fast_heap_table.h"
 #include "storage/direct_load/ob_direct_load_multi_map.h"
 #include "storage/direct_load/ob_direct_load_range_splitter.h"
+#include "storage/blocksstable/ob_sstable.h"
 
 namespace oceanbase
 {
@@ -42,7 +43,7 @@ public:
   }
   int process() override
   {
-    OB_TABLE_LOAD_STATISTICS_TIME_COST(merge_time_us);
+    OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, merge_time_us);
     int ret = OB_SUCCESS;
     ObDirectLoadPartitionMergeTask *merge_task = nullptr;
     while (OB_SUCC(ret)) {

@@ -308,7 +308,7 @@ private:
   class SessionPool
   {
   public:
-    static const int64_t POOL_CAPACIPY = 512;
+    static const int64_t POOL_CAPACIPY = 32;
   public:
     SessionPool();
     int init(const int64_t capacity);

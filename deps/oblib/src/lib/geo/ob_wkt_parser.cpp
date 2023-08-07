@@ -383,9 +383,9 @@ int ObWktParser::parse_point(bool with_brackets)
     LOG_WARN("fail to parse point, check next NUMBER", K(ret));
   } else if (with_brackets && OB_FAIL(check_next_token(ObWktTokenType::W_RIGHT_B))) {
     LOG_WARN("fail to parse point, check next RIGHT_B", K(ret));
-  } else if (wkb_buf_.append(x_val.number_val_)) {
+  } else if (OB_FAIL(wkb_buf_.append(x_val.number_val_))) {
     LOG_WARN("fail to append x_val to point", K(ret));
-  } else if (wkb_buf_.append(y_val.number_val_)) {
+  } else if (OB_FAIL(wkb_buf_.append(y_val.number_val_))) {
     LOG_WARN("fail to append y_val to point", K(ret));
   }
   return ret;

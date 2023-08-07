@@ -93,6 +93,9 @@ public:
   static int get_json_val(const common::ObObj &data, ObExprCtx &ctx,
                           bool is_bool, common::ObIAllocator *allocator,
                           ObIJsonBase*& j_base, bool to_bin = false);
+
+  static int eval_oracle_json_val(ObExpr *expr, ObEvalCtx &ctx, common::ObIAllocator *allocator,
+                                ObIJsonBase*& j_base, bool format_json = false, bool is_strict = false, bool is_bin = false);
  
   /*
   replace json_old with json_new in json_doc

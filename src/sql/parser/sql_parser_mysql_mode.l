@@ -702,6 +702,12 @@ X'([0-9A-F])*'|0X([0-9A-F])+ {
       yyerror(yylloc, yyextra, "hex string contain an even number of digits\n");
       return PARSER_SYNTAX_ERROR;
     }
+  } else {
+    // Values written using 0xval notation NOTE: 0Xval (use upper case 'X') notation is illegal in MySQL
+    if (yytext[1] == 'X') {
+      yyerror(yylloc, yyextra, "hex string with leading '0X' (use upper case 'X') is illegal\n");
+      return PARSER_SYNTAX_ERROR;
+    }
   }
   ParseNode *node = NULL;
   ParseResult *p = (ParseResult *)yyextra;
@@ -738,6 +744,12 @@ B'([01])*'|0B([01])+ {
   if(src[len - 1] == '\'')
   {
     --len;
+  } else {
+    // Values written using 0bval notation NOTE: 0Bval (use upper case 'B') notation is illegal in MySQL
+    if (yytext[1] == 'B') {
+      yyerror(yylloc, yyextra, "bit string with leading '0B' (use upper case 'B') is illegal\n");
+      return PARSER_SYNTAX_ERROR;
+    }
   }
   ParseNode *node = NULL;
   ParseResult *p = (ParseResult *)yyextra;
@@ -1100,6 +1112,10 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>NO_WIN_MAGIC { return NO_WIN_MAGIC; }
 <hint>PULLUP_EXPR { return PULLUP_EXPR; }
 <hint>NO_PULLUP_EXPR { return NO_PULLUP_EXPR; }
+<hint>AGGR_FIRST_UNNEST { return AGGR_FIRST_UNNEST; }
+<hint>NO_AGGR_FIRST_UNNEST { return NO_AGGR_FIRST_UNNEST; }
+<hint>JOIN_FIRST_UNNEST { return JOIN_FIRST_UNNEST; }
+<hint>NO_JOIN_FIRST_UNNEST { return NO_JOIN_FIRST_UNNEST; }
 <hint>OPT_PARAM { return OPT_PARAM; }
 <hint>OB_DDL_SCHEMA_VERSION { return OB_DDL_SCHEMA_VERSION; }
 <hint>DYNAMIC_SAMPLING { return DYNAMIC_SAMPLING; }

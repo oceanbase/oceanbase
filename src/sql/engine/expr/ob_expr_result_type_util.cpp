@@ -653,7 +653,7 @@ int ObExprResultTypeUtil::get_arith_calc_type(ObObjType &calc_type,
 int CHECK_STRING_RES_TYPE_ORACLE(const ObExprResType &type)
 {
   int ret = OB_SUCCESS;
-  if (!type.is_string_or_lob_locator_type()) {
+  if (!type.is_string_or_lob_locator_type() && !type.is_raw()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("incorrect type of target type", K(ret), K(type));
   } else if (type.is_blob() || type.is_blob_locator()) {
@@ -663,7 +663,7 @@ int CHECK_STRING_RES_TYPE_ORACLE(const ObExprResType &type)
   } else if (!ObCharset::is_valid_collation(type.get_collation_type())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("incorrect charset of target type", K(ret), K(type));
-  } else if (!type.is_clob() && !type.is_clob_locator() &&
+  } else if (!type.is_clob() && !type.is_clob_locator() && !type.is_raw() &&
              LS_CHAR != type.get_length_semantics() && LS_BYTE != type.get_length_semantics()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("incorrect length_semantics of target type", K(ret), K(type));
@@ -693,6 +693,8 @@ int ObExprResultTypeUtil::deduce_max_string_length_oracle(const ObDataTypeCastPa
   ObLengthSemantics length_semantics = target_type.get_length_semantics();
   if (target_type.is_varchar_or_char() && (LS_BYTE == calc_ls || LS_CHAR == calc_ls)) {
     length_semantics = calc_ls;
+  } else if (target_type.is_raw()) {
+    length_semantics = LS_BYTE;
   }
   if (OB_FAIL(CHECK_STRING_RES_TYPE_ORACLE(target_type))) {
     LOG_WARN("invalid target_type", K(ret));
@@ -736,6 +738,9 @@ int ObExprResultTypeUtil::deduce_max_string_length_oracle(const ObDataTypeCastPa
           // clob to LS_CHAR
           int64_t mbminlen = ObCharset::get_charset(target_type.get_collation_type())->mbminlen;
           length = OB_MAX_ORACLE_VARCHAR_LENGTH / mbminlen;
+        } else if (target_type.is_raw()) {
+          //cast not support, return max length
+          length = OB_MAX_ORACLE_RAW_PL_VAR_LENGTH;
         } else {
           // clob to LS_BYTE
           length = OB_MAX_ORACLE_VARCHAR_LENGTH;
@@ -750,6 +755,12 @@ int ObExprResultTypeUtil::deduce_max_string_length_oracle(const ObDataTypeCastPa
           }
           length *= ObCharset::MAX_MB_LEN;
           length /= ObCharset::get_charset(target_type.get_collation_type())->mbminlen;
+        } else if ((orig_type.is_varchar_or_char() || orig_type.is_nstring())
+                  && target_type.is_raw()) {
+          if (LS_CHAR == orig_type.get_length_semantics()) {
+            length *= ObCharset::get_charset(orig_type.get_collation_type())->mbmaxlen;
+          }
+          length = (length + 1) / 2;
         } else if (LS_CHAR == orig_type.get_length_semantics()
             && LS_BYTE == length_semantics) {
           // LS_CHAR to LS_BYTE
@@ -790,7 +801,14 @@ int ObExprResultTypeUtil::deduce_max_string_length_oracle(const ObDataTypeCastPa
         ascii_bytes = orig_type.get_length();
       }
       if (OB_SUCC(ret)) {
-        if (LS_BYTE == length_semantics &&
+        if (target_type.is_raw()) {
+          if (orig_type.is_raw() || orig_type.is_json()) {
+            length = orig_type.get_length();
+          } else {
+            //cast not support, return max length
+            length = OB_MAX_ORACLE_RAW_PL_VAR_LENGTH;
+          }
+        } else if (LS_BYTE == length_semantics &&
             ObCharset::is_cs_nonascii(target_type.get_collation_type())) {
           length = (ObLength)(ascii_bytes
                               * ObCharset::get_charset(target_type.get_collation_type())->mbminlen);

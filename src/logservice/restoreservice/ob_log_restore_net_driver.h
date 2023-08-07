@@ -46,7 +46,6 @@ class ObLogFetcher;
 
 namespace logservice
 {
-class ObLogRestoreController;
 class ObLogService;
 // The driver for standby based on net service, and its functions includes:
 // 1. fetcher and proxy management;
@@ -60,7 +59,6 @@ public:
   ~ObLogRestoreNetDriver();
 public:
   int init(const uint64_t tenant_id,
-      ObLogRestoreController *controller,
       storage::ObLSService *ls_svr,
       ObLogService *log_service);
   void destroy();

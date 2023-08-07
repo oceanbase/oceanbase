@@ -2202,6 +2202,8 @@ int ObExpandAggregateUtils::add_cast_expr(ObTransformerCtx *ctx,
   } else if (OB_ISNULL(cast_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(cast_expr));
+  } else if (OB_FAIL(cast_expr->add_flag(IS_OP_OPERAND_IMPLICIT_CAST))) {
+    LOG_WARN("failed to add flag", K(ret));
   } else {
     new_expr = cast_expr;
   }

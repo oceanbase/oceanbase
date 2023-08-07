@@ -218,13 +218,23 @@ int ObExprConcat::calc_result_typeN(ObExprResType &type,
     OZ (aggregate_string_type_and_charset_oracle(*type_ctx.get_session(), params, type));
     OZ (deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, params));
   } else {
-    type.set_varchar();
+    bool has_text = false;
+    for (int64_t i = 0; !has_text && i < param_num; ++i) {
+      if (ObTinyTextType != types[i].get_type() && types[i].is_lob()) {
+        has_text = true;
+      }
+    }
+    if (has_text) {
+      type.set_type(ObLongTextType);
+    } else {
+      type.set_varchar();
+    }
     OZ (aggregate_charsets_for_string_result(type,
                                              types,
                                              param_num,
                                              type_ctx.get_coll_type()));
     for (int64_t i = 0; i < param_num; ++i) {
-      types[i].set_calc_type(ObVarcharType);
+      types[i].set_calc_type(type.get_type());
       types[i].set_calc_collation_type(type.get_collation_type());
     }
   }

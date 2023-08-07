@@ -372,7 +372,9 @@ int64_t ObTenantCtxAllocator::sync_wash(int64_t wash_size)
 
   auto stat = obj_mgr_.get_stat();
   const double min_utilization = 0.95;
-  if (stat.payload_ * min_utilization > stat.used_) {
+  int64_t min_memory_fragment = 64LL << 20;
+  if (stat.payload_ * min_utilization > stat.used_ ||
+      stat.payload_ - stat.used_ >= min_memory_fragment) {
     washed_size = obj_mgr_.sync_wash(wash_size);
   }
   if (washed_size != 0 && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
@@ -459,7 +461,7 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
   bool sample_allowed = ObMallocSampleLimiter::malloc_sample_allowed(size, attr);
   const int64_t alloc_size = sample_allowed ? (size + AOBJECT_BACKTRACE_SIZE) : size;
   obj = allocator.realloc_object(obj, alloc_size, attr);
-  if(OB_ISNULL(obj) && g_alloc_failed_ctx().need_wash()) {
+  if (OB_ISNULL(obj) && g_alloc_failed_ctx().need_wash()) {
     int64_t total_size = ta.sync_wash();
     obj = allocator.realloc_object(obj, alloc_size, attr);
   }

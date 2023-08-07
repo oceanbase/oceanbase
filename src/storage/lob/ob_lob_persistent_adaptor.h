@@ -47,14 +47,14 @@ class ObPersistentLobApator : public ObILobApator
 {
 public:
   ObPersistentLobApator() {}
-  virtual int scan_lob_meta(const ObLobAccessParam &param,
+  virtual int scan_lob_meta(ObLobAccessParam &param,
     ObTableScanParam &scan_param,
     common::ObNewRowIterator *&meta_iter) override;
   virtual int get_lob_data(ObLobAccessParam &param,
     uint64_t piece_id,
     ObLobPieceInfo& info) override;
   virtual int revert_scan_iter(common::ObNewRowIterator *iter) override;
-  virtual int fetch_lob_id(const ObLobAccessParam& param, uint64_t &lob_id) override;
+  virtual int fetch_lob_id(ObLobAccessParam& param, uint64_t &lob_id) override;
   // write meta tablet
   virtual int write_lob_meta(ObLobAccessParam &param, ObLobMetaInfo& row_info) override;
   // write piece tablet
@@ -76,15 +76,13 @@ private:
       int64_t &tenant_schema_version);
     
   int get_lob_tablets(
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &data_tablet_id,
+      ObLobAccessParam& param,
       ObTabletHandle &data_tablet,
       ObTabletHandle &lob_meta_tablet,
       ObTabletHandle &lob_piece_tablet);
 
   int get_lob_tablets_id(
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &data_tablet_id,
+      ObLobAccessParam& param,
       common::ObTabletID &lob_meta_tablet_id,
       common::ObTabletID &lob_piece_tablet_id);
   int prepare_table_param(
@@ -97,7 +95,7 @@ private:
       uint32_t col_num,
       ObTableScanParam& scan_param);
   int inner_get_tablet(
-      const share::ObLSID &ls_id,
+      const ObLobAccessParam &param,
       const common::ObTabletID &tablet_id,
       ObTabletHandle &handle);
   bool check_lob_tablet_id(

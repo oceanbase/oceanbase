@@ -538,6 +538,14 @@ int64_t ObTableReadInfo::to_string(char *buf, const int64_t buf_len) const
 /*
  * ------------------------------- ObRowkeyReadInfo -------------------------------
  */
+ObRowkeyReadInfo::ObRowkeyReadInfo()
+  : ObReadInfoStruct(true/*rowkey_mode*/)
+{
+#if defined(__x86_64__)
+  static_assert(sizeof(ObRowkeyReadInfo) == 368, "The size of ObRowkeyReadInfo will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+#endif
+}
+
 int ObRowkeyReadInfo::init(
     common::ObIAllocator &allocator,
     const int64_t schema_column_count,

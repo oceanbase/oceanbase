@@ -374,6 +374,12 @@ int ObIDiagnoseInfoMgr::add_with_no_lock(const int64_t key, ObIDiagnoseInfo *inf
   } else if (info_map_.created()) {
     if (OB_FAIL(info_map_.set_refactored(key, info))) {
       STORAGE_LOG(WARN, "failed to set info into map", K(ret), K(key));
+      if (OB_ISNULL(info_list_.remove(info))) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(ERROR, "failed to remove info from list", K(ret));
+        // unexpected
+        ob_abort();
+      }
     }
   }
 
@@ -443,7 +449,7 @@ int ObIDiagnoseInfoMgr::purge_with_rw_lock(bool batch_purge)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_UNLIKELY(OB_ISNULL(info_list_.remove(iter)))) {
+      if (OB_ISNULL(info_list_.remove(iter))) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(ERROR, "failed to remove info from list", K(ret));
         // unexpected
@@ -702,11 +708,38 @@ int ObCompactionDiagnoseMgr::get_suspect_info_and_print(
   return ret;
 }
 
-int ObCompactionDiagnoseMgr::diagnose_ls_merge(
-    const ObMergeType merge_type,
+void ObCompactionDiagnoseMgr::diagnose_tenant_ls(
+    const bool diagnose_major_flag,
+    const bool weak_read_ts_ready,
+    const int64_t compaction_scn,
+    const bool is_leader,
     const ObLSID &ls_id)
 {
-  return get_suspect_info_and_print(merge_type, ls_id, ObTabletID(INT64_MAX));
+  int tmp_ret = OB_SUCCESS;
+  // check weak read ts
+  if (diagnose_major_flag
+      && !weak_read_ts_ready
+      && can_add_diagnose_info()
+      && OB_TMP_FAIL(SET_DIAGNOSE_INFO(
+                info_array_[idx_++],
+                MEDIUM_MERGE,
+                MTL_ID(),
+                ls_id,
+                ObTabletID(INT64_MAX),
+                ObCompactionDiagnoseInfo::DIA_STATUS_FAILED,
+                ObTimeUtility::fast_current_time(),
+                "weak read ts is not ready, compaction_scn",
+                compaction_scn))) {
+    LOG_WARN_RET(tmp_ret, "failed to add dignose info about weak read ts", K(ls_id), K(compaction_scn));
+  }
+  // check ls suspect info for memtable freezing
+  if (OB_TMP_FAIL(get_suspect_info_and_print(MINI_MERGE, ls_id, ObTabletID(INT64_MAX)))) {
+    LOG_WARN_RET(tmp_ret, "failed to diagnose about memtable freezing", K(ls_id));
+  }
+  // check ls locality change and leader change
+  if (is_leader && OB_TMP_FAIL(get_suspect_info_and_print(MEDIUM_MERGE, ls_id, ObTabletID(INT64_MAX)))) {
+    LOG_WARN_RET(tmp_ret, "failed to diagnose about ls locality change", K(ls_id));
+  }
 }
 
 int ObCompactionDiagnoseMgr::get_next_tablet(ObLSID &ls_id)
@@ -865,6 +898,9 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
             LOG_WARN("failed to set ls check status", K(ret), K(ls_id), K(ls_check_status));
           } else if (!ls_check_status.need_merge_) {
             (void)abnormal_ls_id.push_back(ls_id);
+          } else {
+            (void)diagnose_tenant_ls(diagnose_major_flag, ls_check_status.weak_read_ts_ready_, compaction_scn,
+                ls_check_status.is_leader_, ls_id);
           }
         } else {
           LOG_WARN("failed to get ls check status from map", K(ret));
@@ -873,30 +909,6 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
       ++diagnose_tablets;
       if (OB_SUCC(ret)) {
         if (ls_check_status.need_merge_) {
-          // check weak read ts
-          if (diagnose_major_flag
-              && !ls_check_status.weak_read_ts_ready_
-              && can_add_diagnose_info()
-              && OB_TMP_FAIL(SET_DIAGNOSE_INFO(
-                        info_array_[idx_++],
-                        MEDIUM_MERGE,
-                        MTL_ID(),
-                        ls_id,
-                        ObTabletID(INT64_MAX),
-                        ObCompactionDiagnoseInfo::DIA_STATUS_FAILED,
-                        ObTimeUtility::fast_current_time(),
-                        "weak read ts is not ready, compaction_scn",
-                        compaction_scn))) {
-            LOG_WARN("failed to add dignose info about weak read ts", K(tmp_ret), K(compaction_scn));
-          }
-          // check ls suspect info for memtable freezing
-          if (OB_TMP_FAIL(diagnose_ls_merge(MINI_MERGE, ls_id))) {
-            LOG_WARN("failed to diagnose about memtable freezing", K(tmp_ret));
-          }
-          // check ls locality change and leader change
-          if (ls_check_status.is_leader_ && OB_TMP_FAIL(diagnose_ls_merge(MEDIUM_MERGE, ls_id))) {
-            LOG_WARN("failed to diagnose about ls locality change", K(tmp_ret));
-          }
           if (OB_TMP_FAIL(diagnose_tablet_major_and_medium(diagnose_major_flag,
               ls_check_status.weak_read_ts_ready_, compaction_scn,
               ls_id, *tablet_handle_.get_obj(), tablet_major_finish))) {

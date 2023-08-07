@@ -118,11 +118,10 @@ public:
   // cache cleaning task will delete at least 11w tx data.
   static const int64_t DEFAULT_CACHE_RETAINED_TIME = 100_ms; // 100ms
 
-  // The tx data memtable do not need freeze it self if its memory use is less than 1%
-  static constexpr double TX_DATA_FREEZE_TRIGGER_MIN_PERCENTAGE = 1;
-
-  // The tx data memtable will trigger a freeze if its memory use is more than 10%
-  static constexpr double TX_DATA_FREEZE_TRIGGER_MAX_PERCENTAGE = 5;
+  // The tx data memtable will trigger a freeze if its memory use is more than 2%
+  static constexpr double TX_DATA_FREEZE_TRIGGER_PERCENTAGE = 2;
+  // TODO : @gengli.wzy The active & frozen tx data memtable can not use memory more than 10%
+  static constexpr double TX_DATA_MEM_LIMIT_PERCENTAGE = 10;
 
   enum COLUMN_ID_LIST
   {

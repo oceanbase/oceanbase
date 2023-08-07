@@ -77,8 +77,11 @@ public:
                       int64_t var_idx,
                       const ObPLVar *&var);
 
-  int get_package_type(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
-                       const common::ObString &type_name, const ObUserDefinedType *&user_type);
+  int get_package_type(const ObPLResolveCtx &resolve_ctx,
+                       uint64_t package_id,
+                       const common::ObString &type_name,
+                       const ObUserDefinedType *&user_type,
+                       bool log_user_error = true);
   int get_package_type(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
                        uint64_t type_id, const ObUserDefinedType *&user_type);
 

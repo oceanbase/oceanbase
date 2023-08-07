@@ -186,7 +186,7 @@ int ObJsonParser::check_json_syntax(const ObString &j_doc, ObIAllocator *allocat
         }
         offset = reader.GetErrorOffset();
         syntaxerr = rapidjson::GetParseError_En(reader.GetParseErrorCode());
-        LOG_WARN("fail to parse json text", K(ret), K(r.Code()), KCSTRING(syntaxerr), K(offset));
+        LOG_DEBUG("fail to parse json text", K(ret), K(r.Code()), KCSTRING(syntaxerr), K(offset));
       }
     } else {
       ObRapidJsonHandler handler(allocator, true);

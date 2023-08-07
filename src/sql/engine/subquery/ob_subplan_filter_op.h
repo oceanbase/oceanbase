@@ -105,6 +105,7 @@ public:
   DatumRow probe_row_;
   //hard core, 1M limit for each hashmap
   const static int HASH_MAP_MEMORY_LIMIT = 1024 * 1024;
+  void drain_exch();
 
 private:
 

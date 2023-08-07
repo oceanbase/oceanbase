@@ -484,6 +484,7 @@ int ObTransformUtils::is_columns_unique(const ObIArray<ObRawExpr *> &exprs,
           LOG_WARN("failed to get table schema", K(ret),
                    "index_id", simple_index_infos.at(i).table_id_);
         } else if (OB_ISNULL(index_schema)) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("index schema should not be null", K(ret));
         } else if (index_schema->is_unique_index() && index_schema->get_index_column_num() > 0) {
           const ObIndexInfo &index_info = index_schema->get_index_info();
@@ -634,6 +635,7 @@ int ObTransformUtils::create_new_column_expr(ObTransformerCtx *ctx,
   } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_REF_COLUMN, new_column_ref))) {
     LOG_WARN("failed to create a new column ref expr", K(ret));
   } else if (OB_ISNULL(new_column_ref)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("new_column_ref should not be null", K(ret));
   } else if (OB_FAIL(is_expr_not_null(ctx,
                                       table_item.ref_query_,
@@ -4037,7 +4039,12 @@ int ObTransformUtils::check_stmt_unique(const ObSelectStmt *stmt,
   } else if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (stmt->is_set_stmt()) {
-    if (stmt->is_set_distinct() && ObOptimizerUtil::subset_exprs(select_exprs, exprs)) {
+    ObSEArray<ObRawExpr *, 16> set_op_exprs;
+    // [cast(UNION([1]), DATE(-1, -1))]
+    // cast above set_op_exprs is calulated after the distinct
+    if (OB_FAIL(ObRawExprUtils::extract_set_op_exprs(select_exprs, set_op_exprs))) {
+      LOG_WARN("failed to extract set op exprs", K(ret));
+    } else if (stmt->is_set_distinct() && ObOptimizerUtil::subset_exprs(set_op_exprs, exprs)) {
       is_unique = true;
     } else if (ObSelectStmt::INTERSECT != stmt->get_set_op()
                && ObSelectStmt::EXCEPT != stmt->get_set_op()) {
@@ -6808,6 +6815,17 @@ int ObTransformUtils::adjust_updatable_view(ObRawExprFactory &expr_factory,
       if (OB_SUCC(ret) && !part_exprs.empty()) {
         if (OB_FAIL(del_upd_stmt->set_part_expr_items(part_exprs))) {
           LOG_WARN("failed to set part expr items", K(ret));
+        }
+      }
+      // replace values_desc
+      if (OB_SUCC(ret)) {
+        ObStmtExprReplacer replacer;
+        replacer.add_scope(SCOPE_INSERT_DESC);
+        replacer.set_recursive(false);
+        if (OB_FAIL(replacer.add_replace_exprs(select_list, column_list))) {
+          LOG_WARN("failed to add replace exprs", K(ret));
+        } else if (OB_FAIL(table_info->iterate_stmt_expr(replacer))) {
+          LOG_WARN("failed to iterate stmt expr", K(ret));
         }
       }
     }
@@ -12036,6 +12054,32 @@ int ObTransformUtils::construct_trans_tables(const ObDMLStmt *stmt,
                                                trans_tables))) {
         LOG_WARN("failed to construct eliminated table", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::get_sorted_table_hint(ObSEArray<TableItem *, 4> &tables,
+                                            ObIArray<ObTableInHint> &table_hints) {
+  int ret = OB_SUCCESS;
+  if (tables.count() > 1) {
+    auto cmp_func = [](TableItem* a, TableItem* b) {
+      if (OB_ISNULL(a) || OB_ISNULL(b)) {
+        return false;
+      } else {
+        return a->table_id_ > b->table_id_;
+      }
+    };
+    std::sort(tables.begin(), tables.end(), cmp_func);
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
+    TableItem *table = tables.at(i);
+    if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(table_hints.push_back(
+               ObTableInHint(table->qb_name_, table->database_name_, table->get_object_name())))) {
+      LOG_WARN("failed to push back hint table", K(ret));
     }
   }
   return ret;

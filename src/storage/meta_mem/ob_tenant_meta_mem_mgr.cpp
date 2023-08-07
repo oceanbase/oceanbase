@@ -90,7 +90,7 @@ void ObTenantMetaMemMgr::TabletGCTask::runTimerTask()
   int ret = OB_SUCCESS;
   bool all_tablet_cleaned = false;
   if (OB_FAIL(t3m_->gc_tablets_in_queue(all_tablet_cleaned))) {
-    LOG_WARN("fail to gc tables in queue", K(ret));
+    LOG_WARN("fail to gc tablets in queue", K(ret));
   }
 }
 
@@ -1235,7 +1235,9 @@ int ObTenantMetaMemMgr::acquire_tablet_from_pool(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(key), K(type));
   } else if (OB_FAIL(acquire_tablet(type, tablet_handle))) {
-    LOG_WARN("fail to acquire tablet", K(ret), K(type));
+    if (OB_ALLOCATE_MEMORY_FAILED != ret) {
+      LOG_WARN("fail to acquire tablet", K(ret), K(type));
+    }
   } else {
     tablet_handle.set_wash_priority(priority);
     LOG_DEBUG("acquire tablet from pool", K(tablet_handle));
@@ -1283,7 +1285,9 @@ int ObTenantMetaMemMgr::acquire_tablet(
     LOG_WARN("not supported to wash", K(ret), K(type));
   }
   if (FAILEDx(meta_obj.pool_->alloc_obj(buf))) {
-    LOG_WARN("fail to acquire tablet buffer", K(ret));
+    if (OB_ALLOCATE_MEMORY_FAILED != ret) {
+      LOG_WARN("fail to acquire tablet buffer", K(ret));
+    }
   } else if (OB_ISNULL(buf)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet buffer is nullptr", K(ret), KP(buf));
@@ -2172,7 +2176,9 @@ int ObTenantMetaMemMgr::try_wash_tablet(const std::type_info &type_info, void *&
     SpinWLockGuard guard(wash_lock_);
     time_guard.click("wait_lock");
     if (OB_FAIL(get_wash_tablet_candidate(type_info, info))) {
-      LOG_WARN("fail to get candidate tablet for wash", K(ret));
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get candidate tablet for wash", K(ret));
+      }
     } else {
       time_guard.click("get_candidate_cost");
       if (OB_FAIL(do_wash_candidate_tablet(info, tablet_handle, free_obj))) {
@@ -2183,7 +2189,7 @@ int ObTenantMetaMemMgr::try_wash_tablet(const std::type_info &type_info, void *&
       time_guard.click("wash_tablet");
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) || OB_ITER_END == ret) {
     if (OB_ISNULL(free_obj)) {
       LOG_WARN("no object can be washed", K(ret), K(is_large),
           "tablet count", tablet_map_.count(), K(tablet_buffer_pool_), K(large_tablet_buffer_pool_),

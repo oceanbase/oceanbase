@@ -32,6 +32,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "share/config/ob_server_config.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "sql/resolver/dml/ob_insert_all_stmt.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
@@ -2860,6 +2861,7 @@ int ObTransformPreProcess::recursive_replace_func_is_serving_tenant(ObDMLStmt &s
                 ret = OB_INVALID_ARGUMENT;
                 LOG_WARN("convert server addr to ip failed", K(ret), K(i), K(server));
               } else if (OB_ISNULL(row_op) || OB_ISNULL(ip_expr) || OB_ISNULL(port_expr)) {
+                ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("expr is null", K(row_op), K(ip_expr), K(port_expr));
               } else {
                 ip_obj.set_varchar(ObString(ip_buf));
@@ -5345,6 +5347,12 @@ int ObTransformPreProcess::transform_arg_case_expr(ObRawExprFactory &expr_factor
       LOG_WARN("failed to add param expr", K(ret));
     }
   } // for end
+  ObRawExpr* tmp_case_expr = static_cast<ObRawExpr*>(new_case_expr);
+  if (OB_SUCC(ret) &&
+      !case_expr->is_called_in_sql() &&
+      OB_FAIL(ObRawExprUtils::set_call_in_pl(tmp_case_expr))) {
+    LOG_WARN("failed to set call_in_pl flag", K(ret));
+  }
   if (OB_SUCC(ret)) {
     new_case_expr->set_default_param_expr(case_expr->get_default_param_expr());
     if (OB_FAIL(new_case_expr->formalize(&session))) {
@@ -7954,7 +7962,7 @@ int ObTransformPreProcess::mock_select_list_for_ins_select(ObDMLStmt &batch_stmt
   } else if (OB_ISNULL(param_store = &plan_ctx->get_param_store())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param store is null", K(ret));
-  } else if (batch_stmt.get_child_stmt_size(child_size)) {
+  } else if (OB_FAIL(batch_stmt.get_child_stmt_size(child_size))) {
     LOG_WARN("get child size failed", K(ret));
   } else if (child_size > 0) {
     ret = OB_BATCHED_MULTI_STMT_ROLLBACK;

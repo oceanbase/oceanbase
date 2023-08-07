@@ -55,6 +55,7 @@ int ObExecuteResolver::resolve(const ParseNode &parse_tree)
       } else if (OB_FAIL(session_info_->get_ps_session_info(ps_id, ps_session_info))) {
         LOG_WARN("failed to get ps session info", K(ret));
       } else if (OB_ISNULL(ps_session_info)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ps session info is NULL", K(stmt_name), K(ps_id), K(ret));
       } else {
         ps_type = ps_session_info->get_stmt_type();

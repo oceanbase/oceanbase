@@ -813,29 +813,78 @@ int ObGrantResolver::resolve_col_names(
 1. username dup
 2. grant role can not with grant option 
 3. grant role can not reference, index priv */
-int ObGrantResolver::check_user_dup_and_role_grant_option(
+int ObGrantResolver::check_user_dup(
     ObSchemaGetterGuard *guard,
     ObIArray<ObString> &user_name_array,
     const ObGrantStmt *grant_stmt,
     const ObString& user_name,
     const ObString& host_name,
-    const ObString& priv_user_name)
+    const ObString& priv_user_name,
+    bool &contain_role,
+    bool &is_all_role)
 {
   int ret = OB_SUCCESS;
   CK (grant_stmt != NULL);
   
   if (ObSchemaChecker::is_ora_priv_check()) {
     /* 1. check user dup */
-    if (has_exist_in_array(user_name_array, user_name)) {
+    const ObUserInfo *user_info = NULL;
+    uint64_t tenant_id = OB_INVALID_ID;
+    if (OB_ISNULL(params_.session_info_) || OB_ISNULL(guard)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (has_exist_in_array(user_name_array, user_name)) {
       ret = OB_ERR_DUPLICATE_USERNAME_IN_LIST;
       LOG_WARN("user name dup", K(user_name), K(ret));
     } else if (grant_stmt->get_database_name() != user_name 
                && user_name == priv_user_name) {
       ret = OB_ERR_YOU_MAY_NOT_REVOKE_PRIVILEGES_FROM_YOURSELF;
       LOG_WARN("grant to self", K(user_name), K(ret));
+    } else if (OB_FAIL(user_name_array.push_back(user_name))) {
+      LOG_WARN("failed to push back user name", K(ret), K(user_name));
+    } else if (FALSE_IT(tenant_id = params_.session_info_->get_effective_tenant_id())) {
+      // do nothing
+    } else if (OB_FAIL(guard->get_user_info(tenant_id, user_name, host_name, user_info))) {
+      LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_name), K(host_name));
+    } else if (OB_ISNULL(user_info)) {
+      ret = OB_USER_NOT_EXIST;
+      LOG_WARN("user is not exist", K(ret), K(tenant_id), K(user_name), K(host_name));
     } else {
-      OZ (user_name_array.push_back(user_name));
+      contain_role |= user_info->is_role();
+      is_all_role &= user_info->is_role();
     }
+  }
+  return ret;
+}
+
+int ObGrantResolver::rebuild_table_priv(
+    ObGrantStmt *grant_stmt,
+    bool is_owner,
+    const bool is_all_role)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(grant_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null stmt", K(ret));
+  } else if (grant_stmt->is_grant_all_tab_priv()) {
+    share::ObRawObjPrivArray table_priv_array;
+    OZ (build_table_priv_arary_for_all(grant_stmt,
+                                        table_priv_array,
+                                        is_owner,
+                                        is_all_role));
+    OZ (grant_stmt->set_obj_priv_array(table_priv_array));
+  }
+  return ret;
+}
+
+int ObGrantResolver::check_role_grant_option(
+    const ObGrantStmt *grant_stmt,
+    const bool contain_role) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(grant_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null stmt", K(ret));
+  } else if (ObSchemaChecker::is_ora_priv_check() && contain_role) {
     bool has_ref_priv = false;
     bool has_index_priv = false;
     if (has_exist_in_array(grant_stmt->get_obj_priv_array(), 
@@ -851,30 +900,17 @@ int ObGrantResolver::check_user_dup_and_role_grant_option(
        2. 不能grant reference，其次优先
        3. 不能grant index */
     if (grant_stmt->get_option() == GRANT_OPTION || has_ref_priv || has_index_priv) {
-      const ObUserInfo *user_info = NULL;
-      CK (params_.session_info_ != NULL);
-      uint64_t tenant_id = params_.session_info_->get_effective_tenant_id();
-      CK (guard != NULL);
-      OZ (guard->get_user_info(tenant_id, user_name, host_name, user_info));
-      if (OB_SUCC(ret)) {
-        if (NULL == user_info) {
-          ret = OB_USER_NOT_EXIST;
-        } else if (user_info->is_role()) {
-          if (grant_stmt->get_option() == GRANT_OPTION) {
-            ret = OB_ERR_CANNOT_GRANT_TO_A_ROLE_WITH_GRANT_OPTION;
-          } else if (has_ref_priv) {
-            ObString str = "REFERENCES";
-            ret = OB_ERR_CANNOT_GRANT_STRING_TO_A_ROLE;
-            LOG_USER_ERROR(OB_ERR_CANNOT_GRANT_STRING_TO_A_ROLE,
-                           str.length(), str.ptr());
-          } else {
-            CK (has_index_priv);
-            ObString str = "INDEX";
-            ret = OB_ERR_CANNOT_GRANT_STRING_TO_A_ROLE;
-            LOG_USER_ERROR(OB_ERR_CANNOT_GRANT_STRING_TO_A_ROLE,
-                           str.length(), str.ptr());
-          }
-        }
+      if (grant_stmt->get_option() == GRANT_OPTION) {
+        ret = OB_ERR_CANNOT_GRANT_TO_A_ROLE_WITH_GRANT_OPTION;
+      } else if (has_ref_priv) {
+        ObString str = "REFERENCES";
+        ret = OB_ERR_CANNOT_GRANT_STRING_TO_A_ROLE;
+        LOG_USER_ERROR(OB_ERR_CANNOT_GRANT_STRING_TO_A_ROLE, str.length(), str.ptr());
+      } else {
+        CK (has_index_priv);
+        ObString str = "INDEX";
+        ret = OB_ERR_CANNOT_GRANT_STRING_TO_A_ROLE;
+        LOG_USER_ERROR(OB_ERR_CANNOT_GRANT_STRING_TO_A_ROLE, str.length(), str.ptr());
       }
     }
   }
@@ -999,6 +1035,8 @@ int ObGrantResolver::resolve_grant_obj_privileges(
   if (OB_SUCC(ret)) {
     // oracle 模式下 grant 时，如果用户不存在，不允许创建该用户；fix #17900015
     bool need_create_user = false;
+    bool contain_role = false;
+    bool is_all_role = true;
     CHECK_COMPATIBILITY_MODE(session_info_);
     if (!lib::is_oracle_mode()) {
       need_create_user = (0 == (params_.session_info_->get_sql_mode()
@@ -1086,13 +1124,17 @@ int ObGrantResolver::resolve_grant_obj_privileges(
             //do nothing
           }
         }
-        OZ (check_user_dup_and_role_grant_option(params_.schema_checker_->get_schema_guard(),
-                                                  user_name_array, 
-                                                  grant_stmt, 
-                                                  user_name, 
-                                                  host_name,
-                                                  priv_user_name));
+        OZ (check_user_dup(params_.schema_checker_->get_schema_guard(),
+                            user_name_array,
+                            grant_stmt,
+                            user_name,
+                            host_name,
+                            priv_user_name,
+                            contain_role,
+                            is_all_role));
       }
+      OZ (rebuild_table_priv(grant_stmt, is_owner, is_all_role));
+      OZ (check_role_grant_option(grant_stmt, contain_role));
     }
   }//end of resolve users
 
@@ -1736,7 +1778,8 @@ bool ObGrantResolver::is_ora_obj_priv_type(
 int ObGrantResolver::build_table_priv_arary_for_all(
     ObGrantStmt *grant_stmt,
     share::ObRawObjPrivArray &table_priv_array,
-    bool is_owner)
+    bool is_owner,
+    bool is_role)
 {
   int ret = OB_SUCCESS;
   CK (grant_stmt != NULL);
@@ -1773,12 +1816,14 @@ int ObGrantResolver::build_table_priv_arary_for_all(
             {
               OZ (table_priv_array.push_back(OBJ_PRIV_ID_ALTER));
               OZ (table_priv_array.push_back(OBJ_PRIV_ID_DELETE));
-              OZ (table_priv_array.push_back(OBJ_PRIV_ID_INDEX));
               OZ (table_priv_array.push_back(OBJ_PRIV_ID_INSERT));
-              OZ (table_priv_array.push_back(OBJ_PRIV_ID_REFERENCES));
               OZ (table_priv_array.push_back(OBJ_PRIV_ID_SELECT));
               OZ (table_priv_array.push_back(OBJ_PRIV_ID_UPDATE));
               OZ (table_priv_array.push_back(OBJ_PRIV_ID_FLASHBACK));
+              if (OB_SUCC(ret) && !is_role) {
+                OZ (table_priv_array.push_back(OBJ_PRIV_ID_INDEX));
+                OZ (table_priv_array.push_back(OBJ_PRIV_ID_REFERENCES));
+              }
               break;
             }
           case share::schema::ObObjectType::SEQUENCE:
@@ -1803,9 +1848,11 @@ int ObGrantResolver::build_table_priv_arary_for_all(
             {
               OZ (table_priv_array.push_back(OBJ_PRIV_ID_DELETE));
               OZ (table_priv_array.push_back(OBJ_PRIV_ID_INSERT));
-              OZ (table_priv_array.push_back(OBJ_PRIV_ID_REFERENCES));
               OZ (table_priv_array.push_back(OBJ_PRIV_ID_SELECT));
               OZ (table_priv_array.push_back(OBJ_PRIV_ID_UPDATE));
+              if (OB_SUCC(ret) && !is_role) {
+                OZ (table_priv_array.push_back(OBJ_PRIV_ID_REFERENCES));
+              }
               break;
             }
           case share::schema::ObObjectType::DIRECTORY:
@@ -1880,7 +1927,7 @@ int ObGrantResolver::resolve_obj_priv_list_ora(
       } else if (OB_ISNULL(priv_type_node = role_sys_obj_all_col_priv->children_[0])) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("priv_type_node is NULL", K(ret));
-      } else if (trans_ora_sys_priv_to_obj(priv_type_node)) {
+      } else if (OB_FAIL(trans_ora_sys_priv_to_obj(priv_type_node))) {
         // For compatibility with 2_2_1 on backup
         LOG_WARN("failed to trans_ora_sys_priv_to_obj", K(ret));
       } else if (FALSE_IT(opt_colnames_node = role_sys_obj_all_col_priv->children_[1])) {
@@ -1913,9 +1960,7 @@ int ObGrantResolver::resolve_obj_priv_list_ora(
         } else if (OB_PRIV_TABLE_LEVEL == grant_level) {
           if (OB_PRIV_ALL == priv_type) {
             priv_set |= OB_PRIV_TABLE_ACC;
-            OZ (build_table_priv_arary_for_all(grant_stmt, 
-                                                table_priv_array,
-                                                is_owner));
+            grant_stmt->set_grant_all_tab_priv(true);
           } else if (priv_type & (~(OB_PRIV_TABLE_ACC | OB_PRIV_GRANT)) && 
                       is_ora_obj_priv_type(priv_type) == false) {
             ret = OB_ERR_MISSING_OR_INVALID_PRIVIEGE;

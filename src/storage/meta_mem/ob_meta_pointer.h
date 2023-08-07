@@ -16,10 +16,7 @@
 #include "lib/allocator/ob_allocator.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
-#include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
-#include "storage/slog/ob_storage_log_reader.h"
-#include "storage/slog/ob_storage_logger.h"
 
 namespace oceanbase
 {

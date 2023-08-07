@@ -377,13 +377,11 @@ int PalfHandleImpl::submit_log(
     SCN &scn)
 {
   int ret = OB_SUCCESS;
-  const int64_t curr_time_us = ObClockGenerator::getClock();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl is not inited");
   } else if (NULL == buf || buf_len <= 0 || buf_len > MAX_LOG_BODY_SIZE
-             || !ref_scn.is_valid()
-             || ref_scn.convert_to_ts() > curr_time_us + MAX_ALLOWED_SKEW_FOR_REF_US) {
+             || !ref_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K_(palf_id), KP(buf), K(buf_len), K(ref_scn));
   } else {
@@ -932,13 +930,12 @@ int PalfHandleImpl::change_access_mode(const int64_t proposal_id,
                                        const SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
-  const int64_t curr_time_us = common::ObTimeUtility::current_time();
   AccessMode prev_access_mode;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (INVALID_PROPOSAL_ID == proposal_id ||
              INVALID_PROPOSAL_ID == mode_version ||
-             !ref_scn.is_valid() || ref_scn.convert_to_ts() > curr_time_us + MAX_ALLOWED_SKEW_FOR_REF_US ||
+             !ref_scn.is_valid() ||
              false == is_valid_access_mode(access_mode)) {
     // ref_scn is reasonable only when access_mode is APPEND
     // mode_version is the proposal_id of PALF when access_mode was applied
@@ -1533,12 +1530,7 @@ int PalfHandleImpl::set_allow_vote_flag_(const bool allow_vote,
       flush_meta_cb_ctx.allow_vote_ = allow_vote;
       LogReplicaPropertyMeta replica_property_meta = log_engine_.get_log_meta().get_log_replica_property_meta();
       replica_property_meta.allow_vote_ = allow_vote;
-      if (false == allow_vote
-          && LEADER == state_mgr_.get_role()
-          && OB_FAIL(election_.revoke(RoleChangeReason::PalfDisableVoteToRevoke))
-          && OB_NOT_MASTER != ret) {  // ignore not master err code
-        PALF_LOG(WARN, "election revoke failed", K(ret), K_(palf_id));
-      } else if (OB_FAIL(log_engine_.submit_flush_replica_property_meta_task(flush_meta_cb_ctx, replica_property_meta))) {
+      if (OB_FAIL(log_engine_.submit_flush_replica_property_meta_task(flush_meta_cb_ctx, replica_property_meta))) {
         PALF_LOG(WARN, "submit_flush_replica_property_meta_task failed", K(ret), K(flush_meta_cb_ctx), K(replica_property_meta));
       } else {
         if (!allow_vote) {
@@ -1619,7 +1611,7 @@ int PalfHandleImpl::advance_base_info(const PalfBaseInfo &palf_base_info, const 
       PALF_LOG(INFO, "sw_ truncate_for_rebuild success", K(ret), KPC(this), K(palf_base_info));
     }
   }
-  PALF_EVENT("advance_base_info finished", palf_id_, KPC(this), K(palf_base_info), K(time_guard));
+  PALF_EVENT("advance_base_info finished", palf_id_, K(ret), KPC(this), K(palf_base_info), K(time_guard));
   plugins_.record_advance_base_info_event(palf_id_, palf_base_info);
   return ret;
 }
@@ -4038,6 +4030,7 @@ int PalfHandleImpl::get_prev_log_info_for_fetch_(const LSN &prev_lsn,
   };
   if (OB_FAIL(iterator.init(prev_lsn, get_file_end_lsn, get_mode_version, log_engine_.get_log_storage()))) {
     PALF_LOG(WARN, "LogGroupEntryIterator init failed", K(ret), K(iterator), K(prev_lsn), K(curr_lsn));
+  } else if (FALSE_IT(iterator.set_need_print_error(false))) {
   } else {
     LogGroupEntry entry;
     LSN lsn;

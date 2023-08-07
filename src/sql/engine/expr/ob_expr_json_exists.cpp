@@ -188,6 +188,7 @@ int ObExprJsonExists::get_var_data(const ObExpr &expr, ObEvalCtx &ctx, common::O
   if (OB_UNLIKELY(OB_FAIL(json_arg->eval(ctx, json_datum)))) {
     LOG_WARN("eval json arg failed", K(ret));
   } else if (OB_ISNULL(json_datum)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("eval json arg failed", K(ret));
   } else if (val_type == ObNullType) {
     ret = OB_ERR_INVALID_VARIABLE_IN_JSON_PATH;

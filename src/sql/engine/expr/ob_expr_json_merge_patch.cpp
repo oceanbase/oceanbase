@@ -248,9 +248,10 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
   if ((!is_cover_error && OB_FAIL(ret)) || has_null) {
     // do nothing
   } else if ((tmp_ret = ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 1, j_patch_node, has_null, true, false)) != OB_SUCCESS) {
+    ret = tmp_ret;
+    is_cover_error = false;
     if (tmp_ret == OB_ERR_JSON_SYNTAX_ERROR) {
       ret = OB_ERR_JSON_PATCH_INVALID;
-      is_cover_error = false;
     }
     LOG_WARN("get_json_doc failed", K(ret));
   } else if (has_null) {
@@ -381,7 +382,7 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
             ret = OB_SUCCESS;
             res.set_null();
           }
-        } else if (ObJsonExprHelper::pack_json_str_res(expr, ctx, res, res_string)) {
+        } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, res_string))) {
           LOG_WARN("fail to pack ressult.", K(ret));
         }
       }

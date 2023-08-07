@@ -743,6 +743,7 @@ void ObDDLScheduler::stop()
     task_queue_.set_stop(true);
     idle_stop_ = true;
     is_started_ = false;
+    destroy_all_tasks();
   }
 }
 

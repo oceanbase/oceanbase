@@ -96,33 +96,6 @@ int ObTransformAggrSubquery::transform_one_stmt(common::ObIArray<ObParentDMLStmt
   return ret;
 }
 
-int ObTransformAggrSubquery::transform_one_stmt_with_outline(ObIArray<ObParentDMLStmt> &parent_stmts,
-                                                             ObDMLStmt *&stmt,
-                                                             bool &trans_happened)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(parent_stmts);
-  trans_happened = false;
-  bool is_happened = false;
-  trans_stmt_infos_.reset();
-  join_first_happened_ = false;
-  do {
-    is_happened = false;
-    if (OB_FAIL(do_transform(stmt, is_happened))) {
-      LOG_WARN("failed to transform one stmt", K(ret));
-    } else if (is_happened) {
-      ++ctx_->trans_list_loc_;
-      trans_happened = true;
-      LOG_TRACE("succeed to do aggr subquery with outline", K(ctx_->src_qb_name_));
-    }
-  } while (OB_SUCC(ret) && is_happened);
-
-  if (OB_SUCC(ret) && trans_happened && OB_FAIL(add_transform_hint(*stmt, &trans_stmt_infos_))) {
-    LOG_WARN("failed to add transform hint", K(ret));
-  }
-  return ret;
-}
-
 int ObTransformAggrSubquery::check_hint_status(const ObDMLStmt &stmt, bool &need_trans)
 {
   int ret = OB_SUCCESS;
@@ -135,7 +108,8 @@ int ObTransformAggrSubquery::check_hint_status(const ObDMLStmt &stmt, bool &need
   } else if (!query_hint->has_outline_data()) {
     need_trans = true;
   } else if (NULL == (cur_trans_hint = query_hint->get_outline_trans_hint(ctx_->trans_list_loc_)) ||
-             !cur_trans_hint->is_unnest_hint()) {
+             !(cur_trans_hint->is_aggr_first_unnest_hint() ||
+               cur_trans_hint->is_join_first_unnest_hint())) {
     /*do nothing*/
   } else {
     ObQueryRefRawExpr* subquery_expr = nullptr;
@@ -145,9 +119,15 @@ int ObTransformAggrSubquery::check_hint_status(const ObDMLStmt &stmt, bool &need
           OB_ISNULL(select_stmt = subquery_expr->get_ref_stmt())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(subquery_expr), K(select_stmt));
-      } else {
-        need_trans = query_hint->is_valid_outline_transform(ctx_->trans_list_loc_,
-                                                            get_hint(select_stmt->get_stmt_hint()));
+      } else if (query_hint->is_valid_outline_transform(ctx_->trans_list_loc_,
+                                                   get_sub_unnest_hint(*select_stmt, AGGR_FIRST))) {
+        need_trans = true;
+      } else if (query_hint->is_valid_outline_transform(ctx_->trans_list_loc_,
+                                                   get_sub_unnest_hint(*select_stmt, JOIN_FIRST))) {
+        need_trans = true;
+      } else if (query_hint->is_valid_outline_transform(ctx_->trans_list_loc_,
+                                          select_stmt->get_stmt_hint().get_normal_hint(T_UNNEST))) {
+        need_trans = true;
       }
     }
   }
@@ -170,7 +150,9 @@ int ObTransformAggrSubquery::construct_transform_hint(ObDMLStmt &stmt, void *tra
     ObTransHint *hint = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < trans_stmt_infos->count(); ++i) {
       TransStmtInfo& info = trans_stmt_infos->at(i);
-      if (OB_FAIL(ObQueryHint::create_hint(ctx_->allocator_, T_UNNEST, hint))) {
+      if (OB_FAIL(ObQueryHint::create_hint(ctx_->allocator_,
+                                           get_unnest_strategy(info.pullup_strategy_),
+                                           hint))) {
         LOG_WARN("failed to create hint", K(ret));
       } else if (OB_FAIL(ctx_->add_src_hash_val(info.qb_name_))) {
         LOG_WARN("failed to add src hash val", K(ret));
@@ -209,9 +191,6 @@ int ObTransformAggrSubquery::transform_with_aggregation_first(ObDMLStmt *&stmt,
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
     if (OB_FAIL(do_aggr_first_transform(stmt, exprs.at(i), trans_happened))) {
       LOG_WARN("failed to transform one expr", K(ret));
-    } else if (trans_happened && query_hint->has_outline_data()) {
-      // transform one subquery at one time if with outline 
-      break;
     }
   }
   return ret;
@@ -331,14 +310,10 @@ int ObTransformAggrSubquery::do_aggr_first_transform(ObDMLStmt *&stmt,
       LOG_WARN("failed to transform subquery", K(ret));
     } else if (OB_FAIL(transform_upper_stmt(*stmt, trans_param))) {
       LOG_WARN("failed to transform upper stmt", K(ret));
-    } else if (OB_FAIL(add_trans_stmt_info(*subquery))) {
+    } else if (OB_FAIL(add_trans_stmt_info(*subquery, AGGR_FIRST))) {
       LOG_WARN("failed add trans stmt info", K(ret));
     } else {
       trans_happened = true;
-      if (query_hint->has_outline_data()) {
-        // transform one subquery at one time if with outline 
-        break;
-      }
     }
   }
   return ret;
@@ -373,7 +348,10 @@ int ObTransformAggrSubquery::gather_transform_params(ObDMLStmt &stmt,
     if (ObOptimizerUtil::find_item(no_rewrite_exprs_, child_expr)) {
       LOG_TRACE("subquery in select expr and can use index");
       OPT_TRACE("subquery in select expr and can use index, no need transfrom");
-    } else if (OB_FAIL(check_hint_allowed_unnest(stmt, *subquery, hint_allowed))) {
+    } else if (OB_FAIL(check_hint_allowed_unnest(stmt, *subquery,
+                                                 ctx_->trans_list_loc_ + transform_params.count(),
+                                                 pullup_strategy,
+                                                 hint_allowed))) {
       LOG_WARN("failed to check hint allowed unnest", K(ret));
     } else if (!hint_allowed) {
       OPT_TRACE("hint reject transform");
@@ -1200,9 +1178,6 @@ int ObTransformAggrSubquery::transform_with_join_first(ObDMLStmt *&stmt,
       join_first_happened_ = true;
       if (OB_FAIL(add_constraints_for_limit(param))) {
         LOG_WARN("add constraints failed", K(ret));
-      } else if (query_hint->has_outline_data()) {
-        // transform one subquery at one time if with outline 
-        break;
       }
     }
   }
@@ -1762,7 +1737,7 @@ int ObTransformAggrSubquery::do_join_first_transform(ObSelectStmt &select_stmt,
       LOG_WARN("failed to formalize stmt", K(ret));
     } else if (OB_FAIL(rebuild_conditon(select_stmt, *subquery))) {
       LOG_WARN("failed to rebuild condition", K(ret));
-    } else if (OB_FAIL(add_trans_stmt_info(*subquery))) {
+    } else if (OB_FAIL(add_trans_stmt_info(*subquery, JOIN_FIRST))) {
       LOG_WARN("failed to add trans stmt info", K(ret));
     }
   }
@@ -2449,7 +2424,9 @@ int ObTransformAggrSubquery::extract_no_rewrite_expr(ObRawExpr *expr)
     if (OB_ISNULL(subquery)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (subquery->get_stmt_hint().has_enable_hint(T_UNNEST)) {
+    } else if (subquery->get_stmt_hint().has_enable_hint(T_UNNEST) ||
+               subquery->get_stmt_hint().has_enable_hint(T_AGGR_FIRST_UNNEST) ||
+               subquery->get_stmt_hint().has_enable_hint(T_JOIN_FIRST_UNNEST)) {
       //do nothing
     } else if (OB_FAIL(ObTransformUtils::check_subquery_match_index(ctx_,
                                                                     static_cast<ObQueryRefRawExpr *>(expr),
@@ -2470,50 +2447,94 @@ int ObTransformAggrSubquery::extract_no_rewrite_expr(ObRawExpr *expr)
   }
   return ret;
 }
+ObHint* ObTransformAggrSubquery::get_sub_unnest_hint(ObSelectStmt &subquery,
+                                                     int64_t pullup_strategy)
+{
+  ObHint *myhint = NULL;
+  if (aggr_first(pullup_strategy)) {
+    myhint = subquery.get_stmt_hint().get_normal_hint(T_AGGR_FIRST_UNNEST);
+  } else if (join_first(pullup_strategy)) {
+    myhint = subquery.get_stmt_hint().get_normal_hint(T_JOIN_FIRST_UNNEST);
+  }
+  return myhint;
+}
 
+ObItemType ObTransformAggrSubquery::get_unnest_strategy(int64_t pullup_strategy) {
+  ObItemType hint = T_INVALID;
+  if (aggr_first(pullup_strategy)) {
+    hint = T_AGGR_FIRST_UNNEST;
+  } else if (join_first(pullup_strategy)) {
+    hint = T_JOIN_FIRST_UNNEST;
+  }
+  return hint;
+}
 int ObTransformAggrSubquery::check_hint_allowed_unnest(ObDMLStmt &stmt,
-                                                      ObSelectStmt &subquery,
-                                                      bool &allowed)
+                                                       ObSelectStmt &subquery,
+                                                       const int64_t hint_loc,
+                                                       const int64_t pullup_strategy,
+                                                       bool &allowed)
 {
   int ret = OB_SUCCESS;
   allowed = true;
-  const ObQueryHint *query_hint = NULL;
-  const ObHint *myhint = get_hint(subquery.get_stmt_hint());
-  bool is_enable = (NULL != myhint && myhint->is_enable_hint());
-  bool is_disable = (NULL != myhint && myhint->is_disable_hint());
+  const ObQueryHint *query_hint = stmt.get_stmt_hint().query_hint_;
+  const ObHint *unnest_hint = subquery.get_stmt_hint().get_normal_hint(T_UNNEST);
+  const ObHint *subhint = get_sub_unnest_hint(subquery, pullup_strategy);
+  bool is_enable = false;
+  bool is_disable = false;
+  bool is_unnest_enable = false;
+  bool is_unnest_disable = false;
+  if (NULL != unnest_hint) {
+    is_unnest_enable = unnest_hint->is_enable_hint();
+    is_unnest_disable = unnest_hint->is_disable_hint();
+  }
+  if (NULL != subhint) {
+    is_enable = subhint->is_enable_hint();
+    is_disable = subhint->is_disable_hint();
+  }
   const ObHint *no_rewrite1 = stmt.get_stmt_hint().get_no_rewrite_hint();
   const ObHint *no_rewrite2 = subquery.get_stmt_hint().get_no_rewrite_hint();
-  if (OB_ISNULL(ctx_) || OB_ISNULL(query_hint = stmt.get_stmt_hint().query_hint_)) {
+  if (OB_ISNULL(ctx_) || OB_ISNULL(query_hint)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(ctx_), K(query_hint));
   } else if (query_hint->has_outline_data()) {
     // outline data allowed merge
-    allowed = query_hint->is_valid_outline_transform(ctx_->trans_list_loc_, myhint);
-  } else if (is_enable) {
-    allowed = true;
-  } else if (NULL != no_rewrite1 || NULL != no_rewrite2 || is_disable) {
-    // add disable transform hint here
-    allowed = false;
-    if (OB_FAIL(ctx_->add_used_trans_hint(no_rewrite1))) {
-      LOG_WARN("failed to add used trans hint", K(ret));
-    } else if (OB_FAIL(ctx_->add_used_trans_hint(no_rewrite2))) {
-      LOG_WARN("failed to add used trans hint", K(ret));
-    } else if (is_disable && OB_FAIL(ctx_->add_used_trans_hint(myhint))) {
-      LOG_WARN("failed to add used trans hint", K(ret));
-    }
+    allowed = query_hint->is_valid_outline_transform(hint_loc, subhint);
+  } else {
+    if (is_enable || (!is_disable && is_unnest_enable)) {
+      // enable hint
+      allowed = true;
+    } else if (NULL != no_rewrite1 || NULL != no_rewrite2 || is_disable || is_unnest_disable) {
+      // add disable transform hint here
+      allowed = false;
+      if (OB_FAIL(ctx_->add_used_trans_hint(no_rewrite1))) {
+        LOG_WARN("failed to add used trans hint", K(ret));
+      } else if (OB_FAIL(ctx_->add_used_trans_hint(no_rewrite2))) {
+        LOG_WARN("failed to add used trans hint", K(ret));
+      } else if (is_disable && OB_FAIL(ctx_->add_used_trans_hint(subhint))) {
+        LOG_WARN("failed to add used trans hint", K(ret));
+      } else if (is_unnest_disable && OB_FAIL(ctx_->add_used_trans_hint(unnest_hint))) {
+        LOG_WARN("failed to add used trans hint", K(ret));
+      }
+    } else { /* default enable */ }
   }
   return ret;
 }
 
-int ObTransformAggrSubquery::add_trans_stmt_info(ObSelectStmt &subquery)
+int ObTransformAggrSubquery::add_trans_stmt_info(ObSelectStmt &subquery, int64_t flag)
 {
   int ret = OB_SUCCESS;
   TransStmtInfo info;
-  info.unnest_ = get_hint(subquery.get_stmt_hint());
+  info.pullup_strategy_ = flag;
+  info.unnest_ = get_sub_unnest_hint(subquery, flag);
+  if (NULL == info.unnest_) {
+    info.unnest_ = get_hint(subquery.get_stmt_hint());
+  }
   if (OB_FAIL(subquery.get_qb_name(info.qb_name_))) {
     LOG_WARN("failed to get qb name", K(ret));
   } else if (OB_FAIL(trans_stmt_infos_.push_back(info))) {
     LOG_WARN("failed to push back trans stmt info", K(ret), K(info));
+  } else {
+    ctx_->trans_list_loc_++;
   }
   return ret;
 }

@@ -137,7 +137,7 @@ public:
   void dec_pending_cnt();
   bool is_pending() const { return ATOMIC_LOAD(&pending_cnt_) > 0; }
   int wait_pending();
-  TO_STRING_KV(K_(is_inited), K_(ls_id), K_(tablet_id), K_(ddl_start_scn), K_(snapshot_version),
+  INHERIT_TO_STRING_KV("ObSSTable", ObSSTable, K_(is_inited), K_(ls_id), K_(tablet_id), K_(ddl_start_scn), K_(snapshot_version),
       K_(is_freezed), K_(is_closed),
       K_(last_freezed_scn), K_(min_scn), K_(max_scn), K_(freeze_scn),
       K_(pending_cnt), K_(data_format_version), K_(ref_cnt),

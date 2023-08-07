@@ -76,9 +76,13 @@ int ObExprToNumberBase::calc_result_typeN(ObExprResType &type,
       if (param_num == 3) {
         types[2].set_calc_type_default_varchar();
       }
-      type.set_type(ObNumberType);
-      type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
-      type.set_precision(PRECISION_UNKNOWN_YET);
+      if (types[0].is_null()) {
+        type.set_null();
+      } else {
+        type.set_type(ObNumberType);
+        type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
+        type.set_precision(PRECISION_UNKNOWN_YET);
+      }
     }
   }
   return ret;
@@ -315,9 +319,19 @@ int ObExprToBinaryFloat::calc_result_typeN(ObExprResType &type,
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
-  } else if (OB_UNLIKELY(param_num > 1)) {
+  } else if (OB_UNLIKELY(param_num != 1)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param_num) , K(types));
+  } else if (ObTinyIntType == types[0].get_type()) {
+    // oracle compatible
+    ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+    LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, 15, "TO_BINARY_FLOAT");
+    LOG_WARN("wrong number or types of arguments in function", K(ret), K(types[0].get_type()));
+  } else if (ObExtendType == types[0].get_type()) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("inconsistent datatypes", K(ret),
+             "expected_type_class", ob_obj_type_class(ObFloatType),
+             "got", ob_obj_type_class(types[0].get_type()));
   } else if (OB_FAIL(ObExprToNumberBase::calc_result_typeN(type, types, param_num, type_ctx))) {
     LOG_WARN("fail to calc_result_typeN", K(ret));
   } else if (OB_FAIL(ObObjCaster::can_cast_in_oracle_mode(ObFloatType, CS_TYPE_BINARY,
@@ -325,7 +339,11 @@ int ObExprToBinaryFloat::calc_result_typeN(ObExprResType &type,
     LOG_WARN("input type can not cast to binary_float", K(types[0].get_type()), K(ret));
   } else {
     types[0].set_calc_type(ObFloatType);
-    type.set_type(ObFloatType);
+    if (types[0].is_null()) {
+      type.set_null();
+    } else {
+      type.set_type(ObFloatType);
+    }
   }
   return ret;
 }
@@ -378,9 +396,19 @@ int ObExprToBinaryDouble::calc_result_typeN(ObExprResType &type,
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
-  } else if (OB_UNLIKELY(param_num > 1)) {
+  } else if (OB_UNLIKELY(param_num != 1)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param_num) , K(types));
+  } else if (ObTinyIntType == types[0].get_type()) {
+    // oracle compatible
+    ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+    LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, 16, "TO_BINARY_DOUBLE");
+    LOG_WARN("wrong number or types of arguments in function", K(ret), K(types[0].get_type()));
+  } else if (ObExtendType == types[0].get_type()) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("inconsistent datatypes", K(ret),
+             "expected_type_class", ob_obj_type_class(ObDoubleType),
+             "got", ob_obj_type_class(types[0].get_type()));
   } else if (OB_FAIL(ObExprToNumberBase::calc_result_typeN(type, types, param_num, type_ctx))) {
     LOG_WARN("fail to calc_result_typeN", K(ret));
   } else if (OB_FAIL(ObObjCaster::can_cast_in_oracle_mode(ObDoubleType, CS_TYPE_BINARY,
@@ -388,7 +416,11 @@ int ObExprToBinaryDouble::calc_result_typeN(ObExprResType &type,
     LOG_WARN("input type can not cast to binary_double", K(types[0].get_type()), K(ret));
   } else {
     types[0].set_calc_type(ObDoubleType);
-    type.set_type(ObDoubleType);
+    if (types[0].is_null()) {
+      type.set_null();
+    } else {
+      type.set_type(ObDoubleType);
+    }
   }
   return ret;
 }

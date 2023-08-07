@@ -857,10 +857,10 @@ int ObTransformJoinLimitPushDown::do_transform(ObSelectStmt *select_stmt,
   } else if (OB_FAIL(ObOptimizerUtil::remove_item(select_stmt->get_semi_infos(),
                                                   helper.pushdown_semi_infos_))) {
     LOG_WARN("failed to remove semi infos from stmt", K(ret));
-  } else if (ObTransformUtils::add_new_table_item(ctx_,
+  } else if (OB_FAIL(ObTransformUtils::add_new_table_item(ctx_,
                                                   select_stmt,
                                                   NULL,
-                                                  helper.view_table_)) {
+                                                  helper.view_table_))) {
     LOG_WARN("failed to create table item", K(ret));
   } else if (OB_FAIL(select_stmt->add_from_item(helper.view_table_->table_id_, false))) {
     LOG_WARN("failed to add from item", K(ret));

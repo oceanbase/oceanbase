@@ -187,6 +187,7 @@ int ObDMLService::check_rowkey_whether_distinct(const ObExprPtrIArray &row,
           } else if (OB_FAIL(expr->eval(eval_ctx, col_datum))) {
             LOG_WARN("failed to evaluate expr in rowkey", K(ret), K(i));
           } else if (OB_ISNULL(col_datum)) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("evaluated column datum in rowkey is nullptr", K(ret), K(i));
           } else if (OB_FAIL(col_datum->to_obj(tmp_obj_ptr[i], expr->obj_meta_, expr->obj_datum_map_))) {
             LOG_WARN("convert datum to obj failed", K(ret), K(i));

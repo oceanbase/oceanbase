@@ -71,7 +71,7 @@ public:
   }
   int process() override
   {
-    OB_TABLE_LOAD_STATISTICS_TIME_COST(table_compactor_time_us);
+    OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, table_compactor_time_us);
     int ret = OB_SUCCESS;
     while (OB_SUCC(ret) && !(mem_ctx_->has_error_)) {
       ObDirectLoadMemWorker *loader = nullptr;

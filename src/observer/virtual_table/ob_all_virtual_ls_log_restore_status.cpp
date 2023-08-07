@@ -22,6 +22,7 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "storage/tx_storage/ob_ls_map.h"     // ObLSIterator
 #include "storage/tx_storage/ob_ls_service.h"   // ObLSService
+#include "rootserver/ob_recovery_ls_service.h" //ObLSRecoveryService
 
 using namespace oceanbase::share;
 
@@ -67,12 +68,10 @@ int ObVirtualLSLogRestoreStatus::inner_get_next_row(common::ObNewRow *&row)
       ObLSService *ls_svr = MTL(ObLSService*);
       if (is_user_tenant(MTL_ID())) {
         if (OB_ISNULL(ls_svr)) {
-          ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "mtl ObLSService should not be null", K(ret));
         } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::LOG_MOD))) {
           SERVER_LOG(WARN, "get ls iter failed", K(ret));
         } else if (OB_ISNULL(iter = guard.get_ptr())) {
-          ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "ls iter is NULL", K(ret), K(iter));
         } else {
           while (OB_SUCC(ret)) {
@@ -89,6 +88,7 @@ int ObVirtualLSLogRestoreStatus::inner_get_next_row(common::ObNewRow *&row)
             } else {
               SERVER_LOG(TRACE, "start to iterate this log_stream", K(MTL_ID()), K(ls->get_ls_id()));
               logservice::RestoreStatusInfo restore_status_info;
+              logservice::RestoreStatusInfo sys_restore_status_info;
               restore_handler = ls->get_log_restore_handler();
               if (OB_ISNULL(restore_handler)) {
                 SERVER_LOG(WARN, "restore handler is NULL", K(ret), K(ls));
@@ -96,11 +96,36 @@ int ObVirtualLSLogRestoreStatus::inner_get_next_row(common::ObNewRow *&row)
                 SERVER_LOG(WARN, "fail to get ls restore status info");
               } else if (!restore_status_info.is_valid()) {
                 SERVER_LOG(WARN, "restore status info is invalid", K(restore_status_info));
-              } else if (OB_FAIL(insert_ls_restore_status_info_(restore_status_info))) {
-                SERVER_LOG(WARN, "fail to insert ls restore status info");
-              } else {
-                SERVER_LOG(TRACE, "iterate this log_stream success");
-                scanner_.add_row(cur_row_);
+              } else if (!ls->is_sys_ls()) {  // not sys ls
+                if (OB_FAIL(insert_ls_restore_status_info_(restore_status_info))) {
+                  SERVER_LOG(WARN, "fail to insert ls restore status info", K(restore_status_info));
+                } else {
+                  SERVER_LOG(TRACE, "iterate user log_stream success", K(ls));
+                  scanner_.add_row(cur_row_);
+                }
+              } else {  // sys ls
+                rootserver::ObRecoveryLSService *ls_recovery_svr = MTL(rootserver::ObRecoveryLSService*);
+                if (OB_ISNULL(ls_recovery_svr)) {
+                  SERVER_LOG(WARN, "ls recovery service is NULL", K(ret), K(ls));
+                } else if (OB_FAIL(ls_recovery_svr->get_sys_restore_status(sys_restore_status_info))) {
+                  SERVER_LOG(WARN, "get sys restore status failed", K(ls));
+                  // use restore_status_info if get sys ls restore status failed
+                  if (OB_FAIL(insert_ls_restore_status_info_(restore_status_info))) {
+                    SERVER_LOG(WARN, "fail to insert ls restore status info", K(restore_status_info));
+                  } else {
+                    SERVER_LOG(TRACE, "insert ls restore status info success after get sys restore status failed", K(ls));
+                    scanner_.add_row(cur_row_);
+                  }
+                } else if (sys_restore_status_info.is_valid()
+                            && OB_FAIL(insert_ls_restore_status_info_(sys_restore_status_info))) {
+                  SERVER_LOG(WARN, "fail to insert ls restore status info", K(sys_restore_status_info));
+                } else if (!sys_restore_status_info.is_valid()
+                            && OB_FAIL(insert_ls_restore_status_info_(restore_status_info))) {
+                  SERVER_LOG(WARN, "fail to insert ls restore status info", K(restore_status_info));
+                } else {
+                  SERVER_LOG(TRACE, "iterate sys log_stream success", K(ls));
+                  scanner_.add_row(cur_row_);
+                }
               }
             }
           } // while

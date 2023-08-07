@@ -1135,6 +1135,8 @@ DEFINE_ERROR(OB_ERR_FUNCTIONAL_INDEX_ON_LOB, -5498, ER_FUNCTIONAL_INDEX_ON_LOB, 
 DEFINE_ERROR(OB_ERR_FUNCTIONAL_INDEX_ON_FIELD, -5499, ER_FUNCTIONAL_INDEX_ON_FIELD, "HY000", "Functional index on a column is not supported. Consider using a regular index instead.");
 DEFINE_ERROR(OB_ERR_GENCOL_LEGIT_CHECK_FAILED, -5500, -1, "HY000", "Legitimacy check failed for generated columns.");
 
+DEFINE_ORACLE_ERROR(OB_ERR_GROUPING_FUNC_WITHOUT_GROUP_BY, -5501, -1, "42000", "GROUPING function only supported with GROUP BY CUBE or ROLLUP", 30481, "GROUPING function only supported with GROUP BY CUBE or ROLLUP");
+
 DEFINE_ERROR_EXT(OB_ERR_SP_ALREADY_EXISTS, -5541, ER_SP_ALREADY_EXISTS, "42000", "procedure/function already exists", "%s %.*s already exists");
 DEFINE_ERROR_EXT(OB_ERR_SP_DOES_NOT_EXIST, -5542, ER_SP_DOES_NOT_EXIST, "42000", "procedure/function does not exist", "%s %.*s.%.*s does not exist");
 DEFINE_PLS_ERROR_EXT(OB_ERR_SP_UNDECLARED_VAR, -5543, ER_SP_UNDECLARED_VAR, "42000", "Undeclared variable", "Undeclared variable: %.*s", 201, "identifier must be declared", "identifier '%.*s' must be declared");
@@ -2297,6 +2299,7 @@ DEFINE_ERROR(OB_ERR_MALFORMED_PS_PACKET, -9747, -1, "HY000", "malformed ps packe
 DEFINE_ERROR(OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK, -9748, 1351, "HY000", "View's SELECT contains a variable or parameter");
 DEFINE_ORACLE_ERROR(OB_ERR_OBJECT_NOT_EXIST, -9749, -1, "HY000", "object does not exist", 6564, "object does not exist", "object %.*s does not exist");
 DEFINE_ORACLE_ERROR(OB_ERR_TABLE_OUT_OF_RANGE, -9750, -1, "HY000", "PL/SQL: index for PL/SQL table out of range for host language array", 6513, "PL/SQL: index for PL/SQL table out of range for host language array");
+DEFINE_ERROR_EXT(OB_ERR_WRONG_USAGE, -9751, ER_WRONG_USAGE, "HY000", "Incorrect usage", "Incorrect usage of %s", 600, "Incorrect usage", "Incorrect usage of %s");
 
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code

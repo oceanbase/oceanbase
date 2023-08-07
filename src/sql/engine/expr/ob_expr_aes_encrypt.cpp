@@ -100,27 +100,34 @@ int ObExprAesEncrypt::eval_aes_encrypt(const ObExpr &expr, ObEvalCtx &ctx,
       int64_t block_size = ObAesEncryption::OB_AES_BLOCK_SIZE;
       ObEvalCtx::TempAllocGuard alloc_guard(ctx);
       ObIAllocator &calc_alloc = alloc_guard.get_allocator();
-      buf = static_cast<char *>(calc_alloc.alloc((
-              src_str.length() / block_size + 1) * block_size));
+      int buf_length = (src_str.length() / block_size + 1) * block_size;
+      buf = static_cast<char *>(calc_alloc.alloc(buf_length));
+      bool is_ecb = encryption <= static_cast<int64_t>(ObAesOpMode::ob_aes_256_ecb) &&
+                    encryption >= static_cast<int64_t>(ObAesOpMode::ob_aes_128_ecb);
       if (OB_ISNULL(buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
-      } else if (2 == expr.arg_cnt_) {
-        if (encryption > static_cast<int64_t>(ObAesOpMode::ob_aes_256_ecb)) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("param num error", K(ret), K(expr.arg_cnt_), K(encryption));
-        } else {
+      } else if (!is_ecb && 2 == expr.arg_cnt_) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("param num error", K(ret), K(expr.arg_cnt_), K(encryption));
+      } else if (3 == expr.arg_cnt_ && is_ecb) {
+        // just user warn, not set ret error.
+        LOG_USER_WARN(OB_ERR_INVALID_INPUT_STRING, "iv");
+      }
+      if (OB_SUCC(ret)) {
+        if (2 == expr.arg_cnt_ || is_ecb) {
           OZ(ObAesEncryption::aes_encrypt(key_str.ptr(), key_str.length(), src_str.ptr(),
-                  src_str.length(), (src_str.length() / block_size + 1) * block_size, NULL, 0,
-                  static_cast<ObAesOpMode>(encryption), buf, out_len));
+                                          src_str.length(), buf_length, NULL, 0,
+                                          static_cast<ObAesOpMode>(encryption), buf, out_len));
+        } else {
+          ObString iv_str = expr.locate_param_datum(ctx, 2).get_string();
+          OV(iv_str.length() >= ObAesEncryption::OB_AES_IV_SIZE, OB_ERR_AES_IV_LENGTH);
+          OX(iv_str.assign(iv_str.ptr(), (int32_t)ObAesEncryption::OB_AES_IV_SIZE));
+          OZ(ObAesEncryption::aes_encrypt(key_str.ptr(), key_str.length(), src_str.ptr(),
+                                          src_str.length(), buf_length, iv_str.ptr(),
+                                          iv_str.length(), static_cast<ObAesOpMode>(encryption),
+                                          buf, out_len));
         }
-      } else {
-        ObString iv_str = expr.locate_param_datum(ctx, 2).get_string();
-        OV(iv_str.length() >= ObAesEncryption::OB_AES_IV_SIZE, OB_ERR_AES_IV_LENGTH);
-        OX(iv_str.assign(iv_str.ptr(), (int32_t)ObAesEncryption::OB_AES_IV_SIZE));
-        OZ(ObAesEncryption::aes_encrypt(key_str.ptr(), key_str.length(), src_str.ptr(),
-              src_str.length(), (src_str.length() / block_size + 1) * block_size,
-              iv_str.ptr(), iv_str.length(), static_cast<ObAesOpMode>(encryption), buf, out_len));
       }
       if (OB_SUCC(ret)) {
         ObExprStrResAlloc res_alloc(expr, ctx);
@@ -204,31 +211,34 @@ int ObExprAesDecrypt::eval_aes_decrypt(const ObExpr &expr, ObEvalCtx &ctx,
       ObEvalCtx::TempAllocGuard alloc_guard(ctx);
       ObIAllocator &calc_alloc = alloc_guard.get_allocator();
       buf = static_cast<char *>(calc_alloc.alloc((src_str.length() + 1)));
+      bool is_ecb = encryption <= static_cast<int64_t>(ObAesOpMode::ob_aes_256_ecb) &&
+                    encryption >= static_cast<int64_t>(ObAesOpMode::ob_aes_128_ecb);
       if (OB_ISNULL(buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc mem failed", K(ret));
-      } else if (2 == expr.arg_cnt_) {
-        if (encryption > static_cast<int64_t>(ObAesOpMode::ob_aes_256_ecb)) {
-          ret = OB_ERR_PARAM_SIZE;
-          LOG_WARN("param num error", K(ret), K(expr.arg_cnt_), K(encryption));
-        } else {
+      } else if (!is_ecb && 2 == expr.arg_cnt_) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("param num error", K(ret), K(expr.arg_cnt_), K(encryption));
+      } else if (3 == expr.arg_cnt_ && is_ecb) {
+        // just user warn, not set ret error.
+        LOG_USER_WARN(OB_ERR_INVALID_INPUT_STRING, "iv");
+      }
+      if (OB_SUCC(ret)) {
+        if (2 == expr.arg_cnt_ || is_ecb) {
           OZ(ObAesEncryption::aes_decrypt(key_str.ptr(), key_str.length(), src_str.ptr(),
-                src_str.length(), src_str.length(), NULL, 0,
-                  static_cast<ObAesOpMode>(encryption), buf, out_len));
-          if (OB_ERR_AES_DECRYPT == ret) {
-            //按照mysql兼容的做法,如果解密失败,则将结果设置为null
-            is_null = true;
-            ret = OB_SUCCESS;
-          }
+                                          src_str.length(), src_str.length(), NULL, 0,
+                                          static_cast<ObAesOpMode>(encryption), buf, out_len));
+        } else {
+          ObString iv_str = expr.locate_param_datum(ctx, 2).get_string();
+          OV(iv_str.length() >= ObAesEncryption::OB_AES_IV_SIZE, OB_ERR_AES_IV_LENGTH);
+          OX(iv_str.assign(iv_str.ptr(), (int32_t)ObAesEncryption::OB_AES_IV_SIZE));
+          OZ(ObAesEncryption::aes_decrypt(key_str.ptr(), key_str.length(), src_str.ptr(),
+                                          src_str.length(), src_str.length(), iv_str.ptr(),
+                                          iv_str.length(), static_cast<ObAesOpMode>(encryption),
+                                          buf, out_len));
         }
-      } else {
-        ObString iv_str = expr.locate_param_datum(ctx, 2).get_string();
-        OV(iv_str.length() >= ObAesEncryption::OB_AES_IV_SIZE, OB_ERR_AES_IV_LENGTH);
-        OX(iv_str.assign(iv_str.ptr(), (int32_t)ObAesEncryption::OB_AES_IV_SIZE));
-        OZ(ObAesEncryption::aes_decrypt(key_str.ptr(), key_str.length(), src_str.ptr(),
-              src_str.length(), src_str.length(), iv_str.ptr(), iv_str.length(),
-                static_cast<ObAesOpMode>(encryption), buf, out_len));
         if (OB_ERR_AES_DECRYPT == ret) {
+          //按照mysql兼容的做法,如果解密失败,则将结果设置为null
           is_null = true;
           ret = OB_SUCCESS;
         }

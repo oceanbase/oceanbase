@@ -13,10 +13,19 @@ namespace oceanbase
 namespace observer
 {
 
-#define ENABLE_TABLE_LOAD_STAT 0
+#define ENABLE_TABLE_LOAD_STAT 1
+
+enum struct ObTableLoadStatLevel
+{
+  INFO = 0,
+  TRACE = 1,
+  DEBUG = 2
+};
 
 struct ObTableLoadStat
 {
+  static ObTableLoadStatLevel level_;
+
   ObTableLoadStat()
   {
     reset();
@@ -65,6 +74,7 @@ struct ObTableLoadStat
   int64_t table_store_bucket_append_row_;
   int64_t table_store_row_count_;
   int64_t fast_heap_table_refresh_pk_cache_;
+
   TO_STRING_KV(K_(execute_time_us), K_(add_task_time_us), K_(calc_part_time_us),
                K_(get_part_bucket_time_us), K_(bucket_add_row_time_us), K_(cast_obj_time_us),
                K_(check_rowkey_order_time_us), K_(sstable_append_row_time_us),
@@ -86,15 +96,21 @@ struct ObTableLoadStat
 class ObTableLoadTimeCoster
 {
 public:
-  ObTableLoadTimeCoster(int64_t &save_value) : save_value_(save_value)
+  ObTableLoadTimeCoster(int64_t &save_value, ObTableLoadStatLevel level) : save_value_(save_value)
   {
-    start_time_ = common::ObTimeUtil::current_time();
+    level_ = level;
+    if (level_ >= ObTableLoadStat::level_) {
+      start_time_ = common::ObTimeUtil::current_time();
+    }
   }
   ~ObTableLoadTimeCoster()
   {
-    save_value_ += common::ObTimeUtil::current_time() - start_time_;
+    if (level_ >= ObTableLoadStat::level_) {
+      save_value_ += common::ObTimeUtil::current_time() - start_time_;
+    }
   }
 private:
+  ObTableLoadStatLevel level_;
   int64_t start_time_;
   int64_t &save_value_;
 };
@@ -107,9 +123,9 @@ OB_INLINE ObTableLoadStat *get_local_table_load_stat()
 
 #if defined(ENABLE_TABLE_LOAD_STAT) && ENABLE_TABLE_LOAD_STAT == 1
 
-#define OB_TABLE_LOAD_STATISTICS_TIME_COST(field_name)      \
+#define OB_TABLE_LOAD_STATISTICS_TIME_COST(level, field_name)      \
   observer::ObTableLoadTimeCoster field_name##_time_coster( \
-    observer::get_local_table_load_stat()->field_name##_)
+    observer::get_local_table_load_stat()->field_name##_, observer::ObTableLoadStatLevel::level)
 
 #define OB_TABLE_LOAD_STATISTICS_COUNTER(field_name) \
   ++observer::get_local_table_load_stat()->field_name##_
@@ -126,7 +142,7 @@ OB_INLINE ObTableLoadStat *get_local_table_load_stat()
 
 #else
 
-#define OB_TABLE_LOAD_STATISTICS_TIME_COST(field_name)
+#define OB_TABLE_LOAD_STATISTICS_TIME_COST(level, field_name)
 
 #define OB_TABLE_LOAD_STATISTICS_COUNTER(field_name)
 

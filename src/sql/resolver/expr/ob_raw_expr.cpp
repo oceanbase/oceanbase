@@ -2757,6 +2757,7 @@ int ObObjAccessRawExpr::add_access_indexs(const ObIArray<pl::ObObjAccessIdx> &ac
       if (OB_FAIL(access_indexs_.push_back(tmp_idx))) {
         LOG_WARN("store access index failed", K(ret));
       } else if (OB_ISNULL(access_idx.get_sysfunc_)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null param function", K(ret), K(access_idx.var_name_));
       } else if (OB_FAIL(add_param_expr(access_idx.get_sysfunc_))) {
         LOG_WARN("Failed to add param expr", K(ret));
@@ -3511,6 +3512,7 @@ int ObAggFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
           if (OB_FAIL(ret)) {
             //do nothing
           } else if (OB_ISNULL(order_items_.at(i).expr_)) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("expr is NULL", K(i), K(ret));
           } else if (OB_FAIL(order_items_.at(i).expr_->get_name(buf, buf_len, pos, type))) {
             LOG_WARN("fail to get_name", K(i), K(ret));

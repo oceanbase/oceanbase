@@ -1402,6 +1402,7 @@ int ObJoinOrder::refine_table_heuristics_result(const uint64_t table_id,
                                                                    temp_ordering_info))) {
         LOG_WARN("failed to get ordering info", K(table_id), K(index_id), K(ret));
       } else if (OB_ISNULL(temp_ordering_info)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ordering info is null", K(ret));
       } else { /* do nothing*/ }
       // examine all matched unique index
@@ -2064,6 +2065,7 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
       if (OB_FAIL(guard->get_table_schema(index_table_id, index_schema))) {
         LOG_WARN("failed to get table schema", K(ret));
       } else if (OB_ISNULL(index_schema)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("index schema should not be null", K(ret));
       } else if (OB_FAIL(extract_filter_column_ids(restrict_infos,
                                                    data_table_id == index_table_id,
@@ -3510,7 +3512,7 @@ int ObJoinOrder::sort_predicate_by_index_column(const ObIArray<ColumnItem> &rang
           } else if (!is_in_expr &&
                     OB_FAIL(candi_exprs->eq_exprs_.push_back(expr))) {
             LOG_WARN("failed to push back expr", K(ret));
-          } else if (sort_exprs.push_back(candi_exprs)) {
+          } else if (OB_FAIL(sort_exprs.push_back(candi_exprs))) {
             LOG_WARN("failed to push back expr", K(ret));
           }
         }
@@ -11204,9 +11206,9 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
           LOG_WARN("unexpected null expr", K(ret));
         } else if (expr->has_flag(CNT_DYNAMIC_PARAM)) {
           ret = est_cost_info.pushdown_prefix_filters_.push_back(expr);
-        } else if (ObOptimizerUtil::extract_column_ids(expr,
+        } else if (OB_FAIL(ObOptimizerUtil::extract_column_ids(expr,
                                                        est_cost_info.table_id_,
-                                                       column_bs)) {
+                                                       column_bs))) {
           LOG_WARN("failed to extract column ids", K(ret));
         } else {
           ret = new_prefix_filters.push_back(expr);
@@ -11250,8 +11252,8 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
           LOG_WARN("unexpected null expr", K(ret));
         } else if (ObOptimizerUtil::find_equal_expr(est_cost_info.prefix_filters_, filter)) {
           /*do nothing*/
-        } else if (ObOptimizerUtil::extract_column_ids(filter, est_cost_info.table_id_,
-                                                       expr_column_bs)) {
+        } else if (OB_FAIL(ObOptimizerUtil::extract_column_ids(filter, est_cost_info.table_id_,
+                                                       expr_column_bs))) {
           LOG_WARN("failed to extract column ids", K(ret));
         } else if (!expr_column_bs.is_subset(index_column_bs)) {
           ret = est_cost_info.table_filters_.push_back(filter);
@@ -11286,9 +11288,9 @@ int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
           if (OB_ISNULL(filter)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected null expr", K(ret));
-          } else if (ObOptimizerUtil::extract_column_ids(filter,
+          } else if (OB_FAIL(ObOptimizerUtil::extract_column_ids(filter,
                                                         est_cost_info.table_id_,
-                                                        expr_column_bs)) {
+                                                        expr_column_bs))) {
             LOG_WARN("failed to extract column ids", K(ret));
           } else if (expr_column_bs.is_subset(prefix_column_bs)) {
             ret = est_cost_info.prefix_filters_.push_back(filter);
@@ -13921,7 +13923,7 @@ int ObJoinOrder::try_get_generated_col_index_expr(ObRawExpr *qual,
       if (OB_ISNULL(child)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("child is null", K(ret));
-      } else if (ObOptimizerUtil::get_expr_without_lossless_cast(child, child)) {
+      } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(child, child))) {
         LOG_WARN("fail to get real child without lossless cast", K(ret));
       } else if (OB_ISNULL(child)) {
         ret = OB_ERR_UNEXPECTED;

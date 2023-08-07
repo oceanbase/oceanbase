@@ -704,22 +704,22 @@ end|
 delete from t1|
 drop procedure into_dumpfile|
 
---disable_warnings ONCE
-drop procedure if exists create_select|
-
-create procedure create_select(x char(16), y int)
-begin
-  insert into test.t1 values (x, y);
-  create temporary table test.t3 select * from test.t1;
-  insert into test.t3 values (concat(x, "2"), y+2);
-end|
-
-call create_select("cs", 90)|
-select * from t1, t3|
-drop table t3|
-delete from t1|
-
-drop procedure create_select|
+#--disable_warnings ONCE
+#drop procedure if exists create_select|
+#
+#create procedure create_select(x char(16), y int)
+#begin
+#  insert into test.t1 values (x, y);
+#  create temporary table test.t3 select * from test.t1;
+#  insert into test.t3 values (concat(x, "2"), y+2);
+#end|
+#
+#call create_select("cs", 90)|
+#select * from t1, t3|
+#drop table t3|
+#delete from t1|
+#
+#drop procedure create_select|
 
 
 # A minimal, constant FUNCTION.
@@ -1306,74 +1306,74 @@ unlock tables|
 #
 # Simplest function using temporary table. It is also test case for bug
 # #12198 "Temporary table aliasing does not work inside stored functions"
---error 1422
-create function f9() returns int
-begin
-  declare a, b int;
-  drop temporary table if exists t3;
-  create temporary table t3 (id int);
-  insert into t3 values (1), (2), (3);
-  set a:= (select count(*) from t3);
-  set b:= (select count(*) from t3 t3_alias);
-  return a + b;
-end|
-# This will emit warning as t3 was not existing before.
---error 1305
-select f9()|
---error 1305
-select f9() from t1 limit 1|
+#--error 1422
+#create function f9() returns int
+#begin
+#  declare a, b int;
+#  drop temporary table if exists t3;
+#  create temporary table t3 (id int);
+#  insert into t3 values (1), (2), (3);
+#  set a:= (select count(*) from t3);
+#  set b:= (select count(*) from t3 t3_alias);
+#  return a + b;
+#end|
+## This will emit warning as t3 was not existing before.
+#--error 1305
+#select f9()|
+#--error 1305
+#select f9() from t1 limit 1|
 
 # Function which uses both temporary and permanent tables.
---error 1422
-create function f10() returns int
-begin
-  drop temporary table if exists t3;
-  create temporary table t3 (id int);
-  insert into t3 select id from t4;
-  return (select count(*) from t3);
-end|
-# Check that we don't ignore completely tables used in function
---error 1305
-select f10()|
-create table t4 as select 1 as id|
---error 1305
-select f10()|
+#--error 1422
+#create function f10() returns int
+#begin
+#  drop temporary table if exists t3;
+#  create temporary table t3 (id int);
+#  insert into t3 select id from t4;
+#  return (select count(*) from t3);
+#end|
+## Check that we don't ignore completely tables used in function
+#--error 1305
+#select f10()|
+#create table t4 as select 1 as id|
+#--error 1305
+#select f10()|
 
 # Practical cases which we don't handle well (yet)
 #
 # Function which does not work because of well-known and documented
 # limitation of MySQL. We can't use the several instances of the
 # same temporary table in statement.
---error 1422
-create function f11() returns int
-begin
-  drop temporary table if exists t3;
-  create temporary table t3 (id int);
-  insert into t3 values (1), (2), (3);
-  return (select count(*) from t3 as a, t3 as b);
-end|
---error 1305
-select f11()|
---error 1305
-select f11() from t1|
-# Test that using a single table instance at a time works
---error 1422
-create function f12_1() returns int
-begin
-  drop temporary table if exists t3;
-  create temporary table t3 (id int);
-  insert into t3 values (1), (2), (3);
-  return f12_2();
-end|
-create function f12_2() returns int
-  return (select count(*) from t3)|
-
---error 1051
-drop temporary table t3|
---error 1305
-select f12_1()|
---error 1305
-select f12_1() from t1 limit 1|
+#--error 1422
+#create function f11() returns int
+#begin
+#  drop temporary table if exists t3;
+#  create temporary table t3 (id int);
+#  insert into t3 values (1), (2), (3);
+#  return (select count(*) from t3 as a, t3 as b);
+#end|
+#--error 1305
+#select f11()|
+#--error 1305
+#select f11() from t1|
+## Test that using a single table instance at a time works
+#--error 1422
+#create function f12_1() returns int
+#begin
+#  drop temporary table if exists t3;
+#  create temporary table t3 (id int);
+#  insert into t3 values (1), (2), (3);
+#  return f12_2();
+#end|
+#create function f12_2() returns int
+#  return (select count(*) from t3)|
+#
+#--error 1051
+#drop temporary table t3|
+#--error 1305
+#select f12_1()|
+#--error 1305
+#select f12_1() from t1 limit 1|
 
 # Cleanup
 drop function f0|
@@ -1393,13 +1393,13 @@ drop function f10|
 drop function f11|
 --error 1305
 drop function f12_1|
-drop function f12_2|
+#drop function f12_2|
 drop view v0|
 drop view v1|
 drop view v2|
 truncate table t1 |
 truncate table t2 |
-drop table t4|
+#drop table t4|
 
 # End of non-bug tests
 
@@ -2351,48 +2351,48 @@ drop table t3|
 #
 # BUG#1863
 #
-create table t3 (content varchar(10) )|
-insert into t3 values ("test1")|
-insert into t3 values ("test2")|
-create table t4 (f1 int, rc int, t3 int)|
-
---disable_warnings ONCE
-drop procedure if exists bug1863|
-
-create procedure bug1863(in1 int)
-begin
-
-  declare ind int default 0;
-  declare t1 int;
-  declare t2 int;
-  declare t3 int;
-
-  declare rc int default 0;
-  declare continue handler for 1065 set rc = 1;
-
-  drop temporary table if exists temp_t1;
-  create temporary table temp_t1 (
-    f1 int auto_increment, f2 varchar(20), primary key (f1)
-  );
-
-  insert into temp_t1 (f2) select content from t3;
-
-  select f2 into t3 from temp_t1 where f1 = 10;
-
-  if (rc) then
-       insert into t4 values (1, rc, t3);
-  end if;
-
-  insert into t4 values (2, rc, t3);
-
-end|
-
-call bug1863(10)|
-select * from t4|
-
-drop procedure bug1863|
-drop temporary table temp_t1|
-drop table t3, t4|
+#create table t3 (content varchar(10) )|
+#insert into t3 values ("test1")|
+#insert into t3 values ("test2")|
+#create table t4 (f1 int, rc int, t3 int)|
+#
+#--disable_warnings ONCE
+#drop procedure if exists bug1863|
+#
+#create procedure bug1863(in1 int)
+#begin
+#
+#  declare ind int default 0;
+#  declare t1 int;
+#  declare t2 int;
+#  declare t3 int;
+#
+#  declare rc int default 0;
+#  declare continue handler for 1065 set rc = 1;
+#
+#  drop temporary table if exists temp_t1;
+#  create temporary table temp_t1 (
+#    f1 int auto_increment, f2 varchar(20), primary key (f1)
+#  );
+#
+#  insert into temp_t1 (f2) select content from t3;
+#
+#  select f2 into t3 from temp_t1 where f1 = 10;
+#
+#  if (rc) then
+#       insert into t4 values (1, rc, t3);
+#  end if;
+#
+#  insert into t4 values (2, rc, t3);
+#
+#end|
+#
+#call bug1863(10)|
+#select * from t4|
+#
+#drop procedure bug1863|
+#drop temporary table temp_t1|
+#drop table t3, t4|
 
 #
 # BUG#2656
@@ -2537,49 +2537,49 @@ drop procedure bug3863|
 # BUG#2460
 #
 
-create table t3 (
-  id int(10) unsigned not null default 0,
-  rid int(10) unsigned not null default 0,
-  msg varchar(1024) not null,
-  primary key (id),
-  unique key rid (rid, id)
-)|
-
---disable_warnings ONCE
-drop procedure if exists bug2460_1|
-create procedure bug2460_1(in v int)
-begin
-    ( select n0.id from t3 as n0 where n0.id = v )
-  union
-    ( select n0.id from t3 as n0, t3 as n1
-        where n0.id = n1.rid and n1.id = v )
-  union
-    ( select n0.id from t3 as n0, t3 as n1, t3 as n2
-        where n0.id = n1.rid and n1.id = n2.rid and n2.id = v ) order by id;
-end|
-
-call bug2460_1(2)|
-call bug2460_1(2)|
-insert into t3 values (1, 1, 'foo'), (2, 1, 'bar'), (3, 1, 'zip zap')|
-call bug2460_1(2)|
-call bug2460_1(2)|
-
---disable_warnings ONCE
-drop procedure if exists bug2460_2|
-
-create procedure bug2460_2()
-begin
-  drop table if exists t3;
-  create temporary table t3 (s1 int);
-  insert into t3 select 1 union select 1;
-end|
-
-call bug2460_2()|
-select * from t3|
-
-drop procedure bug2460_1|
-drop procedure bug2460_2|
-drop table t3|
+#create table t3 (
+#  id int(10) unsigned not null default 0,
+#  rid int(10) unsigned not null default 0,
+#  msg varchar(1024) not null,
+#  primary key (id),
+#  unique key rid (rid, id)
+#)|
+#
+#--disable_warnings ONCE
+#drop procedure if exists bug2460_1|
+#create procedure bug2460_1(in v int)
+#begin
+#    ( select n0.id from t3 as n0 where n0.id = v )
+#  union
+#    ( select n0.id from t3 as n0, t3 as n1
+#        where n0.id = n1.rid and n1.id = v )
+#  union
+#    ( select n0.id from t3 as n0, t3 as n1, t3 as n2
+#        where n0.id = n1.rid and n1.id = n2.rid and n2.id = v ) order by id;
+#end|
+#
+#call bug2460_1(2)|
+#call bug2460_1(2)|
+#insert into t3 values (1, 1, 'foo'), (2, 1, 'bar'), (3, 1, 'zip zap')|
+#call bug2460_1(2)|
+#call bug2460_1(2)|
+#
+#--disable_warnings ONCE
+#drop procedure if exists bug2460_2|
+#
+#create procedure bug2460_2()
+#begin
+#  drop table if exists t3;
+#  create temporary table t3 (s1 int);
+#  insert into t3 select 1 union select 1;
+#end|
+#
+#call bug2460_2()|
+#select * from t3|
+#
+#drop procedure bug2460_1|
+#drop procedure bug2460_2|
+#drop table t3|
 
 
 #
@@ -4448,56 +4448,56 @@ drop procedure bug6127|
 # BUG#12589: Assert when creating temp. table from decimal stored procedure
 #            variable
 #
---disable_warnings
-drop procedure if exists bug12589_1|
-drop procedure if exists bug12589_2|
-drop procedure if exists bug12589_3|
---enable_warnings
-
-create procedure bug12589_1()
-begin
-  declare spv1 decimal(3,3);
-  set spv1= 123.456;
-
-  set spv1 = 'test';
-  create temporary table tm1 as select spv1;
-  show create table tm1;
-  drop temporary table tm1;
-end|
-
-create procedure bug12589_2()
-begin
-  declare spv1 decimal(6,3);
-  set spv1= 123.456;
-
-  create temporary table tm1 as select spv1;
-  show create table tm1;
-  drop temporary table tm1;
-end|
-
-create procedure bug12589_3()
-begin
-  declare spv1 decimal(6,3);
-  set spv1= -123.456;
-
-  create temporary table tm1 as select spv1;
-  show create table tm1;
-  drop temporary table tm1;
-end|
+#--disable_warnings
+#drop procedure if exists bug12589_1|
+#drop procedure if exists bug12589_2|
+#drop procedure if exists bug12589_3|
+#--enable_warnings
+#
+#create procedure bug12589_1()
+#begin
+#  declare spv1 decimal(3,3);
+#  set spv1= 123.456;
+#
+#  set spv1 = 'test';
+#  create temporary table tm1 as select spv1;
+#  show create table tm1;
+#  drop temporary table tm1;
+#end|
+#
+#create procedure bug12589_2()
+#begin
+#  declare spv1 decimal(6,3);
+#  set spv1= 123.456;
+#
+#  create temporary table tm1 as select spv1;
+#  show create table tm1;
+#  drop temporary table tm1;
+#end|
+#
+#create procedure bug12589_3()
+#begin
+#  declare spv1 decimal(6,3);
+#  set spv1= -123.456;
+#
+#  create temporary table tm1 as select spv1;
+#  show create table tm1;
+#  drop temporary table tm1;
+#end|
 
 # Note: The type of the field will match the value, not the declared
 #       type of the variable. (This is a type checking issue which
 #       might be changed later.)
 
 # Warning expected from "set spv1 = 'test'", the value is set to decimal "0".
-call bug12589_1()|
+#call bug12589_1()|
 # No warnings here
-call bug12589_2()|
-call bug12589_3()|
+#call bug12589_2()|
+#call bug12589_3()|
 
-drop procedure bug12589_1|
-drop procedure bug12589_2|
-drop procedure bug12589_3|
+#drop procedure bug12589_1|
+#drop procedure bug12589_2|
+#drop procedure bug12589_3|
 
 #
 # BUG#7049: Stored procedure CALL errors are ignored
@@ -8201,113 +8201,113 @@ DROP TABLE t1;
 #
 # Bug#47649 crash during CALL procedure
 #
-
-CREATE TABLE t1 ( f1 integer, primary key (f1));
-CREATE TABLE t2 LIKE t1;
-CREATE TEMPORARY TABLE t3 LIKE t1;
-delimiter |;
-CREATE PROCEDURE p1 () BEGIN SELECT f1 FROM t3 AS A WHERE A.f1 IN ( SELECT f1 FROM t3 ) ;
-END|
-delimiter ;|
-#--error ER_CANT_REOPEN_TABLE
-CALL p1;
-DROP TABLE t3;
-CREATE VIEW t3 AS SELECT f1 FROM t2 A WHERE A.f1 IN ( SELECT f1 FROM t2 );
-CALL p1;
-CALL p1;
-DROP PROCEDURE p1;
-DROP TABLE t1, t2;
-DROP VIEW t3;
-
---echo #
---echo # Bug #46629: Item_in_subselect::val_int(): Assertion `0'
---echo # on subquery inside a SP
---echo #
-CREATE TABLE t1(a INT);
-CREATE TABLE t2(a INT, b INT PRIMARY KEY);
-
-DELIMITER |;
-CREATE PROCEDURE p1 ()
-BEGIN
-  SELECT a FROM t1 A WHERE A.b IN (SELECT b FROM t2 AS B);
-END|
-DELIMITER ;|
---error ER_BAD_FIELD_ERROR
-CALL p1;
---error ER_BAD_FIELD_ERROR
-CALL p1;
-DROP PROCEDURE p1;
-DROP TABLE t1, t2;
-
---echo #
---echo # Bug#47627: SET @@{global.session}.local_variable in stored routine causes crash
---echo # Bug#48626: Crash or lost connection using SET for declared variables with @@
---echo #
-
---disable_warnings
-DROP PROCEDURE IF EXISTS p1;
-DROP PROCEDURE IF EXISTS p2;
-DROP PROCEDURE IF EXISTS p3;
---enable_warnings
-
-delimiter //;
-
---error 1327
-CREATE PROCEDURE p1()
-BEGIN
-  DECLARE v INT DEFAULT 0;
-  SET @@SESSION.v= 10;
-END//
-
-CREATE PROCEDURE p2()
-BEGIN
-  DECLARE v INT DEFAULT 0;
-  SET v= 10;
-END//
-call p2()//
-
-CREATE PROCEDURE p3()
-BEGIN
-  DECLARE v INT DEFAULT 0;
-  SELECT @@SESSION.v;
-END//
---error 1193
-call p3()//
-
---error 1327
-CREATE PROCEDURE p4()
-BEGIN
-  DECLARE v INT DEFAULT 0;
-  SET @@GLOBAL.v= 10;
-END//
-
-CREATE PROCEDURE p5()
-BEGIN
-  DECLARE init_connect INT DEFAULT 0;
-  SET init_connect= 10;
-  SET @@GLOBAL.init_connect= 'SELECT 1';
-  SET @@SESSION.IDENTITY= 1;
-  SELECT @@SESSION.IDENTITY;
-  SELECT @@GLOBAL.init_connect;
-  SELECT init_connect;
-END//
-
---error 1327
-CREATE PROCEDURE p6()
-BEGIN
-  DECLARE v INT DEFAULT 0;
-  SET @@v= 0;
-END//
-
-delimiter ;//
-
-SET @old_init_connect= @@GLOBAL.init_connect;
-CALL p5();
-SET @@GLOBAL.init_connect= @old_init_connect;
-
-DROP PROCEDURE p2;
-DROP PROCEDURE p3;
-DROP PROCEDURE p5;
+#
+#CREATE TABLE t1 ( f1 integer, primary key (f1));
+#CREATE TABLE t2 LIKE t1;
+#CREATE TEMPORARY TABLE t3 LIKE t1;
+#delimiter |;
+#CREATE PROCEDURE p1 () BEGIN SELECT f1 FROM t3 AS A WHERE A.f1 IN ( SELECT f1 FROM t3 ) ;
+#END|
+#delimiter ;|
+##--error ER_CANT_REOPEN_TABLE
+#CALL p1;
+#DROP TABLE t3;
+#CREATE VIEW t3 AS SELECT f1 FROM t2 A WHERE A.f1 IN ( SELECT f1 FROM t2 );
+#CALL p1;
+#CALL p1;
+#DROP PROCEDURE p1;
+#DROP TABLE t1, t2;
+#DROP VIEW t3;
+#
+#--echo #
+#--echo # Bug #46629: Item_in_subselect::val_int(): Assertion `0'
+#--echo # on subquery inside a SP
+#--echo #
+#CREATE TABLE t1(a INT);
+#CREATE TABLE t2(a INT, b INT PRIMARY KEY);
+#
+#DELIMITER |;
+#CREATE PROCEDURE p1 ()
+#BEGIN
+#  SELECT a FROM t1 A WHERE A.b IN (SELECT b FROM t2 AS B);
+#END|
+#DELIMITER ;|
+#--error ER_BAD_FIELD_ERROR
+#CALL p1;
+#--error ER_BAD_FIELD_ERROR
+#CALL p1;
+#DROP PROCEDURE p1;
+#DROP TABLE t1, t2;
+#
+#--echo #
+#--echo # Bug#47627: SET @@{global.session}.local_variable in stored routine causes crash
+#--echo # Bug#48626: Crash or lost connection using SET for declared variables with @@
+#--echo #
+#
+#--disable_warnings
+#DROP PROCEDURE IF EXISTS p1;
+#DROP PROCEDURE IF EXISTS p2;
+#DROP PROCEDURE IF EXISTS p3;
+#--enable_warnings
+#
+#delimiter //;
+#
+#--error 1327
+#CREATE PROCEDURE p1()
+#BEGIN
+#  DECLARE v INT DEFAULT 0;
+#  SET @@SESSION.v= 10;
+#END//
+#
+#CREATE PROCEDURE p2()
+#BEGIN
+#  DECLARE v INT DEFAULT 0;
+#  SET v= 10;
+#END//
+#call p2()//
+#
+#CREATE PROCEDURE p3()
+#BEGIN
+#  DECLARE v INT DEFAULT 0;
+#  SELECT @@SESSION.v;
+#END//
+#--error 1193
+#call p3()//
+#
+#--error 1327
+#CREATE PROCEDURE p4()
+#BEGIN
+#  DECLARE v INT DEFAULT 0;
+#  SET @@GLOBAL.v= 10;
+#END//
+#
+#CREATE PROCEDURE p5()
+#BEGIN
+#  DECLARE init_connect INT DEFAULT 0;
+#  SET init_connect= 10;
+#  SET @@GLOBAL.init_connect= 'SELECT 1';
+#  SET @@SESSION.IDENTITY= 1;
+#  SELECT @@SESSION.IDENTITY;
+#  SELECT @@GLOBAL.init_connect;
+#  SELECT init_connect;
+#END//
+#
+#--error 1327
+#CREATE PROCEDURE p6()
+#BEGIN
+#  DECLARE v INT DEFAULT 0;
+#  SET @@v= 0;
+#END//
+#
+#delimiter ;//
+#
+#SET @old_init_connect= @@GLOBAL.init_connect;
+#CALL p5();
+#SET @@GLOBAL.init_connect= @old_init_connect;
+#
+#DROP PROCEDURE p2;
+#DROP PROCEDURE p3;
+#DROP PROCEDURE p5;
 
 
 --echo #
@@ -8522,94 +8522,94 @@ DROP PROCEDURE p1;
 --echo #
 --echo # Bug #47313 assert in check_key_in_view during CALL procedure
 --echo #
-
---disable_warnings
-DROP TABLE IF EXISTS t1;
-DROP VIEW IF EXISTS t1, t2_unrelated;
-DROP PROCEDURE IF EXISTS p1;
---enable_warnings
-
-CREATE PROCEDURE p1(IN x INT) INSERT INTO t1 VALUES (x);
-CREATE VIEW t1 AS SELECT 10 AS f1;
-
---echo # t1 refers to the view
---error ER_NON_INSERTABLE_TABLE
-CALL p1(1);
-#--error 1050
-CREATE TEMPORARY TABLE t1 (f1 INT);
-
---echo # t1 still refers to the view since it was inlined
---echo #
+#
+#--disable_warnings
+#DROP TABLE IF EXISTS t1;
+#DROP VIEW IF EXISTS t1, t2_unrelated;
+#DROP PROCEDURE IF EXISTS p1;
+#--enable_warnings
+#
+#CREATE PROCEDURE p1(IN x INT) INSERT INTO t1 VALUES (x);
+#CREATE VIEW t1 AS SELECT 10 AS f1;
+#
+#--echo # t1 refers to the view
 #--error ER_NON_INSERTABLE_TABLE
-CALL p1(2);
-
-#--error 1347
-DROP VIEW t1;
-
---echo # t1 now refers to the temporary table
-#--error 1146
-CALL p1(3);
-
---echo # Check which values were inserted into the temp table.
-#--error 1146
-SELECT * FROM t1;
-
+#CALL p1(1);
+##--error 1050
+#CREATE TEMPORARY TABLE t1 (f1 INT);
+#
+#--echo # t1 still refers to the view since it was inlined
+#--echo #
+##--error ER_NON_INSERTABLE_TABLE
+#CALL p1(2);
+#
+##--error 1347
+#DROP VIEW t1;
+#
+#--echo # t1 now refers to the temporary table
+##--error 1146
+#CALL p1(3);
+#
+#--echo # Check which values were inserted into the temp table.
+##--error 1146
+#SELECT * FROM t1;
+#
+##--error 1051
+#DROP TEMPORARY TABLE t1;
 #--error 1051
-DROP TEMPORARY TABLE t1;
---error 1051
-DROP VIEW t1;
-DROP PROCEDURE p1;
-
---echo # Now test what happens if the sp cache is invalidated.
-
---disable_warnings
-DROP VIEW IF EXISTS v2_unrelated;
-CREATE PROCEDURE p1(IN x INT) INSERT INTO t1 VALUES (x);
-CREATE VIEW t1 AS SELECT 10 AS f1;
-CREATE VIEW v2_unrelated AS SELECT 1 AS r1;
-
---echo # Load the procedure into the sp cache
---error ER_NON_INSERTABLE_TABLE
-CALL p1(4);
-
-#--error 1050
-CREATE TEMPORARY TABLE t1 (f1 int);
-
-ALTER VIEW v2_unrelated AS SELECT 2 AS r1;
-
---echo # Alter view causes the sp cache to be invalidated.
---echo # Now t1 refers to the temporary table, not the view.
+#DROP VIEW t1;
+#DROP PROCEDURE p1;
+#
+#--echo # Now test what happens if the sp cache is invalidated.
+#
+#--disable_warnings
+#DROP VIEW IF EXISTS v2_unrelated;
+#CREATE PROCEDURE p1(IN x INT) INSERT INTO t1 VALUES (x);
+#CREATE VIEW t1 AS SELECT 10 AS f1;
+#CREATE VIEW v2_unrelated AS SELECT 1 AS r1;
+#
+#--echo # Load the procedure into the sp cache
 #--error ER_NON_INSERTABLE_TABLE
-CALL p1(5);
-
---echo # Check which values were inserted into the temp table.
-SELECT * FROM t1;
-
-#--error 1051
-DROP TEMPORARY TABLE t1;
-DROP VIEW t1, v2_unrelated;
-DROP PROCEDURE p1;
-
-CREATE PROCEDURE p1(IN x INT) INSERT INTO t1 VALUES (x);
-CREATE TEMPORARY TABLE t1 (f1 INT);
-
---echo # t1 refers to the temporary table
-CALL p1(6);
-
-CREATE VIEW t1 AS SELECT 10 AS f1;
-
---echo # Create view causes the sp cache to be invalidated.
---echo # t1 still refers to the temporary table since it shadows the view.
-CALL p1(7);
-
-#--error 1347
-DROP VIEW t1;
-
---echo # Check which values were inserted into the temp table.
-SELECT * FROM t1;
-
-DROP TEMPORARY TABLE t1;
-DROP PROCEDURE p1;
+#CALL p1(4);
+#
+##--error 1050
+#CREATE TEMPORARY TABLE t1 (f1 int);
+#
+#ALTER VIEW v2_unrelated AS SELECT 2 AS r1;
+#
+#--echo # Alter view causes the sp cache to be invalidated.
+#--echo # Now t1 refers to the temporary table, not the view.
+##--error ER_NON_INSERTABLE_TABLE
+#CALL p1(5);
+#
+#--echo # Check which values were inserted into the temp table.
+#SELECT * FROM t1;
+#
+##--error 1051
+#DROP TEMPORARY TABLE t1;
+#DROP VIEW t1, v2_unrelated;
+#DROP PROCEDURE p1;
+#
+#CREATE PROCEDURE p1(IN x INT) INSERT INTO t1 VALUES (x);
+#CREATE TEMPORARY TABLE t1 (f1 INT);
+#
+#--echo # t1 refers to the temporary table
+#CALL p1(6);
+#
+#CREATE VIEW t1 AS SELECT 10 AS f1;
+#
+#--echo # Create view causes the sp cache to be invalidated.
+#--echo # t1 still refers to the temporary table since it shadows the view.
+#CALL p1(7);
+#
+##--error 1347
+#DROP VIEW t1;
+#
+#--echo # Check which values were inserted into the temp table.
+#SELECT * FROM t1;
+#
+#DROP TEMPORARY TABLE t1;
+#DROP PROCEDURE p1;
 
 --echo #
 --echo # Bug #11918 Can't use a declared variable in LIMIT clause

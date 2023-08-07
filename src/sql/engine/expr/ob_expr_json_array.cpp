@@ -100,7 +100,14 @@ int ObExprJsonArray::calc_result_typeN(ObExprResType& type,
       // returning type : 2
       if (OB_SUCC(ret)) {
         ObExprResType dst_type;
-        if (OB_FAIL(ObJsonExprHelper::get_cast_type(types_stack[param_num - 2], dst_type))) {
+        dst_type.set_type(ObJsonType);
+        dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        int16_t length_semantics = (OB_NOT_NULL(type_ctx.get_session())
+                ? type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
+        dst_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
+
+        dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
+        if (ele_idx > 0 && OB_FAIL(ObJsonExprHelper::parse_res_type(types_stack[0], types_stack[param_num - 2], dst_type, type_ctx))) {
           LOG_WARN("get cast dest type failed", K(ret));
         } else if (OB_FAIL(ObJsonExprHelper::set_dest_type(types_stack[0], type, dst_type, type_ctx))) {
           LOG_WARN("set dest type failed", K(ret));
@@ -157,15 +164,17 @@ int ObExprJsonArray::eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObD
   ObObjType dst_type;
   int32_t dst_len = OB_MAX_TEXT_LENGTH;
   int64_t& opt_res_type = opt_array[OPT_TYPE_ID];
-  if (OB_SUCC(ret) && OB_FAIL(ObJsonExprHelper::eval_and_check_res_type(opt_res_type, dst_type, dst_len))) {
+  if (OB_FAIL(ret)) {
+  } else if (opt_res_type == 0) {
+    dst_type = ObJsonType;
+  } else if (OB_FAIL(ObJsonExprHelper::eval_and_check_res_type(opt_res_type, dst_type, dst_len))) {
     LOG_WARN("fail to check returning type", K(ret));
   }
 
   int64_t& opt_null = opt_array[OPT_NULL_ID];
-  ObJsonBuffer jsn_buf(&temp_allocator);
-  if (OB_SUCC(ret) && OB_FAIL(jsn_buf.append("["))) {
-    LOG_WARN("fail to append curly brace", K(ret));
-  }
+  bool is_strict = (opt_strict > 0 || (dst_type == ObJsonType && opt_res_type > 0));
+  bool is_null_absent = opt_null > 0 ;
+  ObJsonArray j_arr(&temp_allocator);
 
   for (uint32_t i = 0; OB_SUCC(ret) && i < max_val_idx; i += 2) {
     // [expr][format-json]: i -> expr, i + i -> format json
@@ -173,6 +182,7 @@ int ObExprJsonArray::eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObD
     ObExpr *opt_expr = expr.args_[i + 1];
     ObObjType val_type = opt_expr->datum_meta_.type_;
     bool is_format_json = false;
+    ObIJsonBase* j_val = nullptr;
     if (OB_UNLIKELY(OB_FAIL(opt_expr->eval(ctx, opt_format)))) {
       LOG_WARN("eval json arg failed", K(ret));
     } else if (val_type == ObNullType || opt_format->is_null()) {
@@ -183,89 +193,33 @@ int ObExprJsonArray::eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObD
       is_format_json = (opt_format->get_int() > 0);
     }
 
-    ObExpr *val_expr = expr.args_[i];
-    val_type = val_expr->datum_meta_.type_;
-    ObCollationType cs_type = val_expr->datum_meta_.cs_type_;
-    ObScale scale = val_expr->datum_meta_.scale_;
-    ObDatum* j_datum = nullptr;
-    bool can_only_be_null = false;
-    if (OB_SUCC(ret) && is_format_json
-       && (!ObJsonExprHelper::is_convertible_to_json(val_type) || val_type == ObJsonType)) {
-      if (val_type == ObObjType::ObNumberType) {
-        can_only_be_null = true;
-      } else {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "CHAR", ob_obj_type_str(val_type));
-      }
-    }
-
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(val_expr->eval(ctx, j_datum))) {
-      LOG_WARN("eval json arg failed", K(ret), K(val_type));
-    } else if (can_only_be_null && !j_datum->is_null()) {
-      ret = OB_ERR_INVALID_TYPE_FOR_OP;
-      LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "CHAR", ob_obj_type_str(val_type));
-    } else if (j_datum->is_null()) {
-      if (opt_null == 0) {
-        if (OB_FAIL(jsn_buf.append("null"))) {
-          LOG_WARN("failed to append null", K(ret));
-        }
-      } else {
-        continue;
-      }
-    } else if (ObJsonExprHelper::is_convertible_to_json(val_type) || ob_is_raw(val_type)) {
-      if (OB_FAIL(ObJsonExprHelper::transform_convertible_2String(*val_expr, ctx, *j_datum,
-                                                                  val_type,
-                                                                  cs_type,
-                                                                  jsn_buf,
-                                                                  val_expr->obj_meta_.has_lob_header(),
-                                                                  is_format_json,
-                                                                  opt_strict == 1, i))) {
-        LOG_WARN("failed to transform to string", K(ret), K(val_type));
-      }
-    } else if (OB_FAIL(ObJsonExprHelper::transform_scalar_2String(ctx, *j_datum,
-                                                                  val_type,
-                                                                  scale,
-                                                                  ctx.exec_ctx_.get_my_session()->get_timezone_info(),
-                                                                  jsn_buf))) {
-      LOG_WARN("fail to parse value to json base.", K(ret), K(val_type));
+    } else if (OB_FAIL(ObJsonExprHelper::eval_oracle_json_val(
+                expr.args_[i], ctx, &temp_allocator, j_val, is_format_json, is_strict, false))) {
+      LOG_WARN("failed to get json value node.", K(ret), K(val_type));
+    } else if (is_null_absent && j_val->json_type() == ObJsonNodeType::J_NULL) {
+    } else if (OB_FAIL(j_arr.append(static_cast<ObJsonNode*>(j_val)))) {
+      LOG_WARN("failed to append in array.", K(ret), K(i));
     }
-
-    if (OB_SUCC(ret) && i + 2 < max_val_idx && OB_FAIL(jsn_buf.append(","))) {
-      LOG_WARN("failed to append comma", K(ret));
-    }
-  }
-
-  // 添加右括号前删除多余的','
-  if (OB_SUCC(ret) && jsn_buf.back() == ',') {
-    jsn_buf.set_length(jsn_buf.length() - 1);
-  }
-  if (OB_SUCC(ret) && jsn_buf.append("]")) {
-    LOG_WARN("failed to append brace", K(ret), K(jsn_buf.length()));
   }
 
   if (OB_SUCC(ret)) {
-    ObString j_string;
-    j_string.assign_ptr(jsn_buf.ptr(), jsn_buf.length());
 
+    ObJsonBuffer string_buffer(&temp_allocator);
     ObString res_string;
-    ObJsonNode* j_base = nullptr;
 
-    uint32_t parse_flag = ObJsonParser::JSN_STRICT_FLAG;
-    ADD_FLAG_IF_NEED(opt_strict != 1, parse_flag, ObJsonParser::JSN_RELAXED_FLAG);
-
-    if (dst_type == ObJsonType &&
-        OB_FAIL(ObJsonParser::get_tree(&temp_allocator,
-                                       j_string,
-                                       j_base,
-                                       parse_flag))) {
-      LOG_WARN("fail to get json tree.", K(ret));
-    } else if (dst_type == ObJsonType) {
-      if (OB_FAIL(j_base->get_raw_binary(res_string, &temp_allocator))) {
+    if (dst_type == ObJsonType) {
+      if (OB_FAIL(j_arr.get_raw_binary(res_string, &temp_allocator))) {
         LOG_WARN("failed: get json raw binary", K(ret));
       }
     } else {
-      res_string.assign_ptr(j_string.ptr(), j_string.length());
+      if (OB_FAIL(string_buffer.reserve(j_arr.get_serialize_size()))) {
+        LOG_WARN("fail to reserve string.", K(ret), K(j_arr.get_serialize_size()));
+      } else if (OB_FAIL(j_arr.print(string_buffer, true, false))) {
+        LOG_WARN("failed: get json string text", K(ret));
+      } else {
+        res_string.assign_ptr(string_buffer.ptr(), string_buffer.length());
+      }
     }
 
     if (OB_SUCC(ret)) {
@@ -276,8 +230,8 @@ int ObExprJsonArray::eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObD
           LOG_WARN("dst_len fail to string.", K(ret));
         }
         ret = OB_OPERATE_OVERFLOW;
-        LOG_USER_ERROR(OB_OPERATE_OVERFLOW, res_ptr, "json_array");
-      } else if (ObJsonExprHelper::pack_json_str_res(expr, ctx, res, res_string)) {
+        LOG_USER_ERROR(OB_OPERATE_OVERFLOW, res_ptr, N_JSON_ARRAY);
+      } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, res_string))) {
         LOG_WARN("fail to pack ressult.", K(ret));
       }
     }

@@ -72,7 +72,7 @@ public:
                                            const share::ObLSID &ls_id,
                                            palf::PalfBaseInfo &palf_base_info);
   static int check_physical_restore_finish(common::ObISQLClient &proxy, uint64_t tenant_id, bool &is_finish, bool &is_failed);
-
+  static int get_restore_tenant_cpu_count(common::ObMySQLProxy &proxy, const uint64_t tenant_id, double &cpu_count);
 private:
   static int fill_backup_info_(
              const obrpc::ObPhysicalRestoreTenantArg &arg,

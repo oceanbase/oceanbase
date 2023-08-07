@@ -546,6 +546,35 @@ namespace transaction
           || (TX_2PC_PREPARE_REDO_REQ <= msg_type && TX_2PC_PREPARE_VERSION_RESP >= msg_type);
       }
     };
+
+
+   struct ObAskTxStateFor4377Msg
+   {
+   public:
+     ObAskTxStateFor4377Msg() :
+       tx_id_(),
+       ls_id_() {}
+   public:
+     ObTransID tx_id_;
+     share::ObLSID ls_id_;
+     bool is_valid() const;
+     TO_STRING_KV(K_(tx_id), K_(ls_id));
+     OB_UNIS_VERSION(1);
+   };
+
+   struct ObAskTxStateFor4377RespMsg
+   {
+   public:
+     ObAskTxStateFor4377RespMsg() :
+       is_alive_(false),
+       ret_(OB_SUCCESS) {}
+   public:
+     bool is_alive_;
+     int ret_;
+     bool is_valid() const;
+     TO_STRING_KV(K_(is_alive), K_(ret));
+     OB_UNIS_VERSION(1);
+   };
 }
 }
 

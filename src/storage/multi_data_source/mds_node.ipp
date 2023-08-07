@@ -257,9 +257,6 @@ bool UserMdsNode<K, V>::try_on_abort(const share::SCN &abort_scn)// CAUTIONS: no
       if (end_scn_ < redo_scn_) {
         MDS_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "end scn lower than redo scn", K(*this), K(abort_scn));
       }
-    } else if (is_valid_scn_(redo_scn_)) {
-      MDS_LOG_RET(WARN, OB_INVALID_ARGUMENT, "node has been assocaited with a valid redo log, "
-                                             "connot abort with an invalid scn", K(*this), K(abort_scn));
     } else {
       report_event_("ON_ABORT");
     }

@@ -331,8 +331,6 @@ int ObTxDataMemtable::pre_process_commit_version_row_(ObTxData *fake_tx_data)
         K(cur_commit_versions),
         K(past_commit_versions),
         K(merged_commit_versions));
-  } else if (DEBUG_try_calc_upper_and_check_(merged_commit_versions)) {
-    STORAGE_LOG(ERROR, "check calc upper trans version failed", K(merged_commit_versions));
   } else {
     int64_t pos = 0;
     int64_t serialize_size = merged_commit_versions.get_serialize_size();

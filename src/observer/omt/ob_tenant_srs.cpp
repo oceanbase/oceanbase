@@ -20,6 +20,7 @@
 #include "share/ob_thread_mgr.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "share/rc/ob_tenant_base.h"
 #include "lib/geo/ob_geo_utils.h"
 
 using namespace oceanbase::share;
@@ -457,6 +458,8 @@ int ObSrsCacheSnapShot::parse_srs_item(ObMySQLResult *result, const ObSrsItem *&
   double max_x = NAN;
   double max_y = NAN;
   ObSpatialReferenceSystemBase *srs_info = NULL;
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(common::OB_SERVER_TENANT_ID, "SRSWKTParser"));
+
   EXTRACT_UINT_FIELD_MYSQL(*result, "srs_id", srs_id, uint64_t);
   EXTRACT_UINT_FIELD_MYSQL(*result, "srs_version", srs_version, uint64_t);
   EXTRACT_VARCHAR_FIELD_MYSQL(*result, "srs_name", srs_name);
@@ -499,6 +502,8 @@ int ObSrsCacheSnapShot::add_pg_reserved_srs_item(const ObString &pg_wkt, const u
   int ret = OB_SUCCESS;
   ObString proj4text;
   ObSpatialReferenceSystemBase *srs_info = NULL;
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(common::OB_SERVER_TENANT_ID, "SRSWKTParser"));
+
   if (OB_FAIL(ObSrsWktParser::parse_srs_wkt(allocator_, srs_id, pg_wkt, srs_info))) {
     LOG_WARN("failed to parse pg reserved srs wkt", K(ret), K(srs_id), K(pg_wkt));
   } else {

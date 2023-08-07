@@ -81,7 +81,8 @@ public:
       const logservice::TenantLSID &tls_id,
       const palf::LSN &commit_log_lsn,
       const bool print_ls_not_serve_info,
-      const int64_t timeout);
+      const int64_t timeout,
+      volatile bool &stop_flag);
 
   /// Decrement the number of running transactions in a LS
   ///

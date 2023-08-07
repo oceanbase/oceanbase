@@ -2485,6 +2485,8 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
           } else {
             // json or max, do nothing
           }
+        } else if (ob_is_real_type(res_type.get_type())) {
+          res_type.set_double();
         } else {}
         ObCastMode def_cast_mode = CM_NONE;
         ObRawExpr *cast_expr = NULL;
@@ -3256,7 +3258,14 @@ int ObRawExprDeduceType::add_implicit_cast(ObAggFunRawExpr &parent,
                ((parent.get_expr_type() == T_FUN_SUM ||
                  parent.get_expr_type() == T_FUN_AVG ||
                  parent.get_expr_type() == T_FUN_COUNT) &&
-                 child_ptr->get_expr_type() == T_FUN_SYS_OP_OPNSIZE)) {
+                 child_ptr->get_expr_type() == T_FUN_SYS_OP_OPNSIZE) ||
+                (lib::is_mysql_mode() &&
+                 (T_FUN_VARIANCE == parent.get_expr_type() ||
+                  T_FUN_STDDEV == parent.get_expr_type() ||
+                  T_FUN_STDDEV_POP == parent.get_expr_type() ||
+                  T_FUN_STDDEV_SAMP == parent.get_expr_type() ||
+                  T_FUN_VAR_POP == parent.get_expr_type() ||
+                  T_FUN_VAR_SAMP == parent.get_expr_type()))) {
       //do nothing
     } else if (parent.get_expr_type() == T_FUN_WM_CONCAT ||
                parent.get_expr_type() == T_FUN_KEEP_WM_CONCAT ||

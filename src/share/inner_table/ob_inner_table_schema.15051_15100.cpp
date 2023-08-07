@@ -260,7 +260,7 @@ int ObInnerTableSchema::tenant_virtual_table_column_ora_schema(ObTableSchema &ta
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      COLUMN_TYPE_LENGTH, //column_length
+      OB_MAX_VARCHAR_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
       false, //is_nullable

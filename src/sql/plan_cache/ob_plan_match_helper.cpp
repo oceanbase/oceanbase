@@ -327,6 +327,7 @@ int ObPlanMatchHelper::check_partition_constraint(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_ISNULL(GET_MY_SESSION(pc_ctx.exec_ctx_))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get session", KR(ret));
   } else {
     const uint64_t tenant_id = GET_MY_SESSION(pc_ctx.exec_ctx_)->get_effective_tenant_id();
@@ -476,6 +477,7 @@ int ObPlanMatchHelper::check_strict_pwj_cons(
       }
     }
   } else if (OB_ISNULL(GET_MY_SESSION(pc_ctx.exec_ctx_))) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get session", KR(ret));
   } else {
     // distribute partition wise join

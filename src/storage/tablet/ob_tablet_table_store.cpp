@@ -45,6 +45,9 @@ ObTabletTableStore::ObTabletTableStore()
     is_ready_for_read_(false),
     is_inited_(false)
 {
+#if defined(__x86_64__)
+  static_assert(sizeof(ObTabletTableStore) == 320, "The size of ObTabletTableStore will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+#endif
 }
 
 ObTabletTableStore::~ObTabletTableStore()

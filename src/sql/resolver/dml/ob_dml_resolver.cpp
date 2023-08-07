@@ -860,10 +860,11 @@ JSON_QUERY '(' js_doc_expr ',' js_literal opt_js_query_returning_type opt_scalar
 int ObDMLResolver::transform_dot_notation2_json_query(ParseNode &node, const ObString &sql_str)
 {
   INIT_SUCC(ret);
-  int64_t alloc_vec_size = sizeof(ParseNode *) * 10;
+  int64_t alloc_vec_size = sizeof(ParseNode *) * 11;
   ParseNode **param_vec = NULL;     // children_
   ParseNode *opt_node = NULL;       // clause node
   ParseNode *ret_node = NULL;       // returning node
+  ParseNode *truncate_node = NULL;       // truncate node
   ParseNode *path_node = NULL;      // path node
   ParseNode *table_node = NULL;     // table node
   ParseNode *tmp_node = NULL;       // json doc node
@@ -959,7 +960,7 @@ int ObDMLResolver::transform_dot_notation2_json_query(ParseNode &node, const ObS
     param_vec[2] = ret_node;       // return type pos is 2 in json value clause
   }
   // opt_scalars opt_pretty opt_ascii opt_wrapper opt_query_on_error_or_empty_or_mismatch 7
-  for (int8_t i = 3; OB_SUCC(ret) && i < 10; i++) {
+  for (int8_t i = 3; OB_SUCC(ret) && i < 11; i++) {
     opt_node = NULL;
     if (OB_ISNULL(opt_node = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -972,12 +973,14 @@ int ObDMLResolver::transform_dot_notation2_json_query(ParseNode &node, const ObS
       } else {
         int8_t val = 0;
         if (i == 3) {
+          val = 0;
+        } else if (i == 4) {
           val = 2;
-        } else if (i == 7) {
+        } else if (i == 8) {
           val = 1;
-        } else if (i == 8 || i == 6) {
+        } else if (i == 9 || i == 7) {
           val = 5;
-        } else if (i == 9) {
+        } else if (i == 10) {
           val = 3; // mismatch default is 3 from dot notation
         }
         opt_node->value_ = val;
@@ -989,7 +992,7 @@ int ObDMLResolver::transform_dot_notation2_json_query(ParseNode &node, const ObS
   }
   // create json query node
   if (OB_SUCC(ret)) {
-    node.num_child_ = 10;
+    node.num_child_ = 11;
     node.type_ = T_FUN_SYS_JSON_QUERY;
     node.children_ = param_vec;
   }
@@ -1426,6 +1429,7 @@ int ObDMLResolver::get_target_column_list(ObSEArray<ColumnItem, 4> &target_list,
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
     const TableItem *tmp_table_item = stmt->get_table_item(i);
+    column_items.reuse();
     if (OB_ISNULL(tmp_table_item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table item is null");
@@ -1460,8 +1464,8 @@ int ObDMLResolver::get_target_column_list(ObSEArray<ColumnItem, 4> &target_list,
         LOG_WARN("unexpected table type", K_(tmp_table_item->type));
       }
 
-      for (int64_t i = 0; OB_SUCC(ret) && i < column_items.count(); ++i) {
-        const ColumnItem &col_item = column_items.at(i);
+      for (int64_t j = 0; OB_SUCC(ret) && j < column_items.count(); ++j) {
+        const ColumnItem &col_item = column_items.at(j);
         if (!is_col || (is_col && col_item.column_name_ == tab_name)) {
           if (OB_FAIL(target_list.push_back(col_item))) {
             LOG_WARN("push back target list failed", K(ret));
@@ -8574,15 +8578,14 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
     LOG_WARN("table def is null", K(ret), KP(table_def));
   } else if (OB_FAIL(get_json_table_column_by_id(table_item->table_id_, root_col_def))) {
     LOG_WARN("internal error find jt column failed", K(ret));
-  } else if ((col_type == COL_TYPE_EXISTS && parse_tree.num_child_ != 4) ||
+  } else if ((col_type == COL_TYPE_EXISTS && parse_tree.num_child_ != 5) ||
              (col_type == COL_TYPE_VALUE && parse_tree.num_child_ != 5) ||
-             ((col_type == COL_TYPE_QUERY || col_type == COL_TYPE_QUERY_JSON_COL) && parse_tree.num_child_ != 6) ||
+             ((col_type == COL_TYPE_QUERY || col_type == COL_TYPE_QUERY_JSON_COL) && parse_tree.num_child_ != 7) ||
              (col_type == COL_TYPE_ORDINALITY && parse_tree.num_child_ != 2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to resolve json table regular column", K(ret), K(parse_tree.num_child_), K(col_type));
   } else {
     void* buf = NULL;
-
     if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObDmlJtColDef)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
@@ -8604,8 +8607,9 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
           col_def->col_base_info_.col_type_ = COL_TYPE_ORDINALITY;
         }
       } else if (col_type == COL_TYPE_EXISTS) {
-        const ParseNode* path_node = parse_tree.children_[2];
-        const ParseNode* on_err_node = parse_tree.children_[3];
+        const ParseNode* path_node = parse_tree.children_[3];
+        const ParseNode* on_err_node = parse_tree.children_[4];
+        const ParseNode* truncate_node = parse_tree.children_[2];
 
         if (OB_FAIL(resolve_json_table_column_name_and_path(name_node, path_node, allocator_, col_def))) {
           LOG_WARN("failed to resolve json column name node or path node", K(ret));
@@ -8623,6 +8627,7 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
           } else {
             col_def->col_base_info_.on_error_ = error_node->value_;
             col_def->col_base_info_.on_empty_ = empty_node->value_;
+            col_def->col_base_info_.truncate_ = truncate_node->value_;
             col_def->col_base_info_.col_type_ = COL_TYPE_EXISTS;
 
             int jt_on_error = root_col_def->col_base_info_.on_error_;
@@ -8632,10 +8637,12 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
           }
         }
       } else if (col_type == COL_TYPE_QUERY || col_type == COL_TYPE_QUERY_JSON_COL) {
-        const ParseNode* scalar_node = parse_tree.children_[2];
-        const ParseNode* wrapper_node = parse_tree.children_[3];
-        const ParseNode* path_node = parse_tree.children_[4];
-        const ParseNode* on_err_node = parse_tree.children_[5];
+        const ParseNode* scalar_node = parse_tree.children_[3];
+        const ParseNode* wrapper_node = parse_tree.children_[4];
+        const ParseNode* path_node = parse_tree.children_[5];
+        const ParseNode* on_err_node = parse_tree.children_[6];
+
+        const ParseNode* truncate_node = parse_tree.children_[2];
 
 
         if (OB_ISNULL(on_err_node->children_[0])
@@ -8647,7 +8654,7 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
           LOG_WARN("failed to resolve json column name node or path node", K(ret));
         } else {
           col_def->col_base_info_.col_type_ = COL_TYPE_QUERY;
-          col_def->col_base_info_.truncate_ = 0;
+          col_def->col_base_info_.truncate_ = truncate_node->value_;
           col_def->col_base_info_.format_json_ = true;
           col_def->col_base_info_.allow_scalar_ = scalar_node->value_;
           col_def->col_base_info_.wrapper_ = wrapper_node->value_;
@@ -12698,7 +12705,11 @@ int ObDMLResolver::resolve_transform_hint(const ParseNode &hint_node,
     case T_NO_PUSH_LIMIT:
     case T_NO_REWRITE:
     case T_PULLUP_EXPR:
-    case T_NO_PULLUP_EXPR: {
+    case T_NO_PULLUP_EXPR:
+    case T_AGGR_FIRST_UNNEST:
+    case T_NO_AGGR_FIRST_UNNEST:
+    case T_JOIN_FIRST_UNNEST:
+    case T_NO_JOIN_FIRST_UNNEST: {
       if (OB_FAIL(resolve_normal_transform_hint(hint_node, trans_hint))) {
         LOG_WARN("failed to resolve hint with qb name param.", K(ret));
       }
@@ -14376,14 +14387,17 @@ int ObDMLResolver::resolve_cte_table(
   const ParseNode *table_node = &parse_tree;
   const ParseNode *alias_node = nullptr;
   const ParseNode *transpose_node = nullptr;
+  const ParseNode *part_node = nullptr;
   ObString alias_name;
   ObString old_cte_table_name;
   //TODO 存在同一张表有两个hint的情况，目前实现先忽略后面的hint
   if (T_ORG == parse_tree.type_) {
     table_node = parse_tree.children_[0];
+    part_node = parse_tree.children_[2];
   } else if (T_ALIAS == parse_tree.type_) {
     table_node = parse_tree.children_[0];
     alias_node = parse_tree.children_[1];
+    part_node = parse_tree.children_[3];
     if (parse_tree.num_child_ >= 7) {
       transpose_node = parse_tree.children_[6];
     }
@@ -14401,6 +14415,9 @@ int ObDMLResolver::resolve_cte_table(
         LOG_WARN("param is null");
       } else if (OB_ISNULL(node = CTE_table_item->node_)) {
         LOG_WARN("CTE table's parser node can not be NULL");
+      } else if (is_oracle_mode() && OB_NOT_NULL(part_node)) {
+        ret = OB_ERR_PARTITION_EXTENDED_ON_VIEW;
+        LOG_WARN("partition extended only be used with tables and editioning views", K(ret));
       } else if (OB_ISNULL(table_item = dml_stmt->create_table_item(*allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("create table item failed", K(ret));

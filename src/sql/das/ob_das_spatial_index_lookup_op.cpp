@@ -244,8 +244,11 @@ int ObSpatialIndexLookupOp::get_next_row()
 int ObSpatialIndexLookupOp::process_data_table_rowkey()
 {
   int ret = OB_SUCCESS;
-  // last output expr is mbr expr
+  // result_output: rowkey + mbr_expr + transaction_inf_expr
   int64_t rowkey_cnt = index_ctdef_->result_output_.count() - 1;
+  if (index_ctdef_->trans_info_expr_ != nullptr) {
+    rowkey_cnt = rowkey_cnt - 1;
+  }
   ObObj *obj_ptr = nullptr;
   void *buf = nullptr;
   ObNewRange lookup_range;

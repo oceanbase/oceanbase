@@ -1284,7 +1284,7 @@ public:
   }
   int process() override
   {
-    OB_TABLE_LOAD_STATISTICS_TIME_COST(coordinator_write_time_us);
+    OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, coordinator_write_time_us);
     int ret = OB_SUCCESS;
     if (OB_SUCC(trans_->check_trans_status(ObTableLoadTransStatusType::RUNNING)) ||
         OB_SUCC(trans_->check_trans_status(ObTableLoadTransStatusType::FROZEN))) {
@@ -1489,7 +1489,7 @@ public:
   }
   int process() override
   {
-    OB_TABLE_LOAD_STATISTICS_TIME_COST(coordinator_flush_time_us);
+    OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, coordinator_flush_time_us);
     int ret = OB_SUCCESS;
     if (OB_SUCC(trans_->check_trans_status(ObTableLoadTransStatusType::FROZEN))) {
       if (OB_FAIL(bucket_writer_->flush(session_id_))) {

@@ -732,7 +732,7 @@ int ObRFBloomFilterMsg::broadcast(ObIArray<ObAddr> &target_addrs,
       cur_idx = ATOMIC_FAA(filter_idx_, 1);
       if (cur_idx < filter_indexes_.count()) {
         msg.next_peer_addrs_.reuse();
-        auto addr_filter_idx = filter_indexes_.at(cur_idx);
+        const BloomFilterIndex &addr_filter_idx = filter_indexes_.at(cur_idx);
         msg.bloom_filter_.set_begin_idx(addr_filter_idx.begin_idx_);
         msg.bloom_filter_.set_end_idx(addr_filter_idx.end_idx_);
         if (OB_FAIL(msg.next_peer_addrs_.init(addr_filter_idx.channel_ids_.count()))) {

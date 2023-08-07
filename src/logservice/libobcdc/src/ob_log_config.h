@@ -475,6 +475,9 @@ public:
   T_DEF_INT_INFT(test_mode_block_parser_filter_row_data_sec, OB_CLUSTER_PARAMETER, 0, 0,
       "time in seconds to block to filter row data");
 
+  // test mode, time to delay add ls
+  T_DEF_INT_INFT(test_mode_block_add_ls_sec, OB_CLUSTER_PARAMETER, 0, 0, "time in seconds to block add ls");
+
   // INNER_HEARTBEAT_INTERVAL
   T_DEF_INT_INFT(output_inner_heartbeat_interval_msec, OB_CLUSTER_PARAMETER, 100, 1, "output heartbeat interval in micro seconds");
 

@@ -3824,7 +3824,7 @@ int ObOptimizerUtil::check_need_sort(const ObIArray<ObRawExpr*> &expected_order_
               // do nothing
             } else if (fd_item->is_unique()) {
               find_unique = true;
-            } else if (used_fd.add_member(fd_idx)) {
+            } else if (OB_FAIL(used_fd.add_member(fd_idx))) {
               LOG_WARN("failed to add member to set", K(ret));
             } else if (OB_FAIL(split_child_exprs(fd_item, equal_sets, fd_set_parent_exprs,
                                                  extend_exprs))) {
@@ -4046,7 +4046,7 @@ int ObOptimizerUtil::create_interesting_merge_key(const ObIArray<ObRawExpr*> &me
         } else if (!ObOptimizerUtil::is_expr_equivalent(expect_key.at(i).expr_, merge_exprs.at(j),
                                                         equal_sets)) {
           /* do nothing */
-        } else if (found_bs.add_member(j)) {
+        } else if (OB_FAIL(found_bs.add_member(j))) {
           LOG_WARN("failed to add member", K(ret));
         } else if (OB_FAIL(sort_exprs.push_back(merge_exprs.at(j)))) {
           LOG_WARN("failed to push back", K(ret));
@@ -4918,12 +4918,12 @@ public:
     new_expr = NULL;
     if (old_expr->is_const_or_param_expr()) {
       new_expr = old_expr;
-    } else if (ObOptimizerUtil::get_parent_stmt_expr(equal_sets_,
+    } else if (OB_FAIL(ObOptimizerUtil::get_parent_stmt_expr(equal_sets_,
                                                      table_id_,
                                                      parent_stmt_,
                                                      child_stmt_,
                                                      old_expr,
-                                                     new_expr)) {
+                                                     new_expr))) {
       LOG_WARN("failed to get parent stmt expr", K(ret));
     } else {
       // does not replace the old_expr, iterate its child expr
@@ -5995,7 +5995,7 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
       SelectItem &select_item = child_stmt->get_select_item(i);
       new_select_item.alias_name_ = select_item.alias_name_;
       new_select_item.expr_name_ = select_item.expr_name_;
-      new_select_item.is_real_alias_ = true;
+      new_select_item.is_real_alias_ = select_item.is_real_alias_ || select_item.expr_->is_column_ref_expr();
       new_select_item.questions_pos_ = select_item.questions_pos_;
       new_select_item.params_idx_ = select_item.params_idx_;
       new_select_item.neg_param_idx_ = select_item.neg_param_idx_;
@@ -6052,7 +6052,7 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
         SelectItem &select_item = child_stmt->get_select_item(i);
         new_select_item.alias_name_ = select_item.alias_name_;
         new_select_item.expr_name_ = select_item.expr_name_;
-        new_select_item.is_real_alias_ = true;
+        new_select_item.is_real_alias_ = select_item.is_real_alias_ || select_item.expr_->is_column_ref_expr();
         new_select_item.questions_pos_ = select_item.questions_pos_;
         new_select_item.params_idx_ = select_item.params_idx_;
         new_select_item.neg_param_idx_ = select_item.neg_param_idx_;

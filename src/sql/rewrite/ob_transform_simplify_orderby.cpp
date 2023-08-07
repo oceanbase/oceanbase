@@ -130,7 +130,8 @@ int ObTransformSimplifyOrderby::remove_order_by_for_view_stmt(ObDMLStmt *stmt, b
       if (OB_ISNULL(aggr_items.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(aggr_items));
-      } else if (T_FUN_WM_CONCAT == aggr_items.at(i)->get_expr_type()) {
+      } else if (T_FUN_WM_CONCAT == aggr_items.at(i)->get_expr_type()
+                || T_FUN_GROUP_CONCAT == aggr_items.at(i)->get_expr_type()) {
         can_remove = false;
       }
     }

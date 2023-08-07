@@ -285,13 +285,13 @@ public:
     void reset_io();
     int broadcast();
     OB_INLINE ObTmpMacroBlock& get_block() { return block_; };
-    TO_STRING_KV(K_(block), K_(block_handle), K_(ref_cnt), K_(ret_code));
+    TO_STRING_KV(K_(block), KPC_(block_handle), K_(ref_cnt), K_(ret_code));
 
   private:
     void destroy();
 
   public:
-    ObMacroBlockHandle &block_handle_;
+    ObMacroBlockHandle *block_handle_;
     ObTmpMacroBlock &block_;
     ObThreadCond cond_;
     ObIAllocator &allocator_;

@@ -9137,6 +9137,14 @@ static int sql_udt_pl_extend(const ObObjType expect_type, ObObjCastParams &param
   return ret;
 }
 
+static int string_sql_udt(const ObObjType expect_type, ObObjCastParams &params,
+                          const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ret = OB_NOT_SUPPORTED;
+  return ret;
+}
+
 static int pl_extend_sql_udt(const ObObjType expect_type, ObObjCastParams &params,
                              const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -10906,7 +10914,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     string_lob,/*lob*/
     string_json,/*json*/
     cast_not_support,/*geometry*/
-    cast_to_udt_not_support,/*udt*/
+    string_sql_udt,/*udt*/
   },
   {
     /*extend -> XXX*/

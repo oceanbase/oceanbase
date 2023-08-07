@@ -40,8 +40,12 @@ ObTabletTransformArg::ObTabletTransformArg()
     medium_info_list_addr_(),
     auto_inc_seq_addr_(),
     tablet_status_cache_(),
-    aux_tablet_info_cache_()
+    aux_tablet_info_cache_(),
+    ddl_kvs_(nullptr),
+    ddl_kv_count_(0),
+    memtable_count_(0)
 {
+  MEMSET(memtables_, 0x0, sizeof(memtables_));
 }
 
 ObTabletTransformArg::~ObTabletTransformArg()
@@ -165,6 +169,10 @@ int ObTabletPersister::convert_tablet_to_mem_arg(
     arg.extra_medium_info_ = tablet.mds_data_.extra_medium_info_;
     arg.medium_info_list_addr_ = tablet.mds_data_.medium_info_list_.addr_;
     arg.auto_inc_seq_addr_ = tablet.mds_data_.auto_inc_seq_.addr_;
+    arg.ddl_kvs_ = tablet.ddl_kvs_;
+    arg.ddl_kv_count_ = tablet.ddl_kv_count_;
+    MEMCPY(arg.memtables_, tablet.memtables_, sizeof(memtable::ObIMemtable*) * MAX_MEMSTORE_CNT);
+    arg.memtable_count_ = tablet.memtable_count_;
   }
   return ret;
 }
@@ -217,6 +225,12 @@ int ObTabletPersister::convert_tablet_to_disk_arg(
         allocator, fetch_auto_inc_seq, auto_inc_seq, write_infos, tablet_meta_write_ctxs))) {
     LOG_WARN("fail to fetch auto inc seq wrapper and write info", K(ret));
   } else if (FALSE_IT(arg.auto_inc_seq_ptr_ = auto_inc_seq.get_member())) {
+  } else if (FALSE_IT(arg.ddl_kvs_ = tablet.ddl_kvs_)) {
+  } else if (FALSE_IT(arg.ddl_kv_count_ = tablet.ddl_kv_count_)) {
+  } else if (FALSE_IT(arg.memtable_count_ = tablet.memtable_count_)) {
+  } else if (OB_ISNULL(MEMCPY(arg.memtables_, tablet.memtables_, sizeof(arg.memtables_)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to memcpy memtables", K(ret), KP(arg.memtables_), KP(tablet.memtables_));
   } else if (CLICK_FAIL(load_member_and_write_info(
         allocator, load_storage_schema, storage_schema, write_infos))) {
     LOG_WARN("fail to load storage schema and write info", K(ret));
@@ -233,9 +247,7 @@ int ObTabletPersister::convert_tablet_to_disk_arg(
   } else if (CLICK_FAIL(load_medium_info_list_and_write(allocator, medium_info_list_addr, arg.medium_info_list_addr_, tablet_meta_write_ctxs))) {
     LOG_WARN("fail to load medium info list and write", K(ret), K(medium_info_list_addr));
   } else {
-    const int64_t try_cache_size = sizeof(ObTablet)
-                                 + tablet.rowkey_read_info_->get_deep_copy_size()
-                                 + table_store.get_member()->get_deep_copy_size();
+    const int64_t try_cache_size = tablet.get_try_cache_size() + table_store.get_member()->get_deep_copy_size();
     if (try_cache_size > ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
       type = ObTabletPoolType::TP_LARGE;
     }
@@ -270,7 +282,7 @@ int ObTabletPersister::persist_and_fill_tablet(
   } else if (CLICK_FAIL(convert_tablet_to_disk_arg(
       allocator, old_tablet, tablet_meta_write_ctxs, sstable_meta_write_ctxs, type, auto_inc_seq, arg))) {
     LOG_WARN("fail to conver tablet to disk arg", K(ret), K(old_tablet));
-  } else if (sizeof(old_tablet) + old_tablet.rowkey_read_info_->get_deep_copy_size() > ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
+  } else if (old_tablet.get_try_cache_size() > ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
     try_smaller_pool = false;
   }
 
@@ -376,7 +388,8 @@ int ObTabletPersister::persist_4k_tablet(common::ObArenaAllocator &allocator, Ob
 
 int ObTabletPersister::convert_arg_to_tablet(
     const ObTabletTransformArg &arg,
-    ObTablet &tablet)
+    ObTablet &tablet,
+    ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!arg.is_valid())) {
@@ -384,12 +397,12 @@ int ObTabletPersister::convert_arg_to_tablet(
     LOG_WARN("invalid arguments", K(ret), K(arg));
   } else if (OB_FAIL(tablet.tablet_meta_.assign(arg.tablet_meta_))) {
     LOG_WARN("fail to assign tablet meta", K(ret), K(arg.tablet_meta_));
-  } else if (OB_FAIL(tablet.pull_memtables())) {
-    LOG_WARN("fail to build memtables", K(ret), K(tablet));
   } else if (OB_FAIL(tablet.mds_data_.tablet_status_cache_.assign(arg.tablet_status_cache_))) {
     LOG_WARN("fail to assign tablet status cache", K(ret), K(arg.aux_tablet_info_cache_));
   } else if (OB_FAIL(tablet.mds_data_.aux_tablet_info_cache_.assign(arg.aux_tablet_info_cache_))) {
     LOG_WARN("fail to assign aux tablet info cache", K(ret), K(arg.aux_tablet_info_cache_));
+  } else if (OB_FAIL(tablet.assign_memtables(arg.memtables_, arg.memtable_count_))) {
+    LOG_WARN("fail to assign memtables", K(ret), KP(arg.memtables_), K(arg.memtable_count_));
   } else {
     tablet.table_store_addr_.addr_ = arg.table_store_addr_;
     tablet.storage_schema_addr_.addr_ = arg.storage_schema_addr_;
@@ -414,10 +427,11 @@ int ObTabletPersister::transform(
   TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
   ObTablet *tiny_tablet = reinterpret_cast<ObTablet *>(buf);
+  ObArenaAllocator allocator("TmpPullMemTbl");
   if (len <= sizeof(ObTablet) || OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(len));
-  } else if (OB_FAIL(convert_arg_to_tablet(arg, *tiny_tablet))) {
+  } else if (OB_FAIL(convert_arg_to_tablet(arg, *tiny_tablet, allocator))) {
     LOG_WARN("fail to convert arg to tablet", K(ret), K(arg.tablet_meta_));
   } else {
     // buf related
@@ -444,6 +458,24 @@ int ObTabletPersister::transform(
         start_pos += rowkey_read_info_size;
       }
       LOG_DEBUG("TINY TABLET: tablet + rowkey_read_info", KP(buf), K(start_pos), K(remain));
+    }
+
+    // ddl_kvs_ related
+    if (OB_SUCC(ret) && (arg.ddl_kv_count_ > 0)) {
+      const int ddl_kvs_size = sizeof(ObITable*) * ObTablet::DDL_KV_ARRAY_SIZE;
+      if (OB_UNLIKELY(remain < ddl_kvs_size)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet memory buffer not enough for ddl kvs", K(ret), K(remain), K(ddl_kvs_size));
+      } else {
+        tiny_tablet->ddl_kvs_ = reinterpret_cast<ObITable**>(buf + start_pos);
+        if (OB_FAIL(tiny_tablet->assign_ddl_kvs(arg.ddl_kvs_, arg.ddl_kv_count_))) {
+          LOG_WARN("fail to assign ddl_kvs_", K(ret), KP(arg.ddl_kvs_), K(arg.ddl_kv_count_), KP(buf), K(start_pos));
+        } else {
+          remain -= ddl_kvs_size;
+          start_pos += ddl_kvs_size;
+        }
+      }
+      LOG_DEBUG("TINY TABLET: tablet + ddl_kvs", KP(buf), K(start_pos), K(remain), K(tiny_tablet->ddl_kv_count_));
     }
 
     // table store related

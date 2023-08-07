@@ -2353,7 +2353,7 @@ int ObNFMToNumber::process_hex_format(const common::ObString &in_str,
       number::ObNumber res;
       if (base_num.from(base, allocator)) {
         LOG_WARN("fail to cast uint64 to number", K(ret), K(base));
-      } else if (base_num.power(exponent, power_num, allocator)) {
+      } else if (OB_FAIL(base_num.power(exponent, power_num, allocator))) {
         LOG_WARN("power calc failed", K(ret));
       } else {
         for (int32_t i = 0; OB_SUCC(ret) && i < hex_num_size; i++) {

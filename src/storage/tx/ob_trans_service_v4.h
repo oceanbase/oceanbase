@@ -177,6 +177,14 @@ int check_for_standby(const share::ObLSID &ls_id,
 void register_standby_cleanup_task();
 int do_standby_cleanup();
 void handle_defer_abort(ObTxDesc &tx);
+
+// tx state check for 4377
+int ask_tx_state_for_4377(const ObLSID ls_id,
+                          const ObTransID tx_id,
+                          bool &is_alive);
+int handle_ask_tx_state_for_4377(const ObAskTxStateFor4377Msg &msg,
+                                 bool &is_alive);
+
 TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(this));
 
 private:

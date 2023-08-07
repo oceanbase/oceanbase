@@ -245,7 +245,7 @@ int ObRDWFPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs)
     auto wf = static_cast<const ObWindowFunctionSpec *>(op_kit->spec_);
     if (OB_FAIL(wf->rd_generate_patch(*this))) {
       LOG_WARN("calculate range distribution window function final res failed", K(ret));
-    } else if (formalize_store_row()) {
+    } else if (OB_FAIL(formalize_store_row())) {
       LOG_WARN("formalize store row failed", K(ret));
     } else {
       LOG_DEBUG("after formalize", K(infos_));

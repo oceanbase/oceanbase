@@ -904,6 +904,10 @@ int ObLS::offline_(const int64_t start_ts)
   // force set allocators frozen to reduce active tenant_memory
   } else if (OB_FAIL(ls_tablet_svr_.set_frozen_for_all_memtables())) {
     LOG_WARN("tablet service offline failed", K(ret), K(ls_meta_));
+  }
+  // make sure no new dag(tablet_gc_handler may generate new dag) is generated after offline offline_compaction_
+  else if (OB_FAIL(tablet_gc_handler_.offline())) {
+    LOG_WARN("tablet gc handler offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(offline_compaction_())) {
     LOG_WARN("compaction offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_wrs_handler_.offline())) {
@@ -919,8 +923,6 @@ int ObLS::offline_(const int64_t start_ts)
   // force release memtables created by force_tablet_freeze called during major
   } else if (OB_FAIL(ls_tablet_svr_.offline())) {
     LOG_WARN("tablet service offline failed", K(ret), K(ls_meta_));
-  } else if (OB_FAIL(tablet_gc_handler_.offline())) {
-    LOG_WARN("tablet gc handler offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(tablet_empty_shell_handler_.offline())) {
     LOG_WARN("tablet_empty_shell_handler  failed", K(ret), K(ls_meta_));
   } else {
@@ -1484,7 +1486,7 @@ int ObLS::finish_slog_replay()
   } else if (OB_FAIL(load_ls_inner_tablet())) {
     LOG_WARN("ls load inner tablet failed", K(ret), KPC(this));
   } else {
-    // do nothing
+    ls_tablet_svr_.enable_to_read();
   }
   return ret;
 }

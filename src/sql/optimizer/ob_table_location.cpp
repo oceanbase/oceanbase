@@ -2399,6 +2399,8 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
     ObSEArray<ObRawExpr *, 5> normal_filters;
     bool func_always_true = true;
     ObPartLocCalcNode *func_node = NULL;
+    bool is_func_range_get = false;
+    bool is_column_range_get = false;
     for (int64_t idx = 0; OB_SUCC(ret) && idx < filter_exprs.count(); ++idx) {
       bool cnt_func_expr = false;
       bool always_true = false;
@@ -2418,7 +2420,9 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
           //这里好像用cnt_func_expr来确保calc_node不为NULL。但是真的有这种保证么
           //如果是这种保证这个变量名就不太合适
           LOG_WARN("Failed to add and node", K(ret));
-        } else { }//do nothing
+        } else {
+          is_func_range_get = true;
+        }
       }
     }
 
@@ -2429,6 +2433,8 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
         if (OB_FAIL(get_query_range_node(part_level, partition_columns, filter_exprs, column_always_true,
                                          column_node, dtc_params, exec_ctx, is_in_range_optimization_enabled))) {
           LOG_WARN("Failed to get query range node", K(ret));
+        } else if (OB_NOT_NULL(column_node)) {
+          is_column_range_get = static_cast<ObPLQueryRangeNode*>(column_node)->pre_query_range_.is_precise_get();
         }
       }
       if (OB_FAIL(ret)) {
@@ -2443,6 +2449,7 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
       } else {
         res_node = column_node;
       }
+      is_range_get = is_func_range_get || is_column_range_get;
     }
   }
   return ret;
@@ -3362,7 +3369,7 @@ int ObTableLocation::calc_partition_ids_by_ranges(ObExecContext &exec_ctx,
     all_part = !is_all_single_value_ranges;
   } else if (NULL == part_ids) {//PARTITION_LEVEL_ONE
     if (!is_range_part(part_type_) ||
-         is_include_physical_rowid_range(ranges) ||
+        is_include_physical_rowid_range(ranges) ||
         ((PARTITION_FUNC_TYPE_RANGE == part_type_ || PARTITION_FUNC_TYPE_INTERVAL == part_type_) && !is_col_part_expr_) ||
         (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type_ && !is_valid_range_columns_part_range_)) {
       if (!is_all_single_value_ranges) {

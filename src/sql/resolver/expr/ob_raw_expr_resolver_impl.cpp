@@ -1158,6 +1158,7 @@ int ObRawExprResolverImpl::process_multiset_node(const ParseNode *node, ObRawExp
   } else if (OB_FAIL(process_operator_node(node, expr))) {
     LOG_WARN("process node failed.", K(ret));
   } else if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
   } else {
     if (T_OP_MULTISET == node->type_) {
@@ -1682,7 +1683,7 @@ int ObRawExprResolverImpl::process_sys_connect_by_path_node(const ParseNode *nod
   } else if (OB_UNLIKELY(false == is_sys_connect_by_path_expr_valid_scope(ctx_.current_scope_))) {
     ret = OB_ERR_CBY_CONNECT_BY_PATH_NOT_ALLOWED;
     LOG_WARN("Connect by path not allowed here", K(ret));
-  }  else if (ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_CONNECT_BY_PATH, path_expr)) {
+  }  else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_CONNECT_BY_PATH, path_expr))) {
     LOG_WARN("fail to create raw expr", K(ret));
   } else if (OB_ISNULL(path_expr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2135,11 +2136,21 @@ int ObRawExprResolverImpl::resolve_right_node_of_obj_access_idents(const ParseNo
 {
   int ret = OB_SUCCESS;
   if (T_OBJ_ACCESS_REF == right_node.type_) {
-    // example: a(1).b(1), here, we resolve '.b(1)'
-    OZ (resolve_obj_access_idents(right_node, q_name), K(q_name));
+    if (right_node.children_[0] != NULL && T_EXPR_LIST == right_node.children_[0]->type_) {
+      // example: a(1)(2).count, here, we resolve '(2).count' which '(2)' is 'children_[0]' and '.count' is 'children_[1]'
+      CK (2 == right_node.num_child_);
+      CK (OB_NOT_NULL(right_node.children_[0]));
+      CK (OB_NOT_NULL(right_node.children_[1]));
+      OZ (resolve_right_node_of_obj_access_idents(*(right_node.children_[0]), q_name));
+      OZ (resolve_obj_access_idents(*(right_node.children_[1]), q_name));
+    } else {
+      // example: a(1).b(1), here, we resolve '.b(1)'
+      OZ (resolve_obj_access_idents(right_node, q_name), K(q_name));
+    }
   } else {
     // example: a(1)(2) here, we resolve '(2)'
     const ParseNode *element_list = &right_node;
+    CK (T_EXPR_LIST == element_list->type_);
     CK (OB_LIKELY(!q_name.access_idents_.empty()));
     for (int64_t i = 0; OB_SUCC(ret) && i < element_list->num_child_; ++i) {
       ObObjAccessIdent &access_ident = q_name.access_idents_.at(q_name.access_idents_.count() - 1);
@@ -2537,9 +2548,9 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
           ret = OB_NOT_INIT;
           LOG_WARN("context param list is null", K(ret));
         } else if (val.get_unknown() >= ctx_.param_list_->count()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("question mark index out of param list count",
-                   "index", val.get_unknown(), "param_count", ctx_.param_list_->count());
+          ret = OB_ERR_BIND_VARIABLE_NOT_EXIST;
+          LOG_WARN("bind variable does not exist",
+                   K(ret), K(val.get_unknown()), K(ctx_.param_list_->count()));
         } else {
           const ObObjParam &param = ctx_.param_list_->at(val.get_unknown());
           c_expr->set_is_literal_bool(param.is_boolean());
@@ -3282,16 +3293,9 @@ int ObRawExprResolverImpl::process_between_node(const ParseNode *node, ObRawExpr
       if (OB_FAIL(recursive_resolve(node->children_[i], btw_params[i]))) {
         SQL_RESV_LOG(WARN, "resolve child expr failed", K(ret), K(i));
       } else if (OB_ISNULL(btw_params[i])) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(i));
       }
-    }
-    // The content of the 4th raw expr is same to that of the 1st raw expr.
-    // But the ptr addresses need to be different because our optimizer relys on it.
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(recursive_resolve(node->children_[0], btw_params[BTW_PARAM_NUM]))) {
-      SQL_RESV_LOG(WARN, "resolve child expr failed", K(ret), K(BTW_PARAM_NUM));
-    } else if (OB_ISNULL(btw_params[BTW_PARAM_NUM])) {
-      LOG_WARN("unexpected null", K(ret), K(BTW_PARAM_NUM));
     }
     if (OB_SUCC(ret) && lib::is_mysql_mode()) {
       if (OB_ISNULL(ctx_.session_info_)) {
@@ -3315,6 +3319,19 @@ int ObRawExprResolverImpl::process_between_node(const ParseNode *node, ObRawExpr
           LOG_WARN("fail to deduce_type child 3 of between node", K(ret));
         } else if (btw_params[1]->get_result_meta() == btw_params[2]->get_result_meta()) {
           can_transform_in_mysql_mode = true;
+        }
+      }
+    }
+    // The content of the 4th raw expr is same to that of the 1st raw expr.
+    // But the ptr addresses need to be different because our optimizer relys on it.
+    if (OB_SUCC(ret)) {
+      if (lib::is_mysql_mode() && !can_transform_in_mysql_mode) {
+        // do nothing
+      } else {
+        if (OB_FAIL(recursive_resolve(node->children_[0], btw_params[BTW_PARAM_NUM]))) {
+          SQL_RESV_LOG(WARN, "resolve child expr failed", K(ret), K(BTW_PARAM_NUM));
+        } else if (OB_ISNULL(btw_params[BTW_PARAM_NUM])) {
+          LOG_WARN("unexpected null", K(ret), K(BTW_PARAM_NUM));
         }
       }
     }
@@ -5354,7 +5371,7 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
   if(OB_SUCC(ret) && T_FUN_SYS_JSON_QUERY != node->type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node->type_ error");
-  } else if (OB_SUCC(ret) && 10 != node->num_child_) {
+  } else if (OB_SUCC(ret) && 11 != node->num_child_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("num_child_ error");
   }
@@ -5399,7 +5416,7 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
     LOG_WARN("invalid user.table.column, table.column, or column specification", K(ret));
   }
 
-  // [json_text][json_path][returning_type][scalars][pretty][ascii][wrapper][error_type][empty_type][mismatch]
+  // [json_text][json_path][returning_type][truncate][scalars][pretty][ascii][wrapper][error_type][empty_type][mismatch]
   for (int32_t i = 0; OB_SUCC(ret) && i < num; i++) {
     ObRawExpr *para_expr = NULL;
     CK(OB_NOT_NULL(node->children_[i]));

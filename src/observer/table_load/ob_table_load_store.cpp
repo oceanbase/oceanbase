@@ -18,6 +18,7 @@
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
 #include "share/stat/ob_dbms_stats_utils.h"
+#include "storage/blocksstable/ob_sstable.h"
 
 namespace oceanbase
 {
@@ -629,7 +630,7 @@ public:
   }
   int process() override
   {
-    OB_TABLE_LOAD_STATISTICS_TIME_COST(store_write_time_us);
+    OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, store_write_time_us);
     int ret = OB_SUCCESS;
     if (OB_SUCC(trans_->check_trans_status(ObTableLoadTransStatusType::RUNNING)) ||
         OB_SUCC(trans_->check_trans_status(ObTableLoadTransStatusType::FROZEN))) {
@@ -776,7 +777,7 @@ public:
   }
   int process() override
   {
-    OB_TABLE_LOAD_STATISTICS_TIME_COST(store_flush_time_us);
+    OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, store_flush_time_us);
     int ret = OB_SUCCESS;
     if (OB_SUCC(trans_->check_trans_status(ObTableLoadTransStatusType::FROZEN))) {
       if (OB_FAIL(store_writer_->flush(session_id_))) {

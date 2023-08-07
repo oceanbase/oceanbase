@@ -36,7 +36,7 @@ int ObTableLoadBucket::add_row(const ObTabletID &tablet_id,
                                int64_t batch_size,
                                bool &flag)
 {
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(bucket_add_row_time_us);
+  OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, bucket_add_row_time_us);
   int ret = OB_SUCCESS;
   ObTableLoadTabletObjRow tablet_obj_row;
   tablet_obj_row.tablet_id_ = tablet_id;

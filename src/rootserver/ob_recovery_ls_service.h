@@ -16,6 +16,7 @@
 #include "logservice/ob_log_base_type.h"//ObIRoleChangeSubHandler ObICheckpointSubHandler ObIReplaySubHandler
 #include "logservice/palf/lsn.h"//palf::LSN
 #include "logservice/palf/palf_iterator.h"          //PalfBufferIterator
+#include "logservice/restoreservice/ob_log_restore_handler.h"//RestoreStatusInfo
 #include "ob_primary_ls_service.h" //ObTenantThreadHelper
 #include "lib/lock/ob_spin_lock.h" //ObSpinLock
 #include "storage/tx/ob_multi_data_source.h" //ObTxBufferNode
@@ -78,10 +79,11 @@ class ObRecoveryLSService : public ObTenantThreadHelper
 {
 public:
   ObRecoveryLSService() : inited_(false), tenant_id_(OB_INVALID_TENANT_ID), proxy_(NULL),
-  restore_proxy_(), last_report_ts_(OB_INVALID_TIMESTAMP), primary_is_avaliable_(true) {}
+  restore_proxy_(), last_report_ts_(OB_INVALID_TIMESTAMP), primary_is_avaliable_(true), restore_status_() {}
   virtual ~ObRecoveryLSService() {}
   int init();
   void destroy();
+  int get_sys_restore_status(logservice::RestoreStatusInfo &restore_status);
   virtual void do_work() override;
   DEFINE_MTL_FUNC(ObRecoveryLSService)
 private:
@@ -94,7 +96,8 @@ private:
  int process_ls_log_(const ObAllTenantInfo &tenant_info,
                      share::SCN &start_scn,
                      palf::PalfBufferIterator &iterator);
- int process_upgrade_log_(const transaction::ObTxBufferNode &node);
+ int process_upgrade_log_(const share::SCN &sync_scn,
+     const transaction::ObTxBufferNode &node);
  int process_gc_log_(logservice::ObGCLSLog &gc_log,
                      const share::SCN &syn_scn);
  int process_ls_tx_log_(transaction::ObTxLogBlock &tx_log,
@@ -129,6 +132,7 @@ private:
 
  int process_ls_transfer_task_in_trans_(const transaction::ObTxBufferNode &node,
      const share::SCN &sync_scn, common::ObMySQLTransaction &trans);
+ int init_restore_status(const share::SCN &sync_scn, int err_code);
  //thread1
  int do_standby_balance_();
  int do_ls_balance_task_();
@@ -147,6 +151,7 @@ private:
   ObLogRestoreProxyUtil restore_proxy_;
   int64_t last_report_ts_;
   bool primary_is_avaliable_;
+  logservice::RestoreStatusInfo restore_status_;
 };
 }
 }

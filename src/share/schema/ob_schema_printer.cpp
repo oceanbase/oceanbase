@@ -2128,6 +2128,12 @@ int ObSchemaPrinter::print_table_definition_table_options(
       OB_LOG(WARN, "fail to print global/local", K(ret), K(table_schema));
     }
   }
+  if (OB_SUCC(ret) && !strict_compat_
+      && is_index_tbl && is_oracle_mode && !table_schema.is_index_visible()) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "INVISIBLE"))) {
+      OB_LOG(WARN, "fail to print invisible option", K(ret), K(table_schema));
+    }
+  }
   if (OB_SUCC(ret) && !strict_compat_ && !is_index_tbl) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "USE_BLOOM_FILTER = %s ",
                                 table_schema.is_use_bloomfilter() ? "TRUE" : "FALSE"))) {
@@ -5059,6 +5065,9 @@ int ObSchemaPrinter::print_view_define_str(char* buf,
         const char c = (2 == state) ? '\'' : '"';
         while (cursor < end) {
           if (*cursor == '\\' && cursor + 1 < end && *(cursor + 1) == c) {
+            cursor += 2;
+          } else if (*cursor == '\\' && cursor + 1 < end &&
+                     *(cursor + 1) == '\\') {
             cursor += 2;
           } else if (*cursor == c) {
             break;

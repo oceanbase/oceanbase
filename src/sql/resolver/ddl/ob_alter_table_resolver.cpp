@@ -387,6 +387,10 @@ int ObAlterTableResolver::set_table_options()
     //deep copy
     if (OB_FAIL(ret)) {
       //do nothing
+    } else if (compress_method_ == all_compressor_name[ZLIB_COMPRESSOR]) {
+      ret = OB_NOT_SUPPORTED;
+      SQL_RESV_LOG(WARN, "Not allowed to use zlib compressor!", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "zlib compressor");
     } else if (OB_FAIL(alter_table_schema.set_compress_func_name(compress_method_))) {
       SQL_RESV_LOG(WARN, "Write compress_method_ to alter_table_schema failed!", K(ret));
     } else if (OB_FAIL(alter_table_schema.set_comment(comment_))) {
@@ -855,7 +859,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
     }
     //deal with drop column affer drop constraint (mysql mode)
     if (OB_SUCC(ret) && lib::is_mysql_mode() && drop_col_act_position_list.count() > 0) {
-      for (uint64_t i = 0; i < drop_col_act_position_list.count(); ++i) {
+      for (uint64_t i = 0; OB_SUCC(ret) && i < drop_col_act_position_list.count(); ++i) {
         if (OB_FAIL(resolve_drop_column_nodes_for_mysql(*node.children_[drop_col_act_position_list.at(i)], reduced_visible_col_set))) {
           SQL_RESV_LOG(WARN, "Resolve drop column error!", K(ret));
         }

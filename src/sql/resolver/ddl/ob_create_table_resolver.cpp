@@ -485,6 +485,9 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
             case T_TEMPORARY:
               if (create_table_node->children_[5] != NULL) { //临时表不支持分区
                 ret = OB_ERR_TEMPORARY_TABLE_WITH_PARTITION;
+              } else if (lib::is_mysql_mode()) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "MySQL compatible temporary table");
               } else {
                 is_temporary_table = true;
                 is_oracle_temp_table_ = (is_mysql_mode == false);
@@ -1822,30 +1825,41 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
           } else {
             column.set_column_name(select_item.expr_name_);
           }
-          if (OB_SUCC(ret) && is_mysql_mode() &&
-              new_table_item != NULL &&
-              new_table_item->is_basic_table()) {
-            if (base_table_schema == NULL &&
-                OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
-                                                          new_table_item->ref_id_, base_table_schema))) {
-              LOG_WARN("get table schema failed", K(ret));
-            } else if (OB_ISNULL(base_table_schema)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("NULL table schema", K(ret));
-            } else {
-             const ObColumnSchemaV2 *org_column = base_table_schema->get_column_schema(select_item.expr_name_);
-             if (NULL != org_column &&
-                !org_column->is_generated_column() &&
-                !org_column->get_cur_default_value().is_null()) {
-                column.set_cur_default_value(org_column->get_cur_default_value());
+          if (OB_SUCC(ret) && is_mysql_mode()) {
+            if (new_table_item != NULL && new_table_item->is_basic_table()) {
+              if (base_table_schema == NULL &&
+                  OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                            new_table_item->ref_id_, base_table_schema))) {
+                LOG_WARN("get table schema failed", K(ret));
+              } else if (OB_ISNULL(base_table_schema)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("NULL table schema", K(ret));
+              } else {
+                const ObColumnSchemaV2 *org_column = base_table_schema->get_column_schema(select_item.expr_name_);
+                if (NULL != org_column &&
+                    !org_column->is_generated_column() &&
+                    !org_column->get_cur_default_value().is_null()) {
+                    column.set_cur_default_value(org_column->get_cur_default_value());
+                  }
               }
-            }
+            } else if (new_table_item == NULL &&
+                       (ObRawExpr::EXPR_CONST == expr->get_expr_class() ||
+                        (ObRawExpr::EXPR_OPERATOR == expr->get_expr_class() &&
+                         expr->is_static_const_expr())) &&
+                        !expr->get_result_type().is_null()) {
+              common::ObObj zero_obj(0);
+              if (OB_FAIL(column.set_cur_default_value(zero_obj))) {
+                LOG_WARN("set default value failed", K(ret));
+              }
+            } else { /*do nothing*/ }
           }
-          if (ObResolverUtils::is_restore_user(*session_info_)
+          if (OB_SUCC(ret) && ObResolverUtils::is_restore_user(*session_info_)
               && ObCharset::case_insensitive_equal(column.get_column_name_str(), OB_HIDDEN_PK_INCREMENT_COLUMN_NAME)) {
             continue;
           }
-          if (expr->get_result_type().is_null()) { //bug16503918, NULL需要替换为binary(0)
+          if (OB_FAIL(ret)) {
+            // do nothing
+          } else if (expr->get_result_type().is_null()) { //bug16503918, NULL需要替换为binary(0)
             if (is_oracle_mode()) {
               ret = OB_ERR_ZERO_LEN_COL;
               LOG_WARN("add column failed on oracle mode: length is zero", K(ret));
@@ -2368,6 +2382,14 @@ int ObCreateTableResolver::set_table_option_to_schema(ObTableSchema &table_schem
                 "default_compress_func", compress_func_str);
           }
         }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (compress_method_ == all_compressor_name[ZLIB_COMPRESSOR]) {
+        ret = OB_NOT_SUPPORTED;
+        SQL_RESV_LOG(WARN, "Not allowed to use zlib compressor!", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "zlib compressor");
       }
     }
 

@@ -1457,7 +1457,8 @@ int ObXAService::end_stmt(const ObXATransID &xid, ObTxDesc &tx_desc)
 int ObXAService::xa_commit(const ObXATransID &xid,
                            const int64_t flags,
                            const int64_t xa_timeout_seconds,
-                           bool &has_tx_level_temp_table)
+                           bool &has_tx_level_temp_table,
+                           ObTransID &tx_id)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1474,14 +1475,16 @@ int ObXAService::xa_commit(const ObXATransID &xid,
   } else {
     const int64_t timeout_us = xa_timeout_seconds * 1000000;
     if (ObXAFlag::is_tmnoflags(flags, ObXAReqType::XA_COMMIT)) {
-      if (OB_FAIL(two_phase_xa_commit_(xid, timeout_us, request_id, has_tx_level_temp_table))) {
+      if (OB_FAIL(two_phase_xa_commit_(xid, timeout_us, request_id, has_tx_level_temp_table,
+              tx_id))) {
         TRANS_LOG(WARN, "two phase xa commit failed", K(ret), K(xid));
         xa_statistics_.inc_failure_xa_2pc_commit();
       } else {
         xa_statistics_.inc_success_xa_2pc_commit();
       }
     } else if (ObXAFlag::is_tmonephase(flags)) {
-      if (OB_FAIL(one_phase_xa_commit_(xid, timeout_us, request_id, has_tx_level_temp_table))) {
+      if (OB_FAIL(one_phase_xa_commit_(xid, timeout_us, request_id, has_tx_level_temp_table,
+              tx_id))) {
         TRANS_LOG(WARN, "one phase xa commit failed", K(ret), K(xid));
         xa_statistics_.inc_failure_xa_1pc_commit();
       } else {
@@ -1493,19 +1496,19 @@ int ObXAService::xa_commit(const ObXATransID &xid,
     }
   }
 
-  TRANS_LOG(INFO, "xa commit", K(ret), K(xid), K(flags), K(xa_timeout_seconds));
+  TRANS_LOG(INFO, "xa commit", K(ret), K(xid), K(tx_id), K(flags), K(xa_timeout_seconds));
   return ret;
 }
 
 int ObXAService::one_phase_xa_commit_(const ObXATransID &xid,
                                       const int64_t timeout_us,
                                       const int64_t request_id,
-                                      bool &has_tx_level_temp_table)
+                                      bool &has_tx_level_temp_table,
+                                      ObTransID &tx_id)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   ObAddr sche_addr;
-  ObTransID tx_id;
   const bool is_rollback = false;
   int64_t end_flag = 0;
   share::ObLSID coordinator;
@@ -1544,7 +1547,7 @@ int ObXAService::one_phase_xa_commit_(const ObXATransID &xid,
 
     if (OB_TRANS_XA_PROTO == ret) {
       need_delete = false;
-    } else if (OB_TRANS_CTX_NOT_EXIST == ret) {
+    } else if (OB_TRANS_CTX_NOT_EXIST == ret || OB_TRANS_IS_EXITING == ret) {
       // check xa trans state again
       if (OB_SUCCESS != (tmp_ret = query_sche_and_coord(tenant_id,
                                                         xid,
@@ -1579,12 +1582,12 @@ int ObXAService::one_phase_xa_commit_(const ObXATransID &xid,
 }
 
 int ObXAService::xa_rollback(const ObXATransID &xid,
-                             const int64_t xa_timeout_seconds)
+                             const int64_t xa_timeout_seconds,
+                             ObTransID &tx_id)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   int64_t end_flag = 0;
-  ObTransID tx_id;
   ObAddr sche_addr;
   share::ObLSID coordinator;
   const int64_t timeout_us = xa_timeout_seconds * 1000000;
@@ -2090,12 +2093,12 @@ int ObXAService::xa_rollback_all_changes(const ObXATransID &xid, ObTxDesc *&tx_d
 
 // xa prepare
 int ObXAService::xa_prepare(const ObXATransID &xid,
-                            const int64_t timeout_seconds)
+                            const int64_t timeout_seconds,
+                            ObTransID &tx_id)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   common::ObAddr sche_addr;
-  ObTransID tx_id;
   bool is_tightly_coupled = true;
   int64_t end_flag = 0;
   const uint64_t tenant_id = MTL_ID();
@@ -2163,7 +2166,7 @@ int ObXAService::xa_prepare(const ObXATransID &xid,
     ret = OB_TRANS_XA_RDONLY;
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && OB_TRANS_XA_RDONLY != ret) {
     xa_statistics_.inc_failure_xa_prepare();
   } else {
     xa_statistics_.inc_success_xa_prepare();
@@ -2757,7 +2760,8 @@ int ObXAService::update_coord(const uint64_t tenant_id,
 int ObXAService::two_phase_xa_commit_(const ObXATransID &xid,
                                       const int64_t timeout_us,
                                       const int64_t request_id,
-                                      bool &has_tx_level_temp_table)
+                                      bool &has_tx_level_temp_table,
+                                      ObTransID &tx_id)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -2765,7 +2769,6 @@ int ObXAService::two_phase_xa_commit_(const ObXATransID &xid,
   ObXACtx *xa_ctx = NULL;
   bool alloc = true;
   share::ObLSID coordinator;
-  ObTransID tx_id;
   bool record_in_tableone = true;
   int64_t end_flag = 0;
   // only used for constructor

@@ -5815,7 +5815,7 @@ def_table_schema(
   in_tenant_space = True,
 
   normal_columns = [
-  ('type', 'varchar:COLUMN_TYPE_LENGTH'),
+  ('type', 'varchar:OB_MAX_VARCHAR_LENGTH'),
   ('collation', 'varchar:MAX_COLLATION_LENGTH', 'true'),
   ('null', 'varchar:COLUMN_NULLABLE_LENGTH'),
   ('key', 'varchar:COLUMN_KEY_LENGTH'),
@@ -9420,7 +9420,7 @@ def_table_schema(
   ('ORDINAL_POSITION', 'uint', 'false', '0'),
   ('COLUMN_DEFAULT', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'true'),
   ('IS_NULLABLE', 'varchar:COLUMN_NULLABLE_LENGTH',  'false', ''),
-  ('DATA_TYPE', 'varchar:COLUMN_TYPE_LENGTH',  'false', ''),
+  ('DATA_TYPE', 'varchar:OB_MAX_VARCHAR_LENGTH',  'false', ''),
   ('CHARACTER_MAXIMUM_LENGTH', 'uint', 'true'),
   ('CHARACTER_OCTET_LENGTH', 'uint', 'true'),
   ('NUMERIC_PRECISION', 'uint', 'true'),
@@ -9428,7 +9428,7 @@ def_table_schema(
   ('DATETIME_PRECISION', 'uint', 'true'),
   ('CHARACTER_SET_NAME', 'varchar:MAX_CHARSET_LENGTH', 'true'),
   ('COLLATION_NAME', 'varchar:MAX_COLLATION_LENGTH', 'true'),
-  ('COLUMN_TYPE', 'varchar:COLUMN_TYPE_LENGTH'),
+  ('COLUMN_TYPE', 'varchar:OB_MAX_VARCHAR_LENGTH'),
   ('COLUMN_KEY', 'varchar:MAX_COLUMN_KEY_LENGTH', 'false', ''),
   ('EXTRA', 'varchar:COLUMN_EXTRA_LENGTH', 'false', ''),
   ('PRIVILEGES', 'varchar:MAX_COLUMN_PRIVILEGE_LENGTH', 'false', ''),
@@ -12574,14 +12574,6 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15303'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304', all_def_keywords['__all_virtual_arbitration_service_status'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keywords['__all_virtual_obj_lock']))
 
-# 15306: __all_virtual_recover_table_job
-# 15307: __all_virtual_recover_table_job_history
-# 15308: __all_virtual_import_table_job
-# 15309: __all_virtual_import_table_job_history
-# 15310: __all_virtual_import_table_task
-# 15311: __all_virtual_import_table_task_history
-# 15312: __all_virtual_import_stmt_exec_history
-
 #######################################################################
 # oracle agent table index is defined after the System table Index area
 #######################################################################
@@ -12700,6 +12692,14 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15402', all_def_ke
 # 15405: __all_virtual_session_info
 
 # 15406: __all_virtual_tenant_scheduler_job_class
+
+# 15407: __all_virtual_recover_table_job
+# 15408: __all_virtual_recover_table_job_history
+# 15409: __all_virtual_import_table_job
+# 15410: __all_virtual_import_table_job_history
+# 15411: __all_virtual_import_table_task
+# 15412: __all_virtual_import_table_task_history
+# 15413: __all_virtual_import_stmt_exec_history
 
 # 余留位置
 
@@ -12848,7 +12848,8 @@ def_table_schema(
          CAST(V.INDEX_TYPE AS      CHAR(16))     AS INDEX_TYPE,
          CAST(V.COMMENT AS         CHAR(16))     AS COMMENT,
          CAST(V.INDEX_COMMENT AS   CHAR(1024))   AS INDEX_COMMENT,
-         CAST(V.IS_VISIBLE AS      CHAR(3))      AS IS_VISIBLE
+         CAST(V.IS_VISIBLE AS      CHAR(3))      AS IS_VISIBLE,
+         V.EXPRESSION                            AS EXPRESSION
   FROM   (SELECT db.database_name                                              AS TABLE_SCHEMA,
                  t.table_name                                                  AS TABLE_NAME,
                  CASE WHEN i.index_type IN (2,4,8) THEN 0 ELSE 1 END           AS NON_UNIQUE,
@@ -12862,7 +12863,8 @@ def_table_schema(
                  i.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END)END      AS INDEX_TYPE,
                  t.comment                                                     AS COMMENT,
                  i.comment                                                     AS INDEX_COMMENT,
-                 CASE WHEN (i.index_attributes_set & 1) THEN 'NO' ELSE 'YES' END AS IS_VISIBLE
+                 CASE WHEN (i.index_attributes_set & 1) THEN 'NO' ELSE 'YES' END AS IS_VISIBLE,
+                 d_col2.cur_default_value_v2                                     AS EXPRESSION
           FROM   oceanbase.__all_table i
           JOIN   oceanbase.__all_table t
           ON     i.data_table_id=t.table_id
@@ -12884,6 +12886,14 @@ def_table_schema(
           AND   i.tenant_id = d_col.tenant_id
           AND   (case when (c.is_hidden = 1 and substr(c.column_name, 1, 8) = '__substr') then
                    substr(c.column_name, 8 + instr(substr(c.column_name, 8), '_')) else 0 end) = d_col.column_id
+          LEFT JOIN oceanbase.__all_column d_col2
+          ON    i.data_table_id = d_col2.table_id
+          AND   i.tenant_id = d_col2.tenant_id
+          AND   c.column_id = d_col2.column_id
+          AND   d_col2.cur_default_value_v2 is not null
+          AND   d_col2.is_hidden = 1
+          AND   (d_col2.column_flags & (0x1 << 0) = 1 or d_col2.column_flags & (0x1 << 1) = 1)
+          AND   substr(d_col2.column_name, 1, 6) = 'SYS_NC'
         UNION ALL
           SELECT  db.database_name  AS TABLE_SCHEMA,
                   t.table_name      AS TABLE_NAME,
@@ -12898,7 +12908,8 @@ def_table_schema(
                     CASE WHEN t.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END) END AS INDEX_TYPE,
                   t.comment        AS COMMENT,
                   t.comment        AS INDEX_COMMENT,
-                  'YES'            AS IS_VISIBLE
+                  'YES'            AS IS_VISIBLE,
+                  NULL             AS EXPRESSION
           FROM   oceanbase.__all_table t
           JOIN   oceanbase.__all_column c
           ON     t.table_id=c.table_id
@@ -12925,7 +12936,8 @@ def_table_schema(
                 i.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END)END    AS INDEX_TYPE,
               t.comment                                                     AS COMMENT,
               i.comment                                                     AS INDEX_COMMENT,
-              CASE WHEN (i.index_attributes_set & 1) THEN 'NO' ELSE 'YES' END AS IS_VISIBLE
+              CASE WHEN (i.index_attributes_set & 1) THEN 'NO' ELSE 'YES' END AS IS_VISIBLE,
+              d_col2.cur_default_value_v2                                   AS EXPRESSION
           FROM   oceanbase.__ALL_VIRTUAL_CORE_ALL_TABLE i
           JOIN   oceanbase.__ALL_VIRTUAL_CORE_ALL_TABLE t
           ON     i.data_table_id=t.table_id
@@ -12945,6 +12957,14 @@ def_table_schema(
           AND   i.tenant_id = d_col.tenant_id
           AND   (case when (c.is_hidden = 1 and substr(c.column_name, 1, 8) = '__substr') then
                    substr(c.column_name, 8 + instr(substr(c.column_name, 8), '_')) else 0 end) = d_col.column_id
+          LEFT JOIN oceanbase.__ALL_VIRTUAL_CORE_COLUMN_TABLE d_col2
+          ON    i.data_table_id = d_col2.table_id
+          AND   i.tenant_id = d_col2.tenant_id
+          AND   c.column_id = d_col2.column_id
+          AND   d_col2.cur_default_value_v2 is not null
+          AND   d_col2.is_hidden = 1
+          AND   (d_col2.column_flags & (0x1 << 0) = 1 or d_col2.column_flags & (0x1 << 1) = 1)
+          AND   substr(d_col2.column_name, 1, 6) = 'SYS_NC'
         UNION ALL
           SELECT db.database_name  AS TABLE_SCHEMA,
                   t.table_name      AS TABLE_NAME,
@@ -12959,7 +12979,8 @@ def_table_schema(
                     CASE WHEN t.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END) END AS INDEX_TYPE,
                   t.comment        AS COMMENT,
                   t.comment        AS INDEX_COMMENT,
-                  'YES'            AS IS_VISIBLE
+                  'YES'            AS IS_VISIBLE,
+                  NULL             AS EXPRESSION
           FROM   oceanbase.__ALL_VIRTUAL_CORE_ALL_TABLE t
           JOIN   oceanbase.__ALL_VIRTUAL_CORE_COLUMN_TABLE c
           ON     t.table_id=c.table_id
@@ -34761,6 +34782,21 @@ def_table_schema(
       TS.TENANT_ID AS ORIGIN_CON_ID
     FROM
       SYS.ALL_VIRTUAL_TENANT_TRIGGER_SYS_AGENT TS
+    UNION ALL
+    SELECT
+      CAST(D.DATABASE_NAME AS VARCHAR2(128)) AS OWNER,
+      CAST(TY.object_name AS VARCHAR2(128)) AS NAME,
+      CAST(CASE TY.TYPE WHEN 1 THEN 'TYPE' WHEN 2 THEN 'TYPE BODY' END AS VARCHAR2(12)) AS TYPE,
+      CAST(1 AS NUMBER) AS LINE,
+      TO_CLOB(TY.SOURCE) AS TEXT,
+      TY.TENANT_ID AS ORIGIN_CON_ID
+    FROM
+      (SELECT * FROM SYS.ALL_VIRTUAL_TENANT_OBJECT_TYPE_REAL_AGENT
+          WHERE TENANT_ID = EFFECTIVE_TENANT_ID()) TY
+      LEFT JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D ON TY.DATABASE_ID = D.DATABASE_ID
+          AND D.TENANT_ID = EFFECTIVE_TENANT_ID()
+    WHERE
+      D.IN_RECYCLEBIN = 0
 """.replace("\n", " ")
 )
 
@@ -35066,6 +35102,23 @@ def_table_schema(
       TS.TENANT_ID AS ORIGIN_CON_ID
     FROM
       SYS.ALL_VIRTUAL_TENANT_TRIGGER_SYS_AGENT TS
+    UNION ALL
+    SELECT
+      CAST(D.DATABASE_NAME AS VARCHAR2(128)) AS OWNER,
+      CAST(TY.object_name AS VARCHAR2(128)) AS NAME,
+      CAST(CASE TY.TYPE WHEN 1 THEN 'TYPE' WHEN 2 THEN 'TYPE BODY' END AS VARCHAR2(12)) AS TYPE,
+      CAST(1 AS NUMBER) AS LINE,
+      TO_CLOB(TY.SOURCE) AS TEXT,
+      TY.TENANT_ID AS ORIGIN_CON_ID
+    FROM
+      (SELECT * FROM SYS.ALL_VIRTUAL_TENANT_OBJECT_TYPE_REAL_AGENT
+          WHERE TENANT_ID = EFFECTIVE_TENANT_ID()) TY
+      LEFT JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D ON TY.DATABASE_ID = D.DATABASE_ID
+          AND D.TENANT_ID = EFFECTIVE_TENANT_ID()
+    WHERE
+      D.IN_RECYCLEBIN = 0
+      AND (TY.DATABASE_ID = USERENV('SCHEMAID')
+          OR USER_CAN_ACCESS_OBJ(12, TY.OBJECT_TYPE_ID, TY.DATABASE_ID) = 1)
 """.replace("\n", " ")
 )
 
@@ -35247,6 +35300,21 @@ def_table_schema(
     WHERE
       D.IN_RECYCLEBIN = 0
       AND T.DATABASE_ID = USERENV('SCHEMAID')
+    UNION ALL
+    SELECT
+      CAST(TY.object_name AS VARCHAR2(128)) AS NAME,
+      CAST(CASE TY.TYPE WHEN 1 THEN 'TYPE' WHEN 2 THEN 'TYPE BODY' END AS VARCHAR2(12)) AS TYPE,
+      CAST(1 AS NUMBER) AS LINE,
+      TO_CLOB(TY.SOURCE) AS TEXT,
+      TY.TENANT_ID AS ORIGIN_CON_ID
+    FROM
+      (SELECT * FROM SYS.ALL_VIRTUAL_TENANT_OBJECT_TYPE_REAL_AGENT
+          WHERE TENANT_ID = EFFECTIVE_TENANT_ID()) TY
+      LEFT JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D ON TY.DATABASE_ID = D.DATABASE_ID
+          AND D.TENANT_ID = EFFECTIVE_TENANT_ID()
+    WHERE
+      D.IN_RECYCLEBIN = 0
+      AND TY.DATABASE_ID = USERENV('SCHEMAID')
 """.replace("\n", " ")
 )
 
@@ -51740,7 +51808,7 @@ def_table_schema(
           CAST(COMPLETED_TABLE_COUNT AS NUMBER) AS COMPLETED_TABLE_COUNT,
           CAST(RUNNING_TABLE_OWNER AS VARCHAR2(128)) AS RUNNING_TABLE_OWNER,
           CAST(RUNNING_TABLE_NAME AS VARCHAR2(256)) AS RUNNING_TABLE_NAME,
-          CAST(RUNNING_TABLE_DURATION_TIME AS VARCHAR2(256)) AS RUNNING_TABLE_DURATION_TIME
+          CAST(RUNNING_TABLE_DURATION_TIME AS NUMBER) AS RUNNING_TABLE_DURATION_TIME
         FROM SYS.ALL_VIRTUAL_OPT_STAT_GATHER_MONITOR
 """.replace("\n", " ")
 )

@@ -200,7 +200,7 @@ int ObDirectLoadDataBlockWriter<Header, T>::write_item(const T &item)
 template <typename Header, typename T>
 int ObDirectLoadDataBlockWriter<Header, T>::flush_buffer()
 {
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(external_flush_buffer_time_us);
+  OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, external_flush_buffer_time_us);
   int ret = common::OB_SUCCESS;
   if (OB_FAIL(pre_flush_buffer())) {
     STORAGE_LOG(WARN, "fail to pre flush buffer", KR(ret));
@@ -227,7 +227,7 @@ int ObDirectLoadDataBlockWriter<Header, T>::flush_buffer()
 template <typename Header, typename T>
 int ObDirectLoadDataBlockWriter<Header, T>::flush_extra_buffer(const T &item)
 {
-  OB_TABLE_LOAD_STATISTICS_TIME_COST(external_flush_buffer_time_us);
+  OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, external_flush_buffer_time_us);
   int ret = common::OB_SUCCESS;
   if (OB_FAIL(pre_flush_buffer())) {
     STORAGE_LOG(WARN, "fail to pre flush buffer", KR(ret));

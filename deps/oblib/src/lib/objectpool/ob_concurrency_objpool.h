@@ -45,9 +45,10 @@ class ObFixedClassAllocator
 public:
   using object_type = T;
 public:
-  ObFixedClassAllocator(const ObMemAttr &attr, int64_t nway)
+  ObFixedClassAllocator(const ObMemAttr &attr, int64_t nway, int32_t slice_cnt = 0)
     : allocator_(sizeof(T) + sizeof(ObClassMeta), attr,
-                 choose_blk_size(sizeof(T) + sizeof(ObClassMeta)))
+                 0 == slice_cnt ? choose_blk_size(sizeof(T) + sizeof(ObClassMeta)) :
+                                  ObBlockSlicer::get_blk_size(sizeof(T) + sizeof(ObClassMeta), slice_cnt))
   {
     allocator_.set_nway(static_cast<int32_t>(nway));
   }

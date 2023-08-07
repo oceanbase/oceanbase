@@ -67,6 +67,7 @@ int ObTransService::create_ls(const share::ObLSID &ls_id,
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(ls_id));
   } else if (OB_ISNULL(tx_table = ls.get_tx_table())) {
+    ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "get tx table fail", K(ret), K(ls_id));
   } else if (OB_FAIL(tx_ctx_mgr_.create_ls(tenant_id_,
                                            ls_id,
@@ -2097,14 +2098,17 @@ int ObTransService::handle_sp_rollback_resp(const share::ObLSID &ls_id,
   ObTxDesc *tx = NULL;
   if (OB_FAIL(tx_desc_mgr_.get(tx_id, tx))) {
     TRANS_LOG(WARN, "get trans_desc fail", K(ret), K(tx_id));
+  } else if (tx->op_sn_ > request_id || tx->tx_id_ != tx_id) { // fast fail
+    TRANS_LOG(WARN, "receive stale rollback response message",
+              K(addr), K(status), K(request_id), K(result), K(tx_id), K(tx->tx_id_), K(tx->op_sn_));
   } else {
     ObSpinLockGuard guard(tx->lock_);
     if (tx->state_ != ObTxDesc::State::ROLLBACK_SAVEPOINT) {
       TRANS_LOG(WARN, "receive stale rollback response message",
                 K(addr), K(status), K(request_id), K(result), KPC(tx));
-    } else if (tx->op_sn_ > request_id) {
+    } else if (tx->tx_id_ != tx_id || tx->op_sn_ > request_id) {
       TRANS_LOG(WARN, "receive old rpc result msg",
-                K(ret), K_(tx->op_sn), K(request_id), K(tx_id));
+                K(ret), K_(tx->op_sn), K(request_id), K(tx_id), K(tx->tx_id_));
     } else if (status == OB_TRANS_RPC_TIMEOUT || common_retryable_error_(status)) {
       TRANS_LOG(WARN, "rollback savepoint on ls return an retryable error",
                 K(status), K(ls_id), K(tx_id), K(addr));
@@ -3532,6 +3536,74 @@ bool ObTransService::is_ls_dropped_(const share::ObLSID ls_id) {
     }
   }
   return bret;
+}
+
+int ObTransService::ask_tx_state_for_4377(const ObLSID ls_id,
+                                          const ObTransID tx_id,
+                                          bool &is_alive)
+{
+  int ret = OB_SUCCESS;
+
+  static const int64_t MAX_ALLOWED_ASK_STATE_FOR_4377_TIMES = 10 * 1000 * 1000; //10s
+  static const int64_t SLEEP_DURATION_FOR_ASK_STATE_FOR_4377 = 100 * 1000; //100ms
+  const int64_t start_ts = ObTimeUtility::current_time();
+  ObAskTxStateFor4377Msg msg;
+  ObAskTxStateFor4377RespMsg resp;
+  msg.tx_id_ = tx_id;
+  msg.ls_id_ = ls_id;
+
+  do {
+    if (OB_FAIL(rpc_->ask_tx_state_for_4377(msg, resp))) {
+      TRANS_LOG(WARN, "ask tx state for 4377 failed", K(ret));
+      if (OB_LS_IS_DELETED == ret) {
+        is_alive = false;
+        ret = OB_SUCCESS;
+        TRANS_LOG(WARN, "ls is deleted during ask tx state", K(ret), K(msg));
+      }
+    } else if (OB_FAIL(resp.ret_)) {
+      ret = resp.ret_;
+    } else {
+      is_alive = resp.is_alive_;
+    }
+
+    if (OB_FAIL(ret)) {
+      usleep(SLEEP_DURATION_FOR_ASK_STATE_FOR_4377);
+    }
+
+    if (OB_FAIL(ret) && ObTimeUtility::current_time() - start_ts >= MAX_ALLOWED_ASK_STATE_FOR_4377_TIMES) {
+      TRANS_LOG(WARN, "timeout for 4377 check", K(ret), K(ls_id), K(tx_id), K(start_ts));
+      ret = OB_TIMEOUT;
+    }
+  } while (OB_FAIL(ret) && OB_TIMEOUT != ret);
+
+  TRANS_LOG(INFO, "tx state check for 4377 finished", K(ls_id), K(tx_id), K(ret), K(is_alive));
+
+  return ret;
+}
+
+int ObTransService::handle_ask_tx_state_for_4377(const ObAskTxStateFor4377Msg &msg,
+                                                 bool &is_alive)
+{
+  int ret = OB_SUCCESS;
+  ObPartTransCtx *ctx = NULL;
+  is_alive = false;
+
+  if (OB_FAIL(get_tx_ctx_(msg.ls_id_, msg.tx_id_, ctx))) {
+    TRANS_LOG(WARN, "fail to get tx context", K(ret), K(msg));
+    if (OB_TRANS_CTX_NOT_EXIST == ret || OB_PARTITION_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      is_alive = false;
+      TRANS_LOG(WARN, "tx state is not exist for 4377", K(ret), K(msg));
+    }
+  } else if (OB_FAIL(ctx->handle_ask_tx_state_for_4377(is_alive))) {
+    TRANS_LOG(WARN, "fail to handle trans ask state resp", K(ret), K(msg));
+  }
+
+  if (OB_NOT_NULL(ctx)) {
+    revert_tx_ctx_(ctx);
+  }
+  TRANS_LOG(INFO, "handle ask tx state for 4377", K(ret), K(msg), K(is_alive));
+  return ret;
 }
 } // transaction
 } // ocenabase

@@ -275,8 +275,8 @@ bool LogIOWorker::need_reduce_(LogIOTask *io_task)
     default:
       break;
   }
-  //do not reduce io when writing throttling is on
-  return (bool_ret && !need_ignoring_throttling_ && !throttle_->need_writing_throttling_notified());
+  // NB: when need writing throttling, don't reduce io task.
+  return bool_ret && (need_ignoring_throttling_ || !throttle_->need_writing_throttling_notified());
 }
 
 int LogIOWorker::reduce_io_task_(void *task)

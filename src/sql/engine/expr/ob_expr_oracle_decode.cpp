@@ -300,13 +300,37 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
     //deduce string length
     if (ob_is_string_type(type.get_type()) || ob_is_raw(type.get_type())) {
       ObLength len = -1;
-      for (int64_t i = 2; i < param_num; i += 2 /*skip conditions */) {
-        if (types_stack[i].get_length() > len) {
-          len = types_stack[i].get_length();
+      if (is_oracle_mode() && (ob_is_string_tc(type.get_type()) || ob_is_raw(type.get_type()))) {
+        ObLength deduced_len = -1;
+        if (OB_ISNULL(type_ctx.get_session())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("session is NULL", K(ret));
         }
-      }
-      if (has_default) {
-        len = static_cast<ObLength>(MAX(types_stack[param_num - 1].get_length(), len));
+        for (int64_t i = 2; OB_SUCC(ret) && i < param_num; i += 2 /*skip conditions */) {
+          if (OB_FAIL(ObExprResultTypeUtil::deduce_max_string_length_oracle(type_ctx.get_session()->get_dtc_params(),
+                                  types_stack[i], type, deduced_len, type.get_length_semantics()))) {
+            LOG_WARN("fail to deduce max string length", K(ret));
+          } else if (deduced_len > len) {
+            len = deduced_len;
+          }
+        }
+        if (OB_SUCC(ret) && has_default) {
+          if (OB_FAIL(ObExprResultTypeUtil::deduce_max_string_length_oracle(type_ctx.get_session()->get_dtc_params(),
+                                  types_stack[param_num - 1], type, deduced_len, type.get_length_semantics()))) {
+            LOG_WARN("fail to deduce max string length", K(ret));
+          } else if (deduced_len > len) {
+            len = deduced_len;
+          }
+        }
+      } else {
+        for (int64_t i = 2; i < param_num; i += 2 /*skip conditions */) {
+          if (types_stack[i].get_length() > len) {
+            len = types_stack[i].get_length();
+          }
+        }
+        if (has_default) {
+          len = static_cast<ObLength>(MAX(types_stack[param_num - 1].get_length(), len));
+        }
       }
       if (all_literal && lib::is_oracle_mode()) {
         if (OB_FAIL(calc_result_type_for_literal(type, types_stack, param_num, type_ctx))) {

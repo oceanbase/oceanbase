@@ -100,6 +100,7 @@ private:
       ret = OB_ERR_NULL_VALUE;
       LOG_WARN("unexpected null alloactor for transform functor", K(ret));
     } else if (OB_ISNULL(dest_geo = OB_NEWx(GCOutType, alloc, 0, *alloc))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to create geometry collection", K(ret));
     } else {
       typename GCInType::iterator iter = src_geo->begin();

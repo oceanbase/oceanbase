@@ -90,11 +90,11 @@ int ObMPUtils::add_changed_session_info(OMPKOK &ok_pkt, sql::ObSQLSessionInfo &s
           if (OB_FAIL(ret)) {
           } else {
 #ifndef NDEBUG
-            LOG_TRACE("success add system var to ok pack", K(str_kv), K(change_var), K(new_val),
+            LOG_INFO("success add system var to ok pack", K(str_kv), K(change_var), K(new_val),
                K(session.get_sessid()), K(session.get_proxy_sessid()));
 #else
             // for autocommit change record.
-            LOG_INFO("success add system var to ok pack", K(str_kv), K(change_var), K(new_val),
+            LOG_TRACE("success add system var to ok pack", K(str_kv), K(change_var), K(new_val),
                K(session.get_sessid()), K(session.get_proxy_sessid()), K(change_var.id_));
 #endif
           }

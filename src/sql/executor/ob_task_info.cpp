@@ -108,5 +108,20 @@ int ObGranuleTaskInfo::assign(const ObGranuleTaskInfo &other)
   return ret;
 }
 
+int ObTaskInfo::ObPartLoc::assign(ObTaskInfo::ObPartLoc &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(scan_ranges_.assign(other.scan_ranges_))) {
+    LOG_WARN("fail to assign scan range", K(ret), K(other.scan_ranges_.count()));
+  } else {
+    part_key_ref_id_ = other.part_key_ref_id_;
+    value_ref_id_ = other.value_ref_id_;
+    renew_time_ = other.renew_time_;
+    row_store_ = other.row_store_;
+    datum_store_ = other.datum_store_;
+  }
+  return ret;
+}
+
 }
 }

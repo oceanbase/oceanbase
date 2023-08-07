@@ -2408,6 +2408,10 @@ int ObOraSysChecker::check_ora_ddl_priv(
         DEFINE_PUB_CHECK_CMD(PRIV_ID_DROP_ANY_CONTEXT);
         break;  
       }
+      case stmt::T_VARIABLE_SET: {
+        DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("stmt type ddl priv undefined", K(stmt_type));

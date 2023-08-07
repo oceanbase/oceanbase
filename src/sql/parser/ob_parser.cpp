@@ -380,6 +380,7 @@ ObParser::State ObParser::transform_normal(ObString &normal)
   ELSIF(14, S_EDITIONABLE, "noneditionable")
   ELSIF(6, S_SIGNAL, "signal")
   ELSIF(8, S_RESIGNAL, "resignal")
+  ELSIF(5, S_FORCE, "force")
   ELSE()
 
   if (S_INVALID == state
@@ -449,7 +450,8 @@ ObParser::State ObParser::transform_normal(
         } break;
         case S_OR:
         case S_REPLACE:
-        case S_EDITIONABLE: {
+        case S_EDITIONABLE:
+        case S_FORCE: {
           // do nothing ...
         } break;
         case S_FUNCTION: {

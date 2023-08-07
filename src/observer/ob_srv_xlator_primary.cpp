@@ -162,6 +162,8 @@ void oceanbase::observer::init_srv_xlator_for_transaction(ObSrvRpcXlator *xlator
   RPC_PROCESSOR(ObTxFreeRouteCheckAliveP);
   RPC_PROCESSOR(ObTxFreeRouteCheckAliveRespP);
   RPC_PROCESSOR(ObTxFreeRoutePushStateP);
+  // for tx state check of 4377
+  RPC_PROCESSOR(ObAskTxStateFor4377P);
 }
 
 void oceanbase::observer::init_srv_xlator_for_clog(ObSrvRpcXlator *xlator) {

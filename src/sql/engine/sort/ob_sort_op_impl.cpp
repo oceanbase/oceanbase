@@ -1969,10 +1969,15 @@ int ObSortOpImpl::add_heap_sort_row(const common::ObIArray<ObExpr*> &exprs,
   } else { // push back array
     SortStoredRow *new_row = NULL;
     ObIAllocator &alloc = mem_context_->get_malloc_allocator();
+    int64_t topn_heap_size = topn_heap_->count();
     if (OB_FAIL(copy_to_row(exprs, alloc, new_row))) {
       LOG_WARN("failed to generate new row", K(ret));
     } else if (OB_FAIL(topn_heap_->push(new_row))) {
       LOG_WARN("failed to push back row", K(ret));
+      if (topn_heap_->count() == topn_heap_size) {
+        mem_context_->get_malloc_allocator().free(new_row);
+        new_row = NULL;
+      }
     } else {
       store_row = new_row;
       LOG_DEBUG("in memory topn sort check add row", KPC(new_row));
@@ -2094,10 +2099,15 @@ int ObSortOpImpl::adjust_topn_heap_with_ties(const common::ObIArray<ObExpr*> &ex
       /* do nothing */
     } else if (0 == cmp) {
       // equal to heap top, add row to ties array
+      int64_t ties_array_size = ties_array_.count();
       if (OB_FAIL(copy_to_row(exprs, alloc, new_row))) {
         LOG_WARN("failed to generate new row", K(ret));
       } else if (OB_FAIL(ties_array_.push_back(new_row))) {
         LOG_WARN("failed to push back ties array", K(ret));
+        if (ties_array_size == ties_array_.count()) {
+          mem_context_->get_malloc_allocator().free(new_row);
+          new_row = NULL;
+        }
       } else {
         store_row = new_row;
         LOG_DEBUG("in memory topn sort with ties add ties array", KPC(new_row));

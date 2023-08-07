@@ -93,7 +93,7 @@ int ObDirectLoadSSTableBuilder::append_row(const ObTabletID &tablet_id, const Ob
   } else {
     ObDatumRowkey key(datum_row.storage_datums_, param_.table_data_desc_.rowkey_column_num_);
     ObDirectLoadExternalRow external_row;
-    OB_TABLE_LOAD_STATISTICS_TIME_COST(simple_sstable_append_row_time_us);
+    OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, simple_sstable_append_row_time_us);
     if (OB_FAIL(check_rowkey_order(key))) {
       LOG_WARN("fail to check rowkey order", KR(ret), K(datum_row));
     } else if (OB_FAIL(external_row.from_datums(datum_row.storage_datums_, datum_row.count_,
@@ -127,7 +127,7 @@ int ObDirectLoadSSTableBuilder::append_row(const ObDirectLoadExternalRow &extern
   } else {
     ObDatumRowkey key(external_row.rowkey_datum_array_.datums_,
                       param_.table_data_desc_.rowkey_column_num_);
-    OB_TABLE_LOAD_STATISTICS_TIME_COST(simple_sstable_append_row_time_us);
+    OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, simple_sstable_append_row_time_us);
     if (OB_FAIL(check_rowkey_order(key))) {
       LOG_WARN("fail to check rowkey order", KR(ret), K(external_row));
     } else if (OB_FAIL(data_block_writer_.append_row(external_row))) {
@@ -151,7 +151,7 @@ int ObDirectLoadSSTableBuilder::close()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("direct load sstable is closed", KR(ret));
   } else {
-    OB_TABLE_LOAD_STATISTICS_TIME_COST(simple_sstable_append_row_time_us);
+    OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, simple_sstable_append_row_time_us);
     if (OB_FAIL(data_block_writer_.close())) {
       LOG_WARN("fail to close data block writer", KR(ret), K(data_block_writer_));
     } else if (OB_FAIL(index_block_writer_.close())) {

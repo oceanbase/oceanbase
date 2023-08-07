@@ -106,6 +106,8 @@ public:
   RPC_AP(PR3 post_msg, OB_TX_FREE_ROUTE_CHECK_ALIVE, (transaction::ObTxFreeRouteCheckAliveMsg), ObTransRpcResult);
   RPC_AP(PR3 post_msg, OB_TX_FREE_ROUTE_CHECK_ALIVE_RESP, (transaction::ObTxFreeRouteCheckAliveRespMsg), ObTransRpcResult);
   RPC_S(@PR3 sync_access, OB_TX_FREE_ROUTE_PUSH_STATE, (transaction::ObTxFreeRoutePushState), transaction::ObTxFreeRoutePushStateResp);
+  // state check for 4377
+  RPC_S(@PR3 ask_tx_state_for_4377, OB_ASK_TX_STATE_FOR_4377, (transaction::ObAskTxStateFor4377Msg), transaction::ObAskTxStateFor4377RespMsg);
 };
 
 #define TX_P_(name, pcode)                                              \
@@ -373,6 +375,9 @@ public:
   virtual int post_msg(const share::ObLSID &p, ObTxMsg &msg) = 0;
   virtual int post_msg(const ObAddr &server, const ObTxFreeRouteMsg &m) = 0;
   virtual int sync_access(const ObAddr &server, const ObTxFreeRoutePushState &m, ObTxFreeRoutePushStateResp &result) = 0;
+  virtual int ask_tx_state_for_4377(const ObAskTxStateFor4377Msg &msg,
+                                    ObAskTxStateFor4377RespMsg &resp) = 0;
+
 };
 
 /*
@@ -409,7 +414,9 @@ public:
   int post_msg(const share::ObLSID &p, ObTxMsg &msg);
   int post_msg(const ObAddr &server, const ObTxFreeRouteMsg &m);
   int sync_access(const ObAddr &server, const ObTxFreeRoutePushState &m, ObTxFreeRoutePushStateResp &result);
-private:
+  int ask_tx_state_for_4377(const ObAskTxStateFor4377Msg &msg,
+                            ObAskTxStateFor4377RespMsg &resp);
+  private:
   int post_(const ObAddr &server, ObTxMsg &msg);
   int post_commit_msg_(const ObAddr &server, ObTxMsg &msg);
   int post_sub_request_msg_(const ObAddr &server, ObTxMsg &msg);
@@ -450,7 +457,11 @@ private:
   int64_t last_stat_ts_ CACHE_ALIGNED;
 };
 
-
+class ObAskTxStateFor4377P : public obrpc::ObRpcProcessor< obrpc::ObTransRpcProxy::ObRpc<obrpc::OB_ASK_TX_STATE_FOR_4377> >
+{
+protected:
+  int process();
+};
 
 } // transaction
 

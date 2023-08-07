@@ -185,7 +185,7 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse tree", K(ret));
     } else if (FALSE_IT(host_str.assign_ptr(host_node->str_value_, static_cast<int32_t>(host_node->str_len_)))) {
-    } else if (cut_host_string(host_str, ip_port, conn_str)) {
+    } else if (OB_FAIL(cut_host_string(host_str, ip_port, conn_str))) {
       LOG_WARN("failed to cut host string", K(ret), K(host_str));
     } else if (OB_FAIL(host.parse_from_string(ip_port))) {
       LOG_WARN("parse ip port failed", K(ret), K(host_str), K(ip_port));
@@ -286,7 +286,7 @@ int ObCreateDbLinkResolver::resolve_opt_reverse_link(const ParseNode *node, sql:
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse tree", K(ret));
     } else if (FALSE_IT(host_str.assign_ptr(host_node->str_value_, static_cast<int32_t>(host_node->str_len_)))) {
-    } else if (cut_host_string(host_str, ip_port, conn_str)) {
+    } else if (OB_FAIL(cut_host_string(host_str, ip_port, conn_str))) {
       LOG_WARN("failed to cut host string", K(ret), K(host_str));
     } else if (OB_FAIL(host.parse_from_string(ip_port))) {
       LOG_WARN("parse ip port failed", K(ret), K(host_str), K(ip_port));

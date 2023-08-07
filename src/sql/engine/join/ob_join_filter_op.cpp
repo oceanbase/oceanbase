@@ -344,6 +344,7 @@ int ObJoinFilterOp::link_ch_sets(ObPxBloomFilterChSets &ch_sets,
       } else if (OB_FAIL(dtl::ObDtlChannelGroup::link_channel(ci, ch, NULL))) {
         LOG_WARN("fail link channel", K(ci), K(ret));
       } else if (OB_ISNULL(ch)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ch channel is null", K(ret));
       } else if (OB_FAIL(channels.push_back(ch))) {
         LOG_WARN("fail push back channel ptr", K(ci), K(ret));
@@ -409,9 +410,9 @@ int ObJoinFilterOp::do_use_filter_rescan()
 int ObJoinFilterOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
-  if (MY_SPEC.is_create_mode() && do_create_filter_rescan()) {
+  if (MY_SPEC.is_create_mode() && OB_FAIL(do_create_filter_rescan())) {
     LOG_WARN("fail to do create filter rescan", K(ret));
-  } else if (MY_SPEC.is_use_mode() && do_use_filter_rescan()) {
+  } else if (MY_SPEC.is_use_mode() && OB_FAIL(do_use_filter_rescan())) {
     LOG_WARN("fail to do use filter rescan", K(ret));
   } else if (OB_FAIL(ObOperator::inner_rescan())) {
     LOG_WARN("operator rescan failed", K(ret));

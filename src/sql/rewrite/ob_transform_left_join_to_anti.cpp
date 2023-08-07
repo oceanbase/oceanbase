@@ -86,17 +86,10 @@ int ObTransformLeftJoinToAnti::construct_transform_hint(ObDMLStmt &stmt, void *t
     hint->set_qb_name(ctx_->src_qb_name_);
     for (int64_t i = 0; OB_SUCC(ret) && i < trans_tables->count(); ++i) {
       ObSEArray<ObTableInHint, 4> single_or_joined_hint_table;
-      for (int64_t j = 0; OB_SUCC(ret) && j < trans_tables->at(i).count(); ++j) {
-        TableItem *table = trans_tables->at(i).at(j);
-        if (OB_ISNULL(table)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(single_or_joined_hint_table.push_back(ObTableInHint(table->qb_name_,
-                                              table->database_name_, table->get_object_name())))) {
-          LOG_WARN("failed to push back hint table", K(ret));
-        }
-      }
-      if (OB_SUCC(ret) && OB_FAIL(hint->get_tb_name_list().push_back(single_or_joined_hint_table))) {
+      if (OB_FAIL(ObTransformUtils::get_sorted_table_hint(trans_tables->at(i),
+                                                          single_or_joined_hint_table))) {
+        LOG_WARN("failed to get table hint", K(ret));
+      } else if (OB_FAIL(hint->get_tb_name_list().push_back(single_or_joined_hint_table))) {
         LOG_WARN("failed to push back table name list", K(ret));
       }
     }
@@ -543,6 +536,16 @@ int ObTransformLeftJoinToAnti::check_can_be_trans(ObDMLStmt *stmt,
     if (OB_FAIL(ObTransformUtils::check_table_contain_in_semi(stmt, right_table, contained))) {
       LOG_WARN("failed to check table contained in semi", K(ret));
     } else if (contained) {
+      is_table_valid = false;
+    }
+  }
+  // ObQueryRefRawExpr not support copy on replace in copier, disable this condition
+  for (int64_t i = 0; OB_SUCC(ret) && is_table_valid &&
+                      i < joined_table->get_join_conditions().count(); ++i) {
+    if (OB_ISNULL(joined_table->get_join_conditions().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (joined_table->get_join_conditions().at(i)->has_flag(CNT_SUB_QUERY)) {
       is_table_valid = false;
     }
   }

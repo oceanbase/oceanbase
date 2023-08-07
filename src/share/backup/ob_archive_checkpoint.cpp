@@ -105,7 +105,6 @@ int ObDestRoundCheckpointer::checkpoint(const ObTenantArchiveRoundAttr &round_in
   return ret;
 }
 
-
 int ObDestRoundCheckpointer::count_(const ObDestRoundSummary &summary, ObDestRoundCheckpointer::Counter &counter) const
 {
   int ret = OB_SUCCESS;

@@ -98,7 +98,7 @@ int ObDirectLoadExternalMultiPartitionTableBuilder::append_row(const ObTabletID 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(param_), K(datum_row));
   } else {
-    OB_TABLE_LOAD_STATISTICS_TIME_COST(external_append_row_time_us);
+    OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, external_append_row_time_us);
     row_.tablet_id_ = tablet_id;
     if (OB_FAIL(row_.external_row_.from_datums(datum_row.storage_datums_, datum_row.count_,
                                                param_.table_data_desc_.rowkey_column_num_))) {

@@ -41,7 +41,7 @@ int ObLSDDLLogHandler::init(ObLS *ls)
   } else if (nullptr == ls) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
-  } else if (ddl_log_replayer_.init(ls)) {
+  } else if (OB_FAIL(ddl_log_replayer_.init(ls))) {
     LOG_WARN("fail to init ddl log replayer", K(ret));
   } else {
     TCWLockGuard guard(online_lock_);

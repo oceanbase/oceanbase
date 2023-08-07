@@ -306,6 +306,7 @@ int ObDASUtils::generate_spatial_index_rows(
   const ObSrsBoundsItem *srs_bound = NULL;
   uint32_t srid = UINT32_MAX;
   uint64_t rowkey_num = das_ctdef.table_param_.get_data_table().get_rowkey_column_num();
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "S2Adapter"));
 
   if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb_str, srid))) {
     LOG_WARN("failed to get srid", K(ret), K(wkb_str));

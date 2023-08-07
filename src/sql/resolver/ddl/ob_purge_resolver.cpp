@@ -114,9 +114,9 @@ int ObPurgeIndexResolver::resolve(const ParseNode &parser_tree)
     if (OB_ISNULL(table_node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table_node should not be null", K(ret));
-    } else if (resolve_table_relation_node(table_node,
+    } else if (OB_FAIL(resolve_table_relation_node(table_node,
                                            table_name,
-                                           db_name)){
+                                           db_name))){
       LOG_WARN("failed to resolve_table_relation_node", K(ret));
     } else if (session_info_->get_database_name() != db_name){
       ret = OB_NOT_SUPPORTED;

@@ -122,23 +122,21 @@ int ObExprInterval::calc_interval_expr(const ObExpr &expr, ObEvalCtx &ctx,
     } else {
       int64_t high = expr.arg_cnt_ - 1;
       int64_t low = 1;
-      int64_t mid = 0;
       while (low <= high && OB_SUCC(ret)) {
+        int64_t mid = (low + high) / 2;
         const ObDatum &arg_i = expr.locate_param_datum(ctx, static_cast<int>(mid));
-        mid = (low + high + 1) / 2;
         if (OB_FAIL(cmp_func(arg_i, *arg0, cmp_ret))) {
           LOG_WARN("faile to compare", K(ret));
-        } else if (cmp_ret > 0) {
-          high = mid - 1;
-          mid -= 1;
+        } else if (cmp_ret <= 0) {
+          low = mid + 1;
         } else if (low == high) {
           break;
         } else {
-          low = mid;
+          high = mid - 1;
         }
       } // while
       if (OB_SUCC(ret)) {
-        res.set_int(mid);
+        res.set_int(low - 1);
       }
     }
   }

@@ -208,7 +208,7 @@ public:
   }
   int process() override
   {
-    OB_TABLE_LOAD_STATISTICS_TIME_COST(table_compactor_time_us);
+    OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, table_compactor_time_us);
     int ret = OB_SUCCESS;
     const int64_t merge_count_per_round =
       parallel_merge_ctx_->store_ctx_->table_data_desc_.merge_count_per_round_;
@@ -292,7 +292,7 @@ public:
   }
   int process() override
   {
-    OB_TABLE_LOAD_STATISTICS_TIME_COST(table_compactor_time_us);
+    OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, table_compactor_time_us);
     int ret = OB_SUCCESS;
     const ObDirectLoadMultipleDatumRow *datum_row = nullptr;
     ObSEArray<ObIDirectLoadPartitionTable *, 1> table_array;
@@ -424,7 +424,7 @@ public:
   }
   int process() override
   {
-    OB_TABLE_LOAD_STATISTICS_TIME_COST(table_compactor_time_us);
+    OB_TABLE_LOAD_STATISTICS_TIME_COST(INFO, table_compactor_time_us);
     int ret = OB_SUCCESS;
     ObDirectLoadMultipleSSTable *sstable = nullptr;
     if (OB_FAIL(compact_sstable(sstable))) {
