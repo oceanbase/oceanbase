@@ -482,7 +482,7 @@ int ObPxTaskProcess::do_process()
                && ObVirtualTableErrorWhitelist::should_ignore_vtable_error(ret)) {
       // 忽略虚拟表错误
     } else {
-      (void) ObInterruptUtil::interrupt_qc(arg_.task_, ret);
+      (void) ObInterruptUtil::interrupt_qc(arg_.task_, ret, arg_.exec_ctx_);
     }
   }
 

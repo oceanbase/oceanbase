@@ -118,13 +118,8 @@ int ObInitSqcP::process()
   }
 
   //
-  if (OB_SUCCESS != ret && is_schema_error(ret)) {
-    if (OB_NOT_NULL(sqc_handler)
-        && GSCHEMASERVICE.is_schema_error_need_retry(NULL, sqc_handler->get_tenant_id())) {
-      ret = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
-    } else {
-      ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
-    }
+  if (OB_SUCCESS != ret && is_schema_error(ret) && OB_NOT_NULL(sqc_handler)) {
+    ObInterruptUtil::update_schema_error_code(&(sqc_handler->get_exec_ctx()), ret);
   }
   // 非rpc框架的错误内容设置到response消息中
   // rpc框架的错误码在process中返回OB_SUCCESS
@@ -423,13 +418,8 @@ int ObInitFastSqcP::process()
   }
 
   //
-  if (OB_SUCCESS != ret && is_schema_error(ret)) {
-    if (OB_NOT_NULL(sqc_handler)
-        && GSCHEMASERVICE.is_schema_error_need_retry(NULL, sqc_handler->get_tenant_id())) {
-      ret = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
-    } else {
-      ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
-    }
+  if (OB_SUCCESS != ret && is_schema_error(ret) && OB_NOT_NULL(sqc_handler)) {
+    ObInterruptUtil::update_schema_error_code(&(sqc_handler->get_exec_ctx()), ret);
   }
 
   ObActiveSessionGuard::get_stat().in_sql_execution_ = false;

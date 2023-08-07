@@ -108,7 +108,7 @@ int ObPxSubCoord::pre_process()
     if (IS_INTERRUPTED()) {
       // 当前是被QC中断的，不再向QC发送中断
     } else {
-      (void) ObInterruptUtil::interrupt_qc(sqc_arg_.sqc_, ret);
+      (void) ObInterruptUtil::interrupt_qc(sqc_arg_.sqc_, ret, sqc_arg_.exec_ctx_);
     }
   }
 

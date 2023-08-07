@@ -116,8 +116,34 @@ int ObInterruptUtil::interrupt_tasks(ObPxSqcMeta &sqc, int code)
   return ret;
 }
 
+void ObInterruptUtil::update_schema_error_code(ObExecContext *exec_ctx, int &code)
+{
+  int ret = OB_SUCCESS;
+  if (is_schema_error(code) && OB_NOT_NULL(exec_ctx) && OB_NOT_NULL(exec_ctx->get_my_session())) {
+    uint64_t tenant_id = exec_ctx->get_my_session()->get_effective_tenant_id();
+    ObSchemaGetterGuard schema_guard;
+    int64_t local_schema_version = -1;
+    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+      LOG_WARN("get tenant schema guard failed", K(ret));
+    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, local_schema_version))) {
+      LOG_WARN("get schema version failed", K(ret));
+    } else if (local_schema_version !=
+                exec_ctx->get_task_exec_ctx().get_query_tenant_begin_schema_version()) {
+      if (GSCHEMASERVICE.is_schema_error_need_retry(NULL, tenant_id)) {
+        code = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
+      } else {
+        code = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+      }
+    }
+    LOG_TRACE("update_schema_error_code, exec_ctx is not null", K(tenant_id), K(local_schema_version),
+              K(exec_ctx->get_task_exec_ctx().get_query_tenant_begin_schema_version()), K(lbt()));
+  } else {
+    LOG_TRACE("update_schema_error_code, exec_ctx is null", K(lbt()));
+  }
+}
+
 // SQC 向 QC 发送中断
-int ObInterruptUtil::interrupt_qc(ObPxSqcMeta &sqc, int code)
+int ObInterruptUtil::interrupt_qc(ObPxSqcMeta &sqc, int code, ObExecContext *exec_ctx)
 {
   int ret = OB_SUCCESS;
   ObInterruptCode int_code(code,
@@ -128,15 +154,7 @@ int ObInterruptUtil::interrupt_qc(ObPxSqcMeta &sqc, int code)
   ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
   ObInterruptibleTaskID interrupt_id = sqc.get_interrupt_id().query_interrupt_id_;
 
-  // 重写错误码，使得scheduler端能等待远端schema刷新并重试
-  if (is_schema_error(int_code.code_)) {
-    if (GSCHEMASERVICE.is_schema_error_need_retry(NULL, MTL_ID())) {
-      int_code.code_ = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
-    } else {
-      int_code.code_ = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
-    }
-  }
-
+  update_schema_error_code(exec_ctx, int_code.code_);
   if (OB_ISNULL(manager)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_FAIL(manager->interrupt(sqc.get_qc_addr(),
@@ -161,7 +179,7 @@ int ObInterruptUtil::interrupt_qc(ObPxSqcMeta &sqc, int code)
 
 
 // Task 向 QC 发送中断
-int ObInterruptUtil::interrupt_qc(ObPxTask &task, int code)
+int ObInterruptUtil::interrupt_qc(ObPxTask &task, int code, ObExecContext *exec_ctx)
 {
   int ret = OB_SUCCESS;
   ObInterruptCode int_code(code,
@@ -172,15 +190,7 @@ int ObInterruptUtil::interrupt_qc(ObPxTask &task, int code)
   ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
   ObInterruptibleTaskID interrupt_id = task.get_interrupt_id().query_interrupt_id_;
 
-  // 重写错误码，使得scheduler端能等待远端schema刷新并重试
-  if (is_schema_error(int_code.code_)) {
-    if (GSCHEMASERVICE.is_schema_error_need_retry(NULL, MTL_ID())) {
-      int_code.code_ = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
-    } else {
-      int_code.code_ = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
-    }
-  }
-
+  update_schema_error_code(exec_ctx, int_code.code_);
   if (OB_ISNULL(manager)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_FAIL(manager->interrupt(task.get_qc_addr(),
