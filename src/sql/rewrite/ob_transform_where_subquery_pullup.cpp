@@ -421,7 +421,7 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObQueryRefRawExpr *query_ref,
   } else if (check_status) {
     is_valid = false;
     OPT_TRACE("subquery`s on condition is correlated");
-  } else if (OB_FAIL(is_where_subquery_correlated(query_ref->get_exec_params(), *subquery, check_status))) {
+  } else if (OB_FAIL(is_where_having_subquery_correlated(query_ref->get_exec_params(), *subquery, check_status))) {
     LOG_WARN("failed to check select item contain subquery", K(subquery), K(ret));
   } else if (check_status) {
     is_valid = false;
@@ -436,18 +436,23 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObQueryRefRawExpr *query_ref,
   return ret;
 }
 
-/*@brief check if where subquery in subquery is correlated
+/*@brief check if where subquery and having subquery in subquery is correlated
 * semi/anti 的condition中不能有包含上层相关变量的子查询，暂时不支持这种行为
 *   eg:select c2 from t1 where c2 not in
 *                       (select c2 from t2 where t2.c2 not in (select 1 from t3 where t1.c3 = 1));
 */
-int ObWhereSubQueryPullup::is_where_subquery_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
-                                                        const ObSelectStmt &subquery,
-                                                        bool &is_correlated)
+int ObWhereSubQueryPullup::is_where_having_subquery_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                                               const ObSelectStmt &subquery,
+                                                               bool &is_correlated)
 {
   int ret = OB_SUCCESS;
   is_correlated = false;
-  const ObIArray<ObRawExpr*> &conds = subquery.get_condition_exprs();
+  ObSEArray<ObRawExpr*, 4> conds;
+  if (OB_FAIL(conds.assign(subquery.get_condition_exprs()))) {
+    LOG_WARN("failed to assign condition exprs", K(ret));
+  } else if (OB_FAIL(append(conds, subquery.get_having_exprs()))) {
+    LOG_WARN("failed to append having exprs", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && !is_correlated && i < conds.count(); ++i) {
     if (OB_ISNULL(conds.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -533,6 +538,10 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(ObDMLStmt *stmt,
     // for the query contains correlated subquery above, limit 1 should be removed after transform.
     // select * from t1 semi join (select c1 from t2 where c2 = 2) v on t1.c1 = v.c1;
     subquery->set_limit_offset(NULL, NULL);
+    // after ObWhereSubQueryPullup::check_limit, only any/all subquery with const select expr allowed unnest with order by and limit clause:
+    // select * from t1 where t1.c1 in (select 1 from t2 where t1.c2 = c2 order by c3 limit 1);
+    // just reset useless order items here.
+    subquery->get_order_items().reuse();
   }
 
   if (OB_SUCC(ret)) {
