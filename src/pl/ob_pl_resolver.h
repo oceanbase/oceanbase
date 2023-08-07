@@ -31,6 +31,7 @@
   } while(0);
 #endif
 
+#ifndef NDEBUG
 #ifndef SET_LOG_CHECK_MODE
 #define SET_LOG_CHECK_MODE()                        \
   bool set_check_mode = false;                      \
@@ -53,6 +54,10 @@
     CANCLE_OB_LOG_TRACE_MODE();                     \
   }
 #endif // CANCLE_LOG_CHECK_MODE
+#else
+#define SET_LOG_CHECK_MODE()
+#define CANCLE_LOG_CHECK_MODE()
+#endif
 
 namespace oceanbase {
 using sql::ObObjAccessIdent;
@@ -383,14 +388,17 @@ public:
     const share::schema::ObTableSchema* view_schema,
     sql::ObSelectStmt *&select_stmt);
   static
-  int fill_record_type(
-    common::ObIAllocator &allocator, sql::ObSelectStmt *select_stmt, ObRecordType *&record_type);
+  int fill_record_type(share::schema::ObSchemaGetterGuard &schema_guard,
+                       common::ObIAllocator &allocator,
+                       sql::ObSelectStmt *select_stmt,
+                       ObRecordType *&record_type);
   static
   int build_record_type_by_view_schema(const ObPLResolveCtx &resolve_ctx,
                                 const share::schema::ObTableSchema* view_schema,
                                 ObRecordType *&record_type);
   static
-  int build_record_type_by_table_schema(common::ObIAllocator &allocator,
+  int build_record_type_by_table_schema(share::schema::ObSchemaGetterGuard &schema_guard,
+                                common::ObIAllocator &allocator,
                                 const share::schema::ObTableSchema* table_schema,
                                 ObRecordType *&record_type,
                                 bool with_rowid = false);

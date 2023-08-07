@@ -1784,8 +1784,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
             OZ (add_dependency_object(obj_version));
           }
           OX (var_idx = i);
-          CK (OB_NOT_NULL(member_type->get_data_type()));
-          OX (data_type.set_data_type(*(member_type->get_data_type())));
+          OX (data_type = *member_type);
         }
       }
     }

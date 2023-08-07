@@ -863,7 +863,7 @@ int ObResolverUtils::get_type_and_type_id(
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(expr));
-  OX (type_id = expr->get_result_type().get_udt_id());
+  OX (type_id = expr->get_result_type().get_expr_udt_id());
   if (OB_FAIL(ret)) {
   } else if (IS_BOOL_OP(expr->get_expr_type())) {
     type = ObTinyIntType;
@@ -897,7 +897,7 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
   }
 
   int64_t offset = 0;
-  if(OB_SUCC(ret) && 0 < expr_params.count() && OB_NOT_NULL(expr_params.at(0))) {
+  if(OB_SUCC(ret) && expr_params.count() > 0 && OB_NOT_NULL(expr_params.at(0))) {
     ObRawExpr *first_arg = expr_params.at(0);
     if (first_arg->has_flag(IS_UDT_UDF_SELF_PARAM)) {
       // do nothing, may be we can check if routine is static or not
@@ -912,8 +912,7 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
         OX (offset = 1);
       }
     } else if (routine_info->is_udt_routine()
-               && !routine_info->is_udt_static_routine()
-               && expr_params.count() != routine_info->get_param_count()) {
+               && !routine_info->is_udt_static_routine()) {
       uint64_t src_type_id = OB_INVALID_ID;
       ObObjType src_type;
       if (T_SP_CPARAM == first_arg->get_expr_type()) {
@@ -928,7 +927,18 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
           && (src_type_id != routine_info->get_package_id())) {
         // set first param matched
         OX (match_info.match_info_.at(0) = (ObRoutineMatchInfo::MatchInfo(false, src_type, src_type)));
-        OX (offset = 1);
+        if ((expr_params.count() + 1) > routine_info->get_param_count()) {
+          ret = OB_ERR_SP_WRONG_ARG_NUM;
+          LOG_WARN("argument count not match",
+             K(ret),
+             K(expr_params.count()),
+             K(src_type_id),
+             KPC(first_arg),
+             K(routine_info->get_param_count()),
+             K(routine_info->get_routine_name()));
+        } else {
+          OX (offset = 1);
+        }
       }
     }
   }

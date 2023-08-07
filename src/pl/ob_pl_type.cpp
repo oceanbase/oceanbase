@@ -1220,6 +1220,7 @@ ObObjAccessIdx::ObObjAccessIdx(const ObPLDataType &elem_type,
   if (AccessType::IS_EXPR == access_type
       || AccessType::IS_UDF_NS == access_type) {
     get_sysfunc_ = reinterpret_cast<sql::ObRawExpr *>(value);
+    var_index_ = var_type.get_user_type_id();
   } else if (AccessType::IS_INTERNAL_PROC == access_type
           || AccessType::IS_EXTERNAL_PROC == access_type
           || AccessType::IS_NESTED_PROC == access_type) {

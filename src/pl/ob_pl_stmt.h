@@ -982,6 +982,8 @@ public:
   virtual bool is_udt_map() const { return compile_flag_.compile_with_map(); }
   virtual bool is_udt_order() const { return compile_flag_.compile_with_order(); }
 
+  virtual const ObString& get_routine_name() const { return get_name(); }
+
   bool has_self_param() const;
   int64_t get_self_param_pos() const;
 
