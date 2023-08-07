@@ -306,6 +306,7 @@ WAIT_EVENT_DEF(OPT_STAT_GATHER_STAT_LOCK_WAIT, 15260, "latch: optimizer stat gat
 WAIT_EVENT_DEF(TENANT_IO_POOL_WAIT, 15261, "rwlock: tenant io pool wait", "address", "number", "tries", CONCURRENCY, "rwlock: tenant io pool wait", true)
 WAIT_EVENT_DEF(DISPLAY_TASKS_LOCK_WAIT, 15262, "latch: display tasks lock wait", "address", "number", "tries", CONCURRENCY, "latch: display tasks lock wait", true)
 WAIT_EVENT_DEF(TMP_FILE_MEM_BLOCK_LOCK_WAIT, 15263, "latch: tmp file mem block lock wait", "address", "number", "tries", CONCURRENCY, "latch: tmp file mem block lock wait", true)
+WAIT_EVENT_DEF(PL_DEBUG_RUNTIME_INFO_WAIT, 15264, "latch:pl debug runtime info lock wait", "address", "number", "tries", CONCURRENCY, "latch:pl debug runtime info lock wait", true)
 
 //transaction
 WAIT_EVENT_DEF(END_TRANS_WAIT, 16001, "wait end trans", "rollback", "trans_hash_value", "participant_count", COMMIT,"wait end trans", false)
