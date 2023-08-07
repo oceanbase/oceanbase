@@ -547,6 +547,7 @@ struct ObMicroBlockEncodingCtx
     column_encodings_(nullptr), major_working_cluster_version_(0),
     row_store_type_(ENCODING_ROW_STORE), need_calc_column_chksum_(false)
   {
+    previous_encodings_.set_attr(ObMemAttr(MTL_ID(), "MicroEncodeCtx"));
   }
   bool is_valid() const;
   TO_STRING_KV(K_(macro_block_size), K_(micro_block_size), K_(rowkey_column_cnt),

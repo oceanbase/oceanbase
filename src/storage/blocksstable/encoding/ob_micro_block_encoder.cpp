@@ -101,6 +101,16 @@ ObMicroBlockEncoder::ObMicroBlockEncoder() : ctx_(), header_(NULL),
     string_col_cnt_(0), estimate_base_store_size_(0), length_(0),
     is_inited_(false)
 {
+  datum_rows_.set_attr(ObMemAttr(MTL_ID(), "MicroBlkEncoder"));
+  all_col_datums_.set_attr(ObMemAttr(MTL_ID(), "MicroBlkEncoder"));
+  encoders_.set_attr(ObMemAttr(MTL_ID(), "MicroBlkEncoder"));
+  fix_data_encoders_.set_attr(ObMemAttr(MTL_ID(), "MicroBlkEncoder"));
+  var_data_encoders_.set_attr(ObMemAttr(MTL_ID(), "MicroBlkEncoder"));
+  row_indexs_.set_attr(ObMemAttr(MTL_ID(), "MicroBlkEncoder"));
+  hashtables_.set_attr(ObMemAttr(MTL_ID(), "MicroBlkEncoder"));
+  multi_prefix_trees_.set_attr(ObMemAttr(MTL_ID(), "MicroBlkEncoder"));
+  deep_copy_indexes_.set_attr(ObMemAttr(MTL_ID(), "MicroBlkEncoder"));
+  col_ctxs_.set_attr(ObMemAttr(MTL_ID(), "MicroBlkEncoder"));
 }
 
 ObMicroBlockEncoder::~ObMicroBlockEncoder()
@@ -781,6 +791,7 @@ int ObMicroBlockEncoder::fill_row_data(const int64_t fix_data_size)
 {
   int ret = OB_SUCCESS;
   ObArray<int64_t> var_lengths;
+  var_lengths.set_attr(ObMemAttr(MTL_ID(), "MicroBlkEncoder"));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
