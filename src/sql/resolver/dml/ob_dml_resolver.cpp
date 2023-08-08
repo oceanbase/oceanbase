@@ -10832,14 +10832,6 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
            pl::PL_VARRAY_TYPE == udf_expr->get_result_type().get_extend_type())) {
         OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
       }
-      if (OB_SUCC(ret)) {
-        if (is_oracle_mode() && udf_expr->get_result_type().is_tinyint()) {
-          //can not use udf which reurn type is tinyint in oracle mode
-          ret = OB_ERR_INVALID_DATATYPE;
-          LOG_WARN("invalid data type", K(ret), KPC(udf_expr));
-          LOG_USER_ERROR(OB_ERR_INVALID_DATATYPE);
-        }
-      }
     } else if (T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type()) {
       ObDMLStmt *stmt = get_stmt();
       ObObjectConstructRawExpr *object_expr = static_cast<ObObjectConstructRawExpr*>(expr);
