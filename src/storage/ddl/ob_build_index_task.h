@@ -187,6 +187,7 @@ public:
   { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override
   { return consumer_group_id_; }
+  virtual bool is_ha_dag() const override { return false; }
 private:
   bool is_inited_;
   uint64_t tenant_id_;

@@ -219,6 +219,7 @@ public:
   virtual int64_t hash() const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override;
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
+  virtual bool is_ha_dag() const override { return true; }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited));
 
 private:
@@ -244,6 +245,7 @@ public:
   virtual int64_t hash() const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override;
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
+  virtual bool is_ha_dag() const override { return true; }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited));
 
 private:
@@ -275,6 +277,7 @@ public:
   virtual bool check_can_schedule() override;
   virtual lib::Worker::CompatMode get_compat_mode() const override;
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
+  virtual bool is_ha_dag() const override { return true; }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(is_inited));
 
 private:
@@ -302,6 +305,7 @@ public:
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override;
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
+  virtual bool is_ha_dag() const override { return true; }
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(param));
 
 protected:
@@ -346,6 +350,7 @@ public:
   virtual int64_t hash() const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override;
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
+  virtual bool is_ha_dag() const override { return true; }
 
 private:
   int get_file_id_list_(common::ObIArray<int64_t> &file_id_list);
@@ -377,6 +382,7 @@ public:
   virtual int64_t hash() const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override;
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
+  virtual bool is_ha_dag() const override { return true; }
 
 private:
   bool is_inited_;

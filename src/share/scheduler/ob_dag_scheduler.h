@@ -340,7 +340,7 @@ public:
   virtual int set_result(const int32_t result) { UNUSED(result); return common::OB_SUCCESS; }
   int fill_comment(char *buf, const int64_t buf_len);
 
-  virtual bool is_ha_dag() const { return false; }
+  virtual bool is_ha_dag() const = 0;
 
   DECLARE_VIRTUAL_TO_STRING;
   DISABLE_COPY_ASSIGN(ObIDag);
@@ -479,7 +479,7 @@ public:
   {
     return OB_SUCCESS;
   }
-  virtual bool is_ha_dag_net() const { return false; }
+  virtual bool is_ha_dag_net() const = 0;
 public:
   friend class ObTenantDagScheduler;
 
