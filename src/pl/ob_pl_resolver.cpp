@@ -14421,11 +14421,16 @@ int ObPLResolver::resolve_routine_block(const ObStmtNodeTree *parse_tree,
     } else {
       const ObPLRoutineInfo *parent_routine_info = NULL;
       // NOTICE: only package body need search parent_routine_info
-      if (ObPLBlockNS::BlockType::BLOCK_PACKAGE_BODY
+      if ((ObPLBlockNS::BlockType::BLOCK_PACKAGE_BODY
             == current_block_->get_namespace().get_block_type()
           && OB_NOT_NULL(external_ns_.get_parent_ns())
           && ObPLBlockNS::BlockType::BLOCK_PACKAGE_SPEC
-              == external_ns_.get_parent_ns()->get_block_type()) {
+              == external_ns_.get_parent_ns()->get_block_type())
+          || (ObPLBlockNS::BlockType::BLOCK_OBJECT_BODY
+            == current_block_->get_namespace().get_block_type()
+          && OB_NOT_NULL(external_ns_.get_parent_ns())
+          && ObPLBlockNS::BlockType::BLOCK_OBJECT_SPEC
+              == external_ns_.get_parent_ns()->get_block_type())) {
         OZ (external_ns_.get_parent_ns()->get_routine_info(&routine_info, parent_routine_info));
       }
       if (NULL != parent_routine_info &&
