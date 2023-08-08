@@ -3734,7 +3734,8 @@ int ObLSBackupPrepareTask::process()
     ret = OB_NOT_INIT;
     LOG_WARN("prepare task do not init", K(ret));
   } else if (OB_SUCCESS != ls_backup_ctx_->get_result_code()) {
-    LOG_INFO("backup already failed, do nothing");
+    ret = ls_backup_ctx_->get_result_code();
+    LOG_WARN("backup already failed, do nothing", K(ret));
   } else if (OB_FAIL(may_need_advance_checkpoint_())) {
     LOG_WARN("may need advance checkpoint failed", K(ret), K_(param));
   } else if (OB_FAIL(prepare_backup_tx_table_filled_tx_scn_())) {
