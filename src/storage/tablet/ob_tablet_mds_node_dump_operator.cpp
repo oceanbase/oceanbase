@@ -30,7 +30,8 @@ namespace storage
 {
 ObTabletDumpMdsNodeOperator::ObTabletDumpMdsNodeOperator(ObTabletMdsData &mds_data, common::ObIAllocator &allocator)
   : mds_data_(mds_data),
-    allocator_(allocator)
+    allocator_(allocator),
+    dumped_(false)
 {
 }
 
@@ -197,6 +198,8 @@ int ObTabletDumpMdsNodeOperator::operator()(const mds::MdsDumpKV &kv)
   } else if (OB_UNLIKELY(!dumped)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected kv type, not dumped", K(ret), K(kv), K(dumped));
+  } else {
+    dumped_ = true;
   }
 
   return ret;

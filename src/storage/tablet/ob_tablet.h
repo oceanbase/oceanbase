@@ -424,13 +424,6 @@ public:
       int64_t &data_size,
       int64_t &required_size,
       const bool need_checksums = true);
-  int set_tx_data(
-      const ObTabletTxMultiSourceDataUnit &tx_data,
-      const share::SCN &memtable_log_scn,
-      const bool for_replay,
-      const memtable::MemtableRefOp ref_op = memtable::MemtableRefOp::NONE,
-      const bool is_callback = false);
-
   int check_and_set_initial_state();
   int set_memtable_clog_checkpoint_scn(const ObMigrationTabletParam *tablet_meta);
   int read_mds_table(common::ObIAllocator &allocator, ObTabletMdsData &mds_data, const bool for_flush);
@@ -641,7 +634,6 @@ private:
       const ObTaletExtraMediumInfo &extra_info,
       compaction::ObMediumCompactionInfoList &medium_info_list);
   int set_initial_state(const bool initial_state);
-  int check_initial_state(bool &initial_state);
 
   int load_deserialize_v1(
       common::ObArenaAllocator &allocator,

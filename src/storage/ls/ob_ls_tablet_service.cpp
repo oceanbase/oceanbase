@@ -1489,7 +1489,12 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
 
       if (OB_FAIL(ret)) {
       } else if (CLICK_FAIL(old_tablet->read_mds_table(arena_allocator, mds_data, true))) {
-        LOG_WARN("failed to read mds table", K(ret));
+        if (OB_EMPTY_RESULT == ret) {
+          ret = OB_SUCCESS;
+          LOG_INFO("read nothing from mds table, no need to build new tablet", K(ret), K(key));
+        } else {
+          LOG_WARN("failed to read mds table", K(ret), K(key));
+        }
       } else if (CLICK_FAIL(tmp_tablet->init(allocator, *old_tablet, flush_scn, mds_data, old_tablet->mds_data_))) {
         LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet), K(flush_scn));
       } else if (CLICK_FAIL(ObTabletPersister::persist_and_transform_tablet(*tmp_tablet, new_tablet_handle))) {
@@ -1505,7 +1510,7 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
       } else {
         CLICK();
         time_guard.click("CASwap");
-        LOG_INFO("succeeded to build new tablet", K(ret), K(disk_addr), K(new_tablet_handle), K(mds_data));
+        LOG_INFO("succeeded to build new tablet", K(ret), K(key), K(disk_addr), K(new_tablet_handle), K(mds_data));
       }
     }
   }

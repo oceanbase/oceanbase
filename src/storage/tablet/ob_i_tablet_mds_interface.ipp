@@ -37,7 +37,8 @@ inline int ObITabletMdsInterface::get_tablet_status(const share::SCN &snapshot,
     }, snapshot, 0, timeout))) {
     MDS_LOG_GET(WARN, "tablet_status does not exist on neither mds_table nor tablet", K(lbt()));
   } else if (!data.is_valid()) {
-    MDS_LOG_GET(WARN, "get invalid ObTabletCreateDeleteMdsUserData", K(lbt()));
+    ret = OB_ERR_UNEXPECTED;
+    MDS_LOG_GET(WARN, "invalid user data", K(lbt()));
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -57,7 +58,8 @@ inline int ObITabletMdsInterface::get_latest_tablet_status(ObTabletCreateDeleteM
     }, is_committed, 0))) {
     MDS_LOG_GET(WARN, "fail to get_latest_tablet_status");
   } else if (!data.is_valid()) {
-    MDS_LOG_GET(WARN, "get invalid ObTabletCreateDeleteMdsUserData", K(lbt()));
+    ret = OB_ERR_UNEXPECTED;
+    MDS_LOG_GET(WARN, "invalid user data", K(lbt()));
   }
   return ret;
   #undef PRINT_WRAPPER

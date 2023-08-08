@@ -36,12 +36,14 @@ public:
   ObTabletDumpMdsNodeOperator(ObTabletMdsData &mds_data, common::ObIAllocator &allocator);
 public:
   int operator()(const mds::MdsDumpKV &kv);
+  bool dumped() const { return dumped_; }
 private:
   template <typename K, typename T>
   int dump(const mds::MdsDumpKV &kv, bool &dumped);
 private:
   ObTabletMdsData &mds_data_;
   common::ObIAllocator &allocator_;
+  bool dumped_;
 };
 
 class ObTabletMediumInfoNodeOperator
