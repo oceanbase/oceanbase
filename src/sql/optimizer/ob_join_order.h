@@ -1241,6 +1241,7 @@ struct NullAwareAntiJoinInfo {
     struct PathHelper {
       PathHelper()
       : is_inner_path_(false),
+        force_inner_nl_(false),
         child_stmt_(NULL),
         pushdown_filters_(),
         filters_(),
@@ -1250,6 +1251,7 @@ struct NullAwareAntiJoinInfo {
       {}
 
       bool is_inner_path_;
+      bool force_inner_nl_;
       ObSelectStmt *child_stmt_;
       // when generate inner access path, save all pushdown filters
       // when generate subquery path, save all pushdown filters after rename

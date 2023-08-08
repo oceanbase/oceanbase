@@ -1593,22 +1593,13 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
   } else if (OB_ISNULL(index_info_entry)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index info entry should not be null", K(ret));
-  } else if (helper.is_inner_path_ &&
+  } else if (!helper.force_inner_nl_ && helper.is_inner_path_ &&
              (index_info_entry->get_ordering_info().get_index_keys().count() <= 0)) {
-    LOG_TRACE("OPT:skip adding inner access path due to wrong index key count",
-                K(table_id), K(ref_id));
+    LOG_TRACE("skip adding inner access path due to wrong index key count",
+                K(table_id), K(ref_id), KPC(index_info_entry));
   } else if (OB_ISNULL(ap = reinterpret_cast<AccessPath*>(allocator_->alloc(sizeof(AccessPath))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("failed to allocate an AccessPath", K(ret));
-  } else if (get_plan()->get_optimizer_context().is_batched_multi_stmt()) {
-    if (OB_ISNULL(table_item = get_plan()->get_stmt()->get_table_item_by_id(table_id))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table_item is null", K(ret), K(table_id));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    //do nothing
   } else {
     LOG_TRACE("OPT:start to create access path",
                 K(table_id), K(ref_id), K(index_id), K(helper.is_inner_path_), K(use_das));
@@ -2620,12 +2611,15 @@ int ObJoinOrder::compute_cost_and_prune_access_path(PathHelper &helper,
         }
       } else if (!is_virtual_table(ap->get_ref_table_id()) ||
                 is_oracle_mapping_real_virtual_table(ap->get_ref_table_id()) ||
-                ap->is_get_) {
+                ap->is_get_ ||
+                helper.force_inner_nl_) {
         if (OB_FAIL(helper.inner_paths_.push_back(ap))) {
           LOG_WARN("failed to push back inner path", K(ret));
         } else {
           LOG_TRACE("OPT:succeed to add inner access path", K(*ap));
         }
+      } else {
+        LOG_TRACE("path not add ", K(helper.force_inner_nl_));
       }
     } // add path end
   }
@@ -12896,6 +12890,7 @@ int ObJoinOrder::generate_inner_base_table_paths(const ObIArray<ObRawExpr *> &jo
   ObSEArray<ObRawExpr*, 4> pushdown_quals;
   PathHelper helper;
   helper.is_inner_path_ = true;
+  helper.force_inner_nl_ = inner_path_info.force_inner_nl_;
   helper.table_opt_info_ = &inner_path_info.table_opt_info_;
   ObSEArray<ObExecParamRawExpr *, 4> nl_params;
   bool is_valid = false;
