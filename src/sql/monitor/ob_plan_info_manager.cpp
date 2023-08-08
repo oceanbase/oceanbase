@@ -310,8 +310,15 @@ int ObLogicalPlanRawData::uncompress_logical_plan(ObIAllocator &allocator,
     //do nothing
   } else if (uncompress_len_ < 0) {
     //do not need decompress
-    uncompress_buf = logical_plan_;
     uncompress_size = logical_plan_len_;
+    if (NULL == (uncompress_buf = (char*)allocator.alloc(uncompress_size))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      if (REACH_TIME_INTERVAL(100 * 1000)) {
+        LOG_WARN("alloc mem failed", K(uncompress_size), K(ret));
+      }
+    } else {
+      MEMCPY(uncompress_buf, logical_plan_, uncompress_size);
+    }
   } else if (OB_FAIL(common::ObCompressorPool::get_instance().get_compressor(compressor_type,
                                                                              compressor))) {
     LOG_WARN("fail to get compressor", K(compressor_type), K(ret));
