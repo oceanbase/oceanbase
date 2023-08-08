@@ -729,7 +729,7 @@ int ObCrossClusterTabletChecksumValidator::check_column_checksum(
       if (OB_FAIL(construct_valid_tablet_checksum_item(tablet_checksum_item))) {
         LOG_WARN("fail to construct valid tablet checksum item", KR(ret));
       } else if (OB_FAIL(tablet_checksum_items_map.get_refactored(pair, tablet_checksum_item))) {
-        if (OB_ENTRY_NOT_EXIST == ret) {
+        if (OB_HASH_NOT_EXIST == ret) {
           // ignore ret and skip this tablet checksum. this may be caused by timeouted wait of tablet checksum
           ret = OB_SUCCESS;
         } else {
