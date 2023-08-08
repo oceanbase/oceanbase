@@ -7,7 +7,6 @@ We suggest you build OceanBase with debug mode as it is easy to debug.
 # GDB
 GDB is a powerful debugging tool, but it is difficult to debug OceanBase by gdb and the scenarioes is limited.
 
-## Debug running process
 If you want to debug a single oceanbase process and single thread, you can use gdb, otherwise it is more recommended to use logging.
 
 I suppose that you have already deploy the oceanbase built by source code.
@@ -34,7 +33,7 @@ Then you can set breakpoint, print variable, etc. Please refer to [gdb manual](h
 ## Debug oceanbase with debug-info package
 If you want to debug oceanbase or check the coredump file deployed with oceanbase rpm, you should install or load the debug-info package first. Loading is more recommended although installation is more convenient as there will be many debug-info packages in the system and it is not easy to cleanup.
 
-First you should get the debug-info package from the website, then load the package in the gdb, then you can debug oceanbase happily.
+First, obtain the debug-info package from the website, and then load the package into gdb. Afterward, you will be able to debug OceanBase with ease.
 
 Below are some tips.
 
@@ -85,7 +84,7 @@ REVISION: 102000042023061314-43bca414d5065272a730c92a645c3e25768c1d05
 ```
 We need `102000042023061314`.
 
-Then we search `102000042023061314` the oceanbase rpm website like below.
+Then we search `102000042023061314` on the oceanbase rpm website like below.
 
 ![download debug info package](images/download-debug-info-package.png)
 
@@ -110,9 +109,9 @@ Then you can get this.
     └── lib
         └── debug
             ├── .build-id
-            │   └── ee
-            │       ├── f87ee72d228069aab083d8e6d2fa2fcb5c03f2 -> ../../../../../home/admin/oceanbase/bin/observer
-            │       └── f87ee72d228069aab083d8e6d2fa2fcb5c03f2.debug -> ../../home/admin/oceanbase/bin/observer.debug
+            │   └── ee
+            │       ├── f87ee72d228069aab083d8e6d2fa2fcb5c03f2 -> ../../../../../home/admin/oceanbase/bin/observer
+            │       └── f87ee72d228069aab083d8e6d2fa2fcb5c03f2.debug -> ../../home/admin/oceanbase/bin/observer.debug
             └── home
                 └── admin
                     └── oceanbase
@@ -124,7 +123,20 @@ Then you can get this.
 
 **Debug oceanbase with debug-info package**
 
-Now, you can attach a process or a coredump file with gdb. Usually, you will get this message.
+Now, you can attach a process or a coredump file with gdb with commands below.
+```bash
+# attach a process
+gdb ./observer `pidof observer`
+```
+
+or
+
+```bash
+# open a coredump file
+gdb ./observer <coredump file name>
+```
+
+Usually, you will get this message.
 
 ```
 Type "apropos word" to search for commands related to "word"...
@@ -133,7 +145,7 @@ Reading symbols from clusters/local/bin/observer...
 Attaching to program: clusters/local/bin/observer, process 57296
 ```
 
-Which is say that there is no debugging symbols.
+This means that there is no debugging symbols.
 
 If we run some debug command in gdb, such as `bt`, we could got this.
 
