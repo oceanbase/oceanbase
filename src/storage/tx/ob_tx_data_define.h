@@ -430,7 +430,9 @@ public:
   {
     int64_t pos = 0;
     for (int i = 0; i < TX_DATA_MINI_LRU_ITEM_CNT; i++) {
-      J_KV(K(cache_items_[i]));
+      if (OB_UNLIKELY(cache_items_[i].is_valid_)) {
+        J_KV(K(cache_items_[i]));
+      }
     }
     return pos;
   }
