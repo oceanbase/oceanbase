@@ -428,5 +428,66 @@ public:
   uint64_t warnings_ CACHE_ALIGNED;
 };
 
+struct ObTableLoadSequenceNo
+{
+ OB_UNIS_VERSION(1);
+public:
+  static const uint64_t MAX_DATA_ID  = (1LL << 16) - 1;
+  static const uint64_t MAX_CHUNK_ID  = (1LL << 32) - 1;
+  static const uint64_t MAX_BATCH_ID  = (1LL << 48) - 1;
+  static const uint64_t MAX_DATA_SEQ_NO  = (1LL << 48) - 1;
+  static const uint64_t MAX_CHUNK_SEQ_NO  = (1LL << 32) - 1;
+  static const uint64_t MAX_BATCH_SEQ_NO  = (1LL << 16) - 1;
+  union {
+    // multi file
+    struct {
+      uint64_t data_id_ : 16;
+      uint64_t data_seq_no_ : 48;
+    };
+    // single file
+    struct {
+      uint64_t chunk_id_ : 32;
+      uint64_t chunk_seq_no_ : 32;
+    };
+    // client
+    struct {
+      uint64_t batch_id_ : 48;
+      uint64_t batch_seq_no_ : 16;
+    };
+    uint64_t sequence_no_;
+  };
+  ObTableLoadSequenceNo() : sequence_no_(OB_INVALID_ID) {}
+  ObTableLoadSequenceNo(uint64_t sequence_no) { sequence_no_ = sequence_no; }
+  void reset() { sequence_no_ = OB_INVALID_ID; }
+  bool is_valid () const {return sequence_no_ != OB_INVALID_ID; }
+  bool operator == (const ObTableLoadSequenceNo &other) const { return sequence_no_ == other.sequence_no_; }
+  bool operator < (const ObTableLoadSequenceNo &other) const { return sequence_no_ < other.sequence_no_; }
+  bool operator > (const ObTableLoadSequenceNo &other) const { return sequence_no_ > other.sequence_no_; }
+  ObTableLoadSequenceNo &operator=(const ObTableLoadSequenceNo &other) { sequence_no_ = other.sequence_no_; return *this; }
+  ObTableLoadSequenceNo &operator++()
+  {
+    sequence_no_++;
+    return *this;
+  }
+  ObTableLoadSequenceNo operator++(int)
+  {
+    ObTableLoadSequenceNo tmp = *this;
+    sequence_no_++;
+    return tmp;
+  }
+  ObTableLoadSequenceNo &operator--()
+  {
+    sequence_no_--;
+    return *this;
+  }
+  ObTableLoadSequenceNo operator--(int)
+  {
+    ObTableLoadSequenceNo tmp = *this;
+    sequence_no_--;
+    return tmp;
+  }
+  TO_STRING_KV(K_(sequence_no), K_(data_id), K_(data_seq_no), K_(chunk_id), K_(chunk_seq_no), K_(batch_id), K_(batch_seq_no));
+};
+
 } // namespace table
 } // namespace oceanbase

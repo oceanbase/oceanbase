@@ -37,6 +37,7 @@ ObTableLoadClientTask::ObTableLoadClientTask()
     exec_ctx_(nullptr),
     task_scheduler_(nullptr),
     next_trans_idx_(0),
+    next_batch_id_(0),
     table_ctx_(nullptr),
     client_status_(ObTableLoadClientStatus::MAX_STATUS),
     error_code_(OB_SUCCESS),

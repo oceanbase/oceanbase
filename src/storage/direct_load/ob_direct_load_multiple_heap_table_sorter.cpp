@@ -102,7 +102,7 @@ int ObDirectLoadMultipleHeapTableSorter::close_chunk(ObDirectLoadMultipleHeapTab
     for (int64_t j = 0; OB_SUCC(ret) && j < bag.count(); j ++) {
       if (OB_FAIL(bag.at(j)->to_datums(datum_row.storage_datums_, datum_row.count_))) {
         LOG_WARN("fail to transfer dataum row", KR(ret));
-      } else if (OB_FAIL(table_builder.append_row(keys.at(i), datum_row))) {
+      } else if (OB_FAIL(table_builder.append_row(keys.at(i), bag.at(j)->seq_no_, datum_row))) {
         LOG_WARN("fail to append row", KR(ret));
       }
     }

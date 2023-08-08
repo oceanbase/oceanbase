@@ -43,6 +43,7 @@ public:
   OB_INLINE ObTableLoadClientExecCtx *get_exec_ctx() { return exec_ctx_; }
   int add_trans_id(const table::ObTableLoadTransId &trans_id);
   int get_next_trans_id(table::ObTableLoadTransId &trans_id);
+  int64_t get_next_batch_id() { return ATOMIC_FAA(&next_batch_id_, 1); }
   OB_INLINE const common::ObIArray<table::ObTableLoadTransId> &get_trans_ids() const
   {
     return trans_ids_;
@@ -82,6 +83,7 @@ private:
   ObITableLoadTaskScheduler *task_scheduler_;
   common::ObArray<table::ObTableLoadTransId> trans_ids_;
   int64_t next_trans_idx_;
+  int64_t next_batch_id_ CACHE_ALIGNED;
   mutable obsys::ObRWLock rw_lock_;
   ObTableLoadTableCtx *table_ctx_;
   table::ObTableLoadClientStatus client_status_;

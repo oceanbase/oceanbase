@@ -485,12 +485,13 @@ int ObLoadDataDirectImpl::DataDescIterator::add_data_desc(const DataDesc &data_d
   return ret;
 }
 
-int ObLoadDataDirectImpl::DataDescIterator::get_next_data_desc(DataDesc &data_desc)
+int ObLoadDataDirectImpl::DataDescIterator::get_next_data_desc(DataDesc &data_desc, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (pos_ >= data_descs_.count()) {
     ret = OB_ITER_END;
   } else {
+    pos = pos_;
     data_desc = data_descs_.at(pos_++);
   }
   return ret;
@@ -1340,9 +1341,13 @@ int ObLoadDataDirectImpl::FileLoadExecutor::process_task_handle(TaskHandle *hand
           //此时row中的每个obj的内容指向的是data parser中的内存
           //因此得把它们深拷贝一遍
           ObTableLoadObjRow tmp_obj_row;
-          if (OB_FAIL(tmp_obj_row.deep_copy_and_assign(row.cells_, row.count_, allocator_handle))) {
+          tmp_obj_row.seq_no_= handle->get_next_seq_no();
+          tmp_obj_row.cells_ = row.cells_;
+          tmp_obj_row.count_ = row.count_;
+          ObTableLoadObjRow row;
+          if (OB_FAIL(row.deep_copy(tmp_obj_row, allocator_handle))) {
             LOG_WARN("failed to deep copy add assign to tmp_obj_row", KR(ret));
-          } else if (OB_FAIL(obj_rows.push_back(tmp_obj_row))) {
+          } else if (OB_FAIL(obj_rows.push_back(row))) {
             LOG_WARN("failed to add tmp_obj_row to obj_rows", KR(ret));
           } else {
             ++processed_line_count;
@@ -1422,6 +1427,9 @@ int ObLoadDataDirectImpl::LargeFileLoadTaskProcessor::process()
   int64_t line_count = 0;
   if (OB_FAIL(file_load_executor_->process_task_handle(handle_, line_count))) {
     LOG_WARN("fail to process task handle", KR(ret));
+  } else if (OB_UNLIKELY(line_count > ObTableLoadSequenceNo::MAX_CHUNK_SEQ_NO)){
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("size is overflow", KR(ret), K(line_count));
   }
   return ret;
 }
@@ -1431,7 +1439,8 @@ int ObLoadDataDirectImpl::LargeFileLoadTaskProcessor::process()
  */
 
 ObLoadDataDirectImpl::LargeFileLoadExecutor::LargeFileLoadExecutor()
-  : next_worker_idx_(0)
+  : next_worker_idx_(0),
+    next_chunk_id_(0)
 {
 }
 
@@ -1452,6 +1461,7 @@ int ObLoadDataDirectImpl::LargeFileLoadExecutor::init(const LoadExecuteParam &ex
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(execute_param), K(execute_ctx), K(data_desc_iter));
   } else {
+    int64_t data_id = 0;
     DataDescIterator copy_data_desc_iter;
     DataDesc data_desc;
     if (OB_FAIL(inner_init(execute_param, execute_ctx, execute_param.thread_count_,
@@ -1461,7 +1471,7 @@ int ObLoadDataDirectImpl::LargeFileLoadExecutor::init(const LoadExecuteParam &ex
     // data_desc_
     else if (OB_FAIL(copy_data_desc_iter.copy(data_desc_iter))) {
       LOG_WARN("fail to copy data desc iter", KR(ret));
-    } else if (OB_FAIL(copy_data_desc_iter.get_next_data_desc(data_desc))) {
+    } else if (OB_FAIL(copy_data_desc_iter.get_next_data_desc(data_desc, data_id))) {
       LOG_WARN("fail to get next data desc", KR(ret));
     }
     // expr_buffer_
@@ -1493,8 +1503,12 @@ int ObLoadDataDirectImpl::LargeFileLoadExecutor::get_next_task_handle(TaskHandle
 {
   int ret = OB_SUCCESS;
   int64_t current_line_count = 0;
+  const int64_t chunk_id = next_chunk_id_ ++;
   expr_buffer_.reuse();
-  if (OB_FAIL(data_reader_.get_next_buffer(*expr_buffer_.file_buffer_, current_line_count))) {
+  if (OB_UNLIKELY(chunk_id > ObTableLoadSequenceNo::MAX_CHUNK_ID)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("size is overflow", KR(ret), K(chunk_id));
+  } else if (OB_FAIL(data_reader_.get_next_buffer(*expr_buffer_.file_buffer_, current_line_count))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("fail to get next buffer", KR(ret));
     }
@@ -1507,6 +1521,8 @@ int ObLoadDataDirectImpl::LargeFileLoadExecutor::get_next_task_handle(TaskHandle
     handle->data_desc_ = data_desc_;
     handle->start_line_no_ = total_line_count_ + 1;
     handle->result_.created_ts_ = ObTimeUtil::current_time();
+    handle->sequence_no_.chunk_id_ = chunk_id;
+    handle->sequence_no_.chunk_seq_no_ = 0;
     handle->data_buffer_.swap(expr_buffer_);
     handle->data_buffer_.is_end_file_ = data_reader_.is_end_file();
   }
@@ -1601,6 +1617,7 @@ int ObLoadDataDirectImpl::MultiFilesLoadTaskProcessor::process()
   int ret = OB_SUCCESS;
   handle_->result_.start_process_ts_ = ObTimeUtil::current_time();
   int64_t current_line_count = 0;
+  int64_t total_line_count = 0;
   if (OB_FAIL(data_reader_.init(execute_param_->data_access_param_, *execute_ctx_,
                                 handle_->data_desc_, true))) {
     LOG_WARN("fail to init data reader", KR(ret));
@@ -1617,6 +1634,12 @@ int ObLoadDataDirectImpl::MultiFilesLoadTaskProcessor::process()
       current_line_count = 0;
       if (OB_FAIL(file_load_executor_->process_task_handle(handle_, current_line_count))) {
         LOG_WARN("fail to process task handle", KR(ret));
+      } else {
+        total_line_count += current_line_count;
+        if (OB_UNLIKELY(total_line_count > ObTableLoadSequenceNo::MAX_DATA_SEQ_NO)){
+          ret = OB_SIZE_OVERFLOW;
+          LOG_WARN("size is overflow", KR(ret), K(total_line_count));
+        }
       }
     }
   }
@@ -1640,6 +1663,12 @@ int ObLoadDataDirectImpl::MultiFilesLoadTaskProcessor::process()
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("direct-load does not support big row", KR(ret), "size",
                  handle_->data_buffer_.get_data_length());
+      } else {
+        total_line_count += current_line_count;
+        if (OB_UNLIKELY(total_line_count > ObTableLoadSequenceNo::MAX_DATA_SEQ_NO)){
+          ret = OB_SIZE_OVERFLOW;
+          LOG_WARN("size is overflow", KR(ret), K(total_line_count));
+        }
       }
     }
   }
@@ -1741,10 +1770,14 @@ int ObLoadDataDirectImpl::MultiFilesLoadExecutor::get_next_task_handle(TaskHandl
 {
   int ret = OB_SUCCESS;
   DataDesc data_desc;
-  if (OB_FAIL(data_desc_iter_.get_next_data_desc(data_desc))) {
+  int64_t data_id = 0;
+  if (OB_FAIL(data_desc_iter_.get_next_data_desc(data_desc, data_id))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("fail to get next data desc", KR(ret));
     }
+  } else if (OB_UNLIKELY(data_id > ObTableLoadSequenceNo::MAX_DATA_ID)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("size is overflow", KR(ret), K(data_id));
   } else if (OB_FAIL(fetch_task_handle(handle))) {
     LOG_WARN("fail to fetch task handle", KR(ret));
   } else {
@@ -1752,6 +1785,8 @@ int ObLoadDataDirectImpl::MultiFilesLoadExecutor::get_next_task_handle(TaskHandl
     handle->data_desc_ = data_desc;
     handle->start_line_no_ = 0;
     handle->result_.created_ts_ = ObTimeUtil::current_time();
+    handle->sequence_no_.data_id_ = data_id;
+    handle->sequence_no_.data_seq_no_ = 0;
   }
   return ret;
 }

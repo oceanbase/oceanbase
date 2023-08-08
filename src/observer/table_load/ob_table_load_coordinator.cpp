@@ -1260,26 +1260,15 @@ public:
   int set_objs(const ObTableLoadObjRowArray &obj_rows, const ObIArray<int64_t> &idx_array)
   {
     int ret = OB_SUCCESS;
-
     for (int64_t i = 0; OB_SUCC(ret) && (i < obj_rows.count()); ++i) {
       const ObTableLoadObjRow &src_obj_row = obj_rows.at(i);
       ObTableLoadObjRow out_obj_row;
-
-      if (OB_FAIL(out_obj_row.init(src_obj_row.count_, src_obj_row.allocator_handle_))) {
-        LOG_WARN("failed to init out_obj_row", KR(ret), K(src_obj_row.count_));
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && (j < src_obj_row.count_); ++j) {
-          out_obj_row.cells_[j] = src_obj_row.cells_[idx_array.at(j)];
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(obj_rows_.push_back(out_obj_row))) {
-          LOG_WARN("failed to add row to obj_rows_", KR(ret), K(out_obj_row));
-        }
+      if (src_obj_row.project(idx_array, out_obj_row)) {
+        LOG_WARN("failed to projecte out_obj_row", KR(ret), K(src_obj_row.count_));
+      } else if (OB_FAIL(obj_rows_.push_back(out_obj_row))) {
+        LOG_WARN("failed to add row to obj_rows_", KR(ret), K(out_obj_row));
       }
     }
-
     return ret;
   }
   int process() override

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "storage/blocksstable/ob_datum_row.h"
+#include "share/table/ob_table_load_define.h"
 
 namespace oceanbase
 {
@@ -28,6 +29,7 @@ public:
   ObIDirectLoadPartitionTableBuilder() = default;
   virtual ~ObIDirectLoadPartitionTableBuilder() = default;
   virtual int append_row(const common::ObTabletID &tablet_id,
+                         const table::ObTableLoadSequenceNo &seq_no,
                          const blocksstable::ObDatumRow &datum_row) = 0;
   virtual int close() = 0;
   virtual int64_t get_row_count() const = 0;

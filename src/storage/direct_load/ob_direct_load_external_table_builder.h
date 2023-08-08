@@ -42,6 +42,7 @@ public:
   virtual ~ObDirectLoadExternalTableBuilder();
   int init(const ObDirectLoadExternalTableBuildParam &build_param);
   int append_row(const common::ObTabletID &tablet_id,
+                 const table::ObTableLoadSequenceNo &seq_no,
                  const blocksstable::ObDatumRow &datum_row) override;
   int close() override;
   int64_t get_row_count() const override { return row_count_; }

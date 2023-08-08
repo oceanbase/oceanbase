@@ -148,6 +148,7 @@ int ObDirectLoadTableStoreBucket::init(const ObDirectLoadTableStoreParam &param,
 }
 
 int ObDirectLoadTableStoreBucket::append_row(const ObTabletID &tablet_id,
+                                             const ObTableLoadSequenceNo &seq_no,
                                              const ObDatumRow &datum_row)
 {
   OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, table_store_bucket_append_row);
@@ -160,7 +161,7 @@ int ObDirectLoadTableStoreBucket::append_row(const ObTabletID &tablet_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(tablet_id), K(datum_row), KPC(param_));
   } else {
-    if (OB_FAIL(table_builder_->append_row(tablet_id, datum_row))) {
+    if (OB_FAIL(table_builder_->append_row(tablet_id, seq_no, datum_row))) {
       LOG_WARN("fail to append row", KR(ret));
     }
   }
@@ -291,7 +292,7 @@ int ObDirectLoadTableStore::get_bucket(const ObTabletID &tablet_id,
   return ret;
 }
 
-int ObDirectLoadTableStore::append_row(const ObTabletID &tablet_id, const ObDatumRow &datum_row)
+int ObDirectLoadTableStore::append_row(const ObTabletID &tablet_id, const ObTableLoadSequenceNo &seq_no, const ObDatumRow &datum_row)
 {
   OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, table_store_append_row);
   OB_TABLE_LOAD_STATISTICS_COUNTER(table_store_row_count);
@@ -306,7 +307,7 @@ int ObDirectLoadTableStore::append_row(const ObTabletID &tablet_id, const ObDatu
     ObDirectLoadTableStoreBucket *bucket = nullptr;
     if (OB_FAIL(get_bucket(tablet_id, bucket))) {
       LOG_WARN("fail to get bucket", KR(ret), K(tablet_id));
-    } else if (OB_FAIL(bucket->append_row(tablet_id, datum_row))) {
+    } else if (OB_FAIL(bucket->append_row(tablet_id, seq_no, datum_row))) {
       LOG_WARN("fail to append row to bucket", KR(ret), K(tablet_id), K(datum_row));
     }
   }

@@ -447,7 +447,10 @@ int ObTableDirectLoadInsertExecutor::process()
     } else {
       ObTableLoadCoordinator coordinator(table_ctx);
       ObTableLoadTransId trans_id;
-      if (OB_FAIL(client_task->get_next_trans_id(trans_id))) {
+      int64_t batch_id = client_task->get_next_batch_id();
+      if (OB_FAIL(set_batch_seq_no(batch_id, obj_rows))) {
+        LOG_WARN("fail to set batch seq no", KR(ret));
+      } else if (OB_FAIL(client_task->get_next_trans_id(trans_id))) {
         LOG_WARN("fail to get next trans id", KR(ret));
       } else if (OB_FAIL(coordinator.init())) {
         LOG_WARN("fail to init coordinator", KR(ret));
@@ -492,6 +495,27 @@ int ObTableDirectLoadInsertExecutor::decode_payload(const ObString &payload,
       if (OB_FAIL(obj_row_array.deserialize(buf, data_len, pos))) {
         LOG_WARN("failed to deserialize obj rows", KR(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObTableDirectLoadInsertExecutor::set_batch_seq_no(int64_t batch_id,
+                                                      ObTableLoadObjRowArray &obj_row_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(obj_row_array.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(obj_row_array));
+  } else if (OB_UNLIKELY(batch_id > ObTableLoadSequenceNo::MAX_BATCH_ID ||
+                         obj_row_array.count() > ObTableLoadSequenceNo::MAX_BATCH_SEQ_NO)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("size is overflow", KR(ret), K(batch_id), K(obj_row_array.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < obj_row_array.count(); ++i) {
+      ObTableLoadObjRow &row = obj_row_array.at(i);
+      row.seq_no_.batch_id_ = batch_id;
+      row.seq_no_.batch_seq_no_ = i;
     }
   }
   return ret;

@@ -38,7 +38,7 @@ int ObDirectLoadMemSample::gen_ranges(ObIArray<ChunkType *> &chunks, ObIArray<Ra
   }
   if (OB_SUCC(ret)) {
     CompareType compare;
-    if (OB_FAIL(compare.init(*(mem_ctx_->datum_utils_)))) {
+    if (OB_FAIL(compare.init(*(mem_ctx_->datum_utils_), mem_ctx_->dup_action_))) {
       LOG_WARN("fail to init compare", KR(ret));
     } else {
       std::sort(sample_rows.begin(), sample_rows.end(), compare);

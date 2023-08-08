@@ -77,7 +77,7 @@ int ObDirectLoadSSTableBuilder::init(const ObDirectLoadSSTableBuildParam &param)
   return ret;
 }
 
-int ObDirectLoadSSTableBuilder::append_row(const ObTabletID &tablet_id, const ObDatumRow &datum_row)
+int ObDirectLoadSSTableBuilder::append_row(const ObTabletID &tablet_id, const table::ObTableLoadSequenceNo &seq_no, const ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -97,7 +97,7 @@ int ObDirectLoadSSTableBuilder::append_row(const ObTabletID &tablet_id, const Ob
     if (OB_FAIL(check_rowkey_order(key))) {
       LOG_WARN("fail to check rowkey order", KR(ret), K(datum_row));
     } else if (OB_FAIL(external_row.from_datums(datum_row.storage_datums_, datum_row.count_,
-                                                param_.table_data_desc_.rowkey_column_num_))) {
+                                                param_.table_data_desc_.rowkey_column_num_, seq_no))) {
       LOG_WARN("fail to from datum row", KR(ret));
     } else if (OB_FAIL(data_block_writer_.append_row(external_row))) {
       LOG_WARN("fail to append row to data block writer", KR(ret), K(external_row));
