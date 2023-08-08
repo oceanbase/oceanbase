@@ -6389,176 +6389,91 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
     LOG_WARN("rewind failed", KPC(extra), K(ret));
   } else if (!extra->is_iterated() && OB_FAIL(extra->finish_add_row())) {
     LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
+  } else if (aggr_info.param_exprs_.count() < 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get aggr_info param null", K(ret), K(aggr_info.param_exprs_.count()));
   } else {
-    const ObChunkDatumStore::StoredRow *storted_row = NULL;
-    ObJsonBuffer json_array_buf(&aggr_alloc_);
-    ObObj *tmp_obj = NULL;
-    if (OB_FAIL(json_array_buf.append("["))) {
-      LOG_WARN("fail to append curly brace", K(ret));
-    }
-    bool inited_tmp_obj = false;
+    const ObChunkDatumStore::StoredRow *storted_row = nullptr;
+    ObObjMeta data_meta = aggr_info.param_exprs_.at(0)->obj_meta_;
+    bool is_format_json = aggr_info.format_json_;
+    bool is_absent_on_null = !aggr_info.absent_on_null_;
+    bool is_strict = aggr_info.strict_json_;
+    ObJsonArray json_array(&tmp_alloc);
+
     while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
-      if (OB_ISNULL(storted_row)) {
+      if (OB_ISNULL(storted_row) || storted_row->cnt_ < 1) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(storted_row));
+        LOG_WARN("get unexpected null or row cnt not correct", K(ret), K(storted_row));
       } else {
-        // get type
-        if (!inited_tmp_obj && OB_ISNULL(tmp_obj = static_cast<ObObj*>(tmp_alloc.alloc(
-                                                   sizeof(ObObj) * (storted_row->cnt_))))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to allocate memory", K(ret), K(tmp_obj));
-        } else if (!inited_tmp_obj && FALSE_IT(inited_tmp_obj = true)) {
-        } else if (OB_FAIL(convert_datum_to_obj(aggr_info, *storted_row, tmp_obj, storted_row->cnt_))) {
-          LOG_WARN("failed to convert datum to obj", K(ret));
-        } else if (storted_row->cnt_ < 1) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected column count", K(ret), K(storted_row));
-        } else {
-          ObObjType val_type = tmp_obj->get_type();
-          const ObExpr *expr = aggr_info.param_exprs_.at(0);
-          if (val_type == ObNumberType && aggr_info.format_json_) {
-            ret = OB_ERR_INVALID_TYPE_FOR_OP;
-            LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "CHAR", ob_obj_type_str(val_type));
-          } else {
-            if (ob_is_null(val_type) && !aggr_info.absent_on_null_) {
-              continue;
-            }
-            ObCollationType cs_type = tmp_obj->get_collation_type();
-            ObScale scale = tmp_obj->get_scale();
-            ObIJsonBase *json_val = NULL;
-            ObDatum converted_datum;
-            converted_datum.set_datum(storted_row->cells()[0]);
-            bool is_clob = ob_is_clob(val_type, cs_type);
-            // convert string charset if neededd
-            if ((ob_is_string_tc(val_type) || is_clob || ob_is_json(val_type) || ob_is_raw(val_type))
-                && (ObCharset::charset_type_by_coll(cs_type) != CHARSET_UTF8MB4)) {
-              ObString origin_str;
-              if (ob_is_lob_locator(val_type)) {
-                const ObLobLocator &lob_locator = converted_datum.get_lob_locator();
-                origin_str.assign(const_cast<char *>(lob_locator.get_payload_ptr()),
-                    static_cast<ObString::obstr_size_t>(lob_locator.payload_size_));
-                val_type = ObVarcharType;
-              } else if (tmp_obj->is_lob_storage()) {
-                origin_str = converted_datum.get_string();
-                if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_alloc, val_type,
-                                                        cs_type, tmp_obj->has_lob_header(), origin_str))) {
-                  LOG_WARN("fail to get real data.", K(ret), K(origin_str));
-                } else {
-                  val_type = ObVarcharType;
-                }
-              } else {
-                origin_str = converted_datum.get_string();
-              }
-              ObString converted_str;
-              if (OB_FAIL(ret)) {
-              } else if (OB_FAIL(ObExprUtil::convert_string_collation(origin_str, cs_type, converted_str,
-                                                                   CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {
-                LOG_WARN("convert string collation failed", K(ret), K(cs_type), K(origin_str.length()));
-              } else {
-                converted_datum.set_string(converted_str);
-                cs_type = CS_TYPE_UTF8MB4_BIN;
-              }
-            }
-            ObEvalCtx ctx(eval_ctx_);
-            if (OB_FAIL(ret)) {
-            } else if (ObJsonExprHelper::is_convertible_to_json(val_type) || ob_is_raw(val_type)) {
+        const ObDatum& datum = storted_row->cells()[0];
+        ObObjType val_type = data_meta.get_type();
+        ObScale scale = data_meta.get_scale();
+        ObCollationType cs_type = data_meta.get_collation_type();
+        ObIJsonBase *json_val = nullptr;
 
-              if (OB_FAIL(ObJsonExprHelper::transform_convertible_2String(*expr, ctx, converted_datum, val_type,
-                                                                          cs_type, json_array_buf,
-                                                                          tmp_obj->has_lob_header(),
-                                                                          aggr_info.format_json_,
-                                                                          aggr_info.strict_json_, 0))) {
-                LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
-              }
-            } else {
-              if (OB_FAIL(ObJsonExprHelper::transform_scalar_2String(ctx, converted_datum,
-                                                                    val_type, scale,
-                                                                    eval_ctx_.exec_ctx_.get_my_session()->get_timezone_info(),
-                                                                    json_array_buf))) {
-                LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
-              }
-            }
-
-            if (OB_FAIL(ret)) {
-            } else if (json_array_buf.length() > OB_MAX_PACKET_LENGTH) {
-              ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
-              LOG_WARN("result of json_arrar is too long", K(ret), K(json_array_buf.length()),
-                                                                  K(OB_MAX_PACKET_LENGTH));
-            } else if (OB_FAIL(json_array_buf.append(","))) {
-              LOG_WARN("fail to append comma", K(ret));
-            }
-          }
+        if (OB_FAIL(ObJsonExprHelper::oracle_datum2_json_val(&datum, data_meta, &tmp_alloc,
+            eval_ctx_.exec_ctx_.get_my_session(), json_val, false, is_format_json, is_strict, false))) {
+          LOG_WARN("failed to eval json val node.", K(ret), K(is_format_json), K(is_strict), K(data_meta));
+        } else if (is_absent_on_null
+                   && (val_type == ObNullType || json_val->json_type() == ObJsonNodeType::J_NULL)) {
+          // do nothing , continue
+        } else if (OB_FAIL(json_array.append(static_cast<ObJsonNode*>(json_val)))) {
+          LOG_WARN("failed to append array node", K(ret), K(json_array.element_count()));
+        } else if (json_array.get_serialize_size() > OB_MAX_PACKET_LENGTH) {
+          ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
+          LOG_WARN("result of json_arrayagg is too long", K(ret),
+            K(json_array.get_serialize_size()),  K(OB_MAX_PACKET_LENGTH));
         }
       }
-    }//end of while
+    } //end of while
+
     if (ret != OB_ITER_END && ret != OB_SUCCESS) {
       LOG_WARN("fail to get next row", K(ret));
     } else {
       ret = OB_SUCCESS;
       ParseNode parse_node;
       parse_node.value_ = aggr_info.returning_type_;
-      ObObjType obj_type = static_cast<ObObjType>(parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX]);
-      ObCollationType obj_cs_type = static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]);
-      if (json_array_buf.length() > 1) {
-        char *end_of_obj = json_array_buf.ptr() + json_array_buf.length() - 1;
-        *end_of_obj = ']';
-      } else if (OB_FAIL(json_array_buf.append("]"))) {
-        LOG_WARN("fail to append curly brace", K(ret));
+
+      ObObjType rsp_type = static_cast<ObObjType>(parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX]);
+      ObCollationType rsp_cs_type = static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]);
+      int32_t rsp_len = parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX];
+
+      if (!parse_node.value_) {
+        rsp_type = ObJsonType;
+        rsp_cs_type = CS_TYPE_UTF8MB4_BIN;
+        rsp_len = (ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length();
       }
 
-      int32_t dst_len = parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX];
-      ObString res_str(json_array_buf.length(), json_array_buf.ptr());
-      ObJsonNode* json_node = NULL;
-      uint32_t parse_flag = ObJsonParser::JSN_STRICT_FLAG;
+      int64_t result_likely_size = json_array.get_serialize_size();
 
-      ADD_FLAG_IF_NEED(!aggr_info.strict_json_, parse_flag, ObJsonParser::JSN_RELAXED_FLAG);
-      ADD_FLAG_IF_NEED(aggr_info.with_unique_keys_, parse_flag, ObJsonParser::JSN_UNIQUE_FLAG);
+      ObJsonBuffer string_buffer(&tmp_alloc);
 
-      if (obj_type == ObJsonType) {
-        ADD_FLAG_IF_NEED(true, parse_flag, ObJsonParser::JSN_UNIQUE_FLAG);
-      }
-      if (obj_type == ObJsonType && OB_FAIL(ObJsonParser::get_tree(&tmp_alloc, res_str, json_node, parse_flag))) {
-        LOG_WARN("fail to get json base", K(ret), K(res_str));
-      } else if (ob_is_string_type(obj_type) || ob_is_lob_locator(obj_type) || ob_is_raw(obj_type)) {
-        if (ob_is_string_type(obj_type) || ob_is_raw(obj_type)) {
-          if (obj_type == ObVarcharType && res_str.length()  > dst_len) {
-            char res_ptr[OB_MAX_DECIMAL_PRECISION] = {0};
-            if (OB_ISNULL(ObCharset::lltostr(dst_len, res_ptr, 10, 1))) {
-              LOG_WARN("dst_len fail to string.", K(ret));
-            }
-            ret = OB_OPERATE_OVERFLOW;
-            LOG_USER_ERROR(OB_OPERATE_OVERFLOW, res_ptr, "json_arrayagg");
-          } else if (ob_is_string_type(obj_type)) {
-            if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(*aggr_info.expr_, eval_ctx_, concat_result, res_str, &aggr_alloc_))) {
-              LOG_WARN("fail to pack res result.", K(ret));
-            }
-          } else {
-            concat_result.set_string(res_str);
+      if (ob_is_string_type(rsp_type) || ob_is_raw(rsp_type)) {
+        if (OB_FAIL(string_buffer.reserve(result_likely_size))) {
+          LOG_WARN("fail to reserve string.", K(ret), K(result_likely_size));
+        } else if (OB_FAIL(json_array.print(string_buffer, true, false))) {
+          LOG_WARN("failed: get json string text", K(ret));
+        } else if (rsp_type == ObVarcharType && string_buffer.length() > rsp_len) {
+          char res_ptr[OB_MAX_DECIMAL_PRECISION] = {0};
+          if (OB_ISNULL(ObCharset::lltostr(rsp_len, res_ptr, 10, 1))) {
+            LOG_WARN("dst_len fail to string.", K(ret));
           }
-        } else {
-          ObLobLocator *result = nullptr;
-          char *total_buf = NULL;
-          const int64_t total_buf_len = sizeof(ObLobLocator) + res_str.length();
-          if (OB_ISNULL(total_buf = aggr_info.expr_->get_str_res_mem(eval_ctx_, total_buf_len))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("Failed to allocate memory for lob locator", K(ret), K(total_buf_len));
-          } else if (FALSE_IT(result = reinterpret_cast<ObLobLocator *> (total_buf))) {
-          } else if (OB_FAIL(result->init(res_str))) {
-              LOG_WARN("Failed to init lob locator", K(ret), K(res_str), K(result));
-          } else {
-            concat_result.set_lob_locator(*result);
-          }
+          ret = OB_OPERATE_OVERFLOW;
+          LOG_USER_ERROR(OB_OPERATE_OVERFLOW, res_ptr, "json_arrayagg");
+        } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(*aggr_info.expr_, eval_ctx_,concat_result,
+                                                               string_buffer.string(), &aggr_alloc_))) {
+          LOG_WARN("fail to pack res result.", K(ret));
         }
-      } else if (ob_is_json(obj_type)) {
+      } else if (ob_is_json(rsp_type)) {
         ObString raw_binary_str;
-        if (OB_FAIL(json_node->get_raw_binary(raw_binary_str, &aggr_alloc_))) {
+        if (OB_FAIL(json_array.get_raw_binary(raw_binary_str, &tmp_alloc))) {
           LOG_WARN("get result binary failed", K(ret));
         } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(*aggr_info.expr_, eval_ctx_, concat_result, raw_binary_str, &aggr_alloc_))) {
           LOG_WARN("fail to pack res result.", K(ret));
         }
       } else {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unpexcted returning type", K(ret), K(obj_type));
+        LOG_WARN("get unpexcted returning type", K(ret), K(rsp_type));
       }
     }
   }
@@ -6750,11 +6665,8 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
 {
   int ret = OB_SUCCESS;
   common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-  const int64_t MAX_BUCKET_NUM = 1024;
-  common::hash::ObHashSet<ObString> view_key_names;
-  if (OB_FAIL(view_key_names.create(MAX_BUCKET_NUM))) {
-    LOG_WARN("init hash failed", K(ret), K(MAX_BUCKET_NUM));
-  } else if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
+
+  if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unpexcted null", K(ret), K(extra));
   } else if (extra->is_iterated() && OB_FAIL(extra->rewind())) {
@@ -6762,215 +6674,134 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
     LOG_WARN("rewind failed", KPC(extra), K(ret));
   } else if (!extra->is_iterated() && OB_FAIL(extra->finish_add_row())) {
     LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
+  } else if (aggr_info.param_exprs_.count() < 2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get aggr_info param null", K(ret), K(aggr_info.param_exprs_.count()));
   } else {
-    const ObChunkDatumStore::StoredRow *storted_row = NULL;
-    ObJsonBuffer json_object_buf(&aggr_alloc_);
-    if (OB_FAIL(json_object_buf.append("{"))) {
-      LOG_WARN("fail to append curly brace", K(ret));
-    }
-    bool inited_tmp_obj = false;
-    ObObj *tmp_obj = NULL;
+    const ObChunkDatumStore::StoredRow *storted_row = nullptr;
+    ObObjMeta meta_key = aggr_info.param_exprs_.at(0)->obj_meta_;
+    ObObjMeta meta_value = aggr_info.param_exprs_.at(1)->obj_meta_;
+
+    bool is_format_json = aggr_info.format_json_;
+    bool is_absent_on_null = (aggr_info.absent_on_null_ >= 1);
+    bool is_strict = aggr_info.strict_json_;
+    bool is_with_unique_keys = aggr_info.with_unique_keys_;
+
+    ObJsonObject j_obj(&tmp_alloc);
+
     while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
-      if (OB_ISNULL(storted_row)) {
+      if (OB_ISNULL(storted_row) || storted_row->cnt_ < 2) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(storted_row));
+        LOG_WARN("get unexpected null or row cnt not correct", K(ret), K(storted_row));
       } else {
-        // get obj
-        if (!inited_tmp_obj && OB_ISNULL(tmp_obj = static_cast<ObObj*>(tmp_alloc.alloc(
-                                                   sizeof(ObObj) * (storted_row->cnt_))))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to allocate memory", K(ret), K(tmp_obj));
-        } else if (!inited_tmp_obj && FALSE_IT(inited_tmp_obj = true)) {
-        } else if (OB_FAIL(convert_datum_to_obj(aggr_info, *storted_row, tmp_obj, storted_row->cnt_))) {
-          LOG_WARN("failed to convert datum to obj", K(ret));
-        } else if (tmp_obj[0].get_type() == ObNullType) {
+        ObObjType type_key = meta_key.get_type();
+        ObCollationType cs_type_key = meta_key.get_collation_type();
+
+        if (type_key == ObNullType) {
           ret = OB_ERR_JSON_DOCUMENT_NULL_KEY;
-          LOG_WARN("null type for json_objectagg key");
-        } else if (ob_is_string_type(tmp_obj[0].get_type())
-                   && tmp_obj[0].get_collation_type() == CS_TYPE_BINARY) {
-          // not support binary charset as mysql
-          LOG_WARN("unsuport json string type with binary charset",
-              K(tmp_obj[0].get_type()), K(tmp_obj[0].get_collation_type()));
+          LOG_USER_ERROR(OB_ERR_JSON_DOCUMENT_NULL_KEY);
+        } else if (!ob_is_string_type(type_key)) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "CHAR", ob_obj_type_str(type_key));
+        } else if (ob_is_string_type(type_key) && cs_type_key == CS_TYPE_BINARY) {
           ret = OB_ERR_INVALID_JSON_CHARSET;
           LOG_USER_ERROR(OB_ERR_INVALID_JSON_CHARSET);
-        } else if (NULL == tmp_obj[0].get_string_ptr()) {
-          ret = OB_ERR_NULL_VALUE;
-          LOG_WARN("unexpected null result", K(ret), K(tmp_obj[0]));
         } else {
-          ObObjType val_type1 = tmp_obj[1].get_type();
-          const ObExpr *expr = aggr_info.param_exprs_.at(1);
-          if (val_type1 == ObNumberType && aggr_info.format_json_) {
-            ret = OB_ERR_INVALID_TYPE_FOR_OP;
-            LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "CHAR", ob_obj_type_str(val_type1));
-          } else {
-            if (ob_is_null(val_type1) && (aggr_info.absent_on_null_ >= 1)) {
-              continue;
-            }
-            ObObjType val_type0 = tmp_obj[0].get_type();
-            ObCollationType cs_type0 = tmp_obj[0].get_collation_type();
-            ObScale scale1 = tmp_obj[1].get_scale();
-            ObCollationType cs_type1 = tmp_obj[1].get_collation_type();
-            ObString key_string = tmp_obj[0].get_string();
-            if (OB_SUCC(ret) && ObCharset::charset_type_by_coll(cs_type0) != CHARSET_UTF8MB4) {
-              ObString converted_key_str;
-              if (OB_FAIL(ObExprUtil::convert_string_collation(key_string, cs_type0, converted_key_str,
-                                                              CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {
-                LOG_WARN("convert key string collation failed", K(ret), K(cs_type0), K(key_string.length()));
-              } else {
-                key_string = converted_key_str;
-              }
-            }
+          const ObDatum& datum_key = storted_row->cells()[0];
+          const ObDatum& datum_value = storted_row->cells()[1];
 
-            // get key and value, and append to json_object
-            if (OB_SUCC(ret) && aggr_info.with_unique_keys_
-                && OB_FAIL(check_key_valid(view_key_names, key_string))) {
-              LOG_WARN("duplicate key", K(ret), K(key_string));
-            }
-            ObJsonString ob_str(key_string.ptr(), key_string.length());
-            if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(ob_str.print(json_object_buf, true))) {
-              LOG_WARN("fail to print json node", K(ret));
-            } else if (OB_FAIL(json_object_buf.append(":"))) {
-              LOG_WARN("fail to append colon", K(ret));
-            } else {
-              ObDatum converted_datum;
-              converted_datum.set_datum(storted_row->cells()[1]);
-              bool is_clob = !ob_is_clob(val_type1, cs_type1);
-              // convert string charset if neededd
-              if ((ob_is_string_tc(val_type1) || is_clob || ob_is_json(val_type1) || ob_is_raw(val_type1))
-                  && (ObCharset::charset_type_by_coll(cs_type1) != CHARSET_UTF8MB4)) {
-                ObString origin_str;
-                if (ob_is_lob_locator(val_type1)) {
-                  const ObLobLocator &lob_locator = converted_datum.get_lob_locator();
-                  origin_str.assign(const_cast<char *>(lob_locator.get_payload_ptr()),
-                      static_cast<ObString::obstr_size_t>(lob_locator.payload_size_));
-                  val_type1 = ObVarcharType;
-                } else if (tmp_obj->is_lob_storage()) {
-                  origin_str = converted_datum.get_string();
-                  if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_alloc, val_type1,
-                                                          cs_type1, tmp_obj[1].has_lob_header(), origin_str))) {
-                    LOG_WARN("fail to get real data.", K(ret), K(origin_str));
-                  } else {
-                    val_type1 = ObVarcharType;
-                  }
-                } else {
-                  origin_str = converted_datum.get_string();
-                }
-                ObString converted_str;
-                if (OB_FAIL(ret)) {
-                } else if (OB_FAIL(ObExprUtil::convert_string_collation(origin_str, cs_type1, converted_str,
-                                                                    CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {
-                  LOG_WARN("convert string collation failed", K(ret), K(cs_type1), K(origin_str.length()));
-                } else {
-                  converted_datum.set_string(converted_str);
-                  cs_type1 = CS_TYPE_UTF8MB4_BIN;
-                }
-              }
+          ObObjType type_value = meta_value.get_type();
+          ObCollationType cs_type_value = meta_value.get_collation_type();
+          ObScale scale = meta_value.get_scale();
 
-              ObIJsonBase *json_val = NULL;
-              ObString val_data;
-              ObEvalCtx ctx(eval_ctx_);
-              if (OB_FAIL(ret)) {
-              } else if (ObJsonExprHelper::is_convertible_to_json(val_type1) || ob_is_raw(val_type1)) {
-                if (OB_FAIL(ObJsonExprHelper::transform_convertible_2String(*expr, ctx, converted_datum, val_type1,
-                                                                            cs_type1, json_object_buf,
-                                                                            tmp_obj[1].has_lob_header(),
-                                                                            aggr_info.format_json_,
-                                                                            aggr_info.strict_json_, 0))) {
-                  LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type1));
-                }
-              } else {
-                if (OB_FAIL(ObJsonExprHelper::transform_scalar_2String(ctx, converted_datum,
-                                                                      val_type1, scale1,
-                                                                      eval_ctx_.exec_ctx_.get_my_session()->get_timezone_info(),
-                                                                      json_object_buf))) {
-                  LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type1));
-                }
-              }
+          ObString key_string = datum_key.get_string();
+          ObIJsonBase *json_val = nullptr;
 
-              if (OB_FAIL(ret)) {
-              } else if (json_object_buf.length() > OB_MAX_PACKET_LENGTH) {
-                ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
-                LOG_WARN("result of json_objectagg is too long", K(ret), K(json_object_buf.length()),
-                                                                K(OB_MAX_PACKET_LENGTH));
-              } else if (OB_FAIL(json_object_buf.append(","))) {
-                LOG_WARN("fail to append comma", K(ret));
-              }
-            }
+          if (OB_ISNULL(key_string.ptr())) {
+            ret = OB_ERR_NULL_VALUE;
+            LOG_WARN("unexpected null result", K(ret));
+          } else if (is_absent_on_null && ob_is_null(type_value)) {
+            continue;
+          } else if (ObCharset::charset_type_by_coll(cs_type_key) != CHARSET_UTF8MB4
+            && OB_FAIL(ObExprUtil::convert_string_collation(key_string, cs_type_key, key_string,
+                                                            CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {
+            LOG_WARN("convert key string collation failed", K(ret), K(cs_type_key), K(key_string.length()));
+          } else if (OB_FAIL(ObJsonExprHelper::oracle_datum2_json_val(&datum_value, meta_value, &tmp_alloc,
+              eval_ctx_.exec_ctx_.get_my_session(), json_val, false, is_format_json, is_strict, false))) {
+            LOG_WARN("failed to eval json val node.", K(ret), K(is_format_json), K(is_strict), K(meta_value));
+          } else if (is_absent_on_null && json_val->json_type() == ObJsonNodeType::J_NULL) {
+            // do nothing , continue
+          } else if (OB_FAIL(j_obj.add(key_string, static_cast<ObJsonNode*>(json_val), false, true, false))) {
+            LOG_WARN("failed to append array node", K(ret), K(j_obj.element_count()));
+          } else if (j_obj.get_serialize_size() > OB_MAX_PACKET_LENGTH) {
+            ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
+            LOG_WARN("result of json_objectagg is too long", K(ret),
+              K(j_obj.get_serialize_size()),  K(OB_MAX_PACKET_LENGTH));
           }
         }
       }
-    }//end of while
-    if (ret == OB_ERR_JSON_DOCUMENT_NULL_KEY) {
-      LOG_USER_ERROR(OB_ERR_JSON_DOCUMENT_NULL_KEY);
-    }
+    } // end of while
+
     if (ret != OB_ITER_END && ret != OB_SUCCESS) {
       LOG_WARN("fail to get next row", K(ret));
     } else {
       ret = OB_SUCCESS;
       ParseNode parse_node;
+      bool is_default_type = false;
+
       parse_node.value_ = aggr_info.returning_type_;
-      ObObjType obj_type = aggr_info.expr_->obj_meta_.get_type();
-      ObCollationType obj_cs_type = aggr_info.expr_->obj_meta_.get_collation_type();
-      if (json_object_buf.length() > 1) {
-        char *end_of_obj = json_object_buf.ptr() + json_object_buf.length() - 1;
-        *end_of_obj = '}';
-      } else if (OB_FAIL(json_object_buf.append("}"))) {
-        LOG_WARN("fail to append curly brace", K(ret));
-      }
-      ObString res_str(json_object_buf.length(), json_object_buf.ptr());
-      ObJsonNode* json_node = NULL;
-      int32_t dst_len = parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX];
-      uint32_t parse_flag = ObJsonParser::JSN_STRICT_FLAG;
+      ObObjType rsp_type = static_cast<ObObjType>(parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX]);
+      ObCollationType rsp_cs_type = static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]);
+      int32_t rsp_len = parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX];
+      int64_t result_likely_size = j_obj.get_serialize_size();
 
-      ADD_FLAG_IF_NEED(!aggr_info.strict_json_, parse_flag, ObJsonParser::JSN_RELAXED_FLAG);
-      ADD_FLAG_IF_NEED(aggr_info.with_unique_keys_, parse_flag, ObJsonParser::JSN_UNIQUE_FLAG);
-
-      if (obj_type == ObJsonType) {
-        ADD_FLAG_IF_NEED(true, parse_flag, ObJsonParser::JSN_UNIQUE_FLAG);
+      if (!parse_node.value_) {
+        is_default_type = true;
+        rsp_type = ObJsonType;
+        rsp_cs_type = CS_TYPE_UTF8MB4_BIN;
+        rsp_len = (ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length();
       }
-      if (obj_type == ObJsonType && OB_FAIL(ObJsonParser::get_tree(&tmp_alloc, res_str, json_node, parse_flag))) {
-        LOG_WARN("fail to get json base", K(ret));
-      } else if (ob_is_string_type(obj_type) || ob_is_lob_locator(obj_type) || ob_is_raw(obj_type)) {
-        if (ob_is_string_type(obj_type) || ob_is_raw(obj_type)) {
-          if (obj_type == ObVarcharType && res_str.length()  > dst_len) {
-            char res_ptr[OB_MAX_DECIMAL_PRECISION] = {0};
-            if (OB_ISNULL(ObCharset::lltostr(dst_len, res_ptr, 10, 1))) {
-              LOG_WARN("dst_len fail to string.", K(ret));
-            }
-            ret = OB_OPERATE_OVERFLOW;
-            LOG_USER_ERROR(OB_OPERATE_OVERFLOW, res_ptr, "json_objectagg");
-          } else if (ob_is_string_type(obj_type)) {
-            if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(*aggr_info.expr_, eval_ctx_, concat_result, res_str, &aggr_alloc_))) {
-              LOG_WARN("fail to pack res result.", K(ret));
-            }
-          } else {
-            concat_result.set_string(res_str);
+
+      ObJsonBuffer string_buffer(&tmp_alloc);
+
+      uint64_t unsorted_count = j_obj.element_count();
+
+      if (is_strict || (ob_is_json(rsp_type) && !is_default_type) || is_with_unique_keys) {
+        j_obj.stable_sort();
+        j_obj.unique();
+      }
+      uint64_t sorted_count = j_obj.element_count();
+
+      if ((is_with_unique_keys || ob_is_json(rsp_type) || is_strict)
+          && (unsorted_count > sorted_count)) {
+        ret = OB_ERR_DUPLICATE_KEY;
+        LOG_WARN("duplicate key", K(ret));
+      } else if (ob_is_string_type(rsp_type) || ob_is_raw(rsp_type)) {
+        if (OB_FAIL(string_buffer.reserve(result_likely_size))) {
+          LOG_WARN("fail to reserve string.", K(ret), K(result_likely_size));
+        } else if (OB_FAIL(j_obj.print(string_buffer, true, false))) {
+          LOG_WARN("failed: get json string text", K(ret));
+        } else if (rsp_type == ObVarcharType && string_buffer.length() > rsp_len) {
+          char res_ptr[OB_MAX_DECIMAL_PRECISION] = {0};
+          if (OB_ISNULL(ObCharset::lltostr(rsp_len, res_ptr, 10, 1))) {
+            LOG_WARN("dst_len fail to string.", K(ret));
           }
-        } else {
-          ObLobLocator *result = nullptr;
-          char *total_buf = NULL;
-          const int64_t total_buf_len = sizeof(ObLobLocator) + res_str.length();
-          if (OB_ISNULL(total_buf = aggr_info.expr_->get_str_res_mem(eval_ctx_, total_buf_len))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("Failed to allocate memory for lob locator", K(ret), K(total_buf_len));
-          } else if (FALSE_IT(result = reinterpret_cast<ObLobLocator *> (total_buf))) {
-          } else if (OB_FAIL(result->init(res_str))) {
-              LOG_WARN("Failed to init lob locator", K(ret), K(res_str), K(result));
-          } else {
-            concat_result.set_lob_locator(*result);
-          }
+          ret = OB_OPERATE_OVERFLOW;
+          LOG_USER_ERROR(OB_OPERATE_OVERFLOW, res_ptr, "json_objectagg");
+        } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(*aggr_info.expr_, eval_ctx_,concat_result,
+                                                               string_buffer.string(), &aggr_alloc_))) {
+          LOG_WARN("fail to pack res result.", K(ret));
         }
-      } else if (ob_is_json(obj_type)) {
+      } else if (ob_is_json(rsp_type)) {
         ObString raw_binary_str;
-        if (OB_FAIL(json_node->get_raw_binary(raw_binary_str, &aggr_alloc_))) {
+        if (OB_FAIL(j_obj.get_raw_binary(raw_binary_str, &tmp_alloc))) {
           LOG_WARN("get result binary failed", K(ret));
         } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(*aggr_info.expr_, eval_ctx_, concat_result, raw_binary_str, &aggr_alloc_))) {
           LOG_WARN("fail to pack res result.", K(ret));
         }
       } else {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unpexcted returning type", K(ret), K(obj_type));
+        LOG_WARN("get unpexcted returning type", K(ret), K(rsp_type));
       }
     }
   }

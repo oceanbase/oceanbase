@@ -562,7 +562,7 @@ int ObDMLResolver::pre_process_json_object_contain_star(ParseNode *node, common:
       } else if (value_node->type_ == T_OBJ_ACCESS_REF && OB_NOT_NULL(returning_node->raw_text_)) {
         if (OB_FAIL(check_is_json_constraint(*allocator_, value_node, format_json, 2))) {
           LOG_WARN("fail to check json constraint of col", K(ret));
-        } else if (returning_node->int16_values_[OB_NODE_CAST_TYPE_IDX] == T_VARCHAR && def_val.case_compare(returning_node->raw_text_) == 0 && format_json) {
+        } else if (returning_node->value_ == 0 && def_val.case_compare(returning_node->raw_text_) == 0 && format_json) {
           returning_node->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_JSON; /* data type */
           returning_node->int16_values_[OB_NODE_CAST_COLL_IDX] = INVALID_COLLATION;
           returning_node->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;        /* length */
