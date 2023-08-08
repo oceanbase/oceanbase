@@ -772,10 +772,10 @@ int ObRFBloomFilterMsg::generate_filter_indexes(
   int64_t start_idx = 0, end_idx = 0;
   int64_t group_addr_cnt = each_group_size > addr_cnt ?
         addr_cnt : each_group_size;
-  BloomFilterIndex filter_index;
-  ObSEArray<BloomFilterIndex *, 64> tmp_filter_indexes;
   lib::ObMemAttr attr(tenant_id_, "TmpBFIdxAlloc");
   common::ObArenaAllocator tmp_allocator(attr);
+  BloomFilterIndex filter_index;
+  ObSEArray<BloomFilterIndex *, 64> tmp_filter_indexes;
   filter_index.channel_ids_.set_allocator(&tmp_allocator);
   BloomFilterIndex *filter_index_ptr = nullptr;
   for (int i = 0; OB_SUCC(ret) && i < count; ++i) {
@@ -833,6 +833,7 @@ int ObRFBloomFilterMsg::generate_filter_indexes(
       }
     }
   }
+  filter_index.channel_ids_.destroy();
   return ret;
 }
 //end ObRFBloomFilterMsg
