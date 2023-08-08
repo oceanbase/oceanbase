@@ -38,6 +38,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "pl/sys_package/ob_dbms_sql.h"
 #include "pl/ob_pl.h"
+#include "src/sql/dblink/ob_tm_service.h"
 
 namespace oceanbase
 {
