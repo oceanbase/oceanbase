@@ -437,8 +437,13 @@ int ObSQLSessionMgr::create_session(const uint64_t tenant_id,
     } else if (mgr.is_valid_tenant_config()) {
       tmp_sess->set_flt_control_info(mgr.get_control_info());
     }
-    tmp_sess->update_last_active_time();
-    session_info = tmp_sess;
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else {
+      tmp_sess->update_last_active_time();
+      session_info = tmp_sess;
+    }
   }
   return ret;
 }
