@@ -673,6 +673,7 @@ public:
   class IterationAge
   {
   public:
+    IterationAge() : age_(0) {}
     int64_t get(void) const { return age_; }
     void inc(void) { age_ += 1; }
   private:

@@ -1250,8 +1250,8 @@ int ObHashJoinOp::build_hash_table_for_nest_loop(int64_t &num_left_rows)
     int64_t memory_bound = std::max(remain_data_memory_size_,
                                     hj_batch->get_chunk_row_store().get_max_blk_size());
     const int64_t row_bound = hash_table.nbuckets_ / 2;
-    ObChunkDatumStore::IterationAge iter_age;
-    hj_batch->set_iteration_age(iter_age);
+    hj_batch->set_iteration_age(iter_age_);
+    iter_age_.inc();
     while (OB_SUCC(ret)) {
       int64_t read_size = 0;
       if (OB_FAIL(hj_batch->get_next_batch(left_stored_rows,
@@ -1740,8 +1740,8 @@ int ObHashJoinOp::build_hash_table_in_memory(int64_t &num_left_rows)
     // do nothing
   } else {
     PartHashJoinTable &hash_table = *cur_hash_table_;
-    ObChunkDatumStore::IterationAge iter_age;
-    hj_batch->set_iteration_age(iter_age);
+    hj_batch->set_iteration_age(iter_age_);
+    iter_age_.inc();
     while (OB_SUCC(ret)) {
       int64_t read_size = 0;
       if (OB_FAIL(hj_batch->get_next_batch(left_stored_rows,

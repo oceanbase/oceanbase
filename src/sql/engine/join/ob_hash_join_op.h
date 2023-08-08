@@ -1269,6 +1269,7 @@ private:
   */
   bool skip_left_null_;
   bool skip_right_null_;
+  ObChunkDatumStore::IterationAge iter_age_;
 };
 
 inline int ObHashJoinOp::init_mem_context(uint64_t tenant_id)
