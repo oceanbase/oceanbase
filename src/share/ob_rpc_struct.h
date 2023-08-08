@@ -1970,6 +1970,7 @@ public:
         || alter_table_schema_.alter_option_bitset_.has_member(STORE_FORMAT)
         || alter_table_schema_.alter_option_bitset_.has_member(STORAGE_FORMAT_VERSION)
         || alter_table_schema_.alter_option_bitset_.has_member(PROGRESSIVE_MERGE_ROUND)
+        || alter_table_schema_.alter_option_bitset_.has_member(PROGRESSIVE_MERGE_NUM)
         || alter_table_schema_.alter_option_bitset_.has_member(ENCRYPTION);
   }
   ObAlterTableArg &operator=(const ObAlterTableArg &other) = delete;
