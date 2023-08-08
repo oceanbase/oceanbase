@@ -1824,12 +1824,9 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
     // read the newest initial state.
     // Maybe we should let the two steps, CAS opereation and set initial state, be an atomic operation.
     // The same issue exists on all 4.x version, and should be solved in future.
-    do {
-      // TODO(@bowen.gbw): delete the infinite retry later
-      if (OB_FAIL(new_handle.get_obj()->check_and_set_initial_state())) {
-        LOG_WARN("failed to check and set initial state", K(ret), K(key));
-      }
-    } while (OB_TIMEOUT == ret || OB_ALLOCATE_MEMORY_FAILED == ret || OB_DISK_HUNG == ret);
+    if (OB_FAIL(new_handle.get_obj()->check_and_set_initial_state())) {
+      LOG_WARN("failed to check and set initial state", K(ret), K(key));
+    }
   }
 
   LOG_DEBUG("compare and swap object", K(ret), KPC(new_handle.get_obj()), K(lbt()));
