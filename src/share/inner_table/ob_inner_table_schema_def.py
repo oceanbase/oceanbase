@@ -5756,6 +5756,7 @@ def_table_schema(
 # 479 : __all_import_table_task
 # 480 : __all_import_table_task_history
 # 481 : __all_import_stmt_exec_history
+# 482 : __all_tablet_reorganize_history
 
 #
 # 余留位置
