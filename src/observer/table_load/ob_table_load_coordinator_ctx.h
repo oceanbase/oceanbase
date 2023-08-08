@@ -28,6 +28,7 @@ class ObTableLoadTableCtx;
 class ObTableLoadTransCtx;
 class ObTableLoadCoordinatorTrans;
 class ObITableLoadTaskScheduler;
+class ObTableLoadErrorRowHandler;
 
 class ObTableLoadCoordinatorCtx
 {
@@ -119,6 +120,7 @@ public:
   common::ObArray<int64_t> idx_array_;
   ObTableLoadExecCtx *exec_ctx_;
   table::ObTableLoadResultInfo result_info_;
+  ObTableLoadErrorRowHandler *error_row_handler_;
   share::schema::ObSequenceSchema sequence_schema_;
   struct SessionContext
   {

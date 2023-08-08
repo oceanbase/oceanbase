@@ -18,13 +18,16 @@ class ObTableLoadResultInfo;
 namespace observer
 {
 class ObTableLoadStoreCtx;
+class ObTableLoadCoordinatorCtx;
+class ObTableLoadParam;
 
 class ObTableLoadErrorRowHandler : public ObDirectLoadDMLRowHandler
 {
 public:
   ObTableLoadErrorRowHandler();
   virtual ~ObTableLoadErrorRowHandler();
-  int init(ObTableLoadStoreCtx *store_ctx);
+  int init(const ObTableLoadParam &param, table::ObTableLoadResultInfo &result_info,
+           sql::ObLoadDataStat *job_stat);
   int handle_insert_row(const blocksstable::ObDatumRow &row) override;
   int handle_update_row(const blocksstable::ObDatumRow &row) override;
   int handle_update_row(const blocksstable::ObDatumRow &old_row,

@@ -5,8 +5,9 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_error_row_handler.h"
-#include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
+#include "observer/table_load/ob_table_load_struct.h"
+#include "share/table/ob_table_load_define.h"
 
 namespace oceanbase
 {
@@ -30,17 +31,19 @@ ObTableLoadErrorRowHandler::~ObTableLoadErrorRowHandler()
 {
 }
 
-int ObTableLoadErrorRowHandler::init(ObTableLoadStoreCtx *store_ctx)
+int ObTableLoadErrorRowHandler::init(const ObTableLoadParam &param,
+                                     table::ObTableLoadResultInfo &result_info,
+                                     sql::ObLoadDataStat *job_stat)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadErrorRowHandler init twice", KR(ret), KP(this));
   } else {
-    dup_action_ = store_ctx->ctx_->param_.dup_action_;
-    max_error_row_count_ = store_ctx->ctx_->param_.max_error_row_count_;
-    result_info_ = &store_ctx->result_info_;
-    job_stat_ = store_ctx->ctx_->job_stat_;
+    dup_action_ = param.dup_action_;
+    max_error_row_count_ = param.max_error_row_count_;
+    result_info_ = &result_info;
+    job_stat_ = job_stat;
     is_inited_ = true;
   }
   return ret;
