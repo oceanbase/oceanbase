@@ -715,6 +715,7 @@ int ObTmpTenantMemBlockManager::IOWaitInfo::exec_wait(int64_t io_timeout_ms)
     STORAGE_LOG(ERROR, "lock io request condition failed", K(ret), K(block_.get_block_id()));
   } else if (OB_NOT_NULL(block_handle_) && OB_FAIL(block_handle_->wait(io_timeout_ms))) {
     STORAGE_LOG(WARN, "wait handle wait io failed", K(ret), K(block_.get_block_id()));
+    block_handle_->reset_macro_id();
   }
   reset_io();
   return ret;
