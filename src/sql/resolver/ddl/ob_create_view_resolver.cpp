@@ -356,7 +356,8 @@ int ObCreateViewResolver::check_view_columns(ObSelectStmt &select_stmt,
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support behavior while creating view in oracle", K(ret),
                                                       K(select_item.is_real_alias_),
-                                                      K(select_item.expr_->get_expr_type()));
+                                                      K(select_item.expr_->get_expr_type()),
+                                                      K(select_stmt));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "expression without a column alias");
       } else if (OB_HASH_EXIST == (ret = view_col_names.set_refactored(select_item.alias_name_, 0))) {// flag = 0不覆盖原有的值
         is_col_dup = true;

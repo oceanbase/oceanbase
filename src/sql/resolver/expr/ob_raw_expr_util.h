@@ -1121,6 +1121,8 @@ public:
 
   static int check_is_valid_generated_col(ObRawExpr *expr, ObIAllocator &allocator);
 
+  static bool is_column_ref_skip_implicit_cast(const ObRawExpr *expr);
+
 private :
 
   static int create_real_cast_expr(ObRawExprFactory &expr_factory,

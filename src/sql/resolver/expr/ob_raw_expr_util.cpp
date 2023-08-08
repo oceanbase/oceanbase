@@ -8448,5 +8448,19 @@ int ObRawExprUtils::check_is_valid_generated_col(ObRawExpr *expr, ObIAllocator &
   return ret;
 }
 
+bool ObRawExprUtils::is_column_ref_skip_implicit_cast(const ObRawExpr *expr)
+{
+  bool bret = false;
+  if (OB_NOT_NULL(expr)) {
+    if (expr->is_column_ref_expr()) {
+      bret = true;
+    } else if (T_FUN_SYS_CAST == expr->get_expr_type() &&
+               expr->has_flag(IS_INNER_ADDED_EXPR)) {
+      bret = is_column_ref_skip_implicit_cast(expr->get_param_expr(0));
+    }
+  }
+  return bret;
+}
+
 }
 }
