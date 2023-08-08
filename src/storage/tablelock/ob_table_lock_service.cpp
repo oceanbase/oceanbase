@@ -225,7 +225,7 @@ int ObTableLockService::ObOBJLockGarbageCollector::garbage_collect_for_all_ls_()
 void ObTableLockService::ObOBJLockGarbageCollector::check_and_report_timeout_()
 {
   int ret = OB_SUCCESS;
-  int current_timestamp = ObClockGenerator::getClock();
+  int64_t current_timestamp = ObClockGenerator::getClock();
   if (last_success_timestamp_ > current_timestamp) {
     LOG_ERROR("last success timestamp is not correct", K(current_timestamp),
               K(last_success_timestamp_), KPC(this));
