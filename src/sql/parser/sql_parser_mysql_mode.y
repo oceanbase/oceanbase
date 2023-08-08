@@ -500,7 +500,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_sql_throttle_for_priority opt_sql_throttle_using_cond sql_throttle_one_or_more_metrics sql_throttle_metric
 %type <node> opt_copy_id opt_backup_dest opt_preview opt_backup_backup_dest opt_tenant_info opt_with_active_piece get_format_unit opt_backup_tenant_list opt_backup_to opt_description policy_name opt_recovery_window opt_redundancy opt_backup_copies opt_restore_until opt_backup_key_info opt_encrypt_key
 %type <node> new_or_old new_or_old_column_ref diagnostics_info_ref
-%type <node> on_empty on_error json_on_response opt_returning_type opt_on_empty_or_error json_value_expr opt_ascii
+%type <node> on_empty on_error json_on_response opt_returning_type opt_on_empty_or_error json_value_expr opt_ascii opt_truncate_clause
 %type <node> ws_nweights opt_ws_as_char opt_ws_levels ws_level_flag_desc ws_level_flag_reverse ws_level_flags ws_level_list ws_level_list_item ws_level_number ws_level_range ws_level_list_or_range
 %type <node> get_diagnostics_stmt get_statement_diagnostics_stmt get_condition_diagnostics_stmt statement_information_item_list condition_information_item_list statement_information_item condition_information_item statement_information_item_name condition_information_item_name condition_arg
 %type <node> method_opt method_list method extension
@@ -17402,10 +17402,10 @@ DAY
  *===========================================================*/
 
 json_value_expr:
-JSON_VALUE '(' simple_expr ',' complex_string_literal opt_returning_type opt_ascii opt_on_empty_or_error ')'
+JSON_VALUE '(' simple_expr ',' complex_string_literal opt_returning_type opt_truncate_clause opt_ascii opt_on_empty_or_error ')'
 {
-  ParseNode *empty_value = $8->children_[1];
-  ParseNode *error_value = $8->children_[3];
+  ParseNode *empty_value = $9->children_[1];
+  ParseNode *error_value = $9->children_[3];
 
   ParseNode *on_mismatch = NULL;
   malloc_terminal_node(on_mismatch, result->malloc_pool_, T_INT);
@@ -17419,7 +17419,22 @@ JSON_VALUE '(' simple_expr ',' complex_string_literal opt_returning_type opt_asc
   ParseNode *mismatch_options = NULL;
   malloc_non_terminal_node(mismatch_options, result->malloc_pool_, T_LINK_NODE, 2, on_mismatch, mismatch_type);
 
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_JSON_VALUE, 9, $3, $5, $6, $7, $8->children_[0], empty_value, $8->children_[2], error_value, mismatch_options);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_JSON_VALUE, 10, $3, $5, $6, $7, $8, $9->children_[0], empty_value, $9->children_[2], error_value, mismatch_options);
+}
+;
+
+opt_truncate_clause:
+TRUNCATE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+  $$->is_hidden_const_ = 1;
+}
+|
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 ;
 

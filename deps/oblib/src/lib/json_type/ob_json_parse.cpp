@@ -170,14 +170,22 @@ int ObJsonParser::check_json_syntax(const ObString &j_doc, ObIAllocator *allocat
       rapidjson::InsituStringStream ss(static_cast<char *>(alloc_buf));
       ObRapidJsonReader reader(&parse_allocator);
       rapidjson::ParseResult r;
-      if (HAS_FLAG(parse_flag, JSN_RELAXED_FLAG)) {
-        r = reader.Parse<RELAXJSON_FLAG>(ss, handler);
-      } else if (HAS_FLAG(parse_flag, JSN_STRICT_FLAG)) {
-        r = reader.Parse<STRICTJSON_FLAG>(ss, handler);
-      } else {
-        r = reader.Parse<rapidjson::kParseInsituFlag>(ss, handler);
+      try {
+        if (HAS_FLAG(parse_flag, JSN_RELAXED_FLAG)) {
+          r = reader.Parse<RELAXJSON_FLAG>(ss, handler);
+        } else if (HAS_FLAG(parse_flag, JSN_STRICT_FLAG)) {
+          r = reader.Parse<STRICTJSON_FLAG>(ss, handler);
+        } else {
+          r = reader.Parse<rapidjson::kParseInsituFlag>(ss, handler);
+        }
+      } catch (const std::bad_alloc &e) {
+        allocator->free(alloc_buf);
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for json text", K(ret));
       }
-      if (r.IsError()) {
+
+      if (OB_FAIL(ret)) {
+      } else if (r.IsError()) {
         allocator->free(alloc_buf);
         if (handler.is_too_deep()) {
           ret = OB_ERR_JSON_OUT_OF_DEPTH;
@@ -194,15 +202,22 @@ int ObJsonParser::check_json_syntax(const ObString &j_doc, ObIAllocator *allocat
       rapidjson::InsituStringStream ss(static_cast<char *>(alloc_buf));
       ObRapidJsonReader reader(&parse_allocator);
       rapidjson::ParseResult r;
-      if (HAS_FLAG(parse_flag, JSN_RELAXED_FLAG)) {
-        r = reader.Parse<RELAXJSON_FLAG>(ss, handler);
-      } else if (HAS_FLAG(parse_flag, JSN_STRICT_FLAG)) {
-        r = reader.Parse<STRICTJSON_FLAG>(ss, handler);
-      } else {
-        r = reader.Parse<rapidjson::kParseInsituFlag>(ss, handler);
+      try {
+        if (HAS_FLAG(parse_flag, JSN_RELAXED_FLAG)) {
+          r = reader.Parse<RELAXJSON_FLAG>(ss, handler);
+        } else if (HAS_FLAG(parse_flag, JSN_STRICT_FLAG)) {
+          r = reader.Parse<STRICTJSON_FLAG>(ss, handler);
+        } else {
+          r = reader.Parse<rapidjson::kParseInsituFlag>(ss, handler);
+        }
+      } catch (const std::bad_alloc &e) {
+        allocator->free(alloc_buf);
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory for json text", K(ret));
       }
 
-      if (!r.IsError()) {
+      if (OB_FAIL(ret)) {
+      } else if (!r.IsError()) {
         if (OB_ISNULL(handler.get_built_doc()) && OB_NOT_NULL(syntaxerr)) {
           allocator->free(alloc_buf);
           ret = OB_ERR_UNEXPECTED;

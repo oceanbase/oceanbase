@@ -1773,12 +1773,33 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
       LOG_WARN("fail to print cast_type", K(ret));
     }
   }
+
   if (OB_SUCC(ret)) {
     if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(3))->get_value().is_int()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("pretty value isn't int value");
+      LOG_WARN("truncate value isn't int value");
     } else {
       int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(3))->get_value().get_int();
+      switch (type) {
+        case 0:
+          break;
+        case 1:
+          DATA_PRINTF(" TRUNCATE");
+          break;
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid type value.", K(type));
+          break;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(4))->get_value().is_int()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ascii value isn't int value");
+    } else {
+      int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(4))->get_value().get_int();
       switch (type) {
         case 0:
           DATA_PRINTF("");
@@ -1794,11 +1815,11 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
     }
   }
   if (OB_SUCC(ret)) {
-    if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(4))->get_value().is_int()) {
+    if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(5))->get_value().is_int()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("type value isn't int value");
     } else {
-      int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(4))->get_value().get_int();
+      int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(5))->get_value().get_int();
       switch (type) {
         case 0:
           DATA_PRINTF(" error");
@@ -1811,7 +1832,7 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
           break;
         case 2:
           DATA_PRINTF(" default ");
-          PRINT_EXPR(expr->get_param_expr(5));
+          PRINT_EXPR(expr->get_param_expr(6));
           break;
         default:
           ret = OB_ERR_UNEXPECTED;
@@ -1824,11 +1845,11 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
     }
   }
   if (OB_SUCC(ret)) {
-    if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(7))->get_value().is_int()) {
+    if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(8))->get_value().is_int()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("type value isn't int value");
     } else {
-      int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(7))->get_value().get_int();
+      int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(8))->get_value().get_int();
       switch (type) {
         case 0:
           DATA_PRINTF(" error");
@@ -1839,7 +1860,7 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
           break;
         case 2:
           DATA_PRINTF(" default ");
-          PRINT_EXPR(expr->get_param_expr(8));
+          PRINT_EXPR(expr->get_param_expr(9));
           break;
         default:
           ret = OB_ERR_UNEXPECTED;
@@ -1854,7 +1875,7 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
   if (lib::is_oracle_mode()) {
     if (OB_SUCC(ret)) {
       bool not_first_node = false;
-      for (size_t i = 10;  OB_SUCC(ret) && i < expr->get_param_count(); i++) {
+      for (size_t i = 11;  OB_SUCC(ret) && i < expr->get_param_count(); i++) {
         if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(i))->get_value().is_int()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("type value isn't int value");

@@ -70,12 +70,12 @@ int ObExprJsonValue::calc_result_typeN(ObExprResType& type,
     bool is_oracle_mode = lib::is_oracle_mode();
     //type.set_json();
     // json doc : 0
-    ObObjType doc_type = types_stack[json_value_param_json_doc].get_type();
-    if (types_stack[json_value_param_json_doc].get_type() == ObNullType) {
+    ObObjType doc_type = types_stack[json_doc_id].get_type();
+    if (types_stack[json_doc_id].get_type() == ObNullType) {
     } else if (!ObJsonExprHelper::is_convertible_to_json(doc_type)) {
       if (lib::is_oracle_mode()) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(types_stack[json_value_param_json_doc].get_type()), "JSON");
+        LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(types_stack[json_doc_id].get_type()), "JSON");
       } else {
         ret = OB_ERR_INVALID_TYPE_FOR_JSON;
         LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_JSON, 1, "json_value");
@@ -83,50 +83,50 @@ int ObExprJsonValue::calc_result_typeN(ObExprResType& type,
       }
     } else if (ob_is_string_type(doc_type)) {
       if (is_oracle_mode) {
-        if (types_stack[json_value_param_json_doc].get_collation_type() == CS_TYPE_BINARY) {
-          types_stack[json_value_param_json_doc].set_calc_collation_type(CS_TYPE_BINARY);
-        } else if (types_stack[json_value_param_json_doc].get_charset_type() != CHARSET_UTF8MB4) {
-          types_stack[json_value_param_json_doc].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+        if (types_stack[json_doc_id].get_collation_type() == CS_TYPE_BINARY) {
+          types_stack[json_doc_id].set_calc_collation_type(CS_TYPE_BINARY);
+        } else if (types_stack[json_doc_id].get_charset_type() != CHARSET_UTF8MB4) {
+          types_stack[json_doc_id].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
         }
       } else {
-        if (types_stack[json_value_param_json_doc].get_collation_type() == CS_TYPE_BINARY) {
+        if (types_stack[json_doc_id].get_collation_type() == CS_TYPE_BINARY) {
         // unsuport string type with binary charset
           ret = OB_ERR_INVALID_JSON_CHARSET;
           LOG_WARN("Unsupport for string type with binary charset input.", K(ret), K(doc_type));
-        } else if (types_stack[json_value_param_json_doc].get_charset_type() != CHARSET_UTF8MB4) {
-          types_stack[json_value_param_json_doc].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+        } else if (types_stack[json_doc_id].get_charset_type() != CHARSET_UTF8MB4) {
+          types_stack[json_doc_id].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
         }
       }
     } else if (doc_type == ObJsonType) {
       // do nothing
     } else {
-      types_stack[json_value_param_json_doc].set_calc_type(ObLongTextType);
-      types_stack[json_value_param_json_doc].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+      types_stack[json_doc_id].set_calc_type(ObLongTextType);
+      types_stack[json_doc_id].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
     }
 
     // json path : 1
     if (OB_SUCC(ret)) {
-      if (types_stack[json_value_param_json_path].get_type() == ObNullType) {
+      if (types_stack[json_path_id].get_type() == ObNullType) {
         if (lib::is_oracle_mode()) {
           ret = OB_ERR_PATH_EXPRESSION_NOT_LITERAL;
           LOG_USER_ERROR(OB_ERR_PATH_EXPRESSION_NOT_LITERAL);
         }
         // do nothing
-      } else if (ob_is_string_type(types_stack[json_value_param_json_path].get_type())) {
-        if (types_stack[json_value_param_json_path].get_charset_type() != CHARSET_UTF8MB4) {
-          types_stack[json_value_param_json_path].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+      } else if (ob_is_string_type(types_stack[json_path_id].get_type())) {
+        if (types_stack[json_path_id].get_charset_type() != CHARSET_UTF8MB4) {
+          types_stack[json_path_id].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
         }
       } else {
-        types_stack[json_value_param_json_path].set_calc_type(ObLongTextType);
-        types_stack[json_value_param_json_path].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+        types_stack[json_path_id].set_calc_type(ObLongTextType);
+        types_stack[json_path_id].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
       }
     }
     // returning type : 2
     ObExprResType dst_type;
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(get_cast_type(types_stack[json_value_param_ret_type], dst_type))) {
+      if (OB_FAIL(get_cast_type(types_stack[ret_type_id], dst_type))) {
         LOG_WARN("get cast dest type failed", K(ret));
-      } else if (OB_FAIL(set_dest_type(types_stack[json_value_param_json_doc], type, dst_type, type_ctx))) {
+      } else if (OB_FAIL(set_dest_type(types_stack[json_doc_id], type, dst_type, type_ctx))) {
         LOG_WARN("set dest type failed", K(ret));
       } else {
         type.set_calc_collation_type(type.get_collation_type());
@@ -143,63 +143,63 @@ int ObExprJsonValue::calc_result_typeN(ObExprResType& type,
     // empty : 4, 5， 6
     if (OB_SUCC(ret)) {
       ObExprResType temp_type;
-      if (types_stack[json_value_param_empty_type].get_type() == ObNullType) {
+      if (types_stack[empty_type_id].get_type() == ObNullType) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("<empty type> param type is unexpected", K(types_stack[json_value_param_empty_type].get_type()));
-      } else if (types_stack[json_value_param_empty_type].get_type() != ObIntType) {
-        types_stack[json_value_param_empty_type].set_calc_type(ObIntType);
-      } else if (types_stack[json_value_param_empty_val].get_type() == ObNullType) {
+        LOG_WARN("<empty type> param type is unexpected", K(types_stack[empty_type_id].get_type()));
+      } else if (types_stack[empty_type_id].get_type() != ObIntType) {
+        types_stack[empty_type_id].set_calc_type(ObIntType);
+      } else if (types_stack[empty_val_id].get_type() == ObNullType) {
         // do nothing
-      } else if (OB_FAIL(set_dest_type(types_stack[json_value_param_empty_val], temp_type, dst_type, type_ctx))) {
+      } else if (OB_FAIL(set_dest_type(types_stack[empty_val_id], temp_type, dst_type, type_ctx))) {
         LOG_WARN("set dest type failed", K(ret));
       } else {
-        types_stack[json_value_param_empty_val].set_calc_type(temp_type.get_type());
-        types_stack[json_value_param_empty_val].set_calc_collation_type(temp_type.get_collation_type());
-        types_stack[json_value_param_empty_val].set_calc_collation_level(temp_type.get_collation_level());
-        types_stack[json_value_param_empty_val].set_calc_accuracy(temp_type.get_accuracy());
+        types_stack[empty_val_id].set_calc_type(temp_type.get_type());
+        types_stack[empty_val_id].set_calc_collation_type(temp_type.get_collation_type());
+        types_stack[empty_val_id].set_calc_collation_level(temp_type.get_collation_level());
+        types_stack[empty_val_id].set_calc_accuracy(temp_type.get_accuracy());
       }
-      if (types_stack[json_value_param_empty_val_pre].get_type() == ObNullType) {
+      if (types_stack[empty_val_pre_id].get_type() == ObNullType) {
         // do nothing
       } else {
-        types_stack[json_value_param_empty_val_pre].set_calc_type(types_stack[json_value_param_empty_val_pre].get_type());
-        types_stack[json_value_param_empty_val_pre].set_calc_collation_type(types_stack[json_value_param_empty_val_pre].get_collation_type());
-        types_stack[json_value_param_empty_val_pre].set_calc_collation_level(types_stack[json_value_param_empty_val_pre].get_collation_level());
-        types_stack[json_value_param_empty_val_pre].set_calc_accuracy(types_stack[json_value_param_empty_val_pre].get_accuracy());
+        types_stack[empty_val_pre_id].set_calc_type(types_stack[empty_val_pre_id].get_type());
+        types_stack[empty_val_pre_id].set_calc_collation_type(types_stack[empty_val_pre_id].get_collation_type());
+        types_stack[empty_val_pre_id].set_calc_collation_level(types_stack[empty_val_pre_id].get_collation_level());
+        types_stack[empty_val_pre_id].set_calc_accuracy(types_stack[empty_val_pre_id].get_accuracy());
       }
     }
 
     // error : 7, 8，9
     if (OB_SUCC(ret)) {
       ObExprResType temp_type;
-      if (types_stack[json_value_param_error_type].get_type() == ObNullType) {
+      if (types_stack[error_type_id].get_type() == ObNullType) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("<error type> param type is unexpected", K(types_stack[json_value_param_error_type].get_type()));
-      } else if (types_stack[json_value_param_error_type].get_type() != ObIntType) {
-        types_stack[json_value_param_error_type].set_calc_type(ObIntType);
-      } else if (types_stack[json_value_param_error_val].get_type() == ObNullType) {
+        LOG_WARN("<error type> param type is unexpected", K(types_stack[error_type_id].get_type()));
+      } else if (types_stack[error_type_id].get_type() != ObIntType) {
+        types_stack[error_type_id].set_calc_type(ObIntType);
+      } else if (types_stack[error_val_id].get_type() == ObNullType) {
         // do nothing
-      } else if (OB_FAIL(set_dest_type(types_stack[json_value_param_error_val], temp_type, dst_type, type_ctx))) {
+      } else if (OB_FAIL(set_dest_type(types_stack[error_val_id], temp_type, dst_type, type_ctx))) {
         LOG_WARN("set dest type failed", K(ret));
       } else {
-        types_stack[json_value_param_error_val].set_calc_type(temp_type.get_type());
-        types_stack[json_value_param_error_val].set_calc_collation_type(temp_type.get_collation_type());
-        types_stack[json_value_param_error_val].set_calc_collation_level(temp_type.get_collation_level());
-        types_stack[json_value_param_error_val].set_calc_accuracy(temp_type.get_accuracy());
+        types_stack[error_val_id].set_calc_type(temp_type.get_type());
+        types_stack[error_val_id].set_calc_collation_type(temp_type.get_collation_type());
+        types_stack[error_val_id].set_calc_collation_level(temp_type.get_collation_level());
+        types_stack[error_val_id].set_calc_accuracy(temp_type.get_accuracy());
       }
-      if (types_stack[json_value_param_error_val_pre].get_type() == ObNullType) {
+      if (types_stack[error_val_pre_id].get_type() == ObNullType) {
         // do nothing
       } else {
-        types_stack[json_value_param_error_val_pre].set_calc_type(types_stack[json_value_param_error_val_pre].get_type());
-        types_stack[json_value_param_error_val_pre].set_calc_collation_type(types_stack[json_value_param_error_val_pre].get_collation_type());
-        types_stack[json_value_param_error_val_pre].set_calc_collation_level(types_stack[json_value_param_error_val_pre].get_collation_level());
-        types_stack[json_value_param_error_val_pre].set_calc_accuracy(types_stack[json_value_param_error_val_pre].get_accuracy());
+        types_stack[error_val_pre_id].set_calc_type(types_stack[error_val_pre_id].get_type());
+        types_stack[error_val_pre_id].set_calc_collation_type(types_stack[error_val_pre_id].get_collation_type());
+        types_stack[error_val_pre_id].set_calc_collation_level(types_stack[error_val_pre_id].get_collation_level());
+        types_stack[error_val_pre_id].set_calc_accuracy(types_stack[error_val_pre_id].get_accuracy());
       }
     }
 
     // mismatch : 10,
 
     if (OB_SUCC(ret)) {
-      for (size_t i = json_value_param_opt_mismatch; OB_SUCC(ret) && i < param_num; i++) {
+      for (size_t i = opt_mismatch_id; OB_SUCC(ret) && i < param_num; i++) {
         if (types_stack[i].get_type() == ObNullType) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("<empty type> param type is unexpected", K(types_stack[i].get_type()), K(ret), K(i));
@@ -211,6 +211,30 @@ int ObExprJsonValue::calc_result_typeN(ObExprResType& type,
 
   }
 
+  return ret;
+}
+
+
+static int get_on_truncate(const ObExpr &expr,
+                           ObEvalCtx &ctx,
+                           uint8_t index,
+                           bool &is_cover_by_error,
+                           uint8 &type)
+{
+  INIT_SUCC(ret);
+  ObExpr *json_arg = expr.args_[index];
+  ObObjType val_type = json_arg->datum_meta_.type_;
+  ObDatum *json_datum = NULL;
+  if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+    is_cover_by_error = false;
+    LOG_WARN("eval json arg failed", K(ret));
+  } else if (val_type != ObIntType) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("input type error", K(val_type));
+  } else {
+    int64_t option_type = json_datum->get_int();
+    type = static_cast<uint8_t>(option_type);
+  }
   return ret;
 }
 
@@ -267,7 +291,7 @@ int ObExprJsonValue::eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObObjType empty_val_type;
   uint8_t empty_type = OB_JSON_ON_RESPONSE_IMPLICIT;
   if (OB_SUCC(ret) && !is_null_result) {
-    ret = get_on_empty_or_error(expr, ctx, 4, is_cover_by_error, accuracy, empty_type, &empty_datum, dst_type, empty_val_type);
+    ret = get_on_empty_or_error(expr, ctx, 5, is_cover_by_error, accuracy, empty_type, &empty_datum, dst_type, empty_val_type);
   }
 
   // parse error option
@@ -275,9 +299,9 @@ int ObExprJsonValue::eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObObjType error_val_type;
   uint8_t error_type = OB_JSON_ON_RESPONSE_IMPLICIT;
   if (OB_SUCC(ret) && !is_null_result) {
-    ret = get_on_empty_or_error(expr, ctx, 7, is_cover_by_error, accuracy, error_type, &error_val, dst_type, error_val_type);
+    ret = get_on_empty_or_error(expr, ctx, 8, is_cover_by_error, accuracy, error_type, &error_val, dst_type, error_val_type);
   } else if (is_cover_by_error) { // always get error option for return default value on error
-    int temp_ret = get_on_empty_or_error(expr, ctx, 7, is_cover_by_error, accuracy,
+    int temp_ret = get_on_empty_or_error(expr, ctx, 8, is_cover_by_error, accuracy,
         error_type, &error_val, dst_type, error_val_type);
     if (temp_ret != OB_SUCCESS) {
       LOG_WARN("failed to get error option.", K(temp_ret));
@@ -324,7 +348,7 @@ int ObExprJsonValue::eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObVector<uint8_t> mismatch_val;
   ObVector<uint8_t> mismatch_type;    //OB_JSON_TYPE_IMPLICIT
   if (OB_SUCC(ret) && !is_null_result) {
-    ret = get_on_mismatch(expr, ctx, json_value_param_opt_mismatch, is_cover_by_error, accuracy, mismatch_val, mismatch_type);
+    ret = get_on_mismatch(expr, ctx, opt_mismatch_id, is_cover_by_error, accuracy, mismatch_val, mismatch_type);
     if (ret != OB_SUCCESS || mismatch_type.size() == 0 || mismatch_val.size() == 0) {
       LOG_WARN("failed to get mismatch option.", K(ret), K(mismatch_type.size()), K(mismatch_val.size()));
     }
@@ -347,7 +371,7 @@ int ObExprJsonValue::eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       ObCollationType in_coll_type = expr.args_[0]->datum_meta_.cs_type_;
       ObCollationType dst_coll_type = expr.datum_meta_.cs_type_;
       ret = cast_to_res(&temp_allocator, expr, ctx, hits[0], error_type, error_val,
-          accuracy, dst_type, in_coll_type, dst_coll_type, res, mismatch_val, mismatch_type, is_type_cast, 0);
+          accuracy, dst_type, in_coll_type, dst_coll_type, res, mismatch_val, mismatch_type, is_type_cast, 0, 0);
     }
   }
 
@@ -358,7 +382,7 @@ int ObExprJsonValue::eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObD
 {
   INIT_SUCC(ret);
   ObDatum *json_datum = NULL;
-  ObExpr *json_arg = expr.args_[json_value_param_json_path];
+  ObExpr *json_arg = expr.args_[json_path_id];
   ObObjType type = json_arg->datum_meta_.type_;
   bool is_cover_by_error = true;
   bool is_null_result = false;
@@ -411,7 +435,14 @@ int ObExprJsonValue::eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObD
   // parse ascii
   uint8_t ascii_type = OB_JSON_ON_ASCII_IMPLICIT;
   if (OB_SUCC(ret) && !is_null_result) {
-    ret = get_on_ascii(expr, ctx, json_value_param_opt_ascii, is_cover_by_error, ascii_type);
+    ret = get_on_ascii(expr, ctx, opt_ascii_id, is_cover_by_error, ascii_type);
+  }
+
+  uint8_t is_truncate = 0;
+  if (OB_SUCC(ret) && !is_null_result) {
+    if (OB_FAIL(get_on_truncate(expr, ctx, opt_truncate_id, is_cover_by_error, is_truncate))) {
+      LOG_WARN("eval truncate option error", K(ret));
+    }
   }
 
   if ((expr.datum_meta_.cs_type_ == CS_TYPE_BINARY || !(ob_is_string_tc(dst_type) || ob_is_text_tc(dst_type)))
@@ -434,7 +465,7 @@ int ObExprJsonValue::eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObD
   }
 
   // parse json doc
-  json_arg = expr.args_[json_value_param_json_doc];
+  json_arg = expr.args_[json_doc_id];
   type = json_arg->datum_meta_.type_;
   ObCollationType cs_type = json_arg->datum_meta_.cs_type_;
   ObJsonInType j_in_type;
@@ -475,13 +506,13 @@ int ObExprJsonValue::eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObD
   ObDatum *empty_datum = NULL;
   uint8_t empty_type = OB_JSON_ON_RESPONSE_IMPLICIT;
   if (OB_SUCC(ret) && !is_null_result) {
-    ret = get_on_empty_or_error(expr, ctx, json_value_param_empty_type, is_cover_by_error, accuracy, empty_type, &empty_datum, dst_type, empty_val_type);
+    ret = get_on_empty_or_error(expr, ctx, empty_type_id, is_cover_by_error, accuracy, empty_type, &empty_datum, dst_type, empty_val_type);
   }
 
   // parse error option
   ObDatum *error_val = NULL;
   uint8_t error_type = OB_JSON_ON_RESPONSE_IMPLICIT;
-  json_arg = expr.args_[json_value_param_error_type + 2];
+  json_arg = expr.args_[error_type_id + 2];
   ObObjType val_type = json_arg->datum_meta_.type_;
   if ((OB_SUCC(ret) && !is_null_result) || is_cover_by_error) {
     int temp_ret = OB_SUCCESS;
@@ -517,12 +548,12 @@ int ObExprJsonValue::eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObD
   ObVector<uint8_t> mismatch_val;
   ObVector<uint8_t> mismatch_type;    //OB_JSON_TYPE_IMPLICIT
   if (OB_SUCC(ret) && !is_null_result) {
-    ret = get_on_mismatch(expr, ctx, json_value_param_opt_mismatch, is_cover_by_error, accuracy, mismatch_val, mismatch_type);
+    ret = get_on_mismatch(expr, ctx, opt_mismatch_id, is_cover_by_error, accuracy, mismatch_val, mismatch_type);
     if (ret != OB_SUCCESS || mismatch_type.size() == 0 || mismatch_val.size() == 0) {
       LOG_WARN("failed to get mismatch option.", K(ret), K(mismatch_type.size()), K(mismatch_val.size()));
     }
   } else if (is_type_cast) {
-    int tmp_ret = get_on_mismatch(expr, ctx, json_value_param_opt_mismatch, is_cover_by_error, accuracy, mismatch_val, mismatch_type);
+    int tmp_ret = get_on_mismatch(expr, ctx, opt_mismatch_id, is_cover_by_error, accuracy, mismatch_val, mismatch_type);
     if (tmp_ret != OB_SUCCESS || mismatch_type.size() == 0 || mismatch_val.size() == 0) {
       LOG_WARN("failed to get mismatch option.", K(ret), K(mismatch_type.size()), K(mismatch_val.size()));
     }
@@ -545,7 +576,7 @@ int ObExprJsonValue::eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObD
       ObCollationType in_coll_type = expr.args_[0]->datum_meta_.cs_type_;
       ObCollationType dst_coll_type = expr.datum_meta_.cs_type_;
       ret = cast_to_res(&temp_allocator, expr, ctx, hits[0], error_type, error_val,
-          accuracy, dst_type, in_coll_type, dst_coll_type, res, mismatch_val, mismatch_type, is_type_cast, ascii_type);
+          accuracy, dst_type, in_coll_type, dst_coll_type, res, mismatch_val, mismatch_type, is_type_cast, ascii_type, is_truncate);
     }
   }
 
@@ -1311,7 +1342,8 @@ int ObExprJsonValue::cast_to_string(common::ObIAllocator *allocator,
                                     common::ObAccuracy &accuracy,
                                     ObObjType dst_type,
                                     ObString &val,
-                                    uint8_t &is_type_cast)
+                                    uint8_t &is_type_cast,
+                                    uint8_t is_truncate)
 {
   INIT_SUCC(ret);
 
@@ -1388,8 +1420,12 @@ int ObExprJsonValue::cast_to_string(common::ObIAllocator *allocator,
       if (OB_SUCC(ret)) {
         if (max_accuracy_len == DEFAULT_STR_LENGTH) { // default string len
         } else if (max_accuracy_len <= 0 || str_len_char > max_accuracy_len) {
-          ret = OB_OPERATE_OVERFLOW;
-          LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "STRING", "json_value");
+          if (str_len_char > max_accuracy_len && is_truncate && dst_type == ObVarcharType) {
+            val.assign_ptr(val.ptr(), max_accuracy_len);
+          } else {
+            ret = OB_OPERATE_OVERFLOW;
+            LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "STRING", "json_value");
+          }
         }
       }
     }
@@ -1442,7 +1478,8 @@ int ObExprJsonValue::cast_to_res(common::ObIAllocator *allocator,
                                  ObVector<uint8_t> &mismatch_val,
                                  ObVector<uint8_t> &mismatch_type,
                                  uint8_t &is_type_cast,
-                                 uint8_t ascii_type)
+                                 uint8_t ascii_type,
+                                 uint8_t is_truncate)
 {
   INIT_SUCC(ret);
 
@@ -1569,7 +1606,7 @@ int ObExprJsonValue::cast_to_res(common::ObIAllocator *allocator,
     case ObHexStringType:
     case ObLongTextType: {
       ObString val;
-      ret = cast_to_string(allocator, j_base, in_coll_type, dst_coll_type, accuracy, dst_type, val, is_type_cast);
+      ret = cast_to_string(allocator, j_base, in_coll_type, dst_coll_type, accuracy, dst_type, val, is_type_cast, is_truncate);
       ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
       if (OB_FAIL(ret)) {
       } else if (ascii_type == 0) {
@@ -1661,7 +1698,7 @@ bool ObExprJsonValue::try_set_error_val(const ObExpr &expr,
   if (OB_FAIL(ret)) {
     int temp_ret = 0;
     if (lib::is_oracle_mode() && error_type == OB_JSON_ON_RESPONSE_IMPLICIT) {
-      temp_ret = get_on_empty_or_error(expr, ctx, json_value_param_error_type, is_cover_by_error, accuracy, error_type, &error_val, dst_type, default_val_type);
+      temp_ret = get_on_empty_or_error(expr, ctx, error_type_id, is_cover_by_error, accuracy, error_type, &error_val, dst_type, default_val_type);
     }
     if (temp_ret != OB_SUCCESS && !is_cover_by_error) {
       ret = temp_ret;
@@ -1837,7 +1874,7 @@ int ObExprJsonValue::get_on_empty_or_error(const ObExpr &expr,
   }
   json_arg = expr.args_[index + 2];
   val_type = json_arg->datum_meta_.type_;
-  if (OB_SUCC(ret) && index != json_value_param_error_type) {
+  if (OB_SUCC(ret) && index != error_type_id) {
     if (lib::is_oracle_mode() && (val_type == ObCharType || val_type == ObNumberType)) {
       if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
         is_cover_by_error = false;
@@ -1869,7 +1906,7 @@ int ObExprJsonValue::get_on_empty_or_error(const ObExpr &expr,
       is_cover_by_error = false;
       LOG_WARN("eval json arg failed", K(ret));
     } else if (val_type == ObNullType || json_datum->is_null()) {
-    } else if ((lib::is_mysql_mode() || index == json_value_param_empty_type) && OB_FAIL(check_default_val_accuracy<ObDatum>(accuracy, val_type, json_datum))) {
+    } else if ((lib::is_mysql_mode() || index == empty_type_id) && OB_FAIL(check_default_val_accuracy<ObDatum>(accuracy, val_type, json_datum))) {
       is_cover_by_error = false;
     } else {
       *default_value = json_datum;
@@ -2189,7 +2226,7 @@ bool ObExprJsonValue::type_cast_to_string(ObString &json_string,
                                           ObAccuracy &accuracy) {
   INIT_SUCC(ret);
   uint8_t is_type_cast = 0;
-  ret = cast_to_string(allocator, j_base, CS_TYPE_BINARY, CS_TYPE_BINARY, accuracy, ObLongTextType, json_string, is_type_cast);
+  ret = cast_to_string(allocator, j_base, CS_TYPE_BINARY, CS_TYPE_BINARY, accuracy, ObLongTextType, json_string, is_type_cast, 0);
   return ret == 0 ? true : false;
 }
 

@@ -648,13 +648,14 @@ JSON_VALUE '(' js_doc_expr ',' js_literal opt_js_value_returning_type opt_ascii 
 int ObDMLResolver::transform_dot_notation2_json_value(ParseNode &node, const ObString &sql_str)
 {
   INIT_SUCC(ret);
-  int64_t alloc_size = sizeof(ParseNode *) * (9);
+  int64_t alloc_size = sizeof(ParseNode *) * (10);
   ParseNode **param_vec = NULL;       // children
   ParseNode **param_mismatch = NULL;  // mismatch node
   ParseNode *tmp_node = NULL;         // json doc node
   ParseNode *table_node = NULL;       // table node
   ParseNode *path_node = NULL;        // path node
   ParseNode *ret_node = NULL;         // returning node
+  ParseNode *opt_truncate_node = NULL; // truncate node
   ParseNode *opt_node = NULL;         // clause node
   ParseNode *match_node = NULL;       // mismatch node
   ParseNode *match_node_l = NULL;
@@ -762,15 +763,15 @@ int ObDMLResolver::transform_dot_notation2_json_value(ParseNode &node, const ObS
     ret_node->text_len_ = 7;
     param_vec[2] = ret_node;          // return type pos is 2 in json value clause
   }
-  //  opt_ascii(3) opt_value_on_empty(4)_or_error(5) mismatch (6, 7)
-  for (int8_t i = 3; OB_SUCC(ret) && i < 8; i++) {
+  //  opt_truncate(3) opt_ascii(4) opt_value_on_empty(5)_or_error(6) mismatch (7, 8)
+  for (int8_t i = 3; OB_SUCC(ret) && i < 9; i++) {
     opt_node = NULL;
     if (OB_ISNULL(opt_node = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
     } else {
       opt_node = new(opt_node) ParseNode;
-      if (i == 5 || i == 7) {
+      if (i == 6 || i == 8) {
         if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(*allocator_, "", opt_node, T_NULL))) {
           LOG_WARN("create path node failed", K(ret));
         } else {
@@ -781,9 +782,11 @@ int ObDMLResolver::transform_dot_notation2_json_value(ParseNode &node, const ObS
           LOG_WARN("create path node failed", K(ret));
         } else {
           int8_t val = 0;
-          if (i == 4) {
+          if (i == 3) {
+            val = 0;
+          } else if (i == 5) {
             val = 3;
-          } else if (i == 6) {
+          } else if (i == 7) {
             val = 1;
           }
           opt_node->value_ = val;
@@ -841,13 +844,13 @@ int ObDMLResolver::transform_dot_notation2_json_value(ParseNode &node, const ObS
         match_node->num_child_ = 2;
         match_node->type_ = T_LINK_NODE;
         match_node->children_ = param_mismatch;
-        param_vec[8] = match_node;
+        param_vec[9] = match_node;
       }
     }
   }
   // create json value node
   if (OB_SUCC(ret)) {
-    node.num_child_ = 9;
+    node.num_child_ = 10;
     node.type_ = T_FUN_SYS_JSON_VALUE;
     node.children_ = param_vec;
   }
