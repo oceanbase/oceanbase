@@ -38,7 +38,8 @@ public:
   static int get_server_ip(ObIAllocator *allocator, ObString &ipstr);
 
   static int get_log_disk_info_in_config(int64_t& log_disk_size,
-                                         int64_t& log_disk_percentage);
+                                         int64_t& log_disk_percentage,
+                                         int64_t& total_log_disk_size);
 
   static int get_data_disk_info_in_config(int64_t& data_disk_size,
                                           int64_t& data_disk_percentage);

@@ -49,7 +49,8 @@ int ObServerUtils::get_server_ip(ObIAllocator *allocator, ObString &ipstr)
 }
 
 int ObServerUtils::get_log_disk_info_in_config(int64_t& log_disk_size,
-                                               int64_t& log_disk_percentage)
+                                               int64_t& log_disk_percentage,
+                                               int64_t& total_log_disk_size)
 {
   int ret = OB_SUCCESS;
   int64_t suggested_data_disk_size = GCONF.datafile_size;
@@ -81,9 +82,10 @@ int ObServerUtils::get_log_disk_info_in_config(int64_t& log_disk_size,
         KR(ret), K(data_dir), K(suggested_data_disk_size), K(suggested_data_disk_percentage),
         K(data_default_disk_percentage), K(shared_mode));
   } else {
+    total_log_disk_size = clog_disk_total_size;
     LOG_INFO("get_log_disk_info_in_config", K(suggested_data_disk_size), K(suggested_clog_disk_size),
              K(suggested_data_disk_percentage), K(suggested_clog_disk_percentage), K(log_disk_size),
-             K(log_disk_percentage));
+             K(log_disk_percentage), K(total_log_disk_size));
   }
   return ret;
 }
@@ -138,9 +140,10 @@ int ObServerUtils::cal_all_part_disk_size(const int64_t suggested_data_disk_size
                                           int64_t& log_disk_percentage)
 {
   int ret = OB_SUCCESS;
+  int64_t total_log_disk_space = 0;
   if (OB_FAIL(get_data_disk_info_in_config(data_disk_size, data_disk_percentage))) {
     LOG_ERROR("get_data_disk_info_in_config failed", K(data_disk_size), K(data_disk_percentage));
-  } else if (OB_FAIL(get_log_disk_info_in_config(log_disk_size, log_disk_percentage))) {
+  } else if (OB_FAIL(get_log_disk_info_in_config(log_disk_size, log_disk_percentage, total_log_disk_space))) {
     LOG_ERROR("get_log_disk_info_in_config failed", K(log_disk_size), K(log_disk_percentage));
   } else {
     LOG_INFO("cal_all_part_disk_size success", K(suggested_data_disk_size), K(suggested_clog_disk_size),
@@ -345,10 +348,13 @@ int ObServerUtils::decide_disk_size(const int64_t total_space,
   } else {
     disk_size = suggested_disk_size;
   }
-
   if (disk_size > total_space) {
-    ret = OB_SERVER_OUTOF_DISK_SPACE;
+    LOG_WARN("disk_size is greater than total disk space", KR(OB_SERVER_OUTOF_DISK_SPACE),
+          K(suggested_disk_size), K(suggested_disk_percentage),
+          K(default_disk_percentage),
+          K(total_space), K(disk_size));
   }
+
   LOG_INFO("decide disk size finished",
         K(suggested_disk_size), K(suggested_disk_percentage),
         K(default_disk_percentage),
