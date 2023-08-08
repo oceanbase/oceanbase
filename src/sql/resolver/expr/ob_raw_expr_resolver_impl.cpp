@@ -6181,6 +6181,19 @@ int ObRawExprResolverImpl::resolve_udf_node(const ParseNode *node, ObUDFInfo &ud
     }
   }
   if (OB_SUCC(ret)) {
+    if (ctx_.query_ctx_ != NULL) {
+      ctx_.query_ctx_->has_udf_ = true;
+      for (int64_t i = 0; OB_SUCC(ret) && i < ctx_.query_ctx_->all_user_variable_.count(); ++i) {
+        if (OB_ISNULL(ctx_.query_ctx_->all_user_variable_.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null user var expr", K(ret));
+        } else {
+          ctx_.query_ctx_->all_user_variable_.at(i)->set_query_has_udf(true);
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
     func_expr->set_func_name(udf_info.udf_name_);
     udf_info.ref_expr_ = func_expr;
     if (OB_FAIL(func_expr->extract_info())) {

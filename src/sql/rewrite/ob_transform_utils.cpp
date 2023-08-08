@@ -12509,7 +12509,7 @@ int ObTransformUtils::check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr*> &sele
                expr->has_generalized_column()) {
       // do nothing
     } else if (expr->has_flag(CNT_STATE_FUNC) ||
-               expr->has_flag(CNT_USER_VARIABLE) ||
+               expr->has_flag(CNT_DYNAMIC_USER_VARIABLE) ||
                expr->has_flag(CNT_ALIAS) ||
                expr->has_flag(CNT_VALUES) ||
                expr->has_flag(CNT_SEQ_EXPR) ||
@@ -13026,6 +13026,12 @@ int ObTransformUtils::convert_aggr_expr(ObTransformerCtx *ctx,
              aggr_expr->get_expr_type() == T_FUN_MIN ||
              aggr_expr->get_expr_type() == T_FUN_SUM) {
     output_expr = aggr_expr->get_param_expr(0);
+    if (OB_FAIL(add_cast_for_replace_if_need(*ctx->expr_factory_,
+                                             aggr_expr,
+                                             output_expr,
+                                             ctx->session_info_))) {
+      LOG_WARN("failed to add cast expr", K(ret));
+    }
   } else if (aggr_expr->get_expr_type() != T_FUN_COUNT) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid aggregation type", K(ret), K(aggr_expr->get_expr_type()));

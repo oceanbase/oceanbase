@@ -2413,10 +2413,9 @@
   },
   "expr_info": [
     "IS_FUNC",
-    "IS_USER_VARIABLE",
+    "IS_CONST_EXPR",
     "CNT_CONST",
-    "CNT_FUNC",
-    "CNT_USER_VARIABLE"
+    "CNT_FUNC"
   ],
   "rel_id": [
   ],
