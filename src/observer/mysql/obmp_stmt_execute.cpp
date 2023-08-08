@@ -1655,7 +1655,8 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
   setup_wb(session);
   const bool enable_trace_log = lib::is_trace_log_enabled();
   //============================ 注意这些变量的生命周期 ================================
-  ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
+  ObSMConnection *conn = get_conn();
+  ObSessionStatEstGuard stat_est_guard(conn->tenant_->id(), session.get_sessid());
   if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var failed.", K(ret), K(multi_stmt_item));
   } else {
@@ -1719,14 +1720,10 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
       if (OB_FAIL(do_process_single(session, params_, has_more_result, force_sync_resp, async_resp_used))) {
         LOG_WARN("fail to do process", K(ret), K(ctx_.cur_sql_));
       }
-      if (OB_UNLIKELY(NULL != GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid()) {
+      if (OB_UNLIKELY(NULL != GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() && is_conn_valid()) {
         int bak_ret = ret;
-        ObSMConnection *conn = get_conn();
         ObSQLSessionInfo *sess = NULL;
-        if (OB_ISNULL(conn)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("null conn ptr", K(ret));
-        } else if (OB_FAIL(get_session(sess))) {
+        if (OB_FAIL(get_session(sess))) {
           LOG_WARN("get session fail", K(ret));
         } else if (OB_ISNULL(sess)) {
           ret = OB_ERR_UNEXPECTED;
