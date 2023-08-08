@@ -44,10 +44,6 @@ public:
   {
     drop_database_arg_.tenant_id_ = tenant_id;
   }
-  void set_is_add_to_scheduler(const bool is_add_to_scheduler) 
-  {
-    drop_database_arg_.is_add_to_scheduler_ = is_add_to_scheduler;
-  }
 
   void set_if_exist(const bool if_exist)
   {

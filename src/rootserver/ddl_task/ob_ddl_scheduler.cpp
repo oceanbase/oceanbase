@@ -973,20 +973,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
       case DDL_DROP_PARTITION:
       case DDL_DROP_SUB_PARTITION:
       case DDL_TRUNCATE_PARTITION:
-      case DDL_TRUNCATE_SUB_PARTITION: {
-        if (OB_FAIL(create_ddl_retry_task(proxy,
-                                          param.tenant_id_,
-                                          param.object_id_,
-                                          param.schema_version_,
-                                          param.consumer_group_id_,
-                                          param.type_,
-                                          param.ddl_arg_,
-                                          *param.allocator_,
-                                          task_record))) {
-          LOG_WARN("fail to create ddl retry task", K(ret));
-        }
-        break;
-      }
+      case DDL_TRUNCATE_SUB_PARTITION:
       default:
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("error unexpected, ddl type is not supported", K(ret), K(param.type_));
