@@ -1009,23 +1009,23 @@ int ObTableLocation::init_table_location(ObExecContext &exec_ctx,
   }
   if (OB_SUCC(ret)) {
     bool is_weak_read = false;
-    //if (OB_FAIL(get_is_weak_read(stmt,
-    //                             exec_ctx.get_my_session(),
-    //                             exec_ctx.get_sql_ctx(),
-    //                             is_weak_read))) {
-    //  LOG_WARN("get is weak read failed", K(ret));
-    //} else
-
-    if (ObDuplicateScope::DUPLICATE_SCOPE_NONE != table_schema->get_duplicate_scope()) {
+    if (OB_FAIL(get_is_weak_read(stmt,
+                                 exec_ctx.get_my_session(),
+                                 exec_ctx.get_sql_ctx(),
+                                 is_weak_read))) {
+      LOG_WARN("get is weak read failed", K(ret));
+    } else if (ObDuplicateScope::DUPLICATE_SCOPE_NONE != table_schema->get_duplicate_scope()) {
       loc_meta_.is_dup_table_ = 1;
     }
-    if (is_dml_table) {
-      loc_meta_.select_leader_ = 1;
-    } else if (!is_weak_read) {
-      loc_meta_.select_leader_ = loc_meta_.is_dup_table_ ? 0 : 1;
-    } else {
-      loc_meta_.select_leader_ = 0;
-      loc_meta_.is_weak_read_ = 1;
+    if (OB_SUCC(ret)) {
+      if (is_dml_table) {
+        loc_meta_.select_leader_ = 1;
+      } else if (!is_weak_read) {
+        loc_meta_.select_leader_ = loc_meta_.is_dup_table_ ? 0 : 1;
+      } else {
+        loc_meta_.select_leader_ = 0;
+        loc_meta_.is_weak_read_ = 1;
+      }
     }
   }
   if (OB_SUCC(ret) && PARTITION_LEVEL_TWO == table_schema->get_part_level()) {
@@ -1347,6 +1347,8 @@ int ObTableLocation::get_is_weak_read(const ObDMLStmt &dml_stmt,
   } else if (dml_stmt.get_query_ctx()->has_dml_write_stmt_ ||
              dml_stmt.get_query_ctx()->is_contain_select_for_update_ ||
              dml_stmt.get_query_ctx()->is_contain_inner_table_) {
+    is_weak_read = false;
+  } else if (share::ObTenantEnv::get_tenant() == nullptr) { //table api can't invoke MTL_IS_PRIMARY_TENANT
     is_weak_read = false;
   } else if (!MTL_IS_PRIMARY_TENANT()) {
     is_weak_read = true;
