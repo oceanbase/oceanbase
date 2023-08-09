@@ -1361,6 +1361,8 @@ int ObPLResolver::resolve_sp_composite_type(const ParseNode *sp_data_type_node,
   CK (OB_NOT_NULL(current_block_));
   CK (T_SP_OBJ_ACCESS_REF == sp_data_type_node->type_);
   OZ (resolve_obj_access_idents(*(sp_data_type_node), obj_access_idents, func));
+  CK (obj_access_idents.count() > 0);
+  OX (obj_access_idents.at(obj_access_idents.count() - 1).has_brackets_ = false);
   for (int64_t i = 0; OB_SUCC(ret) && i < obj_access_idents.count(); ++i) {
     OZ (resolve_access_ident(obj_access_idents.at(i),
                              current_block_->get_namespace(),
@@ -2251,7 +2253,8 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
       OB_LIKELY(T_SP_OBJ_ACCESS_REF == sp_data_type_node->children_[0]->type_));
 
   OZ (resolve_obj_access_idents(*(sp_data_type_node->children_[0]), obj_access_idents, func));
-
+  CK (obj_access_idents.count() > 0);
+  OX (obj_access_idents.at(obj_access_idents.count() - 1).has_brackets_ = false);
   if (OB_SUCC(ret)) {
     ObArray<ObObjAccessIdx> access_idxs;
     for (int64_t i = 0; OB_SUCC(ret) && i < obj_access_idents.count(); ++i) {
@@ -5807,8 +5810,9 @@ int ObPLResolver::resolve_inout_param(ObRawExpr *param_expr, ObPLRoutineParamMod
         && ObObjAccessIdx::get_local_variable_idx(access_idxs) == (access_idxs.count() - 1)) {
       CK (!obj_expr->get_var_indexs().empty());
       OX (out_idx = obj_expr->get_var_indexs().at(0));
-    } else if (ObObjAccessIdx::is_local_variable(access_idxs)  //本地复杂变量的某个域做出参
-               || ObObjAccessIdx::is_package_variable(access_idxs)) { //Package复杂变量的某个域做出参
+    } else if (ObObjAccessIdx::is_local_variable(access_idxs)
+               || ObObjAccessIdx::is_package_variable(access_idxs)
+               || ObObjAccessIdx::is_subprogram_variable(access_idxs)) {
       if (ObObjAccessIdx::is_local_variable(access_idxs)) {
         int64_t var_idx
           = access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_;
@@ -5821,6 +5825,9 @@ int ObPLResolver::resolve_inout_param(ObRawExpr *param_expr, ObPLRoutineParamMod
       } else {
         OZ (check_variable_accessible(current_block_->get_namespace(), access_idxs, true));
       }
+    } else {
+      ret = OB_ERR_EXP_NOT_ASSIGNABLE;
+      LOG_WARN("expression cannot be used as an assignment", K(ret), K(access_idxs));
     }
     OX (obj_expr->set_write(true));
     OZ (obj_expr->formalize(&get_resolve_ctx().session_info_));
@@ -5861,7 +5868,7 @@ int ObPLResolver::resolve_inout_param(ObRawExpr *param_expr, ObPLRoutineParamMod
     // PACKAGE变量做出参, 得不到OutIDX, 仅检查变量是否可读写
     OZ (check_variable_accessible(param_expr, true));
   } else {
-    ret = OB_NOT_SUPPORTED;
+    ret = OB_ERR_EXP_NOT_ASSIGNABLE;
     LOG_WARN("wrong param type with output routine param",
              K(ret), K(param_expr->get_expr_type()), KPC(param_expr));
   }
@@ -9030,7 +9037,7 @@ int ObPLResolver::mock_self_param(bool need_rotate,
   const ObUserDefinedType *user_type = NULL;
   bool need_mock = true;
   ObRawExpr *self_arg = NULL;
-  if (OB_SUCC(ret) && acc_cnt > 1) {
+  if (OB_SUCC(ret) && acc_cnt > 1 && !obj_access_idents.at(acc_cnt - 2).has_brackets_) {
     OZ (current_block_->get_namespace().get_pl_data_type_by_name(resolve_ctx_,
                                     acc_cnt > 2 ? obj_access_idents.at(acc_cnt - 3).access_name_ : ObString(""),
                                     ObString(""),
@@ -9106,7 +9113,7 @@ int ObPLResolver::resolve_inner_call(
                                access_idxs,
                                func,
                                is_routine),
-                               K(access_idxs), K(i));
+                               K(obj_access_idents), K(access_idxs), K(i));
       OZ (obj_access_idents.at(i).extract_params(0, expr_params));
       OX (idx_cnt = (idx_cnt >= access_idxs.count()) ? 0 : idx_cnt);
       if (OB_SUCC(ret)
@@ -9574,6 +9581,9 @@ int ObPLResolver::resolve_obj_access_idents(const ParseNode &node,
     } else if (T_SP_CPARAM_LIST == node.children_[0]->type_) {
       ParseNode *params_node = node.children_[0];
       ObObjAccessIdent param_access;
+      bool current_params = obj_access_idents.count() > 0
+              && !obj_access_idents.at(obj_access_idents.count()-1).access_name_.empty()
+              && obj_access_idents.at(obj_access_idents.count()-1).params_.empty();
       obj_access_idents.at(obj_access_idents.count() -1).has_brackets_ = true;
       for (int64_t param_idx = 0; OB_SUCC(ret) && param_idx < params_node->num_child_; ++param_idx) {
         ObRawExpr *expr = NULL;
@@ -9582,9 +9592,7 @@ int ObPLResolver::resolve_obj_access_idents(const ParseNode &node,
           LOG_WARN("failed to resolve expr", K(ret));
         } else {
           std::pair<ObRawExpr*, int64_t> param(expr, 0);
-          if (obj_access_idents.count() > 0
-              && !obj_access_idents.at(obj_access_idents.count()-1).access_name_.empty()
-              && obj_access_idents.at(obj_access_idents.count()-1).params_.empty()) {
+          if (current_params) {
             if (OB_FAIL(obj_access_idents.at(obj_access_idents.count()-1).params_.push_back(param))) {
               LOG_WARN("push back expr failed", K(ret));
             }
@@ -12423,10 +12431,10 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
     }
 
     if (OB_FAIL(ret)) {
-    } else if ((ObPLExternalNS::LOCAL_TYPE == type && is_routine)
-               || (ObPLExternalNS::PKG_TYPE == type && is_routine)
-               || (ObPLExternalNS::UDT_NS == type && is_routine)) {
-      OZ (resolve_construct(access_ident, ns, access_idxs, var_index, func));
+    } else if ((ObPLExternalNS::LOCAL_TYPE == type || ObPLExternalNS::PKG_TYPE == type || ObPLExternalNS::UDT_NS == type)
+                && (is_routine || (access_ident.has_brackets_))) {
+      OZ (resolve_construct(access_ident, ns, access_idxs, var_index, func),
+        K(is_routine), K(is_resolve_rowtype), K(type), K(pl_data_type), K(var_index));
     } else if (ObPLExternalNS::INVALID_VAR == type
                || (ObPLExternalNS::SELF_ATTRIBUTE == type)
                || (ObPLExternalNS::LOCAL_VAR == type && is_routine)
@@ -12460,7 +12468,7 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
     }
   } else {
     // not top node and parent not a namespace, it must be composite access. handle it here.
-    OZ (resolve_composite_access(access_ident, access_idxs, ns, func));
+    OZ (resolve_composite_access(access_ident, access_idxs, ns, func), K(access_ident), K(access_idxs));
   }
 
   CANCLE_LOG_CHECK_MODE();
