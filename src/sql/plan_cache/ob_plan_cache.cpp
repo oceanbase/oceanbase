@@ -560,11 +560,12 @@ int ObPlanCache::construct_multi_stmt_fast_parser_result(common::ObIAllocator &a
     ObFastParserResult trimmed_parser_result;
     for (int64_t i = 0; OB_SUCC(ret) && i < queries->count(); i++) {
       parser_result.reset();
+      ObString trimed_stmt = const_cast<ObString &>(queries->at(i)).trim();
       if (OB_FAIL(construct_fast_parser_result(allocator,
                                                pc_ctx,
-                                               queries->at(i),
+                                               trimed_stmt,
                                                parser_result))) {
-        LOG_WARN("failed to construct fast parser result", K(ret));
+        LOG_WARN("failed to construct fast parser result", K(ret), K(i), K(trimed_stmt));
       } else if (OB_FAIL(pc_ctx.multi_stmt_fp_results_.push_back(parser_result))) {
         LOG_WARN("failed to push back parser result", K(ret));
       } else if (i == 0 && enable_explain_batched_multi_statement) {
