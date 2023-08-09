@@ -204,6 +204,7 @@ public:
   virtual ~ObIOTuner();
   int init();
   void destroy();
+  int send_detect_task();
   virtual void run1() override;
 
 private:
@@ -501,6 +502,7 @@ public:
   int get_device_health_status(ObDeviceHealthStatus &dhs, int64_t &device_abnormal_time);
   void reset_device_health();
   void record_failure(const ObIORequest &req);
+  int record_timing_task(const int64_t first_id, const int64_t second_id);
 
 private:
   int record_read_failure(const ObIORequest &req);

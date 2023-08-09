@@ -236,6 +236,11 @@ void ObIOFlag::set_detect(const bool is_detect)
   is_detect_ = is_detect;
 }
 
+void ObIOFlag::set_time_detect(const bool is_time_detect)
+{
+  is_time_detect_ = is_time_detect;
+}
+
 bool ObIOFlag::is_unlimited() const
 {
   return is_unlimited_;
@@ -244,6 +249,11 @@ bool ObIOFlag::is_unlimited() const
 bool ObIOFlag::is_detect() const
 {
   return is_detect_;
+}
+
+bool ObIOFlag::is_time_detect() const
+{
+  return is_time_detect_;
 }
 
 /******************             IOCallback              **********************/

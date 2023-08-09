@@ -93,9 +93,11 @@ public:
   void set_unlimited(const bool is_unlimited = true);
   bool is_unlimited() const;
   void set_detect(const bool is_detect = true);
+  void set_time_detect(const bool is_time_detect = true);
   bool is_detect() const;
+  bool is_time_detect() const;
   TO_STRING_KV("mode", common::get_io_mode_string(static_cast<ObIOMode>(mode_)),
-               K(group_id_), K(wait_event_id_), K(is_sync_), K(is_unlimited_), K(reserved_), K(is_detect_));
+               K(group_id_), K(wait_event_id_), K(is_sync_), K(is_unlimited_), K(reserved_), K(is_detect_), K(is_time_detect_));
 private:
   static constexpr int64_t IO_MODE_BIT = 4; // read, write, append
   static constexpr int64_t IO_GROUP_ID_BIT = 16; // for consumer group in resource manager
@@ -103,11 +105,13 @@ private:
   static constexpr int64_t IO_SYNC_FLAG_BIT = 1; // indicate if the caller is waiting io finished
   static constexpr int64_t IO_DETECT_FLAG_BIT = 1; // notify a retry task
   static constexpr int64_t IO_UNLIMITED_FLAG_BIT = 1; // indicate if the io is unlimited
+  static constexpr int64_t IO_TIME_DETECT_FLAG_BIT = 1; // indicate if the io is unlimited
   static constexpr int64_t IO_RESERVED_BIT = 64 - IO_MODE_BIT
                                                 - IO_GROUP_ID_BIT
                                                 - IO_WAIT_EVENT_BIT
                                                 - IO_SYNC_FLAG_BIT
                                                 - IO_UNLIMITED_FLAG_BIT
+                                                - IO_TIME_DETECT_FLAG_BIT
                                                 - IO_DETECT_FLAG_BIT;
 
   union {
@@ -119,6 +123,7 @@ private:
       bool is_sync_ : IO_SYNC_FLAG_BIT;
       bool is_unlimited_ : IO_UNLIMITED_FLAG_BIT;
       bool is_detect_ : IO_DETECT_FLAG_BIT;
+      bool is_time_detect_ : IO_TIME_DETECT_FLAG_BIT;
       int64_t reserved_ : IO_RESERVED_BIT;
     };
   };
