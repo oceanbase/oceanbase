@@ -1452,15 +1452,20 @@ int ObTablet::deserialize(
         start_pos += rowkey_read_info_->get_deep_copy_size();
       }
     } else {
+      // `pull_memtables` pulls ddl kvs into `ddl_kvs_addr` array which allocated by `allocator`.
+      // tiny tablet needs to deep copy `ddl_kvs_addr` array to `tablet_buf + start_pos`, and CANNOT additionally
+      // inc ref count. Cause `pull_memtables` already done this.
       if (OB_NOT_NULL(ddl_kvs_addr)) {
         const int64_t ddl_kv_size = sizeof(ObITable*) * DDL_KV_ARRAY_SIZE;
         if (remain < ddl_kv_size) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail to deep copy ddl kv to tablet", K(ret), K(remain), K(ddl_kv_size), K(ddl_kv_count));
         } else {
+          ddl_kv_count_ = ddl_kv_count;
           ddl_kvs_ = reinterpret_cast<ObITable**>(tablet_buf + start_pos);
-          if (OB_FAIL(assign_ddl_kvs(ddl_kvs_addr, ddl_kv_count))) {
-            LOG_WARN("fail to assign ddl_kvs", K(ret), KP(ddl_kvs_addr), K(ddl_kv_count), KP(tablet_buf), K(start_pos));
+          if (OB_ISNULL(MEMCPY(ddl_kvs_, ddl_kvs_addr, ddl_kv_size))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to memcpy ddl_kvs", K(ret), KP(ddl_kvs_), KP(ddl_kvs_addr), K(ddl_kv_count_));
           } else {
             start_pos += ddl_kv_size;
             remain -= ddl_kv_size;
