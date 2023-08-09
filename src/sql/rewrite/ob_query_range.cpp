@@ -5262,8 +5262,7 @@ int ObQueryRange::union_single_equal_cond(ObExecContext *exec_ctx,
 // do two path and operation
 int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
                                         ObExecContext *exec_ctx,
-                                        const ObDataTypeCastParams &dtc_params,
-                                        bool is_in_or)
+                                        const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
@@ -5332,7 +5331,7 @@ int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
               if (OB_FAIL(split_or(and_next, sub_or_list))) {
                 LOG_WARN("Split OR failed", K(ret));
               } else if (OB_FAIL(or_range_graph(sub_or_list, exec_ctx, new_tmp->and_next_,
-                                                dtc_params, is_in_or))) {
+                                                dtc_params))) {
                 LOG_WARN("Do OR of range graphs failed", K(ret));
               }
             }
@@ -5742,8 +5741,7 @@ do { \
 int ObQueryRange::or_range_graph(ObKeyPartList &ranges,
                                  ObExecContext *exec_ctx,
                                  ObKeyPart *&out_key_part,
-                                 const ObDataTypeCastParams &dtc_params,
-                                 bool is_in_or /* = false*/)
+                                 const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
@@ -5808,8 +5806,7 @@ int ObQueryRange::or_range_graph(ObKeyPartList &ranges,
             break;
           }
         } else if (head_key_part->is_in_key()) {
-          if (cur->pos_.offset_ == head_offset ||
-              (is_in_or && is_contain(head_key_part->in_keypart_->offsets_, cur->pos_.offset_))) {
+          if (cur->pos_.offset_ == head_offset) {
             if (OB_FAIL(split_or(cur, or_list))) {
               LOG_WARN("failed to split or", K(ret));
             }
@@ -5819,8 +5816,7 @@ int ObQueryRange::or_range_graph(ObKeyPartList &ranges,
             break;
           }
         } else if (cur->is_in_key()) {
-          if (head_key_part->pos_.offset_ == cur->in_keypart_->get_min_offset() ||
-              (is_in_or && is_contain(cur->in_keypart_->offsets_, head_key_part->pos_.offset_))) {
+          if (head_key_part->pos_.offset_ == cur->in_keypart_->get_min_offset()) {
             if (OB_FAIL(split_or(cur, or_list))) {
               LOG_WARN("failed to split or", K(ret));
             }
@@ -5852,7 +5848,7 @@ int ObQueryRange::or_range_graph(ObKeyPartList &ranges,
           } else {
             out_key_part = find_false;
           }
-        } else if (OB_FAIL(SMART_CALL(or_single_head_graphs(or_list, exec_ctx, dtc_params, is_in_or)))) {
+        } else if (OB_FAIL(SMART_CALL(or_single_head_graphs(or_list, exec_ctx, dtc_params)))) {
           LOG_WARN("Or single head graphs failed", K(ret));
         } else {
           bool has_geo_key = false;
@@ -6395,8 +6391,8 @@ int ObQueryRange::and_first_search(ObSearchState &search_state,
       // 3. current key part is equal value and and_next_ is not NULL, but consequent key does not exist.
       bool not_consequent = false;
       if (NULL != cur->and_next_) {
-        not_consequent = contain_in_ ?
-                         !search_state.valid_offsets_.has_member(i + 1) :
+        not_consequent = cur->and_next_->is_in_key() ?
+                         !is_contain(cur->and_next_->in_keypart_->offsets_, i + 1) :
                          i + 1 != cur->and_next_->pos_.offset_;
       }
       if (copy_produce_range
@@ -7188,7 +7184,7 @@ OB_NOINLINE int ObQueryRange::final_extract_query_range(ObExecContext &exec_ctx,
                                                         const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
-  SQL_REWRITE_LOG(DEBUG, "final extract query range");
+  SQL_REWRITE_LOG(DEBUG, "final extract query range", K(table_graph_.is_equal_range_));
   if (state_ == NEED_PREPARE_PARAMS && NULL != table_graph_.key_part_head_) {
     ObKeyPartList or_array;
     // find all key part path and do OR option

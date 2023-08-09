@@ -721,7 +721,7 @@ private:
                             const common::ObDataTypeCastParams &dtc_params,
                             bool &is_bound_modified);
   int or_single_head_graphs(ObKeyPartList &or_list, ObExecContext *exec_ctx,
-                            const common::ObDataTypeCastParams &dtc_params, bool is_in_or = false);
+                            const common::ObDataTypeCastParams &dtc_params);
   int union_in_with_in(ObKeyPartList &or_list,
                        ObKeyPart *cur1,
                        ObKeyPart *cur2,
@@ -746,7 +746,7 @@ private:
                               ObKeyPart *cur1,
                               ObKeyPart *cur2);
   int or_range_graph(ObKeyPartList &ranges, ObExecContext *exec_ctx, ObKeyPart *&out_key_part,
-                     const common::ObDataTypeCastParams &dtc_params, bool is_in_or = false);
+                     const common::ObDataTypeCastParams &dtc_params);
   int definite_in_range_graph(ObExecContext &exec_ctx, ObKeyPart *&root, bool &has_scan_key,
                               const common::ObDataTypeCastParams &dtc_params);
 
