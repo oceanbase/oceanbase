@@ -241,16 +241,15 @@ int32_t CodecDeflateQpl::do_decompress_data(const char * source, uint32_t source
 int qpl_init(QplAllocator &allocator)
 {
   int ret = 0;
-  CodecDeflateQpl &software_qpl = CodecDeflateQpl::get_software_instance();
-  ret = software_qpl.init(qpl_path_software, allocator);
+  CodecDeflateQpl &hardware_qpl = CodecDeflateQpl::get_hardware_instance();
+  ret = hardware_qpl.init(qpl_path_hardware, allocator);
   if (0 == ret) {
-    CodecDeflateQpl &hardware_qpl = CodecDeflateQpl::get_hardware_instance();
-    ret = hardware_qpl.init(qpl_path_hardware, allocator);
-    if (QPL_STS_NO_MEM_ERR == ret) {
-      // If you do not install the usdm_drv, the cloud-qpl return this error code.
-      // But we can use software instead
-      ret = 0;
-    }
+    // If there is no hardware, qpl will use software instead
+  } else if (QPL_STS_NO_MEM_ERR == ret) {
+    // If you do not install the usdm_drv, the cloud-qpl return this error code.
+    // But we can use software instead
+    CodecDeflateQpl &software_qpl = CodecDeflateQpl::get_software_instance();
+    ret = software_qpl.init(qpl_path_software, allocator);
   }
 
   return ret;
