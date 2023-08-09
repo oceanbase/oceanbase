@@ -635,6 +635,7 @@ class EventTable
       EN_PX_JOIN_FILTER_NOT_MERGE_MSG = 610,
       EN_PX_P2P_MSG_REG_DM_FAILED= 611,
       EN_PX_JOIN_FILTER_HOLD_MSG = 612,
+      EN_PX_DTL_TRACE_LOG_ENABLE = 613,
       // please add new trace point after 700 or before 600
 
       // Compaction Related 700-750
