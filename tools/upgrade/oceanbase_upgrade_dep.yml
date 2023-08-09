@@ -28,9 +28,6 @@
 - version: 4.1.0.1
   can_be_upgraded_to:
       - 4.1.0.2
-  require_from_binary:
-    value: True
-    when_come_from: [4.0.0.0] # can't upgrade from 4.0.0.0 to 4.1.0.2 directly
 
 - version: 4.1.0.2
   can_be_upgraded_to:

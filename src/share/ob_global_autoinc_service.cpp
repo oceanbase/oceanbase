@@ -440,7 +440,6 @@ int ObGlobalAutoIncService::fetch_next_node_(const ObGAISNextAutoIncValReq &requ
                                                     request.max_value_,
                                                     desired_count,
                                                     autoinc_version,
-                                                    true, /*for_udpate*/
                                                     start_inclusive,
                                                     end_inclusive,
                                                     sync_value))) {
@@ -480,7 +479,6 @@ int ObGlobalAutoIncService::sync_value_to_inner_table_(
                                                     insert_value,
                                                     request.max_value_,
                                                     autoinc_version,
-                                                    true,/*for_update*/
                                                     seq_value,
                                                     sync_value))) {
     LOG_WARN("fail to sync autoinc value to inner table", K(ret));

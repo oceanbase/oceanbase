@@ -1537,7 +1537,7 @@ int ObInnerTableGlobalAutoIncrementService::get_value(
   uint64_t sync_value_from_inner_table = 0;
   ret = inner_table_proxy_.next_autoinc_value(
           key, offset, increment, table_auto_increment, max_value, desired_count, autoinc_version,
-          true /*for_update*/, start_inclusive, end_inclusive, sync_value_from_inner_table);
+          start_inclusive, end_inclusive, sync_value_from_inner_table);
   if (OB_SUCC(ret)) {
     if (table_auto_increment != 0 && table_auto_increment - 1 > sync_value_from_inner_table) {
       sync_value = table_auto_increment -1;
@@ -1575,7 +1575,7 @@ int ObInnerTableGlobalAutoIncrementService::local_push_to_global_value(
 {
   uint64_t seq_value = 0; // unused, * MUST * set seq_value to 0 here.
   return inner_table_proxy_.sync_autoinc_value(key, insert_value, max_value, autoinc_version,
-                                              true, /*for_update*/seq_value, sync_value);
+                                              seq_value, sync_value);
 }
 
 int ObInnerTableGlobalAutoIncrementService::local_sync_with_global_value(
@@ -1666,24 +1666,44 @@ int ObRpcGlobalAutoIncrementService::clear_global_autoinc_cache(const AutoincKey
   return gais_client_.clear_global_autoinc_cache(key);
 }
 
-int ObAutoIncInnerTableProxy::check_inner_autoinc_version(const int64_t &request_autoinc_version,
-                                                          const int64_t &inner_autoinc_version,
-                                                          const AutoincKey &key)
+// For update from 4.0.0.0 to 4.1.0.2
+// We should handle column truncate version not exist situation
+// 1.If column truncate version not exist, we should not update __all_auto_increment with truncate_version.
+//   If we don't do that, it may case local value use newer truncate_version's seq value which is smaller than local value
+// 2.If column truncate version exist, we should update __auto_increment with truncate_version
+int ObAutoIncInnerTableProxy::get_and_check_autoinc_version_(const AutoincKey &key,
+                                                             const int64_t &request_autoinc_version,
+                                                             const common::sqlclient::ObMySQLResult &result,
+                                                             bool &update_with_version,
+                                                             int64_t &inner_autoinc_version)
 {
   int ret = OB_SUCCESS;
-  if (0 == request_autoinc_version || 0 == inner_autoinc_version) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("autoinc version is zero", KR(ret), K(request_autoinc_version), K(inner_autoinc_version));
-  // inner table did not update
-  } else if (OB_UNLIKELY(inner_autoinc_version < request_autoinc_version)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("inner_autoinc_version can not less than autoinc_version", KR(ret), K(key),
-                                                                        K(inner_autoinc_version), K(request_autoinc_version));
-  // old request
-  } else if (OB_UNLIKELY(inner_autoinc_version > request_autoinc_version)) {
-    ret = OB_AUTOINC_CACHE_NOT_EQUAL;
-    LOG_WARN("inner_autoinc_version is greater than autoinc_version, request needs retry", KR(ret), K(key),
-                                                                                           K(inner_autoinc_version), K(request_autoinc_version));
+  update_with_version = true;
+  inner_autoinc_version = OB_INVALID_VERSION;
+  if (OB_FAIL(result.get_int("truncate_version", inner_autoinc_version))) {
+    if (OB_ERR_COLUMN_NOT_FOUND == ret
+        || OB_ERR_NULL_VALUE == ret) {
+      update_with_version = false;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get truncate_version.", KR(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (0 == request_autoinc_version || 0 == inner_autoinc_version) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("autoinc version is zero", KR(ret), K(request_autoinc_version), K(inner_autoinc_version));
+      // inner table did not update
+    } else if (OB_UNLIKELY(inner_autoinc_version < request_autoinc_version)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inner_autoinc_version can not less than autoinc_version", KR(ret), K(key),
+                                                                          K(inner_autoinc_version), K(request_autoinc_version));
+    // old request
+    } else if (OB_UNLIKELY(inner_autoinc_version > request_autoinc_version)) {
+      ret = OB_AUTOINC_CACHE_NOT_EQUAL;
+      LOG_WARN("inner_autoinc_version is greater than autoinc_version, request needs retry", KR(ret), K(key),
+                                                                                            K(inner_autoinc_version), K(request_autoinc_version));
+    }
   }
   return ret;
 }
@@ -1695,7 +1715,6 @@ int ObAutoIncInnerTableProxy::next_autoinc_value(const AutoincKey &key,
                                                  const uint64_t max_value,
                                                  const uint64_t desired_count,
                                                  const int64_t &autoinc_version,
-                                                 bool for_update,
                                                  uint64_t &start_inclusive,
                                                  uint64_t &end_inclusive,
                                                  uint64_t &sync_value)
@@ -1716,16 +1735,16 @@ int ObAutoIncInnerTableProxy::next_autoinc_value(const AutoincKey &key,
     LOG_WARN("failed to start transaction", K(ret), K(tenant_id));
   } else {
     int sql_len = 0;
+    bool update_with_version = true;
     SMART_VAR(char[OB_MAX_SQL_LENGTH], sql) {
       const uint64_t exec_tenant_id = tenant_id;
       const char *table_name = OB_ALL_AUTO_INCREMENT_TNAME;
       sql_len = snprintf(sql, OB_MAX_SQL_LENGTH,
-                         " SELECT sequence_key, sequence_value, sync_value, truncate_version FROM %s WHERE tenant_id = %lu AND sequence_key = %lu AND column_id = %lu %s",
+                         " SELECT * FROM %s WHERE tenant_id = %lu AND sequence_key = %lu AND column_id = %lu FOR UPDATE",
                          table_name,
                          ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
                          ObSchemaUtils::get_extract_schema_id(tenant_id, table_id),
-                         column_id,
-                         for_update ? "FOR UPDATE" : "");
+                         column_id);
       if (sql_len >= OB_MAX_SQL_LENGTH || sql_len <= 0) {
         ret = OB_SIZE_OVERFLOW;
         LOG_WARN("failed to format sql. size not enough");
@@ -1752,14 +1771,15 @@ int ObAutoIncInnerTableProxy::next_autoinc_value(const AutoincKey &key,
                 LOG_WARN("failed to get next", K(ret));
               }
             } else {
-              if (OB_FAIL(result->get_int(0l, fetch_table_id))) {
+              if (OB_FAIL(result->get_int("sequence_key", fetch_table_id))) {
                 LOG_WARN("fail to get int_value.", K(ret));
-              } else if (OB_FAIL(result->get_uint(1l, sequence_value))) {
+              } else if (OB_FAIL(result->get_uint("sequence_value", sequence_value))) {
                 LOG_WARN("fail to get int_value.", K(ret));
-              } else if (OB_FAIL(result->get_uint(2l, sync_value))) {
+              } else if (OB_FAIL(result->get_uint("sync_value", sync_value))) {
                 LOG_WARN("fail to get int_value.", K(ret));
-              } else if (OB_FAIL(result->get_int(3l, inner_autoinc_version))) {
-                LOG_WARN("fail to get inner_autoinc_version.", K(ret));
+              } else if (OB_FAIL(get_and_check_autoinc_version_(key, tmp_autoinc_version, *result,
+                                                                update_with_version, inner_autoinc_version))) {
+                LOG_WARN("fail to get and check inner_autoinc_version", KR(ret), K(key), K(tmp_autoinc_version), K(inner_autoinc_version));
               } else {
                 if (sync_value >= max_value) {
                   sequence_value = max_value;
@@ -1768,9 +1788,6 @@ int ObAutoIncInnerTableProxy::next_autoinc_value(const AutoincKey &key,
                 }
                 if (base_value > sequence_value) {
                   sequence_value = base_value;
-                }
-                if (OB_FAIL(check_inner_autoinc_version(tmp_autoinc_version, inner_autoinc_version, key))) {
-                  LOG_WARN("fail to check inner_autoinc_version", KR(ret));
                 }
               }
               if (OB_SUCC(ret)) {
@@ -1787,6 +1804,12 @@ int ObAutoIncInnerTableProxy::next_autoinc_value(const AutoincKey &key,
                 }
               }
             }
+          }
+        }
+        ObSqlString truncate_version_str;
+        if (OB_SUCC(ret) && update_with_version) {
+          if (OB_FAIL(truncate_version_str.assign_fmt(" AND truncate_version = %ld", inner_autoinc_version))) {
+            LOG_WARN("failed to assign truncate_version_str", KR(ret));
           }
         }
         if (OB_SUCC(ret)) {
@@ -1812,13 +1835,13 @@ int ObAutoIncInnerTableProxy::next_autoinc_value(const AutoincKey &key,
 
             sql_len = snprintf(sql, OB_MAX_SQL_LENGTH,
                               "UPDATE %s SET sequence_value = %lu, gmt_modified = now(6)"
-                              " WHERE tenant_id = %lu AND sequence_key = %lu AND column_id = %lu AND truncate_version = %ld",
+                              " WHERE tenant_id = %lu AND sequence_key = %lu AND column_id = %lu %s",
                               table_name,
                               next_sequence_value,
                               OB_INVALID_TENANT_ID,
                               table_id,
                               column_id,
-                              inner_autoinc_version);
+                              !truncate_version_str.empty() ? truncate_version_str.ptr() : "");
             int64_t affected_rows = 0;
             if (sql_len >= OB_MAX_SQL_LENGTH || sql_len <= 0) {
               ret = OB_SIZE_OVERFLOW;
@@ -1859,65 +1882,77 @@ int ObAutoIncInnerTableProxy::get_autoinc_value(const AutoincKey &key,
                                                 uint64_t &sync_value)
 {
   int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
   const uint64_t tenant_id = key.tenant_id_;
   const int64_t tmp_autoinc_version = get_modify_autoinc_version(autoinc_version);
-  SMART_VARS_2((ObMySQLProxy::MySQLResult, res), (char[OB_MAX_SQL_LENGTH], sql)) {
-    ObMySQLResult *result = NULL;
-    int sql_len = 0;
-    const uint64_t exec_tenant_id = tenant_id;
-    const char *table_name = OB_ALL_AUTO_INCREMENT_TNAME;
-    sql_len = snprintf(sql, OB_MAX_SQL_LENGTH,
-                        " SELECT sequence_value, sync_value, truncate_version FROM %s"
-                        " WHERE tenant_id = %lu AND sequence_key = %lu AND column_id = %lu",
-                        table_name,
-                        ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-                        ObSchemaUtils::get_extract_schema_id(exec_tenant_id, key.table_id_),
-                        key.column_id_);
-    ObISQLClient *sql_client = mysql_proxy_;
-    uint64_t sequence_table_id = OB_ALL_AUTO_INCREMENT_TID;
-    ObSQLClientRetryWeak sql_client_retry_weak(sql_client,
-                                                exec_tenant_id,
-                                                sequence_table_id);
-    if (OB_ISNULL(mysql_proxy_)) {
-      ret = OB_NOT_INIT;
-      LOG_WARN("mysql proxy is null", K(ret));
-    } else if (sql_len >= OB_MAX_SQL_LENGTH || sql_len <= 0) {
-      ret = OB_SIZE_OVERFLOW;
-      LOG_WARN("failed to format sql. size not enough");
-    } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql))) {
-      LOG_WARN(" failed to read data", K(ret));
-    } else if (NULL == (result = res.get_result())) {
-      LOG_WARN("failed to get result", K(ret));
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(result->next())) {
-      if (OB_ITER_END == ret) {
-        LOG_INFO("there is no autoinc column record, return 0 as seq_value by default",
-                  K(key), K(ret));
-        seq_value = 0;
-        ret = OB_SUCCESS;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("get min data_version failed", KR(ret), K(tenant_id));
+  } else {
+    SMART_VARS_2((ObMySQLProxy::MySQLResult, res), (char[OB_MAX_SQL_LENGTH], sql)) {
+      ObMySQLResult *result = NULL;
+      int sql_len = 0;
+      const uint64_t exec_tenant_id = tenant_id;
+      const char *table_name = OB_ALL_AUTO_INCREMENT_TNAME;
+      bool need_for_update = data_version < DATA_VERSION_4_1_0_0;
+      sql_len = snprintf(sql, OB_MAX_SQL_LENGTH,
+                          " SELECT * FROM %s"
+                          " WHERE tenant_id = %lu AND sequence_key = %lu AND column_id = %lu %s",
+                          table_name,
+                          ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                          ObSchemaUtils::get_extract_schema_id(exec_tenant_id, key.table_id_),
+                          key.column_id_,
+                          need_for_update ? "FOR UPDATE" : "");
+      ObISQLClient *sql_client = mysql_proxy_;
+      uint64_t sequence_table_id = OB_ALL_AUTO_INCREMENT_TID;
+      ObSQLClientRetryWeak sql_client_retry_weak(sql_client,
+                                                  exec_tenant_id,
+                                                  sequence_table_id);
+      if (OB_ISNULL(mysql_proxy_)) {
+        ret = OB_NOT_INIT;
+        LOG_WARN("mysql proxy is null", K(ret));
+      } else if (sql_len >= OB_MAX_SQL_LENGTH || sql_len <= 0) {
+        ret = OB_SIZE_OVERFLOW;
+        LOG_WARN("failed to format sql. size not enough");
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql))) {
+        LOG_WARN(" failed to read data", K(ret));
+      } else if (NULL == (result = res.get_result())) {
+        LOG_WARN("failed to get result", K(ret));
+        ret = OB_ERR_UNEXPECTED;
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          LOG_INFO("there is no autoinc column record, return 0 as seq_value by default",
+                    K(key), K(ret));
+          seq_value = 0;
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail get next value", K(key), K(ret));
+        }
       } else {
-        LOG_WARN("fail get next value", K(key), K(ret));
-      }
-    } else {
-      int64_t inner_autoinc_version = OB_INVALID_VERSION;
-      if (OB_FAIL(result->get_uint(0l, seq_value))) {
-        LOG_WARN("fail to get int_value.", K(ret));
-      } else if (OB_FAIL(result->get_uint(1l, sync_value))) {
-        LOG_WARN("fail to get int_value.", K(ret));
-      } else if (OB_FAIL(result->get_int(2l, inner_autoinc_version))) {
-        LOG_WARN("fail to get truncate_version.", K(ret));
-      } else if (OB_FAIL(check_inner_autoinc_version(tmp_autoinc_version, inner_autoinc_version, key))) {
-        LOG_WARN("fail to check inner_autoinc_version", KR(ret));
-      }
-      if (OB_SUCC(ret)) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_ITER_END != (tmp_ret = result->next())) {
-          if (OB_SUCCESS == tmp_ret) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("more than one row", K(ret), K(key));
-          } else {
-            ret = tmp_ret;
-            LOG_WARN("fail to iter next row", K(ret), K(key));
+        bool update_with_version = true;
+        int64_t inner_autoinc_version = OB_INVALID_VERSION;
+        if (OB_FAIL(result->get_uint("sequence_value", seq_value))) {
+          LOG_WARN("fail to get int_value.", K(ret));
+        } else if (OB_FAIL(result->get_uint("sync_value", sync_value))) {
+          LOG_WARN("fail to get int_value.", K(ret));
+        } else if (OB_FAIL(get_and_check_autoinc_version_(key, tmp_autoinc_version, *result,
+                                                          update_with_version, inner_autoinc_version))) {
+          LOG_WARN("fail to get and check inner_autoinc_version", KR(ret), K(key), K(tmp_autoinc_version), K(inner_autoinc_version));
+        } else if (!need_for_update && !update_with_version) {
+          // local schema is greater than remote schema, need retry
+          ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+          LOG_WARN("data version is greater than 4.1.0.0, column truncate_version should exist in __all_auto_increment",
+                    KR(ret), K(key), K(tmp_autoinc_version), K(inner_autoinc_version));
+        }
+        if (OB_SUCC(ret)) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_ITER_END != (tmp_ret = result->next())) {
+            if (OB_SUCCESS == tmp_ret) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("more than one row", K(ret), K(key));
+            } else {
+              ret = tmp_ret;
+              LOG_WARN("fail to iter next row", K(ret), K(key));
+            }
           }
         }
       }
@@ -2019,7 +2054,6 @@ int ObAutoIncInnerTableProxy::sync_autoinc_value(const AutoincKey &key,
                                                  const uint64_t insert_value,
                                                  const uint64_t max_value,
                                                  const int64_t autoinc_version,
-                                                 bool for_update,
                                                  uint64_t &seq_value,
                                                  uint64_t &sync_value)
 {
@@ -2031,6 +2065,7 @@ int ObAutoIncInnerTableProxy::sync_autoinc_value(const AutoincKey &key,
   ObSqlString sql;
   bool with_snap_shot = true;
   uint64_t fetch_seq_value = 0;
+  bool update_with_version = true;
   int64_t inner_autoinc_version = OB_INVALID_VERSION;
   int64_t tmp_autoinc_version = get_modify_autoinc_version(autoinc_version);
   if (OB_ISNULL(mysql_proxy_)) {
@@ -2042,13 +2077,12 @@ int ObAutoIncInnerTableProxy::sync_autoinc_value(const AutoincKey &key,
     const uint64_t exec_tenant_id = tenant_id;
     const char *table_name = OB_ALL_AUTO_INCREMENT_TNAME;
     int64_t fetch_table_id = OB_INVALID_ID;
-    if (OB_FAIL(sql.assign_fmt(" SELECT sequence_key, sequence_value, sync_value, truncate_version FROM %s WHERE tenant_id = %lu AND sequence_key = %lu"
-                               " AND column_id = %lu %s",
+    if (OB_FAIL(sql.assign_fmt(" SELECT * FROM %s WHERE tenant_id = %lu AND sequence_key = %lu"
+                               " AND column_id = %lu FOR UPDATE",
                                table_name,
                                ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
                                ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id),
-                               column_id,
-                               for_update ? "FOR UPDATE" : ""))) {
+                               column_id))) {
       LOG_WARN("failed to assign sql", K(ret));
     }
     if (OB_SUCC(ret)) {
@@ -2071,16 +2105,15 @@ int ObAutoIncInnerTableProxy::sync_autoinc_value(const AutoincKey &key,
             ret = OB_SCHEMA_ERROR;
             LOG_WARN("failed to get next", K(ret));
           }
-        } else if (OB_FAIL(result->get_int(0l, fetch_table_id))) {
+        } else if (OB_FAIL(result->get_int("sequence_key", fetch_table_id))) {
           LOG_WARN("failed to get int_value.", K(ret));
-        } else if (OB_FAIL(result->get_uint(1l, fetch_seq_value))) {
+        } else if (OB_FAIL(result->get_uint("sequence_value", fetch_seq_value))) {
           LOG_WARN("failed to get int_value.", K(ret));
-        } else if (OB_FAIL(result->get_uint(2l, sync_value))) {
+        } else if (OB_FAIL(result->get_uint("sync_value", sync_value))) {
           LOG_WARN("failed to get int_value.", K(ret));
-        } else if (OB_FAIL(result->get_int(3l, inner_autoinc_version))) {
-          LOG_WARN("failed to get inner_autoinc_version.", K(ret));
-        } else if (OB_FAIL(check_inner_autoinc_version(tmp_autoinc_version, inner_autoinc_version, key))) {
-          LOG_WARN("failed to check inner_autoinc_version", KR(ret));
+        } else if (OB_FAIL(get_and_check_autoinc_version_(key, tmp_autoinc_version, *result,
+                                                          update_with_version, inner_autoinc_version))) {
+          LOG_WARN("fail to get and check inner_autoinc_version", KR(ret), K(key), K(tmp_autoinc_version), K(inner_autoinc_version));
         }
         if (OB_SUCC(ret)) {
           int tmp_ret = OB_SUCCESS;
@@ -2094,6 +2127,12 @@ int ObAutoIncInnerTableProxy::sync_autoinc_value(const AutoincKey &key,
             }
           }
         }
+      }
+    }
+    ObSqlString truncate_version_str;
+    if (OB_SUCC(ret) && update_with_version) {
+      if (OB_FAIL(truncate_version_str.assign_fmt(" AND truncate_version = %ld", inner_autoinc_version))) {
+        LOG_WARN("failed to assign truncate_version_str", KR(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -2124,9 +2163,10 @@ int ObAutoIncInnerTableProxy::sync_autoinc_value(const AutoincKey &key,
         //       > I can't get MAX_VALUE in DDL context. auto inc column type is needed.
         if (OB_FAIL(sql.assign_fmt(
                     "UPDATE %s SET sync_value = %lu, sequence_value = %lu, gmt_modified = now(6) "
-                    "WHERE tenant_id=%lu AND sequence_key=%lu AND column_id=%lu AND truncate_version=%ld",
+                    "WHERE tenant_id=%lu AND sequence_key=%lu AND column_id=%lu %s",
                     table_name, sync_value, new_seq_value,
-                    OB_INVALID_TENANT_ID, table_id, column_id, inner_autoinc_version))) {
+                    OB_INVALID_TENANT_ID, table_id, column_id,
+                    !truncate_version_str.empty() ? truncate_version_str.ptr() : ""))) {
           LOG_WARN("failed to assign sql", K(ret));
         } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != exec_tenant_id) {
           ret = OB_OP_NOT_ALLOW;

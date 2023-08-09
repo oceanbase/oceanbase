@@ -3564,9 +3564,15 @@ int ObTableSqlService::add_sequence(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
   // FIXME:__all_time_zone contains auto increment column. Cyclic dependence may occur.
+  uint64_t data_version = 0;
   const uint64_t exec_tenant_id = tenant_id;
   if (OB_FAIL(trans.start(sql_proxy_, tenant_id, false))) {
     LOG_WARN("failed to start trans, ", K(ret), K(tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get data version", KR(ret));
+  } else if (data_version < DATA_VERSION_4_1_0_2 && OB_INVALID_VERSION != truncate_version) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("data version is less than 4.1.0.2, truncate_version should not be -1 in autoinc", KR(ret), K(data_version), K(tenant_id));
   } else {
     ObSqlString sql;
     ObSqlString values;
@@ -3580,7 +3586,9 @@ int ObTableSqlService::add_sequence(const uint64_t tenant_id,
       SQL_COL_APPEND_VALUE(sql, values, column_id, "column_id", "%lu");
       SQL_COL_APPEND_VALUE(sql, values, 0 == auto_increment ? 1 : auto_increment, "sequence_value", "%lu");
       SQL_COL_APPEND_VALUE(sql, values, 0 == auto_increment ? 0 : auto_increment - 1, "sync_value", "%lu");
-      SQL_COL_APPEND_VALUE(sql, values, truncate_version, "truncate_version", "%ld");
+      if (data_version >= DATA_VERSION_4_1_0_2) {
+        SQL_COL_APPEND_VALUE(sql, values, truncate_version, "truncate_version", "%ld");
+      }
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(sql.append_fmt(", gmt_modified) VALUES (%.*s, now(6))",

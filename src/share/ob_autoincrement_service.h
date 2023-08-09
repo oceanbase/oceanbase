@@ -210,7 +210,6 @@ public:
                          const uint64_t max_value,
                          const uint64_t desired_count,
                          const int64_t &inner_autoinc_version,
-                         bool for_update,
                          uint64_t &start_inclusive,
                          uint64_t &end_inclusive,
                          uint64_t &sync_value );
@@ -225,13 +224,14 @@ public:
                          const uint64_t insert_value,
                          const uint64_t max_value,
                          const int64_t autoinc_version,
-                         bool for_update,
                          uint64_t &seq_value,
                          uint64_t &sync_value);
 private:
-  int check_inner_autoinc_version(const int64_t &request_autoinc_version,
-                                  const int64_t &inner_autoinc_version,
-                                  const AutoincKey &key);
+  int get_and_check_autoinc_version_(const AutoincKey &key,
+                                     const int64_t &request_autoinc_version,
+                                     const common::sqlclient::ObMySQLResult &result,
+                                     bool &update_with_version,
+                                     int64_t &inner_autoinc_version);
 private:
   common::ObMySQLProxy *mysql_proxy_;
 };
