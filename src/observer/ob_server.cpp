@@ -2123,7 +2123,6 @@ int ObServer::init_interrupt()
   return ret;
 }
 
-FILE *fp = fopen("1.txt", "w");
 int ObServer::init_zlib_lite_compressor()
 {
   int ret = OB_SUCCESS;
@@ -2135,6 +2134,9 @@ int ObServer::init_zlib_lite_compressor()
   } else if (FALSE_IT(zlib_lite_compressor = static_cast<ZLIB_LITE::ObZlibLiteCompressor *>(compressor))) {
   } else if (OB_FAIL(zlib_lite_compressor->init())){
     LOG_ERROR("failed to init zlib lite compressor", K(ret));
+  } else {
+    const char *zlib_lite_compress_method = zlib_lite_compressor->compression_method();
+    LOG_INFO("zlib lite compressor init success", KCSTRING(zlib_lite_compress_method));
   }
   return ret;
 }

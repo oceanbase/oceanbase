@@ -11,11 +11,10 @@
  */
 
 #include "ob_zlib_lite_compressor.h"
-#include "zlib_lite_src/codec_deflate_qpl.h"
-#include "zlib_lite_src/deflate.h"
-#include "zlib_lite_src/zlib.h"
+#include "zlib_lite_adaptor.h"
 #include "lib/ob_errno.h"
 #include "lib/allocator/ob_malloc.h"
+#include "lib/utility/utility.h"
 
 namespace oceanbase
 {
@@ -26,7 +25,7 @@ namespace ZLIB_LITE
 /*zlib_lite supports two algorithms. On the platform that supports qpl, the qpl compression algorithm will be used, 
 otherwise the zlib algorithm will be used.*/
 
-ObZlibLiteCompressor::ObZlibLiteCompressor() : qpl_runtime_enabled_(false)
+ObZlibLiteCompressor::ObZlibLiteCompressor() : adaptor_(NULL)
 {
 }
 
@@ -47,147 +46,27 @@ void qpl_deallocate(void *ptr)
 int ObZlibLiteCompressor::init()
 {
   int ret = OB_SUCCESS;
-  qpl_runtime_enabled_ = false;
-#ifdef ENABLE_QPL_COMPRESSION
-  if (0 == access("/dev/usdm_drv", F_OK)) {
-    qpl_runtime_enabled_ = true;
-    
-    QplAllocator allocator;
-    allocator.allocate = qpl_allocate;
-    allocator.deallocate = qpl_deallocate;
-    int qpl_ret = qpl_init(allocator);
-    if (0 != qpl_ret) {
-      ret = OB_ERROR;
-    }
+  if (adaptor_ != NULL) {
+    ret = OB_INIT_TWICE;
+  } else if (FALSE_IT(adaptor_ = OB_NEW(ObZlibLiteAdaptor, ObModIds::OB_COMPRESSOR))) {
+  } else if (NULL == adaptor_) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LIB_LOG(WARN, "failed to create ObZlibLiteAdaptor");
+  } else {
+    ret = adaptor_->init(qpl_allocate, qpl_deallocate);
   }
-#endif
+
+  LIB_LOG(INFO, "init zlib lite done.", K(ret), KCSTRING(adaptor_->compression_method()));
   return ret;
 }
 
 void ObZlibLiteCompressor::deinit()
 {
-#ifdef ENABLE_QPL_COMPRESSION
-  if (qpl_runtime_enabled_) {
-    qpl_deinit();
+  if (adaptor_ != NULL) {
+    adaptor_->deinit();
+    OB_DELETE(ObZlibLiteAdaptor, ObModIds::OB_COMPRESSOR, adaptor_);
+    adaptor_ = NULL;
   }
-#endif
-}
-
-int ObZlibLiteCompressor::zlib_compress(char *dest, int64_t *dest_len, const char *source, int64_t source_len)
-{
-  int ret = OB_SUCCESS; // just for log
-  z_stream stream;
-  int err = Z_OK;
-
-  stream.next_in = (z_const Bytef *)source;
-  stream.avail_in = (uInt)source_len;
-#ifdef MAXSEG_64K
-  /* Check for source > 64K on 16-bit machine: */
-  if ((uLong)stream.avail_in != source_len) return Z_BUF_ERROR;
-#endif
-  stream.next_out = (Bytef *)dest;
-  stream.avail_out = (uInt)*dest_len;
-  stream.zalloc = (alloc_func)0;
-  stream.zfree = (free_func)0;
-  stream.opaque = (voidpf)0;
-
-  if ((uLong)stream.avail_out != *dest_len) {
-    err = Z_BUF_ERROR;
-  } else if (Z_OK != (err = deflateInit2_(&stream, compress_level, Z_DEFLATED, window_bits, DEF_MEM_LEVEL,
-                                          Z_DEFAULT_STRATEGY, ZLIB_VERSION, (int)sizeof(z_stream)))) {
-    LIB_LOG(WARN, "deflateInit2_ failed", K(err));
-  } else if (Z_STREAM_END != (err = deflate(&stream, Z_FINISH))) {
-    deflateEnd(&stream);
-    err = (err == Z_OK ? Z_BUF_ERROR : err);
-  } else {
-    *dest_len = stream.total_out;
-    err = deflateEnd(&stream);
-  }
-  return err;
-}
-
-int ObZlibLiteCompressor::zlib_decompress(char *dest, int64_t *dest_len, const char *source, int64_t source_len)
-{
-  int ret = OB_SUCCESS; // just for log
-  z_stream stream;
-  int err = Z_OK;
-
-  stream.next_in = (z_const Bytef *)source;
-  stream.avail_in = (uInt)source_len;
-  stream.next_out = (Bytef *)dest;
-  stream.avail_out = (uInt)*dest_len;
-  stream.zalloc = (alloc_func)0;
-  stream.zfree = (free_func)0;
-  
-  /* Check for source > 64K on 16-bit machine: */
-  if ((uLong)stream.avail_in != source_len || (uLong)stream.avail_out != *dest_len) {
-    err = Z_BUF_ERROR;
-  } else if (Z_OK != (err = inflateInit2_(&stream, window_bits, ZLIB_VERSION,
-                                          (int)sizeof(z_stream)))) {
-    LIB_LOG(WARN, "inflateInit2_ failed", K(err));
-  } else {
-    err = inflate(&stream, Z_FINISH);
-    if (err != Z_STREAM_END) {
-      inflateEnd(&stream);
-      if (err == Z_NEED_DICT || (err == Z_BUF_ERROR && stream.avail_in == 0)) {
-        err = Z_DATA_ERROR;
-      }
-    } else {
-      *dest_len = stream.total_out;
-      err = inflateEnd(&stream);
-    }
-  }
-  return err;
-}
-
-int ObZlibLiteCompressor::zlib_lite_compress(const char* src_buffer,
-                                             const int64_t src_data_size,
-                                             char* dst_buffer,
-                                             const int64_t dst_buffer_size)
-{
-#ifdef ENABLE_QPL_COMPRESSION
-  if (qpl_runtime_enabled_) {
-    return qpl_compress(src_buffer, dst_buffer, static_cast<int>(src_data_size),
-                        static_cast<int>(dst_buffer_size));
-  }
-#endif // ENABLE_QPL_COMPRESSION
-  
-  int ret = OB_SUCCESS;
-  int zlib_errno = Z_OK;
-  int64_t compress_ret_size = dst_buffer_size;
-  zlib_errno = zlib_compress(dst_buffer, &compress_ret_size, src_buffer, src_data_size);
-  if (OB_UNLIKELY(Z_OK != zlib_errno)) {
-    ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
-    LIB_LOG(WARN, "Compress data by zlib in zlib_lite algorithm faild, ", K(ret), K(zlib_errno));
-    return -1;
-  } 
-    
-  return compress_ret_size;
-}
-
-int ObZlibLiteCompressor::zlib_lite_decompress(const char* src_buffer,
-                                               const int64_t src_data_size,
-                                               char* dst_buffer,
-                                               const int64_t dst_buffer_size)
-{
-#ifdef ENABLE_QPL_COMPRESSION
-  if (qpl_runtime_enabled_) {
-    return qpl_decompress(src_buffer, dst_buffer,
-                          static_cast<int>(src_data_size),
-                          static_cast<int>(dst_buffer_size));
-  }
-#endif
-  
-  int ret = OB_SUCCESS;
-  int64_t decompress_ret_size = dst_buffer_size;
-  int zlib_errno = Z_OK;
-  zlib_errno = zlib_decompress(dst_buffer, &decompress_ret_size, src_buffer, src_data_size);
-  if (OB_UNLIKELY(Z_OK != zlib_errno)) {
-    ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
-    LIB_LOG(WARN, "Decompress data by zlib in zlib_lite algorithm faild, ",K(ret), K(zlib_errno));
-    return -1;
-  }
-  return decompress_ret_size;
 }
 
 int ObZlibLiteCompressor::compress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer,
@@ -195,7 +74,10 @@ int ObZlibLiteCompressor::compress(const char* src_buffer, const int64_t src_dat
 {
   int ret = OB_SUCCESS;
   int64_t max_overflow_size = 0;
-  if (NULL == src_buffer || 0 >= src_data_size || NULL == dst_buffer || 0 >= dst_buffer_size) {
+  if (NULL == adaptor_) {
+    ret = OB_NOT_INIT;
+    LIB_LOG(WARN, "zlib lite is not init");
+  } else if (NULL == src_buffer || 0 >= src_data_size || NULL == dst_buffer || 0 >= dst_buffer_size) {
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN,
             "invalid compress argument, ",
@@ -209,8 +91,7 @@ int ObZlibLiteCompressor::compress(const char* src_buffer, const int64_t src_dat
   } else if ((src_data_size + max_overflow_size) > dst_buffer_size) {
     ret = OB_BUF_NOT_ENOUGH;
     LIB_LOG(WARN, "dst buffer not enough, ", K(ret), K(src_data_size), K(max_overflow_size), K(dst_buffer_size));
-  } else if (0 >= (dst_data_size = zlib_lite_compress(
-                       src_buffer, src_data_size, dst_buffer, dst_buffer_size))) {
+  } else if (0 >= (dst_data_size = adaptor_->compress(src_buffer, src_data_size, dst_buffer, dst_buffer_size))) {
     ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
     LIB_LOG(WARN,
             "fail to compress data by zlib_lite_compress, ",
@@ -228,7 +109,10 @@ int ObZlibLiteCompressor::decompress(const char* src_buffer, const int64_t src_d
     const int64_t dst_buffer_size, int64_t& dst_data_size)
 {
   int ret = OB_SUCCESS;
-  if (NULL == src_buffer || 0 >= src_data_size || NULL == dst_buffer || 0 >= dst_buffer_size) {
+  int decompress_ret = 0;
+  if (NULL == adaptor_) {
+    ret = OB_NOT_INIT;
+  } else if (NULL == src_buffer || 0 >= src_data_size || NULL == dst_buffer || 0 >= dst_buffer_size) {
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN,
             "invalid decompress argument, ",
@@ -237,8 +121,7 @@ int ObZlibLiteCompressor::decompress(const char* src_buffer, const int64_t src_d
             K(src_data_size),
             KP(dst_buffer),
             K(dst_buffer_size));
-  } else if (0 >= (dst_data_size = zlib_lite_decompress(
-                       src_buffer, src_data_size, dst_buffer, dst_buffer_size))) {
+  } else if (0 >= (dst_data_size = adaptor_->decompress(src_buffer, src_data_size, dst_buffer, dst_buffer_size))) {
     ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
     LIB_LOG(WARN,
             "fail to decompress by zlib_lite_decompress, ",
@@ -274,6 +157,16 @@ ObCompressorType ObZlibLiteCompressor::get_compressor_type() const
   return ObCompressorType::ZLIB_LITE_COMPRESSOR;
 }
 
+const char* ObZlibLiteCompressor::compression_method() const
+{
+  const char *str = NULL;
+  if (NULL == adaptor_) {
+    str = "";
+  } else {
+    str = adaptor_->compression_method();
+  }
+  return str;
+}
 } // namespace ZLIB_LITE
 } // namespace common
 } // namespace oceanbase

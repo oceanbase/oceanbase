@@ -14,22 +14,24 @@
 #define OCEANBASE_COMMON_COMPRESS_ZLIB_LITE_COMPRESSOR_H_
 
 #include "lib/compress/ob_compressor.h"
+
 namespace oceanbase
 {
-namespace common 
+namespace common
 {
 namespace ZLIB_LITE
 {
-#define OB_PUBLIC_API __attribute__((visibility("default")))
 
-class OB_PUBLIC_API ObZlibLiteCompressor : public ObCompressor {
+class ObZlibLiteAdaptor;
+
+class ObZlibLiteCompressor : public ObCompressor {
 public:
   explicit ObZlibLiteCompressor();
   virtual ~ObZlibLiteCompressor();
 
   int  init();
   void deinit();
-  
+
   int compress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size,
         int64_t& dst_data_size) override;
 
@@ -41,29 +43,13 @@ public:
   int get_max_overflow_size(const int64_t src_data_size, int64_t& max_overflow_size) const override;
   virtual ObCompressorType get_compressor_type() const override;
 
-private:
-  int zlib_lite_compress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size);
-  int zlib_lite_decompress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size);
-
-  //has the same function as the compress and uncompress functions in the zlib source code.
-  // return zlib error code, not oceanbase error code
-  int zlib_compress(char *dest, int64_t *dest_len, const char *source, int64_t source_len);
-  int zlib_decompress(char *dest, int64_t *dest_len, const char *source, int64_t source_len);
+  const char *compression_method() const;
 
 private:
-  // If compiled with qpl but it is disabled, or there is no usdm_drv kernel module,
-  // the qpl cannot work
-  bool qpl_runtime_enabled_;
-  
-  //zlib compress level,default is 1.
-  static constexpr int compress_level = 1;
-
-  //zlib window bits,in order to compress and decompress each other with the qpl algorithm, this parameter can only be -12.
-  static constexpr int window_bits = -12;
+  ObZlibLiteAdaptor *adaptor_;
 };
-}
-#undef OB_PUBLIC_API
+} // namespace ZLIB_LITE
 
-} 
-} 
-#endif
+} // namespace common
+} // namespace oceanbase
+#endif // OCEANBASE_COMMON_COMPRESS_ZLIB_LITE_COMPRESSOR_H_

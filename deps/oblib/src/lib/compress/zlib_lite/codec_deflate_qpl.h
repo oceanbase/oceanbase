@@ -46,12 +46,16 @@ public:
 
   int  init(qpl_path_t path, QplAllocator &allocator);
   void deinit();
-  
-  qpl_job * acquire_job(uint32_t & job_id);
-  void release_job(uint32_t job_id);
+
   const bool & is_job_pool_ready() const { return job_pool_ready_; }
   int32_t do_decompress_data(const char * source, uint32_t source_size, char * dest, uint32_t uncompressed_size);
   int32_t do_compress_data(const char * source, uint32_t source_size, char * dest, uint32_t dest_size);
+
+  const char *qpl_execute_path() const { return qpl_excute_path_; }
+
+private:
+  qpl_job * acquire_job(uint32_t & job_id);
+  void release_job(uint32_t job_id);
 
 private:
   bool try_lock_job(uint32_t index);
@@ -81,6 +85,8 @@ void qpl_deinit();
 
 int32_t qpl_compress(const char* source, char* dest, int input_size, int max_output_size);
 int32_t qpl_decompress(const char* source, char* dest, int input_size, int max_output_size);
+
+bool qpl_hardware_enabled();
 
 } //namespace ZLIB_LITE
 } //namespace common
