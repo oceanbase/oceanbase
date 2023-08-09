@@ -31,16 +31,18 @@
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_tenant_schema_service.h"
 #include "share/ob_tablet_autoincrement_service.h"
-#include "storage/access/ob_dml_param.h"
 #include "storage/ob_dml_running_ctx.h"
 #include "storage/ob_i_store.h"
 #include "storage/ob_i_table.h"
 #include "storage/ob_row_reshape.h"
 #include "storage/ob_sync_tablet_seq_clog.h"
 #include "storage/ob_storage_schema.h"
+#include "storage/ob_tenant_tablet_stat_mgr.h"
+#include "storage/access/ob_dml_param.h"
 #include "storage/blocksstable/ob_sstable.h"
 #include "storage/blocksstable/ob_sstable_sec_meta_iterator.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
+#include "storage/compaction/ob_extra_medium_info.h"
 #include "storage/compaction/ob_tenant_freeze_info_mgr.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/memtable/ob_memtable.h"
@@ -60,15 +62,13 @@
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "storage/tablet/ob_tablet_memtable_mgr.h"
 #include "storage/tablet/ob_tablet_ddl_info.h"
+#include "storage/tablet/ob_tablet_medium_info_reader.h"
 #include "storage/tablet/ob_tablet_mds_node_dump_operator.h"
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "storage/tablet/ob_tablet_binding_mds_user_data.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/ob_tenant_tablet_stat_mgr.h"
-#include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "storage/tablet/ob_tablet_medium_info_reader.h"
 
 namespace oceanbase
 {
@@ -5506,7 +5506,7 @@ int ObTablet::set_initial_state(const bool initial_state)
 int ObTablet::load_medium_info_list(
     common::ObArenaAllocator &allocator,
     const ObTabletComplexAddr<oceanbase::storage::ObTabletDumpedMediumInfo> &complex_addr,
-    const ObTaletExtraMediumInfo &extra_info,
+    const compaction::ObExtraMediumInfo &extra_info,
     compaction::ObMediumCompactionInfoList &medium_info_list)
 {
   int ret = OB_SUCCESS;

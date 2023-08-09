@@ -70,6 +70,12 @@ namespace blocksstable
 {
 class ObSSTable;
 }
+
+namespace compaction
+{
+class ObExtraMediumInfo;
+}
+
 namespace transaction
 {
 class ObTransID;
@@ -631,7 +637,7 @@ private:
   static int load_medium_info_list(
       common::ObArenaAllocator &allocator,
       const ObTabletComplexAddr<oceanbase::storage::ObTabletDumpedMediumInfo> &complex_addr,
-      const ObTaletExtraMediumInfo &extra_info,
+      const compaction::ObExtraMediumInfo &extra_info,
       compaction::ObMediumCompactionInfoList &medium_info_list);
   int set_initial_state(const bool initial_state);
 

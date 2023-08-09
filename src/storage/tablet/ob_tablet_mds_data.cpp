@@ -17,6 +17,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
 #include "storage/compaction/ob_medium_compaction_mgr.h"
+#include "storage/compaction/ob_extra_medium_info.h"
 #include "storage/tablet/ob_tablet_full_memory_mds_data.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
 #include "ob_i_tablet_mds_interface.h"
@@ -529,7 +530,7 @@ int ObTabletMdsData::do_init(
 int ObTabletMdsData::init_medium_info_list(
     common::ObIAllocator &allocator,
     const ObTabletDumpedMediumInfo *old_medium_info_list,
-    const ObTaletExtraMediumInfo &old_extra_medium_info,
+    const compaction::ObExtraMediumInfo &old_extra_medium_info,
     const int64_t finish_medium_scn,
     const ObMergeType merge_type)
 {
@@ -570,7 +571,7 @@ int ObTabletMdsData::init_medium_info_list(
     common::ObIAllocator &allocator,
     const ObTabletDumpedMediumInfo *old_medium_info_list,
     const ObTabletFullMediumInfo &full_memory_medium_info_list,
-    const ObTaletExtraMediumInfo &old_extra_medium_info,
+    const compaction::ObExtraMediumInfo &old_extra_medium_info,
     const int64_t finish_medium_scn)
 {
   int ret = OB_SUCCESS;
@@ -625,7 +626,7 @@ int ObTabletMdsData::init_medium_info_list(
 int ObTabletMdsData::init_with_update_medium_info(
     common::ObIAllocator &allocator,
     const ObTabletDumpedMediumInfo *old_medium_info_list,
-    const ObTaletExtraMediumInfo &old_extra_medium_info)
+    const compaction::ObExtraMediumInfo &old_extra_medium_info)
 {
   int ret = OB_SUCCESS;
   const int64_t finish_medium_scn = old_extra_medium_info.last_medium_scn_;

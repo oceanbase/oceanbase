@@ -14,6 +14,7 @@
 #define OCEANBASE_STORAGE_OB_TABLET_PERSIST_H_
 
 #include "lib/allocator/page_arena.h"
+#include "storage/compaction/ob_extra_medium_info.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/blockstore/ob_shared_block_reader_writer.h"
@@ -57,7 +58,7 @@ public:
   ObMetaDiskAddr tablet_status_committed_kv_addr_;
   ObMetaDiskAddr aux_tablet_info_uncommitted_kv_addr_;
   ObMetaDiskAddr aux_tablet_info_committed_kv_addr_;
-  ObTaletExtraMediumInfo extra_medium_info_;
+  compaction::ObExtraMediumInfo extra_medium_info_;
   ObMetaDiskAddr medium_info_list_addr_;
   ObMetaDiskAddr auto_inc_seq_addr_;
   ObTabletCreateDeleteMdsUserData tablet_status_cache_;

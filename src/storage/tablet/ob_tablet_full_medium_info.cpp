@@ -22,55 +22,6 @@ namespace oceanbase
 {
 namespace storage
 {
-ObTaletExtraMediumInfo::ObTaletExtraMediumInfo()
-  : compat_(MEDIUM_LIST_VERSION),
-    last_compaction_type_(0),
-    wait_check_flag_(0),
-    reserved_(0),
-    last_medium_scn_(0)
-{
-}
-
-void ObTaletExtraMediumInfo::reset()
-{
-  compat_ = MEDIUM_LIST_VERSION;
-  last_compaction_type_ = 0;
-  wait_check_flag_ = 0;
-  reserved_ = 0;
-  last_medium_scn_ = 0;
-}
-
-int ObTaletExtraMediumInfo::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
-{
-  int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_ENCODE,
-      info_,
-      last_medium_scn_);
-
-  return ret;
-}
-
-int ObTaletExtraMediumInfo::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_DECODE,
-      info_,
-      last_medium_scn_);
-
-  return ret;
-}
-
-int64_t ObTaletExtraMediumInfo::get_serialize_size() const
-{
-  int64_t len = 0;
-  LST_DO_CODE(OB_UNIS_ADD_LEN,
-      info_,
-      last_medium_scn_);
-
-  return len;
-}
-
-
 ObTabletFullMediumInfo::ObTabletFullMediumInfo()
   : extra_medium_info_(),
     medium_info_list_()

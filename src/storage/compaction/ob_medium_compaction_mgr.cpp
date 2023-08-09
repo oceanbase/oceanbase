@@ -24,6 +24,7 @@
 namespace oceanbase
 {
 using namespace storage;
+using namespace common;
 
 namespace compaction
 {
@@ -404,11 +405,8 @@ int ObTabletMediumCompactionInfoRecorder::submit_log(
 ObMediumCompactionInfoList::ObMediumCompactionInfoList()
   : is_inited_(false),
     allocator_(nullptr),
-    compat_(MEDIUM_LIST_VERSION),
-    last_compaction_type_(0),
-    wait_check_flag_(0),
-    reserved_(0),
-    last_medium_scn_(0)
+    extra_info_(),
+    medium_info_list_()
 {
 }
 
@@ -424,7 +422,6 @@ int ObMediumCompactionInfoList::init(common::ObIAllocator &allocator)
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
   } else {
-    compat_ = MEDIUM_LIST_VERSION;
     allocator_ = &allocator;
     is_inited_ = true;
   }
@@ -445,7 +442,6 @@ int ObMediumCompactionInfoList::init(
   } else {
     allocator_ = &allocator;
     set_basic_info(*input_list);
-    compat_ = MEDIUM_LIST_VERSION;
     is_inited_ = true;
   }
   return ret;
@@ -453,7 +449,7 @@ int ObMediumCompactionInfoList::init(
 
 int ObMediumCompactionInfoList::init(
     common::ObIAllocator &allocator,
-    const ObTaletExtraMediumInfo &extra_medium_info,
+    const ObExtraMediumInfo &extra_medium_info,
     const ObTabletDumpedMediumInfo &medium_info_list)
 {
   int ret = OB_SUCCESS;
@@ -497,10 +493,7 @@ int ObMediumCompactionInfoList::init(
     if (OB_FAIL(ret)) {
       reset();
     } else {
-      compat_ = MEDIUM_LIST_VERSION;
-      last_compaction_type_ = extra_medium_info.last_compaction_type_;
-      last_medium_scn_ = extra_medium_info.last_medium_scn_;
-      wait_check_flag_ = extra_medium_info.wait_check_flag_;
+      extra_info_ = extra_medium_info;
       is_inited_ = true;
     }
   }
@@ -522,10 +515,9 @@ void ObMediumCompactionInfoList::reset()
   if (OB_NOT_NULL(allocator_)) {
     reset_list();
   }
-  is_inited_ = false;
-  info_ = 0;
-  last_medium_scn_ = 0;
+  extra_info_.reset();
   allocator_ = nullptr;
+  is_inited_ = false;
 }
 
 int ObMediumCompactionInfoList::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
@@ -539,12 +531,10 @@ int ObMediumCompactionInfoList::serialize(char *buf, const int64_t buf_len, int6
   } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("medium info list is invalid", K(ret), KPC(this));
-  } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, new_pos, info_))) {
-    STORAGE_LOG(WARN, "failed to serialize info", K(ret), K(buf_len), K(pos));
-  } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, new_pos, last_medium_scn_))) {
-    STORAGE_LOG(WARN, "failed to serialize wait_check_medium_scn", K(ret), K(buf_len), K(pos));
+  } else if (OB_FAIL(extra_info_.serialize(buf, buf_len, new_pos))) {
+    LOG_WARN("failed to serialize extra info", K(ret), K(buf_len), K(pos));
   } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, new_pos, medium_info_list_.get_size()))) {
-    LOG_WARN("failed to serialize medium status", K(ret), K(buf_len));
+    LOG_WARN("failed to serialize medium info list count", K(ret), K(buf_len));
   } else {
     DLIST_FOREACH_X(info, medium_info_list_, OB_SUCC(ret)) {
       if (OB_FAIL(static_cast<const ObMediumCompactionInfo *>(info)->serialize(buf, buf_len, new_pos))) {
@@ -569,6 +559,7 @@ int ObMediumCompactionInfoList::deserialize(
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
   int64_t deserialize_info = 0;
+  int64_t last_medium_scn = 0;
   int64_t list_count = 0;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -577,7 +568,7 @@ int ObMediumCompactionInfoList::deserialize(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(buf), K(data_len), K(pos));
   } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, new_pos, &deserialize_info))) {
-    LOG_WARN("failed to deserialize cur medium snapshot", K(ret), K(data_len));
+    LOG_WARN("failed to deserialize info", K(ret), K(data_len));
   } else if (0 == deserialize_info) {
     if (OB_FAIL(serialization::decode_vi64(buf, data_len, new_pos, &list_count))) {
       LOG_WARN("failed to deserialize list count", K(ret), K(data_len));
@@ -585,10 +576,11 @@ int ObMediumCompactionInfoList::deserialize(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("list count should be zero in old version medium list", K(ret), K(list_count));
     }
-  } else if (FALSE_IT(info_ = deserialize_info)) {
+  } else if (FALSE_IT(extra_info_.info_ = deserialize_info)) {
   } else if (FALSE_IT(allocator_ = &allocator)) { // set allocator to call reset() when deserialize failed
-  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, new_pos, &last_medium_scn_))) {
-    LOG_WARN("failed to deserialize wait_check_medium_scn", K(ret), K(data_len));
+  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, new_pos, &last_medium_scn))) {
+    LOG_WARN("failed to deserialize last medium scn", K(ret), K(data_len));
+  } else if (FALSE_IT(extra_info_.last_medium_scn_ = last_medium_scn)) {
   } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, new_pos, &list_count))) {
     LOG_WARN("failed to deserialize list count", K(ret), K(data_len));
   } else if (OB_UNLIKELY(list_count < 0)) {
@@ -624,7 +616,7 @@ int ObMediumCompactionInfoList::deserialize(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("medium info list is invalid", K(ret), KPC(this));
   } else {
-    compat_ = MEDIUM_LIST_VERSION;
+    extra_info_.compat_ = ObExtraMediumInfo::MEDIUM_LIST_VERSION;
     is_inited_ = true;
     pos = new_pos;
   }
@@ -634,8 +626,7 @@ int ObMediumCompactionInfoList::deserialize(
 int64_t ObMediumCompactionInfoList::get_serialize_size() const
 {
   int64_t len = 0;
-  len += serialization::encoded_length_vi64(info_);
-  len += serialization::encoded_length_vi64(last_medium_scn_);
+  len += extra_info_.get_serialize_size();
   len += serialization::encoded_length_vi64(medium_info_list_.get_size());
   DLIST_FOREACH_NORET(info, medium_info_list_){
     len += static_cast<const ObMediumCompactionInfo *>(info)->get_serialize_size();
@@ -650,7 +641,7 @@ void ObMediumCompactionInfoList::gene_info(
     // do nothing
   } else {
     J_OBJ_START();
-    J_KV("size", size(), K_(last_compaction_type), K_(wait_check_flag), K_(last_medium_scn));
+    J_KV(K_(extra_info), "size", size());
     J_COMMA();
     BUF_PRINTF("info_list");
     J_COLON();
