@@ -5360,7 +5360,10 @@ int ObTableLocation::get_full_leader_table_loc(ObDASLocationRouter &loc_router,
     ObDASTableLocMeta *loc_meta = NULL;
     char *table_buf = static_cast<char*>(allocator.alloc(sizeof(ObDASTableLoc)
                                          + sizeof(ObDASTableLocMeta)));
-    CK(OB_NOT_NULL(table_buf));
+    if (OB_ISNULL(table_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ret));
+    }
     if (OB_SUCC(ret)) {
       table_loc = new(table_buf) ObDASTableLoc(allocator);
       loc_meta = new(table_buf+sizeof(ObDASTableLoc)) ObDASTableLocMeta(allocator);
@@ -5372,7 +5375,10 @@ int ObTableLocation::get_full_leader_table_loc(ObDASLocationRouter &loc_router,
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i++) {
       ObDASTabletLoc *tablet_loc = NULL;
       void *tablet_buf = allocator.alloc(sizeof(ObDASTabletLoc));
-      CK(OB_NOT_NULL(tablet_buf));
+      if (OB_ISNULL(tablet_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory", K(ret));
+      }
       OX(tablet_loc = new(tablet_buf) ObDASTabletLoc());
       OX(tablet_loc->loc_meta_ = loc_meta);
       OX(tablet_loc->partition_id_ = partition_ids.at(i));
