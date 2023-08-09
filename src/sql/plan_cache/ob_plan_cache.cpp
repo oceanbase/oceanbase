@@ -2586,6 +2586,10 @@ void ObPlanCacheEliminationTask::runTimerTask()
     observer::ObReqTimeGuard req_timeinfo_guard;
     run_free_cache_obj_task();
   }
+
+  //
+  ObQueryCache::get_instance()->debug_info();
+
   SQL_PC_LOG(INFO, "schedule next cache evict task",
              "evict_interval", (int64_t)(GCONF.plan_cache_evict_interval));
 }

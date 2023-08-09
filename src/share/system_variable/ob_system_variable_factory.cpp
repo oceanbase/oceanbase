@@ -121,6 +121,12 @@ const char *ObSysVarParallelDegreePolicy::PARALLEL_DEGREE_POLICY_NAMES[] = {
   "AUTO",
   0
 };
+const char *ObSysVarUseQueryCache::USE_QUERY_CACHE_NAMES[] = {
+  "OFF",
+  "ON",
+  "DEMAND",
+  0
+};
 
 const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_aggregation_optimization_settings",
@@ -344,6 +350,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "tx_isolation",
   "tx_read_only",
   "unique_checks",
+  "use_query_cache",
   "validate_password_check_user_name",
   "validate_password_length",
   "validate_password_mixed_case_count",
@@ -580,6 +587,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_TX_ISOLATION,
   SYS_VAR_TX_READ_ONLY,
   SYS_VAR_UNIQUE_CHECKS,
+  SYS_VAR_USE_QUERY_CACHE,
   SYS_VAR_VALIDATE_PASSWORD_CHECK_USER_NAME,
   SYS_VAR_VALIDATE_PASSWORD_LENGTH,
   SYS_VAR_VALIDATE_PASSWORD_MIXED_CASE_COUNT,

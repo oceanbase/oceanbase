@@ -685,7 +685,7 @@
   "query_cache_size": {
     "id": 44,
     "name": "query_cache_size",
-    "default_value": "0",
+    "default_value": "134217728",
     "base_value": "0",
     "data_type": "uint",
     "info": "The memory allocated to store results from old queries(not used yet)",
@@ -704,7 +704,7 @@
     "base_value": "0",
     "data_type": "enum",
     "info": "OFF = Do not cache or retrieve results. ON = Cache all results except SELECT SQL_NO_CACHE ... queries. DEMAND = Cache only SELECT SQL_CACHE ... queries(not used yet)",
-    "flags": "GLOBAL | MYSQL_ONLY | READONLY",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
     "enum_names": [
       "OFF",
       "ON",
@@ -1236,7 +1236,7 @@
   "query_cache_limit": {
     "id": 85,
     "name": "query_cache_limit",
-    "default_value": "0",
+    "default_value": "655536",
     "base_value": "0",
     "data_type": "uint",
     "info": "The maximum query result set that can be cached by the query cache(not used yet, only sys var compatible)",

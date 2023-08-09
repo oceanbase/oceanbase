@@ -44,6 +44,7 @@
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "sql/monitor/flt/ob_flt_extra_info.h"
 #include "sql/ob_optimizer_trace_impl.h"
+#include "sql/query_cache/ob_query_cache.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 #include "storage/tx/ob_tx_free_route.h"
 
@@ -1208,6 +1209,19 @@ public:
   void set_ignore_stmt(bool v) { is_ignore_stmt_ = v; }
   bool is_ignore_stmt() const { return is_ignore_stmt_; }
 
+  // use for query cache
+  void set_select_sql_cache(bool sql_cache) { is_select_sql_cache_ = sql_cache; }
+  bool get_select_sql_cache() { return is_select_sql_cache_; }
+  void set_select_sql_no_cache(bool sql_no_cache) { is_select_sql_no_cache_ = sql_no_cache; }
+  bool get_select_sql_no_cache() { return is_select_sql_no_cache_; }
+  void set_use_query_cache(bool use_query_cache) { use_query_cache_ = use_query_cache; }
+  bool get_use_query_cache() { return use_query_cache_; }
+  void set_insert_query_cache(bool insert_query_cache) { insert_query_cache_ = insert_query_cache; }
+  bool get_insert_query_cache() { return insert_query_cache_; }
+  ObQueryCache *get_query_cache() { return ObQueryCache::get_instance(); }
+  void set_query_cache_handle(ObQueryCacheValueHandle query_cache_handle) { query_cache_handle_ = query_cache_handle;}
+  ObQueryCacheValueHandle get_query_cache_handle() { return query_cache_handle_; }
+
   // piece
   void *get_piece_cache(bool need_init = false);
 
@@ -1390,6 +1404,12 @@ private:
   bool is_send_control_info_ = false;  // whether send control info to client
   bool auto_flush_trace_ = false;
   bool coninfo_set_by_sess_ = false;
+  // use for query cache
+  bool use_query_cache_ = false;
+  bool insert_query_cache_ = false;
+  bool is_select_sql_cache_ = false;
+  bool is_select_sql_no_cache_ = false;
+  ObQueryCacheValueHandle query_cache_handle_;
 
   ObSessInfoEncoder* sess_encoders_[SESSION_SYNC_MAX_TYPE] = {
                             //&usr_var_encoder_,

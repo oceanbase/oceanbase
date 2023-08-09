@@ -718,7 +718,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[44].default_value_ = "0" ;
+      ObSysVars[44].default_value_ = "134217728" ;
       ObSysVars[44].info_ = "The memory allocated to store results from old queries(not used yet)" ;
       ObSysVars[44].name_ = "query_cache_size" ;
       ObSysVars[44].data_type_ = ObUInt64Type ;
@@ -738,7 +738,7 @@ static struct VarsInit{
       ObSysVars[45].name_ = "query_cache_type" ;
       ObSysVars[45].data_type_ = ObIntType ;
       ObSysVars[45].enum_names_ = "[u'OFF', u'ON', u'DEMAND']" ;
-      ObSysVars[45].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[45].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
       ObSysVars[45].id_ = SYS_VAR_QUERY_CACHE_TYPE ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_QUERY_CACHE_TYPE)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_QUERY_CACHE_TYPE] = 45 ;
@@ -1265,7 +1265,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[85].default_value_ = "0" ;
+      ObSysVars[85].default_value_ = "655536" ;
       ObSysVars[85].info_ = "The maximum query result set that can be cached by the query cache(not used yet, only sys var compatible)" ;
       ObSysVars[85].name_ = "query_cache_limit" ;
       ObSysVars[85].data_type_ = ObUInt64Type ;

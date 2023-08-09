@@ -918,6 +918,10 @@ ob_set_subtarget(ob_sql plan_cache
   plan_cache/ob_plan_match_helper.cpp
 )
 
+ob_set_subtarget(ob_sql query_cache
+  query_cache/ob_query_cache.cpp
+)
+
 ob_set_subtarget(ob_sql resolver
   resolver/ob_resolver.cpp
   resolver/ob_resolver_utils.cpp

@@ -106,6 +106,22 @@ private:
   int store_params_value_to_str(ObIAllocator &allocator,
                                 sql::ObSQLSessionInfo &session,
                                 common::ParamStore &params);
+  int can_insert_query_cache(sql::ObSQLSessionInfo &session,
+                            ObMySQLResultSet &result,
+                            bool &insert_query_cache);
+  int can_use_query_cache(const ObString &sql,
+                          sql::ObSQLSessionInfo &session,
+                          bool &use_query_cache);
+  int query_cache_response_row(sql::ObSQLSessionInfo &session,
+                                        ObMySQLResultSet &result,
+                                        const common::ObNewRow &row,
+                                        const ColumnsFieldIArray *fields);
+  int query_cache_response_query_header(const ObQueryCacheValueHandle &handle,
+                                        ObMySQLResultSet &result,
+                                        sql::ObSQLSessionInfo &session);
+  int query_cache_response_result(const ObQueryCacheValueHandle &handle,
+                                  ObMySQLResultSet &result,
+                                  sql::ObSQLSessionInfo &session);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPQuery);
 private:

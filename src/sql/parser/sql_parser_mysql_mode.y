@@ -10011,11 +10011,13 @@ ALL
 {
   // SQL_NO_CACHE/SQL_CACHE is deprecated and will be removed in a future release
   // we only support it in parser, but actually do nothing.
-  $$=NULL;
+
+  // shujie: the sys variable 'query_cache_type' need use it.
+  malloc_terminal_node($$, result->malloc_pool_, T_SQL_NO_CACHE);
 }
 | SQL_CACHE
 {
-  $$=NULL;
+  malloc_terminal_node($$, result->malloc_pool_, T_SQL_CACHE);
 }
 ;
 
@@ -15787,6 +15789,11 @@ ALL
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = CACHE_TYPE_LIB_CACHE;
+}
+| QUERY
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = CACHE_TYPE_QUERY_CACHE;
 }
 ;
 

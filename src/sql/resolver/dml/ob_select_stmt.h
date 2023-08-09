@@ -622,6 +622,10 @@ public:
   bool has_external_table() const;
   int get_pure_set_exprs(ObIArray<ObRawExpr*> &pure_set_exprs) const;
   static ObRawExpr* get_pure_set_expr(ObRawExpr *expr);
+  inline void set_sql_cache(bool is_sql_cache) { is_sql_cache_ = is_sql_cache; }
+  inline void set_sql_no_cache(bool is_sql_no_cache) { is_sql_no_cache_ = is_sql_no_cache; }
+  inline bool get_sql_cache() const { return is_sql_cache_; }
+  inline bool get_sql_no_cache() const { return is_sql_no_cache_; }
 
 private:
   SetOperator set_op_;
@@ -681,6 +685,8 @@ private:
   bool is_hierarchical_query_;
   bool has_prior_;
   bool has_reverse_link_;
+  bool is_sql_cache_ = false;
+  bool is_sql_no_cache_ = false;
 };
 }
 }
