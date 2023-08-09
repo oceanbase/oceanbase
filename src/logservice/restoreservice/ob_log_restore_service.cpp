@@ -42,6 +42,7 @@ ObLogRestoreService::ObLogRestoreService() :
   net_driver_(),
   fetch_log_impl_(),
   fetch_log_worker_(),
+  writer_(),
   error_reporter_(),
   allocator_(),
   scheduler_(),
@@ -77,6 +78,8 @@ int ObLogRestoreService::init(rpc::frame::ObReqTransport *transport,
     LOG_WARN("fetch_log_impl_ init failed", K(ret));
   } else if (OB_FAIL(fetch_log_worker_.init(tenant_id, &allocator_, this, ls_svr))) {
     LOG_WARN("fetch_log_worker_ init failed", K(ret));
+  } else if (OB_FAIL(writer_.init(tenant_id, ls_svr, this, &fetch_log_worker_))) {
+    LOG_WARN("remote_log_writer init failed");
   } else if (OB_FAIL(error_reporter_.init(tenant_id, ls_svr))) {
     LOG_WARN("error_reporter_ init failed", K(ret));
   } else if (OB_FAIL(allocator_.init(tenant_id))) {
@@ -95,6 +98,7 @@ void ObLogRestoreService::destroy()
 {
   inited_ = false;
   fetch_log_worker_.destroy();
+  writer_.destroy();
   stop();
   wait();
   location_adaptor_.destroy();
@@ -119,6 +123,8 @@ int ObLogRestoreService::start()
     LOG_WARN("restore service not init", K(ret), K(inited_));
   } else if (OB_FAIL(fetch_log_worker_.start())) {
     LOG_WARN("fetch_log_worker_ start failed", K(ret));
+  } else if (OB_FAIL(writer_.start())) {
+    LOG_WARN("remote_log_writer start failed");
   } else if (OB_FAIL(ObThreadPool::start())) {
     LOG_WARN("restore service start failed", K(ret));
   } else {
@@ -131,6 +137,7 @@ void ObLogRestoreService::stop()
 {
   net_driver_.stop();
   fetch_log_worker_.stop();
+  writer_.stop();
   ObThreadPool::stop();
   LOG_INFO("ObLogRestoreService thread stop", "tenant_id", MTL_ID());
 }
@@ -139,6 +146,7 @@ void ObLogRestoreService::wait()
 {
   net_driver_.wait();
   fetch_log_worker_.wait();
+  writer_.wait();
   ObThreadPool::wait();
   LOG_INFO("ObLogRestoreService thread wait", "tenant_id", MTL_ID());
 }

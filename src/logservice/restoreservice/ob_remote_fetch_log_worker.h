@@ -79,20 +79,13 @@ private:
   int handle_single_task_();
   int handle_fetch_log_task_(ObFetchLogTask *task);
   bool need_fetch_log_(const share::ObLSID &id);
-  int submit_entries_(ObFetchLogTask &task);
-  int submit_log_(const ObLSID &id, const int64_t proposal_id, const LSN &lsn,
-      const share::SCN &scn, const char *buf, const int64_t buf_size);
   void mark_if_to_end_(ObFetchLogTask &task, const share::SCN &upper_limit_scn, const share::SCN &scn);
-  int try_retire_(ObFetchLogTask *&task);
   void try_update_location_info_(const ObFetchLogTask &task, ObRemoteLogGroupEntryIterator &iter);
 
   int push_submit_array_(ObFetchLogTask &task);
-  int try_consume_data_();
-  int do_consume_data_();
-  int foreach_ls_(const ObLSID &id);
-  void inner_free_task_(ObFetchLogTask &task);
 
-  bool is_retry_ret_code_(const int ret_code) const;
+  int try_retire_(ObFetchLogTask *&task);
+  void inner_free_task_(ObFetchLogTask &task);
   bool is_fatal_error_(const int ret_code) const;
   void report_error_(const ObLSID &id,
                      const int ret_code,
