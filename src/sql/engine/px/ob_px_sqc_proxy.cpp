@@ -491,12 +491,7 @@ int ObPxSQCProxy::report(int end_ret) const
   finish_msg.rc_ = sqc_ret;
   // 重写错误码，使得scheduler端能等待远端schema刷新并重试
   if (OB_SUCCESS != sqc_ret && is_schema_error(sqc_ret)) {
-    if (OB_NOT_NULL(session)
-        && GSCHEMASERVICE.is_schema_error_need_retry(NULL, session->get_effective_tenant_id())) {
-      finish_msg.rc_ = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
-    } else {
-      finish_msg.rc_ = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
-    }
+    ObInterruptUtil::update_schema_error_code(sqc_arg.exec_ctx_, finish_msg.rc_);
   }
 
   // 如果 session 为 null，rc 不会为 SUCCESS，没有设置 trans_result 也无妨

@@ -265,6 +265,26 @@ int ObGlobalStatProxy::get_target_data_version(
   return ret;
 }
 
+int ObGlobalStatProxy::get_target_data_version_ora_rowscn(
+  const uint64_t tenant_id,
+  share::SCN &target_data_version_ora_rowscn)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  target_data_version_ora_rowscn.set_invalid();
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(sql.assign_fmt(
+              "SELECT ORA_ROWSCN FROM %s WHERE TABLE_NAME = '__all_global_stat' AND COLUMN_NAME"
+              " = 'target_data_version'", OB_ALL_CORE_TABLE_TNAME))) {
+    LOG_WARN("assign sql failed", KR(ret));
+  } else if (OB_FAIL(ObShareUtil::get_ora_rowscn(*GCTX.sql_proxy_, tenant_id, sql, target_data_version_ora_rowscn))) {
+    LOG_WARN("fail to get target_data_version_ora_rowscn", KR(ret), K(tenant_id), K(sql));
+  }
+  return ret;
+}
+
 int ObGlobalStatProxy::inc_rootservice_epoch()
 {
   int ret = OB_SUCCESS;

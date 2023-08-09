@@ -11,6 +11,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "common/object/ob_object.h"
 #include "common/ob_tablet_id.h"
+#include "ob_table_load_define.h"
 
 namespace oceanbase
 {
@@ -25,8 +26,8 @@ public:
   virtual ~ObTableLoadRow() {}
   void reset();
   int init(int64_t count, const ObTableLoadSharedAllocatorHandle &allocator_handle);
-  int deep_copy_and_assign(const T *row, int64_t count,
-      const ObTableLoadSharedAllocatorHandle &allocator_handle);
+  int project(const ObIArray<int64_t> &idx_projector, ObTableLoadRow<T> &projected_row) const;
+  int deep_copy(const ObTableLoadRow<T> &other, const ObTableLoadSharedAllocatorHandle &allocator_handle);
   // for deserialize()
   void set_allocator(const ObTableLoadSharedAllocatorHandle &allocator_handle)
   {
@@ -36,6 +37,10 @@ public:
   {
     return allocator_handle_;
   }
+  ObTableLoadSequenceNo& get_sequence_no()
+  {
+    return seq_no_;
+  }
   TO_STRING_KV(K_(count));
 
 private:
@@ -44,6 +49,7 @@ private:
 
 public:
   ObTableLoadSharedAllocatorHandle allocator_handle_;
+  ObTableLoadSequenceNo seq_no_;
   T *cells_;
   int64_t count_;
 };
@@ -52,6 +58,7 @@ template<class T>
 void ObTableLoadRow<T>::reset()
 {
   allocator_handle_.reset();
+  seq_no_.reset();
   cells_ = nullptr;
   count_ = 0;
 }
@@ -101,7 +108,7 @@ int ObTableLoadRow<T>::allocate_cells(T *&cells, int64_t count,
 }
 
 template<class T>
-int ObTableLoadRow<T>::deep_copy_and_assign(const T *row, int64_t count,
+int ObTableLoadRow<T>::deep_copy(const ObTableLoadRow<T> &other,
     const ObTableLoadSharedAllocatorHandle &allocator_handle)
 {
 
@@ -109,21 +116,36 @@ int ObTableLoadRow<T>::deep_copy_and_assign(const T *row, int64_t count,
   T *cells = nullptr;
 
   reset();
-  if (OB_FAIL(allocate_cells(cells, count, allocator_handle))) {
-    OB_LOG(WARN, "failed to allocate cells", KR(ret), K(count));
+  if (OB_FAIL(allocate_cells(cells, other.count_, allocator_handle))) {
+    OB_LOG(WARN, "failed to allocate cells", KR(ret), K(other.count_));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < count; i ++) {
-    if (OB_FAIL(observer::ObTableLoadUtils::deep_copy(row[i],
+  for (int64_t i = 0; OB_SUCC(ret) && i < other.count_; i ++) {
+    if (OB_FAIL(observer::ObTableLoadUtils::deep_copy(other.cells_[i],
         cells[i], *allocator_handle))) {
       OB_LOG(WARN, "fail to deep copy object", KR(ret));
     }
   }
   if (OB_SUCC(ret)) {
     allocator_handle_ = allocator_handle;
+    seq_no_ = other.seq_no_;
     cells_ = cells;
-    count_ = count;
+    count_ = other.count_;
   }
+  return ret;
+}
 
+template<class T>
+int ObTableLoadRow<T>::project(const ObIArray<int64_t> &idx_projector, ObTableLoadRow<T> &projected_row) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(projected_row.init(count_, allocator_handle_))) {
+    OB_LOG(WARN, "failed to alloate cells", KR(ret), K(projected_row.count_));
+  } else {
+    for (int64_t j = 0; j < count_; ++j) {
+      projected_row.cells_[j] = cells_[idx_projector.at(j)];
+    }
+    projected_row.seq_no_ = seq_no_;
+  }
   return ret;
 }
 
@@ -131,6 +153,7 @@ template<class T>
 int ObTableLoadRow<T>::serialize(SERIAL_PARAMS) const
 {
   int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(seq_no_);
   OB_UNIS_ENCODE_ARRAY(cells_, count_);
   return ret;
 }
@@ -140,6 +163,7 @@ int ObTableLoadRow<T>::deserialize(DESERIAL_PARAMS)
 {
   int ret = OB_SUCCESS;
   int64_t count = 0;
+  OB_UNIS_DECODE(seq_no_);
   OB_UNIS_DECODE(count);
   if (OB_SUCC(ret) && (count > 0)) {
     T *cells = nullptr;
@@ -162,6 +186,7 @@ template<class T>
 int64_t ObTableLoadRow<T>::get_serialize_size() const
 {
   int64_t len = 0;
+  OB_UNIS_ADD_LEN(seq_no_);
   OB_UNIS_ADD_LEN_ARRAY(cells_, count_);
   return len;
 }
@@ -178,7 +203,6 @@ public:
     obj_row_.set_allocator(allocator_handle);
   }
   TO_STRING_KV(K_(tablet_id), K_(obj_row));
-
 public:
   common::ObTabletID tablet_id_;
   ObTableLoadObjRow obj_row_;

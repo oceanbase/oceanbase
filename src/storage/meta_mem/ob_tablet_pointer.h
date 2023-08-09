@@ -76,15 +76,15 @@ private:
   int add_tablet_to_old_version_chain(ObTablet *tablet);
   int remove_tablet_from_old_version_chain(ObTablet *tablet);
 private:
-  ObLSHandle ls_handle_;
-  ObDDLKvMgrHandle ddl_kv_mgr_handle_;
-  ObMemtableMgrHandle memtable_mgr_handle_;
-  ObTabletDDLInfo ddl_info_;
-  bool initial_state_;
+  ObLSHandle ls_handle_; // 24B
+  ObDDLKvMgrHandle ddl_kv_mgr_handle_; // 48B
+  ObMemtableMgrHandle memtable_mgr_handle_; // 16B
+  ObTabletDDLInfo ddl_info_; // 32B
+  bool initial_state_; // 1B
+  ObByteLock ddl_kv_mgr_lock_; // 1B
   mds::ObMdsTableHandler mds_table_handler_;// 48B
-  ObByteLock ddl_kv_mgr_lock_;
-  ObTablet *old_version_chain_;
-  DISALLOW_COPY_AND_ASSIGN(ObTabletPointer);
+  ObTablet *old_version_chain_; // 8B
+  DISALLOW_COPY_AND_ASSIGN(ObTabletPointer); // 272B
 };
 
 } // namespace storage

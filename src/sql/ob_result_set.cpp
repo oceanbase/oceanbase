@@ -1275,6 +1275,9 @@ int ObResultSet::ExternalRetrieveInfo::build(
   CK (OB_NOT_NULL(session_info.get_cur_exec_ctx()->get_sql_ctx()));
   OX (is_bulk_ = session_info.get_cur_exec_ctx()->get_sql_ctx()->is_bulk_);
   OX (session_info.get_cur_exec_ctx()->get_sql_ctx()->is_bulk_ = false);
+  if (stmt.is_dml_stmt()) {
+    OX (has_link_table_ = static_cast<ObDMLStmt&>(stmt).has_link_table());
+  }
   if (OB_SUCC(ret)) {
     ObSchemaGetterGuard *schema_guard = NULL;
     if (OB_ISNULL(stmt.get_query_ctx()) ||

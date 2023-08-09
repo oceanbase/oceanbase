@@ -1181,8 +1181,10 @@ int ObTabletReplicaChecksumOperator::check_local_index_column_checksum(
 
   SMART_VARS_2((ObArray<ObTabletReplicaChecksumItem>, data_table_ckm_items),
                (ObArray<ObTabletReplicaChecksumItem>, index_table_ckm_items)) {
-    SMART_VARS_2((ObArray<ObTabletLSPair>, data_table_tablets),
-                 (ObArray<ObTabletLSPair>, index_table_tablets)) {
+    SMART_VARS_4((ObArray<ObTabletLSPair>, data_table_tablets),
+                 (ObArray<ObTabletLSPair>, index_table_tablets),
+                 (ObArray<ObTabletID>, index_table_tablet_ids),
+                 (ObArray<ObTabletID>, data_table_tablet_ids)) {
       if (OB_FAIL(get_tablet_replica_checksum_items_(tenant_id, sql_proxy, index_table_schema, compaction_scn,
           index_table_tablets, index_table_ckm_items))) {
         LOG_WARN("fail to get index table tablet replica ckm_items", KR(ret), K(tenant_id), K(compaction_scn),
@@ -1191,7 +1193,7 @@ int ObTabletReplicaChecksumOperator::check_local_index_column_checksum(
           data_table_tablets, data_table_ckm_items))) {
         LOG_WARN("fail to get data table tablet replica ckm_items", KR(ret), K(tenant_id), K(compaction_scn),
           K(data_table_id));
-      } else if (data_table_tablets.count() != index_table_tablets.count()) {
+      } else if (OB_UNLIKELY(data_table_tablets.count() != index_table_tablets.count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet count of local index table is not same with data table", KR(ret), "data_table_tablet_cnt",
           data_table_tablets.count(), "index_table_tablet_cnt", index_table_tablets.count());
@@ -1205,26 +1207,57 @@ int ObTabletReplicaChecksumOperator::check_local_index_column_checksum(
         LOG_WARN("fail to check need verfy checksum", KR(ret), K(compaction_scn), K(index_table_id), K(data_table_id));
       } else if (!need_verify) {
         LOG_INFO("do not need verify checksum", K(index_table_id), K(data_table_id), K(compaction_scn));
+      } else if (OB_FAIL(get_table_all_tablet_ids_(index_table_schema, index_table_tablet_ids))) {
+        LOG_WARN("fail to get index table all tablet ids", KR(ret), K(index_table_schema));
+      } else if (OB_FAIL(get_table_all_tablet_ids_(data_table_schema, data_table_tablet_ids))) {
+        LOG_WARN("fail to get data table all tablet ids", KR(ret), K(data_table_schema));
+      } else if (OB_UNLIKELY((data_table_tablet_ids.count() != index_table_tablet_ids.count())
+                             || (data_table_tablets.count() != data_table_tablet_ids.count()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid tablet_ids count or tablet_ls_pair count", KR(ret), "data_table_tablet_id_cnt",
+          data_table_tablet_ids.count(), "index_table_tablet_id_cnt", index_table_tablet_ids.count(),
+          "data_table_tablet_ls_pair_count", data_table_tablets.count());
       } else {
+        // map elemant: <tablet_id, tablet_ls_pair>
+        hash::ObHashMap<ObTabletID, ObTabletLSPair> data_tablet_ls_pair_map;
+        hash::ObHashMap<ObTabletID, ObTabletLSPair> index_tablet_ls_pair_map;
         // map element: <column_id, checksum>
         hash::ObHashMap<int64_t, int64_t> data_column_ckm_map;
         hash::ObHashMap<int64_t, int64_t> index_column_ckm_map;
-        if (OB_FAIL(data_column_ckm_map.create(default_column_cnt, ObModIds::OB_CHECKSUM_CHECKER))) {
-          LOG_WARN("fail to create data table column ckm map", KR(ret), K(default_column_cnt));
-        } else if (OB_FAIL(index_column_ckm_map.create(default_column_cnt, ObModIds::OB_CHECKSUM_CHECKER))) {
-          LOG_WARN("fail to create index table column ckm map", KR(ret), K(default_column_cnt));
-        } 
+        if (OB_FAIL(data_tablet_ls_pair_map.create(500, ObModIds::OB_CHECKSUM_CHECKER,
+                                                   ObModIds::OB_CHECKSUM_CHECKER, tenant_id))) {
+          LOG_WARN("fail to create data tablet ls pair map", KR(ret), K(default_column_cnt), K(tenant_id));
+        } else if (OB_FAIL(index_tablet_ls_pair_map.create(500, ObModIds::OB_CHECKSUM_CHECKER,
+                                                   ObModIds::OB_CHECKSUM_CHECKER, tenant_id))) {
+          LOG_WARN("fail to create index tablet ls pair map", KR(ret), K(default_column_cnt), K(tenant_id));
+        } else if (OB_FAIL(convert_array_to_map(data_table_tablets, data_tablet_ls_pair_map))) {
+          LOG_WARN("fail to convert array to map", KR(ret));
+        } else if (OB_FAIL(convert_array_to_map(index_table_tablets, index_tablet_ls_pair_map))) {
+          LOG_WARN("fail to convert array to map", KR(ret));
+        } else if (OB_FAIL(data_column_ckm_map.create(default_column_cnt,
+                           ObModIds::OB_CHECKSUM_CHECKER, ObModIds::OB_CHECKSUM_CHECKER, tenant_id))) {
+          LOG_WARN("fail to create data table column ckm map", KR(ret), K(default_column_cnt), K(tenant_id));
+        } else if (OB_FAIL(index_column_ckm_map.create(default_column_cnt,
+                           ObModIds::OB_CHECKSUM_CHECKER, ObModIds::OB_CHECKSUM_CHECKER, tenant_id))) {
+          LOG_WARN("fail to create index table column ckm map", KR(ret), K(default_column_cnt), K(tenant_id));
+        }
 
         // One tablet of local index table is mapping to one tablet of data table
         const int64_t tablet_cnt = data_table_tablets.count();
         for (int64_t i = 0; (i < tablet_cnt) && OB_SUCC(ret); ++i) {
+          ObTabletID &tmp_data_tablet_id = data_table_tablet_ids.at(i);
+          ObTabletID &tmp_index_tablet_id = index_table_tablet_ids.at(i);
+          ObTabletLSPair data_tablet_pair;
+          ObTabletLSPair index_tablet_pair;
           if (OB_FAIL(data_column_ckm_map.clear())) {
             LOG_WARN("fail to clear hash map", KR(ret), K(default_column_cnt));
           } else if (OB_FAIL(index_column_ckm_map.clear())) {
             LOG_WARN("fail to clear hash map", KR(ret), K(default_column_cnt));
+          } else if (OB_FAIL(data_tablet_ls_pair_map.get_refactored(tmp_data_tablet_id, data_tablet_pair))) {
+            LOG_WARN("fail to get refactored", KR(ret), K(tmp_data_tablet_id));
+          } else if (OB_FAIL(index_tablet_ls_pair_map.get_refactored(tmp_index_tablet_id, index_tablet_pair))) {
+            LOG_WARN("fail to get refactored", KR(ret), K(tmp_index_tablet_id));
           } else {
-            const ObTabletLSPair &data_tablet_pair = data_table_tablets.at(i);
-            const ObTabletLSPair &index_tablet_pair = index_table_tablets.at(i);
             int64_t data_tablet_idx = OB_INVALID_INDEX;
             int64_t index_tablet_idx = OB_INVALID_INDEX;
             if (OB_FAIL(find_checksum_item_(data_tablet_pair, data_table_ckm_items, compaction_scn, data_tablet_idx))) {
@@ -1393,7 +1426,7 @@ int ObTabletReplicaChecksumOperator::find_checksum_item_(
   int ret = OB_SUCCESS;
   idx = OB_INVALID_INDEX;
   const int64_t item_cnt = items.count();
-  if (!pair.is_valid() || (item_cnt < 1)) {
+  if (OB_UNLIKELY(!pair.is_valid() || (item_cnt < 1))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(pair), K(item_cnt));
   } else {
@@ -1445,7 +1478,7 @@ int ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(
     const ObIArray<ObTabletID> &tablet_ids,
     ObIArray<ObTabletLSPair> &pairs)
 {
-    int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   if (!is_valid_tenant_id(tenant_id) || (tablet_ids.count() < 1)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tablet_ids.count()));
@@ -1459,32 +1492,28 @@ int ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(
             LOG_WARN("fail to push back ls_id", KR(ret), K(tenant_id), K(table_id));
           }
         }
-      } else if (OB_FAIL(ObTabletToLSTableOperator::batch_get_ls(sql_proxy, tenant_id, tablet_ids, ls_ids))) {
+        const int64_t ls_id_cnt = ls_ids.count();
+        for (int64_t i = 0; (i < ls_id_cnt) && OB_SUCC(ret); ++i) {
+          ObTabletLSPair cur_pair;
+          const ObTabletID &cur_tablet_id = tablet_ids.at(i);
+          const ObLSID &cur_ls_id = ls_ids.at(i);
+          if (OB_FAIL(cur_pair.init(cur_tablet_id, cur_ls_id))) {
+            LOG_WARN("fail to init tablet_ls_pair", KR(ret), K(i), K(cur_tablet_id), K(cur_ls_id));
+          } else if (OB_FAIL(pairs.push_back(cur_pair))) {
+            LOG_WARN("fail to push back pair", KR(ret), K(cur_pair));
+          }
+        }
+      } else if (OB_FAIL(ObTabletToLSTableOperator::batch_get_tablet_ls_pairs(sql_proxy, tenant_id,
+                                                                              tablet_ids, pairs))) {
         LOG_WARN("fail to batch get ls", KR(ret), K(tenant_id), K(tablet_ids));
       }
+    }
 
-      const int64_t ls_id_cnt = ls_ids.count();
-      if (OB_SUCC(ret) && (ls_id_cnt != tablet_ids.count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("count mismatch", KR(ret), K(ls_id_cnt), K(tablet_ids.count()));
-      }
-
-      for (int64_t i = 0; (i < ls_id_cnt) && OB_SUCC(ret); ++i) {
-        ObTabletLSPair cur_pair;
-        const ObTabletID &cur_tablet_id = tablet_ids.at(i);
-        const ObLSID &cur_ls_id = ls_ids.at(i);
-        if (OB_FAIL(cur_pair.init(cur_tablet_id, cur_ls_id))) {
-          LOG_WARN("fail to init tablet_ls_pair", KR(ret), K(i), K(cur_tablet_id), K(cur_ls_id));
-        } else if (OB_FAIL(pairs.push_back(cur_pair))) {
-          LOG_WARN("fail to push back pair", KR(ret), K(cur_pair));
-        }
-      }
-
-      if (OB_FAIL(ret)){
-      } else if (OB_UNLIKELY(pairs.count() != ls_id_cnt)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("some unexpected err about tablet_ls_pair count", KR(ret), K(ls_id_cnt), K(pairs.count()));
-      }
+    if (OB_FAIL(ret)){
+    } else if (OB_UNLIKELY(pairs.count() != tablet_ids.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("some unexpected err about tablet_ls_pair count", KR(ret), "tablet_id_cnt",
+               tablet_ids.count(), "pair_cnt", pairs.count());
     }
   }
   return ret;
@@ -1809,6 +1838,22 @@ int ObTabletReplicaChecksumOperator::get_hex_column_meta(
     LOG_WARN("encode error", KR(ret), K(hex_pos), K(hex_size));
   } else {
     column_meta_hex_str.assign_ptr(hex_buf, static_cast<int32_t>(hex_size));
+  }
+  return ret;
+}
+
+int ObTabletReplicaChecksumOperator::convert_array_to_map(
+    const ObArray<ObTabletLSPair> &tablet_ls_pairs,
+    hash::ObHashMap<ObTabletID, ObTabletLSPair> &tablet_ls_pair_map)
+{
+  int ret = OB_SUCCESS;
+  const int64_t tablet_ls_pair_cnt = tablet_ls_pairs.count();
+  for (int64_t i = 0; (i < tablet_ls_pair_cnt) && OB_SUCC(ret); ++i) {
+    const ObTabletLSPair &pair = tablet_ls_pairs.at(i);
+    const ObTabletID &tablet_id = pair.get_tablet_id();
+    if (OB_FAIL(tablet_ls_pair_map.set_refactored(tablet_id, pair, false/*overwrite*/))) {
+      LOG_WARN("fail to set_refactored", KR(ret), K(tablet_id), K(pair));
+    }
   }
   return ret;
 }

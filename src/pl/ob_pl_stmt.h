@@ -457,7 +457,8 @@ public:
     ref_objects_(allocator),
     row_desc_(NULL),
     rowid_table_id_(OB_INVALID_ID),
-    ps_sql_() {}
+    ps_sql_(),
+    is_link_table_(false) {}
   virtual ~ObPLSql() {}
 
   inline const common::ObString &get_sql() const { return sql_; }
@@ -485,6 +486,9 @@ public:
   inline uint64_t get_rowid_table_id() const { return rowid_table_id_; }
   inline void set_rowid_table_id(uint64 table_id) { rowid_table_id_ = table_id; }
 
+  inline void set_link_table(bool is_link_table) { is_link_table_ = is_link_table; }
+  inline bool has_link_table() const { return is_link_table_; }
+
   TO_STRING_KV(K_(sql), K_(params), K_(ps_sql), K_(stmt_type), K_(ref_objects), K_(rowid_table_id));
 
 protected:
@@ -499,6 +503,7 @@ protected:
   const ObRecordType *row_desc_;
   uint64_t rowid_table_id_;
   common::ObString ps_sql_;
+  bool is_link_table_;
 };
 
 class ObPLCursor
@@ -976,6 +981,8 @@ public:
   virtual bool is_udt_cons() const { return compile_flag_.compile_with_cons(); }
   virtual bool is_udt_map() const { return compile_flag_.compile_with_map(); }
   virtual bool is_udt_order() const { return compile_flag_.compile_with_order(); }
+
+  virtual const ObString& get_routine_name() const { return get_name(); }
 
   bool has_self_param() const;
   int64_t get_self_param_pos() const;

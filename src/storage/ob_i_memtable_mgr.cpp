@@ -327,10 +327,6 @@ int ObIMemtableMgr::add_memtable_(ObTableHandleV2 &memtable_handle)
     } else {
       tables_[idx]->inc_ref();
       memtable_tail_++;
-      ObTaskController::get().allow_next_syslog();
-      // FIXME : delete lbt()
-      STORAGE_LOG(INFO, "succeed to add memtable", KP(this), K(get_memtable_count_()),
-          K(memtable_handle));
     }
   }
   return ret;

@@ -61,7 +61,6 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
       } else {
         drop_table_arg.if_exist_ = (NULL != parse_tree.children_[IF_EXIST_NODE]) ? true : false;
       }
-      drop_table_arg.is_add_to_scheduler_ = true;
       drop_table_arg.tenant_id_ = session_info_->get_effective_tenant_id();
       drop_table_arg.to_recyclebin_ = is_recyclebin_open.get_bool();
     }

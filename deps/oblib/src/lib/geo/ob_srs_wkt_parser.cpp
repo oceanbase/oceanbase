@@ -318,7 +318,7 @@ static int parse_coordinate_system(common::ObIAllocator &allocator, const common
     char l_brac = r_brac == ')' ? '(' : '[';
     const char *begin = srs_str.ptr();
     const char *end = begin + last + 1; // past the last
-    void *buf = allocator.alloc(sizeof(SrsWktGrammar<decltype(begin), boost::spirit::ascii::space_type>));
+    void *buf = tmp_alloc.alloc(sizeof(SrsWktGrammar<decltype(begin), boost::spirit::ascii::space_type>));
     if (OB_ISNULL(buf)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("alloc SrsWktGrammar failed", K(ret));
@@ -333,6 +333,9 @@ static int parse_coordinate_system(common::ObIAllocator &allocator, const common
         ret = OB_ERR_PARSER_SYNTAX; // todo@dazhi: ER_SRS_PARSE_ERROR
         ObString trailing_str(end - begin, begin);
         LOG_WARN("failed to parse coodinate sytem, has extra trailing characters", K(trailing_str));
+      }
+      if (OB_NOT_NULL(parser)) {
+        parser->~SrsWktGrammar<decltype(begin), boost::spirit::ascii::space_type>();
       }
     }
   }

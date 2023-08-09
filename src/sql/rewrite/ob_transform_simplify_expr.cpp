@@ -2310,6 +2310,7 @@ int ObTransformSimplifyExpr::remove_ora_decode(ObDMLStmt *stmt, bool &trans_happ
   ObSEArray<ObRawExpr *, 2> old_exprs;
   ObSEArray<ObRawExpr *, 2> new_exprs;
   ObSEArray<ObRawExpr *, 16> relation_exprs;
+  trans_happened = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is NULL", K(stmt));

@@ -1744,15 +1744,12 @@ int ObSelectLogPlan::generate_raw_plan_for_set()
     const int64_t child_size = child_stmts.count();
     const bool is_set_distinct = select_stmt->is_set_distinct();
     ObSEArray<ObRawExpr *, 8> child_input_filters;
-    ObSEArray<ObRawExpr *, 8> child_candi_filters;
     ObSEArray<ObRawExpr *, 8> child_rename_filters;
     ObSEArray<ObRawExpr *, 8> child_remain_filters;
-    bool can_pushdown = false;
     const ObSelectStmt *child_stmt = NULL;
     ObSelectLogPlan *child_plan = NULL;
     for (int64 i = 0; OB_SUCC(ret) && i < child_size; ++i) {
       child_input_filters.reuse();
-      child_candi_filters.reuse();
       child_rename_filters.reuse();
       child_remain_filters.reuse();
       if (OB_ISNULL(child_stmt = child_stmts.at(i))) {
@@ -1761,27 +1758,20 @@ int ObSelectLogPlan::generate_raw_plan_for_set()
       } else if (!pushdown_filters_.empty() &&
                  OB_FAIL(child_input_filters.assign(pushdown_filters_))) {
         LOG_WARN("failed to copy exprs", K(ret));
-      } else if (!child_input_filters.empty() &&
-                 OB_FAIL(ObOptimizerUtil::pushdown_filter_into_subquery(*select_stmt,
-                                                                        *child_stmt,
-                                                                        get_optimizer_context(),
-                                                                        child_input_filters,
-                                                                        child_candi_filters,
-                                                                        child_remain_filters,
-                                                                        can_pushdown))) {
-        LOG_WARN("pushdown filters into left query failed", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::pushdown_and_rename_filter_into_subquery(*select_stmt,
+                                                                                   *child_stmt,
+                                                                                   OB_INVALID_ID,
+                                                                                   get_optimizer_context(),
+                                                                                   child_input_filters,
+                                                                                   child_rename_filters,
+                                                                                   child_remain_filters,
+                                                                                   false))) {
+        LOG_WARN("failed to push down filter into subquery", K(ret));
       } else if (OB_FAIL(ObOptimizerUtil::get_set_op_remain_filter(*select_stmt,
                                                                    child_remain_filters,
                                                                    remain_filters,
                                                                    0 == i))) {
         LOG_WARN("get remain filters failed", K(ret));
-      } else if (!child_candi_filters.empty() &&
-                OB_FAIL(ObOptimizerUtil::rename_pushdown_filter(*select_stmt, *child_stmt,
-                                                                OB_INVALID, session_info,
-                                                                *expr_factory,
-                                                                child_candi_filters,
-                                                                child_rename_filters))) {
-        LOG_WARN("failed to rename pushdown filter", K(ret));
       } else if (OB_FAIL(generate_child_plan_for_set(child_stmt, child_plan,
                                                      child_rename_filters, i,
                                                      select_stmt->is_set_distinct()))) {

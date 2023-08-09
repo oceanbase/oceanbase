@@ -468,6 +468,8 @@ void ObLogger::print_trace_buffer(const char* mod_name,
   }
 }
 
+
+
 const char *const ObLogger::errstr_[] = {"ERROR", "WARN", "INFO", "EDIAG", "WDIAG", "TRACE", "DEBUG"};
 
 ObLogger::ObLogger()

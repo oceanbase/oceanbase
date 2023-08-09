@@ -212,7 +212,7 @@ bool ObRawExpr::is_vectorize_result() const
   // TODO bin.lb: more sophisticate
   bool not_pre_calc = has_generalized_column()
       || has_flag(CNT_STATE_FUNC)
-      || has_flag(CNT_USER_VARIABLE)
+      || has_flag(CNT_DYNAMIC_USER_VARIABLE)
       || has_flag(CNT_ALIAS)
       || has_flag(CNT_VALUES)
       || has_flag(CNT_SEQ_EXPR)
@@ -681,7 +681,7 @@ bool ObRawExpr::is_not_calculable_expr() const
 {
   return is_generalized_column()
          || has_flag(IS_STATE_FUNC)
-         || has_flag(IS_USER_VARIABLE)
+         || has_flag(IS_DYNAMIC_USER_VARIABLE)
          || has_flag(IS_ALIAS)
          || has_flag(IS_VALUES)
          || has_flag(IS_SEQ_EXPR)
@@ -699,7 +699,7 @@ bool ObRawExpr::cnt_not_calculable_expr() const
   // need add the same rules.
   return has_generalized_column()
          || has_flag(CNT_STATE_FUNC)
-         || has_flag(CNT_USER_VARIABLE)
+         || has_flag(CNT_DYNAMIC_USER_VARIABLE)
          || has_flag(CNT_ALIAS)
          || has_flag(CNT_VALUES)
          || has_flag(CNT_SEQ_EXPR)
@@ -742,7 +742,6 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_SYS_SLEEP == type_
       || T_OP_PRIOR == type_
       || T_OP_ASSIGN == type_
-      || T_OP_GET_USER_VAR == type_
       || T_FUN_NORMAL_UDF == type_
       || T_FUN_SYS_REMOVE_CONST == type_
       || T_FUN_SYS_WRAPPER_INNER == type_
@@ -2756,10 +2755,7 @@ int ObObjAccessRawExpr::add_access_indexs(const ObIArray<pl::ObObjAccessIdx> &ac
       tmp_idx.var_index_ = get_param_count() + var_indexs_.count(); //外部变量的下标排在
       if (OB_FAIL(access_indexs_.push_back(tmp_idx))) {
         LOG_WARN("store access index failed", K(ret));
-      } else if (OB_ISNULL(access_idx.get_sysfunc_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("null param function", K(ret), K(access_idx.var_name_));
-      } else if (OB_FAIL(add_param_expr(access_idx.get_sysfunc_))) {
+      } else if (OB_NOT_NULL(access_idx.get_sysfunc_) && OB_FAIL(add_param_expr(access_idx.get_sysfunc_))) {
         LOG_WARN("Failed to add param expr", K(ret));
       } else { /*do nothing*/ }
     } else if (access_idx.is_ns()

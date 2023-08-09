@@ -117,6 +117,7 @@ public:
   // @return other, there is something wrong or there is some readonly tx not cleaned up.
   int check_all_readonly_tx_clean_up() const;
   int block_tx();
+  int block_all();
   int kill_all_tx(const bool graceful);
   // for ddl check
   // Check all active and not "for_replay" tx_ctx in this ObLSTxCtxMgr

@@ -41,6 +41,7 @@ public:
   virtual ~ObDirectLoadExternalMultiPartitionTableBuilder();
   int init(const ObDirectLoadExternalMultiPartitionTableBuildParam &param);
   int append_row(const common::ObTabletID &tablet_id,
+                 const table::ObTableLoadSequenceNo &seq_no,
                  const blocksstable::ObDatumRow &datum_row) override;
   int close() override;
   int64_t get_row_count() const override { return total_row_count_; }

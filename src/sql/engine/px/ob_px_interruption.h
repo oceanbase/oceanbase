@@ -71,9 +71,10 @@ public:
   static int interrupt_tasks(ObPxSqcMeta &sqc, int code);
   // DFO 重试时，需要使用新的中断号，避免遇到中断残余，被误中断
   static int regenerate_interrupt_id(ObDfo &dfo);
+  static void update_schema_error_code(ObExecContext *exec_ctx, int &code);
   // SQC 以及 Tasks 向 QC 发送中断
-  static int interrupt_qc(ObPxSqcMeta &sqc, int code);
-  static int interrupt_qc(ObPxTask &task, int code);
+  static int interrupt_qc(ObPxSqcMeta &sqc, int code, ObExecContext *exec_ctx);
+  static int interrupt_qc(ObPxTask &task, int code, ObExecContext *exec_ctx);
   // 将server_id、execution_id、qc_id共同组成中断id
   static int generate_query_interrupt_id(const uint32_t server_id,
                                          const uint64_t px_sequence_id,

@@ -30,16 +30,19 @@ public:
     : parallel_(0),
       max_error_row_count_(0),
       dup_action_(sql::ObLoadDupActionType::LOAD_INVALID_MODE),
-      timeout_(0)
+      timeout_(0),
+      force_create_(false)
   {
   }
-  TO_STRING_KV(K_(table_name), K_(parallel), K_(max_error_row_count), K_(dup_action), K_(timeout));
+  TO_STRING_KV(K_(table_name), K_(parallel), K_(max_error_row_count), K_(dup_action), K_(timeout),
+               K_(force_create));
 public:
   ObString table_name_;
   int64_t parallel_;
   uint64_t max_error_row_count_;
   sql::ObLoadDupActionType dup_action_;
   int64_t timeout_;
+  bool force_create_;
 };
 
 struct ObTableDirectLoadBeginRes

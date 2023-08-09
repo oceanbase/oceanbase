@@ -180,7 +180,7 @@ int ObTxDataMemtableMgr::create_memtable_(const SCN clog_checkpoint_scn,
     STORAGE_LOG(WARN, "add memtable fail.", KR(ret));
   } else {
     // create memtable success
-    STORAGE_LOG(INFO, "create tx data memtable done", KR(ret), KPC(tx_data_memtable));
+    STORAGE_LOG(INFO, "create tx data memtable done", KR(ret), KPC(tx_data_memtable), KPC(this));
   }
 
   return ret;

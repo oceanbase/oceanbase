@@ -75,7 +75,7 @@ public:
            expr.has_flag(CNT_ROWNUM) ||
            expr.has_flag(CNT_SEQ_EXPR) ||
            expr.has_flag(CNT_STATE_FUNC) ||
-           expr.has_flag(CNT_USER_VARIABLE);
+           expr.has_flag(CNT_DYNAMIC_USER_VARIABLE);
   }
 
 private:

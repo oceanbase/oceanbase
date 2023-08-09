@@ -536,7 +536,7 @@ void ObHATabletGroupCtx::reuse()
 ObHATabletGroupMgr::ObHATabletGroupMgr()
   : is_inited_(false),
     lock_(),
-    allocator_("HATGMgr"),
+    allocator_("HATGMgr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     tablet_group_ctx_array_(),
     index_(0)
 {

@@ -142,7 +142,7 @@ int ObDirectLoadMemLoader::close_chunk(ChunkType *&chunk)
 {
   int ret = OB_SUCCESS;
   CompareType compare;
-  if (OB_FAIL(compare.init(*(mem_ctx_->datum_utils_)))) {
+  if (OB_FAIL(compare.init(*(mem_ctx_->datum_utils_), mem_ctx_->dup_action_))) {
     LOG_WARN("fail to init compare", KR(ret));
   } else if (OB_FAIL(chunk->sort(compare))) {
     LOG_WARN("fail to sort chunk", KR(ret));

@@ -246,6 +246,7 @@ public:
     ObString ps_sql_; // sql prepare过后的参数化sql
     bool is_bulk_;
     bool has_dup_column_name_;
+    bool has_link_table_;
   };
 
   struct PLPrepareCtx

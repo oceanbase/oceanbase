@@ -34,8 +34,6 @@ public:
   uint64_t get_tenant_id() const { return truncate_table_arg_.tenant_id_; }
   const common::ObString& get_database_name() const { return truncate_table_arg_.database_name_; }
   const common::ObString& get_table_name() const { return truncate_table_arg_.table_name_; }
-  void set_is_add_scheduler(bool is_add_to_scheduler)
-  { truncate_table_arg_.is_add_to_scheduler_ = is_add_to_scheduler; }
 
   inline const obrpc::ObTruncateTableArg &get_truncate_table_arg() const;
   obrpc::ObTruncateTableArg &get_truncate_table_arg() { return truncate_table_arg_; }

@@ -249,6 +249,10 @@ private:
   int check_restore_to_newest_from_archive_(ObLogArchivePieceContext &piece_context,
       const palf::LSN &end_lsn, const share::SCN &end_scn, share::SCN &archive_scn);
   bool restore_to_end_unlock_() const;
+  int get_offline_scn_(share::SCN &scn);
+  void deep_copy_source_(ObRemoteSourceGuard &guard);
+  int check_if_ls_gc_(bool &done);
+  int check_offline_log_(bool &done);
 
 private:
   ObRemoteLogParent *parent_;

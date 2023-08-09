@@ -83,6 +83,7 @@ private:
                              common::ObArenaAllocator &cast_allocator);
   int write_row_to_table_store(storage::ObDirectLoadTableStore &table_store,
                                const common::ObTabletID &tablet_id,
+                               const table::ObTableLoadSequenceNo &seq_no,
                                const blocksstable::ObDatumRow &datum_row);
 private:
   ObTableLoadTransStore *const trans_store_;

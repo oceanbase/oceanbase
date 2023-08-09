@@ -2755,6 +2755,7 @@ int ObSql::generate_stmt(ParseResult &parse_result,
       context.all_pre_calc_constraints_ = &(resolver_ctx.query_ctx_->all_pre_calc_constraints_);
       context.all_expr_constraints_ = &(resolver_ctx.query_ctx_->all_expr_constraints_);
       context.all_priv_constraints_ = &(resolver_ctx.query_ctx_->all_priv_constraints_);
+      context.need_match_all_params_ = resolver_ctx.query_ctx_->need_match_all_params_;
       context.cur_stmt_ = stmt;
       context.res_map_rule_id_ = resolver_ctx.query_ctx_->res_map_rule_id_;
       context.res_map_rule_param_idx_ = resolver_ctx.query_ctx_->res_map_rule_param_idx_;

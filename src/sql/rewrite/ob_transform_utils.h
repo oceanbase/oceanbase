@@ -116,6 +116,19 @@ public:
   ObArray<ObRawExpr *> filters_;
 };
 
+class ObSelectStmtPointer {
+public:
+  ObSelectStmtPointer();
+
+  virtual ~ObSelectStmtPointer();
+  int get(ObSelectStmt *&stmt) const;
+  int set(ObSelectStmt *stmt);
+  int add_ref(ObSelectStmt **stmt);
+  int64_t ref_count() const { return stmt_group_.count(); }
+  TO_STRING_KV("", "");
+private:
+  common::ObSEArray<ObSelectStmt **, 1> stmt_group_;
+};
 
 class ObTransformUtils
 {
@@ -156,6 +169,7 @@ class ObTransformUtils
   private:
     DISALLOW_COPY_AND_ASSIGN(UniqueCheckHelper);
   };
+  static const uint64_t MAX_SET_STMT_SIZE_OF_COSTED_BASED_RELUES = 5;
 
 public:
   struct LazyJoinInfo {
@@ -515,11 +529,13 @@ public:
    */
   static int find_expr(const ObIArray<const ObRawExpr *> &source,
                        const ObRawExpr *target,
-                       bool &bret);
+                       bool &bret,
+                       ObExprEqualCheckContext *check_context = NULL);
 
   static int find_expr(ObIArray<ObRawExpr *> &source,
                        ObRawExpr *target,
-                       bool &bret);
+                       bool &bret,
+                       ObExprEqualCheckContext *check_context = NULL);
 
   static int find_expr(const ObIArray<OrderItem> &source,
                        const ObRawExpr *target,
@@ -1456,7 +1472,7 @@ public:
 
   static int get_all_child_stmts(ObDMLStmt *stmt,
                                  ObIArray<ObSelectStmt*> &child_stmts,
-                                 hash::ObHashMap<uint64_t, ObDMLStmt *> *parent_map = NULL);
+                                 hash::ObHashMap<uint64_t, ObParentDMLStmt> *parent_map = NULL);
 
   static int check_select_expr_is_const(ObSelectStmt *stmt, ObRawExpr *expr, bool &is_const);
 
@@ -1591,13 +1607,6 @@ public:
   static int is_batch_stmt_write_table(uint64_t table_id,
                                        const ObDMLStmt &stmt,
                                        bool &is_target_table);
-
-  static int move_expr_into_view(ObRawExprFactory &expr_factory,
-                                 ObDMLStmt &stmt,
-                                 TableItem &view,
-                                 ObIArray<ObRawExpr *> &exprs,
-                                 ObIArray<ObRawExpr *> &new_exprs,
-                                 ObIArray<ObQueryRefRawExpr *> *moved_query_refs = NULL);
 
   static int get_generated_table_item(ObDMLStmt &parent_stmt,
                                       ObDMLStmt *child_stmt,
@@ -1773,6 +1782,15 @@ public:
                                   ObIArray<ObRawExpr *> &relation_exprs,
                                   ObIArray<ObRawExpr *> &common_exprs);
   static int check_is_index_part_key(ObTransformerCtx &ctx, ObDMLStmt &stmt, ObRawExpr *check_expr, bool &is_valid);
+
+  static int expand_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTableInfo& table_info);
+
+  static int get_stmt_map_after_copy(ObDMLStmt *origin_stmt,
+                                     ObDMLStmt *new_stmt,
+                                     hash::ObHashMap<uint64_t, ObDMLStmt *> &stmt_map);
+
+  static int check_stmt_contain_oversize_set_stmt(ObDMLStmt *stmt, bool &is_contain);
+
   static int convert_preds_vector_to_scalar(ObTransformerCtx &ctx,
                                             ObRawExpr *expr,
                                             ObIArray<ObRawExpr*> &exprs,

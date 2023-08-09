@@ -12306,6 +12306,8 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12427: __all_virtual_import_table_task_history
 # 12428: __all_virtual_import_stmt_exec_history
 
+# 12429: __all_virtual_data_activity_metrics
+
 #
 # 余留位置
 #
@@ -28070,6 +28072,9 @@ def_table_schema(
 # 21474: DBA_OB_IMPORT_TABLE_TASK_HISTORY
 # 21475: CDB_OB_IMPORT_STMT_EXEC_HISTORY
 # 21476: DBA_OB_IMPORT_STMT_EXEC_HISTORY
+
+# 21477: GV$OB_DUMP_TENANT_INFO
+# 21478: V$OB_DUMP_TENANT_INFO
 
 #
 # 余留位置
@@ -52059,6 +52064,10 @@ def_table_schema(
 # 28197: V$OB_SESSION
 # 28198: GV$OB_PL_CACHE_OBJECT
 # 28199: V$OB_PL_CACHE_OBJECT
+
+# 28200: GV$OB_DUMP_TENANT_INFO
+# 28201: V$OB_DUMP_TENANT_INFO
+
 ################################################################################
 # Lob Table (50000, 70000)
 ################################################################################

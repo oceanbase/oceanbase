@@ -5,6 +5,7 @@
 #pragma once
 
 #include "lib/allocator/page_arena.h"
+#include "share/table/ob_table_load_define.h"
 #include "storage/blocksstable/ob_datum_rowkey.h"
 #include "storage/direct_load/ob_direct_load_datum.h"
 
@@ -24,18 +25,20 @@ public:
   int deep_copy(const ObDirectLoadExternalRow &src, char *buf, const int64_t len, int64_t &pos);
   // not deep copy
   int from_datums(blocksstable::ObStorageDatum *datums, int64_t column_count,
-                  int64_t rowkey_column_count);
+                  int64_t rowkey_column_count, const table::ObTableLoadSequenceNo &seq_no);
   int to_datums(blocksstable::ObStorageDatum *datums, int64_t column_count) const;
   int get_rowkey(blocksstable::ObDatumRowkey &rowkey) const;
   bool is_valid() const
   {
-    return rowkey_datum_array_.is_valid() && buf_size_ > 0 && nullptr != buf_;
+    return rowkey_datum_array_.is_valid() && seq_no_.is_valid() && buf_size_ > 0 && nullptr != buf_;
   }
   OB_INLINE int64_t get_raw_size() const { return buf_size_; }
-  TO_STRING_KV(K_(rowkey_datum_array), K_(buf_size), KP_(buf));
+  TO_STRING_KV(K_(rowkey_datum_array), K_(seq_no), K_(buf_size), KP_(buf));
+
 public:
   common::ObArenaAllocator allocator_;
   ObDirectLoadDatumArray rowkey_datum_array_;
+  table::ObTableLoadSequenceNo seq_no_;
   int64_t buf_size_;
   const char *buf_;
 };

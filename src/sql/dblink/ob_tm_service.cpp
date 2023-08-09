@@ -136,6 +136,7 @@ int ObTMService::tm_rm_start(ObExecContext &exec_ctx,
   } else {
     tx_id = tx_desc->tid();
   }
+  my_session->get_raw_audit_record().trans_id_ = my_session->get_tx_id();
   LOG_INFO("tm rm start", K(ret), K(tx_id), K(xid), K(need_start), K(need_promote));
 
   // TODO, if fail, the trans needs rollback
@@ -163,6 +164,7 @@ int ObTMService::tm_commit(ObExecContext &exec_ctx,
   } else {
     ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
     tx_id = tx_desc->tid();
+    my_session->get_raw_audit_record().trans_id_ = tx_id;
     if (OB_FAIL(xa_service->commit_for_dblink_trans(tx_desc))) {
       LOG_WARN("fail to commit for dblink trans", K(ret));
     } else {
@@ -197,6 +199,7 @@ int ObTMService::tm_rollback(ObExecContext &exec_ctx,
   } else {
     ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
     tx_id = tx_desc->tid();
+    my_session->get_raw_audit_record().trans_id_ = tx_id;
     if (OB_FAIL(xa_service->rollback_for_dblink_trans(tx_desc))) {
       LOG_WARN("fail to rollback for dblink trans", K(ret));
     } else {

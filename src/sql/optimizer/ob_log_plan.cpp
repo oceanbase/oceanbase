@@ -960,9 +960,7 @@ int ObLogPlan::pre_process_quals(const ObIArray<TableItem*> &table_items,
     } else if (qual->is_const_expr()) {
       ret = add_startup_filter(qual);
     } else if (qual->has_flag(CNT_RAND_FUNC) ||
-               qual->has_flag(CNT_USER_VARIABLE) ||
-               qual->has_flag(CNT_PL_UDF) ||
-               qual->has_flag(CNT_SO_UDF)) {
+               qual->has_flag(CNT_DYNAMIC_USER_VARIABLE)) {
       ret = add_special_expr(qual);
     } else if (ObOptimizerUtil::has_hierarchical_expr(*qual)) {
       ret = normal_quals.push_back(qual);
@@ -10370,6 +10368,9 @@ int ObLogPlan::add_candidate_plan(ObIArray<CandidatePlan> &current_plans,
       should_add = false;
       OPT_TRACE("containt match all fake cte, but not remote plan, will not add plan");
     }
+  } else if (new_plan.plan_tree_->get_contains_match_all_fake_cte() &&
+             !new_plan.plan_tree_->is_remote()) {
+    should_add = false;
   }
   for (int64_t i = current_plans.count() - 1;
        OB_SUCC(ret) && should_add && i >= 0; --i) {
@@ -11096,9 +11097,9 @@ int ObLogPlan::get_source_table_info(ObLogicalOperator &top,
   if (OB_SUCC(ret) && OB_UNLIKELY(log_op_def::ObLogOpType::LOG_SET == top.get_type()
                                   && NULL != source_sharding)) {
     int64_t total_part_cnt = 0;
-    if (OB_FAIL(source_sharding->get_total_part_cnt(total_part_cnt))) {
+    if (!source_sharding->is_distributed() && OB_FAIL(source_sharding->get_total_part_cnt(total_part_cnt))) {
       LOG_WARN("failed to get total part cnt", K(ret), K(*source_sharding));
-    } else if (total_part_cnt > 1) {
+    } else if (source_sharding->is_distributed() || total_part_cnt > 1) {
       /*  create table t3(c1 int, c2 int, c3 int, index idx(c2)) partition by hash(c1) partitions 5;
       *  update t3 set c3 = 3  where (c1 = 1 or c2 =1);
       *  If this DML happend or expansion transform, we need multi table dml,

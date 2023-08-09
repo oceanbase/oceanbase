@@ -121,6 +121,15 @@ public:
   */
  int get_replayable_scn(share::SCN &replayable_scn);
 
+  /**
+  * @description:
+  *    get tenant sync_scn.
+  *       for SYS/META tenant: there isn't sync_scn
+  *       for user tenant: get sync_scn from __all_tenant_info cache
+  * @param[out] sync_scn
+  */
+ int get_sync_scn(share::SCN &sync_scn);
+
  /**
   * @description:
   *    get tenant is_standby_normal_status

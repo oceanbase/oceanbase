@@ -107,7 +107,7 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array,
     }
     // init partition_calc_
     else if (OB_FAIL(
-               partition_calc_.init(ctx_->param_.tenant_id_, ctx_->param_.table_id_, ctx_->session_info_))) {
+               partition_calc_.init(ctx_->param_, ctx_->session_info_))) {
       LOG_WARN("fail to init partition calc", KR(ret));
     }
     // init trans_allocator_

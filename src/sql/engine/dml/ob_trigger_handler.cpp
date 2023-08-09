@@ -790,5 +790,18 @@ int TriggerHandle::destroy_compound_trigger_state(ObExecContext &exec_ctx, const
   return ret;
 }
 
+int64_t TriggerHandle::get_routine_param_count(const uint64_t routine_id)
+{
+  int64_t count = OB_INVALID_COUNT;
+  if (lib::is_oracle_mode()
+      && (ROUTINE_IDX_BEFORE_STMT == routine_id
+          || ROUTINE_IDX_AFTER_STMT == routine_id)) {
+    count = STMT_POINT_PARAM_COUNT;
+  } else {
+    count = ROW_POINT_PARAM_COUNT;
+  }
+  return count;
+}
+
 }  // namespace sql
 }  // namespace oceanbase

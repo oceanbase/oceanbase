@@ -67,6 +67,27 @@ int PCVSchemaObj::init(const ObTableSchema *schema)
   return ret;
 }
 
+int PCVSchemaObj::init_with_synonym(const ObSimpleSynonymSchema *schema) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(schema) || OB_ISNULL(inner_alloc_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpected null argument", K(ret), K(schema), K(inner_alloc_));
+  } else {
+    database_id_ = schema->get_database_id();
+    // copy table name
+    char *buf = nullptr;
+    const ObString &tname = schema->get_synonym_name_str();
+    if (nullptr == (buf = static_cast<char *>(inner_alloc_->alloc(tname.length())))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret), K(tname.length()));
+    } else {
+      MEMCPY(buf, tname.ptr(), tname.length());
+      table_name_.assign_ptr(buf, tname.length());
+    }
+  }
+  return ret;
+}
+
 bool PCVSchemaObj::operator==(const PCVSchemaObj &other) const
 {
   bool ret = true;
@@ -1591,6 +1612,20 @@ bool ObPlanCacheValue::is_contain_tmp_tbl() const
   return is_contain;
 }
 
+bool ObPlanCacheValue::is_contain_synonym() const
+{
+  bool is_contain = false;
+
+  for (int64_t i = 0; !is_contain && i < stored_schema_objs_.count(); i++) {
+    if (nullptr != stored_schema_objs_.at(i)
+        && (SYNONYM_SCHEMA == stored_schema_objs_.at(i)->schema_type_)) {
+      is_contain = true;
+    }
+  }
+
+  return is_contain;
+}
+
 /*!
  * 系统包/类型的更新仅会推高系统租户的schema_version, 在普通租户下的对象如果依赖了系统包/类型,
  * 在更新的场景下因为未推高普通租户的schema_version, 可能会漏check系统包/类型是否过期,
@@ -1696,14 +1731,28 @@ int ObPlanCacheValue::set_stored_schema_objs(const DependenyTableStore &dep_tabl
       table_schema = nullptr;
       int hash_err = OB_SUCCESS;
       if (table_version.get_schema_type() != TABLE_SCHEMA) {
-        // 如果不是table schema，直接存schema id和version即可
-        if (nullptr == (obj_buf = pc_alloc_->alloc(sizeof(PCVSchemaObj)))) {
+        // 如果不是table schema，直接存schema id和version即可，synonym 多存个 db_id
+        const ObSimpleSynonymSchema *synonym_schema = nullptr;
+        bool is_synonym = (SYNONYM_SCHEMA == table_version.get_schema_type());
+        if (is_synonym && OB_SUCC(ret)) {
+          if (OB_FAIL(schema_guard->get_simple_synonym_info(
+              MTL_ID(), table_version.get_object_id(), synonym_schema))) {
+            LOG_WARN("failed to get table schema", K(ret), K(table_version), K(synonym_schema));
+          } else if (nullptr == synonym_schema) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get an unexpected null schema", K(ret), K(synonym_schema));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (nullptr == (obj_buf = pc_alloc_->alloc(sizeof(PCVSchemaObj)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to allocate memory", K(ret));
         } else if (FALSE_IT(pcv_schema_obj = new(obj_buf)PCVSchemaObj(pc_alloc_))) {
           // do nothing
         } else if (OB_FAIL(pcv_schema_obj->init_with_version_obj(table_version))) {
           LOG_WARN("failed to init pcv schema obj", K(ret), K(table_version));
+        } else if (is_synonym && OB_FAIL(pcv_schema_obj->init_with_synonym(synonym_schema))) {
+          LOG_WARN("failed to init table name", K(ret));
         } else if (OB_FAIL(stored_schema_objs_.push_back(pcv_schema_obj))) {
           LOG_WARN("failed to push back array", K(ret));
         } else {
@@ -1825,6 +1874,20 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
         if (PACKAGE_SCHEMA == stored_schema_objs_.at(i)->schema_type_
             || UDT_SCHEMA == stored_schema_objs_.at(i)->schema_type_) {
           tenant_id = get_tenant_id_by_object_id(stored_schema_objs_.at(i)->schema_id_);
+        } else if (SYNONYM_SCHEMA == pcv_schema->schema_type_) {
+          const ObSimpleSynonymSchema *synonym_schema = nullptr;
+          if (OB_FAIL(schema_guard.get_synonym_info(
+                tenant_id, database_id, pcv_schema->table_name_, synonym_schema))) {
+            LOG_WARN("failed to get private synonym", K(ret));
+          } else if (OB_ISNULL(synonym_schema) && OB_FAIL(schema_guard.get_synonym_info(
+                tenant_id, OB_PUBLIC_SCHEMA_ID, pcv_schema->table_name_, synonym_schema))) {
+            LOG_WARN("failed to get public synonym", K(ret));
+          } else if (OB_NOT_NULL(synonym_schema)) {
+            tmp_schema_obj.database_id_ = synonym_schema->get_database_id();
+            tmp_schema_obj.schema_version_ = synonym_schema->get_schema_version();
+            tmp_schema_obj.schema_id_ = synonym_schema->get_synonym_id();
+            tmp_schema_obj.schema_type_ = pcv_schema->schema_type_;
+          }
         }
         if (OB_FAIL(schema_guard.get_schema_version(pcv_schema->schema_type_,
                                                     tenant_id,
@@ -1833,9 +1896,11 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
           LOG_WARN("failed to get schema version",
                    K(ret), K(tenant_id), K(pcv_schema->schema_type_), K(pcv_schema->schema_id_));
         } else {
-          tmp_schema_obj.schema_id_ = pcv_schema->schema_id_;
-          tmp_schema_obj.schema_type_ = pcv_schema->schema_type_;
-          tmp_schema_obj.schema_version_ = new_version;
+          if (SYNONYM_SCHEMA != pcv_schema->schema_type_) {
+            tmp_schema_obj.schema_id_ = pcv_schema->schema_id_;
+            tmp_schema_obj.schema_version_ = new_version;
+            tmp_schema_obj.schema_type_ = pcv_schema->schema_type_;
+          }
           if (OB_FAIL(schema_array.push_back(tmp_schema_obj))) {
             LOG_WARN("failed to push back array", K(ret));
           } else {
@@ -1944,6 +2009,9 @@ int ObPlanCacheValue::match_dep_schema(const ObPlanCacheCtx &pc_ctx,
                  && !stored_schema_objs_.at(i)->match_compare(schema_array.at(i))) {
         // 检查oracle模式下普通表是否与系统表同名
         is_same = false;
+      } else if (lib::is_oracle_mode()
+                 && SYNONYM_SCHEMA == stored_schema_objs_.at(i)->schema_type_) {
+        is_same = (stored_schema_objs_.at(i)->database_id_ == schema_array.at(i).database_id_);
       } else {
         // do nothing
       }
@@ -2029,14 +2097,16 @@ int ObPlanCacheValue::need_check_schema_version(ObPlanCacheCtx &pc_ctx,
         Therefore, if there is a temporary table, you need to recheck the schema .
      */
     need_check = ((new_schema_version != cached_tenant_schema_version)
+                  || is_contain_synonym()
                   || is_contain_tmp_tbl()
                   || is_contain_sys_pl_object()
                   || contain_sys_name_table_
                   || pc_ctx.sql_ctx_.session_info_->get_has_temp_table_flag());
     if (need_check && REACH_TIME_INTERVAL(10000000)) { //10s间隔打印
       LOG_INFO("need check schema", K(new_schema_version), K(cached_tenant_schema_version),
-               K(contain_sys_name_table_), K(is_contain_tmp_tbl()), K(is_contain_sys_pl_object()),
-               K(pc_ctx.sql_ctx_.session_info_->get_has_temp_table_flag()), K(need_check), K(constructed_sql_));
+               K(is_contain_synonym()), K(contain_sys_name_table_), K(is_contain_tmp_tbl()),
+               K(is_contain_sys_pl_object()), K(pc_ctx.sql_ctx_.session_info_->get_has_temp_table_flag()),
+               K(need_check), K(constructed_sql_));
     }
   }
   return ret;

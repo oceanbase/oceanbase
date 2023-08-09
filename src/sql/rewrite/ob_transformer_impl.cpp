@@ -68,7 +68,7 @@ int ObTransformerImpl::transform(ObDMLStmt *&stmt)
     LOG_WARN("failed to do transform dblink write", K(ret));
   } else if (trans_happended) {
     //dml write query will be executed in remote, do not need transform
-  } else if (OB_FAIL(SMART_CALL(get_stmt_trans_info(stmt)))) {
+  } else if (OB_FAIL(SMART_CALL(get_stmt_trans_info(stmt, true)))) {
     LOG_WARN("get_stmt_trans_info failed", K(ret));
   } else if (OB_FAIL(do_transform_pre_precessing(stmt))) {
     LOG_WARN("failed to do transform pre_precessing", K(ret));
@@ -90,28 +90,24 @@ int ObTransformerImpl::transform(ObDMLStmt *&stmt)
   return ret;
 }
 
-int ObTransformerImpl::get_stmt_trans_info(ObDMLStmt *stmt)
+int ObTransformerImpl::get_stmt_trans_info(ObDMLStmt *stmt, bool is_root)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
-  } else if (stmt->is_select_stmt()) {
-    int64_t size = 0;
-    if (OB_FAIL(static_cast<ObSelectStmt *>(stmt)->get_set_stmt_size(size))) {
-      LOG_WARN("get set stmt size failed", K(ret));
-    } else if (size > ObTransformerImpl::MAX_SET_STMT_SIZE_OF_COSTED_BASED_RELUES) {
-      ctx_->is_set_stmt_oversize_ = true;
-    }
+  } else if (OB_FAIL(ObTransformUtils::check_stmt_contain_oversize_set_stmt(stmt, ctx_->is_set_stmt_oversize_))) {
+    LOG_WARN("failed to check set stmt oversize");
   }
-  if (OB_SUCC(ret) && !ctx_->is_set_stmt_oversize_) {
-    ObSEArray<ObSelectStmt*, 4> child_stmts;
-    if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
-      LOG_WARN("failed to get child stmts", K(ret));
+  if (OB_SUCC(ret) && !ctx_->is_set_stmt_oversize_ && is_root) {
+    ObArray<ObDMLStmt::TempTableInfo> temp_table_infos;
+    if (OB_FAIL(stmt->collect_temp_table_infos(temp_table_infos))) {
+      LOG_WARN("failed to collect temp table infos", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && !ctx_->is_set_stmt_oversize_&& i < child_stmts.count(); i++) {
-      if (OB_FAIL(SMART_CALL(get_stmt_trans_info(child_stmts.at(i))))) {
-        LOG_WARN("get_stmt_trans_info failed", K(ret));
+    for (int64_t i = 0; OB_SUCC(ret) && !ctx_->is_set_stmt_oversize_ && i < temp_table_infos.count(); i++) {
+      if (OB_FAIL(SMART_CALL(ObTransformUtils::check_stmt_contain_oversize_set_stmt(temp_table_infos.at(i).temp_table_query_,
+                                                                                    ctx_->is_set_stmt_oversize_)))) {
+        LOG_WARN("check_contain_oversize_set_stmt failed", K(ret));
       }
     }
   }
@@ -436,18 +432,29 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       ObTransformRule::add_trans_type(disable_list, WIN_MAGIC);
     }
     if (func.contain_link_table_) {
-      disable_list |= (~ObTransformRule::ALL_HEURISTICS_RULES);
-
-      // Below rules might generate filter which contains constant values which has implicit types,
+      // some rules might generate filter which contains constant values which has implicit types,
       // which can not be printed in the link sql.
       // example：
       // create table t (c1 varchar(10), c2 char(10))
       // select * from t where c1 = 'a' and c2 = c1;
       // => select * from t where c1 = 'a' and c2 = implicit cast('a' as varchar);
-      ObTransformRule::add_trans_type(disable_list, PREDICATE_MOVE_AROUND);
-      ObTransformRule::add_trans_type(disable_list, CONST_PROPAGATE);
-      ObTransformRule::add_trans_type(disable_list, SIMPLIFY_EXPR);
-      ObTransformRule::add_trans_type(disable_list, SELECT_EXPR_PULLUP);
+      uint64_t dblink_enable_list = 0;
+      ObTransformRule::add_trans_type(dblink_enable_list, SIMPLIFY_DISTINCT);
+      ObTransformRule::add_trans_type(dblink_enable_list, SIMPLIFY_ORDERBY);
+      ObTransformRule::add_trans_type(dblink_enable_list, SIMPLIFY_LIMIT);
+      ObTransformRule::add_trans_type(dblink_enable_list, PROJECTION_PRUNING);
+      ObTransformRule::add_trans_type(dblink_enable_list, VIEW_MERGE);
+      ObTransformRule::add_trans_type(dblink_enable_list, COUNT_TO_EXISTS);
+      ObTransformRule::add_trans_type(dblink_enable_list, WHERE_SQ_PULL_UP);
+      ObTransformRule::add_trans_type(dblink_enable_list, SIMPLIFY_SUBQUERY);
+      ObTransformRule::add_trans_type(dblink_enable_list, QUERY_PUSH_DOWN);
+      ObTransformRule::add_trans_type(dblink_enable_list, ELIMINATE_OJ);
+      ObTransformRule::add_trans_type(dblink_enable_list, JOIN_ELIMINATION);
+      ObTransformRule::add_trans_type(dblink_enable_list, JOIN_LIMIT_PUSHDOWN);
+      ObTransformRule::add_trans_type(dblink_enable_list, LEFT_JOIN_TO_ANTI);
+      ObTransformRule::add_trans_type(dblink_enable_list, AGGR_SUBQUERY);
+      ObTransformRule::add_trans_type(dblink_enable_list, FASTMINMAX);
+      disable_list |= (~dblink_enable_list);
     }
     //dblink trace point
     if ((OB_E(EventTable::EN_GENERATE_PLAN_WITH_RECONSTRUCT_SQL) OB_SUCCESS) != OB_SUCCESS) {

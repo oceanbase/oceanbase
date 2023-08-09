@@ -973,20 +973,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
       case DDL_DROP_PARTITION:
       case DDL_DROP_SUB_PARTITION:
       case DDL_TRUNCATE_PARTITION:
-      case DDL_TRUNCATE_SUB_PARTITION: {
-        if (OB_FAIL(create_ddl_retry_task(proxy,
-                                          param.tenant_id_,
-                                          param.object_id_,
-                                          param.schema_version_,
-                                          param.consumer_group_id_,
-                                          param.type_,
-                                          param.ddl_arg_,
-                                          *param.allocator_,
-                                          task_record))) {
-          LOG_WARN("fail to create ddl retry task", K(ret));
-        }
-        break;
-      }
+      case DDL_TRUNCATE_SUB_PARTITION:
       default:
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("error unexpected, ddl type is not supported", K(ret), K(param.type_));
@@ -1179,6 +1166,9 @@ int ObDDLScheduler::modify_redef_task(const ObDDLTaskID &task_id, ObRedefCallbac
         }
       }
     }
+  }
+  if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
+    ret = OB_ENTRY_NOT_EXIST;
   }
   if (trans.is_started()) {
     bool commit = (OB_SUCCESS == ret);
@@ -1738,7 +1728,7 @@ int ObDDLScheduler::remove_inactive_ddl_task()
       LOG_WARN("failed to check register time", K(ret));
     } else {
       LOG_INFO("need remove task", K(remove_task_ids));
-      for (int64_t i = 0; OB_SUCC(ret) && i < remove_task_ids.size(); i++) {
+      for (int64_t i = 0; i < remove_task_ids.size(); i++) {
         ObDDLTaskID remove_task_id;
         if (OB_FAIL(remove_task_ids.at(i, remove_task_id))) {
           LOG_WARN("get remove task id fail", K(ret));

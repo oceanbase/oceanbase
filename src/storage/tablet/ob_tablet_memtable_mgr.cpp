@@ -300,7 +300,7 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
           clean_tail_memtable_();
         } else if (FALSE_IT(time_guard.click("add to data_checkpoint"))) {
         } else {
-          LOG_INFO("succeed to create memtable", K(ret), K(ls_id), KPC(memtable));
+          LOG_INFO("succeed to create memtable", K(ret), K(ls_id), KPC(memtable), KPC(this));
         }
       }
     }
@@ -516,7 +516,7 @@ int ObTabletMemtableMgr::set_is_tablet_freeze_for_active_memtable(ObTableHandleV
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else if (OB_FAIL(get_active_memtable(handle))) {
-    LOG_WARN("fail to get active memtable", K(ret));
+    LOG_DEBUG("fail to get active memtable", K(ret));
   } else if (OB_FAIL(handle.get_memtable(active_memtable))) {
     LOG_WARN("fail to get active memtable", K(ret));
     if (ret == OB_NOT_INIT) {
@@ -875,24 +875,6 @@ int64_t ObTabletMemtableMgr::to_string(char *buf, const int64_t buf_len) const
     J_COLON();
     pos += ObIMemtableMgr::to_string(buf + pos, buf_len - pos);
     J_COMMA();
-
-    /************* memtable array **************/
-    MemMgrRLockGuard lock_guard(lock_);
-    J_OBJ_START();
-    J_ARRAY_START();
-    for (int64_t i = memtable_head_; i < memtable_tail_; ++i) {
-      ObMemtable *memtable = get_memtable_(i);
-      if (nullptr != memtable) {
-        J_OBJ_START();
-        J_KV(K(i), "table_key", memtable->get_key(), "ref", memtable->get_ref());
-        J_OBJ_END();
-        J_COMMA();
-      }
-    }
-    J_ARRAY_END();
-    J_OBJ_END();
-    /************* memtable array **************/
-
     J_KV(K_(schema_recorder));
     J_OBJ_END();
   }

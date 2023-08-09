@@ -51,6 +51,16 @@ namespace share
     case OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH:                                                            \
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", query primary failed");               \
       break;                                                                                           \
+    case OB_IN_STOP_STATE:                                                                             \
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", primary is in stop state");           \
+      break;                                                                                           \
+    case OB_TENANT_NOT_EXIST:                                                                          \
+    case OB_TENANT_NOT_IN_SERVER:                                                                      \
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", primary tenant is not avaliable");    \
+      break;                                                                                           \
+    case OB_SERVER_IS_INIT:                                                                            \
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", primary server is initializing");     \
+      break;                                                                                           \
     case -ER_CONNECT_FAILED:                                                                           \
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", please check the network");           \
       break;                                                                                           \
@@ -59,10 +69,15 @@ namespace share
   }                                                                                                    \
 
 #define RESTORE_RETRY(arg)                                                                             \
-  int64_t retry_time = 0;                                                                              \
+  int64_t run_time = 1;                                                                                \
+  int tmp_ret = OB_SUCCESS;                                                                            \
   do {                                                                                                 \
     arg                                                                                                \
-  } while (OB_FAIL(ret) && retry_time++ < server_prover_.get_server_count() - 1);
+    if (OB_TMP_FAIL(ret) && run_time < server_prover_.get_server_count()) {                            \
+      LOG_WARN("restore proxy query failed, switch to next server", K(run_time), K(tmp_ret), K(ret));  \
+      ret = OB_SUCCESS;                                                                                \
+    }                                                                                                  \
+  } while (OB_TMP_FAIL(tmp_ret) && run_time++ < server_prover_.get_server_count());
 
 
 ObLogRestoreMySQLProvider::ObLogRestoreMySQLProvider() : server_list_(), lock_() {}
@@ -625,7 +640,12 @@ int ObLogRestoreProxyUtil::get_max_log_info(const ObLSID &id, palf::AccessMode &
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get result failed", K(sql));
         } else if (OB_FAIL(result->next())) {
-          LOG_WARN("next failed");
+          if (OB_ITER_END == ret) {
+            ret = OB_ENTRY_NOT_EXIST;
+            LOG_WARN("get max log info failed", K(sql), K(id));
+          } else {
+            LOG_WARN("next failed", K(sql), K(id));
+          }
         } else {
           uint64_t max_scn = 0;
           ObString access_mode_str;
@@ -637,6 +657,44 @@ int ObLogRestoreProxyUtil::get_max_log_info(const ObLSID &id, palf::AccessMode &
 
           if (OB_SUCC(ret) && OB_FAIL(scn.convert_for_logservice(max_scn))) {
             LOG_WARN("convert_for_logservice failed", K(id), K(max_scn));
+          }
+        }
+      }
+    )
+  }
+  return ret;
+}
+
+int ObLogRestoreProxyUtil::is_ls_existing(const ObLSID &id)
+{
+  int ret = OB_SUCCESS;
+  const char *LS_ID = "LS_ID";
+  common::ObMySQLProxy *proxy = &sql_proxy_;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invlaid argument", K(id));
+  } else {
+    RESTORE_RETRY(
+      SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
+        common::sqlclient::ObMySQLResult *result = NULL;
+        common::ObSqlString sql;
+        const char *GET_LS_SQL = "SELECT COUNT(1) as COUNT FROM %s WHERE %s=%ld";
+        if (OB_FAIL(sql.append_fmt(GET_LS_SQL, OB_DBA_OB_LS_TNAME,  LS_ID, id.id()))) {
+          LOG_WARN("append_fmt failed");
+        } else if (OB_FAIL(proxy->read(res, sql.ptr()))) {
+          LOG_WARN("excute sql failed", K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get result failed", K(sql));
+        } else if (OB_FAIL(result->next())) {
+          LOG_WARN("next failed", K(id), K(sql));
+        } else {
+          uint64_t count = 0;
+          EXTRACT_UINT_FIELD_MYSQL(*result, "COUNT", count, uint64_t);
+          if (OB_SUCC(ret) && 0 == count) {
+            ret = OB_LS_NOT_EXIST;
           }
         }
       }

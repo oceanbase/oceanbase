@@ -688,7 +688,7 @@ int ObTxRedoLog::format_mutator_row_(const memtable::ObMemtableMutatorRow &row,
     arg.log_stat_->new_row_size_ += new_row.size_;
     arg.log_stat_->old_row_size_ += old_row.size_;
     arg.writer_ptr_->dump_key("RowKey");
-    arg.writer_ptr_->dump_string(to_cstring(rowkey));
+    (void)smart_dump_rowkey_(rowkey, arg);
     arg.writer_ptr_->dump_key("TableVersion");
     arg.writer_ptr_->dump_int64(table_version);
 
@@ -726,6 +726,16 @@ int ObTxRedoLog::format_mutator_row_(const memtable::ObMemtableMutatorRow &row,
     arg.writer_ptr_->dump_int64(old_row.size_);
     arg.writer_ptr_->dump_key("ColumnCnt");
     arg.writer_ptr_->dump_int64(column_cnt);
+  }
+  return ret;
+}
+
+int ObTxRedoLog::smart_dump_rowkey_(const ObStoreRowkey &rowkey, ObAdminMutatorStringArg &arg)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = rowkey.to_smart_string(arg.buf_ + arg.pos_, arg.buf_len_ - arg.pos_);
+  if (pos > 0) {
+    arg.writer_ptr_->dump_string(arg.buf_ + arg.pos_);
   }
   return ret;
 }

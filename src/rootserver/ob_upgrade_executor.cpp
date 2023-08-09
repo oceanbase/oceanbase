@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX RS
 
 #include "rootserver/ob_upgrade_executor.h"
+#include "rootserver/ob_ls_service_helper.h"
 #include "observer/ob_server_struct.h"
 #include "share/ob_global_stat_proxy.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
@@ -470,27 +471,51 @@ int ObUpgradeExecutor::run_upgrade_begin_action_(
     const common::ObIArray<uint64_t> &tenant_ids)
 {
   int ret = OB_SUCCESS;
+  common::hash::ObHashMap<uint64_t, share::SCN> tenants_sys_ls_target_scn;
+  lib::ObMemAttr attr(MTL_ID(), "UPGRADE");
+  const int BUCKET_NUM  = hash::cal_next_prime(tenant_ids.count());
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(check_stop())) {
     LOG_WARN("executor should stopped", KR(ret));
+  } else if (OB_FAIL(tenants_sys_ls_target_scn.create(BUCKET_NUM, attr))) {
+    LOG_WARN("fail to create tenants_sys_ls_target_scn", KR(ret));
   } else {
     int64_t backup_ret = OB_SUCCESS;
     int tmp_ret = OB_SUCCESS;
+    share::SCN sys_ls_target_scn;
+    tenants_sys_ls_target_scn.clear();
     for (int64_t i = tenant_ids.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
       const uint64_t tenant_id = tenant_ids.at(i);
       int64_t start_ts = ObTimeUtility::current_time();
+      sys_ls_target_scn.set_invalid();
       FLOG_INFO("[UPGRADE] start to run upgrade begin action", K(tenant_id));
       if (OB_FAIL(check_stop())) {
         LOG_WARN("executor should stopped", KR(ret));
       } else if (OB_TMP_FAIL(run_upgrade_begin_action_(tenant_id))) {
         LOG_WARN("fail to upgrade begin action", KR(ret), K(tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
+      } else if (!is_user_tenant(tenant_id)) {
+        // skip
+      } else if (OB_FAIL(ObGlobalStatProxy::get_target_data_version_ora_rowscn(tenant_id, sys_ls_target_scn))) {
+        LOG_WARN("fail to get sys_ls_target_scn", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(tenants_sys_ls_target_scn.set_refactored(
+          tenant_id,
+          sys_ls_target_scn,
+          0 /* flag:  0 shows that not cover existing object. */))) {
+        LOG_WARN("fail to push an element into tenants_sys_ls_target_scn", KR(ret), K(tenant_id),
+            K(sys_ls_target_scn));
       }
-      FLOG_INFO("[UPGRADE] finish run upgrade begin action",
+      FLOG_INFO("[UPGRADE] finish run upgrade begin action step 1/2, write upgrade barrier log",
                 KR(ret), K(tenant_id), "cost", ObTimeUtility::current_time() - start_ts);
     } // end for
     ret = OB_SUCC(ret) ? backup_ret : ret;
+    if (OB_SUCC(ret)) {
+      int64_t start_ts_step2 = ObTimeUtility::current_time();
+      ret = ObLSServiceHelper::wait_all_tenants_user_ls_sync_scn(tenants_sys_ls_target_scn);
+      FLOG_INFO("[UPGRADE] finish run upgrade begin action step 2/2, wait all tenants' sync_scn",
+          KR(ret), "cost", ObTimeUtility::current_time() - start_ts_step2);
+    }
   }
   return ret;
 }

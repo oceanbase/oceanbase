@@ -39,43 +39,6 @@ public:
 
   virtual int construct_transform_hint(ObDMLStmt &stmt, void *trans_params) override;
 
-  struct TableInfo {
-    TableInfo()
-    :table_filters_(),
-    column_ids_(),
-    table_item_(NULL),
-    upper_stmt_(NULL)
-    {}
-
-    virtual ~TableInfo(){}
-
-    TO_STRING_KV(
-      K_(table_filters),
-      K_(column_ids),
-      K_(table_item),
-      K_(upper_stmt)
-    );
-    ObSEArray<ObRawExpr*, 8> table_filters_;
-    ObSqlBitSet<> column_ids_;
-    TableItem *table_item_;
-    ObDMLStmt* upper_stmt_;
-  };
-  struct TempTableInfo {
-    TempTableInfo()
-    :table_infos_(),
-    temp_table_query_(NULL)
-    {}
-
-    virtual ~TempTableInfo(){}
-
-    TO_STRING_KV(
-      K_(table_infos),
-      K_(temp_table_query)
-    );
-    
-    ObSEArray<TableInfo, 8> table_infos_;
-    ObSelectStmt *temp_table_query_;
-  };
   struct StmtClassifyHelper {
     StmtClassifyHelper()
     :stmts_(),
@@ -114,40 +77,61 @@ public:
     ObSelectStmt *trans_stmt_;
     ObItemType trans_type_;
   };
+
   /**
    * @brief expand_temp_table
    * 如果temp table只被引用一次
    * 还原成generate table
    */
-  int expand_temp_table(ObIArray<TempTableInfo> &temp_table_info,
+  int expand_temp_table(ObIArray<ObDMLStmt::TempTableInfo> &temp_table_info,
                         bool &trans_happened);
 
-  int inner_expand_temp_table(TempTableInfo &helper);
+  int check_stmt_size(ObDMLStmt *stmt, int64_t &total_size, bool &stmt_oversize);
 
-  int check_stmt_can_materialize(ObSelectStmt *stmt, bool &is_valid);
+  int inner_expand_temp_table(ObDMLStmt::TempTableInfo &helper);
+
+  int check_stmt_can_materialize(ObSelectStmt *stmt, bool is_existing_cte, bool &is_valid);
 
   int check_stmt_has_cross_product(ObSelectStmt *stmt, bool &has_cross_product);
   
+  int generate_with_clause(ObDMLStmt *&stmt, bool &trans_happened);
+
   int extract_common_subquery_as_cte(ObDMLStmt *stmt,
                                      ObIArray<ObSelectStmt*> &stmts,
-                                     hash::ObHashMap<uint64_t, ObDMLStmt *> &parent_map,
+                                     hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
                                      bool &trans_happened);
 
   int inner_extract_common_subquery_as_cte(ObDMLStmt &root_stmt,
                                            ObIArray<ObSelectStmt*> &stmts,
-                                           hash::ObHashMap<uint64_t, ObDMLStmt *> &parent_map,
+                                           hash::ObHashMap<uint64_t,ObParentDMLStmt> &parent_map,
                                            bool &trans_happened);
 
   int add_materialize_stmts(const ObIArray<ObSelectStmt*> &stms);
 
   int check_has_stmt(ObSelectStmt *left_stmt,
                      ObSelectStmt *right_stmt,
-                     hash::ObHashMap<uint64_t, ObDMLStmt *> &parent_map,
+                     hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
                      bool &has_stmt);
 
-  bool is_similar_stmt(ObSelectStmt& stmt,
-                       const ObStmtMapInfo &map_info,
-                       QueryRelation relation);
+  int check_has_stmt(const ObIArray<ObSelectStmt *> &left_stmt,
+                     ObSelectStmt *right_stmt,
+                     hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                     bool &has_stmt);
+
+  int check_stmt_can_extract_temp_table(ObSelectStmt *first,
+                                        ObSelectStmt *second,
+                                        const ObStmtMapInfo &map_info,
+                                        QueryRelation relation,
+                                        bool check_basic,
+                                        bool &is_valid);
+  int check_equal_join_condition_match(ObSelectStmt &first,
+                                       ObSelectStmt &second,
+                                       const ObStmtMapInfo &map_info,
+                                       bool &is_match);
+  int check_index_condition_match(ObSelectStmt &first,
+                                  ObSelectStmt &second,
+                                  const ObStmtMapInfo &map_info,
+                                  bool &is_match);
 
   int remove_simple_stmts(ObIArray<ObSelectStmt*> &stmts);
 
@@ -156,6 +140,9 @@ public:
                                   hash::ObHashMap<uint64_t, uint64_t> &param_level,
                                   ObIArray<ObSelectStmt *> &non_correlated_stmts,
                                   uint64_t &min_param_level);
+
+  int get_non_correlated_subquery(ObDMLStmt *stmt,
+                                  ObIArray<ObSelectStmt *> &non_correlated_stmts);
 
   int check_exec_param_level(const ObRawExpr *expr,
                              const hash::ObHashMap<uint64_t, uint64_t> &param_level,
@@ -166,7 +153,10 @@ public:
   int classify_stmts(ObIArray<ObSelectStmt*> &stmts,
                      ObIArray<StmtClassifyHelper> &stmt_groups);
 
-  int create_temp_table(StmtCompareHelper& compare_info);
+  int create_temp_table(ObDMLStmt &root_stmt,
+                        StmtCompareHelper& compare_info,
+                        hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                        bool &trans_happened);
 
   int compute_common_map_info(ObIArray<ObStmtMapInfo>& map_infos,
                               ObStmtMapInfo &common_map_info);
@@ -198,38 +188,14 @@ public:
                       const uint64_t &view_table_id,
                       uint64_t &table_id);
 
-  int collect_temp_table_infos(ObDMLStmt *stmt,
-                               ObIArray<TempTableInfo> &temp_table_infos);
-
-  int collect_temp_table_infos(ObIArray<ObSelectStmt*> &stmts,
-                               ObIArray<TempTableInfo> &temp_table_infos);
-
-  int inner_collect_temp_table_info(TableInfo &table_info);
-
-  int get_table_filters(ObDMLStmt *stmt, TableItem *table, ObIArray<ObRawExpr*> &table_filters);
-
-  int get_table_filters_in_joined_table(JoinedTable *table,
-                                        uint64_t table_id,
-                                        const ObSqlBitSet<> &table_ids,
-                                        ObIArray<ObRawExpr*> &table_filters);
-
-  int get_candi_exprs(const ObSqlBitSet<> &table_ids,
-                      const ObIArray<ObRawExpr*> &exprs,
-                      ObIArray<ObRawExpr*> &candi_exprs);
-
-  int project_pruning(ObIArray<TempTableInfo> &temp_table_info,
+  int project_pruning(ObIArray<ObDMLStmt::TempTableInfo> &temp_table_info,
                       bool &trans_happened);
 
-  int get_remove_select_item(TempTableInfo &info,
+  int get_remove_select_item(ObDMLStmt::TempTableInfo &info,
                              ObSqlBitSet<> &removed_idx);
 
-  int remove_select_items(TempTableInfo &info,
+  int remove_select_items(ObDMLStmt::TempTableInfo &info,
                           ObSqlBitSet<> &removed_idxs);
-
-  int push_down_filter(ObIArray<TempTableInfo> &temp_table_info,
-                       bool &trans_happened);                      
-
-  int inner_push_down_filter(TempTableInfo& info);
 
   int add_normal_temp_table_trans_hint(ObDMLStmt &stmt, ObItemType type);
 
@@ -253,8 +219,36 @@ public:
 
   int sort_materialize_stmts(Ob2DArray<MaterializeStmts *> &materialize_stmts);
 
-  int pushdown_shared_subqueries(ObSelectStmt *parent_stmt, ObIArray<ObRawExpr*> &candi_exprs);
-
+  int get_stmt_pointers(ObDMLStmt &root_stmt,
+                        ObIArray<ObSelectStmt *> &stmts,
+                        hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                        ObIArray<ObSelectStmtPointer> &stmt_ptrs);
+  int accept_cte_transform(ObDMLStmt &origin_root_stmt,
+                           TableItem *temp_table,
+                           common::ObIArray<ObSelectStmt *> &origin_stmts,
+                           common::ObIArray<ObSelectStmt *> &trans_stmts,
+                           common::ObIArray<ObSelectStmt *> &accept_stmts,
+                           hash::ObHashMap<uint64_t, ObParentDMLStmt> &parent_map,
+                           bool force_accept,
+                           bool &trans_happened);
+  int prepare_eval_cte_cost_stmt(ObDMLStmt &root_stmt,
+                                 ObIArray<ObSelectStmt *> &trans_stmts,
+                                 ObSelectStmt *cte_query,
+                                 ObIArray<ObSelectStmtPointer> &stmt_ptrs,
+                                 ObDMLStmt *&copied_stmt,
+                                 ObIArray<ObSelectStmt *> &copied_trans_stmts,
+                                 ObSelectStmt *&copied_cte_query,
+                                 bool is_trans_stmt);
+  int evaluate_cte_cost(ObDMLStmt &root_stmt,
+                        bool is_trans_stmt,
+                        ObIArray<ObSelectStmt *> &stmts,
+                        ObIArray<ObSelectStmtPointer> &stmt_ptrs,
+                        ObIArray<double> &costs,
+                        TableItem *temp_table,
+                        double &temp_table_cost);
+  int adjust_transformed_stmt(ObIArray<ObSelectStmtPointer> &stmt_ptrs,
+                              ObIArray<ObSelectStmt *> &stmts,
+                              ObIArray<ObSelectStmt *> *origin_stmts);
 private:
   ObArenaAllocator allocator_;
   TempTableTransParam *trans_param_;

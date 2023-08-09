@@ -2331,7 +2331,7 @@ public:
 
   int64_t get_ref_id() const;
   void set_ref_id(int64_t id);
-  ObSelectStmt *get_ref_stmt() { return ref_stmt_; }
+  ObSelectStmt *&get_ref_stmt() { return ref_stmt_; }
   const ObSelectStmt *get_ref_stmt() const { return ref_stmt_; }
   void set_ref_stmt(ObSelectStmt *ref_stmt)
   {

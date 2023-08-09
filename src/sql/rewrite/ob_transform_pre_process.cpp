@@ -68,12 +68,23 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
               OB_FAIL(formalize_limit_expr(*stmt))) {
     LOG_WARN("formalize stmt fialed", K(ret));
   } else {
-    if (OB_FAIL(transform_udt_columns(parent_stmts, stmt, is_happened))) {
-      LOG_WARN("failed to transform for transform for cast multiset", K(ret));
-    } else {
-      trans_happened |= is_happened;
-      OPT_TRACE("transform for udt columns", is_happened);
-      LOG_TRACE("succeed to transform for udt columns", K(is_happened), K(ret));
+    if (OB_SUCC(ret) && parent_stmts.empty()) {
+      if (OB_FAIL(expand_correlated_cte(stmt, is_happened))) {
+        LOG_WARN("failed to expand correlated cte", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        OPT_TRACE("expand correlated cte", is_happened);
+        LOG_TRACE("succeed to expand correlated cte", K(is_happened), K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(transform_udt_columns(parent_stmts, stmt, is_happened))) {
+        LOG_WARN("failed to transform for transform for cast multiset", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        OPT_TRACE("transform for udt columns", is_happened);
+        LOG_TRACE("succeed to transform for udt columns", K(is_happened), K(ret));
+      }
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(transform_cast_multiset_for_stmt(stmt, is_happened))) {
@@ -9330,7 +9341,7 @@ int ObTransformPreProcess::expand_for_last_insert_id(ObDMLStmt &stmt, ObIArray<O
           !expr->has_flag(CNT_SUB_QUERY) &&
           !expr->has_flag(CNT_ROWNUM) &&
           !expr->has_flag(CNT_SEQ_EXPR) &&
-          !expr->has_flag(CNT_USER_VARIABLE)) {
+          !expr->has_flag(CNT_DYNAMIC_USER_VARIABLE)) {
       bool removable = false;
       ObRawExpr *left = expr->get_param_expr(0);
       ObRawExpr *right = expr->get_param_expr(1);
@@ -9448,6 +9459,135 @@ int ObTransformPreProcess::remove_last_insert_id(ObRawExpr *&expr) {
       }
     }
   } else {}
+  return ret;
+}
+
+int ObTransformPreProcess::expand_correlated_cte(ObDMLStmt *stmt, bool& trans_happened)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObDMLStmt::TempTableInfo, 8> temp_table_infos;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is NULL", K(ret));
+  } else if (OB_FAIL(stmt->collect_temp_table_infos(temp_table_infos))) {
+    LOG_WARN("failed to collect temp table infos", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_infos.count(); i ++) {
+    bool is_correlated = false;
+    ObSEArray<ObSelectStmt *, 4> dummy;
+    if (OB_FAIL(check_is_correlated_cte(temp_table_infos.at(i).temp_table_query_, dummy, is_correlated))) {
+      LOG_WARN("failed to check is correlated cte", K(ret));
+    } else if (!is_correlated) {
+      //do nothing
+    } else if (OB_FAIL(ObTransformUtils::expand_temp_table(ctx_, temp_table_infos.at(i)))) {
+      LOG_WARN("failed to extend temp table", K(ret));
+    } else {
+      trans_happened = true;
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::check_exec_param_correlated(const ObRawExpr *expr, bool &is_correlated)
+{
+  int ret = OB_SUCCESS;
+  is_correlated = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret), K(expr));
+  } else if (expr->is_exec_param_expr()) {
+    if (!expr->has_flag(BE_USED)) {
+      is_correlated = true;
+    }
+  } else if (expr->has_flag(CNT_DYNAMIC_PARAM)) {
+    for (int64_t i = 0; OB_SUCC(ret) && !is_correlated && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_exec_param_correlated(expr->get_param_expr(i),
+                                                        is_correlated)))) {
+        LOG_WARN("failed to check exec param correlated", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::check_is_correlated_cte(ObSelectStmt *stmt, ObIArray<ObSelectStmt *> &visited_cte, bool &is_correlated)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObSelectStmt *> child_stmts;
+  ObArray<ObRawExpr *> relation_exprs;
+  is_correlated = false;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is NULL", K(ret));
+  } else if (OB_FAIL(stmt->get_relation_exprs(relation_exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  } else if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+    LOG_WARN("failed to get child stmts", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !is_correlated && i < relation_exprs.count(); ++i) {
+    ObRawExpr *expr = relation_exprs.at(i);
+    if (OB_FAIL(check_exec_param_correlated(expr, is_correlated))) {
+      LOG_WARN("failed to check exec param level", K(ret));
+    }
+  }
+  if (!is_correlated) {
+    // add flag to mark the exec param refer the same table
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_subquery_expr_size(); ++i) {
+      ObQueryRefRawExpr *query_ref = stmt->get_subquery_exprs().at(i);
+      if (OB_ISNULL(query_ref)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("query ref is null", K(ret), K(query_ref));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < query_ref->get_exec_params().count(); ++j) {
+        ObRawExpr *exec_param = query_ref->get_exec_params().at(j);
+        if (OB_ISNULL(exec_param)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("exec param is null", K(ret));
+        } else if (OB_FAIL(exec_param->add_flag(BE_USED))) {
+          LOG_WARN("failed to add flag", K(ret));
+        }
+      }
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && !is_correlated && i < child_stmts.count(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_is_correlated_cte(child_stmts.at(i), visited_cte, is_correlated)))) {
+        LOG_WARN("failed to get non correlated subquery", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_size(); ++i) {
+      TableItem *table = stmt->get_table_item(i);
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null table item", K(ret));
+      } else if (!table->is_temp_table()) {
+        //do nothing
+      } else if (ObOptimizerUtil::find_item(visited_cte, table->ref_query_)) {
+        //do nothing
+      } else if (OB_FAIL(visited_cte.push_back(table->ref_query_))) {
+        LOG_WARN("failed to push back stmt", K(ret));
+      } else if (OB_FAIL(SMART_CALL(check_is_correlated_cte(table->ref_query_, visited_cte, is_correlated)))) {
+        LOG_WARN("failed to get non correlated subquery", K(ret));
+      }
+    }
+
+    // clear flag
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_subquery_expr_size(); ++i) {
+      ObQueryRefRawExpr *query_ref = stmt->get_subquery_exprs().at(i);
+      if (OB_ISNULL(query_ref)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("query ref is null", K(ret), K(query_ref));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < query_ref->get_exec_params().count(); ++j) {
+        ObRawExpr *exec_param = query_ref->get_exec_params().at(j);
+        if (OB_ISNULL(exec_param)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("exec param is null", K(ret));
+        } else {
+          exec_param->clear_flag(BE_USED);
+        }
+      }
+    }
+  }
   return ret;
 }
 

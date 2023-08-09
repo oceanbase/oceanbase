@@ -124,8 +124,6 @@ int ObTruncateTableResolver::resolve(const ParseNode &parser_tree)
                        to_cstring(truncate_table_stmt->get_table_name()));
       }
     } else {
-      const bool is_add_to_scheduler = orig_table_schema->is_user_table() ? true : false;
-      truncate_table_stmt->set_is_add_scheduler(is_add_to_scheduler);
       if (orig_table_schema->is_oracle_tmp_table()) {
         truncate_table_stmt->set_truncate_oracle_temp_table();
         truncate_table_stmt->set_oracle_temp_table_type(orig_table_schema->get_table_type());

@@ -444,6 +444,7 @@ public:
   { return lib::Worker::CompatMode::MYSQL; }
   virtual uint64_t get_consumer_group_id() const override
   { return consumer_group_id_; }
+  virtual bool is_ha_dag() const override { return false; }
   VIRTUAL_TO_STRING_KV(K_(is_inited), K_(type), K_(id), K(task_list_.get_size()));
 protected:
   int64_t id_;

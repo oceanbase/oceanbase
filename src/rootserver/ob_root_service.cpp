@@ -8019,11 +8019,11 @@ int ObRootService::admin_rolling_upgrade_cmd(const obrpc::ObAdminRollingUpgradeA
   return ret;
 }
 
-int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantArg &arg)
+int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantArg &arg, obrpc::Int64 &res_job_id)
 {
   int ret = OB_SUCCESS;
   bool has_standby_cluster = false;
-
+  res_job_id = OB_INVALID_ID;
   int64_t current_timestamp = ObTimeUtility::current_time();
   int64_t start_ts = ObTimeUtility::current_time();
   int64_t job_id = OB_INVALID_ID;
@@ -8075,6 +8075,7 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
         LOG_WARN("fail to fill physical restore job", K(ret), K(job_id), K(arg));
       } else {
         job_info.set_restore_start_ts(start_ts);
+        res_job_id = job_id;
       }
       if (FAILEDx(check_restore_tenant_valid(job_info, schema_guard))) {
         LOG_WARN("failed to check restore tenant vailid", KR(ret), K(job_info));

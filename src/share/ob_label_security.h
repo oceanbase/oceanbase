@@ -200,7 +200,7 @@ public:
                                  schema::ObSchemaGetterGuard &schema_guard,
                                  bool &is_policy_column_exist,
                                  bool &is_policy_already_applied_to_column);
-
+  static int adjust_table_scan_filter(common::ObIArray<sql::ObRawExpr*> &filter_exprs);
 };
 
 

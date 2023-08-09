@@ -36,10 +36,10 @@ int ObSQLParser::parse(const char * str_ptr, const int64_t str_len, ParseResult 
   // proxy don't need this, only for observer
   ObActiveSessionGuard::get_stat().in_parse_ = true;
 #endif
-  if (0 != parse_init(&result)) {
-    ret = OB_ERR_PARSER_INIT;
-  } else {
-    ret = parse_sql(&result, str_ptr, static_cast<size_t>(str_len));
+  if (OB_FAIL(parse_init(&result))) {
+    // do nothing
+  } else if (OB_FAIL(parse_sql(&result, str_ptr, static_cast<size_t>(str_len)))) {
+    // do nothing
   }
 #ifndef SQL_PARSER_COMPILATION
   ObActiveSessionGuard::get_stat().in_parse_ = false;

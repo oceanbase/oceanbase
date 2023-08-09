@@ -115,6 +115,7 @@ public:
         all_plan_const_param_constraints_(alloc_),
         all_pre_calc_constraints_(),
         all_priv_constraints_(),
+        need_match_all_params_(false),
         multi_stmt_rowkey_pos_(alloc_),
         pre_cal_expr_handler_(NULL),
         res_map_rule_id_(common::OB_INVALID_ID),
@@ -234,6 +235,8 @@ protected:
   EqualParamConstraint all_equal_param_constraints_;
   PreCalcExprConstraint all_pre_calc_constraints_;
   PrivConstraint all_priv_constraints_;
+  //if true, check the datatypes of all params
+  bool need_match_all_params_;
   // maintain the rowkey position for multi_stmt
   common::ObFixedArray<int64_t, common::ObIAllocator> multi_stmt_rowkey_pos_;
   // pre calculable expression list handler.

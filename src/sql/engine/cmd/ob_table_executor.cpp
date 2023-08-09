@@ -1231,21 +1231,15 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
     }
 
     if (OB_SUCC(ret)) {
-      const bool is_ddl_retry_task = is_drop_schema_block_concurrent_trans(res.ddl_type_);
       const bool need_wait_ddl_finish = is_double_table_long_running_ddl(res.ddl_type_)
-                                     || is_simple_table_long_running_ddl(res.ddl_type_)
-                                     || is_ddl_retry_task;
+                                     || is_simple_table_long_running_ddl(res.ddl_type_);
       if (OB_SUCC(ret) && need_wait_ddl_finish) {
         int64_t affected_rows = 0;
         if (OB_FAIL(refresh_schema_for_table(alter_table_arg.exec_tenant_id_))) {
           LOG_WARN("refresh_schema_for_table failed", K(ret));
-        } else if (!is_ddl_retry_task && OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_,
+        } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_,
                                                                                     *my_session, common_rpc_proxy))) {
           LOG_WARN("fail to wait ddl finish", K(ret), K(tenant_id), K(res));
-        } else if (is_ddl_retry_task && OB_FAIL(ObDDLExecutorUtil::wait_ddl_retry_task_finish(tenant_id, res.task_id_,
-                                                                                             *my_session, common_rpc_proxy,
-                                                                                             affected_rows))) {
-          LOG_WARN("fail to wait ddl retry task finish", K(ret), K(tenant_id), K(res));
         }
       }
     }

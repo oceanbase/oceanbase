@@ -16,6 +16,7 @@
 #include "sql/engine/ob_operator.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/px/ob_px_util.h"
+#include "sql/ob_sql_define.h"
 
 namespace oceanbase
 {
@@ -271,7 +272,7 @@ private:
   ObBatchRescanParams rescan_batch_params_;
   int64_t left_row_idx_;
   ObBatchRescanCtl batch_rescan_ctl_;
-  common::ObSEArray<common::ObObjParam, 8> cur_params_;
+  sql::ObTMArray<common::ObObjParam> cur_params_;
   common::ObSArray<int64_t> cur_param_idxs_;
   common::ObSArray<int64_t> cur_param_expr_idxs_;
   common::ObSEArray<Iterator*, 8> subplan_iters_to_check_;

@@ -188,6 +188,7 @@ int ObDropDatabaseExecutor::execute(ObExecContext &ctx, ObDropDatabaseStmt &stmt
   const obrpc::ObDropDatabaseArg &drop_database_arg = stmt.get_drop_database_arg();
   obrpc::ObDropDatabaseArg &tmp_arg = const_cast<obrpc::ObDropDatabaseArg&>(drop_database_arg);
   ObString first_stmt;
+  uint64_t database_id = 0;
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
      SQL_ENG_LOG(WARN, "fail to get first stmt" , K(ret));
   } else {
@@ -229,25 +230,12 @@ int ObDropDatabaseExecutor::execute(ObExecContext &ctx, ObDropDatabaseStmt &stmt
         } else if (OB_FAIL(ctx.get_my_session()->set_default_database(null_string, server_coll_type))) {
           SQL_ENG_LOG(WARN, "fail to set default database", K(ret), K(stmt.get_server_collation()), K(server_coll_type));
         } else {
-          ctx.get_physical_plan_ctx()->set_affected_rows(drop_database_res.affected_row_);
           ctx.get_my_session()->set_database_id(OB_INVALID_ID);
         }
       }
     }
-    if (OB_SUCC(ret) && drop_database_res.is_valid()) {
-      int64_t affected_rows = 0;
-      ObSQLSessionInfo *my_session = nullptr;
-      if (OB_ISNULL(my_session = ctx.get_my_session())) {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_ENG_LOG(WARN, "my_session is nullptr", K(ret));
-      } else if (drop_database_res.is_valid() && 
-        OB_FAIL(ObDDLExecutorUtil::wait_ddl_retry_task_finish(drop_database_res.ddl_res_.tenant_id_,
-                                                              drop_database_res.ddl_res_.task_id_,
-                                                              *my_session, common_rpc_proxy, affected_rows))) {
-        SQL_ENG_LOG(WARN, "wait ddl finish failed", K(ret));
-      } else {
-        ctx.get_physical_plan_ctx()->set_affected_rows(affected_rows);
-      }
+    if (OB_SUCC(ret)) {
+      ctx.get_physical_plan_ctx()->set_affected_rows(drop_database_res.affected_row_);
     }
   }
   SQL_ENG_LOG(INFO, "finish execute drop database.", K(ret), K(stmt));

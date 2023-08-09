@@ -224,6 +224,7 @@ public:
   virtual int64_t to_string(char* buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
+  virtual bool is_ha_dag() const override { return false; }
   static int generate_merge_task(
       ObBasicTabletMergeDag &merge_dag,
       ObTabletMergeCtx &ctx,

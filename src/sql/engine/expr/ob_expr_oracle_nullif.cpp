@@ -253,7 +253,7 @@ int ObExprOracleNullif::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_e
                                                       has_lob_header)));
     OX(rt_expr.inner_func_cnt_ = 1);
     OX(rt_expr.inner_functions_[0] = reinterpret_cast<void*>(cmp_func));
-    OX(rt_expr.eval_func_ = first_param_can_be_null_ ? eval_nullif : eval_nullif_not_null);
+    OX(rt_expr.eval_func_ = eval_nullif);
   }
   return ret;
 }

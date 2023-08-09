@@ -30,6 +30,161 @@ gdb observer <pid>
 
 Then you can set breakpoint, print variable, etc. Please refer to [gdb manual](https://sourceware.org/gdb/current/onlinedocs/gdb.html/) for more information.
 
+## Debug oceanbase with debug-info package
+If you want to debug oceanbase or check the coredump file deployed with oceanbase rpm, you should install or load the debug-info package first. Loading is more recommended although installation is more convenient as there will be many debug-info packages in the system and it is not easy to cleanup.
+
+First, obtain the debug-info package from the website, and then load the package into gdb. Afterward, you will be able to debug OceanBase with ease.
+
+Below are some tips.
+
+**How to find debug-info package**
+
+You can get the package revision by the command below.
+```bash
+# in the observer runtime path
+clusters/local/bin [83] $ ./observer -V
+./observer -V
+observer (OceanBase_CE 4.1.0.1)
+
+REVISION: 102000042023061314-43bca414d5065272a730c92a645c3e25768c1d05
+BUILD_BRANCH: HEAD
+BUILD_TIME: Jun 13 2023 14:26:23
+BUILD_FLAGS: RelWithDebInfo
+BUILD_INFO:
+
+Copyright (c) 2011-2022 OceanBase Inc.
+```
+
+If you see the error below
+```
+./observer -V
+./observer: error while loading shared libraries: libmariadb.so.3: cannot open shared object file: No such file or directory
+```
+
+You can run command below to get the revision
+```bash
+clusters/local/bin [83] $ LD_LIBRARY_PATH=../lib:$LD_LIBRARY_PATH ./observer -V
+./observer -V
+observer (OceanBase_CE 4.1.0.1)
+
+REVISION: 102000042023061314-43bca414d5065272a730c92a645c3e25768c1d05
+BUILD_BRANCH: HEAD
+BUILD_TIME: Jun 13 2023 14:26:23
+BUILD_FLAGS: RelWithDebInfo
+BUILD_INFO:
+
+Copyright (c) 2011-2022 OceanBase Inc.
+```
+
+**Download debug-info package**
+
+From the version information above, we can get the first field of the revision. That is
+```
+REVISION: 102000042023061314-43bca414d5065272a730c92a645c3e25768c1d05
+```
+We need `102000042023061314`.
+
+Then we search `102000042023061314` on the oceanbase rpm website like below.
+
+![download debug info package](images/download-debug-info-package.png)
+
+Here is a rpm website list.
+- [x86_64 for el7](http://mirrors.aliyun.com/oceanbase/community/stable/el/7/x86_64/)
+- [x86_64 for el8](https://mirrors.aliyun.com/oceanbase/community/stable/el/8/x86_64/)
+- [aarch64(arm) for el7](https://mirrors.aliyun.com/oceanbase/community/stable/el/7/aarch64/)
+- [aarch64(arm) for el8](https://mirrors.aliyun.com/oceanbase/community/stable/el/8/aarch64/)
+
+**Extract debug-info package from rpm**
+
+Extract debug-info package from rpm, for example.
+```bash
+rpm2cpio oceanbase-ce-debuginfo-4.1.0.1-102000042023061314.el7.x86_64.rpm | cpio -div
+```
+
+Then you can get this.
+```bash
+~/tmp/debug-info [83] $ tree -a
+.
+└── usr
+    └── lib
+        └── debug
+            ├── .build-id
+            │   └── ee
+            │       ├── f87ee72d228069aab083d8e6d2fa2fcb5c03f2 -> ../../../../../home/admin/oceanbase/bin/observer
+            │       └── f87ee72d228069aab083d8e6d2fa2fcb5c03f2.debug -> ../../home/admin/oceanbase/bin/observer.debug
+            └── home
+                └── admin
+                    └── oceanbase
+                        └── bin
+                            └── observer.debug
+```
+
+`observer.debug` is the debug-info package we need and `f87ee72d228069aab083d8e6d2fa2fcb5c03f2.debug` is a symbolic link.
+
+**Debug oceanbase with debug-info package**
+
+Now, you can attach a process or a coredump file with gdb with commands below.
+```bash
+# attach a process
+gdb ./observer `pidof observer`
+```
+
+or
+
+```bash
+# open a coredump file
+gdb ./observer <coredump file name>
+```
+
+Usually, you will get this message.
+
+```
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from clusters/local/bin/observer...
+(No debugging symbols found in clusters/local/bin/observer)
+Attaching to program: clusters/local/bin/observer, process 57296
+```
+
+This means that there is no debugging symbols.
+
+If we run some debug command in gdb, such as `bt`, we could got this.
+
+```bash
+(gdb) bt
+#0  0x00007fb6e9c36d62 in pthread_cond_timedwait@@GLIBC_2.3.2 () from /lib64/libpthread.so.0
+#1  0x00007fb6f9f44862 in ob_pthread_cond_timedwait ()
+#2  0x00007fb6eee8d206 in oceanbase::common::ObThreadCond::wait_us(unsigned long) ()
+#3  0x00007fb6f34b21c8 in oceanbase::observer::ObUniqTaskQueue<oceanbase::observer::ObServerSchemaTask, oceanbase::observer::ObServerSchemaUpdater>::run1() ()
+#4  0x00007fb6f9f44259 in oceanbase::lib::Threads::run(long) ()
+#5  0x00007fb6f9f40aca in oceanbase::lib::Thread::__th_start(void*) ()
+```
+
+We cannot get the source code file name or function parameters information.
+
+Let's load the debug-info package.
+
+```bash
+(gdb) symbol-file usr/lib/debug/home/admin/oceanbase/bin/observer.debug
+Reading symbols from usr/lib/debug/home/admin/oceanbase/bin/observer.debug...
+```
+
+> It's better to use the full path of the debug info file.
+
+Let's run the debug command again and we can get detail information.
+
+```bash
+(gdb) bt
+#0  0x00007fb6e9c36d62 in pthread_cond_timedwait@@GLIBC_2.3.2 () from /lib64/libpthread.so.0
+#1  0x00007fb6f9f44862 in ob_pthread_cond_timedwait (__cond=0x7fb6fb1d5340, __mutex=0x7fb6fb1d5318, __abstime=0x7fb6b3ed41d0)
+    at deps/oblib/src/lib/thread/ob_tenant_hook.cpp:124
+#2  0x00007fb6eee8d206 in oceanbase::common::ObThreadCond::wait_us (this=<optimized out>, time_us=140422679606016)
+    at deps/oblib/src/lib/lock/ob_thread_cond.cpp:106
+#3  0x00007fb6f34b21c8 in oceanbase::common::ObThreadCond::wait (this=0x7fb6fb1d5310, time_ms=200)
+    at deps/oblib/src/lib/lock/ob_thread_cond.h:69
+#4  oceanbase::observer::ObUniqTaskQueue<oceanbase::observer::ObServerSchemaTask, oceanbase::observer::ObServerSchemaUpdater>::run1 (
+    this=<optimized out>) at src/observer/ob_uniq_task_queue.h:417
+```
+
 # Logging
 Logging is the most common way to debug OceanBase, and it is easy to use and can be used in most scenarios.
 In common scenarios, we can add logs in the code and print the variable, then rebuild and redeploy the oceanbase.

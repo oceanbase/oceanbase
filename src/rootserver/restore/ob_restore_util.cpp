@@ -936,7 +936,7 @@ int ObRestoreUtil::get_restore_ls_palf_base_info(
 }
 
 int ObRestoreUtil::check_physical_restore_finish(
-    common::ObISQLClient &proxy, uint64_t tenant_id, bool &is_finish, bool &is_failed) {
+    common::ObISQLClient &proxy, const int64_t job_id, bool &is_finish, bool &is_failed) {
   int ret = OB_SUCCESS;
   is_failed = false;
   is_finish = false;
@@ -946,8 +946,8 @@ int ObRestoreUtil::check_physical_restore_finish(
   HEAP_VAR(ObMySQLProxy::ReadResult, res) {
     common::sqlclient::ObMySQLResult *result = nullptr;
     int64_t cnt = 0;
-    if (OB_FAIL(sql.assign_fmt("select status from %s where tenant_id=%lu and restore_tenant_id=%lu",
-        OB_ALL_RESTORE_JOB_HISTORY_TNAME, OB_SYS_TENANT_ID, tenant_id))) {
+    if (OB_FAIL(sql.assign_fmt("select status from %s where tenant_id=%lu and job_id=%ld",
+        OB_ALL_RESTORE_JOB_HISTORY_TNAME, OB_SYS_TENANT_ID, job_id))) {
       LOG_WARN("failed to assign fmt", K(ret));
     } else if (OB_FAIL(proxy.read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
       LOG_WARN("failed to exec sql", K(ret), K(sql));
@@ -958,7 +958,7 @@ int ObRestoreUtil::check_physical_restore_finish(
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
       } else {
-        LOG_WARN("failed to get next", K(ret), K(tenant_id));
+        LOG_WARN("failed to get next", K(ret), K(job_id));
       }
     } else {
       EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_STATUS, status_str, OB_DEFAULT_STATUS_LENTH, real_length);

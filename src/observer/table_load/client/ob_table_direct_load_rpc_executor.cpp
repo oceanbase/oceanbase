@@ -90,6 +90,41 @@ int ObTableDirectLoadBeginExecutor::process()
         ret = OB_SUCCESS;
         client_task_ = nullptr;
       }
+    } else {
+      bool need_wait_finish = false;
+      ObTableLoadClientStatus wait_client_status;
+      ObTableLoadClientStatus client_status = client_task_->get_status();
+      switch (client_status) {
+        case ObTableLoadClientStatus::RUNNING:
+        case ObTableLoadClientStatus::COMMITTING:
+          if (arg_.force_create_) {
+            if (OB_FAIL(ObTableLoadClientService::abort_task(client_task_))) {
+              LOG_WARN("fail to abort client task", KR(ret));
+            } else {
+              need_wait_finish = true;
+              wait_client_status = ObTableLoadClientStatus::ABORT;
+            }
+          }
+          break;
+        case ObTableLoadClientStatus::COMMIT:
+        case ObTableLoadClientStatus::ABORT:
+          need_wait_finish = true;
+          wait_client_status = client_status;
+          break;
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected client status", KR(ret), KPC(client_task_), K(client_status));
+          break;
+      }
+      if (OB_SUCC(ret) && need_wait_finish) {
+        if (OB_FAIL(ObTableLoadClientService::wait_task_finish(client_task_, wait_client_status))) {
+          LOG_WARN("fail to wait client task finish", KR(ret), KPC(client_task_),
+                   K(wait_client_status));
+        } else {
+          ObTableLoadClientService::revert_task(client_task_);
+          client_task_ = nullptr;
+        }
+      }
     }
   }
 
@@ -322,6 +357,9 @@ int ObTableDirectLoadAbortExecutor::process()
     LOG_WARN("fail to get client task", KR(ret), K(key));
   } else if (OB_FAIL(ObTableLoadClientService::abort_task(client_task))) {
     LOG_WARN("fail to abort client task", KR(ret));
+  } else if (OB_FAIL(ObTableLoadClientService::wait_task_finish(client_task,
+                                                                ObTableLoadClientStatus::ABORT))) {
+    LOG_WARN("fail to abort client task", KR(ret));
   }
   if (nullptr != client_task) {
     ObTableLoadClientService::revert_task(client_task);
@@ -409,7 +447,10 @@ int ObTableDirectLoadInsertExecutor::process()
     } else {
       ObTableLoadCoordinator coordinator(table_ctx);
       ObTableLoadTransId trans_id;
-      if (OB_FAIL(client_task->get_next_trans_id(trans_id))) {
+      int64_t batch_id = client_task->get_next_batch_id();
+      if (OB_FAIL(set_batch_seq_no(batch_id, obj_rows))) {
+        LOG_WARN("fail to set batch seq no", KR(ret));
+      } else if (OB_FAIL(client_task->get_next_trans_id(trans_id))) {
         LOG_WARN("fail to get next trans id", KR(ret));
       } else if (OB_FAIL(coordinator.init())) {
         LOG_WARN("fail to init coordinator", KR(ret));
@@ -454,6 +495,27 @@ int ObTableDirectLoadInsertExecutor::decode_payload(const ObString &payload,
       if (OB_FAIL(obj_row_array.deserialize(buf, data_len, pos))) {
         LOG_WARN("failed to deserialize obj rows", KR(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObTableDirectLoadInsertExecutor::set_batch_seq_no(int64_t batch_id,
+                                                      ObTableLoadObjRowArray &obj_row_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(obj_row_array.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(obj_row_array));
+  } else if (OB_UNLIKELY(batch_id > ObTableLoadSequenceNo::MAX_BATCH_ID ||
+                         obj_row_array.count() > ObTableLoadSequenceNo::MAX_BATCH_SEQ_NO)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("size is overflow", KR(ret), K(batch_id), K(obj_row_array.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < obj_row_array.count(); ++i) {
+      ObTableLoadObjRow &row = obj_row_array.at(i);
+      row.seq_no_.batch_id_ = batch_id;
+      row.seq_no_.batch_seq_no_ = i;
     }
   }
   return ret;

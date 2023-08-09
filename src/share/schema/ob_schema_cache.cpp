@@ -1416,37 +1416,32 @@ int ObSchemaFetcher::fetch_table_schema(const ObRefreshSchemaStatus &schema_stat
   int ret = OB_SUCCESS;
   table_schema = NULL;
 
-  ObSimpleTableSchemaV2 *tmp_table_schema = NULL;
   SchemaKey table_schema_key;
   table_schema_key.tenant_id_ = schema_status.tenant_id_;
   table_schema_key.table_id_ = table_id;
   ObArray<SchemaKey> schema_keys;
-  ObArray<ObSimpleTableSchemaV2> schema_array;
+  ObArray<ObSimpleTableSchemaV2 *> schema_array;
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("inner stat error", K(ret));
+    LOG_WARN("inner stat error", KR(ret));
   } else if (OB_INVALID_ID == table_id || schema_version < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_id), K(schema_version));
+    LOG_WARN("invalid argument", KR(ret), K(table_id), K(schema_version));
   } else if (OB_FAIL(schema_keys.push_back(table_schema_key))) {
-    LOG_WARN("fail to push back schema key", K(ret), K(table_id), K(schema_version));
+    LOG_WARN("fail to push back schema key", KR(ret), K(table_id), K(schema_version));
   } else if (OB_FAIL(schema_service_->get_batch_tables(schema_status,
                                                        *sql_client_,
+                                                       allocator,
                                                        schema_version,
                                                        schema_keys,
                                                        schema_array))) {
-    LOG_WARN("get table schema failed", K(ret), K(table_id), K(schema_version));
+    LOG_WARN("get table schema failed", KR(ret), K(table_id), K(schema_version));
   } else if (OB_UNLIKELY(1 != schema_array.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected schema count", K(ret), K(table_id), K(schema_version));
-  } else if (OB_FAIL(ObSchemaUtils::alloc_schema(allocator, schema_array.at(0), tmp_table_schema))) {
-    LOG_WARN("fail to alloc new var", K(ret), K(table_id), K(schema_version));
-  } else if (OB_ISNULL(tmp_table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table schema is NULL", K(ret), K(table_id), K(schema_version));
+    LOG_WARN("unexpected schema count", KR(ret), K(table_id), K(schema_version));
   } else {
-    table_schema = tmp_table_schema;
-    LOG_TRACE("fetch table schema succeed", K(ret), K(table_id), K(schema_version), KPC(table_schema));
+    table_schema = schema_array.at(0);
+    LOG_TRACE("fetch table schema succeed", KR(ret), K(table_id), K(schema_version), KPC(table_schema));
   }
   return ret;
 }

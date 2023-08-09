@@ -215,7 +215,7 @@ int ObDirectLoadMemDump::dump_tables()
   if (OB_ISNULL(extra_buf_ = static_cast<char *>(allocator_.alloc(extra_buf_size_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", KR(ret));
-  } else if (OB_FAIL(compare.init(*(mem_ctx_->datum_utils_)))) {
+  } else if (OB_FAIL(compare.init(*(mem_ctx_->datum_utils_), mem_ctx_->dup_action_))) {
     LOG_WARN("fail to init compare", KR(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < context_ptr_->mem_chunk_array_.count(); i++) {
@@ -263,7 +263,7 @@ int ObDirectLoadMemDump::dump_tables()
     if (OB_SUCC(ret)) {
       if (OB_FAIL(external_row->to_datums(datum_row.storage_datums_, datum_row.count_))) {
         LOG_WARN("fail to transfer dataum row", KR(ret));
-      } else if (OB_FAIL(table_builder->append_row(external_row->tablet_id_, datum_row))) {
+      } else if (OB_FAIL(table_builder->append_row(external_row->tablet_id_, external_row->seq_no_, datum_row))) {
         if (OB_LIKELY(OB_ERR_PRIMARY_KEY_DUPLICATE == ret)) {
           if (OB_FAIL(mem_ctx_->dml_row_handler_->handle_update_row(datum_row))) {
             LOG_WARN("fail to handle update row", KR(ret), K(datum_row));

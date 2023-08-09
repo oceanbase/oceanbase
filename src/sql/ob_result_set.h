@@ -74,7 +74,8 @@ public:
         is_select_for_update_(false),
         has_hidden_rowid_(false),
         stmt_sql_(),
-        is_bulk_(false) {}
+        is_bulk_(false),
+        has_link_table_(false) {}
     virtual ~ExternalRetrieveInfo() {}
 
     int build(ObStmt &stmt,
@@ -96,6 +97,7 @@ public:
     bool has_hidden_rowid_;
     ObString stmt_sql_;
     bool is_bulk_;
+    bool has_link_table_;
   };
 
   enum PsMode
@@ -169,6 +171,7 @@ public:
   bool get_is_select_for_update();
   inline bool has_hidden_rowid();
   inline bool is_bulk();
+  inline bool is_link_table();
   /// whether the result is with rows (true for SELECT statement)
   bool is_with_rows() const;
   // tell mysql if need to do async end trans
@@ -629,6 +632,11 @@ inline bool ObResultSet::has_hidden_rowid()
 inline bool ObResultSet::is_bulk()
 {
   return external_retrieve_info_.is_bulk_;
+}
+
+inline bool ObResultSet::is_link_table()
+{
+  return external_retrieve_info_.has_link_table_;
 }
 
 inline bool ObResultSet::is_with_rows() const

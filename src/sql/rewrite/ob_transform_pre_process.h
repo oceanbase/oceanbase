@@ -600,6 +600,10 @@ struct DistinctObjMeta
   int expand_last_insert_id_for_join(ObDMLStmt &stmt, JoinedTable *join_table, bool &is_happened);
   int remove_last_insert_id(ObRawExpr *&expr);
   int check_last_insert_id_removable(const ObRawExpr *expr, bool &is_removable);
+
+  int expand_correlated_cte(ObDMLStmt *stmt, bool& trans_happened);
+  int check_exec_param_correlated(const ObRawExpr *expr, bool &is_correlated);
+  int check_is_correlated_cte(ObSelectStmt *stmt, ObIArray<ObSelectStmt *> &visited_cte, bool &is_correlated);
   int convert_join_preds_vector_to_scalar(JoinedTable &joined_table, bool &trans_happened);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformPreProcess);

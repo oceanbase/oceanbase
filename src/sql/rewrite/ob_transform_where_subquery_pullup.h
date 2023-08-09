@@ -231,9 +231,9 @@ struct SingleSetParam {
   int fill_semi_left_table_ids(ObDMLStmt *stmt,
                                SemiInfo *info);
 
-  int is_where_subquery_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
-                                   const ObSelectStmt &subquery,
-                                   bool &is_correlated);
+  int is_where_having_subquery_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
+                                          const ObSelectStmt &subquery,
+                                          bool &is_correlated);
 
   int check_const_select(const ObSelectStmt &stmt, bool &is_const_select) const;
 

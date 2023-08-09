@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "share/table/ob_table_load_define.h"
 #include "storage/direct_load/ob_direct_load_multiple_datum_rowkey.h"
 
 namespace oceanbase
@@ -24,14 +25,20 @@ public:
                 int64_t &pos);
   // not deep copy
   int from_datums(const common::ObTabletID &tablet_id, blocksstable::ObStorageDatum *datums,
-                  int64_t column_count, int64_t rowkey_column_count);
+                  int64_t column_count, int64_t rowkey_column_count,
+                  const table::ObTableLoadSequenceNo &seq_no);
   int to_datums(blocksstable::ObStorageDatum *datums, int64_t column_count) const;
-  OB_INLINE bool is_valid() const { return rowkey_.is_valid() && buf_size_ > 0 && nullptr != buf_; }
+  OB_INLINE bool is_valid() const
+  {
+    return rowkey_.is_valid() && seq_no_.is_valid() && buf_size_ > 0 && nullptr != buf_;
+  }
   OB_INLINE int64_t get_raw_size() const { return buf_size_; }
-  TO_STRING_KV(K_(rowkey), K_(buf_size), KP_(buf));
+  TO_STRING_KV(K_(rowkey), K_(seq_no), K_(buf_size), KP_(buf));
+
 public:
   common::ObArenaAllocator allocator_;
   ObDirectLoadMultipleDatumRowkey rowkey_;
+  table::ObTableLoadSequenceNo seq_no_;
   int64_t buf_size_;
   const char *buf_;
 };

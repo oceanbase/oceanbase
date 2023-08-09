@@ -1379,7 +1379,7 @@ int ObFreezer::create_memtable_if_no_active_memtable(ObTablet *tablet)
       } else {
         ret = OB_SUCCESS;
       }
-    } else if (last_frozen_memtable_handle.get_data_memtable(last_frozen_memtable)) {
+    } else if (OB_FAIL(last_frozen_memtable_handle.get_data_memtable(last_frozen_memtable))) {
       LOG_WARN("[Freezer] fail to get memtable", K(ret), K(ls_id), K(tablet_id));
     }
     if (OB_FAIL(ret)) {

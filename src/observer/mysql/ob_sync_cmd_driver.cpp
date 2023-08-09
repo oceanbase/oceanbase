@@ -22,6 +22,7 @@
 #include "rpc/obmysql/packet/ompk_eof.h"
 #include "share/ob_lob_access_utils.h"
 #include "observer/mysql/obmp_stmt_prexecute.h"
+#include "src/pl/ob_pl_user_type.h"
 
 namespace oceanbase
 {
@@ -102,6 +103,20 @@ int ObSyncCmdDriver::response_query_result(sql::ObResultSet &result,
     result, is_ps_protocol, has_more_result, can_retry, fetch_limit);
 }
 
+
+void ObSyncCmdDriver::free_output_row(ObMySQLResultSet &result)
+{
+  if (OB_NOT_NULL(result.get_exec_context().get_output_row())) {
+    const ObNewRow *row = result.get_exec_context().get_output_row();
+    for (int64_t i = 0; i < row->get_count(); ++i) {
+      ObObj &obj = row->cells_[i];
+      if (obj.is_pl_extend()) {
+        (void)pl::ObUserDefinedType::destruct_obj(obj, &session_);
+      }
+    }
+  }
+}
+
 int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
 {
   ObActiveSessionGuard::get_stat().in_sql_execution_ = true;
@@ -138,6 +153,7 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
       LOG_ERROR("Not SELECT, should not have any row!!!", K(ret));
     } else if (OB_FAIL(response_query_result(result))) {
       LOG_WARN("response query result fail", K(ret));
+      free_output_row(result);
       int cret = result.close();
       if (cret != OB_SUCCESS) {
         LOG_WARN("close result set fail", K(cret));
@@ -160,7 +176,7 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
     // for CRUD SQL
     // must be called before result.close()
     process_schema_version_changes(result);
-
+    free_output_row(result);
     if (OB_FAIL(result.close())) {
       LOG_WARN("close result set fail", K(ret));
     } else if (!result.is_with_rows()

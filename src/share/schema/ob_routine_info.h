@@ -167,6 +167,8 @@ public:
   virtual void set_has_sequence() = 0;
   virtual void set_has_out_param() = 0;
   virtual void set_external_state() = 0;
+  virtual int64_t get_param_start_idx() const { return 0; }
+  virtual const common::ObString &get_routine_name() const = 0;
   TO_STRING_EMPTY();
 };
 

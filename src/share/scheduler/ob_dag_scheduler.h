@@ -269,8 +269,8 @@ public:
   {
     return DAG_STATUS_FINISH == dag_status || DAG_STATUS_ABORT == dag_status;
   }
-  bool has_set_stop() { return is_stop_; }
-  void set_stop() { is_stop_ = true; }
+  bool has_set_stop() { return ATOMIC_LOAD(&is_stop_); }
+  void set_stop() { ATOMIC_SET(&is_stop_, true); }
   ObIDagNet *get_dag_net() const { return dag_net_; }
   void set_dag_net(ObIDagNet &dag_net)
   {
@@ -340,7 +340,7 @@ public:
   virtual int set_result(const int32_t result) { UNUSED(result); return common::OB_SUCCESS; }
   int fill_comment(char *buf, const int64_t buf_len);
 
-  virtual bool is_ha_dag() const { return false; }
+  virtual bool is_ha_dag() const = 0;
 
   DECLARE_VIRTUAL_TO_STRING;
   DISABLE_COPY_ASSIGN(ObIDag);
@@ -479,7 +479,7 @@ public:
   {
     return OB_SUCCESS;
   }
-  virtual bool is_ha_dag_net() const { return false; }
+  virtual bool is_ha_dag_net() const = 0;
 public:
   friend class ObTenantDagScheduler;
 

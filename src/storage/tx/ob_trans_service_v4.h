@@ -124,7 +124,9 @@ int get_min_uncommit_tx_prepare_version(const share::ObLSID& ls_id, share::SCN &
 int kill_all_tx(const share::ObLSID &ls_id, const KillTransArg &arg,
     bool &is_all_tx_cleaned_up);
 
-int block_ls(const share::ObLSID &ls_id, bool &is_all_tx_cleaned_up);
+int block_tx(const share::ObLSID &ls_id, bool &is_all_tx_cleaned_up);
+// block tx and readonly request
+int block_all(const share::ObLSID &ls_id, bool &is_all_tx_cleaned_up);
 
 int iterate_ls_id(ObLSIDIterator &ls_id_iter);
 
@@ -380,6 +382,7 @@ int wait_follower_readable_(ObLS &ls,
 MonotonicTs get_req_receive_mts_();
 bool is_ls_dropped_(const share::ObLSID ls_id);
 static bool common_retryable_error_(const int ret);
+void direct_execute_commit_cb_(ObTxDesc &tx);
 // include tx api refacored for future
 public:
 #include "ob_tx_api.h"

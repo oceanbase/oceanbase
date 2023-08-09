@@ -3757,7 +3757,6 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
           } else {
             alter_table_stmt->get_alter_table_arg().is_update_global_indexes_ = partition_node->num_child_ == 2;
             alter_table_stmt->get_alter_table_arg().alter_part_type_ = ObAlterTableArg::DROP_PARTITION;
-            alter_table_stmt->get_alter_table_arg().is_add_to_scheduler_ = true;
           }
           break;
         }
@@ -3767,7 +3766,6 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
           } else {
             alter_table_stmt->get_alter_table_arg().is_update_global_indexes_ = partition_node->num_child_ == 2;
             alter_table_stmt->get_alter_table_arg().alter_part_type_ = ObAlterTableArg::DROP_SUB_PARTITION;
-            alter_table_stmt->get_alter_table_arg().is_add_to_scheduler_ = true;
           }
           break;
         }
@@ -3842,7 +3840,6 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
           } else {
             alter_table_stmt->get_alter_table_arg().is_update_global_indexes_ = partition_node->num_child_ == 2;
             alter_table_stmt->get_alter_table_arg().alter_part_type_ = ObAlterTableArg::TRUNCATE_PARTITION;
-            alter_table_stmt->get_alter_table_arg().is_add_to_scheduler_ = true;
           }
           break;
         }
@@ -3852,7 +3849,6 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
           } else {
             alter_table_stmt->get_alter_table_arg().is_update_global_indexes_ = partition_node->num_child_ == 2;
             alter_table_stmt->get_alter_table_arg().alter_part_type_ = ObAlterTableArg::TRUNCATE_SUB_PARTITION;
-            alter_table_stmt->get_alter_table_arg().is_add_to_scheduler_ = true;
           }
           break;
         }

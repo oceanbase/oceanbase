@@ -17,6 +17,8 @@
 #include "share/datum/ob_datum.h"
 #include "common/object/ob_object.h"
 #include "share/ob_define.h"
+#include "deps/oblib/src/lib/container/ob_array.h"
+#include "src/share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {
@@ -28,6 +30,7 @@ struct ObSchemaObjVersion;
 }
 }
 using namespace common;
+
 namespace sql
 {
 const int64_t OB_SQL_MAX_CHILD_OPERATOR_NUM = 16;
@@ -631,6 +634,28 @@ struct ObWinfuncOptimizationOpt
     uint64_t v_;
   };
 };
+
+// class full name: ob tenant memory array.
+// Used to solve the following problem:
+// the initial memory allocation of ObSEArray is relatively large, leading to memory inflation issues in some scenarios.
+// Default to using the MTL_ID() tenant,
+// and the lifecycle of this class cannot cross tenants.
+template<typename T, typename BlockAllocatorT = ModulePageAllocator, bool auto_free = false, typename CallBack = ObArrayDefaultCallBack<T>, typename ItemEncode = DefaultItemEncode<T> >
+class ObTMArray final : public ObArrayImpl<T, BlockAllocatorT, auto_free, CallBack, ItemEncode>
+{
+public:
+  using ObArrayImpl<T, BlockAllocatorT, auto_free, CallBack, ItemEncode>::ObArrayImpl;
+  ObTMArray(int64_t block_size = std::min(static_cast<int64_t>(4 * sizeof(T)), OB_MALLOC_NORMAL_BLOCK_SIZE),
+        const BlockAllocatorT &alloc = BlockAllocatorT("TMArray"));
+};
+
+template<typename T, typename BlockAllocatorT, bool auto_free, typename CallBack, typename ItemEncode>
+ObTMArray<T, BlockAllocatorT, auto_free, CallBack, ItemEncode>::ObTMArray(int64_t block_size,
+                                                           const BlockAllocatorT &alloc)
+    : ObArrayImpl<T, BlockAllocatorT, auto_free, CallBack, ItemEncode>(block_size, alloc)
+{
+  this->set_tenant_id(MTL_ID());
+}
 
 }  // namespace sql
 }  // namespace oceanbase

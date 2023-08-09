@@ -5,6 +5,7 @@
 #pragma once
 
 #include "storage/direct_load/ob_direct_load_external_row.h"
+#include "share/table/ob_table_load_define.h"
 
 namespace oceanbase
 {
@@ -47,13 +48,14 @@ public:
   int to_datums(blocksstable::ObStorageDatum *datums, int64_t column_count) const;
   bool is_valid() const
   {
-    return tablet_id_.is_valid() && rowkey_datum_array_.is_valid() && buf_size_ > 0 &&
-           nullptr != buf_;
+    return tablet_id_.is_valid() && rowkey_datum_array_.is_valid() && seq_no_.is_valid() &&
+           buf_size_ > 0 && nullptr != buf_;
   }
-  TO_STRING_KV(K_(tablet_id), K_(rowkey_datum_array), K_(buf_size), KP_(buf));
+  TO_STRING_KV(K_(tablet_id), K_(rowkey_datum_array), K_(seq_no), K_(buf_size), KP_(buf));
 public:
   common::ObTabletID tablet_id_;
   ObDirectLoadConstDatumArray rowkey_datum_array_;
+  table::ObTableLoadSequenceNo seq_no_;
   int64_t buf_size_;
   const char *buf_;
 };

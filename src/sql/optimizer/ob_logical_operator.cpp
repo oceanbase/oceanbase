@@ -431,6 +431,11 @@ double FilterCompare::get_selectivity(ObRawExpr *expr)
 {
   bool found = false;
   double selectivity = 1;
+  if (OB_NOT_NULL(expr) && T_FUN_LABEL_SE_LABEL_VALUE_CMP_LE == expr->get_expr_type()) {
+    // security filter should be calc firstly
+    found = true;
+    selectivity = -1.0;
+  }
   for (int64_t i = 0; !found && i < predicate_selectivities_.count(); i++) {
     if (predicate_selectivities_.at(i).expr_ == expr) {
       found = true;
@@ -2013,7 +2018,7 @@ int ObLogicalOperator::extract_non_const_exprs(const ObIArray<ObRawExpr*> &input
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(expr));
     } else if (expr->is_static_const_expr() ||
-               expr->has_flag(IS_USER_VARIABLE)) {
+               expr->has_flag(IS_DYNAMIC_USER_VARIABLE)) {
       /*do nothing*/
     } else if (OB_FAIL(add_var_to_array_no_dup(non_const_exprs, expr))) {
       LOG_WARN("failed to push back expr", K(ret));

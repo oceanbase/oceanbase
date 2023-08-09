@@ -1268,7 +1268,6 @@ public:
                                              sizeof(hashbucket),
                                              *bucket_allocer_)))) {
       HASH_WRITE_LOG(HASH_WARNING, "create buckets fail, ret=%d", ret);
-      ret = OB_ERR_UNEXPECTED;
     } else {
       for (int64_t i = 0; i < old_bucket_num && OB_SUCC(ret); i++) {
         hashbucket &old_bucket = old_buckets[i];

@@ -72,23 +72,6 @@ public:
     TO_STRING_KV(K(global_part_id_), K(part_id_), K(first_part_id_));
   };
 
-  // store global/part/subpart table/column stat.
-  struct StatItems {
-    StatItems () : global_tab_stat_(nullptr),
-                   part_tab_stat_(nullptr),
-                   first_part_tab_stat_(nullptr),
-                   global_col_stat_(nullptr),
-                   part_col_stat_(nullptr),
-                   first_part_col_stat_(nullptr) {}
-
-    ObOptTableStat *global_tab_stat_;
-    ObOptTableStat *part_tab_stat_;
-    ObOptTableStat *first_part_tab_stat_;
-    ObOptOSGColumnStat *global_col_stat_;
-    ObOptOSGColumnStat *part_col_stat_;
-    ObOptOSGColumnStat *first_part_col_stat_;
-  };
-
 public:
   ObOptimizerStatsGatheringOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
   virtual int inner_open() override;
@@ -116,21 +99,11 @@ private:
   int send_stats();
   int calc_stats();
   // calc stats for each column
-  int calc_column_stats(ObExpr *expr,
-                        uint64_t column_id,
-                        PartIds &part_ids,
-                        StatItems &all_stats,
-                        int64_t &row_len);
+  int calc_column_stats(ObExpr *expr, uint64_t column_id, int64_t &row_len);
+  int calc_columns_stats(int64_t &row_len);
+  int calc_table_stats(int64_t &row_len);
   // generate stat_param that is used to write inner_table.
   int generate_stat_param(ObTableStatParam &param);
-  int generate_part_ids(PartIds &part_ids);
-
-  int get_tab_stats_by_partinfo(PartIds &part_ids, StatItems &stat_item);
-  int get_col_stats_by_partinfo(PartIds &part_ids, uint64_t column_id, StatItems &stat_item);
-
-  // get stat by part_ids
-  int set_col_stats(StatItems &all_stat, ObDatum *datum, const ObObjMeta &meta, const ObDatumCmpFuncType cmp_func);
-  int set_tab_stats(StatItems &all_stat, int64_t row_len);
 
   // get tab stat by key(tenant_id, table_id, partition_id), if NOT_EXISTS, alloc a new one.
   int get_tab_stat_by_key(ObOptTableStat::Key &key, ObOptTableStat *&tab_stat);

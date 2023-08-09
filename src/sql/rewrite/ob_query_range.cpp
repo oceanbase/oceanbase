@@ -2006,7 +2006,9 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else if (tmp_key_part->is_always_false()) {
-        out_key_part = tmp_key_part;
+        if (i == 0) {
+          out_key_part = tmp_key_part;
+        }
         b_flag = true;
       } else if (T_OP_EQ == cmp_type || T_OP_NSEQ == cmp_type) {
         row_is_precise = (row_is_precise && query_range_ctx_->cur_expr_is_precise_);
@@ -2034,7 +2036,7 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
         row_tail = tmp_key_part;
         normal_key_cnt += 1;
         const ObRawExpr *const_expr = l_expr->is_const_expr() ? l_expr : r_expr;
-        if (OB_FAIL(check_bound(tmp_key_part, dtc_params, const_expr, is_bound_modified))) {
+        if (OB_FAIL(check_row_bound(tmp_key_part, dtc_params, const_expr, is_bound_modified))) {
           LOG_WARN("failed to check bound modified");
         } else if (is_bound_modified) {
           b_flag = true;
@@ -2063,51 +2065,31 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
   return ret;
 }
 
-int ObQueryRange::check_bound(ObKeyPart *key_part,
+int ObQueryRange::check_row_bound(ObKeyPart *key_part,
                               const ObDataTypeCastParams &dtc_params,
                               const ObRawExpr *const_expr,
                               bool &is_bound_modified)
 {
   int ret = OB_SUCCESS;
+  ObObj const_val;
+  bool is_valid = false;
+  int64_t cmp = 0;
   if (OB_ISNULL(key_part) || OB_ISNULL(query_range_ctx_) || OB_ISNULL(const_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(key_part), K(query_range_ctx_), K(const_expr));
-  } else if (key_part->is_question_mark() && query_range_ctx_->exec_ctx_ != NULL) {
-    ObObj tmp;
-    int64_t start_cmp = 0;
-    int64_t end_cmp = 0;
-    bool is_valid = false;
-    if (key_part->normal_keypart_->start_.is_unknown()) {
-      if (OB_FAIL(ob_write_obj(allocator_, key_part->normal_keypart_->start_, tmp))) {
-        LOG_WARN("failed to deep copy obj", K(ret));
-      } else if (OB_FAIL(get_calculable_expr_val(const_expr, tmp, is_valid))) {
-        LOG_WARN("failed to calculate val", K(ret), K(*const_expr), K(tmp), K(is_valid));
-      } else if (!is_valid) {
-        // do nothing
-      } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, key_part->pos_,
-                                                    tmp, start_cmp))) {
-        LOG_WARN("failed to cast value", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && key_part->normal_keypart_->end_.is_unknown()) {
-      if (OB_FAIL(ob_write_obj(allocator_, key_part->normal_keypart_->end_, tmp))) {
-        LOG_WARN("failed to deep copy obj", K(ret));
-      } else if (OB_FAIL(get_calculable_expr_val(const_expr, tmp, is_valid))) {
-        LOG_WARN("failed to calculate val", K(ret), K(*const_expr), K(tmp), K(is_valid));
-      } else if (!is_valid) {
-        // do nothing
-      } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, key_part->pos_,
-                                                    tmp, end_cmp))) {
-        LOG_WARN("failed to cast value", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && (start_cmp != 0 || end_cmp != 0)) {
-      // the bound will be modified after we replace the unknown value at final stage
-      is_bound_modified = true;
-    }
-    LOG_TRACE("succeed to check bound",
-              K(is_bound_modified), K(start_cmp), K(end_cmp), K(tmp), K(*key_part), K(*const_expr));
+  } else if (OB_FAIL(get_calculable_expr_val(const_expr, const_val, is_valid))) {
+    LOG_WARN("failed to calculate val", K(ret), K(*const_expr), K(const_val), K(is_valid));
+  } else if (!is_valid) {
+    // do nothing
+  } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, key_part->pos_,
+                                                const_val, cmp))) {
+    LOG_WARN("failed to cast value", K(ret));
+  } else if (cmp != 0 || ob_obj_type_class(const_expr->get_data_type()) !=
+                         ob_obj_type_class(key_part->pos_.column_type_.get_type())) {
+    is_bound_modified = true;
   }
+  LOG_TRACE("succeed to check bound",
+            K(is_bound_modified), K(cmp), K(is_valid), K(*key_part), K(*const_expr), K(const_val));
   return ret;
 }
 
@@ -5175,14 +5157,16 @@ int ObQueryRange::link_or_graphs(ObKeyPartList &storage, ObKeyPart  *&out_key_pa
 // Replace unknown value in item_next_ list,
 // and intersect them.
 
-int ObQueryRange::definite_key_part(ObKeyPart *&key_part, ObExecContext &exec_ctx, const ObDataTypeCastParams &dtc_params)
+int ObQueryRange::definite_key_part(ObKeyPart *&key_part, ObExecContext &exec_ctx,
+                                    const ObDataTypeCastParams &dtc_params,
+                                    bool &is_bound_modified)
 {
   int ret = OB_SUCCESS;
   if (NULL != key_part) {
     for (ObKeyPart *cur = key_part;
          OB_SUCC(ret) && NULL != cur;
          cur = cur->item_next_) {
-      if (OB_FAIL(replace_unknown_value(cur, exec_ctx, dtc_params))) {
+      if (OB_FAIL(replace_unknown_value(cur, exec_ctx, dtc_params, is_bound_modified))) {
         LOG_WARN("Replace unknown value failed", K(ret));
       } else if (cur->is_always_false()) { // set key_part false
         key_part->normal_keypart_ = cur->normal_keypart_;
@@ -5309,8 +5293,9 @@ int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
         ObKeyPart *new_tmp = cur;
         ObKeyPart *and_next = cur->and_next_;
         cur = cur->get_next();
+        bool is_bound_modified = false;
         // replace undefinited value
-        if (OB_FAIL(definite_key_part(new_tmp, *exec_ctx, dtc_params))) {
+        if (OB_FAIL(definite_key_part(new_tmp, *exec_ctx, dtc_params, is_bound_modified))) {
           LOG_WARN("Fill unknown value failed", K(ret));
         } else if (new_tmp != old_tmp) {
           old_tmp->replace_by(new_tmp);
@@ -5338,7 +5323,10 @@ int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
             }
           } else {
             // handle the rest of the graph recursively
-            if (NULL != and_next) {
+            if (contain_row_ && is_bound_modified) {
+              and_next = NULL;
+              new_tmp->and_next_ = NULL;
+            } else if (NULL != and_next) {
               // recursively process following and key part
               ObKeyPartList sub_or_list;
               if (OB_FAIL(split_or(and_next, sub_or_list))) {
@@ -5698,6 +5686,7 @@ int ObQueryRange::definite_in_range_graph(ObExecContext &exec_ctx,
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
+  bool is_bound_modified = false;
   if (OB_FAIL(THIS_WORKER.check_status())) {
     LOG_WARN("check status fail", K(ret));
   } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
@@ -5708,9 +5697,12 @@ int ObQueryRange::definite_in_range_graph(ObExecContext &exec_ctx,
   } else if (OB_ISNULL(root)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("root key is null", K(root));
-  } else if (OB_FAIL(definite_key_part(root, exec_ctx, dtc_params))) {
+  } else if (OB_FAIL(definite_key_part(root, exec_ctx, dtc_params, is_bound_modified))) {
     LOG_WARN("definite key part failed", K(ret));
   } else {
+    if (contain_row_ && is_bound_modified) {
+      root->and_next_ = NULL;
+    }
     //如果graph中某个节点不是严格的等值条件，那么这个节点是一个scan key，需要做or合并
     //如果有恒false条件，也需要走到or去做去除处理
     if (!root->is_equal_condition()) {
@@ -7221,7 +7213,9 @@ OB_NOINLINE int ObQueryRange::final_extract_query_range(ObExecContext &exec_ctx,
 }
 #undef FINAL_EXTRACT
 
-int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx, const ObDataTypeCastParams &dtc_params)
+int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx,
+                                        const ObDataTypeCastParams &dtc_params,
+                                        bool &is_bound_modified)
 {
   int ret = OB_SUCCESS;
   bool is_inconsistent_rowid = false;
@@ -7340,10 +7334,9 @@ int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx
     }
   }
   if (OB_SUCC(ret)) {
-    bool dummy_is_bound_modified = false;
     if (root->is_phy_rowid_key_part() || root->is_in_key()) {
       ////physical rowid no need cast, it's will be transformed in table scan phase.
-    } else if (OB_FAIL(root->cast_value_type(dtc_params, contain_row_, dummy_is_bound_modified))) {
+    } else if (OB_FAIL(root->cast_value_type(dtc_params, contain_row_, is_bound_modified))) {
       LOG_WARN("cast value type failed", K(ret));
     }
   }

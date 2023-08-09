@@ -842,6 +842,15 @@ public:
                                const uint64_t tenant_id,
                                const int64_t schema_version,
                                ObSimpleSysVariableSchema &schema) = 0;
+  #define GET_ALL_SCHEMA_WITH_ALLOCATOR_FUNC_DECLARE_PURE_VIRTUAL(SCHEMA, SCHEMA_TYPE)    \
+    virtual int get_all_##SCHEMA##s(common::ObISQLClient &sql_client, \
+                                    common::ObIAllocator &allocator,  \
+                                    const ObRefreshSchemaStatus &schema_status,\
+                                    const int64_t schema_version,      \
+                                    const uint64_t tenant_id,           \
+                                    common::ObIArray<SCHEMA_TYPE *> &schema_array) = 0;
+  GET_ALL_SCHEMA_WITH_ALLOCATOR_FUNC_DECLARE_PURE_VIRTUAL(table, ObSimpleTableSchemaV2);
+
   #define GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(SCHEMA, SCHEMA_TYPE)    \
     virtual int get_all_##SCHEMA##s(common::ObISQLClient &sql_client, \
                                     const ObRefreshSchemaStatus &schema_status,\
@@ -851,7 +860,6 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(user, ObSimpleUserSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(database, ObSimpleDatabaseSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(tablegroup, ObSimpleTablegroupSchema);
-  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(table, ObSimpleTableSchemaV2);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(db_priv, ObDBPriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(table_priv, ObTablePriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(outline, ObSimpleOutlineSchema);
@@ -947,6 +955,13 @@ public:
   virtual int fetch_new_rls_context_id(const uint64_t tenant_id, uint64_t &new_rls_context_id) = 0;
 
 //------------------For managing privileges-----------------------------//
+  #define GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE_PURE_VIRTUAL(SCHEMA, SCHEMA_TYPE)  \
+    virtual int get_batch_##SCHEMA##s(const ObRefreshSchemaStatus &schema_status,\
+                                      common::ObISQLClient &client,     \
+                                      common::ObIAllocator &allocator,  \
+                                      const int64_t schema_version,     \
+                                      common::ObArray<SchemaKey> &schema_keys, \
+                                      common::ObIArray<SCHEMA_TYPE *> &schema_array) = 0;
   #define GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(SCHEMA, SCHEMA_TYPE)  \
     virtual int get_batch_##SCHEMA##s(const ObRefreshSchemaStatus &schema_status,\
                                       common::ObISQLClient &client,     \
@@ -960,7 +975,7 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(user, ObSimpleUserSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(database, ObSimpleDatabaseSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(tablegroup, ObSimpleTablegroupSchema);
-  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(table, ObSimpleTableSchemaV2);
+  GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE_PURE_VIRTUAL(table, ObSimpleTableSchemaV2);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(db_priv, ObDBPriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(table_priv, ObTablePriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(outline, ObSimpleOutlineSchema);

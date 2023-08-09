@@ -68,13 +68,35 @@ int ObTableLoadSchema::get_table_schema(uint64_t tenant_id, uint64_t table_id,
 {
   int ret = OB_SUCCESS;
   table_schema = nullptr;
-  if (OB_FAIL(get_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
+  bool get_table_schema_succ = false;
+  const int64_t MAX_RETRY_COUNT = 10;
+  for (int64_t i = 0; OB_SUCC(ret) && (!get_table_schema_succ) && (i < MAX_RETRY_COUNT); ++i) {
+    if (OB_FAIL(get_schema_guard(tenant_id, schema_guard))) {
+      LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+    } else if (OB_ISNULL(table_schema)) {
+      const int64_t RESERVED_TIME_US = 600 * 1000; // 600 ms
+      const int64_t timeout_remain_us = THIS_WORKER.get_timeout_remain();
+      const int64_t idle_time_us = 200 * 1000 * (i + 1);
+      if (timeout_remain_us - idle_time_us > RESERVED_TIME_US) {
+        LOG_WARN("fail to get table schema, will retry", KR(ret), K(i), K(tenant_id), K(table_id),
+                 K(timeout_remain_us), K(idle_time_us), K(RESERVED_TIME_US));
+        USLEEP(idle_time_us);
+        ret = OB_SUCCESS;
+      } else {
+        ret = OB_TIMEOUT;
+        LOG_WARN("fail to get table schema, will not retry cuz timeout_remain is not enough",
+                 KR(ret), K(i), K(tenant_id), K(table_id), K(timeout_remain_us), K(idle_time_us),
+                 K(RESERVED_TIME_US));
+      }
+    } else {
+      get_table_schema_succ = true;
+    }
+  }
+  if (OB_SUCC(ret) && !get_table_schema_succ) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("table not exist", KR(ret), K(tenant_id), K(table_id));
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id));
   }
   return ret;
 }
@@ -196,6 +218,7 @@ void ObTableLoadSchema::reset()
   column_descs_.reset();
   multi_version_column_descs_.reset();
   datum_utils_.reset();
+  cmp_funcs_.reset();
   partition_ids_.reset();
   allocator_.reset();
   is_inited_ = false;
@@ -305,7 +328,7 @@ int ObTableLoadSchema::prepare_col_desc(const ObTableSchema *table_schema, commo
   return ret;
 }
 
-int ObTableLoadSchema::init_cmp_funcs(const ObArray<ObColDesc> &col_descs,
+int ObTableLoadSchema::init_cmp_funcs(const ObIArray<ObColDesc> &col_descs,
                                       const bool is_oracle_mode)
 {
   int ret = OB_SUCCESS;

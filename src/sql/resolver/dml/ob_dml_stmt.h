@@ -1099,6 +1099,7 @@ public:
   struct TempTableInfo {
     TempTableInfo()
     :table_items_(),
+    upper_stmts_(),
     temp_table_query_(NULL)
     {}
 
@@ -1109,6 +1110,7 @@ public:
     );
 
     ObSEArray<TableItem*, 8> table_items_;
+    ObSEArray<ObDMLStmt*, 8> upper_stmts_;
     ObSelectStmt *temp_table_query_;
   };
   int collect_temp_table_infos(ObIArray<TempTableInfo> &temp_table_infos);

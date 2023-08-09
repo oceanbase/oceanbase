@@ -1126,10 +1126,10 @@ int do_create(Array &array, const int64_t total_size, const int64_t array_size, 
 {
   UNUSED(array_size);
   int ret = 0;
-  if (total_size <= 0 || item_size <= 0) {
-    ret = -1;
+  if (OB_UNLIKELY(total_size <= 0 || item_size <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
   } else if (NULL == (array = (Array)alloc.alloc(total_size * item_size))) {
-    ret = -1;
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     _OB_LOG(WARN, "alloc memory failed,size:%ld", total_size * item_size);
   } else {
     //BACKTRACE(WARN, total_size * item_size > 65536, "hashutil create init size=%ld", total_size * item_size);

@@ -209,6 +209,9 @@ int ObOptOSGColumnStat::update_column_stat_info(const ObDatum *datum,
       LOG_WARN("failed to inner merge max val");
     }
   }
+  if (OB_SUCC(ret)) {
+    col_stat_->calc_avg_len();
+  }
   return ret;
 }
 

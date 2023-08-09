@@ -10202,9 +10202,12 @@ int ObDDLOperator::drop_all_label_se_table_column(uint64_t tenant_id,
   }
   for (int64_t t_i = 0; OB_SUCC(ret) && t_i < tables.count(); ++t_i) {
     const ObTableSchema *table = NULL;
+    ObTableSchema new_table_schema;
     if (OB_ISNULL(table = tables.at(t_i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table is NULL", K(ret));
+    } else if (OB_FAIL(new_table_schema.assign(*table))) {
+      LOG_WARN("fail to assign table schema", K(ret));
     }
     for (int64_t c_j = 0; OB_SUCC(ret) && c_j < table->get_label_se_column_ids().count(); ++c_j) {
       const ObColumnSchemaV2 *column = NULL;
@@ -10216,7 +10219,14 @@ int ObDDLOperator::drop_all_label_se_table_column(uint64_t tenant_id,
         LOG_WARN("fail to get column schema", K(ret));
       } else if (0 == column->get_column_name_str().compare(policy_column_name)) {
         int64_t new_schema_version = OB_INVALID_SCHEMA_VERSION;
-        if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+        if (table->is_index_table()) {
+          ret = OB_ERR_ALTER_INDEX_COLUMN;
+          LOG_WARN("can't not drop index column", K(ret));
+        } else if (OB_FAIL(update_prev_id_for_delete_column(*table, new_table_schema, *column, trans))) {
+          LOG_WARN("fail to update prev id for delete column", K(ret));
+        } else if (OB_FAIL(new_table_schema.delete_column(column->get_column_name_str()))) {
+          LOG_WARN("fail to delete column", K(ret));
+        } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
           LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
         } else if (OB_FAIL(schema_service->get_table_sql_service().delete_single_column(
                              new_schema_version, trans, *table, *column))) {

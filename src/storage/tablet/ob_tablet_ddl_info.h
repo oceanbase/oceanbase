@@ -14,9 +14,9 @@
 #define OCEANBASE_STORAGE_TABLET_OB_TABLET_DDL_INFO
 
 #include <stdint.h>
-#include "lib/lock/ob_tc_rwlock.h"
 #include "lib/utility/ob_print_utils.h"
 #include "share/scn.h"
+#include "lib/lock/ob_small_spin_lock.h"
 
 namespace oceanbase
 {
@@ -39,7 +39,7 @@ private:
   int64_t ddl_schema_version_;
   int64_t ddl_schema_refreshed_ts_;
   share::SCN schema_version_change_scn_;
-  common::TCRWLock rwlock_;
+  common::ObByteLock rwlock_;
 };
 } // namespace storage
 } // namespace oceanbase

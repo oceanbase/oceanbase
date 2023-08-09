@@ -68,23 +68,6 @@ bool ObTabletChecksumItem::is_same_tablet(const ObTabletChecksumItem &item) cons
     && (ls_id_ == item.ls_id_);
 }
 
-int ObTabletChecksumItem::compare_tablet(const ObTabletReplicaChecksumItem &replica_item) const
-{
-  int ret = 0;
-  if (tablet_id_.id() < replica_item.tablet_id_.id()) {
-    ret = -1;
-  } else if (tablet_id_.id() > replica_item.tablet_id_.id()) {
-    ret = 1;
-  } else {
-    if (ls_id_.id() < replica_item.ls_id_.id()) {
-      ret = -1;
-    } else if (ls_id_.id() > replica_item.ls_id_.id()) {
-      ret = 1;
-    }
-  }
-  return ret;
-}
-
 int ObTabletChecksumItem::verify_tablet_column_checksum(const ObTabletReplicaChecksumItem &replica_item) const
 {
   int ret = OB_SUCCESS;

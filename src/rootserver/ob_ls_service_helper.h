@@ -247,6 +247,8 @@ public:
       const uint64_t &old_unit_group_id,
       ObTenantLSInfo& tenant_ls_info,
       common::ObISQLClient &sql_proxy);
+  static int check_if_need_wait_user_ls_sync_scn(const uint64_t tenant_id, const share::SCN &sys_ls_target_scn);
+  static int wait_all_tenants_user_ls_sync_scn(common::hash::ObHashMap<uint64_t, share::SCN> &tenants_sys_ls_target_scn);
 private:
   static int revision_to_equal_status_(
       const ObLSStatusMachineParameter &status_machine,

@@ -1196,6 +1196,7 @@ public:
   inline int get_err_ret() const { return error_ret_; }
 protected:
   static const int64_t STRING_ARRAY_EXTEND_CNT = 7;
+  static const int64_t SCHEMA_MALLOC_BLOCK_SIZE = 128;
   void *alloc(const int64_t size);
   void free(void *ptr);
   int deep_copy_str(const char *src, common::ObString &dest);
@@ -1214,6 +1215,8 @@ protected:
   void reset_string(common::ObString &str);
   void reset_string_array(common::ObArrayHelper<common::ObString> &str_array);
   const char *extract_str(const common::ObString &str) const;
+  template <class T>
+  int preserve_array(T** &array, int64_t &array_capacity, const int64_t &preserved_capacity);
   // buffer is the memory used to store schema item, if not same with this pointer,
   // it means that this schema item has already been rewrote to buffer when rewriting
   // other schema manager, and when we want to rewrite this schema item in current schema
@@ -2077,6 +2080,7 @@ public:
   int add_partition(const ObSubPartition &subpartition);
   ObSubPartition **get_hidden_subpart_array() const { return hidden_subpartition_array_; }
   int64_t get_hidden_subpartition_num() const { return hidden_subpartition_num_; }
+  int preserve_subpartition(const int64_t &capacity);
 
   INHERIT_TO_STRING_KV(
     "BasePartition", ObBasePartition,

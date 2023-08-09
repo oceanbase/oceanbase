@@ -191,9 +191,11 @@ int ObDirectLoadFastHeapTableBuilder::switch_sstable_slice()
 }
 
 int ObDirectLoadFastHeapTableBuilder::append_row(const ObTabletID &tablet_id,
+                                                 const table::ObTableLoadSequenceNo &seq_no,
                                                  const ObDatumRow &datum_row)
 {
   UNUSED(tablet_id);
+  UNUSED(seq_no);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

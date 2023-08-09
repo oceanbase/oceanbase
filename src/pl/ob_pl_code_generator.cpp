@@ -4503,7 +4503,7 @@ int ObPLCodeGenerator::generate_get_record_attr(const ObObjAccessIdx &current_ac
   OX (record_type = static_cast<const ObRecordType*>(user_type));
   OX (element_idx += record_type->get_record_member_count()); //null map
   OX (element_idx += record_type->get_record_member_count()); //record meta list
-  CK (current_access.is_const());
+  OV (current_access.is_const(), OB_ERR_UNEXPECTED, K(current_access));
   OX (element_idx += current_access.var_index_); //访问的域对应的下标
   if (OB_SUCC(ret) && user_type->is_object_type() && for_write) {
     ObLLVMBasicBlock null_block, not_null_block;
@@ -4581,7 +4581,7 @@ int ObPLCodeGenerator::generate_get_attr(ObLLVMValue &param_array,
                                      for_write,
                                      value,
                                      ret_value_ptr,
-                                     exit));
+                                     exit), K(obj_access), K(i));
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected user type" , K(obj_access.at(i - 1).var_type_), K(ret));
@@ -8099,6 +8099,9 @@ int ObPLCodeGenerator::generate_simple(ObPLFunction &pl_func)
     CK (OB_NOT_NULL(sql_stmt));
     OZ (sql_info.generate(*sql_stmt, pl_func.get_expressions()));
     OZ (sql_infos.push_back(sql_info));
+  }
+  if (OB_SUCC(ret) && ObTriggerInfo::is_trigger_body_package_id(pl_func.get_package_id())) {
+    OZ (pl_func.set_types(get_ast().get_user_type_table()));
   }
 
   return ret;

@@ -2187,6 +2187,7 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
         prepare_result.for_update_ = pl_prepare_result.result_set_->get_is_select_for_update();
         prepare_result.has_hidden_rowid_ = pl_prepare_result.result_set_->has_hidden_rowid();
         prepare_result.is_bulk_ = pl_prepare_result.result_set_->is_bulk();
+        prepare_result.has_link_table_ = pl_prepare_result.result_set_->is_link_table();
         if (OB_FAIL(ret)) {
         } else if (OB_NOT_NULL(prepare_result.record_type_)) {
           if (stmt::T_SELECT != prepare_result.type_) {
@@ -7342,7 +7343,7 @@ int ObSPIService::resolve_ref_objects(const ParseResult &parse_result,
             if (OB_SUCC(ret)) {
               ObSchemaChecker schema_checker;
               const ObRoutineInfo *func_info = NULL;
-              if (OB_FAIL(schema_checker.init(schema_guard))) {
+              if (OB_FAIL(schema_checker.init(schema_guard, session.get_sessid()))) {
                 LOG_WARN("fail to init schema checker", K(ret));
               } else if (OB_FAIL(schema_checker.get_standalone_function_info(
                                                   session.get_effective_tenant_id(),

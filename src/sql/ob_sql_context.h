@@ -522,6 +522,7 @@ public:
   common::ObDList<ObPreCalcExprConstraint> *all_pre_calc_constraints_;
   common::ObIArray<ObExprConstraint> *all_expr_constraints_;
   common::ObIArray<ObPCPrivInfo> *all_priv_constraints_;
+  bool need_match_all_params_; //only used for matching plans
   bool is_ddl_from_primary_;//备集群从主库同步过来需要处理的ddl sql语句
   const sql::ObStmt *cur_stmt_;
   const ObPhysicalPlan *cur_plan_;
@@ -565,6 +566,7 @@ public:
       temp_table_count_(0),
       anonymous_view_count_(0),
       all_user_variable_(),
+      need_match_all_params_(false),
       has_udf_(false),
       disable_udf_parallel_(false),
       has_is_table_(false),
@@ -604,6 +606,7 @@ public:
     temp_table_count_ = 0;
     anonymous_view_count_ = 0;
     all_user_variable_.reset();
+    need_match_all_params_= false;
     has_udf_ = false;
     disable_udf_parallel_ = false;
     has_is_table_ = false;
@@ -680,6 +683,7 @@ public:
   common::ObSArray<ObPCPrivInfo, common::ModulePageAllocator, true> all_priv_constraints_;
   common::ObSArray<ObUserVarIdentRawExpr *, common::ModulePageAllocator, true> all_user_variable_;
   common::hash::ObHashMap<uint64_t, ObObj, common::hash::NoPthreadDefendMode> calculable_expr_results_;
+  bool need_match_all_params_; //only used for matching plans
   bool has_udf_;
   bool disable_udf_parallel_; //used to deterministic pl udf parallel execute
   bool has_is_table_; // used to mark query has information schema table

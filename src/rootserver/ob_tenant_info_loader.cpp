@@ -489,6 +489,19 @@ int ObTenantInfoLoader::get_replayable_scn(share::SCN &replayable_scn)
   return ret;
 }
 
+int ObTenantInfoLoader::get_sync_scn(share::SCN &sync_scn)
+{
+  int ret = OB_SUCCESS;
+  share::ObAllTenantInfo tenant_info;
+  sync_scn.set_invalid();
+  if (OB_FAIL(get_tenant_info(tenant_info))) {
+    LOG_WARN("failed to get tenant info", KR(ret));
+  } else {
+    sync_scn = tenant_info.get_sync_scn();
+  }
+  return ret;
+}
+
 int ObTenantInfoLoader::get_tenant_info(share::ObAllTenantInfo &tenant_info)
 {
   int ret = OB_SUCCESS;

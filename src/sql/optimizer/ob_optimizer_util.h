@@ -1131,7 +1131,8 @@ public:
                                            ObIArray<ObRawExpr*> &pushdown_filters,
                                            ObIArray<ObRawExpr*> &candi_filters,
                                            ObIArray<ObRawExpr*> &remain_filters,
-                                           bool &can_pushdown);
+                                           bool &can_pushdown,
+                                           bool check_match_index = true);
 
   /**
     * @brief check_pushdown_filter
@@ -1146,7 +1147,8 @@ public:
                                    ObOptimizerContext &opt_ctx,
                                    ObIArray<ObRawExpr*> &pushdown_filters,
                                    ObIArray<ObRawExpr*> &candi_filters,
-                                   ObIArray<ObRawExpr*> &remain_filters);
+                                   ObIArray<ObRawExpr*> &remain_filters,
+                                   bool check_match_index = true);
 
   static int check_pushdown_filter_overlap_index(const ObDMLStmt &stmt,
                                                  ObOptimizerContext &opt_ctx,
@@ -1176,7 +1178,8 @@ public:
                                                 ObIArray<ObRawExpr*> &common_exprs,
                                                 ObIArray<ObRawExpr*> &pushdown_filters,
                                                 ObIArray<ObRawExpr*> &candi_filters,
-                                                ObIArray<ObRawExpr*> &remain_filters);
+                                                ObIArray<ObRawExpr*> &remain_filters,
+                                                bool check_match_index = true);
 
   /**
     * @brief get_groupby_win_func_common_exprs
@@ -1456,6 +1459,32 @@ public:
                                              ObOpPseudoColumnRawExpr *&expr);
 
   static int is_in_range_optimization_enabled(const ObGlobalHint &global_hint, ObSQLSessionInfo *session_info, bool &is_enabled);
+
+  static int pushdown_and_rename_filter_into_subquery(const ObDMLStmt &parent_stmt,
+                                                      const ObSelectStmt &subquery,
+                                                      int64_t table_id,
+                                                      ObOptimizerContext &opt_ctx,
+                                                      ObIArray<ObRawExpr *> &input_filters,
+                                                      ObIArray<ObRawExpr *> &push_filters,
+                                                      ObIArray<ObRawExpr *> &remain_filters,
+                                                      bool check_match_index = true);
+  static int split_or_filter_into_subquery(const ObDMLStmt &parent_stmt,
+                                           const ObSelectStmt &subquery,
+                                           int64_t table_id,
+                                           ObOptimizerContext &opt_ctx,
+                                           ObRawExpr *filter,
+                                           ObRawExpr *&push_filter,
+                                           bool &can_pushdown_all,
+                                           bool check_match_index = true);
+  static int split_or_filter_into_subquery(ObIArray<const ObDMLStmt *> &parent_stmts,
+                                           ObIArray<const ObSelectStmt *> &subqueries,
+                                           ObIArray<int64_t> &table_ids,
+                                           ObIArray<ObIArray<ObRawExpr *>*> &or_filter_params,
+                                           ObOptimizerContext &opt_ctx,
+                                           ObRawExpr *&push_filter,
+                                           bool &can_pushdown_all,
+                                           bool check_match_index = true);
+
 private:
   //disallow construct
   ObOptimizerUtil();

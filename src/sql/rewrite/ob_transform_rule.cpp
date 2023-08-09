@@ -58,7 +58,6 @@ void ObTransformerCtx::reset()
   happened_cost_based_trans_ = 0;
   equal_sets_.reset();
   ignore_semi_infos_.reset();
-  used_table_filters_.reset();
   temp_table_ignore_stmts_.reset();
   trans_list_loc_ = 0;
   src_qb_name_.reset();

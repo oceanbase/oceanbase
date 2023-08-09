@@ -61,6 +61,7 @@ public:
                                 uint64_t trigger_event,
                                 const ObTrigDMLCtDef &trig_ctdef,
                                 ObTrigDMLRtDef &trig_rtdef);
+  static int64_t get_routine_param_count(const uint64_t routine_id);
 private:
   // trigger
   static int init_trigger_row(ObIAllocator &alloc, int64_t rowtype_col_count, pl::ObPLRecord *&record);

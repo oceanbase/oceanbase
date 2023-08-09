@@ -2196,7 +2196,10 @@ int ObTenantDagScheduler::check_ls_compaction_dag_exist_with_cancel(
   ObIDag *cancel_dag = nullptr;
   bool cancel_flag = false;
   int64_t cancel_dag_cnt = 0;
-  {
+  if (has_set_stop()) { // scheduler thread is stopped
+    exist = false;
+    COMMON_LOG(INFO, "dag scheduler is stopped", KR(ret), K(exist));
+  } else {
     ObThreadCondGuard guard(scheduler_sync_);
     for (int64_t i = 0; i < ObIDag::MergeDagPrioCnt; ++i) {
       ObIDag *head = dag_list_[READY_DAG_LIST].get_head(ObIDag::MergeDagPrio[i]);

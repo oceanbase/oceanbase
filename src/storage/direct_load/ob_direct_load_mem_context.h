@@ -78,6 +78,7 @@ public:
   int32_t column_count_;
   ObDirectLoadDMLRowHandler *dml_row_handler_;
   ObDirectLoadTmpFileManager *file_mgr_;
+  sql::ObLoadDupActionType dup_action_;
   ObDirectLoadEasyQueue<storage::ObDirectLoadExternalMultiPartitionRowChunk *> mem_chunk_queue_;
   int64_t fly_mem_chunk_count_;
 

@@ -617,6 +617,24 @@ int ObLSAttrOperator::get_ls_attr(const ObLSID &id,
   return ret;
 }
 
+int ObLSAttrOperator::get_pre_tenant_dropping_ora_rowscn(share::SCN &pre_tenant_dropping_ora_rowscn)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  pre_tenant_dropping_ora_rowscn.set_invalid();
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(sql.assign_fmt(
+              "SELECT ORA_ROWSCN FROM %s WHERE ls_id = %ld and status = '%s'",
+              OB_ALL_LS_TNAME, SYS_LS.id(), ls_status_to_str(OB_LS_PRE_TENANT_DROPPING)))) {
+    LOG_WARN("assign sql failed", KR(ret));
+  } else if (OB_FAIL(ObShareUtil::get_ora_rowscn(*GCTX.sql_proxy_, tenant_id_, sql, pre_tenant_dropping_ora_rowscn))) {
+    LOG_WARN("fail to get target_data_version_ora_rowscn", KR(ret), K(pre_tenant_dropping_ora_rowscn), K(sql));
+  }
+  return ret;
+}
+
 int ObLSAttrOperator::get_duplicate_ls_attr(const bool for_update,
                                             common::ObISQLClient &client,
                                             ObLSAttr &ls_attr,

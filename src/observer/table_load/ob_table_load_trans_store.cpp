@@ -294,7 +294,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
         } else {
           ret = OB_SUCCESS;
         }
-      } else if (OB_FAIL(write_row_to_table_store(session_ctx.table_store_, row.tablet_id_, session_ctx.datum_row_))) {
+      } else if (OB_FAIL(write_row_to_table_store(session_ctx.table_store_, row.tablet_id_, row.obj_row_.seq_no_, session_ctx.datum_row_))) {
         LOG_WARN("fail to write row", KR(ret), K(session_id), K(row.tablet_id_), K(i));
       }
     }
@@ -319,6 +319,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(session_id), K(row_array.empty()));
   } else {
+    ObTableLoadSequenceNo seq_no(0); // pdml导入的行目前不存在主键冲突，先都用一个默认的seq_no
     SessionContext &session_ctx = session_ctx_array_[session_id - 1];
     for (int64_t i = 0; OB_SUCC(ret) && i < row_array.count(); ++i) {
       const ObNewRow &row = row_array.at(i);
@@ -329,7 +330,7 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(write_row_to_table_store(session_ctx.table_store_, tablet_id, session_ctx.datum_row_))) {
+        if (OB_FAIL(write_row_to_table_store(session_ctx.table_store_, tablet_id, seq_no, session_ctx.datum_row_))) {
           LOG_WARN("fail to write row", KR(ret), K(session_id), K(tablet_id));
         }
       }
@@ -463,10 +464,11 @@ int ObTableLoadTransStoreWriter::handle_identity_column(const ObColumnSchemaV2 *
 
 int ObTableLoadTransStoreWriter::write_row_to_table_store(ObDirectLoadTableStore &table_store,
                                                           const ObTabletID &tablet_id,
+                                                          const ObTableLoadSequenceNo &seq_no,
                                                           const ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(table_store.append_row(tablet_id, datum_row))) {
+  if (OB_FAIL(table_store.append_row(tablet_id, seq_no, datum_row))) {
     LOG_WARN("fail to append row", KR(ret), K(datum_row));
   }
   if (OB_FAIL(ret)) {

@@ -235,7 +235,7 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
   // insert into t values (:0)
   // two sql have the same key `insert into t values (?)`
   // but they have complete different plans
-  if (param_info.flag_.need_to_check_type_
+  if ((param_info.flag_.need_to_check_type_ || need_match_all_params_)
       || (is_sql_planset && lib::is_oracle_mode() &&
           (param_info.type_ == ObTinyIntType || param.get_type() == ObTinyIntType))) {
     if (lib::is_oracle_mode() &&
@@ -497,7 +497,8 @@ int ObPlanSet::match_params_info(const Ob2DArray<ObParamInfo,
   } else {
     int64_t N = infos.count();
     for (int64_t i = 0; is_same && i < N; ++i) {
-      if (true == is_same && params_info_.at(i).flag_.need_to_check_type_) {
+      if (true == is_same
+          && (params_info_.at(i).flag_.need_to_check_type_ || need_match_all_params_)) {
         if (infos.at(i).type_ != params_info_.at(i).type_
            || infos.at(i).scale_ != params_info_.at(i).scale_
            || infos.at(i).col_type_ != params_info_.at(i).col_type_
@@ -658,6 +659,7 @@ int ObPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
         SQL_PC_LOG(WARN, "fail to push back param info", K(ret));
       }
     }
+    need_match_all_params_ = sql_ctx.need_match_all_params_;
 
     // add user session vars if necessary
     CK( OB_NOT_NULL(sql_ctx.session_info_) );

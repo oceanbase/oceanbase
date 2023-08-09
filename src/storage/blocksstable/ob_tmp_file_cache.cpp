@@ -715,6 +715,7 @@ int ObTmpTenantMemBlockManager::IOWaitInfo::exec_wait(int64_t io_timeout_ms)
     STORAGE_LOG(ERROR, "lock io request condition failed", K(ret), K(block_.get_block_id()));
   } else if (OB_NOT_NULL(block_handle_) && OB_FAIL(block_handle_->wait(io_timeout_ms))) {
     STORAGE_LOG(WARN, "wait handle wait io failed", K(ret), K(block_.get_block_id()));
+    block_handle_->reset_macro_id();
   }
   reset_io();
   return ret;
@@ -1080,7 +1081,7 @@ int ObTmpTenantMemBlockManager::check_memory_limit()
 {
   int ret = OB_SUCCESS;
   const int64_t timeout_ts = THIS_WORKER.get_timeout_ts();
-  while (OB_SUCC(ret) && get_tenant_mem_block_num() < t_mblk_map_.size()) {
+  while (OB_SUCC(ret) && get_tenant_mem_block_num() < t_mblk_map_.size() && !wait_info_queue_.is_empty()) {
     ObThreadCondGuard guard(cond_);
     if (OB_FAIL(guard.get_ret())) {
       STORAGE_LOG(ERROR, "fail to guard request condition", K(ret));
@@ -1130,6 +1131,7 @@ int ObTmpTenantMemBlockManager::cleanup()
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpBlockCache has not been inited", K(ret));
   } else if (OB_FAIL(check_memory_limit())) {
+    STORAGE_LOG(WARN, "fail to check memory limit", K(ret), K(t_mblk_map_.size()), K(get_tenant_mem_block_num()));
   } else {
     const int64_t wash_threshold = get_tenant_mem_block_num() * 0.8;
     Heap heap(compare_, &allocator);
@@ -1463,6 +1465,10 @@ int ObTmpTenantMemBlockManager::exec_wait()
         const int64_t free_page_nums = blk.get_free_page_nums();
         if (OB_FAIL(wait_info->exec_wait(io_timeout_ms))) {
           STORAGE_LOG(WARN, "fail to exec io handle wait", K(ret), K_(tenant_id), KPC(wait_info));
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(blk.check_and_set_status(ObTmpMacroBlock::WASHING, ObTmpMacroBlock::MEMORY))) {
+            STORAGE_LOG(ERROR, "fail to rollback block status", K(ret), K(tmp_ret), K(block_id), K(blk));
+          }
         } else {
           STORAGE_LOG(INFO, "start to wash a block", K(block_id), KPC(&blk));
           ObThreadCondGuard cond_guard(cond_);
@@ -1508,7 +1514,7 @@ int ObTmpTenantMemBlockManager::exec_wait()
     if (OB_TMP_FAIL(cond_.broadcast())) {
       STORAGE_LOG(ERROR, "signal wash condition failed", K(ret), K(tmp_ret));
     }
-    if (loop_nums > 0) {
+    if (loop_nums > 0 || REACH_TIME_INTERVAL(1000 * 1000L)/*1s*/) {
       const int64_t washing_count = ATOMIC_LOAD(&washing_count_);
       int64_t block_cache_num = -1;
       int64_t page_cache_num = -1;

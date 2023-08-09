@@ -34,6 +34,7 @@ ObStringDiffEncoder::ObStringDiffEncoder()
     header_(NULL), last_change_diff_row_id_(0),
     allocator_(blocksstable::OB_ENCODING_LABEL_STRING_DIFF, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
 {
+  diff_descs_.set_attr(ObMemAttr(MTL_ID(), "StrDiffEnc"));
 }
 
 int ObStringDiffEncoder::init(
