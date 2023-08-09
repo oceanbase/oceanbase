@@ -291,7 +291,7 @@ int ObDRTask::build_execute_result(
                           : (now - get_schedule_time());
   execute_result.reset();
   if (OB_FAIL(execute_result.append_fmt(
-              "ret:%d; elapsed:%ld;", ret_code, elapsed))) {
+              "ret:%d, %s; elapsed:%ld;", ret_code, common::ob_error_name(ret_code), elapsed))) {
     LOG_WARN("fail to append to execute_result", KR(ret), K(ret_code), K(elapsed));
   } else if (OB_SUCCESS != ret_code
              && OB_FAIL(execute_result.append_fmt(" ret_comment:%s;",
