@@ -25,6 +25,7 @@
 #include "share/ls/ob_ls_operator.h" //ObLSAttr
 #include "share/schema/ob_multi_version_schema_service.h" // for GSCHEMASERVICE
 #include "share/ob_standby_upgrade.h"  // ObStandbyUpgrade
+#include "share/ob_global_stat_proxy.h"//ObGlobalStatProxy
 #include "share/backup/ob_backup_config.h" // ObBackupConfigParserMgr
 #include "observer/ob_inner_sql_connection.h"//ObInnerSQLConnection
 #include "storage/tx/ob_trans_service.h" //ObTransService
@@ -482,13 +483,20 @@ int ObPrimaryStandbyService::switch_to_standby(
         if (OB_FAIL(ret)) {
         } else {
           ObTenantRoleTransitionService role_transition_service(tenant_id, sql_proxy_, GCTX.srv_rpc_proxy_, switch_optype);
-
+          uint64_t compat_version = 0;
+          ObGlobalStatProxy global_proxy(*sql_proxy_, gen_meta_tenant_id(tenant_id));
           (void)role_transition_service.set_switchover_epoch(tenant_info.get_switchover_epoch());
           if (OB_FAIL(role_transition_service.do_switch_access_mode_to_raw_rw(tenant_info))) {
             LOG_WARN("failed to do_switch_access_mode", KR(ret), K(tenant_id), K(tenant_info));
+          } else if (OB_FAIL(global_proxy.get_current_data_version(compat_version))) {
+            LOG_WARN("failed to get current data version", KR(ret), K(tenant_id));
+          } else if (compat_version < DATA_VERSION_4_2_0_0) {
+            //Regardless of the data_version change and switchover concurrency scenario,
+            //if there is concurrency, the member_list lock that has not been released by the operation and maintenance process
           } else if (OB_FAIL(ObMemberListLockUtils::unlock_member_list_when_switch_to_standby(tenant_id, *sql_proxy_))) {
             LOG_WARN("failed to unlock member list when switch to standby", K(ret), K(tenant_id));
-          } else if (OB_FAIL(role_transition_service.switchover_update_tenant_status(tenant_id,
+          }
+          if (FAILEDx(role_transition_service.switchover_update_tenant_status(tenant_id,
                                                      false /* switch_to_standby */,
                                                      share::STANDBY_TENANT_ROLE,
                                                      tenant_info.get_switchover_status(),

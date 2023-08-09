@@ -954,7 +954,7 @@ int ObLSStatusOperator::inner_get_ls_status_(
            if (OB_FAIL(fill_cell(result, status_info))) {
               LOG_WARN("failed to construct ls status info", KR(ret));
             } else if (need_member_list) {
-              EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(
+             EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(
                   *result, "b_init_member_list", init_member_list_str);
               if (OB_FAIL(ret)) {
                 LOG_WARN("failed to get result", KR(ret),
@@ -966,14 +966,15 @@ int ObLSStatusOperator::inner_get_ls_status_(
                 LOG_WARN("failed to set member list", KR(ret),
                          K(init_member_list_str));
               } else {
-              // deal with learner list
+                // deal with learner list
                 EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(
                     *result, "b_init_learner_list", init_learner_list_str);
                 if (OB_FAIL(ret)) {
                   LOG_WARN("failed to get result", KR(ret), K(init_learner_list_str));
                 } else if (init_learner_list_str.empty()) {
                   // maybe
-                } else if (OB_FAIL(set_list_with_hex_str_(init_learner_list_str, learner_list, arb_member))) {
+                } else if (OB_FAIL(set_list_with_hex_str_(init_learner_list_str,
+                        learner_list, arb_member))) {
                   LOG_WARN("failed to set learner list", KR(ret), K(init_learner_list_str));
                 }
               }
@@ -1602,8 +1603,25 @@ int ObLSStatusOperator::create_abort_ls_in_switch_tenant(
     share::ObLSStatusInfoArray status_info_array;
     ObLSStatusOperator status_op;
     ObAllTenantInfo tenant_info;
-    const uint64_t exec_tenant_id = ObLSLifeIAgent::get_exec_tenant_id(tenant_id);
-    if (OB_FAIL(trans.start(&client, exec_tenant_id))) {
+    bool is_compatible_with_readonly_replica = false;
+    int tmp_ret = OB_SUCCESS;
+    ObSqlString sub_string;
+    const uint64_t exec_tenant_id = get_exec_tenant_id(tenant_id);
+    if (OB_SUCCESS != (tmp_ret = ObShareUtil::check_compat_version_for_readonly_replica(
+                                 exec_tenant_id, is_compatible_with_readonly_replica))) {
+      LOG_WARN("fail to check tenant compat version with readonly replica",
+          KR(tmp_ret), K(exec_tenant_id));
+    } else if (is_compatible_with_readonly_replica
+        && OB_SUCCESS != (tmp_ret = sub_string.assign(", init_learner_list = '', b_init_learner_list = ''"))) {
+      LOG_WARN("fail to construct substring for learner list", KR(tmp_ret));
+      sub_string.reset();
+      //Ignore the fact that data_version has been changed to 4.2,
+      //but the local observer configuration item has not been refreshed.
+      //If the leader_list is not cleaned up, there will be no logical problems.
+      //It is just not very good-looking, and it can be cleaned up eventually.
+    }
+
+    if (FAILEDx(trans.start(&client, exec_tenant_id))) {
       LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(tenant_id));
     } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, &trans, true, tenant_info))) {
       LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
@@ -1611,13 +1629,13 @@ int ObLSStatusOperator::create_abort_ls_in_switch_tenant(
                            || status != tenant_info.get_switchover_status())) {
       ret = OB_NEED_RETRY;
       LOG_WARN("switchover may concurrency, need retry", KR(ret), K(switchover_epoch), K(status), K(tenant_info));
-    } else if (OB_FAIL(sql.assign_fmt("UPDATE %s set status = '%s',init_member_list = '', b_init_member_list = ''"
-                                      ", init_learner_list = '', b_init_learner_list = ''"
+    } else if (OB_FAIL(sql.assign_fmt("UPDATE %s set status = '%s',init_member_list = '', b_init_member_list = ''%.*s"
                                       " where tenant_id = %lu and status in ('%s', '%s')",
                                       OB_ALL_LS_STATUS_TNAME,
                                       ls_status_to_str(share::OB_LS_CREATE_ABORT),
+                                      static_cast<int>(sub_string.length()), sub_string.ptr(),
                                       tenant_id, ls_status_to_str(OB_LS_CREATED), ls_status_to_str(OB_LS_CREATING)))) {
-      LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(sql));
+      LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(sql), K(sub_string));
     } else if (OB_FAIL(exec_write(tenant_id, sql, this, trans, true))) {
       LOG_WARN("failed to exec write", KR(ret), K(tenant_id), K(sql));
     }
@@ -1630,7 +1648,7 @@ int ObLSStatusOperator::create_abort_ls_in_switch_tenant(
     }
   }
   LOG_INFO("finish create abort ls", KR(ret), K(tenant_id), K(sql));
-
+  ALL_LS_EVENT_ADD(tenant_id, SYS_LS, "create abort ls for switchover", ret, sql);
   return ret;
 }
 
