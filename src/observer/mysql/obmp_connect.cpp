@@ -1894,6 +1894,8 @@ int ObMPConnect::verify_ip_white_list(const uint64_t tenant_id) const
   if (OB_UNLIKELY(client_ip_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("client_ip is empty", K(ret));
+  } else if (0 == client_ip_.compare(UNIX_SOCKET_CLIENT_IP)) {
+    LOG_INFO("match unix socket connection", K(tenant_id), K(client_ip_));
   } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("get_schema_guard failed", K(ret));
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
