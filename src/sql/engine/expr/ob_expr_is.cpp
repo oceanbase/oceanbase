@@ -154,31 +154,60 @@ int ObExprIsBase::calc_with_int_internal(
     ObObj& result, const ObObj& obj1, const ObObj& obj2, ObCastCtx& cast_ctx, bool is_not) const
 {
   int ret = OB_SUCCESS;
-  bool ret_bool = false;
   if (obj1.is_null()) {
-    ret_bool = is_not;
+    result.set_bool(is_not);
   } else if (obj1.is_tinyint()) {
-    ret_bool = is_not ? obj1.get_bool() != obj2.get_bool() : obj1.get_bool() == obj2.get_bool();
+    result.set_bool(is_not ? obj1.get_bool() != obj2.get_bool() : obj1.get_bool() == obj2.get_bool());
+  } else if (is_oracle_mode() && obj1.is_varchar_or_char() && 0 == obj1.get_string_len()) {
+    result.set_bool(is_not);
+  } else if (ob_is_numeric_type(obj1.get_type())) {
+    ObObjTypeClass tc = ob_obj_type_class(obj1.get_type());
+    bool res = true;
+    switch (tc) {
+      case ObIntTC: {
+        res = (0 != obj1.get_int()) == (obj2.get_bool() != is_not);
+        break;
+      }
+      case ObUIntTC: {
+        res = (0 != obj1.get_uint64()) == (obj2.get_bool() != is_not);
+        break;
+      }
+      case ObFloatTC: {
+        res = (0 != obj1.get_float()) == (obj2.get_bool() != is_not);
+        break;
+      }
+
+      case ObDoubleTC: {
+        res = (0 != obj1.get_double()) == (obj2.get_bool() != is_not);
+        break;
+      }
+      case ObNumberTC: {
+        res = (!obj1.get_number().is_zero()) == (obj2.get_bool() != is_not);
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected obj type", K(obj1.get_type()));
+      }
+    }
+    result.set_bool(res);
   } else {
-    int64_t int_val = 0;
-    EXPR_GET_INT64_V2(obj1, int_val);
+    number::ObNumber num;
+    EXPR_GET_NUMBER_V2(obj1, num);
     if (OB_SUCC(ret)) {
-      if ((int_val != 0 && obj2.get_bool() == is_not) || (int_val == 0 && obj2.get_bool() == !is_not)) {
-        ret_bool = false;
+      if ((!num.is_zero() && obj2.get_bool() == is_not) || (num.is_zero() && obj2.get_bool() == !is_not)) {
+        result.set_bool(false);
       } else {
-        ret_bool = true;
+        result.set_bool(true);
       }
     } else {
       ret = OB_SUCCESS;
       if (obj2.get_bool() == is_not) {
-        ret_bool = true;
+        result.set_bool(true);
       } else {
-        ret_bool = false;
+        result.set_bool(false);
       }
     }
-  }
-  if (OB_SUCC(ret)) {
-    result.set_int32(static_cast<int32_t>(ret_bool));
   }
   return ret;
 }
