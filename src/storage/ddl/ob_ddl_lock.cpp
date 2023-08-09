@@ -362,9 +362,17 @@ int ObDDLLock::lock_table_lock_in_trans(
       LOG_WARN("failed to lock table", K(ret));
     }
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i++) {
-      if (OB_FAIL(ObInnerConnectionLockUtil::lock_tablet(tenant_id, table_id, tablet_ids.at(i), lock_mode, timeout_us, iconn))) {
-        LOG_WARN("failed to lock tablet", K(ret));
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i++) {
+        if (OB_FAIL(ObInnerConnectionLockUtil::lock_tablet(
+              tenant_id, table_id, tablet_ids.at(i), lock_mode, timeout_us, iconn))) {
+          LOG_WARN("failed to lock tablet", K(ret), K(table_id), K(tablet_ids), K(lock_mode), K(timeout_us));
+        }
+      }
+    } else {
+      if (OB_FAIL(
+            ObInnerConnectionLockUtil::lock_tablet(tenant_id, table_id, tablet_ids, lock_mode, timeout_us, iconn))) {
+        LOG_WARN("failed to lock tablets", K(ret), K(table_id), K(tablet_ids), K(lock_mode), K(timeout_us));
       }
     }
   }
@@ -608,7 +616,7 @@ int ObOnlineDDLLock::lock_table_in_trans(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid conn", K(ret));
   } else if (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, arg, iconn))) {
-    LOG_WARN("failed to lock online ddl table in trans", K(ret));
+    LOG_WARN("failed to lock online ddl table in trans", K(ret), K(arg));
   }
   return ret;
 }
@@ -623,20 +631,25 @@ int ObOnlineDDLLock::lock_tablets_in_trans(
 {
   int ret = OB_SUCCESS;
   ObInnerSQLConnection *iconn = nullptr;
-  ObLockObjRequest arg;
-  arg.obj_type_ = ObLockOBJType::OBJ_TYPE_ONLINE_DDL_TABLET;
-  arg.timeout_us_ = timeout_us;
-  arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
-  arg.lock_mode_ = lock_mode;
-  arg.owner_id_ = 0;
   if (OB_ISNULL(iconn = static_cast<ObInnerSQLConnection *>(trans.get_connection()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid conn", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i++) {
-    arg.obj_id_ = tablet_ids.at(i).id();
-    if (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, arg, iconn))) {
-      LOG_WARN("failed to lock online ddl tablet in trans", K(ret));
+  } else {
+    ObLockObjsRequest arg;
+    ObLockID lock_id;
+    arg.timeout_us_ = timeout_us;
+    arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
+    arg.lock_mode_ = lock_mode;
+    arg.owner_id_ = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i++) {
+      if (OB_FAIL(lock_id.set(ObLockOBJType::OBJ_TYPE_ONLINE_DDL_TABLET, tablet_ids.at(i).id()))) {
+        LOG_WARN("set lock id failed", K(ret), K(i), K(tablet_ids));
+      } else if (OB_FAIL(arg.objs_.push_back(lock_id))) {
+        LOG_WARN("add lock id failed", K(ret), K(lock_id));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, arg, iconn))) {
+      LOG_WARN("failed to lock online ddl tablets in trans", K(ret), K(arg));
     }
   }
   return ret;
@@ -679,20 +692,25 @@ int ObOnlineDDLLock::lock_tablets(
 {
   int ret = OB_SUCCESS;
   ObInnerSQLConnection *iconn = nullptr;
-  ObLockObjRequest arg;
-  arg.obj_type_ = ObLockOBJType::OBJ_TYPE_ONLINE_DDL_TABLET;
-  arg.timeout_us_ = timeout_us;
-  arg.op_type_ = ObTableLockOpType::OUT_TRANS_LOCK;
-  arg.lock_mode_ = lock_mode;
-  arg.owner_id_ = lock_owner;
   if (OB_ISNULL(iconn = static_cast<ObInnerSQLConnection *>(trans.get_connection()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid conn", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i++) {
-    arg.obj_id_ = tablet_ids.at(i).id();
-    if (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, arg, iconn))) {
-      LOG_WARN("failed to lock online ddl tablet", K(ret));
+  } else {
+    ObLockObjsRequest arg;
+    ObLockID lock_id;
+    arg.timeout_us_ = timeout_us;
+    arg.op_type_ = ObTableLockOpType::OUT_TRANS_LOCK;
+    arg.lock_mode_ = lock_mode;
+    arg.owner_id_ = lock_owner;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i++) {
+      if (OB_FAIL(lock_id.set(ObLockOBJType::OBJ_TYPE_ONLINE_DDL_TABLET, tablet_ids.at(i).id()))) {
+        LOG_WARN("set lock id failed", K(ret), K(i), K(tablet_ids));
+      } else if (OB_FAIL(arg.objs_.push_back(lock_id))) {
+        LOG_WARN("add lock id failed", K(ret), K(lock_id));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, arg, iconn))) {
+      LOG_WARN("failed to lock online ddl tablets", K(ret), K(arg));
     }
   }
   return ret;
@@ -743,30 +761,38 @@ int ObOnlineDDLLock::unlock_tablets(
 {
   int ret = OB_SUCCESS;
   ObInnerSQLConnection *iconn = nullptr;
-  ObLockObjRequest arg;
-  arg.obj_type_ = ObLockOBJType::OBJ_TYPE_ONLINE_DDL_TABLET;
-  arg.timeout_us_ = timeout_us;
-  arg.op_type_ = ObTableLockOpType::OUT_TRANS_UNLOCK;
-  arg.lock_mode_ = lock_mode;
-  arg.owner_id_ = lock_owner;
   if (OB_ISNULL(iconn = static_cast<ObInnerSQLConnection *>(trans.get_connection()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid conn", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i++) {
-    arg.obj_id_ = tablet_ids.at(i).id();
-    if (OB_FAIL(ObInnerConnectionLockUtil::unlock_obj(tenant_id, arg, iconn))) {
+  } else {
+    ObUnLockObjsRequest arg;
+    ObLockID lock_id;
+    arg.timeout_us_ = timeout_us;
+    arg.op_type_ = ObTableLockOpType::OUT_TRANS_UNLOCK;
+    arg.lock_mode_ = lock_mode;
+    arg.owner_id_ = lock_owner;
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i++) {
+      if (OB_FAIL(lock_id.set(ObLockOBJType::OBJ_TYPE_ONLINE_DDL_TABLET, tablet_ids.at(i).id()))) {
+        LOG_WARN("set lock id failed", K(ret), K(i), K(tablet_ids));
+      } else if (OB_FAIL(arg.objs_.push_back(lock_id))) {
+        LOG_WARN("add lock id failed", K(ret), K(lock_id));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(ObInnerConnectionLockUtil::unlock_obj(tenant_id, arg, iconn))) {
+      LOG_WARN("meet fail during unlock online ddl tablets", K(ret), K(arg));
       if (OB_OBJ_LOCK_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
         some_lock_not_exist = true;
-        LOG_WARN("online ddl tablet already unlocked", K(ret), K(arg));
+        LOG_WARN("online ddl tablet already unlocked", K(ret));
       } else {
-        LOG_WARN("failed to unlock online ddl tablet", K(ret), K(arg));
+        LOG_WARN("failed to unlock online ddl tablet", K(ret));
       }
     }
   }
+
   return ret;
 }
 
-}
+}  // namespace storage
 }

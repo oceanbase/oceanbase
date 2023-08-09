@@ -4839,13 +4839,24 @@ int ObDDLService::lock_tablets(ObMySQLTransaction &trans,
     LOG_WARN("conn_ is NULL", KR(ret));
   } else {
     LOG_INFO("lock tablet", KR(ret), K(tablet_ids), K(table_id), K(tenant_id), KPC(conn));
-    for (int i = 0; i < tablet_ids.count() && OB_SUCC(ret); i++) {
-      if (OB_FAIL(ObInnerConnectionLockUtil::lock_tablet(tenant_id,
-                                                         table_id,
-                                                         tablet_ids.at(i),
-                                                         EXCLUSIVE,
-                                                         timeout,
-                                                         conn))) {
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
+      for (int i = 0; i < tablet_ids.count() && OB_SUCC(ret); i++) {
+        if (OB_FAIL(ObInnerConnectionLockUtil::lock_tablet(tenant_id,
+                                                           table_id,
+                                                           tablet_ids.at(i),
+                                                           EXCLUSIVE,
+                                                           timeout,
+                                                           conn))) {
+          LOG_WARN("lock dest table failed", KR(ret), K(table_id), K(tenant_id));
+        }
+      }
+    } else {
+        if (OB_FAIL(ObInnerConnectionLockUtil::lock_tablet(tenant_id,
+                                                           table_id,
+                                                           tablet_ids,
+                                                           EXCLUSIVE,
+                                                           timeout,
+                                                           conn))) {
         LOG_WARN("lock dest table failed", KR(ret), K(table_id), K(tenant_id));
         ret = ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_EAGAIN : ret;
       }

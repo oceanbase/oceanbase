@@ -44,6 +44,9 @@ OB_SERIALIZE_MEMBER_INHERIT(ObLockObjRequest, ObLockRequest,
                             obj_type_,
                             obj_id_);
 
+OB_SERIALIZE_MEMBER_INHERIT(ObLockObjsRequest, ObLockRequest,
+                            objs_);
+
 OB_SERIALIZE_MEMBER_INHERIT(ObLockTableRequest, ObLockRequest,
                             table_id_);
 
@@ -254,6 +257,23 @@ bool ObLockObjRequest::is_valid() const
           ObLockRequest::is_valid() &&
           is_lock_obj_type_valid(obj_type_) &&
           is_valid_id(obj_id_));
+}
+
+void ObLockObjsRequest::reset()
+{
+  ObLockRequest::reset();
+  objs_.reset();
+}
+
+bool ObLockObjsRequest::is_valid() const
+{
+  bool is_valid = true;
+  is_valid = (ObLockMsgType::LOCK_OBJ_REQ == type_ &&
+              ObLockRequest::is_valid());
+  for (int64_t i = 0; i < objs_.count() && is_valid; i++) {
+    is_valid = is_valid && objs_.at(i).is_valid();
+  }
+  return is_valid;
 }
 
 void ObLockTableRequest::reset()
