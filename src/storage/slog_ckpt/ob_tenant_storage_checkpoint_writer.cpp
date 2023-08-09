@@ -232,7 +232,12 @@ int ObTenantStorageCheckpointWriter::copy_one_tablet_item(
     }
   } else if (FALSE_IT(old_tablet = old_tablet_handle.get_obj())) {
   } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*old_tablet, new_tablet_handle))) {
-    LOG_WARN("fail to persist and transform tablet", K(ret), K(tablet_key), KPC(old_tablet));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      LOG_INFO("skip writing checkpoint for this tablet", K(tablet_key));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to persist and transform tablet", K(ret), K(tablet_key), KPC(old_tablet));
+    }
   } else if (FALSE_IT(new_tablet = new_tablet_handle.get_obj())) {
   } else if (FALSE_IT(slog.disk_addr_ = new_tablet->get_tablet_addr())) {
   } else if (OB_FAIL(slog.serialize(slog_buf, sizeof(ObUpdateTabletLog), slog_buf_pos))) {
