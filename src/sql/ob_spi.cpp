@@ -6199,6 +6199,8 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
                                                 true,
                                                 can_retry));
         OZ (query_sender->send_eof_packet(true));
+
+        OX(implicit_cursor->set_rowcount(into_count > 0 ? 1 : 0));
       }
     } else if (stmt::T_ANONYMOUS_BLOCK != ob_result_set->get_stmt_type()) {
       // 不带Returing的INSERT，DELETE，UPDATE
