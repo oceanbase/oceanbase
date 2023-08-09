@@ -2664,6 +2664,19 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
         }
 
       }
+
+      if (OB_SUCC(ret) && (column.is_string_type() || column.is_json() || column.is_geometry())
+          && stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+        if (OB_DDL_ADD_COLUMN == static_cast<AlterColumnSchema&>(column).alter_type_) {
+          ObTableSchema &table_schema = static_cast<ObAlterTableStmt *>(stmt_)->get_alter_table_arg().alter_table_schema_;
+          if (OB_FAIL(check_and_fill_column_charset_info(column,
+                                                         table_schema.get_charset_type(),
+                                                         table_schema.get_collation_type()))) {
+            SQL_RESV_LOG(WARN, "fail to check and fill column charset info", K(ret));
+          }
+        }
+      }
+
       if (OB_SUCC(ret) && (column.is_string_type() || column.is_json() || column.is_geometry())
           && stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
         if (OB_FAIL(check_and_fill_column_charset_info(column, charset_type_, collation_type_))) {
