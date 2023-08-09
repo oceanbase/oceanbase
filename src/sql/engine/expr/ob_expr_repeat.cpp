@@ -46,19 +46,21 @@ int ObExprRepeat::calc_result_type2(ObExprResType &type,
                                     ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (!ob_is_text_tc(text.get_type())) {
+  if (!ob_is_text_tc(text.get_type()) && !text.is_null()) {
     text.set_calc_type(common::ObVarcharType);
   }
-  count.set_calc_type(common::ObIntType);
+  if (!count.is_null()) {
+    count.set_calc_type(common::ObIntType);
+  }
   // Set cast mode for %count parameter, truncate string to integer.
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
   // repeat is mysql only epxr.
   CK(lib::is_mysql_mode());
   if (OB_SUCC(ret)) {
     ObObjType res_type = ObMaxType;
-    if (text.is_null() || count.is_null()) {
+    if (text.is_null() && !count.is_null()) {
       res_type = ObVarcharType;
-    } else if (count.is_literal()) {
+    } else if (count.is_literal() && !count.is_null()) {
       const ObObj &obj = count.get_param();
       ObArenaAllocator alloc(ObModIds::OB_SQL_RES_TYPE);
       const ObDataTypeCastParams dtc_params =
