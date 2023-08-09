@@ -120,7 +120,13 @@ int ObExprWeightString::calc_resultN(common::ObObj &result , const common::ObObj
                          objs_array[0].get_type() == ObYearType)) {
         result.set_null();
       } else if (str.empty() && nweights == 0) {
-        result.set_varchar(nullptr,0);
+        result.set_varchar(nullptr, 0);
+        result.set_collation_type(CS_TYPE_BINARY);
+        if (as_binary) {
+          result.set_collation_level(CS_LEVEL_IMPLICIT);
+        } else {
+          result.set_collation_level(objs_array[0].get_collation_level());
+        }
       } else {
         if (OB_FAIL(session->get_max_allowed_packet(max_allowed_packet))) {
           if (OB_ENTRY_NOT_EXIST == ret) {
