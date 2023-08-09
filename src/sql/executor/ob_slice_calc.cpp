@@ -252,7 +252,7 @@ int ObSlaveMapRepartIdxCalcBase::init()
   // p0 : [task1,task2,task3]
   // p1 : [task1,task2,task3]
   // p2 : [task4,task5]
-  const ObPxPartChMapArray &part_ch_array = part_ch_info_.part_ch_array_;
+  const ObPxPartChMapTMArray &part_ch_array = part_ch_info_.part_ch_array_;
   if (OB_SUCC(ret)) {
     if (OB_FAIL(part_to_task_array_map_.create(max(1, part_ch_array.count()), ObModIds::OB_SQL_PX))) {
       LOG_WARN("fail create part to task array map", "count", part_ch_array.count(), K(ret));
@@ -518,7 +518,7 @@ int ObRepartSliceIdxCalc::setup_one_side_one_level_info()
 int ObRepartSliceIdxCalc::build_repart_ch_map(ObPxPartChMap &affinity_map)
 {
   int ret = OB_SUCCESS;
-  const ObPxPartChMapArray &part_ch_array = part_ch_info_.part_ch_array_;
+  const ObPxPartChMapTMArray &part_ch_array = part_ch_info_.part_ch_array_;
   if (OB_FAIL(affinity_map.create(max(1, part_ch_array.count()), ObModIds::OB_SQL_PX))) {
     LOG_WARN("fail create hashmap", "count", part_ch_array.count(), K(ret));
   }
@@ -580,7 +580,7 @@ int ObSlaveMapBcastIdxCalc::get_slice_indexes(const ObIArray<ObExpr*> &exprs,
       LOG_WARN("failed to push back slice idx", K(ret));
     }
   } else {
-    const ObPxPartChMapArray &part_ch_array = part_ch_info_.part_ch_array_;
+    const ObPxPartChMapTMArray &part_ch_array = part_ch_info_.part_ch_array_;
     ARRAY_FOREACH (part_ch_array, idx) {
       if (tablet_id == part_ch_array.at(idx).first_) {
         if (OB_FAIL(slice_idx_array.push_back(part_ch_array.at(idx).second_))) {
@@ -1134,7 +1134,7 @@ int ObSlaveMapPkeyHashIdxCalc::build_affi_hash_map(hash::ObHashMap<int64_t, ObPx
   int ret = OB_SUCCESS;
   int64_t tablet_id = common::OB_INVALID_INDEX_INT64;
   ObPxPartChMapItem item;
-  const ObPxPartChMapArray &part_ch_array = part_ch_info_.part_ch_array_;
+  const ObPxPartChMapTMArray &part_ch_array = part_ch_info_.part_ch_array_;
   if (OB_FAIL(affi_hash_map.create(part_ch_array.count(), common::ObModIds::OB_SQL_PX))) {
     LOG_WARN("failed to create part ch map", K(ret));
   }
