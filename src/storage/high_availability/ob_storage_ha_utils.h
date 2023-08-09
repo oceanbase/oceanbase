@@ -43,6 +43,7 @@ public:
       const share::SCN replay_scn,
       bool &need_rebuild);
   static int get_readable_scn_with_retry(share::SCN &readable_scn);
+  static int64_t get_rpc_timeout();
 
 private:
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);
