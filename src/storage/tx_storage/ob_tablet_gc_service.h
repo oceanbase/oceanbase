@@ -100,6 +100,7 @@ private:
   void set_start() { ATOMIC_STORE(&update_enabled_, true); }
 
 public:
+  static const int64_t GC_LOCK_TIMEOUT = 100_ms; // 100ms
   obsys::ObRWLock wait_lock_;
   lib::ObMutex gc_lock_;
 

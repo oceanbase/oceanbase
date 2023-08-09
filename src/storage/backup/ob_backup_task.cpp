@@ -46,6 +46,8 @@
 #include "share/backup/ob_archive_store.h"
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "share/backup/ob_backup_connectivity.h"
+#include "share/rc/ob_tenant_base.h"
+#include "observer/omt/ob_tenant.h"
 #include <algorithm>
 
 using namespace oceanbase::blocksstable;
@@ -3569,6 +3571,9 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
   int ret = OB_SUCCESS;
   storage::ObLSHandle ls_handle;
   storage::ObLS *ls = NULL;
+  ObTenantDagScheduler *scheduler = NULL;
+  share::ObTenantBase *tenant_base = MTL_CTX();
+  omt::ObTenant *tenant = NULL;
   ObBackupLSMetaInfo ls_meta_info;
   ObExternTabletMetaWriter writer;
   ObBackupDest backup_set_dest;
@@ -3617,7 +3622,14 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
     return ret;
   };
 
-  if (OB_FAIL(get_ls_handle(tenant_id, ls_id, ls_handle))) {
+  if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
+  } else if (OB_ISNULL(tenant_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant base should not be NULL", K(ret), KP(tenant_base));
+  } else if (FALSE_IT(tenant = static_cast<omt::ObTenant *>(tenant_base))) {
+  } else if (OB_FAIL(get_ls_handle(tenant_id, ls_id, ls_handle))) {
     LOG_WARN("failed to get ls", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -3627,12 +3639,43 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
   } else if (OB_FAIL(writer.init(backup_set_dest, param_.ls_id_, param_.turn_id_, param_.retry_id_))) {
     LOG_WARN("failed to init tablet info writer", K(ret));
   } else {
-    if (OB_FAIL(ls->get_ls_meta_package_and_tablet_metas(
+    const int64_t WAIT_GC_LOCK_TIMEOUT = 3 * 60 * 1000 * 1000; // 3 min
+    const int64_t CHECK_GC_LOCK_INTERVAL = 1000000; // 1s
+    const int64_t wait_gc_lock_start_ts = ObTimeUtility::current_time();
+    int64_t cost_ts = 0;
+    do {
+      if (ls->is_stopped()) {
+        ret = OB_NOT_RUNNING;
+        LOG_WARN("ls is not running, stop backup", K(ret), KPC(ls));
+      } else if (scheduler->has_set_stop()) {
+        ret = OB_SERVER_IS_STOPPING;
+        LOG_WARN("tenant dag scheduler has set stop, stop backup", K(ret), KPC(ls));
+      } else if (tenant->has_stopped()) {
+        ret = OB_TENANT_HAS_BEEN_DROPPED;
+        LOG_WARN("tenant has been stopped, stop backup", K(ret), KPC(ls));
+      } else if (OB_FAIL(ls->get_ls_meta_package_and_tablet_metas(
                 false/* check_archive */,
                 save_ls_meta_f,
                 backup_tablet_meta_f))) {
-      LOG_WARN("failed to get ls meta package and tablet meta", K(ret), KPC(ls));
-    } else if (OB_FAIL(backup_ls_meta_package_(ls_meta_info))) {
+        if (OB_TABLET_GC_LOCK_CONFLICT != ret) {
+          LOG_WARN("failed to get ls meta package and tablet meta", K(ret), KPC(ls));
+        } else {
+          cost_ts = ObTimeUtility::current_time() - wait_gc_lock_start_ts;
+          if (WAIT_GC_LOCK_TIMEOUT <= cost_ts) {
+            ret = OB_EAGAIN;
+            LOG_WARN("get ls meta package and tablet meta timeout, need try again.", K(ret), K(ls_id));
+          } else {
+            ob_usleep(CHECK_GC_LOCK_INTERVAL);
+          }
+        }
+      } else {
+        cost_ts = ObTimeUtility::current_time() - wait_gc_lock_start_ts;
+        LOG_INFO("succeed to get ls meta package and tablet meta", K(ls_id), K(cost_ts));
+      }
+    } while (OB_TABLET_GC_LOCK_CONFLICT == ret);
+
+
+    if (FAILEDx(backup_ls_meta_package_(ls_meta_info))) {
       LOG_WARN("failed to backup ls meta package", K(ret), K(ls_meta_info));
     } else if (OB_FAIL(ObBackupLSTaskOperator::update_max_tablet_checkpoint_scn(
                        *report_ctx_.sql_proxy_,
