@@ -280,10 +280,10 @@ void ObLSTxCtxMgr::print_all_tx_ctx_(const int64_t max_print, const bool verbose
 //T_TX_BLOCKED_PENDING   N          F_TX_BLOCKED    L_TX_BLOCKED     T_TX_BLOCKED_PENDING  N                      N                      T_TX_BLOCKED_PENDING   N                 T_ALL_BLOCKED_PENDING  STOPPED  N          N
 //R_TX_BLOCKED_PENDING   N          F_TX_BLOCKED    L_TX_BLOCKED     R_TX_BLOCKED_PENDING  N                      N                      R_TX_BLOCKED_PENDING   N                 R_ALL_BLOCKED_PENDING  STOPPED  N          N
 //
-//F_ALL_BLOCKED          N          F_ALL_BLOCKED   N                N                     T_ALL_BLOCKED_PENDING  R_ALL_BLOCKED_PENDING  N                      N                 F_ALL_BLOCKED          STOPPED  N          N
-//T_ALL_BLOCKED_PENDING  N          F_ALL_BLOCKED   L_ALL_BLOCKED    T_ALL_BLOCKED_PENDING N                      N                      N                      N                 T_ALL_BLOCKED_PENDING  STOPPED  N          N
-//R_ALL_BLOCKED_PENDING  N          F_ALL_BLOCKED   L_ALL_BLOCKED    R_ALL_BLOCKED_PENDING N                      N                      N                      N                 R_ALL_BLOCKED_PENDING  STOPPED  N          N
-//L_ALL_BLOCKED          N          F_ALL_BLOCKED   N                N                     N                      N                      N                      N                 L_ALL_BLOCKED          STOPPED  N          N
+//F_ALL_BLOCKED          N          F_ALL_BLOCKED   N                N                     T_ALL_BLOCKED_PENDING  R_ALL_BLOCKED_PENDING  F_ALL_BLOCKED          N                 F_ALL_BLOCKED          STOPPED  N          N
+//T_ALL_BLOCKED_PENDING  N          F_ALL_BLOCKED   L_ALL_BLOCKED    T_ALL_BLOCKED_PENDING N                      N                      T_ALL_BLOCKED_PENDING  N                 T_ALL_BLOCKED_PENDING  STOPPED  N          N
+//R_ALL_BLOCKED_PENDING  N          F_ALL_BLOCKED   L_ALL_BLOCKED    R_ALL_BLOCKED_PENDING N                      N                      R_ALL_BLOCKED_PENDING  N                 R_ALL_BLOCKED_PENDING  STOPPED  N          N
+//L_ALL_BLOCKED          N          F_ALL_BLOCKED   N                N                     N                      N                      L_ALL_BLOCKED          N                 L_ALL_BLOCKED          STOPPED  N          N
 //
 //STOPPED                N          STOPPED         N                N                     N                      N                      N                      N                 N                      STOPPED  N          N
 //END                    N          N               N                N                     N                      N                      N                      N                 N                      N        N          N
@@ -323,10 +323,10 @@ int ObLSTxCtxMgr::StateHelper::switch_state(const int64_t op)
     {N,         F_TX_BLOCKED,     L_TX_BLOCKED,     T_TX_BLOCKED_PENDING,     N,                        N,                        T_TX_BLOCKED_PENDING, N,                T_ALL_BLOCKED_PENDING, STOPPED, N,         N},
     {N,         F_TX_BLOCKED,     L_TX_BLOCKED,     R_TX_BLOCKED_PENDING,     N,                        N,                        R_TX_BLOCKED_PENDING, N,                R_ALL_BLOCKED_PENDING, STOPPED, N,         N},
 //
-    {N,         F_ALL_BLOCKED,    N,                N,                        T_ALL_BLOCKED_PENDING,    R_ALL_BLOCKED_PENDING,    N,                    N,                F_ALL_BLOCKED,         STOPPED, F_WORKING, N},
-    {N,         F_ALL_BLOCKED,    L_ALL_BLOCKED,    T_ALL_BLOCKED_PENDING,    N,                        N,                        N,                    N,                T_ALL_BLOCKED_PENDING, STOPPED, N,         N},
-    {N,         F_ALL_BLOCKED,    L_ALL_BLOCKED,    R_ALL_BLOCKED_PENDING,    N,                        N,                        N,                    N,                R_ALL_BLOCKED_PENDING, STOPPED, N,         N},
-    {N,         F_ALL_BLOCKED,    N,                N,                        N,                        N,                        N,                    N,                L_ALL_BLOCKED,         STOPPED, N,         N},
+    {N,         F_ALL_BLOCKED,    N,                N,                        T_ALL_BLOCKED_PENDING,    R_ALL_BLOCKED_PENDING,    F_ALL_BLOCKED,        N,                F_ALL_BLOCKED,         STOPPED, F_WORKING, N},
+    {N,         F_ALL_BLOCKED,    L_ALL_BLOCKED,    T_ALL_BLOCKED_PENDING,    N,                        N,                        T_ALL_BLOCKED_PENDING,N,                T_ALL_BLOCKED_PENDING, STOPPED, N,         N},
+    {N,         F_ALL_BLOCKED,    L_ALL_BLOCKED,    R_ALL_BLOCKED_PENDING,    N,                        N,                        R_ALL_BLOCKED_PENDING,N,                R_ALL_BLOCKED_PENDING, STOPPED, N,         N},
+    {N,         F_ALL_BLOCKED,    N,                N,                        N,                        N,                        L_ALL_BLOCKED,        N,                L_ALL_BLOCKED,         STOPPED, N,         N},
 //
     {N,         STOPPED,          N,                N,                        N,                        N,                        N,                    N,                N,                     STOPPED, N,         N},
     {N,         N,                N,                N,                        N,                        N,                        N,                    N,                N,                     N,       N,         N}
