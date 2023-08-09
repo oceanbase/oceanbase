@@ -1798,6 +1798,7 @@ int ObFetchLSMemberListP::process()
     logservice::ObLogService *log_service = nullptr;
     ObRole role;
     int64_t proposal_id = 0;
+    ObAddr election_leader;
     if (tenant_id != MTL_ID()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rpc get member list tenant not match", K(ret), K(tenant_id));
@@ -1806,9 +1807,6 @@ int ObFetchLSMemberListP::process()
       LOG_WARN("log service should not be NULL", K(ret), KP(log_service));
     } else if (OB_FAIL(log_service->get_palf_role(ls_id, role, proposal_id))) {
       LOG_WARN("failed to get role", K(ret), "arg", arg_);
-    } else if (!is_strong_leader(role)) {
-      ret = OB_PARTITION_NOT_LEADER;
-      LOG_WARN("ls is not leader, cannot get member list", K(ret), K(role), K(arg_));
     } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls service should not be null", K(ret));
@@ -1820,6 +1818,12 @@ int ObFetchLSMemberListP::process()
     } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log handler should not be NULL", K(ret));
+    } else if (OB_FAIL(log_handler->get_election_leader(election_leader))) {
+      LOG_WARN("failed to get election leader", K(ret), KPC(ls));
+    } else if (!is_strong_leader(role) && GCTX.self_addr() != election_leader) {
+      ret = OB_LS_NOT_LEADER;
+      LOG_WARN("ls is not leader, cannot get member list", K(ret), K(role), K(arg_),
+          K(election_leader), "self", GCTX.self_addr());
     } else if (OB_FAIL(log_handler->get_paxos_member_list(member_list, paxos_replica_num))) {
       LOG_WARN("failed to get paxos member list", K(ret));
     } else if (OB_FAIL(result_.member_list_.deep_copy(member_list))) {
