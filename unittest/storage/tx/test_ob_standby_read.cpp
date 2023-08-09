@@ -54,7 +54,7 @@ class MockObPartTransCtx : public transaction::ObPartTransCtx
 public :
   MockObPartTransCtx(const share::ObLSID &ls_id)
   {
-    reset();
+    default_init_();
     ls_id_ = ls_id;
     lastest_snapshot_.reset();
     standby_part_collected_.reset();
