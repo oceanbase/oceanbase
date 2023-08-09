@@ -1,0 +1,584 @@
+#owner: zhenling.zzg
+#owner group: sql1
+# tags: optimizer
+
+--disable_info
+--disable_metadata
+--disable_abort_on_error
+--disable_warnings
+--enable_warnings
+
+--disable_warnings
+--error 0, 1051
+drop table t1;
+--error 0, 1051
+drop table t2;
+--error 0, 1051
+drop table t3;
+--error 0, 1051
+drop table t4;
+--error 0, 1051
+drop table target;
+
+
+--enable_warnings
+create table t1(c1 int, c2 int, c3 int);
+create table t2(c1 int, c2 int, c3 int);
+create table t3(c1 int, c2 int, c3 int);
+create table t4(c1 number, c2 number, c3 number);
+create table target(c1 int, c2 int, c3 int);
+
+insert into t1 values(1,1,1);
+insert into t1 values(2,2,2);
+insert into t1 values(3,3,3);
+insert into t1 values(4,4,4);
+insert into t1 values(5,5,5);
+
+insert into t2 values(11,11,11);
+insert into t2 values(12,12,12);
+insert into t2 values(13,13,13);
+insert into t2 values(14,14,14);
+insert into t2 values(15,15,15);
+
+insert into t3 values(111,111,111);
+insert into t3 values(112,112,112);
+insert into t3 values(113,113,113);
+insert into t3 values(114,114,114);
+insert into t3 values(115,115,115);
+
+insert into t4 values(1.0, 1.0, 1.0);
+insert into t4 values(2.0, 2.0, 2.0);
+insert into t4 values(3.0, 3.0, 3.0);
+
+--explain_protocol 1 
+
+--echo ********************* test for select expr transform *********
+select * from t1 where t1.c1 = 1;
+
+select /*+no_rewrite*/* from t1 where t1.c1 = 1;
+
+
+--echo ********************* test for set op expr transform *********
+select c1 + 1 from (select 1 as c1 from t1 union select 1 as c1 from t2);
+select c1 + 1 from (select 2 as c1 from t1 union select 2 as c1 from t2);
+
+select c1 + 1 from (select 1 as c1 from t1 intersect select 1 as c1 from t2);
+select c1 + 1 from (select 3 as c1 from t1 intersect select 3 as c1 from t2);
+
+select /*+no_rewrite*/c1 + 1 from (select 1 as c1 from t1 union select 1 as c1 from t2);
+select /*+no_rewrite*/c1 + 1 from (select 1 as c1 from t1 intersect select 1 as c1 from t2);
+
+
+--echo ********************* test for condition expr transform *********
+--echo inner join
+select t1.c1, t2.c1 from t1, t2 where t1.c1 = t2.c1 and t1.c1 = 1;
+
+select /*+no_rewrite*/t1.c1, t2.c1 from t1, t2 where t1.c1 = t2.c1 and t1.c1 = 1;
+
+
+--echo outer join
+select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 = 1;
+
+select /*+no_rewrite*/t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 = 1;
+
+select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t2.c1 = 1;
+
+select /*+no_rewrite*/t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t2.c1 = 1;
+
+select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t1.c2 = 1;
+
+select /*+no_rewrite*/t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t1.c2 = 1;
+
+select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t2.c2 = 1;
+
+select /*+no_rewrite*/t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t2.c2 = 1;
+
+select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = 1 and t1.c1 + 1 > t2.c1 and t1.c2 = t2.c2;
+
+select /*+no_rewrite*/t1.c1, t2.c1 from t1 left join t2 on t1.c1 = 1 and t1.c1 + 1 > t2.c1 and t1.c2 = t2.c2;
+
+--echo ********************* test for orderby expr transform *********
+select * from t1 where t1.c1 = 1 order by t1.c1 + 1;
+
+select /*+no_rewrite*/* from t1 where t1.c1 = 1 order by t1.c1 + 1;
+
+
+--echo ********************* test for groupby expr transform *********
+select c1 from t1 where t1.c1 = 1 group by t1.c1;
+
+select /*+no_rewrite*/c1 from t1 where t1.c1 = 1 group by t1.c1;
+
+
+--echo ********************* test for const folding using having const info transform *********
+select c1 from t1 group by c1 having c1 = 1 order by c1;
+
+select /*+no_rewrite*/c1 from t1 group by c1 having c1 = 1 order by c1;
+
+select c1, c2 from t1 where c2 = 2 group by c1, c2 having c1 = 1 order by c1;
+
+select /*+no_rewrite*/c1, c2 from t1 where c2 = 2 group by c1, c2 having c1 = 1 order by c1;
+
+select c1, c2 from t1 group by c1, c2 having c1 > (select c3 from t3 where t3.c2 = t1.c2) and t1.c2 = 1 order by t1.c2;
+
+select /*+no_rewrite*/c1, c2 from t1 group by c1, c2 having c1 > (select /*+no_rewrite*/c3 from t3 where t3.c2 = t1.c2) and t1.c2 = 1 order by t1.c2;
+
+
+--echo ********************* test for subquery const pull up transform *********
+select * from (select 1 as a, 2 as b from t1) v, t2 where v.a = t2.c1 and v.b = t2.c2;
+
+select /*+no_rewrite*/* from (select /*+no_rewrite*/1 as a, 2 as b from t1) v, t2 where v.a = t2.c1 and v.b = t2.c2;
+
+
+--echo ********************* test for subquery const push downing transform *********
+select * from t1 WHERE t1.c1 > (select c3 from t3 where t3.c2 = t1.c2) and t1.c2 = 1;
+
+select /*+no_rewrite*/* from t1 WHERE t1.c1 > (select /*+no_rewrite*/c3 from t3 where t3.c2 = t1.c2) and t1.c2 = 1;
+
+
+--echo ********************* test for multi-tables const folding transform *********
+select t1.c1 from t1, t2, t3 where t1.c1 = t2.c1 and t2.c1 = t3.c1 and t3.c1 = 123;
+
+select /*+no_rewrite*/t1.c1 from t1, t2, t3 where t1.c1 = t2.c1 and t2.c1 = t3.c1 and t3.c1 = 123;
+
+select v.c1 from t1, (select t2.c2, t3.c1 from t2, t3 where t2.c1 = t3.c1 and t2.c1 = 123) v where t1.c1 = v.c2 and v.c1 = t1.c2 and t1.c1 = 456;
+
+select /*+no_rewrite*/v.c1 from t1, (select /*+no_rewrite*/t2.c2, t3.c1 from t2, t3 where t2.c1 = t3.c1 and t2.c1 = 123) v where t1.c1 = v.c2 and v.c1 = t1.c2 and t1.c1 = 456;
+
+
+--echo ********************* test for multi-tables const folding transform *********
+select * from (select 1 as a, 2 as b from t1) v, t2 where v.a = t2.c1 and v.b = t2.c2;
+
+select /*+no_rewrite*/* from (select /*+no_rewrite*/1 as a, 2 as b from t1) v, t2 where v.a = t2.c1 and v.b = t2.c2;
+
+
+--echo ********************* test for semi-infos transform *********
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = 1 and t2.c1 = 1);
+
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = 1 and t2.c1 = 1);
+
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1);
+
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1);
+
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1);
+
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1);
+
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 and t1.c1 = 1);
+
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 and t1.c1 = 1);
+
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1) and t1.c1 = 1;
+
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1) and t1.c1 = 1;
+
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1) and t1.c1 = 1;
+
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1) and t1.c1 = 1;
+
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1) and t1.c1 = 2;
+
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1) and t1.c1 = 2;
+
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 + 1 = t2.c1 and t1.c1 = 1);
+
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 + 1 = t2.c1 and t1.c1 = 1);
+
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 + 1 = t2.c1 and t2.c1 = 1);
+
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 + 1 = t2.c1 and t2.c1 = 1);
+
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 + 1 = t2.c1) and t1.c1 = 1;
+
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 + 1 = t2.c1) and t1.c1 = 1;
+
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 + 1 and t1.c1 = 1);
+
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 + 1 and t1.c1 = 1);
+
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 + 1 and t2.c1 = 1);
+
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 + 1 and t2.c1 = 1);
+
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 + 1) and t1.c1 = 1;
+
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 + 1) and t1.c1 = 1;
+
+
+
+--echo ********************* test for update-view regression *********
+start transaction;
+update t1 set c1 = c2 + 1 where c2 in (select count(t2.c2) from t2 where t2.c3 = t1.c2) or t1.c2 = 5;
+rollback;
+
+
+--echo ********************* test for empty select list issue*********
+select * from t1 where t1.c2 > any (select 1 * 1 from dual);
+
+
+--echo ********************* test for subquery in select list*********
+select c1, (select c1 from t2 where t2.c2 = t1.c2) from t1 where c2 = 1;
+
+select /*+no_rewrite*/c1, (select /*+no_rewrite*/c1 from t2 where t2.c2 = t1.c2) from t1 where c2 = 1;
+
+
+--echo ********************* test for type-cast *********
+select v.c1 / 2 from (select c1, c2 from t4 where c1 = 1) v;
+
+select v.c1 / 2 from (select c1, c2 from t1 where c1 = 1.0) v;
+
+
+--echo ********************* test for crud*********
+insert into target select t1.c1, t1.c2, t1.c3 from t1, t2 where t1.c1 = t2.c1 and t2.c1 = 1;
+
+insert into target select /*+no_rewrite*/t1.c1, t1.c2, t1.c3 from t1, t2 where t1.c1 = t2.c1 and t2.c1 = 1;
+
+update target set c1 = c2 + 1 where c2 > (select count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+
+update /*+no_rewrite*/target set c1 = c2 + 1 where c2 > (select count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+
+delete from target where c2 > (select count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+
+delete /*+no_rewrite*/from target where c2 > (select count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+
+
+--echo ********************* test for update assignments *********
+update target set c1 = c2 + 1 where c2 = 1;
+
+update /*+no_rewrite*/target set c1 = c2 + 1 where c2 = 1;
+
+update target set c1 = c2 + 1 where c1 = 1;
+
+update /*+no_rewrite*/target set c1 = c2 + 1 where c1 = 1;
+
+update target set c1 = c2 + 1 where c2 > (select count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+
+update /*+no_rewrite*/target set c1 = c2 + 1 where c2 > (select /*+no_rewrite*/count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+
+--echo ## aggr func const cast removing
+select * from t1 where c1 in (select  sum(c2) s from t2 where c2 = 2);
+
+
+--echo ********************* test for regression tracking *********
+--error 0, 1051
+drop table t1;
+--error 0, 1051
+drop table t2;
+create table t1 (c1 int primary key, c2 int) partition by hash(c1) partitions 2;
+create index i1 on t1(c2) global;
+create table t2 (c1 int primary key, c2 int) partition by hash(c1) partitions 2;
+create index i2 on t2(c2) global;
+select /*+use_hash(t1, t2)*/ * from t1 where (t1.c1, t1.c2) not in (select c1, c2 from t2 where c1 = 5);
+
+--error 0, 1051
+drop table t1;
+--error 0, 1051
+drop table t2;
+--error 0, 1051
+drop table t3;
+create table t1(a int, b int, c int) partition by hash(a) partitions 5;
+create table t2(a int, b int, c int) partition by hash(a) partitions 5;
+create table t3(a int, b int, c int) partition by hash(a) partitions 5;
+select a from t1 where a = 1 intersect select a from t2;
+
+--error 0, 1051
+drop table t1;
+--error 0, 1051
+drop table t2;
+create table t1 (c1 int, c2 int) partition by hash(c1) partitions 4;
+create table t2 (c1 int, c2 int) partition by hash(c1) partitions 4;
+select t1.c1, t1.c2, t1.c1 + t1.c2 from t1 where not exists (select 1 from t2 where t1.c1 = t2.c1) and t1.c1 in (1);
+
+--error 0, 1051
+drop table t1;
+--error 0, 1051
+drop table t2;
+--error 0, 1051
+drop table t3;
+--error 0, 1051
+drop table t4;
+create table t1(c1 int, c2 int, c3 int);
+create table t2(c1 int, c2 int, c3 int);
+create table t3(c1 int, c2 int, c3 int);
+create table t4(c1 int, c2 int, c3 int);
+select t1.* from t1 right join t2 on t1.c1 = t2.c1 right join t3 on t2.c2 = t3.c2 where t3.c2 = 1 order by t3.c3 limit 1;
+
+--error 0, 1051
+drop table t1;
+--error 0, 1051
+drop table t2;
+create table t1(c1 int primary key, c2 int) partition by hash (c1) partitions 5;
+create table t2(c1 int primary key, c2 int, c3 varchar(32)) partition by hash (c1) partitions 3;
+select * from t1 X, t1 Y where X.c1 = Y.c1 and X.c1 = 1;
+select t1.c1, nvl(t2.c2,0) from (select c1,c2 from t1 where c1=0 or c1=1) as t1 left join (select c1,c2 from t1 where c1=0) as t2 on t1.c1=t2.c1;
+
+--error 0, 1051
+drop table t4;
+--error 0, 1051
+drop view v15;
+create table t4(c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 5;
+create view v15 as (select  1 as c1, 2 as c2, 3 as c3 from dual);
+select /*+ordered use_nl(A,B)*/ A.c1, A.c2, A.c3, B.c1, B.c2, B.c3 from t4 A left join (select  1 as c1, 2 as c2, 3 as c3 from dual) B on A.c1 = B.c1;
+drop view v15;
+
+--error 0, 1051
+drop table t1;
+--error 0, 1051
+drop table t2;
+CREATE TABLE t1(c1 int primary key, c2 int);
+CREATE TABLE t2(c1 int primary key, c2 int, c3 varchar(32));
+select * from t1 where (t1.c1, t1.c2) not in (select c1,c2 from t2 where c2 = 1);
+
+select '1000' from dual minus select '100' from dual;
+
+--error 0, 1051
+drop table t1;
+--error 0, 1051
+drop table t2;
+--error 0, 1051
+drop table t3;
+--error 0, 1051
+drop table t4;
+--error 0, 1051
+drop table t5;
+--explain_protocol 0 
+create table t1 (c1 int, c2 int, c3 int);
+create table t2 (c1 int, c2 int, c3 int);
+create table t3 (c1 int, c2 int, c3 int);
+create table t4 (c1 int, c2 int, c3 int);
+create table t5 (c1 int, c2 int, c3 int);
+insert /**/ into t1 values(1, 1, 1);
+insert /**/ into t1 values(2, 2, 2);
+insert /**/ into t1 values(3, 3, 3);
+insert /**/ into t1 values(4, 4, 4);
+insert /**/ into t1 values(5, 5, 5);
+insert /**/ into t2 values(1, 1, 1);
+insert /**/ into t2 values(2, 2, 2);
+insert /**/ into t2 values(3, 3, 3);
+insert /**/ into t2 values(4, 4, 4);
+insert /**/ into t2 values(5, 5, 5);
+insert /**/ into t3 values(1, 1, 1);
+insert /**/ into t3 values(2, 2, 2);
+insert /**/ into t3 values(3, 3, 3);
+insert /**/ into t3 values(4, 4, 4);
+insert /**/ into t3 values(5, 5, 5);
+insert /**/ into t4 values(1, 1, 1);
+insert /**/ into t4 values(2, 2, 2);
+insert /**/ into t4 values(3, 3, 3);
+insert /**/ into t4 values(4, 4, 4);
+insert /**/ into t4 values(5, 5, 5);
+insert /**/ into t5 values(1, 1, 1);
+insert /**/ into t5 values(2, 2, 2);
+insert /**/ into t5 values(3, 3, 3);
+insert /**/ into t5 values(4, 4, 4);
+insert /**/ into t5 values(5, 5, 5);
+select t5.c1, t5.c2, t5.c3, v1.c1, v1.c2, v1.c3 from t5 left join ((select c1,c2,c3 from t1 where c1 =10) v1,t3) on v1.c1 = t5.c1;
+select t5.c1, t5.c2, t5.c3, v1.c1, v1.c2, v1.c3 from t5 left join (t2, (select c1,c2,c3 from t1 where c1 =10) v1,t3) on v1.c1 = t5.c1;
+select t5.c1, t5.c2, t5.c3, v2.c1, v2.c2, v2.c3 from t5 left join (select 10 as c1, v1.c2, v1.c3 from (select c1,c2,c3 from t1 where c1 =10) v1,t3 where 1=1) v2 on v2.c1 = t5.c1;
+
+
+--disable_warnings
+--error 0, 1051
+drop table t1;
+--error 0, 1051
+drop table t2;
+--error 0, 1051
+drop table t3;
+--error 0, 1051
+drop table t4;
+--error 0, 1051
+drop table t5;
+--error 0, 1051
+drop table target;
+
+################################################################################################
+## use check constraint to transform const propagate (https://aone.alibaba-inc.com/task/39579745)
+################################################################################################
+
+--disable_warnings
+drop table if exists t1,t2,t3,t4,t5,t6;
+--enable_warnings
+
+create table t1(c1 int, c2 varchar(10), c3 varchar(10), c4 varchar(10) generated always as (c2),
+                constraint check_t1 check (c4 = c3)) partition by list columns(c4)
+               (partition p0 values in ('01'),
+                partition p1 values in ('02'),
+                partition p2 values in ('03'),
+                partition p3 values in ('04'),
+                partition p4 values in ('05'));
+
+create table t2(c1 int, c2 varchar(10), c3 varchar(10), c4 varchar(10) generated always as (substring(c2, 1, 2)),
+                constraint check_t2 check (c4 = substring(c3, 1, 2))) partition by list columns(c4)
+               (partition p0 values in ('01'),
+                partition p1 values in ('02'),
+                partition p2 values in ('03'),
+                partition p3 values in ('04'),
+                partition p4 values in ('05'));
+
+create table t3(c1 int, c2 varchar(10), c3 varchar(10), c4 int generated always as (length(c2)),
+                constraint check_t3 check (c4 = length(c3))) partition by range(c4)
+               (partition p0 values less than (2),
+                partition p1 values less than (4),
+                partition p2 values less than (6),
+                partition p3 values less than (8),
+                partition p4 values less than MAXVALUE);
+
+create table t4(c1 int, c2 int, c3 int, c4 char(10) generated always as (cast(c2 as char(10))),
+                constraint check_t4 check (c4 = cast(c3 as char(10)))) partition by list columns(c4)
+               (partition p0 values in ('11'),
+                partition p1 values in ('22'),
+                partition p2 values in ('33'));
+
+create table t5(c1 int, c2 varchar(10), c3 varchar(10), c4 binary generated always as (cast(c2 as binary)),
+                constraint check_t5 check (c4 = cast(c3 as binary))) partition by list columns(c4)
+               (partition p0 values in ('a'),
+                partition p1 values in ('A'));
+
+create table t6(c1 int, c2 varchar(10), c3 varchar(10), c4 varchar(10) generated always as (hex(substring(c2,1,2))),
+                constraint check_t6 check (c4 = hex(substring(c3,1,2)))) partition by key(c4) partitions 4;
+
+
+--disable_query_log
+--disable_result_log
+insert into t1(c1,c2,c3) values(1,'01','01'),(2,'02','02'),(3,'03','03'),(4,'04','04'),(5,'05','05');
+insert into t2(c1,c2,c3) values(1,'010','011'),(2,'020','022'),(3,'030','033'),(4,'040','044'),(5,'050','055');
+insert into t3(c1,c2,c3) values(1,'a','d'),(2,'aa','bb'),(3,'020','ddd'),(4,'asas','613a'),(5,'050aa','05aaa'),(6,'cccc3c','ddd3dd'),(7,'aaaabbb','ddddb22'),(8,'cdddccdd','dddsssss'),(9,'asassssss','613asdddd'),(10,'050asdasss','02ss558888');
+insert into t4(c1,c2,c3) values(1,11,11), (2,22,22), (3,33,33);
+insert into t5(c1,c2,c3) values(1,'a','a'),(2,'A','A');
+insert into t6(c1,c2,c3) values(1,'aa','aa'),(2,'Aa','Aa'),(3,'AA','AA');
+select count(*) from t1;
+select count(*) from t2;
+select count(*) from t3;
+select count(*) from t4;
+select count(*) from t5;
+select count(*) from t6;
+--enable_query_log
+--enable_result_log
+
+--result_format 4
+--explain_protocol 2
+
+##can transform const propagate
+select * from t1 where c3 = '01';
+select/*+no_rewrite*/ * from t1 where c3 = '01';
+
+select * from t1 where c3 = '01' or c3 = '02';
+select/*+no_rewrite*/ * from t1 where c3 = '01' or c3 = '02';
+
+select * from t1 where c3 in ('03', '04', '05');
+select/*+no_rewrite*/ * from t1 where c3 in ('03', '04', '05');
+
+select * from t1 where (c3 = '01' and c1 = 1) or c3 = '02';
+select/*+no_rewrite*/ * from t1 where (c3 = '01' and c1 = 1) or c3 = '02';
+
+select * from t1 where (c3 = '03' and c1 = 1) or (c3 in ('04', '05') and c1 = 2);
+select/*+no_rewrite*/ * from t1 where (c3 = '03' and c1 = 1) or (c3 in ('04', '05') and c1 = 2);
+
+select * from t2 where c3 = '011';
+select/*+no_rewrite*/ * from t2 where c3 = '011';
+
+select * from t2 where c3 = '011' or c3 = '022';
+select/*+no_rewrite*/ * from t2 where c3 = '011' or c3 = '022';
+
+select * from t2 where c3 in ('033', '043', '055');
+select/*+no_rewrite*/ * from t2 where c3 in ('033', '044', '055');
+
+select * from t3 where c3 = 'bb' or c3 in ('613a', 'ddd3dd');
+select/*+no_rewrite*/ * from t3 where c3 = 'bb' or c3 in ('613a', 'ddd3dd');
+
+select * from t4 where c3 = 11;
+select/*+no_rewrite*/ * from t2 where c3 = 11;
+
+select * from t4 where c3 = 22 or c3 = 33;
+select/*+no_rewrite*/ * from t2 where c3 = 22 or c3 = 33;
+
+select /*+use_concat*/ * from t3 where c3 = 'bb' or c3 = 'dddsssss' or c1 = 1;
+select/*+no_rewrite*/ * from t3 where c3 = 'bb' or c3 = 'dddsssss' or c1 = 1;
+
+select upper(c2), lower(c2), repeat(c2, 2), replace(c2, 'a', '*'), instr(c2, 'a'), locate(c2, 'a') from t3 where c2 = '050aa';
+select/*+no_rewrite*/ upper(c2), lower(c2), repeat(c2, 2), replace(c2, 'a', '*'), instr(c2, 'a'), locate(c2, 'a') from t3 where c2 = '050aa';
+
+select rpad(c2, 5, '#'), lpad(c2, 5, '*'), strcmp(c2, '040'), ltrim(c2), rtrim(c2) from t2 where c2 = '040';
+select/*+no_rewrite*/ rpad(c2, 5, '#'), lpad(c2, 5, '*'), strcmp(c2, '040'), ltrim(c2), rtrim(c2) from t2 where c2 = '040';
+
+select upper(lower(c2)), repeat(replace(c2, 'a', '*'), 2), rpad(lpad(c2, 5, '*'), 5, '#'), ltrim(rtrim(c2)) from t3 where c2 = 'aaaabbb';
+select/*+no_rewrite*/ upper(lower(c2)), repeat(replace(c2, 'a', '*'), 2), rpad(lpad(c2, 5, '*'), 5, '#'), ltrim(rtrim(c2)) from t3 where c2 = 'aaaabbb';
+
+##can't can transform const propagate
+select * from t5 where c3 = 'a';
+select * from t5 where c3 = 'A' and c1 = 1;
+select * from t5 where c3 in ('A');
+select * from t6 where c3 = 'aa';
+select * from t6 where c3 = 'AA' or c3 = 'Aa';
+select * from t6 where c3 in ('AA', 'Aa');
+select hex(c3), cast(c3 as binary), convert(c3, binary), regexp_substr(c3, 'a', 1, 1, 'i') from t5 where c3 = 'a';
+select hex(regexp_substr(c3, 'aa', 1, 1, 'i')) from t6 where c3 = 'aa';
+
+drop table t1,t2,t3,t4,t5,t6;
+
+--echo ********************* test for collation *********
+--disable_warnings
+drop table if exists t1,t2;
+--enable_warnings
+create table t1(c1 varchar(100) collate utf8mb4_bin, c2 varchar(100) collate utf8mb4_general_ci);
+create table t2(c1 varchar(100) collate utf8mb4_bin, c2 varchar(100) collate utf8mb4_general_ci);
+
+--disable_query_log
+--disable_result_log
+insert into t1 values('a','a');
+insert into t1 values('a','A');
+insert into t1 values('A','a');
+insert into t1 values('A','A');
+insert into t2 select * from t1;
+select count(*) from t1;
+select count(*) from t2;
+--enable_query_log
+--enable_result_log
+
+select hex(c1), hex(c2), concat(c1,c2), length(c1), length(c2) from t1 where c1 = 'a' and c2 = 'a';
+select /*+no_rewrite*/ hex(c1), hex(c2), concat(c1,c2), length(c1), length(c2) from t1 where c1 = 'a' and c2 = 'a';
+
+select * from t1 where c1 = c2 and c1 = 'a';
+select /*+no_rewrite*/ * from t1 where c1 = c2 and c1 = 'a';
+
+select * from t1 where c1 = c2 and c2 = 'a';
+select /*+no_rewrite*/ * from t1 where c1 = c2 and c2 = 'a';
+
+select * from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2 and t1.c1 = 'a';
+select /*+no_rewrite*/ * from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2 and t1.c1 = 'a';
+
+select * from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2 and t1.c2 = 'a';
+select /*+no_rewrite*/ * from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2 and t1.c2 = 'a';
+
+select concat(c1, c2), upper(c1), lower(c2) from (select /*+no_merge*/ c1, c2 from t1 where c1 = 'a' and c2 = 'a');
+select /*+no_rewrite*/ concat(c1, c2), upper(c1), lower(c2) from (select /*+no_merge*/ c1, c2 from t1 where c1 = 'a' and c2 = 'a');
+
+select * from t1 where exists (select 1 from t2 where t2.c1 = t1.c2) and t1.c2 = 'a';
+select /*+no_rewrite*/ * from t1 where exists (select 1 from t2 where t2.c1 = t1.c2) and t1.c2 = 'a';
+
+select * from t1 where exists (select 1 from t2 where t2.c2 = t1.c1) and t1.c1 = 'a';
+select /*+no_rewrite*/ * from t1 where exists (select 1 from t2 where t2.c2 = t1.c1) and t1.c1 = 'a';
+
+drop table t1,t2;
+
+--echo ********************* test for implicit cast *********
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(c1 decimal(30,5), c2 int, c3 varchar(10));
+
+--disable_query_log
+--disable_result_log
+insert into t1 values(1, 1, '1.00000a');
+insert into t1 values(2, 2, '2a');
+select count(*) from t1;
+--enable_query_log
+--enable_result_log
+
+select trim(c1) from t1 where c1 = 1;
+select /*+no_rewrite*/ trim(c1) from t1 where c1 = 1;
+
+select * from t1 a where exists (select 1 from t1 b where b.c2 = a.c1 and b.c3 = concat(a.c1, 'a')) and c1 = 1;
+select /*+no_rewrite*/ * from t1 a where exists (select 1 from t1 b where b.c2 = a.c1 and b.c3 = concat(a.c1, 'a')) and c1 = 1;
+
+drop table t1;

@@ -1,0 +1,3819 @@
+drop table t1;
+drop table t2;
+drop table t3;
+drop table t4;
+drop table target;
+create table t1(c1 int, c2 int, c3 int);
+create table t2(c1 int, c2 int, c3 int);
+create table t3(c1 int, c2 int, c3 int);
+create table t4(c1 number, c2 number, c3 number);
+create table target(c1 int, c2 int, c3 int);
+insert into t1 values(1,1,1);
+insert into t1 values(2,2,2);
+insert into t1 values(3,3,3);
+insert into t1 values(4,4,4);
+insert into t1 values(5,5,5);
+insert into t2 values(11,11,11);
+insert into t2 values(12,12,12);
+insert into t2 values(13,13,13);
+insert into t2 values(14,14,14);
+insert into t2 values(15,15,15);
+insert into t3 values(111,111,111);
+insert into t3 values(112,112,112);
+insert into t3 values(113,113,113);
+insert into t3 values(114,114,114);
+insert into t3 values(115,115,115);
+insert into t4 values(1.0, 1.0, 1.0);
+insert into t4 values(2.0, 2.0, 2.0);
+insert into t4 values(3.0, 3.0, 3.0);
+explain_protocol: 1 
+********************* test for select expr transform *********
+EXPLAIN BASIC select * from t1 where t1.c1 = 1;
+Query Plan
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where t1.c1 = 1;
+c1	c2	c3
+1	1	1
+EXPLAIN BASIC select /*+no_rewrite*/* from t1 where t1.c1 = 1;
+Query Plan
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/* from t1 where t1.c1 = 1;
+c1	c2	c3
+1	1	1
+********************* test for set op expr transform *********
+EXPLAIN BASIC select c1 + 1 from (select 1 as c1 from t1 union select 1 as c1 from t2);
+Query Plan
+===========================================
+|ID|OPERATOR              |NAME           |
+-------------------------------------------
+|0 |SUBPLAN SCAN          |ANONYMOUS_VIEW1|
+|1 |??MERGE UNION DISTINCT|               |
+|2 |  ??TABLE FULL SCAN   |t1             |
+|3 |  ??TABLE FULL SCAN   |t2             |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1 + 1]), filter(nil), rowset=256
+      access(nil)
+  1 - output([UNION([1])]), filter(nil), rowset=256
+  2 - output([1]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([1]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select c1 + 1 from (select 1 as c1 from t1 union select 1 as c1 from t2);
+c1 + 1
+2
+EXPLAIN BASIC select c1 + 1 from (select 2 as c1 from t1 union select 2 as c1 from t2);
+Query Plan
+===========================================
+|ID|OPERATOR              |NAME           |
+-------------------------------------------
+|0 |SUBPLAN SCAN          |ANONYMOUS_VIEW1|
+|1 |??MERGE UNION DISTINCT|               |
+|2 |  ??TABLE FULL SCAN   |t1             |
+|3 |  ??TABLE FULL SCAN   |t2             |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([2 + 1]), filter(nil), rowset=256
+      access(nil)
+  1 - output([UNION([1])]), filter(nil), rowset=256
+  2 - output([2]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([2]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select c1 + 1 from (select 2 as c1 from t1 union select 2 as c1 from t2);
+c1 + 1
+3
+EXPLAIN BASIC select c1 + 1 from (select 1 as c1 from t1 intersect select 1 as c1 from t2);
+Query Plan
+===============================================
+|ID|OPERATOR                  |NAME           |
+-----------------------------------------------
+|0 |SUBPLAN SCAN              |ANONYMOUS_VIEW1|
+|1 |??MERGE INTERSECT DISTINCT|               |
+|2 |  ??TABLE FULL SCAN       |t1             |
+|3 |  ??TABLE FULL SCAN       |t2             |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1 + 1]), filter(nil), rowset=256
+      access(nil)
+  1 - output([INTERSECT([1])]), filter(nil), rowset=256
+  2 - output([1]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([1]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select c1 + 1 from (select 1 as c1 from t1 intersect select 1 as c1 from t2);
+c1 + 1
+2
+EXPLAIN BASIC select c1 + 1 from (select 3 as c1 from t1 intersect select 3 as c1 from t2);
+Query Plan
+===============================================
+|ID|OPERATOR                  |NAME           |
+-----------------------------------------------
+|0 |SUBPLAN SCAN              |ANONYMOUS_VIEW1|
+|1 |??MERGE INTERSECT DISTINCT|               |
+|2 |  ??TABLE FULL SCAN       |t1             |
+|3 |  ??TABLE FULL SCAN       |t2             |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([3 + 1]), filter(nil), rowset=256
+      access(nil)
+  1 - output([INTERSECT([1])]), filter(nil), rowset=256
+  2 - output([3]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([3]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select c1 + 1 from (select 3 as c1 from t1 intersect select 3 as c1 from t2);
+c1 + 1
+4
+EXPLAIN BASIC select /*+no_rewrite*/c1 + 1 from (select 1 as c1 from t1 union select 1 as c1 from t2);
+Query Plan
+===========================================
+|ID|OPERATOR              |NAME           |
+-------------------------------------------
+|0 |SUBPLAN SCAN          |ANONYMOUS_VIEW1|
+|1 |??MERGE UNION DISTINCT|               |
+|2 |  ??TABLE FULL SCAN   |t1             |
+|3 |  ??TABLE FULL SCAN   |t2             |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([.c1 + 1]), filter(nil), rowset=256
+      access([.c1])
+  1 - output([UNION([1])]), filter(nil), rowset=256
+  2 - output([1]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([1]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/c1 + 1 from (select 1 as c1 from t1 union select 1 as c1 from t2);
+c1 + 1
+2
+EXPLAIN BASIC select /*+no_rewrite*/c1 + 1 from (select 1 as c1 from t1 intersect select 1 as c1 from t2);
+Query Plan
+===============================================
+|ID|OPERATOR                  |NAME           |
+-----------------------------------------------
+|0 |SUBPLAN SCAN              |ANONYMOUS_VIEW1|
+|1 |??MERGE INTERSECT DISTINCT|               |
+|2 |  ??TABLE FULL SCAN       |t1             |
+|3 |  ??TABLE FULL SCAN       |t2             |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([.c1 + 1]), filter(nil), rowset=256
+      access([.c1])
+  1 - output([INTERSECT([1])]), filter(nil), rowset=256
+  2 - output([1]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([1]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/c1 + 1 from (select 1 as c1 from t1 intersect select 1 as c1 from t2);
+c1 + 1
+2
+********************* test for condition expr transform *********
+inner join
+EXPLAIN BASIC select t1.c1, t2.c1 from t1, t2 where t1.c1 = t2.c1 and t1.c1 = 1;
+Query Plan
+=====================================
+|ID|OPERATOR                   |NAME|
+-------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN |    |
+|1 |??TABLE FULL SCAN          |t1  |
+|2 |??MATERIAL                 |    |
+|3 |  ??TABLE FULL SCAN        |t2  |
+=====================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  1 - output([t1.c1]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter(nil), rowset=256
+  3 - output([t2.c1]), filter([1 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c1, t2.c1 from t1, t2 where t1.c1 = t2.c1 and t1.c1 = 1;
+c1	c1
+EXPLAIN BASIC select /*+no_rewrite*/t1.c1, t2.c1 from t1, t2 where t1.c1 = t2.c1 and t1.c1 = 1;
+Query Plan
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |MERGE JOIN         |    |
+|1 |??TABLE FULL SCAN  |t1  |
+|2 |??SORT             |    |
+|3 |  ??TABLE FULL SCAN|t2  |
+=============================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+      merge_directions([ASC])
+  1 - output([t1.c1]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter(nil), rowset=256
+      sort_keys([t2.c1, ASC])
+  3 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c1, t2.c1 from t1, t2 where t1.c1 = t2.c1 and t1.c1 = 1;
+c1	c1
+outer join
+EXPLAIN BASIC select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 = 1;
+Query Plan
+===========================================
+|ID|OPERATOR                         |NAME|
+-------------------------------------------
+|0 |NESTED-LOOP OUTER JOIN CARTESIAN |    |
+|1 |??TABLE FULL SCAN                |t1  |
+|2 |??MATERIAL                       |    |
+|3 |  ??TABLE FULL SCAN              |t2  |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  1 - output([t1.c1]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter(nil), rowset=256
+  3 - output([t2.c1]), filter([t2.c1 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 = 1;
+c1	c1
+1	NULL
+EXPLAIN BASIC select /*+no_rewrite*/t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 = 1;
+Query Plan
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |MERGE OUTER JOIN   |    |
+|1 |??TABLE FULL SCAN  |t1  |
+|2 |??SORT             |    |
+|3 |  ??TABLE FULL SCAN|t2  |
+=============================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+      merge_directions([ASC])
+  1 - output([t1.c1]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter(nil), rowset=256
+      sort_keys([t2.c1, ASC])
+  3 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 = 1;
+c1	c1
+1	NULL
+EXPLAIN BASIC select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t2.c1 = 1;
+Query Plan
+=====================================
+|ID|OPERATOR                   |NAME|
+-------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN |    |
+|1 |??TABLE FULL SCAN          |t1  |
+|2 |??MATERIAL                 |    |
+|3 |  ??TABLE FULL SCAN        |t2  |
+=====================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  1 - output([t1.c1]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter(nil), rowset=256
+  3 - output([t2.c1]), filter([t2.c1 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t2.c1 = 1;
+c1	c1
+EXPLAIN BASIC select /*+no_rewrite*/t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t2.c1 = 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |HASH OUTER JOIN  |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter([t2.c1 = 1]), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t2.c1 = 1;
+c1	c1
+EXPLAIN BASIC select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t1.c2 = 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |HASH OUTER JOIN  |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1]), filter([t1.c2 = 1]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t1.c2 = 1;
+c1	c1
+1	NULL
+EXPLAIN BASIC select /*+no_rewrite*/t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t1.c2 = 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |HASH OUTER JOIN  |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1]), filter([t1.c2 = 1]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t1.c2 = 1;
+c1	c1
+1	NULL
+EXPLAIN BASIC select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t2.c2 = 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |HASH JOIN        |    |
+|1 |??TABLE FULL SCAN|t2  |
+|2 |??TABLE FULL SCAN|t1  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t2.c1]), filter([t2.c2 = 1]), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t2.c2 = 1;
+c1	c1
+EXPLAIN BASIC select /*+no_rewrite*/t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t2.c2 = 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |HASH OUTER JOIN  |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter([t2.c2 = 1]), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1], [t2.c2]), filter(nil), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c1, t2.c1 from t1 left join t2 on t1.c1 = t2.c1 where t2.c2 = 1;
+c1	c1
+EXPLAIN BASIC select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = 1 and t1.c1 + 1 > t2.c1 and t1.c2 = t2.c2;
+Query Plan
+================================
+|ID|OPERATOR              |NAME|
+--------------------------------
+|0 |HASH RIGHT OUTER JOIN |    |
+|1 |??TABLE FULL SCAN     |t2  |
+|2 |??TABLE FULL SCAN     |t1  |
+================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c2 = t2.c2]), other_conds([t1.c1 = 1])
+  1 - output([t2.c1], [t2.c2]), filter([cast(1, INT(11, 0)) + 1 > t2.c1]), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select t1.c1, t2.c1 from t1 left join t2 on t1.c1 = 1 and t1.c1 + 1 > t2.c1 and t1.c2 = t2.c2;
+c1	c1
+1	NULL
+2	NULL
+3	NULL
+4	NULL
+5	NULL
+EXPLAIN BASIC select /*+no_rewrite*/t1.c1, t2.c1 from t1 left join t2 on t1.c1 = 1 and t1.c1 + 1 > t2.c1 and t1.c2 = t2.c2;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |HASH OUTER JOIN  |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
+      equal_conds([t1.c2 = t2.c2]), other_conds([t1.c1 = 1], [t1.c1 + 1 > t2.c1])
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1], [t2.c2]), filter(nil), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c1, t2.c1 from t1 left join t2 on t1.c1 = 1 and t1.c1 + 1 > t2.c1 and t1.c2 = t2.c2;
+c1	c1
+1	NULL
+2	NULL
+3	NULL
+5	NULL
+4	NULL
+********************* test for orderby expr transform *********
+EXPLAIN BASIC select * from t1 where t1.c1 = 1 order by t1.c1 + 1;
+Query Plan
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where t1.c1 = 1 order by t1.c1 + 1;
+c1	c2	c3
+1	1	1
+EXPLAIN BASIC select /*+no_rewrite*/* from t1 where t1.c1 = 1 order by t1.c1 + 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SORT             |    |
+|1 |??TABLE FULL SCAN|t1  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      sort_keys([t1.c1 + 1, ASC])
+  1 - output([t1.c1], [t1.c2], [t1.c3], [t1.c1 + 1]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/* from t1 where t1.c1 = 1 order by t1.c1 + 1;
+c1	c2	c3
+1	1	1
+********************* test for groupby expr transform *********
+EXPLAIN BASIC select c1 from t1 where t1.c1 = 1 group by t1.c1;
+Query Plan
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select c1 from t1 where t1.c1 = 1 group by t1.c1;
+c1
+1
+EXPLAIN BASIC select /*+no_rewrite*/c1 from t1 where t1.c1 = 1 group by t1.c1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |MERGE GROUP BY   |    |
+|1 |??TABLE FULL SCAN|t1  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), rowset=256
+      group(nil), agg_func(nil)
+  1 - output([t1.c1]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/c1 from t1 where t1.c1 = 1 group by t1.c1;
+c1
+1
+********************* test for const folding using having const info transform *********
+EXPLAIN BASIC select c1 from t1 group by c1 having c1 = 1 order by c1;
+Query Plan
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select c1 from t1 group by c1 having c1 = 1 order by c1;
+c1
+1
+EXPLAIN BASIC select /*+no_rewrite*/c1 from t1 group by c1 having c1 = 1 order by c1;
+Query Plan
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |MERGE GROUP BY     |    |
+|1 |??SORT             |    |
+|2 |  ??TABLE FULL SCAN|t1  |
+=============================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1]), filter([t1.c1 = 1]), rowset=256
+      group([t1.c1]), agg_func(nil)
+  1 - output([t1.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  2 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/c1 from t1 group by c1 having c1 = 1 order by c1;
+c1
+1
+EXPLAIN BASIC select c1, c2 from t1 where c2 = 2 group by c1, c2 having c1 = 1 order by c1;
+Query Plan
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([t1.c2 = 2], [t1.c1 = 1]), rowset=256
+      access([t1.c2], [t1.c1]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select c1, c2 from t1 where c2 = 2 group by c1, c2 having c1 = 1 order by c1;
+c1	c2
+EXPLAIN BASIC select /*+no_rewrite*/c1, c2 from t1 where c2 = 2 group by c1, c2 having c1 = 1 order by c1;
+Query Plan
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |MERGE GROUP BY     |    |
+|1 |??SORT             |    |
+|2 |  ??TABLE FULL SCAN|t1  |
+=============================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([t1.c1 = 1]), rowset=256
+      group([t1.c1]), agg_func(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  2 - output([t1.c2], [t1.c1]), filter([t1.c2 = 2]), rowset=256
+      access([t1.c2], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/c1, c2 from t1 where c2 = 2 group by c1, c2 having c1 = 1 order by c1;
+c1	c2
+EXPLAIN BASIC select c1, c2 from t1 group by c1, c2 having c1 > (select c3 from t3 where t3.c2 = t1.c2) and t1.c2 = 1 order by t1.c2;
+Query Plan
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |HASH DISTINCT      |    |
+|1 |??SUBPLAN FILTER   |    |
+|2 |  ??TABLE FULL SCAN|t1  |
+|3 |  ??TABLE FULL SCAN|t3  |
+=============================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      distinct([t1.c1])
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([subquery(1)(:0)]), init_plan_idxs_(nil), use_batch=false
+  2 - output([t1.c1], [t1.c2]), filter([t1.c2 = 1], [t1.c1 > :0]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t3.c3]), filter([t3.c2 = 1]), rowset=256
+      access([t3.c2], [t3.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+select c1, c2 from t1 group by c1, c2 having c1 > (select c3 from t3 where t3.c2 = t1.c2) and t1.c2 = 1 order by t1.c2;
+c1	c2
+EXPLAIN BASIC select /*+no_rewrite*/c1, c2 from t1 group by c1, c2 having c1 > (select /*+no_rewrite*/c3 from t3 where t3.c2 = t1.c2) and t1.c2 = 1 order by t1.c2;
+Query Plan
+===============================
+|ID|OPERATOR             |NAME|
+-------------------------------
+|0 |SUBPLAN FILTER       |    |
+|1 |??MERGE GROUP BY     |    |
+|2 |? ??SORT             |    |
+|3 |?   ??TABLE FULL SCAN|t1  |
+|4 |??TABLE FULL SCAN    |t3  |
+===============================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([t1.c1 > subquery(1)]), rowset=256
+      exec_params_([t1.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c2], [t1.c1]), filter([t1.c2 = 1]), rowset=256
+      group([t1.c2], [t1.c1]), agg_func(nil)
+  2 - output([t1.c2], [t1.c1]), filter(nil), rowset=256
+      sort_keys([t1.c2, ASC], [t1.c1, ASC])
+  3 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t3.c3]), filter([t3.c2 = :0]), rowset=256
+      access([t3.c2], [t3.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/c1, c2 from t1 group by c1, c2 having c1 > (select /*+no_rewrite*/c3 from t3 where t3.c2 = t1.c2) and t1.c2 = 1 order by t1.c2;
+c1	c2
+********************* test for subquery const pull up transform *********
+EXPLAIN BASIC select * from (select 1 as a, 2 as b from t1) v, t2 where v.a = t2.c1 and v.b = t2.c2;
+Query Plan
+=====================================
+|ID|OPERATOR                   |NAME|
+-------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN |    |
+|1 |??TABLE FULL SCAN          |t2  |
+|2 |??MATERIAL                 |    |
+|3 |  ??TABLE FULL SCAN        |t1  |
+=====================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1], [2], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  1 - output([t2.c1], [t2.c2], [t2.c3]), filter([1 = t2.c1], [2 = t2.c2]), rowset=256
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  2 - output(nil), filter(nil), rowset=256
+  3 - output(nil), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from (select 1 as a, 2 as b from t1) v, t2 where v.a = t2.c1 and v.b = t2.c2;
+a	b	c1	c2	c3
+EXPLAIN BASIC select /*+no_rewrite*/* from (select /*+no_rewrite*/1 as a, 2 as b from t1) v, t2 where v.a = t2.c1 and v.b = t2.c2;
+Query Plan
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |MERGE JOIN         |    |
+|1 |??SUBPLAN SCAN     |v   |
+|2 |? ??TABLE FULL SCAN|t1  |
+|3 |??SORT             |    |
+|4 |  ??TABLE FULL SCAN|t2  |
+=============================
+Outputs & filters:
+-------------------------------------
+  0 - output([v.a], [v.b], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      equal_conds([v.a = t2.c1], [v.b = t2.c2]), other_conds(nil)
+      merge_directions([ASC], [ASC])
+  1 - output([v.a], [v.b]), filter(nil), rowset=256
+      access([v.a], [v.b])
+  2 - output([1], [2]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      sort_keys([t2.c1, ASC], [t2.c2, ASC])
+  4 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/* from (select /*+no_rewrite*/1 as a, 2 as b from t1) v, t2 where v.a = t2.c1 and v.b = t2.c2;
+a	b	c1	c2	c3
+********************* test for subquery const push downing transform *********
+EXPLAIN BASIC select * from t1 WHERE t1.c1 > (select c3 from t3 where t3.c2 = t1.c2) and t1.c2 = 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t3  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([subquery(1)(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c2], [t1.c1], [t1.c3]), filter([t1.c2 = 1], [t1.c1 > :0]), rowset=256
+      access([t1.c2], [t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t3.c3]), filter([t3.c2 = 1]), rowset=256
+      access([t3.c2], [t3.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 WHERE t1.c1 > (select c3 from t3 where t3.c2 = t1.c2) and t1.c2 = 1;
+c1	c2	c3
+EXPLAIN BASIC select /*+no_rewrite*/* from t1 WHERE t1.c1 > (select /*+no_rewrite*/c3 from t3 where t3.c2 = t1.c2) and t1.c2 = 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t3  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 > subquery(1)]), rowset=256
+      exec_params_([t1.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c2], [t1.c1], [t1.c3]), filter([t1.c2 = 1]), rowset=256
+      access([t1.c2], [t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t3.c3]), filter([t3.c2 = :0]), rowset=256
+      access([t3.c2], [t3.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/* from t1 WHERE t1.c1 > (select /*+no_rewrite*/c3 from t3 where t3.c2 = t1.c2) and t1.c2 = 1;
+c1	c2	c3
+********************* test for multi-tables const folding transform *********
+EXPLAIN BASIC select t1.c1 from t1, t2, t3 where t1.c1 = t2.c1 and t2.c1 = t3.c1 and t3.c1 = 123;
+Query Plan
+=======================================
+|ID|OPERATOR                     |NAME|
+---------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN   |    |
+|1 |??NESTED-LOOP JOIN CARTESIAN |    |
+|2 |? ??TABLE FULL SCAN          |t1  |
+|3 |? ??MATERIAL                 |    |
+|4 |?   ??TABLE FULL SCAN        |t2  |
+|5 |??MATERIAL                   |    |
+|6 |  ??TABLE FULL SCAN          |t3  |
+=======================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  1 - output([t1.c1]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([t1.c1]), filter([t1.c1 = 123]), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output(nil), filter(nil), rowset=256
+  4 - output(nil), filter([t2.c1 = 123]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output(nil), filter(nil), rowset=256
+  6 - output(nil), filter([t3.c1 = 123]), rowset=256
+      access([t3.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+select t1.c1 from t1, t2, t3 where t1.c1 = t2.c1 and t2.c1 = t3.c1 and t3.c1 = 123;
+c1
+EXPLAIN BASIC select /*+no_rewrite*/t1.c1 from t1, t2, t3 where t1.c1 = t2.c1 and t2.c1 = t3.c1 and t3.c1 = 123;
+Query Plan
+===============================
+|ID|OPERATOR             |NAME|
+-------------------------------
+|0 |MERGE JOIN           |    |
+|1 |??MERGE JOIN         |    |
+|2 |? ??TABLE FULL SCAN  |t3  |
+|3 |? ??SORT             |    |
+|4 |?   ??TABLE FULL SCAN|t2  |
+|5 |??SORT               |    |
+|6 |  ??TABLE FULL SCAN  |t1  |
+===============================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+      merge_directions([ASC])
+  1 - output([t2.c1]), filter(nil), rowset=256
+      equal_conds([t2.c1 = t3.c1]), other_conds(nil)
+      merge_directions([ASC])
+  2 - output([t3.c1]), filter([t3.c1 = 123]), rowset=256
+      access([t3.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t2.c1]), filter(nil), rowset=256
+      sort_keys([t2.c1, ASC])
+  4 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t1.c1]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC])
+  6 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c1 from t1, t2, t3 where t1.c1 = t2.c1 and t2.c1 = t3.c1 and t3.c1 = 123;
+c1
+EXPLAIN BASIC select v.c1 from t1, (select t2.c2, t3.c1 from t2, t3 where t2.c1 = t3.c1 and t2.c1 = 123) v where t1.c1 = v.c2 and v.c1 = t1.c2 and t1.c1 = 456;
+Query Plan
+=========================================
+|ID|OPERATOR                       |NAME|
+-----------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN     |    |
+|1 |??TABLE FULL SCAN              |t3  |
+|2 |??MATERIAL                     |    |
+|3 |  ??NESTED-LOOP JOIN CARTESIAN |    |
+|4 |    ??TABLE FULL SCAN          |t1  |
+|5 |    ??MATERIAL                 |    |
+|6 |      ??TABLE FULL SCAN        |t2  |
+=========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t3.c1]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  1 - output([t3.c1]), filter([123 = t3.c1]), rowset=256
+      access([t3.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  2 - output(nil), filter(nil), rowset=256
+  3 - output(nil), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  4 - output(nil), filter([t1.c1 = 456], [t1.c2 = 123]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  5 - output(nil), filter(nil), rowset=256
+  6 - output(nil), filter([456 = t2.c2], [t2.c1 = 123]), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select v.c1 from t1, (select t2.c2, t3.c1 from t2, t3 where t2.c1 = t3.c1 and t2.c1 = 123) v where t1.c1 = v.c2 and v.c1 = t1.c2 and t1.c1 = 456;
+c1
+EXPLAIN BASIC select /*+no_rewrite*/v.c1 from t1, (select /*+no_rewrite*/t2.c2, t3.c1 from t2, t3 where t2.c1 = t3.c1 and t2.c1 = 123) v where t1.c1 = v.c2 and v.c1 = t1.c2 and t1.c1 = 456;
+Query Plan
+=================================
+|ID|OPERATOR               |NAME|
+---------------------------------
+|0 |HASH JOIN              |    |
+|1 |??TABLE FULL SCAN      |t1  |
+|2 |??SUBPLAN SCAN         |v   |
+|3 |  ??MERGE JOIN         |    |
+|4 |    ??TABLE FULL SCAN  |t2  |
+|5 |    ??SORT             |    |
+|6 |      ??TABLE FULL SCAN|t3  |
+=================================
+Outputs & filters:
+-------------------------------------
+  0 - output([v.c1]), filter(nil), rowset=256
+      equal_conds([t1.c1 = v.c2], [v.c1 = t1.c2]), other_conds(nil)
+  1 - output([t1.c1], [t1.c2]), filter([t1.c1 = 456]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([v.c2], [v.c1]), filter(nil), rowset=256
+      access([v.c2], [v.c1])
+  3 - output([t2.c2], [t3.c1]), filter(nil), rowset=256
+      equal_conds([t2.c1 = t3.c1]), other_conds(nil)
+      merge_directions([ASC])
+  4 - output([t2.c1], [t2.c2]), filter([t2.c1 = 123]), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t3.c1]), filter(nil), rowset=256
+      sort_keys([t3.c1, ASC])
+  6 - output([t3.c1]), filter(nil), rowset=256
+      access([t3.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/v.c1 from t1, (select /*+no_rewrite*/t2.c2, t3.c1 from t2, t3 where t2.c1 = t3.c1 and t2.c1 = 123) v where t1.c1 = v.c2 and v.c1 = t1.c2 and t1.c1 = 456;
+c1
+********************* test for multi-tables const folding transform *********
+EXPLAIN BASIC select * from (select 1 as a, 2 as b from t1) v, t2 where v.a = t2.c1 and v.b = t2.c2;
+Query Plan
+=====================================
+|ID|OPERATOR                   |NAME|
+-------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN |    |
+|1 |??TABLE FULL SCAN          |t2  |
+|2 |??MATERIAL                 |    |
+|3 |  ??TABLE FULL SCAN        |t1  |
+=====================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1], [2], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  1 - output([t2.c1], [t2.c2], [t2.c3]), filter([1 = t2.c1], [2 = t2.c2]), rowset=256
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  2 - output(nil), filter(nil), rowset=256
+  3 - output(nil), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from (select 1 as a, 2 as b from t1) v, t2 where v.a = t2.c1 and v.b = t2.c2;
+a	b	c1	c2	c3
+EXPLAIN BASIC select /*+no_rewrite*/* from (select /*+no_rewrite*/1 as a, 2 as b from t1) v, t2 where v.a = t2.c1 and v.b = t2.c2;
+Query Plan
+=============================
+|ID|OPERATOR           |NAME|
+-----------------------------
+|0 |MERGE JOIN         |    |
+|1 |??SUBPLAN SCAN     |v   |
+|2 |? ??TABLE FULL SCAN|t1  |
+|3 |??SORT             |    |
+|4 |  ??TABLE FULL SCAN|t2  |
+=============================
+Outputs & filters:
+-------------------------------------
+  0 - output([v.a], [v.b], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      equal_conds([v.a = t2.c1], [v.b = t2.c2]), other_conds(nil)
+      merge_directions([ASC], [ASC])
+  1 - output([v.a], [v.b]), filter(nil), rowset=256
+      access([v.a], [v.b])
+  2 - output([1], [2]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      sort_keys([t2.c1, ASC], [t2.c2, ASC])
+  4 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/* from (select /*+no_rewrite*/1 as a, 2 as b from t1) v, t2 where v.a = t2.c1 and v.b = t2.c2;
+a	b	c1	c2	c3
+********************* test for semi-infos transform *********
+EXPLAIN BASIC select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = 1 and t2.c1 = 1);
+Query Plan
+======================================
+|ID|OPERATOR                   |NAME |
+--------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN |     |
+|1 |??TABLE FULL SCAN          |t1   |
+|2 |??MATERIAL                 |     |
+|3 |  ??SUBPLAN SCAN           |VIEW1|
+|4 |    ??TABLE FULL SCAN      |t2   |
+======================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  1 - output([t1.c3]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output(nil), filter(nil), rowset=256
+  3 - output(nil), filter(nil), rowset=256
+      access(nil)
+  4 - output([1]), filter([t2.c1 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = 1 and t2.c1 = 1);
+c3
+EXPLAIN BASIC select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = 1 and t2.c1 = 1);
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c3]), filter(nil), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([t2.c1 = 1]), startup_filter([:0 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = 1 and t2.c1 = 1);
+c3
+EXPLAIN BASIC select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1);
+Query Plan
+===============================
+|ID|OPERATOR             |NAME|
+-------------------------------
+|0 |HASH RIGHT SEMI JOIN |    |
+|1 |??TABLE FULL SCAN    |t2  |
+|2 |??TABLE FULL SCAN    |t1  |
+===============================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t1.c1], [t1.c3]), filter(nil), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1);
+c3
+EXPLAIN BASIC select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1);
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c3]), filter(nil), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([:0 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1);
+c3
+EXPLAIN BASIC select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1);
+Query Plan
+======================================
+|ID|OPERATOR                   |NAME |
+--------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN |     |
+|1 |??TABLE FULL SCAN          |t1   |
+|2 |??MATERIAL                 |     |
+|3 |  ??SUBPLAN SCAN           |VIEW1|
+|4 |    ??TABLE FULL SCAN      |t2   |
+======================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  1 - output([t1.c3]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output(nil), filter(nil), rowset=256
+  3 - output(nil), filter(nil), rowset=256
+      access(nil)
+  4 - output([1]), filter([t2.c1 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1);
+c3
+EXPLAIN BASIC select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1);
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c3]), filter(nil), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([:0 = t2.c1], [t2.c1 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1);
+c3
+EXPLAIN BASIC select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 and t1.c1 = 1);
+Query Plan
+===========================================
+|ID|OPERATOR                        |NAME |
+-------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN CARTESIAN |     |
+|1 |??TABLE FULL SCAN               |t1   |
+|2 |??MATERIAL                      |     |
+|3 |  ??SUBPLAN SCAN                |VIEW1|
+|4 |    ??TABLE FULL SCAN           |t2   |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  1 - output([t1.c3]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output(nil), filter(nil), rowset=256
+  3 - output(nil), filter(nil), rowset=256
+      access(nil)
+  4 - output([t2.c1]), filter([t2.c1 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 and t1.c1 = 1);
+c3
+EXPLAIN BASIC select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 and t1.c1 = 1);
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c3]), filter(nil), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([:0 = t2.c1]), startup_filter([:0 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 and t1.c1 = 1);
+c3
+EXPLAIN BASIC select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1) and t1.c1 = 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c3]), filter([t1.c1 = 1]), startup_filter([:0]), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([1 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1) and t1.c1 = 1;
+c3
+EXPLAIN BASIC select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1) and t1.c1 = 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c3]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([:0 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1) and t1.c1 = 1;
+c3
+EXPLAIN BASIC select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1) and t1.c1 = 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c3]), filter([t1.c1 = 1]), startup_filter([:0]), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([t2.c1 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1) and t1.c1 = 1;
+c3
+EXPLAIN BASIC select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1) and t1.c1 = 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c3]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([:0 = t2.c1], [t2.c1 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1) and t1.c1 = 1;
+c3
+EXPLAIN BASIC select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1) and t1.c1 = 2;
+Query Plan
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter(nil), startup_filter([0]), rowset=256
+      access([t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1) and t1.c1 = 2;
+c3
+EXPLAIN BASIC select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1) and t1.c1 = 2;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c3]), filter([t1.c1 = 2]), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([:0 = t2.c1], [t2.c1 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 and t2.c1 = 1) and t1.c1 = 2;
+c3
+EXPLAIN BASIC select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 + 1 = t2.c1 and t1.c1 = 1);
+Query Plan
+======================================
+|ID|OPERATOR                   |NAME |
+--------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN |     |
+|1 |??TABLE FULL SCAN          |t1   |
+|2 |??MATERIAL                 |     |
+|3 |  ??SUBPLAN SCAN           |VIEW2|
+|4 |    ??TABLE FULL SCAN      |t2   |
+======================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  1 - output([t1.c3]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output(nil), filter(nil), rowset=256
+  3 - output(nil), filter(nil), rowset=256
+      access(nil)
+  4 - output([1]), filter([cast(1, INT(11, 0)) + 1 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 + 1 = t2.c1 and t1.c1 = 1);
+c3
+EXPLAIN BASIC select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 + 1 = t2.c1 and t1.c1 = 1);
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c3]), filter(nil), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([:0 + 1 = t2.c1]), startup_filter([:0 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 + 1 = t2.c1 and t1.c1 = 1);
+c3
+EXPLAIN BASIC select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 + 1 = t2.c1 and t2.c1 = 1);
+Query Plan
+======================================
+|ID|OPERATOR                   |NAME |
+--------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN |     |
+|1 |??TABLE FULL SCAN          |t1   |
+|2 |??MATERIAL                 |     |
+|3 |  ??SUBPLAN SCAN           |VIEW1|
+|4 |    ??TABLE FULL SCAN      |t2   |
+======================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  1 - output([t1.c3]), filter([t1.c1 + 1 = 1]), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output(nil), filter(nil), rowset=256
+  3 - output(nil), filter(nil), rowset=256
+      access(nil)
+  4 - output([1]), filter([t2.c1 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 + 1 = t2.c1 and t2.c1 = 1);
+c3
+EXPLAIN BASIC select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 + 1 = t2.c1 and t2.c1 = 1);
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c3]), filter(nil), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([:0 + 1 = t2.c1], [t2.c1 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 + 1 = t2.c1 and t2.c1 = 1);
+c3
+EXPLAIN BASIC select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 + 1 = t2.c1) and t1.c1 = 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c3]), filter([t1.c1 = 1]), startup_filter([:0]), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([cast(1, INT(11, 0)) + 1 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 + 1 = t2.c1) and t1.c1 = 1;
+c3
+EXPLAIN BASIC select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 + 1 = t2.c1) and t1.c1 = 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c3]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([:0 + 1 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 + 1 = t2.c1) and t1.c1 = 1;
+c3
+EXPLAIN BASIC select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 + 1 and t1.c1 = 1);
+Query Plan
+===========================================
+|ID|OPERATOR                        |NAME |
+-------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN CARTESIAN |     |
+|1 |??TABLE FULL SCAN               |t1   |
+|2 |??MATERIAL                      |     |
+|3 |  ??SUBPLAN SCAN                |VIEW1|
+|4 |    ??TABLE FULL SCAN           |t2   |
+===========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  1 - output([t1.c3]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output(nil), filter(nil), rowset=256
+  3 - output(nil), filter(nil), rowset=256
+      access(nil)
+  4 - output([t2.c1]), filter([1 = t2.c1 + 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 + 1 and t1.c1 = 1);
+c3
+EXPLAIN BASIC select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 + 1 and t1.c1 = 1);
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c3]), filter(nil), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([:0 = t2.c1 + 1]), startup_filter([:0 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 + 1 and t1.c1 = 1);
+c3
+EXPLAIN BASIC select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 + 1 and t2.c1 = 1);
+Query Plan
+======================================
+|ID|OPERATOR                   |NAME |
+--------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN |     |
+|1 |??TABLE FULL SCAN          |t1   |
+|2 |??MATERIAL                 |     |
+|3 |  ??SUBPLAN SCAN           |VIEW1|
+|4 |    ??TABLE FULL SCAN      |t2   |
+======================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  1 - output([t1.c3]), filter([t1.c1 = cast(1, INT(11, 0)) + 1]), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output(nil), filter(nil), rowset=256
+  3 - output(nil), filter(nil), rowset=256
+      access(nil)
+  4 - output([1]), filter([t2.c1 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 + 1 and t2.c1 = 1);
+c3
+EXPLAIN BASIC select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 + 1 and t2.c1 = 1);
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c3]), filter(nil), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([:0 = t2.c1 + 1], [t2.c1 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 + 1 and t2.c1 = 1);
+c3
+EXPLAIN BASIC select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 + 1) and t1.c1 = 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c3]), filter([t1.c1 = 1]), startup_filter([:0]), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([1 = t2.c1 + 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c3 from t1 where exists (select 1 from t2 where t1.c1 = t2.c1 + 1) and t1.c1 = 1;
+c3
+EXPLAIN BASIC select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 + 1) and t1.c1 = 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c3]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c3]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([:0 = t2.c1 + 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/t1.c3 from t1 where exists (select /*+no_rewrite*/1 from t2 where t1.c1 = t2.c1 + 1) and t1.c1 = 1;
+c3
+********************* test for update-view regression *********
+start transaction;
+EXPLAIN BASIC update t1 set c1 = c2 + 1 where c2 in (select count(t2.c2) from t2 where t2.c3 = t1.c2) or t1.c2 = 5;
+Query Plan
+===================================
+|ID|OPERATOR                |NAME |
+-----------------------------------
+|0 |UPDATE                  |     |
+|1 |??HASH RIGHT OUTER JOIN |     |
+|2 |  ??SUBPLAN SCAN        |VIEW1|
+|3 |  ? ??HASH GROUP BY     |     |
+|4 |  ?   ??TABLE FULL SCAN |t2   |
+|5 |  ??TABLE FULL SCAN     |t1   |
+===================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{t1: ({t1: (t1.__pk_increment, t1.c1, t1.c2, t1.c3)})}]),
+      update([t1.c1=column_conv(INT,PS:(11,0),NULL,cast(t1.c2 + 1, INT(-1, 0)))])
+  1 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 = CASE WHEN VIEW1.t2.c3 IS NOT NULL THEN VIEW1.count(t2.c2) ELSE 0 END OR t1.c2 
+      = 5]), rowset=256
+      equal_conds([VIEW1.t2.c3 = t1.c2]), other_conds(nil)
+  2 - output([VIEW1.count(t2.c2)], [VIEW1.t2.c3]), filter(nil), rowset=256
+      access([VIEW1.count(t2.c2)], [VIEW1.t2.c3])
+  3 - output([T_FUN_COUNT(t2.c2)], [t2.c3]), filter(nil), rowset=256
+      group([t2.c3]), agg_func([T_FUN_COUNT(t2.c2)])
+  4 - output([t2.c3], [t2.c2]), filter(nil), rowset=256
+      access([t2.c3], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+update t1 set c1 = c2 + 1 where c2 in (select count(t2.c2) from t2 where t2.c3 = t1.c2) or t1.c2 = 5;
+rollback;
+********************* test for empty select list issue*********
+EXPLAIN BASIC select * from t1 where t1.c2 > any (select 1 * 1 from dual);
+Query Plan
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c2 > 1 * 1]), rowset=256
+      access([t1.c2], [t1.c1], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where t1.c2 > any (select 1 * 1 from dual);
+c1	c2	c3
+2	2	2
+3	3	3
+4	4	4
+5	5	5
+********************* test for subquery in select list*********
+EXPLAIN BASIC select c1, (select c1 from t2 where t2.c2 = t1.c2) from t1 where c2 = 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [:0]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([subquery(1)(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1]), filter([t1.c2 = 1]), rowset=256
+      access([t1.c2], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter([t2.c2 = 1]), rowset=256
+      access([t2.c2], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select c1, (select c1 from t2 where t2.c2 = t1.c2) from t1 where c2 = 1;
+c1	(select c1 from t2 where t2.c2 = t1.c2)
+1	NULL
+EXPLAIN BASIC select /*+no_rewrite*/c1, (select /*+no_rewrite*/c1 from t2 where t2.c2 = t1.c2) from t1 where c2 = 1;
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [subquery(1)]), filter(nil), rowset=256
+      exec_params_([t1.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c2], [t1.c1]), filter([t1.c2 = 1]), rowset=256
+      access([t1.c2], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1]), filter([t2.c2 = :0]), rowset=256
+      access([t2.c2], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/c1, (select /*+no_rewrite*/c1 from t2 where t2.c2 = t1.c2) from t1 where c2 = 1;
+c1	(select /*+no_rewrite*/c1 from t2 where t2.c2 = t1.c2)
+1	NULL
+********************* test for type-cast *********
+EXPLAIN BASIC select v.c1 / 2 from (select c1, c2 from t4 where c1 = 1) v;
+Query Plan
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t4  |
+=========================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(cast(1, DECIMAL(1, 0)), DECIMAL(10, 0)) / cast(2, DECIMAL(1, 0))]), filter([t4.c1 = cast(1, DECIMAL(1, 0))]), rowset=256
+      access([t4.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
+select v.c1 / 2 from (select c1, c2 from t4 where c1 = 1) v;
+v.c1 / 2
+0.5000
+EXPLAIN BASIC select v.c1 / 2 from (select c1, c2 from t1 where c1 = 1.0) v;
+Query Plan
+=========================
+|ID|OPERATOR       |NAME|
+-------------------------
+|0 |TABLE FULL SCAN|t1  |
+=========================
+Outputs & filters:
+-------------------------------------
+  0 - output([cast(t1.c1, DECIMAL(11, 0)) / cast(2, DECIMAL(1, 0))]), filter([cast(t1.c1, DECIMAL(11, 0)) = 1.0]), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select v.c1 / 2 from (select c1, c2 from t1 where c1 = 1.0) v;
+v.c1 / 2
+0.5000
+********************* test for crud*********
+EXPLAIN BASIC insert into target select t1.c1, t1.c2, t1.c3 from t1, t2 where t1.c1 = t2.c1 and t2.c1 = 1;
+Query Plan
+====================================================
+|ID|OPERATOR                       |NAME           |
+----------------------------------------------------
+|0 |INSERT                         |               |
+|1 |??SUBPLAN SCAN                 |ANONYMOUS_VIEW1|
+|2 |  ??NESTED-LOOP JOIN CARTESIAN |               |
+|3 |    ??TABLE FULL SCAN          |t1             |
+|4 |    ??MATERIAL                 |               |
+|5 |      ??TABLE FULL SCAN        |t2             |
+====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      columns([{target: ({target: (target.__pk_increment, target.c1, target.c2, target.c3)})}]), partitions(p0), 
+      column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,
+      PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 = 1]), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  4 - output(nil), filter(nil), rowset=256
+  5 - output(nil), filter([t2.c1 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+insert into target select t1.c1, t1.c2, t1.c3 from t1, t2 where t1.c1 = t2.c1 and t2.c1 = 1;
+EXPLAIN BASIC insert into target select /*+no_rewrite*/t1.c1, t1.c2, t1.c3 from t1, t2 where t1.c1 = t2.c1 and t2.c1 = 1;
+Query Plan
+==========================================
+|ID|OPERATOR             |NAME           |
+------------------------------------------
+|0 |INSERT               |               |
+|1 |??SUBPLAN SCAN       |ANONYMOUS_VIEW1|
+|2 |  ??HASH JOIN        |               |
+|3 |    ??TABLE FULL SCAN|t2             |
+|4 |    ??TABLE FULL SCAN|t1             |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      columns([{target: ({target: (target.__pk_increment, target.c1, target.c2, target.c3)})}]), partitions(p0), 
+      column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,
+      PS:(11,0),NULL,ANONYMOUS_VIEW1.c3)])
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+      access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  3 - output([t2.c1]), filter([t2.c1 = 1]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+insert into target select /*+no_rewrite*/t1.c1, t1.c2, t1.c3 from t1, t2 where t1.c1 = t2.c1 and t2.c1 = 1;
+EXPLAIN BASIC update target set c1 = c2 + 1 where c2 > (select count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+Query Plan
+=========================================
+|ID|OPERATOR                     |NAME  |
+-----------------------------------------
+|0 |UPDATE                       |      |
+|1 |??NESTED-LOOP JOIN CARTESIAN |      |
+|2 |  ??SUBPLAN SCAN             |VIEW1 |
+|3 |  ? ??SCALAR GROUP BY        |      |
+|4 |  ?   ??TABLE FULL SCAN      |t2    |
+|5 |  ??TABLE FULL SCAN          |target|
+=========================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{target: ({target: (target.__pk_increment, target.c1, target.c2, target.c3)}), hash_distinct}]),
+      update([target.c1=column_conv(INT,PS:(11,0),NULL,cast(cast(1, INT(11, 0)) + 1, INT(-1, 0)))])
+  1 - output([target.__pk_increment], [target.c1], [target.c2], [target.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output(nil), filter(nil), rowset=256
+      access(nil)
+  3 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(t2.c2))]), filter([1 > T_FUN_COUNT_SUM(T_FUN_COUNT(t2.c2))]), rowset=256
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(t2.c2))])
+  4 - output([T_FUN_COUNT(t2.c2)]), filter([t2.c3 = 1]), rowset=256
+      access([t2.c3], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([target.__pk_increment], [target.c1], [target.c2], [target.c3]), filter([target.c2 = 1]), rowset=256
+      access([target.__pk_increment], [target.c1], [target.c2], [target.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([target.__pk_increment]), range(MIN ; MAX)always true
+update target set c1 = c2 + 1 where c2 > (select count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+EXPLAIN BASIC update /*+no_rewrite*/target set c1 = c2 + 1 where c2 > (select count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+Query Plan
+=================================
+|ID|OPERATOR             |NAME  |
+---------------------------------
+|0 |UPDATE               |      |
+|1 |??SUBPLAN FILTER     |      |
+|2 |  ??TABLE FULL SCAN  |target|
+|3 |  ??SCALAR GROUP BY  |      |
+|4 |    ??TABLE FULL SCAN|t2    |
+=================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{target: ({target: (target.__pk_increment, target.c1, target.c2, target.c3)})}]),
+      update([target.c1=column_conv(INT,PS:(11,0),NULL,cast(target.c2 + 1, INT(-1, 0)))])
+  1 - output([target.__pk_increment], [target.c1], [target.c2], [target.c3]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([subquery(1)(:0)]), init_plan_idxs_(nil), use_batch=false
+  2 - output([target.__pk_increment], [target.c1], [target.c2], [target.c3]), filter([target.c2 > :0], [target.c2 = 1]), rowset=256
+      access([target.__pk_increment], [target.c1], [target.c2], [target.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([target.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(t2.c2))]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(t2.c2))])
+  4 - output([T_FUN_COUNT(t2.c2)]), filter([t2.c3 = 1]), rowset=256
+      access([t2.c3], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+update /*+no_rewrite*/target set c1 = c2 + 1 where c2 > (select count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+EXPLAIN BASIC delete from target where c2 > (select count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+Query Plan
+=========================================
+|ID|OPERATOR                     |NAME  |
+-----------------------------------------
+|0 |DELETE                       |      |
+|1 |??NESTED-LOOP JOIN CARTESIAN |      |
+|2 |  ??SUBPLAN SCAN             |VIEW1 |
+|3 |  ? ??SCALAR GROUP BY        |      |
+|4 |  ?   ??TABLE FULL SCAN      |t2    |
+|5 |  ??TABLE FULL SCAN          |target|
+=========================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{target: ({target: (target.__pk_increment, target.c1, target.c2, target.c3)}), hash_distinct}])
+  1 - output([target.__pk_increment], [target.c1], [target.c2], [target.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output(nil), filter(nil), rowset=256
+      access(nil)
+  3 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(t2.c2))]), filter([1 > T_FUN_COUNT_SUM(T_FUN_COUNT(t2.c2))]), rowset=256
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(t2.c2))])
+  4 - output([T_FUN_COUNT(t2.c2)]), filter([t2.c3 = 1]), rowset=256
+      access([t2.c3], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([target.__pk_increment], [target.c1], [target.c2], [target.c3]), filter([target.c2 = 1]), rowset=256
+      access([target.__pk_increment], [target.c1], [target.c2], [target.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([target.__pk_increment]), range(MIN ; MAX)always true
+delete from target where c2 > (select count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+EXPLAIN BASIC delete /*+no_rewrite*/from target where c2 > (select count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+Query Plan
+=================================
+|ID|OPERATOR             |NAME  |
+---------------------------------
+|0 |DELETE               |      |
+|1 |??SUBPLAN FILTER     |      |
+|2 |  ??TABLE FULL SCAN  |target|
+|3 |  ??SCALAR GROUP BY  |      |
+|4 |    ??TABLE FULL SCAN|t2    |
+=================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{target: ({target: (target.__pk_increment, target.c1, target.c2, target.c3)})}])
+  1 - output([target.__pk_increment], [target.c1], [target.c2], [target.c3]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([subquery(1)(:0)]), init_plan_idxs_(nil), use_batch=false
+  2 - output([target.__pk_increment], [target.c1], [target.c2], [target.c3]), filter([target.c2 > :0], [target.c2 = 1]), rowset=256
+      access([target.__pk_increment], [target.c1], [target.c2], [target.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([target.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(t2.c2))]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(t2.c2))])
+  4 - output([T_FUN_COUNT(t2.c2)]), filter([t2.c3 = 1]), rowset=256
+      access([t2.c3], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+delete /*+no_rewrite*/from target where c2 > (select count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+********************* test for update assignments *********
+EXPLAIN BASIC update target set c1 = c2 + 1 where c2 = 1;
+Query Plan
+=============================
+|ID|OPERATOR         |NAME  |
+-----------------------------
+|0 |UPDATE           |      |
+|1 |??TABLE FULL SCAN|target|
+=============================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{target: ({target: (target.__pk_increment, target.c1, target.c2, target.c3)})}]),
+      update([target.c1=column_conv(INT,PS:(11,0),NULL,cast(cast(1, INT(11, 0)) + 1, INT(-1, 0)))])
+  1 - output([target.__pk_increment], [target.c1], [target.c2], [target.c3]), filter([target.c2 = 1]), rowset=256
+      access([target.__pk_increment], [target.c1], [target.c2], [target.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([target.__pk_increment]), range(MIN ; MAX)always true
+update target set c1 = c2 + 1 where c2 = 1;
+EXPLAIN BASIC update /*+no_rewrite*/target set c1 = c2 + 1 where c2 = 1;
+Query Plan
+=============================
+|ID|OPERATOR         |NAME  |
+-----------------------------
+|0 |UPDATE           |      |
+|1 |??TABLE FULL SCAN|target|
+=============================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{target: ({target: (target.__pk_increment, target.c1, target.c2, target.c3)})}]),
+      update([target.c1=column_conv(INT,PS:(11,0),NULL,cast(target.c2 + 1, INT(-1, 0)))])
+  1 - output([target.__pk_increment], [target.c1], [target.c2], [target.c3]), filter([target.c2 = 1]), rowset=256
+      access([target.__pk_increment], [target.c1], [target.c2], [target.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([target.__pk_increment]), range(MIN ; MAX)always true
+update /*+no_rewrite*/target set c1 = c2 + 1 where c2 = 1;
+EXPLAIN BASIC update target set c1 = c2 + 1 where c1 = 1;
+Query Plan
+=============================
+|ID|OPERATOR         |NAME  |
+-----------------------------
+|0 |UPDATE           |      |
+|1 |??TABLE FULL SCAN|target|
+=============================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{target: ({target: (target.__pk_increment, target.c1, target.c2, target.c3)})}]),
+      update([target.c1=column_conv(INT,PS:(11,0),NULL,cast(target.c2 + 1, INT(-1, 0)))])
+  1 - output([target.__pk_increment], [target.c1], [target.c2], [target.c3]), filter([target.c1 = 1]), rowset=256
+      access([target.__pk_increment], [target.c1], [target.c2], [target.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([target.__pk_increment]), range(MIN ; MAX)always true
+update target set c1 = c2 + 1 where c1 = 1;
+EXPLAIN BASIC update /*+no_rewrite*/target set c1 = c2 + 1 where c1 = 1;
+Query Plan
+=============================
+|ID|OPERATOR         |NAME  |
+-----------------------------
+|0 |UPDATE           |      |
+|1 |??TABLE FULL SCAN|target|
+=============================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{target: ({target: (target.__pk_increment, target.c1, target.c2, target.c3)})}]),
+      update([target.c1=column_conv(INT,PS:(11,0),NULL,cast(target.c2 + 1, INT(-1, 0)))])
+  1 - output([target.__pk_increment], [target.c1], [target.c2], [target.c3]), filter([target.c1 = 1]), rowset=256
+      access([target.__pk_increment], [target.c1], [target.c2], [target.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([target.__pk_increment]), range(MIN ; MAX)always true
+update /*+no_rewrite*/target set c1 = c2 + 1 where c1 = 1;
+EXPLAIN BASIC update target set c1 = c2 + 1 where c2 > (select count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+Query Plan
+=========================================
+|ID|OPERATOR                     |NAME  |
+-----------------------------------------
+|0 |UPDATE                       |      |
+|1 |??NESTED-LOOP JOIN CARTESIAN |      |
+|2 |  ??SUBPLAN SCAN             |VIEW1 |
+|3 |  ? ??SCALAR GROUP BY        |      |
+|4 |  ?   ??TABLE FULL SCAN      |t2    |
+|5 |  ??TABLE FULL SCAN          |target|
+=========================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{target: ({target: (target.__pk_increment, target.c1, target.c2, target.c3)}), hash_distinct}]),
+      update([target.c1=column_conv(INT,PS:(11,0),NULL,cast(cast(1, INT(11, 0)) + 1, INT(-1, 0)))])
+  1 - output([target.__pk_increment], [target.c1], [target.c2], [target.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output(nil), filter(nil), rowset=256
+      access(nil)
+  3 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(t2.c2))]), filter([1 > T_FUN_COUNT_SUM(T_FUN_COUNT(t2.c2))]), rowset=256
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(t2.c2))])
+  4 - output([T_FUN_COUNT(t2.c2)]), filter([t2.c3 = 1]), rowset=256
+      access([t2.c3], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([target.__pk_increment], [target.c1], [target.c2], [target.c3]), filter([target.c2 = 1]), rowset=256
+      access([target.__pk_increment], [target.c1], [target.c2], [target.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([target.__pk_increment]), range(MIN ; MAX)always true
+update target set c1 = c2 + 1 where c2 > (select count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+EXPLAIN BASIC update /*+no_rewrite*/target set c1 = c2 + 1 where c2 > (select /*+no_rewrite*/count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+Query Plan
+=================================
+|ID|OPERATOR             |NAME  |
+---------------------------------
+|0 |UPDATE               |      |
+|1 |??SUBPLAN FILTER     |      |
+|2 |  ??TABLE FULL SCAN  |target|
+|3 |  ??SCALAR GROUP BY  |      |
+|4 |    ??TABLE FULL SCAN|t2    |
+=================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{target: ({target: (target.__pk_increment, target.c1, target.c2, target.c3)})}]),
+      update([target.c1=column_conv(INT,PS:(11,0),NULL,cast(target.c2 + 1, INT(-1, 0)))])
+  1 - output([target.__pk_increment], [target.c1], [target.c2], [target.c3]), filter([target.c2 > subquery(1)]), rowset=256
+      exec_params_([target.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  2 - output([target.__pk_increment], [target.c1], [target.c2], [target.c3]), filter([target.c2 = 1]), rowset=256
+      access([target.__pk_increment], [target.c1], [target.c2], [target.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([target.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(t2.c2))]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(t2.c2))])
+  4 - output([T_FUN_COUNT(t2.c2)]), filter([t2.c3 = :0]), rowset=256
+      access([t2.c3], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+update /*+no_rewrite*/target set c1 = c2 + 1 where c2 > (select /*+no_rewrite*/count(t2.c2) from t2 where t2.c3 = target.c2) and target.c2 = 1;
+## aggr func const cast removing
+EXPLAIN BASIC select * from t1 where c1 in (select  sum(c2) s from t2 where c2 = 2);
+Query Plan
+================================
+|ID|OPERATOR             |NAME |
+--------------------------------
+|0 |HASH JOIN            |     |
+|1 |??SUBPLAN SCAN       |VIEW1|
+|2 |? ??SCALAR GROUP BY  |     |
+|3 |?   ??TABLE FULL SCAN|t2   |
+|4 |??TABLE FULL SCAN    |t1   |
+================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      equal_conds([cast(t1.c1, DECIMAL(11, 0)) = VIEW1.s]), other_conds(nil)
+  1 - output([VIEW1.s]), filter(nil), rowset=256
+      access([VIEW1.s])
+  2 - output([T_FUN_SUM(t2.c2)]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_SUM(t2.c2)])
+  3 - output([t2.c2]), filter([t2.c2 = 2]), rowset=256
+      access([t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  4 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where c1 in (select  sum(c2) s from t2 where c2 = 2);
+c1	c2	c3
+********************* test for regression tracking *********
+drop table t1;
+drop table t2;
+create table t1 (c1 int primary key, c2 int) partition by hash(c1) partitions 2;
+create index i1 on t1(c2) global;
+create table t2 (c1 int primary key, c2 int) partition by hash(c1) partitions 2;
+create index i2 on t2(c2) global;
+EXPLAIN BASIC select /*+use_hash(t1, t2)*/ * from t1 where (t1.c1, t1.c2) not in (select c1, c2 from t2 where c1 = 5);
+Query Plan
+=========================================
+|ID|OPERATOR                     |NAME  |
+-----------------------------------------
+|0 |NESTED-LOOP ANTI JOIN        |      |
+|1 |??DISTRIBUTED TABLE FULL SCAN|t1(i1)|
+|2 |??MATERIAL                   |      |
+|3 |  ??SUBPLAN SCAN             |VIEW1 |
+|4 |    ??TABLE GET              |t2    |
+=========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      conds([t1.c1 = 5], [(T_OP_OR, t1.c2 = VIEW1.c2, t1.c2 IS NULL, VIEW1.c2 IS NULL)]), nl_params_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=true, 
+      range_key([t1.c2], [t1.c1]), range(MIN,MIN ; MAX,MAX)always true
+  2 - output([VIEW1.c2]), filter(nil), rowset=256
+  3 - output([VIEW1.c2]), filter(nil), rowset=256
+      access([VIEW1.c2])
+  4 - output([t2.c2]), filter(nil), rowset=256
+      access([t2.c2]), partitions(p1)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range[5 ; 5], 
+      range_cond([t2.c1 = 5])
+select /*+use_hash(t1, t2)*/ * from t1 where (t1.c1, t1.c2) not in (select c1, c2 from t2 where c1 = 5);
+c1	c2
+drop table t1;
+drop table t2;
+drop table t3;
+create table t1(a int, b int, c int) partition by hash(a) partitions 5;
+create table t2(a int, b int, c int) partition by hash(a) partitions 5;
+create table t3(a int, b int, c int) partition by hash(a) partitions 5;
+EXPLAIN BASIC select a from t1 where a = 1 intersect select a from t2;
+Query Plan
+==================================
+|ID|OPERATOR                |NAME|
+----------------------------------
+|0 |MERGE INTERSECT DISTINCT|    |
+|1 |??TABLE FULL SCAN       |t1  |
+|2 |??TABLE FULL SCAN       |t2  |
+==================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERSECT([1])]), filter(nil), rowset=256
+  1 - output([t1.a]), filter([t1.a = 1]), rowset=256
+      access([t1.a]), partitions(p1)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.a]), filter([t2.a = 1]), rowset=256
+      access([t2.a]), partitions(p1)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select a from t1 where a = 1 intersect select a from t2;
+a
+drop table t1;
+drop table t2;
+create table t1 (c1 int, c2 int) partition by hash(c1) partitions 4;
+create table t2 (c1 int, c2 int) partition by hash(c1) partitions 4;
+EXPLAIN BASIC select t1.c1, t1.c2, t1.c1 + t1.c2 from t1 where not exists (select 1 from t2 where t1.c1 = t2.c1) and t1.c1 in (1);
+Query Plan
+===========================
+|ID|OPERATOR         |NAME|
+---------------------------
+|0 |SUBPLAN FILTER   |    |
+|1 |??TABLE FULL SCAN|t1  |
+|2 |??TABLE FULL SCAN|t2  |
+===========================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [cast(1, INT(11, 0)) + t1.c2]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([(T_OP_NOT_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c2]), filter([t1.c1 = 1]), startup_filter([:0]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p1)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([1 = t2.c1]), rowset=256
+      access([t2.c1]), partitions(p1)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c1, t1.c2, t1.c1 + t1.c2 from t1 where not exists (select 1 from t2 where t1.c1 = t2.c1) and t1.c1 in (1);
+c1	c2	t1.c1 + t1.c2
+drop table t1;
+drop table t2;
+drop table t3;
+drop table t4;
+create table t1(c1 int, c2 int, c3 int);
+create table t2(c1 int, c2 int, c3 int);
+create table t3(c1 int, c2 int, c3 int);
+create table t4(c1 int, c2 int, c3 int);
+EXPLAIN BASIC select t1.* from t1 right join t2 on t1.c1 = t2.c1 right join t3 on t2.c2 = t3.c2 where t3.c2 = 1 order by t3.c3 limit 1;
+Query Plan
+==============================================
+|ID|OPERATOR                           |NAME |
+----------------------------------------------
+|0 |LIMIT                              |     |
+|1 |??NESTED-LOOP OUTER JOIN CARTESIAN |     |
+|2 |  ??SUBPLAN SCAN                   |VIEW1|
+|3 |  ? ??TOP-N SORT                   |     |
+|4 |  ?   ??TABLE FULL SCAN            |t3   |
+|5 |  ??MATERIAL                       |     |
+|6 |    ??HASH OUTER JOIN              |     |
+|7 |      ??TABLE FULL SCAN            |t2   |
+|8 |      ??TABLE FULL SCAN            |t1   |
+==============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      limit(1), offset(nil)
+  1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output(nil), filter(nil), rowset=256
+      access(nil)
+  3 - output([t3.c2], [t3.c3]), filter(nil), rowset=256
+      sort_keys([t3.c3, ASC]), topn(1)
+  4 - output([t3.c2], [t3.c3]), filter([t3.c2 = 1]), rowset=256
+      access([t3.c2], [t3.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+  6 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  7 - output([t2.c1]), filter([t2.c2 = 1]), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  8 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select t1.* from t1 right join t2 on t1.c1 = t2.c1 right join t3 on t2.c2 = t3.c2 where t3.c2 = 1 order by t3.c3 limit 1;
+c1	c2	c3
+drop table t1;
+drop table t2;
+create table t1(c1 int primary key, c2 int) partition by hash (c1) partitions 5;
+create table t2(c1 int primary key, c2 int, c3 varchar(32)) partition by hash (c1) partitions 3;
+EXPLAIN BASIC select * from t1 X, t1 Y where X.c1 = Y.c1 and X.c1 = 1;
+Query Plan
+===================
+|ID|OPERATOR |NAME|
+-------------------
+|0 |TABLE GET|X   |
+===================
+Outputs & filters:
+-------------------------------------
+  0 - output([X.c1], [X.c2], [X.c1], [X.c2]), filter(nil), rowset=256
+      access([X.c1], [X.c2]), partitions(p1)
+      is_index_back=false, is_global_index=false, 
+      range_key([X.c1]), range[1 ; 1], 
+      range_cond([1 = X.c1])
+select * from t1 X, t1 Y where X.c1 = Y.c1 and X.c1 = 1;
+c1	c2	c1	c2
+EXPLAIN BASIC select t1.c1, nvl(t2.c2,0) from (select c1,c2 from t1 where c1=0 or c1=1) as t1 left join (select c1,c2 from t1 where c1=0) as t2 on t1.c1=t2.c1;
+Query Plan
+=========================================
+|ID|OPERATOR                   |NAME    |
+-----------------------------------------
+|0 |NESTED-LOOP OUTER JOIN     |        |
+|1 |??PX COORDINATOR           |        |
+|2 |? ??EXCHANGE OUT DISTR     |:EX10000|
+|3 |?   ??PX PARTITION ITERATOR|        |
+|4 |?     ??TABLE GET          |t1      |
+|5 |??MATERIAL                 |        |
+|6 |  ??TABLE GET              |t1      |
+=========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [nvl(cast(t1.c2, BIGINT(1, 0)), 0)]), filter(nil), rowset=256
+      conds([t1.c1 = 0]), nl_params_(nil), use_batch=false
+  1 - output([t1.c1]), filter(nil), rowset=256
+  2 - output([t1.c1]), filter(nil), rowset=256
+      dop=1
+  3 - output([t1.c1]), filter(nil), rowset=256
+      force partition granule
+  4 - output([t1.c1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.c1]), range[0 ; 0], [1 ; 1], 
+      range_cond([t1.c1 = 0 OR t1.c1 = 1])
+  5 - output([t1.c2]), filter(nil), rowset=256
+  6 - output([t1.c2]), filter(nil), rowset=256
+      access([t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.c1]), range[0 ; 0], 
+      range_cond([t1.c1 = 0])
+select t1.c1, nvl(t2.c2,0) from (select c1,c2 from t1 where c1=0 or c1=1) as t1 left join (select c1,c2 from t1 where c1=0) as t2 on t1.c1=t2.c1;
+c1	nvl(t2.c2,0)
+drop table t4;
+drop view v15;
+create table t4(c1 int primary key, c2 int, c3 int) partition by hash(c1) partitions 5;
+create view v15 as (select  1 as c1, 2 as c2, 3 as c3 from dual);
+EXPLAIN BASIC select /*+ordered use_nl(A,B)*/ A.c1, A.c2, A.c3, B.c1, B.c2, B.c3 from t4 A left join (select  1 as c1, 2 as c2, 3 as c3 from dual) B on A.c1 = B.c1;
+Query Plan
+=========================================
+|ID|OPERATOR                   |NAME    |
+-----------------------------------------
+|0 |PX COORDINATOR             |        |
+|1 |??EXCHANGE OUT DISTR       |:EX10000|
+|2 |  ??NESTED-LOOP OUTER JOIN |        |
+|3 |    ??PX PARTITION ITERATOR|        |
+|4 |    ? ??TABLE FULL SCAN    |A       |
+|5 |    ??MATERIAL             |        |
+|6 |      ??SUBPLAN SCAN       |B       |
+|7 |        ??EXPRESSION       |        |
+=========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(A.c1, A.c2, A.c3, B.c1, B.c2, B.c3)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(A.c1, A.c2, A.c3, B.c1, B.c2, B.c3)]), filter(nil), rowset=256
+      dop=1
+  2 - output([A.c1], [A.c2], [A.c3], [B.c1], [B.c2], [B.c3]), filter(nil), rowset=256
+      conds([A.c1 = 1]), nl_params_(nil), use_batch=false
+  3 - output([A.c1], [A.c2], [A.c3]), filter(nil), rowset=256
+      force partition granule
+  4 - output([A.c1], [A.c2], [A.c3]), filter(nil), rowset=256
+      access([A.c1], [A.c2], [A.c3]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, 
+      range_key([A.c1]), range(MIN ; MAX)always true
+  5 - output([B.c1], [B.c2], [B.c3]), filter(nil), rowset=256
+  6 - output([B.c1], [B.c2], [B.c3]), filter(nil), rowset=256
+      access([B.c1], [B.c2], [B.c3])
+  7 - output([1], [2], [3]), filter(nil)
+      values({1, 2, 3})
+select /*+ordered use_nl(A,B)*/ A.c1, A.c2, A.c3, B.c1, B.c2, B.c3 from t4 A left join (select  1 as c1, 2 as c2, 3 as c3 from dual) B on A.c1 = B.c1;
+c1	c2	c3	c1	c2	c3
+drop view v15;
+drop table t1;
+drop table t2;
+CREATE TABLE t1(c1 int primary key, c2 int);
+CREATE TABLE t2(c1 int primary key, c2 int, c3 varchar(32));
+EXPLAIN BASIC select * from t1 where (t1.c1, t1.c2) not in (select c1,c2 from t2 where c2 = 1);
+Query Plan
+==============================
+|ID|OPERATOR           |NAME |
+------------------------------
+|0 |MERGE ANTI JOIN    |     |
+|1 |??TABLE FULL SCAN  |t1   |
+|2 |??SUBPLAN SCAN     |VIEW1|
+|3 |  ??TABLE FULL SCAN|t2   |
+==============================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      equal_conds([t1.c1 = VIEW1.c1]), other_conds([t1.c2 = 1 OR t1.c2 IS NULL])
+      merge_directions([ASC])
+  1 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.c1]), range(MIN ; MAX)always true
+  2 - output([VIEW1.c1]), filter(nil), rowset=256
+      access([VIEW1.c1])
+  3 - output([t2.c1]), filter([t2.c2 = 1]), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.c1]), range(MIN ; MAX)always true
+select * from t1 where (t1.c1, t1.c2) not in (select c1,c2 from t2 where c2 = 1);
+c1	c2
+EXPLAIN BASIC select '1000' from dual minus select '100' from dual;
+Query Plan
+====================
+|ID|OPERATOR  |NAME|
+--------------------
+|0 |EXPRESSION|    |
+====================
+Outputs & filters:
+-------------------------------------
+  0 - output(['1000']), filter(nil)
+      values({'1000'})
+select '1000' from dual minus select '100' from dual;
+1000
+1000
+drop table t1;
+drop table t2;
+drop table t3;
+drop table t4;
+drop table t5;
+explain_protocol: 0 
+create table t1 (c1 int, c2 int, c3 int);
+create table t2 (c1 int, c2 int, c3 int);
+create table t3 (c1 int, c2 int, c3 int);
+create table t4 (c1 int, c2 int, c3 int);
+create table t5 (c1 int, c2 int, c3 int);
+insert /**/ into t1 values(1, 1, 1);
+insert /**/ into t1 values(2, 2, 2);
+insert /**/ into t1 values(3, 3, 3);
+insert /**/ into t1 values(4, 4, 4);
+insert /**/ into t1 values(5, 5, 5);
+insert /**/ into t2 values(1, 1, 1);
+insert /**/ into t2 values(2, 2, 2);
+insert /**/ into t2 values(3, 3, 3);
+insert /**/ into t2 values(4, 4, 4);
+insert /**/ into t2 values(5, 5, 5);
+insert /**/ into t3 values(1, 1, 1);
+insert /**/ into t3 values(2, 2, 2);
+insert /**/ into t3 values(3, 3, 3);
+insert /**/ into t3 values(4, 4, 4);
+insert /**/ into t3 values(5, 5, 5);
+insert /**/ into t4 values(1, 1, 1);
+insert /**/ into t4 values(2, 2, 2);
+insert /**/ into t4 values(3, 3, 3);
+insert /**/ into t4 values(4, 4, 4);
+insert /**/ into t4 values(5, 5, 5);
+insert /**/ into t5 values(1, 1, 1);
+insert /**/ into t5 values(2, 2, 2);
+insert /**/ into t5 values(3, 3, 3);
+insert /**/ into t5 values(4, 4, 4);
+insert /**/ into t5 values(5, 5, 5);
+select t5.c1, t5.c2, t5.c3, v1.c1, v1.c2, v1.c3 from t5 left join ((select c1,c2,c3 from t1 where c1 =10) v1,t3) on v1.c1 = t5.c1;
+c1	c2	c3	c1	c2	c3
+1	1	1	NULL	NULL	NULL
+2	2	2	NULL	NULL	NULL
+3	3	3	NULL	NULL	NULL
+4	4	4	NULL	NULL	NULL
+5	5	5	NULL	NULL	NULL
+select t5.c1, t5.c2, t5.c3, v1.c1, v1.c2, v1.c3 from t5 left join (t2, (select c1,c2,c3 from t1 where c1 =10) v1,t3) on v1.c1 = t5.c1;
+c1	c2	c3	c1	c2	c3
+1	1	1	NULL	NULL	NULL
+2	2	2	NULL	NULL	NULL
+3	3	3	NULL	NULL	NULL
+4	4	4	NULL	NULL	NULL
+5	5	5	NULL	NULL	NULL
+select t5.c1, t5.c2, t5.c3, v2.c1, v2.c2, v2.c3 from t5 left join (select 10 as c1, v1.c2, v1.c3 from (select c1,c2,c3 from t1 where c1 =10) v1,t3 where 1=1) v2 on v2.c1 = t5.c1;
+c1	c2	c3	c1	c2	c3
+1	1	1	NULL	NULL	NULL
+2	2	2	NULL	NULL	NULL
+3	3	3	NULL	NULL	NULL
+4	4	4	NULL	NULL	NULL
+5	5	5	NULL	NULL	NULL
+drop table t1;
+drop table t2;
+drop table t3;
+drop table t4;
+drop table t5;
+drop table target;
+drop table if exists t1,t2,t3,t4,t5,t6;
+create table t1(c1 int, c2 varchar(10), c3 varchar(10), c4 varchar(10) generated always as (c2),
+constraint check_t1 check (c4 = c3)) partition by list columns(c4)
+(partition p0 values in ('01'),
+partition p1 values in ('02'),
+partition p2 values in ('03'),
+partition p3 values in ('04'),
+partition p4 values in ('05'));
+create table t2(c1 int, c2 varchar(10), c3 varchar(10), c4 varchar(10) generated always as (substring(c2, 1, 2)),
+constraint check_t2 check (c4 = substring(c3, 1, 2))) partition by list columns(c4)
+(partition p0 values in ('01'),
+partition p1 values in ('02'),
+partition p2 values in ('03'),
+partition p3 values in ('04'),
+partition p4 values in ('05'));
+create table t3(c1 int, c2 varchar(10), c3 varchar(10), c4 int generated always as (length(c2)),
+constraint check_t3 check (c4 = length(c3))) partition by range(c4)
+(partition p0 values less than (2),
+partition p1 values less than (4),
+partition p2 values less than (6),
+partition p3 values less than (8),
+partition p4 values less than MAXVALUE);
+create table t4(c1 int, c2 int, c3 int, c4 char(10) generated always as (cast(c2 as char(10))),
+constraint check_t4 check (c4 = cast(c3 as char(10)))) partition by list columns(c4)
+(partition p0 values in ('11'),
+partition p1 values in ('22'),
+partition p2 values in ('33'));
+create table t5(c1 int, c2 varchar(10), c3 varchar(10), c4 binary generated always as (cast(c2 as binary)),
+constraint check_t5 check (c4 = cast(c3 as binary))) partition by list columns(c4)
+(partition p0 values in ('a'),
+partition p1 values in ('A'));
+create table t6(c1 int, c2 varchar(10), c3 varchar(10), c4 varchar(10) generated always as (hex(substring(c2,1,2))),
+constraint check_t6 check (c4 = hex(substring(c3,1,2)))) partition by key(c4) partitions 4;
+result_format: 4
+explain_protocol: 2
+##can transform const propagate
+EXPLAIN select * from t1 where c3 = '01';
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c2]), filter([t1.c3 = cast('01', VARCHAR(1048576))], [t1.c2 = cast(cast('01', VARCHAR(1048576)), VARCHAR(10))]), rowset=256
+      access([t1.c2], [t1.c3], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where c3 = '01';
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    1 | 01   | 01   | 01   |
++------+------+------+------+
+select/*+no_rewrite*/ * from t1 where c3 = '01';
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    1 | 01   | 01   | 01   |
++------+------+------+------+
+
+EXPLAIN select * from t1 where c3 = '01' or c3 = '02';
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |2       |12          |
+|1 |??EXCHANGE OUT DISTR     |:EX10000|2       |11          |
+|2 |  ??PX PARTITION ITERATOR|        |2       |8           |
+|3 |    ??TABLE FULL SCAN    |t1      |2       |8           |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3, t1.c2)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3, t1.c2)]), filter(nil), rowset=256
+      dop=1
+  2 - output([t1.c2], [t1.c2], [t1.c3], [t1.c1]), filter(nil), rowset=256
+      force partition granule
+  3 - output([t1.c2], [t1.c2], [t1.c3], [t1.c1]), filter([t1.c3 = cast('01', VARCHAR(1048576)) OR t1.c3 = cast('02', VARCHAR(1048576))], [t1.c2 IN (cast('01',
+       VARCHAR(1048576)), cast('02', VARCHAR(1048576)))]), rowset=256
+      access([t1.c2], [t1.c3], [t1.c1]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where c3 = '01' or c3 = '02';
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    1 | 01   | 01   | 01   |
+|    2 | 02   | 02   | 02   |
++------+------+------+------+
+select/*+no_rewrite*/ * from t1 where c3 = '01' or c3 = '02';
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    1 | 01   | 01   | 01   |
+|    2 | 02   | 02   | 02   |
++------+------+------+------+
+
+EXPLAIN select * from t1 where c3 in ('03', '04', '05');
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |3       |18          |
+|1 |??EXCHANGE OUT DISTR     |:EX10000|3       |16          |
+|2 |  ??PX PARTITION ITERATOR|        |3       |12          |
+|3 |    ??TABLE FULL SCAN    |t1      |3       |12          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3, t1.c2)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3, t1.c2)]), filter(nil), rowset=256
+      dop=1
+  2 - output([t1.c2], [t1.c2], [t1.c3], [t1.c1]), filter(nil), rowset=256
+      force partition granule
+  3 - output([t1.c2], [t1.c2], [t1.c3], [t1.c1]), filter([t1.c3 IN (cast('03', VARCHAR(1048576)), cast('04', VARCHAR(1048576)), cast('05', VARCHAR(1048576)))],
+       [t1.c2 IN (cast('03', VARCHAR(1048576)), cast('04', VARCHAR(1048576)), cast('05', VARCHAR(1048576)))]), rowset=256
+      access([t1.c2], [t1.c3], [t1.c1]), partitions(p[2-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where c3 in ('03', '04', '05');
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    3 | 03   | 03   | 03   |
+|    4 | 04   | 04   | 04   |
+|    5 | 05   | 05   | 05   |
++------+------+------+------+
+select/*+no_rewrite*/ * from t1 where c3 in ('03', '04', '05');
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    3 | 03   | 03   | 03   |
+|    4 | 04   | 04   | 04   |
+|    5 | 05   | 05   | 05   |
++------+------+------+------+
+
+EXPLAIN select * from t1 where (c3 = '01' and c1 = 1) or c3 = '02';
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |2       |12          |
+|1 |??EXCHANGE OUT DISTR     |:EX10000|2       |11          |
+|2 |  ??PX PARTITION ITERATOR|        |2       |8           |
+|3 |    ??TABLE FULL SCAN    |t1      |2       |8           |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3, t1.c2)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3, t1.c2)]), filter(nil), rowset=256
+      dop=1
+  2 - output([t1.c2], [t1.c2], [t1.c3], [t1.c1]), filter(nil), rowset=256
+      force partition granule
+  3 - output([t1.c2], [t1.c2], [t1.c3], [t1.c1]), filter([t1.c3 = cast('01', VARCHAR(1048576)) AND t1.c1 = 1 OR t1.c3 = cast('02', VARCHAR(1048576))], [t1.c2 
+      IN (cast('01', VARCHAR(1048576)), cast('02', VARCHAR(1048576)))]), rowset=256
+      access([t1.c2], [t1.c3], [t1.c1]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where (c3 = '01' and c1 = 1) or c3 = '02';
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    1 | 01   | 01   | 01   |
+|    2 | 02   | 02   | 02   |
++------+------+------+------+
+select/*+no_rewrite*/ * from t1 where (c3 = '01' and c1 = 1) or c3 = '02';
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    1 | 01   | 01   | 01   |
+|    2 | 02   | 02   | 02   |
++------+------+------+------+
+
+EXPLAIN select * from t1 where (c3 = '03' and c1 = 1) or (c3 in ('04', '05') and c1 = 2);
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |1       |14          |
+|1 |??EXCHANGE OUT DISTR     |:EX10000|1       |13          |
+|2 |  ??PX PARTITION ITERATOR|        |1       |12          |
+|3 |    ??TABLE FULL SCAN    |t1      |1       |12          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3, t1.c2)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, t1.c3, t1.c2)]), filter(nil), rowset=256
+      dop=1
+  2 - output([t1.c2], [t1.c2], [t1.c3], [t1.c1]), filter(nil), rowset=256
+      force partition granule
+  3 - output([t1.c2], [t1.c2], [t1.c3], [t1.c1]), filter([t1.c3 = cast('03', VARCHAR(1048576)) AND t1.c1 = 1 OR t1.c3 IN (cast('04', VARCHAR(1048576)), 
+      cast('05', VARCHAR(1048576))) AND t1.c1 = 2], [t1.c2 IN (cast('03', VARCHAR(1048576)), cast('04', VARCHAR(1048576)), cast('05', VARCHAR(1048576)))]), rowset=256
+      access([t1.c2], [t1.c3], [t1.c1]), partitions(p[2-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where (c3 = '03' and c1 = 1) or (c3 in ('04', '05') and c1 = 2);
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
++------+------+------+------+
+select/*+no_rewrite*/ * from t1 where (c3 = '03' and c1 = 1) or (c3 in ('04', '05') and c1 = 2);
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
++------+------+------+------+
+
+EXPLAIN select * from t2 where c3 = '011';
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t2  |1       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t2.c1], [t2.c2], [t2.c3], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,substr(t2.c2, 1, 2))]), filter([t2.c3 = cast('011', VARCHAR(1048576))],
+       [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,substr(t2.c2, 1, 2)) = substr(cast(cast('011', VARCHAR(1048576)), VARCHAR(10)), 1, 2)]), rowset=256
+      access([t2.c2], [t2.c3], [t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select * from t2 where c3 = '011';
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    1 | 010  | 011  | 01   |
++------+------+------+------+
+select/*+no_rewrite*/ * from t2 where c3 = '011';
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    1 | 010  | 011  | 01   |
++------+------+------+------+
+
+EXPLAIN select * from t2 where c3 = '011' or c3 = '022';
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |2       |12          |
+|1 |??EXCHANGE OUT DISTR     |:EX10000|2       |11          |
+|2 |  ??PX PARTITION ITERATOR|        |2       |8           |
+|3 |    ??TABLE FULL SCAN    |t2      |2       |8           |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t2.c1, t2.c2, t2.c3, column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,substr(t2.c2, 1, 2)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t2.c1, t2.c2, t2.c3, column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,substr(t2.c2, 1, 2)))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t2.c2], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,substr(t2.c2, 1, 2))], [t2.c3], [t2.c1]), filter(nil), rowset=256
+      force partition granule
+  3 - output([t2.c2], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,substr(t2.c2, 1, 2))], [t2.c3], [t2.c1]), filter([t2.c3 = cast('011', VARCHAR(1048576)) 
+      OR t2.c3 = cast('022', VARCHAR(1048576))], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,substr(t2.c2, 1, 2)) IN (substr(cast('011', VARCHAR(1048576)),
+       1, 2), substr(cast('022', VARCHAR(1048576)), 1, 2))]), rowset=256
+      access([t2.c2], [t2.c3], [t2.c1]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select * from t2 where c3 = '011' or c3 = '022';
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    1 | 010  | 011  | 01   |
+|    2 | 020  | 022  | 02   |
++------+------+------+------+
+select/*+no_rewrite*/ * from t2 where c3 = '011' or c3 = '022';
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    1 | 010  | 011  | 01   |
+|    2 | 020  | 022  | 02   |
++------+------+------+------+
+
+EXPLAIN select * from t2 where c3 in ('033', '043', '055');
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |2       |16          |
+|1 |??EXCHANGE OUT DISTR     |:EX10000|2       |15          |
+|2 |  ??PX PARTITION ITERATOR|        |2       |12          |
+|3 |    ??TABLE FULL SCAN    |t2      |2       |12          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t2.c1, t2.c2, t2.c3, column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,substr(t2.c2, 1, 2)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t2.c1, t2.c2, t2.c3, column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,substr(t2.c2, 1, 2)))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t2.c2], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,substr(t2.c2, 1, 2))], [t2.c3], [t2.c1]), filter(nil), rowset=256
+      force partition granule
+  3 - output([t2.c2], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,substr(t2.c2, 1, 2))], [t2.c3], [t2.c1]), filter([t2.c3 IN (cast('033', VARCHAR(1048576)),
+       cast('043', VARCHAR(1048576)), cast('055', VARCHAR(1048576)))], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,substr(t2.c2, 1, 2)) IN (substr(cast('033',
+       VARCHAR(1048576)), 1, 2), substr(cast('043', VARCHAR(1048576)), 1, 2), substr(cast('055', VARCHAR(1048576)), 1, 2))]), rowset=256
+      access([t2.c2], [t2.c3], [t2.c1]), partitions(p[2-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select * from t2 where c3 in ('033', '043', '055');
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    3 | 030  | 033  | 03   |
+|    5 | 050  | 055  | 05   |
++------+------+------+------+
+select/*+no_rewrite*/ * from t2 where c3 in ('033', '044', '055');
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    3 | 030  | 033  | 03   |
+|    4 | 040  | 044  | 04   |
+|    5 | 050  | 055  | 05   |
++------+------+------+------+
+
+EXPLAIN select * from t3 where c3 = 'bb' or c3 in ('613a', 'ddd3dd');
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |3       |18          |
+|1 |??EXCHANGE OUT DISTR     |:EX10000|3       |16          |
+|2 |  ??PX PARTITION ITERATOR|        |3       |12          |
+|3 |    ??TABLE FULL SCAN    |t3      |3       |12          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t3.c1, t3.c2, t3.c3, column_conv(INT,PS:(11,0),NULL,cast(length(t3.c2), INT(-1, 0))))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t3.c1, t3.c2, t3.c3, column_conv(INT,PS:(11,0),NULL,cast(length(t3.c2), INT(-1, 0))))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t3.c2], [column_conv(INT,PS:(11,0),NULL,cast(length(t3.c2), INT(-1, 0)))], [t3.c3], [t3.c1]), filter(nil), rowset=256
+      force partition granule
+  3 - output([t3.c2], [column_conv(INT,PS:(11,0),NULL,cast(length(t3.c2), INT(-1, 0)))], [t3.c3], [t3.c1]), filter([t3.c3 = cast('bb', VARCHAR(1048576)) 
+      OR t3.c3 IN (cast('613a', VARCHAR(1048576)), cast('ddd3dd', VARCHAR(1048576)))], [column_conv(INT,PS:(11,0),NULL,cast(length(t3.c2), INT(-1, 0))) IN (length(cast('bb',
+       VARCHAR(1048576))), length(cast('613a', VARCHAR(1048576))), length(cast('ddd3dd', VARCHAR(1048576))))]), rowset=256
+      access([t3.c2], [t3.c3], [t3.c1]), partitions(p[1-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+select * from t3 where c3 = 'bb' or c3 in ('613a', 'ddd3dd');
++------+--------+--------+------+
+| c1   | c2     | c3     | c4   |
++------+--------+--------+------+
+|    2 | aa     | bb     |    2 |
+|    4 | asas   | 613a   |    4 |
+|    6 | cccc3c | ddd3dd |    6 |
++------+--------+--------+------+
+select/*+no_rewrite*/ * from t3 where c3 = 'bb' or c3 in ('613a', 'ddd3dd');
++------+--------+--------+------+
+| c1   | c2     | c3     | c4   |
++------+--------+--------+------+
+|    2 | aa     | bb     |    2 |
+|    4 | asas   | 613a   |    4 |
+|    6 | cccc3c | ddd3dd |    6 |
++------+--------+--------+------+
+
+EXPLAIN select * from t4 where c3 = 11;
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |1       |14          |
+|1 |??EXCHANGE OUT DISTR     |:EX10000|1       |13          |
+|2 |  ??PX PARTITION ITERATOR|        |1       |12          |
+|3 |    ??TABLE FULL SCAN    |t4      |1       |12          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t4.c1, t4.c2, t4.c3, column_conv(CHAR,utf8mb4_general_ci,length:10,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), 
+      cast(cast(t4.c2, CHAR(10)), CHAR(10))), CHAR(1048576))))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t4.c1, t4.c2, t4.c3, column_conv(CHAR,utf8mb4_general_ci,length:10,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), 
+      cast(cast(t4.c2, CHAR(10)), CHAR(10))), CHAR(1048576))))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t4.c2], [column_conv(CHAR,utf8mb4_general_ci,length:10,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), cast(cast(t4.c2, CHAR(10)), CHAR(10))),
+       CHAR(1048576)))], [t4.c3], [t4.c1]), filter(nil), rowset=256
+      force partition granule
+  3 - output([t4.c2], [column_conv(CHAR,utf8mb4_general_ci,length:10,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), cast(cast(t4.c2, CHAR(10)), CHAR(10))),
+       CHAR(1048576)))], [t4.c3], [t4.c1]), filter([t4.c3 = 11]), rowset=256
+      access([t4.c2], [t4.c3], [t4.c1]), partitions(p[0-2])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
+select * from t4 where c3 = 11;
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    1 |   11 |   11 | 11   |
++------+------+------+------+
+select/*+no_rewrite*/ * from t2 where c3 = 11;
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    1 | 010  | 011  | 01   |
++------+------+------+------+
+
+EXPLAIN select * from t4 where c3 = 22 or c3 = 33;
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |2       |16          |
+|1 |??EXCHANGE OUT DISTR     |:EX10000|2       |15          |
+|2 |  ??PX PARTITION ITERATOR|        |2       |12          |
+|3 |    ??TABLE FULL SCAN    |t4      |2       |12          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t4.c1, t4.c2, t4.c3, column_conv(CHAR,utf8mb4_general_ci,length:10,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), 
+      cast(cast(t4.c2, CHAR(10)), CHAR(10))), CHAR(1048576))))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t4.c1, t4.c2, t4.c3, column_conv(CHAR,utf8mb4_general_ci,length:10,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), 
+      cast(cast(t4.c2, CHAR(10)), CHAR(10))), CHAR(1048576))))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t4.c2], [column_conv(CHAR,utf8mb4_general_ci,length:10,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), cast(cast(t4.c2, CHAR(10)), CHAR(10))),
+       CHAR(1048576)))], [t4.c3], [t4.c1]), filter(nil), rowset=256
+      force partition granule
+  3 - output([t4.c2], [column_conv(CHAR,utf8mb4_general_ci,length:10,NULL,cast(inner_trim(2, cast(' ', VARCHAR(1048576)), cast(cast(t4.c2, CHAR(10)), CHAR(10))),
+       CHAR(1048576)))], [t4.c3], [t4.c1]), filter([t4.c3 = 22 OR t4.c3 = 33]), rowset=256
+      access([t4.c2], [t4.c3], [t4.c1]), partitions(p[0-2])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t4.__pk_increment]), range(MIN ; MAX)always true
+select * from t4 where c3 = 22 or c3 = 33;
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    2 |   22 |   22 | 22   |
+|    3 |   33 |   33 | 33   |
++------+------+------+------+
+select/*+no_rewrite*/ * from t2 where c3 = 22 or c3 = 33;
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    2 | 020  | 022  | 02   |
+|    3 | 030  | 033  | 03   |
++------+------+------+------+
+
+EXPLAIN select /*+use_concat*/ * from t3 where c3 = 'bb' or c3 = 'dddsssss' or c1 = 1;
+Query Plan
+===============================================================
+|ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |PX COORDINATOR             |        |3       |33          |
+|1 |??EXCHANGE OUT DISTR       |:EX10000|3       |31          |
+|2 |  ??UNION ALL              |        |3       |28          |
+|3 |    ??PX PARTITION ITERATOR|        |2       |8           |
+|4 |    ? ??TABLE FULL SCAN    |t3      |2       |8           |
+|5 |    ??PX PARTITION ITERATOR|        |1       |20          |
+|6 |      ??TABLE FULL SCAN    |t3      |1       |20          |
+===============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(UNION([1]), UNION([2]), UNION([3]), UNION([4]))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(UNION([1]), UNION([2]), UNION([3]), UNION([4]))]), filter(nil), rowset=256
+      dop=1
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=256
+  3 - output([t3.c1], [t3.c2], [t3.c3], [column_conv(INT,PS:(11,0),NULL,cast(length(t3.c2), INT(-1, 0)))]), filter(nil), rowset=256
+      affinitize, partition wise, force partition granule
+  4 - output([t3.c2], [column_conv(INT,PS:(11,0),NULL,cast(length(t3.c2), INT(-1, 0)))], [t3.c3], [t3.c1]), filter([t3.c3 = cast('bb', VARCHAR(1048576)) 
+      OR t3.c3 = cast('dddsssss', VARCHAR(1048576))], [column_conv(INT,PS:(11,0),NULL,cast(length(t3.c2), INT(-1, 0))) IN (length(cast('bb', VARCHAR(1048576))),
+       length(cast('dddsssss', VARCHAR(1048576))))]), rowset=256
+      access([t3.c2], [t3.c3], [t3.c1]), partitions(p1, p4)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t3.c1], [t3.c2], [t3.c3], [column_conv(INT,PS:(11,0),NULL,cast(length(t3.c2), INT(-1, 0)))]), filter(nil), rowset=256
+      affinitize, partition wise, force partition granule
+  6 - output([t3.c2], [column_conv(INT,PS:(11,0),NULL,cast(length(t3.c2), INT(-1, 0)))], [t3.c3], [t3.c1]), filter([t3.c1 = 1], [lnnvl(cast(t3.c3 = cast('bb',
+       VARCHAR(1048576)) OR t3.c3 = cast('dddsssss', VARCHAR(1048576)), TINYINT(-1, 0)))]), rowset=256
+      access([t3.c2], [t3.c3], [t3.c1]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+select /*+use_concat*/ * from t3 where c3 = 'bb' or c3 = 'dddsssss' or c1 = 1;
++------+----------+----------+------+
+| c1   | c2       | c3       | c4   |
++------+----------+----------+------+
+|    2 | aa       | bb       |    2 |
+|    8 | cdddccdd | dddsssss |    8 |
+|    1 | a        | d        |    1 |
++------+----------+----------+------+
+select/*+no_rewrite*/ * from t3 where c3 = 'bb' or c3 = 'dddsssss' or c1 = 1;
++------+----------+----------+------+
+| c1   | c2       | c3       | c4   |
++------+----------+----------+------+
+|    1 | a        | d        |    1 |
+|    2 | aa       | bb       |    2 |
+|    8 | cdddccdd | dddsssss |    8 |
++------+----------+----------+------+
+
+EXPLAIN select upper(c2), lower(c2), repeat(c2, 2), replace(c2, 'a', '*'), instr(c2, 'a'), locate(c2, 'a') from t3 where c2 = '050aa';
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t3  |1       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([upper(cast(cast('050aa', VARCHAR(1048576)), VARCHAR(10)))], [lower(cast(cast('050aa', VARCHAR(1048576)), VARCHAR(10)))], [repeat(t3.c2, 2)],
+       [replace(t3.c2, cast('a', VARCHAR(1048576)), cast('*', VARCHAR(1048576)))], [instr(cast(cast('050aa', VARCHAR(1048576)), VARCHAR(10)), cast('a', VARCHAR(1048576)))],
+       [locate(cast(cast('050aa', VARCHAR(1048576)), VARCHAR(10)), cast('a', VARCHAR(1048576)))]), filter([t3.c2 = cast('050aa', VARCHAR(1048576))]), rowset=256
+      access([t3.c2]), partitions(p2)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+select upper(c2), lower(c2), repeat(c2, 2), replace(c2, 'a', '*'), instr(c2, 'a'), locate(c2, 'a') from t3 where c2 = '050aa';
++-----------+-----------+---------------+-----------------------+----------------+-----------------+
+| upper(c2) | lower(c2) | repeat(c2, 2) | replace(c2, 'a', '*') | instr(c2, 'a') | locate(c2, 'a') |
++-----------+-----------+---------------+-----------------------+----------------+-----------------+
+| 050AA     | 050aa     | 050aa050aa    | 050**                 |              4 |               0 |
++-----------+-----------+---------------+-----------------------+----------------+-----------------+
+select/*+no_rewrite*/ upper(c2), lower(c2), repeat(c2, 2), replace(c2, 'a', '*'), instr(c2, 'a'), locate(c2, 'a') from t3 where c2 = '050aa';
++-----------+-----------+---------------+-----------------------+----------------+-----------------+
+| upper(c2) | lower(c2) | repeat(c2, 2) | replace(c2, 'a', '*') | instr(c2, 'a') | locate(c2, 'a') |
++-----------+-----------+---------------+-----------------------+----------------+-----------------+
+| 050AA     | 050aa     | 050aa050aa    | 050**                 |              4 |               0 |
++-----------+-----------+---------------+-----------------------+----------------+-----------------+
+
+EXPLAIN select rpad(c2, 5, '#'), lpad(c2, 5, '*'), strcmp(c2, '040'), ltrim(c2), rtrim(c2) from t2 where c2 = '040';
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t2  |1       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([rpad(t2.c2, 5, cast('#', VARCHAR(1048576)))], [lpad(t2.c2, 5, cast('*', VARCHAR(1048576)))], [strcmp(cast(cast('040', VARCHAR(1048576)), VARCHAR(10)),
+       cast('040', VARCHAR(1048576)))], [ltrim(t2.c2)], [rtrim(t2.c2)]), filter([t2.c2 = cast('040', VARCHAR(1048576))]), rowset=256
+      access([t2.c2]), partitions(p3)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select rpad(c2, 5, '#'), lpad(c2, 5, '*'), strcmp(c2, '040'), ltrim(c2), rtrim(c2) from t2 where c2 = '040';
++------------------+------------------+-------------------+-----------+-----------+
+| rpad(c2, 5, '#') | lpad(c2, 5, '*') | strcmp(c2, '040') | ltrim(c2) | rtrim(c2) |
++------------------+------------------+-------------------+-----------+-----------+
+| 040##            | **040            |                 0 | 040       | 040       |
++------------------+------------------+-------------------+-----------+-----------+
+select/*+no_rewrite*/ rpad(c2, 5, '#'), lpad(c2, 5, '*'), strcmp(c2, '040'), ltrim(c2), rtrim(c2) from t2 where c2 = '040';
++------------------+------------------+-------------------+-----------+-----------+
+| rpad(c2, 5, '#') | lpad(c2, 5, '*') | strcmp(c2, '040') | ltrim(c2) | rtrim(c2) |
++------------------+------------------+-------------------+-----------+-----------+
+| 040##            | **040            |                 0 | 040       | 040       |
++------------------+------------------+-------------------+-----------+-----------+
+
+EXPLAIN select upper(lower(c2)), repeat(replace(c2, 'a', '*'), 2), rpad(lpad(c2, 5, '*'), 5, '#'), ltrim(rtrim(c2)) from t3 where c2 = 'aaaabbb';
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t3  |1       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([upper(lower(cast(cast('aaaabbb', VARCHAR(1048576)), VARCHAR(10))))], [repeat(replace(t3.c2, cast('a', VARCHAR(1048576)), cast('*', VARCHAR(1048576))),
+       2)], [rpad(lpad(t3.c2, 5, cast('*', VARCHAR(1048576))), 5, cast('#', VARCHAR(1048576)))], [ltrim(rtrim(t3.c2))]), filter([t3.c2 = cast('aaaabbb', VARCHAR(1048576))]), rowset=256
+      access([t3.c2]), partitions(p3)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t3.__pk_increment]), range(MIN ; MAX)always true
+select upper(lower(c2)), repeat(replace(c2, 'a', '*'), 2), rpad(lpad(c2, 5, '*'), 5, '#'), ltrim(rtrim(c2)) from t3 where c2 = 'aaaabbb';
++------------------+----------------------------------+--------------------------------+------------------+
+| upper(lower(c2)) | repeat(replace(c2, 'a', '*'), 2) | rpad(lpad(c2, 5, '*'), 5, '#') | ltrim(rtrim(c2)) |
++------------------+----------------------------------+--------------------------------+------------------+
+| AAAABBB          | ****bbb****bbb                   | aaaab                          | aaaabbb          |
++------------------+----------------------------------+--------------------------------+------------------+
+select/*+no_rewrite*/ upper(lower(c2)), repeat(replace(c2, 'a', '*'), 2), rpad(lpad(c2, 5, '*'), 5, '#'), ltrim(rtrim(c2)) from t3 where c2 = 'aaaabbb';
++------------------+----------------------------------+--------------------------------+------------------+
+| upper(lower(c2)) | repeat(replace(c2, 'a', '*'), 2) | rpad(lpad(c2, 5, '*'), 5, '#') | ltrim(rtrim(c2)) |
++------------------+----------------------------------+--------------------------------+------------------+
+| AAAABBB          | ****bbb****bbb                   | aaaab                          | aaaabbb          |
++------------------+----------------------------------+--------------------------------+------------------+
+
+##can't can transform const propagate
+EXPLAIN select * from t5 where c3 = 'a';
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |2       |12          |
+|1 |??EXCHANGE OUT DISTR     |:EX10000|2       |11          |
+|2 |  ??PX PARTITION ITERATOR|        |2       |8           |
+|3 |    ??TABLE FULL SCAN    |t5      |2       |8           |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t5.c1, t5.c2, t5.c3, column_conv(CHAR,binary,length:1,NULL,cast(pad(cast(t5.c2, CHAR(1048576)), X'00', 1), CHAR(1048576))))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t5.c1, t5.c2, t5.c3, column_conv(CHAR,binary,length:1,NULL,cast(pad(cast(t5.c2, CHAR(1048576)), X'00', 1), CHAR(1048576))))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t5.c2], [column_conv(CHAR,binary,length:1,NULL,cast(pad(cast(t5.c2, CHAR(1048576)), X'00', 1), CHAR(1048576)))], [t5.c3], [t5.c1]), filter(nil), rowset=256
+      force partition granule
+  3 - output([t5.c2], [column_conv(CHAR,binary,length:1,NULL,cast(pad(cast(t5.c2, CHAR(1048576)), X'00', 1), CHAR(1048576)))], [t5.c3], [t5.c1]), filter([t5.c3 
+      = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t5.c2], [t5.c3], [t5.c1]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t5.__pk_increment]), range(MIN ; MAX)always true
+select * from t5 where c3 = 'a';
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    2 | A    | A    | A    |
+|    1 | a    | a    | a    |
++------+------+------+------+
+EXPLAIN select * from t5 where c3 = 'A' and c1 = 1;
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |1       |10          |
+|1 |??EXCHANGE OUT DISTR     |:EX10000|1       |10          |
+|2 |  ??PX PARTITION ITERATOR|        |1       |8           |
+|3 |    ??TABLE FULL SCAN    |t5      |1       |8           |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t5.c1, t5.c2, t5.c3, column_conv(CHAR,binary,length:1,NULL,cast(pad(cast(t5.c2, CHAR(1048576)), X'00', 1), CHAR(1048576))))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t5.c1, t5.c2, t5.c3, column_conv(CHAR,binary,length:1,NULL,cast(pad(cast(t5.c2, CHAR(1048576)), X'00', 1), CHAR(1048576))))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t5.c2], [column_conv(CHAR,binary,length:1,NULL,cast(pad(cast(t5.c2, CHAR(1048576)), X'00', 1), CHAR(1048576)))], [t5.c3], [t5.c1]), filter(nil), rowset=256
+      force partition granule
+  3 - output([t5.c2], [column_conv(CHAR,binary,length:1,NULL,cast(pad(cast(t5.c2, CHAR(1048576)), X'00', 1), CHAR(1048576)))], [t5.c3], [t5.c1]), filter([t5.c3 
+      = cast('A', VARCHAR(1048576))], [t5.c1 = 1]), rowset=256
+      access([t5.c2], [t5.c3], [t5.c1]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t5.__pk_increment]), range(MIN ; MAX)always true
+select * from t5 where c3 = 'A' and c1 = 1;
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    1 | a    | a    | a    |
++------+------+------+------+
+EXPLAIN select * from t5 where c3 in ('A');
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |2       |12          |
+|1 |??EXCHANGE OUT DISTR     |:EX10000|2       |11          |
+|2 |  ??PX PARTITION ITERATOR|        |2       |8           |
+|3 |    ??TABLE FULL SCAN    |t5      |2       |8           |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t5.c1, t5.c2, t5.c3, column_conv(CHAR,binary,length:1,NULL,cast(pad(cast(t5.c2, CHAR(1048576)), X'00', 1), CHAR(1048576))))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t5.c1, t5.c2, t5.c3, column_conv(CHAR,binary,length:1,NULL,cast(pad(cast(t5.c2, CHAR(1048576)), X'00', 1), CHAR(1048576))))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t5.c2], [column_conv(CHAR,binary,length:1,NULL,cast(pad(cast(t5.c2, CHAR(1048576)), X'00', 1), CHAR(1048576)))], [t5.c3], [t5.c1]), filter(nil), rowset=256
+      force partition granule
+  3 - output([t5.c2], [column_conv(CHAR,binary,length:1,NULL,cast(pad(cast(t5.c2, CHAR(1048576)), X'00', 1), CHAR(1048576)))], [t5.c3], [t5.c1]), filter([t5.c3 
+      = cast('A', VARCHAR(1048576))]), rowset=256
+      access([t5.c2], [t5.c3], [t5.c1]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t5.__pk_increment]), range(MIN ; MAX)always true
+select * from t5 where c3 in ('A');
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    2 | A    | A    | A    |
+|    1 | a    | a    | a    |
++------+------+------+------+
+EXPLAIN select * from t6 where c3 = 'aa';
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |3       |22          |
+|1 |??EXCHANGE OUT DISTR     |:EX10000|3       |20          |
+|2 |  ??PX PARTITION ITERATOR|        |3       |16          |
+|3 |    ??TABLE FULL SCAN    |t6      |3       |16          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t6.c1, t6.c2, t6.c3, column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,cast(hex(substr(t6.c2, 1, 2)), VARCHAR(1048576))))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t6.c1, t6.c2, t6.c3, column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,cast(hex(substr(t6.c2, 1, 2)), VARCHAR(1048576))))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t6.c2], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,cast(hex(substr(t6.c2, 1, 2)), VARCHAR(1048576)))], [t6.c3], [t6.c1]), filter(nil), rowset=256
+      force partition granule
+  3 - output([t6.c2], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,cast(hex(substr(t6.c2, 1, 2)), VARCHAR(1048576)))], [t6.c3], [t6.c1]), filter([t6.c3 
+      = cast('aa', VARCHAR(1048576))]), rowset=256
+      access([t6.c2], [t6.c3], [t6.c1]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.__pk_increment]), range(MIN ; MAX)always true
+select * from t6 where c3 = 'aa';
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    1 | aa   | aa   | 6161 |
+|    2 | Aa   | Aa   | 4161 |
+|    3 | AA   | AA   | 4141 |
++------+------+------+------+
+EXPLAIN select * from t6 where c3 = 'AA' or c3 = 'Aa';
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |3       |22          |
+|1 |??EXCHANGE OUT DISTR     |:EX10000|3       |20          |
+|2 |  ??PX PARTITION ITERATOR|        |3       |16          |
+|3 |    ??TABLE FULL SCAN    |t6      |3       |16          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t6.c1, t6.c2, t6.c3, column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,cast(hex(substr(t6.c2, 1, 2)), VARCHAR(1048576))))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t6.c1, t6.c2, t6.c3, column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,cast(hex(substr(t6.c2, 1, 2)), VARCHAR(1048576))))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t6.c2], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,cast(hex(substr(t6.c2, 1, 2)), VARCHAR(1048576)))], [t6.c3], [t6.c1]), filter(nil), rowset=256
+      force partition granule
+  3 - output([t6.c2], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,cast(hex(substr(t6.c2, 1, 2)), VARCHAR(1048576)))], [t6.c3], [t6.c1]), filter([t6.c3 
+      = cast('AA', VARCHAR(1048576)) OR t6.c3 = cast('Aa', VARCHAR(1048576))]), rowset=256
+      access([t6.c2], [t6.c3], [t6.c1]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.__pk_increment]), range(MIN ; MAX)always true
+select * from t6 where c3 = 'AA' or c3 = 'Aa';
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    1 | aa   | aa   | 6161 |
+|    2 | Aa   | Aa   | 4161 |
+|    3 | AA   | AA   | 4141 |
++------+------+------+------+
+EXPLAIN select * from t6 where c3 in ('AA', 'Aa');
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |3       |22          |
+|1 |??EXCHANGE OUT DISTR     |:EX10000|3       |20          |
+|2 |  ??PX PARTITION ITERATOR|        |3       |16          |
+|3 |    ??TABLE FULL SCAN    |t6      |3       |16          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t6.c1, t6.c2, t6.c3, column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,cast(hex(substr(t6.c2, 1, 2)), VARCHAR(1048576))))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t6.c1, t6.c2, t6.c3, column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,cast(hex(substr(t6.c2, 1, 2)), VARCHAR(1048576))))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t6.c2], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,cast(hex(substr(t6.c2, 1, 2)), VARCHAR(1048576)))], [t6.c3], [t6.c1]), filter(nil), rowset=256
+      force partition granule
+  3 - output([t6.c2], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,cast(hex(substr(t6.c2, 1, 2)), VARCHAR(1048576)))], [t6.c3], [t6.c1]), filter([t6.c3 
+      IN (cast('AA', VARCHAR(1048576)), cast('Aa', VARCHAR(1048576)))]), rowset=256
+      access([t6.c2], [t6.c3], [t6.c1]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.__pk_increment]), range(MIN ; MAX)always true
+select * from t6 where c3 in ('AA', 'Aa');
++------+------+------+------+
+| c1   | c2   | c3   | c4   |
++------+------+------+------+
+|    1 | aa   | aa   | 6161 |
+|    2 | Aa   | Aa   | 4161 |
+|    3 | AA   | AA   | 4141 |
++------+------+------+------+
+EXPLAIN select hex(c3), cast(c3 as binary), convert(c3, binary), regexp_substr(c3, 'a', 1, 1, 'i') from t5 where c3 = 'a';
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |2       |9           |
+|1 |??EXCHANGE OUT DISTR     |:EX10000|2       |9           |
+|2 |  ??PX PARTITION ITERATOR|        |2       |8           |
+|3 |    ??TABLE FULL SCAN    |t5      |2       |8           |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(hex(t5.c3), cast(t5.c3, CHAR(1048576)), cast(t5.c3, CHAR(1048576)), regexp_substr(cast(t5.c3, VARCHAR(1048576)), cast('a',
+       VARCHAR(1048576)), 1, 1, cast('i', VARCHAR(1048576))))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(hex(t5.c3), cast(t5.c3, CHAR(1048576)), cast(t5.c3, CHAR(1048576)), regexp_substr(cast(t5.c3, VARCHAR(1048576)), cast('a',
+       VARCHAR(1048576)), 1, 1, cast('i', VARCHAR(1048576))))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t5.c3]), filter(nil), rowset=256
+      force partition granule
+  3 - output([t5.c3]), filter([t5.c3 = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t5.c3]), partitions(p[0-1])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t5.__pk_increment]), range(MIN ; MAX)always true
+select hex(c3), cast(c3 as binary), convert(c3, binary), regexp_substr(c3, 'a', 1, 1, 'i') from t5 where c3 = 'a';
++---------+--------------------+---------------------+-----------------------------------+
+| hex(c3) | cast(c3 as binary) | convert(c3, binary) | regexp_substr(c3, 'a', 1, 1, 'i') |
++---------+--------------------+---------------------+-----------------------------------+
+| 41      | A                  | A                   | A                                 |
+| 61      | a                  | a                   | a                                 |
++---------+--------------------+---------------------+-----------------------------------+
+EXPLAIN select hex(regexp_substr(c3, 'aa', 1, 1, 'i')) from t6 where c3 = 'aa';
+Query Plan
+=============================================================
+|ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |PX COORDINATOR           |        |3       |17          |
+|1 |??EXCHANGE OUT DISTR     |:EX10000|3       |17          |
+|2 |  ??PX PARTITION ITERATOR|        |3       |16          |
+|3 |    ??TABLE FULL SCAN    |t6      |3       |16          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(hex(regexp_substr(cast(t6.c3, VARCHAR(1048576)), cast('aa', VARCHAR(1048576)), 1, 1, cast('i', VARCHAR(1048576)))))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(hex(regexp_substr(cast(t6.c3, VARCHAR(1048576)), cast('aa', VARCHAR(1048576)), 1, 1, cast('i', VARCHAR(1048576)))))]), filter(nil), rowset=256
+      dop=1
+  2 - output([t6.c3]), filter(nil), rowset=256
+      force partition granule
+  3 - output([t6.c3]), filter([t6.c3 = cast('aa', VARCHAR(1048576))]), rowset=256
+      access([t6.c3]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t6.__pk_increment]), range(MIN ; MAX)always true
+select hex(regexp_substr(c3, 'aa', 1, 1, 'i')) from t6 where c3 = 'aa';
++-----------------------------------------+
+| hex(regexp_substr(c3, 'aa', 1, 1, 'i')) |
++-----------------------------------------+
+| 6161                                    |
+| 4161                                    |
+| 4141                                    |
++-----------------------------------------+
+
+drop table t1,t2,t3,t4,t5,t6;
+
+********************* test for collation *********
+drop table if exists t1,t2;
+create table t1(c1 varchar(100) collate utf8mb4_bin, c2 varchar(100) collate utf8mb4_general_ci);
+create table t2(c1 varchar(100) collate utf8mb4_bin, c2 varchar(100) collate utf8mb4_general_ci);
+
+EXPLAIN select hex(c1), hex(c2), concat(c1,c2), length(c1), length(c2) from t1 where c1 = 'a' and c2 = 'a';
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |5           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([hex(cast(cast('a', VARCHAR(1048576)), VARCHAR(100)))], [hex(t1.c2)], [concat(cast(cast('a', VARCHAR(1048576)), VARCHAR(100)), cast(t1.c2, 
+      VARCHAR(1048576)))], [length(cast(cast('a', VARCHAR(1048576)), VARCHAR(100)))], [length(cast(cast('a', VARCHAR(1048576)), VARCHAR(100)))]), filter([t1.c1 
+      = cast('a', VARCHAR(1048576))], [t1.c2 = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select hex(c1), hex(c2), concat(c1,c2), length(c1), length(c2) from t1 where c1 = 'a' and c2 = 'a';
++---------+---------+---------------+------------+------------+
+| hex(c1) | hex(c2) | concat(c1,c2) | length(c1) | length(c2) |
++---------+---------+---------------+------------+------------+
+| 61      | 61      | aa            |          1 |          1 |
+| 61      | 41      | aA            |          1 |          1 |
++---------+---------+---------------+------------+------------+
+EXPLAIN select /*+no_rewrite*/ hex(c1), hex(c2), concat(c1,c2), length(c1), length(c2) from t1 where c1 = 'a' and c2 = 'a';
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |5           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([hex(t1.c1)], [hex(t1.c2)], [concat(t1.c1, cast(t1.c2, VARCHAR(1048576)))], [length(t1.c1)], [length(t1.c2)]), filter([t1.c1 = cast('a', VARCHAR(1048576))],
+       [t1.c2 = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/ hex(c1), hex(c2), concat(c1,c2), length(c1), length(c2) from t1 where c1 = 'a' and c2 = 'a';
++---------+---------+---------------+------------+------------+
+| hex(c1) | hex(c2) | concat(c1,c2) | length(c1) | length(c2) |
++---------+---------+---------------+------------+------------+
+| 61      | 61      | aa            |          1 |          1 |
+| 61      | 41      | aA            |          1 |          1 |
++---------+---------+---------------+------------+------------+
+
+EXPLAIN select * from t1 where c1 = c2 and c1 = 'a';
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |5           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([cast('a', VARCHAR(1048576)) = cast(t1.c2, VARCHAR(1048576))], [t1.c1 = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where c1 = c2 and c1 = 'a';
++------+------+
+| c1   | c2   |
++------+------+
+| a    | a    |
++------+------+
+EXPLAIN select /*+no_rewrite*/ * from t1 where c1 = c2 and c1 = 'a';
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |5           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([t1.c1 = cast(t1.c2, VARCHAR(1048576))], [t1.c1 = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/ * from t1 where c1 = c2 and c1 = 'a';
++------+------+
+| c1   | c2   |
++------+------+
+| a    | a    |
++------+------+
+
+EXPLAIN select * from t1 where c1 = c2 and c2 = 'a';
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |5           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([t1.c1 = cast(t1.c2, VARCHAR(1048576))], [t1.c2 = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where c1 = c2 and c2 = 'a';
++------+------+
+| c1   | c2   |
++------+------+
+| a    | a    |
+| A    | A    |
++------+------+
+EXPLAIN select /*+no_rewrite*/ * from t1 where c1 = c2 and c2 = 'a';
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |5           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([t1.c1 = cast(t1.c2, VARCHAR(1048576))], [t1.c2 = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/ * from t1 where c1 = c2 and c2 = 'a';
++------+------+
+| c1   | c2   |
++------+------+
+| a    | a    |
+| A    | A    |
++------+------+
+
+EXPLAIN select * from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2 and t1.c1 = 'a';
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |HASH JOIN        |    |4       |11          |
+|1 |??TABLE FULL SCAN|t1  |2       |5           |
+|2 |??TABLE FULL SCAN|t2  |2       |5           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2]), filter(nil), rowset=256
+      equal_conds([t1.c2 = t2.c2]), other_conds(nil)
+  1 - output([t1.c1], [t1.c2]), filter([t1.c1 = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1], [t2.c2]), filter([cast('a', VARCHAR(1048576)) = t2.c1]), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select * from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2 and t1.c1 = 'a';
++------+------+------+------+
+| c1   | c2   | c1   | c2   |
++------+------+------+------+
+| a    | A    | a    | a    |
+| a    | A    | a    | A    |
+| a    | a    | a    | a    |
+| a    | a    | a    | A    |
++------+------+------+------+
+EXPLAIN select /*+no_rewrite*/ * from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2 and t1.c1 = 'a';
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |HASH JOIN        |    |6       |12          |
+|1 |??TABLE FULL SCAN|t1  |2       |5           |
+|2 |??TABLE FULL SCAN|t2  |4       |4           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1], [t1.c2 = t2.c2]), other_conds(nil)
+  1 - output([t1.c1], [t1.c2]), filter([t1.c1 = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1], [t2.c2]), filter(nil), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/ * from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2 and t1.c1 = 'a';
++------+------+------+------+
+| c1   | c2   | c1   | c2   |
++------+------+------+------+
+| a    | A    | a    | a    |
+| a    | A    | a    | A    |
+| a    | a    | a    | a    |
+| a    | a    | a    | A    |
++------+------+------+------+
+
+EXPLAIN select * from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2 and t1.c2 = 'a';
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |HASH JOIN        |    |8       |13          |
+|1 |??TABLE FULL SCAN|t1  |4       |5           |
+|2 |??TABLE FULL SCAN|t2  |4       |5           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  1 - output([t1.c1], [t1.c2]), filter([t1.c2 = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1], [t2.c2]), filter([t2.c2 = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select * from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2 and t1.c2 = 'a';
++------+------+------+------+
+| c1   | c2   | c1   | c2   |
++------+------+------+------+
+| a    | A    | a    | a    |
+| a    | A    | a    | A    |
+| A    | A    | A    | a    |
+| A    | A    | A    | A    |
+| a    | a    | a    | a    |
+| a    | a    | a    | A    |
+| A    | a    | A    | a    |
+| A    | a    | A    | A    |
++------+------+------+------+
+EXPLAIN select /*+no_rewrite*/ * from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2 and t1.c2 = 'a';
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |HASH JOIN        |    |12      |14          |
+|1 |??TABLE FULL SCAN|t1  |4       |5           |
+|2 |??TABLE FULL SCAN|t2  |4       |4           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1], [t1.c2 = t2.c2]), other_conds(nil)
+  1 - output([t1.c1], [t1.c2]), filter([t1.c2 = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t2.c1], [t2.c2]), filter(nil), rowset=256
+      access([t2.c1], [t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/ * from t1, t2 where t1.c1 = t2.c1 and t1.c2 = t2.c2 and t1.c2 = 'a';
++------+------+------+------+
+| c1   | c2   | c1   | c2   |
++------+------+------+------+
+| a    | A    | a    | a    |
+| a    | A    | a    | A    |
+| A    | A    | A    | a    |
+| A    | A    | A    | A    |
+| a    | a    | a    | a    |
+| a    | a    | a    | A    |
+| A    | a    | A    | a    |
+| A    | a    | A    | A    |
++------+------+------+------+
+
+EXPLAIN select concat(c1, c2), upper(c1), lower(c2) from (select /*+no_merge*/ c1, c2 from t1 where c1 = 'a' and c2 = 'a');
+Query Plan
+============================================================
+|ID|OPERATOR         |NAME           |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------
+|0 |SUBPLAN SCAN     |ANONYMOUS_VIEW1|1       |5           |
+|1 |??TABLE FULL SCAN|t1             |1       |5           |
+============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([concat(cast(cast('a', VARCHAR(1048576)), VARCHAR(100)), cast(.c2, VARCHAR(1048576)))], [upper(cast(cast('a', VARCHAR(1048576)), VARCHAR(100)))],
+       [lower(cast(cast('a', VARCHAR(1048576)), VARCHAR(100)))]), filter(nil), rowset=256
+      access([.c2])
+  1 - output([t1.c2]), filter([t1.c1 = cast('a', VARCHAR(1048576))], [t1.c2 = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select concat(c1, c2), upper(c1), lower(c2) from (select /*+no_merge*/ c1, c2 from t1 where c1 = 'a' and c2 = 'a');
++----------------+-----------+-----------+
+| concat(c1, c2) | upper(c1) | lower(c2) |
++----------------+-----------+-----------+
+| aa             | A         | a         |
+| aA             | A         | a         |
++----------------+-----------+-----------+
+EXPLAIN select /*+no_rewrite*/ concat(c1, c2), upper(c1), lower(c2) from (select /*+no_merge*/ c1, c2 from t1 where c1 = 'a' and c2 = 'a');
+Query Plan
+============================================================
+|ID|OPERATOR         |NAME           |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------
+|0 |SUBPLAN SCAN     |ANONYMOUS_VIEW1|1       |5           |
+|1 |??TABLE FULL SCAN|t1             |1       |5           |
+============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([concat(.c1, cast(.c2, VARCHAR(1048576)))], [upper(.c1)], [lower(.c2)]), filter(nil), rowset=256
+      access([.c1], [.c2])
+  1 - output([t1.c1], [t1.c2]), filter([t1.c1 = cast('a', VARCHAR(1048576))], [t1.c2 = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/ concat(c1, c2), upper(c1), lower(c2) from (select /*+no_merge*/ c1, c2 from t1 where c1 = 'a' and c2 = 'a');
++----------------+-----------+-----------+
+| concat(c1, c2) | upper(c1) | lower(c2) |
++----------------+-----------+-----------+
+| aa             | A         | a         |
+| aA             | A         | a         |
++----------------+-----------+-----------+
+
+EXPLAIN select * from t1 where exists (select 1 from t2 where t2.c1 = t1.c2) and t1.c2 = 'a';
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |HASH RIGHT SEMI JOIN |    |2       |11          |
+|1 |??TABLE FULL SCAN    |t2  |4       |4           |
+|2 |??TABLE FULL SCAN    |t1  |4       |5           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      equal_conds([t2.c1 = cast(t1.c2, VARCHAR(1048576))]), other_conds(nil)
+  1 - output([t2.c1]), filter(nil), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([t1.c2], [t1.c1]), filter([t1.c2 = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t1.c2], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where exists (select 1 from t2 where t2.c1 = t1.c2) and t1.c2 = 'a';
++------+------+
+| c1   | c2   |
++------+------+
+| a    | a    |
+| a    | A    |
+| A    | a    |
+| A    | A    |
++------+------+
+EXPLAIN select /*+no_rewrite*/ * from t1 where exists (select 1 from t2 where t2.c1 = t1.c2) and t1.c2 = 'a';
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |2       |21          |
+|1 |??TABLE FULL SCAN|t1  |4       |5           |
+|2 |??TABLE FULL SCAN|t2  |1       |5           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([t1.c2(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c2], [t1.c1]), filter([t1.c2 = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t1.c2], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([t2.c1 = cast(:0, VARCHAR(1048576))]), rowset=256
+      access([t2.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/ * from t1 where exists (select 1 from t2 where t2.c1 = t1.c2) and t1.c2 = 'a';
++------+------+
+| c1   | c2   |
++------+------+
+| a    | a    |
+| a    | A    |
+| A    | a    |
+| A    | A    |
++------+------+
+
+EXPLAIN select * from t1 where exists (select 1 from t2 where t2.c2 = t1.c1) and t1.c1 = 'a';
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |9           |
+|1 |??TABLE FULL SCAN|t1  |1       |5           |
+|2 |??TABLE FULL SCAN|t2  |1       |5           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c2]), filter([t1.c1 = cast('a', VARCHAR(1048576))]), startup_filter([:0]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([cast(t2.c2, VARCHAR(1048576)) = cast('a', VARCHAR(1048576))]), rowset=256
+      access([t2.c2]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where exists (select 1 from t2 where t2.c2 = t1.c1) and t1.c1 = 'a';
++------+------+
+| c1   | c2   |
++------+------+
+| a    | a    |
+| a    | A    |
++------+------+
+EXPLAIN select /*+no_rewrite*/ * from t1 where exists (select 1 from t2 where t2.c2 = t1.c1) and t1.c1 = 'a';
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |9           |
+|1 |??TABLE FULL SCAN|t1  |1       |5           |
+|2 |??TABLE FULL SCAN|t2  |1       |5           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([t1.c1], [t1.c2]), filter([t1.c1 = cast('a', VARCHAR(1048576))]), startup_filter([:0]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([cast('a', VARCHAR(1048576)) = cast(t2.c2, VARCHAR(1048576))]), rowset=256
+      access([t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/ * from t1 where exists (select 1 from t2 where t2.c2 = t1.c1) and t1.c1 = 'a';
++------+------+
+| c1   | c2   |
++------+------+
+| a    | a    |
+| a    | A    |
++------+------+
+
+drop table t1,t2;
+
+********************* test for implicit cast *********
+drop table if exists t1;
+create table t1(c1 decimal(30,5), c2 int, c3 varchar(10));
+
+EXPLAIN select trim(c1) from t1 where c1 = 1;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([trim(cast(cast(cast(cast(1, DECIMAL(1, 0)), DECIMAL(30, 5)), VARCHAR(1048576)), VARCHAR(1048576)))]), filter([t1.c1 = cast(1, DECIMAL(1, 0))]), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select trim(c1) from t1 where c1 = 1;
++----------+
+| trim(c1) |
++----------+
+| 1.00000  |
++----------+
+EXPLAIN select /*+no_rewrite*/ trim(c1) from t1 where c1 = 1;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([trim(cast(cast(t1.c1, VARCHAR(1048576)), VARCHAR(1048576)))]), filter([t1.c1 = cast(1, DECIMAL(1, 0))]), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/ trim(c1) from t1 where c1 = 1;
++----------+
+| trim(c1) |
++----------+
+| 1.00000  |
++----------+
+
+EXPLAIN select * from t1 a where exists (select 1 from t1 b where b.c2 = a.c1 and b.c3 = concat(a.c1, 'a')) and c1 = 1;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |8           |
+|1 |??TABLE FULL SCAN|a   |1       |4           |
+|2 |??TABLE FULL SCAN|b   |1       |4           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([a.c1], [a.c2], [a.c3]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([(T_OP_EXISTS, subquery(1))(:0)]), init_plan_idxs_(nil), use_batch=false
+  1 - output([a.c1], [a.c2], [a.c3]), filter([a.c1 = cast(1, DECIMAL(1, 0))]), startup_filter([:0]), rowset=256
+      access([a.c1], [a.c2], [a.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([a.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([cast(b.c2, DECIMAL(11, 0)) = cast(1, DECIMAL(1, 0))], [b.c3 = cast(concat(cast(cast(cast(cast(1, DECIMAL(1, 0)), DECIMAL(30, 
+      5)), VARCHAR(1048576)), VARCHAR(1048576)), 'a'), VARCHAR(1048576))]), rowset=256
+      access([b.c2], [b.c3]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([b.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 a where exists (select 1 from t1 b where b.c2 = a.c1 and b.c3 = concat(a.c1, 'a')) and c1 = 1;
++---------+------+----------+
+| c1      | c2   | c3       |
++---------+------+----------+
+| 1.00000 |    1 | 1.00000a |
++---------+------+----------+
+EXPLAIN select /*+no_rewrite*/ * from t1 a where exists (select 1 from t1 b where b.c2 = a.c1 and b.c3 = concat(a.c1, 'a')) and c1 = 1;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SUBPLAN FILTER   |    |1       |8           |
+|1 |??TABLE FULL SCAN|a   |1       |4           |
+|2 |??TABLE FULL SCAN|b   |1       |4           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([a.c1], [a.c2], [a.c3]), filter([(T_OP_EXISTS, subquery(1))]), rowset=256
+      exec_params_([a.c1(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([a.c1], [a.c2], [a.c3]), filter([a.c1 = cast(1, DECIMAL(1, 0))]), rowset=256
+      access([a.c1], [a.c2], [a.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([a.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([1]), filter([cast(1, DECIMAL(1, 0)) = cast(b.c2, DECIMAL(11, 0))], [b.c3 = cast(concat(cast(cast(:0, VARCHAR(1048576)), VARCHAR(1048576)),
+       'a'), VARCHAR(1048576))]), rowset=256
+      access([b.c2], [b.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([b.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/ * from t1 a where exists (select 1 from t1 b where b.c2 = a.c1 and b.c3 = concat(a.c1, 'a')) and c1 = 1;
++---------+------+----------+
+| c1      | c2   | c3       |
++---------+------+----------+
+| 1.00000 |    1 | 1.00000a |
++---------+------+----------+
+
+drop table t1;
