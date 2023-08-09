@@ -27,7 +27,10 @@ class ObLSRestoreTaskMgr final
 public:
   static const int64_t OB_RESTORE_MAX_DAG_NET_NUM = 5;
   static const int64_t OB_LS_RESTORE_MAX_TABLET_NUM = 10000;
-  static const int64_t OB_LS_RESOTRE_TABLET_DAG_NET_BATCH_NUM = 1024;
+  // tablets number in one dag net for low priority tablets.
+  static const int64_t LOW_PRI_TABLETS_BATCH_NUM = 64;
+  // tablets number in one dag net for high priority tablets.
+  static const int64_t HIGH_PRI_TABLETS_BATCH_NUM = 1024;
 
   // There are 2 kinds of types during restore. One is log stream restore
   // task at phase RESTORE_SYS_TABLETS, which does not have any tablets in

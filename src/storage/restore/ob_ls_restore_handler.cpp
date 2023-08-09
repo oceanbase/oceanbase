@@ -1281,6 +1281,24 @@ int ObILSRestoreState::check_restore_concurrency_limit_(bool &reach_limit)
   return ret;
 }
 
+int ObILSRestoreState::inner_check_can_do_restore_(bool &can_do_restore)
+{
+  int ret = OB_SUCCESS;
+  bool reach_limit = false;
+  if (tablet_mgr_.has_no_tablets_to_restore()) {
+    // If all tablets have been restored, then we need push the
+    // restore state to restore done.
+    can_do_restore = true;
+  } else if (OB_FAIL(check_restore_concurrency_limit_(reach_limit))) {
+    LOG_WARN("failed to check restore concurrency limit", K(ret), "ls_id", ls_->get_ls_id().id());
+  } else if (reach_limit) {
+    can_do_restore = false;
+  } else {
+    can_do_restore = true;
+  }
+  return ret;
+}
+
 int ObILSRestoreState::online_()
 {
   int ret = OB_SUCCESS;
@@ -1805,11 +1823,19 @@ int ObLSRestoreSysTabletState::do_restore_sys_tablet()
   uint64_t tenant_id = arg.tenant_id_;
   ObCurTraceId::init(GCONF.self_addr_);
   ObTaskId task_id(*ObCurTraceId::get_trace_id());
+  // always restore from backup.
+  if (OB_FAIL(leader_fill_ls_restore_arg_(arg))) {
+    LOG_WARN("fail to fill ls restore arg", K(ret));
+  }
+#if 0
+  // TODO(wangxiaohui.wxh): 4.3, let leader restore from backup and follower restore from leader.
   if (!is_follower(role_) && OB_FAIL(leader_fill_ls_restore_arg_(arg))) {
     LOG_WARN("fail to fill ls restore arg", K(ret));
   } else if (is_follower(role_) && OB_FAIL(follower_fill_ls_restore_arg_(arg))) {
     LOG_WARN("fail to fill ls restore arg", K(ret));
-  } else if (OB_FAIL(tablet_mgr_.schedule_ls_restore(task_id))) {
+  }
+#endif
+  if (FAILEDx(tablet_mgr_.schedule_ls_restore(task_id))) {
     LOG_WARN("fail to schedule tablet", K(ret), KPC(ls_));
   } else if (OB_FAIL(schedule_ls_restore_(arg, task_id))) {
     LOG_WARN("fail to schedule restore sys tablet", KR(ret), K(arg), K(task_id));
@@ -1904,9 +1930,14 @@ int ObLSRestoreCreateUserTabletState::leader_create_user_tablet_()
   int ret = OB_SUCCESS;
   ObSArray<ObTabletID> restored_tablets;
   ObLSRestoreTaskMgr::ToRestoreTabletGroup tablet_need_restore;
+  bool can_do_restore = false;
   LOG_INFO("ready to create leader user tablet", K(ls_restore_status_), KPC(ls_));
   if (OB_FAIL(tablet_mgr_.remove_restored_tablets(restored_tablets))) {
     LOG_WARN("fail to pop restored tablets", K(ret), KPC(ls_));
+  } else if (OB_FAIL(inner_check_can_do_restore_(can_do_restore))) {
+    LOG_WARN("failed to check can do restore", K(ret), "ls_id", ls_->get_ls_id().id());
+  } else if (!can_do_restore) {
+    // wait next schedule.
   } else if (OB_FAIL(tablet_mgr_.choose_tablets_to_restore(tablet_need_restore))) {
     LOG_WARN("fail to pop need restore tablets", K(ret), KPC(ls_));
   } else if (tablet_need_restore.empty()) {
@@ -1921,6 +1952,9 @@ int ObLSRestoreCreateUserTabletState::leader_create_user_tablet_()
     LOG_WARN("fail to do quick restore", K(ret), K(tablet_need_restore), KPC(ls_));
   }
 
+#if 0
+  // TODO(wangxiaohui.wxh): 4.3, let leader restore from backup and follower restore from leader.
+
   int tmp_ret = OB_SUCCESS; // try rpc's best
   if (restored_tablets.empty()) {
   } else if (OB_SUCCESS != (tmp_ret = notify_follower_restore_tablet_(restored_tablets))) {
@@ -1928,6 +1962,8 @@ int ObLSRestoreCreateUserTabletState::leader_create_user_tablet_()
   } else {
     LOG_INFO("success send tablets to follower for restore", K(restored_tablets));
   }
+#endif
+
   return ret;
 }
 
@@ -1936,9 +1972,14 @@ int ObLSRestoreCreateUserTabletState::follower_create_user_tablet_()
   int ret = OB_SUCCESS;
   ObSArray<ObTabletID> restored_tablets;
   ObLSRestoreTaskMgr::ToRestoreTabletGroup tablet_need_restore;
+  bool can_do_restore = false;
   LOG_INFO("ready to create follower user tablet", K(ls_restore_status_), KPC(ls_));
   if (OB_FAIL(tablet_mgr_.remove_restored_tablets(restored_tablets))) {
     LOG_WARN("fail to pop restored tablets", K(ret), KPC(ls_));
+  } else if (OB_FAIL(inner_check_can_do_restore_(can_do_restore))) {
+    LOG_WARN("failed to check can do restore", K(ret), "ls_id", ls_->get_ls_id().id());
+  } else if (!can_do_restore) {
+    // wait next schedule.
   } else if (OB_FAIL(tablet_mgr_.choose_tablets_to_restore(tablet_need_restore))) {
     LOG_WARN("fail to choose need restore tablets", K(ret), KPC(ls_));
   } else if (tablet_need_restore.empty()) {
@@ -1966,11 +2007,21 @@ int ObLSRestoreCreateUserTabletState::do_create_user_tablet_(
   ObTaskId task_id(*ObCurTraceId::get_trace_id());
   bool reach_dag_limit = false;
   bool is_new_election = false;
+  // always restore from backup.
+  if (OB_FAIL(leader_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
+    LOG_WARN("fail to fill tablet group restore arg", K(ret));
+  }
+
+#if 0
+  // TODO(wangxiaohui.wxh): 4.3, let leader restore from backup and follower restore from leader.
   if (!is_follower(role_) && OB_FAIL(leader_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
     LOG_WARN("fail to fill tablet group restore arg", K(ret));
   } else if (is_follower(role_) && OB_FAIL(follower_fill_tablet_group_restore_arg_(tablet_need_restore.get_tablet_list(), tablet_need_restore.action(), arg))) {
     LOG_WARN("fail to fill tablet group restore arg", K(ret));
-  } else if (OB_FAIL(check_new_election_(is_new_election))) {
+  }
+#endif
+
+  if (FAILEDx(check_new_election_(is_new_election))) {
     LOG_WARN("fail to check change role", K(ret));
   } else if (is_new_election) {
     ret = OB_EAGAIN;
@@ -2122,12 +2173,17 @@ int ObLSQuickRestoreState::leader_quick_restore_()
   ObSArray<ObTabletID> restored_tablets;
   ObLSRestoreTaskMgr::ToRestoreTabletGroup tablet_need_restore;
   ObLogRestoreHandler *log_restore_handle = ls_->get_log_restore_handler();
+  bool can_do_restore = false;
   LOG_INFO("ready to leader quick restore", K(ls_restore_status_), KPC(ls_));
   if (OB_ISNULL(log_restore_handle)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log restore handle can't nullptr", K(ret), K(log_restore_handle));
   } else if (OB_FAIL(tablet_mgr_.remove_restored_tablets(restored_tablets))) {
     LOG_WARN("fail to pop restored tablets", K(ret), KPC(ls_));
+  } else if (OB_FAIL(inner_check_can_do_restore_(can_do_restore))) {
+    LOG_WARN("failed to check can do restore", K(ret), "ls_id", ls_->get_ls_id().id());
+  } else if (!can_do_restore) {
+    // wait next schedule.
   } else if (OB_FAIL(tablet_mgr_.choose_tablets_to_restore(tablet_need_restore))) {
     LOG_WARN("fail to choose need restore tablets", K(ret), KPC(ls_));
   } else if (tablet_need_restore.empty()) {
@@ -2182,12 +2238,17 @@ int ObLSQuickRestoreState::follower_quick_restore_()
   ObSArray<ObTabletID> restored_tablets;
   ObLSRestoreTaskMgr::ToRestoreTabletGroup tablet_need_restore;
   ObLogRestoreHandler *log_restore_handle = ls_->get_log_restore_handler();
+  bool can_do_restore = false;
   LOG_INFO("ready to follower quick restore", K(ls_restore_status_), KPC(ls_));
   if (OB_ISNULL(log_restore_handle)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log restore handle can't nullptr", K(ret), K(log_restore_handle));
   } else if (OB_FAIL(tablet_mgr_.remove_restored_tablets(restored_tablets))) {
     LOG_WARN("fail to pop restored tablets", K(ret), KPC(ls_));
+  } else if (OB_FAIL(inner_check_can_do_restore_(can_do_restore))) {
+    LOG_WARN("failed to check can do restore", K(ret), "ls_id", ls_->get_ls_id().id());
+  } else if (!can_do_restore) {
+    // wait next schedule.
   } else if (OB_FAIL(tablet_mgr_.choose_tablets_to_restore(tablet_need_restore))) {
     LOG_WARN("fail to choose need restore tablets", K(ret), KPC(ls_));
   } else if (tablet_need_restore.empty()) {
@@ -2429,9 +2490,14 @@ int ObLSRestoreMajorState::leader_restore_major_data_()
   int ret = OB_SUCCESS;
   ObSArray<ObTabletID> restored_tablets;
   ObLSRestoreTaskMgr::ToRestoreTabletGroup tablet_need_restore;
+  bool can_do_restore = false;
   LOG_INFO("ready to restore leader major data", K(ls_restore_status_), KPC(ls_));
   if (OB_FAIL(tablet_mgr_.remove_restored_tablets(restored_tablets))) {
     LOG_WARN("fail to pop restored tablets", K(ret), KPC(ls_));
+  } else if (OB_FAIL(inner_check_can_do_restore_(can_do_restore))) {
+    LOG_WARN("failed to check can do restore", K(ret), "ls_id", ls_->get_ls_id().id());
+  } else if (!can_do_restore) {
+    // wait next schedule.
   } else if (OB_FAIL(tablet_mgr_.choose_tablets_to_restore(tablet_need_restore))) {
     LOG_WARN("fail to choose need restore tablets", K(ret), KPC(ls_));
   } else if (tablet_need_restore.empty()) {
@@ -2466,9 +2532,14 @@ int ObLSRestoreMajorState::follower_restore_major_data_()
   int ret = OB_SUCCESS;
   ObSArray<ObTabletID> restored_tablets;
   ObLSRestoreTaskMgr::ToRestoreTabletGroup tablet_need_restore;
+  bool can_do_restore = false;
   LOG_INFO("ready to restore follower major data", K(ls_restore_status_), KPC(ls_));
   if (OB_FAIL(tablet_mgr_.remove_restored_tablets(restored_tablets))) {
     LOG_WARN("fail to pop restored tablets", K(ret), KPC(ls_));
+  } else if (OB_FAIL(inner_check_can_do_restore_(can_do_restore))) {
+    LOG_WARN("failed to check can do restore", K(ret), "ls_id", ls_->get_ls_id().id());
+  } else if (!can_do_restore) {
+    // wait next schedule.
   } else if (OB_FAIL(tablet_mgr_.choose_tablets_to_restore(tablet_need_restore))) {
     LOG_WARN("fail to choose need restore tablets", K(ret), KPC(ls_));
   } else if (tablet_need_restore.empty()) {

@@ -175,6 +175,7 @@ protected:
       const ObLSRestoreArg &arg,
       const share::ObTaskId &task_id);
   int check_restore_concurrency_limit_(bool &reach_limit);
+  int inner_check_can_do_restore_(bool &can_restore);
   int schedule_tablet_group_restore_dag_net_(
       const ObTabletGroupRestoreArg &arg,
       const share::ObTaskId &task_id);
