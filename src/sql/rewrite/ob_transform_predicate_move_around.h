@@ -137,6 +137,10 @@ private:
                                const ObIArray<int64_t> &view_sel_list,
                                ObIArray<ObRawExpr *> &preds);
 
+  int rename_pullup_predicates(ObDMLStmt &stmt,
+                               TableItem &view,
+                               ObIArray<ObRawExpr *> &preds);
+
   int pullup_predicates_from_const_select(ObSelectStmt *parent_stmt,
                                           ObSelectStmt *child_stmt,
                                           ObIArray<ObRawExpr*> &pullup_preds);
@@ -212,7 +216,8 @@ private:
 
   int pushdown_semi_info_right_filter(ObDMLStmt *stmt,
                                       ObTransformerCtx *ctx,
-                                      SemiInfo *semi_info);
+                                      SemiInfo *semi_info,
+                                      ObIArray<ObRawExpr *> &pullup_preds);
 
   int check_has_shared_query_ref(ObRawExpr *expr, bool &has);
 
