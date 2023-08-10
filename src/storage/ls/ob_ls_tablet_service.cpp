@@ -215,6 +215,9 @@ int ObLSTabletService::replay(
     if (OB_TABLET_NOT_EXIST == ret) {
       ret = OB_SUCCESS; // TODO (bowen.gbw): unify multi data replay logic
       LOG_INFO("tablet does not exist, skip", K(ret), K(replayer_executor));
+    } else if (OB_TIMEOUT == ret) {
+      LOG_INFO("replace timeout errno", KR(ret), K(replayer_executor));
+      ret = OB_EAGAIN;
     } else {
       LOG_WARN("failed to replay", K(ret), K(replayer_executor));
     }
@@ -582,64 +585,6 @@ int ObLSTabletService::get_tablet_addr(const ObTabletMapKey &key, ObMetaDiskAddr
     }
   }
 
-  return ret;
-}
-
-int ObLSTabletService::replay_medium_compaction_clog(
-    const share::SCN &scn,
-    const char *buf,
-    const int64_t buf_size,
-    const int64_t pos)
-{
-  int ret = OB_SUCCESS;
-  ObTabletID tablet_id;
-  ObTabletHandle handle;
-  int64_t new_pos = pos;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_UNLIKELY(buf_size <= pos || pos < 0 || buf_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(buf_size), K(pos));
-  } else if (OB_FAIL(tablet_id.deserialize(buf, buf_size, new_pos))) {
-    LOG_WARN("fail to deserialize tablet id", K(ret), K(buf_size), K(pos), K(tablet_id));
-  } else if (OB_FAIL(direct_get_tablet(tablet_id, handle))) {
-    if (OB_TABLET_NOT_EXIST == ret) {
-      LOG_INFO("tablet not exist", K(ret), K(tablet_id));
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
-    }
-  } else if (handle.get_obj()->is_empty_shell()) {
-    LOG_INFO("old tablet is empty shell tablet, should skip this operation", K(ret), "old_tablet", handle.get_obj());
-  } else if (OB_FAIL(handle.get_obj()->replay_medium_compaction_clog(scn, buf, buf_size, new_pos))) {
-    LOG_WARN("update tablet storage schema fail", K(ret), K(tablet_id), K(buf_size), K(new_pos));
-  }
-  return ret;
-}
-
-int ObLSTabletService::replay_update_reserved_snapshot(
-    const share::SCN &scn,
-    const char *buf,
-    const int64_t buf_size,
-    const int64_t pos)
-{
-  int ret = OB_SUCCESS;
-  int64_t new_pos = pos;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_UNLIKELY(buf_size <= pos || pos < 0 || buf_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(buf_size), K(pos));
-  } else if (OB_ISNULL(ls_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls is null", K(ret), KPC(ls_));
-  } else if (OB_FAIL(ls_->replay_reserved_snapshot_log(scn, buf, buf_size, new_pos))) {
-    LOG_WARN("replay reserved snapshot log fail", K(ret), KPC(ls_), K(buf_size), K(new_pos));
-  }
   return ret;
 }
 

@@ -230,7 +230,6 @@ int ObTabletMediumCompactionInfoRecorder::inner_replay_clog(
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_allocator;
   ObMediumCompactionInfo replay_medium_info;
-  ObTabletHandle tmp_tablet_handle;
   if (OB_FAIL(replay_medium_info.deserialize(tmp_allocator, buf, size, pos))) {
     LOG_WARN("failed to deserialize medium compaction info", K(ret));
   } else if (!replay_medium_info.cluster_id_equal()
@@ -252,7 +251,6 @@ int ObTabletMediumCompactionInfoRecorder::inner_replay_clog(
     }
   }
 
-  tmp_tablet_handle.reset();
   return ret;
 }
 

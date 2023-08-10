@@ -1236,7 +1236,6 @@ int ObTabletMergeFinishTask::get_merged_sstable(ObTabletMergeCtx &ctx)
 int ObTabletMergeFinishTask::add_sstable_for_merge(ObTabletMergeCtx &ctx)
 {
   int ret = OB_SUCCESS;
-  ObTablet *old_tablet = ctx.tablet_handle_.get_obj();
   const ObMergeType merge_type = ctx.param_.merge_type_;
 
   if (OB_UNLIKELY(!ctx.is_valid())) {
@@ -1256,7 +1255,6 @@ int ObTabletMergeFinishTask::add_sstable_for_merge(ObTabletMergeCtx &ctx)
                                   is_minor_merge(ctx.param_.merge_type_)/*need_check_sstable*/,
                                   false/*allow_duplicate_sstable*/,
                                   ctx.param_.get_merge_type());
-    ObTablet *old_tablet = ctx.tablet_handle_.get_obj();
     ObTabletHandle new_tablet_handle;
     if (ctx.param_.tablet_id_.is_special_merge_tablet()) {
       param.multi_version_start_ = 1;
