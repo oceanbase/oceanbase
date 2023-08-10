@@ -520,6 +520,43 @@ void ObFetchLSMemberListInfo::reset()
 
 OB_SERIALIZE_MEMBER(ObFetchLSMemberListInfo, member_list_);
 
+ObFetchLSMemberAndLearnerListArg::ObFetchLSMemberAndLearnerListArg()
+  : tenant_id_(OB_INVALID_ID),
+    ls_id_()
+{
+}
+
+bool ObFetchLSMemberAndLearnerListArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid();
+}
+
+void ObFetchLSMemberAndLearnerListArg::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+}
+
+OB_SERIALIZE_MEMBER(ObFetchLSMemberAndLearnerListArg, tenant_id_, ls_id_);
+
+ObFetchLSMemberAndLearnerListInfo::ObFetchLSMemberAndLearnerListInfo()
+  : member_list_(),
+    learner_list_()
+{
+}
+
+bool ObFetchLSMemberAndLearnerListInfo::is_valid() const
+{
+  return member_list_.is_valid() || learner_list_.is_valid();
+}
+
+void ObFetchLSMemberAndLearnerListInfo::reset()
+{
+  member_list_.reset();
+  learner_list_.reset();
+}
+
+OB_SERIALIZE_MEMBER(ObFetchLSMemberAndLearnerListInfo, member_list_, learner_list_);
+
 ObCopySSTableMacroRangeInfoArg::ObCopySSTableMacroRangeInfoArg()
   : tenant_id_(OB_INVALID_ID),
     ls_id_(),
@@ -1839,6 +1876,61 @@ int ObFetchLSMemberListP::process()
       LOG_WARN("failed to assign", K(ret), K(member_list));
     }
   }
+  return ret;
+}
+
+ObFetchLSMemberAndLearnerListP::ObFetchLSMemberAndLearnerListP()
+{
+}
+
+int ObFetchLSMemberAndLearnerListP::process()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg_.tenant_id_;
+  const share::ObLSID &ls_id = arg_.ls_id_;
+  MTL_SWITCH(tenant_id) {
+    ObLSService *ls_svr = NULL;
+    ObLSHandle ls_handle;
+    ObLS *ls = NULL;
+    logservice::ObLogHandler *log_handler = NULL;
+    common::ObMemberList member_list;
+    int64_t paxos_replica_num = 0;
+    logservice::ObLogService *log_service = nullptr;
+    ObRole role;
+    int64_t proposal_id = 0;
+    common::GlobalLearnerList learner_list;
+    if (tenant_id != MTL_ID()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rpc get member list tenant not match", K(ret), K(tenant_id));
+    } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log service should not be NULL", K(ret), KP(log_service));
+    } else if (OB_FAIL(log_service->get_palf_role(ls_id, role, proposal_id))) {
+      LOG_WARN("failed to get role", K(ret), "arg", arg_);
+    } else if (!is_strong_leader(role)) {
+      ret = OB_PARTITION_NOT_LEADER;
+      LOG_WARN("ls is not leader, cannot get member list", K(ret), K(role), K(arg_));
+    } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls service should not be null", K(ret));
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("failed to get ls", K(ret), K(ls_id));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be null", K(ret));
+    } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log handler should not be NULL", K(ret));
+    } else if (OB_FAIL(log_handler->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list))) {
+      LOG_WARN("failed to get paxos member list and learner list", K(ret));
+    } else if (OB_FAIL(result_.member_list_.deep_copy(member_list))) {
+      LOG_WARN("failed to assign member list", K(ret), K(member_list));
+    } else if (OB_FAIL(result_.learner_list_.deep_copy(learner_list))) {
+      LOG_WARN("failed to assign learner list", K(ret), K(learner_list));
+    }
+
+  }
+
   return ret;
 }
 
@@ -3796,5 +3888,26 @@ int ObStorageRpc::wakeup_transfer_service(
   return ret;
 }
 
+int ObStorageRpc::fetch_ls_member_and_learner_list(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const ObStorageHASrcInfo &src_info,
+    obrpc::ObFetchLSMemberAndLearnerListInfo &member_info)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObFetchLSMemberAndLearnerListArg arg;
+  arg.tenant_id_ = tenant_id;
+  arg.ls_id_ = ls_id;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
+  } else if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_)
+      .fetch_ls_member_and_learner_list(arg, member_info))) {
+    LOG_WARN("fail to check ls is valid member", K(ret), K(tenant_id), K(ls_id));
+  }
+
+  return ret;
+}
 } // storage
 } // oceanbase
