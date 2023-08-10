@@ -8,6 +8,10 @@
 
 namespace oceanbase
 {
+namespace observer
+{
+class ObTableLoadTableCtx;
+}
 namespace sql
 {
 class ObExecContext;
@@ -24,10 +28,13 @@ public:
   static int commit_direct_insert(ObExecContext &ctx, ObPhysicalPlan &plan);
   static int finish_direct_insert(ObExecContext &ctx, ObPhysicalPlan &plan);
   // each insert-task is processed in a single thread and is wrapped by a table load trans
-  static int open_task(const uint64_t table_id, const int64_t task_id);
+  static int open_task(const uint64_t table_id,
+                       const int64_t task_id,
+                       observer::ObTableLoadTableCtx *&table_ctx);
   static int close_task(const uint64_t table_id,
-                   const int64_t task_id,
-                   const int error_code = OB_SUCCESS);
+                        const int64_t task_id,
+                        observer::ObTableLoadTableCtx *table_ctx,
+                        const int error_code = OB_SUCCESS);
 };
 } // namespace sql
 } // namespace oceanbase

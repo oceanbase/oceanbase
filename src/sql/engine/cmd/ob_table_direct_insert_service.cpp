@@ -74,12 +74,16 @@ int ObTableDirectInsertService::finish_direct_insert(ObExecContext &ctx,
   return ret;
 }
 
-int ObTableDirectInsertService::open_task(const uint64_t table_id, const int64_t task_id)
+int ObTableDirectInsertService::open_task(const uint64_t table_id,
+                                          const int64_t task_id,
+                                          ObTableLoadTableCtx *&table_ctx)
 {
   int ret = OB_SUCCESS;
-  ObTableLoadTableCtx *table_ctx = nullptr;
   ObTableLoadKey key(MTL_ID(), table_id);
-  if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
+  if (OB_NOT_NULL(table_ctx)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table_ctx should be null", KR(ret), KP(table_ctx));
+  } else if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
     if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
       LOG_WARN("fail to get table ctx", KR(ret), K(key));
     } else {
@@ -100,7 +104,7 @@ int ObTableDirectInsertService::open_task(const uint64_t table_id, const int64_t
       LOG_WARN("fail to start direct load trans", KR(ret), K(trans_id));
     }
   }
-  if (OB_NOT_NULL(table_ctx)) {
+  if (OB_FAIL(ret) && OB_NOT_NULL(table_ctx)) {
     ObTableLoadService::put_ctx(table_ctx);
     table_ctx = nullptr;
   }
@@ -109,14 +113,11 @@ int ObTableDirectInsertService::open_task(const uint64_t table_id, const int64_t
 
 int ObTableDirectInsertService::close_task(const uint64_t table_id,
                                            const int64_t task_id,
+                                           ObTableLoadTableCtx *table_ctx,
                                            const int error_code)
 {
   int ret = OB_SUCCESS;
-  ObTableLoadTableCtx *table_ctx = nullptr;
-  ObTableLoadKey key(MTL_ID(), table_id);
-  if (OB_FAIL(ObTableLoadService::get_ctx(key, table_ctx))) {
-    LOG_WARN("fail to get table ctx", KR(ret), K(key), K(table_id));
-  } else {
+  if (OB_NOT_NULL(table_ctx)) {
     table::ObTableLoadTransId trans_id;
     trans_id.segment_id_ = task_id;
     trans_id.trans_gid_ = 1;
@@ -134,10 +135,7 @@ int ObTableDirectInsertService::close_task(const uint64_t table_id,
         LOG_WARN("fail to abandon direct load trans", KR(tmp_ret), K(trans_id));
       }
     }
-  }
-  if (OB_NOT_NULL(table_ctx)) {
     ObTableLoadService::put_ctx(table_ctx);
-    table_ctx = nullptr;
   }
   return ret;
 }
