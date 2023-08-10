@@ -1023,14 +1023,10 @@ void ObTableModifyOp::log_user_error_inner(int ret, int64_t col_idx, int64_t row
   if (OB_DATA_OUT_OF_RANGE == ret &&
       (0 <= col_idx && col_idx < column_infos.count())) {
     ObString column_name = column_infos.at(col_idx).column_name_;
-    ObSQLUtils::copy_and_convert_string_charset(ctx_.get_allocator(), column_name, column_name,
-                      CS_TYPE_UTF8MB4_BIN, ctx_.get_my_session()->get_local_collation_connection());
     LOG_USER_ERROR(OB_DATA_OUT_OF_RANGE, column_name.length(), column_name.ptr(), row_num);
   } else if (OB_ERR_DATA_TOO_LONG == ret &&
       (0 <= col_idx && col_idx < column_infos.count())) {
     ObString column_name = column_infos.at(col_idx).column_name_;
-    ObSQLUtils::copy_and_convert_string_charset(ctx_.get_allocator(), column_name, column_name,
-                    CS_TYPE_UTF8MB4_BIN, ctx_.get_my_session()->get_local_collation_connection());
     if (lib::is_mysql_mode()) {
       //for error code OB_ERR_DATA_TOO_LONG, oracle and mysql has the different error msg
       //oracle error msg has output in ObExprColumnConv, so need to skip oracle mode here
@@ -1041,8 +1037,6 @@ void ObTableModifyOp::log_user_error_inner(int ret, int64_t col_idx, int64_t row
   } else if ((OB_INVALID_DATE_VALUE == ret || OB_INVALID_DATE_FORMAT == ret)
             && (0 <= col_idx && col_idx < column_infos.count())) {
     ObString column_name = column_infos.at(col_idx).column_name_;
-    ObSQLUtils::copy_and_convert_string_charset(ctx_.get_allocator(), column_name, column_name,
-                    CS_TYPE_UTF8MB4_BIN, ctx_.get_my_session()->get_local_collation_connection());
     LOG_USER_ERROR(OB_ERR_INVALID_DATE_MSG_FMT_V2, column_name.length(),
                    column_name.ptr(), row_num);
   } else {
@@ -1054,13 +1048,9 @@ void ObTableModifyOp::log_user_error_inner(int ret, int64_t row_num, const Colum
 {
   if (OB_DATA_OUT_OF_RANGE == ret) {
     ObString column_name = column_info.column_name_;
-    ObSQLUtils::copy_and_convert_string_charset(ctx_.get_allocator(), column_name, column_name,
-                      CS_TYPE_UTF8MB4_BIN, ctx_.get_my_session()->get_local_collation_connection());
     LOG_USER_ERROR(OB_DATA_OUT_OF_RANGE, column_name.length(), column_name.ptr(), row_num);
   } else if (OB_ERR_DATA_TOO_LONG == ret) {
     ObString column_name = column_info.column_name_;
-    ObSQLUtils::copy_and_convert_string_charset(ctx_.get_allocator(), column_name, column_name,
-                    CS_TYPE_UTF8MB4_BIN, ctx_.get_my_session()->get_local_collation_connection());
     if (lib::is_mysql_mode()) {
       //for error code OB_ERR_DATA_TOO_LONG, oracle and mysql has the different error msg
       //oracle error msg has output in ObExprColumnConv, so need to skip oracle mode here
@@ -1070,8 +1060,6 @@ void ObTableModifyOp::log_user_error_inner(int ret, int64_t row_num, const Colum
     LOG_USER_ERROR(OB_ERR_VALUE_LARGER_THAN_ALLOWED);
   } else if (OB_INVALID_DATE_VALUE == ret || OB_INVALID_DATE_FORMAT == ret) {
     ObString column_name = column_info.column_name_;
-    ObSQLUtils::copy_and_convert_string_charset(ctx_.get_allocator(), column_name, column_name,
-                    CS_TYPE_UTF8MB4_BIN, ctx_.get_my_session()->get_local_collation_connection());
     LOG_USER_ERROR(OB_ERR_INVALID_DATE_MSG_FMT_V2, column_name.length(),
                    column_name.ptr(), row_num);
   } else {

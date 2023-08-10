@@ -2922,8 +2922,6 @@ void ObDMLResolver::report_user_error_msg(int &ret, const ObRawExpr *root_expr, 
         ret = OB_ERR_UNKNOWN_TABLE;
         ObString tbl_name = concat_table_name(q_name.database_name_, q_name.tbl_name_);
         ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
-        ObSQLUtils::copy_and_convert_string_charset(*allocator_, tbl_name, tbl_name,
-                        CS_TYPE_UTF8MB4_BIN, session_info_->get_local_collation_connection());
         LOG_USER_ERROR(OB_ERR_UNKNOWN_TABLE, tbl_name.length(), tbl_name.ptr(), scope_name.length(), scope_name.ptr());
       }
     }
@@ -2931,14 +2929,10 @@ void ObDMLResolver::report_user_error_msg(int &ret, const ObRawExpr *root_expr, 
   if (OB_ERR_BAD_FIELD_ERROR == ret) {
     ObString column_name = concat_qualified_name(q_name.database_name_, q_name.tbl_name_, q_name.col_name_);
     ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
-    ObSQLUtils::copy_and_convert_string_charset(*allocator_, column_name, column_name,
-                    CS_TYPE_UTF8MB4_BIN, session_info_->get_local_collation_connection());
     LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(), scope_name.length(), scope_name.ptr());
   } else if (OB_NON_UNIQ_ERROR == ret) {
     ObString column_name = concat_qualified_name(q_name.database_name_, q_name.tbl_name_, q_name.col_name_);
     ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
-    ObSQLUtils::copy_and_convert_string_charset(*allocator_, column_name, column_name,
-                    CS_TYPE_UTF8MB4_BIN, session_info_->get_local_collation_connection());
     LOG_USER_ERROR(OB_NON_UNIQ_ERROR, column_name.length(), column_name.ptr(), scope_name.length(), scope_name.ptr());
   } else if (OB_ILLEGAL_REFERENCE == ret) {
     //compatiable with mysql
@@ -2946,8 +2940,6 @@ void ObDMLResolver::report_user_error_msg(int &ret, const ObRawExpr *root_expr, 
     //others: select max(c1) as c from t1 group by c+1 ->
     //err msg:ERROR 1247 (42S22): Reference 'c' not supported (reference to group function)
     ObString column_name = q_name.col_name_;
-    ObSQLUtils::copy_and_convert_string_charset(*allocator_, column_name, column_name,
-                    CS_TYPE_UTF8MB4_BIN, session_info_->get_local_collation_connection());
     if (root_expr == q_name.ref_expr_) {
       ret = OB_WRONG_GROUP_FIELD;
       LOG_USER_ERROR(OB_WRONG_GROUP_FIELD, column_name.length(), column_name.ptr());

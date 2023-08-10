@@ -355,6 +355,28 @@ int ObMPPacketSender::send_error_packet(int err,
         message = ObString::make_string(msg_buf); // default error message
       }
     }
+    if (OB_SUCC(ret)) {
+      ObArenaAllocator allocator(ObMemAttr(conn_->tenant_id_));
+      ObString new_message = message;
+      ObCollationType client_cs_type = CS_TYPE_UTF8MB4_BIN;
+
+      if (OB_UNLIKELY(OB_SUCCESS != get_session(session))) {
+        session = NULL;
+      } else {
+        client_cs_type = session->get_local_collation_connection();
+        if (OB_UNLIKELY(OB_SUCCESS != ObCharset::charset_convert(allocator,
+                                                                 message,
+                                                                 CS_TYPE_UTF8MB4_BIN,
+                                                                 client_cs_type,
+                                                                 new_message,
+                                                                 ObCharset::REPLACE_UNKNOWN_CHARACTER))) {
+        } else {
+          int64_t length = MIN(new_message.length(), MAX_MSG_BUF_SIZE);
+          MEMCPY(msg_buf, new_message.ptr(), length);
+          message.assign_ptr(msg_buf, length);
+        }
+      }
+    }
 
     if (ObServerConfig::get_instance().enable_rich_error_msg) {
       // 测试过程中，如果通过proxy访问oceanbase集群，
@@ -411,7 +433,7 @@ int ObMPPacketSender::send_error_packet(int err,
       if (OB_FAIL(fin_msg.append(message))) {
         LOG_WARN("append pl exact err msg fail", K(ret), K(message));
       } else if (has_pl()) {
-        if (OB_FAIL(get_session(session))) {
+        if (NULL == session && OB_FAIL(get_session(session))) {
           LOG_WARN("fail to get session", K(ret));
         } else if (OB_ISNULL(session)) {
           ret = OB_ERR_UNEXPECTED;

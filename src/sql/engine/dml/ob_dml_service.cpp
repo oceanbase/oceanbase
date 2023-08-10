@@ -109,6 +109,7 @@ int ObDMLService::check_column_type(const ExprFixedArray &dml_row,
   int ret = OB_SUCCESS;
   CK(dml_row.count() >= column_infos.count());
   ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  dml_op.get_exec_ctx().set_cur_rownum(row_num);
   for (int64_t i = 0; OB_SUCC(ret) && i < column_infos.count(); ++i) {
     const ColumnContent &column_info = column_infos.at(i);
     ObExpr *expr = dml_row.at(column_info.projector_index_);

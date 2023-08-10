@@ -467,6 +467,8 @@ public:
   int get_errcode() const { return ATOMIC_LOAD(&errcode_); }
   hash::ObHashMap<uint64_t, void*> &get_dblink_snapshot_map() { return dblink_snapshot_map_; }
   ObExecFeedbackInfo &get_feedback_info() { return fb_info_; };
+  void set_cur_rownum(int64_t cur_rownum) { cur_row_num_ = cur_rownum; }
+  int64_t get_cur_rownum() { return cur_row_num_; }
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
   int set_phy_op_ctx_ptr(uint64_t index, void *phy_op);
@@ -644,6 +646,8 @@ protected:
   hash::ObHashMap<uint64_t, void*> dblink_snapshot_map_;
   // for feedback
   ObExecFeedbackInfo fb_info_;
+  // for dml report user warning/error at specific row
+  int64_t cur_row_num_;
   //---------------
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
