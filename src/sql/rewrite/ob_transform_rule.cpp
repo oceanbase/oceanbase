@@ -394,6 +394,7 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stm
     } else {
       LOG_DEBUG("get transformed heuristic rule stmt when evaluate_cost", K(*root_stmt));
       CREATE_WITH_TEMP_CONTEXT(param) {
+        ObRawExprFactory tmp_expr_factory(CURRENT_CONTEXT->get_arena_allocator());
         HEAP_VAR(ObOptimizerContext, optctx,
                 ctx_->session_info_,
                 ctx_->exec_ctx_,
@@ -404,7 +405,7 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stm
                 *ctx_->self_addr_,
                 GCTX.srv_rpc_proxy_,
                 stmt->get_query_ctx()->get_global_hint(),
-                *ctx_->expr_factory_,
+                tmp_expr_factory,
                 root_stmt,
                 false,
                 ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx()) {

@@ -2459,6 +2459,7 @@ int ObTransformTempTable::evaluate_cte_cost(ObDMLStmt &root_stmt,
       LOG_WARN("failed to prepare eval cost stmt", K(ret));
     } else {
       CREATE_WITH_TEMP_CONTEXT(param) {
+        ObRawExprFactory tmp_expr_factory(CURRENT_CONTEXT->get_arena_allocator());
         HEAP_VAR(ObOptimizerContext, optctx,
                 ctx_->session_info_,
                 ctx_->exec_ctx_,
@@ -2469,7 +2470,7 @@ int ObTransformTempTable::evaluate_cte_cost(ObDMLStmt &root_stmt,
                 *ctx_->self_addr_,
                 GCTX.srv_rpc_proxy_,
                 root_stmt.get_query_ctx()->get_global_hint(),
-                *ctx_->expr_factory_,
+                tmp_expr_factory,
                 copy_root_stmt,
                 false,
                 ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx()) {
