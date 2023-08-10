@@ -2062,21 +2062,17 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
   ObFollowerFirstFeedbackType follower_first_feedback = FFF_HIT_MIN;
   int64_t route_policy_type = 0;
   bool proxy_priority_hit_support = false;
-  ObSqlCtx *sql_ctx = exec_ctx.get_sql_ctx();
-  bool use_weak_ignore_retry = false;
-  if (OB_ISNULL(session) || OB_ISNULL(sql_ctx)) {
+  if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("get unexpected NULL", K(ret), K(session), K(sql_ctx));
+    LOG_ERROR("get unexpected NULL", K(ret), K(session));
   } else if (OB_FAIL(session->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy_type))) {
     LOG_WARN("fail to get sys variable", K(ret));
   } else {
     proxy_priority_hit_support = session->get_proxy_cap_flags().is_priority_hit_support();
-    // explain may retry to check outline validation
-    use_weak_ignore_retry = (sql_ctx->first_plan_hash_ != 0 && !sql_ctx->first_outline_data_.empty());
   }
 
   if (OB_FAIL(ret)) {
-  } else if (is_weak && (!session->get_is_in_retry() || use_weak_ignore_retry)) {
+  } else if (is_weak) {
     int64_t max_read_stale_time = exec_ctx.get_my_session()->get_ob_max_read_stale_time();
     uint64_t tenant_id = exec_ctx.get_my_session()->get_effective_tenant_id();
     if (OB_FAIL(ObLogPlan::weak_select_replicas(local_server,
