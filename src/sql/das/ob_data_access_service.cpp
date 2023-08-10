@@ -228,6 +228,14 @@ int ObDataAccessService::refresh_task_location_info(ObDASRef &das_ref, ObIDASTas
     LOG_WARN("get tablet location failed", K(ret), KPC(tablet_loc));
   } else {
     task_op.set_ls_id(tablet_loc->ls_id_);
+    if (!task_op.is_local_task()) {
+      int64_t task_id;
+      if (OB_FAIL(MTL(ObDataAccessService*)->get_das_task_id(task_id))) {
+        LOG_WARN("retry get das task id failed", KR(ret));
+      } else {
+        task_op.set_task_id(task_id);
+      }
+    }
   }
   return ret;
 }
