@@ -657,6 +657,7 @@ private:
                                            const ObObjAccessIdx &current_access,
                                            int64_t access_i,
                                            bool for_write,
+                                           bool is_assoc_array,
                                            jit::ObLLVMValue &current_value,
                                            jit::ObLLVMValue &ret_value_ptr,
                                            jit::ObLLVMBasicBlock& exit);

@@ -4335,6 +4335,7 @@ int ObPLCodeGenerator::generate_get_collection_attr(ObLLVMValue &param_array,
                                          const ObObjAccessIdx &current_access,
                                          int64_t access_i,
                                          bool for_write,
+                                         bool is_assoc_array,
                                          ObLLVMValue &current_value,
                                          ObLLVMValue &ret_value_ptr,
                                          ObLLVMBasicBlock& exit)
@@ -4352,7 +4353,7 @@ int ObPLCodeGenerator::generate_get_collection_attr(ObLLVMValue &param_array,
   OZ (helper_.create_icmp(is_inited, not_init_value, ObLLVMHelper::ICMP_EQ, not_init));
   OZ (helper_.create_cond_br(not_init, not_init_block, after_init_block));
   OZ (helper_.set_insert_point(not_init_block));
-  OZ (helper_.get_int32(OB_NOT_INIT, ret_value));
+  OZ (helper_.get_int32(OB_ERR_COLLECION_NULL, ret_value));
   OZ (helper_.create_store(ret_value, ret_value_ptr));
   OZ (helper_.create_br(exit));
   OZ (helper_.set_insert_point(after_init_block));
@@ -4435,7 +4436,7 @@ int ObPLCodeGenerator::generate_get_collection_attr(ObLLVMValue &param_array,
         OZ (helper_.create_icmp(high, element_idx, ObLLVMHelper::ICMP_SGT, is_true));
         OZ (helper_.create_cond_br(is_true, after_block, error_block));
         OZ (helper_.set_insert_point(error_block));
-        OZ (helper_.get_int32(OB_ARRAY_OUT_OF_RANGE, ret_value));
+        OZ (helper_.get_int32(is_assoc_array ? OB_READ_NOTHING : OB_ERR_SUBSCRIPT_OUTSIDE_LIMIT, ret_value));
         OZ (helper_.create_store(ret_value, ret_value_ptr));
         OZ (helper_.create_br(exit));
         OZ (helper_.set_insert_point(after_block));
@@ -4572,6 +4573,7 @@ int ObPLCodeGenerator::generate_get_attr(ObLLVMValue &param_array,
                                          obj_access.at(i),
                                          i,
                                          for_write,
+                                         parent_type.is_associative_array_type(),
                                          value,
                                          ret_value_ptr,
                                          exit));
