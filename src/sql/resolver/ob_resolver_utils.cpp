@@ -7430,9 +7430,7 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
 {
   int ret = OB_SUCCESS;
 
-  if (secure_file_priv.empty()) {
-    // pass security check
-  } else if (0 == secure_file_priv.case_compare(N_NULL)) {
+  if (secure_file_priv.empty() || 0 == secure_file_priv.case_compare(N_NULL)) {
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("no priv", K(ret), K(secure_file_priv), K(full_path));
   } else if (OB_UNLIKELY(secure_file_priv.length() >= DEFAULT_BUF_LENGTH)) {

@@ -2673,8 +2673,8 @@
   "secure_file_priv": {
     "id": 10102,
     "name": "secure_file_priv",
-    "default_value": "NULL",
-    "base_value": "NULL",
+    "default_value": "",
+    "base_value": "",
     "data_type": "varchar",
     "info": "limit the effect of data import and export operations",
     "flags": "GLOBAL | INFLUENCE_PLAN | NULL",

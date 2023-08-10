@@ -2652,7 +2652,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[186].default_value_ = "NULL" ;
+      ObSysVars[186].default_value_ = "" ;
       ObSysVars[186].info_ = "limit the effect of data import and export operations" ;
       ObSysVars[186].name_ = "secure_file_priv" ;
       ObSysVars[186].data_type_ = ObVarcharType ;
@@ -2660,7 +2660,7 @@ static struct VarsInit{
       ObSysVars[186].id_ = SYS_VAR_SECURE_FILE_PRIV ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SECURE_FILE_PRIV)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_SECURE_FILE_PRIV] = 186 ;
-      ObSysVars[186].base_value_ = "NULL" ;
+      ObSysVars[186].base_value_ = "" ;
     ObSysVars[186].alias_ = "OB_SV_SECURE_FILE_PRIV" ;
     }();
 
