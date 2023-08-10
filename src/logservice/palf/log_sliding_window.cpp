@@ -46,9 +46,9 @@ bool UpdateMatchLsnFunc::operator()(const common::ObAddr &server, LsnTsInfo &val
     if (value.lsn_ < new_end_lsn_) {
       // Update last_advance_time_us_ when lsn really changes.
       value.last_advance_time_us_ = new_ack_time_us_;
+      value.last_ack_time_us_ = new_ack_time_us_;
     }
     value.lsn_ = new_end_lsn_;
-    value.last_ack_time_us_ = new_ack_time_us_;
     bool_ret = true;
   }
   return bool_ret;
