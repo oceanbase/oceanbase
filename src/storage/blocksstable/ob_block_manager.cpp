@@ -138,8 +138,7 @@ ObBlockManager::ObBlockManager()
     marker_status_(),
     marker_lock_(),
     is_mark_sweep_enabled_(false),
-    is_doing_mark_sweep_(false),
-    cond_(),
+    sweep_lock_(),
     mark_block_task_(*this),
     inspect_bad_block_task_(*this),
     timer_(),
@@ -172,8 +171,6 @@ int ObBlockManager::init(
     LOG_WARN("fail to init timer", K(ret));
   } else if (OB_FAIL(bucket_lock_.init(DEFAULT_LOCK_BUCKET_COUNT, ObLatchIds::BLOCK_MANAGER_LOCK))) {
     LOG_WARN("fail to init bucket lock", K(ret));
-  } else if (OB_FAIL(cond_.init(common::ObWaitEventIds::DEFAULT_COND_WAIT))) {
-    LOG_WARN("fail to init thread cond", K(ret));
   } else if (OB_FAIL(block_map_.init("BlockMap", OB_SYS_TENANT_ID))) {
     LOG_WARN("fail to init block map", K(ret));
   } else if (OB_FAIL(super_block_buf_holder_.init(ObServerSuperBlockHeader::OB_MAX_SUPER_BLOCK_SIZE))) {
@@ -288,9 +285,7 @@ void ObBlockManager::destroy()
   super_block_buf_holder_.reset();
   default_block_size_ = 0;
   is_mark_sweep_enabled_ = false;
-  is_doing_mark_sweep_ = false;
   marker_status_.reset();
-  cond_.destroy();
   blk_seq_generator_.reset();
   is_inited_ = false;
 }
@@ -648,10 +643,8 @@ int ObBlockManager::resize_file(const int64_t new_data_file_size,
   } else if (!is_mark_sweep_enabled()) {
     LOG_INFO("mark and sweep is disabled, do not resize file at present");
   } else {
-    disable_mark_sweep();
-    if (OB_FAIL(wait_mark_sweep_finish())) {
-      LOG_WARN("fail to wait mark and sweep finish", K(ret));
-    } else if (OB_UNLIKELY(!super_block_.is_valid())) {
+    SpinWLockGuard sweep_guard(sweep_lock_);
+    if (OB_UNLIKELY(!super_block_.is_valid())) {
       LOG_INFO("observer may be starting", K(super_block_));
     } else {
       SpinWLockGuard guard(lock_);
@@ -687,7 +680,6 @@ int ObBlockManager::resize_file(const int64_t new_data_file_size,
         }
       }
     }
-    enable_mark_sweep();
   }
   return ret;
 }
@@ -956,7 +948,6 @@ void ObBlockManager::mark_and_sweep()
       LOG_WARN("slog replay hasn't finished, this task can't start", K(ret));
     }
   } else {
-    set_mark_sweep_doing();
     if (OB_FAIL(mark_info.init(ObModIds::OB_STORAGE_FILE_BLOCK_REF, OB_SERVER_TENANT_ID))) {
       LOG_WARN("fail to init mark info, ", K(ret));
     } else if (OB_FAIL(macro_id_set.create(MAX(2, block_map_.count())))) {
@@ -978,6 +969,7 @@ void ObBlockManager::mark_and_sweep()
         pending_free_count_ += mark_info.count();
         mark_cost_time_ = ObTimeUtility::fast_current_time() - start_time_;
         //sweep
+        SpinWLockGuard guard(sweep_lock_);
         if (OB_FAIL(do_sweep(mark_info))) {
           LOG_WARN("do sweep fail", K(ret));
         } else {
@@ -995,7 +987,6 @@ void ObBlockManager::mark_and_sweep()
         }
       }
     }
-    set_mark_sweep_done();
   }
   macro_id_set.destroy();
 }
@@ -1430,29 +1421,6 @@ int ObBlockManager::update_mark_info(const MacroBlockId &macro_id,
     }
   }
   return ret;
-}
-
-int ObBlockManager::wait_mark_sweep_finish()
-{
-  int ret = OB_SUCCESS;
-  ObThreadCondGuard guard(cond_);
-  while (is_doing_mark_sweep_) {
-    cond_.wait_us(100);
-  }
-  return ret;
-}
-
-void ObBlockManager::set_mark_sweep_doing()
-{
-  ObThreadCondGuard guard(cond_);
-  is_doing_mark_sweep_ = true;
-}
-
-void ObBlockManager::set_mark_sweep_done()
-{
-  ObThreadCondGuard guard(cond_);
-  is_doing_mark_sweep_ = false;
-  cond_.broadcast();
 }
 
 int ObBlockManager::BlockMapIterator::get_next_block(common::ObIOFd &block_id)

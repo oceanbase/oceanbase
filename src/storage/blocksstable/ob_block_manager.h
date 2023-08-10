@@ -382,10 +382,6 @@ private:
   void enable_mark_sweep() { ATOMIC_SET(&is_mark_sweep_enabled_, true); }
   bool is_mark_sweep_enabled() { return ATOMIC_LOAD(&is_mark_sweep_enabled_); }
 
-  int  wait_mark_sweep_finish();
-  void set_mark_sweep_doing();
-  void set_mark_sweep_done();
-
   int  extend_file_size_if_need();
   bool check_can_be_extend(
       const int64_t reserved_size);
@@ -471,8 +467,7 @@ private:
   common::SpinRWLock marker_lock_;
 
   bool is_mark_sweep_enabled_;
-  bool is_doing_mark_sweep_;
-  ObThreadCond cond_; // for mark sweep
+  common::SpinRWLock sweep_lock_;
 
   MarkBlockTask mark_block_task_;
   InspectBadBlockTask inspect_bad_block_task_;
