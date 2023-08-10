@@ -1700,11 +1700,53 @@ int ObUnitManager::get_to_be_deleted_unit_group(
                "tenant_unit_group_num", all_unit_group_id_array.count());
     } else if (deleted_unit_group_id_array.count() <= 0) {
       // deleted unit groups not specified by the client, we choose for automatically
+      // If some servers are inactive, the related unit_group should take priority to be deleted.
+      ObArray<uint64_t> sorted_unit_group_id_array;
+      // inactive unit_group_id first
+      ObArray<ObUnitInfo> pool_unit_infos;
+      for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
+        if (OB_UNLIKELY(nullptr == pools.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("pool ptr is null", KR(ret), KP(pools.at(i)));
+        } else if (OB_FAIL(inner_get_unit_infos_of_pool(pools.at(i)->resource_pool_id_, pool_unit_infos))) {
+          LOG_WARN("inner_get_unit_infos_of_pool failed", KR(ret), "resource_pool_id", pools.at(i)->resource_pool_id_);
+        } else if (pool_unit_infos.count() <= 0) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("pool_unit_infos is empty", KR(ret), "pool_id", pools.at(i)->resource_pool_id_);
+        } else {
+          ObServerInfoInTable server_info;
+          for (int64_t j = 0; OB_SUCC(ret) && j < pool_unit_infos.count(); ++j) {
+            ObUnit &unit = pool_unit_infos.at(j).unit_;
+            if (has_exist_in_array(sorted_unit_group_id_array, unit.unit_group_id_)) {
+              // skip, this unit_group_id has already been added
+            } else if (OB_FAIL(SVR_TRACER.get_server_info(unit.server_, server_info))) {
+              LOG_WARN("fail to get_server_info", KR(ret), K(unit));
+            } else if (!server_info.is_active()) {
+              if (OB_FAIL(sorted_unit_group_id_array.push_back(unit.unit_group_id_))) {
+                LOG_WARN("fail to push_back", KR(ret), K(unit));
+              }
+            } else {/*active server*/}
+          }
+        }
+      }
+      std::sort(sorted_unit_group_id_array.begin(), sorted_unit_group_id_array.end());
+      // then other active unit group id
+      for (int64_t i = 0; OB_SUCC(ret) && i < all_unit_group_id_array.count(); ++i) {
+        uint64_t ug_id = all_unit_group_id_array.at(i);
+        if (has_exist_in_array(sorted_unit_group_id_array, ug_id)) {
+          // skip, offline unit_group_id is already pushed
+        } else if (OB_FAIL(sorted_unit_group_id_array.push_back(ug_id))) {
+          LOG_WARN("fail to push back", KR(ret), K(ug_id));
+        }
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < to_be_deleted_num; ++i) {
-        if (OB_FAIL(to_be_deleted_unit_group.push_back(all_unit_group_id_array.at(i)))) {
+        if (OB_FAIL(to_be_deleted_unit_group.push_back(sorted_unit_group_id_array.at(i)))) {
           LOG_WARN("fail to push back", KR(ret));
         }
       }
+      LOG_INFO("Automatically determined on unit_group to delete for shrinking tenant unit num.",
+               KR(ret), K(tenant_id), K(new_unit_num),
+               K(to_be_deleted_unit_group), K(sorted_unit_group_id_array));
     } else if (deleted_unit_group_id_array.count() == to_be_deleted_num) {
       // the deleted unit groups are specified by the client
       for (int64_t i = 0; OB_SUCC(ret) && i < deleted_unit_group_id_array.count(); ++i) {
