@@ -1681,9 +1681,10 @@ bool ObResultSet::has_implicit_cursor() const
   return bret;
 }
 
-int ObResultSet::switch_implicit_cursor()
+int ObResultSet::switch_implicit_cursor(int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
+  affected_rows = 0;
   ObPhysicalPlanCtx *plan_ctx = get_exec_context().get_physical_plan_ctx();
   if (OB_ISNULL(plan_ctx)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1693,7 +1694,7 @@ int ObResultSet::switch_implicit_cursor()
       LOG_WARN("cursor_idx is invalid", K(ret));
     }
   } else {
-    set_affected_rows(plan_ctx->get_affected_rows());
+    affected_rows = plan_ctx->get_affected_rows();
     memset(message_, 0, sizeof(message_));
     if (OB_FAIL(set_mysql_info())) {
       LOG_WARN("set mysql info failed", K(ret));

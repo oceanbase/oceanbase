@@ -215,10 +215,11 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
       } else {
         //has implicit cursor, send ok packet to client by implicit cursor
         result.reset_implicit_cursor_idx();
-        while (OB_SUCC(ret) && OB_SUCC(result.switch_implicit_cursor())) {
+        int64_t curr_affected_row = 0;
+        while (OB_SUCC(ret) && OB_SUCC(result.switch_implicit_cursor(curr_affected_row))) {
           ObOKPParam ok_param;
           ok_param.message_ = const_cast<char*>(result.get_message());
-          ok_param.affected_rows_ = result.get_affected_rows();
+          ok_param.affected_rows_ = curr_affected_row;
           ok_param.is_partition_hit_ = session_.partition_hit().get_bool();
           ok_param.has_more_result_ = !result.is_cursor_end();
           process_ok = true;
