@@ -3202,6 +3202,30 @@ int ObSysVariables::set_value(const common::ObString &name, const common::ObStri
   return ret;
 }
 
+int ObSysVariables::set_base_value(const char *name, const char * new_value)
+{
+  ObString tmp_name(static_cast<int32_t>(strlen(name)), name);
+  ObString tmp_value(static_cast<int32_t>(strlen(new_value)), new_value);
+  return set_base_value(tmp_name, tmp_value);
+}
+int ObSysVariables::set_base_value(const common::ObString &name, const common::ObString &new_value)
+{
+  int ret = OB_SUCCESS;
+  bool name_exist = false;
+  for (int64_t i = 0; OB_SUCC(ret) && false == name_exist && i < var_amount; ++i){
+    if (0 == ObSysVars[i].name_.compare(name)) {
+      ObSysVars[i].base_value_.assign_ptr(new_value.ptr(), new_value.length());
+      name_exist = true;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (false == name_exist) {
+      ret = OB_ENTRY_NOT_EXIST;
+    }
+  }
+  return ret;
+}
+
 int ObSysVariables::init_default_values()
 {
   int ret = OB_SUCCESS;
