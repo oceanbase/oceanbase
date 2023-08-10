@@ -5925,11 +5925,64 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
       } else if (actually_type.is_obj_type() && ObNullType == actually_type.get_obj_type()) {
         // do nothing ...
       } else if (actually_type.is_composite_type() && expected_type.is_composite_type()) {
-        if (actually_type.get_user_type_id() != expected_type.get_user_type_id()) {
-          OZ (check_composite_compatible(current_block_->get_namespace(),
-                                         actually_type.get_user_type_id(),
-                                         expected_type.get_user_type_id(),
-                                         is_legal));
+        uint64_t actual_udt_id = actually_type.get_user_type_id();
+        if ((OB_INVALID_ID == actual_udt_id || OB_INVALID_ID == extract_package_id(actual_udt_id)) &&
+            resolve_ctx_.is_prepare_protocol_ &&
+            actually_type.is_collection_type() &&
+            OB_NOT_NULL(resolve_ctx_.params_.param_list_) &&
+            T_QUESTIONMARK == param->get_expr_type()) { // anony array
+          int64_t index = static_cast<const ObConstRawExpr*>(param)->get_value().get_unknown();
+          CK (resolve_ctx_.params_.param_list_->count() > index);
+          if (OB_SUCC(ret)) {
+            const ObObjParam &param = resolve_ctx_.params_.param_list_->at(index);
+            const pl::ObPLComposite *src_composite = NULL;
+            const pl::ObPLCollection *src_coll = NULL;
+            const pl::ObUserDefinedType *pl_user_type = NULL;
+            const pl::ObCollectionType *coll_type = NULL;
+            CK (OB_NOT_NULL(src_composite = reinterpret_cast<const ObPLComposite *>(param.get_ext())));
+            OZ (resolve_ctx_.get_user_type(expected_type.get_user_type_id(), pl_user_type));
+            CK (OB_NOT_NULL(coll_type = static_cast<const ObCollectionType *>(pl_user_type)));
+            CK (OB_NOT_NULL(src_coll = static_cast<const ObPLCollection *>(src_composite)));
+            if (OB_FAIL(ret)) {
+            } else if (coll_type->get_element_type().is_obj_type() ^
+                      src_coll->get_element_desc().is_obj_type()) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("incorrect argument type, diff type",
+                            K(ret), K(coll_type->get_element_type()), K(src_coll->get_element_desc()));
+            } else if (coll_type->get_element_type().is_obj_type()) { // basic data type
+              const ObDataType *src_data_type = &src_coll->get_element_desc();
+              const ObDataType *dst_data_type = coll_type->get_element_type().get_data_type();
+              if (dst_data_type->get_obj_type() == src_data_type->get_obj_type()) {
+                // do nothing
+              } else if (cast_supported(src_data_type->get_obj_type(),
+                                        src_data_type->get_collation_type(),
+                                        dst_data_type->get_obj_type(),
+                                        dst_data_type->get_collation_type())) {
+                // do nothing
+              } else {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("incorrect argument type, diff type", K(ret));
+              }
+            } else {
+              // element is composite type
+              uint64_t element_type_id = src_coll->get_element_desc().get_udt_id();
+              is_legal = element_type_id == coll_type->get_element_type().get_user_type_id();
+              if (!is_legal) {
+                OZ (ObPLResolver::check_composite_compatible(
+                  NULL == resolve_ctx_.params_.secondary_namespace_
+                      ? static_cast<const ObPLINS&>(resolve_ctx_)
+                      : static_cast<const ObPLINS&>(*resolve_ctx_.params_.secondary_namespace_),
+                  element_type_id, coll_type->get_element_type().get_user_type_id(), is_legal));
+              }
+            }
+          } else {
+            if (actual_udt_id != expected_type.get_user_type_id()) {
+              OZ (check_composite_compatible(current_block_->get_namespace(),
+                                            actual_udt_id,
+                                            expected_type.get_user_type_id(),
+                                            is_legal));
+            }
+          }
         }
       } else if (actually_type.is_composite_type() || expected_type.is_composite_type()) {
         if (actually_type.is_obj_type()
