@@ -1,0 +1,23 @@
+connect(conn_mysql,$OBMYSQL_MS0,root@sys,,test,$OBMYSQL_PORT);
+connection conn_mysql;
+#test for desc
+desc oceanbase.__all_virtual_sys_parameter_stat;
+desc oceanbase.__all_virtual_tenant_parameter_stat;
+#test for pass
+select * from oceanbase.__all_virtual_sys_parameter_stat limit 10;
+select * from oceanbase.__all_virtual_tenant_parameter_stat limit 10;
+
+#test for unreveal parameter
+select * from oceanbase.__all_virtual_sys_parameter_stat where name like '\_%' limit 10;
+select * from oceanbase.__all_virtual_tenant_parameter_stat where name like '\_%' limit 10;
+
+#test for true and True
+select * from oceanbase.__all_virtual_sys_parameter_stat where name like 'enable_sql%';
+select * from oceanbase.__all_virtual_tenant_parameter_stat where name like 'enable_sql%';
+
+#test for only when false show command works
+alter system set _parallel_min_message_pool = "32M";
+show parameters like "_parallel_min_message_pool";
+alter system set _parallel_min_message_pool = "64M";
+show parameters like "_parallel_min_message_pool";
+disconnect conn_mysql;

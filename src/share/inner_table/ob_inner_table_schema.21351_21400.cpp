@@ -860,7 +860,7 @@ int ObInnerTableSchema::dba_ob_access_point_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT a.TENANT_ID,         TENANT_NAME,         SVR_IP,         SQL_PORT   FROM OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE a, OCEANBASE.DBA_OB_TENANTS b    WHERE LS_ID=1 and a.TENANT_ID = b.TENANT_ID and b.TENANT_ID = EFFECTIVE_TENANT_ID();   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT a.TENANT_ID,         TENANT_NAME,         SVR_IP,         SQL_PORT   FROM OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE a, OCEANBASE.DBA_OB_TENANTS b   WHERE LS_ID=1 and a.TENANT_ID = b.TENANT_ID and b.TENANT_ID = EFFECTIVE_TENANT_ID();   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -910,7 +910,7 @@ int ObInnerTableSchema::cdb_ob_access_point_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT a.TENANT_ID,         TENANT_NAME,         SVR_IP,         SQL_PORT   FROM OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE a, OCEANBASE.DBA_OB_TENANTS b    WHERE LS_ID=1 and a.TENANT_ID = b.TENANT_ID;   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT a.TENANT_ID,         TENANT_NAME,         SVR_IP,         SQL_PORT   FROM OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE a, OCEANBASE.DBA_OB_TENANTS b   WHERE LS_ID=1 and a.TENANT_ID = b.TENANT_ID;   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

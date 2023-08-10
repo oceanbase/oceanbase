@@ -1,0 +1,103 @@
+desc oceanbase.__all_virtual_sys_parameter_stat;
+Field	Type	Null	Key	Default	Extra
+zone	varchar(128)	NO		NULL	
+svr_type	varchar(16)	NO		NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+name	varchar(128)	NO		NULL	
+data_type	varchar(128)	YES		NULL	
+value	varchar(65536)	NO		NULL	
+value_strict	varchar(4096)	YES		NULL	
+info	varchar(4096)	NO		NULL	
+need_reboot	bigint(20)	NO		NULL	
+section	varchar(128)	NO		NULL	
+visible_level	varchar(64)	NO		NULL	
+scope	varchar(64)	NO		NULL	
+source	varchar(64)	NO		NULL	
+edit_level	varchar(128)	NO		NULL	
+default_value	varchar(65536)	NO		NULL	
+isdefault	bigint(20)	NO		NULL	
+desc oceanbase.__all_virtual_tenant_parameter_stat;
+Field	Type	Null	Key	Default	Extra
+zone	varchar(128)	NO		NULL	
+svr_type	varchar(16)	NO		NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+name	varchar(128)	NO		NULL	
+data_type	varchar(128)	YES		NULL	
+value	varchar(65536)	NO		NULL	
+info	varchar(4096)	NO		NULL	
+section	varchar(128)	NO		NULL	
+scope	varchar(64)	NO		NULL	
+source	varchar(64)	NO		NULL	
+edit_level	varchar(128)	NO		NULL	
+tenant_id	bigint(20)	YES		NULL	
+default_value	varchar(65536)	NO		NULL	
+isdefault	bigint(20)	NO		NULL	
+select * from oceanbase.__all_virtual_sys_parameter_stat limit 10;
+zone	svr_type	svr_ip	svr_port	name	data_type	value	value_strict	info	need_reboot	section	visible_level	scope	source	edit_level	default_value	isdefault
+zone1	observer	127.0.0.1	2882	_enable_system_tenant_memory_limit	NULL	True	NULL	specifies whether allowed to limit the memory of tenant 500	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	True	1
+zone1	observer	127.0.0.1	2882	_force_explict_500_malloc	NULL	False	NULL	Force 500 memory for explicit allocation	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	False	1
+zone1	observer	127.0.0.1	2882	_wait_interval_after_truncate	NULL	30s	NULL	time interval for waiting other servers to refresh schema after truncate	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	30s	1
+zone1	observer	127.0.0.1	2882	_enable_backtrace_function	NULL	True	NULL	Decide whether to let the backtrace function take effect	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	True	1
+zone1	observer	127.0.0.1	2882	rpc_server_authentication_method	NULL	ALL	NULL	specifies rpc server authentication method. ALL: support all authentication methods. NONE: without authentication. SSL_NO_ENCRYPT: authentication by SSL handshake but not encrypt the communication channel. SSL_IO: authentication by SSL handshake and encrypt the communication channel	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	ALL	1
+zone1	observer	127.0.0.1	2882	rpc_client_authentication_method	NULL	NONE	NULL	specifies rpc client authentication method. NONE: without authentication. SSL_NO_ENCRYPT: authentication by SSL handshake but not encrypt the communication channel. SSL_IO: authentication by SSL handshake and encrypt the communication channel	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NONE	1
+zone1	observer	127.0.0.1	2882	_enable_reserved_user_dcl_restriction	NULL	False	NULL	specifies whether to forbid non-reserved user to modify reserved users	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	False	1
+zone1	observer	127.0.0.1	2882	_enable_px_fast_reclaim	NULL	True	NULL	Enable the fast reclaim function through PX tasks deteting for survival by detect manager. The default value is True.	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	True	1
+zone1	observer	127.0.0.1	2882	observer_id	NULL	1	NULL	the unique id that been assigned by rootservice for each observer in cluster, default: 0 (invalid id), Range: [1, 18446744073709551615]	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	READONLY	0	0
+zone1	observer	127.0.0.1	2882	local_ip	NULL	127.0.0.1	NULL	the IP address of the machine on which the ObServer will be installed	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	READONLY		0
+select * from oceanbase.__all_virtual_tenant_parameter_stat limit 10;
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	tenant_id	default_value	isdefault
+zone1	observer	127.0.0.1	2882	_enable_system_tenant_memory_limit	NULL	True	specifies whether allowed to limit the memory of tenant 500	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	True	1
+zone1	observer	127.0.0.1	2882	_force_explict_500_malloc	NULL	False	Force 500 memory for explicit allocation	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	False	1
+zone1	observer	127.0.0.1	2882	_wait_interval_after_truncate	NULL	30s	time interval for waiting other servers to refresh schema after truncate	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	30s	1
+zone1	observer	127.0.0.1	2882	_enable_backtrace_function	NULL	True	Decide whether to let the backtrace function take effect	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	True	1
+zone1	observer	127.0.0.1	2882	rpc_server_authentication_method	NULL	ALL	specifies rpc server authentication method. ALL: support all authentication methods. NONE: without authentication. SSL_NO_ENCRYPT: authentication by SSL handshake but not encrypt the communication channel. SSL_IO: authentication by SSL handshake and encrypt the communication channel	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	ALL	1
+zone1	observer	127.0.0.1	2882	rpc_client_authentication_method	NULL	NONE	specifies rpc client authentication method. NONE: without authentication. SSL_NO_ENCRYPT: authentication by SSL handshake but not encrypt the communication channel. SSL_IO: authentication by SSL handshake and encrypt the communication channel	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	NONE	1
+zone1	observer	127.0.0.1	2882	_enable_reserved_user_dcl_restriction	NULL	False	specifies whether to forbid non-reserved user to modify reserved users	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	False	1
+zone1	observer	127.0.0.1	2882	_enable_px_fast_reclaim	NULL	True	Enable the fast reclaim function through PX tasks deteting for survival by detect manager. The default value is True.	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	True	1
+zone1	observer	127.0.0.1	2882	observer_id	NULL	1	the unique id that been assigned by rootservice for each observer in cluster, default: 0 (invalid id), Range: [1, 18446744073709551615]	OBSERVER	CLUSTER	DEFAULT	READONLY	NULL	0	0
+zone1	observer	127.0.0.1	2882	local_ip	NULL	127.0.0.1	the IP address of the machine on which the ObServer will be installed	OBSERVER	CLUSTER	DEFAULT	READONLY	NULL		0
+select * from oceanbase.__all_virtual_sys_parameter_stat where name like '\_%' limit 10;
+zone	svr_type	svr_ip	svr_port	name	data_type	value	value_strict	info	need_reboot	section	visible_level	scope	source	edit_level	default_value	isdefault
+zone1	observer	127.0.0.1	2882	_enable_system_tenant_memory_limit	NULL	True	NULL	specifies whether allowed to limit the memory of tenant 500	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	True	1
+zone1	observer	127.0.0.1	2882	_force_explict_500_malloc	NULL	False	NULL	Force 500 memory for explicit allocation	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	False	1
+zone1	observer	127.0.0.1	2882	_wait_interval_after_truncate	NULL	30s	NULL	time interval for waiting other servers to refresh schema after truncate	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	30s	1
+zone1	observer	127.0.0.1	2882	_enable_backtrace_function	NULL	True	NULL	Decide whether to let the backtrace function take effect	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	True	1
+zone1	observer	127.0.0.1	2882	_enable_reserved_user_dcl_restriction	NULL	False	NULL	specifies whether to forbid non-reserved user to modify reserved users	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	False	1
+zone1	observer	127.0.0.1	2882	_enable_px_fast_reclaim	NULL	True	NULL	Enable the fast reclaim function through PX tasks deteting for survival by detect manager. The default value is True.	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	True	1
+zone1	observer	127.0.0.1	2882	_load_tde_encrypt_engine	NULL	NONE	NULL	load the engine that meet the security classification requirement to encrypt data.  default NONE	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NONE	1
+zone1	observer	127.0.0.1	2882	_enable_protocol_diagnose	NULL	True	NULL	enables protocol layer diagnosis. The default value is False.	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	True	1
+zone1	observer	127.0.0.1	2882	_ob_enable_direct_load	NULL	True	NULL	Enable or disable direct path load	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	True	1
+zone1	observer	127.0.0.1	2882	_ob_plan_cache_auto_flush_interval	NULL	0s	NULL	time interval for auto periodic flush plan cache. Range: [0s, +∞)	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	0s	1
+select * from oceanbase.__all_virtual_tenant_parameter_stat where name like '\_%' limit 10;
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	tenant_id	default_value	isdefault
+zone1	observer	127.0.0.1	2882	_enable_system_tenant_memory_limit	NULL	True	specifies whether allowed to limit the memory of tenant 500	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	True	1
+zone1	observer	127.0.0.1	2882	_force_explict_500_malloc	NULL	False	Force 500 memory for explicit allocation	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	False	1
+zone1	observer	127.0.0.1	2882	_wait_interval_after_truncate	NULL	30s	time interval for waiting other servers to refresh schema after truncate	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	30s	1
+zone1	observer	127.0.0.1	2882	_enable_backtrace_function	NULL	True	Decide whether to let the backtrace function take effect	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	True	1
+zone1	observer	127.0.0.1	2882	_enable_reserved_user_dcl_restriction	NULL	False	specifies whether to forbid non-reserved user to modify reserved users	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	False	1
+zone1	observer	127.0.0.1	2882	_enable_px_fast_reclaim	NULL	True	Enable the fast reclaim function through PX tasks deteting for survival by detect manager. The default value is True.	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	True	1
+zone1	observer	127.0.0.1	2882	_load_tde_encrypt_engine	NULL	NONE	load the engine that meet the security classification requirement to encrypt data.  default NONE	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	NONE	1
+zone1	observer	127.0.0.1	2882	_enable_protocol_diagnose	NULL	True	enables protocol layer diagnosis. The default value is False.	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	True	1
+zone1	observer	127.0.0.1	2882	_ob_enable_direct_load	NULL	True	Enable or disable direct path load	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	True	1
+zone1	observer	127.0.0.1	2882	_ob_plan_cache_auto_flush_interval	NULL	0s	time interval for auto periodic flush plan cache. Range: [0s, +∞)	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	0s	1
+select * from oceanbase.__all_virtual_sys_parameter_stat where name like 'enable_sql%';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	value_strict	info	need_reboot	section	visible_level	scope	source	edit_level	default_value	isdefault
+zone1	observer	127.0.0.1	2882	enable_sql_operator_dump	NULL	True	NULL	specifies whether sql operators (sort/hash join/material/window function/interm result/...) allowed to write to disk	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	True	1
+zone1	observer	127.0.0.1	2882	enable_sql_audit	NULL	True	NULL	specifies whether SQL audit is turned on. The default value is TRUE. Value: TRUE: turned on FALSE: turned off	NULL	OBSERVER	NULL	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	true	1
+zone1	observer	127.0.0.1	2882	enable_sql_extension	NULL	False	NULL	specifies whether to allow use some oracle mode features in mysql mode	NULL	OBSERVER	NULL	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	False	1
+select * from oceanbase.__all_virtual_tenant_parameter_stat where name like 'enable_sql%';
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	tenant_id	default_value	isdefault
+zone1	observer	127.0.0.1	2882	enable_sql_operator_dump	NULL	True	specifies whether sql operators (sort/hash join/material/window function/interm result/...) allowed to write to disk	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	True	1
+zone1	observer	127.0.0.1	2882	enable_sql_audit	NULL	True	specifies whether SQL audit is turned on. The default value is TRUE. Value: TRUE: turned on FALSE: turned off	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	NULL	true	1
+zone1	observer	127.0.0.1	2882	enable_sql_extension	NULL	False	specifies whether to allow use some oracle mode features in mysql mode	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	1	False	1
+zone1	observer	127.0.0.1	2882	enable_sql_extension	NULL	False	specifies whether to allow use some oracle mode features in mysql mode	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	1001	False	1
+zone1	observer	127.0.0.1	2882	enable_sql_extension	NULL	False	specifies whether to allow use some oracle mode features in mysql mode	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	1002	False	1
+alter system set _parallel_min_message_pool = "32M";
+show parameters like "_parallel_min_message_pool";
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	127.0.0.1	2882	_parallel_min_message_pool	NULL	32M	DTL message buffer pool reserve the mininum size after extend the size. Range: [16M,8G]	TENANT	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	64M	0
+alter system set _parallel_min_message_pool = "64M";
+show parameters like "_parallel_min_message_pool";
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
