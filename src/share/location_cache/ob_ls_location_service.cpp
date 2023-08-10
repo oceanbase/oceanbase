@@ -846,6 +846,11 @@ int ObLSLocationService::renew_all_ls_locations_by_rpc()
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0) {
     // for rpc compatibility
+    // avoid circular dependency with schema during upgrade
+    ObLSLocation sys_location;
+    if (OB_FAIL(renew_location_(GCONF.cluster_id, OB_SYS_TENANT_ID, SYS_LS, sys_location))) {
+      LOG_WARN("renew sys tenant ls location failed", KR(ret), K(sys_location));
+    }
   } else if (OB_FAIL(construct_rpc_dests_(dests))) {
     LOG_WARN("fail to get rpc dests", KR(ret));
   } else if (dests.count() <= 0) {
