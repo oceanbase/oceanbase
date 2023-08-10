@@ -14,6 +14,7 @@
 #define OCEANBASE_SQL_ENGINE_EXPR_OB_SQL_EXPR_LRPAD_
 
 #include "sql/engine/expr/ob_expr_operator.h"
+#include "sql/engine/expr/ob_i_expr_extra_info.h"
 
 namespace oceanbase
 {
@@ -222,6 +223,24 @@ public:
                                            ObDatum &res);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprOracleRpad);
+};
+
+struct ObExprOracleLRpadInfo : public ObIExprExtraInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObExprOracleLRpadInfo(common::ObIAllocator &alloc, ObExprOperatorType type)
+      : ObIExprExtraInfo(alloc, type),
+        is_called_in_sql_(true)
+  {
+  }
+
+  virtual int deep_copy(common::ObIAllocator &allocator,
+                        const ObExprOperatorType type,
+                        ObIExprExtraInfo *&copied_info) const override;
+
+public:
+  bool is_called_in_sql_;
 };
 
 } // namespace sql
