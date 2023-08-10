@@ -659,16 +659,16 @@ TEST_F(TestConstDecoder, get_min_or_max_test_ff)
   agg_min_or_max_test(false, false);
 }
 
-// TEST_F(TestConstDecoder, batch_decode_to_datum_test_with_expection)
-// {
-//   batch_decode_to_datum_test();
-// }
+TEST_F(TestConstDecoder, batch_decode_to_datum_test_with_expection)
+{
+  batch_decode_to_datum_test();
+}
 
 
-// TEST_F(TestConstDecoder, batch_get_row_perf_test)
-// {
-//   batch_get_row_perf_test();
-// }
+TEST_F(TestConstDecoder, batch_get_row_perf_test)
+{
+  batch_get_row_perf_test();
+}
 
 } // namespace blocksstable
 } // namespace oceanbase

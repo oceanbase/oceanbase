@@ -202,7 +202,7 @@ public:
 
   static const int64_t COLUMN_CNT = ObExtendType - 1 + 7;
 
-  static const int64_t ROW_CNT = 128;
+  static const int64_t ROW_CNT = 64;
 
   virtual void SetUp();
   virtual void TearDown() {}

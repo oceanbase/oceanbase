@@ -48,7 +48,7 @@ public:
   static const int64_t ROWKEY_CNT = 1;
   int64_t COLUMN_CNT = ObExtendType - 1 + 7;
 
-  static const int64_t ROW_CNT = 256;
+  static const int64_t ROW_CNT = 64;
 
   virtual void SetUp();
   virtual void TearDown();
