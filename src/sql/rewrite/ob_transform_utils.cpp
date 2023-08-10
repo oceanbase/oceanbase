@@ -3946,19 +3946,13 @@ int ObTransformUtils::check_exprs_unique_on_table_items(const ObDMLStmt *stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else {
-    lib::MemoryContext mem_context = NULL;
     lib::ContextParam param;
     param.set_mem_attr(session_info->get_effective_tenant_id(), "CheckUnique",
                        ObCtxIds::DEFAULT_CTX_ID)
        .set_properties(lib::USE_TL_PAGE_OPTIONAL)
        .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
-    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, param))) {
-      LOG_WARN("failed to create memory entity", K(ret));
-    } else if (OB_ISNULL(mem_context)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to create memory entity", K(ret));
-    } else {
-      ObArenaAllocator &alloc = mem_context->get_arena_allocator();
+    CREATE_WITH_TEMP_CONTEXT(param) {
+      ObArenaAllocator &alloc = CURRENT_CONTEXT->get_arena_allocator();
       ObFdItemFactory fd_item_factory(alloc);
       ObRawExprFactory expr_factory(alloc);
       UniqueCheckHelper check_helper;
@@ -3984,9 +3978,6 @@ int ObTransformUtils::check_exprs_unique_on_table_items(const ObDMLStmt *stmt,
       } else {
         LOG_TRACE("get is unique result", K(exprs), K(table_items), K(is_unique));
       }
-    }
-    if (OB_NOT_NULL(mem_context)) {
-      DESTROY_CONTEXT(mem_context);
     }
   }
   return ret;
@@ -4076,19 +4067,13 @@ int ObTransformUtils::check_stmt_unique(const ObSelectStmt *stmt,
   if (OB_FAIL(ret) || is_unique || !need_check) {
     /*do nothing*/
   } else {
-    lib::MemoryContext mem_context = NULL;
     lib::ContextParam param;
     param.set_mem_attr(session_info->get_effective_tenant_id(), "CheckUnique",
                        ObCtxIds::DEFAULT_CTX_ID)
        .set_properties(lib::USE_TL_PAGE_OPTIONAL)
        .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
-    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, param))) {
-      LOG_WARN("failed to create memory context", K(ret));
-    } else if (OB_ISNULL(mem_context)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to create memory context", K(ret));
-    } else {
-      ObArenaAllocator &alloc = mem_context->get_arena_allocator();
+    CREATE_WITH_TEMP_CONTEXT(param) {
+      ObArenaAllocator &alloc = CURRENT_CONTEXT->get_arena_allocator();
       ObFdItemFactory fd_item_factory(alloc);
       ObRawExprFactory expr_factory(alloc);
       UniqueCheckHelper check_helper;
@@ -4113,9 +4098,6 @@ int ObTransformUtils::check_stmt_unique(const ObSelectStmt *stmt,
       } else {
         LOG_TRACE("get is unique result", K(ret), K(is_unique));
       }
-    }
-    if (OB_NOT_NULL(mem_context)) {
-      DESTROY_CONTEXT(mem_context);
     }
   }
   return ret;
