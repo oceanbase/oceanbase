@@ -6615,6 +6615,8 @@ int ObSelectResolver::resolve_shared_order_item(OrderItem &order_item, ObSelectS
       OB_ISNULL(params_.query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null pointer", K(ret));
+  } else if (select_stmt->is_order_siblings()) {
+    // do noting
   } else if (OB_FAIL(select_stmt->get_select_exprs(select_exprs))) {
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (ObOptimizerUtil::find_item(select_exprs, order_item.expr_)) {

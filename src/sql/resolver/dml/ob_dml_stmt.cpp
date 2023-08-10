@@ -4414,8 +4414,10 @@ int ObDMLStmt::do_formalize_query_ref_exprs_pre()
   ObQueryRefRawExpr *ref_query = NULL;
   ObExecParamRawExpr *exec_param = NULL;
   ObSEArray<ObRawExpr*, 8> ref_exprs;
+  ObSEArray<int64_t, 8> ref_exec_idxs;
   for (int64_t j = 0; OB_SUCC(ret) && j < subquery_exprs_.count(); ++j) {
     ref_exprs.reuse();
+    ref_exec_idxs.reuse();
     if (OB_ISNULL(ref_query = subquery_exprs_.at(j))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
@@ -4430,9 +4432,11 @@ int ObDMLStmt::do_formalize_query_ref_exprs_pre()
       } else if (ObOptimizerUtil::find_item(ref_exprs,
                                             exec_param->get_ref_expr(),
                                             &idx)) {
-        exec_param->set_ref_expr(ref_exprs.at(idx));
+        exec_param->set_ref_expr(ref_query->get_exec_param(ref_exec_idxs.at(idx)));
       } else if (OB_FAIL(ref_exprs.push_back(exec_param->get_ref_expr()))) {
         LOG_WARN("failed to push back ref exprs");
+      } else if (OB_FAIL(ref_exec_idxs.push_back(i))) {
+        LOG_WARN("failed to push back ref exec idxs", K(ret));
       }
     }
   }
