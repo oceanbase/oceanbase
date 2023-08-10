@@ -1886,7 +1886,7 @@ void ObTenantMetaMemMgr::release_tablet(ObTablet *tablet)
     ObMetaObjBufferNode &linked_node = ObMetaObjBufferHelper::get_linked_node(reinterpret_cast<char *>(tablet));
     ObMetaObjBufferHeader &buf_header = ObMetaObjBufferHelper::get_buffer_header(reinterpret_cast<char *>(tablet));
     void *buf = ObMetaObjBufferHelper::get_meta_obj_buffer_ptr(reinterpret_cast<char *>(tablet));
-    LOG_DEBUG("release tablet", K(buf_header), KP(buf));
+    LOG_DEBUG("release tablet", K(buf_header), KP(buf), KP(tablet));
     SpinWLockGuard guard(wash_lock_);
     if (0 != tablet->get_ref()) {
       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ObTablet reference count may be leak", KP(tablet));
@@ -1897,7 +1897,6 @@ void ObTenantMetaMemMgr::release_tablet(ObTablet *tablet)
       large_tablet_header_.remove(&linked_node);
       large_tablet_buffer_pool_.free_obj(buf);
     }
-    LOG_DEBUG("release tablet", K(buf_header.buf_len_), KP(tablet));
   }
 }
 
