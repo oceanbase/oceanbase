@@ -70,10 +70,6 @@ ObSharedBlocksWriteCtx::~ObSharedBlocksWriteCtx()
   clear();
 }
 
-ObSharedBlocksWriteCtx::ObSharedBlocksWriteCtx(const ObSharedBlocksWriteCtx &other)
-{
-  *this = other;
-}
 void ObSharedBlocksWriteCtx::clear()
 {
   int ret = OB_SUCCESS;
@@ -119,7 +115,7 @@ int ObSharedBlocksWriteCtx::add_block_id(const blocksstable::MacroBlockId &block
   return ret;
 }
 
-ObSharedBlocksWriteCtx &ObSharedBlocksWriteCtx::operator=(const ObSharedBlocksWriteCtx &other)
+int ObSharedBlocksWriteCtx::assign(const ObSharedBlocksWriteCtx &other)
 {
   int ret = OB_SUCCESS;
   if (this != &other) {
@@ -134,7 +130,7 @@ ObSharedBlocksWriteCtx &ObSharedBlocksWriteCtx::operator=(const ObSharedBlocksWr
       }
     }
   }
-  return *this;
+  return ret;
 }
 
 //=================================== ObSharedBlockHeader =============================
@@ -430,8 +426,8 @@ int ObSharedBlockLinkHandle::get_write_ctx(ObSharedBlocksWriteCtx &write_ctx)
     LOG_WARN("Unexpected invalid batch handle", K(ret), KPC(this));
   } else if (OB_FAIL(wait())) {
     LOG_WARN("Fail to wait io finish", K(ret), KPC(this));
-  } else {
-    write_ctx = write_ctx_;
+  } else if (OB_FAIL(write_ctx.assign(write_ctx_))) {
+    LOG_WARN("Fail to get write ctx", K(ret), KPC(this));
   }
   return ret;
 }
