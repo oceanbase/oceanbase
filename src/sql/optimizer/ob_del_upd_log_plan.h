@@ -131,6 +131,7 @@ public:
                              const ObExchangeInfo &exch_info,
                              ObTablePartitionInfo *table_location,
                              const ObIArray<OrderItem> &sort_keys,
+                             const ObIArray<OrderItem> &sample_sort_keys,
                              const ObIArray<OrderItem> &px_coord_sort_keys,
                              bool is_index_maintenance,
                              bool is_last_dml_op,
@@ -138,8 +139,11 @@ public:
                              bool is_pdml_update_split,
                              IndexDMLInfo *index_dml_info);
 
+  int get_ddl_sample_sort_column_count(int64_t &sample_sort_column_count);
+
   int get_ddl_sort_keys_with_part_expr(ObExchangeInfo &exch_info,
-                                       common::ObIArray<OrderItem> &sort_keys);
+                                       common::ObIArray<OrderItem> &sort_keys,
+                                       common::ObIArray<OrderItem> &sample_sort_keys);
 
   int replace_exch_info_exprs(ObExchangeInfo &exch_info);
 

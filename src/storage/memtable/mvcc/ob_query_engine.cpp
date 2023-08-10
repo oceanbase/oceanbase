@@ -320,7 +320,12 @@ int ObQueryEngine::ensure(const ObMemtableKey *key, ObMvccRow *value)
       } else {
         ObStoreRowkeyWrapper key_wrapper(key->get_rowkey());
         if (OB_FAIL(node_ptr->get_keybtree().insert(key_wrapper, value))) {
-          TRANS_LOG(WARN, "ensure keybtree fail", KR(ret), K(*key));
+          if (OB_ENTRY_EXIST == ret) {
+            TRANS_LOG(ERROR, "ensure keybtree fail", KR(ret), K(*key));
+            ob_abort();
+          } else {
+            TRANS_LOG(WARN, "ensure keybtree fail", KR(ret), K(*key));
+          }
         } else {
           value->set_btree_indexed();
         }
