@@ -22,6 +22,7 @@
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/ob_stmt_type.h"
 #include "share/schema/ob_dependency_info.h"      // ObReferenceObjTable
+#include "lib/allocator/ob_pooled_allocator.h"
 namespace oceanbase
 {
 namespace sql
@@ -67,6 +68,9 @@ struct expr_equal_to
     return a == b;
   }
 };
+
+typedef common::ObPooledAllocator<common::hash::HashMapTypes<uint64_t, int64_t>::AllocType,
+                                    common::ObWrapperAllocator> TableHashAllocator;
 
 /// the base class of all statements
 class ObStmt
@@ -533,6 +537,7 @@ public:
                           common::ObIAllocator &allocator);
   const share::schema::ObReferenceObjTable *get_ref_obj_table() const;
   share::schema::ObReferenceObjTable *get_ref_obj_table();
+  virtual int init_stmt(TableHashAllocator &table_hash_alloc, ObWrapperAllocator &wrapper_alloc) { return common::OB_SUCCESS; }
 protected:
   void print_indentation(FILE *fp, int32_t level) const;
 
@@ -591,6 +596,8 @@ class ObStmtFactory
 public:
   explicit ObStmtFactory(common::ObIAllocator &alloc)
     : allocator_(alloc),
+      wrapper_allocator_(&alloc),
+      table_hash_allocator_(OB_MALLOC_NORMAL_BLOCK_SIZE, wrapper_allocator_),
       stmt_store_(alloc),
       free_list_(alloc),
       query_ctx_(NULL)
@@ -614,6 +621,8 @@ public:
         SQL_RESV_LOG(WARN, "store stmt failed", K(ret));
         stmt->~StmtType();
         stmt = NULL;
+      } else if (OB_FAIL(stmt->init_stmt(table_hash_allocator_, wrapper_allocator_))) {
+        SQL_RESV_LOG(WARN, "failed to init tables hash", K(ret));
       }
     }
     return ret;
@@ -631,6 +640,8 @@ public:
   inline common::ObIAllocator &get_allocator() { return allocator_; }
 private:
   common::ObIAllocator &allocator_;
+  common::ObWrapperAllocator wrapper_allocator_;
+  TableHashAllocator table_hash_allocator_;
   common::ObObjStore<ObStmt*, common::ObIAllocator&, true> stmt_store_;
   common::ObObjStore<ObSelectStmt*, common::ObIAllocator&, true> free_list_;
   ObQueryCtx *query_ctx_;

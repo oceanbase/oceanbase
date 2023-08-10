@@ -643,8 +643,12 @@ public:
     ObSEArray<int64_t, 4,common::ModulePageAllocator, true> check_flags_;
   };
 
-  typedef common::ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> ObViewTableIds;
-
+  typedef common::hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode,
+                                  common::hash::hash_func<uint64_t>,
+                                  common::hash::equal_to<uint64_t>,
+                                  TableHashAllocator,
+                                  common::hash::NormalPointer,
+                                  common::ObWrapperAllocator> ObDMLStmtTableHash;
 public:
 
   explicit ObDMLStmt(stmt::StmtType type);
@@ -671,6 +675,8 @@ public:
     is_modified = false;
     return OB_SUCCESS;
   }
+
+  virtual int init_stmt(TableHashAllocator &table_hash_alloc, ObWrapperAllocator &wrapper_alloc) override;
 
   bool is_hierarchical_query() const;
 
@@ -903,6 +909,7 @@ public:
                              bool is_anonymous = false);
   int32_t get_table_bit_index(uint64_t table_id) const;
   int set_table_bit_index(uint64_t table_id);
+  int assign_tables_hash(const ObDMLStmtTableHash &tables_hash);
   ColumnItem *get_column_item(uint64_t table_id, const common::ObString &col_name);
   ColumnItem *get_column_item(uint64_t table_id, uint64_t column_id);
   int add_column_item(ColumnItem &column_item);
@@ -920,7 +927,6 @@ public:
   { return pseudo_column_like_exprs_; }
   const common::ObIArray<ObRawExpr *> &get_pseudo_column_like_exprs() const
   { return pseudo_column_like_exprs_; }
-  common::ObRowDesc &get_table_hash() { return tables_hash_; }
   int rebuild_tables_hash();
   int update_rel_ids(ObRelIds &rel_ids, const ObIArray<int64_t> &bit_index_map);
   int update_column_item_rel_id();
@@ -1204,9 +1210,7 @@ protected:
   common::ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> condition_exprs_;
   // 存放共享的类伪列表达式, 我们认为除了一般的伪列表达式ObPseudoColumnRawExpr, rownum和sequence也属于伪列
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> pseudo_column_like_exprs_;
-  // it is only used to record the table_id--bit_index map
-  // although it is a little weird, but it is high-performance than ObHashMap
-  common::ObRowDesc tables_hash_;
+  ObDMLStmtTableHash tables_hash_;
   common::ObSEArray<ObQueryRefRawExpr*, 4, common::ModulePageAllocator, true> subquery_exprs_;
   const TransposeItem *transpose_item_;
 
