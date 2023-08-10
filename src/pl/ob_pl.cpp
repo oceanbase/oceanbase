@@ -2327,6 +2327,19 @@ int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value)
   }
 
   if (OB_FAIL(ret)) {
+  } else if (copy_value.is_null() && params->at(var_idx).is_pl_extend()) {
+    if (params->at(var_idx).get_ext() == 0) {
+      const ObUserDefinedType *user_type = NULL;
+      uint64_t udt_id = params->at(var_idx).get_udt_id();
+      OZ (ctx_.get_user_type(udt_id, user_type), K(udt_id));
+      CK (OB_NOT_NULL(user_type));
+      OZ (init_complex_obj(*get_allocator(), *user_type, params->at(var_idx)));
+      if (OB_SUCC(ret) && user_type->is_collection_type()) {
+        ObPLCollection *coll = reinterpret_cast<ObPLCollection *>(params->at(var_idx).get_ext());
+        CK (OB_NOT_NULL(coll));
+        OX (coll->set_count(OB_INVALID_COUNT));
+      }
+    }
   } else if (!copy_value.is_ext()) {
     bool is_ref_cursor = params->at(var_idx).is_ref_cursor_type();
     copy_value.ObObj::set_scale(params->at(var_idx).get_meta().get_scale());
