@@ -674,17 +674,15 @@ int ObDictDecoder::get_aggregate_result(
         ref = 0;
         if (OB_FAIL(read_ref(row_id, ctx.is_bit_packing(), col_data, ref))) {
             LOG_WARN("Failed to read reference for dictionary", K(ret), K(col_data), K(row_id));
-        } else {
-          if ((ref < count) && !ref_map.test(ref)){
-              if(OB_FAIL(decode(ctx.obj_meta_, cell, ref, ctx.col_header_->length_))){
-                LOG_WARN("Failed to decode", K(ret), K(ref), K(ctx.obj_meta_));
-              } else if (OB_FAIL(datum_buf[i].from_obj(cell))){
-                LOG_WARN("Failed to trans to datum",K(ret),K(cell));
-              } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))){
-                LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[i]), K(agg_info));
-              }
-            ref_map.set(ref);
-          }
+        } else if ((ref < count) && !ref_map.test(ref)){
+            if(OB_FAIL(decode(ctx.obj_meta_, cell, ref, ctx.col_header_->length_))){
+              LOG_WARN("Failed to decode", K(ret), K(ref), K(ctx.obj_meta_));
+            } else if (OB_FAIL(datum_buf[i].from_obj(cell))){
+              LOG_WARN("Failed to trans to datum",K(ret),K(cell));
+            } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))){
+              LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[i]), K(agg_info));
+            }
+          ref_map.set(ref);
         }
       }
     }

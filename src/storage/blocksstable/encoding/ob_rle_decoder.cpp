@@ -132,7 +132,9 @@ int ObRLEDecoder::get_aggregate_result(
   const int64_t dict_meta_length = ctx.col_header_->length_ - meta_header_->offset_;
   if (dict_count > 0) {
     if(row_cap == ctx.micro_block_header_->row_count_){
-      dict_decoder_.get_aggregate_result(ctx, row_ids, row_cap, agg_info, datum_buf);
+      if(OB_FAIL(dict_decoder_.get_aggregate_result(ctx, row_ids, row_cap, agg_info, datum_buf))){
+        LOG_WARN("failed to decode whole dict_decoder in rle", K(ret), K(dict_decoder_));
+      }
     } else {
       const ObIntArrayFuncTable &row_id_array
           = ObIntArrayFuncTable::instance(meta_header_->row_id_byte_);
