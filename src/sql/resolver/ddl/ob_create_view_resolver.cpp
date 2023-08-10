@@ -370,7 +370,8 @@ int ObCreateViewResolver::check_view_columns(ObSelectStmt &select_stmt,
   } else if (lib::is_mysql_mode()) {
     ObArray<int64_t> index_array;
     for (int64_t i = 0; OB_SUCC(ret) && i < select_item_size; ++i) {
-      if (OB_FAIL(check_select_stmt_col_name(select_stmt.get_select_item(i), index_array, i,
+      if (OB_FAIL(check_select_stmt_col_name(select_stmt.get_select_item(i),
+                                             index_array, i,
                                              view_col_names, is_col_dup, dup_col_name))) {
         SQL_RESV_LOG(WARN, "check select stmt col name failed", K(ret),
                                   K(select_stmt.get_select_item(i).alias_name_));
@@ -566,7 +567,6 @@ int ObCreateViewResolver::check_select_stmt_col_name(
   bool len_is_legal = false;
   // 如果列没有被用户指定一个别名，那么 alias_name_ 就和 expr_name_ 保持一致
   ObString col_name = select_item.alias_name_;
-
   if (select_item.is_real_alias_) {
     // 如果是真的别名，别名长度不允许超过 64，超过则报错
     if (col_name.length() > static_cast<size_t>(OB_MAX_VIEW_COLUMN_NAME_LENGTH_MYSQL)) {
@@ -575,23 +575,24 @@ int ObCreateViewResolver::check_select_stmt_col_name(
     } else {
       len_is_legal = true;
     }
-  } else {
+  } else if (col_name.length() > static_cast<size_t>(OB_MAX_VIEW_COLUMN_NAME_LENGTH_MYSQL)) {
     // 如果列没有别名，超过 64 的话系统则自动为其会生成一个列别名
     // 因为需要避免自动生成的列名和用户定义的列名相同的情况，所以这里暂时把这种情况的列序号记录下来
-    if (col_name.length() > static_cast<size_t>(OB_MAX_VIEW_COLUMN_NAME_LENGTH_MYSQL)) {
-      if (OB_FAIL(index_array.push_back(pos))) {
-        SQL_RESV_LOG(WARN, "push_back failed", K(ret), K(pos), K(col_name));
-      }
+    if (OB_FAIL(index_array.push_back(pos))) {
+      SQL_RESV_LOG(WARN, "push_back failed", K(ret), K(pos), K(col_name));
     } else {
       len_is_legal = true;
     }
   }
+
   if (OB_SUCC(ret) && len_is_legal) {
     // 如果不是超长列名，则检查是否有重名
     if (OB_HASH_EXIST == (hash_ret = view_col_names.exist_refactored(col_name))) {
-      is_expr_or_col_dup = true;
-      if (dup_col_name.empty()) {
-        dup_col_name = col_name;
+      if (dup_col_name.empty() && select_item.is_real_alias_) {
+        is_expr_or_col_dup = true;
+        dup_col_name = select_item.alias_name_;
+      } else if ((!select_item.is_real_alias_) && OB_FAIL(index_array.push_back(pos))) {
+        SQL_RESV_LOG(WARN, "push_back failed", K(ret), K(pos), K(col_name));
       }
       ret = OB_SUCCESS;
       // ret = OB_ERR_COLUMN_DUPLICATE;

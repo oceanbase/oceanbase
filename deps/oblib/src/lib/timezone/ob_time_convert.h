@@ -476,7 +476,7 @@ public:
   static int calc_last_date_of_the_month(const int64_t ori_date_value, int64_t &result_date_value,
                                          const ObObjType dest_type,  const bool is_dayofmonth,
                                          const ObDateSqlMode date_sql_mode);
-  static int calc_next_date_of_the_wday(const int64_t ori_date_value, const ObString &wday_name, int64_t &result_date_value);
+  static int calc_next_date_of_the_wday(const int64_t ori_date_value, const ObString &wday_name, const int64_t week_count, int64_t &result_date_value);
   static int calc_days_and_months_between_dates(const int64_t date_value1, const int64_t date_value2, int64_t &months_diff, int64_t &rest_utc_diff);
 
 public:

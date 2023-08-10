@@ -2890,7 +2890,12 @@ int ObTableLocation::add_partition_columns(const ObDMLStmt &stmt,
             //do nothing.Only deal case with one partition column.
           } else {
             gen_col_expr = col_expr->get_dependant_expr();
-            if (OB_FAIL(add_partition_columns(stmt, col_expr->get_dependant_expr(),
+            bool can_replace = false;
+            if (OB_FAIL(check_can_replace(gen_col_expr, col_expr, can_replace))) {
+              LOG_WARN("failed to check can replace", K(ret));
+            } else if (!can_replace) {
+              //do nothing
+            } else if (OB_FAIL(add_partition_columns(stmt, col_expr->get_dependant_expr(),
                                               partition_columns, gen_cols, gen_col_expr,
                                               row_desc, gen_row_desc, true))) {
               LOG_WARN("Failed to add gen columns", K(ret));
@@ -2910,6 +2915,44 @@ int ObTableLocation::add_partition_columns(const ObDMLStmt &stmt,
   return ret;
 }
 
+int ObTableLocation::check_can_replace(ObRawExpr *gen_col_expr,
+                                       ObRawExpr *col_expr,
+                                       bool &can_replace)
+{
+  int ret = OB_SUCCESS;
+  can_replace = false;
+  ObCollationLevel res_cs_level = CS_LEVEL_INVALID;
+  ObCollationType res_cs_type = CS_TYPE_INVALID;
+  ObRawExpr* expr = gen_col_expr;
+  if (OB_ISNULL(gen_col_expr) || OB_ISNULL(col_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parameter", K(ret));
+  } else if (!ob_is_string_or_lob_type(gen_col_expr->get_result_type().get_type()) ||
+             !ob_is_string_or_lob_type(col_expr->get_result_type().get_type())) {
+    can_replace = true;
+  } else if (gen_col_expr->get_expr_type() != T_FUN_COLUMN_CONV) {
+    can_replace = true;
+  } else if (((gen_col_expr->get_param_count() != 5) &&
+             (gen_col_expr->get_param_count() != 6)) ||
+             OB_ISNULL(expr = gen_col_expr->get_param_expr(4))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error",K(gen_col_expr->get_param_count()), K(expr), K(ret));
+  } else if (expr->has_flag(IS_INNER_ADDED_EXPR)) {
+    while (expr->has_flag(IS_INNER_ADDED_EXPR) &&
+           (expr->get_param_count() > 0) &&
+           (NULL != expr->get_param_expr(0))) {
+        expr = expr->get_param_expr(0);
+    }
+  }
+  if (OB_FAIL(ret) || can_replace) {
+    //do nothing
+  } else if (expr->get_result_type().get_collation_type() != col_expr->get_result_type().get_collation_type()) {
+    can_replace = false;
+  } else {
+    can_replace = true;
+  }
+  return ret;
+}
 int ObTableLocation::add_partition_column(const ObDMLStmt &stmt,
                                           const uint64_t table_id,
                                           const uint64_t column_id,

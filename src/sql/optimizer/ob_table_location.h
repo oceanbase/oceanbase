@@ -909,7 +909,9 @@ private:
                             RowDesc &row_desc,
                             RowDesc &gen_row_desc,
                             const bool only_gen_cols = false);
-
+  int check_can_replace(ObRawExpr *gen_col_expr,
+                        ObRawExpr *col_expr,
+                        bool &can_replace);
   //add partition column
   //add column to row desc and partiton columns
   int add_partition_column(const ObDMLStmt &stmt,
