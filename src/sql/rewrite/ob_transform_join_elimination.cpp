@@ -3590,7 +3590,7 @@ int ObTransformJoinElimination::eliminate_candi_tables(ObDMLStmt *stmt,
           if (OB_FAIL(do_join_elimination_self_key(stmt, child_candi_tables.at(j),
                                                    candi_tables.at(i), is_from_base_table,
                                                    is_happened, trans_tables, equal_sets))) {
-            LOG_WARN("failed to do join elimination erlf key", K(ret));
+            LOG_WARN("failed to do join elimination self key", K(ret));
           } else if (!is_happened) {
             /*do nothing*/
           } else if (OB_FAIL(removed_items.add_member(i))) {

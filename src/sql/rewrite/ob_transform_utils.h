@@ -18,6 +18,7 @@
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
 #include "sql/rewrite/ob_transform_rule.h"
+#include "sql/rewrite/ob_union_find.h"
 #include "sql/optimizer/ob_fd_item.h"
 
 namespace oceanbase {
@@ -47,6 +48,12 @@ enum NULLABLE_SCOPE {
   NS_WHERE    = 1 << 1,
   NS_GROUPBY  = 1 << 2,
   NS_TOP      = 1 << 4
+};
+
+enum CheckInnerJoinLoseless {
+  LEFT_SIDE   = 0,
+  RIGHT_SIDE  = 1,
+  TWO_SIDE    = 2
 };
 
 struct ObNotNullContext
@@ -175,22 +182,59 @@ public:
   struct LazyJoinInfo {
     LazyJoinInfo()
       :join_conditions_(),
+      joined_type_(UNKNOWN_JOIN),
       right_table_(NULL)
     {}
     
     void reset() {
       join_conditions_.reset();
+      joined_type_ = UNKNOWN_JOIN;
       right_table_ = NULL;
     }
     int assign(const LazyJoinInfo &other);
 
     TO_STRING_KV(
       K(join_conditions_),
+      K(joined_type_),
       K(right_table_)
     );
 
     ObSEArray<ObRawExpr*, 4> join_conditions_;
+    ObJoinType joined_type_;
     TableItem *right_table_;
+  };
+
+  struct MultiColumnJoinInfo {
+    MultiColumnJoinInfo()
+      :join_conditions_(),
+      left_single_table_(NULL),
+      right_single_table_(NULL),
+      left_table_(NULL),
+      right_table_(NULL)
+    {}
+
+    void reset() {
+      join_conditions_.reset();
+      left_single_table_ = NULL;
+      right_single_table_ = NULL;
+      left_table_ = NULL;
+      right_table_ = NULL;
+    }
+    int assign(const MultiColumnJoinInfo &other);
+
+    TO_STRING_KV(
+      K(join_conditions_),
+      K(left_single_table_),
+      K(right_single_table_),
+      K(left_table_),
+      K(right_table_)
+    );
+
+    ObSEArray<ObRawExpr*, 4> join_conditions_;
+    TableItem* left_single_table_;
+    TableItem* right_single_table_;
+    TableItem* left_table_;
+    TableItem* right_table_;
   };
 
   static int decorrelate(ObRawExpr *&expr, ObIArray<ObExecParamRawExpr *> &exec_params);
@@ -671,6 +715,24 @@ public:
                                         bool &is_foreign_primary_join,
                                         bool &is_first_table_parent,
                                         share::schema::ObForeignKeyInfo *&foreign_key_info);
+    static int check_foreign_primary_join(const TableItem *first_table,
+                                        const TableItem * second_table,
+                                        const ObIArray<const ObColumnRefRawExpr *> &first_exprs,
+                                        const ObIArray<const ObColumnRefRawExpr *> &second_exprs,
+                                        ObSchemaChecker *schema_checker,
+                                        ObSQLSessionInfo *session_info,
+                                        bool &is_foreign_primary_join,
+                                        bool &is_first_table_parent,
+                                        share::schema::ObForeignKeyInfo *&foreign_key_info);
+  static int check_foreign_primary_join(const TableItem *first_table,
+                                        const TableItem * second_table,
+                                        const ObIArray< ObColumnRefRawExpr *> &first_exprs,
+                                        const ObIArray< ObColumnRefRawExpr *> &second_exprs,
+                                        ObSchemaChecker *schema_checker,
+                                        ObSQLSessionInfo *session_info,
+                                        bool &is_foreign_primary_join,
+                                        bool &is_first_table_parent,
+                                        share::schema::ObForeignKeyInfo *&foreign_key_info);
 
   /**
    * @brief is_all_foreign_key_involved
@@ -691,6 +753,14 @@ public:
                                          const ObIArray< ObRawExpr *> &parent_exprs,
                                          const share::schema::ObForeignKeyInfo &info,
                                          bool &is_all_involved);
+  static int is_all_foreign_key_involved(const ObIArray<const ObColumnRefRawExpr *> &child_exprs,
+                                         const ObIArray<const ObColumnRefRawExpr *> &parent_exprs,
+                                         const share::schema::ObForeignKeyInfo &info,
+                                         bool &is_all_involved);
+  static int is_all_foreign_key_involved(const ObIArray< ObColumnRefRawExpr *> &child_exprs,
+                                         const ObIArray< ObColumnRefRawExpr *> &parent_exprs,
+                                         const share::schema::ObForeignKeyInfo &info,
+                                         bool &is_all_involved);                                       
 
   /**
    * @brief is_foreign_key_rely
@@ -947,6 +1017,130 @@ public:
   
   static int get_outer_join_right_tables(const JoinedTable &joined_table,
                                          ObIArray<uint64_t> &table_ids);
+  
+  /* This function used in build_inner_joined_tables
+   * reorder tables in list according join conditions
+   * avoid cartesian product */
+  static int reorder_inner_joined_tables(ObDMLStmt *stmt,
+                                         ObIArray<TableItem*> &tables,
+                                         ObIArray<TableItem*> &ordered_tables,
+                                         ObIArray<ObRawExpr*> &join_conds);
+
+  /* Pushdown join conditions to child joined table if tables related to one condition
+   * are all in one side.
+   *
+   * for example:
+   * A join B join C on A.id = B.id and B.id = C.id
+   * will be transformed as
+   * A join B on A.id = B.id join C on B.id = C.id
+  */
+  static int pushdown_highlevel_conditions(const ObDMLStmt *stmt, JoinedTable *inner_joined_table);
+
+  static int build_inner_joined_multi_tables(ObTransformerCtx *ctx,
+                                             ObDMLStmt *stmt,
+                                             TableItem *&top_table,
+                                             ObIArray<TableItem*> &tables,
+                                             ObIArray<ObRawExpr*> &join_conds);
+  
+  static int build_inner_joined_tables(ObTransformerCtx *ctx,
+                                       ObDMLStmt *stmt,
+                                       TableItem *&top_table,
+                                       ObIArray<FromItem> &tables,
+                                       ObIArray<ObRawExpr*> &join_conds,
+                                       bool &is_valid);                                                                      
+
+  static int get_ref_table_column_expr(ObDMLStmt *stmt, 
+                                       uint64_t select_column_id, 
+                                       ObRawExpr *&ref_column_expr,
+                                       bool& is_valid);
+
+  /* check if expr is min/max agg function expr */
+  static int check_expr_min_max(ObRawExpr *expr, ObRawExpr *&column_ref, bool &is_valid);
+
+  /* get all column exprs from a condition expr */
+  static int get_condition_columnref_children(ObRawExpr *cond,
+                                              ObIArray<ObRawExpr*> &column_exprs, 
+                                              bool &is_valid,
+                                              bool &has_agg);
+  
+  /* check if one condition expr contain two column exprs and get them */
+  static int check_get_two_columns_from_condition(ObRawExpr *cond, 
+                                                  ObColumnRefRawExpr *&left, 
+                                                  ObColumnRefRawExpr *&right,
+                                                  bool &is_valid,
+                                                  bool &has_agg);
+
+  /* check all conditions are simple equal join conditions */
+  static int check_all_conditions_equal_connection(common::ObIArray<ObRawExpr*> &conds,
+                                                   bool &is_valid); 
+
+  /* check not join conditions have only one table related, so as to pushdown to one table */
+  static int check_not_join_conds(ObIArray<ObRawExpr*> &conds, bool &is_loseless);
+
+  static int get_conds_relation_ids(ObIArray<ObRawExpr*> &conds, ObSqlBitSet<> &conds_table_ids);
+
+  /* classify equal join conditions and other conditions */
+  static int get_conditions_equaljoin_others(common::ObIArray<ObRawExpr*> &conds,
+                                             common::ObIArray<ObRawExpr*> &equaljoins,
+                                             common::ObIArray<ObRawExpr*> &otherconds);
+
+  /* check join conditions between two tables 
+   * if one condition is not equal join condition or agg function more than one, is_valid is false */
+  static int check_and_get_conds_between_two_tables(ObDMLStmt *stmt, 
+                                                    TableItem *left_table,
+                                                    TableItem *right_table,
+                                                    common::ObIArray<ObRawExpr*> &conds,
+                                                    ObSEArray<ObRawExpr*, 4> &connected_conds,
+                                                    ObSEArray<ObColumnRefRawExpr*, 4> &left_columns,
+                                                    ObSEArray<ObColumnRefRawExpr*, 4> &right_columns,
+                                                    bool &is_cond_valid); 
+
+  /* check left table is loseless in inner join conditions between two single tables 
+   * solve three situations
+   * 1. foreign key loseless
+   * 2. self join of the same table and column
+   * 3. one column is min/max agg function + situation1/2 */
+  static int check_single_table_containment(ObTransformerCtx *ctx,
+                                            ObDMLStmt *stmt, 
+                                            TableItem *join_left_table,
+                                            TableItem *join_right_table,
+                                            ObIArray<ObRawExpr*> &conds,
+                                            bool &is_contained);
+
+  static int get_table_item_by_rel_id(ObDMLStmt* stmt, uint64_t &rel_id, TableItem *&table_item);
+
+  static int get_table_item_by_rel_id(ObDMLStmt* stmt, ObRelIds &rel_ids, ObIArray<TableItem*> &table_items);
+
+  /* group join conditions according two tables in conditions */
+  static int group_multi_column_join(ObDMLStmt *stmt,
+                                     TableItem *left_table,
+                                     TableItem *right_table,
+                                     ObSqlBitSet<> left_child_relation_id,
+                                     ObSqlBitSet<> right_child_relation_id,
+                                     ObIArray<ObRawExpr*> &join_conditions,
+                                     ObIArray<MultiColumnJoinInfo> &group_join_list);
+
+  /* check inner join conditions is loseless
+   * if right_table is loseless, swap left and right branch 
+   * if target_table is not null, meaning check the side where target_table in is loseless */
+  static int check_inner_loseless(ObTransformerCtx *ctx,
+                                  ObDMLStmt *stmt,
+                                  TableItem *&left_table,
+                                  TableItem *&right_table,
+                                  ObIArray<ObRawExpr*> &join_conditions,
+                                  ObSqlBitSet<> &expr_relation_ids,
+                                  bool &is_loseless,
+                                  TableItem *target_table = NULL);
+
+  /* check cartesian, left, inner join conditions is loseless
+   * if right_table is loseless, swap left and right branch
+   * if target_table is not null, meaning check the side where target_table in is loseless */
+  static int check_limit_join_loseless(ObTransformerCtx *ctx,
+                                       ObDMLStmt *stmt,
+                                       TableItem *&joined_table,
+                                       ObSqlBitSet<> &expr_relation_ids,
+                                       bool &is_loseless,
+                                       TableItem *target_table = NULL);
 
   /**
    * @brief is_equal_correlation
@@ -1654,6 +1848,23 @@ public:
                                 const ObIArray<TableItem *> &tables,
                                 ObSqlBitSet<> &expr_relation_ids,
                                 ObIArray<LazyJoinInfo> &lazy_join_infos);
+
+  static int get_rel_ids_from_column_exprs(ObSqlBitSet<> &expr_relation_ids, 
+                                           ObIArray<ObRawExpr*> &column_exprs);
+
+  static int get_nullable_exprs(const ObDMLStmt *stmt,
+                                ObSchemaChecker *schema_checker,
+                                const ObSQLSessionInfo *session_info,
+                                ObIArray<ObRawExpr*>& candidate_exprs,
+                                ObIArray<ObRawExpr*>& result_exprs);
+
+  static int get_lazy_inner_join(ObTransformerCtx *ctx,
+                                 ObDMLStmt *stmt,
+                                 TableItem *&table,
+                                 ObSqlBitSet<> &expr_relation_ids,
+                                 ObIArray<LazyJoinInfo> &lazy_join_infos,
+                                 ObIArray<ObRawExpr*> &is_not_null_epxrs,
+                                 bool in_full_join);                              
   
   static int is_null_propagate_expr(const ObRawExpr *expr,
                                     const ObRawExpr *target,
@@ -1689,6 +1900,8 @@ public:
                                      ObIArray<TableItem *> &from_tables,
                                      ObIArray<SemiInfo *> *semi_infos = NULL);
 
+  static int create_is_not_null_cond_expr(ObTransformerCtx *ctx, ObRawExpr *&expr, ObRawExpr *&cond);
+
   static int create_inline_view(ObTransformerCtx *ctx,
                                 ObDMLStmt *stmt,
                                 TableItem *&view_table,
@@ -1699,7 +1912,8 @@ public:
                                 ObIArray<ObRawExpr *> *group_exprs = NULL,
                                 ObIArray<ObRawExpr *> *rollup_exprs = NULL,
                                 ObIArray<ObRawExpr *> *having_exprs = NULL,
-                                ObIArray<OrderItem> *order_items = NULL);
+                                ObIArray<OrderItem> *order_items = NULL,
+                                ObIArray<ObRawExpr *> *is_not_null_exprs = NULL);
 
   static int create_inline_view(ObTransformerCtx *ctx,
                                 ObDMLStmt *stmt,
@@ -1711,7 +1925,8 @@ public:
                                 ObIArray<ObRawExpr *> *group_exprs = NULL,
                                 ObIArray<ObRawExpr *> *rollup_exprs = NULL,
                                 ObIArray<ObRawExpr *> *having_exprs = NULL,
-                                ObIArray<OrderItem> *order_items = NULL);
+                                ObIArray<OrderItem> *order_items = NULL,
+                                ObIArray<ObRawExpr *> *is_not_null_exprs = NULL);
 
   /* Push all content of the parent stmt into an inline view,
      and keep the ptr of the parent stmt  */

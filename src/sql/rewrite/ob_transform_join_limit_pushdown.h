@@ -43,6 +43,7 @@ private:
         pushdown_tables_(),
         lazy_join_tables_(),
         expr_relation_ids_(),
+        inner_is_not_null_exprs_(),
         all_lazy_join_is_unique_join_(true) {}
     virtual ~LimitPushDownHelper() {};
 
@@ -54,6 +55,7 @@ private:
       pushdown_tables_.reset();
       lazy_join_tables_.reset();
       expr_relation_ids_.reset();
+      inner_is_not_null_exprs_.reset();
       all_lazy_join_is_unique_join_ = true;
     }
     int assign(const LimitPushDownHelper &other);
@@ -68,6 +70,7 @@ private:
                  K(pushdown_tables_),
                  K(lazy_join_tables_),
                  K(expr_relation_ids_),
+                 K(inner_is_not_null_exprs_),
                  K(all_lazy_join_is_unique_join_));
 
     TableItem *view_table_;                       //created by pushdown tables,conds,semi infos, order by
@@ -77,6 +80,7 @@ private:
     ObSEArray<TableItem *, 8> pushdown_tables_;
     ObSEArray<ObTransformUtils::LazyJoinInfo, 8> lazy_join_tables_;     //lazy left join`s right table item and on condition
     ObSqlBitSet<> expr_relation_ids_;                  //table ids ref by conditions, semi infos, order by items
+    ObSEArray<ObRawExpr*, 8> inner_is_not_null_exprs_;   //inner join need construct is not null conditions
     bool all_lazy_join_is_unique_join_;                         //all lazy left join key is unique
   };
 
@@ -93,14 +97,47 @@ public:
 private:
   int check_stmt_validity(ObDMLStmt *stmt,
                           ObIArray<LimitPushDownHelper*> &helpers,
-                          bool &is_valid);
-  
+                          bool &is_valid,
+                          bool &is_only_inner_valid);
+
+  int check_inner_join_rewrite_done(ObSelectStmt *stmt,
+                                    TableItem *inner_join_table,
+                                    LimitPushDownHelper *helper, 
+                                    bool &is_valid);
+                                    
+  int check_inner_join_validity(ObDMLStmt *stmt, 
+                                LimitPushDownHelper *inner_helper, 
+                                TableItem *inner_join_table, 
+                                bool &is_valid);
+
   int check_lazy_join_is_unique(ObIArray<ObTransformUtils::LazyJoinInfo> &lazy_join, 
                                 ObDMLStmt *stmt,
                                 bool &is_unique_join);
 
   int do_transform(ObSelectStmt *select_stmt,
                    LimitPushDownHelper &helper);
+
+  int create_is_not_null_cond_expr(ObRawExpr *&expr,
+                                   ObRawExpr *&cond);
+  
+  int create_not_null_condition_exprs(ObDMLStmt *select_stmt,
+                                      ObIArray<TableItem *> &from_tables,
+                                      ObIArray<ObRawExpr *> &is_not_null_exprs,
+                                      ObIArray<ObRawExpr *> &is_not_null_conditions);
+
+  /* 
+   * add constraint while view_stmt limit > select_stmt offset+limit
+   * for example:
+   * select * from (select * from A limit 5) V left join B on V.id = B.id limit 3;
+   * will add a constraint "5 > 3" 
+  */
+  int add_constraint_for_generated_table_with_limit(ObSelectStmt *select_stmt,
+                                                    ObSelectStmt *view_stmt,
+                                                    ObIArray<TableItem *> &from_tables);
+  // do transform while containing inner join
+  int do_transform_inner_join(ObSelectStmt *select_stmt,
+                              LimitPushDownHelper &helper,
+                              bool keep_limit);                
 
   int split_cartesian_tables(ObSelectStmt *select_stmt,
                              ObIArray<LimitPushDownHelper*> &helpers,
@@ -129,7 +166,20 @@ private:
                              const ObIArray<TableItem *> &target_tables,
                              ObIArray<int64_t> &indices);
 
-  int check_table_validity(const ObIArray<TableItem *> &target_tables, bool &is_valid);
+  int get_limit_expr_value(const ObRawExpr *limit_expr, int64_t& limit_value_int);
+
+  /* 
+   * check if ref_query limit <= stmt offset+limit
+   * if true, return ref_limit_lower_equal as true
+   * then the rewrite will stops 
+   */
+  int check_ref_query_offset_limit_expr_lower_equal(ObSelectStmt *ref_query,
+                                                    ObSelectStmt *stmt,
+                                                    bool &ref_limit_lower_equal);
+
+  int check_table_validity(ObSelectStmt *stmt, 
+                          const ObIArray<TableItem *> &target_tables, 
+                          bool &is_valid);
 
   int collect_pushdown_exprs(ObSelectStmt *stmt,
                                LimitPushDownHelper &helper);
@@ -144,7 +194,7 @@ private:
 
   int inner_remove_lazy_left_join(TableItem* &table, LimitPushDownHelper &helper);
 
-  int build_lazy_left_join(ObDMLStmt *stmt, LimitPushDownHelper &helper);
+  int build_lazy_join(ObDMLStmt *stmt, LimitPushDownHelper &helper);
 
   int add_limit_for_view(ObSelectStmt *generated_view,
                          ObSelectStmt *upper_stmt,
