@@ -165,38 +165,38 @@ private:
   int check_remove_ora_decode_valid(ObRawExpr *&expr, int64_t &result_idx, bool &is_valid);
   int try_remove_ora_decode(ObRawExpr *&expr, ObRawExpr *&new_expr);
 
-  int convert_case_when_predicate(ObDMLStmt *stmt, bool &trans_happened);
-  int convert_case_when_predicate_by_when_expr(ObRawExpr *&expr, 
-                                  const bool is_scala_group_by,
-                                  bool &trans_happened);
+  int convert_case_when_predicate(ObDMLStmt *stmt, bool &trans_happended);
+  int recursive_convert_case_when_predicate_by_when_expr(
+                                            ObRawExpr *&expr, 
+                                            const bool is_scala_group_by,
+                                            bool &trans_happended);
   int inner_convert_case_when_predicate_by_when_expr(
-                                      ObRawExpr *&expr, 
-                                      bool &trans_happened);
-  int check_when_expr_validity(
-                  ObCaseOpRawExpr *case_expr,
-                  const int64_t idx,
-                  ObRawExpr *&rewrite_expr,
-                  bool &is_blocked);
+                                            ObRawExpr *&expr, 
+                                            bool &trans_happended);
+  int check_when_expr_validity(ObCaseOpRawExpr *case_expr,
+                               const int64_t idx,
+                               ObRawExpr *&rewrite_expr,
+                               bool &is_blocked);
 
-  int convert_case_when_predicate_by_then_expr(ObRawExpr *&expr, 
-                                  const bool is_scala_group_by,
-                                  bool &trans_happened);
-  int do_convert_case_when_predicate_by_then_expr(
+  int convert_case_when_predicate_by_then_expr(
+                                      ObIArray<ObRawExpr *> &exprs,
+                                      const bool is_scala_group_by,
+                                      bool &trans_happended);
+  int inner_convert_case_when_predicate_by_then_expr(
                                       ObRawExpr *&parent_expr,
-                                      ObRawExpr *&case_expr,
-                                      ObRawExpr *&sibling_expr,
+                                      ObCaseOpRawExpr *case_expr,
+                                      ObRawExpr *sibling_expr,
                                       const bool case_at_left,
-                                      bool &trans_happened);
-  int check_then_exprs_validity(
-                            ObRawExpr *&parent_expr,
-                            ObCaseOpRawExpr *&case_expr,
-                            ObRawExpr *&sibling_expr,
-                            const bool case_at_left,
-                            bool &is_uncalculable,
-                            int64_t &true_null_uncalc_idx,
-                            ObRawExpr *&true_null_uncalc_expr,
-                            ObIArray<ObRawExpr*> &false_exprs,
-                            bool &is_valid);
+                                      bool &trans_happended);
+  int check_then_exprs_validity(ObRawExpr *parent_expr,
+                                ObCaseOpRawExpr *case_expr,
+                                ObRawExpr *sibling_expr,
+                                const bool case_at_left,
+                                bool &is_uncalculable,
+                                int64_t &true_null_uncalc_idx,
+                                ObRawExpr *&true_null_uncalc_expr,
+                                ObIArray<ObRawExpr*> &false_exprs,
+                                bool &is_valid);
   int build_rewrite_expr(ObCaseOpRawExpr *case_expr,
                          const int64_t true_null_uncalc_idx,
                          ObRawExpr *true_null_uncalc_expr,

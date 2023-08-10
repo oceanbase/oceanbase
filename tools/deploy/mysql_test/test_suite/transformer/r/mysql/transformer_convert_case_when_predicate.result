@@ -94,7 +94,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([t3.c1 > 0 AND 'aaa' = 'aaa']), rowset=256
+  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([t3.c1 > 0]), rowset=256
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
@@ -1446,9 +1446,9 @@ Outputs & filters:
       column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c1)])
   1 - output([ANONYMOUS_VIEW1.c1]), filter(nil), rowset=256
       access([ANONYMOUS_VIEW1.c1])
-  2 - output([t1.c1]), filter([(T_OP_AND, lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0))), lnnvl(cast(t1.c2 > 2, TINYINT(-1, 0))), 3 > 2)]), rowset=256
+  2 - output([t1.c1]), filter([lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0)))], [lnnvl(cast(t1.c2 > 2, TINYINT(-1, 0)))]), rowset=256
       access([t1.c1], [t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 insert into is_c1 select c1 from t1 where case when c1 > 1 then 1
                                                when c2 > 2 then 2
@@ -1741,7 +1741,7 @@ Outputs & filters:
       access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([t3.c1]), filter([t3.c1 > 0 AND 'aaa' = 'aaa']), rowset=256
+  3 - output([t3.c1]), filter([t3.c1 > 0]), rowset=256
       access([t3.c1]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
@@ -1802,7 +1802,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([lnnvl(cast(t1.c1 > 0, TINYINT(-1, 0))) AND 1 > 0]), rowset=256
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([lnnvl(cast(t1.c1 > 0, TINYINT(-1, 0)))]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -1944,8 +1944,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([(T_OP_AND, lnnvl(cast(t1.c1 > 0, TINYINT(-1, 0))), t1.c2 > 0, 2 > 1)], [t1.c1 
-      > 0], [t1.c2 > 0]), rowset=256
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([t1.c1 > 0], [t1.c2 > 0], [lnnvl(cast(t1.c1 > 0, TINYINT(-1, 0)))]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -2478,7 +2477,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([lnnvl(cast(t1.c1 > 0, TINYINT(-1, 0))) AND 0 = 0]), rowset=256
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([lnnvl(cast(t1.c1 > 0, TINYINT(-1, 0)))]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -2503,10 +2502,10 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([(T_OP_AND, lnnvl(cast(t1.c1 > 0, TINYINT(-1, 0))), lnnvl(cast(t1.c2 > 0, TINYINT(-1,
-       0))), t1.c3 > 0, 3 > 2)]), rowset=256
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([t1.c3 > 0], [lnnvl(cast(t1.c1 > 0, TINYINT(-1, 0)))], [lnnvl(cast(t1.c2 > 0,
+       TINYINT(-1, 0)))]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 where case when c1 > 0 then 1
                             when c2 > 0 then 2
@@ -2545,6 +2544,55 @@ select /*+no_rewrite*/ * from t1 where case when c1 > 0 then 1
 +------+------+------+------+------+------+
 +------+------+------+------+------+------+
 
+
+== case 14: false/null error at select expr
+EXPLAIN select /*+no_rewrite*/ case when c1 > 2 then 1 when null > 1 then 2 else 0 end > 1 from t1;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |5       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([CASE WHEN t1.c1 > 2 THEN 1 WHEN NULL > 1 THEN 2 ELSE 0 END > 1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select /*+no_rewrite*/ case when c1 > 2 then 1 when null > 1 then 2 else 0 end > 1 from t1;
++-------------------------------------------------------------+
+| case when c1 > 2 then 1 when null > 1 then 2 else 0 end > 1 |
++-------------------------------------------------------------+
+|                                                           0 |
+|                                                           0 |
+|                                                           0 |
+|                                                           0 |
+|                                                           0 |
++-------------------------------------------------------------+
+EXPLAIN select case when c1 > 2 then 1 when null > 1 then 2 else 0 end > 1 from t1;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |5       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([CASE WHEN t1.c1 > 2 THEN 1 WHEN NULL > 1 THEN 2 ELSE 0 END > 1]), filter(nil), rowset=256
+      access([t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select case when c1 > 2 then 1 when null > 1 then 2 else 0 end > 1 from t1;
++-------------------------------------------------------------+
+| case when c1 > 2 then 1 when null > 1 then 2 else 0 end > 1 |
++-------------------------------------------------------------+
+|                                                           0 |
+|                                                           0 |
+|                                                           0 |
+|                                                           0 |
+|                                                           0 |
++-------------------------------------------------------------+
+
 **************************** Joint when and then exprs test **************************** 
 
 == case 1 
@@ -2563,9 +2611,9 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([t1.c2 > 0 AND t1.c2 > 2]), rowset=256
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([t1.c2 > 0], [t1.c2 > 2]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 where 
 	case when 1 > 2 then 1
@@ -2944,9 +2992,9 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([(T_OP_AND, lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0))), t1.c2 > 1, 2 > 1)]), rowset=256
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([t1.c2 > 1], [lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0)))]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 where case when c1 > 1 then 1 when c2 > 1 then 2 else 0 end > 1;
 +------+------+------+------+------+------+
@@ -3025,9 +3073,9 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([(T_OP_AND, lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0))), t1.c2 > 1, 2 > 1)]), rowset=256
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([t1.c2 > 1], [lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0)))]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 where case when c1 > 1 then 1 when c2 > 1 then 2 else 0 end > 1;
 +------+------+------+------+------+------+
@@ -3071,9 +3119,9 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([(T_OP_AND, lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0))), t1.c2 > 1, 2 > 1)]), rowset=256
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([t1.c2 > 1], [lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0)))]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 where case when c1 > 1 then 1 when c2 > 1 then 2 else 0 end > 1;
 +------+------+------+------+------+------+
@@ -3152,9 +3200,9 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([(T_OP_AND, lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0))), t1.c2 > 1, 2 > 1)]), rowset=256
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([t1.c2 > 1], [lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0)))]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 where case when c1 > 1 then 1 when c2 > 1 then 2 else 0 end > 1;
 +------+------+------+------+------+------+
@@ -3216,9 +3264,9 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([(T_OP_AND, lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0))), t1.c2 > 1, 2 > 1)]), rowset=256
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([t1.c2 > 1], [lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0)))]), rowset=256
       access([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
 select * from t1 where case when c1 > 1 then 1 when c2 > 1 then 2 else 0 end > 1;
 +------+------+------+------+------+------+
@@ -3484,8 +3532,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([(T_OP_AND, lnnvl(cast(1 > 1, TINYINT(-1, 0))), lnnvl(cast(t1.c2 > 2, TINYINT(-1,
-       0))), lnnvl(cast(3 > 3, TINYINT(-1, 0))), 4 > 3)]), rowset=256
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([lnnvl(cast(t1.c2 > 2, TINYINT(-1, 0)))]), rowset=256
       access([t1.c2], [t1.c1], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -3546,17 +3593,18 @@ select /*+no_rewrite*/ * from t1 where case when c1 > 1 then 1 when c2 > 2 then 
 +------+------+------+------+------+------+
 EXPLAIN select * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else 0 end > 1;
 Query Plan
-===================================================
-|ID|OPERATOR       |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------
-|0 |TABLE FULL SCAN|t1(t1c2)|1       |13          |
-===================================================
+====================================================
+|ID|OPERATOR        |NAME    |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(t1c2)|2       |13          |
+====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([(T_OP_AND, lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0))), t1.c2 > 2, 2 > 1)]), rowset=256
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0)))]), rowset=256
       access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
-      range_key([t1.c2], [t1.__pk_increment]), range(2,MAX ; MAX,MAX)
+      range_key([t1.c2], [t1.__pk_increment]), range(2,MAX ; MAX,MAX), 
+      range_cond([t1.c2 > 2])
 select * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else 0 end > 1;
 +------+------+------+------+------+------+
 | c1   | c2   | c3   | c4   | c5   | c6   |
@@ -3585,17 +3633,18 @@ select /*+no_rewrite*/ * from t1 where case when c1 > 1 then 1 when c2 > 2 then 
 +------+------+------+------+------+------+
 EXPLAIN select * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 end > 1;
 Query Plan
-===================================================
-|ID|OPERATOR       |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------
-|0 |TABLE FULL SCAN|t1(t1c2)|1       |13          |
-===================================================
+====================================================
+|ID|OPERATOR        |NAME    |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(t1c2)|2       |13          |
+====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([(T_OP_AND, lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0))), t1.c2 > 2, 2 > 1)]), rowset=256
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), filter([lnnvl(cast(t1.c1 > 1, TINYINT(-1, 0)))]), rowset=256
       access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3], [t1.c4], [t1.c5], [t1.c6]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
-      range_key([t1.c2], [t1.__pk_increment]), range(2,MAX ; MAX,MAX)
+      range_key([t1.c2], [t1.__pk_increment]), range(2,MAX ; MAX,MAX), 
+      range_cond([t1.c2 > 2])
 select * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 end > 1;
 +------+------+------+------+------+------+
 | c1   | c2   | c3   | c4   | c5   | c6   |

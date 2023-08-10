@@ -458,6 +458,11 @@ select /*+no_rewrite*/ * from t1 where case when c1 > 0 then 1
                             else null
                        end > 2;
 
+--echo 
+--echo == case 14: false/null error at select expr
+select /*+no_rewrite*/ case when c1 > 2 then 1 when null > 1 then 2 else 0 end > 1 from t1;
+select case when c1 > 2 then 1 when null > 1 then 2 else 0 end > 1 from t1;
+
 
 --echo **************************** Joint when and then exprs test **************************** 
 --echo
