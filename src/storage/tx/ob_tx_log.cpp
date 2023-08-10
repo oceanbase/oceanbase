@@ -42,14 +42,54 @@ ObTxLogTypeChecker::need_replay_barrier(const ObTxLogType log_type,
 
       barrier_flag = logservice::ObReplayBarrierType::PRE_BARRIER;
 
-    } else if (data_source_type == ObTxDataSourceType::START_TRANSFER_IN
-               || data_source_type == ObTxDataSourceType::FINISH_TRANSFER_IN) {
+    } else if (data_source_type == ObTxDataSourceType::FINISH_TRANSFER_IN) {
 
+      barrier_flag = logservice::ObReplayBarrierType::STRICT_BARRIER;
+    }
+  } else if (ObTxLogType::TX_COMMIT_LOG == log_type) {
+    if (data_source_type == ObTxDataSourceType::START_TRANSFER_IN) {
       barrier_flag = logservice::ObReplayBarrierType::STRICT_BARRIER;
     }
   }
 
   return barrier_flag;
+}
+
+int ObTxLogTypeChecker::decide_final_barrier_type(
+    const logservice::ObReplayBarrierType tmp_log_barrier_type,
+    logservice::ObReplayBarrierType &final_barrier_type)
+{
+
+  int ret = OB_SUCCESS;
+  if (logservice::ObReplayBarrierType::NO_NEED_BARRIER == final_barrier_type
+      || logservice::ObReplayBarrierType::INVALID_BARRIER == final_barrier_type) {
+    final_barrier_type = tmp_log_barrier_type;
+
+  } else if (logservice::ObReplayBarrierType::NO_NEED_BARRIER == tmp_log_barrier_type) {
+    // do nothing
+  } else if (logservice::ObReplayBarrierType::PRE_BARRIER == tmp_log_barrier_type) {
+    if (logservice::ObReplayBarrierType::PRE_BARRIER == final_barrier_type
+        || logservice::ObReplayBarrierType::STRICT_BARRIER == final_barrier_type) {
+      // do nothing
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "Unkown final barrier type", K(ret), K(final_barrier_type),
+                K(tmp_log_barrier_type));
+    }
+
+  } else if (logservice::ObReplayBarrierType::STRICT_BARRIER == tmp_log_barrier_type) {
+
+    if (logservice::ObReplayBarrierType::PRE_BARRIER == final_barrier_type) {
+      final_barrier_type = tmp_log_barrier_type;
+    } else if (logservice::ObReplayBarrierType::STRICT_BARRIER == final_barrier_type) {
+      // do nothing
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "Unkown final barrier type", K(ret), K(final_barrier_type),
+                K(tmp_log_barrier_type));
+    }
+  }
+  return ret;
 }
 
 // ============================== Tx Log Header =============================
@@ -1136,8 +1176,10 @@ int ObTxLogBlock::rewrite_barrier_log_block(int64_t replay_hint,
   char *serialize_buf = nullptr;
   logservice::ObLogBaseHeader header(logservice::ObLogBaseType::TRANS_SERVICE_LOG_BASE_TYPE,
                                      barrier_type, replay_hint);
-  if (OB_ISNULL(fill_buf_.get_buf())) {
+  if (OB_ISNULL(fill_buf_.get_buf())
+      || logservice::ObReplayBarrierType::INVALID_BARRIER == barrier_type) {
     ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid arguments", K(ret), K(replay_hint), K(barrier_type), KPC(this));
   } else {
     serialize_buf = fill_buf_.get_buf();
   }
@@ -1150,7 +1192,6 @@ int ObTxLogBlock::rewrite_barrier_log_block(int64_t replay_hint,
   } else if (OB_FAIL(header.serialize(serialize_buf, len_, tmp_pos))) {
     TRANS_LOG(WARN, "serialize log base header error", K(ret));
   }
-
 
   return ret;
 }

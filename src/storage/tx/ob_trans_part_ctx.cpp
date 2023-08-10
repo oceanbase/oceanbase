@@ -1483,7 +1483,7 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (FALSE_IT(ctx_info.exec_info_.mrege_buffer_ctx_array_to_multi_data_source())) {
-    } else if (OB_FAIL(deep_copy_mds_array(ctx_info.exec_info_.multi_data_source_, _unused_))) {
+    } else if (OB_FAIL(deep_copy_mds_array_(ctx_info.exec_info_.multi_data_source_, _unused_))) {
       TRANS_LOG(WARN, "deep copy ctx_info mds_array failed", K(ret));
     } else if (FALSE_IT(ctx_info.exec_info_.clear_buffer_ctx_in_multi_data_source())) {
       // clear it cause buffer ctx memory need released
@@ -3233,6 +3233,7 @@ int ObPartTransCtx::submit_commit_log_()
                              coord_prepare_info_arr_);
     ObTxLogCb *log_cb = NULL;
     bool redo_log_submitted = false;
+    logservice::ObReplayBarrierType commit_log_barrier_type =  logservice::ObReplayBarrierType::NO_NEED_BARRIER;
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(set_start_scn_in_commit_log_(commit_log))) {
@@ -3240,6 +3241,10 @@ int ObPartTransCtx::submit_commit_log_()
       } else if ((exec_info_.multi_data_source_.count() > 0 || mds_cache_.count() > 0)
                  && OB_FAIL(try_alloc_retain_ctx_func_())) {
         TRANS_LOG(WARN, "alloc retain ctx func for mds trans failed", K(ret), K(mds_cache_), KPC(this));
+      } else if (OB_FAIL(decide_state_log_barrier_type_(ObTxLogType::TX_COMMIT_LOG,
+                                                        commit_log_barrier_type))) {
+        TRANS_LOG(WARN, "decide commit log barrier type failed", K(ret), K(commit_log_barrier_type),
+                  KPC(this));
       }
     }
 
@@ -3292,11 +3297,11 @@ int ObPartTransCtx::submit_commit_log_()
             TRANS_LOG(WARN, "add new log failed", KR(ret), K(*this));
             return_log_cb_(log_cb);
             log_cb = NULL;
-          // } else if (need_commit_barrier()
-          //            && OB_FAIL(log_block.rewrite_barrier_log_block(trans_id_.get_id(), true))) {
-          //   TRANS_LOG(WARN, "rewrite commit log barrier failed", K(ret));
-          //   return_log_cb_(log_cb);
-          //   log_cb = NULL;
+          } else if (commit_log_barrier_type != logservice::ObReplayBarrierType::NO_NEED_BARRIER
+                     && OB_FAIL(log_block.rewrite_barrier_log_block(trans_id_.get_id(), commit_log_barrier_type))) {
+            TRANS_LOG(WARN, "rewrite commit log barrier failed", K(ret));
+            return_log_cb_(log_cb);
+            log_cb = NULL;
           } else if (log_block.get_cb_arg_array().count() == 0) {
             ret = OB_ERR_UNEXPECTED;
             TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
@@ -3330,11 +3335,11 @@ int ObPartTransCtx::submit_commit_log_()
         return_log_cb_(log_cb);
         log_cb = NULL;
       }
-    // } else if (need_commit_barrier()
-    //            && OB_FAIL(log_block.rewrite_barrier_log_block(trans_id_.get_id(), true))) {
-    //   TRANS_LOG(WARN, "rewrite commit log barrier failed", K(ret));
-    //   return_log_cb_(log_cb);
-    //   log_cb = NULL;
+    } else if (commit_log_barrier_type != logservice::ObReplayBarrierType::NO_NEED_BARRIER
+               && OB_FAIL(log_block.rewrite_barrier_log_block(trans_id_.get_id(), commit_log_barrier_type))) {
+      TRANS_LOG(WARN, "rewrite commit log barrier failed", K(ret));
+      return_log_cb_(log_cb);
+      log_cb = NULL;
     } else if (log_block.get_cb_arg_array().count() == 0) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
@@ -5243,7 +5248,7 @@ int ObPartTransCtx::replay_multi_data_source(const ObTxMultiDataSourceLog &log,
   if (OB_FAIL(ret)) {
     // do nothing
   //TODO & ATTENTION: deep copy a part of the mds array in the log twice after recovered from the tx_ctx_table
-  } else if (OB_FAIL(deep_copy_mds_array(log.get_data(), increamental_array))) {
+  } else if (OB_FAIL(deep_copy_mds_array_(log.get_data(), increamental_array))) {
     TRANS_LOG(WARN, "deep copy mds array failed", K(ret));
   } else if (OB_FAIL(notify_data_source_(NotifyType::REGISTER_SUCC,
                                          timestamp,
@@ -5932,7 +5937,7 @@ int ObPartTransCtx::gen_total_mds_array_(ObTxBufferNodeArray &mds_array) const
   return ret;
 }
 
-int ObPartTransCtx::deep_copy_mds_array(const ObTxBufferNodeArray &mds_array,
+int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
                                         ObTxBufferNodeArray &incremental_array,
                                         bool need_replace)
 {
@@ -6060,6 +6065,53 @@ int ObPartTransCtx::deep_copy_mds_array(const ObTxBufferNodeArray &mds_array,
         TRANS_LOG(WARN, "push back incremental_array failed", K(ret));
       }
     }
+  }
+
+  return ret;
+}
+
+int ObPartTransCtx::decide_state_log_barrier_type_(
+    const ObTxLogType &state_log_type,
+    logservice::ObReplayBarrierType &final_barrier_type)
+{
+  int ret = OB_SUCCESS;
+
+  final_barrier_type = logservice::ObReplayBarrierType::NO_NEED_BARRIER;
+
+  logservice::ObReplayBarrierType mds_cache_final_log_barrier_type =
+      logservice::ObReplayBarrierType::NO_NEED_BARRIER;
+  logservice::ObReplayBarrierType tmp_state_log_barrier_type =
+      logservice::ObReplayBarrierType::NO_NEED_BARRIER;
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(mds_cache_.decide_cache_state_log_mds_barrier_type(
+            state_log_type, mds_cache_final_log_barrier_type))) {
+      TRANS_LOG(WARN, "decide mds cache state log barrier type failed", K(ret), K(state_log_type),
+                K(mds_cache_final_log_barrier_type), KPC(this));
+    } else {
+      final_barrier_type = mds_cache_final_log_barrier_type;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    for (int i = 0; i < exec_info_.multi_data_source_.count() && OB_SUCC(ret); i++) {
+
+      tmp_state_log_barrier_type = ObTxLogTypeChecker::need_replay_barrier(
+          state_log_type, exec_info_.multi_data_source_[i].get_data_source_type());
+      if (OB_FAIL(ObTxLogTypeChecker::decide_final_barrier_type(tmp_state_log_barrier_type,
+                                                                final_barrier_type))) {
+        TRANS_LOG(WARN, "decide one mds node barrier type failed", K(ret),
+                  K(tmp_state_log_barrier_type), K(final_barrier_type), K(state_log_type),
+                  K(exec_info_.multi_data_source_[i]), KPC(this));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && final_barrier_type != logservice::ObReplayBarrierType::NO_NEED_BARRIER
+      && final_barrier_type != logservice::ObReplayBarrierType::INVALID_BARRIER) {
+    TRANS_LOG(INFO, "decide a valid barrier type for state_log", K(ret),
+              K(mds_cache_final_log_barrier_type), K(final_barrier_type), K(state_log_type),
+              KPC(this));
   }
 
   return ret;

@@ -21,6 +21,7 @@
 #include "lib/list/ob_dlist.h"
 #include "share/ob_ls_id.h"
 #include "logservice/palf/lsn.h"
+#include "ob_tx_ctx_mds.h"
 #include "ob_one_phase_committer.h"
 #include "ob_two_phase_committer.h"
 #include <cstdint>
@@ -538,9 +539,11 @@ private:
                           const bool is_force_kill = false);
   int gen_final_mds_array_(ObTxBufferNodeArray &array, bool is_committing = true) const;
   int gen_total_mds_array_(ObTxBufferNodeArray &mds_array) const;
-  int deep_copy_mds_array(const ObTxBufferNodeArray &mds_array,
-                          ObTxBufferNodeArray &incremental_array,
-                          bool need_replace = false);
+  int deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
+                           ObTxBufferNodeArray &incremental_array,
+                           bool need_replace = false);
+  int decide_state_log_barrier_type_(const ObTxLogType &state_log_type,
+                                     logservice::ObReplayBarrierType &final_barrier_type);
   bool is_contain_mds_type_(const ObTxDataSourceType target_type);
   int submit_multi_data_source_();
   int submit_multi_data_source_(ObTxLogBlock &log_block);

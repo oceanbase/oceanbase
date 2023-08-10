@@ -19,6 +19,7 @@
 #include "storage/ob_storage_log_type.h"
 #include "share/config/ob_server_config.h"
 #include "ob_trans_define.h"
+#include "ob_tx_ctx_mds.h"
 #include "ob_trans_event.h"
 #include "share/ob_ls_id.h"
 #include "logservice/ob_log_handler.h"

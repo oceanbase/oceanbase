@@ -324,6 +324,7 @@ ob_set_subtarget(ob_storage tx
   tx/ob_xa_rpc.cpp
   tx/ob_xa_service.cpp
   tx/ob_xa_trans_heartbeat_worker.cpp
+  tx/ob_tx_ctx_mds.cpp
   tx/ob_multi_data_source.cpp
   tx/ob_tx_free_route.cpp
   tx/ob_tx_free_route_state.cpp

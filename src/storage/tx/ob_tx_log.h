@@ -170,7 +170,11 @@ public:
   #endif
         ;
   }
-  static logservice::ObReplayBarrierType need_replay_barrier(const ObTxLogType log_type, const ObTxDataSourceType data_source_type);
+
+  static logservice::ObReplayBarrierType
+  need_replay_barrier(const ObTxLogType log_type, const ObTxDataSourceType data_source_type);
+  static int decide_final_barrier_type(const logservice::ObReplayBarrierType tmp_log_barrier_type,
+                                       logservice::ObReplayBarrierType &final_barrier_type);
 };
 
 // ============================== Tx Log Header ==============================
