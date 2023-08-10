@@ -2826,64 +2826,98 @@ int ObPreProcessSysVars::change_initial_value()
     LOG_WARN("fail to change initial value", K(OB_SV_VERSION_COMMENT),
              K(ObSpecialSysVarValues::version_comment_));
 
-
+  } else if (OB_FAIL(ObSysVariables::set_base_value(OB_SV_VERSION_COMMENT,
+                                               ObSpecialSysVarValues::version_comment_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_VERSION_COMMENT),
+             K(ObSpecialSysVarValues::version_comment_));
   // OB_SV_SYSTEM_TIME_ZONE
   } else if (OB_FAIL(ObSysVariables::set_value(OB_SV_SYSTEM_TIME_ZONE,
                                                ObSpecialSysVarValues::system_time_zone_str_))) {
     LOG_WARN("fail to change initial value", K(OB_SV_SYSTEM_TIME_ZONE),
              K(ObSpecialSysVarValues::system_time_zone_str_));
-
+  } else if (OB_FAIL(ObSysVariables::set_base_value(OB_SV_SYSTEM_TIME_ZONE,
+                                               ObSpecialSysVarValues::system_time_zone_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_SYSTEM_TIME_ZONE),
+             K(ObSpecialSysVarValues::system_time_zone_str_));
   // charset和collation相关
   // OB_SV_CHARACTER_SET_SERVER
   } else if (OB_FAIL(ObSysVariables::set_value(OB_SV_CHARACTER_SET_SERVER,
                                              ObSpecialSysVarValues::default_coll_int_str_))) {
     LOG_WARN("fail to change initial value", K(ret), K(OB_SV_CHARACTER_SET_SERVER),
              K(ObSpecialSysVarValues::default_coll_int_str_));
-
+  } else if (OB_FAIL(ObSysVariables::set_base_value(OB_SV_CHARACTER_SET_SERVER,
+                                             ObSpecialSysVarValues::default_coll_int_str_))) {
+    LOG_WARN("fail to change initial value", K(ret), K(OB_SV_CHARACTER_SET_SERVER),
+             K(ObSpecialSysVarValues::default_coll_int_str_));
   // OB_SV_CHARACTER_SET_CONNECTION
   } else if (OB_FAIL(ObSysVariables::set_value(OB_SV_CHARACTER_SET_CONNECTION,
                                              ObSpecialSysVarValues::default_coll_int_str_))) {
     LOG_WARN("fail to change initial value", K(OB_SV_CHARACTER_SET_CONNECTION),
              K(ObSpecialSysVarValues::default_coll_int_str_));
-
+  } else if (OB_FAIL(ObSysVariables::set_base_value(OB_SV_CHARACTER_SET_CONNECTION,
+                                             ObSpecialSysVarValues::default_coll_int_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_CHARACTER_SET_CONNECTION),
+             K(ObSpecialSysVarValues::default_coll_int_str_));
   // OB_SV_CHARACTER_SET_CLIENT
   } else if (OB_FAIL(ObSysVariables::set_value(OB_SV_CHARACTER_SET_CLIENT,
                                              ObSpecialSysVarValues::default_coll_int_str_))) {
     LOG_WARN("fail to change initial value", K(OB_SV_CHARACTER_SET_CLIENT),
              K(ObSpecialSysVarValues::default_coll_int_str_));
-
+  } else if (OB_FAIL(ObSysVariables::set_base_value(OB_SV_CHARACTER_SET_CLIENT,
+                                             ObSpecialSysVarValues::default_coll_int_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_CHARACTER_SET_CLIENT),
+             K(ObSpecialSysVarValues::default_coll_int_str_));
   // OB_SV_CHARACTER_SET_RESULTS
   } else if (OB_FAIL(ObSysVariables::set_value(OB_SV_CHARACTER_SET_RESULTS,
                                              ObSpecialSysVarValues::default_coll_int_str_))) {
     LOG_WARN("fail to change initial value", K(OB_SV_CHARACTER_SET_RESULTS),
              K(ObSpecialSysVarValues::default_coll_int_str_));
-
+  } else if (OB_FAIL(ObSysVariables::set_base_value(OB_SV_CHARACTER_SET_RESULTS,
+                                             ObSpecialSysVarValues::default_coll_int_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_CHARACTER_SET_RESULTS),
+             K(ObSpecialSysVarValues::default_coll_int_str_));
   // OB_SV_CHARACTER_SET_SYSTEM
   } else if (OB_FAIL(ObSysVariables::set_value(OB_SV_CHARACTER_SET_SYSTEM,
                                              ObSpecialSysVarValues::default_coll_int_str_))) {
     LOG_WARN("fail to change initial value", K(OB_SV_CHARACTER_SET_SYSTEM),
              K(ObSpecialSysVarValues::default_coll_int_str_));
-
+  } else if (OB_FAIL(ObSysVariables::set_base_value(OB_SV_CHARACTER_SET_SYSTEM,
+                                             ObSpecialSysVarValues::default_coll_int_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_CHARACTER_SET_SYSTEM),
+             K(ObSpecialSysVarValues::default_coll_int_str_));
   // OB_SV_COLLATION_SERVER
   } else if (OB_FAIL(ObSysVariables::set_value(OB_SV_COLLATION_SERVER,
                                              ObSpecialSysVarValues::default_coll_int_str_))) {
     LOG_WARN("fail to change initial value", K(OB_SV_COLLATION_SERVER),
              K(ObSpecialSysVarValues::default_coll_int_str_));
-
+  } else if (OB_FAIL(ObSysVariables::set_base_value(OB_SV_COLLATION_SERVER,
+                                             ObSpecialSysVarValues::default_coll_int_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_COLLATION_SERVER),
+             K(ObSpecialSysVarValues::default_coll_int_str_));
   // OB_SV_COLLATION_DATABASE
   } else if (OB_FAIL(ObSysVariables::set_value(OB_SV_COLLATION_DATABASE,
                                              ObSpecialSysVarValues::default_coll_int_str_))) {
     LOG_WARN("fail to change initial value", K(OB_SV_COLLATION_DATABASE),
              K(ObSpecialSysVarValues::default_coll_int_str_));
-
+  } else if (OB_FAIL(ObSysVariables::set_base_value(OB_SV_COLLATION_DATABASE,
+                                             ObSpecialSysVarValues::default_coll_int_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_COLLATION_DATABASE),
+             K(ObSpecialSysVarValues::default_coll_int_str_));
   // OB_SV_COLLATION_CONNECTION
   } else if (OB_FAIL(ObSysVariables::set_value(OB_SV_COLLATION_CONNECTION,
                                              ObSpecialSysVarValues::default_coll_int_str_))) {
     LOG_WARN("fail to change initial value", K(OB_SV_COLLATION_CONNECTION),
              K(ObSpecialSysVarValues::default_coll_int_str_));
-
+  } else if (OB_FAIL(ObSysVariables::set_base_value(OB_SV_COLLATION_CONNECTION,
+                                             ObSpecialSysVarValues::default_coll_int_str_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_COLLATION_CONNECTION),
+             K(ObSpecialSysVarValues::default_coll_int_str_));
   // OB_SV_SERVER_UUID
   } else if (OB_FAIL(ObSysVariables::set_value(OB_SV_SERVER_UUID,
+                                               ObSpecialSysVarValues::server_uuid_))) {
+    LOG_WARN("fail to change initial value", K(OB_SV_SERVER_UUID),
+             K(ObSpecialSysVarValues::server_uuid_));
+  } else if (OB_FAIL(ObSysVariables::set_base_value(OB_SV_SERVER_UUID,
                                                ObSpecialSysVarValues::server_uuid_))) {
     LOG_WARN("fail to change initial value", K(OB_SV_SERVER_UUID),
              K(ObSpecialSysVarValues::server_uuid_));
@@ -2896,7 +2930,6 @@ int ObPreProcessSysVars::change_initial_value()
   }
   return ret;
 }
-
 int ObPreProcessSysVars::init_sys_var()
 {
   int ret = OB_SUCCESS;
