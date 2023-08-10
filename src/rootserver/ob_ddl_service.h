@@ -1601,7 +1601,8 @@ private:
       common::hash::ObHashSet<ObColumnNameHashWrapper> &update_column_name_set);
   int check_generated_column_modify_authority(
       const share::schema::ObColumnSchemaV2 &old_column_schema,
-      const share::schema::AlterColumnSchema &alter_column_schema);
+      const share::schema::AlterColumnSchema &alter_column_schema,
+      bool is_oracle_mode);
   int update_generated_column_schema(
       const share::schema::AlterColumnSchema &alter_column_schema,
       const share::schema::ObColumnSchemaV2 &orig_column_schema,

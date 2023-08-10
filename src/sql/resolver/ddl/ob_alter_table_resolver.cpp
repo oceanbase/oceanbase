@@ -4445,7 +4445,8 @@ int ObAlterTableResolver::resolve_alter_table_column_definition(AlterColumnSchem
                                                                 ObColumnResolveStat &stat,
                                                                 bool &is_modify_column_visibility,
                                                         ObIArray<ObColumnSchemaV2 *> &resolved_cols,
-                                                                const bool is_oracle_temp_table)
+                                                                const bool is_oracle_temp_table,
+                                                                const bool allow_has_default)
 {
   int ret = OB_SUCCESS;
   common::ObString pk_name;
@@ -4463,7 +4464,10 @@ int ObAlterTableResolver::resolve_alter_table_column_definition(AlterColumnSchem
     LOG_WARN("failed to assign a table schema", K(ret));
   } else if (OB_FAIL(resolve_column_definition(column, node, stat,
               is_modify_column_visibility, pk_name,
-              is_oracle_temp_table))) {
+              is_oracle_temp_table,
+              false,
+              false,
+              allow_has_default))) {
     SQL_RESV_LOG(WARN, "resolve column definition failed", K(ret));
   } else if (is_mysql_mode()){ // add column level constraint
     add_or_modify_check_cst_times_ += alter_table_schema.get_constraint_count() - cst_cnt;
@@ -5069,12 +5073,14 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
 
       if (OB_SUCC(ret)) {
         ObSEArray<ObColumnSchemaV2 *, 8> resolved_cols;
+        bool allow_has_default = !(is_oracle_mode() && origin_col_schema->is_generated_column());
         if (OB_FAIL(get_table_schema_all_column_schema(resolved_cols, alter_table_stmt->get_alter_table_schema()))) {
           SQL_RESV_LOG(WARN, "failed to get table column schema", K(ret));
         } else if (OB_FAIL(resolve_alter_table_column_definition(
                     alter_column_schema, node.children_[i], stat, is_modify_column_visibility,
                     resolved_cols,
-                    table_schema_->is_oracle_tmp_table()))) {
+                    table_schema_->is_oracle_tmp_table(),
+                    allow_has_default))) {
           SQL_RESV_LOG(WARN, "resolve column definition failed", K(ret));
         } else if (!is_oracle_mode() && !stat.is_primary_key_ &&
                   OB_FAIL(resolve_alter_column_not_null(alter_column_schema, *origin_col_schema))) {

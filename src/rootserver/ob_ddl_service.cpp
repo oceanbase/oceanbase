@@ -6473,6 +6473,7 @@ int ObDDLService::pre_check_orig_column_schema(
   const ObColumnSchemaV2 *orig_column_schema = origin_table_schema.get_column_schema(orig_column_name);
   const ObColumnSchemaV2 *column_schema_from_old_table_schema = origin_table_schema.get_column_schema(orig_column_name);
   ObColumnNameHashWrapper orig_column_key(orig_column_name);
+  bool is_oracle_mode = false;
   if (NULL == column_schema_from_old_table_schema) {
     ret = OB_ERR_BAD_FIELD_ERROR;
     LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, orig_column_name.length(), orig_column_name.ptr(),
@@ -6487,14 +6488,16 @@ int ObDDLService::pre_check_orig_column_schema(
                     origin_table_schema.get_table_name_str().length(),
                     origin_table_schema.get_table_name_str().ptr());
     LOG_WARN("column that has been altered, can't not update again", K(ret));
-  } else if (OB_FAIL(check_generated_column_modify_authority(*orig_column_schema, alter_column_schema))) {
+  } else if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to check if tenant mode is oracle mode", K(ret));
+  } else if (OB_FAIL(check_generated_column_modify_authority(*orig_column_schema, alter_column_schema, is_oracle_mode))) {
     LOG_WARN("check generated column modify authority", K(ret), KPC(orig_column_schema), K(alter_column_schema));
   }
   return ret;
 }
 
 int ObDDLService::check_generated_column_modify_authority(
-    const ObColumnSchemaV2 &old_column_schema, const AlterColumnSchema &alter_column_schema)
+    const ObColumnSchemaV2 &old_column_schema, const AlterColumnSchema &alter_column_schema, bool is_oracle_mode)
 {
   int ret = OB_SUCCESS;
   if (old_column_schema.is_generated_column() && alter_column_schema.is_generated_column()) {
@@ -6516,8 +6519,17 @@ int ObDDLService::check_generated_column_modify_authority(
       LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN, "Changing the STORED status");
     }
   } else if (old_column_schema.is_generated_column() || alter_column_schema.is_generated_column()) {
-    ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
-    LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN, "Changing the STORED status");
+    if (is_oracle_mode && old_column_schema.is_generated_column()
+        && old_column_schema.get_data_type() != alter_column_schema.get_data_type()) {
+      ret = OB_ERR_MODIFY_TYPE_OF_GENCOL;
+      LOG_WARN("cannot change the data-type of virtual column without modifying the underlying expression", K(ret), K(old_column_schema), K(alter_column_schema));
+    } else if (is_oracle_mode && alter_column_schema.is_generated_column()) {
+      ret = OB_ERR_MODIFY_REALCOL_TO_GENCOL;
+      LOG_WARN("cannot alter a real column to have an expression", K(ret), K(old_column_schema), K(alter_column_schema));
+    } else {
+      ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
+      LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN, "Changing the STORED status");
+    }
   }
   return ret;
 }

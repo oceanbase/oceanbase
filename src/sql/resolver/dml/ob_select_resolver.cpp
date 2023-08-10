@@ -4765,6 +4765,9 @@ int ObSelectResolver::resolve_into_clause(const ParseNode *node)
     } else if (OB_UNLIKELY(is_in_set_query())) {
       ret = OB_INAPPROPRIATE_INTO;
       LOG_WARN("select into can not in set query", K(ret));
+    } else if (is_mysql_mode() && params_.is_from_create_view_) {
+      ret = OB_ERR_VIEW_SELECT_CONTAIN_INTO;
+      LOG_WARN("View's SELECT contains a 'INTO' clause.", K(ret));
     } else {
       new(into_item) ObSelectIntoItem();
       into_item->into_type_ = node->type_;

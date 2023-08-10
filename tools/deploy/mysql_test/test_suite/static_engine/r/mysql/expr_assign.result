@@ -312,12 +312,9 @@ select @a;
 +------+
 drop view if exists vv;
 create view vv as select @a;
+ERROR HY000: View's SELECT contains a variable or parameter
 desc vv;
-+-------+--------------------+------+-----+---------+-------+
-| Field | Type               | Null | Key | Default | Extra |
-+-------+--------------------+------+-----+---------+-------+
-| @a    | varbinary(1048576) | NO   |     |         |       |
-+-------+--------------------+------+-----+---------+-------+
+ERROR 42S02: Table 'oceanbase.vv' doesn't exist
 
 select @a := null;
 +------------+
@@ -333,10 +330,7 @@ select @a;
 +------+
 drop view if exists vv;
 create view vv as select @a;
+ERROR HY000: View's SELECT contains a variable or parameter
 desc vv;
-+-------+--------------------+------+-----+---------+-------+
-| Field | Type               | Null | Key | Default | Extra |
-+-------+--------------------+------+-----+---------+-------+
-| @a    | varbinary(1048576) | NO   |     |         |       |
-+-------+--------------------+------+-----+---------+-------+
+ERROR 42S02: Table 'oceanbase.vv' doesn't exist
 

@@ -2582,6 +2582,9 @@ int ObRawExprResolverImpl::process_system_variable_node(const ParseNode *node, O
   if (OB_ISNULL(node) || OB_ISNULL(ctx_.sys_vars_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(node), K_(ctx_.sys_vars));
+  } else if (!ctx_.is_variable_allowed_) {
+    ret = OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK;
+    LOG_WARN("View's SELECT contains a variable or parameter", K(ret));
   } else {
     ObString str;
     str.assign_ptr(const_cast<char *>(node->str_value_), static_cast<int32_t>(node->str_len_));
@@ -2919,6 +2922,9 @@ int ObRawExprResolverImpl::process_user_var_node(const ParseNode *node, ObRawExp
              OB_ISNULL(node->children_[0])) {
     ret = OB_ERR_PARSER_SYNTAX;
     LOG_WARN("invalid node children for get user_val", K(ret), K(node->num_child_));
+  } else if (!ctx_.is_variable_allowed_) {
+    ret = OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK;
+    LOG_WARN("View's SELECT contains a variable or parameter", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::build_get_user_var(
       ctx_.expr_factory_,
       ObString(static_cast<int32_t>(node->children_[0]->str_len_), node->children_[0]->str_value_),

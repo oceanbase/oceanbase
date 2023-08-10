@@ -855,6 +855,10 @@ constexpr int OB_ERR_FUNCTIONAL_INDEX_ON_FIELD = -5499;
 constexpr int OB_ERR_GENCOL_LEGIT_CHECK_FAILED = -5500;
 constexpr int OB_ERR_GROUPING_FUNC_WITHOUT_GROUP_BY = -5501;
 constexpr int OB_ERR_DEPENDENT_BY_PARTITION_FUNC = -5502;
+constexpr int OB_ERR_VIEW_SELECT_CONTAIN_INTO = -5503;
+constexpr int OB_ERR_DEFAULT_NOT_ALLOWED = -5504;
+constexpr int OB_ERR_MODIFY_REALCOL_TO_GENCOL = -5505;
+constexpr int OB_ERR_MODIFY_TYPE_OF_GENCOL = -5506;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
 constexpr int OB_ERR_SP_UNDECLARED_VAR = -5543;
@@ -2796,6 +2800,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_GENCOL_LEGIT_CHECK_FAILED__USER_ERROR_MSG "Legitimacy check failed for generated columns."
 #define OB_ERR_GROUPING_FUNC_WITHOUT_GROUP_BY__USER_ERROR_MSG "GROUPING function only supported with GROUP BY CUBE or ROLLUP"
 #define OB_ERR_DEPENDENT_BY_PARTITION_FUNC__USER_ERROR_MSG "Column '%.*s' has a partitioning function dependency and cannot be dropped or renamed."
+#define OB_ERR_VIEW_SELECT_CONTAIN_INTO__USER_ERROR_MSG "View's SELECT contains a 'INTO' clause."
+#define OB_ERR_DEFAULT_NOT_ALLOWED__USER_ERROR_MSG "Virtual column cannot have a default value"
+#define OB_ERR_MODIFY_REALCOL_TO_GENCOL__USER_ERROR_MSG "Real column cannot have an expression"
+#define OB_ERR_MODIFY_TYPE_OF_GENCOL__USER_ERROR_MSG "cannot modify data-type of virtual column"
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__USER_ERROR_MSG "Undeclared variable: %.*s"
@@ -4906,6 +4914,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_GENCOL_LEGIT_CHECK_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5500, Legitimacy check failed for generated columns."
 #define OB_ERR_GROUPING_FUNC_WITHOUT_GROUP_BY__ORA_USER_ERROR_MSG "ORA-30481: GROUPING function only supported with GROUP BY CUBE or ROLLUP"
 #define OB_ERR_DEPENDENT_BY_PARTITION_FUNC__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5502, Column '%.*s' has a partitioning function dependency and cannot be dropped or renamed."
+#define OB_ERR_VIEW_SELECT_CONTAIN_INTO__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5503, View's SELECT contains a 'INTO' clause."
+#define OB_ERR_DEFAULT_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-54025: Virtual column cannot have a default value"
+#define OB_ERR_MODIFY_REALCOL_TO_GENCOL__ORA_USER_ERROR_MSG "ORA-54026: Real column cannot have an expression"
+#define OB_ERR_MODIFY_TYPE_OF_GENCOL__ORA_USER_ERROR_MSG "ORA-54027: cannot modify data-type of virtual column"
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5542, %s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__ORA_USER_ERROR_MSG "PLS-00201: identifier '%.*s' must be declared"
@@ -5991,7 +6003,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2106];
+extern int g_all_ob_errnos[2110];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

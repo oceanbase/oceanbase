@@ -52,7 +52,9 @@ select @a;
 --disable_warnings
 drop view if exists vv;
 --enable_warnings
+--error 1351
 create view vv as select @a;
+--error 1146
 desc vv;
 
 select @a := null;
@@ -60,7 +62,9 @@ select @a;
 --disable_warnings
 drop view if exists vv;
 --enable_warnings
+--error 1351
 create view vv as select @a;
+--error 1146
 desc vv;
 
 sleep 2;

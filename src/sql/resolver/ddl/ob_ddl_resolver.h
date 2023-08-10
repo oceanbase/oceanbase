@@ -459,7 +459,8 @@ protected:
       common::ObString &pk_name,
       const bool is_oracle_temp_table = false,
       const bool is_create_table_as = false,
-      const bool is_external_table = false);
+      const bool is_external_table = false,
+      const bool allow_has_default = true);
   int resolve_uk_name_from_column_attribute(
       ParseNode *attrs_node,
       common::ObString &uk_name);
@@ -478,7 +479,8 @@ protected:
   int resolve_normal_column_attribute(share::schema::ObColumnSchemaV2 &column,
                                       ParseNode *attrs_node,
                                       ObColumnResolveStat &reslove_stat,
-                                      common::ObString &pk_name);
+                                      common::ObString &pk_name,
+                                      const bool allow_has_default = true);
   int resolve_normal_column_attribute_check_cons(ObColumnSchemaV2 &column,
                                                  ParseNode *attrs_node,
                                                  ObCreateTableStmt *create_table_stmt);
