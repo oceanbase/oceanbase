@@ -1594,6 +1594,9 @@ int ObTableScanOp::local_iter_rescan()
         }
       }
       if (OB_SUCC(ret)) {
+        if (MY_SPEC.gi_above_) {
+          scan_op->set_gi_above_and_rescan(true);
+        }
         if (OB_FAIL(cherry_pick_range_by_tablet_id(scan_op))) {
           LOG_WARN("prune query range by partition id failed", K(ret));
         } else if (OB_FAIL(init_das_group_range(0, group_size_))) {
