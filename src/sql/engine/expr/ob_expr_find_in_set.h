@@ -30,6 +30,10 @@ public:
 																common::ObExprTypeCtx &type_ctx) const;
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                        ObExpr &rt_expr) const;
+  virtual bool need_rt_ctx() const override
+  {
+    return true;
+  }
   static int calc_find_in_set_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
 private:
 	 DISALLOW_COPY_AND_ASSIGN(ObExprFindInSet);

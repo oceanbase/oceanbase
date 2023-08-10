@@ -35,6 +35,7 @@
 #include "sql/engine/expr/ob_expr_cmp_func.h"
 #include "sql/engine/expr/ob_expr_extra_info_factory.h"
 #include "sql/engine/expr/ob_i_expr_extra_info.h"
+#include "lib/hash/ob_hashset.h"
 
 
 #define GET_EXPR_CTX(ClassType, ctx, id) static_cast<ClassType *>((ctx).get_expr_op_ctx(id))
@@ -2029,6 +2030,17 @@ public:
 private:
   common::ObFixedArray<common::ObDFMElem, common::ObIAllocator> dfm_elems_;
   common::ObFixedBitSet<common::OB_DEFAULT_BITSET_SIZE_FOR_DFM> elem_flags_;
+};
+
+class ObExprFindIntCachedValue : public ObExprOperatorCtx
+{
+  typedef common::hash::ObHashMap<common::ObString, uint64_t, hash::NoPthreadDefendMode> HASH_MAP_TYPE;
+public:
+  ObExprFindIntCachedValue() {}
+  virtual ~ObExprFindIntCachedValue();
+  HASH_MAP_TYPE &get_hashmap() { return hash_map_; }
+private:
+  HASH_MAP_TYPE hash_map_;
 };
 
 class ObExprTRDateFormat

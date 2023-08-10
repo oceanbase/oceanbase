@@ -1523,6 +1523,9 @@ int ObExprDFMConvertCtx::parse_format(const ObString &format_str,
   return ret;
 }
 
+ObExprFindIntCachedValue::~ObExprFindIntCachedValue() {
+}
+
 ObObjType ObExprOperator::enumset_calc_types_[ObMaxTC] =
 {
   ObUInt64Type,/*ObNullTC*/
