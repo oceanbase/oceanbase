@@ -225,7 +225,7 @@ public:
     : is_locked_(false),
     trans_version_(share::SCN::min_scn()),
     lock_trans_id_(),
-    lock_data_sequence_(0),
+    lock_data_sequence_(),
     lock_dml_flag_(blocksstable::ObDmlFlag::DF_NOT_EXIST),
     is_delayed_cleanout_(false),
     mvcc_row_(NULL),
@@ -243,7 +243,7 @@ public:
   bool is_locked_;
   share::SCN trans_version_;
   transaction::ObTransID lock_trans_id_;
-  int64_t lock_data_sequence_;
+  transaction::ObTxSEQ lock_data_sequence_;
   blocksstable::ObDmlFlag lock_dml_flag_;
   bool is_delayed_cleanout_;
   memtable::ObMvccRow *mvcc_row_;

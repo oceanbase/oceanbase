@@ -337,7 +337,7 @@ public:
   }
   virtual int write_lock_yield();
 
-  virtual void update_max_submitted_seq_no(const int64_t seq_no) override;
+  virtual void update_max_submitted_seq_no(const transaction::ObTxSEQ seq_no) override;
 public:
   virtual void set_read_only();
   virtual void inc_ref();
@@ -401,7 +401,7 @@ public:
   int remove_callback_for_uncommited_txn(
     const memtable::ObMemtableSet *memtable_set,
     const share::SCN max_applied_scn);
-  int rollback(const int64_t seq_no, const int64_t from_seq_no);
+  int rollback(const transaction::ObTxSEQ seq_no, const transaction::ObTxSEQ from_seq_no);
   bool is_all_redo_submitted();
   bool is_for_replay() const { return trans_mgr_.is_for_replay(); }
   int64_t get_trans_mem_total_size() const { return trans_mem_total_size_; }
@@ -494,7 +494,7 @@ private:
   int clear_table_lock_(const bool is_commit,
                         const share::SCN &commit_version,
                         const share::SCN &commit_scn);
-  int rollback_table_lock_(int64_t seq_no);
+  int rollback_table_lock_(transaction::ObTxSEQ seq_no);
   int register_multi_source_data_if_need_(
       const transaction::tablelock::ObTableLockOp &lock_op,
       const bool is_replay);

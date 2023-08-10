@@ -40,13 +40,13 @@ OB_SERIALIZE_MEMBER(ObWriteFlag, flag_);
 // effort to sort out these posibilities(listed in the following cases), new
 // possibility should be added carefully and remind the owner of the code.
 int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_flag,
-                                 const int64_t reader_seq_no,
+                                 const transaction::ObTxSEQ reader_seq_no,
                                  const transaction::ObTransID writer_tx_id,
                                  const blocksstable::ObDmlFlag writer_dml_flag,
-                                 const int64_t writer_seq_no,
+                                 const transaction::ObTxSEQ writer_seq_no,
                                  const transaction::ObTransID locker_tx_id,
                                  const blocksstable::ObDmlFlag locker_dml_flag,
-                                 const int64_t locker_seq_no)
+                                 const transaction::ObTxSEQ locker_seq_no)
 {
   int ret = OB_SUCCESS;
   // TODO(handora.qc): add flag to carefully screen out the different cases. For

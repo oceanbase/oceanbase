@@ -186,7 +186,7 @@ public:
                                          const ObExprPtrIArray &exprs,
                                          ObChunkDatumStore::StoredRow *&new_row);
   static int catch_violate_error(int err_ret,
-                                 int64_t savepoint_no,
+                                 transaction::ObTxSEQ savepoint_no,
                                  ObDMLRtCtx &dml_rtctx,
                                  ObErrLogRtDef &err_log_rt_def,
                                  ObErrLogCtDef &error_logging_ctdef,
@@ -209,9 +209,9 @@ public:
   static int set_heap_table_hidden_pk(const ObInsCtDef &ins_ctdef,
                                       const common::ObTabletID &tablet_id,
                                       ObEvalCtx &eval_ctx);
-  static int create_anonymous_savepoint(transaction::ObTxDesc &tx_desc, int64_t &savepoint);
+  static int create_anonymous_savepoint(transaction::ObTxDesc &tx_desc, transaction::ObTxSEQ &savepoint);
   static int rollback_local_savepoint(transaction::ObTxDesc &tx_desc,
-                                      int64_t savepoint,
+                                      const transaction::ObTxSEQ savepoint,
                                       int64_t expire_ts);
   static int check_local_index_affected_rows(int64_t table_affected_rows,
                                              int64_t index_affected_rows,
@@ -364,7 +364,7 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet_with_ignore(DMLIterator &
     LOG_WARN("begin write iterator failed", K(ret));
   }
   while (OB_SUCC(ret) && OB_SUCC(write_iter.get_next_row(dml_row))) {
-    int64_t savepoint_no = 0;
+    transaction::ObTxSEQ savepoint_no;
     int64_t table_affected_rows = 0;
     ObDASWriteBuffer single_row_buffer;
     ObDASWriteBuffer::DmlShadowRow dsr;

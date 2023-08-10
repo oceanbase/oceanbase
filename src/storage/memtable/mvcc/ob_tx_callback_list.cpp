@@ -246,7 +246,7 @@ int ObTxCallbackList::remove_callbacks_for_remove_memtable(
   return ret;
 }
 
-int ObTxCallbackList::remove_callbacks_for_rollback_to(const int64_t to_seq_no)
+int ObTxCallbackList::remove_callbacks_for_rollback_to(const transaction::ObTxSEQ to_seq_no)
 {
   int ret = OB_SUCCESS;
   SpinLockGuard guard(latch_);
@@ -266,14 +266,14 @@ int ObTxCallbackList::remove_callbacks_for_rollback_to(const int64_t to_seq_no)
   } else {
     callback_mgr_.add_rollback_to_callback_remove_cnt(functor.get_remove_cnt());
     ensure_checksum_(functor.get_checksum_last_scn());
-    TRANS_LOG(DEBUG, "remove callbacks for rollback to", KP(to_seq_no), K(functor), K(*this));
+    TRANS_LOG(DEBUG, "remove callbacks for rollback to", K(to_seq_no), K(functor), K(*this));
   }
 
 
   return ret;
 }
 
-int ObTxCallbackList::reverse_search_callback_by_seq_no(const int64_t seq_no,
+int ObTxCallbackList::reverse_search_callback_by_seq_no(const transaction::ObTxSEQ seq_no,
                                                         ObITransCallback *search_res)
 {
   int ret = OB_SUCCESS;

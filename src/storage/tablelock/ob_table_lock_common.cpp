@@ -161,7 +161,7 @@ void ObTableLockOp::set(
     const ObTransID &trans_id,
     const ObTableLockOpType type,
     const ObTableLockOpStatus lock_op_status,
-    const int64_t seq_no,
+    const ObTxSEQ seq_no,
     const int64_t create_timestamp,
     const int64_t create_schema_version)
 {

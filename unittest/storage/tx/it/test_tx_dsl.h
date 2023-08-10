@@ -50,7 +50,7 @@
     ASSERT_EQ(OB_SUCCESS, n1->get_read_snapshot(tx, tx_param.isolation_, n1->ts_after_ms(100), snapshot));
 
 #define CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, sp)                 \
-    int64_t sp = 0;                                                     \
+    ObTxSEQ sp;                                                         \
     ASSERT_EQ(OB_SUCCESS, n1->create_implicit_savepoint(tx, tx_param, sp));
 
 #define ROLLBACK_TO_IMPLICIT_SAVEPOINT(n1, tx, sp, timeout_us)          \

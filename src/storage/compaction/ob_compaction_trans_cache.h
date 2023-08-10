@@ -32,11 +32,11 @@ namespace compaction
 struct ObMergeCachedTransKey {
   ObMergeCachedTransKey()
     : trans_id_(),
-      sql_sequence_(0)
+      sql_sequence_()
   {}
   ObMergeCachedTransKey(
     transaction::ObTransID trans_id,
-    int64_t sql_sequence)
+    transaction::ObTxSEQ sql_sequence)
     : trans_id_(trans_id),
       sql_sequence_(sql_sequence)
   {}
@@ -48,17 +48,18 @@ struct ObMergeCachedTransKey {
   inline uint64_t hash() const
   {
     uint64_t hash_value = trans_id_.hash();
-    hash_value = murmurhash(&sql_sequence_, sizeof(sql_sequence_), hash_value);
+    uint64_t seq_hash = sql_sequence_.hash();
+    hash_value = murmurhash(&seq_hash, sizeof(seq_hash), hash_value);
     return hash_value;
   }
   inline bool is_valid() const
   {
-    return trans_id_.is_valid() && 0 != sql_sequence_;
+    return trans_id_.is_valid() && sql_sequence_.is_valid();
   }
   TO_STRING_KV(K_(trans_id), K_(sql_sequence));
 
   transaction::ObTransID trans_id_;
-  int64_t sql_sequence_;
+  transaction::ObTxSEQ sql_sequence_;
 };
 
 struct ObMergeCachedTransState {
@@ -71,7 +72,7 @@ struct ObMergeCachedTransState {
   {}
   ObMergeCachedTransState(
     transaction::ObTransID trans_id,
-    int64_t sql_sequence,
+    transaction::ObTxSEQ sql_sequence,
     int64_t trans_version,
     int32_t trans_state,
     int16_t can_read,
@@ -111,10 +112,10 @@ public:
   int init(int64_t max_cnt);
   void destroy();
   inline uint64_t cal_idx(const ObMergeCachedTransKey &key) { return key.hash() % max_cnt_; }
-  int get_trans_state(const transaction::ObTransID &trans_id, const int64_t sql_seq, ObMergeCachedTransState &trans_state);
+  int get_trans_state(const transaction::ObTransID &trans_id, const transaction::ObTxSEQ &sql_seq, ObMergeCachedTransState &trans_state);
   int add_trans_state(
     const transaction::ObTransID &trans_id,
-    const int64_t sql_seq,
+    const transaction::ObTxSEQ &sql_seq,
     const int64_t trans_version,
     const int32_t trans_state,
     const int16_t can_read,

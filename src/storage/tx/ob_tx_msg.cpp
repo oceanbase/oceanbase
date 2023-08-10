@@ -281,7 +281,7 @@ bool ObTxRollbackSPMsg::is_valid() const
 {
   bool ret = false;
   if (ObTxMsg::is_valid() && type_ == ROLLBACK_SAVEPOINT
-      && savepoint_ > -1 && op_sn_ > -1) {
+      && savepoint_.is_valid() && op_sn_ > -1) {
     ret = true;
   }
   return ret;

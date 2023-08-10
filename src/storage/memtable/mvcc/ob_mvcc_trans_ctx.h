@@ -49,7 +49,7 @@ struct RedoDataNode
            const uint32_t acc_checksum,
            const int64_t version,
            const int32_t flag,
-           const int64_t seq_no,
+           const transaction::ObTxSEQ seq_no,
            const common::ObTabletID &tablet_id,
            const int64_t column_cnt);
   void set_callback(ObITransCallback *callback) { callback_ = callback; }
@@ -61,7 +61,7 @@ struct RedoDataNode
   uint32_t acc_checksum_;
   int64_t version_;
   int32_t flag_; // currently, unused
-  int64_t seq_no_;
+  transaction::ObTxSEQ seq_no_;
   ObITransCallback *callback_;
   common::ObTabletID tablet_id_;
   int64_t column_cnt_;
@@ -74,7 +74,7 @@ struct TableLockRedoDataNode
           const common::ObTabletID &tablet_id,
           ObITransCallback *callback);
   ObMemtableKey key_;
-  int64_t seq_no_;
+  transaction::ObTxSEQ seq_no_;
   ObITransCallback *callback_;
   common::ObTabletID tablet_id_;
 
@@ -215,8 +215,8 @@ public:
   int trans_end(const bool commit);
   int replay_fail(const share::SCN scn);
   int replay_succ(const share::SCN scn);
-  int rollback_to(const int64_t seq_no,
-                  const int64_t from_seq_no);
+  int rollback_to(const transaction::ObTxSEQ seq_no,
+                  const transaction::ObTxSEQ from_seq_no);
   void set_for_replay(const bool for_replay);
   bool is_for_replay() const { return ATOMIC_LOAD(&for_replay_); }
   int remove_callbacks_for_fast_commit(const ObITransCallback *generate_cursor,
@@ -349,7 +349,7 @@ public:
       memtable_(memtable),
       is_link_(false),
       not_calc_checksum_(false),
-      seq_no_(0),
+      seq_no_(),
       column_cnt_(0)
   {}
   ObMvccRowCallback(ObMvccRowCallback &cb, ObMemtable *memtable) :
@@ -372,12 +372,12 @@ public:
   void set_is_link() { is_link_ = true; }
   void unset_is_link() { is_link_ = false; }
   void set(const ObMemtableKey *key,
-            ObMvccTransNode *node,
-            const int64_t data_size,
-            const ObRowData *old_row,
-            const bool is_replay,
-            const int64_t seq_no,
-            const int64_t column_cnt)
+           ObMvccTransNode *node,
+           const int64_t data_size,
+           const ObRowData *old_row,
+           const bool is_replay,
+           const transaction::ObTxSEQ seq_no,
+           const int64_t column_cnt)
   {
     UNUSED(is_replay);
 
@@ -413,7 +413,7 @@ public:
   const ObMemtableKey *get_key() { return &key_; }
   int get_memtable_key(uint64_t &table_id, common::ObStoreRowkey &rowkey) const;
   bool is_logging_blocked() const override;
-  int64_t get_seq_no() const { return seq_no_; }
+  transaction::ObTxSEQ get_seq_no() const { return seq_no_; }
   int get_trans_id(transaction::ObTransID &trans_id) const;
   int get_cluster_version(uint64_t &cluster_version) const override;
   transaction::ObTransCtx *get_trans_ctx() const;
@@ -470,7 +470,7 @@ private:
     bool is_link_ : 1;
     bool not_calc_checksum_ : 1;
   };
-  int64_t seq_no_;
+  transaction::ObTxSEQ seq_no_;
   int64_t column_cnt_;
 };
 

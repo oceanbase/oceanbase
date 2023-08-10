@@ -1002,7 +1002,7 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
   uint32_t acc_checksum = 0;
   int64_t version = 0;
   int32_t flag = 0;
-  int64_t seq_no = 0;
+  transaction::ObTxSEQ seq_no;
   int64_t column_cnt = 0;
   ObStoreRowkey rowkey;
   ObRowData row;
@@ -1079,7 +1079,7 @@ int ObMemtable::lock_row_on_frozen_stores_(
   int ret = OB_SUCCESS;
   ObStoreRowLockState &lock_state = res.lock_state_;
   ObStoreCtx &ctx = *(context.store_ctx_);
-  const int64_t reader_seq_no = ctx.mvcc_acc_ctx_.snapshot_.scn_;
+  const auto reader_seq_no = ctx.mvcc_acc_ctx_.snapshot_.scn_;
   if (OB_ISNULL(value) || !ctx.mvcc_acc_ctx_.is_write() || NULL == key) {
     TRANS_LOG(WARN, "invalid param", KP(value), K(ctx), KP(key));
     ret = OB_INVALID_ARGUMENT;

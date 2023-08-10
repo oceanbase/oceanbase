@@ -636,7 +636,7 @@ int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id
       audit_record.upd_reset_snapshot_ = true;
       ObSpinLockGuard guard(tx->lock_);
       tx->snapshot_version_.reset();
-      tx->snapshot_scn_ = 0;
+      tx->snapshot_scn_.reset();
     }
   } else if (header.flag_.is_fallback()) {
     audit_record.upd_fallback_ = true;

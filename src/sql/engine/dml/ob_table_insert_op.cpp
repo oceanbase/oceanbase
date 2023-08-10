@@ -229,7 +229,7 @@ void ObTableInsertOp::record_err_for_load_data(int err_ret, int row_num)
 OB_INLINE int ObTableInsertOp::insert_row_to_das()
 {
   int ret = OB_SUCCESS;
-  int64_t savepoint_no = 0;
+  transaction::ObTxSEQ savepoint_no;
   NG_TRACE(insert_start);
   // first get next row from child operator
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);

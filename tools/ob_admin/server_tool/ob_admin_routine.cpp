@@ -643,7 +643,7 @@ DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
   int64_t create_tx_id = 0;
   int64_t op_type = 0;
   int64_t lock_op_status = 1; // does not used.
-  int64_t seq_no = 0;
+  ObTxSEQ seq_no;
   int64_t create_timestamp = 0;
   int64_t create_schema_version = 0;
 
@@ -725,7 +725,7 @@ DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
   int64_t lock_op_status = 1;
   int64_t commit_version = 0;
   int64_t commit_scn = 0;
-  int64_t seq_no = 0;
+  ObTxSEQ seq_no;
   int64_t create_timestamp = 0;
   int64_t create_schema_version = 0;
 

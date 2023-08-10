@@ -41,7 +41,7 @@ void RedoDataNode::set(const ObMemtableKey *key,
                        const uint32_t acc_checksum,
                        const int64_t version,
                        const int32_t flag,
-                       const int64_t seq_no,
+                       const transaction::ObTxSEQ seq_no,
                        const common::ObTabletID &tablet_id,
                        const int64_t column_cnt)
 {
@@ -385,14 +385,11 @@ void ObTransCallbackMgr::after_append(ObITransCallback *node, const int ret_code
   }
 }
 
-int ObTransCallbackMgr::rollback_to(const int64_t to_seq_no,
-                                    const int64_t from_seq_no)
+int ObTransCallbackMgr::rollback_to(const ObTxSEQ to_seq_no,
+                                    const ObTxSEQ from_seq_no)
 {
   int ret = OB_SUCCESS;
-  if (0 > to_seq_no || 0 > from_seq_no) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), K(from_seq_no), K(to_seq_no));
-  } else if (OB_FAIL(callback_list_.remove_callbacks_for_rollback_to(to_seq_no))) {
+  if (OB_FAIL(callback_list_.remove_callbacks_for_rollback_to(to_seq_no))) {
     TRANS_LOG(WARN, "invalid argument", K(ret), K(from_seq_no), K(to_seq_no));
   }
   return ret;
@@ -1268,7 +1265,7 @@ int64_t ObMvccRowCallback::to_string(char *buf, const int64_t buf_len) const
       "seq_no=%ld, memtable=%p, scn=%s",
       this, to_cstring(ctx_), is_link_, need_fill_redo_,
       to_cstring(value_), NULL == tnode_ ? "null" : to_cstring(*tnode_),
-      seq_no_, memtable_, to_cstring(scn_));
+      seq_no_.cast_to_int(), memtable_, to_cstring(scn_));
   return pos;
 }
 

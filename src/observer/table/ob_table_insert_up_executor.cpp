@@ -586,7 +586,7 @@ int ObTableApiInsertUpExecutor::get_next_row()
 
   while (OB_SUCC(ret) && !is_iter_end) {
     int64_t insert_rows = 0;
-    int64_t savepoint_no = 0;
+    transaction::ObTxSEQ savepoint_no;
     // must set conflict_row fetch flag
     set_need_fetch_conflict();
     if (OB_FAIL(ObSqlTransControl::create_anonymous_savepoint(exec_ctx_, savepoint_no))) {

@@ -2109,7 +2109,7 @@ int ObLogFormatter::parse_aux_lob_meta_table_insert_(
     const transaction::ObTransID &trans_id = log_entry_task.get_trans_id();
     const uint64_t aux_lob_meta_table_id = stmt_task.get_table_id();
     ObLobId lob_id;
-    int64_t row_seq_no = stmt_task.get_row_seq_no();
+    const ObTxSEQ &row_seq_no = stmt_task.get_row_seq_no();
     const char *lob_data = nullptr;
     int64_t lob_data_len = 0;
     ObCDCLobAuxMetaStorager &lob_aux_meta_storager = TCTX.lob_aux_meta_storager_;
@@ -2143,7 +2143,7 @@ int ObLogFormatter::parse_aux_lob_meta_table_delete_(
     const transaction::ObTransID &trans_id = log_entry_task.get_trans_id();
     const uint64_t aux_lob_meta_table_id = stmt_task.get_table_id();
     ObLobId lob_id;
-    int64_t row_seq_no = stmt_task.get_row_seq_no();
+    const transaction::ObTxSEQ &row_seq_no = stmt_task.get_row_seq_no();
     const char *lob_data = nullptr;
     int64_t lob_data_len = 0;
     ObCDCLobAuxMetaStorager &lob_aux_meta_storager = TCTX.lob_aux_meta_storager_;

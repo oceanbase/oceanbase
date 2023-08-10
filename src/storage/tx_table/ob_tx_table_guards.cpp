@@ -54,7 +54,7 @@ namespace storage
 int ObTxTableGuards::check_row_locked(
     const transaction::ObTransID &read_tx_id,
     const transaction::ObTransID &data_tx_id,
-    const int64_t sql_sequence,
+    const transaction::ObTxSEQ &sql_sequence,
     const share::SCN &scn,
     storage::ObStoreRowLockState &lock_state)
 {
@@ -101,7 +101,7 @@ int ObTxTableGuards::check_row_locked(
 // The interface lock_for_read also applies this logic.
 int ObTxTableGuards::check_sql_sequence_can_read(
     const transaction::ObTransID &data_tx_id,
-    const int64_t sql_sequence,
+    const transaction::ObTxSEQ &sql_sequence,
     const share::SCN &scn,
     bool &can_read)
 {

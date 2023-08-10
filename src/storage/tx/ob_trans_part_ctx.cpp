@@ -304,8 +304,8 @@ void ObPartTransCtx::default_init_()
   sub_state_.reset();
   reset_log_cbs_();
   last_op_sn_ = 0;
-  last_scn_ = 0;
-  first_scn_ = 0;
+  last_scn_.reset();
+  first_scn_.reset();
   dup_table_follower_max_read_version_.reset();
   rec_log_ts_.reset();
   prev_rec_log_ts_.reset();
@@ -2906,7 +2906,7 @@ int ObPartTransCtx::submit_redo_active_info_log_()
   } else if (OB_FAIL(submit_redo_log_(log_block, has_redo, helper))) {
     TRANS_LOG(WARN, "submit redo log failed", KR(ret), K(*this));
   } else {
-    int64_t cur_submitted_seq_no = max(exec_info_.max_submitted_seq_no_, helper.max_seq_no_);
+    ObTxSEQ cur_submitted_seq_no = MAX(exec_info_.max_submitted_seq_no_, helper.max_seq_no_);
     ObTxActiveInfoLog active_info_log(exec_info_.scheduler_, exec_info_.trans_type_, session_id_,
                                       trace_info_.get_app_trace_id(),
                                       mt_ctx_.get_min_table_version(), can_elr_,
@@ -4682,8 +4682,8 @@ int ObPartTransCtx::replay_active_info(const ObTxActiveInfoLog &log,
     exec_info_.xid_ = log.get_xid();
     epoch_ = log.get_epoch();
     last_op_sn_ = log.get_last_op_sn();
-    first_scn_ = log.get_first_scn();
-    last_scn_ = log.get_last_scn();
+    first_scn_ = log.get_first_seq_no();
+    last_scn_ = log.get_last_seq_no();
     cluster_version_ = log.get_cluster_version();
     update_max_submitted_seq_no(log.get_max_submitted_seq_no());
     exec_info_.data_complete_ = true;
@@ -7054,7 +7054,7 @@ int ObPartTransCtx::check_status_()
  * 3) remember data_scn
  */
 int ObPartTransCtx::start_access(const ObTxDesc &tx_desc,
-                                 const int64_t data_scn)
+                                 const ObTxSEQ data_scn)
 {
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
@@ -7064,8 +7064,8 @@ int ObPartTransCtx::start_access(const ObTxDesc &tx_desc,
     TRANS_LOG(WARN, "stale access operation", K(ret),
               K_(tx_desc.op_sn), K_(last_op_sn), KPC(this), K(tx_desc));
   } else if (FALSE_IT(++pending_write_)) {
-  } else if (FALSE_IT(last_scn_ = std::max(data_scn, last_scn_))) {
-  } else if (first_scn_ == 0 && FALSE_IT(first_scn_ = last_scn_)) {
+  } else if (FALSE_IT(last_scn_ = MAX(data_scn, last_scn_))) {
+  } else if (!first_scn_.is_valid() && FALSE_IT(first_scn_ = last_scn_)) {
   } else if (tx_desc.op_sn_ != last_op_sn_) {
     last_op_sn_ = tx_desc.op_sn_;
   }
@@ -7080,7 +7080,7 @@ int ObPartTransCtx::start_access(const ObTxDesc &tx_desc,
                       OB_ID(ret), ret,
                       OB_ID(trace_id), ObCurTraceId::get_trace_id_str(),
                       OB_ID(opid), tx_desc.op_sn_,
-                      OB_ID(data_seq), data_scn,
+                      OB_ID(data_seq), data_scn.cast_to_int(),
                       OB_ID(pending), pending_write_,
                       OB_ID(ctx_ref), get_ref(),
                       OB_ID(thread_id), get_itid() + 1);
@@ -7136,8 +7136,8 @@ int ObPartTransCtx::end_access()
  *   when start_access was called
  */
 int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
-                                          const int64_t from_scn,
-                                          const int64_t to_scn)
+                                          const ObTxSEQ from_scn,
+                                          const ObTxSEQ to_scn)
 {
   int ret = OB_SUCCESS;
   bool need_write_log = false;
@@ -7172,8 +7172,8 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
   }
   REC_TRANS_TRACE_EXT(tlog_, rollback_savepoint,
                       OB_ID(ret), ret,
-                      OB_ID(from), from_scn,
-                      OB_ID(to), to_scn,
+                      OB_ID(from), from_scn.cast_to_int(),
+                      OB_ID(to), to_scn.cast_to_int(),
                       OB_ID(pending), pending_write_,
                       OB_ID(opid), op_sn,
                       OB_ID(thread_id), GETTID());
@@ -7184,8 +7184,8 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
   return ret;
 }
 
-int ObPartTransCtx::rollback_to_savepoint_(const int64_t from_scn,
-                                           const int64_t to_scn)
+int ObPartTransCtx::rollback_to_savepoint_(const ObTxSEQ from_scn,
+                                           const ObTxSEQ to_scn)
 {
   int ret = OB_SUCCESS;
 
@@ -7240,8 +7240,8 @@ int ObPartTransCtx::rollback_to_savepoint_(const int64_t from_scn,
   return ret;
 }
 
-int ObPartTransCtx::submit_rollback_to_log_(const int64_t from_scn,
-                                            const int64_t to_scn,
+int ObPartTransCtx::submit_rollback_to_log_(const ObTxSEQ from_scn,
+                                            const ObTxSEQ to_scn,
                                             ObTxData *tx_data)
 {
   int ret = OB_SUCCESS;
@@ -7278,8 +7278,10 @@ int ObPartTransCtx::submit_rollback_to_log_(const int64_t from_scn,
   } else {
     log_cb->set_tx_data(tx_data);
   }
-  REC_TRANS_TRACE_EXT(tlog_, submit_rollback_log, OB_ID(ret), ret, OB_ID(from), from_scn, OB_ID(to),
-                      to_scn);
+  REC_TRANS_TRACE_EXT(tlog_, submit_rollback_log,
+                      OB_ID(ret), ret,
+                      OB_ID(from), from_scn.cast_to_int(),
+                      OB_ID(to), to_scn.cast_to_int());
   TRANS_LOG(INFO, "RollbackToLog submit", K(ret), K(from_scn), K(to_scn), KP(log_cb), KPC(this));
   return ret;
 }

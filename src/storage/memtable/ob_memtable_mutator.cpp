@@ -230,7 +230,7 @@ ObMutator::ObMutator():
     row_size_(0),
     table_id_(OB_INVALID_ID),
     table_version_(0),
-    seq_no_(0)
+    seq_no_()
 {
   rowkey_.assign((ObObj*)obj_array_, OB_MAX_ROWKEY_COLUMN_NUMBER);
 }
@@ -239,7 +239,7 @@ ObMutator::ObMutator(
     const uint64_t table_id,
     const common::ObStoreRowkey &rowkey,
     const int64_t table_version,
-    const int64_t seq_no):
+    const transaction::ObTxSEQ seq_no):
     rowkey_(rowkey),
     row_size_(0),
     table_id_(table_id),
@@ -254,7 +254,7 @@ void ObMutator::reset()
   rowkey_.reset();
   rowkey_.get_rowkey().assign((ObObj*)obj_array_, OB_MAX_ROWKEY_COLUMN_NUMBER);
   table_version_ = 0;
-  seq_no_ = 0;
+  seq_no_.reset();
 }
 
 const char *get_mutator_type_str(MutatorType mutator_type)
@@ -341,7 +341,7 @@ ObMemtableMutatorRow::ObMemtableMutatorRow(const uint64_t table_id,
                                            const uint32_t acc_checksum,
                                            const int64_t version,
                                            const int32_t flag,
-                                           const int64_t seq_no,
+                                           const transaction::ObTxSEQ seq_no,
                                            const int64_t column_cnt):
     ObMutator(table_id, rowkey, table_version, seq_no),
     dml_flag_(dml_flag),
@@ -379,7 +379,7 @@ int ObMemtableMutatorRow::copy(uint64_t &table_id,
                                uint32_t &acc_checksum,
                                int64_t &version,
                                int32_t &flag,
-                               int64_t &seq_no,
+                               transaction::ObTxSEQ &seq_no,
                                int64_t &column_cnt) const
 {
   int ret = OB_SUCCESS;
@@ -429,7 +429,7 @@ int ObMemtableMutatorRow::serialize(char *buf, int64_t &buf_len, int64_t &pos,
         || OB_FAIL(encode_vi32(buf, buf_len, new_pos, acc_checksum_))
         || OB_FAIL(encode_vi64(buf, buf_len, new_pos, version_))
         || OB_FAIL(encode_vi32(buf, buf_len, new_pos, flag_))
-        || OB_FAIL(encode_vi64(buf, buf_len, new_pos, seq_no_))) {
+        || OB_FAIL(seq_no_.serialize(buf, buf_len, new_pos))) {
         if (OB_BUF_NOT_ENOUGH != ret || buf_len > common::OB_MAX_LOG_ALLOWED_SIZE) {
           TRANS_LOG(INFO, "serialize row fail", K(ret), KP(buf), K(buf_len), K(pos));
         }
@@ -505,7 +505,7 @@ int ObMemtableMutatorRow::deserialize(const char *buf, const int64_t buf_len, in
           }
         }
         if (OB_SUCC(ret) && (new_pos < decrypted_len)) {
-          if (OB_FAIL(decode_vi64(decrypted_buf, decrypted_len, new_pos, (int64_t *)&seq_no_))) {
+          if (OB_FAIL(seq_no_.deserialize(decrypted_buf, decrypted_len, new_pos))) {
             TRANS_LOG(WARN, "deserialize seq no fail", K(ret), K(table_id_), K(decrypted_len), K(new_pos));
           }
         }
@@ -541,7 +541,7 @@ ObMutatorTableLock::ObMutatorTableLock(
     const ObTableLockOwnerID owner_id,
     const ObTableLockMode lock_mode,
     const ObTableLockOpType lock_op_type,
-    const int64_t seq_no,
+    const transaction::ObTxSEQ seq_no,
     const int64_t create_timestamp,
     const int64_t create_schema_version) :
     ObMutator(table_id, rowkey, table_version, seq_no),
@@ -580,7 +580,7 @@ int ObMutatorTableLock::copy(ObLockID &lock_id,
                              ObTableLockOwnerID &owner_id,
                              ObTableLockMode &lock_mode,
                              ObTableLockOpType &lock_op_type,
-                             int64_t &seq_no,
+                             transaction::ObTxSEQ &seq_no,
                              int64_t &create_timestamp,
                              int64_t &create_schema_version) const
 {
@@ -607,7 +607,7 @@ int ObMutatorTableLock::serialize(
              OB_FAIL(owner_id_.serialize(buf, buf_len, new_pos)) ||
              OB_FAIL(encode_i8(buf, buf_len, new_pos, mode_)) ||
              OB_FAIL(encode_i8(buf, buf_len, new_pos, lock_type_)) ||
-             OB_FAIL(encode_vi64(buf, buf_len, new_pos, seq_no_)) ||
+             OB_FAIL(seq_no_.serialize(buf, buf_len, new_pos)) ||
              OB_FAIL(encode_vi64(buf, buf_len, new_pos, create_timestamp_)) ||
              OB_FAIL(encode_vi64(buf, buf_len, new_pos, create_schema_version_))) {
     if (OB_BUF_NOT_ENOUGH != ret
@@ -651,7 +651,7 @@ int ObMutatorTableLock::deserialize(
     TRANS_LOG(WARN, "deserialize lock mode fail", K(ret), K(pos), K(new_pos), K(row_size_), K(buf_len));
   } else if (OB_FAIL(decode_i8(buf, buf_len, new_pos, reinterpret_cast<int8_t*>(&lock_type_)))) {
     TRANS_LOG(WARN, "deserialize lock op type fail", K(ret), K(pos), K(new_pos), K(row_size_), K(buf_len));
-  } else if (OB_FAIL(decode_vi64(buf, buf_len, new_pos, &seq_no_))) {
+  } else if (OB_FAIL(seq_no_.deserialize(buf, buf_len, new_pos))) {
     TRANS_LOG(WARN, "deserialize seq no fail", K(ret));
   } else {
     // do nothing

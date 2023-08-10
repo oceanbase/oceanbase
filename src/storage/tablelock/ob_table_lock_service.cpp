@@ -50,12 +50,12 @@ ObTableLockService::ObTableLockCtx::ObTableLockCtx(const ObTableLockTaskType tas
     abs_timeout_ts_(),
     trans_state_(),
     tx_desc_(nullptr),
-    current_savepoint_(-1),
+    current_savepoint_(),
     tablet_list_(),
     schema_version_(-1),
     tx_is_killed_(false),
     is_from_sql_(false),
-    stmt_savepoint_(-1)
+    stmt_savepoint_()
 {
   abs_timeout_ts_ = (0 == timeout_us)
     ? ObTimeUtility::current_time() + DEFAULT_TIMEOUT_US
@@ -2869,7 +2869,7 @@ int ObTableLockService::start_sub_tx_(ObTableLockCtx &ctx)
     const ObTxParam &tx_param = ctx.tx_param_;
     const ObTxIsolationLevel &isolation_level = tx_param.isolation_;
     const int64_t expire_ts = ctx.abs_timeout_ts_;
-    int64_t &savepoint = ctx.current_savepoint_;
+    auto &savepoint = ctx.current_savepoint_;
     if (OB_FAIL(txs->create_implicit_savepoint(*ctx.tx_desc_,
                                                tx_param,
                                                savepoint))) {
@@ -2889,7 +2889,7 @@ int ObTableLockService::end_sub_tx_(ObTableLockCtx &ctx, const bool is_rollback)
   if (!ctx.is_savepoint_valid()) {
     LOG_INFO("end_sub_tx_ skip", K(ret), K(ctx));
   } else {
-    const int64_t &savepoint = ctx.current_savepoint_;
+    const auto &savepoint = ctx.current_savepoint_;
     const int64_t expire_ts = OB_MAX(ctx.abs_timeout_ts_, DEFAULT_TIMEOUT_US + ObTimeUtility::current_time());
     ObTransService *txs = MTL(ObTransService*);
     if (is_rollback &&
@@ -2921,7 +2921,7 @@ int ObTableLockService::start_stmt_(ObTableLockCtx &ctx)
     const ObTxParam &tx_param = ctx.tx_param_;
     const ObTxIsolationLevel &isolation_level = tx_param.isolation_;
     const int64_t expire_ts = ctx.abs_timeout_ts_;
-    int64_t &savepoint = ctx.stmt_savepoint_;
+    auto &savepoint = ctx.stmt_savepoint_;
     if (OB_FAIL(txs->create_implicit_savepoint(*ctx.tx_desc_,
                                                tx_param,
                                                savepoint))) {
@@ -2941,7 +2941,7 @@ int ObTableLockService::end_stmt_(ObTableLockCtx &ctx, const bool is_rollback)
   if (!ctx.is_stmt_savepoint_valid()) {
     LOG_INFO("end_stmt_ skip", K(ret), K(ctx));
   } else {
-    const int64_t &savepoint = ctx.stmt_savepoint_;
+    const auto &savepoint = ctx.stmt_savepoint_;
     const int64_t expire_ts = OB_MAX(ctx.abs_timeout_ts_, DEFAULT_TIMEOUT_US + ObTimeUtility::current_time());
     ObTransService *txs = MTL(ObTransService*);
     // just rollback the whole stmt, if it is needed.

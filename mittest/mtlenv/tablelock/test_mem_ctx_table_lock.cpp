@@ -288,12 +288,12 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
   // 1.1 add lock record
   LOG_INFO("TestMemCtxTableLock::rollback_table_lock 1.1");
   ObTableLockOp lock_op1 = DEFAULT_IN_TRANS_LOCK_OP;
-  lock_op1.lock_seq_no_ = 1;
+  lock_op1.lock_seq_no_ = ObTxSEQ(2, 0);
   ret = mem_ctx_.add_lock_record(lock_op1,
                                  lock_op_node);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTableLockOp lock_op2 = DEFAULT_OUT_TRANS_LOCK_OP;
-  lock_op2.lock_seq_no_ = 2;
+  lock_op2.lock_seq_no_ = ObTxSEQ(3, 0);
   ret = mem_ctx_.add_lock_record(lock_op2,
                                  lock_op_node);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -317,7 +317,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
   ASSERT_EQ(lock_exist, true);
   // 1.3 rollback
   LOG_INFO("TestMemCtxTableLock::rollback_table_lock 1.3");
-  int64_t rollback_to_seq_no = 1;
+  auto rollback_to_seq_no = ObTxSEQ(2, 0);
   ret = mem_ctx_.rollback_table_lock(rollback_to_seq_no);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = mem_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
@@ -338,7 +338,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
   ASSERT_EQ(lock_exist, false);
   // 1.4 rollback again
   LOG_INFO("TestMemCtxTableLock::rollback_table_lock 1.4");
-  rollback_to_seq_no = 0;
+  rollback_to_seq_no = ObTxSEQ(1, 0);
   ret = mem_ctx_.rollback_table_lock(rollback_to_seq_no);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = mem_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,

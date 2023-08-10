@@ -56,7 +56,7 @@ int ObIMvccCtx::register_row_commit_cb(
     const int64_t data_size,
     const ObRowData *old_row,
     ObMemtable *memtable,
-    const int64_t seq_no,
+    const transaction::ObTxSEQ seq_no,
     const int64_t column_cnt)
 {
   int ret = OB_SUCCESS;
@@ -104,7 +104,7 @@ int ObIMvccCtx::register_row_replay_cb(
     ObMvccTransNode *node,
     const int64_t data_size,
     ObMemtable *memtable,
-    const int64_t seq_no,
+    const transaction::ObTxSEQ seq_no,
     const SCN scn,
     const int64_t column_cnt)
 {

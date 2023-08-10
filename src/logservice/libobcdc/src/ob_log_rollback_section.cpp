@@ -20,7 +20,7 @@ namespace libobcdc
 {
 using namespace oceanbase::common;
 
-RollbackNode::RollbackNode(const int64_t rollback_from_seq, const int64_t rollback_to_seq)
+RollbackNode::RollbackNode(const transaction::ObTxSEQ &rollback_from_seq, const transaction::ObTxSEQ &rollback_to_seq)
   : from_seq_(rollback_from_seq),
     to_seq_(rollback_to_seq)
 {
@@ -28,16 +28,16 @@ RollbackNode::RollbackNode(const int64_t rollback_from_seq, const int64_t rollba
 
 RollbackNode::~RollbackNode()
 {
-  from_seq_ = -1;
-  to_seq_ = -1;
+  from_seq_.reset();
+  to_seq_.reset();
 }
 
 bool RollbackNode::is_valid() const
 {
-  return from_seq_ >= 0 && to_seq_ >= 0 && from_seq_ >= to_seq_;
+  return from_seq_.is_valid() && to_seq_.is_valid() && from_seq_ > to_seq_;
 }
 
-bool RollbackNode::should_rollback_stmt(const int64_t stmt_seq_no) const
+bool RollbackNode::should_rollback_stmt(const transaction::ObTxSEQ &stmt_seq_no) const
 {
   // note: from_seq is large than to_seq
   return from_seq_ >= stmt_seq_no && to_seq_ < stmt_seq_no;

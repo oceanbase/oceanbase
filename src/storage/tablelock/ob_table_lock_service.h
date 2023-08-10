@@ -93,11 +93,11 @@ private:
     const common::ObTabletID &get_tablet_id(const int64_t index) const;
     int add_touched_ls(const share::ObLSID &lsid);
     void clean_touched_ls();
-    bool is_savepoint_valid() { return -1 != current_savepoint_; }
-    void reset_savepoint() { current_savepoint_ = -1; }
+    bool is_savepoint_valid() { return current_savepoint_.is_valid(); }
+    void reset_savepoint() { current_savepoint_.reset(); }
 
-    bool is_stmt_savepoint_valid() { return -1 != stmt_savepoint_; }
-    void reset_stmt_savepoint() { stmt_savepoint_ = -1; }
+    bool is_stmt_savepoint_valid() { return stmt_savepoint_.is_valid(); }
+    void reset_stmt_savepoint() { stmt_savepoint_.reset(); }
     ObTableLockOpType get_lock_op_type() const { return lock_op_type_; }
     bool is_unlock_task() const
     {
@@ -135,7 +135,7 @@ private:
     sql::TransState trans_state_;
     transaction::ObTxDesc *tx_desc_;
     ObTxParam tx_param_;           // the tx param for current tx
-    int64_t current_savepoint_;    // used to rollback current sub tx.
+    transaction::ObTxSEQ current_savepoint_;    // used to rollback current sub tx.
     share::ObLSArray need_rollback_ls_; // which ls has been modified after
                                         // the current_savepoint_ created.
     common::ObTabletIDArray tablet_list_; // all the tablets need to be locked/unlocked
@@ -147,7 +147,7 @@ private:
     bool is_from_sql_;
 
     // use to kill the whole lock table stmt.
-    int64_t stmt_savepoint_;
+    transaction::ObTxSEQ stmt_savepoint_;
 
     TO_STRING_KV(K(is_in_trans_), K(table_id_), K(partition_id_),
                  K(tablet_list_), K(obj_list_), K(lock_op_type_),

@@ -3920,6 +3920,7 @@ int ObLSTabletService::insert_lob_col(
     // init lob access param
     ObLobAccessParam lob_param;
     lob_param.tx_desc_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_;
+    lob_param.parent_seq_no_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_scn_;
     lob_param.snapshot_ = run_ctx.dml_param_.snapshot_;
     lob_param.is_total_quantity_log_ = run_ctx.dml_param_.is_total_quantity_log_;
     if (lob_param.snapshot_.is_none_read()) {
@@ -4258,6 +4259,7 @@ int ObLSTabletService::process_delta_lob(
     ObLobAccessParam lob_param;
     // init lob param
     lob_param.tx_desc_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_;
+    lob_param.parent_seq_no_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_scn_;
     lob_param.snapshot_ = run_ctx.dml_param_.snapshot_;
     if (lob_param.snapshot_.is_none_read()) {
       // NOTE:
@@ -5311,6 +5313,7 @@ int ObLSTabletService::delete_lob_col(
         MEMCPY(buf, data.ptr(), data.length());
         lob_common = reinterpret_cast<ObLobCommon*>(buf);
         lob_param.tx_desc_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_;
+        lob_param.parent_seq_no_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_scn_;
         lob_param.snapshot_ = run_ctx.dml_param_.snapshot_;
         lob_param.tx_id_ = lob_param.tx_desc_->get_tx_id();
         lob_param.sql_mode_ = run_ctx.dml_param_.sql_mode_;

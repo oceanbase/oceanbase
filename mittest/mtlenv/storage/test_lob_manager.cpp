@@ -350,7 +350,7 @@ void TestLobManager::insert_lob_piece(
   // 2. create savepoint (can be rollbacked)
   ObTxParam tx_param;
   TestDmlCommon::build_tx_param(tx_param);
-  int64_t savepoint = 0;
+  ObTxSEQ savepoint;
   ASSERT_EQ(OB_SUCCESS, tx_service->create_implicit_savepoint(*tx_desc, tx_param, savepoint, true));
   // 3. acquire snapshot (write also need snapshot)
   ObTxIsolationLevel isolation = ObTxIsolationLevel::RC;
@@ -474,7 +474,7 @@ void TestLobManager::insert_lob_meta(
   // 2. create savepoint (can be rollbacked)
   ObTxParam tx_param;
   TestDmlCommon::build_tx_param(tx_param);
-  int64_t savepoint = 0;
+  ObTxSEQ savepoint;
   ASSERT_EQ(OB_SUCCESS, tx_service->create_implicit_savepoint(*tx_desc, tx_param, savepoint, true));
   // 3. acquire snapshot (write also need snapshot)
   ObTxIsolationLevel isolation = ObTxIsolationLevel::RC;
@@ -1053,7 +1053,7 @@ TEST_F(TestLobManager, DISABLED_basic3)
     // 2. create savepoint (can be rollbacked)
     ObTxParam tx_param;
     TestDmlCommon::build_tx_param(tx_param);
-    int64_t savepoint = 0;
+    ObTxSEQ savepoint;
     ASSERT_EQ(OB_SUCCESS, tx_service->create_implicit_savepoint(*tx_desc, tx_param, savepoint, true));
     // 3. acquire snapshot (write also need snapshot)
     ObTxIsolationLevel isolation = ObTxIsolationLevel::RC;
@@ -1134,7 +1134,7 @@ TEST_F(TestLobManager, DISABLED_basic3)
     // 2. create savepoint (can be rollbacked)
     ObTxParam tx_param;
     TestDmlCommon::build_tx_param(tx_param);
-    int64_t savepoint = 0;
+    ObTxSEQ savepoint;
     ASSERT_EQ(OB_SUCCESS, tx_service->create_implicit_savepoint(*tx_desc, tx_param, savepoint, true));
     // 3. acquire snapshot (write also need snapshot)
     ObTxIsolationLevel isolation = ObTxIsolationLevel::RC;

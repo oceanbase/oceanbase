@@ -182,9 +182,9 @@ public:
     const memtable::ObMemtableSet *memtable_set);
   int64_t get_trans_mem_total_size() const { return mt_ctx_.get_trans_mem_total_size(); }
 
-  void update_max_submitted_seq_no(const int64_t seq_no)
+  void update_max_submitted_seq_no(const ObTxSEQ seq_no)
   {
-    inc_update(&(exec_info_.max_submitted_seq_no_), seq_no);
+    exec_info_.max_submitted_seq_no_.inc_update(seq_no);
   }
   int check_with_tx_data(ObITxDataCheckFunctor &fn);
   const share::SCN get_rec_log_ts() const;
@@ -730,12 +730,12 @@ public:
    *            new created data will marked with this seq no
    */
   int start_access(const ObTxDesc &tx_desc,
-                   const int64_t data_seq);
+                   const ObTxSEQ data_seq);
   /*
    * end_access - end of txn protected resources access
    */
   int end_access();
-  int rollback_to_savepoint(const int64_t op_sn, const int64_t from_scn, const int64_t to_scn);
+  int rollback_to_savepoint(const int64_t op_sn, const ObTxSEQ from_scn, const ObTxSEQ to_scn);
   int set_block_frozen_memtable(memtable::ObMemtable *memtable);
   void clear_block_frozen_memtable();
   bool is_logging_blocked();
@@ -743,8 +743,8 @@ public:
 private:
   int check_status_();
   int tx_keepalive_response_(const int64_t status);
-  int rollback_to_savepoint_(const int64_t from_scn, const int64_t to_scn);
-  int submit_rollback_to_log_(const int64_t from_scn, const int64_t to_scn, ObTxData *tx_data);
+  int rollback_to_savepoint_(const ObTxSEQ from_scn, const ObTxSEQ to_scn);
+  int submit_rollback_to_log_(const ObTxSEQ from_scn, const ObTxSEQ to_scn, ObTxData *tx_data);
   int set_state_info_array_();
   void build_and_post_collect_state_msg_(const share::SCN &snapshot);
   int build_and_post_ask_state_msg_(const share::SCN &snapshot);
@@ -791,9 +791,9 @@ private:
   // latest operation sequence no, used to detect duplicate operation
   int64_t last_op_sn_;
   // data sequence no of latest access
-  int64_t last_scn_;
+  ObTxSEQ last_scn_;
   // data sequence no of first access
-  int64_t first_scn_;
+  ObTxSEQ first_scn_;
 private:
   TransModulePageAllocator reserve_allocator_;
   // ========================================================

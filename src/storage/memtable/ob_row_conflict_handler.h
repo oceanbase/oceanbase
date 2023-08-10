@@ -21,6 +21,7 @@ class ObMvccValueIterator;
 }
 namespace transaction {
 class ObTransID;
+class ObTxSEQ;
 }
 namespace common {
 class ObTabletID;
@@ -50,7 +51,7 @@ public:
   static int check_foreign_key_constraint_for_sstable(storage::ObTxTableGuards &tx_table_guards,
                                                       const transaction::ObTransID &read_trans_id,
                                                       const transaction::ObTransID &data_trans_id,
-                                                      const int64_t sql_sequence,
+                                                      const transaction::ObTxSEQ &sql_sequence,
                                                       const int64_t trans_version,
                                                       const int64_t snapshot_version,
                                                       const share::SCN &end_scn,

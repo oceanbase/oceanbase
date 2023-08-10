@@ -139,7 +139,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
   //        reader_tx_id.
   const ObTransID &snapshot_tx_id = ctx_->snapshot_.tx_id_;
   const ObTransID &reader_tx_id = ctx_->tx_id_;
-  const int64_t snapshot_seq_no = ctx_->snapshot_.scn_;
+  const ObTxSEQ snapshot_seq_no = ctx_->snapshot_.scn_;
 
   const SCN snapshot_version = ctx_->get_snapshot_version();
   const bool read_latest = flag.is_read_latest();

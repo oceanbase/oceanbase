@@ -838,7 +838,7 @@ int ObTableInsertUpOp::do_insert_up()
   bool is_iter_end = false;
   while (OB_SUCC(ret) && !is_iter_end) {
     int64_t insert_rows = 0;
-    int64_t savepoint_no = 0;
+    transaction::ObTxSEQ savepoint_no;
     // must set conflict_row fetch flag
     add_need_conflict_result_flag();
     NG_TRACE_TIMES(2, insert_up_load_all_row);

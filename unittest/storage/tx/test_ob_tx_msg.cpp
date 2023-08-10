@@ -119,7 +119,7 @@ public:
     msg.timestamp_ = op_sn_;
     msg.epoch_ = -1;
     msg.request_id_ = op_sn_;
-    msg.savepoint_ = 1;
+    msg.savepoint_ = ObTxSEQ(1, 0);
     msg.op_sn_ = op_sn_;
     msg.branch_id_ = 1;
     msg.tx_ptr_ = tx;

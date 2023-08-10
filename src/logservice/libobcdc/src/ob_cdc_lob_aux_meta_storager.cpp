@@ -203,7 +203,7 @@ int ObCDCLobAuxMetaStorager::del_lob_col_value_(
   } else {
     const uint64_t seq_no_start = lob_data_out_row_ctx->seq_no_st_;
     const uint32_t seq_no_cnt = lob_data_out_row_ctx->seq_no_cnt_;
-    uint64_t seq_no = seq_no_start;
+    auto seq_no = transaction::ObTxSEQ::cast_from_int(seq_no_start);
     const ObLobId &lob_id = lob_data_get_ctx.get_new_lob_data()->id_;
 
     for (int64_t idx = 0; OB_SUCC(ret) && idx < seq_no_cnt; ++idx, ++seq_no) {

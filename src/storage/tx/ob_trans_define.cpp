@@ -1100,7 +1100,7 @@ void ObTxExecInfo::reset()
   max_applied_log_ts_.reset();
   max_applying_log_ts_.reset();
   max_applying_part_log_no_ = INT64_MAX;
-  max_submitted_seq_no_ = 0;
+  max_submitted_seq_no_.reset();
   checksum_ = 0;
   checksum_scn_.set_min();
   max_durable_lsn_.reset();

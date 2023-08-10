@@ -1657,7 +1657,7 @@ int ObDMLService::convert_exprs_to_stored_row(ObIAllocator &allocator,
 }
 
 int ObDMLService::catch_violate_error(int err_ret,
-                                      int64_t savepoint_no,
+                                      transaction::ObTxSEQ savepoint_no,
                                       ObDMLRtCtx &dml_rtctx,
                                       ObErrLogRtDef &err_log_rt_def,
                                       ObErrLogCtDef &error_logging_ctdef,
@@ -1848,7 +1848,7 @@ int ObDMLService::check_nested_sql_legality(ObExecContext &ctx, common::ObTableI
   return ret;
 }
 
-int ObDMLService::create_anonymous_savepoint(ObTxDesc &tx_desc, int64_t &savepoint)
+int ObDMLService::create_anonymous_savepoint(ObTxDesc &tx_desc, transaction::ObTxSEQ &savepoint)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObSqlTransControl::create_anonymous_savepoint(tx_desc, savepoint))) {
@@ -1857,7 +1857,7 @@ int ObDMLService::create_anonymous_savepoint(ObTxDesc &tx_desc, int64_t &savepoi
   return ret;
 }
 
-int ObDMLService::rollback_local_savepoint(ObTxDesc &tx_desc, int64_t savepoint, int64_t expire_ts)
+int ObDMLService::rollback_local_savepoint(ObTxDesc &tx_desc, const transaction::ObTxSEQ savepoint, int64_t expire_ts)
 {
   int ret = OB_SUCCESS;
   ObTransService *tx = MTL(transaction::ObTransService*);

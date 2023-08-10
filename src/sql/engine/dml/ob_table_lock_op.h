@@ -125,7 +125,7 @@ protected:
   int submit_row_by_strategy();
 
 protected:
-  int64_t savepoint_no_;
+  transaction::ObTxSEQ savepoint_no_;
   LockRtDef2DArray lock_rtdefs_;
   bool need_return_row_;
 };

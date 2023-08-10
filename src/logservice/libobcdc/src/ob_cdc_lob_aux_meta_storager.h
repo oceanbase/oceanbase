@@ -31,7 +31,7 @@ struct LobAuxMetaKey
       const transaction::ObTransID &trans_id,
       const uint64_t aux_lob_meta_tid,
       const common::ObLobId &lob_id,
-      const int64_t seq_no) :
+      const transaction::ObTxSEQ &seq_no) :
     tenant_id_(tenant_id),
     trans_id_(trans_id),
     aux_lob_meta_tid_(aux_lob_meta_tid),
@@ -44,7 +44,7 @@ struct LobAuxMetaKey
   {
     return common::OB_INVALID_TENANT_ID != tenant_id_
       && common::OB_INVALID_ID != aux_lob_meta_tid_
-      && seq_no_ > 0;
+      && seq_no_.is_valid();
   }
 
   uint64_t hash() const
@@ -87,7 +87,7 @@ struct LobAuxMetaKey
   transaction::ObTransID trans_id_;
   uint64_t aux_lob_meta_tid_;
   common::ObLobId lob_id_;
-  int64_t seq_no_;
+  transaction::ObTxSEQ seq_no_;
 };
 
 struct LobAuxMetaValue

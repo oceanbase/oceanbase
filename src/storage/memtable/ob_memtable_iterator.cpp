@@ -1208,8 +1208,8 @@ int ObMemtableMultiVersionScanIterator::iterate_uncommitted_row_value_(ObDatumRo
   ObRowReader row_reader;
   const void *tnode = NULL;
   const ObMemtableDataHeader *mtd = NULL;
-  int64_t sql_seq = -1;
-  int64_t first_sql_sequence = -1;
+  transaction::ObTxSEQ sql_seq;
+  transaction::ObTxSEQ first_sql_sequence;
   int64_t trans_version = INT64_MAX;
   SCN trans_scn;
   bool same_sql_sequence_flag = true;
@@ -1219,7 +1219,7 @@ int ObMemtableMultiVersionScanIterator::iterate_uncommitted_row_value_(ObDatumRo
   } else {
     bitmap_.reuse();
     while (OB_SUCC(ret)) {
-      if (first_sql_sequence > -1
+      if (first_sql_sequence.is_valid()
           && OB_FAIL(value_iter_->check_next_sql_sequence(row.trans_id_, first_sql_sequence, same_sql_sequence_flag))) {
         TRANS_LOG(WARN, "failed to check next sql sequence", K(ret), K(tnode));
       } else if (!same_sql_sequence_flag) { // different sql sequence need break
@@ -1246,12 +1246,12 @@ int ObMemtableMultiVersionScanIterator::iterate_uncommitted_row_value_(ObDatumRo
           bool read_finished = false;
           if (OB_FAIL(row_reader.read_memtable_row(mtd->buf_, mtd->buf_len_, *read_info_, row, bitmap_, read_finished))) {
             TRANS_LOG(WARN, "Failed to read memtable row", K(ret));
-          } else if (-1 == first_sql_sequence) { // record sql sequence
+          } else if (!first_sql_sequence.is_valid()) { // record sql sequence
             first_sql_sequence = sql_seq;
             row.storage_datums_[trans_version_col_idx_].reuse();
             row.storage_datums_[sql_sequence_col_idx_].reuse();
             row.storage_datums_[trans_version_col_idx_].set_int(-trans_version);
-            row.storage_datums_[sql_sequence_col_idx_].set_int(-sql_seq);
+            row.storage_datums_[sql_sequence_col_idx_].set_int(-sql_seq.cast_to_int());
             row.row_flag_.set_flag(mtd->dml_flag_);
           } else {
             row.row_flag_.fuse_flag(mtd->dml_flag_);

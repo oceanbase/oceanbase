@@ -527,7 +527,7 @@ int ObLogPartTransParser::check_row_need_rollback_(
   int ret = OB_SUCCESS;
   need_rollback = false;
   const RollbackList &rollback_list = part_trans_task.get_rollback_list();
-  const int64_t row_seq_no = row.seq_no_;
+  const auto &row_seq_no = row.seq_no_;
   const RollbackNode *rollback_node = rollback_list.head_;
 
   while (OB_SUCC(ret) && OB_NOT_NULL(rollback_node) && ! need_rollback) {
@@ -790,7 +790,7 @@ int ObLogPartTransParser::parse_ddl_lob_aux_stmts_(
       const uint64_t tenant_id = part_trans_task.get_tenant_id();
       const transaction::ObTransID &trans_id = part_trans_task.get_trans_id();
       ObLobId lob_id;
-      int64_t row_seq_no = stmt_task->get_row_seq_no();
+      const transaction::ObTxSEQ &row_seq_no = stmt_task->get_row_seq_no();
       const char *lob_data = nullptr;
       int64_t lob_data_len = 0;
       ObCDCLobAuxMetaStorager &lob_aux_meta_storager = TCTX.lob_aux_meta_storager_;
@@ -862,7 +862,7 @@ int ObLogPartTransParser::parse_dml_stmts_(
   return ret;
 }
 
-int64_t ObLogPartTransParser::get_row_seq_(PartTransTask &task, MutatorRow &row) const
+const transaction::ObTxSEQ &ObLogPartTransParser::get_row_seq_(PartTransTask &task, MutatorRow &row) const
 {
   //return task.is_cluster_version_before_320() ? row.sql_no_ : row.seq_no_;
   return row.seq_no_;

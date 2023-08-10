@@ -136,7 +136,7 @@ public:
   ObMutator(const uint64_t table_id,
             const ObStoreRowkey &rowkey,
             const int64_t table_version,
-            const int64_t seq_no);
+            const transaction::ObTxSEQ seq_no);
   void reset();
 public:
   char obj_array_[sizeof(common::ObObj) * common::OB_MAX_ROWKEY_COLUMN_NUMBER];
@@ -144,7 +144,7 @@ public:
   uint32_t row_size_;
   uint64_t table_id_;
   int64_t table_version_;
-  int64_t seq_no_;
+  transaction::ObTxSEQ seq_no_;
 };
 
 class ObMemtableMutatorRow : public ObMutator
@@ -161,7 +161,7 @@ public:
                        const uint32_t acc_checksum,
                        const int64_t version,
                        const int32_t flag,
-                       const int64_t seq_no,
+                       const transaction::ObTxSEQ seq_no,
                        const int64_t column_cnt);
   virtual ~ObMemtableMutatorRow();
   void reset();
@@ -175,9 +175,8 @@ public:
            uint32_t &acc_checksum,
            int64_t &version,
            int32_t &flag,
-           int64_t &seq_no,
+           transaction::ObTxSEQ &seq_no,
            int64_t &column_cnt) const;
-
   int serialize(char *buf, int64_t &buf_len, int64_t &pos,
                 const transaction::ObTxEncryptMeta *encrypt_meta,
                 transaction::ObCLogEncryptInfo &new_encrypt_info,
@@ -231,7 +230,7 @@ public:
                      const transaction::tablelock::ObTableLockOwnerID owner_id,
                      const transaction::tablelock::ObTableLockMode lock_mode,
                      const transaction::tablelock::ObTableLockOpType lock_op_type,
-                     const int64_t seq_no,
+                     const transaction::ObTxSEQ seq_no,
                      const int64_t create_timestamp,
                      const int64_t create_schema_version);
   virtual ~ObMutatorTableLock();
@@ -241,7 +240,7 @@ public:
            transaction::tablelock::ObTableLockOwnerID &owner_id,
            transaction::tablelock::ObTableLockMode &lock_mode,
            transaction::tablelock::ObTableLockOpType &lock_op_type,
-           int64_t &seq_no,
+           transaction::ObTxSEQ &seq_no,
            int64_t &create_timestamp,
            int64_t &create_schema_version) const;
   int serialize(char *buf, const int64_t buf_len, int64_t &pos);

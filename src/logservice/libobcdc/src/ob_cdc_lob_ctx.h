@@ -144,7 +144,7 @@ struct LobColumnFragmentCtx
   LobColumnFragmentCtx(ObLobDataGetCtx &host) :
     host_(host),
     is_new_col_(0),
-    seq_no_(0),
+    seq_no_(),
     idx_(-1),
     ref_cnt_(-1),
     next_(nullptr)
@@ -152,7 +152,7 @@ struct LobColumnFragmentCtx
 
   void reset(
     const bool is_new_col,
-    const int64_t seq_no,
+    const transaction::ObTxSEQ &seq_no,
     const uint32_t idx,
     const uint32_t ref_cnt)
   {
@@ -164,7 +164,7 @@ struct LobColumnFragmentCtx
 
   bool is_valid() const
   {
-    return (0 != seq_no_) && (idx_ < ref_cnt_);
+    return seq_no_.is_valid() && (idx_ < ref_cnt_);
   }
 
   LobColumnFragmentCtx *get_next() { return next_; }
@@ -179,7 +179,7 @@ struct LobColumnFragmentCtx
 
   ObLobDataGetCtx &host_;
   int8_t is_new_col_ : 1;
-  int64_t seq_no_;
+  transaction::ObTxSEQ seq_no_;
   uint64_t idx_ : 32;
   uint64_t ref_cnt_ : 32;
   LobColumnFragmentCtx *next_;

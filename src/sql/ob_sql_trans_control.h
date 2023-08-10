@@ -266,8 +266,8 @@ public:
    * capability:
    *   only support inner stmt savepoint, and can not been used to cross stmt rollback
    */
-  static int create_anonymous_savepoint(ObExecContext &exec_ctx, int64_t &savepoint);
-  static int create_anonymous_savepoint(transaction::ObTxDesc &tx_desc, int64_t &savepoint);
+  static int create_anonymous_savepoint(ObExecContext &exec_ctx, transaction::ObTxSEQ &savepoint);
+  static int create_anonymous_savepoint(transaction::ObTxDesc &tx_desc, transaction::ObTxSEQ &savepoint);
   /*
    * rollback to savepoint
    *
@@ -281,7 +281,7 @@ public:
    * for example: the sql-task executed timeout and its result was unknown, and then do rollback_savepoint;
    *   in this case, the trans_result was incomplete, the flag must been set.
    */
-  static int rollback_savepoint(ObExecContext &exec_ctx, const int64_t savepoint);
+  static int rollback_savepoint(ObExecContext &exec_ctx, const transaction::ObTxSEQ savepoint);
 
   //
   // Transaction free route relative

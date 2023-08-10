@@ -131,7 +131,7 @@ private:
       MutatorRow &row,
       ObLogEntryTask &redo_log_entry_task,
       PartTransTask &part_trans_task);
-  int64_t get_row_seq_(PartTransTask &task, MutatorRow &row) const;
+  const transaction::ObTxSEQ &get_row_seq_(PartTransTask &task, MutatorRow &row) const;
   int alloc_mutator_row_(
       PartTransTask &part_trans_task,
       ObLogEntryTask &redo_log_entry_task,
@@ -151,7 +151,6 @@ private:
       MutatorRow *&row,
       ObCDCTableInfo &table_info,
       bool &is_ignored);
-
 private:
   bool              inited_;
   IObLogBRPool      *br_pool_;

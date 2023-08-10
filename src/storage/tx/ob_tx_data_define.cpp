@@ -170,7 +170,7 @@ int64_t ObUndoStatusList::get_serialize_size_() const
   return len;
 }
 
-bool ObUndoStatusList::is_contain(const int64_t seq_no, const int32_t tx_data_state) const
+bool ObUndoStatusList::is_contain(const transaction::ObTxSEQ seq_no, const int32_t tx_data_state) const
 {
   if (OB_LIKELY(ObTxData::COMMIT == tx_data_state || ObTxData::ABORT == tx_data_state)) {
     return is_contain_(seq_no);
@@ -180,7 +180,7 @@ bool ObUndoStatusList::is_contain(const int64_t seq_no, const int32_t tx_data_st
   }
 }
 
-bool ObUndoStatusList::is_contain_(const int64_t seq_no) const
+bool ObUndoStatusList::is_contain_(const transaction::ObTxSEQ seq_no) const
 {
   bool bool_ret = false;
   ObUndoStatusNode *node_ptr = head_;
@@ -234,7 +234,7 @@ void ObUndoStatusList::dump_2_text(FILE *fd) const
   }
   while (OB_NOT_NULL(node)) {
     for (int64_t i = node->size_ - 1; i >= 0; i--) {
-      fprintf(fd, "{from:%ld, to:%ld}", node->undo_actions_[i].undo_from_, node->undo_actions_[i].undo_to_);
+      fprintf(fd, "{from:%ld, to:%ld}", node->undo_actions_[i].undo_from_.cast_to_int(), node->undo_actions_[i].undo_to_.cast_to_int());
     }
     node = node->next_;
   }

@@ -195,8 +195,8 @@ OB_TX_SERIALIZE_MEMBER(ObTxActiveInfoLog,
                        /* 11 */ tx_expired_time_,
                        /* 12 */ epoch_,
                        /* 13 */ last_op_sn_,
-                       /* 14 */ first_sn,
-                       /* 15 */ last_sn,
+                       /* 14 */ first_seq_no_,
+                       /* 15 */ last_seq_no_,
                        /* 16 */ cluster_version_,
                        /* 17 */ max_submitted_seq_no_,
                        /* 18 */ xid_);
@@ -276,10 +276,10 @@ int ObTxActiveInfoLog::before_serialize()
     TX_NO_NEED_SER(tx_expired_time_ == 0, 11, compat_bytes_);
     TX_NO_NEED_SER(epoch_ == 0, 12, compat_bytes_);
     TX_NO_NEED_SER(last_op_sn_ == 0, 13, compat_bytes_);
-    TX_NO_NEED_SER(first_sn == 0, 14, compat_bytes_);
-    TX_NO_NEED_SER(last_sn == 0, 15, compat_bytes_);
+    TX_NO_NEED_SER(!first_seq_no_.is_valid(), 14, compat_bytes_);
+    TX_NO_NEED_SER(!last_seq_no_.is_valid(), 15, compat_bytes_);
     TX_NO_NEED_SER(cluster_version_ == 0, 16, compat_bytes_);
-    TX_NO_NEED_SER(max_submitted_seq_no_ == 0, 17, compat_bytes_);
+    TX_NO_NEED_SER(!max_submitted_seq_no_.is_valid(), 17, compat_bytes_);
     TX_NO_NEED_SER(xid_.empty(), 18, compat_bytes_);
   }
 
@@ -673,7 +673,7 @@ int ObTxRedoLog::format_mutator_row_(const memtable::ObMemtableMutatorRow &row,
   uint32_t acc_checksum = 0;
   int64_t version = 0;
   int32_t flag = 0;
-  int64_t seq_no = 0;
+  transaction::ObTxSEQ seq_no;
   int64_t column_cnt = 0;
   ObStoreRowkey rowkey;
   memtable::ObRowData new_row;
@@ -719,7 +719,7 @@ int ObTxRedoLog::format_mutator_row_(const memtable::ObMemtableMutatorRow &row,
     arg.writer_ptr_->dump_key("Flag");
     arg.writer_ptr_->dump_int64(flag);
     arg.writer_ptr_->dump_key("SeqNo");
-    arg.writer_ptr_->dump_int64(seq_no);
+    arg.writer_ptr_->dump_int64(seq_no.cast_to_int());
     arg.writer_ptr_->dump_key("NewRowSize");
     arg.writer_ptr_->dump_int64(new_row.size_);
     arg.writer_ptr_->dump_key("OldRowSize");

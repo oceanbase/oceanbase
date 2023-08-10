@@ -57,7 +57,7 @@ void ObCachedTransStateMgr::destroy()
 
 int ObCachedTransStateMgr::get_trans_state(
   const transaction::ObTransID &trans_id,
-  const int64_t sql_seq,
+  const transaction::ObTxSEQ &sql_seq,
   ObMergeCachedTransState &trans_state)
 {
   int ret = OB_SUCCESS;
@@ -81,7 +81,7 @@ int ObCachedTransStateMgr::get_trans_state(
 
 int ObCachedTransStateMgr::add_trans_state(
   const transaction::ObTransID &trans_id,
-  const int64_t sql_seq,
+  const transaction::ObTxSEQ &sql_seq,
   const int64_t commited_trans_version,
   const int32_t trans_state,
   const int16_t can_read,

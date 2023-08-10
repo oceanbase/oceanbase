@@ -36,7 +36,7 @@ int ObTxTableGuard::init(ObTxTable *tx_table)
 
 int ObTxTableGuard::check_row_locked(const transaction::ObTransID &read_tx_id,
                                      const transaction::ObTransID data_tx_id,
-                                     const int64_t sql_sequence,
+                                     const transaction::ObTxSEQ &sql_sequence,
                                      storage::ObStoreRowLockState &lock_state)
 {
   if (OB_NOT_NULL(tx_table_)) {
@@ -48,7 +48,7 @@ int ObTxTableGuard::check_row_locked(const transaction::ObTransID &read_tx_id,
 }
 
 int ObTxTableGuard::check_sql_sequence_can_read(const transaction::ObTransID tx_id,
-                                                const int64_t sql_sequence,
+                                                const transaction::ObTxSEQ &sql_sequence,
                                                 bool &can_read)
 {
   if (OB_NOT_NULL(tx_table_)) {

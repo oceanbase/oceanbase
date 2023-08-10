@@ -41,7 +41,7 @@ struct ObTxNodeArg
   // of the memtable. It is used for debug.
   int64_t memstore_version_;
   // seq_no_ is the sequence no of the executing sql
-  int64_t seq_no_;
+  transaction::ObTxSEQ seq_no_;
   // scn_ is thee log ts of the redo log
   share::SCN scn_;
   int64_t column_cnt_;
@@ -59,7 +59,7 @@ struct ObTxNodeArg
   ObTxNodeArg(const ObMemtableData *data,
               const ObRowData *old_row,
               const int64_t memstore_version,
-              const int64_t seq_no,
+              const transaction::ObTxSEQ seq_no,
               const int64_t column_cnt)
     : data_(data),
     old_row_(old_row),
@@ -74,7 +74,7 @@ struct ObTxNodeArg
   ObTxNodeArg(const ObMemtableData *data,
               const ObRowData *old_row,
               const int64_t memstore_version,
-              const int64_t seq_no,
+              const transaction::ObTxSEQ seq_no,
               const uint32_t modify_count,
               const uint32_t acc_checksum,
               const share::SCN scn,
@@ -94,7 +94,7 @@ struct ObTxNodeArg
     modify_count_ = 0;
     acc_checksum_ = 0;
     memstore_version_ = 0;
-    seq_no_ = 0;
+    seq_no_.reset();
     scn_ = share::SCN::min_scn();
     column_cnt_ = 0;
   }

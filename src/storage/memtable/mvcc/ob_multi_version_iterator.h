@@ -50,10 +50,10 @@ public:
       const void *&tnode,
       transaction::ObTransID &trans_id,
       share::SCN &trans_version,
-      int64_t &sql_sequence);
+      transaction::ObTxSEQ &sql_sequence);
   int check_next_sql_sequence(
       const transaction::ObTransID &input_trans_id,
-      const int64_t input_sql_sequence,
+      const transaction::ObTxSEQ input_sql_sequence,
       bool &same_sql_sequence_flag);
   void reset();
   bool is_exist() const { return nullptr != version_iter_; }

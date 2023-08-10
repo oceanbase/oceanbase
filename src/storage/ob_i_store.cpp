@@ -134,7 +134,7 @@ void ObStoreRowLockState::reset()
   is_locked_ = false;
   trans_version_ = SCN::min_scn();
   lock_trans_id_.reset();
-  lock_data_sequence_ = 0;
+  lock_data_sequence_.reset();
   lock_dml_flag_ = blocksstable::ObDmlFlag::DF_NOT_EXIST;
   is_delayed_cleanout_ = false;
   mvcc_row_ = NULL;

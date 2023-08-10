@@ -59,10 +59,10 @@ public:
 public: // dalegate functions
   int check_row_locked(const transaction::ObTransID &read_tx_id,
                        const transaction::ObTransID data_tx_id,
-                       const int64_t sql_sequence,
+                       const transaction::ObTxSEQ &sql_sequence,
                        storage::ObStoreRowLockState &lock_state);
 
-  int check_sql_sequence_can_read(const transaction::ObTransID tx_id, const int64_t sql_sequence, bool &can_read);
+  int check_sql_sequence_can_read(const transaction::ObTransID tx_id, const transaction::ObTxSEQ &sql_sequence, bool &can_read);
 
   int get_tx_state_with_scn(const transaction::ObTransID tx_id,
                             const share::SCN scn,

@@ -98,7 +98,7 @@ public: // for mvcc engine invoke
   virtual void on_wlock_retry(const ObMemtableKey& key, const transaction::ObTransID &conflict_tx_id) = 0;
   virtual void inc_truncate_cnt() = 0;
   virtual void add_trans_mem_total_size(const int64_t size) = 0;
-  virtual void update_max_submitted_seq_no(const int64_t seq_no) = 0;
+  virtual void update_max_submitted_seq_no(const transaction::ObTxSEQ seq_no) = 0;
   virtual transaction::ObTransID get_tx_id() const = 0;
   virtual transaction::ObPartTransCtx *get_trans_ctx() const = 0;
   // statics maintainness for txn logging
@@ -163,7 +163,7 @@ public:
       const int64_t data_size,
       const ObRowData *old_row,
       ObMemtable *memtable,
-      const int64_t seq_no,
+      const transaction::ObTxSEQ seq_no,
       const int64_t column_cnt);
   int register_row_replay_cb(
       const ObMemtableKey *key,
@@ -171,7 +171,7 @@ public:
       ObMvccTransNode *node,
       const int64_t data_size,
       ObMemtable *memtable,
-      const int64_t seq_no,
+      const transaction::ObTxSEQ seq_no,
       const share::SCN scn,
       const int64_t column_cnt);
   int register_table_lock_cb(

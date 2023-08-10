@@ -51,7 +51,7 @@ int ObRowConflictHandler::check_foreign_key_constraint_for_memtable(ObMvccValueI
 int ObRowConflictHandler::check_foreign_key_constraint_for_sstable(ObTxTableGuards &tx_table_guards,
                                                                    const ObTransID &read_trans_id,
                                                                    const ObTransID &data_trans_id,
-                                                                   const int64_t sql_sequence,
+                                                                   const ObTxSEQ &sql_sequence,
                                                                    const int64_t trans_version,
                                                                    const int64_t snapshot_version,
                                                                    const share::SCN &end_scn,
