@@ -716,12 +716,13 @@ int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCh
     LOG_WARN("tx table is not init.", KR(ret), K(read_tx_data_arg));
     return ret;
   }
+  ObTimeGuard tg("check_with_tx_data", 10 * 1000);
 
   // step 1 : read tx data in mini cache
   int tmp_ret = OB_SUCCESS;
   bool find_tx_data_in_cache = false;
   if (OB_TMP_FAIL(check_tx_data_in_mini_cache_(read_tx_data_arg, fn))) {
-    if (OB_TRANS_CTX_NOT_EXIST != ret) {
+    if (OB_TRANS_CTX_NOT_EXIST != tmp_ret) {
       STORAGE_LOG(WARN, "check tx data in mini cache failed", KR(tmp_ret), K(read_tx_data_arg));
     }
   } else {
@@ -729,10 +730,12 @@ int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCh
     find_tx_data_in_cache = true;
   }
 
+  tg.click("read tx data in mini cache finish");
+
   // step 2 : read tx data in tx_ctx table and tx_data table
   if (find_tx_data_in_cache) {
     // already find tx data and do function with cache
-  } else if (OB_FAIL(check_tx_data_in_tables_(read_tx_data_arg, fn))) {
+  } else if (OB_FAIL(check_tx_data_in_tables_(read_tx_data_arg, fn, tg))) {
     if (OB_TRANS_CTX_NOT_EXIST != ret) {
       STORAGE_LOG(WARN, "check tx data in tables failed", KR(ret), K(ls_id_), K(read_tx_data_arg));
     }
@@ -742,6 +745,7 @@ int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCh
   if (OB_SUCC(ret) || OB_TRANS_CTX_NOT_EXIST == ret) {
     check_state_and_epoch_(read_tx_data_arg.tx_id_, read_tx_data_arg.read_epoch_, true /*need_log_error*/, ret);
   }
+
   return ret;
 }
 
@@ -765,13 +769,15 @@ int ObTxTable::check_tx_data_in_mini_cache_(ObReadTxDataArg &read_tx_data_arg, O
   return ret;
 }
 
-int ObTxTable::check_tx_data_in_tables_(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn)
+int ObTxTable::check_tx_data_in_tables_(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn, ObTimeGuard &tg)
 {
   int ret = OB_SUCCESS;
 
   if (OB_SUCC(tx_ctx_table_.check_with_tx_data(read_tx_data_arg.tx_id_, fn))) {
     TRANS_LOG(DEBUG, "tx ctx table check with tx data succeed", K(read_tx_data_arg), K(fn));
+    tg.click("read tx data in tx ctx table finish");
   } else if (OB_TRANS_CTX_NOT_EXIST == ret) {
+    tg.click("read tx data in tx ctx table finish");
     // ATOMIC_INC(&read_tx_data_table_cnt_);
     ObTxDataGuard tx_data_guard;
     ObTxData *tx_data = nullptr;
@@ -797,6 +803,8 @@ int ObTxTable::check_tx_data_in_tables_(ObReadTxDataArg &read_tx_data_arg, ObITx
         read_tx_data_arg.tx_data_mini_cache_.set(*tx_data);
       }
     }
+
+    tg.click("read tx data in tx data table finish");
   }
 
   return ret;
