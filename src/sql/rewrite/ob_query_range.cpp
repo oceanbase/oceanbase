@@ -5034,7 +5034,9 @@ int ObQueryRange::and_range_graph(ObKeyPartList &ranges, ObKeyPart  *&out_key_pa
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
-  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+  if (OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("check status fail", K(ret));
+  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
     LOG_WARN("failed to do stack overflow check", K(ret));
   } else if (is_stack_overflow) {
     ret = OB_SIZE_OVERFLOW;
@@ -5889,7 +5891,9 @@ int ObQueryRange::or_range_graph(ObKeyPartList &ranges,
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
-  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+  if (OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("check status fail", K(ret));
+  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
     LOG_WARN("failed to do stack overflow check", K(ret));
   } else if (is_stack_overflow) {
     ret = OB_SIZE_OVERFLOW;
@@ -5994,6 +5998,9 @@ int ObQueryRange::or_range_graph(ObKeyPartList &ranges,
           } else {
             out_key_part = find_false;
           }
+        } else if (or_list.get_size() > MAX_RANGE_SIZE_OLD && query_range_ctx_ != NULL) {
+          GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+          out_key_part->id_.table_id_ = table_id;
         } else if (OB_FAIL(SMART_CALL(or_single_head_graphs(or_list, exec_ctx, dtc_params, is_in_or)))) {
           LOG_WARN("Or single head graphs failed", K(ret));
         } else {
