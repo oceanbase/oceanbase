@@ -106,6 +106,46 @@ TEST_F(TestDictDecoder, batch_decode_to_datum_test)
   batch_decode_to_datum_test();
 }
 
+TEST_F(TestDictDecoder, batch_decode_single_var_len_dict) {
+  const int64_t string_len = UINT16_MAX + 3;
+  char *string_buf = nullptr;
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator_, full_column_cnt_));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(0, row));
+  int64_t varchar_col_idx = -1;
+  for (int64_t i = 0; i < column_cnt_; ++i) {
+    if (col_descs_.at(i).col_type_.get_type() == ObVarcharType) {
+      varchar_col_idx = i;
+      break;
+    }
+  }
+  ASSERT_NE(varchar_col_idx, -1);
+  string_buf = static_cast<char *>(allocator_.alloc(string_len));
+  ASSERT_TRUE(nullptr != string_buf);
+  MEMSET(string_buf, 7, string_len);
+  row.storage_datums_[varchar_col_idx].ptr_ = string_buf;
+  row.storage_datums_[varchar_col_idx].pack_ = string_len;
+
+  ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row));
+  char *buf = nullptr;
+  int64_t size = 0;
+  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
+  ObMicroBlockDecoder decoder;
+  ObMicroBlockData data(encoder_.get_data().data(), encoder_.get_data().pos());
+  ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_));
+  int64_t row_id = 0;
+  const char *cell_data = nullptr;
+  ObDatum datum;
+  char datum_buf[40];
+  datum.ptr_ = datum_buf;
+  ASSERT_EQ(OB_SUCCESS, decoder.decoders_[varchar_col_idx].batch_decode(decoder.row_index_, &row_id, &cell_data, 1, &datum));
+
+  ASSERT_EQ(datum.len_, string_len);
+  ASSERT_EQ(0, MEMCMP(datum.ptr_, string_buf, string_len));
+
+
+}
+
 TEST_F(TestRLEDecoder, batch_decode_to_datum_test)
 {
   batch_decode_to_datum_test();

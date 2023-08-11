@@ -504,7 +504,7 @@ int ObDictDecoder::batch_decode_dict(
       int32_t var_dict_data_len_arr[count];
 
       var_dict_data_len_arr[0] = off_array.at_(dict_payload, 0);
-      int32_t last_dict_element_offset = off_array.at_(dict_payload, 0);
+      int32_t last_dict_element_offset = 1 == count ? 0 : off_array.at_(dict_payload, 0);
       for (int64_t i = 1; i < count - 1; ++i) {
         int32_t curr_dict_element_offset = off_array.at_(dict_payload, i);
         var_dict_data_len_arr[i] = curr_dict_element_offset - last_dict_element_offset;
