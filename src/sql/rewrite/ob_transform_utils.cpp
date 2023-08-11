@@ -3873,7 +3873,12 @@ int ObTransformUtils::check_stmt_unique(const ObSelectStmt *stmt,
   } else if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (stmt->is_set_stmt()) {
-    if (stmt->is_set_distinct() && ObOptimizerUtil::subset_exprs(select_exprs, exprs)) {
+    ObSEArray<ObRawExpr *, 16> set_op_exprs;
+    // [cast(UNION([1]), DATE(-1, -1))]
+    // cast above set_op_exprs is calulated after the distinct
+    if (OB_FAIL(ObRawExprUtils::extract_set_op_exprs(select_exprs, set_op_exprs))) {
+      LOG_WARN("failed to extract set op exprs", K(ret));
+    } else if (stmt->is_set_distinct() && ObOptimizerUtil::subset_exprs(set_op_exprs, exprs)) {
       is_unique = true;
     } else if (ObSelectStmt::INTERSECT != stmt->get_set_op()
                && ObSelectStmt::EXCEPT != stmt->get_set_op()) {
