@@ -368,6 +368,8 @@ public:
                                 ObRawExpr *from,
                                 ObRawExpr *to,
                                 const ObIArray<ObRawExpr*> *except_exprs = NULL);
+  static int contain_virtual_generated_column(ObRawExpr *&expr,
+                                  bool &is_contain_vir_gen_column);
 
   static bool is_all_column_exprs(const common::ObIArray<ObRawExpr*> &exprs);
   static int extract_set_op_exprs(const ObRawExpr *raw_expr,
