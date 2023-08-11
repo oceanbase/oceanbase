@@ -53,8 +53,7 @@ private:
                         const ParamStore &param_store,
                         ObIArray<const ObRawExpr *> &null_expr_lists);
   int convert_preds_vector_to_scalar(ObDMLStmt *stmt, bool &trans_happened);
-  int convert_join_preds_vector_to_scalar(TableItem *table_item, bool &trans_happened);
-  int inner_convert_preds_vector_to_scalar(ObRawExpr *expr, ObIArray<ObRawExpr*> &exprs, bool &trans_happened);
+  int recursively_convert_join_preds_vector_to_scalar(TableItem *table_item, bool &trans_happened);
   int remove_dummy_exprs(ObDMLStmt *stmt, bool &trans_happened);
   int remove_dummy_filter_exprs(common::ObIArray<ObRawExpr*> &exprs,
                                 ObIArray<ObExprConstraint> &constraints);
