@@ -95,38 +95,28 @@ int ObTableLoadManager::remove_table_ctx(const ObTableLoadUniqueKey &key,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(key), KP(table_ctx));
   } else {
-    const uint64_t table_id = key.table_id_;
-    ObTableLoadTableCtx *table_ctx_in_map = nullptr;
     {
+      const uint64_t table_id = key.table_id_;
+      HashMapEraseIfEqual erase_if_equal(table_ctx);
+      bool is_erased = false;
       obsys::ObWLockGuard guard(rwlock_);
-      // remove table ctx
-      if (OB_FAIL(table_ctx_map_.get_refactored(key, table_ctx_in_map))) {
-        if (OB_UNLIKELY(OB_HASH_NOT_EXIST == ret)) {
-          LOG_WARN("fail to get refactored", KR(ret), K(key));
-        } else {
-          ret = OB_SUCCESS;
-        }
-      } else if (OB_UNLIKELY(table_ctx != table_ctx_in_map)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected table ctx", KR(ret), K(key), KPC(table_ctx), KPC(table_ctx_in_map));
-      } else if (OB_FAIL(table_ctx_map_.erase_refactored(key))) {
+      if (OB_FAIL(table_ctx_map_.erase_if(key, erase_if_equal, is_erased))) {
         if (OB_UNLIKELY(OB_HASH_NOT_EXIST == ret)) {
           LOG_WARN("fail to erase refactored", KR(ret), K(key));
         } else {
           ret = OB_ENTRY_NOT_EXIST;
         }
+      } else if (OB_UNLIKELY(!is_erased)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected table ctx", KR(ret), KPC(table_ctx));
       }
       // try remove table ctx index
-      else if (FALSE_IT(table_ctx_in_map = nullptr)) {
-      } else if (OB_FAIL(table_ctx_index_map_.get_refactored(table_id, table_ctx_in_map))) {
+      else if (OB_FAIL(table_ctx_index_map_.erase_if(table_id, erase_if_equal, is_erased))) {
         if (OB_UNLIKELY(OB_HASH_NOT_EXIST == ret)) {
           LOG_WARN("fail to get refactored", KR(ret), K(table_id));
         } else {
           ret = OB_SUCCESS;
         }
-      } else if (table_ctx == table_ctx_in_map &&
-                 OB_FAIL(table_ctx_index_map_.erase_refactored(table_id))) {
-        LOG_WARN("fail to erase refactored", KR(ret), K(table_id));
       }
     }
     if (OB_SUCC(ret)) {

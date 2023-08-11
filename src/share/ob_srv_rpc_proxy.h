@@ -18,6 +18,7 @@
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "share/ob_rpc_struct.h"
 #include "observer/ob_server_struct.h"
+#include "observer/table_load/control/ob_table_load_control_rpc_struct.h"
 
 namespace oceanbase
 {
@@ -186,6 +187,7 @@ public:
   RPC_S(PR5 sync_rewrite_rules, OB_SYNC_REWRITE_RULES, (ObSyncRewriteRuleArg));
   RPC_S(PR5 force_set_ls_as_single_replica, OB_LOG_FORCE_SET_LS_AS_SINGLE_REPLICA, (obrpc::ObForceSetLSAsSingleReplicaArg));
   RPC_AP(PR5 broadcast_consensus_version, OB_BROADCAST_CONSENSUS_VERSION, (obrpc::ObBroadcastConsensusVersionArg), obrpc::ObBroadcastConsensusVersionRes);
+  RPC_S(PR5 direct_load_control, OB_DIRECT_LOAD_CONTROL, (observer::ObDirectLoadControlRequest), observer::ObDirectLoadControlResult);
 }; // end of class ObSrvRpcProxy
 
 } // end of namespace rpc

@@ -133,7 +133,6 @@ const T &ObTableLoadRowArray<T>::at(int64_t idx) const
 }
 
 typedef ObTableLoadRowArray<ObTableLoadObjRow> ObTableLoadObjRowArray;
-typedef ObTableLoadRowArray<ObTableLoadStrRow> ObTableLoadStrRowArray;
 typedef ObTableLoadRowArray<ObTableLoadTabletObjRow> ObTableLoadTabletObjRowArray;
 
 }  // namespace table

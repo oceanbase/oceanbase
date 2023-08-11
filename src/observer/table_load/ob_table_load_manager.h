@@ -48,6 +48,24 @@ private:
   typedef common::hash::ObHashMap<uint64_t, ObTableLoadTableCtx *,
                                   common::hash::NoPthreadDefendMode>
     TableCtxIndexMap;
+
+  class HashMapEraseIfEqual
+  {
+  public:
+    HashMapEraseIfEqual(ObTableLoadTableCtx *table_ctx) : table_ctx_(table_ctx) {}
+    bool operator()(
+      common::hash::HashMapPair<ObTableLoadUniqueKey, ObTableLoadTableCtx *> &entry) const
+    {
+      return table_ctx_ == entry.second;
+    }
+    bool operator()(common::hash::HashMapPair<uint64_t, ObTableLoadTableCtx *> &entry) const
+    {
+      return table_ctx_ == entry.second;
+    }
+  public:
+    ObTableLoadTableCtx *table_ctx_;
+  };
+private:
   mutable obsys::ObRWLock rwlock_;
   TableCtxMap table_ctx_map_;
   TableCtxIndexMap table_ctx_index_map_; // index of the latest task
