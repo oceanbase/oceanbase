@@ -1013,6 +1013,9 @@ int ObDDLScheduler::abort_redef_table(const ObDDLTaskID &task_id)
       }
     }
   }
+  if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
+    ret = OB_ENTRY_NOT_EXIST;
+  }
   if (trans.is_started()) {
     bool commit = (OB_SUCCESS == ret);
     int tmp_ret = trans.end(commit);
@@ -1672,7 +1675,7 @@ int ObDDLScheduler::remove_inactive_ddl_task()
       LOG_WARN("failed to check register time", K(ret));
     } else {
       LOG_INFO("need remove task", K(remove_task_ids));
-      for (int64_t i = 0; OB_SUCC(ret) && i < remove_task_ids.size(); i++) {
+      for (int64_t i = 0; i < remove_task_ids.size(); i++) {
         ObDDLTaskID remove_task_id;
         if (OB_FAIL(remove_task_ids.at(i, remove_task_id))) {
           LOG_WARN("get remove task id fail", K(ret));
