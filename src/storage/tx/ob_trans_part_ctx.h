@@ -380,6 +380,7 @@ public:
   // get_tx_ctx_table_info returns OB_TRANS_CTX_NOT_EXIST if the tx ctx table need not to be
   // dumped.
   int get_tx_ctx_table_info(ObTxCtxTableInfo &info);
+  int serialize_tx_ctx_to_buffer(ObTxLocalBuffer &buffer, int64_t &serialize_size);
   int recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info);
 
   // leader switch related

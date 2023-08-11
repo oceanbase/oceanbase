@@ -1561,9 +1561,11 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
 }
 
 // Checkpoint the tx ctx table
-int ObPartTransCtx::get_tx_ctx_table_info(ObTxCtxTableInfo &info)
+int ObPartTransCtx::serialize_tx_ctx_to_buffer(ObTxLocalBuffer &buffer, int64_t &serialize_size)
 {
   int ret = OB_SUCCESS;
+  ObTxCtxTableInfo ctx_info;
+
   CtxLockGuard guard(lock_);
   // 1. Tx ctx has already exited, so it means that it may have no chance to
   //    push its rec_log_ts to aggre_rec_log_ts, so we must not persist it
@@ -1586,16 +1588,25 @@ int ObPartTransCtx::get_tx_ctx_table_info(ObTxCtxTableInfo &info)
       TRANS_LOG(INFO, "tx ctx is in complete replay ctx", K(ret), KPC(this));
     }
   // 3. Fetch the current state of the tx ctx table
-  } else if (OB_FAIL(get_tx_ctx_table_info_(info))) {
+  } else if (OB_FAIL(get_tx_ctx_table_info_(ctx_info))) {
     TRANS_LOG(WARN, "get tx ctx table info failed", K(ret), K(*this));
-  } else if (OB_UNLIKELY(!info.is_valid())) {
+  } else if (OB_UNLIKELY(!ctx_info.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "tx ctx info invalid", K(ret), K(info));
+    TRANS_LOG(WARN, "tx ctx info invalid", K(ret), K(ctx_info));
   // 4. Refresh the rec_log_ts for the next checkpoint
   } else if (OB_FAIL(refresh_rec_log_ts_())) {
     TRANS_LOG(WARN, "refresh rec log ts failed", K(ret), K(*this));
   } else {
-    is_ctx_table_merged_ = true;
+    // 5. Do serialize
+    int64_t pos = 0;
+    serialize_size = ctx_info.get_serialize_size();
+    if (OB_FAIL(buffer.reserve(serialize_size))) {
+      TRANS_LOG(WARN, "Failed to reserve local buffer", KR(ret));
+    } else if (OB_FAIL(ctx_info.serialize(buffer.get_ptr(), serialize_size, pos))) {
+      TRANS_LOG(WARN, "failed to serialize ctx_info", KR(ret), K(ctx_info), K(pos));
+    } else {
+      is_ctx_table_merged_ = true;
+    }
   }
 
   return ret;

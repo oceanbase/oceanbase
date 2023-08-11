@@ -58,8 +58,9 @@ using namespace share;
 namespace storage
 {
 
-int ObTxCtxMemtableScanIterator::get_next_tx_ctx_table_info_(transaction::ObPartTransCtx *&tx_ctx,
-                                                             ObTxCtxTableInfo &ctx_info)
+int ObTxCtxMemtableScanIterator::serialize_next_tx_ctx_(ObTxLocalBuffer &buffer,
+                                                        int64_t &serialize_size,
+                                                        transaction::ObPartTransCtx *&tx_ctx)
 {
   int ret = OB_SUCCESS;
   bool need_retry = true;
@@ -69,7 +70,7 @@ int ObTxCtxMemtableScanIterator::get_next_tx_ctx_table_info_(transaction::ObPart
       if (OB_ITER_END != ret) {
         STORAGE_LOG(WARN, "ls_tx_ctx_iter_.get_next_tx_ctx failed", K(ret));
       }
-    } else if (OB_FAIL(tx_ctx->get_tx_ctx_table_info(ctx_info))) {
+    } else if (OB_FAIL(tx_ctx->serialize_tx_ctx_to_buffer(buffer, serialize_size))) {
       if (OB_TRANS_CTX_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
       } else {
@@ -82,9 +83,9 @@ int ObTxCtxMemtableScanIterator::get_next_tx_ctx_table_info_(transaction::ObPart
   }
 
   if (OB_FAIL(ret)) {
-    STORAGE_LOG(INFO, "get next tx ctx table info failed", KR(ret), KPC(tx_ctx), K(ctx_info.tx_data_guard_));
+    STORAGE_LOG(INFO, "get next tx ctx table info failed", KR(ret), KPC(tx_ctx));
   } else if (SLEEP_BEFORE_DUMP_TX_CTX) {
-    fprintf(stdout, "ready to dump tx ctx, undo status node ptr : %p\n", ctx_info.tx_data_guard_.tx_data()->undo_status_list_.head_);
+    fprintf(stdout, "ready to dump tx ctx, undo status node ptr : %p\n", tx_ctx->ctx_tx_data_.tx_data_guard_.tx_data()->undo_status_list_.head_);
     fprintf(stdout, "sleep 20 seconds before dump\n");
     HAS_GOT_TX_CTX = true;
     SLEEP_BEFORE_DUMP_TX_CTX = false;

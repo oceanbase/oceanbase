@@ -265,8 +265,8 @@ public:
     return ret;
   }
 private:
-  int get_next_tx_ctx_table_info_(transaction::ObPartTransCtx *&tx_ctx,
-                                  ObTxCtxTableInfo &ctx_info);
+  int serialize_next_tx_ctx_(ObTxLocalBuffer &buffer, int64_t &serialize_size, transaction::ObPartTransCtx *&tx_ctx);
+
 private:
   const static int64_t TX_CTX_META_BUF_LENGTH = 256;
   const static int64_t TX_CTX_BUF_LENGTH = 1000;
