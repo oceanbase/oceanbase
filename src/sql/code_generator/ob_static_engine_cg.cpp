@@ -2562,8 +2562,8 @@ int ObStaticEngineCG::generate_spec(ObLogGranuleIterator &op, ObGranuleIteratorS
   if (log_op_def::LOG_TABLE_SCAN == child_log_op->get_type()) {
     ObLogTableScan *log_tsc = NULL;
     log_tsc = static_cast<ObLogTableScan*>(child_log_op);
-    //这里拿ref_table_id的行为是为了和table scan拿partition service的行为一致
-    spec.set_related_id(log_tsc->get_ref_table_id());
+    //这里拿index_table_id和table_scan->get_loc_ref_table_id保持一致。
+    spec.set_related_id(log_tsc->get_index_table_id());
   }
   ObPhyPlanType execute_type = spec.plan_->get_plan_type();
   if (execute_type == OB_PHY_PLAN_LOCAL) {
