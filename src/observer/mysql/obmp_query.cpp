@@ -344,7 +344,7 @@ int ObMPQuery::process()
               //FIXME qianfu NG_TRACE_EXT(set_disconnect, OB_ID(disconnect), true, OB_ID(pos), "multi stmt begin");
               if (OB_UNLIKELY(parse_stat.parse_fail_
                   && (i == parse_stat.fail_query_idx_)
-                  && (OB_ERR_PARSE_SQL != parse_stat.fail_ret_))) {
+                  && ObSQLUtils::check_need_disconnect_parser_err(parse_stat.fail_ret_))) {
                 // 进入本分支，说明在multi_query中的某条query parse失败，如果不是语法错，则进入该分支
                 // 如果当前query_count 为1， 则不断连接;如果大于1，
                 // 则需要在发错误包之后断连接，防止客户端一直在等接下来的回包
