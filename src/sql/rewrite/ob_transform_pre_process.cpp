@@ -240,7 +240,7 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
     }
     if (OB_SUCC(ret)) {
       LOG_DEBUG("transform pre process succ", K(*stmt));
-      if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+     if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
         LOG_WARN("failed to formalize stmt", K(ret));
       //} else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
       //  LOG_WARN("failed to formalize stmt reference", K(ret));

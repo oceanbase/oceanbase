@@ -142,3 +142,55 @@ int ObSharedExprChecker::do_visit(ObRawExpr *&expr)
   }
   return ret;
 }
+
+int ObStmtExecParamFormatter::do_visit(ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  bool is_happened = false;
+  if (OB_FAIL(do_formalize_exec_param(expr, is_happened))) {
+    LOG_WARN("failed to add exec param reference", K(ret));
+  } else if (!is_happened) {
+    //do nothing
+  } else if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret), K(expr));
+  } else if (OB_FAIL(expr->extract_info())) {
+    LOG_WARN("failed to extract info", K(ret));
+  }
+  return ret;
+}
+
+int ObStmtExecParamFormatter::do_formalize_exec_param(ObRawExpr *&expr, bool &is_happened)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret), K(expr));
+  } else if (expr->is_exec_param_expr()) {
+    ObExecParamRawExpr *exec_param = static_cast<ObExecParamRawExpr *>(expr);
+    ObRawExpr *ref_expr = exec_param->get_ref_expr();
+    if (OB_ISNULL(ref_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ref expr is null", K(ret));
+    } else if (OB_FAIL(SMART_CALL(do_formalize_exec_param(ref_expr, is_happened)))) {
+      LOG_WARN("failed to remove const exec param", K(ret));
+    } else if (ref_expr->is_const_expr() &&
+               !ref_expr->has_flag(CNT_ONETIME)) {
+      // if the ref expr is a const expr but is also a onetime expr
+      // then it is no need to remove it
+      expr = ref_expr;
+      is_happened = true;
+    } else {
+      exec_param->set_explicited_reference();
+      exec_param->set_ref_expr(ref_expr);
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(do_formalize_exec_param(expr->get_param_expr(i),
+                                                     is_happened)))) {
+        LOG_WARN("failed to remove const exec param", K(ret));
+      }
+    }
+  }
+  return ret;
+}

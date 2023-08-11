@@ -213,6 +213,17 @@ private:
   hash::ObHashSet<uint64_t> shared_expr_set_;
 };
 
+class ObStmtExecParamFormatter : public ObStmtExprVisitor
+{
+public:
+  ObStmtExecParamFormatter() {}
+
+  virtual int do_visit(ObRawExpr *&expr) override;
+
+  int do_formalize_exec_param(ObRawExpr *&expr, bool &is_happened);
+
+};
+
 }
 }
 

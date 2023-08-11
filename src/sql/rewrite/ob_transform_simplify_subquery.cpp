@@ -87,7 +87,11 @@ int ObTransformSimplifySubquery::transform_one_stmt(common::ObIArray<ObParentDML
     }
   }
   if (OB_SUCC(ret) && trans_happened) {
-    if (OB_FAIL(add_transform_hint(*stmt))) {
+    if (OB_FAIL(stmt->adjust_subquery_list())) {
+      LOG_WARN("failed to adjust subquery list", K(ret));
+    } else if (OB_FAIL(stmt->formalize_query_ref_exprs())) {
+      LOG_WARN("failed to formalize query ref exprs");
+    } else if (OB_FAIL(add_transform_hint(*stmt))) {
       LOG_WARN("failed to add transform hint", K(ret));
     }
   }
