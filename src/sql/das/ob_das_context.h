@@ -96,6 +96,7 @@ public:
     table_locs_.clear();
     related_tablet_map_.clear();
     external_table_locs_.clear();
+    same_server_ = 1;
   }
   ObDASTaskFactory &get_das_factory() { return das_factory_; }
   void set_sql_ctx(ObSqlCtx *sql_ctx) { sql_ctx_ = sql_ctx; }
