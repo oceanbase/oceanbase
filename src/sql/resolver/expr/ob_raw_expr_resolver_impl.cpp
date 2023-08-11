@@ -6086,6 +6086,11 @@ int ObRawExprResolverImpl::resolve_udf_info(const ParseNode *node,
         }
       }
     }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(func_expr->extract_info())) {
+      LOG_WARN("fail to extract info of udf", K(ret), K(func_expr));
+    }
   }
   return ret;
 }
