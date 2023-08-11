@@ -561,6 +561,7 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
     }
 
     if (OB_READ_NOTHING == ret && info->is_called_in_sql_ && lib::is_oracle_mode()) {
+      result.set_null();
       ret = OB_SUCCESS;
     }
     if (OB_SUCC(ret)
