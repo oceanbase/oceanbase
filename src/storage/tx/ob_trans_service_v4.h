@@ -366,6 +366,7 @@ int wait_follower_readable_(ObLS &ls,
 MonotonicTs get_req_receive_mts_();
 bool is_ls_dropped_(const share::ObLSID ls_id);
 static bool common_retryable_error_(const int ret);
+void direct_execute_commit_cb_(ObTxDesc &tx);
 // include tx api refacored for future
 public:
 #include "ob_tx_api.h"

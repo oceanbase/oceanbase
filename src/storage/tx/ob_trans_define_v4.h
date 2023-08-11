@@ -119,6 +119,7 @@ public:
 
 
 #define OB_TX_ABORT_CAUSE_LIST                  \
+  _XX(PARTICIPANT_IS_CLEAN)                     \
   _XX(TX_RESULT_INCOMPLETE)                     \
   _XX(IN_CONSIST_STATE)                         \
   _XX(SAVEPOINT_ROLLBACK_FAIL)                  \
@@ -132,7 +133,6 @@ public:
 
 enum ObTxAbortCause
 {
-SUCCESS = 0,
 #define _XX(X) X,
 OB_TX_ABORT_CAUSE_LIST
 #undef _XX

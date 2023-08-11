@@ -173,6 +173,11 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
   } else if (OB_FAIL(finalize_tx_(tx))) {
     TRANS_LOG(WARN, "finalize tx fail", K(ret), K(tx.tx_id_));
   } else {
+    // after finalize tx, the txDesc can not be fetch from TxDescMgr
+    // but the reference maybe hold by user, wait to be queisenct
+    // before we reuse it
+
+    // if reuse come from commit_cb, assume current thread hold one reference
     final_ref_cnt = tx.commit_cb_lock_.self_locked() ? 2 : 1;
     while (tx.get_ref() > final_ref_cnt) {
       PAUSE();
@@ -525,7 +530,7 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
   DEFER({
       tx.lock_.unlock();
       if (OB_SUCC(ret) && committed) {
-        tx.execute_commit_cb();
+        direct_execute_commit_cb_(tx);
       }
     });
 #ifndef NDEBUG
@@ -545,6 +550,15 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
                       OB_ID(ref), tx.get_ref(),
                       OB_ID(thread_id), GETTID());
   return ret;
+}
+
+// when callback exec directly, mock the general pattern
+// acquire ref -> exec callback -> release ref
+void ObTransService::direct_execute_commit_cb_(ObTxDesc &tx)
+{
+  tx.inc_ref(1);
+  tx.execute_commit_cb();
+  tx_desc_mgr_.revert(tx);
 }
 
 int ObTransService::get_read_snapshot(ObTxDesc &tx,
