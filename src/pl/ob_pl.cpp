@@ -3407,11 +3407,13 @@ int ObPLExecState::check_pl_execute_priv(ObSchemaGetterGuard &guard,
   uint64_t db_id = 0;
   const ObUDTTypeInfo *udt_info = NULL;
   const ObRoutineInfo *routine_info = NULL;
+  const ObPackageInfo *package_info = NULL;
   const ObUserInfo *user_info = NULL;
   uint64_t obj_tenant_id = tenant_id;
   const uint64_t fetch_tenant_id = get_tenant_id_by_object_id(schema_obj.get_object_id());
   ObSchemaType schema_type = schema_obj.get_schema_type();
   ObObjectType object_type = ObObjectType::INVALID;
+  int64_t obj_id = schema_obj.get_object_id();
 
   if (UDT_SCHEMA == schema_type) {
     OZ (guard.get_udt_info(fetch_tenant_id, schema_obj.get_object_id(), udt_info));
@@ -3428,6 +3430,25 @@ int ObPLExecState::check_pl_execute_priv(ObSchemaGetterGuard &guard,
     if (OB_NOT_NULL(routine_info)) {
       OX (db_id = routine_info->get_database_id());
       OX (obj_tenant_id = routine_info->get_tenant_id());
+      if (ROUTINE_UDT_TYPE == routine_info->get_routine_type()) {
+        // for UDT routines, privilege of the UDT should be checked
+        OZ (guard.get_udt_info(fetch_tenant_id, routine_info->get_package_id(), udt_info));
+        if (OB_SUCC(ret) && OB_NOT_NULL(udt_info)) {
+          object_type = ObObjectType::TYPE;
+          obj_id = routine_info->get_package_id();
+          db_id = udt_info->get_database_id();
+          obj_tenant_id = udt_info->get_tenant_id();
+        }
+      } else if (ROUTINE_PACKAGE_TYPE == routine_info->get_routine_type()) {
+        // for package routines, privilege of the package should be checked
+        OZ (guard.get_package_info(fetch_tenant_id, routine_info->get_package_id(), package_info));
+        if (OB_SUCC(ret) && OB_NOT_NULL(package_info)) {
+          object_type = ObObjectType::PACKAGE;
+          obj_id = routine_info->get_package_id();
+          db_id = package_info->get_database_id();
+          obj_tenant_id = package_info->get_tenant_id();
+        }
+      }
     }
   }
 
@@ -3450,7 +3471,7 @@ int ObPLExecState::check_pl_execute_priv(ObSchemaGetterGuard &guard,
                         obj_tenant_id,
                         user_id,
                         database_name,
-                        schema_obj.get_object_id(),
+                        obj_id,
                         OBJ_LEVEL_FOR_TAB_PRIV,
                         static_cast<uint64_t>(object_type),
                         OBJ_PRIV_ID_EXECUTE,
