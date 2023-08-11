@@ -3767,8 +3767,15 @@ int ObTransformPredicateMoveAround::push_down_cte_filter(ObIArray<ObSqlTempTable
       if (table_filters.empty()) {
         have_common_filter = false;
       } else if (j == 0) {
-        if (OB_FAIL(common_filters.assign(table_filters))) {
-          LOG_WARN("failed to assign", K(ret));
+        for (int64_t k = 0; OB_SUCC(ret) && k < table_filters.count(); ++k) {
+          if (table_filters.at(k)->has_flag(CNT_DYNAMIC_PARAM)) {
+            //exec param can not push into temp table
+          } else if (OB_FAIL(common_filters.push_back(table_filters.at(k)))) {
+            LOG_WARN("failed to push back", K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && common_filters.empty()) {
+          have_common_filter = false;
         }
       } else {
         ObSEArray<ObRawExpr *, 4> new_common_filters;
@@ -3778,7 +3785,9 @@ int ObTransformPredicateMoveAround::push_down_cte_filter(ObIArray<ObSqlTempTable
                            &info->table_query_->get_query_ctx()->calculable_items_);
         for (int64_t k = 0; OB_SUCC(ret) && k < common_filters.count(); ++k) {
           bool find = false;
-          if (OB_FAIL(ObTransformUtils::find_expr(table_filters, common_filters.at(k), find, &check_context))) {
+           if (common_filters.at(k)->has_flag(CNT_DYNAMIC_PARAM)) {
+            //exec param can not push into temp table
+          } else if (OB_FAIL(ObTransformUtils::find_expr(table_filters, common_filters.at(k), find, &check_context))) {
             LOG_WARN("failed to find expr", K(ret));
           } else if (find && OB_FAIL(new_common_filters.push_back(common_filters.at(k)))) {
             LOG_WARN("failed to push back", K(ret));
