@@ -1957,7 +1957,7 @@ DEFINE_ERROR(OB_STOP_DROP_SCHEMA, -9022, -1, "HY000", "physical backup switch is
 DEFINE_ERROR(OB_CANNOT_START_LOG_ARCHIVE_BACKUP, -9023, -1, "HY000", "cannot start log archive backup");
 DEFINE_ERROR(OB_ALREADY_NO_LOG_ARCHIVE_BACKUP, -9024, -1, "HY000", "log archive backup is already disabled");
 DEFINE_ERROR(OB_LOG_ARCHIVE_BACKUP_INFO_NOT_EXIST, -9025, -1, "HY000", "log archive backup info not exists");
-DEFINE_ERROR_DEP(OB_INVALID_BACKUP_DEST, -9026, -1, "HY000", "backup destination is not valid");
+DEFINE_ERROR_EXT_DEP(OB_INVALID_BACKUP_DEST, -9026, -1, "HY000", "backup destination is not valid", "%s is not a valid uri");
 DEFINE_ERROR(OB_LOG_ARCHIVE_INTERRUPTED, -9027, -1, "HY000", "ob log archive interrupted");
 DEFINE_ERROR(OB_LOG_ARCHIVE_STAT_NOT_MATCH, -9028, -1, "HY000", "ob log archive stat not match");
 DEFINE_ERROR(OB_LOG_ARCHIVE_NOT_RUNNING, -9029, -1, "HY000", "log archive is not running");

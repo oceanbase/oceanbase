@@ -21364,10 +21364,10 @@ static const _error _error_OB_INVALID_BACKUP_DEST = {
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
       .str_error             = "backup destination is not valid",
-      .str_user_error        = "backup destination is not valid",
+      .str_user_error        = "%s is not a valid uri",
       .oracle_errno          = 600,
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -9026, backup destination is not valid",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9026, backup destination is not valid"
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9026, %s is not a valid uri"
 };
 static const _error _error_OB_LOG_ARCHIVE_INTERRUPTED = {
       .error_name            = "OB_LOG_ARCHIVE_INTERRUPTED",

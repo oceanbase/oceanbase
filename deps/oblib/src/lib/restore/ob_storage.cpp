@@ -58,7 +58,7 @@ int validate_uri_type(const common::ObString &uri)
   if (!uri.prefix_match(OB_OSS_PREFIX) &&
       !uri.prefix_match(OB_FILE_PREFIX)) {
     ret = OB_INVALID_BACKUP_DEST;
-    STORAGE_LOG(ERROR, "invlaid backup uri", K(ret), K(uri));
+    STORAGE_LOG(ERROR, "invalid backup uri", K(ret), K(uri));
   }
   return ret;  
 }

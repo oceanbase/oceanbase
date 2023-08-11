@@ -16,6 +16,7 @@
 #include "common/ob_zone.h"
 #include "lib/utility/utility.h"
 #include "lib/restore/ob_storage_path.h"
+#include "lib/restore/ob_storage.h"
 #include "share/backup/ob_backup_io_adapter.h"
 
 using namespace oceanbase::common;
@@ -226,13 +227,20 @@ int ObPhysicalRestoreUriParser::parse(
       tok = ::strtok_r(str, ",", &ptr);
       if (OB_ISNULL(tok)) {
         break;
-      } else if (OB_FAIL(find_repeat_(uri_list, tok, is_repeat))) {
-        LOG_WARN("failed to find repeat", KR(ret), K(tok), K(uri_list));
+      }
+
+      ObString path(tok);
+      const ObString actual_path = path.trim();
+      if (OB_FAIL(validate_uri_type(actual_path))) {
+        LOG_WARN("invalid uri", KR(ret), K(path), K(actual_path));
+        LOG_USER_ERROR(OB_INVALID_BACKUP_DEST, tok);
+      } else if (OB_FAIL(find_repeat_(uri_list, actual_path, is_repeat))) {
+        LOG_WARN("failed to find repeat", KR(ret), K(actual_path), K(uri_list));
       } else if (is_repeat) {
         // skip repeat path
-        LOG_INFO("skip repeat path", K(tok));
-      } else if (OB_FAIL(uri_list.push_back(tok))) {
-        LOG_WARN("failed to push back", KR(ret), K(tok));
+        LOG_INFO("skip repeat path", K(actual_path));
+      } else if (OB_FAIL(uri_list.push_back(actual_path))) {
+        LOG_WARN("failed to push back", KR(ret), K(actual_path));
       }
     }
   }
