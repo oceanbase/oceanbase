@@ -312,7 +312,9 @@ LATCH_DEF(ARB_SERVER_CONFIG_LOCK, 297, "arbserver config lock", LATCH_FIFO, 2000
 LATCH_DEF(CDC_SERVICE_LS_CTX_LOCK, 298, "cdcservice clientlsctx lock", LATCH_FIFO, 2000, 0, CDC_SERVICE_LS_CTX_LOCK_WAIT, "cdcservice clientlsctx lock")
 LATCH_DEF(MAJOR_FREEZE_DIAGNOSE_LOCK, 299, "major freeze diagnose lock", LATCH_READ_PREFER, 2000, 0, MAJOR_FREEZE_DIAGNOSE_LOCK_WAIT, "major freeze diagnose lock")
 LATCH_DEF(DISPLAY_TASKS_LOCK, 300, "display tasks lock", LATCH_READ_PREFER, 2000, 0, DISPLAY_TASKS_LOCK_WAIT, "display tasks lock")
-LATCH_DEF(LATCH_END, 301, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "latch end")
+LATCH_DEF(PL_DEBUG_RUNTIMEINFO_LOCK, 310, "PL DEBUG RuntimeInfo lock", LATCH_FIFO, 2000, 0, PL_DEBUG_RUNTIME_INFO_WAIT, "PL DEBUG RuntimeInfo lock")
+
+LATCH_DEF(LATCH_END, 311, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "latch end")
 #endif
 
 #ifndef OB_LATCH_DEFINE_H_
