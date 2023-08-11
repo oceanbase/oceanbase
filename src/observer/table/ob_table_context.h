@@ -348,6 +348,9 @@ private:
   bool has_exist_in_columns(const common::ObIArray<common::ObString>& columns,
                             const common::ObString &name,
                             int64_t *idx = nullptr) const;
+  // 获取索引表的tablet_id
+  int get_related_tablet_id(const share::schema::ObTableSchema &index_schema,
+                            common::ObTabletID &related_tablet_id);
 private:
   bool is_init_;
   common::ObIAllocator &allocator_; // processor allocator

@@ -1118,7 +1118,9 @@ int ObTableCtx::init_index_info(const ObString &index_name)
         is_found = true;
         index_table_id_ = tids[i];
         index_schema_ = index_schema;
-        index_tablet_id_ = index_schema->get_tablet_id();
+        if (OB_FAIL(get_related_tablet_id(*index_schema, index_tablet_id_))) {
+          LOG_WARN("fail to get index tablet id", K(ret));
+        }
       }
     }
 
@@ -1258,6 +1260,38 @@ int ObTableCtx::update_auto_inc_value()
   } else if (OB_FAIL(phy_plan_ctx->sync_last_value_global())) {
     LOG_WARN("fail to sync last value global", K(ret));
   }
+  return ret;
+}
+
+// 获取索引表的tablet_id
+int ObTableCtx::get_related_tablet_id(const share::schema::ObTableSchema &index_schema,
+                                      ObTabletID &related_tablet_id)
+{
+  int ret = OB_SUCCESS;
+
+  if (!index_schema.is_partitioned_table()) {
+    related_tablet_id = index_schema.get_tablet_id();
+  } else {
+    int64_t part_idx = OB_INVALID_ID;
+    int64_t subpart_idx = OB_INVALID_ID;
+    ObObjectID related_part_id = OB_INVALID_ID;
+    ObTabletID tmp_tablet_id;
+    // 先从主表获取part_idx和subpart_idx，索引表的part_idx和subpart_idx是和主表一致的
+    if (OB_ISNULL(table_schema_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret));
+    } else if (OB_FAIL(table_schema_->get_part_idx_by_tablet(tablet_id_, part_idx, subpart_idx))) {
+      LOG_WARN("fail to get part idx", K(ret), K_(tablet_id));
+    } else if (OB_FAIL(index_schema.get_part_id_and_tablet_id_by_idx(part_idx,
+                                                                     subpart_idx,
+                                                                     related_part_id,
+                                                                     tmp_tablet_id))) {
+      LOG_WARN("fail to get tablet id", K(ret), K(part_idx), K(subpart_idx));
+    } else {
+      related_tablet_id = tmp_tablet_id;
+    }
+  }
+
   return ret;
 }
 
