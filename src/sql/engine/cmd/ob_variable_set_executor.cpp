@@ -268,7 +268,7 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
                   if (!addr.ip_to_string(buf, sizeof(buf))) {
                     ret = OB_ERR_UNEXPECTED;
                     LOG_WARN("format leader ip failed", K(ret), K(addr));
-                  } else if (!(0 == client_ip.compare("unix:"))) {
+                  } else if (!(0 == client_ip.compare(UNIX_SOCKET_CLIENT_IP))) {
                     ret = OB_NOT_SUPPORTED;
                     LOG_WARN("modify SECURE_FILE_PRIV not by unix socket connection", K(ret), K(client_ip));
                     LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify SECURE_FILE_PRIV not by unix socket connection");
