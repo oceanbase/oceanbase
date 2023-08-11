@@ -4650,19 +4650,24 @@ int ObAlterTableResolver::check_alter_part_key_allowed(const ObTableSchema &tabl
       part_type, part_str, part_expr));
     }
     ObRawExprPartExprChecker part_expr_checker(part_type);
-    if (OB_ISNULL(part_expr)) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(part_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null part expr", K(ret));
     } else if (OB_FAIL(alter_column_expr_in_part_expr(src_col_schema, dst_col_schema, part_expr))) {
       LOG_WARN("fail to alter column expr in part expr", K(ret), KPC(part_expr));
     }
     OZ (part_expr->formalize(session_info_));
-    if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type ||
+    if (OB_FAIL(ret)) {
+    } else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type ||
         PARTITION_FUNC_TYPE_LIST_COLUMNS == part_type || 
         is_key_part(part_type)) {
       if (is_key_part(part_type) && part_expr->get_param_count() < 1) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error", K(ret), K(*part_expr));
+      }
+      if (0 == part_expr->get_param_count()) {
+        OZ (ObResolverUtils::check_column_valid_for_partition(*part_expr, part_type, table_schema));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < part_expr->get_param_count(); ++i) {
         ObRawExpr *param_expr = part_expr->get_param_expr(i);
