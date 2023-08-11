@@ -155,11 +155,12 @@ int ObOBJLockCallback::get_redo(
   int ret = OB_SUCCESS;
   if (NULL == key_.get_rowkey()) {
     ret = OB_ENTRY_NOT_EXIST;
-  } else {
-    redo_node.set(&key_,
-                  lock_op_->lock_op_,
-                  memtable_->get_key().get_tablet_id(),
-                  this);
+    LOG_WARN("get redo failed", K(ret), K_(key));
+  } else if (OB_FAIL(redo_node.set(&key_,
+                                   lock_op_->lock_op_,
+                                   memtable_->get_key().get_tablet_id(),
+                                   this))) {
+    LOG_WARN("get redo failed", K(ret), KP(this), KP_(lock_op));
   }
   LOG_DEBUG("ObOBJLockCallback::get_redo", K(ret), K(*this), K(lock_op_->lock_op_));
   return ret;
