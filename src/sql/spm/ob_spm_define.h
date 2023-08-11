@@ -314,6 +314,11 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
   {
     return (STAT_ACCEPT_EVOLUTION_PLAN == spm_stat_) || (STAT_ACCEPT_BASELINE_PLAN == spm_stat_);
   }
+  bool is_spm_in_process()
+  {
+    return is_retry_for_spm_ ||
+           (spm_stat_ > STAT_INVALID && spm_stat_ < STAT_MAX);
+  }
   
   ObBaselineKey bl_key_;
   SpmMode handle_cache_mode_;
