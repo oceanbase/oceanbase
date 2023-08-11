@@ -240,7 +240,11 @@ int ObExprIntDiv::div_int_int(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &datum
   } else if (is_finish) {
     //do nothing
   } else if (right->get_int() == 0) {
-    datum.set_null();
+    if (expr.is_error_div_by_zero_) {
+      ret = OB_DIVISION_BY_ZERO;
+    } else {
+      datum.set_null();
+    }
   } else {
     char expr_str[OB_MAX_TWO_OPERATOR_EXPR_LENGTH];
     int64_t pos = 0;
@@ -274,7 +278,11 @@ int ObExprIntDiv::div_int_uint(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &datu
   } else if (is_finish) {
     //do nothing
   } else if (right->get_uint() == 0) {
-    datum.set_null();
+    if (expr.is_error_div_by_zero_) {
+      ret = OB_DIVISION_BY_ZERO;
+    } else {
+      datum.set_null();
+    }
   } else {
     int64_t left_i = left->get_int();
     uint64_t left_ui = left_i < 0 ? -left_i : left_i;
@@ -302,7 +310,11 @@ int ObExprIntDiv::div_uint_uint(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &dat
   } else if (is_finish) {
     //do nothing
   } else if (right->get_uint() == 0) {
-    datum.set_null();
+    if (expr.is_error_div_by_zero_) {
+      ret = OB_DIVISION_BY_ZERO;
+    } else {
+      datum.set_null();
+    }
   } else {
     uint64_t left_ui = left->get_uint();
     uint64_t right_ui = right->get_uint();
@@ -324,7 +336,11 @@ int ObExprIntDiv::div_uint_int(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &datu
   } else if (is_finish) {
     //do nothing
   } else if (right->get_int() == 0) {
-    datum.set_null();
+    if (expr.is_error_div_by_zero_) {
+      ret = OB_DIVISION_BY_ZERO;
+    } else {
+      datum.set_null();
+    }
   } else {
     uint64_t left_ui = left->get_uint();
     int64_t right_i = right->get_int();
@@ -352,7 +368,11 @@ int ObExprIntDiv::div_number(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &datum)
   } else if (is_finish) {
     //do nothing
   } else if (right->get_number().is_zero()) {
-    datum.set_null();
+    if (expr.is_error_div_by_zero_) {
+      ret = OB_DIVISION_BY_ZERO;
+    } else {
+      datum.set_null();
+    }
   } else {
     number::ObNumber lnum(left->get_number());
     number::ObNumber rnum(right->get_number());
@@ -427,6 +447,25 @@ int ObExprIntDiv::cg_expr(ObExprCGCtx &op_cg_ctx,
     }
   } else {
     rt_expr.eval_func_ = ObExprIntDiv::div_number;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(op_cg_ctx.session_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected session is null", K(ret));
+  } else {
+    stmt::StmtType stmt_type = op_cg_ctx.session_->get_stmt_type();
+    if (lib::is_mysql_mode()
+        && is_error_for_division_by_zero(op_cg_ctx.session_->get_sql_mode())
+        && is_strict_mode(op_cg_ctx.session_->get_sql_mode())
+        && !op_cg_ctx.session_->is_ignore_stmt()
+        && (stmt::T_INSERT == stmt_type
+            || stmt::T_REPLACE == stmt_type
+            || stmt::T_UPDATE == stmt_type)) {
+      rt_expr.is_error_div_by_zero_ = true;
+    } else {
+      rt_expr.is_error_div_by_zero_ = false;
+    }
   }
   return ret;
 }
