@@ -267,7 +267,7 @@ private:
     // When the other fetcher is end, we start to iterator this fetcher and outptu until end.
     // At the beginning, there are some rows in the current batch that not output yet.
     // We need store these rows and output first, then get batch from child and output directly.
-    ObSEArray<ObDatum *, 256, common::ModulePageAllocator, true> backup_datums_;
+    ObSEArray<ObDatum *, 256> backup_datums_;
     int64_t backup_rows_cnt_;
     ObBatchResultHolder brs_holder_;
 
@@ -524,9 +524,9 @@ private:
   };
 
   int64_t cmp_res_;
-  ObSEArray<RowsListPair, 256, common::ModulePageAllocator, true> match_groups_;
+  ObSEArray<RowsListPair, 256> match_groups_;
   bool is_last_right_join_output_;
-  ObSEArray<RowsPair, 256, common::ModulePageAllocator, true> output_cache_;
+  ObSEArray<RowsPair, 256> output_cache_;
   ObBitVector *rj_match_vec_; // bitmap to check whether it is matched during right join
   int64_t rj_match_vec_size_; // size of `rj_match_vec_`
   ObRADatumStore::IterationAge output_rows_it_age_;
