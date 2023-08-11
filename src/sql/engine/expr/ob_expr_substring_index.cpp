@@ -135,9 +135,9 @@ int ObExprSubstringIndex::eval_substring_index(
     expr_datum.len_ = 0;
   } else {
     const ObString m_delim = delim.get_string();
-    // Static cast count to int32, compatible with mysql 5.6,
+    // mysql 5.6 static cast count to int32,
     // actually this is a bug and fixed in mysql 8.0.
-    int32_t count_val = static_cast<int32_t>(count.get_int());
+    int64_t count_val = count.get_int();
     ObString res_str;
     ObExprKMPSearchCtx *kmp_ctx = NULL;
     const uint64_t op_id = static_cast<uint64_t>(expr.expr_ctx_id_);
@@ -180,14 +180,14 @@ int ObExprSubstringIndex::eval_substring_index_batch(const ObExpr &expr,
         continue;;
       }
       ObString res_str;
-      int32_t count_val = 0;
+      int64_t count_val = 0;
       ObDatum &text = expr.args_[0]->locate_expr_datum(ctx, i);
       ObDatum &delim = expr.args_[1]->locate_expr_datum(ctx, i);
       ObDatum &count = expr.args_[2]->locate_expr_datum(ctx, i);
       if (OB_UNLIKELY(text.is_null() || delim.is_null() || count.is_null())) {
         res[i].set_null();
       } else if (0 == text.len_ || 0 == delim.len_ ||
-                 0 == (count_val = static_cast<int32_t>(count.get_int()))) {
+                 0 == (count_val = count.get_int())) {
         // return empty string if %str or %delim is empty.
         //重置null flag 防止丢失空串信息
         res[i].null_ = 0;

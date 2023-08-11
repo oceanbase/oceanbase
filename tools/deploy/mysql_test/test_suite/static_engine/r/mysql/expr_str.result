@@ -10069,9 +10069,12 @@ select c21, c1, make_set(c21, c1) from t1;
 +------+------+-------------------+
 | c21  | c1   | make_set(c21, c1) |
 +------+------+-------------------+
-| 9.5  |    1 |                   |
-| -9.5 |   -1 |                   |
+| 9.5  |    1 | 1                 |
+| -9.5 |   -1 | -1                |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c1, concat_ws(c21, c1) from t1;
 +------+------+--------------------+
 | c21  | c1   | concat_ws(c21, c1) |
@@ -10091,9 +10094,12 @@ select c21, c2, make_set(c21, c2) from t1;
 +------+------+-------------------+
 | c21  | c2   | make_set(c21, c2) |
 +------+------+-------------------+
-| 9.5  |    2 |                   |
-| -9.5 |    2 |                   |
+| 9.5  |    2 | 2                 |
+| -9.5 |    2 | 2                 |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c2, concat_ws(c21, c2) from t1;
 +------+------+--------------------+
 | c21  | c2   | concat_ws(c21, c2) |
@@ -10113,9 +10119,12 @@ select c21, c3, make_set(c21, c3) from t1;
 +------+------+-------------------+
 | c21  | c3   | make_set(c21, c3) |
 +------+------+-------------------+
-| 9.5  |    1 |                   |
-| -9.5 |   -1 |                   |
+| 9.5  |    1 | 1                 |
+| -9.5 |   -1 | -1                |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c3, concat_ws(c21, c3) from t1;
 +------+------+--------------------+
 | c21  | c3   | concat_ws(c21, c3) |
@@ -10135,9 +10144,12 @@ select c21, c4, make_set(c21, c4) from t1;
 +------+------+-------------------+
 | c21  | c4   | make_set(c21, c4) |
 +------+------+-------------------+
-| 9.5  |    2 |                   |
-| -9.5 |    2 |                   |
+| 9.5  |    2 | 2                 |
+| -9.5 |    2 | 2                 |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c4, concat_ws(c21, c4) from t1;
 +------+------+--------------------+
 | c21  | c4   | concat_ws(c21, c4) |
@@ -10157,9 +10169,12 @@ select c21, c5, make_set(c21, c5) from t1;
 +------+------+-------------------+
 | c21  | c5   | make_set(c21, c5) |
 +------+------+-------------------+
-| 9.5  |    1 |                   |
-| -9.5 |   -1 |                   |
+| 9.5  |    1 | 1                 |
+| -9.5 |   -1 | -1                |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c5, concat_ws(c21, c5) from t1;
 +------+------+--------------------+
 | c21  | c5   | concat_ws(c21, c5) |
@@ -10179,9 +10194,12 @@ select c21, c6, make_set(c21, c6) from t1;
 +------+------+-------------------+
 | c21  | c6   | make_set(c21, c6) |
 +------+------+-------------------+
-| 9.5  |    2 |                   |
-| -9.5 |    2 |                   |
+| 9.5  |    2 | 2                 |
+| -9.5 |    2 | 2                 |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c6, concat_ws(c21, c6) from t1;
 +------+------+--------------------+
 | c21  | c6   | concat_ws(c21, c6) |
@@ -10201,9 +10219,12 @@ select c21, c7, make_set(c21, c7) from t1;
 +------+------+-------------------+
 | c21  | c7   | make_set(c21, c7) |
 +------+------+-------------------+
-| 9.5  |    1 |                   |
-| -9.5 |   -1 |                   |
+| 9.5  |    1 | 1                 |
+| -9.5 |   -1 | -1                |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c7, concat_ws(c21, c7) from t1;
 +------+------+--------------------+
 | c21  | c7   | concat_ws(c21, c7) |
@@ -10223,9 +10244,12 @@ select c21, c8, make_set(c21, c8) from t1;
 +------+------+-------------------+
 | c21  | c8   | make_set(c21, c8) |
 +------+------+-------------------+
-| 9.5  |    2 |                   |
-| -9.5 |    2 |                   |
+| 9.5  |    2 | 2                 |
+| -9.5 |    2 | 2                 |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c8, concat_ws(c21, c8) from t1;
 +------+------+--------------------+
 | c21  | c8   | concat_ws(c21, c8) |
@@ -10245,9 +10269,12 @@ select c21, c9, make_set(c21, c9) from t1;
 +------+------+-------------------+
 | c21  | c9   | make_set(c21, c9) |
 +------+------+-------------------+
-| 9.5  |    1 |                   |
-| -9.5 |   -1 |                   |
+| 9.5  |    1 | 1                 |
+| -9.5 |   -1 | -1                |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c9, concat_ws(c21, c9) from t1;
 +------+------+--------------------+
 | c21  | c9   | concat_ws(c21, c9) |
@@ -10267,9 +10294,12 @@ select c21, c10, make_set(c21, c10) from t1;
 +------+------+--------------------+
 | c21  | c10  | make_set(c21, c10) |
 +------+------+--------------------+
-| 9.5  |    2 |                    |
-| -9.5 |    2 |                    |
+| 9.5  |    2 | 2                  |
+| -9.5 |    2 | 2                  |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c10, concat_ws(c21, c10) from t1;
 +------+------+---------------------+
 | c21  | c10  | concat_ws(c21, c10) |
@@ -10289,9 +10319,12 @@ select c21, c11, make_set(c21, c11) from t1;
 +------+------+--------------------+
 | c21  | c11  | make_set(c21, c11) |
 +------+------+--------------------+
-| 9.5  |    1 |                    |
-| -9.5 |   -1 |                    |
+| 9.5  |    1 | 1                  |
+| -9.5 |   -1 | -1                 |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c11, concat_ws(c21, c11) from t1;
 +------+------+---------------------+
 | c21  | c11  | concat_ws(c21, c11) |
@@ -10311,9 +10344,12 @@ select c21, c12, make_set(c21, c12) from t1;
 +------+------+--------------------+
 | c21  | c12  | make_set(c21, c12) |
 +------+------+--------------------+
-| 9.5  |    2 |                    |
-| -9.5 |    2 |                    |
+| 9.5  |    2 | 2                  |
+| -9.5 |    2 | 2                  |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c12, concat_ws(c21, c12) from t1;
 +------+------+---------------------+
 | c21  | c12  | concat_ws(c21, c12) |
@@ -10333,9 +10369,12 @@ select c21, c13, make_set(c21, c13) from t1;
 +------+------+--------------------+
 | c21  | c13  | make_set(c21, c13) |
 +------+------+--------------------+
-| 9.5  |  3.5 |                    |
-| -9.5 | -3.5 |                    |
+| 9.5  |  3.5 | 3.5                |
+| -9.5 | -3.5 | -3.5               |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c13, concat_ws(c21, c13) from t1;
 +------+------+---------------------+
 | c21  | c13  | concat_ws(c21, c13) |
@@ -10355,9 +10394,12 @@ select c21, c14, make_set(c21, c14) from t1;
 +------+------+--------------------+
 | c21  | c14  | make_set(c21, c14) |
 +------+------+--------------------+
-| 9.5  |  4.5 |                    |
-| -9.5 |  4.5 |                    |
+| 9.5  |  4.5 | 4.5                |
+| -9.5 |  4.5 | 4.5                |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c14, concat_ws(c21, c14) from t1;
 +------+------+---------------------+
 | c21  | c14  | concat_ws(c21, c14) |
@@ -10377,9 +10419,12 @@ select c21, c15, make_set(c21, c15) from t1;
 +------+------+--------------------+
 | c21  | c15  | make_set(c21, c15) |
 +------+------+--------------------+
-| 9.5  |  5.5 |                    |
-| -9.5 | -5.5 |                    |
+| 9.5  |  5.5 | 5.5                |
+| -9.5 | -5.5 | -5.5               |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c15, concat_ws(c21, c15) from t1;
 +------+------+---------------------+
 | c21  | c15  | concat_ws(c21, c15) |
@@ -10399,9 +10444,12 @@ select c21, c16, make_set(c21, c16) from t1;
 +------+------+--------------------+
 | c21  | c16  | make_set(c21, c16) |
 +------+------+--------------------+
-| 9.5  |  6.5 |                    |
-| -9.5 |  6.5 |                    |
+| 9.5  |  6.5 | 6.5                |
+| -9.5 |  6.5 | 6.5                |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c16, concat_ws(c21, c16) from t1;
 +------+------+---------------------+
 | c21  | c16  | concat_ws(c21, c16) |
@@ -10421,9 +10469,12 @@ select c21, c17, make_set(c21, c17) from t1;
 +------+------+--------------------+
 | c21  | c17  | make_set(c21, c17) |
 +------+------+--------------------+
-| 9.5  |    8 |                    |
-| -9.5 |   -8 |                    |
+| 9.5  |    8 | 8                  |
+| -9.5 |   -8 | -8                 |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c17, concat_ws(c21, c17) from t1;
 +------+------+---------------------+
 | c21  | c17  | concat_ws(c21, c17) |
@@ -10443,9 +10494,12 @@ select c21, c18, make_set(c21, c18) from t1;
 +------+------+--------------------+
 | c21  | c18  | make_set(c21, c18) |
 +------+------+--------------------+
-| 9.5  |    9 |                    |
-| -9.5 |    9 |                    |
+| 9.5  |    9 | 9                  |
+| -9.5 |    9 | 9                  |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c18, concat_ws(c21, c18) from t1;
 +------+------+---------------------+
 | c21  | c18  | concat_ws(c21, c18) |
@@ -10462,12 +10516,15 @@ select c21, c18, interval(c21, c18) from t1;
 +------+------+--------------------+
 
 select c21, c19, make_set(c21, c19) from t1;
-+------+---------------------+--------------------+
-| c21  | c19                 | make_set(c21, c19) |
-+------+---------------------+--------------------+
-| 9.5  | 2019-12-01 12:00:00 |                    |
-| -9.5 | 2019-12-01 12:00:00 |                    |
-+------+---------------------+--------------------+
++------+---------------------+---------------------+
+| c21  | c19                 | make_set(c21, c19)  |
++------+---------------------+---------------------+
+| 9.5  | 2019-12-01 12:00:00 | 2019-12-01 12:00:00 |
+| -9.5 | 2019-12-01 12:00:00 | 2019-12-01 12:00:00 |
++------+---------------------+---------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c19, concat_ws(c21, c19) from t1;
 +------+---------------------+---------------------+
 | c21  | c19                 | concat_ws(c21, c19) |
@@ -10484,12 +10541,15 @@ select c21, c19, interval(c21, c19) from t1;
 +------+---------------------+--------------------+
 
 select c21, c20, make_set(c21, c20) from t1;
-+------+---------------------+--------------------+
-| c21  | c20                 | make_set(c21, c20) |
-+------+---------------------+--------------------+
-| 9.5  | 2019-12-03 06:00:00 |                    |
-| -9.5 | 2019-12-03 06:00:00 |                    |
-+------+---------------------+--------------------+
++------+---------------------+---------------------+
+| c21  | c20                 | make_set(c21, c20)  |
++------+---------------------+---------------------+
+| 9.5  | 2019-12-03 06:00:00 | 2019-12-03 06:00:00 |
+| -9.5 | 2019-12-03 06:00:00 | 2019-12-03 06:00:00 |
++------+---------------------+---------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c20, concat_ws(c21, c20) from t1;
 +------+---------------------+---------------------+
 | c21  | c20                 | concat_ws(c21, c20) |
@@ -10509,9 +10569,12 @@ select c21, c21, make_set(c21, c21) from t1;
 +------+------+--------------------+
 | c21  | c21  | make_set(c21, c21) |
 +------+------+--------------------+
-| 9.5  | 9.5  |                    |
-| -9.5 | -9.5 |                    |
+| 9.5  | 9.5  | 9.5                |
+| -9.5 | -9.5 | -9.5               |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c21, concat_ws(c21, c21) from t1;
 +------+------+---------------------+
 | c21  | c21  | concat_ws(c21, c21) |
@@ -10531,9 +10594,12 @@ select c21, c22, make_set(c21, c22) from t1;
 +------+------+--------------------+
 | c21  | c22  | make_set(c21, c22) |
 +------+------+--------------------+
-| 9.5  | 10.5 |                    |
-| -9.5 | 10.5 |                    |
+| 9.5  | 10.5 | 10.5               |
+| -9.5 | 10.5 | 10.5               |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '9.5'
+Warning	1292	Truncated incorrect INTEGER value: '-9.5'
 select c21, c22, concat_ws(c21, c22) from t1;
 +------+------+---------------------+
 | c21  | c22  | concat_ws(c21, c22) |
@@ -10567,9 +10633,12 @@ select c22, c1, make_set(c22, c1) from t1;
 +------+------+-------------------+
 | c22  | c1   | make_set(c22, c1) |
 +------+------+-------------------+
-| 10.5 |    1 | 1                 |
-| 10.5 |   -1 | -1                |
+| 10.5 |    1 |                   |
+| 10.5 |   -1 |                   |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c1, concat_ws(c22, c1) from t1;
 +------+------+--------------------+
 | c22  | c1   | concat_ws(c22, c1) |
@@ -10589,9 +10658,12 @@ select c22, c2, make_set(c22, c2) from t1;
 +------+------+-------------------+
 | c22  | c2   | make_set(c22, c2) |
 +------+------+-------------------+
-| 10.5 |    2 | 2                 |
-| 10.5 |    2 | 2                 |
+| 10.5 |    2 |                   |
+| 10.5 |    2 |                   |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c2, concat_ws(c22, c2) from t1;
 +------+------+--------------------+
 | c22  | c2   | concat_ws(c22, c2) |
@@ -10611,9 +10683,12 @@ select c22, c3, make_set(c22, c3) from t1;
 +------+------+-------------------+
 | c22  | c3   | make_set(c22, c3) |
 +------+------+-------------------+
-| 10.5 |    1 | 1                 |
-| 10.5 |   -1 | -1                |
+| 10.5 |    1 |                   |
+| 10.5 |   -1 |                   |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c3, concat_ws(c22, c3) from t1;
 +------+------+--------------------+
 | c22  | c3   | concat_ws(c22, c3) |
@@ -10633,9 +10708,12 @@ select c22, c4, make_set(c22, c4) from t1;
 +------+------+-------------------+
 | c22  | c4   | make_set(c22, c4) |
 +------+------+-------------------+
-| 10.5 |    2 | 2                 |
-| 10.5 |    2 | 2                 |
+| 10.5 |    2 |                   |
+| 10.5 |    2 |                   |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c4, concat_ws(c22, c4) from t1;
 +------+------+--------------------+
 | c22  | c4   | concat_ws(c22, c4) |
@@ -10655,9 +10733,12 @@ select c22, c5, make_set(c22, c5) from t1;
 +------+------+-------------------+
 | c22  | c5   | make_set(c22, c5) |
 +------+------+-------------------+
-| 10.5 |    1 | 1                 |
-| 10.5 |   -1 | -1                |
+| 10.5 |    1 |                   |
+| 10.5 |   -1 |                   |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c5, concat_ws(c22, c5) from t1;
 +------+------+--------------------+
 | c22  | c5   | concat_ws(c22, c5) |
@@ -10677,9 +10758,12 @@ select c22, c6, make_set(c22, c6) from t1;
 +------+------+-------------------+
 | c22  | c6   | make_set(c22, c6) |
 +------+------+-------------------+
-| 10.5 |    2 | 2                 |
-| 10.5 |    2 | 2                 |
+| 10.5 |    2 |                   |
+| 10.5 |    2 |                   |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c6, concat_ws(c22, c6) from t1;
 +------+------+--------------------+
 | c22  | c6   | concat_ws(c22, c6) |
@@ -10699,9 +10783,12 @@ select c22, c7, make_set(c22, c7) from t1;
 +------+------+-------------------+
 | c22  | c7   | make_set(c22, c7) |
 +------+------+-------------------+
-| 10.5 |    1 | 1                 |
-| 10.5 |   -1 | -1                |
+| 10.5 |    1 |                   |
+| 10.5 |   -1 |                   |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c7, concat_ws(c22, c7) from t1;
 +------+------+--------------------+
 | c22  | c7   | concat_ws(c22, c7) |
@@ -10721,9 +10808,12 @@ select c22, c8, make_set(c22, c8) from t1;
 +------+------+-------------------+
 | c22  | c8   | make_set(c22, c8) |
 +------+------+-------------------+
-| 10.5 |    2 | 2                 |
-| 10.5 |    2 | 2                 |
+| 10.5 |    2 |                   |
+| 10.5 |    2 |                   |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c8, concat_ws(c22, c8) from t1;
 +------+------+--------------------+
 | c22  | c8   | concat_ws(c22, c8) |
@@ -10743,9 +10833,12 @@ select c22, c9, make_set(c22, c9) from t1;
 +------+------+-------------------+
 | c22  | c9   | make_set(c22, c9) |
 +------+------+-------------------+
-| 10.5 |    1 | 1                 |
-| 10.5 |   -1 | -1                |
+| 10.5 |    1 |                   |
+| 10.5 |   -1 |                   |
 +------+------+-------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c9, concat_ws(c22, c9) from t1;
 +------+------+--------------------+
 | c22  | c9   | concat_ws(c22, c9) |
@@ -10765,9 +10858,12 @@ select c22, c10, make_set(c22, c10) from t1;
 +------+------+--------------------+
 | c22  | c10  | make_set(c22, c10) |
 +------+------+--------------------+
-| 10.5 |    2 | 2                  |
-| 10.5 |    2 | 2                  |
+| 10.5 |    2 |                    |
+| 10.5 |    2 |                    |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c10, concat_ws(c22, c10) from t1;
 +------+------+---------------------+
 | c22  | c10  | concat_ws(c22, c10) |
@@ -10787,9 +10883,12 @@ select c22, c11, make_set(c22, c11) from t1;
 +------+------+--------------------+
 | c22  | c11  | make_set(c22, c11) |
 +------+------+--------------------+
-| 10.5 |    1 | 1                  |
-| 10.5 |   -1 | -1                 |
+| 10.5 |    1 |                    |
+| 10.5 |   -1 |                    |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c11, concat_ws(c22, c11) from t1;
 +------+------+---------------------+
 | c22  | c11  | concat_ws(c22, c11) |
@@ -10809,9 +10908,12 @@ select c22, c12, make_set(c22, c12) from t1;
 +------+------+--------------------+
 | c22  | c12  | make_set(c22, c12) |
 +------+------+--------------------+
-| 10.5 |    2 | 2                  |
-| 10.5 |    2 | 2                  |
+| 10.5 |    2 |                    |
+| 10.5 |    2 |                    |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c12, concat_ws(c22, c12) from t1;
 +------+------+---------------------+
 | c22  | c12  | concat_ws(c22, c12) |
@@ -10831,9 +10933,12 @@ select c22, c13, make_set(c22, c13) from t1;
 +------+------+--------------------+
 | c22  | c13  | make_set(c22, c13) |
 +------+------+--------------------+
-| 10.5 |  3.5 | 3.5                |
-| 10.5 | -3.5 | -3.5               |
+| 10.5 |  3.5 |                    |
+| 10.5 | -3.5 |                    |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c13, concat_ws(c22, c13) from t1;
 +------+------+---------------------+
 | c22  | c13  | concat_ws(c22, c13) |
@@ -10853,9 +10958,12 @@ select c22, c14, make_set(c22, c14) from t1;
 +------+------+--------------------+
 | c22  | c14  | make_set(c22, c14) |
 +------+------+--------------------+
-| 10.5 |  4.5 | 4.5                |
-| 10.5 |  4.5 | 4.5                |
+| 10.5 |  4.5 |                    |
+| 10.5 |  4.5 |                    |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c14, concat_ws(c22, c14) from t1;
 +------+------+---------------------+
 | c22  | c14  | concat_ws(c22, c14) |
@@ -10875,9 +10983,12 @@ select c22, c15, make_set(c22, c15) from t1;
 +------+------+--------------------+
 | c22  | c15  | make_set(c22, c15) |
 +------+------+--------------------+
-| 10.5 |  5.5 | 5.5                |
-| 10.5 | -5.5 | -5.5               |
+| 10.5 |  5.5 |                    |
+| 10.5 | -5.5 |                    |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c15, concat_ws(c22, c15) from t1;
 +------+------+---------------------+
 | c22  | c15  | concat_ws(c22, c15) |
@@ -10897,9 +11008,12 @@ select c22, c16, make_set(c22, c16) from t1;
 +------+------+--------------------+
 | c22  | c16  | make_set(c22, c16) |
 +------+------+--------------------+
-| 10.5 |  6.5 | 6.5                |
-| 10.5 |  6.5 | 6.5                |
+| 10.5 |  6.5 |                    |
+| 10.5 |  6.5 |                    |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c16, concat_ws(c22, c16) from t1;
 +------+------+---------------------+
 | c22  | c16  | concat_ws(c22, c16) |
@@ -10919,9 +11033,12 @@ select c22, c17, make_set(c22, c17) from t1;
 +------+------+--------------------+
 | c22  | c17  | make_set(c22, c17) |
 +------+------+--------------------+
-| 10.5 |    8 | 8                  |
-| 10.5 |   -8 | -8                 |
+| 10.5 |    8 |                    |
+| 10.5 |   -8 |                    |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c17, concat_ws(c22, c17) from t1;
 +------+------+---------------------+
 | c22  | c17  | concat_ws(c22, c17) |
@@ -10941,9 +11058,12 @@ select c22, c18, make_set(c22, c18) from t1;
 +------+------+--------------------+
 | c22  | c18  | make_set(c22, c18) |
 +------+------+--------------------+
-| 10.5 |    9 | 9                  |
-| 10.5 |    9 | 9                  |
+| 10.5 |    9 |                    |
+| 10.5 |    9 |                    |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c18, concat_ws(c22, c18) from t1;
 +------+------+---------------------+
 | c22  | c18  | concat_ws(c22, c18) |
@@ -10960,12 +11080,15 @@ select c22, c18, interval(c22, c18) from t1;
 +------+------+--------------------+
 
 select c22, c19, make_set(c22, c19) from t1;
-+------+---------------------+---------------------+
-| c22  | c19                 | make_set(c22, c19)  |
-+------+---------------------+---------------------+
-| 10.5 | 2019-12-01 12:00:00 | 2019-12-01 12:00:00 |
-| 10.5 | 2019-12-01 12:00:00 | 2019-12-01 12:00:00 |
-+------+---------------------+---------------------+
++------+---------------------+--------------------+
+| c22  | c19                 | make_set(c22, c19) |
++------+---------------------+--------------------+
+| 10.5 | 2019-12-01 12:00:00 |                    |
+| 10.5 | 2019-12-01 12:00:00 |                    |
++------+---------------------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c19, concat_ws(c22, c19) from t1;
 +------+---------------------+---------------------+
 | c22  | c19                 | concat_ws(c22, c19) |
@@ -10982,12 +11105,15 @@ select c22, c19, interval(c22, c19) from t1;
 +------+---------------------+--------------------+
 
 select c22, c20, make_set(c22, c20) from t1;
-+------+---------------------+---------------------+
-| c22  | c20                 | make_set(c22, c20)  |
-+------+---------------------+---------------------+
-| 10.5 | 2019-12-03 06:00:00 | 2019-12-03 06:00:00 |
-| 10.5 | 2019-12-03 06:00:00 | 2019-12-03 06:00:00 |
-+------+---------------------+---------------------+
++------+---------------------+--------------------+
+| c22  | c20                 | make_set(c22, c20) |
++------+---------------------+--------------------+
+| 10.5 | 2019-12-03 06:00:00 |                    |
+| 10.5 | 2019-12-03 06:00:00 |                    |
++------+---------------------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c20, concat_ws(c22, c20) from t1;
 +------+---------------------+---------------------+
 | c22  | c20                 | concat_ws(c22, c20) |
@@ -11007,9 +11133,12 @@ select c22, c21, make_set(c22, c21) from t1;
 +------+------+--------------------+
 | c22  | c21  | make_set(c22, c21) |
 +------+------+--------------------+
-| 10.5 | 9.5  | 9.5                |
-| 10.5 | -9.5 | -9.5               |
+| 10.5 | 9.5  |                    |
+| 10.5 | -9.5 |                    |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c21, concat_ws(c22, c21) from t1;
 +------+------+---------------------+
 | c22  | c21  | concat_ws(c22, c21) |
@@ -11029,9 +11158,12 @@ select c22, c22, make_set(c22, c22) from t1;
 +------+------+--------------------+
 | c22  | c22  | make_set(c22, c22) |
 +------+------+--------------------+
-| 10.5 | 10.5 | 10.5               |
-| 10.5 | 10.5 | 10.5               |
+| 10.5 | 10.5 |                    |
+| 10.5 | 10.5 |                    |
 +------+------+--------------------+
+Warnings:
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
+Warning	1292	Truncated incorrect INTEGER value: '10.5'
 select c22, c22, concat_ws(c22, c22) from t1;
 +------+------+---------------------+
 | c22  | c22  | concat_ws(c22, c22) |

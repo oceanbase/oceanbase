@@ -44,6 +44,7 @@ int ObExprMakeSet::calc_result_typeN(ObExprResType &type,
   } else {
     // set expected type of parameter
     ObLength max_len = 0;
+    type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
     types[0].set_calc_type(ObIntType);
     for (int64_t i = 1; i < param_num; ++i) {
       types[i].set_calc_type(ObVarcharType);
