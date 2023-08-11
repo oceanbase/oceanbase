@@ -505,6 +505,7 @@ int ObSchemaUtils::batch_get_latest_table_schemas(
   ObSchemaService *schema_service = NULL;
   ObArray<ObTableLatestSchemaVersion> table_schema_versions;
   ObArray<SchemaKey> need_refresh_table_schema_keys;
+  ObArray<ObSimpleTableSchemaV2 *> table_schemas_from_inner_table;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || table_ids.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(tenant_id), K(table_ids));
@@ -530,8 +531,15 @@ int ObSchemaUtils::batch_get_latest_table_schemas(
       allocator,
       tenant_id,
       need_refresh_table_schema_keys,
-      table_schemas))) {
+      table_schemas_from_inner_table))) {
     LOG_WARN("batch get table_schemas from inner table failed", KR(ret), K(need_refresh_table_schema_keys));
+  } else if (OB_FAIL(common::append(table_schemas, table_schemas_from_inner_table))) {
+    LOG_WARN("append failed", KR(ret), "table_schemas count", table_schemas.count(),
+        "table_schemas_from_inner_table count", table_schemas_from_inner_table.count());
+  } else if (table_ids.count() != table_schemas.count()) {
+    LOG_INFO("get less table_schemas, some tables have been deleted", K(tenant_id),
+        "table_ids count", table_ids.count(), "table_schemas count", table_schemas.count(),
+        K(table_ids), K(table_schema_versions), K(need_refresh_table_schema_keys));
   }
   // check table schema ptr
   ARRAY_FOREACH(table_schemas, idx) {
@@ -606,6 +614,7 @@ int ObSchemaUtils::batch_get_table_schemas_from_cache_(
       ObSimpleTableSchemaV2 *new_table_schema = NULL;
       const ObTableLatestSchemaVersion &table_schema_version = table_schema_versions.at(idx);
       if (table_schema_version.is_deleted()) {
+        LOG_INFO("table has been deleted", K(tenant_id), K(table_schema_version));
         // skip
       } else if (OB_FAIL(schema_guard.get_simple_table_schema(
           tenant_id,
@@ -639,7 +648,7 @@ int ObSchemaUtils::batch_get_table_schemas_from_inner_table_(
     common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas)
 {
   int ret = OB_SUCCESS;
-  // do not reset table_schemas
+  table_schemas.reset();
   ObSchemaService *schema_service = NULL;
   ObRefreshSchemaStatus schema_status;
   schema_status.tenant_id_ = tenant_id;
