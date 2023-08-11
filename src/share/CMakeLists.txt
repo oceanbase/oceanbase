@@ -166,7 +166,6 @@ ob_set_subtarget(ob_share common
   ob_time_zone_info_manager.cpp
   ob_unique_index_row_transformer.cpp
   ob_unit_getter.cpp
-  ob_unit_stat_table_operator.cpp
   ob_unit_table_operator.cpp
   ob_upgrade_utils.cpp
   ob_virtual_table_iterator.cpp

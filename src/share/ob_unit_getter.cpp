@@ -183,7 +183,7 @@ int ObUnitInfoGetter::init(ObMySQLProxy &proxy, common::ObServerConfig *config)
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(ut_operator_.init(proxy, config))) {
+  } else if (OB_FAIL(ut_operator_.init(proxy))) {
     LOG_WARN("init unit table operator failed", K(ret));
   } else {
     inited_ = true;
@@ -812,41 +812,6 @@ int ObUnitInfoGetter::get_compat_mode(const int64_t tenant_id, lib::Worker::Comp
   }
   return ret;
 }
-
-ObUnitStatGetter::ObUnitStatGetter()
-  : inited_(false),
-    ut_stat_operator_()
-{
-}
-
-ObUnitStatGetter::~ObUnitStatGetter()
-{
-}
-
-int ObUnitStatGetter::init(share::ObCheckStopProvider &check_stop_provider)
-{
-  int ret = OB_SUCCESS;
-  if (inited_) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(ut_stat_operator_.init(check_stop_provider))) {
-    LOG_WARN("init unit stat table operator failed", K(ret));
-  } else {
-    inited_ = true;
-  }
-  return ret;
-}
-
-int ObUnitStatGetter::get_unit_stat(uint64_t tenant_id, uint64_t unit_id, ObUnitStat &unit_stat) const
-{
-  return ut_stat_operator_.get_unit_stat(tenant_id, unit_id, unit_stat);
-}
-
-int ObUnitStatGetter::get_unit_stat(uint64_t tenant_id, share::ObUnitStatMap &unit_stat_map) const
-{
-  return ut_stat_operator_.get_unit_stat(tenant_id, unit_stat_map);
-}
-
 
 }//end namespace share
 }//end namespace oceanbase

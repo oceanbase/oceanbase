@@ -45,7 +45,7 @@ int64_t ObRootBalanceIdling::get_idle_interval_us()
 
 ObRootBalancer::ObRootBalancer()
   : ObRsReentrantThread(true), inited_(false), active_(0), idling_(stop_, *this),
-    unit_stat_mgr_(), server_balancer_(),
+    server_balancer_(),
     disaster_recovery_worker_(stop_),
     rootservice_util_checker_(stop_)
 {
@@ -73,10 +73,8 @@ int ObRootBalancer::init(common::ObServerConfig &cfg,
   } else if (OB_UNLIKELY(nullptr == GCTX.lst_operator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lst_operator_ ptr is null", KR(ret));
-  } else if (OB_FAIL(unit_stat_mgr_.init(schema_service, unit_mgr, *this))) {
-    LOG_WARN("init unit stat mgr failed", KR(ret));
   } else if (OB_FAIL(server_balancer_.init(schema_service, unit_mgr,
-                                           zone_mgr, server_mgr, unit_stat_mgr_))) {
+                                           zone_mgr, server_mgr, sql_proxy))) {
     LOG_WARN("init failed", K(ret));
   } else if (OB_FAIL(create(root_balancer_thread_cnt, "RootBalance"))) {
     LOG_WARN("create root balancer thread failed", K(ret), K(root_balancer_thread_cnt));
@@ -209,12 +207,6 @@ int ObRootBalancer::all_balance()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    if (OB_FAIL(unit_stat_mgr_.gather_stat())) {
-      LOG_WARN("gather all tenant unit stat failed, refuse to do server_balance", K(ret));
-      unit_stat_mgr_.reuse();
-      ret = OB_SUCCESS;
-    }
-
     if (OB_SUCC(ret)) {
       if (OB_FAIL(disaster_recovery_worker_.try_disaster_recovery())) {
         LOG_WARN("fail to try disaster recovery", KR(ret));

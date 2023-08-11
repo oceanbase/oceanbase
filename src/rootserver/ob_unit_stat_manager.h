@@ -20,7 +20,7 @@ namespace oceanbase
 {
 namespace share
 {
-class ObUnitStatGetter;
+class ObUnitTableOperator;
 namespace schema
 {
 class ObMultiVersionSchemaService;
@@ -35,9 +35,7 @@ public:
   ObUnitStatManager();
   virtual ~ObUnitStatManager() = default;
 
-  virtual int init(share::schema::ObMultiVersionSchemaService &schema_service,
-                   ObUnitManager &unit_mgr,
-                   share::ObCheckStopProvider &check_stop_provider);
+  virtual int init(common::ObMySQLProxy &sql_proxy);
   void reuse();
   virtual int gather_stat();
   virtual int get_unit_stat(
@@ -46,9 +44,8 @@ public:
       share::ObUnitStat &unit_stat);
 private:
   bool inited_;
-  share::schema::ObMultiVersionSchemaService *schema_service_;
-  ObUnitManager *unit_mgr_;
-  share::ObUnitStatGetter unit_stat_getter_;
+  bool loaded_stats_;
+  share::ObUnitTableOperator ut_operator_;
   share::ObUnitStatMap unit_stat_map_;
   DISALLOW_COPY_AND_ASSIGN(ObUnitStatManager);
 };

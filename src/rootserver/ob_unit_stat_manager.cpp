@@ -18,6 +18,7 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "rootserver/ob_unit_manager.h"
 #include "storage/ob_file_system_router.h"
+#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -25,29 +26,22 @@ using namespace oceanbase::rootserver;
 
 ObUnitStatManager::ObUnitStatManager()
   : inited_(false),
-    schema_service_(NULL),
-    unit_mgr_(NULL),
-    unit_stat_getter_(),
+    loaded_stats_(false),
     unit_stat_map_()
 {
 }
 
-int ObUnitStatManager::init(
-    share::schema::ObMultiVersionSchemaService &schema_service,
-    ObUnitManager &unit_mgr,
-    share::ObCheckStopProvider &check_stop_provider)
+int ObUnitStatManager::init(common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", K(inited_));
-  } else if (OB_FAIL(unit_stat_getter_.init(check_stop_provider))) {
-    LOG_WARN("init unit stat getter fail", KR(ret));
+    LOG_WARN("init twice", KR(ret), K(inited_));
   } else if (OB_FAIL(unit_stat_map_.init(500000))) { /// FIXME: use more accurate CONSTANT
-    LOG_WARN("fail init unit stat map", K(ret));
+    LOG_WARN("fail init unit stat map", KR(ret));
+  } else if (OB_FAIL(ut_operator_.init(sql_proxy))) {
+    LOG_WARN("fail to init ut_operator_", KR(ret));
   } else {
-    schema_service_ = &schema_service;
-    unit_mgr_ = &unit_mgr;
     inited_ = true;
   }
   return ret;
@@ -56,39 +50,44 @@ int ObUnitStatManager::init(
 void ObUnitStatManager::reuse()
 {
   unit_stat_map_.reuse();
+  loaded_stats_ = false;
 }
+
+ERRSIM_POINT_DEF(ERRSIM_UNIT_DISK_ASSIGN);
 
 int ObUnitStatManager::gather_stat()
 {
   int ret = OB_SUCCESS;
-  ObArray<uint64_t> tenant_ids;
-  ObArray<uint64_t> unit_ids;
+  ObArray<share::ObUnitStat> unit_stats;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(ObTenantUtils::get_tenant_ids(schema_service_, tenant_ids))) {
-    LOG_WARN("get tenant ids fail", K(ret));
+  } else if (OB_FAIL(ut_operator_.get_unit_stats(unit_stats))) {
+    LOG_WARN("get unit_stats failed", KR(ret));
   } else {
-    reuse();
-    // init empty map with all unit ids
-    if (OB_FAIL(unit_mgr_->get_unit_ids(unit_ids))) {
-      LOG_WARN("fail get unit ids", K(ret));
-    } else {
-      ObUnitStatMap::Item *stat = NULL;
-      FOREACH_CNT_X(unit_id, unit_ids, OB_SUCC(ret)) {
-        if (OB_FAIL(unit_stat_map_.locate(*unit_id, stat))) {
-          LOG_WARN("fail init stat for unit", K(*unit_id), K(ret));
+    ObUnitStatMap::Item *item;
+    FOREACH_CNT_X(unit_stat, unit_stats, OB_SUCC(ret)) {
+      if (OB_FAIL(unit_stat_map_.locate(unit_stat->get_unit_id(), item))) {
+        LOG_WARN("fail to init stat for unit", KR(ret), K(unit_stat->get_unit_id()));
+      } else if (OB_FAIL(ERRSIM_UNIT_DISK_ASSIGN)) {
+        if (OB_FAIL(item->v_.init(unit_stat->get_unit_id(),
+                                  1024 * 1024 * 1024,  // assign 1 GB for test use only
+                                  unit_stat->get_is_migrating()))) {
+          LOG_WARN("fail to init unit_stat", KR(ret), K(unit_stat->get_unit_id()));
+        } else {
+          ret = OB_SUCCESS;
         }
+        LOG_ERROR("errsim triggered, assign unit_stats' required size to 1GB.", KR(ret), KP(item));
+      } else {
+        item->v_.deep_copy(*unit_stat);
       }
     }
-
-    // walk through all meta tables to gather unit stat data
-    FOREACH_CNT_X(id, tenant_ids, OB_SUCC(ret)) {
-      const uint64_t tenant_id = *id;
-      if (OB_FAIL(unit_stat_getter_.get_unit_stat(tenant_id, unit_stat_map_))) {
-        LOG_WARN("fail get unit stat", K(tenant_id), K(ret));
-      }
-    }
+  }
+  if (OB_SUCC(ret)) {
+    loaded_stats_ = true;
+  } else {
+    unit_stat_map_.reuse();
+    loaded_stats_ = false;
   }
   return ret;
 }
@@ -99,17 +98,17 @@ int ObUnitStatManager::get_unit_stat(
     share::ObUnitStat &unit_stat)
 {
   int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
+  ObUnitStat tmp_unit_stat;
+  if (!inited_ || !loaded_stats_) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("not init or not loaded", KR(ret), K(inited_), K(loaded_stats_));
+  } else if (OB_FAIL(unit_stat_map_.get(unit_id, tmp_unit_stat))) {
+    LOG_WARN("fail to get unit stat", KR(ret), K(unit_id), K(zone));
+  } else if (tmp_unit_stat.get_is_migrating()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("unit is migrating, disk statistic not accurate, not allowed to use", KR(ret), K(unit_id), K(zone));
   } else {
-    int tmp_ret = unit_stat_map_.get(unit_id, unit_stat);
-    if (OB_SUCCESS == tmp_ret) {
-      // good
-    } else {
-      ret = tmp_ret;
-      LOG_WARN("fail to get unit stat", KR(ret), K(unit_id), K(zone));
-    }
+    unit_stat = tmp_unit_stat;
   }
   return ret;
 }
