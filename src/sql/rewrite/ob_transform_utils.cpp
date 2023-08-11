@@ -6490,6 +6490,17 @@ int ObTransformUtils::adjust_updatable_view(ObRawExprFactory &expr_factory,
           LOG_WARN("failed to set part expr items", K(ret));
         }
       }
+      // replace values_desc
+      if (OB_SUCC(ret)) {
+        ObStmtExprReplacer replacer;
+        replacer.add_scope(SCOPE_INSERT_DESC);
+        replacer.set_recursive(false);
+        if (OB_FAIL(replacer.add_replace_exprs(select_list, column_list))) {
+          LOG_WARN("failed to add replace exprs", K(ret));
+        } else if (OB_FAIL(table_info->iterate_stmt_expr(replacer))) {
+          LOG_WARN("failed to iterate stmt expr", K(ret));
+        }
+      }
     }
   }
   return ret;
