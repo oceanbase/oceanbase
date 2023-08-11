@@ -71,6 +71,7 @@ private:
   template <typename M> bool timed_wait_impl(const M&, const ObSysTime&) const;
 
   mutable pthread_cond_t _cond;
+  mutable pthread_condattr_t _attr;
 };
 
 template <typename M> inline bool
@@ -104,7 +105,7 @@ Cond::timed_wait_impl(const M& mutex, const ObSysTime& timeout) const
     LockState state;
     mutex.unlock(state);
 
-    timeval tv = ObSysTime::now(ObSysTime::Realtime) + timeout;
+    timeval tv = ObSysTime::now(ObSysTime::Monotonic) + timeout;
     timespec ts;
     ts.tv_sec = tv.tv_sec;
     ts.tv_nsec = tv.tv_usec * 1000;
