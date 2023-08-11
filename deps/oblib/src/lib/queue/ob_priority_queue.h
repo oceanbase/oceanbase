@@ -129,7 +129,15 @@ public:
   int push(ObLink* data, int priority)
   {
     int ret = OB_SUCCESS;
-    if (ATOMIC_FAA(&size_, 1) > limit_) {
+    int64_t extra;
+    if (priority < HIGH_PRIOS) {
+      extra = 2048;
+    } else if (priority < NORMAL_PRIOS + HIGH_PRIOS) {
+      extra = 1024;
+    } else {
+      extra = 0;
+    }
+    if (ATOMIC_FAA(&size_, 1) > limit_ + extra) {
       ret = OB_SIZE_OVERFLOW;
     } else if (OB_UNLIKELY(NULL == data) || OB_UNLIKELY(priority < 0) || OB_UNLIKELY(priority >= PRIO_CNT)) {
       ret = OB_INVALID_ARGUMENT;
