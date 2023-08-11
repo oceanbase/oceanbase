@@ -478,8 +478,16 @@ int ObOrderPerservingEncoder::encode_from_string_varlen(
   bool is_valid_uni = false;
   bool is_mem = lib::is_oracle_mode();
 
-  // tail is up to 8 byte, and src will only expand four times at most when encoding.
-  if ((to_len + 4 * str.length() + 8) > max_buf_len) {
+  int64_t safety_buf_size = 20;
+  // tail is up to 8 byte and [space] will be expand to 10byte,
+  // therefore safty buffer size round up to 20(byte)
+  // and src will only expand 7 times at most when encoding.
+  // for bad case
+  // [space] A [space] A
+  // [space] will expand to 10 byte
+  // A will expand to 4 byte
+  // therefore src will expand (10+4)/2=>7 times at most when encoding
+  if ((to_len + 7 * str.length() + safety_buf_size) > max_buf_len) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_TRACE("no enough memory to do encoding for string", K(ret));
   } else if (str.empty() ||  (str.length()==1 && *str.ptr()=='\0')) {
@@ -498,7 +506,8 @@ int ObOrderPerservingEncoder::encode_from_string_varlen(
              || cs == CS_TYPE_UTF16_GENERAL_CI || cs == CS_TYPE_UTF16_BIN
              || cs == CS_TYPE_GB18030_CHINESE_CI) {
     int64_t res_len = ObCharset::sortkey_var_len(cs, str.ptr(), str.length(), (char *)to,
-                                                 max_buf_len, is_mem, is_valid_uni);
+                                                 max_buf_len - to_len - safety_buf_size,
+                                                 is_mem, is_valid_uni);
     if (res_len < 0) {
       ret = OB_NOT_SUPPORTED;
       LOG_TRACE("not support collation", K(cs));
@@ -519,8 +528,16 @@ int ObOrderPerservingEncoder::encode_from_string_varlen(
   ObCollationType cs = param.cs_type_;
   bool is_valid_uni = false;
 
-  // tail is up to 8 byte, and src will only expand four times at most when encoding.
-  if ((to_len + 4 * str.length() + 8) > max_buf_len) {
+  int64_t safty_buf_size = 20;
+  // tail is up to 8 byte and [space] will be expand to 10byte,
+  // therefore safty buffer size round up to 20(byte)
+  // and src will only expand 7 times at most when encoding.
+  // for bad case
+  // [space] A [space] A
+  // [space] will expand to 10 byte
+  // A will expand to 4 byte
+  // therefore src will expand (10+4)/2=>7 times at most when encoding
+  if ((to_len + 7 * str.length() + safty_buf_size) > max_buf_len) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_TRACE("no enough memory to do encoding for string", K(ret));
   } else if (str.empty() || (str.length()==1 && *str.ptr()=='\0')) {
@@ -539,7 +556,8 @@ int ObOrderPerservingEncoder::encode_from_string_varlen(
              || cs == CS_TYPE_UTF16_GENERAL_CI || cs == CS_TYPE_UTF16_BIN
              || cs == CS_TYPE_GB18030_CHINESE_CI) {
     int64_t res_len = ObCharset::sortkey_var_len(cs, str.ptr(), str.length(), (char *)to,
-                                                 max_buf_len, param.is_memcmp_, param.is_valid_uni_);
+                                                 max_buf_len - to_len - safty_buf_size,
+                                                 param.is_memcmp_, param.is_valid_uni_);
     if (!param.is_valid_uni_) {
       // invalid unicode, do nothing
     } else {
