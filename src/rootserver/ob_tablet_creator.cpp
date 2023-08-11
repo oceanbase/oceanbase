@@ -182,11 +182,15 @@ int ObBatchCreateTabletHelper::try_add_table_schema(
   } else if(OB_HASH_NOT_EXIST == ret)  {
     ret = OB_SUCCESS;
     index = arg_.table_schemas_.count();
-    if (OB_FAIL(arg_.table_schemas_.push_back(*table_schema))) {
-      LOG_WARN("failed to push back table schema", KR(ret), KPC(table_schema));
-    } else if (FALSE_IT(arg_.table_schemas_.at(index).reset_partition_schema())) {
-    } else if (OB_FAIL(table_schemas_map_.set_refactored(table_schema->get_table_id(), index))) {
-      LOG_WARN("failed to set table schema map", KR(ret), K(index), KPC(table_schema));
+    HEAP_VAR(ObTableSchema, temp_table_schema) {
+      if (OB_FAIL(temp_table_schema.assign(*table_schema))) {
+        LOG_WARN("failed to assign temp_table_schema", KR(ret), KPC(table_schema));
+      } else if (FALSE_IT(temp_table_schema.reset_partition_schema())) {
+      } else if (OB_FAIL(arg_.table_schemas_.push_back(temp_table_schema))) {
+        LOG_WARN("failed to push back table schema", KR(ret), K(temp_table_schema));
+      } else if (OB_FAIL(table_schemas_map_.set_refactored(temp_table_schema.get_table_id(), index))) {
+        LOG_WARN("failed to set table schema map", KR(ret), K(index), K(temp_table_schema));
+      }
     }
   } else {
     LOG_WARN("failed to find table schema in map", KR(ret), KP(table_schema));
