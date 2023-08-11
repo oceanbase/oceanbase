@@ -414,6 +414,14 @@ int ObSQLSessionMgr::create_session(const uint64_t tenant_id,
     ObFLTControlInfoManager mgr(tenant_id);
     if (OB_FAIL(mgr.init())) {
       LOG_WARN("failed to init full link control info", K(ret));
+      if (FALSE_IT(revert_session(tmp_sess))) {
+        LOG_ERROR("fail to free session", K(err), K(sessid), K(proxy_sessid));
+      } else if (OB_SUCCESS != (err = sessinfo_map_.del(Key(sessid)))) {
+        LOG_ERROR("fail to free session", K(err), K(sessid), K(proxy_sessid));
+      } else {
+        LOG_DEBUG("free session successfully in create session", K(err),
+            K(sessid), K(proxy_sessid));
+      }
     } else if (mgr.is_valid_tenant_config()) {
       tmp_sess->set_flt_control_info(mgr.get_control_info());
     }
