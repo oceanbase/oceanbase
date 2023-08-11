@@ -1305,6 +1305,7 @@ int ObDMLResolver::get_target_column_list(ObSEArray<ColumnItem, 4> &target_list,
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
     const TableItem *tmp_table_item = select_stmt->get_table_item(i);
+    column_items.reuse();
     if (OB_ISNULL(tmp_table_item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table item is null");
@@ -1338,8 +1339,8 @@ int ObDMLResolver::get_target_column_list(ObSEArray<ColumnItem, 4> &target_list,
         LOG_WARN("unexpected table type", K_(tmp_table_item->type));
       }
 
-      for (int64_t i = 0; OB_SUCC(ret) && i < column_items.count(); ++i) {
-        const ColumnItem &col_item = column_items.at(i);
+      for (int64_t j = 0; OB_SUCC(ret) && j < column_items.count(); ++j) {
+        const ColumnItem &col_item = column_items.at(j);
         if (!is_col || (is_col && col_item.column_name_ == tab_name)) {
           if (OB_FAIL(target_list.push_back(col_item))) {
             LOG_WARN("push back target list failed", K(ret));

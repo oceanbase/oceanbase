@@ -1848,7 +1848,6 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
               not_first_node = false;
               break;
             case 1:
-            case 3:
               if (not_first_node) {
                 DATA_PRINTF(")");
               }
@@ -1861,6 +1860,8 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
               }
               DATA_PRINTF(" ignore ");
               not_first_node = false;
+              break;
+            case 3:
               break;
             case 4:
               if (not_first_node) {
@@ -1898,7 +1899,7 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
               LOG_WARN("invalid type value.", K(type));
               break;
           }
-          if (OB_SUCC(ret) && type <= 3) {
+          if (OB_SUCC(ret) && type < 3) {
             DATA_PRINTF(" on mismatch ");
           }
         }

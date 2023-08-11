@@ -1103,6 +1103,7 @@ int ObExprJsonValue::cast_to_datetime(ObIJsonBase *j_base,
       } else if (type_cast_to_string(json_string, allocator, j_base, accuracy) && json_string.length() > 0) {
         ObJsonString json_str(json_string.ptr(),json_string.length());
         if (CAST_FAIL(json_str.to_datetime(val, &cvrt_ctx))) {
+          is_type_cast = 1;
           LOG_WARN("wrapper to datetime failed.", K(ret), K(*j_base));
         }
       } else if (CAST_FAIL(j_base->to_datetime(val, &cvrt_ctx))) {
@@ -1676,7 +1677,7 @@ bool ObExprJsonValue::try_set_error_val(const ObExpr &expr,
         for(size_t i = 0; i < mismatch_val.size(); i++) {  // 目前不支持UDT，因此只考虑第一个参数中的 error 和 null。
           if (mismatch_val[i] == OB_JSON_ON_MISMATCH_ERROR) {
             mismatch_error = false;
-          } else if (mismatch_val[i] == OB_JSON_ON_MISMATCH_NULL) {
+          } else if (mismatch_val[i] == OB_JSON_ON_MISMATCH_NULL || mismatch_val[i] == OB_JSON_ON_MISMATCH_IGNORE) {
             is_null_res = true;
           }
         }
