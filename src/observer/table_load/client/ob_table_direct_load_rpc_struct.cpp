@@ -25,7 +25,8 @@ OB_SERIALIZE_MEMBER_SIMPLE(ObTableDirectLoadBeginArg,
                            parallel_,
                            max_error_row_count_,
                            dup_action_,
-                           timeout_);
+                           timeout_,
+                           force_create_);
 
 OB_SERIALIZE_MEMBER_SIMPLE(ObTableDirectLoadBeginRes,
                            table_id_,
