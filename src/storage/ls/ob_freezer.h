@@ -302,7 +302,8 @@ private:
 
   /* inner subfunctions for freeze process */
   int inner_logstream_freeze(ObFuture<int> *result);
-  int submit_log_for_freeze();
+  int submit_log_for_freeze(bool is_try);
+  void try_submit_log_for_freeze_();
   int ls_freeze_task();
   int tablet_freeze_task(ObTableHandleV2 handle);
   int submit_freeze_task(const bool is_ls_freeze, ObFuture<int> *result, ObTableHandleV2 &handle);
