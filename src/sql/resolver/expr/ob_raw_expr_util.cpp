@@ -1947,7 +1947,19 @@ int ObRawExprUtils::check_deterministic_single(const ObRawExpr *expr,
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(expr));
   if (OB_SUCC(ret) && ObResolverUtils::DISABLE_CHECK != check_status) {
-    if (expr->is_sys_func_expr()) {
+    if (is_oracle_mode()
+        && (ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status
+            || ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status)
+        && T_OP_IS == expr->get_expr_type()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Use ISNULL() in generated column or functional index");
+      LOG_WARN("special function is not suppored in generated column", K(ret), KPC(expr));
+    } else if (is_oracle_mode()
+              && T_FUN_SYS_DEFAULT == expr->get_expr_type()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Use DEFAULT() in generated column or functional index or check constraint");
+      LOG_WARN("special function is not suppored in generated column", K(ret), KPC(expr));
+    } else if (expr->is_sys_func_expr()) {
       bool is_non_pure_func = false;
       if (OB_FAIL(expr->is_non_pure_sys_func_expr(is_non_pure_func))) {
         LOG_WARN("check is non pure sys func expr failed", K(ret));
