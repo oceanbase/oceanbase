@@ -1480,7 +1480,7 @@ int ObXAService::one_phase_xa_commit_(const ObXATransID &xid,
 
     if (OB_TRANS_XA_PROTO == ret) {
       need_delete = false;
-    } else if (OB_TRANS_CTX_NOT_EXIST == ret) {
+    } else if (OB_TRANS_CTX_NOT_EXIST == ret || OB_TRANS_IS_EXITING == ret) {
       // check xa trans state again
       if (OB_SUCCESS != (tmp_ret = query_sche_and_coord(tenant_id,
                                                         xid,
