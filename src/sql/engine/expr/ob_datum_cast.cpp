@@ -967,8 +967,13 @@ int common_string_double(const ObExpr &expr,
         }
       } else if (OB_FAIL(check_convert_str_err(in_str.ptr(), endptr, in_str.length(), err, in_cs_type))) {
         LOG_WARN("failed to check_convert_str_err", K(ret), K(in_str), K(out_val), K(err), K(in_cs_type));
-        ret = OB_ERR_DOUBLE_TRUNCATED;
+        if (lib::is_mysql_mode() && CM_IS_COLUMN_CONVERT(expr.extra_) && ret == OB_ERR_DATA_TRUNCATED) {
+          // do nothing, compatible mysql, retain OB_ERR_DATA_TRUNCATED error code in column_convert.
+        } else {
+          ret = OB_ERR_DOUBLE_TRUNCATED;
+        }
         if (CM_IS_WARN_ON_FAIL(expr.extra_)) {
+          ret = OB_ERR_DOUBLE_TRUNCATED;
           LOG_USER_WARN(OB_ERR_DOUBLE_TRUNCATED, in_str.length(), in_str.ptr());
         }
       }
