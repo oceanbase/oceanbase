@@ -10870,6 +10870,11 @@ int ObDMLResolver::add_cte_table_to_children(ObChildStmtResolver& child_resolver
     } else {
     }
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < parent_cte_tables_.count(); i++) {
+    if (OB_FAIL(child_resolver.add_parent_cte_table_item(parent_cte_tables_.at(i)))) {
+      LOG_WARN("add parent cte table to children failed", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -14043,26 +14048,51 @@ int ObDMLResolver::add_parent_cte_table_to_children(ObChildStmtResolver &child_r
   return ret;
 }
 
-int ObDMLResolver::check_CTE_name_exist(const ObString &var_name, bool &exist){
+int ObDMLResolver::check_current_CTE_name_exist(const ObString &var_name, bool &exist){
   int ret = OB_SUCCESS;
   exist = false;
-  //优先找自己本层定义的CTE table
   for (int64_t i = 0; !exist && i < current_cte_tables_.count(); i++) {
-    if (ObCharset::case_insensitive_equal(current_cte_tables_[i]->table_name_, var_name)) {
+    if (OB_NOT_NULL(current_cte_tables_[i]) &&
+        ObCharset::case_insensitive_equal(current_cte_tables_[i]->table_name_, var_name)) {
       exist = true;
     }
   }
   return ret;
 }
 
-int ObDMLResolver::check_CTE_name_exist(const ObString &var_name, bool &exist, TableItem *&table_item){
+int ObDMLResolver::check_current_CTE_name_exist(const ObString &var_name, bool &exist, TableItem *&table_item){
   int ret = OB_SUCCESS;
   exist = false;
-  //优先找自己本层定义的CTE table
   for (int64_t i = 0; !exist && i < current_cte_tables_.count(); i++) {
-    if (ObCharset::case_insensitive_equal(current_cte_tables_[i]->table_name_, var_name)) {
+    if (OB_NOT_NULL(current_cte_tables_[i]) &&
+        ObCharset::case_insensitive_equal(current_cte_tables_[i]->table_name_, var_name)) {
       exist = true;
       table_item = current_cte_tables_[i];
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::check_parent_CTE_name_exist(const ObString &var_name, bool &exist){
+  int ret = OB_SUCCESS;
+  exist = false;
+  for (int64_t i = 0; !exist && i < parent_cte_tables_.count(); i++) {
+    if (OB_NOT_NULL(parent_cte_tables_[i]) &&
+        ObCharset::case_insensitive_equal(parent_cte_tables_[i]->table_name_, var_name)) {
+      exist = true;
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::check_parent_CTE_name_exist(const ObString &var_name, bool &exist, TableItem *&table_item){
+  int ret = OB_SUCCESS;
+  exist = false;
+  for (int64_t i = 0; !exist && i < parent_cte_tables_.count(); i++) {
+    if (OB_NOT_NULL(parent_cte_tables_[i]) &&
+        ObCharset::case_insensitive_equal(parent_cte_tables_[i]->table_name_, var_name)) {
+      exist = true;
+      table_item = parent_cte_tables_[i];
     }
   }
   return ret;
@@ -14173,8 +14203,6 @@ int ObDMLResolver::init_cte_resolver(ObSelectResolver &select_resolver,
     /* 把当前的cte定义表名传入子resolver，用于判断后续是否是递归类的cte */
     if (OB_FAIL(add_cte_table_to_children(select_resolver))) {
       LOG_WARN("failed to resolve with clause", K(ret));
-    } else if (OB_FAIL(add_parent_cte_table_to_children(select_resolver))) {
-      LOG_WARN("failed to add parent cte table to children", K(ret));
     }
   }
   return ret;
@@ -14240,8 +14268,19 @@ int ObDMLResolver::add_fake_schema(ObSelectStmt *left_stmt)
             new_col->set_meta_type(expr->get_result_type());
             new_col->set_accuracy(expr->get_accuracy());
             new_col->set_collation_type(select_expr->get_collation_type());
+            new_col->set_extended_type_info(expr->get_enum_set_values());
             new_col->add_column_flag(CTE_GENERATED_COLUMN_FLAG);
-            tbl_schema->add_column(*new_col);
+            if (OB_FAIL(tbl_schema->add_column(*new_col))) {
+              LOG_WARN("failed to add column", K(ret), KPC(new_col));
+              if (OB_ERR_COLUMN_DUPLICATE == ret) {
+                if (lib::is_oracle_mode()) {
+                  ret = OB_ERR_CTE_COLUMN_ALIAS_DUPLICATE;
+                } else {
+                  ObString &name = cte_ctx_.cte_col_names_.at(i);
+                  LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, name.length(), name.ptr());
+                }
+              }
+            }
             //因为table schema内部会深度拷贝一次，所以这个在外部一定要释放
             allocator_->free(new_col);
             //ob_free(new_col);
@@ -14288,18 +14327,28 @@ int ObDMLResolver::resolve_basic_table_with_cte(const ParseNode &parse_tree, Tab
     table_node = parse_tree.children_[0];
   }
   no_defined_database_name = (table_node->children_[0] == NULL);
-  //查找顺序:先查找递归cte，再查找cte，最后查找正常的表
+  //查找顺序:先查找本层cte，再查找递归cte，再查找外层cte，最后查找正常的表
   ObString tblname(table_node->str_len_, table_node->str_value_);
-  if (cte_ctx_.is_with_resolver()
+  if (OB_FAIL(check_current_CTE_name_exist(tblname, find_CTE_name, table_item))) {
+    LOG_WARN("check CTE duplicate name failed", K(ret));
+  } else if (find_CTE_name && no_defined_database_name) {
+    TableItem* CTE_table_item = table_item;
+    table_item = NULL;
+    if (OB_FAIL(resolve_cte_table(parse_tree, CTE_table_item, table_item))) {
+      LOG_WARN("failed to resolve CTE table", K(ret));
+    } else if (OB_ISNULL(table_item)) {
+      table_item = CTE_table_item;
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to resolve CTE table", K(ret));
+    }
+  } else if ((is_oracle_mode() || params_.has_recursive_word_)
+      && cte_ctx_.is_with_resolver()
       && ObCharset::case_insensitive_equal(cte_ctx_.current_cte_table_name_, tblname)
       && tblname.length()
       && no_defined_database_name) {
     //cte表引用了自身，此时的cte是递归
     TableItem *item = NULL;
-    if (!is_oracle_mode() && !params_.has_recursive_word_) {
-      ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("cte table shows in union stmt without recursive keyword", K(ret));
-    } else if (OB_FAIL(resolve_recursive_cte_table(parse_tree, item))) {
+    if (OB_FAIL(resolve_recursive_cte_table(parse_tree, item))) {
       LOG_WARN("revolve recursive set query's right child failed", K(ret));
     } else if (cte_ctx_.more_than_two_branch()) {
       ret = OB_ERR_NEED_ONLY_TWO_BRANCH_IN_RECURSIVE_CTE;
@@ -14321,14 +14370,14 @@ int ObDMLResolver::resolve_basic_table_with_cte(const ParseNode &parse_tree, Tab
       //CTE_TABLE仅仅标记在with clause中，union all右边儿子的中被解析出来的cte伪表
       table_item->type_ = TableItem::CTE_TABLE;
     }
-  } else if (OB_FAIL(check_CTE_name_exist(tblname, find_CTE_name, table_item))) {
+  } else if (OB_FAIL(check_parent_CTE_name_exist(tblname, find_CTE_name, table_item))) {
     LOG_WARN("check CTE duplicate name failed", K(ret));
   } else if (find_CTE_name && no_defined_database_name) {
     TableItem* CTE_table_item = table_item;
     table_item = NULL;
     if (OB_FAIL(resolve_cte_table(parse_tree, CTE_table_item, table_item))) {
       LOG_WARN("failed to resolve CTE table", K(ret));
-    }else if (OB_ISNULL(table_item)) {
+    } else if (OB_ISNULL(table_item)) {
       table_item = CTE_table_item;
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to resolve CTE table", K(ret));
@@ -14547,7 +14596,12 @@ int ObDMLResolver::resolve_with_clause_opt_alias_colnames(const ParseNode *parse
           LOG_WARN("failed to set_refactored", K(ret));
           //change error number
           if (OB_HASH_EXIST == ret) {
-            ret = OB_ERR_CTE_COLUMN_ALIAS_DUPLICATE;
+            if (lib::is_oracle_mode()) {
+              ret = OB_ERR_CTE_COLUMN_ALIAS_DUPLICATE;
+            } else {
+              ret = OB_ERR_COLUMN_DUPLICATE;
+              LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, src.length(), src.ptr());
+            }
             LOG_WARN("column ambiguously defined", K(ret));
           }
         }
@@ -14738,7 +14792,7 @@ int ObDMLResolver::resolve_with_clause(const ParseNode *node, bool same_level)
       } else {
         ObString table_name(child_node->children_[0]->str_len_,
                             child_node->children_[0]->str_value_);
-        if (OB_FAIL(ObDMLResolver::check_CTE_name_exist(table_name, duplicate_name))) {
+        if (OB_FAIL(ObDMLResolver::check_current_CTE_name_exist(table_name, duplicate_name))) {
           LOG_WARN("check cte name failed", K(ret));
         } else if (duplicate_name) {
           if (is_oracle_mode()) {
@@ -14768,14 +14822,6 @@ int ObDMLResolver::resolve_with_clause(const ParseNode *node, bool same_level)
           table_item->node_ = child_node;
         }
       }
-    }
-  }
-
-  //解析完本层的在加入parent的到本层，为了的是本层优先，
-  //屏蔽父层次相同名字的cte的表
-  if (OB_SUCC(ret) && is_select_resolver()) {
-    if (OB_FAIL(set_parent_cte())) {
-      LOG_WARN("set parent cte failed");
     }
   }
   return ret;

@@ -102,7 +102,7 @@ ERROR 42S02: Table 'cte_st.qn' doesn't exist
 # recursive
 with recursive qn AS (SELECT a FROM qn)
 SELECT qn.a FROM qn;
-ERROR HY000: recursive WITH clause must use a UNION ALL operation
+ERROR HY000: Recursive Common Table Expression should contain a UNION ALL
 
 with RECURSIVE qn1 AS (SELECT a FROM qn3),
 qn2 AS (SELECT a FROM qn1),
@@ -520,7 +520,7 @@ with RECURSIVE qn (foo, bar) as (select 1,1 from t1) select * from qn;
 |   1 |   1 |
 +-----+-----+
 with RECURSIVE qn (foo, foo) as (select 1,2 from dual) select * from qn;
-ERROR HY000: duplicate name found in column alias list for WITH clause
+ERROR 42S21: Duplicate column name 'foo'
 
 # Derived tables support this too
 # Column names for QN/DT are printed
@@ -1650,7 +1650,7 @@ with RECURSIVE t4(a) as (select 1 from dual union all select a+1 from t4 where a
 |    9 |
 +------+
 with RECURSIVE cte(a,a) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
-ERROR HY000: duplicate name found in column alias list for WITH clause
+ERROR 42S21: Duplicate column name 'a'
 with RECURSIVE cte(a,b) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
 +------+------+
 | a    | b    |
@@ -1747,122 +1747,23 @@ with RECURSIVE cte(a) as (select 1 from dual union all select 2 from dual), cte_
 |    2 |
 +------+
 with RECURSIVE cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 UNION ALL select 2 from dual) select * from cte;
-ERROR HY000: UNION ALL operation in recursive WITH clause must have only two branches
+ERROR HY000: More than one recursive query blocks of Common Table Expression not supported
 with RECURSIVE cte(n) AS ( select 1 from cte) select * from cte;
-ERROR HY000: recursive WITH clause must use a UNION ALL operation
+ERROR HY000: Recursive Common Table Expression should contain a UNION ALL
 set @@ob_query_timeout=1000000;
 with RECURSIVE cte(n) AS ( select 1 from dual UNION ALL select sum(n+1) from cte) select * from cte;
-ERROR HY000: Recursive Common Table Expression can contain neither aggregation nor window functions in recursive query block
+ERROR HY000: ORDER BY / LIMIT / SELECT DISTINCT / HAVING / WINDOW FUNCTION / GROUP BY in recursive query block of Common Table Expression not supported
 set @@ob_query_timeout=10000000;
 with RECURSIVE cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 union all select n+1 from cte where n < 2) select * from cte;
-ERROR HY000: UNION ALL operation in recursive WITH clause must have only two branches
+ERROR HY000: More than one recursive query blocks of Common Table Expression not supported
 with RECURSIVE cte(n) as (select 1 from dual union all select c1 from t1 union all (with RECURSIVE cte(n) as (select c1 from t1) select * from cte)) select * from cte;
-ERROR HY000: cycle detected while executing recursive WITH query
-with RECURSIVE cte(n) as (select '1' from dual union all select n+1 from cte where n < 100) select * from cte;
 +------+
 | n    |
 +------+
-| 1    |
-| 2    |
-| 3    |
-| 4    |
-| 5    |
-| 6    |
-| 7    |
-| 8    |
-| 9    |
-| 10   |
-| 11   |
-| 12   |
-| 13   |
-| 14   |
-| 15   |
-| 16   |
-| 17   |
-| 18   |
-| 19   |
-| 20   |
-| 21   |
-| 22   |
-| 23   |
-| 24   |
-| 25   |
-| 26   |
-| 27   |
-| 28   |
-| 29   |
-| 30   |
-| 31   |
-| 32   |
-| 33   |
-| 34   |
-| 35   |
-| 36   |
-| 37   |
-| 38   |
-| 39   |
-| 40   |
-| 41   |
-| 42   |
-| 43   |
-| 44   |
-| 45   |
-| 46   |
-| 47   |
-| 48   |
-| 49   |
-| 50   |
-| 51   |
-| 52   |
-| 53   |
-| 54   |
-| 55   |
-| 56   |
-| 57   |
-| 58   |
-| 59   |
-| 60   |
-| 61   |
-| 62   |
-| 63   |
-| 64   |
-| 65   |
-| 66   |
-| 67   |
-| 68   |
-| 69   |
-| 70   |
-| 71   |
-| 72   |
-| 73   |
-| 74   |
-| 75   |
-| 76   |
-| 77   |
-| 78   |
-| 79   |
-| 80   |
-| 81   |
-| 82   |
-| 83   |
-| 84   |
-| 85   |
-| 86   |
-| 87   |
-| 88   |
-| 89   |
-| 90   |
-| 91   |
-| 92   |
-| 93   |
-| 94   |
-| 95   |
-| 96   |
-| 97   |
-| 98   |
-| 99   |
-| 100  |
+|    1 |
 +------+
+with RECURSIVE cte(n) as (select '1' from dual union all select n+1 from cte where n < 100) select * from cte;
+ERROR 22001: Data too long for column
 
 with RECURSIVE cte(n) as (select n from (select 1 from dual union all select n+1 from cte) tmp) select * from cte;
 ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must be referenced only once, and not in any subquery

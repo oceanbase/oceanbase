@@ -135,7 +135,7 @@ with RECURSIVE t4(a) as (select 1 from dual union all select a+1 from t4 where a
 ##############################
 
 ##   PART 2.1 定义列名重复
---error 5751
+--error 1060
 with RECURSIVE cte(a,a) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
 
 ##   PART 2.2.1 定义列数量与查询产生列一致或不一致
@@ -251,7 +251,6 @@ set @@ob_query_timeout=10000000;
 --error 5743
 with RECURSIVE cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 union all select n+1 from cte where n < 2) select * from cte;
 
---error 5746
 with RECURSIVE cte(n) as (select 1 from dual union all select c1 from t1 union all (with RECURSIVE cte(n) as (select c1 from t1) select * from cte)) select * from cte;
 
 --error 3577

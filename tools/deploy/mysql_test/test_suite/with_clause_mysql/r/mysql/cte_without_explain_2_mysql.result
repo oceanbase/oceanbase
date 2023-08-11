@@ -1028,11 +1028,11 @@ SELECT * FROM x;
 
 with RECURSIVE x(n) AS (SELECT 1 from dual UNION ALL SELECT count(*) FROM x)
   SELECT * FROM x;
-ERROR HY000: Recursive Common Table Expression can contain neither aggregation nor window functions in recursive query block
+ERROR HY000: ORDER BY / LIMIT / SELECT DISTINCT / HAVING / WINDOW FUNCTION / GROUP BY in recursive query block of Common Table Expression not supported
 
 with RECURSIVE x(n) AS (SELECT 1 from dual UNION ALL SELECT sum(n) FROM x)
   SELECT * FROM x;
-ERROR HY000: Recursive Common Table Expression can contain neither aggregation nor window functions in recursive query block
+ERROR HY000: ORDER BY / LIMIT / SELECT DISTINCT / HAVING / WINDOW FUNCTION / GROUP BY in recursive query block of Common Table Expression not supported
 
 with RECURSIVE x(n) AS (SELECT 1 from dual UNION ALL SELECT n+1 FROM x where n < 10 ORDER BY 1 ) SELECT * FROM x;
 +------+
@@ -1105,7 +1105,7 @@ with RECURSIVE outermost(x) AS (
          UNION SELECT * FROM innermost)
 )
 SELECT * FROM outermost ORDER BY 1;
-ERROR HY000: UNION ALL operation in recursive WITH clause must have only two branches
+ERROR HY000: More than one recursive query blocks of Common Table Expression not supported
 
 with RECURSIVE outermost(x) AS (
   SELECT 1 FROM DUAL

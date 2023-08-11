@@ -122,7 +122,7 @@ WITH t4 as (select 1 from dual) select * from t4;
 ##############################
 ##   PART 2.1 定义列名重复
 with cte(a,a) as (select 1,1 from dual) select * from cte;
-ERROR HY000: duplicate name found in column alias list for WITH clause
+ERROR 42S21: Duplicate column name 'a'
 
 ##   PART 2.2.1 定义列数量与查询产生列一致或不一致
 explain basic with cte(a,b) as (select 1,1 from dual) select * from cte;

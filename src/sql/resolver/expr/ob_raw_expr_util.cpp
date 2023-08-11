@@ -4215,6 +4215,43 @@ int ObRawExprUtils::create_type_to_str_expr(ObRawExprFactory &expr_factory,
   return ret;
 }
 
+int ObRawExprUtils::wrap_enum_set_for_stmt(ObRawExprFactory &expr_factory,
+                                           ObSelectStmt *stmt,
+                                           ObSQLSessionInfo *session_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null stmt", K(ret));
+  } else if (stmt->is_set_stmt()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_set_query().count(); i ++) {
+      ret = wrap_enum_set_for_stmt(expr_factory,
+                                   stmt->get_set_query().at(i),
+                                   session_info);
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_select_item_size(); i ++) {
+      ObRawExpr *&expr = stmt->get_select_item(i).expr_;
+      if (OB_ISNULL(expr)){
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null expr");
+      } else if (ob_is_enumset_tc(expr->get_result_type().get_type())) {
+        ObSysFunRawExpr *cast_expr = NULL;
+        if (OB_FAIL(ObRawExprUtils::create_type_to_str_expr(expr_factory,
+                                                            expr,
+                                                            cast_expr,
+                                                            session_info,
+                                                            true))) {
+          LOG_WARN("create to str expr for stmt failed", K(ret));
+        } else {
+          expr = cast_expr;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::get_exec_param_expr(ObRawExprFactory &expr_factory,
                                         ObQueryRefRawExpr *query_ref,
                                         ObRawExpr *outer_val_expr,

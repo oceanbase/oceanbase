@@ -139,7 +139,7 @@ with RECURSIVE t4(a) as (select 1 from dual union all select a+1 from t4 where a
 ##############################
 ##   PART 2.1 定义列名重复
 with RECURSIVE cte(a,a) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
-ERROR HY000: duplicate name found in column alias list for WITH clause
+ERROR 42S21: Duplicate column name 'a'
 
 ##   PART 2.2.1 定义列数量与查询产生列一致或不一致
 with RECURSIVE cte(a,b) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
@@ -973,24 +973,42 @@ with RECURSIVE cte(a) as (select 1 from dual union all select 2 from dual), cte_
 ##   非常的复杂
 ##   递归cte只能有两个入口
 with RECURSIVE cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 UNION ALL select 2 from dual) select * from cte;
-ERROR HY000: UNION ALL operation in recursive WITH clause must have only two branches
+ERROR HY000: More than one recursive query blocks of Common Table Expression not supported
 
 ## 递归必须包含union all
 with RECURSIVE cte(n) AS ( select 1 from cte) select * from cte;
-ERROR HY000: recursive WITH clause must use a UNION ALL operation
+ERROR HY000: Recursive Common Table Expression should contain a UNION ALL
 
 set @@ob_query_timeout=1000000;
 with RECURSIVE cte(n) AS ( select 1 from dual UNION ALL select sum(n+1) from cte) select * from cte;
-ERROR HY000: Recursive Common Table Expression can contain neither aggregation nor window functions in recursive query block
+ERROR HY000: ORDER BY / LIMIT / SELECT DISTINCT / HAVING / WINDOW FUNCTION / GROUP BY in recursive query block of Common Table Expression not supported
 
 set @@ob_query_timeout=10000000;
 
 ##递归查询只允许有两个入口
 with RECURSIVE cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 union all select n+1 from cte where n < 2) select * from cte;
-ERROR HY000: UNION ALL operation in recursive WITH clause must have only two branches
+ERROR HY000: More than one recursive query blocks of Common Table Expression not supported
 
 with RECURSIVE cte(n) as (select 1 from dual union all select c1 from t1 union all (with RECURSIVE cte(n) as (select c1 from t1) select * from cte)) select * from cte;
-ERROR HY000: cycle detected while executing recursive WITH query
++------+
+| n    |
++------+
+|    1 |
+|    1 |
+|    4 |
+|    7 |
+|   10 |
+|   13 |
+|   16 |
+|   19 |
+|    1 |
+|    4 |
+|    7 |
+|   10 |
+|   13 |
+|   16 |
+|   19 |
++------+
 
 with RECURSIVE cte(n) as (select n from (select 1 from dual union all select n+1 from cte) tmp) select * from cte;
 ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must be referenced only once, and not in any subquery
@@ -1826,15 +1844,18 @@ Outputs & filters:
   4 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
   5 - output([1], [1], [1]), filter(nil)
       values({1, 1, 1})
-  6 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), rowset=256
+  6 - output([column_conv(BIGINT,PS:(1,0),NULL,cte1.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.c +
+      1)]), filter([cte1.a < 10]), rowset=256
       access([cte1.a], [cte1.b], [cte1.c])
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key(nil), range(MIN ; MAX)
-  7 - output([cte2.a + 1], [cte2.b + 1], [cte2.c + 1]), filter([cte2.a < 10]), rowset=256
+  7 - output([column_conv(BIGINT,PS:(1,0),NULL,cte2.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.c +
+      1)]), filter([cte2.a < 10]), rowset=256
       access([cte2.a], [cte2.b], [cte2.c])
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key(nil), range(MIN ; MAX)
-  8 - output([cte3.a + 1], [cte3.b + 1], [cte3.c + 1]), filter(nil), rowset=256
+  8 - output([column_conv(BIGINT,PS:(1,0),NULL,cte3.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte3.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte3.c +
+      1)]), filter(nil), rowset=256
       conds([cte3.a < cte2.b]), nl_params_(nil), use_batch=false
   9 - output([cte3.a], [cte3.b], [cte3.c]), filter([cte3.a < 10]), rowset=256
       access([cte3.a], [cte3.b], [cte3.c])
@@ -1847,11 +1868,13 @@ Outputs & filters:
  13 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
  14 - output([1], [1], [1]), filter(nil)
       values({1, 1, 1})
- 15 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), rowset=256
+ 15 - output([column_conv(BIGINT,PS:(1,0),NULL,cte1.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.c +
+      1)]), filter([cte1.a < 10]), rowset=256
       access([cte1.a], [cte1.b], [cte1.c])
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key(nil), range(MIN ; MAX)
- 16 - output([cte2.a + 1], [cte2.b + 1], [cte2.c + 1]), filter([cte2.a < 10]), rowset=256
+ 16 - output([column_conv(BIGINT,PS:(1,0),NULL,cte2.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte2.c +
+      1)]), filter([cte2.a < 10]), rowset=256
       access([cte2.a], [cte2.b], [cte2.c])
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key(nil), range(MIN ; MAX)
@@ -1861,7 +1884,8 @@ Outputs & filters:
  19 - output([UNION([1])], [UNION([2])], [UNION([3])]), filter(nil), rowset=256
  20 - output([1], [1], [1]), filter(nil)
       values({1, 1, 1})
- 21 - output([cte1.a + 1], [cte1.b + 1], [cte1.c + 1]), filter([cte1.a < 10]), rowset=256
+ 21 - output([column_conv(BIGINT,PS:(1,0),NULL,cte1.a + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.b + 1)], [column_conv(BIGINT,PS:(1,0),NULL,cte1.c +
+      1)]), filter([cte1.a < 10]), rowset=256
       access([cte1.a], [cte1.b], [cte1.c])
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key(nil), range(MIN ; MAX)

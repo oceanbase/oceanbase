@@ -256,7 +256,7 @@ with RECURSIVE qn (foo, bar) as (select 1,1 from dual) select * from qn;
 --error 1060
 with RECURSIVE qn as (select 1,1 from t1) select * from qn;
 with RECURSIVE qn (foo, bar) as (select 1,1 from t1) select * from qn;
---error 5751
+--error 1060
 with RECURSIVE qn (foo, foo) as (select 1,2 from dual) select * from qn;
 
 --echo # Derived tables support this too
@@ -1029,7 +1029,7 @@ create table insert_t (c1 int, c2 int, c3 int);
 create table t4(id int, value char(10), parent_id int);
 
 with RECURSIVE t4(a) as (select 1 from dual union all select a+1 from t4 where a+1 < 10) select * from t4;
---error 5751
+--error 1060
 with RECURSIVE cte(a,a) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
 with RECURSIVE cte(a,b) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
 --error 1353
@@ -1103,8 +1103,8 @@ with RECURSIVE cte(n) AS ( select 1 from dual UNION ALL select sum(n+1) from cte
 set @@ob_query_timeout=10000000;
 --error 5743
 with RECURSIVE cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 union all select n+1 from cte where n < 2) select * from cte;
---error 5746
 with RECURSIVE cte(n) as (select 1 from dual union all select c1 from t1 union all (with RECURSIVE cte(n) as (select c1 from t1) select * from cte)) select * from cte;
+--error 1406
 with RECURSIVE cte(n) as (select '1' from dual union all select n+1 from cte where n < 100) select * from cte;
 
 --error 3577

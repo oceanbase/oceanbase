@@ -160,13 +160,14 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       conds([r.empno = e.MGR]), nl_params_(nil), use_batch=false
   4 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
       is_index_back=false, is_global_index=false,
       range_key(nil), range(MIN ; MAX)
-  5 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
   6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -243,11 +244,12 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
       merge_directions([ASC])
-  4 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
-  5 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       sort_keys([e.MGR, ASC])
   6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -328,7 +330,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -421,10 +424,11 @@ Outputs & filters:
       access([d.SAL]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  6 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  7 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
-  8 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  7 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+  8 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       equal_conds([e.SAL = d.SAL]), other_conds(nil)
   9 - output([d.SAL]), filter(nil), rowset=256
       access([d.SAL]), partitions(p0)
@@ -552,7 +556,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([e.MGR = r.empno]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -632,7 +637,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -735,9 +741,10 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([e.MGR = cast(n.empno, DECIMAL(-1, -1))]), other_conds(nil)
-  9 - output([r.empno], [e.MGR], [r.iters], [r.sal], [e.SAL]), filter(nil), rowset=256
+  9 - output([e.MGR], [r.empno], [r.iters], [r.sal], [e.SAL]), filter(nil), rowset=256
       equal_conds([r.mgr = e.EMPno]), other_conds(nil)
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
@@ -840,9 +847,10 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([e.MGR = cast(n.empno, DECIMAL(-1, -1))]), other_conds(nil)
-  9 - output([r.empno], [e.MGR], [e.SAL], [r.iters], [r.sal]), filter(nil), rowset=256
+  9 - output([e.MGR], [e.SAL], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       equal_conds([e.EMPno = r.mgr]), other_conds(nil)
  10 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
@@ -946,7 +954,8 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([e.EMPno = r.mgr]), other_conds(nil)
   9 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256
  10 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256
@@ -1053,7 +1062,8 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([e.EMPno = r.mgr]), other_conds(nil)
   9 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256
  10 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256
@@ -1137,7 +1147,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
@@ -1217,7 +1228,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([e.MGR = r.empno]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -1320,9 +1332,10 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([cast(n.empno, DECIMAL(-1, -1)) = e.MGR], [r.mgr = e.EMPno]), other_conds(nil)
-  9 - output([r.empno], [r.mgr], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
+  9 - output([r.mgr], [r.empno], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
@@ -1427,9 +1440,10 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([r.mgr = e.EMPno], [cast(n.empno, DECIMAL(-1, -1)) = e.MGR]), other_conds(nil)
-  9 - output([r.empno], [r.mgr], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
+  9 - output([r.mgr], [r.empno], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
@@ -1510,7 +1524,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -1589,7 +1604,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.EMPno], [e.ENAME]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.ENAME]), partitions(p0)
@@ -1697,13 +1713,14 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       conds([r.empno = e.MGR]), nl_params_(nil), use_batch=false
   4 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
       is_index_back=false, is_global_index=false,
       range_key(nil), range(MIN ; MAX)
-  5 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
   6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -1780,11 +1797,12 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
       merge_directions([ASC])
-  4 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
-  5 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       sort_keys([e.MGR, ASC])
   6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -1865,7 +1883,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -1958,10 +1977,11 @@ Outputs & filters:
       access([d.SAL]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  6 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  7 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
-  8 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  7 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+  8 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       equal_conds([e.SAL = d.SAL]), other_conds(nil)
   9 - output([d.SAL]), filter(nil), rowset=256
       access([d.SAL]), partitions(p0)
@@ -2089,7 +2109,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([e.MGR = r.empno]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -2169,7 +2190,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -2272,9 +2294,10 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([e.MGR = cast(n.empno, DECIMAL(-1, -1))]), other_conds(nil)
-  9 - output([r.empno], [e.MGR], [r.iters], [r.sal], [e.SAL]), filter(nil), rowset=256
+  9 - output([e.MGR], [r.empno], [r.iters], [r.sal], [e.SAL]), filter(nil), rowset=256
       equal_conds([r.mgr = e.EMPno]), other_conds(nil)
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
@@ -2377,9 +2400,10 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([e.MGR = cast(n.empno, DECIMAL(-1, -1))]), other_conds(nil)
-  9 - output([r.empno], [e.MGR], [e.SAL], [r.iters], [r.sal]), filter(nil), rowset=256
+  9 - output([e.MGR], [e.SAL], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       equal_conds([e.EMPno = r.mgr]), other_conds(nil)
  10 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
@@ -2483,7 +2507,8 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([e.EMPno = r.mgr]), other_conds(nil)
   9 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256
  10 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256
@@ -2590,7 +2615,8 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([e.EMPno = r.mgr]), other_conds(nil)
   9 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256
  10 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256
@@ -2675,7 +2701,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
@@ -2755,7 +2782,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([e.MGR = r.empno]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -2858,9 +2886,10 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([cast(n.empno, DECIMAL(-1, -1)) = e.MGR], [r.mgr = e.EMPno]), other_conds(nil)
-  9 - output([r.empno], [r.mgr], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
+  9 - output([r.mgr], [r.empno], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
@@ -2965,9 +2994,10 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([r.mgr = e.EMPno], [cast(n.empno, DECIMAL(-1, -1)) = e.MGR]), other_conds(nil)
-  9 - output([r.empno], [r.mgr], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
+  9 - output([r.mgr], [r.empno], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
@@ -3048,7 +3078,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -3127,7 +3158,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.EMPno], [e.ENAME]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.ENAME]), partitions(p0)
@@ -3235,13 +3267,14 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       conds([r.empno = e.MGR]), nl_params_(nil), use_batch=false
   4 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
       is_index_back=false, is_global_index=false,
       range_key(nil), range(MIN ; MAX)
-  5 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
   6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -3318,11 +3351,12 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
       merge_directions([ASC])
-  4 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
-  5 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+  5 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       sort_keys([e.MGR, ASC])
   6 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -3403,7 +3437,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -3496,10 +3531,11 @@ Outputs & filters:
       access([d.SAL]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([d.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  6 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
-  7 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
-  8 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  7 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
+  8 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       equal_conds([e.SAL = d.SAL]), other_conds(nil)
   9 - output([d.SAL]), filter(nil), rowset=256
       access([d.SAL]), partitions(p0)
@@ -3627,7 +3663,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([e.MGR = r.empno]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -3707,7 +3744,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -3810,9 +3848,10 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([e.MGR = cast(n.empno, DECIMAL(-1, -1))]), other_conds(nil)
-  9 - output([r.empno], [e.MGR], [r.iters], [r.sal], [e.SAL]), filter(nil), rowset=256
+  9 - output([e.MGR], [r.empno], [r.iters], [r.sal], [e.SAL]), filter(nil), rowset=256
       equal_conds([r.mgr = e.EMPno]), other_conds(nil)
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
@@ -3915,9 +3954,10 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([e.MGR = cast(n.empno, DECIMAL(-1, -1))]), other_conds(nil)
-  9 - output([r.empno], [e.MGR], [e.SAL], [r.iters], [r.sal]), filter(nil), rowset=256
+  9 - output([e.MGR], [e.SAL], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       equal_conds([e.EMPno = r.mgr]), other_conds(nil)
  10 - output([e.EMPno], [e.MGR], [e.SAL]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.EMPno], [e.MGR], [e.SAL]), partitions(p0)
@@ -4021,7 +4061,8 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([e.EMPno = r.mgr]), other_conds(nil)
   9 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256
  10 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256
@@ -4128,7 +4169,8 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([e.EMPno = r.mgr]), other_conds(nil)
   9 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256
  10 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256
@@ -4212,7 +4254,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([r.empno]), filter(nil), rowset=256
       access([r.empno])
@@ -4292,7 +4335,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([e.MGR = r.empno]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -4395,9 +4439,10 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([cast(n.empno, DECIMAL(-1, -1)) = e.MGR], [r.mgr = e.EMPno]), other_conds(nil)
-  9 - output([r.empno], [r.mgr], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
+  9 - output([r.mgr], [r.empno], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
@@ -4502,9 +4547,10 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       equal_conds([r.mgr = e.EMPno], [cast(n.empno, DECIMAL(-1, -1)) = e.MGR]), other_conds(nil)
-  9 - output([r.empno], [r.mgr], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
+  9 - output([r.mgr], [r.empno], [r.iters], [r.sal], [n.empno]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), use_batch=false
  10 - output([r.mgr], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       access([r.mgr], [r.empno], [r.iters], [r.sal])
@@ -4585,7 +4631,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.ENAME], [e.EMPno]), filter(nil), rowset=256
       access([e.MGR], [e.ENAME], [e.EMPno]), partitions(p0)
@@ -4664,7 +4711,8 @@ Outputs & filters:
       access([e.JOB], [e.ENAME], [e.MGR], [e.EMPno]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([e.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([e.ENAME], [e.MGR], [e.EMPno]), filter(nil), rowset=256
+  3 - output([column_conv(VARCHAR,utf8mb4_general_ci,length:30,NULL,e.ENAME)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(DECIMAL,PS:(10,0),
+      NULL,e.EMPno)]), filter(nil), rowset=256
       equal_conds([r.empno = e.MGR]), other_conds(nil)
   4 - output([e.MGR], [e.EMPno], [e.ENAME]), filter([e.EMPno < e.MGR]), rowset=256
       access([e.MGR], [e.EMPno], [e.ENAME]), partitions(p0)
@@ -4799,12 +4847,13 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       conds([e.EMPno > VIEW1.c1]), nl_params_(nil), use_batch=false
-  9 - output([r.empno], [e.MGR], [e.EMPno], [e.SAL], [r.iters], [r.sal]), filter(nil), rowset=256
+  9 - output([e.EMPno], [e.MGR], [e.SAL], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       equal_conds([e.EMPno = r.mgr]), other_conds(nil)
- 10 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256
- 11 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256
+ 10 - output([e.EMPno], [e.MGR], [e.SAL]), filter(nil), rowset=256
+ 11 - output([e.EMPno], [e.MGR], [e.SAL]), filter(nil), rowset=256
       equal_conds([cast(n.empno, DECIMAL(-1, -1)) = e.MGR]), other_conds(nil)
  12 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)
@@ -4918,14 +4967,15 @@ Outputs & filters:
       access([n2.empno]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([n2.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([r.empno], [e.MGR], [r.iters + 1], [r.sal + e.SAL]), filter(nil), rowset=256
+  8 - output([column_conv(DECIMAL,PS:(10,0),NULL,r.empno)], [column_conv(DECIMAL,PS:(4,0),NULL,e.MGR)], [column_conv(BIGINT,PS:(1,0),NULL,r.iters + 1)],
+       [column_conv(DECIMAL,PS:(7,2),NULL,r.sal + e.SAL)]), filter(nil), rowset=256
       conds([e.EMPno > VIEW1.c1]), nl_params_(nil), use_batch=false
-  9 - output([r.empno], [e.MGR], [e.EMPno], [e.SAL], [r.iters], [r.sal]), filter(nil), rowset=256
+  9 - output([e.EMPno], [e.MGR], [e.SAL], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), use_batch=false
- 10 - output([r.empno], [e.MGR], [e.EMPno], [e.SAL], [r.iters], [r.sal]), filter(nil), rowset=256
+ 10 - output([e.EMPno], [e.MGR], [e.SAL], [r.empno], [r.iters], [r.sal]), filter(nil), rowset=256
       equal_conds([e.EMPno = r.mgr]), other_conds(nil)
- 11 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256
- 12 - output([e.MGR], [e.EMPno], [e.SAL]), filter(nil), rowset=256
+ 11 - output([e.EMPno], [e.MGR], [e.SAL]), filter(nil), rowset=256
+ 12 - output([e.EMPno], [e.MGR], [e.SAL]), filter(nil), rowset=256
       equal_conds([cast(n.empno, DECIMAL(-1, -1)) = e.MGR]), other_conds(nil)
  13 - output([n.empno]), filter(nil), rowset=256
       access([n.empno]), partitions(p0)

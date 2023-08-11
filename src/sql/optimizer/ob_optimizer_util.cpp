@@ -5957,7 +5957,8 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
                                          ObSelectStmt &left_stmt,
                                          ObSelectStmt &right_stmt,
                                          ObSelectStmt *select_stmt,
-                                         const bool to_left_type /* false */)
+                                         const bool is_mysql_recursive_union /* false */,
+                                         ObIArray<ObString> *rcte_col_name /* null */)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 1> left_stmts;
@@ -5965,7 +5966,8 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
   if (OB_FAIL(left_stmts.push_back(&left_stmt)) || OB_FAIL(right_stmts.push_back(&right_stmt))) {
     LOG_WARN("failed to pushback stmt", K(ret));
   } else if (OB_FAIL(gen_set_target_list(allocator, session_info, expr_factory,
-                                         left_stmts, right_stmts, select_stmt, to_left_type))) {
+                                         left_stmts, right_stmts, select_stmt, is_mysql_recursive_union,
+                                         rcte_col_name))) {
     LOG_WARN("failed to get set target list", K(ret));
   }
   return ret;
@@ -5977,7 +5979,8 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
                                          ObIArray<ObSelectStmt*> &left_stmts,
                                          ObIArray<ObSelectStmt*> &right_stmts,
                                          ObSelectStmt *select_stmt,
-                                         const bool to_left_type /* false */)
+                                         const bool is_mysql_recursive_union /* false */,
+                                         ObIArray<ObString> *rcte_col_name /* null */)
 {
   int ret = OB_SUCCESS;
   UNUSED(allocator);
@@ -5989,7 +5992,7 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
   } else if (OB_FAIL(try_add_cast_to_set_child_list(allocator, session_info, expr_factory,
                                                     select_stmt->is_set_distinct(),
                                                     left_stmts, right_stmts, &res_types,
-                                                    to_left_type))) {
+                                                    is_mysql_recursive_union, rcte_col_name))) {
     LOG_WARN("failed to try add cast to set child list", K(ret));
   } else if (OB_ISNULL(child_stmt = select_stmt->get_set_query(0))
              || OB_UNLIKELY(res_types.count() != child_stmt->get_select_item_size())) {
@@ -6179,7 +6182,8 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
                                                     ObIArray<ObSelectStmt*> &left_stmts,
                                                     ObIArray<ObSelectStmt*> &right_stmts,
                                                     ObIArray<ObExprResType> *res_types,
-                                                    const bool to_left_type /* false */)
+                                                    const bool is_mysql_recursive_union /* false */,
+                                                    ObIArray<ObString> *rcte_col_name /* null */)
 {
   int ret = OB_SUCCESS;
   ObExprResType res_type;
@@ -6211,7 +6215,7 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
         left_type.unset_result_flag(NOT_NULL_FLAG);
         right_type.unset_result_flag(NOT_NULL_FLAG);
       }
-      if (left_type != right_type || ob_is_enumset_tc(right_type.get_type())) {
+      if (left_type != right_type || ob_is_enumset_tc(right_type.get_type()) || is_mysql_recursive_union) {
         ObSEArray<ObExprResType, 2> types;
         ObExprVersion dummy_op(*allocator);
         ObCollationType coll_type = CS_TYPE_INVALID;
@@ -6271,7 +6275,15 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
         }
         const ObLengthSemantics length_semantics = session_info->get_actual_nls_length_semantics();
         if (OB_FAIL(ret)) {
-        } else if (to_left_type || skip_add_cast) {
+        } else if (is_mysql_recursive_union) {
+          if (left_type.is_null()) {
+            res_type.set_binary();
+            res_type.set_length(0);
+            res_type.set_collation_level(CS_LEVEL_IMPLICIT);
+          } else {
+            res_type = left_type;
+          }
+        } else if (skip_add_cast) {
           res_type = left_type;
         } else if (OB_FAIL(types.push_back(left_type)) || OB_FAIL(types.push_back(right_type))) {
           LOG_WARN("failed to push back", K(ret));
@@ -6294,9 +6306,14 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
         } else if (left_type != res_type && OB_FAIL(add_cast_to_set_list(session_info,
                                                         expr_factory, left_stmts, res_type, i))) {
           LOG_WARN("failed to add add cast to set list", K(ret));
-        } else if (right_type != res_type && OB_FAIL(add_cast_to_set_list(session_info,
+        } else if (!is_mysql_recursive_union &&
+                   right_type != res_type && OB_FAIL(add_cast_to_set_list(session_info,
                                                         expr_factory, right_stmts, res_type, i))) {
           LOG_WARN("failed to add add cast to set list", K(ret));
+        } else if (is_mysql_recursive_union &&
+                   OB_FAIL(add_column_conv_to_set_list(session_info, expr_factory, right_stmts,
+                                                       res_type, i, rcte_col_name))) {
+          LOG_WARN("failed to add column_conv to set list", K(ret));
         }
       } else if (lib::is_oracle_mode() && is_distinct &&
                 (left_type.is_lob() || left_type.is_lob_locator())) {
@@ -6337,16 +6354,23 @@ int ObOptimizerUtil::add_cast_to_set_list(ObSQLSessionInfo *session_info,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected stmt", K(ret), K(stmts.at(i)));
     } else if (ob_is_enumset_tc(src_expr->get_result_type().get_type())) {
-      ObSysFunRawExpr *cast_expr = NULL;
+      ObSysFunRawExpr *to_str_expr = NULL;
       if (src_expr->get_result_type() == res_type) {
         /*do nothing*/
-      } else if (OB_FAIL(ObRawExprUtils::create_cast_expr(*expr_factory, src_expr, res_type,
-                                                          cast_expr, session_info))) {
+      } else if (OB_FAIL(ObRawExprUtils::create_type_to_str_expr(*expr_factory,
+                                                                 src_expr,
+                                                                 to_str_expr,
+                                                                 session_info,
+                                                                 true))) {
+        LOG_WARN("create to str expr for stmt failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(expr_factory, session_info,
+                                                                *to_str_expr, res_type,
+                                                                new_expr))) {
         LOG_WARN("create cast expr for stmt failed", K(ret));
-      } else if (OB_FAIL(cast_expr->add_flag(IS_INNER_ADDED_EXPR))) {
+      } else if (OB_FAIL(new_expr->add_flag(IS_INNER_ADDED_EXPR))) {
         LOG_WARN("failed to add flag", K(ret));
       } else {
-        stmt->get_select_item(idx).expr_ = cast_expr;
+        stmt->get_select_item(idx).expr_ = new_expr;
       }
     } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(expr_factory, session_info,
                                                                *src_expr, res_type,
@@ -6358,6 +6382,42 @@ int ObOptimizerUtil::add_cast_to_set_list(ObSQLSessionInfo *session_info,
       LOG_WARN("failed to add flag", K(ret));
     } else {
       stmt->get_select_item(idx).expr_ = new_expr;
+    }
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::add_column_conv_to_set_list(ObSQLSessionInfo *session_info,
+                                                 ObRawExprFactory *expr_factory,
+                                                 ObIArray<ObSelectStmt*> &stmts,
+                                                 const ObExprResType &res_type,
+                                                 const int64_t idx,
+                                                 ObIArray<ObString> *rcte_col_name)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *src_expr = NULL;
+  ObRawExpr *new_expr = NULL;
+  ObSelectStmt *stmt = NULL;
+  const int64_t num = stmts.count();
+  if (OB_ISNULL(session_info) || OB_ISNULL(expr_factory)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < num; ++i) {
+    if (OB_ISNULL(stmt = stmts.at(i)) || idx >= stmt->get_select_item_size()
+        || OB_ISNULL(src_expr = stmt->get_select_item(idx).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected stmt", K(ret), K(stmts.at(i)));
+    } else if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(session_info,
+                                                              *expr_factory,
+                                                              res_type.get_type(),
+                                                              res_type.get_collation_type(),
+                                                              res_type.get_accuracy().get_accuracy(),
+                                                              true,
+                                                              NULL != rcte_col_name ? &rcte_col_name->at(idx) : NULL,
+                                                              NULL,
+                                                              stmt->get_select_item(idx).expr_))) {
+      LOG_WARN("failed to build column conv expr", K(ret));
     }
   }
   return ret;

@@ -508,6 +508,10 @@ public:
                                      bool is_type_to_str,
                                      ObObjType dst_type = ObMaxType);
 
+  static int wrap_enum_set_for_stmt(ObRawExprFactory &expr_factory,
+                                    ObSelectStmt *stmt,
+                                    ObSQLSessionInfo *session_info);
+
   static int get_exec_param_expr(ObRawExprFactory &expr_factory,
                                  ObQueryRefRawExpr *query_ref,
                                  ObRawExpr *correlated_expr,

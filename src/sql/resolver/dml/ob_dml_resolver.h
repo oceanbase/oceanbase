@@ -675,8 +675,10 @@ protected:
   int add_cte_table_to_children(ObChildStmtResolver& child_resolver);
   int add_parent_cte_table_to_children(ObChildStmtResolver& child_resolver);
   void set_non_record(bool record) { with_clause_without_record_ = record; };
-  int check_CTE_name_exist(const ObString &var_name, bool &dup_name);
-  int check_CTE_name_exist(const ObString &var_name, bool &dup_name, TableItem *&table_item);
+  int check_current_CTE_name_exist(const ObString &var_name, bool &dup_name);
+  int check_current_CTE_name_exist(const ObString &var_name, bool &dup_name, TableItem *&table_item);
+  int check_parent_CTE_name_exist(const ObString &var_name, bool &dup_name);
+  int check_parent_CTE_name_exist(const ObString &var_name, bool &dup_name, TableItem *&table_item);
   int set_cte_ctx(ObCteResolverCtx &cte_ctx, bool copy_col_name = true, bool in_subquery = false);
   int add_cte_table_item(TableItem *table_item,  bool &dup_name);
   int get_opt_alias_colnames_for_recursive_cte(ObIArray<ObString>& columns, const ParseNode *parse_tree);

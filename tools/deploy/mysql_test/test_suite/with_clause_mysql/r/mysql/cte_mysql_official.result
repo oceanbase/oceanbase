@@ -215,16 +215,16 @@ CREATE TABLE numbers
   )
   SELECT * FROM my_cte;
 SELECT * FROM numbers;
-+---+
-| n |
-+---+
-| 1 |
-| 2 |
-| 3 |
-| 4 |
-| 5 |
-| 6 |
-+---+
++------+
+| n    |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
+|    6 |
++------+
 
 INSERT INTO numbers
 WITH RECURSIVE my_cte(n) AS
@@ -236,22 +236,22 @@ WITH RECURSIVE my_cte(n) AS
 SELECT * FROM my_cte;
 
 SELECT * FROM numbers;
-+---+
-| n |
-+---+
-| 1 |
-| 2 |
-| 3 |
-| 4 |
-| 5 |
-| 6 |
-| 1 |
-| 2 |
-| 3 |
-| 4 |
-| 5 |
-| 6 |
-+---+
++------+
+| n    |
++------+
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
+|    6 |
+|    1 |
+|    2 |
+|    3 |
+|    4 |
+|    5 |
+|    6 |
++------+
 
 DELETE FROM numbers
 WHERE numbers.n >
@@ -265,12 +265,12 @@ WHERE numbers.n >
     SELECT AVG(n)/2 FROM my_cte
   );
 SELECT * FROM numbers;
-+---+
-| n |
-+---+
-| 1 |
-| 1 |
-+---+
++------+
+| n    |
++------+
+|    1 |
+|    1 |
++------+
 
 ################################################################################################
 ### PART 2   generating series

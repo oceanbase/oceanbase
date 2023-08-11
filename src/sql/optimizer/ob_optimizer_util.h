@@ -1079,7 +1079,8 @@ public:
                                  ObSelectStmt &left_stmt,
                                  ObSelectStmt &right_stmt,
                                  ObSelectStmt *select_stmt,
-                                 const bool to_left_type = false);
+                                 const bool is_mysql_recursive_union = false,
+                                 ObIArray<ObString> *rcte_col_name = NULL);
 
   static int gen_set_target_list(ObIAllocator *allocator,
                                  ObSQLSessionInfo *session_info,
@@ -1087,7 +1088,8 @@ public:
                                  ObIArray<ObSelectStmt*> &left_stmts,
                                  ObIArray<ObSelectStmt*> &right_stmts,
                                  ObSelectStmt *select_stmt,
-                                 const bool to_left_type = false);
+                                 const bool is_mysql_recursive_union = false,
+                                 ObIArray<ObString> *rcte_col_name = NULL);
 
   static int gen_set_target_list(ObIAllocator *allocator,
                                  ObSQLSessionInfo *session_info,
@@ -1106,13 +1108,21 @@ public:
                                             ObIArray<ObSelectStmt*> &left_stmts,
                                             ObIArray<ObSelectStmt*> &right_stmts,
                                             ObIArray<ObExprResType> *res_types,
-                                            const bool to_left_type = false);
+                                            const bool is_mysql_recursive_union = false,
+                                            ObIArray<ObString> *rcte_col_name = NULL);
 
   static int add_cast_to_set_list(ObSQLSessionInfo *session_info,
                                   ObRawExprFactory *expr_factory,
                                   ObIArray<ObSelectStmt*> &stmts,
                                   const ObExprResType &res_type,
                                   const int64_t idx);
+
+  static int add_column_conv_to_set_list(ObSQLSessionInfo *session_info,
+                                         ObRawExprFactory *expr_factory,
+                                         ObIArray<ObSelectStmt*> &stmts,
+                                         const ObExprResType &res_type,
+                                         const int64_t idx,
+                                         ObIArray<ObString> *rcte_col_name);
 
   static int check_subquery_has_ref_assign_user_var(ObRawExpr *expr, bool &is_has);
 

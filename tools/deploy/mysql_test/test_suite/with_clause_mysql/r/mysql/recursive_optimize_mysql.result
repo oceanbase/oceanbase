@@ -52,7 +52,7 @@ WITH rw (ename, mgr, empno, job) AS
 SELECT ename, empno, mgr, job
 FROM rw
 WHERE job = 'PRESIDENT' ;
-ERROR 42S02: Table doesn't exist
+ERROR 42S02: Table 'cte_st.rw' doesn't exist
 
 WITH rw (ename, mgr, empno, job) AS
 (
@@ -66,6 +66,6 @@ WITH rw (ename, mgr, empno, job) AS
 SELECT /*+ :HINT: */ ename, empno, mgr, job
 FROM rw
 WHERE job = 'PRESIDENT' ;
-ERROR 42S02: Table doesn't exist
+ERROR 42S02: Table 'cte_st.rw' doesn't exist
 
 drop database cte_st;

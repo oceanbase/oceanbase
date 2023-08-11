@@ -110,7 +110,7 @@ WITH t4 as (select 1 from dual) select * from t4;
 --echo ##############################
 
 --echo ##   PART 2.1 定义列名重复
---error 5751
+--error 1060
 with cte(a,a) as (select 1,1 from dual) select * from cte;
 
 --echo ##   PART 2.2.1 定义列数量与查询产生列一致或不一致
