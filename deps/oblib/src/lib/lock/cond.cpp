@@ -20,7 +20,18 @@ namespace obutil
 {
 Cond::Cond()
 {
-    int rt = pthread_cond_init(&_cond, NULL);
+
+    int rt = pthread_condattr_init(&_attr);
+    if (0 != rt) {
+      _OB_LOG_RET(WARN, OB_ERR_SYS, "Failed to init cond attr, err=%d", rt);
+    }
+    // Set the attribute to use CLOCK_MONOTONIC clock source
+    rt = pthread_condattr_setclock(&_attr, CLOCK_MONOTONIC);
+    if (0 != rt) {
+      _OB_LOG_RET(WARN, OB_ERR_SYS, "Failed to set MONOTONIC Clock, err=%d", rt);
+    }
+
+    rt = pthread_cond_init(&_cond, &_attr);
     if (0 != rt) {
       _OB_LOG_RET(WARN, OB_ERR_SYS, "Failed to init cond, err=%d", rt);
     }
@@ -28,7 +39,11 @@ Cond::Cond()
 
 Cond::~Cond()
 {
-  int rt = pthread_cond_destroy(&_cond);
+  int rt = pthread_condattr_destroy(&_attr);
+  if (0 != rt) {
+    _OB_LOG_RET(WARN, OB_ERR_SYS, "Failed to destroy cond attr, err=%d", rt);
+  }
+  rt = pthread_cond_destroy(&_cond);
   if (0 != rt) {
     _OB_LOG_RET(WARN, OB_ERR_SYS, "Failed to destroy cond, err=%d", rt);
   }
