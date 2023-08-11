@@ -2526,9 +2526,9 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
           ret = OB_NOT_INIT;
           LOG_WARN("context param list is null", K(ret));
         } else if (val.get_unknown() >= ctx_.param_list_->count()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("question mark index out of param list count",
-                   "index", val.get_unknown(), "param_count", ctx_.param_list_->count());
+          ret = OB_ERR_BIND_VARIABLE_NOT_EXIST;
+          LOG_WARN("bind variable does not exist",
+                   K(ret), K(val.get_unknown()), K(ctx_.param_list_->count()));
         } else {
           const ObObjParam &param = ctx_.param_list_->at(val.get_unknown());
           c_expr->set_is_literal_bool(param.is_boolean());

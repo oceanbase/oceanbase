@@ -77,10 +77,13 @@ int search(const ObString &str, const ObString &str_list, const ObCollationType 
     ObString comma_str = ObCharsetUtils::get_const_str(cs_type, ',');
 
     while (str_list_pos < str_list.length()) {
-      int64_t comma_pos = ObCharset::instrb(cs_type, str_list.ptr() + str_list_pos, str_list.length() - str_list_pos,
-                                            comma_str.ptr(), comma_str.length());
+      comma_pos = ObCharset::instrb(cs_type,
+                                    str_list.ptr() + str_list_pos,
+                                    str_list.length() - str_list_pos,
+                                    comma_str.ptr(),
+                                    comma_str.length());
       const char* elem_ptr = str_list.ptr() + str_list_pos;
-      int64_t elem_length = (comma_pos >=0) ? comma_pos : str_list.length() - str_list_pos;
+      int64_t elem_length = (comma_pos >= 0) ? comma_pos : (str_list.length() - str_list_pos);
       if (0 != ObCharset::strcmp(cs_type, elem_ptr, elem_length, str.ptr(), str.length())) {
         //not match
         str_list_pos += elem_length + ((comma_pos >= 0) ? comma_str.length() : 0);
@@ -90,7 +93,8 @@ int search(const ObString &str, const ObString &str_list, const ObCollationType 
       }
     }
 
-    if (str_list_pos < str_list.length()) {
+    if (str_list_pos < str_list.length()
+        || (str_list_pos == str_list.length() && 0 == str.length() && comma_pos > 0)) {
       res_pos = elem_idx;
     } else {
       res_pos = 0;

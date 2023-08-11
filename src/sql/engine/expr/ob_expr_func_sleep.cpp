@@ -110,6 +110,9 @@ int ObExprSleep::eval_sleep(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
   if (OB_FAIL(expr.eval_param_value(ctx, sec))) {
     LOG_WARN("eval arg failed", K(ret));
   } else if (sec->is_null()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sleep");
+    LOG_WARN("invalid arguments to sleep");
   } else if (OB_FAIL(get_usec(number::ObNumber(sec->get_number()), usec, calc_alloc))) {
     ret = OB_SUCCESS;
   } else {
