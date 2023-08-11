@@ -356,7 +356,7 @@ int ObMPPacketSender::send_error_packet(int err,
       }
     }
     if (OB_SUCC(ret)) {
-      ObArenaAllocator allocator(ObMemAttr(conn_->tenant_id_));
+      ObArenaAllocator allocator(ObMemAttr(conn_->tenant_id_, "WARN_MSG"));
       ObString new_message = message;
       ObCollationType client_cs_type = CS_TYPE_UTF8MB4_BIN;
 
