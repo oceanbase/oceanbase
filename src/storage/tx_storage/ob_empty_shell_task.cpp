@@ -165,7 +165,7 @@ int ObTabletEmptyShellHandler::get_empty_shell_tablet_ids(common::ObTabletIDArra
       } else if (OB_FAIL(check_can_become_empty_shell_(*tablet, can_become_shell, need_retry))) {
         STORAGE_LOG(WARN, "check tablet can become empty shell failed", KR(ret), KPC(tablet));
       } else if (!can_become_shell) {
-        STORAGE_LOG(INFO, "table can not become shell", KR(ret), "tablet_meta", tablet->get_tablet_meta());
+        STORAGE_LOG(INFO, "tablet can not become shell", KR(ret), "tablet_meta", tablet->get_tablet_meta());
       } else if (OB_FAIL(empty_shell_tablet_ids.push_back(tablet->get_tablet_meta().tablet_id_))) {
         STORAGE_LOG(WARN, "update tablet to empty shell failed", KR(ret),"tablet_meta", tablet->get_tablet_meta());
       }
@@ -242,7 +242,7 @@ int ObTabletEmptyShellHandler::check_can_become_empty_shell_(const ObTablet &tab
   } else if (MTL_IS_PRIMARY_TENANT() && OB_FAIL(check_tablet_empty_shell_for_primary_(tablet, user_data, can, need_retry))) {
     STORAGE_LOG(WARN, "failed to check tablet can become empty shell for primary", K(ret), "ls_id", ls_->get_ls_id(), K(tablet_id));
   } else if (!MTL_IS_PRIMARY_TENANT() && OB_FAIL(check_tablet_empty_shell_for_standby_(tablet, user_data, can, need_retry))) {
-    STORAGE_LOG(WARN, "failed to update tablet to shell", K(ret), "ls_id", ls_->get_ls_id(), K(tablet_id));
+    STORAGE_LOG(WARN, "failed to check tablet can become empty shell for standby", K(ret), "ls_id", ls_->get_ls_id(), K(tablet_id));
   }
   return ret;
 }
@@ -284,7 +284,7 @@ int ObTabletEmptyShellHandler::check_tablet_empty_shell_for_standby_(
       need_retry = true;
       if (REACH_TENANT_TIME_INTERVAL(1 * 1000 * 1000/*1s*/)) {
         STORAGE_LOG(INFO, "readable_scn is smaller than finish_scn",
-          "ls_id", ls_->get_ls_id(), K(tablet_id), K(info), K(user_data));
+          "ls_id", ls_->get_ls_id(), K(tablet_id), K(readable_scn), K(user_data), KPC(info));
       }
     }
   }

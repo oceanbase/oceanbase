@@ -328,7 +328,7 @@ int ObLSTabletService::delete_all_tablets()
     ObSArray<ObTabletID> tablet_id_array;
     GetAllTabletIDOperator op(tablet_id_array);
 
-    ObTimeGuard time_guard("ObLSTabletService::delete_all_tablets", 1 * 1000 * 1000);
+    ObTimeGuard time_guard("ObLSTabletService::delete_all_tablets", 1_s);
     common::ObBucketWLockAllGuard lock_guard(bucket_lock_);
     time_guard.click("Lock");
     if (OB_FAIL(tablet_id_set_.foreach(op))) {
@@ -427,7 +427,7 @@ int ObLSTabletService::remove_tablets(const common::ObIArray<common::ObTabletID>
 
   if (OB_SUCC(ret)) {
     ObMetaDiskAddr tablet_addr;
-    ObTimeGuard time_guard("ObLSTabletService::remove_tablets", 1 * 1000 * 1000);
+    ObTimeGuard time_guard("ObLSTabletService::remove_tablets", 1_s);
     ObMultiBucketLockGuard lock_guard(bucket_lock_, true/*is_write_lock*/);
     if (OB_FAIL(lock_guard.lock_multi_buckets(all_tablet_id_hash_array))) {
       LOG_WARN("failed to lock multi buckets", K(ret));
@@ -497,7 +497,7 @@ int ObLSTabletService::remove_tablets(const common::ObIArray<common::ObTabletID>
 int ObLSTabletService::do_remove_tablet(const ObTabletMapKey &key)
 {
   int ret = OB_SUCCESS;
-  ObTimeGuard time_guard("RmTabletLock", 1000000/*1 seconds*/);
+  ObTimeGuard time_guard("RmTabletLock", 1_s);
   ObBucketHashWLockGuard lock_guard(bucket_lock_, key.tablet_id_.hash());
   time_guard.click("Lock");
   if (OB_FAIL(inner_remove_tablet(key.ls_id_, key.tablet_id_))) {
@@ -723,7 +723,7 @@ int ObLSTabletService::trim_old_tablets(const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle_head;
-  ObTimeGuard time_guard("ObLSTabletService::trim_old_tablets", 1 * 1000 * 1000);
+  ObTimeGuard time_guard("ObLSTabletService::trim_old_tablets", 1_s);
   ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
   time_guard.click("Lock");
 
@@ -769,7 +769,7 @@ int ObLSTabletService::rollback_rebuild_tablet(const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle_head;
-  ObTimeGuard time_guard("ObLSTabletService::rollback_rebuild_tablet", 1 * 1000 * 1000);
+  ObTimeGuard time_guard("ObLSTabletService::rollback_rebuild_tablet", 1_s);
   ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
   time_guard.click("Lock");
 
@@ -818,7 +818,7 @@ int ObLSTabletService::rebuild_tablet_with_old(
     ObTabletHandle &tablet_guard)
 {
   int ret = OB_SUCCESS;
-  ObTimeGuard time_guard("ObLSTabletService::rebuild_tablet_with_old", 1 * 1000 * 1000);
+  ObTimeGuard time_guard("ObLSTabletService::rebuild_tablet_with_old", 1_s);
   common::ObArenaAllocator allocator("RebuildTablet");
   ObTabletHandle old_tablet_hdl;
   ObTabletHandle tmp_tablet_hdl;
@@ -868,7 +868,7 @@ int ObLSTabletService::migrate_update_tablet(
     const ObMigrationTabletParam &mig_tablet_param)
 {
   int ret = OB_SUCCESS;
-  ObTimeGuard time_guard("ObLSTabletService::migrate_update_tablet", 1 * 1000 * 1000);
+  ObTimeGuard time_guard("ObLSTabletService::migrate_update_tablet", 1_s);
   common::ObArenaAllocator allocator("MigUpTab");
   const common::ObTabletID &tablet_id = mig_tablet_param.tablet_id_;
   const share::ObLSID &ls_id = mig_tablet_param.ls_id_;
@@ -916,7 +916,7 @@ int ObLSTabletService::migrate_create_tablet(
     ObTabletHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObTimeGuard time_guard("ObLSTabletService::migrate_create_tablet", 1 * 1000 * 1000);
+  ObTimeGuard time_guard("ObLSTabletService::migrate_create_tablet", 1_s);
   common::ObArenaAllocator allocator("MigCreateTab");
   const share::ObLSID &ls_id = mig_tablet_param.ls_id_;
   const common::ObTabletID &tablet_id = mig_tablet_param.tablet_id_;
@@ -993,7 +993,7 @@ int ObLSTabletService::update_tablet_checkpoint(
 {
   int ret = OB_SUCCESS;
 
-  ObTimeGuard time_guard("UpdateTabletCKPT", 3000000/*3 seconds*/);
+  ObTimeGuard time_guard("UpdateTabletCKPT", 3_s);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls tablet svr hasn't been inited", K(ret));
@@ -1062,7 +1062,7 @@ int ObLSTabletService::update_tablet_table_store(
     ObTablet *old_tablet = old_tablet_handle.get_obj();
     const common::ObTabletID &tablet_id = old_tablet->get_tablet_meta().tablet_id_;
 
-    ObTimeGuard time_guard("ObLSTabletService::ReplaceSSTable", 1 * 1000 * 1000);
+    ObTimeGuard time_guard("ObLSTabletService::ReplaceSSTable", 1_s);
     ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
     time_guard.click("Lock");
 
@@ -1127,7 +1127,7 @@ int ObLSTabletService::update_tablet_table_store(
   ObTabletHandle old_tablet_hdl;
   ObTabletHandle tmp_tablet_hdl;
   ObTabletHandle new_tablet_hdl;
-  ObTimeGuard time_guard("ObLSTabletService::UpdateTableStore", 1 * 1000 * 1000);
+  ObTimeGuard time_guard("ObLSTabletService::UpdateTableStore", 1_s);
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1190,7 +1190,7 @@ int ObLSTabletService::update_tablet_mstx(
   ObTablet *new_tablet = nullptr;
   ObMetaDiskAddr new_addr;
 
-  ObTimeGuard time_guard("ObLSTabletService::update_tablet_mstx", 1 * 1000 * 1000);
+  ObTimeGuard time_guard("ObLSTabletService::update_tablet_mstx", 1_s);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -1252,7 +1252,7 @@ int ObLSTabletService::update_tablet_to_empty_shell(const common::ObTabletID &ta
   const share::ObLSID &ls_id = ls_->get_ls_id();
   const ObTabletMapKey key(ls_id, tablet_id);
   ObTabletHandle new_tablet_hdl;
-  ObTimeGuard time_guard("UpdateTabletToEmptyShell", 3 * 1000 * 1000/*3 seconds*/);
+  ObTimeGuard time_guard("UpdateTabletToEmptyShell", 3_s);
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1299,7 +1299,7 @@ int ObLSTabletService::no_lock_update_tablet_to_empty_shell(
   int ret = OB_SUCCESS;
   ObTabletHandle old_tablet_handle;
   const common::ObTabletID &tablet_id = key.tablet_id_;
-  ObTimeGuard time_guard("NoLockUpdateTabletToEmptyShell", 2 * 1000 * 1000/*2 seconds*/);
+  ObTimeGuard time_guard("NoLockUpdateTabletToEmptyShell", 2_s);
 
   if (OB_FAIL(direct_get_tablet(tablet_id, old_tablet_handle))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
@@ -1339,7 +1339,7 @@ int ObLSTabletService::update_medium_compaction_info(
   int ret = OB_SUCCESS;
   common::ObArenaAllocator allocator;
   ObTabletHandle old_tablet_handle;
-  ObTimeGuard time_guard("ObLSTabletService::update_medium_compaction_info", 1 * 1000 * 1000);
+  ObTimeGuard time_guard("ObLSTabletService::update_medium_compaction_info", 1_s);
   ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
   time_guard.click("Lock");
 
@@ -1403,7 +1403,7 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
   ObTabletHandle old_tablet_handle;
   ObTabletHandle tmp_tablet_hdl;
   ObTabletHandle new_tablet_handle;
-  ObTimeGuard time_guard("MdsDump", 3 * 1000 * 1000/*3 seconds*/);
+  ObTimeGuard time_guard("MdsDump", 3_s);
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1467,7 +1467,7 @@ int ObLSTabletService::update_tablet_report_status(const common::ObTabletID &tab
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
-  ObTimeGuard time_guard("ObLSTabletService::update_tablet_report_status", 1 * 1000 * 1000);
+  ObTimeGuard time_guard("ObLSTabletService::update_tablet_report_status", 1_s);
   ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
   time_guard.click("Lock");
 
@@ -1523,7 +1523,7 @@ int ObLSTabletService::update_tablet_restore_status(
   ObTabletRestoreStatus::STATUS current_status = ObTabletRestoreStatus::RESTORE_STATUS_MAX;
   bool can_change = false;
 
-  ObTimeGuard time_guard("ObLSTabletService::update_tablet_report_status", 1 * 1000 * 1000);
+  ObTimeGuard time_guard("ObLSTabletService::update_tablet_report_status", 1_s);
   ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
   time_guard.click("Lock");
   if (IS_NOT_INIT) {
@@ -1596,7 +1596,7 @@ int ObLSTabletService::update_tablet_ha_data_status(
   ObTabletDataStatus::STATUS current_status = ObTabletDataStatus::DATA_STATUS_MAX;
   bool can_change = false;
 
-  ObTimeGuard time_guard("ObLSTabletService::update_tablet_ha_data_status", 1 * 1000 * 1000);
+  ObTimeGuard time_guard("ObLSTabletService::update_tablet_ha_data_status", 1_s);
   ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
   time_guard.click("Lock");
   if (IS_NOT_INIT) {
@@ -1670,7 +1670,7 @@ int ObLSTabletService::update_tablet_ha_expected_status(
   ObTabletExpectedStatus::STATUS current_status = ObTabletExpectedStatus::EXPECTED_STATUS_MAX;
   bool can_change = false;
 
-  ObTimeGuard time_guard("ObLSTabletService::update_tablet_ha_data_status", 1 * 1000 * 1000);
+  ObTimeGuard time_guard("ObLSTabletService::update_tablet_ha_data_status", 1_s);
   ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
   time_guard.click("Lock");
   if (IS_NOT_INIT) {
@@ -1759,7 +1759,7 @@ int ObLSTabletService::replay_create_tablet(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("restart replay tablet should not exist", K(ret), K(ls_id), K(tablet_id));
   } else {
-    ObTimeGuard time_guard("ObLSTabletService::replay_create_tablet", 1 * 1000 * 1000);
+    ObTimeGuard time_guard("ObLSTabletService::replay_create_tablet", 1_s);
     common::ObArenaAllocator allocator("ReplayCreate");
     const ObTabletMapKey key(ls_id, tablet_id);
     ObTabletHandle tablet_hdl;
@@ -2125,7 +2125,7 @@ int ObLSTabletService::create_transfer_in_tablet(
   ObTabletHandle old_tablet_hdl;
 
   LOG_INFO("prepare to init transfer in tablet", K(ret), K(ls_id), K(tablet_meta));
-  ObTimeGuard time_guard("CreateTransferIn", 3000000/*3 seconds*/);
+  ObTimeGuard time_guard("CreateTransferIn", 3_s);
 
   bool cover_empty_shell = false;
   if (!is_inited_) {
@@ -2286,7 +2286,7 @@ int ObLSTabletService::create_memtable(
   ObTabletMemberWrapper<ObTabletTableStore> table_store;
   ObTabletMemberWrapper<share::ObTabletAutoincSeq> autoinc_seq;
 
-  ObTimeGuard time_guard("ObLSTabletService::create_memtable", 10 * 1000);
+  ObTimeGuard time_guard("ObLSTabletService::create_memtable", 10_ms);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -3400,7 +3400,7 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
   ObArenaAllocator allocator("BuildHaTab");
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   ObMetaDiskAddr disk_addr;
-  ObTimeGuard time_guard("ObLSTabletService::build_ha_tablet_new_table_store", 1 * 1000 * 1000);
+  ObTimeGuard time_guard("ObLSTabletService::build_ha_tablet_new_table_store", 1_s);
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

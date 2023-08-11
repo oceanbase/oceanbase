@@ -52,9 +52,11 @@ public:
   ObTabletMediumInfoNodeOperator(ObTabletDumpedMediumInfo &medium_info_list, common::ObIAllocator &allocator);
 public:
   int operator()(const mds::MdsDumpKV &kv);
+  bool dumped() const { return dumped_; }
 private:
   ObTabletDumpedMediumInfo &medium_info_list_;
   common::ObIAllocator &allocator_;
+  bool dumped_;
 };
 } // namespace storage
 } // namespace oceanbase

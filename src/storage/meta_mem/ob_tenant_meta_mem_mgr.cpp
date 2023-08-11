@@ -1169,7 +1169,11 @@ void ObTenantMetaMemMgr::mark_mds_table_deleted_(const ObTabletMapKey &key)
   int ret = OB_SUCCESS;
   ObTabletPointerHandle ptr_handle(tablet_map_);
   if (OB_FAIL(tablet_map_.get(key, ptr_handle))) {
-    LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to get pointer from map", KR(ret), KPC(ptr_handle.get_resource_ptr()));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      // do nothing
+    } else {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to get pointer from map", KR(ret), "resource_ptr", ptr_handle.get_resource_ptr());
+    }
   } else {
     if (OB_ISNULL(ptr_handle.get_resource_ptr())) {
       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ptr_handle is null", KPC(ptr_handle.get_resource_ptr()));

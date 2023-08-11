@@ -639,6 +639,9 @@ private:
       const ObTabletComplexAddr<oceanbase::storage::ObTabletDumpedMediumInfo> &complex_addr,
       const compaction::ObExtraMediumInfo &extra_info,
       compaction::ObMediumCompactionInfoList &medium_info_list);
+  int validate_medium_info_list(
+      const int64_t finish_medium_scn,
+      const ObTabletMdsData &mds_data) const;
   int set_initial_state(const bool initial_state);
 
   int load_deserialize_v1(

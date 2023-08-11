@@ -828,7 +828,14 @@ int ObTablet::read_medium_info_list(
   } else if (OB_FAIL(get_finish_medium_scn(finish_medium_scn))) {
     LOG_WARN("failed to get finish medium scn", K(ret));
   } else if (OB_FAIL(read_mds_table_medium_info_list(allocator, mds_table_medium_info_list))) {
-    LOG_WARN("failed to read mds table medium info list", K(ret));
+    if (OB_EMPTY_RESULT == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to read mds table medium info list", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObTabletMdsData::load_medium_info_list(allocator, complex_addr, base_medium_info_list))) {
     LOG_WARN("failed to load medium info list", K(ret));
   } else if (OB_FAIL(ObTabletMdsData::copy_medium_info_list(finish_medium_scn, *base_medium_info_list, fused_medium_info_list))) {
@@ -5116,12 +5123,12 @@ int ObTablet::read_mds_table(common::ObIAllocator &allocator, ObTabletMdsData &m
       ret = OB_EMPTY_RESULT;
       LOG_INFO("mds table does not exist, may be released", K(ret), K(ls_id), K(tablet_id));
     } else {
-      LOG_WARN("failed to get mds table", K(ret));
+      LOG_WARN("failed to get mds table", K(ret), K(ls_id), K(tablet_id));
     }
   } else {
     ObTabletDumpMdsNodeOperator op(mds_data, allocator);
     if (CLICK_FAIL(mds_table_handle.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(op, for_flush))) {
-      LOG_WARN("failed to traverse mds table", K(ret));
+      LOG_WARN("failed to traverse mds table", K(ret), K(ls_id), K(tablet_id));
     } else if (!op.dumped()) {
       ret = OB_EMPTY_RESULT;
       LOG_INFO("read nothing from mds table", K(ret), K(ls_id), K(tablet_id));
@@ -5135,22 +5142,29 @@ int ObTablet::read_mds_table_medium_info_list(
     common::ObIAllocator &allocator,
     ObTabletDumpedMediumInfo &medium_info_list) const
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = tablet_meta_.ls_id_;
+  const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
   medium_info_list.reset();
   mds::MdsTableHandle mds_table_handle;
 
-  if (OB_FAIL(inner_get_mds_table(mds_table_handle))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to get mds table", K(ret));
-    }
-  } else if (OB_FAIL(medium_info_list.init(allocator))) {
+  if (CLICK_FAIL(medium_info_list.init(allocator))) {
     LOG_WARN("failed to init medium info list", K(ret));
+  } else if (CLICK_FAIL(inner_get_mds_table(mds_table_handle))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_EMPTY_RESULT;
+      LOG_INFO("mds table does not exist, may be released", K(ret), K(ls_id), K(tablet_id));
+    } else {
+      LOG_WARN("failed to get mds table", K(ret), K(ls_id), K(tablet_id));
+    }
   } else {
     ObTabletMediumInfoNodeOperator op(medium_info_list, allocator);
-    if (OB_FAIL(mds_table_handle.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(op, false/*for_flush*/))) {
-      LOG_WARN("failed to traverse mds table", K(ret));
+    if (CLICK_FAIL(mds_table_handle.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(op, false/*for_flush*/))) {
+      LOG_WARN("failed to traverse mds table", K(ret), K(ls_id), K(tablet_id));
+    } else if (!op.dumped()) {
+      ret = OB_EMPTY_RESULT;
+      LOG_INFO("read nothing from mds table", K(ret), K(ls_id), K(tablet_id));
     }
   }
 
@@ -5552,9 +5566,46 @@ int ObTablet::get_fused_medium_info_list(
     LOG_WARN("failed to get finish medium scn", K(ret));
   } else if (OB_FAIL(new_mds_data.init(allocator, mds_table_data, mds_data_, finish_medium_scn))) {
     LOG_WARN("failed to init new mds data", K(ret), K(finish_medium_scn));
+  } else if (OB_FAIL(validate_medium_info_list(finish_medium_scn, new_mds_data))) {
+    LOG_WARN("failed to validate medium info list", K(ret), K(finish_medium_scn));
   } else if (OB_FAIL(mds_data.init(allocator, new_mds_data))) {
     LOG_WARN("failed to assign mds data", K(ret), K(new_mds_data), K(mds_data_), K(mds_table_data));
   }
+  return ret;
+}
+
+int ObTablet::validate_medium_info_list(
+    const int64_t finish_medium_scn,
+    const ObTabletMdsData &mds_data) const
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = tablet_meta_.ls_id_;
+  const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
+  const ObTabletDumpedMediumInfo *medium_info_list = mds_data.medium_info_list_.ptr_;
+  const ObExtraMediumInfo &extra_info = mds_data.extra_medium_info_;
+
+  if (OB_ISNULL(medium_info_list)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("medium info list is null", K(ret), K(mds_data));
+  } else if (OB_UNLIKELY(0 != extra_info.last_medium_scn_ && finish_medium_scn != extra_info.last_medium_scn_)) {
+    ret = OB_INVALID_DATA;
+    LOG_WARN("last medium scn does not equal to last major sstable snapshot version", K(ret), K(ls_id), K(tablet_id),
+        K(finish_medium_scn), K(extra_info));
+  } else {
+    const common::ObIArray<compaction::ObMediumCompactionInfo*> &array = medium_info_list->medium_info_list_;
+    if (!array.empty()) {
+      const compaction::ObMediumCompactionInfo *first_info = array.at(0);
+      if (OB_ISNULL(first_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("medium info is null", K(ret), K(ls_id), K(tablet_id), KP(first_info));
+      } else if (OB_UNLIKELY(first_info->last_medium_snapshot_ != finish_medium_scn)) {
+        ret = OB_INVALID_DATA;
+        LOG_WARN("first medium info does not match last major sstable snapshot version", K(ret), K(ls_id), K(tablet_id),
+            K(finish_medium_scn), KPC(first_info));
+      }
+    }
+  }
+
   return ret;
 }
 

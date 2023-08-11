@@ -595,7 +595,7 @@ int ObTabletMdsData::init_medium_info_list(
      * finish_medium_scn = last_major->get_snapshot_version()
      * if finish_medium_scn < old_extra_medium_info.last_medium_scn_, means local extra_medium_info is invalid,
      * use input medium list to replace
-    */
+     */
     if (nullptr == old_medium_info_list
       || finish_medium_scn < old_extra_medium_info.last_medium_scn_
       || old_extra_medium_info.last_medium_scn_ < full_memory_medium_info_list.extra_medium_info_.last_medium_scn_) {
