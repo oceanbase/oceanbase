@@ -859,7 +859,7 @@ int ObSlaveMapPkeyRangeIdxCalc::build_partition_range_channel_map(
 {
   int ret = OB_SUCCESS;
   part_range_channel_map.destroy();
-  const ObIArray<ObPxTabletRange> &part_ranges = exec_ctx_.get_partition_ranges();
+  const Ob2DArray<ObPxTabletRange> &part_ranges = exec_ctx_.get_partition_ranges();
   if (OB_FAIL(part_range_channel_map.create(DEFAULT_PARTITION_COUNT, common::ObModIds::OB_SQL_PX))) {
     LOG_WARN("create part range map failed", K(ret));
   } else {
@@ -951,7 +951,7 @@ bool ObSlaveMapPkeyRangeIdxCalc::Compare::operator()(
     int cmp = 0;
     const int64_t cnt = sort_cmp_funs_->count();
     for (int64_t i = 0; 0 == cmp && i < cnt; i++) {
-      cmp = sort_cmp_funs_->at(i).cmp_func_(l[i], r[i]);
+      cmp = sort_cmp_funs_->at(i).cmp_func_(l.at(i), r.at(i));
       if (cmp < 0) {
         less = sort_collations_->at(i).is_ascending_;
       } else if (cmp > 0) {
@@ -1265,7 +1265,7 @@ bool ObRangeSliceIdCalc::Compare::operator()(
     int cmp = 0;
     const int64_t cnt = sort_cmp_funs_->count();
     for (int64_t i = 0; 0 == cmp && i < cnt; i++) {
-      cmp = sort_cmp_funs_->at(i).cmp_func_(l[i], r[i]);
+      cmp = sort_cmp_funs_->at(i).cmp_func_(l.at(i), r.at(i));
       if (cmp < 0) {
         less = sort_collations_->at(i).is_ascending_;
       } else if (cmp > 0) {

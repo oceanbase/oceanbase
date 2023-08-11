@@ -17,6 +17,7 @@
 #include "sql/engine/table/ob_block_sample_scan_op.h"
 #include "sql/engine/table/ob_row_sample_scan_op.h"
 #include "common/ob_smart_call.h"
+#include "sql/engine/px/ob_px_sqc_handler.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -272,6 +273,8 @@ int ObStatCollectorOp::split_partition_range()
     int64_t border_vals_cnt = MY_SPEC.sort_exprs_.count() - (int64_t)(!is_none_partition());
     ObPxTabletRange::DatumKey border_vals;
     ObPxTabletRange partition_range;
+    Ob2DArray<ObPxTabletRange> tmp_part_ranges;
+    int64_t datum_len_sum = 0;
     OZ(border_vals.prepare_allocate(border_vals_cnt));
     while (OB_SUCC(ret) && !sort_iter_end) {
       if (OB_FAIL(sort_impl_.get_next_row(MY_SPEC.sort_exprs_))) {
@@ -290,7 +293,7 @@ int ObStatCollectorOp::split_partition_range()
           LOG_WARN("fail to get partition id", K(ret));
         } else {
           if (pre_tablet_id != OB_INVALID_ID) {
-            OZ(ctx_.add_partition_range(partition_range));
+            OZ(tmp_part_ranges.push_back(partition_range));
             partition_range.reset();
           }
           if (is_none_partition()) {
@@ -302,7 +305,7 @@ int ObStatCollectorOp::split_partition_range()
         }
       }
       if (OB_SUCC(ret) && sort_iter_end) {
-        OZ(ctx_.add_partition_range(partition_range));
+        OZ(tmp_part_ranges.push_back(partition_range));
         partition_range.reset();
       }
       CK(0 != step);
@@ -320,6 +323,8 @@ int ObStatCollectorOp::split_partition_range()
             } else if (OB_FAIL(border_vals.at(i - (int64_t)!is_none_partition()).
                   deep_copy(*cur_datum, ctx_.get_allocator()))) {
               LOG_WARN("deep copy datum failed", K(ret), K(i), K(*cur_datum));
+            } else {
+              datum_len_sum += cur_datum->get_deep_copy_size();
             }
           }
           if (OB_SUCC(ret)) {
@@ -328,6 +333,22 @@ int ObStatCollectorOp::split_partition_range()
             OZ(partition_range.range_cut_.push_back(border_vals));
           }
         }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      void *buf = NULL;
+      if (OB_LIKELY(datum_len_sum > 0)) {
+        if (OB_ISNULL(ctx_.get_sqc_handler())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sqc handler is null", K(ret));
+        } else if (OB_ISNULL(buf = ctx_.get_sqc_handler()->get_safe_allocator().alloc(datum_len_sum))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret), K(datum_len_sum));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(ctx_.set_partition_ranges(tmp_part_ranges,
+                                                        static_cast<char*>(buf), datum_len_sum))) {
+        LOG_WARN("set partition ranges failed", K(ret));
       }
     }
   }
