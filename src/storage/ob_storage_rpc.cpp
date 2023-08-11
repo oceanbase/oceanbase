@@ -2886,7 +2886,8 @@ int ObStorageGetConfigVersionAndTransferScnP::process()
 
 ObStorageFetchLSViewP::ObStorageFetchLSViewP(
     common::ObInOutBandwidthThrottle *bandwidth_throttle)
-    : ObStorageStreamRpcP(bandwidth_throttle)
+    : ObStorageStreamRpcP(bandwidth_throttle),
+      max_tablet_num_(0)
 {
 }
 
@@ -2899,7 +2900,15 @@ int ObStorageFetchLSViewP::process()
     ObLSService *ls_service = NULL;
     ObLS *ls = NULL;
     char * buf = NULL;
-    const int64_t MAX_TABLET_NUM = 32;
+    max_tablet_num_ = 32;
+
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      const int64_t tmp_max_tablet_num = tenant_config->_ha_tablet_info_batch_count;
+      if (0 != tmp_max_tablet_num) {
+        max_tablet_num_ = tmp_max_tablet_num;
+      }
+    }
 
     int64_t filled_tablet_count = 0;
     int64_t total_tablet_count = 0;
@@ -2918,7 +2927,7 @@ int ObStorageFetchLSViewP::process()
       if (!tablet_info.is_valid()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("fill tablet meta info get invalid argument", K(ret), K(tablet_info));
-      } else if (filled_tablet_count >= MAX_TABLET_NUM) {
+      } else if (filled_tablet_count >= this->max_tablet_num_) {
         if (this->result_.get_position() > 0 && OB_FAIL(flush_and_wait())) {
           LOG_WARN("failed to flush and wait", K(ret), K(tablet_info));
         } else {

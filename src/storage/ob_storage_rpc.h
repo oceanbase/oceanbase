@@ -1038,6 +1038,8 @@ public:
 
 protected:
   int process();
+protected:
+  int64_t max_tablet_num_;
 };
 
 class ObStorageBlockTxP:

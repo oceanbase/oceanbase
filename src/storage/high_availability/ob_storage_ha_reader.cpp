@@ -2628,6 +2628,8 @@ int ObCopyLSViewInfoObReader::init(
     const int64_t CHECK_GC_LOCK_INTERVAL = 1000000; // 1s
     const int64_t wait_gc_lock_start_ts = ObTimeUtility::current_time();
     int64_t cost_ts = 0;
+    int64_t rpc_timeout = FETCH_LS_VIEW_INFO_TIMEOUT;
+
     do {
       if (ls->is_stopped()) {
         ret = OB_NOT_RUNNING;
@@ -2638,8 +2640,9 @@ int ObCopyLSViewInfoObReader::init(
       } else if (tenant->has_stopped()) {
         ret = OB_TENANT_HAS_BEEN_DROPPED;
         LOG_WARN("tenant has been stopped, stop send get ls view rpc", K(ret), KPC(ls));
+      } else if (FALSE_IT(rpc_timeout = ObStorageHAUtils::get_rpc_timeout())) {
       } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID)
-                .timeout(FETCH_LS_VIEW_INFO_TIMEOUT).dst_cluster_id(src_info.cluster_id_)
+                .timeout(rpc_timeout).dst_cluster_id(src_info.cluster_id_)
                 .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
                 .fetch_ls_view(rpc_arg, rpc_reader_.get_rpc_buffer(), rpc_reader_.get_handle()))) {
         if (OB_TABLET_GC_LOCK_CONFLICT != ret) {
