@@ -3563,7 +3563,7 @@ int ObLSTabletService::check_old_row_legitimacy(
     } else if (OB_FAIL(old_row_getter.get_next_row(storage_old_row))) {
       if (OB_ITER_END == ret) {
         ret = OB_ERR_DEFENSIVE_CHECK;
-        LOG_WARN("old row in storage is not exists", K(ret));
+        FLOG_WARN("old row in storage is not exists", K(ret));
       } else {
         LOG_WARN("get next row from old_row_iter failed", K(ret), KPC(run_ctx.column_ids_), K(old_row));
       }
@@ -3572,7 +3572,7 @@ int ObLSTabletService::check_old_row_legitimacy(
       LOG_WARN("unexpected error, storage old row is NULL", K(ret));
     } else if (storage_old_row->get_count() != old_row.get_count()) {
       ret = OB_ERR_DEFENSIVE_CHECK;
-      LOG_WARN("storage old row is not matched with sql old row", K(ret));
+      FLOG_WARN("storage old row is not matched with sql old row", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < old_row.get_count(); ++i) {
         const ObObj &storage_val = storage_old_row->get_cell(i);
@@ -3589,17 +3589,17 @@ int ObLSTabletService::check_old_row_legitimacy(
           } else if (!is_nop) {
             err_col_id = column_ids.at(i);
             ret = OB_ERR_DEFENSIVE_CHECK;
-            LOG_WARN("storage old row is not matched with sql old row", K(ret),
+            FLOG_WARN("storage old row is not matched with sql old row", K(ret),
                     K(i), K(column_ids.at(i)), K(storage_val), K(sql_val));
           }
         } else if (sql_val.is_nop_value()) {
           //this column is nop val, means that this column does not be touched by DML
           //just ignore it
         } else if (OB_FAIL(storage_val.compare(sql_val, cmp)) || 0 != cmp) {
-          err_col_id = column_ids.at(i);
-          LOG_WARN("storage_val is not equal with sql_val, maybe catch a bug", K(ret),
-                  K(storage_val), K(sql_val), K(cmp), K(column_ids.at(i)));
           ret = OB_ERR_DEFENSIVE_CHECK;
+          err_col_id = column_ids.at(i);
+          FLOG_WARN("storage_val is not equal with sql_val, maybe catch a bug", K(ret),
+                  K(storage_val), K(sql_val), K(cmp), K(column_ids.at(i)));
         }
       }
     }
