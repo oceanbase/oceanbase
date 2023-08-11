@@ -58,6 +58,8 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "analyze table during restore or standby cluster");
   } else if (OB_FAIL(stmt.fill_table_stat_param(ctx, param))) {
     LOG_WARN("failed to fill table stat param", K(ret));
+  } else if (OB_FAIL(pl::ObDbmsStats::process_not_size_manual_column(ctx, param))) {
+    LOG_WARN("failed to process not size_manual column", K(ret));
   } else if (!stmt.is_delete_histogram()) {
     if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, param))) {
       LOG_WARN("failed check stat locked", K(ret));
