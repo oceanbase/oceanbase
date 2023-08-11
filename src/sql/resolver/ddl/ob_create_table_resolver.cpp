@@ -1514,6 +1514,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
 {
   int ret = OB_SUCCESS;
   ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt *>(stmt_);
+  const ObTableSchema *base_table_schema = NULL;
   ParseNode *sub_sel_node = parse_tree.children_[CREATE_TABLE_AS_SEL_NUM_CHILD - 1];
   ObSelectStmt *select_stmt = NULL;
   ObSelectResolver select_resolver(params_);
@@ -1625,7 +1626,9 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); ++i) {
         const SelectItem &select_item = select_items.at(i);
-        const ObRawExpr *expr = select_item.expr_;
+        ObRawExpr *expr = select_item.expr_;
+	      ObColumnRefRawExpr *new_col_ref = static_cast<ObColumnRefRawExpr *>(expr);
+        TableItem *new_table_item = select_stmt->get_table_item_by_id(new_col_ref->get_table_id());
         if (OB_UNLIKELY(NULL == expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("select item expr is null", K(ret), K(i));
@@ -1636,11 +1639,41 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
           } else {
             column.set_column_name(select_item.expr_name_);
           }
-          if (ObResolverUtils::is_restore_user(*session_info_)
+          if (OB_SUCC(ret) && is_mysql_mode()) {
+            if (new_table_item != NULL && new_table_item->is_basic_table()) {
+              if (base_table_schema == NULL &&
+                  OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                            new_table_item->ref_id_, base_table_schema))) {
+                LOG_WARN("get table schema failed", K(ret));
+              } else if (OB_ISNULL(base_table_schema)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("NULL table schema", K(ret));
+              } else {
+                const ObColumnSchemaV2 *org_column = base_table_schema->get_column_schema(select_item.expr_name_);
+                if (NULL != org_column &&
+                    !org_column->is_generated_column() &&
+                    !org_column->get_cur_default_value().is_null()) {
+                    column.set_cur_default_value(org_column->get_cur_default_value());
+                  }
+              }
+            } else if (new_table_item == NULL &&
+                       (ObRawExpr::EXPR_CONST == expr->get_expr_class() ||
+                        (ObRawExpr::EXPR_OPERATOR == expr->get_expr_class() &&
+                         expr->is_static_const_expr())) &&
+                        !expr->get_result_type().is_null()) {
+              common::ObObj zero_obj(0);
+              if (OB_FAIL(column.set_cur_default_value(zero_obj))) {
+                LOG_WARN("set default value failed", K(ret));
+              }
+            } else { /*do nothing*/ }
+          }
+          if (OB_SUCC(ret) && ObResolverUtils::is_restore_user(*session_info_)
               && ObCharset::case_insensitive_equal(column.get_column_name_str(), OB_HIDDEN_PK_INCREMENT_COLUMN_NAME)) {
             continue;
           }
-          if (expr->get_result_type().is_null()) { //bug16503918, NULL需要替换为binary(0)
+          if (OB_FAIL(ret)) {
+            // do nothing
+          } else if (expr->get_result_type().is_null()) { //bug16503918, NULL需要替换为binary(0)
             if (is_oracle_mode()) {
               ret = OB_ERR_ZERO_LEN_COL;
               LOG_WARN("add column failed on oracle mode: length is zero", K(ret));
