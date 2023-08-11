@@ -4009,7 +4009,14 @@ bool ObSQLUtils::is_one_part_table_can_skip_part_calc(const ObTableSchema &schem
   if (!schema.is_partitioned_table()) {
     can_skip = true;
   } else if (schema.get_all_part_num() == 1 && schema.is_hash_part()) {
-    can_skip = true;
+    if (PARTITION_LEVEL_ONE == schema.get_part_level()) {
+      can_skip = true;
+    } else if (PARTITION_LEVEL_TWO == schema.get_part_level()
+              && schema.is_hash_subpart()) {
+      can_skip = true;
+    } else {
+      can_skip = false;
+    }
   } else {
     can_skip = false;
   }
