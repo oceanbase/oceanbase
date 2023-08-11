@@ -1681,53 +1681,62 @@ int ObPLResolver::fill_record_type(
   return ret;
 }
 
+#define RESOLVE_SELECT_VIEW_STMT \
+    ObSelectStmt *select_stmt = NULL;  \
+    ObSelectStmt *real_stmt = NULL;    \
+    ObArenaAllocator alloc;            \
+    ObStmtFactory stmt_factory(alloc);    \
+    ObRawExprFactory expr_factory(alloc);    \
+    const ObDatabaseSchema *db_schema = NULL;   \
+    ObSqlString select_sql;                     \
+    ParseResult parse_result;                   \
+    ObParser parser(alloc, ctx.session_info_.get_sql_mode(),                  \
+                    ctx.session_info_.get_local_collation_connection());      \
+    ObSchemaChecker schema_checker;                                           \
+    ObResolverParams resolver_ctx;                                            \
+    ParseNode *select_stmt_node = NULL;                                       \
+                                                                              \
+    OZ (ctx.schema_guard_.get_database_schema(view_schema->get_tenant_id(),   \
+        view_schema->get_database_id(), db_schema));                          \
+    CK (OB_NOT_NULL(db_schema));                                              \
+    if (lib::is_oracle_mode()) {                                              \
+      OZ (select_sql.append_fmt(                                              \
+        "select * from \"%.*s\".\"%.*s\"",                                    \
+        db_schema->get_database_name_str().length(), db_schema->get_database_name_str().ptr(),  \
+        view_schema->get_table_name_str().length(), view_schema->get_table_name_str().ptr()));  \
+    } else {                                                                                    \
+      OZ (select_sql.append_fmt(    \
+        "select * from `%.*s`.`%.*s`",   \
+        db_schema->get_database_name_str().length(), db_schema->get_database_name_str().ptr(),  \
+        view_schema->get_table_name_str().length(), view_schema->get_table_name_str().ptr()));  \
+    }   \
+    OZ (parser.parse(select_sql.string(), parse_result));  \
+    OZ (schema_checker.init(ctx.schema_guard_));  \
+                                                  \
+    OX (resolver_ctx.allocator_ = &(alloc));      \
+    OX (resolver_ctx.schema_checker_ = &schema_checker);     \
+    OX (resolver_ctx.session_info_ = &(ctx.session_info_));  \
+    OX (resolver_ctx.expr_factory_ = &expr_factory);         \
+    OX (resolver_ctx.stmt_factory_ = &stmt_factory);         \
+    OX (resolver_ctx.sql_proxy_ = &(ctx.sql_proxy_));        \
+    CK (OB_NOT_NULL(resolver_ctx.query_ctx_ = stmt_factory.get_query_ctx()));    \
+    OX (resolver_ctx.query_ctx_->question_marks_count_                           \
+          = static_cast<int64_t>(parse_result.question_mark_ctx_.count_));       \
+                                                                                 \
+    CK (OB_NOT_NULL(select_stmt_node = parse_result.result_tree_->children_[0]));\
+    CK (T_SELECT == select_stmt_node->type_);                                    \
+    ObSelectResolver select_resolver(resolver_ctx);                              \
+    OZ (SMART_CALL(select_resolver.resolve(*select_stmt_node)));                 \
+    CK (OB_NOT_NULL(select_stmt = static_cast<ObSelectStmt*>(select_resolver.get_basic_stmt()))); \
+    CK (OB_NOT_NULL(real_stmt = select_stmt->get_real_stmt()));
+
+
 int ObPLResolver::build_record_type_by_view_schema(const ObPLResolveCtx &ctx,
                                                    const ObTableSchema* view_schema,
                                                    ObRecordType *&record_type)
 {
   int ret = OB_SUCCESS;
-  ObSelectStmt *select_stmt = NULL;
-  ObSelectStmt *real_stmt = NULL;
-  ObArenaAllocator alloc;
-  ObStmtFactory stmt_factory(alloc);
-  ObRawExprFactory expr_factory(alloc);
-  const ObDatabaseSchema *db_schema = NULL;
-  ObSqlString select_sql;
-  ParseResult parse_result;
-  ObParser parser(alloc, ctx.session_info_.get_sql_mode(),
-                  ctx.session_info_.get_local_collation_connection());
-  ObSchemaChecker schema_checker;
-  ObResolverParams resolver_ctx;
-  ParseNode *select_stmt_node = NULL;
-
-  OZ (ctx.schema_guard_.get_database_schema(view_schema->get_tenant_id(),
-      view_schema->get_database_id(), db_schema));
-  CK (OB_NOT_NULL(db_schema));
-  OZ (select_sql.append_fmt(
-    "select * from \"%.*s\".\"%.*s\"",
-    db_schema->get_database_name_str().length(), db_schema->get_database_name_str().ptr(),
-    view_schema->get_table_name_str().length(), view_schema->get_table_name_str().ptr()));
-  OZ (parser.parse(select_sql.string(), parse_result));
-  OZ (schema_checker.init(ctx.schema_guard_));
-
-  OX (resolver_ctx.allocator_ = &(alloc));
-  OX (resolver_ctx.schema_checker_ = &schema_checker);
-  OX (resolver_ctx.session_info_ = &(ctx.session_info_));
-  OX (resolver_ctx.expr_factory_ = &expr_factory);
-  OX (resolver_ctx.stmt_factory_ = &stmt_factory);
-  OX (resolver_ctx.sql_proxy_ = &(ctx.sql_proxy_));
-  CK (OB_NOT_NULL(resolver_ctx.query_ctx_ = stmt_factory.get_query_ctx()));
-  OX (resolver_ctx.query_ctx_->question_marks_count_
-        = static_cast<int64_t>(parse_result.question_mark_ctx_.count_));
-
-  CK (OB_NOT_NULL(select_stmt_node = parse_result.result_tree_->children_[0]));
-  CK (T_SELECT == select_stmt_node->type_);
-
-  ObSelectResolver select_resolver(resolver_ctx);
-  OZ (SMART_CALL(select_resolver.resolve(*select_stmt_node)));
-  CK (OB_NOT_NULL(select_stmt = static_cast<ObSelectStmt*>(select_resolver.get_basic_stmt())));
-  // OZ (get_view_select_stmt(resolve_ctx, view_schema, select_stmt));
-  CK (OB_NOT_NULL(real_stmt = select_stmt->get_real_stmt()));
+  RESOLVE_SELECT_VIEW_STMT;
   CK (OB_NOT_NULL(record_type));
   OZ (fill_record_type(ctx.allocator_, real_stmt, record_type));
   return ret;
@@ -1798,6 +1807,38 @@ int ObPLResolver::build_record_type_by_table_schema(common::ObIAllocator &alloca
   }
   return ret;
 }
+
+int ObPLResolver::collect_dep_info_by_view_schema(const ObPLResolveCtx &ctx,
+                                                  const ObTableSchema* view_schema,
+                                                  ObIArray<ObSchemaObjVersion> &dependency_objects)
+{
+  int ret = OB_SUCCESS;
+  RESOLVE_SELECT_VIEW_STMT;
+  CK (OB_NOT_NULL(real_stmt->get_global_dependency_table()));
+  for (int64_t i = 0; OB_SUCC(ret) && i < real_stmt->get_global_dependency_table()->count(); ++i) {
+    OZ (dependency_objects.push_back(real_stmt->get_global_dependency_table()->at(i)));
+  }
+  return ret;
+}
+int ObPLResolver::collect_dep_info_by_schema(const ObPLResolveCtx &ctx,
+                                             const ObTableSchema* table_schema,
+                                             ObIArray<ObSchemaObjVersion> &dependency_objects)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(table_schema));
+  if (OB_SUCC(ret)) {
+    if (table_schema->is_view_table() && !table_schema->is_materialized_view()) {
+      OZ (collect_dep_info_by_view_schema(ctx, table_schema, dependency_objects));
+    } else {
+      OZ(dependency_objects.push_back(ObSchemaObjVersion(table_schema->get_table_id(),
+                                                         table_schema->get_schema_version(),
+                                                         ObDependencyTableType::DEPENDENCY_TABLE)));
+    }
+  }
+  return ret;
+}
+
+#undef RESOLVE_SELECT_VIEW_STMT
 
 int ObPLResolver::build_record_type_by_schema(
   const ObPLResolveCtx &resolve_ctx, const ObTableSchema* table_schema,
@@ -2203,6 +2244,16 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
           OX (pl_type.set_type_from_orgin(pl_type.get_type_from()));
           OX (pl_type.set_type_from(PL_TYPE_ATTR_TYPE));
           OZ (resolve_extern_type_info(resolve_ctx_.schema_guard_, access_idxs, extern_type_info));
+          if (OB_SUCC(ret) && ObObjAccessIdx::is_table_column(access_idxs)) {
+            ObSEArray<ObSchemaObjVersion, 4> dep_schemas;
+            const ObTableSchema* table_schema = NULL;
+            const uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();
+            CK (idx_cnt > 1);
+            OZ (resolve_ctx_.schema_guard_.get_table_schema(tenant_id, access_idxs.at(idx_cnt - 2).var_index_, table_schema));
+            CK (OB_NOT_NULL(table_schema));
+            OZ (collect_dep_info_by_schema(resolve_ctx_, table_schema, dep_schemas));
+            OZ (func.add_dependency_objects(dep_schemas));
+          }
         } else {
           ret = OB_ERR_TYPE_DECL_ILLEGAL;
           LOG_WARN("PLS-00206: %TYPE must be applied to a variable, column, field or attribute",
@@ -2215,11 +2266,13 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
           uint64_t db_id = OB_INVALID_ID;
           const ObTableSchema* table_schema = NULL;
           ObRecordType *record_type = NULL;
+          ObSEArray<ObSchemaObjVersion, 4> dep_schemas;
           ObSEArray<ObDataType, 8> types;
           const uint64_t tenant_id = session_info.get_effective_tenant_id();
           OZ (session_info.get_database_id(db_id));
           OZ (schema_guard.get_table_schema(tenant_id, access_idxs.at(idx_cnt - 1).var_index_, table_schema));
           CK (OB_NOT_NULL(table_schema));
+          OZ (collect_dep_info_by_schema(resolve_ctx_, table_schema, dep_schemas));
           if (OB_FAIL(ret)) {
           } else if (with_rowid) {
             // with_rowid的情况只可能是oracle模式下的trigger
@@ -2257,8 +2310,7 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
                   record_type = static_cast<ObRecordType *>(const_cast<void *>(dup_type));
                   OV (OB_NOT_NULL(record_type));
                   OX (pl_type.set_user_type_id(record_type->get_type(), record_type->get_user_type_id()));
-                  OZ (func.add_dependency_object(ObSchemaObjVersion(table_schema->get_table_id(),
-                      table_schema->get_schema_version(), ObDependencyTableType::DEPENDENCY_TABLE)));
+                  OZ (func.add_dependency_objects(dep_schemas));
                 }
               } else {
                 OZ (build_record_type_by_schema(resolve_ctx_, table_schema, record_type, with_rowid));
@@ -2269,8 +2321,7 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
                 OX (record_type->set_type_from(PL_TYPE_PACKAGE));
                 OX (pl_type.set_user_type_id(record_type->get_type(), record_type->get_user_type_id()));
                 OZ (pl_type.get_all_depended_user_type(resolve_ctx_, *pre_ns));
-                OZ (func.add_dependency_object(ObSchemaObjVersion(table_schema->get_table_id(),
-                        table_schema->get_schema_version(), ObDependencyTableType::DEPENDENCY_TABLE)));
+                OZ (func.add_dependency_objects(dep_schemas));
               }
             }
             OX (pl_type.set_type_from(PL_TYPE_PACKAGE));
@@ -2287,8 +2338,7 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
             OX (pl_type.set_type_from(PL_TYPE_ATTR_ROWTYPE));
             OZ (pl_type.get_all_depended_user_type(resolve_ctx_, current_block_->get_namespace()));
             OZ (resolve_extern_type_info(resolve_ctx_.schema_guard_, access_idxs, extern_type_info));
-            OZ (func.add_dependency_object(ObSchemaObjVersion(table_schema->get_table_id(),
-                      table_schema->get_schema_version(), ObDependencyTableType::DEPENDENCY_TABLE)));
+            OZ (func.add_dependency_objects(dep_schemas));
           }
         } else if (ObObjAccessIdx::is_local_cursor_variable(access_idxs)
                    || ObObjAccessIdx::is_local_refcursor_variable(access_idxs)

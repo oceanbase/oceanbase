@@ -344,6 +344,54 @@ int ObPLObjectValue::get_all_dep_schema(ObSchemaGetterGuard &schema_guard,
   return ret;
 }
 
+int ObPLObjectValue::get_synonym_schema_version(ObPLCacheCtx &pc_ctx,
+                                                uint64_t tenant_id,
+                                                const PCVPlSchemaObj &pcv_schema,
+                                                int64_t &new_version)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(pc_ctx.schema_guard_) || OB_ISNULL(pc_ctx.session_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    const ObSimpleSynonymSchema *synonym_info = NULL;
+    ObSchemaGetterGuard &schema_guard = *pc_ctx.schema_guard_;
+    ObSQLSessionInfo *session_info = pc_ctx.session_info_;
+    CK (SYNONYM_SCHEMA == pcv_schema.schema_type_);
+    OZ (schema_guard.get_simple_synonym_info(tenant_id, pcv_schema.schema_id_, synonym_info));
+    if (OB_SUCC(ret) && OB_NOT_NULL(synonym_info)) {
+      if (OB_PUBLIC_SCHEMA_ID == synonym_info->get_database_id()) {
+        // in same db, no need check for objects with the same name if synonym name is same as linked object name
+        if (pc_ctx.session_info_->get_database_id() == synonym_info->get_object_database_id() &&
+            synonym_info->get_synonym_name() == synonym_info->get_object_name()) {
+          new_version = synonym_info->get_schema_version();
+        } else {
+          bool exist = false;
+          ObSchemaChecker schema_checker;
+          int tmp = schema_checker.init(schema_guard);
+          if (OB_SUCCESS == tmp) {
+            tmp = schema_checker.check_exist_same_name_object_with_synonym(synonym_info->get_tenant_id(),
+                                                                           session_info->get_database_id(),
+                                                                           synonym_info->get_synonym_name(),
+                                                                           exist);
+            if (exist) {
+              ret = OB_OLD_SCHEMA_VERSION;
+              LOG_WARN("exist object which name as current synonym", K(ret), KPC(synonym_info));
+            } else {
+              new_version = synonym_info->get_schema_version();
+            }
+          }
+        }
+      } else {
+        new_version = synonym_info->get_schema_version();
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObPLObjectValue::get_all_dep_schema(ObPLCacheCtx &pc_ctx,
                                          const uint64_t database_id,
                                          int64_t &new_schema_version,
@@ -376,18 +424,24 @@ int ObPLObjectValue::get_all_dep_schema(ObPLCacheCtx &pc_ctx,
       } else if (TABLE_SCHEMA != pcv_schema->schema_type_) {
         // if no table schema, get schema version is enough
         int64_t new_version = 0;
-        if (PACKAGE_SCHEMA == stored_schema_objs_.at(i)->schema_type_
-            || UDT_SCHEMA == stored_schema_objs_.at(i)->schema_type_
-            || ROUTINE_SCHEMA == stored_schema_objs_.at(i)->schema_type_) {
-          tenant_id = pl::get_tenant_id_by_object_id(stored_schema_objs_.at(i)->schema_id_);
+        if (PACKAGE_SCHEMA == pcv_schema->schema_type_
+            || UDT_SCHEMA == pcv_schema->schema_type_
+            || ROUTINE_SCHEMA == pcv_schema->schema_type_) {
+          tenant_id = pl::get_tenant_id_by_object_id(pcv_schema->schema_id_);
         }
-        if (OB_FAIL(schema_guard.get_schema_version(pcv_schema->schema_type_,
+        if (SYNONYM_SCHEMA == pcv_schema->schema_type_) {
+          if (OB_FAIL(get_synonym_schema_version(pc_ctx, tenant_id, *pcv_schema, new_version))) {
+            LOG_WARN("failed to get schema version",
+                   K(ret), K(tenant_id), K(pcv_schema->schema_type_), K(pcv_schema->schema_id_));
+          }
+        } else if (OB_FAIL(schema_guard.get_schema_version(pcv_schema->schema_type_,
                                                     tenant_id,
                                                     pcv_schema->schema_id_,
                                                     new_version))) {
           LOG_WARN("failed to get schema version",
                    K(ret), K(tenant_id), K(pcv_schema->schema_type_), K(pcv_schema->schema_id_));
-        } else {
+        }
+        if (OB_SUCC(ret)) {
           tmp_schema_obj.schema_id_ = pcv_schema->schema_id_;
           tmp_schema_obj.schema_type_ = pcv_schema->schema_type_;
           tmp_schema_obj.schema_version_ = new_version;

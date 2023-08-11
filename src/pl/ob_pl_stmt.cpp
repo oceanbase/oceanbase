@@ -1309,6 +1309,25 @@ int ObPLBlockNS::check_dup_cursor(const ObString &name, bool &is_dup) const
   return ret;
 }
 
+int ObPLExternalNS::add_dependency_synonym_object(const ObSynonymChecker &synonym_checker) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < synonym_checker.get_synonym_ids().count(); ++i) {
+    int64_t schema_version = OB_INVALID_VERSION;
+    uint64_t obj_id = synonym_checker.get_synonym_ids().at(i);
+    if (OB_FAIL(resolve_ctx_.schema_guard_.get_schema_version(SYNONYM_SCHEMA,
+                                                              resolve_ctx_.session_info_.get_effective_tenant_id(),
+                                                              obj_id,
+                                                              schema_version))) {
+      LOG_WARN("get schema version failed", K(resolve_ctx_.session_info_.get_effective_tenant_id()),
+                                            K(obj_id), K(ret));
+    } else if (OB_FAIL(add_dependency_object(ObSchemaObjVersion(obj_id, schema_version, DEPENDENCY_SYNONYM)))) {
+      LOG_WARN("add dependency object failed", K(obj_id), K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObPLExternalNS::add_dependency_object(const ObSchemaObjVersion &obj_version) const
 {
   int ret = OB_SUCCESS;
@@ -1621,6 +1640,9 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
           tenant_id, db_id, name, object_db_id, object_name, exist));
         if (exist) {
           OZ (resolve_synonym(object_db_id, object_name, type, parent_id, var_idx));
+          if (synonym_checker.has_synonym()) {
+            OZ (add_dependency_synonym_object(synonym_checker));
+          }
         }
       }
       // 尝试看是不是系统变量的特殊写法，如 set SQL_MODE='ONLY_FULL_GROUP_BY';
@@ -2046,6 +2068,7 @@ int ObPLExternalNS::resolve_external_routine(const ObString &db_name,
     }
   }
   if (OB_SUCC(ret) && routine_infos.empty()) {
+    ObSynonymChecker synonym_checker;
     const ObRoutineInfo *schema_routine_info = NULL;
     ObRoutineType schema_routine_type =
       is_procedure(routine_type) ? ROUTINE_PROCEDURE_TYPE : ROUTINE_FUNCTION_TYPE;
@@ -2057,7 +2080,8 @@ int ObPLExternalNS::resolve_external_routine(const ObString &db_name,
                                           routine_name,
                                           schema_routine_type,
                                           expr_params,
-                                          schema_routine_info))) {
+                                          schema_routine_info,
+                                          &synonym_checker))) {
       LOG_WARN("failed to get routine info",
                K(ret), K(db_name), K(package_name), K(routine_name));
     } else {
@@ -2068,6 +2092,8 @@ int ObPLExternalNS::resolve_external_routine(const ObString &db_name,
       obj_version.version_ = schema_routine_info->get_schema_version();
       if (OB_FAIL(add_dependency_object(obj_version))) {
         LOG_WARN("add dependency object failed", "package_id", schema_routine_info->get_package_id(), K(ret));
+      } else if (synonym_checker.has_synonym() && OB_FAIL(add_dependency_synonym_object(synonym_checker))) {
+        LOG_WARN("add dependency synonym failed", K(ret));
       } else {
         OZ (routine_infos.push_back(schema_routine_info));
       }

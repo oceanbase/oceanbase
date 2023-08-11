@@ -10068,6 +10068,91 @@ int ObDMLResolver::generate_check_constraint_exprs(const TableItem *table_item,
   return ret;
 }
 
+int ObDMLResolver::collect_schema_version(ObRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  ObDMLStmt *stmt = get_stmt();
+  CK (OB_NOT_NULL(expr));
+  CK (OB_NOT_NULL(stmt));
+  if (OB_FAIL(ret)) {
+  } else if (T_OP_GET_PACKAGE_VAR == expr->get_expr_type()) {
+    uint64_t package_id = OB_INVALID_ID;
+    const ObPackageInfo *spec_info = NULL;
+    const ObPackageInfo *body_info = NULL;
+    uint64_t dep_obj_id = view_ref_id_;
+    ObSchemaObjVersion ver;
+    CK (expr->get_param_count() >= 3);
+    OX (package_id = static_cast<const ObConstRawExpr *>(expr->get_param_expr(0))->get_value().get_uint64());
+    if (package_id != OB_INVALID_ID) {
+      OZ (pl::ObPLPackageManager::get_package_schema_info(*schema_checker_->get_schema_guard(), package_id, spec_info, body_info));
+    }
+    if (OB_NOT_NULL(spec_info)) {
+      OX (ver.object_id_ = spec_info->get_package_id());
+      OX (ver.version_ = spec_info->get_schema_version());
+      OX (ver.object_type_ = DEPENDENCY_PACKAGE);
+      OZ (stmt->add_global_dependency_table(ver));
+      OZ (stmt->add_ref_obj_version(dep_obj_id, spec_info->get_database_id(), ObObjectType::VIEW, ver, *allocator_));
+    }
+    if (OB_NOT_NULL(body_info)) {
+      OX (ver.object_id_ = body_info->get_package_id());
+      OX (ver.version_ = body_info->get_schema_version());
+      OX (ver.object_type_ = DEPENDENCY_PACKAGE_BODY);
+      OZ (stmt->add_global_dependency_table(ver));
+      OZ (stmt->add_ref_obj_version(dep_obj_id, body_info->get_database_id(), ObObjectType::VIEW, ver, *allocator_));
+    }
+  } else if (T_FUN_UDF == expr->get_expr_type()) {
+    ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr*>(expr);
+    ObSchemaObjVersion udf_version;
+    share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+    uint64_t database_id = OB_INVALID_ID;
+    CK (OB_NOT_NULL(udf_expr));
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(schema_guard = params_.schema_checker_->get_schema_guard())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret), K(schema_guard));
+    } else if (OB_FAIL(schema_guard->get_database_id(session_info_->get_effective_tenant_id(),
+                                                      udf_expr->get_database_name().empty() ? session_info_->get_database_name() : udf_expr->get_database_name(),
+                                                      database_id))) {
+      LOG_WARN("failed to get database id", K(ret));
+    } else if (udf_expr->need_add_dependency()) {
+      uint64_t dep_obj_id = view_ref_id_;
+      uint64_t dep_db_id = database_id;
+      OZ (udf_expr->get_schema_object_version(udf_version));
+      OZ (stmt->add_global_dependency_table(udf_version));
+      OZ (stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, udf_version, *allocator_));
+      //for udf without params, we just set called_in_sql = true,
+      //if this expr go through pl :: build_raw_expr later,
+      //the flag will change to false;
+      OX (expr->set_is_called_in_sql(true));
+    }
+  } else if (T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type()) {
+    ObObjectConstructRawExpr *object_expr = static_cast<ObObjectConstructRawExpr*>(expr);
+    CK (OB_NOT_NULL(object_expr));
+    if (OB_SUCC(ret) && object_expr->need_add_dependency()) {
+      uint64_t dep_obj_id = view_ref_id_;
+      ObSchemaObjVersion coll_schema_version;
+      OZ (object_expr->get_schema_object_version(coll_schema_version));
+      OZ (stmt->add_global_dependency_table(coll_schema_version));
+      OZ (stmt->add_ref_obj_version(dep_obj_id, object_expr->get_database_id(), ObObjectType::VIEW, coll_schema_version, *allocator_));
+    }
+  } else if (T_FUN_PL_COLLECTION_CONSTRUCT == expr->get_expr_type()) {
+    ObCollectionConstructRawExpr *coll_expr = static_cast<ObCollectionConstructRawExpr*>(expr);
+    CK (OB_NOT_NULL(coll_expr));
+    if (OB_SUCC(ret) && coll_expr->need_add_dependency()) {
+      uint64_t dep_obj_id = view_ref_id_;
+      ObSchemaObjVersion coll_schema_version;
+      OZ (coll_expr->get_schema_object_version(coll_schema_version));
+      OZ (stmt->add_global_dependency_table(coll_schema_version));
+      OZ (stmt->add_ref_obj_version(dep_obj_id, coll_expr->get_database_id(), ObObjectType::VIEW, coll_schema_version, *allocator_));
+    }
+  } else if (T_OBJ_ACCESS_REF == expr->get_expr_type()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      OZ (collect_schema_version(expr->get_param_expr(i)));
+    }
+  }
+  return ret;
+}
+
 int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
                                          ObIArray<ObQualifiedName> &columns,
                                          ObIArray<ObRawExpr*> &real_exprs,
@@ -10108,57 +10193,16 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Invalid expr", K(expr), K(ret));
     } else if (expr->is_udf_expr()) {
-      ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr*>(expr);
-      ObDMLStmt *stmt = get_stmt();
-      ObSchemaObjVersion udf_version;
-      share::schema::ObSchemaGetterGuard *schema_guard = NULL;
-      uint64_t database_id = OB_INVALID_ID;
-      CK (OB_NOT_NULL(udf_expr));
-      if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(schema_guard = params_.schema_checker_->get_schema_guard())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table schema is null", K(ret), K(schema_guard));
-      } else if (OB_FAIL(schema_guard->get_database_id(session_info_->get_effective_tenant_id(), udf_expr->get_database_name(), database_id))) {
-        LOG_WARN("failed to get database id", K(ret));
-      } else if (udf_expr->need_add_dependency()) {
-        uint64_t dep_obj_id = view_ref_id_;
-        uint64_t dep_db_id = database_id;
-        OZ (udf_expr->get_schema_object_version(udf_version));
-        CK (OB_NOT_NULL(stmt));
-        OZ (stmt->add_global_dependency_table(udf_version));
-        OZ (stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, udf_version, *allocator_));
-        //for udf without params, we just set called_in_sql = true,
-        //if this expr go through pl :: build_raw_expr later,
-        //the flag will change to false;
-        OX (expr->set_is_called_in_sql(true));
-      }
+      //for udf without params, we just set called_in_sql = true,
+      //if this expr go through pl :: build_raw_expr later,
+      //the flag will change to false;
+      OX (expr->set_is_called_in_sql(true));
     } else if (T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type()) {
-      ObDMLStmt *stmt = get_stmt();
-      ObObjectConstructRawExpr *object_expr = static_cast<ObObjectConstructRawExpr*>(expr);
-      CK (OB_NOT_NULL(object_expr));
-      CK (OB_NOT_NULL(stmt));
-      if (OB_SUCC(ret) && object_expr->need_add_dependency()) {
-        uint64_t dep_obj_id = view_ref_id_;
-        ObSchemaObjVersion coll_schema_version;
-        OZ (object_expr->get_schema_object_version(coll_schema_version));
-        OZ (stmt->add_global_dependency_table(coll_schema_version));
-        OZ (stmt->add_ref_obj_version(dep_obj_id, object_expr->get_database_id(), ObObjectType::VIEW, coll_schema_version, *allocator_));
-      }
       stmt_->get_query_ctx()->has_pl_udf_ = true;
     } else if (T_FUN_PL_COLLECTION_CONSTRUCT == expr->get_expr_type()) {
-      ObDMLStmt *stmt = get_stmt();
-      ObCollectionConstructRawExpr *coll_expr = static_cast<ObCollectionConstructRawExpr*>(expr);
-      CK (OB_NOT_NULL(coll_expr));
-      CK (OB_NOT_NULL(stmt));
-      if (OB_SUCC(ret) && coll_expr->need_add_dependency()) {
-        uint64_t dep_obj_id = view_ref_id_;
-        ObSchemaObjVersion coll_schema_version;
-        OZ (coll_expr->get_schema_object_version(coll_schema_version));
-        OZ (stmt->add_global_dependency_table(coll_schema_version));
-        OZ (stmt->add_ref_obj_version(dep_obj_id, coll_expr->get_database_id(), ObObjectType::VIEW, coll_schema_version, *allocator_));
-      }
       stmt_->get_query_ctx()->has_pl_udf_ = true;
     }
+    OZ (collect_schema_version(expr));
   }
   if (OB_ERR_SP_UNDECLARED_VAR == ret) {
     ret = OB_ERR_BAD_FIELD_ERROR;

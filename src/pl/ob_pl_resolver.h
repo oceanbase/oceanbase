@@ -366,6 +366,12 @@ public:
                                 const share::schema::ObTableSchema* table_schema,
                                 ObRecordType *&record_type,
                                 bool with_rowid = false);
+  static int collect_dep_info_by_schema(const ObPLResolveCtx &ctx,
+                                        const ObTableSchema* table_schema,
+                                        ObIArray<ObSchemaObjVersion> &dependency_objects);
+  static int collect_dep_info_by_view_schema(const ObPLResolveCtx &ctx,
+                                              const ObTableSchema* view_schema,
+                                              ObIArray<ObSchemaObjVersion> &dependency_objects);
   static
   int build_record_type_by_schema(const ObPLResolveCtx &resolve_ctx,
                                 const share::schema::ObTableSchema* table_schema,

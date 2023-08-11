@@ -184,6 +184,10 @@ public:
   int need_check_schema_version(ObPLCacheCtx &pc_ctx,
                                 int64_t &new_schema_version,
                                 bool &need_check);
+  int get_synonym_schema_version(ObPLCacheCtx &pc_ctx,
+                                  uint64_t tenant_id,
+                                  const PCVPlSchemaObj &pcv_schema,
+                                  int64_t &new_version);
   int get_all_dep_schema(ObPLCacheCtx &pc_ctx,
                           const uint64_t database_id,
                           int64_t &new_schema_version,

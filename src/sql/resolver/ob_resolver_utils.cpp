@@ -390,7 +390,7 @@ int ObResolverUtils::get_candidate_routines(ObSchemaChecker &schema_checker,
   const ObString &package_name, const ObString &routine_name,
   const share::schema::ObRoutineType routine_type,
   common::ObIArray<const share::schema::ObIRoutineInfo *> &routines,
-  uint64_t udt_id)
+  uint64_t udt_id, ObSynonymChecker *outer_synonym_checker)
 {
   int ret = OB_SUCCESS;
 
@@ -438,7 +438,7 @@ if ((OB_FAIL(ret) || 0 == routines.count())   \
   bool exist = false;                         \
   ObSynonymChecker synonym_checker;           \
   OZ (resolve_synonym_object_recursively(     \
-    schema_checker, synonym_checker,          \
+    schema_checker, (outer_synonym_checker != NULL) ? *outer_synonym_checker : synonym_checker,          \
     tenant_id, database_id, synonym_name,     \
     object_db_id, object_name, exist));       \
   if (OB_SUCC(ret) && exist) {                \
@@ -1253,7 +1253,8 @@ int ObResolverUtils::get_routine(ObResolverParams &params,
                                  const ObString &routine_name,
                                  const share::schema::ObRoutineType routine_type,
                                  const common::ObIArray<ObRawExpr *> &expr_params,
-                                 const ObRoutineInfo *&routine)
+                                 const ObRoutineInfo *&routine,
+                                 ObSynonymChecker *synonym_checker)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(params.allocator_));
@@ -1284,7 +1285,8 @@ int ObResolverUtils::get_routine(ObResolverParams &params,
                     routine_name,
                     routine_type,
                     expr_params,
-                    routine));
+                    routine,
+                    synonym_checker));
   }
   return ret;
 }
@@ -1297,7 +1299,8 @@ int ObResolverUtils::get_routine(const pl::ObPLResolveCtx &resolve_ctx,
                                  const ObString &routine_name,
                                  const share::schema::ObRoutineType routine_type,
                                  const common::ObIArray<ObRawExpr *> &expr_params,
-                                 const ObRoutineInfo *&routine)
+                                 const ObRoutineInfo *&routine,
+                                 ObSynonymChecker *synonym_checker)
 {
   int ret = OB_SUCCESS;
   common::ObSEArray<const share::schema::ObIRoutineInfo *, 4> candidate_routine_infos;
@@ -1314,7 +1317,8 @@ int ObResolverUtils::get_routine(const pl::ObPLResolveCtx &resolve_ctx,
                                      routine_name,
                                      routine_type,
                                      candidate_routine_infos,
-                                     udt_id))) {
+                                     udt_id,
+                                     synonym_checker))) {
     LOG_WARN("failed to get candidate routine infos",
              K(db_name), K(package_name), K(routine_name), K(ret));
   } else {
@@ -1420,6 +1424,7 @@ int ObResolverUtils::resolve_synonym_object_recursively(ObSchemaChecker &schema_
   int ret = OB_SUCCESS;
   uint64_t synonym_id = OB_INVALID_ID;
   bool exist_with_synonym = false;
+  bool exist_non_syn_object = false;
   if (OB_FAIL(schema_checker.get_synonym_schema(
       tenant_id, database_id, synonym_name, object_database_id,
       synonym_id, object_name, exist_with_synonym, search_public_schema))) {
@@ -1434,7 +1439,10 @@ int ObResolverUtils::resolve_synonym_object_recursively(ObSchemaChecker &schema_
         LOG_WARN("failed to add synonym id to synonym checker",
                  K(ret), K(tenant_id), K(database_id), K(synonym_name));
       }
-    } else {
+    } else if (OB_FAIL(schema_checker.check_exist_same_name_object_with_synonym(tenant_id,
+                                                                                database_id,
+                                                                                object_name,
+                                                                                exist_non_syn_object)) || !exist_non_syn_object) {
       OZ (SMART_CALL(resolve_synonym_object_recursively(
         schema_checker, synonym_checker, tenant_id,
         object_database_id, object_name, object_database_id, object_name, exist_with_synonym,

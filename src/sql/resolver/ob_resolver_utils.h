@@ -165,7 +165,8 @@ public:
                               const ObString &routine_name,
                               const share::schema::ObRoutineType routine_type,
                               common::ObIArray<const share::schema::ObIRoutineInfo *> &routines,
-                              uint64_t udt_id = OB_INVALID_ID);
+                              uint64_t udt_id = OB_INVALID_ID,
+                              ObSynonymChecker *synonym_checker = NULL);
   static int check_routine_exists(const ObSQLSessionInfo *session_info,
                                   ObSchemaChecker *schema_checker,
                                   pl::ObPLBlockNS *secondary_namespace,
@@ -235,7 +236,8 @@ public:
                          const ObString &routine_name,
                          const share::schema::ObRoutineType routine_type,
                          const common::ObIArray<ObRawExpr *> &expr_params,
-                         const share::schema::ObRoutineInfo *&routine);
+                         const share::schema::ObRoutineInfo *&routine,
+                         ObSynonymChecker *synonym_checker = NULL);
   static int get_routine(const pl::ObPLResolveCtx &resolve_ctx,
                          uint64_t tenant_id,
                          const ObString &current_database,
@@ -244,7 +246,8 @@ public:
                          const ObString &routine_name,
                          const share::schema::ObRoutineType routine_type,
                          const common::ObIArray<ObRawExpr *> &expr_params,
-                         const share::schema::ObRoutineInfo *&routine);
+                         const share::schema::ObRoutineInfo *&routine,
+                         ObSynonymChecker *synonym_checker = NULL);
   static int resolve_sp_access_name(ObSchemaChecker &schema_checker,
                                     ObIAllocator &allocator,
                                     uint64_t tenant_id,

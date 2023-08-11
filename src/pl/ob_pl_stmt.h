@@ -1138,6 +1138,7 @@ public:
   inline const ObPLDependencyTable *get_dependency_table() const { return dependency_table_; }
   inline void set_dependency_table(ObPLDependencyTable *dependency_table) { dependency_table_ = dependency_table; }
   int add_dependency_object(const share::schema::ObSchemaObjVersion &obj_version) const;
+  int add_dependency_synonym_object(const ObSynonymChecker &synonym_checker) const;
 
 private:
   const ObPLResolveCtx &resolve_ctx_;
