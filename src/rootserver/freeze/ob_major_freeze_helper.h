@@ -126,6 +126,9 @@ private:
       const rpc::frame::ObReqTransport &transport, 
       const uint64_t tenant_id,
       const obrpc::ObTenantAdminMergeType &admin_type);
+  static int add_user_warning(
+      const uint64_t tenant_id,
+      const char *buf);
 
 private:
   static const int64_t MAX_PROCESS_TIME_US = 10 * 1000 * 1000L;
