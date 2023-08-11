@@ -451,19 +451,12 @@ int ObOptColumnStat::merge_column_stat(const ObOptColumnStat &other)
     add_num_not_null(other.get_num_not_null());
     add_col_len(other.get_total_col_len());
     calc_avg_len();
-    const ObObj &min_val = other.get_min_value();
-    const ObObj &max_val = other.get_max_value();
-    if (!min_val.is_null() && (min_value_.is_null() || min_val < min_value_)) {
-      inner_min_allocator_.reuse();
-      if (OB_FAIL(ob_write_obj(inner_min_allocator_, min_val, min_value_))) {
-        LOG_WARN("fail to deep copy obj", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && (!max_val.is_null() && (max_value_.is_null() || max_val > max_value_))) {
-      inner_max_allocator_.reuse();
-      if (OB_FAIL(ob_write_obj(inner_max_allocator_, max_val, max_value_))) {
-        LOG_WARN("fail to deep copy obj", K(ret));
-      }
+    const ObObj &other_min = other.get_min_value();
+    const ObObj &other_max = other.get_max_value();
+    if (OB_FAIL(merge_min_max(min_value_, other_min, true))) {
+      LOG_WARN("failed to merge min value", K(other_min), K(min_value_));
+    } else if (OB_FAIL(merge_min_max(max_value_, other_max, false))) {
+      LOG_WARN("failed to merge max value", K(other_max), K(max_value_));
     }
     // llc
     if (llc_bitmap_size_ == other.get_llc_bitmap_size()) {
@@ -471,6 +464,48 @@ int ObOptColumnStat::merge_column_stat(const ObOptColumnStat &other)
     }
     // do not process histogram
   }
+  return ret;
+}
+
+/**
+ * @brief
+ *
+ * @param cur
+ * @param other
+ * @param is_cmp_min true: merge min, false: merge max
+ * @return int
+ */
+int ObOptColumnStat::merge_min_max(ObObj &cur, const ObObj &other, bool is_cmp_min)
+{
+  int ret = OB_SUCCESS;
+  int cmp = 0;
+  bool need_update_min = false;
+  bool need_update_max = false;
+  if (other.is_null()) {
+    // do nothing
+  } else if (cur.is_null()) {
+    need_update_min = is_cmp_min ? true : false;
+    need_update_max = !need_update_min;
+  } else if (!other.is_null()) {
+    if (OB_FAIL(other.compare(cur, cmp))) {
+      LOG_WARN("failed to compare", K(other), K(cur), K(cmp));
+    } else if (is_cmp_min) {
+      need_update_min = cmp < 0;
+    } else {
+      need_update_max = cmp > 0;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (need_update_min) {
+      inner_min_allocator_.reuse();
+      ret = ob_write_obj(inner_min_allocator_, other, cur);
+    } else if (need_update_max) {
+      inner_max_allocator_.reuse();
+      ret = ob_write_obj(inner_max_allocator_, other, cur);
+    }
+  }
+  LOG_TRACE("succeed to merge min/max val", K(ret), K(cur), K(other), K(is_cmp_min), K(cmp),
+                                            K(need_update_min), K(need_update_max));
   return ret;
 }
 

@@ -348,6 +348,7 @@ public:
                K_(histogram));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptColumnStat);
+  int merge_min_max(ObObj &cur, const ObObj &other, bool is_cmp_min);
 protected:
   uint64_t table_id_;
   int64_t partition_id_;
