@@ -1535,6 +1535,7 @@ public:
       K_(status), K_(result), K_(encryption_mode), K_(passwd), K_(file_status), K_(backup_path), K_(start_replay_scn),
       K_(min_restore_scn), K_(tenant_compatible), K_(backup_compatible), K_(data_turn_id), K_(meta_turn_id),
       K_(cluster_version), K_(consistent_scn));
+  int64_t to_string(char *min_restore_scn_display, char *buf, int64_t buf_len) const;
 
   int64_t backup_set_id_;
   int64_t incarnation_;

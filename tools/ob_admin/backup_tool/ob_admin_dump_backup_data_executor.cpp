@@ -951,6 +951,7 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_backup_path_()
   share::ObBackupPath path;
   share::ObBackupStorageInfo storage_info;
   storage::ObTenantBackupSetInfosDesc tenant_backup_set_infos;
+  storage::ObExternTenantLocalityInfoDesc locality_info;
   ObSArray<share::ObBackupSetDesc> backup_set_array;
   ObArray<share::ObBackupSetFileDesc> target_backup_set;
   if (OB_FAIL(get_backup_set_placeholder_dir_path(path))) {
@@ -961,28 +962,34 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_backup_path_()
     STORAGE_LOG(WARN, "fail to list files", K(ret));
   } else if (OB_FAIL(op.get_backup_set_array(backup_set_array))) {
     STORAGE_LOG(WARN, "fail to get backup set names", K(ret));
-  } else {
+  } else if (!backup_set_array.empty()) {
     storage::ObBackupDataStore::ObBackupSetDescComparator cmp;
     std::sort(backup_set_array.begin(), backup_set_array.end(), cmp);
-    for (int64_t i = backup_set_array.count() - 1; i >= 0; i--) {
-      path.reset();
-      const share::ObBackupSetDesc &backup_set_dir = backup_set_array.at(i);
-      if (OB_FAIL(get_tenant_backup_set_infos_path_(backup_set_dir, path))) {
-        STORAGE_LOG(WARN, "fail to get backup set infos path");
-      } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(path.get_obstr(), ObString(storage_info_), tenant_backup_set_infos))) {
-        if (OB_BACKUP_FILE_NOT_EXIST == ret) {
-          continue;
+    share::ObBackupSetDesc latest_backup_set_desc = backup_set_array.at(backup_set_array.count() - 1);
+    if (OB_FAIL(read_locality_info_file(backup_path_, latest_backup_set_desc, locality_info))) {
+      STORAGE_LOG(WARN, "fail to read locality info file", K(ret), K(backup_path_), K(latest_backup_set_desc), K(storage_info));
+    } else {
+      for (int64_t i = backup_set_array.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+        path.reset();
+        const share::ObBackupSetDesc &backup_set_dir = backup_set_array.at(i);
+        if (OB_FAIL(get_tenant_backup_set_infos_path_(backup_set_dir, path))) {
+          STORAGE_LOG(WARN, "fail to get backup set infos path");
+        } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(path.get_obstr(), ObString(storage_info_), tenant_backup_set_infos))) {
+          if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+            STORAGE_LOG(WARN, "backup set file is not exist", K(ret), K(path));
+            ret = OB_SUCCESS;
+          } else {
+            STORAGE_LOG(WARN, "fail to read backup info file", K(ret));
+          }
+        } else if (OB_FAIL(filter_backup_set_(tenant_backup_set_infos, backup_set_array, target_backup_set))) {
+          STORAGE_LOG(WARN, "fail to filter backup set", K(ret));
+        } else if (OB_FAIL(inner_print_common_header_(path.get_obstr(), ObString(storage_info_)))) {
+          STORAGE_LOG(WARN, "fail to print common header", K(ret));
+        } else if (OB_FAIL(dump_tenant_backup_set_infos_(target_backup_set, locality_info))) {
+          STORAGE_LOG(WARN, "fail to dump tenant backup set infos", K(ret));
         } else {
-          STORAGE_LOG(WARN, "fail to read backup info file", K(ret));
+          break;
         }
-      } else if (OB_FAIL(filter_backup_set_(tenant_backup_set_infos, backup_set_array, target_backup_set))) {
-        STORAGE_LOG(WARN, "fail to filter backup set", K(ret));
-      } else if (OB_FAIL(inner_print_common_header_(path.get_obstr(), ObString(storage_info_)))) {
-        STORAGE_LOG(WARN, "fail to print common header", K(ret));
-      } else if (OB_FAIL(dump_tenant_backup_set_infos_(target_backup_set))) {
-        STORAGE_LOG(WARN, "fail to dump tenant backup set infos", K(ret));
-      } else {
-        break;
       }
     }
   }
@@ -1627,14 +1634,28 @@ int ObAdminDumpBackupDataExecutor::print_backup_format_file_()
 
 int ObAdminDumpBackupDataExecutor::print_tenant_backup_set_infos_()
 {
-  int ret = OB_SUCCESS;
+ int ret = OB_SUCCESS;
+  ObBackupDest backup_tenant_dest;
+  ObBackupSetFileDesc latest_file_desc;
+  ObBackupSetDesc backup_set_desc;
   storage::ObTenantBackupSetInfosDesc file_desc;
+  storage::ObExternTenantLocalityInfoDesc locality_info;
+  ObBackupPath locality_info_path;
   if (OB_FAIL(inner_print_common_header_(backup_path_, storage_info_))) {
     STORAGE_LOG(WARN, "fail to inner print common header", K(ret));
   } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(ObString(backup_path_), ObString(storage_info_), file_desc))) {
     STORAGE_LOG(WARN, "fail to read archive piece info file", K(ret), K(backup_path_), K(storage_info_));
-  } else if (OB_FAIL(dump_tenant_backup_set_infos_(file_desc.backup_set_infos_))) {
-    STORAGE_LOG(WARN, "fail to dump archive piece info file", K(ret), K(file_desc));
+  } else if(!file_desc.backup_set_infos_.empty()) {
+    latest_file_desc = file_desc.backup_set_infos_.at(file_desc.backup_set_infos_.count() - 1);
+    backup_set_desc.backup_set_id_ = latest_file_desc.backup_set_id_;
+    backup_set_desc.backup_type_ = latest_file_desc.backup_type_;
+    if (OB_FAIL(read_locality_info_file(latest_file_desc.backup_path_.ptr(), backup_set_desc, locality_info))) {
+      STORAGE_LOG(WARN, "fail to read locality info file", K(ret), K(latest_file_desc), K(backup_set_desc));
+    } else if (OB_FAIL(backup_tenant_dest.set(latest_file_desc.backup_path_))) {
+      STORAGE_LOG(WARN, "fail to set backup tenant dest", K(ret), K(latest_file_desc), K(storage_info_));
+    } else if (OB_FAIL(dump_tenant_backup_set_infos_(file_desc.backup_set_infos_, locality_info))) {
+        STORAGE_LOG(WARN, "fail to dump archive piece info file", K(ret), K(file_desc), K(locality_info));
+      }
   }
   return ret;
 }
@@ -2314,22 +2335,30 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_diagnose_info_(const storage::ObE
   return ret;
 }
 
-int ObAdminDumpBackupDataExecutor::dump_tenant_backup_set_infos_(const ObIArray<oceanbase::share::ObBackupSetFileDesc> &backup_set_infos)
+int ObAdminDumpBackupDataExecutor::dump_tenant_backup_set_infos_(const ObIArray<oceanbase::share::ObBackupSetFileDesc> &backup_set_infos,
+    const storage::ObExternTenantLocalityInfoDesc &locality_info)
 {
   int ret = OB_SUCCESS;
   PrintHelper::print_dump_title("tenant backup set infos");
   ARRAY_FOREACH_X(backup_set_infos, i , cnt, OB_SUCC(ret)) {
     const share::ObBackupSetFileDesc &backup_set_desc = backup_set_infos.at(i);
+    int64_t pos = 0;
     char buf[OB_MAX_CHAR_LEN] = { 0 };
     char str_buf[OB_MAX_TEXT_LENGTH] = { 0 };
-    if (OB_FAIL(databuff_printf(buf, OB_MAX_CHAR_LEN, "%ld", i+1))) {
+    char min_restore_scn_str_buf[OB_MAX_TIME_STR_LENGTH] = { 0 };
+    if (OB_FAIL(ObTimeConverter::scn_to_str(backup_set_desc.min_restore_scn_.get_val_for_inner_table_field(),
+                                            locality_info.sys_time_zone_wrap_.get_time_zone_info(),
+                                            min_restore_scn_str_buf,
+                                            OB_MAX_TIME_STR_LENGTH,
+                                            pos))) {
+      STORAGE_LOG(WARN, "fail to convert scn to str", K(ret), K(backup_set_desc));
+    } else if (OB_FAIL(databuff_printf(buf, OB_MAX_CHAR_LEN, "%ld", i+1))) {
       STORAGE_LOG(WARN, "fail to printf buf", K(ret), K(i));
-    } else if (OB_FALSE_IT(backup_set_desc.to_string(str_buf, OB_MAX_TEXT_LENGTH))) {
+    } else if (OB_FALSE_IT(backup_set_desc.to_string(min_restore_scn_str_buf, str_buf, OB_MAX_TEXT_LENGTH))) {
     } else {
       PrintHelper::print_dump_line(buf, str_buf);
     }
   }
-  PrintHelper::print_end_line();
   return ret;
 }
 
@@ -2650,6 +2679,20 @@ int ObAdminDumpBackupDataExecutor::filter_backup_set_(
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::read_locality_info_file(const char *tenant_backup_path, share::ObBackupSetDesc latest_backup_set_desc, storage::ObExternTenantLocalityInfoDesc &locality_info) {
+  int ret = OB_SUCCESS;
+  share::ObBackupDest tenant_backup_dest;
+  share::ObBackupPath locality_info_path;
+  if (OB_FAIL(tenant_backup_dest.set(tenant_backup_path))) {
+    STORAGE_LOG(WARN, "fail to set tenant backup set dest", K(ret), K(tenant_backup_path));
+  } else if (OB_FAIL(ObBackupPathUtil::get_locality_info_path(tenant_backup_dest, latest_backup_set_desc, locality_info_path))) {
+    STORAGE_LOG(WARN, "fail to get locality info path", K(ret), K(tenant_backup_dest), K(latest_backup_set_desc));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(locality_info_path.get_obstr(), ObString(storage_info_), locality_info))) {
+    STORAGE_LOG(WARN, "fail to read locality info file", K(ret), K(locality_info_path), K(storage_info_));
   }
   return ret;
 }
