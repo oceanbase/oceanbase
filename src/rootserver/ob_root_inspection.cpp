@@ -185,17 +185,15 @@ int ObTenantChecker::check_garbage_tenant_(bool &passed)
     LOG_WARN("schema service not init", KR(ret));
   } else if (!schema_service_->is_sys_full_schema()) {
     // skip
-  } else if (GCTX.is_standby_cluster()) {
-    //In standby cluster, As long as transaction one is successful, transaction two does not need to be executed,
-    //and there is no case that tenant creation fails and drop tenant is needed.
   } else {
     obrpc::ObGetSchemaArg arg;
     obrpc::ObTenantSchemaVersions result;
     ObSchemaGetterGuard schema_guard;
     arg.ignore_fail_ = true;
     arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
+    const int64_t rpc_timeout = GCONF.rpc_timeout * 10;
     // There may have multi RootService, so we won't force drop tenant here.
-    if (OB_FAIL(rpc_proxy_.get_tenant_schema_versions(arg, result))) {
+    if (OB_FAIL(rpc_proxy_.timeout(rpc_timeout).get_tenant_schema_versions(arg, result))) {
       LOG_WARN("fail to get tenant schema versions", KR(ret));
     } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
       LOG_WARN("get_schema_guard failed", KR(ret));
