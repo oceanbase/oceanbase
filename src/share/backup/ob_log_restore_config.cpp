@@ -223,35 +223,13 @@ int ObLogRestoreSourceServiceConfigParser::check_before_update_inner_config(
     ObCompatibilityMode &compat_mode)
 {
   int ret = OB_SUCCESS;
-  char passwd[OB_MAX_PASSWORD_LENGTH + 1] = { 0 }; //unencrypted password
-  ObSqlString user_and_tenant;
   compat_mode = ObCompatibilityMode::OCEANBASE_MODE;
   bool source_is_self = false;
 
   SMART_VAR(ObLogRestoreProxyUtil, proxy) {
     if (is_empty_) {
-    } else if (!type_.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid parser", KPC(this));
-    } else if (0 == STRLEN(service_attr_.encrypt_passwd_)
-        || 0 == STRLEN(service_attr_.user_.user_name_)
-        || 0 == STRLEN(service_attr_.user_.tenant_name_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("fail to parse log restore source config, please check the config parameters");
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parse log restore source config, please check the config parameters");
-    } else if (OB_FAIL(service_attr_.get_password(passwd, sizeof(passwd)))) {
-      LOG_WARN("get servcie attr password failed");
-    } else if (OB_FAIL(service_attr_.get_user_str_(user_and_tenant))) {
-      LOG_WARN("get user str failed", K(service_attr_.user_.user_name_), K(service_attr_.user_.tenant_name_));
-    } else if (OB_FAIL(proxy.try_init(tenant_id_/*standby*/, service_attr_.addr_, user_and_tenant.ptr(), passwd))) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("proxy connect to primary db failed", K(service_attr_.addr_), K(user_and_tenant));
-    } else if (OB_FAIL(proxy.get_tenant_id(service_attr_.user_.tenant_name_, service_attr_.user_.tenant_id_))) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("get primary tenant id failed", K(tenant_id_), K(service_attr_.user_));
-    } else if (OB_FAIL(proxy.get_cluster_id(service_attr_.user_.tenant_id_, service_attr_.user_.cluster_id_))) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("get primary cluster id failed", K(tenant_id_), K(service_attr_.user_.tenant_id_));
+    } else if (OB_FAIL(construct_restore_sql_proxy_(proxy))) {
+      LOG_WARN("failed to construct restore sql proxy", KR(ret));
     } else if (!for_verify && OB_FAIL(service_attr_.check_restore_source_is_self_(source_is_self, tenant_id_))) {
       LOG_WARN("check restore source is self failed");
     } else if (source_is_self) {
@@ -271,6 +249,48 @@ int ObLogRestoreSourceServiceConfigParser::check_before_update_inner_config(
   return ret;
 }
 
+int ObLogRestoreSourceServiceConfigParser::construct_restore_sql_proxy_(ObLogRestoreProxyUtil &log_restore_proxy)
+{
+  int ret = OB_SUCCESS;
+  char passwd[OB_MAX_PASSWORD_LENGTH + 1] = { 0 }; //unencrypted password
+  ObSqlString user_and_tenant;
+  if (is_empty_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else if (!type_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parser", KPC(this));
+  } else if (0 == STRLEN(service_attr_.encrypt_passwd_) ||
+             0 == STRLEN(service_attr_.user_.user_name_) ||
+             0 == STRLEN(service_attr_.user_.tenant_name_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to parse log restore source config, please check the config parameters");
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+        "parse log restore source config, please check the config parameters");
+  } else if (OB_FAIL(service_attr_.get_password(passwd, sizeof(passwd)))) {
+    LOG_WARN("get servcie attr password failed");
+  } else if (OB_FAIL(service_attr_.get_user_str_(user_and_tenant))) {
+    LOG_WARN("get user str failed", K(service_attr_.user_.user_name_),
+             K(service_attr_.user_.tenant_name_));
+  } else if (OB_FAIL(log_restore_proxy.try_init(tenant_id_ /*standby*/, service_attr_.addr_,
+                                    user_and_tenant.ptr(), passwd))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("proxy connect to primary db failed", K(service_attr_.addr_),
+             K(user_and_tenant));
+  } else if (OB_FAIL(log_restore_proxy.get_tenant_id(service_attr_.user_.tenant_name_,
+                                         service_attr_.user_.tenant_id_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get primary tenant id failed", K(tenant_id_),
+             K(service_attr_.user_));
+  } else if (OB_FAIL(log_restore_proxy.get_cluster_id(service_attr_.user_.tenant_id_,
+                                          service_attr_.user_.cluster_id_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get primary cluster id failed", K(tenant_id_),
+             K(service_attr_.user_.tenant_id_));
+  }
+  return ret;
+}
+
 int ObLogRestoreSourceServiceConfigParser::get_compatibility_mode(common::ObCompatibilityMode &compatibility_mode)
 {
   int ret = OB_SUCCESS;
@@ -284,6 +304,36 @@ int ObLogRestoreSourceServiceConfigParser::get_compatibility_mode(common::ObComp
     LOG_WARN("not init", KPC(this));
   } else {
     compatibility_mode = service_attr_.user_.mode_;
+  }
+  return ret;
+}
+
+int ObLogRestoreSourceServiceConfigParser::
+    get_primary_server_addr(const common::ObSqlString &value,
+                            uint64_t &primary_tenant_id,
+                            uint64_t &primary_cluster_id,
+                            ObIArray<common::ObAddr> &addr_list) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(value.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(value));
+  } else if (OB_FAIL(parse_from(value))) {
+    LOG_WARN("failed to parse from value", KR(ret), K(value));
+  } else {
+    SMART_VAR(ObLogRestoreProxyUtil, proxy) {
+      if (OB_FAIL(construct_restore_sql_proxy_(proxy))) {
+        LOG_WARN("failed to construct restore sql proxy", KR(ret));
+      } else if (OB_FAIL(proxy.get_server_addr(service_attr_.user_.tenant_id_, addr_list))) {
+        LOG_WARN("failed to get server addr", KR(ret), K(tenant_id_), K(addr_list), K(service_attr_));
+      } else if (OB_UNLIKELY(0 >= addr_list.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("addr list is empty", K(primary_tenant_id), K(value));
+      } else {
+        primary_tenant_id = service_attr_.user_.tenant_id_;
+        primary_cluster_id = service_attr_.user_.cluster_id_;
+      }
+      LOG_INFO("get primary server info", K(primary_tenant_id), K(primary_cluster_id), K(addr_list));
+    }
   }
   return ret;
 }

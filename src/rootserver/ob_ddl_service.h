@@ -120,6 +120,7 @@ class ObDDLService
 {
 public:
   typedef std::pair<share::ObLSID, common::ObTabletID> LSTabletID;
+  typedef ObFixedLengthString<OB_ROOT_KEY_LEN + 1> RootKeyValue;
 public:
   friend class ObTableGroupHelp;
   friend class ObStandbyClusterSchemaProcessor;

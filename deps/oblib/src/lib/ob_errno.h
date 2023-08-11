@@ -141,6 +141,7 @@ constexpr int OB_FROZEN_INFO_ALREADY_EXIST = -4744;
 constexpr int OB_CREATE_STANDBY_TENANT_FAILED = -4765;
 constexpr int OB_LS_WAITING_SAFE_DESTROY = -4766;
 constexpr int OB_LS_LOCK_CONFLICT = -4768;
+constexpr int OB_INVALID_ROOT_KEY = -4769;
 constexpr int OB_ERR_PARSER_SYNTAX = -5006;
 constexpr int OB_ERR_COLUMN_NOT_FOUND = -5031;
 constexpr int OB_ERR_SYS_VARIABLE_UNKNOWN = -5044;

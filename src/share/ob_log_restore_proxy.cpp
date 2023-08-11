@@ -485,11 +485,11 @@ int ObLogRestoreProxyUtil::check_begin_lsn(const uint64_t tenant_id)
       SMART_VAR(ObMySQLProxy::MySQLResult, result) {
         ObSqlString sql;
         if (OB_FAIL(sql.assign_fmt("SELECT COUNT(*) AS CNT FROM %s OB_LS LEFT JOIN"
-                    "(SELECT TENANT_ID, LS_ID, BEGIN_LSN FROM %s WHERE ROLE= 'LEADER') LOG_STAT "
+              "(SELECT TENANT_ID, LS_ID, BEGIN_LSN FROM %s WHERE ROLE= 'LEADER' AND TENANT_ID = %lu) LOG_STAT "
                     "ON OB_LS.LS_ID = LOG_STAT.LS_ID "
-                    "WHERE LOG_STAT.TENANT_ID = %lu AND (BEGIN_LSN IS NULL OR BEGIN_LSN != 0)"
-                        "AND OB_LS.STATUS NOT IN ('TENANT_DROPPING', 'CREATE_ABORT', 'PRE_TENANT_DROPPING')",
-                        OB_DBA_OB_LS_TNAME, OB_GV_OB_LOG_STAT_ORA_TNAME, tenant_id))) {
+                    "WHERE (BEGIN_LSN IS NULL OR BEGIN_LSN != 0)"
+                    "AND OB_LS.STATUS NOT IN ('TENANT_DROPPING', 'CREATE_ABORT', 'PRE_TENANT_DROPPING')",
+                    OB_DBA_OB_LS_ORA_TNAME, OB_GV_OB_LOG_STAT_ORA_TNAME, tenant_id))) {
           LOG_WARN("fail to generate sql", KR(ret), K(tenant_id));
         } else if (OB_FAIL(sql_proxy_.read(result, sql.ptr()))) {
           LOG_WARN("check_begin_lsn failed", KR(ret), K(tenant_id), K(sql));
@@ -510,6 +510,7 @@ int ObLogRestoreProxyUtil::check_begin_lsn(const uint64_t tenant_id)
             LOG_WARN("primary tenant LS log may be recycled, create standby tenant is not allow", KR(ret), K(tenant_id), K(sql));
             LOG_USER_ERROR(OB_OP_NOT_ALLOW, "primary tenant LS log may be recycled, create standby tenant is");
           }
+          LOG_INFO("check begion lsn", K(cnt), K(sql));
         }
       }
     )
@@ -520,18 +521,47 @@ int ObLogRestoreProxyUtil::check_begin_lsn(const uint64_t tenant_id)
 int ObLogRestoreProxyUtil::get_server_ip_list(const uint64_t tenant_id, common::ObArray<common::ObAddr> &addrs)
 {
   int ret = OB_SUCCESS;
-  RESTORE_RETRY(
-    SMART_VAR(ObMySQLProxy::MySQLResult ,result) {
-      ObSqlString sql;
+  ObSqlString sql;
+  if (OB_FAIL(
+          sql.assign_fmt("SELECT SVR_IP, SQL_PORT AS SVR_PORT FROM %s WHERE TENANT_ID=%ld",
+                         OB_DBA_OB_ACCESS_POINT_TNAME, tenant_id))) {
+    LOG_WARN("fail to generate sql");
+  } else if (OB_FAIL(construct_server_ip_list(sql, addrs))) {
+    LOG_WARN("failed to get server ip list", KR(ret), K(sql));
+  }
+  return ret;
+}
+
+int ObLogRestoreProxyUtil::get_server_addr(const uint64_t tenant_id, common::ObIArray<common::ObAddr> &addrs)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant id is invalid", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(sql.assign_fmt("SELECT distinct(SVR_IP), SVR_PORT FROM %s WHERE TENANT_ID=%ld",
+                             OB_GV_OB_LOG_STAT_TNAME, tenant_id))) {
+    LOG_WARN("fail to generate sql");
+  } else if (OB_FAIL(construct_server_ip_list(sql, addrs))) {
+    LOG_WARN("failed to get server ip list", KR(ret), K(sql));
+  }
+  return ret;
+}
+
+int ObLogRestoreProxyUtil::construct_server_ip_list(const common::ObSqlString &sql, common::ObIArray<common::ObAddr> &addrs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(sql.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sql is empty", KR(ret), K(sql));
+  } else {
+    RESTORE_RETRY(SMART_VAR(ObMySQLProxy::MySQLResult, result) {
       ObMySQLResult *res = NULL;
-      if (OB_FAIL(sql.assign_fmt("SELECT SVR_IP, SQL_PORT FROM %s WHERE TENANT_ID=%ld",
-        OB_DBA_OB_ACCESS_POINT_TNAME, tenant_id))) {
-        LOG_WARN("fail to generate sql");
-      } else if (OB_FAIL(sql_proxy_.read(result, OB_INVALID_TENANT_ID, sql.ptr()))) {
-        LOG_WARN("read value from DBA_OB_ACCESS_POINT failed", K(tenant_id), K(sql));
+      if (OB_FAIL(sql_proxy_.read(result, OB_INVALID_TENANT_ID, sql.ptr()))) {
+        LOG_WARN("read value from DBA_OB_ACCESS_POINT failed", K(tenant_id_), K(sql));
       } else if (OB_ISNULL(res = result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("query result is null", K(tenant_id), K(sql));
+        LOG_WARN("query result is null", K(tenant_id_), K(sql));
       } else {
         while (OB_SUCC(ret) && OB_SUCC(res->next())) {
           ObString tmp_ip;
@@ -539,31 +569,31 @@ int ObLogRestoreProxyUtil::get_server_ip_list(const uint64_t tenant_id, common::
           ObAddr addr;
 
           EXTRACT_VARCHAR_FIELD_MYSQL(*res, "SVR_IP", tmp_ip);
-          EXTRACT_INT_FIELD_MYSQL(*res, "SQL_PORT", tmp_port, int32_t);
+          EXTRACT_INT_FIELD_MYSQL(*res, "SVR_PORT", tmp_port, int32_t);
 
           if (OB_FAIL(ret)) {
-            LOG_WARN("fail to get server ip and sql port", K(tmp_ip), K(tmp_port), K(tenant_id), K(sql));
+            LOG_WARN("fail to get server ip and sql port", K(tmp_ip), K(tmp_port), K(tenant_id_), K(sql));
           } else if (!addr.set_ip_addr(tmp_ip, tmp_port)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("fail to set addr", K(tmp_ip), K(tmp_port), K(tenant_id), K(sql));
+            LOG_WARN("fail to set addr", K(tmp_ip), K(tmp_port), K(tenant_id_), K(sql));
           } else if (!addr.is_valid()) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("addr is invalid", K(addr), K(tenant_id), K(sql));
+            LOG_WARN("addr is invalid", K(addr), K(tenant_id_), K(sql));
           } else if (OB_FAIL(addrs.push_back(addr))) {
-            LOG_WARN("fail to push back addr to addrs", K(addr), K(tenant_id), K(sql));
+            LOG_WARN("fail to push back addr to addrs", K(addr), K(tenant_id_), K(sql));
           }
         }
         if (OB_ITER_END != ret) {
-          SERVER_LOG(WARN, "failed to get ip list", K(tenant_id));
+          SERVER_LOG(WARN, "failed to get ip list", K(tenant_id_));
         } else {
           ret = OB_SUCCESS;
         }
       }
     }
-  )
+    )
+  }
   return ret;
 }
-
 bool ObLogRestoreProxyUtil::is_user_changed_(const char *user_name, const char *user_password, const char *db_name)
 {
   return user_name_ != common::ObFixedLengthString<common::OB_MAX_USER_NAME_BUF_LENGTH>(user_name)
