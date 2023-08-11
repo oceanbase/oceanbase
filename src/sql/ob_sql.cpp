@@ -4595,7 +4595,6 @@ int ObSql::check_batched_multi_stmt_after_resolver(ObPlanCacheCtx &pc_ctx,
   ObPhysicalPlanCtx *plan_ctx = NULL;
   is_valid = true;
   bool has_dblink = false;
-  bool has_any_dblink = false;
   bool is_ps_ab_opt = pc_ctx.sql_ctx_.multi_stmt_item_.is_ab_batch_opt();
   if (OB_ISNULL(plan_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx())
       || OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
@@ -4618,9 +4617,9 @@ int ObSql::check_batched_multi_stmt_after_resolver(ObPlanCacheCtx &pc_ctx,
       is_valid = false;
     }
 
-    if (OB_FAIL(ObDblinkUtils::has_reverse_link_or_any_dblink(&delupd_stmt, has_dblink, has_any_dblink))) {
+    if (OB_FAIL(ObDblinkUtils::has_reverse_link_or_any_dblink(&delupd_stmt, has_dblink, true))) {
       LOG_WARN("failed to check dblink in stmt", K(delupd_stmt), K(ret));
-    } else if (has_any_dblink) {
+    } else if (has_dblink) {
       is_valid = false;
     }
 

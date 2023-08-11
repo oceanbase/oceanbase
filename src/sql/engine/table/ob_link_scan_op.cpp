@@ -300,32 +300,6 @@ int ObLinkScanOp::fetch_row()
     if (OB_ITER_END != ret) {
       LOG_WARN("failed to get next row", K(ret));
     } else {
-      // check if connection is alive, if not, then OB_ITER_END is a fake errno
-      if (sql::DblinkGetConnType::TM_CONN == conn_type_) {
-        if (OB_ISNULL(tm_rm_connection_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null ptr", K(ret));
-        } else if (OB_FAIL(tm_rm_connection_->ping())) {
-          LOG_WARN("failed to ping tm_rm_connection_", K(ret));
-        }
-      } else if (sql::DblinkGetConnType::TEMP_CONN == conn_type_) {
-        if (OB_ISNULL(reverse_link_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null ptr", K(ret));
-        } else if (OB_FAIL(reverse_link_->ping())) {
-          LOG_WARN("failed to ping reverse_link_", K(ret));
-        }
-      } else {
-        if (OB_ISNULL(dblink_conn_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null ptr", K(ret));
-        } else if (OB_FAIL(dblink_conn_->ping())) {
-          LOG_WARN("failed to ping dblink_conn_", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        ret = OB_ITER_END;
-      }
       reset_result();
     }
   } else {
