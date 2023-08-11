@@ -3274,14 +3274,6 @@ int ObRawExprResolverImpl::process_between_node(const ParseNode *node, ObRawExpr
         LOG_WARN("unexpected null", K(ret), K(i));
       }
     }
-    // The content of the 4th raw expr is same to that of the 1st raw expr.
-    // But the ptr addresses need to be different because our optimizer relys on it.
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(recursive_resolve(node->children_[0], btw_params[BTW_PARAM_NUM]))) {
-      SQL_RESV_LOG(WARN, "resolve child expr failed", K(ret), K(BTW_PARAM_NUM));
-    } else if (OB_ISNULL(btw_params[BTW_PARAM_NUM])) {
-      LOG_WARN("unexpected null", K(ret), K(BTW_PARAM_NUM));
-    }
     if (OB_SUCC(ret) && lib::is_mysql_mode()) {
       if (OB_ISNULL(ctx_.session_info_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -3304,6 +3296,19 @@ int ObRawExprResolverImpl::process_between_node(const ParseNode *node, ObRawExpr
           LOG_WARN("fail to deduce_type child 3 of between node", K(ret));
         } else if (btw_params[1]->get_result_meta() == btw_params[2]->get_result_meta()) {
           can_transform_in_mysql_mode = true;
+        }
+      }
+    }
+    // The content of the 4th raw expr is same to that of the 1st raw expr.
+    // But the ptr addresses need to be different because our optimizer relys on it.
+    if (OB_SUCC(ret)) {
+      if (lib::is_mysql_mode() && !can_transform_in_mysql_mode) {
+        // do nothing
+      } else {
+        if (OB_FAIL(recursive_resolve(node->children_[0], btw_params[BTW_PARAM_NUM]))) {
+          SQL_RESV_LOG(WARN, "resolve child expr failed", K(ret), K(BTW_PARAM_NUM));
+        } else if (OB_ISNULL(btw_params[BTW_PARAM_NUM])) {
+          LOG_WARN("unexpected null", K(ret), K(BTW_PARAM_NUM));
         }
       }
     }
