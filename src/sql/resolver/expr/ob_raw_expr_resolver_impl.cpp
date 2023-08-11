@@ -2135,8 +2135,7 @@ int ObRawExprResolverImpl::resolve_obj_access_idents(const ParseNode &node, ObQu
         }
       }
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Invalid node type", K(node.children_[0]->type_), K(ret));
+      OZ (resolve_right_node_of_obj_access_idents(*node.children_[0], q_name));
     }
 
     //2、然后解T_OBJ_ACCESS_REF的右支，右支只可能是T_OBJ_ACCESS_REF（'.'的情况）或T_EXPR_LIST（'()'的情况）
@@ -2168,6 +2167,48 @@ int ObRawExprResolverImpl::resolve_obj_access_idents(const ParseNode &node, ObQu
               KPC(param_expr), K(param_level));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::resolve_right_node_of_obj_access_idents(const ParseNode &right_node, ObQualifiedName &q_name)
+{
+  int ret = OB_SUCCESS;
+  if (T_OBJ_ACCESS_REF == right_node.type_) {
+    if (right_node.children_[0] != NULL && T_EXPR_LIST == right_node.children_[0]->type_) {
+      // example: a(1)(2).count, here, we resolve '(2).count' which '(2)' is 'children_[0]' and '.count' is 'children_[1]'
+      CK (2 == right_node.num_child_);
+      CK (OB_NOT_NULL(right_node.children_[0]));
+      CK (OB_NOT_NULL(right_node.children_[1]));
+      OZ (resolve_right_node_of_obj_access_idents(*(right_node.children_[0]), q_name));
+      OZ (resolve_obj_access_idents(*(right_node.children_[1]), q_name));
+    } else {
+      // example: a(1).b(1), here, we resolve '.b(1)'
+      OZ (resolve_obj_access_idents(right_node, q_name), K(q_name));
+    }
+  } else {
+    // example: a(1)(2) here, we resolve '(2)'
+    const ParseNode *element_list = &right_node;
+    CK (T_EXPR_LIST == element_list->type_);
+    CK (OB_LIKELY(!q_name.access_idents_.empty()));
+    for (int64_t i = 0; OB_SUCC(ret) && i < element_list->num_child_; ++i) {
+      ObObjAccessIdent &access_ident = q_name.access_idents_.at(q_name.access_idents_.count() - 1);
+      ObRawExpr *param_expr = NULL;
+      int64_t param_level = OB_INVALID_INDEX;
+      CK (OB_NOT_NULL(element_list->children_[i]));
+      OZ (SMART_CALL(recursive_resolve(element_list->children_[i], param_expr)));
+      if (OB_FAIL(ret)) {
+      } else if (access_ident.params_.empty()) {
+        if (access_ident.is_pl_var() && access_ident.access_name_.empty()) {
+          param_level = 0; // :a(index)
+        } else {
+          param_level = 1; // f()(index)
+        }
+      } else {
+        param_level = access_ident.params_.at(access_ident.params_.count() - 1).second + 1;
+      }
+      OZ (access_ident.params_.push_back(std::make_pair(param_expr, param_level)), KPC(param_expr), K(param_level));
     }
   }
   return ret;

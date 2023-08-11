@@ -50,6 +50,7 @@ public:
 
   // types and constants
 private:
+  int resolve_right_node_of_obj_access_idents(const ParseNode &right_node, ObQualifiedName &q_name);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprResolverImpl);
   // function members
