@@ -2255,7 +2255,7 @@ int ObPL::insert_error_msg(int errcode)
 int ObPL::check_trigger_arg(const ParamStore &params, const ObPLFunction &func)
 {
   int ret = OB_SUCCESS;
-  if (ObTriggerInfo::is_trigger_body_package_id(func.get_package_id())) {
+  if (TriggerHandle::is_trigger_body_routine(func.get_package_id(), func.get_routine_id(), func.get_proc_type())) {
     const int64_t param_cnt = TriggerHandle::get_routine_param_count(func.get_routine_id());
     OV (params.count() == param_cnt, OB_ERR_UNEXPECTED, K(params.count()), K(param_cnt));
     for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; i++) {
@@ -2281,7 +2281,7 @@ int ObPL::check_trigger_arg(const ParamStore &params, const ObPLFunction &func)
         }
       }
     }
-    LOG_DEBUG("checkout trigger routine arg end", K(ret), K(func), K(params));
+    LOG_DEBUG("check trigger routine arg end", K(ret), K(func), K(params));
   }
   return ret;
 }

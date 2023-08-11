@@ -62,6 +62,20 @@ public:
                                 const ObTrigDMLCtDef &trig_ctdef,
                                 ObTrigDMLRtDef &trig_rtdef);
   static int64_t get_routine_param_count(const uint64_t routine_id);
+  inline static bool is_trigger_body_routine(const uint64_t package_id,
+                                             const uint64_t routine_id,
+                                             pl::ObProcType type)
+  {
+    bool is_trg_routine = false;
+    if (schema::ObTriggerInfo::is_trigger_body_package_id(package_id) && pl::ObProcType::PACKAGE_PROCEDURE == type) {
+      if (lib::is_oracle_mode()) {
+        is_trg_routine = (routine_id >= ROUTINE_IDX_CALC_WHEN && routine_id <= ROUTINE_IDX_AFTER_STMT);
+      } else {
+        is_trg_routine = (routine_id >= ROUTINE_IDX_BEFORE_ROW_MYSQL && routine_id <= ROUTINE_IDX_AFTER_ROW_MYSQL);
+      }
+    }
+    return is_trg_routine;
+  }
 private:
   // trigger
   static int init_trigger_row(ObIAllocator &alloc, int64_t rowtype_col_count, pl::ObPLRecord *&record);
