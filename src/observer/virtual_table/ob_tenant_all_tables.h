@@ -40,6 +40,8 @@ class ObTableSchema;
 }
 namespace observer
 {
+
+
 class ObTenantAllTables : public common::ObVirtualTableIterator
 {
   enum TENANT_ALL_TABLES_COLUMN
@@ -87,12 +89,24 @@ class ObTenantAllTables : public common::ObVirtualTableIterator
       create_time_ = 0;
       update_time_ = 0;
     }
+    inline void set_table_rows(const int64_t &v) { row_count_ = v; }
+    inline void set_data_length(const int64_t &v) { data_size_ = v; }
+    inline void set_version(const int64_t &v) { data_version_ = v; }
+    inline void set_checksum(const int64_t &v) { data_checksum_ = v; }
+    inline void set_create_time(const int64_t &v) { create_time_ = v; }
+    inline void set_update_time(const int64_t &v) { update_time_ = v; }
     int64_t row_count_;
     int64_t data_size_;
     int64_t data_version_;
     int64_t data_checksum_;
     int64_t create_time_;
     int64_t update_time_;
+    TO_STRING_KV(K_(row_count),
+                 K_(data_size),
+                 K_(data_version),
+                 K_(data_checksum),
+                 K_(create_time),
+                 K_(update_time));
   };
 public:
   ObTenantAllTables();
@@ -105,6 +119,7 @@ public:
 private:
   int inner_get_next_row();
   int get_sequence_value();
+  int get_table_stats();
 private:
   common::ObMySQLProxy *sql_proxy_;
   uint64_t tenant_id_;
