@@ -181,6 +181,10 @@ public:
 
   int add_replace_exprs(const ObIArray<ObRawExpr *> &from_exprs,
                         const ObIArray<ObRawExpr *> &to_exprs);
+  void set_skip_bool_param_mysql(bool skip) { replacer.set_skip_bool_param_mysql(skip); }
+  bool is_skip_bool_param_mysql() { return replacer.is_skip_bool_param_mysql(); }
+private:
+  int add_skip_expr(const ObRawExpr *skip_expr);
 private:
   ObRawExprReplacer replacer;
 };
