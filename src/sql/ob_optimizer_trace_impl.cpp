@@ -289,6 +289,20 @@ int ObOptimizerTraceImpl::append_lower(const char* msg)
   return ret;
 }
 
+int ObOptimizerTraceImpl::append_ptr(const void *ptr)
+{
+  int ret = OB_SUCCESS;
+  char buf[32] = {0};
+  int64_t buf_len = 32;
+  buf_len = snprintf(buf, buf_len, "ptr:%p", ptr);
+  if (buf_len > 0) {
+    if (OB_FAIL(log_handle_.append(buf, buf_len))) {
+      LOG_WARN("failed to append value", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObOptimizerTraceImpl::append()
 {
   int ret = OB_SUCCESS;
@@ -394,6 +408,52 @@ int ObOptimizerTraceImpl::append(const ObObj& value)
   return ret;
 }
 
+int ObOptimizerTraceImpl::append(const ObTableLocationType& type)
+{
+  int ret = OB_SUCCESS;
+  switch(type) {
+    case OB_TBL_LOCATION_UNINITIALIZED:
+      ret = append("uninitialized");
+      break;
+    case OB_TBL_LOCATION_LOCAL:
+      ret = append("local");
+      break;
+    case OB_TBL_LOCATION_REMOTE:
+      ret = append("remote");
+      break;
+    case OB_TBL_LOCATION_DISTRIBUTED:
+      ret = append("distribute");
+      break;
+    case OB_TBL_LOCATION_ALL:
+      ret = append("match all");
+      break;
+  }
+  return ret;
+}
+
+int ObOptimizerTraceImpl::append(const ObPhyPlanType& type)
+{
+  int ret = OB_SUCCESS;
+  switch(type) {
+    case OB_PHY_PLAN_UNINITIALIZED:
+      ret = append("uninitialized");
+      break;
+    case OB_PHY_PLAN_LOCAL:
+      ret = append("local");
+      break;
+    case OB_PHY_PLAN_REMOTE:
+      ret = append("remote");
+      break;
+    case OB_PHY_PLAN_DISTRIBUTED:
+      ret = append("distribute");
+      break;
+    case OB_PHY_PLAN_UNCERTAIN:
+      ret = append("uncertain");
+      break;
+  }
+  return ret;
+}
+
 int ObOptimizerTraceImpl::append(const ObLogPlan *log_plan)
 {
   int ret = OB_SUCCESS;
@@ -465,6 +525,8 @@ int ObOptimizerTraceImpl::append(const Path *path)
   if (OB_NOT_NULL(path)) {
     increase_section();
     new_line();
+    append_ptr(path);
+    new_line();
     append("tables:", path->parent_);
     if (path->is_access_path()) {
       const AccessPath& ap = static_cast<const AccessPath&>(*path);
@@ -491,7 +553,9 @@ int ObOptimizerTraceImpl::append(const Path *path)
     append("cost:", path->cost_, ",card:", path->parent_->get_output_rows(),
           ",width:", path->parent_->get_output_row_size());
     new_line();
-    append("parallel:", path->parallel_, ",server count:", path->server_cnt_);
+    append("parallel:", path->parallel_);
+    append(", server count:", path->server_cnt_);
+    append(path->get_sharding());
     decrease_section();
   }
   return ret;
@@ -502,6 +566,8 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(join_path)) {
     increase_section();
+    new_line();
+    append_ptr(join_path);
     new_line();
     if (HASH_JOIN == join_path->join_algo_) {
       append("dist algo:", ob_dist_algo_str(join_path->join_dist_algo_),
@@ -581,6 +647,41 @@ int ObOptimizerTraceImpl::append(const TableItem *table)
     }
   } else if (OB_FAIL(append(table->get_table_name()))) {
     LOG_WARN("failed to append msg", K(ret));
+  }
+  return ret;
+}
+
+int ObOptimizerTraceImpl::append(const ObShardingInfo *info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(info)) {
+  } else {
+    new_line();
+    append("location type:", info->get_location_type());
+    append(", partion count:", info->get_part_cnt());
+  }
+  return ret;
+}
+
+int ObOptimizerTraceImpl::append(const CandidatePlan &plan)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(plan.plan_tree_)) {
+  } else {
+    increase_section();
+    new_line();
+    append_ptr(plan.plan_tree_);
+    new_line();
+    append("cost:", plan.plan_tree_->get_cost(), ",card:", plan.plan_tree_->get_card(),
+          ",width:", plan.plan_tree_->get_width());
+    new_line();
+    append("partition wise", plan.plan_tree_->is_partition_wise(), ", plan type:", plan.plan_tree_->get_phy_plan_type(),
+    ", location type:", plan.plan_tree_->get_location_type());
+    new_line();
+    append("parallel:", plan.plan_tree_->get_parallel());
+    append(", server count:", plan.plan_tree_->get_server_cnt());
+    append(plan.plan_tree_->get_sharding());
+    decrease_section();
   }
   return ret;
 }
