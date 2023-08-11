@@ -199,14 +199,12 @@ public:
 
 int64_t TxStateHeader::encode_length()
 {
-  int64_t l = encoded_length_i64(1)
-    + encoded_length_i64(1)
-    + encoded_length_i8(1);
-  if (with_version_()) {
-    l += encoded_length_i16(100); // length
-    l += encoded_length_i8(1); // version
-    l += encoded_length_i32(1); // backend_sess_id
-  }
+  int64_t l = encoded_length_i64(1) // tx_id_
+    + encoded_length_i64(1)         // global_version_
+    + encoded_length_i8(1)          // flag_
+    + encoded_length_i16(100)       // length_
+    + encoded_length_i8(1)          // version_
+    + encoded_length_i32(1);        // backend_sess_id_
   return l;
 }
 
