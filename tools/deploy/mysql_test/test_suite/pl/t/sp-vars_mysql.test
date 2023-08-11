@@ -843,7 +843,8 @@ BEGIN
   RETURN arg;
 END|
 delimiter ;|
-
+# mysql8.0 会报错
+--error 1264
 SELECT f1(-2500);
 
 # Call in TRADITIONAL mode the function created in ANSI mode.
@@ -853,6 +854,7 @@ SET @@sql_mode = 'STRICT_TRANS_TABLES,STRICT_ALL_TABLES';
 
 # TODO: a warning should be emitted here.
 ## --error ER_WARN_DATA_OUT_OF_RANGE
+--error 1264
 SELECT f1(-2500);
 
 # Recreate the function in TRADITIONAL mode.
@@ -867,6 +869,7 @@ END|
 delimiter ;|
 
 ## --error ER_WARN_DATA_OUT_OF_RANGE
+--error 1264
 SELECT f1(-2500);
 
 #
@@ -915,6 +918,8 @@ BEGIN
 END|
 delimiter ;|
 
+#mysql 8.0报错
+--error 1264
 SELECT f1(8388699);
 
 # Call in TRADITIONAL mode the function created in ANSI mode.
@@ -924,6 +929,7 @@ SET @@sql_mode = 'STRICT_TRANS_TABLES,STRICT_ALL_TABLES';
 
 # TODO: a warning should be emitted here.
 ## --error ER_WARN_DATA_OUT_OF_RANGE
+--error 1264
 SELECT f1(8388699);
 
 # Recreate the function in TRADITIONAL mode.
@@ -938,6 +944,7 @@ END|
 delimiter ;|
 
 ## --error ER_WARN_DATA_OUT_OF_RANGE
+--error 1264
 SELECT f1(8388699);
 
 #
