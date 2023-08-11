@@ -2867,6 +2867,7 @@ bool ObLSRestoreResultMgr::can_retrieable_err(const int err) const
     case OB_BACKUP_FILE_NOT_EXIST :
     case OB_ARCHIVE_ROUND_NOT_CONTINUOUS :
     case OB_HASH_NOT_EXIST:
+    case OB_TOO_MANY_PARTITIONS_ERROR:
       bret = false;
       break;
     default:

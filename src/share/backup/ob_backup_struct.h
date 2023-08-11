@@ -1346,6 +1346,9 @@ public:
   ObTaskId trace_id_;
   ObAddr addr_;
   int result_;
+
+private:
+  const char *get_error_str_() const;
 };
 
 struct ObBackupJobAttr final

@@ -3275,13 +3275,35 @@ bool ObHAResultInfo::is_valid() const
   return !trace_id_.is_invalid() && addr_.is_valid() &&  MAX_FAILED_TYPE > type_ && ROOT_SERVICE <= type_;
 }
 
+const char *ObHAResultInfo::get_error_str_() const
+{
+  const char *str = NULL;
+  switch (result_) {
+    case OB_SUCCESS: {
+      str = "";
+      break;
+    }
+
+    case OB_TOO_MANY_PARTITIONS_ERROR: {
+      str = "unit config is too small";
+      break;
+    }
+
+    default: {
+      str = common::ob_strerror(result_);
+      break;
+    }
+  }
+  return str;
+}
+
 int ObHAResultInfo::get_comment_str(Comment &comment) const
 {
   int ret = OB_SUCCESS;
   const char *type = get_failed_type_str();
   char trace_id[OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
   char addr_buf[OB_MAX_SERVER_ADDR_SIZE] = "";
-  const char *err_code_str = OB_SUCCESS == result_ ? "" : common::ob_strerror(result_);
+  const char *err_code_str = get_error_str_();
   if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid result info", K(ret), KPC(this));
