@@ -1107,19 +1107,35 @@ int ObTransformPredicateMoveAround::rename_pullup_predicates(
     ObIArray<ObRawExpr *> &preds)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<int64_t, 8> sel_ids;
-  ObSelectStmt *view_stmt = NULL;
-  if (OB_ISNULL(view_stmt = view.ref_query_)) {
+  ObSEArray<ObRawExpr *, 8> sel_exprs;
+  ObSEArray<ObRawExpr *, 8> col_exprs;
+  ObRawExprFactory *expr_factory = NULL;
+  if (preds.empty()) {
+    // do nothing
+  } else if (OB_ISNULL(ctx_) ||
+             OB_ISNULL(expr_factory = ctx_->expr_factory_) ||
+             OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < view_stmt->get_select_item_size(); i++) {
-    if (OB_FAIL(sel_ids.push_back(i))) {
-      LOG_WARN("failed to push back", K(ret));
+  } else if (OB_FAIL(stmt.get_view_output(view, sel_exprs, col_exprs))) {
+    LOG_WARN("failed to get view output", K(ret));
+  } else {
+    ObRawExprCopier copier(*expr_factory);
+    if (OB_FAIL(copier.add_replaced_expr(sel_exprs, col_exprs))) {
+      LOG_WARN("failed to add replaced expr");
     }
-  }
-  if (OB_SUCC(ret)) {
-    ret = rename_pullup_predicates(stmt, view, sel_ids, preds);
+    for (int64_t i = 0; OB_SUCC(ret) && i < preds.count(); ++i) {
+      ObRawExpr *new_pred = NULL;
+      if (OB_FAIL(copier.copy_on_replace(preds.at(i), new_pred))) {
+        LOG_WARN("failed to copy on replace expr", K(ret));
+      } else if (OB_FAIL(new_pred->formalize(ctx_->session_info_))) {
+        LOG_WARN("failed to formalize expr", K(ret));
+      } else if (OB_FAIL(new_pred->pull_relation_id())) {
+        LOG_WARN("failed to pull relation id and levels", K(ret));
+      } else {
+        preds.at(i) = new_pred;
+      }
+    }
   }
   return ret;
 }
