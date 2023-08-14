@@ -409,6 +409,7 @@ private:
   int read_file(void *buf, const int64_t size, const int64_t offset);
 
   bool need_dump();
+  inline bool has_index_block() const { return nullptr != idx_blk_; }
 
 private:
   bool inited_;

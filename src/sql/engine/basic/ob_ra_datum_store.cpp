@@ -637,7 +637,7 @@ int ObRADatumStore::add_block_idx(const BlockIndex &bi)
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    if (NULL == idx_blk_) {
+    if (!has_index_block()) {
       if (OB_FAIL(blocks_.push_back(bi))) {
         LOG_WARN("add block index to array failed", K(ret));
       } else {
@@ -1309,7 +1309,7 @@ int ObRADatumStore::finish_add_row()
       const bool finish_add = true;
       if (OB_FAIL(switch_block(min_size))) {
         LOG_WARN("write last block to file failed", K(ret), K(min_size));
-      } else if (OB_FAIL(switch_idx_block(finish_add))) {
+      } else if (has_index_block() && OB_FAIL(switch_idx_block(finish_add))) {
         LOG_WARN("write last index block to file failed", K(ret), K(ret));
       } else if (OB_FAIL(get_timeout(timeout_ms))) {
         LOG_WARN("get timeout failed", K(ret));
