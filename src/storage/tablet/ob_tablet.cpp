@@ -5587,7 +5587,9 @@ int ObTablet::validate_medium_info_list(
   if (OB_ISNULL(medium_info_list)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("medium info list is null", K(ret), K(mds_data));
-  } else if (OB_UNLIKELY(0 != extra_info.last_medium_scn_ && finish_medium_scn != extra_info.last_medium_scn_)) {
+  } else if (OB_UNLIKELY(0 != extra_info.last_medium_scn_
+      && finish_medium_scn > 0
+      && finish_medium_scn != extra_info.last_medium_scn_)) {
     ret = OB_INVALID_DATA;
     LOG_WARN("last medium scn does not equal to last major sstable snapshot version", K(ret), K(ls_id), K(tablet_id),
         K(finish_medium_scn), K(extra_info));
@@ -5598,6 +5600,7 @@ int ObTablet::validate_medium_info_list(
       if (OB_ISNULL(first_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("medium info is null", K(ret), K(ls_id), K(tablet_id), KP(first_info));
+      } else if (!first_info->from_cur_cluster()) {
       } else if (OB_UNLIKELY(first_info->last_medium_snapshot_ != finish_medium_scn)) {
         ret = OB_INVALID_DATA;
         LOG_WARN("first medium info does not match last major sstable snapshot version", K(ret), K(ls_id), K(tablet_id),
