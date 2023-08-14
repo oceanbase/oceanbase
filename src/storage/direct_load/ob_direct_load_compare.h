@@ -85,9 +85,9 @@ public:
 class ObDirectLoadExternalRowCompare
 {
 public:
-  ObDirectLoadExternalRowCompare() : result_code_(common::OB_SUCCESS), is_inited_(false) {}
+  ObDirectLoadExternalRowCompare() : result_code_(common::OB_SUCCESS), ignore_seq_no_(false), is_inited_(false) {}
   int init(const blocksstable::ObStorageDatumUtils &datum_utils,
-           sql::ObLoadDupActionType dup_action);
+           sql::ObLoadDupActionType dup_action, bool ignore_seq_no = false);
   int compare(const ObDirectLoadExternalRow *lhs, const ObDirectLoadExternalRow *rhs, int &cmp_ret);
   bool operator()(const ObDirectLoadExternalRow *lhs, const ObDirectLoadExternalRow *rhs);
   int get_error_code() const { return result_code_; }
@@ -96,6 +96,7 @@ public:
   ObDirectLoadDatumArrayCompare datum_array_compare_;
   sql::ObLoadDupActionType dup_action_;
   int result_code_;
+  bool ignore_seq_no_;
   bool is_inited_;
 };
 
@@ -103,11 +104,11 @@ class ObDirectLoadExternalMultiPartitionRowCompare
 {
 public:
   ObDirectLoadExternalMultiPartitionRowCompare()
-    : result_code_(common::OB_SUCCESS), is_inited_(false)
+    : result_code_(common::OB_SUCCESS), ignore_seq_no_(false), is_inited_(false)
   {
   }
   int init(const blocksstable::ObStorageDatumUtils &datum_utils,
-           sql::ObLoadDupActionType dup_action);
+           sql::ObLoadDupActionType dup_action, bool ignore_seq_no = false);
   bool operator()(const ObDirectLoadExternalMultiPartitionRow *lhs,
                   const ObDirectLoadExternalMultiPartitionRow *rhs);
   bool operator()(const ObDirectLoadConstExternalMultiPartitionRow *lhs,
@@ -122,6 +123,7 @@ public:
   ObDirectLoadDatumArrayCompare datum_array_compare_;
   sql::ObLoadDupActionType dup_action_;
   int result_code_;
+  bool ignore_seq_no_;
   bool is_inited_;
 };
 

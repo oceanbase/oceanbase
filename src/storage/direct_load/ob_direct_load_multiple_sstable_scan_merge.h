@@ -72,6 +72,7 @@ private:
   ScanMergeLoserTree *loser_tree_;
   common::ObRowsMerger<LoserTreeItem, LoserTreeCompare> *rows_merger_;
   blocksstable::ObDatumRow datum_row_;
+  common::ObArray<const ObDirectLoadMultipleDatumRow *> rows_;
   bool is_inited_;
 };
 

@@ -1440,7 +1440,8 @@ int ObLoadDataDirectImpl::LargeFileLoadTaskProcessor::process()
 
 ObLoadDataDirectImpl::LargeFileLoadExecutor::LargeFileLoadExecutor()
   : next_worker_idx_(0),
-    next_chunk_id_(0)
+    next_chunk_id_(0),
+    total_line_no_(0)
 {
 }
 
@@ -1519,12 +1520,13 @@ int ObLoadDataDirectImpl::LargeFileLoadExecutor::get_next_task_handle(TaskHandle
     handle->worker_idx_ = get_worker_idx();
     handle->session_id_ = handle->worker_idx_ + 1;
     handle->data_desc_ = data_desc_;
-    handle->start_line_no_ = total_line_count_ + 1;
+    handle->start_line_no_ = total_line_no_ ;
     handle->result_.created_ts_ = ObTimeUtil::current_time();
     handle->sequence_no_.chunk_id_ = chunk_id;
     handle->sequence_no_.chunk_seq_no_ = 0;
     handle->data_buffer_.swap(expr_buffer_);
     handle->data_buffer_.is_end_file_ = data_reader_.is_end_file();
+    total_line_no_ += current_line_count;
   }
   return ret;
 }

@@ -204,6 +204,7 @@ int ObDirectLoadMemDump::dump_tables()
   ObArray<ObDirectLoadMemChunkIter<RowType, CompareType>> chunk_iters; //用于暂存iters
   ObDirectLoadExternalMerger<RowType, CompareType> merger;
   CompareType compare;
+  CompareType compare1;  //不带上seq_no的排序
 
   const RowType *external_row = nullptr;
   ObDatumRow datum_row;
@@ -217,10 +218,12 @@ int ObDirectLoadMemDump::dump_tables()
     LOG_WARN("fail to allocate memory", KR(ret));
   } else if (OB_FAIL(compare.init(*(mem_ctx_->datum_utils_), mem_ctx_->dup_action_))) {
     LOG_WARN("fail to init compare", KR(ret));
+  } else if (OB_FAIL(compare1.init(*(mem_ctx_->datum_utils_), mem_ctx_->dup_action_, true))) {
+    LOG_WARN("fail to init compare1", KR(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < context_ptr_->mem_chunk_array_.count(); i++) {
     ChunkType *chunk = context_ptr_->mem_chunk_array_[i];
-    auto iter = chunk->scan(range_.start_, range_.end_, compare);
+    auto iter = chunk->scan(range_.start_, range_.end_, compare1);
     if (OB_FAIL(chunk_iters.push_back(iter))) {
       LOG_WARN("fail to push iter", KR(ret));
     }

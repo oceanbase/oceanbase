@@ -434,6 +434,7 @@ private:
     DataReader data_reader_;
     int64_t next_worker_idx_;
     int64_t next_chunk_id_;
+    int64_t total_line_no_;
     DISALLOW_COPY_AND_ASSIGN(LargeFileLoadExecutor);
   };
 
