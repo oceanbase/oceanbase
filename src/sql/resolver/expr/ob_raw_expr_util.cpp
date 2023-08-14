@@ -3440,6 +3440,30 @@ int ObRawExprUtils::extract_col_aggr_exprs(ObRawExpr* expr,
   return ret;
 }
 
+int ObRawExprUtils::contain_virtual_generated_column(ObRawExpr *&expr, bool &is_contain_vir_gen_column)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (expr->is_column_ref_expr() &&
+      static_cast<ObColumnRefRawExpr *>(expr)->is_virtual_generated_column() &&
+      !static_cast<ObColumnRefRawExpr *>(expr)->is_xml_column()) {
+    is_contain_vir_gen_column = true;
+  }
+  for (int64_t j = 0; OB_SUCC(ret) && is_contain_vir_gen_column == false && j < expr->get_param_count(); j++) {
+    if (OB_ISNULL(expr->get_param_expr(j))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param_expr is NULL", K(j), K(ret));
+    } else if (OB_FAIL(SMART_CALL(contain_virtual_generated_column(expr->get_param_expr(j), is_contain_vir_gen_column)))) {
+      LOG_WARN("fail to contain virtual gen column", K(j), K(ret));
+    } else {
+      LOG_TRACE("conclude virtual generated column", K(is_contain_vir_gen_column));
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::extract_column_exprs(const ObIArray<ObRawExpr*> &exprs,
                                          ObIArray<ObRawExpr*> &column_exprs,
                                          bool need_pseudo_column)
@@ -8446,6 +8470,20 @@ int ObRawExprUtils::check_is_valid_generated_col(ObRawExpr *expr, ObIAllocator &
     }
   }
   return ret;
+}
+
+bool ObRawExprUtils::is_column_ref_skip_implicit_cast(const ObRawExpr *expr)
+{
+  bool bret = false;
+  if (OB_NOT_NULL(expr)) {
+    if (expr->is_column_ref_expr()) {
+      bret = true;
+    } else if (T_FUN_SYS_CAST == expr->get_expr_type() &&
+               expr->has_flag(IS_INNER_ADDED_EXPR)) {
+      bret = is_column_ref_skip_implicit_cast(expr->get_param_expr(0));
+    }
+  }
+  return bret;
 }
 
 }

@@ -119,13 +119,13 @@ struct ObWriteFlag
 // rolled back. This solves the common problem between B and C mentioned above
 // It is guaranteed that only There is a concurrent modification of a task.
 int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_flag,
-                                 const int64_t reader_seq_no,
+                                 const transaction::ObTxSEQ reader_seq_no,
                                  const transaction::ObTransID checker_tx_id,
                                  const blocksstable::ObDmlFlag checker_dml_flag,
-                                 const int64_t checker_seq_no,
+                                 const transaction::ObTxSEQ checker_seq_no,
                                  const transaction::ObTransID locker_tx_id,
                                  const blocksstable::ObDmlFlag locker_dml_flag,
-                                 const int64_t locker_seq_no);
+                                 const transaction::ObTxSEQ locker_seq_no);
 
 } // namespace concurrent_control
 } // namespace oceanbase

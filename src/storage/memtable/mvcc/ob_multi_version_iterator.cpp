@@ -134,7 +134,7 @@ int ObMultiVersionValueIterator::get_next_uncommitted_node(
     const void *&tnode,
     transaction::ObTransID &trans_id,
     SCN &trans_version,
-    int64_t &sql_sequence)
+    transaction::ObTxSEQ &sql_sequence)
 {
   int ret = OB_SUCCESS;
   int64_t state = -1;
@@ -199,7 +199,7 @@ int ObMultiVersionValueIterator::get_next_uncommitted_node(
 
 int ObMultiVersionValueIterator::check_next_sql_sequence(
     const ObTransID &input_trans_id,
-    const int64_t input_sql_sequence,
+    const ObTxSEQ input_sql_sequence,
     bool &same_sql_sequence_flag)
 {
   int ret = OB_SUCCESS;
@@ -244,7 +244,7 @@ int ObMultiVersionValueIterator::get_state_of_curr_trans_node(
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "trans node is null", K(ret), K(version_iter_));
   } else {
-    int64_t sql_sequence = INT64_MAX;
+    transaction::ObTxSEQ sql_sequence;
     version_iter_->get_trans_id_and_seq_no(trans_id, sql_sequence);
 
     if (version_iter_->is_aborted()) {

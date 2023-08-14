@@ -2162,6 +2162,7 @@ int ObTransformSimplifySubquery::check_can_trans_as_exists(ObRawExpr* expr, bool
   int ret = OB_SUCCESS;
   ObQueryRefRawExpr* right_hand = NULL;
   ObRawExpr* left_hand = NULL;
+  bool dummy = false;
   is_valid = false;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2188,17 +2189,22 @@ int ObTransformSimplifySubquery::check_can_trans_as_exists(ObRawExpr* expr, bool
     // do nothing
   } else if (OB_FAIL(check_stmt_can_trans_as_exists(right_hand->get_ref_stmt(),
                                                     !right_hand->get_exec_params().empty(),
+                                                    dummy,
                                                     is_valid))) {
     LOG_WARN("failed to check stmt can trans as exists", K(ret));
   }
   return ret;
 }
 
-int ObTransformSimplifySubquery::check_stmt_can_trans_as_exists(ObSelectStmt *stmt, bool is_correlated, bool &is_valid)
+int ObTransformSimplifySubquery::check_stmt_can_trans_as_exists(ObSelectStmt *stmt,
+                                                                bool is_correlated,
+                                                                bool &match_index,
+                                                                bool &is_valid)
 {
   int ret = OB_SUCCESS;
   bool contain_rownum = false;
   is_valid = false;
+  match_index = false;
   if (OB_ISNULL(stmt) ||
       OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2209,6 +2215,7 @@ int ObTransformSimplifySubquery::check_stmt_can_trans_as_exists(ObSelectStmt *st
              stmt->has_limit()) {
     // do nothing
   } else if (stmt->is_set_stmt()) {
+    bool has_index_matched = false;
     if (stmt->is_recursive_union()) {
     } else if (stmt->get_set_op() == ObSelectStmt::EXCEPT) {
       if (OB_UNLIKELY(stmt->get_set_query().empty())) {
@@ -2216,17 +2223,28 @@ int ObTransformSimplifySubquery::check_stmt_can_trans_as_exists(ObSelectStmt *st
         LOG_WARN("get except set query is empty", K(ret));
       } else if (OB_FAIL(SMART_CALL(check_stmt_can_trans_as_exists(stmt->get_set_query(0),
                                                                    is_correlated,
+                                                                   has_index_matched,
                                                                    is_valid)))) {
         LOG_WARN("failted to check stmt can trans as exists", K(ret));
+      } else {
+        match_index = has_index_matched;
+        is_valid = has_index_matched && is_valid;
       }
     } else {
       is_valid = true;
       for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < stmt->get_set_query().count(); ++i) {
+        has_index_matched = false;
         if (OB_FAIL(SMART_CALL(check_stmt_can_trans_as_exists(stmt->get_set_query(i),
                                                               is_correlated,
+                                                              has_index_matched,
                                                               is_valid)))) {
           LOG_WARN("failted to check stmt can trans as exists", K(ret));
+        } else if (has_index_matched) {
+          match_index = has_index_matched;
         }
+      }
+      if (OB_SUCC(ret)) {
+        is_valid = match_index && is_valid;
       }
     }
   } else if (stmt->is_contains_assignment() ||
@@ -2266,6 +2284,8 @@ int ObTransformSimplifySubquery::check_stmt_can_trans_as_exists(ObSelectStmt *st
                                                             &equal_sets,
                                                             &const_exprs))) {
           LOG_WARN("failed to check is match index prefix", K(ret));
+        } else if (is_valid) {
+          match_index = true;
         }
       }
     }

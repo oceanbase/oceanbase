@@ -16,6 +16,7 @@
 #include "ob_log_lighty_list.h"                     // LightyList
 #include "lib/queue/ob_link.h"                      // ObLink
 #include "lib/container/ob_array_iterator.h"        // ObArray
+#include "storage/tx/ob_trans_define.h"             // ObTxSEQ
 
 namespace oceanbase
 {
@@ -25,22 +26,22 @@ namespace libobcdc
 class RollbackNode : public common::ObLink
 {
 public:
-  RollbackNode(const int64_t rollback_from_seq, const int64_t rollback_to_seq);
+  RollbackNode(const transaction::ObTxSEQ &rollback_from_seq, const transaction::ObTxSEQ &rollback_to_seq);
   ~RollbackNode();
 
 public:
   bool is_valid() const;
   void set_next(RollbackNode* next) { next_ = next; }
   const RollbackNode *get_next() const { return static_cast<RollbackNode*>(next_); }
-  int64_t get_rollback_from_seq() const { return from_seq_; }
-  int64_t get_rollback_to_seq() const { return to_seq_; }
-  bool should_rollback_stmt(const int64_t stmt_seq_no) const;
+  const transaction::ObTxSEQ &get_rollback_from_seq() const { return from_seq_; }
+  const transaction::ObTxSEQ &get_rollback_to_seq() const { return to_seq_; }
+  bool should_rollback_stmt(const transaction::ObTxSEQ &stmt_seq_no) const;
 
   TO_STRING_KV(K_(from_seq), K_(to_seq));
 private:
-  // from_seq_ >= to_seq_
-  int64_t from_seq_;
-  int64_t to_seq_;
+  // from_seq_ > to_seq_
+  transaction::ObTxSEQ from_seq_;
+  transaction::ObTxSEQ to_seq_;
 };
 
 // Rollback algorithm:

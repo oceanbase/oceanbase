@@ -287,6 +287,52 @@ int ObLogTableScan::extract_file_column_exprs_recursively(ObRawExpr *expr)
   return ret;
 }
 
+// If the filter is indexed before returning to the table,
+// and there are generated columns, deep copy is required
+int ObLogTableScan::copy_filter_before_index_back()
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObRawExpr*> &filters = get_filter_exprs();
+  const auto &flags = get_filter_before_index_flags();
+  if (OB_FAIL(filter_before_index_back_set())) {
+    LOG_WARN("Failed to filter_before_index_back_set", K(ret));
+  } else if (get_index_back() && !flags.empty()) {
+    ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
+    const ObDMLStmt *stmt = NULL;
+    ObArray<ObRawExpr *> column_exprs;
+    if (OB_ISNULL(stmt = get_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(get_stmt()), K(ret));
+    } else if (OB_FAIL(stmt->get_column_exprs(column_exprs))) {
+      LOG_WARN("failed to get column exprs", K(ret));
+    } else if (OB_FAIL(copier.add_skipped_expr(column_exprs))) {
+      LOG_WARN("failed to add skipped exprs", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
+      if (filters.at(i)->has_flag(CNT_PL_UDF)) {
+        // do nothing.
+      } else if (flags.at(i)) {
+        if (get_index_back() && get_is_index_global() && filters.at(i)->has_flag(CNT_SUB_QUERY)) {
+          // do nothing.
+        } else {
+          bool is_contain_vir_gen_column = false;
+          // ObArray<ObRawExpr *> column_exprs;
+          // scan_pushdown before index back conculde virtual generated column
+          // need copy for avoiding shared expression.
+          if (OB_FAIL(ObRawExprUtils::contain_virtual_generated_column(filters.at(i), is_contain_vir_gen_column))) {
+            LOG_WARN("fail to contain virtual gen column", K(ret));
+          } else if (is_contain_vir_gen_column) {
+            if (OB_FAIL(copier.copy(filters.at(i), filters.at(i)))) {
+              LOG_WARN("failed to copy exprs", K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
 int ObLogTableScan::generate_access_exprs()
 {
   int ret = OB_SUCCESS;
@@ -295,6 +341,8 @@ int ObLogTableScan::generate_access_exprs()
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_plan()), K(get_stmt()), K(ret));
+  } else if (OB_FAIL(copy_filter_before_index_back())) {
+    LOG_WARN("failed to copy filter before index back", K(ret));
   } else if (OB_FAIL(generate_necessary_rowkey_and_partkey_exprs())) {
     LOG_WARN("failed to generate rowkey and part exprs", K(ret));
   } else if (use_batch()

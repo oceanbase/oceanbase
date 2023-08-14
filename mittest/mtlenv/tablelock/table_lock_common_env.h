@@ -58,7 +58,7 @@ ObTableLockOp       DEFAULT_CONFLICT_OUT_TRANS_LOCK_OP;
 void init_default_lock_test_value()
 {
   int ret = OB_SUCCESS;
-  const int64_t seq_no = 0;
+  const ObTxSEQ seq_no;
   const int64_t create_timestamp = 1;
   const int64_t create_schema_version = 1;
 

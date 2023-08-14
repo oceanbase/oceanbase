@@ -517,7 +517,7 @@ int MockObServer::do_handle_(ObReq &req, ObResp &resp)
     break;
   case ObReq::T::DUMMY_WRITE: {
     PREPARE_TX_PARAM(tx_param);
-    int64_t sp;
+    ObTxSEQ sp;
     ret = tx_node_.create_implicit_savepoint(*tx_desc, tx_param, sp, true);
   }
     break;

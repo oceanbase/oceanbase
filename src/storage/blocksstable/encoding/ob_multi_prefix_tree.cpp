@@ -460,6 +460,7 @@ ObMultiPrefixTreeFactory::ObMultiPrefixTreeFactory()
 {
   lib::ObMemAttr attr(MTL_ID(), blocksstable::OB_ENCODING_LABEL_PREFIX_TREE_FACTORY);
   allocator_.set_attr(attr);
+  prefix_trees_.set_attr(attr);
 }
 
 ObMultiPrefixTreeFactory::~ObMultiPrefixTreeFactory()

@@ -31,6 +31,7 @@
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "rootserver/ob_tenant_info_loader.h"
+#include "src/observer/omt/ob_tenant_config.h"
 
 using namespace oceanbase::share;
 
@@ -447,6 +448,19 @@ int ObTransferUtils::get_gts(const uint64_t tenant_id, SCN &gts)
   LOG_INFO("get tenant gts", KR(ret), K(tenant_id), K(gts));
   return ret;
 }
+
+int64_t ObStorageHAUtils::get_rpc_timeout()
+{
+  int64_t rpc_timeout = ObStorageRpcProxy::STREAM_RPC_TIMEOUT;
+  int64_t tmp_rpc_timeout = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    tmp_rpc_timeout = tenant_config->_ha_rpc_timeout;
+    rpc_timeout = std::max(rpc_timeout, tmp_rpc_timeout);
+  }
+  return rpc_timeout;
+}
+
 
 } // end namespace storage
 } // end namespace oceanbase

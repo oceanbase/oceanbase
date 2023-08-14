@@ -864,7 +864,7 @@ int64_t ObTxTable::get_filter_col_idx()
 
 int ObTxTable::check_row_locked(ObReadTxDataArg &read_tx_data_arg,
                                 const transaction::ObTransID &read_tx_id,
-                                const int64_t sql_sequence,
+                                const transaction::ObTxSEQ sql_sequence,
                                 storage::ObStoreRowLockState &lock_state)
 {
   CheckRowLockedFunctor fn(read_tx_id, read_tx_data_arg.tx_id_, sql_sequence, lock_state);
@@ -875,7 +875,7 @@ int ObTxTable::check_row_locked(ObReadTxDataArg &read_tx_data_arg,
 }
 
 int ObTxTable::check_sql_sequence_can_read(ObReadTxDataArg &read_tx_data_arg,
-                                           const int64_t sql_sequence,
+                                           const transaction::ObTxSEQ &sql_sequence,
                                            bool &can_read)
 {
   CheckSqlSequenceCanReadFunctor fn(sql_sequence, can_read);

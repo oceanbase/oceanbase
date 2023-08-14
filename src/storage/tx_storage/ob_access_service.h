@@ -203,7 +203,8 @@ protected:
       transaction::ObTxDesc &tx_desc,
       const transaction::ObTxReadSnapshot &snapshot,
       const concurrent_control::ObWriteFlag write_flag,
-      ObStoreCtxGuard &ctx_guard);
+      ObStoreCtxGuard &ctx_guard,
+      const transaction::ObTxSEQ &spec_seq_no = transaction::ObTxSEQ::INVL());
   int check_read_allowed_(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,

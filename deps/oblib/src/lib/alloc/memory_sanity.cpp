@@ -14,7 +14,6 @@
 #else
 #include "lib/alloc/memory_sanity.h"
 #include "lib/utility/utility.h"
-#include "objit/ob_llvm_symbolizer.h"
 
 __thread bool enable_sanity_check = true;
 struct t_vip {
@@ -46,6 +45,8 @@ void sanity_set_whitelist(const char *str)
     }
   }
 }
+
+BacktraceSymbolizeFunc backtrace_symbolize_func = NULL;
 
 void memory_sanity_abort()
 {
@@ -101,7 +102,9 @@ void memory_sanity_abort()
         }
       }
     };
-    oceanbase::common::backtrace_symbolize(addrs, n_addr, check_vip);
+    if (backtrace_symbolize_func != NULL) {
+      backtrace_symbolize_func(addrs, n_addr, check_vip);
+    }
     while (pos > 0 && '\n' == buf[pos - 1]) pos--;
     fprintf(stderr, "[ERROR] sanity check failed, vip_func: %s, lbt: %s\nsymbolize:\n%.*s\n", vip_func,
             oceanbase::common::parray((int64_t*)addrs, n_addr), pos, buf);

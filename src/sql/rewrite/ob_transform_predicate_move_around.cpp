@@ -1101,6 +1101,29 @@ int ObTransformPredicateMoveAround::rename_pullup_predicates(
   return ret;
 }
 
+int ObTransformPredicateMoveAround::rename_pullup_predicates(
+    ObDMLStmt &stmt,
+    TableItem &view,
+    ObIArray<ObRawExpr *> &preds)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<int64_t, 8> sel_ids;
+  ObSelectStmt *view_stmt = NULL;
+  if (OB_ISNULL(view_stmt = view.ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < view_stmt->get_select_item_size(); i++) {
+    if (OB_FAIL(sel_ids.push_back(i))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ret = rename_pullup_predicates(stmt, view, sel_ids, preds);
+  }
+  return ret;
+}
+
 /**
  * @brief ObTransformPredicateMoveAround::pushdown_predicates
  * @param stmt
@@ -2646,7 +2669,7 @@ int ObTransformPredicateMoveAround::pushdown_into_semi_info(ObDMLStmt *stmt,
   } else if (OB_FAIL(pushdown_into_table(stmt, right_table, pullup_preds,
                                          semi_info->semi_conditions_, pred_conditions))) {
     LOG_WARN("failed to push down predicates", K(ret));
-  } else if (OB_FAIL(pushdown_semi_info_right_filter(stmt, ctx_, semi_info))) {
+  } else if (OB_FAIL(pushdown_semi_info_right_filter(stmt, ctx_, semi_info, pullup_preds))) {
     LOG_WARN("failed to pushdown semi info right filter", K(ret));
   }
   return ret;
@@ -2709,7 +2732,8 @@ int ObTransformPredicateMoveAround::check_has_shared_query_ref(ObRawExpr *expr, 
 // 2. pushdown the right table filters into the generate table.
 int ObTransformPredicateMoveAround::pushdown_semi_info_right_filter(ObDMLStmt *stmt,
                                                                     ObTransformerCtx *ctx,
-                                                                    SemiInfo *semi_info)
+                                                                    SemiInfo *semi_info,
+                                                                    ObIArray<ObRawExpr *> &pullup_preds)
 {
   int ret = OB_SUCCESS;
   TableItem *right_table = NULL;
@@ -2746,6 +2770,8 @@ int ObTransformPredicateMoveAround::pushdown_semi_info_right_filter(ObDMLStmt *s
                                                           right_table,
                                                           &right_filters))) {
     LOG_WARN("failed to create view with table", K(ret));
+  } else if (OB_FAIL(rename_pullup_predicates(*stmt, *view_table, pullup_preds))) {
+    LOG_WARN("failed to rename pullup preds", K(ret));
   } else {
     real_happened_ = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_infos_.count(); i ++) {

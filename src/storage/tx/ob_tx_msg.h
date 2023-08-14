@@ -236,7 +236,7 @@ namespace transaction
     struct ObTxRollbackSPMsg : public ObTxMsg {
       ObTxRollbackSPMsg() :
           ObTxMsg(ROLLBACK_SAVEPOINT),
-          savepoint_(-1),
+          savepoint_(),
           op_sn_(-1),
           //todo:后续branch_id使用方式确定后，需要相应修改
           branch_id_(-1),
@@ -249,7 +249,7 @@ namespace transaction
           tx_ptr_ = NULL;
         }
       }
-      int64_t savepoint_;
+      ObTxSEQ savepoint_;
       int64_t op_sn_;
       //todo:后期设计中操作编号是否等于branch_id
       int64_t branch_id_;

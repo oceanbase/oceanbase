@@ -65,7 +65,7 @@ public:
   : tx_id_(),
     trans_version_(share::SCN::min_scn()),
     scn_(share::SCN::max_scn()),
-    seq_no_(0),
+    seq_no_(),
     tx_end_scn_(share::SCN::max_scn()),
     prev_(NULL),
     next_(NULL),
@@ -81,7 +81,7 @@ public:
   transaction::ObTransID tx_id_;
   share::SCN trans_version_;
   share::SCN scn_;
-  int64_t seq_no_;
+  transaction::ObTxSEQ seq_no_;
   share::SCN tx_end_scn_;
   ObMvccTransNode *prev_;
   ObMvccTransNode *next_;
@@ -170,10 +170,10 @@ public:
   blocksstable::ObDmlFlag get_dml_flag() const;
   int fill_trans_version(const share::SCN version);
   int fill_scn(const share::SCN scn);
-  void get_trans_id_and_seq_no(transaction::ObTransID &trans_id, int64_t &seq_no);
-  int64_t get_seq_no() const { return seq_no_; }
+  void get_trans_id_and_seq_no(transaction::ObTransID &trans_id, transaction::ObTxSEQ &seq_no);
+  transaction::ObTxSEQ get_seq_no() const { return seq_no_; }
   transaction::ObTransID get_tx_id() const { return tx_id_; }
-  void set_seq_no(const int64_t seq_no) { seq_no_ = seq_no; }
+  void set_seq_no(const transaction::ObTxSEQ seq_no) { seq_no_ = seq_no; }
   int is_lock_node(bool &is_lock) const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
   void set_tx_end_scn(const share::SCN tx_end_scn)

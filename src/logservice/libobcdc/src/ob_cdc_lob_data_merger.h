@@ -83,7 +83,7 @@ private:
       volatile bool &stop_flag);
   int get_lob_col_fra_ctx_list_(
       const bool is_new_col,
-      const uint64_t seq_no_start,
+      const transaction::ObTxSEQ &seq_no_start,
       const uint32_t seq_no_cnt,
       ObIAllocator &allocator,
       ObLobDataGetCtx &lob_data_get_ctx,

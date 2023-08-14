@@ -35,7 +35,7 @@ using namespace memtable;
 namespace memtable
 {
 
-void ObMemtableCtx::update_max_submitted_seq_no(const int64_t seq_no)
+void ObMemtableCtx::update_max_submitted_seq_no(const ObTxSEQ seq_no)
 {
   UNUSEDx(seq_no);
 }

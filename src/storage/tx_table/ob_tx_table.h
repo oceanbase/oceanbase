@@ -121,12 +121,11 @@ public:
    * @param[in] read_trans_id 
    * @param[in] data_trans_id 
    * @param[in] sql_sequence 
-   * @param[in] read_epoch 
    * @param[out] lock_state 
    */
   int check_row_locked(ObReadTxDataArg &read_tx_data_arg,
                        const transaction::ObTransID &read_tx_id,
-                       const int64_t sql_sequence,
+                       const transaction::ObTxSEQ sql_sequence,
                        storage::ObStoreRowLockState &lock_state);
 
   /**
@@ -134,10 +133,11 @@ public:
    * 
    * @param[in] data_tx_id 
    * @param[in] sql_sequence 
-   * @param[in] read_epoch 
    * @param[out] can_read 
    */
-  int check_sql_sequence_can_read(ObReadTxDataArg &read_tx_data_arg, const int64_t sql_sequence, bool &can_read);
+  int check_sql_sequence_can_read(ObReadTxDataArg &read_tx_data_arg,
+                                  const transaction::ObTxSEQ &sql_sequence,
+                                  bool &can_read);
 
   /**
    * @brief fetch the state of txn DATA_TRANS_ID when replaying to LOG_TS the requirement can be seen from

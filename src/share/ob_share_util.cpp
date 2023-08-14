@@ -292,7 +292,7 @@ int ObShareUtil::get_ora_rowscn(
       LOG_WARN("fail to get next row", KR(ret));
     } else {
       EXTRACT_INT_FIELD_MYSQL(*result, "ORA_ROWSCN", ora_rowscn_val, int64_t);
-      if (OB_FAIL(ora_rowscn.convert_for_inner_table_field(ora_rowscn_val))) {
+      if (FAILEDx(ora_rowscn.convert_for_inner_table_field(ora_rowscn_val))) {
         LOG_WARN("fail to convert val to SCN", KR(ret), K(ora_rowscn_val));
       }
     }

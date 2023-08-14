@@ -4765,6 +4765,9 @@ int ObSelectResolver::resolve_into_clause(const ParseNode *node)
     } else if (OB_UNLIKELY(is_in_set_query())) {
       ret = OB_INAPPROPRIATE_INTO;
       LOG_WARN("select into can not in set query", K(ret));
+    } else if (is_mysql_mode() && params_.is_from_create_view_) {
+      ret = OB_ERR_VIEW_SELECT_CONTAIN_INTO;
+      LOG_WARN("View's SELECT contains a 'INTO' clause.", K(ret));
     } else {
       new(into_item) ObSelectIntoItem();
       into_item->into_type_ = node->type_;
@@ -6615,6 +6618,8 @@ int ObSelectResolver::resolve_shared_order_item(OrderItem &order_item, ObSelectS
       OB_ISNULL(params_.query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null pointer", K(ret));
+  } else if (select_stmt->is_order_siblings()) {
+    // do noting
   } else if (OB_FAIL(select_stmt->get_select_exprs(select_exprs))) {
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (ObOptimizerUtil::find_item(select_exprs, order_item.expr_)) {

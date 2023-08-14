@@ -466,7 +466,7 @@ public:
 
   ObLogEntryTask &get_redo_log_entry_task() { return log_entry_task_; }
 
-  int64_t get_row_seq_no() const { return row_.seq_no_; }
+  const transaction::ObTxSEQ get_row_seq_no() const { return row_.seq_no_; }
 
   bool is_callback() const { return 1 == is_callback_; }
   void mark_callback() { is_callback_ = 1; }
@@ -550,7 +550,7 @@ public:
   uint64_t get_op_tablegroup_id() const { return ddl_op_tablegroup_id_; }
   int64_t get_op_schema_version() const { return ddl_op_schema_version_; }
   uint64_t get_exec_tenant_id() const { return ddl_exec_tenant_id_; }
-  int64_t get_row_seq_no() const { return row_.seq_no_; }
+  const transaction::ObTxSEQ &get_row_seq_no() const { return row_.seq_no_; }
 
 public:
   // tennat_id(UINT64_MAX: 20) + schema_version(INT64_MAX:19)
@@ -797,13 +797,13 @@ public:
    * 1. lsn of rollback_to should push into all_recorded_lsns(ObTxRollbackToLog should has independent LogEntry)
    * 2. construct RollbackNode and push into rollback_list_
    * @param {LSN} &lsn lsn of ObTxRollbackToLog
-   * @param {int64_t} rollback_from
-   * @param {int64_t} rollback_to
+   * @param {ObTxSEQ} rollback_from
+   * @param {ObTxSEQ} rollback_to
    * @retval OB_ENTRY_EXIST: the tollback_to node already recorded
    * @retval OB_SUCCESS: op succ
    * @retval other error code: op fail by other reason
    */
-  int push_rollback_to_info(const palf::LSN &lsn, const int64_t rollback_from, const int64_t rollback_to);
+  int push_rollback_to_info(const palf::LSN &lsn, const transaction::ObTxSEQ &rollback_from, const transaction::ObTxSEQ &rollback_to);
 
   /// set PartTrans Commit Info
   /// @param [in] trace_id              app trace id

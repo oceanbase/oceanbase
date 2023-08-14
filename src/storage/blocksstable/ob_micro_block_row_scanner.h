@@ -339,7 +339,7 @@ private:
   void clear_scan_status();
   int prepare_committed_row_queue(const ObDatumRow *&row);
   int get_row_from_row_queue(const ObDatumRow *&row);
-  int check_curr_row_can_read(const transaction::ObTransID &trans_id, const int64_t sql_seq, bool &can_read);
+  int check_curr_row_can_read(const transaction::ObTransID &trans_id, const transaction::ObTxSEQ &sql_seq, bool &can_read);
   int compact_trans_row_into_row_queue();
   int set_trans_version_for_uncommitted_row(ObDatumRow &row);
   int get_trans_state(const transaction::ObTransID &trans_id,

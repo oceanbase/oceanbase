@@ -187,10 +187,10 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
   const transaction::ObTxSnapshot &snapshot = lock_for_read_arg_.mvcc_acc_ctx_.snapshot_;
   const SCN &snapshot_version = snapshot.version_;
   const transaction::ObTransID snapshot_tx_id = snapshot.tx_id_;
-  const int64_t snapshot_sql_sequence = snapshot.scn_;
+  const transaction::ObTxSEQ snapshot_sql_sequence = snapshot.scn_;
 
   const transaction::ObTransID data_tx_id = lock_for_read_arg_.data_trans_id_;
-  const int64_t data_sql_sequence = lock_for_read_arg_.data_sql_sequence_;
+  const transaction::ObTxSEQ data_sql_sequence = lock_for_read_arg_.data_sql_sequence_;
   const bool read_latest = lock_for_read_arg_.read_latest_;
   const transaction::ObTransID reader_tx_id = lock_for_read_arg_.mvcc_acc_ctx_.tx_id_;
 

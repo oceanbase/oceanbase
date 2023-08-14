@@ -25,6 +25,7 @@
 #include "ob_log_restore_scheduler.h"                       // ObLogRestoreScheduler
 #include "ob_log_restore_net_driver.h"                      // ObLogRestoreNetDriver
 #include "ob_log_restore_archive_driver.h"                  // ObLogRestoreArchiveDriver
+#include "ob_remote_log_writer.h"                           // ObRemoteLogWriter
 
 namespace oceanbase
 {
@@ -93,6 +94,7 @@ private:
   ObLogRestoreNetDriver net_driver_;
   ObRemoteFetchLogImpl fetch_log_impl_;
   ObRemoteFetchWorker fetch_log_worker_;
+  ObRemoteLogWriter writer_;
   ObRemoteErrorReporter error_reporter_;
   ObLogRestoreAllocator allocator_;
   ObLogRestoreScheduler scheduler_;

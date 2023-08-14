@@ -51,7 +51,7 @@ public:
       tx_desc_(NULL),
       tx_ctx_(NULL),
       mem_ctx_(NULL),
-      tx_scn_(-1),
+      tx_scn_(),
       write_flag_(),
       handle_start_time_(OB_INVALID_TIMESTAMP),
       is_standby_read_(false),
@@ -65,7 +65,7 @@ public:
     tx_desc_ = NULL;
     tx_ctx_ = NULL;
     mem_ctx_ = NULL;
-    tx_scn_ = -1;
+    tx_scn_.reset();
     write_flag_.reset();
     handle_start_time_ = OB_INVALID_TIMESTAMP;
     is_standby_read_ = false;
@@ -83,7 +83,7 @@ public:
     tx_desc_ = NULL;
     tx_ctx_ = NULL;
     mem_ctx_ = NULL;
-    tx_scn_ = -1;
+    tx_scn_.reset();
     write_flag_.reset();
     handle_start_time_ = OB_INVALID_TIMESTAMP;
     is_standby_read_ = false;
@@ -102,7 +102,7 @@ public:
       && snapshot_.is_valid()
       && tx_ctx_
       && mem_ctx_
-      && tx_scn_ > 0
+      && tx_scn_.is_valid()
       && tx_id_.is_valid()
       && tx_table_guards_.is_valid();
   }
@@ -147,7 +147,7 @@ public:
   void init_write(transaction::ObPartTransCtx &tx_ctx,
                   ObMemtableCtx &mem_ctx,
                   const transaction::ObTransID &tx_id,
-                  const int64_t tx_scn,
+                  const transaction::ObTxSEQ tx_scn,
                   transaction::ObTxDesc &tx_desc,
                   const storage::ObTxTableGuard &tx_table_guard,
                   const transaction::ObTxSnapshot &snapshot,
@@ -267,7 +267,7 @@ public: // NOTE: those field should only be accessed by txn relative routine
   transaction::ObTxDesc *tx_desc_;             // the txn descriptor
   transaction::ObPartTransCtx *tx_ctx_;        // the txn context
   ObMemtableCtx *mem_ctx_;                     // memtable-ctx
-  int64_t tx_scn_;                             // the change's number of this modify
+  transaction::ObTxSEQ tx_scn_;                             // the change's number of this modify
   concurrent_control::ObWriteFlag write_flag_; // the write flag of the write process
 
   // this was used for runtime mertic

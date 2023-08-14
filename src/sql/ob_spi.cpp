@@ -3717,7 +3717,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
           lib::ContextTLOptGuard guard(false);
           if (OB_FAIL(inner_open(ctx, sql_str, ps_sql, stmt_type, exec_params,
                               *spi_result, spi_result->get_out_params()))) {
-            if (spi_result->get_result_set() != NULL) {
+            if (spi_result->get_result_set() != NULL && !cursor.is_ps_cursor()) {
               int cli_ret = OB_SUCCESS;
               retry_ctrl.test_and_save_retry_state(GCTX,
                                                 spi_result->get_sql_ctx(),
@@ -3797,7 +3797,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
         session_info->get_raw_audit_record().exec_record_ = record_bk;
         session_info->get_raw_audit_record().try_cnt_ = try_cnt;
       }
-    } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
+    } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type() && !cursor.is_ps_cursor());
   } else {
     SMART_VAR(ObSPIResultSet, spi_result) {
       ObSPICursor *spi_cursor = NULL;
@@ -3839,16 +3839,16 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                   spi_result.get_result_set()->get_field_columns(),
                   cursor.get_field_columns()));
             OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor));
-            if (OB_FAIL(ret)) {
+            if (OB_FAIL(ret) && !cursor.is_ps_cursor()) {
               int cli_ret = OB_SUCCESS;
               retry_ctrl.test_and_save_retry_state(GCTX,
                                                   spi_result.get_sql_ctx(),
                                                   *spi_result.get_result_set(),
                                                   ret,
                                                   cli_ret,
-                                                  cursor.is_ps_cursor() ? false : true,
-                                                  cursor.is_ps_cursor() ? false : true,
-                                                  cursor.is_ps_cursor() ? false : true);
+                                                  true,
+                                                  true,
+                                                  true);
               LOG_WARN("failed to fill_cursor, check if need retry",
                       K(ret), K(cli_ret), K(retry_ctrl.need_retry()),
                       K(sql_stmt), K(ps_sql), K(exec_params));
@@ -3904,8 +3904,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
           }
           ret = OB_SUCCESS == ret ? close_ret : ret;
           retry_cnt++;
-        } while ((!cursor.is_ps_cursor() && RETRY_TYPE_NONE != retry_ctrl.get_retry_type())
-          || (cursor.is_ps_cursor() && RETRY_TYPE_LOCAL == retry_ctrl.get_retry_type()));
+        } while (!cursor.is_ps_cursor() && RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
         session->set_query_start_time(old_query_start_time);
       }
 
@@ -6200,6 +6199,8 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
                                                 true,
                                                 can_retry));
         OZ (query_sender->send_eof_packet(true));
+
+        OX(implicit_cursor->set_rowcount(into_count > 0 ? 1 : 0));
       }
     } else if (stmt::T_ANONYMOUS_BLOCK != ob_result_set->get_stmt_type()) {
       // 不带Returing的INSERT，DELETE，UPDATE

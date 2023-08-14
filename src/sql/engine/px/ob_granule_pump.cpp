@@ -1075,9 +1075,19 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
           LOG_WARN("fail to build tablet idx map", K(ret));
         }
       }
+      if (OB_SUCC(ret)) {
+        // see issue
+        // for virtual table, we can directly mock a tablet id
+        // function build_tablet_idx_map will mock a idx map whose key
+        // varies from 1 to table_schema->get_all_part_num(), and the value = key + 1
+        // so we can directly set tablet_idx = tablet_loc.tablet_id_.id() + 1, the result is same
+        if (is_virtual_table(table_schema->get_table_id())) {
+          tablet_idx = tablet_loc.tablet_id_.id() + 1;
+        } else if (OB_FAIL(idx_map.get_refactored(tablet_loc.tablet_id_.id(), tablet_idx))) {
+          LOG_WARN("fail to get tablet idx", K(ret));
+        }
+      }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(idx_map.get_refactored(tablet_loc.tablet_id_.id(), tablet_idx))) {
-        LOG_WARN("fail to get tablet idx", K(ret));
       } else if (OB_FAIL(ObPxAffinityByRandom::get_tablet_info(tablet_loc.tablet_id_.id(),
                                                                partitions_info_,
                                                                partition_row_info))) {

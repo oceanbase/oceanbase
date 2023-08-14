@@ -92,6 +92,9 @@ int ObFlashBackTableFromRecyclebinResolver::resolve(const ParseNode &parser_tree
         if (OB_ISNULL(session_info_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("session_info_ is null", K(ret));
+        } else if (OB_UNLIKELY(session_info_->get_database_name().empty())) {
+          ret = OB_ERR_NO_DB_SELECTED;
+          LOG_WARN("database not specified", K(ret));
         } else {
           flashback_table_from_recyclebin_stmt->set_origin_db_name(
               session_info_->get_database_name());

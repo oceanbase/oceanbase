@@ -215,6 +215,9 @@ int ObLSTabletService::replay(
     if (OB_TABLET_NOT_EXIST == ret) {
       ret = OB_SUCCESS; // TODO (bowen.gbw): unify multi data replay logic
       LOG_INFO("tablet does not exist, skip", K(ret), K(replayer_executor));
+    } else if (OB_TIMEOUT == ret) {
+      LOG_INFO("replace timeout errno", KR(ret), K(replayer_executor));
+      ret = OB_EAGAIN;
     } else {
       LOG_WARN("failed to replay", K(ret), K(replayer_executor));
     }
@@ -582,64 +585,6 @@ int ObLSTabletService::get_tablet_addr(const ObTabletMapKey &key, ObMetaDiskAddr
     }
   }
 
-  return ret;
-}
-
-int ObLSTabletService::replay_medium_compaction_clog(
-    const share::SCN &scn,
-    const char *buf,
-    const int64_t buf_size,
-    const int64_t pos)
-{
-  int ret = OB_SUCCESS;
-  ObTabletID tablet_id;
-  ObTabletHandle handle;
-  int64_t new_pos = pos;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_UNLIKELY(buf_size <= pos || pos < 0 || buf_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(buf_size), K(pos));
-  } else if (OB_FAIL(tablet_id.deserialize(buf, buf_size, new_pos))) {
-    LOG_WARN("fail to deserialize tablet id", K(ret), K(buf_size), K(pos), K(tablet_id));
-  } else if (OB_FAIL(direct_get_tablet(tablet_id, handle))) {
-    if (OB_TABLET_NOT_EXIST == ret) {
-      LOG_INFO("tablet not exist", K(ret), K(tablet_id));
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
-    }
-  } else if (handle.get_obj()->is_empty_shell()) {
-    LOG_INFO("old tablet is empty shell tablet, should skip this operation", K(ret), "old_tablet", handle.get_obj());
-  } else if (OB_FAIL(handle.get_obj()->replay_medium_compaction_clog(scn, buf, buf_size, new_pos))) {
-    LOG_WARN("update tablet storage schema fail", K(ret), K(tablet_id), K(buf_size), K(new_pos));
-  }
-  return ret;
-}
-
-int ObLSTabletService::replay_update_reserved_snapshot(
-    const share::SCN &scn,
-    const char *buf,
-    const int64_t buf_size,
-    const int64_t pos)
-{
-  int ret = OB_SUCCESS;
-  int64_t new_pos = pos;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_UNLIKELY(buf_size <= pos || pos < 0 || buf_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(buf_size), K(pos));
-  } else if (OB_ISNULL(ls_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls is null", K(ret), KPC(ls_));
-  } else if (OB_FAIL(ls_->replay_reserved_snapshot_log(scn, buf, buf_size, new_pos))) {
-    LOG_WARN("replay reserved snapshot log fail", K(ret), KPC(ls_), K(buf_size), K(new_pos));
-  }
   return ret;
 }
 
@@ -1489,7 +1434,12 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
 
       if (OB_FAIL(ret)) {
       } else if (CLICK_FAIL(old_tablet->read_mds_table(arena_allocator, mds_data, true))) {
-        LOG_WARN("failed to read mds table", K(ret));
+        if (OB_EMPTY_RESULT == ret) {
+          ret = OB_SUCCESS;
+          LOG_INFO("read nothing from mds table, no need to build new tablet", K(ret), K(key));
+        } else {
+          LOG_WARN("failed to read mds table", K(ret), K(key));
+        }
       } else if (CLICK_FAIL(tmp_tablet->init(allocator, *old_tablet, flush_scn, mds_data, old_tablet->mds_data_))) {
         LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet), K(flush_scn));
       } else if (CLICK_FAIL(ObTabletPersister::persist_and_transform_tablet(*tmp_tablet, new_tablet_handle))) {
@@ -1505,7 +1455,7 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
       } else {
         CLICK();
         time_guard.click("CASwap");
-        LOG_INFO("succeeded to build new tablet", K(ret), K(disk_addr), K(new_tablet_handle), K(mds_data));
+        LOG_INFO("succeeded to build new tablet", K(ret), K(key), K(disk_addr), K(new_tablet_handle), K(mds_data));
       }
     }
   }
@@ -3915,6 +3865,7 @@ int ObLSTabletService::insert_lob_col(
     // init lob access param
     ObLobAccessParam lob_param;
     lob_param.tx_desc_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_;
+    lob_param.parent_seq_no_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_scn_;
     lob_param.snapshot_ = run_ctx.dml_param_.snapshot_;
     lob_param.is_total_quantity_log_ = run_ctx.dml_param_.is_total_quantity_log_;
     if (lob_param.snapshot_.is_none_read()) {
@@ -4253,6 +4204,7 @@ int ObLSTabletService::process_delta_lob(
     ObLobAccessParam lob_param;
     // init lob param
     lob_param.tx_desc_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_;
+    lob_param.parent_seq_no_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_scn_;
     lob_param.snapshot_ = run_ctx.dml_param_.snapshot_;
     if (lob_param.snapshot_.is_none_read()) {
       // NOTE:
@@ -5306,6 +5258,7 @@ int ObLSTabletService::delete_lob_col(
         MEMCPY(buf, data.ptr(), data.length());
         lob_common = reinterpret_cast<ObLobCommon*>(buf);
         lob_param.tx_desc_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_;
+        lob_param.parent_seq_no_ = run_ctx.store_ctx_.mvcc_acc_ctx_.tx_scn_;
         lob_param.snapshot_ = run_ctx.dml_param_.snapshot_;
         lob_param.tx_id_ = lob_param.tx_desc_->get_tx_id();
         lob_param.sql_mode_ = run_ctx.dml_param_.sql_mode_;

@@ -932,7 +932,9 @@ int ObJsonBin::parse_tree(ObJsonNode *json_tree)
   INIT_SUCC(ret);
   result_.reuse();
   ObJsonNodeType root_type = json_tree->json_type();
-  if (root_type == ObJsonNodeType::J_ARRAY || root_type == ObJsonNodeType::J_OBJECT) {
+  if (OB_FAIL(result_.reserve(json_tree->get_serialize_size()))) {
+    LOG_WARN("failed to reserve bin buffer", K(ret), K(json_tree->get_serialize_size()));
+  } else if (root_type == ObJsonNodeType::J_ARRAY || root_type == ObJsonNodeType::J_OBJECT) {
     if (OB_FAIL(serialize_json_value(json_tree, result_))) { // do recursion
       LOG_WARN("failed to serialize json tree at recursion", K(ret));
       result_.reset();

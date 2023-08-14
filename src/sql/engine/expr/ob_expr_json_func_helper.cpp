@@ -308,7 +308,6 @@ int ObJsonExprHelper::get_json_val(const ObExpr &expr, ObEvalCtx &ctx,
   }
   return ret;
 }
-
 int ObJsonExprHelper::eval_oracle_json_val(ObExpr *expr,
                                            ObEvalCtx &ctx,
                                            common::ObIAllocator *allocator,
@@ -320,21 +319,49 @@ int ObJsonExprHelper::eval_oracle_json_val(ObExpr *expr,
   INIT_SUCC(ret);
   ObDatum *json_datum = nullptr;
   ObExpr *json_arg = expr;
-  ObObjType val_type = json_arg->datum_meta_.type_;
-  ObCollationType cs_type = json_arg->datum_meta_.cs_type_;
-  bool is_nchar = (val_type == ObNCharType || val_type == ObNVarchar2Type);
-  bool is_raw_type = val_type == ObRawType;
+  bool is_bool_data_type = json_arg->is_boolean_;
 
   if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
-    LOG_WARN("eval json arg failed", K(ret), K(val_type));
-  } else if (json_datum->is_null() || ob_is_null(val_type)) {
+    LOG_WARN("eval json arg failed", K(ret), K(json_arg->datum_meta_));
+  } else if (OB_FAIL(oracle_datum2_json_val(json_datum,
+                                            json_arg->obj_meta_,
+                                            allocator,
+                                            ctx.exec_ctx_.get_my_session(),
+                                            j_base,
+                                            is_bool_data_type,
+                                            is_format_json,
+                                            is_strict, is_bin))) {
+    LOG_WARN("failed to wrapper json base", K(ret), K(json_arg->datum_meta_),
+             K(is_format_json), K(is_strict), K(is_bin));
+  }
+
+  return ret;
+}
+
+int ObJsonExprHelper::oracle_datum2_json_val(const ObDatum *json_datum,
+                                             ObObjMeta& data_meta,
+                                             common::ObIAllocator *allocator,
+                                             ObBasicSessionInfo *session,
+                                             ObIJsonBase*& j_base,
+                                             bool is_bool_data_type,
+                                             bool is_format_json,
+                                             bool is_strict,
+                                             bool is_bin)
+{
+  INIT_SUCC(ret);
+  ObObjType val_type = data_meta.get_type();
+  ObCollationType cs_type = data_meta.get_collation_type();
+  bool is_nchar = (val_type == ObNCharType || val_type == ObNVarchar2Type);
+  bool is_raw_type = (val_type == ObRawType);
+
+  if (json_datum->is_null() || ob_is_null(val_type)) {
     ObJsonNull *null_node = nullptr;
     if (OB_ISNULL(null_node = OB_NEWx(ObJsonNull, allocator))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed: alloscate jsonboolean", K(ret));
     }
     j_base = null_node;
-  } else if (json_arg->is_boolean_ == 1) {
+  } else if (is_bool_data_type) {
     ObJsonBoolean *bool_node = nullptr;
     if (OB_ISNULL(bool_node = OB_NEWx(ObJsonBoolean, allocator, (json_datum->get_bool())))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -351,21 +378,27 @@ int ObJsonExprHelper::eval_oracle_json_val(ObExpr *expr,
         || is_raw_type
         || is_nchar) {
 
-      uint32_t parse_flag =  is_strict ? ObJsonParser::JSN_STRICT_FLAG : ObJsonParser::JSN_RELAXED_FLAG;
+      uint32_t parse_flag = ObJsonParser::JSN_RELAXED_FLAG;
       ObString j_str = json_datum->get_string();
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(
-                    allocator, val_type, cs_type, json_arg->obj_meta_.has_lob_header(), j_str))) {
+                    allocator, val_type, cs_type, data_meta.has_lob_header(), j_str))) {
         LOG_WARN("fail to get real data.", K(ret), K(j_str));
-      } else if (!is_format_json || is_nchar || is_raw_type) {
+      } else if (cs_type != CS_TYPE_INVALID && cs_type != CS_TYPE_BINARY
+        && OB_FAIL(ObExprUtil::convert_string_collation(j_str, cs_type, j_str, CS_TYPE_UTF8MB4_BIN, *allocator))) {
+        LOG_WARN("fail to convert charset.", K(ret), K(j_str), K(cs_type));
+      } else if (!is_format_json || is_raw_type) {
         if (is_raw_type) {
           ObObj tmp_result;
           ObObj obj;
-          ObCastCtx cast_ctx(allocator, NULL, CM_NONE, CS_TYPE_INVALID);
 
-          if (OB_FAIL(json_datum->to_obj(obj, expr->obj_meta_))) {
+          ObDatum tmp_datum = *json_datum;
+          tmp_datum.set_string(j_str);
+          ObCastCtx cast_ctx(allocator, nullptr, CM_NONE, CS_TYPE_INVALID);
+
+          if (OB_FAIL(tmp_datum.to_obj(obj, data_meta))) {
             LOG_WARN("datum to obj fail", K(ret));
           } else if (OB_FAIL(ObHexUtils::rawtohex(obj, cast_ctx, tmp_result))) {
-            LOG_WARN("fail to check json syntax", K(ret), K(expr->obj_meta_));
+            LOG_WARN("fail to check json syntax", K(ret), K(data_meta));
           } else {
             j_str = tmp_result.get_string();
           }
@@ -401,7 +434,7 @@ int ObJsonExprHelper::eval_oracle_json_val(ObExpr *expr,
       ObJsonInType to_type = is_bin ? ObJsonInType::JSON_BIN : ObJsonInType::JSON_TREE;
       ObString j_str = json_datum->get_string();
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(
-                    allocator, val_type, cs_type, json_arg->obj_meta_.has_lob_header(), j_str))) {
+                    allocator, val_type, cs_type, data_meta.has_lob_header(), j_str))) {
         LOG_WARN("fail to get real data.", K(ret), K(j_str));
       } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, ObJsonInType::JSON_BIN, to_type, j_base))) {
         ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
@@ -422,9 +455,7 @@ int ObJsonExprHelper::eval_oracle_json_val(ObExpr *expr,
       }
     }
   } else {
-    ObBasicSessionInfo *session = ctx.exec_ctx_.get_my_session();
-    ObScale scale = json_arg->datum_meta_.scale_;
-    scale = (val_type == ObBitType) ? json_arg->datum_meta_.length_semantics_ : scale;
+    ObScale scale = data_meta.get_scale();
     if (is_format_json) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("input type error", K(val_type));
@@ -472,7 +503,7 @@ int ObJsonExprHelper::eval_oracle_json_val(ObExpr *expr,
         LOG_WARN("failed to allocate memory", K(ret));
       } else {
         ObOTimestampData in_val;
-        ObScale scale = json_arg->datum_meta_.scale_;
+        ObScale scale = data_meta.get_scale();
         const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
         if (OB_FAIL(common_construct_otimestamp(val_type, *json_datum, in_val))) {
           LOG_WARN("common_construct_otimestamp failed", K(ret));
@@ -807,7 +838,7 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
     case ObUFloatType:
     case ObUDoubleType: {
       double val;
-      if (type == ObFloatType || type ==ObUFloatType) {
+      if (type == ObFloatType || type ==ObUFloatType ) {
         val = datum.get_float();
       } else {
         val = datum.get_double();
@@ -845,6 +876,7 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
     }
 
     case ObUNumberType:
+    case ObNumberFloatType:
     case ObNumberType: {
       // won't waster much memory, do deep copy num
       number::ObNumber num;
@@ -972,238 +1004,6 @@ int ObJsonExprHelper::get_timestamp_str_in_oracle_mode(ObEvalCtx &ctx,
   return ret;
 }
 
-int ObJsonExprHelper::transform_scalar_2String(ObEvalCtx &ctx,
-                                               const ObDatum &datum,
-                                               ObObjType type,
-                                               ObScale scale,
-                                               const ObTimeZoneInfo *tz_info,
-                                               ObJsonBuffer &j_buf)
-{
-  int ret = OB_SUCCESS;
-
-  switch(type) {
-    case ObTinyIntType: { // support bool
-      bool val = datum.get_int();
-      if(val) {
-        if (OB_FAIL(j_buf.append("true", 4))) {
-          LOG_WARN("fail to append true to buffer", K(ret), K(datum.get_int()));
-        }
-      } else {
-        if (OB_FAIL(j_buf.append("false", 5))) {
-          LOG_WARN("fail to append false to buffer", K(ret), K(datum.get_int()));
-        }
-      }
-      break;
-    }
-    case ObSmallIntType:
-    case ObMediumIntType:
-    case ObInt32Type:
-    case ObIntType: {
-      char tmp_buf[ObFastFormatInt::MAX_DIGITS10_STR_SIZE] = {0};
-      int64_t len = ObFastFormatInt::format_signed(datum.get_int(), tmp_buf);
-      if (OB_FAIL(j_buf.append(tmp_buf, len))) {
-        LOG_WARN("fail to append int to buffer", K(ret), K(datum.get_int()));
-      }
-      break;
-    }
-    case ObUTinyIntType:
-    case ObUSmallIntType:
-    case ObUMediumIntType:
-    case ObUInt32Type:
-    case ObUInt64Type: {
-      char tmp_buf[ObFastFormatInt::MAX_DIGITS10_STR_SIZE] = {0};
-      int64_t len = ObFastFormatInt::format_unsigned(datum.get_uint64(), tmp_buf);
-      if(OB_FAIL(j_buf.append(tmp_buf, len))) {
-        LOG_WARN("fail to append json uint to buffer", K(ret), K(datum.get_uint64()));
-      }
-      break;
-    }
-    case ObDateTimeType: {
-      ObTime ob_time(DT_TYPE_DATETIME);
-      int64_t value = datum.get_datetime();
-      PRINT_OB_DATETIME(ob_time, value, j_buf);
-      break;
-    }
-    case ObDateType: {
-      ObTime ob_time(DT_TYPE_DATE);
-      int64_t value = datum.get_date();
-      PRINT_OB_TIME(ob_time, value, date_to_ob_time, j_buf);
-      break;
-    }
-    case ObTimeType: {
-      ObTime ob_time(DT_TYPE_TIME);
-      int64_t value = datum.get_date();
-      PRINT_OB_TIME(ob_time, value, time_to_ob_time, j_buf);
-      break;
-    }
-    case ObTimestampType:
-    case ObTimestampNanoType:
-    case ObTimestampTZType :
-    case ObTimestampLTZType :{
-      if (lib::is_oracle_mode()) {
-        if (OB_FAIL(get_timestamp_str_in_oracle_mode(ctx, datum, type, scale, tz_info, j_buf))) {
-          LOG_WARN("deal timestamp fail", K(ret));
-        }
-      } else {
-        ObTime ob_time(DT_TYPE_DATETIME);
-        int64_t value = datum.get_timestamp();
-        PRINT_OB_DATETIME(ob_time, value, j_buf);
-      }
-      break;
-    }
-    case ObIntervalDSType :
-    case ObIntervalYMType :{
-      char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
-      int64_t len = 0;
-      if (ob_is_interval_ym(type)) {
-        ObIntervalYMValue in_val(datum.get_interval_nmonth());
-        if (OB_FAIL(ObTimeConverter::interval_ym_to_str(in_val, scale, buf,
-                                                    OB_CAST_TO_VARCHAR_MAX_LENGTH, len,
-                                                    true))) {
-          LOG_WARN("interval_ym_to_str failed", K(ret));
-        }
-      } else {
-        ObIntervalDSValue in_val(datum.get_interval_ds());
-        if (OB_FAIL(ObTimeConverter::interval_ds_to_str(in_val, scale, buf,
-                                                    OB_CAST_TO_VARCHAR_MAX_LENGTH, len,
-                                                    true))) {
-          LOG_WARN("interval_ym_to_str failed", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        ObString in_str(len, buf);
-        if (OB_FAIL(j_buf.append("\""))) {
-          LOG_WARN("fail to append \"", K(ret));
-        } else if (OB_FAIL(j_buf.append(in_str))) {
-          LOG_WARN("fail to append date_buf to j_buf", K(ret), K(in_str));
-        } else if (OB_FAIL(j_buf.append("\""))) {
-          LOG_WARN("fail to append \"", K(ret));
-        }
-      }
-      break;
-    }
-
-    case ObFloatType:
-    case ObUFloatType: {
-      if (OB_FAIL(j_buf.reserve(FLOAT_TO_STRING_CONVERSION_BUFFER_SIZE + 1))) {
-        LOG_WARN("fail to reserve memory for j_buf", K(ret));
-      } else {
-        double val = datum.get_float();
-        if (isnan(val)) {
-          if (OB_FAIL(j_buf.append("\"Nan\""))) {
-            LOG_WARN("jbuf add Nan fail", K(ret));
-          }
-        } else if (isinf(val) != 0) {
-          if (OB_FAIL(j_buf.append("\""))) {
-            LOG_WARN("jbuf add \" fail", K(ret));
-          } else if (isinf(val) == -1 && OB_FAIL(j_buf.append("-"))) {
-            LOG_WARN("jbuf add - fail", K(ret));
-          } else if (OB_FAIL(j_buf.append("Inf"))) {
-            LOG_WARN("jbuf add Nan fail", K(ret));
-          } else if (OB_FAIL(j_buf.append("\""))) {
-            LOG_WARN("jbuf add \" fail", K(ret));
-          }
-        } else {
-          char *start = j_buf.ptr() + j_buf.length();
-          uint64_t len = ob_gcvt(val, ob_gcvt_arg_type::OB_GCVT_ARG_FLOAT,
-                                FLOAT_TO_STRING_CONVERSION_BUFFER_SIZE, start, NULL);
-          if (OB_FAIL(j_buf.set_length(j_buf.length() + len))) {
-            LOG_WARN("fail to set j_buf len", K(ret), K(j_buf.length()), K(len));
-          } /*else {
-            // add ".0" in the end.
-            ObFindDoubleEscapeFunc func;
-            if (std::none_of(start, start + len, func)) {
-              if (OB_FAIL(j_buf.append("."))) {
-                LOG_WARN("fail to append '.' to buffer", K(ret), K(start), K(len));
-              } else if (OB_FAIL(j_buf.append("0"))) {
-                LOG_WARN("fail to append '0' to buffer", K(ret), K(start), K(len));
-              }
-            }
-          }*/
-        }
-      }
-      break;
-    }
-    case ObDoubleType:
-    case ObUDoubleType: {
-      if (OB_FAIL(j_buf.reserve(DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE + 1))) {
-        LOG_WARN("fail to reserve memory for j_buf", K(ret));
-      } else {
-        double val = datum.get_double();
-        if (isnan(val)) {
-          if (OB_FAIL(j_buf.append("\"Nan\""))) {
-            LOG_WARN("jbuf add Nan fail", K(ret));
-          }
-        } else if (isinf(val) != 0) {
-          if (OB_FAIL(j_buf.append("\""))) {
-            LOG_WARN("jbuf add \" fail", K(ret));
-          } else if (isinf(val) == -1 && OB_FAIL(j_buf.append("-"))) {
-            LOG_WARN("jbuf add - fail", K(ret));
-          } else if (OB_FAIL(j_buf.append("Inf"))) {
-            LOG_WARN("jbuf add Nan fail", K(ret));
-          } else if (OB_FAIL(j_buf.append("\""))) {
-            LOG_WARN("jbuf add \" fail", K(ret));
-          }
-        } else {
-          char *start = j_buf.ptr() + j_buf.length();
-          uint64_t len = ob_gcvt(val, ob_gcvt_arg_type::OB_GCVT_ARG_DOUBLE,
-                                DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE, start, NULL);
-          if (OB_FAIL(j_buf.set_length(j_buf.length() + len))) {
-            LOG_WARN("fail to set j_buf len", K(ret), K(j_buf.length()), K(len));
-          }/* else {
-            // add ".0" in the end.
-            ObFindDoubleEscapeFunc func;
-            if (std::none_of(start, start + len, func)) {
-              if (OB_FAIL(j_buf.append("."))) {
-                LOG_WARN("fail to append '.' to buffer", K(ret), KCSTRING(start), K(len));
-              } else if (OB_FAIL(j_buf.append("0"))) {
-                LOG_WARN("fail to append '0' to buffer", K(ret), KCSTRING(start), K(len));
-              }
-            }
-          }*/
-        }
-      }
-      break;
-    }
-
-    case ObUNumberType:
-    case ObNumberFloatType:
-    case ObNumberType: {
-      number::ObNumber val = datum.get_number();
-      int64_t pos = j_buf.length();
-      char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
-      int64_t len = 0;
-      if (lib::is_oracle_mode()) {
-        if (OB_FAIL(val.format(buf, sizeof(buf), len, scale))) {
-          LOG_WARN("fail to format", K(ret), K(val));
-        }
-        ObString in_str(len, buf);
-        if (in_str[0] == '.' && OB_FAIL(j_buf.append("0"))) {
-          LOG_WARN("fail to append 0 to j_buf", K(ret));
-        } else if (OB_FAIL(j_buf.append(in_str))) {
-          LOG_WARN("fail to append number to j_buf", K(ret), K(in_str));
-        }
-      } else if (OB_FAIL(j_buf.reserve(number::ObNumber::MAX_PRINTABLE_SIZE))) {
-        LOG_WARN("fail to reserve memory for buf", K(ret));
-      } else {
-        if (OB_FAIL(val.format_v2(j_buf.ptr(), j_buf.capacity(), pos, scale))) {
-          LOG_WARN("fail to format decimal value", K(ret), K(val), K(j_buf.length()), K(pos));
-        } else if (OB_FAIL(j_buf.set_length(pos))){
-          LOG_WARN("fail to set buf length", K(ret), K(pos), K(j_buf.length()));
-        }
-      }
-      break;
-    }
-    default:
-    {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("Invalid argument", K(ret), K(type));
-    }
-  }
-
-  return ret;
-}
-
 bool ObJsonExprHelper::is_cs_type_bin(ObCollationType &cs_type)
 {
   bool res = false;
@@ -1217,170 +1017,6 @@ bool ObJsonExprHelper::is_cs_type_bin(ObCollationType &cs_type)
     }
   }
   return res;
-}
-
-//  format json contrl whether use strict or with unique keys ? TODO
-int ObJsonExprHelper::transform_convertible_2String(const ObExpr &expr,
-                                                    ObEvalCtx &ctx,
-                                                    const ObDatum &datum,
-                                                    ObObjType type,
-                                                    ObCollationType cs_type,
-                                                    ObJsonBuffer &j_buf,
-                                                    bool has_lob_header,
-                                                    bool format_json,
-                                                    bool strict_json,
-                                                    int32_t pos)
-{
-  int ret = OB_SUCCESS;
-  common::ObArenaAllocator tmp_alloc;
-  common::ObIAllocator *allocator = &tmp_alloc;
-  const ObObjMeta obj_meta = expr.obj_meta_;
-  switch(type) {
-    case ObNullType: {
-      if (OB_FAIL(j_buf.append("null"))) {
-        LOG_WARN("fail to append null", K(ret));
-      }
-      break;
-    }
-    case ObRawType: {
-      ObObj tmp_result;
-      ObObj obj;
-      ObCastCtx cast_ctx(allocator, NULL, CM_NONE, CS_TYPE_INVALID);
-      common::ObString j_str = datum.get_string();
-
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(datum.to_obj(obj, obj_meta))) {
-        LOG_WARN("datum to obj fail", K(ret));
-      } else if (OB_FAIL(ObHexUtils::rawtohex(obj, cast_ctx, tmp_result))) {
-        LOG_WARN("fail to check json syntax", K(ret), K(type), K(j_str));
-      } else if (format_json) {
-        if (strict_json) {
-          ObIJsonBase *j_tree = NULL;
-          uint32_t parse_flag = ObJsonParser::JSN_STRICT_FLAG;
-          if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, allocator, parse_flag))) {
-            ret = OB_ERR_JSON_SYNTAX_ERROR;
-            LOG_WARN("fail to parse json text strict", K(ret));
-          } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, ObJsonInType::JSON_TREE,
-                    ObJsonInType::JSON_TREE, j_tree, parse_flag))) {
-          } else if (OB_FAIL(j_tree->print(j_buf, true))) {
-            LOG_WARN("fail to print json node", K(ret));
-          }
-        } else if (OB_FAIL(j_buf.append(j_str))) {
-          LOG_WARN("fail to append string to j_buf", K(ret), K(j_str));
-        }
-      } else {
-        j_str = tmp_result.get_string();
-        if (OB_FAIL(j_buf.append("\"", 1))) {
-          LOG_WARN("fail to append \"", K(ret));
-        } else if (OB_FAIL(j_buf.append(j_str))) {
-          LOG_WARN("fail to append int to buffer", K(ret), K(j_str));
-        } else if (OB_FAIL(j_buf.append("\"", 1))) {
-          LOG_WARN("fail to append \"", K(ret));
-        }
-      }
-      break;
-    }
-    case ObNVarchar2Type:
-    case ObNCharType:
-    case ObVarcharType:
-    case ObCharType:
-    case ObTinyTextType:
-    case ObTextType :
-    case ObMediumTextType:
-    case ObLobType:
-    case ObLongTextType: {
-      ObString value;
-      bool is_bin = false;
-      const ObLobLocator* lob_locator;
-      ObObj tmp_result;
-      ObObj obj;
-      ObCastCtx cast_ctx(allocator, NULL, CM_NONE, CS_TYPE_INVALID);
-      if (OB_FAIL(datum.to_obj(obj, obj_meta))) {
-        LOG_WARN("datum to obj fail", K(ret));
-      } else if (type == ObLobType) {
-        const ObLobLocator* lob_locator = obj.get_lob_locator();
-        if (OB_ISNULL(lob_locator)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("lob_locator is null", K(ret));
-        } else if (OB_FAIL(lob_locator->get_payload(value))) {
-          LOG_WARN("get payload from lob_locator failed", K(ret), K(*lob_locator));
-        } else {
-          size_t val_len = value.length();
-          const char* val_ptr = value.ptr();
-          if (val_len > 0) {
-            char first = val_ptr[0];
-            char last = val_ptr[val_len - 1];
-            char mid = val_ptr[val_len >> 1];
-          }
-        }
-      } else {
-        value = datum.get_string();
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, type,
-                          cs_type, has_lob_header, value))) {
-        LOG_WARN("fail to get real data.", K(ret), K(value));
-      } else if (lib::is_oracle_mode() && ObJsonExprHelper::is_cs_type_bin(cs_type) && !format_json) {
-        is_bin = true;
-        obj.set_string(type, value);
-        if (OB_FAIL(ObHexUtils::rawtohex(obj, cast_ctx, tmp_result))) {
-          LOG_WARN("fail to check json syntax", K(ret), K(type));
-        } else {
-          value = tmp_result.get_string();
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (format_json) {
-        bool relaxed_json = lib::is_oracle_mode() && !strict_json;
-        uint32_t parse_flag = ObJsonParser::JSN_STRICT_FLAG;
-        ADD_FLAG_IF_NEED(!strict_json, parse_flag, ObJsonParser::JSN_RELAXED_FLAG);
-        if (lib::is_mysql_mode() && OB_FAIL(ObJsonExprHelper::ensure_collation(type, cs_type))) {
-          // should check collation first
-          LOG_WARN("Invalid collation type for input string.", K(ret));
-        } else if (strict_json) {
-          ObIJsonBase *j_tree = NULL;
-          uint32_t parse_flag = ObJsonParser::JSN_RELAXED_FLAG;
-          if (OB_FAIL(ObJsonParser::check_json_syntax(value, allocator, parse_flag))) {
-            ret = OB_ERR_JSON_SYNTAX_ERROR;
-            LOG_WARN("fail to check json syntax", K(ret), K(type));
-          } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, value, ObJsonInType::JSON_TREE,
-                    ObJsonInType::JSON_TREE, j_tree, parse_flag))) {
-          } else if (OB_FAIL(j_tree->print(j_buf, true))) {
-            LOG_WARN("fail to print json node", K(ret));
-          }
-        } else if (OB_FAIL(j_buf.append(value))) {
-          LOG_WARN("fail to append string to j_buf", K(ret), K(value));
-        }
-      } else {
-        ObJsonString ob_str(value.ptr(), value.length());
-        if (OB_FAIL(ob_str.print(j_buf, true, false, 0))) {
-          LOG_WARN("fail to print json node", K(ret));
-        }
-      }
-      break;
-    }
-    case ObJsonType: {
-      ObIJsonBase* json_node = NULL;
-      ObString j_str;
-      j_str = datum.get_string();
-      if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, type, cs_type, has_lob_header, j_str))) {
-        LOG_WARN("fail to get real data.", K(ret), K(j_str));
-      } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, ObJsonInType::JSON_BIN,
-                                                   ObJsonInType::JSON_BIN, json_node))) {
-        ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
-        LOG_WARN("fail to get json base", K(ret));
-      } else if (OB_FAIL(json_node->print(j_buf, true, false, 0))) {
-        LOG_WARN("fail to print json node", K(ret));
-      }
-      break;
-    }
-    default:
-    {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("Invalid argument", K(ret), K(type));
-    }
-  }
-  return ret;
 }
 
 template <typename T>
@@ -1457,19 +1093,20 @@ int ObJsonExprHelper::transform_convertible_2jsonBase(const T &datum,
       break;
     }
     case ObJsonType: {
-      ObString j_str;
-      if (deep_copy) {
-        if (OB_FAIL(deep_copy_ob_string(*allocator, datum.get_string(), j_str))) {
-          LOG_WARN("do deep copy failed", K(ret));
-        }
-      } else {
-        j_str = datum.get_string();
-      }
+      ObString j_str = datum.get_string();
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, type, cs_type, has_lob_header, j_str))) {
+        ObString tmp_str = j_str;
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, type, cs_type, has_lob_header, tmp_str))) {
           LOG_WARN("fail to get real data.", K(ret), K(j_str));
+        } else if (deep_copy) {
+          if (OB_FAIL(deep_copy_ob_string(*allocator, tmp_str, j_str))) {
+            LOG_WARN("do deep copy failed", K(ret));
+          }
+        } else {
+          j_str = tmp_str;
         }
       }
+
       if (OB_SUCC(ret)) {
         ObJsonInType to_type = to_bin ? ObJsonInType::JSON_BIN : ObJsonInType::JSON_TREE;
         uint32_t parse_flag = relax_type ? ObJsonParser::JSN_RELAXED_FLAG : ObJsonParser::JSN_STRICT_FLAG;

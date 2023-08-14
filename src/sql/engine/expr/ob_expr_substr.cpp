@@ -256,7 +256,7 @@ int ObExprSubstr::calc_result_typeN(ObExprResType &type,
         types_array[i].set_calc_type(ObIntType);
       }
     }
-    if (OB_SUCC(ret) && type.is_varchar()) {
+    if (OB_SUCC(ret) && !ob_is_text_tc(type.get_type())) {
       // Set cast mode for integer parameters, truncate string to integer.
       // see: ObExprSubstr::cast_param_type_for_mysql
       OX(type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC));

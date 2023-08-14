@@ -331,6 +331,14 @@ public:
       return left.backup_set_id_ < right.backup_set_id_;
     }
   };
+
+    struct ObBackupSetFileDescComparator
+  {
+    bool operator()(const share::ObBackupSetFileDesc &left, const share::ObBackupSetFileDesc &right) const
+    {
+      return left.backup_set_id_ < right.backup_set_id_;
+    }
+  };
 private:
   int do_get_backup_set_array_(const common::ObString &passwd_array, const share::SCN &restore_scn,
       const ObBackupSetFilter &op, common::ObIArray<share::ObRestoreBackupSetBriefInfo> &tmp_backup_set_list, 

@@ -883,7 +883,7 @@ int ObLockMemtable::replay_row(
   ObTableLockOwnerID owner_id(0);
   ObTableLockMode lock_mode = NO_LOCK;
   ObTableLockOpType lock_op_type = ObTableLockOpType::UNKNOWN_TYPE;
-  int64_t seq_no = 0;
+  transaction::ObTxSEQ seq_no;
   int64_t create_timestamp = 0;
   int64_t create_schema_vesion = -1;
   ObMemtableCtx *mem_ctx = nullptr;

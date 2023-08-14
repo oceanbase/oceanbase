@@ -248,7 +248,8 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
     const int64_t read_snapshot_version = access_ctx_->trans_version_range_.snapshot_version_;
     const bool enable_fuse_row_cache = access_ctx_->use_fuse_row_cache_ &&
                                        access_param_->iter_param_.enable_fuse_row_cache(access_ctx_->query_flag_) &&
-                                       read_snapshot_version >= tablet_meta.snapshot_version_;
+                                       read_snapshot_version >= tablet_meta.snapshot_version_ &&
+                                       !tablet_meta.has_transfer_table(); // The query in the transfer scenario does not enable fuse row cache
     bool need_update_fuse_cache = false;
     access_ctx_->query_flag_.set_not_use_row_cache();
     nop_pos_.reset();

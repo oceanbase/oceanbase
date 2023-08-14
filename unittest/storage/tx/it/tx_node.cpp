@@ -555,10 +555,10 @@ int ObTxNode::atomic_write(ObTxDesc &tx, const int64_t key, const int64_t value,
                            const int64_t expire_ts, const ObTxParam &tx_param)
 {
   int ret = OB_SUCCESS;
-  int64_t sp = -1;
+  ObTxSEQ sp;
   OZ(create_implicit_savepoint(tx, tx_param, sp, true));
   OZ(write(tx, key, value));
-  if (sp != -1 && OB_FAIL(ret)) {
+  if (sp.is_valid() && OB_FAIL(ret)) {
     OZ(rollback_to_implicit_savepoint(tx, sp, expire_ts, nullptr));
   }
   return ret;
@@ -595,8 +595,7 @@ int ObTxNode::write(ObTxDesc &tx,
   OZ(txs_.get_write_store_ctx(tx,
                               snapshot,
                               write_flag,
-                              write_store_ctx,
-                              false));
+                              write_store_ctx));
   write_store_ctx.mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.init(&fake_tx_table_);
   ObArenaAllocator allocator;
   ObStoreRow row;
@@ -650,8 +649,7 @@ int ObTxNode::write_begin(ObTxDesc &tx,
   OZ(txs_.get_write_store_ctx(tx,
                               snapshot,
                               write_flag,
-                              write_store_ctx,
-                              false));
+                              write_store_ctx));
   return ret;
 }
 

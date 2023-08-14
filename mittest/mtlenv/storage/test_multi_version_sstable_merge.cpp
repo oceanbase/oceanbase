@@ -1060,7 +1060,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans)
       tx_data->start_scn_.convert_for_tx(i);
       tx_data->end_scn_.convert_for_tx(30);
       tx_data->state_ = ObTxData::RUNNING;
-      transaction::ObUndoAction undo_action(2,1);
+      transaction::ObUndoAction undo_action(ObTxSEQ(2, 0),ObTxSEQ(1, 0));
       tx_data->add_undo_action(tx_table, undo_action);
     }
 
@@ -1223,7 +1223,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact)
       tx_data->start_scn_.convert_for_tx(i);
       tx_data->end_scn_.convert_for_tx(50);
       tx_data->state_ = ObTxData::RUNNING;
-      transaction::ObUndoAction undo_action(2,1);
+      transaction::ObUndoAction undo_action(ObTxSEQ(2, 0),ObTxSEQ(1,0));
       tx_data->add_undo_action(tx_table, undo_action);
     }
 
@@ -1386,7 +1386,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
       tx_data->start_scn_.convert_for_tx(i);
       tx_data->end_scn_.convert_for_tx(50);
       tx_data->state_ = ObTxData::RUNNING;
-      transaction::ObUndoAction undo_action(2,1);
+      transaction::ObUndoAction undo_action(ObTxSEQ(2, 0),ObTxSEQ(1, 0));
       tx_data->add_undo_action(tx_table, undo_action);
 ;
     }

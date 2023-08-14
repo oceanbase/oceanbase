@@ -295,20 +295,20 @@ public:
   {
     ATOMIC_SET(&dispatched_redo_count_, 0);
     ATOMIC_SET(&sorted_redo_count_, 0);
-    ATOMIC_SET(&sorted_row_seq_no_, 0);
+    sorted_row_seq_no_.atomic_reset();
   }
   void reset_for_sys_ls_dml_trans(const int64_t redo_node_count)
   {
     ATOMIC_SET(&dispatched_redo_count_, redo_node_count);
     ATOMIC_SET(&sorted_redo_count_, redo_node_count);
-    ATOMIC_SET(&sorted_row_seq_no_, 0);
+    sorted_row_seq_no_.atomic_reset();
   }
   OB_INLINE int64_t get_dispatched_redo_count() const { return ATOMIC_LOAD(&dispatched_redo_count_); }
   OB_INLINE void inc_dispatched_redo_count() { ATOMIC_INC(&dispatched_redo_count_); }
   OB_INLINE int64_t get_sorted_redo_count() const { return ATOMIC_LOAD(&sorted_redo_count_); }
   OB_INLINE void inc_sorted_redo_count() { ATOMIC_INC(&sorted_redo_count_); }
-  OB_INLINE int64_t get_sorted_row_seq_no() const { return ATOMIC_LOAD(&sorted_row_seq_no_); }
-  void set_sorted_row_seq_no(const int64_t row_seq_no);
+  OB_INLINE transaction::ObTxSEQ get_sorted_row_seq_no() const { return sorted_row_seq_no_.atomic_load(); }
+  void set_sorted_row_seq_no(const transaction::ObTxSEQ &row_seq_no);
   OB_INLINE int64_t get_dispatched_not_sort_redo_count() const
   { return ATOMIC_LOAD(&dispatched_redo_count_) - ATOMIC_LOAD(&sorted_redo_count_); }
 public:
@@ -319,7 +319,7 @@ public:
 private:
   int64_t dispatched_redo_count_;
   int64_t sorted_redo_count_;
-  int64_t sorted_row_seq_no_;
+  transaction::ObTxSEQ sorted_row_seq_no_;
 };
 
 class IStmtTask;
@@ -392,7 +392,7 @@ struct SortedRedoLogList
   OB_INLINE bool has_dispatched_but_unsorted_redo() const
   { return sorted_progress_.get_dispatched_not_sort_redo_count() > 0; }
 
-  OB_INLINE void set_sorted_row_seq_no(const int64_t row_seq_no) { sorted_progress_.set_sorted_row_seq_no(row_seq_no); }
+  OB_INLINE void set_sorted_row_seq_no(const transaction::ObTxSEQ &row_seq_no) { sorted_progress_.set_sorted_row_seq_no(row_seq_no); }
 
   bool is_dml_stmt_iter_end() const { return is_dml_stmt_iter_end_; }
 

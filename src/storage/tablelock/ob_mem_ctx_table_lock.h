@@ -102,7 +102,7 @@ public:
       const bool is_committed,
       const share::SCN &commit_version,
       const share::SCN &commit_scn);
-  int rollback_table_lock(const int64_t seq_no);
+  int rollback_table_lock(const ObTxSEQ seq_no);
   void *alloc_lock_op_callback();
   void free_lock_op_callback(void *cb);
   int get_table_lock_store_info(ObTableLockInfo &table_lock_info);
@@ -117,7 +117,7 @@ private:
   void free_lock_op(void *op);
   void free_lock_op_(void *op);
   void print() const;
-  void rollback_table_lock_(const int64_t seq_no);
+  void rollback_table_lock_(const ObTxSEQ seq_no);
   int commit_table_lock_(const share::SCN &commit_version, const share::SCN &commit_scn);
   void abort_table_lock_();
 private:

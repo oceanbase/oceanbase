@@ -1111,13 +1111,16 @@ static OB_INLINE int common_string_number(const ObExpr &expr,
                                           number::ObNumber &nmb)
 {
   int ret = OB_SUCCESS;
+  const ObCastMode cast_mode = expr.extra_;
   DEF_IN_OUT_TYPE();
   if (ObHexStringType == in_type) {
     ret = nmb.from(hex_to_uint64(in_str), alloc);
   } else if (0 == in_str.length()) {
     // in mysql mode, this err will be ignored(because default cast_mode is WARN_ON_FAIL)
     nmb.set_zero();
-    ret = OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD;
+    if (lib::is_oracle_mode() || CM_IS_COLUMN_CONVERT(cast_mode)) {
+      ret = OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD;
+    }
   } else {
     ObPrecision res_precision; // useless
     ObScale res_scale;
@@ -1151,7 +1154,6 @@ static OB_INLINE int common_string_number(const ObExpr &expr,
     }
   }
 
-  const ObCastMode cast_mode = expr.extra_;
   if (CAST_FAIL(ret)) {
     LOG_WARN("string_number failed", K(ret), K(in_type), K(out_type), K(cast_mode), K(in_str));
   } else if (ObUNumberType == out_type && CAST_FAIL(numeric_negative_check(nmb))) {
@@ -8659,7 +8661,9 @@ int anytype_to_varchar_char_explicit(const sql::ObExpr &expr,
           src_meta = expr.args_[0]->datum_meta_;
         }
         if (OB_LIKELY(OB_ERR_DATA_TOO_LONG == ret)) {
-          if (ob_is_character_type(src_meta.type_, src_meta.cs_type_) && lib::is_oracle_mode()) {
+          if (lib::is_oracle_mode() &&
+              (ob_is_character_type(src_meta.type_, src_meta.cs_type_) ||
+              ob_is_raw(src_meta.type_))) {
             ret = OB_SUCCESS;
           } else if ((ob_is_clob(src_meta.type_, src_meta.cs_type_)
                       || ob_is_clob_locator(src_meta.type_, src_meta.cs_type_)

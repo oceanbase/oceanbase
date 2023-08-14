@@ -1009,23 +1009,23 @@ int ObTableLocation::init_table_location(ObExecContext &exec_ctx,
   }
   if (OB_SUCC(ret)) {
     bool is_weak_read = false;
-    //if (OB_FAIL(get_is_weak_read(stmt,
-    //                             exec_ctx.get_my_session(),
-    //                             exec_ctx.get_sql_ctx(),
-    //                             is_weak_read))) {
-    //  LOG_WARN("get is weak read failed", K(ret));
-    //} else
-
-    if (ObDuplicateScope::DUPLICATE_SCOPE_NONE != table_schema->get_duplicate_scope()) {
+    if (OB_FAIL(get_is_weak_read(stmt,
+                                 exec_ctx.get_my_session(),
+                                 exec_ctx.get_sql_ctx(),
+                                 is_weak_read))) {
+      LOG_WARN("get is weak read failed", K(ret));
+    } else if (ObDuplicateScope::DUPLICATE_SCOPE_NONE != table_schema->get_duplicate_scope()) {
       loc_meta_.is_dup_table_ = 1;
     }
-    if (is_dml_table) {
-      loc_meta_.select_leader_ = 1;
-    } else if (!is_weak_read) {
-      loc_meta_.select_leader_ = loc_meta_.is_dup_table_ ? 0 : 1;
-    } else {
-      loc_meta_.select_leader_ = 0;
-      loc_meta_.is_weak_read_ = 1;
+    if (OB_SUCC(ret)) {
+      if (is_dml_table) {
+        loc_meta_.select_leader_ = 1;
+      } else if (!is_weak_read) {
+        loc_meta_.select_leader_ = loc_meta_.is_dup_table_ ? 0 : 1;
+      } else {
+        loc_meta_.select_leader_ = 0;
+        loc_meta_.is_weak_read_ = 1;
+      }
     }
   }
   if (OB_SUCC(ret) && PARTITION_LEVEL_TWO == table_schema->get_part_level()) {
@@ -1347,6 +1347,8 @@ int ObTableLocation::get_is_weak_read(const ObDMLStmt &dml_stmt,
   } else if (dml_stmt.get_query_ctx()->has_dml_write_stmt_ ||
              dml_stmt.get_query_ctx()->is_contain_select_for_update_ ||
              dml_stmt.get_query_ctx()->is_contain_inner_table_) {
+    is_weak_read = false;
+  } else if (share::ObTenantEnv::get_tenant() == nullptr) { //table api can't invoke MTL_IS_PRIMARY_TENANT
     is_weak_read = false;
   } else if (!MTL_IS_PRIMARY_TENANT()) {
     is_weak_read = true;
@@ -2888,7 +2890,12 @@ int ObTableLocation::add_partition_columns(const ObDMLStmt &stmt,
             //do nothing.Only deal case with one partition column.
           } else {
             gen_col_expr = col_expr->get_dependant_expr();
-            if (OB_FAIL(add_partition_columns(stmt, col_expr->get_dependant_expr(),
+            bool can_replace = false;
+            if (OB_FAIL(check_can_replace(gen_col_expr, col_expr, can_replace))) {
+              LOG_WARN("failed to check can replace", K(ret));
+            } else if (!can_replace) {
+              //do nothing
+            } else if (OB_FAIL(add_partition_columns(stmt, col_expr->get_dependant_expr(),
                                               partition_columns, gen_cols, gen_col_expr,
                                               row_desc, gen_row_desc, true))) {
               LOG_WARN("Failed to add gen columns", K(ret));
@@ -2908,6 +2915,44 @@ int ObTableLocation::add_partition_columns(const ObDMLStmt &stmt,
   return ret;
 }
 
+int ObTableLocation::check_can_replace(ObRawExpr *gen_col_expr,
+                                       ObRawExpr *col_expr,
+                                       bool &can_replace)
+{
+  int ret = OB_SUCCESS;
+  can_replace = false;
+  ObCollationLevel res_cs_level = CS_LEVEL_INVALID;
+  ObCollationType res_cs_type = CS_TYPE_INVALID;
+  ObRawExpr* expr = gen_col_expr;
+  if (OB_ISNULL(gen_col_expr) || OB_ISNULL(col_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parameter", K(ret));
+  } else if (!ob_is_string_or_lob_type(gen_col_expr->get_result_type().get_type()) ||
+             !ob_is_string_or_lob_type(col_expr->get_result_type().get_type())) {
+    can_replace = true;
+  } else if (gen_col_expr->get_expr_type() != T_FUN_COLUMN_CONV) {
+    can_replace = true;
+  } else if (((gen_col_expr->get_param_count() != 5) &&
+             (gen_col_expr->get_param_count() != 6)) ||
+             OB_ISNULL(expr = gen_col_expr->get_param_expr(4))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error",K(gen_col_expr->get_param_count()), K(expr), K(ret));
+  } else if (expr->has_flag(IS_INNER_ADDED_EXPR)) {
+    while (expr->has_flag(IS_INNER_ADDED_EXPR) &&
+           (expr->get_param_count() > 0) &&
+           (NULL != expr->get_param_expr(0))) {
+        expr = expr->get_param_expr(0);
+    }
+  }
+  if (OB_FAIL(ret) || can_replace) {
+    //do nothing
+  } else if (expr->get_result_type().get_collation_type() != col_expr->get_result_type().get_collation_type()) {
+    can_replace = false;
+  } else {
+    can_replace = true;
+  }
+  return ret;
+}
 int ObTableLocation::add_partition_column(const ObDMLStmt &stmt,
                                           const uint64_t table_id,
                                           const uint64_t column_id,
@@ -5358,7 +5403,10 @@ int ObTableLocation::get_full_leader_table_loc(ObDASLocationRouter &loc_router,
     ObDASTableLocMeta *loc_meta = NULL;
     char *table_buf = static_cast<char*>(allocator.alloc(sizeof(ObDASTableLoc)
                                          + sizeof(ObDASTableLocMeta)));
-    CK(OB_NOT_NULL(table_buf));
+    if (OB_ISNULL(table_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory", K(ret));
+    }
     if (OB_SUCC(ret)) {
       table_loc = new(table_buf) ObDASTableLoc(allocator);
       loc_meta = new(table_buf+sizeof(ObDASTableLoc)) ObDASTableLocMeta(allocator);
@@ -5370,7 +5418,10 @@ int ObTableLocation::get_full_leader_table_loc(ObDASLocationRouter &loc_router,
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i++) {
       ObDASTabletLoc *tablet_loc = NULL;
       void *tablet_buf = allocator.alloc(sizeof(ObDASTabletLoc));
-      CK(OB_NOT_NULL(tablet_buf));
+      if (OB_ISNULL(tablet_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory", K(ret));
+      }
       OX(tablet_loc = new(tablet_buf) ObDASTabletLoc());
       OX(tablet_loc->loc_meta_ = loc_meta);
       OX(tablet_loc->partition_id_ = partition_ids.at(i));

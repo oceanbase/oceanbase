@@ -62,16 +62,16 @@ public:
     : addr_(), block_ids_()
   {}
   ~ObSharedBlocksWriteCtx();
-  ObSharedBlocksWriteCtx(const ObSharedBlocksWriteCtx &other);
   bool is_valid() const;
   int set_addr(const ObMetaDiskAddr &addr); // overwrite
   int add_block_id(const blocksstable::MacroBlockId &block_id); // distinct
   void clear();
-  ObSharedBlocksWriteCtx &operator=(const ObSharedBlocksWriteCtx &other);
+  int assign(const ObSharedBlocksWriteCtx &other);
   TO_STRING_KV(K_(addr), K_(block_ids));
 public:
   ObMetaDiskAddr addr_;
   ObArray<blocksstable::MacroBlockId> block_ids_;
+  DISALLOW_COPY_AND_ASSIGN(ObSharedBlocksWriteCtx);
 };
 
 struct ObSharedBlockHeader final

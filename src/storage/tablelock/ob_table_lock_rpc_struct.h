@@ -159,6 +159,24 @@ public:
 };
 using ObUnLockObjRequest = ObLockObjRequest;
 
+struct ObLockObjsRequest : public ObLockRequest
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObLockObjsRequest() :
+      ObLockRequest(),
+      objs_()
+  { type_ = ObLockMsgType::LOCK_OBJ_REQ; }
+  virtual ~ObLockObjsRequest() { reset(); }
+  virtual void reset();
+  virtual bool is_valid() const;
+  INHERIT_TO_STRING_KV("ObLockRequest", ObLockRequest, K_(objs));
+public:
+  // which objects should we lock
+  common::ObSEArray<ObLockID, 2> objs_;
+ };
+using ObUnLockObjsRequest = ObLockObjsRequest;
+
 struct ObLockTableRequest : public ObLockRequest
 {
   OB_UNIS_VERSION_V(1);
@@ -218,6 +236,7 @@ public:
  public:
   common::ObTabletIDArray tablet_ids_;
 };
+using ObUnLockTabletsRequest = ObLockTabletsRequest;
 
 struct ObLockAloneTabletRequest : public ObLockTabletsRequest
 {

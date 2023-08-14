@@ -414,38 +414,45 @@ int ObStorageHADagUtils::check_self_is_valid_member(
     bool &is_valid_member)
 {
   int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
-  ObLS *ls = nullptr;
-  logservice::ObLogHandler *log_handler = NULL;
-  common::ObMemberList member_list;
-  common::GlobalLearnerList learner_list;
-  int64_t paxos_replica_num = 0;
-  const ObAddr &self_addr = GCONF.self_addr_;
   is_valid_member = false;
+  const uint64_t tenant_id = MTL_ID();
+  share::ObLocationService *location_service = nullptr;
+  const bool force_renew = true;
+  common::ObAddr leader_addr;
+  ObLSService *ls_service = nullptr;
+  storage::ObStorageRpc *storage_rpc = nullptr;
+  obrpc::ObFetchLSMemberAndLearnerListInfo member_info;
+  storage::ObStorageHASrcInfo src_info;
+  src_info.cluster_id_ = GCONF.cluster_id;
+  const ObAddr &self_addr = GCONF.self_addr_;
   if (!ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check self in member list get invalid argument", K(ret), K(ls_id));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ls_id, ls_handle))) {
-    LOG_WARN("failed to get ls", K(ret), K(ls_id));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+  } else if (OB_ISNULL(location_service = GCTX.location_service_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(ls_id));
-  } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+    LOG_WARN("location service should not be NULL", K(ret), KP(location_service));
+  } else if (OB_FAIL(location_service->get_leader(src_info.cluster_id_, tenant_id, ls_id, force_renew, leader_addr))) {
+    LOG_WARN("fail to get ls leader server", K(ret), K(tenant_id), K(ls_id));
+  } else if (FALSE_IT(src_info.src_addr_ = leader_addr)) {
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log handler should not be NULL", K(ret));
-  } else if (OB_FAIL(log_handler->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list))) {
-    LOG_WARN("failed to get paxos member list and learner list", K(ret));
-  } else if (member_list.contains(self_addr)) {
+    LOG_WARN("ls service should not be NULL", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_ISNULL(storage_rpc = ls_service->get_storage_rpc())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("storage rpc should not be NULL", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(storage_rpc->fetch_ls_member_and_learner_list(tenant_id, ls_id, src_info, member_info))) {
+    LOG_WARN("failed to check ls is valid member", K(ret), K(tenant_id), K(ls_id));
+  } else if (member_info.member_list_.contains(self_addr)) {
     is_valid_member = true;
-  } else if (!learner_list.contains(self_addr)) {
+  } else if (!member_info.learner_list_.contains(self_addr)) {
     is_valid_member = false;
   } else {
     ObMember member;
-    if (OB_FAIL(learner_list.get_learner_by_addr(self_addr, member))) {
+    if (OB_FAIL(member_info.learner_list_.get_learner_by_addr(self_addr, member))) {
       LOG_WARN("failed to get_learner_by_addr", K(ret));
     } else if (member.is_migrating()) {
       is_valid_member = false;
-      LOG_INFO("self is not valid member", K(ret), K(member), K(member_list), K(learner_list), K(self_addr), K(ls_id));
+      LOG_INFO("self is not valid member", K(ret), K(member), K(member_info), K(self_addr), K(ls_id));
     } else {
       is_valid_member = true;
     }

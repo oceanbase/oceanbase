@@ -207,12 +207,12 @@ struct ObTxPart
   share::ObLSID id_;             // identifier, the logstream
   ObAddr addr_;           // its latest address
   int64_t epoch_;         // used to judge a ctx not revived
-  int64_t first_scn_;      // used to judge a ctx is clean in scheduler view
-  int64_t last_scn_;       // used to get rollback savepoint set
+  ObTxSEQ first_scn_;      // used to judge a ctx is clean in scheduler view
+  ObTxSEQ last_scn_;       // used to get rollback savepoint set
   int64_t last_touch_ts_; // used to judge a ctx retouched after a time point
   bool operator==(const ObTxPart &rhs) const { return id_ == rhs.id_ && addr_ == rhs.addr_; }
   bool operator!=(const ObTxPart &rhs) const { return !operator==(rhs); }
-  bool is_clean() const { return first_scn_ > last_scn_; }
+  bool is_clean() const { return !first_scn_.is_valid() || (first_scn_ > last_scn_); }
   bool is_without_ctx() const { return is_without_ctx(epoch_); }
   static bool is_without_ctx(int64_t epoch) { return EPOCH_DEAD == epoch; }
   TO_STRING_KV(K_(id), K_(addr), K_(epoch), K_(first_scn), K_(last_scn), K_(last_touch_ts));
@@ -228,7 +228,7 @@ struct ObTxSnapshot
 {
   share::SCN version_;
   ObTransID tx_id_;
-  int64_t scn_;
+  ObTxSEQ scn_;
   bool elr_;
   TO_STRING_KV(K_(version), K_(tx_id), K_(scn));
   ObTxSnapshot();
@@ -287,11 +287,15 @@ class ObTxSavePoint
   friend class ObTxDesc;
 private:
   enum class T { INVL= 0, SAVEPOINT= 1, SNAPSHOT= 2, STASH= 3 } type_;
-  int64_t scn_;
+  ObTxSEQ scn_;
   /* The savepoint should be unique to the session,
     and the session id is required to distinguish the
     savepoint for the multi-branch scenario of xa */
   uint32_t session_id_;
+  /*
+    used by XA, synchronize savepoint should exclude internal savepoint
+    (eg. 'PL IMPLICIT_SAVEPOINT')
+  */
   bool user_create_;
   union {
     ObTxReadSnapshot *snapshot_;
@@ -305,7 +309,7 @@ public:
   bool operator==(const ObTxSavePoint &a) const;
   void release();
   void rollback();
-  int init(const int64_t scn,
+  int init(const ObTxSEQ &scn,
            const ObString &name,
            const uint32_t session_id,
            const bool user_create,
@@ -382,7 +386,7 @@ protected:
   ObTxAccessMode access_mode_;         // READ_ONLY | READ_WRITE
   share::SCN snapshot_version_;           // snapshot for RR | SERIAL Isolation
   int64_t snapshot_uncertain_bound_;   // uncertain bound of @snapshot_version_
-  int64_t snapshot_scn_;               // the time of acquire @snapshot_version_
+  ObTxSEQ snapshot_scn_;               // the time of acquire @snapshot_version_
   uint32_t sess_id_;                   // sesssion id of txn start, for XA it is XA_START session id
   uint32_t assoc_sess_id_;             // the session which associated with
   ObGlobalTxType global_tx_type_;      // global trans type, i.e., xa or dblink
@@ -451,8 +455,8 @@ protected:
   int64_t commit_ts_;                // COMMIT start time
   int64_t finish_ts_;                // COMMIT/ABORT finish time
 
-  int64_t active_scn_;               // logical time of ACTIVE | IMPLICIT_ACTIVE
-  int64_t min_implicit_savepoint_;   // mininum of implicit savepoints
+  ObTxSEQ active_scn_;               // logical time of ACTIVE | IMPLICIT_ACTIVE
+  ObTxSEQ min_implicit_savepoint_;   // mininum of implicit savepoints
   ObTxPartList parts_;               // participant list
   ObTxSavePointList savepoints_;     // savepoints established
   // cflict_txs_ is used to store conflict trans id when try acquire row lock failed(meet lock conflict)
@@ -665,9 +669,9 @@ public:
   int get_inc_exec_info(ObTxExecResult &exec_info);
   int add_exec_info(const ObTxExecResult &exec_info);
   bool has_implicit_savepoint() const;
-  void add_implicit_savepoint(const int64_t savepoint);
+  void add_implicit_savepoint(const ObTxSEQ savepoint);
   void release_all_implicit_savepoint();
-  void release_implicit_savepoint(const int64_t savepoint);
+  void release_implicit_savepoint(const ObTxSEQ savepoint);
   ObTransTraceLog &get_tlog() { return tlog_; }
   bool is_xa_terminate_state_() const;
   void set_can_elr(const bool can_elr) { can_elr_ = can_elr; }
@@ -700,6 +704,9 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   bool is_extra_changed() { return state_change_flags_.EXTRA_CHANGED_; };
   void set_explicit() { flags_.EXPLICIT_ = true; }
   void clear_interrupt() { flags_.INTERRUPTED_ = false; }
+  ObTxSEQ get_and_inc_tx_seq(int16_t branch, int N) const;
+  ObTxSEQ inc_and_get_tx_seq(int16_t branch) const;
+  ObTxSEQ get_tx_seq(int64_t seq_abs = 0) const;
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;
@@ -812,7 +819,7 @@ protected:
   int64_t timeout_us_;
   int64_t expire_ts_;
   int64_t finish_ts_;
-  int64_t active_scn_;
+  ObTxSEQ active_scn_;
   ObTxPartList parts_;
   uint32_t session_id_ = 0;
   ObTxSavePointList savepoints_;

@@ -167,14 +167,15 @@ int ObLSTxService::get_read_store_ctx(const SCN &snapshot,
 int ObLSTxService::get_write_store_ctx(ObTxDesc &tx,
                                        const ObTxReadSnapshot &snapshot,
                                        const concurrent_control::ObWriteFlag write_flag,
-                                       storage::ObStoreCtx &store_ctx) const
+                                       storage::ObStoreCtx &store_ctx,
+                                       const ObTxSEQ &spec_seq_no) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(trans_service_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret));
   } else {
-    ret = trans_service_->get_write_store_ctx(tx, snapshot, write_flag, store_ctx, false);
+    ret = trans_service_->get_write_store_ctx(tx, snapshot, write_flag, store_ctx, spec_seq_no, false);
   }
   return ret;
 }

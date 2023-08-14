@@ -49,7 +49,7 @@ public:
       related_tablet_map_(allocator),
       allocator_(allocator),
       snapshot_(),
-      savepoint_(0),
+      savepoint_(),
       del_ctx_list_(allocator),
       jump_read_group_id_(-1),
       flags_(0)
@@ -85,8 +85,8 @@ public:
   int64_t get_related_tablet_cnt() const;
   void set_snapshot(const transaction::ObTxReadSnapshot &snapshot) { snapshot_ = snapshot; }
   transaction::ObTxReadSnapshot &get_snapshot() { return snapshot_; }
-  int64_t get_savepoint() const { return savepoint_; }
-  void set_savepoint(const int64_t savepoint) { savepoint_ = savepoint; }
+  transaction::ObTxSEQ get_savepoint() const { return savepoint_; }
+  void set_savepoint(const transaction::ObTxSEQ savepoint) { savepoint_ = savepoint; }
   ObDASLocationRouter &get_location_router() { return location_router_; }
   int build_related_tablet_loc(ObDASTabletLoc &tablet_loc);
   int build_related_table_loc(ObDASTableLoc &table_loc);
@@ -127,7 +127,7 @@ private:
   DASRelatedTabletMap related_tablet_map_;
   common::ObIAllocator &allocator_;
   transaction::ObTxReadSnapshot snapshot_;           // Mvcc snapshot
-  int64_t savepoint_;                                // DML savepoint
+  transaction::ObTxSEQ savepoint_;                   // DML savepoint
   //@todo: save snapshot version
   DASDelCtxList del_ctx_list_;
 public:

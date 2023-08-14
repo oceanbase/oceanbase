@@ -89,7 +89,7 @@ int ObTenantVirtualConcurrentLimitSql::get_next_concurrent_limit_row(const ObOut
       }
     } else {
       ++param_idx_;
-      if (OB_FAIL(get_next_concurrent_limit_row(outline_info, is_iter_end))) {
+      if (OB_FAIL(SMART_CALL(get_next_concurrent_limit_row(outline_info, is_iter_end)))) {
         LOG_WARN("fail to get next concurrent_limit_row", K(ret), K(param_idx_), K(outline_info_idx_));
       }
     }
@@ -118,7 +118,7 @@ int ObTenantVirtualConcurrentLimitSql::inner_get_next_row(common::ObNewRow *&row
     } else if (is_iter_end) {
       ++outline_info_idx_;
       param_idx_ = 0;
-      if (OB_FAIL(inner_get_next_row(row))) {
+      if (OB_FAIL(SMART_CALL(inner_get_next_row(row)))) {
         LOG_WARN("fail to get_next_row", K(ret));
       }
     } else {
@@ -126,7 +126,7 @@ int ObTenantVirtualConcurrentLimitSql::inner_get_next_row(common::ObNewRow *&row
     }
   } else {
     ++outline_info_idx_;
-    if (OB_FAIL(inner_get_next_row(row))) {
+    if (OB_FAIL(SMART_CALL(inner_get_next_row(row)))) {
       LOG_WARN("fail to get_next_row", K(ret));
     }
   }

@@ -27,7 +27,7 @@ namespace storage
 
   READ_ALL_COMMITED:
     Read committed row after transaction committed, except empty shell.
-    Return tablet in NORMAL, TRANSFER_IN, TRANSFER_OUT, DELETED, TRANSFER_OUT_DELETED status.
+    Return tablet which has finished at least one MDS transaction(not including tablet in NORMAL not committed, TRANSFER_IN not committed status).
     Not return CREATING and DELETING who was abandoned from 4.2.
     In addition, you should NOT pass read timeout under this mode.
 

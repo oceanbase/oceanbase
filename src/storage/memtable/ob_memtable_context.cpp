@@ -818,19 +818,19 @@ uint64_t ObMemtableCtx::get_tenant_id() const
   return tenant_id;
 }
 
-void ObMemtableCtx::update_max_submitted_seq_no(const int64_t seq_no)
+void ObMemtableCtx::update_max_submitted_seq_no(const transaction::ObTxSEQ seq_no)
 {
   if (NULL != ATOMIC_LOAD(&ctx_)) {
     static_cast<ObPartTransCtx *>(ctx_)->update_max_submitted_seq_no(seq_no);
   }
 }
 
-int ObMemtableCtx::rollback(const int64_t to_seq_no, const int64_t from_seq_no)
+int ObMemtableCtx::rollback(const transaction::ObTxSEQ to_seq_no, const transaction::ObTxSEQ from_seq_no)
 {
   int ret = OB_SUCCESS;
   ObByteLockGuard guard(lock_);
 
-  if (0 > to_seq_no || 0 > from_seq_no) {
+  if (!to_seq_no.is_valid() || !from_seq_no.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(from_seq_no), K(to_seq_no));
   } else if (OB_ISNULL(ATOMIC_LOAD(&ctx_))) {
@@ -1189,7 +1189,7 @@ int ObMemtableCtx::clear_table_lock_(const bool is_commit,
   return ret;
 }
 
-int ObMemtableCtx::rollback_table_lock_(int64_t seq_no)
+int ObMemtableCtx::rollback_table_lock_(transaction::ObTxSEQ seq_no)
 {
   int ret = OB_SUCCESS;
   if (is_read_only_) {

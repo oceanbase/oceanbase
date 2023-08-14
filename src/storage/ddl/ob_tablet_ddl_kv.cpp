@@ -429,6 +429,18 @@ ObDDLKV::~ObDDLKV()
   reset();
 }
 
+void ObDDLKV::inc_ref()
+{
+  ATOMIC_AAF(&ref_cnt_, 1);
+  // FLOG_INFO("DDLKV inc_ref", K(ref_cnt_), KP(this), K(tablet_id_));
+}
+
+int64_t ObDDLKV::dec_ref()
+{
+  // FLOG_INFO("DDLKV dec_ref", K(ref_cnt_), KP(this), K(tablet_id_));
+  return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */);
+}
+
 int ObDDLKV::init(ObTablet &tablet,
                   const SCN &ddl_start_scn,
                   const int64_t snapshot_version,

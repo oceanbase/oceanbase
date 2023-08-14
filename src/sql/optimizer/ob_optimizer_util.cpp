@@ -26,6 +26,7 @@
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "share/location_cache/ob_location_service.h"
 #include "share/ob_order_perserving_encoder.h"
+#include "sql/rewrite/ob_predicate_deduce.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -6003,7 +6004,8 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
       SelectItem &select_item = child_stmt->get_select_item(i);
       new_select_item.alias_name_ = select_item.alias_name_;
       new_select_item.expr_name_ = select_item.expr_name_;
-      new_select_item.is_real_alias_ = select_item.is_real_alias_ || select_item.expr_->is_column_ref_expr();
+      new_select_item.is_real_alias_ = select_item.is_real_alias_ ||
+                  ObRawExprUtils::is_column_ref_skip_implicit_cast(select_item.expr_);
       new_select_item.questions_pos_ = select_item.questions_pos_;
       new_select_item.params_idx_ = select_item.params_idx_;
       new_select_item.neg_param_idx_ = select_item.neg_param_idx_;
@@ -6060,7 +6062,8 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
         SelectItem &select_item = child_stmt->get_select_item(i);
         new_select_item.alias_name_ = select_item.alias_name_;
         new_select_item.expr_name_ = select_item.expr_name_;
-        new_select_item.is_real_alias_ = select_item.is_real_alias_ || select_item.expr_->is_column_ref_expr();
+        new_select_item.is_real_alias_ = select_item.is_real_alias_ ||
+                    ObRawExprUtils::is_column_ref_skip_implicit_cast(select_item.expr_);
         new_select_item.questions_pos_ = select_item.questions_pos_;
         new_select_item.params_idx_ = select_item.params_idx_;
         new_select_item.neg_param_idx_ = select_item.neg_param_idx_;
@@ -6471,8 +6474,10 @@ int ObOptimizerUtil::check_pushdown_filter(const ObDMLStmt &parent_stmt,
                                                       remain_filters))) {
         LOG_WARN("failed to check pushdown filter overlap index", K(ret));
       }
-    } else {
-      ret = candi_filters.assign(pushdown_filters);
+    } else if (OB_FAIL(candi_filters.assign(pushdown_filters))) {
+      LOG_WARN("failed to assign exprs", K(ret));
+    } else if (OB_FAIL(remove_special_exprs(candi_filters, remain_filters))) {
+      LOG_WARN("failed to remove special exprs", K(ret));
     }
   } else if (OB_FAIL(get_groupby_win_func_common_exprs(subquery,
                                                       common_exprs,
@@ -6500,6 +6505,30 @@ int ObOptimizerUtil::check_pushdown_filter(const ObDMLStmt &parent_stmt,
                                                   check_match_index))) {
       LOG_WARN("failed to check pushdown filter for subquery", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::remove_special_exprs(ObIArray<ObRawExpr*> &pushdown_filters,
+                                          ObIArray<ObRawExpr*> &remain_filters)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> normal_filters;
+  for (int64_t i = 0; OB_SUCC(ret) && i < pushdown_filters.count(); ++i) {
+    if (OB_ISNULL(pushdown_filters.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("predicate is null", K(ret));
+    } else if (ObPredicateDeduce::contain_special_expr(*pushdown_filters.at(i))) {
+      if (OB_FAIL(remain_filters.push_back(pushdown_filters.at(i)))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    } else if (OB_FAIL(normal_filters.push_back(pushdown_filters.at(i)))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) &&
+      OB_FAIL(pushdown_filters.assign(normal_filters))) {
+    LOG_WARN("failed to assign filters", K(ret));
   }
   return ret;
 }
@@ -6538,9 +6567,15 @@ int ObOptimizerUtil::check_pushdown_filter_overlap_index(const ObDMLStmt &stmt,
   }
   if (OB_FAIL(ret)) {
   } else if (is_match_index) {
-    ret = candi_filters.assign(pushdown_filters);
+    if (OB_FAIL(candi_filters.assign(pushdown_filters))) {
+      LOG_WARN("failed to assign exprs", K(ret));
+    } else if (OB_FAIL(remove_special_exprs(candi_filters, remain_filters))) {
+      LOG_WARN("failed to remove special exprs", K(ret));
+    }
   } else {
-    ret = remain_filters.assign(pushdown_filters);
+    if (OB_FAIL(remain_filters.assign(pushdown_filters))) {
+      LOG_WARN("failed to assign exprs", K(ret));
+    }
   }
   return ret;
 }
@@ -6581,6 +6616,8 @@ int ObOptimizerUtil::check_pushdown_filter_for_set(const ObSelectStmt &parent_st
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
+      } else if (ObPredicateDeduce::contain_special_expr(*expr)) {
+        is_simple_expr = false;
       } else if (expr->has_flag(CNT_WINDOW_FUNC) ||
                   expr->has_flag(CNT_AGG) ||
                   expr->has_flag(CNT_SUB_QUERY) ||
@@ -6652,6 +6689,8 @@ int ObOptimizerUtil::check_pushdown_filter_for_subquery(const ObDMLStmt &parent_
           if (OB_ISNULL(expr)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpect null expr", K(ret));
+          } else if (ObPredicateDeduce::contain_special_expr(*expr)) {
+            is_simple_expr = false;
           } else if (expr->has_flag(CNT_WINDOW_FUNC) ||
                      expr->has_flag(CNT_AGG) ||
                      expr->has_flag(CNT_SUB_QUERY)) {

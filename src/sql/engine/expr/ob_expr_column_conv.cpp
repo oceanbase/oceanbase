@@ -189,13 +189,13 @@ int ObExprColumnConv::convert_skip_null_check(ObObj &result,
       LOG_WARN("failed to check accuracy", K(ret), K(accuracy), K(collation_type), KPC(res_obj));
       if (OB_ERR_DATA_TOO_LONG == ret && lib::is_oracle_mode()
           && OB_NOT_NULL(column_info) && !column_info->empty()) {
-        ObString column_info_connection;
-        ObArenaAllocator allocator;
-        ObSQLUtils::copy_and_convert_string_charset(allocator, *column_info,
-                                                    column_info_connection, CS_TYPE_UTF8MB4_BIN,
-                                                    cast_ctx.dtc_params_.connection_collation_);
-        LOG_ORACLE_USER_ERROR(OB_ERR_DATA_TOO_LONG_MSG_FMT_V2, column_info_connection.length(),
-                              column_info_connection.ptr(), str_len_byte, max_accuracy_len);
+        int64_t col_length = str_len_byte;
+        if (ObStringTC == ob_obj_type_class(type)
+            && !is_oracle_byte_length(lib::is_oracle_mode(), accuracy.get_length_semantics())) {
+          col_length = ObCharset::strlen_char(collation_type, result.get_string().ptr(), str_len_byte);
+        }
+        LOG_ORACLE_USER_ERROR(OB_ERR_DATA_TOO_LONG_MSG_FMT_V2, column_info->length(),
+                              column_info->ptr(), col_length, max_accuracy_len);
       }
     }
   }
@@ -285,7 +285,8 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
         LOG_WARN("inconsistent datatypes", "expected", type_tc, "got", value_tc);
       } else {
         type_ctx.set_cast_mode(
-            type_ctx.get_cast_mode() | type_ctx.get_raw_expr()->get_extra() | CM_COLUMN_CONVERT);
+            type_ctx.get_cast_mode() | type_ctx.get_raw_expr()->get_extra() | CM_COLUMN_CONVERT
+            | CM_CHARSET_CONVERT_IGNORE_ERR);
         types[4].set_calc_meta(type);
       }
     }
@@ -349,10 +350,25 @@ static inline int column_convert_datum_accuracy_check(const ObExpr &expr,
         LOG_WARN("evaluate parameter failed", K(ret));
       } else {
         column_info_str = column_info->get_string();
+        int64_t col_length = str_len_byte;
+        if (ObStringTC == ob_obj_type_class(expr.datum_meta_.get_type())
+            && !is_oracle_byte_length(lib::is_oracle_mode(), expr.datum_meta_.length_semantics_)) {
+          col_length = ObCharset::strlen_char(expr.datum_meta_.cs_type_, datum_for_check.ptr_, str_len_byte);
+        }
         LOG_ORACLE_USER_ERROR(OB_ERR_DATA_TOO_LONG_MSG_FMT_V2, column_info_str.length(),
-                              column_info_str.ptr(), str_len_byte, max_accuracy_len);
+                              column_info_str.ptr(), col_length, max_accuracy_len);
       }
       ret = OB_ERR_DATA_TOO_LONG;
+    }
+  }
+  if (OB_SUCC(ret) && lib::is_mysql_mode() && OB_ERR_DATA_TOO_LONG == warning) {
+    ObDatum *column_info = NULL;
+    int64_t rownum = ctx.exec_ctx_.get_cur_rownum();
+    if (rownum > 0
+        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_
+        && OB_SUCCESS == expr.args_[5]->eval(ctx, column_info)) {
+      LOG_USER_WARN(OB_ERR_DATA_TRUNCATED, column_info->get_string().length(),
+                                           column_info->get_string().ptr(), rownum);
     }
   }
   return ret;

@@ -2403,7 +2403,7 @@ int PartTransTask::push_redo_log(
   return ret;
 }
 
-int PartTransTask::push_rollback_to_info(const palf::LSN &lsn, const int64_t rollback_from, const int64_t rollback_to)
+int PartTransTask::push_rollback_to_info(const palf::LSN &lsn, const ObTxSEQ &rollback_from, const ObTxSEQ &rollback_to)
 {
   int ret = OB_SUCCESS;
   RollbackNode *rollback_node = static_cast<RollbackNode*>(allocator_.alloc(sizeof(RollbackNode)));

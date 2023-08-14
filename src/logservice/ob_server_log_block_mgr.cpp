@@ -204,6 +204,7 @@ int ObServerLogBlockMgr::resize_(const int64_t new_size_byte)
   } else if (OB_FAIL(
                  do_resize_(old_log_pool_meta, resize_block_cnt, new_log_pool_meta))) {
     if (OB_ALLOCATE_DISK_SPACE_FAILED == ret) {
+      ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
       LOG_DBA_ERROR(OB_ALLOCATE_DISK_SPACE_FAILED,
                     "possible reason",
                     "may be diskspace is not enough, please check the configuration about log disk",
@@ -758,7 +759,8 @@ int ObServerLogBlockMgr::try_resize()
 {
   int ret = OB_SUCCESS;
   int64_t log_disk_size = 0;
-  int64_t log_disk_percentage = 0;
+  int64_t unused_log_disk_percentage = 0;
+  int64_t total_log_disk_size = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "ObServerLogBlockMgr has not inited", KPC(this));
@@ -766,17 +768,16 @@ int ObServerLogBlockMgr::try_resize()
     ret = OB_NOT_RUNNING;
     CLOG_LOG(WARN, "ObServerLogBlockMgr not running, can not support resize", KPC(this));
   } else if (OB_FAIL(observer::ObServerUtils::get_log_disk_info_in_config(log_disk_size,
-                                                                          log_disk_percentage))) {
-    if (OB_SERVER_OUTOF_DISK_SPACE == ret) {
-      ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
-      CLOG_LOG(ERROR, "try_resize failed, log disk space is not enough", K(log_disk_size), KPC(this));
-    } else {
-      CLOG_LOG(ERROR, "get_log_disk_info_in_config failed", K(log_disk_size), KPC(this));
-    }
+                                                                          unused_log_disk_percentage,
+                                                                          total_log_disk_size))) {
+    CLOG_LOG(ERROR, "get_log_disk_info_in_config failed", K(log_disk_size), KPC(this));
+  } else if (log_disk_size > total_log_disk_size) {
+    ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
+    CLOG_LOG(ERROR, "try_resize failed, log disk space is not enough", K(log_disk_size), KPC(this));
   } else if (OB_FAIL(resize_(log_disk_size))) {
     CLOG_LOG(ERROR, "ObServerLogBlockMGR resize failed", K(ret), KPC(this));
   } else {
-    CLOG_LOG(INFO, "try_resize success", K(ret), K(log_disk_size), KPC(this));
+    CLOG_LOG(INFO, "try_resize success", K(ret), K(log_disk_size), K(total_log_disk_size), KPC(this));
   }
   return ret;
 }

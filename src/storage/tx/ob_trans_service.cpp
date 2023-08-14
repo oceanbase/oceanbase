@@ -729,7 +729,7 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
   tx_param.access_mode_ = tx_desc.access_mode_;
   tx_param.isolation_ = tx_desc.isolation_;
   tx_param.timeout_us_ = tx_desc.timeout_us_;
-  int64_t savepoint = 0;
+  ObTxSEQ savepoint;
   if (OB_UNLIKELY(!tx_desc.is_valid() || !ls_id.is_valid() || type <= ObTxDataSourceType::UNKNOWN
                   || type >= ObTxDataSourceType::MAX_TYPE || OB_ISNULL(buf) || buf_len < 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -873,7 +873,7 @@ int ObTransService::register_mds_into_ctx_(ObTxDesc &tx_desc,
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", KR(ret), K(tx_desc), K(ls_id), KP(buf), K(buf_len));
   } else if (FALSE_IT(store_ctx.ls_id_ = ls_id)) {
-  } else if (OB_FAIL(get_write_store_ctx(tx_desc, snapshot, write_flag, store_ctx, true))) {
+  } else if (OB_FAIL(get_write_store_ctx(tx_desc, snapshot, write_flag, store_ctx, ObTxSEQ::INVL(), true))) {
     TRANS_LOG(WARN, "get store ctx failed", KR(ret), K(tx_desc), K(ls_id));
   } else {
     ObPartTransCtx *ctx = store_ctx.mvcc_acc_ctx_.tx_ctx_;

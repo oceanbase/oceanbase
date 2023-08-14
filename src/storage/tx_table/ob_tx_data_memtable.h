@@ -496,14 +496,14 @@ public:
             to_cstring(tx_data->commit_version_));
 
     // printf undo status list
-    fprintf(fd_, "Undo Actions : {");
+    fprintf(fd_, "Undo Actions [from, to): {");
     ObUndoStatusNode *cur_node = tx_data->undo_status_list_.head_;
     while (OB_NOT_NULL(cur_node))
     {
       for (int i = 0; i < cur_node->size_; i++) {
-        fprintf(fd_, "(from:%s,to:%s)",
-                to_cstring(cur_node->undo_actions_[i].undo_from_),
-                to_cstring(cur_node->undo_actions_[i].undo_to_));
+        fprintf(fd_, "[%ld, %ld)",
+                cur_node->undo_actions_[i].undo_from_.cast_to_int(),
+                cur_node->undo_actions_[i].undo_to_.cast_to_int());
       }
       cur_node = cur_node->next_;
     }

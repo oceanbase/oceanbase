@@ -38,16 +38,16 @@ struct ObCallbackScope
 
 struct ObRedoLogSubmitHelper
 {
-  ObRedoLogSubmitHelper() : callbacks_(), max_seq_no_(0), data_size_(0) {}
+  ObRedoLogSubmitHelper() : callbacks_(), max_seq_no_(), data_size_(0) {}
   ~ObRedoLogSubmitHelper() {}
   void reset()
   {
     callbacks_.reset();
-    max_seq_no_ = 0;
+    max_seq_no_.reset();
     data_size_ = 0;
   }
   ObCallbackScope callbacks_; // callbacks in the redo log
-  int64_t max_seq_no_;
+  transaction::ObTxSEQ max_seq_no_;
   int64_t data_size_;  // records the data amount of all serialized trans node of this fill process
 };
 

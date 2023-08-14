@@ -876,18 +876,18 @@ int ObIDagNet::add_dag_into_dag_net(ObIDag &dag)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  WEAK_BARRIER();
-
   ObDagRecord *dag_record = nullptr;
   int hash_ret = OB_SUCCESS;
   ObMutexGuard guard(lock_);
+  WEAK_BARRIER();
+  const bool is_stop = is_stopped_;
 
   if (OB_NOT_NULL(dag.get_dag_net())) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "dag already belongs to a dag_net", K(ret), K(dag));
-  } else if (is_stopped_) {
+  } else if (is_stop) {
     ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("dag_net is in stop state, not allowed to add dag", K(ret), K(is_stopped_));
+    LOG_WARN("dag_net is in stop state, not allowed to add dag", K(ret), K(is_stop));
   } else if (is_cancel_) {
     ret = OB_CANCELED;
     LOG_WARN("dag net is cancel, do not allow to add new dag", K(ret), K(is_cancel_));
@@ -1000,7 +1000,6 @@ void ObIDagNet::remove_dag_record_(ObDagRecord &dag_record)
 int ObIDagNet::erase_dag_from_dag_net(ObIDag &dag)
 {
   int ret = OB_SUCCESS;
-  bool found = false;
   ObDagRecord *dag_record = nullptr;
   ObMutexGuard guard(lock_);
   WEAK_BARRIER();
@@ -1012,14 +1011,13 @@ int ObIDagNet::erase_dag_from_dag_net(ObIDag &dag)
   } else if (OB_ISNULL(dag_record)) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "dag record should not be NULL", K(ret), KP(this), KP(&dag));
-  } else if (dag_record->dag_ptr_ != &dag) {
+  } else if (OB_UNLIKELY(dag_record->dag_ptr_ != &dag)) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "dag record has unexpected dag value", K(ret), KP(this), KP(&dag), KPC(dag_record));
   } else if (OB_UNLIKELY(ObIDag::is_finish_status(dag_record->dag_status_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("dag status is invalid when erase", K(ret), KPC(dag_record));
   } else {
-    found = true;
     COMMON_LOG(DEBUG, "success to update status", K(ret), KPC(dag_record));
     remove_dag_record_(*dag_record);
     dag.clear_dag_net();

@@ -202,6 +202,9 @@ public:
   ObIDASTaskResult *get_op_result() const { return op_result_; }
   void set_op_result(ObIDASTaskResult *op_result) { op_result_ = op_result; }
 
+  bool get_gi_above_and_rescan()          { return gi_above_and_rescan_; }
+  void set_gi_above_and_rescan(bool flag) { gi_above_and_rescan_ = flag; }
+
 protected:
   int start_das_task();
   int end_das_task();
@@ -224,7 +227,8 @@ protected:
       uint16_t in_part_retry_    : 1;
       uint16_t in_stmt_retry_    : 1;
       uint16_t need_switch_param_ : 1; //need to switch param in gi table rescan, this parameter has been deprecated
-      uint16_t status_reserved_  : 12;
+      uint16_t gi_above_and_rescan_ : 1; //For partition wise nlj, We need to disable das task retry.
+      uint16_t status_reserved_  : 11;
     };
   };
   transaction::ObTxDesc *trans_desc_; //trans desc，事务是全局信息，由RPC框架管理，这里不维护其内存

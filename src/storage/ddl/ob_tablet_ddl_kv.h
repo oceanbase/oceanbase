@@ -112,8 +112,8 @@ class ObDDLKV : public blocksstable::ObSSTable
 public:
   ObDDLKV();
   virtual ~ObDDLKV();
-  virtual void inc_ref() override { ATOMIC_AAF(&ref_cnt_, 1); }
-  virtual int64_t dec_ref() override { return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); }
+  virtual void inc_ref() override;
+  virtual int64_t dec_ref() override;
   virtual int64_t get_ref() const override { return ObITable::get_ref(); }
   int init(ObTablet &tablet,
            const share::SCN &ddl_start_scn,

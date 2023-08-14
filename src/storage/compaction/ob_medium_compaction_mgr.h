@@ -19,13 +19,13 @@
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/compaction/ob_partition_merge_policy.h"
 #include "storage/compaction/ob_medium_compaction_info.h"
+#include "storage/compaction/ob_extra_medium_info.h"
 
 namespace oceanbase
 {
 namespace storage
 {
 class ObTablet;
-class ObTaletExtraMediumInfo;
 class ObTabletDumpedMediumInfo;
 }
 namespace compaction
@@ -100,7 +100,7 @@ public:
 
   int init(
       common::ObIAllocator &allocator,
-      const ObTaletExtraMediumInfo &extra_medium_info,
+      const ObExtraMediumInfo &extra_medium_info,
       const ObTabletDumpedMediumInfo &medium_info_list);
 
   void reset();
@@ -112,8 +112,8 @@ public:
     return inner_is_valid();
   }
   OB_INLINE const MediumInfoList &get_list() const { return medium_info_list_; }
-  OB_INLINE int64_t get_wait_check_medium_scn() const { return wait_check_flag_ ? last_medium_scn_ : 0; }
-  OB_INLINE bool need_check_finish() const { return wait_check_flag_; }
+  OB_INLINE int64_t get_wait_check_medium_scn() const { return extra_info_.wait_check_flag_ ? extra_info_.last_medium_scn_ : 0; }
+  OB_INLINE bool need_check_finish() const { return extra_info_.wait_check_flag_; }
   // check status on serialized medium list
   OB_INLINE bool could_schedule_next_round() const
   {
@@ -122,15 +122,15 @@ public:
   const ObMediumCompactionInfo *get_next_schedule_medium_info(const int64_t last_major_snapshot) const;
   OB_INLINE ObMediumCompactionInfo::ObCompactionType get_last_compaction_type() const
   {
-    return (ObMediumCompactionInfo::ObCompactionType)last_compaction_type_;
+    return static_cast<ObMediumCompactionInfo::ObCompactionType>(extra_info_.last_compaction_type_);
   }
   OB_INLINE int64_t get_last_compaction_scn() const
   {
-    return last_medium_scn_;
+    return extra_info_.last_medium_scn_;
   }
   OB_INLINE uint64_t get_union_info() const
   {
-    return info_;
+    return extra_info_.info_;
   }
 
   // serialize & deserialize
@@ -147,42 +147,26 @@ public:
     const ObMediumCompactionInfo &medium_info,
     const ObITable *last_major_sstable,
     const bool force_check);
-  TO_STRING_KV(K_(is_inited), K_(info), K_(last_compaction_type), K_(wait_check_flag), K_(last_medium_scn),
-      "list_size", size(), K_(medium_info_list));
+  TO_STRING_KV(K_(is_inited), K_(extra_info), "list_size", size(), K_(medium_info_list));
 
 private:
   void reset_list();
   OB_INLINE bool inner_is_valid() const
   {
-    return last_compaction_type_ < ObMediumCompactionInfo::COMPACTION_TYPE_MAX
-        && last_medium_scn_ >= 0 && size() >= 0;
+    return extra_info_.last_compaction_type_ < ObMediumCompactionInfo::COMPACTION_TYPE_MAX
+        && extra_info_.last_medium_scn_ >= 0 && size() >= 0;
   }
 
   OB_INLINE void set_basic_info(const ObMediumCompactionInfoList &input_list)
   {
-    last_compaction_type_ = input_list.last_compaction_type_;
-    last_medium_scn_ = input_list.last_medium_scn_;
-    wait_check_flag_ = input_list.wait_check_flag_;
+    extra_info_ = input_list.extra_info_;
   }
-private:
-  static const int64_t MEDIUM_LIST_VERSION = 1;
-  static const int32_t MEDIUM_LIST_INFO_RESERVED_BITS = 51;
 
 private:
   bool is_inited_;
   common::ObIAllocator *allocator_;
 
-  // need serialize
-  union {
-    uint64_t info_;
-    struct {
-      uint64_t compat_                  : 8;
-      uint64_t last_compaction_type_    : 4; // check inner_table when last_compaction is major
-      uint64_t wait_check_flag_         : 1; // true: need check finish, false: don't need check
-      uint64_t reserved_                : MEDIUM_LIST_INFO_RESERVED_BITS;
-    };
-  };
-  int64_t last_medium_scn_; // record last finish medium_scn
+  ObExtraMediumInfo extra_info_;
 
   MediumInfoList medium_info_list_; // need for compat, will not store any MediumCompactionInfo after 4.2
 };

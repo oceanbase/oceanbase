@@ -2221,7 +2221,7 @@ int ObLS::set_ls_rebuild()
   ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock, try_lock);
 
   if (!lock_myself.locked()) {
-    ret = OB_EAGAIN;
+    ret = OB_LS_LOCK_CONFLICT;
     LOG_WARN("try lock failed, please retry later", K(ret), K(ls_meta_));
   } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

@@ -5311,19 +5311,13 @@ int ObTransformUtils::check_exprs_unique_on_table_items(const ObDMLStmt *stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else {
-    lib::MemoryContext mem_context = NULL;
     lib::ContextParam param;
     param.set_mem_attr(session_info->get_effective_tenant_id(), "CheckUnique",
                        ObCtxIds::DEFAULT_CTX_ID)
        .set_properties(lib::USE_TL_PAGE_OPTIONAL)
        .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
-    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, param))) {
-      LOG_WARN("failed to create memory entity", K(ret));
-    } else if (OB_ISNULL(mem_context)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to create memory entity", K(ret));
-    } else {
-      ObArenaAllocator &alloc = mem_context->get_arena_allocator();
+    CREATE_WITH_TEMP_CONTEXT(param) {
+      ObArenaAllocator &alloc = CURRENT_CONTEXT->get_arena_allocator();
       ObFdItemFactory fd_item_factory(alloc);
       ObRawExprFactory expr_factory(alloc);
       UniqueCheckHelper check_helper;
@@ -5349,9 +5343,6 @@ int ObTransformUtils::check_exprs_unique_on_table_items(const ObDMLStmt *stmt,
       } else {
         LOG_TRACE("get is unique result", K(exprs), K(table_items), K(is_unique));
       }
-    }
-    if (OB_NOT_NULL(mem_context)) {
-      DESTROY_CONTEXT(mem_context);
     }
   }
   return ret;
@@ -5441,19 +5432,13 @@ int ObTransformUtils::check_stmt_unique(const ObSelectStmt *stmt,
   if (OB_FAIL(ret) || is_unique || !need_check) {
     /*do nothing*/
   } else {
-    lib::MemoryContext mem_context = NULL;
     lib::ContextParam param;
     param.set_mem_attr(session_info->get_effective_tenant_id(), "CheckUnique",
                        ObCtxIds::DEFAULT_CTX_ID)
        .set_properties(lib::USE_TL_PAGE_OPTIONAL)
        .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
-    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, param))) {
-      LOG_WARN("failed to create memory context", K(ret));
-    } else if (OB_ISNULL(mem_context)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to create memory context", K(ret));
-    } else {
-      ObArenaAllocator &alloc = mem_context->get_arena_allocator();
+    CREATE_WITH_TEMP_CONTEXT(param) {
+      ObArenaAllocator &alloc = CURRENT_CONTEXT->get_arena_allocator();
       ObFdItemFactory fd_item_factory(alloc);
       ObRawExprFactory expr_factory(alloc);
       UniqueCheckHelper check_helper;
@@ -5478,9 +5463,6 @@ int ObTransformUtils::check_stmt_unique(const ObSelectStmt *stmt,
       } else {
         LOG_TRACE("get is unique result", K(ret), K(is_unique));
       }
-    }
-    if (OB_NOT_NULL(mem_context)) {
-      DESTROY_CONTEXT(mem_context);
     }
   }
   return ret;
@@ -10425,20 +10407,15 @@ int ObTransformUtils::recursive_set_stmt_unique(ObSelectStmt *select_stmt,
                                                 ObIArray<ObRawExpr *> *unique_keys)
 {
   int ret = OB_SUCCESS;
+  if (NULL != unique_keys) {
+    unique_keys->reuse();
+  }
   bool is_unique = false;
-  bool is_stack_overflow = false;
   ObSqlBitSet<> origin_output_rel_ids;
-  ObSEArray<ObRawExpr*, 4> pkeys;
-  ObSEArray<ObRawExpr*, 4> select_exprs;
-  if (OB_ISNULL(select_stmt) || OB_ISNULL(ctx) || OB_ISNULL(ctx->session_info_)
-      || OB_ISNULL(ctx->schema_checker_) || OB_ISNULL(ctx->allocator_)) {
+  ObSEArray<ObRawExpr*, 4> added_unique_keys;
+  if (OB_ISNULL(select_stmt) || OB_ISNULL(ctx) || OB_ISNULL(ctx->allocator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null", K(ret), K(select_stmt), K(ctx));
-  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("check stack overflow failed", K(ret), K(is_stack_overflow));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
+    LOG_WARN("unexpected null", K(ret), K(select_stmt), K(ctx));
   } else if (!ignore_check_unique && (OB_FAIL(check_stmt_unique(select_stmt,
                                                                 ctx->session_info_,
                                                                 ctx->schema_checker_,
@@ -10446,13 +10423,12 @@ int ObTransformUtils::recursive_set_stmt_unique(ObSelectStmt *select_stmt,
                                                                 is_unique)))) {
     LOG_WARN("failed to check stmt unique", K(ret));
   } else if (is_unique) {
-    if (OB_ISNULL(unique_keys)) {
-      //do nothing
-    } else if (OB_FAIL(select_stmt->get_select_exprs_without_lob(*unique_keys))) {
-      LOG_WARN("failed to get select exprs", K(ret));
+    if (NULL != unique_keys && OB_FAIL(get_unique_keys_from_unique_stmt(select_stmt,
+                                                                        ctx->expr_factory_,
+                                                                        *unique_keys,
+                                                                        added_unique_keys))) {
+      LOG_WARN("failed to get unique keys from unique stmt", K(ret));
     }
-  } else if (OB_FAIL(select_stmt->get_select_exprs(select_exprs))) {
-    LOG_WARN("failed to get select exprs", K(ret));
   } else if (OB_FAIL(select_stmt->get_from_tables(origin_output_rel_ids))) {
     LOG_WARN("failed to get output rel ids", K(ret));
   } else {
@@ -10491,28 +10467,61 @@ int ObTransformUtils::recursive_set_stmt_unique(ObSelectStmt *select_stmt,
                                                               *view_stmt,
                                                               *select_stmt,
                                                               cur_table->table_id_,
-                                                              pkeys))) {
+                                                              added_unique_keys))) {
           //找到stmt unique keys对应的本层column expr
           LOG_WARN("failed to get stmt unique keys columns expr", K(ret));
         }
       } else if (!cur_table->is_basic_table()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect table item type", K(*cur_table), K(ret));
-      } else if (OB_FAIL(generate_unique_key(ctx, select_stmt, cur_table, pkeys))) {
+      } else if (OB_FAIL(generate_unique_key(ctx, select_stmt, cur_table, added_unique_keys))) {
         LOG_WARN("failed to generate unique key", K(ret));
       }
     }
-    if (OB_FAIL(ret)) {
-      //do nothing
-    } else if (OB_NOT_NULL(unique_keys) && OB_FAIL(append(*unique_keys,pkeys))) {
+  }
+
+  // need add additional select item
+  if (OB_SUCC(ret) && !added_unique_keys.empty()) {
+    ObSEArray<ObRawExpr*, 4> select_exprs;
+    if (OB_FAIL(select_stmt->get_select_exprs(select_exprs))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (OB_NOT_NULL(unique_keys) && OB_FAIL(append(*unique_keys, added_unique_keys))) {
       LOG_WARN("failed to append unique keys", K(ret));
-    } else if (OB_FAIL(add_non_duplicated_select_expr(pkeys, select_exprs))) {
+    } else if (OB_FAIL(add_non_duplicated_select_expr(added_unique_keys, select_exprs))) {
       LOG_WARN("failed to add non-duplicated select expr", K(ret));
-    } else if (OB_FAIL(create_select_item(*ctx->allocator_, pkeys, select_stmt))) {
+    } else if (OB_FAIL(create_select_item(*ctx->allocator_, added_unique_keys, select_stmt))) {
       LOG_WARN("failed to get tables primary keys", K(ret));
     } else if (OB_FAIL(select_stmt->formalize_stmt(ctx->session_info_))) {
       LOG_WARN("failed to formalize stmt", K(ret));
     }
+  }
+  return ret;
+}
+
+/* select_stmt is unique checked by ObTransformUtils::check_stmt_unique */
+int ObTransformUtils::get_unique_keys_from_unique_stmt(const ObSelectStmt *select_stmt,
+                                                       ObRawExprFactory *expr_factory,
+                                                       ObIArray<ObRawExpr*> &unique_keys,
+                                                       ObIArray<ObRawExpr*> &added_unique_keys)
+{
+  int ret = OB_SUCCESS;
+  unique_keys.reuse();
+  added_unique_keys.reuse();
+  ObConstRawExpr *expr = NULL;
+  if (OB_ISNULL(select_stmt) || OB_ISNULL(expr_factory)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(select_stmt), K(expr_factory));
+  } else if (OB_FAIL(select_stmt->get_select_exprs_without_lob(unique_keys))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else if (OB_LIKELY(!unique_keys.empty())) {
+    /* do nothing */
+  } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*expr_factory, ObIntType, 0, expr))) {
+    LOG_WARN("failed to build const int expr", K(ret));
+  } else if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(added_unique_keys.push_back(expr))) {
+    LOG_WARN("failed to push back", K(ret));
   }
   return ret;
 }

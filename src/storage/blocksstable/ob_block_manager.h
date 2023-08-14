@@ -197,6 +197,7 @@ public:
   int64_t get_free_macro_block_count() const;
   int64_t get_used_macro_block_count() const;
   int64_t get_max_macro_block_count(int64_t reserved_size) const;
+  int get_all_macro_ids(ObArray<MacroBlockId> &ids_array);
 
   int check_macro_block_free(const MacroBlockId &macro_id, bool &is_free) const;
   int get_bad_block_infos(common::ObIArray<ObBadBlockInfo> &bad_block_infos);
@@ -381,10 +382,6 @@ private:
   void enable_mark_sweep() { ATOMIC_SET(&is_mark_sweep_enabled_, true); }
   bool is_mark_sweep_enabled() { return ATOMIC_LOAD(&is_mark_sweep_enabled_); }
 
-  int  wait_mark_sweep_finish();
-  void set_mark_sweep_doing();
-  void set_mark_sweep_done();
-
   int  extend_file_size_if_need();
   bool check_can_be_extend(
       const int64_t reserved_size);
@@ -470,8 +467,7 @@ private:
   common::SpinRWLock marker_lock_;
 
   bool is_mark_sweep_enabled_;
-  bool is_doing_mark_sweep_;
-  ObThreadCond cond_; // for mark sweep
+  common::SpinRWLock sweep_lock_;
 
   MarkBlockTask mark_block_task_;
   InspectBadBlockTask inspect_bad_block_task_;

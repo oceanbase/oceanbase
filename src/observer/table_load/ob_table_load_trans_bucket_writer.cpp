@@ -315,7 +315,7 @@ int ObTableLoadTransBucketWriter::write_for_partitioned(SessionContext &session_
   ObArray<ObNewRow> part_keys;
   ObArray<int64_t> row_idxs;
   ObTableLoadErrorRowHandler *error_row_handler =
-        trans_ctx_->ctx_->store_ctx_->error_row_handler_;
+        coordinator_ctx_->error_row_handler_;
   partition_ids.set_block_allocator(common::ModulePageAllocator(allocator));
   for (int64_t i = 0; OB_SUCC(ret) && i < obj_rows.count(); ++i) {
     ObNewRow part_key;

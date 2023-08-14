@@ -604,21 +604,25 @@ int ObOptimizerStatsGatheringOp::generate_stat_param(ObTableStatParam &param)
       param.global_tablet_id_ = MY_SPEC.table_id_;
       param.part_stat_param_.need_modify_ = false;
       param.subpart_stat_param_.need_modify_ = false;
-      for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.column_ids_.count(); i++) {
-        ObColumnStatParam col_param;
-        col_param.column_id_ = MY_SPEC.column_ids_.at(i);
-        const ObColumnSchemaV2 *col_schema =  nullptr;
-        if (OB_FAIL(schema_guard->get_column_schema(tenant_id_, MY_SPEC.table_id_, col_param.column_id_, col_schema))) {
-          LOG_WARN("can't get column schema", K(ret), K(tenant_id_), K(MY_SPEC.table_id_), K(col_param.column_id_));
-        } else if (OB_ISNULL(col_schema)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("can't get column schema", K(ret), K(tenant_id_), K(MY_SPEC.table_id_), K(col_param.column_id_));
-        } else {
-          col_param.cs_type_ = col_schema->get_collation_type();
-        }
-        if (OB_SUCC(ret) && OB_FAIL(param.column_params_.push_back(col_param))) {
-          LOG_WARN("fail to push back column param", K(ret));
-        }
+    } else {
+      param.part_stat_param_.need_modify_ = false;
+      param.subpart_stat_param_.need_modify_ = false;
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.column_ids_.count(); i++) {
+      ObColumnStatParam col_param;
+      col_param.column_id_ = MY_SPEC.column_ids_.at(i);
+      const ObColumnSchemaV2 *col_schema =  nullptr;
+      if (OB_FAIL(schema_guard->get_column_schema(tenant_id_, MY_SPEC.table_id_, col_param.column_id_, col_schema))) {
+        LOG_WARN("can't get column schema", K(ret), K(tenant_id_), K(MY_SPEC.table_id_), K(col_param.column_id_));
+      } else if (OB_ISNULL(col_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("can't get column schema", K(ret), K(tenant_id_), K(MY_SPEC.table_id_), K(col_param.column_id_));
+      } else {
+        col_param.cs_type_ = col_schema->get_collation_type();
+      }
+      if (OB_SUCC(ret) && OB_FAIL(param.column_params_.push_back(col_param))) {
+        LOG_WARN("fail to push back column param", K(ret));
       }
     }
   }

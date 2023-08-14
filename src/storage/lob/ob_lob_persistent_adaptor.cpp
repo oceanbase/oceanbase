@@ -279,7 +279,7 @@ int ObPersistentLobApator::prepare_lob_meta_dml(
       LOG_WARN("failed to build meta schema", K(ret), K(data_tablet), K(lob_meta_tablet));
     }
   } else {
-    if (param.seq_no_st_ != -1) {
+    if (param.seq_no_st_.is_valid()) {
       if (param.used_seq_cnt_ < param.total_seq_cnt_) {
         param.dml_base_param_->spec_seq_no_ = param.seq_no_st_ + param.used_seq_cnt_;
         param.used_seq_cnt_++;
@@ -314,7 +314,7 @@ int ObPersistentLobApator::build_lob_meta_table_dml(
   dml_base_param.encrypt_meta_ = &dml_base_param.encrypt_meta_legacy_;
   dml_base_param.snapshot_ = param.snapshot_;
   dml_base_param.check_schema_version_ = false; // lob tablet should not check schema version
-  if (param.seq_no_st_ != -1) {
+  if (param.seq_no_st_.is_valid()) {
     if (param.used_seq_cnt_ < param.total_seq_cnt_) {
       dml_base_param.spec_seq_no_ = param.seq_no_st_ + param.used_seq_cnt_;
       param.used_seq_cnt_++;

@@ -657,6 +657,8 @@ DEFINE_ORACLE_ERROR(OB_ERR_USE_ROWID_FOR_UPDATE, -4763, -1, "HY000", "invalid us
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_UNKNOWN_SET_OPTION, -4764, -1, "HY000", "unknown SET option", "unknown SET option \'%s\'", 600, "unknown SET option", "unknown SET option \'%s\'");
 DEFINE_ERROR_EXT_DEP(OB_CREATE_STANDBY_TENANT_FAILED, -4765, -1, "HY000", "create standby tenant may fail", "create standby tenant may fail, %s");
 DEFINE_ERROR_EXT_DEP(OB_LS_WAITING_SAFE_DESTROY, -4766, -1, "HY000", "ls waiting safe destory", "ls waiting safe destory, %s");
+DEFINE_ERROR(OB_LS_NOT_LEADER, -4767, -1, "HY000", "log stream is not leader log stream");
+DEFINE_ERROR_EXT_DEP(OB_LS_LOCK_CONFLICT, -4768, -1, "HY000", "ls lock conflict", "ls lock conflict, %s");
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
@@ -1138,6 +1140,11 @@ DEFINE_ERROR(OB_ERR_GENCOL_LEGIT_CHECK_FAILED, -5500, -1, "HY000", "Legitimacy c
 DEFINE_ORACLE_ERROR(OB_ERR_GROUPING_FUNC_WITHOUT_GROUP_BY, -5501, -1, "42000", "GROUPING function only supported with GROUP BY CUBE or ROLLUP", 30481, "GROUPING function only supported with GROUP BY CUBE or ROLLUP");
 // for rename column in mysql mode
 DEFINE_ERROR_EXT(OB_ERR_DEPENDENT_BY_PARTITION_FUNC, -5502, ER_DEPENDENT_BY_PARTITION_FUNC, "HY000", "Column has a partitioning function dependency and cannot be dropped or renamed.", "Column '%.*s' has a partitioning function dependency and cannot be dropped or renamed.");
+
+DEFINE_ERROR(OB_ERR_VIEW_SELECT_CONTAIN_INTO, -5503, ER_VIEW_SELECT_CLAUSE, "HY000", "View's SELECT contains a 'INTO' clause.");
+DEFINE_ORACLE_ERROR(OB_ERR_DEFAULT_NOT_ALLOWED, -5504, -1, "HY000", "Virtual column cannot have a default value", 54025, "Virtual column cannot have a default value");
+DEFINE_ORACLE_ERROR(OB_ERR_MODIFY_REALCOL_TO_GENCOL, -5505, -1, "HY000", "Real column cannot have an expression", 54026, "Real column cannot have an expression");
+DEFINE_ORACLE_ERROR(OB_ERR_MODIFY_TYPE_OF_GENCOL, -5506, -1, "HY000", "cannot modify data-type of virtual column", 54027, "cannot modify data-type of virtual column");
 
 DEFINE_ERROR_EXT(OB_ERR_SP_ALREADY_EXISTS, -5541, ER_SP_ALREADY_EXISTS, "42000", "procedure/function already exists", "%s %.*s already exists");
 DEFINE_ERROR_EXT(OB_ERR_SP_DOES_NOT_EXIST, -5542, ER_SP_DOES_NOT_EXIST, "42000", "procedure/function does not exist", "%s %.*s.%.*s does not exist");

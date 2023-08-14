@@ -49,7 +49,7 @@ public:
   virtual bool on_memtable(const ObIMemtable * const memtable)
   { UNUSED(memtable); return false; }
   virtual ObIMemtable* get_memtable() const { return nullptr; }
-  virtual int64_t get_seq_no() const { return 0; }
+  virtual transaction::ObTxSEQ get_seq_no() const { return transaction::ObTxSEQ::INVL(); }
   virtual int del() { return remove(); }
   virtual bool is_need_free() const { return true; }
   virtual bool log_synced() const { return false; }

@@ -233,8 +233,8 @@ int ObExprObjAccess::ExtraInfo::get_collection_attr(int64_t* params,
   int64_t element_idx;
   CK (OB_NOT_NULL(current_coll));
   if (OB_SUCC(ret) && !current_coll->is_inited()) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("", K(ret), KPC(current_coll));
+    ret = OB_ERR_COLLECION_NULL;
+    LOG_WARN("Reference to uninitialized collection", K(ret), KPC(current_coll));
   }
   if (OB_SUCC(ret) && !current_access.is_property()) {
     if (current_access.is_const()) {
@@ -383,7 +383,7 @@ int ObExprObjAccess::ExtraInfo::calc(ObObj &result,
       OZ (get_attr_func(param_array.count(), param_ptr, &attr_addr, *ctx));
     }
     if (OB_FAIL(ret)) {
-      if (OB_NOT_INIT == ret && pl::ObCollectionType::EXISTS_PROPERTY == property_type_) {
+      if (OB_ERR_COLLECION_NULL == ret && pl::ObCollectionType::EXISTS_PROPERTY == property_type_) {
         ret = OB_SUCCESS;
         result.set_tinyint(0);
       }

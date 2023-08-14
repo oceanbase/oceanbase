@@ -139,7 +139,7 @@ public:
 
   int check_sql_sequence_can_read(
       const transaction::ObTransID &data_trans_id,
-      const int64_t sql_sequence,
+      const transaction::ObTxSEQ &sql_sequence,
       const share::SCN scn,
       bool &can_read)
   {

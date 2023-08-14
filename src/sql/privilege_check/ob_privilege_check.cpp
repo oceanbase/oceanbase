@@ -3054,7 +3054,8 @@ int ObPrivilegeCheck::can_do_grant_on_db_table(
       || 0 == db_name.case_compare(OB_RECYCLEBIN_SCHEMA_NAME)
       || 0 == db_name.case_compare(OB_PUBLIC_SCHEMA_NAME)
       || 0 == db_name.case_compare(OB_SYS_DATABASE_NAME)) {
-      if (OB_PRIV_HAS_OTHER(priv_set, OB_PRIV_SELECT)) {
+      if (0 == db_name.case_compare(OB_INFORMATION_SCHEMA_NAME)
+        || OB_PRIV_HAS_OTHER(priv_set, OB_PRIV_SELECT)) {
         ret = OB_ERR_NO_DB_PRIVILEGE;
         LOG_USER_ERROR(OB_ERR_NO_DB_PRIVILEGE, session_priv.user_name_.length(), session_priv.user_name_.ptr(),
                        session_priv.host_name_.length(),session_priv.host_name_.ptr(),
@@ -3070,6 +3071,13 @@ int ObPrivilegeCheck::can_do_grant_on_db_table(
                        table_name.length(), table_name.ptr());
       }
     } else { }//do nothing
+  } else {
+    if (0 == db_name.case_compare(OB_INFORMATION_SCHEMA_NAME)) {
+      ret = OB_ERR_NO_DB_PRIVILEGE;
+      LOG_USER_ERROR(OB_ERR_NO_DB_PRIVILEGE, session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                     session_priv.host_name_.length(),session_priv.host_name_.ptr(),
+                     db_name.length(), db_name.ptr());
+    }
   }
   return ret;
 }

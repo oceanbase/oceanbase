@@ -146,9 +146,9 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
   } else if (OB_FAIL(lob_iter_ctx->locator_.get_location_info(location_info))) {
   } else {
     param.tx_desc_ = NULL;
-    param.snapshot_.core_.tx_id_ = tx_info->tx_id_;
-    param.snapshot_.core_.version_.convert_for_tx(tx_info->version_);
-    param.snapshot_.core_.scn_ = tx_info->scn_;
+    param.snapshot_.core_.tx_id_ = tx_info->snapshot_tx_id_;
+    param.snapshot_.core_.version_.convert_for_tx(tx_info->snapshot_version_);
+    param.snapshot_.core_.scn_ = transaction::ObTxSEQ::cast_from_int(tx_info->snapshot_seq_);
     param.snapshot_.valid_= true;
     param.snapshot_.source_ = transaction::ObTxReadSnapshot::SRC::LS;
     param.snapshot_.snapshot_lsid_ = share::ObLSID(location_info->ls_id_);

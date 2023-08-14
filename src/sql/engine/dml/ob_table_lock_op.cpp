@@ -119,7 +119,7 @@ ObTableLockOp::ObTableLockOp(ObExecContext &exec_ctx,
                              const ObOpSpec &spec,
                              ObOpInput *input)
   : ObTableModifyOp(exec_ctx, spec, input),
-    savepoint_no_(0),
+    savepoint_no_(),
     need_return_row_(false)
 {
 }

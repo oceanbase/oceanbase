@@ -492,7 +492,7 @@ struct ObLobDataOutRowCtx
   uint64_t op_ : 8;
   uint64_t offset_ : 55;
   uint64_t check_sum_;
-  uint64_t seq_no_st_;
+  int64_t seq_no_st_;
   uint32_t seq_no_cnt_;
   uint32_t del_seq_no_cnt_; // for sql update
   uint64_t modified_len_;
@@ -803,13 +803,13 @@ struct ObMemLobTxInfo
 {
   ObMemLobTxInfo(){}
   ObMemLobTxInfo(int64_t snapshot_ver, int64_t tx_id, int64_t scn) :
-    version_(snapshot_ver), tx_id_(tx_id), scn_(scn)
+    snapshot_version_(snapshot_ver), snapshot_tx_id_(tx_id), snapshot_seq_(scn)
   {}
-  TO_STRING_KV(K_(version), K_(tx_id), K_(scn));
+  TO_STRING_KV(K_(snapshot_version), K_(snapshot_tx_id), K_(snapshot_seq));
 
-  int64_t version_;
-  int64_t tx_id_;
-  int64_t scn_;
+  int64_t snapshot_version_;
+  int64_t snapshot_tx_id_;
+  int64_t snapshot_seq_;
   char data_[0];
 };
 
@@ -2048,9 +2048,7 @@ inline ObObj::ObObj(const ObObj &other)
 
 inline void ObObj::reset()
 {
-  meta_.set_null();
-  meta_.set_collation_type(CS_TYPE_INVALID);
-  meta_.set_collation_level(CS_LEVEL_INVALID);
+  meta_.reset();
   val_len_ = 0;
   v_.int64_ = 0;
 }

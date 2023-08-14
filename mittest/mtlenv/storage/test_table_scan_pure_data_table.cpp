@@ -114,7 +114,7 @@ void TestTableScanPureDataTable::insert_data_to_tablet(MockObAccessService *acce
   // 2. create savepoint (can be rollbacked)
   ObTxParam tx_param;
   TestDmlCommon::build_tx_param(tx_param);
-  int64_t savepoint = 0;
+  ObTxSEQ savepoint;
   ASSERT_EQ(OB_SUCCESS, tx_service->create_implicit_savepoint(*tx_desc, tx_param, savepoint, true));
   // 3. acquire snapshot (write also need snapshot)
   ObTxIsolationLevel isolation = ObTxIsolationLevel::RC;

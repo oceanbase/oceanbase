@@ -29,12 +29,12 @@ public:
     : trans_version_(share::SCN::max_scn()),
     scn_(share::SCN::max_scn()),
     trans_id_(),
-    seq_no_(0) {}
+    seq_no_() {}
 
   void set(const share::SCN trans_version,
            const share::SCN scn,
            const transaction::ObTransID trans_id,
-           const int64_t seq_no)
+           const transaction::ObTxSEQ &seq_no)
   {
     trans_version_ = trans_version;
     scn_ = scn;
@@ -47,14 +47,14 @@ public:
     trans_version_ = share::SCN::max_scn();
     scn_ = share::SCN::max_scn();
     trans_id_.reset();
-    seq_no_ = 0;
+    seq_no_.reset();
   }
 
   TO_STRING_KV(K_(trans_version), K_(scn), K_(trans_id), K_(seq_no));
   share::SCN trans_version_;
   share::SCN scn_;
   transaction::ObTransID trans_id_;
-  int64_t seq_no_;
+  transaction::ObTxSEQ seq_no_;
 public:
   static const int64_t MAX_TRANS_STRING_SIZE = 120;
 };

@@ -50,9 +50,14 @@ int ObExprFormat::calc_result_typeN(ObExprResType &type,
 {
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == type_array || params_count != 2)) {
+  if (OB_UNLIKELY(NULL == type_array || (params_count != 2 && params_count != 3))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument.", K(ret), K(type_array), K(params_count));
+  } else if (params_count == 3) {
+    //to do, format function support a optional locale parameter
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("format function not support an optional locale parameter", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "optional locale parameter of format");
   } else if (OB_FAIL(calc_result_type(type, type_array))) {
     LOG_WARN("failed to calc result type", K(ret));
   } else {

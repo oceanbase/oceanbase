@@ -462,7 +462,7 @@ int ObTableReplaceOp::do_replace_into()
   int ret = OB_SUCCESS;
   bool is_iter_end = false;
   while (OB_SUCC(ret) && !is_iter_end) {
-    int64_t savepoint_no = 0;
+    transaction::ObTxSEQ savepoint_no;
     // must set conflict_row fetch flag
     add_need_conflict_result_flag();
     NG_TRACE_TIMES(2, replace_load_all_row);

@@ -248,9 +248,7 @@ void ObTxLogGenerator::gen_redo_log()
 
 void ObTxLogGenerator::gen_rollback_to_log()
 {
-  ObTxRollbackToLog rollback_to_log(2, 1);
-//  rollback_to_log.from_ = 2;
-//  rollback_to_log.to_ = 1;
+  ObTxRollbackToLog rollback_to_log(ObTxSEQ(2, 0), ObTxSEQ(1, 0));
   EXPECT_EQ(OB_SUCCESS, block_builder_.fill_tx_log_except_redo(rollback_to_log));
 }
 

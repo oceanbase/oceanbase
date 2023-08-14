@@ -337,9 +337,6 @@ int ObLSRestoreTaskMgr::schedule_tablet_group_restore(
   } else if (is_exist) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("task id exist", K(ret), K(task_id), K(to_restore_tg));
-  } else if (OB_RESTORE_MAX_DAG_NET_NUM <= tablet_map_.size()) {
-    reach_dag_limit = true;
-    LOG_INFO("two many restore dag net, wait later", "dag_net num", tablet_map_.size());
   } else if (OB_FAIL(tablet_map_.set_refactored(task_id, to_restore_tg))) {
     LOG_WARN("fail to set task id map", K(ret), K(task_id), K(to_restore_tg));
   } else {
@@ -669,7 +666,8 @@ int ObLSRestoreTaskMgr::check_need_reload_tablets_(bool &reload)
   } else if (is_follower_()) {
     // follower can reload tablets only if leader has been restored except at QUICK_RESTORE or RESTORE_MAJOR.
     bool finish = true;
-    if (!ls_restore_status.is_quick_restore()
+    if (!ls_restore_status.is_restore_tablets_meta()
+        && !ls_restore_status.is_quick_restore()
         && !ls_restore_status.is_restore_major_data()
         && OB_FAIL(restore_state_handler_->check_leader_restore_finish(finish))) {
       LOG_WARN("fail to check leader restore finish", K(ret), KPC_(restore_state_handler));
@@ -723,6 +721,7 @@ int ObLSRestoreTaskMgr::check_tablet_need_discard_when_reload_(
     } else if (is_finish) {
       discard = true;
       LOG_DEBUG("skip restored tablet", K(tablet_id), K(ls_restore_status), "ha_status", tablet_meta.ha_status_);
+    } else if (ls_restore_status.is_restore_tablets_meta()) {
     } else if (ls_restore_status.is_quick_restore()) {
     } else if (ls_restore_status.is_restore_major_data()) {
     } else if (is_follower && !has_checked_leader_done_) {
@@ -914,7 +913,7 @@ int ObLSRestoreTaskMgr::choose_tablets_from_wait_set_(
       }
     } else if (OB_FAIL(tablet_group.tablet_list_.push_back(iter->first))) {
       LOG_WARN("fail to push backup tablet", K(ret));
-    } else if (tablet_group.count() >= OB_LS_RESOTRE_TABLET_DAG_NET_BATCH_NUM) {
+    } else if (tablet_group.count() >= LOW_PRI_TABLETS_BATCH_NUM) {
       break;
     }
   }
@@ -968,7 +967,7 @@ int ObLSRestoreTaskMgr::choose_tablets_from_high_pri_tablet_set_(
       LOG_INFO("this tablet need wait transfer replace", K_(ls_id), K(tablet_id));
     } else if (OB_FAIL(tablet_group.tablet_list_.push_back(tablet_id))) {
       LOG_WARN("fail to push backup tablet", K(ret));
-    } else if (tablet_group.count() >= OB_LS_RESOTRE_TABLET_DAG_NET_BATCH_NUM) {
+    } else if (tablet_group.count() >= HIGH_PRI_TABLETS_BATCH_NUM) {
       break;
     }
   }

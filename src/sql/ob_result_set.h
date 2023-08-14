@@ -302,7 +302,7 @@ public:
   // 深拷计划中的field columns，存放在field_columns_成员中
   int copy_field_columns(const ObPhysicalPlan &plan);
   bool has_implicit_cursor() const;
-  int switch_implicit_cursor();
+  int switch_implicit_cursor(int64_t &affected_rows);
   void reset_implicit_cursor_idx()
   {
     if (get_exec_context().get_physical_plan_ctx() != nullptr)

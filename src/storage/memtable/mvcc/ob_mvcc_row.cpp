@@ -146,7 +146,7 @@ void ObMvccTransNode::get_snapshot_version_barrier(int64_t &version,
 }
 
 void ObMvccTransNode::get_trans_id_and_seq_no(ObTransID &tx_id,
-                                              int64_t &seq_no)
+                                              ObTxSEQ &seq_no)
 {
   tx_id = tx_id_;
   seq_no = seq_no_;
@@ -233,7 +233,7 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           & (~SNAPSHOT_VERSION_BARRIER_BIT),
                           snapshot_version_barrier_ >> 62,
                           to_cstring(*mtd),
-                          seq_no_);
+                          seq_no_.cast_to_int());
   return pos;
 }
 
@@ -820,7 +820,7 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
   ObMvccTransNode *iter = ATOMIC_LOAD(&list_head_);
   ObTransID writer_tx_id = ctx.get_tx_id();
   const SCN snapshot_version = snapshot.version_;
-  const int64_t reader_seq_no = snapshot.scn_;
+  const ObTxSEQ reader_seq_no = snapshot.scn_;
   bool &can_insert = res.can_insert_;
   bool &need_insert = res.need_insert_;
   bool &is_new_locked = res.is_new_locked_;

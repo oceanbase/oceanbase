@@ -239,18 +239,9 @@ void ObRemoteFetchWorker::do_thread_task_()
 {
   int ret = OB_SUCCESS;
   int64_t size = task_queue_.size();
-  if (0 != get_thread_idx() || lib::Threads::get_thread_count() <= 1) {
-    for (int64_t i = 0; i < size && OB_SUCC(ret) && !has_set_stop(); i++) {
-      if (OB_FAIL(handle_single_task_())) {
-        LOG_WARN("handle single task failed", K(ret));
-      }
-    }
-  }
-
-  if (0 == get_thread_idx())
-  {
-    if (OB_FAIL(try_consume_data_())) {
-      LOG_WARN("try_consume_data_ failed", K(ret));
+  for (int64_t i = 0; i < size && OB_SUCC(ret) && !has_set_stop(); i++) {
+    if (OB_FAIL(handle_single_task_())) {
+      LOG_WARN("handle single task failed", K(ret));
     }
   }
 
@@ -357,70 +348,24 @@ bool ObRemoteFetchWorker::need_fetch_log_(const share::ObLSID &id)
   return bret;
 }
 
-int ObRemoteFetchWorker::submit_entries_(ObFetchLogTask &task)
+int ObRemoteFetchWorker::push_submit_array_(ObFetchLogTask &task)
 {
   int ret = OB_SUCCESS;
-  LogGroupEntry entry;
-  const char *buf = NULL;
-  int64_t size = 0;
-  LSN lsn;
   const ObLSID id = task.id_;
-  while (OB_SUCC(ret) && ! has_set_stop()) {
-    if (OB_FAIL(task.iter_.next(entry, lsn, buf, size))) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("ObRemoteLogIterator next failed", K(task));
-      } else {
-        LOG_TRACE("ObRemoteLogIterator to end", K(task.iter_));
-      }
-    } else if (OB_UNLIKELY(! entry.check_integrity())) {
-      ret = OB_INVALID_DATA;
-      LOG_WARN("entry is invalid", K(entry), K(lsn), K(task));
-    } else if (task.cur_lsn_ > lsn) {
-      LOG_INFO("repeated log, just skip", K(lsn), K(entry), K(task));
-    } else if (OB_FAIL(submit_log_(id, task.proposal_id_, lsn,
-            entry.get_scn(), buf, entry.get_serialize_size()))) {
-      LOG_WARN("submit log failed", K(buf), K(entry), K(lsn), K(task));
-    } else {
-      task.cur_lsn_ = lsn + entry.get_serialize_size();
+  DEBUG_SYNC(BEFORE_RESTORE_SERVICE_PUSH_FETCH_DATA);
+  GET_RESTORE_HANDLER_CTX(id) {
+    if (OB_FAIL(restore_handler->submit_sorted_task(task))) {
+      LOG_WARN("submit sort task failed", K(ret), K(task));
     }
-  } // while
-  if (OB_ITER_END == ret) {
-    if (lsn.is_valid()) {
-      LOG_INFO("submit_entries_ succ", K(id), K(lsn), K(entry.get_scn()), K(task));
-    }
-    ret = OB_SUCCESS;
   }
   return ret;
 }
 
-int ObRemoteFetchWorker::submit_log_(const ObLSID &id,
-    const int64_t proposal_id,
-    const LSN &lsn,
-    const SCN &scn,
-    const char *buf,
-    const int64_t buf_size)
+bool ObRemoteFetchWorker::is_fatal_error_(const int ret_code) const
 {
-  int ret = OB_SUCCESS;
-  do {
-    GET_RESTORE_HANDLER_CTX(id) {
-      if (OB_FAIL(restore_handler->raw_write(proposal_id, lsn, scn, buf, buf_size))) {
-        if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
-          ret = OB_SUCCESS;
-        } else if (OB_RESTORE_LOG_TO_END == ret) {
-          // do nothing
-        } else {
-          LOG_WARN("raw write failed", K(ret), K(id), K(lsn), K(buf), K(buf_size));
-        }
-      }
-    }
-  } while (OB_LOG_OUTOF_DISK_SPACE == ret && ! has_set_stop());
-  // submit log until successfully if which can succeed with retry
-  // except NOT MASTER or OTHER FATAL ERROR
-
-  if (OB_ERR_UNEXPECTED == ret) {
-    report_error_(id, ret, lsn, ObLogRestoreErrorContext::ErrorType::SUBMIT_LOG);
-  }
-  return ret;
+  return OB_ARCHIVE_ROUND_NOT_CONTINUOUS == ret_code
+    || OB_ARCHIVE_LOG_RECYCLED == ret_code
+    || OB_INVALID_BACKUP_DEST == ret_code;
 }
 
 int ObRemoteFetchWorker::try_retire_(ObFetchLogTask *&task)
@@ -433,7 +378,6 @@ int ObRemoteFetchWorker::try_retire_(ObFetchLogTask *&task)
     } else if (done) {
       inner_free_task_(*task);
       task = NULL;
-      restore_service_->signal();
     } else {
       if (OB_FAIL(submit_fetch_log_task(task))) {
         LOG_ERROR("submit fetch log task failed", K(ret), KPC(task));
@@ -451,129 +395,10 @@ int ObRemoteFetchWorker::try_retire_(ObFetchLogTask *&task)
   return ret;
 }
 
-int ObRemoteFetchWorker::push_submit_array_(ObFetchLogTask &task)
-{
-  int ret = OB_SUCCESS;
-  const ObLSID id = task.id_;
-  DEBUG_SYNC(BEFORE_RESTORE_SERVICE_PUSH_FETCH_DATA);
-  GET_RESTORE_HANDLER_CTX(id) {
-    if (OB_FAIL(restore_handler->submit_sorted_task(task))) {
-      LOG_WARN("submit sort task failed", K(ret), K(task));
-    }
-  }
-  return ret;
-}
-
-int ObRemoteFetchWorker::try_consume_data_()
-{
-  int ret = OB_SUCCESS;
-  if (0 != get_thread_idx()) {
-    // do nothing
-  } else if (OB_FAIL(do_consume_data_())) {
-    LOG_WARN("do consume data failed", K(ret));
-  }
-  return ret;
-}
-
-int ObRemoteFetchWorker::do_consume_data_()
-{
-  int ret = OB_SUCCESS;
-  ObFetchLogTask *task = NULL;
-  ObLS *ls = NULL;
-  ObLSIterator *iter = NULL;
-  common::ObSharedGuard<ObLSIterator> guard;
-  if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::LOG_MOD))) {
-    LOG_WARN("get ls iter failed", K(ret));
-  } else if (OB_ISNULL(iter = guard.get_ptr())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("iter is NULL", K(ret), K(iter));
-  } else {
-    while (OB_SUCC(ret) && ! has_set_stop()) {
-     ls = NULL;
-     if (OB_FAIL(iter->get_next(ls))) {
-       if (OB_ITER_END != ret) {
-         LOG_WARN("iter ls get next failed", K(ret));
-       } else {
-         LOG_TRACE("iter to end", K(ret));
-       }
-      } else if (OB_ISNULL(ls)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("ls is NULL", K(ret), K(ls));
-      } else if (OB_FAIL(foreach_ls_(ls->get_ls_id()))) {
-        LOG_WARN("foreach ls failed", K(ret), K(ls));
-      }
-    }
-    // rewrite ret code
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    }
-  }
-
-  return ret;
-}
-
-int ObRemoteFetchWorker::foreach_ls_(const ObLSID &id)
-{
-  int ret = OB_SUCCESS;
-  const int64_t MAX_TASK_COUNT = 6;  // max task count for single turn
-  ObFetchLogTask *task = NULL;
-  for (int64_t i = 0; i < MAX_TASK_COUNT && OB_SUCC(ret); i++) {
-    GET_RESTORE_HANDLER_CTX(id) {
-      task = NULL;
-      // get task only if it is in turn
-      if (OB_FAIL(restore_handler->get_next_sorted_task(task))) {
-        if (OB_NOT_MASTER == ret) {
-          // do nothing
-          LOG_TRACE("ls not master, just skip", K(ret), K(id));
-        } else {
-          LOG_WARN("get sorted task failed", K(ret), K(id));
-        }
-      } else if (NULL == task) {
-        break;
-      } else if (OB_FAIL(submit_entries_(*task))) {
-        if (OB_RESTORE_LOG_TO_END != ret) {
-          LOG_WARN("submit_entries_ failed", K(ret), KPC(task));
-        }
-      }
-
-      // try retire task, if task is consumed done or stale, free it,
-      // otherwise push_back to task_queue_
-      if (NULL != task) {
-        int tmp_ret = OB_SUCCESS;
-        task->iter_.update_source_cb();
-        if (OB_SUCCESS != (tmp_ret = try_retire_(task))) {
-          LOG_WARN("retire task failed", K(tmp_ret), KP(task));
-        }
-      }
-    }
-  }
-  // rewrite ret code
-  ret = OB_SUCCESS;
-  return ret;
-}
-
 void ObRemoteFetchWorker::inner_free_task_(ObFetchLogTask &task)
 {
   task.reset();
   mtl_free(&task);
-}
-
-bool ObRemoteFetchWorker::is_retry_ret_code_(const int ret_code) const
-{
-  return OB_ITER_END == ret_code
-    || OB_NOT_MASTER == ret_code
-    || OB_EAGAIN == ret_code
-    || OB_ALLOCATE_MEMORY_FAILED == ret_code
-    || OB_LS_NOT_EXIST == ret_code
-    || OB_ENTRY_NOT_EXIST == ret_code
-    || is_io_error(ret_code);
-}
-
-bool ObRemoteFetchWorker::is_fatal_error_(const int ret_code) const
-{
-  return OB_ARCHIVE_ROUND_NOT_CONTINUOUS == ret_code
-    || OB_ARCHIVE_LOG_RECYCLED == ret_code
-    || OB_INVALID_BACKUP_DEST == ret_code;
 }
 
 void ObRemoteFetchWorker::report_error_(const ObLSID &id,

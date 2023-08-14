@@ -1305,8 +1305,11 @@ int ObStartCompleteMigrationTask::change_member_list_()
   share::SCN ls_transfer_scn;
   uint64_t cluster_version = 0;
   palf::LogConfigVersion fake_config_version;
-
-  if (!is_inited_) {
+#ifdef ERRSIM
+  ret = OB_E(EventTable::EN_SET_MEMBER_LIST_FAIL) OB_SUCCESS;
+#endif
+  if (OB_FAIL(ret)) {
+  } else if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start complete migration task do not init", K(ret));
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {

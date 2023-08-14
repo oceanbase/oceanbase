@@ -31,16 +31,18 @@
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_tenant_schema_service.h"
 #include "share/ob_tablet_autoincrement_service.h"
-#include "storage/access/ob_dml_param.h"
 #include "storage/ob_dml_running_ctx.h"
 #include "storage/ob_i_store.h"
 #include "storage/ob_i_table.h"
 #include "storage/ob_row_reshape.h"
 #include "storage/ob_sync_tablet_seq_clog.h"
 #include "storage/ob_storage_schema.h"
+#include "storage/ob_tenant_tablet_stat_mgr.h"
+#include "storage/access/ob_dml_param.h"
 #include "storage/blocksstable/ob_sstable.h"
 #include "storage/blocksstable/ob_sstable_sec_meta_iterator.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
+#include "storage/compaction/ob_extra_medium_info.h"
 #include "storage/compaction/ob_tenant_freeze_info_mgr.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/memtable/ob_memtable.h"
@@ -60,15 +62,13 @@
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "storage/tablet/ob_tablet_memtable_mgr.h"
 #include "storage/tablet/ob_tablet_ddl_info.h"
+#include "storage/tablet/ob_tablet_medium_info_reader.h"
 #include "storage/tablet/ob_tablet_mds_node_dump_operator.h"
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "storage/tablet/ob_tablet_binding_mds_user_data.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "storage/ob_tenant_tablet_stat_mgr.h"
-#include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "storage/tablet/ob_tablet_medium_info_reader.h"
 
 namespace oceanbase
 {
@@ -1452,15 +1452,20 @@ int ObTablet::deserialize(
         start_pos += rowkey_read_info_->get_deep_copy_size();
       }
     } else {
+      // `pull_memtables` pulls ddl kvs into `ddl_kvs_addr` array which allocated by `allocator`.
+      // tiny tablet needs to deep copy `ddl_kvs_addr` array to `tablet_buf + start_pos`, and CANNOT additionally
+      // inc ref count. Cause `pull_memtables` already done this.
       if (OB_NOT_NULL(ddl_kvs_addr)) {
         const int64_t ddl_kv_size = sizeof(ObITable*) * DDL_KV_ARRAY_SIZE;
         if (remain < ddl_kv_size) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail to deep copy ddl kv to tablet", K(ret), K(remain), K(ddl_kv_size), K(ddl_kv_count));
         } else {
+          ddl_kv_count_ = ddl_kv_count;
           ddl_kvs_ = reinterpret_cast<ObITable**>(tablet_buf + start_pos);
-          if (OB_FAIL(assign_ddl_kvs(ddl_kvs_addr, ddl_kv_count))) {
-            LOG_WARN("fail to assign ddl_kvs", K(ret), KP(ddl_kvs_addr), K(ddl_kv_count), KP(tablet_buf), K(start_pos));
+          if (OB_ISNULL(MEMCPY(ddl_kvs_, ddl_kvs_addr, ddl_kv_size))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to memcpy ddl_kvs", K(ret), KP(ddl_kvs_), KP(ddl_kvs_addr), K(ddl_kv_count_));
           } else {
             start_pos += ddl_kv_size;
             remain -= ddl_kv_size;
@@ -4577,17 +4582,24 @@ int ObTablet::check_and_set_initial_state()
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = tablet_meta_.ls_id_;
   const ObTabletID &tablet_id = tablet_meta_.tablet_id_;
-  bool initial_state = true;
 
-  if (is_empty_shell()) {
-    initial_state = false;
-  } else if (OB_FAIL(check_initial_state(initial_state))) {
-    LOG_WARN("failed to check initial state", K(ret));
-  }
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else {
+    // for normal tablet(except ls inner tablet), if mds_checkpoint_scn equals initial SCN(value is 1),
+    // it means all kinds of mds data(including tablet status) has never been dumped to disk,
+    // then we think that this tablet is in initial state
+    bool initial_state = true;
+    if (is_ls_inner_tablet()) {
+      initial_state = false;
+    } else {
+      initial_state = (tablet_meta_.mds_checkpoint_scn_ == ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN);
+    }
 
-  if (OB_FAIL(ret)) {
-  } else if (!initial_state) {
-    if (OB_FAIL(set_initial_state(false/*initial_state*/))) {
+    if (initial_state) {
+      // do nothing
+    } else if (OB_FAIL(set_initial_state(false/*initial_state*/))) {
       LOG_WARN("failed to set initial state", K(ret));
     } else {
       LOG_DEBUG("set initial state to false", K(ret), K(ls_id), K(tablet_id));
@@ -4813,7 +4825,15 @@ int ObTablet::build_transfer_tablet_param(
     if (OB_FAIL(mig_tablet_param.transfer_info_.init(tablet_meta_.ls_id_, user_data.transfer_scn_, transfer_seq))) {
       LOG_WARN("failed to init transfer info", K(ret), K(tablet_meta_), K(user_data));
     } else if (OB_FAIL(read_mds_table(mig_tablet_param.allocator_, mds_table_data, false))) {
-      LOG_WARN("failed to read mds table", K(ret));
+      if (OB_EMPTY_RESULT == ret) {
+        // do nothing
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to read mds table", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(get_finish_medium_scn(finish_medium_scn))) {
       LOG_WARN("failed to get finish medium scn", K(ret));
     } else if (OB_FAIL(new_mds_data.init(mig_tablet_param.allocator_, mds_table_data, mds_data_, finish_medium_scn))) {
@@ -5081,6 +5101,8 @@ int ObTablet::read_mds_table(common::ObIAllocator &allocator, ObTabletMdsData &m
 {
   TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = tablet_meta_.ls_id_;
+  const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
   mds_data.reset();
   mds::MdsTableHandle mds_table_handle;
 
@@ -5091,10 +5113,8 @@ int ObTablet::read_mds_table(common::ObIAllocator &allocator, ObTabletMdsData &m
     LOG_WARN("failed to init mds data", K(ret));
   } else if (CLICK_FAIL(inner_get_mds_table(mds_table_handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-      LOG_INFO("mds table does not exist, may be released", K(ret),
-          "ls_id", tablet_meta_.ls_id_,
-          "tablet_id", tablet_meta_.tablet_id_);
+      ret = OB_EMPTY_RESULT;
+      LOG_INFO("mds table does not exist, may be released", K(ret), K(ls_id), K(tablet_id));
     } else {
       LOG_WARN("failed to get mds table", K(ret));
     }
@@ -5102,6 +5122,9 @@ int ObTablet::read_mds_table(common::ObIAllocator &allocator, ObTabletMdsData &m
     ObTabletDumpMdsNodeOperator op(mds_data, allocator);
     if (CLICK_FAIL(mds_table_handle.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(op, for_flush))) {
       LOG_WARN("failed to traverse mds table", K(ret));
+    } else if (!op.dumped()) {
+      ret = OB_EMPTY_RESULT;
+      LOG_INFO("read nothing from mds table", K(ret), K(ls_id), K(tablet_id));
     }
   }
 
@@ -5480,80 +5503,10 @@ int ObTablet::set_initial_state(const bool initial_state)
   return ret;
 }
 
-int ObTablet::check_initial_state(bool &initial_state)
-{
-  int ret = OB_SUCCESS;
-  initial_state = true;
-  const ObTabletComplexAddr<mds::MdsDumpKV> &uncommitted_tablet_status_addr = mds_data_.tablet_status_.uncommitted_kv_;
-  const ObTabletComplexAddr<mds::MdsDumpKV> &committed_tablet_status_addr = mds_data_.tablet_status_.committed_kv_;
-  ObTabletCreateDeleteMdsUserData uncommitted_data;
-  ObTabletCreateDeleteMdsUserData committed_data;
-  const mds::MdsDumpKV *uncommitted_kv = nullptr;
-  const mds::MdsDumpKV *committed_kv = nullptr;
-  ObArenaAllocator arena_allocator("mds_reader");
-
-  if (OB_UNLIKELY(!(uncommitted_tablet_status_addr.is_memory_object() || uncommitted_tablet_status_addr.is_disk_object())
-      || !(committed_tablet_status_addr.is_memory_object() || committed_tablet_status_addr.is_disk_object()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet status addr is not mem or disk type", K(ret), K(uncommitted_tablet_status_addr), K(committed_tablet_status_addr));
-  }
-
-  // TODO(@bowen.gbw): optimize, check initial state without IO
-  // TODO(@chenqingxiang.cqx): support using none addr to check initial state.
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObTabletMdsData::load_mds_dump_kv(arena_allocator, uncommitted_tablet_status_addr, uncommitted_kv))) {
-    LOG_WARN("failed to load mds dump kv", K(ret), K(uncommitted_tablet_status_addr));
-  } else if (OB_ISNULL(uncommitted_kv)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, mds dump kv is null", K(ret));
-  } else {
-    const common::ObString &user_data = uncommitted_kv->v_.user_data_;
-    int64_t pos = 0;
-    if (user_data.empty()) {
-      // uncommitted tablet status is empty
-    } else if (OB_FAIL(uncommitted_data.deserialize(user_data.ptr(), user_data.length(), pos))) {
-      LOG_WARN("failed to deserialize", K(user_data),
-               "user_data_length", user_data.length(),
-               "user_hash:%x", user_data.hash(),
-               "crc_check_number", uncommitted_kv->v_.crc_check_number_);
-    } else if (ObTabletStatus::MAX != uncommitted_data.tablet_status_) {
-      initial_state = false;
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (!initial_state) {
-    // no need to check committed tablet status
-  } else if (OB_FAIL(ObTabletMdsData::load_mds_dump_kv(arena_allocator, committed_tablet_status_addr, committed_kv))) {
-    LOG_WARN("failed to load mds dump kv", K(ret), K(committed_tablet_status_addr));
-  } else if (OB_ISNULL(committed_kv)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, mds dump kv is null", K(ret));
-  } else {
-    const common::ObString &user_data = committed_kv->v_.user_data_;
-    int64_t pos = 0;
-    if (user_data.empty()) {
-      // committed tablet status is empty
-    } else if (OB_FAIL(committed_data.deserialize(user_data.ptr(), user_data.length(), pos))) {
-      LOG_WARN("failed to deserialize", K(user_data),
-               "user_data_length", user_data.length(),
-               "user_hash:%x", user_data.hash(),
-               "crc_check_number", committed_kv->v_.crc_check_number_);
-    } else if (ObTabletStatus::MAX != committed_data.tablet_status_) {
-      initial_state = false;
-    }
-  }
-
-  ObTabletMdsData::free_mds_dump_kv(arena_allocator, uncommitted_kv);
-  ObTabletMdsData::free_mds_dump_kv(arena_allocator, committed_kv);
-
-  return ret;
-}
-
 int ObTablet::load_medium_info_list(
     common::ObArenaAllocator &allocator,
     const ObTabletComplexAddr<oceanbase::storage::ObTabletDumpedMediumInfo> &complex_addr,
-    const ObTaletExtraMediumInfo &extra_info,
+    const compaction::ObExtraMediumInfo &extra_info,
     compaction::ObMediumCompactionInfoList &medium_info_list)
 {
   int ret = OB_SUCCESS;
@@ -5586,7 +5539,15 @@ int ObTablet::get_fused_medium_info_list(
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else if (OB_FAIL(read_mds_table(allocator, mds_table_data, false))) {
-    LOG_WARN("failed to read mds table", K(ret));
+    if (OB_EMPTY_RESULT == ret) {
+      // do nothing
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to read mds table", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(get_finish_medium_scn(finish_medium_scn))) {
     LOG_WARN("failed to get finish medium scn", K(ret));
   } else if (OB_FAIL(new_mds_data.init(allocator, mds_table_data, mds_data_, finish_medium_scn))) {

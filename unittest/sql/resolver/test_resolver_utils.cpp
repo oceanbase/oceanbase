@@ -33,7 +33,7 @@ TEST_F(TestResovlerUtils, check_secure_path)
   int ret = OB_SUCCESS;
 
   {
-    ObString secure_file_priv("");
+    ObString secure_file_priv("/");
     ObString directory_path1("/tmp");
     ret = ObResolverUtils::check_secure_path(secure_file_priv, directory_path1);
     ASSERT_EQ(OB_SUCCESS, ret);

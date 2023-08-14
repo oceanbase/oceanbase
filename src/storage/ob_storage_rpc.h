@@ -299,6 +299,34 @@ public:
   common::ObMemberList member_list_;
 };
 
+struct ObFetchLSMemberAndLearnerListArg
+{
+  OB_UNIS_VERSION(2);
+public:
+  ObFetchLSMemberAndLearnerListArg();
+  virtual ~ObFetchLSMemberAndLearnerListArg() {}
+  bool is_valid() const;
+  void reset();
+
+  TO_STRING_KV(K_(tenant_id), K_(ls_id));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+};
+
+struct ObFetchLSMemberAndLearnerListInfo
+{
+  OB_UNIS_VERSION(2);
+public:
+  ObFetchLSMemberAndLearnerListInfo();
+  virtual ~ObFetchLSMemberAndLearnerListInfo() {}
+  bool is_valid() const;
+  void reset();
+
+  TO_STRING_KV(K_(member_list), K_(learner_list));
+  common::ObMemberList member_list_;
+  common::GlobalLearnerList learner_list_;
+};
+
 struct ObCopySSTableMacroRangeInfoArg final
 {
   OB_UNIS_VERSION(2);
@@ -743,7 +771,6 @@ public:
   RPC_SS(PR5 lob_query, OB_LOB_QUERY, (ObLobQueryArg), common::ObDataBuffer);
   RPC_SS(PR5 fetch_transfer_tablet_info, OB_FETCH_TRANSFER_TABLET_INFO, (ObTransferTabletInfoArg), common::ObDataBuffer);
   RPC_SS(PR5 fetch_ls_view, OB_HA_FETCH_LS_VIEW, (ObCopyLSViewArg), common::ObDataBuffer);
-
   RPC_S(PR5 fetch_ls_member_list, OB_HA_FETCH_LS_MEMBER_LIST, (ObFetchLSMemberListArg), ObFetchLSMemberListInfo);
   RPC_S(PR5 fetch_ls_meta_info, OB_HA_FETCH_LS_META_INFO, (ObFetchLSMetaInfoArg), ObFetchLSMetaInfoResp);
   RPC_S(PR5 fetch_ls_info, OB_HA_FETCH_LS_INFO, (ObCopyLSInfoArg), ObCopyLSInfo);
@@ -763,6 +790,7 @@ public:
   RPC_S(PR5 unlock_config_change, OB_HA_UNLOCK_CONFIG_CHANGE, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
   RPC_S(PR5 get_config_change_lock_stat, OB_HA_GET_CONFIG_CHANGE_LOCK_STAT, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
   RPC_S(PR5 wakeup_transfer_service, OB_HA_WAKEUP_TRANSFER_SERVICE, (ObStorageWakeupTransferServiceArg));
+  RPC_S(PR5 fetch_ls_member_and_learner_list, OB_HA_FETCH_LS_MEMBER_AND_LEARNER_LIST, (ObFetchLSMemberAndLearnerListArg), ObFetchLSMemberAndLearnerListInfo);
 };
 
 template <ObRpcPacketCode RPC_CODE>
@@ -854,6 +882,16 @@ class ObFetchLSMemberListP:
 public:
   explicit ObFetchLSMemberListP();
   virtual ~ObFetchLSMemberListP() { }
+protected:
+  int process();
+};
+
+class ObFetchLSMemberAndLearnerListP:
+    public ObStorageRpcProxy::Processor<OB_HA_FETCH_LS_MEMBER_AND_LEARNER_LIST>
+{
+public:
+  explicit ObFetchLSMemberAndLearnerListP();
+  virtual ~ObFetchLSMemberAndLearnerListP() { }
 protected:
   int process();
 };
@@ -1000,6 +1038,8 @@ public:
 
 protected:
   int process();
+protected:
+  int64_t max_tablet_num_;
 };
 
 class ObStorageBlockTxP:
@@ -1332,6 +1372,11 @@ public:
   virtual int wakeup_transfer_service(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info);
+  virtual int fetch_ls_member_and_learner_list(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const ObStorageHASrcInfo &src_info,
+      obrpc::ObFetchLSMemberAndLearnerListInfo &member_info);
 
 private:
   bool is_inited_;

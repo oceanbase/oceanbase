@@ -280,6 +280,13 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     }
   }
 
+  uint8_t is_truncate = 0;
+  if (OB_SUCC(ret) && !is_null_result) {
+    if (OB_FAIL(get_clause_opt(expr, ctx, 3, is_cover_by_error, is_truncate, 2))) {
+      LOG_WARN("failed to get mismatch option.", K(ret), K(mismatch_type));
+    }
+  }
+
   //  do seek
   //  chose wrapper
   int use_wrapper = 0;
@@ -371,13 +378,13 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     ObCollationType in_coll_type = expr.args_[0]->datum_meta_.cs_type_;
     ObCollationType dst_coll_type = expr.datum_meta_.cs_type_;
     ret = ObExprJsonValue::cast_to_res(&temp_allocator, expr, ctx, hits[0], OB_JSON_ON_RESPONSE_NULL, error_val,
-                  accuracy, dst_type, in_coll_type, dst_coll_type, res, mismatch_val_tmp, mismatch_type_tmp, is_type_cast, ascii_type);
+                  accuracy, dst_type, in_coll_type, dst_coll_type, res, mismatch_val_tmp, mismatch_type_tmp, is_type_cast, ascii_type, is_truncate);
   } else {
     if (is_null_json_obj) {
       ObJsonObject j_node_null(&temp_allocator);
       ObIJsonBase *jb_res = NULL;
       jb_res = &j_node_null;
-      if (OB_FAIL(set_result(dst_type, dst_len, jb_res, &temp_allocator, ctx, expr, res, error_type, ascii_type, pretty_type))) {
+      if (OB_FAIL(set_result(dst_type, dst_len, jb_res, &temp_allocator, ctx, expr, res, error_type, ascii_type, pretty_type, is_truncate))) {
         LOG_WARN("result set fail", K(ret));
       }
     } else if (use_wrapper == 1 || is_null_json_array) {
@@ -440,11 +447,11 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
         }
       }
       if (!is_null_json_array && try_set_error_val(&temp_allocator, ctx, expr, res, ret, error_type, mismatch_type, dst_type)) {
-      } else if (OB_FAIL(set_result(dst_type,dst_len, jb_res, &temp_allocator, ctx, expr, res, error_type, ascii_type, pretty_type))) {
+      } else if (OB_FAIL(set_result(dst_type,dst_len, jb_res, &temp_allocator, ctx, expr, res, error_type, ascii_type, pretty_type, is_truncate))) {
         LOG_WARN("result set fail", K(ret));
       }
     } else {
-      ret = set_result(dst_type, dst_len, hits[0], &temp_allocator, ctx, expr, res, error_type, ascii_type, pretty_type);
+      ret = set_result(dst_type, dst_len, hits[0], &temp_allocator, ctx, expr, res, error_type, ascii_type, pretty_type, is_truncate);
     }
   }
   return ret;
@@ -459,7 +466,8 @@ int ObExprJsonQuery::set_result(ObObjType dst_type,
                                 ObDatum &res,
                                 uint8_t error_type,
                                 uint8_t ascii_type,
-                                uint8_t pretty_type) {
+                                uint8_t pretty_type,
+                                uint8_t is_truncate) {
   INIT_SUCC(ret);
   if (dst_type == ObVarcharType || dst_type == ObLongTextType) {
     ObJsonBuffer jbuf(allocator);
@@ -475,14 +483,21 @@ int ObExprJsonQuery::set_result(ObObjType dst_type,
     if (OB_SUCC(ret)) {
       uint64_t length = res_string.length();
       if (dst_type == ObVarcharType && length  > dst_len) {
-        char res_ptr[OB_MAX_DECIMAL_PRECISION] = {0};
-        if (OB_ISNULL(ObCharset::lltostr(dst_len, res_ptr, 10, 1))) {
-          LOG_WARN("dst_len fail to string.", K(ret));
-        }
-        ret = OB_OPERATE_OVERFLOW;
-        LOG_USER_ERROR(OB_OPERATE_OVERFLOW, res_ptr, "json_query");
-        if (!try_set_error_val(allocator, ctx, expr, res, ret, error_type, OB_JSON_ON_MISMATCH_IMPLICIT, dst_type)) {
-          LOG_WARN("set error val fail", K(ret));
+        if (is_truncate) {
+          res_string.assign_ptr(res_string.ptr(), dst_len);
+          if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, res_string))) {
+            LOG_WARN("fail to pack json result", K(ret));
+          }
+        } else {
+          char res_ptr[OB_MAX_DECIMAL_PRECISION] = {0};
+          if (OB_ISNULL(ObCharset::lltostr(dst_len, res_ptr, 10, 1))) {
+            LOG_WARN("dst_len fail to string.", K(ret));
+          }
+          ret = OB_OPERATE_OVERFLOW;
+          LOG_USER_ERROR(OB_OPERATE_OVERFLOW, res_ptr, "json_query");
+          if (!try_set_error_val(allocator, ctx, expr, res, ret, error_type, OB_JSON_ON_MISMATCH_IMPLICIT, dst_type)) {
+            LOG_WARN("set error val fail", K(ret));
+          }
         }
       } else {
         ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
@@ -761,7 +776,7 @@ bool ObExprJsonQuery::try_set_error_val(common::ObIAllocator *allocator,
       ObJsonArray j_arr_res(allocator);
       ObIJsonBase *jb_res = NULL;
       jb_res = &j_arr_res;
-      if (OB_FAIL(set_result(dst_type, OB_MAX_TEXT_LENGTH, jb_res, allocator, ctx, expr, res, error_type, 0))) {
+      if (OB_FAIL(set_result(dst_type, OB_MAX_TEXT_LENGTH, jb_res, allocator, ctx, expr, res, error_type, 0, 0))) {
         LOG_WARN("result set fail", K(ret));
       }
     } else if (error_type == OB_JSON_ON_RESPONSE_EMPTY_OBJECT) {
@@ -769,7 +784,7 @@ bool ObExprJsonQuery::try_set_error_val(common::ObIAllocator *allocator,
       ObJsonObject j_node_null(allocator);
       ObIJsonBase *jb_res = NULL;
       jb_res = &j_node_null;
-      if (OB_FAIL(set_result(dst_type, OB_MAX_TEXT_LENGTH, jb_res, allocator, ctx, expr, res, error_type, 0))) {
+      if (OB_FAIL(set_result(dst_type, OB_MAX_TEXT_LENGTH, jb_res, allocator, ctx, expr, res, error_type, 0, 0))) {
         LOG_WARN("result set fail", K(ret));
       }
     } else if (error_type == OB_JSON_ON_RESPONSE_NULL || error_type == OB_JSON_ON_RESPONSE_IMPLICIT) {

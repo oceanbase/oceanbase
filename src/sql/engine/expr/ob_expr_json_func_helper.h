@@ -93,6 +93,9 @@ public:
   static int get_json_val(const common::ObObj &data, ObExprCtx &ctx,
                           bool is_bool, common::ObIAllocator *allocator,
                           ObIJsonBase*& j_base, bool to_bin = false);
+  static int oracle_datum2_json_val(const ObDatum *json_datum,  ObObjMeta& data_meta, common::ObIAllocator *allocator,
+                                    ObBasicSessionInfo *session, ObIJsonBase*& j_base, bool is_bool_data_type,
+                                    bool format_json = false, bool is_strict = false, bool is_bin = false);
 
   static int eval_oracle_json_val(ObExpr *expr, ObEvalCtx &ctx, common::ObIAllocator *allocator,
                                 ObIJsonBase*& j_base, bool format_json = false, bool is_strict = false, bool is_bin = false);
@@ -157,23 +160,6 @@ public:
                                              bool relax_type = true,
                                              bool format_json = false);
 
-  static int transform_convertible_2String(const ObExpr &expr,
-                                           ObEvalCtx &ctx,
-                                           const ObDatum &datum,
-                                           ObObjType type,
-                                           ObCollationType cs_type,
-                                           ObJsonBuffer &j_buf,
-                                           bool has_lob_header,
-                                           bool format_json,
-                                           bool strict_json,
-                                           int32_t pos);
-
-  static int transform_scalar_2String(ObEvalCtx &ctx,
-                                      const ObDatum &datum,
-                                      ObObjType type,
-                                      ObScale scale,
-                                      const ObTimeZoneInfo *tz_info,
-                                      ObJsonBuffer &j_buf);
   static bool is_cs_type_bin(ObCollationType &cs_type);
   static int get_timestamp_str_in_oracle_mode(ObEvalCtx &ctx,
                                                                 const ObDatum &datum,

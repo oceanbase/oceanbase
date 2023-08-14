@@ -562,7 +562,7 @@ int ObDMLResolver::pre_process_json_object_contain_star(ParseNode *node, common:
       } else if (value_node->type_ == T_OBJ_ACCESS_REF && OB_NOT_NULL(returning_node->raw_text_)) {
         if (OB_FAIL(check_is_json_constraint(*allocator_, value_node, format_json, 2))) {
           LOG_WARN("fail to check json constraint of col", K(ret));
-        } else if (returning_node->int16_values_[OB_NODE_CAST_TYPE_IDX] == T_VARCHAR && def_val.case_compare(returning_node->raw_text_) == 0 && format_json) {
+        } else if (returning_node->value_ == 0 && def_val.case_compare(returning_node->raw_text_) == 0 && format_json) {
           returning_node->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_JSON; /* data type */
           returning_node->int16_values_[OB_NODE_CAST_COLL_IDX] = INVALID_COLLATION;
           returning_node->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;        /* length */
@@ -648,13 +648,14 @@ JSON_VALUE '(' js_doc_expr ',' js_literal opt_js_value_returning_type opt_ascii 
 int ObDMLResolver::transform_dot_notation2_json_value(ParseNode &node, const ObString &sql_str)
 {
   INIT_SUCC(ret);
-  int64_t alloc_size = sizeof(ParseNode *) * (9);
+  int64_t alloc_size = sizeof(ParseNode *) * (10);
   ParseNode **param_vec = NULL;       // children
   ParseNode **param_mismatch = NULL;  // mismatch node
   ParseNode *tmp_node = NULL;         // json doc node
   ParseNode *table_node = NULL;       // table node
   ParseNode *path_node = NULL;        // path node
   ParseNode *ret_node = NULL;         // returning node
+  ParseNode *opt_truncate_node = NULL; // truncate node
   ParseNode *opt_node = NULL;         // clause node
   ParseNode *match_node = NULL;       // mismatch node
   ParseNode *match_node_l = NULL;
@@ -762,15 +763,15 @@ int ObDMLResolver::transform_dot_notation2_json_value(ParseNode &node, const ObS
     ret_node->text_len_ = 7;
     param_vec[2] = ret_node;          // return type pos is 2 in json value clause
   }
-  //  opt_ascii(3) opt_value_on_empty(4)_or_error(5) mismatch (6, 7)
-  for (int8_t i = 3; OB_SUCC(ret) && i < 8; i++) {
+  //  opt_truncate(3) opt_ascii(4) opt_value_on_empty(5)_or_error(6) mismatch (7, 8)
+  for (int8_t i = 3; OB_SUCC(ret) && i < 9; i++) {
     opt_node = NULL;
     if (OB_ISNULL(opt_node = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
     } else {
       opt_node = new(opt_node) ParseNode;
-      if (i == 5 || i == 7) {
+      if (i == 6 || i == 8) {
         if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(*allocator_, "", opt_node, T_NULL))) {
           LOG_WARN("create path node failed", K(ret));
         } else {
@@ -781,9 +782,11 @@ int ObDMLResolver::transform_dot_notation2_json_value(ParseNode &node, const ObS
           LOG_WARN("create path node failed", K(ret));
         } else {
           int8_t val = 0;
-          if (i == 4) {
+          if (i == 3) {
+            val = 0;
+          } else if (i == 5) {
             val = 3;
-          } else if (i == 6) {
+          } else if (i == 7) {
             val = 1;
           }
           opt_node->value_ = val;
@@ -841,13 +844,13 @@ int ObDMLResolver::transform_dot_notation2_json_value(ParseNode &node, const ObS
         match_node->num_child_ = 2;
         match_node->type_ = T_LINK_NODE;
         match_node->children_ = param_mismatch;
-        param_vec[8] = match_node;
+        param_vec[9] = match_node;
       }
     }
   }
   // create json value node
   if (OB_SUCC(ret)) {
-    node.num_child_ = 9;
+    node.num_child_ = 10;
     node.type_ = T_FUN_SYS_JSON_VALUE;
     node.children_ = param_vec;
   }
@@ -1525,6 +1528,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     ctx.is_for_dynamic_sql_ = params_.is_dynamic_sql_;
     ctx.is_for_dbms_sql_ = params_.is_dbms_sql_;
     ctx.view_ref_id_ = view_ref_id_;
+    ctx.is_variable_allowed_ = !(is_mysql_mode() && params_.is_from_create_view_);
     ObRawExprResolverImpl expr_resolver(ctx);
     ObIArray<ObUserVarIdentRawExpr *> &user_var_exprs = get_stmt()->get_user_vars();
     bool is_multi_stmt = session_info_->get_cur_exec_ctx() != NULL &&
@@ -2753,10 +2757,11 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
     if (OB_SUCC(ret)) {
       if (lib::is_oracle_mode()
       && NULL != params_.secondary_namespace_
-      && get_basic_stmt()->is_insert_stmt()
-      && !static_cast<ObInsertStmt*>(get_basic_stmt())->value_from_select()
+      && ((get_basic_stmt()->is_insert_stmt()
+             && !static_cast<ObInsertStmt*>(get_basic_stmt())->value_from_select())
+           || T_CURRENT_OF_SCOPE == current_scope_)
       && T_FIELD_LIST_SCOPE != current_scope_) {
-        //oracle模式insert语句的values子句，标识符优先解释为变量
+        //In Oracle Mode, current of ident, insert values(ident), ident should explain to pl/sql variable
         if (!q_name.access_idents_.empty()) { //q_name.access_idents_为NULL肯定是列
           if (OB_FAIL(resolve_external_name(q_name, columns, real_exprs, real_ref_expr))) {
             LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve external symbol failed", K(ret), K(q_name));
@@ -2767,7 +2772,8 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
           } else if (ObExtendType == real_ref_expr->get_result_type().get_type() &&
                      T_FUN_PL_SQLCODE_SQLERRM != real_ref_expr->get_expr_type() &&
-                     (!ob_is_xml_pl_type(real_ref_expr->get_data_type(), real_ref_expr->get_udt_id()))) {
+                     (!ob_is_xml_pl_type(real_ref_expr->get_data_type(), real_ref_expr->get_udt_id())) &&
+                     current_scope_ != T_CURRENT_OF_SCOPE) {
             bool is_support = false;
             const ObUserDefinedType *user_type = NULL;
             uint64_t udt_id = real_ref_expr->get_result_type().get_udt_id();
@@ -2917,8 +2923,6 @@ void ObDMLResolver::report_user_error_msg(int &ret, const ObRawExpr *root_expr, 
         ret = OB_ERR_UNKNOWN_TABLE;
         ObString tbl_name = concat_table_name(q_name.database_name_, q_name.tbl_name_);
         ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
-        ObSQLUtils::copy_and_convert_string_charset(*allocator_, tbl_name, tbl_name,
-                        CS_TYPE_UTF8MB4_BIN, session_info_->get_local_collation_connection());
         LOG_USER_ERROR(OB_ERR_UNKNOWN_TABLE, tbl_name.length(), tbl_name.ptr(), scope_name.length(), scope_name.ptr());
       }
     }
@@ -2926,14 +2930,10 @@ void ObDMLResolver::report_user_error_msg(int &ret, const ObRawExpr *root_expr, 
   if (OB_ERR_BAD_FIELD_ERROR == ret) {
     ObString column_name = concat_qualified_name(q_name.database_name_, q_name.tbl_name_, q_name.col_name_);
     ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
-    ObSQLUtils::copy_and_convert_string_charset(*allocator_, column_name, column_name,
-                    CS_TYPE_UTF8MB4_BIN, session_info_->get_local_collation_connection());
     LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(), scope_name.length(), scope_name.ptr());
   } else if (OB_NON_UNIQ_ERROR == ret) {
     ObString column_name = concat_qualified_name(q_name.database_name_, q_name.tbl_name_, q_name.col_name_);
     ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
-    ObSQLUtils::copy_and_convert_string_charset(*allocator_, column_name, column_name,
-                    CS_TYPE_UTF8MB4_BIN, session_info_->get_local_collation_connection());
     LOG_USER_ERROR(OB_NON_UNIQ_ERROR, column_name.length(), column_name.ptr(), scope_name.length(), scope_name.ptr());
   } else if (OB_ILLEGAL_REFERENCE == ret) {
     //compatiable with mysql
@@ -2941,8 +2941,6 @@ void ObDMLResolver::report_user_error_msg(int &ret, const ObRawExpr *root_expr, 
     //others: select max(c1) as c from t1 group by c+1 ->
     //err msg:ERROR 1247 (42S22): Reference 'c' not supported (reference to group function)
     ObString column_name = q_name.col_name_;
-    ObSQLUtils::copy_and_convert_string_charset(*allocator_, column_name, column_name,
-                    CS_TYPE_UTF8MB4_BIN, session_info_->get_local_collation_connection());
     if (root_expr == q_name.ref_expr_) {
       ret = OB_WRONG_GROUP_FIELD;
       LOG_USER_ERROR(OB_WRONG_GROUP_FIELD, column_name.length(), column_name.ptr());
@@ -5891,6 +5889,7 @@ int ObDMLResolver::resolve_current_of(const ParseNode &node,
   int ret = OB_SUCCESS;
   ObRawExpr *cursor_expr = NULL;
   ObRawExpr *equal_expr = NULL;
+  current_scope_ = T_CURRENT_OF_SCOPE;
   if (OB_ISNULL(params_.secondary_namespace_)) {
     // secondary_namespace_ 为空, 说明不是在PL中
     ret = OB_UNIMPLEMENTED_FEATURE;
@@ -10828,14 +10827,6 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
            pl::PL_NESTED_TABLE_TYPE == udf_expr->get_result_type().get_extend_type() ||
            pl::PL_VARRAY_TYPE == udf_expr->get_result_type().get_extend_type())) {
         OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
-      }
-      if (OB_SUCC(ret)) {
-        if (is_oracle_mode() && udf_expr->get_result_type().is_tinyint()) {
-          //can not use udf which reurn type is tinyint in oracle mode
-          ret = OB_ERR_INVALID_DATATYPE;
-          LOG_WARN("invalid data type", K(ret), KPC(udf_expr));
-          LOG_USER_ERROR(OB_ERR_INVALID_DATATYPE);
-        }
       }
     } else if (T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type()) {
       ObDMLStmt *stmt = get_stmt();

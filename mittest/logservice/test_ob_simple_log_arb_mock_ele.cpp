@@ -24,10 +24,11 @@ using namespace logservice;
 
 namespace logservice
 {
+int64_t global_timeous_us = 2 * 1000 * 1000L;
 
 void ObArbitrationService::update_arb_timeout_()
 {
-  arb_timeout_us_ = 2 * 1000 * 1000L;
+  arb_timeout_us_ = global_timeous_us;
   if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
     CLOG_LOG_RET(WARN, OB_ERR_UNEXPECTED, "update_arb_timeout_", K_(self), K_(arb_timeout_us));
   }
@@ -691,6 +692,65 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_2f1a_degrade_migrate)
   }
   delete_paxos_group(id);
   PALF_LOG(INFO, "end test_2f1a_degrade_migrate", K(id));
+}
+
+TEST_F(TestObSimpleLogClusterArbMockEleService, test_2f1a_disk_full_reconfirm)
+{
+  int ret = OB_SUCCESS;
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L;
+  OB_LOGGER.set_log_level("TRACE");
+  SET_CASE_LOG_FILE(TEST_NAME, "test_2f1a_disk_full_reconfirm");
+  PALF_LOG(INFO, "begin test_2f1a_disk_full_reconfirm", K(id));
+  {
+    int64_t leader_idx = 0;
+    int64_t arb_replica_idx = 0;
+    PalfHandleImplGuard leader;
+    std::vector<PalfHandleImplGuard*> palf_list;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_arb_mock_election(id, arb_replica_idx, leader_idx, leader));
+    EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+    dynamic_cast<ObSimpleLogServer*>(get_cluster()[leader_idx])->log_service_.get_arbitration_service()->stop();
+
+    const int64_t b_idx = (leader_idx + 1) % 3;
+    const common::ObAddr a_addr = get_cluster()[leader_idx]->get_addr();
+    const common::ObAddr b_addr = get_cluster()[b_idx]->get_addr();
+    PalfHandleImplGuard *a_handle = palf_list[leader_idx];
+    PalfHandleImplGuard *b_handle = palf_list[b_idx];
+
+    // 1. the leader has more log than follower
+    int64_t proposal_id = 0;
+    int64_t mode_version = 0;
+    proposal_id = leader.palf_handle_impl_->state_mgr_.get_proposal_id();
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->mode_mgr_.get_mode_version(mode_version));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 200, id));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(proposal_id, mode_version, AccessMode::RAW_WRITE, SCN::min_scn()));
+    EXPECT_UNTIL_EQ(true, (leader.palf_handle_impl_->get_max_lsn() == b_handle->palf_handle_impl_->get_end_lsn()));
+    b_handle->palf_handle_impl_->disable_sync();
+    proposal_id = leader.palf_handle_impl_->state_mgr_.get_proposal_id();
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->mode_mgr_.get_mode_version(mode_version));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(proposal_id, mode_version, AccessMode::APPEND, SCN::min_scn()));
+    (void) submit_log(leader, 100, id);
+    EXPECT_UNTIL_EQ(true, (leader.palf_handle_impl_->get_max_lsn() == leader.palf_handle_impl_->sw_.max_flushed_end_lsn_));
+
+    // 2. the leader revokes and takes over again
+    for (auto srv: get_cluster()) {
+      const ObAddr addr1(ObAddr::IPV4, "0.0.0.0", 0);
+      srv->set_leader(id, addr1);
+    }
+    EXPECT_UNTIL_EQ(false, a_handle->palf_handle_impl_->state_mgr_.is_leader_active());
+    global_timeous_us = 5 * 1000 * 1000;
+    dynamic_cast<ObSimpleLogServer*>(get_cluster()[leader_idx])->log_service_.get_arbitration_service()->start();
+
+    for (auto srv: get_cluster()) {
+      srv->set_leader(id, a_addr, 3);
+    }
+    EXPECT_UNTIL_EQ(true, a_handle->palf_handle_impl_->state_mgr_.is_leader_active());
+
+    revert_cluster_palf_handle_guard(palf_list);
+  }
+  delete_paxos_group(id);
+  global_timeous_us = 2 * 1000 * 1000;
+  PALF_LOG(INFO, "end test_2f1a_disk_full_reconfirm", K(id));
 }
 } // end unittest
 } // end oceanbase

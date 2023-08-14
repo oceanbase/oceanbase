@@ -2515,7 +2515,8 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
                                              common::ObString &pk_name,
                                              const bool is_oracle_temp_table,
                                              const bool is_create_table_as,
-                                             const bool is_external_table)
+                                             const bool is_external_table,
+                                             const bool allow_has_default)
 {
   int ret = OB_SUCCESS;
   bool is_modify_column = stmt::T_ALTER_TABLE == stmt_->get_stmt_type()
@@ -2664,6 +2665,19 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
         }
 
       }
+
+      if (OB_SUCC(ret) && (column.is_string_type() || column.is_json() || column.is_geometry())
+          && stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+        if (OB_DDL_ADD_COLUMN == static_cast<AlterColumnSchema&>(column).alter_type_) {
+          ObTableSchema &table_schema = static_cast<ObAlterTableStmt *>(stmt_)->get_alter_table_arg().alter_table_schema_;
+          if (OB_FAIL(check_and_fill_column_charset_info(column,
+                                                         table_schema.get_charset_type(),
+                                                         table_schema.get_collation_type()))) {
+            SQL_RESV_LOG(WARN, "fail to check and fill column charset info", K(ret));
+          }
+        }
+      }
+
       if (OB_SUCC(ret) && (column.is_string_type() || column.is_json() || column.is_geometry())
           && stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
         if (OB_FAIL(check_and_fill_column_charset_info(column, charset_type_, collation_type_))) {
@@ -2811,7 +2825,8 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
       } else if (OB_FAIL(resolve_normal_column_attribute(column,
                                                          attrs_node,
                                                          resolve_stat,
-                                                         pk_name))) {
+                                                         pk_name,
+                                                         allow_has_default))) {
         LOG_WARN("resolve normal column attribute failed", K(ret));
       }
     }
@@ -3073,7 +3088,8 @@ int ObDDLResolver::resolve_normal_column_attribute_constr_default(ObColumnSchema
 int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
                                                    ParseNode *attrs_node,
                                                    ObColumnResolveStat &resolve_stat,
-                                                   ObString &pk_name)
+                                                   ObString &pk_name,
+                                                   const bool allow_has_default)
 {
   int ret = OB_SUCCESS;
   ObObjParam default_value;
@@ -3171,7 +3187,10 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
       }
       case T_CONSTR_ORIG_DEFAULT:
       case T_CONSTR_DEFAULT: {
-        if (OB_FAIL(resolve_normal_column_attribute_constr_default(column, attr_node, resolve_stat,
+        if (!allow_has_default) {
+          ret = OB_ERR_DEFAULT_NOT_ALLOWED;
+          LOG_WARN("Virtual column cannot have a default value", K(ret), K(column));
+        } else if (OB_FAIL(resolve_normal_column_attribute_constr_default(column, attr_node, resolve_stat,
                                                                    default_value, is_set_cur_default,
                                                                    is_set_orig_default))) {
           LOG_WARN("resolve default value failed", K(ret));

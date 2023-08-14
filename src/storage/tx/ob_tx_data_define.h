@@ -156,17 +156,15 @@ public:
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos, ObSliceAlloc &slice_allocator);
   int64_t get_serialize_size() const;
-
-  bool is_contain(const int64_t seq_no, int32_t tx_data_state) const;
-  bool is_contain_(const int64_t seq_no) const;
-
-  void reset() 
-  { 
+  bool is_contain(const  transaction::ObTxSEQ seq_no, int32_t tx_data_state) const;
+  void reset()
+  {
     head_ = nullptr;
     undo_node_cnt_ = 0;
   }
 
 private:
+  bool is_contain_(const transaction::ObTxSEQ seq_no) const;
   int serialize_(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize_(const char *buf, const int64_t data_len, int64_t &pos, ObSliceAlloc &slice_allocator);
   int64_t get_serialize_size_() const;
@@ -430,7 +428,9 @@ public:
   {
     int64_t pos = 0;
     for (int i = 0; i < TX_DATA_MINI_LRU_ITEM_CNT; i++) {
-      J_KV(K(cache_items_[i]));
+      if (OB_UNLIKELY(cache_items_[i].is_valid_)) {
+        J_KV(K(cache_items_[i]));
+      }
     }
     return pos;
   }

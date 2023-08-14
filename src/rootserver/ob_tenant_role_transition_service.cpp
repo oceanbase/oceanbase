@@ -23,6 +23,7 @@
 #include "share/ob_rpc_struct.h"//ObLSAccessModeInfo
 #include "observer/ob_server_struct.h"//GCTX
 #include "share/location_cache/ob_location_service.h"//get ls leader
+#include "share/ob_global_stat_proxy.h"//ObGlobalStatProxy
 #include "share/ob_schema_status_proxy.h"//set_schema_status
 #include "storage/tx/ob_timestamp_service.h"  // ObTimestampService
 #include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
@@ -485,26 +486,36 @@ int ObTenantRoleTransitionService::get_tenant_ref_scn_(const share::SCN &sync_sc
 int ObTenantRoleTransitionService::wait_ls_balance_task_finish_()
 {
   int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
   } else {
-    bool is_finish = false;
-    ObBalanceTaskHelper ls_balance_task;
-    while (!THIS_WORKER.is_timeout() && OB_SUCC(ret) && !is_finish) {
-      if (FALSE_IT(ret = ObBalanceTaskHelperTableOperator::pop_task(tenant_id_,
-              *sql_proxy_, ls_balance_task))) {
-      } else if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-        is_finish = true;
-      } else if (OB_SUCC(ret)) {
-        usleep(100L * 1000L);
-        LOG_INFO("has balance task not finish", K(ls_balance_task));
+    ObGlobalStatProxy global_proxy(*sql_proxy_, gen_meta_tenant_id(tenant_id_));
+    if (OB_FAIL(global_proxy.get_current_data_version(compat_version))) {
+      LOG_WARN("failed to get current data version", KR(ret), K(tenant_id_));
+    } else if (compat_version < DATA_VERSION_4_2_0_0) {
+      //if tenant version is less than 4200, no need check
+      //Regardless of the data_version change and switchover concurrency scenario
+    } else {
+      bool is_finish = false;
+      ObBalanceTaskHelper ls_balance_task;
+      while (!THIS_WORKER.is_timeout() && OB_SUCC(ret) && !is_finish) {
+        if (FALSE_IT(ret = ObBalanceTaskHelperTableOperator::pop_task(tenant_id_,
+                *sql_proxy_, ls_balance_task))) {
+        } else if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          is_finish = true;
+        } else if (OB_SUCC(ret)) {
+          usleep(100L * 1000L);
+          LOG_INFO("has balance task not finish", K(ls_balance_task));
+        }
       }
-    }
-    if (OB_SUCC(ret)) {
-      if (THIS_WORKER.is_timeout() || !is_finish) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("failed to wait ls balance task finish", KR(ret), K(is_finish));
+      if (OB_SUCC(ret)) {
+        if (THIS_WORKER.is_timeout() || !is_finish) {
+          ret = OB_TIMEOUT;
+          LOG_WARN("failed to wait ls balance task finish", KR(ret), K(is_finish));
+        }
       }
     }
   }

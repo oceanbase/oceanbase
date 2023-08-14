@@ -324,6 +324,7 @@ ob_set_subtarget(ob_storage tx
   tx/ob_xa_rpc.cpp
   tx/ob_xa_service.cpp
   tx/ob_xa_trans_heartbeat_worker.cpp
+  tx/ob_tx_ctx_mds.cpp
   tx/ob_multi_data_source.cpp
   tx/ob_tx_free_route.cpp
   tx/ob_tx_free_route_state.cpp
@@ -504,6 +505,7 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_tenant_freeze_info_mgr.cpp
   compaction/ob_tenant_tablet_scheduler.cpp
   compaction/ob_schedule_dag_func.cpp
+  compaction/ob_extra_medium_info.cpp
   compaction/ob_medium_compaction_func.cpp
   compaction/ob_medium_compaction_mgr.cpp
   compaction/ob_medium_compaction_info.cpp

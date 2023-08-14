@@ -253,13 +253,13 @@ int DmlRedoLogNode::set_data_info(char *data, int64_t data_len)
   return ret;
 }
 
-void RedoSortedProgress::set_sorted_row_seq_no(const int64_t row_seq_no)
+void RedoSortedProgress::set_sorted_row_seq_no(const transaction::ObTxSEQ &row_seq_no)
 {
-  if (row_seq_no < ATOMIC_LOAD(&sorted_row_seq_no_)) {
+  if (row_seq_no < sorted_row_seq_no_.atomic_load()) {
     // TODO PDML may cause row_seq_no rollback
     LOG_WARN_RET(OB_STATE_NOT_MATCH, "row_seq_no rollbacked! check if PDML sence", K(row_seq_no), K_(sorted_row_seq_no));
   }
-  ATOMIC_STORE(&sorted_row_seq_no_, row_seq_no);
+  sorted_row_seq_no_.atomic_store(row_seq_no);
 }
 
 int SortedRedoLogList::push(const bool is_data_in_memory,

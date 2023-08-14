@@ -3275,13 +3275,35 @@ bool ObHAResultInfo::is_valid() const
   return !trace_id_.is_invalid() && addr_.is_valid() &&  MAX_FAILED_TYPE > type_ && ROOT_SERVICE <= type_;
 }
 
+const char *ObHAResultInfo::get_error_str_() const
+{
+  const char *str = NULL;
+  switch (result_) {
+    case OB_SUCCESS: {
+      str = "";
+      break;
+    }
+
+    case OB_TOO_MANY_PARTITIONS_ERROR: {
+      str = "unit config is too small";
+      break;
+    }
+
+    default: {
+      str = common::ob_strerror(result_);
+      break;
+    }
+  }
+  return str;
+}
+
 int ObHAResultInfo::get_comment_str(Comment &comment) const
 {
   int ret = OB_SUCCESS;
   const char *type = get_failed_type_str();
   char trace_id[OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
   char addr_buf[OB_MAX_SERVER_ADDR_SIZE] = "";
-  const char *err_code_str = OB_SUCCESS == result_ ? "" : common::ob_strerror(result_);
+  const char *err_code_str = get_error_str_();
   if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid result info", K(ret), KPC(this));
@@ -3960,6 +3982,24 @@ int ObBackupSetFileDesc::assign(const ObBackupSetFileDesc &other)
   }
   return ret;
 }
+
+int64_t ObBackupSetFileDesc::to_string(char *min_restore_scn_str_buf, char *buf, int64_t buf_len) const {
+  int64_t pos = 0;
+  if (OB_ISNULL(min_restore_scn_str_buf) || OB_ISNULL(buf) || buf_len <= 0 || !is_valid()) {
+    // do nothing
+  } else {
+    J_OBJ_START();
+    ObSzString min_restore_scn_display(min_restore_scn_str_buf);
+    J_KV(K_(backup_set_id), K_(incarnation), K_(tenant_id), K_(dest_id), K_(backup_type), K_(plus_archivelog),
+      K_(date), K_(prev_full_backup_set_id), K_(prev_inc_backup_set_id), K_(stats), K_(start_time), K_(end_time),
+      K_(status), K_(result), K_(encryption_mode), K_(passwd), K_(file_status), K_(backup_path), K_(start_replay_scn),
+      K_(min_restore_scn), K(min_restore_scn_display), K_(tenant_compatible), K_(backup_compatible), K_(data_turn_id), K_(meta_turn_id),
+      K_(cluster_version), K_(consistent_scn));
+    J_OBJ_END();
+  }
+  return pos;
+}
+
 
 ObBackupSkipTabletAttr::ObBackupSkipTabletAttr()
   : tablet_id_(),

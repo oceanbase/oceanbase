@@ -1747,6 +1747,7 @@ int ObNewTableTabletAllocator::choose_new_ls_(
       }
     }
   } else if (old_ls_attr.get_ls_flag().is_block_tablet_in()) {
+    //only in 4200 canbe block tablet in, no need process data_version
     if (OB_FAIL(ObBalanceTaskTableOperator::get_merge_task_dest_ls_by_src_ls(
         *sql_proxy_,
         tenant_id,

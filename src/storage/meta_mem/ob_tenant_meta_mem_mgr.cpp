@@ -1824,12 +1824,9 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
     // read the newest initial state.
     // Maybe we should let the two steps, CAS opereation and set initial state, be an atomic operation.
     // The same issue exists on all 4.x version, and should be solved in future.
-    do {
-      // TODO(@bowen.gbw): delete the infinite retry later
-      if (OB_FAIL(new_handle.get_obj()->check_and_set_initial_state())) {
-        LOG_WARN("failed to check and set initial state", K(ret), K(key));
-      }
-    } while (OB_TIMEOUT == ret || OB_ALLOCATE_MEMORY_FAILED == ret || OB_DISK_HUNG == ret);
+    if (OB_FAIL(new_handle.get_obj()->check_and_set_initial_state())) {
+      LOG_WARN("failed to check and set initial state", K(ret), K(key));
+    }
   }
 
   LOG_DEBUG("compare and swap object", K(ret), KPC(new_handle.get_obj()), K(lbt()));
@@ -1889,7 +1886,7 @@ void ObTenantMetaMemMgr::release_tablet(ObTablet *tablet)
     ObMetaObjBufferNode &linked_node = ObMetaObjBufferHelper::get_linked_node(reinterpret_cast<char *>(tablet));
     ObMetaObjBufferHeader &buf_header = ObMetaObjBufferHelper::get_buffer_header(reinterpret_cast<char *>(tablet));
     void *buf = ObMetaObjBufferHelper::get_meta_obj_buffer_ptr(reinterpret_cast<char *>(tablet));
-    LOG_DEBUG("release tablet", K(buf_header), KP(buf));
+    LOG_DEBUG("release tablet", K(buf_header), KP(buf), KP(tablet));
     SpinWLockGuard guard(wash_lock_);
     if (0 != tablet->get_ref()) {
       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ObTablet reference count may be leak", KP(tablet));
@@ -1900,7 +1897,6 @@ void ObTenantMetaMemMgr::release_tablet(ObTablet *tablet)
       large_tablet_header_.remove(&linked_node);
       large_tablet_buffer_pool_.free_obj(buf);
     }
-    LOG_DEBUG("release tablet", K(buf_header.buf_len_), KP(tablet));
   }
 }
 

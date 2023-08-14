@@ -18,6 +18,7 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "src/sql/dtl/ob_dtl_tenant_mem_manager.h"
 #include "share/ob_occam_time_guard.h"
+#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
@@ -134,6 +135,11 @@ ObDtlLinkedBuffer *ObDtlChannelMemManager::alloc(int64_t chid, int64_t size)
   }
   if (nullptr != allocated_buf) {
     increase_alloc_cnt();
+  }
+  uint64_t opt = std::abs(EVENT_CALL(EventTable::EN_PX_DTL_TRACE_LOG_ENABLE));
+  if (0 != opt) {
+    share::ObTaskController::get().allow_next_syslog();
+    LOG_INFO("alloc dtl buffer", KP(allocated_buf));
   }
   LOG_TRACE("channel memory status", K(get_alloc_cnt()), K(get_free_cnt()),
     K(get_free_queue_length()), K(get_max_tenant_memory_limit_size()), K(get_max_dtl_memory_size()),

@@ -450,47 +450,45 @@ int ObMetaPointerMap<Key, T>::load_and_hook_meta_obj(
       STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
     } else {
       ObMetaPointerHandle<Key, T> tmp_ptr_hdl(*this);
-      common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
-      if (OB_FAIL(ResourceMap::get_without_lock(key, tmp_ptr_hdl))) {
-        if (OB_ENTRY_NOT_EXIST != ret) {
-          STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
-        }
-        need_free_obj = true;
-      } else if (meta_pointer->is_in_memory()) {  // some other thread finish loading
-        need_free_obj = true;
-        if (OB_FAIL(meta_pointer->get_in_memory_obj(guard))) {
-          STORAGE_LOG(ERROR, "fail to get meta object", K(ret), KP(meta_pointer));
-        }
-      } else if (OB_UNLIKELY(disk_addr != meta_pointer->get_addr()
-          || meta_pointer != tmp_ptr_hdl.get_resource_ptr()
-          || meta_pointer->get_addr() != tmp_ptr_hdl.get_resource_ptr()->get_addr())) {
-        ret = OB_ITEM_NOT_MATCH;
-        int tmp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (tmp_ret = meta_pointer->release_obj(t))) {
-          STORAGE_LOG(ERROR, "fail to release object", K(ret), K(tmp_ret), KP(meta_pointer));
-        } else {
-          if (meta_pointer != tmp_ptr_hdl.get_resource_ptr()) {
-            meta_pointer = tmp_ptr_hdl.get_resource_ptr();
-            if (OB_TMP_FAIL(ptr_hdl.assign(tmp_ptr_hdl))) {
-              STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), K(tmp_ret), K(ptr_hdl), K(tmp_ptr_hdl));
-            }
+      {
+        common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
+        if (OB_FAIL(ResourceMap::get_without_lock(key, tmp_ptr_hdl))) {
+          if (OB_ENTRY_NOT_EXIST != ret) {
+            STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
           }
+          need_free_obj = true;
+        } else if (meta_pointer->is_in_memory()) {  // some other thread finish loading
+          need_free_obj = true;
+          if (OB_FAIL(meta_pointer->get_in_memory_obj(guard))) {
+            STORAGE_LOG(ERROR, "fail to get meta object", K(ret), KP(meta_pointer));
+          }
+        } else if (OB_UNLIKELY(disk_addr != meta_pointer->get_addr()
+            || meta_pointer != tmp_ptr_hdl.get_resource_ptr()
+            || meta_pointer->get_addr() != tmp_ptr_hdl.get_resource_ptr()->get_addr())) {
+          ret = OB_ITEM_NOT_MATCH;
+          need_free_obj = true;
           if (REACH_TIME_INTERVAL(1000000)) {
-            STORAGE_LOG(WARN, "disk address or pointer change", K(ret), K(disk_addr), KPC(meta_pointer));
+            STORAGE_LOG(WARN, "disk address or pointer change", K(ret), K(disk_addr), KPC(meta_pointer),
+                KPC(tmp_ptr_hdl.get_resource_ptr()));
+          }
+        } else {
+          if (OB_FAIL(meta_pointer->hook_obj(t, guard))) {
+            STORAGE_LOG(ERROR, "fail to hook object", K(ret), KP(meta_pointer));
+          } else if (OB_FAIL(guard.get_obj()->assign_pointer_handle(ptr_hdl))) {
+            STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret));
           }
         }
-      } else {
-        if (OB_FAIL(meta_pointer->hook_obj(t, guard))) {
-          STORAGE_LOG(ERROR, "fail to hook object", K(ret), KP(meta_pointer));
-        } else if (OB_FAIL(guard.get_obj()->assign_pointer_handle(ptr_hdl))) {
-          STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret));
+      } // write lock end
+      if (need_free_obj) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(meta_pointer->release_obj(t))) {
+          STORAGE_LOG(ERROR, "fail to release object", K(ret), K(tmp_ret), KP(meta_pointer));
+        } else if (meta_pointer != tmp_ptr_hdl.get_resource_ptr()) {
+          meta_pointer = tmp_ptr_hdl.get_resource_ptr();
+          if (OB_TMP_FAIL(ptr_hdl.assign(tmp_ptr_hdl))) {
+            STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), K(tmp_ret), K(ptr_hdl), K(tmp_ptr_hdl));
+          }
         }
-      }
-    }  // write lock end
-    if (need_free_obj) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(meta_pointer->release_obj(t))) {
-        STORAGE_LOG(ERROR, "fail to release object", K(ret), K(tmp_ret), KP(meta_pointer));
       }
     }
   } while (OB_ITEM_NOT_MATCH == ret);

@@ -1261,6 +1261,10 @@ void ObObjAccessIdx::reset()
 
 bool ObObjAccessIdx::operator==(const ObObjAccessIdx &other) const
 {
+  int ret = OB_SUCCESS;
+  // udf deterministic default value is false, we need display setting check_ctx.need_check_deterministic_
+  ObExprEqualCheckContext check_ctx;
+  check_ctx.need_check_deterministic_ = false;
   return elem_type_ == other.elem_type_
       && access_type_ == other.access_type_
       && 0 == var_name_.case_compare(other.var_name_)
@@ -1269,7 +1273,7 @@ bool ObObjAccessIdx::operator==(const ObObjAccessIdx &other) const
       && routine_info_ == other.routine_info_
       && is_array_equal(type_method_params_, other.type_method_params_)
       && (get_sysfunc_ == other.get_sysfunc_
-          || (NULL != get_sysfunc_ && NULL != other.get_sysfunc_ && get_sysfunc_->same_as(*other.get_sysfunc_)));
+          || (NULL != get_sysfunc_ && NULL != other.get_sysfunc_ && get_sysfunc_->same_as(*other.get_sysfunc_, &check_ctx)));
 }
 
 bool ObObjAccessIdx::is_table(const common::ObIArray<ObObjAccessIdx> &access_idxs)

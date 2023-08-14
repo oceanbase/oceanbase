@@ -126,7 +126,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     tmp_alloc_used_(false),
     table_direct_insert_ctx_(),
     errcode_(OB_SUCCESS),
-    dblink_snapshot_map_()
+    dblink_snapshot_map_(),
+    cur_row_num_(-1)
 {
 }
 

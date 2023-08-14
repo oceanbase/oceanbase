@@ -61,7 +61,7 @@ public:
   bool on_memtable(const memtable::ObIMemtable * const memtable) override;
   memtable::ObIMemtable* get_memtable() const override;
   virtual int del() override;
-  int64_t get_seq_no() const override;
+  transaction::ObTxSEQ get_seq_no() const override;
   bool is_table_lock_callback() const override { return true; }
   bool log_synced() const override { return share::SCN::max_scn() != scn_; }
   bool must_log() const;

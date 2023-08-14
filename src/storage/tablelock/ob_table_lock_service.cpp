@@ -39,29 +39,36 @@ namespace transaction
 
 namespace tablelock
 {
-
 ObTableLockService::ObTableLockCtx::ObTableLockCtx(const ObTableLockTaskType task_type,
-                                                   const uint64_t table_id,
                                                    const int64_t origin_timeout_us,
                                                    const int64_t timeout_us)
   : task_type_(task_type),
     is_in_trans_(false),
-    table_id_(table_id),
+    table_id_(OB_INVALID_ID),
     origin_timeout_us_(origin_timeout_us),
     timeout_us_(timeout_us),
     abs_timeout_ts_(),
     trans_state_(),
     tx_desc_(nullptr),
-    current_savepoint_(-1),
+    current_savepoint_(),
     tablet_list_(),
     schema_version_(-1),
     tx_is_killed_(false),
     is_from_sql_(false),
-    stmt_savepoint_(-1)
+    stmt_savepoint_()
 {
   abs_timeout_ts_ = (0 == timeout_us)
     ? ObTimeUtility::current_time() + DEFAULT_TIMEOUT_US
     : ObTimeUtility::current_time() + timeout_us;
+}
+
+ObTableLockService::ObTableLockCtx::ObTableLockCtx(const ObTableLockTaskType task_type,
+                                                   const uint64_t table_id,
+                                                   const int64_t origin_timeout_us,
+                                                   const int64_t timeout_us)
+  : ObTableLockCtx(task_type, origin_timeout_us, timeout_us)
+{
+  table_id_ = table_id;
 }
 
 ObTableLockService::ObTableLockCtx::ObTableLockCtx(const ObTableLockTaskType task_type,
@@ -82,17 +89,6 @@ ObTableLockService::ObTableLockCtx::ObTableLockCtx(const ObTableLockTaskType tas
  : ObTableLockCtx(task_type, table_id, origin_timeout_us, timeout_us)
 {
   ls_id_ = ls_id;
-}
-
-ObTableLockService::ObTableLockCtx::ObTableLockCtx(const ObTableLockTaskType task_type,
-                                                   const ObLockOBJType obj_type,
-                                                   const uint64_t obj_id,
-                                                   const int64_t origin_timeout_us,
-                                                   const int64_t timeout_us)
-  : ObTableLockCtx(task_type, 0, origin_timeout_us, timeout_us)
-{
-  obj_type_ = obj_type;
-  obj_id_ = obj_id;
 }
 
 void ObTableLockService::ObRetryCtx::reuse()
@@ -225,7 +221,7 @@ int ObTableLockService::ObOBJLockGarbageCollector::garbage_collect_for_all_ls_()
 void ObTableLockService::ObOBJLockGarbageCollector::check_and_report_timeout_()
 {
   int ret = OB_SUCCESS;
-  int current_timestamp = ObClockGenerator::getClock();
+  int64_t current_timestamp = ObClockGenerator::getClock();
   if (last_success_timestamp_ > current_timestamp) {
     LOG_ERROR("last success timestamp is not correct", K(current_timestamp),
               K(last_success_timestamp_), KPC(this));
@@ -255,6 +251,41 @@ int ObTableLockService::ObTableLockCtx::set_tablet_id(const common::ObTabletID &
   tablet_list_.reuse();
   if (OB_FAIL(tablet_list_.push_back(tablet_id))) {
     LOG_WARN("set tablet id failed", K(ret), K(tablet_id));
+  }
+  return ret;
+}
+
+int ObTableLockService::ObTableLockCtx::set_lock_id(const common::ObIArray<ObLockID> &lock_ids)
+{
+  int ret = OB_SUCCESS;
+  obj_list_.reuse();
+  for (int64_t i = 0; OB_SUCC(ret) && i < lock_ids.count(); i++) {
+    if (OB_FAIL(obj_list_.push_back(lock_ids.at(i)))) {
+      LOG_WARN("set lock id failed", K(ret), K(i), K(lock_ids));
+    }
+  }
+  return ret;
+}
+
+int ObTableLockService::ObTableLockCtx::set_lock_id(const ObLockID &lock_id)
+{
+  int ret = OB_SUCCESS;
+  obj_list_.reuse();
+  if (OB_FAIL(obj_list_.push_back(lock_id))) {
+    LOG_WARN("set lock id failed", K(ret), K(lock_id));
+  }
+  return ret;
+}
+
+int ObTableLockService::ObTableLockCtx::set_lock_id(const ObLockOBJType &obj_type, const uint64_t obj_id)
+{
+  int ret = OB_SUCCESS;
+  ObLockID lock_id;
+  obj_list_.reuse();
+  if (OB_FAIL(lock_id.set(obj_type, obj_id))) {
+    LOG_WARN("set lock id failed", K(ret), K(obj_type), K(obj_id));
+  } else if (OB_FAIL(obj_list_.push_back(lock_id))) {
+    LOG_WARN("set lock id failed", K(ret), K(lock_id));
   }
   return ret;
 }
@@ -611,7 +642,6 @@ int ObTableLockService::lock_tablet(ObTxDesc &tx_desc,
                                     const ObLockTabletRequest &arg)
 {
   int ret = OB_SUCCESS;
-  const ObTableLockOwnerID lock_owner(0);
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -638,12 +668,44 @@ int ObTableLockService::lock_tablet(ObTxDesc &tx_desc,
   return ret;
 }
 
+int ObTableLockService::lock_tablet(ObTxDesc &tx_desc,
+                                    const ObTxParam &tx_param,
+                                    const ObLockTabletsRequest &arg)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("lock service is not inited", K(ret));
+  } else if (OB_UNLIKELY(!tx_desc.is_valid()) ||
+             OB_UNLIKELY(!tx_param.is_valid()) ||
+             OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tx_desc), K(arg), K(tx_desc.is_valid()),
+             K(tx_param.is_valid()), K(arg.is_valid()));
+  } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_2_0_0))) {
+    LOG_WARN("data version check failed", K(ret), K(arg));
+  } else {
+    ObTableLockCtx ctx(LOCK_TABLET, arg.table_id_,
+                       arg.timeout_us_, arg.timeout_us_);
+    ctx.is_in_trans_ = true;
+    ctx.tx_desc_ = &tx_desc;
+    ctx.tx_param_ = tx_param;
+    ctx.lock_op_type_ = arg.op_type_;
+    if (OB_FAIL(ctx.set_tablet_id(arg.tablet_ids_))) {
+      LOG_WARN("set tablet id failed", K(ret), K(arg));
+    } else if (OB_FAIL(process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_))) {
+      LOG_WARN("process lock task failed", K(ret), K(arg));
+    }
+  }
+  return ret;
+}
+
 int ObTableLockService::unlock_tablet(ObTxDesc &tx_desc,
                                       const ObTxParam &tx_param,
                                       const ObUnLockTabletRequest &arg)
 {
   int ret = OB_SUCCESS;
-  const ObTableLockOwnerID lock_owner(0);
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -663,6 +725,39 @@ int ObTableLockService::unlock_tablet(ObTxDesc &tx_desc,
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
     if (OB_FAIL(ctx.set_tablet_id(arg.tablet_id_))) {
+      LOG_WARN("set tablet id failed", K(ret), K(arg));
+    } else if (OB_FAIL(process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_))) {
+      LOG_WARN("process lock task failed", K(ret), K(arg));
+    }
+  }
+  return ret;
+}
+
+int ObTableLockService::unlock_tablet(ObTxDesc &tx_desc,
+                                      const ObTxParam &tx_param,
+                                      const ObUnLockTabletsRequest &arg)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("lock service is not inited", K(ret));
+  } else if (OB_UNLIKELY(!tx_desc.is_valid()) ||
+             OB_UNLIKELY(!tx_param.is_valid()) ||
+             OB_UNLIKELY(!arg.is_valid()) ||
+             OB_UNLIKELY(ObTableLockOpType::OUT_TRANS_UNLOCK != arg.op_type_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tx_desc), K(arg), K(tx_desc.is_valid()),
+             K(tx_param.is_valid()), K(arg.is_valid()));
+  } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_2_0_0))) {
+    LOG_WARN("data version check failed", K(ret), K(arg));
+  } else {
+    ObTableLockCtx ctx(UNLOCK_TABLET, arg.table_id_, arg.timeout_us_, arg.timeout_us_);
+    ctx.is_in_trans_ = true;
+    ctx.tx_desc_ = &tx_desc;
+    ctx.tx_param_ = tx_param;
+    ctx.lock_op_type_ = arg.op_type_;
+    if (OB_FAIL(ctx.set_tablet_id(arg.tablet_ids_))) {
       LOG_WARN("set tablet id failed", K(ret), K(arg));
     } else if (OB_FAIL(process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_))) {
       LOG_WARN("process lock task failed", K(ret), K(arg));
@@ -911,12 +1006,16 @@ int ObTableLockService::lock_obj(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_data_version_after_(DATA_VERSION_4_1_0_0))) {
     LOG_WARN("data version check failed", K(ret), K(arg));
   } else {
-    ObTableLockCtx ctx(LOCK_OBJECT, arg.obj_type_, arg.obj_id_, arg.timeout_us_, arg.timeout_us_);
+    ObTableLockCtx ctx(LOCK_OBJECT, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
-    ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
+    if (OB_FAIL(ctx.set_lock_id(arg.obj_type_, arg.obj_id_))) {
+      LOG_WARN("set lock id failed", K(ret), K(arg));
+    } else {
+      ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
+    }
   }
   return ret;
 }
@@ -940,12 +1039,85 @@ int ObTableLockService::unlock_obj(ObTxDesc &tx_desc,
   } else if (OB_FAIL(check_data_version_after_(DATA_VERSION_4_1_0_0))) {
     LOG_WARN("data version check failed", K(ret), K(arg));
   } else {
-    ObTableLockCtx ctx(UNLOCK_OBJECT, arg.obj_type_, arg.obj_id_, arg.timeout_us_, arg.timeout_us_);
+    ObTableLockCtx ctx(UNLOCK_OBJECT, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
-    ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
+    if (OB_FAIL(ctx.set_lock_id(arg.obj_type_, arg.obj_id_))) {
+      LOG_WARN("set lock id failed", K(ret), K(arg));
+    } else {
+      ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
+    }
+  }
+  return ret;
+}
+
+int ObTableLockService::lock_obj(ObTxDesc &tx_desc,
+                                 const ObTxParam &tx_param,
+                                 const ObLockObjsRequest &arg)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("lock service is not inited", K(ret));
+  } else if (OB_UNLIKELY(!tx_desc.is_valid()) ||
+             OB_UNLIKELY(!tx_param.is_valid()) ||
+             OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tx_desc), K(arg), K(tx_desc.is_valid()),
+             K(tx_param.is_valid()), K(arg.is_valid()));
+  } else if (OB_FAIL(check_data_version_after_(DATA_VERSION_4_1_0_0))) {
+    LOG_WARN("data version check failed", K(ret), K(arg));
+  } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_2_0_0))) {
+    LOG_WARN("cluster version check failed", K(ret), K(arg));
+  } else {
+    ObTableLockCtx ctx(LOCK_OBJECT, arg.timeout_us_, arg.timeout_us_);
+    ctx.is_in_trans_ = true;
+    ctx.tx_desc_ = &tx_desc;
+    ctx.tx_param_ = tx_param;
+    ctx.lock_op_type_ = arg.op_type_;
+    if (OB_FAIL(ctx.set_lock_id(arg.objs_))) {
+      LOG_WARN("set lock id failed", K(ret), K(arg));
+    } else {
+      ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
+    }
+  }
+  return ret;
+}
+
+int ObTableLockService::unlock_obj(ObTxDesc &tx_desc,
+                                   const ObTxParam &tx_param,
+                                   const ObUnLockObjsRequest &arg)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("lock service is not inited", K(ret));
+  } else if (OB_UNLIKELY(!tx_desc.is_valid()) ||
+             OB_UNLIKELY(!tx_param.is_valid()) ||
+             OB_UNLIKELY(!arg.is_valid()) ||
+             OB_UNLIKELY(ObTableLockOpType::OUT_TRANS_UNLOCK != arg.op_type_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tx_desc), K(arg), K(tx_desc.is_valid()),
+             K(tx_param.is_valid()), K(arg.is_valid()));
+  } else if (OB_FAIL(check_data_version_after_(DATA_VERSION_4_1_0_0))) {
+    LOG_WARN("data version check failed", K(ret), K(arg));
+  } else if (OB_FAIL(check_cluster_version_after_(CLUSTER_VERSION_4_2_0_0))) {
+    LOG_WARN("cluster version check failed", K(ret), K(arg));
+  } else {
+    ObTableLockCtx ctx(UNLOCK_OBJECT, arg.timeout_us_, arg.timeout_us_);
+    ctx.is_in_trans_ = true;
+    ctx.tx_desc_ = &tx_desc;
+    ctx.tx_param_ = tx_param;
+    ctx.lock_op_type_ = arg.op_type_;
+    if (OB_FAIL(ctx.set_lock_id(arg.objs_))) {
+      LOG_WARN("set lock id failed", K(ret), K(arg));
+    } else {
+      ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
+    }
   }
   return ret;
 }
@@ -1028,16 +1200,23 @@ int ObTableLockService::process_obj_lock_task_(ObTableLockCtx &ctx,
                                                const ObTableLockOwnerID lock_owner)
 {
   int ret = OB_SUCCESS;
-  ObLockID lock_id;
-  if (OB_FAIL(get_lock_id(ctx.obj_type_, ctx.obj_id_, lock_id))) {
-    LOG_WARN("failed to get_obj_lock_id", K(ret), K(ctx));
-  } else if (OB_FAIL(process_obj_lock_(ctx,
-                                       LOCK_SERVICE_LS,
-                                       lock_id,
-                                       lock_mode,
-                                       lock_owner))) {
-    LOG_WARN("lock obj failed", K(ret), K(ctx), K(LOCK_SERVICE_LS),
-             K(lock_id), K(ctx.task_type_), K(lock_mode));
+  if (ctx.obj_list_.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("obj list is empty when lock obj", K(ret), K(ctx), K(lock_mode), K(lock_owner));
+  } else {
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
+      ObLockID lock_id;
+      for (int64_t i = 0; OB_SUCC(ret) && i < ctx.obj_list_.count(); ++i) {
+        lock_id = ctx.obj_list_.at(i);
+        if (OB_FAIL(process_obj_lock_(ctx, LOCK_SERVICE_LS, lock_id, lock_mode, lock_owner))) {
+            LOG_WARN("lock obj failed", K(ret), K(ctx), K(LOCK_SERVICE_LS), K(lock_id), K(ctx.task_type_), K(lock_mode));
+        }
+      }
+    } else {
+      if (OB_FAIL(process_obj_lock_(ctx, LOCK_SERVICE_LS, ctx.obj_list_, lock_mode, lock_owner))) {
+        LOG_WARN("lock obj failed", K(ret), K(ctx), K(LOCK_SERVICE_LS), K(ctx.obj_list_), K(ctx.task_type_), K(lock_mode));
+      }
+    }
   }
   return ret;
 }
@@ -2119,6 +2298,63 @@ int ObTableLockService::process_obj_lock_(ObTableLockCtx &ctx,
   return ret;
 }
 
+int ObTableLockService::process_obj_lock_(ObTableLockCtx &ctx,
+                                          const ObLSID &ls_id,
+                                          const common::ObIArray<ObLockID> &lock_ids,
+                                          const ObTableLockMode lock_mode,
+                                          const ObTableLockOwnerID lock_owner)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  bool need_retry = false;
+  ObLSLockMap ls_lock_map;
+  ObLockIDArray lock_array;
+  ObLockIDArray *p = nullptr;
+  if (OB_FAIL(ls_lock_map.create(10, lib::ObLabel("LSLockMap")))) {
+    LOG_WARN("ls_lock_map create failed");
+  } else if (OB_FAIL(ls_lock_map.set_refactored(ls_id, lock_array)) &&
+             OB_ENTRY_EXIST != ret && OB_HASH_EXIST != ret) {
+    LOG_WARN("fail to set tablet_map", K(ret), K(ls_id));
+  } else if (OB_ISNULL(p = const_cast<ObLockIDArray *>(ls_lock_map.get(ls_id)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the ls not exist at tablet map", K(ret), K(ls_id));
+  } else if (OB_FAIL(p->assign(lock_ids))) {
+    LOG_WARN("push_back tablet_id failed", K(ret), K(ls_id), K(lock_ids));
+  } else {
+    do {
+      need_retry = false;
+
+      if (ctx.is_timeout()) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("lock table timeout", K(ret), K(ctx));
+      } else if (OB_FAIL(start_sub_tx_(ctx))) {
+        LOG_WARN("failed to start sub tx", K(ret), K(ctx));
+      } else {
+        if (OB_FAIL(inner_process_obj_lock_batch_(ctx, ls_lock_map, lock_mode, lock_owner))) {
+          LOG_WARN("process object locks failed", K(ret), K(lock_ids), K(ls_id));
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(end_sub_tx_(ctx, false/*not rollback*/))) {
+            LOG_WARN("failed to end sub tx", K(ret), K(ctx));
+          }
+        } else {
+          // rollback the sub tx.
+          need_retry = need_retry_single_task_(ctx, ret);
+          // overwrite the ret code.
+          if (need_retry &&
+              OB_FAIL(end_sub_tx_(ctx, true/*rollback*/))) {
+            LOG_WARN("failed to rollback sub tx", K(ret), K(ctx));
+          }
+        }
+      }
+    } while (need_retry && OB_SUCC(ret));
+  }
+  LOG_DEBUG("ObTableLockService::process_obj_lock_", K(ret), K(ctx), K(ls_id),
+            K(lock_ids), K(ctx.task_type_), K(lock_mode), K(lock_owner));
+
+  return ret;
+}
+
 int ObTableLockService::process_table_lock_(ObTableLockCtx &ctx,
                                             const ObTableLockMode lock_mode,
                                             const ObTableLockOwnerID lock_owner)
@@ -2633,7 +2869,7 @@ int ObTableLockService::start_sub_tx_(ObTableLockCtx &ctx)
     const ObTxParam &tx_param = ctx.tx_param_;
     const ObTxIsolationLevel &isolation_level = tx_param.isolation_;
     const int64_t expire_ts = ctx.abs_timeout_ts_;
-    int64_t &savepoint = ctx.current_savepoint_;
+    auto &savepoint = ctx.current_savepoint_;
     if (OB_FAIL(txs->create_implicit_savepoint(*ctx.tx_desc_,
                                                tx_param,
                                                savepoint))) {
@@ -2653,7 +2889,7 @@ int ObTableLockService::end_sub_tx_(ObTableLockCtx &ctx, const bool is_rollback)
   if (!ctx.is_savepoint_valid()) {
     LOG_INFO("end_sub_tx_ skip", K(ret), K(ctx));
   } else {
-    const int64_t &savepoint = ctx.current_savepoint_;
+    const auto &savepoint = ctx.current_savepoint_;
     const int64_t expire_ts = OB_MAX(ctx.abs_timeout_ts_, DEFAULT_TIMEOUT_US + ObTimeUtility::current_time());
     ObTransService *txs = MTL(ObTransService*);
     if (is_rollback &&
@@ -2685,7 +2921,7 @@ int ObTableLockService::start_stmt_(ObTableLockCtx &ctx)
     const ObTxParam &tx_param = ctx.tx_param_;
     const ObTxIsolationLevel &isolation_level = tx_param.isolation_;
     const int64_t expire_ts = ctx.abs_timeout_ts_;
-    int64_t &savepoint = ctx.stmt_savepoint_;
+    auto &savepoint = ctx.stmt_savepoint_;
     if (OB_FAIL(txs->create_implicit_savepoint(*ctx.tx_desc_,
                                                tx_param,
                                                savepoint))) {
@@ -2705,7 +2941,7 @@ int ObTableLockService::end_stmt_(ObTableLockCtx &ctx, const bool is_rollback)
   if (!ctx.is_stmt_savepoint_valid()) {
     LOG_INFO("end_stmt_ skip", K(ret), K(ctx));
   } else {
-    const int64_t &savepoint = ctx.stmt_savepoint_;
+    const auto &savepoint = ctx.stmt_savepoint_;
     const int64_t expire_ts = OB_MAX(ctx.abs_timeout_ts_, DEFAULT_TIMEOUT_US + ObTimeUtility::current_time());
     ObTransService *txs = MTL(ObTransService*);
     // just rollback the whole stmt, if it is needed.

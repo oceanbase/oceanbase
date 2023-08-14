@@ -84,7 +84,7 @@ int ObRedoLogGenerator::fill_redo_log(char *buf,
     TableLockRedoDataNode table_lock_redo;
     // record the number of serialized trans node in the filling process
     int64_t data_node_count = 0;
-    int64_t max_seq_no = 0;
+    transaction::ObTxSEQ max_seq_no;
     // TODO by fengshuo.fs : fix this usage
     ObTransCallbackMgr::RDLockGuard guard(callback_mgr_->get_rwlock());
     ObCallbackScope callbacks;
@@ -133,7 +133,7 @@ int ObRedoLogGenerator::fill_redo_log(char *buf,
         if (OB_UNLIKELY(OB_ERR_TOO_BIG_ROWSIZE == ret)) {
           callbacks.start_ = callbacks.end_ = cursor;
           data_size += iter->get_data_size();
-          max_seq_no = max(max_seq_no, iter->get_seq_no());
+          max_seq_no = MAX(max_seq_no, iter->get_seq_no());
         } else if (OB_SUCC(ret)) {
           if (nullptr == *callbacks.start_) {
             callbacks.start_ = cursor;
@@ -144,7 +144,7 @@ int ObRedoLogGenerator::fill_redo_log(char *buf,
             data_node_count++;
           }
           data_size += iter->get_data_size();
-          max_seq_no = max(max_seq_no, iter->get_seq_no());
+          max_seq_no = MAX(max_seq_no, iter->get_seq_no());
         }
       }
     }

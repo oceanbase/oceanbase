@@ -112,12 +112,12 @@ public:
 class CheckSqlSequenceCanReadFunctor : public ObITxDataCheckFunctor
 {
 public:
-  CheckSqlSequenceCanReadFunctor(const int64_t &sql_sequence, bool &can_read)
+  CheckSqlSequenceCanReadFunctor(const transaction::ObTxSEQ &sql_sequence, bool &can_read)
     : sql_sequence_(sql_sequence), can_read_(can_read) {}
   virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) override;
   TO_STRING_KV(K(sql_sequence_), K(can_read_));
 public:
-  const int64_t &sql_sequence_;
+  const transaction::ObTxSEQ &sql_sequence_;
   bool &can_read_;
 };
 
@@ -133,7 +133,7 @@ class CheckRowLockedFunctor : public ObITxDataCheckFunctor
 public:
   CheckRowLockedFunctor(const transaction::ObTransID &read_tx_id,
                         const transaction::ObTransID &data_tx_id,
-                        const int64_t &sql_sequence,
+                        const transaction::ObTxSEQ &sql_sequence,
                         ObStoreRowLockState &lock_state)
     : read_tx_id_(read_tx_id),
       data_tx_id_(data_tx_id),
@@ -145,7 +145,7 @@ public:
 public:
   const transaction::ObTransID &read_tx_id_;
   const transaction::ObTransID &data_tx_id_;
-  const int64_t &sql_sequence_;
+  const transaction::ObTxSEQ &sql_sequence_;
   ObStoreRowLockState &lock_state_;
 };
 

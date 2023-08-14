@@ -221,17 +221,6 @@ public:
   int get_bf_optimal_prefix(int64_t &prefix);
   int64_t get_tablet_count() const;
 
-  int replay_medium_compaction_clog(
-      const share::SCN &scn,
-      const char *buf,
-      const int64_t buf_size,
-      const int64_t pos);
-  int replay_update_reserved_snapshot(
-      const share::SCN &scn,
-      const char *buf,
-      const int64_t buf_size,
-      const int64_t pos);
-
   // update tablet
   int update_tablet_checkpoint(
     const ObTabletMapKey &key,

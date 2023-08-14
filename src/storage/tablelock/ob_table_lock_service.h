@@ -62,6 +62,9 @@ private:
   {
   public:
     ObTableLockCtx(const ObTableLockTaskType task_type,
+                   const int64_t origin_timeout_us,
+                   const int64_t timeout_us);
+    ObTableLockCtx(const ObTableLockTaskType task_type,
                    const uint64_t table_id,
                    const int64_t origin_timeout_us,
                    const int64_t timeout_us);
@@ -75,14 +78,12 @@ private:
                    const share::ObLSID &ls_id,
                    const int64_t origin_timeout_us,
                    const int64_t timeout_us);
-    ObTableLockCtx(const ObTableLockTaskType task_type,
-                   const ObLockOBJType obj_type,
-                   const uint64_t obj_id,
-                   const int64_t origin_timeout_us,
-                   const int64_t timeout_us);
     ~ObTableLockCtx() {}
     int set_tablet_id(const common::ObIArray<common::ObTabletID> &tablet_ids);
     int set_tablet_id(const common::ObTabletID &tablet_id);
+    int set_lock_id(const common::ObIArray<ObLockID> &lock_ids);
+    int set_lock_id(const ObLockID &lock_id);
+    int set_lock_id(const ObLockOBJType &obj_type, const uint64_t obj_id);
     bool is_try_lock() const { return 0 == timeout_us_; }
     bool is_deadlock_avoid_enabled() const;
     bool is_timeout() const;
@@ -92,11 +93,11 @@ private:
     const common::ObTabletID &get_tablet_id(const int64_t index) const;
     int add_touched_ls(const share::ObLSID &lsid);
     void clean_touched_ls();
-    bool is_savepoint_valid() { return -1 != current_savepoint_; }
-    void reset_savepoint() { current_savepoint_ = -1; }
+    bool is_savepoint_valid() { return current_savepoint_.is_valid(); }
+    void reset_savepoint() { current_savepoint_.reset(); }
 
-    bool is_stmt_savepoint_valid() { return -1 != stmt_savepoint_; }
-    void reset_stmt_savepoint() { stmt_savepoint_ = -1; }
+    bool is_stmt_savepoint_valid() { return stmt_savepoint_.is_valid(); }
+    void reset_stmt_savepoint() { stmt_savepoint_.reset(); }
     ObTableLockOpType get_lock_op_type() const { return lock_op_type_; }
     bool is_unlock_task() const
     {
@@ -118,16 +119,11 @@ private:
     ObTableLockTaskType task_type_; // current lock request type
     bool is_in_trans_;
     union {
-      // used for table/partition/tablet
+      // used for table/partition
       struct {
         uint64_t table_id_;
         uint64_t partition_id_;          // set when lock or unlock specified partition
         share::ObLSID ls_id_;            // used for alone tablet lock and unlock
-      };
-      // used for lock object
-      struct {
-        ObLockOBJType obj_type_;
-        uint64_t obj_id_;
       };
     };
 
@@ -139,10 +135,11 @@ private:
     sql::TransState trans_state_;
     transaction::ObTxDesc *tx_desc_;
     ObTxParam tx_param_;           // the tx param for current tx
-    int64_t current_savepoint_;    // used to rollback current sub tx.
+    transaction::ObTxSEQ current_savepoint_;    // used to rollback current sub tx.
     share::ObLSArray need_rollback_ls_; // which ls has been modified after
                                         // the current_savepoint_ created.
     common::ObTabletIDArray tablet_list_; // all the tablets need to be locked/unlocked
+    ObLockIDArray obj_list_;
     // TODO: yanyuan.cxf we need better performance.
     // share::ObLSArray ls_list_; // related ls list
     int64_t schema_version_;             // the schema version of the table to be locked
@@ -150,14 +147,14 @@ private:
     bool is_from_sql_;
 
     // use to kill the whole lock table stmt.
-    int64_t stmt_savepoint_;
+    transaction::ObTxSEQ stmt_savepoint_;
 
     TO_STRING_KV(K(is_in_trans_), K(table_id_), K(partition_id_),
-                 K(tablet_list_), K(obj_type_), K(obj_id_), K(lock_op_type_),
+                 K(tablet_list_), K(obj_list_), K(lock_op_type_),
                  K(origin_timeout_us_), K(timeout_us_),
                  K(abs_timeout_ts_), KPC(tx_desc_), K(tx_param_),
                  K(current_savepoint_), K(need_rollback_ls_),
-                 K(tablet_list_), K(schema_version_), K(tx_is_killed_),
+                 K(schema_version_), K(tx_is_killed_),
                  K(is_from_sql_), K(stmt_savepoint_));
   };
   class ObRetryCtx
@@ -289,11 +286,17 @@ public:
   int lock_tablet(ObTxDesc &tx_desc,
                   const ObTxParam &tx_param,
                   const ObLockTabletRequest &arg);
+  int lock_tablet(ObTxDesc &tx_desc,
+                  const ObTxParam &tx_param,
+                  const ObLockTabletsRequest &arg);
   // arg.op_type_ should be OUT_TRANS_UNLOCK:
   // unlock the table level lock and the tablet level lock.
   int unlock_tablet(ObTxDesc &tx_desc,
                     const ObTxParam &tx_param,
                     const ObUnLockTabletRequest &arg);
+  int unlock_tablet(ObTxDesc &tx_desc,
+                    const ObTxParam &tx_param,
+                    const ObUnLockTabletsRequest &arg);
   int lock_tablet(ObTxDesc &tx_desc,
                   const ObTxParam &tx_param,
                   const ObLockAloneTabletRequest &arg);
@@ -323,6 +326,12 @@ public:
   int unlock_obj(ObTxDesc &tx_desc,
                  const ObTxParam &tx_param,
                  const ObUnLockObjRequest &arg);
+  int lock_obj(ObTxDesc &tx_desc,
+               const ObTxParam &tx_param,
+               const ObLockObjsRequest &arg);
+  int unlock_obj(ObTxDesc &tx_desc,
+                 const ObTxParam &tx_param,
+                 const ObUnLockObjsRequest &arg);
   int garbage_collect_right_now();
   int get_obj_lock_garbage_collector(ObOBJLockGarbageCollector *&obj_lock_garbage_collector);
 private:
@@ -502,6 +511,11 @@ private:
   int process_obj_lock_(ObTableLockCtx &ctx,
                         const share::ObLSID &ls_id,
                         const ObLockID &lock_id,
+                        const ObTableLockMode lock_mode,
+                        const ObTableLockOwnerID lock_owner);
+  int process_obj_lock_(ObTableLockCtx &ctx,
+                        const share::ObLSID &ls_id,
+                        const common::ObIArray<ObLockID> &lock_ids,
                         const ObTableLockMode lock_mode,
                         const ObTableLockOwnerID lock_owner);
   static bool is_part_table_lock_(const ObTableLockTaskType task_type);

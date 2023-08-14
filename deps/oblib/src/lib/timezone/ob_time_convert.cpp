@@ -6104,7 +6104,10 @@ int ObTimeConverter::calc_last_date_of_the_month(const int64_t ori_datetime_valu
   return ret;
 }
 
-int ObTimeConverter::calc_next_date_of_the_wday(const int64_t ori_date_value, const ObString &wday_name, int64_t &result_date_value)
+int ObTimeConverter::calc_next_date_of_the_wday(const int64_t ori_date_value,
+                                                const ObString &wday_name,
+                                                const int64_t week_count,
+                                                int64_t &result_date_value)
 {
   int ret = OB_SUCCESS;
   ObTime ob_time(DT_TYPE_DATETIME);
@@ -6121,9 +6124,14 @@ int ObTimeConverter::calc_next_date_of_the_wday(const int64_t ori_date_value, co
         wday = i;
       }
     }
+    if (!found && 1 <= week_count && week_count <=7) {
+        found = true;
+        //1->Sunday, 2->Monday, 7-->Saturday
+        wday = (week_count == 1) ? 7:(week_count-1);
+    }
     if (!found) {
       ret = OB_ERR_INVALID_DAY_OF_THE_WEEK;
-      LOG_WARN("invalid week day", K(ret), K(wday_name));
+      LOG_WARN("invalid week day", K(ret), K(wday_name), K(week_count));
     } else {
       int32_t days_before_the_target_date = wday - ob_time.parts_[DT_WDAY];
       if (days_before_the_target_date <= 0) {

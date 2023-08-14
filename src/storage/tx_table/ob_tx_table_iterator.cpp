@@ -693,8 +693,9 @@ int ObTxCtxMemtableScanIterator::init(ObTxCtxMemtable *tx_ctx_memtable)
   return ret;
 }
 
-int ObTxCtxMemtableScanIterator::get_next_tx_ctx_table_info_(transaction::ObPartTransCtx *&tx_ctx,
-                                                             ObTxCtxTableInfo &ctx_info)
+int ObTxCtxMemtableScanIterator::serialize_next_tx_ctx_(ObTxLocalBuffer &buffer,
+                                                        int64_t &serialize_size,
+                                                        transaction::ObPartTransCtx *&tx_ctx)
 {
   int ret = OB_SUCCESS;
   bool need_retry = true;
@@ -704,7 +705,7 @@ int ObTxCtxMemtableScanIterator::get_next_tx_ctx_table_info_(transaction::ObPart
       if (OB_ITER_END != ret) {
         STORAGE_LOG(WARN, "ls_tx_ctx_iter_.get_next_tx_ctx failed", K(ret));
       }
-    } else if (OB_FAIL(tx_ctx->get_tx_ctx_table_info(ctx_info))) {
+    } else if (OB_FAIL(tx_ctx->serialize_tx_ctx_to_buffer(buffer, serialize_size))) {
       if (OB_TRANS_CTX_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
       } else {
@@ -724,7 +725,6 @@ int ObTxCtxMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
   int ret = OB_SUCCESS;
 
   ObTxCtxTableMeta curr_meta;
-  ObTxCtxTableInfo ctx_info;
   transaction::ObPartTransCtx *tx_ctx = NULL;
   char *row_buf = NULL;
   int64_t need_merge_length = 0;
@@ -733,40 +733,31 @@ int ObTxCtxMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "tx ctx memtable scan iterator is not inited");
-  }
-
-  if (OB_SUCC(ret)) {
-    if (has_unmerged_buf_) {
-      row_buf = buf_.get_ptr() + unmerged_buf_start_pos_;
-      need_merge_length = prev_meta_.get_tx_ctx_serialize_size() - unmerged_buf_start_pos_;
-      if (OB_FAIL(prev_meta_.get_multi_row_next_extent(curr_meta))) {
-        STORAGE_LOG(WARN, "prev_meta_.get_multi_row_next_extent failed", KR(ret), K_(prev_meta));
+  } else if (has_unmerged_buf_) {
+    // a single row can not hold the whole tx ctx
+    row_buf = buf_.get_ptr() + unmerged_buf_start_pos_;
+    need_merge_length = prev_meta_.get_tx_ctx_serialize_size() - unmerged_buf_start_pos_;
+    if (OB_FAIL(prev_meta_.get_multi_row_next_extent(curr_meta))) {
+      STORAGE_LOG(WARN, "prev_meta_.get_multi_row_next_extent failed", KR(ret), K_(prev_meta));
+    }
+    STORAGE_LOG(DEBUG, "write prev tx ctx unmerged buffer", K(prev_meta_));
+  } else {
+    // get next tx ctx and serialize it into buffer
+    int64_t serialize_size = 0;
+    if (OB_FAIL(serialize_next_tx_ctx_(buf_, serialize_size, tx_ctx))) {
+      if (OB_ITER_END != ret) {
+        STORAGE_LOG(WARN, "get_next_tx_ctx_table_info_ failed", K(ret));
       }
-      STORAGE_LOG(DEBUG, "write prev tx ctx unmerged buffer", K(prev_meta_));
     } else {
-      if (OB_FAIL(get_next_tx_ctx_table_info_(tx_ctx, ctx_info))) {
-        if (OB_ITER_END != ret) {
-          STORAGE_LOG(WARN, "get_next_tx_ctx_table_info_ failed", K(ret));
-        }
-      } else {
-        int64_t serialize_size = ctx_info.get_serialize_size();
-        curr_meta.init(tx_ctx->get_trans_id(), tx_ctx->get_ls_id(), serialize_size,
-                       // ceil((double)serialize_size / MAX_VALUE_LENGTH_)
-                       (serialize_size + MAX_VALUE_LENGTH_ - 1) / MAX_VALUE_LENGTH_, 0);
-        if (OB_FAIL(buf_.reserve(serialize_size))) {
-          STORAGE_LOG(WARN, "Failed to reserve local buffer", KR(ret));
-        } else {
-          int64_t pos = 0;
-          if (OB_FAIL(ctx_info.serialize(buf_.get_ptr(), serialize_size, pos))) {
-            STORAGE_LOG(WARN, "failed to serialize ctx_info", KR(ret), K(ctx_info), K(pos));
-          } else {
-            row_buf = buf_.get_ptr();
-            need_merge_length = serialize_size;
-          }
-        }
-        STORAGE_LOG(DEBUG, "write tx ctx info", K(ctx_info), K(serialize_size));
-        ls_tx_ctx_iter_.revert_tx_ctx(tx_ctx);
-      }
+      (void)curr_meta.init(tx_ctx->get_trans_id(),
+                           tx_ctx->get_ls_id(),
+                           serialize_size,
+                           (serialize_size + MAX_VALUE_LENGTH_ - 1) / MAX_VALUE_LENGTH_ /* row_num */,
+                           0 /* row_idx */);
+      row_buf = buf_.get_ptr();
+      need_merge_length = serialize_size;
+      STORAGE_LOG(DEBUG, "write tx ctx info", KPC(tx_ctx), K(serialize_size));
+      ls_tx_ctx_iter_.revert_tx_ctx(tx_ctx);
     }
   }
 
@@ -814,7 +805,7 @@ int ObTxCtxMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
     row_.set_last_multi_version_row();
     row_.set_compacted_multi_version_row();
     row = &row_;
-    STORAGE_LOG(DEBUG, "write tx ctx info", K(ctx_info), K(idx_), K(curr_meta));
+    STORAGE_LOG(DEBUG, "write tx ctx info", K(idx_), K(curr_meta));
     idx_++;
   }
 

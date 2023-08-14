@@ -292,7 +292,7 @@ public:
     store_ctx.mvcc_acc_ctx_.init_write(trans_ctx_,
                                        mem_ctx_,
                                        tx_desc_.tx_id_,
-                                       1000,
+                                       ObTxSEQ(1000, 0),
                                        tx_desc_,
                                        tx_table_guard,
                                        snapshot,

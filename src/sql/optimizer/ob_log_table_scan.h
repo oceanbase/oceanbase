@@ -426,6 +426,7 @@ public:
                                 ObRawExpr *&real_expr);
   int get_phy_location_type(ObTableLocationType &location_type);
   virtual int generate_access_exprs();
+  int copy_filter_before_index_back();
   void set_use_batch(bool use_batch) { use_batch_ = use_batch; }
   bool use_batch() const { return use_batch_; }
   // only use group_id_expr_ when use_batch() is true.

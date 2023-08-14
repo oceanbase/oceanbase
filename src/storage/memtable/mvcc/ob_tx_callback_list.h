@@ -72,11 +72,11 @@ public:
   // until callbacks smaller or equal than the seq_no. It will remove both
   // callbacks and data by calling rollback_callback. For synced callback we need
   // calculate checksum and for unsynced one we need remove them.
-  int remove_callbacks_for_rollback_to(const int64_t to_seq_no);
+  int remove_callbacks_for_rollback_to(const transaction::ObTxSEQ to_seq_no);
 
   // reverse_search_callback_by_seq_no will search callback from back to front
   // until callbacks smaller or equal than the seq_no
-  int reverse_search_callback_by_seq_no(const int64_t seq_no, ObITransCallback *search_res);
+  int reverse_search_callback_by_seq_no(const transaction::ObTxSEQ seq_no, ObITransCallback *search_res);
 
   // get_memtable_key_arr_w_timeout get all memtable key until timeout
   int get_memtable_key_arr_w_timeout(transaction::ObMemtableKeyArray &memtable_key_arr);

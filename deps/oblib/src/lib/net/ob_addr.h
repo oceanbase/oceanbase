@@ -30,7 +30,7 @@ class ObBatchP;
 namespace common
 {
 class ObString;
-
+static constexpr char UNIX_SOCKET_CLIENT_IP[] = "unix:";
 class ObAddr
 {
   OB_UNIS_VERSION(1);

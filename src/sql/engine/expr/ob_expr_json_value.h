@@ -52,7 +52,8 @@ public:
                          ObVector<uint8_t> &mismatch_val,
                          ObVector<uint8_t> &mismatch_type,
                          uint8_t &is_type_cast,
-                         uint8_t ascii_type);
+                         uint8_t ascii_type,
+                         uint8_t is_truncate);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   virtual common::ObCastMode get_cast_mode() const { return CM_ERROR_ON_SCALE_OVER;}
@@ -120,7 +121,8 @@ private:
                             common::ObAccuracy &accuracy,
                             ObObjType dst_type,
                             ObString &val,
-                            uint8_t &is_type_cast);
+                            uint8_t &is_type_cast,
+                            uint8_t is_truncate);
   static int cast_to_bit(ObIJsonBase *j_base, uint64_t &val);
   static int cast_to_json(common::ObIAllocator *allocator, ObIJsonBase *j_base,
                           ObString &val, uint8_t &is_type_cast);
@@ -172,17 +174,18 @@ private:
   const static uint8_t OB_JSON_TYPE_TYPE_ERROR      = 6;
   const static uint8_t OB_JSON_TYPE_IMPLICIT        = 7;
 
-  const static uint8_t json_value_param_json_doc      = 0;
-  const static uint8_t json_value_param_json_path     = 1;
-  const static uint8_t json_value_param_ret_type      = 2;
-  const static uint8_t json_value_param_opt_ascii     = 3;
-  const static uint8_t json_value_param_empty_type    = 4;
-  const static uint8_t json_value_param_empty_val     = 5;
-  const static uint8_t json_value_param_empty_val_pre = 6;
-  const static uint8_t json_value_param_error_type    = 7;
-  const static uint8_t json_value_param_error_val     = 8;
-  const static uint8_t json_value_param_error_val_pre = 9;
-  const static uint8_t json_value_param_opt_mismatch  = 10;
+  const static uint8_t json_doc_id      = 0;
+  const static uint8_t json_path_id     = 1;
+  const static uint8_t ret_type_id      = 2;
+  const static uint8_t opt_truncate_id  = 3;
+  const static uint8_t opt_ascii_id     = 4;
+  const static uint8_t empty_type_id    = 5;
+  const static uint8_t empty_val_id     = 6;
+  const static uint8_t empty_val_pre_id = 7;
+  const static uint8_t error_type_id    = 8;
+  const static uint8_t error_val_id     = 9;
+  const static uint8_t error_val_pre_id = 10;
+  const static uint8_t opt_mismatch_id  = 11;
 
   static int get_on_empty_or_error(const ObExpr &expr,
                                    ObEvalCtx &ctx,

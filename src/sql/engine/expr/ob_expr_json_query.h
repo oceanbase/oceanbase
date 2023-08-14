@@ -56,7 +56,7 @@ private:
                                 ObObjType dst_type);
   static int set_result(ObObjType dst_type, int32_t dst_len, ObIJsonBase *jb_res,
                         common::ObIAllocator *allocator, ObEvalCtx &ctx,
-                        const ObExpr &expr, ObDatum &res, uint8_t error_type, uint8_t ascii_type, uint8_t pretty_type = 0);
+                        const ObExpr &expr, ObDatum &res, uint8_t error_type, uint8_t ascii_type, uint8_t pretty_type = 0, uint8_t is_truncate = 0);
 
   /* process empty or error */
   const static uint8_t OB_JSON_ON_RESPONSE_COUNT        = 6;

@@ -256,9 +256,12 @@ void TestTxDataTable::insert_tx_data_()
     tx_data->state_ = is_abort_tx ? ObTxData::ABORT : ObTxData::COMMIT;
     int undo_act_num = is_abort_tx ? 0 : rand() & 15;
     for (int j = 0; j < undo_act_num; j++) {
-      auto from = random();
-      auto to = (from - 10000 > 0) ? (from - 100000) : 1;
-      transaction::ObUndoAction undo_action(from, to);
+      int64_t from = ObRandom::rand(2, 200000);
+      auto to = (from > 100000) ? (from - 100000) : 1;
+      transaction::ObUndoAction undo_action(ObTxSEQ(from, 0), ObTxSEQ(to, 0));
+      char buf[128];
+      undo_action.to_string(buf, 128);
+      ASSERT_TRUE(undo_action.is_valid()) << buf;
       ASSERT_EQ(OB_SUCCESS, tx_data->add_undo_action(&tx_table_, undo_action));
     }
 
@@ -290,7 +293,7 @@ void TestTxDataTable::insert_rollback_tx_data_()
     if (tx_data->end_scn_ > max_end_scn) {
       max_end_scn = tx_data->end_scn_;
     }
-    transaction::ObUndoAction undo_action(100, 10);
+    transaction::ObUndoAction undo_action(ObTxSEQ(100, 0), ObTxSEQ(10, 0));
     tx_data->add_undo_action(&tx_table_, undo_action);
     tx_data->state_ = ObTxData::RUNNING;
 
@@ -462,13 +465,13 @@ void TestTxDataTable::do_undo_status_test()
 
     tx_data->tx_id_ = rand();
     for (int i = 1; i <= 1001; i++) {
-      transaction::ObUndoAction undo_action(10 * (i + 1), 10 * i);
+      transaction::ObUndoAction undo_action(ObTxSEQ(10 * (i + 1), 0), ObTxSEQ(10 * i, 0));
       ASSERT_EQ(OB_SUCCESS, tx_data->add_undo_action(&tx_table_, undo_action));
     }
     ASSERT_EQ(1000 / TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE + 1, tx_data->undo_status_list_.undo_node_cnt_);
 
     {
-      transaction::ObUndoAction undo_action(10000000, 10);
+      transaction::ObUndoAction undo_action(ObTxSEQ(10000000, 0), ObTxSEQ(10,0));
       ASSERT_EQ(OB_SUCCESS, tx_data->add_undo_action(&tx_table_, undo_action));
     }
 
@@ -488,13 +491,13 @@ void TestTxDataTable::do_undo_status_test()
     tx_data->tx_id_ = rand();
 
     for (int i = 1; i <= 14; i++) {
-      transaction::ObUndoAction undo_action(i + 1, i);
+      transaction::ObUndoAction undo_action(ObTxSEQ(i + 1,0), ObTxSEQ(i,0));
       ASSERT_EQ(OB_SUCCESS, tx_data->add_undo_action(&tx_table_, undo_action));
     }
     ASSERT_EQ(2, tx_data->undo_status_list_.undo_node_cnt_);
 
     {
-      transaction::ObUndoAction undo_action(15, 7);
+      transaction::ObUndoAction undo_action(ObTxSEQ(15, 0), ObTxSEQ(7,0));
       ASSERT_EQ(OB_SUCCESS, tx_data->add_undo_action(&tx_table_, undo_action));
     }
 
@@ -518,7 +521,7 @@ void TestTxDataTable::test_serialize_with_action_cnt_(int cnt)
     tx_data->state_ = ObTxData::COMMIT;
 
     for (int i = 1; i <= cnt; i++) {
-      transaction::ObUndoAction undo_action(10 * (i + 1), 10 * i);
+      transaction::ObUndoAction undo_action(ObTxSEQ(10 * (i + 1), 0), ObTxSEQ(10 * i,0));
       ASSERT_EQ(OB_SUCCESS, tx_data->add_undo_action(&tx_table_, undo_action));
     }
     int64_t node_cnt = 0;
@@ -655,9 +658,9 @@ void TestTxDataTable::do_repeat_insert_test() {
     tx_data->state_ = ObTxData::RUNNING;
     int undo_act_num = (rand() & 31) + 1;
     for (int j = 0; j < undo_act_num; j++) {
-      auto from = random();
-      auto to = (from - 10000 > 0) ? (from - 100000) : 1;
-      transaction::ObUndoAction undo_action(from, to);
+      int64_t from = ObRandom::rand(1, 200000);
+      auto to = (from > 100000) ? (from - 100000) : 1;
+      transaction::ObUndoAction undo_action(ObTxSEQ(from, 0), ObTxSEQ(to, 0));
       ASSERT_EQ(OB_SUCCESS, tx_data->add_undo_action(&tx_table_, undo_action));
     }
 

@@ -314,7 +314,7 @@ void unregister_tx_snapshot_verify(ObTxReadSnapshot &snapshot);
  */
 int create_implicit_savepoint(ObTxDesc &tx,
                               const ObTxParam &tx_param,
-                              int64_t &savepoint,
+                              ObTxSEQ &savepoint,
                               const bool release = false);
 
 /**
@@ -370,7 +370,7 @@ int create_explicit_savepoint(ObTxDesc &tx,
  *                          rollback
  */
 int rollback_to_implicit_savepoint(ObTxDesc &tx,
-                                   const int64_t savepoint,
+                                   const ObTxSEQ savepoint,
                                    const int64_t expire_ts,
                                    const share::ObLSArray *extra_touched_ls);
 

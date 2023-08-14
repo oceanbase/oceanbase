@@ -82,6 +82,8 @@ public:
   static int64_t get_amount();
   static int set_value(const char *name, const char * new_value);
   static int set_value(const common::ObString &name, const common::ObString &new_value);
+  static int set_base_value(const char *name, const char * new_value);
+  static int set_base_value(const common::ObString &name, const common::ObString &new_value);
   static int init_default_values();
 };
 

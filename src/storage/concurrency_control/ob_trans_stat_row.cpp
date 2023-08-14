@@ -54,7 +54,7 @@ void build_trans_stat_(const ObTransStatRow trans_stat_row,
                               trans_stat_row.trans_version_.get_val_for_tx(),
                               trans_stat_row.scn_.get_val_for_tx(),
                               trans_stat_row.trans_id_.get_id(),
-                              trans_stat_row.seq_no_))) {
+                              trans_stat_row.seq_no_.cast_to_int()))) {
     TRANS_LOG(WARN, "failed to printf", K(ret), K(pos), K(trans_stat_len), K(trans_stat_row));
     trans_stat_ptr[0] = '\0';
   } else {

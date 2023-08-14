@@ -232,6 +232,7 @@ int ObDropIndexTask::drop_index_impl()
     int64_t ddl_rpc_timeout = 0;
     obrpc::ObDropIndexArg drop_index_arg;
     obrpc::ObDropIndexRes drop_index_res;
+    drop_index_arg.is_inner_          = true;
     drop_index_arg.tenant_id_         = tenant_id_;
     drop_index_arg.exec_tenant_id_    = tenant_id_;
     drop_index_arg.index_table_id_    = target_object_id_;

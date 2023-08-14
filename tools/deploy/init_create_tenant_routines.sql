@@ -63,7 +63,7 @@ begin
 
   if (arg_list = '') then set @str = ''; else set @str = ','; end if;
 
-  set @sql_text = concat("create tenant ", tenant_name, " primary_zone='", zone_name, "', resource_pool_list=('", @pool_name, "') ", @str, arg_list, " set ob_compatibility_mode='", compat_mode, "', ob_tcp_invited_nodes='%', parallel_servers_target=10, secure_file_priv = '';");
+  set @sql_text = concat("create tenant ", tenant_name, " primary_zone='", zone_name, "', resource_pool_list=('", @pool_name, "') ", @str, arg_list, " set ob_compatibility_mode='", compat_mode, "', ob_tcp_invited_nodes='%', parallel_servers_target=10, secure_file_priv = '/';");
   prepare stmt from @sql_text;
   execute stmt;
   deallocate prepare stmt;

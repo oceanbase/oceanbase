@@ -2582,6 +2582,9 @@ int ObRawExprResolverImpl::process_system_variable_node(const ParseNode *node, O
   if (OB_ISNULL(node) || OB_ISNULL(ctx_.sys_vars_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(node), K_(ctx_.sys_vars));
+  } else if (!ctx_.is_variable_allowed_) {
+    ret = OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK;
+    LOG_WARN("View's SELECT contains a variable or parameter", K(ret));
   } else {
     ObString str;
     str.assign_ptr(const_cast<char *>(node->str_value_), static_cast<int32_t>(node->str_len_));
@@ -2919,6 +2922,9 @@ int ObRawExprResolverImpl::process_user_var_node(const ParseNode *node, ObRawExp
              OB_ISNULL(node->children_[0])) {
     ret = OB_ERR_PARSER_SYNTAX;
     LOG_WARN("invalid node children for get user_val", K(ret), K(node->num_child_));
+  } else if (!ctx_.is_variable_allowed_) {
+    ret = OB_ERR_VIEW_SELECT_CONTAIN_QUESTIONMARK;
+    LOG_WARN("View's SELECT contains a variable or parameter", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::build_get_user_var(
       ctx_.expr_factory_,
       ObString(static_cast<int32_t>(node->children_[0]->str_len_), node->children_[0]->str_value_),
@@ -5507,7 +5513,7 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
   CK(OB_NOT_NULL(node))
   CK(T_FUN_SYS_JSON_VALUE == node->type_);
   // node child_num is nine,
-  CK(9 == node->num_child_);
+  CK(10 == node->num_child_);
   bool mismatch_vec = false;
   int32_t num = 0;
   ObSysFunRawExpr *func_expr = NULL;
@@ -5519,9 +5525,9 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
   }
   // pl mode check whether has mismatch
   if (lib::is_oracle_mode() && ctx_.current_scope_ == T_PL_SCOPE) {
-    if (node->children_[8]->num_child_ != 2
-        || node->children_[8]->children_[0]->value_ != 3
-        || node->children_[8]->children_[1]->value_ != 7) {
+    if (node->children_[9]->num_child_ != 2
+        || node->children_[9]->children_[0]->value_ != 3
+        || node->children_[9]->children_[1]->value_ != 7) {
       ret = OB_ERR_PARSE_PLSQL;
       LOG_USER_ERROR(OB_ERR_PARSE_PLSQL, "\"MISMATCH\"", "error empty");
     }
@@ -5553,16 +5559,16 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
   ParseNode *empty_default_value = NULL;
   ParseNode *error_type = NULL;
   ParseNode *error_default_value = NULL;
-  if (node->children_[4]->is_input_quoted_ == 1) {
-    empty_type = node->children_[6];
-    empty_default_value = node->children_[7];
-    error_type = node->children_[4];
-    error_default_value = node->children_[5];
+  if (node->children_[5]->is_input_quoted_ == 1) {
+    empty_type = node->children_[7];
+    empty_default_value = node->children_[8];
+    error_type = node->children_[5];
+    error_default_value = node->children_[6];
   } else {
-    empty_type = node->children_[4];
-    empty_default_value = node->children_[5];
-    error_type = node->children_[6];
-    error_default_value = node->children_[7];
+    empty_type = node->children_[5];
+    empty_default_value = node->children_[6];
+    error_type = node->children_[7];
+    error_default_value = node->children_[8];
   }
   // if use defualt, value should not be null , support
   if (OB_SUCC(ret)) {
@@ -5591,7 +5597,7 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
   // judge input TODO object type can use ignore and match type
   ObVector<const ParseNode*> mismatch_arr;
   if (OB_SUCC(ret)) {
-    const ParseNode *on_mismatch = node->children_[8];
+    const ParseNode *on_mismatch = node->children_[9];
     if (OB_ISNULL(on_mismatch)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("mismatch node is null", K(ret));
@@ -5603,13 +5609,13 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
         ParseNode *cur_node = NULL;
         for (int32_t i = 0; OB_SUCC(ret) && i < num; i++) {
           cur_node = node->children_[i];
-          if (i == 4) {
+          if (i == 5) {
             cur_node = empty_type;
-          } else if (i == 5) {
-            cur_node = empty_default_value;
           } else if (i == 6) {
-            cur_node = error_type;
+            cur_node = empty_default_value;
           } else if (i == 7) {
+            cur_node = error_type;
+          } else if (i == 8) {
             cur_node = error_default_value;
           }
           if (node->children_[i]->type_ == T_LINK_NODE || node->children_[i]->type_ == T_VALUE_VECTOR) {
@@ -5620,7 +5626,7 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
             CK(OB_NOT_NULL(para_expr));
             OZ(func_expr->add_param_expr(para_expr));
           }
-          if (OB_SUCC(ret) && (i == 5 || i == 7)) {
+          if (OB_SUCC(ret) && (i == 6 || i == 8)) {
             ObRawExpr *para_expr = NULL;
             CK(OB_NOT_NULL(cur_node));
             OZ(SMART_CALL(recursive_resolve(cur_node, para_expr)));

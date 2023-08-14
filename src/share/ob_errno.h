@@ -458,6 +458,7 @@ constexpr int OB_LS_IS_DELETED = -4761;
 constexpr int OB_SKIP_CHECKING_LS_STATUS = -4762;
 constexpr int OB_ERR_USE_ROWID_FOR_UPDATE = -4763;
 constexpr int OB_ERR_UNKNOWN_SET_OPTION = -4764;
+constexpr int OB_LS_NOT_LEADER = -4767;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -854,6 +855,10 @@ constexpr int OB_ERR_FUNCTIONAL_INDEX_ON_FIELD = -5499;
 constexpr int OB_ERR_GENCOL_LEGIT_CHECK_FAILED = -5500;
 constexpr int OB_ERR_GROUPING_FUNC_WITHOUT_GROUP_BY = -5501;
 constexpr int OB_ERR_DEPENDENT_BY_PARTITION_FUNC = -5502;
+constexpr int OB_ERR_VIEW_SELECT_CONTAIN_INTO = -5503;
+constexpr int OB_ERR_DEFAULT_NOT_ALLOWED = -5504;
+constexpr int OB_ERR_MODIFY_REALCOL_TO_GENCOL = -5505;
+constexpr int OB_ERR_MODIFY_TYPE_OF_GENCOL = -5506;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
 constexpr int OB_ERR_SP_UNDECLARED_VAR = -5543;
@@ -2329,6 +2334,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_UNKNOWN_SET_OPTION__USER_ERROR_MSG "unknown SET option \'%s\'"
 #define OB_CREATE_STANDBY_TENANT_FAILED__USER_ERROR_MSG "create standby tenant may fail, %s"
 #define OB_LS_WAITING_SAFE_DESTROY__USER_ERROR_MSG "ls waiting safe destory, %s"
+#define OB_LS_NOT_LEADER__USER_ERROR_MSG "log stream is not leader log stream"
+#define OB_LS_LOCK_CONFLICT__USER_ERROR_MSG "ls lock conflict, %s"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -2793,6 +2800,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_GENCOL_LEGIT_CHECK_FAILED__USER_ERROR_MSG "Legitimacy check failed for generated columns."
 #define OB_ERR_GROUPING_FUNC_WITHOUT_GROUP_BY__USER_ERROR_MSG "GROUPING function only supported with GROUP BY CUBE or ROLLUP"
 #define OB_ERR_DEPENDENT_BY_PARTITION_FUNC__USER_ERROR_MSG "Column '%.*s' has a partitioning function dependency and cannot be dropped or renamed."
+#define OB_ERR_VIEW_SELECT_CONTAIN_INTO__USER_ERROR_MSG "View's SELECT contains a 'INTO' clause."
+#define OB_ERR_DEFAULT_NOT_ALLOWED__USER_ERROR_MSG "Virtual column cannot have a default value"
+#define OB_ERR_MODIFY_REALCOL_TO_GENCOL__USER_ERROR_MSG "Real column cannot have an expression"
+#define OB_ERR_MODIFY_TYPE_OF_GENCOL__USER_ERROR_MSG "cannot modify data-type of virtual column"
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__USER_ERROR_MSG "Undeclared variable: %.*s"
@@ -4437,6 +4448,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_UNKNOWN_SET_OPTION__ORA_USER_ERROR_MSG "ORA-00600: unknown SET option \'%s\'"
 #define OB_CREATE_STANDBY_TENANT_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4765, create standby tenant may fail, %s"
 #define OB_LS_WAITING_SAFE_DESTROY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4766, ls waiting safe destory, %s"
+#define OB_LS_NOT_LEADER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4767, log stream is not leader log stream"
+#define OB_LS_LOCK_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4768, ls lock conflict, %s"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -4901,6 +4914,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_GENCOL_LEGIT_CHECK_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5500, Legitimacy check failed for generated columns."
 #define OB_ERR_GROUPING_FUNC_WITHOUT_GROUP_BY__ORA_USER_ERROR_MSG "ORA-30481: GROUPING function only supported with GROUP BY CUBE or ROLLUP"
 #define OB_ERR_DEPENDENT_BY_PARTITION_FUNC__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5502, Column '%.*s' has a partitioning function dependency and cannot be dropped or renamed."
+#define OB_ERR_VIEW_SELECT_CONTAIN_INTO__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5503, View's SELECT contains a 'INTO' clause."
+#define OB_ERR_DEFAULT_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-54025: Virtual column cannot have a default value"
+#define OB_ERR_MODIFY_REALCOL_TO_GENCOL__ORA_USER_ERROR_MSG "ORA-54026: Real column cannot have an expression"
+#define OB_ERR_MODIFY_TYPE_OF_GENCOL__ORA_USER_ERROR_MSG "ORA-54027: cannot modify data-type of virtual column"
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5542, %s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__ORA_USER_ERROR_MSG "PLS-00201: identifier '%.*s' must be declared"
@@ -5986,7 +6003,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2104];
+extern int g_all_ob_errnos[2110];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

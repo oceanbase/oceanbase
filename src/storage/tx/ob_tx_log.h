@@ -170,7 +170,11 @@ public:
   #endif
         ;
   }
-  static logservice::ObReplayBarrierType need_replay_barrier(const ObTxLogType log_type, const ObTxDataSourceType data_source_type);
+
+  static logservice::ObReplayBarrierType
+  need_replay_barrier(const ObTxLogType log_type, const ObTxDataSourceType data_source_type);
+  static int decide_final_barrier_type(const logservice::ObReplayBarrierType tmp_log_barrier_type,
+                                       logservice::ObReplayBarrierType &final_barrier_type);
 };
 
 // ============================== Tx Log Header ==============================
@@ -342,8 +346,8 @@ public:
       : scheduler_(temp_ref.scheduler_), trans_type_(TransType::SP_TRANS), session_id_(0),
         app_trace_id_str_(temp_ref.app_trace_id_str_), schema_version_(0), can_elr_(false),
         proposal_leader_(temp_ref.proposal_leader_), cur_query_start_time_(0), is_sub2pc_(false),
-        is_dup_tx_(false), tx_expired_time_(0), epoch_(0), last_op_sn_(0), first_sn(0),
-        last_sn(0), max_submitted_seq_no_(0), cluster_version_(0), xid_(temp_ref.xid_)
+        is_dup_tx_(false), tx_expired_time_(0), epoch_(0), last_op_sn_(0), first_seq_no_(),
+        last_seq_no_(), max_submitted_seq_no_(), cluster_version_(0), xid_(temp_ref.xid_)
   {
     before_serialize();
   }
@@ -360,16 +364,16 @@ public:
                     int64_t tx_expired_time,
                     int64_t epoch,
                     int64_t last_op_sn,
-                    int64_t first_scn,
-                    int64_t last_scn,
-                    int64_t max_submitted_seq_no,
+                    ObTxSEQ first_seq_no,
+                    ObTxSEQ last_seq_no,
+                    ObTxSEQ max_submitted_seq_no,
                     uint64_t cluster_version,
                     const ObXATransID &xid)
       : scheduler_(scheduler), trans_type_(trans_type), session_id_(session_id),
         app_trace_id_str_(app_trace_id_str), schema_version_(schema_version), can_elr_(elr),
         proposal_leader_(proposal_leader), cur_query_start_time_(cur_query_start_time),
         is_sub2pc_(is_sub2pc), is_dup_tx_(is_dup_tx), tx_expired_time_(tx_expired_time),
-        epoch_(epoch), last_op_sn_(last_op_sn), first_sn(first_scn), last_sn(last_scn),
+        epoch_(epoch), last_op_sn_(last_op_sn), first_seq_no_(first_seq_no), last_seq_no_(last_seq_no),
         max_submitted_seq_no_(max_submitted_seq_no), cluster_version_(cluster_version),
         xid_(xid)
   {
@@ -389,9 +393,9 @@ public:
   int64_t get_tx_expired_time() const { return tx_expired_time_; }
   int64_t get_last_op_sn() const { return last_op_sn_; }
   int64_t get_epoch() const { return epoch_; }
-  int64_t get_first_scn() const { return first_sn; }
-  int64_t get_last_scn() const { return last_sn; }
-  int64_t get_max_submitted_seq_no() const { return max_submitted_seq_no_; }
+  ObTxSEQ get_first_seq_no() const { return first_seq_no_; }
+  ObTxSEQ get_last_seq_no() const { return last_seq_no_; }
+  ObTxSEQ get_max_submitted_seq_no() const { return max_submitted_seq_no_; }
   uint64_t get_cluster_version() const { return cluster_version_; }
   const ObXATransID &get_xid() const { return xid_; }
   // for ob_admin
@@ -412,8 +416,8 @@ public:
                K(tx_expired_time_),
                K(epoch_),
                K(last_op_sn_),
-               K(first_sn),
-               K(last_sn),
+               K(first_seq_no_),
+               K(last_seq_no_),
                K(max_submitted_seq_no_),
                K(cluster_version_),
                K(xid_));
@@ -438,11 +442,11 @@ private:
   // sql execution relative
   int64_t epoch_;
   int64_t last_op_sn_;
-  int64_t first_sn;
-  int64_t last_sn;
+  ObTxSEQ first_seq_no_;
+  ObTxSEQ last_seq_no_;
 
   // ctrl savepoint written log
-  int64_t max_submitted_seq_no_;
+  ObTxSEQ max_submitted_seq_no_;
 
   uint64_t cluster_version_;
   ObXATransID xid_;
@@ -873,12 +877,12 @@ public:
   OB_UNIS_VERSION(1);
 public:
   ObTxRollbackToLog() = default;
-  ObTxRollbackToLog(const int64_t from, const int64_t to)
+  ObTxRollbackToLog(const ObTxSEQ from, const ObTxSEQ to)
     : from_(from), to_(to) {before_serialize();}
 
 
-  int64_t get_from() const { return from_; }
-  int64_t get_to() const { return to_; }
+  ObTxSEQ get_from() const { return from_; }
+  ObTxSEQ get_to() const { return to_; }
 
   int ob_admin_dump(share::ObAdminMutatorStringArg &arg);
 
@@ -889,8 +893,8 @@ public:
   int before_serialize();
 private:
   ObTxSerCompatByte compat_bytes_;
-  int64_t from_;
-  int64_t to_;
+  ObTxSEQ from_;
+  ObTxSEQ to_;
 };
 
 // ============================== Tx Log Blcok ==============================

@@ -520,6 +520,43 @@ void ObFetchLSMemberListInfo::reset()
 
 OB_SERIALIZE_MEMBER(ObFetchLSMemberListInfo, member_list_);
 
+ObFetchLSMemberAndLearnerListArg::ObFetchLSMemberAndLearnerListArg()
+  : tenant_id_(OB_INVALID_ID),
+    ls_id_()
+{
+}
+
+bool ObFetchLSMemberAndLearnerListArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid();
+}
+
+void ObFetchLSMemberAndLearnerListArg::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+}
+
+OB_SERIALIZE_MEMBER(ObFetchLSMemberAndLearnerListArg, tenant_id_, ls_id_);
+
+ObFetchLSMemberAndLearnerListInfo::ObFetchLSMemberAndLearnerListInfo()
+  : member_list_(),
+    learner_list_()
+{
+}
+
+bool ObFetchLSMemberAndLearnerListInfo::is_valid() const
+{
+  return member_list_.is_valid() || learner_list_.is_valid();
+}
+
+void ObFetchLSMemberAndLearnerListInfo::reset()
+{
+  member_list_.reset();
+  learner_list_.reset();
+}
+
+OB_SERIALIZE_MEMBER(ObFetchLSMemberAndLearnerListInfo, member_list_, learner_list_);
+
 ObCopySSTableMacroRangeInfoArg::ObCopySSTableMacroRangeInfoArg()
   : tenant_id_(OB_INVALID_ID),
     ls_id_(),
@@ -1413,8 +1450,17 @@ int ObFetchTabletInfoP::process()
     ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
     ObCopyTabletInfoObProducer producer;
     ObCopyTabletInfo tablet_info;
-    const int64_t MAX_TABLET_NUM = 100;
+    int64_t max_tablet_num = 32;
     int64_t tablet_count = 0;
+
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      const int64_t tmp_max_tablet_num = tenant_config->_ha_tablet_info_batch_count;
+      if (0 != tmp_max_tablet_num) {
+        max_tablet_num = tmp_max_tablet_num;
+      }
+    }
+
     LOG_INFO("start to fetch tablet info", K(arg_));
 
     last_send_time_ = ObTimeUtility::current_time();
@@ -1464,7 +1510,7 @@ int ObFetchTabletInfoP::process()
           } else {
             STORAGE_LOG(WARN, "failed to get next tablet meta info", K(ret));
           }
-        } else if (tablet_count >= MAX_TABLET_NUM) {
+        } else if (tablet_count >= max_tablet_num) {
           timeguard.click();
           if (this->result_.get_position() > 0 && OB_FAIL(flush_and_wait())) {
             LOG_WARN("failed to flush and wait", K(ret), K(tablet_info));
@@ -1798,6 +1844,61 @@ int ObFetchLSMemberListP::process()
     logservice::ObLogService *log_service = nullptr;
     ObRole role;
     int64_t proposal_id = 0;
+    ObAddr election_leader;
+    if (tenant_id != MTL_ID()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rpc get member list tenant not match", K(ret), K(tenant_id));
+    } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log service should not be NULL", K(ret), KP(log_service));
+    } else if (OB_FAIL(log_service->get_palf_role(ls_id, role, proposal_id))) {
+      LOG_WARN("failed to get role", K(ret), "arg", arg_);
+    } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls service should not be null", K(ret));
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("failed to get ls", K(ret), K(ls_id));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be null", K(ret));
+    } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log handler should not be NULL", K(ret));
+    } else if (OB_FAIL(log_handler->get_election_leader(election_leader))) {
+      LOG_WARN("failed to get election leader", K(ret), KPC(ls));
+    } else if (!is_strong_leader(role) && GCTX.self_addr() != election_leader) {
+      ret = OB_LS_NOT_LEADER;
+      LOG_WARN("ls is not leader, cannot get member list", K(ret), K(role), K(arg_),
+          K(election_leader), "self", GCTX.self_addr());
+    } else if (OB_FAIL(log_handler->get_paxos_member_list(member_list, paxos_replica_num))) {
+      LOG_WARN("failed to get paxos member list", K(ret));
+    } else if (OB_FAIL(result_.member_list_.deep_copy(member_list))) {
+      LOG_WARN("failed to assign", K(ret), K(member_list));
+    }
+  }
+  return ret;
+}
+
+ObFetchLSMemberAndLearnerListP::ObFetchLSMemberAndLearnerListP()
+{
+}
+
+int ObFetchLSMemberAndLearnerListP::process()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg_.tenant_id_;
+  const share::ObLSID &ls_id = arg_.ls_id_;
+  MTL_SWITCH(tenant_id) {
+    ObLSService *ls_svr = NULL;
+    ObLSHandle ls_handle;
+    ObLS *ls = NULL;
+    logservice::ObLogHandler *log_handler = NULL;
+    common::ObMemberList member_list;
+    int64_t paxos_replica_num = 0;
+    logservice::ObLogService *log_service = nullptr;
+    ObRole role;
+    int64_t proposal_id = 0;
+    common::GlobalLearnerList learner_list;
     if (tenant_id != MTL_ID()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rpc get member list tenant not match", K(ret), K(tenant_id));
@@ -1820,12 +1921,16 @@ int ObFetchLSMemberListP::process()
     } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log handler should not be NULL", K(ret));
-    } else if (OB_FAIL(log_handler->get_paxos_member_list(member_list, paxos_replica_num))) {
-      LOG_WARN("failed to get paxos member list", K(ret));
+    } else if (OB_FAIL(log_handler->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list))) {
+      LOG_WARN("failed to get paxos member list and learner list", K(ret));
     } else if (OB_FAIL(result_.member_list_.deep_copy(member_list))) {
-      LOG_WARN("failed to assign", K(ret), K(member_list));
+      LOG_WARN("failed to assign member list", K(ret), K(member_list));
+    } else if (OB_FAIL(result_.learner_list_.deep_copy(learner_list))) {
+      LOG_WARN("failed to assign learner list", K(ret), K(learner_list));
     }
+
   }
+
   return ret;
 }
 
@@ -2781,7 +2886,8 @@ int ObStorageGetConfigVersionAndTransferScnP::process()
 
 ObStorageFetchLSViewP::ObStorageFetchLSViewP(
     common::ObInOutBandwidthThrottle *bandwidth_throttle)
-    : ObStorageStreamRpcP(bandwidth_throttle)
+    : ObStorageStreamRpcP(bandwidth_throttle),
+      max_tablet_num_(0)
 {
 }
 
@@ -2794,7 +2900,15 @@ int ObStorageFetchLSViewP::process()
     ObLSService *ls_service = NULL;
     ObLS *ls = NULL;
     char * buf = NULL;
-    const int64_t MAX_TABLET_NUM = 32;
+    max_tablet_num_ = 32;
+
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      const int64_t tmp_max_tablet_num = tenant_config->_ha_tablet_info_batch_count;
+      if (0 != tmp_max_tablet_num) {
+        max_tablet_num_ = tmp_max_tablet_num;
+      }
+    }
 
     int64_t filled_tablet_count = 0;
     int64_t total_tablet_count = 0;
@@ -2813,7 +2927,7 @@ int ObStorageFetchLSViewP::process()
       if (!tablet_info.is_valid()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("fill tablet meta info get invalid argument", K(ret), K(tablet_info));
-      } else if (filled_tablet_count >= MAX_TABLET_NUM) {
+      } else if (filled_tablet_count >= this->max_tablet_num_) {
         if (this->result_.get_position() > 0 && OB_FAIL(flush_and_wait())) {
           LOG_WARN("failed to flush and wait", K(ret), K(tablet_info));
         } else {
@@ -3783,5 +3897,26 @@ int ObStorageRpc::wakeup_transfer_service(
   return ret;
 }
 
+int ObStorageRpc::fetch_ls_member_and_learner_list(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const ObStorageHASrcInfo &src_info,
+    obrpc::ObFetchLSMemberAndLearnerListInfo &member_info)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObFetchLSMemberAndLearnerListArg arg;
+  arg.tenant_id_ = tenant_id;
+  arg.ls_id_ = ls_id;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
+  } else if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_)
+      .fetch_ls_member_and_learner_list(arg, member_info))) {
+    LOG_WARN("fail to check ls is valid member", K(ret), K(tenant_id), K(ls_id));
+  }
+
+  return ret;
+}
 } // storage
 } // oceanbase

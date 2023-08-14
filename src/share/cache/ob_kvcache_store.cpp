@@ -539,7 +539,9 @@ int ObKVCacheStore::sync_wash_mbs(const uint64_t tenant_id, const int64_t size_n
     COMMON_LOG(WARN, "invalid arguments", K(ret), K(tenant_id), K(size_need_washed),
         K(wash_single_mb), K_(aligned_block_size));
   } else if (OB_FAIL(try_flush_washable_mb(tenant_id, wash_blocks, -1, size_need_washed))) {
-    COMMON_LOG(WARN, "Fail to try flush mb", K(ret), K(tenant_id));
+    if (ret != OB_CACHE_FREE_BLOCK_NOT_ENOUGH) {
+      COMMON_LOG(WARN, "Fail to try flush mb", K(ret), K(tenant_id));
+    }
   }
   
   return ret;
@@ -654,7 +656,7 @@ int ObKVCacheStore::try_flush_washable_mb(
       // sync wash 
       if (OB_SUCC(ret) && size_washed < size_need_washed) {
         ret = OB_CACHE_FREE_BLOCK_NOT_ENOUGH;
-        COMMON_LOG(WARN, "can not find enough memory block to wash", K(ret), K(size_washed), K(size_need_washed));
+        COMMON_LOG(INFO, "can not find enough memory block to wash", K(ret), K(size_washed), K(size_need_washed));
       }
       if (OB_FAIL(ret)) {
         // free memory of memory blocks washed if any error occur

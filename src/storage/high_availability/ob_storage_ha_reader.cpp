@@ -20,6 +20,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/tablet/ob_tablet_iterator.h"
+#include "observer/omt/ob_tenant.h"
 
 namespace oceanbase
 {
@@ -206,6 +207,8 @@ int ObCopyMacroBlockObReader::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(param));
   } else {
+    const int64_t rpc_timeout = ObStorageHAUtils::get_rpc_timeout();
+
     SMART_VAR(ObCopyMacroBlockRangeArg, arg) {
       if (OB_FAIL(macro_block_mem_context_.init())) {
         LOG_WARN("failed to init macro block memory context", K(ret));
@@ -230,7 +233,7 @@ int ObCopyMacroBlockObReader::init(
           LOG_ERROR("rpc arg must not larger than packet size", K(ret), K(arg.get_serialize_size()));
         } else if (OB_FAIL(param.svr_rpc_proxy_->to(param.src_info_.src_addr_).by(OB_DATA_TENANT_ID).dst_cluster_id(param.src_info_.cluster_id_)
                            .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
-                           .timeout(ObStorageRpcProxy::STREAM_RPC_TIMEOUT)
+                           .timeout(rpc_timeout)
                            .fetch_macro_block(arg, rpc_buffer_, handle_))) {
           LOG_WARN("failed to send fetch macro block rpc", K(param), K(ret));
         } else {
@@ -786,6 +789,7 @@ int ObCopyTabletInfoObReader::init(
     common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
+  int64_t rpc_timeout = FETCH_TABLET_INFO_TIMEOUT;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -796,7 +800,8 @@ int ObCopyTabletInfoObReader::init(
     LOG_WARN("invalid argument", K(ret), K(src_info), K(rpc_arg));
   } else if (OB_FAIL(rpc_reader_.init(bandwidth_throttle))) {
     LOG_WARN("fail to init tablet info rpc reader", K(ret));
-  } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID).timeout(FETCH_TABLET_INFO_TIMEOUT).dst_cluster_id(src_info.cluster_id_)
+  } else if (FALSE_IT(rpc_timeout = ObStorageHAUtils::get_rpc_timeout())) {
+  } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID).timeout(rpc_timeout).dst_cluster_id(src_info.cluster_id_)
                 .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
                 .fetch_tablet_info(rpc_arg, rpc_reader_.get_rpc_buffer(), rpc_reader_.get_handle()))) {
     LOG_WARN("failed to send fetch tablet info rpc", K(ret), K(src_info), K(rpc_arg));
@@ -1051,6 +1056,7 @@ int ObCopySSTableInfoObReader::init(
     common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
+  int64_t rpc_timeout = FETCH_TABLET_SSTABLE_INFO_TIMEOUT;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -1061,8 +1067,9 @@ int ObCopySSTableInfoObReader::init(
     LOG_WARN("invalid argument", K(ret), K(src_info), K(rpc_arg));
   } else if (OB_FAIL(rpc_reader_.init(bandwidth_throttle))) {
     LOG_WARN("fail to init tablet info rpc reader", K(ret));
+  } else if (FALSE_IT(rpc_timeout = ObStorageHAUtils::get_rpc_timeout())) {
   } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID)
-                .timeout(FETCH_TABLET_SSTABLE_INFO_TIMEOUT).dst_cluster_id(src_info.cluster_id_)
+                .timeout(rpc_timeout).dst_cluster_id(src_info.cluster_id_)
                 .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
                 .fetch_tablet_sstable_info(rpc_arg, rpc_reader_.get_rpc_buffer(), rpc_reader_.get_handle()))) {
     LOG_WARN("failed to send fetch tablet info rpc", K(ret), K(src_info), K(rpc_arg));
@@ -1912,6 +1919,7 @@ int ObCopySSTableMacroObReader::init(
     common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
+  int64_t rpc_timeout = FETCH_SSTABLE_MACRO_INFO_TIMEOUT;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -1922,8 +1930,9 @@ int ObCopySSTableMacroObReader::init(
     LOG_WARN("invalid argument", K(ret), K(src_info), K(rpc_arg));
   } else if (OB_FAIL(rpc_reader_.init(bandwidth_throttle))) {
     LOG_WARN("fail to init tablet info rpc reader", K(ret));
+  } else if (FALSE_IT(rpc_timeout = ObStorageHAUtils::get_rpc_timeout())) {
   } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID)
-                .timeout(FETCH_SSTABLE_MACRO_INFO_TIMEOUT).dst_cluster_id(src_info.cluster_id_)
+                .timeout(rpc_timeout).dst_cluster_id(src_info.cluster_id_)
                 .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
                 .fetch_sstable_macro_info(rpc_arg, rpc_reader_.get_rpc_buffer(), rpc_reader_.get_handle()))) {
     LOG_WARN("failed to send fetch tablet info rpc", K(ret), K(src_info), K(rpc_arg));
@@ -2583,6 +2592,12 @@ int ObCopyLSViewInfoObReader::init(
     common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
+  ObTenantDagScheduler *scheduler = NULL;
+  share::ObTenantBase *tenant_base = MTL_CTX();
+  omt::ObTenant *tenant = NULL;
+  ObLSService *ls_service = NULL;
+  ObLS *ls = NULL;
+  ObLSHandle ls_handle;
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -2591,22 +2606,74 @@ int ObCopyLSViewInfoObReader::init(
              || OB_UNLIKELY(!rpc_arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(src_info), K(rpc_arg));
+  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
+  } else if (OB_ISNULL(tenant_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant base should not be NULL", K(ret), KP(tenant_base));
+  } else if (FALSE_IT(tenant = static_cast<omt::ObTenant *>(tenant_base))) {
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(rpc_arg.ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(rpc_arg));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), K(rpc_arg));
   } else if (OB_FAIL(rpc_reader_.init(bandwidth_throttle))) {
     LOG_WARN("fail to init tablet info rpc reader", K(ret));
-  } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID)
-                .timeout(FETCH_LS_VIEW_INFO_TIMEOUT).dst_cluster_id(src_info.cluster_id_)
+  } else {
+    const int64_t WAIT_GC_LOCK_TIMEOUT = 3 * 60 * 1000 * 1000; // 3 min
+    const int64_t CHECK_GC_LOCK_INTERVAL = 1000000; // 1s
+    const int64_t wait_gc_lock_start_ts = ObTimeUtility::current_time();
+    int64_t cost_ts = 0;
+    int64_t rpc_timeout = FETCH_LS_VIEW_INFO_TIMEOUT;
+
+    do {
+      if (ls->is_stopped()) {
+        ret = OB_NOT_RUNNING;
+        LOG_WARN("ls is not running, stop send get ls view rpc", K(ret), KPC(ls));
+      } else if (scheduler->has_set_stop()) {
+        ret = OB_SERVER_IS_STOPPING;
+        LOG_WARN("tenant dag scheduler has set stop, stop send get ls view rpc", K(ret), KPC(ls));
+      } else if (tenant->has_stopped()) {
+        ret = OB_TENANT_HAS_BEEN_DROPPED;
+        LOG_WARN("tenant has been stopped, stop send get ls view rpc", K(ret), KPC(ls));
+      } else if (FALSE_IT(rpc_timeout = ObStorageHAUtils::get_rpc_timeout())) {
+      } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID)
+                .timeout(rpc_timeout).dst_cluster_id(src_info.cluster_id_)
                 .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
                 .fetch_ls_view(rpc_arg, rpc_reader_.get_rpc_buffer(), rpc_reader_.get_handle()))) {
-    LOG_WARN("failed to send fetch ls view info rpc", K(ret), K(src_info), K(rpc_arg));
-  } else if (OB_FAIL(rpc_reader_.fetch_and_decode(ls_meta_))) {
-    LOG_WARN("fail to fetch and decode ls meta", K(ret));
-  } else if (!ls_meta_.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid ls meta", K(ret), K_(ls_meta));
-  } else {
-    is_inited_ = true;
-    LOG_INFO("succeed to init fetch ls view info reader", K(src_info), K(rpc_arg));
+        if (OB_TABLET_GC_LOCK_CONFLICT != ret) {
+          LOG_WARN("failed to send fetch ls view info rpc", K(ret), K(src_info), K(rpc_arg));
+        } else {
+          cost_ts = ObTimeUtility::current_time() - wait_gc_lock_start_ts;
+          if (WAIT_GC_LOCK_TIMEOUT <= cost_ts) {
+            ret = OB_EAGAIN;
+            LOG_WARN("copy ls view wait gc lock timeout, need try again.", K(ret), K(src_info), K(rpc_arg));
+          } else {
+            ob_usleep(CHECK_GC_LOCK_INTERVAL);
+          }
+        }
+      } else {
+        cost_ts = ObTimeUtility::current_time() - wait_gc_lock_start_ts;
+        LOG_INFO("succeed to init copy ls view", K(src_info), K(rpc_arg), K(cost_ts));
+      }
+    } while (OB_TABLET_GC_LOCK_CONFLICT == ret);
+
+
+    if (FAILEDx(rpc_reader_.fetch_and_decode(ls_meta_))) {
+      LOG_WARN("fail to fetch and decode ls meta", K(ret));
+    } else if (!ls_meta_.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid ls meta", K(ret), K_(ls_meta));
+    } else {
+      is_inited_ = true;
+      LOG_INFO("succeed to init fetch ls view info reader", K(src_info), K(rpc_arg));
+    }
   }
+
   return ret;
 }
 

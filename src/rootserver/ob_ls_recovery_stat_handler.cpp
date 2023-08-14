@@ -194,6 +194,9 @@ int ObLSRecoveryStatHandler::do_get_ls_level_readable_scn_(SCN &read_scn)
     // scn get order: read_scn before replayable_scn before sync_scn
   } else if (OB_FAIL(ls_->get_max_decided_scn(read_scn))) {
     LOG_WARN("failed to get_max_decided_scn", KR(ret), KPC_(ls));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
+    //Before the cluster version is pushed up, the majority is not counted,
+    //and this RPC is only supported in version 4.2
   } else if (OB_FAIL(get_majority_readable_scn_(read_scn /* leader_readable_scn */, majority_min_readable_scn))) {
     LOG_WARN("failed to get_majority_readable_scn_", KR(ret), K(read_scn), KPC_(ls));
   } else {

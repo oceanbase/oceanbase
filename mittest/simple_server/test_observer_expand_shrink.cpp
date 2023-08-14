@@ -101,9 +101,12 @@ TEST_F(ObserverExpandShink, basic_func)
   GCONF.log_disk_size = 1024 * 1024 * 1024ul * 1024 * 100ul;
   int64_t log_disk_size = 0;
   int64_t log_disk_percentage = 0;
-  EXPECT_EQ(OB_SERVER_OUTOF_DISK_SPACE, observer::ObServerUtils::get_log_disk_info_in_config(
+  int64_t total_space = 0;
+  EXPECT_EQ(OB_SUCCESS, observer::ObServerUtils::get_log_disk_info_in_config(
                                                                 log_disk_size,
-                                                                log_disk_percentage));
+                                                                log_disk_percentage,
+                                                                total_space));
+  EXPECT_EQ(true, total_space < log_disk_size);
 }
 
 template<typename ... Args>

@@ -10218,6 +10218,10 @@ int ObDDLOperator::drop_all_label_se_table_column(uint64_t tenant_id,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get column schema", K(ret));
       } else if (0 == column->get_column_name_str().compare(policy_column_name)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("drop policy with table column", K(ret), K(table->get_table_name_str()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop policy with table column");
+        /*
         int64_t new_schema_version = OB_INVALID_SCHEMA_VERSION;
         if (table->is_index_table()) {
           ret = OB_ERR_ALTER_INDEX_COLUMN;
@@ -10238,6 +10242,7 @@ int ObDDLOperator::drop_all_label_se_table_column(uint64_t tenant_id,
                              trans, *table, new_schema_version ))) {
           LOG_WARN("fail to sync aux schema version column", K(ret));
         }
+        */
       }
     }
   }

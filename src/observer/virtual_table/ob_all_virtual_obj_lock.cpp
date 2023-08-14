@@ -284,7 +284,7 @@ int ObAllVirtualObjLock::process_curr_tenant(ObNewRow *&row)
         case EXTRA_INFO:
           snprintf(lock_op_extra_info_, sizeof(lock_op_extra_info_),
                    "count:%ld, position:%s",
-                   ((lock_op.op_type_ == IN_TRANS_DML_LOCK && !is_iter_tx_) ? lock_op.lock_seq_no_ : 0),
+                   ((lock_op.op_type_ == IN_TRANS_DML_LOCK && !is_iter_tx_) ? lock_op.lock_seq_no_.cast_to_int() : 0),
                    is_iter_tx_ ? "tx_ctx" : "lock_table");
           lock_op_extra_info_[MAX_LOCK_OP_EXTRA_INFO_LENGTH - 1] = '\0';
           cur_row_.cells_[i].set_varchar(lock_op_extra_info_);

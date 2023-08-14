@@ -355,7 +355,7 @@ public:
       create_trans_id_(),
       op_type_(UNKNOWN_TYPE),
       lock_op_status_(UNKNOWN_STATUS),
-      lock_seq_no_(0),
+      lock_seq_no_(),
       commit_version_(),
       commit_scn_(),
       create_timestamp_(0),
@@ -368,7 +368,7 @@ public:
       const ObTransID &trans_id,
       const ObTableLockOpType op_type,
       const ObTableLockOpStatus lock_op_status,
-      const int64_t seq_no,
+      const ObTxSEQ seq_no,
       const int64_t create_timestamp,
       const int64_t create_schema_version) :
       lock_id_(),
@@ -377,7 +377,7 @@ public:
       create_trans_id_(),
       op_type_(UNKNOWN_TYPE),
       lock_op_status_(UNKNOWN_STATUS),
-      lock_seq_no_(0),
+      lock_seq_no_(),
       commit_version_(),
       commit_scn_(),
       create_timestamp_(0),
@@ -400,7 +400,7 @@ public:
       const ObTransID &trans_id,
       const ObTableLockOpType op_type,
       const ObTableLockOpStatus lock_op_status,
-      const int64_t seq_no,
+      const ObTxSEQ seq_no,
       const int64_t create_timestamp,
       const int64_t create_schema_version);
   bool is_valid() const;
@@ -445,7 +445,7 @@ public:
   ObTransID create_trans_id_;
   ObTableLockOpType op_type_;
   ObTableLockOpStatus lock_op_status_;
-  int64_t lock_seq_no_;
+  ObTxSEQ lock_seq_no_;
   share::SCN commit_version_;
   share::SCN commit_scn_;
   // used to check whether a trans modify before a schema_version or timestamp.

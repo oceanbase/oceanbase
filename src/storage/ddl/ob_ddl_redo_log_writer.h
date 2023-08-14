@@ -184,7 +184,7 @@ private:
 struct ObDDLRedoLogHandle final
 {
 public:
-  static const int64_t DDL_REDO_LOG_TIMEOUT = 10 * 1000 * 1000; // 10
+  static const int64_t DDL_REDO_LOG_TIMEOUT = 60 * 1000 * 1000; // 1min
   static const int64_t CHECK_DDL_REDO_LOG_FINISH_INTERVAL = 1000; // 1ms
   ObDDLRedoLogHandle();
   ~ObDDLRedoLogHandle();

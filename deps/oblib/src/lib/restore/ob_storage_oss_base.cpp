@@ -602,7 +602,7 @@ int ObStorageOssBase::get_oss_file_meta(const ObString &bucket_ob_string,
         convert_io_error(aos_ret, ret);
       }
       OB_LOG(WARN, "fail to head object", K(bucket_ob_string), K(object_ob_string), K(ret));
-      print_oss_info(aos_ret);
+      print_oss_info(resp_headers, aos_ret);
     } else {
       is_file_exist = true;
       //get md5
@@ -625,11 +625,23 @@ int ObStorageOssBase::get_oss_file_meta(const ObString &bucket_ob_string,
   return ret;
 }
 
-void ObStorageOssBase::print_oss_info(aos_status_s *aos_ret)
+void ObStorageOssBase::print_oss_info(aos_table_t *resp_headers, aos_status_s *aos_ret)
 {
+  int ret = OB_SUCCESS;
+  char *delay_time_number = NULL;
+  char delay_time[OB_MAX_TIME_STR_LENGTH] = { 0 };
   if (NULL != aos_ret) {
+    if (OB_NOT_NULL(resp_headers)) {
+      delay_time_number = (char*)apr_table_get(resp_headers, "x-oss-qos-delay-time");
+      if (OB_NOT_NULL(delay_time_number)) {
+        if (OB_FAIL(databuff_printf(delay_time, sizeof(delay_time), "%s ms", delay_time_number))) {
+          OB_LOG(WARN, "fail to print delay time", K(ret), K(delay_time_number));
+        }
+      }
+    }
     OB_LOG_RET(WARN, OB_SUCCESS, "oss info ", K(aos_ret->code), KCSTRING(aos_ret->error_code),
-        KCSTRING(aos_ret->error_msg), KCSTRING(aos_ret->req_id), KCSTRING(oss_account_->oss_domain_), KCSTRING(oss_endpoint_), KCSTRING(oss_account_->oss_id_));
+        KCSTRING(aos_ret->error_msg), KCSTRING(aos_ret->req_id),  KCSTRING(delay_time),
+        KCSTRING(oss_account_->oss_domain_), KCSTRING(oss_endpoint_), KCSTRING(oss_account_->oss_id_));
   } else {
     OB_LOG_RET(WARN, OB_SUCCESS, "oss info ", KCSTRING(oss_account_->oss_domain_), KCSTRING(oss_endpoint_), KCSTRING(oss_account_->oss_id_));
   }
@@ -686,7 +698,7 @@ int ObStorageOssMultiPartWriter::open(const ObString &uri, void* oss_account)
               || !aos_status_is_ok(aos_ret)) {
       ret = OB_OSS_ERROR;
       OB_LOG(WARN, "oss init multipart upload error", K(uri), K(ret));
-      print_oss_info(aos_ret);
+      print_oss_info(resp_headers, aos_ret);
       cleanup();
     }
 
@@ -849,14 +861,14 @@ int ObStorageOssMultiPartWriter::write_single_part()
         ret = OB_OSS_ERROR;
         OB_LOG(WARN, "fail to upload one part from buffer",
             K(upload_size), K(bucket_), K(object_), K(ret));
-        print_oss_info(aos_ret);
+        print_oss_info(resp_headers, aos_ret);
         cleanup();
       }
       bool is_slow = false;
       print_access_storage_log("oss upload one part ", object_, start_time, upload_size, &is_slow);
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCC(ret) && is_slow) {
-        print_oss_info(aos_ret);
+        print_oss_info(resp_headers, aos_ret);
         if (OB_SUCCESS != (tmp_ret = reinit_oss_option())) {
           OB_LOG(WARN, "fail to reinit oss option", K(tmp_ret));
           ret = tmp_ret;
@@ -911,7 +923,7 @@ int ObStorageOssMultiPartWriter::close()
         params, &resp_headers)) || !aos_status_is_ok(aos_ret)) {
       ret = OB_OSS_ERROR;
       OB_LOG(WARN, "fail to list oss upload parts", K(bucket_), K(object_), K(ret));
-      print_oss_info(aos_ret);
+      print_oss_info(resp_headers, aos_ret);
       cleanup();
     } else {
       aos_list_for_each_entry(oss_list_part_content_t, part_content, &params->part_list, node) {
@@ -933,7 +945,7 @@ int ObStorageOssMultiPartWriter::close()
           &complete_part_list, complete_headers, &resp_headers)) || !aos_status_is_ok(aos_ret)) {
         ret = OB_OSS_ERROR;
         OB_LOG(WARN, "fail to complete multipart upload", K(bucket_), K(object_), K(ret));
-        print_oss_info(aos_ret);
+        print_oss_info(resp_headers, aos_ret);
         cleanup();
       }
     }
@@ -963,7 +975,7 @@ int ObStorageOssMultiPartWriter::close()
             headers, &resp_headers)) || !aos_status_is_ok(aos_ret)) {
           ret = OB_OSS_ERROR;
           OB_LOG(WARN, "fail to copy object with md5", K(bucket_), K(object_), K(ret));
-          print_oss_info(aos_ret);
+          print_oss_info(resp_headers, aos_ret);
           cleanup();
         }
       }
@@ -1113,9 +1125,9 @@ int ObStorageOssReader::pread(
 
         if (NULL == (aos_ret = oss_get_object_to_buffer(oss_option, &bucket, &object, headers, params,
             &buffer, &resp_headers)) ||  !aos_status_is_ok(aos_ret)) {
-          convert_io_error(aos_ret, ret);
+            convert_io_error(aos_ret, ret);
           OB_LOG(WARN, "fail to get object to buffer", K(bucket_), K(object_), K(ret));
-          print_oss_info(aos_ret);
+          print_oss_info(resp_headers, aos_ret);
         } else {
           //check date len
           aos_list_for_each_entry(aos_buf_t, content, &buffer, node) {
@@ -1146,7 +1158,7 @@ int ObStorageOssReader::pread(
       bool is_slow = false;
       print_access_storage_log("oss read one part ", object_, start_time, get_data_size, &is_slow);
       if (is_slow) {
-        print_oss_info(aos_ret);
+        print_oss_info(resp_headers, aos_ret);
       }
     }//if(file_length_ - file_offset_ > 0)
   }
@@ -1338,7 +1350,7 @@ int ObStorageOssUtil::is_tagging(
     if (OB_ISNULL(aos_ret = oss_get_object_tagging(oss_base.oss_option_, &bucket, &object, &tag_list, &head_resp_headers)) || !aos_status_is_ok(aos_ret)) {
       convert_io_error(aos_ret, ret);
       OB_LOG(WARN, "get object tag fail", K(ret), K(uri));
-      oss_base.print_oss_info(aos_ret);
+      oss_base.print_oss_info(head_resp_headers, aos_ret);
     } else {
       aos_list_for_each_entry(oss_tag_content_t, b, &tag_list, node) {
         char key_str[OB_MAX_TAGGING_STR_LENGTH];
@@ -1377,7 +1389,7 @@ int ObStorageOssUtil::delete_object_(
   if (OB_ISNULL(aos_ret = oss_delete_object(oss_base.oss_option_, &bucket, &object, &resp_headers)) || !aos_status_is_ok(aos_ret)) {
     convert_io_error(aos_ret, ret);
     OB_LOG(WARN, "delete object fail", K(ret), K(uri));
-    oss_base.print_oss_info(aos_ret);
+    oss_base.print_oss_info(resp_headers, aos_ret);
   } else {
     OB_LOG(INFO, "delete object succ", K(uri));
   }
@@ -1411,7 +1423,7 @@ int ObStorageOssUtil::tagging_object_(
     if (OB_ISNULL(aos_ret = oss_put_object_tagging(oss_base.oss_option_, &bucket, &object, &tag_list, &head_resp_headers)) || !aos_status_is_ok(aos_ret)) {
       convert_io_error(aos_ret, ret);
       OB_LOG(WARN, "set object tag fail", K(ret), K(uri));
-      oss_base.print_oss_info(aos_ret);
+      oss_base.print_oss_info(head_resp_headers, aos_ret);
     } else {
       OB_LOG(INFO, "set object tag succ", K(uri));
     }
@@ -1536,14 +1548,16 @@ int ObStorageOssUtil::list_files(const common::ObString &dir_path,
     aos_str_set(&bucket, bucket_str.ptr());
     oss_list_object_content_t *content = NULL;
     ObString tmp_string;
+    aos_table_t *resp_headers = NULL;
+
 
     do {
       tmp_string.reset();
-      if (OB_ISNULL(aos_ret = oss_list_object(oss_base.oss_option_, &bucket, params, NULL)) 
+      if (OB_ISNULL(aos_ret = oss_list_object(oss_base.oss_option_, &bucket, params, &resp_headers))
       || !aos_status_is_ok(aos_ret)) {
         convert_io_error(aos_ret, ret);
         OB_LOG(WARN, "fail to list all object", K(ret));
-        oss_base.print_oss_info(aos_ret);
+        oss_base.print_oss_info(resp_headers, aos_ret);
       } else {
         aos_list_for_each_entry(oss_list_object_content_t, content, &params->object_list, node) {
           //key.data has prefix object_str, we only get the file name
@@ -1631,6 +1645,7 @@ int ObStorageOssUtil::check_backup_dest_lifecycle(
   ObString object_str;
   aos_status_t *aos_ret = NULL;
   aos_list_t lifecycle_rule_list;
+  aos_table_t *resp_headers = NULL;
   oss_lifecycle_rule_content_t *rule_content = NULL;
   aos_string_t bucket;
   ObString rule_id;
@@ -1656,10 +1671,10 @@ int ObStorageOssUtil::check_backup_dest_lifecycle(
   } else {
     aos_str_set(&bucket, bucket_str.ptr());
     aos_list_init(&lifecycle_rule_list);
-    if (OB_ISNULL(aos_ret = oss_get_bucket_lifecycle(oss_base.oss_option_, &bucket, &lifecycle_rule_list, NULL)) || !aos_status_is_ok(aos_ret)) {
+    if (OB_ISNULL(aos_ret = oss_get_bucket_lifecycle(oss_base.oss_option_, &bucket, &lifecycle_rule_list, &resp_headers)) || !aos_status_is_ok(aos_ret)) {
       convert_io_error(aos_ret, ret);
       OB_LOG(WARN, "fail to list all object", K(ret));
-      oss_base.print_oss_info(aos_ret);
+      oss_base.print_oss_info(resp_headers, aos_ret);
     } else {
       aos_list_for_each_entry(oss_lifecycle_rule_content_t, rule_content, &lifecycle_rule_list, node) {
         prefix = apr_psprintf(oss_base.aos_pool_, "%.*s", rule_content->prefix.len, rule_content->prefix.data);
@@ -1743,6 +1758,7 @@ int ObStorageOssUtil::list_directories(
     aos_str_set(&params->delimiter, delimiter);
     aos_string_t bucket;
     aos_str_set(&bucket, bucket_str.ptr());
+    aos_table_t *resp_headers;
     oss_list_object_common_prefix_t *common_prefix = NULL;
     ObString tmp_string;
     ObString directory_name;
@@ -1750,10 +1766,10 @@ int ObStorageOssUtil::list_directories(
     do {
       tmp_string.reset();
       directory_name.reset();
-      if (OB_ISNULL(aos_ret = oss_list_object(oss_base.oss_option_, &bucket, params, NULL)) || !aos_status_is_ok(aos_ret)) {
+      if (OB_ISNULL(aos_ret = oss_list_object(oss_base.oss_option_, &bucket, params, &resp_headers)) || !aos_status_is_ok(aos_ret)) {
         convert_io_error(aos_ret, ret);
         OB_LOG(WARN, "fail to list all object", K(ret));
-        oss_base.print_oss_info(aos_ret);
+        oss_base.print_oss_info(resp_headers, aos_ret);
       } else {
         aos_list_for_each_entry(oss_list_object_common_prefix_t, common_prefix, &params->common_prefix_list, node) {
           //key.data has prefix object_str, we only get the file name
@@ -1940,12 +1956,11 @@ int ObStorageOssAppendWriter::do_write(const char *buf, const int64_t size, cons
     aos_buf_t *content = NULL;
     aos_list_init(&buffer);
     int64_t position = 0;
-
     if(OB_ISNULL(headers1 = aos_table_make(aos_pool_, 0))) {
       ret = OB_OSS_ERROR;
       OB_LOG(WARN, "fail to make apr table", K(ret));
     } else if(OB_ISNULL(aos_ret = oss_head_object(oss_option_, &bucket, &object, headers1, &resp_headers))) {
-      print_oss_info(aos_ret);
+      print_oss_info(resp_headers, aos_ret);
       ret = OB_OSS_ERROR;
       OB_LOG(WARN, "oss head object fail", K(ret), K_(bucket), K_(object), K(aos_ret));
     } else {
@@ -1987,7 +2002,7 @@ int ObStorageOssAppendWriter::do_write(const char *buf, const int64_t size, cons
           if (0 != aos_status_is_ok(aos_ret)) { // != 0 means ok
             file_length_ += size;
           } else {
-            print_oss_info(aos_ret);
+            print_oss_info(resp_headers, aos_ret);
             convert_io_error(aos_ret, ret);
             OB_LOG(WARN, "fail to append", K(content), K(ret));
           }
@@ -2003,7 +2018,7 @@ int ObStorageOssAppendWriter::do_write(const char *buf, const int64_t size, cons
       if (cost_time > warn_cost_time) {
         _OB_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "oss append one object cost too much time, time:%ld, size:%ld speed:%.2Lf MB/s file_length=%ld, ret=%d",
             cost_time, size, speed, file_length_, ret);
-        print_oss_info(aos_ret);
+        print_oss_info(resp_headers, aos_ret);
       } else {
         _OB_LOG(DEBUG, "oss append one object time:%ld, size:%ld speed:%.2Lf MB/s file_length=%ld, ret=%d",
             cost_time, size, speed, file_length_, ret);
@@ -2110,7 +2125,8 @@ int ObStorageOssWriter::write(const char *buf, const int64_t size)
                    &buffer, headers, &resp_headers)) || !aos_status_is_ok(aos_ret)) {
         convert_io_error(aos_ret, ret);
         OB_LOG(WARN, "fail to upload one object", K(bucket_), K(object_), K(ret));
-        print_oss_info(aos_ret);
+        print_oss_info(resp_headers, aos_ret);
+
       } else {
         file_length_ = size;
       }
@@ -2119,7 +2135,7 @@ int ObStorageOssWriter::write(const char *buf, const int64_t size)
     bool is_slow = false;
     print_access_storage_log("oss upload one object ", object_, start_time, size, &is_slow);
     if (is_slow) {
-      print_oss_info(aos_ret);
+      print_oss_info(resp_headers, aos_ret);
     }
   }
   return ret; 

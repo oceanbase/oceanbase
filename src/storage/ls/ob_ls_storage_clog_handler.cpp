@@ -122,6 +122,10 @@ int ObMediumCompactionClogHandler::inner_replay(
   } else if (OB_FAIL(handle.get_obj()->replay_medium_compaction_clog(scn, buffer, buffer_size, new_pos))) {
     LOG_WARN("failed to replay medium compaction clog", K(ret), K(tablet_id), K(buffer_size), K(new_pos));
   }
+  if (OB_TIMEOUT == ret) {
+    LOG_INFO("replace timeout errno", KR(ret), K(scn), K(tablet_id));
+    ret = OB_EAGAIN;
+  }
   return ret;
 }
 

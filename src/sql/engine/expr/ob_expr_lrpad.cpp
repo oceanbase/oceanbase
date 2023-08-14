@@ -1110,9 +1110,20 @@ int ObExprBaseLRpad::calc_oracle(LRpadType pad_type, const ObExpr &expr,
     int64_t text_width = 0;
     const ObString &str_text = text.get_string();
     const ObString &str_pad = pad_text.get_string();
-    int64_t max_result_size = ob_is_text_tc(expr.datum_meta_.type_) ?
-                                OB_MAX_LONGTEXT_LENGTH: OB_MAX_ORACLE_VARCHAR_LENGTH;
     const ObCollationType cs_type = expr.datum_meta_.cs_type_;
+
+    // max varchar size is 4000 in Oracle SQL, however 32767 in PL/SQL
+    // OB does not support `MAX_STRING_SIZE = EXTENDED` for now
+    const ObExprOracleLRpadInfo *info = nullptr;
+    int64_t max_varchar_size = OB_MAX_ORACLE_VARCHAR_LENGTH;
+    if (OB_NOT_NULL(info = static_cast<ObExprOracleLRpadInfo *>(expr.extra_info_)) &&
+        info->is_called_in_sql_) {
+      const int64_t STANDARD_MAX_ORACLE_VARCHAR_LENGTH = 4000;
+      max_varchar_size = STANDARD_MAX_ORACLE_VARCHAR_LENGTH;
+    }
+    int64_t max_result_size = ob_is_text_tc(expr.datum_meta_.type_)
+        ? OB_MAX_LONGTEXT_LENGTH
+        : max_varchar_size;
 
     number::ObNumber len_num(len.get_number());
     int64_t decimal_parts = -1;
@@ -1301,9 +1312,25 @@ int ObExprOracleLpad::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
                               ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
-  UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
-  rt_expr.eval_func_ = calc_oracle_lpad_expr;
+  if (OB_ISNULL(expr_cg_ctx.allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Allocator is NULL", K(ret));
+  } else {
+    ObIAllocator &alloc = *expr_cg_ctx.allocator_;
+    ObIExprExtraInfo *extra_info = nullptr;
+    if (OB_FAIL(ObExprExtraInfoFactory::alloc(alloc, rt_expr.type_, extra_info))) {
+      LOG_WARN("Failed to allocate memory for ObExprOracleLRpadInfo", K(ret));
+    } else if (OB_ISNULL(extra_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("extra_info should not be nullptr", K(ret));
+    } else {
+      ObExprOracleLRpadInfo *info = static_cast<ObExprOracleLRpadInfo *>(extra_info);
+      info->is_called_in_sql_ = is_called_in_sql();
+      rt_expr.extra_info_ = extra_info;
+      rt_expr.eval_func_ = calc_oracle_lpad_expr;
+    }
+  }
   return ret;
 }
 
@@ -1358,9 +1385,25 @@ int ObExprOracleRpad::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
                               ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
-  UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
-  rt_expr.eval_func_ = calc_oracle_rpad_expr;
+  if (OB_ISNULL(expr_cg_ctx.allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Allocator is NULL", K(ret));
+  } else {
+    ObIAllocator &alloc = *expr_cg_ctx.allocator_;
+    ObIExprExtraInfo *extra_info = nullptr;
+    if (OB_FAIL(ObExprExtraInfoFactory::alloc(alloc, rt_expr.type_, extra_info))) {
+      LOG_WARN("Failed to allocate memory for ObExprOracleLRpadInfo", K(ret));
+    } else if (OB_ISNULL(extra_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("extra_info should not be nullptr", K(ret));
+    } else {
+      ObExprOracleLRpadInfo *info = static_cast<ObExprOracleLRpadInfo *>(extra_info);
+      info->is_called_in_sql_ = is_called_in_sql();
+      rt_expr.extra_info_ = extra_info;
+      rt_expr.eval_func_ = calc_oracle_rpad_expr;
+    }
+  }
   return ret;
 }
 
@@ -1370,6 +1413,44 @@ int ObExprOracleRpad::calc_oracle_rpad_expr(const ObExpr &expr, ObEvalCtx &ctx,
   return calc_oracle_pad_expr(expr, ctx, RPAD_TYPE, res);
 }
 /* ObExprRpadOracle END }}} */
+
+OB_DEF_SERIALIZE(ObExprOracleLRpadInfo)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, is_called_in_sql_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObExprOracleLRpadInfo)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE, is_called_in_sql_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObExprOracleLRpadInfo)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, is_called_in_sql_);
+  return len;
+}
+
+int ObExprOracleLRpadInfo::deep_copy(common::ObIAllocator &allocator,
+                                     const ObExprOperatorType type,
+                                     ObIExprExtraInfo *&copied_info) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObExprExtraInfoFactory::alloc(allocator, type, copied_info))) {
+    LOG_WARN("Failed to allocate memory for ObExprOracleLRpadInfo", K(ret));
+  } else if (OB_ISNULL(copied_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("extra_info should not be nullptr", K(ret));
+  } else {
+    ObExprOracleLRpadInfo *other = static_cast<ObExprOracleLRpadInfo *>(copied_info);
+    other->is_called_in_sql_ = is_called_in_sql_;
+  }
+  return ret;
+}
 
 } // namespace sql
 } // namespace oceanbase

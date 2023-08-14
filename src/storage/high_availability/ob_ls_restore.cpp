@@ -20,6 +20,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/high_availability/ob_storage_ha_reader.h"
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
+#include "storage/tablet/ob_tablet_create_mds_helper.h"
 #include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
@@ -984,6 +985,8 @@ int ObStartLSRestoreTask::create_tablet_(
   if (!tablet_meta.is_valid() || OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create tablet get invalid argument", K(ret), K(tablet_meta), KP(ls));
+  } else if (OB_FAIL(ObTabletCreateMdsHelper::check_create_new_tablets(1LL))) {
+    LOG_WARN("failed to check create new tablet", K(ret), K(tablet_meta));
   } else if (OB_FAIL(ls->rebuild_create_tablet(tablet_meta, false /*keep old*/))) {
     LOG_WARN("failed to create tablet", K(ret), K(tablet_meta));
   } else {

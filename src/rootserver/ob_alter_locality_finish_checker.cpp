@@ -132,13 +132,14 @@ int ObAlterLocalityFinishChecker::check()
       } else if (alter_locality_finish
                  && (meta_alter_locality_finish || is_sys_tenant(tenant_id))) {
         DEBUG_SYNC(BEFORE_FINISH_LOCALITY);
+        const int64_t timeout = GCONF.internal_sql_execute_timeout;  // 30s default
         rootserver::ObCommitAlterTenantLocalityArg arg;
         arg.tenant_id_ = tenant_id;
         arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
         if (OB_FAIL(check_stop())) {
           LOG_WARN("ObAlterLocalityFinishChecker stopped", KR(ret));
-        } else if (OB_SUCCESS != (tmp_ret = common_rpc_proxy_->to(self_).commit_alter_tenant_locality(arg))) {
-          LOG_WARN("fail to commit alter tenant locality", KR(tmp_ret));
+        } else if (OB_SUCCESS != (tmp_ret = common_rpc_proxy_->to(self_).timeout(timeout).commit_alter_tenant_locality(arg))) {
+          LOG_WARN("fail to commit alter tenant locality", KR(tmp_ret), K(timeout), K(arg));
         }
       }
     }

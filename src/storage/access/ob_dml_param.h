@@ -183,7 +183,7 @@ struct ObDMLBaseParam
         dml_allocator_(nullptr),
         encrypt_meta_(NULL),
         encrypt_meta_legacy_(),
-        spec_seq_no_(-1),
+        spec_seq_no_(),
         snapshot_(),
         direct_insert_task_id_(0),
         write_flag_(),
@@ -212,7 +212,7 @@ struct ObDMLBaseParam
   common::ObSEArray<transaction::ObEncryptMetaCache, 1> encrypt_meta_legacy_;
 
   // specified seq_no
-  int64_t spec_seq_no_;
+  transaction::ObTxSEQ spec_seq_no_;
   // transaction snapshot
   transaction::ObTxReadSnapshot snapshot_;
   int64_t direct_insert_task_id_; // 0 means no direct insert

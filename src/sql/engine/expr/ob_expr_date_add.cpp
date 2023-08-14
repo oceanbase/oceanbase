@@ -20,6 +20,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "ob_datum_cast.h"
+#include "common/object/ob_obj_type.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
@@ -192,8 +193,11 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
         expr_datum.set_null();
       } else if (OB_FAIL(ObTimeConverter::date_adjust(dt_val, interval_val, unit_val, res_dt_val,
                                                       is_add, date_sql_mode))) {
-        if (OB_UNLIKELY(OB_INVALID_DATE_VALUE == ret)) {
+        if (OB_UNLIKELY(OB_INVALID_DATE_VALUE == ret || OB_TOO_MANY_DATETIME_PARTS == ret)) {
           expr_datum.set_null();
+          if (OB_TOO_MANY_DATETIME_PARTS == ret) {
+            LOG_USER_WARN(OB_TOO_MANY_DATETIME_PARTS);
+          }
           ret = OB_SUCCESS;
         }
       } else if (ObDateType == res_type) {
@@ -549,7 +553,16 @@ int ObExprNextDay::calc_result_type2(ObExprResType &type,
     type.set_scale(OB_MAX_DATE_PRECISION);
     type1.set_calc_type(ObDateTimeType);
     type1.set_calc_scale(OB_MAX_DATETIME_PRECISION);
-    type2.set_calc_type(ObVarcharType);
+    if (ob_is_numeric_tc(type2.get_type_class())) {
+      if (lib::is_oracle_mode()) {
+        type2.set_calc_type(ObNumberType);
+      } else {
+        type2.set_calc_type(ObUInt64Type);
+
+      }
+    } else {
+      type2.set_calc_type(ObVarcharType);
+    }
   }
   return ret;
 }
@@ -588,13 +601,31 @@ int ObExprNextDay::calc_next_day(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
     LOG_WARN("eval second param value failed");
   } else if (param2->is_null()) {
     expr_datum.set_null();
+  } else if (ob_is_numeric_tc(ob_obj_type_class(expr.args_[1]->datum_meta_.type_))) {
+    int64_t ori_date_utc = param1->get_datetime();
+    ObString wday_name = ObString(0,"");//not use
+    int64_t wday_count = 0;
+    int64_t res_date_utc = 0;
+    number::ObNumber wdaycount(param2->get_number());
+    if (OB_FAIL(wdaycount.extract_valid_int64_with_trunc(wday_count))) {
+      LOG_WARN("fail to do round", K(ret));
+    } else if (OB_FAIL(ObTimeConverter::calc_next_date_of_the_wday(ori_date_utc,
+                                                            wday_name.trim(),
+                                                            wday_count,
+                                                            res_date_utc))) {
+      LOG_WARN("fail to calc next mday", K(ret));
+    } else {
+      expr_datum.set_datetime(res_date_utc);
+    }
   } else {
     int64_t ori_date_utc = param1->get_datetime();
     ObString wday_name = param2->get_string();
+    int64_t wday_count = 0; //not use
     int64_t res_date_utc = 0;
-
     if (OB_FAIL(ObTimeConverter::calc_next_date_of_the_wday(ori_date_utc,
-                                                            wday_name.trim(), res_date_utc))) {
+                                                            wday_name.trim(),
+                                                            wday_count,
+                                                            res_date_utc))) {
       LOG_WARN("fail to calc next mday", K(ret));
     } else {
       expr_datum.set_datetime(res_date_utc);

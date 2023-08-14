@@ -210,6 +210,11 @@ typedef common::ObArray<ObPxPartChMapItem,
                         false, /*auto free*/
                         common::ObArrayDefaultCallBack<ObPxPartChMapItem>,
                         common::DefaultItemEncode<ObPxPartChMapItem> > ObPxPartChMapArray;
+typedef sql::ObTMArray<ObPxPartChMapItem,
+                       common::ModulePageAllocator,
+                       false, /*auto free*/
+                       common::ObArrayDefaultCallBack<ObPxPartChMapItem>,
+                       common::DefaultItemEncode<ObPxPartChMapItem> > ObPxPartChMapTMArray;
 typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::NoPthreadDefendMode> ObPxPartChMap;
 
 
@@ -217,7 +222,7 @@ struct ObPxPartChInfo
 {
   ObPxPartChInfo() : part_ch_array_() {}
   ~ObPxPartChInfo() = default;
-  ObPxPartChMapArray part_ch_array_;
+  ObPxPartChMapTMArray part_ch_array_;
 };
 
 class ObPxReceiveDataChannelMsg

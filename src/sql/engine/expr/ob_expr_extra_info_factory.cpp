@@ -30,6 +30,7 @@
 #include "sql/engine/expr/ob_expr_plsql_variable.h"
 #include "sql/engine/expr/ob_pl_expr_subquery.h"
 #include "sql/engine/expr/ob_expr_cast.h"
+#include "sql/engine/expr/ob_expr_lrpad.h"
 
 namespace oceanbase
 {
@@ -98,6 +99,8 @@ void ObExprExtraInfoFactory::register_expr_extra_infos()
   REG_EXTRA_INFO(T_FUN_SYS_GREATEST, ObExprOperator::DatumCastExtraInfo);
   REG_EXTRA_INFO(T_FUN_SYS_NULLIF, ObExprOperator::DatumCastExtraInfo);
   REG_EXTRA_INFO(T_FUN_SYS_CAST, ObExprCast::CastMultisetExtraInfo);
+  REG_EXTRA_INFO(T_FUN_SYS_LPAD, ObExprOracleLRpadInfo);
+  REG_EXTRA_INFO(T_FUN_SYS_RPAD, ObExprOracleLRpadInfo);
 }
 
 } // end namespace sql

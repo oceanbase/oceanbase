@@ -115,7 +115,8 @@ private:
                                             ParseNode *node, ObColumnResolveStat &stat,
                                             bool &is_modify_column_visibility,
                                             ObIArray<ObColumnSchemaV2 *> &resolved_cols,
-                                            const bool is_oracle_temp_table = false);
+                                            const bool is_oracle_temp_table = false,
+                                            const bool allow_has_default = true);
   int resolve_alter_column_not_null(share::schema::AlterColumnSchema &column,
                                      const ObColumnSchemaV2 &ori_column);
   int get_table_schema_all_column_schema(ObIArray<ObColumnSchemaV2 *> &resolved_cols,

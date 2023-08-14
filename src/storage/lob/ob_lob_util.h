@@ -40,7 +40,7 @@ struct ObLobAccessParam {
       lob_data_(nullptr), byte_size_(0), handle_size_(0), timeout_(0),
       fb_snapshot_(),
       scan_backward_(false), asscess_ptable_(false), offset_(0), len_(0),
-      seq_no_st_(-1), used_seq_cnt_(0), total_seq_cnt_(0), checksum_(0), update_len_(0),
+      parent_seq_no_(), seq_no_st_(), used_seq_cnt_(0), total_seq_cnt_(0), checksum_(0), update_len_(0),
       op_type_(ObLobDataOutRowCtx::OpType::SQL), is_fill_zero_(false), from_rpc_(false),
       inrow_read_nocopy_(false)
   {}
@@ -52,8 +52,8 @@ struct ObLobAccessParam {
 public:
   int set_lob_locator(common::ObLobLocatorV2 *lob_locator);
   TO_STRING_KV(K_(ls_id), K_(tablet_id), KPC_(lob_locator), KPC_(lob_common), KPC_(lob_data), K_(byte_size), K_(handle_size),
-    K_(coll_type), K_(scan_backward), K_(offset), K_(len), K_(seq_no_st), K_(used_seq_cnt), K_(total_seq_cnt), K_(checksum),
-    K_(update_len), K_(op_type), K_(is_fill_zero), K_(from_rpc), K_(snapshot), K_(tx_id), K_(inrow_read_nocopy));
+    K_(coll_type), K_(scan_backward), K_(offset), K_(len), K_(parent_seq_no), K_(seq_no_st), K_(used_seq_cnt), K_(total_seq_cnt),
+    K_(checksum), K_(update_len), K_(op_type), K_(is_fill_zero), K_(from_rpc), K_(snapshot), K_(tx_id), K_(inrow_read_nocopy));
 public:
   transaction::ObTxDesc *tx_desc_; // for write/update/delete
   transaction::ObTxReadSnapshot snapshot_; // for read
@@ -83,7 +83,8 @@ public:
   uint64_t offset_; // is_char == true, offset means char offset
   uint64_t len_; // is_char == true, len means char len
   // runtime
-  int64_t seq_no_st_;
+  transaction::ObTxSEQ parent_seq_no_; // the parent tablet write seq_no
+  transaction::ObTxSEQ seq_no_st_; // start seq_no of lob tablet write
   uint32_t used_seq_cnt_;
   uint32_t total_seq_cnt_;
   int64_t checksum_;

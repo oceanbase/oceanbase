@@ -185,7 +185,7 @@ int ObOBJLockCallback::get_trans_id(ObTransID &trans_id) const
   return ret;
 }
 
-int64_t ObOBJLockCallback::get_seq_no() const
+transaction::ObTxSEQ ObOBJLockCallback::get_seq_no() const
 {
   return lock_op_->lock_op_.lock_seq_no_;
 }

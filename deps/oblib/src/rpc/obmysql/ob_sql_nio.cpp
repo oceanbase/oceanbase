@@ -143,7 +143,7 @@ public:
                 alloc_buf_(NULL), buf_end_(NULL), cur_buf_(NULL), data_end_(NULL),
                 consume_sz_(0)
   {}
-  ~ReadBuffer() 
+  ~ReadBuffer()
   {
     if (NULL != alloc_buf_) {
       direct_free(alloc_buf_);
@@ -190,7 +190,7 @@ private:
     if (limit <= 0) {
       ret = OB_INVALID_ARGUMENT;
     } else if (remain() >= limit) {
-      
+
     } else if (cur_buf_ + limit > buf_end_ && OB_FAIL(switch_buffer(limit))) {
       LOG_ERROR("alloc read buffer fail", K_(fd), K(ret));
     } else if (OB_FAIL(do_read_fd(limit))) {
@@ -263,7 +263,9 @@ private:
   }
   void* alloc_io_buffer(int64_t sz) { return direct_alloc(sz); }
   void free_io_buffer(void* p) { direct_free(p); }
-  static void* direct_alloc(int64_t sz) { return ob_malloc(sz, ObModIds::OB_COMMON_NETWORK); }
+  static void* direct_alloc(int64_t sz) {
+    return ob_malloc(sz, SET_USE_UNEXPECTED_500(ObModIds::OB_COMMON_NETWORK));
+  }
   static void direct_free(void* p) { ob_free(p); }
 private:
   int fd_;
@@ -363,7 +365,7 @@ public:
       fd_ = -1;
     }
   }
-  void set_last_decode_succ_time(int64_t time) { last_decode_time_ = time;  }  
+  void set_last_decode_succ_time(int64_t time) { last_decode_time_ = time;  }
   int64_t get_consume_sz() { return read_buffer_.get_consume_sz(); }
 
   int peek_data(int64_t limit, const char*& buf, int64_t& sz) {
@@ -1008,7 +1010,9 @@ private:
       }
     }
   }
-  static void* direct_alloc(int64_t sz) { return common::ob_malloc(sz, common::ObModIds::OB_COMMON_NETWORK); }
+  static void* direct_alloc(int64_t sz) {
+    return common::ob_malloc(sz, SET_USE_UNEXPECTED_500(common::ObModIds::OB_COMMON_NETWORK));
+  }
   static void direct_free(void* p) { common::ob_free(p); }
 
   int get_epfd(){return epfd_;}
@@ -1130,7 +1134,7 @@ void ObSqlNio::reset_sql_session_info(void* sess)
 
 void ObSqlNio::set_sql_session_info(void* sess, void* sql_session)
 {
-  ObSqlSock* sock = sess2sock(sess);  
+  ObSqlSock* sock = sess2sock(sess);
   sock->set_sql_session_info(sql_session);
 }
 

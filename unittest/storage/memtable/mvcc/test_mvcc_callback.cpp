@@ -35,19 +35,19 @@ public:
                    bool need_submit_log = true,
                    bool need_fill_redo = true,
                    share::SCN scn = share::SCN::max_scn(),
-                   int64_t seq_no = INT64_MAX)
+                   transaction::ObTxSEQ seq_no = transaction::ObTxSEQ::MAX_VAL())
     : ObITransCallback(need_fill_redo, need_submit_log),
       mt_(mt), seq_no_(seq_no) { scn_ = scn; }
 
   virtual ObIMemtable* get_memtable() const override { return mt_; }
-  virtual int64_t get_seq_no() const override { return seq_no_; }
+  virtual transaction::ObTxSEQ get_seq_no() const override { return seq_no_; }
   virtual int checkpoint_callback() override;
   virtual int rollback_callback() override;
   virtual int calc_checksum(const share::SCN checksum_scn,
                             ObBatchChecksum *checksumer) override;
 
   ObMemtable *mt_;
-  int64_t seq_no_;
+  transaction::ObTxSEQ seq_no_;
 };
 
 class ObMockBitSet {
@@ -99,7 +99,7 @@ class TestTxCallbackList : public ::testing::Test
 {
 public:
   TestTxCallbackList()
-    : seq_counter_(0),
+    : seq_counter_(),
       mt_counter_(0),
       mt_ctx_(),
       cb_allocator_(),
@@ -140,7 +140,7 @@ public:
                                     bool need_fill_redo = true,
                                     share::SCN scn = share::SCN::max_scn())
   {
-    int64_t seq_no = ++seq_counter_;
+    auto seq_no = ++seq_counter_;
     ObMockTxCallback *cb = new ObMockTxCallback(mt,
                                                 need_submit_log,
                                                 need_fill_redo,
@@ -171,7 +171,7 @@ public:
     return (ObMemtable *)(mt_counter_);
   }
 
-  int64_t get_seq_no() const
+  transaction::ObTxSEQ get_seq_no() const
   {
     return seq_counter_;
   }
@@ -193,7 +193,7 @@ public:
   static int64_t rollback_cnt_;
   static ObMockBitSet checksum_;
 
-  int64_t seq_counter_;
+  transaction::ObTxSEQ seq_counter_;
   int64_t mt_counter_;
   ObMemtableCtx mt_ctx_;
   ObMemtableCtxCbAllocator cb_allocator_;
@@ -222,7 +222,7 @@ int ObMockTxCallback::calc_checksum(const share::SCN checksum_scn,
                                     ObBatchChecksum *)
 {
   if (checksum_scn <= scn_) {
-    TestTxCallbackList::checksum_.add_bit(seq_no_);
+    TestTxCallbackList::checksum_.add_bit(seq_no_.get_seq());
     TRANS_LOG(INFO, "need to calc checksum", K(checksum_scn), K(scn_), K(seq_no_));
   } else {
     TRANS_LOG(INFO, "no need to calc checksum", K(checksum_scn), K(scn_), K(seq_no_));
@@ -466,7 +466,7 @@ TEST_F(TestTxCallbackList, remove_callback_by_rollback_to)
   scn_2.convert_for_logservice(2);
   scn_3.convert_for_logservice(3);
 
-  int64_t savepoint0 = get_seq_no();
+  auto savepoint0 = get_seq_no();
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
@@ -479,7 +479,7 @@ TEST_F(TestTxCallbackList, remove_callback_by_rollback_to)
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
                              scn_2/*scn*/);
-  int64_t savepoint1 = get_seq_no();
+  auto savepoint1 = get_seq_no();
   create_and_append_callback(memtable3,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
@@ -494,11 +494,11 @@ TEST_F(TestTxCallbackList, remove_callback_by_rollback_to)
   create_and_append_callback(memtable1,
                              true, /*need_submit_log*/
                              true  /*need_fill_redo*/);
-  int64_t savepoint2 = get_seq_no();
+  auto savepoint2 = get_seq_no();
   create_and_append_callback(memtable3,
                              true, /*need_submit_log*/
                              true  /*need_fill_redo*/);
-  int64_t savepoint3 = get_seq_no();
+  auto savepoint3 = get_seq_no();
   create_and_append_callback(memtable1,
                              true, /*need_submit_log*/
                              true  /*need_fill_redo*/);
@@ -923,7 +923,7 @@ TEST_F(TestTxCallbackList, checksum_rollback_to_and_tx_end)
   scn_3.convert_for_logservice(3);
   scn_4.convert_for_logservice(4);
 
-  int64_t savepoint0 = get_seq_no();
+  auto savepoint0 = get_seq_no();
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
@@ -936,7 +936,7 @@ TEST_F(TestTxCallbackList, checksum_rollback_to_and_tx_end)
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
                              scn_2/*scn*/);
-  int64_t savepoint1 = get_seq_no();
+  auto savepoint1 = get_seq_no();
   create_and_append_callback(memtable3,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
@@ -951,11 +951,11 @@ TEST_F(TestTxCallbackList, checksum_rollback_to_and_tx_end)
   create_and_append_callback(memtable1,
                              true, /*need_submit_log*/
                              true  /*need_fill_redo*/);
-  int64_t savepoint2 = get_seq_no();
+  auto savepoint2 = get_seq_no();
   create_and_append_callback(memtable3,
                              true, /*need_submit_log*/
                              true  /*need_fill_redo*/);
-  int64_t savepoint3 = get_seq_no();
+  auto savepoint3 = get_seq_no();
   create_and_append_callback(memtable1,
                              true, /*need_submit_log*/
                              true  /*need_fill_redo*/);
@@ -1023,7 +1023,7 @@ TEST_F(TestTxCallbackList, checksum_all_and_tx_end_test) {
         it->scn_.convert_for_logservice(cur_log);
         enable = true;
         need_submit_head = it;
-        my_calculate.add_bit(it->get_seq_no());
+        my_calculate.add_bit(it->get_seq_no().get_seq());
       }
 
       if (!enable) {
@@ -1085,9 +1085,10 @@ TEST_F(TestTxCallbackList, checksum_all_and_tx_end_test) {
     [&]() -> bool{
       bool enable = false;
       if (!callback_list_.empty() &&
-          callback_list_.head_.next_->get_seq_no() + 1 < seq_counter_ - 1) {
-        int64_t seq = ObRandom::rand(callback_list_.head_.next_->get_seq_no() + 1,
-                                       seq_counter_ - 1);
+          callback_list_.head_.next_->get_seq_no().get_seq() + 1 < seq_counter_.get_seq() - 1) {
+        auto from = callback_list_.head_.next_->get_seq_no();
+        auto range_cnt = seq_counter_.get_seq() - from.get_seq();
+        auto seq = from + ObRandom::rand(1, range_cnt - 1);
         enable = true;
         if (enable) {
           if (need_submit_head->get_seq_no() > seq) {
@@ -1131,7 +1132,7 @@ TEST_F(TestTxCallbackList, checksum_all_and_tx_end_test) {
        it = it->next_) {
     EXPECT_EQ(it->need_submit_log_, true);
     EXPECT_EQ(it->need_fill_redo_, true);
-    my_calculate.add_bit(it->get_seq_no());
+    my_calculate.add_bit(it->get_seq_no().get_seq());
   }
 
   EXPECT_EQ(OB_SUCCESS, callback_list_.tx_commit());

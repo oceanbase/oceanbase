@@ -936,7 +936,7 @@ int ObTransService::handle_trans_keepalive_response(const ObTxKeepaliveRespMsg &
 
 int ObTransService::find_parts_after_sp_(ObTxDesc &tx,
                                          ObTxPartRefList &parts,
-                                         const int64_t scn)
+                                         const ObTxSEQ scn)
 {
   int ret = OB_SUCCESS;
   ARRAY_FOREACH(tx.parts_, i) {
@@ -1073,12 +1073,13 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
                                         const ObTxReadSnapshot &snapshot,
                                         const concurrent_control::ObWriteFlag write_flag,
                                         storage::ObStoreCtx &store_ctx,
+                                        const ObTxSEQ &spec_seq_no,
                                         const bool special)
 {
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = store_ctx.ls_id_;
   ObPartTransCtx *tx_ctx = NULL;
-  const int64_t data_scn = ObSequence::inc_and_get_max_seq_no();
+  const ObTxSEQ data_scn = spec_seq_no.is_valid() ? spec_seq_no : tx.inc_and_get_tx_seq(0);
   ObTxSnapshot snap = snapshot.core_;
   ObTxTableGuard tx_table_guard;
   bool access_started = false;
@@ -3251,7 +3252,7 @@ int ObTransService::check_scheduler_status(const share::ObLSID &ls_id)
 /*
  * create_in_txn_implicit_savepoint - create an implicit savepoint when txn is active
  */
-int ObTransService::create_in_txn_implicit_savepoint(ObTxDesc &tx, int64_t &savepoint)
+int ObTransService::create_in_txn_implicit_savepoint(ObTxDesc &tx, ObTxSEQ &savepoint)
 {
   int ret = OB_SUCCESS;
 

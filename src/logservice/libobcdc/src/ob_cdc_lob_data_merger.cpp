@@ -211,7 +211,7 @@ int ObCDCLobDataMerger::push_lob_column_(
   } else {
     LOG_DEBUG("push_lob_column_", K(lob_data_get_ctx), K(lob_data_out_row_ctx_list));
     const bool is_empty_sql = (ObLobDataOutRowCtx::OpType::EMPTY_SQL == lob_data_out_row_ctx->op_);
-    uint64_t seq_no_st = lob_data_out_row_ctx->seq_no_st_;
+    const auto seq_no_st = transaction::ObTxSEQ::cast_from_int(lob_data_out_row_ctx->seq_no_st_);
     const uint32_t seq_no_cnt = lob_data_out_row_ctx->seq_no_cnt_;
     const uint32_t del_seq_no_cnt = lob_data_out_row_ctx->del_seq_no_cnt_;
     LobColumnFragmentCtxList new_lob_col_fra_ctx_list;
@@ -293,14 +293,14 @@ int ObCDCLobDataMerger::push_lob_column_(
 
 int ObCDCLobDataMerger::get_lob_col_fra_ctx_list_(
     const bool is_new_col,
-    const uint64_t seq_no_start,
+    const transaction::ObTxSEQ &seq_no_start,
     const uint32_t seq_no_cnt,
     ObIAllocator &allocator,
     ObLobDataGetCtx &lob_data_get_ctx,
     LobColumnFragmentCtxList &lob_col_fra_ctx_list)
 {
   int ret = OB_SUCCESS;
-  uint64_t seq_no = seq_no_start;
+  transaction::ObTxSEQ seq_no = seq_no_start;
 
   for (int64_t idx = 0; OB_SUCC(ret) && idx < seq_no_cnt; ++idx, ++seq_no) {
     LobColumnFragmentCtx *lob_col_fragment_ctx

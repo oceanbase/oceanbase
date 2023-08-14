@@ -68,5 +68,7 @@ select SUBSTRING( TRIM( BOTH CONVERT( 'a', BINARY( 0 ) ) FROM '+-ÃÃ·ï¹¢ï�
 select collation(TRIM( BOTH _binary'a' FROM '+-ÃÃ·ï¹¢ï¹£Â±/= â¥â' )) ;
 select collation(TRIM( BOTH _binary'a' FROM _gbk'abc' )) ;
 
+select TRIM(LEADING 'a' FROM TRIM(SUBSTR(REPEAT(NULL, 4 + 1), 1, LEAST(146, 20))));
+
 connection syscon;
 --sleep 2

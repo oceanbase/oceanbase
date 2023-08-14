@@ -100,7 +100,8 @@ public:
   int get_write_store_ctx(transaction::ObTxDesc &tx,
                           const transaction::ObTxReadSnapshot &snapshot,
                           const concurrent_control::ObWriteFlag write_flag,
-                          storage::ObStoreCtx &store_ctx) const;
+                          storage::ObStoreCtx &store_ctx,
+                          const transaction::ObTxSEQ &spec_seq_no = transaction::ObTxSEQ::INVL()) const;
   int revert_store_ctx(storage::ObStoreCtx &store_ctx) const;
   // Freeze process needs to traverse trans ctx to submit redo log
   int traverse_trans_to_submit_redo_log(transaction::ObTransID &fail_tx_id);

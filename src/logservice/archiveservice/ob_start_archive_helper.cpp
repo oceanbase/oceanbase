@@ -186,6 +186,8 @@ int StartArchiveHelper::locate_round_start_archive_point_()
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_LOG_EXIST_GAP);
+
 // 基于日志流定位归档起点
 //
 // 1. OB_SUCCESS
@@ -227,15 +229,9 @@ int StartArchiveHelper::get_local_base_lsn_(palf::LSN &lsn, bool &log_gap)
       ARCHIVE_LOG(WARN, "locate by scn coarsely failed", K(ret), KPC(this));
     }
   }
-#ifdef ERRSIM
-  if (OB_SUCC(ret)) {
-    ret = OB_E(EventTable::EN_START_ARCHIVE_LOG_GAP) OB_SUCCESS;
-  }
-  if (OB_FAIL(ret)) {
+  if (OB_SUCC(ret) && ERRSIM_LOG_EXIST_GAP) {
     log_gap = true;
-    ret = OB_SUCCESS;
   }
-#endif
   return ret;
 }
 

@@ -1517,7 +1517,10 @@ public:
                                        ObTransformerCtx *ctx,
                                        bool ignore_check_unique = false,
                                        common::ObIArray<ObRawExpr *> *unique_keys = NULL);
-
+  static int get_unique_keys_from_unique_stmt(const ObSelectStmt *select_stmt,
+                                              ObRawExprFactory *expr_factory,
+                                              ObIArray<ObRawExpr*> &unique_keys,
+                                              ObIArray<ObRawExpr*> &added_unique_keys);
   static int check_can_set_stmt_unique(ObDMLStmt *stmt,
                                        bool &can_set_unique);
 

@@ -228,6 +228,7 @@ ObEncodingHashTableFactory::ObEncodingHashTableFactory()
 {
   lib::ObMemAttr attr(MTL_ID(), blocksstable::OB_ENCODING_LABEL_HT_FACTORY);
   allocator_.set_attr(attr);
+  hashtables_.set_attr(attr);
 }
 
 ObEncodingHashTableFactory::~ObEncodingHashTableFactory()

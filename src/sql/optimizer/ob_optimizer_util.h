@@ -1150,6 +1150,9 @@ public:
                                    ObIArray<ObRawExpr*> &remain_filters,
                                    bool check_match_index = true);
 
+  static int remove_special_exprs(ObIArray<ObRawExpr*> &pushdown_filters,
+                                  ObIArray<ObRawExpr*> &remain_filters);
+
   static int check_pushdown_filter_overlap_index(const ObDMLStmt &stmt,
                                                  ObOptimizerContext &opt_ctx,
                                                  ObIArray<ObRawExpr*> &pushdown_filters,

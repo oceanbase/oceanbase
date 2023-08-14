@@ -206,6 +206,12 @@ int ObPLPackageState::set_package_var_val(const int64_t var_idx, const ObObj &va
       ObObj copy;
       OZ (ObUserDefinedType::deep_copy_obj(inner_allocator_, value, copy));
       OX (vars_.at(var_idx) = copy);
+    } else if (value.is_null()
+               && vars_.at(var_idx).is_pl_extend()
+               && types_.at(var_idx) != PL_CURSOR_TYPE
+               && types_.at(var_idx) != PL_REF_CURSOR_TYPE) {
+      CK (vars_.at(var_idx).get_ext() != 0);
+      OZ (ObUserDefinedType::destruct_obj(vars_.at(var_idx)));
     } else {
       vars_.at(var_idx) = value;
     }

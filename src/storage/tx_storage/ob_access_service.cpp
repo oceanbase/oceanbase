@@ -338,7 +338,8 @@ int ObAccessService::get_write_store_ctx_guard_(
     transaction::ObTxDesc &tx_desc,
     const transaction::ObTxReadSnapshot &snapshot,
     const concurrent_control::ObWriteFlag write_flag,
-    ObStoreCtxGuard &ctx_guard)
+    ObStoreCtxGuard &ctx_guard,
+    const transaction::ObTxSEQ &spec_seq_no)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
@@ -354,7 +355,7 @@ int ObAccessService::get_write_store_ctx_guard_(
     auto &ctx = ctx_guard.get_store_ctx();
     ctx.ls_ = ls;
     ctx.timeout_ = timeout;
-    if (OB_FAIL(ls->get_write_store_ctx(tx_desc, snapshot, write_flag, ctx))) {
+    if (OB_FAIL(ls->get_write_store_ctx(tx_desc, snapshot, write_flag, ctx, spec_seq_no))) {
       LOG_WARN("can not get write store ctx", K(ret), K(ls_id), K(snapshot), K(tx_desc));
     }
   }
@@ -565,7 +566,8 @@ int ObAccessService::check_write_allowed_(
                                                 tx_desc,
                                                 dml_param.snapshot_,
                                                 dml_param.write_flag_,
-                                                ctx_guard))) {
+                                                ctx_guard,
+                                                dml_param.spec_seq_no_))) {
     LOG_WARN("get write store ctx failed", K(ret), K(ls_id), K(dml_param), K(tx_desc));
   } else if (FALSE_IT(ctx_guard.get_store_ctx().tablet_id_ = tablet_id)) {
   } else if (OB_ISNULL(ls = ctx_guard.get_ls_handle().get_ls())) {
@@ -591,8 +593,6 @@ int ObAccessService::check_write_allowed_(
     } else if (!dml_param.is_direct_insert()
         && OB_FAIL(ls->lock(ctx_guard.get_store_ctx(), lock_param))) {
       LOG_WARN("lock tablet failed", K(ret), K(lock_param));
-    } else if (dml_param.spec_seq_no_ != -1) {
-      ctx_guard.get_store_ctx().mvcc_acc_ctx_.tx_scn_ = dml_param.spec_seq_no_;
     } else {
       // do nothing
     }

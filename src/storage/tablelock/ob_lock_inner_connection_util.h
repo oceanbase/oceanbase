@@ -40,11 +40,13 @@ namespace tablelock
 {
 class ObLockRequest;
 class ObLockObjRequest;
+class ObLockObjsRequest;
 class ObLockTableRequest;
 class ObLockTabletRequest;
 class ObLockPartitionRequest;
 class ObLockAloneTabletRequest;
 using ObUnLockObjRequest = ObLockObjRequest;
+using ObUnLockObjsRequest = ObLockObjsRequest;
 using ObUnLockTableRequest = ObLockTableRequest;
 using ObUnLockPartitionRequest = ObLockPartitionRequest;
 using ObUnLockTabletRequest = ObLockTabletRequest;
@@ -107,6 +109,13 @@ public:
       observer::ObInnerSQLConnection *conn);
   static int lock_tablet(
       const uint64_t tenant_id,
+      const uint64_t table_id,
+      const ObIArray<ObTabletID> &tablet_ids,
+      const ObTableLockMode lock_mode,
+      const int64_t timeout_us,
+      observer::ObInnerSQLConnection *conn);
+  static int lock_tablet(
+      const uint64_t tenant_id,
       const ObLockTabletRequest &arg,
       observer::ObInnerSQLConnection *conn);
   static int unlock_tablet(
@@ -128,6 +137,14 @@ public:
   static int unlock_obj(
       const uint64_t tenant_id,
       const ObUnLockObjRequest &arg,
+      observer::ObInnerSQLConnection *conn);
+  static int lock_obj(
+      const uint64_t tenant_id,
+      const ObLockObjsRequest &arg,
+      observer::ObInnerSQLConnection *conn);
+  static int unlock_obj(
+      const uint64_t tenant_id,
+      const ObUnLockObjsRequest &arg,
       observer::ObInnerSQLConnection *conn);
 private:
   static int do_obj_lock_(

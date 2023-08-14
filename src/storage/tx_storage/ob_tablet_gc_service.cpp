@@ -286,9 +286,13 @@ uint8_t ObTabletGCHandler::get_tablet_persist_trigger_and_reset()
 int ObTabletGCHandler::disable_gc()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(gc_lock_.trylock())) {
+  if (OB_FAIL(gc_lock_.lock(GC_LOCK_TIMEOUT))) {
     ret = OB_TABLET_GC_LOCK_CONFLICT;
     LOG_WARN("try lock failed, please retry later", K(ret));
+  } else if (check_stop()) {
+    gc_lock_.unlock();
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("gc handler has already been offline", K(ret));
   }
 
   return ret;
@@ -302,7 +306,7 @@ void ObTabletGCHandler::enable_gc()
 int ObTabletGCHandler::set_tablet_change_checkpoint_scn(const share::SCN &scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(gc_lock_.trylock())) {
+  if (OB_FAIL(gc_lock_.lock(GC_LOCK_TIMEOUT))) {
     ret = OB_TABLET_GC_LOCK_CONFLICT;
     LOG_WARN("try lock failed, please retry later", K(ret));
   } else {
@@ -699,7 +703,7 @@ int ObTabletGCHandler::offline()
   if (!is_finish()) {
     ret = OB_EAGAIN;
     STORAGE_LOG(INFO, "tablet gc handler not finish, retry", KR(ret), KPC(this), KPC(ls_), K(ls_->get_ls_meta()));
-  } else if (OB_FAIL(gc_lock_.trylock())) {
+  } else if (OB_FAIL(gc_lock_.lock(GC_LOCK_TIMEOUT))) {
     // make sure 'gc_lock_' is not using.
     ret = OB_TABLET_GC_LOCK_CONFLICT;
     LOG_WARN("tablet gc handler not finish, retry", K(ret));

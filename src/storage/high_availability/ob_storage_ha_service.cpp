@@ -184,6 +184,7 @@ int ObStorageHAService::scheduler_ls_ha_handler_()
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha service do not init", K(ret));
   } else {
+    std::random_shuffle(ls_id_array_.begin(), ls_id_array_.end());
     LOG_INFO("start do ls ha handler", K(ls_id_array_));
 
     for (int64_t i = 0; OB_SUCC(ret) && i < ls_id_array_.count(); ++i) {

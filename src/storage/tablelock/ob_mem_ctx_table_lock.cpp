@@ -78,7 +78,7 @@ void ObLockMemCtx::reset()
   callback_pool_.reset();
 }
 
-void ObLockMemCtx::rollback_table_lock_(const int64_t seq_no)
+void ObLockMemCtx::rollback_table_lock_(const ObTxSEQ seq_no)
 {
   int ret = OB_SUCCESS;
   ObLockMemtable *memtable = nullptr;
@@ -153,7 +153,7 @@ int ObLockMemCtx::commit_table_lock_(const SCN &commit_version, const SCN &commi
   return ret;
 }
 
-int ObLockMemCtx::rollback_table_lock(const int64_t seq_no)
+int ObLockMemCtx::rollback_table_lock(const ObTxSEQ seq_no)
 {
   int ret = OB_SUCCESS;
   if (lock_list_.is_empty()) {

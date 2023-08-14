@@ -228,6 +228,14 @@ int ObDataAccessService::refresh_task_location_info(ObDASRef &das_ref, ObIDASTas
     LOG_WARN("get tablet location failed", K(ret), KPC(tablet_loc));
   } else {
     task_op.set_ls_id(tablet_loc->ls_id_);
+    if (!task_op.is_local_task()) {
+      int64_t task_id;
+      if (OB_FAIL(MTL(ObDataAccessService*)->get_das_task_id(task_id))) {
+        LOG_WARN("retry get das task id failed", KR(ret));
+      } else {
+        task_op.set_task_id(task_id);
+      }
+    }
   }
   return ret;
 }
@@ -253,6 +261,13 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
                KR(task_op.errcode_), K(need_retry),
                "retry_cnt", location_router.get_retry_cnt(),
                KPC(task_op.get_tablet_loc()));
+      if (need_retry &&
+          task_op.get_gi_above_and_rescan() &&
+          location_router.get_retry_cnt() > 100) { //hard code retry 100 times.
+        //When das scan under px gi with transfor case, we need to disable das retry.
+        need_retry = false;
+        retry_continue = false;
+      }
       if (need_retry) {
         task_op.in_part_retry_ = true;
         location_router.set_last_errno(task_op.get_errcode());

@@ -550,7 +550,7 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
     auto &ar_snapshot = audit_record.snapshot_;
     ar_snapshot.version_ = snapshot.core_.version_;
     ar_snapshot.tx_id_ = snapshot.core_.tx_id_.get_id();
-    ar_snapshot.scn_ = snapshot.core_.scn_;
+    ar_snapshot.scn_ = snapshot.core_.scn_.cast_to_int();
     ar_snapshot.source_ = snapshot.get_source_name().ptr();
   }
   if (OB_SUCC(ret) && !session->has_start_stmt()) {
@@ -679,7 +679,7 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
     auto &tx_desc = *session->get_tx_desc();
     snapshot.init_none_read();
     snapshot.core_.tx_id_ = tx_desc.get_tx_id();
-    snapshot.core_.scn_ = common::ObSequence::get_max_seq_no();
+    snapshot.core_.scn_ = tx_desc.get_tx_seq();
   } else {
     auto &tx_desc = *session->get_tx_desc();
     int64_t stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);
@@ -740,7 +740,7 @@ int ObSqlTransControl::stmt_setup_savepoint_(ObSQLSessionInfo *session,
   ObTxParam &tx_param = plan_ctx->get_trans_param();
   OZ (build_tx_param_(session, tx_param));
   auto &tx = *session->get_tx_desc();
-  int64_t savepoint = 0;
+  transaction::ObTxSEQ savepoint;
   OZ (txs->create_implicit_savepoint(tx, tx_param, savepoint, nested_level == 0), tx, tx_param);
   OX (das_ctx.set_savepoint(savepoint));
   return ret;
@@ -950,7 +950,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
   transaction::ObTxDesc *tx_desc = NULL;
   sql::stmt::StmtType stmt_type = sql::stmt::StmtType::T_NONE;
   bool is_plain_select = false;
-  int64_t savepoint = das_ctx.get_savepoint();
+  transaction::ObTxSEQ savepoint = das_ctx.get_savepoint();
 
   CK (OB_NOT_NULL(session), OB_NOT_NULL(plan_ctx));
   CK (OB_NOT_NULL(plan = plan_ctx->get_phy_plan()));
@@ -1047,7 +1047,7 @@ bool ObSqlTransControl::is_isolation_RR_or_SE(ObTxIsolationLevel isolation)
           || isolation == ObTxIsolationLevel::SERIAL);
 }
 
-int ObSqlTransControl::create_anonymous_savepoint(ObExecContext &exec_ctx, int64_t &savepoint)
+int ObSqlTransControl::create_anonymous_savepoint(ObExecContext &exec_ctx, transaction::ObTxSEQ &savepoint)
 {
   int ret = OB_SUCCESS;
   transaction::ObTransService *txs = NULL;
@@ -1060,7 +1060,7 @@ int ObSqlTransControl::create_anonymous_savepoint(ObExecContext &exec_ctx, int64
   return ret;
 }
 
-int ObSqlTransControl::create_anonymous_savepoint(transaction::ObTxDesc &tx_desc, int64_t &savepoint)
+int ObSqlTransControl::create_anonymous_savepoint(transaction::ObTxDesc &tx_desc, transaction::ObTxSEQ &savepoint)
 {
   int ret = OB_SUCCESS;
   transaction::ObTransService *txs = NULL;
@@ -1072,7 +1072,7 @@ int ObSqlTransControl::create_anonymous_savepoint(transaction::ObTxDesc &tx_desc
   return ret;
 }
 
-int ObSqlTransControl::rollback_savepoint(ObExecContext &exec_ctx, const int64_t savepoint)
+int ObSqlTransControl::rollback_savepoint(ObExecContext &exec_ctx, const transaction::ObTxSEQ savepoint)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);

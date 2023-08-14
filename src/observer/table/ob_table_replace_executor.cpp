@@ -301,7 +301,7 @@ int ObTableApiReplaceExecutor::get_next_row()
   bool is_iter_end = false;
 
   while (OB_SUCC(ret) && !is_iter_end) {
-    int64_t savepoint_no = 0;
+    transaction::ObTxSEQ savepoint_no;
     set_need_fetch_conflict();
     if (OB_FAIL(ObSqlTransControl::create_anonymous_savepoint(exec_ctx_, savepoint_no))) {
       LOG_WARN("fail to create save_point", K(ret));

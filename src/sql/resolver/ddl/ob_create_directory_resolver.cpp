@@ -95,14 +95,23 @@ int ObCreateDirectoryResolver::resolve(const ParseNode &parse_tree)
     } else if (child_node->str_len_ >= OB_MAX_DIRECTORY_PATH_LENGTH) {
       ret = OB_ERR_TOO_LONG_IDENT;
       LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, static_cast<int32_t>(child_node->str_len_), child_node->str_value_);
-    } else if (FALSE_IT(directory_path.assign_ptr(child_node->str_value_, static_cast<int32_t>(child_node->str_len_)))) {
-      // do nothing
-    } else if (OB_FAIL(session_info_->get_secure_file_priv(secure_file_priv))) {
-      LOG_WARN("failed to get secure file priv", K(ret));
-    } else if (OB_FAIL(ObResolverUtils::check_secure_path(secure_file_priv, directory_path))) {
-      LOG_WARN("check secure path failed", K(ret), K(directory_path));
-    } else if (OB_FAIL(create_directory_stmt->set_directory_path(directory_path))) {
-      LOG_WARN("set directory path failed", K(ret));
+    } else {
+      ObString real_directory_path;
+      directory_path.assign_ptr(child_node->str_value_, static_cast<int32_t>(child_node->str_len_));
+      directory_path.trim();
+      if (!directory_path.empty() && '.' == directory_path[0]) {
+        //Relative path
+        ObArrayWrap<char> buffer;
+        OZ (buffer.allocate_array(*allocator_, PATH_MAX));
+        if (OB_SUCC(ret)) {
+          real_directory_path = ObString(realpath(to_cstring(directory_path), buffer.get_data()));
+        }
+      } else {
+        real_directory_path = directory_path;
+      }
+      OZ (session_info_->get_secure_file_priv(secure_file_priv));
+      OZ (ObResolverUtils::check_secure_path(secure_file_priv, real_directory_path));
+      OZ (create_directory_stmt->set_directory_path(directory_path));
     }
   }
 

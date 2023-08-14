@@ -134,10 +134,11 @@ static inline uint64_t sanity_align_up(uint64_t x, uint64_t align)
 static inline void sanity_check_range(const void *ptr, ssize_t len)
 {
   if (!enable_sanity_check) return;
-  if (len <= 0) return;
+  if (0 == len) return;
   if (!sanity_addr_in_range(ptr)) return;
   char *start = (char*)ptr;
   char *end = start + len;
+  if (end <= start) memory_sanity_abort();
   char *start_align = (char*)sanity_align_up((uint64_t)start, 8);
   char *end_align = (char*)sanity_align_down((uint64_t)end, 8);
   if (start_align > start &&
@@ -166,6 +167,9 @@ static inline void sanity_check_range(const void *ptr, ssize_t len)
 }
 
 extern void sanity_set_whitelist(const char *str);
+using SymbolizeCb = std::function<void(void *, const char *, const char *, uint32_t)>;
+typedef int (*BacktraceSymbolizeFunc)(void **addrs, int32_t n_addr, SymbolizeCb cb);
+extern BacktraceSymbolizeFunc backtrace_symbolize_func;
 
 #endif /* ENABLE_SANITY */
 #endif /* _MEMORY_SANITY_H_ */

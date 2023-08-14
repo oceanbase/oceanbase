@@ -571,7 +571,7 @@ int ObLSServiceHelper::wait_all_tenants_user_ls_sync_scn(
   int ret = OB_SUCCESS;
   share::SCN sys_ls_target_scn;
   ObTimeoutCtx timeout_ctx;
-  const int64_t DEFAULT_TIMEOUT = GCONF.internal_sql_execute_timeout;
+  const int64_t DEFAULT_TIMEOUT = GCONF.internal_sql_execute_timeout * 10;
   sys_ls_target_scn.set_invalid();
   if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, DEFAULT_TIMEOUT))) {
     LOG_WARN("fail to get default timeout", KR(ret));

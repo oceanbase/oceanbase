@@ -23,6 +23,7 @@
 #include "lib/allocator/ob_libeasy_mem_pool.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/utility/ob_defer.h"
+#include "objit/ob_llvm_symbolizer.h"
 #include "observer/ob_server.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_server_utils.h"
@@ -435,6 +436,9 @@ void reasy_pool_set_allocator(reasy_pool_realloc_pt alloc);
 }
 int main(int argc, char *argv[])
 {
+#ifdef ENABLE_SANITY
+  backtrace_symbolize_func = oceanbase::common::backtrace_symbolize;
+#endif
   if (0 != pthread_getname_np(pthread_self(), ob_get_tname(), OB_THREAD_NAME_BUF_LEN)) {
     snprintf(ob_get_tname(), OB_THREAD_NAME_BUF_LEN, "observer");
   }

@@ -283,11 +283,109 @@ private:
   int64_t tx_id_;
 };
 
+// Transaction used Sequence number,
+// since 4.3 the Sequence number split into two parts:
+//   part 1: sequence number offset against transaction start
+//   part 2: id of parallel write branch
+class ObTxSEQ
+{
+public:
+  ObTxSEQ() : raw_val_(0) {}
+  explicit ObTxSEQ(int64_t seq, int16_t branch):
+    branch_(branch), seq_(seq), n_format_(true), _sign_(0)
+  {
+    OB_ASSERT(seq > 0 && seq >> 62 == 0);
+    OB_ASSERT(branch >= 0);
+  }
+private:
+  explicit ObTxSEQ(int64_t raw_v): raw_val_(raw_v) {}
+public:
+  // old version builder
+  static ObTxSEQ mk_v0(int64_t seq_v)
+  {
+    OB_ASSERT(seq_v > 0);
+    return ObTxSEQ(seq_v);
+  }
+  static const ObTxSEQ &INVL() { static ObTxSEQ v; return v; }
+  static const ObTxSEQ &MAX_VAL() { static ObTxSEQ v(INT64_MAX); return v; }
+  void reset() { raw_val_ = 0; }
+  bool is_valid() const { return raw_val_ > 0; }
+  bool is_max() const { return *this == MAX_VAL(); }
+  ObTxSEQ clone_with_seq(int64_t seq_n) const
+  {
+    ObTxSEQ n = *this;
+    if (n_format_) { n.seq_ = seq_n; } else { n.seq_v0_ = seq_n; }
+    return n;
+  }
+  bool operator>(const ObTxSEQ &b) const
+  {
+    return n_format_ ? seq_ > b.seq_ : seq_v0_ > b.seq_v0_;
+  }
+  bool operator>=(const ObTxSEQ &b) const
+  {
+    return *this > b || *this == b;
+  }
+  bool operator<(const ObTxSEQ &b) const
+  {
+    return b > *this;
+  }
+  bool operator<=(const ObTxSEQ &b) const
+  {
+    return b >= *this;
+  }
+  bool operator==(const ObTxSEQ &b) const
+  {
+    return raw_val_ == b.raw_val_;
+  }
+  bool operator!=(const ObTxSEQ &b) const
+  {
+    return !(*this == b);
+  }
+  ObTxSEQ &operator++() {
+    if (n_format_) { ++seq_; } else { ++seq_v0_; }
+    return *this;
+  }
+  ObTxSEQ operator+(int n) const {
+    int64_t s = n_format_ ? seq_ + n : seq_v0_ + n;
+    return n_format_ ? ObTxSEQ(s, branch_) : ObTxSEQ::mk_v0(s);
+  }
+  uint64_t hash() const { return murmurhash(&raw_val_, sizeof(raw_val_), 0); }
+  // atomic incremental update
+  int64_t inc_update(const ObTxSEQ &b) { return common::inc_update(&raw_val_, b.raw_val_); }
+  uint64_t cast_to_int() const { return raw_val_; }
+  static ObTxSEQ cast_from_int(int64_t seq) { return ObTxSEQ(seq); }
+  // return sequence number
+  int64_t get_seq() const { return n_format_ ? seq_ : seq_v0_; }
+  int16_t get_branch() const { return n_format_ ? branch_ : 0; }
+  // atomic Load/Store
+  void atomic_reset() { ATOMIC_SET(&raw_val_, 0); }
+  ObTxSEQ atomic_load() const { auto v = ATOMIC_LOAD(&raw_val_); ObTxSEQ s; s.raw_val_ = v; return s; }
+  void atomic_store(ObTxSEQ seq) { ATOMIC_STORE(&raw_val_, seq.raw_val_); }
+  NEED_SERIALIZE_AND_DESERIALIZE;
+  DECLARE_TO_STRING;
+private:
+  union {
+    int64_t raw_val_;
+    union {
+      struct { // v0, old_version
+        uint64_t seq_v0_     :62;
+      };
+      struct { // new_version
+        uint16_t branch_     :15;
+        uint64_t seq_        :47;
+        bool     n_format_   :1;
+        int     _sign_       :1;
+      };
+    };
+  };
+};
+static_assert(sizeof(ObTxSEQ) == sizeof(int64_t), "ObTxSEQ should sizeof(int64_t)");
+
 struct ObLockForReadArg
 {
   ObLockForReadArg(memtable::ObMvccAccessCtx &acc_ctx,
                    ObTransID data_trans_id,
-                   int64_t data_sql_sequence,
+                   ObTxSEQ data_sql_sequence,
                    bool read_latest,
                    share::SCN scn)
     : mvcc_acc_ctx_(acc_ctx),
@@ -300,7 +398,7 @@ struct ObLockForReadArg
 
   memtable::ObMvccAccessCtx &mvcc_acc_ctx_;
   ObTransID data_trans_id_;
-  int64_t data_sql_sequence_;
+  ObTxSEQ data_sql_sequence_;
   bool read_latest_;
   share::SCN scn_; // Compare with transfer_start_scn, sstable is end_scn, and memtable is ObMvccTransNode scn
 };
@@ -1394,36 +1492,35 @@ class ObUndoAction
   OB_UNIS_VERSION(1);
 public:
   ObUndoAction() { reset(); }
-  ObUndoAction(const int64_t undo_from, const int64_t undo_to)
+  ObUndoAction(const ObTxSEQ undo_from, const ObTxSEQ undo_to)
       : undo_from_(undo_from), undo_to_(undo_to) {}
   ~ObUndoAction() { destroy(); }
   void reset()
   {
-    undo_from_ = 0;
-    undo_to_ = 0;
+    undo_from_.reset();
+    undo_to_.reset();
   }
   void destroy() { reset(); }
   bool is_valid() const
-  { return undo_from_ > 0 && undo_to_ > 0 && undo_from_ > undo_to_; }
+  { return undo_from_.is_valid() && undo_to_.is_valid() && undo_from_ > undo_to_; }
 
-  bool is_contain(const int64_t seq_no) const
+  bool is_contain(const ObTxSEQ seq_no) const
   { return seq_no > undo_to_ && seq_no <= undo_from_; }
 
   bool is_contain(const ObUndoAction &other) const
   { return undo_from_ >= other.undo_from_ && undo_to_ <= other.undo_to_; }
 
-  bool is_less_than(const int64_t seq_no) const
+  bool is_less_than(const ObTxSEQ seq_no) const
   { return seq_no > undo_from_;}
 
   int merge(const ObUndoAction &other);
-  int64_t get_undo_from() { return undo_from_; }
 
   TO_STRING_KV(K_(undo_from), K_(undo_to));
 
 public:
   // from > to
-  int64_t undo_from_; // inclusive
-  int64_t undo_to_;   // exclusive
+  ObTxSEQ undo_from_; // inclusive
+  ObTxSEQ undo_to_;   // exclusive
 };
 
 class ObLSLogInfo final
@@ -1541,85 +1638,6 @@ enum class RetainCause : int16_t
   MAX = 1
 };
 
-typedef ObList<ObTxBufferNode, TransModulePageAllocator> ObTxBufferNodeList;
-
-class ObTxMDSRange;
-
-class ObTxMDSCache
-{
-public:
-  ObTxMDSCache(TransModulePageAllocator &allocator) : mds_list_(allocator) { reset(); }
-  void reset();
-  void destroy();
-
-  int insert_mds_node(const ObTxBufferNode &buf_node);
-  int rollback_last_mds_node();
-  int fill_mds_log(ObPartTransCtx* ctx,
-                   ObTxMultiDataSourceLog &mds_log,
-                   ObTxMDSRange &mds_range,
-                   logservice::ObReplayBarrierType &barrier_flag,
-                   share::SCN &mds_base_scn);
-  int earse_from_cache(const ObTxBufferNode &node) {return mds_list_.erase(node); }
-  int copy_to(ObTxBufferNodeArray &tmp_array) const;
-
-  int64_t get_unsubmitted_size() const { return unsubmitted_size_; }
-  int64_t count() const { return mds_list_.size(); }
-  void update_submitted_iterator(ObTxBufferNodeArray & range_array);
-  void update_sync_failed_range(ObTxBufferNodeArray & range_array);
-  // {
-  //   unsubmitted_size_ = unsubmitted_size_ - iter->get_serialize_size();
-  //   submitted_iterator_ = iter;
-  // }
-  void clear_submitted_iterator() { submitted_iterator_ = mds_list_.end(); }
-
-  bool is_contain(const ObTxDataSourceType target_type) const;
-
-  void set_need_retry_submit_mds(bool need_retry) { need_retry_submit_mds_ = need_retry; };
-  bool need_retry_submit_mds() { return need_retry_submit_mds_; }
-
-  TO_STRING_KV(K(unsubmitted_size_), K(mds_list_.size()));
-
-private:
-  // TransModulePageAllocator allocator_;
-  bool need_retry_submit_mds_;
-  int64_t unsubmitted_size_;
-  ObTxBufferNodeList mds_list_;
-  ObTxBufferNodeList::iterator submitted_iterator_;
-};
-
-class ObTxMDSRange
-{
-public:
-  ObTxMDSRange() { reset(); }
-  void reset();
-  // void clear();
-
-  int init(ObPartTransCtx * tx_ctx);
-  int update_range(ObTxBufferNodeList::iterator iter);
-
-  int move_from_cache_to_arr(ObTxMDSCache & mds_cache, ObTxBufferNodeArray& mds_durable_arr);
-  // int move_to(ObTxBufferNodeArray &tx_buffer_node_arr);
-  // int copy_to(ObTxBufferNodeArray &tx_buffer_node_arr) const;
-
-  int range_submitted(ObTxMDSCache &cache);
-  void range_sync_failed(ObTxMDSCache &cache);
-  int assign(const ObTxMDSRange &other);
-
-  int64_t count() const { return range_array_.count(); };
-
-  const ObTxBufferNodeArray & get_range_array() {return range_array_;}
-
-  TO_STRING_KV(K(range_array_.count()),K(range_array_));
-
-private:
-  ObTxBufferNodeArray range_array_;
-  ObPartTransCtx *tx_ctx_;
-
-  // ObTxBufferNodeList *list_ptr_;
-  // ObTxBufferNodeList::iterator start_iter_;
-  // int64_t count_;
-};
-
 static const int64_t MAX_TABLET_MODIFY_RECORD_COUNT = 16;
 // exec info need to be persisted by "trans context table"
 struct ObTxExecInfo
@@ -1687,7 +1705,7 @@ public:
   share::SCN max_applied_log_ts_;
   share::SCN max_applying_log_ts_;
   int64_t max_applying_part_log_no_; // start from 0 on follower and always be INT64_MAX on leader
-  int64_t max_submitted_seq_no_; // maintains on Leader and transfer to Follower via ActiveInfoLog
+  ObTxSEQ max_submitted_seq_no_; // maintains on Leader and transfer to Follower via ActiveInfoLog
   uint64_t checksum_;
   share::SCN checksum_scn_;
   palf::LSN max_durable_lsn_;
