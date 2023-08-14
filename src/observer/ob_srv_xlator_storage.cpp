@@ -88,6 +88,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcBackupMetaP, gctx_);
     RPC_PROCESSOR(ObRpcBackupLSDataResP, gctx_);
     RPC_PROCESSOR(ObRpcBackupCleanLSResP, gctx_);
+    RPC_PROCESSOR(ObRpcNotifyArchiveP, gctx_);
 
     RPC_PROCESSOR(ObRpcCheckBackupTaskExistP, gctx_);
     RPC_PROCESSOR(ObRenewInZoneHbP, gctx_);

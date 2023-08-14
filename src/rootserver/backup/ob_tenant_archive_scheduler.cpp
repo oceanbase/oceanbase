@@ -24,6 +24,7 @@
 #include "share/backup/ob_archive_store.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/ls/ob_ls_i_life_manager.h"
+#include "share/ls/ob_ls_operator.h"
 #include "share/scn.h"
 #include "share/ob_debug_sync.h"
 
@@ -547,6 +548,7 @@ int ObArchiveHandler::check_can_do_archive(bool &can) const
 int ObArchiveHandler::enable_archive(const int64_t dest_no)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   bool can;
   bool create;
   ObTenantArchiveRoundAttr new_round_attr;
@@ -564,6 +566,11 @@ int ObArchiveHandler::enable_archive(const int64_t dest_no)
   } else if (OB_FAIL(round_handler_.enable_archive(dest_no, new_round_attr))) {
     LOG_WARN("failed to enable archive", K(ret), K_(tenant_id), K(dest_no));
   } else {
+    if (new_round_attr.state_.status_ == ObArchiveRoundState::Status::BEGINNING) {
+      if (OB_TMP_FAIL(notify_(new_round_attr))) {
+        LOG_WARN("notify failed", K(tmp_ret), K(new_round_attr));
+      }
+    }
     LOG_INFO("enable archive", K(dest_no), K(new_round_attr));
   }
 
@@ -580,6 +587,7 @@ int ObArchiveHandler::enable_archive(const int64_t dest_no)
 int ObArchiveHandler::disable_archive(const int64_t dest_no)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObTenantArchiveRoundAttr new_round_attr;
 
   if (IS_NOT_INIT) {
@@ -588,6 +596,9 @@ int ObArchiveHandler::disable_archive(const int64_t dest_no)
   } else if (OB_FAIL(round_handler_.disable_archive(dest_no, new_round_attr))) {
     LOG_WARN("failed to disable archive", K(ret), K_(tenant_id), K(dest_no));
   } else {
+    if (OB_TMP_FAIL(notify_(new_round_attr))) {
+      LOG_WARN("notify failed", K(tmp_ret), K(new_round_attr));
+    }
     LOG_INFO("disable archive", K(dest_no), K(new_round_attr));
   }
 
@@ -604,6 +615,7 @@ int ObArchiveHandler::disable_archive(const int64_t dest_no)
 int ObArchiveHandler::defer_archive(const int64_t dest_no)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObTenantArchiveRoundAttr new_round_attr;
 
   if (IS_NOT_INIT) {
@@ -612,6 +624,9 @@ int ObArchiveHandler::defer_archive(const int64_t dest_no)
   } else if (OB_FAIL(round_handler_.defer_archive(dest_no, new_round_attr))) {
     LOG_WARN("failed to defer archive", K(ret), K_(tenant_id), K(dest_no));
   } else {
+    if (OB_TMP_FAIL(notify_(new_round_attr))) {
+      LOG_WARN("notify failed", K(tmp_ret), K(new_round_attr));
+    }
     LOG_INFO("defer archive", K(dest_no), K(new_round_attr));
   }
 
@@ -755,9 +770,40 @@ int ObArchiveHandler::do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info
 int ObArchiveHandler::notify_(const ObTenantArchiveRoundAttr &round)
 {
   int ret = OB_SUCCESS;
-  // TODO: notify each log stream.
+  int tmp_ret = OB_SUCCESS;
   UNUSED(round);
-  // Get all log streams, and try the best to notify each log stream event of archive start.
+  share::ObLSAttrArray ls_array;
+  share::ObLSAttrOperator ls_operator(tenant_id_, sql_proxy_);
+  hash::ObHashSet<ObAddr> notify_addr_set;
+  share::ObLocationService *location_service = GCTX.location_service_;
+  const bool force_renew = true;
+  common::ObAddr leader_addr;
+  obrpc::ObNotifyArchiveArg arg;
+  arg.tenant_id_ = tenant_id_;
+
+  if (OB_FAIL(ls_operator.get_all_ls_by_order(ls_array))) {
+    LOG_WARN("failed to get all ls info", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(notify_addr_set.create(ls_array.count()))) {
+    LOG_WARN("failed to create notify addr set", K(ret));
+  } else {
+    ARRAY_FOREACH_N(ls_array, i, cnt) {
+      const ObLSAttr &ls_attr = ls_array.at(i);
+      if(OB_FAIL(location_service->get_leader(GCONF.cluster_id, tenant_id_, ls_attr.get_ls_id(), force_renew, leader_addr))) {
+        LOG_WARN("failed to get leader addr", K(ret), KP(location_service), "ls_id", ls_attr.get_ls_id());
+      } else if(OB_FAIL(notify_addr_set.set_refactored(leader_addr))) {
+        LOG_WARN("failed to set server_addr in notify_addr_set", K(ret), "ls_id", ls_attr.get_ls_id(), K(leader_addr));
+      }
+    }
+    LOG_INFO("leader_addr_set to be notified archive:", K(notify_addr_set));
+    for (hash::ObHashSet<ObAddr>::const_iterator it = notify_addr_set.begin(); it != notify_addr_set.end(); it++) {
+      if (OB_TMP_FAIL(rpc_proxy_->to(it->first).notify_archive(arg))) {
+        LOG_WARN("failed to notify ls leader archive", K(tmp_ret), K(arg));
+      } else {
+        LOG_INFO("succeed to notify ls leader archive", K(arg), K(it->first));
+      }
+    }
+  }
+
   return ret;
 }
 

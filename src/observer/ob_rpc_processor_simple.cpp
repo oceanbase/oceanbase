@@ -618,6 +618,18 @@ int ObRpcBackupLSCleanP::process()
   return ret;
 }
 
+int ObRpcNotifyArchiveP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KP(gctx_.ob_service_), K(ret));
+  } else {
+    ret = gctx_.ob_service_->notify_archive(arg_);
+  }
+  return ret;
+}
+
 int ObRpcBackupLSDataP::process()
 {
   int ret = OB_SUCCESS;

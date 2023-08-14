@@ -146,6 +146,7 @@ public:
   int check_sys_task_exist(const share::ObTaskId &arg, bool &res);
   int check_migrate_task_exist(const share::ObTaskId &arg, bool &res);
   int delete_backup_ls_task(const obrpc::ObLSBackupCleanArg &arg);
+  int notify_archive(const obrpc::ObNotifyArchiveArg &arg);
   int report_backup_over(const obrpc::ObBackupTaskRes &res);
   int report_backup_clean_over(const obrpc::ObBackupTaskRes &res);
 

@@ -105,9 +105,7 @@ public:
   int get_ls_archive_speed(const ObLSID &id, int64_t &speed, bool &force_wait, bool &ignore);
 
   ///////////// RPC process functions /////////////////
-  void process_start_archive();
-
-  void process_stop_archive();
+  void wakeup();
 
   int iterate_ls(const std::function<int(const ObLSArchiveTask&)> &func);
 
