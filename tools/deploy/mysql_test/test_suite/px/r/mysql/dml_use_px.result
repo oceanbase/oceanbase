@@ -25,7 +25,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
-  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_s.c1]), range(MIN ; MAX)always true
@@ -41,7 +41,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
-  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_s.c1]), range(MIN ; MAX)always true
@@ -68,11 +68,11 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
-  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_s.c1]), range(MIN ; MAX)always true
@@ -98,14 +98,14 @@ Query Plan
 =======================================
 Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
       dop=10
-  2 - output(nil), filter(nil), rowset=256
+  2 - output(nil), filter(nil), rowset=16
       partition wise, force partition granule
   3 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range(MIN ; MAX)always true
@@ -122,14 +122,14 @@ Query Plan
 =======================================
 Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
       dop=10
-  2 - output(nil), filter(nil), rowset=256
+  2 - output(nil), filter(nil), rowset=16
       partition wise, force partition granule
   3 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range(MIN ; MAX)always true
@@ -155,14 +155,14 @@ Query Plan
 =======================================
 Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
       dop=10
-  2 - output(nil), filter(nil), rowset=256
+  2 - output(nil), filter(nil), rowset=16
       partition wise, force partition granule
   3 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; MAX),
@@ -180,14 +180,14 @@ Query Plan
 =======================================
 Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
       dop=10
-  2 - output(nil), filter(nil), rowset=256
+  2 - output(nil), filter(nil), rowset=16
       partition wise, force partition granule
   3 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; MAX),
@@ -218,7 +218,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p1)
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; 5],
@@ -238,11 +238,11 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p1)
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; 5],
@@ -262,11 +262,11 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p1)
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; 5],
@@ -307,21 +307,21 @@ Query Plan
 ========================================
 Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
       dop=4
-  2 - output(nil), filter(nil), rowset=256
+  2 - output(nil), filter(nil), rowset=16
       partition wise, force partition granule
   3 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       conds(nil), nl_params_([t_p.c1(:0)]), use_batch=true
-  5 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  5 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; MAX),
       range_cond([t_p.c1 >= 5])
-  6 - output(nil), filter(nil), rowset=256
+  6 - output(nil), filter(nil), rowset=16
       access([GROUP_ID]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p4.c1]), range(MIN ; MAX),
@@ -347,24 +347,24 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       equal_conds([t_p.c1 = t_p4.c1]), other_conds(nil)
-  4 - output([t_p4.c1]), filter(nil), rowset=256
+  4 - output([t_p4.c1]), filter(nil), rowset=16
       RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t_p4.c1)]
-  5 - output([t_p4.c1]), filter(nil), rowset=256
-  6 - output([t_p4.c1]), filter(nil), rowset=256
+  5 - output([t_p4.c1]), filter(nil), rowset=16
+  6 - output([t_p4.c1]), filter(nil), rowset=16
       dop=10
-  7 - output([t_p4.c1]), filter(nil), rowset=256
-  8 - output([t_p4.c1]), filter(nil), rowset=256
+  7 - output([t_p4.c1]), filter(nil), rowset=16
+  8 - output([t_p4.c1]), filter(nil), rowset=16
       access([t_p4.c1]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p4.c1]), range[5 ; MAX),
       range_cond([t_p4.c1 >= 5])
-  9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
- 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; MAX),
@@ -404,23 +404,23 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       equal_conds([t_p.c1 = t_p4.c2]), other_conds(nil)
-  4 - output([t_p4.c2]), filter(nil), rowset=256
+  4 - output([t_p4.c2]), filter(nil), rowset=16
       RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t_p4.c2)]
-  5 - output([t_p4.c2]), filter(nil), rowset=256
-  6 - output([t_p4.c2]), filter(nil), rowset=256
+  5 - output([t_p4.c2]), filter(nil), rowset=16
+  6 - output([t_p4.c2]), filter(nil), rowset=16
       dop=10
-  7 - output([t_p4.c2]), filter(nil), rowset=256
-  8 - output([t_p4.c2]), filter([t_p4.c2 >= 5]), rowset=256
+  7 - output([t_p4.c2]), filter(nil), rowset=16
+  8 - output([t_p4.c2]), filter([t_p4.c2 >= 5]), rowset=16
       access([t_p4.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t_p4.c1]), range(MIN ; MAX)always true
-  9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
- 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; MAX),
@@ -446,23 +446,23 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       equal_conds([t_p.c1 = t_p4.c2]), other_conds(nil)
-  4 - output([t_p4.c2]), filter(nil), rowset=256
+  4 - output([t_p4.c2]), filter(nil), rowset=16
       RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t_p4.c2)]
-  5 - output([t_p4.c2]), filter(nil), rowset=256
-  6 - output([t_p4.c2]), filter(nil), rowset=256
+  5 - output([t_p4.c2]), filter(nil), rowset=16
+  6 - output([t_p4.c2]), filter(nil), rowset=16
       dop=10
-  7 - output([t_p4.c2]), filter(nil), rowset=256
-  8 - output([t_p4.c2]), filter([t_p4.c2 >= 5]), rowset=256
+  7 - output([t_p4.c2]), filter(nil), rowset=16
+  8 - output([t_p4.c2]), filter([t_p4.c2 >= 5]), rowset=16
       access([t_p4.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t_p4.c1]), range(MIN ; MAX)always true
-  9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
- 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; MAX),
@@ -504,22 +504,22 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)}), hash_distinct}], [{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
-  1 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  1 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  3 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  5 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  5 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_s.c1]), range(MIN ; MAX)always true
-  6 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  7 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  8 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  6 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  7 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  8 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       dop=10
-  9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
- 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range(MIN ; MAX)always true
@@ -544,22 +544,22 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)}), hash_distinct}], [{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
-  1 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  1 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  3 - output([t_s.c1], [t_s.c2], [t_s.c3], [t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  5 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  5 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_s.c1]), range(MIN ; MAX)always true
-  6 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  7 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  8 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  6 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  7 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  8 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       dop=10
-  9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
- 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range(MIN ; MAX)always true
@@ -599,21 +599,21 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
-  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       equal_conds([t_p.c1 = t_s.c1]), other_conds(nil)
-  4 - output([t_p.c1]), filter(nil), rowset=256
-  5 - output([t_p.c1]), filter(nil), rowset=256
+  4 - output([t_p.c1]), filter(nil), rowset=16
+  5 - output([t_p.c1]), filter(nil), rowset=16
       dop=10
-  6 - output([t_p.c1]), filter(nil), rowset=256
-  7 - output([t_p.c1]), filter(nil), rowset=256
+  6 - output([t_p.c1]), filter(nil), rowset=16
+  7 - output([t_p.c1]), filter(nil), rowset=16
       access([t_p.c1]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range(MIN ; MAX)always true
-  8 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  9 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  8 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  9 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_s.c1]), range(MIN ; MAX)always true
@@ -638,23 +638,23 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
-  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       equal_conds([t_p.c1 = t_s.c1]), other_conds(nil)
-  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t_s.c1)]
-  5 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  6 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  5 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  6 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_s.c1]), range(MIN ; MAX)always true
-  7 - output([t_p.c1]), filter(nil), rowset=256
-  8 - output([t_p.c1]), filter(nil), rowset=256
+  7 - output([t_p.c1]), filter(nil), rowset=16
+  8 - output([t_p.c1]), filter(nil), rowset=16
       dop=10
-  9 - output([t_p.c1]), filter(nil), rowset=256
- 10 - output([t_p.c1]), filter(nil), rowset=256
+  9 - output([t_p.c1]), filter(nil), rowset=16
+ 10 - output([t_p.c1]), filter(nil), rowset=16
       access([t_p.c1]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range(MIN ; MAX)always true
@@ -686,21 +686,21 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}])
-  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       equal_conds([t_p.c1 = t_s.c1]), other_conds(nil)
-  4 - output([t_p.c1]), filter(nil), rowset=256
-  5 - output([t_p.c1]), filter(nil), rowset=256
+  4 - output([t_p.c1]), filter(nil), rowset=16
+  5 - output([t_p.c1]), filter(nil), rowset=16
       dop=10
-  6 - output([t_p.c1]), filter(nil), rowset=256
-  7 - output([t_p.c1]), filter(nil), rowset=256
+  6 - output([t_p.c1]), filter(nil), rowset=16
+  7 - output([t_p.c1]), filter(nil), rowset=16
       access([t_p.c1]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range(MIN ; MAX)always true
-  8 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  9 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  8 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  9 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_s.c1]), range(MIN ; MAX)always true
@@ -735,23 +735,23 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  5 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  5 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p1)
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[1 ; 1],
       range_cond([t_p.c1 = 1])
-  6 - output(nil), filter(nil), rowset=256
-  7 - output(nil), filter(nil), rowset=256
-  8 - output(nil), filter(nil), rowset=256
+  6 - output(nil), filter(nil), rowset=16
+  7 - output(nil), filter(nil), rowset=16
+  8 - output(nil), filter(nil), rowset=16
       dop=10
-  9 - output(nil), filter(nil), rowset=256
- 10 - output(nil), filter(nil), rowset=256
+  9 - output(nil), filter(nil), rowset=16
+ 10 - output(nil), filter(nil), rowset=16
       access(nil), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_s.c1]), range[1 ; 1],
@@ -770,14 +770,14 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  2 - output(nil), filter(nil), rowset=256
+  2 - output(nil), filter(nil), rowset=16
       access(nil), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_s.c1]), range[1 ; 1],
       range_cond([1 = t_s.c1])
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p1)
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[1 ; 1],
@@ -803,23 +803,23 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  5 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  5 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p1)
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[1 ; 1],
       range_cond([t_p.c1 = 1])
-  6 - output(nil), filter(nil), rowset=256
-  7 - output(nil), filter(nil), rowset=256
-  8 - output(nil), filter(nil), rowset=256
+  6 - output(nil), filter(nil), rowset=16
+  7 - output(nil), filter(nil), rowset=16
+  8 - output(nil), filter(nil), rowset=16
       dop=10
-  9 - output(nil), filter(nil), rowset=256
- 10 - output(nil), filter(nil), rowset=256
+  9 - output(nil), filter(nil), rowset=16
+ 10 - output(nil), filter(nil), rowset=16
       access(nil), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_s.c1]), range[1 ; 1],
@@ -866,22 +866,22 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  4 - output(nil), filter(nil), rowset=256
-  5 - output(nil), filter(nil), rowset=256
+  4 - output(nil), filter(nil), rowset=16
+  5 - output(nil), filter(nil), rowset=16
       dop=10
-  6 - output(nil), filter(nil), rowset=256
-  7 - output(nil), filter([t_p4.c2 = 4]), rowset=256
+  6 - output(nil), filter(nil), rowset=16
+  7 - output(nil), filter([t_p4.c2 = 4]), rowset=16
       access([t_p4.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t_p4.c1]), range(MIN ; MAX)always true
-  8 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
- 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  8 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[4 ; 4],
@@ -904,19 +904,19 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  2 - output(nil), filter(nil), rowset=256
-  3 - output(nil), filter(nil), rowset=256
+  2 - output(nil), filter(nil), rowset=16
+  3 - output(nil), filter(nil), rowset=16
       dop=1
-  4 - output(nil), filter(nil), rowset=256
+  4 - output(nil), filter(nil), rowset=16
       force partition granule
-  5 - output(nil), filter([t_p4.c2 = 4]), rowset=256
+  5 - output(nil), filter([t_p4.c2 = 4]), rowset=16
       access([t_p4.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t_p4.c1]), range(MIN ; MAX)always true
-  6 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  7 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  6 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  7 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[4 ; 4],
@@ -961,22 +961,22 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  4 - output(nil), filter(nil), rowset=256
-  5 - output(nil), filter(nil), rowset=256
+  4 - output(nil), filter(nil), rowset=16
+  5 - output(nil), filter(nil), rowset=16
       dop=10
-  6 - output(nil), filter(nil), rowset=256
-  7 - output(nil), filter([t_p4.c2 = 4]), rowset=256
+  6 - output(nil), filter(nil), rowset=16
+  7 - output(nil), filter([t_p4.c2 = 4]), rowset=16
       access([t_p4.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t_p4.c1]), range(MIN ; MAX)always true
-  8 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
- 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  8 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+ 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[4 ; 4],
@@ -1019,11 +1019,11 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]),
       update([t_s.c2=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
-  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_s.c1]), range[5 ; MAX),
@@ -1044,11 +1044,11 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]),
       update([t_s.c2=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
-  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_s.c1]), range[5 ; MAX),
@@ -1089,11 +1089,11 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]),
       update([t_s.c1=column_conv(INT,PS:(11,0),NOT NULL,cast(20, INT(-1, 0)))])
-  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter([t_s.c2 = 5]), rowset=256
+  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter([t_s.c2 = 5]), rowset=16
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t_s.c1]), range(MIN ; MAX)always true
@@ -1113,11 +1113,11 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]),
       update([t_s.c1=column_conv(INT,PS:(11,0),NOT NULL,cast(20, INT(-1, 0)))])
-  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  1 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  2 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
-  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter([t_s.c2 = 5]), rowset=256
+  3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=16
+  4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter([t_s.c2 = 5]), rowset=16
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t_s.c1]), range(MIN ; MAX)always true
@@ -1154,15 +1154,15 @@ Query Plan
 =======================================
 Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
       dop=10
-  2 - output(nil), filter(nil), rowset=256
+  2 - output(nil), filter(nil), rowset=16
       partition wise, force partition granule
   3 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]),
       update([t_p.c3=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
-  4 - output([t_p.c1], [t_p.c3], [t_p.c2]), filter(nil), rowset=256
+  4 - output([t_p.c1], [t_p.c3], [t_p.c2]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c3], [t_p.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; MAX),
@@ -1180,15 +1180,15 @@ Query Plan
 =======================================
 Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
       dop=10
-  2 - output(nil), filter(nil), rowset=256
+  2 - output(nil), filter(nil), rowset=16
       partition wise, force partition granule
   3 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]),
       update([t_p.c3=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
-  4 - output([t_p.c1], [t_p.c3], [t_p.c2]), filter(nil), rowset=256
+  4 - output([t_p.c1], [t_p.c3], [t_p.c2]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c3], [t_p.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; MAX),
@@ -1229,11 +1229,11 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]),
       update([t_p.c1=column_conv(INT,PS:(11,0),NOT NULL,cast(20, INT(-1, 0)))])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p1)
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; 5],
@@ -1254,11 +1254,11 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]),
       update([t_p.c1=column_conv(INT,PS:(11,0),NOT NULL,cast(20, INT(-1, 0)))])
-  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p1)
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range[5 ; 5],
@@ -1296,15 +1296,15 @@ Query Plan
 =======================================
 Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
       dop=10
-  2 - output(nil), filter(nil), rowset=256
+  2 - output(nil), filter(nil), rowset=16
       partition wise, force partition granule
   3 - output(nil), filter(nil)
       table_columns([{pp: ({t_p: (pp.c1, pp.c2, pp.c3)})}]),
       update([pp.c3=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
-  4 - output([pp.c1], [pp.c3], [pp.c2]), filter(nil), rowset=256
+  4 - output([pp.c1], [pp.c3], [pp.c2]), filter(nil), rowset=16
       access([pp.c1], [pp.c3], [pp.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([pp.c1]), range[5 ; MAX),
@@ -1322,15 +1322,15 @@ Query Plan
 =======================================
 Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
       dop=10
-  2 - output(nil), filter(nil), rowset=256
+  2 - output(nil), filter(nil), rowset=16
       partition wise, force partition granule
   3 - output(nil), filter(nil)
       table_columns([{pp: ({t_p: (pp.c1, pp.c2, pp.c3)})}]),
       update([pp.c3=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))])
-  4 - output([pp.c1], [pp.c3], [pp.c2]), filter(nil), rowset=256
+  4 - output([pp.c1], [pp.c3], [pp.c2]), filter(nil), rowset=16
       access([pp.c1], [pp.c3], [pp.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([pp.c1]), range[5 ; MAX),
@@ -1371,11 +1371,11 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{t_no_p: ({t_no_p: (t_no_p.__pk_increment, t_no_p.c1, t_no_p.c2, t_no_p.c3)})}]),
       update([t_no_p.c1=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))], [t_no_p.__pk_increment=T_HIDDEN_PK])
-  1 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=256
-  2 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=256
+  1 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=16
+  2 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=256
-  4 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter([t_no_p.c1 >= 5]), rowset=256
+  3 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=16
+  4 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter([t_no_p.c1 >= 5]), rowset=16
       access([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t_no_p.__pk_increment]), range(MIN ; MAX)always true
@@ -1395,11 +1395,11 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{t_no_p: ({t_no_p: (t_no_p.__pk_increment, t_no_p.c1, t_no_p.c2, t_no_p.c3)})}]),
       update([t_no_p.c1=column_conv(INT,PS:(11,0),NULL,cast(20, INT(-1, 0)))], [t_no_p.__pk_increment=T_HIDDEN_PK])
-  1 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=256
-  2 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=256
+  1 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=16
+  2 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=256
-  4 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter([t_no_p.c1 >= 5]), rowset=256
+  3 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter(nil), rowset=16
+  4 - output([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), filter([t_no_p.c1 >= 5]), rowset=16
       access([t_no_p.__pk_increment], [t_no_p.c1], [t_no_p.c2], [t_no_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t_no_p.__pk_increment]), range(MIN ; MAX)always true
@@ -1443,9 +1443,9 @@ Outputs & filters:
       columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  2 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
+  2 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=16
       access([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
@@ -1464,9 +1464,9 @@ Outputs & filters:
       columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  2 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
+  2 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=16
       access([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
@@ -1510,13 +1510,13 @@ Outputs & filters:
       columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
-  5 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
+  4 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=16
+  5 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=16
       access([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
@@ -1538,13 +1538,13 @@ Outputs & filters:
       columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
-  5 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
+  4 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=16
+  5 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=16
       access([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
@@ -1589,13 +1589,13 @@ Outputs & filters:
       columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter([t_temp_p.c2 >= 5]), rowset=256
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
+  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter([t_temp_p.c2 >= 5]), rowset=16
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
@@ -1617,13 +1617,13 @@ Outputs & filters:
       columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter([t_temp_p.c2 >= 5]), rowset=256
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
+  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter([t_temp_p.c2 >= 5]), rowset=16
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
@@ -1665,23 +1665,23 @@ Outputs & filters:
       columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_s.c3]), filter(nil), rowset=256
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_s.c3]), filter(nil), rowset=16
       equal_conds([t_temp_p.c1 = t_temp_s.c1]), other_conds(nil)
-  5 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
-  6 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
+  5 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=16
+  6 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=16
       dop=10
-  7 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
-  8 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
+  7 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=16
+  8 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=16
       access([t_temp_p.c1], [t_temp_p.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
-  9 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256
- 10 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256
+  9 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=16
+ 10 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=16
       access([t_temp_s.c1], [t_temp_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
@@ -1708,23 +1708,23 @@ Outputs & filters:
       columns([{t_s: ({t_s: (t_s.c1, t_s.c2, t_s.c3)})}]), partitions(p0), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_s.c3]), filter(nil), rowset=256
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_s.c3]), filter(nil), rowset=16
       equal_conds([t_temp_p.c1 = t_temp_s.c1]), other_conds(nil)
-  5 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
-  6 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
+  5 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=16
+  6 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=16
       dop=10
-  7 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
-  8 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
+  7 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=16
+  8 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=16
       access([t_temp_p.c1], [t_temp_p.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
-  9 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256
- 10 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256
+  9 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=16
+ 10 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=16
       access([t_temp_s.c1], [t_temp_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
@@ -1765,13 +1765,13 @@ Outputs & filters:
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
-  5 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
+  4 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=16
+  5 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=16
       access([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
@@ -1793,13 +1793,13 @@ Outputs & filters:
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
-  5 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=256
+  4 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=16
+  5 - output([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), filter(nil), rowset=16
       access([t_temp_s.c1], [t_temp_s.c2], [t_temp_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
@@ -1836,18 +1836,18 @@ Query Plan
 ==============================================
 Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
       dop=10
-  2 - output(nil), filter(nil), rowset=256
+  2 - output(nil), filter(nil), rowset=16
       partition wise, force partition granule
   3 - output(nil), filter(nil)
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  4 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  4 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
@@ -1865,18 +1865,18 @@ Query Plan
 ==============================================
 Outputs & filters:
 -------------------------------------
-  0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256
+  0 - output(nil), filter(nil), rowset=16
+  1 - output(nil), filter(nil), rowset=16
       dop=10
-  2 - output(nil), filter(nil), rowset=256
+  2 - output(nil), filter(nil), rowset=16
       partition wise, force partition granule
   3 - output(nil), filter(nil)
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  4 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  4 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
@@ -1923,25 +1923,25 @@ Outputs & filters:
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
       equal_conds([t_temp_p.c1 = t_temp_p5.c1]), other_conds(nil)
-  5 - output([t_temp_p5.c1]), filter(nil), rowset=256
+  5 - output([t_temp_p5.c1]), filter(nil), rowset=16
       RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t_temp_p5.c1)]
-  6 - output([t_temp_p5.c1]), filter(nil), rowset=256
-  7 - output([t_temp_p5.c1]), filter(nil), rowset=256
+  6 - output([t_temp_p5.c1]), filter(nil), rowset=16
+  7 - output([t_temp_p5.c1]), filter(nil), rowset=16
       dop=10
-  8 - output([t_temp_p5.c1]), filter(nil), rowset=256
-  9 - output([t_temp_p5.c1]), filter(nil), rowset=256
+  8 - output([t_temp_p5.c1]), filter(nil), rowset=16
+  9 - output([t_temp_p5.c1]), filter(nil), rowset=16
       access([t_temp_p5.c1]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p5.__pk_increment]), range(MIN ; MAX)always true
- 10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
- 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+ 10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
+ 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
@@ -1969,25 +1969,25 @@ Outputs & filters:
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
       equal_conds([t_temp_p.c1 = t_temp_p5.c1]), other_conds(nil)
-  5 - output([t_temp_p5.c1]), filter(nil), rowset=256
+  5 - output([t_temp_p5.c1]), filter(nil), rowset=16
       RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t_temp_p5.c1)]
-  6 - output([t_temp_p5.c1]), filter(nil), rowset=256
-  7 - output([t_temp_p5.c1]), filter(nil), rowset=256
+  6 - output([t_temp_p5.c1]), filter(nil), rowset=16
+  7 - output([t_temp_p5.c1]), filter(nil), rowset=16
       dop=10
-  8 - output([t_temp_p5.c1]), filter(nil), rowset=256
-  9 - output([t_temp_p5.c1]), filter(nil), rowset=256
+  8 - output([t_temp_p5.c1]), filter(nil), rowset=16
+  9 - output([t_temp_p5.c1]), filter(nil), rowset=16
       access([t_temp_p5.c1]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p5.__pk_increment]), range(MIN ; MAX)always true
- 10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
- 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+ 10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
+ 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
@@ -2034,24 +2034,24 @@ Outputs & filters:
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p3), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  5 - output(nil), filter(nil), rowset=256
-  6 - output(nil), filter(nil), rowset=256
+  5 - output(nil), filter(nil), rowset=16
+  6 - output(nil), filter(nil), rowset=16
       dop=10
-  7 - output(nil), filter(nil), rowset=256
-  8 - output(nil), filter([3 = t_temp_p5.c1]), rowset=256
+  7 - output(nil), filter(nil), rowset=16
+  8 - output(nil), filter([3 = t_temp_p5.c1]), rowset=16
       access([t_temp_p5.c1]), partitions(p3)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t_temp_p5.__pk_increment]), range(MIN ; MAX)always true
-  9 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
- 10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
- 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter([t_temp_p.c1 = 3]), rowset=256
+  9 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
+ 10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
+ 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter([t_temp_p.c1 = 3]), rowset=16
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p3)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
@@ -2089,25 +2089,25 @@ Outputs & filters:
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
       equal_conds([t_temp_p.c1 = t_temp_p4.c1]), other_conds(nil)
-  5 - output([t_temp_p4.c1]), filter(nil), rowset=256
+  5 - output([t_temp_p4.c1]), filter(nil), rowset=16
       RF_TYPE(bloom), RF_EXPR[calc_tablet_id(t_temp_p4.c1)]
-  6 - output([t_temp_p4.c1]), filter(nil), rowset=256
-  7 - output([t_temp_p4.c1]), filter(nil), rowset=256
+  6 - output([t_temp_p4.c1]), filter(nil), rowset=16
+  7 - output([t_temp_p4.c1]), filter(nil), rowset=16
       dop=10
-  8 - output([t_temp_p4.c1]), filter(nil), rowset=256
-  9 - output([t_temp_p4.c1]), filter(nil), rowset=256
+  8 - output([t_temp_p4.c1]), filter(nil), rowset=16
+  9 - output([t_temp_p4.c1]), filter(nil), rowset=16
       access([t_temp_p4.c1]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p4.__pk_increment]), range(MIN ; MAX)always true
- 10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
- 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+ 10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
+ 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
@@ -2153,23 +2153,23 @@ Outputs & filters:
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_s.c3]), filter(nil), rowset=256
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_s.c3]), filter(nil), rowset=16
       equal_conds([t_temp_p.c1 = t_temp_s.c1]), other_conds(nil)
-  5 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
-  6 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
+  5 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=16
+  6 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=16
       dop=10
-  7 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
-  8 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
+  7 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=16
+  8 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=16
       access([t_temp_p.c1], [t_temp_p.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
-  9 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256
- 10 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256
+  9 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=16
+ 10 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=16
       access([t_temp_s.c1], [t_temp_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
@@ -2196,23 +2196,23 @@ Outputs & filters:
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_s.c3]), filter(nil), rowset=256
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_s.c3]), filter(nil), rowset=16
       equal_conds([t_temp_p.c1 = t_temp_s.c1]), other_conds(nil)
-  5 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
-  6 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
+  5 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=16
+  6 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=16
       dop=10
-  7 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
-  8 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=256
+  7 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=16
+  8 - output([t_temp_p.c1], [t_temp_p.c2]), filter(nil), rowset=16
       access([t_temp_p.c1], [t_temp_p.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
-  9 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256
- 10 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=256
+  9 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=16
+ 10 - output([t_temp_s.c1], [t_temp_s.c3]), filter(nil), rowset=16
       access([t_temp_s.c1], [t_temp_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_temp_s.__pk_increment]), range(MIN ; MAX)always true
@@ -2255,13 +2255,13 @@ Outputs & filters:
       columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}]), partitions(p[0-3]), 
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
+  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
@@ -2284,13 +2284,13 @@ Outputs & filters:
       column_values([column_conv(INT,PS:(11,0),NOT NULL,ANONYMOUS_VIEW1.c1)], [column_conv(INT,PS:(11,0),NULL,ANONYMOUS_VIEW1.c2)], [column_conv(INT,PS:(11,
       0),NULL,ANONYMOUS_VIEW1.c3)]),
       update([t_p.c3=column_conv(INT,PS:(11,0),NULL,cast(2, INT(-1, 0)))])
-  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
-  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  1 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
+  2 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       dop=10
-  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=256
+  3 - output([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3]), filter(nil), rowset=16
       access([ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3])
-  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+  4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
+  5 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=16
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
