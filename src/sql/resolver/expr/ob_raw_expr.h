@@ -4305,7 +4305,7 @@ public:
   ObRawExpr *date_unit_expr_;
 
   ObRawExpr *exprs_[BOUND_EXPR_MAX];
-  TO_STRING_KV(K_(type), K_(is_preceding), K_(is_nmb_literal), KP_(interval_expr),
+  TO_STRING_KV(K_(type), K_(is_preceding), K_(is_nmb_literal), KPC_(interval_expr),
                K_(date_unit_expr));
 };
 

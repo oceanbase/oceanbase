@@ -822,7 +822,8 @@ protected:
   // shanting attention!
   inline int64_t get_part_end_idx() const { return input_rows_.cur_->count() - 1; }
   static int get_param_int_value(ObExpr &expr, ObEvalCtx &eval_ctx, bool &is_null, int64_t &value,
-                                 const bool need_number_type = false);
+                                 const bool need_number_type = false,
+                                 const bool need_check_valid = false);
   int parallel_winbuf_process();
   int get_whole_msg(bool is_end, ObWinbufWholeMsg &whole,
       const ObRADatumStore::StoredRow *row = NULL);
@@ -897,6 +898,7 @@ protected:
       const ObChunkDatumStore::StoredRow *row_, uint64_t &hash_value);
   int detect_aggr_status();
   bool skip_calc(const int64_t wf_idx);
+  int check_interval_valid(ObExpr &expr);
 
 private:
   // disallow copy

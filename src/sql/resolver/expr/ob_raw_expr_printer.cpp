@@ -3850,7 +3850,14 @@ int ObRawExprPrinter::print_window_clause(ObWinFunRawExpr *expr)
       } else if (BoundType::BOUND_CURRENT_ROW == expr->get_upper().type_) {
         DATA_PRINTF(" CURRENT ROW ");
       } else if (BoundType::BOUND_INTERVAL == expr->get_upper().type_) {
+        if (!expr->get_upper().is_nmb_literal_) {
+          DATA_PRINTF(" INTERVAL ");
+        }
         PRINT_EXPR(expr->get_upper().interval_expr_);
+        if (!expr->get_upper().is_nmb_literal_) {
+          DATA_PRINTF(" ");
+          PRINT_EXPR(expr->get_upper().date_unit_expr_);
+        }
         if (expr->get_upper().is_preceding_) {
           DATA_PRINTF(" PRECEDING ");
         } else {
@@ -3868,7 +3875,14 @@ int ObRawExprPrinter::print_window_clause(ObWinFunRawExpr *expr)
       } else if (BoundType::BOUND_CURRENT_ROW == expr->get_lower().type_) {
         DATA_PRINTF(" CURRENT ROW ");
       } else if (BoundType::BOUND_INTERVAL == expr->get_lower().type_) {
+        if (!expr->get_lower().is_nmb_literal_) {
+          DATA_PRINTF(" INTERVAL ");
+        }
         PRINT_EXPR(expr->get_lower().interval_expr_);
+        if (!expr->get_lower().is_nmb_literal_) {
+          DATA_PRINTF(" ");
+          PRINT_EXPR(expr->get_lower().date_unit_expr_);
+        }
         if (expr->get_lower().is_preceding_) {
           DATA_PRINTF(" PRECEDING ");
         } else {

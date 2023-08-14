@@ -4899,7 +4899,8 @@ int ObSelectResolver::resolve_column_ref_expr(
     LOG_WARN("session info is null");
   } else  if (OB_FALSE_IT(const_cast<ObQualifiedName&>(q_name).current_resolve_level_ = current_level_)) {
 
-  } else if (q_name.parents_expr_info_.has_member(IS_AGG)) {
+  } else if (q_name.parents_expr_info_.has_member(IS_AGG) &&
+             !q_name.parents_expr_info_.has_member(IS_WINDOW_FUNC)) {
     const_cast<ObQualifiedName&>(q_name).parent_aggr_level_ = current_level_;
   } else {
     const_cast<ObQualifiedName&>(q_name).parent_aggr_level_ = parent_aggr_level_;

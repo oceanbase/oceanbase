@@ -5087,6 +5087,9 @@ int ObWindow::assign(const ObWindow &other)
       LOG_WARN("failed to assign order items", K(ret));
     } else if (OB_FAIL(ObFrame::assign(other))) {
       LOG_WARN("failed to assign frame", K(ret));
+    } else {
+      win_name_ = other.win_name_;
+      has_frame_orig_ = other.has_frame_orig_;
     }
   }
   return ret;

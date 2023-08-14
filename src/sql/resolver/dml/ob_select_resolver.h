@@ -56,7 +56,10 @@ public:
   virtual ObSelectStmt *get_child_stmt() { return get_select_stmt(); }
   virtual bool is_select_resolver() const { return true; }
   inline bool can_produce_aggr() const
-  { return T_FIELD_LIST_SCOPE == current_scope_ || T_HAVING_SCOPE == current_scope_ || T_ORDER_SCOPE == current_scope_; }
+  { return T_FIELD_LIST_SCOPE == current_scope_ ||
+           T_HAVING_SCOPE == current_scope_ ||
+           T_ORDER_SCOPE == current_scope_ ||
+           T_NAMED_WINDOWS_SCOPE == current_scope_; }
   int add_aggr_expr(ObAggFunRawExpr *&final_aggr_expr);
   int add_unsettled_column(ObRawExpr *column_expr);
   void set_in_set_query(bool in_set_query) { in_set_query_ = in_set_query; }

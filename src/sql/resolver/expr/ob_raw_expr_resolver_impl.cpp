@@ -6419,6 +6419,12 @@ int ObRawExprResolverImpl::process_window_function_node(const ParseNode *node, O
         LOG_WARN("fail to add param expr", K(ret));
       } else if (OB_FAIL(func_params.push_back(n_expr))) {
         LOG_WARN("fail to add param expr", K(ret));
+      } else if (OB_FAIL(n_expr->extract_info())) {
+        LOG_WARN("faield to extract info", K(ret));
+      } else if (OB_UNLIKELY(lib::is_mysql_mode() && !n_expr->is_const_expr())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid arguments to nth_value", K(ret));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "nth_value");
       } else {
         win_func->set_is_from_first(NULL == func_node->children_[2] || T_FIRST == func_node->children_[2]->type_);
         win_func->set_is_ignore_null(!(NULL == func_node->children_[3] || T_RESPECT == func_node->children_[3]->type_));
@@ -6535,10 +6541,16 @@ int ObRawExprResolverImpl::process_window_function_node(const ParseNode *node, O
             break;
           }
         }
-        if(OB_SUCC(ret) && NULL == named_win)  {
+        if (OB_SUCC(ret) && NULL == named_win)  {
           ret = OB_ERR_WINDOW_NAME_IS_NOT_DEFINE;
           LOG_WARN("name win not exist", K(name), K(ret), K(named_windows));
           LOG_USER_ERROR(OB_ERR_WINDOW_NAME_IS_NOT_DEFINE, name.length(), name.ptr());
+        } else if (OB_UNLIKELY(ctx_.current_scope_ == T_NAMED_WINDOWS_SCOPE &&
+                               named_win->has_frame_orig())) {
+          ret = OB_EER_WINDOW_NO_INHERIT_FRAME;
+          LOG_WARN("Named window cann't be modified by another framing property", K(ret));
+          ObString tmp_name = named_win->get_win_name().empty() ? ObString("<unnamed window>") : named_win->get_win_name();
+          LOG_USER_ERROR(OB_EER_WINDOW_NO_INHERIT_FRAME, tmp_name.length(), tmp_name.ptr());
         }
       }
     }
@@ -6676,6 +6688,13 @@ int ObRawExprResolverImpl::process_window_function_node(const ParseNode *node, O
       if (OB_SUCC(ret) && NULL != frame_node) {
         if (OB_FAIL(process_frame_node(frame_node, frame))) {
           LOG_WARN("process window node failed", K(ret));
+        } else if (lib::is_mysql_mode() &&
+                   OB_UNLIKELY((frame.get_upper().interval_expr_ != NULL && !frame.get_upper().interval_expr_->is_const_expr()) ||
+                               (frame.get_lower().interval_expr_ != NULL && !frame.get_lower().interval_expr_->is_const_expr()))) {
+          ret = OB_ERR_WINDOW_RANGE_BOUND_NOT_CONSTANT;
+          LOG_WARN("Window has a non-constant frame bound.", K(ret), KPC(frame.get_upper().interval_expr_), KPC(frame.get_lower().interval_expr_));
+          ObString tmp_name = named_win == NULL ? ObString("<unnamed window>") : named_win->get_win_name();
+          LOG_USER_ERROR(OB_ERR_WINDOW_RANGE_BOUND_NOT_CONSTANT, tmp_name.length(), tmp_name.ptr());
         }
       }
       if (OB_SUCC(ret)) {
@@ -6914,6 +6933,8 @@ int ObRawExprResolverImpl::process_interval_node(const ParseNode *node,
     } else if (OB_ISNULL(interval_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("NULL ptr", K(ret), K(interval_expr));
+    } else if (OB_FAIL(interval_expr->extract_info())) {
+      LOG_WARN("fail to extract info", K(interval_expr), K(ret));
     } else if (!is_nmb_literal) {
       // date type
       ParseNode *date_unit_node = node->children_[1];
@@ -6922,8 +6943,10 @@ int ObRawExprResolverImpl::process_interval_node(const ParseNode *node,
       } else if (OB_ISNULL(date_unit_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("NULL ptr", K(ret), K(date_unit_expr));
+      } else if (OB_FAIL(date_unit_expr->extract_info())) {
+        LOG_WARN("fail to extract info", K(interval_expr), K(ret));
       } else if (!date_unit_expr->is_const_raw_expr()) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_INVALID_ARGUMENT;
         LOG_WARN("not const expr error", K(ret), K(date_unit_expr->get_expr_type()));
       } else {/*do nothing*/}
     }

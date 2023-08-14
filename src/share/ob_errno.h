@@ -859,6 +859,10 @@ constexpr int OB_ERR_VIEW_SELECT_CONTAIN_INTO = -5503;
 constexpr int OB_ERR_DEFAULT_NOT_ALLOWED = -5504;
 constexpr int OB_ERR_MODIFY_REALCOL_TO_GENCOL = -5505;
 constexpr int OB_ERR_MODIFY_TYPE_OF_GENCOL = -5506;
+constexpr int OB_ERR_WINDOW_FRAME_ILLEGAL = -5507;
+constexpr int OB_ERR_WINDOW_RANGE_FRAME_TEMPORAL_TYPE = -5508;
+constexpr int OB_ERR_WINDOW_RANGE_FRAME_NUMERIC_TYPE = -5509;
+constexpr int OB_ERR_WINDOW_RANGE_BOUND_NOT_CONSTANT = -5510;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
 constexpr int OB_ERR_SP_UNDECLARED_VAR = -5543;
@@ -2805,6 +2809,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DEFAULT_NOT_ALLOWED__USER_ERROR_MSG "Virtual column cannot have a default value"
 #define OB_ERR_MODIFY_REALCOL_TO_GENCOL__USER_ERROR_MSG "Real column cannot have an expression"
 #define OB_ERR_MODIFY_TYPE_OF_GENCOL__USER_ERROR_MSG "cannot modify data-type of virtual column"
+#define OB_ERR_WINDOW_FRAME_ILLEGAL__USER_ERROR_MSG "Window '%.*s': frame start or end is negative or NULL or of non-integral type"
+#define OB_ERR_WINDOW_RANGE_FRAME_TEMPORAL_TYPE__USER_ERROR_MSG "Window '%.*s' with RANGE frame has ORDER BY expression of datetime type. Only INTERVAL bound value allowed."
+#define OB_ERR_WINDOW_RANGE_FRAME_NUMERIC_TYPE__USER_ERROR_MSG "Window '%.*s' with RANGE frame has ORDER BY expression of numeric type. INTERVAL bound value not allowed."
+#define OB_ERR_WINDOW_RANGE_BOUND_NOT_CONSTANT__USER_ERROR_MSG "Window '%.*s' has a non-constant frame bound."
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__USER_ERROR_MSG "Undeclared variable: %.*s"
@@ -4920,6 +4928,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DEFAULT_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-54025: Virtual column cannot have a default value"
 #define OB_ERR_MODIFY_REALCOL_TO_GENCOL__ORA_USER_ERROR_MSG "ORA-54026: Real column cannot have an expression"
 #define OB_ERR_MODIFY_TYPE_OF_GENCOL__ORA_USER_ERROR_MSG "ORA-54027: cannot modify data-type of virtual column"
+#define OB_ERR_WINDOW_FRAME_ILLEGAL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5507, Window '%.*s': frame start or end is negative or NULL or of non-integral type"
+#define OB_ERR_WINDOW_RANGE_FRAME_TEMPORAL_TYPE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5508, Window '%.*s' with RANGE frame has ORDER BY expression of datetime type. Only INTERVAL bound value allowed."
+#define OB_ERR_WINDOW_RANGE_FRAME_NUMERIC_TYPE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5509, Window '%.*s' with RANGE frame has ORDER BY expression of numeric type. INTERVAL bound value not allowed."
+#define OB_ERR_WINDOW_RANGE_BOUND_NOT_CONSTANT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5510, Window '%.*s' has a non-constant frame bound."
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5542, %s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__ORA_USER_ERROR_MSG "PLS-00201: identifier '%.*s' must be declared"
@@ -6005,7 +6017,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2111];
+extern int g_all_ob_errnos[2115];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

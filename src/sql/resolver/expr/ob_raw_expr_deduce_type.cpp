@@ -2429,6 +2429,20 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
       } else {
         func_params.at(0) = cast_expr;
       }
+    } else if (OB_UNLIKELY(lib::is_mysql_mode() &&
+                           (!func_params.at(0)->is_const_expr() ||
+                            !func_params.at(0)->get_result_type().is_integer_type()))) {
+      if (func_params.at(0)->get_expr_type() == T_FUN_SYS_FLOOR &&
+          func_params.at(0)->get_param_count() >= 1 &&
+          func_params.at(0)->get_param_expr(0) != NULL &&
+          func_params.at(0)->get_param_expr(0)->get_expr_type() == T_REF_QUERY &&
+          func_params.at(0)->get_param_expr(0)->get_result_type().is_integer_type()) {
+        //do nothing
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("Incorrect arguments to ntile", K(ret), KPC(func_params.at(0)));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ntile");
+      }
     }
   } else if (T_WIN_FUN_NTH_VALUE == expr.get_func_type()) {
     // nth_value函数的返回类型可以为null. lead和lag也是
@@ -2598,6 +2612,31 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
       } else {
         ret = OB_INVALID_NUMERIC;
         LOG_WARN("interval is not numberic", K(ret), KPC(expr.lower_.interval_expr_));
+      }
+    }
+    if (OB_SUCC(ret) &&
+        lib::is_mysql_mode() &&
+        expr.get_window_type() == WINDOW_RANGE &&
+        (expr.upper_.interval_expr_ != NULL || expr.lower_.interval_expr_ != NULL)) {
+      if (expr.get_order_items().empty()) {
+        //do nothing
+      } else if (OB_UNLIKELY(expr.get_order_items().count() != 1)) {
+        ret = OB_ERR_INVALID_WINDOW_FUNC_USE;
+        LOG_WARN("invalid window specification", K(ret), K(expr.get_order_items()));
+      } else if (OB_UNLIKELY(((expr.upper_.interval_expr_ != NULL && !expr.upper_.is_nmb_literal_) ||
+                              (expr.lower_.interval_expr_ != NULL && !expr.lower_.is_nmb_literal_)) &&
+                              expr.get_order_items().at(0).expr_->get_result_type().is_numeric_type())) {
+        ret = OB_ERR_WINDOW_RANGE_FRAME_NUMERIC_TYPE;
+        LOG_WARN("Window with RANGE frame has ORDER BY expression of numeric type. INTERVAL bound value not allowed.", K(ret));
+        ObString tmp_name = expr.get_win_name().empty() ? ObString("<unnamed window>") : expr.get_win_name();
+        LOG_USER_ERROR(OB_ERR_WINDOW_RANGE_FRAME_NUMERIC_TYPE, tmp_name.length(), tmp_name.ptr());
+      } else if (OB_UNLIKELY(((expr.upper_.interval_expr_ != NULL && expr.upper_.is_nmb_literal_) ||
+                              (expr.lower_.interval_expr_ != NULL && expr.lower_.is_nmb_literal_)) &&
+                              expr.get_order_items().at(0).expr_->get_result_type().is_temporal_type())) {
+        ret = OB_ERR_WINDOW_RANGE_FRAME_TEMPORAL_TYPE;
+        LOG_WARN("Window with RANGE frame has ORDER BY expression of datetime type. Only INTERVAL bound value allowed.", K(ret));
+        ObString tmp_name = expr.get_win_name().empty() ? ObString("<unnamed window>") : expr.get_win_name();
+        LOG_USER_ERROR(OB_ERR_WINDOW_RANGE_FRAME_TEMPORAL_TYPE, tmp_name.length(), tmp_name.ptr());
       }
     }
     LOG_DEBUG("finish add cast for window function", K(result_number_type), K(expr.lower_), K(expr.upper_));

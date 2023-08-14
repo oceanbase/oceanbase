@@ -444,10 +444,12 @@ int ObWindowFunctionOp::get_param_int_value(ObExpr &expr,
                                             ObEvalCtx &eval_ctx,
                                             bool &is_null,
                                             int64_t &value,
-                                            const bool need_number/* = false*/)
+                                            const bool need_number/* = false*/,
+                                            const bool need_check_valid/* = false*/)
 {
   int ret = OB_SUCCESS;
   ObDatum *result = NULL;
+  bool is_valid_param = true;
   is_null = false;
   value = 0;
   if (OB_FAIL(expr.eval(eval_ctx, result))) {
@@ -457,12 +459,14 @@ int ObWindowFunctionOp::get_param_int_value(ObExpr &expr,
     LOG_WARN("params is not number type", K(expr), K(ret));
   } else if (result->is_null()) {
     is_null = true;
+    is_valid_param = !need_check_valid;
   } else if (need_number || expr.obj_meta_.is_number()) {
     //we restrict the bucket_num in range [0, (1<<63)-1]
     number::ObNumber result_nmb;
     number::ObCompactNumber &cnum = const_cast<number::ObCompactNumber &>(
         result->get_number());
     result_nmb.assign(cnum.desc_.desc_, cnum.digits_ + 0);
+    is_valid_param = !need_check_valid || !result_nmb.is_negative();
     if (OB_FAIL(result_nmb.extract_valid_int64_with_trunc(value))) {
       LOG_WARN("extract_valid_int64_with_trunc failed", K(ret));
     }
@@ -470,11 +474,13 @@ int ObWindowFunctionOp::get_param_int_value(ObExpr &expr,
     switch (expr.obj_meta_.get_type_class()) {
       case ObIntTC: {
         value = result->get_int();
+        is_valid_param = !need_check_valid || value >= 0;
         break;
       }
       case ObUIntTC: {
         const uint64_t tmp_value = result->get_uint();
-        if (tmp_value > INT64_MAX) {
+        is_valid_param = !need_check_valid || static_cast<int64_t>(tmp_value) >= 0;
+        if (tmp_value > INT64_MAX && is_valid_param) {
           ret = OB_DATA_OUT_OF_RANGE;
           LOG_WARN("int64 out of range", K(ret), K(tmp_value), K(INT64_MAX));
         } else {
@@ -484,6 +490,7 @@ int ObWindowFunctionOp::get_param_int_value(ObExpr &expr,
       }
       case ObFloatTC: {
         const float tmp_value = result->get_float();
+        is_valid_param = !need_check_valid || tmp_value >= 0;
         if (tmp_value > INT64_MAX) {
           ret = OB_DATA_OUT_OF_RANGE;
           LOG_WARN("int64 out of range", K(ret), K(tmp_value), K(INT64_MAX));
@@ -494,6 +501,7 @@ int ObWindowFunctionOp::get_param_int_value(ObExpr &expr,
       }
       case ObDoubleTC: {
         const double tmp_value = result->get_double();
+        is_valid_param = !need_check_valid || tmp_value >= 0;
         if (tmp_value > INT64_MAX) {
           ret = OB_DATA_OUT_OF_RANGE;
           LOG_WARN("int64 out of range", K(ret), K(tmp_value), K(INT64_MAX));
@@ -504,7 +512,8 @@ int ObWindowFunctionOp::get_param_int_value(ObExpr &expr,
       }
       case ObBitTC: {
         const uint64_t tmp_value = result->get_bit();
-        if (tmp_value > INT64_MAX) {
+        is_valid_param = !need_check_valid || static_cast<int64_t>(tmp_value) >= 0;
+        if (tmp_value > INT64_MAX && is_valid_param) {
           ret = OB_DATA_OUT_OF_RANGE;
           LOG_WARN("int64 out of range", K(ret), K(tmp_value), K(INT64_MAX));
         } else {
@@ -517,6 +526,10 @@ int ObWindowFunctionOp::get_param_int_value(ObExpr &expr,
         LOG_WARN("not support type", K(expr), K(ret));
       }
     }
+  }
+  if (OB_SUCC(ret) && !is_valid_param) {
+    ret = OB_ERR_WINDOW_FRAME_ILLEGAL;
+    LOG_WARN("frame start or end is negative, NULL or of non-integral type", K(ret), K(value), KPC(result));
   }
   return ret;
 }
@@ -758,8 +771,14 @@ int ObWindowFunctionOp::NonAggrCellNtile::eval(RowsReader &row_reader,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("argument is NULL", K(ret));
   } else if (OB_FAIL(ObWindowFunctionOp::get_param_int_value(*param,
-      op_.eval_ctx_, is_null, bucket_num))) {
-    LOG_WARN("get_param_int_value failed", K(ret));
+      op_.eval_ctx_, is_null, bucket_num, false, lib::is_mysql_mode()))) {
+    if (ret == OB_ERR_WINDOW_FRAME_ILLEGAL) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Incorrect arguments to ntile", K(ret));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ntile");
+    } else {
+      LOG_WARN("get_param_int_value failed", K(ret));
+    }
   } else if (is_null) {
     // return NULL when backets_num is NULL
     val.set_null();
@@ -2818,7 +2837,10 @@ int ObWindowFunctionOp::get_pos(RowsReader &row_reader,
       if (OB_ISNULL(between_value_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("between_value_expr is unexpected", KPC(between_value_expr), K(ret));
-      } else if (OB_FAIL(get_param_int_value(*between_value_expr, eval_ctx_, is_null, interval))) {
+      } else if (OB_UNLIKELY(lib::is_mysql_mode() && is_rows && !between_value_expr->obj_meta_.is_integer_type())) {
+        ret = OB_ERR_WINDOW_FRAME_ILLEGAL;
+        LOG_WARN("frame start or end is negative, NULL or of non-integral type", K(ret), K(between_value_expr->obj_meta_));
+      } else if (OB_FAIL(get_param_int_value(*between_value_expr, eval_ctx_, is_null, interval, false, lib::is_mysql_mode()))) {
         LOG_WARN("get_param_int_value failed", K(ret), KPC(between_value_expr));
       } else if (is_null) {
         got_null_val = true;
@@ -2831,7 +2853,17 @@ int ObWindowFunctionOp::get_pos(RowsReader &row_reader,
     if (OB_FAIL(ret)) {
     } else if (is_rows) {
     // range or rows with expr
-      pos = is_preceding ? row_idx - interval : row_idx + interval;
+      if (OB_UNLIKELY(!is_preceding && static_cast<uint64>(row_idx + interval) > INT64_MAX)) {
+        if (lib::is_mysql_mode()) {
+          ret = OB_ERR_WINDOW_FRAME_ILLEGAL;
+          LOG_WARN("frame start or end is negative, NULL or of non-integral type", K(ret), K(row_idx + interval));
+        } else {
+          ret = OB_DATA_OUT_OF_RANGE;
+          LOG_WARN("int64 out of range", K(ret), K(row_idx + interval));
+        }
+      } else {
+        pos = is_preceding ? row_idx - interval : row_idx + interval;
+      }
     } else if (wf_cell.wf_info_.sort_exprs_.count() == 0) {
       //Only when order by is const, sort_exprs_.count() == 0
       ObDatum *cmp_result = NULL;
@@ -2886,6 +2918,12 @@ int ObWindowFunctionOp::get_pos(RowsReader &row_reader,
         LOG_WARN("NULL ptr", K(ret), K(bound_expr));
       } else if (OB_FAIL(bound_expr->eval(eval_ctx_, cmp_val))) {
         LOG_WARN("calc compare value failed", K(ret));
+      } else if (lib::is_mysql_mode() &&
+                 !is_nmb_literal &&
+                 ob_is_temporal_type(bound_expr->datum_meta_.get_type())) {
+        if (OB_FAIL(check_interval_valid(*bound_expr))) {
+          LOG_WARN("failed to check interval valid", K(ret));
+        }
       }
       ObSortFuncs &sort_cmp_funcs = wf_cell.wf_info_.sort_cmp_funcs_;
       ObDatumCmpFuncType cmp_func = sort_cmp_funcs.at(0).cmp_func_;
@@ -3891,6 +3929,42 @@ int ObWindowFunctionOp::final_next_batch(const int64_t max_row_cnt)
       brs_.end_ = true;
     } else if (OB_FAIL(output_batch_rows(std::min(max_row_cnt, MY_SPEC.max_batch_size_)))) {
       LOG_WARN("output batch rows failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObWindowFunctionOp::check_interval_valid(ObExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  if (expr.type_ == T_FUN_SYS_DATE_ADD ||
+      expr.type_ == T_FUN_SYS_DATE_SUB) {
+    bool is_valid = true;
+    ObDatum *date = NULL;
+    ObDatum *interval = NULL;
+    ObDatum *unit = NULL;
+    if (OB_FAIL(expr.eval_param_value(eval_ctx_, date, interval, unit))) {
+      LOG_WARN("eval param value failed");
+    } else if (OB_UNLIKELY(date->is_null() || interval->is_null())) {
+      is_valid = false;
+    } else {
+      ObString interval_val = interval->get_string();
+      int64_t unit_value = unit->get_int();
+      ObDateUnitType unit_val = static_cast<ObDateUnitType>(unit_value);
+      ObInterval interval_time;
+      if (OB_FAIL(ObTimeConverter::str_to_ob_interval(interval_val, unit_val, interval_time))) {
+        if (OB_UNLIKELY(OB_INVALID_DATE_VALUE == ret)) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to convert string to ob interval", K(ret));
+        }
+      } else {
+        is_valid = !(DT_MODE_NEG & interval_time.mode_);
+      }
+    }
+    if (OB_SUCC(ret) && !is_valid) {
+      ret = OB_ERR_WINDOW_FRAME_ILLEGAL;
+      LOG_WARN("frame start or end is negative, NULL or of non-integral type", K(ret), KPC(interval), KPC(unit));
     }
   }
   return ret;

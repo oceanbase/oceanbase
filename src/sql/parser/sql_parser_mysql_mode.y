@@ -1951,7 +1951,7 @@ COUNT '(' opt_all '*' ')' OVER new_generalized_window_clause
   $$->type_ = T_WIN_FUN_LAG;
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $4);
 }
-| NTH_VALUE '(' expr ',' expr ')' opt_from_first_or_last opt_respect_or_ignore_nulls OVER new_generalized_window_clause
+| NTH_VALUE '(' expr ',' simple_expr ')' opt_from_first_or_last opt_respect_or_ignore_nulls OVER new_generalized_window_clause
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_WIN_FUN_NTH_VALUE, 4, $3, $5, $7, $8);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $10);
@@ -2159,9 +2159,20 @@ PRECEDING
 ;
 
 win_interval:
-expr
+INTNUM
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_WIN_INTERVAL, 1, $1);
+  $$->value_ = 1;
+}
+| DECIMAL_VAL
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WIN_INTERVAL, 1, $1);
+  $$->value_ = 1;
+}
+| UNBOUNDED
+{
+  get_non_reserved_node($$, result->malloc_pool_, @1.first_column, @1.last_column);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WIN_INTERVAL, 1, $$);
   $$->value_ = 1;
 }
 | INTERVAL expr date_unit
