@@ -132,20 +132,20 @@ int ObTabletCreateMdsHelper::register_process(
     LOG_WARN("unexpected error, arg is not valid", K(ret), K(arg));
   } else if (CLICK_FAIL(create_tablets(arg, false/*for_replay*/, share::SCN::invalid_scn(), ctx, tablet_id_array))) {
     LOG_WARN("failed to create tablets", K(ret), K(arg));
+  } else if (CLICK_FAIL(ObTabletBindingHelper::modify_tablet_binding_for_new_mds_create(arg, SCN::invalid_scn(), ctx))) {
+    LOG_WARN("failed to modify tablet binding", K(ret));
+  }
 
+  if (OB_FAIL(ret)) {
     // roll back
     int tmp_ret = OB_SUCCESS;
-    if (CLICK() && OB_TMP_FAIL(roll_back_remove_tablets(arg.id_, tablet_id_array))) {
+    if (CLICK_TMP_FAIL(roll_back_remove_tablets(arg.id_, tablet_id_array))) {
       LOG_ERROR("failed to roll back remove tablets", K(tmp_ret));
       ob_usleep(1 * 1000 * 1000);
       ob_abort();
     }
   } else if (CLICK_FAIL(ObTabletCreateDeleteMdsUserData::set_tablet_gc_trigger(arg.id_))) {
     LOG_WARN("failed to set tablet gc trigger", K(ret));
-  }
-
-  if (OB_SUCC(ret) && OB_FAIL(ObTabletBindingHelper::modify_tablet_binding_for_new_mds_create(arg, SCN::invalid_scn(), ctx))) {
-    LOG_WARN("failed to modify tablet binding", K(ret));
   }
   LOG_INFO("create tablet register", KR(ret), K(arg));
   return ret;
