@@ -287,10 +287,8 @@ int ObConstDecoder::get_aggregate_result(
     if (OB_FAIL(decode_without_dict(ctx, const_obj))){
       LOG_WARN("Failed to decode without dict",K(ret),K(ctx));
     } else {
-      if (OB_FAIL(datum_buf[0].from_obj(const_obj))){
-        LOG_WARN("Failed to trans to datum",K(ret),K(const_obj));
-      } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[0]))){
-        LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[0]), K(agg_info));
+      if(OB_FAIL(ObIColumnDecoder::update_agg_from_obj(const_obj, agg_info, datum_buf[0]))){
+        LOG_WARN("Failed to update_min_or_max");
       }
     }
   } else if (const_ref ==  dict_decoder_.get_dict_header()->count_) {
@@ -299,11 +297,9 @@ int ObConstDecoder::get_aggregate_result(
     // Const value is not null
     ObDictDecoderIterator dict_iter = dict_decoder_.begin(&ctx, dict_meta_length);
     ObObj& const_obj = *(dict_iter + meta_header_->const_ref_);
-      if (OB_FAIL(datum_buf[0].from_obj(const_obj))){
-        LOG_WARN("Failed to trans to datum",K(ret),K(const_obj));
-      } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[0]))){
-        LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[0]), K(agg_info));
-      }
+    if(OB_FAIL(ObIColumnDecoder::update_agg_from_obj(const_obj, agg_info, datum_buf[0]))){
+      LOG_WARN("Failed to update_min_or_max");
+    }
   }
 
   if (OB_SUCC(ret) && count > 0) {
@@ -317,10 +313,8 @@ int ObConstDecoder::get_aggregate_result(
                         || ((*trav_it).is_null() && lib::is_mysql_mode()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("There should not be null object in dictionary", K(ret));
-        } else if (OB_FAIL(datum_buf[i].from_obj(*trav_it))){
-          LOG_WARN("Failed to trans to datum",K(ret),K(*trav_it));
-        } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))){
-          LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[i]), K(agg_info));
+        } else if(OB_FAIL(ObIColumnDecoder::update_agg_from_obj(*trav_it, agg_info, datum_buf[0]))){
+          LOG_WARN("Failed to update_min_or_max");
         }
         ++trav_it;
         ++i;
@@ -358,10 +352,8 @@ int ObConstDecoder::get_aggregate_result(
               next_except_row_id = row_id_arr.at_(meta_header_->payload_ + count, except_table_pos);
             }
             cell = *(begin_it + *curr_ref);
-            if (OB_FAIL(datum_buf[i].from_obj(cell))){
-              LOG_WARN("Failed to trans to datum",K(ret),K(cell));
-            } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))){
-              LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[i]), K(agg_info));
+            if(OB_FAIL(ObIColumnDecoder::update_agg_from_obj(cell, agg_info, datum_buf[0]))){
+              LOG_WARN("Failed to update_min_or_max");
             }
           }
         } 

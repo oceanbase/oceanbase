@@ -276,5 +276,20 @@ int ObIColumnDecoder::get_aggregate_result(
   return ret;
 }
 
+int ObIColumnDecoder::update_agg_from_obj(
+      const common::ObObj cell,
+      ObMicroBlockAggInfo<ObDatum> &agg_info,
+      ObDatum datum) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(datum.from_obj(cell))){
+    LOG_WARN("Failed to trans to datum",K(ret),K(cell));
+  } else if (OB_FAIL(agg_info.update_min_or_max(datum))){
+    LOG_WARN("Failed to update_min_or_max", K(ret), K(datum), K(agg_info));
+  }
+  return ret;
+}
+
+
 } // end of namespace oceanbase
 } // end of namespace oceanbase

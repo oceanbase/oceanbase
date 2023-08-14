@@ -619,6 +619,11 @@ int ObIntegerBaseDiffDecoder::get_aggregate_result(
     if (OB_FAIL(agg_info.update_min_or_max(datum_buf[0]))){
       LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[0]), K(agg_info));
     }
+  } else if (ctx.obj_meta_.get_type_class() == ObFloatTC
+            || ctx.obj_meta_.get_type_class() == ObDoubleTC) {
+    // Can't compare by uint directly, support this later with float point number compare later
+    ret = OB_NOT_SUPPORTED;
+    LOG_DEBUG("Double/Float with INT_DIFF encoding, back to retro path", K(ctx));
   } else {
     int64_t data_offset = 0;
     const unsigned char *col_data = reinterpret_cast<const unsigned char *>(header_)
@@ -638,7 +643,7 @@ int ObIntegerBaseDiffDecoder::get_aggregate_result(
           ctx, row_ids, row_cap, datum_len, data_offset, datum_buf))) {
         LOG_WARN("Failed to batch unpack delta values", K(ret), K(ctx));
       }
-      for (int64_t i = 0; i < row_cap; ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && (i < row_cap); ++i) {
         if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))){
           LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[i]), K(agg_info));
         }
@@ -650,7 +655,7 @@ int ObIntegerBaseDiffDecoder::get_aggregate_result(
       uint64_t value = 0;
       uint64_t res_value = 0;
       bool is_min = agg_info.get_is_min();
-      for (int64_t i = 0; i < row_cap; ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && (i < row_cap); ++i) {
         if (ctx.has_extend_value()) {
           // Skip
         } else {
@@ -662,11 +667,13 @@ int ObIntegerBaseDiffDecoder::get_aggregate_result(
           }
         }
       }
-      res_value += base_;
-      MEMCPY(const_cast<char *>(datum_buf[0].ptr_), &res_value, datum_len);
-      datum_buf[0].pack_ = datum_len;
-      if (OB_FAIL(agg_info.update_min_or_max(datum_buf[0]))){
-        LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[0]), K(agg_info));
+      
+      if(OB_SUCC(ret)){
+        res_value += base_;
+        datum_buf[0].set_int(res_value);
+        if (OB_FAIL(agg_info.update_min_or_max(datum_buf[0]))){
+          LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[0]), K(agg_info));
+        }
       }
     }
   }

@@ -173,10 +173,8 @@ int ObRLEDecoder::get_aggregate_result(
           curr_ref = ref_array.at_(meta_header_->payload_ + ref_offset_, ref_table_pos - 1);
           if (OB_FAIL(dict_decoder_.decode(ctx.obj_meta_, cell, curr_ref, dict_meta_length))) {
             LOG_WARN("failed to decode dict", K(ret), K(curr_ref));
-          } else if (OB_FAIL(datum_buf[trav_cnt].from_obj(cell))){
-            LOG_WARN("Failed to trans to datum",K(ret),K(cell));
-          } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[trav_cnt]))){
-            LOG_WARN("Failed to update_min_or_max", K(ret), K(datum_buf[trav_cnt]), K(agg_info));
+          } else if(OB_FAIL(ObIColumnDecoder::update_agg_from_obj(cell, agg_info, datum_buf[trav_cnt]))){
+            LOG_WARN("Failed to update_min_or_max");
           }
         }
         ++trav_cnt;

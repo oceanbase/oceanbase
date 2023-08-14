@@ -206,7 +206,7 @@ struct RawFixIntGetMinMaxFunc_T
       ObDatum &datum)
   {
     typedef typename ObEncodingTypeInference<IS_SIGNED_SC, STORE_LEN_TAG>::Type StoreType;
-    typedef typename ObEncodingTypeInference<IS_SIGNED_SC, DATUM_LEN_TAG>::Type DatumType;
+    // typedef typename ObEncodingTypeInference<IS_SIGNED_SC, DATUM_LEN_TAG>::Type DatumType;
     const StoreType *input = reinterpret_cast<const StoreType *>(base_data);
     int64_t tmp = input[row_ids[0]];
     for (int64_t i = 1; i < row_cap; i++) {
@@ -215,11 +215,12 @@ struct RawFixIntGetMinMaxFunc_T
         tmp = input[row_id];
       }
     }
-    *reinterpret_cast<DatumType *>(const_cast<char *>(datum.ptr_)) = tmp;
-    datum.pack_ = sizeof(DatumType);
+    datum.set_int(tmp);
+    // *reinterpret_cast<DatumType *>(const_cast<char *>(datum.ptr_)) = tmp;
+    // datum.pack_ = sizeof(DatumType);
   }
 };
-//Fast Min/Max for UIntSC / IntSC
+
  
 
 // Initialize fast int get min or max func family while compiling
@@ -774,7 +775,9 @@ bool ObRawDecoder::fast_agg_valid(const ObColumnDecoderCtx &ctx) const
     valid = !col_header->is_bit_packing()
         && !col_header->has_extend_value()
         && ((ObIntSC == store_class || ObUIntSC == store_class))
-        && raw_fix_batch_decode_funcs_inited;
+        && raw_fix_batch_decode_funcs_inited
+        && ctx.obj_meta_.get_type_class() != ObFloatTC
+        && ctx.obj_meta_.get_type_class() != ObDoubleTC;
     if (valid) {
       uint32_t store_size = col_header->length_;
       valid = (store_size == 1 || store_size == 2 || store_size == 4 || store_size == 8);

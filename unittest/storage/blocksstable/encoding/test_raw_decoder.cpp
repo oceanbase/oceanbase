@@ -871,33 +871,29 @@ TEST_F(TestRawDecoder, get_min_or_max){
   }
 
   const_cast<bool &>(encoder_.ctx_.encoder_opt_.enable_bit_packing_) = false;
-
+  bool is_full_block = true;
+  bool is_min =true;
   char *buf = NULL;
   int64_t size = 0;
   ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
   ObMicroBlockDecoder decoder;
   ObMicroBlockData data(encoder_.get_data().data(), encoder_.get_data().pos());
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_));
-  const ObRowHeader *row_header = nullptr;
-  int64_t row_len = 0;
-  const char *row_data = nullptr;
-  const char *cell_datas[ROW_CNT];
+  const char *cell_datas_n[ROW_CNT];
+  const char *cell_datas_o[ROW_CNT];
   void *datum_buf_1 = allocator_.alloc(sizeof(int8_t) * 128 * ROW_CNT);
-  void *datum_buf_2 = allocator_.alloc(sizeof(int8_t) * 128);
-int64_t sum_time_wmin_n = 0;
-  int64_t sum_time_wmin_o = 0;
-  int64_t sum_time_wmax_n = 0;
-  int64_t sum_time_wmax_o = 0;
-  int64_t sum_time_pmin_n = 0;
-  int64_t sum_time_pmin_o = 0;
-  int64_t sum_time_pmax_n = 0;
-  int64_t sum_time_pmax_o = 0;
-  int row_cap = ROW_CNT;
-  for (int64_t i = 0; i < full_column_cnt_-17; ++i) {
+  void *datum_buf_2 = allocator_.alloc(sizeof(int8_t) * 128 * ROW_CNT);
+  int64_t sum_time_n = 0;
+  int64_t sum_time_o = 0;
+  int64_t row_cap = ROW_CNT;
+  if(!is_full_block){
+    row_cap = ROW_CNT - 1;
+  }
+  for (int64_t i = 0; i < full_column_cnt_; ++i) {
     int32_t col_offset = i;
-    ObDatum datums[row_cap];
-    int64_t row_ids[row_cap];
-    for (int64_t j = 0; j < row_cap; ++j) {
+    ObDatum datums[ROW_CNT];
+    int64_t row_ids[ROW_CNT];
+    for (int64_t j = 0; j < ROW_CNT; ++j) {
       datums[j].ptr_ = reinterpret_cast<char *>(datum_buf_1) + j * 128;
       row_ids[j] = j;
     }
@@ -910,36 +906,22 @@ int64_t sum_time_wmin_n = 0;
                                                       decoder.decoders_[col_offset].ctx_->obj_meta_.get_collation_type(),
                                                       SCALE_UNKNOWN_YET,
                                                       false, false);
-    ObMicroBlockAggInfo<ObDatum> agg_info_min(true,cmp_fun,result_datum);
-    ObMicroBlockAggInfo<ObDatum> agg_info_max(false,cmp_fun,result_datum);
+    ObMicroBlockAggInfo<ObDatum> agg_info(is_min,cmp_fun,result_datum);
     // LOG_INFO("Current col: ", K(i), K(col_descs_.at(i).col_id_),  
     //     K(*decoder.decoders_[col_offset].ctx_),K(datums->len_));
     int64_t start_time = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, decoder.get_min_or_max(i , row_ids, cell_datas, row_cap, datums, agg_info_min));    
+    ASSERT_EQ(OB_SUCCESS, decoder.get_min_or_max(i , row_ids, cell_datas_n, row_cap, datums, agg_info));    
     int64_t end_time = ObTimeUtility::current_time();
-    sum_time_wmin_n += (end_time-start_time);
-
-    start_time = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, decoder.get_min_or_max(i , row_ids, cell_datas, row_cap, datums, agg_info_max));    
-    end_time = ObTimeUtility::current_time();
-    sum_time_wmax_n += (end_time-start_time);
-
-    start_time = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, decoder.get_min_or_max(i , row_ids, cell_datas, row_cap-1, datums, agg_info_min));    
-    end_time = ObTimeUtility::current_time();
-    sum_time_pmin_n += (end_time-start_time);
-
-    start_time = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, decoder.get_min_or_max(i , row_ids, cell_datas, row_cap-1, datums, agg_info_max));    
-    end_time = ObTimeUtility::current_time();
-    sum_time_pmax_n += (end_time-start_time); 
+    LOG_INFO("col new result",K(agg_info));
+    sum_time_n += (end_time-start_time);
   }
-  for (int64_t i = 0; i < full_column_cnt_-17; ++i) {
+
+  for (int64_t i = 0; i < full_column_cnt_; ++i) {
     int32_t col_offset = i;
-    ObDatum datums[row_cap];
-    int64_t row_ids[row_cap];
-    for (int64_t j = 0; j < row_cap; ++j) {
-      datums[j].ptr_ = reinterpret_cast<char *>(datum_buf_1) + j * 128;
+    ObDatum datums[ROW_CNT];
+    int64_t row_ids[ROW_CNT];
+    for (int64_t j = 0; j < ROW_CNT; ++j) {
+      datums[j].ptr_ = reinterpret_cast<char *>(datum_buf_2) + j * 128;
       row_ids[j] = j;
     }
     ObStorageDatum result_datum;
@@ -951,63 +933,23 @@ int64_t sum_time_wmin_n = 0;
                                                       decoder.decoders_[col_offset].ctx_->obj_meta_.get_collation_type(),
                                                       SCALE_UNKNOWN_YET,
                                                       false, false);
-    ObMicroBlockAggInfo<ObDatum> agg_info_min(true,cmp_fun,result_datum);
-    ObMicroBlockAggInfo<ObDatum> agg_info_max(false,cmp_fun,result_datum);
-
+    ObMicroBlockAggInfo<ObDatum> agg_info(is_min,cmp_fun,result_datum);
     int64_t start_time = ObTimeUtility::current_time();
     ASSERT_EQ(OB_SUCCESS, decoder.decoders_[col_offset].batch_decode(decoder.row_index_,
                             row_ids,
-                            cell_datas,
+                            cell_datas_o,
                             row_cap,
                             datums));
     for(int i = 0;i<row_cap;++i){
-      agg_info_min.update_min_or_max(datums[i]);
+      agg_info.update_min_or_max(datums[i]);
     } 
     int64_t end_time = ObTimeUtility::current_time();
-    sum_time_wmin_o += (end_time-start_time);
-
-    start_time = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, decoder.decoders_[col_offset].batch_decode(decoder.row_index_,
-                            row_ids,
-                            cell_datas,
-                            row_cap,
-                            datums));
-    for(int i = 0;i<row_cap;++i){
-      agg_info_max.update_min_or_max(datums[i]);
-    } 
-    end_time = ObTimeUtility::current_time();
-    sum_time_wmax_o += (end_time-start_time);   
-
-    start_time = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, decoder.decoders_[col_offset].batch_decode(decoder.row_index_,
-                            row_ids,
-                            cell_datas,
-                            row_cap-1,
-                            datums));
-    for(int i = 0;i<row_cap-1;++i){
-      agg_info_min.update_min_or_max(datums[i]);
-    } 
-    end_time = ObTimeUtility::current_time();
-    sum_time_pmin_o += (end_time-start_time);
-
-    start_time = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, decoder.decoders_[col_offset].batch_decode(decoder.row_index_,
-                            row_ids,
-                            cell_datas,
-                            row_cap-1,
-                            datums));
-    for(int i = 0;i<row_cap-1;++i){
-      agg_info_max.update_min_or_max(datums[i]);
-    } 
-    end_time = ObTimeUtility::current_time();
-    sum_time_pmin_o += (end_time-start_time);
+    LOG_INFO("col old result",K(agg_info));
+    sum_time_o += (end_time-start_time);
   }
 
-  double ratio_wmin = sum_time_wmin_o*1.0/sum_time_wmin_n;
-  double ratio_wmax = sum_time_wmax_o*1.0/sum_time_wmax_n;
-  double ratio_pmin = sum_time_pmin_o*1.0/sum_time_pmin_n;
-  double ratio_pmax = sum_time_pmax_o*1.0/sum_time_pmax_n;
-  STORAGE_LOG(INFO,"get min/max time for all cols with decoder tpye:",K(decoder.col_header_->type_),K(ratio_wmin),K(ratio_wmax),K(ratio_pmin),K(ratio_pmax),K(row_cap));
+  double ratio = sum_time_o*1.0/sum_time_n;
+  STORAGE_LOG(INFO,"get min/max time for all cols with decoder tpye:",K(decoder.col_header_->type_),K(is_min),K(row_cap),K(is_full_block),K(ratio));
 }
 
 } // end namespace blocksstable

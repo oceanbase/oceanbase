@@ -205,6 +205,12 @@ public:
       const int64_t row_cap,
       ObMicroBlockAggInfo<ObDatum> &agg_info,
       ObDatum *datum_buf) const; 
+
+  virtual int update_agg_from_obj(
+      const common::ObObj cell,
+      ObMicroBlockAggInfo<ObDatum> &agg_info,
+      ObDatum datum_buf) const; 
+
 protected:
   int get_null_count_from_extend_value(
     const ObColumnDecoderCtx &ctx,
