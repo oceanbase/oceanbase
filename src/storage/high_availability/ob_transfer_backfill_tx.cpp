@@ -85,6 +85,8 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
   bool in_migration = false;
   ObLSRestoreStatus restore_status;
 
+  DEBUG_SYNC(TRANSFER_GET_BACKFILL_TABLETS_BEFORE);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer work not init", K(ret));

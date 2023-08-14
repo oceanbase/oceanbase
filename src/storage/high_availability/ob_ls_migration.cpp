@@ -965,6 +965,8 @@ int ObStartMigrationTask::process()
     LOG_WARN("failed to choose src", K(ret), KPC(ctx_));
   } else if (OB_FAIL(build_ls_())) {
     LOG_WARN("failed to build ls", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(fill_restore_arg_if_needed_())) {
+    LOG_WARN("failed to fill restore arg", K(ret), KPC(ctx_));
   } else {
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
@@ -1541,6 +1543,33 @@ int ObStartMigrationTask::create_all_tablets_(
       ctx_->tablet_simple_info_map_))) {
     LOG_WARN("failed to create all tablets", K(ret), KPC(ctx_));
   }
+  return ret;
+}
+
+int ObStartMigrationTask::fill_restore_arg_if_needed_()
+{
+  // As the source log stream status can be ignored during transfer when log scn
+  // is before restore consistent scn. So, we should ensure consistent scn is
+  // valid when replaying transfer log during migration.
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  ObLSRestoreStatus restore_status;
+  if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls), KPC(ctx_));
+  } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
+    LOG_WARN("failed to get restore status", K(ret), KPC(ls), KPC(ctx_));
+  } else if (!restore_status.is_in_restore()) {
+    // do nothing
+  } else if (OB_FAIL(ls->get_ls_restore_handler()->fill_restore_arg())) {
+    LOG_WARN("failed to fill restore arg", K(ret), KPC(ls), KPC(ctx_));
+  } else {
+    LOG_INFO("succeed fill restore arg during migration", "ls_id", ctx_->arg_.ls_id_, K(restore_status));
+  }
+
   return ret;
 }
 

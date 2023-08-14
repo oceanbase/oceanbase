@@ -425,7 +425,7 @@ int ObLSRestoreHandler::update_state_handle_()
     LOG_WARN("fail to get_restore_status", K(ret), KPC(ls_));
   } else if (nullptr != state_handler_
       && new_status == state_handler_->get_restore_status()) { // no need update state handler
-  } else if (OB_FAIL(fill_restore_arg_())) {
+  } else if (OB_FAIL(fill_restore_arg())) {
     LOG_WARN("fail to fill restore arg", K(ret));
   } else {
     lib::ObMutexGuard guard(mtx_);
@@ -1602,7 +1602,7 @@ int ObLSRestoreStartState::inc_need_restore_ls_cnt_()
   return ret;
 }
 
-int ObLSRestoreHandler::fill_restore_arg_()
+int ObLSRestoreHandler::fill_restore_arg()
 {
   int ret = OB_SUCCESS;
   common::ObMySQLProxy *sql_proxy_ = GCTX.sql_proxy_;
@@ -1620,6 +1620,7 @@ int ObLSRestoreHandler::fill_restore_arg_()
               tenant_id, job_info))) {
         LOG_WARN("fail to get restore job", K(ret), K(tenant_id));
       } else {
+        lib::ObMutexGuard guard(mtx_);
         ls_restore_arg_.job_id_ =  job_info.get_job_id();
         ls_restore_arg_.restore_type_ = share::ObRestoreType::NORMAL_RESTORE; // quick restore or normal restore
         ls_restore_arg_.tenant_id_ = tenant_id;

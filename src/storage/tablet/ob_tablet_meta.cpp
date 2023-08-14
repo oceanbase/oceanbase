@@ -361,34 +361,51 @@ int ObTabletMeta::init(
       table_store_flag = OB_ISNULL(tablet_meta) ? table_store_flag : tablet_meta->table_store_flag_;
     }
 
-    version_ = TABLET_META_VERSION;
-    ls_id_ = old_tablet_meta.ls_id_;
-    tablet_id_ = old_tablet_meta.tablet_id_;
-    data_tablet_id_ = old_tablet_meta.data_tablet_id_;
-    ref_tablet_id_ = old_tablet_meta.ref_tablet_id_;
-    create_scn_ = old_tablet_meta.create_scn_;
-    create_schema_version_ = old_tablet_meta.create_schema_version_;
-    start_scn_ = old_tablet_meta.start_scn_;
-    clog_checkpoint_scn_ = clog_checkpoint_scn;
-    snapshot_version_ = snapshot_version;
-    multi_version_start_ = multi_version_start;
-    compat_mode_ = old_tablet_meta.compat_mode_;
-    ha_status_ = old_tablet_meta.ha_status_;
-    report_status_ = old_tablet_meta.report_status_; //old tablet meta report status already reset
-    table_store_flag_ = table_store_flag;
-    ddl_checkpoint_scn_ = old_tablet_meta.ddl_checkpoint_scn_;
-    ddl_start_scn_ = old_tablet_meta.ddl_start_scn_;
-    ddl_commit_scn_ = old_tablet_meta.ddl_commit_scn_;
-    ddl_snapshot_version_ = old_tablet_meta.ddl_snapshot_version_;
-    max_sync_storage_schema_version_ = max_sync_storage_schema_version;
-    max_serialized_medium_scn_ = MAX(old_tablet_meta.max_serialized_medium_scn_,
-        OB_ISNULL(tablet_meta) ? 0 : tablet_meta->max_serialized_medium_scn_);
-    ddl_execution_id_ = old_tablet_meta.ddl_execution_id_;
-    ddl_data_format_version_ = old_tablet_meta.ddl_data_format_version_;
-    transfer_info_ = transfer_info;
-    mds_checkpoint_scn_ = old_tablet_meta.mds_checkpoint_scn_;
+    // fuse restore status during migration, consider the following timeline
+    // 1. SOURCE: tablet P0 was created with restore status FULL by replay start transfer in.
+    // 2. TARGET: rebuild was triggered, then create P0 with restore status FULL, and data status INCOMPLETE.
+    // 3. SOURCE: transfer handler modified the restore status of P0 to EMPTY.
+    // 4. SOURCE: the minor of P0 was restored by restore handler, then set the restore status to MINOR_AND_MAJOR_META.
+    // 5. TARGET: the minor of P0 was restored by migration, then set data status COMPLETE.
+    // The result is P0 was FULL, but only exist minor sstables, with no major.
+    ObTabletHAStatus new_ha_status = old_tablet_meta.ha_status_;
+    if (!old_tablet_meta.ha_status_.is_data_status_complete() && OB_NOT_NULL(tablet_meta)) {
+      ObTabletRestoreStatus::STATUS src_restore_status;
+      if (OB_FAIL(tablet_meta->ha_status_.get_restore_status(src_restore_status))) {
+        LOG_WARN("failed to get restore status", K(ret), KPC(tablet_meta));
+      } else if (OB_FAIL(new_ha_status.set_restore_status(src_restore_status))) {
+        LOG_WARN("failed to set new restore status", K(ret), K(new_ha_status), K(src_restore_status));
+      }
+    }
 
     if (OB_SUCC(ret)) {
+      version_ = TABLET_META_VERSION;
+      ls_id_ = old_tablet_meta.ls_id_;
+      tablet_id_ = old_tablet_meta.tablet_id_;
+      data_tablet_id_ = old_tablet_meta.data_tablet_id_;
+      ref_tablet_id_ = old_tablet_meta.ref_tablet_id_;
+      create_scn_ = old_tablet_meta.create_scn_;
+      create_schema_version_ = old_tablet_meta.create_schema_version_;
+      start_scn_ = old_tablet_meta.start_scn_;
+      clog_checkpoint_scn_ = clog_checkpoint_scn;
+      snapshot_version_ = snapshot_version;
+      multi_version_start_ = multi_version_start;
+      compat_mode_ = old_tablet_meta.compat_mode_;
+      ha_status_ = new_ha_status;
+      report_status_ = old_tablet_meta.report_status_; //old tablet meta report status already reset
+      table_store_flag_ = table_store_flag;
+      ddl_checkpoint_scn_ = old_tablet_meta.ddl_checkpoint_scn_;
+      ddl_start_scn_ = old_tablet_meta.ddl_start_scn_;
+      ddl_commit_scn_ = old_tablet_meta.ddl_commit_scn_;
+      ddl_snapshot_version_ = old_tablet_meta.ddl_snapshot_version_;
+      max_sync_storage_schema_version_ = max_sync_storage_schema_version;
+      max_serialized_medium_scn_ = MAX(old_tablet_meta.max_serialized_medium_scn_,
+          OB_ISNULL(tablet_meta) ? 0 : tablet_meta->max_serialized_medium_scn_);
+      ddl_execution_id_ = old_tablet_meta.ddl_execution_id_;
+      ddl_data_format_version_ = old_tablet_meta.ddl_data_format_version_;
+      transfer_info_ = transfer_info;
+      mds_checkpoint_scn_ = old_tablet_meta.mds_checkpoint_scn_;
+
       is_inited_ = true;
     }
   }

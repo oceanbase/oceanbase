@@ -238,6 +238,7 @@ private:
   int generate_tablets_migration_dag_();
   int report_ls_meta_table_();
   int choose_src_();
+  int fill_restore_arg_if_needed_();
   int fetch_ls_info_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const common::ObAddr &member_addr, obrpc::ObCopyLSInfo &ls_info);
   int get_local_ls_checkpoint_scn_(share::SCN &local_checkpoint_scn);
