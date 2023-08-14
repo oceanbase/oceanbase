@@ -6527,9 +6527,10 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
       cursor_type.set_user_type_id(record_type->get_type(), record_type->get_user_type_id());
       cursor_type.set_type_from(record_type->get_type_from());
     } else {
+      ObArenaAllocator allocator;
       const ObUserDefinedType *cursor_user_type = NULL;
       if (OB_FAIL(current_block_->get_namespace().get_user_type(cursor_type.get_user_type_id(),
-                                                                cursor_user_type))) {
+                                                                cursor_user_type, &allocator))) {
         LOG_WARN("failed to get user type", K(cursor_type), K(ret));
       } else if (OB_ISNULL(cursor_user_type)) {
         ret = OB_ERR_UNEXPECTED;
@@ -7070,8 +7071,10 @@ int ObPLResolver::resolve_open_for(
           const ObPLCursor *cursor = stmt->get_cursor();
           CK (OB_NOT_NULL(cursor));
           if (OB_SUCC(ret) && cursor->get_cursor_type().is_valid_type()) {
+            ObArenaAllocator allocator;
             const ObUserDefinedType *cursor_type = NULL;
-            if (OB_FAIL(current_block_->get_namespace().get_user_type(cursor->get_cursor_type().get_user_type_id(), cursor_type))) {
+            if (OB_FAIL(current_block_->get_namespace().get_user_type(cursor->get_cursor_type().get_user_type_id(),
+                  cursor_type, &allocator))) {
               LOG_WARN("failed to get user type", K(cursor->get_cursor_type()), K(ret));
             } else if (OB_ISNULL(cursor_type)) {
               ret = OB_ERR_UNEXPECTED;
@@ -8265,11 +8268,12 @@ int ObPLResolver::check_composite_compatible(const ObPLINS &ns,
   int ret = OB_SUCCESS;
   const ObUserDefinedType *left_type = NULL;
   const ObUserDefinedType *right_type = NULL;
+  ObArenaAllocator allocator;
   is_compatible = false;
   //NOTICE: do not call this function when left_type_id equal to right_type_id
   CK (left_type_id != right_type_id);
-  OZ (ns.get_user_type(left_type_id, left_type));
-  OZ (ns.get_user_type(right_type_id, right_type));
+  OZ (ns.get_user_type(left_type_id, left_type, &allocator));
+  OZ (ns.get_user_type(right_type_id, right_type, &allocator));
   CK (OB_NOT_NULL(left_type) && OB_NOT_NULL(right_type));
   // Assigning One Record Variable to Another
   // You can assign the value of one record variable to another record variable only in these cases:
