@@ -118,6 +118,8 @@ public:
         need_match_all_params_(false),
         multi_stmt_rowkey_pos_(alloc_),
         pre_cal_expr_handler_(NULL),
+        can_skip_params_match_(false),
+        can_delay_init_datum_store_(false),
         res_map_rule_id_(common::OB_INVALID_ID),
         res_map_rule_param_idx_(common::OB_INVALID_INDEX),
         is_cli_return_rowid_(false)
@@ -135,6 +137,8 @@ public:
                         int64_t outline_param_idx,
                         const ObPlanCacheCtx &pc_ctx,
                         bool &is_same);
+  bool can_skip_params_match();
+  bool can_delay_init_datum_store();
   int match_param_info(const ObParamInfo &param_info,
                        const ObObjParam &param,
                        bool &is_same,
@@ -174,6 +178,10 @@ public:
                /*bool &same_bool_param);*/
   inline bool is_multi_stmt_plan() const { return !multi_stmt_rowkey_pos_.empty(); }
   int remove_cache_obj_entry(const ObCacheObjID obj_id);
+
+  bool get_can_skip_params_match() { return can_skip_params_match_; }
+  bool get_can_delay_init_datum_store() { return can_delay_init_datum_store_; }
+
 private:
   bool is_match_outline_param(int64_t param_idx)
   {
@@ -241,6 +249,8 @@ protected:
   common::ObFixedArray<int64_t, common::ObIAllocator> multi_stmt_rowkey_pos_;
   // pre calculable expression list handler.
   PreCalcExprHandler* pre_cal_expr_handler_;
+  bool can_skip_params_match_;
+  bool can_delay_init_datum_store_;
 
 public:
   //variables for resource map rule

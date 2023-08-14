@@ -407,7 +407,7 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       || OB_ISNULL(sql_ctx = ctx_->exec_ctx_->get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt));
-  } else if (sql_ctx->multi_stmt_item_.is_batched_multi_stmt()) {
+  } else if (sql_ctx->is_batch_params_execute()) {
     need_types = 0; //如果是batch优化暂时不做改写
   } else if (OB_FAIL(check_stmt_functions(stmt, func))) {
     LOG_WARN("failed to check stmt functions", K(ret));

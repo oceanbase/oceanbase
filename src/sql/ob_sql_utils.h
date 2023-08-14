@@ -568,7 +568,6 @@ public:
   static bool is_fk_nested_sql(ObExecContext *cur_ctx);
   static bool is_nested_sql(ObExecContext *cur_ctx);
   static bool is_select_from_dual(ObExecContext &ctx);
-  static bool is_batch_execute(ObSqlCtx &sql_ctx);
 
   static int get_obj_from_ext_obj(const ObObjParam &ext_obj, int64_t pos, ObObj *&obj);
   static int get_result_from_ctx(ObExecContext &exec_ctx,

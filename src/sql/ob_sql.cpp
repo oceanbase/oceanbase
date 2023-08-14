@@ -1004,14 +1004,10 @@ int ObSql::do_real_prepare(const ObString &sql,
   ObPlanCacheCtx pc_ctx(sql, PC_PS_MODE, allocator, context, ectx,
                         session.get_effective_tenant_id());
   ParamStore param_store( (ObWrapperAllocator(&allocator)) );
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session.get_effective_tenant_id()));
   pc_ctx.set_is_inner_sql(is_inner_sql);
 
   CHECK_COMPATIBILITY_MODE(context.session_info_);
-
-  if (tenant_config.is_valid()) {
-    enable_udr = tenant_config->enable_user_defined_rewrite_rules;
-  }
+  enable_udr = context.get_enable_user_defined_rewrite();
   if (OB_ISNULL(context.session_info_) || OB_ISNULL(context.schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", K(ret));
@@ -1406,7 +1402,7 @@ int ObSql::handle_sql_execute(const ObString &sql,
   } else if (mode == PC_PL_MODE) {
     if (OB_FAIL(reconstruct_pl_params_store(allocator, context, org_params, params, ab_params))) {
       LOG_WARN("failed to reconstruct pl params", K(ret));
-    } else if (context.multi_stmt_item_.is_batched_multi_stmt() && OB_ISNULL(ab_params)) {
+    } else if (context.is_batch_params_execute() && OB_ISNULL(ab_params)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("pl ab params is null", K(ret));
     } else if (OB_FAIL(construct_param_store(params, pctx->get_param_store_for_update()))) {
@@ -1920,7 +1916,7 @@ int ObSql::reconstruct_pl_params_store(ObIAllocator &allocator,
                                        ParamStore *&pl_ab_params)
 {
   int ret = OB_SUCCESS;
-  if (context.multi_stmt_item_.is_batched_multi_stmt()) {
+  if (context.is_batch_params_execute()) {
     ParamStore *first_group_params = &pl_params;
     if (OB_FAIL(init_execute_params_for_ab(allocator, origin_params, first_group_params))) {
       LOG_WARN("fail to init first batch params", K(ret), K(origin_params));
@@ -1951,7 +1947,7 @@ int ObSql::reconstruct_ps_params_store(ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   ParamStore *first_group_params = NULL;
-  if (context.multi_stmt_item_.is_batched_multi_stmt()) {
+  if (context.is_batch_params_execute()) {
     if (OB_FAIL(init_execute_params_for_ab(allocator, origin_params, first_group_params))) {
       LOG_WARN("fail to init first batch params", K(ret), K(origin_params));
     } else if (OB_FAIL(construct_ps_param_store(*first_group_params,
@@ -2088,7 +2084,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
     } else if (OB_FAIL(reconstruct_ps_params_store(
         allocator, context, params, fixed_params, ps_info, ps_params, ps_ab_params))) {
       LOG_WARN("fail to reconstruct_ps_params_store", K(ret));
-    } else if (context.multi_stmt_item_.is_batched_multi_stmt() &&
+    } else if (context.is_batch_params_execute() &&
         OB_ISNULL(ps_ab_params)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ps_ab_params_store is null", K(ret));
@@ -2292,7 +2288,7 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
       if (OB_FAIL(session->get_database_id(context.spm_ctx_.bl_key_.db_id_))) {
         LOG_WARN("Failed to get database id", K(ret));
       } else if (!use_plan_cache) {
-        if (context.multi_stmt_item_.is_batched_multi_stmt()) {
+        if (context.is_batch_params_execute()) {
           ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
           LOG_WARN("batched multi_stmt needs rollback");
         }
@@ -2451,10 +2447,10 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
     if (trimed_stmt.length() == 6) {
       //是否为COMMIT语句
       is_begin_commit_stmt = (0 == STRNCASECMP(trimed_stmt.ptr(), "commit", 6)
-                              && !context.multi_stmt_item_.is_batched_multi_stmt());
+                              && !context.is_batch_params_execute());
     } else if (trimed_stmt.length() == 5) {
       is_begin_commit_stmt = (0 == STRNCASECMP(trimed_stmt.ptr(), "begin", 5)
-                              && !context.multi_stmt_item_.is_batched_multi_stmt());
+                              && !context.is_batch_params_execute());
     }
     if (is_begin_commit_stmt) {
       //记录当前语句是begin/commit 语句，用于性能优化
@@ -2627,8 +2623,8 @@ int ObSql::generate_stmt(ParseResult &parse_result,
     resolver_ctx.is_restore_ = context.is_restore_;
     resolver_ctx.is_ddl_from_primary_ = context.is_ddl_from_primary_;
     resolver_ctx.is_cursor_ = context.is_cursor_;
-    resolver_ctx.is_batch_stmt_ = context.multi_stmt_item_.is_batched_multi_stmt();
-    resolver_ctx.batch_stmt_num_ = context.multi_stmt_item_.get_batched_stmt_cnt();
+    resolver_ctx.is_batch_stmt_ = context.is_batch_params_execute();
+    resolver_ctx.batch_stmt_num_ = context.get_batch_params_count();
     if (NULL != pc_ctx && pc_ctx->is_remote_executor_) {
       resolver_ctx.need_check_col_dup_
         = !(context.is_prepare_protocol_ && parse_result.question_mark_ctx_.by_ordinal_ && pc_ctx->is_original_ps_mode_);
@@ -2892,7 +2888,6 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
   ObStmtOraNeedPrivs stmt_ora_need_privs;
   stmt_need_privs.need_privs_.set_allocator(&allocator);
   stmt_ora_need_privs.need_privs_.set_allocator(&allocator);
-
   _LOG_DEBUG("start to generate physical plan for query.(query = %.*s)",
               parse_result.input_sql_len_, parse_result.input_sql_);
   if (OB_FAIL(sanity_check(sql_ctx))) { //check sql_ctx.session_info_ and sql_ctx.schema_guard_
@@ -2918,7 +2913,7 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
   } else if (OB_FAIL(ObPrivilegeCheck::check_password_expired(sql_ctx,
                                                               basic_stmt->get_stmt_type()))) {
     LOG_WARN("Falied to check password expired", K(ret));
-  } else if (sql_ctx.multi_stmt_item_.is_batched_multi_stmt() &&
+  } else if ((sql_ctx.is_batch_params_execute()) &&
              NULL != pc_ctx &&
              OB_FAIL(check_batched_multi_stmt_after_resolver(*pc_ctx,
                                                              *basic_stmt,
@@ -3874,7 +3869,7 @@ int ObSql::get_outline_data(ObSqlCtx &context,
   } else if (0 != context.first_plan_hash_) {
     outline_content = context.first_outline_data_;
   } else if (OB_INVALID_ID == context.spm_ctx_.bl_key_.db_id_
-             || context.multi_stmt_item_.is_batched_multi_stmt()) {
+             || context.is_batch_params_execute()) {
     //no outline is available when database name of session is not specified, just keep the stmt
   } else if (pc_ctx.is_begin_commit_stmt()) {
     /* do nothing */
@@ -4199,20 +4194,20 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
                        bool& plan_added)
 {
   int ret = OB_SUCCESS;
-  bool enable_udr = false;
   ObPhysicalPlan *phy_plan = result.get_physical_plan();
   pc_ctx.fp_result_.pc_key_.namespace_ = ObLibCacheNameSpace::NS_CRSR;
   plan_added = false;
-  bool is_batch_exec = pc_ctx.sql_ctx_.multi_stmt_item_.is_batched_multi_stmt();
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  if (tenant_config.is_valid()) {
-    enable_udr = tenant_config->enable_user_defined_rewrite_rules;
-  }
+  bool is_batch_exec = pc_ctx.sql_ctx_.is_batch_params_execute();
+  bool enable_udr = pc_ctx.sql_ctx_.get_enable_user_defined_rewrite();
   if (OB_ISNULL(phy_plan) || OB_ISNULL(plan_cache)) {
     ret = OB_NOT_INIT;
     LOG_WARN("Fail to generate plan", K(phy_plan), K(plan_cache));
   } else if (OB_USE_PLAN_CACHE_NONE == phy_plan->get_phy_plan_hint().plan_cache_policy_) {
     LOG_DEBUG("Hint not use plan cache");
+    if (is_batch_exec) {
+      ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
+      LOG_WARN("with not use plan_cache hint, batched multi_stmt needs rollback", K(ret));
+    }
   } else if (OB_FAIL(result.to_plan(pc_ctx.mode_, phy_plan))) {
     LOG_WARN("Failed copy field to pplan", K(ret));
   } else if (OB_FAIL(ob_write_string(phy_plan->get_allocator(),
@@ -4362,6 +4357,9 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
           // Since 4.0, there should be only one autoinc_param
           param.autoinc_increment_ = session.get_local_auto_increment_increment();
           param.autoinc_offset_ = session.get_local_auto_increment_offset();
+          if (pc_ctx.sql_ctx_.is_do_insert_batch_opt()) {
+            param.total_value_count_ = pc_ctx.sql_ctx_.get_insert_batch_row_cnt();
+          }
         }  // end for
       }
 
@@ -4401,7 +4399,7 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
           pctx->get_remote_sql_info().ps_param_cnt_ = static_cast<int32_t>(param_store.count());
         } else if (phy_plan->temp_sql_can_prepare()
             && pc_ctx.neg_param_index_.is_empty()
-            && !pc_ctx.sql_ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
+            && !pc_ctx.sql_ctx_.is_batch_params_execute()) {
           //本地是文本协议的SQL，并且缓存在plan中，走ps协议
           //@TODO:yuchen.wyc 文本协议中如果出现不能参数化的参数，由于param store里的值可能不是参数化对应的值
           //例如select a, b-1 from t1; 这里会参数化成select a, b-? from t1;但param store里对应的是-1
@@ -4605,8 +4603,8 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
   // for batched multi stmt, we only parse and optimize the first statement
   // only in multi_query, need do this
   if (!(PC_PS_MODE == mode || PC_PL_MODE == mode) &&
-      context.multi_stmt_item_.is_batched_multi_stmt() &&
-      OB_FAIL(get_first_batched_multi_stmt(context.multi_stmt_item_, outlined_stmt))) {
+      context.is_batch_params_execute() &&
+      OB_FAIL(get_first_batched_multi_stmt(pc_ctx, context.multi_stmt_item_, outlined_stmt))) {
     LOG_WARN("failed to get first batched stmt item", K(ret));
   } else if (OB_FAIL(ObUDRUtils::match_udr_and_refill_ctx(outlined_stmt,
                                                           context,
@@ -4625,7 +4623,7 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
                                    add_plan_to_pc,
                                    is_enable_transform_tree))) {
     LOG_WARN("fail to parser and check", K(ret));
-  } else if (context.multi_stmt_item_.is_batched_multi_stmt() &&
+  } else if (context.is_batch_params_execute() &&
              !(PC_PS_MODE == mode || PC_PL_MODE == mode) &&
              OB_FAIL(check_batched_multi_stmt_after_parser(pc_ctx,
                                                            parse_result,
@@ -4634,7 +4632,7 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
     LOG_WARN("failed to check batched multi_stmt", K(ret));
   } else if (!is_valid) {
     ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
-    LOG_TRACE("batched multi_stmt needs rollback", K(ret));
+    LOG_WARN("batched multi_stmt needs rollback", K(ret));
   }
   generate_sql_id(pc_ctx, add_plan_to_pc, parse_result, signature_sql, ret);
   if (OB_FAIL(ret)) {
@@ -4724,9 +4722,8 @@ int ObSql::check_batched_multi_stmt_after_parser(ObPlanCacheCtx &pc_ctx,
   int ret = OB_SUCCESS;
   is_valid = false;
   ObItemType type = parse_result.result_tree_->children_[0]->type_;
-  if (add_plan_to_pc
-      || (ObSQLUtils::is_enable_explain_batched_multi_statement()
-          && T_EXPLAIN == type)) {
+  if (add_plan_to_pc ||
+      (ObSQLUtils::is_enable_explain_batched_multi_statement() && T_EXPLAIN == type)) {
     is_valid = true;
     // only update support batched multi-stmt optimization
     if (OB_ISNULL(parse_result.result_tree_) ||
@@ -4744,13 +4741,118 @@ int ObSql::check_batched_multi_stmt_after_parser(ObPlanCacheCtx &pc_ctx,
     } else { /*do nothing*/ }
 
     if (OB_SUCC(ret) && is_valid && !pc_ctx.not_param_info_.empty()) {
-      if (OB_FAIL(ObPlanCacheValue::check_multi_stmt_not_param_value(pc_ctx.multi_stmt_fp_results_,
-                                                                     pc_ctx.not_param_info_,
-                                                                     is_valid))) {
-        LOG_WARN("failed to check multi stmt not param value", K(ret));
-      } else { /*do nothing*/ }
+      if (pc_ctx.sql_ctx_.is_do_insert_batch_opt()) {
+        if (OB_FAIL(ObPlanCacheValue::check_insert_multi_values_param(pc_ctx, is_valid))) {
+          LOG_WARN("failed to check insert multi values not param value", K(ret));
+        }
+      } else if (pc_ctx.sql_ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
+        if (OB_FAIL(ObPlanCacheValue::check_multi_stmt_not_param_value(pc_ctx.multi_stmt_fp_results_,
+                                                                       pc_ctx.not_param_info_,
+                                                                       is_valid))) {
+          LOG_WARN("failed to check multi stmt not param value", K(ret));
+        }
+      }
     }
   }
+  return ret;
+}
+
+int ObSql::before_resolve_array_params(ObPlanCacheCtx &pc_ctx,
+                                       int64_t query_num,
+                                       int64_t param_num,
+                                       ParamStore *&ab_params,
+                                       ObBitSet<> &neg_param_index,
+                                       ObBitSet<> &not_param_index,
+                                       ObBitSet<> &must_be_positive_index)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ab_params = static_cast<ParamStore *>(pc_ctx.allocator_.alloc(sizeof(ParamStore))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", K(ret));
+  } else if (FALSE_IT(ab_params = new(ab_params)ParamStore(ObWrapperAllocator(pc_ctx.allocator_)))) {
+   // do nothing
+  } else if (OB_FAIL(ObSQLUtils::create_multi_stmt_param_store(pc_ctx.allocator_,
+                                                               query_num,
+                                                               param_num,
+                                                               *ab_params))) {
+    LOG_WARN("failed to create multi_stmt param store", K(query_num), K(param_num),K(ret));
+  } else if (OB_FAIL(neg_param_index.add_members2(pc_ctx.neg_param_index_))) {
+    LOG_WARN("failed to assign bit sets", K(ret));
+  } else if (OB_FAIL(not_param_index.add_members2(pc_ctx.not_param_index_))) {
+    LOG_WARN("failed to assign bit sets", K(ret));
+  } else if (OB_FAIL(must_be_positive_index.add_members2(pc_ctx.must_be_positive_index_))) {
+    LOG_WARN("failed to assign bit sets", K(ret));
+  }
+  return ret;
+}
+
+int ObSql::resolve_ins_multi_row_params(ObPlanCacheCtx &pc_ctx, const ObStmt &stmt, ParamStore *&ab_params)
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalPlanCtx *plan_ctx = NULL;
+  ObBitSet<> neg_param_index;
+  ObBitSet<> not_param_index;
+  ObBitSet<> must_be_positive_index;
+  int64_t query_num = pc_ctx.sql_ctx_.get_insert_batch_row_cnt();
+  int64_t param_num = 0;
+  if (OB_ISNULL(plan_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (FALSE_IT(param_num = plan_ctx->get_param_store().count())) {
+    // do nothing
+  } else if (OB_FAIL(before_resolve_array_params(pc_ctx,
+                                                 query_num,
+                                                 param_num,
+                                                 ab_params,
+                                                 neg_param_index,
+                                                 not_param_index,
+                                                 must_be_positive_index))) {
+    LOG_WARN("fail to prepare resolve params info", K(ret), K(query_num), K(param_num));
+  } else if (OB_FAIL(ObPlanCacheValue::resolve_insert_multi_values_param(pc_ctx,
+                                                                         stmt.get_stmt_type(),
+                                                                         pc_ctx.param_charset_type_,
+                                                                         neg_param_index,
+                                                                         not_param_index,
+                                                                         must_be_positive_index,
+                                                                         param_num,
+                                                                         *ab_params))) {
+    LOG_WARN("failed to check multi-stmt param type", K(ret));
+  }
+  return ret;
+}
+
+int ObSql::resolve_multi_query_params(ObPlanCacheCtx &pc_ctx, const ObStmt &stmt, ParamStore *&ab_params)
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalPlanCtx *plan_ctx = NULL;
+  ObBitSet<> neg_param_index;
+  ObBitSet<> not_param_index;
+  ObBitSet<> must_be_positive_index;
+  int64_t query_num = pc_ctx.sql_ctx_.get_batch_params_count();
+  int64_t param_num = 0;
+  if (OB_ISNULL(plan_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (FALSE_IT(param_num = plan_ctx->get_param_store().count())) {
+    // do nothing
+  } else if (OB_FAIL(before_resolve_array_params(pc_ctx,
+                                                 query_num,
+                                                 param_num,
+                                                 ab_params,
+                                                 neg_param_index,
+                                                 not_param_index,
+                                                 must_be_positive_index))) {
+    LOG_WARN("fail to prepare resolve params info", K(ret), K(query_num), K(param_num));
+  } else if (OB_FAIL(ObPlanCacheValue::check_multi_stmt_param_type(pc_ctx,
+                                                                   stmt.get_stmt_type(),
+                                                                   pc_ctx.param_charset_type_,
+                                                                   neg_param_index,
+                                                                   not_param_index,
+                                                                   must_be_positive_index,
+                                                                   *ab_params))) {
+    LOG_WARN("failed to check multi-stmt param type", K(ret));
+  }
+
   return ret;
 }
 
@@ -4762,7 +4864,6 @@ int ObSql::check_batched_multi_stmt_after_resolver(ObPlanCacheCtx &pc_ctx,
   ObPhysicalPlanCtx *plan_ctx = NULL;
   is_valid = true;
   bool has_dblink = false;
-  bool is_ps_ab_opt = pc_ctx.sql_ctx_.multi_stmt_item_.is_ab_batch_opt();
   if (OB_ISNULL(plan_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx())
       || OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -4792,41 +4893,24 @@ int ObSql::check_batched_multi_stmt_after_resolver(ObPlanCacheCtx &pc_ctx,
 
     // make sure type of all the parameters are the same
     if (OB_SUCC(ret) && is_valid) {
-      if (!is_ps_ab_opt) {
-        ParamStore *ab_params = NULL;
-        ObBitSet<> neg_param_index;
-        ObBitSet<> not_param_index;
-        ObBitSet<> must_be_positive_index;
-        int64_t query_num = pc_ctx.multi_stmt_fp_results_.count();
-        int64_t param_num = plan_ctx->get_param_store().count();
-        if (OB_ISNULL(ab_params = static_cast<ParamStore *>(pc_ctx.allocator_.alloc(sizeof(ParamStore))))) {
-           ret = OB_ALLOCATE_MEMORY_FAILED;
-           LOG_WARN("failed to allocate memory", K(ret));
-        } else if (FALSE_IT(ab_params = new(ab_params)ParamStore(ObWrapperAllocator(pc_ctx.allocator_)))) {
-         // do nothing
-        } else if (OB_FAIL(ObSQLUtils::create_multi_stmt_param_store(pc_ctx.allocator_,
-                                                                     query_num,
-                                                                     param_num,
-                                                                     *ab_params))) {
-          LOG_WARN("failed to create multi_stmt param store", K(query_num), K(param_num),K(ret));
-        } else if (OB_FAIL(neg_param_index.add_members2(pc_ctx.neg_param_index_))) {
-          LOG_WARN("failed to assign bit sets", K(ret));
-        } else if (OB_FAIL(not_param_index.add_members2(pc_ctx.not_param_index_))) {
-          LOG_WARN("failed to assign bit sets", K(ret));
-        } else if (OB_FAIL(must_be_positive_index.add_members2(pc_ctx.must_be_positive_index_))) {
-          LOG_WARN("failed to assign bit sets", K(ret));
-        } else if (OB_FAIL(ObPlanCacheValue::check_multi_stmt_param_type(pc_ctx,
-                                                                         stmt.get_stmt_type(),
-                                                                         pc_ctx.param_charset_type_,
-                                                                         neg_param_index,
-                                                                         not_param_index,
-                                                                         must_be_positive_index,
-                                                                         *ab_params,
-                                                                         true,
-                                                                         is_valid))) {
-          LOG_WARN("failed to check multi-stmt param type", K(ret));
-        } else if (!is_valid) {
-          /*do nothing*/
+      ParamStore *ab_params = NULL;
+      ObBitSet<> neg_param_index;
+      ObBitSet<> not_param_index;
+      ObBitSet<> must_be_positive_index;
+      if (pc_ctx.sql_ctx_.is_do_insert_batch_opt()) {
+        if (OB_FAIL(resolve_ins_multi_row_params(pc_ctx, stmt, ab_params))) {
+          LOG_WARN("fail to resolve multi insert row params", K(ret));
+        } else {
+          pc_ctx.ab_params_ = ab_params;
+          ParamStore &param_store = plan_ctx->get_param_store_for_update();
+          for (int64_t i = 0; OB_SUCC(ret) && i < param_store.count(); i++) {
+            ObObjParam &obj_param = param_store.at(i);
+            obj_param.get_param_flag().is_batch_parameter_ = true;
+          }
+        }
+      } else if (!pc_ctx.sql_ctx_.multi_stmt_item_.is_ab_batch_opt()) {
+        if (OB_FAIL(resolve_multi_query_params(pc_ctx, stmt, ab_params))) {
+          LOG_WARN("fail to resolve multi query params", K(ret));
         } else {
           pc_ctx.ab_params_ = ab_params;
           ParamStore &param_store = plan_ctx->get_param_store_for_update();
@@ -5222,10 +5306,28 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
   return ret;
 }
 
-int ObSql::get_first_batched_multi_stmt(ObMultiStmtItem& multi_stmt_item, ObString& stmt_sql)
+int ObSql::get_first_batched_multi_stmt(ObPlanCacheCtx &pc_ctx, ObMultiStmtItem &multi_stmt_item, ObString &stmt_sql)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(multi_stmt_item.get_queries())) {
+  if (pc_ctx.sql_ctx_.is_do_insert_batch_opt()) {
+    // Restore the original SQL according to the first row of parameters
+    if (OB_FAIL(ObPlanCache::do_construct_sql(pc_ctx.allocator_,
+                                              pc_ctx,
+                                              *pc_ctx.insert_batch_opt_info_.multi_raw_params_.at(0),
+                                              pc_ctx.insert_batch_opt_info_.insert_params_count_,
+                                              pc_ctx.insert_batch_opt_info_.sql_delta_length_,
+                                              pc_ctx.fp_result_.pc_key_.name_))) {
+      LOG_WARN("fail to do construct sql",
+          K(ret), K(pc_ctx.fp_result_.pc_key_.name_), K(pc_ctx.insert_batch_opt_info_.new_reconstruct_sql_));
+      // if rebuild origin sql fail, this sql would rollback
+      ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
+      LOG_WARN("change error ret to -5787", K(ret), K(pc_ctx.insert_batch_opt_info_), K(pc_ctx.fp_result_.pc_key_.name_));
+    } else {
+      stmt_sql = pc_ctx.insert_batch_opt_info_.new_reconstruct_sql_;
+      LOG_TRACE("print new_reconstruct_sql",
+          K(pc_ctx.fp_result_.pc_key_.name_), K(pc_ctx.insert_batch_opt_info_.new_reconstruct_sql_));
+    }
+  } else if (OB_ISNULL(multi_stmt_item.get_queries())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(multi_stmt_item));
   } else if (OB_UNLIKELY(multi_stmt_item.get_queries()->empty())) {

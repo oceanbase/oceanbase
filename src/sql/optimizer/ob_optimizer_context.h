@@ -253,17 +253,27 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   void set_is_pdml_heap_table(bool flag) { is_pdml_heap_table_ = flag; }
   inline void set_parallel_rule(PXParallelRule rule) { px_parallel_rule_ = rule; }
   const PXParallelRule& get_parallel_rule() const { return px_parallel_rule_; }
-  inline bool is_batched_multi_stmt() {
+  inline bool is_batched_multi_stmt()
+  {
     bool bret = false;
     if (NULL != exec_ctx_ && NULL != exec_ctx_->get_sql_ctx()) {
-      bret = exec_ctx_->get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt();
+      bret = exec_ctx_->get_sql_ctx()->is_batch_params_execute();
     }
     return bret;
   }
-  inline bool is_strict_defensive_check() {
+  inline bool is_do_insert_batch_opt()
+  {
     bool bret = false;
     if (NULL != exec_ctx_ && NULL != exec_ctx_->get_sql_ctx()) {
-      bret = exec_ctx_->get_sql_ctx()->is_strict_defensive_check_;
+      bret = exec_ctx_->get_sql_ctx()->is_do_insert_batch_opt();
+    }
+    return bret;
+  }
+  inline bool is_strict_defensive_check()
+  {
+    bool bret = false;
+    if (NULL != exec_ctx_ && NULL != exec_ctx_->get_sql_ctx()) {
+      bret = exec_ctx_->get_sql_ctx()->get_enable_strict_defensive_check();
     }
     return bret;
   }

@@ -918,7 +918,7 @@ int ObMPStmtPrexecute::after_do_process_for_arraybinding(ObSQLSessionInfo &sessi
     }
   } else {
     if (ctx_.multi_stmt_item_.is_ab_batch_opt()
-        && ctx_.multi_stmt_item_.get_batched_stmt_cnt() == arraybinding_size_) {
+        && ctx_.get_batch_params_count() == arraybinding_size_) {
       // 执行成功，全部数据都完成batch优化，直接回eof包
       if (OB_SUCCESS != (response_ret = send_eof_packet(session, 0, false, true, false))) {
         ret = response_ret;

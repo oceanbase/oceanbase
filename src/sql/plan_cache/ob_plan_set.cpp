@@ -561,6 +561,38 @@ int ObPlanSet::match_params_info(const Ob2DArray<ObParamInfo,
   return ret;
 }
 
+bool ObPlanSet::can_skip_params_match()
+{
+  bool can_skip = true;
+  for (int64_t i = 0; can_skip && i < params_info_.count(); i++) {
+    if (params_info_.at(i).flag_.need_to_check_type_) {
+      can_skip = false;
+    }
+  }
+  if (can_skip) {
+    if (!all_plan_const_param_constraints_.empty() ||
+        !all_possible_const_param_constraints_.empty() ||
+        !all_equal_param_constraints_.empty() ||
+        all_pre_calc_constraints_.get_size() != 0) {
+      can_skip = false;
+      LOG_DEBUG("print can't skip", K(can_skip), K(all_plan_const_param_constraints_.empty()),
+      K(all_possible_const_param_constraints_.empty()),
+      K(all_equal_param_constraints_.empty()),
+      K(all_pre_calc_constraints_.get_size()));
+    }
+  }
+  return can_skip;
+}
+
+bool ObPlanSet::can_delay_init_datum_store()
+{
+  bool can_delay = true;
+  if (all_pre_calc_constraints_.get_size() != 0) {
+    can_delay = false;
+  }
+  return can_delay;
+}
+
 void ObPlanSet::reset()
 {
   ObDLinkBase<ObPlanSet>::reset();
@@ -581,6 +613,8 @@ void ObPlanSet::reset()
   all_equal_param_constraints_.reset();
   all_pre_calc_constraints_.reset();
   all_priv_constraints_.reset();
+  can_skip_params_match_ = false;
+  can_delay_init_datum_store_ = false;
   alloc_.reset();
 }
 
@@ -733,6 +767,11 @@ int ObPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
       } else if (OB_FAIL(append(multi_stmt_rowkey_pos_, sql_ctx.multi_stmt_rowkey_pos_))) {
         LOG_WARN("failed to append multi stmt rowkey pos", K(ret));
       } else { /*do nothing*/ }
+    }
+
+    if (OB_SUCC(ret) && sql_ctx.is_do_insert_batch_opt()) {
+      can_skip_params_match_ = can_skip_params_match();
+      can_delay_init_datum_store_ = can_delay_init_datum_store();
     }
   }
 

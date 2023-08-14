@@ -235,39 +235,16 @@ int ObMPQuery::process()
           }
         }
 
-        bool enable_batch_opt = session.is_enable_batched_multi_statement();;
         if (OB_FAIL(ret)) {
           //do nothing
         } else if (OB_FAIL(parser.split_multiple_stmt(sql_, queries, parse_stat))) {
           // 进入本分支，说明push_back出错，OOM，委托外层代码返回错误码
           // 且进入此分支之后，要断连接
           need_response_error = true;
-        } else if (enable_batch_opt &&
-            OB_FAIL(parser.reconstruct_insert_sql(sql_, queries, ins_queries, do_ins_batch_opt))) {
-          LOG_WARN("fail to reconstruct", K(ret), K(sql_));
         } else if (OB_UNLIKELY(queries.count() <= 0)) {
           ret = OB_ERR_UNEXPECTED;
           need_response_error = true;//进入此分支之后，要断连接，极其严重错误
           LOG_ERROR("emtpy query count. client would have suspended. never be here!", K_(sql), K(ret));
-        } else if (do_ins_batch_opt) {
-          bool optimization_done = false;
-          if (OB_FAIL(try_batched_multi_stmt_optimization(session,
-                                                          ins_queries,
-                                                          parse_stat,
-                                                          optimization_done,
-                                                          async_resp_used,
-                                                          need_disconnect,
-                                                          true))) {
-            LOG_WARN("fail to try batch", K(ret));
-          } else if (!optimization_done) {
-            // 如果 batch执行失败，那么还是回退成原本的单条执行
-            ret = process_single_stmt(ObMultiStmtItem(false, 0, sql_),
-                                      session,
-                                      has_more,
-                                      force_sync_resp,
-                                      async_resp_used,
-                                      need_disconnect);
-          }
         } else if (OB_UNLIKELY(1 == session.get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS)) {
           // 处理Multiple Statement
           /* MySQL处理Multi-Stmt出错时候的行为：

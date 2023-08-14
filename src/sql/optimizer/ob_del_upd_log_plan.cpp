@@ -1870,7 +1870,7 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
       if (OB_ISNULL(exec_ctx)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("exec_cts is null", K(ret));
-      } else if (exec_ctx->get_sql_ctx()->is_strict_defensive_check_ &&
+      } else if (exec_ctx->get_sql_ctx()->get_enable_strict_defensive_check() &&
           !(optimizer_context_.get_session_info()->is_inner()) &&
           (stmt_->is_update_stmt() || stmt_->is_delete_stmt()) &&
           GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0) {

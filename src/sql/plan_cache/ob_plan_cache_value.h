@@ -170,19 +170,34 @@ public:
                              ParamStore *obj_params);
 
   int resolve_multi_stmt_params(ObPlanCacheCtx &pc_ctx);
+
+  int before_resolve_array_params(ObPlanCacheCtx &pc_ctx, int64_t query_num, int64_t param_num, ParamStore *&ab_params);
+
   static int check_multi_stmt_param_type(ObPlanCacheCtx &pc_ctx,
                                          const stmt::StmtType stmt_type,
                                          const ObIArray<ObCharsetType> &param_charset_type,
                                          const ObBitSet<> &neg_param_index_,
                                          const ObBitSet<> &not_param_index,
                                          const ObBitSet<> &must_be_positive_idx,
-                                         ParamStore &param_store,
-                                         bool need_check_param_type,
-                                         bool &is_valid);
+                                         ParamStore &param_store);
+
+  static int resolve_insert_multi_values_param(ObPlanCacheCtx &pc_ctx,
+                                               const stmt::StmtType stmt_type,
+                                               const ObIArray<ObCharsetType> &param_charset_type,
+                                               const ObBitSet<> &neg_param_index_,
+                                               const ObBitSet<> &not_param_index,
+                                               const ObBitSet<> &must_be_positive_idx,
+                                               int64_t params_num,
+                                               ParamStore &param_store);
+
   static int check_multi_stmt_not_param_value(
                                 const ObIArray<ObFastParserResult> &multi_stmt_fp_results,
                                 const ObIArray<NotParamInfo> &not_param_info,
                                 bool &is_same);
+  static int check_insert_multi_values_param(ObPlanCacheCtx &pc_ctx, bool &is_same);
+  static int check_not_param_value(const ObIArray<ObPCParam *> &raw_params,
+                                   const ObIArray<NotParamInfo> &not_param_info,
+                                   bool &is_same);
   static int check_not_param_value(const ObFastParserResult &fp_result,
                                    const ObIArray<NotParamInfo> &not_param_info,
                                    bool &is_same);

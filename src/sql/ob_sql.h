@@ -432,6 +432,18 @@ private:
                                               const ObStmt &stmt,
                                               bool &is_valid);
 
+  int before_resolve_array_params(ObPlanCacheCtx &pc_ctx,
+                                  int64_t query_num,
+                                  int64_t param_num,
+                                  ParamStore *&ab_params,
+                                  ObBitSet<> &neg_param_index,
+                                  ObBitSet<> &not_param_index,
+                                  ObBitSet<> &must_be_positive_index);
+
+  int resolve_ins_multi_row_params(ObPlanCacheCtx &pc_ctx, const ObStmt &stmt, ParamStore *&ab_params);
+
+  int resolve_multi_query_params(ObPlanCacheCtx &pc_ctx, const ObStmt &stmt, ParamStore *&ab_params);
+
   int replace_const_expr(common::ObIArray<ObRawExpr*> &raw_exprs,
                          ParamStore &param_store);
   int replace_const_expr(ObRawExpr *raw_expr,
@@ -476,11 +488,11 @@ private:
 
   int handle_text_execute(const ObStmt *basic_stmt, ObSqlCtx &sql_ctx, ObResultSet &result);
   int check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session, ObPhysicalPlan *plan, bool &need_reroute);
-  int get_first_batched_multi_stmt(ObMultiStmtItem& multi_stmt_item, ObString& sql);
   int check_read_only_privilege(ParseResult &parse_result,
                                 ObExecContext &exec_ctx,
                                 ObSchemaGetterGuard &schema_guard,
                                 ObSqlTraits &sql_traits);
+  int get_first_batched_multi_stmt(ObPlanCacheCtx &pc_ctx, ObMultiStmtItem& multi_stmt_item, ObString& sql);
   static int add_param_to_param_store(const ObObjParam &param,
                                       ParamStore &param_store);
 

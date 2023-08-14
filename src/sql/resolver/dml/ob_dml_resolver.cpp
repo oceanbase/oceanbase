@@ -1533,7 +1533,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     ObIArray<ObUserVarIdentRawExpr *> &user_var_exprs = get_stmt()->get_user_vars();
     bool is_multi_stmt = session_info_->get_cur_exec_ctx() != NULL &&
         session_info_->get_cur_exec_ctx()->get_sql_ctx() != NULL &&
-        session_info_->get_cur_exec_ctx()->get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt();
+        session_info_->get_cur_exec_ctx()->get_sql_ctx()->is_batch_params_execute();
     bool is_hierarchical_query = stmt_->is_select_stmt() &&
         static_cast<const ObSelectStmt *>(stmt_)->is_hierarchical_query();
 

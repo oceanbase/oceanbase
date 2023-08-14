@@ -642,7 +642,7 @@ int ObTableModifyOp::merge_implict_cursor(int64_t insert_rows,
                                           int64_t found_rows)
 {
   int ret = OB_SUCCESS;
-  bool is_ins_val_opt = ctx_.get_sql_ctx()->multi_stmt_item_.is_ins_multi_val_opt();
+  bool is_ins_val_opt = ctx_.get_sql_ctx()->is_do_insert_batch_opt();
   if (MY_SPEC.ab_stmt_id_ != nullptr && !is_ins_val_opt) {
     ObDatum *stmt_id_datum = nullptr;
     if (OB_FAIL(MY_SPEC.ab_stmt_id_->eval(eval_ctx_, stmt_id_datum))) {

@@ -20,6 +20,7 @@
 #include "sql/parser/ob_char_type.h"
 #include "sql/parser/parse_malloc.h"
 #include "sql/udr/ob_udr_struct.h"
+#include "sql/plan_cache/ob_plan_cache_struct.h"
 
 namespace oceanbase
 {
@@ -67,7 +68,8 @@ public:
 			 						 int64_t &no_param_sql_len,
 			 						 ParamList *&param_list,
 			 						 int64_t &param_num,
-									 ObQuestionMarkCtx &ctx);
+									 ObQuestionMarkCtx &ctx,
+									 int64_t &values_token_pos);
 };
 
 class ObFastParserBase
@@ -85,7 +87,26 @@ public:
 						char *&no_param_sql,
 						int64_t &no_param_sql_len,
 						ParamList *&param_list,
-						int64_t &param_num);
+						int64_t &param_num,
+						int64_t &values_token_pos);
+
+	int do_trim_for_insert(char *new_sql_buf,
+                         int64_t buff_len,
+                         const ObString &no_trim_sql,
+                         ObString &after_trim_sql,
+                         bool &trimed_succ);
+
+
+  int parser_insert_str(common::ObIAllocator &allocator,
+                        int64_t values_token_pos,
+                        const ObString &old_no_param_sql,
+                        ObString &new_truncated_sql,
+                        bool &can_batch_opt,
+                        int64_t &params_count,
+                        int64_t &upd_params_count,
+                        int64_t &lenth_delta,
+                        int64_t &row_count);
+
 	const ObQuestionMarkCtx &get_question_mark_ctx() const { return question_mark_ctx_; }
 
 protected:
@@ -96,6 +117,24 @@ protected:
 		PARAM_TOKEN,  // token that needs to be parameterized
 		IGNORE_TOKEN  // token that need to be ignored such as comments
 	};
+
+  enum ROW_STATE
+  {
+    START_STATE = 0,
+    LEFT_PAR_STATE,
+    PARS_MATCH,
+    ON_DUPLICATE_KEY,
+    UNEXPECTED_STATE
+  };
+
+  enum TRIM_STATE
+  {
+    START_TRIM_STATE = 0,
+    WITH_SPLII_CH,
+    WITH_OTHER_CH,
+    WITH_SPACE_CH,
+    TRIM_FAILED
+  };
 
 	// In the process of judging the identifer, we need to continuously scan next char
 	// in order to prevent the problem of memory access out of bounds, so we need to write
@@ -238,6 +277,13 @@ protected:
 	#define IS_MULTI_RIGHT_PARENTHESIS(pos, byte_len) \
 	DEF_RAW_SQL_MULTI_BYTE_CHARACTER_CHECK(right_parenthesis, pos, byte_len)
 	#define CHECK_EQ_STRNCASECMP(str, size) (0 == raw_sql_.strncasecmp(str, size))
+
+  #define DEF_RAW_SQL_MULTI_BYTE_CHARACTER_CHECK_V2(CHARACTER_NAME, raw_sql, pos, byte_len) \
+  is_multi_byte_##CHARACTER_NAME(raw_sql.raw_sql_, raw_sql.raw_sql_len_, pos, byte_len)
+  #define IS_MULTI_SPACE_V2(raw_sql, pos, byte_len) \
+  DEF_RAW_SQL_MULTI_BYTE_CHARACTER_CHECK_V2(space, raw_sql, pos, byte_len)
+  #define IS_MULTI_COMMA_V2(raw_sql, pos, byte_len) \
+  DEF_RAW_SQL_MULTI_BYTE_CHARACTER_CHECK_V2(space, raw_sql, pos, byte_len)
 
 	DEF_CHARACTER_CHECK_FUNCS(comma, ',');
 	DEF_CHARACTER_CHECK_FUNCS(left_parenthesis, '(');
@@ -490,6 +536,7 @@ protected:
 	int64_t is_interval_ds(int64_t pos);
 	// to{space}+(year|month)
 	int64_t is_interval_ym(int64_t pos);
+
 	/**
 	 * Used to parse ({interval_pricision}{space}*|{space}+)to{space}+
 	 * @param [in] : pos the position of the first character
@@ -524,6 +571,29 @@ protected:
 	 */
 	int process_interval();
 
+	int process_insert_or_replace(const char *str, const int64_t size);
+	int process_values(const char *str);
+
+	int get_one_insert_row_str(ObRawSql &raw_sql,
+                             ObString &str,
+                             bool &is_valid,
+                             int64_t &ins_params_count,
+                             bool &is_insert_up,
+                             int64_t &on_duplicate_params,
+                             int64_t &end_pos);
+
+	int copy_trimed_data_buff(char *new_sql_buf,
+                            int64_t buf_len,
+                            int64_t &pos,
+                            const int64_t start_pos,
+                            const int64_t end_pos,
+                            ObRawSql &src);
+
+	bool is_split_character(ObRawSql &raw_sql);
+
+	int check_is_on_duplicate_key(ObRawSql &raw_sql, bool &is_on_duplicate_key);
+	bool skip_space(ObRawSql &raw_sql);
+
 protected:
 	ObRawSql raw_sql_;
 	char *no_param_sql_;
@@ -546,6 +616,8 @@ protected:
 	common::ObIAllocator &allocator_;
 	common::ObCharsetType charset_type_;
 	const ObCharsetInfo *charset_info_;
+	bool get_insert_;
+	int64_t values_token_pos_;
 	ParseNextTokenFunc parse_next_token_func_;
 	ProcessIdfFunc process_idf_func_;
 

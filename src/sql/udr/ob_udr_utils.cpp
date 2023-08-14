@@ -1,9 +1,14 @@
-// Copyright 2015-2016 Alibaba Inc. All Rights Reserved.
-// Author:
-//     LuoFan
-// Normalizer:
-//     LuoFan
-
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
 
 #define USING_LOG_PREFIX SQL_QRR
 #include "sql/ob_sql.h"
@@ -244,14 +249,10 @@ int ObUDRUtils::match_udr_and_refill_ctx(const ObString &pattern,
                                          ObUDRItemMgr::UDRItemRefGuard &item_guard)
 {
   int ret = OB_SUCCESS;
-  bool enable_udr = false;
   is_match_udr = false;
+  bool enable_udr = sql_ctx.get_enable_user_defined_rewrite();
   ObSQLSessionInfo &session = result.get_session();
   ObExecContext &ectx = result.get_exec_context();
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session.get_effective_tenant_id()));
-  if (tenant_config.is_valid()) {
-    enable_udr = tenant_config->enable_user_defined_rewrite_rules;
-  }
   if (enable_udr && !(pc_ctx.is_inner_sql() || PC_PL_MODE == pc_ctx.mode_)) {
     ObIAllocator &allocator = result.get_mem_pool();
     PatternConstConsList cst_cons_list;

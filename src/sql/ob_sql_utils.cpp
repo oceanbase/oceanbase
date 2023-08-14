@@ -449,6 +449,7 @@ int ObSQLUtils::calc_simple_expr_without_row(
   } else if (OB_FAIL(calc_const_expr(session, *raw_expr, result, allocator, *params))) {
     SQL_LOG(WARN, "Get const_expr value error", KPC(raw_expr), K(ret));
   }
+
   return ret;
 }
 int ObSQLUtils::calc_raw_expr_without_row(
@@ -4390,11 +4391,6 @@ bool ObSQLUtils::is_fk_nested_sql(ObExecContext *cur_ctx)
 bool ObSQLUtils::is_nested_sql(ObExecContext *cur_ctx)
 {
   return is_pl_nested_sql(cur_ctx) || is_fk_nested_sql(cur_ctx);
-}
-
-bool ObSQLUtils::is_batch_execute(ObSqlCtx &sql_ctx)
-{
-  return sql_ctx.multi_stmt_item_.is_batched_multi_stmt();
 }
 
 bool ObSQLUtils::is_select_from_dual(ObExecContext &ctx)

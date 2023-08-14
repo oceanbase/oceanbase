@@ -502,7 +502,7 @@ OB_NOINLINE int ObPreCalcExprFrameInfo::do_batch_stmt_eval(ObExecContext &exec_c
   ObEvalCtx eval_ctx(exec_ctx);
   ObDatum *res_datum = NULL;
   ObDatumObjParam datum_param;
-  int64_t group_cnt = exec_ctx.get_sql_ctx()->multi_stmt_item_.get_batched_stmt_cnt();
+  int64_t group_cnt = exec_ctx.get_sql_ctx()->get_batch_params_count();
   ObSqlDatumArray *datum_array = nullptr;
   //construct sql array obj
   for (int64_t i = 0; OB_SUCC(ret) && i < pre_calc_rt_exprs_.count(); ++i) {

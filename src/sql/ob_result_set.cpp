@@ -438,7 +438,7 @@ bool ObResultSet::transaction_set_violation_and_retry(int &err, int64_t &retry_t
   ObSqlCtx *sql_ctx = get_exec_context().get_sql_ctx();
   bool is_batched_stmt = false;
   if (sql_ctx != nullptr) {
-    is_batched_stmt = sql_ctx->multi_stmt_item_.is_batched_multi_stmt();
+    is_batched_stmt = sql_ctx->is_batch_params_execute();
   }
   if ((OB_SNAPSHOT_DISCARDED == err
        || OB_TRANSACTION_SET_VIOLATION == err)

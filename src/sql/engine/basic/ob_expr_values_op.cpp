@@ -421,8 +421,8 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   int64_t col_num = MY_SPEC.get_output_count();
   int64_t col_idx = 0;
-  ctx_.get_sql_ctx()->multi_stmt_item_.get_batched_stmt_cnt();
-  int64_t value_group = (MY_SPEC.contain_ab_param_ ? ctx_.get_sql_ctx()->multi_stmt_item_.get_batched_stmt_cnt() : 1);
+  int64_t batch_cnt = ctx_.get_sql_ctx()->get_batch_params_count();
+  int64_t value_group = (MY_SPEC.contain_ab_param_ ? batch_cnt : 1);
   int64_t real_value_cnt = MY_SPEC.get_value_count() * value_group;
   if (node_idx_ == real_value_cnt) {
     // there is no values any more

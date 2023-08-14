@@ -201,9 +201,10 @@ ObSqlCtx::ObSqlCtx()
     res_map_rule_param_idx_(OB_INVALID_INDEX),
     res_map_rule_version_(0),
     is_text_ps_mode_(false),
-    is_strict_defensive_check_(false),
     first_plan_hash_(0),
     is_bulk_(false),
+    ins_opt_ctx_(),
+    flags_(0),
     reroute_info_(nullptr)
 {
   sql_id_[0] = '\0';
@@ -259,8 +260,10 @@ void ObSqlCtx::reset()
   cur_plan_ = nullptr;
   is_execute_call_stmt_ = false;
   is_text_ps_mode_ = false;
-  is_strict_defensive_check_ = false;
+  enable_strict_defensive_check_ = false;
+  enable_user_defined_rewrite_ = false;
   is_bulk_ = false;
+  ins_opt_ctx_.reset();
 }
 
 //release dynamic allocated memory
@@ -276,6 +279,7 @@ void ObSqlCtx::clear()
   spm_ctx_.bl_key_.reset();
   cur_stmt_ = nullptr;
   is_text_ps_mode_ = false;
+  ins_opt_ctx_.clear();
 }
 
 OB_SERIALIZE_MEMBER(ObSqlCtx, stmt_type_);

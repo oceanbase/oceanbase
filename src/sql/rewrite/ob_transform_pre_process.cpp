@@ -7578,6 +7578,8 @@ int ObTransformPreProcess::transform_for_ins_batch_stmt(ObDMLStmt *batch_stmt,
   ObExecContext *exec_ctx = nullptr;
   ObPhysicalPlanCtx *plan_ctx = nullptr;
   ObSQLSessionInfo *session_info = NULL;
+  ObSEArray<ObRawExpr*, 4> params;
+  ObPseudoColumnRawExpr *stmt_id_expr = NULL;
 
   if (OB_ISNULL(ctx_)
       || OB_ISNULL(exec_ctx = ctx_->exec_ctx_)
@@ -7590,49 +7592,37 @@ int ObTransformPreProcess::transform_for_ins_batch_stmt(ObDMLStmt *batch_stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("batch_stmt or inner_view_stmt is null", K(ret), K(batch_stmt));
   } else if (FALSE_IT(insert_stmt = static_cast<ObInsertStmt*>(batch_stmt))) {
-  } else if (insert_stmt->value_from_select()) {
-    ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
-    LOG_TRACE("insert select stmt not supported batch exec opt", K(ret), KPC(batch_stmt));
+  } else if (OB_FAIL(create_stmt_id_expr(stmt_id_expr))) {
+    LOG_WARN("fail to create stmt id expr", K(ret));
+  } else if (FALSE_IT(batch_stmt->get_query_ctx()->ins_values_batch_opt_ = true)) {
+  } else if (FALSE_IT(static_cast<ObDelUpdStmt*>(batch_stmt)->set_ab_stmt_id_expr(stmt_id_expr))) {
+  } else if (OB_FAIL(ObRawExprUtils::extract_params(insert_stmt->get_values_vector(), params))) {
+    LOG_WARN("extract param expr from related exprs failed", K(ret));
   } else {
-    // insert values stmt
-    ObSEArray<ObRawExpr*, 4> params;
-    ObPseudoColumnRawExpr *stmt_id_expr = NULL;
-    common::ObIArray<ObColumnRefRawExpr*> &value_desc = insert_stmt->get_values_desc();
     common::ObIArray<ObRawExpr*> &value_vector = insert_stmt->get_values_vector();
-    int64_t row_count = value_vector.count() / value_desc.count();
-    if (row_count > 1) {
-      ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
-      LOG_TRACE("insert stmt with multi rows not supported batch exec", K(ret), KPC(batch_stmt));
-    } else if (OB_FAIL(create_stmt_id_expr(stmt_id_expr))) {
-      LOG_WARN("fail to create stmt id expr", K(ret));
-    } else if (FALSE_IT(batch_stmt->get_query_ctx()->ins_values_batch_opt_ = true)) {
-    } else if (FALSE_IT(static_cast<ObDelUpdStmt*>(batch_stmt)->set_ab_stmt_id_expr(stmt_id_expr))) {
-    } else if (OB_FAIL(ObRawExprUtils::extract_params(value_vector, params))) {
-      LOG_WARN("extract param expr from related exprs failed", K(ret));
-    } else {
-      const ParamStore &param_store = plan_ctx->get_param_store();
-      for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
-        ObConstRawExpr *param_expr = static_cast<ObConstRawExpr *>(params.at(i));
-        ObPseudoColumnRawExpr *group_id = NULL;
-        int64_t param_idx = param_expr->get_value().get_unknown();
-        if (param_idx < 0 || param_idx >= param_store.count()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("param_idx is invalid", K(ret), K(param_idx), K(param_store));
-        } else if (!param_store.at(param_idx).is_batch_parameters()) {
-          // 不是batch 参数, 不需要打标记
-        } else {
-          param_expr->set_is_batch_stmt_parameter();
-        }
+    const ParamStore &param_store = plan_ctx->get_param_store();
+    for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
+      ObConstRawExpr *param_expr = static_cast<ObConstRawExpr *>(params.at(i));
+      ObPseudoColumnRawExpr *group_id = NULL;
+      int64_t param_idx = param_expr->get_value().get_unknown();
+      if (param_idx < 0 || param_idx >= param_store.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param_idx is invalid", K(ret), K(param_idx), K(param_store));
+      } else if (!param_store.at(param_idx).is_batch_parameters()) {
+        // 不是batch 参数, 不需要打标记
+      } else {
+        param_expr->set_is_batch_stmt_parameter();
       }
-      // 给所有的batch参数表达上边打上了标记，需要重新做表达式推导
-      // 这里因为insert values的特殊性，所以只需要推导value_vector中的表达式即可
-      for (int64_t i = 0; OB_SUCC(ret) && i < value_vector.count(); ++i) {
-        if (OB_FAIL(value_vector.at(i)->formalize(session_info))) {
-          LOG_WARN("formalize expr failed", K(ret), K(i), KPC(value_vector.at(i)));
-        }
+    }
+    // 给所有的batch参数表达上边打上了标记，需要重新做表达式推导
+    // 这里因为insert values的特殊性，所以只需要推导value_vector中的表达式即可
+    for (int64_t i = 0; OB_SUCC(ret) && i < value_vector.count(); ++i) {
+      if (OB_FAIL(value_vector.at(i)->formalize(session_info))) {
+        LOG_WARN("formalize expr failed", K(ret), K(i), KPC(value_vector.at(i)));
       }
     }
   }
+
   return ret;
 }
 
@@ -7748,26 +7738,56 @@ int ObTransformPreProcess::transform_for_batch_stmt(ObDMLStmt *batch_stmt, bool 
       OB_ISNULL(batch_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ctx_), K(exec_ctx), K(ret));
-  } else if (!exec_ctx->get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt()) {
+  } else if (!exec_ctx->get_sql_ctx()->is_batch_params_execute()) {
     //rewrite only when stmt is batch multi statement
   } else if (!batch_stmt->is_dml_write_stmt()) {
-    ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
-    LOG_TRACE("only DML Stmt without subquery supports batch execution, need to rollback",
-              K(ret), K(batch_stmt->get_stmt_type()));
+    // 非dml_stmt暂时不用处理
   } else if (stmt_type == stmt::T_UPDATE || stmt_type == stmt::T_DELETE) {
-    if (OB_FAIL(create_inner_view_stmt(batch_stmt, inner_view_stmt))) {
+    int64_t child_size = 0;
+    if (OB_FAIL(batch_stmt->get_child_stmt_size(child_size))) {
+      LOG_WARN("fail to get child_stmt size", K(ret), KPC(batch_stmt));
+    } else if (child_size != 0) {
+      ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
+      LOG_TRACE("only DML Stmt without subquery supports batch execution, need to rollback",
+                K(ret), K(child_size), KPC(batch_stmt));
+    } else if (OB_FAIL(create_inner_view_stmt(batch_stmt, inner_view_stmt))) {
       LOG_WARN("fail to create inner_view_stmt", K(ret));
     } else if (OB_FAIL(transform_for_upd_del_batch_stmt(batch_stmt, inner_view_stmt, trans_happened))) {
       LOG_WARN("fail to transform upd or del batch stmt", K(ret));
     }
   } else if (stmt_type == stmt::T_INSERT || stmt_type == stmt::T_REPLACE) {
     // insert的改写
-    ObSQLSessionInfo *session_info = NULL;
-    if (OB_ISNULL(session_info = ctx_->session_info_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("session is null", K(ret));
+    int64_t child_size = 0;
+    bool can_batch = false;
+    ObInsertStmt *insert_stmt = static_cast<ObInsertStmt *>(batch_stmt);
+    if (OB_FAIL(check_insert_can_batch(insert_stmt, can_batch))) {
+      LOG_WARN("fail to check insert can batch", K(ret), KPC(insert_stmt));
+    } else if (!can_batch) {
+      ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
+      LOG_TRACE("can't support insert batch optimization", K(ret), KPC(batch_stmt));
     } else if (OB_FAIL(transform_for_ins_batch_stmt(batch_stmt, trans_happened))) {
       LOG_WARN("fail to transform ins batch stmt", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::check_insert_can_batch(ObInsertStmt *insert_stmt, bool &can_batch)
+{
+  int ret = OB_SUCCESS;
+  can_batch = true;
+  if (insert_stmt->value_from_select()) {
+    can_batch = false;
+    LOG_TRACE("insert select stmt not supported batch exec opt", K(ret));
+  } else if (!insert_stmt->is_insert_single_value()) {
+    can_batch = false;
+    LOG_TRACE("multi row insert not supported batch exec opt", K(ret));
+  } else {
+    common::ObIArray<ObRawExpr*> &value_vector = insert_stmt->get_values_vector();
+    for (int64_t i = 0; OB_SUCC(ret) && i < value_vector.count(); i++) {
+      if (value_vector.at(i)->has_flag(CNT_SUB_QUERY)) {
+        can_batch = false;
+      }
     }
   }
   return ret;
@@ -8044,26 +8064,20 @@ int ObTransformPreProcess::mock_select_list_for_upd_del(ObDMLStmt &batch_stmt,
   ObSEArray<ObRawExpr*, 4> params;
   ObSEArray<ObRawExpr*, 8> related_exprs;
   ObSEArray<ObRawExpr *, 4> select_list;
-  int64_t child_stmts_size = 0;
 
   if (OB_ISNULL(ctx_)
       || OB_ISNULL(exec_ctx = ctx_->exec_ctx_)
       || OB_ISNULL(plan_ctx = exec_ctx->get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ctx_), K(exec_ctx), K(plan_ctx), K(ret));
-  } else if (OB_FAIL(batch_stmt.get_child_stmt_size(child_stmts_size))) {
-    LOG_WARN("get child_stmt size failed", K(ret));
-  } else if (child_stmts_size != 0) {
-    ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
-    LOG_WARN("for delete or update batch exec, child_stmt_size != 0", K(ret), K(child_stmts_size));
-  } else {
-    param_store = &plan_ctx->get_param_store();
-    if (OB_FAIL(batch_stmt.get_relation_exprs(related_exprs))) {
-      LOG_WARN("get relation exprs failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::extract_params(related_exprs, params))) {
-      LOG_WARN("extract param expr from related exprs failed", K(ret));
-    }
-  }
+  } else if (FALSE_IT(param_store = &plan_ctx->get_param_store())) {
+    // do nothing
+  } else if (OB_FAIL(batch_stmt.get_relation_exprs(related_exprs))) {
+    LOG_WARN("get relation exprs failed", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::extract_params(related_exprs, params))) {
+    LOG_WARN("extract param expr from related exprs failed", K(ret));
+  } else { }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
     ObConstRawExpr *param_expr = static_cast<ObConstRawExpr *>(params.at(i));
     int64_t param_idx = param_expr->get_value().get_unknown();

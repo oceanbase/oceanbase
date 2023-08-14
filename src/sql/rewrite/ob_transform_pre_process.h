@@ -493,6 +493,8 @@ struct DistinctObjMeta
   int transform_for_ins_batch_stmt(ObDMLStmt *batch_stmt, bool &trans_happened);
   int transform_for_batch_stmt(ObDMLStmt *batch_stmt, bool &trans_happened);
 
+  int check_insert_can_batch(ObInsertStmt *insert_stmt, bool &can_batch);
+
   int formalize_batch_stmt(ObDMLStmt *batch_stmt,
                           ObSelectStmt* inner_view_stmt,
                           const ObIArray<ObRawExpr *> &other_exprs,

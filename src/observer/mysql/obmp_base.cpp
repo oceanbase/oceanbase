@@ -340,6 +340,7 @@ int ObMPBase::init_process_var(sql::ObSqlCtx &ctx,
                                sql::ObSQLSessionInfo &session) const
 {
   int ret = OB_SUCCESS;
+  bool enable_udr = false;
   if (!packet_sender_.is_conn_valid()) {
     ret = OB_CONNECT_ERROR;
     LOG_WARN("connection already disconnected", K(ret));
@@ -363,9 +364,14 @@ int ObMPBase::init_process_var(sql::ObSqlCtx &ctx,
       ctx.can_reroute_sql_ = (pkt.can_reroute_pkt() && get_conn()->is_support_proxy_reroute());
     }
     ctx.is_protocol_weak_read_ = pkt.is_weak_read();
-    ctx.is_strict_defensive_check_ = GCONF.enable_strict_defensive_check();
+    ctx.set_enable_strict_defensive_check(GCONF.enable_strict_defensive_check());
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session.get_effective_tenant_id()));
+    if (tenant_config.is_valid()) {
+      enable_udr = tenant_config->enable_user_defined_rewrite_rules;
+    }
+    ctx.set_enable_user_defined_rewrite(enable_udr);
     LOG_TRACE("protocol flag info", K(ctx.can_reroute_sql_), K(ctx.is_protocol_weak_read_),
-        K(ctx.is_strict_defensive_check_));
+        K(ctx.get_enable_strict_defensive_check()), K(enable_udr));
   }
   return ret;
 }

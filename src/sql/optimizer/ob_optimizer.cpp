@@ -443,7 +443,7 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
   } else if (OB_ISNULL(sql_ctx = ctx_.get_exec_ctx()->get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(ctx_.get_exec_ctx()));
-  } else if (sql_ctx->multi_stmt_item_.is_batched_multi_stmt()) {
+  } else if (sql_ctx->is_batch_params_execute()) {
     can_use_pdml = false;
     // 当batch优化打开时，不支持pdml
   } else if (!stmt.is_pdml_supported_stmt()) {

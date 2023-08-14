@@ -226,7 +226,6 @@ int ObSqlParameterization::transform_syntax_tree(ObIAllocator &allocator,
     SQL_PC_LOG(DEBUG, "after transform_tree",
                "result_tree_", SJ(ObParserResultPrintWrapper(*tree)));
   }
-
   return ret;
 }
 
@@ -1030,11 +1029,13 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
     fp_ctx.def_name_ctx_ = pc_ctx.def_name_ctx_;
     if (OB_FAIL(fast_parser(allocator,
                             fp_ctx,
-                            pc_ctx.raw_sql_,
+                            pc_ctx.sql_ctx_.is_do_insert_batch_opt() ?
+                                pc_ctx.insert_batch_opt_info_.new_reconstruct_sql_ : pc_ctx.raw_sql_,
                             pc_ctx.fp_result_))) {
       SQL_PC_LOG(WARN, "fail to fast parser", K(ret));
     }
   }
+
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (FALSE_IT(reserved_cnt = pc_ctx.fp_result_.raw_params_.count())) {
@@ -1467,10 +1468,11 @@ int ObSqlParameterization::fast_parser(ObIAllocator &allocator,
     (void)fp_result.pc_key_.name_.assign_ptr(sql.ptr(), sql.length());
   } else if (GCONF._ob_enable_fast_parser) {
     if (OB_FAIL(ObFastParser::parse(sql, fp_ctx, allocator, no_param_sql_ptr,
-                no_param_sql_len, p_list, param_num, fp_result.question_mark_ctx_))) {
+                no_param_sql_len, p_list, param_num, fp_result.question_mark_ctx_, fp_result.values_token_pos_))) {
       LOG_WARN("fast parse error", K(param_num),
               K(ObString(no_param_sql_len, no_param_sql_ptr)), K(sql));
     }
+
     if (OB_SUCC(ret)) {
       (void)fp_result.pc_key_.name_.assign_ptr(no_param_sql_ptr, no_param_sql_len);
       if (param_num > 0) {

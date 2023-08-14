@@ -39,7 +39,7 @@ void ObRetryPolicy::try_packet_retry(ObRetryParam &v) const
   const ObMultiStmtItem &multi_stmt_item = v.ctx_.multi_stmt_item_;
   if (v.force_local_retry_) {
     v.retry_type_ = RETRY_TYPE_LOCAL;
-  } else if (multi_stmt_item.is_batched_multi_stmt()) {
+  } else if (v.ctx_.is_batch_params_execute()) {
     // in batch optimization, can't do packet retry
     v.retry_type_ = RETRY_TYPE_LOCAL;
   } else if (multi_stmt_item.is_part_of_multi_stmt() && multi_stmt_item.get_seq_num() > 0) {
@@ -171,6 +171,21 @@ public:
   virtual void test(ObRetryParam &v) const override
   {
     v.retry_type_ = RETRY_TYPE_LOCAL;
+  }
+};
+
+class ObBatchExecOptRetryPolicy : public ObRetryPolicy
+{
+public:
+  ObBatchExecOptRetryPolicy() = default;
+  ~ObBatchExecOptRetryPolicy() = default;
+  virtual void test(ObRetryParam &v) const override
+  {
+    if (v.ctx_.is_do_insert_batch_opt()) {
+      v.retry_type_ = RETRY_TYPE_LOCAL;
+    } else {
+      v.retry_type_ = RETRY_TYPE_NONE;
+    }
   }
 };
 
@@ -761,6 +776,13 @@ void ObQueryRetryCtrl::force_local_retry_proc(ObRetryParam &v)
   retry_obj.test(force_local_retry);
 }
 
+void ObQueryRetryCtrl::batch_execute_opt_retry_proc(ObRetryParam &v)
+{
+  ObRetryObject retry_obj(v);
+  ObBatchExecOptRetryPolicy batch_opt_retry;
+  retry_obj.test(batch_opt_retry);
+}
+
 void ObQueryRetryCtrl::switch_consumer_group_retry_proc(ObRetryParam &v)
 {
   ObRetryObject retry_obj(v);
@@ -1011,6 +1033,7 @@ int ObQueryRetryCtrl::init()
   // create a new interval part when inserting a row which has no matched part,
   // wait and retry, will see new part
   ERR_RETRY_FUNC("SQL",      OB_NO_PARTITION_FOR_INTERVAL_PART,  short_wait_retry_proc,             short_wait_retry_proc,                         nullptr);
+  ERR_RETRY_FUNC("SQL",      OB_BATCHED_MULTI_STMT_ROLLBACK,     batch_execute_opt_retry_proc,      batch_execute_opt_retry_proc,                  nullptr);
   ERR_RETRY_FUNC("SQL",      OB_SQL_RETRY_SPM,                   force_local_retry_proc,            force_local_retry_proc,                        nullptr);
   ERR_RETRY_FUNC("SQL",      OB_NEED_SWITCH_CONSUMER_GROUP,      switch_consumer_group_retry_proc,  empty_proc,                                    nullptr);
 

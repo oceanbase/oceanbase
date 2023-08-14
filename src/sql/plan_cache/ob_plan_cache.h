@@ -234,10 +234,33 @@ public:
   int init(int64_t hash_bucket, uint64_t tenant_id);
   bool is_inited() { return inited_; }
 
+  static int check_can_do_insert_opt(common::ObIAllocator &allocator,
+                                     ObPlanCacheCtx &pc_ctx,
+                                     ObFastParserResult &fp_result,
+                                     bool &can_do_batch,
+                                     int64_t &batch_count,
+                                     ObString &first_truncated_sql);
+  static int rebuild_raw_params(common::ObIAllocator &allocator,
+                                ObPlanCacheCtx &pc_ctx,
+                                ObFastParserResult &fp_result,
+                                int64_t row_count,
+                                int64_t insert_param_count,
+                                int64_t upd_param_count);
+
+  static int do_construct_sql(common::ObIAllocator &allocator,
+                              ObPlanCacheCtx &pc_ctx,
+                              const ObIArray<ObPCParam *> &raw_params,
+                              int64_t ins_params_count,
+                              int64_t delta_length,
+                              ObString &no_param_sql);
+
+  static bool can_do_insert_batch_opt(ObPlanCacheCtx &pc_ctx);
+
   /**
    * Add new plan to PlanCache
    */
   int add_plan(ObPhysicalPlan *plan, ObPlanCacheCtx &pc_ctx);
+
   /**
    * Add new ps plan to PlanCache
    */

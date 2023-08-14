@@ -40,14 +40,15 @@ int ObFastParser::parse(const common::ObString &stmt,
 {
   ObActiveSessionGuard::get_stat().in_parse_ = true;
   int ret = OB_SUCCESS;
+  int64_t values_token_pos = 0;
   if (!lib::is_oracle_mode()) {
     ObFastParserMysql fp(allocator, fp_ctx);
-    if (OB_FAIL(fp.parse(stmt, no_param_sql, no_param_sql_len, param_list, param_num))) {
+    if (OB_FAIL(fp.parse(stmt, no_param_sql, no_param_sql_len, param_list, param_num, values_token_pos))) {
       LOG_WARN("failed to fast parser", K(stmt));
     }
   } else {
     ObFastParserOracle fp(allocator, fp_ctx);
-    if (OB_FAIL(fp.parse(stmt, no_param_sql, no_param_sql_len, param_list, param_num))) {
+    if (OB_FAIL(fp.parse(stmt, no_param_sql, no_param_sql_len, param_list, param_num, values_token_pos))) {
       LOG_WARN("failed to fast parser", K(stmt));
     }
   }
@@ -62,20 +63,21 @@ int ObFastParser::parse(const common::ObString &stmt,
                         int64_t &no_param_sql_len,
                         ParamList *&param_list,
                         int64_t &param_num,
-                        ObQuestionMarkCtx &ctx)
+                        ObQuestionMarkCtx &ctx,
+                        int64_t &values_token_pos)
 {
   ObActiveSessionGuard::get_stat().in_parse_ = true;
   int ret = OB_SUCCESS;
   if (!lib::is_oracle_mode()) {
     ObFastParserMysql fp(allocator, fp_ctx);
-    if (OB_FAIL(fp.parse(stmt, no_param_sql, no_param_sql_len, param_list, param_num))) {
+    if (OB_FAIL(fp.parse(stmt, no_param_sql, no_param_sql_len, param_list, param_num, values_token_pos))) {
       LOG_WARN("failed to fast parser", K(stmt));
     } else {
       ctx = fp.get_question_mark_ctx();
     }
   } else {
     ObFastParserOracle fp(allocator, fp_ctx);
-    if (OB_FAIL(fp.parse(stmt, no_param_sql, no_param_sql_len, param_list, param_num))) {
+    if (OB_FAIL(fp.parse(stmt, no_param_sql, no_param_sql_len, param_list, param_num, values_token_pos))) {
       LOG_WARN("failed to fast parser", K(stmt));
     } else {
       ctx = fp.get_question_mark_ctx();
@@ -114,6 +116,7 @@ ObFastParserBase::ObFastParserBase(
   tmp_buf_(nullptr), tmp_buf_len_(0), last_escape_check_pos_(0),
   param_node_list_(nullptr), tail_param_node_(nullptr),
   cur_token_type_(INVALID_TOKEN), allocator_(allocator),
+  get_insert_(false), values_token_pos_(0),
   parse_next_token_func_(nullptr), process_idf_func_(nullptr)
 {
 	question_mark_ctx_.count_ = 0;
@@ -129,7 +132,8 @@ int ObFastParserBase::parse(const ObString &stmt,
                             char *&no_param_sql,
                             int64_t &no_param_sql_len,
                             ParamList *&param_list,
-                            int64_t &param_num)
+                            int64_t &param_num,
+                            int64_t &values_token_pos)
 {
   int ret = OB_SUCCESS;
   int64_t len = stmt.length();
@@ -161,7 +165,277 @@ int ObFastParserBase::parse(const ObString &stmt,
     no_param_sql_len = no_param_sql_len_;
     param_list = param_node_list_;
     param_num = param_num_;
+    values_token_pos = values_token_pos_;
   }
+  return ret;
+}
+
+int ObFastParserBase::copy_trimed_data_buff(char *new_sql_buf,
+                                            int64_t buf_len,
+                                            int64_t &pos,
+                                            const int64_t start_pos,
+                                            const int64_t end_pos,
+                                            ObRawSql &raw_sql)
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("print copy_trimed_data_buff", K(start_pos), K(end_pos), K(raw_sql.to_string()));
+  if (start_pos < end_pos) {
+    if (OB_FAIL(databuff_memcpy(new_sql_buf, buf_len, pos, end_pos - start_pos, raw_sql.ptr(start_pos)))) {
+      LOG_WARN("fail to do copy", K(ret), K(buf_len), K(pos), K(start_pos), K(end_pos));
+    }
+  }
+  return ret;
+}
+
+int ObFastParserBase::do_trim_for_insert(char *new_sql_buf,
+                                         int64_t buff_len,
+                                         const ObString &no_trim_sql,
+                                         ObString &after_trim_sql,
+                                         bool &trimed_succ)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  trimed_succ = false;
+  int64_t space_len = 0;
+  after_trim_sql.reset();
+  ObRawSql raw_sql;
+  raw_sql.init(no_trim_sql.ptr(), no_trim_sql.length());
+  int64_t start_pos = raw_sql.cur_pos_;
+  int64_t end_pos = raw_sql.cur_pos_;
+  TRIM_STATE trim_state = START_TRIM_STATE;
+  while(trim_state != TRIM_FAILED && OB_SUCC(ret) && !raw_sql.is_search_end()) {
+    char ch = raw_sql.char_at(raw_sql.cur_pos_);
+    switch (trim_state) {
+      case START_TRIM_STATE:
+        if (IS_MULTI_SPACE_V2(raw_sql, raw_sql.cur_pos_, space_len)) {
+          skip_space(raw_sql);
+          start_pos = raw_sql.cur_pos_;
+        } else if (is_split_character(raw_sql)) {
+          trim_state = WITH_SPLII_CH;
+        } else {
+          raw_sql.scan();
+          trim_state = WITH_OTHER_CH;
+        }
+        break;
+      case WITH_SPLII_CH:
+        if (IS_MULTI_SPACE_V2(raw_sql, raw_sql.cur_pos_, space_len)) {
+          end_pos = raw_sql.cur_pos_;
+          if (OB_FAIL(copy_trimed_data_buff(new_sql_buf, buff_len, pos, start_pos, end_pos, raw_sql))) {
+            LOG_WARN("fail to do copy", K(ret), K(buff_len), K(pos), K(start_pos), K(end_pos));
+          } else {
+            skip_space(raw_sql);
+            start_pos = raw_sql.cur_pos_;
+            end_pos = start_pos;
+          }
+        } else if (is_split_character(raw_sql)) {
+          // do nothing
+        } else {
+          raw_sql.scan();
+          trim_state = WITH_OTHER_CH;
+        }
+        break;
+      case WITH_OTHER_CH:
+        if (IS_MULTI_SPACE_V2(raw_sql, raw_sql.cur_pos_, space_len)) {
+          end_pos = raw_sql.cur_pos_;
+          trim_state = WITH_SPACE_CH;
+          if (OB_FAIL(copy_trimed_data_buff(new_sql_buf, buff_len, pos, start_pos, end_pos, raw_sql))) {
+            LOG_WARN("fail to do copy", K(ret), K(buff_len), K(pos), K(start_pos), K(end_pos));
+          } else {
+            skip_space(raw_sql);
+            start_pos = raw_sql.cur_pos_;
+            end_pos = start_pos;
+          }
+        } else if (is_split_character(raw_sql)) {
+          trim_state = WITH_SPLII_CH;
+        } else {
+          raw_sql.scan();
+        }
+        break;
+      case WITH_SPACE_CH:
+        if (IS_MULTI_SPACE_V2(raw_sql, raw_sql.cur_pos_, space_len)) {
+          end_pos = raw_sql.cur_pos_;
+          if (OB_FAIL(copy_trimed_data_buff(new_sql_buf, buff_len, pos, start_pos, end_pos, raw_sql))) {
+            LOG_WARN("fail to do copy", K(ret), K(buff_len), K(pos), K(start_pos), K(end_pos));
+          } else {
+            skip_space(raw_sql);
+            start_pos = raw_sql.cur_pos_;
+            end_pos = start_pos;
+          }
+        } else if (is_split_character(raw_sql)) {
+          trim_state = WITH_SPLII_CH;
+        } else {
+          trim_state = TRIM_FAILED;
+        }
+        break;
+      case TRIM_FAILED:
+        // do nothing
+        break;
+      }
+
+    if (raw_sql.is_search_end()) {
+      end_pos = raw_sql.cur_pos_;
+      if (OB_FAIL(copy_trimed_data_buff(new_sql_buf, buff_len, pos, start_pos, end_pos, raw_sql))) {
+        LOG_WARN("fail to do copy", K(ret));
+      }
+    }
+  } // end while
+
+
+  if (OB_SUCC(ret) && trim_state != TRIM_FAILED) {
+    after_trim_sql.assign_ptr(new_sql_buf, pos);
+    trimed_succ = true;
+  }
+
+  LOG_DEBUG("print after do_trim", K(buff_len), K(pos), K(no_trim_sql), K(after_trim_sql), K(trimed_succ));
+  return ret;
+}
+
+int ObFastParserBase::parser_insert_str(common::ObIAllocator &allocator,
+                                        int64_t values_token_pos,
+                                        const ObString &old_no_param_sql,
+                                        ObString &new_truncated_sql,
+                                        bool &can_batch_opt,
+                                        int64_t &params_count,
+                                        int64_t &upd_params_count,
+                                        int64_t &lenth_delta,
+                                        int64_t &row_count)
+{
+  int ret = OB_SUCCESS;
+  can_batch_opt = false;
+  params_count = 0;
+  row_count = 0;
+  upd_params_count = 0;
+  lenth_delta = 0;
+  bool is_valid = false;
+  bool is_insert_up = false;
+  int64_t first_end_pos = 0;
+  if (values_token_pos != 0) {
+    ObRawSql raw_sql;
+    raw_sql.init(old_no_param_sql.ptr(), old_no_param_sql.length());
+    raw_sql.cur_pos_ = values_token_pos - 1;
+    if (0 == raw_sql.strncasecmp(raw_sql.cur_pos_, "values", 6)) {
+      bool is_first = true;
+      is_valid = true;
+      ObString first_str;
+      ObString first_trimed_str;
+      ObString cur_str;
+      ObString cur_trimed_str;
+      int64_t end_pos = 0;
+      char *first_str_buf = nullptr;
+      char *other_str_buf = nullptr;
+      int64_t first_str_buf_len = 0;
+
+      // scan the length of 'values'
+      raw_sql.scan(6);
+      while (OB_SUCC(ret) && is_valid && !raw_sql.is_search_end()) {
+        cur_str.reset();
+        if (is_insert_up) {
+          is_valid = false;
+        } else if (OB_FAIL(get_one_insert_row_str(raw_sql,
+                                                  cur_str,
+                                                  is_valid,
+                                                  params_count,
+                                                  is_insert_up,
+                                                  upd_params_count,
+                                                  end_pos))) {
+          LOG_WARN("fail to get one insert row", K(ret));
+        } else if (!is_valid) {
+          LOG_WARN("get insert row failed", K(raw_sql.to_string()));
+        } else if (is_first) {
+          is_first = false;
+          first_str.assign_ptr(cur_str.ptr(), cur_str.length());
+          new_truncated_sql.assign_ptr(old_no_param_sql.ptr(), end_pos + 1);
+          first_end_pos = end_pos;
+          LOG_DEBUG("print first_str", K(first_str), K(is_valid), K(end_pos), K(old_no_param_sql), K(new_truncated_sql));
+          row_count++;
+        } else if (first_str != cur_str) {
+          is_valid = false;
+          row_count++;
+          bool trimed_succ = false;
+          if (first_str_buf == nullptr) {
+            first_str_buf_len = first_str.length() + 1; // copy函数要求的最后边必须有一位填'\0'
+            if (OB_ISNULL(first_str_buf = static_cast<char*>(allocator.alloc(first_str_buf_len)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("fail to alloc memory", K(ret), K(first_str_buf_len));
+            } else if (OB_ISNULL(other_str_buf = static_cast<char*>(allocator.alloc(first_str_buf_len)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("fail to alloc memory", K(ret), K(first_str_buf_len));
+            } else if (OB_FAIL(do_trim_for_insert(first_str_buf,
+                                                  first_str_buf_len,
+                                                  first_str,
+                                                  first_trimed_str,
+                                                  trimed_succ))) {
+              LOG_WARN("fail to do trim", K(ret), K(first_str));
+            } else if (!trimed_succ) {
+              // trim failed
+            } else if (OB_FAIL(do_trim_for_insert(other_str_buf,
+                                                  first_str_buf_len,
+                                                  cur_str,
+                                                  cur_trimed_str,
+                                                  trimed_succ))) {
+              LOG_WARN("fail to do trim", K(ret), K(cur_str));
+            } else if (!trimed_succ) {
+              // trim failed
+            } else if (first_trimed_str == cur_trimed_str) {
+              is_valid = true;
+            }
+          } else if (FALSE_IT(cur_trimed_str.reset())) {
+            // cur_trimed_str will be reused，need do reset, other_str_buf also will be reuse
+          } else if (OB_ISNULL(other_str_buf)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null ptr", K(ret));
+          } else if (OB_FAIL(do_trim_for_insert(other_str_buf,
+                                                first_str_buf_len,
+                                                cur_str,
+                                                cur_trimed_str,
+                                                trimed_succ))) {
+            LOG_WARN("fail to do trim", K(ret), K(cur_str));
+          } else if (!trimed_succ) {
+            // trim failed
+          } else if (first_trimed_str == cur_trimed_str) {
+            is_valid = true;
+          }
+        } else {
+          row_count++;
+        }
+
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (is_valid && is_insert_up) {
+          char *new_sql_buf = NULL;
+          int64_t pos = 0;
+          int64_t on_duplicate_pos = end_pos + 1;
+          int64_t on_duplicate_length = old_no_param_sql.length() - on_duplicate_pos;
+          int64_t insert_length = new_truncated_sql.length();
+          int64_t final_length = insert_length + on_duplicate_length + 1;
+          lenth_delta = end_pos - first_end_pos;
+          LOG_DEBUG("is insert_up print final length",
+              K(on_duplicate_length), K(insert_length), K(end_pos), K(lenth_delta), K(final_length));
+          if (OB_ISNULL(new_sql_buf = static_cast<char*>(allocator.alloc(final_length)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc memory", K(ret), K(final_length));
+          } else if (OB_FAIL(databuff_memcpy(
+              new_sql_buf, final_length, pos, insert_length, old_no_param_sql.ptr()))) {
+            LOG_WARN("failed to deep copy insert string",
+                K(ret), K(final_length), K(pos), K(new_truncated_sql));
+          } else if (OB_FAIL(databuff_memcpy(
+              new_sql_buf, final_length, pos, (on_duplicate_length), (old_no_param_sql.ptr() + on_duplicate_pos)))) {
+            LOG_WARN("failed to deep copy on duplicate key string",
+                K(ret), K(final_length), K(pos), K(old_no_param_sql.length()), K(end_pos),
+                K(ObString(on_duplicate_length, old_no_param_sql.ptr() + on_duplicate_pos)));
+          } else {
+            new_truncated_sql.reset();
+            new_truncated_sql.assign_ptr(new_sql_buf, pos);
+            LOG_DEBUG("succ to deep copy on duplicate key string",
+                K(ret), K(final_length), K(pos), K(old_no_param_sql), K(end_pos), K(new_truncated_sql));
+          }
+        }
+      } // end while
+      can_batch_opt = is_valid;
+    }
+  }
+  LOG_TRACE("after parser insert print curr_sql", K(old_no_param_sql), K(new_truncated_sql),
+        K(can_batch_opt), K(params_count), K(row_count));
   return ret;
 }
 
@@ -497,6 +771,189 @@ int ObFastParserBase::process_interval()
       lex_store_param(node, buf);
     }
   }
+  return ret;
+}
+
+int ObFastParserBase::process_insert_or_replace(const char *str, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (CHECK_EQ_STRNCASECMP(str, size)) {
+    raw_sql_.scan(size);
+    if (OB_FAIL(process_hint())) {
+      LOG_WARN("failed to process hint", K(ret), K(raw_sql_.to_string()), K_(raw_sql_.cur_pos));
+    } else {
+      // 说明是insert token
+      get_insert_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObFastParserBase::process_values(const char *str)
+{
+  int ret = OB_SUCCESS;
+  if (get_insert_) {
+    if (is_oracle_mode_) {
+      if (CHECK_EQ_STRNCASECMP("alues", 5)) {
+        values_token_pos_ = raw_sql_.cur_pos_;
+        raw_sql_.scan(5);
+      }
+    } else {
+      // mysql support: insert ... values / value (xx, ...);
+      if (CHECK_EQ_STRNCASECMP("alues", 5)) {
+        values_token_pos_ = raw_sql_.cur_pos_;
+        raw_sql_.scan(5);
+      } else if (CHECK_EQ_STRNCASECMP("alue", 4)) {
+        values_token_pos_ = raw_sql_.cur_pos_;
+        raw_sql_.scan(4);
+      } else {
+        // do nothing
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObFastParserBase::skip_space(ObRawSql &raw_sql)
+{
+  bool b_ret = false;
+  int64_t space_len = 0;
+  while (!raw_sql.search_end_ && IS_MULTI_SPACE_V2(raw_sql, raw_sql.cur_pos_, space_len)) {
+    raw_sql.scan(space_len);
+    b_ret = true;
+  }
+  return b_ret;
+}
+
+bool ObFastParserBase::is_split_character(ObRawSql &raw_sql)
+{
+  bool bret = false;
+  char ch = raw_sql.char_at(raw_sql.cur_pos_);
+  if (is_comma(ch) || is_left_parenthesis(ch) || is_right_parenthesis(ch)) {
+    raw_sql.scan();
+    bret = true;
+  }
+  return bret;
+}
+
+int ObFastParserBase::check_is_on_duplicate_key(ObRawSql &raw_sql, bool &is_on_duplicate_key)
+{
+  int ret = OB_SUCCESS;
+  is_on_duplicate_key = false;
+  if (0 == raw_sql.strncasecmp("duplicate", 9)) {
+    raw_sql.scan(9);
+    bool has_space = skip_space(raw_sql);
+    if (has_space && 0 == raw_sql.strncasecmp("key", 3)) {
+      raw_sql.scan(3);
+      has_space = skip_space(raw_sql);
+      if (has_space && 0 == raw_sql.strncasecmp("update", 6)) {
+        raw_sql.scan(6);
+        is_on_duplicate_key = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObFastParserBase::get_one_insert_row_str(ObRawSql &raw_sql,
+                                             ObString &str,
+                                             bool &is_valid,
+                                             int64_t &ins_params_count,
+                                             bool &is_insert_up,
+                                             int64_t &on_duplicate_params,
+                                             int64_t &end_pos)
+{
+  int ret = OB_SUCCESS;
+  int left_count = 0;
+  int64_t start = 0;
+  int64_t end = 0;
+  bool need_break = false;
+  int64_t curr_pos = 0;
+  is_valid = false;
+  is_insert_up = false;
+  on_duplicate_params = 0;
+  ins_params_count = 0;
+  end_pos = 0;
+  ROW_STATE row_state = START_STATE;
+
+  while (!need_break && !raw_sql.is_search_end()) {
+    skip_space(raw_sql);
+    char ch = raw_sql.char_at(raw_sql.cur_pos_);
+    curr_pos = raw_sql.cur_pos_;
+    raw_sql.scan();
+    switch (row_state) {
+      case START_STATE:
+        if ('(' == ch) {
+          start = curr_pos;
+          row_state = LEFT_PAR_STATE;
+          left_count++;
+        } else {
+          row_state = UNEXPECTED_STATE;
+        }
+        break;
+      case LEFT_PAR_STATE:
+        if (')' == ch) {
+          left_count--;
+          if (0 == left_count) {
+            row_state = PARS_MATCH;
+            end = curr_pos;
+          }
+        } else if ('(' == ch) {
+          left_count++;
+        } else if ('?' == ch) {
+          ins_params_count++;
+        }
+        break;
+      case PARS_MATCH:
+        if (',' == ch) {
+          need_break = true;
+        } else if (';' == ch) {
+          raw_sql.search_end_ = true;
+          need_break = true;
+        } else if ('o' == ch || 'O' == ch) {
+          bool is_duplicate = false;
+          if (0 == raw_sql.strncasecmp("n", 1)) {
+            raw_sql.scan();
+            bool has_space = skip_space(raw_sql);
+            bool is_duplicate = false;
+            if (has_space) {
+              check_is_on_duplicate_key(raw_sql, is_duplicate);
+              if (is_duplicate) {
+                row_state = ON_DUPLICATE_KEY;
+              } else {
+                row_state = UNEXPECTED_STATE;
+              }
+            }
+          }
+        } else {
+          row_state = UNEXPECTED_STATE;
+        }
+        break;
+      case ON_DUPLICATE_KEY:
+        if ('?' == ch) {
+          on_duplicate_params++;
+        }
+        break;
+      case UNEXPECTED_STATE:
+        need_break = true;
+        break;
+      default:
+        break;
+    }
+  }
+
+  if (PARS_MATCH == row_state || ON_DUPLICATE_KEY == row_state) {
+    if (ON_DUPLICATE_KEY == row_state) {
+      is_insert_up = true;
+    }
+    if (start > 0 && end > 0) {
+      str.assign_ptr(raw_sql.ptr(start), (end - start) + 1);
+      end_pos = end;
+      is_valid = true;
+    }
+  }
+  LOG_TRACE("after get one insert row str", K(raw_sql.cur_pos_), K(str), K(row_state),
+      K(on_duplicate_params), K(is_valid), K(start), K(end));
   return ret;
 }
 
@@ -2130,12 +2587,19 @@ int ObFastParserMysql::process_identifier(bool is_number_begin)
       }
       case 'i': // insert or interval
       case 'I': {
-        CHECK_AND_PROCESS_HINT("nsert", 5);
+        OZ (process_insert_or_replace("nsert", 5));
         break;
       }
+      // check whether is 'values' token
+      case 'v':
+      case 'V':
+        // 是不是values;
+        process_values("alues");
+        break;
+
       case 'r': // replace
       case 'R': {
-        CHECK_AND_PROCESS_HINT("eplace", 6);
+        OZ (process_insert_or_replace("eplace", 6));
         break;
       }
       case 'h': // hint
@@ -2530,7 +2994,7 @@ int ObFastParserOracle::process_identifier(bool is_number_begin)
           raw_sql_.scan(7);
           OZ (process_time_relate_type(need_process_ws));
         } else {
-          CHECK_AND_PROCESS_HINT("nsert", 5);
+          OZ (process_insert_or_replace("nsert", 5));
         }
         break;
       }
@@ -2557,6 +3021,10 @@ int ObFastParserOracle::process_identifier(bool is_number_begin)
         }
         break;
       }
+      case 'v':
+      case 'V':
+        process_values("alues");
+        break;
       default: {
         break;
       }
