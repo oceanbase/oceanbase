@@ -299,7 +299,7 @@ private:
   class SSTableGCTask : public common::ObTimerTask
   {
   public:
-    SSTableGCTask() = default;
+    SSTableGCTask() { disable_timeout_check(); }
     virtual ~SSTableGCTask() = default;
     virtual void runTimerTask() override;
   };
