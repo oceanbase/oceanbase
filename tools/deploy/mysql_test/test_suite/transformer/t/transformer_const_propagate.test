@@ -68,7 +68,25 @@ select c1 + 1 from (select 3 as c1 from t1 intersect select 3 as c1 from t2);
 select /*+no_rewrite*/c1 + 1 from (select 1 as c1 from t1 union select 1 as c1 from t2);
 select /*+no_rewrite*/c1 + 1 from (select 1 as c1 from t1 intersect select 1 as c1 from t2);
 
+--echo ********************* new test for nested case when transform *********
+--echo nested case when expr 
+select * from t1 where case when c1 = 1 then c1 else 0 end > 0;
+select /*+no_rewrite*/ * from t1 where case when c1 = 1 then c1 else 0 end > 0;
 
+select * from t1 where c1 = 1 and case when c1 > c2 then c1 else c2 end > 0;
+select /*+no_rewrite*/ * from t1 where c1 = 1 and case when c1 > c2 then c1 else c2 end > 0;
+
+select * from t1 where case when c1 = 1 then c1 
+                            when c2 = 2 then c2
+                            when c3 = 3 then c3 
+                            else 0 end > 0;
+
+select /*+no_rewrite*/ * from t1 where case when c1 = 1 then c1 
+                                when c2 = 2 then c2
+                                when c3 = 3 then c3 
+                                else 0 end > 0;
+
+                            
 --echo ********************* test for condition expr transform *********
 --echo inner join
 select t1.c1, t2.c1 from t1, t2 where t1.c1 = t2.c1 and t1.c1 = 1;
