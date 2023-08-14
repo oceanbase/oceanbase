@@ -217,7 +217,7 @@ int ObDtlChannelLoop::process_base(ObIDltChannelLoopPred *pred, int64_t &hinted_
   int ret = OB_SUCCESS;
   if (chans_.count() == 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("channel hasn't set", K(ret));
+    LOG_WARN("channel hasn't set", K(ret));
   } else {
     // 处理思路：
     // 1. 轮询所有 channel，如果能收到一个数据，则成功
