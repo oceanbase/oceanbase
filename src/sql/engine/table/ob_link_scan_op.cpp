@@ -274,6 +274,7 @@ int ObLinkScanOp::inner_open()
 int ObLinkScanOp::inner_get_next_row()
 {
   row_allocator_.reuse();
+  clear_evaluated_flag();
   return fetch_row();
 }
 
@@ -302,32 +303,6 @@ int ObLinkScanOp::fetch_row()
     if (OB_ITER_END != ret) {
       LOG_WARN("failed to get next row", K(ret));
     } else {
-      // check if connection is alive, if not, then OB_ITER_END is a fake errno
-      if (sql::DblinkGetConnType::TM_CONN == conn_type_) {
-        if (OB_ISNULL(tm_rm_connection_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null ptr", K(ret));
-        } else if (OB_FAIL(tm_rm_connection_->ping())) {
-          LOG_WARN("failed to ping tm_rm_connection_", K(ret));
-        }
-      } else if (sql::DblinkGetConnType::TEMP_CONN == conn_type_) {
-        if (OB_ISNULL(reverse_link_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null ptr", K(ret));
-        } else if (OB_FAIL(reverse_link_->ping())) {
-          LOG_WARN("failed to ping reverse_link_", K(ret));
-        }
-      } else {
-        if (OB_ISNULL(dblink_conn_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null ptr", K(ret));
-        } else if (OB_FAIL(dblink_conn_->ping())) {
-          LOG_WARN("failed to ping dblink_conn_", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        ret = OB_ITER_END;
-      }
       reset_result();
     }
   } else {
@@ -400,6 +375,7 @@ int ObLinkScanOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
   int ret = OB_SUCCESS;
   int64_t row_cnt = 0;
+  clear_evaluated_flag();
   if (iter_end_) {
     brs_.size_ = 0;
     brs_.end_ = true;
@@ -415,14 +391,15 @@ int ObLinkScanOp::inner_get_next_batch(const int64_t max_row_cnt)
           LOG_WARN("inner get next row failed", K(ret));
         }
       } else {
-        const ObIArray<ObExpr *> &output = spec_.output_;
-        for (int64_t i = 0; OB_SUCC(ret) && i < output.count(); i++) {
-          ObExpr *expr = output.at(i);
-          if (!expr->is_const_expr() &&
-              T_FUN_SYS_REMOVE_CONST != expr->type_ &&
-              T_QUESTIONMARK != expr->type_ &&
-              (ob_is_string_or_lob_type(expr->datum_meta_.type_) ||
-              ob_is_raw(expr->datum_meta_.type_) || ob_is_json(expr->datum_meta_.type_))) {
+        const ObIArray<ObExpr *> &select_exprs =
+          (MY_SPEC.select_exprs_.empty() ? spec_.output_ : MY_SPEC.select_exprs_);
+        for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); i++) {
+          ObExpr *expr = select_exprs.at(i);
+          if (expr->is_const_expr()) {
+            // do nothing
+          } else if (T_QUESTIONMARK != expr->type_ &&
+                     (ob_is_string_or_lob_type(expr->datum_meta_.type_) ||
+                     ob_is_raw(expr->datum_meta_.type_) || ob_is_json(expr->datum_meta_.type_))) {
             ObDatum &datum = expr->locate_expr_datum(eval_ctx_);
             char *buf = NULL;
             if (OB_ISNULL(buf = expr->get_str_res_mem(eval_ctx_, datum.len_))) {
@@ -445,14 +422,6 @@ int ObLinkScanOp::inner_get_next_batch(const int64_t max_row_cnt)
       brs_.size_ = row_cnt;
       brs_.end_ = iter_end_;
       brs_.skip_->reset(row_cnt);
-      const ObIArray<ObExpr *> &output = spec_.output_;
-      for (int64_t i = 0; OB_SUCC(ret) && i < output.count(); i++) {
-        ObExpr *expr = output.at(i);
-        if (expr->is_batch_result()) {
-          ObBitVector &eval_flags = expr->get_evaluated_flags(eval_ctx_);
-          eval_flags.set_all(row_cnt);
-        }
-      }
     }
   }
   return ret;

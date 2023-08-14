@@ -51,13 +51,13 @@ int sqlclient::ObDblinkErrorTrans::external_errno_to_ob_errno(bool is_oracle_err
         external_errno <= 2075 && // you will known errno in [2000, 2075] is client error at dev.mysql.com
         (!is_oracle_err ||
         (is_oracle_err &&
-        OB_NOT_NULL(external_errmsg) &&
+        (OB_NOT_NULL(external_errmsg) && 0 != STRLEN(external_errmsg)) &&
         0 != std::memcmp(oracle_msg_prefix, external_errmsg,
         std::min(STRLEN(oracle_msg_prefix), STRLEN(external_errmsg)))))) {
       ob_errno = external_errno; // do not map, show user client errno directly.
     } else {
       ob_errno = OB_ERR_DBLINK_REMOTE_ECODE; // default ob_errno, if external_errno can not map to any valid ob_errno
-      if (OB_ISNULL(external_errmsg)) {
+      if (OB_ISNULL(external_errmsg) || 0 == STRLEN(external_errmsg)) {
         for (int i = 0; i < oceanbase::common::OB_MAX_ERROR_CODE; ++i) {
           if (external_errno == (is_oracle_err ? get_oracle_errno(i) : get_mysql_errno(i))) {
             ob_errno = -i;

@@ -150,7 +150,9 @@ int ObMySQLResultImpl::next()
       LOG_WARN("unexpected null ptr", K(ret));
     } else {
       ret = -mysql_errno(stmt_handler);
-      const char *errmsg = mysql_error(stmt_handler);
+      char errmsg[256] = {0};
+      const char *srcmsg = mysql_error(stmt_handler);
+      MEMCPY(errmsg, srcmsg, MIN(255, STRLEN(srcmsg)));
       ObMySQLConnection *conn = stmt_.get_connection();
       if (0 == ret) {
         ret = OB_ITER_END;

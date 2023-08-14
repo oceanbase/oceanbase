@@ -371,6 +371,7 @@ int ObLinkOp::init_dblink_param_ctx(dblink_param_ctx &param_ctx)
     param_ctx.dblink_id_ = dblink_id_;
     param_ctx.link_type_ = link_type_;
     param_ctx.sessid_ = sessid_;
+    param_ctx.sql_request_level_ = next_sql_req_level_;
   }
   return ret;
 }

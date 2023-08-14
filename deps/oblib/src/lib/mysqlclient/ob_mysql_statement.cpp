@@ -101,8 +101,11 @@ int ObMySQLStatement::execute_update(int64_t &affected_rows)
     int64_t begin = ObTimeUtility::current_monotonic_raw_time();
     if (0 != (tmp_ret = mysql_real_query(stmt_, sql_str_, STRLEN(sql_str_)))) {
       ret = -mysql_errno(stmt_);
+      char errmsg[256] = {0};
+      const char *srcmsg = mysql_error(stmt_);
+      MEMCPY(errmsg, srcmsg, MIN(255, STRLEN(srcmsg)));
       LOG_WARN("fail to query server", "sessid",  conn_->get_sessid(), "server", stmt_->host, "port", stmt_->port,
-               "err_msg", mysql_error(stmt_), K(tmp_ret), K(ret), K(sql_str_));
+               "err_msg", errmsg, K(tmp_ret), K(ret), K(sql_str_));
       if (OB_NOT_MASTER == tmp_ret) {
         // conn -> server pool -> connection pool
         conn_->get_root()->get_root()->signal_refresh(); // refresh server pool immediately
@@ -116,10 +119,10 @@ int ObMySQLStatement::execute_update(int64_t &affected_rows)
                                             K(conn_->ping()),
                                             K(stmt_->host),
                                             K(stmt_->port),
-                                            K(mysql_error(stmt_)),
+                                            K(errmsg),
                                             K(STRLEN(sql_str_)),
                                             K(sql_str_));
-        TRANSLATE_CLIENT_ERR(ret, mysql_error(stmt_));
+        TRANSLATE_CLIENT_ERR(ret, errmsg);
       }
       if (is_need_disconnect_error(ret)) {
         conn_->set_usable(false);
@@ -150,13 +153,16 @@ ObMySQLResult *ObMySQLStatement::execute_query(bool enable_use_result)
     int64_t begin = ObTimeUtility::current_monotonic_raw_time();
     if (0 != mysql_real_query(stmt_, sql_str_, STRLEN(sql_str_))) {
       ret = -mysql_errno(stmt_);
+      char errmsg[256] = {0};
+      const char *srcmsg = mysql_error(stmt_);
+      MEMCPY(errmsg, srcmsg, MIN(255, STRLEN(srcmsg)));
       const int ER_LOCK_WAIT_TIMEOUT = -1205;
       if (ER_LOCK_WAIT_TIMEOUT == ret) {
         LOG_INFO("fail to query server", "sessid", conn_->get_sessid(), "host", stmt_->host, "port", stmt_->port,
-               "err_msg", mysql_error(stmt_), K(ret), K(sql_str_));
+               "err_msg", errmsg, K(ret), K(sql_str_));
       } else {
         LOG_WARN("fail to query server", "host", stmt_->host, "port", stmt_->port, K(conn_->get_sessid()),
-               "err_msg", mysql_error(stmt_), K(ret), K(STRLEN(sql_str_)), K(sql_str_));
+               "err_msg", errmsg, K(ret), K(STRLEN(sql_str_)), K(sql_str_));
       }
       if (OB_SUCCESS == ret) {
         ret = OB_ERR_SQL_CLIENT;
@@ -170,10 +176,10 @@ ObMySQLResult *ObMySQLStatement::execute_query(bool enable_use_result)
                                             K(conn_->ping()),
                                             K(stmt_->host),
                                             K(stmt_->port),
-                                            K(mysql_error(stmt_)),
+                                            K(errmsg),
                                             K(STRLEN(sql_str_)),
                                             K(sql_str_));
-        TRANSLATE_CLIENT_ERR(ret, mysql_error(stmt_));
+        TRANSLATE_CLIENT_ERR(ret, errmsg);
       }
       if (is_need_disconnect_error(ret)) {
         conn_->set_usable(false);
