@@ -50,7 +50,7 @@ enum NULLABLE_SCOPE {
   NS_TOP      = 1 << 4
 };
 
-enum CheckInnerJoinLoseless {
+enum CheckInnerJoinlossless {
   LEFT_SIDE   = 0,
   RIGHT_SIDE  = 1,
   TWO_SIDE    = 2
@@ -1034,7 +1034,9 @@ public:
    * will be transformed as
    * A join B on A.id = B.id join C on B.id = C.id
   */
-  static int pushdown_highlevel_conditions(const ObDMLStmt *stmt, JoinedTable *inner_joined_table);
+  static int pushdown_highlevel_conditions(ObDMLStmt *stmt, 
+                                           JoinedTable *inner_joined_table, 
+                                           ObIArray<ObRawExpr*> &not_join_conds);
 
   static int build_inner_joined_multi_tables(ObTransformerCtx *ctx,
                                              ObDMLStmt *stmt,
@@ -1051,7 +1053,7 @@ public:
 
   static int get_ref_table_column_expr(ObDMLStmt *stmt, 
                                        uint64_t select_column_id, 
-                                       ObRawExpr *&ref_column_expr,
+                                       ObRawExpr *&select_expr,
                                        bool& is_valid);
 
   /* check if expr is min/max agg function expr */
@@ -1073,7 +1075,7 @@ public:
                                                    bool &is_valid); 
 
   /* check not join conditions have only one table related, so as to pushdown to one table */
-  static int check_not_join_conds(ObIArray<ObRawExpr*> &conds, bool &is_loseless);
+  static int check_not_join_conds(ObIArray<ObRawExpr*> &conds, bool &is_lossless);
 
   static int get_conds_relation_ids(ObIArray<ObRawExpr*> &conds, ObSqlBitSet<> &conds_table_ids);
 
@@ -1087,15 +1089,15 @@ public:
   static int check_and_get_conds_between_two_tables(ObDMLStmt *stmt, 
                                                     TableItem *left_table,
                                                     TableItem *right_table,
-                                                    common::ObIArray<ObRawExpr*> &conds,
-                                                    ObSEArray<ObRawExpr*, 4> &connected_conds,
-                                                    ObSEArray<ObColumnRefRawExpr*, 4> &left_columns,
-                                                    ObSEArray<ObColumnRefRawExpr*, 4> &right_columns,
+                                                    ObIArray<ObRawExpr*> &conds,
+                                                    ObIArray<ObRawExpr*> &connected_conds,
+                                                    ObIArray<ObColumnRefRawExpr*> &left_columns,
+                                                    ObIArray<ObColumnRefRawExpr*> &right_columns,
                                                     bool &is_cond_valid); 
 
-  /* check left table is loseless in inner join conditions between two single tables 
+  /* check left table is lossless in inner join conditions between two single tables 
    * solve three situations
-   * 1. foreign key loseless
+   * 1. foreign key lossless
    * 2. self join of the same table and column
    * 3. one column is min/max agg function + situation1/2 */
   static int check_single_table_containment(ObTransformerCtx *ctx,
@@ -1118,26 +1120,26 @@ public:
                                      ObIArray<ObRawExpr*> &join_conditions,
                                      ObIArray<MultiColumnJoinInfo> &group_join_list);
 
-  /* check inner join conditions is loseless
-   * if right_table is loseless, swap left and right branch 
-   * if target_table is not null, meaning check the side where target_table in is loseless */
-  static int check_inner_loseless(ObTransformerCtx *ctx,
+  /* check inner join conditions is lossless
+   * if right_table is lossless, swap left and right branch 
+   * if target_table is not null, meaning check the side where target_table in is lossless */
+  static int check_inner_lossless(ObTransformerCtx *ctx,
                                   ObDMLStmt *stmt,
                                   TableItem *&left_table,
                                   TableItem *&right_table,
                                   ObIArray<ObRawExpr*> &join_conditions,
                                   ObSqlBitSet<> &expr_relation_ids,
-                                  bool &is_loseless,
+                                  bool &is_lossless,
                                   TableItem *target_table = NULL);
 
-  /* check cartesian, left, inner join conditions is loseless
-   * if right_table is loseless, swap left and right branch
-   * if target_table is not null, meaning check the side where target_table in is loseless */
-  static int check_limit_join_loseless(ObTransformerCtx *ctx,
+  /* check cartesian, left, inner join conditions is lossless
+   * if right_table is lossless, swap left and right branch
+   * if target_table is not null, meaning check the side where target_table in is lossless */
+  static int check_limit_join_lossless(ObTransformerCtx *ctx,
                                        ObDMLStmt *stmt,
                                        TableItem *&joined_table,
                                        ObSqlBitSet<> &expr_relation_ids,
-                                       bool &is_loseless,
+                                       bool &is_lossless,
                                        TableItem *target_table = NULL);
 
   /**
@@ -1212,7 +1214,7 @@ public:
                                 ObSqlBitSet<> &ignore_tables,
                                 ObIArray<ObRawExpr *> &unique_keys);
 
-  static int check_loseless_join(ObDMLStmt *stmt,
+  static int check_lossless_join(ObDMLStmt *stmt,
                                  ObTransformerCtx *ctx,
                                  TableItem *source_table,
                                  TableItem *target_table,
@@ -1220,7 +1222,7 @@ public:
                                  ObSchemaChecker *schema_checker,
                                  ObStmtMapInfo &stmt_map_info,
                                  bool is_on_null_side,
-                                 bool &is_loseless,
+                                 bool &is_lossless,
                                  EqualSets *input_equal_sets = NULL);
 
   /**

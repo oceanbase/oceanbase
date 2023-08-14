@@ -498,6 +498,7 @@ int ObTransformUtils::is_columns_unique(const ObIArray<ObRawExpr *> &exprs,
           LOG_WARN("failed to get table schema", K(ret),
                    "index_id", simple_index_infos.at(i).table_id_);
         } else if (OB_ISNULL(index_schema)) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("index schema should not be null", K(ret));
         } else if (index_schema->is_unique_index() && index_schema->get_index_column_num() > 0) {
           const ObIndexInfo &index_info = index_schema->get_index_info();
@@ -648,6 +649,7 @@ int ObTransformUtils::create_new_column_expr(ObTransformerCtx *ctx,
   } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_REF_COLUMN, new_column_ref))) {
     LOG_WARN("failed to create a new column ref expr", K(ret));
   } else if (OB_ISNULL(new_column_ref)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("new_column_ref should not be null", K(ret));
   } else if (OB_FAIL(is_expr_not_null(ctx,
                                       table_item.ref_query_,
@@ -2146,7 +2148,7 @@ int ObTransformUtils::reorder_inner_joined_tables(ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformUtils::pushdown_highlevel_conditions(const ObDMLStmt *stmt, JoinedTable *inner_joined_table)
+int ObTransformUtils::pushdown_highlevel_conditions(ObDMLStmt *stmt, JoinedTable *inner_joined_table, ObIArray<ObRawExpr*> &not_join_conds)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 8> equaljoins;
@@ -2159,6 +2161,20 @@ int ObTransformUtils::pushdown_highlevel_conditions(const ObDMLStmt *stmt, Joine
   if (OB_ISNULL(inner_joined_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected get null pointer", K(ret));
+  } if (INNER_JOIN != inner_joined_table->joined_type_) {
+    // if not inner join, directly pushdown child joined table recursively
+    if (inner_joined_table->left_table_->is_joined_table()) {
+      JoinedTable* left_child_table = static_cast<JoinedTable*>(inner_joined_table->left_table_);
+      if (OB_FAIL(pushdown_highlevel_conditions(stmt, left_child_table, not_join_conds))) {
+        LOG_WARN("failed to pushdown highlevel conditions", K(ret), KPC(left_child_table));
+      } 
+    }
+    if (inner_joined_table->right_table_->is_joined_table()) {
+      JoinedTable* right_child_table = static_cast<JoinedTable*>(inner_joined_table->right_table_);
+      if (OB_FAIL(pushdown_highlevel_conditions(stmt, right_child_table, not_join_conds))) {
+        LOG_WARN("failed to pushdown highlevel conditions", K(ret), KPC(right_child_table));
+      } 
+    }
   } else if (OB_FAIL(stmt->get_table_rel_ids(*inner_joined_table->left_table_, left_child_relation_id))) {
     LOG_WARN("failed to get table rel ids", K(ret));
   } else if (OB_FAIL(stmt->get_table_rel_ids(*inner_joined_table->right_table_, right_child_relation_id))) {
@@ -2196,7 +2212,7 @@ int ObTransformUtils::pushdown_highlevel_conditions(const ObDMLStmt *stmt, Joine
           ObIArray<ObRawExpr*> &left_child_conds = left_child_table->get_join_conditions();
           if (OB_FAIL(append(left_child_conds, left_child_join_conditions))) {
             LOG_WARN("failed to append conditions", K(ret));
-          } else if (OB_FAIL(pushdown_highlevel_conditions(stmt, left_child_table))) {
+          } else if (OB_FAIL(pushdown_highlevel_conditions(stmt, left_child_table, not_join_conds))) {
             LOG_WARN("failed to pushdown highlevel conditions", K(ret), KPC(left_child_table));
           } else {
             left_conds_push = true;
@@ -2211,7 +2227,7 @@ int ObTransformUtils::pushdown_highlevel_conditions(const ObDMLStmt *stmt, Joine
           ObIArray<ObRawExpr*> &right_child_conds = right_child_table->get_join_conditions();
           if (OB_FAIL(append(right_child_conds, right_child_join_conditions))) {
             LOG_WARN("failed to append conditions", K(ret));
-          } else if (OB_FAIL(pushdown_highlevel_conditions(stmt, right_child_table))) {
+          } else if (OB_FAIL(pushdown_highlevel_conditions(stmt, right_child_table, not_join_conds))) {
             LOG_WARN("failed to pushdown highlevel conditions", K(ret), KPC(right_child_table));
           } else {
             right_conds_push = true;
@@ -2232,7 +2248,9 @@ int ObTransformUtils::pushdown_highlevel_conditions(const ObDMLStmt *stmt, Joine
     }
     inner_joined_table->join_conditions_.reuse();
     if (OB_FAIL(inner_joined_table->join_conditions_.assign(new_join_conditions))) {
-      LOG_WARN("failed to assign condition arrays", K(ret));
+      LOG_WARN("failed to assign condition arrays", K(ret), K(new_join_conditions));
+    } else if (OB_FAIL(append(not_join_conds, otherconds))) {
+      LOG_WARN("failed to append to condition arrays", K(ret), K(otherconds));
     }
   }
   return ret;
@@ -2250,6 +2268,19 @@ int ObTransformUtils::build_inner_joined_multi_tables(ObTransformerCtx *ctx,
     LOG_WARN("empty tables", K(ret), K(tables));
   } else if (1 == tables.count()) {
     top_table = tables.at(0);
+    if (OB_ISNULL(top_table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null table pointer", K(ret));
+    } else if (top_table->is_joined_table() && INNER_JOIN == static_cast<JoinedTable*>(top_table)->joined_type_) {
+      if (OB_FAIL(append(static_cast<JoinedTable*>(top_table)->get_join_conditions(), join_conds))) {
+        LOG_WARN("failed to append exprs", K(ret));
+      } else {
+        join_conds.reuse();
+      }
+    }
+  } else if (OB_ISNULL(tables.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null table pointer", K(ret));
   } else if (OB_FAIL(stmt->get_table_rel_ids(*tables.at(0), table_set))) {
     LOG_WARN("failed to get table rel ids", K(ret));
   } else {
@@ -2257,11 +2288,9 @@ int ObTransformUtils::build_inner_joined_multi_tables(ObTransformerCtx *ctx,
     TableItem *right_table = NULL;
     ObSEArray<ObRawExpr*, 8> cur_join_conds;
     ObSEArray<TableItem*, 4> ordered_tables;
-    LOG_INFO("xql get inner join order before", K(tables));
     if (OB_FAIL(reorder_inner_joined_tables(stmt, tables, ordered_tables, join_conds))) {
       LOG_WARN("failed to reorder inner joined tables to avoid cartesian product", K(ret));
     } else {
-      LOG_INFO("xql get inner join order tables", K(ordered_tables));
       TableItem *cur_table = ordered_tables.at(0);
       // 连接顺序是从左往后依次连接为一棵左深树
       for (int64_t i = 1; OB_SUCC(ret) && i < ordered_tables.count(); i++) {
@@ -2285,13 +2314,11 @@ int ObTransformUtils::build_inner_joined_multi_tables(ObTransformerCtx *ctx,
         } else if (OB_FAIL(static_cast<JoinedTable*>(cur_table)->get_join_conditions().assign(cur_join_conds))) {
           LOG_WARN("failed to assign exprs", K(ret));
         } else {
-          LOG_INFO("xql get inner join conds", K(table_set), K(cur_join_conds));
           ret = ObTransformUtils::adjust_single_table_ids(static_cast<JoinedTable*>(cur_table));
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(append(static_cast<JoinedTable*>(cur_table)->get_join_conditions(),
-                                join_conds))) {
+      } else if (OB_FAIL(append(static_cast<JoinedTable*>(cur_table)->get_join_conditions(), join_conds))) {
         LOG_WARN("failed to append exprs", K(ret));
       } else {
         join_conds.reuse(); // 清空join
@@ -2321,31 +2348,10 @@ int ObTransformUtils::build_inner_joined_tables(ObTransformerCtx *ctx,
       if (IS_OUTER_JOIN(joined_table->joined_type_)) {
         top_table = joined_table;
         is_valid = false; // 忽略
-      } else {
-        ObSEArray<ObRawExpr*, 4> equaljoins;
-        ObSEArray<ObRawExpr*, 4> otherconds;
-        if (OB_FAIL(get_conditions_equaljoin_others(join_conds,
-                                                    equaljoins,
-                                                    otherconds))) {                                   
-          LOG_WARN("failed to get condition expr", K(ret));
-        } else if (OB_FAIL(check_not_join_conds(otherconds, is_valid))) {
-          LOG_WARN("failed to check other conds expr", K(ret));
-        } else if (!is_valid) {
-          //
-        } else if (OB_FAIL(append(joined_table->get_join_conditions(),
-                                  equaljoins))) {
-          LOG_WARN("failed to append exprs", K(ret));
-        } else {
-          join_conds.reuse(); // 清空join
-          ret = join_conds.assign(otherconds);
-          top_table = joined_table;
-          if (OB_FAIL(pushdown_highlevel_conditions(stmt, static_cast<JoinedTable*>(top_table)))) {
-            LOG_WARN("failed to pushdown highlevel conditions", K(ret), KPC(top_table));
-          }
-        }
-      }
+      } 
     } 
-  } else {
+  } 
+  if (is_valid) {
     for(int i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
       TableItem* table = stmt->get_table_item(tables.at(i));
       if (OB_ISNULL(table)) {
@@ -2367,11 +2373,15 @@ int ObTransformUtils::build_inner_joined_tables(ObTransformerCtx *ctx,
       //
     } else if (OB_FAIL(build_inner_joined_multi_tables(ctx, stmt, top_table, table_items, equaljoins))) {      
       LOG_WARN("failed to build inner join table", K(ret));
-    } else if (OB_FAIL(pushdown_highlevel_conditions(stmt, static_cast<JoinedTable*>(top_table)))) {
+    } else if (OB_FAIL(pushdown_highlevel_conditions(stmt, static_cast<JoinedTable*>(top_table), otherconds))) {
       LOG_WARN("failed to pushdown highlevel conditions", K(ret), KPC(top_table));
     } else {
       join_conds.reuse();
-      join_conds.assign(otherconds);
+      if (!equaljoins.empty() && OB_FAIL(join_conds.assign(equaljoins))) {
+        LOG_WARN("failed to assign equal joins to join conds", K(ret));
+      } else if (OB_FAIL(append(join_conds, otherconds))) {
+        LOG_WARN("failed to append other joins to join conds", K(ret));
+      }
       tables.reuse();
       FromItem from_table;
       from_table.table_id_ = top_table->table_id_;
@@ -2385,32 +2395,27 @@ int ObTransformUtils::build_inner_joined_tables(ObTransformerCtx *ctx,
 
 int ObTransformUtils::get_ref_table_column_expr(ObDMLStmt *stmt, 
                                                 uint64_t select_column_id, 
-                                                ObRawExpr *&ref_column_expr,
+                                                ObRawExpr *&select_expr,
                                                 bool& is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = true;
-  ObRawExpr *select_expr = NULL;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
   } else if (!stmt->is_select_stmt()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect stmt type", K(ret));
-  } else if (OB_UNLIKELY(select_column_id - OB_APP_MIN_COLUMN_ID < 0)) {
+  } else if (OB_UNLIKELY(select_column_id - OB_APP_MIN_COLUMN_ID < 0 || select_column_id - OB_APP_MIN_COLUMN_ID >= static_cast<ObSelectStmt*>(stmt)->get_select_item_size())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect column_id", K(ret));
-  } else {
-    select_expr = static_cast<ObSelectStmt*>(stmt)->get_select_item(select_column_id - OB_APP_MIN_COLUMN_ID).expr_;
-  }
-  if (OB_ISNULL(select_expr)) {
+  } else if (OB_ISNULL(select_expr = static_cast<ObSelectStmt*>(stmt)->get_select_item(select_column_id - OB_APP_MIN_COLUMN_ID).expr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(select_column_id));
   } else {
-    ref_column_expr = select_expr;
     // check table is basic table
     ObSEArray<uint64_t, 4> table_ids;
-    if (OB_FAIL(ObRawExprUtils::extract_table_ids(ref_column_expr, table_ids))) {
+    if (OB_FAIL(ObRawExprUtils::extract_table_ids(select_expr, table_ids))) {
       LOG_WARN("failed to extract table ids", K(ret), K(select_column_id));
     } else if (table_ids.count() > 1) {
       is_valid = false;
@@ -2511,13 +2516,18 @@ int ObTransformUtils::check_all_conditions_equal_connection(common::ObIArray<ObR
   return ret;
 }       
 
-int ObTransformUtils::check_not_join_conds(ObIArray<ObRawExpr*> &conds, bool &is_loseless)
+int ObTransformUtils::check_not_join_conds(ObIArray<ObRawExpr*> &conds, bool &is_lossless)
 {
   int ret = OB_SUCCESS;
-  for (int i = 0; is_loseless && i < conds.count(); i++) {
-    ObRelIds &relation_ids = conds.at(i)->get_relation_ids();
-    if (relation_ids.num_members() > 1) {
-      is_loseless = false;
+  for (int i = 0; OB_SUCC(ret) && is_lossless && i < conds.count(); i++) {
+    if (OB_ISNULL(conds.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null condition pointer", K(ret));
+    } else {
+      ObRelIds &relation_ids = conds.at(i)->get_relation_ids();
+      if (relation_ids.num_members() > 1) {
+        is_lossless = false;
+      }
     }
   }
   return ret;
@@ -2569,9 +2579,9 @@ int ObTransformUtils::check_and_get_conds_between_two_tables(ObDMLStmt *stmt,
                                                              TableItem *left_table,
                                                              TableItem *right_table,
                                                              ObIArray<ObRawExpr*> &conds,
-                                                             ObSEArray<ObRawExpr*, 4> &connected_conds,
-                                                             ObSEArray<ObColumnRefRawExpr*, 4> &left_columns,
-                                                             ObSEArray<ObColumnRefRawExpr*, 4> &right_columns,
+                                                             ObIArray<ObRawExpr*> &connected_conds,
+                                                             ObIArray<ObColumnRefRawExpr*> &left_columns,
+                                                             ObIArray<ObColumnRefRawExpr*> &right_columns,
                                                              bool &is_valid)
 {
   int ret = OB_SUCCESS;
@@ -2768,11 +2778,6 @@ int ObTransformUtils::check_single_table_containment(ObTransformerCtx *ctx,
       // 笛卡尔积的情况
     } else if ((join_left_table->is_basic_table() || (join_left_table->is_generated_table() || join_left_table->is_temp_table())) && 
                 join_right_table->is_basic_table()) { // join_right_table是基本表，join_left_table要么是基本表，要么是生成表（且要么有group by要么有distinct）
-      ObForeignKeyInfo* foreign_key_info = NULL;
-      bool is_foreign_primary_join = false;
-      bool all_primary_key = false;
-      bool is_rely_foreign_key = false;
-      bool is_first_table_parent = false;
       TableItem* left_real_table_item = join_left_table;
       ObSelectStmt* left_real_stmt = static_cast<ObSelectStmt*>(stmt);
       if (left_columns.count() > 0){
@@ -2785,7 +2790,34 @@ int ObTransformUtils::check_single_table_containment(ObTransformerCtx *ctx,
           }
         }
       }
+      // 判断表的包含关系
+      if (!is_contained || !is_columns_id_same) {
+        // do nothing
+      } else if (left_real_table_item->is_basic_table()) { // 实际上包含了t1是basic_table和generated_table的情况
+        QueryRelation relation = QueryRelation::QUERY_UNCOMPARABLE;
+        //zhenling.zzg 修复存在partition hint的情况下，正确性bug
+        if (OB_FAIL(ObStmtComparer::compare_basic_table_item(left_real_stmt,
+                                                             left_real_table_item,
+                                                             stmt,
+                                                             join_right_table,
+                                                             relation))) { 
+          LOG_WARN("compare table part failed",K(ret), K(left_real_table_item), K(join_right_table));
+        } else if (QueryRelation::QUERY_LEFT_SUBSET == relation ||
+                  QueryRelation::QUERY_EQUAL == relation) {
+          table_contained = true;
+          LOG_TRACE("succeed to check table item containment", K(table_contained));
+        } else {
+          table_contained = false; // 上一步判断包含失败，不是包含关系
+        }
+      } else {
+        table_contained = false; // 如果列不是同列，判断同表没有意义
+      }
       // 判断主外键
+      ObForeignKeyInfo* foreign_key_info = NULL;
+      bool is_foreign_primary_join = false;
+      bool all_primary_key = false;
+      bool is_rely_foreign_key = false;
+      bool is_first_table_parent = false;
       if (!is_contained) {
         // do_nothing
       } else if (OB_FAIL(ObTransformUtils::check_foreign_primary_join(left_real_table_item,
@@ -2814,29 +2846,6 @@ int ObTransformUtils::check_single_table_containment(ObTransformerCtx *ctx,
         OPT_TRACE("foreign key is not reliable");
       } else {
         is_foreign_key = true;
-      }
-
-      // 判断表的包含关系
-      if (!is_contained || !is_columns_id_same) {
-        // do nothing
-      } else if (left_real_table_item->is_basic_table()) { // 实际上包含了t1是basic_table和generated_table的情况
-        QueryRelation relation = QueryRelation::QUERY_UNCOMPARABLE;
-        //zhenling.zzg 修复存在partition hint的情况下，正确性bug
-        if (OB_FAIL(ObStmtComparer::compare_basic_table_item(left_real_stmt,
-                                                             left_real_table_item,
-                                                             stmt,
-                                                             join_right_table,
-                                                             relation))) { 
-          LOG_WARN("compare table part failed",K(ret), K(left_real_table_item), K(join_right_table));
-        } else if (QueryRelation::QUERY_LEFT_SUBSET == relation ||
-                  QueryRelation::QUERY_EQUAL == relation) {
-          table_contained = true;
-          LOG_TRACE("succeed to check table item containment", K(table_contained));
-        } else {
-          table_contained = false; // 上一步判断包含失败，不是包含关系
-        }
-      } else {
-        table_contained = false; // 如果列不是同列，判断同表没有意义
       }
     } else if ((join_left_table->is_generated_table() || join_left_table->is_temp_table()) && (join_right_table->is_generated_table() || join_right_table->is_temp_table())) {
       // 两个视图包含，不具体去考虑单表上的各种情况了，也不考虑外键了
@@ -2982,27 +2991,27 @@ int ObTransformUtils::group_multi_column_join(ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformUtils::check_inner_loseless(ObTransformerCtx *ctx,
+int ObTransformUtils::check_inner_lossless(ObTransformerCtx *ctx,
                                            ObDMLStmt *stmt,
                                            TableItem *&left_table,
                                            TableItem *&right_table,
                                            ObIArray<ObRawExpr*> &join_conditions,
                                            ObSqlBitSet<> &expr_relation_ids,
-                                           bool &is_loseless,
+                                           bool &is_lossless,
                                            TableItem *target_table     /* = NULL*/)
 {
   int ret = OB_SUCCESS;
-  is_loseless = true;
+  is_lossless = true;
   ObSqlBitSet<> left_child_relation_id;
   ObSqlBitSet<> right_child_relation_id;
-  ObSEArray<bool, 2> is_loseless_array;
+  ObSEArray<bool, 2> is_lossless_array;
   ObSEArray<uint64_t, 8> left_table_ids;
   ObSEArray<uint64_t, 8> right_table_ids;
-  CheckInnerJoinLoseless flag = TWO_SIDE;
+  CheckInnerJoinlossless flag = TWO_SIDE;
   if (OB_ISNULL(ctx) || OB_ISNULL(stmt) || OB_ISNULL(left_table) || OB_ISNULL(right_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ret));
-  } else if (OB_FAIL(check_all_conditions_equal_connection(join_conditions, is_loseless))) {
+  } else if (OB_FAIL(check_all_conditions_equal_connection(join_conditions, is_lossless))) {
     LOG_WARN("failed to check if conditions are equal connection", K(ret));
   } else if (OB_NOT_NULL(target_table)) {
     if (left_table->is_joined_table()) {
@@ -3036,27 +3045,27 @@ int ObTransformUtils::check_inner_loseless(ObTransformerCtx *ctx,
     ret = expr_relation_ids.to_array(expr_relation_ids_array);
     bool left_overlap = expr_relation_ids.overlap(left_child_relation_id); // 获取后续on、semi、order涉及的表与左右两分支的重叠情况
     bool right_overlap = expr_relation_ids.overlap(right_child_relation_id);
-    // for left_loseless
+    // for left_lossless
     if (right_overlap){ // 如果右侧的表有损，左侧一定有损
-      is_loseless_array.push_back(false);
+      is_lossless_array.push_back(false);
     } else {  // 如果右侧的表无损，左侧可能无损
-      is_loseless_array.push_back(true);
+      is_lossless_array.push_back(true);
     }
-    // for right_loseless
+    // for right_lossless
     if (left_overlap){ // 同上
-      is_loseless_array.push_back(false);
+      is_lossless_array.push_back(false);
     } else {
-      is_loseless_array.push_back(true);
+      is_lossless_array.push_back(true);
     }
   }
-  if (OB_FAIL(ret) || !is_loseless) {
+  if (OB_FAIL(ret) || !is_lossless) {
     // do nothing
   } else if (join_conditions.count() > 0) {
     for (int8_t left_or_right = LEFT_SIDE; OB_SUCC(ret) && left_or_right <= RIGHT_SIDE; ++left_or_right) {
       if (flag != TWO_SIDE && flag != left_or_right) {
         continue;
       }
-      if (!is_loseless_array.at(left_or_right)) {
+      if (!is_lossless_array.at(left_or_right)) {
         continue;
       }
       ObSEArray<MultiColumnJoinInfo, 8> group_join_list;
@@ -3069,27 +3078,27 @@ int ObTransformUtils::check_inner_loseless(ObTransformerCtx *ctx,
                                           group_join_list))) {
         LOG_WARN("failed to group conditions for multi column join", K(ret));                                    
       } else {
-        for (int i = 0; OB_SUCC(ret) && is_loseless_array.at(left_or_right) && i < group_join_list.count(); i++) {
+        for (int i = 0; OB_SUCC(ret) && is_lossless_array.at(left_or_right) && i < group_join_list.count(); i++) {
           TableItem* contained_item = NULL;
           TableItem* containing_item = NULL;   
-          TableItem* waiting_check_loseless_item = NULL;   
+          TableItem* waiting_check_lossless_item = NULL;   
           if (left_or_right == LEFT_SIDE) {
             contained_item = group_join_list.at(i).left_single_table_;
             containing_item = group_join_list.at(i).right_single_table_;
-            waiting_check_loseless_item = group_join_list.at(i).right_table_; // 如果希望左侧无损连接，则需要去向下判断右子树情况
+            waiting_check_lossless_item = group_join_list.at(i).right_table_; // 如果希望左侧无损连接，则需要去向下判断右子树情况
           } else if (left_or_right == RIGHT_SIDE) {
             contained_item = group_join_list.at(i).right_single_table_;
             containing_item = group_join_list.at(i).left_single_table_;
-            waiting_check_loseless_item = group_join_list.at(i).left_table_; // 如果希望右侧无损连接，则需要去向下判断左子树情况
+            waiting_check_lossless_item = group_join_list.at(i).left_table_; // 如果希望右侧无损连接，则需要去向下判断左子树情况
           }
           if (OB_FAIL(check_single_table_containment(ctx,
                                                      stmt, 
                                                      contained_item,
                                                      containing_item,
                                                      group_join_list.at(i).join_conditions_,
-                                                     is_loseless_array.at(left_or_right)))) {
+                                                     is_lossless_array.at(left_or_right)))) {
             LOG_WARN("failed to check single table left contained by right", K(ret));                                          
-          } else if (is_loseless_array.at(left_or_right)) {
+          } else if (is_lossless_array.at(left_or_right)) {
             ObSqlBitSet<> contained_table_ids;
             ObSqlBitSet<> nullable_rel_ids;
             ObSEArray<ObRawExpr*, 8> join_keys;
@@ -3108,40 +3117,40 @@ int ObTransformUtils::check_inner_loseless(ObTransformerCtx *ctx,
                                                   join_keys,
                                                   nullable_keys))) {
               LOG_WARN("failed to get nullable join keys", K(ret));                                            
-            } else if (!nullable_keys.empty() && waiting_check_loseless_item->is_joined_table()) {
-              is_loseless_array.at(left_or_right) = false;
+            } else if (!nullable_keys.empty() && waiting_check_lossless_item->is_joined_table()) {
+              is_lossless_array.at(left_or_right) = false;
             }
-            if (is_loseless_array.at(left_or_right) && 
-                OB_FAIL(check_limit_join_loseless(ctx,
+            if (is_lossless_array.at(left_or_right) && 
+                OB_FAIL(check_limit_join_lossless(ctx,
                                                   stmt,
-                                                  waiting_check_loseless_item,
+                                                  waiting_check_lossless_item,
                                                   expr_relation_ids,
-                                                  is_loseless_array.at(left_or_right),
+                                                  is_lossless_array.at(left_or_right),
                                                   containing_item))) {
-              LOG_WARN("failed to check right table complete loseless", K(ret));
+              LOG_WARN("failed to check right table complete lossless", K(ret));
             }
           }
         }
       }
     }
   }
-  if (OB_SUCC(ret) && is_loseless) {
-    bool left_loseless = is_loseless_array.at(LEFT_SIDE);
-    bool right_loseless = is_loseless_array.at(RIGHT_SIDE);
-    if (!left_loseless && !right_loseless){
-      is_loseless = false;
-    } else if (flag != LEFT_SIDE && right_loseless) {
+  if (OB_SUCC(ret) && is_lossless) {
+    bool left_lossless = is_lossless_array.at(LEFT_SIDE);
+    bool right_lossless = is_lossless_array.at(RIGHT_SIDE);
+    if (!left_lossless && !right_lossless){
+      is_lossless = false;
+    } else if (flag != LEFT_SIDE && right_lossless) {
       // 如果右边有损，要交换左右
       TableItem* temp = left_table;
       left_table = right_table;
       right_table = temp;
-      is_loseless = true;
-    } else if (flag != RIGHT_SIDE && left_loseless) {
+      is_lossless = true;
+    } else if (flag != RIGHT_SIDE && left_lossless) {
       // 左边无损，什么也不做
-      is_loseless = true;
+      is_lossless = true;
     } else {
       // 两边都无损
-      is_loseless = true;
+      is_lossless = true;
       if (flag == LEFT_SIDE) {
         // do nothing
       } else if (left_child_relation_id.num_members() < right_child_relation_id.num_members()) {
@@ -3152,34 +3161,35 @@ int ObTransformUtils::check_inner_loseless(ObTransformerCtx *ctx,
       }
     }
   } else {
-    is_loseless = false;
+    is_lossless = false;
   }
   return ret;
 }
 
-int ObTransformUtils::check_limit_join_loseless(ObTransformerCtx *ctx,
+int ObTransformUtils::check_limit_join_lossless(ObTransformerCtx *ctx,
                                                 ObDMLStmt *stmt,
                                                 TableItem *&joined_table,
                                                 ObSqlBitSet<> &expr_relation_ids,
-                                                bool &is_loseless,
+                                                bool &is_lossless,
                                                 TableItem *target_table     /* = NULL*/)
 {
   int ret = OB_SUCCESS;
-  is_loseless = false;
+  is_lossless = false;
   if (OB_ISNULL(ctx) || OB_ISNULL(stmt) || OB_ISNULL(joined_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null pointer", K(ret));
   } else if (!joined_table->is_joined_table()) {
     if (OB_NOT_NULL(target_table) && target_table->table_id_ == joined_table->table_id_) {
-      is_loseless = true;
+      is_lossless = true;
     } else {
-      is_loseless = false;
+      is_lossless = false;
     }
   } else {
     JoinedTable* joined_table_ptr = static_cast<JoinedTable*>(joined_table);
     ObSEArray<uint64_t, 8> left_ids;
     ObSEArray<uint64_t, 8> right_ids;
     if (OB_ISNULL(joined_table_ptr->left_table_) || OB_ISNULL(joined_table_ptr->right_table_)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null joined child table", K(ret));
     } else {
       if (joined_table_ptr->left_table_->is_joined_table()) {
@@ -3192,7 +3202,7 @@ int ObTransformUtils::check_limit_join_loseless(ObTransformerCtx *ctx,
       } else if (OB_SUCC(ret)) {
         ret = right_ids.push_back(joined_table_ptr->right_table_->table_id_);
       }
-      CheckInnerJoinLoseless single_side = TWO_SIDE;
+      CheckInnerJoinlossless single_side = TWO_SIDE;
       if (OB_NOT_NULL(target_table)) {
         bool left_contain = false;
         bool right_contain = false;
@@ -3212,7 +3222,7 @@ int ObTransformUtils::check_limit_join_loseless(ObTransformerCtx *ctx,
                                                 joined_table_ptr, 
                                                 expr_relation_ids, 
                                                 in_full_join,
-                                                is_loseless))) {
+                                                is_lossless))) {
             LOG_WARN("failed to check lazy left join valid", K(ret));
           }
         } else {
@@ -3221,36 +3231,26 @@ int ObTransformUtils::check_limit_join_loseless(ObTransformerCtx *ctx,
                                                   joined_table_ptr, 
                                                   expr_relation_ids, 
                                                   in_full_join,
-                                                  is_loseless))) {
+                                                  is_lossless))) {
                 LOG_WARN("failed to check lazy left join valid", K(ret));
             }
           } else {
-            is_loseless = false;
+            is_lossless = false;
           }
         }
       } else if (INNER_JOIN == joined_table_ptr->joined_type_) {
-        if (OB_ISNULL(target_table)) {
-          if (OB_FAIL(check_inner_loseless(ctx,
-                                           stmt,
-                                           joined_table_ptr->left_table_,
-                                           joined_table_ptr->right_table_, // 根据无损情况可能调整左右顺序
-                                           joined_table_ptr->get_join_conditions(),
-                                           expr_relation_ids, // 这里会把条件中非等值连接涉及的表id添加进来
-                                           is_loseless))) {
-            LOG_WARN("failed to check inner join loseless", K(ret));                                
-          }
-        } else if (OB_FAIL(check_inner_loseless(ctx,
-                                                stmt,
-                                                joined_table_ptr->left_table_,
-                                                joined_table_ptr->right_table_, // 根据无损情况可能调整左右顺序
-                                                joined_table_ptr->get_join_conditions(),
-                                                expr_relation_ids, // 这里会把条件中非等值连接涉及的表id添加进来
-                                                is_loseless,
-                                                target_table))) {
-          LOG_WARN("failed to check inner join loseless", K(ret));                                
+        if (OB_FAIL(check_inner_lossless(ctx,
+                                         stmt,
+                                         joined_table_ptr->left_table_,
+                                         joined_table_ptr->right_table_, // 根据无损情况可能调整左右顺序
+                                         joined_table_ptr->get_join_conditions(),
+                                         expr_relation_ids, // 这里会把条件中非等值连接涉及的表id添加进来
+                                         is_lossless,
+                                         target_table))) {
+          LOG_WARN("failed to check inner join lossless", K(ret));                                
         }
       } else if (FULL_OUTER_JOIN == joined_table_ptr->joined_type_) {
-        is_loseless = false;
+        is_lossless = false;
       }
     }
   }
@@ -7012,7 +7012,7 @@ int ObTransformUtils::generate_unique_key(ObTransformerCtx *ctx,
   return ret;
 }
 
-int ObTransformUtils::check_loseless_join(ObDMLStmt *stmt,
+int ObTransformUtils::check_lossless_join(ObDMLStmt *stmt,
                                           ObTransformerCtx *ctx,
                                           TableItem *source_table,
                                           TableItem *target_table,
@@ -7020,7 +7020,7 @@ int ObTransformUtils::check_loseless_join(ObDMLStmt *stmt,
                                           ObSchemaChecker *schema_checker,
                                           ObStmtMapInfo &stmt_map_info,
                                           bool is_on_null_side,
-                                          bool &is_loseless,
+                                          bool &is_lossless,
                                           EqualSets *input_equal_sets) // default value NULL
 {
   int ret = OB_SUCCESS;
@@ -7030,7 +7030,7 @@ int ObTransformUtils::check_loseless_join(ObDMLStmt *stmt,
   ObSEArray<ObRawExpr*, 16> source_exprs;
   ObSEArray<ObRawExpr*, 16> target_exprs;
   ObSEArray<ObRawExpr *, 8> target_tab_cols;
-  is_loseless = false;
+  is_lossless = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(source_table) ||
       OB_ISNULL(target_table) || OB_ISNULL(schema_checker)) {
     ret = OB_ERR_UNEXPECTED;
@@ -7056,7 +7056,7 @@ int ObTransformUtils::check_loseless_join(ObDMLStmt *stmt,
   } else if (OB_FAIL(stmt->get_column_exprs(target_table->table_id_, target_tab_cols))) {
     LOG_WARN("failed to get column exprs", K(ret));
   } else if (is_on_null_side && !target_tab_cols.empty() && target_exprs.empty()) {
-    is_loseless = false;
+    is_lossless = false;
   } else if (OB_FAIL(ObTransformUtils::check_exprs_unique(*stmt, source_table, source_exprs,
                                                 session_info, schema_checker, source_unique))) {
     LOG_WARN("failed to check exprs unique", K(ret));
@@ -7064,13 +7064,13 @@ int ObTransformUtils::check_loseless_join(ObDMLStmt *stmt,
                                                 session_info, schema_checker, target_unique))) {
     LOG_WARN("failed to check exprs unique", K(ret));
   } else if (source_unique && target_unique) {
-    is_loseless = true;
+    is_lossless = true;
     LOG_TRACE("succeed to check lossless join", K(source_unique), K(target_unique),
-        K(is_loseless));
+        K(is_lossless));
   } else {
-    is_loseless = false;
+    is_lossless = false;
     LOG_TRACE("succeed to check lossless join", K(source_unique), K(target_unique),
-        K(is_loseless));
+        K(is_lossless));
   }
   return ret;
 }
@@ -13740,22 +13740,22 @@ int ObTransformUtils::get_lazy_inner_join(ObTransformerCtx *ctx,
     } else if (INNER_JOIN == joined_table->joined_type_ && in_full_join == false) {
       // 判断，如果无损，则朝着无损的一侧进一步探测
       // 如果有损，则把连接条件加到上面再朝着两侧探测
-      bool is_loseless = false;
+      bool is_lossless = false;
       // bool is_join_to_one = false;
       // 判断
       // 左到右无损
       // 右到左无损
       ObIArray<ObRawExpr*> &joined_conds = joined_table->get_join_conditions();
-      if (OB_FAIL(check_inner_loseless(ctx,
+      if (OB_FAIL(check_inner_lossless(ctx,
                                        stmt,
                                        joined_table->left_table_,
                                        joined_table->right_table_, // 根据无损情况可能调整左右顺序
                                        joined_conds,
                                        expr_relation_ids, // 这里会把条件中非等值连接涉及的表id添加进来
-                                       is_loseless))) {
+                                       is_lossless))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to check inner join loseless", K(ret));                                
-      } else if (is_loseless) {
+        LOG_WARN("failed to check inner join lossless", K(ret));                                
+      } else if (is_lossless) {
         // 无损，朝着左侧递归
         LazyJoinInfo lazy_join;
         lazy_join.right_table_ = joined_table->right_table_;
@@ -13801,7 +13801,7 @@ int ObTransformUtils::get_lazy_inner_join(ObTransformerCtx *ctx,
                                                           in_full_join)))) {
           LOG_WARN("failed to get lazy inner join", K(ret));                              
         }
-      } else if (!is_loseless) {
+      } else if (!is_lossless) {
         // 有损，朝着两侧递归
         if (joined_conds.count() > 0 && 
             OB_FAIL(get_exprs_relation_ids(joined_conds, 

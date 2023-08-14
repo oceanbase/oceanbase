@@ -319,15 +319,15 @@ int ObTransformJoinLimitPushDown::check_inner_join_rewrite_done(ObSelectStmt *st
   } else {
     TableItem* table = inner_join_table;
     ObSqlBitSet<> &expr_relation_ids = helper->expr_relation_ids_;
-    bool is_loseless = true;
+    bool is_lossless = true;
     while (OB_SUCC(ret) && table->type_ == TableItem::JOINED_TABLE) {
-      if (OB_FAIL(ObTransformUtils::check_limit_join_loseless(ctx_,
+      if (OB_FAIL(ObTransformUtils::check_limit_join_lossless(ctx_,
                                                               stmt,
                                                               table,
                                                               expr_relation_ids,
-                                                              is_loseless))) {
-        LOG_WARN("failed to check if join is loseless");
-      } else if (is_loseless) {
+                                                              is_lossless))) {
+        LOG_WARN("failed to check if join is lossless");
+      } else if (is_lossless) {
         table = static_cast<JoinedTable*>(table)->left_table_;
       } else {
         break;
@@ -442,8 +442,8 @@ int ObTransformJoinLimitPushDown::check_inner_join_validity(ObDMLStmt *stmt,
       SemiInfo *semi_info = stmt->get_semi_infos().at(i);
       semi_ids.reuse();
       if (OB_FAIL(ObTransformUtils::get_left_rel_ids_from_semi_info(stmt, 
-                                                  semi_info, 
-                                                  semi_ids))) {
+                                                                    semi_info, 
+                                                                    semi_ids))) {
         LOG_WARN("failed to get left table rel ids", K(ret));                                            
       } else if (OB_FAIL(helper->pushdown_semi_infos_.push_back(semi_info))) {
         LOG_WARN("failed to push back semi info", K(ret));
