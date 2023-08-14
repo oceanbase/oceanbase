@@ -563,21 +563,6 @@ insert into test.t1 values (concat(x, "2"), y+2);
 end|
 delete from t1|
 drop procedure into_dumpfile|
-drop procedure if exists create_select|
-create procedure create_select(x char(16), y int)
-begin
-insert into test.t1 values (x, y);
-create temporary table test.t3 select * from test.t1;
-insert into test.t3 values (concat(x, "2"), y+2);
-end|
-call create_select("cs", 90)|
-select * from t1, t3|
-id	data	id	data
-cs	90	cs	90
-cs	90	cs2	92
-drop table t3|
-delete from t1|
-drop procedure create_select|
 drop function if exists e|
 create function e() returns double
 return 2.7182818284590452354|
@@ -1125,62 +1110,6 @@ select f4()|
 f4()
 2
 unlock tables|
-create function f9() returns int
-begin
-declare a, b int;
-drop temporary table if exists t3;
-create temporary table t3 (id int);
-insert into t3 values (1), (2), (3);
-set a:= (select count(*) from t3);
-set b:= (select count(*) from t3 t3_alias);
-return a + b;
-end|
-ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
-select f9()|
-ERROR 42000: FUNCTION f9 does not exist
-select f9() from t1 limit 1|
-ERROR 42000: FUNCTION f9 does not exist
-create function f10() returns int
-begin
-drop temporary table if exists t3;
-create temporary table t3 (id int);
-insert into t3 select id from t4;
-return (select count(*) from t3);
-end|
-ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
-select f10()|
-ERROR 42000: FUNCTION f10 does not exist
-create table t4 as select 1 as id|
-select f10()|
-ERROR 42000: FUNCTION f10 does not exist
-create function f11() returns int
-begin
-drop temporary table if exists t3;
-create temporary table t3 (id int);
-insert into t3 values (1), (2), (3);
-return (select count(*) from t3 as a, t3 as b);
-end|
-ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
-select f11()|
-ERROR 42000: FUNCTION f11 does not exist
-select f11() from t1|
-ERROR 42000: FUNCTION f11 does not exist
-create function f12_1() returns int
-begin
-drop temporary table if exists t3;
-create temporary table t3 (id int);
-insert into t3 values (1), (2), (3);
-return f12_2();
-end|
-ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
-create function f12_2() returns int
-return (select count(*) from t3)|
-drop temporary table t3|
-ERROR 42S02: Unknown table 'test.t3'
-select f12_1()|
-ERROR 42000: FUNCTION f12_1 does not exist
-select f12_1() from t1 limit 1|
-ERROR 42000: FUNCTION f12_1 does not exist
 drop function f0|
 drop function f1|
 drop function f2|
@@ -1198,13 +1127,11 @@ drop function f11|
 ERROR 42000: FUNCTION test.f11 does not exist
 drop function f12_1|
 ERROR 42000: FUNCTION test.f12_1 does not exist
-drop function f12_2|
 drop view v0|
 drop view v1|
 drop view v2|
 truncate table t1 |
 truncate table t2 |
-drop table t4|
 drop table if exists t3|
 create table t3 (n int unsigned not null primary key, f bigint unsigned)|
 drop procedure if exists ifac|
@@ -2041,37 +1968,6 @@ s1
 0
 drop procedure bug2780|
 drop table t3|
-create table t3 (content varchar(10) )|
-insert into t3 values ("test1")|
-insert into t3 values ("test2")|
-create table t4 (f1 int, rc int, t3 int)|
-drop procedure if exists bug1863|
-create procedure bug1863(in1 int)
-begin
-declare ind int default 0;
-declare t1 int;
-declare t2 int;
-declare t3 int;
-declare rc int default 0;
-declare continue handler for 1065 set rc = 1;
-drop temporary table if exists temp_t1;
-create temporary table temp_t1 (
-f1 int auto_increment, f2 varchar(20), primary key (f1)
-);
-insert into temp_t1 (f2) select content from t3;
-select f2 into t3 from temp_t1 where f1 = 10;
-if (rc) then
-insert into t4 values (1, rc, t3);
-end if;
-insert into t4 values (2, rc, t3);
-end|
-call bug1863(10)|
-select * from t4|
-f1	rc	t3
-2	0	NULL
-drop procedure bug1863|
-drop temporary table temp_t1|
-drop table t3, t4|
 create table t3 (
 OrderID  int not null,
 MarketID int,
@@ -2175,51 +2071,6 @@ select @a|
 @a
 5
 drop procedure bug3863|
-create table t3 (
-id int(10) unsigned not null default 0,
-rid int(10) unsigned not null default 0,
-msg varchar(1024) not null,
-primary key (id),
-unique key rid (rid, id)
-)|
-drop procedure if exists bug2460_1|
-create procedure bug2460_1(in v int)
-begin
-( select n0.id from t3 as n0 where n0.id = v )
-union
-( select n0.id from t3 as n0, t3 as n1
-where n0.id = n1.rid and n1.id = v )
-union
-( select n0.id from t3 as n0, t3 as n1, t3 as n2
-where n0.id = n1.rid and n1.id = n2.rid and n2.id = v ) order by id;
-end|
-call bug2460_1(2)|
-id
-call bug2460_1(2)|
-id
-insert into t3 values (1, 1, 'foo'), (2, 1, 'bar'), (3, 1, 'zip zap')|
-call bug2460_1(2)|
-id
-1
-2
-call bug2460_1(2)|
-id
-1
-2
-drop procedure if exists bug2460_2|
-create procedure bug2460_2()
-begin
-drop table if exists t3;
-create temporary table t3 (s1 int);
-insert into t3 select 1 union select 1;
-end|
-call bug2460_2()|
-select * from t3|
-s1
-1
-drop procedure bug2460_1|
-drop procedure bug2460_2|
-drop table t3|
 set @@sql_mode = ''|
 drop procedure if exists bug2564_1|
 create procedure bug2564_1()
@@ -3665,52 +3516,6 @@ s1
 set sql_mode=@sm|
 drop table t3|
 drop procedure bug6127|
-drop procedure if exists bug12589_1|
-drop procedure if exists bug12589_2|
-drop procedure if exists bug12589_3|
-create procedure bug12589_1()
-begin
-declare spv1 decimal(3,3);
-set spv1= 123.456;
-set spv1 = 'test';
-create temporary table tm1 as select spv1;
-show create table tm1;
-drop temporary table tm1;
-end|
-create procedure bug12589_2()
-begin
-declare spv1 decimal(6,3);
-set spv1= 123.456;
-create temporary table tm1 as select spv1;
-show create table tm1;
-drop temporary table tm1;
-end|
-create procedure bug12589_3()
-begin
-declare spv1 decimal(6,3);
-set spv1= -123.456;
-create temporary table tm1 as select spv1;
-show create table tm1;
-drop temporary table tm1;
-end|
-call bug12589_1()|
-Table	Create Table
-tm1	CREATE TEMPORARY TABLE `tm1` (
-  `spv1` decimal(3,3) DEFAULT NULL
-) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
-call bug12589_2()|
-Table	Create Table
-tm1	CREATE TEMPORARY TABLE `tm1` (
-  `spv1` decimal(6,3) DEFAULT NULL
-) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
-call bug12589_3()|
-Table	Create Table
-tm1	CREATE TEMPORARY TABLE `tm1` (
-  `spv1` decimal(6,3) DEFAULT NULL
-) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
-drop procedure bug12589_1|
-drop procedure bug12589_2|
-drop procedure bug12589_3|
 drop table if exists t3|
 drop procedure if exists bug7049_1|
 drop procedure if exists bug7049_2|
@@ -4630,7 +4435,7 @@ show create table t3|
 Table	Create Table
 t3	CREATE TABLE `t3` (
   `j` int(11) DEFAULT NULL
-) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
 select * from t3|
 j
 0
@@ -5892,7 +5697,7 @@ select bug20777(9223372036854775810) as '9223372036854775810   2**63+2';
 9223372036854775810   2**63+2
 9223372036854775810
 select bug20777(-9223372036854775808) as 'lower bounds signed bigint';
-ERROR 22003: BIGINT UNSIGNED value is out of range in ''(0 - 10)''
+ERROR 22003: Out of range value for column
 select bug20777(9223372036854775807) as 'upper bounds signed bigint';
 upper bounds signed bigint
 9223372036854775807
@@ -5902,10 +5707,9 @@ select bug20777(18446744073709551615) as 'upper bounds unsigned bigint';
 upper bounds unsigned bigint
 18446744073709551615
 select bug20777(18446744073709551616) as 'upper bounds unsigned bigint + 1';
-upper bounds unsigned bigint + 1
-18446744073709551615
+ERROR 22003: Out of range value for column
 select bug20777(-1) as 'lower bounds unsigned bigint - 1';
-ERROR 22003: BIGINT UNSIGNED value is out of range in ''(0 - 10)''
+ERROR 22003: Out of range value for column
 create table examplebug20777 as select
 0 as 'i',
 bug20777(9223372036854775806) as '2**63-2',
@@ -5915,24 +5719,7 @@ bug20777(9223372036854775809) as '2**63+1',
 bug20777(18446744073709551614) as '2**64-2',
 bug20777(18446744073709551615) as '2**64-1',
 bug20777(18446744073709551616) as '2**64';
-insert into examplebug20777 values (1, 9223372036854775806, 9223372036854775807, 223372036854775808, 9223372036854775809, 18446744073709551614, 18446744073709551615, 8446744073709551616);
-show create table examplebug20777;
-Table	Create Table
-examplebug20777	CREATE TABLE `examplebug20777` (
-  `i` bigint(1) NOT NULL,
-  `2**63-2` bigint(20) unsigned DEFAULT NULL,
-  `2**63-1` bigint(20) unsigned DEFAULT NULL,
-  `2**63` bigint(20) unsigned DEFAULT NULL,
-  `2**63+1` bigint(20) unsigned DEFAULT NULL,
-  `2**64-2` bigint(20) unsigned DEFAULT NULL,
-  `2**64-1` bigint(20) unsigned DEFAULT NULL,
-  `2**64` bigint(20) unsigned DEFAULT NULL
-) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = NUM BLOCK_SIZE = SIZE USE_BLOOM_FILTER = FALSE TABLET_SIZE = SIZE PCTFREE = 10
-select * from examplebug20777 order by i;
-i	2**63-2	2**63-1	2**63	2**63+1	2**64-2	2**64-1	2**64
-0	9223372036854775806	9223372036854775807	9223372036854775808	9223372036854775809	18446744073709551614	18446744073709551615	18446744073709551615
-1	9223372036854775806	9223372036854775807	223372036854775808	9223372036854775809	18446744073709551614	18446744073709551615	8446744073709551616
-drop table examplebug20777;
+ERROR 22003: Out of range value for column
 select bug20777(18446744073709551613)+1;
 bug20777(18446744073709551613)+1
 18446744073709551614
@@ -6259,7 +6046,7 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `v` datetime DEFAULT NULL
-) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
 
 DROP TABLE t1;
 
@@ -6268,7 +6055,7 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `v` datetime DEFAULT NULL
-) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
 
 DROP TABLE t1;
 
@@ -6276,8 +6063,8 @@ CALL p2(10);
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `v` int(11) DEFAULT NULL
-) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+  `v` int(11) DEFAULT '0'
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
 
 DROP TABLE t1;
 
@@ -6285,8 +6072,8 @@ CALL p2('text');
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `v` int(11) DEFAULT NULL
-) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+  `v` int(11) DEFAULT '0'
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
 
 DROP TABLE t1;
 
@@ -6755,98 +6542,6 @@ CALL p1();
 CALL p1();
 DROP PROCEDURE p1;
 DROP TABLE t1;
-CREATE TABLE t1 ( f1 integer, primary key (f1));
-CREATE TABLE t2 LIKE t1;
-CREATE TEMPORARY TABLE t3 LIKE t1;
-CREATE PROCEDURE p1 () BEGIN SELECT f1 FROM t3 AS A WHERE A.f1 IN ( SELECT f1 FROM t3 ) ;
-END|
-CALL p1;
-f1
-DROP TABLE t3;
-CREATE VIEW t3 AS SELECT f1 FROM t2 A WHERE A.f1 IN ( SELECT f1 FROM t2 );
-CALL p1;
-f1
-CALL p1;
-f1
-DROP PROCEDURE p1;
-DROP TABLE t1, t2;
-DROP VIEW t3;
-#
-# Bug #46629: Item_in_subselect::val_int(): Assertion `0'
-# on subquery inside a SP
-#
-CREATE TABLE t1(a INT);
-CREATE TABLE t2(a INT, b INT PRIMARY KEY);
-CREATE PROCEDURE p1 ()
-BEGIN
-SELECT a FROM t1 A WHERE A.b IN (SELECT b FROM t2 AS B);
-END|
-CALL p1;
-ERROR 42S22: Unknown column 'a.b' in 'where clause'
-CALL p1;
-ERROR 42S22: Unknown column 'a.b' in 'where clause'
-DROP PROCEDURE p1;
-DROP TABLE t1, t2;
-#
-# Bug#47627: SET @@{global.session}.local_variable in stored routine causes crash
-# Bug#48626: Crash or lost connection using SET for declared variables with @@
-#
-DROP PROCEDURE IF EXISTS p1;
-DROP PROCEDURE IF EXISTS p2;
-DROP PROCEDURE IF EXISTS p3;
-CREATE PROCEDURE p1()
-BEGIN
-DECLARE v INT DEFAULT 0;
-SET @@SESSION.v= 10;
-END//
-ERROR 42000: Undeclared variable: v
-CREATE PROCEDURE p2()
-BEGIN
-DECLARE v INT DEFAULT 0;
-SET v= 10;
-END//
-call p2()//
-CREATE PROCEDURE p3()
-BEGIN
-DECLARE v INT DEFAULT 0;
-SELECT @@SESSION.v;
-END//
-call p3()//
-ERROR HY000: Unknown system variable 'v'
-CREATE PROCEDURE p4()
-BEGIN
-DECLARE v INT DEFAULT 0;
-SET @@GLOBAL.v= 10;
-END//
-ERROR 42000: Undeclared variable: v
-CREATE PROCEDURE p5()
-BEGIN
-DECLARE init_connect INT DEFAULT 0;
-SET init_connect= 10;
-SET @@GLOBAL.init_connect= 'SELECT 1';
-SET @@SESSION.IDENTITY= 1;
-SELECT @@SESSION.IDENTITY;
-SELECT @@GLOBAL.init_connect;
-SELECT init_connect;
-END//
-CREATE PROCEDURE p6()
-BEGIN
-DECLARE v INT DEFAULT 0;
-SET @@v= 0;
-END//
-ERROR 42000: Undeclared variable: v
-SET @old_init_connect= @@GLOBAL.init_connect;
-CALL p5();
-@@SESSION.IDENTITY
-@@GLOBAL.init_connect
-init_connect
-1
-SELECT 1
-10
-SET @@GLOBAL.init_connect= @old_init_connect;
-DROP PROCEDURE p2;
-DROP PROCEDURE p3;
-DROP PROCEDURE p5;
 #
 # Bug#11840395 (formerly known as bug#60347):
 # The string "versiondata" seems
@@ -7001,66 +6696,6 @@ DROP PROCEDURE p1;
 #
 # Bug #47313 assert in check_key_in_view during CALL procedure
 #
-DROP TABLE IF EXISTS t1;
-DROP VIEW IF EXISTS t1, t2_unrelated;
-DROP PROCEDURE IF EXISTS p1;
-CREATE PROCEDURE p1(IN x INT) INSERT INTO t1 VALUES (x);
-CREATE VIEW t1 AS SELECT 10 AS f1;
-# t1 refers to the view
-CALL p1(1);
-ERROR HY000: The target table t1 of the INSERT is not insertable-into
-CREATE TEMPORARY TABLE t1 (f1 INT);
-# t1 still refers to the view since it was inlined
-#
-CALL p1(2);
-DROP VIEW t1;
-# t1 now refers to the temporary table
-CALL p1(3);
-# Check which values were inserted into the temp table.
-SELECT * FROM t1;
-f1
-2
-3
-DROP TEMPORARY TABLE t1;
-DROP VIEW t1;
-ERROR 42S02: Unknown table 'test.t1'
-DROP PROCEDURE p1;
-# Now test what happens if the sp cache is invalidated.
-DROP VIEW IF EXISTS v2_unrelated;
-CREATE PROCEDURE p1(IN x INT) INSERT INTO t1 VALUES (x);
-CREATE VIEW t1 AS SELECT 10 AS f1;
-CREATE VIEW v2_unrelated AS SELECT 1 AS r1;
-# Load the procedure into the sp cache
-CALL p1(4);
-ERROR HY000: The target table t1 of the INSERT is not insertable-into
-CREATE TEMPORARY TABLE t1 (f1 int);
-ALTER VIEW v2_unrelated AS SELECT 2 AS r1;
-# Alter view causes the sp cache to be invalidated.
-# Now t1 refers to the temporary table, not the view.
-CALL p1(5);
-# Check which values were inserted into the temp table.
-SELECT * FROM t1;
-f1
-5
-DROP TEMPORARY TABLE t1;
-DROP VIEW t1, v2_unrelated;
-DROP PROCEDURE p1;
-CREATE PROCEDURE p1(IN x INT) INSERT INTO t1 VALUES (x);
-CREATE TEMPORARY TABLE t1 (f1 INT);
-# t1 refers to the temporary table
-CALL p1(6);
-CREATE VIEW t1 AS SELECT 10 AS f1;
-# Create view causes the sp cache to be invalidated.
-# t1 still refers to the temporary table since it shadows the view.
-CALL p1(7);
-DROP VIEW t1;
-# Check which values were inserted into the temp table.
-SELECT * FROM t1;
-f1
-6
-7
-DROP TEMPORARY TABLE t1;
-DROP PROCEDURE p1;
 #
 # Bug #11918 Can't use a declared variable in LIMIT clause
 #

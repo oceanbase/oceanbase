@@ -11264,14 +11264,23 @@ int ObPLResolver::check_variable_accessible(
   } else if (ObObjAccessIdx::is_subprogram_variable(access_idxs)) {
     if (for_write) {
       const ObPLBlockNS *subprogram_ns = NULL;
+      const ObRawExpr *f_expr = NULL;
       int64_t subprogram_idx = OB_INVALID_INDEX;
       OX (subprogram_idx = ObObjAccessIdx::get_subprogram_idx(access_idxs));
       CK (subprogram_idx != OB_INVALID_INDEX
           && subprogram_idx >= 0 && subprogram_idx < access_idxs.count());
       OX (subprogram_ns = access_idxs.at(subprogram_idx).var_ns_);
       CK (OB_NOT_NULL(subprogram_ns));
-      OZ (check_local_variable_read_only(
-        *subprogram_ns, access_idxs.at(subprogram_idx).var_index_));
+      OX (f_expr = access_idxs.at(subprogram_idx).get_sysfunc_);
+      CK (OB_NOT_NULL(f_expr));
+      if (T_OP_GET_SUBPROGRAM_VAR == f_expr->get_expr_type()) {
+        uint64_t actual_var_idx = OB_INVALID_INDEX;
+        OZ (get_const_expr_value(f_expr->get_param_expr(2), actual_var_idx));
+        OZ (check_local_variable_read_only(*subprogram_ns, actual_var_idx));
+      } else {
+        OZ (check_local_variable_read_only(
+          *subprogram_ns, access_idxs.at(subprogram_idx).var_index_));
+      }
     }
   } else if (ObObjAccessIdx::is_get_variable(access_idxs)) {
     // do nothing ...
@@ -11332,8 +11341,8 @@ int ObPLResolver::check_variable_accessible(ObRawExpr *expr, bool for_write)
           && subprogram_idx >= 0 && subprogram_idx < access_idxs.count());
       OX (subprogram_ns = access_idxs.at(subprogram_idx).var_ns_);
       CK (OB_NOT_NULL(subprogram_ns));
-      f_expr = obj_access->get_param_expr(subprogram_idx);
-      CK(OB_NOT_NULL(f_expr));
+      OX (f_expr = obj_access->get_param_expr(subprogram_idx));
+      CK (OB_NOT_NULL(f_expr));
       if (T_OP_GET_SUBPROGRAM_VAR == f_expr->get_expr_type()) {
         uint64_t actual_var_idx = OB_INVALID_INDEX;
         GET_CONST_EXPR_VALUE(f_expr->get_param_expr(2), actual_var_idx);
