@@ -148,7 +148,7 @@ int ObGvSqlAudit::check_ip_and_port(bool &is_valid)
         ObObj ip_low = (req_id_range.get_start_key().get_obj_ptr()[PRI_KEY_IP_IDX]);
         ObObj ip_high = (req_id_range.get_end_key().get_obj_ptr()[PRI_KEY_IP_IDX]);
         ip_obj.set_varchar(ipstr_);
-        ip_obj.set_collation_type(ip_low.get_collation_type());
+        ip_obj.set_collation_type(ObCharset::get_system_collation());
         if (ip_obj.compare(ip_low) >= 0 && ip_obj.compare(ip_high) <= 0) {
           ObObj port_obj;
           port_obj.set_int32(port_);
