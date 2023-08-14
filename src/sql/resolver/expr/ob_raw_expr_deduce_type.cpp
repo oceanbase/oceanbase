@@ -865,8 +865,15 @@ int ObRawExprDeduceType::check_expr_param(ObOpRawExpr &expr)
     }
   } else if (lib::is_oracle_mode()
              && (T_OP_EQ == expr.get_expr_type() || T_OP_NE == expr.get_expr_type())
-             && (T_OP_ROW == expr.get_param_expr(0)->get_expr_type())) {
-    if (1 > expr.get_param_expr(0)->get_param_count()
+             && (T_OP_ROW == expr.get_param_expr(0)->get_expr_type() ||
+                 T_OP_ROW == expr.get_param_expr(1)->get_expr_type())) {
+    if (expr.get_param_expr(0)->get_expr_type() != T_OP_ROW
+        && expr.get_param_expr(1)->get_expr_type() == T_OP_ROW) {
+      // scalar = vector is not allowed
+      ret = OB_ERR_INVALID_COLUMN_NUM;
+      LOG_WARN("invalid relational operator", K(ret));
+      LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_NUM, static_cast<long>(1));
+    } else if (1 > expr.get_param_expr(0)->get_param_count()
         || T_OP_ROW == expr.get_param_expr(0)->get_param_expr(0)->get_expr_type()
         || T_OP_ROW != expr.get_param_expr(1)->get_expr_type()) {
       ret = OB_ERR_INVALID_COLUMN_NUM;
