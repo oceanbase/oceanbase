@@ -143,6 +143,26 @@ int ObTransformConstPropagate::ConstInfoContext::add_const_info(ExprConstInfo &c
   return ret;
 }
 
+int ObTransformConstPropagate::ConstInfoContext::add_expr_info(ObRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param is NULL", K(ret));
+  } else if (ObOptimizerUtil::find_item(propagate_exprs_, expr)) {
+    /* do nothing */
+  } else if (OB_FAIL(propagate_exprs_.push_back(expr))) {
+    LOG_WARN("failed to push back propagate exprs", K(ret));
+  }
+  return ret;
+}
+
+bool ObTransformConstPropagate::ConstInfoContext::is_empty() const 
+{
+  return active_const_infos_.empty() && propagate_exprs_.empty();
+}
+
 int ObTransformConstPropagate::ConstInfoContext::merge_expired_const_infos(ConstInfoContext &other,
                                                                            bool is_null_side)
 {
@@ -283,7 +303,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
       }
     }
 
-    if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty()) {
+    if (OB_SUCC(ret) && !const_ctx.is_empty()) {
       if (OB_FAIL(replace_common_exprs(stmt->get_condition_exprs(),
                                        const_ctx,
                                        is_happened))) {
@@ -294,7 +314,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
       }
     }
 
-    if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty() &&
+    if (OB_SUCC(ret) && !const_ctx.is_empty() &&
         (stmt->is_insert_stmt() || stmt->is_merge_stmt())) {
       is_happened = false;
       ObDelUpdStmt *insert = static_cast<ObDelUpdStmt *>(stmt);
@@ -309,7 +329,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
       }
     }
 
-    if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty() &&
+    if (OB_SUCC(ret) && !const_ctx.is_empty() &&
         (stmt->is_insert_stmt() || stmt->is_merge_stmt())) {
       ObDelUpdStmt *insert = static_cast<ObDelUpdStmt *>(stmt);
       if (OB_FAIL(replace_common_exprs(insert->get_sharding_conditions(),
@@ -322,7 +342,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
       }
     }
 
-    if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty()) {
+    if (OB_SUCC(ret) && !const_ctx.is_empty()) {
       is_happened = false;
       if (OB_FAIL(replace_semi_conditions(stmt,
                                           const_ctx,
@@ -340,7 +360,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
       has_rollup_or_groupingsets = true;
     }
 
-    if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty() && stmt->is_select_stmt() && !has_rollup_or_groupingsets) {
+    if (OB_SUCC(ret) && !const_ctx.is_empty() && stmt->is_select_stmt() && !has_rollup_or_groupingsets) {
       is_happened = false;
       if (OB_FAIL(replace_group_exprs(static_cast<ObSelectStmt*>(stmt),
                                       const_ctx,
@@ -362,7 +382,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
 
 
     if (OB_SUCC(ret) && stmt->is_select_stmt()) {
-      if (!const_ctx.active_const_infos_.empty() && !ignore_all_select_exprs && static_cast<ObSelectStmt*>(stmt)->get_aggr_item_size() > 0) {
+      if (!const_ctx.is_empty() && !ignore_all_select_exprs && static_cast<ObSelectStmt*>(stmt)->get_aggr_item_size() > 0) {
         if (OB_FAIL(replace_select_exprs(static_cast<ObSelectStmt*>(stmt),
                                         const_ctx,
                                         is_happened))) {
@@ -398,7 +418,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
       }
     }
 
-    if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty()) {
+    if (OB_SUCC(ret) && !const_ctx.is_empty()) {
       is_happened = false;
       if (OB_FAIL(replace_orderby_exprs(stmt->get_order_items(),
                                         const_ctx,
@@ -411,7 +431,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
     }
 
     // replace select exprs using common const info and post-gby const info
-    if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty() && stmt->is_select_stmt() && !ignore_all_select_exprs) {
+    if (OB_SUCC(ret) && !const_ctx.is_empty() && stmt->is_select_stmt() && !ignore_all_select_exprs) {
       is_happened = false;
       if (static_cast<ObSelectStmt*>(stmt)->get_aggr_item_size() > 0) {
         if (OB_FAIL(replace_select_exprs_skip_agg(static_cast<ObSelectStmt*>(stmt),
@@ -433,7 +453,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
     }
 
     // replace update assignment list
-    if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty() && stmt->is_update_stmt()) {
+    if (OB_SUCC(ret) && !const_ctx.is_empty() && stmt->is_update_stmt()) {
       is_happened = false;
       ObUpdateStmt *upd_stmt = static_cast<ObUpdateStmt *>(stmt);
        for (int64_t i = 0; OB_SUCC(ret) && i < upd_stmt->get_update_table_info().count(); ++i) {
@@ -453,7 +473,7 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
     }
 
     // replace condition exprs from check constraint exprs.
-    if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty()) {
+    if (OB_SUCC(ret) && !const_ctx.is_empty()) {
       is_happened = false;
       if (OB_FAIL(replace_check_constraint_exprs(stmt,
                                                  const_ctx,
@@ -1054,14 +1074,23 @@ int ObTransformConstPropagate::replace_expr_internal(ObRawExpr *&cur_expr,
                                                      bool used_in_compare)
 {
   int ret = OB_SUCCESS;
+  trans_happened = false;
+  bool const_trans_happended = false;
+  bool expr_trans_happended = false;
   if (const_ctx.hint_allowed_trans_) {
     ObSEArray<ObRawExpr *, 8> parent_exprs;
     if (OB_FAIL(recursive_replace_expr(cur_expr,
                                       parent_exprs,
                                       const_ctx,
                                       used_in_compare,
-                                      trans_happened))) {
+                                      const_trans_happended))) {
       LOG_WARN("failed to recursive");
+    } else if (OB_FAIL(recursive_replace_case_when_expr(cur_expr, 
+                                                        const_ctx, 
+                                                        expr_trans_happended))) {
+      LOG_WARN("failed to recursive replace case when expr", K(ret));
+    } else {
+      trans_happened |= const_trans_happended || expr_trans_happended;
     }
   }
   return ret;
@@ -1164,6 +1193,138 @@ int ObTransformConstPropagate::replace_internal(ObRawExpr *&cur_expr,
       trans_happened = true;
       LOG_TRACE("succeed to replace expr", KPC(column_expr), KPC(cur_expr));
     }
+  }
+  return ret;
+}
+
+int ObTransformConstPropagate::recursive_replace_case_when_expr(ObRawExpr *&cur_expr,
+                                                                ConstInfoContext &const_ctx,
+                                                                bool &trans_happended) 
+{
+  int ret = OB_SUCCESS;
+  trans_happended = false;
+  bool is_shared = false;
+  bool is_happended = false;
+  if (OB_ISNULL(cur_expr))  {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param is NULL", K(ret));
+  } else if (OB_FAIL(const_ctx.shared_expr_checker_.is_shared_expr(cur_expr, is_shared))) {
+    LOG_WARN("failed to check lis shared expr", K(ret));
+  } else if (is_shared) {
+    /* do nothing for shared expr */
+  } else if (OB_FAIL(replace_case_when_expr_internal(cur_expr,
+                                                     const_ctx,
+                                                     is_happended))) {
+    LOG_WARN("failed to replace case when expr internal", K(ret)); 
+  } else {
+    trans_happended |= is_happended;
+    int64_t N = cur_expr->get_param_count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+      bool param_trans_happended = false;
+      ObRawExpr *&child_expr = cur_expr->get_param_expr(i);
+      if (OB_FAIL(SMART_CALL(recursive_replace_case_when_expr(child_expr, 
+                                                              const_ctx, 
+                                                              param_trans_happended)))) {
+        LOG_WARN("failed to recursive replace case when expr", K(ret));
+      } else {
+        trans_happended |= param_trans_happended;
+      }
+    } 
+  }
+  return ret;
+}
+
+int ObTransformConstPropagate::replace_case_when_expr_internal(ObRawExpr *&cur_expr,
+                                                               ConstInfoContext &const_ctx,
+                                                               bool &trans_happended) 
+{
+  int ret = OB_SUCCESS;
+  trans_happended = false;
+  ObCaseOpRawExpr *case_expr = NULL;
+  if (OB_ISNULL(cur_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid param", K(ret));
+  } else if (T_OP_CASE != cur_expr->get_expr_type()) {
+    /* do nothing */
+  } else if (OB_FALSE_IT(case_expr = static_cast<ObCaseOpRawExpr*>(cur_expr))) {
+  } else if (OB_UNLIKELY(case_expr->get_when_expr_size() != case_expr->get_then_expr_size())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("incorrect param in case expr", K(ret), 
+                      K(case_expr->get_when_expr_size()),
+                      K(case_expr->get_then_expr_size()));
+  } else if (OB_UNLIKELY(case_expr->get_when_expr_size() <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("incorrect param in case expr", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < case_expr->get_when_expr_size(); ++i) {
+      bool param_trans_happended = false;
+      if (OB_FAIL(recursive_replace_when_expr(case_expr->get_when_param_expr(i), 
+                                              const_ctx, 
+                                              param_trans_happended))) {
+        LOG_WARN("failed to replace case when expr", K(ret));
+      } else {
+        trans_happended |= param_trans_happended;
+      }
+    } 
+  }
+  return ret;
+}
+
+
+int ObTransformConstPropagate::recursive_replace_when_expr(ObRawExpr *&when_expr,
+                                                           ConstInfoContext &const_ctx,
+                                                           bool &trans_happended) 
+{
+  int ret = OB_SUCCESS;
+  trans_happended = false; 
+  bool is_happended = false;
+  if (OB_ISNULL(when_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parameter", K(ret));
+  } else if (OB_FAIL(replace_when_expr_internal(when_expr, 
+                                                const_ctx.propagate_exprs_, 
+                                                is_happended))) {
+    LOG_WARN("failed to replace when expr internal", K(ret));
+  } else if (!is_happended) {
+    bool is_shared = false; // if this is shared_expr, we shouldn't replace its children exprs
+    if (OB_FAIL(const_ctx.shared_expr_checker_.is_shared_expr(when_expr, is_shared))) {
+      LOG_WARN("failed to check is shared expr", K(ret)); 
+    } else if (is_shared) {
+      /* do nothing */
+    } else if (when_expr->get_param_count() > 0) {
+      int64_t N = when_expr->get_param_count();
+      for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+        bool param_trans_happended = false;
+        if (OB_FAIL(SMART_CALL(recursive_replace_when_expr(when_expr->get_param_expr(i),
+                                                           const_ctx,
+                                                           param_trans_happended)))) {
+          LOG_WARN("failed to recusive replace when expr", K(ret));
+        } else {
+          trans_happended |= param_trans_happended;
+        }
+      }
+    }
+  } else {
+    trans_happended |= is_happended;
+  }
+  return ret;
+}
+
+int ObTransformConstPropagate::replace_when_expr_internal(ObRawExpr *&when_expr,
+                                                          ObIArray<ObRawExpr *> &propagate_exprs,
+                                                          bool &trans_happended) 
+{
+  int ret = OB_SUCCESS;
+  trans_happended = false;
+  if (OB_ISNULL(when_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param is NULL", K(ret));
+  } else if (!ObOptimizerUtil::find_item(propagate_exprs, when_expr)) {
+    /* do nothing */
+  } else if (OB_FAIL(replace_with_true_expr(when_expr))) {
+    LOG_WARN("failed to replace expr with true_expr", K(ret));
+  } else {
+    trans_happended = true;
   }
   return ret;
 }
@@ -1797,6 +1958,8 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
   if (OB_ISNULL(stmt) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt), K(expr));
+  } else if (OB_FAIL(const_ctx.add_expr_info(expr))) {
+    LOG_WARN("failed to add propagate expr", K(ret));
   } else if (T_OP_EQ == expr->get_expr_type()) {
     // todo: support general expr const info instead of column expr
     ObRawExpr *param_1 = expr->get_param_expr(0);
@@ -1886,18 +2049,42 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
         }
       }
     }
-  } else if (T_OP_OR == expr->get_expr_type()) {
+  } else if (T_OP_OR == expr->get_expr_type() || T_OP_CASE == expr->get_expr_type()) {
     ObArray<ExprConstInfo> complex_infos;
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+    int64_t N = expr->get_param_count();
+    bool is_op_case = T_OP_CASE == expr->get_expr_type();
+    ObCaseOpRawExpr *case_expr = NULL;
+    if (is_op_case) {
+      if (OB_ISNULL(case_expr = static_cast<ObCaseOpRawExpr *>(expr))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected param is NULL", K(ret));
+      } else if (OB_UNLIKELY(case_expr->get_when_expr_size() != case_expr->get_then_expr_size())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("uncorrect case when params", K(ret),
+                                              K(case_expr->get_when_expr_size()),
+                                              K(case_expr->get_then_expr_size()));
+      } else if (OB_UNLIKELY(case_expr->get_when_expr_size() < 1)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("uncorrect case when params", K(ret),
+                                              K(case_expr->get_when_expr_size()));
+      } else {
+        N = case_expr->get_when_expr_size();
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       ConstInfoContext tmp_ctx(const_ctx.shared_expr_checker_, const_ctx.hint_allowed_trans_);
       bool child_happened = false;
       bool current_happened = false;
       if (OB_FAIL(SMART_CALL(recursive_collect_equal_pair_from_condition(stmt,
-                                                                         expr->get_param_expr(i),
+                                                                         is_op_case ? 
+                                                                            case_expr->get_when_param_expr(i) :
+                                                                            expr->get_param_expr(i),
                                                                          tmp_ctx,
                                                                          child_happened)))) {
         LOG_WARN("failed to recursive collect const info from condition", K(ret));
-      } else if (OB_FAIL(replace_expr_internal(expr->get_param_expr(i),
+      } else if (OB_FAIL(replace_expr_internal(is_op_case ? 
+                                                  case_expr->get_then_param_expr(i) : 
+                                                  expr->get_param_expr(i),
                                                tmp_ctx,
                                                current_happened))) {
         LOG_WARN("failed to replace expr", K(ret));
@@ -2582,6 +2769,26 @@ int ObTransformConstPropagate::replace_select_exprs_skip_agg_internal(ObRawExpr 
     if (OB_SUCC(ret)) {
       parent_exprs.pop_back();
     }
+  }
+  return ret;
+}
+
+int ObTransformConstPropagate::replace_with_true_expr(ObRawExpr *&expr) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(true_expr_)) {
+    if (OB_ISNULL(ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected param is NULL", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(ctx_->expr_factory_, 
+                                                             true_expr_, true))) {
+      LOG_WARN("failed to build bool expr");
+    } else if (OB_ISNULL(true_expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected param is NULL", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    expr = true_expr_;
   }
   return ret;
 }
