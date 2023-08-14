@@ -32,6 +32,10 @@
 
 - version: 4.1.0.1
   can_be_upgraded_to:
+      - 4.1.0.2
+
+- version: 4.1.0.2
+  can_be_upgraded_to:
       - 4.2.0.0
   require_from_binary:
     value: True
