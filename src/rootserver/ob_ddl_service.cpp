@@ -7835,6 +7835,11 @@ int ObDDLService::add_new_column_to_table_schema(
     ObSchemaChecker schema_checker;
     if (OB_FAIL(schema_checker.init(schema_guard))) {
       LOG_WARN("failed to init schema guard", K(ret));
+    } else if (alter_column_schema.is_udt_related_column()) {
+      // 1. xmltype cannot be primary key
+      // 2. xmltype column and its hidden blob column default value is calc/set in resolver
+      //    only check xmltype schema version on rs in check_parallel_ddl_conflict
+      LOG_INFO("alter table add udt related column", K(alter_column_schema));
     } else if (OB_FAIL(ObDDLResolver::check_default_value(
                 alter_column_schema.get_cur_default_value(),
                 tz_info_wrap, &nls_formats, allocator,

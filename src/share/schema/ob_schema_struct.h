@@ -6006,30 +6006,35 @@ public:
   ObBasedSchemaObjectInfo()
     : schema_id_(common::OB_INVALID_ID),
       schema_type_(OB_MAX_SCHEMA),
-      schema_version_(common::OB_INVALID_VERSION)
+      schema_version_(common::OB_INVALID_VERSION),
+      schema_tenant_id_(OB_INVALID_TENANT_ID)
   {}
   ObBasedSchemaObjectInfo(
       const uint64_t schema_id,
       const ObSchemaType schema_type,
-      const int64_t schema_version)
+      const int64_t schema_version,
+      const uint64_t schema_tenant_id = OB_INVALID_TENANT_ID)
       : schema_id_(schema_id),
         schema_type_(schema_type),
-        schema_version_(schema_version)
+        schema_version_(schema_version),
+        schema_tenant_id_(schema_tenant_id)
   {}
   bool operator ==(const ObBasedSchemaObjectInfo &other) const {
     return (schema_id_ == other.schema_id_
             && schema_type_ == other.schema_type_
-            && schema_version_ == other.schema_version_);
+            && schema_version_ == other.schema_version_
+            && schema_tenant_id_ == other.schema_tenant_id_);
   }
   int64_t get_convert_size() const
   {
     int64_t convert_size = sizeof(*this);
     return convert_size;
   }
-  TO_STRING_KV(K_(schema_id), K_(schema_type), K_(schema_version));
+  TO_STRING_KV(K_(schema_id), K_(schema_type), K_(schema_version), K_(schema_tenant_id));
   uint64_t schema_id_;
   ObSchemaType schema_type_;
   int64_t schema_version_;
+  uint64_t schema_tenant_id_;
 };
 
 

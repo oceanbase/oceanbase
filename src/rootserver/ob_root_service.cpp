@@ -5070,8 +5070,11 @@ int ObRootService::check_parallel_ddl_conflict(
   if (arg.is_need_check_based_schema_objects()) {
     for (int64_t i = 0; OB_SUCC(ret) && (i < arg.based_schema_object_infos_.count()); ++i) {
       const ObBasedSchemaObjectInfo &info = arg.based_schema_object_infos_.at(i);
-      if (OB_FAIL(schema_guard.get_schema_version(info.schema_type_,
-          arg.exec_tenant_id_, info.schema_id_, schema_version))) {
+      if (OB_FAIL(schema_guard.get_schema_version(
+          info.schema_type_,
+          info.schema_tenant_id_ == OB_INVALID_TENANT_ID ? arg.exec_tenant_id_: info.schema_tenant_id_,
+          info.schema_id_,
+          schema_version))) {
         LOG_WARN("failed to get_schema_version", K(ret), K(arg.exec_tenant_id_), K(info));
       } else if (OB_INVALID_VERSION == schema_version) {
         ret = OB_ERR_PARALLEL_DDL_CONFLICT;

@@ -276,6 +276,24 @@ public:
       const common::ObTimeZoneInfoWrap &tz_info_wrap,
       const common::ObString *nls_formats,
       common::ObIAllocator &allocator);
+  static int get_udt_column_default_values(const ObObj &default_value,
+                                           const common::ObTimeZoneInfoWrap &tz_info_wrap,
+                                           const common::ObString *nls_formats,
+                                           ObIAllocator &allocator,
+                                           ObColumnSchemaV2 &column,
+                                           const ObSQLMode sql_mode,
+                                           ObSQLSessionInfo *session_info,
+                                           ObSchemaChecker *schema_checker,
+                                           ObObj &extend_result,
+                                           obrpc::ObDDLArg &ddl_arg);
+  static int ob_udt_check_and_add_ddl_dependency(const uint64_t schema_id,
+                                                 const ObSchemaType schema_type,
+                                                 const int64_t schema_version,
+                                                 const uint64_t schema_tenant_id,
+                                                 obrpc::ObDDLArg &ddl_arg);
+  static int add_udt_default_dependency(ObRawExpr *expr,
+                                        ObSchemaChecker *schema_checker,
+                                        obrpc::ObDDLArg &ddl_arg);
   static int adjust_string_column_length_within_max(
       share::schema::ObColumnSchemaV2 &column,
       const bool is_oracle_mode);

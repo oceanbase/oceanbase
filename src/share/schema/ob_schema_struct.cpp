@@ -11080,7 +11080,8 @@ int ObForeignKeyInfo::assign(const ObForeignKeyInfo &other)
 OB_SERIALIZE_MEMBER(ObBasedSchemaObjectInfo,
                     schema_id_,
                     schema_type_,
-                    schema_version_);
+                    schema_version_,
+                    schema_tenant_id_);
 
 const char *ObForeignKeyInfo::reference_action_str_[ACTION_MAX + 1] =
 {

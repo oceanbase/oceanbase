@@ -23,6 +23,7 @@
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/resolver/dml/ob_delete_resolver.h"
 #include "share/ob_index_builder_util.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -4288,7 +4289,8 @@ int ObAlterTableResolver::process_timestamp_column(ObColumnResolveStat &stat,
   return ret;
 }
 
-int ObAlterTableResolver::add_udt_hidden_column(ObAlterTableStmt *alter_table_stmt, const AlterColumnSchema &column_schema)
+int ObAlterTableResolver::add_udt_hidden_column(ObAlterTableStmt *alter_table_stmt,
+                                                AlterColumnSchema &column_schema)
 {
   int ret = OB_SUCCESS;
   if (column_schema.is_xmltype()) {
@@ -4301,7 +4303,41 @@ int ObAlterTableResolver::add_udt_hidden_column(ObAlterTableStmt *alter_table_st
     hidden_blob.set_charset_type(CHARSET_BINARY);
     hidden_blob.set_collation_type(CS_TYPE_BINARY);
     hidden_blob.set_udt_set_id(1);
-    if (OB_FAIL(hidden_blob.set_column_name("SYS_NC"))) {
+    ObObj orig_default_value;
+    column_schema.set_tenant_id(table_schema_->get_tenant_id());
+    ObString nls_formats_str[ObNLSFormatEnum::NLS_MAX];
+    nls_formats_str[ObNLSFormatEnum::NLS_DATE] = session_info_->get_local_nls_date_format();
+    nls_formats_str[ObNLSFormatEnum::NLS_TIMESTAMP] = session_info_->get_local_nls_timestamp_format();
+    nls_formats_str[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = session_info_->get_local_nls_timestamp_tz_format();
+
+    // the only udt hidden column in 4.2 is the hidden blob of xmltype
+    // if cur default value setted on xmltype column:
+    // original default value on xmltype column is null
+    // original default value on hidden blob is the calc result of xmltype cur default value (convert to blob)
+    // cur default value on hidden blob is null
+    if (OB_ISNULL(alter_table_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("alter table stmt not exist", K(ret));
+    } else if (column_schema.get_cur_default_value().is_null()) {
+    } else if (OB_FAIL(get_udt_column_default_values(column_schema.get_cur_default_value(),
+                                                     session_info_->get_tz_info_wrap(),
+                                                     nls_formats_str,
+                                                     *allocator_,
+                                                     column_schema,
+                                                     session_info_->get_sql_mode(),
+                                                     session_info_,
+                                                     schema_checker_,
+                                                     orig_default_value,
+                                                     alter_table_stmt->get_ddl_arg()))) {
+      LOG_WARN("fail to calc xmltype default value expr", K(ret));
+    } else {
+      // calc result is 1. string type (not lob) or 2. xmltype binary (need to remove lob header)
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("xml type not supported in opensource version", K(ret), K(orig_default_value));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(hidden_blob.set_column_name("SYS_NC"))) {
       SQL_RESV_LOG(WARN, "failed to set column name", K(ret));
     } else if (OB_FAIL(alter_table_stmt->add_column(hidden_blob))) {
       SQL_RESV_LOG(WARN, "add column to table_schema failed", K(ret), K(hidden_blob));

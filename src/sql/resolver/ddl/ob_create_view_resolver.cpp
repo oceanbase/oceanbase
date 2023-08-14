@@ -772,6 +772,9 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
             LOG_WARN("set enum or set info failed", K(ret), K(*expr));
           }
         }
+        if (column_meta.is_xml_sql_type()) {
+          column.set_sub_data_type(T_OBJ_XML);
+        }
         column.set_charset_type(table_schema.get_charset_type());
         column.set_collation_type(expr->get_collation_type());
         column.set_accuracy(expr->get_accuracy());

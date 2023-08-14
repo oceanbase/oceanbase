@@ -40,8 +40,8 @@
 #include "sql/engine/cmd/ob_load_data_parser.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
-
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "pl/ob_pl_stmt.h"
 namespace oceanbase
 {
 using namespace common;
@@ -2600,25 +2600,29 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
       if (OB_SUCC(ret)) {
         uint64_t udt_id = OB_INVALID_ID;
         uint64_t db_id = session_info_->get_database_id();
+        uint64_t tenant_id = session_info_->get_effective_tenant_id();
+        ObString udt_name = ObString(name_node->children_[1]->str_len_, name_node->children_[1]->str_value_);
         if (NULL != name_node->children_[0]) {
-          OZ (schema_checker_->get_database_id(session_info_->get_effective_tenant_id(),
-                                            ObString(name_node->children_[0]->str_len_, name_node->children_[0]->str_value_),
-                                            db_id));
+          OZ (schema_checker_->get_database_id(tenant_id,
+                                               ObString(name_node->children_[0]->str_len_,
+                                                        name_node->children_[0]->str_value_),
+                                               db_id));
         }
-        OZ (schema_checker_->get_udt_id(session_info_->get_effective_tenant_id(), db_id, OB_INVALID_ID,
-                      ObString(name_node->children_[1]->str_len_, name_node->children_[1]->str_value_), udt_id));
-          if (OB_SUCC(ret) && udt_id == OB_INVALID_ID) {
-            if (tenant_data_version < DATA_VERSION_4_2_0_0) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("tenant version is less than 4.2, udt type not supported", K(ret), K(tenant_data_version));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.2, udt type");
-            } else if (OB_FAIL(schema_checker_->get_sys_udt_id(ObString(name_node->children_[1]->str_len_, name_node->children_[1]->str_value_),
-                                                              udt_id))) {
-              LOG_WARN("failed to get sys udt id", K(ret));
-            } else if (udt_id == OB_INVALID_ID) {
-              ret = OB_ERR_INVALID_DATATYPE;
-              SQL_RESV_LOG(WARN, "type_node or stmt_ or datatype is invalid", K(ret));
-            }
+        OZ (schema_checker_->get_udt_id(tenant_id, db_id, OB_INVALID_ID, udt_name, udt_id));
+        if (OB_SUCC(ret) && udt_id == OB_INVALID_ID) {
+          // not found in current tenant, try get from tenant schema
+          if (tenant_data_version < DATA_VERSION_4_2_0_0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("tenant version is less than 4.2, udt type not supported", K(ret), K(tenant_data_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.2, udt type");
+          } else if (OB_FAIL(schema_checker_->get_sys_udt_id(udt_name, udt_id))) {
+            LOG_WARN("failed to get sys udt id", K(ret));
+          } else if (udt_id == OB_INVALID_ID) {
+            ret = OB_ERR_INVALID_DATATYPE;
+            SQL_RESV_LOG(WARN, "type_node or stmt_ or datatype is invalid", K(ret));
+          } else {
+            tenant_id = OB_SYS_TENANT_ID;
+          }
         }
 
         if (OB_SUCC(ret)) {
@@ -2628,6 +2632,27 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
             data_type.set_obj_type(ObUserDefinedSQLType);
             data_type.set_collation_type(CS_TYPE_BINARY);
             // udt column is varbinary used for null bitmap
+            ObDDLArg *ddl_arg = NULL;
+            if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
+              ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+              ddl_arg = &create_table_stmt->get_ddl_arg();
+            } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+              ObAlterTableStmt *alter_table_stmt = static_cast<ObAlterTableStmt*>(stmt_);
+              ddl_arg = &alter_table_stmt->get_ddl_arg();
+            } else {
+              // do nothing.
+            }
+            const ObUDTTypeInfo *udt_info = NULL;
+            if (OB_ISNULL(ddl_arg)) {
+            } else if (OB_FAIL(schema_checker_->get_udt_info(tenant_id, udt_id, udt_info))) {
+              LOG_WARN("failed to get udt info", K(ret));
+            } else if (OB_FAIL(ob_udt_check_and_add_ddl_dependency(udt_id,
+                                                                   UDT_SCHEMA,
+                                                                   udt_info->get_schema_version(),
+                                                                   udt_info->get_tenant_id(),
+                                                                   *ddl_arg))) {
+              LOG_WARN("failed to add udt type ddl dependency", K(ret), K(udt_info));
+            }
           }
         }
       }
@@ -5562,20 +5587,10 @@ int ObDDLResolver::calc_default_value(share::schema::ObColumnSchemaV2 &column,
       } else {
         ObObjType data_type = column.get_data_type();
         ObCollationType collation_type = column.get_collation_type();
-        if (lib::is_oracle_mode() && column.is_xmltype()) {
-          if (ob_is_user_defined_sql_type(data_type)) {
-            // bugfix: 50351856
-            default_value.meta_.set_sql_udt(ObXMLSqlType);
-          } else {
-            // use hidden column type, treat as clob, wil transform to blob in _makexmlbinary
-            data_type = ObLongTextType;
-            collation_type = CS_TYPE_UTF8MB4_BIN;
-          }
-        }
         ObObj dest_obj;
         const ObDataTypeCastParams dtc_params(tz_info_wrap.get_time_zone_info(), nls_formats, CS_TYPE_INVALID, CS_TYPE_INVALID, CS_TYPE_UTF8MB4_GENERAL_CI);
         ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, collation_type);
-        if(OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, default_value, dest_obj))) {
+        if (OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, default_value, dest_obj))) {
           LOG_WARN("cast obj failed, ", "src type", default_value.get_type(), "dest type", data_type, K(default_value), K(ret));
         } else {
           // remove lob header for lob
@@ -5615,6 +5630,244 @@ int ObDDLResolver::calc_default_value(share::schema::ObColumnSchemaV2 &column,
   }
   return ret;
 
+}
+
+int ObDDLResolver::ob_udt_check_and_add_ddl_dependency(const uint64_t schema_id,
+                                                       const ObSchemaType schema_type,
+                                                       const int64_t schema_version,
+                                                       const uint64_t schema_tenant_id,
+                                                       obrpc::ObDDLArg &ddl_arg)
+{
+  int ret = OB_SUCCESS;
+  if (schema_id == OB_INVALID_ID) { // do nothing
+  } else if (schema_version == OB_INVALID_VERSION
+             || (schema_type != UDT_SCHEMA
+                 && schema_type != PACKAGE_SCHEMA
+                 && schema_type != ROUTINE_SCHEMA)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error default dependency item", K(ret), K(schema_id), K(schema_type), K(schema_version));
+  } else {
+    // check duplicate
+    bool found_same_schema = false;
+    for (int64_t i = 0;
+        !found_same_schema && OB_SUCC(ret) && (i < ddl_arg.based_schema_object_infos_.count());
+        i++) {
+      const ObBasedSchemaObjectInfo &info = ddl_arg.based_schema_object_infos_.at(i);
+      if (schema_id == info.schema_id_
+          && schema_type == info.schema_type_
+          && schema_tenant_id == info.schema_tenant_id_) {
+        if (schema_version == info.schema_version_) {
+          found_same_schema = true;
+          // same schema do nothing
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("error default dependency item with different schema",
+                  K(ret), K(schema_id), K(schema_type), K(schema_tenant_id),
+                  K(schema_version), K(info.schema_version_));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && !found_same_schema) {
+      if (OB_FAIL(ddl_arg.based_schema_object_infos_.push_back(
+                  ObBasedSchemaObjectInfo(schema_id, schema_type, schema_version, schema_tenant_id)))) {
+        LOG_WARN("fail to add udt default dependency",
+                  K(ret), K(schema_id), K(schema_type), K(schema_version), K(schema_tenant_id));
+      } else {
+        LOG_DEBUG("succ to add udt default dependency",
+                  K(schema_id), K(schema_type), K(schema_version), K(schema_tenant_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::add_udt_default_dependency(ObRawExpr *expr,
+                                              ObSchemaChecker *schema_checker,
+                                              obrpc::ObDDLArg &ddl_arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+  } else if (OB_ISNULL(schema_checker)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("need schema checker to validate udt dependency", K(ret));
+  } else {
+    bool need_dependency = false;
+    ObSchemaObjVersion obj_version;
+
+    if (expr->get_expr_type() == T_FUN_PL_OBJECT_CONSTRUCT) {
+      ObObjectConstructRawExpr *obj_cons_expr = static_cast<ObObjectConstructRawExpr *>(expr);
+      // refer to ObDMLResolver::resolve_external_name
+      need_dependency = obj_cons_expr->need_add_dependency();
+      if (need_dependency) {
+        ret = obj_cons_expr->get_schema_object_version(obj_version);
+      }
+    } else if (expr->get_expr_type() == T_FUN_PL_COLLECTION_CONSTRUCT) {
+      ObCollectionConstructRawExpr *obj_coll_expr = static_cast<ObCollectionConstructRawExpr *>(expr);
+      need_dependency = obj_coll_expr->need_add_dependency();
+      if (need_dependency) {
+        ret = obj_coll_expr->get_schema_object_version(obj_version);
+      }
+    } else if (expr->is_udf_expr()) {
+      ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr *>(expr);
+      need_dependency = udf_expr->need_add_dependency();
+      if (need_dependency) {
+        ret = udf_expr->get_schema_object_version(obj_version);
+      }
+    }
+    if (need_dependency && OB_SUCC(ret)) {
+      uint64_t object_id = obj_version.get_object_id();
+      uint64_t tenant_id = pl::get_tenant_id_by_object_id(object_id);
+      ObSchemaType schema_type = obj_version.get_schema_type();
+      int64_t schema_version = obj_version.get_version();
+      int64_t schema_check_version = OB_INVALID_VERSION;
+      // local validate
+      if (OB_FAIL(schema_checker->get_schema_version(tenant_id,
+                                                     object_id,
+                                                     schema_type,
+                                                     schema_check_version))) {
+        LOG_WARN("failed to get_schema_version", K(ret), K(tenant_id), K(object_id), K(schema_type));
+      } else if (OB_INVALID_VERSION == schema_check_version) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get_schema_version, schema may not exist",
+                 K(ret), K(tenant_id), K(object_id), K(schema_type));
+      } else if (schema_version != schema_check_version) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema_version validation failed", K(ret),
+        K(tenant_id), K(object_id), K(schema_type), K(schema_version), K(schema_check_version));
+      } else if (OB_FAIL(ob_udt_check_and_add_ddl_dependency(object_id,
+                                                             schema_type,
+                                                             schema_version,
+                                                             tenant_id,
+                                                             ddl_arg))) {
+        LOG_WARN("failed to add udt type ddl dependency",
+                 K(ret), K(object_id), K(schema_type), K(schema_version), K(tenant_id));
+      }
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
+      if (OB_FAIL(add_udt_default_dependency(expr->get_param_expr(i), schema_checker, ddl_arg))) {
+        LOG_WARN("fail to add udt default dependency", K(ret), K(expr), K(ddl_arg), K(i));
+      }
+    }
+  }
+
+  return ret;
+}
+
+// check & calc udt default_value, do not call this function on RS
+int ObDDLResolver::get_udt_column_default_values(const ObObj &default_value,
+                                                 const common::ObTimeZoneInfoWrap &tz_info_wrap,
+                                                 const common::ObString *nls_formats,
+                                                 ObIAllocator &allocator,
+                                                 ObColumnSchemaV2 &column,
+                                                 const ObSQLMode sql_mode,
+                                                 ObSQLSessionInfo *session_info,
+                                                 ObSchemaChecker *schema_checker,
+                                                 ObObj &extend_result,
+                                                 obrpc::ObDDLArg &ddl_arg)
+{
+  int ret = OB_SUCCESS;
+  const ObObj input_default_value = default_value;
+  if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (!(column.is_extend())) {
+    // do nothing
+  } else if (column.is_identity_column() || column.is_generated_column()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("udt columns cannot be generated column or identity column",
+             K(ret), K(column), K(default_value));
+  } else if (default_value.is_null()) {
+    // do nothing
+  } else if (!column.is_default_expr_v2_column()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("udt columns is not default expr v2 column",
+             K(ret), K(column), K(default_value));
+  } else {
+    extend_result.set_null();
+    ObString expr_str;
+    ObResolverParams params;
+    ObRawExpr *expr = NULL;
+    ObRawExprFactory expr_factory(allocator);
+    ParamStore empty_param_list( (ObWrapperAllocator(allocator)) );
+    params.expr_factory_ = &expr_factory;
+    params.allocator_ = &allocator;
+    params.session_info_ = session_info;
+    params.param_list_ = &empty_param_list;
+    params.schema_checker_ = schema_checker;
+    common::ObObj tmp_default_value;
+    common::ObObj tmp_dest_obj;
+    const ObObj *tmp_res_obj = NULL;
+    common::ObObj tmp_dest_obj_null;
+    const bool is_strict = true;//oracle mode
+
+    ObObjType data_type = column.get_data_type();
+    const ObAccuracy &accuracy = column.get_accuracy();
+    ObCollationType collation_type = column.get_collation_type();
+    const ObDataTypeCastParams dtc_params = session_info->get_dtc_params();
+    ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, collation_type);
+
+    if (OB_FAIL(input_default_value.get_string(expr_str))) {
+      LOG_WARN("get expr string from default value failed", K(ret), K(input_default_value));
+    } else if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(allocator,
+                                                                            dtc_params,
+                                                                            expr_str))) {
+      LOG_WARN("fail to convert for resolve", K(ret));
+    } else if (OB_FAIL(ObResolverUtils::resolve_default_expr_v2_column_expr(params,
+                                                                            expr_str,
+                                                                            column,
+                                                                            expr,
+                                                                            false))) {
+      LOG_WARN("resolve expr_default expr failed", K(expr_str), K(column), K(ret));
+    } else if (OB_FAIL(ObSQLUtils::calc_simple_expr_without_row(
+        params.session_info_, expr, tmp_default_value, params.param_list_, allocator))) {
+      LOG_WARN("Failed to get simple expr value", K(ret));
+    } else if (OB_FAIL(add_udt_default_dependency(expr, schema_checker, ddl_arg))) {
+      LOG_WARN("Failed to add udt default expr dependency", K(ret), K(expr));
+    } else if (column.is_xmltype()) {
+      if (expr->get_result_type().is_string_type()) {
+        data_type = expr->get_result_type().get_type();
+        collation_type = CS_TYPE_UTF8MB4_BIN;
+      } else {
+        data_type = ObUserDefinedSQLType;
+        tmp_dest_obj.set_type(data_type);
+        tmp_dest_obj.meta_.set_sql_udt(ObXMLSqlType);
+      }
+    } else { /* do nothing */ }
+
+    if (OB_FAIL(ret)) {
+    } else if (column.is_xmltype() && (ob_is_numeric_type(tmp_default_value.get_type()) || is_lob(tmp_default_value.get_type()))) {
+      ret = OB_ERR_INVALID_XML_DATATYPE;
+      LOG_WARN("incorrect cmp type with xml arguments",K(tmp_default_value.get_type()), K(ret));
+    } else if (lib::is_oracle_mode() && column.get_meta_type().is_blob() && ob_is_numeric_type(tmp_default_value.get_type())) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("inconsistent datatypes", "expected", data_type, "got", tmp_default_value.get_type(), K(ret));
+    } else if(OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, tmp_default_value, tmp_dest_obj, tmp_res_obj))) {
+      LOG_WARN("cast obj failed, ", "src type", tmp_default_value.get_type(), "dest type", data_type, K(tmp_default_value), K(ret));
+    } else if (OB_ISNULL(tmp_res_obj)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cast obj failed, ", "src type", tmp_default_value.get_type(), "dest type", data_type, K(tmp_default_value), K(ret));
+    } else if (OB_FAIL(obj_collation_check(is_strict, collation_type,  *const_cast<ObObj*>(tmp_res_obj)))) {
+      LOG_WARN("failed to check collation", K(ret), K(collation_type), K(tmp_dest_obj));
+    } else if (OB_FAIL(obj_accuracy_check(cast_ctx, accuracy, collation_type, *tmp_res_obj, tmp_dest_obj, tmp_res_obj))) {
+      LOG_WARN("failed to check accuracy", K(ret), K(accuracy), K(collation_type), KPC(tmp_res_obj));
+    } else if (0 == input_default_value.get_string().compare("''")) {
+      tmp_dest_obj_null.set_varchar(input_default_value.get_string());
+      tmp_dest_obj_null.set_collation_type(ObCharset::get_system_collation());
+      if (OB_FAIL(column.set_cur_default_value(tmp_dest_obj_null))) {
+        LOG_WARN("set orig default value failed", K(ret));
+      }
+    } else if (OB_FAIL(print_expr_to_default_value(*expr, column, schema_checker, tz_info_wrap.get_time_zone_info()))) {
+      LOG_WARN("fail to print_expr_to_default_value", KPC(expr), K(column), K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      extend_result = tmp_dest_obj;
+    }
+    LOG_DEBUG("finish check udt default value", K(input_default_value), K(expr_str),
+              K(tmp_default_value), K(tmp_dest_obj), K(tmp_dest_obj_null), KPC(expr), K(ret));
+  }
+  return ret;
 }
 
 // the column length is determined by the expr result length in CTAS and GC, if the result length

@@ -194,8 +194,9 @@ public:
     return ((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
            || meta_type_.is_xml_sql_type();
   }
-  inline bool is_extend() const { return meta_type_.is_ext(); }
+  inline bool is_extend() const { return meta_type_.is_ext() || meta_type_.is_user_defined_sql_type(); }
   inline bool is_udt_hidden_column() const { return get_udt_set_id() > 0 && is_hidden(); }
+  inline bool is_udt_related_column() const { return is_extend() || is_udt_hidden_column(); }
   inline common::ObCharsetType get_charset_type() const { return charset_type_; }
   inline common::ObCollationType get_collation_type() const { return meta_type_.get_collation_type(); }
   inline const common::ObObj &get_orig_default_value()  const { return orig_default_value_; }
