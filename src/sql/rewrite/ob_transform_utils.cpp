@@ -2046,7 +2046,7 @@ int ObTransformUtils::reorder_inner_joined_tables(ObDMLStmt *stmt,
 {
   int ret = OB_SUCCESS;
   // 构建rel_ids的关联图
-  ObSEArray<ObString, 4> cond_rel_ids;
+  ObSEArray<std::pair<int,int>, 4> cond_rel_ids;
   for (int64_t i = 0; i < join_conds.count(); i++) {
     ObRawExpr* cond = join_conds.at(i);
     ObRelIds cond_table_id = cond->get_relation_ids();
@@ -2064,13 +2064,7 @@ int ObTransformUtils::reorder_inner_joined_tables(ObDMLStmt *stmt,
         if (p > q) {
           std::swap(p, q);
         }
-        char temp[4];
-        temp[0] = p + '0';
-        temp[1] = '_';
-        temp[2] = q + '0';
-        temp[3] = 0;
-        ObString condrels = ObString::make_string(temp);
-        if (OB_FAIL(cond_rel_ids.push_back(condrels))) {
+        if (OB_FAIL(cond_rel_ids.push_back(std::make_pair(p,q)))) {
           LOG_WARN("failed push obstring back to array", K(ret));
         }
       }
@@ -2117,13 +2111,7 @@ int ObTransformUtils::reorder_inner_joined_tables(ObDMLStmt *stmt,
               if (p > q) {
                 std::swap(p, q);
               }
-              char temp[4];
-              temp[0] = p + '0';
-              temp[1] = '_';
-              temp[2] = q + '0';
-              temp[3] = 0;
-              ObString condrels = ObString::make_string(temp);
-              if (is_contain(cond_rel_ids, condrels)) {
+              if (is_contain(cond_rel_ids, std::make_pair(p,q))) {
                 if_connected = true;
               }
             }
@@ -2172,10 +2160,8 @@ int ObTransformUtils::pushdown_highlevel_conditions(const ObDMLStmt *stmt, Joine
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected get null pointer", K(ret));
   } else if (OB_FAIL(stmt->get_table_rel_ids(*inner_joined_table->left_table_, left_child_relation_id))) {
-    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get table rel ids", K(ret));
   } else if (OB_FAIL(stmt->get_table_rel_ids(*inner_joined_table->right_table_, right_child_relation_id))) {
-    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get table rel ids", K(ret));
   } else if (OB_FAIL(get_conditions_equaljoin_others(inner_joined_table->join_conditions_,
                                                      equaljoins,
@@ -2271,9 +2257,11 @@ int ObTransformUtils::build_inner_joined_multi_tables(ObTransformerCtx *ctx,
     TableItem *right_table = NULL;
     ObSEArray<ObRawExpr*, 8> cur_join_conds;
     ObSEArray<TableItem*, 4> ordered_tables;
+    LOG_INFO("xql get inner join order before", K(tables));
     if (OB_FAIL(reorder_inner_joined_tables(stmt, tables, ordered_tables, join_conds))) {
       LOG_WARN("failed to reorder inner joined tables to avoid cartesian product", K(ret));
     } else {
+      LOG_INFO("xql get inner join order tables", K(ordered_tables));
       TableItem *cur_table = ordered_tables.at(0);
       // 连接顺序是从左往后依次连接为一棵左深树
       for (int64_t i = 1; OB_SUCC(ret) && i < ordered_tables.count(); i++) {
@@ -2283,6 +2271,8 @@ int ObTransformUtils::build_inner_joined_multi_tables(ObTransformerCtx *ctx,
           LOG_WARN("unexpected null", K(ret), K(left_table), K(right_table));
         } else if (OB_FAIL(stmt->get_table_rel_ids(*left_table, table_set))) {
           LOG_WARN("failed to get table rel ids", K(ret));
+        } else if (OB_FAIL(stmt->get_table_rel_ids(*right_table, table_set))) {
+          LOG_WARN("failed to get table rel ids", K(ret));
         } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(*stmt, join_conds, table_set,
                                                                   cur_join_conds))) {
           LOG_WARN("failed to extract table exprs", K(ret));
@@ -2291,11 +2281,11 @@ int ObTransformUtils::build_inner_joined_multi_tables(ObTransformerCtx *ctx,
         } else if (OB_FAIL(ObTransformUtils::add_new_joined_table(ctx, *stmt, INNER_JOIN, left_table,
                                                                   right_table, cur_join_conds, cur_table, true))) { 
                                                                   // 新建一个joinedtable，并且加到了stmt上面，地址返回给cur_table
-          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected add_new_joined_table", K(ret), K(left_table), K(right_table));
         } else if (OB_FAIL(static_cast<JoinedTable*>(cur_table)->get_join_conditions().assign(cur_join_conds))) {
           LOG_WARN("failed to assign exprs", K(ret));
         } else {
+          LOG_INFO("xql get inner join conds", K(table_set), K(cur_join_conds));
           ret = ObTransformUtils::adjust_single_table_ids(static_cast<JoinedTable*>(cur_table));
         }
       }
@@ -2375,8 +2365,7 @@ int ObTransformUtils::build_inner_joined_tables(ObTransformerCtx *ctx,
       LOG_WARN("failed to check other conds expr", K(ret));
     } else if (!is_valid) {
       //
-    } else if (OB_FAIL(build_inner_joined_multi_tables(ctx, stmt, top_table, table_items, equaljoins))) {
-      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(build_inner_joined_multi_tables(ctx, stmt, top_table, table_items, equaljoins))) {      
       LOG_WARN("failed to build inner join table", K(ret));
     } else if (OB_FAIL(pushdown_highlevel_conditions(stmt, static_cast<JoinedTable*>(top_table)))) {
       LOG_WARN("failed to pushdown highlevel conditions", K(ret), KPC(top_table));
@@ -2422,7 +2411,6 @@ int ObTransformUtils::get_ref_table_column_expr(ObDMLStmt *stmt,
     // check table is basic table
     ObSEArray<uint64_t, 4> table_ids;
     if (OB_FAIL(ObRawExprUtils::extract_table_ids(ref_column_expr, table_ids))) {
-      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to extract table ids", K(ret), K(select_column_id));
     } else if (table_ids.count() > 1) {
       is_valid = false;
@@ -2437,45 +2425,37 @@ int ObTransformUtils::get_ref_table_column_expr(ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformUtils::check_expr_min_max(ObRawExpr *expr, ObRawExpr *&column_ref, bool &is_valid)
+int ObTransformUtils::check_expr_min_max(ObRawExpr *expr, ObRawExpr *&column_ref)
 {
   int ret = OB_SUCCESS;
-  is_valid = false;
   column_ref = NULL;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected get null expr pointer", K(ret));
   } else if (expr->has_flag(IS_AGG) && (expr->get_expr_type() == T_FUN_MAX || expr->get_expr_type() == T_FUN_MIN)) {
-      int64_t N = expr->get_param_count();
-      if (N == 1 && OB_NOT_NULL(expr->get_param_expr(0)) && expr->get_param_expr(0)->has_flag(IS_COLUMN)) {
-        is_valid = true;
-        column_ref = expr->get_param_expr(0);
-      } else {
-        is_valid = false;
-      }
-  } else {
-    is_valid = false;
+    int64_t N = expr->get_param_count();
+    if (N == 1 && OB_NOT_NULL(expr->get_param_expr(0)) && expr->get_param_expr(0)->has_flag(IS_COLUMN)) {
+      column_ref = expr->get_param_expr(0);
+    }
   }
   return ret;
 }
 
-int ObTransformUtils::get_condition_columnref_children(ObRawExpr *cond, ObIArray<ObRawExpr*> &column_exprs, bool &is_valid, bool &has_agg)
+int ObTransformUtils::get_condition_columnref_children(ObRawExpr *cond, ObIArray<ObRawExpr*> &column_exprs, bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  bool has_column = false;
-  has_agg = false;
   column_exprs.reuse();
   is_valid = true;
   int64_t N = cond->get_param_count();
   for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < N; ++i) {
     ObRawExpr* child_expr = cond->get_param_expr(i);
     ObRawExpr* column_expr = NULL;
-    if (child_expr->has_flag(IS_COLUMN)) {
+    if (OB_ISNULL(child_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected get null child_expr pointer", K(ret));
+    } else if (child_expr->has_flag(IS_COLUMN)) {
       is_valid = true;
-      has_column = true;
       column_expr = child_expr;
-    } else if (OB_FAIL(check_expr_min_max(child_expr, column_expr, is_valid)) && (has_agg=true)) {
-      // do nothing
     } else {
       is_valid = false;
     }
@@ -2485,18 +2465,13 @@ int ObTransformUtils::get_condition_columnref_children(ObRawExpr *cond, ObIArray
       column_exprs.reuse();
     }
   }
-  if (!has_column) { // 等式两端不能都是min/max
-    is_valid = false;
-    column_exprs.reuse();
-  }
   return ret;
 }
 
 int ObTransformUtils::check_get_two_columns_from_condition(ObRawExpr *cond, 
                                                            ObColumnRefRawExpr *&left, 
                                                            ObColumnRefRawExpr *&right,
-                                                           bool &is_valid,
-                                                           bool &has_agg)
+                                                           bool &is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = true;
@@ -2508,8 +2483,7 @@ int ObTransformUtils::check_get_two_columns_from_condition(ObRawExpr *cond,
     is_valid = false;
   } else if (cond->get_param_count() != 2) {
     is_valid = false;
-  } else if (OB_FAIL(get_condition_columnref_children(cond, column_exprs, is_valid, has_agg))) {
-    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(get_condition_columnref_children(cond, column_exprs, is_valid))) {
     LOG_WARN("failed to check condition's children", K(ret));
   } else if (is_valid) {
     left = static_cast<ObColumnRefRawExpr*>(column_exprs.at(0));
@@ -2521,7 +2495,6 @@ int ObTransformUtils::check_get_two_columns_from_condition(ObRawExpr *cond,
 int ObTransformUtils::check_all_conditions_equal_connection(common::ObIArray<ObRawExpr*> &conds,
                                                             bool &is_valid)
 {
-  // 忽略has_agg的影响，因为这里既没有stmt，也没有表格信息，无法对is_agg做判断
   int ret = OB_SUCCESS;
   int N = conds.count();
   is_valid = true;
@@ -2531,8 +2504,7 @@ int ObTransformUtils::check_all_conditions_equal_connection(common::ObIArray<ObR
     left = NULL;
     right = NULL;
     bool has_agg = false;
-    if (OB_FAIL(check_get_two_columns_from_condition(conds.at(i), left, right, is_valid, has_agg))) {
-      ret = OB_ERR_UNEXPECTED;
+    if (OB_FAIL(check_get_two_columns_from_condition(conds.at(i), left, right, is_valid))) {
       LOG_WARN("failed to get two columns from conditioin", K(ret));
     }
   }
@@ -2572,20 +2544,22 @@ int ObTransformUtils::get_conditions_equaljoin_others(common::ObIArray<ObRawExpr
   ObColumnRefRawExpr *right = NULL;
   equaljoins.reuse();
   otherconds.reuse();
-  for (int i = 0; i < N; i++) {
+  for (int i = 0; OB_SUCC(ret) && i < N; i++) {
     bool is_single_cond_valid = false;
-    bool has_agg = false;
     if (OB_ISNULL(conds.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get condition expr", K(ret));
-    } else if (OB_FAIL(check_get_two_columns_from_condition(conds.at(i), left, right, is_single_cond_valid, has_agg))) {
-      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(check_get_two_columns_from_condition(conds.at(i), left, right, is_single_cond_valid))) {
       LOG_WARN("failed to get two columns from conditioin", K(ret));
     }
-    if (is_single_cond_valid) {
-      equaljoins.push_back(conds.at(i));
+    if (OB_SUCC(ret) && is_single_cond_valid) {
+      if (OB_FAIL(equaljoins.push_back(conds.at(i)))) {
+        LOG_WARN("failed to push back condition expr to equaljoins", K(ret));
+      }
     } else {
-      otherconds.push_back(conds.at(i));
+      if (OB_FAIL(otherconds.push_back(conds.at(i)))) {
+        LOG_WARN("failed to push back condition expr to equaljoins", K(ret));
+      }
     }
   }
   return ret;
@@ -2606,19 +2580,14 @@ int ObTransformUtils::check_and_get_conds_between_two_tables(ObDMLStmt *stmt,
   for (int i = 0; OB_SUCC(ret) && is_valid && i < conds.count(); i++) {
     ObColumnRefRawExpr *left = NULL;
     ObColumnRefRawExpr *right = NULL;
-    bool has_agg = false;
-    if (OB_FAIL(check_get_two_columns_from_condition(conds.at(i), left, right, is_valid, has_agg))) {
+    if (OB_FAIL(check_get_two_columns_from_condition(conds.at(i), left, right, is_valid))) {
       // 获取一个连接条件两边连接的列
       // 这里获得的是真正的列，因为有递归提取，所以外层的alias、agg func不影响
       // 如果表是generated_table, 获取的表达式是外层的而不是子查询的
-      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get two column expr from condition", K(ret));
     } else if (!is_valid) { // 如果有一个条件上包含单列或者多列，直接不继续判断了
       break;
     // 下面的条件上只有两列
-    } else if (agg_count > 0 && has_agg) {
-      is_valid = false;
-      break;
     } else {
       // 匹配条件左右和表，匹配不上的就跳过
       // left->get_table_id()获得的是条件左边列对应的表
@@ -2657,7 +2626,6 @@ int ObTransformUtils::check_and_get_conds_between_two_tables(ObDMLStmt *stmt,
         } else if (left_table->ref_query_->get_table_size() > 1) { // 检查子查询中的表个数，如果超过1则暂不判断
           is_valid = false; 
         } else if (OB_FAIL(get_ref_table_column_expr(left_table->ref_query_, column_id, real_left_column, is_ref_basic))) {
-          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get two column expr from ref_query", K(ret));
         } else if (!is_ref_basic){
           is_valid = false;
@@ -2667,15 +2635,13 @@ int ObTransformUtils::check_and_get_conds_between_two_tables(ObDMLStmt *stmt,
           if (real_left_column->has_flag(IS_COLUMN)) {
             left = static_cast<ObColumnRefRawExpr*>(real_left_column);
           } else if (real_left_column->has_flag(IS_AGG)) {
-            ObRawExpr* temp = NULL;
-            bool is_expr_min_max = false;
-            if (OB_FAIL(check_expr_min_max(real_left_column, temp, is_expr_min_max))) {
-              ret = OB_ERR_UNEXPECTED;
+            ObRawExpr* temp_expr = NULL;
+            if (OB_FAIL(check_expr_min_max(real_left_column, temp_expr))) {
               LOG_WARN("failed to whether check expr is min/max");
             }
-            if (OB_SUCC(ret) && is_expr_min_max) {
+            if (OB_SUCC(ret) && OB_NOT_NULL(temp_expr)) {
               left_agg = true;
-              left = static_cast<ObColumnRefRawExpr*>(temp);
+              left = static_cast<ObColumnRefRawExpr*>(temp_expr);
             } else {
               is_valid = false;
             }
@@ -2699,7 +2665,6 @@ int ObTransformUtils::check_and_get_conds_between_two_tables(ObDMLStmt *stmt,
         } else if (right_table->ref_query_->get_table_size() > 1) { // 检查子查询中的表个数，如果超过1则暂不判断
           is_valid = false; 
         } else if (OB_FAIL(get_ref_table_column_expr(right_table->ref_query_, column_id, real_right_column, is_ref_basic))) {
-          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get two column expr from ref_query", K(ret));
         } else if (!is_ref_basic){
           is_valid = false;
@@ -2709,15 +2674,13 @@ int ObTransformUtils::check_and_get_conds_between_two_tables(ObDMLStmt *stmt,
           if (real_right_column->has_flag(IS_COLUMN)) {
             right = static_cast<ObColumnRefRawExpr*>(real_right_column);
           } else if (real_right_column->has_flag(IS_AGG)) {
-            ObRawExpr* temp = NULL;
-            bool is_expr_min_max = false;
-            if (OB_FAIL(check_expr_min_max(real_right_column, temp, is_expr_min_max))) {
-              ret = OB_ERR_UNEXPECTED;
+            ObRawExpr* temp_expr = NULL;
+            if (OB_FAIL(check_expr_min_max(real_right_column, temp_expr))) {
               LOG_WARN("failed to whether check expr is min/max");
             }
-            if (OB_SUCC(ret) && is_expr_min_max) {
+            if (OB_SUCC(ret) && OB_NOT_NULL(temp_expr)) {
               right_agg = true;
-              right = static_cast<ObColumnRefRawExpr*>(temp);
+              right = static_cast<ObColumnRefRawExpr*>(temp_expr);
             } else {
               is_valid = false;
             }
@@ -2735,12 +2698,14 @@ int ObTransformUtils::check_and_get_conds_between_two_tables(ObDMLStmt *stmt,
       } else if (left_agg || right_agg) {
         agg_count ++;
       }
-      if (is_valid) {
+      if (agg_count <= 1 && is_valid) {
         connected_conds.push_back(conds.at(i)); // 找到两表的condition
         left_columns.push_back(left);
         right_columns.push_back(right);
       } else {
         //条件上有其他列存在，或者存在的列是聚合函数但不是min/max, 或者两边都是聚合函数，暂时跳过
+        left_columns.reuse();
+        right_columns.reuse();
         break;
       }
     }
@@ -2768,8 +2733,7 @@ int ObTransformUtils::check_single_table_containment(ObTransformerCtx *ctx,
   } else { // find conditions between two tables
     bool is_cond_valid = false; // 判断当前的condition是否可以判断无损(只有两列等值连接, 且这两列没有表达式，如果有聚合不能两边都是min/max，且只能出现一次带聚合函数的条件)
     if (OB_FAIL(check_and_get_conds_between_two_tables(stmt, join_left_table, join_right_table, conds, 
-                       connected_conds, left_columns, right_columns, is_cond_valid))) {
-      ret = OB_ERR_UNEXPECTED;
+                       connected_conds, left_columns, right_columns, is_cond_valid))) {      
       LOG_WARN("failed to check get conds between two tables", K(ret));              
     } else if (!is_cond_valid) {
       is_contained = false; // 条件导致无法判断包含关系
@@ -2862,8 +2826,7 @@ int ObTransformUtils::check_single_table_containment(ObTransformerCtx *ctx,
                                                              left_real_table_item,
                                                              stmt,
                                                              join_right_table,
-                                                             relation))) {
-          ret = OB_ERR_UNEXPECTED;
+                                                             relation))) { 
           LOG_WARN("compare table part failed",K(ret), K(left_real_table_item), K(join_right_table));
         } else if (QueryRelation::QUERY_LEFT_SUBSET == relation ||
                   QueryRelation::QUERY_EQUAL == relation) {
@@ -2922,10 +2885,8 @@ int ObTransformUtils::get_table_item_by_rel_id(ObDMLStmt* stmt, uint64_t &rel_id
     ObSqlBitSet<> one_id_set;
     ObSEArray<TableItem*, 1> one_table_item_list;
     if (OB_FAIL(one_id_set.add_member(rel_id))) {
-      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to add member to ObSqlBitSet", K(ret));
     } else if (OB_FAIL(stmt->relids_to_table_items(one_id_set, one_table_item_list))) {
-      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get table items from rel_ids", K(ret));
     } else if (one_table_item_list.count() == 1 && OB_NOT_NULL(one_table_item_list.at(0))) {
       table_item = one_table_item_list.at(0);
@@ -2944,7 +2905,6 @@ int ObTransformUtils::get_table_item_by_rel_id(ObDMLStmt* stmt, ObRelIds &rel_id
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt pointer", K(ret));
   } else if (OB_FAIL(stmt->relids_to_table_items(rel_ids, table_items))) {
-    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get table items from rel_ids", K(ret));
   }
   return ret;
@@ -2974,7 +2934,6 @@ int ObTransformUtils::group_multi_column_join(ObDMLStmt *stmt,
       ObRelIds cond_table_id = cond->get_relation_ids(); // 条件分为只包含目标表的，和与目标表相关的
       ObSEArray<int64_t, 2> cond_table_id_array;
       if (OB_FAIL(cond_table_id.to_array(cond_table_id_array))) {
-        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get condition array from obsqlbitset", K(ret));
       } else if (OB_UNLIKELY(cond_table_id_array.count() != 2)) {
         // do nothing
@@ -2987,10 +2946,8 @@ int ObTransformUtils::group_multi_column_join(ObDMLStmt *stmt,
         TableItem* left_single_table = NULL;
         TableItem* right_single_table = NULL;
         if (OB_FAIL(get_table_item_by_rel_id(stmt, left_cond_table_id, left_single_table))) {
-          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get left table item by rel id", K(ret));
         } else if (OB_FAIL(get_table_item_by_rel_id(stmt, right_cond_table_id, right_single_table))) {
-          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get left table item by rel id", K(ret));
         }
         ObSEArray<ObRawExpr*, 4> conds_group; // 获取与当前条件同一个表的所有条件
@@ -3070,10 +3027,8 @@ int ObTransformUtils::check_inner_loseless(ObTransformerCtx *ctx,
   if (OB_FAIL(ret)) {
     LOG_WARN("failed to get condition expr", K(ret));
   } else if (OB_FAIL(stmt->get_table_rel_ids(*left_table, left_child_relation_id))) {
-    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get table rel ids", K(ret));
   } else if (OB_FAIL(stmt->get_table_rel_ids(*right_table, right_child_relation_id))) {
-    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get table rel ids", K(ret));
   } else {
     // 从重叠情况初步排除不可能无损的连接
@@ -3112,7 +3067,6 @@ int ObTransformUtils::check_inner_loseless(ObTransformerCtx *ctx,
                                           right_child_relation_id,
                                           join_conditions,
                                           group_join_list))) {
-        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to group conditions for multi column join", K(ret));                                    
       } else {
         for (int i = 0; OB_SUCC(ret) && is_loseless_array.at(left_or_right) && i < group_join_list.count(); i++) {
@@ -3134,7 +3088,6 @@ int ObTransformUtils::check_inner_loseless(ObTransformerCtx *ctx,
                                                      containing_item,
                                                      group_join_list.at(i).join_conditions_,
                                                      is_loseless_array.at(left_or_right)))) {
-            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("failed to check single table left contained by right", K(ret));                                          
           } else if (is_loseless_array.at(left_or_right)) {
             ObSqlBitSet<> contained_table_ids;

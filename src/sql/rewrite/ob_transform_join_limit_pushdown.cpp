@@ -118,7 +118,6 @@ int ObTransformJoinLimitPushDown::transform_one_stmt(common::ObIArray<ObParentDM
   UNUSED(parent_stmts);
   bool is_valid = false;
   bool is_only_inner_valid = false;
-  bool check_inner_valid = true; // 内连接下推优化的开关
   ObSEArray<LimitPushDownHelper*, 4> helpers;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -146,49 +145,47 @@ int ObTransformJoinLimitPushDown::transform_one_stmt(common::ObIArray<ObParentDM
           trans_happened = true;
         }
       } 
-      if (check_inner_valid) {
-        // treat inner join
-        bool inner_valid = true;
-        bool keep_limit = false;
-        ObSelectStmt* inner_join_stmt = NULL;
-        if (!is_only_inner_valid) {
-          inner_join_stmt = helpers.at(i)->view_table_->ref_query_;
-        } else {
-          inner_join_stmt = static_cast<ObSelectStmt *>(stmt);
-          keep_limit = true;
-        }
-        TableItem* inner_join_table = NULL;
-        if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_) || OB_ISNULL(ctx_->expr_factory_) || OB_ISNULL(inner_join_stmt)) {
+      // treat inner join
+      bool inner_valid = true;
+      bool keep_limit = false;
+      ObSelectStmt* inner_join_stmt = NULL;
+      if (!is_only_inner_valid) {
+        inner_join_stmt = helpers.at(i)->view_table_->ref_query_;
+      } else {
+        inner_join_stmt = static_cast<ObSelectStmt *>(stmt);
+        keep_limit = true;
+      }
+      TableItem* inner_join_table = NULL;
+      if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_) || OB_ISNULL(ctx_->expr_factory_) || OB_ISNULL(inner_join_stmt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null inner_join_stmt", K(ret));
+      } else if (inner_valid && 
+        OB_FAIL(ObTransformUtils::build_inner_joined_tables(ctx_,
+                                                            inner_join_stmt,
+                                                            inner_join_table,
+                                                            inner_join_stmt->get_from_items(),
+                                                            inner_join_stmt->get_condition_exprs(),
+                                                            inner_valid))) {
+        LOG_WARN("failed to build inner joined tables", K(ret));                                    
+      } else if (!inner_valid) {
+        // do nothing
+      } else {
+        // select * from A, B where A.id = B.id limit 5;
+        // select * from A join B limit 5;
+        LimitPushDownHelper* inner_helper = NULL;
+        if (OB_FAIL(LimitPushDownHelper::alloc_helper(*ctx_->allocator_, inner_helper))) {
+          LOG_WARN("failed to allocate helper", K(ret));
+        } else if (OB_ISNULL(inner_helper)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpect null inner_join_stmt", K(ret));
-        } else if (inner_valid && 
-          OB_FAIL(ObTransformUtils::build_inner_joined_tables(ctx_,
-                                                              inner_join_stmt,
-                                                              inner_join_table,
-                                                              inner_join_stmt->get_from_items(),
-                                                              inner_join_stmt->get_condition_exprs(),
-                                                              inner_valid))) {
-          LOG_WARN("failed to build inner joined tables", K(ret));                                    
+          LOG_WARN("unexpect null helper", K(ret));
+        } else if (OB_FAIL(check_inner_join_validity(inner_join_stmt, inner_helper, inner_join_table, inner_valid))) {
+          LOG_WARN("failed to check inner join validity", K(ret));
         } else if (!inner_valid) {
           // do nothing
-        } else {
-          // select * from A, B where A.id = B.id limit 5;
-          // select * from A join B limit 5;
-          LimitPushDownHelper* inner_helper = NULL;
-          if (OB_FAIL(LimitPushDownHelper::alloc_helper(*ctx_->allocator_, inner_helper))) {
-            LOG_WARN("failed to allocate helper", K(ret));
-          } else if (OB_ISNULL(inner_helper)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpect null helper", K(ret));
-          } else if (OB_FAIL(check_inner_join_validity(inner_join_stmt, inner_helper, inner_join_table, inner_valid))) {
-            LOG_WARN("failed to check inner join validity", K(ret));
-          } else if (!inner_valid) {
-            // do nothing
-          } else if (inner_helper->lazy_join_tables_.count() == 0) {
-            // do nothing
-          } else if (OB_FAIL(do_transform_inner_join(static_cast<ObSelectStmt *>(inner_join_stmt), *inner_helper, keep_limit))) {
-            LOG_WARN("failed to push limit before inner join", K(ret));
-          }
+        } else if (inner_helper->lazy_join_tables_.count() == 0) {
+          // do nothing
+        } else if (OB_FAIL(do_transform_inner_join(static_cast<ObSelectStmt *>(inner_join_stmt), *inner_helper, keep_limit))) {
+          LOG_WARN("failed to push limit before inner join", K(ret));
         }
       }
     }
@@ -319,13 +316,11 @@ int ObTransformJoinLimitPushDown::check_inner_join_rewrite_done(ObSelectStmt *st
   if (OB_ISNULL(stmt) || OB_ISNULL(inner_join_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null pointer of stmt or inner join table", K(ret));
-  } else if (!is_valid) {
-    // do nothing
   } else {
     TableItem* table = inner_join_table;
     ObSqlBitSet<> &expr_relation_ids = helper->expr_relation_ids_;
     bool is_loseless = true;
-    while (table->type_ == TableItem::JOINED_TABLE) {
+    while (OB_SUCC(ret) && table->type_ == TableItem::JOINED_TABLE) {
       if (OB_FAIL(ObTransformUtils::check_limit_join_loseless(ctx_,
                                                               stmt,
                                                               table,
@@ -345,7 +340,6 @@ int ObTransformJoinLimitPushDown::check_inner_join_rewrite_done(ObSelectStmt *st
       } else if (OB_FAIL(check_ref_query_offset_limit_expr_lower_equal(table->ref_query_, 
                                                                        stmt,
                                                                        ref_limit_lower_equal))) {
-        ret = OB_ERR_UNEXPECTED;
         LOG_INFO("invalid check ref query offset limit expr lower equal", K(ret));
       } else if (ref_limit_lower_equal) {
         is_valid = false;
@@ -388,11 +382,11 @@ int ObTransformJoinLimitPushDown::check_inner_join_validity(ObDMLStmt *stmt,
     // NOT support those left.
     is_valid = false;
   } else if (OB_FAIL(check_limit(select_stmt, is_valid))) {
-    LOG_WARN("failed to check the validity of limit expr", K(ret));
+    LOG_WARN("failed to check the validity of limit expr", K(ret), KPC(select_stmt));
   } else if (!is_valid) {
     // do nothing
   } else if (OB_FAIL(helper->pushdown_tables_.push_back(inner_join_table))) {
-    // do nothing
+    LOG_WARN("failed to push back inner_join_table", K(ret), KPC(inner_join_table));
   } else {
     // 拿到wher、order by、semi
     ObSqlBitSet<> table_rel_ids;
@@ -450,7 +444,6 @@ int ObTransformJoinLimitPushDown::check_inner_join_validity(ObDMLStmt *stmt,
       if (OB_FAIL(ObTransformUtils::get_left_rel_ids_from_semi_info(stmt, 
                                                   semi_info, 
                                                   semi_ids))) {
-        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get left table rel ids", K(ret));                                            
       } else if (OB_FAIL(helper->pushdown_semi_infos_.push_back(semi_info))) {
         LOG_WARN("failed to push back semi info", K(ret));
@@ -1313,7 +1306,10 @@ int ObTransformJoinLimitPushDown::add_constraint_for_generated_table_with_limit(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null pointer", K(ret));
     } else if (table_item->is_generated_table()) {
-      if (OB_NOT_NULL(table_item->ref_query_) && table_item->ref_query_->has_limit() && select_stmt->has_limit()) {
+      if (OB_ISNULL(table_item->ref_query_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null table ref query pointer", K(ret));
+      } else if (table_item->ref_query_->has_limit() && select_stmt->has_limit()) {
         ObRawExpr* upper_limit_expr = NULL;
         ObRawExpr* ref_limit_expr = table_item->ref_query_->get_limit_expr();
         bool is_need_transform = false;

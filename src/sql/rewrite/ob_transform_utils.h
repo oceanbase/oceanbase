@@ -1055,20 +1055,18 @@ public:
                                        bool& is_valid);
 
   /* check if expr is min/max agg function expr */
-  static int check_expr_min_max(ObRawExpr *expr, ObRawExpr *&column_ref, bool &is_valid);
+  static int check_expr_min_max(ObRawExpr *expr, ObRawExpr *&column_ref);
 
   /* get all column exprs from a condition expr */
   static int get_condition_columnref_children(ObRawExpr *cond,
                                               ObIArray<ObRawExpr*> &column_exprs, 
-                                              bool &is_valid,
-                                              bool &has_agg);
+                                              bool &is_valid);
   
   /* check if one condition expr contain two column exprs and get them */
   static int check_get_two_columns_from_condition(ObRawExpr *cond, 
                                                   ObColumnRefRawExpr *&left, 
                                                   ObColumnRefRawExpr *&right,
-                                                  bool &is_valid,
-                                                  bool &has_agg);
+                                                  bool &is_valid);
 
   /* check all conditions are simple equal join conditions */
   static int check_all_conditions_equal_connection(common::ObIArray<ObRawExpr*> &conds,
