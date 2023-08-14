@@ -109,6 +109,15 @@ public:
                                              ObIArray<ObTabletID> &tablet_ids,
                                              ObIArray<ObObjectID> &partition_ids);
 
+  static int get_need_stats_tables(ObExecContext &ctx,
+                                   const int64_t tenant_id,
+                                   ObIArray<int64_t> &table_ids,
+                                   int64_t &slice_cnt);
+
+  static int get_need_stats_table_cnt(ObExecContext &ctx,
+                                      const int64_t tenant_id,
+                                      int64_t &task_table_count);
+
   int estimate(const ObTableStatParam &param,
                const ObExtraParam &extra,
                ObIArray<ObOptStat> &dst_opt_stats);

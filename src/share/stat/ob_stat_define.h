@@ -231,30 +231,6 @@ struct ObStatTableWrapper {
                K_(last_gather_duration));
 };
 
-struct ObGatherTableStatsHelper {
-  ObGatherTableStatsHelper():
-    stat_tables_(),
-    duration_time_(-1),
-    succeed_count_(0),
-    failed_count_(0)
-    {}
-  inline bool need_gather_table_stats() const
-  {
-    return !stat_tables_.empty();
-  }
-  int get_duration_time(sql::ParamStore &params);
-  ObArray<ObStatTableWrapper> stat_tables_;
-
-  //duration_time to is used to mark the gather database stats job can use max time. default value
-  //is -1, it's meaning gather until all table have been gathered.
-  int64_t duration_time_;
-  int64_t succeed_count_;
-  int64_t failed_count_;
-  TO_STRING_KV(K_(stat_tables),
-               K_(duration_time),
-               K_(succeed_count),
-               K_(failed_count));
-};
 struct ObGlobalStatParam
 {
   ObGlobalStatParam()

@@ -911,6 +911,115 @@ int ObBasicStatsEstimator::get_all_tablet_id_and_object_id(const ObTableStatPara
   return ret;
 }
 
+int ObBasicStatsEstimator::get_need_stats_table_cnt(ObExecContext &ctx,
+                                                    const int64_t tenant_id,
+                                                    int64_t &task_table_count)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString select_sql;
+  if (OB_FAIL(select_sql.append_fmt(
+          "select count(1) as cnt from (select m.table_id from " \
+          "%s m left join %s up on m.table_id = up.table_id and up.pname = 'STALE_PERCENT' join %s gp on gp.sname = 'STALE_PERCENT' " \
+          "where (case when (m.inserts+m.updates+m.deletes) = 0 then 0 "
+          "else ((m.inserts+m.updates+m.deletes) - (m.last_inserts+m.last_updates+m.last_deletes)) * 1.0 / (m.inserts+m.updates+m.deletes) > " \
+          "(CASE WHEN up.valchar IS NOT NULL THEN cast(up.valchar as signed) * 1.0 / 100 ELSE Cast(gp.spare4 AS signed) * 1.0 / 100 end) end)) ",
+          share::OB_ALL_MONITOR_MODIFIED_TNAME,
+          share::OB_ALL_OPTSTAT_USER_PREFS_TNAME,
+          share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TNAME))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    ObCommonSqlProxy *sql_proxy = ctx.get_sql_proxy();
+    SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
+      sqlclient::ObMySQLResult *client_result = NULL;
+      ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy);
+      if (OB_FAIL(sql_client_retry_weak.read(proxy_result, tenant_id, select_sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(ret), K(select_sql));
+      } else if (OB_ISNULL(client_result = proxy_result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to execute sql", K(ret));
+      } else {
+        while (OB_SUCC(ret) && OB_SUCC(client_result->next())) {
+          int64_t idx = 0;
+          ObObj obj;
+          if (OB_FAIL(client_result->get_obj(idx, obj))) {
+            LOG_WARN("failed to get object", K(ret));
+          } else if (OB_FAIL(obj.get_int(task_table_count))) {
+            LOG_WARN("failed to get int", K(ret), K(obj));
+          }
+        }
+        ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+      }
+      int tmp_ret = OB_SUCCESS;
+      if (NULL != client_result) {
+        if (OB_SUCCESS != (tmp_ret = client_result->close())) {
+          LOG_WARN("close result set failed", K(ret), K(tmp_ret));
+          ret = COVER_SUCC(tmp_ret);
+        }
+      }
+    }
+    LOG_TRACE("succeed to get table count that need gathering table stats", K(ret), K(task_table_count));
+  }
+  return ret;
+}
+
+int ObBasicStatsEstimator::get_need_stats_tables(ObExecContext &ctx,
+                                                 const int64_t tenant_id,
+                                                 ObIArray<int64_t> &table_ids,
+                                                 int64_t &slice_cnt)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString select_sql;
+  if (OB_FAIL(select_sql.append_fmt(
+          "select distinct table_id from (select m.table_id from " \
+          "%s m left join %s up on m.table_id = up.table_id and up.pname = 'STALE_PERCENT' join %s gp on gp.sname = 'STALE_PERCENT' " \
+          "where (case when (m.inserts+m.updates+m.deletes) = 0 then 0 "
+          "else ((m.inserts+m.updates+m.deletes) - (m.last_inserts+m.last_updates+m.last_deletes)) * 1.0 / (m.inserts+m.updates+m.deletes) > " \
+          "(CASE WHEN up.valchar IS NOT NULL THEN cast(up.valchar as signed) * 1.0 / 100 ELSE Cast(gp.spare4 AS signed) * 1.0 / 100 end) end)) "
+          "ORDER BY table_id DESC limit %ld",
+          share::OB_ALL_MONITOR_MODIFIED_TNAME,
+          share::OB_ALL_OPTSTAT_USER_PREFS_TNAME,
+          share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TNAME,
+          slice_cnt))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    ObCommonSqlProxy *sql_proxy = ctx.get_sql_proxy();
+    SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
+      sqlclient::ObMySQLResult *client_result = NULL;
+      ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy);
+      if (OB_FAIL(sql_client_retry_weak.read(proxy_result, tenant_id, select_sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(ret), K(select_sql));
+      } else if (OB_ISNULL(client_result = proxy_result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to execute sql", K(ret));
+      } else {
+        while (OB_SUCC(ret) && OB_SUCC(client_result->next())) {
+          int64_t idx = 0;
+          ObObj obj;
+          int64_t table_id = -1;
+          if (OB_FAIL(client_result->get_obj(idx, obj))) {
+            LOG_WARN("failed to get object", K(ret));
+          } else if (OB_FAIL(obj.get_int(table_id))) {
+            LOG_WARN("failed to get int", K(ret), K(obj));
+          } else if (OB_FAIL(table_ids.push_back(table_id))) {
+            LOG_WARN("failed to push back table id", K(ret));
+          }
+        }
+        ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+      }
+      int tmp_ret = OB_SUCCESS;
+      if (NULL != client_result) {
+        if (OB_SUCCESS != (tmp_ret = client_result->close())) {
+          LOG_WARN("close result set failed", K(ret), K(tmp_ret));
+          ret = COVER_SUCC(tmp_ret);
+        }
+      }
+    }
+    LOG_TRACE("succeed to get table ids that need gathering table stats",
+              K(ret), K(slice_cnt), K(tenant_id), K(table_ids.count()), K(table_ids));
+  }
+  return ret;
+}
+
 int ObBasicStatsEstimator::generate_first_part_idx_map(const ObIArray<PartInfo> &all_part_infos,
                                                        hash::ObHashMap<int64_t, int64_t> &first_part_idx_map)
 {

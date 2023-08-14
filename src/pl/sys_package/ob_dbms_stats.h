@@ -437,19 +437,32 @@ public:
                                             sql::ParamStore &params,
                                             common::ObObj &result);
 
-  static int get_need_statistics_tables(sql::ObExecContext &ctx,
-                                        ObGatherTableStatsHelper &helper);
+  static int gather_database_table_stats(sql::ObExecContext &ctx,
+                                         const int64_t duration_time,
+                                         int64_t &succeed_cnt,
+                                         ObOptStatTaskInfo &task_info);
+
+  static int do_gather_table_stats(sql::ObExecContext &ctx,
+                                   ObSchemaGetterGuard &schema_guard,
+                                   const int64_t table_id,
+                                   const uint64_t tenant_id,
+                                   const int64_t duration_time,
+                                   int64_t &succeed_cnt,
+                                   ObOptStatTaskInfo &task_info);
+
+  static int do_gather_tables_stats(sql::ObExecContext &ctx,
+                                    ObSchemaGetterGuard &schema_guard,
+                                    const uint64_t tenant_id,
+                                    const ObIArray<int64_t> &table_ids,
+                                    const int64_t duration_time,
+                                    int64_t &succeed_cnt,
+                                    ObOptStatTaskInfo &task_info);
 
   static int get_table_stale_percent(sql::ObExecContext &ctx,
                                      const uint64_t tenant_id,
                                      const share::schema::ObTableSchema &table_schema,
                                      const double stale_percent_threshold,
-                                     StatTable &stat_table,
-                                     bool &is_big_table);
-
-  static int gather_tables_stats_with_default_param(ObExecContext &ctx,
-                                                    ObGatherTableStatsHelper &helper,
-                                                    ObOptStatTaskInfo &task_info);
+                                     StatTable &stat_table);
 
   static int gather_table_stats_with_default_param(ObExecContext &ctx,
                                                    const int64_t duration_time,

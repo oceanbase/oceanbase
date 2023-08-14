@@ -89,25 +89,6 @@ int StatTable::assign(const StatTable &other)
   return no_regather_partition_ids_.assign(other.no_regather_partition_ids_);
 }
 
-int ObGatherTableStatsHelper::get_duration_time(sql::ParamStore &params)
-{
-  int ret = OB_SUCCESS;
-  duration_time_ = -1;
-  number::ObNumber num_duration;
-  if (OB_UNLIKELY(params.empty() || params.at(0).is_null())) {
-    // do nothing
-  } else if (lib::is_oracle_mode()) {
-    if (OB_FAIL(params.at(0).get_number(num_duration))) {
-      LOG_WARN("failed to get duration", K(ret), K(params.at(0)));
-    } else if (OB_FAIL(num_duration.extract_valid_int64_with_trunc(duration_time_))) {
-      LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_duration));
-    }
-  } else if (OB_FAIL(params.at(0).get_int(duration_time_))) {
-    LOG_WARN("failed to get duration", K(ret), K(params.at(0)));
-  }
-  return ret;
-}
-
 /**
  * @brief
  *  The order to gather tables
