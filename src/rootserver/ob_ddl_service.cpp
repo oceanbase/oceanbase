@@ -13982,6 +13982,8 @@ int ObDDLService::add_new_index_schema(obrpc::ObAlterTableArg &alter_table_arg,
                                        const share::schema::ObTableSchema &orig_table_schema,
                                        const ObTableSchema &hidden_table_schema,
                                        ObSchemaGetterGuard &schema_guard,
+                                       ObDDLOperator &ddl_operator,
+                                       common::ObMySQLTransaction &trans,
                                        ObSArray<ObTableSchema> &new_table_schemas,
                                        ObSArray<uint64_t> &index_ids)
 {
@@ -14132,6 +14134,18 @@ int ObDDLService::add_new_index_schema(obrpc::ObAlterTableArg &alter_table_arg,
                       LOG_WARN("failed to add table schema!", K(ret));
                     } else if (OB_FAIL(index_ids.push_back(index_schema.get_table_id()))) {
                       LOG_WARN("failed to add new index id!", K(ret));
+                    } else {
+                      // add new function index should add additional SYS_NC column into data table.
+                      new_table_schema.set_in_offline_ddl_white_list(true);
+                      for (int64_t i = 0; OB_SUCC(ret) && i < gen_columns.count(); ++i) {
+                        ObColumnSchemaV2 *new_column_schema = gen_columns.at(i);
+                        if (OB_ISNULL(new_column_schema)) {
+                          ret = OB_ERR_UNEXPECTED;
+                          LOG_WARN("new column schema is null");
+                        } else if (OB_FAIL(ddl_operator.insert_single_column(trans, new_table_schema, *new_column_schema))) {
+                          LOG_WARN("failed to create table schema, ", K(ret));
+                        }
+                      }
                     }
                   }
                   if (OB_SUCC(ret)) {
@@ -14368,15 +14382,13 @@ int ObDDLService::reconstruct_index_schema(const ObTableSchema &orig_table_schem
 }
 
 int ObDDLService::rebuild_hidden_table_index_in_trans(
-                  ObAlterTableArg &alter_table_arg,
-                  const ObTableSchema &hidden_table_schema,
+                  const uint64_t tenant_id,
                   ObSchemaGetterGuard &schema_guard,
+                  ObDDLOperator &ddl_operator,
                   ObMySQLTransaction &trans,
                   ObSArray<ObTableSchema> &new_table_schemas)
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = hidden_table_schema.get_tenant_id();
-  ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
   } else {
@@ -14469,6 +14481,7 @@ int ObDDLService::rebuild_hidden_table_index(obrpc::ObAlterTableArg &alter_table
         }
       }
     } else {
+      ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
       if (OB_FAIL(col_name_map.init(*orig_table_schema, alter_table_schema))) {
         LOG_WARN("failed to init column name map", K(ret), K(alter_table_schema), KPC(orig_table_schema));
       } else if (OB_FAIL(get_all_dropped_column_ids(alter_table_arg, *orig_table_schema, drop_cols_id_arr))) {
@@ -14487,12 +14500,14 @@ int ObDDLService::rebuild_hidden_table_index(obrpc::ObAlterTableArg &alter_table
                                               *orig_table_schema,
                                               *hidden_table_schema,
                                               schema_guard,
+                                              ddl_operator,
+                                              trans,
                                               new_table_schemas,
                                               index_ids))) {
         LOG_WARN("failed to add new index schema", K(ret));
-      } else if (OB_FAIL(rebuild_hidden_table_index_in_trans(alter_table_arg,
-                                                             *hidden_table_schema,
+      } else if (OB_FAIL(rebuild_hidden_table_index_in_trans(tenant_id,
                                                              schema_guard,
+                                                             ddl_operator,
                                                              trans,
                                                              new_table_schemas))) {
         LOG_WARN("failed to rebuild hidden table index in trans", K(ret));

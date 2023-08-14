@@ -1495,9 +1495,9 @@ private:
       common::ObMySQLTransaction &trans,
       common::ObSArray<uint64_t> &cst_ids);
   int rebuild_hidden_table_index_in_trans(
-      obrpc::ObAlterTableArg &alter_table_arg,
-      const share::schema::ObTableSchema &hidden_table_schema,
+      const uint64_t tenant_id,
       share::schema::ObSchemaGetterGuard &schema_guard,
+      ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       common::ObSArray<share::schema::ObTableSchema> &new_table_schemas);
   int add_new_index_schema(
@@ -1505,6 +1505,8 @@ private:
       const share::schema::ObTableSchema &orig_table_schema,
       const ObTableSchema &hidden_table_schema,
       ObSchemaGetterGuard &schema_guard,
+      ObDDLOperator &ddl_operator,
+      common::ObMySQLTransaction &trans,
       ObSArray<ObTableSchema> &new_table_schemas,
       ObSArray<uint64_t> &index_ids);
   int check_index_table_need_rebuild(
