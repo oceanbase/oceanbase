@@ -80,7 +80,7 @@ private:
   }
   bool is_retryable(int ret)
   {
-    return OB_NOT_MASTER == ret || OB_NOT_INIT == ret || OB_TIMEOUT == ret || OB_EAGAIN == ret;
+    return OB_NOT_MASTER == ret || OB_NOT_INIT == ret || OB_TIMEOUT == ret || OB_EAGAIN == ret || OB_LS_NOT_EXIST == ret || OB_TABLET_NOT_EXIST == ret;
   }
 private:
   static const int64_t PREFETCH_THRESHOLD = 4;

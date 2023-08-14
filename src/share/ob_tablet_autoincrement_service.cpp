@@ -160,7 +160,7 @@ int ObTabletAutoincMgr::fetch_new_range(const ObTabletAutoincParam &param,
         finish = true;
       }
       if (OB_FAIL(ret) && is_retryable(ret)) {
-        const bool need_refresh_leader = OB_NOT_MASTER == ret;
+        const bool need_refresh_leader = OB_NOT_MASTER == ret || OB_LS_NOT_EXIST == ret || OB_TABLET_NOT_EXIST == ret;
         ob_usleep<common::ObWaitEventIds::STORAGE_AUTOINC_FETCH_RETRY_SLEEP>(RETRY_INTERVAL);
         res.reset();
         if (OB_FAIL(THIS_WORKER.check_status())) { // overwrite ret
