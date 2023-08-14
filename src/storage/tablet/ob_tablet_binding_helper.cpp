@@ -266,6 +266,9 @@ int ObTabletBindingHelper::modify_tablet_binding_new_mds(
       }
     }
   }
+  if (replay_scn.is_valid() && OB_TIMEOUT == ret) {
+    ret = OB_EAGAIN;
+  }
   return ret;
 }
 
