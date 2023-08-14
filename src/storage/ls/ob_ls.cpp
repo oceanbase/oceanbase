@@ -1852,7 +1852,7 @@ int ObLS::get_transfer_scn(share::SCN &scn)
   } else if (OB_UNLIKELY(is_stopped_)) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("ls stopped", K(ret), K_(ls_meta));
-  } else if (OB_FAIL(ls_tablet_svr_.get_max_tablet_transfer_scn(max_tablet_scn))) {
+  } else if (OB_FAIL(member_list_service_.get_max_tablet_transfer_scn(max_tablet_scn))) {
     LOG_WARN("failed to get max tablet transfer scn", K(ret), K_(ls_meta));
   } else {
     scn = MAX(max_tablet_scn, ls_meta_.get_transfer_scn());

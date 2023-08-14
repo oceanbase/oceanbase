@@ -24,6 +24,7 @@ namespace storage
 ObLSMemberListService::ObLSMemberListService()
   : is_inited_(false),
     ls_(NULL),
+    transfer_scn_iter_lock_(),
     log_handler_(NULL)
 {
 }
@@ -162,6 +163,65 @@ int ObLSMemberListService::switch_learner_to_acceptor(
     STORAGE_LOG(WARN, "failed to switch learner to acceptor", K(ret));
   } else {
     STORAGE_LOG(INFO, "switch learner to acceptor success", K(ret), K(learner), K(paxos_replica_num), K(leader_config_version));
+  }
+  return ret;
+}
+
+int ObLSMemberListService::get_max_tablet_transfer_scn(share::SCN &transfer_scn)
+{
+  int ret = OB_SUCCESS;
+  const bool need_initial_state = false;
+  ObHALSTabletIDIterator iter(ls_->get_ls_id(), need_initial_state);
+  share::SCN max_transfer_scn = share::SCN::min_scn();
+  static const int64_t LOCK_TIMEOUT = 100_ms; // 100ms
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(ls_->build_tablet_iter(iter))) {
+    STORAGE_LOG(WARN, "failed to build tablet iter", K(ret));
+  } else if (OB_FAIL(transfer_scn_iter_lock_.lock(LOCK_TIMEOUT))) {
+    STORAGE_LOG(WARN, "failed to lock transfer scn iter lock", K(ret));
+  } else {
+    ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+    common::ObTabletID tablet_id;
+    ObTabletMapKey key;
+    key.ls_id_ = ls_->get_ls_id();
+    ObTabletCreateDeleteMdsUserData mds_data;
+    bool committed_flag = false;
+    ObTabletHandle tablet_handle;
+    const WashTabletPriority priority = WashTabletPriority::WTP_LOW;
+    while (OB_SUCC(ret)) {
+      mds_data.reset();
+      if (OB_FAIL(iter.get_next_tablet_id(tablet_id))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          STORAGE_LOG(WARN, "failed to get tablet id", K(ret));
+        }
+      } else if (OB_FALSE_IT(key.tablet_id_ = tablet_id)) {
+      } else if (OB_FAIL(t3m->get_tablet(priority, key, tablet_handle))) {
+        STORAGE_LOG(WARN, "failed to get tablet", K(ret), K(key));
+      } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_latest_tablet_status(mds_data, committed_flag))) {
+        if (OB_EMPTY_RESULT == ret || OB_ERR_SHARED_LOCK_CONFLICT == ret) {
+          STORAGE_LOG(INFO, "committed tablet_status does not exist", K(ret), K(key));
+          ret = OB_SUCCESS;
+        } else {
+          STORAGE_LOG(WARN, "failed to get mds table", KR(ret), K(key));
+        }
+      } else if (!committed_flag) {
+        continue;
+      } else if (share::SCN::invalid_scn() == mds_data.transfer_scn_) {
+        // do nothing
+      } else {
+        transfer_scn = mds_data.transfer_scn_;
+        max_transfer_scn = MAX(transfer_scn, max_transfer_scn);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      transfer_scn = max_transfer_scn;
+    }
+    transfer_scn_iter_lock_.unlock();
   }
   return ret;
 }

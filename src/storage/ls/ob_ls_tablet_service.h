@@ -412,7 +412,6 @@ public:
   int get_all_tablet_ids(const bool except_ls_inner_tablet, common::ObIArray<ObTabletID> &tablet_id_array);
 
   int flush_mds_table(int64_t recycle_scn);
-  int get_max_tablet_transfer_scn(share::SCN &transfer_scn);
 protected:
   virtual int prepare_dml_running_ctx(
       const common::ObIArray<uint64_t> *column_ids,

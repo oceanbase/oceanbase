@@ -46,6 +46,7 @@ public:
   int replace_member_with_learner(const common::ObMember &added_member,
                                   const common::ObMember &removed_member,
                                   const int64_t timeout);
+  int get_max_tablet_transfer_scn(share::SCN &transfer_scn);
 
 private:
   int get_leader_config_version_and_transfer_scn_(
@@ -64,6 +65,7 @@ private:
 private:
   bool is_inited_;
   storage::ObLS *ls_;
+  lib::ObMutex transfer_scn_iter_lock_;
   logservice::ObLogHandler *log_handler_;
   DISALLOW_COPY_AND_ASSIGN(ObLSMemberListService);
 };

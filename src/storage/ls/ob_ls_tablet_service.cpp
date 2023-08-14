@@ -6053,59 +6053,6 @@ int ObLSTabletService::flush_mds_table(int64_t recycle_scn)
   return ret;
 }
 
-int ObLSTabletService::get_max_tablet_transfer_scn(share::SCN &transfer_scn)
-{
-  int ret = OB_SUCCESS;
-  const bool need_initial_state = false;
-  ObHALSTabletIDIterator iter(ls_->get_ls_id(), need_initial_state);
-  share::SCN max_transfer_scn = share::SCN::min_scn();
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(build_tablet_iter(iter))) {
-    LOG_WARN("failed to build tablet iter", K(ret), KPC(this));
-  } else {
-    ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-    common::ObTabletID tablet_id;
-    ObTabletMapKey key;
-    key.ls_id_ = ls_->get_ls_id();
-    ObTabletCreateDeleteMdsUserData mds_data;
-    ObTabletHandle tablet_handle;
-    const WashTabletPriority priority = WashTabletPriority::WTP_LOW;
-    while (OB_SUCC(ret)) {
-      mds_data.reset();
-      if (OB_FAIL(iter.get_next_tablet_id(tablet_id))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-          break;
-        } else {
-          LOG_WARN("failed to get tablet id", K(ret));
-        }
-      } else if (OB_FALSE_IT(key.tablet_id_ = tablet_id)) {
-      } else if (OB_FAIL(t3m->get_tablet(priority, key, tablet_handle))) {
-          LOG_WARN("failed to get tablet", K(ret), K(key));
-      } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_tablet_status(
-          share::SCN::max_scn(), mds_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
-        if (OB_EMPTY_RESULT == ret || OB_ERR_SHARED_LOCK_CONFLICT == ret) {
-          LOG_INFO("committed tablet_status does not exist", K(ret), K(key));
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("failed to get mds table", KR(ret), K(key));
-        }
-      } else if (share::SCN::invalid_scn() == mds_data.transfer_scn_) {
-        // do nothing
-      } else {
-        transfer_scn = mds_data.transfer_scn_;
-        max_transfer_scn = MAX(transfer_scn, max_transfer_scn);
-      }
-    }
-    if (OB_SUCC(ret)) {
-      transfer_scn = max_transfer_scn;
-    }
-  }
-  return ret;
-}
-
 int ObLSTabletService::set_frozen_for_all_memtables()
 {
   int ret = OB_SUCCESS;

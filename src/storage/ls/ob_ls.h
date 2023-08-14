@@ -509,7 +509,6 @@ public:
   DELEGATE_WITH_RET(ls_tablet_svr_, flush_mds_table, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, enable_to_read, void);
   DELEGATE_WITH_RET(ls_tablet_svr_, disable_to_read, void);
-  DELEGATE_WITH_RET(ls_tablet_svr_, get_max_tablet_transfer_scn, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, get_tablet_with_timeout, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, get_mds_table_mgr, int);
 
@@ -657,6 +656,7 @@ public:
   DELEGATE_WITH_RET(member_list_service_, replace_member, int);
   DELEGATE_WITH_RET(member_list_service_, replace_member_with_learner, int);
   DELEGATE_WITH_RET(member_list_service_, get_config_version_and_transfer_scn, int);
+  DELEGATE_WITH_RET(member_list_service_, get_max_tablet_transfer_scn, int);
   DELEGATE_WITH_RET(log_handler_, add_learner, int);
   DELEGATE_WITH_RET(log_handler_, replace_learners, int);
   DELEGATE_WITH_RET(block_tx_service_, ha_block_tx, int);
