@@ -44,9 +44,8 @@ int ObExprToClob::calc_result_type1(ObExprResType &type,
   if (OB_ISNULL(type_ctx.get_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
-  } else if (ob_is_null(text.get_type())) {
-    type.set_null();
-  } else if (ob_is_string_tc(text.get_type())
+  } else if (ob_is_null(text.get_type())
+             || ob_is_string_tc(text.get_type())
              || ob_is_clob(text.get_type(), text.get_collation_type())
              || ob_is_raw(text.get_type())
              || ob_is_numeric_type(text.get_type())

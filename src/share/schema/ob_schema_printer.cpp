@@ -2092,6 +2092,12 @@ int ObSchemaPrinter::print_table_definition_table_options(
       OB_LOG(WARN, "fail to print global/local", K(ret), K(table_schema));
     }
   }
+  if (OB_SUCC(ret) && !strict_compat_
+      && is_index_tbl && is_oracle_mode && !table_schema.is_index_visible()) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "INVISIBLE"))) {
+      OB_LOG(WARN, "fail to print invisible option", K(ret), K(table_schema));
+    }
+  }
   if (OB_SUCC(ret) && !strict_compat_ && !is_index_tbl) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "USE_BLOOM_FILTER = %s ",
                                 table_schema.is_use_bloomfilter() ? "TRUE" : "FALSE"))) {
