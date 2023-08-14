@@ -279,6 +279,7 @@ int ObMPUtils::append_modfied_sess_info(common::ObIAllocator &allocator,
         } else if (encoder->is_changed_) {
           int16_t info_type = (int16_t)i;
           int32_t info_len = sess_size[i];
+          int64_t info_pos = 0;
           LOG_DEBUG("session-info-encode", K(sess.get_sessid()), K(info_type), K(info_len));
           if (info_len < 0) {
             ret = OB_INVALID_ARGUMENT;
@@ -287,10 +288,14 @@ int ObMPUtils::append_modfied_sess_info(common::ObIAllocator &allocator,
             // invalid info len do nothing and skip it.
             encoder->is_changed_ = false;
           } else if (OB_FAIL(ObProtoTransUtil::store_type_and_len(buf, size, pos, info_type, info_len))) {
-            LOG_WARN("failed to set type and len", K(info_type), K(info_len), K(ret));
-          } else if (OB_FAIL(encoder->serialize(sess, buf, size, pos))) {
-            LOG_WARN("failed to serialize", K(sess), K(ret), K(size), K(pos));
+            LOG_WARN("failed to set type and len", K(ret), K(info_type), K(info_len), K(pos));
+          } else if (pos + info_len > size) {
+            ret = OB_SIZE_OVERFLOW;
+            LOG_WARN("buf overflow for info", K(ret), K(buf), K(pos), K(info_type), K(info_len), K(size));
+          } else if (OB_FAIL(encoder->serialize(sess, buf + pos, info_len, info_pos))) {
+            LOG_WARN("failed to serialize", K(sess), K(ret), K(size), K(buf), K(pos), K(info_type), K(info_len), K(info_pos));
           } else {
+            pos += info_len;
             // reset to not changed
             encoder->is_changed_ = false;
           }
@@ -333,6 +338,12 @@ int ObMPUtils::append_modfied_sess_info(common::ObIAllocator &allocator,
         } else {
           LOG_TRACE("add extra_info", K(kv) , KPHEX(buf, size), KP(buf), KP(kv.value_.get_string().ptr()));
         }
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // dump info size array
+      for (int i = 0; i< SESSION_SYNC_MAX_TYPE; i++) {
+        LOG_INFO("dump sess info size", "type", i, "size", sess_size[i]);
       }
     }
   }
