@@ -112,7 +112,7 @@ public:
   int find(const ObITable::TableKey &table_key, ObITable *&table) const;
   int find(const share::SCN &start_scn, const int64_t base_version, ObITable *&table, int64_t &mem_pos) const;
   int assign(ObMemtableArray &dst_array) const;
-  int64_t to_string(char *buf, const int64_t buf_len) const;
+  TO_STRING_KV(K_(count));
 private:
   bool exist_memtable_with_end_scn(const ObITable *table, const share::SCN &end_scn);
   memtable::ObIMemtable *memtable_array_[MAX_MEMSTORE_CNT];
@@ -151,7 +151,7 @@ public:
   OB_INLINE int64_t get_deep_copy_size() const { return count_ * sizeof(ObITable *); }
   int init(ObArenaAllocator &allocator, common::ObIArray<ObITable *> &ddl_kvs);
   int deep_copy(char *buf, const int64_t buf_size, int64_t &pos, ObDDLKVArray &dst) const;
-  int64_t to_string(char *buf, const int64_t buf_len) const;
+  TO_STRING_KV(K_(count), K_(is_inited));
 private:
   bool is_inited_;
   ObITable **ddl_kvs_;

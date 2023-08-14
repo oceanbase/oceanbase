@@ -837,22 +837,6 @@ bool ObMemtableArray::exist_memtable_with_end_scn(const ObITable *table, const S
   return is_exist;
 }
 
-int64_t ObMemtableArray::to_string(char *buf, const int64_t buf_len) const
-{
-  int64_t pos = 0;
-  if (OB_ISNULL(buf) || buf_len <= 0) {
-    // do nothing
-  } else {
-    J_OBJ_START();
-    J_NAME("ObMemtableArray");
-    J_KV(KP(this),
-        K_(count),
-        "memtable_ptr_array", ObArrayWrap<memtable::ObIMemtable *>(memtable_array_, count_));
-    J_OBJ_END();
-  }
-  return pos;
-}
-
 int ObDDLKVArray::init(
     ObArenaAllocator &allocator,
     common::ObIArray<ObITable *> &ddl_kvs)
@@ -917,21 +901,7 @@ int ObDDLKVArray::deep_copy(
   return ret;
 }
 
-int64_t ObDDLKVArray::to_string(char *buf, const int64_t buf_len) const
-{
-  int64_t pos = 0;
-  if (OB_ISNULL(buf) || buf_len <= 0) {
-    // do nothing
-  } else {
-    J_OBJ_START();
-    J_NAME("ObDDLKVArray");
-    J_KV(KP(this),
-        K_(count),
-        "ddl_kv_ptr_array", ObArrayWrap<ObITable *>(ddl_kvs_, count_));
-    J_OBJ_END();
-  }
-  return pos;
-}
+
 /* ObTableStoreUtil Section */
 bool ObTableStoreUtil::ObITableLogTsRangeCompare::operator()(
      const ObITable *ltable, const ObITable *rtable) const
