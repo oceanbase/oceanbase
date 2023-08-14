@@ -126,7 +126,7 @@ int ObTransformConstPropagate::ConstInfoContext::add_const_info(ExprConstInfo &c
   bool found = false;
   for (int64_t i = 0; OB_SUCC(ret) && !found && i < active_const_infos_.count(); ++i) {
     ExprConstInfo &cur_info = active_const_infos_.at(i);
-    if (const_info.column_expr_ == cur_info.const_expr_) {
+    if (const_info.column_expr_ == cur_info.column_expr_) { /* bugfix(fhkong) */
       found = true;
       if (const_info.is_used_) {
         if (OB_FAIL(expired_const_infos_.push_back(const_info))) {
@@ -1841,7 +1841,7 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
       if (OB_FAIL(SMART_CALL(recursive_collect_equal_pair_from_condition(stmt,
                                                                          expr->get_param_expr(i),
                                                                          const_ctx,
-                                                                         trans_happened)))) {
+                                                                         is_happened)))) { /* bugfix(fhkong) */
         LOG_WARN("failed to recursive collect const info from condition", K(ret));
       } else {
         trans_happened |= is_happened;
