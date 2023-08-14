@@ -1458,6 +1458,12 @@ int ObTablet::deserialize(
         remain -= rowkey_read_info_->get_deep_copy_size();
         start_pos += rowkey_read_info_->get_deep_copy_size();
       }
+    }
+
+    if (OB_FAIL(ret)) { // need to dec ddl kv ref cnt.
+      ddl_kvs_ = ddl_kvs_addr;
+      ddl_kv_count_ = ddl_kv_count;
+      reset_ddl_memtables();
     } else {
       // `pull_memtables` pulls ddl kvs into `ddl_kvs_addr` array which allocated by `allocator`.
       // tiny tablet needs to deep copy `ddl_kvs_addr` array to `tablet_buf + start_pos`, and CANNOT additionally
@@ -5499,6 +5505,7 @@ void ObTablet::reset_ddl_memtables()
     }
     ddl_kvs_[i] = nullptr;
   }
+  ddl_kvs_ = nullptr;
   ddl_kv_count_ = 0;
 }
 
