@@ -531,7 +531,6 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
         flags.status_flags_.OB_SERVER_MORE_RESULTS_EXISTS = has_ok_packet() ? true : false; /*no more result*/
         flags.status_flags_.OB_SERVER_STATUS_CURSOR_EXISTS = !last_row ? 1 : 0;
         if ((!cursor.is_streaming()
-             && cursor.is_ps_cursor()
              && max_count == cursor.get_current_position() + 1)
               || last_row) {
           flags.status_flags_.OB_SERVER_STATUS_LAST_ROW_SENT = 1;
@@ -570,8 +569,7 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
               ok_param.affected_rows_ = 0;
             }
             if ((!cursor.is_streaming()
-                 && cursor.is_ps_cursor()
-                 && max_count == cursor.get_current_position() + 1 )
+                 && max_count == cursor.get_current_position() + 1)
                 || last_row) {
               ok_param.send_last_row_ = true;
             } else {
