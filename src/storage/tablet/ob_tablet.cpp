@@ -373,7 +373,7 @@ int ObTablet::init(
     const ObTabletMdsData &mds_table_data,
     const ObTabletMdsData &base_data)
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
+  TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
   allocator_ = &allocator;
   common::ObArenaAllocator tmp_arena_allocator(common::ObMemAttr(MTL_ID(), "InitTabletMDS"));
@@ -709,7 +709,7 @@ int ObTablet::init(
 
 int ObTablet::fetch_table_store(ObTabletMemberWrapper<ObTabletTableStore> &wrapper) const
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
+  TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!table_store_addr_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -5106,7 +5106,7 @@ int ObTablet::build_memtable(common::ObIArray<ObTableHandleV2> &handle_array, co
 
 int ObTablet::read_mds_table(common::ObIAllocator &allocator, ObTabletMdsData &mds_data, const bool for_flush)
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
+  TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = tablet_meta_.ls_id_;
   const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
@@ -5142,7 +5142,7 @@ int ObTablet::read_mds_table_medium_info_list(
     common::ObIAllocator &allocator,
     ObTabletDumpedMediumInfo &medium_info_list) const
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
+  TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = tablet_meta_.ls_id_;
   const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
@@ -5175,7 +5175,7 @@ int ObTablet::notify_mds_table_flush_ret(
     const share::SCN &flush_scn,
     const int flush_ret)
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
+  TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
   mds::MdsTableHandle mds_table;
   const share::ObLSID &ls_id = tablet_meta_.ls_id_;

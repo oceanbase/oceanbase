@@ -28,7 +28,6 @@ namespace storage
 {
 class ObTablet;
 class ObTabletDDLKvMgr;
-
 typedef ObMetaObjGuard<ObTabletDDLKvMgr> ObDDLKvMgrHandle;
 
 class ObTabletPointer : public ObMetaPointer<ObTablet>
@@ -71,6 +70,7 @@ public:
   int try_release_mds_nodes_below(const share::SCN &scn);
   int try_gc_mds_table();
   int get_min_mds_ckpt_scn(share::SCN &scn);
+  ObLS *get_ls() const;
 private:
   int wash_obj();
   int add_tablet_to_old_version_chain(ObTablet *tablet);

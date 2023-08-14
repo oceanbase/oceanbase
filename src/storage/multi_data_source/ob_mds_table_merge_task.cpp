@@ -66,7 +66,7 @@ int ObMdsTableMergeTask::init()
 
 int ObMdsTableMergeTask::process()
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
+  TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
 
   DEBUG_SYNC(AFTER_EMPTY_SHELL_TABLET_CREATE);

@@ -58,7 +58,7 @@ int ObTabletCreateDeleteHelper::get_tablet(
     ObTabletHandle &handle,
     const int64_t timeout_us)
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
+  TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
   static const int64_t SLEEP_TIME_US = 10;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
@@ -491,7 +491,7 @@ int ObTabletCreateDeleteHelper::acquire_tmp_tablet(
     common::ObArenaAllocator &allocator,
     ObTabletHandle &handle)
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
+  TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   if (OB_UNLIKELY(!key.is_valid())) {

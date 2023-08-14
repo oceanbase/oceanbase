@@ -172,7 +172,7 @@ enum LogPhase
 };
 
 constexpr int64_t INVALID_VALUE = -1;
-#define MDS_TG(ms) TIMEGUARD_INIT(MDS, ms, 5_s)
+#define MDS_TG(ms) TIMEGUARD_INIT(MDS, ms)
 #define _MDS_LOG_PHASE(level, phase, info, args...) \
 do {\
   if (phase == mds::LogPhase::NONE) {\

@@ -1,10 +1,6 @@
 #ifndef INCLUDE_OB_TABLET_MDS_PART_IPP
 #define INCLUDE_OB_TABLET_MDS_PART_IPP
-#include "lib/ob_errno.h"
 #include "ob_i_tablet_mds_interface.h"
-#include "storage/multi_data_source/compile_utility/compile_mapper.h"
-#include "storage/multi_data_source/mds_node.h"
-#include "storage/multi_data_source/mds_unit.h"
 #endif
 namespace oceanbase
 {
@@ -286,16 +282,16 @@ int ObITabletMdsInterface::set(T &&data, mds::MdsCtx &ctx, const int64_t lock_ti
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   mds::MdsTableHandle handle;
-  if (CLICK_FAIL(get_mds_table_handle_(handle, true))) {
+  if (MDS_FAIL(get_mds_table_handle_(handle, true))) {
     MDS_LOG_SET(WARN, "failed to get_mds_table");
   } else if (!handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG_SET(WARN, "mds cannot be NULL");
-  } else if (CLICK_FAIL(handle.set(std::forward<T>(data), ctx, lock_timeout_us))) {
-    MDS_LOG_SET(WARN, "failed to set dummy key unit data");
   } else if (OB_ISNULL(get_tablet_ponter_())) {
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG_SET(WARN, "tablet pointer is null", K(ret), KPC(this));
+  } else if (MDS_FAIL(handle.set(std::forward<T>(data), ctx, lock_timeout_us))) {
+    MDS_LOG_SET(WARN, "failed to set dummy key unit data");
   } else {
     get_tablet_ponter_()->set_mds_written();
     MDS_LOG_SET(TRACE, "success to set dummy key unit data");
@@ -319,11 +315,11 @@ int ObITabletMdsInterface::replay(T &&data, mds::MdsCtx &ctx, const share::SCN &
     } else if (!handle.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       MDS_LOG_SET(WARN, "mds cannot be NULL");
-    } else if (CLICK_FAIL(handle.replay(std::forward<T>(data), ctx, scn))) {
-      MDS_LOG_SET(WARN, "failed to replay dummy key unit data");
     } else if (OB_ISNULL(get_tablet_ponter_())) {
       ret = OB_ERR_UNEXPECTED;
       MDS_LOG_SET(WARN, "tablet pointer is null", K(ret), KPC(this));
+    } else if (CLICK_FAIL(handle.replay(std::forward<T>(data), ctx, scn))) {
+      MDS_LOG_SET(WARN, "failed to replay dummy key unit data");
     } else {
       get_tablet_ponter_()->set_mds_written();
       MDS_LOG_SET(TRACE, "success to replay dummy key unit data");
@@ -345,11 +341,11 @@ int ObITabletMdsInterface::set(const Key &key, Value &&data, mds::MdsCtx &ctx, c
   } else if (!handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG_SET(WARN, "mds cannot be NULL");
-  } else if (CLICK_FAIL(handle.set(key, std::forward<Value>(data), ctx, lock_timeout_us))) {
-    MDS_LOG_SET(WARN, "failed to set multi key unit data");
   } else if (OB_ISNULL(get_tablet_ponter_())) {
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG_SET(WARN, "tablet pointer is null", K(ret), KPC(this));
+  } else if (CLICK_FAIL(handle.set(key, std::forward<Value>(data), ctx, lock_timeout_us))) {
+    MDS_LOG_SET(WARN, "failed to set multi key unit data");
   } else {
     get_tablet_ponter_()->set_mds_written();
     MDS_LOG_SET(TRACE, "success to set multi key unit data");
@@ -376,11 +372,11 @@ int ObITabletMdsInterface::replay(const Key &key,
     } else if (!handle.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       MDS_LOG_SET(WARN, "mds cannot be NULL");
-    } else if (CLICK_FAIL(handle.replay(key, std::forward<Value>(mds), ctx, scn))) {
-      MDS_LOG_SET(WARN, "failed to replay multi key unit data");
     } else if (OB_ISNULL(get_tablet_ponter_())) {
       ret = OB_ERR_UNEXPECTED;
       MDS_LOG_SET(WARN, "tablet pointer is null", K(ret), KPC(this));
+    } else if (CLICK_FAIL(handle.replay(key, std::forward<Value>(mds), ctx, scn))) {
+      MDS_LOG_SET(WARN, "failed to replay multi key unit data");
     } else {
       get_tablet_ponter_()->set_mds_written();
       MDS_LOG_SET(TRACE, "success to replay multi key unit data");
@@ -397,11 +393,15 @@ int ObITabletMdsInterface::remove(const Key &key, mds::MdsCtx &ctx, const int64_
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   mds::MdsTableHandle handle;
+  ObLSSwitchChecker ls_switch_checker;
   if (CLICK_FAIL(get_mds_table_handle_(handle, true))) {
     MDS_LOG_SET(WARN, "failed to get_mds_table");
   } else if (!handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG_SET(WARN, "mds cannot be NULL");
+  } else if (OB_ISNULL(get_tablet_ponter_())) {
+    ret = OB_ERR_UNEXPECTED;
+    MDS_LOG_SET(WARN, "tablet pointer is null", K(ret), KPC(this));
   } else if (CLICK_FAIL(handle.remove(key, ctx, lock_timeout_us))) {
     MDS_LOG_SET(WARN, "failed to remove multi key unit data");
   } else if (OB_ISNULL(get_tablet_ponter_())) {
@@ -422,16 +422,17 @@ int ObITabletMdsInterface::replay_remove(const Key &key, mds::MdsCtx &ctx, const
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   mds::MdsTableHandle handle;
+  ObLSSwitchChecker ls_switch_checker;
   if (CLICK_FAIL(get_mds_table_handle_(handle, true))) {
     MDS_LOG_SET(WARN, "failed to get_mds_table");
   } else if (!handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG_SET(WARN, "mds cannot be NULL");
-  } else if (CLICK() && OB_SUCCESS != (ret = handle.replay_remove<Key, Value>(key, ctx, scn))) {
-    MDS_LOG_SET(WARN, "failed to replay remove multi key unit data");
   } else if (OB_ISNULL(get_tablet_ponter_())) {
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG_SET(WARN, "tablet pointer is null", K(ret), KPC(this));
+  } else if (CLICK() && OB_SUCCESS != (ret = handle.replay_remove<Key, Value>(key, ctx, scn))) {
+    MDS_LOG_SET(WARN, "failed to replay remove multi key unit data");
   } else {
     get_tablet_ponter_()->set_mds_written();
     MDS_LOG_SET(TRACE, "success to remove multi key unit data");
@@ -447,6 +448,8 @@ int ObITabletMdsInterface::is_locked_by_others(bool &is_locked, const mds::MdsWr
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   mds::MdsTableHandle handle;
+  ObLSSwitchChecker ls_switch_checker;
+  bool is_online = false;
   if (CLICK_FAIL(get_mds_table_handle_(handle, false))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       MDS_LOG_GET(WARN, "failed to get_mds_table");
@@ -458,6 +461,11 @@ int ObITabletMdsInterface::is_locked_by_others(bool &is_locked, const mds::MdsWr
   } else if (!handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG_GET(WARN, "mds cannot be NULL");
+  } else if (OB_ISNULL(get_tablet_ponter_())) {
+    ret = OB_ERR_UNEXPECTED;
+    MDS_LOG_GET(WARN, "tablet pointer is null", K(ret), KPC(this));
+  } else if (MDS_FAIL(ls_switch_checker.check_ls_switch_state(get_tablet_ponter_()->get_ls(), is_online))) {
+    MDS_LOG_GET(WARN, "check ls online state failed", K(ret), KPC(this));
   } else if (CLICK_FAIL(handle.is_locked_by_others<T>(is_locked, self))) {
     if (OB_SNAPSHOT_DISCARDED != ret) {
       MDS_LOG_GET(WARN, "failed to check lock unit data");
@@ -468,7 +476,11 @@ int ObITabletMdsInterface::is_locked_by_others(bool &is_locked, const mds::MdsWr
     }
   }
   if (OB_SUCC(ret)) {
-    MDS_LOG_GET(TRACE, "success to get is locked by others state");
+    if (is_online && MDS_FAIL(ls_switch_checker.double_check_epoch())) {
+      MDS_LOG_GET(WARN, "failed to double check ls online");
+    } else {
+      MDS_LOG_GET(TRACE, "success to get is locked by others state");
+    }
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -481,6 +493,8 @@ int ObITabletMdsInterface::get_latest(OP &&read_op, bool &is_committed, const in
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   mds::MdsTableHandle handle;
+  ObLSSwitchChecker ls_switch_checker;
+  bool is_online = false;
   if (CLICK_FAIL(get_mds_table_handle_(handle, false))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       MDS_LOG_GET(WARN, "failed to get_mds_table");
@@ -490,6 +504,11 @@ int ObITabletMdsInterface::get_latest(OP &&read_op, bool &is_committed, const in
   } else if (!handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG_GET(WARN, "mds cannot be NULL");
+  } else if (OB_ISNULL(get_tablet_ponter_())) {
+    ret = OB_ERR_UNEXPECTED;
+    MDS_LOG_GET(WARN, "tablet pointer is null", K(ret), KPC(this));
+  } else if (MDS_FAIL(ls_switch_checker.check_ls_switch_state(get_tablet_ponter_()->get_ls(), is_online))) {
+    MDS_LOG_GET(WARN, "check ls online state failed", K(ret), KPC(this));
   } else if (CLICK_FAIL(handle.get_latest<T>(read_op, is_committed, read_seq))) {
     if (OB_SNAPSHOT_DISCARDED != ret) {
       MDS_LOG_GET(WARN, "failed to get mds data");
@@ -508,6 +527,13 @@ int ObITabletMdsInterface::get_latest(OP &&read_op, bool &is_committed, const in
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    if (is_online && MDS_FAIL(ls_switch_checker.double_check_epoch())) {
+      MDS_LOG_GET(WARN, "failed to double check ls online");
+    } else {
+      MDS_LOG_GET(TRACE, "success to get_latest");
+    }
+  }
   return ret;
   #undef PRINT_WRAPPER
 }
@@ -522,6 +548,8 @@ int ObITabletMdsInterface::get_snapshot(OP &&read_op,
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   mds::MdsTableHandle handle;
+  ObLSSwitchChecker ls_switch_checker;
+  bool is_online = false;
   if (CLICK_FAIL(get_mds_table_handle_(handle, false))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       MDS_LOG_GET(WARN, "failed to get_mds_table");
@@ -531,6 +559,11 @@ int ObITabletMdsInterface::get_snapshot(OP &&read_op,
   } else if (!handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG_GET(WARN, "mds cannot be NULL");
+  } else if (OB_ISNULL(get_tablet_ponter_())) {
+    ret = OB_ERR_UNEXPECTED;
+    MDS_LOG_GET(WARN, "tablet pointer is null", K(ret), KPC(this));
+  } else if (MDS_FAIL(ls_switch_checker.check_ls_switch_state(get_tablet_ponter_()->get_ls(), is_online))) {
+    MDS_LOG_GET(WARN, "check ls online state failed", K(ret), KPC(this));
   } else if (CLICK_FAIL(handle.get_snapshot<T>(read_op, snapshot, read_seq, timeout_us))) {
     if (OB_SNAPSHOT_DISCARDED != ret) {
       MDS_LOG_GET(WARN, "failed to get mds data");
@@ -552,6 +585,13 @@ int ObITabletMdsInterface::get_snapshot(OP &&read_op,
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    if (is_online && MDS_FAIL(ls_switch_checker.double_check_epoch())) {
+      MDS_LOG_GET(WARN, "failed to double check ls online");
+    } else {
+      MDS_LOG_GET(TRACE, "success to get_snapshot");
+    }
+  }
   return ret;
   #undef PRINT_WRAPPER
 }
@@ -567,6 +607,8 @@ int ObITabletMdsInterface::get_snapshot(const Key &key,
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
   mds::MdsTableHandle handle;
+  ObLSSwitchChecker ls_switch_checker;
+  bool is_online = false;
   if (CLICK_FAIL(get_mds_table_handle_(handle, false))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       MDS_LOG_GET(WARN, "failed to get_mds_table");
@@ -576,6 +618,11 @@ int ObITabletMdsInterface::get_snapshot(const Key &key,
   } else if (!handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG_GET(WARN, "mds cannot be NULL");
+  } else if (OB_ISNULL(get_tablet_ponter_())) {
+    ret = OB_ERR_UNEXPECTED;
+    MDS_LOG_GET(WARN, "tablet pointer is null", K(ret), KPC(this));
+  } else if (MDS_FAIL(ls_switch_checker.check_ls_switch_state(get_tablet_ponter_()->get_ls(), is_online))) {
+    MDS_LOG_GET(WARN, "check ls online state failed", K(ret), KPC(this));
   } else if (CLICK() && OB_SUCCESS != (ret = handle.get_snapshot<Key, Value>(key, read_op, snapshot, read_seq, timeout_us))) {
     if (OB_SNAPSHOT_DISCARDED != ret) {
       MDS_LOG_GET(WARN, "failed to get mds data");
@@ -595,6 +642,13 @@ int ObITabletMdsInterface::get_snapshot(const Key &key,
           MDS_LOG_GET(WARN, "failed to get snapshot data from tablet");
         }
       }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (is_online && MDS_FAIL(ls_switch_checker.double_check_epoch())) {
+      MDS_LOG_GET(WARN, "failed to double check ls online");
+    } else {
+      MDS_LOG_GET(TRACE, "success to get_snapshot");
     }
   }
   return ret;

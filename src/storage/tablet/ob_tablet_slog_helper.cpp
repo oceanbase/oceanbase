@@ -35,7 +35,7 @@ int ObTabletSlogHelper::write_update_tablet_slog(
     const common::ObTabletID &tablet_id,
     const ObMetaDiskAddr &disk_addr)
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
+  TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
   const ObTabletMapKey tablet_key(ls_id, tablet_id);
   if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || !disk_addr.is_valid())) {

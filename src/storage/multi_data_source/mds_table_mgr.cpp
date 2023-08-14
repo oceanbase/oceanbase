@@ -247,7 +247,7 @@ int ObMdsTableMgr::flush(SCN recycle_scn, bool need_freeze)
     MDS_LOG_FREEZE(WARN, "fail to get max_consequent_callbacked_scn", KR(ret), K(*this));
   } else if (!max_consequent_callbacked_scn.is_valid() || max_consequent_callbacked_scn.is_max() || max_consequent_callbacked_scn.is_min()) {
     ret = OB_ERR_UNEXPECTED;
-    MDS_LOG_FREEZE(ERROR, "invalid max_consequent_callbacked_scn", KR(ret), K(*this));
+    MDS_LOG_FREEZE(WARN, "invalid max_consequent_callbacked_scn", KR(ret), K(*this));
   } else {
     if (need_freeze) {
       if (recycle_scn.is_max() || !recycle_scn.is_valid()) {

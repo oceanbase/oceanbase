@@ -91,6 +91,7 @@ ObLS::ObLS()
     is_stopped_(false),
     is_offlined_(false),
     is_remove_(false),
+    switch_epoch_(0),
     ls_meta_(),
     rs_reporter_(nullptr),
     startup_transfer_info_()
@@ -892,6 +893,7 @@ int ObLS::offline_(const int64_t start_ts)
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
   } else if (FALSE_IT(is_offlined_ = true)) {
+  } else if (OB_FAIL(offline_advance_epoch_())) {
   } else if (FALSE_IT(checkpoint_executor_.offline())) {
     LOG_WARN("checkpoint executor offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_restore_handler_.offline())) {
@@ -1004,6 +1006,31 @@ int ObLS::online_compaction_()
   return ret;
 }
 
+int ObLS::offline_advance_epoch_()
+{
+  int ret = OB_SUCCESS;
+  if (ATOMIC_LOAD(&switch_epoch_) & 1) {
+    ATOMIC_AAF(&switch_epoch_, 1);
+    LOG_INFO("offline advance epoch", K(ret), K(ls_meta_), K_(switch_epoch));
+  } else {
+    LOG_INFO("offline not advance epoch(maybe repeat call)", K(ret), K(ls_meta_), K_(switch_epoch));
+  }
+  return ret;
+}
+
+int ObLS::online_advance_epoch_()
+{
+  int ret = OB_SUCCESS;
+  if (ATOMIC_LOAD(&switch_epoch_) & 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("switch_epoch_ is odd, means online already", K(ret));
+  } else {
+    ATOMIC_AAF(&switch_epoch_, 1);
+    LOG_INFO("online advance epoch", K(ret), K(ls_meta_), K_(switch_epoch));
+  }
+  return ret;
+}
+
 int ObLS::online()
 {
   int ret = OB_SUCCESS;
@@ -1036,9 +1063,9 @@ int ObLS::online()
   } else if (FALSE_IT(checkpoint_executor_.online())) {
   } else if (FALSE_IT(tablet_gc_handler_.online())) {
   } else if (FALSE_IT(tablet_empty_shell_handler_.online())) {
+  } else if (OB_FAIL(online_advance_epoch_())) {
   } else {
     is_offlined_ = false;
-    // do nothing
   }
 
   FLOG_INFO("ls online end", KR(ret), "ls_id", get_ls_id());

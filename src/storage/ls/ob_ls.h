@@ -161,6 +161,7 @@ public:
   friend ObLSLockGuard;
   friend class ObFreezer;
   friend class checkpoint::ObDataCheckpoint;
+  friend class ObLSSwitchChecker;
 public:
   static constexpr int64_t TOTAL_INNER_TABLET_NUM = 3;
   static const uint64_t INNER_TABLET_ID_LIST[TOTAL_INNER_TABLET_NUM];
@@ -336,7 +337,7 @@ public:
   bool is_stopped() const { return is_stopped_; }
   int check_can_replay_clog(bool &can_replay);
 
-  TO_STRING_KV(K_(ls_meta), K_(log_handler), K_(restore_handler), K_(is_inited), K_(tablet_gc_handler), K_(startup_transfer_info));
+  TO_STRING_KV(K_(ls_meta), K_(switch_epoch), K_(log_handler), K_(restore_handler), K_(is_inited), K_(tablet_gc_handler), K_(startup_transfer_info));
 private:
   int ls_init_for_dup_table_();
   int ls_destory_for_dup_table_();
@@ -349,6 +350,8 @@ private:
   int online_compaction_();
   int offline_tx_(const int64_t start_ts);
   int online_tx_();
+  int offline_advance_epoch_();
+  int online_advance_epoch_();
 public:
   // ObLSMeta interface:
   int update_ls_meta(const bool update_restore_status,
@@ -894,6 +897,7 @@ private:
   bool is_stopped_;
   bool is_offlined_;
   bool is_remove_;
+  uint64_t switch_epoch_;// started from 0, odd means online, even means offline
   ObLSMeta ls_meta_;
   observer::ObIMetaReport *rs_reporter_;
   ObLSLock lock_;

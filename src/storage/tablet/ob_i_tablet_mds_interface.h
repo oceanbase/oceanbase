@@ -18,7 +18,7 @@
 #include "storage/meta_mem/ob_tablet_pointer.h"
 #include "storage/tablet/ob_tablet_mds_data.h"
 #include "storage/tablet/ob_tablet_member_wrapper.h"
-#include "storage/tablet/ob_tablet_meta.h"
+#include "storage/ls/ob_ls_switch_checker.h"
 
 namespace oceanbase
 {

@@ -407,6 +407,11 @@ int ObTabletPointer::get_min_mds_ckpt_scn(share::SCN &scn)
   return ret;
 }
 
+ObLS *ObTabletPointer::get_ls() const
+{
+  return ls_handle_.get_ls();
+}
+
 int ObTabletPointer::acquire_obj(ObTablet *&t)
 {
   int ret = OB_SUCCESS;

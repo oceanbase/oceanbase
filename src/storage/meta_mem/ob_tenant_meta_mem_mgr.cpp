@@ -1781,7 +1781,7 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
     const ObTabletHandle &old_handle,
     ObTabletHandle &new_handle)
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
+  TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
   const ObMetaDiskAddr &new_addr = new_handle.get_obj()->get_tablet_addr();
   const ObTablet *old_tablet = old_handle.get_obj();
