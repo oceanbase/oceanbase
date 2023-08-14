@@ -755,7 +755,6 @@ void ObCdcFetcher::handle_when_reach_max_lsn_in_palf_(const ObLSID &ls_id,
     ObCdcLSFetchLogResp &resp)
 {
   int ret = OB_SUCCESS;
-  bool is_ls_fall_behind = frt.is_ls_fall_behind();
 
   // Because we cannot determine whether this LS is a backward standby or a normal LS,
   // we can only check the LS.
@@ -764,10 +763,8 @@ void ObCdcFetcher::handle_when_reach_max_lsn_in_palf_(const ObLSID &ls_id,
   // 1. Reach max lsn but the progress is behind the upper limit
   // 2. No logs fetched in this round of RPC
   // 2. The overall progress is behind
-  if (fetched_log_count <= 0 && is_ls_fall_behind) {
-    if (OB_FAIL(check_lag_follower_(ls_id, palf_handle_guard, resp))) {
-      LOG_WARN("check_lag_follower_ fail", KR(ret), K(ls_id), K(frt));
-    }
+  if (OB_FAIL(check_lag_follower_(ls_id, palf_handle_guard, resp))) {
+    LOG_WARN("check_lag_follower_ fail", KR(ret), K(ls_id), K(frt));
   }
 }
 

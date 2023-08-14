@@ -181,7 +181,7 @@ public:
   T_DEF_INT_INFT(blacklist_survival_time_sec, OB_CLUSTER_PARAMETER, 30, 1, "blacklist-server surival time in seconds");
 
   // The maximum time the server can be blacklisted, in minutes
-  T_DEF_INT_INFT(blacklist_survival_time_upper_limit_min, OB_CLUSTER_PARAMETER, 4, 1, "blacklist-server survival time upper limit in minute");
+  T_DEF_INT_INFT(blacklist_survival_time_upper_limit_min, OB_CLUSTER_PARAMETER, 1, 1, "blacklist-server survival time upper limit in minute");
 
   // The server is blacklisted in the logstream, based on the time of the current server service logstream - to decide whether to penalize the survival time
   // When the service time is less than a certain interval, a doubling-live-time policy is adopted
