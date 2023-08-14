@@ -12703,6 +12703,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15402', all_def_ke
 # 15411: __all_virtual_import_table_task
 # 15412: __all_virtual_import_table_task_history
 # 15413: __all_virtual_import_stmt_exec_history
+# 15414: __all_virtual_ls_info
 
 # 余留位置
 
