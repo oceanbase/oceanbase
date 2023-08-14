@@ -1229,7 +1229,7 @@ int ObMPStmtPrexecute::send_param_packet(ObSQLSessionInfo &session,
   for (int64_t i = 0; OB_SUCC(ret) && i < params_cnt; ++i) {
     ObField param_field;
     ObMySQLField field;
-    param_field.type_.set_type(params->at(i).get_type()); // @bug
+    param_field.type_.set_type(ObIntType); // @bug
     param_field.cname_ = ObString::make_string("?");
     OZ (ObMySQLResultSet::to_mysql_field(param_field, field));
     OMPKField fp(field);
