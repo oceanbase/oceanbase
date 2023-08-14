@@ -10562,7 +10562,7 @@ int ObPLResolver::check_local_variable_read_only(
       if (var->get_name().prefix_match(ANONYMOUS_ARG)) {
         ObPLVar *shadow_var = const_cast<ObPLVar*>(var);
         shadow_var->set_readonly(false);
-        if (is_for_inout_param) {
+        if (is_for_inout_param || var->is_referenced()) {
           shadow_var->set_name(ANONYMOUS_INOUT_ARG);
         }
       } else {
@@ -11219,6 +11219,13 @@ int ObPLResolver::check_variable_accessible(
       OZ (check_local_variable_read_only(
         ns, access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_
         /*access_idxs.at(access_idxs.count() - 1).var_index_*/), access_idxs);
+    } else {
+      ObPLVar *var = NULL;
+      const ObPLSymbolTable *symbol_table = NULL;
+      int64_t idx = access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_;
+      CK (OB_NOT_NULL(symbol_table = ns.get_symbol_table()));
+      OV (OB_NOT_NULL(var = const_cast<ObPLVar *>(symbol_table->get_symbol(idx))), OB_ERR_UNEXPECTED, K(idx));
+      OX (var->set_is_referenced(true));
     }
   } else if (ObObjAccessIdx::is_package_variable(access_idxs)) {
     if ((for_write && ns.get_compile_flag().compile_with_wnps())
