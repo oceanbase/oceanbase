@@ -224,7 +224,7 @@ int ObExprConcat::calc_result_typeN(ObExprResType &type,
         has_text = true;
       }
     }
-    if (has_text) {
+    if (has_text && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0) {
       type.set_type(ObLongTextType);
     } else {
       type.set_varchar();
