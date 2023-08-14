@@ -164,8 +164,52 @@ private:
                               ObIArray<ObRawExpr *> &new_exprs);
   int check_remove_ora_decode_valid(ObRawExpr *&expr, int64_t &result_idx, bool &is_valid);
   int try_remove_ora_decode(ObRawExpr *&expr, ObRawExpr *&new_expr);
-};
 
+  int convert_case_when_predicate(ObDMLStmt *stmt, bool &trans_happended);
+  int recursive_convert_case_when_predicate_by_when_expr(
+                                            ObRawExpr *&expr, 
+                                            const bool is_scala_group_by,
+                                            bool &trans_happended);
+  int inner_convert_case_when_predicate_by_when_expr(
+                                            ObRawExpr *&expr, 
+                                            bool &trans_happended);
+  int check_when_expr_validity(ObCaseOpRawExpr *case_expr,
+                               const int64_t idx,
+                               ObRawExpr *&rewrite_expr,
+                               bool &is_blocked);
+
+  int convert_case_when_predicate_by_then_expr(
+                                      ObIArray<ObRawExpr *> &exprs,
+                                      const bool is_scala_group_by,
+                                      bool &trans_happended);
+  int inner_convert_case_when_predicate_by_then_expr(
+                                      ObRawExpr *&parent_expr,
+                                      ObCaseOpRawExpr *case_expr,
+                                      ObRawExpr *sibling_expr,
+                                      const bool case_at_left,
+                                      bool &trans_happended);
+  int check_then_exprs_validity(ObRawExpr *parent_expr,
+                                ObCaseOpRawExpr *case_expr,
+                                ObRawExpr *sibling_expr,
+                                const bool case_at_left,
+                                bool &is_uncalculable,
+                                int64_t &true_null_uncalc_idx,
+                                ObRawExpr *&true_null_uncalc_expr,
+                                ObIArray<ObRawExpr*> &false_exprs,
+                                bool &is_valid);
+  int build_rewrite_expr(ObCaseOpRawExpr *case_expr,
+                         const int64_t true_null_uncalc_idx,
+                         ObRawExpr *true_null_uncalc_expr,
+                         ObRawExpr *&rewrite_expr);
+  int add_constraint_for_convert_case_when(
+                                ObIArray<ObRawExpr *> &false_null_exprs,
+                                const bool need_add_true_cons,
+                                ObRawExpr *true_expr);
+  
+  int assign_array_at_idx(ObIArray<ObRawExpr *> &exprs, const int64_t idx);
+  int build_nvl_bool_exprs(ObIArray<ObRawExpr *> &exprs, const bool boolean);
+  int build_nvl_bool_expr(ObRawExpr *expr, const bool boolean, ObRawExpr *&nvl_expr);
+};
 }
 }
 

@@ -1,0 +1,632 @@
+
+# owner: kongfanhao.kfh
+# owner group: sql
+# tags: optimizer
+
+--disable_info
+--disable_metadata
+--disable_abort_on_error
+
+--result_format 4
+--explain_protocol 2
+
+--disable_warnings
+DROP DATABASE IF EXISTS DB_CONVERT_CASE_WHEN;
+--enable_warnings
+CREATE DATABASE DB_CONVERT_CASE_WHEN;
+USE DB_CONVERT_CASE_WHEN;
+
+--disable_warnings
+drop table if exists t1, t2, t3;
+--enable_warnings
+create table t1(c1 int, c2 int, c3 int, c4 int, c5 int, c6 int);
+create table t2(c1 int, c2 int, c3 int);
+create table t3(c1 int, c2 varchar(64), c3 varchar(64));
+
+insert/*trace*/ into t1 values(1,1,1,1,1,1), (2,2,2,2,2,2), (3,3,3,3,3,3), (4,4,4,4,4,4), (5,5,5,5,5,5);
+insert/*trace*/ into t2 values(NULL, NULL, NULL);
+insert/*trace*/ into t3 values(1, "aaa", "is_aaa"), (2, "bbb", "is_bbb"), (3, "ccc", "is_ccc"), (4, "ddd", "is_ddd");
+
+--disable_warnings
+drop table if exists is_c1;
+--enable_warnings
+create table is_c1(c1 int);
+
+# disable plan cache
+set ob_enable_plan_cache = 0;
+
+--echo **************************** basic test **************************** 
+--echo
+--echo == case 1
+select /*+no_rewrite*/* from (select /*+no_rewrite*/* from t2 where case when 1 is NULL then c1 else c2 end > 1); 
+select * from (select * from t2 where case when 1 is NULL then c1 else c2 end > 1); 
+
+--echo
+--echo == case 2
+select /*+no_rewrite*/* from t3 where case when c1 > 0 then "aaa" else "bbb" end = "aaa";
+select * from t3 where case when c1 > 0 then "aaa" else "bbb" end = "aaa";
+
+--echo
+--echo == case 3
+select /*+no_rewrite*/* from t3 where case when c1 > 0 then "aaa" else "bbb" end = "ccc";
+select * from t3 where case when c1 > 0 then "aaa" else "bbb" end = "ccc";
+
+--echo
+--echo == case 4 set union
+select /*+no_rewrite*/ * from ((select /*+no_rewrite*/ c1 from t1 where case when 1 > 2 then c1 else c2 end > 1) 
+                         union (select /*+no_rewrite*/ c1 from t3 where case when c1 > 0 then 1 else 2 end > 1)) as tmp;
+select * from ((select c1 from t1 where case when 1 > 2 then c1 else c2 end > 1) 
+         union (select c1 from t3 where case when c1 > 0 then 1 else 2 end > 1)) as tmp;
+
+--echo **************************** convert when exprs test **************************** 
+--echo
+--echo == case 1
+select /*+no_rewrite*/ * from t1 where c1 > 0 and case when 2 > 1 then c1 else c2 end > 1;
+select * from t1 where c1 > 0 and case when 2 > 1 then c1 else c2 end > 1;
+
+--echo
+--echo == case 2
+select /*+no_rewrite*/ case when 2 > 1 then c1 else c2 end from t1 where c1 > 0 and case when 2 > 1 then c1 else c2 end > 1;
+select case when 2 > 1 then c1 else c2 end from t1 where c1 > 0 and case when 2 > 1 then c1 else c2 end > 1;
+
+--echo
+--echo == case 3
+select /*+no_rewrite*/ 1 from t1 where case when c1 > c2 then c1 else c2 end > 1;
+select 1 from t1 where case when c1 > c2 then c1 else c2 end > 1;
+
+--echo
+--echo == case 4
+select /*+no_rewrite*/ 1 from t1 where case when 2 > 2 then c1 
+                                            when 1 > 2  then 2 
+                                            when 2 < 3 then c2 
+                                            else c3 end > 1;
+select 1 from t1 where case when 2 > 2 then c1 
+                            when 1 > 2  then 2 
+                            when 2 < 3 then c2 
+                            else c3 end > 1;
+
+--echo
+--echo == case 5
+select /*+no_rewrite*/ 1 from t1 where case when 2 > 1 then c1 
+                                            when 1 > 2  then 2 
+                                            when 2 < 3 then c2 
+                                            else c3 end > 1;
+select 1 from t1 where case when 2 > 1 then c1 
+                            when 1 > 2  then 2 
+                            when 2 < 3 then c2 
+                            else c3 end > 1;
+                            
+--echo
+--echo == case 6
+select /*+no_rewrite*/ 1 from t1 where case when NULL > 1 then c1 
+                                            when 1 > 2  then 2 
+                                            when 2 < 3 then c2 
+                                            else c3 end > 1;
+select 1 from t1 where case when NULL > 1 then c1 
+                            when 1 > 2  then 2 
+                            when 2 < 3 then c2 
+                            else c3 end > 1;
+
+--echo
+--echo == case 7
+select /*+no_rewrite*/ 1 from t1 where case when c1 > 1 then c1 
+                                            when 1 > 2  then 2 
+                                            when 2 < 3 then c2 
+                                            else c3 end > 1;
+select 1 from t1 where case when c1 > 1 then c1 
+                            when 1 > 2  then 2 
+                            when 2 < 3 then c2 
+                            else c3 end > 1;
+
+--echo
+--echo == case 8
+select /*+no_rewrite*/ 1 from t1 where case when 1 > 1 then c1 
+                                            else c3 end > 1;
+select 1 from t1 where case when 1 > 1 then c1 else c3 end > 1;
+
+--echo
+--echo == case 9
+select /*+no_rewrite*/ * from t1 where case when 1 < 2 then 1 
+                            when 2 > 3 then 2 
+                            when 3 > 2 then c1
+                            when c2 > 0 then c2
+                            else c3
+                        end > 2;
+select * from t1 where case when 1 < 2 then 1 
+                            when 2 > 3 then 2 
+                            when 3 > 2 then c1
+                            when c2 > 0 then c2
+                            else c3
+                        end > 2;
+
+--echo
+--echo == case 10: with scala group by
+select /*+no_rewrite*/ 1 from t1 having case when 1 > 1 then count(*) 
+                                             else 3 end > 1;
+select 1 from t1 having case when 1 > 1 then count(*) 
+                        else 3 end > 1;
+
+--echo
+--echo == case 11: with scala group by
+select /*+no_rewrite*/ case when 1 then 2 else count(*) end from t1 
+                        where c1 > 0 and case when 1 >= 1 then c1 else c2 end > 0
+                        having case when 1 > 1 then count(*) else 3 end > 1;
+select case when 1 then 2 else count(*) end from t1 
+                        where c1 > 0 and case when 1 >= 1 then c1 else c2 end > 0
+                        having case when 1 > 1 then count(*) else 3 end > 1;
+
+--echo
+--echo == case 12: with scala group by
+select /*+no_rewrite*/ 1 from t1 having case when 1 > 1 then count(*) 
+                                             when 2 > 1 then 2
+                                             else 3 end > 1;
+select 1 from t1 having case when 1 > 1 then count(*) 
+                                             when 2 > 1 then 2
+                                             else 3 end > 1;
+
+--echo
+--echo == case 13: with shared expr 
+select /*+no_rewrite*/ case when 2 > 1 then c1 else c2 end from t1 where 
+                                    case when 2 > 1 then c1 
+                                         else c2 
+                                    end > 1;
+select case when 2 > 1 then c1 else c2 end from t1 where 
+                                    case when 2 > 1 then c1 
+                                         else c2 
+                                    end > 1;
+
+--echo
+--echo == case 14: with subquery 
+select /*+no_rewrite*/1 from t1 where c1 > 0 and c2 in (
+    select /*+no_rewrite*/c2 from t2 where 
+    case when 0 > 1 then c1
+         when 1 > 2 then c2
+         else c3
+    end > 0
+) and c3 > 0;
+
+select 1 from t1 where c1 > 0 and c2 in (
+    select c2 from t2 where 
+    case when 0 > 1 then c1
+         when 1 > 2 then c2
+         else c3
+    end > 0
+) and c3 > 0;
+
+--echo
+--echo == case 15: with subquery with scala group by
+select /*+no_rewrite*/1 from t1 where c1 > 0 and c2 in (
+    select /*+no_rewrite*/c2 from t2 having 
+    case when 0 > 1 then count(*) 
+         when 1 > 2 then 2
+         else 2 
+    end > 0
+) and c3 > 0;
+
+select 1 from t1 where c1 > 0 and c2 in (
+    select c2 from t2 having 
+    case when 0 > 1 then count(*) 
+         when 1 > 2 then 2
+         else 2 
+    end > 0
+) and c3 > 0;
+
+--echo
+--echo == case 16: with scalar static const expr 
+select /*+no_rewrite*/ 1 from t1 where case when 1 > 2 then c1
+                            when 2 in (1,2,3) then c2
+                            when c1 > 2 then c3 
+                            else c4 
+                        end > 1;
+select 1 from t1 where case when 1 > 2 then c1
+                            when 2 in (1,2,3) then c2
+                            when c1 > 2 then c3 
+                            else c4 
+                        end > 1;
+
+--echo
+--echo == case 17: debug  
+select /*+no_rewrite*/ 1 from t1 where case when 1 > 2 then c1
+                            when 2 > 3 then c2
+                            when c1 > 2 then c3 
+                            when c2 > 2 then c4
+                            when c3 > 2 then c4
+                            else c4 
+                        end > 1;
+select 1 from t1 where case when 1 > 2 then c1
+                            when 2 > 3 then c2
+                            when c1 > 2 then c3 
+                            when c2 > 2 then c4
+                            when c3 > 2 then c4
+                            else c4 
+                        end > 1;
+
+--echo set autocommit = 0;
+set autocommit = 0;
+--echo 
+--echo == case 18: insert SQL 
+insert into is_c1 select /*+no_rewrite*/c1 from t1 where case when 2 > 2 then c1
+                                               when 2 > 1 then c2
+                                               else c3
+                                          end > 1;
+insert into is_c1 select c1 from t1 where case when 2 > 2 then c1
+                                               when 2 > 1 then c2
+                                               else c3
+                                          end > 1;
+select * from is_c1;
+rollback;
+
+--echo 
+--echo == case 19: insert SQL 
+insert into is_c1 select /*+no_rewrite*/c1 from t1 where case when 1 > NULL then c1
+                                               when 2 > 2 then c2
+                                               else c3
+                                          end > 1;
+insert into is_c1 select c1 from t1 where case when 1 > NULL then c1
+                                               when 2 > 2 then c2
+                                               else c3
+                                          end > 1;
+select * from is_c1;
+rollback;
+
+--echo 
+--echo == case 20: insert SQL 
+insert into is_c1 select /*+no_rewrite*/c1 from t1 where case when c1 > 1 then 1
+                                               when c2 > 2 then 2
+                                               else 3
+                                          end > 2;
+insert into is_c1 select c1 from t1 where case when c1 > 1 then 1
+                                               when c2 > 2 then 2
+                                               else 3
+                                          end > 2;
+select * from is_c1;
+rollback;
+
+--echo 
+--echo == case 21: insert SQL 
+insert into is_c1 select /*+no_rewrite*/c1 from t1 where case when c1 > 1 then 1
+                                               when c2 > 2 then 2
+                                          end > 2;
+insert into is_c1 select c1 from t1 where case when c1 > 1 then 1
+                                               when c2 > 2 then 2
+                                          end > 2;
+select * from is_c1;
+rollback;
+
+--echo 
+--echo == case 22: update SQL 
+update /*+no_rewrite*/ t1 set t1.c1 = t1.c1 + 1 where case when c1 > 1 then 1
+                                                           when c2 > 2 then 2
+                                                      end > 2;
+update t1 set t1.c1 = t1.c1 + 1 where case when c1 > 1 then 1
+                                           when c2 > 2 then 2
+                                      end > 2;
+select * from t1;
+rollback;
+
+--echo 
+--echo == case 23: update SQL 
+update /*+no_rewrite*/ t1 set t1.c1 = t1.c1 + 1 where case when 1 > 1 then c1
+                                                           when 2 > 2 then c2
+                                                           else c3
+                                                      end > 2;
+update t1 set t1.c1 = t1.c1 + 1 where case when 1 > 1 then c1
+                                           when 2 > 2 then c2
+                                           else c3
+                                      end > 2;
+select * from t1;
+rollback;
+
+delete from t1 where c1 = (select /*+no_rewrite*/ c1 from t3 where case when c1 > 0 then "aaa" else "bbb" end = "aaa" limit 1);
+delete from t1 where c1 = (select c1 from t3 where case when c1 > 0 then "aaa" else "bbb" end = "aaa" limit 1);
+select * from t1;
+rollback;
+
+set autocommit = 1;
+
+
+--echo **************************** convert then exprs test **************************** 
+--echo
+--echo == case 1
+select /*+no_rewrite*/* from t1 where case when c1 > 0 then 0 else 1 end > 0;
+select * from t1 where case when c1 > 0 then 0 else 1 end > 0;
+
+--echo
+--echo == case 2
+select /*+no_rewrite*/* from t1 where case when c1 > 0 then 0 else 1 end > 1;
+select * from t1 where case when c1 > 0 then 0 else 1 end > 1;
+
+--echo
+--echo == case 3
+select /*+no_rewrite*/ * from t1 where case when c1 > 0 then 0 
+							when c2 > 0 then 0 
+							else 1 
+					   end > 1;
+select * from t1 where case when c1 > 0 then 0 
+							when c2 > 0 then 0 
+							else 1 
+					   end > 1;
+
+--echo
+--echo == case 4
+select /*+no_rewrite*/ * from t1 where c1 > 0 and c2 > 0 and 
+                            case when c1 > 0 then 1 
+                                 when c2 > 0 then 2
+                                 else 0 
+                            end > 1;
+select * from t1 where c1 > 0 and c2 > 0 and 
+                            case when c1 > 0 then 1 
+                                 when c2 > 0 then 2
+                                 else 0 
+                            end > 1;
+
+--echo
+--echo == case 5
+select /*+no_rewrite*/ * from t1 where c1 > 0 or (c2 > 0 and 
+                                case when c1 > 0 then 1 
+                                    when c2 > 0 then 2
+                                    else 0 
+                                end > 1);
+select * from t1 where c1 > 0 or (c2 > 0 and 
+                                case when c1 > 0 then 1 
+                                    when c2 > 0 then 2
+                                    else 0 
+                                end > 1);
+
+--echo
+--echo == case 6: test with scala group by
+select /*+no_rewrite*/ case when c1 > 0 then 1 else count(*) end > 2 from t1;
+select case when c1 > 0 then 1 else count(*) end > 2 from t1;
+
+--echo
+--echo == case 7: test with scala group by
+select /*+no_rewrite*/ c2 > 0 and case when c1 > 0 then 1 else count(*) end > 2 from t1;
+select c2 > 0 and case when c1 > 0 then 1 else count(*) end > 2 from t1;
+
+--echo
+--echo == case 8: test with scala group by
+select /*+no_rewrite*/ 1 from t1 having case when 1 then 1 else count(*) end > 2;
+select 1 from t1 having case when 1 then 1 else count(*) end > 2;
+
+--echo
+--echo == case 9: test with scala group by
+select 1 from t1 where c1 > 0 or (c2 > 0 and 
+                                    case when c1 > 0 then 1 
+                                        when c2 > 0 then 2
+                                        else 0 
+                                    end > 1)
+                    having case when 1 then 1 else count(*) end > 2;
+select /*+no_rewrite*/ 1 from t1 where c1 > 0 or (c2 > 0 and 
+                                    case when c1 > 0 then 1 
+                                        when c2 > 0 then 2
+                                        else 0 
+                                    end > 1)
+                    having case when 1 then 1 else count(*) end > 2;
+
+--echo
+--echo == case 10: can't be rewrite 
+select /*+no_rewrite*/ * from t1 where case when c1 > 0 then 1 else 2 end > 0;
+select * from t1 where case when c1 > 0 then 1 else 2 end > 0;
+
+--echo
+--echo == case 11: can't be rewrite 
+select /*+no_rewrite*/ * from t1 where case when c1 > 0 then 1 
+                          	when c2 > 0 then 2
+                      	    when c3 > 0 then 3
+                          	else 4
+                       end > 1;
+select * from t1 where case when c1 > 0 then 1 
+                          	when c2 > 0 then 2
+                      	    when c3 > 0 then 3
+                          	else 4
+                       end > 1;
+                    
+--echo
+--echo == case 12: can't be rewrite 
+select /*+no_rewrite*/ * from t1 where case when c1 > 0 then c1 else c2 end > 0;
+select * from t1 where case when c1 > 0 then c1 else c2 end > 0;
+ 
+--echo
+--echo == case 13: can't be rewrite 
+select /*+no_rewrite*/ * from t1 where case when c1 > 0 then c1 
+                                when c2 > 0 then c2
+                                when c3 > 0 then 0
+                                else 0
+                            end > 1;
+
+select * from t1 where case when c1 > 0 then c1 
+                          	when c2 > 0 then c2
+                      	    when c3 > 0 then 0
+                          	else 0
+                       end > 1;
+
+--echo
+--echo == case 13: can't be rewrite with NULL
+select /*+no_rewrite*/ * from t1 where case when c1 > 0 then null else 0 end = 0;
+select * from t1 where case when c1 > 0 then null else 0 end = 0;
+
+--echo
+--echo == case 13: can't be rewrite with NULL
+select * from t1 where case when c1 > 0 then 1
+                            when c2 > 0 then 2
+                          	when c3 > 0 then 3
+                            else null
+                       end > 2;
+select /*+no_rewrite*/ * from t1 where case when c1 > 0 then 1
+                            when c2 > 0 then 2
+                          	when c3 > 0 then 3
+                            else null
+                       end > 2;
+
+--echo 
+--echo == case 14: false/null error at select expr
+select /*+no_rewrite*/ case when c1 > 2 then 1 when null > 1 then 2 else 0 end > 1 from t1;
+select case when c1 > 2 then 1 when null > 1 then 2 else 0 end > 1 from t1;
+
+
+--echo **************************** Joint when and then exprs test **************************** 
+--echo
+--echo == case 1 
+select * from t1 where 
+	case when 1 > 2 then 1
+			 when 2 > 3 then 2
+		   when null then c1
+			 when c2 > 0 then c2
+  	   else 1
+	end > 2;
+select /*+no_rewrite*/ * from t1 where 
+	case when 1 > 2 then 1
+			 when 2 > 3 then 2
+		   when null then c1
+			 when c2 > 0 then c2
+  	   else 1
+	end > 2;
+
+--echo 
+--echo == case 2
+select /*+no_rewrite*/ 1 from t1 where c1 > 0 and (c2 > 0 or case when c1 > c2 then c1 else 3 end > 5);
+select 1 from t1 where c1 > 0 and (c2 > 0 or case when c1 > c2 then c1 else 3 end > 5);
+
+--echo 
+--echo == case 3
+select /*+no_rewrite*/ 1 from t1 where c1 > 0 and (c2 > 0 or case when c1 > c2 then c1 else 3 end > 5) 
+group by c3
+having case when c3 > 0 then c3 else 0 end > 4;
+
+select 1 from t1 where c1 > 0 and (c2 > 0 or case when c1 > c2 then c1 else 3 end > 5) 
+group by c3
+having case when c3 > 0 then c3 else 0 end > 4;
+
+
+--echo **************************** plan cache test **************************** 
+--echo enable plan cache
+set ob_enable_plan_cache = 1;
+alter system set enable_sql_audit = true;
+alter system flush plan cache global;
+
+--echo
+--echo == case 1
+select * from t1 where case when c1 > 0 then 0 when c2 > 0 then 1 when c3 > 0 then 2 else 3 end > 3;
+select * from t1 where case when c1 > 0 then 0 when c2 > 0 then 1 when c3 > 0 then 2 else 3 end > 4;
+select hit_count, sql_id, query_sql from oceanbase.V$OB_PLAN_CACHE_PLAN_STAT where statement like "select * from t1 where case when c1 > ? then ? when c2 > ? then ? when c3 > ? then ? else ? end > ?";
+--echo expect generate 1 plan
+
+alter system flush plan cache global;
+--echo
+--echo == case 2
+select * from t1 where case when 1 > 2 then c1 when 2 > 3 then c2 else c3 end > 1;
+select * from t1 where case when 1 > 2 then c1 when 2 > 1 then c2 else c3 end > 1;
+select hit_count, sql_id, query_sql from oceanbase.V$OB_PLAN_CACHE_PLAN_STAT where statement like "select * from t1 where case when ? > ? then c1 when ? > ? then c2 else c3 end > ?";
+--echo expect generate 2 plan
+
+alter system flush plan cache global;
+--echo
+--echo == case 3
+select * from t1 where case when 1 > 2 then c1 when 2 > 1 then c2 else c3 end > 1;
+select * from t1 where case when 1 > 2 then c1 when 2 > 3 then c2 else c3 end > 1;
+select hit_count, sql_id, query_sql from oceanbase.V$OB_PLAN_CACHE_PLAN_STAT where statement like "select * from t1 where case when ? > ? then c1 when ? > ? then c2 else c3 end > ?";
+--echo expect generate 2 plan
+
+alter system flush plan cache global;
+--echo
+--echo == case 4
+select * from t1 where case when c1 > 1 then 1 when c2 > 1 then 2 else 0 end > 1;
+select * from t1 where case when c1 > 1 then 1 when c2 > 1 then 1 else 0 end > 1;
+select hit_count, sql_id, query_sql from oceanbase.V$OB_PLAN_CACHE_PLAN_STAT where statement like "select * from t1 where case when c1 > ? then ? when c2 > ? then ? else ? end > ?";
+--echo expect generate 2 plan
+
+alter system flush plan cache global;
+--echo
+--echo == case 5
+select * from t1 where case when c1 > 1 then 1 when c2 > 1 then 1 else 0 end > 1;
+select * from t1 where case when c1 > 1 then 1 when c2 > 1 then 2 else 0 end > 1;
+select hit_count, sql_id, query_sql from oceanbase.V$OB_PLAN_CACHE_PLAN_STAT where statement like "select * from t1 where case when c1 > ? then ? when c2 > ? then ? else ? end > ?";
+--echo expect generate 2 plan
+
+--echo NULL and const plan Constraint
+alter system flush plan cache global;
+--echo
+--echo == case 6
+select * from t1 where case when c1 > 1 then 1 when c2 > 1 then 2 else 0 end > 1;
+select * from t1 where case when c1 > 1 then 1 when c2 > 1 then NULL else 0 end > 1;
+select hit_count, sql_id, query_sql from oceanbase.V$OB_PLAN_CACHE_PLAN_STAT where statement like "select * from t1 where case when c1 > ? then ? when c2 > ? then ? else ? end > ?";
+--echo expect generate 2 plan
+
+alter system flush plan cache global;
+--echo
+--echo == case 7
+select * from t1 where case when c1 > 1 then 1 when c2 > 1 then NULL else 0 end > 1;
+select * from t1 where case when c1 > 1 then 1 when c2 > 1 then 2 else 0 end > 1;
+select hit_count, sql_id, query_sql from oceanbase.V$OB_PLAN_CACHE_PLAN_STAT where statement like "select * from t1 where case when c1 > ? then ? when c2 > ? then ? else ? end > ?";
+--echo expect generate 2 plan
+
+## The following test case generate 1 plan, for that can't be rewrite SQL, we don't add constraint
+alter system flush plan cache global;
+--echo
+--echo == case 8
+select * from t1 where case when c1 > 1 then 1 when c2 > 1 then NULL end > 1;
+select * from t1 where case when c1 > 1 then 1 when c2 > 1 then 2 else 0 end > 1;
+select hit_count, sql_id, query_sql from oceanbase.V$OB_PLAN_CACHE_PLAN_STAT where statement like "select * from t1 where case when c1 > ? then ? when c2 > ? then ? else ? end > ?";
+--echo expect generate 2 plan
+
+## The following test case generate 1 plan, for that can't be rewrite SQL, we don't add constraint
+alter system flush plan cache global;
+--echo
+--echo == case 9
+select * from t1 where case when c1 > 1 then 1 when c2 > 1 then 2 else 3 end > 1;
+select * from t1 where case when c1 > 1 then 1 when c2 > 1 then 2 else 3 end > 5;
+select hit_count, sql_id, query_sql from oceanbase.V$OB_PLAN_CACHE_PLAN_STAT where statement like "select * from t1 where case when c1 > ? then ? when c2 > ? then ? else ? end > ?";
+--echo expect generate 1 plan
+
+alter system flush plan cache global;
+--echo
+--echo == case 9.1
+select * from t1 where case when c1 > 1 then 1 when c2 > 1 then 2 else 3 end > 5;
+select * from t1 where case when c1 > 1 then 1 when c2 > 1 then 2 else 3 end > 1;
+select hit_count, sql_id, query_sql from oceanbase.V$OB_PLAN_CACHE_PLAN_STAT where statement like "select * from t1 where case when c1 > ? then ? when c2 > ? then ? else ? end > ?";
+--echo expect generate 2 plan
+
+## The following test case generate 1 plan, for NULL we add NVL(NULL, FALSE) as FALSE
+alter system flush plan cache global;
+--echo
+--echo == case 10
+select * from t1 where case when 1 > 1 then c1 when NULL > 2 then c2 when 3 > 3 then c3 else c4 end > 1;
+select * from t1 where case when 1 > 1 then c1 when 2 > 2 then c2 when 3 > 3 then c3 else c4 end > 1;
+select hit_count, sql_id, query_sql from oceanbase.V$OB_PLAN_CACHE_PLAN_STAT where statement like "select * from t1 where case when ? > ? then c1 when ? > ? then c2 when ? > ? then c3 else c4 end > ?";
+--echo expect generate 1 plan
+
+alter system flush plan cache global;
+--echo
+--echo == case 11
+select * from t1 where case when 1 > 1 then 1 when c2 > 2 then 2 when 3 > 3 then 3 else 4 end > 0;
+select * from t1 where case when 1 > 1 then 1 when c2 > 2 then 2 when 3 > 3 then 3 else 4 end > 3;
+select hit_count, sql_id, query_sql from oceanbase.V$OB_PLAN_CACHE_PLAN_STAT where statement like "select * from t1 where case when ? > ? then ? when c2 > ? then ? when ? > ? then ? else ? end > ?";
+--echo expect generate 1 plan
+
+
+--echo **************************** index scan test **************************** 
+set ob_enable_plan_cache = 0;
+create index t1c2 on t1(c2);
+--echo
+--echo == case 1
+select /*+no_rewrite*/ * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else 0 end > 1;
+select * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else 0 end > 1;
+--echo expect use range scan on index t1c2 
+
+--echo
+--echo == case 2
+select /*+no_rewrite*/ * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 end > 1;
+select * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 end > 1;
+--echo expect use range scan on index t1c2 
+
+--echo
+--echo == case 3
+select /*+no_rewrite*/ * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else c3 end > 1;
+select * from t1 where case when c1 > 1 then 1 when c2 > 2 then 2 else c3 end > 1;
+--echo expect don't use range scan 
+
+--echo end test
+
+USE DB_CONVERT_CASE_WHEN;
+drop database DB_CONVERT_CASE_WHEN;
+
