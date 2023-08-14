@@ -3022,7 +3022,7 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
   uint64_t value_count = OB_INVALID_ID;
   bool is_all_default = false;
   if (OB_ISNULL(del_upd_stmt) || OB_ISNULL(node) || OB_ISNULL(session_info_) ||
-      T_VALUE_LIST != node->type_ || OB_ISNULL(node->children_)) {
+      T_VALUE_LIST != node->type_ || OB_ISNULL(node->children_) || OB_ISNULL(del_upd_stmt->get_query_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguemnt", K(del_upd_stmt), K(node), K(session_info_), K(ret));
   } else if (is_oracle_mode() && 1 < node->num_child_) {
@@ -3039,6 +3039,12 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
   if (FAILEDx(table_info.values_vector_.reserve(node->num_child_ * table_info.values_desc_.count()))) {
     // works for most cases. except label security/timestamp generation needs extend memory
     LOG_WARN("reserve memory fail", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(check_need_match_all_params(table_info.values_desc_,
+                                            del_upd_stmt->get_query_ctx()->need_match_all_params_))) {
+      LOG_WARN("check need match all params failed", K(ret));
+    }
   }
   if (OB_SUCC(ret)) {
     //move generated columns behind basic columns before resolve values
@@ -4296,6 +4302,40 @@ int ObDelUpdResolver::recursive_search_sequence_expr(const ObRawExpr *default_ex
       if (child_expr->has_flag(CNT_SEQ_EXPR)
           && OB_FAIL(SMART_CALL(recursive_search_sequence_expr(child_expr)))) {
         LOG_WARN("resursive search sequence expr failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDelUpdResolver::check_need_match_all_params(const common::ObIArray<ObColumnRefRawExpr*> &value_descs, bool &need_match)
+{
+  int ret = OB_SUCCESS;
+  need_match = false;
+  ObSEArray<uint64_t, 4> col_ids;
+  ObBitSet<> column_bs;
+  for (int64_t i = 0; OB_SUCC(ret) && i < value_descs.count() && !need_match; ++i) {
+    ObColumnRefRawExpr *value_desc = value_descs.at(i);
+    if (OB_ISNULL(value_desc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("value desc is null", K(ret), K(value_descs));
+    } else if (OB_FAIL(column_bs.add_member(value_desc->get_column_id()))) {
+      LOG_WARN("add column id failed", K(ret));
+    }
+  }
+  //if a depend column exists in value_desc, need match the datatypes of all params
+  for (int64_t i = 0; OB_SUCC(ret) && i < value_descs.count() && !need_match; ++i) {
+    if (value_descs.at(i)->is_generated_column()) {
+      col_ids.reset();
+      if (OB_FAIL(ObRawExprUtils::extract_column_ids(value_descs.at(i)->get_dependant_expr(),
+                                                    col_ids))) {
+        LOG_WARN("extract column exprs failed", K(ret));
+      } else {
+        for (int64_t j = 0; j < col_ids.count() && !need_match; ++j) {
+          if (column_bs.has_member(col_ids.at(j))) {
+            need_match = true;
+          }
+        }
       }
     }
   }
