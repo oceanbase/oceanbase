@@ -92,7 +92,7 @@ int ObTabletPersister::persist_and_transform_tablet(
 {
   TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
-  common::ObArenaAllocator allocator;
+  common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "PesistTranf"));
   common::ObSEArray<ObSharedBlocksWriteCtx, 16> tablet_meta_write_ctxs;
   common::ObSEArray<ObSharedBlocksWriteCtx, 16> sstable_meta_write_ctxs;
 
@@ -427,7 +427,7 @@ int ObTabletPersister::transform(
   TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
   ObTablet *tiny_tablet = reinterpret_cast<ObTablet *>(buf);
-  ObArenaAllocator allocator("TmpPullMemTbl");
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "TmpPullMemTbl"));
   if (len <= sizeof(ObTablet) || OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(len));
@@ -437,7 +437,7 @@ int ObTabletPersister::transform(
     // buf related
     int64_t start_pos = sizeof(ObTablet);
     int64_t remain = len - start_pos;
-    common::ObArenaAllocator allocator("Transform");
+    common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "Transform"));
 
     LOG_DEBUG("TINY TABLET: tablet", KP(buf), K(start_pos), K(remain));
     // rowkey read info related
@@ -567,7 +567,7 @@ int ObTabletPersister::fetch_and_persist_sstable(
     } else {
       ObMetaDiskAddr addr;
       ObSSTable *sstable = nullptr;
-      ObArenaAllocator tmp_allocator("PersistSSTable");
+      ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "PersistSSTable"));
       // The sstable by cache in table store, the address is also valid. But, here we hope that all
       // members of the sstable are serialized. So, we deep copy the sstable and set mem address.
       addr.set_mem_addr(0, sizeof(ObSSTable));
@@ -717,7 +717,7 @@ int ObTabletPersister::link_write_medium_info_list(
   int ret = OB_SUCCESS;
   ObTenantCheckpointSlogHandler *ckpt_slog_hanlder = MTL(ObTenantCheckpointSlogHandler*);
   ObSharedBlockReaderWriter &reader_writer = ckpt_slog_hanlder->get_shared_block_reader_writer();
-  common::ObArenaAllocator arena_allocator("serializer");
+  common::ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "serializer"));
   ObSharedBlockWriteInfo write_info;
   ObSharedBlockLinkHandle write_handle;
 
@@ -786,7 +786,7 @@ int ObTabletPersister::load_table_store(
 {
   int ret = OB_SUCCESS;
   void *ptr = nullptr;
-  ObArenaAllocator io_allocator("PersisterTmpIO");
+  ObArenaAllocator io_allocator(common::ObMemAttr(MTL_ID(), "PersisterTmpIO"));
   if (OB_UNLIKELY(!addr.is_block())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("address type isn't disk", K(ret), K(addr));

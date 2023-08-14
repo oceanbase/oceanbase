@@ -1659,7 +1659,7 @@ int ObTabletTableStore::batch_cache_sstable_meta(
     const int64_t remain_size)
 {
   int ret = OB_SUCCESS;
-  common::ObArenaAllocator tmp_allocator("CacheSSTable");
+  common::ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "CacheSSTable"));
   ObSafeArenaAllocator safe_allocator(tmp_allocator);
   common::ObSEArray<ObStorageMetaKey, 4> cache_keys;
   common::ObSEArray<ObSSTable *, 4> sstables;

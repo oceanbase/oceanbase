@@ -684,7 +684,7 @@ int ObSSTable::check_row_locked(
   int ret = OB_SUCCESS;
   void *buf = NULL;
   ObSSTableRowLockChecker *row_checker = NULL;
-  ObArenaAllocator allocator(ObModIds::OB_STORE_ROW_LOCK_CHECKER);
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_STORE_ROW_LOCK_CHECKER));
   lock_state.trans_version_ = SCN::min_scn();
   lock_state.is_locked_ = false;
 
@@ -1119,7 +1119,7 @@ void ObSSTable::dec_macro_ref() const
   int ret = OB_SUCCESS;
   MacroBlockId macro_id;
   ObMacroIdIterator iterator;
-  common::ObArenaAllocator tmp_allocator("CacheSST");
+  common::ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "CacheSST"));
   ObSafeArenaAllocator safe_allocator(tmp_allocator);
   ObSSTableMetaHandle meta_handle;
   if (OB_FAIL(get_meta(meta_handle, &safe_allocator))) {
@@ -1179,7 +1179,7 @@ int ObSSTable::inc_macro_ref(bool &inc_success) const
   int64_t data_blk_cnt = 0;
   int64_t other_blk_cnt = 0;
   int64_t linked_blk_cnt = 0;
-  common::ObArenaAllocator tmp_allocator("CacheSST");
+  common::ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "CacheSST"));
   ObSafeArenaAllocator safe_allocator(tmp_allocator);
   ObSSTableMetaHandle meta_handle;
   if (OB_FAIL(get_meta(meta_handle, &safe_allocator))) {

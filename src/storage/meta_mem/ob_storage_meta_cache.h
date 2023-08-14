@@ -288,7 +288,7 @@ int ObStorageMetaValue::bypass_process_storage_meta(
     const int64_t size)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_allocator("ProcMetaVaule");
+  ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "ProcMetaVaule"));
   int64_t pos = 0;
   T t;
   char *buff = nullptr;

@@ -252,7 +252,7 @@ int ObStorageMetaValue::process_sstable(
 {
   UNUSED(tablet);
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "ProSStable"));
   blocksstable::ObSSTable sstable;
   ObIStorageMetaObj *tiny_meta = nullptr;
   char *tmp_buf = nullptr;
@@ -290,7 +290,7 @@ int ObStorageMetaValue::process_table_store(
     const ObTablet *tablet)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator("ProcMetaVaule");
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "ProcMetaVaule"));
   ObTabletTableStore table_store;
   ObIStorageMetaObj *tiny_meta = nullptr;
   char *tmp_buf = nullptr;
@@ -327,7 +327,7 @@ int ObStorageMetaValue::process_autoinc_seq(
 {
   UNUSED(tablet); // tablet pointer has no use here
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "AutoIncSeq"));
   share::ObTabletAutoincSeq autoinc_seq;
   ObIStorageMetaObj *tiny_meta = nullptr;
   char *tmp_buf = nullptr;

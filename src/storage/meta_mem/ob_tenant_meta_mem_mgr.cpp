@@ -798,7 +798,7 @@ int ObTenantMetaMemMgr::get_min_end_scn_for_ls(
     SCN &min_end_scn_from_old)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "GetMinScn"));
   ObTabletHandle handle;
   min_end_scn_from_latest.set_max();
   min_end_scn_from_old.set_max();
@@ -881,7 +881,7 @@ int ObTenantMetaMemMgr::get_min_mds_ckpt_scn(const ObTabletMapKey &key, share::S
   int ret = OB_SUCCESS;
   SCN min_scn_from_old_tablets = SCN::max_scn();
   SCN min_scn_from_cur_tablet = SCN::max_scn();
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "GetMinMdsScn"));
   ObTabletHandle handle;
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -2170,7 +2170,7 @@ int ObTenantMetaMemMgr::try_wash_tablet(const std::type_info &type_info, void *&
     LOG_WARN("fail to acquire tablet", K(ret));
   } else {
     tablet_handle.set_wash_priority(WashTabletPriority::WTP_LOW);
-    ObArenaAllocator allocator("WashTablet");
+    ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "WashTablet"));
     CandidateTabletInfo info;
     time_guard.click("prepare");
     SpinWLockGuard guard(wash_lock_);

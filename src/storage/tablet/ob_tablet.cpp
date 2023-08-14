@@ -97,7 +97,7 @@ namespace storage
 #define IO_AND_DESERIALIZE(allocator, meta_addr, meta_ptr, args...)                                         \
   do {                                                                                                      \
     if (OB_SUCC(ret)) {                                                                                     \
-      ObArenaAllocator io_allocator;                                                                        \
+      ObArenaAllocator io_allocator(common::ObMemAttr(MTL_ID(), "TmpIO"));                                  \
       char *io_buf = nullptr;                                                                               \
       int64_t buf_len = -1;                                                                                 \
       int64_t io_pos = 0;                                                                                   \
@@ -270,7 +270,7 @@ int ObTablet::init(
   int ret = OB_SUCCESS;
   int64_t max_sync_schema_version = 0;
   int64_t input_max_sync_schema_version = 0;
-  common::ObArenaAllocator tmp_arena_allocator("InitTablet");
+  common::ObArenaAllocator tmp_arena_allocator(common::ObMemAttr(MTL_ID(), "InitTablet"));
   ObTabletMemberWrapper<ObTabletTableStore> old_table_store_wrapper;
   const ObTabletTableStore *old_table_store = nullptr;
   const ObStorageSchema *old_storage_schema = nullptr;
@@ -376,7 +376,7 @@ int ObTablet::init(
   TIMEGUARD_INIT(STORAGE, 10_ms, 5_s);
   int ret = OB_SUCCESS;
   allocator_ = &allocator;
-  common::ObArenaAllocator tmp_arena_allocator("InitTabletMDS");
+  common::ObArenaAllocator tmp_arena_allocator(common::ObMemAttr(MTL_ID(), "InitTabletMDS"));
   ObTabletMemberWrapper<ObTabletTableStore> old_table_store_wrapper;
   const ObTabletTableStore *old_table_store = nullptr;
   const ObStorageSchema *old_storage_schema = nullptr;
@@ -532,7 +532,7 @@ int ObTablet::init(
     const ObTablet &old_tablet)
 {
   int ret = OB_SUCCESS;
-  common::ObArenaAllocator tmp_arena_allocator("InitTablet");
+  common::ObArenaAllocator tmp_arena_allocator(common::ObMemAttr(MTL_ID(), "InitTablet"));
   ObTabletMemberWrapper<ObTabletTableStore> old_table_store_wrapper;
   const ObTabletTableStore *old_table_store = nullptr;
   const ObStorageSchema *old_storage_schema = nullptr;
@@ -612,7 +612,7 @@ int ObTablet::init(
   int ret = OB_SUCCESS;
   allocator_ = &allocator;
   SCN max_clog_checkpoint_scn;
-  common::ObArenaAllocator tmp_arena_allocator("InitTablet");
+  common::ObArenaAllocator tmp_arena_allocator(common::ObMemAttr(MTL_ID(), "InitTablet"));
   ObTabletMemberWrapper<ObTabletTableStore> old_table_store_wrapper;
   const ObTabletTableStore *old_table_store = nullptr;
   const ObStorageSchema *old_storage_schema = nullptr;
@@ -988,7 +988,7 @@ int ObTablet::init_empty_shell(
 int ObTablet::check_sstable_column_checksum() const
 {
   int ret = OB_SUCCESS;
-  common::ObArenaAllocator allocator;
+  common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "CKColCKS"));
   const ObStorageSchema *storage_schema = nullptr;
   ObTableStoreIterator iter;
   int64_t schema_col_cnt = 0;
@@ -1174,7 +1174,7 @@ int ObTablet::deserialize(
 
   if (OB_SUCC(ret)) {
     pos = new_pos;
-    ObArenaAllocator arena_allocator;
+    ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "TmpSchema"));
     const ObStorageSchema *schema = nullptr;
     if (!is_empty_shell()) {
       if (OB_FAIL(load_storage_schema(allocator, schema))) {
@@ -2226,7 +2226,7 @@ int ObTablet::lock_row(
     LOG_WARN("fail to protect table", K(ret), "tablet_id", tablet_meta_.tablet_id_);
   }
   if (OB_SUCC(ret)) {
-    ObArenaAllocator allocator(ObModIds::OB_STORE_ROW_LOCK_CHECKER);
+    ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_STORE_ROW_LOCK_CHECKER));
     ObMemtable *write_memtable = nullptr;
     ObTableIterParam param;
     ObTableAccessContext context;
@@ -2270,7 +2270,7 @@ int ObTablet::lock_row(
   } else if (OB_FAIL(guard.refresh_and_protect_table(relative_table))) {
     LOG_WARN("fail to protect table", K(ret));
   } else {
-    ObArenaAllocator allocator(ObModIds::OB_STORE_ROW_LOCK_CHECKER);
+    ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_STORE_ROW_LOCK_CHECKER));
     ObMemtable *write_memtable = nullptr;
     ObTableIterParam param;
     ObTableAccessContext context;
@@ -2295,7 +2295,7 @@ int ObTablet::check_row_locked_by_myself(
     bool &locked)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator(ObModIds::OB_STORE_ROW_LOCK_CHECKER);
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_STORE_ROW_LOCK_CHECKER));
   ObMemtable *write_memtable = nullptr;
   ObTableIterParam param;
   ObTableAccessContext context;
@@ -2791,7 +2791,7 @@ int ObTablet::update_row(
     } else if (OB_FAIL(prepare_memtable(relative_table, store_ctx, write_memtable))) {
       LOG_WARN("prepare write memtable fail", K(ret), K(relative_table));
     } else {
-      ObArenaAllocator allocator(ObModIds::OB_STORE_ROW_EXISTER);
+      ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_STORE_ROW_EXISTER));
       ObTableIterParam param;
       ObTableAccessContext context;
       if (OB_FAIL(prepare_param_ctx(allocator, relative_table, store_ctx, param, context))) {
@@ -2841,7 +2841,7 @@ int ObTablet::insert_row_without_rowkey_check(
     } else if (OB_FAIL(prepare_memtable(relative_table, store_ctx, write_memtable))) {
       LOG_WARN("prepare write memtable fail", K(ret), K(relative_table));
     } else {
-      ObArenaAllocator allocator(ObModIds::OB_STORE_ROW_EXISTER);
+      ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_STORE_ROW_EXISTER));
       ObTableIterParam param;
       ObTableAccessContext context;
       if (OB_FAIL(prepare_param_ctx(allocator, relative_table, store_ctx, param, context))) {
@@ -2994,7 +2994,7 @@ int ObTablet::rowkey_exists(
       ObStoreRowkey rowkey;
       ObDatumRowkey datum_rowkey;
       ObDatumRowkeyHelper rowkey_helper;
-      ObArenaAllocator allocator(ObModIds::OB_STORE_ROW_EXISTER);
+      ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_STORE_ROW_EXISTER));
       ObTableIterParam param;
       ObTableAccessContext context;
 
@@ -3261,7 +3261,7 @@ int ObTablet::get_schema_version_from_storage_schema(int64_t &schema_version) co
   int ret = OB_SUCCESS;
   const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
   const ObStorageSchema *storage_schema = nullptr;
-  ObArenaAllocator arena_allocator;
+  ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "TmpSchema"));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited), K(tablet_id));
@@ -3596,7 +3596,7 @@ int ObTablet::build_read_info(common::ObArenaAllocator &allocator, const ObTable
 {
   int ret = OB_SUCCESS;
   int64_t full_stored_col_cnt = 0;
-  common::ObArenaAllocator tmp_allocator;
+  common::ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "TmpSchema"));
   const ObStorageSchema *storage_schema = nullptr;
   ObSEArray<share::schema::ObColDesc, 16> cols_desc;
   tablet = (tablet == nullptr) ? this : tablet;
@@ -3714,7 +3714,7 @@ int ObTablet::build_migration_tablet_param(
     mig_tablet_param.transfer_info_ = tablet_meta_.transfer_info_;
     mig_tablet_param.is_empty_shell_ = is_empty_shell();
 
-    ObArenaAllocator arena_allocator("BuildMigParam");
+    ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "BuildMigParam"));
     const ObStorageSchema *storage_schema = nullptr;
     const ObTabletAutoincSeq *tablet_autoinc_seq = nullptr;
     if (!is_empty_shell()) {
@@ -3842,7 +3842,7 @@ int ObTablet::fetch_tablet_autoinc_seq_cache(
     share::ObTabletAutoincInterval &result)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "FetchAutoSeq"));
   ObTabletAutoincSeq autoinc_seq;
   uint64_t auto_inc_seqvalue = 0;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -3888,7 +3888,7 @@ int ObTablet::get_kept_multi_version_start(
   const common::ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   const ObTabletTableStore *table_store = nullptr;
-  common::ObArenaAllocator arena_allocator("reader");
+  common::ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "reader"));
 
   if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
@@ -4024,7 +4024,7 @@ int ObTablet::write_sync_tablet_seq_log(ObTabletAutoincSeq &autoinc_seq,
 int ObTablet::update_tablet_autoinc_seq(const uint64_t autoinc_seq)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator("UpdAutoincSeq");
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "UpdAutoincSeq"));
   ObTabletAutoincSeq curr_autoinc_seq;
   uint64_t curr_auto_inc_seqvalue;
   SCN scn;

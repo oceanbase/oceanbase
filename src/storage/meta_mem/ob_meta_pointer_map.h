@@ -460,7 +460,7 @@ int ObMetaPointerMap<Key, T>::load_and_hook_meta_obj(
         } else if (meta_pointer->is_in_memory()) {  // some other thread finish loading
           need_free_obj = true;
           if (OB_FAIL(meta_pointer->get_in_memory_obj(guard))) {
-            STORAGE_LOG(ERROR, "fail to get meta object", K(ret), KP(meta_pointer));
+            STORAGE_LOG(WARN, "fail to get meta object", K(ret), KP(meta_pointer));
           }
         } else if (OB_UNLIKELY(disk_addr != meta_pointer->get_addr()
             || meta_pointer != tmp_ptr_hdl.get_resource_ptr()
@@ -473,7 +473,7 @@ int ObMetaPointerMap<Key, T>::load_and_hook_meta_obj(
           }
         } else {
           if (OB_FAIL(meta_pointer->hook_obj(t, guard))) {
-            STORAGE_LOG(ERROR, "fail to hook object", K(ret), KP(meta_pointer));
+            STORAGE_LOG(WARN, "fail to hook object", K(ret), KP(meta_pointer));
           } else if (OB_FAIL(guard.get_obj()->assign_pointer_handle(ptr_hdl))) {
             STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret));
           }
@@ -511,13 +511,13 @@ int ObMetaPointerMap<Key, T>::load_meta_obj(
   } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
     STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
   } else {
-    common::ObArenaAllocator arena_allocator;
+    common::ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "LoadMetaObj"));
     char *buf = nullptr;
     int64_t buf_len = 0;
     {
       common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
       if (OB_FAIL(meta_pointer->read_from_disk(arena_allocator, buf, buf_len, load_addr))) {
-        STORAGE_LOG(ERROR, "fail to read from disk", K(ret), KPC(meta_pointer));
+        STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer));
       }
     }
     if (OB_SUCC(ret)) {
@@ -550,13 +550,13 @@ int ObMetaPointerMap<Key, T>::load_meta_obj(
   } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
     STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
   } else {
-    common::ObArenaAllocator arena_allocator;
+    common::ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "LoadMetaObj"));
     char *buf = nullptr;
     int64_t buf_len = 0;
     {
       common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
       if (OB_FAIL(meta_pointer->read_from_disk(arena_allocator, buf, buf_len, load_addr))) {
-        STORAGE_LOG(ERROR, "fail to read from disk", K(ret), KPC(meta_pointer));
+        STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer));
       }
     }
     if (OB_SUCC(ret)) {
@@ -632,7 +632,7 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
             }
           } else if (!force_alloc_new && t_ptr->is_in_memory()) {
             if (OB_FAIL(t_ptr->get_in_memory_obj(guard))) {
-              STORAGE_LOG(ERROR, "fail to get meta object", K(ret), KP(t_ptr));
+              STORAGE_LOG(WARN, "fail to get meta object", K(ret), KP(t_ptr));
             } else {
               need_free_obj = true;
             }
@@ -904,7 +904,7 @@ int ObMetaPointerMap<Key, T>::wash_meta_obj(const Key &key, ObMetaObjGuard<ObTab
       ret = common::OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr), K(key));
     } else if (OB_FAIL(t_ptr->dump_meta_obj(guard, free_obj))) {
-      STORAGE_LOG(ERROR, "fail to dump meta obj", K(ret), K(key));
+      STORAGE_LOG(WARN, "fail to dump meta obj", K(ret), K(key));
     }
   }
   return ret;
