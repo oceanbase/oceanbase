@@ -189,7 +189,7 @@ int MdsUnit<K, V>::for_each_row(OP &&op)// node maybe recycled in this function
       const K *p_k = &kv_row.k_;
       const Row<K, V> &row = kv_row.v_;
       if (MDS_FAIL(op(row))) {
-        MDS_LOG_SCAN(WARN, "fail to scan row", KPC(p_k), K(kv_row));
+        MDS_LOG_SCAN(WARN, "fail to scan row", KPC(p_k));
       }
       if (row.sorted_list_.empty()) {// if this row is recycled, just delete it
         KvPair<K, Row<K, V>> *p_kv = &const_cast<KvPair<K, Row<K, V>> &>(kv_row);
@@ -198,7 +198,6 @@ int MdsUnit<K, V>::for_each_row(OP &&op)// node maybe recycled in this function
       }
       return OB_SUCCESS != ret;// keep scanning until meet failure
   });
-  MDS_LOG_SCAN(TRACE, "for_each_row done", K_(multi_row_list));
   return ret;
   #undef PRINT_WRAPPER
 }
@@ -770,7 +769,6 @@ int MdsUnit<DummyKey, V>::for_each_row(OP &&op) const {
   if (MDS_FAIL(op(single_row_.v_))) {
     MDS_LOG_SCAN(WARN, "fail to scan single row");
   }
-  MDS_LOG_SCAN(TRACE, "for_each_row done", K_(single_row_.v));
   return ret;
   #undef PRINT_WRAPPER
 }
