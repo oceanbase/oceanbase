@@ -2110,22 +2110,20 @@ int ObTransformSimplifyExpr::build_null_for_empty_set(const ObSelectStmt* sub_st
 int ObTransformSimplifyExpr::build_null_expr_and_cast(const ObRawExpr* expr, ObRawExpr*& cast_expr)
 {
   int ret = OB_SUCCESS;
-  ObRawExpr* null_expr = NULL;
   cast_expr = NULL;
   if (OB_ISNULL(expr) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parameters have null", K(expr), K(ctx_));
-  } else if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx_->expr_factory_, null_expr))) {
+  } else if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx_->expr_factory_, cast_expr))) {
     LOG_WARN("failed to build null expr", K(ret));
-  } else if (OB_ISNULL(null_expr)) {
+  } else if (OB_ISNULL(cast_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(ctx_->expr_factory_,
-              ctx_->session_info_,
-              *null_expr,
-              expr->get_result_type(),
-              cast_expr))) {
-    LOG_WARN("try add cast expr above failed", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                    expr,
+                                                                    cast_expr,
+                                                                    ctx_->session_info_))) {
+    LOG_WARN("failed to add cast for replace if need", K(ret));
   }
   return ret;
 }
@@ -2153,12 +2151,12 @@ int ObTransformSimplifyExpr::replace_expr_when_filter_is_false(ObRawExpr*& expr)
       } else if (OB_ISNULL(zero_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(ctx_->expr_factory_,
-                  ctx_->session_info_,
-                  *zero_expr,
-                  expr->get_result_type(),
-                  cast_expr))) {
-        LOG_WARN("try add cast expr above failed", K(ret));
+      } else if (FALSE_IT(cast_expr = zero_expr)) {
+      } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                   expr,
+                                                                   cast_expr,
+                                                                   ctx_->session_info_))) {
+        LOG_WARN("failed to add cast for replace if need", K(ret));
       } else {
         expr = cast_expr;
       }
