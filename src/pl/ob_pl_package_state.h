@@ -171,6 +171,8 @@ public:
 
   int shrink() { return inner_allocator_.shrink(); }
 
+  int check_package_state_valid(ObExecContext &exec_ctx, bool &valid);
+
   TO_STRING_KV(K(package_id_), K(serially_reusable_), K(state_version_));
 
 private:
