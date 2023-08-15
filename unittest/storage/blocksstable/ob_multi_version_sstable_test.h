@@ -232,11 +232,6 @@ void ObMultiVersionSSTableTest::SetUpTestCase()
   const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
   ObIOManager::get_instance().add_tenant_io_manager(
       tenant_id_, ObTenantIOConfig::default_instance());
-  OK(ObKVGlobalCache::get_instance().init(&getter,
-                                          bucket_num,
-                                          max_cache_size,
-                                          block_size));
-  OK(OB_STORE_CACHE.init(10, 1, 1, 1, 1, 10000));
 
   // create ls
   ObLSHandle ls_handle;
@@ -247,7 +242,6 @@ void ObMultiVersionSSTableTest::SetUpTestCase()
 void ObMultiVersionSSTableTest::TearDownTestCase()
 {
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ObLSID(ls_id_), false));
-  ObKVGlobalCache::get_instance().destroy();
   //ObIODeviceWrapper::get_instance().destroy();
   OB_STORE_CACHE.destroy();
 

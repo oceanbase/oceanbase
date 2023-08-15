@@ -44,7 +44,6 @@ class SCN;
 }
 
 using namespace common;
-static ObSimpleMemLimitGetter getter;
 namespace blocksstable
 {
 class TestIndexBlockDataPrepare : public ::testing::Test
@@ -178,11 +177,6 @@ void TestIndexBlockDataPrepare::SetUpTestCase()
   const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
   ObIOManager::get_instance().add_tenant_io_manager(
       tenant_id_, ObTenantIOConfig::default_instance());
-  EXPECT_EQ(OB_SUCCESS, ObKVGlobalCache::get_instance().init(&getter,
-                                                             bucket_num,
-                                                             max_cache_size,
-                                                             block_size));
-  EXPECT_EQ(OB_SUCCESS, OB_STORE_CACHE.init(10, 1, 1, 1, 1, 10000));
 
   fake_freeze_info();
 
@@ -206,7 +200,6 @@ void TestIndexBlockDataPrepare::SetUpTestCase()
 void TestIndexBlockDataPrepare::TearDownTestCase()
 {
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ObLSID(ls_id_), false));
-  ObKVGlobalCache::get_instance().destroy();
   OB_STORE_CACHE.destroy();
   SAFE_DESTROY_INSTANCE.stop();
   SAFE_DESTROY_INSTANCE.wait();

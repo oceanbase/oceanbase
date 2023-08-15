@@ -302,6 +302,7 @@ WAIT_EVENT_DEF(SQL_WF_PARTICIPATOR_COND_WAIT, 15256, "mutex: window function par
 WAIT_EVENT_DEF(MAJOR_FREEZE_DIAGNOSE_LOCK_WAIT, 15257, "latch: major_freeze diagnose lock wait", "address", "number", "tries", CONCURRENCY, "latch: major_freeze diagnose lock wait", true)
 WAIT_EVENT_DEF(DISPLAY_TASKS_LOCK_WAIT, 15258, "latch: display tasks lock wait", "address", "number", "tries", CONCURRENCY, "latch: display tasks lock wait", true)
 WAIT_EVENT_DEF(PL_DEBUG_RUNTIME_INFO_WAIT, 15259, "latch:pl debug runtime info lock wait", "address", "number", "tries", CONCURRENCY, "latch:pl debug runtime info lock wait", true)
+WAIT_EVENT_DEF(TMP_FILE_MEM_BLOCK_LOCK_WAIT, 15263, "latch: tmp file mem block lock wait", "address", "number", "tries", CONCURRENCY, "latch: tmp file mem block lock wait", true)
 
 //transaction
 WAIT_EVENT_DEF(END_TRANS_WAIT, 16001, "wait end trans", "rollback", "trans_hash_value", "participant_count", COMMIT,"wait end trans", false)

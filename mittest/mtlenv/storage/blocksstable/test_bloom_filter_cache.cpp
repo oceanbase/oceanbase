@@ -23,7 +23,6 @@
 namespace oceanbase
 {
 using namespace common;
-static ObSimpleMemLimitGetter getter;
 namespace blocksstable
 {
 
@@ -104,10 +103,9 @@ TEST_F(TestBloomFilterCache, test_normal)
   const int64_t max_cache_size = 1024 * 1024 * 512;
   const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
   uint64_t key_hash;
-  ObKVGlobalCache::get_instance().init(&getter, bucket_num, max_cache_size, block_size);
 
   // test ObBloomFilterCache may_contain()
-  ret = bf_cache.init("bf_cache", 1);
+  ret = bf_cache.init("bf_cache_ut", 1);
   EXPECT_EQ(OB_SUCCESS, ret);
 
   ret = bf_value.init(2, 1);
@@ -154,7 +152,6 @@ TEST_F(TestBloomFilterCache, test_normal)
   EXPECT_EQ(2, cell->count_);
 
   bf_cache.destroy();
-  ObKVGlobalCache::get_instance().destroy();
 }
 
 TEST_F(TestBloomFilterCache, test_empty_read_cell_invalid)
@@ -166,7 +163,7 @@ TEST_F(TestBloomFilterCache, test_empty_read_cell_invalid)
   int8_t empty_read_prefix=3;
   ObEmptyReadCell *cell;
 
-  ret = bf_cache.init("bf_cache", 1,7);
+  ret = bf_cache.init("bf_cache_ut", 1,7);
   EXPECT_NE(OB_SUCCESS, ret);
 
   ObBloomFilterCacheKey bf_key(tenant_id, block_id, empty_read_prefix);
@@ -184,9 +181,8 @@ TEST_F(TestBloomFilterCache, test_empty_read_cell_normal)
   const int64_t bucket_num = 1024;
   const int64_t max_cache_size = 1024 * 1024 * 512;
   const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
-  ObKVGlobalCache::get_instance().init(&getter, bucket_num, max_cache_size, block_size);
   ObBloomFilterCache bf_cache;
-  ret = bf_cache.init("bf_cache", 1);
+  ret = bf_cache.init("bf_cache_ut", 1);
   EXPECT_EQ(OB_SUCCESS, ret);
 
   ObStoreRowkey rowkey;
@@ -224,7 +220,6 @@ TEST_F(TestBloomFilterCache, test_empty_read_cell_normal)
   EXPECT_EQ(1, cur_cnt);
 
   bf_cache.destroy();
-  ObKVGlobalCache::get_instance().destroy();
 }
 
 }

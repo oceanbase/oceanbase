@@ -73,6 +73,7 @@
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 #include "storage/tx/wrs/ob_tenant_weak_read_service.h"
+#include "share/ob_simple_mem_limit_getter.h"
 
 namespace oceanbase
 {
@@ -358,6 +359,8 @@ private:
   // switch tenant thread local
   share::ObTenantSwitchGuard guard_;
 
+  ObSimpleMemLimitGetter getter_;
+
   bool inited_;
   bool destroyed_;
 
@@ -493,6 +496,9 @@ int MockTenantModuleEnv::prepare_io()
   const int64_t async_io_thread_count = 8;
   const int64_t sync_io_thread_count = 2;
   const int64_t max_io_depth = 256;
+  const int64_t bucket_num = 1024L;
+  const int64_t max_cache_size = 1024L * 1024L * 512;
+  const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(THE_IO_DEVICE->init(iod_opts))) {
@@ -510,6 +516,13 @@ int MockTenantModuleEnv::prepare_io()
     STORAGE_LOG(WARN, "fail to start io manager", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().add_tenant_io_manager(OB_SERVER_TENANT_ID, io_config))) {
     STORAGE_LOG(WARN, "add tenant io config failed", K(ret));
+  } else if (OB_FAIL(ObKVGlobalCache::get_instance().init(&getter_,
+      bucket_num,
+      max_cache_size,
+      block_size))) {
+    STORAGE_LOG(WARN, "fail to init kv global cache ", K(ret));
+  } else if (OB_FAIL(OB_STORE_CACHE.init(10, 1, 1, 1, 1, 10000))) {
+    STORAGE_LOG(WARN, "fail to init OB_STORE_CACHE, ", K(ret));
   } else {
   }
   return ret;
@@ -638,7 +651,6 @@ int MockTenantModuleEnv::init()
       ret = OB_INIT_TWICE;
       STORAGE_LOG(ERROR, "init twice", K(ret));
     } else if (FALSE_IT(init_gctx_gconf())) {
-
     } else if (OB_FAIL(init_before_start_mtl())) {
       STORAGE_LOG(ERROR, "init_before_start_mtl failed", K(ret));
     } else {
@@ -677,6 +689,8 @@ int MockTenantModuleEnv::init()
       STORAGE_LOG(ERROR, "reload memory config failed", K(ret));
     } else if (OB_FAIL(start_())) {
       STORAGE_LOG(ERROR, "mock env start failed", K(ret));
+    } else if (OB_FAIL(ObTmpFileManager::get_instance().init())) {
+      STORAGE_LOG(WARN, "init_tmp_file_manager failed", K(ret));
     } else {
       inited_ = true;
     }
@@ -747,8 +761,13 @@ void MockTenantModuleEnv::destroy()
   multi_tenant_.wait();
   multi_tenant_.destroy();
 
+  ObTmpFileManager::get_instance().destroy();
+  ObKVGlobalCache::get_instance().destroy();
   ObServerCheckpointSlogHandler::get_instance().destroy();
   SLOGGERMGR.destroy();
+  OB_SERVER_BLOCK_MGR.stop();
+  OB_SERVER_BLOCK_MGR.wait();
+  OB_SERVER_BLOCK_MGR.destroy();
   THE_IO_DEVICE->destroy();
 
   ObTsMgr::get_instance().stop();
