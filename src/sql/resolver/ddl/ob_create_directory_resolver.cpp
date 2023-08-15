@@ -98,16 +98,15 @@ int ObCreateDirectoryResolver::resolve(const ParseNode &parse_tree)
     } else {
       ObString real_directory_path;
       directory_path.assign_ptr(child_node->str_value_, static_cast<int32_t>(child_node->str_len_));
-      directory_path.trim();
-      if (!directory_path.empty() && '.' == directory_path[0]) {
-        //Relative path
+      if (!directory_path.empty()) {
         ObArrayWrap<char> buffer;
         OZ (buffer.allocate_array(*allocator_, PATH_MAX));
         if (OB_SUCC(ret)) {
           real_directory_path = ObString(realpath(to_cstring(directory_path), buffer.get_data()));
+          if (real_directory_path.empty()) {
+            real_directory_path = directory_path;
+          }
         }
-      } else {
-        real_directory_path = directory_path;
       }
       OZ (session_info_->get_secure_file_priv(secure_file_priv));
       OZ (ObResolverUtils::check_secure_path(secure_file_priv, real_directory_path));

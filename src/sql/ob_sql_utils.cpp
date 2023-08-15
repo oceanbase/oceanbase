@@ -4814,8 +4814,7 @@ int ObSQLUtils::check_location_access_priv(const ObString &location, ObSQLSessio
     ObArenaAllocator allocator;
     ObString real_location = location;
     real_location += strlen(OB_FILE_PREFIX);
-    if (!real_location.empty() && '.' == real_location[0]) {
-      //Relative path
+    if (!real_location.empty()) {
       ObArrayWrap<char> buffer;
       OZ (buffer.allocate_array(allocator, PATH_MAX));
       if (OB_SUCC(ret)) {
