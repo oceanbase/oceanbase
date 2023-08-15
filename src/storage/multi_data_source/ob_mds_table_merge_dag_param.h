@@ -30,10 +30,11 @@ public:
   virtual ~ObMdsTableMergeDagParam() = default;
 public:
   INHERIT_TO_STRING_KV("ObTabletMergeDagParam", compaction::ObTabletMergeDagParam,
-                       K_(flush_scn), KTIME_(generate_ts));
+                       K_(flush_scn), KTIME_(generate_ts), K_(mds_construct_sequence), K_(mds_construct_sequence));
 public:
   share::SCN flush_scn_;
   int64_t generate_ts_;
+  int64_t mds_construct_sequence_;
 };
 } // namespace mds
 } // namespace storage

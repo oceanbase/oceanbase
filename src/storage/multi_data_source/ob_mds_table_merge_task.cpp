@@ -11,6 +11,7 @@
  */
 
 #include "storage/multi_data_source/ob_mds_table_merge_task.h"
+#include "lib/ob_errno.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ls/ob_ls_get_mod.h"
 #include "storage/tablet/ob_tablet_common.h"
@@ -18,6 +19,7 @@
 #include "storage/compaction/ob_tablet_merge_ctx.h"
 #include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/multi_data_source/ob_mds_table_merge_dag.h"
+#include "storage/multi_data_source/ob_mds_table_merge_dag_param.h"
 
 #define USING_LOG_PREFIX MDS
 
@@ -100,7 +102,10 @@ int ObMdsTableMergeTask::process()
       LOG_WARN("tablet is null", K(ret), K(ls_id), K(tablet_id), "tablet_handle", ctx.tablet_handle_);
     } else if (FALSE_IT(ctx.time_guard_.click(ObCompactionTimeGuard::GET_TABLET))) {
     } else if (FALSE_IT(ls_rebuild_seq = ls->get_rebuild_seq())) {
-    } else if (MDS_FAIL(ls->build_new_tablet_from_mds_table(ls_rebuild_seq, tablet_id, flush_scn))) {
+    } else if (MDS_FAIL(ls->build_new_tablet_from_mds_table(ls_rebuild_seq,
+                                                            tablet_id,
+                                                            mds_merge_dag_->get_mds_construct_sequence(),
+                                                            flush_scn))) {
       LOG_WARN("failed to build new tablet from mds table", K(ret), K(ls_id), K(tablet_id), K(ls_rebuild_seq), K(flush_scn));
     } else {
       ctx.time_guard_.click(ObCompactionTimeGuard::EXECUTE);

@@ -173,7 +173,7 @@ int ObMdsTableMgr::first_scan_to_get_min_rec_scn_(share::SCN &min_rec_scn)
       MDS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "meet empty mds table list", K(tablet_id));
     } else {
       MdsTableBase *mds_table = static_cast<MdsTableBase *>(mds_table_list.list_head_);
-      if (mds_table->is_removed_from_t3m()) {
+      if (mds_table->is_removed_from_t3m() || mds_table->is_switched_to_empty_shell()) {
         // jsut skip it
       } else {
         share::SCN rec_scn = mds_table->get_rec_scn();

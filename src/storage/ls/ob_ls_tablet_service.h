@@ -240,6 +240,7 @@ public:
       const ObIArray<storage::ObITable *> &tables);
   int build_new_tablet_from_mds_table(
       const common::ObTabletID &tablet_id,
+      const int64_t mds_construct_sequence,
       const share::SCN &flush_scn);
   int update_tablet_report_status(const common::ObTabletID &tablet_id);
   int update_tablet_restore_status(

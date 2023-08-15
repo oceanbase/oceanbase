@@ -432,7 +432,11 @@ public:
       const bool need_checksums = true);
   int check_and_set_initial_state();
   int set_memtable_clog_checkpoint_scn(const ObMigrationTabletParam *tablet_meta);
-  int read_mds_table(common::ObIAllocator &allocator, ObTabletMdsData &mds_data, const bool for_flush);
+  int read_mds_table(
+      common::ObIAllocator &allocator,
+      ObTabletMdsData &mds_data,
+      const bool for_flush,
+      const int64_t mds_construct_sequence = 0);
   int notify_mds_table_flush_ret(
       const share::SCN &flush_scn,
       const int flush_ret);
@@ -713,6 +717,7 @@ private:
   int pull_ddl_memtables(ObArenaAllocator &allocator, ObITable **&ddl_kvs_addr, int64_t &ddl_kv_count);
   void reset_ddl_memtables();
   int wait_release_memtables_();
+  int mark_mds_table_switched_to_empty_shell_();
 private:
   // ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE
   // Array size is too large, need to shrink it if possible

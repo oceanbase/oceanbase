@@ -137,6 +137,7 @@ public:
                                   const MdsWriter &self = MdsWriter()) const override;
   virtual int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(
                                   ObFunction<int(const MdsDumpKV&)> &for_each_op,
+                                  const int64_t mds_construct_sequence,
                                   const bool for_flush) const override;
   virtual int dump_status() const override;
   int calculate_flush_scn_and_need_dumped_nodes_cnt_(share::SCN need_advanced_rec_scn_lower_limit,
@@ -222,9 +223,9 @@ public:
                           const MdsWriter &self = MdsWriter()) const;
   /************************************************************************************************/
   template <typename DUMP_OP, ENABLE_IF_LIKE_FUNCTION(DUMP_OP, int(const MdsDumpKV &))>
-  int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(DUMP_OP &&for_each_op, const bool for_flush);
+  int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(DUMP_OP &&for_each_op, const int64_t mds_construct_sequence, const bool for_flush);
   TO_STRING_KV(KP(this), K_(ls_id), K_(tablet_id), K_(flushing_scn),
-               K_(rec_scn), K_(last_inner_recycled_scn), K_(total_node_cnt), K_(debug_info));
+               K_(rec_scn), K_(last_inner_recycled_scn), K_(total_node_cnt), K_(construct_sequence), K_(debug_info));
   // template <typename SCAN_OP>
   // int for_each_scan_node(SCAN_OP &&op);
   template <typename SCAN_OP>

@@ -37,15 +37,18 @@ public:
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
 
   share::SCN get_flush_scn() const { return flush_scn_; }
+  int64_t get_mds_construct_sequence() const { return mds_construct_sequence_; }
 
   INHERIT_TO_STRING_KV("ObTabletMergeDag", ObTabletMergeDag,
                        K_(is_inited),
                        K_(flush_scn),
-                       K_(generate_ts));
+                       KTIME_(generate_ts),
+                       K_(mds_construct_sequence));
 private:
   bool is_inited_;
   share::SCN flush_scn_;
   int64_t generate_ts_;
+  int64_t mds_construct_sequence_;
 };
 } // namespace mds
 } // namespace storage

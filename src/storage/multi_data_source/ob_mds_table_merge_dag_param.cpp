@@ -21,7 +21,8 @@ namespace mds
 ObMdsTableMergeDagParam::ObMdsTableMergeDagParam()
   : ObTabletMergeDagParam(),
     flush_scn_(share::SCN::invalid_scn()),
-    generate_ts_(0)
+    generate_ts_(0),
+    mds_construct_sequence_(-1)
 {
 }
 } // namespace mds

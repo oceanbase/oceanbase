@@ -31,7 +31,10 @@ namespace mds
 {
 ObMdsTableMergeDag::ObMdsTableMergeDag()
   : ObTabletMergeDag(ObDagType::DAG_TYPE_MDS_TABLE_MERGE),
-    is_inited_(false)
+    is_inited_(false),
+    flush_scn_(),
+    generate_ts_(0),
+    mds_construct_sequence_(-1)
 {
 }
 
@@ -58,6 +61,7 @@ int ObMdsTableMergeDag::init_by_param(const share::ObIDagInitParam *param)
     } else {
       flush_scn_ = mds_param->flush_scn_;
       generate_ts_ = mds_param->generate_ts_;
+      mds_construct_sequence_ = mds_param->mds_construct_sequence_;
       is_inited_ = true;
     }
   }

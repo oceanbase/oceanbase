@@ -68,7 +68,7 @@ int MdsTableBase::get_ls_max_consequent_callbacked_scn_(share::SCN &max_conseque
   return OB_SUCCESS;
 }
 
-int MdsTableBase::merge(const share::SCN &flushing_scn)
+int MdsTableBase::merge(const int64_t construct_sequence, const share::SCN &flushing_scn)
 {
   MOCK_FLUSHING_SCN = flushing_scn;
   return OB_SUCCESS;
@@ -164,7 +164,7 @@ TEST_F(TestMdsTableFlush, normal_flush) {
   ASSERT_EQ(OB_SUCCESS, handle.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump([&scan_cnt](const MdsDumpKV &kv) -> int {
     scan_cnt++;
     return OB_SUCCESS;
-  }, true));
+  }, 0, true));
   ASSERT_EQ(1, scan_cnt);
   handle.on_flush(MOCK_FLUSHING_SCN, OB_SUCCESS);
   ASSERT_EQ(OB_SUCCESS, handle.get_rec_scn(rec_scn));
@@ -190,7 +190,7 @@ TEST_F(TestMdsTableFlush, normal_flush) {
   ASSERT_EQ(OB_SUCCESS, handle.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump([&scan_cnt](const MdsDumpKV &kv) -> int {
     scan_cnt++;
     return OB_SUCCESS;
-  }, true));
+  }, 0, true));
   ASSERT_EQ(1, scan_cnt);
   handle.on_flush(MOCK_FLUSHING_SCN, OB_SUCCESS);
   ASSERT_EQ(OB_SUCCESS, handle.get_rec_scn(rec_scn));
@@ -207,7 +207,7 @@ TEST_F(TestMdsTableFlush, normal_flush) {
   ASSERT_EQ(OB_SUCCESS, handle.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump([&scan_cnt](const MdsDumpKV &kv) -> int {
     scan_cnt++;
     return OB_SUCCESS;
-  }, true));
+  }, 0, true));
   ASSERT_EQ(2, scan_cnt);
   handle.on_flush(MOCK_FLUSHING_SCN, OB_SUCCESS);
   ASSERT_EQ(OB_SUCCESS, handle.get_rec_scn(rec_scn));

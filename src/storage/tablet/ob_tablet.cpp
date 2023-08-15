@@ -11,6 +11,7 @@
  */
 
 #include "lib/ob_errno.h"
+#include <cstdint>
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tablet/ob_tablet.h"
@@ -963,6 +964,8 @@ int ObTablet::init_empty_shell(
     LOG_WARN("failed to init mds data", K(ret), K(user_data));
   } else if (OB_FAIL(wait_release_memtables_())) {
     LOG_ERROR("fail to release memtables", K(ret), K(old_tablet));
+  } else if (OB_FAIL(mark_mds_table_switched_to_empty_shell_())) {// to avoid calculate it's rec_scn
+    LOG_WARN("fail to mark mds table switched to empty shell", K(ret), K(old_tablet));
   } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, table_store_addr_.ptr_))) {
     LOG_WARN("fail to allocate and new rowkey read info", K(ret));
   } else if (OB_FAIL(table_store_addr_.ptr_->init(allocator, *this))) {
@@ -3488,6 +3491,24 @@ int ObTablet::wait_release_memtables_()
   return ret;
 }
 
+int ObTablet::mark_mds_table_switched_to_empty_shell_()
+{
+  int64_t ret = OB_SUCCESS;
+  mds::MdsTableHandle mds_table;
+
+  if (OB_FAIL(inner_get_mds_table(mds_table))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get mds table", K(ret));
+    }
+  } else if (OB_FAIL(mds_table.mark_switched_to_empty_shell())) {
+    LOG_WARN("failed to mark mds table switched to empty shell", K(ret));
+  }
+
+  return ret;
+}
+
 int ObTablet::reset_storage_related_member()
 {
   int ret = OB_SUCCESS;
@@ -5120,7 +5141,10 @@ int ObTablet::build_memtable(common::ObIArray<ObTableHandleV2> &handle_array, co
   return ret;
 }
 
-int ObTablet::read_mds_table(common::ObIAllocator &allocator, ObTabletMdsData &mds_data, const bool for_flush)
+int ObTablet::read_mds_table(common::ObIAllocator &allocator,
+                             ObTabletMdsData &mds_data,
+                             const bool for_flush,
+                             const int64_t mds_construct_sequence)
 {
   TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
@@ -5143,7 +5167,7 @@ int ObTablet::read_mds_table(common::ObIAllocator &allocator, ObTabletMdsData &m
     }
   } else {
     ObTabletDumpMdsNodeOperator op(mds_data, allocator);
-    if (CLICK_FAIL(mds_table_handle.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(op, for_flush))) {
+    if (CLICK_FAIL(mds_table_handle.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(op, mds_construct_sequence, for_flush))) {
       LOG_WARN("failed to traverse mds table", K(ret), K(ls_id), K(tablet_id));
     } else if (!op.dumped()) {
       ret = OB_EMPTY_RESULT;
@@ -5176,7 +5200,7 @@ int ObTablet::read_mds_table_medium_info_list(
     }
   } else {
     ObTabletMediumInfoNodeOperator op(medium_info_list, allocator);
-    if (CLICK_FAIL(mds_table_handle.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(op, false/*for_flush*/))) {
+    if (CLICK_FAIL(mds_table_handle.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(op, 0, false/*for_flush*/))) {
       LOG_WARN("failed to traverse mds table", K(ret), K(ls_id), K(tablet_id));
     } else if (!op.dumped()) {
       ret = OB_EMPTY_RESULT;

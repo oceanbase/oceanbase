@@ -1393,6 +1393,7 @@ int ObLSTabletService::update_medium_compaction_info(
 
 int ObLSTabletService::build_new_tablet_from_mds_table(
     const common::ObTabletID &tablet_id,
+    const int64_t mds_construct_sequence,
     const share::SCN &flush_scn)
 {
   TIMEGUARD_INIT(STORAGE, 10_ms);
@@ -1433,7 +1434,7 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
       ObTabletMdsData mds_data;
 
       if (OB_FAIL(ret)) {
-      } else if (CLICK_FAIL(old_tablet->read_mds_table(arena_allocator, mds_data, true))) {
+      } else if (CLICK_FAIL(old_tablet->read_mds_table(arena_allocator, mds_data, true, mds_construct_sequence))) {
         if (OB_EMPTY_RESULT == ret) {
           ret = OB_SUCCESS;
           LOG_INFO("read nothing from mds table, no need to build new tablet", K(ret), K(key));

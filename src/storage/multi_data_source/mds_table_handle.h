@@ -43,7 +43,8 @@ public:
   template <typename UnitKey, typename UnitValue>
   int get_mds_unit(MdsUnit<UnitKey, UnitValue> *&p_mds_unit);
   int fill_virtual_info(ObIArray<MdsNodeInfoForVirtualTable> &mds_node_info_array) const;
-  int mark_removed_from_t3m(ObTabletPointer *pointer);
+  int mark_removed_from_t3m(ObTabletPointer *pointer) const;
+  int mark_switched_to_empty_shell() const;
   template <int N>
   int forcely_reset_mds_table(const char (&reason)[N]);
   /******************************Single Key Unit Access Interface**********************************/
@@ -99,6 +100,7 @@ public:
   /************************************************************************************************/
   template <typename DUMP_OP, ENABLE_IF_LIKE_FUNCTION(DUMP_OP, int(const MdsDumpKV &))>
   int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(DUMP_OP &&for_each_op,
+                                                                       const int64_t mds_construct_sequence,
                                                                        const bool for_flush) const;
   int flush(share::SCN need_advanced_rec_scn_lower_limit);
   int is_flushing(bool &is_flushing) const;
@@ -115,7 +117,9 @@ public:
   TO_STRING_KV(K_(p_mds_table_base), K_(mds_table_id));
 public:// compile error message
   template <typename DUMP_OP, ENABLE_IF_NOT_LIKE_FUNCTION(DUMP_OP, int(const MdsDumpKV &))>
-  int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(DUMP_OP &&for_each_op) const {
+  int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(DUMP_OP &&for_each_op,
+                                                                       const int64_t mds_construct_sequence,
+                                                                       const bool for_flush) const {
     static_assert(OB_TRAIT_IS_FUNCTION_LIKE(DUMP_OP, int(const MdsDumpKV &)),
                   "for_each_op required to be used like: int for_each_op(const MdsDumpKV &)");
     return OB_NOT_SUPPORTED;

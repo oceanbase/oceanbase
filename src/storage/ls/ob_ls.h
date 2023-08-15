@@ -833,6 +833,7 @@ public:
   int build_new_tablet_from_mds_table(
       const int64_t ls_rebuild_seq,
       const common::ObTabletID &tablet_id,
+      const int64_t mds_construct_sequence,
       const share::SCN &flush_scn);
   int try_update_uppder_trans_version();
   int diagnose(DiagnoseInfo &info) const;

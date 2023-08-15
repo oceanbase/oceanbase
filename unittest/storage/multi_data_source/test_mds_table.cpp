@@ -387,7 +387,7 @@ void TestMdsTable::test_flush() {
       OB_ASSERT(idx < 10);
       MDS_LOG(INFO, "print dump node kv", K(kv));
       return OB_SUCCESS;
-    }, true)
+    }, 0, true)
   );
   mds_table_.on_flush(mock_scn(199), OB_SUCCESS);// 3. 推大rec_scn【至少】到200
   share::SCN rec_scn;
@@ -518,7 +518,7 @@ TEST_F(TestMdsTable, test_recycle) {
   ASSERT_EQ(OB_SUCCESS, mds_table_.flush(mock_scn(20000)));
   mds_table_.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump([](const MdsDumpKV &){
     return OB_SUCCESS;
-  }, true);
+  }, 0, true);
   mds_table_.on_flush(mock_scn(20000), OB_SUCCESS);
   share::SCN rec_scn;
   ASSERT_EQ(OB_SUCCESS, mds_table_.get_rec_scn(rec_scn));

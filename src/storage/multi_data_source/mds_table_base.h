@@ -50,6 +50,18 @@ enum class MdsTableType {
   UNKNOWN = 3,
 };
 
+struct ObMdsGlobalSequencer
+{
+  static int64_t generate_senquence() { return ATOMIC_AAF(&get_instance().sequence_, 1); }
+  static ObMdsGlobalSequencer &get_instance() {
+    static ObMdsGlobalSequencer instance;
+    return instance;
+  }
+private:
+  ObMdsGlobalSequencer() : sequence_(0) {}
+  int64_t sequence_;
+};
+
 class MdsTableBase : public ListNode<MdsTableBase>
 {
   template <typename K, typename V>
@@ -89,7 +101,8 @@ public:
   last_inner_recycled_scn_(share::SCN::min_scn()),
   rec_scn_(share::SCN::max_scn()),
   total_node_cnt_(0),
-  lock_() {}
+  construct_sequence_(0),
+  lock_() { construct_sequence_ = ObMdsGlobalSequencer::generate_senquence(); }
   virtual ~MdsTableBase() {}
   int init(const ObTabletID tablet_id,
            const share::ObLSID ls_id,
@@ -139,6 +152,7 @@ public:
                                   const MdsWriter &self) const = 0;
   virtual int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(
                                   ObFunction<int(const MdsDumpKV&)> &for_each_op,
+                                  const int64_t mds_construct_sequence,
                                   const bool for_flush) const = 0;
   virtual void on_flush(const share::SCN &flushed_scn, const int flush_ret) = 0;
   virtual int try_recycle(const share::SCN recycle_scn) = 0;
@@ -152,6 +166,8 @@ public:
   virtual int fill_virtual_info(ObIArray<MdsNodeInfoForVirtualTable> &mds_node_info_array) const = 0;
   virtual int forcely_reset_mds_table(const char *reason) = 0;
   void mark_removed_from_t3m(ObTabletPointer *pointer);// need called in del tablet phase
+  void mark_switched_to_empty_shell();
+  bool is_switched_to_empty_shell() const;
   bool is_removed_from_t3m() const;
   int64_t get_removed_from_t3m_ts() const;
   VIRTUAL_TO_STRING_KV(KP(this));
@@ -163,7 +179,7 @@ protected:
   int get_ls_max_consequent_callbacked_scn_(share::SCN &max_consequent_callbacked_scn) const;
   int register_to_mds_table_mgr();
   int unregister_from_mds_table_mgr();
-  int merge(const share::SCN &flushing_scn);
+  int merge(const int64_t construct_sequence, const share::SCN &flushing_scn);
   template <int N>
   void report_rec_scn_event_(const char (&event_str)[N],
                              share::SCN old_scn,
@@ -265,16 +281,17 @@ protected:
     init_trace_id_(),
     remove_trace_id_() {}
     TO_STRING_KV(KP_(do_init_tablet_pointer), KP_(do_remove_tablet_pointer), KTIME_(init_ts), KTIME_(last_reset_ts),
-                 KTIME_(remove_ts), KTIME_(last_flush_ts), K_(init_trace_id), K_(remove_trace_id));
-    ObTabletPointer *do_init_tablet_pointer_;// can not be accessed, jsut record it to debug
-    ObTabletPointer *do_remove_tablet_pointer_;// can not be accessed, jsut record it to debug
+                 KTIME_(remove_ts), KTIME_(last_flush_ts), K_(switch_to_empty_shell_ts), K_(init_trace_id), K_(remove_trace_id));
+    ObTabletPointer *do_init_tablet_pointer_;// can not be accessed, just record it to debug
+    ObTabletPointer *do_remove_tablet_pointer_;// can not be accessed, just record it to debug
     int64_t init_ts_;
     int64_t last_reset_ts_;
     int64_t remove_ts_;
+    int64_t switch_to_empty_shell_ts_;
     int64_t last_flush_ts_;
     ObCurTraceId::TraceId init_trace_id_;
     ObCurTraceId::TraceId remove_trace_id_;
-  } debug_info_;// 112B
+  } debug_info_;// 120B
   mutable State state_;
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
@@ -282,6 +299,7 @@ protected:
   share::SCN last_inner_recycled_scn_;// To filter repeated release operation
   share::SCN rec_scn_;// To CLOG to recycle
   int64_t total_node_cnt_;// To tell if this mds table is safety to destroy
+  int64_t construct_sequence_;// To filter invalid dump DAG
   MdsTableMgrHandle mgr_handle_;
   mutable MdsLock lock_;
 };
