@@ -2049,42 +2049,18 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
         }
       }
     }
-  } else if (T_OP_OR == expr->get_expr_type() || T_OP_CASE == expr->get_expr_type()) {
+  } else if (T_OP_OR == expr->get_expr_type()) {
     ObArray<ExprConstInfo> complex_infos;
-    int64_t N = expr->get_param_count();
-    bool is_op_case = T_OP_CASE == expr->get_expr_type();
-    ObCaseOpRawExpr *case_expr = NULL;
-    if (is_op_case) {
-      if (OB_ISNULL(case_expr = static_cast<ObCaseOpRawExpr *>(expr))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected param is NULL", K(ret));
-      } else if (OB_UNLIKELY(case_expr->get_when_expr_size() != case_expr->get_then_expr_size())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("uncorrect case when params", K(ret),
-                                              K(case_expr->get_when_expr_size()),
-                                              K(case_expr->get_then_expr_size()));
-      } else if (OB_UNLIKELY(case_expr->get_when_expr_size() < 1)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("uncorrect case when params", K(ret),
-                                              K(case_expr->get_when_expr_size()));
-      } else {
-        N = case_expr->get_when_expr_size();
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       ConstInfoContext tmp_ctx(const_ctx.shared_expr_checker_, const_ctx.hint_allowed_trans_);
       bool child_happened = false;
       bool current_happened = false;
       if (OB_FAIL(SMART_CALL(recursive_collect_equal_pair_from_condition(stmt,
-                                                                         is_op_case ? 
-                                                                            case_expr->get_when_param_expr(i) :
-                                                                            expr->get_param_expr(i),
+                                                                         expr->get_param_expr(i),
                                                                          tmp_ctx,
                                                                          child_happened)))) {
         LOG_WARN("failed to recursive collect const info from condition", K(ret));
-      } else if (OB_FAIL(replace_expr_internal(is_op_case ? 
-                                                  case_expr->get_then_param_expr(i) : 
-                                                  expr->get_param_expr(i),
+      } else if (OB_FAIL(replace_expr_internal(expr->get_param_expr(i),
                                                tmp_ctx,
                                                current_happened))) {
         LOG_WARN("failed to replace expr", K(ret));
