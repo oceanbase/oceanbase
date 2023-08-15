@@ -280,6 +280,7 @@ private:
   static const int64_t MIGRATION_SSTABLE_PARAM_VERSION = 1;
   typedef common::ObSEArray<int64_t, common::OB_ROW_DEFAULT_COLUMNS_COUNT> ColChecksumArray;
 public:
+  common::ObArenaAllocator allocator_;
   ObSSTableBasicMeta basic_meta_;
   ColChecksumArray column_checksums_;
   storage::ObITable::TableKey table_key_;

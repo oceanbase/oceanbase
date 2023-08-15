@@ -225,6 +225,7 @@ public:
     bool is_inited_;
     common::ObTabletID tablet_id_;
     storage::ObCopyTabletStatus::STATUS status_;
+    common::ObArenaAllocator allocator_;
     common::ObArray<blocksstable::ObMigrationSSTableParam> copy_table_info_array_;
     ObMigrationTabletParam tablet_meta_;
     DISALLOW_COPY_AND_ASSIGN(ObStorageHATabletTableInfoMgr);

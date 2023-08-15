@@ -714,10 +714,11 @@ int ObSSTableMeta::deep_copy(
 
 //================================== ObMigrationSSTableParam ==================================
 ObMigrationSSTableParam::ObMigrationSSTableParam()
-  : basic_meta_(),
-    column_checksums_(),
+  : allocator_("SSTableParam", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    basic_meta_(),
+    column_checksums_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
     table_key_(),
-    column_default_checksums_(),
+    column_default_checksums_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
     is_small_sstable_(false)
 {
 }
@@ -734,6 +735,7 @@ void ObMigrationSSTableParam::reset()
   column_default_checksums_.reset();
   basic_meta_.reset();
   is_small_sstable_ = false;
+  allocator_.reset();
 }
 
 bool ObMigrationSSTableParam::is_valid() const

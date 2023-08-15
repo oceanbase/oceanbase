@@ -1474,12 +1474,15 @@ ObStorageHATableInfoMgr::ObStorageHATabletTableInfoMgr::ObStorageHATabletTableIn
   : is_inited_(false),
     tablet_id_(),
     status_(ObCopyTabletStatus::MAX_STATUS),
-    copy_table_info_array_()
+    allocator_("HATableInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    copy_table_info_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
+    tablet_meta_()
 {
 }
 
 ObStorageHATableInfoMgr::ObStorageHATabletTableInfoMgr::~ObStorageHATabletTableInfoMgr()
 {
+  allocator_.reset();
 }
 
 int ObStorageHATableInfoMgr::ObStorageHATabletTableInfoMgr::init(
