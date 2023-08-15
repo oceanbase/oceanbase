@@ -1105,6 +1105,7 @@ public:
   int trans_sql(PlTransformTreeCtx &trans_ctx, ParseNode *root, ObExecContext &ctx);
   // for anonymous
   int execute(sql::ObExecContext &ctx,
+              ParamStore &params,
               const ObStmtNodeTree *block);
 
   // for normal routine or package routine

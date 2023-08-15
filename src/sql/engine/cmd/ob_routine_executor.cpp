@@ -437,7 +437,8 @@ int ObAnonymousBlockExecutor::execute(ObExecContext &ctx, ObAnonymousBlockStmt &
       }
     }
   } else {
-    OZ (ctx.get_pl_engine()->execute(ctx, stmt.get_body()));
+    CK (OB_NOT_NULL(stmt.get_params()));
+    OZ (ctx.get_pl_engine()->execute(ctx, *stmt.get_params(), stmt.get_body()));
   }
   return ret;
 }

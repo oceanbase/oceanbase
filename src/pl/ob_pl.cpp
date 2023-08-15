@@ -1666,7 +1666,7 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
 }
 
 // for execute anonymous
-int ObPL::execute(ObExecContext &ctx, const ObStmtNodeTree *block)
+int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *block)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pl_entry);
@@ -1674,7 +1674,7 @@ int ObPL::execute(ObExecContext &ctx, const ObStmtNodeTree *block)
   lib::ContextParam param;
   ObPLFunction *routine = NULL;
   ObCacheObjGuard cacheobj_guard(PL_ANON_HANDLE);
-  bool is_forbid_anony_parameter = block->is_forbid_anony_parameter_;
+  bool is_forbid_anony_parameter = block->is_forbid_anony_parameter_ || (params.count() > 0);
   int64_t old_worker_timeout_ts = 0;
   /* !!!
    * PL，req_timeinfo_guard一定要在执行前定义
@@ -1726,7 +1726,7 @@ int ObPL::execute(ObExecContext &ctx, const ObStmtNodeTree *block)
                   K(ret), K(sizeof(ObPLFunction)));
         }
         OX (routine = new(routine)ObPLFunction(mem_context));
-        OZ (compiler.compile(block, *routine, NULL, false));
+        OZ (compiler.compile(block, *routine, &params, false));
         OX (routine->set_debug_priv());
       }
     }
@@ -1747,7 +1747,7 @@ int ObPL::execute(ObExecContext &ctx, const ObStmtNodeTree *block)
                       ctx.get_allocator(),
                       *(ctx.get_package_guard()),
                       *routine,
-                      is_forbid_anony_parameter ? NULL : &exec_params, // params
+                      is_forbid_anony_parameter ? &params : &exec_params, // params
                       NULL, // nocopy params
                       NULL, // result
                       NULL, // status

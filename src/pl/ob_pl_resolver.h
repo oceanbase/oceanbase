@@ -510,6 +510,7 @@ public:
   int resolve_condition_compile(
     const ParseNode *node,
     const ParseNode *&new_node,
+    int64_t &question_mark_count,
     bool is_inner_parse = false,
     bool is_for_trigger = false,
     bool is_for_dynamic = false,

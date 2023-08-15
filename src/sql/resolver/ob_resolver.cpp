@@ -222,7 +222,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
                               *(params_.expr_factory_),
                               NULL,
                               params_.is_prepare_protocol_);
-    OZ (resolver.resolve_condition_compile(&parse_tree, real_parse_tree));
+    OZ (resolver.resolve_condition_compile(&parse_tree, real_parse_tree, params_.query_ctx_->question_marks_count_));
   } else {
     real_parse_tree = &parse_tree;
   }

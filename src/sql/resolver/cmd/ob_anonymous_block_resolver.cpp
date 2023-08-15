@@ -87,6 +87,7 @@ int ObAnonymousBlockResolver::resolve(const ParseNode &parse_tree)
                     || T_SP_LABELED_BLOCK == block_node->type_));
       OX (stmt->set_prepare_protocol(false));
       OX (stmt->set_body(block_node));
+      OZ (add_param());
     }
   }
   return ret;
@@ -157,9 +158,19 @@ int ObAnonymousBlockResolver::add_param()
     anonymous_stmt = static_cast<ObAnonymousBlockStmt*>(stmt_);
   }
   CK (OB_NOT_NULL(anonymous_stmt));
-  for (int64_t i = 0; OB_SUCC(ret) && i < params_.param_list_->count(); ++i) {
-    if (OB_FAIL(anonymous_stmt->add_param(params_.param_list_->at(i)))) {
-      LOG_WARN("fail to push back param", K(i), K(ret));
+  if (OB_FAIL(ret)) {
+  } else if (params_.param_list_->count() > 0) {
+    CK (params_.param_list_->count() == params_.query_ctx_->question_marks_count_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < params_.param_list_->count(); ++i) {
+      if (OB_FAIL(anonymous_stmt->add_param(params_.param_list_->at(i)))) {
+        LOG_WARN("fail to push back param", K(i), K(ret));
+      }
+    }
+  } else if (params_.query_ctx_->question_marks_count_ > 0) {
+    for (int64_t i =0; OB_SUCC(ret) && i < params_.query_ctx_->question_marks_count_; ++i) {
+      if (OB_FAIL(anonymous_stmt->add_param(ObObjParam(ObObj(ObNullType))))) {
+        LOG_WARN("failed to push back param", K(ret), K(i));
+      }
     }
   }
   return ret;

@@ -8593,9 +8593,11 @@ int ObPLResolver::resolve_condition_compile(
         ObPLResolver resolver(
           allocator, session,
           *schema_guard, *package_guard, *sql_proxy, expr_factory, NULL, false);
+        int64_t question_mark_count = 0;
         OZ (resolver.resolve_condition_compile(
           node,
           new_node,
+          question_mark_count,
           is_inner_parse,
           is_for_trigger,
           is_for_dynamic,
@@ -8612,9 +8614,11 @@ int ObPLResolver::resolve_condition_compile(
     ObPLResolver resolver(
       allocator, *session_info,
       *schema_guard, *package_guard, *sql_proxy, expr_factory, NULL, false);
+    int64_t question_mark_count = 0;
     OZ (resolver.resolve_condition_compile(
       node,
       new_node,
+      question_mark_count,
       is_inner_parse,
       is_for_trigger,
       is_for_dynamic,
@@ -8627,6 +8631,7 @@ int ObPLResolver::resolve_condition_compile(
 int ObPLResolver::resolve_condition_compile(
   const ParseNode *node,
   const ParseNode *&new_node,
+  int64_t &question_mark_count,
   bool is_inner_parse,
   bool is_for_trigger,
   bool is_for_dynamic,
@@ -8657,6 +8662,7 @@ int ObPLResolver::resolve_condition_compile(
 
     CK (1 == parse_result.result_tree_->num_child_);
     CK (OB_NOT_NULL(new_node = parse_result.result_tree_->children_[0]));
+    OX (question_mark_count = parse_result.question_mark_ctx_.count_);
     if (OB_SUCC(ret) && T_SP_CREATE_TYPE == new_node->type_) {
       ret = OB_ERR_DIRECTIVE_CONTEXT;
       LOG_WARN("preprocessor directives are not supported in this context",
