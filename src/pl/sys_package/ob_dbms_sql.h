@@ -124,7 +124,7 @@ public:
       id_(id),
       cnt_(cnt),
       lower_bnd_(lower_bnd),
-      cur_idx_(lower_bnd_ - 1),
+      cur_idx_(0),
       type_(type) {}
     uint64_t id_;
     int64_t cnt_;
