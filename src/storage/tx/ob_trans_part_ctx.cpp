@@ -843,7 +843,7 @@ int ObPartTransCtx::check_modify_time_elapsed(
     } else if (is_exiting_) {
       // do nothing
     } else if (is_follower_()) {
-      ret = OB_EAGAIN;
+      ret = OB_NOT_MASTER;
       TRANS_LOG(WARN, "current transaction not master, need retry later", K(ret),
                 K(tablet_id), K(timestamp), "context", *this);
     } else if (OB_FAIL(mt_ctx_.check_modify_time_elapsed(tablet_id,

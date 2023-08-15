@@ -591,10 +591,12 @@ int ObUniqueIndexChecker::wait_trans_end(ObIDag *dag)
     LOG_WARN("get ls failed", K(ret), K(ls_id_));
   } else {
     const int64_t now = ObTimeUtility::current_time();
+    const int64_t timeout_us = 1000L * 1000L * 60L; // 1 min
     while (OB_SUCC(ret) && !dag->has_set_stop()) {
       transaction::ObTransID pending_tx_id;
       if (OB_FAIL(ls_handle.get_ls()->check_modify_time_elapsed(tablet_id_, now, pending_tx_id))) {
-        if (OB_EAGAIN == ret) {
+        // when timeout with EAGAIN, ddl scheduler of root service will retry
+        if (OB_EAGAIN == ret && ObTimeUtility::current_time() - now < timeout_us) {
           ret = OB_SUCCESS;
           ob_usleep(RETRY_INTERVAL);
           dag_yield();
