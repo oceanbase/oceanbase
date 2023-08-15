@@ -2840,6 +2840,7 @@ int ObStaticEngineCG::generate_basic_transmit_spec(
     spec.is_wf_hybrid_ = op.is_wf_hybrid();
     spec.sample_type_ = op.get_sample_type();
     spec.repartition_table_id_ = op.get_repartition_table_id();
+    spec.is_related_child_ = op.is_related_child();
     OZ(check_rollup_distributor(&spec));
     LOG_TRACE("CG transmit", K(op.get_dfo_id()), K(op.get_op_id()),
               K(op.get_dist_method()), K(op.get_unmatch_row_dist_method()));

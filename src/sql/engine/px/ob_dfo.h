@@ -498,7 +498,8 @@ public:
     p2p_dh_loc_(nullptr),
     need_p2p_info_(false),
     p2p_dh_map_info_(),
-    coord_info_ptr_(nullptr)
+    coord_info_ptr_(nullptr),
+    is_related_pair_(false)
   {
   }
 
@@ -541,7 +542,8 @@ public:
   inline void set_slave_mapping_type(SlaveMappingType v) { slave_mapping_type_ = v; }
   inline SlaveMappingType get_slave_mapping_type() { return slave_mapping_type_; }
   inline bool is_slave_mapping() { return SlaveMappingType::SM_NONE != slave_mapping_type_; }
-
+  inline void set_is_related_pair(bool is_related_pair) { is_related_pair_ = is_related_pair; }
+  inline bool is_related_pair() { return is_related_pair_; }
   ObPxPartChMapArray &get_part_ch_map() { return part_ch_map_; }
 
   // DFO 分布，DFO 在各个 server 上的任务状态
@@ -776,6 +778,7 @@ private:
   // ---------------
   ObPxCoordInfo *coord_info_ptr_;
   bool force_bushy_;
+  bool is_related_pair_;
 };
 
 

@@ -458,7 +458,8 @@ struct ObExchangeInfo
     sample_type_(NOT_INIT_SAMPLE_TYPE),
     parallel_(ObGlobalHint::UNSET_PARALLEL),
     server_cnt_(0),
-    server_list_()
+    server_list_(),
+    is_related_child_(false)
   {
     repartition_table_id_ = 0;
   }
@@ -521,6 +522,9 @@ struct ObExchangeInfo
   int64_t parallel_;
   int64_t server_cnt_;
   common::ObSEArray<common::ObAddr, 4> server_list_;
+  // Sometimes, a dfo's construction relies on its child. This flag 
+  // indicates that the current dfo is the child being depended upon
+  bool is_related_child_;
 
   TO_STRING_KV(K_(is_remote),
                K_(is_task_order),
@@ -547,7 +551,8 @@ struct ObExchangeInfo
                K_(sample_type),
                K_(parallel),
                K_(server_cnt),
-               K_(server_list));
+               K_(server_list),
+               K_(is_related_child));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExchangeInfo);
 };
