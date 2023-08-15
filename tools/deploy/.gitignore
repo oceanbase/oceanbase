@@ -4,3 +4,6 @@
 bquery/*
 obclient
 obclient.down
+/mysql_test/test_suite/transformer/t/transformer_const_propagate.test
+/mysql_test/test_suite/transformer/r/mysql/transformer_const_propagate.result
+
