@@ -67,12 +67,14 @@ public:
   int update_sess(ObTableApiCredential &credential);
 private:
   int extend_sess_pool(uint64_t tenant_id, ObTableApiSessPoolGuard &guard);
+  int get_or_create_sess_pool(ObTableApiCredential &credential, ObTableApiSessPoolGuard &guard);
 private:
   static const int64_t ELIMINATE_SESSION_DELAY = 60 * 1000 * 1000; // 60s
   bool is_inited_;
   SessPoolMap sess_pool_map_;
   ObTableApiSessEliminationTask elimination_task_;
   common::ObTimer timer_;
+  ObSpinLock lock_; // for get_or_create_sess_pool
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiSessPoolMgr);
 };
