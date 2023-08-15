@@ -15,6 +15,7 @@
  *
  *  Authors:
  */
+#ifndef OB_BUILD_FULL_CHARSET
 
 #include "lib/charset/ob_ctype.h"
 
@@ -10940,3 +10941,4 @@ ObCharsetInfo ob_charset_gbk_bin=
     PAD_SPACE
 };
 
+#endif

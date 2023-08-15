@@ -19,6 +19,9 @@ LIB_CACHE_OBJ_DEF(NS_TRGR, "TRGR", pl::ObPLObjectKey, pl::ObPLObjectSet, pl::ObP
 LIB_CACHE_OBJ_DEF(NS_PKG, "PKG", pl::ObPLObjectKey, pl::ObPLObjectSet, pl::ObPLPackage, ObNewModIds::OB_SQL_PHY_PL_OBJ)    // package cache
 LIB_CACHE_OBJ_DEF(NS_TABLEAPI, "TABLEAPI", table::ObTableApiCacheKey, table::ObTableApiCacheNode, table::ObTableApiCacheObj, "OB_TABLEAPI_OBJ")    // tableapi cache
 LIB_CACHE_OBJ_DEF(NS_CALLSTMT, "CALLSTMT", pl::ObPLObjectKey, pl::ObPLObjectSet, ObCallProcedureInfo, ObNewModIds::OB_SQL_PHY_PL_OBJ)  // call stmt cache
+#ifdef OB_BUILD_SPM
+LIB_CACHE_OBJ_DEF(NS_SPM, "SPM", ObBaselineKey, ObSpmSet, ObPlanBaselineItem, "OB_SQL_SPM_OBJ") // baseline cache
+#endif /*OB_BUILD_SPM*/
 #endif /*LIB_CACHE_OBJ_DEF*/
 
 #ifndef OCEANBASE_SQL_PLAN_CACHE_OB_LIB_CACHE_REGISTER_

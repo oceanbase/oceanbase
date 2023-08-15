@@ -18,6 +18,8 @@
 *      - initial release
 *
 */
+#ifndef OB_BUILD_FULL_CHARSET
+
 #include "lib/charset/ob_mysql_global.h"
 #include "lib/charset/ob_ctype.h"
 #include "lib/utility/ob_macro_utils.h"
@@ -406,3 +408,6 @@ ObCharsetInfo ob_charset_latin1_bin = {
     &ob_charset_latin1_handler,
     &ob_collation_8bit_bin_handler,
     PAD_SPACE};
+
+
+#endif

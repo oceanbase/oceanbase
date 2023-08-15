@@ -33,6 +33,9 @@ class ObLogServiceRpcProxy;
 
 namespace logservice
 {
+#ifdef OB_BUILD_ARBITRATION
+class ObArbitrationService;
+#endif
 class ObLogFlashbackService;
 class ObLogHandler;
 class ObLogReplayService;
@@ -48,6 +51,9 @@ public:
   int handle_request(const ReqType &req);
 private:
   int get_palf_handle_guard_(const int64_t palf_id, palf::PalfHandleGuard &palf_handle_guard) const;
+#ifdef OB_BUILD_ARBITRATION
+  int get_arb_service_(ObArbitrationService *&arb_service) const;
+#endif
   int get_self_addr_(common::ObAddr &self) const;
   int get_rpc_proxy_(obrpc::ObLogServiceRpcProxy *&rpc_proxy) const;
   int get_flashback_service_(ObLogFlashbackService *&flashback_srv) const;

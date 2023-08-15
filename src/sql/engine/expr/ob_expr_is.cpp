@@ -99,6 +99,24 @@ int ObExprIs::calc_collection_is_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
     } else {
       uint64_t ext = param->extend_obj_->get_ext();
       switch (param->extend_obj_->get_meta().get_extend_type()) {
+#ifdef OB_BUILD_ORACLE_PL
+        case pl::PL_NESTED_TABLE_TYPE:
+        case pl::PL_ASSOCIATIVE_ARRAY_TYPE:
+        case pl::PL_VARRAY_TYPE: {
+          pl::ObPLCollection *collection = reinterpret_cast<pl::ObPLCollection*>(ext);
+          v = OB_ISNULL(collection) ? true : collection->is_collection_null();
+          break;
+        }
+        case pl::PL_OPAQUE_TYPE: {
+          pl::ObPLOpaque *opaque = reinterpret_cast<pl::ObPLOpaque *>(ext);
+          v = OB_ISNULL(opaque) ? true : opaque->is_invalid();
+          break;
+        }
+        case pl::PL_CURSOR_TYPE:
+        case pl::PL_REF_CURSOR_TYPE: {
+          v = param->extend_obj_->get_ext() == 0;
+        } break;
+#endif
         case pl::PL_RECORD_TYPE: {
           pl::ObPLRecord *rec = reinterpret_cast<pl::ObPLRecord *>(ext);
           v = rec->is_null();

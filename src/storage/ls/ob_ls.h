@@ -46,6 +46,9 @@
 #include "logservice/rcservice/ob_role_change_handler.h"
 #include "logservice/restoreservice/ob_log_restore_handler.h"     // ObLogRestoreHandler
 #include "logservice/ob_log_handler.h"
+#ifdef OB_BUILD_ARBITRATION
+#include "logservice/ob_arbitration_service.h"
+#endif
 #include "logservice/restoreservice/ob_log_restore_handler.h"     // ObLogRestoreHandler
 #include "storage/ls/ob_ls_meta_package.h"
 #include "storage/ls/ob_ls_get_mod.h"
@@ -129,6 +132,9 @@ struct DiagnoseInfo
   logservice::GCDiagnoseInfo gc_diagnose_info_;
   checkpoint::CheckpointDiagnoseInfo checkpoint_diagnose_info_;
   logservice::RestoreDiagnoseInfo restore_diagnose_info_;
+#ifdef OB_BUILD_ARBITRATION
+  logservice::LogArbSrvDiagnoseInfo arb_srv_diagnose_info_;
+#endif
   TO_STRING_KV(K(ls_id_),
                K(log_handler_diagnose_info_),
                K(palf_diagnose_info_),
@@ -138,6 +144,9 @@ struct DiagnoseInfo
                K(gc_diagnose_info_),
                K(checkpoint_diagnose_info_),
                K(restore_diagnose_info_)
+#ifdef OB_BUILD_ARBITRATION
+               ,K(arb_srv_diagnose_info_)
+#endif
                );
   void reset() {
     ls_id_ = -1;
@@ -149,6 +158,9 @@ struct DiagnoseInfo
     gc_diagnose_info_.reset();
     checkpoint_diagnose_info_.reset();
     restore_diagnose_info_.reset();
+#ifdef OB_BUILD_ARBITRATION
+    arb_srv_diagnose_info_.reset();
+#endif
   }
 };
 
@@ -645,6 +657,10 @@ public:
   DELEGATE_WITH_RET(log_handler_, disable_vote, int);
   DELEGATE_WITH_RET(log_handler_, remove_member, int);
   DELEGATE_WITH_RET(log_handler_, remove_learner, int);
+#ifdef OB_BUILD_ARBITRATION
+  DELEGATE_WITH_RET(log_handler_, add_arbitration_member, int);
+  DELEGATE_WITH_RET(log_handler_, remove_arbitration_member, int);
+#endif
   DELEGATE_WITH_RET(log_handler_, is_in_sync, int);
   DELEGATE_WITH_RET(log_handler_, get_end_scn, int);
   DELEGATE_WITH_RET(log_handler_, disable_sync, int);

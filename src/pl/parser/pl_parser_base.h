@@ -113,6 +113,9 @@ extern ParseNode *new_terminal_node(void *malloc_pool, ObItemType type);
 extern ParseNode *new_non_terminal_node(void *malloc_pool, ObItemType node_tag, int num, ...);
 extern int parse_sql_stmt(ParseResult *parse_result);
 
+#ifdef OB_BUILD_ORACLE_PL
+extern const NonReservedKeyword *oracle_pl_non_reserved_keyword_lookup(const char *word);
+#endif
 
 extern const NonReservedKeyword *mysql_pl_non_reserved_keyword_lookup(const char *word);
 
@@ -193,6 +196,42 @@ extern const NonReservedKeyword *mysql_pl_non_reserved_keyword_lookup(const char
     }                                                                      \
   } while (0)
 
+#ifdef OB_BUILD_ORACLE_PL
+#define get_oracle_non_reserved_node(node, malloc_pool, expr_start, expr_end) \
+  do {                                                                 \
+    malloc_terminal_node(node, malloc_pool, T_IDENT);                   \
+    if (OB_UNLIKELY(NULL == node || NULL == parse_ctx || NULL == parse_ctx->stmt_str_)) {\
+      YY_FATAL_ERROR("invalid argument, node:%p, result:%p or input_sql is NULL", node, parse_ctx);                                         \
+    } else if (OB_UNLIKELY(expr_start <= 0 || expr_end <= 0 || expr_start > expr_end)) {               \
+      YY_FATAL_ERROR("invalid argument, expr_start:%d, expr_end:%d", expr_start, expr_end);                     \
+    } else {                                                               \
+      int start = expr_start;                                              \
+      char * upper_value = NULL;                                           \
+      char * raw_str = NULL;                                              \
+      node->str_value_ = NULL;                                             \
+      node->str_len_ = 0;                                                  \
+      node->raw_text_ = NULL;                                             \
+      node->text_len_ = 0;                                                 \
+      while (start <= expr_end && ISSPACE(parse_ctx->stmt_str_[start])) { \
+        start++;                                                           \
+      }                                                                    \
+      if (start >= expr_start                                              \
+          && (OB_UNLIKELY((NULL == (upper_value = parse_strndup(parse_ctx->stmt_str_ + start, expr_end - start + 1, parse_ctx->mem_pool_)))))) { \
+        YY_FATAL_ERROR("No more space for copying expression string");          \
+      } else {                                                             \
+        if (start >= expr_start                                              \
+            && (OB_UNLIKELY((NULL == (raw_str = parse_strndup(parse_ctx->stmt_str_ + start, expr_end - start + 1, parse_ctx->mem_pool_)))))) { \
+          YY_FATAL_ERROR("No more space for copying expression string");          \
+        } else {                                                            \
+          node->raw_text_ = raw_str;                                    \
+          node->text_len_ = expr_end - start + 1;                            \
+          node->str_value_ = str_toupper(upper_value, expr_end - start + 1); \
+          node->str_len_ = expr_end - start + 1;                             \
+        }                                                                   \
+      }                                                                    \
+    }                                                                      \
+  } while(0)
+#endif
 
 #define make_name_node(node, malloc_pool, name)                         \
   do {                                                                  \
@@ -209,6 +248,19 @@ extern const NonReservedKeyword *mysql_pl_non_reserved_keyword_lookup(const char
 // only supports up to 15 decimal place precision:
 // e.g., (int64_t)3.00000000000000001 == 3.00000000000000001 is true;
 // oracle supports up to 40 decimal place precision.
+#ifdef OB_BUILD_ORACLE_PL
+#define CHECK_ASSIGN_ZERO_SUFFIX_INT(decimal_str, result, int_flag)         \
+  do                                                                        \
+  {                                                                         \
+    double temp_val = strtod(decimal_str, NULL);                            \
+    if ((int64_t)temp_val == temp_val) {                                    \
+      int_flag = true;                                                      \
+    } else {                                                                \
+      int_flag = false;                                                     \
+    }                                                                       \
+    result = (int64_t)temp_val;                                             \
+  } while (0);
+#endif
 
 #define ESCAPE_PERCENT_CHARACTER(result, src, dst)\
 do {\

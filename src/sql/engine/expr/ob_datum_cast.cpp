@@ -30,7 +30,12 @@
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "lib/geo/ob_geometry_cast.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
-
+#ifdef OB_BUILD_ORACLE_XML
+#include "lib/xml/ob_xml_util.h"
+#include "sql/engine/expr/ob_expr_xml_func_helper.h"
+#endif
+#include "pl/ob_pl.h"
+#include "pl/ob_pl_user_type.h"
 namespace oceanbase
 {
 namespace sql
@@ -7803,7 +7808,57 @@ CAST_FUNC_NAME(string, udt)
 {
   EVAL_STRING_ARG()
   {
+#ifdef OB_BUILD_ORACLE_XML
+  const ObObjMeta &in_obj_meta = expr.args_[0]->obj_meta_;
+  ObObjType in_type = expr.args_[0]->datum_meta_.type_;
+  ObObjType out_type = expr.datum_meta_.type_;
+  ObCollationType in_cs_type;
+  ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  ObString in_str(child_res->len_, child_res->ptr_);
+  ObDatum t_res_datum;
+  ObMulModeMemCtx* mem_ctx = nullptr;
+  ObXmlDocument* doc = nullptr;
+  ObString xml_plain_text;
+  if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&temp_allocator, mem_ctx))) {
+    LOG_WARN("fail to create tree memory context", K(ret));
+  } else if (in_obj_meta.is_string_type()) {
+    // first step cs_type transform
+    in_cs_type = expr.args_[0]->datum_meta_.cs_type_;
+    if (ObCharset::charset_type_by_coll(in_cs_type) != CHARSET_UTF8MB4) {
+      bool has_set_res = false;
+      OZ(common_string_string(expr, in_type, in_cs_type, ObObjType::ObVarcharType,
+                              CS_TYPE_UTF8MB4_BIN, in_str, ctx, t_res_datum, has_set_res));
+    } else {
+      OZ(common_copy_string(expr, in_str, ctx, t_res_datum));
+    }
+
+    // second step xmlparse document
+    xml_plain_text = t_res_datum.get_string();
+    ObXmlParser parser(mem_ctx);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(parser.parse_document(xml_plain_text))) {
+      ret = OB_ERR_XML_PARSE;
+      LOG_USER_ERROR(OB_ERR_XML_PARSE);
+      LOG_WARN("parse xml plain text as document failed.", K(xml_plain_text));
+    } else {
+      doc = parser.document();
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (!doc->get_encoding().empty() || doc->get_encoding_flag()) {
+      doc->set_encoding(ObXmlUtil::get_charset_name(in_cs_type));
+    }
+    if (OB_SUCC(ret) && OB_FAIL(ObXMLExprHelper::pack_xml_res(expr, ctx, res_datum, doc, mem_ctx,
+                                              M_DOCUMENT,
+                                              xml_plain_text))) {
+      LOG_WARN("pack_xml_res failed", K(ret));
+    }
+  }
+#else
   ret = OB_NOT_SUPPORTED;
+#endif
   }
   return ret;
 }
@@ -7813,7 +7868,49 @@ CAST_FUNC_NAME(udt, string)
   // udt(xmltype) can be null: select dump(xmlparse(document NULL)) from dual;
   EVAL_STRING_ARG()
   {
+#ifdef OB_BUILD_ORACLE_XML
+    const ObObjMeta &in_obj_meta = expr.args_[0]->obj_meta_;
+    const ObObjMeta &out_obj_meta = expr.obj_meta_;
+    if (in_obj_meta.is_xml_sql_type()) {
+      ObString blob_data = child_res->get_string();
+      ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+      common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+      ObIMulModeBase *xml_root = NULL;
+      ObStringBuffer xml_plain_text(&temp_allocator);
+      ObCollationType session_cs_type = CS_TYPE_UTF8MB4_BIN;
+      GET_SESSION() {
+        session_cs_type = session->get_nls_collation();
+      }
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(&temp_allocator,
+                                                            ObLongTextType,
+                                                            CS_TYPE_BINARY,
+                                                            true,
+                                                            blob_data))) {
+        LOG_WARN("fail to get real data.", K(ret), K(blob_data));
+      } else if (OB_FAIL(ObXmlUtil::cast_to_string(blob_data, temp_allocator, xml_plain_text, session_cs_type))) {
+        LOG_WARN("failed to convert xml to string", K(ret), KP(blob_data.ptr()), K(blob_data.length()));
+      } else { // use clob before xml binary implemented
+        ObObjType in_type = ObLongTextType;
+        ObObjType out_type = expr.datum_meta_.type_;
+        ObCollationType in_cs_type = CS_TYPE_UTF8MB4_BIN;
+        ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
+        bool has_set_res = false;
+        OZ(common_string_string(expr, in_type, in_cs_type, out_type,
+                                out_cs_type, xml_plain_text.string(), ctx, res_datum, has_set_res));
+        const ObString res_str = res_datum.get_string();  // res str need deep copy in pl mode
+        if (OB_SUCC(ret) && OB_FAIL(common_copy_string(expr, res_str, ctx, res_datum))) {
+          LOG_WARN("fail to deep copy str", K(ret));
+        }
+      }
+    } else {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN_RET(OB_ERR_INVALID_TYPE_FOR_OP, "inconsistent datatypes",
+        "expected", out_obj_meta.get_type(), "got", in_obj_meta.get_type(),
+        K(in_obj_meta.get_subschema_id()));
+    }
+#else
   ret = OB_NOT_SUPPORTED;
+#endif
   }
   return ret;
 }
@@ -7822,7 +7919,69 @@ CAST_FUNC_NAME(pl_extend, string)
 {
   EVAL_STRING_ARG()
   {
+#ifdef OB_BUILD_ORACLE_XML
+    const ObObjMeta &in_obj_meta = expr.args_[0]->obj_meta_;
+    const ObObjMeta &out_obj_meta = expr.obj_meta_;
+     if (pl::PL_OPAQUE_TYPE == in_obj_meta.get_extend_type()) {
+      pl::ObPLOpaque *pl_src = reinterpret_cast<pl::ObPLOpaque*>(child_res->get_ext());
+      if (OB_ISNULL(pl_src)) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("failed to get pl data type info", K(ret), K(in_obj_meta));
+      } else if (pl_src->get_type() == pl::ObPLOpaqueType::PL_XML_TYPE) {
+        pl::ObPLXmlType * xmltype = static_cast<pl::ObPLXmlType*>(pl_src);
+        ObObj *blob_obj = xmltype->get_data();
+        if (OB_ISNULL(blob_obj)) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("Unexpected xml data", K(ret), K(*xmltype));
+        } else {
+          ObString blob_data = blob_obj->get_string();
+          ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+          common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+          ObStringBuffer xml_plain_text(&temp_allocator);
+          ObCollationType session_cs_type = CS_TYPE_UTF8MB4_BIN;
+          GET_SESSION() {
+            session_cs_type = session->get_nls_collation();
+          }
+          if (OB_FAIL(ObTextStringHelper::read_real_string_data(&temp_allocator,
+                                                                ObLongTextType,
+                                                                CS_TYPE_BINARY,
+                                                                true,
+                                                                blob_data))) {
+            LOG_WARN("fail to get real data.", K(ret), K(blob_data));
+          } else if (OB_FAIL(ObXmlUtil::cast_to_string(blob_data, temp_allocator, xml_plain_text, session_cs_type))) {
+            LOG_WARN("failed to convert xml to string", K(ret), KP(blob_data.ptr()), K(blob_data.length()));
+          } else { // use clob before xml binary implemented
+            ObObjType in_type = ObLongTextType;
+            ObObjType out_type = expr.datum_meta_.type_;
+            ObCollationType in_cs_type = CS_TYPE_UTF8MB4_BIN;
+            ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
+            bool has_set_res = false;
+            OZ(common_string_string(expr, in_type, in_cs_type, out_type,
+                                    out_cs_type, xml_plain_text.string(), ctx, res_datum, has_set_res));
+            const ObString res_str = res_datum.get_string();  // res str need deep copy in pl mode
+            if (OB_SUCC(ret) && OB_FAIL(common_copy_string(expr, res_str, ctx, res_datum))) {
+              LOG_WARN("fail to deep copy str", K(ret));
+            }
+          }
+        }
+      } else if (pl_src->get_type() == pl::ObPLOpaqueType::PL_INVALID) {
+        // possibly an un-initiated pl variable, for example, xml_data and xml_data2 are only declared
+        // then call this directly: select replace(xml_data,xml_data2 ,'1') into stringval from dual;
+        res_datum.set_null();
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected type to convert pl format",
+          K(ret), K(pl_src->get_type()), K(in_obj_meta), K(out_obj_meta));
+      }
+    } else {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN_RET(OB_ERR_INVALID_TYPE_FOR_OP, "inconsistent datatypes",
+        "expected", out_obj_meta.get_type(), "got", in_obj_meta.get_type(),
+        K(in_obj_meta.get_subschema_id()));
+    }
+#else
   ret = OB_NOT_SUPPORTED;
+#endif
   }
   return ret;
 }
@@ -7834,7 +7993,62 @@ CAST_FUNC_NAME(sql_udt, pl_extend)
   // For PL extend type, detaield udt id is stored in accurcy_ before code generation,
   // then only existed in the data after cg.
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_XML
+  ObDatum *child_res = NULL;
+  if (OB_FAIL(expr.args_[0]->eval(ctx, child_res))) {
+    LOG_WARN("eval arg failed", K(ret), K(ctx));
+  } else {
+    const ObObjMeta &in_obj_meta = expr.args_[0]->obj_meta_;
+    const ObObjMeta &out_obj_meta = expr.obj_meta_;
+    if (in_obj_meta.is_xml_sql_type()) {
+      pl::ObPLXmlType *xmltype = NULL;
+      void *ptr = NULL;
+      ObObj* data = NULL; // obobj for blob;
+      ObIAllocator &allocator = ctx.exec_ctx_.get_allocator();
+      if (OB_ISNULL(ptr = allocator.alloc(sizeof(pl::ObPLXmlType)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("Failed to allocate memory for pl xml data type", K(ret), K(sizeof(pl::ObPLXmlType)));
+      } else if (FALSE_IT(xmltype = new (ptr)pl::ObPLXmlType())) {
+      } else if (OB_ISNULL(data = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory for pl object", K(ret));
+      } else {
+        ObString xml_data;
+
+        if (!child_res->is_null() && !child_res->get_string().empty()) {
+          /*
+          We believe that the memory in child_res is reliable,
+          and the content in it can be passed to the next layer without copying.
+          Therefore, there is no deep copy of row-level memory here.
+          If you find that the memory of xml_data is unstable later,
+          you can add a deep copy here to copy the data to the memory of expr: get_str_res_mem().
+          */
+          xml_data = child_res->get_string();
+          data->set_string(ObLongTextType, xml_data.ptr(), xml_data.length());
+          data->set_has_lob_header(); // must has lob header
+          data->set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        } else {
+          data->set_null();
+        }
+        if (OB_SUCC(ret)) {
+          ObObj result_obj;
+          xmltype->set_data(data);
+          result_obj.set_extend(reinterpret_cast<int64_t>(xmltype), pl::PL_OPAQUE_TYPE);
+          if (OB_FAIL(res_datum.from_obj(result_obj, expr.obj_datum_map_))) { // check obj_datum_map_
+            LOG_WARN("failed to set extend datum from obj", K(ret));
+          }
+        }
+      }
+    } else {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN_RET(OB_ERR_INVALID_TYPE_FOR_OP, "inconsistent datatypes",
+        "expected", out_obj_meta.get_type(), "got", in_obj_meta.get_type(),
+        K(in_obj_meta.get_subschema_id()));
+    }
+  }
+#else
   ret = OB_NOT_SUPPORTED;
+#endif
   return ret;
 }
 
@@ -7843,7 +8057,55 @@ CAST_FUNC_NAME(pl_extend, sql_udt)
   // Convert sql udt type to pl udt type, currently only xmltype is supported
   EVAL_STRING_ARG()
   {
+#ifdef OB_BUILD_ORACLE_XML
+    const ObObjMeta &in_obj_meta = expr.args_[0]->obj_meta_;
+    const ObObjMeta &out_obj_meta = expr.obj_meta_;
+    if (pl::PL_OPAQUE_TYPE == in_obj_meta.get_extend_type()) {
+      pl::ObPLOpaque *pl_src = reinterpret_cast<pl::ObPLOpaque*>(child_res->get_ext());
+      if (OB_ISNULL(pl_src)) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("failed to get pl data type info", K(ret), K(in_obj_meta));
+      } else if (pl_src->get_type() == pl::ObPLOpaqueType::PL_XML_TYPE) {
+        if(!out_obj_meta.is_xml_sql_type()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected pl xml to sql udt type", K(ret), K(in_obj_meta), K(out_obj_meta));
+        } else {
+          pl::ObPLXmlType * xmltype = static_cast<pl::ObPLXmlType*>(pl_src);
+          ObObj *blob_obj = xmltype->get_data();
+          if (OB_ISNULL(blob_obj) || blob_obj->is_null()) {
+            res_datum.set_null();
+          } else {
+            // deep copy here or by the caller ?
+            ObString xml_data = blob_obj->get_string();
+            int64_t xml_data_size = xml_data.length();
+            char *xml_data_buff = expr.get_str_res_mem(ctx, xml_data_size);
+            if (OB_ISNULL(xml_data_buff)) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to allocate memory for xmldata",
+                       K(ret), K(out_obj_meta), K(xml_data_size));
+            } else {
+              MEMCPY(xml_data_buff, xml_data.ptr(), xml_data_size);
+              res_datum.set_string(ObString(xml_data_size, xml_data_buff));
+              // should not destroy input extends
+            }
+          }
+        }
+      } else if (pl_src->get_type() == pl::ObPLOpaqueType::PL_INVALID) {
+        // un-initiated pl opaque variable
+        res_datum.set_null();
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected type to convert pl format",
+          K(ret), K(pl_src->get_type()), K(in_obj_meta), K(out_obj_meta));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected type to convert pl udt to sql udt format",
+        K(ret), K(in_obj_meta), K(out_obj_meta));
+    }
+#else
   ret = OB_NOT_SUPPORTED;
+#endif
   }
   return ret;
 }

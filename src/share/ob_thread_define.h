@@ -126,7 +126,14 @@ TG_DEF(DDLScanTask, DDLScanTask, TIMER)
 TG_DEF(TenantLSMetaChecker, LSMetaCh, TIMER)
 TG_DEF(TenantTabletMetaChecker, TbMetaCh, TIMER)
 TG_DEF(ServerMetaChecker, SvrMetaCh, TIMER)
+#ifdef OB_BUILD_ARBITRATION
+TG_DEF(ArbNormalRpcQueueTh, ArbNormalRpcQueueTh, THREAD_POOL, ThreadCountPair(arbserver::ObArbSrvDeliver::get_normal_rpc_thread_num(), arbserver::ObArbSrvDeliver::MINI_MODE_RPC_QUEUE_CNT))
+TG_DEF(ArbServerRpcQueueTh, ArbSrvRpcQueueTh, THREAD_POOL, ThreadCountPair(arbserver::ObArbSrvDeliver::get_server_rpc_thread_num(), arbserver::ObArbSrvDeliver::MINI_MODE_RPC_QUEUE_CNT))
+#endif
 TG_DEF(ArbGCSTh, ArbGCTimerP, TIMER)
+#ifdef OB_BUILD_ARBITRATION
+TG_DEF(ArbServerTimer, ArbServerTimer, TIMER)
+#endif
 TG_DEF(DataDictTimer, DataDictTimer, TIMER)
 TG_DEF(CDCService, CDCSrv, THREAD_POOL, 1)
 TG_DEF(LogUpdater, LogUpdater, TIMER)

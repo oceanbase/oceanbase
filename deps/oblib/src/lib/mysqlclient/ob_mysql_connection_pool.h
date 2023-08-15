@@ -22,6 +22,9 @@
 #include "lib/mysqlclient/ob_mysql_connection.h"
 #include "lib/net/ob_addr.h"
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
+#ifdef OB_BUILD_DBLINK
+#include "lib/oracleclient/ob_oracle_oci_connection.h"
+#endif
 
 namespace oceanbase
 {
@@ -253,12 +256,18 @@ public:
   inline void set_link_type(DblinkDriverProto link_type) { link_type_= link_type; }
   DblinkDriverProto &get_link_type() { return link_type_; }
   ObMySQLConnectionPool &get_mysql_pool() { return mysql_pool_; }
+#ifdef OB_BUILD_DBLINK
+  ObOciConnectionPool &get_oci_pool() { return oci_pool_; }
+#endif
   inline void stop() {}
 
 private:
   // ObISQLConnectionPool &get_pool_from_type(DblinkDriverProto &link_type);
   // ObDbLinkMySQLConnectionPool mysql_pool_;
   ObMySQLConnectionPool mysql_pool_;
+#ifdef OB_BUILD_DBLINK
+  ObOciConnectionPool oci_pool_;
+#endif
   DblinkDriverProto link_type_;
 };
 

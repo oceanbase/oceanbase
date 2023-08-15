@@ -338,6 +338,27 @@ int ObMPConnect::process()
     }
 
     if (NULL != session) {
+#ifdef OB_BUILD_AUDIT_SECURITY
+      ObSqlString comment_text;
+      (void)comment_text.append_fmt("LOGIN: tenant_name=%.*s, user_name=%.*s, client_ip=%.*s, "
+                                    "sessid=%u, proxy_sessid=%lu, "
+                                    "capability=%X, proxy_capability=%lX, use_ssl=%s, protocol=%s",
+                                    tenant_name_.length(), tenant_name_.ptr(),
+                                    user_name_.length(), user_name_.ptr(),
+                                    host_name.length(), host_name.ptr(),
+                                    sessid,
+                                    proxy_sessid,
+                                    capability,
+                                    proxy_capability,
+                                    use_ssl ? "true" : "false",
+                                    get_cs_protocol_type_name(protoType));
+
+      (void)ObSecurityAuditUtils::handle_security_audit(*session,
+                                                        stmt::T_LOGIN,
+                                                        ObString::make_string("CONNECT"),
+                                                        comment_text.string(),
+                                                        proc_ret);
+#endif
       // oracle temp table need to be refactored
       //if (OB_SUCCESS == proc_ret) {
       //  proc_ret = session->drop_reused_oracle_temp_tables();
@@ -626,6 +647,10 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
           LOG_WARN("failed to update database variables", K(ret));
         } else if (OB_FAIL(session.update_max_packet_size())) {
           LOG_WARN("failed to update max packet size", K(ret));
+#ifdef OB_BUILD_AUDIT_SECURITY
+        } else if (OB_FAIL(check_audit_user(session_priv.tenant_id_, user_name_))) {
+          LOG_WARN("fail to check audit user privilege", K(ret));
+#endif
         } else if (OB_FAIL(get_client_attribute_capability(client_attr_cap_flags))) {
           LOG_WARN("failed to get client attribute capability", K(ret));
         } else {
@@ -850,6 +875,29 @@ int ObMPConnect::unlock_user_if_time_is_up_mysql(const uint64_t tenant_id,
   return ret;
 }
 
+#ifdef OB_BUILD_AUDIT_SECURITY
+int ObMPConnect::check_audit_user(const uint64_t tenant_id, ObString &user_name)
+{
+  int ret = OB_SUCCESS;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::MYSQL;
+  if (0 == user_name.case_compare(OB_ORA_AUDITOR_NAME)) {
+    if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
+      LOG_WARN("fail to get tenant mode in convert_oracle_object_name", K(ret));
+    } else if (compat_mode == lib::Worker::CompatMode::MYSQL) {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (tenant_config.is_valid()) {
+        ObString audit_mode(tenant_config->_audit_mode.get_value());
+        if (0 != audit_mode.case_compare("ORACLE")) {
+          ret = OB_ERR_NO_PRIVILEGE;
+          LOG_WARN("audit user cannot login in because of the"
+              "audit_mode not be oracle", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObMPConnect::update_login_stat_in_trans(const uint64_t tenant_id,
                                             const bool is_login_succ,

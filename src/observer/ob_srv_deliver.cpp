@@ -183,8 +183,7 @@ int check_easy_memory_limit(ObRequest &req)
   int ret = OB_SUCCESS;
   easy_mod_stat_t *stat = NULL;
 
-  if (req.get_nio_protocol() == ObRequest::TRANSPORT_PROTO_POC
-      || req.get_nio_protocol() == ObRequest::TRANSPORT_PROTO_RDMA) {
+  if (req.get_nio_protocol() == ObRequest::TRANSPORT_PROTO_POC) {
     // Todo:
     return ret;
   }
@@ -517,7 +516,7 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
         EVENT_INC(MYSQL_PACKET_IN);
         EVENT_ADD(MYSQL_PACKET_IN_BYTES, pkt.get_clen() + OB_MYSQL_HEADER_LENGTH);
       }
-      if (OB_UNLIKELY((ObRequest::TRANSPORT_PROTO_RDMA != req.get_nio_protocol()) && NULL != diagnose_queue_ && SQL_REQ_OP.get_peer(&req).get_port() <= 0)) {
+      if (OB_UNLIKELY(NULL != diagnose_queue_ && SQL_REQ_OP.get_peer(&req).get_port() <= 0)) {
         LOG_INFO("receive login request from unix domain socket");
         if (!diagnose_queue_->queue_.push(&req, MAX_QUEUE_LEN)) {
           ret = OB_QUEUE_OVERFLOW;

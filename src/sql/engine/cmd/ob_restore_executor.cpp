@@ -90,7 +90,7 @@ int ObPhysicalRestoreTenantExecutor::execute(
       }
 
     } else {
-  // TODO:  fix restore preview later.
+    // TODO(chongrong.th): fix restore preview in 4.3
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("restore preview is not support now", K(ret));
       // if (OB_FAIL(physical_restore_preview(ctx, stmt))) {

@@ -68,6 +68,9 @@ private:
   int dump_shared_macro_block(const char* buf, const int64_t size);
   void dump_sstable();
   void dump_sstable_meta();
+#ifdef OB_BUILD_TDE_SECURITY
+  int init_master_key_getter();
+#endif
 
   bool is_quiet_;
   ObAdminDumpsstCmd cmd_;

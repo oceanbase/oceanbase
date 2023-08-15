@@ -95,6 +95,12 @@ private:
 
   int resolve_base_object(obrpc::ObCreateTriggerArg &trigger_arg, bool search_public_schema);
   int resolve_order_clause(const ParseNode *parse_node, obrpc::ObCreateTriggerArg &trigger_arg);
+#ifdef OB_BUILD_ORACLE_PL
+  int resolve_rename_trigger(const ParseNode &rename_clause,
+                             ObSchemaGetterGuard &schema_guard,
+                             share::schema::ObTriggerInfo &trigger_info,
+                             common::ObIAllocator &alloc);
+#endif
 
 private:
   static const common::ObString REF_OLD;

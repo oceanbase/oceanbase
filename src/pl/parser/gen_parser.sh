@@ -36,7 +36,12 @@ fi
 
 # generate pl_parser
 bison_parser ../../../src/pl/parser/pl_parser_mysql_mode.y ../../../src/pl/parser/pl_parser_mysql_mode_tab.c
-
 flex -o ../../../src/pl/parser/pl_parser_mysql_mode_lex.c ../../../src/pl/parser/pl_parser_mysql_mode.l ../../../src/pl/parser/pl_parser_mysql_mode_tab.h
+
+if [ -d "../../../close_modules/oracle_pl/pl/parser/" ]; then
+  bison_parser ../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode.y ../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_tab.c
+  flex -o ../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_lex.c ../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode.l ../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_tab.h
+fi
+
 #./gen_type_name.sh ob_item_type.h >type_name.c
 

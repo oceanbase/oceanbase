@@ -17,6 +17,9 @@
 #include "lib/time/ob_time_utility.h"
 #include "lib/oblog/ob_log_module.h"
 #include "share/ob_cluster_version.h" // for GET_MIN_DATA_VERSION
+#ifdef OB_BUILD_ARBITRATION
+#include "share/arbitration_service/ob_arbitration_service_utils.h" // ObArbitrationServiceUtils
+#endif
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "observer/omt/ob_tenant_config_mgr.h" // ObTenantConfigGuard
 
@@ -124,6 +127,13 @@ int ObShareUtil::generate_arb_replica_num(
                   || !ls_id.is_valid_with_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
+#ifdef OB_BUILD_ARBITRATION
+  } else if (OB_FAIL(ObArbitrationServiceUtils::generate_arb_replica_num(
+                         tenant_id,
+                         ls_id,
+                         arb_replica_num))) {
+    LOG_WARN("fail to generate arb replica number", KR(ret), K(tenant_id), K(ls_id));
+#endif
   }
   return ret;
 }

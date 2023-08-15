@@ -14,6 +14,7 @@
 #include "lib/allocator/ob_malloc.h"
 #include "lib/utility/serialization.h"
 #include "lib/utility/ob_tracepoint.h"
+#ifndef OB_BUILD_TDE_SECURITY
 
 namespace oceanbase
 {
@@ -134,3 +135,4 @@ OB_SERIALIZE_MEMBER(ObEncryptMetaCache, table_id_, local_index_id_, meta_);
 
 }//transaction
 }//oceanbase
+#endif

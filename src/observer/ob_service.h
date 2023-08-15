@@ -209,6 +209,15 @@ public:
       obrpc::ObBatchBroadcastSchemaResult &result);
 
   ////////////////////////////////////////////////////////////////
+#ifdef OB_BUILD_TDE_SECURITY
+  int wait_master_key_in_sync(const obrpc::ObWaitMasterKeyInSyncArg &wms_in_sync_arg);
+  int trigger_tenant_config(const obrpc::ObWaitMasterKeyInSyncArg &wms_in_sync_arg);
+  int do_wait_master_key_in_sync(
+      const common::ObIArray<std::pair<uint64_t, uint64_t> > &got_version_array);
+  int convert_tenant_max_key_version(
+      const common::ObIArray<std::pair<uint64_t, share::ObLeaseResponse::TLRpKeyVersion> > &,
+      common::ObIArray<std::pair<uint64_t, uint64_t> > &);
+#endif
   // ObReportReplicaP @RS::admin to report replicas
   int report_replica();
   int load_leader_cluster_login_info();

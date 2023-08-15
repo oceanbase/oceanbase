@@ -35,6 +35,9 @@
 #include "sql/engine/expr/ob_expr_plsql_variable.h"
 #include "share/resource_manager/ob_resource_manager_proxy.h"
 #include "sql/engine/expr/ob_expr_uuid.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/ob_pl_warning.h"
+#endif
 
 
 using namespace oceanbase::common;
@@ -63,7 +66,12 @@ ObSpecialSysVarValues::ObSpecialSysVarValues()
   } else if (OB_FAIL(databuff_printf(ObSpecialSysVarValues::version_comment_,
                                      ObSpecialSysVarValues::VERSION_COMMENT_MAX_LEN,
                                      pos,
+#ifdef OB_BUILD_CLOSE_MODULES
+                                     "OceanBase %s (r%s) (Built %s %s)",
+#else
                                      "OceanBase_CE %s (r%s) (Built %s %s)",
+
+#endif
                                      PACKAGE_VERSION, build_version(),
                                      build_date(), build_time()))) {
     LOG_ERROR("fail to print version_comment to buff", K(ret));
@@ -74,7 +82,12 @@ ObSpecialSysVarValues::ObSpecialSysVarValues()
   } else if (FALSE_IT(pos = 0)) {
   } else if (OB_FAIL(databuff_printf(ObSpecialSysVarValues::version_,
                                      ObSpecialSysVarValues::VERSION_MAX_LEN,
+#ifdef OB_BUILD_CLOSE_MODULES
+                                     pos, "5.7.25-OceanBase-v%s", PACKAGE_VERSION))) {
+#else
                                      pos, "5.7.25-OceanBase_CE-v%s", PACKAGE_VERSION))) {
+
+#endif
     LOG_ERROR("fail to print version to buff", K(ret));
   }
 
@@ -2312,7 +2325,17 @@ int ObSysVarOnCheckFuncs::check_and_convert_plsql_warnings(sql::ObExecContext &c
                                                  common::ObObj &out_val)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
   UNUSEDx(ctx, set_var, sys_var, in_val, out_val);
+#else
+  UNUSEDx(ctx, set_var, sys_var);
+  if (OB_FAIL(pl::PlCompilerWarningCategory::verify_warning_settings(in_val.get_string(), NULL))) {
+    ret = OB_ERR_PARAM_VALUE_INVALID;
+    LOG_USER_ERROR(OB_ERR_PARAM_VALUE_INVALID);
+  } else {
+    out_val = in_val;
+  }
+#endif
   return ret;
 }
 

@@ -18,6 +18,7 @@
 *      - initial release
 *
 */
+#ifndef OB_BUILD_FULL_CHARSET
 
 #include "lib/charset/ob_ctype.h"
 #include "lib/charset/ob_dtoa.h"
@@ -2579,3 +2580,5 @@ ObCharsetInfo ob_charset_utf8mb4_bin=
   PAD_SPACE
 };
 
+
+#endif

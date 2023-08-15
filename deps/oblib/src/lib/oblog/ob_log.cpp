@@ -1692,6 +1692,43 @@ int64_t ObLogger::get_wait_us(const int32_t level)
   return ret_timeout_us;
 }
 
+#ifdef OB_BUILD_AUDIT_SECURITY
+int ObLogger::async_audit_dump(const common::ObBasebLogPrint &info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(is_async_log_used())
+      && OB_LIKELY(info.get_data_length() > 0)) {
+    const int32_t level = OB_LOG_LEVEL_INFO;
+    ObPLogItem *log_item = NULL;
+    set_disable_logging(true);
+    //1. fill log buffer
+    if (OB_FAIL(alloc_log_item(level, MAX_LOG_SIZE, log_item))) {
+      LOG_STDERR("alloc_log_item error, ret=%d\n", ret);
+    } else if (OB_ISNULL(log_item)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      int64_t pos = log_item->get_data_len();
+      log_item->set_timestamp(info.get_timestamp());
+      log_item->set_fd_type(FD_AUDIT_FILE);
+      if (OB_FAIL(info.print_data(log_item->get_buf(), log_item->get_buf_size(), pos))) {
+        LOG_STDERR("print_data error ret = %d\n", ret);
+      } else if (FALSE_IT(check_log_end(*log_item, pos))) {
+      } else if (OB_FAIL(append_log(*log_item))) {
+        LOG_STDERR("append_log error ret = %d\n", ret);
+      }
+    }
+
+    //3. stat
+    if (OB_FAIL(ret)) {
+      inc_dropped_log_count(level);
+      free_log_item(log_item);
+      log_item = NULL;
+    }
+    set_disable_logging(false);
+  }
+  return ret;
+}
+#endif
 
 int ObLogger::alloc_log_item(const int32_t level, const int64_t size, ObPLogItem *&log_item)
 {

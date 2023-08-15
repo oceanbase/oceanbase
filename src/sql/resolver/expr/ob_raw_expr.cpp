@@ -2703,6 +2703,27 @@ int ObObjAccessRawExpr::add_access_indexs(const ObIArray<pl::ObObjAccessIdx> &ac
     case pl::ObObjAccessIdx::IS_PROPERTY: {
       if (OB_FAIL(expr_access.push_back(access_idx))) {
         LOG_WARN("store access index failed", K(ret));
+#ifdef OB_BUILD_ORACLE_PL
+      } else if (access_idx.is_property()) {
+        if (0 == access_idx.var_name_.case_compare("count")) {
+          set_property(pl::ObAssocArrayType::COUNT_PROPERTY);
+        } else if (0 == access_idx.var_name_.case_compare("first")) {
+          set_property(pl::ObAssocArrayType::FIRST_PROPERTY);
+        } else if (0 == access_idx.var_name_.case_compare("last")) {
+          set_property(pl::ObAssocArrayType::LAST_PROPERTY);
+        } else if (0 == access_idx.var_name_.case_compare("limit")) {
+          set_property(pl::ObAssocArrayType::LIMIT_PROPERTY);
+        } else if (0 == access_idx.var_name_.case_compare("prior")) {
+          set_property(pl::ObAssocArrayType::PRIOR_PROPERTY);
+        } else if (0 == access_idx.var_name_.case_compare("next")) {
+          set_property(pl::ObAssocArrayType::NEXT_PROPERTY);
+        } else if (0 == access_idx.var_name_.case_compare("exists")) {
+          set_property(pl::ObAssocArrayType::EXISTS_PROPERTY);
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Invalid property type", K(i), K(access_idx), K(ret));
+        }
+#endif
       } else { /*do nothing*/ }
     }
     break;

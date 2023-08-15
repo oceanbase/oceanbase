@@ -111,21 +111,68 @@ const int64_t OB_CLOG_ENCRYPT_TABLE_KEY_LEN = 32;
 class ObEncryptionUtil
 {
 public:
-  static const ObAesOpMode DEFAULT_TABLE_KEY_ENCRYPT_ALGORITHM = share::ObAesOpMode::ob_aes_128_ecb;
-  static const ObAesOpMode MASTER_KEY_ENCRYPT_ALGORITHM = share::ObAesOpMode::ob_aes_128_cbc;
 
   static int init_ssl_malloc();
+#ifdef OB_BUILD_TDE_SECURITY
+  static bool need_encrypt(int64_t encrypt_id);
+  static int get_tde_method(int64_t tenant_id, common::ObString &tde_method);
+  static int get_tde_kms_info(int64_t tenant_id, common::ObString &kms_info);
+#endif
   static int parse_encryption_algorithm(const common::ObString &str, ObAesOpMode &encryption_algorithm);
   static int parse_encryption_algorithm(const char *str, ObAesOpMode &encryption_algorithm);
   static int parse_encryption_id(const char *str, int64_t &encrypt_id);
   static int parse_encryption_id(const common::ObString &str, int64_t &encrypt_id);
 
+#ifdef OB_BUILD_TDE_SECURITY
+  static int64_t sys_encrypted_length(int64_t data_len);
+
+  static int encrypt_data(const char *key, const int64_t key_len, enum ObAesOpMode mode,
+                          const char *data, const int64_t data_len,
+                          char *buf, const int64_t buf_len, int64_t &out_len);
+  static int decrypt_data(const char *key, const int64_t key_len, enum ObAesOpMode mode,
+                          const char *data, const int64_t data_len,
+                          char *buf, const int64_t buf_len, int64_t &out_len);
+  static int encrypt_data(const share::ObEncryptMeta &meta,
+                          const char *from_buf, const int64_t from_len,
+                          char *to_buf, int64_t to_buf_size, int64_t &to_len);
+  static int decrypt_data(const share::ObEncryptMeta &meta,
+                          const char *from_buf, const int64_t from_len,
+                          char *to_buf, int64_t to_buf_size, int64_t &to_len);
+  static int encrypt_table_key(const share::ObEncryptMeta &meta,
+                               char *out_buf, const int64_t out_buf_len, int64_t &out_len);
+  static int decrypt_table_key(share::ObEncryptMeta &meta,
+                               const char *in_buf, const int64_t in_buf_len);
+  static int encrypt_master_key(const uint64_t tenant_id, const char *data, const int64_t data_len,
+                                char *buf, const int64_t buf_len, int64_t &out_len);
+  static int decrypt_master_key(const uint64_t tenant_id, const char *data, const int64_t data_len,
+                                char *buf, const int64_t buf_len, int64_t &out_len);
+  static int encrypt_sys_data(const uint64_t tenant_id, const char *data, const int64_t data_len,
+                              char *buf, const int64_t buf_len, int64_t &out_len);
+  static int encrypt_sys_data_default(const char *data, const int64_t data_len,
+                                      char *buf, const int64_t buf_len, int64_t &out_len);
+
+  static int decrypt_sys_data(const uint64_t tenant_id, const char *data, const int64_t data_len,
+                              char *buf, const int64_t buf_len, int64_t &out_len);
+  static int decrypt_sys_data_default(const char *data, const int64_t data_len,
+                                      char *buf, const int64_t buf_len, int64_t &out_len);
+  static int encrypt_zone_data(share::ObZoneEncryptMeta &meta,
+                               const char *data, const int64_t data_len,
+                               char *buf, const int64_t buf_len, int64_t &out_len);
+  static int decrypt_zone_data(const share::ObZoneEncryptMeta &meta,
+                               const char *data, const int64_t data_len,
+                               char *buf, const int64_t buf_len, int64_t &out_len);
+#endif
   // return the max length after encryption
   static int64_t encrypted_length(const int64_t data_len);
   // return an unencrypted data length whose length after encryption is always less than data_len
   static int64_t decrypted_length(const int64_t data_len);
   // return the max length after decryption
   static int64_t safe_buffer_length(const int64_t data_len);
+#ifdef OB_BUILD_TDE_SECURITY
+private:
+  static const char* system_encrypt_key_;
+  static const char* system_encrypt_iv_;
+#endif
 };
 
 struct ObBackupEncryptionMode final
@@ -146,6 +193,17 @@ struct ObBackupEncryptionMode final
   static EncryptionMode parse_str(const common::ObString &str);
 };
 
+#ifdef OB_BUILD_TDE_SECURITY
+class ObTdeMethodUtil
+{
+public:
+  static bool is_valid(const common::ObString &tde_method);
+  static bool is_internal(const common::ObString &tde_method);
+  static bool is_kms(const common::ObString &tde_method);
+  static bool is_sm_algorithm(const common::ObString &tde_method);
+  static bool use_external_key_id(const common::ObString &tde_method);
+};
+#endif
 
 enum ObHashAlgorithm {
   OB_HASH_INVALID = 0,

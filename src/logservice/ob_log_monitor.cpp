@@ -301,6 +301,33 @@ int ObLogMonitor::add_log_write_stat(const int64_t palf_id, const int64_t log_wr
 }
 // =========== PALF Performance Statistic ===========
 
+#ifdef OB_BUILD_ARBITRATION
+// =========== Arbitration Event Reporting ===========
+#define ARBSRV_MONITOR_EVENT_FMT_PREFIX "ARB", type_to_string_(event), "TENANT_ID", mtl_id, "LS_ID", palf_id
+int ObLogMonitor::record_degrade_event(const int64_t palf_id, const char *degraded_list, const char *reasons)
+{
+  int ret = OB_SUCCESS;
+  const int64_t mtl_id = MTL_ID();
+  const EventType event = EventType::DEGRADE;
+  SERVER_EVENT_ADD_WITH_RETRY(ARBSRV_MONITOR_EVENT_FMT_PREFIX,
+      "DEGRADED LIST", degraded_list,
+      "REASONS", reasons);
+  return ret;
+}
+
+int ObLogMonitor::record_upgrade_event(const int64_t palf_id, const char *upgraded_list, const char *reasons)
+{
+  int ret = OB_SUCCESS;
+  const int64_t mtl_id = MTL_ID();
+  const EventType event = EventType::UPGRADE;
+  SERVER_EVENT_ADD_WITH_RETRY(ARBSRV_MONITOR_EVENT_FMT_PREFIX,
+      "UPGRADED LIST", upgraded_list,
+      "REASONS", reasons);
+  return ret;
+}
+#undef ARBSRV_MONITOR_EVENT_FMT_PREFIX
+// =========== Arbitration Event Reporting ===========
+#endif
 
 #undef LOG_MONITOR_EVENT_FMT_PREFIX
 } // end namespace logservice

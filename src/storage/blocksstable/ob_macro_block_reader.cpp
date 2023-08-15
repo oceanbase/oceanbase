@@ -56,6 +56,24 @@ ObMacroBlockReader::~ObMacroBlockReader()
   }
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObMacroBlockReader::init_encrypter_if_needed()
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  ObMemAttr attr(MTL_ID(), ObModIds::OB_CS_SSTABLE_READER);
+
+  if (nullptr != encryption_) {
+  } else if (OB_ISNULL(buf = ob_malloc(sizeof(ObMicroBlockEncryption), attr))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "Failed to alloc memory for encrypter", K(ret));
+  } else {
+    encryption_ = new (buf) ObMicroBlockEncryption();
+  }
+
+  return ret;
+}
+#endif
 
 
 int ObMacroBlockReader::decompress_data(
@@ -317,7 +335,27 @@ int ObMacroBlockReader::decrypt_and_decompress_data(
   } else {
     const char *data_buf = input + header_size;
     int64_t data_buf_size = size - header_size;
+#ifndef OB_BUILD_TDE_SECURITY
     is_compressed = header.is_compressed_data();
+#else
+    if (OB_UNLIKELY(share::ObEncryptionUtil::need_encrypt(deserialize_meta.encrypt_id_))) {
+      LOG_DEBUG("Macro data need decrypt", K(deserialize_meta.encrypt_id_), K(data_buf_size));
+      const char *decrypt_buf = NULL;
+      int64_t decrypt_size = 0;
+      if (OB_FAIL(ObMacroBlockReader::decrypt_buf(
+          deserialize_meta, data_buf, data_buf_size, decrypt_buf, decrypt_size))) {
+        STORAGE_LOG(WARN, "fail to decrypt buf", K(ret));
+      } else {
+        data_buf = decrypt_buf;
+        data_buf_size = decrypt_size;
+        is_compressed = (header.data_length_ != decrypt_size);
+        is_encrypted = true;
+      }
+    } else {
+      is_compressed = header.is_compressed_data();
+      is_encrypted = false;
+    }
+#endif
 
     if (OB_SUCC(ret) && !is_compressed) {
       uncomp_size = header_size + data_buf_size;
@@ -362,6 +400,36 @@ int ObMacroBlockReader::decrypt_and_decompress_data(
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObMacroBlockReader::decrypt_buf(
+    const ObMicroBlockDesMeta &deserialize_meta,
+    const char *buf,
+    const int64_t size,
+    const char *&decrypt_buf,
+    int64_t &decrypt_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument of input data", K(ret), KP(buf));
+  } else if (OB_UNLIKELY(!share::ObEncryptionUtil::need_encrypt(deserialize_meta.encrypt_id_))) {
+    decrypt_buf = buf;
+    decrypt_size = size;
+  } else if (OB_FAIL(init_encrypter_if_needed())) {
+    LOG_WARN("Failed to init encrypter", K(ret));
+  } else if (OB_FAIL(encryption_->init(
+      deserialize_meta.encrypt_id_,
+      MTL_ID(),
+      deserialize_meta.master_key_id_,
+      deserialize_meta.encrypt_key_,
+      share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH))) {
+    LOG_WARN("Fail to init micro block encryption", K(ret));
+  } else if (OB_FAIL(encryption_->decrypt(buf, size, decrypt_buf, decrypt_size))) {
+    LOG_WARN("Fail to decrypt data", K(ret));
+  }
+  return ret;
+}
+#endif
 
 ObSSTableDataBlockReader::ObSSTableDataBlockReader()
   : data_(NULL), size_(0), common_header_(), macro_header_(), linked_header_(),

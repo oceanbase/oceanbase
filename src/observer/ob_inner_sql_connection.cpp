@@ -45,6 +45,9 @@
 #include "share/rc/ob_tenant_base.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tablelock/ob_table_lock_rpc_struct.h"
+#ifdef OB_BUILD_AUDIT_SECURITY
+#include "sql/monitor/ob_security_audit_utils.h"
+#endif
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "observer/mysql/obmp_stmt_execute.h"
 
@@ -859,6 +862,14 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
         }
 
         if (res.is_inited()) {
+#ifdef OB_BUILD_AUDIT_SECURITY
+          (void)ObSecurityAuditUtils::handle_security_audit(res.result_set(),
+                                                            res.sql_ctx().schema_guard_,
+                                                            res.sql_ctx().cur_stmt_,
+                                                            ObString::make_string("inner sql"),
+                                                            ret);
+
+#endif
           if (OB_SUCC(ret) && get_session().get_in_transaction()) {
             if (ObStmt::is_dml_write_stmt(res.result_set().get_stmt_type()) ||
                 ObStmt::is_savepoint_stmt(res.result_set().get_stmt_type())) {

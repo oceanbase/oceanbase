@@ -19,6 +19,9 @@
 #include "share/ob_locality_parser.h"
 #include "share/ob_time_utility2.h"
 #include "share/ob_encryption_util.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_encrypt_kms.h"
+#endif
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/ob_zone_table_operation.h"
@@ -1961,6 +1964,20 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                       if (OB_FAIL(item.tenant_name_.assign(tenant_name))) {
                         LOG_WARN("assign tenant name failed", K(tenant_name), K(ret));
                         break;
+#ifdef OB_BUILD_TDE_SECURITY
+                      } else if (0 == config_name.case_compare(TDE_METHOD)
+                                 || 0 == config_name.case_compare(EXTERNAL_KMS_INFO)) {
+                        if (OB_ISNULL(schema_checker_)) {
+                          ret = OB_ERR_UNEXPECTED;
+                          LOG_WARN("schema checker is null", K(ret));
+                        } else if (OB_FAIL(schema_checker_->get_tenant_id(tenant_name, tenant_node_id))) {
+                          LOG_WARN("fail to get tenant id", K(ret));
+                        } else if (OB_FAIL(check_param_valid(tenant_node_id,
+                                   config_name,
+                                   ObString(item.value_.size(), item.value_.ptr())))) {
+                          LOG_WARN("fail to check param valid", K(ret));
+                        }
+#endif
                       }
                     }
                   } else {
@@ -2042,14 +2059,32 @@ int ObSetConfigResolver::check_param_valid(int64_t tenant_id ,
   int ret = OB_SUCCESS;
   if (tenant_id == OB_SYS_TENANT_ID) {
     if (0 == name.case_compare(SSL_EXTERNAL_KMS_INFO)) {
+#ifndef OB_BUILD_TDE_SECURITY
       ret = OB_NOT_SUPPORTED;
+#else
+      share::ObSSLClient client;
+      if (OB_FAIL(client.init(value.ptr(), value.length()))) {
+        OB_LOG(WARN, "ssl client init", K(ret), K(value));
+      } else if (OB_FAIL(client.check_param_valid())) {
+        OB_LOG(WARN, "ssl client param is not valid", K(ret));
+      }
+#endif
     } else if (0 == name.case_compare("ssl_client_authentication")
                && (0 == value.case_compare("1")
                    || 0 == value.case_compare("ON")
                    || 0 == value.case_compare("TRUE"))) {
       ObString ssl_config(GCONF.ssl_external_kms_info.str());
       if (!ssl_config.empty()) {
+#ifndef OB_BUILD_TDE_SECURITY
         ret = OB_NOT_SUPPORTED;
+#else
+        share::ObSSLClient client;
+        if (OB_FAIL(client.init(ssl_config.ptr(), ssl_config.length()))) {
+          OB_LOG(WARN, "kms client init", K(ret), K(ssl_config));
+        } else if (OB_FAIL(client.check_param_valid())) {
+          OB_LOG(WARN, "kms client param is not valid", K(ret));
+        }
+#endif
       } else {
         if (EASY_OK != easy_ssl_ob_config_check(OB_SSL_CA_FILE, OB_SSL_CERT_FILE,
                                                 OB_SSL_KEY_FILE, NULL, NULL, true, false)) {
@@ -2075,6 +2110,69 @@ int ObSetConfigResolver::check_param_valid(int64_t tenant_id ,
       }
     }
   }
+#ifdef OB_BUILD_TDE_SECURITY
+  if (OB_SUCC(ret)) {
+    if (0 == name.case_compare("tde_method")) {
+      ObString tde_method;
+      if (!ObTdeMethodUtil::is_valid(value)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported other method", K(value), K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter invalid tde_method");
+      } else if (OB_FAIL(share::ObEncryptionUtil::get_tde_method(tenant_id, tde_method))) {
+        LOG_WARN("fail to check tenant is method internal", K(ret));
+      } else if (0 != tde_method.case_compare("none") && 0 != value.case_compare(tde_method)) {
+        // tde_method修改规则
+        // 当主密钥已经存在于租户内, 不允许修改为其他类型.
+        // 主备库场景放开此限制, 检查主密钥的类型是否和要修改的类型一致.
+        ObSchemaGetterGuard schema_guard;
+        const share::schema::ObKeystoreSchema *keystore_schema = NULL;
+        if (OB_ISNULL(GCTX.schema_service_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("schema service is empty");
+        } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
+              tenant_id, schema_guard))) {
+          LOG_WARN("get_schema_guard failed");
+        } else if (OB_FAIL(schema_guard.get_keystore_schema(tenant_id, keystore_schema))) {
+          LOG_WARN("fail get keystore schema", K(ret));
+        } else if (OB_ISNULL(keystore_schema)) {
+          ret = OB_OBJECT_NAME_NOT_EXIST;
+          LOG_WARN("fail to get keystore schema", K(ret));
+        } else if (0 != keystore_schema->get_master_key_id()) {
+          if (!GCTX.is_standby_cluster()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("alter tde method is not support", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tde method with master key exists");
+          } else if (0 == keystore_schema->get_master_key().case_compare("kms")
+                     && 0 == value.case_compare("bkmi")) {
+            /*do nothing*/
+          } else if (0 == keystore_schema->get_master_key().case_compare(value)) {
+            /*do nothing*/
+          } else if (0 == value.case_compare("internal")) {
+             /*do nothing*/
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("alter tde method is not support", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tde method with master key exists");
+          }
+        }
+      }
+    } else if (0 == name.case_compare(EXTERNAL_KMS_INFO)) {
+      ObString tde_method;
+      ObKmsClient *client = NULL;
+      ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+      if (OB_FAIL(share::ObEncryptionUtil::get_tde_method(tenant_id, tde_method))) {
+        LOG_WARN("fail to get method internal", K(ret));
+      } else if (OB_FAIL(ObKmsClientUtil::get_kms_client(allocator, tde_method, client))) {
+        LOG_WARN("fail to get kms client", K(tde_method), K(ret));
+      } else if (OB_ISNULL(client)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("kms_client is null", K(tde_method), K(ret));
+      } else if (OB_FAIL(client->init(value.ptr(), value.length()))) {
+        LOG_WARN("the json str is not valid", K(ret));
+      }
+    }
+  }
+#endif
   return ret;
 }
 
@@ -2350,30 +2448,105 @@ int ObMigrateUnitResolver::resolve(const ParseNode &parse_tree)
 int ObAddArbitrationServiceResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ARBITRATION
   UNUSEDx(parse_tree);
   ret = OB_NOT_SUPPORTED;
   LOG_WARN("not supported in CE version", KR(ret));
   LOG_USER_ERROR(OB_NOT_SUPPORTED, "add arbitration service in CE version");
+#else
+  if (OB_UNLIKELY(T_ADD_ARBITRATION_SERVICE != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_ADD_ARBITRATION_SERVICE", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null");
+  } else {
+    ObAddArbitrationServiceStmt *stmt = create_stmt<ObAddArbitrationServiceStmt>();
+    if (NULL == stmt) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObAddArbitrationServiceStmt failed");
+    } else {
+      stmt_ = stmt;
+      ObString dest("");
+      if (OB_FAIL(Util::resolve_string(parse_tree.children_[0], dest))) {
+        LOG_WARN("resolve string failed", K(ret));
+      } else if (OB_FAIL(stmt->get_rpc_arg().init(dest))) {
+        LOG_WARN("fail to init arg", K(ret), K(dest));
+      }
+    }
+  }
+#endif
   return ret;
 }
 
 int ObRemoveArbitrationServiceResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ARBITRATION
   UNUSEDx(parse_tree);
   ret = OB_NOT_SUPPORTED;
   LOG_WARN("not supported in CE version", KR(ret));
   LOG_USER_ERROR(OB_NOT_SUPPORTED, "remove arbitration service in CE version");
+#else
+  if (OB_UNLIKELY(T_REMOVE_ARBITRATION_SERVICE != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_REMOVE_ARBITRATION_SERVICE", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null");
+  } else {
+    ObRemoveArbitrationServiceStmt *stmt = create_stmt<ObRemoveArbitrationServiceStmt>();
+    if (NULL == stmt) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObRemoveArbitrationServiceStmt failed");
+    } else {
+      stmt_ = stmt;
+      ObString dest("");
+      if (OB_FAIL(Util::resolve_string(parse_tree.children_[0], dest))) {
+        LOG_WARN("resolve string failed", K(ret));
+      } else if (OB_FAIL(stmt->get_rpc_arg().init(dest))) {
+        LOG_WARN("fail to init arg", K(ret), K(dest));
+      }
+    }
+  }
+#endif
   return ret;
 }
 
 int ObReplaceArbitrationServiceResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ARBITRATION
   UNUSEDx(parse_tree);
   ret = OB_NOT_SUPPORTED;
   LOG_WARN("not supported in CE version", KR(ret));
   LOG_USER_ERROR(OB_NOT_SUPPORTED, "replace arbitration service in CE version");
+#else
+  if (OB_UNLIKELY(T_REPLACE_ARBITRATION_SERVICE != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_REPLACE_ARBITRATION_SERVICE", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null");
+  } else {
+    ObReplaceArbitrationServiceStmt *stmt = create_stmt<ObReplaceArbitrationServiceStmt>();
+    if (NULL == stmt) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObReplaceArbitrationServiceStmt failed");
+    } else {
+      stmt_ = stmt;
+      ObString arbitration_service("");
+      ObString previous_arbitration_service("");
+      if (OB_FAIL(Util::resolve_string(parse_tree.children_[0], previous_arbitration_service))) {
+        LOG_WARN("resolve string failed", K(ret));
+      } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[1], arbitration_service))) {
+        LOG_WARN("resolve string for previous arb service failed", K(ret));
+      } else if (OB_FAIL(stmt->get_rpc_arg().init(arbitration_service, previous_arbitration_service))) {
+        LOG_WARN("fail to init arg", KR(ret), K(arbitration_service), K(previous_arbitration_service));
+      }
+    }
+  }
+#endif
   return ret;
 }
 
@@ -2528,6 +2701,10 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
       } else if (OB_NOT_NULL(description_node) 
           && OB_FAIL(Util::resolve_string(description_node, stmt->get_rpc_arg().description_))) {
         LOG_WARN("fail to resolve description", K(ret));
+#ifdef OB_BUILD_TDE_SECURITY
+      } else if (OB_FAIL(resolve_kms_encrypt_info(stmt->get_rpc_arg().restore_option_))) {
+        LOG_WARN("fail to resolve encrypt info", K(ret));
+#endif
       } else if (OB_FAIL(resolve_decryption_passwd(stmt->get_rpc_arg()))) {
         LOG_WARN("failed to resolve decrytion passwd", K(ret));
       } else if (OB_FAIL(resolve_restore_source_array(stmt->get_rpc_arg()))) {
@@ -2574,7 +2751,7 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
             stmt->set_is_preview(false);
           } else {
             if (T_TABLE_LIST == node->type_) {
-      // TODO table list restore not support, fix this 4.3
+      // TODO(chongrong.th) table list restore not support, fix this in 4.3
               ret = OB_NOT_SUPPORTED;
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "table list restore is");
               // store database_name/table_name with case sensitive.
@@ -2616,6 +2793,54 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObPhysicalRestoreTenantResolver::resolve_kms_encrypt_info(common::ObString store_option)
+{
+  int ret = OB_SUCCESS;
+  const char *encrypt_option_str = "kms_encrypt=true";
+  ObString kms_var("kms_encrypt_info");
+  int64_t encrypt_opt_str_len = strlen(encrypt_option_str);
+  bool is_kms_encrypt = false;
+  for (int i = 0; i <= store_option.length() - encrypt_opt_str_len; ++i) {
+    if (0 == STRNCASECMP(store_option.ptr() + i, encrypt_option_str, encrypt_opt_str_len)) {
+      is_kms_encrypt = true;
+      break;
+    }
+  }
+  if (is_kms_encrypt) {
+     ObObj value;
+    if (OB_ISNULL(session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session is null" , K(ret));
+    } else if (OB_FAIL(session_info_->get_user_variable_value(kms_var, value))) {
+      LOG_WARN("fail to get user variable", K(ret));
+    } else {
+      ObPhysicalRestoreTenantStmt *stmt = static_cast<ObPhysicalRestoreTenantStmt *>(stmt_);
+      stmt->get_rpc_arg().kms_info_ = value.get_varchar(); //浅拷贝即可
+      bool is_valid = false;
+      if (OB_FAIL(check_kms_info_valid(stmt->get_rpc_arg().kms_info_, is_valid))) {
+        LOG_WARN("fail to check kms info valid", K(ret));
+      } else if (!is_valid) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("kms info is not valid", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObPhysicalRestoreTenantResolver::check_kms_info_valid(const ObString &kms_info, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  if (kms_info.length() > 4000 || kms_info.length() < 0) {
+    is_valid = false;
+  } else {
+    is_valid = true;
+  }
+  return ret;
+}
+#endif
 
 int ObPhysicalRestoreTenantResolver::resolve_decryption_passwd(
     ObPhysicalRestoreTenantArg &arg)
@@ -3406,6 +3631,60 @@ int ObAlterSystemSetResolver::check_param_valid(int64_t tenant_id ,
     const ObString &name, const ObString &value)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_TDE_SECURITY
+  if (0 == name.case_compare("tde_method")) {
+    ObString tde_method;
+      if (!ObTdeMethodUtil::is_valid(value)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported other method", K(value), K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter invalid tde_method");
+    } else if (OB_FAIL(share::ObEncryptionUtil::get_tde_method(tenant_id, tde_method))) {
+      LOG_WARN("fail to check tenant is method internal", K(ret));
+    } else if (0 != tde_method.case_compare("none") && 0 != value.case_compare(tde_method)) {
+      // tde_method修改规则
+      // 当主密钥已经存在于租户内, 不允许修改为其他类型.
+      // 主备库场景放开此限制, 检查主密钥的类型是否和要修改的类型一致.
+      const share::schema::ObKeystoreSchema *keystore_schema = NULL;
+      if (OB_FAIL(schema_checker_->get_keystore_schema(tenant_id, keystore_schema))) {
+        LOG_WARN("fail get keystore schema", K(ret));
+      } else if (OB_ISNULL(keystore_schema)) {
+        ret = OB_OBJECT_NAME_NOT_EXIST;
+        LOG_WARN("fail to get keystore schema", K(ret));
+      } else if (0 != keystore_schema->get_master_key_id()) {
+        if (!GCTX.is_standby_cluster()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("alter tde method is not support", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tde method with master key exists");
+        } else if (0 == keystore_schema->get_master_key().case_compare("kms")
+            && 0 == value.case_compare("bkmi")) {
+          /*do nothing*/
+        } else if (0 == keystore_schema->get_master_key().case_compare(value)) {
+          /*do nothing*/
+        } else if (ObTdeMethodUtil::is_internal(value)) {
+            /*do nothing*/
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("alter tde method is not support", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tde method with master key exists");
+        }
+      }
+    }
+  } else if (0 == name.case_compare(EXTERNAL_KMS_INFO)) {
+    ObString tde_method;
+    ObKmsClient *client = NULL;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    if (OB_FAIL(share::ObEncryptionUtil::get_tde_method(tenant_id, tde_method))) {
+      LOG_WARN("fail to get method internal", K(ret));
+    } else if (OB_FAIL(ObKmsClientUtil::get_kms_client(allocator, tde_method, client))) {
+      LOG_WARN("fail to get kms client", K(tde_method), K(ret));
+    } else if (OB_ISNULL(client)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("kms_client is null", K(tde_method), K(ret));
+    } else if (OB_FAIL(client->init(value.ptr(), value.length()))) {
+      LOG_WARN("the json str is not valid", K(ret));
+    }
+  }
+#endif
   return ret;
 }
 
@@ -4136,7 +4415,75 @@ int ObDeletePolicyResolver::resolve(const ParseNode &parse_tree)
 
 int ObBackupKeyResolver::resolve(const ParseNode &parse_tree)
 {
+#ifndef OB_BUILD_TDE_SECURITY
   int ret = OB_ERR_PARSE_SQL;
+#else
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(T_BACKUP_KEY != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_BACKUP_KEY", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null", K(ret));
+  } else if (OB_UNLIKELY(4 != parse_tree.num_child_ && 3 != parse_tree.num_child_ )) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info should not be null", K(ret));
+  } else {
+    uint64_t tenant_id = session_info_->get_login_tenant_id();
+    const int64_t with_tenant = parse_tree.children_[0]->value_;
+    common::ObSArray<uint64_t> backup_tenant_ids;
+    ObBackupPathString backup_dest;
+    ObString encrypt_key;
+    if (0 == with_tenant) {
+      ParseNode *dest_node = parse_tree.children_[1];
+      ParseNode *encrypt_key_node = parse_tree.children_[2];
+      if (nullptr != dest_node && OB_FAIL(backup_dest.assign(dest_node->str_value_))) {
+        LOG_WARN("failed to assign backup_dest", K(ret));
+      } else if (nullptr != encrypt_key_node) {
+        encrypt_key.assign_ptr(encrypt_key_node->str_value_,
+                               static_cast<ObString::obstr_size_t>(encrypt_key_node->str_len_));
+      }
+    } else if (1 == with_tenant && OB_SYS_TENANT_ID != tenant_id) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("user tenant cannot specify tenant names", K(ret), K(tenant_id));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "user tenant cannot specify tenant names");
+    } else if (1 == with_tenant/*tenant level*/ && OB_SYS_TENANT_ID == tenant_id) {
+      ParseNode *t_node = parse_tree.children_[1];
+      ParseNode *dest_node = parse_tree.children_[2];
+      ParseNode *encrypt_key_node = parse_tree.children_[3];
+      if (nullptr == t_node) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("No tenant name specified", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "No tenant name specified");
+      } else if (OB_FAIL(Util::get_tenant_ids(*t_node, backup_tenant_ids))) {
+        LOG_WARN("failed to get tenant ids");
+      } else if (backup_tenant_ids.count() != 1) {
+        ret = common::OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant list, count of tenants must be 1");
+      } else if (FALSE_IT(tenant_id = backup_tenant_ids.at(0))) {
+      } else if (nullptr != dest_node && OB_FAIL(backup_dest.assign(dest_node->str_value_))) {
+        LOG_WARN("failed to assign backup_dest", K(ret));
+      } else if (nullptr != encrypt_key_node) {
+        encrypt_key.assign_ptr(encrypt_key_node->str_value_,
+                               static_cast<ObString::obstr_size_t>(encrypt_key_node->str_len_));
+      }
+    }
+
+    ObBackupKeyStmt *stmt = create_stmt<ObBackupKeyStmt>();
+    if (OB_FAIL(ret)) {
+    } else if (nullptr == stmt) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObBackupKeyStmt failed");
+    } else if (OB_FAIL(stmt->set_param(tenant_id, backup_dest, encrypt_key))) {
+      LOG_WARN("Failed to set param", K(ret), K(tenant_id));
+    } else {
+      stmt_ = stmt;
+    }
+  }
+#endif
   return ret;
 }
 

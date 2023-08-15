@@ -16,6 +16,9 @@
 #include "storage/blocksstable/ob_data_buffer.h"
 #include "../dumpsst/ob_admin_dumpsst_print_helper.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
 
 #include <algorithm>
 #include <functional>
@@ -520,6 +523,11 @@ int ObAdminDumpBackupDataExecutor::execute(int argc, char *argv[])
   lib::set_tenant_memory_limit(500, 96 * 1024 * 1024 * 1024LL);
   int64_t data_type = 0;
   ObBackupDestType::TYPE path_type;
+#ifdef OB_BUILD_TDE_SECURITY
+  // The root_key is set to ensure the successful parsing of backup_dest, because there is encryption and decryption of access_key
+  share::ObMasterKeyGetter::instance().init(NULL);
+  ObMasterKeyGetter::instance().set_root_key(OB_SYS_TENANT_ID, obrpc::RootKeyType::DEFAULT, ObString());
+#endif
   if (OB_FAIL(parse_cmd_(argc, argv))) {
     STORAGE_LOG(WARN, "failed to parse cmd", K(ret), K(argc), K(argv));
   } else if (is_quiet_) {

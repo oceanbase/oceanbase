@@ -15,7 +15,12 @@
 #ifndef OCEANBASE_LIBOBCDC_BINLOG_RECORD_
 #define OCEANBASE_LIBOBCDC_BINLOG_RECORD_
 
+#ifndef OB_USE_DRCMSG
 #include "ob_cdc_msg_convert.h"
+#else
+#include <drcmsg/BR.h>                               // IBinlogRecord
+#include <drcmsg/DRCMessageFactory.h>                // createBinlogRecord
+#endif
 #include "lib/queue/ob_link.h"                       // ObLink
 
 #include "share/ob_define.h"

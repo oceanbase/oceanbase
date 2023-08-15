@@ -30,8 +30,8 @@ static const char *TEST_FILE_NAME = "test_lock_table_persistence";
 static const char *BORN_CASE_NAME = "ObLockTableBeforeRestartTest";
 static const char *RESTART_CASE_NAME = "ObLockTableAfterRestartTest";
 
-static share::SCN lock_scn;
-static share::SCN unlock_scn;
+static oceanbase::share::SCN lock_scn;
+static oceanbase::share::SCN unlock_scn;
 
 namespace oceanbase
 {

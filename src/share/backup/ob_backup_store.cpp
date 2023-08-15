@@ -487,7 +487,6 @@ int ObBackupDestMgr::generate_format_desc_(
   schema::ObSchemaGetterGuard schema_guard;
   share::ObBackupPathString root_path;
   const schema::ObTenantSchema *tenant_schema = nullptr;
-
   if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), K(GCTX.schema_service_));

@@ -13,7 +13,11 @@
 
 #include "ob_expr_xmlparse.h"
 #include "sql/engine/ob_exec_context.h"
-#include "ob_expr_xml_func_helper.h"
+#ifdef OB_BUILD_ORACLE_XML
+#include "sql/engine/expr/ob_expr_xml_func_helper.h"
+#include "lib/xml/ob_xml_tree.h"
+#include "lib/xml/ob_xml_util.h"
+#endif
 
 #define USING_LOG_PREFIX SQL_ENG
 
@@ -82,6 +86,104 @@ int ObExprXmlparse::calc_result_typeN(ObExprResType &type,
   return ret;
 }
 
+#ifdef OB_BUILD_ORACLE_XML
+int ObExprXmlparse::eval_xmlparse(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+{
+  INIT_SUCC(ret);
+  ObDatum *xml_datum = NULL;
+  ObString xml_plain_text;
+  ObMulModeNodeType res_type;
+  uint8_t xml_type = OB_XML_DOC_TYPE_IMPLICIT;
+  uint8_t is_wellformed = OB_WELLFORMED_IMPLICIT;
+  bool is_xml_text_null = false;
+  bool need_format = false;
+
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  ObMulModeMemCtx* mem_ctx = nullptr;
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "XMLCodeGen"));
+
+  if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&tmp_allocator, mem_ctx))) {
+    LOG_WARN("fail to create tree memory context", K(ret));
+  } else if (OB_UNLIKELY(expr.arg_cnt_ != 4)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid arg_cnt_", K(expr.arg_cnt_));
+  } else if (OB_FAIL(expr.args_[3]->eval(ctx, xml_datum))) {
+    LOG_WARN("get extra para failed", K(ret));
+  } else if (FALSE_IT(need_format = (xml_datum->get_int() & 0x08) != 0)) {
+  } else if (OB_FAIL(get_clause_opt(expr, ctx, 0, xml_type, OB_XML_DOC_TYPE_COUNT))) {
+    LOG_WARN("get document/context error", K(ret), K(xml_type));
+  } else if (OB_FAIL(get_clause_opt(expr, ctx, 2, is_wellformed, OB_WELLFORMED_COUNT))) {
+    LOG_WARN("get wellformed error", K(ret), K(is_wellformed));
+  } else if (OB_FAIL(expr.args_[1]->eval(ctx, xml_datum))) {
+    LOG_WARN("get extra para failed", K(ret));
+  } else if (expr.args_[1]->datum_meta_.type_ == ObNullType || xml_datum->is_null()) {
+    is_xml_text_null = true;
+  } else if (OB_FAIL(ObTextStringHelper::get_string(expr, tmp_allocator, 1, xml_datum, xml_plain_text))) {
+    LOG_WARN("get xml plain text failed", K(ret), K(is_xml_text_null));
+  }
+
+  bool is_unparsed_res = false;
+  if(OB_FAIL(ret)) {
+  } else if (is_xml_text_null) {
+    res.set_null();
+  } else {
+    ObXmlDocument* doc = nullptr;
+    ObXmlParser parser(mem_ctx);
+
+    if (xml_type == OB_XML_DOCUMENT) {
+      if (is_wellformed) {
+        res_type = M_UNPARESED_DOC;
+        if(OB_FAIL(ObMulModeFactory::add_unparsed_text_into_doc(mem_ctx, xml_plain_text, doc))) {
+          LOG_WARN("add text failed", K(ret), K(xml_plain_text));
+        }
+      } else if (OB_FAIL(parser.parse_document(xml_plain_text))) {
+        ret = OB_ERR_XML_PARSE;
+        LOG_USER_ERROR(OB_ERR_XML_PARSE);
+        LOG_WARN("parse xml plain text as document failed.", K(xml_plain_text));
+      } else {
+        res_type = M_DOCUMENT;
+        doc = parser.document();
+      }
+    } else if (xml_type == OB_XML_CONTENT) {
+      if (!is_wellformed) {
+        if (OB_FAIL(parser.parse_content(xml_plain_text))) {
+          ret = OB_ERR_XML_PARSE;
+          LOG_USER_ERROR(OB_ERR_XML_PARSE);
+          LOG_WARN("parse xml plain text as content failed.", K(xml_plain_text));
+        } else {
+          res_type = M_CONTENT;
+          doc = parser.document();
+        }
+      } else {
+        is_unparsed_res = true;
+        res_type = M_UNPARSED;
+        if (OB_ISNULL(doc = OB_NEWx(ObXmlDocument, mem_ctx->allocator_, ObMulModeNodeType::M_DOCUMENT, mem_ctx))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to create document", K(ret));
+        } else if(OB_FAIL(doc->append_unparse_text(xml_plain_text))) {
+          LOG_WARN("fail to add unparse text to doc", K(ret));
+        }
+      }
+    }
+
+
+    if (OB_SUCC(ret)) {
+      ObCollationType session_cs_type = CS_TYPE_UTF8MB4_BIN;
+      if (!doc->get_encoding().empty() || doc->get_encoding_flag()) {
+        doc->set_encoding(ObXmlUtil::get_charset_name(session_cs_type));
+      }
+      if (OB_FAIL(ObXMLExprHelper::pack_xml_res(expr, ctx, res, doc, mem_ctx,
+                                                res_type,
+                                                xml_plain_text))) {
+        LOG_WARN("pack_xml_res failed", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+#endif
 
 int ObExprXmlparse::get_clause_opt(const ObExpr &expr,
                                    ObEvalCtx &ctx,

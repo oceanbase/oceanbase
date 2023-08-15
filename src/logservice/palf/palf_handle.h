@@ -65,6 +65,21 @@ public:
   int set_initial_member_list(const common::ObMemberList &member_list,
                               const int64_t paxos_replica_num,
                               const common::GlobalLearnerList &learner_list);
+#ifdef OB_BUILD_ARBITRATION
+  // @brief set the initial member list of paxos group which contains
+  // arbitration replica after creating palf successfully,
+  // it can only be called once
+  // @param[in] ObMemberList, the initial member list, do not include arbitration replica
+  // @param[in] ObMember, the arbitration replica
+  // @param[in] int64_t, the paxos relica num(including arbitration replica)
+  // @retval
+  //    return OB_SUCCESS if success
+  //    else return other errno
+  int set_initial_member_list(const common::ObMemberList &member_list,
+                              const common::ObMember &arb_member,
+                              const int64_t paxos_replica_num,
+                              const common::GlobalLearnerList &learner_list);
+#endif
   int set_region(const common::ObRegion &region);
   int set_paxos_member_region_map(const common::ObArrayHashMap<common::ObAddr, common::ObRegion> &region_map);
   //================ 文件访问相关接口 =======================
@@ -336,6 +351,72 @@ public:
                                   const common::ObMember &removed_member,
                                   const LogConfigVersion &config_version,
                                   const int64_t timeout_us);
+#ifdef OB_BUILD_ARBITRATION
+
+  // @brief, add an arbitration member to paxos group
+  // @param[in] common::ObMember &member: arbitration member which will be added
+  // @param[in] const int64_t timeout_us: add member timeout, us
+  // @return
+  // - OB_SUCCESS: add arbitration member successfully
+  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
+  // - OB_TIMEOUT: add arbitration member timeout
+  // - OB_NOT_MASTER: not leader or rolechange during membership changing
+  // - other: bug
+  int add_arb_member(const common::ObMember &added_member,
+                     const int64_t timeout_us);
+
+  // @brief, remove an arbitration member from paxos group
+  // @param[in] common::ObMember &member: arbitration member which will be removed
+  // @param[in] const int64_t timeout_us: remove member timeout, us
+  // @return
+  // - OB_SUCCESS: remove arbitration member successfully
+  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
+  // - OB_TIMEOUT: remove arbitration member timeout
+  // - OB_NOT_MASTER: not leader or rolechange during membership changing
+  // - other: bug
+  int remove_arb_member(const common::ObMember &arb_member,
+                        const int64_t timeout_us);
+  // @brief: degrade an acceptor(full replica) to learner(special read only replica) in this cluster
+  // @param[in] const common::ObMemberList &member_list: acceptors will be degraded to learner
+  // @param[in] const int64_t timeout_us
+  // @return
+  // - OB_SUCCESS
+  // - OB_INVALID_ARGUMENT: invalid argument
+  // - OB_TIMEOUT: timeout
+  // - OB_NOT_MASTER: not leader
+  // - OB_EAGAIN: need retry
+  // - OB_OP_NOT_ALLOW: can not do degrade because of pre check fails
+  //      if last_ack_ts of any server in LogMemberAckInfoList has changed, can not degrade
+  int degrade_acceptor_to_learner(const LogMemberAckInfoList &degrade_servers, const int64_t timeout_us);
+
+  // @brief: upgrade a learner(special read only replica) to acceptor(full replica) in this cluster
+  // @param[in] const common::ObMemberList &learner_list: learners will be upgraded to acceptors
+  // @param[in] const int64_t timeout_us
+  // @return
+  // - OB_SUCCESS
+  // - OB_INVALID_ARGUMENT: invalid argument
+  // - OB_TIMEOUT: timeout
+  // - OB_NOT_MASTER: not leader
+  // - OB_EAGAIN: need retry
+  // - OB_OB_NOT_ALLOW: can not do upgrade because of pre check fails
+  //      if lsn of any server in LogMemberAckInfoList is less than match_lsn in palf, can not upgrade
+  int upgrade_learner_to_acceptor(const LogMemberAckInfoList &upgrade_servers, const int64_t timeout_us);
+  // @brief: get arbitration member info from arbitration service by sync rpc.
+  // @param[in] ArbMemberInfo &arb_member_info: arbitration member info
+  // @return
+  // - OB_SUCCESS
+  // - OB_NOT_MASTER: self is not leader
+  // - OB_STATE_NOT_MATCH: palf does not have an arbitration member
+  // - OB_TIMEOUT: rpc timeout
+  // - OB_RPC_POST_ERROR: arbitration server is in easy's black_list
+  int get_remote_arb_member_info(ArbMemberInfo &arb_member_info) const;
+  // @brief: get arbitration member
+  // @param[in/out] common::ObMember &arb_member
+  // @return
+  // - OB_SUCCESS
+  // - OB_NOT_INIT
+  int get_arbitration_member(common::ObMember &arb_member) const;
+#endif
   int revoke_leader(const int64_t proposal_id);
   int change_leader_to(const common::ObAddr &dst_addr);
   // @brief: change AccessMode of palf.

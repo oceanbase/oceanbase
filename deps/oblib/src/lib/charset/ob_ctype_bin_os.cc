@@ -18,6 +18,7 @@
 *      - initial release
 *
 */
+#ifndef OB_BUILD_FULL_CHARSET
 
 #include "lib/charset/ob_ctype.h"
 
@@ -522,3 +523,5 @@ ObCharsetInfo ob_charset_bin =
 
 #undef likeconv
 #undef INC_PTR
+
+#endif

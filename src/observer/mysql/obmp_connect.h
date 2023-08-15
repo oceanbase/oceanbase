@@ -115,6 +115,9 @@ private:
   int check_password_expired(const uint64_t tenant_id,
                              share::schema::ObSchemaGetterGuard &schema_guard,
                              sql::ObSQLSessionInfo &session);
+#ifdef OB_BUILD_AUDIT_SECURITY
+  int check_audit_user(const uint64_t tenant_id, ObString &user_name);
+#endif
 
   int set_proxy_version(ObSMConnection &conn);
   int update_charset_sys_vars(ObSMConnection &conn, sql::ObSQLSessionInfo &sess_info);

@@ -15,6 +15,9 @@
 #include "share/backup/ob_backup_io_adapter.h"
 #include "lib/restore/ob_storage.h"
 #include "lib/oblog/ob_log_module.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
 
 using namespace oceanbase;
 using namespace common;
@@ -700,12 +703,39 @@ int ObBackupDataStore::read_backup_set_info(ObExternBackupSetInfoDesc &backup_se
 int ObBackupDataStore::write_root_key_info(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_TDE_SECURITY
+  share::ObBackupPath path;
+  ObString empty_str;
+  // TODO(sean.yyj): support use user specified encrypt key to encrypt rook key backup
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_backup_root_key_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get path", K(ret));
+  } else if (OB_FAIL(ObMasterKeyUtil::backup_root_key(tenant_id, path.get_obstr(),
+                                              backup_set_dest_.get_storage_info(), empty_str))) {
+    LOG_WARN("fail to backup root key", K(ret));
+  }
+#endif
   return ret;
 }
 
 int ObBackupDataStore::read_root_key_info(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_TDE_SECURITY
+  share::ObBackupPath path;
+  ObString empty_str;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_backup_root_key_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get path", K(ret));
+  } else if (OB_FAIL(ObMasterKeyUtil::restore_root_key(tenant_id, path.get_obstr(),
+                                              backup_set_dest_.get_storage_info(), empty_str))) {
+    LOG_WARN("fail to backup root key", K(ret));
+  }
+#endif
   return ret;
 }
 

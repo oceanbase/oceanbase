@@ -10,12 +10,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#ifndef OB_BUILD_TDE_SECURITY
+
 #define USING_LOG_PREFIX SHARE
-#include "ob_encryption_util.h"
+#include "share/ob_encryption_util.h"
 #include <openssl/md4.h>
 #include <openssl/md5.h>
 #include <openssl/sha.h>
-#include "ob_encryption_struct.h"
+#include "share/ob_encryption_struct.h"
 #include "lib/alloc/alloc_assist.h"
 #include "share/ob_errno.h"
 #include "lib/atomic/atomic128.h"
@@ -30,7 +32,6 @@ namespace oceanbase
 using namespace common;
 namespace share
 {
-
 
 int ObKeyGenerator::generate_encrypt_key(char *buf, int64_t len)
 {
@@ -105,6 +106,10 @@ static const EVP_CIPHER *aes_evp_type(const ObAesOpMode mode)
     case ob_aes_256_cfb8:   return EVP_aes_256_cfb8();
     case ob_aes_256_cfb128: return EVP_aes_256_cfb128();
     case ob_aes_256_ofb:    return EVP_aes_256_ofb();
+#ifdef OB_USE_BABASSL
+    case ob_sm4_mode:       return EVP_sm4_ctr();
+    case ob_sm4_cbc_mode:   return EVP_sm4_cbc();
+#endif
     default: return NULL;
   }
 }
@@ -265,6 +270,7 @@ int ObAesEncryption::aes_decrypt(const char *key, const int64_t &key_len, const 
   return ret;
 }
 
+#ifndef OB_USE_BABASSL
 static void* ob_malloc_openssl(size_t nbytes)
 {
   ObMemAttr attr;
@@ -283,15 +289,37 @@ static void ob_free_openssl(void *ptr)
 {
   ob_free(ptr);
 }
+#else
+static void* ob_malloc_openssl(size_t nbyte, const char *, int)
+{
+  ObMemAttr attr;
+  attr.label_ = ObModIds::OB_BUFFER;
+  return ob_malloc(nbyte, attr);
+}
+
+static void* ob_realloc_openssl(void *ptr, size_t nbyte, const char *, int)
+{
+  ObMemAttr attr;
+  attr.label_ = ObModIds::OB_BUFFER;
+  return ob_realloc(ptr, nbyte, attr);
+}
+
+static void ob_free_openssl(void *ptr, const char *, int)
+{
+  ob_free(ptr);
+}
+#endif
 
 int ObEncryptionUtil::init_ssl_malloc()
 {
   int ret = OB_SUCCESS;
+#ifdef OB_USE_BABASSL
   int tmp_ret = CRYPTO_set_mem_functions(ob_malloc_openssl, ob_realloc_openssl, ob_free_openssl);
   if (OB_UNLIKELY(tmp_ret != 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to set crypto mem functions", K(tmp_ret), K(ret));
   }
+#endif
   return ret;
 }
 
@@ -372,7 +400,6 @@ ObBackupEncryptionMode::EncryptionMode ObBackupEncryptionMode::parse_str(const c
   }
   return mode;
 }
-
 
 int ObHashUtil::hash(const enum ObHashAlgorithm algo, const ObString data,
                      ObIAllocator &allocator, ObString &output)
@@ -626,3 +653,5 @@ int ObTdeEncryptEngineLoader::reload_config()
 
 }//end share
 } //end oceanbase
+
+#endif

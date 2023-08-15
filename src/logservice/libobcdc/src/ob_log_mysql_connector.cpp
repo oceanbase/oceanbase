@@ -204,6 +204,9 @@ int ObLogMySQLConnector::exec(MySQLQueryBase& query)
 bool ObLogMySQLConnector::is_oracle_mode() const
 {
   bool b_ret = false;
+#ifdef OB_USE_DRCMSG
+  b_ret = OB_NOT_NULL(mysql_) && mysql_->oracle_mode;
+#endif
   return b_ret;
 }
 
@@ -262,6 +265,17 @@ int ObLogMySQLConnector::init_conn_(const MySQLConnConfig &cfg,
         K(mysql_error(mysql_)), K(write_timeout));
     ret = OB_ERR_UNEXPECTED;
   } else {
+#ifdef OB_BUILD_TDE_SECURITY
+    if (! enable_ssl_client_authentication) {
+      int64_t ssl_enforce = 0;
+
+      if (0 != (mysql_options(mysql_, MYSQL_OPT_SSL_ENFORCE, &ssl_enforce))) {
+        LOG_ERROR("failed to set ssl mode for mysql conn",
+            K(mysql_error(mysql_)), K(ssl_enforce));
+        ret = OB_ERR_UNEXPECTED;
+      }
+    }
+#endif
 
     // CLIENT_MULTI_STATEMENTS: enable multiple-statement execution and multiple-result
     if (mysql_ != mysql_real_connect(mysql_,

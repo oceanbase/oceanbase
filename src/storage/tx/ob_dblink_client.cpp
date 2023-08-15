@@ -13,6 +13,9 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "observer/ob_server_struct.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/sys_package/ob_dbms_xa.h"
+#endif
 
 namespace oceanbase
 {

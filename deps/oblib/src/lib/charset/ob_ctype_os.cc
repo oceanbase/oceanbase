@@ -15,6 +15,7 @@
  *
  *  Authors:
  */
+#ifndef OB_BUILD_FULL_CHARSET
 
 #include "lib/charset/ob_ctype.h"
 
@@ -120,3 +121,5 @@ ob_convert(char *to, uint32 to_length, const ObCharsetInfo *to_cs,
 
   return 0;          
 }
+
+#endif

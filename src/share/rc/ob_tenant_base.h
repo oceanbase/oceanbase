@@ -22,6 +22,9 @@
 #include "lib/thread/thread_mgr.h"
 #include "lib/allocator/ob_malloc.h"
 #include "share/ob_tenant_role.h"//ObTenantRole
+#ifdef OB_BUILD_DBLINK
+#include "lib/oracleclient/ob_oci_environment.h"
+#endif
 #include "lib/mysqlclient/ob_tenant_oci_envs.h"
 namespace oceanbase
 {
@@ -188,7 +191,11 @@ namespace detector
   class ObDeadLockDetectorMgr;
 }
 
+#ifndef OB_BUILD_ARBITRATION
 #define ArbMTLMember
+#else
+#define ArbMTLMember rootserver::ObArbitrationService*,
+#endif
 
 // 在这里列举需要添加的租户局部变量的类型，租户会为每种类型创建一个实例。
 // 实例的初始化和销毁逻辑由MTL_BIND接口指定。

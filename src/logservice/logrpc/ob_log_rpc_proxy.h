@@ -33,6 +33,10 @@ public:
       (logservice::LogChangeAccessModeCmd));
   RPC_AP(PR3 send_log_flashback_msg, OB_LOG_FLASHBACK_CMD,
       (logservice::LogFlashbackMsg));
+#ifdef OB_BUILD_ARBITRATION
+  RPC_S(PR5 create_arb, OB_CREATE_ARB, (obrpc::ObCreateArbArg), obrpc::ObCreateArbResult);
+  RPC_S(PR5 delete_arb, OB_DELETE_ARB, (obrpc::ObDeleteArbArg), obrpc::ObDeleteArbResult);
+#endif
   RPC_S(PR3 get_palf_stat, OB_LOG_GET_PALF_STAT,
       (logservice::LogGetPalfStatReq), logservice::LogGetPalfStatResp);
 };

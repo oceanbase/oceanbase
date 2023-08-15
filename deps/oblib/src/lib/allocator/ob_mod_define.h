@@ -53,7 +53,6 @@ LABEL_ITEM_DEF(OB_FIFO_ALLOC, FifoAlloc)
 //commonmodules
 LABEL_ITEM_DEF(OB_OBJ_FREELISTS, ObjFreelists)
 LABEL_ITEM_DEF(OB_COMMON_NETWORK, CommonNetwork)
-LABEL_ITEM_DEF(OB_RDMA_MYSQL, MysqlRdmaNet)
 LABEL_ITEM_DEF(OB_THREAD_BUFFER, ThreadBuffer)
 LABEL_ITEM_DEF(OB_KVSTORE_CACHE, KvstoreCache)
 LABEL_ITEM_DEF(OB_KVSTORE_CACHE_ITERATOR, KvstorCacheIter)
@@ -677,7 +676,7 @@ struct InnerModIds
   #undef LABEL_ITEM_DEF
   };
   enum { LABEL_COUNT_LIMIT = InnerModIds::OB_MOD_END };
-  STATIC_ASSERT(LABEL_COUNT_LIMIT == 453, "forbidden to add new label!!!");
+  STATIC_ASSERT(LABEL_COUNT_LIMIT == 452, "forbidden to add new label!!!");
 };
 
 #define ObNewModIds ObModIds

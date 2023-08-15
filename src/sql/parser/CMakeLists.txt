@@ -1,5 +1,7 @@
 
 # charset objects used for proxy_parser
+
+if (OB_BUILD_OPENSOURCE)
 set(ob_sql_parser_charset_object_list
   ob_ctype_bin_os.cc
   ob_ctype_gb18030_os.cc
@@ -12,9 +14,33 @@ set(ob_sql_parser_charset_object_list
   ob_ctype_utf8_os.cc
   ob_dtoa_os.cc
 )
+endif()
 
 list(TRANSFORM ob_sql_parser_charset_object_list
   PREPEND ${PROJECT_SOURCE_DIR}/deps/oblib/src/lib/charset/)
+
+if(OB_BUILD_FULL_CHARSET)
+  set(ob_sql_parser_full_charset_object_list
+    ob_ctype_bin.cc
+    ob_ctype.cc
+    ob_ctype_gbk.cc
+    ob_ctype_latin1.cc
+    ob_ctype_mb.cc
+    ob_ctype_simple.cc
+    ob_ctype_utf8.cc
+    ob_dtoa.cc
+    ob_ctype_utf16.cc
+    ob_ctype_uca.cc
+    ob_ctype_gb18030.cc
+    uca900_ja_tbls.cc
+    uca900_zh_tbls.cc
+    uca900_zh2_tbls.cc
+    uca900_zh3_tbls.cc
+  )
+endif()
+
+list(TRANSFORM ob_sql_parser_full_charset_object_list
+  PREPEND ${PROJECT_SOURCE_DIR}/close_modules/charset/deps/oblib/src/lib/charset/)
 
 # hash objects used for proxy parser
 set(ob_sql_parser_hash_object_list
@@ -28,10 +54,42 @@ list(TRANSFORM ob_sql_parser_hash_object_list
 add_library(ob_sql_parser_base INTERFACE)
 target_include_directories(ob_sql_parser_base INTERFACE
   ${PROJECT_SOURCE_DIR}/deps/oblib/src/common/sql_mode/
-  ${PROJECT_SOURCE_DIR}/src/objit/include/objit/common)
+  ${PROJECT_SOURCE_DIR}/src/objit/include/objit/common
+  ${CMAKE_SOURCE_DIR}/deps/oblib/src/lib/charset/
+  )
 
 # parser objects for proxy parser
+if (OB_BUILD_ORACLE_PARSER)
+  set(ob_inner_sql_parser_object_list
+    sql_parser_oracle_utf8_mode_lex.c
+    sql_parser_oracle_utf8_mode_lex.h
+    sql_parser_oracle_utf8_mode_tab.c
+    sql_parser_oracle_utf8_mode_tab.h
+    sql_parser_oracle_gbk_mode_lex.c
+    sql_parser_oracle_gbk_mode_lex.h
+    sql_parser_oracle_gbk_mode_tab.c
+    sql_parser_oracle_gbk_mode_tab.h
+    sql_parser_oracle_latin1_mode_lex.c
+    sql_parser_oracle_latin1_mode_lex.h
+    sql_parser_oracle_latin1_mode_tab.c
+    sql_parser_oracle_latin1_mode_tab.h
+  )
+
+  set(ob_inner_sql_parser_object_list
+    ${ob_inner_sql_parser_object_list}
+    non_reserved_keywords_oracle_utf8_mode.c
+    non_reserved_keywords_oracle_gbk_mode.c
+    non_reserved_keywords_oracle_latin1_mode.c
+  )
+endif()
+
+# common
 set(ob_inner_sql_parser_object_list
+  ${ob_inner_sql_parser_object_list}
+  sql_parser_mysql_mode_lex.c
+  sql_parser_mysql_mode_lex.h
+  sql_parser_mysql_mode_tab.c
+  sql_parser_mysql_mode_tab.h
   non_reserved_keywords_mysql_mode.c
   ob_item_type_str.h
   ob_non_reserved_keywords.c
@@ -51,10 +109,6 @@ set(ob_inner_sql_parser_object_list
   sql_parser_base.c
   sql_parser_base.h
   sql_parser_base.h
-  sql_parser_mysql_mode_lex.c
-  sql_parser_mysql_mode_lex.h
-  sql_parser_mysql_mode_tab.c
-  sql_parser_mysql_mode_tab.h
   parser_utility.cpp
   parser_utility.h
   type_name.c
@@ -70,11 +124,19 @@ set(ob_extra_sql_parser_object_list
 )
 
 # ob_sql_proxy_parser_objects is the static library for proxy, it does not link against observer
-add_library(ob_sql_proxy_parser_objects OBJECT
-  ${ob_inner_sql_parser_object_list}
-  ${ob_sql_parser_charset_object_list}
-  ${ob_sql_parser_hash_object_list}
-)
+if (OB_BUILD_FULL_CHARSET)
+  add_library(ob_sql_proxy_parser_objects OBJECT
+              ${ob_inner_sql_parser_object_list}
+              ${ob_sql_parser_hash_object_list}
+              ${ob_sql_parser_full_charset_object_list}
+              )
+else()
+  add_library(ob_sql_proxy_parser_objects OBJECT
+              ${ob_inner_sql_parser_object_list}
+              ${ob_sql_parser_hash_object_list}
+              ${ob_sql_parser_charset_object_list}
+              )
+endif()
 
 # ob_sql_server_parser_object is the static library for observer
 add_library(ob_sql_server_parser_objects OBJECT

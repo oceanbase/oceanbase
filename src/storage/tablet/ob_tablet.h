@@ -689,6 +689,12 @@ private:
       ObTableIterParam &param,
       ObTableAccessContext &context);
 
+#ifdef OB_BUILD_TDE_SECURITY
+  void get_encrypt_meta(
+      const uint64_t table_id,
+      const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr,
+      const transaction::ObSerializeEncryptMeta *&encrypt_meta);
+#endif
 
   // memtable operation
   int pull_memtables(ObArenaAllocator &allocator, ObITable **&ddl_kvs_addr, int64_t &ddl_kv_count);
@@ -845,6 +851,20 @@ inline int64_t ObTablet::get_lock_wait_timeout(
           (abs_lock_timeout > stmt_timeout ? stmt_timeout : abs_lock_timeout));
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+inline void ObTablet::get_encrypt_meta(
+     const uint64_t table_id,
+     const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr,
+     const transaction::ObSerializeEncryptMeta *&encrypt_meta)
+{
+  for (int64_t i = 0; i < encrypt_meta_arr->count(); ++i) {
+    if (encrypt_meta_arr->at(i).real_table_id() == table_id) {
+      encrypt_meta = &(encrypt_meta_arr->at(i).meta_);
+      break;
+    }
+  }
+}
+#endif
 
 } // namespace storage
 } // namespace oceanbase

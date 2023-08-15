@@ -189,6 +189,9 @@ int PriorityV1::refresh_(const share::ObLSID &ls_id)
   LsElectionReferenceInfo election_reference_info;
   SCN scn = SCN::min_scn();
   if (observer::ObServer::get_instance().is_arbitration_mode()) {
+#ifdef OB_BUILD_ARBITRATION
+    ret = OB_NO_NEED_UPDATE;
+#endif
   } else if (OB_ISNULL(coordinator) || OB_ISNULL(detector)) {
     ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG_(ERROR, "unexpected nullptr");

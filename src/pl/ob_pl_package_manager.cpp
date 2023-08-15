@@ -206,6 +206,59 @@ int ObPLPackageManager::load_sys_package(
 
 static const char* sys_package_dir = "admin";
 static ObSysPackageFile oracle_sys_package_file_table[] = {
+#ifdef OB_BUILD_ORACLE_PL
+  {"dbms_standard", "dbms_standard.sql", "dbms_standard_body.sql"},
+  {"dbms_output", "dbms_output.sql", "dbms_output_body.sql"},
+  {"dbms_metadata", "dbms_metadata.sql", "dbms_metadata_body.sql"},
+  {"dbms_spm", "dbms_spm.sql", "dbms_spm_body.sql"},
+  {"utl_raw", "utl_raw.sql", "utl_raw_body.sql"},
+  {"dbms_lob", "dbms_lob.sql", "dbms_lob_body.sql"},
+  {"sa_components", "sa_components.sql", "sa_components_body.sql"},
+  {"sa_label_admin", "sa_label_admin.sql", "sa_label_admin_body.sql"},
+  {"sa_policy_admin", "sa_policy_admin.sql", "sa_policy_admin_body.sql"},
+  {"sa_session", "sa_session.sql", "sa_session_body.sql"},
+  {"sa_sysdba", "sa_sysdba.sql", "sa_sysdba_body.sql"},
+  {"sa_user_admin", "sa_user_admin.sql", "sa_user_admin_body.sql"},
+  {"utl_i18n", "utl_i18n.sql", "utl_i18n_body.sql"},
+  {"dbms_crypto", "dbms_crypto.sql","dbms_crypto_body.sql"},
+  {"dbms_random", "dbms_random.sql", "dbms_random_body.sql"},
+  {"dbms_debug", "dbms_debug.sql", "dbms_debug_body.sql"},
+  {"utl_inaddr", "utl_inaddr.sql", "utl_inaddr_body.sql"},
+  {"utl_encode", "dbms_utl_encode.sql", "dbms_utl_encode_body.sql"},
+  {"dbms_warning", "dbms_warning.sql", "dbms_warning_body.sql"},
+  {"dbms_errlog", "dbms_errlog.sql", "dbms_errlog_body.sql"},
+  {"dbms_lock", "dbms_lock.sql", "dbms_lock_body.sql"},
+  {"dbms_sql", "dbms_sql.sql", "dbms_sql_body.sql"},
+  {"dbms_xa", "dbms_xa.sql", "dbms_xa_body.sql"},
+  {"dbms_resource_manager", "dbms_resource_manager.sql", "dbms_resource_manager_body.sql"},
+  {"dbms_utility", "dbms_utility.sql", "dbms_utility_body.sql"},
+  {"odciconst", "odciconst.sql", "odciconst_body.sql"},
+  {"dbms_stats", "dbms_stats.sql", "dbms_stats_body.sql"},
+  {"dbms_any", "dbms_any.sql", "dbms_any_body.sql"},
+  {"xml_type", "xml_type.sql", "xml_type_body.sql"},
+  {"dbms_crypto", "dbms_crypto.sql", "dbms_crypto_body.sql"},
+  {"dbms_ijob", "dbms_ijob.sql", "dbms_ijob_body.sql"},
+  {"dbms_job", "dbms_job.sql", "dbms_job_body.sql"},
+  {"dbms_ischeduler", "dbms_ischeduler.sql", "dbms_ischeduler_body.sql"},
+  {"dbms_scheduler", "dbms_scheduler.sql", "dbms_scheduler_body.sql"},
+  {"catodci", "catodci.sql", "catodci_body.sql"},
+  {"dbms_describe", "dbms_describe.sql", "dbms_describe_body.sql"},
+  {"utl_file", "utl_file.sql", "utl_file_body.sql"},
+  {"dbms_plan_cache", "dbms_plancache.sql", "dbms_plancache_body.sql"},
+  {"dbms_sys_error", "dbms_sys_error.sql", "dbms_sys_error_body.sql"},
+  {"dbms_preprocessor", "dbms_preprocessor.sql", "dbms_preprocessor_body.sql"},
+  {"dbms_audit_mgmt", "dbms_audit_mgmt.sql", "dbms_audit_mgmt_body.sql"},
+  {"dbms_application", "dbms_application.sql", "dbms_application_body.sql"},
+  {"dbms_session", "dbms_session.sql", "dbms_session_body.sql"},
+  {"dbms_monitor", "dbms_monitor.sql", "dbms_monitor_body.sql"},
+  {"dbms_xplan", "dbms_xplan.sql", "dbms_xplan_body.sql"},
+  {"dbms_workload_repository", "dbms_workload_repository.sql", "dbms_workload_repository_body.sql"},
+  {"dbms_ash_internal", "dbms_ash_internal.sql", "dbms_ash_internal_body.sql"},
+  {"dbms_rls", "dbms_rls.sql", "dbms_rls_body.sql"},
+  {"dbms_udr", "dbms_udr.sql", "dbms_udr_body.sql"},
+  {"json_element_t", "json_element_type.sql", "json_element_type_body.sql"},
+  {"json_object_t", "json_object_type.sql", "json_object_type_body.sql"},
+#endif
 };
 
 static ObSysPackageFile mysql_sys_package_file_table[] = {
@@ -215,6 +268,10 @@ static ObSysPackageFile mysql_sys_package_file_table[] = {
   {"dbms_session", "dbms_session_mysql.sql", "dbms_session_body_mysql.sql"},
   {"dbms_monitor", "dbms_monitor_mysql.sql", "dbms_monitor_body_mysql.sql"},
   {"dbms_resource_manager", "dbms_resource_manager_mysql.sql", "dbms_resource_manager_body_mysql.sql"},
+#ifdef OB_BUILD_ORACLE_PL
+  {"dbms_xplan", "dbms_xplan_mysql.sql", "dbms_xplan_mysql_body.sql"},
+  {"dbms_spm", "dbms_spm_mysql.sql", "dbms_spm_body_mysql.sql"},
+#endif
   {"dbms_udr", "dbms_udr_mysql.sql", "dbms_udr_body_mysql.sql"}
 };
 
@@ -345,6 +402,13 @@ int ObPLPackageManager::load_all_special_sys_package(ObMySQLProxy &sql_proxy)
     char package_spec_full_path[MAX_PATH_SIZE] = {};
     char package_body_full_path[MAX_PATH_SIZE] = {};
 
+#ifdef OB_BUILD_ORACLE_PL
+    OZ (databuff_printf(
+      package_spec_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, "__dbms_upgrade.sql"));
+    OZ (databuff_printf(
+      package_body_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, "__dbms_upgrade_body.sql"));
+    OZ (load_sys_package(sql_proxy, package_spec_full_path, package_body_full_path, ObCompatibilityMode::ORACLE_MODE));
+#endif
 
     memset(package_spec_full_path, 0, sizeof(package_spec_full_path));
     memset(package_body_full_path, 0, sizeof(package_body_full_path));

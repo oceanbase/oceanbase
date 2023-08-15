@@ -1,7 +1,13 @@
 add_library(obcdc_msg STATIC IMPORTED)
-set_target_properties(obcdc_msg PROPERTIES
-  IMPORTED_LOCATION ${DEP_DIR}/lib/liboblogmsg.a)
-set_property(GLOBAL PROPERTY CDC_MSG_HEADER_DIR ${DEP_DIR}/include/oblogmsg)
+if (OB_USE_DRCMSG)
+  set_target_properties(obcdc_msg PROPERTIES
+    IMPORTED_LOCATION ${DEP_DIR}/lib/libdrcmsg.a)
+  set_property(GLOBAL PROPERTY CDC_MSG_HEADER_DIR ${DEP_DIR}/include/drcmsg)
+else()
+  set_target_properties(obcdc_msg PROPERTIES
+    IMPORTED_LOCATION ${DEP_DIR}/lib/liboblogmsg.a)
+  set_property(GLOBAL PROPERTY CDC_MSG_HEADER_DIR ${DEP_DIR}/include/oblogmsg)
+endif()
 
 add_library(rocksdb STATIC IMPORTED)
 set_target_properties(rocksdb PROPERTIES
@@ -161,6 +167,7 @@ else()
     -Wl,-e,so_main
     easy
     )
+  if(OB_BUILD_OPENSOURCE)
   set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -lmariadb")
   if (OB_STATIC_LINK_LGPL_DEPS)
     set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -l:libmariadbclient.a")
@@ -169,6 +176,7 @@ else()
     PRIVATE
     ${LGPL_DEPS}
     )
+  endif()
   add_dependencies(obcdc obcdc_objects)
 endif()
 set_target_properties(obcdc PROPERTIES

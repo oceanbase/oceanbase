@@ -101,7 +101,7 @@ int ObBackupCleanTaskMgr::init(
     backup_service_ = &backup_service;
     is_inited_ = true;
   }
-  // TODO: integrate sql_proxy and lease_service 4.1
+  // TODO(wenjinyu.wjy): integrate sql_proxy and lease_service 4.3
   return ret;
 }
 
@@ -604,6 +604,7 @@ int ObBackupCleanTaskMgr::get_ls_ids_from_traverse_(const ObBackupPath &path, Ob
     LOG_WARN("failed to set log stream prefix", K(ret));  
   } else if (OB_FAIL(prefix_op.init(logstream_prefix, strlen(logstream_prefix)))) {
     LOG_WARN("failed to init dir prefix", K(ret), K(logstream_prefix));
+  // TODO(wenjinyu.wjy) iterate dir sequentially 4.3
   } else if (OB_FAIL(util.list_directories(path.get_obstr(), backup_dest_.get_storage_info(), prefix_op))) {
     LOG_WARN("failed to list files", K(ret));
   } else {
@@ -761,6 +762,7 @@ int ObBackupCleanTaskMgr::delete_data_info_turn_files_(const ObBackupPath &infos
   ObDirPrefixEntryNameFilter prefix_op(d_entrys);
   if (OB_FAIL(prefix_op.init(info_turn_prefix, strlen(info_turn_prefix)))) {
     LOG_WARN("failed to init dir prefix", K(ret), K(info_turn_prefix));
+  // TODO(wenjinyu.wjy) iterate dir sequentially 4.3
   } else if (OB_FAIL(util.list_directories(infos_path.get_obstr(), backup_dest_.get_storage_info(), prefix_op))) {
     LOG_WARN("failed to list directories", K(ret));
   } else {

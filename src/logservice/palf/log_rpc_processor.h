@@ -149,6 +149,13 @@ DEFINE_SYNC_RPC_PROCESSOR(LogGetStatP,
                           LogGetStatResp,
                           obrpc::OB_LOG_GET_STAT);
 
+#ifdef OB_BUILD_ARBITRATION
+DEFINE_SYNC_RPC_PROCESSOR(ObRpcGetArbMemberInfoP,
+                          obrpc::LogRpcProxyV2,
+                          LogGetArbMemberInfoReq,
+                          LogGetArbMemberInfoResp,
+                          obrpc::OB_LOG_GET_ARB_MEMBER_INFO);
+#endif
 } // end namespace palf
 } // end namespace oceanbase
 

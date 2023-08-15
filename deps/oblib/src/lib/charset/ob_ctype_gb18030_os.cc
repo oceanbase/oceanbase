@@ -15,6 +15,7 @@
  *
  *  Authors:
  */
+#ifndef OB_BUILD_FULL_CHARSET
 
 #include "lib/charset/ob_ctype.h"
 #include "lib/charset/ob_charset.h"
@@ -20761,3 +20762,5 @@ ObCharsetInfo ob_charset_gb18030_2022_stroke_cs =
   &ob_collation_2022_stroke_cs_handler,
   PAD_SPACE
 };
+
+#endif

@@ -22,10 +22,9 @@
 #include "share/transfer/ob_transfer_task_operator.h" // ObTransferTaskOperator
 #include "lib/allocator/page_arena.h"
 
-using namespace unittest;
-
 namespace oceanbase
 {
+using namespace unittest;
 namespace rootserver
 {
 using namespace share::schema;
@@ -389,7 +388,7 @@ TEST_F(TestTenantTransferService, test_offline_ddl_hidden_table)
 } // namespace oceanbase
 int main(int argc, char **argv)
 {
-  unittest::init_log_and_gtest(argc, argv);
+  oceanbase::unittest::init_log_and_gtest(argc, argv);
   OB_LOGGER.set_log_level("INFO");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

@@ -883,6 +883,10 @@ public:
   TO_STRING_KV(K_(endpoint), K_(access_id), K_(extension), "type", get_type_str());
 private:
   int set_storage_info_field_(const char *info, char *field, const int64_t length);
+#ifdef OB_BUILD_TDE_SECURITY
+  int encrypt_access_key_(char *encrypt_key, int64_t length) const;
+  int decrypt_access_key_(const char *buf);
+#endif
   int set_access_key_(const char *buf, const bool need_decrypt);
   int parse_authorization_(const char *authorization);
   int check_delete_mode_(const char *delete_mode);

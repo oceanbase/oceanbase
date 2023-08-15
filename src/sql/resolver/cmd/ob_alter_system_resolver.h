@@ -172,6 +172,10 @@ class ObPhysicalRestoreTenantResolver : public ObSystemCmdResolver
     virtual ~ObPhysicalRestoreTenantResolver() {}
     virtual int resolve(const ParseNode &parse_tree);
   private:
+#ifdef OB_BUILD_TDE_SECURITY
+    int resolve_kms_encrypt_info(common::ObString store_option);
+    int check_kms_info_valid(const common::ObString &kms_info, bool &is_valid);
+#endif
     int resolve_decryption_passwd(obrpc::ObPhysicalRestoreTenantArg &arg);
     int resolve_restore_source_array(obrpc::ObPhysicalRestoreTenantArg &arg);
 };

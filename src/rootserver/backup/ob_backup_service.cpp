@@ -321,7 +321,7 @@ int ObBackupCleanService::handle_backup_delete(const obrpc::ObBackupCleanArg &ar
     };
     case ObNewBackupCleanType::DELETE_BACKUP_SET: 
     case ObNewBackupCleanType::DELETE_BACKUP_PIECE: {
-    // TODO 4.1 support delete backup set/piece 
+    // TODO(wenjinyu.wjy) 4.3 support delete backup set/piece
       ret = OB_NOT_SUPPORTED;
       break;
     };
@@ -333,7 +333,7 @@ int ObBackupCleanService::handle_backup_delete(const obrpc::ObBackupCleanArg &ar
       break;
     };
     case ObNewBackupCleanType::DELETE_BACKUP_ALL: {
-    // TODO 4.1 support delete backup all function 
+    // TODO(wenjinyu.wjy) 4.3 support delete backup all function
       ret = OB_NOT_SUPPORTED;
       break;
     };

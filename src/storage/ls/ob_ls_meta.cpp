@@ -470,7 +470,7 @@ int ObLSMeta::update_ls_meta(
     guard.click();
     tmp.all_id_meta_.update_all_id_meta(src_ls_meta.all_id_meta_);
     if (tmp.clog_checkpoint_scn_ < clog_checkpoint_scn_) {
-  // TODO: now do not allow clog checkpoint ts rollback, may support it in 4.3
+  // TODO(muwei.ym): now do not allow clog checkpoint ts rollback, may support it in 4.3
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("do not allow clog checkpoint ts rollback", K(ret), K(src_ls_meta), KPC(this));
     } else if (OB_FAIL(write_slog_(tmp))) {

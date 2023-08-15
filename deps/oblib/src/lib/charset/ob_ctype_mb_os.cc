@@ -15,6 +15,7 @@
  *
  *  Authors:
  */
+#ifndef OB_BUILD_FULL_CHARSET
 
 #include "lib/charset/ob_ctype.h"
 
@@ -769,3 +770,5 @@ ObCollationHandler ob_collation_mb_bin_handler = {
 
 #undef INC_PTR
 #undef likeconv
+
+#endif

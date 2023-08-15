@@ -81,6 +81,13 @@
 #include "sql/ob_optimizer_trace_impl.h"
 #include "share/resource_manager/ob_resource_manager.h"
 #include "share/resource_manager/ob_cgroup_ctrl.h"
+#ifdef OB_BUILD_SPM
+#include "sql/spm/ob_spm_controller.h"
+#include "sql/spm/ob_spm_define.h"
+#endif
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/sys_package/ob_json_pl_utils.h"
+#endif
 #include "sql/ob_optimizer_trace_impl.h"
 #include "sql/monitor/ob_sql_plan.h"
 #include "sql/optimizer/ob_explain_log_plan.h"
@@ -655,6 +662,12 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
         } else if (NULL == context->secondary_namespace_ // pl resolve
                     && NULL == context->session_info_->get_pl_context()) { // pl execute
           ret = OB_NOT_SUPPORTED;
+#ifdef OB_BUILD_ORACLE_PL
+          // error code compiltable with oracle
+          if (pl::ObPlJsonUtil::is_pl_jsontype(expr->get_result_type().get_udt_id())) {
+            ret = OB_ERR_PL_JSONTYPE_USAGE;
+          }
+#endif
           LOG_WARN("composite type use in pure sql context not supported!");
         }
       }
@@ -1541,6 +1554,14 @@ int ObSql::handle_pl_execute(const ObString &sql,
     }
   }
 
+#ifdef OB_BUILD_AUDIT_SECURITY
+  (void)ObSecurityAuditUtils::handle_security_audit(result,
+                                                    context.schema_guard_,
+                                                    context.cur_stmt_,
+                                                    ObString::make_string("pl/sql"),
+                                                    ret);
+
+#endif
   if (OB_SUCC(ret) && session.get_in_transaction()) {
     if (ObStmt::is_dml_write_stmt(result.get_stmt_type()) ||
         ObStmt::is_savepoint_stmt(result.get_stmt_type())) {
@@ -2427,7 +2448,11 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
   const uint64_t tenant_id = session.get_effective_tenant_id();
   ObExecContext& ectx = result.get_exec_context();
   int get_plan_err = OB_SUCCESS; //used for judge whether add plan to plan cache
+#ifndef OB_BUILD_SPM
   bool use_plan_cache = session.get_local_ob_enable_plan_cache();
+#else
+  bool use_plan_cache = session.get_local_ob_enable_plan_cache() && !context.spm_ctx_.is_retry_for_spm_;
+#endif
   ObPlanCacheCtx *pc_ctx = NULL;
   bool is_begin_commit_stmt = false;
   if (OB_FAIL(ret)) {
@@ -2466,7 +2491,11 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
                                       database_id)) {
       // do nothing
     } else if (!use_plan_cache) {
+#ifndef OB_BUILD_SPM
       if (context.multi_stmt_item_.is_batched_multi_stmt()) {
+#else
+      if (context.multi_stmt_item_.is_batched_multi_stmt() && !context.spm_ctx_.is_retry_for_spm_) {
+#endif
         ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
         LOG_WARN("batched multi_stmt needs rollback");
       }
@@ -2481,6 +2510,9 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
   int tmp_ret = ret;
   if (!is_begin_commit_stmt
       && 0 == context.multi_stmt_item_.get_seq_num() /* only first item of a multi stmt, or single stmt */
+#ifdef OB_BUILD_SPM
+      && !context.spm_ctx_.is_retry_for_spm_
+#endif
       && OB_FAIL(handle_large_query(tmp_ret,
                                     result,
                                     ectx.get_need_disconnect_for_update(),
@@ -2572,6 +2604,14 @@ OB_NOINLINE int ObSql::handle_large_query(int tmp_ret,
         LOG_INFO("compile time is too long, need delay", K(elapsed_time), K(ret));
       }
     }
+#ifdef OB_BUILD_SPM
+    if (OB_SUCC(ret) && !is_large_query) {
+      result.get_session().reset_spm_select_plan_type();
+    } else if (OB_EAGAIN == ret || is_large_query) {
+      ObSpmCacheCtx& spm_ctx = exec_ctx.get_sql_ctx()->spm_ctx_;
+      result.get_session().set_spm_select_plan_type(spm_ctx.select_plan_type_);
+    }
+#endif
   }
 
   return ret;
@@ -2997,6 +3037,15 @@ int ObSql::generate_plan(ParseResult &parse_result,
     LOG_WARN("query ctx is null", K(ret));
   } else if (OB_FAIL(fill_result_set(result, &sql_ctx, mode, *basic_stmt))) {
     LOG_WARN("Failed to fill result set", K(ret));
+#ifdef OB_BUILD_AUDIT_SECURITY
+  } else if (OB_FAIL(ObSecurityAuditUtils::check_allow_audit(
+                      *sql_ctx.session_info_, allow_audit))) {
+    LOG_WARN("Failed to check allow audit", K(ret));
+  } else if (allow_audit &&
+             OB_FAIL(ObSecurityAuditUtils::get_audit_units(
+                      basic_stmt->get_stmt_type(), basic_stmt, audit_units))) {
+    LOG_WARN("Failed to get audit units", K(ret));
+#endif
   } else if (OB_FAIL(sql_ctx.session_info_->get_sys_variable(
                       share::SYS_VAR__AGGREGATION_OPTIMIZATION_SETTINGS,
                       aggregate_setting))) {
@@ -3005,6 +3054,9 @@ int ObSql::generate_plan(ParseResult &parse_result,
     ObDMLStmt *stmt = static_cast<ObDMLStmt*>(basic_stmt);
     SQL_LOG(DEBUG, "stmt", "stmt", *stmt);
     SQL_LOG(DEBUG, "stmt success", "query", SJ(*stmt));
+#ifdef OB_BUILD_SPM
+    stmt->get_query_ctx()->is_spm_evolution_ = sql_ctx.spm_ctx_.is_retry_for_spm_;
+#endif
     stmt->get_query_ctx()->root_stmt_ = stmt;
     const ObGlobalHint &global_hint = stmt->get_query_ctx()->get_global_hint();
     sql_ctx.session_info_->set_early_lock_release(global_hint.enable_lock_early_release_);
@@ -3873,6 +3925,17 @@ int ObSql::get_outline_data(ObSqlCtx &context,
     //no outline is available when database name of session is not specified, just keep the stmt
   } else if (pc_ctx.is_begin_commit_stmt()) {
     /* do nothing */
+#ifdef OB_BUILD_SPM
+  } else if (pc_ctx.sql_ctx_.spm_ctx_.is_retry_for_spm_) {
+    ObPlanBaselineItem* baseline_item =
+        static_cast<ObPlanBaselineItem*>(pc_ctx.sql_ctx_.spm_ctx_.baseline_guard_.get_cache_obj());
+    if (OB_ISNULL(baseline_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else {
+      outline_content = baseline_item->get_outline_data_str();
+    }
+#endif
   } else if (OB_FAIL(get_outline_data(pc_ctx, signature_sql, outline_state, outline_content))) {
     LOG_WARN("failed to get outline data", K(ret));
   }
@@ -3887,6 +3950,11 @@ int ObSql::get_outline_data(ObSqlCtx &context,
     } else if (OB_FAIL(ob_write_string(pc_ctx.allocator_, sql_helper.string(), temp_outline_sql))) {
       LOG_WARN("failed to write string", K(outline_content), K(ret));
     } else if (OB_FAIL(parser.parse(temp_outline_sql, outline_parse_result))) {
+#ifdef OB_BUILD_SPM
+      if (pc_ctx.sql_ctx_.spm_ctx_.is_retry_for_spm_) {
+        LOG_WARN("failed to parse outline data result for spm", K(ret), K(temp_outline_sql));
+      } else
+#endif
       {
         LOG_WARN("failed to parse outline data result", K(ret), K(temp_outline_sql));
         outline_state.reset();
@@ -4079,7 +4147,11 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
               LOG_WARN("Invalid plan cache", K(ret));
             } else {
               plan_cache->inc_access_cnt();
+#ifndef OB_BUILD_SPM
               if (OB_SQL_PC_NOT_EXIST == get_plan_err) {
+#else
+              if (OB_SQL_PC_NOT_EXIST == get_plan_err || pc_ctx.sql_ctx_.spm_ctx_.is_retry_for_spm_) {
+#endif
                 add_plan_to_pc = true;
               } else {
                 add_plan_to_pc = false;
@@ -4599,6 +4671,9 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
   pc_ctx.neg_param_index_.reset();
   bool plan_added = false;
   bool need_get_baseline = false;
+#ifdef OB_BUILD_SPM
+  spm_ctx.bl_key_.sql_cs_type_ = session.get_local_collation_connection();
+#endif
   LOG_DEBUG("gen plan info", K(spm_ctx.bl_key_), K(get_plan_err));
   // for batched multi stmt, we only parse and optimize the first statement
   // only in multi_query, need do this
@@ -4635,6 +4710,7 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
     LOG_WARN("batched multi_stmt needs rollback", K(ret));
   }
   generate_sql_id(pc_ctx, add_plan_to_pc, parse_result, signature_sql, ret);
+#ifndef OB_BUILD_SPM
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(get_outline_data(context, pc_ctx, signature_sql,
@@ -4669,6 +4745,116 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
   } else if (!is_match_udr && OB_FAIL(pc_add_plan(pc_ctx, result, outline_state, plan_cache, plan_added))) {
     LOG_WARN("fail to add plan to plan cache", K(ret));
   }
+#else
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(get_outline_data(context, pc_ctx, signature_sql,
+                                      outline_state, outline_parse_result))) {
+    LOG_WARN("failed to get outline data for query", K(ret));
+  } else if (OB_FAIL(generate_physical_plan(parse_result,
+                                            &pc_ctx,
+                                            context,
+                                            result,
+                                            pc_ctx.is_begin_commit_stmt(),
+                                            mode,
+                                            &outline_parse_result))) {
+    if (OB_ERR_PROXY_REROUTE == ret) {
+      LOG_DEBUG("Failed to generate plan", K(ret));
+    } else if (OB_OUTLINE_NOT_REPRODUCIBLE == ret && spm_ctx.is_retry_for_spm_) {
+      LOG_TRACE("spm need get baseline due to generate plan failed");
+      need_get_baseline = true;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("Failed to generate plan", K(ret), K(result.get_exec_context().need_disconnect()));
+    }
+  } else if (OB_FALSE_IT(backup_recovery_guard.recovery())) {
+  } else if (OB_FAIL(need_add_plan(pc_ctx,
+                                   result,
+                                   use_plan_cache,
+                                   add_plan_to_pc))) { //加入多表分布式计划的判断，判断是否还需需要add plan
+    LOG_WARN("get need_add_plan failed", K(ret));
+  } else if (!add_plan_to_pc && context.is_batch_params_execute()) {
+    ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
+    LOG_WARN("add_plan_to_pc is false so batched multi_stmt rollback", K(ret));
+  } else if (spm_ctx.is_retry_for_spm_) {
+    // handle spm baseline plan
+    ObPlanBaselineItem* baseline_item = static_cast<ObPlanBaselineItem*>(spm_ctx.baseline_guard_.get_cache_obj());
+    if (OB_ISNULL(result.get_physical_plan()) || OB_ISNULL(baseline_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null physical plan", K(ret), K(result.get_physical_plan()), K(baseline_item));
+    } else if (result.get_physical_plan()->get_plan_hash_value() == baseline_item->get_plan_hash_value()) {
+      pc_ctx.need_evolution_ = true;
+      if (spm_ctx.cur_baseline_not_enable_ || !spm_ctx.capture_baseline_) {
+        spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_ACCEPT_BASELINE_PLAN;
+      } else {
+        spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN;
+      }
+      if (OB_FAIL(pc_add_plan(pc_ctx, result, outline_state, plan_cache, plan_added))) {
+        LOG_WARN("fail to add plan to plan cache", K(ret));
+      } else if (!plan_added && ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN == spm_ctx.spm_stat_) {
+        if (spm_ctx.evolution_task_in_two_plan_set_) {
+          // now baseline plan and evolving plan may be added to differnet plan set due to different
+          // constrain. In this situation, we can't compare two plan. So just keep try next baseline.
+          spm_ctx.evolution_task_in_two_plan_set_ = false;
+          need_get_baseline = true;
+        } else {
+          // add baseline plan failed, need evict unaccepted baseline in baseline cache.
+          (void) ObSpmController::deny_new_plan_as_baseline(spm_ctx);
+        }
+      } else if (plan_added && ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN == spm_ctx.spm_stat_) {
+        spm_ctx.spm_force_disable_ = true;
+        spm_ctx.spm_stat_ = ObSpmCacheCtx::STAT_FIRST_EXECUTE_PLAN;
+        spm_ctx.is_retry_for_spm_ = false;
+        ret = OB_SQL_RETRY_SPM;
+      }
+    } else {
+      LOG_TRACE("spm need get baseline due to plan hash value not equal");
+      need_get_baseline = true;
+    }
+  } else {
+    // handle spm evolution plan or not spm plan
+    if (add_plan_to_pc) {
+      bool baseline_enable = false;
+      bool baseline_exists = true;
+      bool baseline_find = false;
+      if (DEPENDENCY_OUTLINE == outline_state.outline_version_.object_type_ || is_match_udr) {
+        // outline has higher priority than baseline
+      } else if (OB_FAIL(ObSpmController::check_baseline_enable(pc_ctx, result.get_physical_plan(), baseline_enable))) {
+        LOG_WARN("failed to check need capture baseline", K(ret));
+      } else if (!baseline_enable) {
+        // do nothing
+      } else if (OB_FAIL(ObSpmController::check_baseline_exists(pc_ctx, result.get_physical_plan(), baseline_exists))) {
+        LOG_WARN("failed to check baseline exists", K(ret));
+      } else if (!baseline_exists) {
+        pc_ctx.need_evolution_ = true;
+        spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_ADD_EVOLUTION_PLAN;
+      }
+      if (OB_SUCC(ret)) {
+        if (is_match_udr && OB_FAIL(pc_add_udr_plan(item_guard,
+                                                    pc_ctx,
+                                                    result,
+                                                    outline_state,
+                                                    plan_added))) {
+          LOG_WARN("fail to add plan to plan cache", K(ret));
+        } else if (!is_match_udr && OB_FAIL(pc_add_plan(pc_ctx, result, outline_state, plan_cache, plan_added))) {
+          LOG_WARN("fail to add plan to plan cache", K(ret));
+        } else if (!plan_added) {
+          // plan not add to plan cache, do not check if need evolution.
+          if (spm_ctx.check_execute_status_) {
+            (void) ObSpmController::deny_new_plan_as_baseline(spm_ctx);
+          }
+        } else if (baseline_enable && !baseline_exists) {
+          need_get_baseline = true;
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && need_get_baseline) {
+    ObSpmController::get_next_baseline_outline(spm_ctx);
+    ret = OB_SQL_RETRY_SPM;
+    LOG_TRACE("spm get next baeline outline", K(spm_ctx.baseline_guard_.get_cache_obj()), K(ret));
+  }
+#endif
   //if the error code is ob_timeout, we add more error info msg for dml query.
   if (OB_TIMEOUT == ret &&
       parse_result.result_tree_ != NULL &&

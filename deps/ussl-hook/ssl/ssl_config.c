@@ -132,7 +132,39 @@ static void __attribute__((constructor(103))) setup()
   pthread_rwlock_init(&g_ssl_ctx_rwlock, NULL);
 }
 
+#ifdef OB_USE_BABASSL
+static X509 *ob_ssl_get_sm_cert_memory(const char *cert)
+{
+  BIO *bio = NULL;
+  X509 *x509 = NULL;
+  if (NULL == (bio = BIO_new_mem_buf(cert, -1))) {
+    ussl_log_error("BIO_new_mem_buf failed, errno:%d", errno);
+  } else if (NULL == (x509 = PEM_read_bio_X509(bio, NULL, NULL, NULL))) {
+    ussl_log_error("PEM_read_bio_X509 failed, errno:%d", errno);
+  }
+  if (NULL != bio) {
+    BIO_free(bio);
+  }
+  return x509;
+}
+#endif
 
+#ifdef OB_USE_BABASSL
+static EVP_PKEY *ob_ssl_get_sm_pkey_memory(const char *key)
+{
+  BIO *bio = NULL;
+  EVP_PKEY *pkey = NULL;
+  if (NULL == (bio = BIO_new_mem_buf(key, strlen(key)))) {
+    ussl_log_error("BIO_new_mem_buf failed, errno:%d", errno);
+  } else if (NULL == (pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL))) {
+    ussl_log_error("PEM_read_bio_PrivateKey failed, errno:%d", errno);
+  }
+  if (NULL != bio) {
+    BIO_free(bio);
+  }
+  return pkey;
+}
+#endif
 
 static int ob_ssl_config_check(const ssl_config_item_t *ssl_config)
 {
@@ -211,6 +243,59 @@ static int ob_ssl_set_verify_mode_and_load_CA(SSL_CTX *ctx, const ssl_config_ite
   return ret;
 }
 
+#ifdef OB_USE_BABASSL
+static int ob_ssl_load_cert_and_pkey_for_sm_memory(SSL_CTX *ctx,
+                                                   const ssl_config_item_t *ssl_config)
+{
+  int ret = 0;
+  EVP_PKEY *sign_pkey = NULL;
+  EVP_PKEY *enc_pkey = NULL;
+  X509 *sign_x509 = NULL;
+  X509 *enc_x509 = NULL;
+  if (NULL == (sign_pkey = ob_ssl_get_sm_pkey_memory(ssl_config->sign_private_key))) {
+    ret = EINVAL;
+    ussl_log_warn("ob_ssl_get_sm_pkey_memory failed, ret:%d", ret);
+  } else if (!SSL_CTX_use_sign_PrivateKey(ctx, sign_pkey)) {
+    ret = EINVAL;
+    ussl_log_warn("SSL_CTX_use_sign_PrivateKey failed, ret:%d, err:%s", ret,
+                  ERR_error_string(ERR_get_error(), NULL));
+  } else if (NULL == (sign_x509 = ob_ssl_get_sm_cert_memory(ssl_config->sign_cert))) {
+    ret = EINVAL;
+    ussl_log_warn("ob_ssl_get_sm_cert_memory failed, ret:%d", ret);
+  } else if (!SSL_CTX_use_sign_certificate(ctx, sign_x509)) {
+    ret = EINVAL;
+    ussl_log_warn("SSL_CTX_use_sign_certificate failed, ret:%d, err:%s", ret,
+                  ERR_error_string(ERR_get_error(), NULL));
+  } else if (NULL == (enc_pkey = ob_ssl_get_sm_pkey_memory(ssl_config->enc_private_key))) {
+    ret = EINVAL;
+    ussl_log_warn("ob_ssl_get_sm_pkey_memory failed, ret:%d", ret);
+  } else if (!SSL_CTX_use_enc_PrivateKey(ctx, enc_pkey)) {
+    ret = EINVAL;
+    ussl_log_warn("SSL_CTX_use_enc_PrivateKey failed, ret:%d, err:%s", ret,
+                  ERR_error_string(ERR_get_error(), NULL));
+  } else if (NULL == (enc_x509 = ob_ssl_get_sm_cert_memory(ssl_config->enc_cert))) {
+    ret = EINVAL;
+    ussl_log_warn("ob_ssl_get_sm_cert_memory failed, ret:%d", ret);
+  } else if (!SSL_CTX_use_enc_certificate(ctx, enc_x509)) {
+    ret = EINVAL;
+    ussl_log_warn("SSL_CTX_use_enc_certificate failed,ret:%d, err:%s", ret,
+                  ERR_error_string(ERR_get_error(), NULL));
+  }
+  if (NULL != sign_pkey) {
+    EVP_PKEY_free(sign_pkey);
+  }
+  if (NULL != enc_pkey) {
+    EVP_PKEY_free(enc_pkey);
+  }
+  if (NULL != sign_x509) {
+    X509_free(sign_x509);
+  }
+  if (NULL != enc_x509) {
+    X509_free(enc_x509);
+  }
+  return ret;
+}
+#endif
 
 static int ob_ssl_load_cert_and_pkey_for_intl_memory(SSL_CTX *ctx,
                                                      const ssl_config_item_t *ssl_config)
@@ -284,6 +369,22 @@ static int ob_ssl_load_cert_and_pkey(SSL_CTX *ctx, const ssl_config_item_t *ssl_
   int ret = 0;
   if (ssl_config->is_from_file) {
     if (ssl_config->is_sm) {
+#ifdef OB_USE_BABASSL
+      if (!SSL_CTX_use_sign_PrivateKey_file(ctx, ssl_config->sign_private_key, SSL_FILETYPE_PEM)) {
+        ret = EINVAL;
+        ussl_log_warn("SSL_CTX_use_sign_PrivateKey_file failed,ret:%d", ret);
+      } else if (!SSL_CTX_use_sign_certificate_file(ctx, ssl_config->sign_cert, SSL_FILETYPE_PEM)) {
+        ret = EINVAL;
+        ussl_log_warn("SSL_CTX_use_sign_certificate_file failed, ret:%d", ret);
+      } else if (!SSL_CTX_use_enc_PrivateKey_file(ctx, ssl_config->enc_private_key,
+                                                  SSL_FILETYPE_PEM)) {
+        ret = EINVAL;
+        ussl_log_warn("SSL_CTX_use_enc_PrivateKey_file failed, ret:%d", ret);
+      } else if (!SSL_CTX_use_enc_certificate_file(ctx, ssl_config->enc_cert, SSL_FILETYPE_PEM)) {
+        ret = EINVAL;
+        ussl_log_warn("SSL_CTX_use_enc_certificate_file failed, ret:%d", ret);
+      }
+#endif
     } else {
       if (SSL_CTX_use_certificate_chain_file(ctx, ssl_config->sign_cert) <= 0) {
         ret = EINVAL;
@@ -299,6 +400,11 @@ static int ob_ssl_load_cert_and_pkey(SSL_CTX *ctx, const ssl_config_item_t *ssl_
     }
   } else {
     if (ssl_config->is_sm) {
+#ifdef OB_USE_BABASSL
+      if (0 != (ret = ob_ssl_load_cert_and_pkey_for_sm_memory(ctx, ssl_config))) {
+        ussl_log_warn("ob_ssl_load_cert_and_pkey_for_sm_memory failed, ret:%d", ret);
+      }
+#endif
     } else {
       if (0 != (ret = ob_ssl_load_cert_and_pkey_for_intl_memory(ctx, ssl_config))) {
         ussl_log_warn("ob_ssl_load_cert_and_pkey_for_intl_memory failed, ret:%d", ret);
@@ -327,6 +433,12 @@ static SSL_CTX *ob_ssl_create_ssl_ctx(const ssl_config_item_t *ssl_config, int t
   }
 
   if (ssl_config->is_sm) {
+#ifdef OB_USE_BABASSL
+    ctx = SSL_CTX_new(NTLS_method());
+    if (NULL != ctx) {
+      SSL_CTX_enable_ntls(ctx);
+    }
+#endif
   } else {
     ctx = SSL_CTX_new(SSLv23_method());
   }

@@ -15,6 +15,7 @@
  *
  *  Authors:
  */
+#ifndef OB_BUILD_FULL_CHARSET
 
 #include "lib/charset/ob_ctype.h"
 #include "lib/charset/ob_dtoa.h"
@@ -1253,3 +1254,5 @@ ObCharsetInfo ob_charset_utf16_general_ci=
   &ob_collation_utf16_general_ci_handler,
   PAD_SPACE
 };
+
+#endif

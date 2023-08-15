@@ -764,7 +764,16 @@ int ObTransformerImpl::add_trans_happended_hints(ObQueryCtx &query_ctx,
 {
   int ret = OB_SUCCESS;
   ObQueryHint &query_hint = query_ctx.get_query_hint_for_update();
+#ifndef OB_BUILD_SPM
   if (OB_FAIL(query_hint.outline_trans_hints_.assign(trans_ctx.outline_trans_hints_))) {
+#else
+  if (OB_UNLIKELY(query_ctx.is_spm_evolution_
+                  && query_hint.has_outline_data()
+                  && query_hint.trans_list_.count() != trans_ctx.outline_trans_hints_.count())) {
+    ret = OB_OUTLINE_NOT_REPRODUCIBLE;
+    LOG_WARN("failed to do transform for spm evolution plan", K(ret));
+  } else if (OB_FAIL(query_hint.outline_trans_hints_.assign(trans_ctx.outline_trans_hints_))) {
+#endif
     LOG_WARN("failed to assign trans hints", K(ret));
   } else if (OB_FAIL(query_hint.used_trans_hints_.assign(trans_ctx.used_trans_hints_))) {
     LOG_WARN("failed to assign trans hints", K(ret));

@@ -18,6 +18,9 @@
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
+#ifdef OB_BUILD_DBLINK
+#include "lib/oracleclient/ob_oci_environment.h"
+#endif
 using namespace oceanbase::common;
 using namespace oceanbase::common::sqlclient;
 
@@ -411,6 +414,11 @@ int ObDbLinkProxy::switch_dblink_conn_pool(DblinkDriverProto type, ObISQLConnect
     case DBLINK_DRV_OB:
       dblink_conn_pool = static_cast<ObISQLConnectionPool *>(&(link_pool_->get_mysql_pool()));
       break;
+#ifdef OB_BUILD_DBLINK
+    case DBLINK_DRV_OCI :
+      dblink_conn_pool = static_cast<ObISQLConnectionPool *>(&(link_pool_->get_oci_pool()));
+      break;
+#endif
     default:
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unknown dblink type", K(ret), K(type));
@@ -534,6 +542,32 @@ int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx
       }
     }
   }
+#ifdef OB_BUILD_DBLINK
+  else if (DBLINK_DRV_OCI == param_ctx.link_type_) {
+    static sql_ptr_type sql_ptr_ora[] = {
+      "alter session set nls_date_format='YYYY-MM-DD HH24:MI:SS'",
+      "alter session set nls_timestamp_format = 'YYYY-MM-DD HH24:MI:SS.FF'",
+      "alter session set nls_timestamp_tz_format = 'YYYY-MM-DD HH24:MI:SS.FF TZR TZD'"
+    };
+    // oracle init
+    OciStatement stmt;
+    ObOciConnection *conn = static_cast<ObOciConnection *>(dblink_conn);
+    if (OB_ISNULL(conn)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null oci connection", K(ret));
+    }
+    int64_t affected_rows = 0; //no use
+    for (int i = 0; OB_SUCC(ret) && i < sizeof(sql_ptr_ora) / sizeof(sql_ptr_type); ++i) {
+      if (OB_FAIL(stmt.init_stmt(conn->get_oci_connection()))) {
+        LOG_WARN("init oci statement failed", K(ret), K(param_ctx));
+      } else if (OB_FAIL(stmt.set_sql_text(ObString(sql_ptr_ora[i])))) {
+        LOG_WARN("failed to set sql text", K(ret), K(ObString(sql_ptr_ora[i])));
+      } else if (OB_FAIL(stmt.execute_update(affected_rows))) {
+        LOG_WARN("execute sql failed",  K(ret), K(param_ctx));
+      }
+    }
+  }
+#endif
   return ret;
 }
 
@@ -603,6 +637,15 @@ int ObDbLinkProxy::clean_dblink_connection(uint64_t tenant_id)
     if (OB_FAIL(link_pool_->get_mysql_pool().clean_dblink_connection(tenant_id))) {
       LOG_WARN("clean mysql pool failed", K(ret));
     }
+#ifdef OB_BUILD_DBLINK
+    int tmp_ret = ret;
+    if (OB_FAIL(link_pool_->get_oci_pool().clean_dblink_connection(tenant_id))) {
+      LOG_WARN("clean oci pool failed", K(ret));
+    }
+    if (OB_SUCC(ret) && OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+      ret = tmp_ret;
+    }
+#endif
   }
   return ret;
 }

@@ -59,6 +59,15 @@ int ObMicroBlockBufferHelper::open(
     STORAGE_LOG(WARN, "invalid input argument.", K(ret), K(data_store_desc), K(read_info));
   } else if (OB_FAIL(compressor_.init(data_store_desc.micro_block_size_, data_store_desc.compressor_type_))) {
     STORAGE_LOG(WARN, "Fail to init micro block compressor, ", K(ret), K(data_store_desc));
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(encryption_.init(
+      data_store_desc.encrypt_id_,
+      MTL_ID(),
+      data_store_desc.master_key_id_,
+      data_store_desc.encrypt_key_,
+      OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH))) {
+    STORAGE_LOG(WARN, "fail to init micro block encryption", K(ret), K(data_store_desc));
+#endif
   } else if (OB_FAIL(check_datum_row_.init(allocator, read_info.get_request_count()))) {
     STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K(read_info));
   } else if (OB_FAIL(check_reader_helper_.init(allocator))) {
@@ -75,6 +84,9 @@ void ObMicroBlockBufferHelper::reset()
   data_store_desc_ = nullptr;
   micro_block_merge_verify_level_ = 0;
   compressor_.reset();
+#ifdef OB_BUILD_TDE_SECURITY
+  encryption_.reset();
+#endif
   check_reader_helper_.reset();
   check_datum_row_.reset();
 }
@@ -96,10 +108,18 @@ int ObMicroBlockBufferHelper::compress_encrypt_micro_block(ObMicroBlockDesc &mic
       && OB_FAIL(check_micro_block(compress_buf, compress_buf_size,
             block_buffer, block_size, micro_block_desc))) {
     STORAGE_LOG(WARN, "failed to check micro block", K(ret));
+#ifndef OB_BUILD_TDE_SECURITY
   } else {
     ObMicroBlockHeader *header = const_cast<ObMicroBlockHeader *>(micro_block_desc.header_);
     micro_block_desc.buf_ = compress_buf;
     micro_block_desc.buf_size_ = compress_buf_size;
+#else
+  } else if (OB_FAIL(encryption_.encrypt(compress_buf, compress_buf_size, micro_block_desc.buf_, micro_block_desc.buf_size_))) {
+    STORAGE_LOG(WARN, "fail to encrypt micro block", K(ret));
+  } else {
+    // fill header after compress/encrypt
+    ObMicroBlockHeader *header = const_cast<ObMicroBlockHeader *>(micro_block_desc.header_);
+#endif
     header->data_length_ = block_size;
     header->data_zlength_ = micro_block_desc.buf_size_;
     header->data_checksum_ = ob_crc64_sse42(0, micro_block_desc.buf_, micro_block_desc.buf_size_);

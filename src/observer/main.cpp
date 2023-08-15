@@ -430,10 +430,6 @@ static void print_all_thread(const char* desc)
   MPRINT("============= [%s] finish to show unstopped thread =============", desc);
 }
 
-extern "C" {
-typedef void *(*reasy_pool_realloc_pt)(void *ptr, size_t size);
-void reasy_pool_set_allocator(reasy_pool_realloc_pt alloc);
-}
 int main(int argc, char *argv[])
 {
 #ifdef ENABLE_SANITY

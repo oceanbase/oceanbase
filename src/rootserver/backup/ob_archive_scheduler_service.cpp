@@ -393,7 +393,8 @@ void ObArchiveSchedulerService::set_checkpoint_interval_(const int64_t interval_
 
 int ObArchiveSchedulerService::open_archive_mode(const uint64_t tenant_id, const common::ObIArray<uint64_t> &archive_tenant_ids)
 {
-    // TODO: print error trace to user
+
+  // TODO(wangxiaohui.wxh):4.3, print error trace to user
   int ret = OB_SUCCESS;
   ObArray<uint64_t> bak_archive_tenant_ids;
   if (IS_NOT_INIT) {
@@ -430,7 +431,8 @@ int ObArchiveSchedulerService::open_archive_mode(const uint64_t tenant_id, const
 int ObArchiveSchedulerService::open_tenant_archive_mode_(
     const common::ObIArray<uint64_t> &tenant_ids_array)
 {
-    // TODO: return failed if any tenant failed
+
+  // TODO(wangxiaohui.wxh):4.3, return failed if any tenant failed
   int ret = OB_SUCCESS;
   for (int64_t i = 0; i < tenant_ids_array.count(); i++) {
     int tmp_ret = OB_SUCCESS;

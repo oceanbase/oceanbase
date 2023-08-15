@@ -96,9 +96,21 @@ void oceanbase::observer::init_srv_xlator_for_partition(ObSrvRpcXlator *xlator) 
   RPC_PROCESSOR(ObAddDiskP, gctx_);
   RPC_PROCESSOR(ObDropDiskP, gctx_);
   RPC_PROCESSOR(ObForceSetServerListP, gctx_);
+#ifdef OB_BUILD_TDE_SECURITY
+  RPC_PROCESSOR(ObGetMasterKeyP, gctx_);
+  RPC_PROCESSOR(ObRestoreKeyP, gctx_);
+  RPC_PROCESSOR(ObSetRootKeyP, gctx_);
+#endif
   RPC_PROCESSOR(ObHandlePartTransCtxP, gctx_);
+#ifdef OB_BUILD_TDE_SECURITY
+  RPC_PROCESSOR(ObDumpTenantCacheMasterKeyP, gctx_);
+#endif
   RPC_PROCESSOR(ObRpcSetMemberListP, gctx_);
   RPC_PROCESSOR(ObRpcCreateLSP, gctx_);
+#ifdef OB_BUILD_ARBITRATION
+  RPC_PROCESSOR(ObRpcCreateArbP, gctx_);
+  RPC_PROCESSOR(ObRpcDeleteArbP, gctx_);
+#endif
   RPC_PROCESSOR(ObRpcCheckLSCanOfflineP, gctx_);
   RPC_PROCESSOR(ObCleanSequenceCacheP, gctx_);
   RPC_PROCESSOR(ObRegisterTxDataP, gctx_);
@@ -256,6 +268,13 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObGAISPushAutoIncP);
   RPC_PROCESSOR(ObGAISClearAutoIncCacheP);
 
+#ifdef OB_BUILD_SPM
+  // sql plan baseline
+  RPC_PROCESSOR(ObServerAcceptPlanBaselineP, gctx_);
+  RPC_PROCESSOR(ObServerCancelEvolveTaskP, gctx_);
+  RPC_PROCESSOR(ObLoadBaselineP, gctx_);
+  RPC_PROCESSOR(ObLoadBaselineV2P, gctx_);
+#endif
 
   //sql optimizer estimate tablet block count
   RPC_PROCESSOR(ObEstimateTabletBlockCountP, gctx_);

@@ -151,6 +151,9 @@ bool LogConfigChangeCmd::is_valid() const
 bool LogConfigChangeCmd::is_remove_member_list() const
 {
   return REMOVE_MEMBER_CMD == cmd_type_
+#ifdef OB_BUILD_ARBITRATION
+         || REMOVE_ARB_MEMBER_CMD == cmd_type_
+#endif
          || REPLACE_MEMBER_CMD == cmd_type_
          || SWITCH_TO_LEARNER_CMD == cmd_type_
          || REPLACE_MEMBER_WITH_LEARNER_CMD == cmd_type_;
@@ -159,6 +162,9 @@ bool LogConfigChangeCmd::is_remove_member_list() const
 bool LogConfigChangeCmd::is_add_member_list() const
 {
   return ADD_MEMBER_CMD == cmd_type_
+#ifdef OB_BUILD_ARBITRATION
+        || ADD_ARB_MEMBER_CMD == cmd_type_
+#endif
         || REPLACE_MEMBER_CMD == cmd_type_
         || SWITCH_TO_ACCEPTOR_CMD == cmd_type_
         || REPLACE_MEMBER_WITH_LEARNER_CMD == cmd_type_;

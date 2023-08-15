@@ -20,6 +20,10 @@
 #include "lib/json_type/ob_json_parse.h"
 #include "lib/json_type/ob_json_base.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/sys_package/ob_json_pl_utils.h"
+#include "pl/ob_pl_user_type.h"
+#endif
 namespace oceanbase
 {
 namespace sql
@@ -60,6 +64,12 @@ int ObExprTreat::calc_result_type2(ObExprResType &type,
     type.set_length(OB_MAX_SQL_LENGTH);
     type.set_length_semantics(LS_CHAR);
     type.set_calc_type(ObJsonType);
+#ifdef OB_BUILD_ORACLE_PL
+  } else if(ob_is_extend(in_type) && pl::ObPlJsonUtil::is_pl_jsontype(type1.get_udt_id())
+      && ob_is_extend(as_type) && pl::ObPlJsonUtil::is_pl_jsontype(type2.get_udt_id())){
+    type.set_type(ObExtendType);
+    type.set_udt_id(type2.get_udt_id());
+#endif
   } else {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("target type not json", K(ret), K(type1), K(type2));
@@ -83,6 +93,37 @@ int ObExprTreat::cg_expr(ObExprCGCtx &expr_cg_ctx,
   return ret;
 }
 
+#ifdef OB_BUILD_ORACLE_PL
+
+static int treat_as_json_udt(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllocator &temp_allocator,
+                                pl::ObPLOpaque *opaque, ObDatum &res) {
+  INIT_SUCC(ret);
+  ObJsonNode *json_doc = nullptr;
+  pl::ObPLJsonBaseType *jsontype = nullptr;
+  pl::ObPLJsonBaseType *new_jsontype = nullptr;
+  ObObj res_obj;
+
+  if(OB_ISNULL(jsontype = static_cast<pl::ObPLJsonBaseType*>(opaque))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cast to json type is null", K(ret), K(opaque));
+  } else if(OB_ISNULL(json_doc = jsontype->get_data())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get json doc is null", K(ret), K(jsontype));
+  } else {
+    if (OB_FAIL(pl::ObPlJsonUtil::transform_JsonBase_2_PLJsonType(ctx.exec_ctx_, json_doc, new_jsontype))) {
+      LOG_WARN("failed to transfrom ObJsonNode to ObPLJsonBaseType", K(ret));
+    } else if(OB_ISNULL(new_jsontype)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to transfrom ObJsonNode to ObPLJsonBaseType", K(ret));
+    } else {
+      res_obj.set_extend(reinterpret_cast<int64_t>(new_jsontype), pl::PL_OPAQUE_TYPE);
+      res.from_obj(res_obj);
+    }
+  }
+  return ret;
+}
+
+#endif
 
 int ObExprTreat::eval_treat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res) {
   INIT_SUCC(ret);
@@ -102,8 +143,24 @@ int ObExprTreat::eval_treat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res) {
   } else if (OB_ISNULL(child_res) || child_res->is_null()) {
     res.set_null();
   } else if (ob_is_extend(in_type)) {
+  #ifdef OB_BUILD_ORACLE_PL
+    pl::ObPLOpaque *opaque = reinterpret_cast<pl::ObPLOpaque *>(child_res->get_ext());
+    if(OB_ISNULL(opaque)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not json type", K(ret), K(in_type), K(in_cs_type));
+    } else if(opaque->is_json_type()) {
+      // res = *child_res;
+      if(OB_FAIL(treat_as_json_udt(expr, ctx, temp_allocator, opaque, res))) {
+        LOG_WARN("as json udt fail", K(ret));
+      }
+    } else {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("opaque type unexpected", K(ret), K(opaque->get_type()));
+    }
+  #else
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not surpport udt type", K(ret));
+  #endif
   } else if (ob_is_raw(in_type)) {
     if(OB_FAIL(ObDatumHexUtils::rawtohex(expr, child_res->get_string(), ctx, res))) {
       LOG_WARN("fail raw to hex", K(ret), K(in_type), K(child_res->get_string()));

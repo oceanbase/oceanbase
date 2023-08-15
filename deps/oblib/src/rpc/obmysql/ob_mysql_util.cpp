@@ -25,6 +25,10 @@
 #include "lib/json_type/ob_json_bin.h"
 #include "lib/json_type/ob_json_base.h"
 #include "lib/geo/ob_geo_bin.h"
+#ifdef OB_BUILD_ORACLE_XML
+#include "lib/xml/ob_xml_util.h"
+#include "lib/xml/ob_xml_bin.h"
+#endif
 using namespace oceanbase::common;
 
 namespace oceanbase
@@ -1075,7 +1079,46 @@ int ObMySQLUtil::urowid_cell_str(char *buf, const int64_t len, const ObURowIDDat
 int ObMySQLUtil::sql_utd_cell_str(uint64_t tenant_id, char *buf, const int64_t len, const ObString &val, int64_t &pos)
 {
   INIT_SUCC(ret);
+#ifdef OB_BUILD_ORACLE_XML
+  lib::ObMemAttr mem_attr(tenant_id, "XMLCodeGen");
+  lib::ObMallocHookAttrGuard malloc_guard(mem_attr);
+  ObArenaAllocator allocator(mem_attr);
+  ObMulModeNodeType node_type = M_MAX_TYPE;
+  ObStringBuffer jbuf(&allocator);
+  ParamPrint param_list;
+  param_list.indent = 2;
+  ObIMulModeBase *node = NULL;
+  ObXmlNode *xml_node = NULL;
+  ObMulModeMemCtx* xml_mem_ctx = nullptr;
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid input args", K(ret), KP(buf));
+  } else if (val.length() == 0) {
+    if (OB_FAIL(ObMySQLUtil::store_null(buf, len, pos))) {
+      OB_LOG(WARN, "fail to set null string", K(pos), K(len));
+    }
+  } else {
+    int64_t new_length = val.length();
+    if (OB_LIKELY(new_length < len - pos)) {
+      int64_t pos_bk = pos;
+      if (OB_FAIL(ObMySQLUtil::store_length(buf, len, new_length, pos))) {
+        LOG_WARN("xml_cell_str store length failed", K(ret), K(len), K(new_length), K(pos));
+      } else {
+        if (OB_LIKELY(new_length <= len - pos)) {
+          MEMCPY(buf + pos, val.ptr(), val.length());
+          pos += new_length;
+        } else {
+          pos = pos_bk;
+          ret = OB_SIZE_OVERFLOW;
+        }
+      }
+    } else {
+      ret = OB_SIZE_OVERFLOW;
+    }
+  }
+#else
   ret = OB_NOT_SUPPORTED;
+#endif
   return ret;
 }
 

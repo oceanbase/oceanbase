@@ -18,10 +18,16 @@
 #include "logservice/ob_log_service.h"
 #include "logservice/archiveservice/ob_archive_service.h"
 #include "logservice/data_dictionary/ob_data_dict_service.h"
+#ifdef OB_BUILD_ARBITRATION
+#include "logservice/arbserver/ob_arb_srv_garbage_collect_service.h"
+#endif
 #include "observer/net/ob_ingress_bw_alloc_service.h"
 #include "observer/ob_srv_network_frame.h"
 #include "observer/report/ob_i_meta_report.h"
 #include "rootserver/freeze/ob_major_freeze_service.h"
+#ifdef OB_BUILD_ARBITRATION
+#include "rootserver/ob_arbitration_service.h"
+#endif
 #include "rootserver/backup/ob_backup_task_scheduler.h"
 #include "rootserver/backup/ob_backup_service.h"
 #include "rootserver/backup/ob_archive_scheduler_service.h"
@@ -280,6 +286,12 @@ int ObLS::init(const share::ObLSID &ls_id,
         REGISTER_TO_LOGSERVICE(logservice::RESTORE_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObRestoreService *));
       }
 
+#ifdef OB_BUILD_ARBITRATION
+      if (OB_SUCC(ret) && !is_user_tenant(tenant_id) && ls_id.is_sys_ls()) {
+        REGISTER_TO_LOGSERVICE(logservice::ARBITRATION_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObArbitrationService *));
+        LOG_INFO("arbitration service regist to logservice success");
+      }
+#endif
       if (OB_SUCC(ret) && is_sys_tenant(tenant_id) && ls_id.is_sys_ls()) {
         rootserver::ObIngressBWAllocService *ingress_service = GCTX.net_frame_->get_ingress_service();
         REGISTER_TO_LOGSERVICE(logservice::NET_ENDPOINT_INGRESS_LOG_BASE_TYPE, ingress_service);
@@ -813,6 +825,13 @@ void ObLS::destroy()
     rootserver::ObHeartbeatService * heartbeat_service = MTL(rootserver::ObHeartbeatService*);
     UNREGISTER_FROM_LOGSERVICE(logservice::HEARTBEAT_SERVICE_LOG_BASE_TYPE, heartbeat_service);
   }
+#ifdef OB_BUILD_ARBITRATION
+  if (!is_user_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
+    rootserver::ObArbitrationService * arbitration_service = MTL(rootserver::ObArbitrationService*);
+    UNREGISTER_FROM_LOGSERVICE(logservice::ARBITRATION_SERVICE_LOG_BASE_TYPE, arbitration_service);
+  }
+
+#endif
   if (is_sys_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
     rootserver::ObIngressBWAllocService *ingress_service = GCTX.net_frame_->get_ingress_service();
     UNREGISTER_FROM_LOGSERVICE(logservice::NET_ENDPOINT_INGRESS_LOG_BASE_TYPE, ingress_service);
@@ -2135,6 +2154,11 @@ int ObLS::diagnose(DiagnoseInfo &info) const
     STORAGE_LOG(WARN, "diagnose palf failed", K(ret), K(ls_id));
   } else if (OB_FAIL(restore_handler_.diagnose(info.restore_diagnose_info_))) {
     STORAGE_LOG(WARN, "diagnose restore_handler failed", K(ret), K(ls_id), K(info));
+#ifdef OB_BUILD_ARBITRATION
+  } else if (common::ObRole::LEADER == info.palf_diagnose_info_.palf_role_ &&
+             OB_FAIL(log_service->diagnose_arb_srv(ls_id, info.arb_srv_diagnose_info_))) {
+    STORAGE_LOG(WARN, "diagnose_arb_srv failed", K(ret), K(ls_id));
+#endif
   } else if (info.is_role_sync()) {
     // 角色同步时不需要诊断role change service
     info.rc_diagnose_info_.state_ = logservice::TakeOverState::TAKE_OVER_FINISH;

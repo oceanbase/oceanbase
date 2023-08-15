@@ -27,8 +27,13 @@
 #include <fnmatch.h> // FNM_CASEFOLD
 #include <stdint.h>
 #include <map>
+#ifndef OB_USE_DRCMSG
 #include "oblogmsg/LogRecord.h"
 typedef oceanbase::logmessage::ILogRecord ICDCRecord;
+#else
+#include <drcmsg/BR.h>
+typedef IBinlogRecord ICDCRecord;
+#endif
 
 namespace oceanbase
 {

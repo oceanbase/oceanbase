@@ -107,6 +107,12 @@ namespace logservice
 class ObServerLogBlockMgr;
 }
 
+#ifdef OB_BUILD_ARBITRATION
+namespace arbserver
+{
+class ObArbGarbageCollectService;
+}
+#endif
 
 namespace observer
 {
@@ -265,6 +271,9 @@ struct ObGlobalContext
   share::ObAliveServerTracer *server_tracer_;
   ObIDiskReport *disk_reporter_;
   logservice::ObServerLogBlockMgr *log_block_mgr_;
+#ifdef OB_BUILD_ARBITRATION
+  arbserver::ObArbGarbageCollectService *arb_gcs_;
+#endif
 
   bool inited_;
   transaction::ObIWeakReadService *weak_read_service_;

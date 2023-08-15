@@ -999,6 +999,16 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
                                                   resolve_ctx.allocator_,
                                                   resolve_ctx.sql_proxy_,
                                                   dst_pl_type));
+#ifdef OB_BUILD_ORACLE_PL
+      if (OB_SUCC(ret) && dst_pl_type.is_subtype()) {
+        const ObUserDefinedType *user_type = NULL;
+        const ObUserDefinedSubType *sub_type = NULL;
+        OZ (resolve_ctx.get_user_type(
+          dst_pl_type.get_user_type_id(), user_type, &(resolve_ctx.allocator_)));
+        CK (OB_NOT_NULL(sub_type = static_cast<const ObUserDefinedSubType *>(sub_type)));
+        OX (dst_pl_type = *(sub_type->get_base_type()));
+      }
+#endif
     } else {
       dst_pl_type = routine_param->get_pl_data_type();
     }

@@ -990,6 +990,18 @@ easy_ssl_ctx_t *easy_ssl_ctx_load(easy_pool_t *pool, const char *ssl_ca,
       goto error_exit;
   }
 
+#ifdef OB_USE_BABASSL
+  if (is_babassl) {
+     if (!ssl_enc_cert || 0 == strlen(ssl_enc_cert)) {
+         easy_info_log("sm scene, no ssl_enc_cert");
+         goto error_exit;
+     }
+     if (!ssl_enc_key || 0 == strlen(ssl_enc_key)) {
+         easy_info_log("sm scene, no ssl_enc_key");
+         goto error_exit;
+     }
+  }
+#endif
 
   if ((ss = (easy_ssl_ctx_t *)easy_pool_calloc(pool, sizeof(easy_ssl_ctx_t))) == NULL) {
       easy_error_log("easy_pool_calloc easy_ssl_ctx_t failed, size=%u", sizeof(easy_ssl_ctx_t));
@@ -1019,6 +1031,33 @@ easy_ssl_ctx_t *easy_ssl_ctx_load(easy_pool_t *pool, const char *ssl_ca,
   }
 
   if (is_from_file) {
+#ifdef OB_USE_BABASSL
+    if (is_babassl) {
+        if (!SSL_CTX_use_sign_PrivateKey_file(ss->ctx, ssl_key,
+                                                SSL_FILETYPE_PEM)) {
+            easy_info_log("SSL_CTX_use_sign_PrivateKey_file failed!");
+            goto error_exit;
+        }
+
+        if (!SSL_CTX_use_sign_certificate_file(ss->ctx, ssl_cert,
+                                                SSL_FILETYPE_PEM)) {
+            easy_info_log("SSL_CTX_use_sign_certificate_file failed!");
+            goto error_exit;
+        }
+
+        if (!SSL_CTX_use_enc_PrivateKey_file(ss->ctx, ssl_enc_key,
+                                                SSL_FILETYPE_PEM)) {
+            easy_info_log("SSL_CTX_use_enc_PrivateKey_file failed!");
+            goto error_exit;
+        }
+
+        if (!SSL_CTX_use_enc_certificate_file(ss->ctx, ssl_enc_cert,
+                                                SSL_FILETYPE_PEM)) {
+            easy_info_log("SSL_CTX_use_enc_certificate_file failed!");
+            goto error_exit;
+        }
+    }
+#endif
     if(!is_babassl) {
         if (easy_ssl_client_certificate_for_mysql(ss, ssl_ca, 1) != EASY_OK) {
             easy_error_log("easy_ssl_client_certificate_for_mysql failed, client_certificate=%s", ssl_ca);
@@ -1032,6 +1071,42 @@ easy_ssl_ctx_t *easy_ssl_ctx_load(easy_pool_t *pool, const char *ssl_ca,
         }
     }
   } else {
+#ifdef OB_USE_BABASSL
+    if (is_babassl) {
+        if (NULL == (pkey = easy_ssl_read_sm_pkey(ssl_key))) {
+            goto error_exit;
+        }
+        if (!SSL_CTX_use_sign_PrivateKey(ss->ctx, pkey)) {
+            easy_info_log("SSL_CTX_use_sign_PrivateKey failed!");
+            goto error_exit;
+        }
+
+        if (NULL == (x509 = easy_ssl_get_sm_cert(ssl_cert))) {
+            goto error_exit;
+        }
+        if (!SSL_CTX_use_sign_certificate(ss->ctx, x509)) {
+            easy_info_log("SSL_CTX_use_sign_certificate failed");
+            goto error_exit;
+        }
+
+        if (NULL == (pkey = easy_ssl_read_sm_pkey(ssl_enc_key))) {
+            goto error_exit;
+        }
+        if (!SSL_CTX_use_enc_PrivateKey(ss->ctx, pkey)) {
+            easy_info_log("SSL_CTX_use_enc_PrivateKey failed!");
+            goto error_exit;
+        }
+
+        if (NULL == (x509 = easy_ssl_get_sm_cert(ssl_enc_cert))) {
+            goto error_exit;
+        }
+
+        if (!SSL_CTX_use_enc_certificate(ss->ctx, x509)) {
+            easy_info_log("SSL_CTX_use_enc_certificate failed");
+            goto error_exit;
+        }
+    }
+#endif
     if (!is_babassl) {
         if (easy_ssl_client_certificate_for_mysql_memory(ss, ssl_ca) != EASY_OK) {
             easy_error_log("easy_ssl_client_certificate_for_mysql_memory failed, client_certificate=%s", ssl_ca);
@@ -1505,8 +1580,19 @@ static int easy_ssl_ctx_create(easy_ssl_ctx_t *ssl)
 
 static int easy_ssl_ctx_create_for_mysql(easy_ssl_ctx_t *ssl, int is_babassl)
 {
+#ifdef OB_USE_BABASSL
+    if (is_babassl) {
+      ssl->ctx = SSL_CTX_new(NTLS_method());
+      if (NULL != ssl->ctx) {
+        SSL_CTX_enable_ntls(ssl->ctx);
+      }
+    } else {
+      ssl->ctx = SSL_CTX_new(SSLv23_method());
+    }
+#else
     (void)is_babassl;
     ssl->ctx = SSL_CTX_new(SSLv23_method());
+#endif
 
     if (ssl->ctx == NULL) {
         easy_ssl_error(EASY_LOG_ERROR, "SSL_CTX_new() failed");
@@ -1733,6 +1819,7 @@ static int easy_ssl_dhparam(easy_ssl_ctx_t *ssl, char *file)
             return EASY_ERROR;
         }
 
+#ifndef OB_USE_BABASSL
         dh->p = BN_bin2bn(dh1024_p, sizeof(dh1024_p), NULL);
         dh->g = BN_bin2bn(dh1024_g, sizeof(dh1024_g), NULL);
 
@@ -1741,6 +1828,18 @@ static int easy_ssl_dhparam(easy_ssl_ctx_t *ssl, char *file)
             DH_free(dh);
             return EASY_ERROR;
         }
+#else
+        if (1 != DH_set0_pqg(dh, BN_bin2bn(dh1024_p, sizeof(dh1024_p), NULL), NULL, NULL)) {
+          easy_ssl_error(EASY_LOG_ERROR, "BN_bin2bn() failed");
+          DH_free(dh);
+          return EASY_ERROR;
+        }
+        if (1 != DH_set0_pqg(dh, NULL, NULL, BN_bin2bn(dh1024_g, sizeof(dh1024_g), NULL))) {
+          easy_ssl_error(EASY_LOG_ERROR, "BN_bin2bn() failed");
+          DH_free(dh);
+          return EASY_ERROR;
+        }
+#endif
         SSL_CTX_set_tmp_dh(ssl->ctx, dh);
 
         DH_free(dh);

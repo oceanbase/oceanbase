@@ -24,6 +24,10 @@
 #include "sql/resolver/dml/ob_delete_resolver.h"
 #include "share/ob_index_builder_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#ifdef OB_BUILD_ORACLE_XML
+#include "lib/xml/ob_xml_parser.h"
+#include "lib/xml/ob_xml_util.h"
+#endif
 
 namespace oceanbase
 {
@@ -4332,8 +4336,60 @@ int ObAlterTableResolver::add_udt_hidden_column(ObAlterTableStmt *alter_table_st
       LOG_WARN("fail to calc xmltype default value expr", K(ret));
     } else {
       // calc result is 1. string type (not lob) or 2. xmltype binary (need to remove lob header)
+#ifdef OB_BUILD_ORACLE_XML
+      ObString res_string;
+      ObObj xml_default;
+      xml_default.set_null();
+      if (orig_default_value.is_character_type()) {
+        // convert to xml binary
+        ObXmlDocument *xml_doc = NULL;
+        ObMulModeMemCtx* mem_ctx = nullptr;
+        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "XMLCodeGen"));
+        if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(allocator_, mem_ctx))) {
+          LOG_WARN("fail to create tree memory context", K(ret));
+        } else if (OB_FAIL(ObXmlParserUtils::parse_document_text(mem_ctx,
+                                                                  orig_default_value.get_string(),
+                                                                  xml_doc))) {
+          LOG_WARN("parse xml plain text as document failed.", K(ret), K(orig_default_value.get_string()));
+          ret = OB_ERR_XML_PARSE;
+          LOG_USER_ERROR(OB_ERR_XML_PARSE);
+        } else if (OB_ISNULL(xml_doc)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null xml document.", K(ret));
+        } else {
+          ObIMulModeBase *xml_root = static_cast<ObIMulModeBase *>(xml_doc);
+          ObString res_string;
+          if (OB_FAIL(xml_root->get_raw_binary(res_string, allocator_))) {
+            LOG_WARN("failed to get xml binary", K(ret), K(orig_default_value.get_string()));
+          } else {
+            xml_default.set_lob_value(ObLongTextType, res_string.ptr(), res_string.length());
+            xml_default.set_collation_type(CS_TYPE_BINARY);
+          }
+        }
+      } else if (orig_default_value.is_xml_sql_type()) {
+        // move lob header
+        res_string = orig_default_value.get_string();
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator_,
+                                                              ObLongTextType,
+                                                              CS_TYPE_BINARY,
+                                                              true, res_string))) {
+          LOG_WARN("failed to get xml binary data", K(ret), K(orig_default_value.get_string()));
+        } else {
+          xml_default.set_lob_value(ObLongTextType, res_string.ptr(), res_string.length());
+          xml_default.set_collation_type(CS_TYPE_BINARY);
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("error xml default type", K(ret), K(orig_default_value));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(hidden_blob.set_orig_default_value(xml_default))) {
+        LOG_WARN("fail to set orig default value", K(xml_default), K(ret));
+      }
+#else
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("xml type not supported in opensource version", K(ret), K(orig_default_value));
+#endif
     }
 
     if (OB_FAIL(ret)) {

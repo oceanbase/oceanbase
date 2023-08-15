@@ -256,6 +256,14 @@ private:
                             const ObSQLSessionInfo &session,
                             ObIAllocator &allocator,
                             bool &need_fire);
+#ifdef OB_BUILD_TDE_SECURITY
+  int init_encrypt_metas_(const share::schema::ObTableSchema *table_schema,
+                          share::schema::ObSchemaGetterGuard *guard,
+                          ObIArray<transaction::ObEncryptMetaCache>&meta_array);
+  int init_encrypt_table_meta_(const share::schema::ObTableSchema *table_schema,
+                               share::schema::ObSchemaGetterGuard *guard,
+                               ObIArray<transaction::ObEncryptMetaCache>&meta_array);
+#endif
   int generate_table_loc_meta(const IndexDMLInfo &index_dml_info, ObDASTableLocMeta &loc_meta);
 private:
   ObStaticEngineCG &cg_;

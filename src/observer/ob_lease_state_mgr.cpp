@@ -21,6 +21,9 @@
 #include "observer/ob_server.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
 
 namespace oceanbase
 {
@@ -306,6 +309,48 @@ int ObLeaseStateMgr::start_heartbeat()
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObLeaseStateMgr::update_master_key_info(
+    const share::ObLeaseResponse &lease_response)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else {
+    const common::ObIArray<std::pair<uint64_t, ObLeaseResponse::TLRpKeyVersion> > &master_key_array
+      = lease_response.tenant_max_key_version_;
+    common::ObArray<std::pair<uint64_t, uint64_t> > max_key_version_array;
+    common::ObArray<std::pair<uint64_t, uint64_t> > max_available_key_version_array;
+    for (int64_t i = 0; OB_SUCC(ret) && i < master_key_array.count(); ++i) {
+      const std::pair<uint64_t, ObLeaseResponse::TLRpKeyVersion> &key = master_key_array.at(i);
+      std::pair<uint64_t, uint64_t> max_key_version
+        = std::pair<uint64_t, uint64_t>(key.first, key.second.max_key_version_);
+      std::pair<uint64_t, uint64_t> available_key_version
+        = std::pair<uint64_t, uint64_t>(key.first, key.second.max_available_key_version_);
+      if (OB_FAIL(max_key_version_array.push_back(max_key_version))) {
+        LOG_WARN("fail to push back", KR(ret));
+      } else {
+        if (available_key_version.second > 0) {
+          if (OB_FAIL(max_available_key_version_array.push_back(available_key_version))) {
+            LOG_WARN("fail to push back", KR(ret));
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObMasterKeyGetter::instance().got_versions(
+              max_key_version_array))) {
+        LOG_WARN("fail to update got versions", KR(ret));
+      } else if (OB_FAIL(ObMasterKeyGetter::instance().update_active_versions(
+              max_available_key_version_array))) {
+        LOG_WARN("fail to update active versions", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObLeaseStateMgr::do_renew_lease()
 {
@@ -347,6 +392,14 @@ int ObLeaseStateMgr::do_renew_lease()
           baseline_schema_version_ = lease_response.baseline_schema_version_;
         }
       }
+#ifdef OB_BUILD_TDE_SECURITY
+      if (OB_SUCC(ret)) {
+        if (OB_SUCCESS != (tmp_ret = update_master_key_info(lease_response))) {
+          LOG_WARN("fail to update master key info", KR(ret), K(tmp_ret), K(lease_response));
+        }
+      }
+      NG_TRACE_EXT(update_master_key_info, OB_ID(ret), tmp_ret);
+#endif
       const int64_t now = ObTimeUtility::current_time();
       if (OB_SUCC(ret) && lease_response.heartbeat_expire_time_ > now) {
         LOG_DEBUG("renew_lease from  master_rs successfully", K(rs_addr));

@@ -1237,7 +1237,78 @@ int ObExprOLSSessionLabel::cg_expr(ObExprCGCtx &op_cg_ctx,
 }
 int ObExprOLSSessionLabel::eval_label(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
+#ifndef OB_BUILD_LABEL_SECURITY
   int ret = OB_NOT_IMPLEMENT;
+#else
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  uint64_t tenant_id = OB_INVALID_ID;
+  ObDatum *param = nullptr;
+
+  if (OB_ISNULL(session =ctx.exec_ctx_.get_my_session())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(session), K(ret));
+  } else if (OB_FAIL(init_phy_plan_timeout(ctx.exec_ctx_, *session))) {
+    LOG_WARN("fail to init phy plan timeout", K(ret));
+  } else if (OB_FAIL(get_schema_guard(&ctx.exec_ctx_, schema_guard))) {
+    LOG_WARN("schema guard is NULL", K(ret));
+  } else if (OB_FAIL(expr.args_[0]->eval(ctx, param))) {
+    LOG_WARN("failed to eval params", K(ret));
+  } else {
+    tenant_id = session->get_effective_tenant_id();
+  }
+
+  ObString policy_name;
+
+  if (OB_SUCC(ret)) {
+    policy_name = param->get_string();
+    if (OB_FAIL(POLICY_NAME_CHECKER.validate_str_length(policy_name))) {
+      LOG_WARN("check policy name failed", K(ret), K(policy_name));
+    }
+  }
+
+  uint64_t policy_id = OB_INVALID_ID;
+
+  if (OB_SUCC(ret)) {
+    const ObLabelSePolicySchema *ols_policy_schema = NULL;
+
+    if (OB_FAIL(schema_guard->get_label_se_policy_schema_by_name(tenant_id,
+                                                                 policy_name,
+                                                                 ols_policy_schema))) {
+      LOG_WARN("fail to get ols policy schema", K(ret));
+    } else if (OB_FAIL(POLICY_SCHEMA_CHECKER.validate(ols_policy_schema))) {
+      LOG_WARN("policy is not exist", K(ret));
+    } else {
+      policy_id = ols_policy_schema->get_label_se_policy_id();
+    }
+  }
+
+  ObLabelSeSessionLabel session_label;
+  if (OB_SUCC(ret)) {
+    if (OB_SUCCESS == session->get_session_label(policy_id, session_label)) {
+      //do nothing
+    } else {
+      if (OB_FAIL(ObLabelSeUtil::load_default_session_label(tenant_id,
+                                                            policy_id, session->get_user_id(),
+                                                            *schema_guard, session_label))) {
+        LOG_WARN("fail to load default session label", K(ret));
+      } else if (OB_FAIL(session->replace_new_session_label(policy_id, session_label))) {
+        LOG_WARN("fail to replace new session label", K(ret));
+      }
+      LOG_DEBUG("load default session label", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObLabelSeLabelTag &read_tag = session_label.get_read_label_tag();
+    if (read_tag.is_unauth()) {
+      res.set_null();
+    } else {
+      res.set_int(read_tag.get_value());
+    }
+  }
+#endif
 
   return ret;
 }
@@ -1275,7 +1346,78 @@ int ObExprOLSSessionRowLabel::cg_expr(ObExprCGCtx &op_cg_ctx,
 
 int ObExprOLSSessionRowLabel::eval_row_label(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
+#ifndef OB_BUILD_LABEL_SECURITY
   int ret = OB_NOT_IMPLEMENT;
+#else
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  uint64_t tenant_id = OB_INVALID_ID;
+  ObDatum *param = nullptr;
+
+  if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(session), K(ret));
+  } else if (OB_FAIL(init_phy_plan_timeout(ctx.exec_ctx_, *session))) {
+    LOG_WARN("fail to init phy plan timeout", K(ret));
+  } else if (OB_FAIL(get_schema_guard(&ctx.exec_ctx_, schema_guard))) {
+    LOG_WARN("schema guard is NULL", K(ret));
+  } else if (OB_FAIL(expr.args_[0]->eval(ctx, param))) {
+    LOG_WARN("failed to eval params", K(ret));
+  } else {
+    tenant_id = session->get_effective_tenant_id();
+  }
+
+  ObString policy_name;
+
+  if (OB_SUCC(ret)) {
+    policy_name = param->get_string();
+    if (OB_FAIL(POLICY_NAME_CHECKER.validate_str_length(policy_name))) {
+      LOG_WARN("check policy name failed", K(ret), K(policy_name));
+    }
+  }
+
+  uint64_t policy_id = OB_INVALID_ID;
+
+  if (OB_SUCC(ret)) {
+    const ObLabelSePolicySchema *ols_policy_schema = NULL;
+
+    if (OB_FAIL(schema_guard->get_label_se_policy_schema_by_name(tenant_id,
+                                                                 policy_name,
+                                                                 ols_policy_schema))) {
+      LOG_WARN("fail to get ols policy schema", K(ret));
+    } else if (OB_FAIL(POLICY_SCHEMA_CHECKER.validate(ols_policy_schema))) {
+      LOG_WARN("policy is not exist", K(ret));
+    } else {
+      policy_id = ols_policy_schema->get_label_se_policy_id();
+    }
+  }
+
+  ObLabelSeSessionLabel session_label;
+  if (OB_SUCC(ret)) {
+    if (OB_SUCCESS == session->get_session_label(policy_id, session_label)) {
+      //do nothing
+    } else {
+      if (OB_FAIL(ObLabelSeUtil::load_default_session_label(tenant_id,
+                                                            policy_id, session->get_user_id(),
+                                                            *schema_guard, session_label))) {
+        LOG_WARN("fail to load default session label", K(ret));
+      } else if (OB_FAIL(session->replace_new_session_label(policy_id, session_label))) {
+        LOG_WARN("fail to replace new session label", K(ret));
+      }
+      LOG_DEBUG("load default session label", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObLabelSeLabelTag &write_tag = session_label.get_write_label_tag();
+    if (write_tag.is_unauth()) {
+      res.set_null();
+    } else {
+      res.set_int(write_tag.get_value());
+    }
+  }
+#endif
 
   return ret;
 }
@@ -1321,7 +1463,58 @@ int ObExprOLSLabelCmpLE::cg_expr(ObExprCGCtx &op_cg_ctx,
 
 int ObExprOLSLabelCmpLE::eval_cmple(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
+#ifndef OB_BUILD_LABEL_SECURITY
   int ret = OB_NOT_IMPLEMENT;
+#else
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  int64_t label_tag[2] = {-1, -1};
+  // uint64_t policy_id[2] = {OB_INVALID_ID, OB_INVALID_ID};
+  enum {COLUMN_LABEL = 0, SESSION_LABEL};
+  ObDatum *param1 = nullptr;
+  ObDatum *param2 = nullptr;
+  if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get session", K(ret));
+  } else if (OB_FAIL(expr.eval_param_value(ctx, param1, param2))) {
+    LOG_WARN("failed to eval parmas", K(ret));
+  } else if (OB_FAIL(get_schema_guard(&ctx.exec_ctx_, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret));
+  } else if (param1->is_null()) {
+    //column label is null, noone can read it, return fail(-1)
+    res.set_int(-1);
+  } else if (param2->is_null()) {
+    //session label is null, column label is not null, can't access return fail(-1)
+    res.set_int(-1);
+  } else {
+    //从参数中获取label tag
+    if (OB_SUCC(ret)) {
+      label_tag[COLUMN_LABEL] = param1->get_int();
+      label_tag[SESSION_LABEL] = param2->get_int();
+      if (OB_FAIL(LABEL_TAG_CHECKER.validate(label_tag[COLUMN_LABEL]))
+                 || OB_FAIL(LABEL_TAG_CHECKER.validate(label_tag[SESSION_LABEL]))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unknown label tag", K(ret),
+                 K(label_tag[COLUMN_LABEL]), K(label_tag[SESSION_LABEL]));
+      }
+    }
+
+    //比较component值，返回函数结果
+    if (OB_SUCC(ret)) {
+      int64_t cmp_result = -1;
+      if (OB_FAIL(ObExprOLSUtil::label_tag_compare(session->get_effective_tenant_id(),
+                                                   *schema_guard,
+                                                   label_tag[COLUMN_LABEL],
+                                                   label_tag[SESSION_LABEL],
+                                                   cmp_result))) {
+        LOG_WARN("fail to compare label tag", K(ret));
+      } else {
+        res.set_int(cmp_result);
+      }
+    }
+  }
+#endif
   return ret;
 }
 
@@ -1365,7 +1558,78 @@ int ObExprOLSLabelCheck::cg_expr(ObExprCGCtx &op_cg_ctx,
 
 int ObExprOLSLabelCheck::eval_label_check(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
+#ifndef OB_BUILD_LABEL_SECURITY
   int ret = OB_NOT_IMPLEMENT;
+#else
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  const ObLabelSeLabelSchema *ols_label_schema = NULL;
+
+  ObLabelSeLabelTag label_tag;
+
+  ObDatum *param = nullptr;
+  if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get session failed", K(ret));
+  } else if (OB_FAIL(get_schema_guard(&ctx.exec_ctx_, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret));
+  } else if (OB_FAIL(expr.eval_param_value(ctx, param))) {
+    LOG_WARN("failed to eval params", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (param->is_null()) {
+      label_tag.set_unauth_value();
+    } else if (ObIntType == expr.args_[0]->datum_meta_.type_) {
+      int64_t label_tag_value = param->get_int();
+      uint64_t tenant_id = session->get_effective_tenant_id();
+
+      if (OB_FAIL(LABEL_TAG_CHECKER.validate(label_tag_value))) {
+        LOG_WARN("invalid label tag value", K(ret));
+      } else if (OB_FAIL(schema_guard->get_label_se_label_by_label_tag(tenant_id,
+                                                                       label_tag_value,
+                                                                       ols_label_schema))) {
+        LOG_WARN("get label schema failed", K(ret));
+      } else if (OB_FAIL(LABEL_SCHEMA_CHECKER.validate(ols_label_schema))) {
+        LOG_WARN("label schema not exist", K(ret));
+      } else if (ols_label_schema->get_flag() != 1) {
+        ret = OB_ERR_POLICY_WITH_CHECK_OPTION_VIOLATION;
+        LOG_WARN("data label is false for write dml", K(ret));
+      } else {
+        ObString label_text = ols_label_schema->get_label_str();
+        uint64_t policy_id = ols_label_schema->get_label_se_policy_id();
+        //TODO [label] get label_nums from ols_label_schema->get_label_num_str()
+        ObLabelSeDecomposedLabel label_comps;
+        ObLabelSeLabelCompNums label_nums;
+        if (OB_FAIL(ObLabelSeResolver::resolve_label_text(label_text, label_comps))) {
+          LOG_WARN("fail to resolve label", K(ret));
+        } else if (OB_FAIL(ObLabelSeUtil::convert_label_comps_name_to_num(tenant_id, policy_id,
+                                                                          *schema_guard,
+                                                                          label_comps, label_nums))) {
+          LOG_WARN("fail to validate component", K(ret), K(label_comps));
+        } else if (OB_FAIL(ObLabelSeUtil::validate_user_auth(tenant_id, policy_id,
+                                                             session->get_user_id(),
+                                                             *schema_guard, label_nums, true))) {
+          LOG_WARN("validate user auth failed", K(ret));
+        } else {
+          label_tag.set_value(label_tag_value);
+        }
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid obj type", K(expr.args_[0]->datum_meta_.type_));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (label_tag.is_unauth()) {
+      res.set_null();
+    } else {
+      res.set_int(label_tag.get_value());
+    }
+  }
+#endif
   return ret;
 }
 
@@ -1409,7 +1673,49 @@ int ObExprOLSLabelToChar::cg_expr(ObExprCGCtx &op_cg_ctx,
 
 int ObExprOLSLabelToChar::eval_label_to_char(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
+#ifndef OB_BUILD_LABEL_SECURITY
   int ret = OB_NOT_IMPLEMENT;
+#else
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  const ObLabelSeLabelSchema *ols_label_schema = NULL;
+  ObDatum *param = nullptr;
+
+  if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get session", K(ret));
+  } else if (OB_FAIL(get_schema_guard(&ctx.exec_ctx_, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret));
+  } else if (OB_FAIL(expr.eval_param_value(ctx, param))) {
+    LOG_WARN("failed to eval param value", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (param->is_null()) {
+      res.set_null();
+    } else if (ObIntType == expr.args_[0]->datum_meta_.type_) {
+      int64_t label_tag_value = param->get_int();
+
+      if (OB_FAIL(LABEL_TAG_CHECKER.validate(label_tag_value))) {
+        LOG_WARN("invalid label tag value", K(ret));
+      } else if (OB_FAIL(schema_guard->get_label_se_label_by_label_tag(
+                           session->get_effective_tenant_id(),
+                           label_tag_value,
+                           ols_label_schema))) {
+        LOG_WARN("get label schema failed", K(ret));
+      } else if (OB_FAIL(LABEL_SCHEMA_CHECKER.validate(ols_label_schema))) {
+        LOG_WARN("label schema not exist", K(ret));
+      } else {
+        ObString label_text = ols_label_schema->get_label_str();
+        res.set_string(label_text);
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid obj type", K(expr.args_[0]->datum_meta_.type_));
+    }
+  }
+#endif
   return ret;
 }
 
@@ -1454,7 +1760,108 @@ int ObExprOLSCharToLabel::cg_expr(ObExprCGCtx &op_cg_ctx,
 }
 int ObExprOLSCharToLabel::eval_char_to_label(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
+#ifndef OB_BUILD_LABEL_SECURITY
   int ret = OB_NOT_IMPLEMENT;
+#else
+  int ret = OB_SUCCESS;
+  ObString policy_name;
+  ObString label_text;
+
+  ObSQLSessionInfo *session = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  ObSqlString stmt_param_str;
+
+  uint64_t tenant_id = OB_INVALID_ID;
+  ObObj obj1;
+  ObObj obj2;
+  ObDatum *param1 = nullptr;
+  ObDatum *param2 = nullptr;
+
+  if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get session failed", K(ret));
+  } else if (OB_FAIL(init_phy_plan_timeout(ctx.exec_ctx_, *session))) {
+    LOG_WARN("fail to init phy plan timeout", K(ret));
+  } else if (OB_FAIL(get_schema_guard(&ctx.exec_ctx_, schema_guard))) {
+    LOG_WARN("schema guard is NULL", K(ret));
+  } else if (OB_FAIL(expr.eval_param_value(ctx, param1, param2))) {
+    LOG_WARN("failed to eval params", K(ret));
+  } else if (param1->to_obj(obj1, expr.args_[0]->obj_meta_)) {
+    LOG_WARN("failed to convert to obj", K(ret));
+  } else if (param2->to_obj(obj2, expr.args_[1]->obj_meta_)) {
+    LOG_WARN("failed to convert to obj", K(ret));
+  } else {
+    tenant_id = session->get_effective_tenant_id();
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(get_string_from_obj_and_check(&ctx.exec_ctx_.get_allocator(), obj1,
+                                              policy_name, POLICY_NAME_CHECKER,
+                                              stmt_param_str))) {
+      LOG_WARN("fail to check input value", K(ret));
+    } else if (OB_FAIL(get_string_from_obj_and_check(&ctx.exec_ctx_.get_allocator(), obj2,
+                                                     label_text, LABEL_TEXT_CHECKER,
+                                                     stmt_param_str))) {
+      LOG_WARN("fail to check input value", K(ret));
+    }
+  }
+
+  uint64_t policy_id = OB_INVALID_ID;
+
+  if (OB_SUCC(ret)) {
+    const ObLabelSePolicySchema *ols_policy_schema = NULL;
+
+    if (OB_FAIL(schema_guard->get_label_se_policy_schema_by_name(tenant_id,
+                                                                 policy_name,
+                                                                 ols_policy_schema))) {
+      LOG_WARN("fail to get ols policy schema", K(ret));
+    } else if (OB_FAIL(POLICY_SCHEMA_CHECKER.validate(ols_policy_schema))) {
+      LOG_WARN("policy is not exist", K(ret));
+    } else {
+      policy_id = ols_policy_schema->get_label_se_policy_id();
+    }
+  }
+
+  //resolve session label
+  ObLabelSeDecomposedLabel label_comps;
+  ObLabelSeLabelCompNums label_nums;
+  ObString normalized_label_text;
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObLabelSeResolver::resolve_label_text(label_text, label_comps))) {
+      LOG_WARN("fail to resolve label", K(ret));
+    } else if (OB_FAIL(ObLabelSeUtil::convert_label_comps_name_to_num(tenant_id, policy_id,
+                                                                      *schema_guard,
+                                                                      label_comps, label_nums))) {
+      LOG_WARN("fail to validate component", K(ret), K(label_comps));
+    } else if (OB_FAIL(ObLabelSeResolver::construct_label_text(label_comps,
+                                                               &ctx.exec_ctx_.get_allocator(),
+                                                               normalized_label_text))) {
+      LOG_WARN("fail to construct label text", K(ret));
+    }
+  }
+
+  int64_t new_label_tag;
+
+  if (OB_SUCC(ret)) {
+    const ObLabelSeLabelSchema *ols_label_schema = NULL;
+
+    if (OB_FAIL(schema_guard->get_label_se_label_schema_by_name(tenant_id,
+                                                                normalized_label_text,
+                                                                ols_label_schema))) {
+      LOG_WARN("get label schema failed", K(ret));
+    } else if (OB_FAIL(LABEL_SCHEMA_CHECKER.validate(ols_label_schema))) {
+      //TODO [label] create one
+      LOG_WARN("label schema not exist", K(ret), K(normalized_label_text));
+    } else {
+      new_label_tag = ols_label_schema->get_label_tag();
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    res.set_int(new_label_tag);
+  }
+#endif
 
   return ret;
 }

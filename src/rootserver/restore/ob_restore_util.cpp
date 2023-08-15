@@ -239,9 +239,7 @@ int ObRestoreUtil::fill_multi_backup_path(
     share::ObPhysicalRestoreJob &job)
 {
   int ret = OB_SUCCESS;
-
   // TODO: use restore preview url
-
   return ret;
 }
 
@@ -423,6 +421,34 @@ int ObRestoreUtil::fill_encrypt_info_(
     share::ObPhysicalRestoreJob &job)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_TDE_SECURITY
+  ObArenaAllocator allocator;
+  ObArray<ObString> kms_path_array;
+  ObString kms_dest_str;
+  ObBackupDest dest;
+  ObBackupIoAdapter util;
+  bool is_exist = false;
+  if (OB_FAIL(job.set_encrypt_key(arg.encrypt_key_))) {
+    LOG_WARN("failed to fill encrypt key", KR(ret), K(arg));
+  } else if (arg.kms_uri_.empty()) {
+    // do nothing
+  } else if (OB_FAIL(ObPhysicalRestoreUriParser::parse(arg.kms_uri_, allocator, kms_path_array))) {
+    LOG_WARN("fail to parse uri", K(ret), K(arg));
+  } else if (OB_FAIL(get_encrypt_backup_dest_format_str(kms_path_array, allocator, kms_dest_str))) {
+    LOG_WARN("failed to convert uri", K(ret), K(arg), K(kms_path_array));
+  } else if (OB_FAIL(dest.set(kms_dest_str))) {
+    LOG_WARN("failed to set dest", K(ret));
+  } else if (OB_FAIL(util.is_exist(dest.get_root_path(), dest.get_storage_info(), is_exist))) {
+    LOG_WARN("failed to check file is exists", K(ret));
+  } else if (OB_UNLIKELY(!is_exist)) {
+    ret = OB_BACKUP_FILE_NOT_EXIST;
+    LOG_WARN("kms backup file is not exist", K(ret));
+  } else if (OB_FAIL(job.set_kms_dest(kms_dest_str))) {
+    LOG_WARN("failed to copy kms dest", K(ret), K(arg));
+  } else if (OB_FAIL(job.set_kms_encrypt_key(arg.kms_encrypt_key_))) {
+    LOG_WARN("failed to fill kms encrypt key", KR(ret), K(arg));
+  }
+#endif
   return ret;
 }
 

@@ -142,6 +142,9 @@
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
 #include "share/stat/ob_stat_define.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
 
 namespace oceanbase
 {
@@ -6855,6 +6858,40 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     }
   }
 
+#ifdef OB_BUILD_TDE_SECURITY
+  // set encrypt info in phy plan
+  if (OB_SUCC(ret)) {
+    const ObIArray<ObSchemaObjVersion> *dependency_table = log_plan.get_stmt()->get_global_dependency_table();
+    if (OB_ISNULL(dependency_table)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret));
+    } else {
+      int64_t table_id = OB_INVALID_ID;
+      const share::schema::ObTableSchema *full_table_schema = NULL;
+      ObArray<transaction::ObEncryptMetaCache>metas;
+      for (int64_t i = 0; OB_SUCC(ret) && i < dependency_table->count(); i++) {
+        if (DEPENDENCY_TABLE == dependency_table->at(i).object_type_) {
+          full_table_schema = NULL;
+          table_id = dependency_table->at(i).get_object_id();
+          if (OB_FAIL(schema_guard->get_table_schema(
+              MTL_ID(), table_id, full_table_schema))) {
+            LOG_WARN("fail to get table schema", K(ret), K(table_id));
+          } else if (OB_ISNULL(full_table_schema)) {
+            ret = OB_TABLE_NOT_EXIST;
+            LOG_WARN("table is not exist", K(ret), K(full_table_schema));
+          } else if (OB_FAIL(init_encrypt_metas(full_table_schema, schema_guard, metas))) {
+            LOG_WARN("fail to init encrypt table meta", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret) && metas.count() > 0) {
+        if (OB_FAIL(phy_plan.get_encrypt_meta_array().assign(metas))) {
+          LOG_WARN("fail to assgin encrypt meta", K(ret));
+        }
+      }
+    }
+  }
+#endif
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(log_plan.get_stmt())) {
       ret = OB_ERR_UNEXPECTED;
@@ -7206,6 +7243,114 @@ int ObStaticEngineCG::classify_anti_monotone_filter_exprs(const ObIArray<ObRawEx
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObStaticEngineCG::init_encrypt_metas(
+    const share::schema::ObTableSchema *table_schema,
+    share::schema::ObSchemaGetterGuard *guard,
+    ObIArray<transaction::ObEncryptMetaCache> &meta_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema) || OB_ISNULL(guard)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table schema is invalid", K(ret));
+  } else if (OB_FAIL(init_encrypt_table_meta(table_schema, guard, meta_array))) {
+    LOG_WARN("fail to init encrypt_table_meta", KPC(table_schema), K(ret));
+  } else if (!table_schema->is_user_table()) {
+    /*do nothing*/
+  } else {
+    ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+    const ObTableSchema *index_schema = nullptr;
+    if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos))) {
+      LOG_WARN("get simple_index_infos failed", K(ret));
+    }
+    for (int i = 0; i < simple_index_infos.count() && OB_SUCC(ret); ++i) {
+      if (OB_FAIL(guard->get_table_schema(
+          MTL_ID(),
+          simple_index_infos.at(i).table_id_, index_schema))) {
+        LOG_WARN("fail to get table schema", K(ret));
+      } else if (OB_ISNULL(index_schema)) {
+        ret = OB_SCHEMA_ERROR;
+        LOG_WARN("index schema not exist", K(simple_index_infos.at(i).table_id_), K(ret));
+      } else if (!index_schema->is_index_local_storage()) {
+        // do nothing
+      } else if (OB_FAIL(init_encrypt_table_meta(index_schema, guard, meta_array))) {
+        LOG_WARN("fail to init encrypt_table_meta", KPC(index_schema), K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::init_encrypt_table_meta(
+    const share::schema::ObTableSchema *table_schema,
+    share::schema::ObSchemaGetterGuard *guard,
+    ObIArray<transaction::ObEncryptMetaCache>&meta_array)
+{
+  int ret = OB_SUCCESS;
+  transaction::ObEncryptMetaCache meta_cache;
+  char master_key[OB_MAX_MASTER_KEY_LENGTH];
+  char random_string[OB_CLOG_ENCRYPT_RANDOM_LEN];
+  int64_t master_key_length = 0;
+  if (OB_ISNULL(table_schema) || OB_ISNULL(guard)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table schema is invalid", K(ret));
+  } else if (!(table_schema->need_encrypt() && table_schema->get_master_key_id() > 0 &&
+               table_schema->get_encrypt_key_len() > 0)) {
+    // do nothing
+  } else if (OB_FAIL(table_schema->get_encryption_id(meta_cache.meta_.encrypt_algorithm_))) {
+    LOG_WARN("fail to get encryption id", K(ret));
+  } else {
+    if (table_schema->is_index_local_storage()) {
+      meta_cache.table_id_ = table_schema->get_data_table_id();
+      meta_cache.local_index_id_ = table_schema->get_table_id();
+    } else {
+      meta_cache.table_id_ = table_schema->get_table_id();
+    }
+    meta_cache.meta_.tenant_id_ = table_schema->get_tenant_id();
+    meta_cache.meta_.master_key_version_ = table_schema->get_master_key_id();
+    if (OB_FAIL(meta_cache.meta_.encrypted_table_key_.set_content(
+        table_schema->get_encrypt_key()))) {
+      LOG_WARN("fail to assign encrypt key", K(ret));
+    } else if (OB_FAIL(share::ObKeyGenerator::generate_encrypt_key(
+                  random_string, OB_CLOG_ENCRYPT_RANDOM_LEN))) {
+      LOG_WARN("fail to generate random string", K(ret));
+    } else if (OB_FAIL(meta_cache.meta_.random_.set_content(ObString(
+                  OB_CLOG_ENCRYPT_RANDOM_LEN, random_string)))) {
+      LOG_WARN("fail to assign random string", K(ret));
+    }
+    #ifdef ERRSIM
+      else if (OB_FAIL(OB_E(EventTable::EN_ENCRYPT_GET_MASTER_KEY_FAILED) OB_SUCCESS)) {
+      LOG_WARN("ERRSIM, fail to get master key", K(ret));
+    }
+    #endif
+      else if (OB_FAIL(share::ObMasterKeyGetter::get_master_key(table_schema->get_tenant_id(),
+                  table_schema->get_master_key_id(),
+                  master_key, OB_MAX_MASTER_KEY_LENGTH, master_key_length))) {
+      LOG_WARN("fail to get master key", K(ret));
+      // 如果在cg阶段获取主密钥失败了, 有可能是因为RS执行内部sql没有租户资源引起的.
+      // 在没有租户资源的情况下获取主密钥, 获取加密租户配置项时会失败
+      // 在这种情况下, 我们认为这里是合理的, 缓存中可以不保存主密钥内容
+      // cg阶段获取主密钥的任何失败我们可以接受
+      // 兜底是执行期再次获取, 再次获取成功了则继续往下走, 失败了则报错出来.
+      // 见bug
+      ret = OB_SUCCESS;
+    } else if (OB_FAIL(meta_cache.meta_.master_key_.set_content(ObString(
+                  master_key_length, master_key)))) {
+      LOG_WARN("fail to assign master_key", K(ret));
+    } else if (OB_FAIL(ObEncryptionUtil::decrypt_table_key(meta_cache.meta_,
+                                                           meta_cache.meta_.encrypted_table_key_.ptr(),
+                                                           meta_cache.meta_.encrypted_table_key_.size()))) {
+      LOG_WARN("failed to decrypt_table_key", K(ret));
+    } else {/*do nothing*/}
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(meta_array.push_back(meta_cache))) {
+      LOG_WARN("fail to push back meta array", K(ret));
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObStaticEngineCG::map_value_param_index(const ObInsertStmt *insert_stmt,
                                             RowParamMap &row_params_map)

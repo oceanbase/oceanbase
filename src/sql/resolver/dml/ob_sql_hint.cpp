@@ -1407,19 +1407,32 @@ bool ObStmtHint::has_disable_hint(ObItemType hint_type) const
 void ObLogPlanHint::reset()
 {
   is_outline_data_ = false;
+#ifdef OB_BUILD_SPM
+  is_spm_evolution_ = false;
+#endif
   join_order_.reset();
   table_hints_.reuse();
   join_hints_.reuse();
   normal_hints_.reuse();
 }
 
+#ifndef OB_BUILD_SPM
 int ObLogPlanHint::init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
                                       const ObDMLStmt &stmt,
                                       const ObQueryHint &query_hint)
+#else
+int ObLogPlanHint::init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
+                                      const ObDMLStmt &stmt,
+                                      const ObQueryHint &query_hint,
+                                      const bool is_spm_evolution)
+#endif
 {
   int ret = OB_SUCCESS;
   reset();
   is_outline_data_ = query_hint.has_outline_data();
+#ifdef OB_BUILD_SPM
+  is_spm_evolution_ = is_spm_evolution;
+#endif
   const ObStmtHint &stmt_hint = stmt.get_stmt_hint();
   if (OB_FAIL(join_order_.init_leading_info(stmt, query_hint, stmt_hint.get_normal_hint(T_LEADING)))) {
     LOG_WARN("failed to get leading hint info", K(ret));
@@ -1948,6 +1961,12 @@ int ObLogPlanHint::check_valid_set_left_branch(const ObSelectStmt *select_stmt,
 int ObLogPlanHint::check_status() const
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SPM
+  if (is_spm_evolution_) {
+    ret = OB_OUTLINE_NOT_REPRODUCIBLE;
+    LOG_WARN("failed to generate plan use outline data for spm evolution", K(ret));
+  }
+#endif
   return ret;
 }
 

@@ -1255,7 +1255,7 @@ int ObUserTenantBackupDeleteMgr::get_delete_backup_set_infos_(ObArray<ObBackupSe
 int ObUserTenantBackupDeleteMgr::get_delete_backup_piece_infos_(ObArray<ObTenantArchivePieceAttr> &piece_list)
 {
   int ret = OB_SUCCESS;
-  // TODO 4.1 support
+  // TODO(wenjinyu.wjy) 4.3 support
   return ret;
 }
 

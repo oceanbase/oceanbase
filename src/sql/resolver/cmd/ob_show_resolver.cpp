@@ -1420,7 +1420,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
         break;
       }
       case T_SHOW_RESTORE_PREVIEW: {
-  // TODO:  fix restore preview later.
+  // TODO(chongrong.th): fix restore preview in 4.1
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "show restore preview is");
         break;

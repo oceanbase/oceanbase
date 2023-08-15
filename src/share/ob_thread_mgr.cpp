@@ -17,6 +17,9 @@
 #include "storage/tx_storage/ob_ls_freeze_thread.h"
 #include "rootserver/ob_index_builder.h"
 #include "observer/ob_srv_deliver.h"
+#ifdef OB_BUILD_ARBITRATION
+#include "logservice/arbserver/ob_arb_srv_deliver.h"
+#endif
 #include "logservice/palf/log_io_task_cb_thread_pool.h"
 #include "logservice/palf/log_io_worker.h"
 #include "logservice/palf/log_define.h"

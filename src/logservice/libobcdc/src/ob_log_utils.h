@@ -15,7 +15,14 @@
 #ifndef OCEANBASE_LIBOBCDC_UTILS_H__
 #define OCEANBASE_LIBOBCDC_UTILS_H__
 
+#ifndef OB_USE_DRCMSG
 #include "ob_cdc_msg_convert.h"
+#else
+#include <drcmsg/BR.h>                        // RecordType
+#include <drcmsg/MsgWrapper.h>                // IStrArray
+#include <drcmsg/MD.h>                        // ITableMeta
+#include <drcmsg/DRCMessageFactory.h>
+#endif
 
 #include <sys/prctl.h>
 #include "lib/allocator/ob_allocator.h"       // ObIAllocator

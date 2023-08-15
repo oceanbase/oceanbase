@@ -96,7 +96,6 @@ private:
   ObSMHandler mysql_handler_;
   rootserver::ObIngressBWAllocService ingress_service_;
 
-
   rpc::frame::ObNetEasy net_;
   rpc::frame::ObReqTransport *rpc_transport_;
   rpc::frame::ObReqTransport *high_prio_rpc_transport_;

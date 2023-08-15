@@ -642,7 +642,33 @@ int ObPLDIADTService::get_table_type(const ObString &type_name, uint32_t line,
                                      ObLLVMDIType &element_type, ObLLVMDIType &table_type)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
   UNUSEDx(type_name, line, element_type, table_type);
+#else
+  ObLLVMDIType element_array_type;
+  ObLLVMDIType element_array_ptr_type;
+  ObLLVMDIType member_type;
+  ObSEArray<ObLLVMDIType, 8> member_types;
+  if (OB_FAIL(get_collection(line, member_types))) {
+    LOG_WARN("failed to get collation", K(ret));
+  } else if (OB_FAIL(helper_.create_array_type(element_type, 0, element_array_type))) {
+    LOG_WARN("failed to create array type", K(ret));
+  } else if (OB_FAIL(helper_.create_pointer_type(element_array_type, element_array_ptr_type))) {
+    LOG_WARN("failed to create pointer type", K(ret));
+  } else if (OB_FAIL(helper_.create_member_type("data_", ObPLNestedTable::data_offset_bits(),
+                                                line, element_array_ptr_type, member_type))) {
+    LOG_WARN("failed to create member type", K(ret));
+  } else if (OB_FAIL(member_types.push_back(member_type))) {
+    LOG_WARN("failed to push back member type", K(ret));
+  } else if (OB_FAIL(helper_.create_struct_type(type_name, line,
+                                                sizeof(ObPLNestedTable) * 8, 32,
+                                                member_types, table_type))) {
+    LOG_WARN("failed to create di struct type", K(ret));
+  } else if (OB_ISNULL(table_type.get_v())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to create di table type", K(ret));
+  }
+#endif
   return ret;
 }
 

@@ -336,6 +336,14 @@ int ObMemtable::set(
     TRANS_LOG(WARN, "invalid param", K(param),
               K(columns.count()), K(row.row_val_.count_));
     ret = OB_INVALID_ARGUMENT;
+#ifdef OB_BUILD_TDE_SECURITY
+  //TODO: table_id is just used as encrypt_index, we may rename it in the future.
+  //      If the function(set) no longer passes in this parameter(table_id),
+  //      we need to construct ObTxEncryptMeta in advance, and pass tx_encrypt_meta(ObTxEncryptMeta*)
+  //      instead of encrypt_meta(ObEncryptMeta*) into this function(set)
+  } else if (need_for_save(encrypt_meta) && OB_FAIL(save_encrypt_meta(param.table_id_, encrypt_meta))) {
+      TRANS_LOG(WARN, "store encrypt meta to memtable failed", KPC(encrypt_meta), KR(ret));
+#endif
   }
 
   if (OB_FAIL(ret)) {
@@ -371,6 +379,14 @@ int ObMemtable::set(
              || param.get_schema_rowkey_count() > columns.count()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(ERROR, "invalid param", K(ret), K(param));
+#ifdef OB_BUILD_TDE_SECURITY
+  //TODO: table_id is just used as encrypt_index, we may rename it in the future.
+  //      If the function(set) no longer passes in this parameter(table_id),
+  //      we need to construct ObTxEncryptMeta in advance, and pass tx_encrypt_meta(ObTxEncryptMeta*)
+  //      instead of encrypt_meta(ObEncryptMeta*) into this function(set)
+  } else if (need_for_save(encrypt_meta) && OB_FAIL(save_encrypt_meta(param.table_id_, encrypt_meta))) {
+      TRANS_LOG(WARN, "store encrypt meta to memtable failed", KPC(encrypt_meta), KR(ret));
+#endif
   }
 
   if (OB_FAIL(ret)){
@@ -2385,6 +2401,59 @@ bool ObMemtable::is_partition_memtable_empty(const uint64_t table_id) const
   return query_engine_.is_partition_memtable_empty(table_id);
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObMemtable::save_encrypt_meta(const uint64_t table_id, const share::ObEncryptMeta *encrypt_meta)
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard guard(encrypt_meta_lock_);
+  if (OB_NOT_NULL(encrypt_meta)) {
+    if (OB_ISNULL(encrypt_meta_) &&
+        (OB_ISNULL(encrypt_meta_ = (ObTxEncryptMeta *)local_allocator_.alloc(sizeof(ObTxEncryptMeta))) ||
+        OB_ISNULL(new(encrypt_meta_) ObTxEncryptMeta()))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      TRANS_LOG(WARN, "alloc failed", KP(encrypt_meta), K(ret));
+    } else {
+      ret = encrypt_meta_->store_encrypt_meta(table_id, *encrypt_meta);
+    }
+  } else {
+    //maybe the table is removed from encrypted tablespace
+    local_allocator_.free((void *)encrypt_meta_);
+    encrypt_meta_ = nullptr;
+  }
+  return ret;
+}
+
+int ObMemtable::get_encrypt_meta(transaction::ObTxEncryptMeta *&encrypt_meta)
+{
+  int ret = OB_SUCCESS;
+  SpinRLockGuard guard(encrypt_meta_lock_);
+  if (NULL != encrypt_meta_) {
+    if (NULL == encrypt_meta && NULL == (encrypt_meta = op_alloc(ObTxEncryptMeta))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      ret = encrypt_meta->assign(*encrypt_meta_);
+    }
+  } else {
+    if (NULL != encrypt_meta) {
+      encrypt_meta->reset();
+    }
+  }
+  return ret;
+}
+
+bool ObMemtable::need_for_save(const share::ObEncryptMeta *encrypt_meta)
+{
+  bool need_save = true;
+  SpinRLockGuard guard(encrypt_meta_lock_);
+  if (encrypt_meta == NULL && encrypt_meta_ == NULL) {
+    need_save = false;
+  } else if (encrypt_meta != NULL && encrypt_meta_ != NULL &&
+             encrypt_meta_->is_memtable_equal(*encrypt_meta)) {
+    need_save = false;
+  }
+  return need_save;
+}
+#endif
 
 int RowHeaderGetter::get()
 {

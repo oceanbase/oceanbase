@@ -16,6 +16,7 @@
 
 namespace oceanbase
 {
+#ifndef OB_BUILD_DBLINK
 namespace common {
   struct Dblink_status {
   uint64_t link_id;
@@ -55,6 +56,7 @@ namespace common {
                K(extra_info));
 };
 }
+#endif
 
 namespace observer
 {

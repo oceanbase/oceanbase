@@ -55,6 +55,9 @@
 #include "rootserver/ob_empty_server_checker.h"
 #include "rootserver/ob_lost_replica_checker.h"
 #include "rootserver/ob_server_zone_op_service.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "rootserver/ob_rs_master_key_manager.h"
+#endif
 
 namespace oceanbase
 {
@@ -424,6 +427,9 @@ public:
   int not_implement();
 
   int execute_bootstrap(const obrpc::ObBootstrapArg &arg);
+#ifdef OB_BUILD_TDE_SECURITY
+  int check_sys_tenant_initial_master_key_valid();
+#endif
 
   int check_config_result(const char *name, const char *value);
   int check_ddl_allowed();
@@ -570,6 +576,15 @@ public:
   int drop_synonym(const obrpc::ObDropSynonymArg &arg);
   //----End of functions for managing synonyms----
 
+#ifdef OB_BUILD_SPM
+  //----Functions for managing plan_baselines----
+  int accept_plan_baseline(const obrpc::ObModifyPlanBaselineArg &arg);
+  int cancel_evolve_task(const obrpc::ObModifyPlanBaselineArg &arg);
+  int admin_load_baseline(const obrpc::ObLoadPlanBaselineArg &arg);
+  int admin_load_baseline_v2(const obrpc::ObLoadPlanBaselineArg &arg, obrpc::ObLoadBaselineRes &res);
+  // int drop_plan_baseline(const obrpc::ObDropPlanBaselineArg &arg);
+  //----End of functions for managing plan_baselines----
+#endif
 
   //----Functions for sync rewrite rules----
   int admin_sync_rewrite_rules(const obrpc::ObSyncRewriteRuleArg &arg);
@@ -681,6 +696,12 @@ public:
   int admin_reload_server();
   int admin_reload_zone();
   int admin_clear_merge_error(const obrpc::ObAdminMergeArg &arg);
+#ifdef OB_BUILD_ARBITRATION
+  int admin_add_arbitration_service(const obrpc::ObAdminAddArbitrationServiceArg &arg);
+  int admin_remove_arbitration_service(const obrpc::ObAdminRemoveArbitrationServiceArg &arg);
+  int admin_replace_arbitration_service(const obrpc::ObAdminReplaceArbitrationServiceArg &arg);
+  int remove_cluster_info_from_arb_server(const obrpc::ObRemoveClusterInfoFromArbServerArg &arg);
+#endif
   int admin_migrate_unit(const obrpc::ObAdminMigrateUnitArg &arg);
   int admin_upgrade_virtual_schema();
   int run_job(const obrpc::ObRunJobArg &arg);
@@ -777,7 +798,15 @@ public:
   int update_rslist();
   int recompile_all_views_batch(const obrpc::ObRecompileAllViewsBatchArg &arg);
   int try_add_dep_infos_for_synonym_batch(const obrpc::ObTryAddDepInofsForSynonymBatchArg &arg);
+#ifdef OB_BUILD_TDE_SECURITY
+  int handle_get_root_key(const obrpc::ObRootKeyArg &arg, obrpc::ObRootKeyResult &result);
+  int get_root_key_from_obs(const obrpc::ObRootKeyArg &arg, obrpc::ObRootKeyResult &result);
+#endif
 private:
+#ifdef OB_BUILD_TDE_SECURITY
+  int try_check_encryption_zone_cond(
+      const obrpc::ObAdminZoneArg &arg);
+#endif
   int check_parallel_ddl_conflict(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const obrpc::ObDDLArg &arg);
@@ -954,6 +983,10 @@ private:
 
   int64_t fail_count_;
   ObSchemaHistoryRecycler schema_history_recycler_;
+#ifdef OB_BUILD_TDE_SECURITY
+  // master key manager
+  ObRsMasterKeyManager master_key_mgr_;
+#endif
   // Disaster Recovery related
   ObDRTaskExecutor disaster_recovery_task_executor_;
   ObDRTaskMgr disaster_recovery_task_mgr_;

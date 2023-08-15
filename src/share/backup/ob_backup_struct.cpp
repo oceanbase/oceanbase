@@ -1177,6 +1177,15 @@ int ObBackupStorageInfo::set_access_key_(const char *buf, const bool need_decryp
   } else if (0 != strlen(access_key_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("access_key has been set value", K(ret), K_(access_key));
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (need_decrypt) {
+    char encrypted_key[OB_MAX_BACKUP_ENCRYPTKEY_LENGTH] = { 0 };
+    if (OB_FAIL(set_storage_info_field_(buf, encrypted_key, sizeof(encrypted_key)))) {
+      LOG_WARN("failed to set access_key", K(ret), K(buf));
+    } else if (OB_FAIL(decrypt_access_key_(encrypted_key))) {
+      LOG_WARN("failed to set access key", K(ret), K(buf));
+    }
+#endif
   } else if (OB_FAIL(set_storage_info_field_(buf, access_key_, sizeof(access_key_)))) {
     LOG_WARN("failed to set endpoint",K(ret), K(buf));
   }
@@ -1241,6 +1250,12 @@ int ObBackupStorageInfo::set(
         if (OB_FAIL(set_storage_info_field_(token, access_id_, sizeof(access_id_)))) {
           LOG_WARN("failed to set access id", K(ret), K(token));
         }
+#ifdef OB_BUILD_TDE_SECURITY
+      } else if (0 == strncmp(ENCRYPT_KEY, token, strlen(ENCRYPT_KEY))) {
+        if (OB_FAIL(set_access_key_(token, true/*need decrypt*/))) {
+          LOG_WARN("failed to set oss extension", K(ret), K(token));
+        }
+#endif
       } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
         if (OB_FAIL(set_access_key_(token, false/*need decrypt*/))) {
           LOG_WARN("failed to set oss extension", K(ret), K(token));
@@ -1311,6 +1326,15 @@ int ObBackupStorageInfo::parse_authorization_(const char *authorization)
         if (OB_FAIL(set_storage_info_field_(token, access_id_, sizeof(access_id_)))) {
           LOG_WARN("failed to set access id", K(ret), K(token));
         }
+#ifdef OB_BUILD_TDE_SECURITY
+      } else if (0 == strncmp(ENCRYPT_KEY, token, strlen(ENCRYPT_KEY))) {
+        char serialize_key[OB_MAX_BACKUP_SERIALIZEKEY_LENGTH] = { 0 };
+        if (OB_FAIL(set_storage_info_field_(token, serialize_key, sizeof(serialize_key)))) {
+          LOG_WARN("failed to set encrypt_key", K(ret), K(token));
+        } else if (OB_FAIL(decrypt_access_key_(serialize_key))) {
+          LOG_WARN("failed to decrypt access key", K(ret), K(token));
+        }
+#endif
       } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
         if (OB_FAIL(set_storage_info_field_(token, access_key_, sizeof(access_key_)))) {
           LOG_WARN("failed to set access key", K(ret), K(token));
@@ -1337,8 +1361,15 @@ int ObBackupStorageInfo::get_authorization_info(char *authorization, int64_t len
     LOG_WARN("storage info is invalid", K(ret));
   } else if (OB_STORAGE_FILE == device_type_) {
     // do nothing
+#ifndef OB_BUILD_TDE_SECURITY
   } else if (OB_FAIL(databuff_printf(authorization, length, "%s&%s",  access_id_, access_key_))) {
     LOG_WARN("failed to set authorization", K(ret), K_(access_id), K(access_key_));
+#else
+  } else if (OB_FAIL(encrypt_access_key_(encrypt_key, sizeof(encrypt_key)))) {
+    LOG_WARN("failed to encrept access key", K(ret));
+  } else if (OB_FAIL(databuff_printf(authorization, length, "%s&%s",  access_id_, encrypt_key))) {
+    LOG_WARN("failed to set authorization", K(ret), K_(access_id), K(encrypt_key));
+#endif
   }
   return ret;
 }
@@ -1356,6 +1387,14 @@ int ObBackupStorageInfo::get_storage_info_str(char *storage_info, int64_t info_l
     LOG_WARN("storage info is invalid", K(ret));
   } else if (OB_STORAGE_FILE == device_type_) {
     // do nothing
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (need_encrypt) {
+    if (OB_FAIL(encrypt_access_key_(encrypt_key, sizeof(encrypt_key)))) {
+      LOG_WARN("failed to encrypt access key", K(ret));
+    } else {
+      key = encrypt_key;
+    }
+#endif
   } else {
     key = access_key_;
   }
@@ -1428,6 +1467,66 @@ int ObBackupStorageInfo::set_storage_info_field_(const char *info, char *field, 
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObBackupStorageInfo::encrypt_access_key_(char *encrypt_key, int64_t length) const
+{
+  int ret = OB_SUCCESS;
+  char encrypted_key[OB_MAX_BACKUP_ENCRYPTKEY_LENGTH] = { 0 };
+  char serialize_buf[OB_MAX_BACKUP_SERIALIZEKEY_LENGTH] = { 0 };
+  int64_t serialize_pos = 0;
+  int64_t key_len = 0;
+  if (0 == strlen(access_key_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("access_key is empty, shouldn't encrypt", K(ret));
+  } else if (0 != strncmp(ACCESS_KEY, access_key_, strlen(ACCESS_KEY))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("parameter is not access_key", K(ret));
+  } else if (OB_FAIL(ObEncryptionUtil::encrypt_sys_data(OB_SYS_TENANT_ID,
+      access_key_ + strlen(ACCESS_KEY), strlen(access_key_) - strlen(ACCESS_KEY),
+      encrypted_key, OB_MAX_BACKUP_ENCRYPTKEY_LENGTH, key_len))) {
+    LOG_WARN("failed to encrypt authorization key", K(ret));
+  } else if (OB_FAIL(hex_print(encrypted_key, key_len, serialize_buf, sizeof(serialize_buf), serialize_pos))) {
+    LOG_WARN("failed to serialize encrypted key", K(ret), K(encrypted_key));
+  } else if (serialize_pos >= sizeof(serialize_buf) || serialize_pos >= length) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("encode error", K(ret), K(serialize_pos), K(sizeof(serialize_buf)), K(length));
+  } else if (FALSE_IT(serialize_buf[serialize_pos] = '\0')) {
+  } else if (OB_FAIL(databuff_printf(encrypt_key, length, "%s%s", ENCRYPT_KEY, serialize_buf))) {
+    LOG_WARN("failed to get encrypted key", K(ret), K(serialize_buf));
+  }
+
+  return ret;
+}
+
+int ObBackupStorageInfo::decrypt_access_key_(const char *buf)
+{
+  int ret = OB_SUCCESS;
+  int64_t key_len = 0;
+  char deserialize_buf[OB_MAX_BACKUP_SERIALIZEKEY_LENGTH] = { 0 };
+  char decrypt_key[OB_MAX_BACKUP_ACCESSKEY_LENGTH] = { 0 };
+  int64_t buf_len = strlen(buf);
+  int64_t deserialize_size = 0;
+  if (0 == buf_len) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("encrypted_key is empty", K(ret));
+  } else if (OB_FAIL(hex_to_cstr(buf + strlen(ENCRYPT_KEY), buf_len - strlen(ENCRYPT_KEY),
+      deserialize_buf, sizeof(deserialize_buf), deserialize_size))) {
+    LOG_WARN("failed to get cstr from hex", KR(ret), K(buf_len), K(sizeof(deserialize_buf)));
+  } else if (OB_FAIL(ObEncryptionUtil::decrypt_sys_data(OB_SYS_TENANT_ID,
+      deserialize_buf, deserialize_size,
+      decrypt_key, sizeof(decrypt_key), key_len))) {
+    LOG_WARN("failed to decrypt authorization key", K(ret), K(deserialize_buf), K(deserialize_size));
+  } else if (key_len >= sizeof(decrypt_key) || (key_len + strlen(ACCESS_KEY)) >= sizeof(access_key_)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("decrypt key size overflow", K(ret), K(key_len), K(sizeof(decrypt_key)));
+  } else if (FALSE_IT(decrypt_key[key_len] = '\0')) {
+  } else if (OB_FAIL(databuff_printf(access_key_, sizeof(access_key_), "%s%s", ACCESS_KEY, decrypt_key))) {
+    LOG_WARN("failed to set access key", K(ret));
+  }
+
+  return ret;
+}
+#endif
 
 ObBackupDest::ObBackupDest()
   : root_path_(NULL),

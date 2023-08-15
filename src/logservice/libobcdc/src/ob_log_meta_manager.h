@@ -15,7 +15,12 @@
 #ifndef OCEANBASE_LIBOBCDC_META_MANAGER_H__
 #define OCEANBASE_LIBOBCDC_META_MANAGER_H__
 
+#ifndef OB_USE_DRCMSG
 #include "ob_cdc_msg_convert.h"
+#else
+#include <drcmsg/MD.h>                                    // ITableMeta, IDBMeta
+#include <drcmsg/DRCMessageFactory.h>                     // DRCMessageFactory
+#endif
 #include "share/ob_errno.h"                               // OB_SUCCESS
 #include "lib/lock/ob_spin_rwlock.h"                      // SpinRWLock, SpinRLockGuard, SpinWLockGuard
 #include "lib/allocator/page_arena.h"                     // DefaultPageAllocator

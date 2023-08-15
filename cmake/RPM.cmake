@@ -17,6 +17,7 @@ set(CPACK_PACKAGING_INSTALL_PREFIX /home/admin/oceanbase)
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OceanBase is a distributed relational database")
 set(CPACK_PACKAGE_VENDOR "OceanBase Inc.")
 set(CPACK_RPM_PACKAGE_RELEASE ${OB_RELEASEID})
+if (OB_BUILD_OPENSOURCE)
 set(CPACK_PACKAGE_NAME "oceanbase-ce")
 set(CPACK_PACKAGE_VERSION "${OceanBase_CE_VERSION}")
 set(CPACK_PACKAGE_VERSION_MAJOR "${OceanBase_CE_VERSION_MAJOR}")
@@ -30,6 +31,14 @@ set(CPACK_RPM_UTILS_PACKAGE_PREFIX /usr)
 list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/home")
 list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/home/admin")
 list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/home/admin/oceanbase")
+else()
+set(CPACK_PACKAGE_NAME "oceanbase")
+set(CPACK_PACKAGE_VERSION "${OceanBase_VERSION}")
+set(CPACK_PACKAGE_VERSION_MAJOR "${OceanBase_VERSION_MAJOR}")
+set(CPACK_PACKAGE_VERSION_MINOR "${OceanBase_VERSION_MINOR}")
+set(CPACK_PACKAGE_VERSION_PATCH "${OceanBase_VERSION_PATCH}")
+set(CPACK_RPM_PACKAGE_URL "${OceanBase_HOMEPAGE_URL}")
+endif()
 set(CPACK_RPM_PACKAGE_GROUP "Applications/Databases")
 set(CPACK_RPM_PACKAGE_DESCRIPTION "OceanBase is a distributed relational database")
 set(CPACK_RPM_PACKAGE_LICENSE "Mulan PubL v2.")
@@ -54,11 +63,24 @@ set(CPACK_RPM_SPEC_MORE_DEFINE
 set(BITCODE_TO_ELF_LIST "")
 
 ## server
+if (OB_BUILD_OPENSOURCE)
 install(PROGRAMS
   tools/import_time_zone_info.py
   ${CMAKE_BINARY_DIR}/src/observer/observer
   DESTINATION bin
   COMPONENT server)
+else()
+install(PROGRAMS
+  script/dooba/dooba
+  tools/import_time_zone_info.py
+  tools/import_srs_data.py
+  ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
+  tools/ob_admin/io_bench/bench_io.sh
+  ${CMAKE_BINARY_DIR}/src/observer/observer
+  $<$<STREQUAL:"${ARCHITECTURE}","x86_64">:${DEVTOOLS_DIR}/bin/obstack>
+  DESTINATION bin
+  COMPONENT server)
+endif()
 
 install(FILES
   src/sql/fill_help_tables-ob.sql
@@ -97,12 +119,22 @@ install(
   COMPONENT cdc
   )
 
+if(OB_BUILD_OPENSOURCE)
 install(
   FILES
     ${PROJECT_SOURCE_DIR}/src/logservice/libobcdc/tests/libobcdc.conf
     DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}
   COMPONENT cdc
   )
+else()
+install(
+  FILES
+    ${PROJECT_SOURCE_DIR}/src/logservice/libobcdc/tests/libobcdc.conf
+    ${PROJECT_SOURCE_DIR}/src/logservice/libobcdc/tests/timezone_info.conf
+    DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}
+  COMPONENT cdc
+  )
+endif()
 endif()
 
 ## oceanbase-sql-parser
@@ -331,6 +363,7 @@ if (OB_BUILD_LIBOBTABLE)
     COMPONENT table)
 endif()
 
+if(OB_BUILD_OPENSOURCE)
 ## oceanbase-libs
 install(PROGRAMS
   deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1
@@ -350,6 +383,7 @@ if(OB_BUILD_OBADMIN)
       COMPONENT utils
     )
   endif()
+endif()
 
 # install cpack to make everything work
 include(CPack)

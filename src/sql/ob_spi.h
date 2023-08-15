@@ -565,6 +565,13 @@ public:
 
   static int spi_sub_nestedtable(pl::ObPLExecCtx *ctx, int64_t src_idx, int64_t dst_idx, int32_t lower, int32_t upper);
 
+#ifdef OB_BUILD_ORACLE_PL
+  static int spi_extend_assoc_array(int64_t tenant_id,
+                                    const pl::ObPLINS *ns,
+                                    ObIAllocator &allocator,
+                                    pl::ObPLAssocArray &assoc_array,
+                                    int64_t n);
+#endif
   static int spi_get_package_allocator(pl::ObPLExecCtx *ctx, uint64_t package_id, ObIAllocator *&allocator);
 
   static int spi_copy_datum(pl::ObPLExecCtx *ctx,
@@ -674,6 +681,11 @@ public:
   static int spi_update_package_change_info(
     pl::ObPLExecCtx *ctx, uint64_t package_id, uint64_t var_idx);
 
+#ifdef OB_BUILD_ORACLE_PL
+  static int spi_copy_opaque(
+      pl::ObPLExecCtx *ctx, ObIAllocator *allocator,
+      pl::ObPLOpaque &src, pl::ObPLOpaque *&dest, uint64_t package_id = OB_INVALID_ID);
+#endif
   static int spi_check_composite_not_null(ObObjParam *v);
 
   static int spi_update_location(pl::ObPLExecCtx *ctx, uint64_t location);

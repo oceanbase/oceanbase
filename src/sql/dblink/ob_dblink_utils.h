@@ -20,6 +20,9 @@
 #include "lib/mysqlclient/ob_mysql_connection.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
+#ifdef OB_BUILD_DBLINK
+#include "lib/oracleclient/ob_oci_environment.h"
+#endif
 #include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
@@ -30,6 +33,11 @@ namespace sql
 class ObDblinkService
 {
 public:
+#ifdef OB_BUILD_DBLINK
+  static uint64_t get_current_tenant_id();
+  static common::sqlclient::ObTenantOciEnvs * get_tenant_oci_envs();
+  static int init_oci_envs_func_ptr();
+#endif
   static int check_lob_in_result(common::sqlclient::ObMySQLResult *result, bool &have_lob);
   static int get_length_from_type_text(ObString &type_text, int32_t &length);
   static int get_local_session_vars(sql::ObSQLSessionInfo *session_info,

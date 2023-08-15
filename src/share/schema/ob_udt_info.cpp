@@ -525,6 +525,16 @@ int ObUDTTypeInfo::transform_to_pl_type(const ObUDTTypeAttr* attr_info, pl::ObPL
     pl_type.set_user_type_id(pl::ObPLType::PL_RECORD_TYPE,
                              attr_info->get_type_attr_id());
     pl_type.set_type_from(pl::ObPLTypeFrom::PL_TYPE_UDT);
+#ifdef OB_BUILD_ORACLE_PL
+  } else if (attr_info->is_coll_type()) {
+    pl_type.set_user_type_id(pl::ObPLType::PL_NESTED_TABLE_TYPE,
+                             attr_info->get_type_attr_id());
+    pl_type.set_type_from(pl::ObPLTypeFrom::PL_TYPE_UDT);
+  } else if (attr_info->is_opaque_type()) {
+    pl_type.set_user_type_id(pl::ObPLType::PL_OPAQUE_TYPE,
+                             attr_info->get_type_attr_id());
+    pl_type.set_type_from(pl::ObPLTypeFrom::PL_TYPE_UDT);
+#endif
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("attr info type is invalid", K(ret), KPC(attr_info));
@@ -538,6 +548,42 @@ int ObUDTTypeInfo::transform_to_pl_type(common::ObIAllocator &allocator, const p
   void *ptr = NULL;
   pl::ObUserDefinedType *local_pl_type = NULL;
   pl_type = NULL;
+#ifdef OB_BUILD_ORACLE_PL
+  if (is_collection()) {
+    pl::ObCollectionType *table_type = NULL;
+    pl::ObPLDataType elem_type;
+    if (OB_ISNULL(ptr = allocator.alloc(is_varray() ? sizeof(pl::ObVArrayType) : sizeof(pl::ObCollectionType)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for ObNestedTableType", K(ret));
+    } else if (OB_FAIL(transform_to_pl_type(coll_info_, elem_type))) {
+      LOG_WARN("failed get collection elem type", K(ret));
+    } else {
+      if (is_varray()) {
+        table_type = static_cast<pl::ObCollectionType*>(new(ptr)pl::ObVArrayType());
+        pl::ObVArrayType *vt = static_cast<pl::ObVArrayType*> (ptr);
+        //
+        vt->set_capacity(coll_info_->get_upper_bound());
+      } else {
+        table_type = static_cast<pl::ObCollectionType*>(new(ptr)pl::ObNestedTableType());
+      }
+      table_type->set_user_type_id(get_type_id());
+      table_type->set_type_from(pl::ObPLTypeFrom::PL_TYPE_UDT);
+      table_type->set_element_type(elem_type);
+      local_pl_type = table_type;
+    }
+  } else if (is_opaque()) {
+    pl::ObOpaqueType *opaque_type = NULL;
+    if (OB_ISNULL(ptr = allocator.alloc(sizeof(pl::ObOpaqueType)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for ObOpaqueType", K(ret));
+    } else {
+      opaque_type = new(ptr)pl::ObOpaqueType();
+      opaque_type->set_user_type_id(get_type_id());
+      opaque_type->set_type_from(pl::ObPLTypeFrom::PL_TYPE_UDT);
+      local_pl_type = opaque_type;
+    }
+  } else {
+#endif
     pl::ObRecordType *record_type = NULL;
     if (OB_ISNULL(ptr = allocator.alloc(sizeof(pl::ObRecordType)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -565,6 +611,9 @@ int ObUDTTypeInfo::transform_to_pl_type(common::ObIAllocator &allocator, const p
         local_pl_type = record_type;
       }
     }
+#ifdef OB_BUILD_ORACLE_PL
+  }
+#endif
   if (OB_SUCC(ret)) {
     ObString copy_type_name;
     if (OB_FAIL(deep_copy_name(allocator, get_type_name(), copy_type_name))) {

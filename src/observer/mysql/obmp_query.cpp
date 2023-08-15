@@ -990,8 +990,23 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
     }
     bool is_need_retry = THIS_THWORKER.need_retry() ||
         RETRY_TYPE_NONE != retry_ctrl_.get_retry_type();
+#ifdef OB_BUILD_SPM
+    if (!is_need_retry) {
+      (void)ObSQLUtils::handle_plan_baseline(audit_record, plan, ret, ctx_);
+    }
+#endif
     (void)ObSQLUtils::handle_audit_record(is_need_retry, EXECUTE_LOCAL, session,
         ctx_.is_sensitive_);
+#ifdef OB_BUILD_AUDIT_SECURITY
+    // 对于触发重试的语句不需要进行审计，以免一条语句被审计多次
+    if (!retry_ctrl_.need_retry() && !async_resp_used) {
+      (void)ObSecurityAuditUtils::handle_security_audit(result,
+                                                        ctx_.schema_guard_,
+                                                        ctx_.cur_stmt_,
+                                                        ObString::make_empty_string(),
+                                                        ret);
+    }
+#endif
   }
   return ret;
 }
@@ -1238,7 +1253,13 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
   ObSQLSessionInfo &session = result.get_session();
   CHECK_COMPATIBILITY_MODE(&session);
 
+#ifndef OB_BUILD_SPM
   bool need_trans_cb  = result.need_end_trans_callback() && (!force_sync_resp);
+#else
+  bool need_trans_cb  = result.need_end_trans_callback() &&
+                        (!force_sync_resp) &&
+                        (!ctx_.spm_ctx_.check_execute_status_);
+#endif
 
   // 通过判断 plan 是否为 null 来确定是 plan 还是 cmd
   // 针对 plan 和 cmd 分开处理，逻辑会较为清晰。

@@ -29,10 +29,22 @@ public:
   virtual int inner_get_next_row(common::ObNewRow *&row);
   void destroy();
 private:
+#ifdef OB_BUILD_ARBITRATION
+  int insert_row_(const common::ObAddr &self,
+      const common::ObAddr &arb_service_addr,
+      const bool is_in_blacklist,
+      common::ObNewRow *row);
+  void reset_buf_();
+#endif
 private:
   static const int64_t VARCHAR_32 = 32;
   static const int64_t VARCHAR_128 = 128;
 private:
+#ifdef OB_BUILD_ARBITRATION
+  char ip_[common::OB_IP_PORT_STR_BUFF] = {'\0'};
+  char arb_service_addr_buf_[VARCHAR_128] = {'\0'};
+  char arb_service_status_buf_[VARCHAR_32] = {'\0'};
+#endif
 };
 }//namespace observer
 }//namespace oceanbase

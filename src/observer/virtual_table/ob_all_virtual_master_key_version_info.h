@@ -23,9 +23,33 @@ class ObAllVirtualMasterKeyVersionInfo : public common::ObVirtualTableScannerIte
 {
 public:
 
+#ifndef OB_BUILD_TDE_SECURITY
   ObAllVirtualMasterKeyVersionInfo() {}
   virtual ~ObAllVirtualMasterKeyVersionInfo() {}
   virtual int inner_get_next_row(common::ObNewRow *&row) { return OB_ITER_END; }
+#else
+  enum COLUMN_ID_LIST
+  {
+    SVR_IP = common::OB_APP_MIN_COLUMN_ID,
+    SVR_PORT,
+    TENANT_ID,
+    MAX_ACTIVE_VERSION,
+    MAX_STORED_VERSION,
+    EXPECT_VERSION
+  };
+  ObAllVirtualMasterKeyVersionInfo();
+  virtual ~ObAllVirtualMasterKeyVersionInfo();
+  virtual void reset();
+  virtual int inner_open();
+  virtual int inner_get_next_row(common::ObNewRow *&row);
+private:
+  int gen_row(common::ObNewRow *&row);
+  int fill_tenant_ids();
+
+  char ip_buf_[common::OB_IP_STR_BUFF];
+  ObSEArray<uint64_t, 16> tenant_ids_;
+  int64_t tenant_ids_idx_;
+#endif
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualMasterKeyVersionInfo);
 };

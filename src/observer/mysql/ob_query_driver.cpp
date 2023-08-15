@@ -24,7 +24,11 @@
 #include "share/ob_lob_access_utils.h"
 #include "lib/charset/ob_charset.h"
 #include "observer/mysql/obmp_stmt_prexecute.h"
-
+#ifdef OB_BUILD_ORACLE_XML
+#include "lib/xml/ob_multi_mode_interface.h"
+#include "lib/xml/ob_xml_util.h"
+#include "sql/engine/expr/ob_expr_xml_func_helper.h"
+#endif
 
 namespace oceanbase
 {
@@ -205,6 +209,13 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
     if (is_first_row) {
       is_first_row = false;
       can_retry = false; // 已经获取到第一行数据，不再重试了
+#ifdef OB_BUILD_SPM
+      if (OB_NOT_NULL(result.get_exec_context().get_physical_plan_ctx()) &&
+          OB_NOT_NULL(sql_ctx) && sql_ctx->spm_ctx_.need_spm_timeout_) {
+        LOG_TRACE("reset to origin timeout because result is returning to user");
+        result.get_exec_context().get_physical_plan_ctx()->set_spm_timeout_timestamp(0);
+      }
+#endif
       if (OB_FAIL(response_query_header(result, has_more_result, false))) {
         LOG_WARN("fail to response query header", K(ret), K(row_num), K(can_retry));
       }
@@ -246,6 +257,10 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
         } else if ((value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry())
                   && OB_FAIL(process_lob_locator_results(value, result))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
+#ifdef OB_BUILD_ORACLE_XML
+        } else if (value.is_user_defined_sql_type() && OB_FAIL(ObXMLExprHelper::process_sql_udt_results(value, result))) {
+          LOG_WARN("convert udt to client format failed", K(ret), K(value.get_udt_subschema_id()));
+#endif
         }
       }
     }

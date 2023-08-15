@@ -22,6 +22,10 @@
 #include "sql/resolver/tcl/ob_start_trans_stmt.h"
 #include "sql/resolver/tcl/ob_savepoint_stmt.h"
 #include "sql/engine/ob_exec_context.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/sys_package/ob_dbms_xa.h"
+#include "sql/dblink/ob_tm_service.h"
+#endif
 
 namespace oceanbase
 {
@@ -44,6 +48,50 @@ int ObEndTransExecutor::end_trans(ObExecContext &ctx, ObEndTransStmt &stmt)
     LOG_ERROR("session ptr is null", K(ret));
   } else if (my_session->is_in_transaction() &&
              my_session->associated_xa()) {
+#ifdef OB_BUILD_ORACLE_PL
+    transaction::ObTxDesc *tx_desc = my_session->get_tx_desc();
+    const transaction::ObXATransID xid = my_session->get_xid();
+    const transaction::ObGlobalTxType global_tx_type = tx_desc->get_global_tx_type(xid);
+    if (transaction::ObGlobalTxType::XA_TRANS == global_tx_type) {
+      if (stmt.get_is_rollback()) {
+        // rollback can be executed in xa trans
+        // NOTE that rollback does not finish the xa trans,
+        // it only rollbacks all actions of the trans
+        if (OB_FAIL(pl::ObDbmsXA::xa_rollback_origin_savepoint(ctx))) {
+          LOG_WARN("rollback xa changes failed", K(ret), K(xid), K(global_tx_type));
+        }
+      } else {
+        // commit is not allowed in xa trans
+        ret = OB_TRANS_XA_ERR_COMMIT;
+        LOG_WARN("COMMIT is not allowed in a xa trans", K(ret), K(xid), K(global_tx_type),
+            KPC(tx_desc));
+      }
+    } else if (transaction::ObGlobalTxType::DBLINK_TRANS == global_tx_type) {
+      transaction::ObTransID tx_id;
+      if (stmt.get_is_rollback()) {
+        if (OB_FAIL(ObTMService::tm_rollback(ctx, tx_id))) {
+          LOG_WARN("fail to do rollback for dblink trans", K(ret), K(tx_id), K(xid),
+              K(global_tx_type));
+        }
+        my_session->restore_auto_commit();
+      } else {
+        if (OB_FAIL(ObTMService::tm_commit(ctx, tx_id))) {
+          LOG_WARN("fail to do commit for dblink trans", K(ret), K(tx_id), K(xid),
+              K(global_tx_type));
+        }
+        my_session->restore_auto_commit();
+      }
+      const bool force_disconnect = false;
+      int tmp_ret = OB_SUCCESS;
+      if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = my_session->get_dblink_context().clean_dblink_conn(force_disconnect)))) {
+        LOG_WARN("dblink transaction failed to release dblink connections", K(tmp_ret), K(tx_id), K(xid));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected global trans type", K(ret), K(xid), K(global_tx_type), KPC(tx_desc));
+    }
+    ctx.set_need_disconnect(false);
+#endif
   } else if (OB_FAIL(ObSqlTransControl::explicit_end_trans(ctx, stmt.get_is_rollback(), stmt.get_hint()))) {
     LOG_WARN("fail end trans", K(ret));
   }

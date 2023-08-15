@@ -389,7 +389,14 @@ class ObAddArbitrationServiceStmt : public ObSystemCmdStmt
 public:
   ObAddArbitrationServiceStmt() : ObSystemCmdStmt(stmt::T_ADD_ARBITRATION_SERVICE) {}
   virtual ~ObAddArbitrationServiceStmt() {}
+#ifndef OB_BUILD_ARBITRATION
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_));
+#else
+  obrpc::ObAdminAddArbitrationServiceArg &get_rpc_arg() { return rpc_arg_; }
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+private:
+  obrpc::ObAdminAddArbitrationServiceArg rpc_arg_;
+#endif
 };
 
 class ObRemoveArbitrationServiceStmt : public ObSystemCmdStmt
@@ -397,7 +404,14 @@ class ObRemoveArbitrationServiceStmt : public ObSystemCmdStmt
 public:
   ObRemoveArbitrationServiceStmt() : ObSystemCmdStmt(stmt::T_REMOVE_ARBITRATION_SERVICE) {}
   virtual ~ObRemoveArbitrationServiceStmt() {}
+#ifndef OB_BUILD_ARBITRATION
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_));
+#else
+  obrpc::ObAdminRemoveArbitrationServiceArg &get_rpc_arg() { return rpc_arg_; }
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+private:
+  obrpc::ObAdminRemoveArbitrationServiceArg rpc_arg_;
+#endif
 };
 
 class ObReplaceArbitrationServiceStmt : public ObSystemCmdStmt
@@ -405,7 +419,14 @@ class ObReplaceArbitrationServiceStmt : public ObSystemCmdStmt
 public:
   ObReplaceArbitrationServiceStmt() : ObSystemCmdStmt(stmt::T_REPLACE_ARBITRATION_SERVICE) {}
   virtual ~ObReplaceArbitrationServiceStmt() {}
+#ifndef OB_BUILD_ARBITRATION
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_));
+#else
+  obrpc::ObAdminReplaceArbitrationServiceArg &get_rpc_arg() { return rpc_arg_; }
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+private:
+  obrpc::ObAdminReplaceArbitrationServiceArg rpc_arg_;
+#endif
 };
 
 class ObClearLocationCacheStmt : public ObSystemCmdStmt

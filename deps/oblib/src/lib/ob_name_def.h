@@ -844,6 +844,11 @@
 #define N_DES_ENCRYPT "des_encrypt"
 #define N_ENCRYPT "encrypt"
 
+//*********** for spm
+#define N_SPM_LOAD_PLANS_FROM_PLAN_CACHE "spm_load_plans_from_plan_cache"
+#define N_SPM_ALTER_BASELINE "spm_alter_baseline"
+#define N_SPM_DROP_BASELINE "spm_drop_baseline"
+//*********** for spm end
 
 #define N_UID "uid"
 #define N_PL_INTEGER_CHECKER "pl_integer_checker"

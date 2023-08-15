@@ -89,6 +89,12 @@ storage_dml_unittest(test_major_rows_merger)
 storage_dml_unittest(test_tablet tablet/test_tablet.cpp)
 storage_unittest(test_compaction_iter compaction/test_compaction_iter.cpp)
 
+if(OB_BUILD_CLOSE_MODULES)
+storage_dml_unittest(test_compaction_policy)
+endif()
 #storage_dml_unittest(test_table_scan_pure_index_table)
 
+if(OB_BUILD_CLOSE_MODULES)
+  storage_unittest(test_lob_seq_id)
+endif()
 storage_unittest(test_sstable_log_ts_range_cut test_sstable_log_ts_range_cut.cpp)

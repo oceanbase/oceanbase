@@ -510,6 +510,9 @@ public:
   }
 
 
+#ifdef OB_BUILD_AUDIT_SECURITY
+  int async_audit_dump(const common::ObBasebLogPrint &info);
+#endif
 
   //@brief Check whether the level to print.
   bool __attribute__((weak, noinline, cold)) need_to_print(const int32_t level) { return (level <= get_log_level()); }

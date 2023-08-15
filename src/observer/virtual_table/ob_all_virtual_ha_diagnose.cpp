@@ -249,6 +249,9 @@ int ObAllVirtualHADiagnose::insert_stat_(storage::DiagnoseInfo &diagnose_info)
         break;
       case ARB_SRV_INFO:
         cur_row_.cells_[i].set_varchar(ObString(""));
+#ifdef OB_BUILD_ARBITRATION
+        cur_row_.cells_[i].set_varchar(diagnose_info.arb_srv_diagnose_info_.diagnose_str_.string());
+#endif
         cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
                                               ObCharset::get_default_charset()));
         break;

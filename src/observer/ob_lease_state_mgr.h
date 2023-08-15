@@ -97,6 +97,9 @@ private:
 private:
   int start_heartbeat();
   int do_renew_lease();
+#ifdef OB_BUILD_TDE_SECURITY
+  int update_master_key_info(const share::ObLeaseResponse &lease_response);
+#endif
   int update_major_merge_info(const share::ObLeaseResponse &lease_response);
 private:
   bool inited_;

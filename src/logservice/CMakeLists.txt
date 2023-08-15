@@ -49,6 +49,8 @@ ob_set_subtarget(ob_logservice common
   ob_server_log_block_mgr.cpp
   ob_log_flashback_service.cpp
   ob_net_keepalive_adapter.cpp
+  ob_log_external_storage_handler.cpp
+  ob_log_external_storage_io_task.cpp
   ob_log_monitor.cpp
   ob_log_external_storage_handler.cpp
   ob_log_external_storage_io_task.cpp
@@ -185,7 +187,6 @@ ob_set_subtarget(ob_logservice restoreservice
   restoreservice/ob_restore_log_function.cpp
   restoreservice/ob_remote_log_writer.cpp
 )
-
 
 ob_set_subtarget(ob_logservice data_dictionary
   data_dictionary/ob_data_dict_utils.cpp

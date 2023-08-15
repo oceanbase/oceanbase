@@ -19,11 +19,37 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "common/ob_smart_call.h"
 #include "common/object/ob_object.h"
+#ifdef OB_BUILD_DBLINK
+#include "observer/omt/ob_multi_tenant.h"
+#include "share/rc/ob_tenant_base.h"
+#include "common/sql_mode/ob_sql_mode_utils.h"
+#endif
 
 using namespace oceanbase;
 using namespace oceanbase::sql;
 using namespace oceanbase::share;
 
+#ifdef OB_BUILD_DBLINK
+uint64_t ObDblinkService::get_current_tenant_id()
+{
+  return MTL_ID();
+}
+
+oceanbase::common::sqlclient::ObTenantOciEnvs * ObDblinkService::get_tenant_oci_envs()
+{
+  return MTL(oceanbase::common::sqlclient::ObTenantOciEnvs*);
+}
+
+int ObDblinkService::init_oci_envs_func_ptr()
+{
+  int ret = common::OB_SUCCESS;
+  OciEnvironment::get_tenant_id_ = get_current_tenant_id;
+  OciEnvironment::get_tenant_oci_envs_ = get_tenant_oci_envs;
+  return ret;
+}
+
+bool g_dblink_oci_func_ptr_inited = ObDblinkService::init_oci_envs_func_ptr();
+#endif
 int ObDblinkService::check_lob_in_result(common::sqlclient::ObMySQLResult *result, bool &have_lob)
 {
   int ret = OB_SUCCESS;

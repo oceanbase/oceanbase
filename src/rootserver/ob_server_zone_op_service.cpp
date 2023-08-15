@@ -37,6 +37,9 @@ ObServerZoneOpService::ObServerZoneOpService()
       sql_proxy_(NULL),
       lst_operator_(NULL),
       unit_manager_(NULL)
+#ifdef OB_BUILD_TDE_SECURITY
+      , master_key_mgr_()
+#endif
 {
 }
 ObServerZoneOpService::~ObServerZoneOpService()
@@ -48,12 +51,20 @@ int ObServerZoneOpService::init(
     ObLSTableOperator &lst_operator,
     ObUnitManager &unit_manager,
     ObMySQLProxy &sql_proxy
+#ifdef OB_BUILD_TDE_SECURITY
+    , ObRsMasterKeyManager *master_key_mgr
+#endif
 )
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("server zone operation service has been inited already", KR(ret), K(is_inited_));
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_ISNULL(master_key_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("master key mgr is null", KR(ret), KP(master_key_mgr));
+#endif
   } else if (OB_FAIL(st_operator_.init(&sql_proxy))) {
     LOG_WARN("fail to init server table operator", KR(ret));
   } else {
@@ -62,6 +73,9 @@ int ObServerZoneOpService::init(
     sql_proxy_ = &sql_proxy;
     lst_operator_ = &lst_operator;
     unit_manager_ = &unit_manager;
+#ifdef OB_BUILD_TDE_SECURITY
+    master_key_mgr_ = master_key_mgr;
+#endif
     is_inited_ = true;
   }
   return ret;
@@ -74,6 +88,10 @@ int ObServerZoneOpService::add_servers(const ObIArray<ObAddr> &servers, const Ob
   ObCheckServerForAddingServerResult rpc_result;
   ObZone picked_zone;
   ObTimeoutCtx ctx;
+#ifdef OB_BUILD_TDE_SECURITY
+  ObWaitMasterKeyInSyncArg wms_in_sync_arg;
+  // master key mgr sync
+#endif
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(is_inited_));
@@ -82,9 +100,19 @@ int ObServerZoneOpService::add_servers(const ObIArray<ObAddr> &servers, const Ob
   } else if (OB_ISNULL(rpc_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("rpc_proxy_ is null", KR(ret), KP(rpc_proxy_));
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_ISNULL(master_key_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("master_key_mgr_ is null", KR(ret), KP(master_key_mgr_));
+  } else if (OB_FAIL(construct_rs_list_arg(wms_in_sync_arg.rs_list_arg_))) {
+    LOG_WARN("fail to construct rs list arg", KR(ret));
+#endif
   } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
     LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
   } else {
+#ifdef OB_BUILD_TDE_SECURITY
+    SpinRLockGuard sync_guard(master_key_mgr_->sync());
+#endif
     for (int64_t i = 0; OB_SUCC(ret) && i < servers.count(); ++i) {
       const ObAddr &addr = servers.at(i);
       int64_t timeout = ctx.get_timeout();
@@ -124,6 +152,10 @@ int ObServerZoneOpService::add_servers(const ObIArray<ObAddr> &servers, const Ob
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, non_empty_server_err_msg);
       } else if (OB_FAIL(zone_checking_for_adding_server_(zone, rpc_result.get_zone(), picked_zone))) {
         LOG_WARN("zone checking for adding server is failed", KR(ret), K(zone), K(rpc_result.get_zone()));
+#ifdef OB_BUILD_TDE_SECURITY
+      } else if (!is_bootstrap && OB_FAIL(master_key_checking_for_adding_server(addr, picked_zone, wms_in_sync_arg))) {
+        LOG_WARN("master key checking for adding server is failed", KR(ret), K(addr), K(picked_zone));
+#endif
       } else if (OB_FAIL(add_server_(
           addr,
           server_id,
@@ -273,6 +305,61 @@ int ObServerZoneOpService::start_servers(
   }
   return ret;
 }
+#ifdef OB_BUILD_TDE_SECURITY
+int ObServerZoneOpService::master_key_checking_for_adding_server(
+    const common::ObAddr &server,
+    const ObZone &zone,
+    obrpc::ObWaitMasterKeyInSyncArg &wms_in_sync_arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(is_inited_));
+  } else if (OB_ISNULL(master_key_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("master_key_mgr_ is null", KR(ret), KP(master_key_mgr_));
+  } else {
+    bool master_key_empty = true;
+    share::ObLeaseResponse tmp_lease_response;
+    bool encryption = false;
+    ObTimeoutCtx ctx;
+    if (OB_FAIL(master_key_mgr_->check_master_key_empty(master_key_empty))) {
+      LOG_WARN("fail to check whether master key is empty", KR(ret));
+    } else if (master_key_empty) {
+      LOG_INFO("empty master key, no need to sync master key info");
+    } else if (!master_key_empty && zone.is_empty()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "not support to add a server "
+      "without a specified zone when the master key is valid");
+    } else if (OB_FAIL(ObZoneTableOperation::check_encryption_zone(*sql_proxy_, zone, encryption))) {
+      LOG_WARN("fail to check zone encryption", KR(ret), "zone", zone);
+    } else if (encryption) {
+      LOG_INFO("server in encrypted zone, no need to sync master key info", "zone", zone);
+    } else if (OB_FAIL(master_key_mgr_->get_all_tenant_master_key(
+            zone, wms_in_sync_arg.tenant_max_key_version_))) {
+      LOG_WARN("fail to get all tenant master key", KR(ret));
+    } else if (OB_FAIL(OTC_MGR.get_lease_response(tmp_lease_response))) {
+      LOG_WARN("fail to get lease response", KR(ret));
+    } else if (OB_FAIL(wms_in_sync_arg.tenant_config_version_.assign(
+            tmp_lease_response.tenant_config_version_))) {
+      LOG_WARN("fail to assign tenant config version", KR(ret));
+    } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+      LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
+    } else {
+      int64_t timeout = ctx.get_timeout();
+      if (OB_UNLIKELY(timeout <= 0)) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("ctx time out", KR(ret), K(timeout));
+      } else if (OB_FAIL(rpc_proxy_->to(server)
+          .timeout(timeout)
+          .wait_master_key_in_sync(wms_in_sync_arg))) {
+        LOG_WARN("fail to wait master key in sync", KR(ret), K(server));
+      } else {}
+    }
+  }
+  return ret;
+}
+#endif
 int ObServerZoneOpService::stop_server_precheck(
     const ObIArray<ObAddr> &servers,
     const obrpc::ObAdminServerArg::AdminServerOp &op)

@@ -134,6 +134,9 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
     LOG_INFO("connecting to mysql server", "ip", host, "port", addr.get_port());
     mysql_init(&mysql_);
     timeout_ = timeout;
+#ifdef OB_BUILD_TDE_SECURITY
+    int64_t ssl_enforce = 1;
+#endif
     mysql_options(&mysql_, MYSQL_OPT_CONNECT_TIMEOUT,  &timeout_);
     if (read_write_no_timeout) {
       int64_t zero_second = 0;
@@ -157,6 +160,9 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
     default:
        mysql_options4(&mysql_, MYSQL_OPT_CONNECT_ATTR_ADD, OB_SQL_REQUEST_LEVEL, OB_SQL_REQUEST_LEVEL0);
     }
+#ifdef OB_BUILD_TDE_SECURITY
+    mysql_options(&mysql_, MYSQL_OPT_SSL_ENFORCE, &ssl_enforce);
+#endif
     int32_t port = addr.get_port();
     MYSQL *mysql = mysql_real_connect(&mysql_, host, user, pass, db, port, NULL, 0);
     if (OB_ISNULL(mysql)) {
@@ -204,6 +210,12 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
     close();
     LOG_INFO("connecting to mysql server", "ip", host, "port", root_->get_server().get_port());
     mysql_init(&mysql_);
+#ifdef OB_BUILD_TDE_SECURITY
+    int64_t ssl_enforce = 1;
+    if (! use_ssl) {
+      ssl_enforce = 0;
+    }
+#endif
     mysql_options(&mysql_, MYSQL_OPT_CONNECT_TIMEOUT,  &timeout_);
     if (read_write_no_timeout) {
       int64_t zero_second = 0;
@@ -227,6 +239,9 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
     default:
        mysql_options4(&mysql_, MYSQL_OPT_CONNECT_ATTR_ADD, OB_SQL_REQUEST_LEVEL, OB_SQL_REQUEST_LEVEL0);
     }
+#ifdef OB_BUILD_TDE_SECURITY
+    mysql_options(&mysql_, MYSQL_OPT_SSL_ENFORCE, &ssl_enforce);
+#endif
     int32_t port = root_->get_server().get_port();
     MYSQL *mysql = mysql_real_connect(&mysql_, host, user, pass, db, port, NULL, 0);
     if (OB_ISNULL(mysql)) {

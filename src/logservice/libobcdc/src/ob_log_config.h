@@ -177,6 +177,7 @@ public:
   // default value '0:not_skip'
   T_DEF_BOOL(skip_ob_version_compat_check, OB_CLUSTER_PARAMETER, 0, "0:not_skip, 1:skip")
 
+#ifndef OB_USE_DRCMSG
   // default DFT_BR(LogRecordImpl), add DFT_BR_PB
   // passed in via IObLog::init interface
   // string LogMsgFactory::DFT_ColMeta = "ColMetaImpl";
@@ -185,6 +186,17 @@ public:
   // string LogMsgFactory::DFT_METAS = "MetaDataCollectionsImpl";
   // string LogMsgFactory::DFT_LR = "LogRecordImpl";
   DEF_STR(drc_message_factory_binlog_record_type, OB_CLUSTER_PARAMETER, "LogRecordImpl", "LogMsgFactory::DFT_BR");
+#else
+  // default DFT_BR(BinlogRecordImpl), add DFT_BR_PB
+  // passed in via IObLog::init interface
+  // string DRCMessageFactory::DFT_ColMeta = "ColMetaImpl";
+  // string DRCMessageFactory::DFT_TableMeta = "TableMetaImpl";
+  // string DRCMessageFactory::DFT_DBMeta = "DBMetaImpl";
+  // string DRCMessageFactory::DFT_METAS = "MetaDataCollectionsImpl";
+  // string DRCMessageFactory::DFT_BR = "BinlogRecordImpl";
+  // string DRCMessageFactory::DFT_BR_PB = "BinlogRecordProtobuf";
+  DEF_STR(drc_message_factory_binlog_record_type, OB_CLUSTER_PARAMETER, "BinlogRecordImpl", "DRCMessageFactory::DFT_BR");
+#endif
 
   // whether to check ObTraceId
   T_DEF_BOOL(need_verify_ob_trace_id, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");

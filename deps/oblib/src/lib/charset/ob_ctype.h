@@ -190,6 +190,79 @@ typedef struct ObUnicaseInfo
   const ObUnicaseInfoChar **page;
 } ObUnicaseInfo;
 
+#ifdef OB_BUILD_FULL_CHARSET
+// OB_CHARSET_HANDLER
+// ==================
+
+// OB_CHARSET_HANDLER is a collection of character-set
+// related routines. Defined in m_ctype.h. Have the
+// following set of functions:
+
+// Multi-byte routines
+// ------------------
+// ismbchar()  - detects whether the given string is a multi-byte sequence
+// mbcharlen() - returns length of multi-byte sequence starting with
+//               the given character
+// numchars()  - returns number of characters in the given string, e.g.
+//               in SQL function CHAR_LENGTH().
+// charpos()   - calculates the offset of the given position in the string.
+//               Used in SQL functions LEFT(), RIGHT(), SUBSTRING(),
+//               INSERT()
+
+// well_formed_len()
+//             - returns length of a given multi-byte string in bytes
+//               Used in INSERTs to shorten the given string so it
+//               a) is "well formed" according to the given character set
+//               b) can fit into the given data type
+
+// lengthsp()  - returns the length of the given string without trailing spaces.
+
+
+// Unicode conversion routines
+// ---------------------------
+// mb_wc       - converts the left multi-byte sequence into its Unicode code.
+// mc_mb       - converts the given Unicode code into multi-byte sequence.
+
+
+// Case and sort conversion
+// ------------------------
+// caseup_str  - converts the given 0-terminated string to uppercase
+// casedn_str  - converts the given 0-terminated string to lowercase
+// caseup      - converts the given string to lowercase using length
+// casedn      - converts the given string to lowercase using length
+
+// Number-to-string conversion routines
+// ------------------------------------
+// snprintf()
+// long10_to_str()
+// longlong10_to_str()
+
+// The names are pretty self-describing.
+
+// String padding routines
+// -----------------------
+// fill()     - writes the given Unicode value into the given string
+//              with the given length. Used to pad the string, usually
+//              with space character, according to the given charset.
+
+// String-to-number conversion routines
+// ------------------------------------
+// strntol()
+// strntoul()
+// strntoll()
+// strntoull()
+// strntod()
+
+// These functions are almost the same as their STDLIB counterparts,
+// but also:
+//   - accept length instead of 0-terminator
+//   - are character set dependent
+
+// Simple scanner routines
+// -----------------------
+// scan()    - to skip leading spaces in the given string.
+//             Used when a string value is inserted into a numeric field.
+#endif
 typedef struct ObCharsetHandler
 {
   //my_bool (*init)(struct ObCharsetInfo *, MY_CHARSET_LOADER *loader);
@@ -257,8 +330,22 @@ typedef struct ObCharsetHandler
   size_t        (*scan)(const struct ObCharsetInfo *, const char *b,
                         const char *e, int sq);
 } ObCharsetHandler;
-
-
+#ifdef OB_BUILD_FULL_CHARSET
+// OB_COLLATION_HANDLER
+// ====================
+// strnncoll()   - compares two strings according to the given collation
+// strnncollsp() - like the above but ignores trailing spaces for PAD SPACE
+//                 collations. For NO PAD collations, identical to strnncoll.
+// strnxfrm()    - makes a sort key suitable for memcmp() corresponding
+//                 to the given string
+// like_range()  - creates a LIKE range, for optimizer
+// wildcmp()     - wildcard comparison, for LIKE
+// strcasecmp()  - 0-terminated string comparison
+// instr()       - finds the first substring appearance in the string
+// hash_sort()   - calculates hash value taking into account
+//                 the collation rules, e.g. case-insensitivity,
+//                 accent sensitivity, etc.
+#endif
 static const int HASH_BUFFER_LENGTH = 128;
 
 typedef uint64_t (*hash_algo)(const void* input, uint64_t length, uint64_t seed);
@@ -353,8 +440,15 @@ struct ObCharsetInfo
 
   ObCharsetHandler *cset;
   ObCollationHandler *coll;
+#ifdef OB_BUILD_FULL_CHARSET
+  /**
+    If this collation is PAD_SPACE, it collates as if all inputs were
+    padded with a given number of spaces at the end (see the "num_codepoints"
+    flag to strnxfrm). NO_PAD simply compares unextended strings.
 
-
+    Note that this is fundamentally about the behavior of coll->strnxfrm.
+  */
+#endif
   enum ObCharsetPadAttr pad_attribute;
 };
 
@@ -438,6 +532,16 @@ extern ObCharsetInfo ob_charset_gb18030_2022_radical_cs;
 extern ObCharsetInfo ob_charset_gb18030_2022_stroke_ci;
 extern ObCharsetInfo ob_charset_gb18030_2022_stroke_cs;
 extern ObCharsetInfo ob_charset_gb18030_2022_bin;
+#ifdef OB_BUILD_FULL_CHARSET
+extern ObCharsetInfo ob_charset_utf8mb4_unicode_ci;
+extern ObCharsetInfo ob_charset_utf16_unicode_ci;
+extern ObCharsetInfo ob_charset_utf8mb4_zh_0900_as_cs;
+extern ObCharsetInfo ob_charset_utf8mb4_zh2_0900_as_cs;
+extern ObCharsetInfo ob_charset_utf8mb4_zh3_0900_as_cs;
+extern ObCharsetInfo ob_charset_utf8mb4_0900_bin;
+extern ObCharsetInfo ob_charset_latin1;
+extern ObCharsetInfo ob_charset_latin1_bin;
+#endif
 
 extern ObCollationHandler ob_collation_mb_bin_handler;
 extern ObCharsetHandler ob_charset_utf8mb4_handler;

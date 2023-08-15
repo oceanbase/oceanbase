@@ -53,6 +53,9 @@
 #include "lib/charset/ob_charset.h"
 #include "pl/ob_pl_user_type.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#ifdef OB_BUILD_SPM
+#include "sql/spm/ob_spm_controller.h"
+#endif
 #include "observer/omt/ob_tenant_srs_mgr.h"
 #include "sql/executor/ob_maintain_dependency_info_task.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
@@ -2997,8 +3000,23 @@ int ObSQLUtils::get_ext_obj_data_type(const ObObjParam &obj, ObDataType &data_ty
       data_type = array_params->element_;
     }
   } else if (obj.is_pl_extend()) {
+#ifndef OB_BUILD_ORACLE_PL
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support", K(ret));
+#else
+    if (obj.get_meta().get_extend_type() == pl::PL_NESTED_TABLE_TYPE
+      || obj.get_meta().get_extend_type() == pl::PL_ASSOCIATIVE_ARRAY_TYPE
+      || obj.get_meta().get_extend_type() == pl::PL_VARRAY_TYPE) {
+      const pl::ObPLNestedTable *nested_table =
+          reinterpret_cast<const pl::ObPLNestedTable*>(obj.get_ext());
+      if (OB_ISNULL(nested_table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("nested table is null", K(ret));
+      } else {
+        data_type = nested_table->get_element_type();
+      }
+    }
+#endif
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("obj is not extend type", K(ret), K(obj));
@@ -4818,6 +4836,28 @@ int ObSQLUtils::check_location_access_priv(const ObString &location, ObSQLSessio
   return ret;
 }
 
+#ifdef OB_BUILD_SPM
+int ObSQLUtils::handle_plan_baseline(const ObAuditRecordData &audit_record,
+                                     ObPhysicalPlan *plan,
+                                     const int ret_code,
+                                     ObSqlCtx &sql_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(plan) && OB_UNLIKELY(OB_SUCCESS != ret_code && plan->get_evolution())) {
+    plan->update_plan_error_cnt();
+  }
+  if (OB_LIKELY(!sql_ctx.spm_ctx_.check_execute_status_)) {
+    /*do nothing*/
+  } else if (OB_SUCCESS == ret_code) {
+    if (OB_FAIL(ObSpmController::accept_new_plan_as_baseline(sql_ctx.spm_ctx_, audit_record))) {
+      LOG_WARN("failed to accept new plan as baseline", K(ret));
+    }
+  } else if (OB_FAIL(ObSpmController::deny_new_plan_as_baseline(sql_ctx.spm_ctx_))) {
+    LOG_WARN("failed to deny new plan as baseline", K(ret));
+  }
+  return ret;
+}
+#endif
 
 int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_view_schema,
                                      ObSelectStmt *select_stmt,

@@ -3,12 +3,20 @@ cmake_minimum_required(VERSION 3.20)
 include(cmake/Utils.cmake)
 include(cmake/Env.cmake)
 
-project("OceanBase_CE"
-  VERSION 4.2.0.0
-  DESCRIPTION "OceanBase distributed database system"
-  HOMEPAGE_URL "https://open.oceanbase.com/"
-  LANGUAGES CXX C ASM)
-message(STATUS "open source build enabled")
+if(OB_BUILD_OPENSOURCE)
+  project("OceanBase_CE"
+    VERSION 4.2.0.0
+    DESCRIPTION "OceanBase distributed database system"
+    HOMEPAGE_URL "https://open.oceanbase.com/"
+    LANGUAGES CXX C ASM)
+  message(STATUS "open source build enabled")
+else()
+  project(OceanBase
+    VERSION 4.2.0.0
+    DESCRIPTION "OceanBase distributed database system"
+    HOMEPAGE_URL "https://www.oceanbase.com/"
+    LANGUAGES CXX C ASM)
+endif()
 
 
 if(ENABLE_COMPILE_DLL_MODE)
@@ -94,6 +102,11 @@ message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+if(EXISTS ${CMAKE_SOURCE_DIR}/close_modules)
+  message(STATUS "will add close_modules sub directory")
+  add_subdirectory(close_modules)
+endif()
+
 add_subdirectory(deps/easy)
 add_subdirectory(deps/oblib)
 add_subdirectory(src/objit)
@@ -141,10 +154,23 @@ cmake_dependent_option(
 include(CTest)
 if (OB_BUILD_UNITTEST)
   add_subdirectory(unittest)
+  if(OB_BUILD_CLOSE_MODULES)
+    add_subdirectory(mittest)
+  endif()
 elseif(OB_INCLUDE_UNITTEST)
   add_subdirectory(unittest EXCLUDE_FROM_ALL)
+  if(OB_BUILD_CLOSE_MODULES)
+    add_subdirectory(mittest EXCLUDE_FROM_ALL)
+  endif()
 endif()
 
+if(OB_BUILD_CLOSE_MODULES)
+  if (OB_BUILD_TEST)
+    add_subdirectory(test)
+  elseif(OB_INCLUDE_TEST)
+    add_subdirectory(test EXCLUDE_FROM_ALL)
+  endif()
+endif()
 
 if (OB_BUILD_TOOLS)
   add_subdirectory(tools)

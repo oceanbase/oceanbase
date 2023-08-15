@@ -52,6 +52,9 @@ class ObLibCacheAtomicOp;
 class ObEvolutionPlan;
 
 typedef common::hash::ObHashMap<uint64_t, ObPlanCache *> PlanCacheMap;
+#ifdef OB_BUILD_SPM
+typedef common::ObSEArray<ObEvolutionPlan*, 16> EvolutionPlanList;
+#endif
 
 struct ObKVEntryTraverseOp
 {
@@ -356,6 +359,13 @@ public:
   int cache_evict_by_ns(ObLibCacheNameSpace ns);
   template<typename CallBack = ObKVEntryTraverseOp>
   int foreach_cache_evict(CallBack &cb);
+#ifdef OB_BUILD_SPM
+  int cache_evict_baseline_by_sql_id(uint64_t db_id, common::ObString sql_id);
+  // load plan baseline from plan cache
+  // int load_plan_baseline();
+  int load_plan_baseline(const obrpc::ObLoadPlanBaselineArg &arg, uint64_t &load_count);
+  int check_baseline_finish();
+#endif
   void destroy();
   common::ObAddr &get_host() { return host_; }
   void set_host(common::ObAddr &addr) { host_ = addr; }

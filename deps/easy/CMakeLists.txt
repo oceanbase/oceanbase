@@ -20,11 +20,19 @@ set_property(GLOBAL PROPERTY EASY_INCLUDE_DIRS
   ${INNER_INCLUDE_DIRS}
 )
 
-target_include_directories(
-  easy_base INTERFACE
-  ${INNER_INCLUDE_DIRS}
-  ${DEP_DIR}/include
-)
+if(OB_USE_BABASSL)
+  target_include_directories(
+    easy_base INTERFACE
+    ${INNER_INCLUDE_DIRS}
+    ${DEP_3RD_DIR}/usr/local/babassl-ob/include
+  )
+else()
+  target_include_directories(
+    easy_base INTERFACE
+    ${INNER_INCLUDE_DIRS}
+    ${DEP_DIR}/include
+  )
+endif()
 
 
 if (OB_USE_CLANG)

@@ -284,6 +284,13 @@ struct DistinctObjMeta
 	int add_filter_for_temporary_table(ObDMLStmt &stmt,
 	                                   const TableItem &table_item,
                                      bool is_trans_scope_temp_table);
+#ifdef OB_BUILD_LABEL_SECURITY
+	int transform_for_label_se_table(ObDMLStmt *stmt, bool &trans_happened);
+  int add_filter_for_label_se_table(ObDMLStmt &stmt,
+                                    const TableItem &table_item,
+                                    const common::ObString &policy_name,
+                                    const share::schema::ObColumnSchemaV2 &column_schema);
+#endif
 	int collect_all_tableitem(ObDMLStmt *stmt,
                             TableItem *table_item,
                             common::ObArray<TableItem*> &table_item_list);

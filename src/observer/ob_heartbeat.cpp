@@ -29,6 +29,9 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "common/ob_timeout_ctx.h"
 #include "storage/slog/ob_storage_logger_manager.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
 
 namespace oceanbase
 {
@@ -93,6 +96,24 @@ void ObHeartBeatProcess::destroy()
   TG_DESTROY(lib::TGDefIDs::ObHeartbeat);
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObHeartBeatProcess::set_lease_request_max_stored_versions(
+    share::ObLeaseRequest &lease_request,
+    const common::ObIArray<std::pair<uint64_t, uint64_t> > &max_stored_versions)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < max_stored_versions.count(); ++i) {
+    const std::pair<uint64_t, uint64_t> &src = max_stored_versions.at(i);
+    std::pair<uint64_t, ObLeaseRequest::TLRqKeyVersion> dest;
+    dest.first = src.first;
+    dest.second.max_flushed_key_version_ = src.second;
+    if (OB_FAIL(lease_request.tenant_max_flushed_key_version_.push_back(dest))) {
+      LOG_WARN("fail to push back", KR(ret));
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObHeartBeatProcess::init_lease_request(ObLeaseRequest &lease_request)
 {
@@ -107,6 +128,13 @@ int ObHeartBeatProcess::init_lease_request(ObLeaseRequest &lease_request)
     LOG_WARN("GCTX.ob_service_ is null", KR(ret), KP(GCTX.ob_service_));
   } else if (OB_FAIL((GCTX.ob_service_->get_server_resource_info(lease_request.resource_info_)))) {
     LOG_WARN("fail to get server resource info", KR(ret));
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(ObMasterKeyGetter::instance().get_max_stored_versions(max_stored_versions))) {
+    LOG_WARN("fail to get max stored versions", KR(ret));
+  } else if (OB_FAIL(set_lease_request_max_stored_versions(lease_request, max_stored_versions))) {
+    LOG_WARN("fail to set lease request max stored key versions",
+             KR(ret), K(lease_request), K(max_stored_versions));
+#endif
   } else {
     lease_request.request_lease_time_ = 0; // this is not a valid member
     lease_request.version_ = ObLeaseRequest::LEASE_VERSION;

@@ -22,6 +22,9 @@
 #include "sql/resolver/ob_stmt_resolver.h"
 #include "pl/ob_pl_package.h"
 #include "pl/ob_pl_user_type.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/ob_pl_udt_object_manager.h"
+#endif
 
 namespace oceanbase {
 using namespace common;
@@ -112,6 +115,11 @@ const ObUserDefinedType *ObPLUserTypeTable::get_type(const ObString &type_name) 
 const ObUserDefinedType *ObPLUserTypeTable::get_type(uint64_t type_id) const
 {
   const ObUserDefinedType *user_defined_type = NULL;
+#ifdef OB_BUILD_ORACLE_PL
+  if (type_id == sys_refcursor_type_.get_user_type_id()) {
+    user_defined_type = &sys_refcursor_type_;
+  }
+#endif
   for (int64_t i = 0; NULL == user_defined_type && i < user_types_.count(); ++i) {
     if (user_types_.at(i) != NULL && user_types_.at(i)->get_user_type_id() == type_id) {
       user_defined_type = user_types_.at(i);
@@ -128,6 +136,11 @@ const ObUserDefinedType *ObPLUserTypeTable::get_type(int64_t idx) const
 const ObUserDefinedType *ObPLUserTypeTable::get_external_type(uint64_t type_id) const
 {
   const ObUserDefinedType *user_defined_type = NULL;
+#ifdef OB_BUILD_ORACLE_PL
+  if (type_id == sys_refcursor_type_.get_user_type_id()) {
+    user_defined_type = &sys_refcursor_type_;
+  }
+#endif
   for (int64_t i = 0; NULL == user_defined_type && i < external_user_types_.count(); ++i) {
     if (external_user_types_.at(i) != NULL && external_user_types_.at(i)->get_user_type_id() == type_id) {
       user_defined_type = external_user_types_.at(i);
@@ -507,6 +520,15 @@ int ObPLRoutineInfo::make_routine_param(ObIAllocator &allocator,
   OZ (ob_write_string(allocator, extern_type_info.type_subname_,
                       const_cast<ObString&>(param->get_type_subname())), extern_type_info);
 
+#ifdef OB_BUILD_ORACLE_PL
+  if (OB_SUCC(ret)) {
+    if (ObPLUDTObjectManager::is_self_param(param_name)) {
+      param->set_is_self_param(true);
+    } else {
+      param->set_is_self_param(false);
+    }
+  }
+#endif
 
   LOG_DEBUG("make call routine param", K(ret), K(extern_type_info), K(param_type), K(lbt()));
 
@@ -2165,6 +2187,77 @@ int ObPLExternalNS::check_routine_exists(const ObString &db_name,
   return ret;
 }
 
+#ifdef OB_BUILD_ORACLE_PL
+#define SET_ACCESS(idx, data_type) \
+    do { \
+      if (OB_SUCC(ret)) { \
+        var_idx = idx +1; \
+        ObPLDataType property_type; \
+        property_type.set_data_type(data_type); \
+        new(&access_idx)ObObjAccessIdx(property_type, ObObjAccessIdx::IS_PROPERTY, \
+                                       attr_name, property_type, var_idx); \
+      } \
+    } while(0)
+
+#define SET_ACCESS_AA(idx, data_type) \
+    do { \
+      if (OB_SUCC(ret)) { \
+        if (user_type.is_associative_array_type()) {\
+          const ObAssocArrayType &assoc_type = static_cast<const ObAssocArrayType&>(user_type);\
+          const ObDataType *dt= assoc_type.get_index_type().get_data_type();\
+          CK (OB_NOT_NULL(dt));\
+          SET_ACCESS(IDX_COLLECTION_FIRST, *dt);\
+        } else {\
+          SET_ACCESS(IDX_COLLECTION_FIRST, data_type);\
+        }\
+      } \
+    } while(0)
+
+int ObPLBlockNS::add_column_conv_for_coll_func(
+  ObSQLSessionInfo &session_info,
+  ObRawExprFactory &expr_factory,
+  const ObUserDefinedType *user_type,
+  const ObString &attr_name,
+  ObRawExpr *&expr) const
+{
+  int ret = OB_SUCCESS;
+  ObDataType expected_type;
+  CK (OB_NOT_NULL(user_type));
+  CK (OB_NOT_NULL(expr));
+  if (OB_FAIL(ret)) {
+  } else if (0 == attr_name.case_compare("prior")
+      || 0 == attr_name.case_compare("next")
+      || 0 == attr_name.case_compare("exists")
+      || 0 == attr_name.case_compare("delete")) {
+    if (user_type->is_associative_array_type()) {
+      const ObAssocArrayType *assoc_type = static_cast<const ObAssocArrayType *>(user_type);
+      CK (OB_NOT_NULL(assoc_type));
+      if (OB_SUCC(ret)
+          && assoc_type->get_index_type().get_data_type() != NULL) {
+        expected_type = *(assoc_type->get_index_type().get_data_type());
+      }
+    } else {
+      expected_type.set_obj_type(ObInt32Type);
+    }
+  } else if (0 == attr_name.case_compare("extend")
+              || 0 == attr_name.case_compare("trim")) {
+    expected_type.set_obj_type(ObInt32Type);
+  }
+  if (OB_SUCC(ret) && expected_type.get_obj_type() != ObNullType) {
+    OZ (ObRawExprUtils::build_column_conv_expr(&session_info,
+                                               expr_factory,
+                                               expected_type.get_obj_type(),
+                                               expected_type.get_collation_type(),
+                                               expected_type.get_accuracy_value(),
+                                               true,
+                                               NULL,
+                                               NULL,
+                                               expr,
+                                               true));
+  }
+  return ret;
+}
+#endif
 
 int ObPLBlockNS::find_sub_attr_by_name(const ObUserDefinedType &user_type,
                                        const ObObjAccessIdent &access_ident,
@@ -2194,6 +2287,99 @@ int ObPLBlockNS::find_sub_attr_by_name(const ObUserDefinedType &user_type,
       ret = OB_ERR_SP_UNDECLARED_VAR;
       LOG_WARN("PLS-00302: component 'A' must be declared", K(ret), K(access_ident), K(user_type));
     }
+#ifdef OB_BUILD_ORACLE_PL
+  } else if (user_type.is_collection_type()) {
+    ObPLExternalNS::ExternalType type = ObPLExternalNS::INVALID_VAR;
+    // declare v vvv, last number; val number; begin val = v.last; end; vvv 是 varray
+    // 这种场景下，last会被识别为一个local，所以collection的类型需要设置type id，
+    // 确保在resolve symbol的时候不会找错。
+    if (OB_INVALID_ID == package_id) {
+      package_id = user_type.get_user_type_id();
+    }
+    if (OB_FAIL(resolve_symbol(attr_name, type, data_type, package_id, var_idx))) {
+      LOG_WARN("get var index by name failed", K(ret));
+    } else if (ObPLExternalNS::INVALID_VAR == type) {
+      ObDataType data_type;
+      data_type.set_int();
+      if (0 == attr_name.case_compare("count")) { // TODO: bug!!! @ryan.ly @yuchen.wyc
+
+        SET_ACCESS(IDX_COLLECTION_COUNT, data_type);
+
+      } else  if (0 == attr_name.case_compare("first")) {
+
+        SET_ACCESS_AA(IDX_COLLECTION_FIRST, data_type);
+
+      } else if (0 == attr_name.case_compare("last")) {
+
+        SET_ACCESS_AA(IDX_COLLECTION_LAST, data_type);
+
+      } else if (0 == attr_name.case_compare("limit")){
+
+        SET_ACCESS(IDX_VARRAY_CAPACITY, data_type);
+
+      } else if (0 == attr_name.case_compare("prior")
+                 || 0 == attr_name.case_compare("next")
+                 || 0 == attr_name.case_compare("exists")) {
+        if (0 == attr_name.case_compare("exists")) {
+          data_type.set_obj_type(ObTinyIntType);
+          SET_ACCESS(IDX_COLLECTION_PLACEHOLD, data_type);
+        } else {
+          SET_ACCESS_AA(IDX_COLLECTION_PLACEHOLD, data_type);
+        }
+        if (OB_SUCC(ret) && access_ident.params_.count() > 1) {
+          ret = OB_ERR_CALL_WRONG_ARG;
+          LOG_WARN("call collection method with wrong parameter",
+                    K(ret), K(access_ident.params_), K(attr_name));
+          LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, attr_name.length(), attr_name.ptr());
+        }
+        ARRAY_FOREACH(access_ident.params_, idx) {
+          ObRawExpr *param_expr = access_ident.params_.at(idx).first;
+          int64_t expr_idx = OB_INVALID_INDEX;
+          OZ (add_column_conv_for_coll_func(
+            session_info, expr_factory, &user_type, attr_name, param_expr));
+          if (OB_FAIL(ret)) {
+          } else if (!has_exist_in_array(func.get_exprs(), param_expr, &expr_idx)) {
+            OZ (func.add_expr(param_expr));
+            OX (expr_idx = func.get_exprs().count() - 1);
+          }
+          OZ (access_idx.type_method_params_.push_back(expr_idx));
+        }
+
+      } else if (0 == attr_name.case_compare("extend")
+                 || 0 == attr_name.case_compare("delete")
+                 || 0 == attr_name.case_compare("trim")) {
+        ObPLDataType invalid_pl_data_type;
+        new(&access_idx)ObObjAccessIdx(
+          invalid_pl_data_type, ObObjAccessIdx::IS_TYPE_METHOD, attr_name, invalid_pl_data_type);
+        if (access_ident.params_.count() > 2) {
+          ret = OB_ERR_CALL_WRONG_ARG;
+          LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, attr_name.length(), attr_name.ptr());
+        }
+        ARRAY_FOREACH(access_ident.params_, idx) {
+          ObRawExpr *param_expr = access_ident.params_.at(idx).first;
+          int64_t expr_idx = OB_INVALID_INDEX;
+          OZ (add_column_conv_for_coll_func(
+              session_info, expr_factory, &user_type, attr_name, param_expr));
+          if (OB_FAIL(ret)) {
+          } else if (!has_exist_in_array(func.get_exprs(), param_expr, &expr_idx)) {
+            OZ (func.add_expr(param_expr));
+            OX (expr_idx = func.get_exprs().count() - 1);
+          }
+          OZ (access_idx.type_method_params_.push_back(expr_idx));
+        }
+      } else {
+        ret = OB_ERR_SP_UNDECLARED_VAR;
+        LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR, attr_name.length(), attr_name.ptr());
+      }
+    } else {
+      const ObCollectionType &collection_type = static_cast<const ObCollectionType &>(user_type);
+      new(&access_idx)ObObjAccessIdx(collection_type.get_element_type(),
+                                     static_cast<ObObjAccessIdx::AccessType>(type),
+                                     attr_name,
+                                     data_type,
+                                     var_idx);
+    }
+#endif
   } else {
     ret = OB_ERR_COMPONENT_UNDECLARED;
     LOG_USER_ERROR(OB_ERR_COMPONENT_UNDECLARED, attr_name.length(), attr_name.ptr());
@@ -2926,6 +3112,21 @@ int ObPLBlockNS::check_routine_exists(const ObString &db_name,
 int ObPLBlockNS::find_sub_attr_by_index(const ObUserDefinedType &user_type, int64_t attr_index, const ObRawExpr *func_expr, ObObjAccessIdx &access_idx) const
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_PL
+  if (user_type.is_nested_table_type()) {
+    const ObNestedTableType &table_type = static_cast<const ObNestedTableType &>(user_type);
+    ObString empty_name;
+    new(&access_idx)ObObjAccessIdx(table_type.get_element_type(),
+                                   NULL == func_expr ? ObObjAccessIdx::IS_CONST : ObObjAccessIdx::IS_EXPR,
+                                       empty_name,
+                                       table_type.get_element_type(),
+                                       reinterpret_cast<int64_t>(func_expr));
+    access_idx.var_index_ = attr_index;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Invalid user type", K(user_type), K(ret));
+  }
+#endif
   return ret;
 }
 
@@ -2978,6 +3179,15 @@ int ObPLBlockNS::get_pl_data_type_by_name(const ObPLResolveCtx &resolve_ctx,
         } else { /*do nothing*/ }
       }
     }
+#ifdef OB_BUILD_ORACLE_PL
+    //所有的type表都找不到，看是否是SYS_REFCURSOR
+    if ((OB_SUCC(ret) && OB_ISNULL(user_type)) || OB_ERR_SP_UNDECLARED_TYPE == ret) {
+      if (db_name.empty() && package_name.empty() && ObCharset::case_insensitive_equal(type_name, "SYS_REFCURSOR")) {
+        user_type = &type_table_->get_sys_refcursor_type();
+        ret = OB_SUCCESS;
+      }
+    }
+#endif
     if (OB_SUCC(ret) && OB_NOT_NULL(user_type)) {
       if (OB_FAIL(user_type->get_all_depended_user_type(resolve_ctx, *this))) {
         LOG_WARN("get all depended user type failed", K(ret));
@@ -2988,6 +3198,18 @@ int ObPLBlockNS::get_pl_data_type_by_name(const ObPLResolveCtx &resolve_ctx,
   return ret;
 }
 
+#ifdef OB_BUILD_ORACLE_PL
+int ObPLBlockNS::get_subtype(uint64_t type_id, const ObUserDefinedSubType *&subtype)
+{
+  int ret = OB_SUCCESS;
+  const ObUserDefinedType *type = NULL;
+  OZ (get_pl_data_type_by_id(type_id, type));
+  CK (OB_NOT_NULL(type));
+  CK (type->is_subtype());
+  CK (OB_NOT_NULL(subtype = static_cast<const ObUserDefinedSubType *>(type)));
+  return ret;
+}
+#endif
 
 int ObPLBlockNS::get_subtype_actually_basetype(ObPLDataType &pl_type)
 {
@@ -3008,8 +3230,19 @@ int ObPLBlockNS::get_subtype_actually_basetype(const ObPLDataType *pl_type,
                                                const ObPLDataType *&actually_type)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
   ret = OB_NOT_SUPPORTED;
   LOG_WARN("get_subtype_actually_basetype is not supported in mysql mode", K(ret));
+#else
+  const ObUserDefinedSubType *subtype = NULL;
+  if (OB_NOT_NULL(pl_type) && pl_type->is_subtype()) {
+    OZ (get_subtype(pl_type->get_user_type_id(), subtype));
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(subtype)) {
+    CK (OB_NOT_NULL(actually_type = subtype->get_base_type()));
+    OZ (get_subtype_actually_basetype(actually_type, actually_type));
+  }
+#endif
   return ret;
 }
 
@@ -3751,6 +3984,24 @@ int ObPLInto::check_into(ObPLFunctionAST &func, ObPLBlockNS &ns, bool is_bulk)
         ret = OB_ERR_MIX_SINGLE_MULTI;
         LOG_WARN("PLS-00497: cannot mix between single row and multi-row (BULK) in INTO list",
                  K(ret), K(i));
+#ifdef OB_BUILD_ORACLE_PL
+      } else if (!is_bulk && type.is_collection_type()) {
+        //ret = OB_ERR_INTO_EXPR_ILLEGAL;
+        //LOG_WARN("PLS-00597: expression 'string' in the INTO list is of wrong type", K(ret), K(i));
+      } else if (is_bulk && type.is_associative_array_type()) {
+        const ObUserDefinedType *user_type = NULL;
+        const ObAssocArrayType *assoc_type = NULL;
+        OZ (ns.get_pl_data_type_by_id(type.get_user_type_id(), user_type));
+        CK (OB_NOT_NULL(assoc_type = static_cast<const ObAssocArrayType*>(user_type)));
+        CK (OB_NOT_NULL(assoc_type->get_index_type().get_data_type()));
+        if (OB_FAIL(ret)) {
+        } else if (ObStringTC == assoc_type->get_index_type().get_data_type()->get_type_class()) {
+          ret = OB_ERR_BULK_SQL_RESTRICTION;
+          LOG_WARN("PLS-00657: Implementation restriction:"
+                   " bulk SQL with associative arrays with VARCHAR2 key is not supported.",
+                   K(ret), K(i), KPC(assoc_type));
+        }
+#endif
       }
     }
   }

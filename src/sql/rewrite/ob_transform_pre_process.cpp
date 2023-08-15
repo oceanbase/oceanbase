@@ -133,6 +133,17 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
         LOG_TRACE("succeed to replace function", K(is_happened));
       }
     }
+#ifdef OB_BUILD_LABEL_SECURITY
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(transform_for_label_se_table(stmt, is_happened))) {
+        LOG_WARN("failed to transform for label security table", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        OPT_TRACE("transform for label security table:", is_happened);
+        LOG_TRACE("succeed to transform for label security table", K(is_happened), K(ret));
+      }
+    }
+#endif
     if (OB_SUCC(ret)) {
       if (OB_FAIL(transform_for_rls_table(stmt, is_happened))) {
         LOG_WARN("failed to transform for rls table", K(ret));
@@ -3195,6 +3206,199 @@ int ObTransformPreProcess::collect_all_tableitem(ObDMLStmt *stmt,
   return ret;
 }
 
+#ifdef OB_BUILD_LABEL_SECURITY
+/**
+ * 假如t1的安全列是 c_label，对应的安全策略是 policy_name, 会在下面三种语句添加filter
+ * 1) select * from t1 where  ..
+ * 2) update t1 set c1 = 1 where ..
+ * 3) delete from t1 where ..
+ *
+ * filter: 0 == ols_label_value_cmp_le(ols_session_label(policy_name), c_label)
+ *
+ */
+int ObTransformPreProcess::transform_for_label_se_table(ObDMLStmt *stmt, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->schema_checker_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null unexpected", K(ret), K(stmt), K(ctx_), K(ctx_->schema_checker_));
+  } else if (OB_ISNULL(ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is NULL", K(ret));
+  } else if (!ctx_->session_info_->is_inner()) { //内部session不用条件进行过滤
+    common::ObArray<TableItem*> table_item_list;
+    int64_t num_from_items = stmt->get_from_item_size();
+    //1, collect all table item
+    for(int64_t i = 0; OB_SUCC(ret) && i < num_from_items; ++i) {
+      const FromItem &from_item = stmt->get_from_item(i);
+      if (from_item.is_joined_) {
+        JoinedTable *joined_table_item = stmt->get_joined_table(from_item.table_id_);
+        if (OB_FAIL(collect_all_tableitem(stmt, joined_table_item, table_item_list))) {
+          LOG_WARN("failed to collect table item", K(ret));
+        }
+      } else {
+        TableItem *table_item = NULL;
+        table_item = stmt->get_table_item_by_id(from_item.table_id_);
+        if (OB_FAIL(collect_all_tableitem(stmt, table_item, table_item_list))) {
+          LOG_WARN("failed to collect table item", K(ret));
+          LOG_WARN("failed to collect table item", K(ret), K(*stmt));
+        }
+      }
+    }
+
+    //2, for each label security table item, add label column filter
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_item_list.count(); ++i) {
+      TableItem *table_item = table_item_list.at(i);
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table item is null", K(ret));
+      } else if (table_item->is_basic_table() || table_item->is_link_table()) {
+        uint64_t table_ref_id = table_item->ref_id_;
+        const ObTableSchema *table_schema = NULL;
+        if (OB_FAIL(ctx_->schema_checker_->get_table_schema(ctx_->session_info_->get_effective_tenant_id(), table_ref_id, table_schema, table_item->is_link_table()))) {
+          LOG_WARN("failed to get table schema", K(table_ref_id), K(ret));
+        } else if (OB_ISNULL(table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table should not be null", K(table_ref_id));
+        } else if (table_schema->has_label_se_column()) {
+          const ObIArray<uint64_t> &label_se_column_ids = table_schema->get_label_se_column_ids();
+          for (int64_t j = 0; OB_SUCC(ret) && j < label_se_column_ids.count(); ++j) {
+            const ObColumnSchemaV2 *column_schema = NULL;
+            ObString policy_name;
+            if (OB_ISNULL(column_schema = table_schema->get_column_schema(label_se_column_ids.at(j)))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("column schema not exist", K(ret), K(label_se_column_ids.at(j)));
+            } else if (OB_FAIL(ctx_->schema_checker_->get_label_se_policy_name_by_column_name(
+                                 ctx_->session_info_->get_effective_tenant_id(),
+                                 column_schema->get_column_name_str(),
+                                 policy_name))) {
+              LOG_WARN("fail to get policy name", K(ret));
+            } else if (OB_FAIL(add_filter_for_label_se_table(*stmt, *table_item, policy_name, *column_schema))) {
+              LOG_WARN("add filter for temporary table failed", K(ret));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            trans_happened = true;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::add_filter_for_label_se_table(ObDMLStmt &stmt,
+                                                         const TableItem &table_item,
+                                                         const ObString &policy_name,
+                                                         const ObColumnSchemaV2 &column_schema)
+{
+  int ret = OB_SUCCESS;
+  ObRawExprFactory *expr_factory = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+
+  if (OB_ISNULL(ctx_)
+      || OB_ISNULL(session_info = ctx_->session_info_)
+      || OB_ISNULL(expr_factory = ctx_->expr_factory_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("some parameter is NULL", K(ret), K(ctx_), K(expr_factory), K(session_info));
+  }
+
+  ObConstRawExpr *policy_name_expr = NULL;
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*expr_factory,
+                                                        ObVarcharType,
+                                                        policy_name,
+                                                        ObCharset::get_default_collation(ObCharset::get_default_charset()),
+                                                        policy_name_expr))) {
+      LOG_WARN("fail to build expr", K(ret));
+    }
+  }
+
+  ObSysFunRawExpr *session_label_expr = NULL;
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_LABEL_SE_SESSION_LABEL, session_label_expr))) {
+      LOG_WARN("create expr failed", K(ret));
+    } else {
+      ObString func_name = ObString::make_string(N_OLS_SESSION_LABEL);
+      session_label_expr->set_func_name(func_name);
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(session_label_expr->add_param_expr(policy_name_expr))) {
+        LOG_WARN("fail to add param expr", K(ret));
+      }
+    }
+  }
+
+  ObColumnRefRawExpr *col_expr = NULL;
+  if (OB_SUCC(ret)) {
+    ColumnItem *col_item = NULL;
+    if (NULL != (col_item = stmt.get_column_item_by_id(table_item.table_id_, column_schema.get_column_id()))) {
+      col_expr = col_item->expr_;
+      col_expr->set_explicited_reference();
+    } else {
+      if (OB_FAIL(ObRawExprUtils::build_column_expr(*expr_factory, column_schema, col_expr))) {
+        LOG_WARN("fail to build column expr", K(ret));
+      } else {
+        col_expr->set_table_id(table_item.table_id_);
+        col_expr->set_table_name(table_item.table_name_);
+        col_expr->set_explicited_reference();
+        ColumnItem column_item;
+        column_item.expr_ = col_expr;
+        column_item.table_id_ = col_expr->get_table_id();
+        column_item.column_id_ = col_expr->get_column_id();
+        column_item.column_name_ = col_expr->get_column_name();
+        if (OB_FAIL(stmt.add_column_item(column_item))) {
+          LOG_WARN("add column item to stmt failed", K(ret));
+        }
+      }
+    }
+  }
+  ObSysFunRawExpr *label_cmp_expr = NULL;
+  if (OB_SUCC(ret)) {
+    ObString func_name = ObString::make_string(N_OLS_LABEL_VALUE_CMP_LE);
+
+    if (OB_FAIL(expr_factory->create_raw_expr(T_FUN_LABEL_SE_LABEL_VALUE_CMP_LE, label_cmp_expr))) {
+      LOG_WARN("create expr failed", K(ret));
+    } else {
+      label_cmp_expr->set_func_name(func_name);
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(label_cmp_expr->add_param_expr(col_expr))) {
+        LOG_WARN("fail to add param expr", K(ret));
+      } else if (OB_FAIL(label_cmp_expr->add_param_expr(session_label_expr))) {
+        LOG_WARN("fail to add parm expr", K(ret));
+      }
+    }
+  }
+  ObConstRawExpr *zero_int_expr = NULL;
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*expr_factory, ObIntType, 0, zero_int_expr))) {
+      LOG_WARN("fail to build expr", K(ret));
+    }
+  }
+  ObRawExpr *equal_expr = NULL;
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObRawExprUtils::create_equal_expr(*expr_factory,
+                                                  session_info,
+                                                  label_cmp_expr,
+                                                  zero_int_expr,
+                                                  equal_expr))) {
+      LOG_WARN("fail to create equal expr", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(stmt.get_condition_exprs().push_back(equal_expr))) {
+      LOG_WARN("failed to push back new filter", K(ret));
+    } else {
+      LOG_TRACE("add new filter succeed", K(stmt.get_condition_exprs()), K(*equal_expr));
+    }
+  }
+  return ret;
+}
+#endif
 
 /**
  * ObTransformPreProcess::transform_for_rls_table

@@ -104,6 +104,14 @@
 #include "logservice/data_dictionary/ob_data_dict_storager.h" // ObDataDictStorage
 #include "share/scn.h"
 #include "share/backup/ob_backup_config.h" // ObBackupConfigParserMgr
+#ifdef OB_BUILD_ARBITRATION
+#include "share/arbitration_service/ob_arbitration_service_table_operator.h"
+#include "share/arbitration_service/ob_arbitration_service_utils.h" // ObArbitrationServiceUtils
+#endif
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/sys_package/ob_dbms_audit_mgmt.h" // ObDbmsAuditMgmt
+#include "share/backup/ob_log_restore_config.h"//ObLogRestoreSourceServiceConfigParser
+#endif
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
@@ -21188,6 +21196,35 @@ int ObDDLService::create_tenant_schema(
     } else if (OB_FAIL(trans.start(sql_proxy_, OB_SYS_TENANT_ID, refreshed_schema_version))) {
       LOG_WARN("start transaction failed, ", KR(ret), K(refreshed_schema_version));
     }
+#ifdef OB_BUILD_ARBITRATION
+    // check arbitration service if needed
+    ObArbitrationServiceTableOperator arbitration_service_table_operator;
+    const ObString arbitration_service_key("default");
+    const bool lock_line = true;
+    ObArbitrationServiceInfo arbitration_service_info;
+    if (OB_FAIL(ret)) {
+    } else if (meta_tenant_schema.get_arbitration_service_status()
+               != user_tenant_schema.get_arbitration_service_status()) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("tenant has different arbitration service status with its meta tenant", KR(ret),
+               "meta_tenant_arb_status", meta_tenant_schema.get_arbitration_service_status(),
+               "user_tenant_arb_status", user_tenant_schema.get_arbitration_service_status());
+    } else if (meta_tenant_schema.get_arbitration_service_status().is_enabling()
+               || meta_tenant_schema.get_arbitration_service_status().is_enabled()) {
+      if (OB_FAIL(arbitration_service_table_operator.get(
+                      trans,
+                      arbitration_service_key,
+                      lock_line,
+                      arbitration_service_info))) {
+        if (OB_ARBITRATION_SERVICE_NOT_EXIST == ret) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "arbitration service not exist, create tenant");
+        }
+        LOG_WARN("fail to get arbitration service", KR(ret), K(arbitration_service_key),
+                 K(lock_line), K(arbitration_service_info));
+      }
+    }
+#endif
     // 1. create tenant schema
     if (OB_SUCC(ret)) {
       LOG_INFO("[CREATE_TENANT] STEP 1.1. start create tenant schema", K(arg));
@@ -21257,6 +21294,29 @@ int ObDDLService::create_tenant_schema(
                "cost", ObTimeUtility::fast_current_time() - tmp_start_time);
     }
 
+#ifdef OB_BUILD_TDE_SECURITY
+    if (OB_SUCC(ret)) {
+      LOG_INFO("[CREATE_TENANT] STEP 1.5. start create root key", K(user_tenant_id));
+      const int64_t tmp_start_time = ObTimeUtility::fast_current_time();
+      ObArray<ObAddr> addrs;
+      bool need_create = false;
+      if (OB_FAIL(check_need_create_root_key(arg, need_create))) {
+        LOG_WARN("fail to check need create root key", K(ret));
+      } else if (!need_create) {
+        // do nothing
+      } else if (OB_FAIL(unit_mgr_->get_servers_by_pools(pools, addrs))) {
+        LOG_WARN("fail to get tenant's servers", KR(ret), K(user_tenant_id));
+      } else if (arg.is_creating_standby_) {
+        if (OB_FAIL(standby_create_root_key(user_tenant_id, arg, addrs))) {
+          LOG_WARN("failed to create root key", KR(ret), K(user_tenant_id), K(arg));
+        }
+      } else if (OB_FAIL(create_root_key(*rpc_proxy_, user_tenant_id, addrs))) {
+        LOG_WARN("fail to create root key", KR(ret), K(addrs));
+      }
+      LOG_INFO("[CREATE_TENANT] STEP 1.5. finish create root key",
+               KR(ret), K(user_tenant_id), "cost", ObTimeUtility::fast_current_time() - tmp_start_time);
+    }
+#endif
 
     if (OB_SUCC(ret)) {
       ObArray<ObAddr> addrs;
@@ -21363,6 +21423,305 @@ int ObDDLService::notify_init_tenant_config(
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObDDLService::check_need_create_root_key(const ObCreateTenantArg &arg, bool &need_create)
+{
+  int ret = OB_SUCCESS;
+  need_create = false;
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
+    need_create = false;
+  } else if (arg.is_restore_) {
+    need_create = false;
+  } else {
+    need_create = true;
+  }
+  return ret;
+}
+
+int ObDDLService::standby_create_root_key(
+             const uint64_t tenant_id,
+             const obrpc::ObCreateTenantArg &arg,
+             const common::ObIArray<common::ObAddr> &addrs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", KR(ret));
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id) || !arg.is_creating_standby_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(arg));
+  } else {
+    obrpc::RootKeyType key_type = obrpc::RootKeyType::INVALID;
+    RootKeyValue root_key;
+    if (OB_FAIL(get_root_key_from_primary(arg, tenant_id, key_type, root_key))) {
+      LOG_WARN("failed to get root key", KR(ret), K(arg), K(tenant_id));
+    } else {
+      obrpc::ObRootKeyArg root_key_arg;
+      obrpc::ObRootKeyResult dummy_result;
+      ObString key_value_str(root_key.ptr());
+      if (OB_FAIL(root_key_arg.init(tenant_id, key_type, key_value_str))) {
+        LOG_WARN("failed to init root key arg", KR(ret), K(tenant_id), K(key_type), K(root_key));
+      } else if (OB_FAIL(notify_root_key(*rpc_proxy_, root_key_arg, addrs, dummy_result))) {
+        LOG_WARN("fail to notify root key", K(ret), K(root_key_arg));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::get_root_key_from_primary(const obrpc::ObCreateTenantArg &arg,
+    const uint64_t tenant_id, obrpc::RootKeyType &key_type,
+    RootKeyValue &key_value)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", KR(ret));
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id) || !arg.is_creating_standby_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(arg));
+  } else {
+    uint64_t primary_tenant_id = OB_INVALID_TENANT_ID;
+    uint64_t cluster_id = OB_INVALID_ID;
+    ObArray<ObAddr> addr_list;
+    ObLogRestoreSourceServiceConfigParser log_restore_source(ObBackupConfigType::LOG_RESTORE_SOURCE, tenant_id);
+    common::ObSqlString value;
+    obrpc::ObRootKeyArg root_key_arg;
+    if (OB_FAIL(value.assign(arg.log_restore_source_))) {
+      LOG_WARN("fail to assign value", KR(ret), K(log_restore_source));
+    } else if (OB_FAIL(log_restore_source.get_primary_server_addr(
+      value, primary_tenant_id, cluster_id, addr_list))) {
+      LOG_WARN("failed to get primary server addr", KR(ret), K(value));
+    } else if (OB_FAIL(root_key_arg.init_for_get(primary_tenant_id))) {
+      LOG_WARN("failed to init for get", KR(ret), K(primary_tenant_id));
+    }
+    if (FAILEDx(get_root_key_from_obs(cluster_id, *rpc_proxy_, root_key_arg,
+            addr_list, key_type, key_value))) {
+      LOG_WARN("failed to get root key from obs", KR(ret), K(cluster_id),
+          K(root_key_arg), K(addr_list));
+    }
+    if (OB_INVALID_ROOT_KEY == ret) {
+      LOG_USER_ERROR(OB_INVALID_ROOT_KEY, "Can not get root key from primary tenant");
+    }
+    LOG_INFO("get root key from primary tenant", K(primary_tenant_id), K(tenant_id), K(value),
+        K(addr_list), K(key_type), K(key_value), K(cluster_id));
+  }
+  return ret;
+}
+
+int ObDDLService::create_root_key(
+    obrpc::ObSrvRpcProxy &rpc_proxy,
+    const uint64_t tenant_id,
+    const common::ObIArray<common::ObAddr> &addrs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || addrs.count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id is invalid", KR(ret), K(tenant_id), K(addrs));
+  } else {
+    char root_key[OB_ROOT_KEY_LEN] = {0};
+    obrpc::ObRootKeyArg arg;
+    obrpc::ObRootKeyResult dummy_result;
+    arg.tenant_id_ = tenant_id;
+    arg.is_set_ = true;
+    arg.key_type_ = obrpc::RootKeyType::NORMAL;
+    if (OB_FAIL(ObKeyGenerator::generate_encrypt_key(root_key, OB_ROOT_KEY_LEN))) {
+      LOG_WARN("fail to generate root key", K(ret));
+    } else if (FALSE_IT(arg.root_key_.assign_ptr(root_key, OB_ROOT_KEY_LEN))) {
+    } else if (OB_FAIL(notify_root_key(rpc_proxy, arg, addrs, dummy_result))) {
+      LOG_WARN("fail to notify root key", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::get_root_key_from_obs(
+             const uint64_t &cluster_id,
+             obrpc::ObSrvRpcProxy &rpc_proxy,
+             const obrpc::ObRootKeyArg &arg,
+             const common::ObIArray<common::ObAddr> &addrs,
+             obrpc::RootKeyType &key_type,
+             RootKeyValue &key_value)
+{
+  int ret = OB_SUCCESS;
+  key_type = obrpc::RootKeyType::INVALID;
+  key_value.reset();
+  if (OB_UNLIKELY(OB_INVALID_CLUSTER_ID == cluster_id
+                  || !arg.is_valid() || arg.is_set_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else {
+    ObTimeoutCtx ctx;
+    bool has_failed = false;
+    const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L; // 10s
+    if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, DEFAULT_TIMEOUT))) {
+      LOG_WARN("fail to set default timeout", KR(ret));
+    } else {
+      // 1. send rpc
+      rootserver::ObSetRootKeyProxy proxy(
+        rpc_proxy, &obrpc::ObSrvRpcProxy::set_root_key);
+      int tmp_ret = OB_SUCCESS;
+      for (int64_t i = 0; OB_SUCC(ret) && i < addrs.count(); i++) {
+        int64_t timeout = ctx.get_timeout();
+        const ObAddr &addr = addrs.at(i);
+        if (OB_TMP_FAIL(proxy.call(addr, timeout, cluster_id, OB_SYS_TENANT_ID, arg))) {
+          has_failed = true;
+          LOG_WARN("send rpc failed", KR(ret), KR(tmp_ret), K(addr), K(timeout), K(arg), K(cluster_id));
+        }
+      } // end for
+      // 2. check result
+      ObArray<int> return_ret_array;
+      if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_ret_array))) {
+        LOG_WARN("wait batch result failed", KR(tmp_ret), KR(ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < return_ret_array.count() && !has_failed; ++i) {
+        tmp_ret = return_ret_array.at(i);
+        if (OB_TMP_FAIL(tmp_ret)) {
+          has_failed = true;
+          LOG_WARN("failed to get root key from observer", KR(tmp_ret), K(i));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < proxy.get_results().count(); i++) {
+        const ObRootKeyResult *rpc_result = proxy.get_results().at(i);
+        if (OB_ISNULL(rpc_result)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get empty result", KR(ret), K(i), K(addrs));
+        } else if (obrpc::RootKeyType::INVALID == rpc_result->key_type_) {
+          //There may be no root_key information on some observers
+        } else if (rpc_result->key_type_ != key_type) {
+          if (OB_UNLIKELY(obrpc::RootKeyType::INVALID != key_type)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("root key type is conflict", KR(ret), K(key_type), KPC(rpc_result));
+          } else if (OB_FAIL(key_value.assign(rpc_result->root_key_))) {
+            LOG_WARN("failed to assign result", KR(ret), KPC(rpc_result));
+          } else {
+            key_type = rpc_result->key_type_;
+          }
+        } else if (OB_UNLIKELY(0 != key_value.str().compare(rpc_result->root_key_))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("root key is conflict", KR(ret), K(key_value), KPC(rpc_result));
+        }
+      } // end for
+      if (OB_SUCC(ret) && obrpc::RootKeyType::INVALID == key_type) {
+        if (has_failed) {
+          ret = OB_INVALID_ROOT_KEY;
+          LOG_WARN("failed to get root key from obs", KR(ret), K(cluster_id),
+            K(addrs), K(key_type), K(key_value));
+        } else {
+          //If the root_key cannot be obtained from all current observers,
+          //set default. This tenant may be an upgraded tenant.
+          //The scope of this observer is obtained from the __all_virtual_log_stat,
+          //it may not be all observers, ignore this situation
+          key_type = obrpc::RootKeyType::DEFAULT;
+          LOG_INFO("can not get root key from all observer, set default", K(cluster_id),
+              K(addrs), K(key_type), K(key_value));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::notify_root_key(
+    obrpc::ObSrvRpcProxy &rpc_proxy,
+    const obrpc::ObRootKeyArg &arg,
+    const common::ObIArray<common::ObAddr> &addrs,
+    obrpc::ObRootKeyResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObTimeoutCtx ctx;
+  const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L; // 10s
+  if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, DEFAULT_TIMEOUT))) {
+    LOG_WARN("fail to set default timeout", KR(ret));
+  } else {
+    int64_t server_cnt = addrs.count();
+    // 1. send rpc
+    rootserver::ObSetRootKeyProxy proxy(
+        rpc_proxy, &obrpc::ObSrvRpcProxy::set_root_key);
+    bool call_rs = false;
+    ObAddr rs_addr = GCONF.self_addr_;
+    int64_t timeout = ctx.get_timeout();
+    for (int64_t i = 0; OB_SUCC(ret) && i < addrs.count(); i++) {
+      const ObAddr &addr = addrs.at(i);
+      if (OB_FAIL(proxy.call(addr, timeout, arg))) {
+        LOG_WARN("send rpc failed", KR(ret), K(addr), K(timeout), K(arg));
+      } else if (rs_addr == addr) {
+        call_rs = true;
+      }
+    } // end for
+    if (OB_FAIL(ret) || call_rs) {
+    } else if (OB_FAIL(proxy.call(rs_addr, timeout, arg))) {
+      LOG_WARN("fail to call rs", KR(ret), K(rs_addr), K(timeout), K(arg));
+    } else {
+      server_cnt++;
+    }
+    // 2. check result
+    ObArray<int> return_ret_array;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_ret_array))) { // ignore ret
+      LOG_WARN("wait batch result failed", KR(tmp_ret), KR(ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    } else if (return_ret_array.count() != server_cnt ||
+               proxy.get_results().count() != server_cnt) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result cnt not match", KR(ret), K(server_cnt), "ret_cnt", return_ret_array.count(),
+                                                "result_cnt", proxy.get_results().count());
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < return_ret_array.count(); i++) {
+      int return_ret = return_ret_array.at(i);
+      const ObAddr &addr = proxy.get_dests().at(i);
+      const ObRootKeyResult *result = proxy.get_results().at(i);
+      if (OB_SUCCESS != return_ret) {
+        ret = return_ret;
+        LOG_WARN("rpc return error", KR(ret), K(addr), K(timeout));
+      } else if (OB_ISNULL(result)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get empty result", KR(ret), K(addr), K(timeout));
+      }
+    } // end for
+    if (OB_SUCC(ret) && !arg.is_set_) {
+      obrpc::RootKeyType key_type = obrpc::RootKeyType::INVALID;
+      ObString root_key;
+      for (int64_t i = 0; OB_SUCC(ret) && i < proxy.get_results().count(); ++i) {
+        const ObRootKeyResult *rpc_result = proxy.get_results().at(i);
+        if (OB_ISNULL(rpc_result)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get empty result", KR(ret), "addr", proxy.get_dests().at(i), K(timeout));
+        } else if (obrpc::RootKeyType::INVALID == rpc_result->key_type_) {
+          // do nothing
+        } else if (rpc_result->key_type_ != key_type) {
+          if (OB_UNLIKELY(obrpc::RootKeyType::INVALID != key_type)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("root key type is conflict", K(key_type), K(rpc_result->key_type_), K(ret));
+          } else {
+            key_type = rpc_result->key_type_;
+            root_key = rpc_result->root_key_;
+          }
+        } else if (OB_UNLIKELY(0 != root_key.compare(rpc_result->root_key_))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("root key is conflict", K(root_key), K(rpc_result->root_key_), K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (obrpc::RootKeyType::INVALID == key_type) {
+          key_type = obrpc::RootKeyType::DEFAULT;
+        }
+        if (OB_FAIL(ObMasterKeyGetter::instance().set_root_key(arg.tenant_id_,
+                                                  key_type, root_key))) {
+          LOG_WARN("failed to set root key", K(ret));
+        } else if (OB_FAIL(ObMasterKeyGetter::instance().get_root_key(arg.tenant_id_,
+                                                  result.key_type_, result.root_key_))) {
+          LOG_WARN("failed to get root key", K(ret));
+        } else if (OB_UNLIKELY(key_type != result.key_type_ ||
+                               0 != root_key.compare(result.root_key_))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpect root key", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+#endif
 
 // 1. create tenant's sys ls
 // 2. broadcast sys table schemas
@@ -23342,9 +23701,26 @@ int ObDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, const 
 
       if (OB_FAIL(ret)) {
       } else if (arg.alter_option_bitset_.has_member(obrpc::ObModifyTenantArg::ENABLE_ARBITRATION_SERVICE)) {
+#ifndef OB_BUILD_ARBITRATION
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("modify tenant arbitration service status in CE version not supprted", KR(ret));
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "modify tenant arbitration service status in CE version");
+#else
+        const ObArbitrationServiceStatus old_status = orig_tenant_schema->get_arbitration_service_status();
+        const ObArbitrationServiceStatus new_status = arg.tenant_schema_.get_arbitration_service_status();
+        if ((new_status.is_enabling() && old_status.is_enable_like())
+             || ((new_status.is_disabling() && old_status.is_disable_like()))) {
+          // do nothing
+        } else if (OB_FAIL(check_tenant_arbitration_service_status_(
+                                trans,
+                                tenant_id,
+                                old_status,
+                                new_status))) {
+          LOG_WARN("fail to check tenant arbitration service", KR(ret), K(tenant_id), K(old_status), K(new_status));
+        } else {
+          new_tenant_schema.set_arbitration_service_status(new_status);
+        }
+#endif
       }
 
       if (OB_FAIL(ret)) {
@@ -24406,6 +24782,10 @@ int ObDDLService::modify_system_variable(const ObModifySysVarArg &arg)
         LOG_WARN("alter tenant info failed", K(ret));
       } else if (OB_FAIL(sys_variable_schema->get_oracle_mode(is_oracle_mode))) {
         LOG_WARN("failed to get oracle mode", K(ret));
+#ifdef OB_BUILD_ORACLE_PL
+      } else if (!is_oracle_mode && OB_FAIL(pl::ObDbmsAuditMgmt::handle_audit_param_mysql(new_sys_variable_schema, trans))) {
+        LOG_WARN("failed to refresh audit log trail jobs", K(ret), K(new_sys_variable_schema));
+#endif
       }
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
@@ -30081,6 +30461,41 @@ int ObDDLService::get_schema_primary_regions(
   return ret;
 }
 
+#ifdef OB_BUILD_ARBITRATION
+int ObDDLService::check_tenant_arbitration_service_status_(
+    ObMySQLTransaction &trans,
+    const uint64_t tenant_id,
+    const share::ObArbitrationServiceStatus &old_status,
+    const share::ObArbitrationServiceStatus &new_status)
+{
+  int ret = OB_SUCCESS;
+  bool is_compatible = false;
+  bool can_promote = false;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+                  || !old_status.is_valid()
+                  || !new_status.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(old_status), K(new_status));
+  } else if (OB_FAIL(ObShareUtil::check_compat_version_for_arbitration_service(tenant_id, is_compatible))) {
+    LOG_WARN("fail to check data version", KR(ret), K(tenant_id));
+  } else if (!is_compatible) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("can not change arbitration service status with data version below 4.1", KR(ret), K(tenant_id));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "data version is below 4.1, change tenant arbitration service status");
+  } else if ((new_status.is_enabled() && !old_status.is_enabling())
+             || (new_status.is_disabled() && !old_status.is_disabling())) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("unexpected status", KR(ret), K(new_status), K(old_status));
+  } else if (OB_FAIL(ObArbitrationServiceUtils::check_can_promote_arbitration_service_status(trans, tenant_id, old_status, new_status, can_promote))) {
+    LOG_WARN("fail to check whether can enable arb service", KR(ret), K(tenant_id), K(old_status), K(new_status));
+  } else if (!can_promote) {
+    // LOG_USER_ERROR will raise inside check_can_promote_arbitration_service_status
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("promote conditions not satisfied", KR(ret), K(tenant_id), K(old_status), K(new_status), K(can_promote));
+  }
+  return ret;
+}
+#endif
 
 int ObDDLService::check_tenant_primary_zone_(
     share::schema::ObSchemaGetterGuard &schema_guard,

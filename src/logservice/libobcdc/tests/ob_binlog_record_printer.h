@@ -15,7 +15,14 @@
 #ifndef OCEANBASE_LIBOBCDC_TESTS_BINLOG_RECORD_PRINTER_H__
 #define OCEANBASE_LIBOBCDC_TESTS_BINLOG_RECORD_PRINTER_H__
 
+#ifndef OB_USE_DRCMSG
 #include "ob_cdc_msg_convert.h"
+#else
+#include <drcmsg/BR.h>               // IBinlogRecord
+#include <drcmsg/MD.h>               // ITableMeta
+#include <drcmsg/MsgWrapper.h>       // IStrArray
+#include <drcmsg/binlogBuf.h>        // binlogBuf
+#endif
 
 #include "share/ob_define.h"  // DISALLOW_COPY_AND_ASSIGN
 #include "ob_log_config.h"    // TCONF

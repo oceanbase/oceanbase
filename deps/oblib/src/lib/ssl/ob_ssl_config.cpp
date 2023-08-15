@@ -208,6 +208,44 @@ static int ob_ssl_set_verify_mode_and_load_CA(SSL_CTX* ctx, const ObSSLConfig& s
   return ret;
 }
 
+#ifdef OB_USE_BABASSL
+static int ob_ssl_load_cert_and_pkey_for_sm_memory(SSL_CTX* ctx, const ObSSLConfig& ssl_config)
+{
+  int ret = OB_SUCCESS;
+  EVP_PKEY *pkey = NULL;
+  X509 *x509 = NULL;
+  if (NULL == (pkey = ob_ssl_get_sm_pkey_memory(ssl_config.sign_private_key_))) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_ssl_get_sm_pkey_memory failed", K(ssl_config.sign_private_key_), K(ret));
+  } else if (!SSL_CTX_use_sign_PrivateKey(ctx, pkey)) {
+    ret = OB_ERR_UNEXPECTED;
+    EVP_PKEY_free(pkey);
+    COMMON_LOG(WARN, "SSL_CTX_use_sign_PrivateKey failed", K(ssl_config.sign_private_key_), K(ret), K(ERR_error_string(ERR_get_error(), NULL)));
+  } else if (NULL == (x509 = ob_ssl_get_sm_cert_memory(ssl_config.sign_cert_))){
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_ssl_get_sm_cert_memory failed", K(ssl_config.sign_cert_), K(ret));
+  } else if (!SSL_CTX_use_sign_certificate(ctx, x509)) {
+    ret = OB_ERR_UNEXPECTED;
+    X509_free(x509);
+    COMMON_LOG(WARN, "SSL_CTX_use_sign_certificate failed", K(ssl_config.sign_cert_), K(ret),  K(ERR_error_string(ERR_get_error(), NULL)));
+  } else if (NULL == (pkey = ob_ssl_get_sm_pkey_memory(ssl_config.enc_private_key_))) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_ssl_get_sm_pkey_memory failed", K(ssl_config.enc_private_key_), K(ret));
+  } else if (!SSL_CTX_use_enc_PrivateKey(ctx, pkey)) {
+    ret = OB_ERR_UNEXPECTED;
+    EVP_PKEY_free(pkey);
+    COMMON_LOG(WARN, "SSL_CTX_use_enc_PrivateKey failed", K(ssl_config.enc_private_key_), K(ret), K(ERR_error_string(ERR_get_error(), NULL)));
+  } else if (NULL == (x509 = ob_ssl_get_sm_cert_memory(ssl_config.enc_cert_))) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_ssl_get_sm_cert_memory failed", K(ssl_config.enc_cert_), K(ret));
+  } else if (!SSL_CTX_use_enc_certificate(ctx, x509)) {
+    ret = OB_ERR_UNEXPECTED;
+    X509_free(x509);
+    COMMON_LOG(WARN, "SSL_CTX_use_enc_certificate  failed", K(ssl_config.enc_cert_), K(ret), K(ERR_error_string(ERR_get_error(), NULL)));
+  }
+  return ret;
+}
+#endif
 
 static int ob_ssl_load_cert_and_pkey_for_intl_memory(SSL_CTX* ctx, const ObSSLConfig& ssl_config)
 {
@@ -280,6 +318,21 @@ static int ob_ssl_load_cert_and_pkey(SSL_CTX* ctx, const ObSSLConfig& ssl_config
   int ret = OB_SUCCESS;
   if (ssl_config.is_from_file_) {
     if (ssl_config.is_sm_) {
+#ifdef OB_USE_BABASSL
+      if (!SSL_CTX_use_sign_PrivateKey_file(ctx, ssl_config.sign_private_key_, SSL_FILETYPE_PEM)) {
+        ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(WARN, "SSL_CTX_use_sign_PrivateKey_file failed", K(ssl_config.sign_private_key_), K(ret));
+      } else if (!SSL_CTX_use_sign_certificate_file(ctx, ssl_config.sign_cert_, SSL_FILETYPE_PEM)) {
+        ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(WARN, "SSL_CTX_use_sign_certificate_file failed", K(ssl_config.sign_cert_), K(ret));
+      } else if (!SSL_CTX_use_enc_PrivateKey_file(ctx, ssl_config.enc_private_key_, SSL_FILETYPE_PEM)) {
+        ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(WARN, "SSL_CTX_use_enc_PrivateKey_file failed", K(ssl_config.enc_private_key_), K(ret));
+      }  else if (!SSL_CTX_use_enc_certificate_file(ctx, ssl_config.enc_cert_, SSL_FILETYPE_PEM)) {
+        ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(WARN, "SSL_CTX_use_enc_certificate_file failed", K(ssl_config.enc_cert_), K(ret));
+      }
+#endif
     } else {
       if (SSL_CTX_use_certificate_chain_file(ctx, ssl_config.sign_cert_) <= 0) {
         ret = OB_ERR_UNEXPECTED;
@@ -294,6 +347,11 @@ static int ob_ssl_load_cert_and_pkey(SSL_CTX* ctx, const ObSSLConfig& ssl_config
     }
   } else {
     if (ssl_config.is_sm_) {
+#ifdef OB_USE_BABASSL
+      if (OB_FAIL(ob_ssl_load_cert_and_pkey_for_sm_memory(ctx, ssl_config))) {
+        COMMON_LOG(WARN, "ob_ssl_load_cert_and_pkey_for_sm_memory failed", K(ret));
+      }
+#endif
     } else {
       if (OB_FAIL(ob_ssl_load_cert_and_pkey_for_intl_memory(ctx, ssl_config))) {
         COMMON_LOG(WARN, "ob_ssl_load_cert_and_pkey_for_intl_memory failed", K(ret));
@@ -312,6 +370,12 @@ static SSL_CTX* ob_ssl_create_ssl_ctx(const ObSSLConfig& ssl_config)
   SSL_CTX *ctx = NULL;
 
   if (ssl_config.is_sm_) {
+#ifdef OB_USE_BABASSL
+    ctx = SSL_CTX_new(NTLS_method());
+    if (NULL != ctx) {
+      SSL_CTX_enable_ntls(ctx);
+    }
+#endif
   } else {
     ctx = SSL_CTX_new(SSLv23_method());
   }

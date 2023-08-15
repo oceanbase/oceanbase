@@ -87,9 +87,73 @@ int ObPLCollAllocator::free_child_coll(ObPLCollection &dest)
 int ObPLCollAllocator::copy_all_element_with_new_allocator(ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
     UNUSED(allocator);
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support", K(ret));
+#else
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("copy allocator is null", K(ret), K(allocator));
+  } else if (OB_ISNULL(coll_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("collection is null", K(ret), K(coll_));
+  } else {
+
+#define DEEP_COPY_COLLECTION(type, class) \
+  case type: { \
+    if (OB_ISNULL(dest = reinterpret_cast<class*>(allocator->alloc(sizeof(class))))) { \
+      ret = OB_ALLOCATE_MEMORY_FAILED; \
+      LOG_WARN("failed to alloc memory for collection", K(ret), K(allocator), KPC(coll_), KPC(dest)); \
+    } else if (FALSE_IT(dest = new (dest) class(coll_->get_id()))) { \
+    } else if (OB_FAIL((reinterpret_cast<class*>(dest))->deep_copy(coll_, allocator))) { \
+      LOG_WARN("failed to deep copy", K(ret), K(allocator), KPC(coll_), KPC(dest)); \
+      int tmp = ObPLCollAllocator::free_child_coll(reinterpret_cast<ObPLCollection&>(*dest));   \
+      if (OB_SUCCESS != tmp) {                                      \
+        LOG_WARN("failed to free child memory", K(tmp));    \
+      }  \
+    } \
+    break; \
+  }
+    ObPLCollection* dest = NULL;
+    switch (coll_->get_type()) {
+      DEEP_COPY_COLLECTION(PL_NESTED_TABLE_TYPE, ObPLNestedTable);
+      DEEP_COPY_COLLECTION(PL_ASSOCIATIVE_ARRAY_TYPE, ObPLAssocArray);
+      DEEP_COPY_COLLECTION(PL_VARRAY_TYPE, ObPLVArray);
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unknow collection type", K(ret), K(coll_->get_type()), KPC(coll_));
+        break;
+      }
+    }
+#undef DEEP_COPY_COLLECTION
+
+    if (OB_SUCC(ret)) {
+      dest->set_allocator(this);
+      for (int64_t i = 0; OB_SUCC(ret) && i < coll_->get_count(); ++i) {
+        if (OB_FAIL(ObUserDefinedType::destruct_obj(coll_->get_data()[i], NULL))) {
+          LOG_WARN("failed to destruct collection", K(ret), K(coll_->get_data()[i]), K(i));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        coll_->set_allocator(dest->get_allocator());
+        coll_->set_data(dest->get_data());
+        if (PL_ASSOCIATIVE_ARRAY_TYPE == coll_->get_type()) {
+          ObPLAssocArray* src = static_cast<ObPLAssocArray*>(coll_);
+          ObPLAssocArray* dst = static_cast<ObPLAssocArray*>(dest);
+          if (OB_ISNULL(src) || OB_ISNULL(dst)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected associative array pointer", K(ret), KPC(coll_), KPC(dst));
+          } else {
+            src->set_key(dst->get_key());
+            src->set_sort(dst->get_sort());
+          }
+        }
+      }
+    }
+    LOG_INFO("copy all element with new allocator in collection", K(ret), KPC(coll_), KPC(dest), K(lbt()));
+  }
+#endif
   return ret;
 }
 

@@ -36,6 +36,9 @@
 #include "observer/mysql/ob_mysql_request_manager.h"
 #include "observer/omt/ob_multi_tenant.h"
 #include "observer/omt/ob_tenant_node_balancer.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
 #include "share/stat/ob_opt_stat_manager.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
 // for 4.0
@@ -61,6 +64,9 @@
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
 #include "storage/high_availability/ob_transfer_service.h" // ObTransferService
 #include "sql/udr/ob_udr_mgr.h"
+#ifdef OB_BUILD_SPM
+#include "sql/spm/ob_spm_controller.h"
+#endif
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "rootserver/ob_primary_ls_service.h" // for ObPrimaryLSService
 #include "sql/session/ob_sql_session_info.h"
@@ -424,6 +430,67 @@ int ObRpcLSCheckDRTaskExistP::process()
   return ret;
 }
 
+#ifdef OB_BUILD_ARBITRATION
+int ObRpcAddArbP::process()
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle handle;
+  ObLS *ls = nullptr;
+  uint64_t tenant_id = arg_.tenant_id_;
+  share::ObLSID ls_id = arg_.ls_id_;
+  ObLSService *ls_svr = nullptr;
+  if (tenant_id != MTL_ID()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRpcSetMemberListP::process tenant not match", K(ret), K(tenant_id));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(ERROR, "mtl ObLSService should not be null", K(ret));
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
+    COMMON_LOG(WARN, "get ls failed", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(ERROR, "ls should not be null", K(ret));
+  } else if (OB_FAIL(ls->add_arbitration_member(arg_.arb_member_, arg_.timeout_us_))) {
+    COMMON_LOG(WARN, "failed to add_arbitration_member", KR(ret), K(arg_));
+  } else {
+    COMMON_LOG(INFO, "success to add_arbitration_member", K_(arg));
+  }
+  result_.set_result(ret);
+  return ret;
+}
+
+int ObRpcRemoveArbP::process()
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle handle;
+  ObLS *ls = nullptr;
+  uint64_t tenant_id = arg_.tenant_id_;
+  share::ObLSID ls_id = arg_.ls_id_;
+  ObLSService *ls_svr = nullptr;
+  if (tenant_id != MTL_ID()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRpcSetMemberListP::process tenant not match", K(ret), K(tenant_id));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(ERROR, "mtl ObLSService should not be null", K(ret));
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
+    COMMON_LOG(WARN, "get ls failed", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(ERROR, "ls should not be null", K(ret));
+  } else if (OB_FAIL(ls->remove_arbitration_member(arg_.arb_member_, arg_.timeout_us_))) {
+    COMMON_LOG(WARN, "failed to remove_arbitration_member", KR(ret), K(arg_));
+  } else {
+    COMMON_LOG(INFO, "success to remove_arbitration_member", K_(arg));
+  }
+  result_.set_result(ret);
+  return ret;
+}
+#endif
 
 int ObRpcSetConfigP::process()
 {
@@ -904,6 +971,19 @@ int ObRpcCheckDeploymentModeP::process()
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObRpcWaitMasterKeyInSyncP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
+  } else {
+    ret = gctx_.ob_service_->wait_master_key_in_sync(arg_);
+  }
+  return ret;
+}
+#endif
 
 int ObRpcSyncAutoincValueP::process()
 {
@@ -1430,6 +1510,19 @@ int ObRpcCreateLSP::process()
   return ret;
 }
 
+#ifdef OB_BUILD_ARBITRATION
+int ObRpcCreateArbP::process()
+{
+  int ret = OB_SUCCESS;
+  return ret;
+}
+
+int ObRpcDeleteArbP::process()
+{
+  int ret = OB_SUCCESS;
+  return ret;
+}
+#endif
 
 int ObRpcCheckLSCanOfflineP::process()
 {
@@ -1589,6 +1682,17 @@ int ObRpcSetMemberListP::process()
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(ERROR, "ls should not be null", K(ret));
+#ifdef OB_BUILD_ARBITRATION
+  } else if (arg_.get_arbitration_service().is_valid()) {
+    if (OB_FAIL(ls->set_initial_member_list(arg_.get_member_list(),
+                                            arg_.get_arbitration_service(),
+                                            arg_.get_paxos_replica_num(),
+                                            arg_.get_learner_list()))) {
+      COMMON_LOG(WARN, "failed to set member list and arbitration service", KR(ret), K(arg_));
+    } else {
+      COMMON_LOG(INFO, "success to set initial member list and arbitration service");
+    }
+#endif
   } else if (OB_FAIL(ls->set_initial_member_list(arg_.get_member_list(),
                                                  arg_.get_paxos_replica_num(),
                                                  arg_.get_learner_list()))) {
@@ -1980,6 +2084,40 @@ int ObPreProcessServerP::process()
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObGetMasterKeyP::process()
+{
+  int ret = OB_SUCCESS;
+  // int64_t master_key_version = (int64_t)arg_;
+  // int64_t master_key_len = 0;
+  // if (OB_FAIL(share::ObMasterKeyGetter::get_master_key(master_key_version,
+  //                     result_.str_.ptr(), OB_MAX_MASTER_KEY_LENGTH, master_key_len))) {
+  //   TRANS_LOG(WARN, "failed to get master key", K(ret));
+  // }
+  // result_.str_.set_length(master_key_len);
+  ret = OB_NOT_SUPPORTED;
+  return ret;
+}
+
+int ObRestoreKeyP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObMasterKeyUtil::restore_key(arg_.tenant_id_,
+                                           arg_.backup_dest_, arg_.encrypt_key_))) {
+    LOG_WARN("failed to restore key", K(ret));
+  }
+  return ret;
+}
+
+int ObSetRootKeyP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObMasterKeyGetter::instance().set_root_key(arg_, result_))) {
+    LOG_WARN("failed to set root key", K(ret));
+  }
+  return ret;
+}
+#endif
 
 int ObHandlePartTransCtxP::process()
 {
@@ -2037,6 +2175,13 @@ int ObRpcBatchSetTabletAutoincSeqP::process()
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObDumpTenantCacheMasterKeyP::process()
+{
+  const uint64_t tenant_id = (uint64_t)arg_;
+  return ObMasterKeyGetter::instance().dump_tenant_cache_master_key(tenant_id, result_);
+}
+#endif
 
 int ObBatchBroadcastSchemaP::process()
 {
@@ -2309,6 +2454,78 @@ int ObRpcBackupCleanLSResP::process()
   return ret;
 }
 
+#ifdef OB_BUILD_SPM
+int ObServerAcceptPlanBaselineP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sql::ObSpmController::accept_plan_baseline_by_user(arg_))) {
+    LOG_WARN("failed to accept plan baseline", K(ret), K(arg_));
+  }
+  return ret;
+}
+
+int ObServerCancelEvolveTaskP::process()
+{
+  int ret = OB_SUCCESS;
+  observer::ObReqTimeGuard req_timeinfo_guard;
+  ObPlanCache *plan_cache = nullptr;
+  obrpc::ObModifyPlanBaselineArg &arg = arg_;
+  bool evict_baseline = (ObModifyPlanBaselineArg::Action::EVICT_BASELINE == arg.action_ ||
+                         ObModifyPlanBaselineArg::Action::EVICT_ALL == arg.action_);
+  bool evict_plan = (ObModifyPlanBaselineArg::Action::EVICT_EVOLVE == arg.action_ ||
+                     ObModifyPlanBaselineArg::Action::EVICT_ALL == arg.action_);
+  MTL_SWITCH(arg.tenant_id_) {
+    plan_cache = MTL(ObPlanCache*);
+    if (evict_baseline && OB_FAIL(plan_cache->
+          cache_evict_baseline_by_sql_id(arg.database_id_, arg.sql_id_))) {
+      LOG_WARN("failed to evict baseline by sql id", K(ret));
+    } else if (evict_plan && OB_FAIL(plan_cache->
+          cache_evict_plan_by_sql_id(arg.database_id_, arg.sql_id_))) {
+      LOG_WARN("failed to evict plan by sql id", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLoadBaselineP::process()
+{
+  int ret = OB_SUCCESS;
+
+  observer::ObReqTimeGuard req_timeinfo_guard;
+  MTL_SWITCH(arg_.tenant_id_) {
+    ObPlanCache *plan_cache = MTL(ObPlanCache*);
+    uint64_t dummy_count = 0;
+    if (OB_INVALID_ID == arg_.tenant_id_ || arg_.sql_id_.empty()) {  // load appointed tenant cache
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K_(arg), K(ret));
+    } else if (OB_FAIL(plan_cache->load_plan_baseline(arg_, dummy_count))) {
+      LOG_WARN("fail to load baseline from pc with arg", K_(arg));
+    }
+  }
+
+  return ret;
+}
+
+int ObLoadBaselineV2P::process()
+{
+  int ret = OB_SUCCESS;
+  observer::ObReqTimeGuard req_timeinfo_guard;
+  MTL_SWITCH(arg_.tenant_id_) {
+    ObPlanCache *plan_cache = MTL(ObPlanCache*);
+    uint64_t load_count = 0;
+    if (OB_INVALID_ID == arg_.tenant_id_ || arg_.sql_id_.empty()) {  // load appointed tenant cache
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K_(arg), K(ret));
+    } else if (OB_FAIL(plan_cache->load_plan_baseline(arg_, load_count))) {
+      LOG_WARN("fail to load baseline from pc with arg", K_(arg));
+    } else {
+      result_.load_count_ = load_count;
+    }
+  }
+
+  return ret;
+}
+#endif
 
 int ObEstimateTabletBlockCountP::process()
 {

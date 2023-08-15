@@ -13,6 +13,7 @@ function(rpc_server_test case)
     oceanbase_static
     ob_sql_static
     ob_storage_static
+    ${ob_close_modules_static_name}
     -Wl,--end-group
     -static-libgcc
     -static-libstdc++)

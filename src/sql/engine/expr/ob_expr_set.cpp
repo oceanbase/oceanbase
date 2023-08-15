@@ -79,6 +79,69 @@ int ObExprSet::calc_result_type1(ObExprResType &type,
   return ret;
 }
 
+#ifdef OB_BUILD_ORACLE_PL
+int ObExprSet::eval_coll(const ObObj &obj, ObExecContext &ctx, pl::ObPLNestedTable *&coll)
+{
+  int ret = OB_SUCCESS;
+  pl::ObPLCollection *c1 = reinterpret_cast<pl::ObPLCollection *>(obj.get_ext());
+  ObIAllocator &allocator = ctx.get_allocator();
+  ObIAllocator *collection_allocator = NULL;
+  ObObj *data_arr = NULL;
+  int64_t elem_count = 0;
+  coll = static_cast<pl::ObPLNestedTable*>(allocator.alloc(sizeof(pl::ObPLNestedTable)));
+  if (OB_ISNULL(coll)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc memory failed.", K(ret));
+  } else if (OB_ISNULL(c1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("union udt failed due to null udt", K(ret), K(obj));
+  } else if (pl::PL_NESTED_TABLE_TYPE != c1->get_type()) {
+    ret = OB_ERR_WRONG_TYPE_FOR_VAR;
+    LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt",
+    K(ret), K(c1->get_type()));
+  } else if (0 > c1->get_count() || !(c1->is_inited())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("union udt failed due to null udt", K(ret), K(c1->get_count()), K(c1->is_inited()));
+  } else {
+    coll = new(coll)pl::ObPLNestedTable(c1->get_id());
+    collection_allocator =
+                static_cast<ObIAllocator*>(allocator.alloc(sizeof(pl::ObPLCollAllocator)));
+    collection_allocator = new(collection_allocator)pl::ObPLCollAllocator(coll);
+    if (OB_ISNULL(collection_allocator)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc pl collection allocator failed.", K(ret));
+    } else {
+      if (OB_FAIL(ObExprMultiSet::calc_ms_one_distinct(collection_allocator,
+                                                        reinterpret_cast<ObObj *>(c1->get_data()),
+                                                        c1->get_count(),
+                                                        data_arr,
+                                                        elem_count))) {
+        LOG_WARN("failed to distinct nest table", K(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("failed to calc set operator", K(ret), K(data_arr));
+  }
+  else if (0 != elem_count && OB_ISNULL(data_arr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected result.", K(elem_count), K(data_arr), K(ret));
+  } else {
+    coll->set_allocator(collection_allocator);
+    coll->set_type(c1->get_type());
+    coll->set_id(c1->get_id());
+    coll->set_is_null(c1->is_null());
+    coll->set_element_type(c1->get_element_type());
+    coll->set_column_count(c1->get_column_count());
+    coll->set_not_null(c1->is_not_null());
+    coll->set_count(elem_count);
+    coll->set_first(elem_count > 0 ? 1 : OB_INVALID_ID);
+    coll->set_last(elem_count > 0 ? elem_count : OB_INVALID_ID);
+    coll->set_data(data_arr);
+  }
+  return ret;
+}
+#endif
 
 int ObExprSet::cg_expr(
     ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
@@ -94,7 +157,25 @@ int ObExprSet::cg_expr(
 int ObExprSet::calc_set(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
   UNUSEDx(expr, ctx, expr_datum);
+#else
+  if (lib::is_oracle_mode() && ObExtendType == expr.args_[0]->datum_meta_.type_) {
+    ObDatum *datum = NULL;
+    pl::ObPLNestedTable *coll = NULL;
+    ObObj *obj = NULL;
+    ObObjMeta obj_meta;
+    obj_meta.set_ext();
+    CK (OB_NOT_NULL(obj = static_cast<ObObj *>(
+        ctx.exec_ctx_.get_allocator().alloc(sizeof(ObObj)))));
+    OZ (expr.args_[0]->eval(ctx, datum));
+    OX (datum->to_obj(*obj, obj_meta));
+    OZ (eval_coll(*obj, ctx.exec_ctx_, coll));
+    CK (OB_NOT_NULL(coll));
+    OX (obj->set_extend(reinterpret_cast<int64_t>(coll), coll->get_type()));
+    OZ (expr_datum.from_obj(*obj));
+  }
+#endif
   return ret;
 }
 

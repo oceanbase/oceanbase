@@ -13,6 +13,9 @@
 #ifndef OCEANBASE_LOGSERVICE_OB_LOG_MONITOR_H_
 #define OCEANBASE_LOGSERVICE_OB_LOG_MONITOR_H_
 
+#ifdef OB_BUILD_ARBITRATION
+#include "logservice/ob_arbitration_service.h"
+#endif
 #include "palf/palf_callback.h"
 
 namespace oceanbase
@@ -21,6 +24,9 @@ namespace logservice
 {
 
 class ObLogMonitor : public palf::PalfMonitorCb
+#ifdef OB_BUILD_ARBITRATION
+, public IObArbitrationMonitor
+#endif
 {
 public:
   ObLogMonitor() { }
@@ -79,6 +85,13 @@ public:
   // =========== PALF Performance Statistic ===========
   int add_log_write_stat(const int64_t palf_id, const int64_t log_write_size) override final;
   // =========== PALF Performance Statistic ===========
+#ifdef OB_BUILD_ARBITRATION
+public:
+  // =========== Arbitration Event Reporting ===========
+  int record_degrade_event(const int64_t palf_id, const char *degraded_list, const char *reasons) override final;
+  int record_upgrade_event(const int64_t palf_id, const char *upgraded_list, const char *reasons) override final;
+  // =========== Arbitration Event Reporting ===========
+#endif
 private:
   enum EventType
   {

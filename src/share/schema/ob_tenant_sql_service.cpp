@@ -256,11 +256,36 @@ int ObTenantSqlService::replace_tenant(
           || OB_FAIL(dml.add_column("in_recyclebin", tenant_schema.is_in_recyclebin())))) {
         LOG_WARN("add column failed", K(ret));
       }
+#ifndef OB_BUILD_ARBITRATION
       if (OB_SUCC(ret) && !tenant_schema.get_arbitration_service_status().is_disabled()) {
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("arbitration service is not supported in CE version", KR(ret), K(tenant_schema));
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "create tenant with arbitration service in CE version");
       }
+#else
+      // If this ddl is a create tenant stmt
+      // (1) Only need to make sure sys tenant data version is above 4.1 to compate with arbitration service.
+      // (2) Do not check data version of the creating tenant and its meta tenant, because we can not get valid tenant config now
+      //
+      // If this ddl is a alter tenant stmt
+      // (1) Need to make sure sys,user,meta tenants all upgraded to 4.1
+      const uint64_t tenant_to_check_data_version = (OB_DDL_ADD_TENANT == op || OB_DDL_ADD_TENANT_START == op)
+                                                  ? OB_SYS_TENANT_ID
+                                                  : tenant_schema.get_tenant_id();
+       if (OB_FAIL(ret)) {
+       } else if (OB_FAIL(ObShareUtil::check_compat_version_for_arbitration_service(
+                             tenant_to_check_data_version, is_compatible_with_arbitration_service))) {
+        LOG_WARN("fail to check compat version with arbitration service", KR(ret), K(tenant_to_check_data_version));
+      } else if (is_compatible_with_arbitration_service) {
+        if (OB_FAIL(dml.add_column("arbitration_service_status", tenant_schema.get_arbitration_service_status_str()))) {
+          LOG_WARN("fail to add arbitration service status column", KR(ret), K(tenant_schema));
+        }
+      } else if (!tenant_schema.get_arbitration_service_status().is_disabled()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("data version is not above 4.1, and arbitration service status is not default value",
+                 KR(ret), K(tenant_schema));
+      }
+#endif
     }
     // insert into __all_tenant
     if (OB_SUCC(ret)) {

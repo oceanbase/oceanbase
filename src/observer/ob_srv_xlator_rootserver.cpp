@@ -256,10 +256,25 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcDropDirectoryP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDisasterRecoveryTaskReplyP, *gctx_.root_service_);
 
+#ifdef OB_BUILD_SPM
+    // sql plan baseline
+    RPC_PROCESSOR(rootserver::ObRpcAcceptPlanBaselineP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCancelEvolveTaskP, *gctx_.root_service_)
+    RPC_PROCESSOR(rootserver::ObRpcAdminLoadBaselineP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcAdminLoadBaselineV2P, *gctx_.root_service_);
+    // arb service related
+    RPC_PROCESSOR(rootserver::ObRpcAdminAddArbitrationServiceP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcAdminRemoveArbitrationServiceP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcAdminReplaceArbitrationServiceP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcRemoveClusterInfoFromArbServerP, *gctx_.root_service_);
+#endif
 
     RPC_PROCESSOR(rootserver::ObRpcAdminSyncRewriteRulesP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcHandleRlsPolicyDDLP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcHandleRlsGroupDDLP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcHandleRlsContextDDLP, *gctx_.root_service_);
+#ifdef OB_BUILD_TDE_SECURITY
+    RPC_PROCESSOR(rootserver::ObGetRootKeyP, *gctx_.root_service_);
+#endif
 
 }

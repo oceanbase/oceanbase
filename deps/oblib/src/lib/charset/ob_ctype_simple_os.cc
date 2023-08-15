@@ -18,6 +18,7 @@
 *      - initial release
 *
 */
+#ifndef OB_BUILD_FULL_CHARSET
 
 #include "lib/charset/ob_ctype.h"
 #include "lib/charset/ob_dtoa.h"
@@ -1098,3 +1099,5 @@ ObCollationHandler ob_collation_8bit_simple_ci_handler = {
 
 #undef likeconv
 #undef INC_PTR
+
+#endif

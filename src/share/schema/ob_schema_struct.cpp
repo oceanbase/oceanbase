@@ -10239,13 +10239,78 @@ int ObDbLinkBaseInfo::do_encrypt_reverse_password()
 int ObDbLinkBaseInfo::dblink_encrypt(common::ObString &src, common::ObString &dst)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_DBLINK
+  if (src.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src is empty", K(ret));
+  } else {
+    char encrypted_string[common::OB_MAX_ENCRYPTED_PASSWORD_LENGTH] = {0};
+
+    char hex_buff[common::OB_MAX_ENCRYPTED_PASSWORD_LENGTH + 1] = {0}; // +1 to reserve space for \0
+    int64_t encrypt_len = -1;
+    if (OB_FAIL(oceanbase::share::ObEncryptionUtil::encrypt_sys_data(tenant_id_,
+                                                   src.ptr(),
+                                                   src.length(),
+                                                   encrypted_string,
+                                                   common::OB_MAX_ENCRYPTED_PASSWORD_LENGTH,
+                                                   encrypt_len))) {
+
+      LOG_WARN("fail to encrypt_sys_data", KR(ret), K(src));
+    } else if (0 >= encrypt_len || common::OB_MAX_ENCRYPTED_PASSWORD_LENGTH < encrypt_len * 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("encrypt_len is invalid", K(ret), K(encrypt_len), K(common::OB_MAX_ENCRYPTED_PASSWORD_LENGTH));
+    } else if (OB_FAIL(to_hex_cstr(encrypted_string, encrypt_len, hex_buff, common::OB_MAX_ENCRYPTED_PASSWORD_LENGTH + 1))) {
+      LOG_WARN("fail to print to hex str", K(ret));
+    } else if (OB_FAIL(deep_copy_str(ObString(hex_buff), dst))) {
+      LOG_WARN("failed to deep copy encrypted_string", K(ret));
+    } else {
+      LOG_TRACE("succ to encrypt src", K(src), K(dst));
+    }
+  }
+#else
   ret = OB_NOT_SUPPORTED;
+#endif
   return ret;
 }
 int ObDbLinkBaseInfo::dblink_decrypt(common::ObString &src, common::ObString &dst)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_DBLINK
+  if (src.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src is empty", K(ret));
+  } else if (0 != src.length() % 2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid src", K(src.length()), K(ret));
+  } else {
+    char encrypted_password_not_hex[common::OB_MAX_ENCRYPTED_PASSWORD_LENGTH] = {0};
+    char plain_string[common::OB_MAX_PASSWORD_LENGTH + 1] = { 0 }; // need +1 to reserve space for \0
+    int64_t plain_string_len = -1;
+    if (OB_FAIL(hex_to_cstr(src.ptr(),
+                            src.length(),
+                            encrypted_password_not_hex,
+                            common::OB_MAX_ENCRYPTED_PASSWORD_LENGTH))) {
+      LOG_WARN("failed to hex to cstr", K(src.length()), K(ret));
+    } else if (OB_FAIL(ObEncryptionUtil::decrypt_sys_data(tenant_id_,
+                                                          encrypted_password_not_hex,
+
+                                                          src.length() / 2,
+                                                          plain_string,
+                                                          common::OB_MAX_PASSWORD_LENGTH + 1,
+                                                          plain_string_len))) {
+      LOG_WARN("failed to decrypt_sys_data", K(ret), K(src.length()));
+    } else if (0 >= plain_string_len) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("decrypt dblink password failed", K(ret), K(plain_string_len));
+    } else if (OB_FAIL(deep_copy_str(ObString(plain_string_len, plain_string), dst))) {
+      LOG_WARN("failed to deep copy plain_string", K(ret));
+    } else {
+      LOG_TRACE("succ to decrypt src", K(plain_string_len), K(src), K(dst));
+    }
+  }
+#else
   ret = OB_NOT_SUPPORTED;
+#endif
   return ret;
 }
 

@@ -532,6 +532,19 @@ public:
                                   share::schema::ObSchemaGetterGuard &schema_guard,
                                   ObPLDataType &pl_type,
                                   share::schema::ObSchemaObjVersion *obj_version);
+#ifdef OB_BUILD_ORACLE_PL
+  static int get_pkg_type_by_name(uint64_t tenant_id,
+                                  uint64_t owner_id,
+                                  const common::ObString &pkg,
+                                  const common::ObString &type,
+                                  common::ObIAllocator &allocator,
+                                  sql::ObSQLSessionInfo &session_info,
+                                  share::schema::ObSchemaGetterGuard &schema_guard,
+                                  common::ObMySQLProxy &sql_proxy,
+                                  bool is_pkg_var, // pkg var or pkg type
+                                  ObPLDataType &pl_type,
+                                  share::schema::ObSchemaObjVersion *obj_version);
+#endif
   static int get_table_type_by_name(uint64_t tenant_id,
                                   uint64_t owner_id,
                                   const ObString &table,

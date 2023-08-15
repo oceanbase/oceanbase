@@ -1018,6 +1018,9 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
     SQL_PC_LOG(ERROR, "got session is NULL", K(ret));
   } else if (is_prepare_mode(mode)
             || is_transform_outline
+#ifdef OB_BUILD_SPM
+            || pc_ctx.sql_ctx_.spm_ctx_.is_retry_for_spm_
+#endif
             ) {
     // if so, faster parser is needed
     // otherwise, fast parser has been done before

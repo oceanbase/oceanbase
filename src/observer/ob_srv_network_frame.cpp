@@ -31,6 +31,9 @@ extern "C" {
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "storage/ob_locality_manager.h"
+#ifdef OB_USE_BABASSL
+#include "share/ob_encrypt_kms.h"
+#endif
 
 using namespace oceanbase::rpc::frame;
 using namespace oceanbase::common;
@@ -155,6 +158,11 @@ int ObSrvNetworkFrame::init()
   } else if (ingress_service_.init(GCONF.cluster_id)) {
     LOG_ERROR("endpoint ingress service init fail", K(ret));
   }
+#ifdef OB_USE_BABASSL
+  else if (OB_FAIL(net_.add_rpc_unix_listen(rpc_unix_path, rpc_handler_))) {
+    LOG_ERROR("listen rpc unix path fail");
+  }
+#endif
   else {
     if (OB_FAIL(obrpc::global_poc_server.start(rpc_port, io_cnt, &deliver_))) {
       LOG_ERROR("poc rpc server start fail", K(ret));
@@ -398,6 +406,24 @@ int ObSrvNetworkFrame::reload_ssl_config()
       const char *enc_cert  = NULL;
       const char *enc_private_key = NULL;
 
+#ifdef OB_USE_BABASSL
+      share::ObSSLClient client;
+      if (!ssl_config.empty()) {
+        if (OB_FAIL(client.init(ssl_config.ptr(), ssl_config.length()))) {
+          OB_LOG(WARN, "kms client init", K(ret), K(ssl_config));
+        } else if (OB_FAIL(client.check_param_valid())) {
+          OB_LOG(WARN, "kms client param is not valid", K(ret));
+        } else {
+          use_bkmi = client.is_bkmi_mode();
+          use_sm = client.is_sm_scene();
+          ca_cert = client.get_root_ca().ptr();
+          public_cert = client.public_cert_.content_.ptr();
+          private_key = client.private_key_.content_.ptr();
+          enc_cert = client.public_cert_for_enc_.content_.ptr();
+          enc_private_key = client.private_key_for_enc_.content_.ptr();
+        }
+      }
+#endif
 
       if (! use_bkmi) {
         if (!use_sm) {
@@ -411,6 +437,23 @@ int ObSrvNetworkFrame::reload_ssl_config()
             public_cert = OB_SSL_CERT_FILE;
             private_key = OB_SSL_KEY_FILE;
           }
+#ifdef OB_USE_BABASSL
+        } else {
+          if (EASY_OK != easy_ssl_ob_config_check(OB_SSL_CA_FILE,
+                                                   OB_SSL_SM_SIGN_CERT_FILE, OB_SSL_SM_SIGN_KEY_FILE,
+                                                   OB_SSL_SM_ENC_CERT_FILE, OB_SSL_SM_ENC_KEY_FILE,
+                                                   true, true)) {
+            ret = OB_INVALID_CONFIG;
+            LOG_WARN("key and cert not match", K(ret));
+            LOG_USER_ERROR(OB_INVALID_CONFIG, "key and cert not match");
+          } else {
+            ca_cert = OB_SSL_CA_FILE;
+            public_cert = OB_SSL_SM_SIGN_CERT_FILE;
+            private_key = OB_SSL_SM_SIGN_KEY_FILE;
+            enc_cert = OB_SSL_SM_ENC_CERT_FILE;
+            enc_private_key = OB_SSL_SM_ENC_KEY_FILE;
+          }
+#endif
         }
       }
 
@@ -419,6 +462,11 @@ int ObSrvNetworkFrame::reload_ssl_config()
         if (!use_bkmi && !use_sm &&OB_FAIL(extract_expired_time(OB_SSL_CERT_FILE, ssl_key_expired_time))) {
           OB_LOG(WARN, "extract_expired_time intl failed", K(ret), K(use_bkmi));
         }
+        #ifdef OB_USE_BABASSL
+          else if (!use_bkmi && use_sm && OB_FAIL(extract_expired_time(OB_SSL_SM_ENC_CERT_FILE, ssl_key_expired_time))) {
+          OB_LOG(WARN, "extract_expired_time sm failed", K(ret), K(use_bkmi));
+        }
+        #endif
          else if (OB_FAIL(net_.load_ssl_config(use_bkmi, use_sm, ca_cert,
             public_cert, private_key, enc_cert, enc_private_key))) {
           OB_LOG(WARN, "load_ssl_config failed", K(ret), K(use_bkmi), K(use_sm));
@@ -427,7 +475,15 @@ int ObSrvNetworkFrame::reload_ssl_config()
           mysql_handler_.ez_handler()->is_ssl_opt = 1;
           rpc_handler_.ez_handler()->is_ssl = 1;
           rpc_handler_.ez_handler()->is_ssl_opt = 0;
+#ifndef OB_USE_BABASSL
           GCTX.ssl_key_expired_time_ =  ssl_key_expired_time;
+#else
+          if (use_bkmi) {
+            GCTX.ssl_key_expired_time_ =  client.public_cert_.key_expired_time_;
+          } else {
+            GCTX.ssl_key_expired_time_ =  ssl_key_expired_time;
+          }
+#endif
           last_ssl_info_hash_ = new_hash_value;
           LOG_INFO("finish reload_ssl_config", K(use_bkmi), K(use_bkmi), K(use_sm),
                    "ssl_key_expired_time", GCTX.ssl_key_expired_time_, K(new_hash_value));

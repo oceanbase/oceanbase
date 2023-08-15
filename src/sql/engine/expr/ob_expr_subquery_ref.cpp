@@ -317,6 +317,72 @@ int ObExprSubQueryRef::expr_eval(
     LOG_WARN("filter to rewind subquery iterator", K(ret));
   }
   if (OB_FAIL(ret)) {
+#ifdef OB_BUILD_ORACLE_PL
+  } else if (extra_info->is_cursor_) {
+    const pl::ObRefCursorType pl_type;
+    int64_t param_size = 0;
+    char *data = NULL;
+    ObObj *obj = NULL;
+    pl::ObPLCursorInfo *cursor = NULL;
+    ObSPICursor* spi_cursor = NULL;
+    uint64_t size = 0;
+    ObNewRow row;
+    ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+    CK (OB_NOT_NULL(ctx.exec_ctx_.get_sql_ctx()));
+    CK (OB_NOT_NULL(ctx.exec_ctx_.get_sql_ctx()->schema_guard_));
+    OZ (pl_type.get_size(pl::ObPLUDTNS(*ctx.exec_ctx_.get_sql_ctx()->schema_guard_),
+                         pl::PL_TYPE_INIT_SIZE, param_size));
+    CK (OB_NOT_NULL(data = static_cast<char *>(
+        ctx.exec_ctx_.get_allocator().alloc(param_size))));
+    CK (OB_NOT_NULL(obj = static_cast<ObObj *>(
+        ctx.exec_ctx_.get_allocator().alloc(sizeof(ObObj)))));
+    if (OB_SUCC(ret)) {
+      MEMSET(data, 0, param_size);
+      new(data) pl::ObPLCursorInfo(&ctx.exec_ctx_.get_allocator());
+      obj->set_extend(reinterpret_cast<int64_t>(data), pl::PL_CURSOR_TYPE);
+      expr_datum.from_obj(*obj);
+      OX (cursor = reinterpret_cast<pl::ObPLCursorInfo*>(obj->get_ext()));
+    }
+    CK (OB_NOT_NULL(cursor));
+    CK (OB_NOT_NULL(session));
+    OZ (session->get_tmp_table_size(size));
+    OZ (cursor->prepare_spi_cursor(spi_cursor,
+                                   session->get_effective_tenant_id(),
+                                   size));
+    OZ (spi_cursor->row_desc_.assign(extra_info->row_desc_));
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(iter->get_next_row())) {
+        //do nothing
+      } else if (OB_FAIL(convert_datum_to_obj(ctx, *iter, ctx.exec_ctx_.get_allocator(), row))) {
+        LOG_WARN("failed to convert datum to obj", K(ret));
+      } else if (OB_FAIL(spi_cursor->row_store_.add_row(row))) {
+        LOG_WARN("failed to add row to row store", K(ret));
+      } else { /*do nothing*/ }
+    }
+    if (OB_LIKELY(OB_ITER_END == ret)) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("get next row from row iterator failed", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      OX (spi_cursor->row_store_.finish_add_row());
+      OX (cursor->open(spi_cursor));
+    }
+    if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+      transaction::ObTxReadSnapshot &snapshot = ctx.exec_ctx_.get_das_ctx().get_snapshot();
+      OZ (cursor->set_and_register_snapshot(snapshot));
+    }
+    if (OB_SUCC(ret)) {
+      ObExprSubQueryRefCtx *sub_query_ctx = NULL;
+      uint64_t ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
+      if (NULL == (sub_query_ctx = static_cast<ObExprSubQueryRefCtx *>
+                        (ctx.exec_ctx_.get_expr_op_ctx(ctx_id)))) {
+        OZ (ctx.exec_ctx_.create_expr_op_ctx(ctx_id, sub_query_ctx));
+      }
+      CK (OB_NOT_NULL(sub_query_ctx));
+      OZ (sub_query_ctx->add_cursor_info(cursor, ctx.exec_ctx_.get_my_session()));
+    }
+#endif
   } else if (extra.is_scalar_) {
     if (1 != iter->get_output().count()) {
       //not a scalar obj

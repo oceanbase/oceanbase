@@ -88,9 +88,20 @@ public:
       bool &is_compressed,
       const bool need_deep_copy = false,
       ObIAllocator *ext_allocator = nullptr);
+#ifdef OB_BUILD_TDE_SECURITY
+  int decrypt_buf(
+      const ObMicroBlockDesMeta &deserialize_meta,
+      const char *buf,
+      const int64_t size,
+      const char *&decrypt_buf,
+      int64_t &decrypt_size);
+#endif
 private:
   int alloc_buf(const int64_t req_size, char *&buf, int64_t &buf_size);
   int alloc_buf(ObIAllocator &allocator, const int64_t buf_size, char *&buf);
+#ifdef OB_BUILD_TDE_SECURITY
+  int init_encrypter_if_needed();
+#endif
 
 private:
   common::ObCompressor *compressor_;

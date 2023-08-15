@@ -21,10 +21,24 @@ namespace observer
 {
 class ObAllVirtualAuditActionTable : public common::ObVirtualTableScannerIterator
 {
+#ifndef OB_BUILD_AUDIT_SECURITY
 public:
   ObAllVirtualAuditActionTable() {}
   virtual ~ObAllVirtualAuditActionTable() {}
   virtual int inner_get_next_row(common::ObNewRow *&row) { return OB_ITER_END; }
+#else
+  static const int32_t AUDIT_ACTION_COLUMN_COUNT = 2;
+  enum COLUMN_NAME {
+    ACTION_ID = common::OB_APP_MIN_COLUMN_ID,
+    ACTION_NAME,
+  };
+
+public:
+  ObAllVirtualAuditActionTable();
+  virtual ~ObAllVirtualAuditActionTable();
+
+  virtual int inner_get_next_row(common::ObNewRow *&row);
+#endif
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualAuditActionTable);

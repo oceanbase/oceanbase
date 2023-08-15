@@ -1885,6 +1885,92 @@ int ObAdminFlushCache::execute(const obrpc::ObAdminFlushCacheArg &arg)
   return ret;
 }
 
+#ifdef OB_BUILD_SPM
+int ObAdminLoadBaseline::execute(const obrpc::ObLoadPlanBaselineArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAddr, 8> server_list;
+  if (OB_FAIL(get_tenant_servers(arg.tenant_id_, server_list))) {
+    LOG_WARN("fail to get tenant servers", "tenant_id", arg.tenant_id_, KR(ret));
+  } else {
+    //call tenant servers;
+    for (int64_t j = 0; OB_SUCC(ret) && j < server_list.count(); ++j) {
+      if (OB_FAIL(call_server(server_list.at(j), arg))) {
+        LOG_WARN("fail to call tenant server",
+                 "tenant_id", arg.tenant_id_,
+                 "server addr", server_list.at(j),
+                 KR(ret));
+      }
+    }
+  }
+  server_list.reset();
+  return ret;
+}
+
+int ObAdminLoadBaseline::call_server(const common::ObAddr &server,
+                                     const obrpc::ObLoadPlanBaselineArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!ctx_.is_inited()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!server.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid server", K(server), KR(ret));
+  } else if (OB_FAIL(ctx_.rpc_proxy_->to(server)
+                                     .by(arg.tenant_id_)
+                                     .as(arg.tenant_id_)
+                                     .load_baseline(arg))) {
+    LOG_WARN("request server load baseline failed", KR(ret), K(server));
+  }
+
+  return ret;
+}
+
+int ObAdminLoadBaselineV2::execute(const obrpc::ObLoadPlanBaselineArg &arg, uint64_t &total_load_count)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAddr, 8> server_list;
+  if (OB_FAIL(get_tenant_servers(arg.tenant_id_, server_list))) {
+    LOG_WARN("fail to get tenant servers", "tenant_id", arg.tenant_id_, KR(ret));
+  } else {
+    //call tenant servers;
+    for (int64_t j = 0; OB_SUCC(ret) && j < server_list.count(); ++j) {
+      obrpc::ObLoadBaselineRes res;
+      if (OB_FAIL(call_server(server_list.at(j), arg, res))) {
+        LOG_WARN("fail to call tenant server",
+                 "tenant_id", arg.tenant_id_,
+                 "server addr", server_list.at(j),
+                 KR(ret));
+      } else {
+        total_load_count += res.load_count_;
+      }
+    }
+  }
+  server_list.reset();
+  return ret;
+}
+
+int ObAdminLoadBaselineV2::call_server(const common::ObAddr &server,
+                                     const obrpc::ObLoadPlanBaselineArg &arg,
+                                     obrpc::ObLoadBaselineRes &res)
+{
+  int ret = OB_SUCCESS;
+  if (!ctx_.is_inited()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!server.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid server", K(server), KR(ret));
+  } else if (OB_FAIL(ctx_.rpc_proxy_->to(server)
+                                     .by(arg.tenant_id_)
+                                     .as(arg.tenant_id_)
+                                     .load_baseline_v2(arg, res))) {
+    LOG_WARN("request server load baseline failed", KR(ret), K(server));
+  }
+  return ret;
+}
+#endif
 
 int ObTenantServerAdminUtil::get_tenant_servers(const uint64_t tenant_id, common::ObIArray<ObAddr> &servers)
 {

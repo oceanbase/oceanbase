@@ -74,6 +74,9 @@
 #include "sql/ob_optimizer_trace_impl.h"
 #include "sql/optimizer/ob_explain_note.h"
 #include "share/ob_lob_access_utils.h"
+#ifdef OB_BUILD_SPM
+#include "sql/spm/ob_spm_define.h"
+#endif
 
 using namespace oceanbase;
 using namespace sql;
@@ -10857,6 +10860,9 @@ int ObLogPlan::check_enable_plan_expiration(bool &enable) const
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = NULL;
+#ifdef OB_BUILD_SPM
+  bool use_spm = false;
+#endif
   enable = false;
   if (OB_ISNULL(get_stmt()) ||
       OB_ISNULL(session = optimizer_context_.get_session_info())) {
@@ -10864,6 +10870,12 @@ int ObLogPlan::check_enable_plan_expiration(bool &enable) const
     LOG_WARN("stmt is null", K(ret));
   } else if (!get_stmt()->is_select_stmt()) {
     // do nothing
+#ifdef OB_BUILD_SPM
+  } else if (OB_FAIL(session->get_use_plan_baseline(use_spm))) {
+    LOG_WARN("failed to check is spm enabled", K(ret));
+  } else if (use_spm) {
+    // do nothing
+#endif
   } else if (optimizer_context_.get_phy_plan_type() != OB_PHY_PLAN_LOCAL &&
              optimizer_context_.get_phy_plan_type() != OB_PHY_PLAN_DISTRIBUTED) {
     // do nothing
@@ -11185,9 +11197,16 @@ int ObLogPlan::init_plan_info()
   } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(get_stmt()->get_condition_exprs(),
                                                           get_const_exprs()))) {
     LOG_WARN("failed to compute const equivalent exprs", K(ret));
+#ifndef OB_BUILD_SPM
   } else if (OB_FAIL(log_plan_hint_.init_log_plan_hint(*schema_guard, *get_stmt(),
                                                        query_ctx->get_query_hint()))) {
     LOG_WARN("failed to init log plan hint", K(ret));
+#else
+  } else if (OB_FAIL(log_plan_hint_.init_log_plan_hint(*schema_guard, *get_stmt(),
+                                                       query_ctx->get_query_hint(),
+                                                       query_ctx->is_spm_evolution_))) {
+    LOG_WARN("failed to init log plan hint", K(ret));
+#endif
   } else if (OB_FAIL(init_onetime_subquery_info())) {
     LOG_WARN("failed to extract onetime_exprs", K(ret));
   }

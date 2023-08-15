@@ -66,6 +66,31 @@ int ObPLCompiler::init_anonymous_ast(
         CK (OB_NOT_NULL(user_type));
         OX (pl_type.reset());
         OX (pl_type = *user_type);
+#ifdef OB_BUILD_ORACLE_PL
+      } else if (PL_REF_CURSOR_TYPE == param.get_meta().get_extend_type()) {
+        pl_type.reset();
+        pl_type.set_type(pl::PL_REF_CURSOR_TYPE);
+        pl_type.set_type_from(pl::PL_TYPE_SYS_REFCURSOR);
+      } else if (PL_NESTED_TABLE_TYPE == param.get_meta().get_extend_type()) {
+        ObPLCollection *coll = reinterpret_cast<ObPLCollection *>(param.get_ext());
+        ObNestedTableType *nested_type = NULL;
+        ObPLDataType element_type;
+        if (OB_ISNULL(nested_type =
+          reinterpret_cast<ObNestedTableType*>(allocator.alloc(sizeof(ObNestedTableType))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc memory for ObNestedTableType", K(ret));
+        }
+        CK (OB_NOT_NULL(coll));
+        OX (new(nested_type)ObNestedTableType());
+        OX (element_type.reset());
+        OX (element_type.set_data_type(coll->get_element_type()));
+        OX (nested_type->set_element_type(element_type));
+        OX (nested_type->set_user_type_id(
+          func_ast.get_user_type_table().generate_user_type_id(OB_INVALID_ID)));
+        OZ (func_ast.get_user_type_table().add_type(nested_type));
+        OZ (func_ast.get_user_type_table().add_external_type(nested_type));
+        OX (pl_type = *nested_type);
+#endif
       } else {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN(
@@ -1038,6 +1063,88 @@ int ObPLCompiler::compile_types(const ObIArray<const ObUserDefinedType*> &types,
         }
       }
         break;
+#ifdef OB_BUILD_ORACLE_PL
+      case PL_NESTED_TABLE_TYPE: {
+        ObNestedTableType *table_type = static_cast<ObNestedTableType *>(alloc.alloc(sizeof(ObNestedTableType)));
+        if (OB_ISNULL(table_type)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret), KPC(ast_type), K(i));
+        } else {
+          new (table_type) ObNestedTableType();
+          if (OB_FAIL(table_type->deep_copy(alloc, *(static_cast<ObNestedTableType *>(ast_type))))) {
+            LOG_WARN("pl user type deep copy failed", K(ret), KPC(ast_type), K(i));
+          } else {
+            user_type = table_type;
+          }
+        }
+      }
+        break;
+      case PL_ASSOCIATIVE_ARRAY_TYPE: {
+        ObAssocArrayType *assoc_array_type = static_cast<ObAssocArrayType *>(alloc.alloc(sizeof(ObAssocArrayType)));
+        if (OB_ISNULL(assoc_array_type)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret), KPC(ast_type), K(i));
+        } else {
+          new (assoc_array_type) ObAssocArrayType();
+          if (OB_FAIL(assoc_array_type->deep_copy(alloc, *(static_cast<ObAssocArrayType *>(ast_type))))) {
+            LOG_WARN("pl user type deep copy failed", K(ret), KPC(ast_type), K(i));
+          } else {
+            user_type = assoc_array_type;
+          }
+        }
+      }
+        break;
+      case PL_VARRAY_TYPE: {
+        ObVArrayType *varray_type = static_cast<ObVArrayType *>(alloc.alloc(sizeof(ObVArrayType)));
+        if (OB_ISNULL(varray_type)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory for varray type failed", K(ret), K(varray_type), KPC(ast_type), K(i));
+        } else {
+          new (varray_type) ObVArrayType();
+          if (OB_FAIL(varray_type->deep_copy(alloc, *(static_cast<ObVArrayType *>(ast_type))))) {
+            LOG_WARN("deep copy varray type failed", K(ret), KPC(ast_type), K(i));
+          } else {
+            user_type = varray_type;
+          }
+        }
+      }
+        break;
+      case PL_SUBTYPE:  {
+        ObUserDefinedSubType *subtype =
+          static_cast<ObUserDefinedSubType*>(alloc.alloc(sizeof(ObUserDefinedSubType)));
+        if (OB_ISNULL(subtype)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory for user define sub type",
+                   K(ret), K(subtype), KPC(ast_type), K(i));
+        } else {
+          new(subtype)ObUserDefinedSubType();
+          OZ (subtype->deep_copy(alloc,
+                                 *(static_cast<ObUserDefinedSubType*>(ast_type))),
+                                 ast_type, i);
+          OX (user_type = subtype);
+        }
+      }
+        break;
+      case PL_OPAQUE_TYPE:  {
+        ObOpaqueType *opaqua_type = static_cast<ObOpaqueType *>(alloc.alloc(sizeof(ObOpaqueType)));
+        if (OB_ISNULL(opaqua_type)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory for cursor type failed",
+                   K(ret),
+                   K(opaqua_type),
+                   KPC(ast_type),
+                   K(i));
+        } else {
+          new (opaqua_type) ObOpaqueType();
+          if (OB_FAIL(opaqua_type->deep_copy(alloc, *(static_cast<ObOpaqueType *>(ast_type))))) {
+            LOG_WARN("deep copy ref cursor type failed", K(ret), KPC(ast_type), K(i));
+          } else {
+            user_type = opaqua_type;
+          }
+        }
+      }
+        break;
+#endif
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid pl type", K(ret), KPC(ast_type), K(i));

@@ -278,6 +278,9 @@ public:
 
   int lift_tenant_schema_version(int64_t new_schema_version);
   int check_contains_table(uint64_t db_id, common::ObString tab_name, bool &contains);
+#ifdef OB_BUILD_SPM
+  int get_evolving_evolution_task(EvolutionPlanList &evo_task_list);
+#endif
 private:
   //used for add plan
   //check table version, view table version, merged version
@@ -406,6 +409,9 @@ private:
   uint64_t sess_create_time_;
   // wether this pcv's plans contains sys table (oracle mode)
   bool contain_sys_name_table_;
+#ifdef OB_BUILD_SPM
+  bool is_spm_closed_;
+#endif
 
   bool need_param_;
   //at present, if a SQL is in nested sql, it is forced to use DAS plan

@@ -37,6 +37,9 @@ ob_define(OB_MAX_UNITY_BATCH_SIZE 30)
 # the global switch of unity build, defualt is 'ON'
 ob_define(OB_ENABLE_UNITY ON)
 
+ob_define(OB_BUILD_OPENSOURCE ON)
+
+
 if(WITH_COVERAGE)
   # -ftest-coverage to generate .gcno file
   # -fprofile-arcs to generate .gcda file
@@ -61,6 +64,88 @@ if(ENABLE_THIN_LTO)
   set(THIN_LTO_CONCURRENCY_LINK "-Wl,--thinlto-jobs=32,--lto-whole-program-visibility")
 endif()
 
+set(ob_close_modules_static_name "")
+set(ob_close_deps_static_name "")
+
+if (OB_BUILD_OPENSOURCE)
+  # 开源模式
+  set(OB_BUILD_CLOSE_MODULES OFF)
+else()
+  # 闭源模式
+  set(OB_BUILD_CLOSE_MODULES ON)
+endif()
+
+if(OB_BUILD_CLOSE_MODULES)
+  # SECURITY, 包含3个功能点
+  ob_define(OB_BUILD_TDE_SECURITY ON)
+  ob_define(OB_BUILD_AUDIT_SECURITY ON)
+  ob_define(OB_BUILD_LABEL_SECURITY ON)
+  # 字符集
+  ob_define(OB_BUILD_FULL_CHARSET ON)
+  # SPM功能
+  ob_define(OB_BUILD_SPM ON)
+
+  # oralce
+  ob_define(OB_BUILD_ORACLE_PARSER ON)
+  ob_define(OB_BUILD_ORACLE_PL ON)
+  ob_define(OB_BUILD_ORACLE_XML ON)
+  # dblink
+  ob_define(OB_BUILD_DBLINK ON)
+  # 仲裁功能
+  ob_define(OB_BUILD_ARBITRATION ON)
+
+  # 默认使用BABASSL
+  ob_define(OB_USE_BABASSL ON)
+  add_definitions(-DOB_USE_BABASSL)
+  # 默认使用OB_USE_DRCMSG
+  ob_define(OB_USE_DRCMSG ON)
+  add_definitions(-DOB_USE_DRCMSG)
+endif()
+
+# 下面开始逻辑控制
+if(OB_BUILD_CLOSE_MODULES)
+  add_definitions(-DOB_BUILD_CLOSE_MODULES)
+endif()
+
+if(OB_BUILD_TDE_SECURITY)
+  add_definitions(-DOB_BUILD_TDE_SECURITY)
+endif()
+
+if(OB_BUILD_AUDIT_SECURITY)
+  add_definitions(-DOB_BUILD_AUDIT_SECURITY)
+endif()
+
+if(OB_BUILD_LABEL_SECURITY)
+  add_definitions(-DOB_BUILD_LABEL_SECURITY)
+endif()
+
+if(OB_BUILD_FULL_CHARSET)
+  add_definitions(-DOB_BUILD_FULL_CHARSET)
+endif()
+
+if(OB_BUILD_SPM)
+  add_definitions(-DOB_BUILD_SPM)
+endif()
+
+if(OB_BUILD_ORACLE_PARSER)
+  add_definitions(-DOB_BUILD_ORACLE_PARSER)
+endif()
+
+if(OB_BUILD_ORACLE_PL)
+  add_definitions(-DOB_BUILD_ORACLE_PL)
+endif()
+
+if(OB_BUILD_ORACLE_XML)
+  add_definitions(-DOB_BUILD_ORACLE_XML)
+endif()
+
+if(OB_BUILD_ARBITRATION)
+  add_definitions(-DOB_BUILD_ARBITRATION)
+endif()
+
+if(OB_BUILD_DBLINK)
+  add_definitions(-DOB_BUILD_DBLINK)
+endif()
 
 # should not use initial-exec for tls-model if building OBCDC.
 if(NOT OB_BUILD_CDC)
@@ -125,7 +210,36 @@ if (OB_USE_CLANG)
   set(CMAKE_SHARED_LINKER_FLAGS "${LD_OPT} -Wl,-z,noexecstack ${THIN_LTO_CONCURRENCY_LINK} ${REORDER_LINK_OPT}")
   set(CMAKE_EXE_LINKER_FLAGS "${LD_OPT} -Wl,-z,noexecstack -pie ${THIN_LTO_CONCURRENCY_LINK} ${REORDER_LINK_OPT} ${CMAKE_COVERAGE_EXE_LINKER_OPTIONS}")
 else() # not clang, use gcc
+if(OB_BUILD_OPENSOURCE)
   message("gcc9 not support currently, please set OB_USE_CLANG ON and we will finish it as soon as possible")
+else()
+
+  if (OB_CC)
+    message(STATUS "Using OB_CC compiler: ${OB_CC}")
+  else()
+    find_program(OB_CC gcc
+      PATHS ${DEVTOOLS_DIR}/bin
+      NO_DEFAULT_PATH)
+  endif()
+
+  if (OB_CXX)
+    message(STATUS "Using OB_CXX compiler: ${OB_CXX}")
+  else()
+    find_program(OB_CXX g++
+      PATHS ${DEVTOOLS_DIR}/bin
+      NO_DEFAULT_PATH)
+  endif()
+
+  if (OB_USE_LLD)
+    set(LD_OPT "-B${CMAKE_SOURCE_DIR}/rpm/.compile")
+    set(REORDER_COMP_OPT "-ffunction-sections")
+    set(REORDER_LINK_OPT "-Wl,--no-warn-symbol-ordering,--symbol-ordering-file,${HOTFUNC_PATH}")
+  endif()
+  set(CMAKE_CXX_FLAGS "${LD_OPT} -fdiagnostics-color ${REORDER_COMP_OPT}")
+  set(CMAKE_C_FLAGS "${LD_OPT} -fdiagnostics-color ${REORDER_COMP_OPT}")
+  set(CMAKE_SHARED_LINKER_FLAGS "-z noexecstack ${REORDER_LINK_OPT}")
+  set(CMAKE_EXE_LINKER_FLAGS "-z noexecstack ${REORDER_LINK_OPT}")
+endif()
 endif()
 
 if (OB_BUILD_CCLS)
@@ -143,6 +257,15 @@ else()
   message(FATAL_ERROR "can't find suitable compiler")
 endif()
 
+find_program(OB_COMPILE_EXECUTABLE ob-compile)
+if (NOT OB_COMPILE_EXECUTABLE)
+  message(STATUS "ob-compile not found, compile locally.")
+else()
+  set(CMAKE_C_COMPILER_LAUNCHER ${OB_COMPILE_EXECUTABLE})
+  set(CMAKE_CXX_COMPILER_LAUNCHER ${OB_COMPILE_EXECUTABLE})
+  set(CMAKE_C_LINKER_LAUNCHER ${OB_COMPILE_EXECUTABLE})
+  set(CMAKE_CXX_LINKER_LAUNCHER ${OB_COMPILE_EXECUTABLE})
+endif()
 
 option(OB_ENABLE_AVX2 "enable AVX2 and related instruction set support for x86_64" OFF)
 
@@ -152,8 +275,6 @@ if( ${ARCHITECTURE} STREQUAL "x86_64" )
     set(MTUNE_CFLAGS -mtune=core2)
     set(ARCH_LDFLAGS "")
     set(OCI_DEVEL_INC "${DEP_3RD_DIR}/usr/include/oracle/11.2/client64")
-    add_compile_options(-DRDMA_ENABLED)
-    set(rdma_lib_deps "reasy" )
 else()
     set(MARCH_CFLAGS "-march=armv8-a+crc" )
     set(MTUNE_CFLAGS "-mtune=generic" )

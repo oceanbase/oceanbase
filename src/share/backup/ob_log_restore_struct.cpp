@@ -258,9 +258,15 @@ int ObRestoreSourceServiceAttr::set_service_passwd_to_encrypt(const char *passwd
   if (OB_ISNULL(passwd) || OB_UNLIKELY(0 == STRLEN(passwd) || STRLEN(passwd) > OB_MAX_PASSWORD_LENGTH)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument");
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(set_encrypt_password_key_(passwd))) {
+    LOG_WARN("encrypt password failed");
+  }
+#else
   } else if (OB_FAIL(databuff_printf(encrypt_passwd_, sizeof(encrypt_passwd_), "%s", passwd))) {
     LOG_WARN("fail to print encrypt password");
   }
+#endif
   LOG_INFO("set service password success");
   return ret;
 }
@@ -632,21 +638,88 @@ int ObRestoreSourceServiceAttr::get_is_encrypted_str_(char *buf, const int64_t b
   if (OB_ISNULL(buf) || OB_UNLIKELY(buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid encrypted str argument", KP(buf), K(buf_size));
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(databuff_printf(buf, buf_size, "%s", "true"))) {
+    LOG_WARN("fail to print is_encrypted str");
+  }
+#else
   } else if (OB_FAIL(databuff_printf(buf, buf_size, "%s", "false"))) {
     LOG_WARN("fail to print encrypted str");
   }
+#endif
   return ret;
 }
 
 int ObRestoreSourceServiceAttr::get_is_encrypted_str_(ObSqlString &encrypted_str) const
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_TDE_SECURITY
+  if (OB_FAIL(encrypted_str.assign("true"))) {
+    LOG_WARN("fail to print is_encrypted str");
+  }
+#else
   if (OB_FAIL(encrypted_str.assign("false"))) {
     LOG_WARN("fail to print str");
+  }
+#endif
+  return ret;
+}
+
+#ifdef OB_BUILD_TDE_SECURITY
+int ObRestoreSourceServiceAttr::set_encrypt_password_key_(const char *passwd)
+{
+  int ret = OB_SUCCESS;
+  char encrypted_key[OB_MAX_BACKUP_ENCRYPTKEY_LENGTH] = { 0 };
+  char serialize_buf[OB_MAX_BACKUP_SERIALIZEKEY_LENGTH] = { 0 };
+  int64_t serialize_pos = 0;
+  int64_t key_len = 0;
+
+  if (OB_ISNULL(passwd) || OB_UNLIKELY(0 == STRLEN(passwd))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("password is empty, shouldn't encrypt");
+  } else if (OB_FAIL(ObEncryptionUtil::encrypt_sys_data(OB_SYS_TENANT_ID, passwd, strlen(passwd), encrypted_key,
+    OB_MAX_BACKUP_ENCRYPTKEY_LENGTH, key_len))) {
+    LOG_WARN("failed to encrypt authorization key");
+  } else if (OB_FAIL(hex_print(encrypted_key, key_len, serialize_buf, sizeof(serialize_buf), serialize_pos))) {
+    LOG_WARN("failed to serialize encrypted key", K(encrypted_key));
+  } else if (serialize_pos >= sizeof(serialize_buf) || serialize_pos >= sizeof(encrypt_passwd_)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("encode error", K(serialize_pos), K(sizeof(serialize_buf)), K(sizeof(encrypt_passwd_)));
+  } else if (FALSE_IT(serialize_buf[serialize_pos] = '\0')) {
+  } else if (OB_FAIL(databuff_printf(encrypt_passwd_, sizeof(encrypt_passwd_), "%s", serialize_buf))) {
+    LOG_WARN("failed to get encrypted key", K(serialize_buf));
   }
   return ret;
 }
 
+int ObRestoreSourceServiceAttr::get_decrypt_password_key_(char *unencrypt_key, const int64_t buf_size) const
+{
+  int ret = OB_SUCCESS;
+  int64_t key_len = 0;
+  char deserialize_buf[OB_MAX_BACKUP_SERIALIZEKEY_LENGTH] = { 0 };
+  char decrypt_key[OB_MAX_BACKUP_ACCESSKEY_LENGTH] = { 0 };
+  int64_t buf_len = strlen(encrypt_passwd_);
+  int64_t deserialize_size = 0;
+
+  if (OB_ISNULL(unencrypt_key) || OB_UNLIKELY((0 == buf_len) || (buf_size <= 0) || (buf_size < OB_MAX_PASSWORD_LENGTH))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get decrypt password, parameter is invalid", K(ret));
+  } else if (OB_FAIL(hex_to_cstr(encrypt_passwd_, buf_len,
+      deserialize_buf, sizeof(deserialize_buf), deserialize_size))) {
+    LOG_WARN("failed to get cstr from hex", K(buf_len), K(sizeof(deserialize_buf)));
+  } else if (OB_FAIL(ObEncryptionUtil::decrypt_sys_data(OB_SYS_TENANT_ID, deserialize_buf, deserialize_size,
+      decrypt_key, sizeof(decrypt_key), key_len))) {
+    LOG_WARN("failed to decrypt authorization key", K(ret), K(deserialize_buf), K(deserialize_size));
+  } else if (key_len >= sizeof(decrypt_key) || (key_len) >= buf_size) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("decrypt key size overflow", K(ret), K(key_len), K(sizeof(decrypt_key)), K(sizeof(unencrypt_key)));
+  } else if (FALSE_IT(decrypt_key[key_len] = '\0')) {
+  } else if (OB_FAIL(databuff_printf(unencrypt_key, buf_size, "%s", decrypt_key))) {
+    LOG_WARN("failed to set unencrypt key", K(ret));
+  }
+  return ret;
+}
+#endif
 
 int ObRestoreSourceServiceAttr::get_password(char *passwd, const int64_t buf_size) const
 {
@@ -655,9 +728,17 @@ int ObRestoreSourceServiceAttr::get_password(char *passwd, const int64_t buf_siz
   if (OB_ISNULL(passwd) || OB_UNLIKELY((buf_size <= 0) || (buf_size < OB_MAX_PASSWORD_LENGTH))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid parameter when get password", K(passwd), K(STRLEN(passwd)));
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(get_decrypt_password_key_(tmp_passwd, sizeof(tmp_passwd)))) {
+    LOG_WARN("failed to get decrypt password key");
+  } else if (OB_FAIL(databuff_printf(passwd, buf_size, "%s", tmp_passwd))) {
+    LOG_WARN("failed to print encrypt_passwd_ key", K(encrypt_passwd_));
+  }
+#else
   } else if (OB_FAIL(databuff_printf(passwd, buf_size, "%s", encrypt_passwd_))) {
     LOG_WARN("failed to print encrypt_passwd_ key", K(encrypt_passwd_));
   }
+#endif
   return ret;
 }
 

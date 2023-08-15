@@ -11,6 +11,10 @@
  */
 
 #include "ob_all_virtual_dblink_info.h"
+#ifdef OB_BUILD_DBLINK
+#include "lib/oracleclient/ob_oci_environment.h"
+#include "lib/oracleclient/ob_oracle_oci_connection.h"
+#endif
 #include "observer/ob_server_struct.h"
 
 using namespace oceanbase::common;
@@ -72,6 +76,10 @@ int ObAllVirtualDblinkInfo::inner_open()
     // do nothing
   } else if (OB_ISNULL(link_pool = proxy->get_dblink_conn_pool())) {
     // do nothing
+#ifdef OB_BUILD_DBLINK
+  } else if (OB_FAIL(link_pool->get_oci_pool().get_dblink_status(link_status_, *get_allocator()))) {
+    SERVER_LOG(ERROR, "failed to get link status", K(ret));
+#endif
   } else {
     row_cnt_ = 0;
   }

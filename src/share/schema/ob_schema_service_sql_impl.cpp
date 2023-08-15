@@ -8408,6 +8408,93 @@ int ObSchemaServiceSQLImpl::sort_table_partition_info_v2(
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObSchemaServiceSQLImpl::fetch_master_key(
+    ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const uint64_t master_key_id,
+    ObMasterKey *key,
+    ObString &encrypt_out)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObMySQLResult *result = NULL;
+  DEFINE_SQL_CLIENT_RETRY_WEAK(sql_client);
+
+  if (OB_INVALID_TENANT_ID == tenant_id ||
+      OB_INVALID_ID == master_key_id ||
+      OB_ISNULL(key) ||
+      OB_ISNULL(key->key_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("master key id is not invalid", K(ret));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE MASTER_KEY_ID = %lu LIMIT 1",
+                                 OB_ALL_TENANT_KEYSTORE_HISTORY_TNAME,
+                                 ObSchemaUtils::get_extract_schema_id(tenant_id, master_key_id)))) {
+        LOG_WARN("append sql failed", K(ret));
+      } else if (OB_FAIL(sql_client_retry_weak.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(sql), K(ret));
+      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get result. ", K(ret));
+      } else if (OB_FAIL(result->next())) {
+        if (common::OB_ITER_END == ret) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("select master_key return no row", K(ret), K(master_key_id));
+        } else {
+          LOG_WARN("failed to get value about master_key", K(ret), K(master_key_id));
+        }
+      } else {
+        ObString encrypted_key;
+        ObString empty_str("");
+        EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(
+            *result, "encrypted_key", encrypted_key, true,
+            ObSchemaService::g_ignore_column_retrieve_error_, empty_str);
+        if (OB_FAIL(ret)) {
+          LOG_WARN("failed to get encrypted_key value", K(ret), K(master_key_id));
+        } else if (!encrypted_key.empty()) {
+          char real_master_key[OB_MAX_ENCRYPTED_KEY_LENGTH] = {0};
+          int64_t master_key_len = 0;
+          if (encrypt_out.size() > 0) {
+            if (OB_UNLIKELY(0 == encrypt_out.write(encrypted_key.ptr(), encrypted_key.length()))) {
+              ret = OB_SIZE_OVERFLOW;
+              LOG_WARN("encrypted key length too long", K( encrypted_key.length()), K(ret));
+            }
+          } else if (OB_FAIL(ObEncryptionUtil::decrypt_master_key(tenant_id,
+                                                                  encrypted_key.ptr(),
+                                                                  encrypted_key.length(),
+                                                                  real_master_key,
+                                                                  OB_MAX_ENCRYPTED_KEY_LENGTH,
+                                                                  master_key_len))) {
+            LOG_WARN("failed to decrypt_master_key", K(encrypted_key), K(ret));
+          } else if (OB_UNLIKELY(master_key_len > OB_MAX_MASTER_KEY_LENGTH)) {
+            ret = OB_SIZE_OVERFLOW;
+            LOG_WARN("master key length too long", K(master_key_len), K(ret));
+          } else {
+            MEMCPY(key->key_, real_master_key, master_key_len);
+            key->len_ = master_key_len;
+          }
+        } else {
+          ObString master_key;
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, "master_key", master_key);
+          if (OB_FAIL(ret)) {
+            LOG_WARN("failed to get master_key value", K(ret), K(master_key_id));
+          } else if (OB_UNLIKELY(master_key.length() > OB_MAX_MASTER_KEY_LENGTH)) {
+            ret = OB_SIZE_OVERFLOW;
+            LOG_WARN("master key length too long", K(master_key), K(ret));
+          } else {
+            MEMCPY(key->key_, master_key.ptr(), master_key.length());
+            key->len_ = master_key.length();
+          }
+        }
+      }
+    }
+  }
+  LOG_INFO("fetch the mater_key", K(master_key_id), K(ret));
+  return ret;
+}
+#endif
 
 // link table.
 int ObSchemaServiceSQLImpl::get_link_table_schema(const ObDbLinkSchema *dblink_schema,
@@ -8620,6 +8707,12 @@ int ObSchemaServiceSQLImpl::fetch_link_table_info(dblink_param_ctx &param_ctx,
           OB_SUCCESS != (tmp_ret = result->close())) {
         LOG_WARN("failed to close result", K(tmp_ret));
       }
+#ifdef OB_BUILD_DBLINK
+      if (DBLINK_DRV_OCI == param_ctx.link_type_ &&
+          OB_SUCCESS != (tmp_ret = static_cast<ObOciConnection *>(dblink_conn)->free_oci_stmt())) {
+        LOG_WARN("failed to close oci result", K(tmp_ret));
+      }
+#endif
       if (OB_SUCCESS != (tmp_ret = dblink_proxy_->release_dblink(param_ctx.link_type_, dblink_conn))) {
         LOG_WARN("failed to relese connection", K(tmp_ret));
       }

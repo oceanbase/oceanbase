@@ -832,6 +832,16 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
                 (tmp_ret = ObSqlTransControl::rollback_savepoint(*ctx->exec_ctx_, expr_savepoint_name))) {
               LOG_WARN("failed to rollback current pl to implicit savepoint", K(ret), K(tmp_ret));
             }
+#ifdef OB_BUILD_ORACLE_PL
+          } else if (ctx->exec_ctx_->get_my_session()->associated_xa()) {
+            if (OB_TRANS_XA_BRANCH_FAIL != ret) {
+              tmp_ret = ObDbmsXA::xa_rollback_savepoint(*ctx->exec_ctx_);
+              if (OB_SUCCESS != tmp_ret) {
+                LOG_WARN("xa trans roll back to save point failed",
+                        K(tmp_ret), KPC(ctx->exec_ctx_->get_my_session()->get_tx_desc()));
+              }
+            }
+#endif
           } else if (ctx->exec_ctx_->get_my_session()->get_in_transaction()) {
             tmp_ret = ObPLContext::implicit_end_trans(*ctx->exec_ctx_->get_my_session(), *ctx->exec_ctx_, true);
           }
@@ -1361,8 +1371,37 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
       if (OB_SUCC(ret)) {
         if (my_session->is_in_transaction() &&
           my_session->get_tx_desc()->is_xa_trans()) {
+#ifndef OB_BUILD_ORACLE_PL
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("not support ObDbmsXA", K(ret));
+#else
+          transaction::ObXATransID xid = my_session->get_xid();
+          transaction::ObGlobalTxType global_tx_type = my_session->get_tx_desc()->get_global_tx_type(xid);
+          if (is_rollback) {
+            //Rollback can be executed in the xa transaction,
+            //the role is to roll back all modifications,
+            //but does not end the xa transaction
+            if (transaction::ObGlobalTxType::DBLINK_TRANS == global_tx_type) {
+              transaction::ObTransID tx_id;
+              if (OB_FAIL(ObTMService::tm_rollback(*ctx->exec_ctx_, tx_id))) {
+                LOG_WARN("fail to do rollback for dblink trans", K(ret), K(tx_id), K(xid), K(global_tx_type));
+              }
+              const bool force_disconnect = false;
+              int tmp_ret = OB_SUCCESS;
+              if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret =
+                  my_session->get_dblink_context().clean_dblink_conn(force_disconnect)))) {
+                LOG_WARN("dblink transaction failed to release dblink connections", K(tmp_ret), K(tx_id), K(xid));
+              }
+            } else if (OB_FAIL(pl::ObDbmsXA::xa_rollback_origin_savepoint(*(ctx->exec_ctx_)))) {
+              LOG_WARN("rollback xa changes failed", K(ret), K(xid));
+            }
+          } else {
+            //Commit is prohibited in xa transaction
+            ret = OB_TRANS_XA_ERR_COMMIT;
+            LOG_WARN("COMMIT is not allowed in a xa trans", K(ret), K(xid));
+          }
+          ctx->exec_ctx_->set_need_disconnect(false);
+#endif
         } else {
           // PL内部的提交使用同步提交
           OZ (sql::ObSqlTransControl::end_trans(*ctx->exec_ctx_, is_rollback, true));
@@ -4393,7 +4432,42 @@ int ObSPIService::spi_pipe_row_to_result(pl::ObPLExecCtx *ctx,
                                          ObObjParam *single_row)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
   UNUSEDx(ctx, single_row);
+#else
+  ObPLNestedTable *coll = NULL;
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(ctx->result_));
+  CK (OB_NOT_NULL(ctx->allocator_));
+  CK (OB_NOT_NULL(single_row));
+  CK (ctx->result_->is_ext());
+  CK (OB_NOT_NULL(coll = reinterpret_cast<ObPLNestedTable *>(ctx->result_->get_ext())));
+  OX (coll->is_inited() ? (void)NULL : coll->set_inited());
+  OZ (spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
+                           ctx, *(ctx->allocator_), *coll, 1, true));
+  CK (coll->get_count() >= 1);
+  CK (coll->get_column_count() > 0);
+  if (OB_SUCC(ret)) {
+    ObObj copied;
+    OZ (spi_copy_datum(ctx, coll->get_allocator(), single_row, &copied,
+                       const_cast<ObDataType *>(&coll->get_element_type()),
+                       OB_INVALID_ID /* package_id */));
+    OZ (coll->set_row(copied, coll->get_count() - 1));
+  }
+
+  if (OB_SUCC(ret) && NULL != coll->get_allocator()) {
+    // use _pipelined_table_function_memory_limit to limit pipe row
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (OB_LIKELY(tenant_config.is_valid())) {
+      if ((static_cast<ObPLCollAllocator*>(coll->get_allocator()))->get_used()
+            > tenant_config->_pipelined_table_function_memory_limit) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("pipe row use too much memory", K(ret));
+      }
+    }
+  }
+
+#endif
   return ret;
 }
 
@@ -4405,7 +4479,64 @@ int ObSPIService::spi_alloc_complex_var(pl::ObPLExecCtx *ctx,
                                         int64_t *addr)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
   UNUSEDx(ctx, type, id, var_idx, init_size, addr);
+#else
+  void *ptr = NULL;
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(ctx->allocator_));
+  CK (OB_NOT_NULL(ctx->params_));
+  CK (OB_NOT_NULL(ctx->result_));
+  CK ((var_idx >= 0 && var_idx < ctx->params_->count())
+      || OB_INVALID_INDEX == var_idx); // OB_INVALID_ID代表初始化函数返回值
+  if (OB_SUCC(ret)) {
+    ptr = ctx->allocator_->alloc(init_size);
+    LOG_DEBUG("debug for spi alloc complex var",
+              K(var_idx), K(init_size),
+              K(sizeof(ObPLCollection)), K(sizeof(ObPLAssocArray)),
+              K(sizeof(ObPLNestedTable)), K(sizeof(ObPLVArray)));
+    if (OB_ISNULL(ptr)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for complex var", K(ret));
+    } else {
+      MEMSET(ptr, 0, init_size);
+      if (NULL != addr) {
+        *addr = reinterpret_cast<int64_t>(ptr);
+      }
+
+#define CONSTRUCT_COLLECTION(type, class) \
+  case type: { \
+    new(ptr)class(id); \
+    break; \
+  }
+      ObPLType complex_type = (ObPLType)type;
+      switch (complex_type) {
+        CONSTRUCT_COLLECTION(PL_NESTED_TABLE_TYPE, ObPLNestedTable);
+        CONSTRUCT_COLLECTION(PL_ASSOCIATIVE_ARRAY_TYPE, ObPLAssocArray);
+        CONSTRUCT_COLLECTION(PL_VARRAY_TYPE, ObPLVArray);
+        case PL_RECORD_TYPE: {
+          new (ptr) ObPLRecord(id, 0);
+        } break;
+        case PL_OPAQUE_TYPE: {
+          new (ptr) ObPLOpaque();
+        } break;
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected complex type", K(ret), K(complex_type));
+        }
+      }
+#undef CONSTRUCT_COLLECTION
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_INVALID_INDEX != var_idx) {
+        ctx->params_->at(var_idx).set_extend(reinterpret_cast<int64_t>(ptr), type, init_size);
+        ctx->params_->at(var_idx).set_param_meta();
+      } else if (OB_INVALID_INDEX == var_idx && NULL == addr) {
+        ctx->result_->set_extend(reinterpret_cast<int64_t>(ptr), type, init_size);
+      } else { /*do nothing*/ }
+    }
+  }
+#endif
   return ret;
 }
 
@@ -4783,7 +4914,56 @@ int ObSPIService::spi_trim_collection(pl::ObPLExecCtx *ctx,
                                    const ObSqlExpression *n_expr)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
   UNUSEDx(ctx, collection_expr, row_size, n_expr);
+#else
+  UNUSED(row_size);
+  CK (OB_NOT_NULL(ctx),
+      OB_NOT_NULL(ctx->exec_ctx_));
+  if (OB_SUCC(ret)) {
+    ObObjParam result;
+    ObPLCollection *table = NULL;
+    int64_t n = OB_INVALID_INDEX;
+
+    CK (OB_NOT_NULL(collection_expr));
+    OZ (spi_calc_expr(ctx, collection_expr, OB_INVALID_INDEX, &result));
+    CK (OB_LIKELY(ObExtendType == result.get_type()));
+    CK (OB_LIKELY(result.get_ext() != 0));
+    CK (OB_NOT_NULL(table = reinterpret_cast<ObPLCollection*>(result.get_ext())));
+    CK (OB_LIKELY(table->get_column_count() != 0));
+
+    if (OB_SUCC(ret) && !table->is_inited()) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("ORA-06531: Reference to uninitialized collection", K(ret));
+    }
+    if (OB_SUCC(ret) && table->is_associative_array()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("associative array is not support trim operation", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "associative array trim operation");
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_NOT_NULL(n_expr)) {
+        OZ (spi_calc_expr(ctx, n_expr, OB_INVALID_INDEX, &result));
+        if (OB_SUCC(ret)) {
+          GET_INTEGER_FROM_OBJ(result, n);
+        }
+      } else {
+        // coll.trim/ coll.trim() 无参，删除最后一个
+        n = 1;
+      }
+      if (OB_SUCC(ret)) {
+        if (0 > n) {
+          ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
+        } else if (n > table->get_count()) {
+          // raise exception
+          ret = OB_ERR_SUBSCRIPT_BEYOND_COUNT;
+        } else {
+          OZ (table->trim_collection_elem(n));
+        }
+      }
+    }
+  }
+#endif
   return ret;
 }
 
@@ -4794,28 +4974,325 @@ int ObSPIService::spi_delete_collection(pl::ObPLExecCtx *ctx,
                                         const ObSqlExpression *n_expr)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
   UNUSEDx(ctx, collection_expr, row_size, m_expr, n_expr);
+#else
+  UNUSED(row_size);
+  CK (OB_NOT_NULL(ctx),
+      OB_NOT_NULL(ctx->exec_ctx_));
+  if (OB_SUCC(ret)) {
+    ObObjParam result;
+    ObPLCollection *table = NULL;
+    int64_t m = OB_INVALID_INDEX;
+    int64_t n = OB_INVALID_INDEX;
+
+    OZ (spi_calc_expr(ctx, collection_expr, OB_INVALID_INDEX, &result));
+    CK (OB_LIKELY(result.get_type() == ObExtendType));
+    CK (OB_LIKELY(result.get_ext() != 0));
+    CK (OB_NOT_NULL(table = reinterpret_cast<ObPLCollection*>(result.get_ext())));
+    CK (OB_LIKELY(table->get_column_count() != 0));
+
+    CK (!(OB_ISNULL(m_expr) && OB_NOT_NULL(n_expr)));
+    if (OB_SUCC(ret) && !table->is_inited()) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("ORA-06531: Reference to uninitialized collection", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(m_expr) && OB_ISNULL(n_expr)) {
+        // delete all data
+        if (table->get_count() != 0) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < table->get_count(); ++i) {
+            OZ (ObUserDefinedType::destruct_obj(table->get_data()[i], NULL));
+          }
+          CK (OB_NOT_NULL(dynamic_cast<ObPLCollAllocator *>(table->get_allocator())));
+          OX (table->get_allocator()->reset());
+          OX (table->set_count(0));
+          OX (table->set_data(NULL));
+          OX (table->set_first(OB_INVALID_INDEX));
+          OX (table->set_last(OB_INVALID_INDEX));
+          if (OB_SUCC(ret) && PL_ASSOCIATIVE_ARRAY_TYPE == table->get_type()) {
+            (static_cast<ObPLAssocArray *>(table))->set_key(NULL);
+            (static_cast<ObPLAssocArray *>(table))->set_sort(NULL);
+          }
+        }
+      } else if (OB_NOT_NULL(m_expr) && OB_ISNULL(n_expr)) {
+        // delete table(m)
+        OZ (spi_calc_expr(ctx, m_expr, OB_INVALID_INDEX, &result));
+        if (OB_SUCC(ret) && 0 < table->get_count() && !result.is_null()) {
+          if (table->is_nested_table()) {
+            GET_INTEGER_FROM_OBJ(result, m);
+            if (OB_SUCC(ret)) {
+              if (m > table->get_count() || m <= 0) {
+                /*
+                 * From an associative array or nested table (but not a varray):
+                 * – DELETE(n) deletes the element whose index is n, if that element exists;
+                 * otherwise, it does nothing.
+                 * – DELETE(m,n) deletes all elements whose indexes are in the range m..n, if
+                 * both m and n exist and m <= n; otherwise, it does nothing.
+                 * */
+              } else {
+                OX (table->delete_collection_elem(m - 1));
+              }
+            }
+          } else if (table->is_varray()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("varray type is not able to delete with index", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "delete varray type with index");
+          } else if (table->is_associative_array()) {
+            ObObj *key1 = static_cast<ObObj *>(&result);
+            ObPLAssocArray *atable = static_cast<ObPLAssocArray *>(table);
+            ObObj *key = atable->get_key();
+            // 到这儿count必然大于0，可以直接拿来比较
+            OV (key!=NULL ? key[0].can_compare(*key1) : key1->is_integer_type(),
+                  OB_ERR_UNEXPECTED, K(key[0]), KPC(key1));
+            // key 不可能重复，如果有重复是一个bug
+            for (int64_t i = 0; OB_SUCC(ret) && i < atable->get_count(); ++i) {
+              if (key!=NULL ? key[i]==*key1 : (result.get_int32() == i)) {
+                OX (atable->delete_collection_elem(i));
+                if (atable->get_first() - 1 == i) {
+                  atable->update_first();
+                }
+                if (atable->get_last() - 1 == i) {
+                  atable->update_last();
+                }
+                break;
+              }
+            }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("illegal table type detected.", K(*table));
+          }
+        }
+      } else if (OB_NOT_NULL(m_expr) && OB_NOT_NULL(n_expr)) {
+        // delete table(m,n)
+        ObObjParam result1;
+        OZ (spi_calc_expr(ctx, m_expr, OB_INVALID_INDEX, &result));
+        OZ (spi_calc_expr(ctx, n_expr, OB_INVALID_INDEX, &result1));
+        if (OB_SUCC(ret) && 0 < table->get_count() && !result.is_null() && !result1.is_null()) {
+          if (table->is_nested_table()) {
+            GET_INTEGER_FROM_OBJ(result, m);
+            GET_INTEGER_FROM_OBJ(result1, n);
+            if (OB_SUCC(ret)) {
+              m = m < 0 ? 0 : m > table->get_count() ? table->get_count() + 1 : m;
+              n = n < 0 ? 0 : n > table->get_count() ? table->get_count() + 1 : n;
+              if (m < n || ((m == n && m != 0 && m != table->get_count()))) {
+                m = 0 == m ? 1 : m;
+                n = (table->get_count() + 1) == n ? table->get_count() : n;
+                for (int64_t i = m - 1; OB_SUCC(ret) && i <= n - 1; ++i) {
+                  OZ (table->delete_collection_elem(i));
+                }
+              }
+            }
+          } else if (table->is_varray()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("varray type is not able to delete with index", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "delete varray type with index");
+          } else if (table->is_associative_array()) {
+
+            ObObj *key1 = static_cast<ObObj *>(&result);
+            ObObj *key2 = static_cast<ObObj *>(&result1);
+            ObPLAssocArray *atable = static_cast<ObPLAssocArray *>(table);
+            ObObj *key = atable->get_key();
+            CK (OB_NOT_NULL(key1));
+            CK (OB_NOT_NULL(key2));
+            CK (key!=NULL ? key1->can_compare(*key2) && key[0].can_compare(*key1)
+                          : (key1->is_integer_type() && key2->is_integer_type()));
+            if (OB_SUCC(ret)) {
+              if (*key1 <= *key2) {
+                for (int64_t i = 0; OB_SUCC(ret) && i < atable->get_count(); ++i) {
+                  bool flag = key!=NULL ? (key[i] >= *key1 && key[i] <= *key2)
+                                        : (i >= key1->get_int32() && i <= key2->get_int32());
+                  if (flag) {
+                    OZ (atable->delete_collection_elem(i));
+                    if (atable->get_first() - 1 == i) {
+                      atable->update_first();
+                    }
+                    if (atable->get_last() - 1 == i) {
+                      atable->update_last();
+                    }
+                  }
+                }
+              } else {
+                // do nothing;
+              }
+            }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("illegal table type detected.", K(*table));
+          }
+        }
+      }
+    }
+  }
+  SET_SPI_STATUS;
+#endif
   return ret;
 }
 #undef GET_INTEGER_FROM_OBJ
 int ObSPIService::spi_destruct_collection(ObPLExecCtx *ctx, int64_t idx)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
   UNUSEDx(ctx, idx);
+#else
+  if (OB_ISNULL(ctx)
+      || OB_ISNULL(ctx->exec_ctx_)
+      || OB_ISNULL(ctx->exec_ctx_->get_my_session())
+      || OB_INVALID_INDEX == idx) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Argument passed in is NULL", K(ctx), K(idx), K(ret));
+  } else {
+    ParamStore *params = ctx->params_;
+    if (OB_ISNULL(params)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Argument in pl context is NULL", K(params), K(ret));
+    } else if (OB_FAIL(ObUserDefinedType::destruct_obj(params->at(idx), ctx->exec_ctx_->get_my_session()))) {
+      LOG_WARN("collection is NULL", K(idx), K(params->at(idx).get_int()), K(ret));
+    } else { /*do nothing*/ }
+  }
+  SET_SPI_STATUS;
+#endif
   return ret;
 }
 
 int ObSPIService::spi_sub_nestedtable(ObPLExecCtx *ctx, int64_t src_idx, int64_t dst_idx, int32_t lower, int32_t upper)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
   UNUSEDx(ctx, src_idx, dst_idx, lower, upper);
+#else
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(ctx->params_));
+  CK (OB_LIKELY(src_idx >= 0 && src_idx < ctx->params_->count()));
+  CK (OB_LIKELY(dst_idx >= 0 && dst_idx < ctx->params_->count()));
+  CK (OB_LIKELY(lower <= upper));
+  if (OB_SUCC(ret)) {
+    ParamStore *params = ctx->params_;
+    ObObjParam& src_obj = params->at(src_idx);
+    ObObjParam& dst_obj = params->at(dst_idx);
+    ObPLCollection *src_coll = reinterpret_cast<ObPLCollection*>(src_obj.get_ext());
+    CK (OB_LIKELY(src_obj.is_ext()));
+    CK (OB_LIKELY(dst_obj.is_ext() || dst_obj.is_null()));
+    CK (OB_NOT_NULL(src_coll));
+    CK (OB_NOT_NULL(ctx->allocator_));
+    if (OB_SUCC(ret)) {
+      ObPLCollection *dst_coll = NULL;
+      if (lower <= 0 // 检查是否越界, lower,upper从1开始
+          || lower > src_coll->get_count()
+          || upper > src_coll->get_count()) {
+        ret = OB_ARRAY_OUT_OF_RANGE;
+        LOG_WARN("ORA-22160: element at index does not exist",
+                 K(lower), K(upper), K(src_coll->get_count()), K(ret));
+      } else if (OB_ISNULL(dst_coll = static_cast<ObPLCollection*>(ctx->allocator_->alloc(sizeof(ObPLCollection))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc dst collection memory", K(ret));
+      } else {
+        ObObj *data_ptr = src_coll->get_data();
+        CK (OB_NOT_NULL(data_ptr));
+        if (OB_SUCC(ret)) {
+          int64_t count = upper - lower + 1;
+          data_ptr = data_ptr + (lower - 1);
+          dst_coll->set_data(data_ptr);
+          dst_coll->set_type(PL_NESTED_TABLE_TYPE);
+          dst_coll->set_element_type(src_coll->get_element_type());
+          dst_coll->set_column_count(src_coll->get_column_count());
+          dst_coll->set_first(OB_INVALID_INDEX);
+          dst_coll->set_last(OB_INVALID_INDEX);
+          dst_coll->set_allocator(NULL);
+          dst_coll->set_count(count);
+          dst_coll->set_element_type(src_coll->get_element_type());
+          dst_obj.set_extend(reinterpret_cast<int64_t>(dst_coll), dst_coll->get_type());
+          dst_obj.set_param_meta();
+        }
+      }
+    }
+  }
+#endif
   return ret;
 }
 
 int ObSPIService::spi_init_collection(ObPLExecCtx *ctx, ObPLCollection *src, ObPLCollection *dest, int64_t row_size, uint64_t package_id)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
   UNUSEDx(ctx, src, dest, row_size, package_id);
+#else
+  if (OB_ISNULL(ctx)
+      || OB_ISNULL(ctx->exec_ctx_)
+      || OB_ISNULL(ctx->exec_ctx_->get_my_session())
+      || OB_ISNULL(src)
+      || OB_ISNULL(dest)
+      || row_size <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Argument passed in is NULL", K(ctx), K(src), K(dest), K(row_size), K(ret));
+  } else if (!src->is_inited()) { // 如果源collection未初始化, 将目标也设置为未初始化
+    dest->set_count(OB_INVALID_COUNT);
+    dest->set_first(OB_INVALID_INDEX);
+    dest->set_last(OB_INVALID_INDEX);
+    dest->set_data(NULL);
+  } else {
+    ObIAllocator *allocator = NULL;
+    if (package_id != OB_INVALID_ID) {
+      OZ (spi_get_package_allocator(ctx, package_id, allocator));
+    } else {
+      allocator = ctx->allocator_;
+    }
+    CK (OB_NOT_NULL(allocator));
+    OZ (spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
+                             ctx, *allocator, *dest, src->get_count()), src->get_count());
+    CK (OB_NOT_NULL(dest->get_allocator()));
+    if (OB_SUCC(ret)) {
+      switch (src->get_type()) {
+      case PL_NESTED_TABLE_TYPE: {
+        // do nothing
+      }
+      break;
+      case PL_ASSOCIATIVE_ARRAY_TYPE: {
+        ObObj *key = NULL;
+        int64_t *sort = NULL;
+        ObPLAssocArray *src_aa = static_cast<ObPLAssocArray*>(src);
+        ObPLAssocArray *dest_aa = static_cast<ObPLAssocArray*>(dest);
+        CK (OB_NOT_NULL(src_aa));
+        CK (OB_NOT_NULL(dest_aa));
+        if (OB_SUCC(ret) && src->get_count() > 0) {
+          if (NULL != src_aa->get_sort() && NULL != src_aa->get_key()) {
+            key = static_cast<ObObj*>(dest->get_allocator()->alloc(src->get_count() * sizeof(ObObj)));
+            sort = static_cast<int64_t*>(dest->get_allocator()->alloc(src->get_count() * sizeof(int64_t)));
+            CK (OB_NOT_NULL(key));
+            CK (OB_NOT_NULL(sort));
+            for (int64_t i = 0; OB_SUCC(ret) && i < src->get_count(); ++i) {
+              OZ (deep_copy_obj(*dest->get_allocator(), *src_aa->get_key(i), key[i]));
+              OX (sort[i] = src_aa->get_sort(i));
+            }
+          } else if (NULL == src_aa->get_sort() && NULL == src_aa->get_key()) {
+            //Associative array的优化
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Unexpected associative array", K(*src), K(*dest), K(row_size), K(package_id), K(ret));
+          }
+        }
+        OX (dest_aa->set_key(key));
+        OX (dest_aa->set_sort(sort));
+      }
+      break;
+      case PL_VARRAY_TYPE: {
+        ObPLVArray *src_va = static_cast<ObPLVArray*>(src);
+        ObPLVArray *dest_va = static_cast<ObPLVArray*>(dest);
+        CK (OB_NOT_NULL(src_va));
+        CK (OB_NOT_NULL(dest_va));
+        OX (dest_va->set_capacity(src_va->get_capacity()));
+      }
+      break;
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("src is not a collection", K(ctx), K(*src), K(*dest), K(row_size), K(package_id), K(ret));
+      }
+      break;
+      }
+    }
+  }
+  SET_SPI_STATUS;
+#endif
   return ret;
 }
 
@@ -4827,7 +5304,192 @@ int ObSPIService::spi_set_collection(int64_t tenant_id,
                                        bool extend_mode)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
   UNUSEDx(tenant_id, ns, allocator, coll, n, extend_mode);
+#else
+#define CHECK_VARRAY_CAPACITY \
+  do { \
+    if (OB_SUCC(ret)) { \
+      if (coll.is_varray()) { \
+        ObPLVArray &va = static_cast<ObPLVArray&>(coll); \
+        if (va.get_capacity() < va.get_count() + n) { \
+          ret = OB_SIZE_OVERFLOW; \
+          LOG_WARN("varray size overflow, ORA-06532: Subscript outside of limit", K(va), K(va.get_capacity()), K(n), K(coll.get_count()), K(ret)); \
+        } \
+      } \
+    } \
+  } while (0)
+
+#define CHECK_NOT_NULL \
+  do { \
+    if (OB_SUCC(ret)) { \
+      if (coll.is_not_null()) { \
+        ret = OB_ERR_NUMERIC_OR_VALUE_ERROR; \
+        LOG_WARN("not null check violated", K(coll), K(n), K(extend_mode), K(coll.is_not_null()), K(coll.get_count()), K(ret)); \
+      } \
+    } \
+  } while (0)
+
+#define SET_COLLECTION_INFO \
+  do { \
+    if (OB_SUCC(ret)) { \
+      coll.set_data(reinterpret_cast<ObObj*>(data)); \
+      coll.set_count(coll.get_count() + n); \
+      if (coll.is_associative_array()) { \
+        /*associative array的first和last不在这里设置，需要根据数据计算*/ \
+      } else { \
+        OB_INVALID_INDEX == coll.get_first() ? coll.set_first(1) : (void)NULL;  /*first和last从1开始*/ \
+        coll.set_last(coll.get_count()); \
+      } \
+    } \
+  } while (0)
+
+  UNUSED(tenant_id);
+  common::ObIAllocator *collection_allocator = NULL;
+  void *data = NULL;
+  bool set_data = false;
+  if (extend_mode && !coll.is_inited()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ORA-06531: Reference to uninitialized collection", K(ret));
+  } else if (NULL == coll.get_allocator()) {
+    collection_allocator = static_cast<common::ObIAllocator*>(allocator.alloc(sizeof(ObPLCollAllocator)));
+    if (OB_ISNULL(collection_allocator)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("get a invalud obj", K(ret), K(collection_allocator));
+    } else {
+      collection_allocator = new(collection_allocator)ObPLCollAllocator(&coll);
+      coll.set_allocator(collection_allocator);
+      coll.set_count(0);
+      coll.set_first(OB_INVALID_INDEX);
+      coll.set_last(OB_INVALID_INDEX);
+      coll.set_data(NULL);
+//      set_data = true;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (extend_mode && n > 0) {
+
+      CHECK_VARRAY_CAPACITY;
+
+      // CHECK_NOT_NULL;
+
+      if (OB_SUCC(ret)) {
+        data = coll.get_allocator()->alloc(sizeof(ObObj) * (coll.get_count() + n));
+        if (OB_ISNULL(data)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc failed",
+                   K(sizeof(ObObj) * (coll.get_count() + n)),
+                   K(n),
+                   K(coll.get_count()),
+                   K(ret));
+        } else {
+          ObObj *obj_data = reinterpret_cast<ObObj*>(data);
+          for (int64_t i = coll.get_count(); OB_SUCC(ret) && i < coll.get_count() + n; ++i) {
+            new (obj_data + i) ObObj();
+          }
+        }
+        OX (OB_NOT_NULL(coll.get_data()) ? MEMCPY(data, coll.get_data(), sizeof(ObObj) * coll.get_count()) : (void*)(NULL));
+        OX (OB_NOT_NULL(coll.get_data()) ? coll.get_allocator()->free(coll.get_data()) : void(NULL));
+        LOG_DEBUG("PL/SQL realloc collection memory",
+                 K(coll.get_data()),
+                 K(coll.get_count()),
+                 K(n),
+                 K(coll.get_allocator()->total()),
+                 K(coll.get_allocator()->used()));
+
+        CK (coll.get_column_count() > 0);
+        for (int64_t i = 0; OB_SUCC(ret) && i < n; ++i) {
+          /*
+           * extend模式需要把下层结构递归分配出来，因为在下面这个case里extend之后下面就可以直接访问内存了
+           * declare
+           *  TYPE rec_type IS RECORD(a int, b varchar(10));
+           *  TYPE tab_type IS TABLE OF rec_type;
+           *  v_tab1 tab_type := tab_type();
+           *  begin
+           *      v_tab1.extend;
+           *      v_tab1(1).a := 1;
+           *      v_tab1(1).b := 'a';
+           *      end;
+           */
+          ObObj* row = &(reinterpret_cast<ObObj*>(data)[(coll.get_count() + i)]);
+          if (!coll.get_element_desc().is_composite_type() || NULL == ns) {
+            new (row) ObObj(ObNullType);
+          } else {
+            const ObUserDefinedType *type = NULL;
+            const ObCollectionType *collection_type = NULL;
+            int64_t ptr = 0;
+            int64_t init_size = OB_INVALID_SIZE;
+            CK (OB_NOT_NULL(ns));
+            OZ (ns->get_user_type(coll.get_id(), type));
+            CK (OB_NOT_NULL(type));
+            CK (type->is_collection_type());
+            CK (OB_NOT_NULL(collection_type = static_cast<const ObCollectionType*>(type)));
+            OZ (collection_type->get_element_type().newx(*coll.get_allocator(), ns, ptr));
+            OZ (collection_type->get_element_type().get_size(*ns, PL_TYPE_INIT_SIZE, init_size));
+            OX (row->set_extend(ptr, collection_type->get_element_type().get_type(), init_size));
+          }
+        }
+        SET_COLLECTION_INFO;
+      }
+      //only extend data in this call, key and sort will be extended by caller.
+      //do not shrink here, may core cause key and sort not equal to data.
+      //also, Associative array will shrink by caller.
+      if (OB_SUCC(ret) && !coll.is_associative_array()) {
+        OZ (coll.shrink());
+      }
+    } else {
+      for (int64_t cnt = 0; OB_SUCC(ret) && cnt < coll.get_count(); ++cnt) {
+        ObObj &old_obj = reinterpret_cast<ObObj*>(coll.get_data())[cnt];
+        if (old_obj.get_meta().get_extend_type() != PL_CURSOR_TYPE) {
+          OZ (ObUserDefinedType::destruct_obj(old_obj));
+        }
+      }
+      coll.set_count(0);
+      coll.set_first(OB_INVALID_INDEX);
+      coll.set_last(OB_INVALID_INDEX);
+      coll.set_data(NULL);
+      if (coll.is_associative_array()) {
+        ObPLAssocArray &aa = static_cast<ObPLAssocArray&>(coll);
+        if (NULL != aa.get_key()) {
+          aa.set_key(NULL);
+        }
+        if (NULL != aa.get_sort()) {
+          aa.set_sort(NULL);
+        }
+      }
+      collection_allocator = dynamic_cast<ObPLCollAllocator*>(coll.get_allocator());
+      if (NULL != collection_allocator) {
+        collection_allocator->reset();
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("Allocator unexpected", K(ret));
+      }
+      set_data = true;
+    }
+  }
+
+  if (OB_SUCC(ret) && set_data && n > 0) {
+    CHECK_VARRAY_CAPACITY;
+
+    // CHECK_NOT_NULL;
+
+    if (OB_SUCC(ret)) {
+      data = coll.get_allocator()->alloc(sizeof(ObObj) * n);
+      if (OB_ISNULL(data)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc failed", K(sizeof(ObObj) * n), K(n), K(coll), K(ret));
+      } else {
+        CK (coll.get_column_count() > 0);
+        //非extend模式仅扩展出n个Obj结构并初始化为NULL，下层结构不分配
+        for (int64_t i = 0; OB_SUCC(ret) && i < n; ++i) {
+          new (&reinterpret_cast<ObObj*>(data)[i])ObObj(ObNullType);
+        }
+
+        SET_COLLECTION_INFO;
+      }
+    }
+  }
+#endif
   return ret;
 }
 
@@ -4866,6 +5528,105 @@ int ObSPIService::spi_reset_collection(ObPLCollection *coll)
   return ret;
 }
 
+#ifdef OB_BUILD_ORACLE_PL
+int ObSPIService::spi_extend_assoc_array(int64_t tenant_id,
+                                         const ObPLINS *ns,
+                                         ObIAllocator &allocator,
+                                         ObPLAssocArray &assoc_array,
+                                         int64_t n)
+{
+  int ret = OB_SUCCESS;
+  assoc_array.is_inited() ? (void)NULL : assoc_array.set_inited();
+  if (OB_FAIL(spi_set_collection(tenant_id, ns, allocator, assoc_array, n, true))) {
+    LOG_WARN("failed to spi_reset_collection", K(assoc_array), K(ret));
+  } else if (OB_ISNULL(assoc_array.get_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is NULL", K(assoc_array), K(n), K(ret));
+  } else if (NULL == dynamic_cast<ObPLAllocator*>(assoc_array.get_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("Unexpected allocator used in Collection", K(assoc_array), K(n), K(ret));
+  } else if (NULL == assoc_array.get_key()) {
+    if (NULL != assoc_array.get_sort()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("key is NULL, but sort is not NULL", K(assoc_array), K(n), K(ret));
+    }
+
+#define ALLOC_ASSOC_ARRAY(TYPE, PROPERTY) \
+  do { \
+    if (OB_SUCC(ret)) { \
+      TYPE *addr = NULL; \
+      ObPLAllocator *allocator = static_cast<ObPLAllocator*>(assoc_array.get_allocator()); \
+      if (OB_ISNULL(allocator)) { \
+        ret = OB_ERR_UNEXPECTED; \
+        LOG_WARN("failed to static cast pl allocator", \
+                 K(ret), K(allocator), K(assoc_array.get_allocator())); \
+      } else if (OB_ISNULL(allocator->get_allocator())) { \
+        ret = OB_ERR_UNEXPECTED; \
+        LOG_WARN("allocator is null", K(ret), K(allocator), K(assoc_array.get_allocator())); \
+      } else if (OB_ISNULL(addr = static_cast<TYPE *>(allocator->get_allocator()->alloc(sizeof(TYPE) * n)))) { \
+        ret = OB_ALLOCATE_MEMORY_FAILED; \
+        LOG_WARN("alloc failed", K(assoc_array), K(n), K(sizeof(TYPE)), K(ret)); \
+      } else { \
+        assoc_array.set_##PROPERTY(addr); \
+      } \
+    } \
+  } while(0)
+
+    ALLOC_ASSOC_ARRAY(ObObj, key);
+
+    ALLOC_ASSOC_ARRAY(int64_t, sort);
+
+    // NOTE: init extend key avoid to deep copy core!!!
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; i < assoc_array.get_count(); ++i) {
+        ObObj *key = assoc_array.get_key(i);
+        key = new(key)ObObj();
+      }
+    }
+
+  } else {
+
+#define REALLOC_ASSOC_ARRAY(TYPE, PROPERTY) \
+  do { \
+    if (OB_SUCC(ret)) { \
+      TYPE *addr = NULL; \
+      ObPLAllocator *allocator = static_cast<ObPLAllocator*>(assoc_array.get_allocator()); \
+      if (OB_ISNULL(allocator)) { \
+        ret = OB_ERR_UNEXPECTED; \
+        LOG_WARN("failed to static cast pl allocator", \
+                 K(ret), K(allocator), K(assoc_array.get_allocator())); \
+      } else if (OB_ISNULL(allocator->get_allocator())) { \
+        ret = OB_ERR_UNEXPECTED; \
+        LOG_WARN("allocator is null", K(ret), K(allocator), K(assoc_array.get_allocator())); \
+      } else if (OB_ISNULL(addr = reinterpret_cast<TYPE*>(allocator->get_allocator()->alloc(sizeof(TYPE) * assoc_array.get_count())))) { \
+        ret = OB_ALLOCATE_MEMORY_FAILED; \
+        LOG_WARN("alloc failed", K(ret), K(assoc_array), K(n), K(sizeof(TYPE) * (assoc_array.get_count() - n)), K(sizeof(TYPE) * assoc_array.get_count())); \
+      } \
+      OX (OB_NOT_NULL(assoc_array.get_##PROPERTY()) ? MEMCPY(addr, assoc_array.get_##PROPERTY(), sizeof(TYPE) * (assoc_array.get_count() - n)) \
+                                                    : (void*)(NULL)); \
+      OX (OB_NOT_NULL(assoc_array.get_##PROPERTY()) ? assoc_array.get_allocator()->free(assoc_array.get_##PROPERTY()) : void(NULL)); \
+      OX (assoc_array.set_##PROPERTY(addr)); \
+    } \
+  } while(0)
+
+    REALLOC_ASSOC_ARRAY(ObObj, key);
+
+    REALLOC_ASSOC_ARRAY(int64_t, sort);
+
+    // NOTE: init extend key avoid to deep copy core!!!
+    if (OB_SUCC(ret)) {
+      for (int64_t i = assoc_array.get_count() - 1; i >= assoc_array.get_count() - n; --i) {
+        ObObj *key = assoc_array.get_key(i);
+        key = new(key)ObObj();
+      }
+    }
+    OZ (assoc_array.shrink());
+
+    LOG_DEBUG("spi extend assoc array", K(ret), K(assoc_array));
+  }
+  return ret;
+}
+#endif
 
 int ObSPIService::spi_get_package_allocator(
   ObPLExecCtx *ctx, uint64_t package_id, ObIAllocator *&allocator)
@@ -4955,7 +5716,34 @@ int ObSPIService::spi_handle_ref_cursor_refcount(ObPLExecCtx *ctx,
                                       int64_t addend)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
   UNUSEDx(ctx, package_id, routine_id, index, addend);
+#else
+  ObPLCursorInfo *cursor_info = NULL;
+  ObObjParam cursor_var;
+  ObCusorDeclareLoc odc;
+  LOG_DEBUG("spi handle ref cursor", K(package_id), K(routine_id), K(index), K(addend));
+  OZ (spi_get_cursor_info(ctx, package_id, routine_id, index, cursor_info, cursor_var, odc));
+  if (OB_NOT_NULL(cursor_info)) {
+    OZ (spi_add_ref_cursor_refcount(ctx, &cursor_var, addend));
+  } else {
+    // do nothing
+    // for example:
+    /*
+    * declare
+      cur1 SYS_REFCURSOR;
+      begin
+      end;
+      cur1 is not open, so it is null;
+
+      declare
+      cursor cur is select 1 from dual;
+      begin
+      null;
+      end;
+    */
+  }
+#endif
   return ret;
 }
 
@@ -4967,7 +5755,52 @@ int ObSPIService::spi_copy_ref_cursor(ObPLExecCtx *ctx,
                                  uint64_t package_id)
 {
   int ret = OB_SUCCESS;  
+#ifndef OB_BUILD_ORACLE_PL
   UNUSEDx(ctx, allocator, src, dest, dest_type, package_id);
+#else
+  UNUSEDx(allocator, dest_type);
+  CK (OB_INVALID_ID == package_id); // ref cursor can't define inside package
+  CK (OB_NOT_NULL(src));
+  CK (OB_NOT_NULL(dest));
+  if (OB_SUCC(ret)) {
+    bool need_inc_ref_cnt = false;
+    // see if null cursor
+    // case 1: dest is not null, add dest cursor ref count
+    // case 2: src is not null, dec src cursor ref count, if equals to 0, close cursor,
+    ObPLCursorInfo *src_cursor = reinterpret_cast<ObPLCursorInfo *>(src->get_ext());
+    ObPLCursorInfo *dest_cursor = reinterpret_cast<ObPLCursorInfo *>(dest->get_ext());
+    if (OB_NOT_NULL(src_cursor) && src_cursor->isopen()) {
+      LOG_DEBUG("copy ref cursor, src ref count: ", K(src_cursor->get_ref_count()));
+      need_inc_ref_cnt = (0 == src_cursor->get_ref_count() && src_cursor->get_is_returning());
+      CK (0 < src_cursor->get_ref_count() || need_inc_ref_cnt);
+      // 到了这里先把returning状态重置，ref count先不加，等赋值成功再加
+      OX (src_cursor->set_is_returning(false));
+    }
+    if (src_cursor == dest_cursor) {
+      // 说明指向同一个内存，或者都为null， 这个时候应该不干，除了一个特殊的场景，即return场景，需要将count+1
+      // 例如: c1 := c2; c1 := c2; c2 may null or not null;
+      if (need_inc_ref_cnt) {
+        OX (src_cursor->inc_ref_count());
+      }
+    } else {
+      if (OB_NOT_NULL(dest_cursor) && dest_cursor->isopen()) {
+        LOG_DEBUG("copy ref cursor, dest ref count: ",K(*dest_cursor),
+                                                      K(dest_cursor->get_ref_count()));
+        CK (0 < dest_cursor->get_ref_count());
+        OX (dest_cursor->dec_ref_count());
+        if (0 == dest_cursor->get_ref_count()) {
+          OZ (cursor_close_impl(ctx, dest_cursor, true, OB_INVALID_ID, OB_INVALID_ID, true));
+        }
+      }
+      OX (*dest = *src);
+      if (OB_NOT_NULL(src_cursor)) {
+        OX (src_cursor->inc_ref_count());
+        LOG_DEBUG("copy ref cursor, src ref count: ",K(*src_cursor),
+                                                      K(src_cursor->get_ref_count()));
+      }
+    }
+  }
+#endif
   return ret;
 }
 
@@ -6123,7 +6956,28 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
                 table->set_first(OB_INVALID_INDEX);
                 table->set_last(OB_INVALID_INDEX);
                 table->set_data(NULL);
+#ifdef OB_BUILD_ORACLE_PL
+                if (table->is_associative_array()) {
+                  ObPLAssocArray &aa = static_cast<ObPLAssocArray&>(*table);
+                  if (NULL != aa.get_key()) {
+                    aa.set_key(NULL);
+                  }
+                  if (NULL != aa.get_sort()) {
+                    aa.set_sort(NULL);
+                  }
+                }
+              } else if (table->is_associative_array()) {
+                ObPLAssocArray* assoc = static_cast<ObPLAssocArray*>(table);
+                CK (OB_NOT_NULL(assoc));
+                if (OB_SUCC(ret) && assoc->get_key() != NULL) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                                 "Implementation restriction, bulk collect with associative array has key values");
+                }
               }
+#else
+              }
+#endif
             }
           }
         }
@@ -6685,6 +7539,19 @@ int ObSPIService::check_and_copy_composite(
   if (PL_OBJ_TYPE == type || PL_INTEGER_TYPE == type) {
     ret = OB_ERR_EXPRESSION_WRONG_TYPE;
     LOG_WARN("expr is wrong type", K(ret));
+#ifdef OB_BUILD_ORACLE_PL
+  } else if (PL_OPAQUE_TYPE == type) {
+    if (src.get_meta().get_extend_type() != PL_OPAQUE_TYPE) {
+      ret = OB_ERR_EXPRESSION_WRONG_TYPE;
+      LOG_WARN("expr is wrong type", K(ret), K(src), K(type), K(dst_udt_id));
+    } else {
+      ObPLOpaque* opaque = reinterpret_cast<ObPLOpaque *>(src.get_ext());
+      if (opaque->get_type() != ObPLOpaque::get_type(dst_udt_id)) {
+        ret = OB_ERR_EXPRESSION_WRONG_TYPE;
+        LOG_WARN("expr is wrong type", K(ret));
+      }
+    }
+#endif
   } else {
     ObPLComposite *composite = reinterpret_cast<ObPLComposite*>(src.get_ext());
     if (NULL == composite) {
@@ -6869,6 +7736,18 @@ int ObSPIService::store_datums(ObObj &dest_addr, const ObIArray<ObObj> &obj_arra
       if (PL_OPAQUE_TYPE == dest_addr.get_meta().get_extend_type()) {
         CK (1 == obj_array.count());
         OX (current_datum = reinterpret_cast<int64_t>(&dest_addr));
+#ifdef OB_BUILD_ORACLE_PL
+        if (OB_SUCC(ret) && obj_array.at(0).is_pl_extend()) {
+          is_opaque = true;
+          ObPLOpaque *src = reinterpret_cast<ObPLOpaque *>(obj_array.at(0).get_ext());
+          ObPLOpaque *dst = reinterpret_cast<ObPLOpaque *>(dest_addr.get_ext());
+          if (OB_FAIL(ObSPIService::spi_copy_opaque(NULL, NULL, *src, dst))) { // dst buffer has enough size?
+            LOG_WARN("opaque data store datum failed ", KPC(src), K(dest_addr), K(obj_array), K(ret));
+          } else if (OB_NOT_NULL(src)) {
+            src->~ObPLOpaque();
+          }
+        }
+#endif
       } else {
         ObPLComposite *composite = reinterpret_cast<ObPLComposite*>(dest_addr.get_ext());
         ObPLRecord *record = NULL;
@@ -7424,6 +8303,47 @@ int ObSPIService::spi_update_package_change_info(
   return ret;
 }
 
+#ifdef OB_BUILD_ORACLE_PL
+int ObSPIService::spi_copy_opaque(
+  pl::ObPLExecCtx *ctx, ObIAllocator *allocator,
+  ObPLOpaque &src, ObPLOpaque *&dest, uint64_t package_id)
+{
+  int ret = OB_SUCCESS;
+  UNUSEDx(ctx, package_id);
+  if (NULL == dest) {
+    CK (OB_NOT_NULL(allocator));
+    if (OB_SUCC(ret) && OB_ISNULL(dest = reinterpret_cast<ObPLOpaque*>(allocator->alloc(src.get_init_size())))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory for dest opaque", K(ret), K(src.get_init_size()));
+    }
+    OX (new (dest)ObPLOpaque());
+  }
+  if (OB_SUCC(ret)) {
+    switch (src.get_type()) {
+      case ObPLOpaqueType::PL_ANY_TYPE: {
+        ObPLAnyType &anytype = static_cast<ObPLAnyType&>(src);
+        OZ (anytype.deep_copy(dest));
+      } break;
+      case ObPLOpaqueType::PL_ANY_DATA: {
+        ObPLAnyData &anydata = static_cast<ObPLAnyData&>(src);
+        OZ (anydata.deep_copy(dest));
+      } break;
+      case ObPLOpaqueType::PL_XML_TYPE: {
+        ObPLXmlType &xml = static_cast<ObPLXmlType&>(src);
+        OZ (xml.deep_copy(dest));
+      } break;
+      case ObPLOpaqueType::PL_JSON_TYPE: {
+        ObPLJsonBaseType &jsn = static_cast<ObPLJsonBaseType&>(src);
+        OZ (jsn.deep_copy(dest));
+      } break;
+      default: {
+        OZ (src.deep_copy(dest));
+      } break;
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObSPIService::spi_check_composite_not_null(ObObjParam *v)
 {

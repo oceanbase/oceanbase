@@ -270,6 +270,23 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
 int ObPreBootstrap::notify_sys_tenant_root_key()
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_TDE_SECURITY
+  ObArray<ObAddr> addrs;
+  obrpc::ObRootKeyArg arg;
+  if (OB_FAIL(addrs.reserve(rs_list_.count()))) {
+    LOG_WARN("fail to reserve array", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < rs_list_.count(); i++) {
+    if (OB_FAIL(addrs.push_back(rs_list_[i].server_))) {
+      LOG_WARN("fail to push back server", KR(ret));
+    }
+  } // end for
+  if (FAILEDx(ObDDLService::create_root_key(
+              rpc_proxy_, OB_SYS_TENANT_ID, addrs))) {
+    LOG_WARN("fail to create sys tenant root key", KR(ret), K(addrs));
+  }
+  BOOTSTRAP_CHECK_SUCCESS();
+#endif
   return ret;
 }
 

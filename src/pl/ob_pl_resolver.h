@@ -19,6 +19,9 @@
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/dml/ob_sequence_namespace_checker.h"
 #include "objit/common/ob_item_type.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/ob_pl_warning.h"
+#endif
 
 #ifndef LOG_IN_CHECK_MODE
 #define LOG_IN_CHECK_MODE(fmt, args...) \
@@ -552,6 +555,19 @@ private:
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLPackageAST &package_ast);
   int resolve_declare_var_comm(const ObStmtNodeTree *parse_tree, ObPLDeclareVarStmt *stmt,
                                ObPLCompileUnitAST &unit_ast);
+#ifdef OB_BUILD_ORACLE_PL
+  int resolve_declare_user_type(const ObStmtNodeTree *parse_tree, ObPLDeclareUserTypeStmt *stmt, ObPLFunctionAST &func);
+  int resolve_declare_user_type(const ObStmtNodeTree *parse_tree, ObPLPackageAST &package_ast);
+  int resolve_declare_user_type_comm(const ObStmtNodeTree *parse_tree, ObPLDeclareUserTypeStmt *stmt,
+                                     ObPLCompileUnitAST &unit_ast);
+  int resolve_subtype_precision(const ObStmtNodeTree *precision_node, ObPLDataType &base_type);
+  int resolve_declare_user_subtype(const ObStmtNodeTree *parse_tree,
+                                   ObPLDeclareUserTypeStmt *stmt,
+                                   ObPLCompileUnitAST &unit_ast);
+  int resolve_ref_cursor_type(const ParseNode *node, ObPLDeclareUserTypeStmt *stmt, ObPLCompileUnitAST &unit_ast);
+  int resolve_declare_collection_type(const ParseNode *type_node, ObPLDeclareUserTypeStmt *stmt, ObPLCompileUnitAST &unit_ast);
+  int resolve_declare_ref_cursor(const ObStmtNodeTree *parse_tree, ObPLDeclareCursorStmt *stmt, ObPLFunctionAST &func);
+#endif
   int resolve_declare_record_type(const ParseNode *type_node, ObPLDeclareUserTypeStmt *stmt, ObPLCompileUnitAST &unit_ast);
   int resolve_extern_type_info(share::schema::ObSchemaGetterGuard &schema_guard,
                                const ObSQLSessionInfo &session_info,
@@ -647,6 +663,17 @@ private:
   int resolve_do(const ObStmtNodeTree *parse_tree, 
                 ObPLDoStmt *stmt, 
                 ObPLFunctionAST &func);
+#ifdef OB_BUILD_ORACLE_PL
+  int resolve_object_elem_spec_def(const ParseNode *parse_tree,
+                                   ObPLCompileUnitAST &package_ast);
+  int resolve_object_def(const ParseNode *parse_tree,
+                         ObPLCompileUnitAST &package_ast);
+  int resolve_object_elem_spec_list(const ParseNode *parse_tree,
+                                    ObPLCompileUnitAST &package_ast);
+  int resolve_object_constructor(const ParseNode *parse_tree,
+                                 ObPLCompileUnitAST &package_ast,
+                                 ObPLRoutineInfo *&routine_info);
+#endif
 private:
   int resolve_ident(const ParseNode *node, common::ObString &ident);
   int build_raw_expr(const ParseNode *node, ObPLCompileUnitAST &unit_ast, ObRawExpr *&expr,
@@ -831,6 +858,9 @@ private:
   int check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt, const ObPLConditionValue &value,
                                 bool &dup, ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc* cur_desc);
   int analyze_actual_condition_type(const ObPLConditionValue &value, ObPLConditionType &type);
+#ifdef OB_BUILD_ORACLE_PL
+  int check_collection_constructor(const ParseNode *node, const common::ObString &type_name, bool &is_constructor);
+#endif
   int check_subprogram_variable_read_only(ObPLBlockNS &ns, uint64_t subprogram_id, int64_t var_idx);
   int check_package_variable_read_only(uint64_t package_id, uint64_t var_idx);
   int check_local_variable_read_only(

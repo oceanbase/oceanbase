@@ -28,6 +28,9 @@
 #include "pl/ob_pl_resolver.h"
 #include "common/ob_smart_call.h"
 #include "share/schema/ob_udt_info.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/ob_pl_udt_object_manager.h"
+#endif
 #include "sql/resolver/ob_stmt.h"
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
 #include "deps/oblib/src/lib/json_type/ob_json_path.h"
@@ -2517,10 +2520,25 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
           const ObObjParam &param = ctx_.param_list_->at(val.get_unknown());
           c_expr->set_is_literal_bool(param.is_boolean());
           if (param.is_ext()) {
+#ifdef OB_BUILD_ORACLE_PL
+            if (OB_NOT_NULL(ctx_.session_info_->get_pl_implicit_cursor())
+                && ctx_.session_info_->get_pl_implicit_cursor()->get_in_forall()
+                && param.is_ext_sql_array()) {
+              ObSqlArrayObj *param_array = reinterpret_cast<ObSqlArrayObj*>(param.get_ext());
+              CK (OB_NOT_NULL(param_array));
+              OX (c_expr->set_meta_type(param_array->element_.get_meta_type()));
+              OX (c_expr->set_expr_obj_meta(param_array->element_.get_meta_type()));
+              OX (c_expr->set_accuracy(param_array->element_.get_accuracy()));
+              OX (c_expr->set_param(param));
+            } else {
+#endif
               c_expr->set_meta_type(param.get_meta());
               c_expr->set_expr_obj_meta(param.get_param_meta());
               c_expr->set_udt_id(param.get_udt_id());
               c_expr->set_param(param);
+#ifdef OB_BUILD_ORACLE_PL
+            }
+#endif
           } else {
             c_expr->set_meta_type(ObSQLUtils::is_oracle_empty_string(param)
                                   ? param.get_param_meta() : param.get_meta());
@@ -2555,8 +2573,21 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
           const ObObjParam &param = ctx_.param_list_->at(val.get_unknown());
           c_expr->set_is_literal_bool(param.is_boolean());
           if (param.is_ext()) {
+#ifndef OB_BUILD_ORACLE_PL
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("not support array binding", K(ret));
+#else
+            pl::ObPLNestedTable *param_array = reinterpret_cast<pl::ObPLNestedTable*>(param.get_ext());
+            if (OB_ISNULL(param_array)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("param array is invalid", KPC(param_array));
+            } else {
+              c_expr->set_meta_type(param_array->get_element_type().get_meta_type());
+              c_expr->set_expr_obj_meta(param_array->get_element_type().get_meta_type());
+              c_expr->set_accuracy(param_array->get_element_type().get_accuracy());
+              c_expr->set_param(param);
+            }
+#endif
           } else {
             //questionmark won't set meta_type again
             if (param.get_param_meta().get_type() != param.get_type()) {

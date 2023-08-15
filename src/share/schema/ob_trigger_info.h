@@ -501,6 +501,11 @@ public:
                            const ParseNode &parse_node,
                            const ObDataTypeCastParams &dtc_params,
                            ObString &procedure_source);
+#ifdef OB_BUILD_ORACLE_PL
+  static int replace_trigger_name_in_body(ObTriggerInfo &trigger_info,
+                                  common::ObIAllocator &alloc,
+                                  share::schema::ObSchemaGetterGuard &schema_guard);
+#endif
   static int replace_table_name_in_body(ObTriggerInfo &trigger_info,
                                         common::ObIAllocator &alloc,
                                         const common::ObString &base_object_database,

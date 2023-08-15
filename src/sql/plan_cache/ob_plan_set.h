@@ -23,6 +23,9 @@
 #include "sql/plan_cache/ob_dist_plans.h"
 #include "share/schema/ob_schema_struct.h"
 #include "lib/hash/ob_hashset.h"
+#ifdef OB_BUILD_SPM
+#include "sql/spm/ob_spm_evolution_plan.h"
+#endif
 
 namespace test
 {
@@ -275,7 +278,12 @@ public:
       has_duplicate_table_(false),
       //has_array_binding_(false),
       is_contain_virtual_table_(false),
+#ifdef OB_BUILD_SPM
+      enable_inner_part_parallel_exec_(false),
+      is_spm_closed_(false)
+#else
       enable_inner_part_parallel_exec_(false)
+#endif
       {
       }
 
@@ -306,6 +314,10 @@ public:
   inline bool has_duplicate_table() const { return has_duplicate_table_; }
   //inline bool has_array_binding() const { return has_array_binding_; }
   inline bool enable_inner_part_parallel() const { return enable_inner_part_parallel_exec_; }
+#ifdef OB_BUILD_SPM
+  int add_evolution_plan_for_spm(ObPhysicalPlan *plan, ObPlanCacheCtx &ctx);
+  int get_evolving_evolution_task(EvolutionPlanList &evo_task_list);
+#endif
 private:
   enum
   {
@@ -335,6 +347,17 @@ private:
 
   int get_plan_special(ObPlanCacheCtx &pc_ctx,
                        ObPhysicalPlan *&plan);
+#ifdef OB_BUILD_SPM
+  int try_get_local_evolution_plan(ObPlanCacheCtx &pc_ctx,
+                                   ObPhysicalPlan *&plan,
+                                   bool &get_next);
+  int try_get_dist_evolution_plan(ObPlanCacheCtx &pc_ctx,
+                                  ObPhysicalPlan *&plan,
+                                  bool &get_next);
+  int try_get_evolution_plan(ObPlanCacheCtx &pc_ctx,
+                             ObPhysicalPlan *&plan,
+                             bool &get_next);
+#endif
   int try_get_local_plan(ObPlanCacheCtx &pc_ctx,
                          ObPhysicalPlan *&plan,
                          bool &get_next);
@@ -375,6 +398,10 @@ private:
   //used for array binding, only local plan
   ObPhysicalPlan *array_binding_plan_;
   ObPhysicalPlan *local_plan_;
+#ifdef OB_BUILD_SPM
+  ObEvolutionPlan local_evolution_plan_;
+  ObEvolutionPlan dist_evolution_plan_;
+#endif
   ObPhysicalPlan *remote_plan_;
   // for directly get plan
   ObPhysicalPlan *direct_local_plan_;
@@ -391,6 +418,9 @@ private:
   bool is_contain_virtual_table_;
   // px并行度是否大于1
   bool enable_inner_part_parallel_exec_;
+#ifdef OB_BUILD_SPM
+  bool is_spm_closed_;
+#endif
 };
 
 inline ObPlanSetType ObPlanSet::get_plan_set_type_by_cache_obj_type(ObLibCacheNameSpace ns)

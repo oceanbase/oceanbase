@@ -2012,6 +2012,34 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("dynamic sql returning bulk collect is not supported!", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynamic sql returning bulk collect");
+#ifdef OB_BUILD_ORACLE_PL
+      } else if (1 == node->value_) { //Bulk Into的变量一定是NestedTable，这里做下CHECK
+        if (!user_vars.empty()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("Bulk Collection Into not support User Variables", K(ret), K(user_vars.count()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Bulk Collection to User Variables");
+        } else {
+          for (uint64_t i = 0; OB_SUCC(ret) && i < pl_vars.count(); ++i) {
+            CK (OB_NOT_NULL(pl_vars.at(i)));
+            if (OB_SUCC(ret)
+                && !pl_vars.at(i)->is_obj_access_expr() && !pl_vars.at(i)->is_const_raw_expr()) {
+              ret = OB_ERR_MIX_SINGLE_MULTI;
+              LOG_WARN("Bulk Collection Into is not Nested Table", K(ret));
+            }
+            if (OB_SUCC(ret) && pl_vars.at(i)->is_obj_access_expr()) {
+              pl::ObPLDataType pl_type;
+              const ObUserDefinedType *user_type = NULL;
+              ObObjAccessRawExpr* access_expr = static_cast<ObObjAccessRawExpr*>(pl_vars.at(i));
+              OZ (access_expr->get_final_type(pl_type));
+              if (OB_SUCC(ret) && !pl_type.is_collection_type()) {
+                ret = OB_ERR_MIX_SINGLE_MULTI;
+                LOG_WARN("Bulk Collection Into is not collection", K(ret), K(pl_type));
+              }
+            }
+          }
+          OX (session_info_->get_cur_exec_ctx()->get_sql_ctx()->is_bulk_ = true);
+        }
+#endif
       }
     }
     if (OB_SUCC(ret) && !pl_vars.empty() && !user_vars.empty()) {

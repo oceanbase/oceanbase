@@ -772,6 +772,88 @@ void LogGetStatResp::reset()
 OB_SERIALIZE_MEMBER(LogGetStatResp, max_scn_, end_lsn_);
 // ================= LogGetStatResp end ================
 
+#ifdef OB_BUILD_ARBITRATION
+LogGetArbMemberInfoReq::LogGetArbMemberInfoReq()
+  : palf_id_(-1)
+{}
+
+LogGetArbMemberInfoReq::LogGetArbMemberInfoReq(const int64_t palf_id)
+  : palf_id_(palf_id)
+{}
+
+LogGetArbMemberInfoReq::~LogGetArbMemberInfoReq()
+{
+  reset();
+}
+
+bool LogGetArbMemberInfoReq::is_valid() const
+{
+  return is_valid_palf_id(palf_id_);
+}
+
+void LogGetArbMemberInfoReq::reset()
+{
+  palf_id_ = -1;
+}
+
+OB_SERIALIZE_MEMBER(LogGetArbMemberInfoReq, palf_id_);
+
+LogGetArbMemberInfoResp::LogGetArbMemberInfoResp()
+  : arb_member_info_()
+{}
+
+LogGetArbMemberInfoResp::~LogGetArbMemberInfoResp()
+{
+  reset();
+}
+
+bool LogGetArbMemberInfoResp::is_valid() const
+{
+  return arb_member_info_.is_valid();
+}
+
+void LogGetArbMemberInfoResp::reset()
+{
+  arb_member_info_.reset();
+}
+
+OB_SERIALIZE_MEMBER(LogGetArbMemberInfoResp, arb_member_info_);
+
+ArbMemberInfo::ArbMemberInfo()
+   :  palf_id_(INVALID_PALF_ID),
+      arb_server_(),
+      log_proposal_id_(INVALID_PROPOSAL_ID),
+      config_version_(),
+      mode_version_(INVALID_PROPOSAL_ID),
+      access_mode_(AccessMode::INVALID_ACCESS_MODE),
+      paxos_member_list_(),
+      paxos_replica_num_(-1),
+      arbitration_member_(),
+      degraded_list_() { }
+
+bool ArbMemberInfo::is_valid() const
+{
+  return (arb_server_.is_valid() && palf_id_ != INVALID_PALF_ID);
+}
+
+void ArbMemberInfo::reset()
+{
+  palf_id_ = INVALID_PALF_ID;
+  arb_server_.reset();
+  log_proposal_id_ = INVALID_PROPOSAL_ID;
+  config_version_.reset();
+  mode_version_ = INVALID_PROPOSAL_ID;
+  access_mode_ = AccessMode::INVALID_ACCESS_MODE;
+  paxos_member_list_.reset();
+  paxos_replica_num_ = -1;
+  arbitration_member_.reset();
+  degraded_list_.reset();
+}
+
+OB_SERIALIZE_MEMBER(ArbMemberInfo, palf_id_, arb_server_, log_proposal_id_,
+    config_version_, mode_version_, access_mode_, paxos_member_list_,
+    paxos_replica_num_, arbitration_member_, degraded_list_);
+#endif
 
 LogBatchFetchResp::LogBatchFetchResp()
     : msg_proposal_id_(INVALID_PROPOSAL_ID),

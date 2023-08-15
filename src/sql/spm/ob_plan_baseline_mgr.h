@@ -13,7 +13,6 @@
 #ifndef OB_SQL_SPM_OB_PLAN_BASELINE_MGR_H_
 #define OB_SQL_SPM_OB_PLAN_BASELINE_MGR_H_
 #include "sql/spm/ob_spm_define.h"
-#include "sql/spm/ob_plan_baseline_cache.h"
 #include "sql/spm/ob_plan_baseline_sql_service.h"
 #include "lib/task/ob_timer.h"
 #include "lib/list/ob_list.h"

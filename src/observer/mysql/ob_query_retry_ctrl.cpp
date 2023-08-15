@@ -792,10 +792,25 @@ void ObQueryRetryCtrl::switch_consumer_group_retry_proc(ObRetryParam &v)
 
 void ObQueryRetryCtrl::timeout_proc(ObRetryParam &v)
 {
+#ifdef OB_BUILD_SPM
+  if (OB_UNLIKELY(v.err_ == OB_TIMEOUT &&
+                  ObSpmCacheCtx::STAT_FIRST_EXECUTE_PLAN == v.ctx_.spm_ctx_.spm_stat_ &&
+                  v.ctx_.spm_ctx_.need_spm_timeout_)) {
+    const_cast<ObSqlCtx &>(v.ctx_).spm_ctx_.spm_stat_ = ObSpmCacheCtx::STAT_FALLBACK_EXECUTE_PLAN;
+    const_cast<ObSqlCtx &>(v.ctx_).spm_ctx_.need_spm_timeout_ = false;
+    ObRetryObject retry_obj(v);
+    ObForceLocalRetryPolicy force_local_retry;
+    retry_obj.test(force_local_retry);
+  } else if (is_try_lock_row_err(v.session_.get_retry_info().get_last_query_retry_err())) {
+    v.client_ret_ = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
+    v.retry_type_ = RETRY_TYPE_NONE;
+  }
+#else
   if (is_try_lock_row_err(v.session_.get_retry_info().get_last_query_retry_err())) {
     v.client_ret_ = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
     v.retry_type_ = RETRY_TYPE_NONE;
   }
+#endif
 }
 
 /////// For inner SQL only ///////////////

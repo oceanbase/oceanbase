@@ -14,6 +14,9 @@
 #define OCEANBASE_STORAGE_OB_LOCALITY_MANAGER_H_
 
 #include "lib/mysqlclient/ob_mysql_proxy.h"
+#ifdef OB_BUILD_ARBITRATION
+#include "share/arbitration_service/ob_arbitration_service_table_operator.h"
+#endif
 #include "share/ob_locality_info.h"
 #include "share/ob_locality_table_operator.h"
 #include "common/ob_zone_type.h"
@@ -57,6 +60,10 @@ public:
   virtual int get_server_region(const common::ObAddr &server, common::ObRegion &region) const;
   virtual int get_server_idc(const common::ObAddr &server, common::ObIDC &idc) const;
   int get_server_cluster_id(const common::ObAddr &server, int64_t &cluster_id) const;
+#ifdef OB_BUILD_ARBITRATION
+  int load_arb_service_info();
+  int get_arb_service_addr(common::ObAddr &arb_service_addr) const;
+#endif
   int record_server_region(const common::ObAddr &server, const common::ObRegion &region);
   int record_server_idc(const common::ObAddr &server, const common::ObIDC &idc);
   int record_server_cluster_id(const common::ObAddr &server, const int64_t &cluster_id);
@@ -107,6 +114,10 @@ private:
   share::ObLocalityTableOperator locality_operator_;
   common::ObDedupQueue refresh_locality_task_queue_;
   ReloadLocalityTask reload_locality_task_;
+#ifdef OB_BUILD_ARBITRATION
+  common::ObAddr arb_service_addr_;
+  share::ObArbitrationServiceTableOperator arbitration_service_table_operator_;
+#endif
   char *ssl_invited_nodes_buf_;//common::OB_MAX_CONFIG_VALUE_LEN, use new
   bool is_loaded_;
   static const int64_t FAIL_TO_LOAD_LOCALITY_CACHE_TIMEOUT = 60L * 1000L * 1000L;

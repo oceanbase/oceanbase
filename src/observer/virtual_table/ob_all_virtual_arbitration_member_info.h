@@ -21,6 +21,9 @@ namespace oceanbase
 {
 namespace palf
 {
+#ifdef OB_BUILD_ARBITRATION
+class ArbMemberInfo;
+#endif
 }
 
 namespace observer
@@ -35,6 +38,11 @@ public:
   virtual int inner_get_next_row(common::ObNewRow *&row);
   void destroy();
 private:
+#ifdef OB_BUILD_ARBITRATION
+  int insert_arb_member_info_(const palf::ArbMemberInfo &arb_member_info, common::ObNewRow *row);
+  int member_list_to_string_(const common::ObMemberList &member_list);
+  int learner_list_to_string_(const common::GlobalLearnerList &learner_list);
+#endif
 private:
   static const int64_t VARCHAR_32 = 32;
   static const int64_t VARCHAR_64 = 64;

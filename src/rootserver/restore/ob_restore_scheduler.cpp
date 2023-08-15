@@ -37,6 +37,9 @@
 #include "share/ob_primary_standby_service.h"
 #include "logservice/palf/log_define.h"//scn
 #include "share/scn.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
 
 namespace oceanbase
 {
@@ -521,18 +524,153 @@ int ObRestoreService::convert_parameters(
     const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_TDE_SECURITY
+  uint64_t tenant_id = tenant_id_;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_INVALID_TENANT_ID == tenant_id
+             || OB_SYS_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(check_stop())) {
+    LOG_WARN("restore scheduler stopped", K(ret));
+  } else if (job_info.get_kms_dest().empty()) {
+    // do nothing
+  } else {
+    ObArenaAllocator allocator;
+    int64_t affected_row = 0;
+    ObString tde_method;
+    ObString kms_info;
+    ObSqlString sql;
+    // set tde_method
+    if (OB_FAIL(ObMasterKeyUtil::restore_encrypt_params(allocator, job_info.get_kms_dest(),
+                                          job_info.get_kms_encrypt_key(), tde_method, kms_info))) {
+      LOG_WARN("failed to restore encrypt params", K(ret));
+    } else if (OB_UNLIKELY(tde_method.empty())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("tde_method is empty", K(ret));
+    } else if (!job_info.get_kms_info().empty()) {
+      kms_info = job_info.get_kms_info();
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!ObTdeMethodUtil::is_valid(tde_method)) {
+      // do nothing
+    } else if (OB_FAIL(sql.assign_fmt("ALTER SYSTEM SET tde_method = '%s'", tde_method.ptr()))) {
+      LOG_WARN("failed to assign fmt", K(ret), K(sql));
+    } else if (OB_FAIL(sql_proxy_->write(tenant_id, sql.ptr(), affected_row))) {
+      LOG_WARN("failed to execute", K(ret), K(affected_row), K(sql));
+    } else if (ObTdeMethodUtil::is_internal(tde_method)) {
+      // do nothing
+    } else if (FALSE_IT(sql.reset())) {
+    } else if (OB_FAIL(sql.assign_fmt("ALTER SYSTEM SET external_kms_info= '%s'", kms_info.ptr()))) {
+      LOG_WARN("failed to assign fmt", K(ret), K(sql));
+    } else if (OB_FAIL(sql_proxy_->write(tenant_id, sql.ptr(), affected_row))) {
+      LOG_WARN("failed to execute", K(ret), K(affected_row), K(sql));
+    }
+  }
+#endif
   return ret;
 }
 
 int ObRestoreService::restore_root_key(const share::ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_TDE_SECURITY
+  int64_t idx = job_info.get_multi_restore_path_list().get_backup_set_path_list().count() - 1;
+  if (idx < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid job info", K(ret), K(idx), K(job_info));
+  } else if (OB_ISNULL(srv_rpc_proxy_) || OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null svr rpc proxy or sql proxy", K(ret));
+  } else {
+    storage::ObBackupDataStore store;
+    const share::ObBackupSetPath &backup_set_path = job_info.get_multi_restore_path_list().get_backup_set_path_list().at(idx);
+    ObRootKey root_key;
+    if (OB_FAIL(store.init(backup_set_path.ptr()))) {
+      LOG_WARN("fail to init backup data store", K(ret));
+    } else if (OB_FAIL(store.read_root_key_info(tenant_id_))) {
+      LOG_WARN("fail to read root key info", K(ret));
+    } else if (OB_FAIL(ObMasterKeyGetter::instance().get_root_key(tenant_id_, root_key))) {
+      LOG_WARN("fail to get root key", K(ret));
+    } else if (obrpc::RootKeyType::INVALID == root_key.key_type_) {
+      // do nothing
+    } else {
+      obrpc::ObRootKeyArg arg;
+      obrpc::ObRootKeyResult result;
+      ObUnitTableOperator unit_operator;
+      ObArray<ObUnit> units;
+      ObArray<ObAddr> addrs;
+      arg.tenant_id_ = tenant_id_;
+      arg.is_set_ = true;
+      arg.key_type_ = root_key.key_type_;
+      arg.root_key_ = root_key.key_;
+      if (OB_FAIL(unit_operator.init(*sql_proxy_))) {
+        LOG_WARN("failed to init unit operator", KR(ret));
+      } else if (OB_FAIL(unit_operator.get_units_by_tenant(tenant_id_, units))) {
+        LOG_WARN("failed to get tenant unit", KR(ret), K_(tenant_id));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < units.count(); i++) {
+        const ObUnit &unit = units.at(i);
+        if (OB_FAIL(addrs.push_back(unit.server_))) {
+          LOG_WARN("failed to push back addr", KR(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObDDLService::notify_root_key(*srv_rpc_proxy_, arg, addrs, result))) {
+        LOG_WARN("failed to notify root key", K(ret));
+      }
+    }
+  }
+#endif
   return ret;
 }
 
 int ObRestoreService::restore_keystore(const share::ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_TDE_SECURITY
+  const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;
+  ObUnitTableOperator unit_operator;
+  common::ObArray<ObUnit> units;
+  ObArray<int> return_code_array;
+  obrpc::ObRestoreKeyArg arg;
+  if (job_info.get_kms_dest().empty()) {
+    // do nothing
+  } else if (OB_ISNULL(srv_rpc_proxy_) || OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null svr rpc proxy or sql proxy", K(ret));
+  } else if (OB_FAIL(unit_operator.init(*sql_proxy_))) {
+    LOG_WARN("failed to init unit operator", KR(ret));
+  } else if (OB_FAIL(unit_operator.get_units_by_tenant(tenant_id_, units))) {
+    LOG_WARN("failed to get tenant unit", KR(ret), K_(tenant_id));
+  } else {
+    ObRestoreKeyProxy proxy(*srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::restore_key);
+    arg.tenant_id_ = job_info.get_tenant_id();
+    arg.backup_dest_ = job_info.get_kms_dest();
+    arg.encrypt_key_ = job_info.get_kms_encrypt_key();
+    for (int64_t i = 0; OB_SUCC(ret) && i < units.count(); i++) {
+      const ObUnit &unit = units.at(i);
+      if (OB_FAIL(proxy.call(unit.server_, DEFAULT_TIMEOUT, arg))) {
+        LOG_WARN("failed to send rpc", KR(ret));
+      }
+    }
+
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_code_array))) {
+      LOG_WARN("wait batch result failed", KR(tmp_ret), KR(ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); i++) {
+      ret = return_code_array.at(i);
+      const ObAddr &addr = proxy.get_dests().at(i);
+      if (OB_FAIL(ret)) {
+        LOG_WARN("failed to restore key", KR(ret), K(addr));
+      }
+    }
+  }
+#endif
   return ret;
 }
 

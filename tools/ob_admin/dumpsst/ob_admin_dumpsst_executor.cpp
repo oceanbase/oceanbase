@@ -14,6 +14,9 @@
 #include "ob_admin_dumpsst_executor.h"
 #include "observer/ob_server_struct.h"
 #include "share/ob_io_device_helper.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
 #include "share/ob_tenant_mem_limit_getter.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/ob_file_system_router.h"
@@ -310,6 +313,11 @@ int ObAdminDumpsstExecutor::dump_macro_block(const ObDumpMacroBlockContext &macr
   if (OB_UNLIKELY(!macro_block_context.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(ERROR, "invalid macro block id", K(macro_block_context), K(ret));
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(init_master_key_getter())) {
+    STORAGE_LOG(ERROR, "failed to init master key getter", K(ret));
+    STORAGE_LOG(ERROR, "failed to init macro reader", K(ret));
+#endif
   } else if (OB_FAIL(ObBlockManager::read_block(read_info, macro_handle))) {
     STORAGE_LOG(ERROR, "Fail to read macro block, ", K(ret), K(read_info));
   } else if (OB_FAIL(common_header.deserialize(macro_handle.get_buffer(), macro_handle.get_data_size(), pos))) {
@@ -331,6 +339,30 @@ int ObAdminDumpsstExecutor::dump_macro_block(const ObDumpMacroBlockContext &macr
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObAdminDumpsstExecutor::init_master_key_getter()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(share::ObMasterKeyGetter::instance().init(NULL, nullptr))) {
+    STORAGE_LOG(WARN, "fail to init master key", K(ret));
+  }
+  if (OB_INIT_TWICE == ret) {
+    ret = OB_SUCCESS;
+  }
+  // if (OB_SUCC(ret) && OB_NOT_NULL(key_hex_str_)) {
+  //   int64_t len = STRLEN(key_hex_str_);
+  //   char master_key[share::OB_MAX_MASTER_KEY_LENGTH + 1];
+  //   if (OB_FAIL(common::hex_to_cstr(key_hex_str_, len,
+  //     master_key, share::OB_MAX_MASTER_KEY_LENGTH + 1))) {
+  //     STORAGE_LOG(WARN, "fail to hex to cstr", K(ret));
+  //   } else if (share::ObMasterKeyGetter::instance().set_master_key(
+  //       master_key_id_, master_key, STRLEN(master_key))) {
+  //     STORAGE_LOG(WARN, "fail to set master key", K(ret));
+  //   }
+  // }
+  return ret;
+}
+#endif
 
 void ObAdminDumpsstExecutor::print_usage()
 {

@@ -14,6 +14,9 @@
 
 #define USING_LOG_PREFIX OBLOG
 
+#ifdef OB_USE_DRCMSG
+#include <drcmsg/MD.h>                        // ITableMeta
+#endif
 
 #include "ob_log_binlog_record.h"
 #include "ob_log_utils.h"

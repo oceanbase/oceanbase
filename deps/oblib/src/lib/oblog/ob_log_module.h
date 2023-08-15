@@ -67,7 +67,6 @@ DEFINE_LOG_SUB_MOD(EASY)                 // libeasy
 DEFINE_LOG_SUB_MOD(DETECT)               // dead lock
 DEFINE_LOG_SUB_MOD(PALF)                 // palf
 DEFINE_LOG_SUB_MOD(STANDBY)              // primary and standby cluster
-DEFINE_LOG_SUB_MOD(REASY)                 // libreasy
 DEFINE_LOG_SUB_MOD(COORDINATOR)          // leader coordinator
 DEFINE_LOG_SUB_MOD(FLT)                // trace
 DEFINE_LOG_SUB_MOD(OBTRACE)                // trace
@@ -186,6 +185,7 @@ DEFINE_LOG_SUB_MOD(CG)                   // code_generator
 DEFINE_LOG_SUB_MOD(MONITOR)              // monitor
 DEFINE_LOG_SUB_MOD(DTL)                  // data transfer layer
 DEFINE_LOG_SUB_MOD(DAS)                  // data access service
+DEFINE_LOG_SUB_MOD(SPM)                  // sql plan baseline
 DEFINE_LOG_SUB_MOD(QRR)                  // query rewrite rule
 LOG_MOD_END(SQL)
 
@@ -784,11 +784,14 @@ LOG_MOD_END(PL)
                                                                     info_string, ##args)
 #define _SQL_DAS_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(SQL, DAS, level,                     \
                                                                 _fmt_, ##args)
+#define SQL_SPM_LOG(level, info_string, args...) OB_SUB_MOD_LOG(SQL, SPM, level,                 \
+                                                                    info_string, ##args)
+#define _SQL_SPM_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(SQL, SPM, level,                     \
+                                                                _fmt_, ##args)
 #define SQL_QRR_LOG(level, info_string, args...) OB_SUB_MOD_LOG(SQL, QRR, level,                 \
                                                                     info_string, ##args)
 #define _SQL_QRR_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(SQL, QRR, level,                     \
                                                                 _fmt_, ##args)
-
 #define DETECT_LOG_LOG(level, info_string, args...) OB_SUB_MOD_LOG(DETECT, LOG,level,              \
                                                                 info_string,  ##args)
 #define _DETECT_LOG_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(DETECT, LOG,level,                  \

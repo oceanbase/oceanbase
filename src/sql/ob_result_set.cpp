@@ -310,6 +310,12 @@ int ObResultSet::start_stmt()
   } else {
     if (-1 != phy_plan->tx_id_) {
       const transaction::ObTransID tx_id(phy_plan->tx_id_);
+      if (OB_FAIL(sql::ObTMService::recover_tx_for_callback(tx_id, get_exec_context()))) {
+        LOG_WARN("failed to recover dblink xa transaction", K(ret), K(tx_id));
+      } else {
+        need_revert_tx_ = true;
+        LOG_DEBUG("succ to recover dblink xa transaction", K(tx_id));
+      }
     } else {
       LOG_DEBUG("recover dblink xa skip", K(phy_plan->tx_id_));
     }
@@ -366,6 +372,9 @@ int ObResultSet::end_stmt(const bool is_rollback)
     // do nothing
   }
   if (need_revert_tx_) { // ignore ret
+    int tmp_ret = sql::ObTMService::revert_tx_for_callback(get_exec_context());
+    need_revert_tx_ = false;
+    LOG_DEBUG("revert tx for callback", K(tmp_ret));
   }
   NG_TRACE(end_stmt);
   return ret;
@@ -976,6 +985,23 @@ OB_INLINE int ObResultSet::auto_end_plan_trans(ObPhysicalPlan& plan,
         async = false;
       } else {
         // 外部SQL请求，走异步接口
+#ifdef OB_BUILD_AUDIT_SECURITY
+        {
+          // do security audit before async end trans to avoid deadlock of query_lock.
+          //
+          // don't need to set ret
+          ObSqlCtx *sql_ctx = get_exec_context().get_sql_ctx();
+          if (OB_ISNULL(sql_ctx)) {
+            LOG_WARN("sql_ctx is null when handle security audit");
+          } else {
+            ObSecurityAuditUtils::handle_security_audit(*this,
+                                                        sql_ctx->schema_guard_,
+                                                        sql_ctx->cur_stmt_,
+                                                        ObString::make_empty_string(),
+                                                        ret);
+          }
+        }
+#endif
         int save_ret = ret;
         my_session_.get_end_trans_cb().set_last_error(ret);
         ret = ObSqlTransControl::implicit_end_trans(get_exec_context(),

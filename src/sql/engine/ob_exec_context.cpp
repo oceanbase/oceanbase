@@ -25,6 +25,9 @@
 #include "share/interrupt/ob_global_interrupt_call.h"
 #include "ob_operator.h"
 #include "observer/ob_server.h"
+#ifdef OB_BUILD_SPM
+#include "sql/spm/ob_spm_controller.h"
+#endif
 
 namespace oceanbase
 {
@@ -774,6 +777,13 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
       phy_plan_ctx_->set_foreign_key_checks(0 != foreign_key_checks);
       phy_plan_ctx_->set_table_row_count_list_capacity(plan.get_access_table_num());
       THIS_WORKER.set_timeout_ts(phy_plan_ctx_->get_timeout_timestamp());
+#ifdef OB_BUILD_SPM
+      if (sql_ctx_ != NULL && sql_ctx_->spm_ctx_.need_spm_timeout_) {
+        phy_plan_ctx_->set_spm_timeout_timestamp(
+            ObSpmController::calc_spm_timeout_us(start_time + plan_timeout,
+                                                 sql_ctx_->spm_ctx_.baseline_exec_time_));
+      }
+#endif
     }
   }
   if (OB_SUCC(ret)) {

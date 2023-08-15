@@ -1852,6 +1852,32 @@ public:
              obrpc::ObSrvRpcProxy &rpc_proxy,
              const common::ObIArray<common::ObConfigPairs> &init_configs,
              const common::ObIArray<common::ObAddr> &addrs);
+#ifdef OB_BUILD_TDE_SECURITY
+  int check_need_create_root_key(const obrpc::ObCreateTenantArg &arg, bool &need_create);
+  int get_root_key_from_primary(const obrpc::ObCreateTenantArg &arg,
+  const uint64_t tenant_id, obrpc::RootKeyType &key_type,
+  RootKeyValue &key_value);
+  static int get_root_key_from_obs(
+             const uint64_t &cluster_id,
+             obrpc::ObSrvRpcProxy &rpc_proxy,
+             const obrpc::ObRootKeyArg &arg,
+             const common::ObIArray<common::ObAddr> &addrs,
+             obrpc::RootKeyType &key_type,
+             RootKeyValue &key_value);
+  int standby_create_root_key(
+             const uint64_t tenant_id,
+             const obrpc::ObCreateTenantArg &arg,
+             const common::ObIArray<common::ObAddr> &addrs);
+  static int create_root_key(
+             obrpc::ObSrvRpcProxy &rpc_proxy,
+             const uint64_t tenant_id,
+             const common::ObIArray<common::ObAddr> &addrs);
+  static int notify_root_key(
+             obrpc::ObSrvRpcProxy &rpc_proxy,
+             const obrpc::ObRootKeyArg &arg,
+             const common::ObIArray<common::ObAddr> &addrs,
+             obrpc::ObRootKeyResult &result);
+#endif
 private:
   int handle_security_audit_for_stmt(const obrpc::ObSecurityAuditArg &arg,
                                      share::schema::ObSAuditSchema &audit_schema);
@@ -2282,6 +2308,13 @@ private:
                             ObTableSchema &meta_schema, ObTableSchema &data_schema);
   int check_has_multi_autoinc(share::schema::ObTableSchema &table_schema);
 private:
+#ifdef OB_BUILD_ARBITRATION
+  int check_tenant_arbitration_service_status_(
+      ObMySQLTransaction &trans,
+      const uint64_t tenant_id,
+      const share::ObArbitrationServiceStatus &old_status,
+      const share::ObArbitrationServiceStatus &new_status);
+#endif
   int check_tenant_primary_zone_(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTenantSchema &new_tenant_schema);

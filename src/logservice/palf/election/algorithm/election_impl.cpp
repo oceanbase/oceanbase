@@ -485,6 +485,15 @@ uint64_t ElectionImpl::get_ls_biggest_min_cluster_version_ever_seen_() const
   int ret = OB_SUCCESS;
   uint64_t ls_biggest_min_cluster_version_ever_seen = 0;
   if (observer::ObServer::get_instance().is_arbitration_mode()) {
+#ifdef OB_BUILD_ARBITRATION
+    if (CLUSTER_CURRENT_VERSION < ls_biggest_min_cluster_version_ever_seen_.version_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_NONE(ERROR, "ls_biggest_min_cluster_version_ever_seen_ greater than arb binary version");
+    } else if (ls_biggest_min_cluster_version_ever_seen_.version_ == 0) {
+      LOG_NONE(WARN, "ls_biggest_min_cluster_version_ever_seen_ not setted yet");
+    }
+    ls_biggest_min_cluster_version_ever_seen = ls_biggest_min_cluster_version_ever_seen_.version_;
+#endif
   } else {
     ls_biggest_min_cluster_version_ever_seen = std::max(GET_MIN_CLUSTER_VERSION(),
                                                         ls_biggest_min_cluster_version_ever_seen_.version_);

@@ -66,7 +66,7 @@ typedef struct YYLTYPE
 
 %{
 #include "pl/parser/pl_parser_mysql_mode_lex.h"
-#include "pl_parser_base.h"
+#include "pl/parser/pl_parser_base.h"
 
 typedef struct _YYLookaheadToken
 {

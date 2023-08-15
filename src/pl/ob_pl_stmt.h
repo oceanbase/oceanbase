@@ -312,12 +312,24 @@ private:
 class ObPLUserTypeTable
 {
 public:
+#ifdef OB_BUILD_ORACLE_PL
+  ObPLUserTypeTable() : type_start_gen_id_(0), sys_refcursor_type_(), user_types_(), external_user_types_()
+  {
+    sys_refcursor_type_.set_name("SYS_REFCURSOR");
+    sys_refcursor_type_.set_user_type_id(generate_user_type_id(OB_INVALID_ID));
+    sys_refcursor_type_.set_type_from(PL_TYPE_SYS_REFCURSOR);
+  }
+#else
   ObPLUserTypeTable() : type_start_gen_id_(0), user_types_(), external_user_types_() {}
+#endif
   virtual ~ObPLUserTypeTable() {}
 
   inline void set_type_start_gen_id(uint64_t type_start_gen_id) { type_start_gen_id_ = type_start_gen_id; }
   inline uint64_t get_type_start_gen_id() const { return type_start_gen_id_; }
   inline int64_t get_count() const { return user_types_.count(); }
+#ifdef OB_BUILD_ORACLE_PL
+  inline const ObRefCursorType &get_sys_refcursor_type() const { return sys_refcursor_type_; }
+#endif
   const common::ObIArray<const ObUserDefinedType *> &get_types() const { return user_types_; }
   int add_type(ObUserDefinedType *user_defined_type);
   const ObUserDefinedType *get_type(const common::ObString &type_name) const;
@@ -331,6 +343,9 @@ public:
   inline uint64_t generate_user_type_id(uint64_t package_id) { return common::combine_pl_type_id(package_id, type_start_gen_id_++); }
 private:
   uint64_t type_start_gen_id_;
+#ifdef OB_BUILD_ORACLE_PL
+  ObRefCursorType sys_refcursor_type_;
+#endif
   common::ObSEArray<const ObUserDefinedType *, 4> user_types_;
   common::ObSEArray<const ObUserDefinedType *, 4> external_user_types_;
 };
@@ -1348,6 +1363,9 @@ public:
                                const ObString &db_name, const ObString &package_name,
                                const ObString &type_name, const ObUserDefinedType *&user_type) const;
   int get_pl_data_type_by_id(uint64_t type_id, const ObUserDefinedType *&user_type) const;
+#ifdef OB_BUILD_ORACLE_PL
+  int get_subtype(uint64_t type_id, const ObUserDefinedSubType *&subtype);
+#endif
   int get_subtype_actually_basetype(ObPLDataType &pl_type);
   int get_subtype_actually_basetype(const ObPLDataType *pl_type,
                                     const ObPLDataType *&actually_type);
@@ -1435,6 +1453,13 @@ public:
                                             bool &exists,
                                             pl::ObProcType &proc_type,
                                             uint64_t udt_id) const;
+#ifdef OB_BUILD_ORACLE_PL
+  int add_column_conv_for_coll_func(ObSQLSessionInfo &session_info,
+                                    ObRawExprFactory &expr_factory,
+                                    const ObUserDefinedType *user_type,
+                                    const ObString &attr_name,
+                                    ObRawExpr *&expr) const;
+#endif
   int find_sub_attr_by_name(const ObUserDefinedType &user_type,
                             const sql::ObObjAccessIdent &access_ident,
                             ObSQLSessionInfo &session_info,

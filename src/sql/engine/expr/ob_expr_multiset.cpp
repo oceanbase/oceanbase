@@ -486,9 +486,127 @@ int ObExprMultiSet::cg_expr(ObExprCGCtx &expr_cg_ctx,
 int ObExprMultiSet::eval_multiset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
   UNUSEDx(expr, ctx, res);
   ret = OB_NOT_SUPPORTED;
   LOG_WARN("not support udt", K(ret));
+#else
+  ObDatum *datum1 = nullptr;
+  ObDatum *datum2 = nullptr;
+  ObObj result;
+  const ObExprMultiSetInfo *info = static_cast<ObExprMultiSetInfo *>(expr.extra_info_);
+  if (OB_FAIL(expr.eval_param_value(ctx, datum1, datum2))) {
+    LOG_WARN("failed to eval params", K(ret));
+  } else if (lib::is_oracle_mode()
+             && ObExtendType == expr.args_[0]->datum_meta_.type_
+             && ObExtendType == expr.args_[1]->datum_meta_.type_) {
+    ObObj obj1;
+    ObObj obj2;
+    if (OB_FAIL(datum1->to_obj(obj1, expr.args_[0]->obj_meta_))) {
+      LOG_WARN("failed to convert to obj", K(ret));
+    } else if (OB_FAIL(datum2->to_obj(obj2, expr.args_[1]->obj_meta_))) {
+      LOG_WARN("failed to convert to obj", K(ret));
+    } else {
+      pl::ObPLCollection *c1 = reinterpret_cast<pl::ObPLCollection *>(obj1.get_ext());
+      pl::ObPLCollection *c2 = reinterpret_cast<pl::ObPLCollection *>(obj2.get_ext());
+      ObIAllocator &allocator = ctx.exec_ctx_.get_allocator();
+      ObIAllocator *collection_allocator = NULL;
+      ObObj *data_arr = NULL;
+      int64_t elem_count = -1;
+      pl::ObPLNestedTable *coll =
+              static_cast<pl::ObPLNestedTable*>(allocator.alloc(sizeof(pl::ObPLNestedTable)));
+      if (OB_ISNULL(coll)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory failed.", K(ret));
+      } else if (OB_ISNULL(c1) || OB_ISNULL(c2)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("union udt failed due to null udt", K(ret), K(obj1), K(obj2));
+      } else if (pl::PL_NESTED_TABLE_TYPE != c1->get_type()
+                || pl::PL_NESTED_TABLE_TYPE != c2->get_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "udt union except nested table");
+        LOG_WARN("not support udt union except nested table", K(ret), K(c1), K(c2));
+      } else if (c1->get_element_type().get_obj_type() != c2->get_element_type().get_obj_type()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("udt union failed due to uninited", K(ret), KPC(c1), KPC(c2));
+      } else if (!c1->is_inited() || !c2->is_inited()) {
+        // if has uninit collection, result is uninit, so do nothing ...
+      } else {
+        coll = new(coll)pl::ObPLNestedTable(c1->get_id());
+        collection_allocator =
+                    static_cast<ObIAllocator*>(allocator.alloc(sizeof(pl::ObPLCollAllocator)));
+        collection_allocator = new(collection_allocator)pl::ObPLCollAllocator(coll);
+        if (OB_ISNULL(collection_allocator)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc pl collection allocator failed.", K(ret));
+        } else {
+          switch (info->ms_type_) {
+            case MULTISET_TYPE_UNION:
+              if (OB_FAIL(calc_ms_union(collection_allocator,
+                                        c1, c2, data_arr, elem_count,
+                                        info->ms_type_, info->ms_modifier_))) {
+                LOG_WARN("calc multiset union failed.", K(ret));
+              }
+              break;
+            case MULTISET_TYPE_INTERSECT:
+              if (OB_FAIL(calc_ms_intersect(collection_allocator,
+                                            c1, c2, data_arr, elem_count,
+                                            info->ms_type_, info->ms_modifier_))) {
+                LOG_WARN("calc multiset union failed.", K(ret));
+              }
+              break;
+            case MULTISET_TYPE_EXCEPT:
+              if (OB_FAIL(calc_ms_except(collection_allocator,
+                                        c1, c2, data_arr, elem_count,
+                                        info->ms_type_, info->ms_modifier_))) {
+                LOG_WARN("calc multiset union failed.", K(ret));
+              }
+              break;
+            default:
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unknown multiset operation type", K(info->ms_type_),
+                                              K(info->ms_modifier_), K(ret));
+              break;
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+        LOG_WARN("failed to calc multiset operator", K(ret), K(data_arr));
+      } else if (elem_count > 0 && OB_ISNULL(data_arr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected result.", K(elem_count), K(data_arr), K(ret));
+      } else {
+        coll->set_allocator(collection_allocator);
+        coll->set_type(c1->get_type());
+        coll->set_id(c1->get_id());
+        coll->set_is_null(c1->is_null());
+        coll->set_element_type(c1->get_element_type());
+        coll->set_column_count(c1->get_column_count());
+        coll->set_not_null(c1->is_not_null());
+        coll->set_count(elem_count);
+        coll->set_first(elem_count > 0 ? 1 : OB_INVALID_ID);
+        coll->set_last(elem_count > 0 ? elem_count : OB_INVALID_ID);
+        coll->set_data(data_arr);
+        result.set_extend(reinterpret_cast<int64_t>(coll), coll->get_type());
+        OZ(res.from_obj(result, expr.obj_datum_map_));
+        //Collection constructed here must be recorded and destructed at last
+        if (OB_NOT_NULL(coll->get_allocator())) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_ISNULL(ctx.exec_ctx_.get_pl_ctx())) {
+            tmp_ret = ctx.exec_ctx_.init_pl_ctx();
+          }
+          if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx())) {
+            tmp_ret = ctx.exec_ctx_.get_pl_ctx()->add(result);
+          }
+          if (OB_SUCCESS != tmp_ret) {
+            LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
+          }
+          ret = OB_SUCCESS == ret ? tmp_ret : ret;
+        }
+      }
+    }
+  }
+#endif
   return ret;
 }
 

@@ -274,6 +274,22 @@ int LogNetService::submit_config_change_pre_check_req(
   return ret;
 }
 
+#ifdef OB_BUILD_ARBITRATION
+int LogNetService::submit_get_arb_member_info_req(
+      const common::ObAddr &server,
+      const int64_t timeout_us,
+      LogGetArbMemberInfoResp &resp)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    LogGetArbMemberInfoReq req(palf_id_);
+    ret = post_sync_request_to_server_(server, timeout_us, req, resp);
+  }
+  return ret;
+}
+#endif
 
 int LogNetService::submit_register_parent_req(
     const common::ObAddr &server,

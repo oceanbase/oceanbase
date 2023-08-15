@@ -2024,6 +2024,7 @@ int ObTabletTableStore::build_ha_ddl_tables_(
     const ObBatchUpdateTableStoreParam &param,
     const ObTabletTableStore &old_store)
 {
+  //TODO(muwei.ym) need reuse local minor sstable and cut sstable log ts 4.3
   int ret = OB_SUCCESS;
   ObArray<ObITable *> ddl_tables;
   ObITable *new_table = nullptr;

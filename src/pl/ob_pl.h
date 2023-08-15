@@ -867,6 +867,9 @@ public:
     old_priv_user_id_ = OB_INVALID_ID;
     old_in_definer_ = false;
     has_output_arguments_ = false;
+#ifdef OB_BUILD_ORACLE_PL
+    call_trace_.reset();
+#endif
     old_worker_timeout_ts_ = 0;
     old_phy_plan_timeout_ts_ = 0;
     parent_stack_ctx_ = nullptr;
@@ -942,6 +945,12 @@ public:
   void reset_role_id_array(int &ret);
 
   ObIArray<ObPLExecState *> &get_exec_stack() { return exec_stack_; }
+#ifdef OB_BUILD_ORACLE_PL
+  ObIArray<DbmsUtilityHelper::BtInfo*> &get_error_trace() { return call_trace_.error_trace; }
+  ObIArray<DbmsUtilityHelper::BtInfo*> &get_call_stack() { return call_trace_.call_stack; }
+  void set_call_trace_error_code(int errcode) { call_trace_.err_code = errcode; }
+  int get_call_trace_error_code() const { return call_trace_.err_code; }
+#endif
   ObPLExecState *get_current_state()
   {
     return exec_stack_.empty() ? NULL : exec_stack_.at(exec_stack_.count() - 1);
@@ -954,6 +963,11 @@ public:
   {
     return NULL == get_current_state() ? NULL : &get_current_state()->get_exec_ctx();
   }
+#ifdef OB_BUILD_ORACLE_PL
+  static int get_exact_error_msg(ObIArray<DbmsUtilityHelper::BtInfo*> &error_trace,
+                                   ObIArray<DbmsUtilityHelper::BtInfo*> &call_stack,
+                                   common::ObSqlString &err_msg);
+#endif
   bool has_output_arguments() { return has_output_arguments_; }
   void set_has_output_arguments(bool has_output_arguments)
   {
@@ -1022,6 +1036,9 @@ private:
   common::ObString cur_query_;
 
   common::ObSEArray<ObPLExecState*, 4> exec_stack_;
+#ifdef OB_BUILD_ORACLE_PL
+  DbmsUtilityHelper::BackTrace call_trace_;
+#endif
   ObPLContext *parent_stack_ctx_;
   ObPLContext *top_stack_ctx_;
   sql::ObExecContext *my_exec_ctx_; //my exec context

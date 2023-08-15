@@ -47,7 +47,9 @@
 #include "share/ob_lob_access_utils.h"
 #include "sql/monitor/flt/ob_flt_utils.h"
 #include "sql/session/ob_sess_info_verify.h"
+#ifdef OB_BUILD_ORACLE_XML
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
+#endif
 namespace oceanbase
 {
 using namespace share;
@@ -552,6 +554,13 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
                                     &allocator,
                                     &session))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
+#ifdef OB_BUILD_ORACLE_XML
+        } else if (value.is_user_defined_sql_type()
+                   && OB_FAIL(ObXMLExprHelper::process_sql_udt_results(value,
+                                    &allocator,
+                                    &session))) {
+          LOG_WARN("convert udt to client format failed", K(ret), K(value.get_udt_subschema_id()));
+#endif
         }
       }
     }

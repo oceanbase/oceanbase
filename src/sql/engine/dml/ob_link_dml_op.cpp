@@ -110,6 +110,8 @@ int ObLinkDmlOp::inner_execute_link_stmt(const char *link_stmt)
   if (OB_ISNULL(dblink_proxy_) || OB_ISNULL(dblink_conn_) || OB_ISNULL(link_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dblink_proxy or link_stmt is NULL", K(ret), KP(dblink_proxy_), KP(link_stmt), KP(dblink_conn_));
+  } else if (OB_FAIL(ObTMService::tm_rm_start(ctx_, link_type_, dblink_conn_, tx_id))) {
+    LOG_WARN("failed to tm_rm_start", K(ret), K(dblink_id_), K(dblink_conn_));
   } else if (MY_SPEC.is_reverse_link_ && OB_FAIL(send_reverse_link_info(tx_id))) {
     LOG_WARN("failed to send reverse link info", K(ret), K(link_stmt));
   } else if (OB_FAIL(dblink_proxy_->dblink_write(dblink_conn_, affected_rows_, link_stmt))) {

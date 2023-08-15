@@ -62,7 +62,7 @@ int ObBackupConnectivityCheckManager::schedule_connectivity_check_(
     const share::ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
-    // TODO in 4.1, this code logic needs to be adjusted.
+  // TODO(wenjinyu.wjy) in 4.3, this code logic needs to be rewritten. Since server_mgr needs to be removed, first comment the code
   // obrpc::ObCheckBackupConnectivityArg args;
   // args.tenant_id_ = tenant_id_;
   // common::ObArray<ObAddr> server_list;
@@ -202,6 +202,9 @@ int ObBackupConnectivityCheckManager::check_backup_dest_connectivity(
     LOG_WARN("failed to check oss/cos io permission", K(ret), K_(tenant_id), K(backup_dest)); 
   } else if (OB_FAIL(set_connectivity_check_path_(backup_dest, path))) {
     LOG_WARN("failed to get check file", K(ret), K_(tenant_id), K(backup_dest));
+  // TODO(wenjinyu.wjy) in 4.3, support check connectivity
+  //} else if (OB_FAIL(schedule_connectivity_check_(backup_dest, path))) {
+  //  LOG_WARN("failed to schedule connectivity check", K(ret), K_(tenant_id));
   } else if (OB_FAIL(set_last_check_time_(backup_dest))) {
     LOG_WARN("failed to set last check time", K(ret), K_(tenant_id), K(backup_dest));
   } else {
@@ -359,7 +362,6 @@ int ObBackupCheckFile::generate_format_desc_(const share::ObBackupDest &dest, sh
   int ret = OB_SUCCESS;
   schema::ObSchemaGetterGuard schema_guard;
   const schema::ObTenantSchema *tenant_schema = nullptr;
-
   if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), K(GCTX.schema_service_));

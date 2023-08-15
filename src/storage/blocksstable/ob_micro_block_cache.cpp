@@ -351,6 +351,10 @@ int ObIMicroBlockIOCallback::process_block(
       ObIMicroBlockCache::BaseBlockCache *kvcache = nullptr;
       ObKVCachePair *kvpair = nullptr;
       ObKVCacheInstHandle inst_handle;
+#ifdef OB_BUILD_TDE_SECURITY
+      const char *decrypt_buf = NULL;
+      int64_t decrypt_len = 0;
+#endif
       const int64_t block_size = header.header_size_ + header.data_length_;
       int64_t extra_size = 0;
       bool need_decoder = false;
@@ -375,12 +379,20 @@ int ObIMicroBlockIOCallback::process_block(
           LOG_WARN("Fail to serialize header", K(ret), K(header));
         } else if (FALSE_IT(payload_buf = payload_buf + pos)) {
         } else if (FALSE_IT(payload_size = payload_size - pos)) {
+#ifndef OB_BUILD_TDE_SECURITY
         } else if (OB_FAIL(reader->decompress_data_with_prealloc_buf(
             block_des_meta_.compressor_type_,
             payload_buf,
             payload_size,
             block_buf + pos,
             block_size - pos))) {
+#else
+        } else if (OB_FAIL(reader->decrypt_buf(
+            block_des_meta_, payload_buf, payload_size, decrypt_buf, decrypt_len))) {
+          LOG_WARN("Fail to decrypt data", K(ret));
+        } else if (OB_FAIL(reader->decompress_data_with_prealloc_buf(block_des_meta_.compressor_type_, decrypt_buf,
+                                                                     decrypt_len, block_buf + pos, block_size - pos))) {
+#endif
           LOG_WARN("Fail to decompress data with preallocated buffer", K(ret));
         } else if (need_write_extra_buf_ && OB_FAIL(cache_->write_extra_buf(block_buf, block_size,
                                                     extra_size, block_buf + block_size, micro_data))) {

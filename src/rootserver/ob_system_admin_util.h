@@ -527,6 +527,42 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminFlushCache);
 };
 
+#ifdef OB_BUILD_SPM
+class ObAdminLoadBaseline : public ObTenantServerAdminUtil
+{
+public:
+  explicit ObAdminLoadBaseline(const ObSystemAdminCtx &ctx)
+    : ObTenantServerAdminUtil(ctx)
+  {}
+  virtual ~ObAdminLoadBaseline() {}
+
+  int call_server(const common::ObAddr &server,
+                  const obrpc::ObLoadPlanBaselineArg &arg);
+
+  int execute(const obrpc::ObLoadPlanBaselineArg &arg);
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAdminLoadBaseline);
+};
+
+class ObAdminLoadBaselineV2 : public ObTenantServerAdminUtil
+{
+public:
+  explicit ObAdminLoadBaselineV2(const ObSystemAdminCtx &ctx)
+    : ObTenantServerAdminUtil(ctx)
+  {}
+  virtual ~ObAdminLoadBaselineV2() {}
+
+  int call_server(const common::ObAddr &server,
+                  const obrpc::ObLoadPlanBaselineArg &arg,
+                  obrpc::ObLoadBaselineRes &res);
+
+  int execute(const obrpc::ObLoadPlanBaselineArg &arg, uint64_t &total_load_count);
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAdminLoadBaselineV2);
+};
+#endif
 
 class ObAdminSetTP : public ObAdminCallServer
 {

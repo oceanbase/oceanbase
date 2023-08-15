@@ -487,7 +487,8 @@ int ObDataBackupDestConfigParser::update_inner_config_table(common::ObISQLClient
   ObBackupDestMgr dest_mgr;
   share::ObBackupPathString backup_dest;
   ObBackupDestType::TYPE dest_type = ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA;
-  // TODO: handle trans failed after write format file.
+
+  // TODO(wangxiaohui.wxh):4.3, handle trans failed after write format file in 4.1.
   if (!type_.is_valid() || 1 != config_items_.count() ) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid parser", K(ret), KPC(this));
@@ -592,7 +593,8 @@ int ObLogArchiveDestConfigParser::update_archive_dest_config_(common::ObISQLClie
       LOG_WARN("fail to gen archive config items", K(ret)); 
     }
 
-  // TODO: handle trans failed after write format file.
+
+    // TODO(wangxiaohui.wxh):4.3, handle trans failed after write format file in 4.1.
     ARRAY_FOREACH_X(config_items_, i, cnt, OB_SUCC(ret)) {
       const BackupConfigItemPair &config_item = config_items_.at(i);
       if (OB_FAIL(helper.set_kv_item(trans, dest_no_, config_item.key_, config_item.value_))) {
@@ -783,7 +785,7 @@ int ObLogArchiveDestConfigParser::do_parse_compression_(const common::ObString &
       LOG_WARN("fail to push back pair", K(ret), K(pair));
     }
   } else {
-  // TODO:  when log archive support compression, remove this.
+  // TODO(chongrong.th): when log archive support compression, remove this in 4.3
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("compression not support value", K(ret), K(value));
   }

@@ -106,6 +106,18 @@
 #include "observer/virtual_table/ob_mds_event_buffer.h"
 #include "observer/ob_server_startup_task_handler.h"
 #include "share/detect/ob_detect_manager.h"
+#ifdef OB_BUILD_ARBITRATION
+#include "logservice/arbserver/palf_env_lite_mgr.h"
+#include "logservice/arbserver/ob_arb_srv_network_frame.h"
+#include "logservice/arbserver/ob_arb_cluster_white_list.h"
+#include "logservice/arbserver/ob_arb_server_config.h"
+#endif
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
+#ifdef OB_BUILD_ORACLE_XML
+#include "lib/xml/ob_libxml2_sax_handler.h"
+#endif
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -188,6 +200,10 @@ ObServer::ObServer()
     unix_domain_listener_(),
     disk_usage_report_task_(),
     log_block_mgr_()
+#ifdef OB_BUILD_ARBITRATION
+    ,arb_gcs_(),
+    arb_timer_()
+#endif
 {
   memset(&gctx_, 0, sizeof (gctx_));
 }
@@ -206,6 +222,11 @@ int ObServer::parse_mode()
     if (0 == STRCASECMP(mode_str, NORMAL_MODE_STR)) {
       gctx_.startup_mode_ = NORMAL_MODE;
       LOG_INFO("set normal mode");
+#ifdef OB_BUILD_ARBITRATION
+    } else if (0 == STRCASECMP(mode_str, ARBITRATION_MODE_STR)) {
+      gctx_.startup_mode_ = ARBITRATION_MODE;
+      LOG_INFO("set arbitration mode");
+#endif
     } else if (0 == STRCASECMP(mode_str, FLASHBACK_MODE_STR)) {
       gctx_.startup_mode_ = PHY_FLASHBACK_MODE;
       LOG_INFO("set physical_flashback mode");
@@ -244,6 +265,25 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   ObLargePageHelper::set_param(config_.use_large_pages);
 
   if (is_arbitration_mode()) {
+#ifdef OB_BUILD_ARBITRATION
+    FLOG_INFO("begin init observer in arbitration mode", KR(ret));
+    if (FAILEDx(OB_LOGGER.init(log_cfg, true))) {
+      LOG_ERROR("async log init error.", KR(ret));
+      ret = OB_ELECTION_ASYNC_LOG_WARN_INIT;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(init_pre_setting())) {
+      LOG_ERROR("init pre setting failed", KR(ret));
+    } else if (OB_FAIL(ObClockGenerator::init())) {
+      LOG_ERROR("init create clock generator failed", KR(ret));
+    } else if (OB_FAIL(init_version())) {
+      LOG_ERROR("init version failed", KR(ret));
+    } else if (OB_FAIL(init_server_in_arb_mode())) {
+      LOG_ERROR("init_server_in_arb_mode failed", KR(ret));
+    }
+    lib::g_runtime_enabled = true;
+    FLOG_INFO("end init observer in arbitration mode", KR(ret));
+#endif
   } else {
     if (FAILEDx(OB_LOGGER.init(log_cfg, false))) {
       LOG_ERROR("async log init error.", KR(ret));
@@ -406,6 +446,10 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init get compat mode server failed",KR(ret));
     } else if (OB_FAIL(table_service_.init())) {
       LOG_ERROR("init table service failed", KR(ret));
+#ifdef OB_BUILD_TDE_SECURITY
+    } else if (OB_FAIL(ObMasterKeyGetter::instance().init(&sql_proxy_))) {
+      LOG_ERROR("init get master key server failed", KR(ret));
+#endif
     } else if (OB_FAIL(ObTimerMonitor::get_instance().init())) {
       LOG_ERROR("init timer monitor failed", KR(ret));
     } else if (OB_FAIL(ObBGThreadMonitor::get_instance().init())) {
@@ -439,6 +483,13 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (OB_FAIL(ObDDLRedoLogWriter::get_instance().init())) {
       LOG_WARN("init DDL redo log writer failed", KR(ret));
     }
+#ifdef OB_BUILD_ARBITRATION
+    else if (OB_FAIL(arb_gcs_.init(GCTX.self_addr(),
+                                   lib::TGDefIDs::ArbGCSTh,
+                                    GCTX.srv_rpc_proxy_, GCTX.sql_proxy_))) {
+      LOG_ERROR("init arb_gcs_ failed", KR(ret));
+    }
+#endif
     else if (OB_FAIL(ObDetectManagerThread::instance().init(GCTX.self_addr(), net_frame_.get_req_transport()))) {
       LOG_WARN("init ObDetectManagerThread failed", KR(ret));
     } else {
@@ -477,6 +528,9 @@ void ObServer::destroy()
   FLOG_INFO("destroy config manager success");
 
   if (is_arbitration_mode()) {
+#ifdef OB_BUILD_ARBITRATION
+    destroy_server_in_arb_mode();
+#endif
   } else if (!has_destroy_ && has_stopped_) {
 
     FLOG_INFO("begin to destroy OB_LOGGER");
@@ -519,6 +573,11 @@ void ObServer::destroy()
     ObTableStoreStatMgr::get_instance().destroy();
     FLOG_INFO("table store stat mgr destroyed");
 
+#ifdef OB_BUILD_TDE_SECURITY
+    FLOG_INFO("begin to destroy master key getter");
+    ObMasterKeyGetter::instance().destroy();
+    FLOG_INFO("master key getter destroyed");
+#endif
 
     FLOG_INFO("begin to destroy unix domain listener");
     unix_domain_listener_.destroy();
@@ -588,6 +647,11 @@ void ObServer::destroy()
     sql_engine_.destroy();
     FLOG_INFO("sql engine destroyed");
 
+#ifdef OB_BUILD_ORACLE_XML
+    FLOG_INFO("begin to destroy xml ctx");
+    ObLibXml2SaxHandler::destroy();
+    FLOG_INFO("xml ctx destroyed");
+#endif
 
     FLOG_INFO("begin to destroy pl engine");
     pl_engine_.destory();
@@ -717,6 +781,10 @@ void ObServer::destroy()
     ObClockGenerator::destroy();
     FLOG_INFO("clock generator destroyed");
 
+#ifdef OB_BUILD_ARBITRATION
+    arb_gcs_.destroy();
+    FLOG_INFO("ArbGarbageCollectSerivce destroyed");
+#endif
 
     has_destroy_ = true;
     FLOG_INFO("[OBSERVER_NOTICE] destroy observer end");
@@ -745,6 +813,18 @@ int ObServer::start()
   FLOG_INFO("[OBSERVER_NOTICE] start observer begin");
 
   if (is_arbitration_mode()) {
+#ifdef OB_BUILD_ARBITRATION
+    if (OB_FAIL(start_sig_worker_and_handle())) {
+      LOG_ERROR("fail to start signal worker and handle", KR(ret));
+    } else if (OB_FAIL(start_server_in_arb_mode())) {
+      LOG_ERROR("start_server_in_arb_mode failed", K(ret));
+    } else {
+      FLOG_INFO("[OBSERVER_NOTICE] server instance start succeed");
+      prepare_stop_ = false;
+      stop_ = false;
+      has_stopped_ = false;
+    }
+#endif
   } else {
     if (OB_FAIL(start_sig_worker_and_handle())) {
       LOG_ERROR("fail to start signal worker", KR(ret));
@@ -899,6 +979,13 @@ int ObServer::start()
       FLOG_INFO("success to start location service");
     }
 
+#ifdef OB_BUILD_ARBITRATION
+    if (FAILEDx(arb_gcs_.start())) {
+      LOG_ERROR("start arb_gcs_ failed", KR(ret));
+    } else {
+      FLOG_INFO("success to start ArbGarbageCollectSerivce");
+    }
+#endif
 
     if (OB_SUCC(ret)) {
       FLOG_INFO("[OBSERVER_NOTICE] server instance start succeed");
@@ -1069,6 +1156,9 @@ int ObServer::stop()
   FLOG_INFO("stop config manager success");
 
   if (is_arbitration_mode()) {
+#ifdef OB_BUILD_ARBITRATION
+    (void) stop_server_in_arb_mode();
+#endif
   } else {
 #ifdef ENABLE_IMC
     FLOG_INFO("begin to stop imc tasks", KR(ret));
@@ -1124,6 +1214,11 @@ int ObServer::stop()
     ObTableStoreStatMgr::get_instance().stop();
     FLOG_INFO("table store stat mgr stopped");
 
+#ifdef OB_BUILD_TDE_SECURITY
+    FLOG_INFO("begin to stop master key getter");
+    ObMasterKeyGetter::instance().stop();
+    FLOG_INFO("master key getter stopped");
+#endif
 
     FLOG_INFO("begin to stop unix domain listener");
     unix_domain_listener_.stop();
@@ -1289,6 +1384,10 @@ int ObServer::stop()
     rl_mgr_.stop();
     FLOG_INFO("ratelimit manager stopped");
 
+#ifdef OB_BUILD_ARBITRATION
+      arb_gcs_.stop();
+      FLOG_INFO("ArbGarbageCollectSerivce stopped");
+#endif
 
     FLOG_INFO("begin to shutdown rpc network");
     if (OB_FAIL(net_frame_.rpc_shutdown())) {
@@ -1386,6 +1485,9 @@ int ObServer::wait()
   FLOG_INFO("wait config manager success");
 
   if (is_arbitration_mode()) {
+#ifdef OB_BUILD_ARBITRATION
+    (void) wait_server_in_arb_mode();
+#endif
   } else {
 
     FLOG_INFO("begin to wait OB_LOGGER");
@@ -1416,6 +1518,11 @@ int ObServer::wait()
     ObTableStoreStatMgr::get_instance().wait();
     FLOG_INFO("wait table store stat mgr success");
 
+#ifdef OB_BUILD_TDE_SECURITY
+    FLOG_INFO("begin to wait master key getter");
+    ObMasterKeyGetter::instance().wait();
+    FLOG_INFO("wait master key getter success");
+#endif
 
     FLOG_INFO("begin to wait unix domain listener");
     unix_domain_listener_.wait();
@@ -1586,6 +1693,10 @@ int ObServer::wait()
     palf::election::GLOBAL_REPORT_TIMER.wait();
     FLOG_INFO("wait global election report timer success");
 
+   #ifdef OB_BUILD_ARBITRATION
+     arb_gcs_.wait();
+     FLOG_INFO("wait ArbGarbageCollectSerivce success");
+   #endif
 
     FLOG_INFO("begin to wait rootservice event history");
     ROOTSERVICE_EVENT_INSTANCE.wait();
@@ -2327,6 +2438,11 @@ int ObServer::init_sql()
     }
   }
 
+#ifdef OB_BUILD_ORACLE_XML
+  if (OB_SUCC(ret)) {
+    ObLibXml2SaxHandler::init();
+  }
+#endif
 
   if (OB_SUCC(ret)) {
     LOG_INFO("init sql done");
@@ -2432,6 +2548,9 @@ int ObServer::init_global_context()
   gctx_.locality_manager_ = &locality_manager_;
   gctx_.disk_reporter_ = &disk_usage_report_task_;
   gctx_.log_block_mgr_ = &log_block_mgr_;
+#ifdef OB_BUILD_ARBITRATION
+  gctx_.arb_gcs_ = &arb_gcs_;
+#endif
   (void)gctx_.set_upgrade_stage(obrpc::OB_UPGRADE_STAGE_INVALID);
 
   gctx_.flashback_scn_ = opts_.flashback_scn_;
@@ -3376,10 +3495,205 @@ int ObServer::clean_up_invalid_tables_by_tenant(
 }
 
 // ---------------------------------- arb server start -------------------------------
+#ifdef OB_BUILD_ARBITRATION
+int ObServer::init_server_in_arb_mode()
+{
+  int ret = OB_SUCCESS;
+  // init GCTX's config members.
+  gctx_.config_ = &config_;
+  gctx_.config_mgr_ = &config_mgr_;
+  // set_extra_payload() call is necessary, or dest may return -4007 when deserialie rpc packet.
+  obrpc::ObIRpcExtraPayload::set_extra_payload(ObRpcExtraPayload::extra_payload_instance());
+  palflite::PalfEnvLiteMgr &palf_env_mgr = palflite::PalfEnvLiteMgr::get_instance();
+  arbserver::ObArbSrvNetworkFrame &net_work_farme = arbserver::ObArbSrvNetworkFrame::get_instance();
+  rpc::frame::ObNetOptions opts;
+  arbserver::ArbNetOptions arb_opts;
+  const uint32_t rpc_port = static_cast<uint32_t>(GCONF.rpc_port);
+
+  int rpc_io_cnt = static_cast<int>(GCONF.net_thread_count);
+  // make net thread count adaptive
+  if (0 == rpc_io_cnt) {
+    rpc_io_cnt = get_default_net_thread_count();
+  }
+  const int hp_io_cnt = static_cast<int>(GCONF.high_priority_net_thread_count);
+  opts.rpc_io_cnt_ = rpc_io_cnt;                     // rpc io thread count
+  opts.high_prio_rpc_io_cnt_ = hp_io_cnt;
+  // Do not need set mysql/batch io cnt for arb server
+  // opts.mysql_io_cnt_ = io_cnt;
+  // opts.batch_rpc_io_cnt_ = io_cnt;
+  opts.use_ipv6_ = GCONF.use_ipv6;
+  //TODO(tony.wzh): fix opts.tcp_keepidle  negative
+  opts.tcp_user_timeout_ = static_cast<int>(GCONF.dead_socket_detection_timeout);
+  opts.tcp_keepidle_     = static_cast<int>(GCONF.tcp_keepidle);
+  opts.tcp_keepintvl_    = static_cast<int>(GCONF.tcp_keepintvl);
+  opts.tcp_keepcnt_      = static_cast<int>(GCONF.tcp_keepcnt);
+
+  if (GCONF.enable_tcp_keepalive) {
+    opts.enable_tcp_keepalive_ = 1;
+  } else {
+    opts.enable_tcp_keepalive_ = 0;
+  }
+
+  arb_opts.opts_ = opts;
+  arb_opts.self_ = self_addr_;
+
+  LOG_INFO("io thread connection negotiation enabled!");
+  arb_opts.negotiation_enable_ = 1;          // enable negotiation
+  arb_opts.rpc_port_ = rpc_port;
+
+  if (OB_FAIL(net_work_farme.init(arb_opts, &palf_env_mgr))) {
+    LOG_ERROR("init ObArbSrvNetworkFrame failed", K(ret), K(arb_opts));
+  } else if (OB_FAIL(palf_env_mgr.init(GCONF.data_dir, self_addr_, net_work_farme.get_req_transport()))) {
+    LOG_ERROR("init PalfEnvLiteMgr failed", K(ret), K(arb_opts));
+  } else if (OB_FAIL(arb_timer_.init(lib::TGDefIDs::ArbServerTimer, &palf_env_mgr))) {
+    LOG_ERROR("init ArbServerTimer failed", K(ret));
+  #ifndef OB_USE_ASAN
+  } else if (OB_FAIL(ObMemoryDump::get_instance().init())) {
+    LOG_ERROR("init memory dumper failed", KR(ret));
+  #endif
+  } else if (OB_FAIL(arbserver::ObArbWhiteList::get_instance().init())) {
+    LOG_ERROR("init ObArbWhiteList failed", K(ret));
+  } else if (OB_FAIL(ASCONF.init())){
+    LOG_ERROR("init ObArbServerConfig failed", K(ret));
+  } else if (OB_FAIL(ASCONF.init_config_with_file())) {
+    LOG_ERROR("init config with file failed", K(ret));
+  } else {
+    LOG_INFO("init_server_in_arb_mode success", K(ret), K(arb_opts));
+  }
+
+  return ret;
+}
+
+int ObServer::start_server_in_arb_mode()
+{
+  int ret = OB_SUCCESS;
+  arbserver::ObArbSrvNetworkFrame &net_work_farme = arbserver::ObArbSrvNetworkFrame::get_instance();
+  if (OB_FAIL(net_work_farme.start())) {
+    LOG_ERROR("start ObArbSrvNetworkFrame failed", K(ret));
+  } else if (OB_FAIL(arb_timer_.start())) {
+    LOG_ERROR("start ObArbServerTimer failed", K(ret));
+  } else {
+    LOG_INFO("start_server_in_arb_mode success", K(ret));
+  }
+  return ret;
+}
+
+int ObServer::stop_server_in_arb_mode()
+{
+  int ret = OB_SUCCESS;
+  palf::election::GLOBAL_REPORT_TIMER.stop();
+  FLOG_INFO("global election report timer stopped");
+
+  arbserver::ObArbSrvNetworkFrame &net_work_farme = arbserver::ObArbSrvNetworkFrame::get_instance();
+  FLOG_INFO("begin to stop net_frame");
+  if (OB_FAIL(net_work_farme.rpc_shutdown())) {
+    FLOG_WARN("rpc_shutdown failed");
+  } else if (OB_FAIL(net_work_farme.stop())) {
+    FLOG_WARN("stop net_frame failed");
+  } else if (OB_FAIL(arb_timer_.stop())) {
+    LOG_ERROR("stop ObArbServerTimer failed", K(ret));
+  } else {
+    FLOG_INFO("stop net_frame success");
+    FLOG_INFO("begin to stop OB_LOGGER");
+    OB_LOGGER.stop();
+    FLOG_INFO("stop OB_LOGGER success");
+
+    FLOG_INFO("begin to stop task controller");
+    ObTaskController::get().stop();
+    FLOG_INFO("stop task controller success");
+
+    FLOG_INFO("begin stop arbserver config");
+    ASCONF.stop();
+    FLOG_INFO("stop arbserver config success");
+
+    FLOG_INFO("begin stop signal worker");
+    sig_worker_->stop();
+    FLOG_INFO("stop signal worker success");
+
+    FLOG_INFO("begin stop signal handle");
+    signal_handle_->stop();
+    FLOG_INFO("stop signal handle success");
+
+    FLOG_INFO("begin to stop memory dump");
+    ObMemoryDump::get_instance().stop();
+    FLOG_INFO("memory dump stopped");
+
+  }
+
+  FLOG_INFO("stop_server_in_arb_mode success", K(ret));
+  return ret;
+}
+
+int ObServer::wait_server_in_arb_mode()
+{
+  int ret = OB_SUCCESS;
+  palf::election::GLOBAL_REPORT_TIMER.wait();
+  FLOG_INFO("wait global election report timer success");
+
+  FLOG_INFO("begin to wait OB_LOGGER");
+  OB_LOGGER.wait();
+  FLOG_INFO("wait OB_LOGGER success");
+
+  FLOG_INFO("begin to wait task controller");
+  ObTaskController::get().wait();
+  FLOG_INFO("wait task controller success");
+
+  arbserver::ObArbSrvNetworkFrame &net_work_farme = arbserver::ObArbSrvNetworkFrame::get_instance();
+  FLOG_INFO("begin to wait net_frame");
+  net_work_farme.wait();
+  FLOG_INFO("wait net_frame success");
+
+  FLOG_INFO("begin to wait arb_server");
+  arb_timer_.wait();
+  FLOG_INFO("wait arb_server success");
+
+  FLOG_INFO("begin wait arbserver config");
+  ASCONF.wait();
+  FLOG_INFO("wait arbserver config success");
+
+  FLOG_INFO("begin wait signal worker");
+  sig_worker_->wait();
+  FLOG_INFO("wait signal worker success");
+
+  FLOG_INFO("begin wait signal handle");
+  signal_handle_->wait();
+  FLOG_INFO("wait signal handle success");
+
+  FLOG_INFO("begin to wait memory dump");
+  ObMemoryDump::get_instance().wait();
+  FLOG_INFO("wait memory dump success");
+
+  FLOG_INFO("wait_server_in_arb_mode success", K(ret));
+  return ret;
+}
+
+int ObServer::destroy_server_in_arb_mode()
+{
+  int ret = OB_SUCCESS;
+  OB_LOGGER.destroy();
+  ObTaskController::get().destroy();
+  sig_worker_->destroy();
+  signal_handle_->destroy();
+  palflite::PalfEnvLiteMgr &palf_env_mgr = palflite::PalfEnvLiteMgr::get_instance();
+  arbserver::ObArbSrvNetworkFrame &net_work_farme = arbserver::ObArbSrvNetworkFrame::get_instance();
+  palf_env_mgr.destroy();
+  net_work_farme.destroy();
+  arb_timer_.destroy();
+  ObMemoryDump::get_instance().destroy();
+  ASCONF.destroy();
+  palf::election::GLOBAL_REPORT_TIMER.destroy();
+  LOG_WARN("destroy_server_in_arb_mode success", K(ret));
+  return ret;
+}
+#endif
 
 bool ObServer::is_arbitration_mode() const
 {
+#ifdef OB_BUILD_ARBITRATION
+  return (ARBITRATION_MODE == gctx_.startup_mode_) ? true : false;
+#else
   return false;
+#endif
 
 }
 

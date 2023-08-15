@@ -12,6 +12,9 @@
 #include "share/ob_define.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "observer/ob_server_struct.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/sys_package/ob_dbms_xa.h"
+#endif
 #include "sql/ob_sql_utils.h"
 
 namespace oceanbase
@@ -69,8 +72,30 @@ int ObXAQueryObImpl::xa_start(const ObXATransID &xid, const int64_t flags)
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected connection", K(ret), K(xid));
   } else {
+#ifdef OB_BUILD_DBLINK
+    ObSqlString sql;
+    int xa_result = ObDbmsXA::XA_OK;
+    if (OB_FAIL(sql.assign_fmt(RM_XA_START_SQL,
+                               xid.get_format_id(),
+                               xid.get_gtrid_str().length(), xid.get_gtrid_str().ptr(),
+                               xid.get_bqual_str().length(), xid.get_bqual_str().ptr()))) {
+      TRANS_LOG(WARN, "fail to generate query sql", K(ret), K(xid));
+    } else if (OB_FAIL(execute_query_(sql, xa_result))) {
+      TRANS_LOG(WARN, "fail to execute query", K(ret), K(xid), K(sql));
+    } else {
+      if (ObDbmsXA::XA_OK == xa_result) {
+        // return success
+      } else {
+        // TODO, accurate error number
+        ret = OB_TRANS_XA_RMFAIL;
+        TRANS_LOG(WARN, "an error is returned from xa start", K(ret), K(xa_result),
+            K(xid), K(sql));
+      }
+    }
+#else
   ret = OB_NOT_SUPPORTED;
   TRANS_LOG(WARN, "fail to xa_start", K(ret));
+#endif
   }
   return ret;
 }
@@ -97,8 +122,30 @@ int ObXAQueryObImpl::xa_end(const ObXATransID &xid, const int64_t flags)
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected connection", K(ret), K(xid));
   } else {
+#ifdef OB_BUILD_DBLINK
+    ObSqlString sql;
+    int xa_result = ObDbmsXA::XA_OK;
+    if (OB_FAIL(sql.assign_fmt(RM_XA_END_SQL,
+                               xid.get_format_id(),
+                               xid.get_gtrid_str().length(), xid.get_gtrid_str().ptr(),
+                               xid.get_bqual_str().length(), xid.get_bqual_str().ptr()))) {
+      TRANS_LOG(WARN, "fail to generate query sql", K(ret), K(xid));
+    } else if (OB_FAIL(execute_query_(sql, xa_result))) {
+      TRANS_LOG(WARN, "fail to execute query", K(ret), K(xid), K(sql));
+    } else {
+      if (ObDbmsXA::XA_OK == xa_result) {
+        // return success
+      } else {
+        // TODO, accurate error number
+        ret = OB_TRANS_XA_RMFAIL;
+        TRANS_LOG(WARN, "an error is returned from xa end", K(ret), K(xa_result),
+            K(xid), K(sql));
+      }
+    }
+#else
   ret = OB_NOT_SUPPORTED;
   TRANS_LOG(WARN, "fail to xa_end", K(ret));
+#endif
   }
   return ret;
 }
@@ -125,8 +172,33 @@ int ObXAQueryObImpl::xa_prepare(const ObXATransID &xid)
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected connection", K(ret), K(xid));
   } else {
+#ifdef OB_BUILD_DBLINK
+    ObSqlString sql;
+    int xa_result = ObDbmsXA::XA_OK;
+    if (OB_FAIL(sql.assign_fmt(RM_XA_PREPARE_SQL,
+                               xid.get_format_id(),
+                               xid.get_gtrid_str().length(), xid.get_gtrid_str().ptr(),
+                               xid.get_bqual_str().length(), xid.get_bqual_str().ptr()))) {
+      TRANS_LOG(WARN, "fail to generate query sql", K(ret), K(xid));
+    } else if (OB_FAIL(execute_query_(sql, xa_result))) {
+      TRANS_LOG(WARN, "fail to execute query", K(ret), K(xid), K(sql));
+    } else {
+      if (ObDbmsXA::XA_OK == xa_result) {
+        // return success
+      } else if (ObDbmsXA::XA_RDONLY == xa_result) {
+        // return rdonly
+        ret = OB_TRANS_XA_RDONLY;
+      } else {
+        // TODO, accurate error number
+        ret = OB_TRANS_XA_RMFAIL;
+        TRANS_LOG(WARN, "an error is returned from xa prepare", K(ret), K(xa_result),
+            K(xid), K(sql));
+      }
+    }
+#else
   ret = OB_NOT_SUPPORTED;
   TRANS_LOG(WARN, "fail to xa_prepare", K(ret));
+#endif
   }
   return ret;
 }
@@ -153,8 +225,31 @@ int ObXAQueryObImpl::xa_commit(const ObXATransID &xid, const int64_t flags)
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected connection", K(ret), K(xid));
   } else {
+#ifdef OB_BUILD_DBLINK
+    ObSqlString sql;
+    int xa_result = ObDbmsXA::XA_OK;
+    if (OB_FAIL(sql.assign_fmt(RM_XA_COMMIT_SQL,
+                               xid.get_format_id(),
+                               xid.get_gtrid_str().length(), xid.get_gtrid_str().ptr(),
+                               xid.get_bqual_str().length(), xid.get_bqual_str().ptr(),
+                               flags))) {
+      TRANS_LOG(WARN, "fail to generate query sql", K(ret), K(xid));
+    } else if (OB_FAIL(execute_query_(sql, xa_result))) {
+      TRANS_LOG(WARN, "fail to execute query", K(ret), K(xid), K(sql));
+    } else {
+      if (ObDbmsXA::XA_OK == xa_result) {
+        // return success
+      } else {
+        // TODO, accurate error number
+        ret = OB_TRANS_XA_RMFAIL;
+        TRANS_LOG(WARN, "an error is returned from xa commit", K(ret), K(xa_result),
+            K(xid), K(sql));
+      }
+    }
+#else
   ret = OB_NOT_SUPPORTED;
   TRANS_LOG(WARN, "fail to xa_commit", K(ret));
+#endif
   }
   return ret;
 }
@@ -181,8 +276,30 @@ int ObXAQueryObImpl::xa_rollback(const ObXATransID &xid)
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected connection", K(ret), K(xid));
   } else {
+#ifdef OB_BUILD_DBLINK
+    ObSqlString sql;
+    int xa_result = ObDbmsXA::XA_OK;
+    if (OB_FAIL(sql.assign_fmt(RM_XA_ROLLBACK_SQL,
+                               xid.get_format_id(),
+                               xid.get_gtrid_str().length(), xid.get_gtrid_str().ptr(),
+                               xid.get_bqual_str().length(), xid.get_bqual_str().ptr()))) {
+      TRANS_LOG(WARN, "fail to generate query sql", K(ret), K(xid));
+    } else if (OB_FAIL(execute_query_(sql, xa_result))) {
+      TRANS_LOG(WARN, "fail to execute query", K(ret), K(xid), K(sql));
+    } else {
+      if (ObDbmsXA::XA_OK == xa_result) {
+        // return success
+      } else {
+        // TODO, accurate error number
+        ret = OB_TRANS_XA_RMFAIL;
+        TRANS_LOG(WARN, "an error is returned from xa rollback", K(ret), K(xa_result),
+            K(xid), K(sql));
+      }
+    }
+#else
   ret = OB_NOT_SUPPORTED;
   TRANS_LOG(WARN, "fail to xa_rollback", K(ret));
+#endif
   }
   return ret;
 }
@@ -190,8 +307,27 @@ int ObXAQueryObImpl::xa_rollback(const ObXATransID &xid)
 int ObXAQueryObImpl::execute_query_(const ObSqlString &sql, int &xa_result)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_DBLINK
+  int tmp_xa_result = ObDbmsXA::XA_OK;
+  const uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result;
+    if (OB_FAIL(conn_->execute_read(tenant_id, sql.ptr(), res))) {
+      TRANS_LOG(WARN, "fail to execute xa query sql", K(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN,"fail to execute sql", K(ret), K(tenant_id), K(sql));
+    } else if (OB_FAIL(result->next())) {
+      TRANS_LOG(WARN,"fail to iterate next result", K(ret), K(sql));
+    } else {
+      EXTRACT_INT_FIELD_MYSQL(*result, "RESULT", tmp_xa_result, int64_t);
+      xa_result = tmp_xa_result;
+    }
+  }
+#else
   ret = OB_NOT_SUPPORTED;
   TRANS_LOG(WARN, "fail to execute_query_", K(ret));
+#endif
   return ret;
 }
 
@@ -239,8 +375,32 @@ int ObXAQueryOraImpl::xa_start(const ObXATransID &xid, const int64_t flags)
   } else if (OB_FAIL(convert_flag_(flags, ObXAReqType::XA_START, oci_flag))) {
     TRANS_LOG(WARN, "fail to convert xa flag to oci flag", K(ret), K(xid), K(flags), K(oci_flag));
   } else {
+#ifdef OB_BUILD_DBLINK
+    common::ObOciConnection *oci_conn = dynamic_cast<common::ObOciConnection*>(conn_);
+    if (NULL == oci_conn) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "unexpected connection", K(ret), KP_(conn));
+    } else {
+      // if success, ora errcode is 0
+      int ora_errcode = 0;
+      const int64_t timeout_seconds = 60;
+      if (OB_FAIL(oci_conn->trans_start(xid.get_gtrid_str(), xid.get_bqual_str(),
+              xid.get_format_id(), timeout_seconds, oci_flag, ora_errcode))) {
+        TRANS_LOG(WARN, "fail to do trans start", K(ret), K(xid), K(ora_errcode),
+            K(timeout_seconds), K(flags), K(oci_flag));
+      } else if (0 != ora_errcode) {
+        ret = OB_TRANS_XA_RMFAIL;
+        TRANS_LOG(WARN, "an error is returned from trans start", K(ret), K(xid), K(ora_errcode),
+            K(timeout_seconds), K(flags), K(oci_flag));
+      } else {
+        TRANS_LOG(INFO, "oci trans start", K(ret), K(xid), K(ora_errcode), K(flags));
+        // do nothing
+      }
+    }
+#else
   ret = OB_NOT_SUPPORTED;
   TRANS_LOG(WARN, "fail to xa_start", K(ret));
+#endif
   }
   return ret;
 }
@@ -259,8 +419,30 @@ int ObXAQueryOraImpl::xa_end(const ObXATransID &xid, const int64_t flags)
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected connection", K(ret), K(xid));
   } else {
+#ifdef OB_BUILD_DBLINK
+    common::ObOciConnection *oci_conn = dynamic_cast<common::ObOciConnection*>(conn_);
+    if (NULL == oci_conn) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "unexpected connection", K(ret), KP_(conn));
+    } else {
+      // if success, ora errcode is 0
+      int ora_errcode = 0;
+      if (OB_FAIL(oci_conn->trans_detach(xid.get_gtrid_str(), xid.get_bqual_str(),
+              xid.get_format_id(), ora_errcode))) {
+        TRANS_LOG(WARN, "fail to do trans detach", K(ret), K(xid), K(ora_errcode), K(flags));
+      } else if (0 != ora_errcode) {
+        ret = OB_TRANS_XA_RMFAIL;
+        TRANS_LOG(WARN, "an error is returned from trans detach", K(ret), K(xid), K(ora_errcode),
+            K(flags));
+      } else {
+        TRANS_LOG(INFO, "oci trans detach", K(ret), K(xid), K(ora_errcode), K(flags));
+        // do nothing
+      }
+    }
+#else
   ret = OB_NOT_SUPPORTED;
   TRANS_LOG(WARN, "fail to xa_end", K(ret));
+#endif
   }
   return ret;
 }
@@ -279,8 +461,37 @@ int ObXAQueryOraImpl::xa_prepare(const ObXATransID &xid)
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected connection", K(ret), K(xid));
   } else {
+#ifdef OB_BUILD_DBLINK
+    common::ObOciConnection *oci_conn = dynamic_cast<common::ObOciConnection*>(conn_);
+    if (NULL == oci_conn) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "unexpected connection", K(ret), KP_(conn));
+    } else {
+      // if success, ora errcode is 0
+      int ora_errcode = 0;
+      if (OB_FAIL(oci_conn->trans_prepare(xid.get_gtrid_str(), xid.get_bqual_str(),
+              xid.get_format_id(), ora_errcode))) {
+        TRANS_LOG(WARN, "fail to do trans prepare", K(ret), K(xid), K(ora_errcode));
+      } else if (0 != ora_errcode) {
+        const int ORA_RDONLY = 24767;
+        if (ORA_RDONLY == ora_errcode) {
+          ret = OB_TRANS_XA_RDONLY;
+          TRANS_LOG(INFO, "read-only code is returned from trans prepare", K(ret),
+              K(xid), K(ora_errcode));
+        } else {
+          ret = OB_TRANS_XA_RMFAIL;
+          TRANS_LOG(WARN, "an error is returned from trans prepare", K(ret), K(xid),
+              K(ora_errcode));
+        }
+      } else {
+        TRANS_LOG(INFO, "oci trans prepare", K(ret), K(xid), K(ora_errcode));
+        // do nothing
+      }
+    }
+#else
   ret = OB_NOT_SUPPORTED;
   TRANS_LOG(WARN, "fail to xa_prepare", K(ret));
+#endif
   }
   return ret;
 }
@@ -302,8 +513,31 @@ int ObXAQueryOraImpl::xa_commit(const ObXATransID &xid, const int64_t flags)
   } else if (OB_FAIL(convert_flag_(flags, ObXAReqType::XA_COMMIT, oci_flag))) {
     TRANS_LOG(WARN, "fail to convert xa flag to oci flag", K(ret), K(xid), K(flags), K(oci_flag));
   } else {
+#ifdef OB_BUILD_DBLINK
+    common::ObOciConnection *oci_conn = dynamic_cast<common::ObOciConnection*>(conn_);
+    if (NULL == oci_conn) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "unexpected connection", K(ret), KP_(conn));
+    } else {
+      // if success, ora errcode is 0
+      int ora_errcode = 0;
+      if (OB_FAIL(oci_conn->trans_commit(xid.get_gtrid_str(), xid.get_bqual_str(),
+              xid.get_format_id(), oci_flag, ora_errcode))) {
+        TRANS_LOG(WARN, "fail to do trans commit", K(ret), K(xid), K(ora_errcode),
+            K(flags), K(oci_flag));
+      } else if (0 != ora_errcode) {
+        ret = OB_TRANS_XA_RMFAIL;
+        TRANS_LOG(WARN, "an error is returned from trans commit", K(ret), K(xid), K(ora_errcode),
+            K(flags), K(oci_flag));
+      } else {
+        TRANS_LOG(INFO, "oci trans commit", K(ret), K(xid), K(ora_errcode), K(flags), K(oci_flag));
+        // do nothing
+      }
+    }
+#else
   ret = OB_NOT_SUPPORTED;
   TRANS_LOG(WARN, "fail to xa_commit", K(ret));
+#endif
   }
   return ret;
 }
@@ -321,8 +555,30 @@ int ObXAQueryOraImpl::xa_rollback(const ObXATransID &xid)
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected connection", K(ret), K(xid));
   } else {
+#ifdef OB_BUILD_DBLINK
+    common::ObOciConnection *oci_conn = dynamic_cast<common::ObOciConnection*>(conn_);
+    if (NULL == oci_conn) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "unexpected connection", K(ret), KP_(conn));
+    } else {
+      // if success, ora errcode is 0
+      int ora_errcode = 0;
+      if (OB_FAIL(oci_conn->trans_rollback(xid.get_gtrid_str(), xid.get_bqual_str(),
+              xid.get_format_id(), ora_errcode))) {
+        TRANS_LOG(WARN, "fail to do trans rollback", K(ret), K(xid), K(ora_errcode));
+      } else if (0 != ora_errcode) {
+        ret = OB_TRANS_XA_RMFAIL;
+        TRANS_LOG(WARN, "an error is returned from trans rollback", K(ret), K(xid),
+            K(ora_errcode));
+      } else {
+        TRANS_LOG(INFO, "oci trans rollback", K(ret), K(xid), K(ora_errcode));
+        // do nothing
+      }
+    }
+#else
   ret = OB_NOT_SUPPORTED;
   TRANS_LOG(WARN, "fail to xa_rollback", K(ret));
+#endif
   }
   return ret;
 }

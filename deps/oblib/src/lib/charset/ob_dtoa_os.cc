@@ -19,6 +19,7 @@
 *
 */
 
+#ifndef OB_BUILD_FULL_CHARSET
 
 #include "lib/charset/ob_dtoa.h"
 #include "lib/charset/ob_mysql_global.h"
@@ -2486,3 +2487,5 @@ ret1:
 }
 
 #undef P
+
+#endif

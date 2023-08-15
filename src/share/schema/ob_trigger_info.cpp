@@ -394,6 +394,11 @@ int ObTriggerInfo::gen_package_source(const uint64_t tenant_id,
       OV (T_TG_SOURCE == trigger_source_node->type_, trigger_source_node->type_);
       OV (OB_NOT_NULL(trigger_define_node = trigger_source_node->children_[1]));
       if (OB_FAIL(ret)) {
+#ifdef OB_BUILD_ORACLE_PL
+      } else if (lib::is_oracle_mode()) {
+        OV (5 == trigger_define_node->num_child_);
+        OV (OB_NOT_NULL(trigger_body_node = trigger_define_node->children_[4]));
+#endif
       } else {
         OV (4 == trigger_define_node->num_child_);
         OV (OB_NOT_NULL(trigger_body_node = trigger_define_node->children_[3]));
@@ -1020,6 +1025,53 @@ bool ObTriggerInfo::ActionOrderComparator::operator()(const ObTriggerInfo *left,
   return bool_ret;
 }
 
+#ifdef OB_BUILD_ORACLE_PL
+// for alter trigger rename
+int ObTriggerInfo::replace_trigger_name_in_body(ObTriggerInfo &trigger_info,
+                                                common::ObIAllocator &alloc,
+                                                ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  int64_t buf_len = 0;
+  int64_t pos = 0;
+  ObParser parser(alloc, trigger_info.get_sql_mode());
+  ParseResult parse_result;
+  ParseNode *stmt_list_node = NULL;
+  const ParseNode *trigger_source_node = NULL;
+  const ObDatabaseSchema *db_schema = NULL;
+  OZ (schema_guard.get_database_schema(trigger_info.get_tenant_id(), trigger_info.get_database_id(), db_schema));
+  OV (OB_NOT_NULL(db_schema));
+  OZ (parser.parse(trigger_info.get_trigger_body(), parse_result, TRIGGER_MODE,
+                   false, false, true),
+      trigger_info.get_trigger_body());
+  // stmt list node
+  OV (OB_NOT_NULL(stmt_list_node = parse_result.result_tree_));
+  OV (stmt_list_node->type_ == T_STMT_LIST, OB_ERR_UNEXPECTED, stmt_list_node->type_);
+  OV (stmt_list_node->num_child_ == 1, OB_ERR_UNEXPECTED, stmt_list_node->num_child_);
+  OV (OB_NOT_NULL(stmt_list_node->children_));
+  // trigger source node
+  OV (OB_NOT_NULL(trigger_source_node = stmt_list_node->children_[0]));
+  if (OB_SUCC(ret)) {
+#define RENAME_TRIGGER_FMT \
+  "TRIGGER \"%.*s\".\"%.*s\" %.*s"
+    buf_len = STRLEN(RENAME_TRIGGER_FMT) + db_schema->get_database_name_str().length()
+              + trigger_info.get_trigger_name().length() + trigger_source_node->str_len_;
+    buf = static_cast<char*>(alloc.alloc(buf_len));
+    OV (OB_NOT_NULL(buf), OB_ALLOCATE_MEMORY_FAILED);
+    OZ (BUF_PRINTF(RENAME_TRIGGER_FMT,
+                   db_schema->get_database_name_str().length(),
+                   db_schema->get_database_name_str().ptr(),
+                   trigger_info.get_trigger_name().length(),
+                   trigger_info.get_trigger_name().ptr(),
+                   (int)trigger_source_node->str_len_,
+                   trigger_source_node->str_value_));
+    OZ (trigger_info.set_trigger_body(ObString(buf)));
+#undef RENAME_TRIGGER_FMT
+  }
+  return ret;
+}
+#endif
 
 // for rebuild trigger body due to rename table
 int ObTriggerInfo::replace_table_name_in_body(ObTriggerInfo &trigger_info,

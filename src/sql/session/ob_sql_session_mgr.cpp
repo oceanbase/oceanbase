@@ -458,6 +458,20 @@ int ObSQLSessionMgr::free_session(const ObFreeSessionCtx &ctx)
   ObSQLSessionInfo *sess_info = NULL;
   sessinfo_map_.get(Key(sessid), sess_info);
   if (NULL != sess_info) {
+#ifdef OB_BUILD_AUDIT_SECURITY
+    if (!sess_info->get_is_deserialized()) {
+      ObString empty_comment_text;
+      sess_info->update_alive_time_stat();
+      int64_t cur_timeout_backup = THIS_WORKER.get_timeout_ts();
+      THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + OB_MAX_USER_SPECIFIED_TIMEOUT);
+      ObSecurityAuditUtils::handle_security_audit(*sess_info,
+                                                  stmt::T_LOGOFF,
+                                                  ObString::make_string("DISCONNECT"),
+                                                  empty_comment_text,
+                                                  ret);
+      THIS_WORKER.set_timeout_ts(cur_timeout_backup);
+    }
+#endif
     if (OB_UNLIKELY(OB_SUCCESS != sess_info->on_user_disconnect())) {
       LOG_WARN("user disconnect failed", K(ret), K(sess_info->get_user_id()));
     }

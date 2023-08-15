@@ -1218,7 +1218,9 @@ int ObBackupSetTaskMgr::update_inner_task_(
     if (nullptr == ls_attr) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("[DATA_BACKUP]null ls ptr", K(ret));
-  // TODO use another error code to determine change turn in 4.1
+    // else if (OB_LS_NOT_EXIST == ls_attr->result_) {
+    // LOG_WARN("[DATA_BACKUP]ls has been delete, need not to redo backup", K(ret), "ls_id", ls_attr->ls_id_);
+    // } // TODO(yangyi.yyy): use another error code to determine change turn in 4.1
     } else if (OB_FAIL(calc_task_turn_(ls_attr->task_type_, turn_id))) {
       LOG_WARN("failed to calc task turn id", K(ret));
     } else if (OB_FAIL(ObBackupDataLSTaskMgr::redo_ls_task(

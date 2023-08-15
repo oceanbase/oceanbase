@@ -24,6 +24,9 @@
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql.h"
+#ifdef OB_BUILD_AUDIT_SECURITY
+#include "pl/sys_package/ob_dbms_audit_mgmt.h"
+#endif
 
 namespace oceanbase
 {
@@ -137,9 +140,41 @@ int ObDBMSJobExecutor::run_dbms_job(
   uint64_t tenant_id, ObDBMSJobInfo &job_info, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
     UNUSEDx(tenant_id, job_info, allocator);
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support", K(ret));
+#else
+  ObSqlString what;
+  ObInnerSQLConnectionPool *pool = NULL;
+  ObInnerSQLConnection *conn = NULL;
+  SMART_VAR(ObSQLSessionInfo, session) {
+    int64_t affected_rows = 0;
+    CK (OB_LIKELY(inited_));
+    CK (OB_NOT_NULL(sql_proxy_));
+    CK (sql_proxy_->is_inited());
+    if (OB_SUCC(ret)) {
+      if (job_info.is_mysql_audit_job()) {
+        pl::ObDbmsAuditMgmt::ObAuditParam audit_param;
+        OZ (pl::ObDbmsAuditMgmt::parse_mysql_job_param(job_info.get_what(), audit_param));
+        OZ (pl::ObDbmsAuditMgmt::clean_audit_trail_impl(audit_param, allocator, sql_proxy_, tenant_id), audit_param);
+      } else {
+        ObOracleSqlProxy oracle_proxy(*(static_cast<ObMySQLProxy *>(sql_proxy_)));
+        CK (job_info.valid());
+        CK (job_info.get_what().length() != 0);
+        OZ (what.append_fmt("BEGIN %.*s END;",
+                            job_info.get_what().length(), job_info.get_what().ptr()));
+        CK (OB_NOT_NULL(pool = static_cast<ObInnerSQLConnectionPool *>(oracle_proxy.get_pool())));
+        OZ (init_env(job_info, session));
+        OZ (pool->acquire_spi_conn(&session, conn));
+        OZ (conn->execute_write(tenant_id, what.string().ptr(), affected_rows));
+        if (OB_NOT_NULL(conn)) {
+          sql_proxy_->close(conn, ret);
+        }
+      }
+    }
+  }
+#endif
   return ret;
 }
 

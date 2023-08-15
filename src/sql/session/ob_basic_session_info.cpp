@@ -6440,8 +6440,7 @@ observer::ObSMConnection *ObBasicSessionInfo::get_sm_connection()
     } else {
       conn = &sess->conn_;
     }
-  }
-    else {
+  } else {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid sock_desc type", K(sock_desc.type_));
   }
   return conn;

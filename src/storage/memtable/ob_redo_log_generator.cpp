@@ -159,6 +159,11 @@ int ObRedoLogGenerator::fill_redo_log(char *buf,
       if (OB_LIKELY(OB_ERR_TOO_BIG_ROWSIZE != ret)) {
         int64_t res_len = 0;
         uint8_t row_flag = ObTransRowFlag::NORMAL_ROW;
+#ifdef OB_BUILD_TDE_SECURITY
+        if (encrypt_info.has_encrypt_meta()) {
+          row_flag |= ObTransRowFlag::ENCRYPT;
+        }
+#endif
         if (OB_SUCCESS != (tmp_ret = mmw.serialize(row_flag, res_len, encrypt_info))) {
           if (OB_ENTRY_NOT_EXIST != tmp_ret) {
             TRANS_LOG(ERROR, "mmw.serialize fail", K(ret), K(tmp_ret));
@@ -303,6 +308,10 @@ int ObRedoLogGenerator::fill_row_redo(ObITransCallbackIterator &cursor,
     if (OB_ISNULL(memtable)) {
       TRANS_LOG(ERROR, "memtable is null", K(riter));
       ret = OB_ERR_UNEXPECTED;
+#ifdef OB_BUILD_TDE_SECURITY
+    } else if (OB_FAIL(memtable->get_encrypt_meta(clog_encrypt_meta_))) {
+      TRANS_LOG(ERROR, "get encrypt meta failed", K(memtable), K(ret));
+#endif
     } else if (OB_FAIL(mmw.append_row_kv(mem_ctx_->get_max_table_version(),
                                          redo,
                                          clog_encrypt_meta_,

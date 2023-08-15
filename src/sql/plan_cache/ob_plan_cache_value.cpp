@@ -169,6 +169,9 @@ ObPlanCacheValue::ObPlanCacheValue()
     sessid_(OB_INVALID_ID),
     sess_create_time_(0),
     contain_sys_name_table_(false),
+#ifdef OB_BUILD_SPM
+    is_spm_closed_(false),
+#endif
     need_param_(true),
     is_nested_sql_(false),
     is_batch_execute_(false),
@@ -256,6 +259,9 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
     sys_schema_version_ = plan->get_sys_schema_version();
     tenant_schema_version_ = plan->get_tenant_schema_version();
     sql_traits_ = pc_ctx.sql_traits_;
+#ifdef OB_BUILD_SPM
+    is_spm_closed_ = pcv_set->get_spm_closed();
+#endif
     stmt_type_ = plan->get_stmt_type();
     need_param_ = plan->need_param();
     is_nested_sql_ = ObSQLUtils::is_nested_sql(&pc_ctx.exec_ctx_);
@@ -2344,6 +2350,23 @@ int ObPlanCacheValue::check_contains_table(uint64_t db_id, common::ObString tab_
   return ret;
 }
 
+#ifdef OB_BUILD_SPM
+int ObPlanCacheValue::get_evolving_evolution_task(EvolutionPlanList &evo_task_list)
+{
+  int ret = OB_SUCCESS;
+  DLIST_FOREACH(plan_set, plan_sets_) {
+    if (OB_ISNULL(plan_set)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(plan_set), K(ret));
+    } else if (!plan_set->is_sql_planset()) {
+      // do nothing
+    } else if (OB_FAIL(static_cast<ObSqlPlanSet*>(plan_set)->get_evolving_evolution_task(evo_task_list))) {
+      LOG_WARN("fail to get evolving evolution task", K(ret));
+    }
+  }
+  return ret;
+}
+#endif
 
 }//end of namespace sql
 }//end of namespace oceanbase

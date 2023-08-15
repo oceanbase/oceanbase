@@ -20,7 +20,6 @@ ob_set_subtarget(ob_share allocator
   allocator/ob_tenant_mutil_allocator_mgr.cpp
 )
 
-
 ob_set_subtarget(ob_share backup
   backup/ob_archive_piece.cpp
   backup/ob_archive_struct.cpp
@@ -92,7 +91,7 @@ ob_set_subtarget(ob_share common
   ob_disk_usage_table_operator.cpp
   ob_dml_sql_splicer.cpp
   ob_encryption_struct.cpp
-  ob_encryption_util.cpp
+  ob_encryption_util_os.cpp
   ob_errno.cpp
   ob_event_history_table_operator.cpp
   ob_tenant_id_schema_version.cpp

@@ -548,6 +548,10 @@ int ObTxReplayExecutor::replay_redo_in_memtable_(ObTxRedoLog &redo)
                                            pos, encrypt_info))
              || redo.get_mutator_size() != pos) {
     TRANS_LOG(WARN, "[Replay Tx] deserialize fail or pos does not match data_len", K(ret));
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(encrypt_info.decrypt_table_key())) {
+    TRANS_LOG(WARN, "[Replay Tx] failed to decrypt table key", K(ret));
+#endif
   } else {
     meta_flag = mmi_ptr_->get_meta().get_flags();
     ObEncryptRowBuf row_buf;

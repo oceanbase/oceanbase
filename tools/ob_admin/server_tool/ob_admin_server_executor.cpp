@@ -19,6 +19,9 @@
 #include <iterator>
 #include <iomanip>
 #include "observer/ob_srv_network_frame.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_encrypt_kms.h"
+#endif
 #include "lib/utility/ob_print_utils.h"
 #include "ob_admin_routine.h"
 using namespace std;
@@ -209,6 +212,59 @@ static int ob_admin_server_read_bkmi_cfg(const char* buf, int64_t &sz)
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObAdminServerExecutor::load_ssl_config()
+{
+  int ret = OB_SUCCESS;
+  const bool enable_ssl_client_authentication  = (SSL_MODE_NONE == ssl_mode_) ? false : true;
+  if (enable_ssl_client_authentication) {
+    bool use_bkmi = (0 == ssl_cfg_mode_) ? false : true;
+    bool is_sm = (SSL_MODE_SM == ssl_mode_) ? true : false;
+    int64_t ssl_key_expired_time = 0;
+    const char *ca_cert = NULL;
+    const char *public_cert = NULL;
+    const char *private_key = NULL;
+    if (!use_bkmi) {
+      ca_cert = OB_CLIENT_SSL_CA_FILE;
+      public_cert = OB_CLIENT_SSL_CERT_FILE;
+      private_key = OB_CLIENT_SSL_KEY_FILE;
+    } else {
+        share::ObSSLClient ssl_client;
+        char ssl_kms_info[OB_MAX_CONFIG_VALUE_LEN];
+        memset(ssl_kms_info, 0, sizeof(ssl_kms_info));
+        int64_t sz = 0;
+        if (OB_FAIL(ob_admin_server_read_bkmi_cfg(ssl_kms_info, sz))) {
+          COMMON_LOG(ERROR, "read from bkmi config file failed", K(ret));
+        } else {
+          ObString ssl_config(ssl_kms_info);
+          if (OB_FAIL(ssl_client.init(ssl_config.ptr(), ssl_config.length()))) {
+            COMMON_LOG(ERROR, "ssl_client_init failed", K(ret), K(ssl_config));
+          } else if (OB_FAIL(ssl_client.check_param_valid())) {
+            COMMON_LOG(ERROR, "kms client param is not valid", K(ret));
+          } else {
+            ca_cert = ssl_client.get_root_ca().ptr();
+            public_cert = ssl_client.public_cert_.content_.ptr();
+            private_key = ssl_client.private_key_.content_.ptr();
+          }
+        }
+    }
+
+    if (EASY_OK != easy_ssl_ob_config_check(ca_cert, public_cert, private_key, NULL, NULL, !use_bkmi, is_sm)) {
+      COMMON_LOG(ERROR, "Local file mode: key and cert not match");
+      ret = OB_INVALID_CONFIG;
+    } else if (OB_FAIL(observer::ObSrvNetworkFrame::extract_expired_time(OB_CLIENT_SSL_CERT_FILE,
+      ssl_key_expired_time))) {
+      COMMON_LOG(ERROR, "extract_expired_time failed", KR(ret));
+    } else if (OB_FAIL(client_.load_ssl_config(use_bkmi, is_sm, ca_cert, public_cert, private_key, NULL, NULL))) {
+      COMMON_LOG(ERROR, "ObNetClient load_ssl_config failed", K(ret), K(is_sm), K(ssl_key_expired_time));
+    }
+  } else {
+    COMMON_LOG(INFO, "no need to open ssl");
+  }
+
+  return ret;
+}
+#endif
 
 int ObAdminServerExecutor::execute(int argc, char *argv[])
 {
@@ -218,6 +274,10 @@ int ObAdminServerExecutor::execute(int argc, char *argv[])
     ret = OB_NOT_SUPPORTED;
   } else if (OB_FAIL(client_.init())) {
     COMMON_LOG(WARN, "client init failed", K(ret));
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(load_ssl_config())) {
+    COMMON_LOG(WARN, "client load_ssl_config failed", K(ret));
+#endif
   } else if (OB_FAIL(client_.get_proxy(srv_proxy_))) {
     COMMON_LOG(WARN, "get_proxy failed", K(ret));
   } else {

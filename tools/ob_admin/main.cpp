@@ -19,6 +19,9 @@
 #include "io_bench/ob_admin_io_executor.h"
 #include "server_tool/ob_admin_server_executor.h"
 #include "backup_tool/ob_admin_dump_backup_data_executor.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "tools/ob_admin/dump_key/ob_admin_dump_key_executor.h"
+#endif
 #include "dump_enum_value/ob_admin_dump_enum_value_executor.h"
 #include "log_tool/ob_admin_log_tool_executor.h"
 #include "slog_tool/ob_admin_slog_executor.h"
@@ -34,6 +37,9 @@ void print_usage()
          "       ob_admin dump_ckpt ## dump slog checkpoint, only support for 4.x\n"
          "       ob_admin dumpsst\n"
          "       ob_admin dump_enum_value\n"
+#ifdef OB_BUILD_TDE_SECURITY
+         "       ob_admin dump_key\n"
+#endif
          "       ob_admin log_tool ## './ob_admin log_tool' for more detail\n"
          "       ob_admin -h127.0.0.1 -p2883 xxx\n"
          "       ob_admin -h127.0.0.1 -p2883 (-sintl/-ssm -mbkmi/-mlocal) [command]\n"
@@ -61,6 +67,10 @@ int main(int argc, char *argv[])
   } else {
     if (0 == strcmp("io_bench", argv[1])) {
       executor = new ObAdminIOExecutor();
+#ifdef OB_BUILD_TDE_SECURITY
+    } else if (0 == strcmp("dump_key", argv[1])) {
+      executor = new ObAdminDumpKeyExecutor();
+#endif
     } else if (0 == strcmp("dump_enum_value", argv[1])) {
       executor = new ObAdminDumpEnumValueExecutor();
     } else if (0 == strcmp("dumpsst", argv[1])) {

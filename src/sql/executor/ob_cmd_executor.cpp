@@ -142,6 +142,19 @@
 #include "sql/resolver/ddl/ob_create_context_resolver.h"
 #include "sql/resolver/ddl/ob_drop_context_resolver.h"
 #include "sql/engine/cmd/ob_context_executor.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "sql/resolver/ddl/ob_create_keystore_stmt.h"
+#include "sql/resolver/ddl/ob_alter_keystore_stmt.h"
+#include "sql/resolver/ddl/ob_create_tablespace_stmt.h"
+#include "sql/resolver/ddl/ob_alter_tablespace_stmt.h"
+#include "sql/resolver/ddl/ob_drop_tablespace_stmt.h"
+#include "sql/engine/cmd/ob_keystore_cmd_executor.h"
+#include "sql/engine/cmd/ob_tablespace_cmd_executor.h"
+#endif
+#ifdef OB_BUILD_AUDIT_SECURITY
+#include "sql/resolver/ddl/ob_audit_stmt.h"
+#include "sql/engine/cmd/ob_audit_executor.h"
+#endif
 
 namespace oceanbase
 {
@@ -263,6 +276,12 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObCreateTenantStmt, ObCreateStandbyTenantExecutor);
         break;
       }
+#ifdef OB_BUILD_AUDIT_SECURITY
+      case stmt::T_AUDIT: {
+        DEFINE_EXECUTE_CMD(ObAuditStmt, ObAuditExecutor);
+        break;
+      }
+#endif
       case stmt::T_DROP_TENANT: {
         DEFINE_EXECUTE_CMD(ObDropTenantStmt, ObDropTenantExecutor);
         break;
@@ -695,6 +714,16 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         sql_text = ObString::make_empty_string();  // do not record
         break;
       }
+#ifdef OB_BUILD_ORACLE_PL
+      case stmt::T_CREATE_TYPE: {
+        DEFINE_EXECUTE_CMD(ObCreateUDTStmt, ObCreateUDTExecutor);
+        break;
+      }
+      case stmt::T_DROP_TYPE: {
+        DEFINE_EXECUTE_CMD(ObDropUDTStmt, ObDropUDTExecutor);
+        break;
+      }
+#endif
       case stmt::T_CREATE_PACKAGE: {
         DEFINE_EXECUTE_CMD(ObCreatePackageStmt, ObCreatePackageExecutor);
         break;
@@ -837,6 +866,28 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObSetRoutineStmt, ObSetRoleExecutor);
         break;
       }*/
+#ifdef OB_BUILD_TDE_SECURITY
+      case stmt::T_CREATE_KEYSTORE: {
+        DEFINE_EXECUTE_CMD(ObCreateKeystoreStmt, ObCreateKeystoreExecutor);
+        break;
+      }
+      case stmt::T_ALTER_KEYSTORE: {
+        DEFINE_EXECUTE_CMD(ObAlterKeystoreStmt, ObAlterKeystoreExecutor);
+        break;
+      }
+      case stmt::T_CREATE_TABLESPACE: {
+        DEFINE_EXECUTE_CMD(ObCreateTablespaceStmt, ObCreateTablespaceExecutor);
+        break;
+      }
+      case stmt::T_ALTER_TABLESPACE: {
+        DEFINE_EXECUTE_CMD(ObAlterTablespaceStmt, ObAlterTablespaceExecutor);
+        break;
+      }
+      case stmt::T_DROP_TABLESPACE: {
+        DEFINE_EXECUTE_CMD(ObDropTablespaceStmt, ObDropTablespaceExecutor);
+        break;
+      }
+#endif
       case stmt::T_CREATE_PROFILE:
       case stmt::T_ALTER_PROFILE:
       case stmt::T_DROP_PROFILE: {

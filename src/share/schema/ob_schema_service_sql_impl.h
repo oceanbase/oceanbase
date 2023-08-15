@@ -42,6 +42,9 @@
 #include "share/schema/ob_directory_sql_service.h"
 #include "share/schema/ob_context_sql_service.h"
 #include "share/schema/ob_rls_sql_service.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
 #include "sql/dblink/ob_dblink_utils.h"
 #include "lib/string/ob_string.h"
 
@@ -618,6 +621,13 @@ public:
                                       const uint64_t tenant_id,
                                       common::ObCompatibilityMode &mode);
 
+#ifdef OB_BUILD_TDE_SECURITY
+  static int fetch_master_key(common::ObISQLClient &sql_client,
+                              const uint64_t tenant_id,
+                              const uint64_t master_key_id,
+                              share::ObMasterKey *key,
+                              common::ObString &encrypt_out);
+#endif
 
   virtual int get_drop_tenant_infos(
       common::ObISQLClient &sql_client,

@@ -1397,6 +1397,11 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
     bool need_retry = (THIS_THWORKER.need_retry()
                        || RETRY_TYPE_NONE != retry_ctrl_.get_retry_type());
     if (!is_ps_cursor()) {
+#ifdef OB_BUILD_SPM
+      if (!need_retry) {
+        (void)ObSQLUtils::handle_plan_baseline(audit_record, result.get_physical_plan(), ret, ctx_);
+      }
+#endif
       // ps cursor has already record after inner_open in spi
       ObSQLUtils::handle_audit_record(need_retry, EXECUTE_PS_EXECUTE, session, ctx_.is_sensitive_);
     }
@@ -1412,7 +1417,13 @@ int ObMPStmtExecute::response_result(
     bool &async_resp_used)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_SPM
   bool need_trans_cb  = result.need_end_trans_callback() && (!force_sync_resp);
+#else
+  bool need_trans_cb  = result.need_end_trans_callback() &&
+                        (!force_sync_resp) &&
+                        (!ctx_.spm_ctx_.check_execute_status_);
+#endif
 
   // NG_TRACE_EXT(exec_begin, ID(arg1), force_sync_resp, ID(end_trans_cb), need_trans_cb);
 
@@ -2037,10 +2048,53 @@ int ObMPStmtExecute::get_pl_type_by_type_info(ObIAllocator &allocator,
                                               const pl::ObUserDefinedType *&pl_type)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
   UNUSEDx(allocator, type_info, pl_type);
   ret = OB_NOT_SUPPORTED;
   LOG_WARN("not support", K(ret));
   LOG_USER_ERROR(OB_NOT_SUPPORTED, "Get PL type by type info is not supported in CE version");
+#else
+  const share::schema::ObUDTTypeInfo *udt_info = NULL;
+  if (OB_ISNULL(type_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type info is null", K(ret), K(type_info));
+  } else if (!type_info->is_elem_type_) {
+    if (type_info->package_name_.empty()) {
+      OZ (get_udt_by_name(type_info->relation_name_, type_info->type_name_, udt_info));
+      OZ (udt_info->transform_to_pl_type(allocator, pl_type));
+    } else {
+      OZ (get_package_type_by_name(allocator, type_info, pl_type));
+    }
+  } else {
+    void *ptr = NULL;
+    pl::ObNestedTableType *table_type = NULL;
+    pl::ObPLDataType elem_type;
+    const pl::ObUserDefinedType *elem_type_ptr = NULL;
+    if (type_info->elem_type_.get_obj_type() != ObExtendType) {
+      elem_type.set_data_type(type_info->elem_type_);
+    } else if (OB_FAIL(get_udt_by_name(type_info->relation_name_, type_info->type_name_, udt_info))) {
+      LOG_WARN("failed to get udt info", K(ret), K(type_info->relation_name_), K(type_info->type_name_));
+    } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, elem_type_ptr))) {
+      LOG_WARN("failed to transform udt to pl type", K(ret));
+    } else if (OB_ISNULL(elem_type_ptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get elem type ptr", K(ret));
+    } else {
+      elem_type = *(static_cast<const pl::ObPLDataType*>(elem_type_ptr));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(pl::ObNestedTableType)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for ObNestedTableType", K(ret));
+    } else {
+      table_type = new(ptr)pl::ObNestedTableType();
+      table_type->set_type_from(pl::ObPLTypeFrom::PL_TYPE_LOCAL);
+      table_type->set_element_type(elem_type);
+      pl_type = table_type;
+    }
+  }
+  CK (OB_NOT_NULL(pl_type));
+#endif
   return ret;
 }
 

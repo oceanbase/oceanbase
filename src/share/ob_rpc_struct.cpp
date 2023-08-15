@@ -3529,6 +3529,97 @@ int ObDRTaskExistArg::init(
   return ret;
 }
 
+#ifdef OB_BUILD_ARBITRATION
+OB_SERIALIZE_MEMBER(ObAddArbArg,
+                    tenant_id_,
+                    ls_id_,
+                    arb_member_,
+                    timeout_us_);
+int ObAddArbArg::assign(
+    const ObAddArbArg &that)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(arb_member_.assign(that.arb_member_))) {
+    SHARE_LOG(WARN, "fail to assign arb member", K(ret));
+  } else {
+    tenant_id_ = that.tenant_id_;
+    ls_id_ = that.ls_id_;
+    timeout_us_ = that.timeout_us_;
+  }
+  return ret;
+}
+int ObAddArbArg::init(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObMember &arb_member,
+    const int64_t timeout_us)
+{
+  int ret = OB_SUCCESS;
+  if (tenant_id == OB_INVALID_ID
+      || !ls_id.is_valid()
+      || !ls_id.is_valid_with_tenant(tenant_id)
+      || !arb_member.is_valid()
+      || timeout_us == OB_INVALID_TIMESTAMP) {
+    ret = OB_INVALID_ARGUMENT;
+    SHARE_LOG(WARN, "failed to init ObAddArbArg", K(ret), K(tenant_id),
+              K(ls_id), K(arb_member), K(timeout_us));
+  } else if (OB_FAIL(arb_member_.assign(arb_member))) {
+    SHARE_LOG(WARN, "fail to assign arb member", K(ret));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    timeout_us_ = timeout_us;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObRemoveArbArg,
+                    tenant_id_,
+                    ls_id_,
+                    arb_member_,
+                    timeout_us_);
+
+int ObRemoveArbArg::assign(
+    const ObRemoveArbArg &that)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(arb_member_.assign(that.arb_member_))) {
+    SHARE_LOG(WARN, "fail to assign arb member", K(ret));
+  } else {
+    tenant_id_ = that.tenant_id_;
+    ls_id_ = that.ls_id_;
+    timeout_us_ = that.timeout_us_;
+  }
+  return ret;
+}
+
+int ObRemoveArbArg::init(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObMember &arb_member,
+    const int64_t timeout_us)
+{
+  int ret = OB_SUCCESS;
+  if (tenant_id == OB_INVALID_ID
+      || !ls_id.is_valid()
+      || !ls_id.is_valid_with_tenant(tenant_id)
+      || !arb_member.is_valid()
+      || timeout_us == OB_INVALID_TIMESTAMP) {
+    ret = OB_INVALID_ARGUMENT;
+    SHARE_LOG(WARN, "failed to init ObRemoveArbArg", K(ret), K(tenant_id),
+              K(ls_id), K(arb_member), K(timeout_us));
+  } else if (OB_FAIL(arb_member_.assign(arb_member))) {
+    SHARE_LOG(WARN, "fail to assign arb member", K(ret));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    timeout_us_ = timeout_us;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObForceClearArbClusterInfoArg, cluster_id_);
+#endif
 
 //----End structs for partition online/offline----
 
@@ -4573,6 +4664,87 @@ OB_SERIALIZE_MEMBER(ObAutoincSyncArg,
 
 OB_SERIALIZE_MEMBER(ObAdminChangeReplicaArg, force_cmd_);
 
+#ifdef OB_BUILD_ARBITRATION
+int ObAdminAddArbitrationServiceArg::init(const ObString &arbitration_service)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(arbitration_service.length() > OB_MAX_ARBITRATION_SERVICE_LENGTH)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arbitration_service));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "arbitration service, length oversize");
+  } else if (OB_FAIL(arbitration_service_.assign(arbitration_service))) {
+    LOG_WARN("fali to assign arbitration service", KR(ret), K(arbitration_service));
+  }
+  return ret;
+}
+
+int ObAdminRemoveArbitrationServiceArg::init(const ObString &arbitration_service)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(arbitration_service.length() > OB_MAX_ARBITRATION_SERVICE_LENGTH)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arbitration_service));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "arbitration service, length oversize");
+  } else if (OB_FAIL(arbitration_service_.assign(arbitration_service))) {
+    LOG_WARN("fali to assign arbitration service", KR(ret), K(arbitration_service));
+  }
+  return ret;
+}
+
+int ObAdminReplaceArbitrationServiceArg::init(
+    const ObString &arbitration_service,
+    const ObString &previous_arbitration_service)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(arbitration_service.length() > OB_MAX_ARBITRATION_SERVICE_LENGTH)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arbitration_service));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "current arbitration service, length oversize");
+  } else if (OB_UNLIKELY(previous_arbitration_service.length() > OB_MAX_ARBITRATION_SERVICE_LENGTH)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(previous_arbitration_service));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "new arbitration service, length oversize");
+  } else if (OB_FAIL(arbitration_service_.assign(arbitration_service))) {
+    LOG_WARN("fail to assign arbitration_service", KR(ret), K(arbitration_service));
+  } else if (OB_FAIL(previous_arbitration_service_.assign(previous_arbitration_service))) {
+    LOG_WARN("fail to assign previous arbitration service", KR(ret), K(previous_arbitration_service));
+  }
+  return ret;
+}
+
+int ObAdminReplaceArbitrationServiceArg::assign(const ObAdminReplaceArbitrationServiceArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(arbitration_service_.assign(other.arbitration_service_))) {
+    LOG_WARN("fail to assign arbitration service", KR(ret), K(other));
+  } else if (OB_FAIL(previous_arbitration_service_.assign(other.previous_arbitration_service_))) {
+    LOG_WARN("fail to assign previous arbitration service", KR(ret), K(other));
+  }
+  return ret;
+}
+
+int ObRemoveClusterInfoFromArbServerArg::init(
+    const ObString &arbitration_service)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(arbitration_service.length() > OB_MAX_ARBITRATION_SERVICE_LENGTH)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arbitration_service));
+  } else if (OB_FAIL(arbitration_service_.assign(arbitration_service))) {
+    LOG_WARN("fail to assign arbitration_service", KR(ret), K(arbitration_service));
+  }
+  return ret;
+}
+
+int ObRemoveClusterInfoFromArbServerArg::assign(const ObRemoveClusterInfoFromArbServerArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(arbitration_service_.assign(other.arbitration_service_))) {
+    LOG_WARN("fail to assign arbitration service", KR(ret), K(other));
+  }
+  return ret;
+}
+#endif
 
 bool ObUpdateIndexStatusArg::is_allow_when_disable_ddl() const
 {
@@ -4610,6 +4782,15 @@ OB_SERIALIZE_MEMBER(ObDumpTxDataMemtableArg, tenant_id_, ls_id_);
 
 OB_SERIALIZE_MEMBER(ObDumpSingleTxDataArg, tenant_id_, ls_id_, tx_id_);
 
+#ifdef OB_BUILD_ARBITRATION
+OB_SERIALIZE_MEMBER(ObAdminAddArbitrationServiceArg, arbitration_service_);
+
+OB_SERIALIZE_MEMBER(ObAdminRemoveArbitrationServiceArg, arbitration_service_);
+
+OB_SERIALIZE_MEMBER(ObAdminReplaceArbitrationServiceArg, arbitration_service_, previous_arbitration_service_);
+
+OB_SERIALIZE_MEMBER(ObRemoveClusterInfoFromArbServerArg, arbitration_service_);
+#endif
 
 int ObRootMajorFreezeArg::assign(const ObRootMajorFreezeArg &other)
 {
@@ -6061,6 +6242,26 @@ int ObCheckServerForAddingServerResult::assign(const ObCheckServerForAddingServe
   return ret;
 }
 OB_SERIALIZE_MEMBER(ObCheckDeploymentModeArg, single_zone_deployment_on_);
+#ifdef OB_BUILD_TDE_SECURITY
+OB_SERIALIZE_MEMBER(ObWaitMasterKeyInSyncArg,
+                    tenant_max_key_version_,
+                    tenant_config_version_,
+                    rs_list_arg_);
+
+int ObWaitMasterKeyInSyncArg::assign(
+    const ObWaitMasterKeyInSyncArg &that)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(tenant_max_key_version_.assign(that.tenant_max_key_version_))) {
+    LOG_WARN("fail to assign this member", KR(ret));
+  } else if (OB_FAIL(tenant_config_version_.assign(that.tenant_config_version_))) {
+    LOG_WARN("fail to assign this member", KR(ret));
+  } else if (OB_FAIL(rs_list_arg_.assign(that.rs_list_arg_))) {
+    LOG_WARN("fail to assign this member", KR(ret));
+  }
+  return ret;
+}
+#endif
 
 OB_SERIALIZE_MEMBER(ObArchiveLogArg, enable_, tenant_id_, archive_tenant_ids_);
 int ObArchiveLogArg::assign(const ObArchiveLogArg &other)
@@ -6599,6 +6800,110 @@ int ObFetchLocationArg::assign(const ObFetchLocationArg &other)
   }
   return ret;
 }
+#ifdef OB_BUILD_TDE_SECURITY
+OB_SERIALIZE_MEMBER(ObGetMasterKeyResultArg, str_);
+
+OB_SERIALIZE_MEMBER(ObRestoreKeyArg, tenant_id_, backup_dest_, encrypt_key_);
+int ObRestoreKeyArg::assign(const ObRestoreKeyArg &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  backup_dest_ = other.backup_dest_;
+  encrypt_key_ = other.encrypt_key_;
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObRestoreKeyResult, ret_);
+int ObRestoreKeyResult::assign(const ObRestoreKeyResult &other)
+{
+  int ret = OB_SUCCESS;
+  ret_ = other.ret_;
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObRootKeyArg, tenant_id_, is_set_, key_type_, root_key_);
+
+int ObRootKeyArg::init_for_get(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (!is_user_tenant(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    tenant_id_ = tenant_id;
+    is_set_ = false;
+  }
+  return ret;
+}
+
+int ObRootKeyArg::init(const uint64_t tenant_id, RootKeyType key_type,
+            ObString &root_key)
+{
+  int ret = OB_SUCCESS;
+  if (!is_user_tenant(tenant_id)
+      || RootKeyType::INVALID == key_type) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(key_type), K(root_key));
+  } else {
+    tenant_id_ = tenant_id;
+    is_set_ = true;
+    key_type_ = key_type;
+    root_key_ = root_key;
+  }
+  return ret;
+}
+
+int ObRootKeyArg::assign(const ObRootKeyArg &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  is_set_ = other.is_set_;
+  key_type_ = other.key_type_;
+  root_key_ = other.root_key_;
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObRootKeyResult)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              key_type_,
+              root_key_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObRootKeyResult)
+{
+  int ret = OB_SUCCESS;
+  ObString tmp_str;
+  LST_DO_CODE(OB_UNIS_DECODE,
+              key_type_,
+              tmp_str);
+  if (OB_FAIL(ob_write_string(allocator_, tmp_str, root_key_))) {
+    LOG_WARN("failed to copy string", K(ret));
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObRootKeyResult)
+{
+  int len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              key_type_,
+              root_key_);
+  return len;
+}
+
+int ObRootKeyResult::assign(const ObRootKeyResult &other)
+{
+  int ret = OB_SUCCESS;
+  key_type_ = other.key_type_;
+  if (OB_FAIL(ob_write_string(allocator_, other.root_key_, root_key_))) {
+    LOG_WARN("failed to write string", K(ret));
+  }
+  return ret;
+}
+#endif
 OB_SERIALIZE_MEMBER(ObTrxToolArg, trans_id_, status_,
                     trans_version_, end_log_ts_, cmd_);
 OB_SERIALIZE_MEMBER(ObTrxToolRes, trans_info_);
@@ -6755,6 +7060,22 @@ int ObDropDirectoryArg::assign(const ObDropDirectoryArg &other)
 OB_SERIALIZE_MEMBER((ObDropDirectoryArg, ObDDLArg), tenant_id_, directory_name_);
 
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObDumpCacheMasterKeyResultArg::ObMasterKeyVersionPair::assign(
+    const ObDumpCacheMasterKeyResultArg::ObMasterKeyVersionPair &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  master_key_version_ = other.master_key_version_;
+  master_key_.assign_buffer(buf_, share::OB_CLOG_ENCRYPT_MASTER_KEY_LEN);
+  master_key_.write(other.master_key_.ptr(), other.master_key_.length());
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObDumpCacheMasterKeyResultArg, master_key_version_array_);
+OB_SERIALIZE_MEMBER(ObDumpCacheMasterKeyResultArg::ObMasterKeyVersionPair,
+                    tenant_id_, master_key_version_, master_key_);
+#endif
 
 int ObCreateDupLSArg::assign(const ObCreateDupLSArg &arg)
 {
@@ -6873,6 +7194,113 @@ DEF_TO_STRING(ObCreateLSArg)
 OB_SERIALIZE_MEMBER(ObCreateLSArg, tenant_id_, id_, replica_type_, replica_property_, tenant_info_,
 create_scn_, compat_mode_, create_ls_type_, palf_base_info_);
 
+#ifdef OB_BUILD_ARBITRATION
+bool ObCreateArbArg::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_
+         && ls_id_.is_valid()
+         && tenant_role_.is_valid()
+         && ls_id_.is_valid_with_tenant(tenant_id_);
+}
+
+void ObCreateArbArg::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  ls_id_.reset();
+  tenant_role_.reset();
+}
+
+int ObCreateArbArg::assign(const ObCreateArbArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (this == &arg) {
+  } else {
+    tenant_id_ = arg.tenant_id_;
+    ls_id_ = arg.ls_id_;
+    tenant_role_ = arg.tenant_role_;
+  }
+  return ret;
+}
+
+int ObCreateArbArg::init(
+    const int64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const share::ObTenantRole &tenant_role)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+                  || !ls_id.is_valid()
+                  || !ls_id.is_valid_with_tenant(tenant_id)
+                  || !tenant_role.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(tenant_role));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    tenant_role_ = tenant_role;
+  }
+  return ret;
+}
+
+DEF_TO_STRING(ObCreateArbArg)
+{
+  int64_t pos = 0;
+  J_KV(K_(tenant_id), K_(ls_id), K_(tenant_role));
+  return pos;
+}
+
+OB_SERIALIZE_MEMBER(ObCreateArbArg, tenant_id_, ls_id_, tenant_role_);
+
+bool ObDeleteArbArg::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_
+         && ls_id_.is_valid()
+         && ls_id_.is_valid_with_tenant(tenant_id_);
+}
+
+void ObDeleteArbArg::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  ls_id_.reset();
+}
+
+int ObDeleteArbArg::assign(const ObDeleteArbArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (this == &arg) {
+  } else {
+    tenant_id_ = arg.tenant_id_;
+    ls_id_ = arg.ls_id_;
+  }
+  return ret;
+}
+
+int ObDeleteArbArg::init(
+    const int64_t tenant_id,
+    const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+                  || !ls_id.is_valid()
+                  || !ls_id.is_valid_with_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+  }
+  return ret;
+}
+
+DEF_TO_STRING(ObDeleteArbArg)
+{
+  int64_t pos = 0;
+  J_KV(K_(tenant_id), K_(ls_id));
+  return pos;
+}
+
+OB_SERIALIZE_MEMBER(ObDeleteArbArg, tenant_id_, ls_id_);
+#endif
 
 bool ObSetMemberListArgV2::is_valid() const
 {
@@ -7440,6 +7868,71 @@ int ObCreateLSResult::assign(const ObCreateLSResult &other)
   return ret;
 }
 
+#ifdef OB_BUILD_ARBITRATION
+OB_SERIALIZE_MEMBER(ObCreateArbResult, ret_);
+bool ObCreateArbResult::is_valid() const
+{
+  return true;
+}
+
+int ObCreateArbResult::assign(const ObCreateArbResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    ret_ = other.ret_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObDeleteArbResult, ret_);
+bool ObDeleteArbResult::is_valid() const
+{
+  return true;
+}
+
+int ObDeleteArbResult::assign(const ObDeleteArbResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    ret_ = other.ret_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObAddArbResult, ret_);
+bool ObAddArbResult::is_valid() const
+{
+  return true;
+}
+
+int ObAddArbResult::assign(const ObAddArbResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    ret_ = other.ret_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObRemoveArbResult, ret_);
+bool ObRemoveArbResult::is_valid() const
+{
+  return true;
+}
+
+int ObRemoveArbResult::assign(const ObRemoveArbResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    ret_ = other.ret_;
+  }
+  return ret;
+}
+#endif
 OB_SERIALIZE_MEMBER(ObSetMemberListResult, ret_);
 bool ObSetMemberListResult::is_valid() const
 {
@@ -8311,6 +8804,98 @@ int ObFetchLocationResult::set_servers(
   return servers_.assign(servers);
 }
 
+#ifdef OB_BUILD_ARBITRATION
+OB_SERIALIZE_MEMBER(ObArbGCNotifyArg, epoch_, ls_ids_);
+
+int ObArbGCNotifyArg::assign(const ObArbGCNotifyArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ls_ids_.assign(other.ls_ids_))) {
+    LOG_WARN("assign ls_ids_ failed", K(ret), KPC(this), K(other));
+  } else {
+    epoch_ = other.epoch_;
+  }
+  return ret;
+}
+
+int ObArbGCNotifyArg::init(const arbserver::GCMsgEpoch &epoch,
+                           const arbserver::TenantLSIDSArray &ls_ids)
+{
+  int ret = OB_SUCCESS;
+  if (!epoch.is_valid() || !ls_ids.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KPC(this), K(epoch), K(ls_ids));
+  } else if (OB_FAIL(ls_ids_.assign(ls_ids))) {
+    LOG_WARN("failed to assign ls_ids to ls_ids_", K(ret), KPC(this), K(ls_ids));
+  } else {
+    epoch_ = epoch;
+    LOG_INFO("init ObArbGCNotifyArg success", KPC(this));
+  }
+  return ret;
+}
+
+bool ObArbGCNotifyArg::is_valid() const
+{
+  return epoch_.is_valid() && ls_ids_.is_valid();
+}
+
+const arbserver::GCMsgEpoch &ObArbGCNotifyArg::get_epoch() const
+{
+  return epoch_;
+}
+
+arbserver::TenantLSIDSArray &ObArbGCNotifyArg::get_ls_ids()
+{
+  return ls_ids_;
+}
+
+OB_SERIALIZE_MEMBER(ObArbGCNotifyResult, ret_);
+
+void ObArbClusterOpArg::reset()
+{
+  type_ = MSG_TYPE::INVALID_MSG;
+  cluster_id_ = OB_INVALID_CLUSTER_ID;
+  cluster_name_.reset();
+  epoch_.reset();
+}
+
+int ObArbClusterOpArg::assign(const ObArbClusterOpArg &other)
+{
+  type_ = other.type_;
+  cluster_id_ = other.cluster_id_;
+  cluster_name_ = other.cluster_name_;
+  epoch_ = other.epoch_;
+  return OB_SUCCESS;
+}
+
+int ObArbClusterOpArg::init(const int64_t cluster_id,
+                                   const ObString &cluster_name,
+                                   const arbserver::GCMsgEpoch &epoch,
+                                   const bool is_add_arb)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_CLUSTER_ID == cluster_id || !epoch.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    type_ = (is_add_arb)? MSG_TYPE::CLUSTER_ADD_ARB: MSG_TYPE::CLUSTER_REMOVE_ARB;
+    cluster_id_ = cluster_id;
+    cluster_name_ = cluster_name;
+    epoch_ = epoch;
+  }
+  return ret;
+}
+
+bool ObArbClusterOpArg::is_valid() const
+{
+  return type_ != MSG_TYPE::INVALID_MSG &&
+      cluster_id_ != OB_INVALID_CLUSTER_ID &&
+      epoch_.is_valid();
+}
+
+OB_SERIALIZE_MEMBER(ObArbClusterOpArg, type_, cluster_id_, cluster_name_, epoch_);
+
+OB_SERIALIZE_MEMBER(ObArbClusterOpResult, ret_);
+#endif
 
 OB_SERIALIZE_MEMBER(ObSyncRewriteRuleArg, tenant_id_);
 

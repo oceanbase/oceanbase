@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#ifndef OB_BUILD_LABEL_SECURITY
 #define USING_LOG_PREFIX SHARE
 
 #include "share/ob_label_security.h"
@@ -21,6 +22,14 @@ namespace oceanbase {
 namespace share {
 
 int ObLabelSeResolver::resolve_label_text(const ObString &label_text, ObLabelSeDecomposedLabel &label_comps)
+{
+  int ret = OB_NOT_IMPLEMENT;
+  return ret;
+}
+
+int ObLabelSeResolver::construct_label_text(const ObLabelSeDecomposedLabel &label_comps,
+                                            ObIAllocator *allocator,
+                                            ObString &label_text)
 {
   int ret = OB_NOT_IMPLEMENT;
   return ret;
@@ -50,6 +59,18 @@ int ObLabelSeResolver::deserialize_session_labels(const ObString &labels_str,
   return ret;
 }
 
+int ObLabelSeUtil::validate_user_auth(
+    uint64_t tenant_id,
+    uint64_t policy_id,
+    uint64_t user_id,
+    ObSchemaGetterGuard &schema_guard,
+    const ObLabelSeLabelCompNums &label_comp_nums,
+    bool check_lower_bound)
+{
+  int ret = OB_NOT_IMPLEMENT;
+  return ret;
+}
+
 int ObLabelSeUtil::convert_label_comps_name_to_num(
     uint64_t tenant_id,
     uint64_t policy_id,
@@ -61,6 +82,28 @@ int ObLabelSeUtil::convert_label_comps_name_to_num(
   return ret;
 }
 
+int ObLabelSeUtil::load_default_session_label(
+    uint64_t tenant_id,
+    uint64_t policy_id,
+    uint64_t user_id,
+    ObSchemaGetterGuard &schema_guard,
+    ObLabelSeSessionLabel &session_label)
+{
+  int ret = OB_NOT_IMPLEMENT;
+  return ret;
+}
+
+int ObLabelSeUtil::check_policy_column(uint64_t tenant_id,
+                                       const ObString &schema_name,
+                                       const ObString &table_name,
+                                       const ObString &column_name,
+                                       ObSchemaGetterGuard &schema_guard,
+                                       bool &is_policy_column_exist,
+                                       bool &is_policy_already_applied_to_column)
+{
+  int ret = OB_NOT_IMPLEMENT;
+  return ret;
+}
 
 OB_SERIALIZE_MEMBER(ObLabelSeSessionLabel,
                     policy_id_,
@@ -72,5 +115,4 @@ OB_SERIALIZE_MEMBER(ObLabelSeLabelTag,
 
 }
 }
-
-
+#endif

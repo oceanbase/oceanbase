@@ -37,6 +37,11 @@
 #include "pl/ob_pl.h"
 #include "pl/ob_pl_package.h"
 #include "observer/ob_req_time_service.h"
+#ifdef OB_BUILD_SPM
+#include "sql/spm/ob_spm_define.h"
+#include "sql/spm/ob_spm_controller.h"
+#include "sql/spm/ob_spm_evolution_plan.h"
+#endif
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 
 using namespace oceanbase::common;
@@ -153,6 +158,37 @@ struct ObGetKVEntryBySQLIDOp : public ObKVEntryTraverseOp
   common::ObString sql_id_;
 };
 
+#ifdef OB_BUILD_SPM
+struct ObGetPlanBaselineBySQLIDOp : public ObKVEntryTraverseOp
+{
+  explicit ObGetPlanBaselineBySQLIDOp(uint64_t db_id,
+                                      common::ObString sql_id,
+                                      LCKeyValueArray *key_val_list,
+                                      const CacheRefHandleID ref_handle)
+    : ObKVEntryTraverseOp(key_val_list, ref_handle),
+      db_id_(db_id),
+      sql_id_(sql_id)
+  {
+  }
+  virtual int check_entry_match(LibCacheKVEntry &entry, bool &is_match)
+  {
+    int ret = OB_SUCCESS;
+    is_match = false;
+    if (ObLibCacheNameSpace::NS_SPM == entry.first->namespace_) {
+      ObBaselineKey *key = static_cast<ObBaselineKey*>(entry.first);
+      if (db_id_ != common::OB_INVALID_ID && db_id_ != key->db_id_) {
+        // skip entry that has non-matched db_id
+      } else if (sql_id_ == key->sql_id_) {
+        is_match = true;
+      }
+    }
+    return ret;
+  }
+
+  uint64_t db_id_;
+  common::ObString sql_id_;
+};
+#endif
 
 struct ObGetPcvSetByTabNameOp : public ObKVEntryTraverseOp
 {
@@ -188,6 +224,36 @@ struct ObGetPcvSetByTabNameOp : public ObKVEntryTraverseOp
   common::ObString tab_name_;
 };
 
+#ifdef OB_BUILD_SPM
+struct ObGetEvolutionTaskPcvSetOp : public ObKVEntryTraverseOp
+{
+  explicit ObGetEvolutionTaskPcvSetOp(EvolutionPlanList *evo_task_list,
+                                      LCKeyValueArray *key_val_list,
+                                      const CacheRefHandleID ref_handle)
+    : ObKVEntryTraverseOp(key_val_list, ref_handle),
+      evo_task_list_(evo_task_list)
+  {
+  }
+
+  virtual int check_entry_match(LibCacheKVEntry &entry, bool &is_match)
+  {
+    int ret = common::OB_SUCCESS;
+    is_match = false;
+    if (entry.first->namespace_ == ObLibCacheNameSpace::NS_CRSR) {
+      ObPCVSet *node = static_cast<ObPCVSet*>(entry.second);
+      int64_t origin_count = evo_task_list_->count();
+      if (OB_FAIL(node->get_evolving_evolution_task(*evo_task_list_))) {
+        LOG_WARN("failed to get evolving evolution task", K(ret));
+      } else {
+        is_match = evo_task_list_->count() > origin_count;
+      }
+    }
+    return ret;
+  }
+
+  EvolutionPlanList *evo_task_list_;
+};
+#endif
 
 struct ObGetTableIdOp
 {
@@ -1295,6 +1361,20 @@ int ObPlanCache::cache_evict_plan_by_sql_id(uint64_t db_id, common::ObString sql
   return ret;
 }
 
+#ifdef OB_BUILD_SPM
+int ObPlanCache::cache_evict_baseline_by_sql_id(uint64_t db_id, common::ObString sql_id)
+{
+  int ret = OB_SUCCESS;
+  SQL_PC_LOG(TRACE, "cache evict plan baseline by sql id start");
+  LCKeyValueArray to_evict_keys;
+  ObGetPlanBaselineBySQLIDOp get_ids_op(db_id, sql_id, &to_evict_keys, PLAN_BASELINE_HANDLE);
+  if (OB_FAIL(foreach_cache_evict(get_ids_op))) {
+    SQL_PC_LOG(WARN, "failed to foreach cache evict", K(ret));
+  }
+  SQL_PC_LOG(TRACE, "cache evict plan baseline by sql id end");
+  return ret;
+}
+#endif
 
 int ObPlanCache::evict_plan_by_table_name(uint64_t database_id, ObString tab_name)
 {
@@ -1465,6 +1545,69 @@ int ObPlanCache::cache_evict_by_glitch_node()
 //   return ret;
 // }
 
+#ifdef OB_BUILD_SPM
+int ObPlanCache::load_plan_baseline(const obrpc::ObLoadPlanBaselineArg &arg, uint64_t &load_count)
+{
+  int ret = OB_SUCCESS;
+  common::ObSEArray<uint64_t, 4> plan_ids;
+  ObGlobalReqTimeService::check_req_timeinfo();
+  ObGetPlanIdBySqlIdOp plan_id_op(&plan_ids, arg.sql_id_, arg.with_plan_hash_, arg.plan_hash_value_);
+  load_count = 0;
+  if (OB_FAIL(co_mgr_.foreach_cache_obj(plan_id_op))) {
+    LOG_WARN("fail to traverse id2stat_map", K(ret));
+  } else {
+    ObPhysicalPlan *plan = NULL;
+    LOG_INFO("load plan baseline by sql ids", K(arg), K(plan_ids));
+    for (int64_t i = 0; i < plan_ids.count(); i++) {
+      uint64_t plan_id= plan_ids.at(i);
+      ObCacheObjGuard guard(LOAD_BASELINE_HANDLE);
+      int tmp_ret = ref_plan(plan_id, guard); //plan引用计数加1
+      plan = static_cast<ObPhysicalPlan*>(guard.cache_obj_);
+      if (OB_HASH_NOT_EXIST == tmp_ret) {
+        //do nothing;
+      } else if (OB_SUCCESS != tmp_ret || NULL == plan) {
+        LOG_WARN("get plan failed", K(tmp_ret), KP(plan));
+      } else {
+        LOG_INFO("load plan baseline by sql id", K(arg));
+        if (OB_FAIL(ObSpmController::load_baseline(arg, plan))) {
+          LOG_WARN("failed to load baseline", K(ret));
+        } else {
+          ++load_count;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPlanCache::check_baseline_finish()
+{
+  int ret = OB_SUCCESS;
+  LCKeyValueArray hold_keys;
+  EvolutionPlanList evo_task_list;
+  ObGetEvolutionTaskPcvSetOp get_evo_op(&evo_task_list, &hold_keys, CHECK_EVOLUTION_PLAN_HANDLE);
+  ObGlobalReqTimeService::check_req_timeinfo();
+  if (OB_FAIL(cache_key_node_map_.foreach_refactored(get_evo_op))) {
+    LOG_WARN("traversing cache_key_node_map failed");
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < evo_task_list.count(); ++i) {
+      ObEvolutionPlan *evo_plan = evo_task_list.at(i);
+      if (OB_NOT_NULL(evo_plan) && evo_plan->get_is_evolving_flag()) {
+        evo_plan->check_task_need_finish();
+      }
+    }
+  }
+  //decrement reference count anyway
+  int64_t N = hold_keys.count();
+  for (int64_t i = 0; i < N; i++) {
+    if (NULL != hold_keys.at(i).node_) {
+      hold_keys.at(i).node_->dec_ref_count(get_evo_op.get_ref_handle());
+    }
+  }
+  return ret;
+}
+
+#endif
 
 // 计算plan_cache需要淘汰的pcv_set个数
 // ret = true表示执行正常，否则失败

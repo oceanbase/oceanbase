@@ -20,6 +20,9 @@
 
 #include "ob_log_config.h"                // ObLogFetcherConfig
 #include "observer/ob_srv_network_frame.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_encrypt_kms.h"         // ObSSLClient
+#endif
 #include "logservice/data_dictionary/ob_data_dict_utils.h"
 
 /// The rpc proxy executes the RPC function with two error codes:
@@ -255,8 +258,25 @@ int ObLogRpc::reload_ssl_config()
             private_key = OB_CLIENT_SSL_KEY_FILE;
           }
         } else {
+#ifndef OB_BUILD_TDE_SECURITY
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("only support local file mode", K(ret));
+#else
+          share::ObSSLClient client;
+
+          if (OB_FAIL(client.init(ssl_config.ptr(), ssl_config.length()))) {
+            OB_LOG(WARN, "kms client init", K(ret), K(ssl_config));
+          } else if (OB_FAIL(client.check_param_valid())) {
+            OB_LOG(WARN, "kms client param is not valid", K(ret));
+          } else {
+            use_bkmi = client.is_bkmi_mode();
+            use_sm = client.is_sm_scene();
+            ca_cert = client.get_root_ca().ptr();
+            public_cert = client.public_cert_.content_.ptr();
+            private_key = client.private_key_.content_.ptr();
+            ssl_key_expired_time = client.public_cert_.key_expired_time_;
+          }
+#endif
         }
 
         if (OB_SUCC(ret)) {

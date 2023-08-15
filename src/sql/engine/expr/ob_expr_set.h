@@ -32,6 +32,9 @@ public:
                         const ObRawExpr &raw_expr,
                         ObExpr &rt_expr) const override;
   static int calc_set(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+#ifdef OB_BUILD_ORACLE_PL
+  static int eval_coll(const common::ObObj &obj, ObExecContext &ctx, pl::ObPLNestedTable *&coll);
+#endif
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSet);

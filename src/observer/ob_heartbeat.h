@@ -70,6 +70,11 @@ private:
 
   int try_reload_config(const int64_t config_version);
   int try_reload_time_zone_info(const int64_t time_zone_info_version);
+#ifdef OB_BUILD_TDE_SECURITY
+  int set_lease_request_max_stored_versions(
+      share::ObLeaseRequest &lease_request,
+      const common::ObIArray<std::pair<uint64_t, uint64_t> > &max_stored_versions);
+#endif
 private:
   void check_and_update_server_id_(const uint64_t server_id);
   bool inited_;

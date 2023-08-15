@@ -31,6 +31,9 @@
 #include "lib/alloc/ob_malloc_allocator.h"
 #include "share/object/ob_obj_cast.h"
 #include "engine/ob_serializable_function.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/debug/ob_pl_debugger_manager.h"
+#endif
 
 namespace oceanbase
 {
@@ -85,6 +88,10 @@ inline int init_sql_executor_singletons()
   int ret = common::OB_SUCCESS;
   if (OB_FAIL(ObTaskRunnerNotifierService::build_instance())) {
     SQL_LOG(ERROR, "fail to build ObTaskRunnerNotifierService instance", K(ret));
+#ifdef OB_BUILD_ORACLE_PL
+  } else if (OB_FAIL(pl::ObPDBManager::build_instance())) {
+    SQL_LOG(ERROR, "fail to build ObPDBManager instance", K(ret));
+#endif
   } else {
     ObFuncSerialization::init();
   }

@@ -142,6 +142,12 @@ private:
                       const common::ObMember &arbitration_service,
                       const int64_t paxos_replica_num,
                       const common::GlobalLearnerList &learner_list);
+#ifdef OB_BUILD_ARBITRATION
+ int set_arbitration_service_list_(
+     const common::ObMember &arbitration_service,
+     const ObTimeoutCtx &ctx,
+     const obrpc::ObSetMemberListArgV2 &arg);
+#endif
  int persist_ls_member_list_(const common::ObMemberList &member_list,
                              const ObMember &arb_member,
                              const common::GlobalLearnerList &learner_list);
@@ -160,6 +166,15 @@ private:
                         const share::ObZoneReplicaAttrSet &zone_locality,
                         const common::ObIArray<share::ObUnit> &unit_info_array,
                         ObLSReplicaAddr &ls_replica_addr);
+#ifdef OB_BUILD_ARBITRATION
+  int check_need_create_arb_replica_(
+      bool &need_create_arb_replica,
+      ObAddr &arbitration_service);
+
+  int try_create_arbitration_service_replica_(
+      const ObTenantRole &tenant_role,
+      const ObAddr &arbitration_service);
+#endif
  int check_create_ls_result_(const int64_t rpc_count,
                             const int64_t paxos_replica_num,
                             const ObIArray<int> &return_code_array,

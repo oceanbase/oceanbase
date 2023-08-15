@@ -85,14 +85,6 @@ ObMPPacketSender::~ObMPPacketSender()
 
 void ObMPPacketSender::reset()
 {
-  if (conn_valid_) {
-    if (OB_NOT_NULL(req_)) {
-      if (rpc::ObRequest::TRANSPORT_PROTO_RDMA == nio_protocol_) {
-        SQL_REQ_OP.destroy(req_);
-      }
-    }
-  }
-
   req_ = NULL;
   seq_ = 0;
   comp_context_.reset();

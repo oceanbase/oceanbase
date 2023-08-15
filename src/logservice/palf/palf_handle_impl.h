@@ -274,6 +274,22 @@ public:
   virtual int set_initial_member_list(const common::ObMemberList &member_list,
                                       const int64_t paxos_replica_num,
                                       const common::GlobalLearnerList &learner_list) = 0;
+#ifdef OB_BUILD_ARBITRATION
+  // after creating palf which includes arbitration replica successfully,
+  // set initial memberlist(can only be called once)
+  // @param [in] ObMemberList, the initial member list, do not include arbitration replica
+  // @param [in] arb_member, arbitration replica
+  // @param [in] paxos_replica_num, number of paxos replicas
+  // @param [in] learner_list, learner_list
+  // @return :TODO
+  virtual int set_initial_member_list(const common::ObMemberList &member_list,
+                                      const common::ObMember &arb_member,
+                                      const int64_t paxos_replica_num,
+                                      const common::GlobalLearnerList &learner_list) = 0;
+  virtual int get_remote_arb_member_info(ArbMemberInfo &arb_member_info) = 0;
+  virtual int get_arb_member_info(ArbMemberInfo &arb_member_info) const = 0;
+  virtual int get_arbitration_member(common::ObMember &arb_member) const = 0;
+#endif
   // set region for self
   // @param [common::ObRegion] region
   virtual int set_region(const common::ObRegion &region) = 0;
@@ -491,6 +507,50 @@ public:
                                           const common::ObMember &removed_member,
                                           const LogConfigVersion &config_version,
                                           const int64_t timeout_us) = 0;
+#ifdef OB_BUILD_ARBITRATION
+  // @brief, add an arbitration member to paxos group
+  // @param[in] common::ObMember &member: arbitration member which will be added
+  // @param[in] const int64_t timeout_us: add member timeout, us
+  // @return
+  // - OB_SUCCESS: add arbitration member successfully
+  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
+  // - OB_TIMEOUT: add arbitration member timeout
+  // - OB_NOT_MASTER: not leader or rolechange during membership changing
+  // - other: bug
+  virtual int add_arb_member(const common::ObMember &added_member,
+                             const int64_t timeout_us) = 0;
+  // @brief, remove an arbitration member from paxos group
+  // @param[in] common::ObMember &member: arbitration member which will be removed
+  // @param[in] const int64_t timeout_us: remove member timeout, us
+  // @return
+  // - OB_SUCCESS: remove arbitration member successfully
+  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
+  // - OB_TIMEOUT: remove arbitration member timeout
+  // - OB_NOT_MASTER: not leader or rolechange during membership changing
+  // - other: bug
+  virtual int remove_arb_member(const common::ObMember &arb_member,
+                                const int64_t timeout_us) = 0;
+  // @brief: degrade an acceptor(full replica) to learner(special read only replica) in this cluster
+  // @param[in] const common::ObMemberList &member_list: acceptors will be degraded to learner
+  // @param[in] const int64_t timeout_us
+  // @return
+  // - OB_SUCCESS
+  // - OB_INVALID_ARGUMENT: invalid argument
+  // - OB_TIMEOUT: timeout
+  // - OB_NOT_MASTER: not leader
+  virtual int degrade_acceptor_to_learner(const LogMemberAckInfoList &degrade_servers,
+                                          const int64_t timeout_us) = 0;
+  // @brief: upgrade a learner(special read only replica) to acceptor(full replica) in this cluster
+  // @param[in] const common::ObMemberList &learner_list: learners will be upgraded to acceptors
+  // @param[in] const int64_t timeout_us
+  // @return
+  // - OB_SUCCESS
+  // - OB_INVALID_ARGUMENT: invalid argument
+  // - OB_TIMEOUT: timeout
+  // - OB_NOT_MASTER: not leader
+  virtual int upgrade_learner_to_acceptor(const LogMemberAckInfoList &upgrade_servers,
+                                          const int64_t timeout_us) = 0;
+#endif
 
   // 设置日志文件的可回收位点，小于等于lsn的日志文件均可以安全回收
   //
@@ -802,6 +862,12 @@ public:
   int set_initial_member_list(const common::ObMemberList &member_list,
                               const int64_t paxos_replica_num,
                               const common::GlobalLearnerList &learner_list) override final;
+#ifdef OB_BUILD_ARBITRATION
+  int set_initial_member_list(const common::ObMemberList &member_list,
+                              const common::ObMember &arb_member,
+                              const int64_t paxos_replica_num,
+                              const common::GlobalLearnerList &learner_list) override final;
+#endif
   int set_region(const common::ObRegion &region) override final;
   int set_paxos_member_region_map(const LogMemberRegionMap &region_map) override final;
   int submit_log(const PalfAppendOptions &opts,
@@ -861,6 +927,19 @@ public:
                                   const common::ObMember &removed_member,
                                   const LogConfigVersion &config_version,
                                   const int64_t timeout_us) override final;
+#ifdef OB_BUILD_ARBITRATION
+  int add_arb_member(const common::ObMember &added_member,
+                     const int64_t timeout_us) override final;
+  int remove_arb_member(const common::ObMember &arb_member,
+                        const int64_t timeout_us) override final;
+  int degrade_acceptor_to_learner(const LogMemberAckInfoList &degrade_servers,
+                                  const int64_t timeout_us) override final;
+  int upgrade_learner_to_acceptor(const LogMemberAckInfoList &upgrade_servers,
+                                  const int64_t timeout_us) override final;
+  int get_remote_arb_member_info(ArbMemberInfo &arb_member_info) override final;
+  int get_arb_member_info(ArbMemberInfo &arb_member_info) const override final;
+  int get_arbitration_member(common::ObMember &arb_member) const override final;
+#endif
   int set_base_lsn(const LSN &lsn) override final;
   int enable_sync() override final;
   int disable_sync() override final;

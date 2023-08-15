@@ -18,10 +18,9 @@
 #include "lib/ob_errno.h"
 #include "share/transfer/ob_transfer_task_operator.h"
 
-using namespace unittest;
-
 namespace oceanbase
 {
+using namespace unittest;
 namespace share
 {
 using namespace schema;
@@ -45,7 +44,7 @@ public:
   share::SCN start_scn_;
   share::SCN finish_scn_;
   ObTransferStatus status_;
-  TraceId trace_id_;
+  ObCurTraceId::TraceId trace_id_;
   ObTransferTask task_;
   transaction::tablelock::ObTableLockOwnerID lock_owner_id_;
 };
@@ -382,7 +381,7 @@ TEST_F(TestTransferTaskOperator, test_operator)
 } // namespace oceanbase
 int main(int argc, char **argv)
 {
-  unittest::init_log_and_gtest(argc, argv);
+  oceanbase::unittest::init_log_and_gtest(argc, argv);
   OB_LOGGER.set_log_level("INFO");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

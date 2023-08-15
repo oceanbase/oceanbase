@@ -32,6 +32,10 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/geo/ob_geometry_cast.h"
+#ifdef OB_BUILD_ORACLE_XML
+#include "lib/xml/ob_xml_util.h"
+#include "lib/xml/ob_xml_parser.h"
+#endif
 
 // from sql_parser_base.h
 #define DEFAULT_STR_LENGTH -1
@@ -106,7 +110,28 @@ static int cast_extend_types_not_support(const ObObjType expect_type,
   UNUSED(out);
   UNUSED(cast_mode);
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_XML
+  if (in.is_pl_extend()) {
+    if (pl::PL_OPAQUE_TYPE == in.get_meta().get_extend_type()) {
+      pl::ObPLOpaque *pl_src = reinterpret_cast<pl::ObPLOpaque*>(in.get_ext());
+      if (OB_ISNULL(pl_src)) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("failed to get pl data type info", K(ret), K(in));
+      } else if (pl_src->get_type() == pl::ObPLOpaqueType::PL_XML_TYPE) {
+        LOG_WARN("inconsistent datatypes", K(ret), K(expect_type), K(in.get_type()));
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      } else {
+        LOG_WARN("not expected obj type convert", K(ret), K(expect_type), K(in), K(out), K(cast_mode));
+        ret = OB_ERR_UNEXPECTED;
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected type to convert format", K(ret), K(expect_type), K(in));
+  }
+#else
   ret = OB_ERR_UNEXPECTED;
+#endif
   return ret;
 }
 
@@ -9133,7 +9158,44 @@ static int sql_udt_pl_extend(const ObObjType expect_type, ObObjCastParams &param
                              const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_XML
+  if (in.is_xml_sql_type()) {
+    // no need to read blob full data
+    pl::ObPLXmlType *xmltype = NULL;
+    void *ptr = NULL;
+    ObObj* data = NULL; // obobj for blob;
+    if (OB_ISNULL(ptr = params.alloc(sizeof(pl::ObPLXmlType)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Failed to allocate memory for pl xml data type", K(ret), K(sizeof(pl::ObPLXmlType)));
+    } else if (FALSE_IT(xmltype = new (ptr)pl::ObPLXmlType())) {
+    } else if (OB_ISNULL(data = static_cast<ObObj*>(params.alloc(sizeof(ObObj))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for pl object", K(ret));
+    } else {
+      ObString xml_data = in.get_string();
+      int64_t xml_data_size = xml_data.length();
+      char *xml_data_buff = static_cast<char *>(params.alloc(xml_data_size));
+      if (OB_ISNULL(xml_data_buff)) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("failed to allocate memory for xmldata", K(ret), K(xml_data_size));
+      } else {
+        MEMCPY(xml_data_buff, xml_data.ptr(), xml_data_size);
+
+        data->set_string(ObLongTextType, xml_data_buff, static_cast<int32_t>(xml_data_size));
+        data->set_has_lob_header(); // must has lob header
+        data->set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        xmltype->set_data(data);
+        out.set_extend(reinterpret_cast<int64_t>(xmltype), pl::PL_OPAQUE_TYPE);
+        // need deep copy?
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected type to convert format", K(ret), K(expect_type), K(in));
+  }
+#else
   ret = OB_NOT_SUPPORTED;
+#endif
   return ret;
 }
 
@@ -9141,7 +9203,68 @@ static int string_sql_udt(const ObObjType expect_type, ObObjCastParams &params,
                           const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_XML
+  if (in.is_string_type()) {
+    ObMulModeMemCtx* mem_ctx = nullptr;
+    ObIAllocator &temp_allocator = *params.allocator_v2_;
+    bool is_null_result = false;
+    ObString in_str;
+    ObObj tmp_out;
+    ObXmlDocument* doc = nullptr;
+    ObString binary_str;
+    ObString blob_locator;
+    if (ObCharset::charset_type_by_coll(in.get_collation_type()) != CHARSET_UTF8MB4) {
+      if (OB_FAIL(string_string(ObObjType::ObVarcharType, params, in, tmp_out, cast_mode))) {
+        LOG_WARN("fail to cast string to longtext", K(ret), K(in));
+      } else if (tmp_out.is_null()) {
+        is_null_result = true;
+      } else {
+        in_str = tmp_out.get_string();
+      }
+    } else if (OB_FAIL(in.get_string(in_str))) {
+      LOG_WARN("Failed to get string from in obj", K(ret), K(tmp_out));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (is_null_result) {
+      out.set_sql_udt("", 0, ObXMLSqlType);
+    } else if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&temp_allocator, mem_ctx))) {
+      LOG_WARN("fail to create tree memory context", K(ret));
+    } else {
+      ObXmlParser parser(mem_ctx);
+      if (OB_FAIL(parser.parse_document(in_str))) {
+        ret = OB_ERR_XML_PARSE;
+        LOG_USER_ERROR(OB_ERR_XML_PARSE);
+        LOG_WARN("parse xml plain text as document failed.", K(in_str));
+      } else if (OB_ISNULL(doc = parser.document())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get doc null", K(ret));
+      } else if (!doc->get_encoding().empty() || doc->get_encoding_flag()) {
+        doc->set_encoding(ObXmlUtil::get_charset_name(in.get_collation_type()));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(doc->get_raw_binary(binary_str, mem_ctx->allocator_))) {
+        LOG_WARN("get raw binary failed", K(ret));
+      } else {
+        ObTextStringResult blob_res(ObLongTextType, true, mem_ctx->allocator_);
+        int64_t total_length = binary_str.length();
+        if (OB_FAIL(blob_res.init(total_length))) {
+          LOG_WARN("failed to init blob res", K(ret), K(blob_res), K(total_length));
+        } else if (OB_FAIL(blob_res.append(binary_str))) {
+          LOG_WARN("failed to append xml binary data", K(ret), K(blob_res));
+        } else {
+          blob_res.get_result_buffer(blob_locator);
+          out.set_sql_udt(blob_locator.ptr(), blob_locator.length(), ObXMLSqlType);
+        }
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected type to convert format", K(ret), K(expect_type), K(in));
+  }
+#else
   ret = OB_NOT_SUPPORTED;
+#endif
   return ret;
 }
 
@@ -9149,7 +9272,47 @@ static int pl_extend_sql_udt(const ObObjType expect_type, ObObjCastParams &param
                              const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_XML
+  if (in.is_pl_extend()) {
+    if (pl::PL_OPAQUE_TYPE == in.get_meta().get_extend_type()) {
+      pl::ObPLOpaque *pl_src = reinterpret_cast<pl::ObPLOpaque*>(in.get_ext());
+      if (OB_ISNULL(pl_src)) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("failed to get pl data type info", K(ret), K(in));
+      } else if (pl_src->get_type() == pl::ObPLOpaqueType::PL_XML_TYPE) {
+        pl::ObPLXmlType * xmltype = static_cast<pl::ObPLXmlType*>(pl_src);
+        ObObj *blob_obj = xmltype->get_data();
+        if (OB_ISNULL(blob_obj) || blob_obj->is_null()) {
+          out.set_sql_udt("", 0, ObXMLSqlType);
+        } else {
+          // deep copy here or by the caller ?
+          ObString xml_data = blob_obj->get_string();
+          int64_t xml_data_size = xml_data.length();
+          char *xml_data_buff = static_cast<char *>(params.alloc(xml_data_size));
+          if (OB_ISNULL(xml_data_buff)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate memory for xmldata",
+                      K(ret), K(expect_type), K(xml_data_size));
+          } else {
+            MEMCPY(xml_data_buff, xml_data.ptr(), xml_data_size);
+            out.set_sql_udt(xml_data_buff, static_cast<int32_t>(xml_data_size), ObXMLSqlType);
+          }
+        }
+      } else if (pl_src->get_type() == pl::ObPLOpaqueType::PL_INVALID) {
+        // possibly an un-initiated pl opaque variable
+        out.set_null();
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("not expected obj type convert", K(ret), K(expect_type), K(in), K(out), K(cast_mode));
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected type to convert format", K(ret), K(expect_type), K(in));
+  }
+#else
   ret = OB_NOT_SUPPORTED;
+#endif
   return ret;
 }
 
@@ -9157,7 +9320,60 @@ static int pl_extend_string(const ObObjType expect_type, ObObjCastParams &params
                             const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_XML
+  if (in.is_pl_extend()) {
+    if (pl::PL_OPAQUE_TYPE == in.get_meta().get_extend_type()) {
+      pl::ObPLOpaque *pl_src = reinterpret_cast<pl::ObPLOpaque*>(in.get_ext());
+      if (OB_ISNULL(pl_src)) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("failed to get pl data type info", K(ret), K(in));
+      } else if (pl_src->get_type() == pl::ObPLOpaqueType::PL_XML_TYPE) {
+        pl::ObPLXmlType * xmltype = static_cast<pl::ObPLXmlType*>(pl_src);
+        ObObj *blob_obj = xmltype->get_data();
+        if (OB_ISNULL(blob_obj)) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("Unexpected xml data", K(ret), K(*xmltype));
+        } else {
+          ObString blob_data = blob_obj->get_string();
+          ObStringBuffer xml_plain_text(params.allocator_v2_);
+          common::ObArenaAllocator temp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+          ObCollationType session_cs_type = params.dest_collation_;
+          if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_,
+                                                                    ObLongTextType,
+                                                                    CS_TYPE_BINARY,
+                                                                    true,
+                                                                    blob_data))) {
+            LOG_WARN("fail to get xml data.", K(ret), K(blob_data));
+          } else if (OB_FAIL(ObXmlUtil::cast_to_string(blob_data, temp_allocator, xml_plain_text, session_cs_type))) {
+            LOG_WARN("failed to convert xml to string", K(ret), KP(blob_data.ptr()), K(blob_data.length()));
+          } else {
+            ObObj tmp_in = in;
+            tmp_in.set_string(ObVarcharType, xml_plain_text.string());
+            tmp_in.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+            if (OB_FAIL(string_string(expect_type, params, tmp_in, out, cast_mode))) {
+              LOG_WARN("cast string to string in udt string failed", K(ret));
+            }
+          }
+        }
+      } else if (pl_src->get_type() == pl::ObPLOpaqueType::PL_INVALID) {
+        // un-initiated pl variable, for example, xml_data and xml_data2 are declared without assignment
+        // then call this directly: select replace(xml_data,xml_data2 ,'1') into stringval from dual;
+        out.set_null();
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("not expected obj type convert", K(ret), K(expect_type), K(in), K(out), K(cast_mode));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not expected obj type convert", K(ret), K(expect_type), K(in), K(out), K(cast_mode));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected type to convert format", K(ret), K(expect_type), K(in));
+  }
+#else
   ret = OB_NOT_SUPPORTED;
+#endif
   return ret;
 }
 
@@ -9185,7 +9401,37 @@ static int udt_string(const ObObjType expect_type, ObObjCastParams &params,
                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_XML
+  if (in.is_xml_sql_type()) {
+    ObString blob_data = in.get_string();
+    ObStringBuffer xml_plain_text(params.allocator_v2_);
+    common::ObArenaAllocator temp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObCollationType session_cs_type = params.dest_collation_;
+    if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_,
+                                                               ObLongTextType,
+                                                               CS_TYPE_BINARY,
+                                                               true,
+                                                               blob_data))) {
+      LOG_WARN("fail to get xml data.", K(ret), K(blob_data));
+    } else if (OB_FAIL(ObXmlUtil::cast_to_string(blob_data, temp_allocator, xml_plain_text, session_cs_type))) {
+      LOG_WARN("failed to convert xml to string", K(ret), KP(blob_data.ptr()), K(blob_data.length()));
+    } else {
+      ObObj tmp_in = in;
+      tmp_in.set_string(ObVarcharType, xml_plain_text.string());
+      tmp_in.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      if (OB_FAIL(string_string(expect_type, params, tmp_in, out, cast_mode))) {
+        LOG_WARN("cast string to string in udt string failed", K(ret));
+      }
+    }
+  } else {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    // get udt type name from ctx
+    LOG_WARN_RET(OB_ERR_INVALID_TYPE_FOR_OP, "inconsistent datatypes",
+      "expected", expect_type, "got", in.get_type(), K(in.get_udt_subschema_id()));
+  }
+#else
   ret = OB_NOT_SUPPORTED;
+#endif
   return ret;
 }
 

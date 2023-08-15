@@ -75,6 +75,9 @@
 #include "observer/report/ob_tenant_meta_checker.h"//ObTenantMetaChecker
 #include "rootserver/backup/ob_backup_task_scheduler.h" // ObBackupTaskScheduler
 #include "rootserver/backup/ob_backup_schedule_task.h" // ObBackupScheduleTask
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
@@ -1654,6 +1657,125 @@ int ObService::get_partition_count(obrpc::ObGetPartitionCountResult &result)
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObService::convert_tenant_max_key_version(
+    const ObIArray<std::pair<uint64_t, ObLeaseResponse::TLRpKeyVersion> > &max_key_version,
+    ObIArray<std::pair<uint64_t, uint64_t> > &got_version_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < max_key_version.count(); ++i) {
+      const std::pair<uint64_t, ObLeaseResponse::TLRpKeyVersion> &key_version
+        = max_key_version.at(i);
+      std::pair<uint64_t, uint64_t> got_version;
+      got_version.first = key_version.first;
+      got_version.second = key_version.second.max_key_version_;
+      if (OB_FAIL(got_version_array.push_back(got_version))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObService::do_wait_master_key_in_sync(
+    const common::ObIArray<std::pair<uint64_t, uint64_t> > &got_version_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else {
+    const int64_t abs_time = THIS_WORKER.get_timeout_ts();
+    int64_t finished_idx = -1;
+    const int64_t SLEEP_INTERVAL = 50L * 1000L;
+    LOG_INFO("do wait master key in sync", K(abs_time));
+    while (ObTimeUtility::current_time() < abs_time && OB_SUCC(ret)) {
+      for (int64_t i = finished_idx + 1; OB_SUCC(ret) && i < got_version_array.count(); ++i) {
+        uint64_t max_stored_key_version = 0;
+        const std::pair<uint64_t, uint64_t> &got_version = got_version_array.at(i);
+        if (OB_FAIL(ObMasterKeyGetter::instance().get_max_stored_version(
+                got_version.first, max_stored_key_version))) {
+          LOG_WARN("fail to get max active version", KR(ret),
+                   "tenant_id", got_version.first);
+        } else if (max_stored_key_version >= got_version.second) {
+          finished_idx = i;
+        } else {
+          // TODO: wenduo
+          // remove got_versions after renqing make got_versions has a retry logic in it
+          (void)ObMasterKeyGetter::instance().got_versions(got_version_array);
+          ob_usleep(std::min(SLEEP_INTERVAL, abs_time - ObTimeUtility::current_time()));
+          break;
+        }
+      }
+      if (OB_FAIL(ret)) {
+        // failed
+      } else if (finished_idx >= got_version_array.count() - 1) {
+        break; // succ
+        LOG_INFO("wait master key in sync succ");
+      } else if (ObTimeUtility::current_time() >= abs_time) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("fail master key in sync timeout", KR(ret), K(finished_idx));
+      } else {
+        // still need wait
+      }
+    }
+  }
+  return ret;
+}
+
+int ObService::trigger_tenant_config(
+    const obrpc::ObWaitMasterKeyInSyncArg &wms_in_sync_arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(ret));
+  } else {
+    // ignore ret in for condition
+    for (int64_t i = 0; i < wms_in_sync_arg.tenant_config_version_.count(); ++i) {
+      const uint64_t tenant_id = wms_in_sync_arg.tenant_config_version_.at(i).first;
+      const int64_t version = wms_in_sync_arg.tenant_config_version_.at(i).second;
+      OTC_MGR.add_tenant_config(tenant_id); // ignore ret
+      OTC_MGR.got_version(tenant_id, version); // ignore ret
+    }
+  }
+  return ret;
+}
+
+int ObService::wait_master_key_in_sync(
+    const obrpc::ObWaitMasterKeyInSyncArg &wms_in_sync_arg)
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<std::pair<uint64_t, uint64_t> > got_version_array;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(broadcast_rs_list(wms_in_sync_arg.rs_list_arg_))) {
+    LOG_WARN("fail to broadcast rs list", KR(ret), "rs_list_arg", wms_in_sync_arg.rs_list_arg_);
+  } else if (wms_in_sync_arg.tenant_max_key_version_.count() <= 0) {
+    // bypass, since tenant max key version is empty
+  } else if (OB_FAIL(convert_tenant_max_key_version(
+          wms_in_sync_arg.tenant_max_key_version_, got_version_array))) {
+    LOG_WARN("fail to convert tenant max key version", KR(ret), K(wms_in_sync_arg));
+  } else {
+    ObRefreshSchemaInfo schema_info;
+    if (OB_FAIL(schema_updater_.try_reload_schema(schema_info))) {
+      LOG_WARN("fail to try reload schema", KR(ret));
+    } else if (OB_FAIL(trigger_tenant_config(wms_in_sync_arg))) {
+      LOG_WARN("fail to got versions", KR(ret));
+    } else if (OB_FAIL(ObMasterKeyGetter::instance().got_versions(got_version_array))) {
+      LOG_WARN("fail to get versions", KR(ret));
+    } else if (OB_FAIL(do_wait_master_key_in_sync(got_version_array))) {
+      LOG_WARN("fail to do wait master key in sync", KR(ret));
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObService::check_server_empty(bool &is_empty)
 {
@@ -1676,6 +1798,14 @@ int ObService::check_server_empty(bool &is_empty)
         is_empty = false;
       }
     }
+#ifdef OB_BUILD_TDE_SECURITY
+    if (is_empty) {
+      if (ObMasterKeyGetter::instance().is_wallet_exist()) {
+        FLOG_WARN("[CHECK_SERVER_EMPTY] master_key file exists");
+        is_empty = false;
+      }
+    }
+#endif
   }
   return ret;
 }

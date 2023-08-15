@@ -354,15 +354,6 @@ int ObSrvXlator::release(ObReqProcessor *processor)
   } else if (reinterpret_cast<char*>(processor) == cpbuf) {
     processor->destroy();
     ObRequest::TransportProto nio_protocol = (ObRequest::TransportProto)processor->get_nio_protocol();
-    if (ObRequest::TRANSPORT_PROTO_RDMA == nio_protocol) {
-      ObRequest *req = const_cast<ObRequest*>(processor->get_ob_request());
-      bool need_retry = processor->get_need_retry();
-      bool async_resp_used = processor->get_async_resp_used();
-      if (req && !need_retry && !async_resp_used) {
-        SQL_REQ_OP.destroy(req);
-        // ob_free(req);
-      }
-    }
     processor->~ObReqProcessor();
   } else {
     processor->destroy();
@@ -387,12 +378,6 @@ int ObSrvXlator::release(ObReqProcessor *processor)
       ObSqlTaskFactory::get_instance().free(static_cast<ObSqlTask *>(req));
       req = NULL;
     } else {
-      if ((ObRequest::OB_MYSQL == req_type) && (ObRequest::TRANSPORT_PROTO_RDMA == nio_protocol)) {
-        if (req && !need_retry && !async_resp_used) {
-          SQL_REQ_OP.destroy(req);
-          // ob_free(req);
-        }
-      }
       worker_allocator_delete(processor);
       processor = NULL;
     }

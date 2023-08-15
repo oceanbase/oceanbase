@@ -665,6 +665,14 @@ private:
                              int64_t param_count, const
                              common::ObString &func_name,
                              bool for_write);
+#ifdef OB_BUILD_ORACLE_PL
+  int build_nested_table_type(const ObNestedTableType &table_type, ObIArray<jit::ObLLVMType> &elem_type_array);
+  int build_assoc_array_type(const ObAssocArrayType &table_type, ObIArray<jit::ObLLVMType> &elem_type_array);
+  int build_varray_type(const ObVArrayType &array_type, ObIArray<jit::ObLLVMType> &elem_type_array);
+  int build_collection_type(const ObCollectionType &collection_type, ObIArray<jit::ObLLVMType> &elem_type_array);
+  int build_subtype(const ObUserDefinedSubType &subtype, ObIArray<jit::ObLLVMType> &elem_type_array);
+  int build_opaque_type(const ObUserDefinedType &opaque_type, ObIArray<jit::ObLLVMType> &elem_type_array);
+#endif
   int build_record_type(const ObRecordType &record_type, ObIArray<jit::ObLLVMType> &elem_type_array);
   int build_composite(ObIArray<jit::ObLLVMType> &elem_type_array);
   int generate_spi_calc(int64_t expr_idx,
@@ -727,6 +735,9 @@ public:
   int get_di_llvm_type(const ObPLDataType &pl_type, jit::ObLLVMDIType &di_type);
   int get_di_datum_type(const ObPLDataType &pl_type, jit::ObLLVMDIType &di_type);
   int generate_di_user_type(const ObUserDefinedType &type, uint32_t line);
+#ifdef OB_BUILD_ORACLE_PL
+  int generate_di_table_type(const ObNestedTableType &table_type, uint32_t line);
+#endif
   int generate_di_record_type(const ObRecordType &record_type, uint32_t line);
   int generate_di_argument();
   // generate debug info for variables which have a llvm::Value,

@@ -25,6 +25,9 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/client_feedback/ob_feedback_partition_struct.h"
 #include "sql/dblink/ob_dblink_utils.h"
+#ifdef OB_BUILD_SPM
+#include "sql/spm/ob_spm_define.h"
+#endif
 
 namespace oceanbase
 {
@@ -422,6 +425,7 @@ private:
   common::hash::ObHashMap<uint64_t, uint64_t> dblink_scn_;
 };
 
+#ifndef OB_BUILD_SPM
 struct ObBaselineKey
 {
   ObBaselineKey()
@@ -457,6 +461,7 @@ struct ObSpmCacheCtx
   inline void reset() { bl_key_.reset(); }
   ObBaselineKey bl_key_;
 };
+#endif
 
 struct ObSqlCtx
 {
@@ -662,6 +667,9 @@ public:
       reference_obj_tables_(),
       is_table_gen_col_with_udf_(false),
       query_hint_(),
+#ifdef OB_BUILD_SPM
+      is_spm_evolution_(false),
+#endif
       literal_stmt_type_(stmt::T_NONE),
       sql_stmt_(),
       sql_stmt_coll_type_(CS_TYPE_INVALID),
@@ -703,6 +711,9 @@ public:
     reference_obj_tables_.reset();
     is_table_gen_col_with_udf_ = false;
     query_hint_.reset();
+#ifdef OB_BUILD_SPM
+    is_spm_evolution_ = false;
+#endif
     literal_stmt_type_ = stmt::T_NONE;
     sql_stmt_.reset();
     sql_stmt_coll_type_ = CS_TYPE_INVALID;
@@ -780,6 +791,9 @@ public:
   share::schema::ObReferenceObjTable reference_obj_tables_;
   bool is_table_gen_col_with_udf_; // for data consistent check
   ObQueryHint query_hint_;
+#ifdef OB_BUILD_SPM
+  bool is_spm_evolution_;
+#endif
   stmt::StmtType  literal_stmt_type_;
   common::ObString sql_stmt_;
   common::ObCollationType sql_stmt_coll_type_;

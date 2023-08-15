@@ -15,7 +15,11 @@
 #ifndef OCEANBASE_LIBOBCDC_FORMATTER_H__
 #define OCEANBASE_LIBOBCDC_FORMATTER_H__
 
+#ifndef OB_USE_DRCMSG
 #include "ob_cdc_msg_convert.h"
+#else
+#include <drcmsg/binlogBuf.h>                       // binlogBuf
+#endif
 
 #include "lib/allocator/ob_allocator.h"             // ObIAllocator
 #include "lib/thread/ob_multi_fixed_queue_thread.h" // ObMQThread

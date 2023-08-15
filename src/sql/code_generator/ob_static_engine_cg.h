@@ -192,6 +192,16 @@ public:
   const static uint8_t IS_JSON_CONSTRAINT_RELAX = 1;
   const static uint8_t IS_JSON_CONSTRAINT_STRICT = 4;
 private:
+#ifdef OB_BUILD_TDE_SECURITY
+  int init_encrypt_metas(
+    const share::schema::ObTableSchema *table_schema,
+    share::schema::ObSchemaGetterGuard *guard,
+    ObIArray<transaction::ObEncryptMetaCache> &meta_array);
+
+  int init_encrypt_table_meta(const share::schema::ObTableSchema *table_schema,
+      share::schema::ObSchemaGetterGuard *guard,
+      ObIArray<transaction::ObEncryptMetaCache>&meta_array);
+#endif
 
   int classify_anti_monotone_filter_exprs(const common::ObIArray<ObRawExpr*> &input_filters,
                                           common::ObIArray<ObRawExpr*> &non_anti_monotone_filters,

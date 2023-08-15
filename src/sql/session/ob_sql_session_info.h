@@ -62,6 +62,12 @@ struct ObPLExecRecursionCtx;
 struct ObPLSqlCodeInfo;
 class ObPLContext;
 class ObDbmsCursorInfo;
+#ifdef OB_BUILD_ORACLE_PL
+namespace debugger
+{
+class ObPLDebugger;
+}
+#endif
 } // namespace pl
 
 namespace obmysql
@@ -525,12 +531,18 @@ public:
       session_type_ = INVALID_TYPE;
       inner_flag_ = false;
       is_ignore_stmt_ = false;
+    #ifdef OB_BUILD_SPM
+      select_plan_type_ = ObSpmCacheCtx::INVALID_TYPE;
+    #endif
     }
   public:
     ObAuditRecordData audit_record_;
     SessionType session_type_;
     bool inner_flag_;
     bool is_ignore_stmt_;
+  #ifdef OB_BUILD_SPM
+    ObSpmCacheCtx::SpmSelectPlanType select_plan_type_;
+  #endif
   };
 
   class CursorCache {
@@ -832,6 +844,9 @@ public:
     pl_context_ = pl_stack_ctx;
   }
 
+#ifdef OB_BUILD_ORACLE_PL
+  inline pl::debugger::ObPLDebugger *get_pl_debugger() const { return pl_debugger_; }
+#endif
   bool is_pl_debug_on();
 
   inline void set_pl_attached_id(uint32_t id) { pl_attach_session_id_ = id; }
@@ -864,6 +879,12 @@ public:
   int set_package_variable(ObExecContext &ctx,
     const common::ObString &key, const common::ObObj &value, bool from_proxy = false);
 
+#ifdef OB_BUILD_ORACLE_PL
+  int initialize_pl_debugger();
+  int free_pl_debugger();
+  int get_pl_debugger(uint32_t id, pl::debugger::ObPLDebugger *& pl_debugger);
+  int release_pl_debugger(pl::debugger::ObPLDebugger *pl_debugger);
+#endif
   inline bool get_pl_can_retry() { return pl_can_retry_; }
   inline void set_pl_can_retry(bool can_retry) { pl_can_retry_ = can_retry; }
 
@@ -911,6 +932,14 @@ public:
     inner_flag_ = false;
     session_type_ = USER_SESSION;
   }
+#ifdef OB_BUILD_SPM
+  inline void set_spm_select_plan_type(ObSpmCacheCtx::SpmSelectPlanType type)
+  {
+    select_plan_type_ = type;
+  }
+  inline ObSpmCacheCtx::SpmSelectPlanType get_spm_select_plan_type() const { return select_plan_type_; }
+  inline void reset_spm_select_plan_type() { select_plan_type_ = ObSpmCacheCtx::INVALID_TYPE; }
+#endif
   void set_session_type_with_flag();
   void set_session_type(SessionType session_type) { session_type_ = session_type; }
   inline SessionType get_session_type() const { return session_type_; }
@@ -1294,6 +1323,12 @@ private:
   // if false == pl_can_retry_, we can only retry query in PL blocks locally
   bool pl_can_retry_; //标记当前执行的PL是否可以整体重试
 
+#ifdef OB_BUILD_ORACLE_PL
+  pl::debugger::ObPLDebugger *pl_debugger_; // 如果开启了debug, 该字段不为null
+#endif
+#ifdef OB_BUILD_SPM
+  ObSpmCacheCtx::SpmSelectPlanType select_plan_type_;
+#endif
   uint32_t pl_attach_session_id_; // 如果当前session执行过dbms_debug.attach_session, 记录目标session的ID
 
   observer::ObQueryDriver *pl_query_sender_; // send query result in mysql pl

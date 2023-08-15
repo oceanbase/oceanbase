@@ -15,6 +15,9 @@
 
 #include "share/ob_server_table_operator.h"
 #include "share/ob_rpc_struct.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "rootserver/ob_rs_master_key_manager.h"
+#endif
 
 namespace oceanbase
 {
@@ -22,6 +25,9 @@ namespace obrpc
 {
 class ObSrvRpcProxy;
 struct ObRsListArg;
+#ifdef OB_BUILD_TDE_SECURITY
+struct ObWaitMasterKeyInSyncArg;
+#endif
 // struct ObAdminServerArg;
 }
 namespace share
@@ -44,6 +50,9 @@ public:
       share::ObLSTableOperator &lst_operator,
       ObUnitManager &unit_manager,
       ObMySQLProxy &sql_proxy
+#ifdef OB_BUILD_TDE_SECURITY
+      , ObRsMasterKeyManager *master_key_mgr
+#endif
       );
   // Add new servers to a specified（optional) zone in the cluster.
   // The servers should be empty and the zone should be active.
@@ -156,6 +165,12 @@ public:
   int start_servers(
       const ObIArray<ObAddr> &servers,
       const ObZone &zone);
+#ifdef OB_BUILD_TDE_SECURITY
+  int master_key_checking_for_adding_server(
+      const common::ObAddr &server,
+      const common::ObZone &zone,
+      obrpc::ObWaitMasterKeyInSyncArg &wms_in_sync_arg);
+#endif
   int stop_server_precheck(
       const ObIArray<ObAddr> &servers,
       const obrpc::ObAdminServerArg::AdminServerOp &op);
@@ -207,6 +222,9 @@ private:
   share::ObLSTableOperator *lst_operator_;
   share::ObServerTableOperator st_operator_;
   ObUnitManager *unit_manager_;
+#ifdef OB_BUILD_TDE_SECURITY
+  ObRsMasterKeyManager *master_key_mgr_;
+#endif
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObServerZoneOpService);

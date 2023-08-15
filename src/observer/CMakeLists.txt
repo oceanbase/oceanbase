@@ -396,7 +396,7 @@ add_library(oceanbase_static
   ${CMAKE_CURRENT_BINARY_DIR}/ob_version.cpp)
 
 target_link_libraries(oceanbase_static
-  PUBLIC ob_base "${ob_objects}" ob_sql_static ob_storage_static ob_share_static oblib objit)
+  PUBLIC ob_base "${ob_objects}" ob_sql_static ob_storage_static ob_share_static ${ob_close_modules_static_name} oblib objit)
 
 if (OB_GPERF_MODE)
   target_link_libraries(oceanbase_static
@@ -422,6 +422,7 @@ else()
     ob_sql_static
     ob_storage_static
     ob_share_static
+    ${ob_close_modules_static_name}
     -Wl,--no-whole-archive
     -static-libgcc -static-libstdc++
     objit)
@@ -444,6 +445,7 @@ target_link_libraries(observer
   ob_sql_static
   ob_storage_static
   ob_share_static
+  ${ob_close_modules_static_name}
   -Wl,--end-group
   -static-libgcc
   -static-libstdc++

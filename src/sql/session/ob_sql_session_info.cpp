@@ -46,6 +46,10 @@
 #include "sql/engine/px/ob_px_target_mgr.h"
 #include "lib/utility/utility.h"
 #include "lib/utility/ob_proto_trans_util.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/debug/ob_pl_debugger_manager.h"
+#include "pl/sys_package/ob_pl_utl_file.h"
+#endif
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/string/ob_hex_utils_base.h"
 #include "share/stat/ob_opt_stat_manager.h"
@@ -146,6 +150,12 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       curr_session_context_size_(0),
       pl_context_(NULL),
       pl_can_retry_(true),
+#ifdef OB_BUILD_ORACLE_PL
+      pl_debugger_(NULL),
+#endif
+#ifdef OB_BUILD_SPM
+      select_plan_type_(ObSpmCacheCtx::INVALID_TYPE),
+#endif
       pl_attach_session_id_(0),
       pl_query_sender_(NULL),
       pl_ps_protocol_(false),
@@ -293,6 +303,9 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     curr_session_context_size_ = 0;
     pl_context_ = NULL;
     pl_can_retry_ = true;
+#ifdef OB_BUILD_ORACLE_PL
+    pl_debugger_ = NULL;
+#endif
     pl_attach_session_id_ = 0;
     pl_query_sender_ = NULL;
     pl_ps_protocol_ = false;
@@ -359,6 +372,30 @@ void ObSQLSessionInfo::clean_status()
 bool ObSQLSessionInfo::is_encrypt_tenant()
 {
   bool ret = false;
+#ifdef OB_BUILD_TDE_SECURITY
+  uint64_t cur_time = ObClockGenerator::getClock();
+  int64_t tenant_id = get_effective_tenant_id();
+  if (cur_time - encrypt_info_.last_modify_time_ > 10 * 1000 * 1000L) {
+    if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    LOG_WARN("Invalid tenant id to init fast freeze checker", K(tenant_id));
+    } else {
+      encrypt_info_.last_modify_time_ = cur_time;
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (tenant_config.is_valid()) {
+        ObString method_str(tenant_config->tde_method.get_value());
+        if (ObTdeMethodUtil::is_kms(method_str)) {
+          encrypt_info_.is_encrypt_ = true;
+          ret = true;
+        } else {
+          encrypt_info_.is_encrypt_ = false;
+          ret = false;
+        }
+      }
+    }
+  } else {
+    ret = encrypt_info_.is_encrypt_;
+  }
+#endif
 
   return ret;
 }
@@ -514,7 +551,22 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
       piece_cache_ = NULL;
     }
 
+#ifdef OB_BUILD_ORACLE_PL
+    if (OB_SUCC(ret)) {
+      const int64_t session_id = get_sessid();
+      // utl file should close all fd when user session exits,
+      // so we should check session type here to avoid fd closing
+      // unexpectedly when inner session exists
+      if (is_user_session() && OB_FAIL(ObPLUtlFile::close_all(session_id))) {
+        LOG_WARN("failed to close all fd in utl file", K(ret), K(session_id));
+      }
+    }
+#endif
 
+#ifdef OB_BUILD_ORACLE_PL
+    // pl debug 功能, pl debug不支持分布式调试，但调用也不会有副作用
+    reset_pl_debugger_resource();
+#endif
     // 非分布式需要的话，分布式也需要，用于清理package的全局变量值
     reset_all_package_state();
     reset(skip_sys_var);
@@ -849,7 +901,7 @@ ObMySQLRequestManager* ObSQLSessionInfo::get_request_manager()
   return request_manager_;
 }
 
-sql::ObFLTSpanMgr* ObSQLSessionInfo::get_flt_span_manager()
+ObFLTSpanMgr* ObSQLSessionInfo::get_flt_span_manager()
 {
   int ret = OB_SUCCESS;
   if (NULL == flt_span_mgr_) {
@@ -1429,7 +1481,20 @@ int ObSQLSessionInfo::close_dbms_cursor(int64_t cursor_id)
 int ObSQLSessionInfo::make_cursor(pl::ObPLCursorInfo *&cursor)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
   UNUSED(cursor);
+#else
+  const pl::ObRefCursorType pl_type;
+  ObObj param;
+  param.set_ext(reinterpret_cast<int64_t>(cursor));
+  int64_t param_size = 0;
+  ObSchemaGetterGuard dummy_schema_guard;
+  OZ (init_cursor_cache());
+  OZ (pl_type.init_obj(dummy_schema_guard, get_cursor_allocator(), param, param_size));
+  OX (cursor = reinterpret_cast<ObPLCursorInfo*>(param.get_ext()));
+  OZ (add_cursor(cursor));
+  LOG_DEBUG("cursor alloc, session cursor", K(cursor));
+#endif
   return ret;
 }
 
@@ -1809,10 +1874,77 @@ void ObSQLSessionInfo::set_has_pl_implicit_savepoint(bool v)
 bool ObSQLSessionInfo::is_pl_debug_on()
 {
   bool is_on = false;
+#ifdef OB_BUILD_ORACLE_PL
+  is_on = pl_debugger_ != NULL && pl_debugger_->is_debug_on();
+#endif
   return is_on;
 }
 
 
+#ifdef OB_BUILD_ORACLE_PL
+int ObSQLSessionInfo::initialize_pl_debugger()
+{
+  int ret = OB_SUCCESS;
+  ObPDBManager *instance = ObPDBManager::get_instance();
+  if (OB_NOT_NULL(instance)) {
+    OZ (instance->alloc(pl_debugger_, this));
+    CK (OB_NOT_NULL(pl_debugger_));
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("current observer has not debugger instance!", K(ret));
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::get_pl_debugger(
+  uint32_t id, pl::debugger::ObPLDebugger *& pl_debugger)
+{
+  int ret = OB_SUCCESS;
+  ObPDBManager *instance = ObPDBManager::get_instance();
+  if (OB_NOT_NULL(instance)) {
+    OZ (instance->get(id, pl_debugger));
+    CK (OB_NOT_NULL(pl_debugger));
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("current observer has not debugger instance!", K(ret));
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::release_pl_debugger(pl::debugger::ObPLDebugger *pl_debugger)
+{
+  int ret = OB_SUCCESS;
+  ObPDBManager *instance = ObPDBManager::get_instance();
+  if (OB_ISNULL(pl_debugger)) {
+  } else if (OB_NOT_NULL(instance)) {
+    instance->release(pl_debugger);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("current observer has not debugger instance!", K(ret));
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::free_pl_debugger()
+{
+  int ret = OB_SUCCESS;
+  ObPDBManager *instance = ObPDBManager::get_instance();
+  if (OB_ISNULL(pl_debugger_)) {
+  } else if (OB_NOT_NULL(instance)) {
+    instance->free(pl_debugger_);
+    pl_debugger_ = NULL;
+    LOG_INFO("free current session debugger", K(ret));
+  } else {
+    LOG_ERROR("current observer has not debugger instance!");
+  }
+  return ret;
+}
+
+void ObSQLSessionInfo::reset_pl_debugger_resource()
+{
+  free_pl_debugger();
+}
+#endif
 
 void ObSQLSessionInfo::reset_all_package_changed_info()
 {
@@ -2401,6 +2533,9 @@ int ObSQLSessionInfo::save_sql_session(StmtSavedValue &saved_value)
   OX (saved_value.read_uncommited_ = read_uncommited_);
   OX (saved_value.is_ignore_stmt_ = is_ignore_stmt_);
   OX (inner_flag_ = true);
+#ifdef OB_BUILD_SPM
+  OX (saved_value.select_plan_type_ = select_plan_type_);
+#endif
   return ret;
 }
 
@@ -2412,6 +2547,9 @@ int ObSQLSessionInfo::restore_sql_session(StmtSavedValue &saved_value)
   OX (read_uncommited_ = saved_value.read_uncommited_);
   OX (is_ignore_stmt_ = saved_value.is_ignore_stmt_);
   OX (audit_record_.assign(saved_value.audit_record_));
+#ifdef OB_BUILD_SPM
+  OX (select_plan_type_ = saved_value.select_plan_type_);
+#endif
   return ret;
 }
 

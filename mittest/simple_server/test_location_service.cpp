@@ -20,10 +20,9 @@
 #include "lib/ob_errno.h"
 #include "share/location_cache/ob_location_service.h" // ObLocationService
 
-using namespace unittest;
-
 namespace oceanbase
 {
+using namespace unittest;
 namespace share
 {
 using namespace common;
@@ -306,7 +305,7 @@ TEST_F(TestLocationService, test_check_ls_exist)
 } // namespace oceanbase
 int main(int argc, char **argv)
 {
-  unittest::init_log_and_gtest(argc, argv);
+  oceanbase::unittest::init_log_and_gtest(argc, argv);
   OB_LOGGER.set_log_level("INFO");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

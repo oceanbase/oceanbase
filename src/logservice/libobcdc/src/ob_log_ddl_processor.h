@@ -15,7 +15,11 @@
 #ifndef OCEANBASE_LIBOBCDC_OB_LOG_DDL_PROCESSOR_H__
 #define OCEANBASE_LIBOBCDC_OB_LOG_DDL_PROCESSOR_H__
 
+#ifndef OB_USE_DRCMSG
 #include "ob_cdc_msg_convert.h"
+#else
+#include <drcmsg/BR.h>                            // IBinlogRecord
+#endif
 #include "lib/utility/ob_macro_utils.h"           // DISALLOW_COPY_AND_ASSIGN
 #include "ob_log_utils.h"                         // _SEC_
 

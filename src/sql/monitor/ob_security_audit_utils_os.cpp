@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+#ifndef OB_BUILD_AUDIT_SECURITY
 #define USING_LOG_PREFIX SQL_MONITOR
 
 #include "sql/monitor/ob_security_audit_utils.h"
@@ -50,4 +50,4 @@ int ObSecurityAuditUtils::get_audit_file_name(char *buf, const int64_t buf_len, 
 } //namespace sql
 } //namespace oceanbase
 
-
+#endif

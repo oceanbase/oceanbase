@@ -131,6 +131,18 @@
 #include "pl/ob_pl_package.h"
 #include "sql/resolver/ddl/ob_create_context_resolver.h"
 #include "sql/resolver/ddl/ob_drop_context_resolver.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "sql/resolver/ddl/ob_create_tablespace_resolver.h"
+#include "sql/resolver/ddl/ob_alter_tablespace_resolver.h"
+#include "sql/resolver/ddl/ob_drop_tablespace_resolver.h"
+#include "sql/resolver/ddl/ob_create_keystore_resolver.h"
+#include "sql/resolver/ddl/ob_alter_keystore_resolver.h"
+#endif
+#ifdef OB_BUILD_ORACLE_PL
+#include "sql/resolver/ddl/ob_create_udt_resolver.h"
+#include "sql/resolver/ddl/ob_drop_udt_resolver.h"
+#include "sql/resolver/ddl/ob_audit_resolver.h"
+#endif
 namespace oceanbase
 {
 using namespace common;
@@ -288,6 +300,12 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(CreateTable);
         break;
       }
+#ifdef OB_BUILD_AUDIT_SECURITY
+      case T_AUDIT: {
+        REGISTER_STMT_RESOLVER(Audit);
+        break;
+      }
+#endif
       case T_CREATE_FUNC: {
         REGISTER_STMT_RESOLVER(CreateFunc);
         break;
@@ -818,6 +836,20 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(AnonymousBlock);
         break;
       }
+#ifdef OB_BUILD_ORACLE_PL
+      case T_SP_CREATE_TYPE: {
+        REGISTER_STMT_RESOLVER(CreateUDT);
+        break;
+      }
+      case T_SP_CREATE_TYPE_BODY: {
+        REGISTER_STMT_RESOLVER(CreateUDTBody);
+        break;
+      }
+      case T_SP_DROP_TYPE: {
+        REGISTER_STMT_RESOLVER(DropUDT);
+        break;
+      }
+#endif
       case T_PACKAGE_CREATE: {
         REGISTER_STMT_RESOLVER(CreatePackage);
         break;
@@ -957,6 +989,31 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(SetRole);
         break;
       }*/
+#ifdef OB_BUILD_TDE_SECURITY
+      case T_CREATE_KEYSTORE: {
+        REGISTER_STMT_RESOLVER(CreateKeystore);
+        break;
+      }
+      case T_ALTER_KEYSTORE_OPEN:
+      case T_ALTER_KEYSTORE_CLOSE:
+      case T_ALTER_KEYSTORE_SET_KEY:
+      case T_ALTER_KEYSTORE_PASSWORD: {
+        REGISTER_STMT_RESOLVER(AlterKeystore);
+        break;
+      }
+      case T_CREATE_TABLESPACE: {
+        REGISTER_STMT_RESOLVER(CreateTablespace);
+        break;
+      }
+      case T_ALTER_TABLESPACE: {
+        REGISTER_STMT_RESOLVER(AlterTablespace);
+        break;
+      }
+      case T_DROP_TABLESPACE: {
+        REGISTER_STMT_RESOLVER(DropTablespace);
+        break;
+      }
+#endif
       case T_CREATE_PROFILE: {
         REGISTER_STMT_RESOLVER(UserProfile);
         break;

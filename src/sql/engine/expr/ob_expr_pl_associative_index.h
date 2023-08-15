@@ -77,6 +77,15 @@ private:
 
   static_assert(sizeof(Info) == 8, "unexpected size");
 
+#ifdef OB_BUILD_ORACLE_PL
+  static int do_eval_assoc_index(int64_t &assoc_idx,
+                                 ObExecContext &exec_ctx,
+                                 const Info &info,
+                                 pl::ObPLAssocArray &assoc_array,
+                                 const common::ObObj &key);
+
+  static int reserve_assoc_key(pl::ObPLAssocArray &assoc_array);
+#endif
   DISALLOW_COPY_AND_ASSIGN(ObExprPLAssocIndex);
 private:
   Info info_;

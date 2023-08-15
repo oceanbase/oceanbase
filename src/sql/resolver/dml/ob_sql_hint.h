@@ -382,9 +382,16 @@ struct ObLogPlanHint
   ObLogPlanHint() { reset(); }
   void reset();
   int init_normal_hints(const ObIArray<ObHint*> &normal_hints);
+#ifndef OB_BUILD_SPM
   int init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
                          const ObDMLStmt &stmt,
                          const ObQueryHint &query_hint);
+#else
+  int init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
+                         const ObDMLStmt &stmt,
+                         const ObQueryHint &query_hint,
+                         const bool is_spm_evolution);
+#endif
   int init_other_opt_hints(ObSqlSchemaGuard &schema_guard,
                            const ObDMLStmt &stmt,
                            const ObQueryHint &query_hint,
@@ -467,6 +474,9 @@ struct ObLogPlanHint
                K_(normal_hints));
 
   bool is_outline_data_;
+#ifdef OB_BUILD_SPM
+  bool is_spm_evolution_;
+#endif
   LogLeadingHint join_order_;
   common::ObSEArray<LogTableHint, 4, common::ModulePageAllocator, true> table_hints_;
   common::ObSEArray<LogJoinHint, 8, common::ModulePageAllocator, true> join_hints_;

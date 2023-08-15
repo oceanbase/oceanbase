@@ -1008,6 +1008,21 @@ int LogEngine::submit_config_change_pre_check_req(const common::ObAddr &server,
   return ret;
 }
 
+#ifdef OB_BUILD_ARBITRATION
+int LogEngine::sync_get_arb_member_info(const common::ObAddr &server,
+                                        const int64_t timeout_us,
+                                        LogGetArbMemberInfoResp &resp)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    ret = log_net_service_.submit_get_arb_member_info_req(
+        server, timeout_us, resp);
+  }
+  return ret;
+}
+#endif
 
 int LogEngine::submit_fetch_log_req(const ObAddr &server,
                                     const FetchLogType fetch_type,

@@ -520,6 +520,29 @@ int LogRequestHandler::handle_sync_request<LogGetStatReq, LogGetStatResp>(
   return ret;
 }
 
+#ifdef OB_BUILD_ARBITRATION
+template <>
+int LogRequestHandler::handle_sync_request<LogGetArbMemberInfoReq, LogGetArbMemberInfoResp>(
+    const int64_t palf_id,
+    const ObAddr &server,
+    const LogGetArbMemberInfoReq &req,
+    LogGetArbMemberInfoResp &resp)
+{
+  int ret = common::OB_SUCCESS;
+  IPalfHandleImplGuard guard;
+  if (false == is_valid_palf_id(palf_id) || false == req.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(req), KPC(palf_env_impl_));
+  } else if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
+    PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id), K(server));
+  } else if (OB_FAIL(guard.get_palf_handle_impl()->get_arb_member_info(resp.arb_member_info_))) {
+    PALF_LOG(WARN, "get_arb_member_info failed", K(ret), K(palf_id), K(server));
+  } else {
+    PALF_LOG(INFO, "get_arb_member_info succ", K(ret), K(palf_id), K(server), K(req), K(resp));
+  }
+  return ret;
+}
+#endif
 
 } // end namespace palf
 } // end namespace oceanbase

@@ -32,6 +32,9 @@ int ObPCVSet::init(ObILibCacheCtx &ctx, const ObILibCacheObject *obj)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo* sess;
+#ifdef OB_BUILD_SPM
+  bool is_spm_on = false;
+#endif
   ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
   const ObPlanCacheObject *cache_obj = static_cast<const ObPlanCacheObject*>(obj);
   if (is_inited_) {
@@ -43,6 +46,12 @@ int ObPCVSet::init(ObILibCacheCtx &ctx, const ObILibCacheObject *obj)
   } else if (NULL == (sess = pc_ctx.sql_ctx_.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_PC_LOG(WARN, "session info is null", K(ret));
+#ifdef OB_BUILD_SPM
+  } else if (OB_FAIL(sess->get_use_plan_baseline(is_spm_on))) {
+    LOG_WARN("fail to get spm config");
+  } else if (FALSE_IT(is_spm_closed_ = (!is_spm_on))) {
+    // do nothing
+#endif
   } else if (NULL == (pc_alloc_ = lib_cache_->get_pc_allocator())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid plan cache allocator", K_(pc_alloc), K(ret));
@@ -110,6 +119,9 @@ int ObPCVSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
 {
   UNUSED(key);
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SPM
+  bool is_spm_on = false;
+#endif
   ObPlanCacheObject *plan = NULL;
   ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
   if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
@@ -150,6 +162,13 @@ int ObPCVSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected null schema guard",
              K(ret), K(pc_ctx.sql_ctx_.schema_guard_), K(pc_ctx.sql_ctx_.session_info_));
+#ifdef OB_BUILD_SPM
+  } else if (OB_FAIL(pc_ctx.sql_ctx_.session_info_->get_use_plan_baseline(is_spm_on))) {
+    LOG_WARN("failed to get spm status", K(ret));
+  } else if (is_spm_closed_ != (!is_spm_on)) {
+    // spm param is altered
+    ret = OB_OLD_SCHEMA_VERSION;
+#endif
   } else {
     ObSEArray<PCVSchemaObj, 4> schema_array;
     //plan cache匹配临时表应该始终使用用户创建的session才能保证语义的正确性
@@ -521,6 +540,21 @@ int ObPCVSet::check_contains_table(uint64_t db_id, common::ObString tab_name, bo
   return ret;
 }
 
+#ifdef OB_BUILD_SPM
+int ObPCVSet::get_evolving_evolution_task(EvolutionPlanList &evo_task_list)
+{
+  int ret = OB_SUCCESS;
+  DLIST_FOREACH(pcv, pcv_list_) {
+    if (OB_ISNULL(pcv)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(pcv), K(ret));
+    } else if (OB_FAIL(pcv->get_evolving_evolution_task(evo_task_list))) {
+      LOG_WARN("fail to get evolving evolution task", K(ret));
+    }
+  }
+  return ret;
+}
+#endif
 
 }
 }

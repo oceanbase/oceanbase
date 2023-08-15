@@ -159,8 +159,195 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
                                                          ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support", K(ret));
+#else
+  pl::ObPLCollection *coll = NULL;
+  auto session = ctx.exec_ctx_.get_my_session();
+  auto &exec_ctx = ctx.exec_ctx_;
+  const ExtraInfo *info = static_cast<const ExtraInfo *>(expr.extra_info_);
+  CK(NULL != info);
+  // check types
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; i++) {
+    const ObExpr *e = expr.args_[i];
+    if (ObNullType != e->datum_meta_.type_
+        && e->datum_meta_.type_ != info->elem_type_.get_obj_type()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("check type failed", K(ret), K(*e), K(info->elem_type_));
+    }
+  }
+
+  ObIAllocator &alloc = ctx.exec_ctx_.get_allocator();
+  if (OB_SUCC(ret)) {
+    if (pl::PL_NESTED_TABLE_TYPE == info->type_) {
+      if (NULL == (coll =
+      static_cast<pl::ObPLNestedTable*>(alloc.alloc(sizeof(pl::ObPLNestedTable) + 8)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory for pl collection", K(ret), K(coll));
+      } else {
+        coll = new(coll)pl::ObPLNestedTable(info->udt_id_);
+      }
+    } else if (pl::PL_VARRAY_TYPE == info->type_) {
+      if (NULL == (coll =
+      static_cast<pl::ObPLVArray*>(alloc.alloc(sizeof(pl::ObPLVArray) + 8)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory for pl collection", K(ret), K(coll));
+      } else {
+        coll = new(coll)pl::ObPLVArray(info->udt_id_);
+        static_cast<pl::ObPLVArray*>(coll)->set_capacity(info->capacity_);
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected collection type to construct", K(info->type_), K(ret));
+    }
+  }
+
+  OZ(expr.eval_param_value(ctx));
+
+  for (int64_t i = 0; OB_SUCC(ret) && info->not_null_ && i < expr.arg_cnt_; ++i) {
+    if (expr.args_[i]->locate_expr_datum(ctx).is_null()) {
+      ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
+      LOG_WARN("not null check violated", K(coll),
+                                          K(coll->is_not_null()),
+                                          K(coll->get_count()),
+                                          K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    const pl::ObUserDefinedType *type = NULL;
+    const pl::ObCollectionType *collection_type = NULL;
+    pl::ObElemDesc elem_desc;
+    pl::ObPLPackageGuard package_guard(session->get_effective_tenant_id());
+    pl::ObPLResolveCtx resolve_ctx(alloc,
+                                   *session,
+                                   *(exec_ctx.get_sql_ctx()->schema_guard_),
+                                   package_guard,
+                                   *(exec_ctx.get_sql_proxy()),
+                                   false);
+    OZ (package_guard.init());
+    pl::ObPLINS *ns = NULL;
+    if (NULL == session->get_pl_context()) {
+      ns = &resolve_ctx;
+    } else {
+      ns = session->get_pl_context()->get_current_ctx();
+    }
+
+    if (info->elem_type_.get_meta_type().is_ext()) {
+      int64_t field_cnt = OB_INVALID_COUNT;
+      CK (OB_NOT_NULL(ns));
+      OZ (ns->get_user_type(info->udt_id_, type));
+      OV (OB_NOT_NULL(type), OB_ERR_UNEXPECTED, K(info->udt_id_));
+      CK (type->is_collection_type());
+      CK (OB_NOT_NULL(collection_type = static_cast<const pl::ObCollectionType*>(type)));
+      OX (elem_desc.set_obj_type(common::ObExtendType));
+      OX (elem_desc.set_pl_type(collection_type->get_element_type().get_type()));
+      OZ (collection_type->get_element_type().get_field_count(*ns, field_cnt));
+      OX (elem_desc.set_field_count(field_cnt));
+      OX (elem_desc.set_udt_id(collection_type->get_element_type().get_user_type_id()));
+    } else {
+      OX (elem_desc.set_data_type(info->elem_type_));
+      OX (elem_desc.set_field_count(1));
+    }
+    OX (coll->set_element_desc(elem_desc));
+    OX (coll->set_not_null(info->not_null_));
+
+    // recursive construction is not needed
+    OZ (ObSPIService::spi_set_collection(session->get_effective_tenant_id(),
+                                         ns,
+                                         alloc,
+                                         *coll,
+                                         expr.arg_cnt_));
+    if (OB_SUCC(ret)) {
+      if (info->elem_type_.get_meta_type().is_ext()) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
+          const ObDatum &d = expr.args_[i]->locate_expr_datum(ctx);
+          ObObj v;
+          CK (OB_NOT_NULL(coll->get_data()));
+          OZ(d.to_obj(v, expr.args_[i]->obj_meta_, expr.args_[i]->obj_datum_map_));
+          // check type match first if value is not null
+          if (OB_SUCC(ret) && !v.is_null()) {
+            if (pl::PL_OPAQUE_TYPE == v.get_meta().get_extend_type()
+                      || pl::PL_CURSOR_TYPE == v.get_meta().get_extend_type()
+                      || pl::PL_REF_CURSOR_TYPE == v.get_meta().get_extend_type()) {
+              if (v.get_meta().get_extend_type() != coll->get_element_desc().get_pl_type()) {
+                ret = OB_ERR_CALL_WRONG_ARG;
+                LOG_WARN("invalid argument. unexpected composite value", K(ret), K(v), KPC(coll));
+              }
+            } else {
+              TYPE_CHECK(v, info->elem_type_.get_meta_type().get_type());
+              OZ (check_match(v, coll->get_element_desc(), *ns));
+            }
+          }
+          if (OB_SUCC(ret) && info->not_null_ && !v.is_null()) {
+            ObObjParam v1 = v;
+            OZ (ObSPIService::spi_check_composite_not_null(&v1));
+          }
+          if (OB_SUCC(ret)) {
+            if (v.is_null()) {
+              ObObj new_composite;
+              int64_t ptr = 0;
+              int64_t init_size = OB_INVALID_SIZE;
+              OZ (collection_type->get_element_type().newx(*coll->get_allocator(), ns, ptr));
+              OZ (collection_type->get_element_type().get_size(*ns, pl::PL_TYPE_INIT_SIZE, init_size));
+              OX (new_composite.set_extend(ptr, collection_type->get_element_type().get_type(), init_size));
+              OX (static_cast<ObObj*>(coll->get_data())[i] = new_composite);
+            } else if (pl::PL_OPAQUE_TYPE == v.get_meta().get_extend_type()
+                      || pl::PL_CURSOR_TYPE == v.get_meta().get_extend_type()
+                      || pl::PL_REF_CURSOR_TYPE == v.get_meta().get_extend_type()) {
+              OZ (pl::ObUserDefinedType::deep_copy_obj(*coll->get_allocator(),
+                                                       v,
+                                                       static_cast<ObObj*>(coll->get_data())[i],
+                                                       true));
+            } else {
+              OZ (pl::ObUserDefinedType::deep_copy_obj(*coll->get_allocator(),
+                                                       v,
+                                                       static_cast<ObObj*>(coll->get_data())[i],
+                                                       true));
+            }
+          }
+        }
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
+          const ObDatum &d = expr.args_[i]->locate_expr_datum(ctx);
+          ObObj v;
+          CK (OB_NOT_NULL(coll->get_data()));
+          OZ(d.to_obj(v, expr.args_[i]->obj_meta_, expr.args_[i]->obj_datum_map_));
+          if (OB_SUCC(ret) && !v.is_null()) {
+            TYPE_CHECK(v, info->elem_type_.get_meta_type().get_type());
+          }
+          OZ (ObSPIService::spi_pad_char_or_varchar(session,
+                                                    info->elem_type_.get_obj_type(),
+                                                    info->elem_type_.get_accuracy(),
+                                                    coll->get_allocator(),
+                                                    &v));
+          OZ (deep_copy_obj(*coll->get_allocator(),
+                            v,
+                            static_cast<ObObj*>(coll->get_data())[i]));
+        }
+      }
+    }
+
+    ObObj result;
+    result.set_extend(reinterpret_cast<int64_t>(coll), coll->get_type());
+    OZ(expr_datum.from_obj(result, expr.obj_datum_map_));
+    //Collection constructed here must be recorded and destructed at last
+    if (OB_NOT_NULL(coll->get_allocator())) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_ISNULL(exec_ctx.get_pl_ctx())) {
+        tmp_ret = exec_ctx.init_pl_ctx();
+      }
+      if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(exec_ctx.get_pl_ctx())) {
+        tmp_ret = exec_ctx.get_pl_ctx()->add(result);
+      }
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
+      }
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    }
+  }
+#endif
   return ret;
 }
 

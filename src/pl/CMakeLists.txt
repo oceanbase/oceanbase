@@ -36,7 +36,7 @@ ob_set_subtarget(ob_pl common
   ob_pl_user_type.cpp
 )
 
-ob_set_subtarget(ob_pl common_mixed
+ob_set_subtarget(ob_pl pl_cache
   pl_cache/ob_pl_cache.cpp
   pl_cache/ob_pl_cache_mgr.cpp
   pl_cache/ob_pl_cache_object.cpp
@@ -51,7 +51,6 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_upgrade.cpp
   sys_package/ob_dbms_sql.cpp
   sys_package/ob_dbms_user_define_rule.cpp
-  sys_package/ob_pl_dbms_resource_manager.cpp
 )
 
 ob_server_add_target(ob_pl)

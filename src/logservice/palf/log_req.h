@@ -446,6 +446,67 @@ public:
   LSN end_lsn_;
 };
 
+#ifdef OB_BUILD_ARBITRATION
+struct LogGetArbMemberInfoReq {
+  OB_UNIS_VERSION(1);
+public:
+  LogGetArbMemberInfoReq();
+  LogGetArbMemberInfoReq(const int64_t palf_id);
+  ~LogGetArbMemberInfoReq();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(palf_id));
+  int64_t palf_id_;
+};
+
+struct ArbMemberInfo {
+  OB_UNIS_VERSION(1);
+public:
+  ArbMemberInfo();
+  ~ArbMemberInfo() { reset(); }
+  bool is_valid() const;
+  void reset();
+  ArbMemberInfo &operator=(const ArbMemberInfo &other)
+  {
+    this->palf_id_ = other.palf_id_;
+    this->arb_server_ = other.arb_server_;
+    this->log_proposal_id_ = other.log_proposal_id_;
+    this->config_version_ = other.config_version_;
+    this->mode_version_ = other.mode_version_;
+    this->access_mode_ = other.access_mode_;
+    this->paxos_member_list_ = other.paxos_member_list_;
+    this->paxos_replica_num_ = other.paxos_replica_num_;
+    this->arbitration_member_ = other.arbitration_member_;
+    this->degraded_list_ = other.degraded_list_;
+    return *this;
+  }
+  TO_STRING_KV(K_(palf_id), K_(arb_server), K_(log_proposal_id), K_(config_version), K_(mode_version),
+      K_(access_mode), K_(paxos_member_list), K_(paxos_replica_num), K_(arbitration_member),
+      K_(degraded_list));
+public:
+  int64_t palf_id_;
+  common::ObAddr arb_server_;
+  int64_t log_proposal_id_;
+  LogConfigVersion config_version_;
+  int64_t mode_version_;
+  AccessMode access_mode_;
+  ObMemberList paxos_member_list_;
+  int64_t paxos_replica_num_;
+  common::ObMember arbitration_member_;
+  common::GlobalLearnerList degraded_list_;
+};
+
+struct LogGetArbMemberInfoResp {
+  OB_UNIS_VERSION(1);
+public:
+  LogGetArbMemberInfoResp();
+  ~LogGetArbMemberInfoResp();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(arb_member_info));
+  ArbMemberInfo arb_member_info_;
+};
+#endif
 
 } // end namespace palf
 } // end namespace oceanbase

@@ -59,6 +59,9 @@ ObLogService::ObLogService() :
     ls_adapter_(),
     rpc_proxy_(),
     reporter_(),
+#ifdef OB_BUILD_ARBITRATION
+    arb_service_(),
+#endif
     restore_service_(),
     flashback_service_(),
     monitor_()
@@ -127,6 +130,10 @@ int ObLogService::start()
     CLOG_LOG(WARN, "failed to start cdc_service_", K(ret));
   } else if (OB_FAIL(restore_service_.start())) {
     CLOG_LOG(WARN, "failed to start restore_service_", K(ret));
+#ifdef OB_BUILD_ARBITRATION
+  } else if (OB_FAIL(arb_service_.start())) {
+    CLOG_LOG(WARN, "failed to start arb_service_", K(ret));
+#endif
   } else {
     is_running_ = true;
     FLOG_INFO("ObLogService is started");
@@ -143,6 +150,9 @@ void ObLogService::stop()
   (void)role_change_service_.stop();
   (void)cdc_service_.stop();
   (void)restore_service_.stop();
+#ifdef OB_BUILD_ARBITRATION
+  (void)arb_service_.stop();
+#endif
   FLOG_INFO("ObLogService is stopped");
 }
 
@@ -153,6 +163,9 @@ void ObLogService::wait()
   role_change_service_.wait();
   cdc_service_.wait();
   restore_service_.wait();
+#ifdef OB_BUILD_ARBITRATION
+  arb_service_.wait();
+#endif
 }
 
 void ObLogService::destroy()
@@ -167,6 +180,9 @@ void ObLogService::destroy()
   rpc_proxy_.destroy();
   reporter_.destroy();
   restore_service_.destroy();
+#ifdef OB_BUILD_ARBITRATION
+  arb_service_.destroy();
+#endif
   flashback_service_.destroy();
   if (NULL != palf_env_) {
     PalfEnv::destroy_palf_env(palf_env_);
@@ -250,6 +266,10 @@ int ObLogService::init(const PalfOptions &options,
     CLOG_LOG(WARN, "failed to init cdc_service_", K(ret));
   } else if (OB_FAIL(restore_service_.init(transport, ls_service, this))) {
     CLOG_LOG(WARN, "failed to init restore_service_", K(ret));
+#ifdef OB_BUILD_ARBITRATION
+  } else if (OB_FAIL(arb_service_.init(self, palf_env_, &rpc_proxy_, net_keepalive_adapter, &monitor_))) {
+    CLOG_LOG(WARN, "failed to init arb_service_", K(ret), K(self), KP(palf_env_));
+#endif
   } else if (OB_FAIL(flashback_service_.init(self, &location_adapter_, &rpc_proxy_, sql_proxy))) {
     CLOG_LOG(WARN, "failed to init flashback_service_", K(ret));
   } else {
@@ -720,6 +740,22 @@ int ObLogService::diagnose_apply(const share::ObLSID &id,
   return ret;
 }
 
+#ifdef OB_BUILD_ARBITRATION
+int ObLogService::diagnose_arb_srv(const share::ObLSID &id,
+                                   LogArbSrvDiagnoseInfo &diagnose_info)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "log_service is not inited", K(ret));
+  } else if (OB_FAIL(arb_service_.diagnose(id, diagnose_info))) {
+    CLOG_LOG(WARN, "arb_service_ diagnose failed", K(ret), K(id));
+  } else {
+    // do nothing
+  }
+  return ret;
+}
+#endif
 
 int ObLogService::get_io_start_time(int64_t &last_working_time)
 {

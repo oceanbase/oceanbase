@@ -46,7 +46,7 @@ private:
 
 private:
 
-  // TODO:  change SCHEDULER_WAIT_TIME_MS to 5 min when rs use rpc to wake up the ha service.
+  // TODO(chongrong.th): change SCHEDULER_WAIT_TIME_MS to 5 min when rs use rpc to wake up the ha service in 4.3
   static const int64_t SCHEDULER_WAIT_TIME_MS = 1000L; // 1s 
   bool is_inited_;
   common::ObThreadCond thread_cond_;

@@ -172,6 +172,12 @@ src/pl/parser/_gen_pl_parser.output
 src/pl/parser/pl_parser_mysql_mode.output
 src/pl/parser/pl_parser_oracle_mode.output
 
+############# close_modules #############
+close_modules/oracle_pl/pl/parser/*.output
+close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_lex.c
+close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_tab.c
+close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode_tab.h
+
 ############# tools #############
 tools/ObRestore/mvn_repository
 tools/agentserver/agentserver

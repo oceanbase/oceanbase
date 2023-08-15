@@ -373,6 +373,7 @@ protected:
 protected:
   bool is_inited_;
   ObTabletRestoreCtx tablet_restore_ctx_;
+  //TODO(muwei.ym) put this into dag net ctx 4.3
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
   storage::ObStorageRpc *storage_rpc_;

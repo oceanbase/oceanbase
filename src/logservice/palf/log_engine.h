@@ -330,6 +330,11 @@ public:
                                                  const bool need_purge_throttling,
                                                  const int64_t timeout_us,
                                                  LogGetMCStResp &resp);
+#ifdef OB_BUILD_ARBITRATION
+  virtual int sync_get_arb_member_info(const common::ObAddr &server,
+                                       const int64_t timeout_us,
+                                       LogGetArbMemberInfoResp &resp);
+#endif
 
   // @brief: this function used to submit fetch log request to sepcified server
   // @param[in] server: the address of remote server(data source)

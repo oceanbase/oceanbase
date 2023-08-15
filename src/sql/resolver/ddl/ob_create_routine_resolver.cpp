@@ -19,6 +19,9 @@
 #include "pl/ob_pl_package.h"
 #include "pl/ob_pl_resolver.h"
 #include "share/schema/ob_trigger_info.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/ob_pl_udt_object_manager.h"
+#endif
 
 namespace oceanbase
 {
@@ -286,6 +289,38 @@ int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &a
   } else if (ObObjAccessIdx::is_pkg_type(access_idxs)) {
     CK (access_idxs.count() >= 1 && access_idxs.count() <= 3);
     if (OB_FAIL(ret)) {
+#ifdef OB_BUILD_ORACLE_PL
+    } else if (1 == access_idxs.count()) { // standard package type
+      ObPLPackageGuard package_guard(params_.session_info_->get_effective_tenant_id());
+      const ObUserDefinedType *user_type = NULL;
+      const ObUserDefinedSubType *sub_type = NULL;
+      CK (OB_NOT_NULL(params_.schema_checker_));
+      OZ (ObResolverUtils::get_user_type(params_.allocator_,
+                                         params_.session_info_,
+                                         params_.sql_proxy_,
+                                         params_.schema_checker_->get_schema_guard(),
+                                         package_guard,
+                                         access_idxs.at(0).var_index_,
+                                         user_type));
+      CK (OB_NOT_NULL(sub_type = static_cast<const ObUserDefinedSubType *>(user_type)));
+      if (OB_FAIL(ret)) {
+      } else if (sub_type->get_base_type()->is_obj_type()) {
+        ObDataType data_type = *(sub_type->get_base_type()->get_data_type());
+        if (ObNumberTC == data_type.get_type_class() &&
+            38 == data_type.get_precision() &&
+            0 == data_type.get_scale()) {
+          data_type.set_precision(-1);
+          data_type.set_scale(-85);
+        }
+        routine_param.set_param_type(data_type);
+      } else {
+        OX (routine_param.set_param_type(ObExtendType));
+        OX (routine_param.set_pkg_type());
+        OX (routine_param.set_type_name(access_idxs.at(access_idxs.count()-1).var_name_));
+        OX (routine_param.set_type_subname("STANDARD"));
+        OX (routine_param.set_type_owner(OB_SYS_DATABASE_ID));
+      }
+#endif
     } else {
       OX (routine_param.set_param_type(ObExtendType));
       OX (routine_param.set_pkg_type());
@@ -605,6 +640,14 @@ int ObCreateRoutineResolver::resolve_param_list(const ParseNode *param_list, ObR
       if (OB_SUCC(ret) && 1 == param_node->int32_values_[1]) {
         routine_param.set_nocopy_param();
       }
+#ifdef OB_BUILD_ORACLE_PL
+      if (OB_SUCC(ret)) {
+        // 借用text_len_ , 后续修改
+        if (pl::ObPLUDTObjectManager::is_self_param(param_name)) {
+          routine_param.set_is_self_param();
+        }
+      }
+#endif
       // 设置default value expr str
       if (OB_SUCC(ret)
           && 3 == param_node->num_child_ // oracle mode has default node

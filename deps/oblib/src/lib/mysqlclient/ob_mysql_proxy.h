@@ -17,6 +17,9 @@
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "lib/mysqlclient/ob_mysql_statement.h"
 #include "lib/mysqlclient/ob_mysql_connection_pool.h"
+#ifdef OB_BUILD_DBLINK
+#include "lib/oracleclient/ob_oracle_oci_connection.h"
+#endif
 
 namespace oceanbase
 {

@@ -815,6 +815,35 @@ int ObMySQLResultImpl::get_col_meta(const int64_t col_idx, bool old_max_length,
                                     ObDataType &data_type) const
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_DBLINK
+  ObObjType ob_type;
+  if (OB_ISNULL(fields_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("check fields_ failed", K(ret));
+  } else if (col_idx < 0 || col_idx >= result_column_count_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid column idx", K(col_idx), K_(result_column_count));
+  } else if (OB_FAIL(get_ob_type(ob_type, static_cast<obmysql::EMySQLFieldType>(fields_[col_idx].type),
+                     fields_[col_idx].flags & UNSIGNED_FLAG))) {
+    LOG_WARN("failed to get ob type", K(ret), "mysql_type", fields_[col_idx].type);
+  } else {
+    int16_t precision = fields_[col_idx].precision;
+    int16_t scale = fields_[col_idx].decimals;
+    int32_t length = fields_[col_idx].length;
+    name.assign_ptr(fields_[col_idx].name, STRLEN(fields_[col_idx].name));
+    data_type.meta_.set_type(ob_type);
+    data_type.meta_.set_collation_type(static_cast<ObCollationType>(fields_[col_idx].charsetnr));
+    //data_type.meta_.set_autoincrement(fields_[col_idx].flags & AUTO_INCREMENT_FLAG);
+    data_type.set_zero_fill(fields_[col_idx].flags & ZEROFILL_FLAG);
+    format_precision_scale_length(precision, scale, length,
+                                  ob_type, data_type.meta_.get_collation_type(),
+                                  DBLINK_DRV_OB, old_max_length);
+    data_type.set_precision(precision);
+    data_type.set_scale(scale);
+    data_type.set_length(length);
+    LOG_DEBUG("get col type from obclient", K(ob_type), K(data_type), K(ret));
+  }
+#endif
   return ret;
 }
 

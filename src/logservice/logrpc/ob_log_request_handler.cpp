@@ -98,6 +98,23 @@ int LogRequestHandler::get_rpc_proxy_(obrpc::ObLogServiceRpcProxy *&rpc_proxy) c
   return ret;
 }
 
+#ifdef OB_BUILD_ARBITRATION
+int LogRequestHandler::get_arb_service_(ObArbitrationService *&arb_service) const
+{
+  int ret = OB_SUCCESS;
+  logservice::ObLogService *log_service = NULL;
+  if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "get_log_service failed", K(ret));
+  } else if (OB_ISNULL(arb_service = log_service->get_arbitration_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "log_service.get_arbitration_service failed", K(ret));
+  } else {
+    CLOG_LOG(TRACE, "get_arb_service_", KP(arb_service), KP(log_service), K(MTL_ID()));
+  }
+  return ret;
+}
+#endif
 
 int LogRequestHandler::get_flashback_service_(ObLogFlashbackService *&flashback_srv) const
 {
@@ -236,6 +253,14 @@ int ConfigChangeCmdHandler::handle_config_change_cmd(const LogConfigChangeCmd &r
       case REMOVE_MEMBER_CMD:
         ret = palf_handle_->remove_member(req.removed_member_, req.new_replica_num_, req.timeout_us_);
         break;
+#ifdef OB_BUILD_ARBITRATION
+      case ADD_ARB_MEMBER_CMD:
+        ret = palf_handle_->add_arb_member(req.added_member_, req.timeout_us_);
+        break;
+      case REMOVE_ARB_MEMBER_CMD:
+        ret = palf_handle_->remove_arb_member(req.removed_member_, req.timeout_us_);
+        break;
+#endif
       case REPLACE_MEMBER_CMD:
         ret = palf_handle_->replace_member(req.added_member_, req.removed_member_, req.config_version_, req.timeout_us_);
         break;
@@ -277,6 +302,26 @@ int ConfigChangeCmdHandler::handle_config_change_cmd(const LogConfigChangeCmd &r
   return ret;
 }
 
+#ifdef OB_BUILD_ARBITRATION
+template <>
+int LogRequestHandler::handle_request<LogServerProbeMsg>(const LogServerProbeMsg &req)
+{
+  int ret = common::OB_SUCCESS;
+  ObArbitrationService *arb_service;
+  const common::ObAddr &server = req.src_;
+  if (false == req.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(ERROR, "Invalid argument!!!", K(ret), K(req));
+  } else if (OB_FAIL(get_arb_service_(arb_service))) {
+    CLOG_LOG(ERROR, "get_arb_service_ failed", K(ret), K(req));
+  } else if (OB_FAIL(arb_service->handle_server_probe_msg(server, req))) {
+    CLOG_LOG(WARN, "handle_server_probe_msg failed", K(ret), K(req));
+  } else {
+    CLOG_LOG(TRACE, "handle_server_probe_msg success", K(ret), K(server), K(req));
+  }
+  return ret;
+}
+#endif
 
 template <>
 int LogRequestHandler::handle_request<LogChangeAccessModeCmd>(const LogChangeAccessModeCmd &req)

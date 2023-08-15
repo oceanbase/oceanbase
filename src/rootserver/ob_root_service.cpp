@@ -56,6 +56,12 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "share/ob_upgrade_utils.h"
 #include "share/deadlock/ob_deadlock_inner_table_service.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
+#ifdef OB_BUILD_ARBITRATION
+#include "share/arbitration_service/ob_arbitration_service_utils.h" // ObArbitrationServiceUtils
+#endif
 #include "share/ob_max_id_fetcher.h" // ObMaxIdFetcher
 #include "share/backup/ob_backup_config.h"
 #include "share/backup/ob_backup_helper.h"
@@ -655,6 +661,9 @@ ObRootService::ObRootService()
     rs_status_(),
     fail_count_(0),
     schema_history_recycler_(),
+#ifdef OB_BUILD_TDE_SECURITY
+    master_key_mgr_(),
+#endif
     disaster_recovery_task_executor_(),
     disaster_recovery_task_mgr_(),
     global_ctx_task_(*this)
@@ -834,6 +843,9 @@ int ObRootService::init(ObServerConfig &config,
       lst_operator,
       unit_manager_,
       sql_proxy_
+#ifdef OB_BUILD_TDE_SECURITY
+      , &master_key_mgr_
+#endif
       ))) {
     FLOG_WARN("init server zone op service failed", KR(ret));
   } else if (OB_FAIL(hb_checker_.init(server_manager_))) {
@@ -895,6 +907,10 @@ int ObRootService::init(ObServerConfig &config,
                                                                                &sql_proxy_,
                                                                                schema_service_))) {
     FLOG_WARN("init ObDBMSSchedJobMaster failed", KR(ret));
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(master_key_mgr_.init(&zone_manager_, schema_service_))) {
+    FLOG_WARN("init master key mgr failed", KR(ret));
+#endif
   } else if (OB_FAIL(disaster_recovery_task_executor_.init(lst_operator,
                                                            rpc_proxy_))) {
     FLOG_WARN("init disaster recovery task executor failed", KR(ret));
@@ -986,6 +1002,14 @@ void ObRootService::destroy()
   ddl_scheduler_.destroy();
   FLOG_INFO("ddl task scheduler destroy");
 
+#ifdef OB_BUILD_TDE_SECURITY
+  if (OB_FAIL(master_key_mgr_.destroy())) {
+    FLOG_WARN("master key mgr destroy failed", KR(ret));
+    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
+  } else {
+    FLOG_INFO("master key mgr destroy");
+  }
+#endif
 
   if (OB_FAIL(disaster_recovery_task_mgr_.destroy())) {
     FLOG_WARN("disaster recovery task mgr destroy failed", KR(ret));
@@ -1203,6 +1227,10 @@ int ObRootService::stop()
       FLOG_INFO("ddl task scheduler stop");
       dbms_job::ObDBMSJobMaster::get_instance().stop();
       FLOG_INFO("dbms job master stop");
+#ifdef OB_BUILD_TDE_SECURITY
+      master_key_mgr_.stop();
+      FLOG_INFO("master key mgr stop");
+#endif
       disaster_recovery_task_mgr_.stop();
       FLOG_INFO("disaster_recovery_task_mgr stop");
       dbms_scheduler::ObDBMSSchedJobMaster::get_instance().stop();
@@ -1243,6 +1271,10 @@ void ObRootService::wait()
   FLOG_INFO("inspect queue exit success");
   ddl_scheduler_.wait();
   FLOG_INFO("ddl task scheduler exit success");
+#ifdef OB_BUILD_TDE_SECURITY
+  master_key_mgr_.wait();
+  FLOG_INFO("master key mgr exit success");
+#endif
   disaster_recovery_task_mgr_.wait();
   FLOG_INFO("rebalance task mgr exit success");
   TG_WAIT(lib::TGDefIDs::GlobalCtxTimer);
@@ -1982,6 +2014,33 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObRootService::check_sys_tenant_initial_master_key_valid()
+{
+  int ret = OB_SUCCESS;
+  const int64_t start = ObTimeUtility::current_time();
+  const int64_t MAX_WAIT_US = 120L * 1000L * 1000L; //120s
+  const int64_t end = start + MAX_WAIT_US;
+  const int64_t IDLING_US = 100L * 1000L; // 100ms
+  while (OB_SUCC(ret)) {
+    if (ObTimeUtility::current_time() >= end) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("wait sys tenant initial master key valid timeout", KR(ret));
+    } else {
+      bool has_available_master_key = false;
+      if (OB_FAIL(master_key_mgr_.check_if_tenant_has_available_master_keys(
+              OB_SYS_TENANT_ID, has_available_master_key))) {
+        LOG_WARN("fail to check if tenant has available master key", KR(ret));
+      } else if (!has_available_master_key) {
+        ob_usleep(std::min(IDLING_US, end - ObTimeUtility::current_time()));
+      } else {
+        break;
+      }
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObRootService::check_config_result(const char *name, const char* value)
 {
@@ -2172,6 +2231,12 @@ int ObRootService::renew_lease(const ObLeaseRequest &lease_request, ObLeaseRespo
           lease_response.rs_server_status_ = is_stopped ? RSS_IS_STOPPED : RSS_IS_WORKING;
         }
       }
+#ifdef OB_BUILD_TDE_SECURITY
+      if (OB_SUCCESS != (temp_ret = master_key_mgr_.input_server_master_key(
+              lease_request.server_, lease_request.tenant_max_flushed_key_version_))) {
+        LOG_WARN("fail to input server master key", KR(temp_ret), K(lease_request));
+      }
+#endif
     }
     if (OB_SUCC(ret)) {
       lease_response.version_ = ObLeaseResponse::LEASE_VERSION;
@@ -2192,6 +2257,14 @@ int ObRootService::renew_lease(const ObLeaseRequest &lease_request, ObLeaseRespo
         LOG_WARN("fail to get refresh_schema_info", K(temp_ret));
       }
 
+#ifdef OB_BUILD_TDE_SECURITY
+      if (OB_SUCCESS != (temp_ret = master_key_mgr_.get_all_tenant_master_key(
+              lease_request.zone_,
+              lease_response.tenant_max_key_version_))) {
+        LOG_WARN("fail to get all tenant master key", KR(temp_ret),
+                 "server", lease_request.server_, "zone", lease_request.zone_);
+      }
+#endif
       LOG_TRACE("lease_request", K(lease_request), K(lease_response));
     }
   }
@@ -4983,6 +5056,13 @@ int ObRootService::do_restart()
   }
 
 
+#ifdef OB_BUILD_TDE_SECURITY
+  if (FAILEDx(master_key_mgr_.start())) {
+    FLOG_WARN("fail to start master key manager", KR(ret));
+  } else {
+    FLOG_INFO("success to start master key manager");
+  }
+#endif
 
   if (FAILEDx(disaster_recovery_task_mgr_.start())) {
     FLOG_WARN("disaster recovery task manager start failed", KR(ret));
@@ -6402,6 +6482,104 @@ int ObRootService::drop_synonym(const obrpc::ObDropSynonymArg &arg)
 }
 //-----End of functions for managing synonyms-----
 
+#ifdef OB_BUILD_SPM
+//-----Functions for managing plan_baselines-----
+int ObRootService::accept_plan_baseline(const ObModifyPlanBaselineArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObZone null_zone;
+  ObSEArray<ObAddr, 8> server_list;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(null_zone, server_list))) {
+    LOG_WARN("fail to get alive server", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < server_list.count(); i++) {
+      if (OB_FAIL(rpc_proxy_.to(server_list.at(i))
+                            .by(arg.tenant_id_)
+                            .as(arg.tenant_id_)
+                            .svr_accept_plan_baseline(arg))) {
+        LOG_WARN("fail to accept plan baseline", K(ret), K(server_list.at(i)));
+        ret = OB_SUCCESS;
+      } else { /*do nothing*/}
+    }
+  }
+  return ret;
+}
+
+int ObRootService::cancel_evolve_task(const ObModifyPlanBaselineArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObZone null_zone;
+  ObSEArray<ObAddr, 8> server_list;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(null_zone, server_list))) {
+    LOG_WARN("fail to get alive server", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < server_list.count(); i++) {
+      if (OB_FAIL(rpc_proxy_.to(server_list.at(i))
+                            .by(arg.tenant_id_)
+                            .as(arg.tenant_id_)
+                            .svr_cancel_evolve_task(arg))) {
+        LOG_WARN("fail to accept plan baseline", K(ret), K(server_list.at(i)));
+        ret = OB_SUCCESS;
+      } else { /*do nothing*/}
+    }
+  }
+  return ret;
+}
+
+int ObRootService::admin_load_baseline(const obrpc::ObLoadPlanBaselineArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    ObSystemAdminCtx ctx;
+    if (OB_FAIL(init_sys_admin_ctx(ctx))) {
+      LOG_WARN("init_sys_admin_ctx failed", K(ret));
+    } else {
+      ObAdminLoadBaseline admin_util(ctx);
+      if (OB_FAIL(admin_util.execute(arg))) {
+        LOG_WARN("dispatch flush cache failed", K(arg), K(ret));
+      }
+      ROOTSERVICE_EVENT_ADD("root_service", "admin_load_baseline", K(ret), K(arg));
+    }
+  }
+  return ret;
+}
+
+int ObRootService::admin_load_baseline_v2(const obrpc::ObLoadPlanBaselineArg &arg,
+                                          obrpc::ObLoadBaselineRes &res)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    ObSystemAdminCtx ctx;
+    uint64_t load_count = 0;
+    if (OB_FAIL(init_sys_admin_ctx(ctx))) {
+      LOG_WARN("init_sys_admin_ctx failed", K(ret));
+    } else {
+      ObAdminLoadBaselineV2 admin_util(ctx);
+      if (OB_FAIL(admin_util.execute(arg, load_count))) {
+        LOG_WARN("dispatch flush cache failed", K(arg), K(ret));
+      } else {
+        res.load_count_ = load_count;
+      }
+      ROOTSERVICE_EVENT_ADD("root_service", "admin_load_baseline", K(ret), K(arg));
+    }
+  }
+  return ret;
+}
+
+//-----End of functions for managing plan_baselines-----
+#endif
 
 int ObRootService::admin_sync_rewrite_rules(const obrpc::ObSyncRewriteRuleArg &arg)
 {
@@ -6760,9 +6938,36 @@ int ObRootService::do_keystore_ddl(const obrpc::ObKeystoreDDLArg &arg)
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+#ifndef OB_BUILD_TDE_SECURITY
   } else if (OB_FAIL(ddl_service_.do_keystore_ddl(arg))) {
     LOG_WARN("do sequence ddl failed", K(arg), K(ret));
   }
+#else
+  } else {
+    // exclude add server
+    common::ObArray<uint64_t> tenant_id_array;
+    common::ObArray<std::pair<uint64_t, uint64_t> > max_key_version;
+    SpinRLockGuard sync_guard(master_key_mgr_.sync());
+    if (OB_FAIL(ddl_service_.do_keystore_ddl(arg))) {
+      LOG_WARN("do sequence ddl failed", K(arg), K(ret));
+    } else if (arg.type_ == ObKeystoreDDLArg::ALTER_KEYSTORE_SET_KEY) {
+      if (OB_FAIL(tenant_id_array.push_back(arg.exec_tenant_id_))) {
+        LOG_WARN("fail to push back", KR(ret));
+      } else if (OB_FAIL(ObMasterKeyGetter::instance().get_latest_key_versions(
+            tenant_id_array, max_key_version))) {
+        LOG_WARN("fail to get latest key versions", KR(ret));
+      } else if (max_key_version.count() != 1 || max_key_version.at(0).second <= 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("max key version unexpected", KR(ret), K(arg), K(max_key_version));
+      } else if (OB_FAIL(master_key_mgr_.forward_tenant_max_key_version(
+              arg.exec_tenant_id_, max_key_version.at(0).second))) {
+        LOG_WARN("fail to forward tenant max key version", KR(ret), K(arg), K(max_key_version));
+      }
+    } else {
+      // no new master key generated, ignore
+    }
+  }
+#endif
   return ret;
 }
 
@@ -6883,6 +7088,10 @@ int ObRootService::old_add_server(const obrpc::ObAdminServerArg &arg)
   int ret = OB_SUCCESS;
   uint64_t sys_data_version = 0;
   // argument
+#ifdef OB_BUILD_TDE_SECURITY
+  ObWaitMasterKeyInSyncArg wms_in_sync_arg;
+  // master key mgr sync
+#endif
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -6891,6 +7100,10 @@ int ObRootService::old_add_server(const obrpc::ObAdminServerArg &arg)
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_data_version))) {
     LOG_WARN("fail to get sys data version", KR(ret));
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(server_zone_op_service_.construct_rs_list_arg(wms_in_sync_arg.rs_list_arg_))) {
+    LOG_WARN("fail to construct rs list arg", KR(ret));
+#endif
   } else {
     LOG_INFO("add_server", K(arg), "timeout_ts", THIS_WORKER.get_timeout_ts());
     ObCheckServerEmptyArg new_arg(ObCheckServerEmptyArg::ADD_SERVER,
@@ -6898,6 +7111,9 @@ int ObRootService::old_add_server(const obrpc::ObAdminServerArg &arg)
     ObCheckDeploymentModeArg dp_arg;
     dp_arg.single_zone_deployment_on_ = OB_FILE_SYSTEM_ROUTER.is_single_zone_deployment_on();
 
+#ifdef OB_BUILD_TDE_SECURITY
+    SpinRLockGuard sync_guard(master_key_mgr_.sync());
+#endif
     for (int64_t i = 0; OB_SUCC(ret) && i < arg.servers_.count(); ++i) {
       const ObAddr &addr = arg.servers_[i];
       Bool is_empty(false);
@@ -6918,6 +7134,13 @@ int ObRootService::old_add_server(const obrpc::ObAdminServerArg &arg)
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("add server deployment mode mot match not allowed", K(ret));
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "add server deployment mode not match");
+#ifdef OB_BUILD_TDE_SECURITY
+      } else if (OB_FAIL(server_zone_op_service_.master_key_checking_for_adding_server(
+            addr,
+            arg.zone_,
+            wms_in_sync_arg))) {
+        LOG_WARN("master key checking for adding server is failed", KR(ret), K(addr), K(arg.zone_));
+#endif
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(server_manager_.add_server(addr, arg.zone_))) {
@@ -7181,6 +7404,31 @@ int ObRootService::stop_server(const obrpc::ObAdminServerArg &arg)
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObRootService::try_check_encryption_zone_cond(
+    const obrpc::ObAdminZoneArg &arg)
+{
+  int ret = OB_SUCCESS;
+  bool has_available_master_key = false;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else if (arg.zone_type_ != ZONE_TYPE_ENCRYPTION) {
+    // good, no need to check
+  } else if (OB_FAIL(master_key_mgr_.check_if_tenant_has_available_master_keys(
+          OB_SYS_TENANT_ID, has_available_master_key))) {
+    LOG_WARN("fail to check if tenant has available master key", KR(ret));
+  } else if (!has_available_master_key) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("add encryption zone without available master key in sys tenant is not allowed", KR(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "add encryption zone without available master key in sys tenant");
+  }
+  return ret;
+}
+#endif
 
 int ObRootService::add_zone(const obrpc::ObAdminZoneArg &arg)
 {
@@ -7191,6 +7439,10 @@ int ObRootService::add_zone(const obrpc::ObAdminZoneArg &arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(try_check_encryption_zone_cond(arg))) {
+    LOG_WARN("fail to check encryption zone", KR(ret), K(arg));
+#endif
   } else if (OB_FAIL(zone_manager_.add_zone(arg.zone_, arg.region_, arg.idc_, arg.zone_type_))) {
     LOG_WARN("failed to add zone", K(ret), K(arg));
   } else {
@@ -7934,6 +8186,70 @@ int ObRootService::admin_clear_merge_error(const obrpc::ObAdminMergeArg &arg)
   return ret;
 }
 
+#ifdef OB_BUILD_ARBITRATION
+int ObRootService::admin_add_arbitration_service(const obrpc::ObAdminAddArbitrationServiceArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(share::ObArbitrationServiceUtils::add_arbitration_service(sql_proxy_, arg))) {
+    LOG_WARN("fail to add arbitration service", KR(ret), K(arg));
+  }
+  ROOTSERVICE_EVENT_ADD("arb_service", "admin_add_arbitration_service", K(ret), K(arg));
+  return ret;
+}
+
+int ObRootService::admin_remove_arbitration_service(const obrpc::ObAdminRemoveArbitrationServiceArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(share::ObArbitrationServiceUtils::remove_arbitration_service(sql_proxy_, arg))) {
+    LOG_WARN("fail to remove arbitration service", KR(ret), K(arg));
+  }
+  ROOTSERVICE_EVENT_ADD("arb_service", "admin_remove_arbitration_service", K(ret), K(arg));
+  return ret;
+}
+
+int ObRootService::admin_replace_arbitration_service(const obrpc::ObAdminReplaceArbitrationServiceArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(share::ObArbitrationServiceUtils::replace_arbitration_service(sql_proxy_, arg))) {
+    LOG_WARN("fail to replace arbitration service", KR(ret), K(arg));
+  }
+  ROOTSERVICE_EVENT_ADD("arb_service", "admin_replace_arbitration_service", K(ret), K(arg));
+  return ret;
+}
+
+int ObRootService::remove_cluster_info_from_arb_server(const obrpc::ObRemoveClusterInfoFromArbServerArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(ObArbitrationServiceUtils::remove_cluster_info_from_arb_server(arg.get_arbitration_service()))) {
+    LOG_WARN("fail to remove cluster info from arb server", KR(ret), K(arg));
+  }
+  return ret;
+}
+#endif
 
 int ObRootService::admin_migrate_unit(const obrpc::ObAdminMigrateUnitArg &arg)
 {
@@ -10064,6 +10380,42 @@ int ObRootService::try_add_dep_infos_for_synonym_batch(const obrpc::ObTryAddDepI
   return ret;
 }
 
+#ifdef OB_BUILD_TDE_SECURITY
+int ObRootService::handle_get_root_key(const obrpc::ObRootKeyArg &arg,
+                                       obrpc::ObRootKeyResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObRootKey root_key;
+  if (OB_UNLIKELY(arg.is_set_ || !arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(ObMasterKeyGetter::instance().get_root_key(arg.tenant_id_, root_key))) {
+    LOG_WARN("failed to get root key", K(ret));
+  } else if (obrpc::RootKeyType::INVALID != root_key.key_type_) {
+    result.key_type_ = root_key.key_type_;
+    result.root_key_ = root_key.key_;
+  } else if (OB_FAIL(get_root_key_from_obs(arg, result))) {
+    LOG_WARN("failed to get root key from obs", K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::get_root_key_from_obs(const obrpc::ObRootKeyArg &arg,
+                                         obrpc::ObRootKeyResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObZone empty_zone;
+  ObArray<ObAddr> active_server_list;
+  ObArray<ObAddr> inactive_server_list;
+  if (OB_FAIL(SVR_TRACER.get_servers_by_status(empty_zone, active_server_list,
+                                               inactive_server_list))) {
+    LOG_WARN("get alive servers failed", K(ret));
+  } else if (OB_FAIL(ObDDLService::notify_root_key(rpc_proxy_, arg, active_server_list, result))) {
+    LOG_WARN("failed to notify root key");
+  }
+  return ret;
+}
+#endif
 
 } // end namespace rootserver
 } // end namespace oceanbase

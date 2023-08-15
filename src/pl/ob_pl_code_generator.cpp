@@ -3232,6 +3232,40 @@ int ObPLCodeGenerator::generate_user_type(const ObUserDefinedType &type)
     OZ (build_record_type(record_type, elem_type_array));
   }
     break;
+#ifdef OB_BUILD_ORACLE_PL
+  case PL_NESTED_TABLE_TYPE: {
+    const ObNestedTableType &table_type = static_cast<const ObNestedTableType&>(type);
+    OZ (build_nested_table_type(table_type, elem_type_array));
+  }
+    break;
+  case PL_ASSOCIATIVE_ARRAY_TYPE: {
+    const ObAssocArrayType &assoc_array_type = static_cast<const ObAssocArrayType&>(type);
+    OZ (build_assoc_array_type(assoc_array_type, elem_type_array));
+  }
+    break;
+  case PL_VARRAY_TYPE: {
+    const ObVArrayType &varray_type = static_cast<const ObVArrayType&>(type);
+    OZ (build_varray_type(varray_type, elem_type_array));
+  }
+    break;
+  case PL_SUBTYPE: {
+    const ObUserDefinedSubType &subtype = static_cast<const ObUserDefinedSubType&>(type);
+    ObLLVMType base_type;
+    CK (OB_NOT_NULL(subtype.get_base_type()));
+    if (OB_FAIL(ret)) {
+    } else if (!subtype.get_base_type()->is_cursor_type()) {
+      OZ (build_subtype(subtype, elem_type_array));
+    } else {
+      is_cursor_type = true;
+    }
+  }
+    break;
+  case PL_OPAQUE_TYPE: {
+    const ObOpaqueType &opaque_type = static_cast<const ObOpaqueType&>(type);
+    OZ (build_opaque_type(opaque_type, elem_type_array));
+  }
+    break;
+#endif
   case PL_CURSOR_TYPE:
   case PL_REF_CURSOR_TYPE: {
     is_cursor_type =  true;
@@ -3262,6 +3296,98 @@ int ObPLCodeGenerator::generate_user_type(const ObUserDefinedType &type)
   return ret;
 }
 
+#ifdef OB_BUILD_ORACLE_PL
+int ObPLCodeGenerator::build_nested_table_type(const ObNestedTableType &table_type,
+                                                  ObIArray<jit::ObLLVMType> &elem_type_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(build_collection_type(table_type, elem_type_array))) {
+    LOG_WARN("declare collection super type failed", K(ret));
+  }
+  return ret;
+}
+
+int ObPLCodeGenerator::build_assoc_array_type(const ObAssocArrayType &array_type,
+                                                 ObIArray<jit::ObLLVMType> &elem_type_array)
+{
+  int ret = OB_SUCCESS;
+  //ObObj*
+  ObLLVMType obj_type;
+  ObLLVMType key_type;
+  //int64*
+  ObLLVMType int_type;
+  ObLLVMType sort_type;
+  if (OB_FAIL(build_collection_type(array_type, elem_type_array))) {
+    LOG_WARN("declare collection super type failed", K(ret));
+  } else if (OB_FAIL(adt_service_.get_obj(obj_type))) {
+    LOG_WARN("failed to get obj type", K(ret));
+  } else if (OB_FAIL(obj_type.get_pointer_to(key_type))) {
+    LOG_WARN("failed to get_pointer_to", K(ret));
+  } else if (OB_FAIL(helper_.get_llvm_type(ObIntType, int_type))) {
+    LOG_WARN("failed to get int type", K(ret));
+  } else if (OB_FAIL(int_type.get_pointer_to(sort_type))) {
+    LOG_WARN("failed to get_pointer_to", K(ret));
+  } else if (OB_FAIL(elem_type_array.push_back(key_type))) {
+    LOG_WARN("push_back error", K(ret));
+  } else if (OB_FAIL(elem_type_array.push_back(sort_type))) {
+    LOG_WARN("push_back error", K(ret));
+  } else { /*do nothing*/ }
+  return ret;
+}
+
+int ObPLCodeGenerator::build_varray_type(const ObVArrayType &array_type,
+                                                 ObIArray<jit::ObLLVMType> &elem_type_array)
+{
+  int ret = OB_SUCCESS;
+  ObLLVMType int_type;
+  if (OB_FAIL(build_collection_type(array_type, elem_type_array))) {
+    LOG_WARN("declare collection super type failed", K(ret));
+  } else if (OB_FAIL(helper_.get_llvm_type(ObIntType, int_type))) {
+    LOG_WARN("failed to get int type", K(ret));
+  } else if (OB_FAIL(elem_type_array.push_back(int_type))) {
+    LOG_WARN("push_back error", K(ret));
+  } else { /*do nothing*/ }
+  return ret;
+}
+
+int ObPLCodeGenerator::build_collection_type(const ObCollectionType &collection_type,
+                                                ObIArray<ObLLVMType> &elem_type_array)
+{
+  int ret = OB_SUCCESS;
+
+  //common::ObIAllocator *allocator_;
+  ObLLVMType allocator_type;
+  //common::ObDataType element_type_;
+  ObLLVMType element_type;
+  //int64_t count_;
+  ObLLVMType count_type;
+  //int64_t first_;
+  ObLLVMType first_type;
+  //int64_t last_;
+  ObLLVMType last_type;
+
+  ObLLVMType element_ir_type;
+  ObLLVMType data_array_type;
+  ObLLVMType data_array_pointer_type;
+
+  OZ (build_composite(elem_type_array));
+  OZ (helper_.get_llvm_type(ObIntType, allocator_type));
+  OZ (adt_service_.get_elem_desc(element_type));
+  OZ (helper_.get_llvm_type(ObIntType, count_type));
+  OZ (helper_.get_llvm_type(ObIntType, first_type));
+  OZ (helper_.get_llvm_type(ObIntType, last_type));
+  OZ (elem_type_array.push_back(allocator_type));
+  OZ (elem_type_array.push_back(element_type));
+  OZ (elem_type_array.push_back(count_type));
+  OZ (elem_type_array.push_back(first_type));
+  OZ (elem_type_array.push_back(last_type));
+  OZ (get_datum_type(collection_type.get_element_type(), element_ir_type));
+  OZ (ObLLVMHelper::get_array_type(element_ir_type, 0, data_array_type));
+  OZ (data_array_type.get_pointer_to(data_array_pointer_type));
+  OZ (elem_type_array.push_back(data_array_pointer_type));
+  return ret;
+}
+#endif
 
 int ObPLCodeGenerator::build_record_type(const ObRecordType &record_type,
                                          ObIArray<jit::ObLLVMType> &elem_type_array)
@@ -3318,6 +3444,29 @@ int ObPLCodeGenerator::build_composite(ObIArray<jit::ObLLVMType> &elem_type_arra
   return ret;
 }
 
+#ifdef OB_BUILD_ORACLE_PL
+int ObPLCodeGenerator::build_subtype(const ObUserDefinedSubType &subtype,
+                                     ObIArray<jit::ObLLVMType> &elem_type_array)
+{
+  int ret = OB_SUCCESS;
+  ObLLVMType base_type;
+  CK (OB_NOT_NULL(subtype.get_base_type()));
+  OZ (get_datum_type(*subtype.get_base_type(), base_type));
+  OZ (elem_type_array.push_back(base_type));
+  return ret;
+}
+
+int ObPLCodeGenerator::build_opaque_type(const ObUserDefinedType &opaque_type,
+                                         ObIArray<jit::ObLLVMType> &elem_type_array)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(opaque_type);
+  ObLLVMType type;
+  OZ (helper_.get_llvm_type(ObInt32Type, type));
+  OZ (elem_type_array.push_back(type));
+  return ret;
+}
+#endif
 
 int ObPLCodeGenerator::init()
 {
@@ -7258,6 +7407,13 @@ int ObPLCodeGenerator::generate_di_user_type(const ObUserDefinedType &type, uint
       if (OB_FAIL(generate_di_record_type(record_type, line))) {
         LOG_WARN("failed to generate di record type", K(ret));
       }
+#ifdef OB_BUILD_ORACLE_PL
+    } else if (type.is_nested_table_type()) {
+      const ObNestedTableType &table_type = static_cast<const ObNestedTableType&>(type);
+      if (OB_FAIL(generate_di_table_type(table_type, line))) {
+        LOG_WARN("failed to generate di table type", K(ret));
+      }
+#endif
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("user defined type is invalid", K(type.get_type()));
@@ -7266,6 +7422,27 @@ int ObPLCodeGenerator::generate_di_user_type(const ObUserDefinedType &type, uint
   return ret;
 }
 
+#ifdef OB_BUILD_ORACLE_PL
+int ObPLCodeGenerator::generate_di_table_type(const ObNestedTableType &table_type, uint32_t line)
+{
+  int ret = OB_SUCCESS;
+  if (debug_mode_) {
+    const ObString &type_name = table_type.get_name();
+    const ObPLDataType &data_type = table_type.get_element_type();
+    ObLLVMDIType element_type;
+    ObLLVMDIType di_table_type;
+    uint64_t type_id = table_type.get_user_type_id();
+    if (OB_FAIL(get_di_datum_type(data_type, element_type))) {
+      LOG_WARN("failed to get di datum type", K(ret));
+    } else if (OB_FAIL(di_adt_service_.get_table_type(type_name, line, element_type, di_table_type))) {
+      LOG_WARN("failed to get array type", K(ret));
+    } else if (OB_FAIL(di_user_type_map_.set_refactored(type_id, di_table_type))) {
+      LOG_WARN("failed to set di table type to user type map", K(ret), K(table_type));
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObPLCodeGenerator::generate_di_record_type(const ObRecordType &record_type, uint32_t line)
 {

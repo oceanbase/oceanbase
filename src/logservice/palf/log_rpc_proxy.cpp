@@ -112,5 +112,10 @@ DEFINE_SYNC_RPC_PROXY_POST_FUNCTION(get_mc_st,
 DEFINE_SYNC_RPC_PROXY_POST_FUNCTION(get_log_stat,
                                     LogGetStatReq,
                                     LogGetStatResp);
+#ifdef OB_BUILD_ARBITRATION
+DEFINE_SYNC_RPC_PROXY_POST_FUNCTION(get_remote_arb_member_info,
+                                    LogGetArbMemberInfoReq,
+                                    LogGetArbMemberInfoResp);
+#endif
 } // end namespace obrpc
 } // end namespace oceanbase

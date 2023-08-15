@@ -463,6 +463,12 @@ public:
   void set_allow_freeze(const bool allow_freeze);
   inline bool allow_freeze() const { return ATOMIC_LOAD(&allow_freeze_); }
 
+#ifdef OB_BUILD_TDE_SECURITY
+  /*clog encryption related*/
+  int save_encrypt_meta(const uint64_t table_id, const share::ObEncryptMeta *encrypt_meta);
+  int get_encrypt_meta(transaction::ObTxEncryptMeta *&encrypt_meta);
+  bool need_for_save(const share::ObEncryptMeta *encrypt_meta);
+#endif
 
   // Print stat data in log.
   // For memtable debug.

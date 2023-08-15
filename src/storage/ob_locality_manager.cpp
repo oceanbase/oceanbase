@@ -16,6 +16,9 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "rpc/obmysql/obsm_struct.h"                // easy_connection_str
 #include "share/schema/ob_multi_version_schema_service.h"
+#ifdef OB_BUILD_ARBITRATION
+#include "share/arbitration_service/ob_arbitration_service_info.h"
+#endif
 
 namespace oceanbase
 {
@@ -36,6 +39,9 @@ void ObLocalityManager::reset()
 {
   is_inited_ = false;
   self_.reset();
+#ifdef OB_BUILD_ARBITRATION
+  arb_service_addr_.reset();
+#endif
   sql_proxy_ = NULL;
   locality_info_.reset();
   server_locality_cache_.reset();
@@ -240,6 +246,53 @@ int ObLocalityManager::load_region()
   return ret;
 }
 
+#ifdef OB_BUILD_ARBITRATION
+int ObLocalityManager::load_arb_service_info()
+{
+  int ret = OB_SUCCESS;
+  const ObString arbitration_service_key("default");
+  const bool lock_line = false;
+  ObArbitrationServiceInfo arb_service_info;
+  ObAddr arb_service_addr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObLocalityManager not init", K(ret));
+  } else if (OB_FAIL(arbitration_service_table_operator_.get(
+                         *sql_proxy_,
+                         arbitration_service_key,
+                         lock_line,
+                         arb_service_info))) {
+    STORAGE_LOG(WARN, "fail to get arbitration service info", KR(ret), K(arbitration_service_key),
+             K(lock_line), K(arb_service_info));
+    if (OB_ARBITRATION_SERVICE_NOT_EXIST == ret) {
+      SpinWLockGuard guard(rwlock_);
+      arb_service_addr_.reset();
+    }
+  } else if (OB_FAIL(arb_service_addr.parse_from_string(arb_service_info.get_arbitration_service_string()))) {
+    STORAGE_LOG(WARN, "parse_from_string failed", K(ret));
+  } else if (arb_service_addr == arb_service_addr_) {
+    // no need update
+  } else {
+    SpinWLockGuard guard(rwlock_);
+    arb_service_addr_ = arb_service_addr;
+  }
+  STORAGE_LOG(INFO, "load_arb_service_info finshed", K(ret), K_(arb_service_addr));
+  return ret;
+}
+
+int ObLocalityManager::get_arb_service_addr(common::ObAddr &arb_service_addr) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    STORAGE_LOG(ERROR, "locality manager not inited, cannot start.");
+    ret = OB_NOT_INIT;
+  } else {
+    SpinRLockGuard guard(rwlock_);
+    arb_service_addr = arb_service_addr_;
+  }
+  return ret;
+}
+#endif
 
 int ObLocalityManager::get_local_region(ObRegion &region) const
 {
@@ -707,6 +760,10 @@ int ObLocalityManager::ObRefreshLocalityTask::process()
     STORAGE_LOG(WARN, "locality manager is null", K(ret));
   } else if (OB_FAIL(locality_mgr_->load_region())) {
     STORAGE_LOG(WARN, "process refresh locality task fail", K(ret));
+#ifdef OB_BUILD_ARBITRATION
+  } else if (OB_FAIL(locality_mgr_->load_arb_service_info())) {
+    STORAGE_LOG(WARN, "load_arb_service_info fail", K(ret));
+#endif
   }
   return ret;
 }

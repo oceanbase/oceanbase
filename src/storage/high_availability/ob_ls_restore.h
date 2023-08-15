@@ -120,6 +120,7 @@ private:
   backup::ObBackupMetaIndexStoreWrapper meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper second_meta_index_store_;
   backup::ObBackupIndexKVCache *kv_cache_;
+  //TODO(muwei.ym) put bandwidth_throttle, svr_rpc_proxy, and storage_rpc into ctx 4.3
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
   storage::ObStorageRpc *storage_rpc_;
