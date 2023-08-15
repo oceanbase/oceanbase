@@ -203,7 +203,8 @@ public:
   //
   // NB: this interface only can be used in 'ObLogHandler::offline'.
   void reset_proposal_id();
-  void reset_max_applied_scn_meta();
+  // NB: this interface only can be used in 'ObLogHandler::online'.
+  void reset_meta();
   TO_STRING_KV(K(ls_id_),
                K(role_),
                K(proposal_id_),

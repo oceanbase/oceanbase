@@ -1645,9 +1645,6 @@ int ObLogHandler::offline()
     //
     MEM_BARRIER();
     is_offline_ = true;
-    //4.Due to the order of ObLogHandle:offline() and  ObLSWRSHandler::offline() in ObLS::offline(), we must keep reset_max_applied_scn_meta() after set  is_offline_ to true, otherwise ls_wrs_service may
-    //print error log.
-    apply_status_->reset_max_applied_scn_meta();
     // NB: must ensure on_role_change not fail.
     if (OB_FAIL(rc_service_->on_role_change(id_))) {
       CLOG_LOG(WARN, "on_role_change failed", K(ret), KPC(this));
@@ -1686,6 +1683,10 @@ int ObLogHandler::online(const LSN &lsn, const SCN &scn)
   } else {
     WLockGuard guard(lock_);
     proposal_id_ = INVALID_PROPOSAL_ID;
+    //reset_meta to avoid contributing excessively large max_decided_scn
+    //reset_meta is placed here rather than offline() because after offline, callbacks will be
+    //handled after offline which may refer to palf_committed_end_lsn_
+    apply_status_->reset_meta();
     is_offline_ = false;
     // NB: before notify role change service, we need set role to FOLLOWER,
     // otherwise, role change service may need switch leader to leader.

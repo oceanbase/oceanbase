@@ -782,11 +782,13 @@ void ObApplyStatus::reset_proposal_id()
   CLOG_LOG(INFO, "reset_proposal_id success");
 }
 
-void ObApplyStatus::reset_max_applied_scn_meta()
+void ObApplyStatus::reset_meta()
 {
+  RLockGuard rlock(lock_);
   lib::ObMutexGuard guard(mutex_);
   last_check_scn_.reset();
   max_applied_cb_scn_.reset();
+  palf_committed_end_lsn_.val_ = 0;
 }
 
 int ObApplyStatus::submit_task_to_apply_service_(ObApplyServiceTask &task)
