@@ -238,7 +238,11 @@ void ObTenantBase::destroy()
 {
   destroy_mtl_module();
   if (tg_set_.size() > 0) {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "tg thread not execute tg_destory make tg_id leak", K(tg_set_.size()), K(tg_set_));
+    TGSetDumpFunc tg_set_dump_func;
+    tg_set_.foreach_refactored(tg_set_dump_func);
+    _OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED,
+                "tg thread not execute tg_destory make tg_id leak, tg_size=%ld, tg_set=[%s]",
+                tg_set_.size(), tg_set_dump_func.buf_);
   }
   tg_set_.destroy();
   thread_dynamic_factor_map_.destroy();

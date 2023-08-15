@@ -206,6 +206,12 @@ public:
   {
     return ht_.deserialization(archive, &allocer_);
   }
+
+  template<class _callback>
+  int foreach_refactored(_callback &callback) const
+  {
+    return ht_.foreach_refactored(callback);
+  }
 private:
   _allocer allocer_;
   _bucket_allocer bucket_allocer_;

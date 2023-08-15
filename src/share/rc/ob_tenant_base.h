@@ -406,6 +406,21 @@ friend class ObTenantSpaceFetcher;
 friend class omt::ObTenant;
 friend class ObTenantEnv;
 
+struct TGSetDumpFunc
+{
+  static const int64_t BUF_LEN = 128;
+  TGSetDumpFunc() : pos_(0)
+  {
+    MEMSET(buf_, '\0', BUF_LEN);
+  }
+  virtual ~TGSetDumpFunc() = default;
+  int operator()(common::hash::HashSetTypes<int64_t>::pair_type &kv)
+  {
+    return databuff_printf(buf_, BUF_LEN, pos_, " %ld", kv.first);
+  }
+  int64_t pos_;
+  char buf_[BUF_LEN];
+};
 template<class T> struct Identity {};
 
 public:
