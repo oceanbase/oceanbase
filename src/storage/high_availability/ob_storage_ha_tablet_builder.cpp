@@ -1482,7 +1482,6 @@ ObStorageHATableInfoMgr::ObStorageHATabletTableInfoMgr::ObStorageHATabletTableIn
 
 ObStorageHATableInfoMgr::ObStorageHATabletTableInfoMgr::~ObStorageHATabletTableInfoMgr()
 {
-  allocator_.reset();
 }
 
 int ObStorageHATableInfoMgr::ObStorageHATabletTableInfoMgr::init(
