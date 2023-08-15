@@ -227,6 +227,12 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
                     LOG_WARN("fail to process session autocommit", K(ret), K(ret_ac));
                     if (OB_ERR_WRONG_VALUE_FOR_VAR == ret_ac) {
                       ret = ret_ac;
+                    } else if (OB_OP_NOT_ALLOW == ret_ac) {
+                      ret = ret_ac;
+                    } else if (OB_TRANS_XA_ERR_COMMIT == ret_ac) {
+                      ret = ret_ac;
+                    } else if (OB_ERR_UNEXPECTED == ret_ac) {
+                      ret = ret_ac;
                     }
                   } else {}
                 } else {}
@@ -932,8 +938,45 @@ int ObVariableSetExecutor::process_session_autocommit_hook(ObExecContext &exec_c
       LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR, (int)strlen(OB_SV_AUTOCOMMIT), OB_SV_AUTOCOMMIT,
                      (int)strlen(autocommit_str), autocommit_str);
     } else {
+      // in xa trans or dblink trans
+      if (in_trans && my_session->associated_xa()) {
+        const transaction::ObXATransID xid = my_session->get_xid();
+        transaction::ObTxDesc *tx_desc = my_session->get_tx_desc();
+        const transaction::ObGlobalTxType global_tx_type = tx_desc->get_global_tx_type(xid);
+        // not allow to set autocommit to on
+        if (false == orig_ac && 1 == autocommit) {
+          ret = OB_TRANS_XA_ERR_COMMIT;
+          LOG_WARN("not allow to set autocommit on in xa trans", K(ret), K(xid));
+        } else if (true == orig_ac && 1 == autocommit) {
+          if (transaction::ObGlobalTxType::XA_TRANS == global_tx_type) {
+            // do nothing
+          } else if (transaction::ObGlobalTxType::DBLINK_TRANS == global_tx_type) {
+            // in dblink trans, this case is not posssible
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("unexpected case for dblink trans", K(ret), K(xid));
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("unexpected global trans type", K(ret), K(xid), K(global_tx_type));
+          }
+        } else {
+          // in xa trans
+          if (transaction::ObGlobalTxType::XA_TRANS == global_tx_type) {
+            LOG_INFO("set autocommit off in xa trans", K(ret), K(xid));
+          // in dblink trans
+          } else if (transaction::ObGlobalTxType::DBLINK_TRANS == global_tx_type) {
+            if (my_session->need_restore_auto_commit()) {
+              ret = OB_OP_NOT_ALLOW;
+              LOG_WARN("not allow to set autocomit off", K(ret), K(xid));
+            } else {
+              LOG_INFO("set autocommit off in dblink trans", K(ret), K(xid));
+            }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("unexpected global trans type", K(ret), K(xid), K(global_tx_type));
+          }
+        }
       // skip commit txn if this is txn free route temporary node
-      if (false == orig_ac &&  true == in_trans && 1 == autocommit && !my_session->is_txn_free_route_temp()) {
+      } else if (false == orig_ac &&  true == in_trans && 1 == autocommit && !my_session->is_txn_free_route_temp()) {
         if (OB_FAIL(ObSqlTransControl::implicit_end_trans(exec_ctx, false))) {
           LOG_WARN("fail implicit commit trans", K(ret));
         }

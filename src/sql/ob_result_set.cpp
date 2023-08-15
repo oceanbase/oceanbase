@@ -250,12 +250,32 @@ int ObResultSet::on_cmd_execute()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid inner state", K(cmd_));
   } else if (cmd_->cause_implicit_commit()) {
-    // not allow implicit commit in xa trans
-    if (my_session_.associated_xa()) {
-      ret = OB_TRANS_XA_ERR_COMMIT;
+    if (my_session_.is_in_transaction() && my_session_.associated_xa()) {
+      int tmp_ret = OB_SUCCESS;
+      transaction::ObTxDesc *tx_desc = my_session_.get_tx_desc();
+      const transaction::ObXATransID xid = my_session_.get_xid();
+      const transaction::ObGlobalTxType global_tx_type = tx_desc->get_global_tx_type(xid);
+      if (transaction::ObGlobalTxType::XA_TRANS == global_tx_type) {
+        // commit is not allowed in xa trans
+        ret = OB_TRANS_XA_ERR_COMMIT;
+        LOG_WARN("COMMIT is not allowed in a xa trans", K(ret), K(xid), K(global_tx_type),
+            KPC(tx_desc));
+      } else if (transaction::ObGlobalTxType::DBLINK_TRANS == global_tx_type) {
+        transaction::ObTransID tx_id;
+        if (OB_FAIL(ObTMService::tm_commit(get_exec_context(), tx_id))) {
+          LOG_WARN("fail to do commit for dblink trans", K(ret), K(tx_id), K(xid),
+              K(global_tx_type));
+        }
+        my_session_.restore_auto_commit();
+        const bool force_disconnect = false;
+        if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = my_session_.get_dblink_context().clean_dblink_conn(force_disconnect)))) {
+          LOG_WARN("dblink transaction failed to release dblink connections", K(tmp_ret), K(tx_id), K(xid));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected global trans type", K(ret), K(xid), K(global_tx_type), KPC(tx_desc));
+      }
       get_exec_context().set_need_disconnect(false);
-      const transaction::ObTxDesc *tx_desc = my_session_.get_tx_desc();
-      LOG_WARN("COMMIT is not allowed in a xa trans", K(ret), KPC(tx_desc));
     } else {
       // commit current open transaction, synchronously
       if (OB_FAIL(ObSqlTransControl::implicit_end_trans(get_exec_context(), false))) {
@@ -1059,11 +1079,6 @@ int ObResultSet::init_cmd_exec_context(ObExecContext &exec_ctx)
     ret = OB_NOT_INIT;
     LOG_WARN("cmd or ctx is NULL", K(ret), K(cmd_), K(plan_ctx));
     ret = OB_ERR_UNEXPECTED;
-  } else if ((ObStmt::is_ddl_stmt(stmt_type_, true) || ObStmt::is_dcl_stmt(stmt_type_))
-      && stmt::T_VARIABLE_SET != stmt_type_ && my_session_.associated_xa()) {
-    ret = OB_TRANS_XA_ERR_COMMIT;
-    const transaction::ObTxDesc *tx_desc = my_session_.get_tx_desc();
-    LOG_WARN("COMMIT is not allowed in a xa trans", K(ret), KPC(tx_desc));
   } else if (OB_ISNULL(buf = get_mem_pool().alloc(sizeof(ObNewRow)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(sizeof(ObNewRow)), K(ret));

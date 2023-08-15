@@ -618,6 +618,7 @@ public:
     }
   }
   void set_restore_auto_commit() { restore_auto_commit_ = true; }
+  bool need_restore_auto_commit() const { return restore_auto_commit_; }
   void reset_show_warnings_buf() { show_warnings_buf_.reset(); }
   ObPrivSet get_user_priv_set() const { return user_priv_set_; }
   ObPrivSet get_db_priv_set() const { return db_priv_set_; }
