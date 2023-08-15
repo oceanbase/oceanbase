@@ -120,6 +120,10 @@ int ObReqQueue::process_task(void *task)
         } else {
           ObCurTraceId::set(trace_id);
         }
+
+#ifdef ERRSIM
+        THIS_WORKER.set_module_type(packet.get_module_type());
+#endif
         // Do not set thread local log level while log level upgrading (OB_LOGGER.is_info_as_wdiag)
         if (OB_LOGGER.is_info_as_wdiag()) {
           ObThreadLogLevelUtils::clear();

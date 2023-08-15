@@ -294,6 +294,10 @@ int ObRpcProcessorBase::do_response(const Response &rsp)
         // The cluster_id of the response must be the src_cluster_id of the request
         packet->set_dst_cluster_id(rpc_pkt_->get_src_cluster_id());
 
+#ifdef ERRSIM
+        packet->set_module_type(THIS_WORKER.get_module_type());
+#endif
+
         packet->set_request_arrival_time(req_->get_request_arrival_time());
         packet->set_arrival_push_diff(req_->get_arrival_push_diff());
         packet->set_push_pop_diff(req_->get_push_pop_diff());

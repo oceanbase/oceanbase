@@ -18,6 +18,7 @@
 #include "lib/ob_running_mode.h"
 #include "share/rc/ob_tenant_base.h"
 #include "logservice/leader_coordinator/ob_failure_detector.h"
+#include "share/errsim_module/ob_errsim_module_interface_imp.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -314,6 +315,15 @@ int ObIOManager::tenant_aio(const ObIOInfo &info, ObIOHandle &handle)
 {
   int ret = OB_SUCCESS;
   ObRefHolder<ObTenantIOManager> tenant_holder;
+#ifdef ERRSIM
+  const ObErrsimModuleType type = THIS_WORKER.get_module_type();
+  if (is_errsim_module(info.tenant_id_, type.type_)) {
+    ret = OB_IO_ERROR;
+    LOG_ERROR("[ERRSIM MODULE] errsim IO error", K(ret), "tenant_id", info.tenant_id_);
+    return ret;
+  }
+#endif
+
   if (OB_FAIL(get_tenant_io_manager(info.tenant_id_, tenant_holder))) {
     LOG_WARN("get tenant io manager failed", K(ret), K(info.tenant_id_));
   } else if (OB_FAIL(tenant_holder.get_ptr()->inner_aio(info, handle))) {

@@ -85,6 +85,11 @@ int ObRpcPacketHeader::serialize(char* buf, const int64_t buf_len, int64_t& pos)
       LOG_WARN("Encode error", K(ret), KP(buf), K(buf_len), K(pos));
     } else {
       //do nothing
+#ifdef ERRSIM
+      if (OB_FAIL(encode_i64(buf, buf_len, pos, static_cast<int64_t>(module_type_.type_)))) {
+        LOG_WARN("Encode error", K(ret), KP(buf), K(buf_len), K(pos));
+      }
+#endif
     }
   } else {
     ret = OB_BUF_NOT_ENOUGH;
@@ -165,6 +170,15 @@ int ObRpcPacketHeader::deserialize(const char* buf, const int64_t data_len, int6
     } else if (hlen_ > pos && OB_FAIL(decode_i64(buf, hlen_, pos, reinterpret_cast<int64_t*>(&cluster_name_hash_)))) {
       LOG_WARN("Decode error", K(ret), KP(buf), K(hlen_), K(pos));
     } else {
+#ifdef ERRSIM
+      int64_t type = 0;
+      if (hlen_ > pos && OB_FAIL(decode_i64(buf, hlen_, pos, &type))) {
+        LOG_WARN("Decode error", K(ret), KP(buf), K(hlen_), K(pos));
+      } else {
+        module_type_.type_ = static_cast<ObErrsimModuleType::TYPE>(type);
+      }
+#endif
+
     }
     ObSequence::update_max_seq_no(seq_no_);
     LOG_DEBUG("rpc receive seq_no ", K_(seq_no), K(ObSequence::get_max_seq_no()));

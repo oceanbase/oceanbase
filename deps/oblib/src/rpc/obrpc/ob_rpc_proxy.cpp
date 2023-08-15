@@ -153,6 +153,10 @@ int ObRpcProxy::init_pkt(
     pkt->set_trace_id(common::ObCurTraceId::get());
   }
 
+#ifdef ERRSIM
+  pkt->set_module_type(THIS_WORKER.get_module_type());
+#endif
+
   if (OB_SUCC(ret)) {
     pkt->set_pcode(pcode);
     //Assign a channel id to this new packet

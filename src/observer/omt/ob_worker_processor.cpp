@@ -111,6 +111,11 @@ int ObWorkerProcessor::process(rpc::ObRequest &req)
         = static_cast<const obrpc::ObRpcPacket&>(req.get_packet());
     NG_TRACE_EXT(start_rpc, OB_ID(addr), RPC_REQ_OP.get_peer(&req), OB_ID(pcode), packet.get_pcode());
     ObCurTraceId::set(req.generate_trace_id(myaddr_));
+
+#ifdef ERRSIM
+    THIS_WORKER.set_module_type(packet.get_module_type());
+#endif
+
     // Do not set thread local log level while log level upgrading (OB_LOGGER.is_info_as_wdiag)
     if (OB_LOGGER.is_info_as_wdiag()) {
       ObThreadLogLevelUtils::clear();

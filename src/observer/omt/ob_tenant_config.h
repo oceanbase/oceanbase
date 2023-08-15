@@ -97,6 +97,10 @@ public:
 
   OB_UNIS_VERSION(1);
 private:
+#ifdef ERRSIM
+  int build_errsim_module_();
+#endif
+private:
   uint64_t tenant_id_;
   int64_t current_version_; // 当前 tenant config 正在被 task 更新中的版本
   obutil::Mutex mutex_;

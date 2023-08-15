@@ -105,6 +105,10 @@ int ObRpcAsyncResponse<T>::do_response(ObRpcPacket *response_pkt, bool bad_routi
       packet->set_trace_id(rpc_pkt->get_trace_id());
       packet->set_resp();
 
+#ifdef ERRSIM
+      packet->set_module_type(rpc_pkt->get_module_type());
+#endif
+
       packet->set_request_arrival_time(req_->get_request_arrival_time());
       packet->set_arrival_push_diff(req_->get_arrival_push_diff());
       packet->set_push_pop_diff(req_->get_push_pop_diff());

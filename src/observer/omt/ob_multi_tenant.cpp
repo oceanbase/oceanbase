@@ -130,6 +130,10 @@
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "rootserver/ob_heartbeat_service.h"
 #include "share/detect/ob_detect_manager.h"
+#ifdef ERRSIM
+#include "share/errsim_module/ob_tenant_errsim_module_mgr.h"
+#include "share/errsim_module/ob_tenant_errsim_event_mgr.h"
+#endif
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -513,6 +517,12 @@ int ObMultiTenant::init(ObAddr myaddr,
       //           mtl_wait_default, mtl_destroy_default);
     }
     MTL_BIND2(mtl_new_default, rootserver::ObHeartbeatService::mtl_init, nullptr, rootserver::ObHeartbeatService::mtl_stop, rootserver::ObHeartbeatService::mtl_wait, mtl_destroy_default);
+
+#ifdef ERRSIM
+    MTL_BIND2(mtl_new_default, ObTenantErrsimModuleMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, ObTenantErrsimEventMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+#endif
+
   }
 
   if (OB_SUCC(ret)) {
@@ -921,7 +931,6 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
       LOG_WARN("fail to set_tenant_mem_limit", K(ret), K(tenant_id));
     }
   }
-
   if (OB_SUCC(ret)) {
     if (write_slog && OB_FAIL(write_create_tenant_commit_slog(tenant_id))) {
       LOG_ERROR("fail to write create tenant commit slog", K(ret), K(tenant_id));

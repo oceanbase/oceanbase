@@ -32,6 +32,7 @@
 #include "storage/ob_super_block_struct.h"
 #include "storage/slog/ob_storage_logger_manager.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
+#include "lib/worker.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
@@ -422,6 +423,9 @@ int ObBlockManager::write_super_block(const ObServerSuperBlock &super_block)
 {
   int ret = OB_SUCCESS;
   int64_t write_size = 0;
+#ifdef ERRSIM
+  ErrsimModuleGuard guard(ObErrsimModuleType::ERRSIM_MODULE_NONE);
+#endif
 
   if (!super_block.is_valid()) {
     ret = OB_INVALID_ARGUMENT;

@@ -22,7 +22,12 @@
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
-OB_SERIALIZE_MEMBER(ObRuntimeContext, compat_mode_);
+#ifdef ERRSIM
+  OB_SERIALIZE_MEMBER(ObRuntimeContext, compat_mode_, module_type_);
+#else
+  OB_SERIALIZE_MEMBER(ObRuntimeContext, compat_mode_);
+#endif
+
 
 namespace oceanbase {
 namespace lib {

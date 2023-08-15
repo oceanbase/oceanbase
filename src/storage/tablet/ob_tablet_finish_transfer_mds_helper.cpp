@@ -280,6 +280,7 @@ int ObTabletFinishTransferOutHelper::on_register(
   int ret = OB_SUCCESS;
   ObTXFinishTransferOutInfo tx_finish_transfer_out_info;
   int64_t pos = 0;
+  ObTransferUtils::set_transfer_module();
 
   if (OB_ISNULL(buf) || len < 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -294,6 +295,7 @@ int ObTabletFinishTransferOutHelper::on_register(
   } else if (CLICK_FAIL(ObTabletCreateDeleteMdsUserData::set_tablet_empty_shell_trigger(tx_finish_transfer_out_info.src_ls_id_))) {
     LOG_WARN("failed to set_tablet_empty_shell_trigger", K(ret), K(tx_finish_transfer_out_info));
   }
+  ObTransferUtils::clear_transfer_module();
   return ret;
 }
 
@@ -459,6 +461,7 @@ int ObTabletFinishTransferOutHelper::on_replay(
   int ret = OB_SUCCESS;
   ObTXFinishTransferOutInfo tx_finish_transfer_out_info;
   int64_t pos = 0;
+  ObTransferUtils::set_transfer_module();
 
   if (OB_ISNULL(buf) || len < 0 || !scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -473,6 +476,7 @@ int ObTabletFinishTransferOutHelper::on_replay(
   } else if (CLICK_FAIL(ObTabletCreateDeleteMdsUserData::set_tablet_empty_shell_trigger(tx_finish_transfer_out_info.src_ls_id_))) {
     LOG_WARN("failed to set_tablet_empty_shell_trigger", K(ret), K(tx_finish_transfer_out_info));
   }
+  ObTransferUtils::clear_transfer_module();
   return ret;
 }
 
@@ -859,6 +863,7 @@ int ObTabletFinishTransferInHelper::on_register(
   ObTXFinishTransferInInfo tx_finish_transfer_in_info;
   int64_t pos = 0;
   const bool for_replay = false;
+  ObTransferUtils::set_transfer_module();
 
   if (OB_ISNULL(buf) || len < 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -871,6 +876,8 @@ int ObTabletFinishTransferInHelper::on_register(
   } else if (CLICK_FAIL(on_register_success_(tx_finish_transfer_in_info, ctx))) {
     LOG_WARN("failed to do on register success", K(ret), K(tx_finish_transfer_in_info));
   }
+
+  ObTransferUtils::clear_transfer_module();
   return ret;
 }
 
@@ -1072,6 +1079,7 @@ int ObTabletFinishTransferInHelper::on_replay(
   int64_t pos = 0;
   bool skip_replay = false;
   const bool for_replay = true;
+  ObTransferUtils::set_transfer_module();
 
   if (OB_ISNULL(buf) || len < 0 || !scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1084,6 +1092,7 @@ int ObTabletFinishTransferInHelper::on_replay(
   } else if (CLICK_FAIL(on_replay_success_(scn, tx_finish_transfer_in_info, ctx))) {
     LOG_WARN("failed to do on_replay_success_", K(ret), K(tx_finish_transfer_in_info));
   }
+  ObTransferUtils::clear_transfer_module();
   return ret;
 }
 

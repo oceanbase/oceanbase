@@ -484,6 +484,13 @@ ob_set_subtarget(ob_share balance
   balance/ob_balance_task_helper_operator.cpp
 )
 
+if (OB_ERRSIM)
+ ob_set_subtarget(ob_share errsim_module
+   errsim_module/ob_tenant_errsim_module_mgr.cpp
+   errsim_module/ob_tenant_errsim_event_mgr.cpp
+   errsim_module/ob_errsim_module_interface_imp.cpp
+ )
+endif()
 
 ob_add_new_object_target(ob_share ob_share)
 

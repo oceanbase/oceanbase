@@ -23,6 +23,7 @@
 #include "observer/omt/ob_tenant_config.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
+#include "share/errsim_module/ob_errsim_module_interface_imp.h"
 
 using namespace oceanbase::common;
 
@@ -300,6 +301,11 @@ int ObTenantConfig::update_local(int64_t expected_version, ObMySQLProxy::MySQLRe
     } else if (OB_FAIL(publish_special_config_after_dump())) {
       LOG_WARN("publish special config after dump failed", K(tenant_id_), K(ret));
     }
+#ifdef ERRSIM
+    else if (OB_FAIL(build_errsim_module_())) {
+      LOG_WARN("failed to build errsim module", K(ret), K(tenant_id_));
+    }
+#endif
     print();
   } else {
     LOG_WARN("Read tenant config from inner table error", K_(tenant_id), K(ret));
@@ -507,6 +513,37 @@ OB_DEF_SERIALIZE_SIZE(ObTenantConfig)
   len += ObCommonConfig::get_serialize_size();
   return len;
 }
+
+#ifdef ERRSIM
+int ObTenantConfig::build_errsim_module_()
+{
+  int ret = OB_SUCCESS;
+  char buf[ObErrsimModuleTypeHelper::MAX_TYPE_NAME_LENGTH] = "";
+  ObTenantErrsimModuleMgr::ModuleArray module_array;
+  ObTenantErrsimModuleMgr::ErrsimModuleString string;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < this->errsim_module_types.size(); ++i) {
+    if (OB_FAIL(this->errsim_module_types.get(
+        static_cast<int>(i), buf, sizeof(buf)))) {
+      LOG_WARN("get rs failed", K(ret), K(i));
+    } else if (OB_FAIL(string.assign(buf))) {
+      LOG_WARN("failed to assign buffer", K(ret));
+    } else if (OB_FAIL(module_array.push_back(string))) {
+      LOG_WARN("failed to push string into array", K(ret), K(string));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    const int64_t percentage = this->errsim_module_error_percentage;
+
+    if (build_tenant_errsim_moulde(tenant_id_, current_version_, module_array, percentage)) {
+      LOG_WARN("failed to build tenant module", K(ret), K(tenant_id_));
+    }
+  }
+  return ret;
+}
+#endif
+
 
 } // omt
 } // oceanbase

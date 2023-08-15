@@ -89,6 +89,9 @@ int ObRpcRequest::do_flush_buffer(common::ObDataBuffer *buffer, const ObRpcPacke
       res_packet->set_session_id(sess_id);
       res_packet->set_trace_id(common::ObCurTraceId::get());
       res_packet->set_resp();
+#ifdef ERRSIM
+      res_packet->set_module_type(THIS_WORKER.get_module_type());
+#endif
       res_packet->calc_checksum();
     }
     RPC_REQ_OP.response_result(this, res_packet);

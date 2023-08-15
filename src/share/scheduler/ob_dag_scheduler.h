@@ -25,6 +25,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_scheduler_config.h"
 #include "share/ob_table_range.h"
+#include "common/errsim_module/ob_errsim_module_type.h"
 
 namespace oceanbase
 {
@@ -359,6 +360,10 @@ public:
   virtual lib::Worker::CompatMode get_compat_mode() const = 0;
   virtual uint64_t get_consumer_group_id() const = 0;
   int remove_task(ObITask &task);
+
+#ifdef ERRSIM
+  virtual common::ObErrsimModuleType::TYPE get_module_type() { return ObErrsimModuleType::ERRSIM_MODULE_NONE; }
+#endif
 
 protected:
   int dag_ret_;

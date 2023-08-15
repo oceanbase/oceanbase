@@ -191,6 +191,7 @@ int ObTabletStartTransferOutHelper::on_register(
   ObTXStartTransferOutInfo tx_start_transfer_out_info;
   int64_t pos = 0;
   const bool for_replay = false;
+  ObTransferUtils::set_transfer_module();
 
   if (OB_ISNULL(buf) || len < 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -203,6 +204,7 @@ int ObTabletStartTransferOutHelper::on_register(
   } else if (CLICK_FAIL(on_register_success_(tx_start_transfer_out_info, ctx))) {
     LOG_WARN("failed to on register", K(ret), K(tx_start_transfer_out_info));
   }
+  ObTransferUtils::clear_transfer_module();
   return ret;
 }
 
@@ -410,6 +412,7 @@ int ObTabletStartTransferOutHelper::on_replay(
   ObTXStartTransferOutInfo tx_start_transfer_out_info;
   int64_t pos = 0;
   const bool for_replay = true;
+  ObTransferUtils::set_transfer_module();
 
   if (OB_ISNULL(buf) || len < 0 || !scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -441,6 +444,7 @@ int ObTabletStartTransferOutHelper::on_replay(
                         "scn", scn);
 #endif
   DEBUG_SYNC(AFTER_ON_REDO_START_TRANSFER_OUT);
+  ObTransferUtils::clear_transfer_module();
   return ret;
 }
 
@@ -680,6 +684,7 @@ int ObTabletStartTransferInHelper::on_register(
   ObTXStartTransferInInfo tx_start_transfer_in_info;
   int64_t pos = 0;
 
+  ObTransferUtils::set_transfer_module();
   if (OB_ISNULL(buf) || len < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("on register start transfer in get invalid argument", K(ret), KP(buf), K(len));
@@ -693,6 +698,7 @@ int ObTabletStartTransferInHelper::on_register(
   } else if (CLICK_FAIL(ObTabletCreateDeleteMdsUserData::set_tablet_gc_trigger(tx_start_transfer_in_info.dest_ls_id_))) {
     LOG_WARN("failed to set_tablet_gc_trigger", K(ret), K(tx_start_transfer_in_info));
   }
+  ObTransferUtils::clear_transfer_module();
   return ret;
 }
 
@@ -1215,6 +1221,7 @@ int ObTabletStartTransferInHelper::on_replay(
   int64_t pos = 0;
   bool skip_replay = false;
   ObTransferService *transfer_service = nullptr;
+  ObTransferUtils::set_transfer_module();
 
   if (OB_ISNULL(buf) || len < 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -1242,6 +1249,7 @@ int ObTabletStartTransferInHelper::on_replay(
   SERVER_EVENT_SYNC_ADD("TRANSFER", "AFTER_ON_REDO_START_TRANSFER_IN");
 #endif
   DEBUG_SYNC(AFTER_ON_REDO_START_TRANSFER_IN);
+  ObTransferUtils::clear_transfer_module();
   return ret;
 }
 
@@ -1568,6 +1576,8 @@ bool ObTabletStartTransferInHelper::check_can_replay_commit(
   bool skip_replay = false;
   ObTransferService *transfer_service = nullptr;
   bool can_skip_check_src = false;
+  ObTransferUtils::set_transfer_module();
+
   LOG_INFO("check can replay start transfer in commit", K(scn));
   if (OB_ISNULL(buf) || len < 0 || !scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1599,6 +1609,7 @@ bool ObTabletStartTransferInHelper::check_can_replay_commit(
       transfer_service->wakeup();
     }
   }
+  ObTransferUtils::clear_transfer_module();
   return b_ret;
 }
 

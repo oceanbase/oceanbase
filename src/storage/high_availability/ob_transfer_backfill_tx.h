@@ -135,6 +135,9 @@ public:
   virtual bool operator == (const share::ObIDag &other) const override;
   virtual int64_t hash() const override;
   int prepare_ctx(share::ObIDagNet *dag_net);
+#ifdef ERRSIM
+  virtual common::ObErrsimModuleType::TYPE get_module_type() { return ObErrsimModuleType::ERRSIM_MODULE_TRANSFER; }
+#endif
 
   INHERIT_TO_STRING_KV("ObStorageHADag", ObStorageHADag, KP(this));
 private:

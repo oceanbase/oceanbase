@@ -66,6 +66,11 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
     timeguard.click();
     ObRpcMemPool* pool = ObRpcMemPool::create(tenant_id, pcode_label, pool_size);
     void *temp = NULL;
+
+#ifdef ERRSIM
+    THIS_WORKER.set_module_type(tmp_pkt.get_module_type());
+#endif
+
     if (OB_ISNULL(pool)) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       RPC_LOG(WARN, "create memory pool failed", K(tenant_id), K(pcode_label));
@@ -154,6 +159,9 @@ int ObPocServerHandleContext::resp_error(uint64_t resp_id, int err_code, const c
         res_pkt.set_dst_cluster_id(recv_pkt.get_src_cluster_id());
         int64_t receive_ts = ObTimeUtility::current_time();
         res_pkt.set_request_arrival_time(receive_ts);
+#ifdef ERRSIM
+        res_pkt.set_module_type(recv_pkt.get_module_type());
+#endif
       }
     }
     res_pkt.set_resp();

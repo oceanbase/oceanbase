@@ -1786,6 +1786,11 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
   const ObMetaDiskAddr &new_addr = new_handle.get_obj()->get_tablet_addr();
   const ObTablet *old_tablet = old_handle.get_obj();
   const ObTablet *new_tablet = new_handle.get_obj();
+
+#ifdef ERRSIM
+  ErrsimModuleGuard guard(ObErrsimModuleType::ERRSIM_MODULE_NONE);
+#endif
+
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));

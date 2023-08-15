@@ -62,6 +62,8 @@ struct ObTransferUtils
   static int kill_tx(const uint64_t tenant_id, const share::ObLSID &ls_id);
   static int unblock_tx(const uint64_t tenant_id, const share::ObLSID &ls_id);
   static int get_gts(const uint64_t tenant_id, share::SCN &gts);
+  static void set_transfer_module();
+  static void clear_transfer_module();
 };
 
 } // end namespace storage

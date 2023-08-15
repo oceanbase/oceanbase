@@ -123,6 +123,10 @@ void ObTransferService::run1()
 {
   int ret = OB_SUCCESS;
   lib::set_thread_name("TransferService");
+#ifdef ERRSIM
+  ObErrsimModuleType module_type(ObErrsimModuleType::ERRSIM_MODULE_TRANSFER);
+  THIS_WORKER.set_module_type(module_type);
+#endif
 
   while (!has_set_stop()) {
     ls_id_array_.reset();

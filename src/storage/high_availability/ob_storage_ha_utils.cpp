@@ -32,6 +32,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "rootserver/ob_tenant_info_loader.h"
 #include "src/observer/omt/ob_tenant_config.h"
+#include "common/errsim_module/ob_errsim_module_type.h"
 
 using namespace oceanbase::share;
 
@@ -461,6 +462,25 @@ int64_t ObStorageHAUtils::get_rpc_timeout()
   return rpc_timeout;
 }
 
+void ObTransferUtils::set_transfer_module()
+{
+#ifdef ERRSIM
+  if (ObErrsimModuleType::ERRSIM_MODULE_NONE == THIS_WORKER.get_module_type().type_) {
+    ObErrsimModuleType type(ObErrsimModuleType::ERRSIM_MODULE_TRANSFER);
+    THIS_WORKER.set_module_type(type);
+  }
+#endif
+}
+
+void ObTransferUtils::clear_transfer_module()
+{
+#ifdef ERRSIM
+  if (ObErrsimModuleType::ERRSIM_MODULE_TRANSFER == THIS_WORKER.get_module_type().type_) {
+    ObErrsimModuleType type(ObErrsimModuleType::ERRSIM_MODULE_NONE);
+    THIS_WORKER.set_module_type(type);
+  }
+#endif
+}
 
 } // end namespace storage
 } // end namespace oceanbase

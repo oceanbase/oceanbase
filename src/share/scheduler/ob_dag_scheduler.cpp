@@ -1437,6 +1437,10 @@ void ObTenantDagWorker::run1()
           ret = OB_ERR_UNEXPECTED;
           COMMON_LOG(WARN, "invalid compat mode", K(ret), K(*dag));
         } else {
+#ifdef ERRSIM
+          const ObErrsimModuleType type(dag->get_module_type());
+          THIS_WORKER.set_module_type(type);
+#endif
           THIS_WORKER.set_compatibility_mode(compat_mode);
           if (OB_FAIL(set_dag_resource(dag->get_consumer_group_id()))) {
             LOG_WARN("isolate dag CPU and IOPS failed", K(ret));

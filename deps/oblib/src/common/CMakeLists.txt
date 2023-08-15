@@ -59,4 +59,12 @@ ob_set_subtarget(oblib_common storage
   storage/ob_sequence.cpp
 )
 
+if (OB_ERRSIM)
+  ob_set_subtarget(oblib_common errsim_module
+    errsim_module/ob_errsim_module_type.cpp
+    errsim_module/ob_tenant_errsim_event.cpp
+    errsim_module/ob_errsim_module_interface.cpp
+  )
+endif()
+
 ob_lib_add_target(oblib_common)

@@ -182,6 +182,8 @@ class ObTenantDagScheduler;
 class ObTenantModuleInitCtx;
 class ObGlobalAutoIncService;
 class ObDagWarningHistoryManager;
+class ObTenantErrsimModuleMgr;
+class ObTenantErrsimEventMgr;
 namespace schema
 {
   class ObTenantSchemaService;
@@ -195,6 +197,14 @@ namespace detector
 #define ArbMTLMember
 #else
 #define ArbMTLMember rootserver::ObArbitrationService*,
+#endif
+
+#ifdef ERRSIM
+#define TenantErrsimModule share::ObTenantErrsimModuleMgr*,
+#define TenantErrsimEvent share::ObTenantErrsimEventMgr*,
+#else
+#define TenantErrsimModule
+#define TenantErrsimEvent
 #endif
 
 // 在这里列举需要添加的租户局部变量的类型，租户会为每种类型创建一个实例。
@@ -290,6 +300,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       oceanbase::common::sqlclient::ObTenantOciEnvs*, \
       rootserver::ObHeartbeatService*,              \
       oceanbase::common::ObDetectManager*,          \
+      TenantErrsimModule                            \
+      TenantErrsimEvent                             \
       oceanbase::sql::ObTenantSQLSessionMgr*        \
   )
 
