@@ -1151,6 +1151,7 @@ DEFINE_ERROR_EXT(OB_ERR_WINDOW_FRAME_ILLEGAL, -5507, ER_WINDOW_FRAME_ILLEGAL, "H
 DEFINE_ERROR_EXT(OB_ERR_WINDOW_RANGE_FRAME_TEMPORAL_TYPE, -5508, ER_WINDOW_RANGE_FRAME_TEMPORAL_TYPE, "HY000", "Window with RANGE frame has ORDER BY expression of datetime type. Only INTERVAL bound value allowed.", "Window '%.*s' with RANGE frame has ORDER BY expression of datetime type. Only INTERVAL bound value allowed.");
 DEFINE_ERROR_EXT(OB_ERR_WINDOW_RANGE_FRAME_NUMERIC_TYPE, -5509, ER_WINDOW_RANGE_FRAME_NUMERIC_TYPE, "HY000", "Window with RANGE frame has ORDER BY expression of numeric type. INTERVAL bound value not allowed.", "Window '%.*s' with RANGE frame has ORDER BY expression of numeric type. INTERVAL bound value not allowed.");
 DEFINE_ERROR_EXT(OB_ERR_WINDOW_RANGE_BOUND_NOT_CONSTANT, -5510, ER_WINDOW_RANGE_BOUND_NOT_CONSTANT, "HY000", "Window has a non-constant frame bound.", "Window '%.*s' has a non-constant frame bound.");
+DEFINE_ORACLE_ERROR(OB_ERR_DEFAULT_FOR_MODIFYING_VIEWS, -5511, -1, "42000", "Explicit column default is not supported for modifying views", 32575, "Explicit column default is not supported for modifying views");
 
 DEFINE_ERROR_EXT(OB_ERR_SP_ALREADY_EXISTS, -5541, ER_SP_ALREADY_EXISTS, "42000", "procedure/function already exists", "%s %.*s already exists");
 DEFINE_ERROR_EXT(OB_ERR_SP_DOES_NOT_EXIST, -5542, ER_SP_DOES_NOT_EXIST, "42000", "procedure/function does not exist", "%s %.*s.%.*s does not exist");

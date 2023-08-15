@@ -3195,6 +3195,7 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
   ObArray<int64_t> value_idxs; //store the old order of columns in values_desc
   uint64_t value_count = OB_INVALID_ID;
   bool is_all_default = false;
+  bool is_update_view = false;
   if (OB_ISNULL(del_upd_stmt) || OB_ISNULL(node) || OB_ISNULL(session_info_) ||
       T_VALUE_LIST != node->type_ || OB_ISNULL(node->children_) || OB_ISNULL(del_upd_stmt->get_query_ctx())) {
     ret = OB_INVALID_ARGUMENT;
@@ -3215,9 +3216,15 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
     LOG_WARN("reserve memory fail", K(ret));
   }
   if (OB_SUCC(ret)) {
+    TableItem* table_item = NULL;
     if (OB_FAIL(check_need_match_all_params(table_info.values_desc_,
                                             del_upd_stmt->get_query_ctx()->need_match_all_params_))) {
       LOG_WARN("check need match all params failed", K(ret));
+    } else if (OB_ISNULL(table_item = del_upd_stmt->get_table_item_by_id(table_info.table_id_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (table_item->is_generated_table()) {
+      is_update_view = true;
     }
   }
   if (OB_SUCC(ret)) {
@@ -3299,8 +3306,11 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
               LOG_ERROR("fail to resolve sql expr", K(ret), K(expr));
             } else if (T_DEFAULT == expr->get_expr_type()) {
               ColumnItem *column_item = NULL;
-              if (OB_ISNULL(column_item = del_upd_stmt->get_column_item_by_id(table_info.table_id_,
-                                                                             column_id))) {
+              if (is_update_view && is_oracle_mode()) {
+                ret = OB_ERR_DEFAULT_FOR_MODIFYING_VIEWS;
+                LOG_USER_ERROR(OB_ERR_DEFAULT_FOR_MODIFYING_VIEWS);
+              } else if (OB_ISNULL(column_item = del_upd_stmt->get_column_item_by_id(table_info.table_id_,
+                                                                                     column_id))) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("get column item by id failed", K(table_info.table_id_), K(column_id));
               } else  if (column_expr->is_generated_column()) {

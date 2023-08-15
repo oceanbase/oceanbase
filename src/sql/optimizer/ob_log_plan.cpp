@@ -11730,6 +11730,8 @@ int ObLogPlan::set_duplicated_table_location(ObLogicalOperator *op, int64_t dup_
            phy_loc.get_phy_part_loc_info_list_for_update().at(i);
       phy_part_loc.set_selected_replica_idx(dup_table_pos);
     }
+  } else if (OB_FAIL(op->adjust_dup_table_replica_pos(dup_table_pos))) {
+    LOG_WARN("failed to adjust dup table replica pos", K(ret));
   } else {
     ObSEArray<int64_t, 8> dup_table_pos_list;
     if (op->get_dup_table_pos().empty()) {

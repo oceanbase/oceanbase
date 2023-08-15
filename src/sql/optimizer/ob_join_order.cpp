@@ -5427,12 +5427,6 @@ int JoinPath::compute_join_path_sharding()
       } else if (OB_UNLIKELY(2 != reselected_dup_pos.count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected array count", K(reselected_dup_pos.count()), K(ret));
-      } else if (OB_FAIL(ObOptimizerUtil::adjust_join_path_dup_table_replica_pos(left_path_,
-                                                                                 reselected_dup_pos.at(0)))) {
-        LOG_WARN("failed to adjust join path dup table replica pos", K(ret));
-      } else if (OB_FAIL(ObOptimizerUtil::adjust_join_path_dup_table_replica_pos(right_path_,
-                                                                                 reselected_dup_pos.at(1)))) {
-        LOG_WARN("failed to adjust join path dup table replica pos", K(ret));
       } else {
         left_dup_table_pos_ = reselected_dup_pos.at(0);
         right_dup_table_pos_ = reselected_dup_pos.at(1);
@@ -13303,6 +13297,7 @@ int ObJoinOrder::generate_force_inner_path(const ObIArray<ObRawExpr *> &join_con
     } else {
       inner_path->is_inner_path_ = true;
       inner_path->inner_row_count_ = right_tree.get_output_rows();
+      inner_path->log_op_ = NULL;
     }
   }
   return ret;

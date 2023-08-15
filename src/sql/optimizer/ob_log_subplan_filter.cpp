@@ -386,8 +386,6 @@ int ObLogSubPlanFilter::compute_sharding_info()
                                     strong_sharding_,
                                     inherit_sharding_index_))) {
       LOG_WARN("failed to compute basic sharding info", K(ret));
-    } else {
-      strong_sharding_->set_can_reselect_replica(false);
     }
   } else if (DistAlgo::DIST_PULL_TO_LOCAL == dist_algo_) {
     strong_sharding_ = get_plan()->get_optimizer_context().get_local_sharding();

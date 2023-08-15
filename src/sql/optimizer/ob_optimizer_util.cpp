@@ -8124,65 +8124,6 @@ int ObOptimizerUtil::check_exec_param_filter_exprs(const ObIArray<ObRawExpr *> &
   return ret;
 }
 
-int ObOptimizerUtil::adjust_join_path_dup_table_replica_pos(const Path *path,
-                                                            const int64_t cur_dup_table_pos)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(path)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(path));
-  } else if (!path->is_join_path() ||
-             path->strong_sharding_ == NULL ||
-             !path->strong_sharding_->get_can_reselect_replica()) {
-    //do nothing
-  } else {
-    const JoinPath *tmp_path = static_cast<const JoinPath*>(path);
-    if (OB_ISNULL(tmp_path->left_path_) || OB_ISNULL(tmp_path->left_path_->strong_sharding_) ||
-        OB_ISNULL(tmp_path->right_path_) || OB_ISNULL(tmp_path->right_path_->strong_sharding_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(ret), KPC(tmp_path->left_path_), KPC(tmp_path->right_path_));
-    } else if (OB_ISNULL(tmp_path->strong_sharding_->get_phy_table_location_info()) ||
-               OB_UNLIKELY(1 != tmp_path->strong_sharding_->get_phy_table_location_info()->get_partition_cnt())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(ret));
-    } else {
-      const ObCandiTabletLoc &phy_part_loc =
-        tmp_path->strong_sharding_->get_phy_table_location_info()->get_phy_part_loc_info_list_for_update().at(0);
-      const ObIArray<ObRoutePolicy::CandidateReplica> &replicas =
-                                        phy_part_loc.get_partition_location().get_replica_locations();
-      if (OB_UNLIKELY(cur_dup_table_pos < 0 || cur_dup_table_pos >= replicas.count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(cur_dup_table_pos), K(replicas.count()), K(ret));
-      } else {
-        const ObAddr &addr = replicas.at(cur_dup_table_pos).get_server();
-        ObSEArray<ObShardingInfo*, 2> input_shardings;
-        ObSEArray<int64_t, 2> reselected_dup_pos;
-        if (OB_FAIL(input_shardings.push_back(tmp_path->left_path_->strong_sharding_)) ||
-            OB_FAIL(input_shardings.push_back(tmp_path->right_path_->strong_sharding_))) {
-          LOG_WARN("failed to input shardings", K(ret));
-        } else if (OB_FAIL(compute_duplicate_table_replica_pos(addr, input_shardings, reselected_dup_pos))) {
-          LOG_WARN("failed to compute duplicate table replica pos", K(ret));
-        } else if (OB_UNLIKELY(reselected_dup_pos.count() != 2)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected error", K(ret), K(reselected_dup_pos.count()));
-        } else if (OB_FAIL(SMART_CALL(adjust_join_path_dup_table_replica_pos(tmp_path->left_path_,
-                                                                        reselected_dup_pos.at(0))))) {
-          LOG_WARN("failed to adjust join path dup table replica pos", K(ret));
-        } else if (OB_FAIL(SMART_CALL(adjust_join_path_dup_table_replica_pos(tmp_path->right_path_,
-                                                                        reselected_dup_pos.at(1))))) {
-          LOG_WARN("failed to adjust join path dup table replica pos", K(ret));
-        } else {
-          const_cast<JoinPath*>(tmp_path)->left_dup_table_pos_ = reselected_dup_pos.at(0);
-          const_cast<JoinPath*>(tmp_path)->right_dup_table_pos_ = reselected_dup_pos.at(1);
-          LOG_TRACE("Succeed to adjust join path dup table replica pos", K(addr),K(input_shardings),
-                                                                         K(reselected_dup_pos));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObOptimizerUtil::check_contain_batch_stmt_parameter(ObRawExpr* expr, bool &contain)
 {
   int ret = OB_SUCCESS;

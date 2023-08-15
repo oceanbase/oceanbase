@@ -1388,8 +1388,6 @@ public:
   static int check_exec_param_filter_exprs(const ObIArray<ObRawExpr *> &input_filters,
                                            bool &has_exec_param_filters);
 
-  static int adjust_join_path_dup_table_replica_pos(const Path *path,
-                                                    const int64_t cur_dup_table_pos);
 
   static int check_contain_batch_stmt_parameter(ObRawExpr* expr, bool &contain);
 

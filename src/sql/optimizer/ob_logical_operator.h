@@ -1665,6 +1665,8 @@ public:
                                ObIArray<ObExecParamRawExpr *> &right_above_params);
   // 生成 partition id 表达式
   int generate_pseudo_partition_id_expr(ObOpPseudoColumnRawExpr *&expr);
+
+  int adjust_dup_table_replica_pos(int64_t dup_table_pos);
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
   ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
