@@ -539,6 +539,31 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
   return ret;
 }
 
+int ObTabletDDLUtil::try_get_first_ddl_sstable(ObTablet &tablet,
+                                               blocksstable::ObSSTable *&first_sstable)
+{
+  int ret = OB_SUCCESS;
+  first_sstable = nullptr;
+  ObTableStoreIterator ddl_table_iter;
+
+  ObITable *first_ddl_sstable = nullptr;
+  if (OB_FAIL(tablet.get_ddl_sstables(ddl_table_iter))) {
+    LOG_WARN("get ddl sstable handles failed", K(ret));
+  } else if (ddl_table_iter.count() > 0) {
+    if (OB_FAIL(ddl_table_iter.get_boundary_table(false/*is_last*/, first_ddl_sstable))) {
+      LOG_WARN("failed to get boundary table", K(ret));
+    } else if (OB_ISNULL(first_ddl_sstable)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("first_ddl_sstable must not null", K(ret));
+    }
+  }
+
+  if (OB_NOT_NULL(first_ddl_sstable)) {
+    first_sstable = static_cast<ObSSTable *>(first_ddl_sstable);
+  }
+  return ret;
+}
+
 int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
                                         const ObTabletDDLParam &ddl_param,
                                         const ObIArray<const ObDataMacroBlockMeta *> &meta_array,

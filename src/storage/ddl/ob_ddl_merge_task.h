@@ -150,7 +150,8 @@ public:
                                      const int64_t ddl_format_version,
                                      const blocksstable::ObSSTable *first_ddl_sstable,
                                      blocksstable::ObDataStoreDesc &data_desc);
-
+  static int try_get_first_ddl_sstable(ObTablet &tablet,
+                                       blocksstable::ObSSTable *&first_sstable);
   static int create_ddl_sstable(ObTablet &tablet,
                                 const ObTabletDDLParam &ddl_param,
                                 const ObIArray<const blocksstable::ObDataMacroBlockMeta *> &meta_array,
