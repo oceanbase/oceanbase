@@ -1,6 +1,14 @@
-// Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
-// Author:
-//   suzhi.yt <>
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
 
 #define USING_LOG_PREFIX SERVER
 
@@ -208,25 +216,6 @@ int ObTableLoadUtils::deep_copy(const sql::ObSQLSessionInfo &src, sql::ObSQLSess
 bool ObTableLoadUtils::is_local_addr(const ObAddr &addr)
 {
   return (ObServer::get_instance().get_self() == addr);
-}
-
-int ObTableLoadUtils::create_session_info(uint64_t user_id, sql::ObSQLSessionInfo *&session_info, sql::ObFreeSessionCtx &free_session_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(create_session_info(session_info, free_session_ctx))) {
-    LOG_WARN("create session id failed", KR(ret));
-  } else if (session_info != nullptr){
-    OZ(session_info->load_default_sys_variable(false, false)); //加载默认的session参数
-    OZ(session_info->load_default_configs_in_pc());
-    OX(session_info->set_priv_user_id(user_id));
-  }
-  if (OB_FAIL(ret)) {
-    if (session_info != nullptr) {
-      observer::ObTableLoadUtils::free_session_info(session_info, free_session_ctx);
-      session_info = nullptr;
-    }
-  }
-  return ret;
 }
 
 int ObTableLoadUtils::create_session_info(sql::ObSQLSessionInfo *&session_info, sql::ObFreeSessionCtx &free_session_ctx)

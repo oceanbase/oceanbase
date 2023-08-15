@@ -69,6 +69,7 @@ int ObTableDirectLoadBeginExecutor::process()
   int ret = OB_SUCCESS;
   LOG_INFO("table direct load begin", K_(arg));
   const uint64_t tenant_id = ctx_.get_tenant_id();
+  const uint64_t user_id = ctx_.get_user_id();
   const uint64_t database_id = ctx_.get_database_id();
   uint64_t table_id = 0;
 
@@ -139,7 +140,7 @@ int ObTableDirectLoadBeginExecutor::process()
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc client task", KR(ret));
       } else if (OB_FAIL(
-                   client_task_->init(tenant_id, ctx_.get_user_id(), table_id, arg_.timeout_))) {
+                   client_task_->init(tenant_id, user_id, database_id, table_id, arg_.timeout_))) {
         LOG_WARN("fail to init client task", KR(ret));
       } else {
         // create table ctx

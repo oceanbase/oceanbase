@@ -1,6 +1,14 @@
-// Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
-// Author:
-//   suzhi.yt <>
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
 
 #define USING_LOG_PREFIX SERVER
 
@@ -206,7 +214,8 @@ void ObTableLoadService::ObClientTaskAutoAbortTask::runTimerTask()
     } else {
       for (int64_t i = 0; i < client_task_array.count(); ++i) {
         ObTableLoadClientTask *client_task = client_task_array.at(i);
-        if (ObTableLoadClientStatus::ERROR == client_task->get_status()) {
+        if (OB_UNLIKELY(ObTableLoadClientStatus::ERROR == client_task->get_status() ||
+                        client_task->get_exec_ctx()->check_status() != OB_SUCCESS)) {
           if (OB_FAIL(ObTableLoadClientService::abort_task(client_task))) {
             LOG_WARN("fail to abort client task", KR(ret), KPC(client_task));
           }

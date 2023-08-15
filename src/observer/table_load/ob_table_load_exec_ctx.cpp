@@ -1,6 +1,14 @@
-// Copyright (c) 2022-present Oceanbase Inc. All Rights Reserved.
-// Author:
-//   yuya.yu <>
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
 
 #define USING_LOG_PREFIX SERVER
 
@@ -66,6 +74,11 @@ int ObTableLoadClientExecCtx::check_status()
   } else if (OB_UNLIKELY(timeout_ts_ < ObTimeUtil::current_time())) {
     ret = OB_TIMEOUT;
     LOG_WARN("table load is timeout", KR(ret), K_(timeout_ts));
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is null");
+  } else if (session_info_->is_terminate(ret)){
+    LOG_WARN("execution was terminated", K(ret));
   }
   return ret;
 }

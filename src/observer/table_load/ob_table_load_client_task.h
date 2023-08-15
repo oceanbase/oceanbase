@@ -32,7 +32,8 @@ class ObTableLoadClientTask
 public:
   ObTableLoadClientTask();
   ~ObTableLoadClientTask();
-  int init(uint64_t tenant_id, uint64_t user_id, uint64_t table_id, int64_t timeout_us);
+  int init(uint64_t tenant_id, uint64_t user_id, uint64_t database_id, uint64_t table_id,
+           int64_t timeout_us);
   bool is_inited() const { return is_inited_; }
   int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
   int64_t inc_ref_count() { return ATOMIC_AAF(&ref_count_, 1); }
@@ -59,16 +60,21 @@ public:
   int alloc_task(ObTableLoadTask *&task);
   void free_task(ObTableLoadTask *task);
   int add_task(ObTableLoadTask *task);
-  TO_STRING_KV(K_(tenant_id), K_(user_id), K_(table_id), K_(ddl_param), K_(column_names),
-               K_(column_idxs), K_(result_info), KP_(session_info), K_(free_session_ctx),
-               KP_(exec_ctx), KP_(task_scheduler), K_(trans_ids), K_(next_trans_idx),
-               KP_(table_ctx), K_(client_status), K_(error_code), K_(ref_count));
+  TO_STRING_KV(K_(tenant_id), K_(user_id), K_(database_id), K_(table_id), K_(ddl_param),
+               K_(column_names), K_(column_idxs), K_(result_info), KP_(session_info),
+               K_(free_session_ctx), KP_(exec_ctx), KP_(task_scheduler), K_(trans_ids),
+               K_(next_trans_idx), KP_(table_ctx), K_(client_status), K_(error_code),
+               K_(ref_count));
 private:
+  int create_session_info(uint64_t user_id, uint64_t database_id, uint64_t table_id,
+                                 sql::ObSQLSessionInfo *&session_info,
+                                 sql::ObFreeSessionCtx &free_session_ctx);
   int init_column_names_and_idxs();
   int init_exec_ctx(int64_t timeout_us);
 public:
   uint64_t tenant_id_;
   uint64_t user_id_;
+  uint64_t database_id_;
   uint64_t table_id_;
   ObTableLoadDDLParam ddl_param_;
   common::ObArray<ObString> column_names_;

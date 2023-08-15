@@ -20,6 +20,7 @@
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "observer/table_load/ob_table_load_utils.h"
 #include "observer/table_load/ob_table_load_task.h"
+#include "observer/ob_server.h"
 
 namespace oceanbase
 {
@@ -76,8 +77,8 @@ ObTableLoadClientTask::~ObTableLoadClientTask()
   }
 }
 
-int ObTableLoadClientTask::init(uint64_t tenant_id, uint64_t user_id, uint64_t table_id,
-                                int64_t timeout_us)
+int ObTableLoadClientTask::init(uint64_t tenant_id, uint64_t user_id, uint64_t database_id,
+                                uint64_t table_id, int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -90,12 +91,13 @@ int ObTableLoadClientTask::init(uint64_t tenant_id, uint64_t user_id, uint64_t t
   } else {
     tenant_id_ = tenant_id;
     user_id_ = user_id;
+    database_id_ = database_id;
     table_id_ = table_id;
-    if (OB_FAIL(init_column_names_and_idxs())) {
-      LOG_WARN("fail to init column names and idxs", KR(ret));
-    } else if (OB_FAIL(ObTableLoadUtils::create_session_info(user_id_, session_info_,
+    if (OB_FAIL(create_session_info(user_id_, database_id_, table_id_, session_info_,
                                                              free_session_ctx_))) {
       LOG_WARN("fail to create session info", KR(ret));
+    } else if (OB_FAIL(init_column_names_and_idxs())) {
+      LOG_WARN("fail to init column names and idxs", KR(ret));
     } else if (OB_FAIL(init_exec_ctx(timeout_us))) {
       LOG_WARN("fail to init client exec ctx", KR(ret));
     } else if (OB_FAIL(task_allocator_.init("TLD_TaskPool", MTL_ID()))) {
@@ -110,6 +112,75 @@ int ObTableLoadClientTask::init(uint64_t tenant_id, uint64_t user_id, uint64_t t
       LOG_WARN("fail to start task scheduler", KR(ret));
     } else {
       is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadClientTask::create_session_info(uint64_t user_id, uint64_t database_id, uint64_t table_id,
+                                          sql::ObSQLSessionInfo *&session_info,
+                                          sql::ObFreeSessionCtx &free_session_ctx)
+{
+  int ret = OB_SUCCESS;
+  schema::ObSchemaGetterGuard schema_guard;
+  const schema::ObTenantSchema *tenant_info = nullptr;
+  const ObUserInfo *user_info = nullptr;
+  const ObDatabaseSchema *database_schema = nullptr;
+  const ObTableSchema *table_schema = nullptr;
+  uint64_t tenant_id = MTL_ID();
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(ret), K(GCTX.schema_service_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get_schema_guard failed", K(ret));
+  } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_info))) {
+    LOG_WARN("get tenant info failed", K(ret));
+  } else if (OB_ISNULL(tenant_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tenant schema", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_user_info(tenant_id, user_id, user_info))) {
+    LOG_WARN("get user info failed", K(ret));
+  } else if (OB_ISNULL(user_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid user_info", K(ret), K(tenant_id), K(user_id));
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_id, database_schema))) {
+    LOG_WARN("get database schema failed", K(ret));
+  } else if (OB_ISNULL(database_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid database schema", K(ret), K(tenant_id), K(database_id));
+  } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard,
+                                                         table_schema))) {
+    LOG_WARN("fail to get database and table schema", KR(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid table schema", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(ObTableLoadUtils::create_session_info(session_info, free_session_ctx))) {
+    LOG_WARN("create session id failed", KR(ret));
+  } else {
+    common::ObArenaAllocator allocator;
+    ObStringBuffer buffer(&allocator);
+    buffer.append("DIRECT LOAD_");
+    buffer.append(table_schema->get_table_name());
+    OZ(session_info->load_default_sys_variable(false, false)); //加载默认的session参数
+    OZ(session_info->load_default_configs_in_pc());
+    OX(session_info->init_tenant(tenant_info->get_tenant_name(), tenant_id));
+    OX(session_info->set_priv_user_id(user_id));
+    OX(session_info->store_query_string(ObString(buffer.length(), buffer.ptr())));
+    OX(session_info->set_user(user_info->get_user_name(), user_info->get_host_name_str(),
+                              user_info->get_user_id()));
+    OX(session_info->set_user_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT));
+    OX(session_info->set_default_database(database_schema->get_database_name(),
+                                          CS_TYPE_UTF8MB4_GENERAL_CI));
+    OX(session_info->set_mysql_cmd(obmysql::COM_QUERY));
+    OX(session_info->set_current_trace_id(ObCurTraceId::get_trace_id()));
+    OX(session_info->set_client_addr(ObServer::get_instance().get_self()));
+    OX(session_info->set_peer_addr(ObServer::get_instance().get_self()));
+    OX(session_info->set_thread_id(GETTID()));
+  }
+  if (OB_FAIL(ret)) {
+    if (session_info != nullptr) {
+      observer::ObTableLoadUtils::free_session_info(session_info, free_session_ctx);
+      session_info = nullptr;
     }
   }
   return ret;
