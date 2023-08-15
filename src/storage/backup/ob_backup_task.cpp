@@ -4654,6 +4654,7 @@ ObLSBackupComplementLogTask::ObLSBackupComplementLogTask()
       compl_end_scn_(),
       turn_id_(0),
       retry_id_(-1),
+      archive_dest_(),
       report_ctx_()
 {}
 
@@ -5109,7 +5110,7 @@ int ObLSBackupComplementLogTask::inner_get_piece_file_list_(const share::ObLSID 
   const share::SCN &start_scn = piece_attr.start_scn_;
   if (OB_FAIL(get_src_backup_piece_dir_(ls_id, piece_attr, src_piece_dir_path))) {
     LOG_WARN("failed to get src backup piece dir", K(ret), K(round_id), K(piece_id), K(ls_id), K(piece_attr));
-  } else if (OB_FAIL(util.list_files(src_piece_dir_path.get_obstr(), backup_dest_.get_storage_info(), op))) {
+  } else if (OB_FAIL(util.list_files(src_piece_dir_path.get_obstr(), archive_dest_.get_storage_info(), op))) {
     LOG_WARN("failed to list files", K(ret), K(src_piece_dir_path));
   } else if (OB_FAIL(op.get_file_id_list(file_id_list))) {
     LOG_WARN("failed to get files", K(ret));
@@ -5366,7 +5367,7 @@ int ObLSBackupComplementLogTask::inner_transfer_clog_file_(
   if (OB_FAIL(util.open_with_access_type(
           device_handle, fd, backup_dest_.get_storage_info(), dst_path.get_obstr(), OB_STORAGE_ACCESS_RANDOMWRITER))) {
     LOG_WARN("failed to open with access type", K(ret));
-  } else if (OB_FAIL(get_file_length_(src_path.get_obstr(), backup_dest_.get_storage_info(), src_len))) {
+  } else if (OB_FAIL(get_file_length_(src_path.get_obstr(), archive_dest_.get_storage_info(), src_len))) {
     LOG_WARN("failed to get file length", K(ret), K(src_path));
   } else if (OB_FAIL(get_file_length_(dst_path.get_obstr(), backup_dest_.get_storage_info(), dst_len))) {
     LOG_WARN("failed to get file length", K(ret), K(dst_path));
@@ -5380,7 +5381,7 @@ int ObLSBackupComplementLogTask::inner_transfer_clog_file_(
   } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(transfer_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret), K(transfer_len));
-  } else if (OB_FAIL(util.read_part_file(src_path.get_obstr(), backup_dest_.get_storage_info(), buf, transfer_len, dst_len, read_len))) {
+  } else if (OB_FAIL(util.read_part_file(src_path.get_obstr(), archive_dest_.get_storage_info(), buf, transfer_len, dst_len, read_len))) {
     LOG_WARN("failed to read part file", K(ret), K(src_path));
   } else if (read_len != transfer_len) {
     ret = OB_ERR_UNEXPECTED;
@@ -5637,6 +5638,8 @@ int ObLSBackupComplementLogTask::get_archive_backup_dest_(
   if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(
       *report_ctx_.sql_proxy_, tenant_id_, path, archive_dest))) {
     LOG_WARN("failed to get archive dest", K(ret), K(tenant_id_), K(path));
+  } else if (OB_FAIL(archive_dest_.deep_copy(archive_dest))) {
+    LOG_WARN("failed to deep copy archive dest", K(ret));
   } else {
     LOG_INFO("succ get backup dest", K(tenant_id_), K(path));
   }
