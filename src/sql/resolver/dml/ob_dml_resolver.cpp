@@ -2243,7 +2243,8 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
       if (lib::is_oracle_mode()
           && NULL != params_.secondary_namespace_
           && ((get_basic_stmt()->is_insert_stmt()
-                && !static_cast<ObInsertStmt*>(get_basic_stmt())->value_from_select())
+                && !static_cast<ObInsertStmt*>(get_basic_stmt())->value_from_select()
+                && T_FIELD_LIST_SCOPE != current_scope_)
               || T_CURRENT_OF_SCOPE == current_scope_)) {
         //In Oracle Mode, current of ident, insert values(ident), ident should explain to pl/sql variable
         if (!q_name.access_idents_.empty()) { //q_name.access_idents_为NULL肯定是列
