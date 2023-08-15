@@ -128,18 +128,19 @@ int gen_sortkey(ObCollationType cs_type, ObIAllocator &allocator, ObString &elem
   } else if (ObCharset::is_bin_sort(cs_type)) {
     sort_key = elem;
   } else {
-    bool is_valid_character = false;
     const ObCharsetInfo *cs = ObCharset::get_charset(cs_type);
     size_t buf_len = cs->coll->strnxfrmlen(cs, elem.length()) * cs->mbmaxlen;
     ObArrayWrap<char> buffer;
 
     OZ (buffer.allocate_array(allocator, buf_len));
     if (OB_SUCC(ret)) {
-      size_t sort_key_len = ObCharset::sortkey(cs_type, elem.ptr(), elem.length(),
-                                               buffer.get_data(), buf_len, is_valid_character);
-      if (OB_UNLIKELY(!is_valid_character)) {
-        ret = OB_ERR_INCORRECT_STRING_VALUE;
+      int64_t temp_len = 0;
+      if (OB_FAIL(ObCharset::well_formed_len(cs_type, elem.ptr(), elem.length(), temp_len))) {
+        LOG_WARN("invalid input string", KPHEX(elem.ptr(), elem.length()));
       } else {
+        bool is_valid_character = false;
+        size_t sort_key_len = ObCharset::sortkey(cs_type, elem.ptr(), elem.length(),
+                                                buffer.get_data(), buf_len, is_valid_character);
         sort_key.assign_ptr(buffer.get_data(), sort_key_len);
       }
     }
