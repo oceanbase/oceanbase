@@ -115,7 +115,6 @@ DEF_SIMPLE_EXECUTOR(ObRecoverTenant);
 DEF_SIMPLE_EXECUTOR(ObAddDisk);
 DEF_SIMPLE_EXECUTOR(ObDropDisk);
 
-DEF_SIMPLE_EXECUTOR(ObArchiveLog);
 DEF_SIMPLE_EXECUTOR(ObBackupDatabase);
 DEF_SIMPLE_EXECUTOR(ObBackupManage);
 DEF_SIMPLE_EXECUTOR(ObBackupClean);
@@ -132,6 +131,20 @@ DEF_SIMPLE_EXECUTOR(ObSetRegionBandwidth);
 
 DEF_SIMPLE_EXECUTOR(ObCheckpointSlog);
 DEF_SIMPLE_EXECUTOR(ObBootstrap);
+
+class ObArchiveLogExecutor
+{
+  public:
+    ObArchiveLogExecutor() {}
+    virtual ~ObArchiveLogExecutor() {}
+    int execute(ObExecContext &ctx, ObArchiveLogStmt &stmt);
+  private:
+    int wait_close_archive_finish_(ObExecContext &ctx, const obrpc::ObArchiveLogArg &arg);
+    int check_close_archive_finish_(common::ObISQLClient &proxy, const obrpc::ObArchiveLogArg &arg, bool &is_finish);
+    int get_all_archive_tenant_ids_(common::ObIArray<uint64_t> &tenant_array);
+    int check_tenant_archive_status_stop_(common::ObISQLClient &proxy, const uint64_t &tenant_id, bool &is_finish);
+    DISALLOW_COPY_AND_ASSIGN(ObArchiveLogExecutor);
+};
 
 class ObCancelTaskExecutor
 {
