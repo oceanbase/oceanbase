@@ -631,8 +631,10 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
         parent_dfo->set_slave_mapping_type(transmit->get_slave_mapping_type());
         dfo->set_pkey_table_loc_id(
           (reinterpret_cast<const ObPxTransmitSpec *>(transmit))->repartition_table_id_);
-        parent_dfo->set_is_related_pair(transmit->is_related_child_ ||  parent_dfo->is_related_pair());
-        dfo->set_is_related_pair(transmit->is_related_child_ ||  dfo->is_related_pair());
+        if (transmit->is_related_child_) {
+          parent_dfo->set_is_related_pair(true);
+          dfo->set_is_related_pair(true);
+        }
         if (OB_ISNULL(parent_dfo)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("parent dfo should not be null", K(ret));

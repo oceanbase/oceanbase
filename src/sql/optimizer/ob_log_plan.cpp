@@ -4504,6 +4504,7 @@ int ObLogPlan::compute_join_exchange_info(JoinPath &join_path,
         } else {
           left_exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_HASH;
           right_exch_info.dist_method_ = ObPQDistributeMethod::HASH;
+          // The hash join dfo should rely on the child of the local shuffle side.
           right_exch_info.is_related_child_ = true;
           left_exch_info.slave_mapping_type_ = sm_type;
           right_exch_info.slave_mapping_type_ = sm_type;
@@ -4536,6 +4537,7 @@ int ObLogPlan::compute_join_exchange_info(JoinPath &join_path,
         } else {
           left_exch_info.dist_method_ = ObPQDistributeMethod::HASH;
           right_exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_HASH;
+          // The hash join dfo should rely on the child of the local shuffle side.
           left_exch_info.is_related_child_ = true;
           left_exch_info.slave_mapping_type_ = sm_type;
           right_exch_info.slave_mapping_type_ = sm_type;
@@ -4634,7 +4636,8 @@ int ObLogPlan::compute_join_exchange_info(JoinPath &join_path,
              && get_optimizer_context().get_parallel() > 1) {
     /*
       When the data volume is small, the GI operator can only divide a small number of granules, resulting in 
-      task skew. We insert a random shuffle operator on GI to shuffle the data and achieve load balancing.
+      task skew. We insert a random shuffle operator on GI to shuffle the data and achieve load balancing. We 
+      construct the nlj dfo relied on the left child, to minimize network transfer caused by random shuffling.
     */
     left_exch_info.dist_method_ = ObPQDistributeMethod::RANDOM;
     left_exch_info.is_related_child_ = true;
@@ -9129,6 +9132,11 @@ int ObLogPlan::create_subplan_filter_plan(ObLogicalOperator *&top,
   if (OB_SUCC(ret)) {
     ObExchangeInfo exch_info;
     if (DistAlgo::DIST_NONE_ALL == dist_algo && get_optimizer_context().get_parallel() > 1) {
+        /*
+          When the data volume is small, the GI operator can only divide a small number of granules, resulting in 
+          task skew. We insert a random shuffle operator on GI to shuffle the data and achieve load balancing. We 
+          construct the spf dfo relied on the left child, to minimize network transfer caused by random shuffling.
+        */
         exch_info.dist_method_ = ObPQDistributeMethod::RANDOM;
         exch_info.is_related_child_ = true;
         if (OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
