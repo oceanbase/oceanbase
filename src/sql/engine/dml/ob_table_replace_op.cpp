@@ -592,7 +592,7 @@ int ObTableReplaceOp::replace_conflict_row_cache()
     if (OB_SUCC(ret)) {
       ObDMLModifyRowNode modify_row(this, &ins_ctdef, &ins_rtdef, ObDmlEventType::DE_INSERTING);
       modify_row.new_row_ = insert_new_row;
-      if (need_after_row_process(del_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
+      if (need_after_row_process(ins_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
         LOG_WARN("failed to push dml modify row to modified row list", K(ret));
       }
     }
