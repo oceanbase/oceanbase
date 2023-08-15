@@ -139,7 +139,7 @@ private:
 
   // 1.1.1 检查ob日志是否有产生满足处理单元大小的数据
   void check_capacity_enough_(const LSN &commit_lsn, const LSN &cur_lsn,
-      const LSN &end_offset, bool &data_enough, bool &data_full);
+      const LSN &end_offset, bool &data_full);
 
   // 1.1.2 检查日志流落后程度是否需要触发归档
   bool check_scn_enough_(const share::ObLSID &id, const bool new_block, const palf::LSN &lsn,
