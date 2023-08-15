@@ -422,9 +422,6 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("the ls service has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!is_running_)) {
-    ret = OB_NOT_RUNNING;
-    LOG_WARN("ls service is not running.", K(ret));
   } else if (OB_UNLIKELY(!ObServerCheckpointSlogHandler::get_instance().is_started())) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("ls service does not service before slog replay finished", K(ret));
@@ -436,7 +433,10 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
     LOG_WARN("get timeout ts failed", KR(ret));
   } else {
     ObMutexGuardWithTimeout change_guard(change_lock_, abs_timeout_ts);
-    if (OB_FAIL(change_guard.get_ret())) {
+    if (OB_UNLIKELY(!is_running_)) {
+      ret = OB_NOT_RUNNING;
+      LOG_WARN("ls service is not running.", K(ret));
+    } else if (OB_FAIL(change_guard.get_ret())) {
       LOG_WARN("lock failed, try again later", K(ret));
       ret = OB_EAGAIN;
     } else if (OB_FAIL(check_ls_exist(arg.get_ls_id(),
@@ -1028,9 +1028,6 @@ int ObLSService::create_ls_for_ha(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("the ls service has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!is_running_)) {
-    ret = OB_NOT_RUNNING;
-    LOG_WARN("ls service is not running.", K(ret));
   } else if (OB_UNLIKELY(!ObServerCheckpointSlogHandler::get_instance().is_started())) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("ls service does not service before slog replay finished", K(ret));
@@ -1045,7 +1042,10 @@ int ObLSService::create_ls_for_ha(
     LOG_WARN("get timeout ts failed", KR(ret));
   } else {
     ObMutexGuardWithTimeout change_guard(change_lock_, abs_timeout_ts);
-    if (OB_FAIL(change_guard.get_ret())) {
+    if (OB_UNLIKELY(!is_running_)) {
+      ret = OB_NOT_RUNNING;
+      LOG_WARN("ls service is not running.", K(ret));
+    } else if (OB_FAIL(change_guard.get_ret())) {
       LOG_WARN("lock failed, try again later", K(ret));
       ret = OB_EAGAIN;
     } else if (OB_FAIL(check_ls_exist(arg.ls_id_,
