@@ -166,14 +166,14 @@ int ObTabletAutoincMgr::fetch_new_range(const ObTabletAutoincParam &param,
         if (OB_FAIL(THIS_WORKER.check_status())) { // overwrite ret
           LOG_WARN("failed to check status", K(ret));
         } else if (need_refresh_leader) {
-          if (OB_FAIL(location_service->get(param.tenant_id_, tablet_id, INT64_MAX/*expire_renew_time*/, is_cache_hit, ls_id))) {
+          if (OB_FAIL(location_service->get(param.tenant_id_, tablet_id, INT64_MAX/*expire_renew_time*/, is_cache_hit, arg.ls_id_))) {
             LOG_WARN("fail to get log stream id", K(ret), K(ret), K(tablet_id));
           } else if (OB_FAIL(location_service->get_leader(GCONF.cluster_id,
                                                           param.tenant_id_,
-                                                          ls_id,
+                                                          arg.ls_id_,
                                                           true/*force_renew*/,
                                                           leader_addr))) {
-            LOG_WARN("force get leader failed", K(ret), K(ret), K(ls_id));
+            LOG_WARN("force get leader failed", K(ret), K(ret), K(arg.ls_id_));
           }
         }
       }
