@@ -146,10 +146,6 @@ public:
                                          ObDfo &root);
   static int alloc_by_reference_child_distribution(const ObIArray<ObTableLocation> *table_locations,
                                                    ObExecContext &exec_ctx,
-                                                   ObDfo &child,
-                                                   ObDfo &parent);
-  static int alloc_by_reference_child_distribution(const ObIArray<ObTableLocation> *table_locations,
-                                                   ObExecContext &exec_ctx,
                                                    ObDfo &parent);
   static int split_parallel_into_task(const int64_t parallelism,
                                       const common::ObIArray<int64_t> &sqc_partition_count,

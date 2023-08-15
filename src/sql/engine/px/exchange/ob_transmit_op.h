@@ -131,6 +131,10 @@ public:
 
   // for window function adaptive pushdown
   bool is_wf_hybrid_;
+
+  // Sometimes, a dfo's construction relies on its child. This flag 
+  // indicates that the current dfo is the child being depended upon
+  bool is_related_child_;
 };
 
 class ObTransmitOp : public ObOperator

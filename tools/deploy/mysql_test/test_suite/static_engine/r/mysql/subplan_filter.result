@@ -3451,15 +3451,15 @@ Query Plan
 ========================================================================
 |ID|OPERATOR                            |NAME    |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------------
-|0 |PX COORDINATOR                      |        |2       |50          |
-|1 |└─EXCHANGE OUT DISTR                |:EX10001|2       |50          |
-|2 |  └─SUBPLAN FILTER                  |        |2       |49          |
-|3 |    ├─EXCHANGE IN DISTR             |        |5       |4           |
-|4 |    │ └─EXCHANGE OUT DISTR (RANDOM) |:EX10000|5       |3           |
-|5 |    │   └─PX BLOCK ITERATOR         |        |5       |1           |
-|6 |    │     └─TABLE FULL SCAN         |rf_t1   |5       |1           |
-|7 |    └─SCALAR GROUP BY               |        |1       |19          |
-|8 |      └─DISTRIBUTED TABLE RANGE SCAN|rf_t2   |2       |19          |
+|0 |PX COORDINATOR                      |        |2       |56          |
+|1 |└─EXCHANGE OUT DISTR                |:EX10001|2       |56          |
+|2 |  └─SUBPLAN FILTER                  |        |2       |55          |
+|3 |    ├─EXCHANGE IN DISTR             |        |5       |5           |
+|4 |    │ └─EXCHANGE OUT DISTR (RANDOM) |:EX10000|5       |4           |
+|5 |    │   └─PX BLOCK ITERATOR         |        |5       |3           |
+|6 |    │     └─TABLE FULL SCAN         |rf_t1   |5       |3           |
+|7 |    └─SCALAR GROUP BY               |        |1       |21          |
+|8 |      └─DISTRIBUTED TABLE RANGE SCAN|rf_t2   |2       |21          |
 ========================================================================
 Outputs & filters:
 -------------------------------------

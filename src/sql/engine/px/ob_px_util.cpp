@@ -682,6 +682,8 @@ int ObPXServerAddrUtil::alloc_by_child_distribution(const ObDfo &child, ObDfo &p
   ObArray<const ObPxSqcMeta *> sqcs;
   if (OB_FAIL(child.get_sqcs(sqcs))) {
     LOG_WARN("fail get sqcs", K(ret));
+  } else if (OB_FAIL(generate_dh_map_info(parent))) {
+      LOG_WARN("fail to generate dh map info", K(ret));
   } else {
     for (int64_t i = 0; i < sqcs.count() && OB_SUCC(ret); ++i) {
       const ObPxSqcMeta &child_sqc = *sqcs.at(i);
@@ -703,6 +705,13 @@ int ObPXServerAddrUtil::alloc_by_child_distribution(const ObDfo &child, ObDfo &p
         sqc.set_qc_server_id(parent.get_qc_server_id());
         sqc.set_parent_dfo_id(parent.get_parent_dfo_id());
         sqc.get_monitoring_info().assign(child_sqc.get_monitoring_info());
+        if (OB_SUCC(ret)) {
+          if (!parent.get_p2p_dh_map_info().is_empty()) {
+            if (OB_FAIL(sqc.get_p2p_dh_map_info().assign(parent.get_p2p_dh_map_info()))) {
+              LOG_WARN("fail to assign p2p dh map info", K(ret));
+            }
+          }
+        }
         if (OB_FAIL(parent.add_sqc(sqc))) {
           LOG_WARN("fail add sqc", K(sqc), K(ret));
         }
@@ -869,49 +878,31 @@ int ObPXServerAddrUtil::alloc_by_local_distribution(ObExecContext &exec_ctx,
 int ObPXServerAddrUtil::alloc_by_reference_child_distribution(
     const ObIArray<ObTableLocation> *table_locations,
     ObExecContext &exec_ctx,
-    ObDfo &child,
     ObDfo &parent)
 {
   int ret = OB_SUCCESS;
-  ObDfo *reference_child = nullptr;
-  if (2 != parent.get_child_count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("parent should has two child", K(ret));
-  } else if (OB_FAIL(parent.get_child_dfo(0, reference_child))) {
-    LOG_WARN("failed to get reference_child", K(ret));
-  } else if (reference_child->get_dfo_id() == child.get_dfo_id()
-             && OB_FAIL(parent.get_child_dfo(1, reference_child))) {
-    LOG_WARN("failed to get reference_child", K(ret));
-  } else if (OB_FAIL(alloc_by_data_distribution(table_locations, exec_ctx, *reference_child))) {
-    LOG_WARN("failed to alloc by data", K(ret));
-  } else if (OB_FAIL(alloc_by_child_distribution(*reference_child, parent))) {
-    LOG_WARN("failed to alloc by child distribution", K(ret));
-  }
-  return ret;
-}
-
-int ObPXServerAddrUtil::alloc_by_reference_child_distribution(
-    const ObIArray<ObTableLocation> *table_locations,
-    ObExecContext &exec_ctx,
-    ObDfo &parent)
-{
-  int ret = OB_SUCCESS;
-  ObDfo *reference_child = nullptr;
-  bool found = false;
-  for (int64_t i = 0; OB_SUCC(ret) && i < parent.get_child_count() && !found; i++) {
-    OZ (parent.get_child_dfo(i, reference_child));
-    if (reference_child->get_dfo_id() == parent.get_reference_dfo_id()) {
-      found = true;
+  if (0 != parent.get_sqcs_count()) {
+    /**
+     * this dfo has been build. do nothing.
+     */
+  } else {
+    ObDfo *reference_child = nullptr;
+    bool found = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < parent.get_child_count() && !found; i++) {
+      OZ (parent.get_child_dfo(i, reference_child));
+      if (reference_child->is_related_pair()) {
+        found = true;
+      }
     }
-  }
-  if (OB_SUCC(ret)) {
-    if (!found) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get reference_child", K(ret), K(parent.get_reference_dfo_id()));
-    } else if (alloc_by_data_distribution(table_locations, exec_ctx, *reference_child)) {
-      LOG_WARN("failed to alloc by data", K(ret));
-    } else if (OB_FAIL(alloc_by_child_distribution(*reference_child, parent))) {
-      LOG_WARN("failed to alloc by child distribution", K(ret));
+    if (OB_SUCC(ret)) {
+      if (!found) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get reference_child", K(ret));
+      } else if (alloc_by_data_distribution(table_locations, exec_ctx, *reference_child)) {
+        LOG_WARN("failed to alloc by data", K(ret));
+      } else if (OB_FAIL(alloc_by_child_distribution(*reference_child, parent))) {
+        LOG_WARN("failed to alloc by child distribution", K(ret));
+      }
     }
   }
   return ret;
@@ -3022,7 +3013,7 @@ int ObSlaveMapUtil::build_pwj_slave_map_mn_group(ObDfo &parent, ObDfo &child, ui
    */
   if (parent.get_sqcs_count() != child.get_sqcs_count()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("pwj must have some sqc count", K(ret));
+    LOG_WARN("pwj must have same sqc count", K(ret));
   } else if (OB_FAIL(ObDfo::check_dfo_pair(parent, child, child_dfo_idx))) {
     LOG_WARN("failed to check dfo pair", K(ret));
   } else if (OB_FAIL(build_mn_channel_per_sqcs(

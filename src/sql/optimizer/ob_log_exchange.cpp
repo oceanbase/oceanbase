@@ -564,6 +564,7 @@ int ObLogExchange::set_exchange_info(const ObExchangeInfo &exch_info)
   null_row_dist_method_ = exch_info.null_row_dist_method_;
   slave_mapping_type_ = exch_info.slave_mapping_type_;
   if (is_producer()) {
+    is_related_child_ = exch_info.is_related_child_;
     in_server_cnt_ = exch_info.server_cnt_;
     slice_count_ = exch_info.slice_count_;
     repartition_type_ = exch_info.repartition_type_;

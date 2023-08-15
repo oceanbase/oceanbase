@@ -104,8 +104,7 @@ int ObPxTransmitOpInput::get_data_ch(ObPxTaskChSet &task_ch_set, int64_t timeout
 OB_SERIALIZE_MEMBER((ObPxTransmitSpec, ObTransmitSpec),
     sample_type_, need_null_aware_shuffle_, tablet_id_expr_,
     random_expr_, sampling_saving_row_, repartition_table_id_,
-    wf_hybrid_aggr_status_expr_, wf_hybrid_pby_exprs_cnt_array_,
-    is_related_pair_);
+    wf_hybrid_aggr_status_expr_, wf_hybrid_pby_exprs_cnt_array_);
 
 ObPxTransmitSpec::ObPxTransmitSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
     : ObTransmitSpec(alloc, type),
@@ -116,8 +115,7 @@ ObPxTransmitSpec::ObPxTransmitSpec(ObIAllocator &alloc, const ObPhyOperatorType 
       sampling_saving_row_(alloc),
       repartition_table_id_(0),
       wf_hybrid_aggr_status_expr_(NULL),
-      wf_hybrid_pby_exprs_cnt_array_(alloc),
-      is_related_pair_(false)
+      wf_hybrid_pby_exprs_cnt_array_(alloc)
 {
 }
 

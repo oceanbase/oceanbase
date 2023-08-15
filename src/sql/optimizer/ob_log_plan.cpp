@@ -4504,6 +4504,7 @@ int ObLogPlan::compute_join_exchange_info(JoinPath &join_path,
         } else {
           left_exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_HASH;
           right_exch_info.dist_method_ = ObPQDistributeMethod::HASH;
+          right_exch_info.is_related_child_ = true;
           left_exch_info.slave_mapping_type_ = sm_type;
           right_exch_info.slave_mapping_type_ = sm_type;
         }
@@ -4535,6 +4536,7 @@ int ObLogPlan::compute_join_exchange_info(JoinPath &join_path,
         } else {
           left_exch_info.dist_method_ = ObPQDistributeMethod::HASH;
           right_exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_HASH;
+          left_exch_info.is_related_child_ = true;
           left_exch_info.slave_mapping_type_ = sm_type;
           right_exch_info.slave_mapping_type_ = sm_type;
         }
@@ -4635,8 +4637,9 @@ int ObLogPlan::compute_join_exchange_info(JoinPath &join_path,
       task skew. We insert a random shuffle operator on GI to shuffle the data and achieve load balancing.
     */
     left_exch_info.dist_method_ = ObPQDistributeMethod::RANDOM;
-    left_exch_info.is_related_pair_ = true;
-  } else if (DistAlgo::DIST_ALL_NONE == join_path.join_dist_algo_) {
+    left_exch_info.is_related_child_ = true;
+  } else if (DistAlgo::DIST_NONE_ALL == join_path.join_dist_algo_ ||
+             DistAlgo::DIST_ALL_NONE == join_path.join_dist_algo_) {
     // do nothing
   } else { /*do nothing*/ }
 
@@ -7865,8 +7868,6 @@ int ObLogPlan::allocate_exchange_as_top(ObLogicalOperator *&top,
     producer->set_to_producer();
     consumer->set_to_consumer();
     producer->set_sample_type(exch_info.sample_type_);
-    consumer->set_is_related_pair(exch_info.is_related_pair_);
-    producer->set_is_related_pair(exch_info.is_related_pair_);
     if (OB_FAIL(producer->set_exchange_info(exch_info))) {
       LOG_WARN("failed to set exchange info", K(ret));
     } else if (OB_FAIL(producer->compute_property())) {
@@ -9129,7 +9130,7 @@ int ObLogPlan::create_subplan_filter_plan(ObLogicalOperator *&top,
     ObExchangeInfo exch_info;
     if (DistAlgo::DIST_NONE_ALL == dist_algo && get_optimizer_context().get_parallel() > 1) {
         exch_info.dist_method_ = ObPQDistributeMethod::RANDOM;
-        exch_info.is_related_pair_ = true;
+        exch_info.is_related_child_ = true;
         if (OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
           LOG_WARN("failed to allocate exchange as top");
         } else if (OB_FAIL(allocate_subplan_filter_as_top(top,
