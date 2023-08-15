@@ -170,7 +170,7 @@ public:
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 5;
+  static const int64_t DATA_VERSION_NUM = 6;
   static const uint64_t UPGRADE_PATH[DATA_VERSION_NUM];
 };
 
@@ -208,6 +208,8 @@ private:
   int post_upgrade_for_grant_drop_database_link_priv();
   int post_upgrade_for_heartbeat_and_server_zone_op_service();
 };
+
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 0)
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */

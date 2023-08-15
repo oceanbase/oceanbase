@@ -48,4 +48,8 @@
 
 - version: 4.2.0.0
   can_be_upgraded_to:
+      - 4.2.1.0
+
+- version: 4.2.1.0
+  can_be_upgraded_to:
       - 4.3.0.0
