@@ -194,7 +194,9 @@ int ObIMemtableMgr::release_memtables()
           STORAGE_LOG(WARN, "fail to release memtable", K(ret), K(i));
           break;
         } else {
-          STORAGE_LOG(INFO, "succeed to release memtable", K(ret), K(i), K(*memtable), KP(this));
+          // NOTICE: the memtable may live longer than tablet.
+          // And the ref of memtable mgr may be the last one.
+          STORAGE_LOG(INFO, "succeed to release memtable", K(ret), K(i), KP(memtable), KP(this));
         }
       }
     }
