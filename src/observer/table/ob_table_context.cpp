@@ -17,6 +17,8 @@
 #include "lib/utility/utility.h"
 #include "share/ob_lob_access_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "ob_table_aggregation.h"
+
 namespace oceanbase
 {
 namespace table
@@ -315,25 +317,54 @@ int ObTableCtx::adjust_rowkey()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret));
   } else {
-    if (rowkey.get_obj_cnt() != table_schema_->get_rowkey_column_num()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("entity rowkey count mismatch table schema rowkey count",
-           K(ret), K(rowkey.get_obj_cnt()), K(table_schema_->get_rowkey_column_num()));
-    } else {
-      const ObRowkeyInfo &rowkey_info = table_schema_->get_rowkey_info();
-      const ObColumnSchemaV2 *col_schema = nullptr;
-      uint64_t column_id = OB_INVALID_ID;
-      ObObj *obj_ptr = rowkey.get_obj_ptr();
-      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey.get_obj_cnt(); i++) {
-        if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
-          LOG_WARN("fail to get column id", K(ret), K(i));
-        } else if (OB_ISNULL(col_schema = table_schema_->get_column_schema(column_id))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("fail to get column schema", K(ret), K(column_id));
-        } else if (OB_FAIL(adjust_column(*col_schema, obj_ptr[i]))) {
-          LOG_WARN("fail to adjust column", K(ret), K(obj_ptr[i]));
+    const int64_t schema_rowkey_cnt = table_schema_->get_rowkey_column_num();
+    const int64_t entity_rowkey_cnt = rowkey.get_obj_cnt();
+    bool has_auto_inc = false; // only one auto increment column in a table
+    bool is_full_filled = entity_rowkey_cnt == schema_rowkey_cnt; // 是否把主键值填全，存在自增列场景下可以不填全
+    const ObRowkeyInfo &rowkey_info = table_schema_->get_rowkey_info();
+    const ObColumnSchemaV2 *col_schema = nullptr;
+    uint64_t column_id = OB_INVALID_ID;
+    ObObj *obj_ptr = rowkey.get_obj_ptr();
+    // 不存在自增列的情况下，全部校验
+    // 存在自增列情况下，用户填了值，全部校验
+    // 存在自增列情况下，用户没有填值，自增列不校验，其他列校验
+    // idx 是为了在主键中存在自增列是为了解决使用i访问obj_ptr会出现访问越界的问题，因为在主键存在自增列场景下，用户可以
+    // 不填自增列值，这时rowkey中的obj数量少于schema上的rowkey数量
+    for (int64_t i = 0, idx = 0; OB_SUCC(ret) && i < schema_rowkey_cnt; i++) {
+      bool need_check = true;
+      if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
+        LOG_WARN("fail to get column id", K(ret), K(i));
+      } else if (OB_ISNULL(col_schema = table_schema_->get_column_schema(column_id))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get column schema", K(ret), K(column_id));
+      } else if (!has_auto_inc && col_schema->is_autoincrement()) {
+        has_auto_inc = true;
+        if (col_schema->is_part_key_column()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("auto increment column could not be partition column", K(ret), K(*col_schema));
+        } else if (!is_full_filled) { // 当前列是自增列，但是用户没有填值，不需要校验
+          need_check = false;
         }
       }
+
+      if (OB_SUCC(ret) && need_check) {
+        if (idx >= entity_rowkey_cnt) {
+          ret = OB_INDEX_OUT_OF_RANGE;
+          LOG_WARN("idx out of range", K(ret), K(idx), K(entity_rowkey_cnt));
+        } else if (OB_FAIL(adjust_column(*col_schema, obj_ptr[idx]))) { // [c1][c2][c3] [c1][c3]
+          LOG_WARN("fail to adjust column", K(ret), K(obj_ptr[idx]));
+        } else {
+          idx++;
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (!has_auto_inc && entity_rowkey_cnt != schema_rowkey_cnt) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("entity rowkey count mismatch table schema rowkey count",
+           K(ret), K(entity_rowkey_cnt), K(schema_rowkey_cnt));
     }
   }
 
@@ -510,7 +541,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   int ret = OB_SUCCESS;
   const ObString &index_name = query.get_index_name();
   const ObIArray<ObString> &select_columns = query.get_select_columns();
-  const bool select_all_columns = select_columns.empty(); // select all when query column is empty.
+  const bool select_all_columns = select_columns.empty() || query.is_aggregate_query(); // select all when query column is empty.
   const ObColumnSchemaV2 *column_schema = nullptr;
   operation_type_ = ObTableOperationType::Type::SCAN;
   // init is_weak_read_,scan_order_
@@ -545,10 +576,13 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
     // init key_ranges_
     if (OB_FAIL(generate_key_range(query.get_scan_ranges()))) {
       LOG_WARN("fail to generate key ranges", K(ret));
+    } else if (query.is_aggregate_query() && OB_FAIL(init_agg_cell_proj(query.get_aggregations().count()))) {
+      LOG_WARN("fail to init agg cell proj", K(ret));
     } else {
       // select_col_ids用schema序
+      int64_t cell_idx = 0;
       for (ObTableSchema::const_column_iterator iter = table_schema_->column_begin();
-          OB_SUCC(ret) && iter != table_schema_->column_end(); ++iter) {
+          OB_SUCC(ret) && iter != table_schema_->column_end(); ++iter, cell_idx++) {
         const ObColumnSchemaV2 *column_schema = *iter;
         ObString column_name;
         if (OB_ISNULL(column_schema)) {
@@ -562,6 +596,8 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
             LOG_WARN("fail to push back column id", K(ret), K(column_schema->get_column_id()));
           } else if (OB_FAIL(query_col_names_.push_back(column_name))) {
             LOG_WARN("fail to push back column name", K(ret), K(column_name));
+          } else if (query.is_aggregate_query() && OB_FAIL(add_aggregate_proj(cell_idx, column_name, query.get_aggregations()))) {
+            LOG_WARN("failed to add aggregate projector", K(ret), K(cell_idx), K(column_name));
           } else if (is_index_scan_ && !is_index_back_ &&
               OB_ISNULL(column_schema = index_schema_->get_column_schema(column_name))) {
             is_index_back_ = true; // 判断是否需要回表,查询的列不在索引表上即需要回表
@@ -602,6 +638,20 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
 
 int ObTableCtx::init_insert()
 {
+  int ret = OB_SUCCESS;
+  void *buf = allocator_.alloc(sizeof(ObPhysicalPlanCtx));
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc ObPhysicalPlanCtx", K(ret), K(sizeof(ObPhysicalPlanCtx)));
+  } else {
+    ObPhysicalPlanCtx *phy_plan_ctx = new(buf) ObPhysicalPlanCtx(allocator_);
+    phy_plan_ctx->set_timeout_timestamp(timeout_ts_); // ObConflictChecker::init_das_scan_rtdef 需要
+    phy_plan_ctx->set_tenant_schema_version(tenant_schema_version_);
+    exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
+    if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
+      LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
+    }
+  }
   return init_dml_related_tid();
 }
 
@@ -732,6 +782,9 @@ int ObTableCtx::init_replace()
       phy_plan_ctx->set_timeout_timestamp(timeout_ts_); // ObConflictChecker::init_das_scan_rtdef 需要
       phy_plan_ctx->set_tenant_schema_version(tenant_schema_version_);
       exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
+      if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
+        LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
+      }
     }
   }
 
@@ -755,6 +808,9 @@ int ObTableCtx::init_insert_up()
       phy_plan_ctx->set_timeout_timestamp(timeout_ts_); // ObConflictChecker::init_das_scan_rtdef 需要
       phy_plan_ctx->set_tenant_schema_version(tenant_schema_version_);
       exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
+      if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
+        LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
+      }
     }
   }
 
@@ -1065,7 +1121,9 @@ int ObTableCtx::init_index_info(const ObString &index_name)
         is_found = true;
         index_table_id_ = tids[i];
         index_schema_ = index_schema;
-        index_tablet_id_ = index_schema->get_tablet_id();
+        if (OB_FAIL(get_related_tablet_id(*index_schema, index_tablet_id_))) {
+          LOG_WARN("fail to get index tablet id", K(ret));
+        }
       }
     }
 
@@ -1103,6 +1161,139 @@ int ObTableCtx::init_dml_related_tid()
           LOG_WARN("fail to add related index ids", K(ret), K(index_schema->get_table_id()));
         }
       }
+    }
+  }
+
+  return ret;
+}
+
+int ObTableCtx::init_agg_cell_proj(int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(agg_cell_proj_.prepare_allocate(size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory", K(ret), K(size));
+  } else {
+    for (int64_t i = 0; i < agg_cell_proj_.count(); i++) {
+      agg_cell_proj_.at(i) = ObTableAggCalculator::INVALID_PROJECT_ID;
+    }
+  }
+  return ret;
+}
+
+int ObTableCtx::add_aggregate_proj(int64_t cell_idx,
+                                   const common::ObString &column_name,
+                                   const ObIArray<ObTableAggregation> &aggregations)
+{
+  int ret = OB_SUCCESS;
+  if (aggregations.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null aggregations", K(ret));
+  } else {
+    for (int64_t i = 0; i < aggregations.count(); i++) {
+      if (aggregations.at(i).get_column().case_compare(column_name) == 0
+          || aggregations.at(i).is_agg_all_column()) {
+        agg_cell_proj_.at(i) = cell_idx;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableCtx::add_auto_inc_param(ObPhysicalPlanCtx &phy_plan_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<share::AutoincParam> &auto_params = phy_plan_ctx.get_autoinc_params();
+  for (ObTableSchema::const_column_iterator iter = table_schema_->column_begin();
+      OB_SUCC(ret) && iter != table_schema_->column_end() && !has_auto_inc_; ++iter) {
+    const ObColumnSchemaV2 *col_schema = *iter;
+    if (OB_ISNULL(col_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column schema is NULL", K(ret));
+    } else if (col_schema->is_autoincrement()) {
+      has_auto_inc_ = true;
+      int64_t auto_increment_cache_size = -1;
+      if (OB_FAIL(get_session_info().get_auto_increment_cache_size(auto_increment_cache_size))) {
+        LOG_WARN("fail to get increment factor", K(ret));
+      } else {
+        AutoincParam &param = get_auto_inc_param();
+        param.tenant_id_ = tenant_id_;
+        param.autoinc_table_id_ = ref_table_id_;
+        param.autoinc_first_part_num_ = table_schema_->get_first_part_num();
+        param.autoinc_table_part_num_ = table_schema_->get_all_part_num();
+        param.autoinc_col_id_ = col_schema->get_column_id();
+        param.auto_increment_cache_size_ = auto_increment_cache_size;
+        param.part_level_ = table_schema_->get_part_level();
+        ObObjType column_type = col_schema->get_data_type();
+        param.autoinc_col_type_ = column_type;
+        param.autoinc_desired_count_ = 0;
+        param.autoinc_mode_is_order_ = table_schema_->is_order_auto_increment_mode();
+        param.autoinc_version_ = table_schema_->get_truncate_version();
+        param.total_value_count_ = 1;
+        param.autoinc_increment_ = 1;
+        param.autoinc_offset_ = 1;
+        param.part_value_no_order_ = true;
+        // for generate column id when use auto inc
+        set_auto_inc_column_id(col_schema->get_column_id());
+        set_auto_inc_column_name(col_schema->get_column_name_str());
+        if (col_schema->is_tbl_part_key_column()) {
+          // don't keep intra-partition value asc order when partkey column is auto inc
+          param.part_value_no_order_ = true;
+        }
+        if (OB_FAIL(auto_params.prepare_allocate(1))) { // only one auto inc in a table
+          LOG_WARN("fail to init auto params", K(ret));
+        } else {
+          auto_params.at(0) = param;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableCtx::update_auto_inc_value()
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalPlanCtx *phy_plan_ctx = get_physical_plan_ctx();
+  if (OB_ISNULL(phy_plan_ctx)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("phy_plan_ctx is null", K(ret));
+  } else if (OB_FAIL(phy_plan_ctx->sync_last_value_local())) {
+    LOG_WARN("fail to sync last value local", K(ret));
+  } else if (OB_FAIL(phy_plan_ctx->sync_last_value_global())) {
+    LOG_WARN("fail to sync last value global", K(ret));
+  }
+  return ret;
+}
+
+// 获取索引表的tablet_id
+int ObTableCtx::get_related_tablet_id(const share::schema::ObTableSchema &index_schema,
+                                      ObTabletID &related_tablet_id)
+{
+  int ret = OB_SUCCESS;
+
+  if (!index_schema.is_partitioned_table()) {
+    related_tablet_id = index_schema.get_tablet_id();
+  } else {
+    int64_t part_idx = OB_INVALID_ID;
+    int64_t subpart_idx = OB_INVALID_ID;
+    ObObjectID related_part_id = OB_INVALID_ID;
+    ObObjectID related_first_level_part_id = OB_INVALID_ID;
+    ObTabletID tmp_tablet_id;
+    // 先从主表获取part_idx和subpart_idx，索引表的part_idx和subpart_idx是和主表一致的
+    if (OB_ISNULL(table_schema_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret));
+    } else if (OB_FAIL(table_schema_->get_part_idx_by_tablet(tablet_id_, part_idx, subpart_idx))) {
+      LOG_WARN("fail to get part idx", K(ret), K_(tablet_id));
+    } else if (OB_FAIL(index_schema.get_part_id_and_tablet_id_by_idx(part_idx,
+                                                                     subpart_idx,
+                                                                     related_part_id,
+                                                                     related_first_level_part_id,
+                                                                     tmp_tablet_id))) {
+      LOG_WARN("fail to get tablet id", K(ret), K(part_idx), K(subpart_idx));
+    } else {
+      related_tablet_id = tmp_tablet_id;
     }
   }
 

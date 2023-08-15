@@ -248,6 +248,9 @@ TEST_F(TestTableSessPool, retire_session_then_get_session)
 
   // 连接隔了很长时间，突然又访问db
   ASSERT_EQ(OB_HASH_NOT_EXIST, pool->get_sess_node(user_id, node));
+
+  // 新的访问会创建新的池子
+  ASSERT_EQ(OB_SUCCESS, mgr.get_or_create_sess_pool(credential, pool_guard));
 }
 
 int main(int argc, char **argv)

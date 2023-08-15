@@ -110,6 +110,7 @@ private:
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
 
   table::ObTableQueryResult one_result_;
+  bool end_in_advance_; // 提前终止标志
   DISALLOW_COPY_AND_ASSIGN(ObTableQueryAndMutateP);
 };
 } // end namespace observer

@@ -1,17 +1,13 @@
 /**
- * (C) 2010-2018 Alibaba Group Holding Limited.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * Version: $Id$
- *
- * ob_table_filters.h
- *
- * Authors:
- *    xuanchao.xc <>
- *
+ * Copyright (c) 2023 OceanBase
+ * OceanBase is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
  */
 #ifndef _OB_TABLE_FILTERS_H
 #define _OB_TABLE_FILTERS_H 1
@@ -22,6 +18,7 @@
 #include "common/row/ob_row_iterator.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/string/ob_string.h"
+#include "ob_table_aggregation.h"
 
 namespace oceanbase {
 
@@ -164,7 +161,8 @@ public:
                           static_cast<int64_t>(ObTableQueryResult::get_max_packet_buffer_length() - 1024))),
         scan_result_(NULL),
         is_first_result_(true),
-        has_more_rows_(true)
+        has_more_rows_(true),
+        agg_calculator_(query)
   {
   }
   virtual ~ObNormalTableQueryResultIterator() {}
@@ -176,6 +174,11 @@ public:
   }
   virtual void set_one_result(ObTableQueryResult *result) override {one_result_ = result;}
   virtual table::ObTableQueryResult *get_one_result() override { return one_result_; }
+  ObTableAggCalculator &get_agg_calculator() { return agg_calculator_; }
+  int init_aggregation();
+  int get_aggregate_result(table::ObTableQueryResult *&next_result);
+  int get_normal_result(table::ObTableQueryResult *&next_result);
+  bool is_aggregate_query() { return agg_calculator_.is_exist(); }
 private:
   table::ObTableQueryResult *one_result_;
   common::ObNewRow *last_row_;
@@ -184,6 +187,7 @@ private:
   table::ObTableApiScanRowIterator *scan_result_;
   bool is_first_result_;
   bool has_more_rows_;
+  ObTableAggCalculator agg_calculator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObNormalTableQueryResultIterator);
 };
@@ -202,7 +206,8 @@ public:
                         static_cast<int64_t>(ObTableQueryResult::get_max_packet_buffer_length() - 1024))),
       is_first_result_(true),
       has_more_rows_(true),
-      row_idx_(0)
+      row_idx_(0),
+      agg_calculator_(query)
   {}
   virtual ~ObTableFilterOperator() {}
   virtual int get_next_result(ObTableQueryResult *&next_result) override;
@@ -210,6 +215,11 @@ public:
   virtual void set_one_result(ObTableQueryResult *result) override { one_result_ = result; }
   void set_scan_result(table::ObTableApiScanRowIterator *scan_result) { scan_result_ = scan_result; }
   int parse_filter_string(common::ObIAllocator* allocator);
+  ObTableAggCalculator &get_agg_calculator() { return agg_calculator_; }
+  int init_aggregation();
+  int get_aggregate_result(table::ObTableQueryResult *&next_result);
+  int get_normal_result(table::ObTableQueryResult *&next_result);
+  bool is_aggregate_query() { return agg_calculator_.is_exist(); }
 private:
   int check_limit_param();
 private:
@@ -223,6 +233,7 @@ private:
   bool is_first_result_;
   bool has_more_rows_;
   int64_t row_idx_; // not filtered row index
+  ObTableAggCalculator agg_calculator_;
 };
 
 } // end namespace table
