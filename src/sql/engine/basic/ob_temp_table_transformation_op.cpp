@@ -65,8 +65,10 @@ int ObTempTableTransformationOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
   clear_evaluated_flag();
+  ObExecContext &ctx = get_exec_ctx();
   if (init_temp_table_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < get_child_cnt() - 1; ++i) {
+      int64_t temp_table_count = ctx.get_temp_table_ctx().count();
       if (OB_ISNULL(children_[i])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("child op is null");
@@ -75,6 +77,13 @@ int ObTempTableTransformationOp::inner_get_next_row()
         LOG_WARN("failed to get next row.", K(ret));
       } else {
         ret = OB_SUCCESS;
+        while(OB_SUCC(ret) && ctx.get_temp_table_ctx().count() <= temp_table_count) {
+          if (OB_FAIL(check_status())) {
+            LOG_WARN("failed to wait temp table finish msg", K(ret));
+          } else {
+            ob_usleep(1000);
+          }
+        }
       }
     }
     init_temp_table_ = false;
