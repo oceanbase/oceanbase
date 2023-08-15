@@ -3716,12 +3716,12 @@ int ObLSTabletService::check_old_row_legitimacy(
     if (OB_ERR_DEFENSIVE_CHECK == ret) {
       int tmp_ret = OB_SUCCESS;
       bool is_virtual_gen_col = false;
-      if (is_udf) {
-        ret = OB_ERR_INDEX_KEY_NOT_FOUND;
-        LOG_WARN("index key not found on udf column", K(ret), K(old_row));
-      } else if (OB_TMP_FAIL(check_real_leader_for_4377_(run_ctx.store_ctx_.ls_id_))) {
+      if (OB_TMP_FAIL(check_real_leader_for_4377_(run_ctx.store_ctx_.ls_id_))) {
         ret = tmp_ret;
         LOG_WARN("check real leader for 4377 found exception", K(ret), K(old_row), K(data_table));
+      } else if (is_udf) {
+        ret = OB_ERR_INDEX_KEY_NOT_FOUND;
+        LOG_WARN("index key not found on udf column", K(ret), K(old_row));
       } else if (data_table.is_index_table() && OB_TMP_FAIL(check_is_gencol_check_failed(data_table, err_col_id, is_virtual_gen_col))) {
         //don't change ret if gencol check failed
         LOG_WARN("check is functional index failed", K(ret), K(tmp_ret), K(data_table));
