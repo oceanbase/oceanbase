@@ -22,10 +22,12 @@
 #include "storage/compaction/ob_medium_compaction_info.h"
 #include "storage/tablet/ob_tablet_mds_data.h"
 #include "storage/tablet/ob_tablet_dumped_medium_info.h"
+#include "src/storage/compaction/ob_medium_list_checker.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::unittest;
+using namespace oceanbase::compaction;
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -122,7 +124,8 @@ TEST_F(TestTabletDumpedMediumInfo, overlap)
   ASSERT_EQ(6, result.medium_info_list_.at(2)->medium_snapshot_);
   ASSERT_EQ(7, result.medium_info_list_.at(3)->medium_snapshot_);
 
-  ret = ObTabletMdsData::check_medium_info_continuity(result);
+  ret = ObMediumListChecker::check_continue(result.medium_info_list_);
+
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -162,7 +165,7 @@ TEST_F(TestTabletDumpedMediumInfo, no_overlap)
     ASSERT_EQ(6, result.medium_info_list_.at(3)->medium_snapshot_);
     ASSERT_EQ(7, result.medium_info_list_.at(4)->medium_snapshot_);
 
-    ret = ObTabletMdsData::check_medium_info_continuity(result);
+    ret = ObMediumListChecker::check_continue(result.medium_info_list_);
     ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
   }
 
@@ -183,7 +186,7 @@ TEST_F(TestTabletDumpedMediumInfo, no_overlap)
     ASSERT_EQ(6, result.medium_info_list_.at(4)->medium_snapshot_);
     ASSERT_EQ(7, result.medium_info_list_.at(5)->medium_snapshot_);
 
-    ret = ObTabletMdsData::check_medium_info_continuity(result);
+    ret = ObMediumListChecker::check_continue(result.medium_info_list_);
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 }
@@ -222,7 +225,7 @@ TEST_F(TestTabletDumpedMediumInfo, overlap_and_filter)
   ASSERT_EQ(1, result.medium_info_list_.count());
   ASSERT_EQ(7, result.medium_info_list_.at(0)->medium_snapshot_);
 
-  ret = ObTabletMdsData::check_medium_info_continuity(result);
+  ret = ObMediumListChecker::check_continue(result.medium_info_list_);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -257,7 +260,7 @@ TEST_F(TestTabletDumpedMediumInfo, no_overlap_and_filter)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(0, result.medium_info_list_.count());
 
-  ret = ObTabletMdsData::check_medium_info_continuity(result);
+  ret = ObMediumListChecker::check_continue(result.medium_info_list_);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -293,7 +296,7 @@ TEST_F(TestTabletDumpedMediumInfo, standby_cluster)
   ASSERT_EQ(7, result.medium_info_list_.at(1)->medium_snapshot_);
   ASSERT_EQ(9, result.medium_info_list_.at(2)->medium_snapshot_);
 
-  ret = ObTabletMdsData::check_medium_info_continuity(result);
+  ret = ObMediumListChecker::check_continue(result.medium_info_list_);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 

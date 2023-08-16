@@ -236,6 +236,8 @@ public:
   int64_t last_medium_snapshot_;
   storage::ObStorageSchema storage_schema_;
   ObParallelMergeInfo parallel_merge_info_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObMediumCompactionInfo);
 };
 
 } // namespace compaction

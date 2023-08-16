@@ -21,6 +21,7 @@
 #include "storage/tablet/ob_tablet_full_memory_mds_data.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
 #include "ob_i_tablet_mds_interface.h"
+#include "storage/compaction/ob_medium_list_checker.h"
 
 #define USING_LOG_PREFIX MDS
 
@@ -588,7 +589,7 @@ int ObTabletMdsData::init_medium_info_list(
   } else if (nullptr == old_medium_info_list
       && OB_FAIL(copy_medium_info_list(finish_medium_scn, full_memory_medium_info_list.medium_info_list_, *cur_medium_info_list))) {
     LOG_WARN("failed to copy medium info", K(ret));
-  } else if (OB_FAIL(check_medium_info_continuity(*cur_medium_info_list))) {
+  } else if (OB_FAIL(compaction::ObMediumListChecker::check_continue(cur_medium_info_list->medium_info_list_))) {
     LOG_WARN("failed to check medium info continuity", K(ret), K(finish_medium_scn), KPC(cur_medium_info_list));
   } else {
     /*
@@ -760,44 +761,6 @@ int ObTabletMdsData::copy_medium_info_list(
         // do nothing
       } else if (OB_FAIL(medium_info_list.append(*info))) {
         LOG_WARN("failed to append medium info", K(ret), K(j), KPC(info));
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObTabletMdsData::check_medium_info_continuity(
-    const ObTabletDumpedMediumInfo &medium_info_list)
-{
-  int ret = OB_SUCCESS;
-  const common::ObIArray<compaction::ObMediumCompactionInfo*> &array = medium_info_list.medium_info_list_;
-
-  if (array.empty()) {
-    // do nothing
-  } else {
-    const compaction::ObMediumCompactionInfo *first_info = array.at(0);
-    if (OB_ISNULL(first_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("medium info ist null", K(ret), KP(first_info));
-    } else if (!first_info->from_cur_cluster()) {
-      // not from current cluster, maybe standby cluster,
-      // no need to check medium info continuity
-    } else {
-      int64_t prev_medium_snapshot = first_info->medium_snapshot_;
-      for (int64_t i = 1; OB_SUCC(ret) && i < array.count(); ++i) {
-        const compaction::ObMediumCompactionInfo *info = array.at(i);
-        if (OB_ISNULL(info)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("medium info ist null", K(ret), K(i), KP(info));
-        } else if (OB_UNLIKELY(prev_medium_snapshot != info->last_medium_snapshot_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("medium info list is not continuous", K(ret), K(i), K(prev_medium_snapshot),
-              "last_medium_snapshot", info->last_medium_snapshot_,
-              K(medium_info_list));
-        } else {
-          prev_medium_snapshot = info->medium_snapshot_;
-        }
       }
     }
   }
@@ -1161,8 +1124,7 @@ int ObTabletMdsData::build_mds_data(
   } else if (OB_FAIL(build_auto_inc_seq(allocator, auto_inc_seq, mds_data))) {
     LOG_WARN("failed to build auto inc seq", K(ret));
   } else {
-    mds_data.extra_medium_info_.info_ = info_list.get_union_info();
-    mds_data.extra_medium_info_.last_medium_scn_ = info_list.get_last_compaction_scn();
+    mds_data.extra_medium_info_ = info_list.get_extra_medium_info();
     const compaction::ObMediumCompactionInfoList::MediumInfoList &medium_info_list = info_list.get_list();
     if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, mds_data.medium_info_list_.ptr_))) {
       LOG_WARN("failed to alloc and new mda data medium info list", K(ret));

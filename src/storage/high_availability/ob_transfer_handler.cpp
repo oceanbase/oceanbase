@@ -1956,7 +1956,7 @@ int ObTransferHandler::stop_ls_schedule_medium_(const share::ObLSID &ls_id, bool
 int ObTransferHandler::clear_prohibit_medium_flag_(const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(MTL(ObTenantTabletScheduler*)->clear_prohibit_medium_flag(ls_id, ProhibitMediumTask::TRANSFER))) {
+  if (OB_FAIL(MTL(ObTenantTabletScheduler*)->clear_prohibit_medium_flag(ls_id, ObProhibitScheduleMediumMap::TRANSFER))) {
     LOG_WARN("failed to clear prohibit schedule medium flag", K(ret), K(ls_id));
   }
   return ret;

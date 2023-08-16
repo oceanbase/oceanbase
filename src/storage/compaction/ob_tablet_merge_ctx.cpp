@@ -25,8 +25,9 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/compaction/ob_medium_compaction_mgr.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
-#include "src/storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "src/storage/tablet/ob_tablet_medium_info_reader.h"
+#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/tablet/ob_tablet_medium_info_reader.h"
+#include "storage/compaction/ob_medium_list_checker.h"
 
 namespace oceanbase
 {
@@ -709,7 +710,10 @@ int ObTabletMergeCtx::init_get_medium_compaction_info(
   ObMediumCompactionInfo medium_info;
   ObMediumCompactionInfoKey medium_info_key(medium_snapshot);
   storage::ObTabletMediumInfoReader medium_info_reader(*tablet);
-  if (OB_FAIL(medium_info_reader.init(temp_allocator))) {
+  if (OB_UNLIKELY(get_merge_table_result.handle_.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("result is empty", K(ret), KPC(this), K(get_merge_table_result));
+  } else if (OB_FAIL(medium_info_reader.init(temp_allocator))) {
     LOG_WARN("failed to init medium info reader", K(ret), KPC(this));
   } else if (OB_FAIL(medium_info_reader.get_specified_medium_info(temp_allocator, medium_info_key, medium_info))) {
     LOG_WARN("failed to get specified scn info", K(ret), K(medium_snapshot));
@@ -743,8 +747,9 @@ int ObTabletMergeCtx::init_get_medium_compaction_info(
       LOG_ERROR("multi version data is discarded, should not compaction now", K(ret), K(param_), K(medium_snapshot));
     }
   }
-  if (FAILEDx(ObMediumCompactionInfoList::check_medium_info_and_last_major(
-      medium_info, get_merge_table_result.handle_.get_table(0), true/*force_check*/))) {
+  if (FAILEDx(ObMediumListChecker::check_next_schedule_medium(&medium_info,
+      get_merge_table_result.handle_.get_table(0)->get_snapshot_version(),
+      true/*force_check*/))) {
     LOG_WARN("failed to check medium info and last major sstable", KR(ret), K(medium_info), K(get_merge_table_result));
   } else {
     schema_ctx_.schema_version_ = medium_info.storage_schema_.schema_version_;

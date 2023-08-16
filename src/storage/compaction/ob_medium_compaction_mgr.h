@@ -102,7 +102,6 @@ public:
       common::ObIAllocator &allocator,
       const ObExtraMediumInfo &extra_medium_info,
       const ObTabletDumpedMediumInfo &medium_info_list);
-
   void reset();
   OB_INLINE bool is_empty() const { return 0 == medium_info_list_.get_size(); }
   OB_INLINE int64_t size() const { return medium_info_list_.get_size(); }
@@ -113,13 +112,12 @@ public:
   }
   OB_INLINE const MediumInfoList &get_list() const { return medium_info_list_; }
   OB_INLINE int64_t get_wait_check_medium_scn() const { return extra_info_.wait_check_flag_ ? extra_info_.last_medium_scn_ : 0; }
-  OB_INLINE bool need_check_finish() const { return extra_info_.wait_check_flag_; }
+  OB_INLINE bool need_check_finish() const { return get_wait_check_medium_scn() > 0; }
   // check status on serialized medium list
   OB_INLINE bool could_schedule_next_round() const
   {
-    return get_wait_check_medium_scn() == 0 && medium_info_list_.is_empty();
+    return !need_check_finish() && medium_info_list_.is_empty();
   }
-  const ObMediumCompactionInfo *get_next_schedule_medium_info(const int64_t last_major_snapshot) const;
   OB_INLINE ObMediumCompactionInfo::ObCompactionType get_last_compaction_type() const
   {
     return static_cast<ObMediumCompactionInfo::ObCompactionType>(extra_info_.last_compaction_type_);
@@ -128,9 +126,9 @@ public:
   {
     return extra_info_.last_medium_scn_;
   }
-  OB_INLINE uint64_t get_union_info() const
+  const ObExtraMediumInfo& get_extra_medium_info() const
   {
-    return extra_info_.info_;
+    return extra_info_;
   }
 
   // serialize & deserialize
@@ -143,10 +141,6 @@ public:
   int64_t get_serialize_size() const;
 
   void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;
-  static int check_medium_info_and_last_major(
-    const ObMediumCompactionInfo &medium_info,
-    const ObITable *last_major_sstable,
-    const bool force_check);
   TO_STRING_KV(K_(is_inited), K_(extra_info), "list_size", size(), K_(medium_info_list));
 
 private:

@@ -859,11 +859,8 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
       if (OB_TMP_FAIL(get_suspect_info_and_print(MEDIUM_MERGE, share::ObLSID(INT64_MAX), ObTabletID(INT64_MAX)))) {
         LOG_WARN("failed get tenant merge suspect info", K(tmp_ret));
       }
-      if ((!scheduler->could_major_merge_start())
-          && can_add_diagnose_info()) {
-        const int64_t OB_MAX_BUF_LENGTH = 1024;
-        char ls_info_buf[OB_MAX_BUF_LENGTH] = {0};
-        scheduler->print_prohibit_medium_ls_info(ls_info_buf, OB_MAX_BUF_LENGTH);
+      if (scheduler->could_major_merge_start() && can_add_diagnose_info()
+          && scheduler->get_prohibit_medium_ls_map().get_cnt() > 0) {
         SET_DIAGNOSE_INFO(
             info_array_[idx_++],
             !scheduler->could_major_merge_start() ? MAJOR_MERGE : MEDIUM_MERGE,
@@ -874,7 +871,7 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
             ObTimeUtility::fast_current_time(),
             "info", "major or medium may be suspended",
             "could_major_merge", scheduler->could_major_merge_start(),
-            "prohibit_medium_ls_info", ls_info_buf);
+            "prohibit_medium_ls_info", scheduler->get_prohibit_medium_ls_map());
       }
     }
 

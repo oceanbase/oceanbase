@@ -771,21 +771,6 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
       if (OB_TABLE_IS_DELETED != ret) {
         LOG_WARN("failed to get table schema", KR(ret), KPC(this), K(medium_info));
       }
-    } else if (OB_UNLIKELY(result.handle_.empty())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("result is invalid empty", KR(ret), KPC(this), K(result));
-    } else {
-      ObSSTable *base_table = static_cast<ObSSTable *>(result.handle_.get_table(0));
-      ObSSTableMetaHandle sstable_meta_hdl;
-      int64_t schema_col_cnt = 0;
-      if (OB_FAIL(base_table->get_meta(sstable_meta_hdl))) {
-        LOG_WARN("failed to get base table meta", KR(ret));
-      } else if (OB_FAIL(medium_info.storage_schema_.get_stored_column_count_in_sstable(schema_col_cnt))) {
-        LOG_WARN("failed to get store column count", KR(ret), K(medium_info));
-      } else if (OB_UNLIKELY(sstable_meta_hdl.get_sstable_meta().get_column_count() > schema_col_cnt)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("medium column cnt is less than last major sstable", KR(ret), K(schema_col_cnt), K(sstable_meta_hdl));
-      }
     }
   }
   if (FAILEDx(init_parallel_range_and_schema_changed(result, medium_info))) {

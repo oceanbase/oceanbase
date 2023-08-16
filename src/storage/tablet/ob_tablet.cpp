@@ -70,6 +70,7 @@
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/compaction/ob_medium_list_checker.h"
 
 namespace oceanbase
 {
@@ -4663,26 +4664,19 @@ int ObTablet::check_medium_list() const
       LOG_WARN("fail to fetch table store", K(ret));
     } else if (OB_NOT_NULL(last_major = table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/))) {
       ObArenaAllocator arena_allocator("check_medium", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-      ObMediumCompactionInfoList medium_info_list;
-      if (OB_FAIL(load_medium_info_list(arena_allocator,
-          mds_data_.medium_info_list_,
+      const ObTabletDumpedMediumInfo *dumped_list = nullptr;
+      if (OB_FAIL(ObTabletMdsData::load_medium_info_list(arena_allocator, mds_data_.medium_info_list_, dumped_list))) {
+        LOG_WARN("failed to load medium info list", K(ret), K(mds_data_));
+      } else if (OB_ISNULL(dumped_list)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, list is null", K(ret), KP(dumped_list));
+      } else if (OB_FAIL(ObMediumListChecker::validate_medium_info_list(
           mds_data_.extra_medium_info_,
-          medium_info_list))) {
-        LOG_WARN("fail to load medium info list", K(ret));
-      } else if (medium_info_list.get_last_compaction_scn() > 0) { // for compat
-        if (OB_UNLIKELY(medium_info_list.get_last_compaction_scn() != last_major->get_snapshot_version())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("medium list is invalid for last major sstable", K(ret), K(medium_info_list), KPC(last_major));
-        }
+          dumped_list->medium_info_list_,
+          last_major->get_snapshot_version()))) {
+        LOG_WARN("fail to validate medium info list", K(ret), K(mds_data_), KPC(dumped_list), KPC(last_major));
       }
-      if (OB_SUCC(ret) && !medium_info_list.is_empty()) {
-        const ObMediumCompactionInfo *next_schedule_info = medium_info_list.get_next_schedule_medium_info(last_major->get_snapshot_version());
-        if (nullptr != next_schedule_info
-          && OB_FAIL(ObMediumCompactionInfoList::check_medium_info_and_last_major(
-            *next_schedule_info, last_major, false/*force_check*/))) {
-          LOG_WARN("failed to check medium info and last major", KR(ret), K(medium_info_list), KPC(last_major));
-        }
-      }
+      ObTabletMdsData::free_medium_info_list(arena_allocator, dumped_list);
     }
   } else {
     LOG_INFO("skip check medium list for non empty ha_status", KR(ret),
@@ -5627,29 +5621,10 @@ int ObTablet::validate_medium_info_list(
 
   if (OB_ISNULL(medium_info_list)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("medium info list is null", K(ret), K(mds_data));
-  } else if (OB_UNLIKELY(0 != extra_info.last_medium_scn_
-      && finish_medium_scn > 0
-      && finish_medium_scn != extra_info.last_medium_scn_)) {
-    ret = OB_INVALID_DATA;
-    LOG_WARN("last medium scn does not equal to last major sstable snapshot version", K(ret), K(ls_id), K(tablet_id),
-        K(finish_medium_scn), K(extra_info));
-  } else {
-    const common::ObIArray<compaction::ObMediumCompactionInfo*> &array = medium_info_list->medium_info_list_;
-    if (!array.empty()) {
-      const compaction::ObMediumCompactionInfo *first_info = array.at(0);
-      if (OB_ISNULL(first_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("medium info is null", K(ret), K(ls_id), K(tablet_id), KP(first_info));
-      } else if (!first_info->from_cur_cluster()) {
-      } else if (OB_UNLIKELY(first_info->last_medium_snapshot_ != finish_medium_scn)) {
-        ret = OB_INVALID_DATA;
-        LOG_WARN("first medium info does not match last major sstable snapshot version", K(ret), K(ls_id), K(tablet_id),
-            K(finish_medium_scn), KPC(first_info));
-      }
-    }
+    LOG_WARN("medium info list is null", K(ret), K(mds_data), KP(medium_info_list));
+  } else if (OB_FAIL(ObMediumListChecker::validate_medium_info_list(extra_info, medium_info_list->medium_info_list_, finish_medium_scn))) {
+    LOG_WARN("failed to validate medium info list", KR(ret), K(ls_id), K(tablet_id), K(mds_data), K(finish_medium_scn));
   }
-
   return ret;
 }
 

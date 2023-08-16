@@ -38,11 +38,6 @@ class ObTablet;
 class ObITable;
 class ObTabletDDLKvMgr;
 class ObLSTabletService;
-enum ProhibitMediumTask
-{
-  TRANSFER = 0,
-  MEDIUM = 1
-};
 class ObFastFreezeChecker
 {
 public:
@@ -137,6 +132,33 @@ private:
   common::ObSEArray<ObTabletID, TABLET_ID_ARRAY_CNT> tablet_ids_;
 };
 
+struct ObProhibitScheduleMediumMap
+{
+public:
+  enum ProhibitFlag
+  {
+    TRANSFER = 0,
+    MEDIUM = 1,
+    FLAG_MAX
+  };
+  static const char *ProhibitFlagStr[];
+  static bool is_valid_flag(const ProhibitFlag flag)
+  {
+    return flag >= TRANSFER && flag < FLAG_MAX;
+  }
+  ObProhibitScheduleMediumMap();
+  ~ObProhibitScheduleMediumMap() { destroy(); }
+  int init();
+  void destroy();
+  int clear_flag(const share::ObLSID &ls_id, const ProhibitFlag &input_flag);
+  int add_flag(const share::ObLSID &ls_id, const ProhibitFlag &input_flag);
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+  int64_t get_cnt() const;
+private:
+  mutable obsys::ObRWLock lock_;
+  common::hash::ObHashMap<share::ObLSID, ProhibitFlag> ls_id_map_;
+};
+
 class ObTenantTabletScheduler
 {
 public:
@@ -203,10 +225,16 @@ public:
   void resume_major_merge();
   OB_INLINE bool could_major_merge_start() const { return major_merge_status_; }
   int check_tablet_could_schedule_by_status(const ObTablet &tablet, bool &could_schedule_merge);
-  int stop_ls_schedule_medium(const share::ObLSID &ls_id); // may block for waiting lock
-  int clear_prohibit_medium_flag(const share::ObLSID &ls_id, const ProhibitMediumTask &task);
+  // The transfer task sets the flag that prohibits the scheduling of medium when the log stream is src_ls of transfer
+  int stop_ls_schedule_medium(const share::ObLSID &ls_id);
+  int clear_prohibit_medium_flag(const share::ObLSID &ls_id, const ObProhibitScheduleMediumMap::ProhibitFlag &input_flag)
+  {
+    return prohibit_medium_map_.clear_flag(ls_id, input_flag);
+  }
   int ls_start_schedule_medium(const share::ObLSID &ls_id, bool &ls_could_schedule_medium);
-  void print_prohibit_medium_ls_info(char *buf, const int64_t buf_len);
+  const ObProhibitScheduleMediumMap& get_prohibit_medium_ls_map() const {
+    return prohibit_medium_map_;
+  }
   int64_t get_frozen_version() const;
   int64_t get_merged_version() const { return merged_version_; }
   int64_t get_inner_table_merged_scn() const { return ATOMIC_LOAD(&inner_table_merged_scn_); }
@@ -367,8 +395,7 @@ private:
   ObCompactionScheduleIterator minor_ls_tablet_iter_;
   ObCompactionScheduleIterator medium_ls_tablet_iter_;
   int64_t error_tablet_cnt_; // for diagnose
-  mutable obsys::ObRWLock allow_schedule_medium_lock_;
-  common::hash::ObHashMap<share::ObLSID, ProhibitMediumTask> prohibit_medium_ls_id_map_;
+  ObProhibitScheduleMediumMap prohibit_medium_map_;
   compaction::ObStorageLocalityCache ls_locality_cache_;
 };
 
