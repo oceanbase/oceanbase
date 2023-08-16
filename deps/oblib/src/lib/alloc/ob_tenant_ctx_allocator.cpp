@@ -403,6 +403,7 @@ void* ObTenantCtxAllocator::common_alloc(const int64_t size, const ObMemAttr &at
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   void *ret = nullptr;
   AObject *obj = nullptr;
+  int64_t alloc_size = 0;
   bool sample_allowed = false;
   bool is_errsim = false;
   if (!attr.label_.is_valid()) {
@@ -421,7 +422,7 @@ void* ObTenantCtxAllocator::common_alloc(const int64_t size, const ObMemAttr &at
   if (OB_UNLIKELY(is_errsim)) {
   } else {
     sample_allowed = ObMallocSampleLimiter::malloc_sample_allowed(size, attr);
-    const int64_t alloc_size = sample_allowed ? (size + AOBJECT_BACKTRACE_SIZE) : size;
+    alloc_size = sample_allowed ? (size + AOBJECT_BACKTRACE_SIZE) : size;
     obj = allocator.alloc_object(alloc_size, attr);
     if (OB_ISNULL(obj) && g_alloc_failed_ctx().need_wash()) {
       int64_t total_size = ta.sync_wash();
@@ -468,6 +469,7 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
   }
 
   AObject *obj = NULL;
+  int64_t alloc_size = 0;
   bool sample_allowed = false;
   bool is_errsim = false;
   if (NULL != ptr) {
@@ -492,7 +494,7 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
   if (OB_UNLIKELY(is_errsim)) {
   } else {
     sample_allowed = ObMallocSampleLimiter::malloc_sample_allowed(size, attr);
-    const int64_t alloc_size = sample_allowed ? (size + AOBJECT_BACKTRACE_SIZE) : size;
+    alloc_size = sample_allowed ? (size + AOBJECT_BACKTRACE_SIZE) : size;
     obj = allocator.realloc_object(obj, alloc_size, attr);
     if(OB_ISNULL(obj) && g_alloc_failed_ctx().need_wash()) {
       int64_t total_size = ta.sync_wash();
