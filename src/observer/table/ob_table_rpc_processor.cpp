@@ -240,7 +240,7 @@ int ObTableApiProcessorBase::get_ls_id(const ObTabletID &tablet_id, ObLSID &ls_i
 {
   int ret = OB_SUCCESS;
   bool is_cache_hit = false;
-  int64_t expire_renew_time = INT64_MAX;
+  int64_t expire_renew_time = 0; // not refresh ls location cache
   if (OB_FAIL(location_service_->get(MTL_ID(), tablet_id, expire_renew_time, is_cache_hit, ls_id))) {
     LOG_WARN("failed to get ls id", K(ret), K(is_cache_hit));
   }
