@@ -18,6 +18,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/epoll.h>
+#include <sys/poll.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -48,10 +49,10 @@ namespace oceanbase
 namespace obrpc
 {
 
-#define KEEPALIVE_INTERVAL 500 * 1000         // 500ms
-#define WINDOW_LENGTH      3 * 1000 * 1000    // 3s
-#define WINDOW_MAX_FAILS   4                  // 4 times
+#define KEEPALIVE_INTERVAL 200 * 1000         // 200ms
+#define WINDOW_LENGTH      3000 * 1000        // 3s
 #define MAX_CREDIBLE_WINDOW 10 * 1000 * 1000  // 10s
+#define SERVER_EXPIRED_TIME 600L * 1000 * 1000 // 10min
 
 constexpr int32_t KP_MAGIC = 0x2c15c364;
 struct Header
@@ -128,7 +129,7 @@ int32_t ObNetKeepAliveData::get_encoded_size() const
 enum {
   UNCONNECT = 0,
   CONNECTING,
-  CONNECT_OK
+  CONNECT_OK,
 };
 
 int64_t get_usec()
@@ -149,8 +150,9 @@ struct server
 };
 
 typedef ObNetKeepAlive::client client;
-typedef ObNetKeepAlive::rpc_server rpc_server;
+typedef ObNetKeepAlive::DestKeepAliveState DestKeepAliveState;
 
+void destroy_client(client *c);
 void __attribute__((weak)) keepalive_init_data(ObNetKeepAliveData &ka_data)
 {
   // do-nothing
@@ -161,30 +163,22 @@ void __attribute__((weak)) keepalive_make_data(ObNetKeepAliveData &ka_data)
   // do-nothing
 }
 
-rpc_server *client2rs(client *c)
+DestKeepAliveState *client2rs(client *c)
 {
-  return (rpc_server*)((char*)c - offsetof(rpc_server, client_buf_));
+  return (DestKeepAliveState*)((char*)c - offsetof(DestKeepAliveState, client_buf_));
 }
 
-void do_rpin(rpc_server *rs)
-{
-  int64_t now = get_usec();
-  rs->last_read_ts_ = now;
-  rs->rpins_[rs->n_rpin_++ % MAX_PIN_KEEP_CNT] = now;
-}
-
-void do_wpin(rpc_server *rs)
+void update_write_ts(DestKeepAliveState *rs)
 {
   int64_t now = get_usec();
   ATOMIC_STORE(&rs->last_write_ts_, now);
-  rs->wpins_[rs->n_wpin_++ % MAX_PIN_KEEP_CNT] = now;
 }
 
-
 ObNetKeepAlive::ObNetKeepAlive()
-  : pipefd_(-1)
+  : pipefd_(-1), regist_dest_count_(0)
 {
-  bzero(&rss_, sizeof rss_);
+  bzero(&regist_dests_map_, sizeof regist_dests_map_);
+  bzero(&regist_dests_, sizeof regist_dests_);
 }
 
 ObNetKeepAlive::~ObNetKeepAlive()
@@ -253,14 +247,18 @@ int ObNetKeepAlive::in_black(const easy_addr_t &ez_addr, bool &in_black, ObNetKe
     keepalive_init_data(*ka_data);
   }
 
-  rpc_server *rs = regist_rs_if_need(ez_addr);
+  DestKeepAliveState *rs = regist_dest_if_need(ez_addr);
   if (rs != NULL) {
+    int64_t now = get_usec();
     int64_t last_wts = ATOMIC_LOAD(&rs->last_write_ts_);
-    if (get_usec() - last_wts < MAX_CREDIBLE_WINDOW) {
+    ATOMIC_STORE(&rs->last_access_ts_, now);
+    if (now - last_wts < MAX_CREDIBLE_WINDOW) {
       in_black = rs->in_black_;
       if (ka_data != nullptr) {
         memcpy(ka_data, &rs->ka_data_, sizeof(rs->ka_data_));
       }
+    } else if (0 == last_wts) {
+      // net_keepalive client has not started or dst server is expired, treat the server not in black
     } else {
       ret = OB_ERR_UNEXPECTED;
       if (REACH_TIME_INTERVAL(1000000)) {
@@ -288,88 +286,44 @@ bool ObNetKeepAlive::in_black(const easy_addr_t &addr)
   return in_blacklist;
 }
 
-void ObNetKeepAlive::mark_white_black()
+DestKeepAliveState *ObNetKeepAlive::regist_dest_if_need(const easy_addr_t &addr)
 {
-  for (int i = 0; i < MAX_RS_COUNT; i++) {
-    struct rpc_server *rs = ATOMIC_LOAD(&rss_[i]);
-    if (!rs) continue;
-    int64_t now = get_usec();
-    int write_cnt = 0;
-    int read_cnt = 0;
-    {
-      int size = rs->n_wpin_ < MAX_PIN_KEEP_CNT ? rs->n_wpin_ : MAX_PIN_KEEP_CNT;
-      int start = (rs->n_wpin_ - 1) % MAX_PIN_KEEP_CNT;
-      for (int j = size - 1, k = start; j >= 0; j--, k--) {
-        int idx = (k + MAX_PIN_KEEP_CNT) % MAX_PIN_KEEP_CNT;
-        if (now - rs->wpins_[idx] > WINDOW_LENGTH) {
-          break;
-        }
-        write_cnt++;
-      }
-    }
-    {
-      int size = rs->n_rpin_ < MAX_PIN_KEEP_CNT ? rs->n_rpin_ : MAX_PIN_KEEP_CNT;
-      int start = (rs->n_rpin_ - 1) % MAX_PIN_KEEP_CNT;
-      for (int j = size - 1, k = start; j >= 0; j--, k--) {
-        int idx = (k + MAX_PIN_KEEP_CNT) % MAX_PIN_KEEP_CNT;
-        if (now - rs->rpins_[idx] > WINDOW_LENGTH) {
-          break;
-        }
-        read_cnt++;
-      }
-    }
-    if (write_cnt <= 0) {
-      _LOG_INFO("address has been ignored by client maybe");
-      continue;
-    }
-    if (REACH_TIME_INTERVAL(1000000)) {
-      _LOG_DEBUG("dump read write cnt, addr: %s, write_cnt: %d, read_cnt: %d", addr_to_string(rs->svr_addr_), write_cnt, read_cnt);
-    }
-    if (write_cnt - read_cnt < WINDOW_MAX_FAILS) {
-      if (rs->in_black_) {
-        _LOG_INFO("whitewash, addr: %s", addr_to_string(rs->svr_addr_));
-      }
-      rs->in_black_ = 0;
-    } else {
-      if (!rs->in_black_) {
-        _LOG_INFO("mark black, addr: %s", addr_to_string(rs->svr_addr_));
-        rs->in_black_ts_ = now;
-      }
-      rs->in_black_ = 1;
-    }
-  }
-}
-
-rpc_server *get_rpc_server(const easy_addr_t *addr, rpc_server **rss, int32_t n_rs)
-{
-  rpc_server *ret = NULL;
-
-  uint64_t h = easy_hash_code(addr, sizeof(*addr), 5);
+  DestKeepAliveState *ret = NULL;
+  int32_t n_rs = MAX_RS_COUNT;
+  uint64_t h = easy_hash_code(&addr, sizeof(addr), 5);
   for (int64_t i = 0; i < n_rs && !ret; i++) {
-      rpc_server *&rs = rss[(h + i) % n_rs];
+      DestKeepAliveState *&rs = regist_dests_map_[(h + i) % n_rs];
       if (!rs) {
-        rpc_server *s = (rpc_server*)ob_malloc(sizeof(rpc_server), "rpc_server");
+        DestKeepAliveState *s = (DestKeepAliveState*)ob_malloc(sizeof(DestKeepAliveState), "DestKAState");
         if (NULL == s) {
           _LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "alloc memory failed");
           break;
         }
-        bzero(s, sizeof(rpc_server));
-        s->svr_addr_ = *addr;
+        bzero(s, sizeof(DestKeepAliveState));
+        s->svr_addr_ = addr;
+        s->last_read_ts_ = get_usec();
         keepalive_init_data(s->ka_data_);
-        rpc_server *ns = ATOMIC_VCAS(&rs, NULL, s);
+        DestKeepAliveState *ns = ATOMIC_VCAS(&rs, NULL, s);
         if (ns != NULL) {
           ob_free(s);
           s = NULL;
-          if (0 == memcmp(addr, &ns->svr_addr_, sizeof(*addr))) {
+          if (0 == memcmp(&addr, &ns->svr_addr_, sizeof(addr))) {
             ret = ns;
           }
           continue;
         } else {
           ret = s;
-          _LOG_INFO("add new rs, addr: %s", addr_to_string(*addr));
+          int index = ATOMIC_FAA(&regist_dest_count_, 1);
+          if (index >= MAX_RS_COUNT) {
+            LOG_WARN_RET(OB_ERR_UNEXPECTED, "regist dest keepalive state failed", K(index));
+            ATOMIC_FAA(&regist_dest_count_, -1);
+          } else {
+            ATOMIC_STORE(&regist_dests_[index], s);
+          }
+          _LOG_INFO("add new rs, addr: %s", addr_to_string(addr));
         }
       } else {
-        if (0 == memcmp(addr, &rs->svr_addr_, sizeof(*addr))) {
+        if (0 == memcmp(&addr, &rs->svr_addr_, sizeof(addr))) {
           ret = rs;
         }
       }
@@ -377,20 +331,17 @@ rpc_server *get_rpc_server(const easy_addr_t *addr, rpc_server **rss, int32_t n_
   return ret;
 }
 
-rpc_server *ObNetKeepAlive::regist_rs_if_need(const easy_addr_t &addr)
-{
-  return get_rpc_server(&addr, rss_, MAX_RS_COUNT);
-}
-
 void destroy_client(client *c)
 {
   if (c) {
     client2rs(c)->c_ = NULL;
-    if (c->fd_ > 0) close(c->fd_);
+    if (c->fd_ >= 0) {
+      close(c->fd_);
+    }
   }
 }
 
-client* create_client(rpc_server *rs)
+client* create_client(DestKeepAliveState *rs)
 {
   int ret = OB_SUCCESS;
   client *c  = (client *)rs->client_buf_;
@@ -408,15 +359,15 @@ client* create_client(rpc_server *rs)
       ret = OB_IO_ERROR;
       _LOG_ERROR("connect failed: %d", errno);
     } else {
-      c->status_ = CONNECTING;
       _LOG_DEBUG("connecting, addr: %s", addr_to_string(rs->svr_addr_));
     }
   } else {
-    c->status_ = CONNECT_OK;
-    _LOG_DEBUG("connect ok, addr: %s", addr_to_string(rs->svr_addr_));
+    _LOG_INFO("connect ok, fd: %d, conn: %s,%s", c->fd_, addr_to_string(easy_inet_getpeername(c->fd_)), addr_to_string(rs->svr_addr_));
   }
 
   if (OB_SUCC(ret)) {
+    c->status_ = CONNECTING;
+    update_write_ts(rs);
     if (AF_INET == addr.ss_family) {
       struct sockaddr_in self_addr;
       socklen_t len = sizeof(self_addr);
@@ -426,6 +377,8 @@ client* create_client(rpc_server *rs)
           char str[INET_ADDRSTRLEN];
           ret = OB_IO_ERROR;
           _LOG_WARN("connection to %s failed, self connect self", inet_ntop(AF_INET, (const void*)(&addr), str, sizeof(str)));
+        } else {
+          _LOG_DEBUG("connection local_port: %d, fd: %d", ntohs(self_addr.sin_port), c->fd_);
         }
       } else {
         ret = OB_IO_ERROR;
@@ -467,6 +420,7 @@ void ObNetKeepAlive::do_server_loop()
   }
   while (!has_set_stop()) {
     int cnt = ob_epoll_wait(epfd, events, sizeof events/sizeof events[0], 1000);
+    ObTimeGuard timeguard_server("net_keepalive_server_loop", 100 * 1000);
     for (int i = 0; i < cnt; i++) {
       struct server *s = (struct server *)events[i].data.ptr;
       int ev_fd = NULL == s? pipefd_ : s->fd_;
@@ -517,10 +471,18 @@ void ObNetKeepAlive::do_server_loop()
         }
       } else if (events[i].events & EPOLLIN) {
         for (;;) {
+          ObTimeGuard timeguard("net_keepalive_server_response", 100 * 1000);
           ssize_t n = -1;
           char data = PROTOCOL_DATA;
           while ((n = read(ev_fd, &data, sizeof data)) < 0 && errno == EINTR);
-          if (n <= 0) break;
+          if (n <= 0) {
+            if (0 == n || (errno != EAGAIN && errno != EWOULDBLOCK)) {
+              LOG_INFO("socket need_disconn", K(n), K(errno));
+              need_disconn = true;
+            }
+            break;
+          }
+          timeguard.click();
           char buf[128];
           const int64_t buf_len = sizeof buf;
           ObNetKeepAliveData ka_data;
@@ -533,6 +495,7 @@ void ObNetKeepAlive::do_server_loop()
           } else if (OB_SUCCESS != (tmp_ret = ka_data.encode(buf, buf_len, pos))) {
             _LOG_WARN("encode ka_data failed, ret: %d, pos: %ld", tmp_ret, pos);
           } else {
+            timeguard.click();
             while ((n = write(ev_fd, buf, pos)) < 0 && errno == EINTR);
             need_disconn = n < pos;
           }
@@ -554,10 +517,108 @@ void ObNetKeepAlive::do_server_loop()
     }
   }
 }
+void send_keepalive_data(DestKeepAliveState *rs)
+{
+  int ret = OB_SUCCESS;
+  ssize_t n = -1;
+  client *c = rs->c_;
+  while ((n = write(c->fd_, &PROTOCOL_DATA, sizeof PROTOCOL_DATA)) < 0 && errno == EINTR);
+  if (n > 0) {
+    c->wait_resp_ = true;
+    _LOG_DEBUG("update write ts, addr: %s, fd: %d, ts: %ld", addr_to_string(rs->svr_addr_), c->fd_, client2rs(c)->last_write_ts_);
+  } else if (0 == n || ((n < 0 && errno != EAGAIN && errno != EWOULDBLOCK))) {
+    _LOG_WARN("send data to rpc server failed, addr: %s, n: %ld, err: %d", addr_to_string(rs->svr_addr_), n, errno);
+    destroy_client(c);
+  }
+}
+void check_connect(DestKeepAliveState *rs)
+{
+  client *c = rs->c_;
+  struct pollfd fds[1];
+  fds[0].fd = c->fd_;
+  fds[0].events = POLLOUT;
+  int tret = poll(fds, 1, 0);
+  if (tret) {
+    uint32_t conn_has_error = 0;
+    int idx = 0;
+    if (fds[0].revents & POLLOUT
+        && EASY_OK == net_send_negotiate_message(1/*negotiation_enable*/, c->fd_,
+                                                  ObNetEasy::NET_KEEPALIVE_MAGIC, idx, &conn_has_error)
+        && !conn_has_error) {
+      _LOG_INFO("connect ok, fd: %d, conn: %s", c->fd_, addr_to_string(client2rs(c)->svr_addr_));
+      // try to send keepalive msg once the socket is connected
+      c->status_ = CONNECT_OK;
+      send_keepalive_data(rs);
+    } else {
+      _LOG_DEBUG("connect failed, fd: %d, conn: %s", c->fd_, addr_to_string(client2rs(c)->svr_addr_));
+      destroy_client(c);
+    }
+  }
+}
+void try_read_response(DestKeepAliveState *rs)
+{
+  int ret = OB_SUCCESS;
+  client *c = rs->c_;
+  int fd = c->fd_;
+  bool need_disconn = false;
+  while (true) {
+    ssize_t n = -1;
+    char buf[128];
+    Header header;
+    ObNetKeepAliveData ka_data;
+    int32_t read_len = header.get_encoded_size();
+    ObTimeGuard timeguard_clent_recv("net_keepalive_client_recv", 100 * 1000);
+    while ((n = read(fd, buf, read_len)) < 0 && errno == EINTR);
+    if (n <= 0) {
+      if (0 == n || (errno != EAGAIN && errno != EWOULDBLOCK)) {
+        LOG_INFO("socket need_disconn", K(n), K(fd), K(errno));
+        need_disconn = true;
+      }
+      break;
+    }
+    timeguard_clent_recv.click();
+    int tmp_ret = OB_SUCCESS;
+    int64_t pos = 0;
+    if (OB_SUCCESS != (tmp_ret = header.decode(buf, read_len, pos))) {
+      _LOG_WARN("decode failed, ret: %d, pos: %ld", tmp_ret, pos);
+    } else {
+      char data[512];
+      if (header.data_len_ > sizeof data) {
+        tmp_ret = OB_BUF_NOT_ENOUGH;
+        _LOG_WARN("data buf not enough: %d", header.data_len_);
+      } else {
+        while ((n = read(fd, data, header.data_len_)) < 0 && errno == EINTR);
+        if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
+          LOG_INFO("socket need_disconn", K(n), K(fd), K(errno));
+          need_disconn = true;
+          break;
+        }
+        pos = 0;
+        if (OB_SUCCESS != (tmp_ret = ka_data.decode(data, header.data_len_, pos))) {
+          _LOG_WARN("decode failed, ret: %d, pos: %ld", tmp_ret, pos);
+        }
+      }
+    }
+    if (OB_SUCCESS == tmp_ret) {
+      memcpy(&rs->ka_data_, &ka_data, sizeof(ka_data));
+    }
+    // ignore decode error, make keepalive avaliable
+    rs->last_read_ts_ = get_usec();
+    c->wait_resp_ = false;
+    if (rs->in_black_) {
+      _LOG_INFO("whitewash, addr: %s, last_write_ts_=%ld, last_read_ts_=%ld", addr_to_string(rs->svr_addr_), rs->last_write_ts_, rs->last_read_ts_);
+      rs->in_black_ = 0;
+    }
+  }
+  if (need_disconn) {
+    _LOG_INFO("client connection closed, fd: %d, conn: %s", c->fd_, addr_to_string(rs->svr_addr_));
+    destroy_client(c);
+  }
+}
 
 void ObNetKeepAlive::do_client_loop()
 {
-  int ret = OB_SUCCESS;
+int ret = OB_SUCCESS;
   int64_t last_check_ts = 0;
   while (!has_set_stop()) {
     int64_t now = get_usec();
@@ -565,112 +626,54 @@ void ObNetKeepAlive::do_client_loop()
     if (past < KEEPALIVE_INTERVAL) {
       ob_usleep(KEEPALIVE_INTERVAL - past);
     }
-    for (int i = 0; i < MAX_RS_COUNT; i++) {
-      struct rpc_server *rs = ATOMIC_LOAD(&rss_[i]);
-      if (!rs) continue;
+    last_check_ts = get_usec();
+    // traverse all registed dest, send keepalive data, try to receive response and check if the dest is available
+    bool dump_status = false;
+    if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+      dump_status = true;
+    }
+    int64_t regist_dest_count = ATOMIC_LOAD(&regist_dest_count_);
+    for (int i = 0; i < regist_dest_count; i++) {
+      ObTimeGuard timeguard_clent_send("net_keepalive_client_send", 100 * 1000);
+      struct DestKeepAliveState *rs = ATOMIC_LOAD(&regist_dests_[i]);
+      if (now - rs->last_access_ts_ > SERVER_EXPIRED_TIME) {
+        if (rs->last_write_ts_ > 0) {
+          _LOG_INFO("dest has not been accessed by the upper layer for a long time, addr: %s, last_access_time_=%ld", addr_to_string(rs->svr_addr_), rs->last_access_ts_);
+          ATOMIC_STORE(&rs->last_write_ts_, 0);
+        }
+        continue;
+      }
+      if (dump_status) {
+        _LOG_INFO("dump dest keepalive data states, addr: %s, last_write_ts_=%ld, last_read_ts_=%ld, in_black_=%d",
+          addr_to_string(rs->svr_addr_),rs->last_write_ts_, rs->last_read_ts_, rs->in_black_);
+      }
       client *c = rs->c_;
       if (!c) {
         c = create_client(rs);
+        if (NULL == c) continue;
       }
-      if (c && c->status_ == CONNECTING) {
-        do_wpin(rs);
+      if (CONNECTING == c->status_) {
+        check_connect(rs);
+      } else if (CONNECT_OK == c->status_ && false == c->wait_resp_) {
+        send_keepalive_data(rs);
+        update_write_ts(rs);
       }
-      if (!c || c->status_ != CONNECT_OK) continue;
-      int64_t now = get_usec();
-      if (now - rs->last_write_ts_ < KEEPALIVE_INTERVAL) continue;
-      ssize_t n = -1;
-      while ((n = write(c->fd_, &PROTOCOL_DATA, sizeof PROTOCOL_DATA)) < 0 && errno == EINTR);
-      do_wpin(rs);
-      _LOG_DEBUG("update write ts, addr: %s, fd: %d, ts: %ld", addr_to_string(rs->svr_addr_), c->fd_, client2rs(c)->last_write_ts_);
-    }
-    struct epoll_event events[512];
-    int epfd = epoll_create(1);
-    DEFER(
-      if (epfd >= 0) {
-        close(epfd);
-        epfd = -1;
+      c = rs->c_;
+      if (c != NULL) {
+        try_read_response(rs);
       }
-      );
-    if (epfd < 0) {
-       ret = OB_IO_ERROR;
-      _LOG_ERROR("epoll create failed: %d", errno);
-    }
-    for (int i = 0; OB_SUCC(ret) && i < MAX_RS_COUNT; i++) {
-      struct rpc_server *rs = ATOMIC_LOAD(&rss_[i]);
-      if (!rs) continue;
-      client *c = rs->c_;
-      if (!c) continue;
-      struct epoll_event ev;
-      ev.events = EPOLLIN | EPOLLOUT | EPOLLET | EPOLLRDHUP | EPOLLHUP;
-      ev.data.ptr = c;
-      if (epoll_ctl(epfd, EPOLL_CTL_ADD, c->fd_, &ev) < 0) {
-        // ignore ret
-        _LOG_ERROR("add to epoll failed, addr: %s, err: %d", addr_to_string(rs->svr_addr_), errno);
+      now = get_usec();
+      if (now - rs->last_write_ts_ > WINDOW_LENGTH) {
+        _LOG_INFO("failed to get resp and destroy client, addr: %s, last_write_ts_=%ld, last_read_ts_=%ld", addr_to_string(rs->svr_addr_), rs->last_write_ts_, rs->last_read_ts_);
+        destroy_client(c);
       }
-    }
-
-    if (OB_SUCC(ret)) {
-      int cnt = ob_epoll_wait(epfd, events, sizeof events/sizeof events[0], KEEPALIVE_INTERVAL/2/1000);
-      for (int i = 0; i < cnt; i++) {
-        client *c = (client *)events[i].data.ptr;
-        int ev_fd = c->fd_;
-        if ((events[i].events & EPOLLIN) && c->status_ == CONNECT_OK) {
-          rpc_server *rs = client2rs(c);
-          _LOG_DEBUG("update read ts, addr: %s, fd: %d, ts: %ld", addr_to_string(rs->svr_addr_), ev_fd, rs->last_read_ts_);
-          for (;;) {
-            ssize_t n = -1;
-            char buf[128];
-            Header header;
-            ObNetKeepAliveData ka_data;
-            int32_t read_len = header.get_encoded_size();
-            while ((n = read(ev_fd, buf, read_len)) < 0 && errno == EINTR);
-            if (n <= 0) break;
-            int tmp_ret = OB_SUCCESS;
-            int64_t pos = 0;
-            if (OB_SUCCESS != (tmp_ret = header.decode(buf, read_len, pos))) {
-              _LOG_WARN("decode failed, ret: %d, pos: %ld", tmp_ret, pos);
-            } else {
-              char data[512]; // TODO
-              if (header.data_len_ > sizeof data) {
-                tmp_ret = OB_BUF_NOT_ENOUGH;
-                _LOG_WARN("data buf not enough: %d", header.data_len_);
-              } else {
-                while ((n = read(ev_fd, data, header.data_len_)) < 0 && errno == EINTR);
-                pos = 0;
-                if (OB_SUCCESS != (tmp_ret = ka_data.decode(data, header.data_len_, pos))) {
-                  _LOG_WARN("decode failed, ret: %d, pos: %ld", tmp_ret, pos);
-                }
-              }
-            }
-            if (OB_SUCCESS == tmp_ret) {
-              memcpy(&rs->ka_data_, &ka_data, sizeof(ka_data));
-            }
-            // ignore decode error, make keepalive avaliable
-            do_rpin(rs);
-          }
-        }
-        if (events[i].events & (EPOLLERR | EPOLLRDHUP | EPOLLHUP)) {
-          _LOG_DEBUG("client connection closed, fd: %d, conn: %s", ev_fd, addr_to_string(client2rs(c)->svr_addr_));
-          epoll_ctl(epfd, EPOLL_CTL_DEL, ev_fd, NULL);
-          destroy_client(c);
-          continue;
-        }
-        if ((events[i].events & EPOLLOUT) && c->status_ == CONNECTING) {
-          uint32_t conn_has_error = 0;
-          int idx = 0;
-          if (EASY_OK == net_send_negotiate_message(1/*negotiation_enable*/, ev_fd,
-                                                    ObNetEasy::NET_KEEPALIVE_MAGIC, idx, &conn_has_error)
-              && !conn_has_error) {
-            _LOG_DEBUG("connect ok, fd: %d", ev_fd);
-            c->status_ = CONNECT_OK;
-          } else {
-            destroy_client(c);
-          }
+      if (now - rs->last_read_ts_ > WINDOW_LENGTH) {
+        if (!rs->in_black_) {
+          _LOG_INFO("mark black, addr: %s, last_write_ts_=%ld, last_read_ts_=%ld", addr_to_string(rs->svr_addr_), rs->last_write_ts_, rs->last_read_ts_);
+          rs->in_black_ = 1;
         }
       }
     }
-    mark_white_black();
-    last_check_ts = get_usec();
   }
 }
 
