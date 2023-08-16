@@ -467,6 +467,9 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
   bool enable_baseline = false;
   bool captrue_baseline = false;
   bool need_check_schema = (schema_array.count() != 0);
+  if (schema_array.count() == 0 && stored_schema_objs_.count() == 0) {
+    need_check_schema = true;
+  }
   if (stmt::T_NONE == pc_ctx.sql_ctx_.stmt_type_) {
     //sql_ctx_.stmt_type_ != stmt::T_NONE means this calling in nested sql,
     //can't cover the first stmt type in sql context
