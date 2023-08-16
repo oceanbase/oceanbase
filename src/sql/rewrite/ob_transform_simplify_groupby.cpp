@@ -629,9 +629,15 @@ int ObTransformSimplifyGroupby::remove_group_by_duplicates(ObDMLStmt *&stmt, boo
       }
     }
     if (OB_SUCC(ret)) {
-      select_stmt->get_group_exprs().reset();
-      if (OB_FAIL(select_stmt->get_group_exprs().assign(new_group_exprs))) {
-        LOG_WARN("failed to assign a new group exprs", K(ret));
+      if (new_group_exprs.count() == group_exprs.count()) {
+        //do nothing
+      } else {
+        select_stmt->get_group_exprs().reset();
+        if (OB_FAIL(select_stmt->get_group_exprs().assign(new_group_exprs))) {
+          LOG_WARN("failed to assign a new group exprs", K(ret));
+        } else {
+          trans_happened = true;
+        }
       }
     }
   }
