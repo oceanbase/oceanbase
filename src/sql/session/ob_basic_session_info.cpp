@@ -122,6 +122,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
   CHAR_CARRAY_INIT(tenant_);
   CHAR_CARRAY_INIT(effective_tenant_);
   CHAR_CARRAY_INIT(trace_id_buff_);
+  sql_id_[0] = '\0';
   ssl_cipher_buff_[0] = '\0';
 }
 
@@ -337,7 +338,10 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   sys_var_in_pc_str_.reset();
   is_first_gen_ = true;
   CHAR_CARRAY_INIT(trace_id_buff_);
-  // consistency_level_ = INVALID_CONSISTENCY;
+  CHAR_CARRAY_INIT(sql_id_);
+  char *sql_id = sql_id_;
+  sql_id = NULL;
+//consistency_level_ = INVALID_CONSISTENCY;
   next_tx_read_only_ = -1;
   next_tx_isolation_ = transaction::ObTransIsolation::UNKNOWN;
   log_id_level_map_valid_ = false;
@@ -1678,7 +1682,8 @@ void ObBasicSessionInfo::reset_cur_phy_plan_to_null()
 void ObBasicSessionInfo::get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const
 {
   if (common::OB_MAX_SQL_ID_LENGTH + 1 <= sql_id_buf_size) {
-    MEMCPY(sql_id_buf, sql_id_, common::OB_MAX_SQL_ID_LENGTH + 1);
+    MEMCPY(sql_id_buf, sql_id_, common::OB_MAX_SQL_ID_LENGTH);
+    sql_id_buf[common::OB_MAX_SQL_ID_LENGTH] = '\0';
   } else {
     sql_id_buf[0] = '\0';
   }
