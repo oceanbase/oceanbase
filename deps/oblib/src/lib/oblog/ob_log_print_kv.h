@@ -90,6 +90,28 @@ private:
   const char *str_;
 };
 
+class ObQuoteSzString
+{
+public:
+  explicit ObQuoteSzString(const char *s) : str_(s)
+  {}
+  ~ObQuoteSzString()
+  {}
+
+  int64_t to_string(char *buf, const int64_t len) const
+  {
+    int64_t pos = 0;
+    if (OB_ISNULL(str_)) {
+      (void)logdata_printf(buf, len, pos, "NULL");
+    } else {
+      (void)logdata_printf(buf, len, pos, "\"%s\"", str_);
+    }
+    return pos;
+  }
+private:
+  const char *str_;
+};
+
 /**
  * used to print string that maybe not terminated by zero and has a max lenght
  */

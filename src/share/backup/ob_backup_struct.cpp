@@ -4088,7 +4088,7 @@ int64_t ObBackupSetFileDesc::to_string(char *min_restore_scn_str_buf, char *buf,
     // do nothing
   } else {
     J_OBJ_START();
-    ObSzString min_restore_scn_display(min_restore_scn_str_buf);
+    ObQuoteSzString min_restore_scn_display(min_restore_scn_str_buf);
     J_KV(K_(backup_set_id), K_(incarnation), K_(tenant_id), K_(dest_id), K_(backup_type), K_(plus_archivelog),
       K_(date), K_(prev_full_backup_set_id), K_(prev_inc_backup_set_id), K_(stats), K_(start_time), K_(end_time),
       K_(status), K_(result), K_(encryption_mode), K_(passwd), K_(file_status), K_(backup_path), K_(start_replay_scn),
