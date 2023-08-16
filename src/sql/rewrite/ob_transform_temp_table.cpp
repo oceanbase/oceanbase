@@ -140,6 +140,33 @@ int ObTransformTempTable::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &
   return ret;
 }
 
+int ObTransformTempTable::check_stmt_size(ObDMLStmt *stmt, int64_t &total_size, bool &stmt_oversize)
+{
+  int ret = OB_SUCCESS;
+  int64_t size = 0;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("check stmt size failed", K(ret));
+  } else if (stmt->is_select_stmt() &&
+      static_cast<const ObSelectStmt *>(stmt)->is_set_stmt() &&
+        OB_FAIL(static_cast<const ObSelectStmt *>(stmt)->get_set_stmt_size(size))) {
+    LOG_WARN("failed to get set stm size", K(ret));
+  } else if (OB_FALSE_IT(total_size = total_size + size)) {
+  } else if (total_size > common::OB_MAX_SET_STMT_SIZE) {
+    stmt_oversize = true;
+  } else {
+    ObSEArray<ObSelectStmt*, 16> child_stmts;
+    if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+      LOG_WARN("get child stmt failed", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && !stmt_oversize && i < child_stmts.count(); i++) {
+      if (OB_FAIL(SMART_CALL(check_stmt_size(child_stmts.at(i), total_size, stmt_oversize)))) {
+        LOG_WARN("check stmt size failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 /**
  * @brief expand_temp_table
  * 如果temp table只被引用一次或者temp table是一个简单的查询
@@ -168,11 +195,15 @@ int ObTransformTempTable::expand_temp_table(ObIArray<TempTableInfo> &temp_table_
     bool can_materia = false;
     bool force_materia = false;
     bool force_inline = false;
+    bool is_oversize_stmt = false;
+    int64_t stmt_size = 0;
     bool need_expand = false;
     OPT_TRACE("try to expand temp table:", helper.temp_table_query_);
     if (OB_ISNULL(helper.temp_table_query_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null ref query", K(helper), K(ret));
+    } else if (OB_FAIL(check_stmt_size(helper.temp_table_query_, stmt_size, is_oversize_stmt))) {
+      LOG_WARN("check stmt size failed", K(ret));
     } else if (OB_FAIL(check_hint_allowed_trans(*helper.temp_table_query_,
                                                 force_inline,
                                                 force_materia))) {
@@ -183,6 +214,9 @@ int ObTransformTempTable::expand_temp_table(ObIArray<TempTableInfo> &temp_table_
     } else if (force_materia) {
       //do nothing
       OPT_TRACE("hint force materialize CTE");
+    } else if (is_oversize_stmt) {
+      //do nothing
+      OPT_TRACE("CTE too large to expand");
     } else if (system_force_materialize_cte) {
       //do nothing
       OPT_TRACE("system variable force materialize CTE");

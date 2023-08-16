@@ -122,6 +122,8 @@ public:
   int expand_temp_table(ObIArray<TempTableInfo> &temp_table_info,
                         bool &trans_happened);
 
+  int check_stmt_size(ObDMLStmt *stmt, int64_t &total_size, bool &stmt_oversize);
+
   int inner_expand_temp_table(TempTableInfo &helper);
 
   int check_stmt_can_materialize(ObSelectStmt *stmt, bool &is_valid);
