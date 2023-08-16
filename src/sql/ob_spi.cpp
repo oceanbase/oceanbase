@@ -7254,7 +7254,8 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
     } else if (!(obj.is_pl_extend()
                  || obj.is_user_defined_sql_type()
                  || (obj.is_null() && current_type.at(i).get_meta_type().is_user_defined_sql_type()))
-               && result_types[i].get_meta_type().is_ext()) {
+               && result_types[i].get_meta_type().is_ext()
+               && !ob_is_xml_pl_type(result_types[i].get_obj_type(), result_types[i].get_udt_id())) {
       // sql udt can cast to pl extend, null from sql udt type can cast to pl extend(xmltype)
       // but null may not cast to other pl extends (return error 4016 in store_datums)
       // support: select extract(xmlparse(document '<a>a</a>'), '/b') into xml_data from dual;

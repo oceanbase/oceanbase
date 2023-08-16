@@ -1351,7 +1351,7 @@ static const ObObjType NVL_TYPE_PROMOTION_ORACLE[ObMaxTC][ObMaxTC] =
   },
   {
     /*User Defined Type -> XXX*/
-    ObMaxType, /*null*/
+    ObUserDefinedSQLType, /*null*/
     ObMaxType, /*int*/
     ObMaxType, /*uint*/
     ObMaxType, /*float*/

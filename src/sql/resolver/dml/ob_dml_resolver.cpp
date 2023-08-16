@@ -2202,6 +2202,11 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
                                                   value_expr->get_collation_type(),
                                                   into_pl_type.get_data_type()->get_obj_type(),
                                                   into_pl_type.get_data_type()->get_collation_type()));
+              } else if (value_expr->get_data_type() == ObUserDefinedSQLType && into_pl_type.is_opaque_type()) {
+                // sql udt to pl extend, only support xmltype currently, dest collation type is not used
+                OX (is_compatible = cast_supported(value_expr->get_data_type(),
+                                                   value_expr->get_collation_type(),
+                                                   ObExtendType, CS_TYPE_BINARY));
               } else if (value_expr->get_data_type() == ObExtendType &&
                         (!into_pl_type.is_obj_type() ||
                          (into_pl_type.get_data_type() != NULL && into_pl_type.get_data_type()->get_meta_type().is_ext()))) {
