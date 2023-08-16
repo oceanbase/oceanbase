@@ -3124,6 +3124,8 @@ int ObDDLService::check_is_add_column_online(const ObTableSchema &table_schema,
     LOG_WARN("unexpected error", K(ret), K(alter_column_schema));
   } else if (alter_column_schema.is_autoincrement_ || alter_column_schema.is_primary_key_ || alter_column_schema.has_not_null_constraint()) {
     tmp_ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+  } else if (nullptr != table_schema.get_column_schema(alter_column_schema.get_column_name())) {
+    tmp_ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
   } else if (OB_FAIL(check_is_change_column_order(table_schema, alter_column_schema, is_change_column_order))) {
     LOG_WARN("fail to check is change column order", K(ret));
   } else if (is_change_column_order || alter_column_schema.is_stored_generated_column()) {
