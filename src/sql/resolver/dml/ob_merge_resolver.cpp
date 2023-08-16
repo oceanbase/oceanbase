@@ -478,12 +478,18 @@ int ObMergeResolver::resolve_generate_table(const ParseNode &table_node,
 int ObMergeResolver::resolve_match_condition(const ParseNode *condition_node)
 {
   int ret = OB_SUCCESS;
+  bool has_outer_join_symbol = false;
   ObMergeStmt *merge_stmt = get_merge_stmt();
   column_namespace_checker_.enable_check_unique();
   resolve_clause_ = MATCH_CLAUSE;
   if (OB_ISNULL(condition_node) || OB_ISNULL(merge_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arguement", K(condition_node), K(merge_stmt), K(ret));
+  } else if (OB_FAIL(ObSQLUtils::has_outer_join_symbol(condition_node, has_outer_join_symbol))) {
+    LOG_WARN("fail to check has_outer_join_symbol", K(ret));
+  } else if (has_outer_join_symbol) {
+    ret = OB_ERR_OUTER_JOIN_ON_CORRELATION_COLUMN;
+    LOG_WARN("an outer join cannot be specified on a correlation column", K(ret));
   } else if (OB_FAIL(resolve_and_split_sql_expr(*condition_node,
                                                 merge_stmt->get_match_condition_exprs()))) {
     LOG_WARN("fail to resolve match condition expr", K(ret));
