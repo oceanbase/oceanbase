@@ -3024,7 +3024,8 @@ int ObTablet::rowkey_exists(
         LOG_WARN("Failed to transfer datum rowkey", K(ret), K(rowkey));
       } else if (OB_FAIL(prepare_param_ctx(allocator, relative_table, store_ctx, param, context))) {
         LOG_WARN("Failed to prepare param ctx, ", K(ret), K(rowkey));
-      } else if (OB_FAIL(do_rowkey_exists(param, context, datum_rowkey, exists))) {
+      } else if (OB_FAIL(relative_table.tablet_iter_.get_tablet()->do_rowkey_exists(
+              param, context, datum_rowkey, exists))) {
         LOG_WARN("do rowkey exist fail", K(ret), K(rowkey));
       }
       LOG_DEBUG("chaser debug row", K(ret), K(row), K(rowkey));
@@ -3062,11 +3063,13 @@ int ObTablet::rowkeys_exists(
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(auto_get_read_tables(store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
-                                       tables_iter,
-                                       relative_table.allow_not_ready()))) {
+      if (OB_FAIL(relative_table.tablet_iter_.get_tablet()->auto_get_read_tables(
+              store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
+              tables_iter,
+              relative_table.allow_not_ready()))) {
         LOG_WARN("get read iterator fail", K(ret));
-      } else if (OB_FAIL(do_rowkeys_exist(tables_iter.table_store_iter_, rows_info, exists))) {
+      } else if (OB_FAIL(relative_table.tablet_iter_.get_tablet()->do_rowkeys_exist(
+              tables_iter.table_store_iter_, rows_info, exists))) {
         LOG_WARN("fail to check the existence of rows", K(ret), K(rows_info), K(exists));
       }
     }
