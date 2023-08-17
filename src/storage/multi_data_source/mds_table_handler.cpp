@@ -141,7 +141,7 @@ int ObMdsTableHandler::try_release_nodes_below(const share::SCN &scn)
   MDS_TG(5_ms);
   MdsTableHandle mds_table_handle;
   {
-    MdsWLockGuard guard(lock_);
+    MdsRLockGuard guard(lock_);
     CLICK();
     mds_table_handle = mds_table_handle_;
   }
@@ -174,7 +174,7 @@ ObMdsTableHandler &ObMdsTableHandler::operator=(const ObMdsTableHandler &rhs)// 
 void ObMdsTableHandler::mark_removed_from_t3m(ObTabletPointer *pointer)
 {
   int ret = OB_SUCCESS;
-  MdsWLockGuard guard(lock_);
+  MdsRLockGuard guard(lock_);
   if (mds_table_handle_.is_valid()) {
     if (OB_FAIL(mds_table_handle_.mark_removed_from_t3m(pointer))) {
       MDS_LOG(WARN, "fail to unregister_from_mds_table_mgr", K(*this));

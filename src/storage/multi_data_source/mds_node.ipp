@@ -167,7 +167,7 @@ template <typename K, typename V>
 void UserMdsNode<K, V>::before_prepare_()
 {
   if (status_.union_.field_.state_ == TwoPhaseCommitState::BEFORE_PREPARE) {// reentrant
-    OB_ASSERT(trans_version_.is_min());
+    MDS_ASSERT(trans_version_.is_min());
   } else {
     status_.advance(TwoPhaseCommitState::BEFORE_PREPARE);
     trans_version_.set_min();// block all read operation
@@ -192,7 +192,7 @@ void UserMdsNode<K, V>::on_prepare_(const share::SCN &prepare_version)
 {
   if (status_.union_.field_.state_ == TwoPhaseCommitState::ON_PREPARE) {// reentrant
     if (is_valid_scn_(prepare_version)) {
-      OB_ASSERT(trans_version_ == prepare_version);
+      MDS_ASSERT(trans_version_ == prepare_version);
     }
   } else {
     status_.advance(TwoPhaseCommitState::ON_PREPARE);
@@ -226,8 +226,8 @@ void UserMdsNode<K, V>::on_commit_(const share::SCN &commit_version,
                     K(*this), K(commit_version), K(commit_scn));
   } else {
     if (status_.union_.field_.state_ == TwoPhaseCommitState::ON_COMMIT) {// reentrant
-      OB_ASSERT(trans_version_ == commit_version);
-      OB_ASSERT(end_scn_ == commit_scn);
+      MDS_ASSERT(trans_version_ == commit_version);
+      MDS_ASSERT(end_scn_ == commit_scn);
     } else {
       status_.advance(TwoPhaseCommitState::ON_COMMIT);
       trans_version_ = commit_version;

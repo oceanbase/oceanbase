@@ -9,6 +9,20 @@
 #include "src/share/scn.h"
 #include "src/share/ob_occam_time_guard.h"
 
+#ifdef OB_BUILD_RPM
+  #define MDS_ASSERT(x) (void)(x)
+#else
+  #define MDS_ASSERT(x) \
+    do{                                                   \
+    bool v=(x);                                         \
+    if(OB_UNLIKELY(!(v))) {                             \
+      _OB_LOG_RET(ERROR, oceanbase::common::OB_ERROR, "assert fail, exp=%s", #x);        \
+      BACKTRACE_RET(ERROR, oceanbase::common::OB_ERROR, 1, "assert fail");               \
+      ob_abort();                                       \
+    }                                                   \
+  } while(false)
+#endif
+
 namespace oceanbase
 {
 namespace storage
@@ -90,7 +104,7 @@ static constexpr bool STATE_CHECK_ALLOWED_MAP[static_cast<int>(TwoPhaseCommitSta
 
 static inline void check_and_advance_two_phase_commit(TwoPhaseCommitState &state, TwoPhaseCommitState new_state)
 {
-  OB_ASSERT(STATE_CHECK_ALLOWED_MAP[(int)state][(int)new_state] == true);
+  MDS_ASSERT(STATE_CHECK_ALLOWED_MAP[(int)state][(int)new_state] == true);
   state = new_state;
 }
 
@@ -168,6 +182,7 @@ enum LogPhase
   FLUSH,
   GC,
   FREEZE,
+  NOTICE,
   NONE
 };
 
@@ -212,6 +227,9 @@ do {\
     case mds::LogPhase::FREEZE:\
       oceanbase::common::databuff_printf(joined_info, joined_length, pos, "[FREEZE]%s", info);\
       break;\
+    case mds::LogPhase::NOTICE:\
+      oceanbase::common::databuff_printf(joined_info, joined_length, pos, "[NOTICE]%s", info);\
+      break;\
     case mds::LogPhase::NONE:\
       oceanbase::common::databuff_printf(joined_info, joined_length, pos, "[NONE]%s", info);\
       break;\
@@ -232,8 +250,9 @@ do {\
 #define MDS_LOG_SCAN(level, info, args...) _MDS_LOG_PHASE(level, mds::LogPhase::SCAN, info, ##args)
 #define MDS_LOG_FLUSH(level, info, args...) _MDS_LOG_PHASE(level, mds::LogPhase::FLUSH, info, ##args)
 #define MDS_LOG_GC(level, info, args...) _MDS_LOG_PHASE(level, mds::LogPhase::GC, info, ##args)
-#define MDS_LOG_NONE(level, info, args...) _MDS_LOG_PHASE(level, mds::LogPhase::NONE, info, ##args)
 #define MDS_LOG_FREEZE(level, info, args...) _MDS_LOG_PHASE(level, mds::LogPhase::FREEZE, info, ##args)
+#define MDS_LOG_NOTICE(level, info, args...) _MDS_LOG_PHASE(level, mds::LogPhase::NOTICE, info, ##args)
+#define MDS_LOG_NONE(level, info, args...) _MDS_LOG_PHASE(level, mds::LogPhase::NONE, info, ##args)
 
 // flag is needed to rollback logic
 #define MDS_FAIL_FLAG(stmt, flag) (CLICK_FAIL(stmt) || FALSE_IT(flag = true))

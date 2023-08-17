@@ -63,10 +63,10 @@ void MdsNodeStatus::advance(TwoPhaseCommitState new_stat)// ATOMIC
   MdsNodeStatus old_node_status, new_node_status;
   do {
     old_node_status.union_.value_ = ATOMIC_LOAD(&union_.value_);
-    OB_ASSERT(new_stat >= old_node_status.union_.field_.state_ &&
+    MDS_ASSERT(new_stat >= old_node_status.union_.field_.state_ &&
               new_stat < TwoPhaseCommitState::STATE_END &&
               new_stat > TwoPhaseCommitState::STATE_INIT);
-    OB_ASSERT(STATE_CHECK_ALLOWED_MAP[(int)old_node_status.union_.field_.state_][(int)new_stat] == true);
+    MDS_ASSERT(STATE_CHECK_ALLOWED_MAP[(int)old_node_status.union_.field_.state_][(int)new_stat] == true);
     new_node_status.union_.value_ = old_node_status.union_.value_;
     new_node_status.union_.field_.state_ = new_stat;
   } while (!ATOMIC_BCAS(&union_.value_, old_node_status.union_.value_, new_node_status.union_.value_));

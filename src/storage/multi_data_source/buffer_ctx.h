@@ -63,7 +63,7 @@ class BufferCtxNode
 {
 public:
   BufferCtxNode() : ctx_(nullptr) {}
-  void set_ctx(BufferCtx *ctx) { OB_ASSERT(ctx_ == nullptr); ctx_ = ctx; }// 预期不应该出现覆盖的情况
+  void set_ctx(BufferCtx *ctx) { MDS_ASSERT(ctx_ == nullptr); ctx_ = ctx; }// 预期不应该出现覆盖的情况
   const BufferCtx *get_ctx() const { return ctx_; }
   void destroy_ctx();
   void on_redo(const share::SCN &redo_scn) { ctx_->on_redo(redo_scn); }

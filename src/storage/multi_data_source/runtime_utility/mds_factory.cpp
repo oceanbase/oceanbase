@@ -58,7 +58,7 @@ int deepcopy(const transaction::ObTransID &trans_id,
     using ImplType = GET_CTX_TYPE_BY_TUPLE_IDX(IDX);
     ImplType *p_impl = nullptr;
     const ImplType *p_old_impl_ctx = dynamic_cast<const ImplType *>(&old_ctx);
-    OB_ASSERT(OB_NOT_NULL(p_old_impl_ctx));
+    MDS_ASSERT(OB_NOT_NULL(p_old_impl_ctx));
     const ImplType &old_impl_ctx = *p_old_impl_ctx;
     set_mds_mem_check_thread_local_info(MdsWriter(trans_id), typeid(ImplType).name(), alloc_file, alloc_func, line);
     if (CLICK() &&

@@ -396,7 +396,7 @@ int MdsRow<K, V>::get_with_read_wrapper_(READ_OP &&read_operation,
   };
   for_each_node_([&](const UserMdsNode<K, V> &node) {
     bool can_read = false;
-    OB_ASSERT(!node.is_aborted_());// should not meet aborted node, cause aborted node deleted immediately
+    MDS_ASSERT(!node.is_aborted_());// should not meet aborted node, cause aborted node deleted immediately
     if (OB_FAIL(check_node_op(node, can_read))) {
       MDS_LOG_GET(WARN, "check node can read meet failed");
     } else if (can_read) {
@@ -537,19 +537,19 @@ int MdsRow<K, V>::scan_dump_node_from_tail_to_head(DUMP_OP &&op,
     [this, &op, &ret, &dump_kv, flush_scn, for_flush, mds_table_id, mds_unit_id, &has_meet_undump_node](const UserMdsNode<K, V> &node) {
       bool need_break = false;
       MDS_TG(5_ms);
-      OB_ASSERT(!node.is_aborted_());// should not see aborted node, cause it is deleted immediatly
+      MDS_ASSERT(!node.is_aborted_());// should not see aborted node, cause it is deleted immediatly
       if (!node.is_dumped_()) {
         has_meet_undump_node = true;// this is a barrier, mark it to defense
       }
       if (!node.is_committed_()) {
         if (node.redo_scn_.is_valid() && !flush_scn.is_max()) {
-          OB_ASSERT(node.redo_scn_ > flush_scn);// defense
+          MDS_ASSERT(node.redo_scn_ > flush_scn);// defense
         }
         need_break = true;
       } else if (node.is_dumped_() && for_flush) {// just skip it
         // all nodes before first undumped node should be dumped status,(reverse scan order)
         // and all nodes after first undumped node should be undemped status(reverse scan order)
-        OB_ASSERT(has_meet_undump_node == false);// defense
+        MDS_ASSERT(has_meet_undump_node == false);// defense
       } else if (!check_node_scn_beflow_flush(node, flush_scn)) {
         need_break = true;
       } else if (MDS_FAIL(dump_kv.v_.init(mds_table_id,
@@ -602,7 +602,7 @@ void MdsRow<K, V>::node_abort_callback_(ListNodeBase *node)
       }
       return ret;
     });
-    OB_ASSERT(has_meet_input_arg_node);
+    MDS_ASSERT(has_meet_input_arg_node);
   }
   #undef PRINT_WRAPPER
 }

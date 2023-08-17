@@ -36,7 +36,7 @@ int BufferCtxNode::serialize(char *buf, const int64_t buf_len, int64_t &pos) con
   MDS_TG(10_ms);
   if (OB_NOT_NULL(ctx_)) {
     // 序列化时，如果ctx不为空，那么其类型必须是有效的，这里防御一下，否则反序列化的报错会增加排查难度
-    OB_ASSERT(ctx_->get_binding_type_id() != INVALID_VALUE);
+    MDS_ASSERT(ctx_->get_binding_type_id() != INVALID_VALUE);
     int64_t type_id = ctx_->get_binding_type_id();
     if (MDS_FAIL(serialization::encode(buf, buf_len, pos, type_id))) {
       MDS_LOG(ERROR, "serialize buffer ctx id failed", KR(ret), K(type_id));

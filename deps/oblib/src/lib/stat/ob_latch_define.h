@@ -324,8 +324,8 @@ LATCH_DEF(LOG_EXTERNAL_STORAGE_HANDLER_RW_LOCK, 308, "log external storage handl
 LATCH_DEF(LOG_EXTERNAL_STORAGE_HANDLER_LOCK, 309, "log external storage handler spin lock", LATCH_FIFO, 2000, 0, LOG_EXTERNAL_STORAGE_HANDLER_WAIT, "log external storage handler spin lock")
 
 LATCH_DEF(PL_DEBUG_RUNTIMEINFO_LOCK, 310, "PL DEBUG RuntimeInfo lock", LATCH_FIFO, 2000, 0, PL_DEBUG_RUNTIME_INFO_WAIT, "PL DEBUG RuntimeInfo lock")
-
-LATCH_DEF(LATCH_END, 311, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "latch end")
+LATCH_DEF(MDS_TABLE_HANDLER_LOCK, 311, "mds table handler lock", LATCH_READ_PREFER, 2000, 0, MDS_TABLE_HANDLER_WAIT, "mds table handler lock")
+LATCH_DEF(LATCH_END, 312, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "latch end")
 #endif
 
 #ifndef OB_LATCH_DEFINE_H_

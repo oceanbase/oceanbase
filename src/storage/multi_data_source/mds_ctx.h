@@ -70,13 +70,18 @@ private:
     int64_t try_times = 0;
     do {
       MdsWLockGuard lg(lock_);
-      operate_all_nodes_succeed = op();
-      if (OB_LIKELY(operate_all_nodes_succeed)) {
-        if (new_state != TwoPhaseCommitState::STATE_END) {
-          check_and_advance_two_phase_commit(state_, new_state);
+      if (state_ == TwoPhaseCommitState::ON_PREPARE && new_state == TwoPhaseCommitState::BEFORE_PREPARE) {// due to force majeure
+        // do nothing, just accept it
+        operate_all_nodes_succeed = true;
+      } else {
+        operate_all_nodes_succeed = op();
+        if (OB_LIKELY(operate_all_nodes_succeed)) {
+          if (new_state != TwoPhaseCommitState::STATE_END) {
+            check_and_advance_two_phase_commit(state_, new_state);
+          }
+        } else if (OB_UNLIKELY((++try_times % 10000) == 0)) {
+          MDS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "do-while retry too much times", K(try_times), K(*this));
         }
-      } else if (OB_UNLIKELY((++try_times % 10000) == 0)) {
-        MDS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "do-while retry too much times", K(try_times), K(*this));
       }
     } while (!operate_all_nodes_succeed && ({PAUSE(); true;}));// keep trying lock until success, while-try is for avoid thread deadlock
   }

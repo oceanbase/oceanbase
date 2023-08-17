@@ -139,7 +139,7 @@ public:
                                   ObFunction<int(const MdsDumpKV&)> &for_each_op,
                                   const int64_t mds_construct_sequence,
                                   const bool for_flush) const override;
-  virtual int dump_status() const override;
+  virtual int operate(const ObFunction<int(MdsTableBase &)> &operation) override;
   int calculate_flush_scn_and_need_dumped_nodes_cnt_(share::SCN need_advanced_rec_scn_lower_limit,
                                                      share::SCN &flush_scn,
                                                      int64_t &need_dumped_nodes_cnt);

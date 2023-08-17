@@ -95,7 +95,7 @@ void TestMdsDumpKV::test_dump_node_convert_and_serialize_and_compare()
 
   ObArenaAllocator allocator;
   ASSERT_EQ(OB_SUCCESS, dump_node2.deserialize(allocator, buffer, buf_len, pos));
-  OB_ASSERT(dump_node2.crc_check_number_ == dump_node2.generate_hash());
+  MDS_ASSERT(dump_node2.crc_check_number_ == dump_node2.generate_hash());
   ASSERT_EQ(dump_node2.generate_hash(), dump_node2.crc_check_number_);
   ASSERT_EQ(dump_node2.crc_check_number_, dump_node.crc_check_number_);
   UserMdsNode<DummyKey, ExampleUserData2> user_mds_node2;
