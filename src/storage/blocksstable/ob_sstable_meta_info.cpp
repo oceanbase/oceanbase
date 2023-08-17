@@ -460,6 +460,7 @@ void ObMacroIdIterator::reset()
   pos_ = 0;
   count_ = 0;
   is_inited_ = false;
+  allocator_.reuse();
 }
 
 int ObMacroIdIterator::get_next_macro_id(MacroBlockId &macro_id)

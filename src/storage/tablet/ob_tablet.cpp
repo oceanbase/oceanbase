@@ -1807,10 +1807,15 @@ void ObTablet::dec_table_store_ref_cnt()
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   if (table_store_addr_.addr_.is_none()) {
     // skip empty shell
-  } else if (OB_FAIL(fetch_table_store(table_store_wrapper))) {
-    LOG_WARN("fail to fetch table store", K(ret));
   } else {
-    table_store_wrapper.get_member()->dec_macro_ref();
+    do {
+      ret = fetch_table_store(table_store_wrapper);
+    } while (ignore_ret(ret));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("fail to fetch table store", K(ret));
+    } else {
+      table_store_wrapper.get_member()->dec_macro_ref();
+    }
   }
 }
 
@@ -1910,6 +1915,9 @@ void ObTablet::dec_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr)
           if (OB_ITER_END == ret) {
             ret = OB_SUCCESS;
             break;
+          } else if (ignore_ret(ret)) {
+            ret = OB_SUCCESS;
+            // retry
           } else {
             LOG_ERROR("fail to get next macro id, macro block leaks", K(ret));
           }
@@ -1919,6 +1927,11 @@ void ObTablet::dec_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr)
       }
     }
   }
+}
+
+bool ObTablet::ignore_ret(const int ret)
+{
+  return OB_ALLOCATE_MEMORY_FAILED == ret || OB_TIMEOUT == ret || OB_DISK_HUNG == ret;
 }
 
 void ObTablet::set_mem_addr()

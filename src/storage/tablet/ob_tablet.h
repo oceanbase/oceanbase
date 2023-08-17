@@ -521,6 +521,7 @@ private:
   static void dec_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr);
   int64_t get_try_cache_size() const;
 private:
+  static bool ignore_ret(const int ret);
   int inner_check_valid(const bool ignore_ha_status = false) const;
   int get_min_medium_snapshot(int64_t &min_medium_snapshot) const;
 

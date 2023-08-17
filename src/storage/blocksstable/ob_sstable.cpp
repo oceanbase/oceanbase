@@ -1114,6 +1114,11 @@ int64_t ObSSTable::get_ref() const
   return cnt;
 }
 
+bool ObSSTable::ignore_ret(const int ret)
+{
+  return OB_ALLOCATE_MEMORY_FAILED == ret || OB_TIMEOUT == ret || OB_DISK_HUNG == ret;
+}
+
 void ObSSTable::dec_macro_ref() const
 {
   int ret = OB_SUCCESS;
@@ -1122,17 +1127,25 @@ void ObSSTable::dec_macro_ref() const
   common::ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "CacheSST"));
   ObSafeArenaAllocator safe_allocator(tmp_allocator);
   ObSSTableMetaHandle meta_handle;
+
   if (OB_FAIL(dec_used_size())) {// ignore ret
     LOG_WARN("fail to dec used size of shared block", K(ret));
   }
-  // ignore ret and decrease ref cnt
-  if (OB_FAIL(get_meta(meta_handle, &safe_allocator))) {
+  do {
+    safe_allocator.reuse();
+    ret = get_meta(meta_handle, &safe_allocator);
+  } while (ignore_ret(ret));
+  if (OB_FAIL(ret)) {
     LOG_ERROR("fail to get sstable meta", K(ret));
   } else if (OB_UNLIKELY(!meta_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("meta handle is invalid", K(ret), K(meta_handle));
   } else {
-    if (OB_FAIL(meta_handle.get_sstable_meta().get_macro_info().get_data_block_iter(iterator))) {
+    do {
+      iterator.reset();
+      ret = meta_handle.get_sstable_meta().get_macro_info().get_data_block_iter(iterator);
+    } while (ignore_ret(ret));
+    if (OB_FAIL(ret)) {
       LOG_ERROR("fail to get data block iterator", K(ret), KPC(this));
     } else {
       while (OB_SUCC(iterator.get_next_macro_id(macro_id))) {
@@ -1143,8 +1156,12 @@ void ObSSTable::dec_macro_ref() const
         }
       }
     }
-    iterator.reset();
-    if (OB_FAIL(meta_handle.get_sstable_meta().get_macro_info().get_other_block_iter(iterator))) { // ignore ret
+
+    do {
+      iterator.reset();
+      ret = meta_handle.get_sstable_meta().get_macro_info().get_other_block_iter(iterator);
+    } while (ignore_ret(ret));
+    if (OB_FAIL(ret)) { // ignore ret
       LOG_ERROR("fail to get other block iterator", K(ret), KPC(this));
     } else {
       while (OB_SUCC(iterator.get_next_macro_id(macro_id))) {

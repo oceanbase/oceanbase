@@ -229,6 +229,7 @@ public:
 
   static const int64_t AARCH64_CP_BUF_ALIGN = 8;
 private:
+  static bool ignore_ret(const int ret);
   int check_valid_for_reading();
   int add_used_size() const;
   int dec_used_size() const;
