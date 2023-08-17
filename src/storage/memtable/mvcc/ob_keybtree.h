@@ -14,6 +14,7 @@
 #define __OB_KEYBTREE_H__
 
 #include "lib/metrics/ob_counter.h"
+#include "lib/container/ob_iarray.h"
 #include "storage/memtable/mvcc/ob_keybtree_deps.h"
 
 namespace oceanbase
@@ -181,7 +182,10 @@ public:
                     const BtreeKey max_key, const bool end_exclude, int64_t version);
   int get_next(BtreeKey &key, BtreeVal &val);
   int estimate_key_count(int64_t top_level, int64_t& child_count, int64_t& key_count);
-  int split_range(int64_t top_level, int64_t branch_count, int64_t part_count, BtreeKey* key_array);
+  int split_range(int64_t top_level,
+                  int64_t btree_node_count,
+                  int64_t range_count,
+                  common::ObIArray<BtreeKey> &key_array);
   int estimate_element_count(int64_t &physical_row_count, int64_t &element_count, const double ratio);
   bool is_reverse_scan() const;
 private:

@@ -8696,10 +8696,12 @@ int ObEstBlockResElement::assign(const ObEstBlockResElement &other)
   int ret = OB_SUCCESS;
   macro_block_count_ = other.macro_block_count_;
   micro_block_count_ = other.micro_block_count_;
+  sstable_row_count_ = other.sstable_row_count_;
+  memtable_row_count_ = other.memtable_row_count_;
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObEstBlockResElement, macro_block_count_, micro_block_count_);
+OB_SERIALIZE_MEMBER(ObEstBlockResElement, macro_block_count_, micro_block_count_, sstable_row_count_, memtable_row_count_);
 
 int ObEstBlockRes::assign(const ObEstBlockRes &other)
 {

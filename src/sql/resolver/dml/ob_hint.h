@@ -90,7 +90,6 @@ struct ObOptParamHint
     DEF(ENABLE_NEWSORT,)                  \
     DEF(USE_PART_SORT_MGB,)               \
     DEF(USE_DEFAULT_OPT_STAT,)            \
-    DEF(USE_FORCE_BLOCK_SAMPLE,)          \
     DEF(ENABLE_IN_RANGE_OPTIMIZATION,)    \
     DEF(XSOLAPI_GENERATE_WITH_CLAUSE,)   \
 

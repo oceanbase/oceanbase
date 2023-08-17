@@ -19,7 +19,6 @@
 #include "lib/container/ob_se_array.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "ob_block_sample_iterator.h"
 #include "storage/ob_col_map.h"
 #include "storage/ob_i_store.h"
 #include "ob_multiple_get_merge.h"
@@ -28,7 +27,6 @@
 #include "ob_multiple_scan_merge.h"
 #include "ob_multiple_skip_scan_merge.h"
 #include "ob_multiple_multi_skip_scan_merge.h"
-#include "ob_row_sample_iterator.h"
 #include "ob_single_merge.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "storage/tx_storage/ob_ls_map.h"
@@ -41,6 +39,10 @@ namespace storage
 {
 class ObTableScanParam;
 class ObTableReadInfo;
+class ObISampleIterator;
+class ObMemtableRowSampleIterator;
+class ObRowSampleIterator;
+class ObBlockSampleIterator;
 
 class ObTableScanIterator : public common::ObNewRowIterator
 {
@@ -74,18 +76,32 @@ private:
   void reuse_row_iters();
   int switch_param_for_iter();
   int open_iter();
-  int can_retire_to_row_sample(bool &retire);  // try to retire to row sample
+
+  // if need retire to row sample, sample_memtable_ranges must not be null
+  int can_retire_to_memtable_row_sample_(bool &retire, ObIArray<blocksstable::ObDatumRange> &sample_memtable_ranges);
+  int get_memtable_sample_ranges(const ObIArray<ObITable *> &memtables,
+                                 ObIArray<blocksstable::ObDatumRange> &sample_memtable_ranges);
+
   // for read uncommitted data, txn possible rollbacked before iterate
   // check txn status after read rows to ensure read result is correct
   int check_txn_status_if_read_uncommitted_();
+  int init_and_open_get_merge_iter_();
+  int init_and_open_scan_merge_iter_();
+  int init_and_open_block_sample_iter_();
+  int init_and_open_row_sample_iter_();
+  int init_and_open_memtable_row_sample_iter_(const ObIArray<blocksstable::ObDatumRange> &scan_ranges);
+
+private:
   bool is_inited_;
   ObSingleMerge *single_merge_;
   ObMultipleGetMerge *get_merge_;
   ObMultipleScanMerge *scan_merge_;
   ObMultipleMultiScanMerge *multi_scan_merge_;
   ObMultipleSkipScanMerge *skip_scan_merge_;
+  ObMemtableRowSampleIterator *memtable_row_sample_iterator_;
   ObRowSampleIterator *row_sample_iterator_;
-  ObBlockSampleIterator *block_sample_iterator_; // TODO: refactor
+  ObBlockSampleIterator *block_sample_iterator_; // TODO: @yuanzhe refactor
+  // ObISampleIterator *i_sample_iter_;
   // we should consider the constructor cost
   ObTableAccessParam main_table_param_;
   ObTableAccessContext main_table_ctx_;
@@ -95,6 +111,7 @@ private:
   ObTableScanParam *scan_param_;
   ObTableScanRange table_scan_range_;
   ObQueryRowIterator *main_iter_;
+  ObSEArray<ObDatumRange, 1> sample_ranges_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableScanIterator);
 };

@@ -24,13 +24,17 @@ namespace common
 
 struct EstimateBlockRes
 {
-  EstimateBlockRes() : part_id_(), macro_block_count_(0), micro_block_count_(0) {}
+  EstimateBlockRes() : part_id_(), macro_block_count_(0), micro_block_count_(0), sstable_row_count_(0), memtable_row_count_(0) {}
   ObObjectID part_id_;
   int64_t macro_block_count_;
   int64_t micro_block_count_;
+  int64_t sstable_row_count_;
+  int64_t memtable_row_count_;
   TO_STRING_KV(K(part_id_),
                K(macro_block_count_),
-               K(micro_block_count_));
+               K(micro_block_count_),
+               K(sstable_row_count_),
+               K(memtable_row_count_));
 };
 
 class ObBasicStatsEstimator : public ObStatsEstimator
@@ -87,12 +91,12 @@ public:
   static int gen_tablet_list(const ObTableStatParam &param,
                              ObSqlString &tablet_list);
 
-  static int do_estimate_block_count(ObExecContext &ctx,
-                                     const uint64_t tenant_id,
-                                     const uint64_t table_id,
-                                     const ObIArray<ObTabletID> &tablet_ids,
-                                     const ObIArray<ObObjectID> &partition_ids,
-                                     ObIArray<EstimateBlockRes> &estimate_res);
+  static int do_estimate_block_count_and_row_count(ObExecContext &ctx,
+                                                   const uint64_t tenant_id,
+                                                   const uint64_t table_id,
+                                                   const ObIArray<ObTabletID> &tablet_ids,
+                                                   const ObIArray<ObObjectID> &partition_ids,
+                                                   ObIArray<EstimateBlockRes> &estimate_res);
 
   static int get_tablet_locations(ObExecContext &ctx,
                                   const uint64_t ref_table_id,
@@ -100,10 +104,10 @@ public:
                                   const ObIArray<ObObjectID> &partition_ids,
                                   ObCandiTabletLocIArray &candi_tablet_locs);
 
-  static int stroage_estimate_block_count(ObExecContext &ctx,
-                                          const ObAddr &addr,
-                                          const obrpc::ObEstBlockArg &arg,
-                                          obrpc::ObEstBlockRes &result);
+  static int stroage_estimate_block_count_and_row_count(ObExecContext &ctx,
+                                                        const ObAddr &addr,
+                                                        const obrpc::ObEstBlockArg &arg,
+                                                        obrpc::ObEstBlockRes &result);
 
   static int get_all_tablet_id_and_object_id(const ObTableStatParam &param,
                                              ObIArray<ObTabletID> &tablet_ids,

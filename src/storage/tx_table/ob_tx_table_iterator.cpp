@@ -471,7 +471,6 @@ int ObTxDataSingleRowGetter::get_next_row_(const ObSSTableArray &sstables, ObTxD
     } else if (OB_FAIL(tx_data_buffers_.push_back(std::move(temp_buffer)))) {
       STORAGE_LOG(WARN, "push element to reserved array should not fail", KR(ret));
     } else {
-      STORAGE_LOG(INFO, "GENGLI total need buffer cnt", K(total_need_buffer_cnt));
       int64_t total_need_buffer_cnt2 = 0;
       for (int64_t idx = 1; idx < total_need_buffer_cnt && OB_SUCC(ret); ++idx) {
         key_datums_[1].set_int(idx);

@@ -2816,8 +2816,8 @@ int ObService::estimate_tablet_block_count(const obrpc::ObEstBlockArg &arg,
   if (!inited_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("service is not inited", K(ret));
-  } else if (OB_FAIL(sql::ObStorageEstimator::estimate_block_count(arg, res))) {
-    LOG_WARN("failed to estimate partition rowcount", K(ret));
+  } else if (OB_FAIL(sql::ObStorageEstimator::estimate_block_count_and_row_count(arg, res))) {
+    LOG_WARN("failed to estimate block count and row count", K(ret));
   }
   return ret;
 }

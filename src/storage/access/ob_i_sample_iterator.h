@@ -25,6 +25,7 @@ class ObISampleIterator : public ObQueryRowIterator
 public:
   explicit ObISampleIterator(const common::SampleInfo &sample_info);
   virtual ~ObISampleIterator();
+  virtual void reuse() = 0;
 protected:
   bool return_this_sample(const int64_t num) const;
 protected:

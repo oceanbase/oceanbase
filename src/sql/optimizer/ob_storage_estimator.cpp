@@ -57,23 +57,23 @@ int ObStorageEstimator::estimate_row_count(const obrpc::ObEstPartArg &arg,
   return ret;
 }
 
-int ObStorageEstimator::estimate_block_count(const obrpc::ObEstBlockArg &arg,
-                                             obrpc::ObEstBlockRes &res)
+int ObStorageEstimator::estimate_block_count_and_row_count(const obrpc::ObEstBlockArg &arg,
+                                                           obrpc::ObEstBlockRes &res)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < arg.tablet_params_arg_.count(); ++i) {
     obrpc::ObEstBlockResElement est_res;
-    if (OB_FAIL(storage_estimate_blockcount(arg.tablet_params_arg_.at(i), est_res))) {
-      LOG_WARN("failed to estimate tablet block count", K(ret));
+    if (OB_FAIL(storage_estimate_block_count_and_row_count(arg.tablet_params_arg_.at(i), est_res))) {
+      LOG_WARN("failed to estimate tablet block count and row count", K(ret));
     } else if (OB_FAIL(res.tablet_params_res_.push_back(est_res))) {
       LOG_WARN("failed to push back result", K(ret));
     } else {
-      LOG_TRACE("[OPT EST]: block count stat", K(est_res), K(i), "param", arg.tablet_params_arg_.at(i));
+      LOG_TRACE("[OPT EST]: block count and row count stat", K(est_res), K(i), "param", arg.tablet_params_arg_.at(i));
     }
   }
 #if !defined(NDEBUG)
   if (OB_SUCC(ret)) {
-    LOG_INFO("[OPT EST] blockcount estimation result", K(arg), K(res));
+    LOG_INFO("[OPT EST] block count and row count estimation result", K(arg), K(res));
   }
 #endif
   return ret;
@@ -150,17 +150,21 @@ int ObStorageEstimator::storage_estimate_partition_batch_rowcount(
   return ret;
 }
 
-int ObStorageEstimator::storage_estimate_blockcount(
+int ObStorageEstimator::storage_estimate_block_count_and_row_count(
     const obrpc::ObEstBlockArgElement &arg,
     obrpc::ObEstBlockResElement &res)
 {
   int ret = OB_SUCCESS;
   int64_t macro_block_count = 0;
   int64_t micro_block_count = 0;
+  int64_t sstable_row_count = 0;
+  int64_t memtable_row_count = 0;
 
   if (!arg.is_valid()) {
     res.macro_block_count_ = macro_block_count;
     res.micro_block_count_ = micro_block_count;
+    res.sstable_row_count_ = sstable_row_count;
+    res.memtable_row_count_ = memtable_row_count;
   } else {
     const uint64_t tenant_id = arg.tenant_id_;
     MTL_SWITCH(tenant_id) {
@@ -168,16 +172,20 @@ int ObStorageEstimator::storage_estimate_blockcount(
       if (OB_ISNULL(access_service = MTL(ObAccessService *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(access_service));
-      } else if (OB_FAIL(access_service->estimate_block_count(arg.ls_id_,
-                                                              arg.tablet_id_,
-                                                              macro_block_count,
-                                                              micro_block_count))) {
-        LOG_WARN("OPT:[STORAGE EST BLOCK COUNT FAILED]", "storage_ret", ret);
+      } else if (OB_FAIL(access_service->estimate_block_count_and_row_count(arg.ls_id_,
+                                                                            arg.tablet_id_,
+                                                                            macro_block_count,
+                                                                            micro_block_count,
+                                                                            sstable_row_count,
+                                                                            memtable_row_count))) {
+        LOG_WARN("OPT:[STORAGE EST BLOCK COUNT AND ROW COUNT FAILED]", "storage_ret", ret);
       } else {
-        LOG_TRACE("storage estimate row count result", K(macro_block_count),
-                K(micro_block_count), K(ret));
+        LOG_TRACE("storage estimate block count and row count result", K(macro_block_count),
+                K(micro_block_count), K(sstable_row_count), K(memtable_row_count), K(ret));
         res.macro_block_count_ = macro_block_count;
         res.micro_block_count_ = micro_block_count;
+        res.sstable_row_count_ = sstable_row_count;
+        res.memtable_row_count_ = memtable_row_count;
       }
     }
   }

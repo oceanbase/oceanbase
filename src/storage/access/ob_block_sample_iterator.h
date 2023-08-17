@@ -149,7 +149,7 @@ class ObBlockSampleIterator : public ObISampleIterator
 public:
   explicit ObBlockSampleIterator(const common::SampleInfo &sample_info);
   virtual ~ObBlockSampleIterator();
-  void reuse();
+  virtual void reuse();
   virtual void reset() override;
   int open(ObMultipleScanMerge &scan_merge,
            ObTableAccessContext &access_ctx,

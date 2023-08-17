@@ -1025,11 +1025,13 @@ int ObAccessService::estimate_row_count(
   return ret;
 }
 
-int ObAccessService::estimate_block_count(
+int ObAccessService::estimate_block_count_and_row_count(
     const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,
     int64_t &macro_block_count,
-    int64_t &micro_block_count) const
+    int64_t &micro_block_count,
+    int64_t &sstable_row_count,
+    int64_t &memtable_row_count) const
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -1045,9 +1047,9 @@ int ObAccessService::estimate_block_count(
   } else if (nullptr == (ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is unexpected null", K(ret));
-  } else if (OB_FAIL(ls->get_tablet_svr()->estimate_block_count(
-              tablet_id, macro_block_count, micro_block_count))) {
-    LOG_WARN("failed to estimate block count", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(ls->get_tablet_svr()->estimate_block_count_and_row_count(
+              tablet_id, macro_block_count, micro_block_count, sstable_row_count, memtable_row_count))) {
+    LOG_WARN("failed to estimate block count and row count", K(ret), K(ls_id), K(tablet_id));
   }
   return ret;
 }

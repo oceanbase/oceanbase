@@ -1642,12 +1642,6 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
           //block(row) sample scan do not support DAS TSC
           ap->use_das_ = false;
         }
-        bool is_exists_opt = false;
-        if (OB_FAIL(OPT_CTX.get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::USE_FORCE_BLOCK_SAMPLE,
-                                                                             ap->sample_info_.force_block_,
-                                                                             is_exists_opt))) {
-          LOG_WARN("fail to check use force block sample", K(ret));
-        }
       } else if (get_plan()->get_optimizer_context().is_online_ddl() &&
                  get_plan()->get_optimizer_context().get_root_stmt()->is_insert_stmt()) {
         // online ddl plan use sample table scan

@@ -478,13 +478,6 @@ int ObDynamicSampling::do_estimate_table_rowcount(const ObDSTableParam &param, b
     LOG_WARN("failed to calc sample block ratio", K(ret));
   } else if (OB_FAIL(add_block_info_for_stat_items())) {
     LOG_WARN("failed to add block info for stat items", K(ret));
-  } else if (macro_block_num_ <= 1 &&
-             sample_block_ratio_ == 100.0 &&
-             param.partition_infos_.count() <= 1 &&
-             param.max_ds_timeout_ <= param.est_rowcount_ *  2) {
-    //do nothing, rows in memtable is too many, don't dynamic sampling
-    LOG_TRACE("just skip dynamic sampling, because the rows in memtable is too many", K(param),
-                                                                               K(macro_block_num_));
   } else if (OB_FAIL(estimte_rowcount(param.max_ds_timeout_, param.degree_, throw_ds_error))) {
     LOG_WARN("failed to estimate rowcount", K(ret));
   }
@@ -688,9 +681,6 @@ int ObDynamicSampling::add_basic_hint_info(ObSqlString &basic_hint_str,
   //use defualt stat
   } else if (OB_FAIL(basic_hint_str.append(" OPT_PARAM(\'USE_DEFAULT_OPT_STAT\',\'TRUE\') "))) {
     LOG_WARN("failed to append", K(ret));
-  //use force block sample
-  } else if (OB_FAIL(basic_hint_str.append(" OPT_PARAM(\'USE_FORCE_BLOCK_SAMPLE\',\'TRUE\') "))) {
-    LOG_WARN("failed to append", K(ret));
   } else if (OB_FAIL(basic_hint_str.append("*/"))) {//hint end
     LOG_WARN("failed to append", K(ret));
   } else {
@@ -792,24 +782,36 @@ int ObDynamicSampling::calc_table_sample_block_ratio(const ObDSTableParam &param
   } else if (OB_UNLIKELY((sample_micro_cnt = get_dynamic_sampling_micro_block_num(param)) < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(param));
-  } else if (OB_FAIL(estimate_table_micro_block_count(param))) {
-    LOG_WARN("failed to estimate table micro block count", K(ret));
-  } else if (macro_block_num_ <= 1 ||
-             sample_micro_cnt >= micro_block_num_ ||
-             (param.partition_infos_.count() <= 1 && param.est_rowcount_ < MAX_FULL_SCAN_ROW_COUNT)) {
-    sample_block_ratio_ = 100.0;
-    seed_ = param.degree_ > 1 ? 0 : 1;
+  } else if (OB_FAIL(estimate_table_block_count_and_row_count(param))) {
+    LOG_WARN("failed to estimate table block count and row count", K(ret));
   } else {
-    sample_block_ratio_ = 100.0 * sample_micro_cnt / micro_block_num_;
-    if (param.degree_ > 1) {//adjust sample ratio according to the degree.
+    //1.retire to memtable sample
+    if (sstable_row_count_ < memtable_row_count_) {
+      double sample_row_cnt = MAGIC_MAX_AUTO_SAMPLE_SIZE * (1.0 * sample_micro_cnt / OB_DS_BASIC_SAMPLE_MICRO_CNT);
+      if (memtable_row_count_ < sample_row_cnt) {
+        sample_block_ratio_ = 100.0;
+      } else {
+        sample_block_ratio_ = 100.0 * sample_row_cnt / memtable_row_count_;
+      }
+    } else {
+    //2.use the block sample
+      if (sample_micro_cnt >= micro_block_num_) {
+        sample_block_ratio_ = 100.0;
+      } else {
+        sample_block_ratio_ = 100.0 * sample_micro_cnt / micro_block_num_;
+      }
+    }
+    //3.try adjust sample block ratio according to the degree
+    if (param.degree_ > 1 && sample_block_ratio_ < 100.0) {//adjust sample ratio according to the degree.
       sample_block_ratio_ = sample_block_ratio_ * param.degree_;
       sample_block_ratio_ = sample_block_ratio_ < 100.0 ? sample_block_ratio_ : 100.0;
     }
+    //4.adjsut the seed.
     seed_ = (param.degree_ > 1 || param.partition_infos_.count() > 1) ? 0 : 1;
   }
   LOG_TRACE("succeed to calc table sample block ratio", K(param), K(seed_), K(sample_micro_cnt),
                                                         K(sample_block_ratio_), K(micro_block_num_),
-                                                        K(macro_block_num_));
+                                                        K(sstable_row_count_), K(memtable_row_count_));
   return ret;
 }
 
@@ -841,7 +843,7 @@ int64_t ObDynamicSampling::get_dynamic_sampling_micro_block_num(const ObDSTableP
   return sample_micro_cnt;
 }
 
-int ObDynamicSampling::estimate_table_micro_block_count(const ObDSTableParam &param)
+int ObDynamicSampling::estimate_table_block_count_and_row_count(const ObDSTableParam &param)
 {
   int ret = OB_SUCCESS;
   macro_block_num_ = 0;
@@ -854,21 +856,24 @@ int ObDynamicSampling::estimate_table_micro_block_count(const ObDSTableParam &pa
     LOG_WARN("get unexpected null", K(ret), K(ctx_->get_exec_ctx()), K(ctx_->get_session_info()));
   } else if (OB_FAIL(get_all_tablet_id_and_object_id(param, tablet_ids, partition_ids))) {
     LOG_WARN("failed to get all tablet id and object id", K(ret));
-  } else if (OB_FAIL(ObBasicStatsEstimator::do_estimate_block_count(*ctx_->get_exec_ctx(),
-                                                                    ctx_->get_session_info()->get_effective_tenant_id(),
-                                                                    param.table_id_,
-                                                                    tablet_ids,
-                                                                    partition_ids,
-                                                                    estimate_result))) {
-    LOG_WARN("failed to do estimate block count", K(ret));
+  } else if (OB_FAIL(ObBasicStatsEstimator::do_estimate_block_count_and_row_count(*ctx_->get_exec_ctx(),
+                                                                                  ctx_->get_session_info()->get_effective_tenant_id(),
+                                                                                  param.table_id_,
+                                                                                  tablet_ids,
+                                                                                  partition_ids,
+                                                                                  estimate_result))) {
+    LOG_WARN("failed to do estimate block count and row count", K(ret));
   } else {
     for (int64_t i = 0; i < estimate_result.count(); ++i) {
       macro_block_num_ += estimate_result.at(i).macro_block_count_;
       micro_block_num_ += estimate_result.at(i).micro_block_count_;
+      sstable_row_count_ += estimate_result.at(i).sstable_row_count_;
+      memtable_row_count_ += estimate_result.at(i).memtable_row_count_;
     }
     LOG_TRACE("Succeed to estimate micro block count", K(micro_block_num_), K(macro_block_num_),
                                                        K(tablet_ids), K(partition_ids),
-                                                       K(estimate_result), K(param));
+                                                       K(estimate_result), K(param),
+                                                       K(sstable_row_count_), K(memtable_row_count_));
   }
   return ret;
 }
@@ -1306,7 +1311,6 @@ int ObDynamicSamplingUtils::get_ds_table_param(ObOptimizerContext &ctx,
       ds_table_param.tenant_id_ = ctx.get_session_info()->get_effective_tenant_id();
       ds_table_param.table_id_ = table_meta->get_ref_table_id();
       ds_table_param.ds_level_ = ds_level;
-      ds_table_param.est_rowcount_ = table_meta->get_rows();
       ds_table_param.sample_block_cnt_ = sample_block_cnt;
       ds_table_param.max_ds_timeout_ = get_dynamic_sampling_max_timeout(ctx);
       ds_table_param.is_virtual_table_ = is_virtual_table(table_meta->get_ref_table_id()) &&

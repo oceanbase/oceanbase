@@ -189,11 +189,13 @@ public:
       ObIArray<ObEstRowCountRecord> &est_records,
       int64_t &logical_row_count,
       int64_t &physical_row_count) const;
-  int estimate_block_count(
+  int estimate_block_count_and_row_count(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       int64_t &macro_block_count,
-      int64_t &micro_block_count) const;
+      int64_t &micro_block_count,
+      int64_t &sstable_row_count,
+      int64_t &memtable_row_count) const;
 protected:
   int check_tenant_out_of_memstore_limit_(bool &is_out_of_mem);
 

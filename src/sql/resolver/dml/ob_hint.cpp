@@ -729,11 +729,6 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
     }
-    case USE_FORCE_BLOCK_SAMPLE: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
-      break;
-    }
     case ENABLE_IN_RANGE_OPTIMIZATION: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));

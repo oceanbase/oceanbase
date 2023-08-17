@@ -45,6 +45,7 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tablet/ob_tablet_memtable_mgr.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
+#include "storage/access/ob_row_sample_iterator.h"
 
 #include "storage/concurrency_control/ob_trans_stat_row.h"
 
@@ -2161,8 +2162,6 @@ bool ObMemtable::is_frozen_memtable() const
 int ObMemtable::estimate_phy_size(const ObStoreRowkey* start_key, const ObStoreRowkey* end_key, int64_t& total_bytes, int64_t& total_rows)
 {
   int ret = OB_SUCCESS;
-  int64_t level = 0;
-  int64_t branch_count = 0;
   total_bytes = 0;
   total_rows = 0;
   ObMemtableKey start_mtk;
@@ -2175,7 +2174,7 @@ int ObMemtable::estimate_phy_size(const ObStoreRowkey* start_key, const ObStoreR
   }
   if (OB_FAIL(start_mtk.encode(start_key)) || OB_FAIL(end_mtk.encode(end_key))) {
     TRANS_LOG(WARN, "encode key fail", K(ret), K_(key));
-  } else if (OB_FAIL(query_engine_.estimate_size(&start_mtk, &end_mtk, level, branch_count, total_bytes, total_rows))) {
+  } else if (OB_FAIL(query_engine_.estimate_size(&start_mtk, &end_mtk, total_bytes, total_rows))) {
     TRANS_LOG(WARN, "estimate row count fail", K(ret), K_(key));
   }
   return ret;
@@ -2199,6 +2198,122 @@ int ObMemtable::get_split_ranges(const ObStoreRowkey* start_key, const ObStoreRo
     TRANS_LOG(WARN, "encode key fail", K(ret), K_(key));
   } else if (OB_FAIL(query_engine_.split_range(&start_mtk, &end_mtk, part_cnt, range_array))) {
     TRANS_LOG(WARN, "estimate row count fail", K(ret), K_(key));
+  }
+  return ret;
+}
+
+// The logic for sampling in the memtable is as follows, as shown in the diagram: We set a constant variable
+// SAMPLE_MEMTABLE_RANGE_COUNT, which represents the number of intervals to be read during sampling. Currently, it is
+// set to 10. Then, based on the sampling rate, we calculate the total number of ranges to be divided, such that the
+// ratio of the data within the chosen ranges to the total data is equal to the sampling rate. In the diagram,
+// let's assume a sampling rate of 1%. The entire memtable would be divided into 1000 ranges, and 10 ranges would
+// be evenly selected for sampling, including the first and last ranges.
+//
+// +-------+------------+-------+------------+-------+-----------+-------+-----------+-------+
+// |       |            |       |            |       |           |       |           |       |
+// |chosen |            |chosen |            |chosen |           |chosen |           |chosen |
+// |range 1| .........  |range 3|  ......... |range 5| ......... |range 7| ......... |range10|
+// | idx:0 |            |idx:299|            |idx:499|           |idx:699|           |idx:999|
+// |       |            |       |            |       |           |       |           |       |
+// +-------+------------+-------+------------+-------+-----------+-------+-----------+-------+
+// |                                                                                         |
+// +<------------------------      all splited ranges in memtable    ----------------------->+
+// |                                                                                         |
+// +                                                                                         +
+int ObMemtable::split_ranges_for_sample(const blocksstable::ObDatumRange &table_scan_range,
+                                        const double sample_rate_percentage,
+                                        ObIAllocator &allocator,
+                                        ObIArray<blocksstable::ObDatumRange> &sample_memtable_ranges)
+{
+  int ret = OB_SUCCESS;
+  if (sample_rate_percentage == 0 || sample_rate_percentage >= 100) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "invalid sample_rate_percentage", KR(ret), K(sample_rate_percentage));
+  } else {
+    // The logic here for calculating the number of split ranges based on the sampling rate might be confusing.
+    // For example, assuming our sampling rate is 1%, the variable "sample_rate_percentage" would be 1. At the same
+    // time, if we have a total number of intervals to be divided, denoted as "total_split_range_count," with an equal
+    // number of rowkeys within each range, we can obtain the equation:
+    //
+    // SAMPLE_MEMTABLE_RANGE_COUNT / total_split_range_count = sample_rate_percentage / 100.
+    //
+    int total_split_range_count =
+        ObMemtableRowSampleIterator::SAMPLE_MEMTABLE_RANGE_COUNT * 100 / sample_rate_percentage;
+    if (total_split_range_count > ObQueryEngine::MAX_RANGE_SPLIT_COUNT) {
+      total_split_range_count = ObQueryEngine::MAX_RANGE_SPLIT_COUNT;
+    }
+
+    // loop to split range
+    bool split_succ = false;
+    while (!split_succ && total_split_range_count > ObMemtableRowSampleIterator::SAMPLE_MEMTABLE_RANGE_COUNT) {
+      int tmp_ret = OB_SUCCESS;
+      sample_memtable_ranges.reuse();
+      if (OB_TMP_FAIL(try_split_range_for_sample_(table_scan_range.get_start_key().get_store_rowkey(),
+                                                  table_scan_range.get_end_key().get_store_rowkey(),
+                                                  total_split_range_count,
+                                                  allocator,
+                                                  sample_memtable_ranges))) {
+        total_split_range_count = total_split_range_count / 10;
+        TRANS_LOG(WARN,
+                  "try split range for sampling failed, shrink split range count and retry",
+                  KR(tmp_ret),
+                  K(total_split_range_count));
+
+      } else {
+        TRANS_LOG(INFO, "split range finish", K(total_split_range_count), K(sample_memtable_ranges));
+        split_succ = true;
+      }
+    }
+
+    // set ret code to ENTRY_NOT_EXIST if split failed
+    if (!split_succ) {
+      ret = OB_ENTRY_NOT_EXIST;
+    }
+  }
+  return ret;
+}
+
+int64_t ObMemtable::try_split_range_for_sample_(const ObStoreRowkey &start_key,
+                                                const ObStoreRowkey &end_key,
+                                                const int64_t range_count,
+                                                ObIAllocator &allocator,
+                                                ObIArray<blocksstable::ObDatumRange> &sample_memtable_ranges)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObStoreRange, 64> store_range_array;
+  if (OB_FAIL(get_split_ranges(&start_key, &end_key, range_count, store_range_array))) {
+    TRANS_LOG(WARN, "try split ranges for sample failed", KR(ret));
+  } else if (store_range_array.count() != range_count) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "store array count is not equal with range_count", KR(ret), K(range_count), KPC(this));
+  } else {
+    const int64_t range_count_each_chosen =
+        range_count / (ObMemtableRowSampleIterator::SAMPLE_MEMTABLE_RANGE_COUNT - 1);
+
+    // chose some ranges and push back to sample_memtable_ranges
+    int64_t chose_range_idx = 0;
+    bool generate_datum_range_done = false;
+    while (OB_SUCC(ret) && !generate_datum_range_done) {
+      if (chose_range_idx >= range_count - 1 ||
+          sample_memtable_ranges.count() == ObMemtableRowSampleIterator::SAMPLE_MEMTABLE_RANGE_COUNT - 1) {
+        chose_range_idx = range_count - 1;
+        generate_datum_range_done = true;
+      }
+
+      ObDatumRange datum_range;
+      if (OB_FAIL(datum_range.from_range(store_range_array.at(chose_range_idx), allocator))) {
+        STORAGE_LOG(WARN,
+                    "Failed to transfer store range to datum range",
+                    K(ret),
+                    K(chose_range_idx),
+                    K(store_range_array.at(chose_range_idx)));
+      } else if (OB_FAIL(sample_memtable_ranges.push_back(datum_range))) {
+        STORAGE_LOG(WARN, "Failed to push back merge range to array", K(ret), K(datum_range));
+      } else {
+        // chose the next store range
+        chose_range_idx += range_count_each_chosen;
+      }
+    }
   }
   return ret;
 }

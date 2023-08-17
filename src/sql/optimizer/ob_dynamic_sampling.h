@@ -49,7 +49,6 @@ struct ObDSTableParam
     alias_name_(),
     is_virtual_table_(false),
     ds_level_(ObDynamicSamplingLevel::NO_DYNAMIC_SAMPLING),
-    est_rowcount_(0),
     sample_block_cnt_(0),
     max_ds_timeout_(0),
     degree_(1),
@@ -68,7 +67,6 @@ struct ObDSTableParam
   ObString alias_name_;
   bool is_virtual_table_;
   int64_t ds_level_;
-  int64_t est_rowcount_;
   int64_t sample_block_cnt_;
   int64_t max_ds_timeout_;
   int64_t degree_;
@@ -82,7 +80,6 @@ struct ObDSTableParam
                K(alias_name_),
                K(is_virtual_table_),
                K(ds_level_),
-               K(est_rowcount_),
                K(max_ds_timeout_),
                K(degree_),
                K(sample_block_cnt_),
@@ -217,6 +214,8 @@ public:
     partition_list_(),
     macro_block_num_(0),
     micro_block_num_(0),
+    sstable_row_count_(0),
+    memtable_row_count_(0),
     sample_block_ratio_(0.0),
     seed_(0),
     sample_block_(),
@@ -271,7 +270,7 @@ private:
   int estimte_rowcount(int64_t max_ds_timeout, int64_t degree, bool &throw_ds_error);
   int pack(ObSqlString &raw_sql_str);
   int gen_select_filed(ObSqlString &select_fields);
-  int estimate_table_micro_block_count(const ObDSTableParam &param);
+  int estimate_table_block_count_and_row_count(const ObDSTableParam &param);
   int get_all_tablet_id_and_object_id(const ObDSTableParam &param,
                                       ObIArray<ObTabletID> &tablet_ids,
                                       ObIArray<ObObjectID> &partition_ids);
@@ -328,6 +327,8 @@ private:
   ObString partition_list_;
   int64_t macro_block_num_;
   int64_t micro_block_num_;
+  int64_t sstable_row_count_;
+  int64_t memtable_row_count_;
   double sample_block_ratio_;
   int64_t seed_;
   ObString sample_block_;

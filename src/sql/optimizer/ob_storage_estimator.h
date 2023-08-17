@@ -41,8 +41,8 @@ public:
   static int estimate_row_count(const obrpc::ObEstPartArg &arg,
                                 obrpc::ObEstPartRes &res);
 
-  static int estimate_block_count(const obrpc::ObEstBlockArg &arg,
-                                  obrpc::ObEstBlockRes &res);
+  static int estimate_block_count_and_row_count(const obrpc::ObEstBlockArg &arg,
+                                                obrpc::ObEstBlockRes &res);
 private:
 
   // compute memtable whole range row counts
@@ -74,11 +74,11 @@ private:
       double &physical_row_count);
 
   /**
-  * @brief storage_estimate_blockcount
+  * @brief storage_estimate_block_count_and_row_count
   * estimate the blockcount of tablet by using storage interface
   */
-  static int storage_estimate_blockcount(const obrpc::ObEstBlockArgElement &arg,
-                                         obrpc::ObEstBlockResElement &res);
+  static int storage_estimate_block_count_and_row_count(const obrpc::ObEstBlockArgElement &arg,
+                                                        obrpc::ObEstBlockResElement &res);
 };
 
 }

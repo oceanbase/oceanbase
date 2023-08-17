@@ -412,11 +412,12 @@ ob_set_subtarget(ob_storage access
   access/ob_i_sample_iterator.cpp
   access/ob_block_sample_iterator.cpp
   access/ob_row_sample_iterator.cpp
+  access/ob_rows_info.cpp
+  access/ob_sample_iter_helper.cpp
   access/ob_table_read_info.cpp
   access/ob_table_scan_range.cpp
   access/ob_table_access_param.cpp
   access/ob_table_access_context.cpp
-  access/ob_rows_info.cpp
   access/ob_fuse_row_cache_fetcher.cpp
   access/ob_dml_param.cpp
 )

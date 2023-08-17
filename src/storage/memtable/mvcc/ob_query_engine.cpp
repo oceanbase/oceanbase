@@ -547,112 +547,72 @@ int ObQueryEngine::init_raw_iter_for_estimate(Iterator<BtreeRawIterator>*& iter,
 }
 
 int ObQueryEngine::estimate_size(const ObMemtableKey *start_key,
-                  const ObMemtableKey *end_key,
-                  int64_t& level,
-                  int64_t& branch_count,
-                  int64_t& total_bytes,
-                  int64_t& total_rows)
+                                 const ObMemtableKey *end_key,
+                                 int64_t &total_bytes,
+                                 int64_t &total_rows)
 {
   int ret = OB_SUCCESS;
-  Iterator<BtreeRawIterator> *iter = nullptr;
-  branch_count = 0;
-  for(level = 0; branch_count < ESTIMATE_CHILD_COUNT_THRESHOLD && OB_SUCC(ret); ) {
-    level++;
-    if (OB_FAIL(init_raw_iter_for_estimate(iter, start_key, end_key))) {
-      TRANS_LOG(WARN, "init raw iter fail", K(ret), K(*start_key), K(*end_key));
-    } else if (OB_ISNULL(iter)) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(iter->get_read_handle().estimate_key_count(level, branch_count, total_rows))) {
-      if (OB_ENTRY_NOT_EXIST != ret) {
-        TRANS_LOG(WARN, "estimate key count fail", K(ret), K(*start_key), K(*end_key));
-      }
+  int64_t unused_top_level = 0;
+  int64_t unused_btree_node_count = 0;
+  if (OB_FAIL(inner_loop_find_level_(
+          start_key, end_key, ESTIMATE_CHILD_COUNT_THRESHOLD, unused_top_level, unused_btree_node_count, total_rows)))
+  {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      total_bytes = 0;
+      total_rows = 0;
+    } else {
+      TRANS_LOG(WARN, "esitmate size failed", KR(ret), KPC(start_key), KPC(end_key));
     }
-    if (OB_NOT_NULL(iter)) {
-      iter->reset();
-      raw_iter_alloc_.free(iter);
-      iter = NULL;
-    }
-  }
-  if (OB_SUCC(ret)) {
+  } else {
     int64_t per_row_size = 100;
     total_bytes = total_rows * per_row_size;
-  } else if (OB_ENTRY_NOT_EXIST == ret) {
-    ret = OB_SUCCESS;
-    total_bytes = 0;
-    total_rows = 0;
   }
   return ret;
 }
 
 int ObQueryEngine::split_range(const ObMemtableKey *start_key,
                                const ObMemtableKey *end_key,
-                               int64_t part_count,
+                               int64_t range_count,
                                ObIArray<ObStoreRange> &range_array)
 {
   int ret = OB_SUCCESS;
   Iterator<BtreeRawIterator> *iter = nullptr;
-  int64_t level = 0;
-  int64_t branch_count = 0;
-  int64_t total_bytes = 0;
-  int64_t total_rows = 0;
+  int64_t top_level = 0;
+  int64_t btree_node_count = 0;
 
-  if (part_count < 1 || part_count > MAX_RANGE_SPLIT_COUNT) {
-    TRANS_LOG(WARN, "part count should be greater than 1 if you try to split range", K(part_count));
+  if (range_count < 1 || range_count > MAX_RANGE_SPLIT_COUNT) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "range count should be greater than 1 if you try to split range", KR(ret), K(range_count));
   } else {
-    HEAP_VAR(ObStoreRowkeyWrapper[MAX_RANGE_SPLIT_COUNT], key_array) {
-      if (OB_FAIL(estimate_size(start_key, end_key, level, branch_count, total_bytes, total_rows)) && OB_ENTRY_NOT_EXIST != ret) {
-        TRANS_LOG(WARN, "estimate size fail", K(ret), K(*start_key), K(*end_key));
-      } else if (OB_ENTRY_NOT_EXIST == ret) {
-        TRANS_LOG(WARN, "range too small, not enough rows ro split", K(ret), K(*start_key), K(*end_key), K(part_count));
-      } else if (branch_count < part_count) {
-        ret = OB_ENTRY_NOT_EXIST;
-        TRANS_LOG(WARN, "branch fan out less than part count", K(branch_count), K(part_count));
-      } else if (OB_FAIL(init_raw_iter_for_estimate(iter, start_key, end_key))) {
-        TRANS_LOG(WARN, "init raw iter fail", K(ret), K(*start_key), K(*end_key));
-      } else if (NULL == iter) {
-        ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(iter->get_read_handle().split_range(level, branch_count, part_count, key_array))) {
-        TRANS_LOG(WARN, "split range fail", K(ret), K(*start_key), K(*end_key), K(part_count), K(level), K(branch_count), K(part_count));
-      } else {
-        ObStoreRange merge_range;
-        for (int64_t i = 0; OB_SUCC(ret) && i < part_count; i++) {
-          const ObStoreRowkey *rowkey = nullptr;
-          // start key
-          if (0 == i) {
-            if (OB_ISNULL(rowkey = start_key->get_rowkey())) {
-              ret = OB_ERR_UNEXPECTED;
-              TRANS_LOG(WARN, "Unexcepted null store rowkey", K(ret), KPC(start_key));
-            } else {
-              merge_range.set_start_key(*rowkey);
-            }
-          } else {
-            merge_range.set_start_key(*key_array[i - 1].get_rowkey());
-          }
-
-          // endkey
-          if (OB_FAIL(ret)) {
-          } else if (i == part_count - 1) {
-            if (OB_ISNULL(rowkey = end_key->get_rowkey())) {
-              ret = OB_ERR_UNEXPECTED;
-              TRANS_LOG(WARN, "Unexcepted null store rowkey", K(ret), KPC(start_key));
-            } else {
-              merge_range.set_end_key(*rowkey);
-            }
-          } else if (OB_ISNULL(rowkey = key_array[i].get_rowkey())) {
-            ret = OB_ERR_UNEXPECTED;
-            TRANS_LOG(WARN, "Unexpected null store rowkey", K(ret), K(i));
-          } else {
-            merge_range.set_end_key(*rowkey);
-          }
-          if (OB_SUCC(ret)) {
-            merge_range.set_left_open();
-            merge_range.set_right_closed();
-            if (OB_FAIL(range_array.push_back(merge_range))) {
-              TRANS_LOG(WARN, "Failed to push back the merge range to array", K(ret), K(merge_range));
-            }
-          }
-        }
-      }
+    // Here we can not use ESTIMATE_CHILD_COUNT_THRESHOLD to init SEArray due to the stack size limit
+    ObSEArray<ObStoreRowkeyWrapper, ESTIMATE_CHILD_COUNT_THRESHOLD/2> key_array;
+    if (OB_FAIL(find_split_range_level_(start_key, end_key, range_count, top_level, btree_node_count)) &&
+        OB_ENTRY_NOT_EXIST != ret) {
+      TRANS_LOG(WARN, "estimate size fail", K(ret), K(*start_key), K(*end_key));
+    } else if (OB_ENTRY_NOT_EXIST == ret) {
+      TRANS_LOG(WARN, "range too small, not enough rows ro split", K(ret), K(*start_key), K(*end_key), K(range_count));
+    } else if (btree_node_count < range_count) {
+      ret = OB_ENTRY_NOT_EXIST;
+      TRANS_LOG(WARN, "branch fan out less than range count", K(btree_node_count), K(range_count));
+    } else if (OB_FAIL(init_raw_iter_for_estimate(iter, start_key, end_key))) {
+      TRANS_LOG(WARN, "init raw iter fail", K(ret), K(*start_key), K(*end_key));
+    } else if (NULL == iter) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(iter->get_read_handle().split_range(top_level, btree_node_count, range_count, key_array))) {
+      TRANS_LOG(WARN,
+                "split range fail",
+                K(ret),
+                K(*start_key),
+                K(*end_key),
+                K(range_count),
+                K(top_level),
+                K(btree_node_count),
+                K(range_count));
+    } else if (OB_FAIL(convert_keys_to_store_ranges_(start_key, end_key, range_count, key_array, range_array))) {
+      TRANS_LOG(WARN, "convert keys to store ranges failed", KR(ret), K(range_count), K(key_array));
+    } else {
+      // split range succeed
     }
 
     if (OB_NOT_NULL(iter)) {
@@ -664,7 +624,103 @@ int ObQueryEngine::split_range(const ObMemtableKey *start_key,
   return ret;
 }
 
+int ObQueryEngine::find_split_range_level_(const ObMemtableKey *start_key,
+                                           const ObMemtableKey *end_key,
+                                           const int64_t range_count,
+                                           int64_t &top_level,
+                                           int64_t &btree_node_count)
+{
+  int64_t unused_total_rows = 0;
+  const int64_t node_threshold = MAX(ESTIMATE_CHILD_COUNT_THRESHOLD, range_count);
+  return inner_loop_find_level_(start_key, end_key, node_threshold, top_level, btree_node_count, unused_total_rows);
+}
 
+int ObQueryEngine::inner_loop_find_level_(const ObMemtableKey *start_key,
+                                           const ObMemtableKey *end_key,
+                                           const int64_t level_node_threshold,
+                                           int64_t &top_level,
+                                           int64_t &btree_node_count,
+                                           int64_t &total_rows)
+{
+  int ret = OB_SUCCESS;
+  Iterator<BtreeRawIterator> *iter = nullptr;
+
+  // directly loop on the third level because in theory, the second level of BTree can have a maximum of 15 * 15 = 225
+  // nodes, which does not meet the THRESHOLD requirement.
+  btree_node_count = 0;
+  top_level = 2;
+  while (OB_SUCC(ret) && btree_node_count < level_node_threshold) {
+    top_level++;
+    btree_node_count = 0;
+    if (OB_FAIL(init_raw_iter_for_estimate(iter, start_key, end_key))) {
+      TRANS_LOG(WARN, "init raw iter fail", K(ret), K(*start_key), K(*end_key));
+    } else if (OB_ISNULL(iter)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(iter->get_read_handle().estimate_key_count(top_level, btree_node_count, total_rows))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        TRANS_LOG(WARN, "find split range level failed", K(ret), K(*start_key), K(*end_key));
+      }
+    }
+    if (OB_NOT_NULL(iter)) {
+      iter->reset();
+      raw_iter_alloc_.free(iter);
+      iter = NULL;
+    }
+  }
+
+  STORAGE_LOG(INFO, "finish find split level", KR(ret), K(top_level), K(btree_node_count), K(total_rows));
+
+  return ret;
+}
+
+int ObQueryEngine::convert_keys_to_store_ranges_(const ObMemtableKey *start_key,
+                                                 const ObMemtableKey *end_key,
+                                                 const int64_t range_count,
+                                                 const common::ObIArray<ObStoreRowkeyWrapper> &key_array,
+                                                 ObIArray<ObStoreRange> &range_array)
+{
+  int ret = OB_SUCCESS;
+
+  ObStoreRange merge_range;
+  for (int64_t i = 0; OB_SUCC(ret) && i < range_count; i++) {
+    const ObStoreRowkey *rowkey = nullptr;
+    // start key
+    if (0 == i) {
+      if (OB_ISNULL(rowkey = start_key->get_rowkey())) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "Unexcepted null store rowkey", K(ret), KPC(start_key));
+      } else {
+        merge_range.set_start_key(*rowkey);
+      }
+    } else {
+      merge_range.set_start_key(*key_array.at(i - 1).get_rowkey());
+    }
+
+    // endkey
+    if (OB_FAIL(ret)) {
+    } else if (i == range_count - 1) {
+      if (OB_ISNULL(rowkey = end_key->get_rowkey())) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "Unexcepted null store rowkey", K(ret), KPC(start_key));
+      } else {
+        merge_range.set_end_key(*rowkey);
+      }
+    } else if (OB_ISNULL(rowkey = key_array.at(i).get_rowkey())) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "Unexpected null store rowkey", K(ret), K(i));
+    } else {
+      merge_range.set_end_key(*rowkey);
+    }
+    if (OB_SUCC(ret)) {
+      merge_range.set_left_open();
+      merge_range.set_right_closed();
+      if (OB_FAIL(range_array.push_back(merge_range))) {
+        TRANS_LOG(WARN, "Failed to push back the merge range to array", K(ret), K(merge_range));
+      }
+    }
+  }
+  return ret;
+}
 int ObQueryEngine::estimate_row_count(const transaction::ObTransID &tx_id,
                                       const ObMemtableKey *start_key, const int start_exclude,
                                       const ObMemtableKey *end_key, const int end_exclude,

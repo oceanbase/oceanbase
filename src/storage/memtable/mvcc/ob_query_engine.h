@@ -175,7 +175,7 @@ public:
   };
 
 public:
-  enum { ESTIMATE_CHILD_COUNT_THRESHOLD = 1024, MAX_RANGE_SPLIT_COUNT = 1024 };
+  enum { ESTIMATE_CHILD_COUNT_THRESHOLD = 1024, MAX_RANGE_SPLIT_COUNT = 1024 * 1024};
   explicit ObQueryEngine(ObIAllocator &memstore_allocator)
       : is_inited_(false), is_expanding_(false), tenant_id_(common::OB_SERVER_TENANT_ID), 
         index_(nullptr), memstore_allocator_(memstore_allocator),
@@ -193,8 +193,6 @@ public:
   void revert_iter(ObIQueryEngineIterator *iter);
   int estimate_size(const ObMemtableKey *start_key,
                     const ObMemtableKey *end_key,
-                    int64_t& level,
-                    int64_t& branch_count,
                     int64_t& total_bytes,
                     int64_t& total_rows);
   int split_range(const ObMemtableKey *start_key,
@@ -237,6 +235,7 @@ public:
                ? index->btree_alloc_memory() + btree_allocator_.get_allocated()
                : 0;
   }
+
   void check_cleanout(bool &is_all_cleanout,
                       bool &is_all_delay_cleanout,
                       int64_t &count);
@@ -253,6 +252,26 @@ private:
                                  const ObMemtableKey *start_key,
                                  const ObMemtableKey *end_key);
   int set_table_index_(const int64_t obj_cnt, TableIndex *&return_ptr);
+
+  int find_split_range_level_(const ObMemtableKey *start_key,
+                              const ObMemtableKey *end_key,
+                              const int64_t range_count,
+                              int64_t &top_level,
+                              int64_t &btree_node_count);
+
+  int inner_loop_find_level_(const ObMemtableKey *start_key,
+                             const ObMemtableKey *end_key,
+                             const int64_t level_node_threshold,
+                             int64_t &top_level,
+                             int64_t &btree_node_count,
+                             int64_t &total_rows);
+
+  int convert_keys_to_store_ranges_(const ObMemtableKey *start_key,
+                                    const ObMemtableKey *end_key,
+                                    const int64_t range_count,
+                                    const common::ObIArray<ObStoreRowkeyWrapper> &key_array,
+                                    ObIArray<ObStoreRange> &range_array);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryEngine);
   static TableIndex * const PLACE_HOLDER;

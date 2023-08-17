@@ -9334,10 +9334,12 @@ struct ObEstBlockResElement
 public:
   int64_t macro_block_count_;
   int64_t micro_block_count_;
+  int64_t sstable_row_count_;
+  int64_t memtable_row_count_;
   bool is_valid() const { return true; }
   int assign(const ObEstBlockResElement &other);
-  ObEstBlockResElement() : macro_block_count_(0), micro_block_count_(0) {}
-  TO_STRING_KV(K(macro_block_count_), K(micro_block_count_));
+  ObEstBlockResElement() : macro_block_count_(0), micro_block_count_(0), sstable_row_count_(0), memtable_row_count_(0) {}
+  TO_STRING_KV(K(macro_block_count_), K(micro_block_count_), K(sstable_row_count_), K(memtable_row_count_));
 };
 
 struct ObEstBlockRes

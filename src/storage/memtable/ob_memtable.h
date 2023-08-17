@@ -314,6 +314,7 @@ public:
   ObMtStat& get_mt_stat() { return mt_stat_; }
   int64_t get_size() const;
   int64_t get_occupied_size() const;
+  int64_t get_physical_row_cnt() const { return query_engine_.btree_size(); }
   inline bool not_empty() const { return INT64_MAX != get_protection_clock(); };
   void set_max_schema_version(const int64_t schema_version);
   virtual int64_t get_max_schema_version() const override;
@@ -370,6 +371,11 @@ public:
   virtual int64_t get_upper_trans_version() const override;
   virtual int estimate_phy_size(const ObStoreRowkey* start_key, const ObStoreRowkey* end_key, int64_t& total_bytes, int64_t& total_rows) override;
   virtual int get_split_ranges(const ObStoreRowkey* start_key, const ObStoreRowkey* end_key, const int64_t part_cnt, common::ObIArray<common::ObStoreRange> &range_array) override;
+  int split_ranges_for_sample(const blocksstable::ObDatumRange &table_scan_range,
+                              const double sample_rate_percentage,
+                              ObIAllocator &allocator,
+                              ObIArray<blocksstable::ObDatumRange> &sample_memtable_ranges);
+
   ObQueryEngine &get_query_engine() { return query_engine_; }
   ObMvccEngine &get_mvcc_engine() { return mvcc_engine_; }
   const ObMvccEngine &get_mvcc_engine() const { return mvcc_engine_; }
@@ -548,6 +554,12 @@ private:
   int64_t dec_unsubmitted_cnt_();
   int64_t inc_unsynced_cnt_();
   int64_t dec_unsynced_cnt_();
+  int64_t try_split_range_for_sample_(const ObStoreRowkey &start_key,
+                                      const ObStoreRowkey &end_key,
+                                      const int64_t range_count,
+                                      ObIAllocator &allocator,
+                                      ObIArray<blocksstable::ObDatumRange> &sample_memtable_ranges);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtable);
   bool is_inited_;

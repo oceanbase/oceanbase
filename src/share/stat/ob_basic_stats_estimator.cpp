@@ -153,9 +153,9 @@ int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
   } else if (param.part_level_ == share::schema::PARTITION_LEVEL_TWO &&
              OB_FAIL(generate_first_part_idx_map(param.all_part_infos_, first_part_idx_map))) {
     LOG_WARN("failed to generate first part idx map", K(ret));
-  } else if (OB_FAIL(do_estimate_block_count(ctx, param.tenant_id_, table_id, tablet_ids,
-                                             partition_ids, estimate_result))) {
-    LOG_WARN("failed to do estimate block count", K(ret));
+  } else if (OB_FAIL(do_estimate_block_count_and_row_count(ctx, param.tenant_id_, table_id, tablet_ids,
+                                                           partition_ids, estimate_result))) {
+    LOG_WARN("failed to do estimate block count and row count", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < estimate_result.count(); ++i) {
       BolckNumPair block_num_pair;
@@ -213,12 +213,12 @@ int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
   return ret;
 }
 
-int ObBasicStatsEstimator::do_estimate_block_count(ObExecContext &ctx,
-                                                   const uint64_t tenant_id,
-                                                   const uint64_t table_id,
-                                                   const ObIArray<ObTabletID> &tablet_ids,
-                                                   const ObIArray<ObObjectID> &partition_ids,
-                                                   ObIArray<EstimateBlockRes> &estimate_res)
+int ObBasicStatsEstimator::do_estimate_block_count_and_row_count(ObExecContext &ctx,
+                                                                const uint64_t tenant_id,
+                                                                const uint64_t table_id,
+                                                                const ObIArray<ObTabletID> &tablet_ids,
+                                                                const ObIArray<ObObjectID> &partition_ids,
+                                                                ObIArray<EstimateBlockRes> &estimate_res)
 {
   int ret = OB_SUCCESS;
   common::ObSEArray<ObCandiTabletLoc, 4> candi_tablet_locs;
@@ -279,8 +279,8 @@ int ObBasicStatsEstimator::do_estimate_block_count(ObExecContext &ctx,
           } else {/*do nothing*/}
         }
         if (OB_SUCC(ret)) {//begin storage estimate block count
-          if (OB_FAIL(stroage_estimate_block_count(ctx, cur_selected_addr, arg, result))) {
-            LOG_WARN("failed to stroage estimate block count", K(ret));
+          if (OB_FAIL(stroage_estimate_block_count_and_row_count(ctx, cur_selected_addr, arg, result))) {
+            LOG_WARN("failed to stroage estimate block count and row count", K(ret));
           } else {
             for (int64_t i = 0; OB_SUCC(ret) && i < selected_tablet_idx.count(); ++i) {
               int64_t idx = selected_tablet_idx.at(i);
@@ -293,6 +293,8 @@ int ObBasicStatsEstimator::do_estimate_block_count(ObExecContext &ctx,
                 estimate_res.at(idx).part_id_ = partition_ids.at(idx);
                 estimate_res.at(idx).macro_block_count_ = result.tablet_params_res_.at(i).macro_block_count_;
                 estimate_res.at(idx).micro_block_count_ = result.tablet_params_res_.at(i).micro_block_count_;
+                estimate_res.at(idx).sstable_row_count_ = result.tablet_params_res_.at(i).sstable_row_count_;
+                estimate_res.at(idx).memtable_row_count_ = result.tablet_params_res_.at(i).memtable_row_count_;
               }
             }
             LOG_TRACE("succeed to estimate block count", K(selected_tablet_idx), K(partition_ids),
@@ -305,17 +307,17 @@ int ObBasicStatsEstimator::do_estimate_block_count(ObExecContext &ctx,
   return ret;
 }
 
-int ObBasicStatsEstimator::stroage_estimate_block_count(ObExecContext &ctx,
-                                                        const ObAddr &addr,
-                                                        const obrpc::ObEstBlockArg &arg,
-                                                        obrpc::ObEstBlockRes &result)
+int ObBasicStatsEstimator::stroage_estimate_block_count_and_row_count(ObExecContext &ctx,
+                                                                      const ObAddr &addr,
+                                                                      const obrpc::ObEstBlockArg &arg,
+                                                                      obrpc::ObEstBlockRes &result)
 {
   int ret = OB_SUCCESS;
   if (addr == ctx.get_addr()) {
-    if (OB_FAIL(ObStorageEstimator::estimate_block_count(arg, result))) {
+    if (OB_FAIL(ObStorageEstimator::estimate_block_count_and_row_count(arg, result))) {
       LOG_WARN("failed to estimate partition rows", K(ret));
     } else {
-      LOG_TRACE("succeed to stroage estimate block count", K(addr), K(arg), K(result));
+      LOG_TRACE("succeed to stroage estimate block count and row count", K(addr), K(arg), K(result));
     }
   } else {
     obrpc::ObSrvRpcProxy *rpc_proxy = NULL;

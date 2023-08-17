@@ -27,9 +27,42 @@ public:
   explicit ObRowSampleIterator(const common::SampleInfo &sample_info);
   virtual ~ObRowSampleIterator();
   int open(ObQueryRowIterator &iterator);
-  void reuse();
+  virtual void reuse();
   virtual int get_next_row(blocksstable::ObDatumRow *&row) override;
   virtual void reset() override;
+private:
+  ObQueryRowIterator *iterator_;
+  int64_t row_num_;
+};
+
+class ObMemtableRowSampleIterator : public ObISampleIterator
+{
+public:
+  // must larger than 1
+  static const int64_t SAMPLE_MEMTABLE_RANGE_COUNT = 10;
+public:
+  explicit ObMemtableRowSampleIterator(const SampleInfo &sample_info)
+      : ObISampleIterator(sample_info), iterator_(nullptr), row_num_(0) {}
+  virtual ~ObMemtableRowSampleIterator() {}
+
+  int open(ObQueryRowIterator &iterator)
+  {
+    int ret = OB_SUCCESS;
+    iterator_ = &iterator;
+    row_num_ = 0;
+    return ret;
+  }
+
+  virtual void reuse() { row_num_ = 0; }
+
+  virtual void reset() override
+  {
+    iterator_ = nullptr;
+    row_num_ = 0;
+  }
+
+  virtual int get_next_row(blocksstable::ObDatumRow *&row) override;
+
 private:
   ObQueryRowIterator *iterator_;
   int64_t row_num_;

@@ -1505,13 +1505,16 @@ int BtreeRawIterator<BtreeKey, BtreeVal>::estimate_key_count(int64_t top_level, 
   return ret;
 }
 
-template<typename BtreeKey, typename BtreeVal>
-int BtreeRawIterator<BtreeKey, BtreeVal>::split_range(int64_t top_level, int64_t branch_count, int64_t part_count, BtreeKey* key_array)
+template <typename BtreeKey, typename BtreeVal>
+int BtreeRawIterator<BtreeKey, BtreeVal>::split_range(int64_t top_level,
+                                                      int64_t btree_node_count,
+                                                      int64_t range_count,
+                                                      common::ObIArray<BtreeKey> &key_array)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(iter_)) {
     ret = OB_NOT_INIT;
-  } else if (part_count < 1 || branch_count < part_count || OB_ISNULL(key_array)) {
+  } else if (range_count < 1 || btree_node_count < range_count) {
     ret = OB_INVALID_ARGUMENT;
   } else if (top_level > iter_->get_root_level()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1519,26 +1522,55 @@ int BtreeRawIterator<BtreeKey, BtreeVal>::split_range(int64_t top_level, int64_t
     BtreeKey key;
     BtreeVal val = nullptr;
     int64_t level = iter_->get_root_level() - top_level;
-    int64_t part_key_count = branch_count/part_count;
-    int64_t seg_id = 0;
-    int64_t child_count = 0;
-    while(seg_id < part_count - 1 && OB_SUCC(iter_->next_on_level(level, key, val))) {
-      if (0 == (++child_count % part_key_count)) {
-        key_array[seg_id++] = key;
+
+    int64_t remaining_btree_node_count = btree_node_count;
+    // each loop fill in a key for spliting range
+    int64_t range_idx = 0;
+    for (range_idx = 0; OB_SUCC(ret) && range_idx < range_count; range_idx++)
+    {
+      // (range_count - range_idx) means the last range count which need to be splitted
+      int64_t btree_node_cnt_in_this_range = remaining_btree_node_count / (range_count - range_idx);
+
+      // loop btree_node_cnt_in_this_range times to get the next key for splitting
+      for (int64_t iter_node_count = 0; OB_SUCC(ret) && iter_node_count < btree_node_cnt_in_this_range;
+           iter_node_count++) {
+        if (OB_FAIL(iter_->next_on_level(level, key, val))) {
+          OB_LOG(WARN,
+                 "iterate btree node on level failed",
+                 KR(ret),
+                 K(level),
+                 K(iter_node_count),
+                 K(btree_node_cnt_in_this_range),
+                 K(remaining_btree_node_count),
+                 K(range_count),
+                 K(range_idx));
+        }
+      }
+
+      // update remaining btree node count
+      remaining_btree_node_count = remaining_btree_node_count - btree_node_cnt_in_this_range;
+
+      if (OB_SUCC(ret) && OB_FAIL(key_array.push_back(key))) {
+        OB_LOG(WARN,
+               "push back rowkey into key array failed",
+               KR(ret),
+               K(range_idx),
+               K(range_count),
+               K(top_level),
+               K(btree_node_count));
       }
     }
-    if (OB_SUCCESS == ret) {
-      // do nothing
-    } else if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    } else {
+
+    if (range_idx < range_count) {
       ret = OB_ERR_UNEXPECTED;
-    }
-    if (seg_id < part_count - 1) {
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "btree split range: can not get enough sub range", K(branch_count), K(part_count), K(seg_id));
+      OB_LOG(WARN,
+             "btree split range: can not get enough sub range",
+             K(btree_node_count),
+             K(range_idx),
+             K(range_count));
     }
   }
+
   return ret;
 }
 

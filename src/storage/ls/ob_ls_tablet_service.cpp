@@ -5669,14 +5669,18 @@ int ObLSTabletService::estimate_row_count(
   return ret;
 }
 
-int ObLSTabletService::estimate_block_count(
+int ObLSTabletService::estimate_block_count_and_row_count(
     const common::ObTabletID &tablet_id,
     int64_t &macro_block_count,
-    int64_t &micro_block_count)
+    int64_t &micro_block_count,
+    int64_t &sstable_row_count,
+    int64_t &memtable_row_count)
 {
   int ret = OB_SUCCESS;
   macro_block_count = 0;
   micro_block_count = 0;
+  sstable_row_count = 0;
+  memtable_row_count = 0;
   ObTabletTableIterator tablet_iter;
 
   if (IS_NOT_INIT) {
@@ -5688,11 +5692,6 @@ int ObLSTabletService::estimate_block_count(
 
   ObITable *table = nullptr;
   ObSSTable *sstable = nullptr;
-  int64_t total_sample_table_cnt = 2;
-  int64_t sample_table_cnt = 0;
-  int64_t sampled_table_row_cnt = 0;
-  int64_t total_row_count = 0;
-
   while (OB_SUCC(ret)) {
     ObSSTableMetaHandle sst_meta_hdl;
     if (OB_FAIL(tablet_iter.table_iter()->get_next(table))) {
@@ -5705,18 +5704,17 @@ int ObLSTabletService::estimate_block_count(
     } else if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null table", K(ret), K(tablet_iter.table_iter()));
-    } else if (!table->is_sstable()) {
-      break;
-    } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table))) {
-    } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
-      LOG_WARN("fail to get sstable meta handle", K(ret));
-    } else {
+    } else if (table->is_memtable()) {
+      memtable_row_count += static_cast<memtable::ObMemtable *>(table)->get_physical_row_cnt();
+    } else if (table->is_sstable()) {
       sstable = static_cast<ObSSTable *>(table);
-      macro_block_count += sstable->get_data_macro_block_count();
-      micro_block_count += sst_meta_hdl.get_sstable_meta().get_data_micro_block_count();
-      total_row_count += sst_meta_hdl.get_sstable_meta().get_row_count();
-      if (sample_table_cnt++ < total_sample_table_cnt) {
-        sampled_table_row_cnt += sst_meta_hdl.get_sstable_meta().get_row_count();
+      if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
+        LOG_WARN("fail to get sstable meta handle", K(ret));
+      } else {
+        sstable = static_cast<ObSSTable *>(table);
+        macro_block_count += sstable->get_data_macro_block_count();
+        micro_block_count += sst_meta_hdl.get_sstable_meta().get_data_micro_block_count();
+        sstable_row_count += sst_meta_hdl.get_sstable_meta().get_row_count();
       }
     }
   }
