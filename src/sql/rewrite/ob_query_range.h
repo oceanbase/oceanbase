@@ -787,16 +787,15 @@ private:
   int alloc_full_key_part(ObKeyPart *&out_key_part);
   int deep_copy_range_graph(ObKeyPart *src, ObKeyPart *&dest);
   int serialize_range_graph(const ObKeyPart *cur,
-                            const ObKeyPart *pre_and_next,
                             char *buf,
                             int64_t buf_len,
                             int64_t &pos) const;
   int serialize_cur_keypart(const ObKeyPart &cur, char *buf, int64_t buf_len, int64_t &pos) const;
   int serialize_expr_final_info(char *buf, int64_t buf_len, int64_t &pos) const;
-  int deserialize_range_graph(ObKeyPart *pre_key, ObKeyPart *&cur, const char *buf, int64_t data_len, int64_t &pos);
+  int deserialize_range_graph(ObKeyPart *&cur, const char *buf, int64_t data_len, int64_t &pos);
   int deserialize_cur_keypart(ObKeyPart *&cur, const char *buf, int64_t data_len, int64_t &pos);
   int deserialize_expr_final_info(const char *buf, int64_t data_len, int64_t &pos);
-  int get_range_graph_serialize_size(const ObKeyPart *cur, const ObKeyPart *pre_and_next, int64_t &all_size) const;
+  int get_range_graph_serialize_size(const ObKeyPart *cur, int64_t &all_size) const;
   int get_cur_keypart_serialize_size(const ObKeyPart &cur, int64_t &all_size) const;
   int64_t get_expr_final_info_serialize_size() const;
   int serialize_srid_map(char *buf, int64_t buf_len, int64_t &pos) const;
@@ -820,7 +819,7 @@ private:
   int get_in_expr_res_type(const ObRawExpr *in_expr, int64_t val_idx, ObExprResType &res_type) const;
   inline bool is_standard_graph(const ObKeyPart *root) const;
   bool is_strict_in_graph(const ObKeyPart *root, const int64_t start_pos = 0) const;
-  int is_strict_equal_graph(const ObKeyPart *root, int64_t &cur_pos, int64_t &max_pos, bool &is_strict_equal) const;
+  int is_strict_equal_graph(const ObKeyPart *root, const int64_t cur_pos, int64_t &max_pos, bool &is_strict_equal) const;
   inline int get_single_key_value(const ObKeyPart *key,
                                   ObExecContext &exec_ctx,
                                   ObSearchState &search_state,

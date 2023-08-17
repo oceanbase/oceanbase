@@ -1096,34 +1096,29 @@ int ObQueryRange::check_is_get(ObKeyPart &key_part,
 {
   int ret = OB_SUCCESS;
   if (bret == true) {
-    if (valid_offsets.num_members() != column_count) {
-      bret = false;
-    } else if (key_part.is_in_key()) {
-      if (NULL != key_part.and_next_) {
-        ret = SMART_CALL(check_is_get(*key_part.and_next_,
+    for (ObKeyPart *cur_part = &key_part; OB_SUCC(ret) && bret && cur_part != NULL; cur_part = cur_part->or_next_) {
+      if (cur_part != &key_part && OB_FAIL(set_valid_offsets(cur_part, valid_offsets))) {
+        LOG_WARN("failed to set valid offsets", K(ret));
+      } else if (valid_offsets.num_members() != column_count) {
+        bret = false;
+      } else if (cur_part->is_in_key()) {
+        if (NULL != cur_part->and_next_) {
+          ret = SMART_CALL(check_is_get(*cur_part->and_next_,
+                                        column_count,
+                                        bret,
+                                        valid_offsets));
+        }
+      } else if (!cur_part->is_equal_condition()) {
+        bret = false;
+      } else if (NULL != cur_part->and_next_) {
+        ret = SMART_CALL(check_is_get(*cur_part->and_next_,
                                       column_count,
                                       bret,
                                       valid_offsets));
       }
-    } else if (!key_part.is_equal_condition()) {
-      bret = false;
-    } else if (NULL != key_part.and_next_) {
-      ret = SMART_CALL(check_is_get(*key_part.and_next_,
-                                    column_count,
-                                    bret,
-                                    valid_offsets));
-    }
-    if (OB_SUCC(ret) && bret) {
-      if (OB_FAIL(remove_cur_offset(&key_part, valid_offsets))) {
-        LOG_WARN("failed to remove cur offset", K(ret));
-      } else if (NULL != key_part.or_next_) {
-        if (OB_FAIL(set_valid_offsets(key_part.or_next_, valid_offsets))) {
-          LOG_WARN("failed to set valid offsets", K(ret));
-        } else if (OB_FAIL(SMART_CALL(check_is_get(*key_part.or_next_,
-                                                   column_count,
-                                                   bret,
-                                                   valid_offsets)))) {
-          LOG_WARN("failed to check is get", K(ret));
+      if (OB_SUCC(ret) && bret) {
+        if (OB_FAIL(remove_cur_offset(cur_part, valid_offsets))) {
+          LOG_WARN("failed to remove cur offset", K(ret));
         }
       }
     }
@@ -5684,40 +5679,28 @@ int ObQueryRange::definite_in_range_graph(ObExecContext &exec_ctx,
                                           const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
-  bool is_stack_overflow = false;
-  bool is_bound_modified = false;
-  if (OB_FAIL(THIS_WORKER.check_status())) {
-    LOG_WARN("check status fail", K(ret));
-  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("failed to do stack overflow check", K(ret));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("stack overflow", K(ret));
-  } else if (OB_ISNULL(root)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("root key is null", K(root));
-  } else if (OB_FAIL(definite_key_part(root, exec_ctx, dtc_params, is_bound_modified))) {
-    LOG_WARN("definite key part failed", K(ret));
-  } else {
-    if (contain_row_ && is_bound_modified) {
-      root->and_next_ = NULL;
-    }
-    //如果graph中某个节点不是严格的等值条件，那么这个节点是一个scan key，需要做or合并
-    //如果有恒false条件，也需要走到or去做去除处理
-    if (!root->is_equal_condition()) {
-      has_scan_key = true;
-    }
-    if (NULL != root->and_next_ && (NULL == root->or_next_ ||
-                                    root->or_next_->and_next_ != root->and_next_)) {
-      if (OB_FAIL(SMART_CALL(definite_in_range_graph(exec_ctx, root->and_next_,
-                                                     has_scan_key, dtc_params)))) {
-        LOG_WARN("definite and_next_ key part failed", K(ret));
+  int64_t cnt = 0;
+  for (ObKeyPart *cur_part = root; OB_SUCC(ret) && cur_part != NULL; cur_part = cur_part->or_next_) {
+    bool is_bound_modified = false;
+    if (++cnt % 1000 == 0 && OB_FAIL(THIS_WORKER.check_status())) {
+      LOG_WARN("check status fail", K(ret));
+    } else if (OB_FAIL(definite_key_part(cur_part, exec_ctx, dtc_params, is_bound_modified))) {
+      LOG_WARN("definite key part failed", K(ret));
+    } else {
+      if (contain_row_ && is_bound_modified) {
+        cur_part->and_next_ = NULL;
       }
-    }
-    if (OB_SUCC(ret) && NULL != root->or_next_) {
-      if (OB_FAIL(SMART_CALL(definite_in_range_graph(exec_ctx, root->or_next_,
-                                                     has_scan_key, dtc_params)))) {
-        LOG_WARN("definit or_next_ key part failed", K(ret));
+      //如果graph中某个节点不是严格的等值条件，那么这个节点是一个scan key，需要做or合并
+      //如果有恒false条件，也需要走到or去做去除处理
+      if (!cur_part->is_equal_condition()) {
+        has_scan_key = true;
+      }
+      if (NULL != cur_part->and_next_ &&
+          (NULL == cur_part->or_next_ || cur_part->or_next_->and_next_ != cur_part->and_next_)) {
+        if (OB_FAIL(SMART_CALL(definite_in_range_graph(exec_ctx, cur_part->and_next_,
+                                                       has_scan_key, dtc_params)))) {
+          LOG_WARN("definite and_next_ key part failed", K(ret));
+        }
       }
     }
   }
@@ -7567,53 +7550,57 @@ ObKeyPart *ObQueryRange::deep_copy_key_part(ObKeyPart *key_part)
   return new_key_part;
 }
 
-int ObQueryRange::deserialize_range_graph(ObKeyPart *pre_key,
-                                          ObKeyPart *&cur,
+int ObQueryRange::deserialize_range_graph(ObKeyPart *&cur,
                                           const char *buf,
                                           int64_t data_len,
                                           int64_t &pos)
 {
   int ret = OB_SUCCESS;
+  ObKeyPart *pre_key = NULL;
   bool has_and_next = false;
   bool has_or_next = false;
   bool encode_and_next = false;
-  ObKeyPart *and_next = NULL;
-  OB_UNIS_DECODE(has_and_next);
-  OB_UNIS_DECODE(has_or_next);
-  if (OB_SUCC(ret) && has_and_next) {
-    OB_UNIS_DECODE(encode_and_next);
-    if (OB_SUCC(ret) && encode_and_next) {
-      if (OB_FAIL(SMART_CALL(deserialize_range_graph(NULL, and_next, buf, data_len, pos)))) {
-        LOG_WARN("deserialize and_next_ child graph failed", K(ret));
+  do {
+    ObKeyPart *and_next = NULL;
+    ObKeyPart *cur_part = NULL;
+    OB_UNIS_DECODE(has_and_next);
+    OB_UNIS_DECODE(has_or_next);
+    if (OB_SUCC(ret) && has_and_next) {
+      OB_UNIS_DECODE(encode_and_next);
+      if (OB_SUCC(ret) && encode_and_next) {
+        if (OB_FAIL(SMART_CALL(deserialize_range_graph(and_next, buf, data_len, pos)))) {
+          LOG_WARN("deserialize and_next_ child graph failed", K(ret));
+        }
       }
     }
-  }
-  if (OB_SUCC(ret) && OB_FAIL(SMART_CALL(deserialize_cur_keypart(cur, buf, data_len, pos)))) {
-    LOG_WARN("deserialize current key part failed", K(ret));
-  }
-  //build and_next_ child grap and pre_key with current key part
-  if (OB_SUCC(ret)) {
-    if (encode_and_next) {
-      cur->and_next_ = and_next;
-    } else if (has_and_next) {
-      if (OB_ISNULL(pre_key)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("pre_key is null.", K(ret));
+    if (OB_SUCC(ret) && OB_FAIL(SMART_CALL(deserialize_cur_keypart(cur_part, buf, data_len, pos)))) {
+      LOG_WARN("deserialize current key part failed", K(ret));
+    }
+    //build and_next_ child grap and pre_key with current key part
+    if (OB_SUCC(ret)) {
+      if (encode_and_next) {
+        cur_part->and_next_ = and_next;
+      } else if (has_and_next) {
+        if (OB_ISNULL(pre_key)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("pre_key is null.", K(ret));
+        } else {
+          cur_part->and_next_ = pre_key->and_next_;
+        }
       } else {
-        cur->and_next_ = pre_key->and_next_;
+        // do nothing
       }
-    } else {
-      // do nothing
+      if (pre_key) {
+        pre_key->or_next_ = cur_part;
+      } else {
+        cur = cur_part;
+      }
     }
-    if (pre_key) {
-      pre_key->or_next_ = cur;
+
+    if (OB_SUCC(ret) && has_or_next) {
+      pre_key = cur_part;
     }
-  }
-  if (OB_SUCC(ret) && has_or_next) {
-    if (OB_FAIL(SMART_CALL(deserialize_range_graph(cur, cur->or_next_, buf, data_len, pos)))) {
-      LOG_WARN("deserialize or_next_ child graph failed", K(ret));
-    }
-  }
+  } while(OB_SUCC(ret) && has_or_next);
   return ret;
 }
 
@@ -7637,44 +7624,32 @@ int ObQueryRange::deserialize_cur_keypart(ObKeyPart *&cur, const char *buf, int6
 }
 
 int ObQueryRange::serialize_range_graph(const ObKeyPart *cur,
-                                        const ObKeyPart *pre_and_next,
                                         char *buf,
                                         int64_t buf_len,
                                         int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  bool is_stack_overflow = false;
-  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("failed to do stack overflow check", K(ret));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("stack overflow", K(ret));
-  } else if (OB_ISNULL(cur)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("cur is null.", K(ret));
-  } else {
-    bool has_and_next = cur->and_next_ ? true : false;
-    bool has_or_next = cur->or_next_ ? true : false;
+  const ObKeyPart *pre_and_next = NULL;
+  for (const ObKeyPart *cur_part = cur; OB_SUCC(ret) && cur_part != NULL; cur_part = cur_part->or_next_) {
+    bool has_and_next = cur_part->and_next_ ? true : false;
+    bool has_or_next = cur_part->or_next_ ? true : false;
     bool encode_and_next = false;
     OB_UNIS_ENCODE(has_and_next);
     OB_UNIS_ENCODE(has_or_next);
     if (OB_SUCC(ret) && has_and_next) {
-      encode_and_next = cur->and_next_ == pre_and_next ? false : true;
+      encode_and_next = cur_part->and_next_ == pre_and_next ? false : true;
       OB_UNIS_ENCODE(encode_and_next);
     }
     if (OB_SUCC(ret) && encode_and_next) {
-      if (OB_FAIL(SMART_CALL(serialize_range_graph(cur->and_next_, NULL, buf, buf_len, pos)))) {
+      if (OB_FAIL(SMART_CALL(serialize_range_graph(cur_part->and_next_, buf, buf_len, pos)))) {
         LOG_WARN("serialize and_next_ child graph failed", K(ret));
       }
     }
-    if (OB_SUCC((ret)) && OB_FAIL(serialize_cur_keypart(*cur, buf, buf_len, pos))) {
+    if (OB_SUCC((ret)) && OB_FAIL(serialize_cur_keypart(*cur_part, buf, buf_len, pos))) {
       LOG_WARN("serialize current key part failed", K(ret));
     }
     if (OB_SUCC(ret) && has_or_next) {
-      if (OB_FAIL(SMART_CALL(serialize_range_graph(cur->or_next_, cur->and_next_,
-                                                   buf, buf_len, pos)))) {
-        LOG_WARN("serialize or_next_ child graph failed", K(ret));
-      }
+      pre_and_next = cur_part->and_next_;
     }
   }
   return ret;
@@ -7703,40 +7678,35 @@ int ObQueryRange::serialize_cur_keypart(const ObKeyPart &cur, char *buf, int64_t
 }
 
 int ObQueryRange::get_range_graph_serialize_size(const ObKeyPart *cur,
-                                                 const ObKeyPart *pre_and_next,
                                                  int64_t &all_size) const
 {
   int ret = OB_SUCCESS;
   int64_t len = 0;
-  if (OB_ISNULL(cur)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("cur is null.", K(ret));
-  } else {
-    bool has_and_next = cur->and_next_ ? true : false;
-    bool has_or_next = cur->or_next_ ? true : false;
+  const ObKeyPart *pre_and_next = NULL;
+  for (const ObKeyPart *cur_part = cur; OB_SUCC(ret) && cur_part != NULL; cur_part = cur_part->or_next_) {
+    bool has_and_next = cur_part->and_next_ ? true : false;
+    bool has_or_next = cur_part->or_next_ ? true : false;
     bool encode_and_next = false;
-
     OB_UNIS_ADD_LEN(has_and_next);
     OB_UNIS_ADD_LEN(has_or_next);
+
     if (has_and_next) {
-      encode_and_next = cur->and_next_ == pre_and_next ? false : true;
+      encode_and_next = cur_part->and_next_ == pre_and_next ? false : true;
       OB_UNIS_ADD_LEN(encode_and_next);
       if (encode_and_next &&
-          OB_FAIL(SMART_CALL(get_range_graph_serialize_size(cur->and_next_,
-                                                            NULL, all_size)))) {
+          OB_FAIL(SMART_CALL(get_range_graph_serialize_size(cur_part->and_next_, all_size)))) {
         LOG_WARN("failed to get and_next serialize size", K(ret));
       }
     }
+
     if (OB_SUCC(ret)) {
       all_size += len;
-      if (OB_FAIL(SMART_CALL(get_cur_keypart_serialize_size(*cur, all_size)))) {
+      if (OB_FAIL(SMART_CALL(get_cur_keypart_serialize_size(*cur_part, all_size)))) {
         LOG_WARN("failed to get cur serialize size", K(ret));
-      } else if (has_or_next &&
-                 OB_FAIL(SMART_CALL(get_range_graph_serialize_size(cur->or_next_,
-                                                                   cur->and_next_,
-                                                                   all_size)))) {
-        LOG_WARN("failed to get or_next serialize size", K(ret));
       }
+    }
+    if (OB_SUCC(ret) && has_or_next) {
+      pre_and_next = cur_part->and_next_;
     }
   }
   return ret;
@@ -7879,7 +7849,7 @@ OB_DEF_SERIALIZE(ObQueryRange)
   OB_UNIS_ENCODE(column_count_);
   OB_UNIS_ENCODE(graph_count);
   if (1 == graph_count) {
-    if (OB_FAIL(serialize_range_graph(table_graph_.key_part_head_, NULL, buf, buf_len, pos))) {
+    if (OB_FAIL(serialize_range_graph(table_graph_.key_part_head_, buf, buf_len, pos))) {
       LOG_WARN("serialize range graph failed", K(ret));
     }
     OB_UNIS_ENCODE(table_graph_.is_precise_get_);
@@ -7924,8 +7894,7 @@ OB_DEF_SERIALIZE_SIZE(ObQueryRange)
   OB_UNIS_ADD_LEN(column_count_);
   OB_UNIS_ADD_LEN(graph_count);
   if (1 == graph_count) {
-    if (OB_FAIL(SMART_CALL(get_range_graph_serialize_size(table_graph_.key_part_head_,
-                                                          NULL, len)))) {
+    if (OB_FAIL(SMART_CALL(get_range_graph_serialize_size(table_graph_.key_part_head_, len)))) {
       LOG_WARN("failed to get range graph size", K(ret));
     } else {
       OB_UNIS_ADD_LEN(table_graph_.is_precise_get_);
@@ -7966,7 +7935,7 @@ OB_DEF_DESERIALIZE(ObQueryRange)
   OB_UNIS_DECODE(column_count_);
   OB_UNIS_DECODE(graph_count);
   if (1 == graph_count) {
-    if (OB_FAIL(deserialize_range_graph(NULL, table_graph_.key_part_head_, buf, data_len, pos))) {
+    if (OB_FAIL(deserialize_range_graph(table_graph_.key_part_head_, buf, data_len, pos))) {
       LOG_WARN("deserialize range graph failed", K(ret));
     }
     OB_UNIS_DECODE(table_graph_.is_precise_get_);
@@ -8251,44 +8220,46 @@ inline bool ObQueryRange::is_standard_graph(const ObKeyPart *root) const
 // 满足条件： KEY连续、对齐、等值条件
 int ObQueryRange::is_strict_equal_graph(
     const ObKeyPart *node,
-    int64_t &cur_pos,
+    const int64_t cur_pos,
     int64_t &max_pos,
     bool &is_strict_equal) const
 {
   int ret = OB_SUCCESS;
   is_strict_equal = true;
-  if (OB_UNLIKELY(NULL == node)) {
-    is_strict_equal = false;
-  } else if (node->is_in_key()) {
-    if (node->in_keypart_->get_min_offset() != cur_pos ||
-        !node->in_keypart_->is_strict_in_) {
+  for (const ObKeyPart *cur_part = node;
+       OB_SUCC(ret) && is_strict_equal && cur_part != NULL;
+       cur_part = cur_part->or_next_) {
+    int64_t next_pos = -1;
+    if (cur_part->is_in_key()) {
+     if (cur_part->in_keypart_->get_min_offset() != cur_pos ||
+        !cur_part->in_keypart_->is_strict_in_) {
+        is_strict_equal = false;
+      } else {
+        next_pos = cur_part->in_keypart_->get_max_offset() + 1;
+      }
+    } else if (cur_part->pos_.offset_ != cur_pos) { // check consequent
+      is_strict_equal = false;
+    } else if (!cur_part->is_equal_condition()) { // check equal
       is_strict_equal = false;
     } else {
-      cur_pos = node->in_keypart_->get_max_offset();
+      next_pos = cur_pos + 1;
     }
-  } else if (node->pos_.offset_ != cur_pos) { // check consequent
-    is_strict_equal = false;
-  } else if (!node->is_equal_condition()) { // check equal
-    is_strict_equal = false;
-  }
-  if (is_strict_equal) {
-    // and direction
-    if (NULL != node->and_next_) {
-      if (NULL == node->or_next_ || node->or_next_->and_next_ != node->and_next_) {
-        ++cur_pos;
-        OZ(SMART_CALL(is_strict_equal_graph(node->and_next_, cur_pos,
-                                            max_pos, is_strict_equal)));
+    if (is_strict_equal) {
+      // and direction
+      if (NULL != cur_part->and_next_) {
+        if (NULL == cur_part->or_next_ || cur_part->or_next_->and_next_ != cur_part->and_next_) {
+          if(SMART_CALL(is_strict_equal_graph(cur_part->and_next_, next_pos,
+                                              max_pos, is_strict_equal))) {
+            LOG_WARN("failed to check is strict equal graph");
+          }
+        }
+      } else { // check align
+        if (-1 == max_pos) {
+          max_pos = next_pos - 1;
+        } else if (cur_pos != max_pos) {
+          is_strict_equal = false;
+        }
       }
-    } else { // check align
-      if (-1 == max_pos) {
-        max_pos = cur_pos;
-      } else if (cur_pos != max_pos) {
-        is_strict_equal = false;
-      }
-    }
-    //or direction
-    if (is_strict_equal && OB_SUCC(ret) && NULL != node->or_next_) {
-      OZ(SMART_CALL(is_strict_equal_graph(node->or_next_, cur_pos, max_pos, is_strict_equal)));
     }
   }
   return ret;
