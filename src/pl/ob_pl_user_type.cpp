@@ -312,7 +312,7 @@ int ObUserDefinedType::deep_copy_obj(
   return ret;
 }
 
-int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session)
+int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session, bool set_null)
 {
   int ret = OB_SUCCESS;
 
@@ -337,7 +337,7 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session)
       for (int64_t i = 0; OB_SUCC(ret) && i < record->get_count(); ++i) {
         OZ (destruct_obj(record->get_element()[i], session));
       }
-      OX (record->set_null());
+      OX (set_null ? src.set_null() : record->set_null());
     }
       break;
 #ifdef OB_BUILD_ORACLE_PL
@@ -367,7 +367,7 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session)
             collection->set_count(-1);
             collection->set_first(OB_INVALID_INDEX);
             collection->set_last(OB_INVALID_INDEX);
-            collection->set_null();
+            set_null ? src.set_null() : collection->set_null();
           }
         }
       }
