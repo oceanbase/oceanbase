@@ -5344,7 +5344,6 @@ int ObTransformUtils::merge_table_items(ObDMLStmt *stmt,
                                             target_column_items))) {
     LOG_WARN("failed to get column items", K(ret));
   } else {
-    int64_t miss_output_count = 0;
     uint64_t source_table_id = source_table->table_id_;
     uint64_t target_table_id = target_table->table_id_;
     for (int64_t i = 0; OB_SUCC(ret) && i < target_column_items.count(); ++i) {
@@ -5367,16 +5366,12 @@ int ObTransformUtils::merge_table_items(ObDMLStmt *stmt,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected array count", K(output_id),
               K(output_map->count()), K(ret));
-        } else if (OB_INVALID_ID != output_map->at(output_id)) {
-          column_id = output_map->at(output_id) + OB_APP_MIN_COLUMN_ID;
-          source_col = stmt->get_column_item_by_id(source_table_id,
-                                                   column_id);
-        } else if (OB_ISNULL(source_table->ref_query_)) {
+        } else if (OB_UNLIKELY(OB_INVALID_ID == output_map->at(output_id))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
+          LOG_WARN("invalid output idx", K(output_id), K(ret));
         } else {
-          column_id = source_table->ref_query_->get_select_item_size() + OB_APP_MIN_COLUMN_ID + miss_output_count;
-          ++miss_output_count;
+          column_id = output_map->at(output_id) + OB_APP_MIN_COLUMN_ID;
+          source_col = stmt->get_column_item_by_id(source_table_id, column_id);
         }
       }
       if (OB_FAIL(ret)) {

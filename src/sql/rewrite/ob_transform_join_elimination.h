@@ -237,7 +237,7 @@ private:
 
   int create_missing_select_items(ObSelectStmt *source_stmt,
                                   ObSelectStmt *target_stmt,
-                                  const ObIArray<int64_t> &column_map,
+                                  ObIArray<int64_t> &column_map,
                                   const ObIArray<int64_t> &table_map);
   /**
    * @brief trans_table_item
