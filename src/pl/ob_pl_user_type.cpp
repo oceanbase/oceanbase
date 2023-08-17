@@ -1622,10 +1622,33 @@ int ObRecordType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(src));
   CK (OB_NOT_NULL(dst));
-  for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
-    const ObPLDataType *type = get_record_member_type(i);
-    CK (OB_NOT_NULL(type));
-    OZ (type->convert(ctx, src, dst));
+  if (OB_FAIL(ret)) {
+  } else if (src->is_null() || src->get_ext() == 0) {
+    dst->set_null();
+  } else if (dst->is_null() || dst->get_ext() == 0) {
+    int64_t ptr = 0;
+    OZ (newx(ctx.allocator_, &ctx, ptr));
+    OX (dst->set_extend(ptr, get_type(), get_init_size(get_member_count())));
+  }
+  CK (src->is_pl_extend() && ObPLType::PL_RECORD_TYPE == src->get_meta().get_extend_type());
+  if (OB_SUCC(ret)) {
+    ObPLComposite *src_composite = reinterpret_cast<ObPLComposite*>(src->get_ext());
+    ObPLComposite *dst_composite = reinterpret_cast<ObPLComposite*>(dst->get_ext());
+    ObPLRecord* src_record = static_cast<ObPLRecord*>(src_composite);
+    ObPLRecord* dst_record = static_cast<ObPLRecord*>(dst_composite);
+    CK (OB_NOT_NULL(src_composite) && src_composite->is_record());
+    CK (OB_NOT_NULL(dst_composite) && dst_composite->is_record());
+    CK (OB_NOT_NULL(src_record));
+    CK (OB_NOT_NULL(dst_record));
+    for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
+      const ObPLDataType *type = get_record_member_type(i);
+      ObObj* src_obj = NULL;
+      ObObj *dst_obj = NULL;
+      OZ (src_record->get_element(i, src_obj));
+      OZ (dst_record->get_element(i, dst_obj));
+      CK (OB_NOT_NULL(type));
+      OZ (type->convert(ctx, src_obj, dst_obj));
+    }
   }
   return ret;
 }
@@ -2293,7 +2316,6 @@ int ObCollectionType::serialize(share::schema::ObSchemaGetterGuard &schema_guard
                                 int64_t &dst_pos) const
 {
   int ret = OB_SUCCESS;
-  int64_t init_size = 0;
   ObObj *src_obj = NULL;
   ObPLNestedTable *table = NULL;
   if (OB_ISNULL(src_obj = reinterpret_cast<ObObj*>(src))) {
@@ -2308,8 +2330,6 @@ int ObCollectionType::serialize(share::schema::ObSchemaGetterGuard &schema_guard
     LOG_WARN("table is null", K(ret), KPC(table), KPC(this));
   } else if (!table->is_inited()) {
     // table未初始化应该序列化为null, 空在空值位图中标识, 上层已经处理过空值位图, 这里什么都不做
-  } else if (OB_FAIL(get_size(ObPLUDTNS(schema_guard), PL_TYPE_INIT_SIZE, init_size))) {
-    LOG_WARN("failed to type init size", K(ret), KPC(this), KPC(table));
   } else if (OB_FAIL(ObMySQLUtil::store_length(dst, dst_len, table->get_actual_count(), dst_pos))) {
     LOG_WARN("failed to stroe_length for table count", K(ret), KPC(this), KPC(table), K(table->get_count()));
   } else {
@@ -2524,9 +2544,9 @@ int ObCollectionType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
     LOG_WARN("failed to alloc table data", K(ret));
   }
   if (OB_SUCC(ret)) {
-    ObObj *src_table_pos = reinterpret_cast<ObObj*>(src_table->get_data());
-    ObObj *dst_table_pos = reinterpret_cast<ObObj*>(table_data);
     for (int64_t i = 0; OB_SUCC(ret) && i < src_table->get_count(); i++) {
+      ObObj *src_table_pos = reinterpret_cast<ObObj*>(src_table->get_data()) + i;
+      ObObj *dst_table_pos = reinterpret_cast<ObObj*>(table_data) + i;
       OZ (element_type_.convert(ctx, src_table_pos, dst_table_pos));
     }
   }

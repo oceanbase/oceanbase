@@ -1119,16 +1119,7 @@ int ObPLDataType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const
     const ObUserDefinedType *user_type = NULL;
     OZ (ctx.get_user_type(get_user_type_id(), user_type));
     CK (OB_NOT_NULL(user_type));
-    if (OB_FAIL(ret)) {
-    } else if (is_record_type()) {
-      ObObj* tmp_src = reinterpret_cast<ObObj*>(src->get_ext());
-      ObObj* tmp_dst = reinterpret_cast<ObObj*>(dst->get_ext());
-      CK (OB_NOT_NULL(tmp_src));
-      CK (OB_NOT_NULL(tmp_dst));
-      OZ (user_type->convert(ctx, tmp_src, tmp_dst));
-    } else {
-      OZ (user_type->convert(ctx, src, dst));
-    }
+    OZ (user_type->convert(ctx, src, dst));
   }
   return ret;
 }

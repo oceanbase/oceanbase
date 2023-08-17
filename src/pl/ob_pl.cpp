@@ -2922,7 +2922,6 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
         }
         if (OB_FAIL(ret)) {
         } else if (OB_INVALID_ID == udt_id) { // 匿名数组
-          bool need_cast = false;
           const pl::ObPLCollection *src_coll = NULL;
           ObPLResolveCtx resolve_ctx(*get_allocator(),
                                       *session,
@@ -2944,41 +2943,15 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
           } else if (coll_type->get_element_type().is_obj_type()) { // basic data type
             const ObDataType *src_data_type = &src_coll->get_element_desc();
             const ObDataType *dst_data_type = coll_type->get_element_type().get_data_type();
-            if (dst_data_type->get_obj_type() == src_data_type->get_obj_type()) {
-              if (ObVarcharType == dst_data_type->get_obj_type()) {
-                need_cast = true;
-              }
-            } else if (cast_supported(src_data_type->get_obj_type(),
+            if (dst_data_type->get_obj_type() == src_data_type->get_obj_type()
+                || (cast_supported(src_data_type->get_obj_type(),
                                       src_data_type->get_collation_type(),
                                       dst_data_type->get_obj_type(),
-                                      dst_data_type->get_collation_type())) {
-              need_cast = true;
+                                      dst_data_type->get_collation_type()))) {
+              // do nothing ...
             } else {
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("incorrect argument type, diff type", K(ret));
-            }
-            if (OB_SUCC(ret) && need_cast) {
-              int64_t dst_size = 0;
-              ObObjParam &param = params->at(i);
-              ObObj dst;
-              ObObj *dst_ptr = &dst;
-              ObObj *src_ptr = &param;
-              OZ (pl_user_type->init_obj(*(schema_guard), *get_allocator(), dst, dst_size));
-              OZ (pl_user_type->convert(resolve_ctx, src_ptr, dst_ptr));
-              if (OB_SUCC(ret)) {
-                ObPLCollection *collection = reinterpret_cast<ObPLCollection*>(param.get_ext());
-                if (OB_NOT_NULL(collection)
-                    && OB_NOT_NULL(dynamic_cast<ObPLCollAllocator *>(collection->get_allocator()))) {
-                  collection->get_allocator()->reset();
-                  collection->set_data(NULL);
-                  collection->set_count(0);
-                  collection->set_first(OB_INVALID_INDEX);
-                  collection->set_last(OB_INVALID_INDEX);
-                }
-              }
-              OX (param = dst);
-              OX (param.set_param_meta());
-              OX (param.set_udt_id(pl_user_type->get_user_type_id()));
             }
           } else {
             // element is composite type
@@ -2992,6 +2965,30 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("incorrect argument type", K(ret));
             }
+          }
+          // do cast to udt
+          if (OB_SUCC(ret)) {
+            int64_t dst_size = 0;
+            ObObjParam &param = params->at(i);
+            ObObj dst;
+            ObObj *dst_ptr = &dst;
+            ObObj *src_ptr = &param;
+            OZ (pl_user_type->init_obj(*(schema_guard), *get_allocator(), dst, dst_size));
+            OZ (pl_user_type->convert(resolve_ctx, src_ptr, dst_ptr));
+            if (OB_SUCC(ret)) {
+              ObPLCollection *collection = reinterpret_cast<ObPLCollection*>(param.get_ext());
+              if (OB_NOT_NULL(collection)
+                  && OB_NOT_NULL(dynamic_cast<ObPLCollAllocator *>(collection->get_allocator()))) {
+                collection->get_allocator()->reset();
+                collection->set_data(NULL);
+                collection->set_count(0);
+                collection->set_first(OB_INVALID_INDEX);
+                collection->set_last(OB_INVALID_INDEX);
+              }
+            }
+            OX (param = dst);
+            OX (param.set_param_meta());
+            OX (param.set_udt_id(pl_user_type->get_user_type_id()));
           }
         } else { //非匿名数组复杂类型
           uint64_t left_type_id = udt_id;

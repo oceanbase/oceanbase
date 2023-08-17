@@ -5686,15 +5686,19 @@ int ObPLResolver::resolve_using(const ObStmtNodeTree *using_node,
       } else {
         bool legal_extend = false;
         if (ObExtendType == expr->get_result_type().get_type()) {
-          const ObUserDefinedType *user_type = NULL;
-          CK (OB_NOT_NULL(current_block_));
-          OZ (current_block_->get_namespace().get_pl_data_type_by_id(
-            expr->get_result_type().get_udt_id(), user_type));
-          CK (OB_NOT_NULL(user_type));
-          OX (legal_extend = user_type->is_udt_type()
-                          || user_type->is_package_type()
-                          || user_type->is_sys_refcursor_type()
-                          || user_type->is_rowtype_type());
+          if (expr->get_result_type().get_udt_id() != OB_INVALID_ID) {
+            const ObUserDefinedType *user_type = NULL;
+            CK (OB_NOT_NULL(current_block_));
+            OZ (current_block_->get_namespace().get_pl_data_type_by_id(
+              expr->get_result_type().get_udt_id(), user_type));
+            CK (OB_NOT_NULL(user_type));
+            OX (legal_extend = user_type->is_udt_type()
+                               || user_type->is_package_type()
+                               || user_type->is_sys_refcursor_type()
+                               || user_type->is_rowtype_type());
+          } else {
+            legal_extend = true; // for anonymous collection
+          }
         }
         if (OB_SUCC(ret)
             && (T_NULL == using_param->children_[0]->type_
