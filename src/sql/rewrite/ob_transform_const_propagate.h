@@ -95,6 +95,7 @@ private:
                          expired_const_infos_(),
                          extra_excluded_exprs_(),
                          propagate_exprs_(),
+                         need_propagate_exprs_(true),
                          hint_allowed_trans_(hint_allowed_trans),
                          shared_expr_checker_(shared_expr_checker)
     {
@@ -113,6 +114,7 @@ private:
     common::ObSEArray<ExprConstInfo, 4> expired_const_infos_;
     common::ObSEArray<ObRawExpr *, 4> extra_excluded_exprs_;
     common::ObSEArray<ObRawExpr *, 4> propagate_exprs_;
+    bool need_propagate_exprs_;
     bool hint_allowed_trans_;
     const ObSharedExprChecker &shared_expr_checker_;
 
