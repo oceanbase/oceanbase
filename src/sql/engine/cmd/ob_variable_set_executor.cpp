@@ -89,6 +89,7 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
     HEAP_VAR(ObPhysicalPlan, phy_plan) {
       ObPhysicalPlanCtx phy_plan_ctx(ctx.get_allocator());
       ObExprCtx expr_ctx;
+      ObValidatePasswordCtx password_ctx;
       phy_plan_ctx.set_phy_plan(&phy_plan);
       phy_plan_ctx.set_last_insert_id_session(session->get_local_last_insert_id());
       const int64_t cur_time = plan_ctx->has_cur_time() ?
@@ -102,6 +103,8 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
       if (OB_ISNULL(expr_ctx.exec_ctx_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("expr_ctx.exec_ctx_ is NULL", K(ret));
+      } else if (password_ctx.init(stmt.get_actual_tenant_id())) {
+        LOG_WARN("fail to init password ctx", K(ret));
       } else {
         expr_ctx.exec_ctx_->set_sql_proxy(sql_proxy);
       }
@@ -214,6 +217,15 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
                               session->get_effective_tenant_id()))) {
                   LOG_WARN("fail to update resource mapping rule version", K(ret));
                 }
+              } else if (node.variable_name_ == OB_SV_VALIDATE_PASSWORD_LENGTH
+                         || node.variable_name_ == OB_SV_VALIDATE_PASSWORD_MIXED_CASE_COUNT
+                         || node.variable_name_ == OB_SV_VALIDATE_PASSWORD_NUMBER_COUNT
+                         || node.variable_name_ == OB_SV_VALIDATE_PASSWORD_SPECIAL_CHAR_COUNT) {
+                if (OB_FAIL(process_validate_password_hook(password_ctx,
+                                                           node.variable_name_,
+                                                           value_obj))) {
+                  LOG_WARN("fail to process validate password hook", K(ret));
+                }
               } else {}
 
               if (OB_FAIL(ret)) {
@@ -316,6 +328,12 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
         if (OB_SYS_VARS_MAYBE_DIFF_VERSION == ret) {
           // 版本兼容，ret改为OB_SUCCESS以便让for循环继续
           ret = OB_SUCCESS;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(cascade_set_validate_password(ctx, stmt, *expr_ctx.calc_buf_,
+                                                  *sql_proxy, password_ctx))) {
+          LOG_WARN("fail to cascade set validate password", K(ret));
         }
       }
     }
@@ -1176,6 +1194,116 @@ int ObVariableSetExecutor::switch_to_session_variable(const ObObj &value,
     sess_var.meta_.set_scale(value.get_scale());
     sess_var.meta_.set_collation_level(CS_LEVEL_IMPLICIT);
     sess_var.meta_.set_collation_type(value.get_collation_type());
+  }
+  return ret;
+}
+
+int ObVariableSetExecutor::ObValidatePasswordCtx::init(uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service_ is null");
+  } else {
+    ObSchemaGetterGuard schema_guard;
+    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+      LOG_WARN("get schema guard failed", K(ret));
+    } else if (OB_FAIL(get_current_val(schema_guard, tenant_id,
+                                       share::SYS_VAR_VALIDATE_PASSWORD_LENGTH,
+                                       cur_length_))) {
+      LOG_WARN("fail to get validate_password_length", K(ret));
+    } else if (OB_FAIL(get_current_val(schema_guard, tenant_id,
+                                       share::SYS_VAR_VALIDATE_PASSWORD_MIXED_CASE_COUNT,
+                                       cur_mixed_case_count_))) {
+      LOG_WARN("fail to get validate_password_mixed_case_count", K(ret));
+    } else if (OB_FAIL(get_current_val(schema_guard, tenant_id,
+                                       share::SYS_VAR_VALIDATE_PASSWORD_NUMBER_COUNT,
+                                       cur_number_count_))) {
+      LOG_WARN("fail to get validate_password_number_count", K(ret));
+    } else if (OB_FAIL(get_current_val(schema_guard, tenant_id,
+                                       share::SYS_VAR_VALIDATE_PASSWORD_SPECIAL_CHAR_COUNT,
+                                       cur_special_count_))) {
+      LOG_WARN("fail to get validate_password_special_char_count", K(ret));
+    } else {
+      expect_length_ = cur_length_;
+    }
+  }
+  return ret;
+}
+
+int ObVariableSetExecutor::ObValidatePasswordCtx::get_current_val(
+    ObSchemaGetterGuard &schema_guard,
+    uint64_t tenant_id,
+    ObSysVarClassType var_id,
+    uint64_t &val)
+{
+  int ret = OB_SUCCESS;
+  const schema::ObSysVarSchema *var_schema = NULL;
+  ObObj val_obj;
+  if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id, var_id, var_schema))) {
+    LOG_WARN("fail to get system variable", K(ret), K(tenant_id), K(var_id));
+  } else if (OB_ISNULL(var_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("var_schema is null");
+  } else if (OB_FAIL(var_schema->get_value(NULL, NULL, val_obj))) {
+    LOG_WARN("get value from var_schema failed", K(ret), K(*var_schema));
+  } else if (OB_FAIL(val_obj.get_uint64(val))) {
+    LOG_WARN("fail to get uint", K(val_obj), K(ret));
+  }
+  return ret;
+}
+
+int ObVariableSetExecutor::ObValidatePasswordCtx::update_expect_length()
+{
+  int ret = OB_SUCCESS;
+  uint64_t lower_bound = cur_mixed_case_count_ * 2 + cur_number_count_ + cur_special_count_;
+  expect_length_ = MAX(expect_length_, lower_bound);
+  return ret;
+}
+
+int ObVariableSetExecutor::process_validate_password_hook(ObValidatePasswordCtx &ctx,
+                                                          const common::ObString var_name,
+                                                          const common::ObObj &val)
+{
+  int ret = OB_SUCCESS;
+  uint64_t new_val = 0;
+  if (OB_FAIL(val.get_uint64(new_val))) {
+    LOG_WARN("fail to get uint", K(val), K(ret));
+  } else if (var_name == OB_SV_VALIDATE_PASSWORD_MIXED_CASE_COUNT) {
+    ctx.cur_mixed_case_count_ = new_val;
+  } else if (var_name == OB_SV_VALIDATE_PASSWORD_NUMBER_COUNT) {
+    ctx.cur_number_count_ = new_val;
+  } else if (var_name == OB_SV_VALIDATE_PASSWORD_SPECIAL_CHAR_COUNT) {
+    ctx.cur_special_count_ = new_val;
+  } else if (var_name == OB_SV_VALIDATE_PASSWORD_LENGTH) {
+    ctx.cur_length_ = new_val;
+    ctx.expect_length_ = new_val;
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(ctx.update_expect_length())) {
+    LOG_WARN("failed to update expect length", K(ret));
+  }
+  return ret;
+}
+
+int ObVariableSetExecutor::cascade_set_validate_password(ObExecContext &ctx,
+                                                         ObVariableSetStmt &stmt,
+                                                         ObIAllocator &calc_buf,
+                                                         ObMySQLProxy &sql_proxy,
+                                                         const ObValidatePasswordCtx &password_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (password_ctx.expect_length_ == password_ctx.cur_length_) {
+    // do nothing
+  } else {
+    ObObj value_obj;
+    ObSetVar set_var(OB_SV_VALIDATE_PASSWORD_LENGTH, ObSetVar::SET_SCOPE_GLOBAL, false,
+                             stmt.get_actual_tenant_id(), calc_buf, sql_proxy);
+    value_obj.set_uint64(password_ctx.expect_length_);
+    if (OB_FAIL(update_global_variables(ctx, stmt, set_var, value_obj))) {
+      LOG_WARN("failed to update global variables", K(ret));
+    }
   }
   return ret;
 }

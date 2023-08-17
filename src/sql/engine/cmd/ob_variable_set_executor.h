@@ -76,6 +76,27 @@ public:
   static int switch_to_session_variable(const common::ObObj &value,
                                         ObSessionVariable &sess_var);
 private:
+  struct ObValidatePasswordCtx {
+    ObValidatePasswordCtx() :
+      expect_length_(0),
+      cur_length_(0),
+      cur_mixed_case_count_(0),
+      cur_number_count_(0),
+      cur_special_count_(0)
+    {}
+    int init(uint64_t tenant_id);
+    int get_current_val(schema::ObSchemaGetterGuard &schema_guard,
+                        uint64_t tenant_id,
+                        ObSysVarClassType var_id,
+                        uint64_t &val);
+    int update_expect_length();
+
+    uint64_t expect_length_;
+    uint64_t cur_length_;
+    uint64_t cur_mixed_case_count_;
+    uint64_t cur_number_count_;
+    uint64_t cur_special_count_;
+  };
   int process_session_autocommit_hook(ObExecContext &exec_ctx,
                                       const common::ObObj &val);
   int process_auto_increment_hook(const ObSQLMode sql_mode,
@@ -92,6 +113,14 @@ private:
                               const share::ObSetVar &set_var,
                               const common::ObObj &value_obj);
   int global_variable_timezone_formalize(ObExecContext &ctx, ObObj &val);
+  int process_validate_password_hook(ObValidatePasswordCtx &ctx,
+                                     const common::ObString var_name,
+                                     const common::ObObj &val);
+  int cascade_set_validate_password(ObExecContext &ctx,
+                                    ObVariableSetStmt &stmt,
+                                    common::ObIAllocator &calc_buf,
+                                    common::ObMySQLProxy &sql_proxy,
+                                    const ObValidatePasswordCtx &password_ctx);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObVariableSetExecutor);
 };
