@@ -284,6 +284,8 @@ OB_STMT_TYPE_DEF_UNKNOWN_AT(T_BACKUP_KEY, get_sys_tenant_alter_system_priv, 284)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_CREATE_STANDBY_TENANT, get_sys_tenant_super_priv, 285)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_CANCEL_RESTORE, get_sys_tenant_alter_system_priv, 286)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_TABLE_TTL, get_sys_tenant_alter_system_priv, 287)
+//OB_STMT_TYPE_DEF_UNKNOWN_AT(T_RECOVER_TABLE, get_sys_tenant_alter_system_priv, 288)
+//OB_STMT_TYPE_DEF_UNKNOWN_AT(T_CANCEL_RECOVER_TABLE, get_sys_tenant_alter_system_priv, 289)
 
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MAX, err_stmt_type_priv, 500)
 #endif
