@@ -780,7 +780,9 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObTabletHandle &tablet_handle,
     bool finish = false;
     const int64_t start_time = ObTimeUtility::current_time();
     while (OB_SUCC(ret) && !finish) {
-      if (tmp_cb->is_success()) {
+      if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("check status failed", K(ret));
+      } else if (tmp_cb->is_success()) {
         finish = true;
       } else if (tmp_cb->is_failed()) {
         ret = OB_NOT_MASTER;
@@ -789,8 +791,11 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObTabletHandle &tablet_handle,
         const int64_t current_time = ObTimeUtility::current_time();
         if (current_time - start_time > ObDDLRedoLogHandle::DDL_REDO_LOG_TIMEOUT) {
           ret = OB_TIMEOUT;
-          LOG_WARN("write ddl start log timeout", K(ret));
+          LOG_WARN("write ddl start log timeout", K(ret), K(current_time), K(start_time));
         } else {
+          if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) { //10s
+            LOG_INFO("wait ddl start log callback", K(ret), K(finish), K(current_time), K(start_time));
+          }
           ob_usleep(ObDDLRedoLogHandle::CHECK_DDL_REDO_LOG_FINISH_INTERVAL);
         }
       }
@@ -944,7 +949,9 @@ int ObDDLRedoLogHandle::wait(const int64_t timeout)
     bool finish = false;
     const int64_t start_time = ObTimeUtility::current_time();
     while (OB_SUCC(ret) && !finish) {
-      if (cb_->is_success()) {
+      if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("check status failed", K(ret));
+      } else if (cb_->is_success()) {
         finish = true;
       } else if (cb_->is_failed()) {
         ret = OB_NOT_MASTER;
@@ -953,8 +960,11 @@ int ObDDLRedoLogHandle::wait(const int64_t timeout)
         const int64_t current_time = ObTimeUtility::current_time();
         if (current_time - start_time > timeout) {
           ret = OB_TIMEOUT;
-          LOG_WARN("write ddl redo log timeout", K(ret));
+          LOG_WARN("write ddl redo log timeout", K(ret), K(current_time), K(start_time));
         } else {
+          if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) { //10s
+            LOG_INFO("wait ddl redo log callback", K(ret), K(finish), K(current_time), K(start_time));
+          }
           ob_usleep(ObDDLRedoLogHandle::CHECK_DDL_REDO_LOG_FINISH_INTERVAL);
         }
       }
@@ -981,7 +991,9 @@ int ObDDLCommitLogHandle::wait(const int64_t timeout)
     bool finish = false;
     const int64_t start_time = ObTimeUtility::current_time();
     while (OB_SUCC(ret) && !finish) {
-      if (cb_->is_success()) {
+      if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("check status failed", K(ret));
+      } else if (cb_->is_success()) {
         finish = true;
         ret = cb_->get_ret_code();
         if (OB_FAIL(ret)) {
@@ -994,8 +1006,11 @@ int ObDDLCommitLogHandle::wait(const int64_t timeout)
         const int64_t current_time = ObTimeUtility::current_time();
         if (current_time - start_time > timeout) {
           ret = OB_TIMEOUT;
-          LOG_WARN("write ddl commit log timeout", K(ret));
+          LOG_WARN("write ddl commit log timeout", K(ret), K(current_time), K(start_time));
         } else {
+          if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) { //10s
+            LOG_INFO("wait ddl commit log callback", K(ret), K(finish), K(current_time), K(start_time));
+          }
           ob_usleep(ObDDLRedoLogHandle::CHECK_DDL_REDO_LOG_FINISH_INTERVAL);
         }
       }
