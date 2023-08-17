@@ -418,7 +418,7 @@ public:
   OB_INLINE void set_scale(const ObScale scale) { scale_ = static_cast<int8_t>(scale); }
   OB_INLINE ObScale get_scale() const { return static_cast<ObScale>(scale_); }
   OB_INLINE void set_extend_type(uint8_t type) { extend_type_ = type; }
-  OB_INLINE uint8_t get_extend_type() const { return extend_type_; }
+  OB_INLINE uint8_t get_extend_type() const { return is_ext() ? extend_type_ : -1; }
 
   TO_STRING_KV(N_TYPE, ob_obj_type_str(static_cast<ObObjType>(type_)),
                N_COLLATION, ObCharset::collation_name(get_collation_type()),
