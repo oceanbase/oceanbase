@@ -269,8 +269,9 @@ int ObExprFuncPartHash::cg_expr(ObExprCGCtx &, const ObRawExpr &, ObExpr &rt_exp
   int ret = OB_SUCCESS;
   if (lib::is_mysql_mode()) {
     if (1 != rt_expr.arg_cnt_) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("expect one parameter in mysql", K(ret));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "part hash");
     }
   }
 

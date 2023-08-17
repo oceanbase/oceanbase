@@ -29,6 +29,7 @@ extern void parse_free(void *ptr);
 extern char *parse_strndup(const char *str, size_t nbyte, void *malloc_pool);
 extern char *parse_strdup(const char *str, void *malloc_pool, int64_t *out_len);
 extern char *parse_str_convert_utf8(const struct ObCharsetInfo* src_cs, const char *str, void *malloc_pool, int64_t *out_len, int *extra_errno);
+extern char *parse_strndup_with_trim_space_for_new_line(const char *str, size_t nbyte, void *malloc_pool, int *connection_collation, int64_t *new_len);
 extern char *strndup_with_prefix(const char *prefix, const char *str, size_t nbyte, void *malloc_pool);
 extern char *strndup_with_prefix_and_postfix(const char *prefix, const char *postfix, const char *str, size_t nbyte, void *malloc_pool);
 extern char *cp_str_value(const char *src, const size_t nbyte, void *malloc_pool);
