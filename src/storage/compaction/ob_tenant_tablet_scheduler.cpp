@@ -708,6 +708,8 @@ int ObProhibitScheduleMediumMap::add_flag(const ObLSID &ls_id, const ProhibitFla
       if (OB_HASH_NOT_EXIST == ret) {
         if (OB_FAIL(ls_id_map_.set_refactored(ls_id, input_flag))) {
           LOG_WARN("failed to stop ls schedule medium", K(ret), K(ls_id), K(input_flag));
+        } else if (TRANSFER == input_flag) {
+          ++transfer_flag_cnt_;
         }
       } else {
         LOG_WARN("failed to get map", K(ret), K(ls_id), K(tmp_flag));
@@ -736,6 +738,8 @@ int ObProhibitScheduleMediumMap::clear_flag(const ObLSID &ls_id, const ProhibitF
       LOG_TRACE("flag in conflict", K(ret), K(ls_id), K(tmp_flag), K(input_flag));
     } else if (OB_FAIL(ls_id_map_.erase_refactored(ls_id))) {
       LOG_WARN("failed to resume ls schedule medium", K(ret), K(ls_id), K(tmp_flag));
+    } else if (TRANSFER == input_flag) {
+      --transfer_flag_cnt_;
     }
   }
   return ret;
@@ -776,10 +780,10 @@ int64_t ObProhibitScheduleMediumMap::to_string(char *buf, const int64_t buf_len)
   return pos;
 }
 
-int64_t ObProhibitScheduleMediumMap::get_cnt() const
+int64_t ObProhibitScheduleMediumMap::get_transfer_flag_cnt() const
 {
   obsys::ObRLockGuard lock_guard(lock_);
-  return ls_id_map_.size();
+  return transfer_flag_cnt_;
 }
 
 int ObTenantTabletScheduler::stop_ls_schedule_medium(const ObLSID &ls_id)
@@ -1559,7 +1563,7 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
           "cost_time",
           current_time - schedule_stats_.start_timestamp_);
     }
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL) && prohibit_medium_map_.get_cnt() > 0) {
+    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL) && prohibit_medium_map_.get_transfer_flag_cnt() > 0) {
       LOG_INFO("tenant is blocking schedule medium", KR(ret), K_(prohibit_medium_map));
     }
 

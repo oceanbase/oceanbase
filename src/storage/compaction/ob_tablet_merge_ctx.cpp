@@ -895,7 +895,7 @@ int ObTabletMergeCtx::update_tablet_directly(const ObGetMergeTablesResult &get_m
   } else {
     merge_info_.get_sstable_merge_info().merge_finish_time_ = common::ObTimeUtility::fast_current_time();
     (void)generate_participant_table_info(merge_info_.get_sstable_merge_info().participant_table_info_);
-    (void)merge_dag_->get_ctx().collect_running_info();
+    (void)merge_dag_->get_ctx()->collect_running_info();
 
     if (OB_TMP_FAIL(ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
         *ls_handle_.get_ls(), *new_tablet_handle.get_obj()))) {

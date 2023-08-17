@@ -204,7 +204,7 @@ class ObBasicTabletMergeDag: public share::ObIDag, public ObMergeDagHash
 public:
   ObBasicTabletMergeDag(const share::ObDagType::ObDagTypeEnum type);
   virtual ~ObBasicTabletMergeDag();
-  ObTabletMergeCtx &get_ctx() { return *ctx_; }
+  ObTabletMergeCtx *get_ctx() { return ctx_; }
   ObTabletMergeDagParam &get_param() { return param_; }
   virtual const share::ObLSID & get_ls_id() const { return param_.ls_id_; }
   virtual bool operator == (const ObIDag &other) const override;
@@ -220,6 +220,7 @@ public:
         || OB_TABLET_NOT_EXIST == dag_ret_
         || OB_CANCELED == dag_ret_;
   }
+  int prepare_merge_ctx();
   int get_tablet_and_compat_mode();
   virtual int64_t to_string(char* buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
@@ -229,7 +230,6 @@ public:
       ObBasicTabletMergeDag &merge_dag,
       ObTabletMergeCtx &ctx,
       share::ObITask *prepare_task = nullptr);
-
 protected:
   int alloc_merge_ctx();
   int inner_init(const ObTabletMergeDagParam &param);

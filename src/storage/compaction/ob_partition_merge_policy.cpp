@@ -157,6 +157,11 @@ int ObPartitionMergePolicy::get_medium_merge_tables(
   return ret;
 }
 
+bool ObPartitionMergePolicy::is_sstable_count_not_safe(const int64_t minor_table_cnt)
+{
+  return minor_table_cnt >= MAX_SSTABLE_CNT_IN_STORAGE;
+}
+
 int ObPartitionMergePolicy::get_mini_merge_tables(
     const ObGetMergeTablesParam &param,
     ObLS &ls,
@@ -180,7 +185,7 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
   } else if (OB_UNLIKELY(nullptr == tablet.get_memtable_mgr() || !table_store_wrapper.get_member()->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null memtable mgr from tablet or invalid table store", K(ret), K(tablet), K(table_store_wrapper));
-  } else if (table_store_wrapper.get_member()->get_minor_sstables().count() >= MAX_SSTABLE_CNT_IN_STORAGE) {
+  } else if (is_sstable_count_not_safe(table_store_wrapper.get_member()->get_minor_sstables().count())) {
     ret = OB_SIZE_OVERFLOW;
     LOG_ERROR("Too many sstables, delay mini merge until sstable count falls below MAX_SSTABLE_CNT",
               K(ret), K(PRINT_TS_WRAPPER(table_store_wrapper)), K(tablet));

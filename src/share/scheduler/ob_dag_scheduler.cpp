@@ -2297,14 +2297,15 @@ int ObTenantDagScheduler::get_max_major_finish_time(const int64_t version, int64
     ObThreadCondGuard guard(scheduler_sync_);
     ObIDag *head = dag_list_[READY_DAG_LIST].get_head(ObDagPrio::DAG_PRIO_COMPACTION_LOW);
     ObIDag *cur = head->get_next();
+    compaction::ObTabletMergeCtx *ctx = nullptr;
     while (head != cur) {
       if (ObDagType::DAG_TYPE_MAJOR_MERGE == cur->get_type()) {
         dag = static_cast<compaction::ObTabletMergeDag *>(cur);
         if (ObIDag::DAG_STATUS_NODE_RUNNING == dag->get_dag_status()) {
-          if (dag->get_ctx().param_.merge_version_ == version) {
-            if (OB_NOT_NULL(dag->get_ctx().merge_progress_)
-                && dag->get_ctx().merge_progress_->get_estimated_finish_time() > estimated_finish_time) {
-              estimated_finish_time = dag->get_ctx().merge_progress_->get_estimated_finish_time();
+          if (nullptr != (ctx = dag->get_ctx()) && ctx->param_.merge_version_ == version) {
+            if (OB_NOT_NULL(ctx->merge_progress_)
+                && ctx->merge_progress_->get_estimated_finish_time() > estimated_finish_time) {
+              estimated_finish_time = ctx->merge_progress_->get_estimated_finish_time();
             }
           }
         } else {

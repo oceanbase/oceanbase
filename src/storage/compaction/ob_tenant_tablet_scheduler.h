@@ -153,8 +153,9 @@ public:
   int clear_flag(const share::ObLSID &ls_id, const ProhibitFlag &input_flag);
   int add_flag(const share::ObLSID &ls_id, const ProhibitFlag &input_flag);
   int64_t to_string(char *buf, const int64_t buf_len) const;
-  int64_t get_cnt() const;
+  int64_t get_transfer_flag_cnt() const;
 private:
+  int64_t transfer_flag_cnt_;
   mutable obsys::ObRWLock lock_;
   common::hash::ObHashMap<share::ObLSID, ProhibitFlag> ls_id_map_;
 };

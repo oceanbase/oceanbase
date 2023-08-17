@@ -261,23 +261,41 @@ int ObBasicTabletMergeDag::alloc_merge_ctx()
   }
   return ret;
 }
+
+int ObBasicTabletMergeDag::prepare_merge_ctx()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(alloc_merge_ctx())) {
+    LOG_WARN("failed to alloc memory for merge ctx", K(ret), KPC(this));
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ctx_->ls_handle_, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    if (typeid(*this) != typeid(ObTxTableMergeDag)
+        && OB_TMP_FAIL(ctx_->init_merge_progress(param_.is_tenant_major_merge_))) {
+      LOG_WARN("failed to init merge progress", K(tmp_ret), K_(param));
+    }
+  }
+  return ret;
+}
 int ObBasicTabletMergeDag::get_tablet_and_compat_mode()
 {
   int ret = OB_SUCCESS;
   // can't get tablet_handle now! because this func is called in create dag,
   // the last compaction dag is not finished yet, tablet is in old version
+  ObLSHandle tmp_ls_handle;
   ObTabletHandle tmp_tablet_handle;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ctx_->ls_handle_, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, tmp_ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
-  } else if (OB_FAIL(ctx_->ls_handle_.get_ls()->get_tablet_svr()->get_tablet(
+  } else if (OB_FAIL(tmp_ls_handle.get_ls()->get_tablet_svr()->get_tablet(
           tablet_id_,
           tmp_tablet_handle,
           0/*timeout*/,
           ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("failed to get tablet", K(ret), K(ls_id_), K(tablet_id_));
-  } else if (OB_FAIL(ObTabletMergeChecker::check_need_merge(ctx_->param_.merge_type_, *tmp_tablet_handle.get_obj()))) {
+  } else if (OB_FAIL(ObTabletMergeChecker::check_need_merge(param_.merge_type_, *tmp_tablet_handle.get_obj()))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to check need merge", K(ret));
     }
@@ -288,27 +306,20 @@ int ObBasicTabletMergeDag::get_tablet_and_compat_mode()
   }
 
   if (OB_SUCC(ret) && is_mini_merge(merge_type_)) {
-    int64_t inc_sstable_cnt = table_store_wrapper.get_member()->get_minor_sstables().count() + 1/*major table*/;
     bool is_exist = false;
     if (OB_FAIL(MTL(ObTenantDagScheduler *)->check_dag_exist(this, is_exist))) {
       LOG_WARN("failed to check dag exist", K(ret), K_(param));
-    } else if (is_exist) {
-      ++inc_sstable_cnt;
-    }
-    if (OB_SUCC(ret) && inc_sstable_cnt >= MAX_SSTABLE_CNT_IN_STORAGE) {
-      ret = OB_TOO_MANY_SSTABLE;
-      LOG_WARN("Too many sstables in tablet, cannot schdule mini compaction, retry later",
-          K(ret), K_(ls_id), K_(tablet_id), K(inc_sstable_cnt), K(tmp_tablet_handle.get_obj()));
+    } else {
+      const int64_t inc_sstable_cnt = table_store_wrapper.get_member()->get_minor_sstables().count() + (is_exist ? 1 : 0);
+      if (ObPartitionMergePolicy::is_sstable_count_not_safe(inc_sstable_cnt)) {
+        ret = OB_TOO_MANY_SSTABLE;
+        LOG_WARN("Too many sstables in tablet, cannot schdule mini compaction, retry later",
+            K(ret), K_(ls_id), K_(tablet_id), K(tmp_tablet_handle.get_obj()),
+            "inc_sstable_cnt", table_store_wrapper.get_member()->get_minor_sstables().count());
+        ObPartitionMergePolicy::diagnose_table_count_unsafe(MINI_MERGE, *tmp_tablet_handle.get_obj());
+      }
     }
   }
-
-  int tmp_ret = OB_SUCCESS;
-  if (OB_SUCC(ret)
-      && typeid(*this) != typeid(ObTxTableMergeDag)
-      && OB_UNLIKELY(OB_SUCCESS != (tmp_ret = ctx_->init_merge_progress(param_.is_tenant_major_merge_)))) {
-    LOG_WARN("failed to init merge progress", K(tmp_ret), K_(param));
-  }
-
   return ret;
 }
 
@@ -346,7 +357,7 @@ int ObBasicTabletMergeDag::inner_init(const ObTabletMergeDagParam &param)
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("cannot init twice", K(ret), K(param));
-  } else if (!param.is_valid()) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(param));
   } else {
@@ -355,8 +366,6 @@ int ObBasicTabletMergeDag::inner_init(const ObTabletMergeDagParam &param)
     ls_id_ = param.ls_id_;
     tablet_id_ = param.tablet_id_;
     if (param.for_diagnose_) {
-    } else if (OB_FAIL(alloc_merge_ctx())) {
-      LOG_WARN("failed to alloc merge ctx", K(ret));
     } else if (OB_FAIL(get_tablet_and_compat_mode())) {
       LOG_WARN("failed to get tablet and compat mode", K(ret));
     }
@@ -929,7 +938,9 @@ int ObTabletMergePrepareTask::process()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_ISNULL(ctx = &merge_dag_->get_ctx())) {
+  } else if (OB_FAIL(merge_dag_->prepare_merge_ctx())) {
+    LOG_WARN("failed to alloc merge ctx", K(ret));
+  } else if (OB_ISNULL(ctx = merge_dag_->get_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is unexpected null", K(ret), KP(ctx), KPC(merge_dag_));
   } else if (OB_UNLIKELY(is_major_merge_type(ctx->param_.merge_type_)
@@ -1033,26 +1044,29 @@ int ObTabletMergePrepareTask::build_merge_ctx(bool &skip_rest_operation)
 {
   int ret = OB_SUCCESS;
   skip_rest_operation = false;
-  ObTabletMergeCtx &ctx = merge_dag_->get_ctx();
-  const common::ObTabletID &tablet_id = ctx.param_.tablet_id_;
+  ObTabletMergeCtx *ctx = nullptr;
+  const common::ObTabletID &tablet_id = ctx->param_.tablet_id_;
 
   // only ctx.param_ is inited, fill other fields here
-  if (OB_UNLIKELY(!ctx.param_.is_valid())) {
+  if (OB_ISNULL(ctx = merge_dag_->get_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx is unexpected null", K(ret), KP(ctx), KPC(merge_dag_));
+  } else if (OB_UNLIKELY(!ctx->param_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ctx));
-  } else if (OB_FAIL(inner_init_ctx(ctx, skip_rest_operation))) {
-    LOG_WARN("fail to inner init ctx", K(ret), K(tablet_id), K(ctx));
+  } else if (OB_FAIL(inner_init_ctx(*ctx, skip_rest_operation))) {
+    LOG_WARN("fail to inner init ctx", K(ret), "tablet_id", ctx->param_.tablet_id_, KPC(ctx));
   }
 
   if (OB_FAIL(ret) || skip_rest_operation) {
-  } else if (FALSE_IT(ctx.merge_scn_ = ctx.scn_range_.end_scn_)) {
-  } else if (OB_FAIL(ctx.init_merge_info())) {
-    LOG_WARN("fail to init merge info", K(ret), K(tablet_id), K(ctx));
-  } else if (OB_FAIL(ctx.prepare_index_tree())) {
+  } else if (FALSE_IT(ctx->merge_scn_ = ctx->scn_range_.end_scn_)) {
+  } else if (OB_FAIL(ctx->init_merge_info())) {
+    LOG_WARN("fail to init merge info", K(ret), "tablet_id", ctx->param_.tablet_id_, KPC(ctx));
+  } else if (OB_FAIL(ctx->prepare_index_tree())) {
     LOG_WARN("fail to prepare sstable index tree", K(ret), K(ctx));
   }
   if (OB_SUCC(ret)) {
-    FLOG_INFO("succeed to build merge ctx", K(tablet_id), K(ctx), K(skip_rest_operation));
+    FLOG_INFO("succeed to build merge ctx", "tablet_id", ctx->param_.tablet_id_, KPC(ctx), K(skip_rest_operation));
   }
 
   return ret;
@@ -1118,9 +1132,9 @@ int ObTabletMergeFinishTask::init()
     LOG_ERROR("dag type not match", K(ret), KPC(dag_));
   } else {
     merge_dag_ = static_cast<ObTabletMergeDag *>(dag_);
-    if (OB_UNLIKELY(!merge_dag_->get_ctx().is_valid())) {
+    if (OB_UNLIKELY(nullptr == merge_dag_->get_ctx() || !merge_dag_->get_ctx()->is_valid())) {
       ret = OB_ERR_SYS;
-      LOG_WARN("ctx not valid", K(ret), K(merge_dag_->get_ctx()));
+      LOG_WARN("ctx not valid", K(ret), KPC(merge_dag_->get_ctx()));
     } else {
       is_inited_ = true;
     }
@@ -1132,13 +1146,13 @@ int ObTabletMergeFinishTask::init()
 int ObTabletMergeFinishTask::create_sstable_after_merge()
 {
   int ret = OB_SUCCESS;
-  ObTabletMergeCtx &ctx = merge_dag_->get_ctx();
-  if (ctx.merged_sstable_.is_valid()) {
-    if (OB_UNLIKELY(!is_major_merge_type(ctx.param_.merge_type_))) {
+  ObTabletMergeCtx *ctx = merge_dag_->get_ctx();
+  if (ctx->merged_sstable_.is_valid()) {
+    if (OB_UNLIKELY(!is_major_merge_type(ctx->param_.merge_type_))) {
       ret = OB_ERR_SYS;
-      LOG_ERROR("Unxpected valid merged table handle with other merge", K(ret), K(ctx));
+      LOG_ERROR("Unxpected valid merged table handle with other merge", K(ret), KPC(ctx));
     }
-  } else if (OB_FAIL(get_merged_sstable(ctx))) {
+  } else if (OB_FAIL(get_merged_sstable(*ctx))) {
     LOG_WARN("failed to finish_merge_sstable", K(ret));
   }
   return ret;
@@ -1149,47 +1163,49 @@ int ObTabletMergeFinishTask::process()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObTaskController::get().switch_task(share::ObTaskType::DATA_MAINTAIN);
-
+  ObTabletMergeCtx *ctx = nullptr;
   DEBUG_SYNC(MERGE_PARTITION_FINISH_TASK);
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited yet", K(ret));
+  } else if (OB_ISNULL(ctx = merge_dag_->get_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx is unexpected null", K(ret), KP(ctx), KPC(merge_dag_));
   } else {
-    ObTabletMergeCtx &ctx = merge_dag_->get_ctx();
-    ObLSID &ls_id = ctx.param_.ls_id_;
-    ObTabletID &tablet_id = ctx.param_.tablet_id_;
+    ObLSID &ls_id = ctx->param_.ls_id_;
+    ObTabletID &tablet_id = ctx->param_.tablet_id_;
 
-    ctx.time_guard_.click(ObCompactionTimeGuard::EXECUTE);
+    ctx->time_guard_.click(ObCompactionTimeGuard::EXECUTE);
     if (OB_FAIL(create_sstable_after_merge())) {
       LOG_WARN("failed to create sstable after merge", K(ret), K(tablet_id));
-    } else if (FALSE_IT(ctx.time_guard_.click(ObCompactionTimeGuard::CREATE_SSTABLE))) {
-    } else if (OB_FAIL(add_sstable_for_merge(ctx))) {
+    } else if (FALSE_IT(ctx->time_guard_.click(ObCompactionTimeGuard::CREATE_SSTABLE))) {
+    } else if (OB_FAIL(add_sstable_for_merge(*ctx))) {
       LOG_WARN("failed to add sstable for merge", K(ret));
     }
-    if (OB_SUCC(ret) && is_major_merge_type(ctx.param_.merge_type_) && NULL != ctx.param_.report_) {
+    if (OB_SUCC(ret) && is_major_merge_type(ctx->param_.merge_type_) && NULL != ctx->param_.report_) {
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(ctx.param_.report_->submit_tablet_update_task(MTL_ID(), ctx.param_.ls_id_, tablet_id))) {
-        LOG_WARN("failed to submit tablet update task to report", K(tmp_ret), K(MTL_ID()), K(ctx.param_.ls_id_), K(tablet_id));
-      } else if (OB_TMP_FAIL(ctx.ls_handle_.get_ls()->get_tablet_svr()->update_tablet_report_status(tablet_id))) {
+      if (OB_TMP_FAIL(ctx->param_.report_->submit_tablet_update_task(MTL_ID(), ctx->param_.ls_id_, tablet_id))) {
+        LOG_WARN("failed to submit tablet update task to report", K(tmp_ret), K(MTL_ID()), K(ctx->param_.ls_id_), K(tablet_id));
+      } else if (OB_TMP_FAIL(ctx->ls_handle_.get_ls()->get_tablet_svr()->update_tablet_report_status(tablet_id))) {
         LOG_WARN("failed to update tablet report status", K(tmp_ret), K(tablet_id));
       }
     }
 
-    if (OB_SUCC(ret) && OB_NOT_NULL(ctx.merge_progress_)) {
-      if (OB_TMP_FAIL(ctx.merge_progress_->update_merge_info(ctx.merge_info_.get_sstable_merge_info()))) {
+    if (OB_SUCC(ret) && OB_NOT_NULL(ctx->merge_progress_)) {
+      if (OB_TMP_FAIL(ctx->merge_progress_->update_merge_info(ctx->merge_info_.get_sstable_merge_info()))) {
         STORAGE_LOG(WARN, "fail to update update merge info", K(tmp_ret));
       }
 
       if (OB_TMP_FAIL(compaction::ObCompactionSuggestionMgr::get_instance().analyze_merge_info(
-              ctx.merge_info_,
-              *ctx.merge_progress_))) {
+              ctx->merge_info_,
+              *ctx->merge_progress_))) {
         STORAGE_LOG(WARN, "fail to analyze merge info", K(tmp_ret));
       }
       ObSSTableMetaHandle sst_meta_hdl;
-      if (OB_TMP_FAIL(ctx.merged_sstable_.get_meta(sst_meta_hdl))) {
+      if (OB_TMP_FAIL(ctx->merged_sstable_.get_meta(sst_meta_hdl))) {
         STORAGE_LOG(WARN, "fail to get sstable meta handle", K(tmp_ret));
-      } else if (OB_TMP_FAIL(ctx.merge_progress_->finish_merge_progress(
+      } else if (OB_TMP_FAIL(ctx->merge_progress_->finish_merge_progress(
           sst_meta_hdl.get_sstable_meta().get_total_macro_block_count()))) {
         STORAGE_LOG(WARN, "fail to update final merge progress", K(tmp_ret));
       }
@@ -1198,15 +1214,14 @@ int ObTabletMergeFinishTask::process()
 
 
   if (NULL != merge_dag_) {
-    ObTabletMergeCtx &ctx = merge_dag_->get_ctx();
     if (OB_FAIL(ret)) {
-      FLOG_WARN("sstable merge finish", K(ret), K(ctx), "task", *(static_cast<ObITask *>(this)));
+      FLOG_WARN("sstable merge finish", K(ret), KPC(ctx), "task", *(static_cast<ObITask *>(this)));
     } else {
-      ctx.time_guard_.click(ObCompactionTimeGuard::DAG_FINISH);
-      (void)ctx.collect_running_info();
+      ctx->time_guard_.click(ObCompactionTimeGuard::DAG_FINISH);
+      (void)ctx->collect_running_info();
       // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
-      FLOG_INFO("sstable merge finish", K(ret), "merge_info", ctx.get_merge_info(),
-          K(ctx.merged_sstable_), "compat_mode", merge_dag_->get_compat_mode(), K(ctx.time_guard_));
+      FLOG_INFO("sstable merge finish", K(ret), "merge_info", ctx->get_merge_info(),
+          K(ctx->merged_sstable_), "compat_mode", merge_dag_->get_compat_mode(), K(ctx->time_guard_));
     }
   }
 

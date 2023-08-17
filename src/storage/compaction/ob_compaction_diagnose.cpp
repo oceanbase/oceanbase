@@ -859,8 +859,9 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
       if (OB_TMP_FAIL(get_suspect_info_and_print(MEDIUM_MERGE, share::ObLSID(INT64_MAX), ObTabletID(INT64_MAX)))) {
         LOG_WARN("failed get tenant merge suspect info", K(tmp_ret));
       }
-      if (scheduler->could_major_merge_start() && can_add_diagnose_info()
-          && scheduler->get_prohibit_medium_ls_map().get_cnt() > 0) {
+      if ((!scheduler->could_major_merge_start()
+          || scheduler->get_prohibit_medium_ls_map().get_transfer_flag_cnt() > 0)
+            && can_add_diagnose_info()) {
         SET_DIAGNOSE_INFO(
             info_array_[idx_++],
             !scheduler->could_major_merge_start() ? MAJOR_MERGE : MEDIUM_MERGE,

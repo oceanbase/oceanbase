@@ -100,7 +100,7 @@ public:
       ObLS &ls,
       const ObTablet &tablet,
       ObVersionRange &result_version_range);
-
+  static bool is_sstable_count_not_safe(const int64_t minor_table_cnt);
 private:
   static int find_mini_merge_tables(
       const storage::ObGetMergeTablesParam &param,

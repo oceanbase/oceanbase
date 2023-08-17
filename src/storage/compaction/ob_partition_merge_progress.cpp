@@ -209,7 +209,7 @@ int ObPartitionMergeProgress::estimate(ObTabletMergeCtx *ctx)
       update_estimated_finish_time_();
       if (ctx->param_.is_tenant_major_merge_) {
           if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_progress(
-                    merge_dag_->get_ctx().param_.merge_version_,
+                    merge_dag_->get_ctx()->param_.merge_version_,
                     estimate_occupy_size_ - old_major_data_size, // estimate_occupy_size_delta
                     0, // scanned_data_size_delta
                     0, // output_block_cnt_delta
@@ -218,7 +218,7 @@ int ObPartitionMergeProgress::estimate(ObTabletMergeCtx *ctx)
           LOG_WARN("failed to update progress", K(ret), K(old_major_data_size));
         } else {
           LOG_DEBUG("init() success to update progress", K(ret),
-              "param", merge_dag_->get_ctx().param_, K_(estimate_row_cnt), K_(estimate_occupy_size),
+              "param", merge_dag_->get_ctx()->param_, K_(estimate_row_cnt), K_(estimate_occupy_size),
               K(old_major_data_size));
         }
       }
@@ -398,7 +398,7 @@ int ObPartitionMajorMergeProgress::update_merge_progress(
         update_estimated_finish_time_();
 
         if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_progress(
-                merge_dag_->get_ctx().param_.merge_version_,
+                merge_dag_->get_ctx()->param_.merge_version_,
                 0, // estimate_occupy_size_delta
                 scan_data_size_delta,
                 output_block_cnt_delta,
@@ -407,7 +407,7 @@ int ObPartitionMajorMergeProgress::update_merge_progress(
           LOG_WARN("failed to update progress", K(ret), K(idx), K(scan_data_size_delta), K(output_block_cnt_delta));
         } else {
           LOG_DEBUG("update() success to update progress", K(ret),
-              "param", merge_dag_->get_ctx().param_, K(scan_data_size_delta), K(output_block_cnt_delta));
+              "param", merge_dag_->get_ctx()->param_, K(scan_data_size_delta), K(output_block_cnt_delta));
         }
         ATOMIC_STORE(&is_updating_, false);
       }
@@ -423,22 +423,22 @@ int ObPartitionMajorMergeProgress::finish_merge_progress(const int64_t output_cn
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionMajorMergeProgress not inited", K(ret));
   } else if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_progress(
-      merge_dag_->get_ctx().param_.merge_version_,
+      merge_dag_->get_ctx()->param_.merge_version_,
       0, // estimate_occupy_size_delta
       estimate_occupy_size_ - pre_scanned_row_cnt_ * avg_row_length_,// scanned_data_size_delta
       output_cnt - pre_output_block_cnt_,// output_block_cnt_delta
       estimated_finish_time_,
       true/*finish_flag*/,
-      &merge_dag_->get_ctx().time_guard_))) {
+      &merge_dag_->get_ctx()->time_guard_))) {
     LOG_WARN("failed to update progress", K(ret), K(output_cnt), K(estimate_occupy_size_),
         K(pre_scanned_row_cnt_), K(avg_row_length_));
   } else if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_compression_ratio(
-      merge_dag_->get_ctx().param_.merge_version_,
-      merge_dag_->get_ctx().merge_info_.get_sstable_merge_info()))) {
+      merge_dag_->get_ctx()->param_.merge_version_,
+      merge_dag_->get_ctx()->merge_info_.get_sstable_merge_info()))) {
     LOG_WARN("failed to update progress", K(ret), K(output_cnt));
   } else {
     LOG_DEBUG("finish() success to update progress", K(ret),
-        "param", merge_dag_->get_ctx().param_, K(output_cnt),
+        "param", merge_dag_->get_ctx()->param_, K(output_cnt),
         K(pre_scanned_row_cnt_), K(avg_row_length_));
   }
   return ret;
