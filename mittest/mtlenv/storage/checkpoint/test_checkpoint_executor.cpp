@@ -110,7 +110,7 @@ public:
   {
     if (rec_scn < rec_scn_) {
       rec_scn_ = rec_scn;
-      check_can_move_to_active();
+      data_checkpoint_->transfer_from_new_create_to_active_without_src_lock_(this);
     }
   }
 

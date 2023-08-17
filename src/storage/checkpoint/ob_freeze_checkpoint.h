@@ -30,11 +30,11 @@ class ObDataCheckpoint;
 
 enum ObFreezeCheckpointLocation
 {
-  OUT = 0,
-  NEW_CREATE,
-  ACTIVE,
-  PREPARE,
-  LS_FROZEN
+  LS_FROZEN = 1,
+  NEW_CREATE = 2,
+  ACTIVE  = 4,
+  PREPARE = 8,
+  OUT = 16,
 };
 
 static inline
@@ -105,10 +105,6 @@ public:
   // register into ObDataCheckpoint
   int add_to_data_checkpoint(ObDataCheckpoint *data_checkpoint);
   bool is_in_prepare_list_of_data_checkpoint();
-  // transfer to active_list in ObDataCheckpoint
-  // when the checkpoint unit rec_scn_is_stable
-  // @param[in] is_ls_freeze, whether the process is triggered by logstream_freeze
-  int check_can_move_to_active(bool is_ls_freeze = false);
   // after checkpoint ready_for_flush
   // move to prepare_list in data_checkpoint
   int finish_freeze();
@@ -118,7 +114,6 @@ public:
   VIRTUAL_TO_STRING_KV(K_(location));
 
 private:
-  int move_to_active_(bool is_ls_freeze);
   int unlink_();
   // ensure safe by lock of data_checkpoint
   ObFreezeCheckpointLocation location_;

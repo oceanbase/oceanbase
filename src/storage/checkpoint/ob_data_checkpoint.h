@@ -67,37 +67,20 @@ private:
   ObCheckpointDList *dlist_;
 };
 
-class ObSpinLockTimeGuard
-{
-public:
-  ObSpinLockTimeGuard(common::ObSpinLock &lock,
-                      const char *owner = "unknown",
-                      const int64_t warn_threshold = 100 * 1000 /* 100 ms */)
-  : time_guard_(owner, warn_threshold),
-    lock_guard_(lock){}
-
-  ~ObSpinLockTimeGuard() {}
-  void click(const char *mod = NULL) { time_guard_.click(mod); }
-private:
-  ObTimeGuard time_guard_;
-  ObSpinLockGuard lock_guard_;
-};
-
 // responsible for maintenance transaction checkpoint unit
 class ObDataCheckpoint : public ObCommonCheckpoint
 {
   friend class ObFreezeCheckpoint;
+  friend class ObCheckpointLockGuard;
 
 public:
   ObDataCheckpoint()
     : is_inited_(false),
-      lock_(common::ObLatchIds::CLOG_CKPT_LOCK),
       ls_(nullptr),
       new_create_list_(),
       active_list_(),
       prepare_list_(),
       ls_frozen_list_(),
-      ls_frozen_list_lock_(common::ObLatchIds::CLOG_CKPT_LOCK),
       ls_freeze_finished_(true)
   {}
   ~ObDataCheckpoint() { ls_ = nullptr; }
@@ -106,6 +89,28 @@ public:
   static const uint64_t LS_DATA_CHECKPOINT_TABLET_ID = 40000;
   int init(ObLS *ls);
   int safe_to_destroy(bool &is_safe_destroy);
+  ObCheckpointDList* get_checkpoint_list(const ObFreezeCheckpointLocation &location)
+  {
+    ObCheckpointDList *ret = NULL;
+    switch (location) {
+      case LS_FROZEN:
+        ret = &ls_frozen_list_;
+        break;
+      case NEW_CREATE:
+        ret = &new_create_list_;
+        break;
+      case ACTIVE:
+        ret = &active_list_;
+        break;
+      case PREPARE:
+        ret = &prepare_list_;
+        break;
+      default:
+        break;
+    }
+    return ret;
+  }
+
   share::SCN get_rec_scn();
   // if min_rec_scn <= the input rec_scn
   // logstream freeze
@@ -118,8 +123,6 @@ public:
   void road_to_flush(share::SCN rec_scn);
   // ObFreezeCheckpoint register into ObDataCheckpoint
   int add_to_new_create(ObFreezeCheckpoint *ob_freeze_checkpoint);
-  // remove from prepare_list when finish minor_merge
-  int unlink_from_prepare(ObFreezeCheckpoint *ob_freeze_checkpoint);
   // timer to tranfer freeze_checkpoint that rec_scn is stable from new_create_list to
   // active_list
   int check_can_move_to_active_in_newcreate();
@@ -145,7 +148,8 @@ private:
   // case1: some memtable flush failed when ls freeze
   // case2: the memtable that tablet freeze
   int traversal_flush_();
-  int unlink_(ObFreezeCheckpoint *ob_freeze_checkpoint, ObCheckpointDList &src);
+  int unlink_(ObFreezeCheckpoint *ob_freeze_checkpoint);
+  int finish_freeze(ObFreezeCheckpoint *ob_freeze_checkpoint);
   int insert_(ObFreezeCheckpoint *ob_freeze_checkpoint,
               ObCheckpointDList &dst,
               bool ordered = true);
@@ -154,14 +158,15 @@ private:
                 ObCheckpointDList &dst,
                 ObFreezeCheckpointLocation location);
 
-  int transfer_from_new_create_to_active_(ObFreezeCheckpoint *ob_freeze_checkpoint);
+  int transfer_from_ls_frozen_to_active_without_src_lock_(ObFreezeCheckpoint *ob_freeze_checkpoint);
+  int transfer_from_ls_frozen_to_new_created_without_src_lock_(ObFreezeCheckpoint *ob_freeze_checkpoint);
+  int transfer_from_ls_frozen_to_prepare_without_src_lock_(ObFreezeCheckpoint *ob_freeze_checkpoint);
+  int transfer_from_new_create_to_active_without_src_lock_(ObFreezeCheckpoint *ob_freeze_checkpoint);
   int transfer_from_new_create_to_prepare_(ObFreezeCheckpoint *ob_freeze_checkpoint);
-  int transfer_from_ls_frozen_to_active_(ObFreezeCheckpoint *ob_freeze_checkpoint);
-  int transfer_from_ls_frozen_to_prepare_(ObFreezeCheckpoint *ob_freeze_checkpoint);
-  int transfer_from_ls_frozen_to_new_created_(ObFreezeCheckpoint *ob_freeze_checkpoint);
   int transfer_from_active_to_prepare_(ObFreezeCheckpoint *ob_freeze_checkpoint);
 
-  void pop_range_to_ls_frozen_(ObFreezeCheckpoint *last, ObCheckpointDList &list);
+  void pop_active_list_to_ls_frozen_(ObFreezeCheckpoint *last);
+  void pop_new_create_to_ls_frozen_();
   void ls_frozen_to_active_(int64_t &last_time);
   void ls_frozen_to_prepare_(int64_t &last_time);
   void print_list_(ObCheckpointDList &list);
@@ -180,8 +185,6 @@ private:
   // logstream_freeze without get_need_flush_tablets
   static const int64_t MAX_FREEZE_CHECKPOINT_NUM = 50;
   bool is_inited_;
-  // avoid leaving out ObFreezeCheckpoint that unlinking and not in any list
-  common::ObSpinLock lock_;
   ObLS *ls_;
   // new_create_list is unordered_list
   // active_list and prepare_list is ordered_list and order by rec_log_ts
@@ -196,11 +199,95 @@ private:
   // tmp_list for ls_freeze to improve performance
   // used when new_create_list_ -> active_list and active_list -> frozen_list
   ObCheckpointDList ls_frozen_list_;
-  // avoid blocking other list due to traversal ls_frozen_list 
-  common::ObSpinLock ls_frozen_list_lock_;
+
+  obsys::ObRWLock ls_frozen_list_lock_;
+  obsys::ObRWLock new_create_list_lock_;
+  obsys::ObRWLock active_list_lock_;
+  obsys::ObRWLock prepare_list_lock_;
+
+  struct ObCheckpointLock
+  {
+    obsys::ObRWLock ls_frozen_list_lock_;
+    obsys::ObRWLock new_create_list_lock_;
+    obsys::ObRWLock active_list_lock_;
+    obsys::ObRWLock prepare_list_lock_;
+  } lock_;
+
   bool ls_freeze_finished_;
 
   static __thread bool is_tenant_freeze_for_flush_;
+};
+
+// list lock for DataChcekpoint
+// flag:1~4: ObFreezeCheckpointLocation list lock
+// flag:8: read/write lock
+#define RLOCK(flag) ObCheckpointLockGuard lock_guard(*this, ~0x80 & flag, "[data_checkpoint]"); lock_guard.click(__FUNCTION__)
+#define WLOCK(flag) ObCheckpointLockGuard lock_guard(*this, 0x80 | flag, "[data_checkpoint]"); lock_guard.click(__FUNCTION__)
+
+class ObCheckpointLockGuard
+{
+public:
+  ObCheckpointLockGuard(ObDataCheckpoint &data_checkpoint,
+      uint8_t flag,
+      const char *owner = "unknown",
+      const int64_t warn_threshold = 50 * 1000 /* 50 ms */)
+  : time_guard_(owner, warn_threshold),
+    lock_(data_checkpoint.lock_),
+    flag_(flag)
+  {
+    if (0 != (flag & LS_FROZEN)) {
+      lock(flag, lock_.ls_frozen_list_lock_);
+    }
+    if (0 != (flag & NEW_CREATE)) {
+      lock(flag, lock_.new_create_list_lock_);
+    }
+    if (0 != (flag & ACTIVE)) {
+      lock(flag, lock_.active_list_lock_);
+    }
+    if (0 != (flag & PREPARE)) {
+      lock(flag, lock_.prepare_list_lock_);
+    }
+  }
+
+  ~ObCheckpointLockGuard()
+  {
+    if (0 != (flag_ & PREPARE)) {
+      unlock(flag_, lock_.prepare_list_lock_);
+    }
+    if (0 != (flag_ & ACTIVE)) {
+      unlock(flag_, lock_.active_list_lock_);
+    }
+    if (0 != (flag_ & NEW_CREATE)) {
+      unlock(flag_, lock_.new_create_list_lock_);
+    }
+    if (0 != (flag_ & LS_FROZEN)) {
+      unlock(flag_, lock_.ls_frozen_list_lock_);
+    }
+  }
+
+  static void lock(uint8_t flag, obsys::ObRWLock &lock)
+  {
+    if (0 != (flag & 0x80)) {
+      lock.wlock()->lock();
+    } else {
+      lock.rlock()->lock();
+    }
+  }
+
+  static void unlock(uint8_t flag, obsys::ObRWLock &lock)
+  {
+    if (0 != (flag & 0x80)) {
+      lock.wlock()->unlock();
+    } else {
+      lock.rlock()->unlock();
+    }
+  }
+
+  void click(const char *mod = NULL) { time_guard_.click(mod); }
+private:
+  ObTimeGuard time_guard_;
+  ObDataCheckpoint::ObCheckpointLock &lock_;
+  uint8_t flag_;
 };
 
 static const ObTabletID LS_DATA_CHECKPOINT_TABLET(ObDataCheckpoint::LS_DATA_CHECKPOINT_TABLET_ID);
