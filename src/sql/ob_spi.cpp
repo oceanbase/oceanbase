@@ -4738,7 +4738,19 @@ int ObSPIService::spi_raise_application_error(pl::ObPLExecCtx *ctx,
    CALC(errcode_expr, int32, errcode_result);
    CALC(errmsg_expr, varchar, errmsg_result);
    OX (sqlcode_info->set_sqlcode(errcode_result.get_int32()));
-   OX (sqlcode_info->set_sqlmsg(errmsg_result.get_string()));
+   if (OB_SUCC(ret)) {
+    ObPLContext *pl_ctx = NULL;
+    ObPLExecState *frame = NULL;
+    ObIAllocator *pl_allocator = NULL;
+    ObString deep_sqlmsg;
+    CK (OB_NOT_NULL(pl_ctx = ctx->exec_ctx_->get_my_session()->get_pl_context()));
+    CK (pl_ctx->get_exec_stack().count() > 0);
+    CK (OB_NOT_NULL(frame = pl_ctx->get_exec_stack().at(0)));
+    CK (frame->is_top_call());
+    CK (OB_NOT_NULL(pl_allocator = frame->get_exec_ctx().allocator_));
+    OZ (ob_write_string(*pl_allocator, errmsg_result.get_string(), deep_sqlmsg));
+    OX (sqlcode_info->set_sqlmsg(deep_sqlmsg));
+  }
   
   if (OB_SUCC(ret)) {
     if (sqlcode_info->get_sqlcode() <= OB_MAX_RAISE_APPLICATION_ERROR
