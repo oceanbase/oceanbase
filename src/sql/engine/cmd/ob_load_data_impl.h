@@ -91,9 +91,9 @@ struct ObLoadTableColumnDesc
 class ObInsertValueGenerator
 {
 public:
-  ObInsertValueGenerator() : cs_type_(common::CS_TYPE_INVALID), data_buffer_(NULL) {}
+  ObInsertValueGenerator() : cs_type_(common::CS_TYPE_INVALID), data_buffer_(NULL), sql_mode_(0) {}
   int init(ObSQLSessionInfo &session, ObLoadFileBuffer* data_buffer, ObSchemaGetterGuard *schema_guard);
-  int set_params(common::ObString &insert_header, common::ObCollationType cs_type);
+  int set_params(common::ObString &insert_header, common::ObCollationType cs_type, int64_t sql_mode);
   int fill_field_expr(common::ObIArray<ObCSVGeneralParser::FieldValue> &field_values,
                       const common::ObBitSet<> &string_values);
   int gen_insert_values(common::ObIArray<common::ObString> &insert_values,
@@ -110,7 +110,7 @@ private:
   ObRawExprPrinter expr_printer_;
   common::ObSEArray<ObRawExpr *, 16> insert_exprs_;
   common::ObSEArray<ObRawExpr *, 16> field_exprs_;
-
+  int64_t sql_mode_;
 };
 
 //存储row_cnt行序列化的数据，每行的序列化数据是一个SEArray

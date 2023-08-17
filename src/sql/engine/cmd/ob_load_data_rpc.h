@@ -172,6 +172,8 @@ struct ObInsertTask
     insert_stmt_head_.reset();
     insert_value_data_.reset();
     source_frag_.reset();
+    timezone_.reset();
+    sql_mode_ = 0;
   }
 
   bool is_empty_task()
@@ -208,6 +210,8 @@ struct ObInsertTask
   int64_t retry_times_;
   int64_t token_server_idx_;
   int64_t data_size_;
+  ObTimeZoneInfoWrap timezone_;
+  int64_t sql_mode_;
 
   OB_UNIS_VERSION(1);
 };

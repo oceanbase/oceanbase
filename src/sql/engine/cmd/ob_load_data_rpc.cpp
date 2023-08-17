@@ -750,7 +750,9 @@ OB_SERIALIZE_MEMBER(ObInsertTask,
                     row_count_,
                     column_count_,
                     insert_stmt_head_,
-                    insert_value_data_);
+                    insert_value_data_,
+                    timezone_,
+                    sql_mode_);
 OB_SERIALIZE_MEMBER(ObInsertResult,
                     flags_,
                     exec_ret_,
