@@ -350,6 +350,12 @@ TEST_F(TestObSimpleLogClusterRebuild, test_leader_cannot_rebuild)
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->disable_sync());
   EXPECT_EQ(OB_STATE_NOT_MATCH, leader.palf_handle_impl_->advance_base_info(base_info, true));
 
+  AccessMode curr_access_mode;
+  int64_t mode_version, proposal_id;
+  proposal_id = leader.palf_handle_impl_->state_mgr_.get_proposal_id();
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, curr_access_mode));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(proposal_id, mode_version, AccessMode::RAW_WRITE, share::SCN::min_scn()));
+
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->disable_vote(false));
   while(FOLLOWER != leader.palf_handle_impl_->state_mgr_.role_)
   {

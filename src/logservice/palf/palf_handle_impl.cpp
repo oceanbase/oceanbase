@@ -1621,14 +1621,26 @@ int PalfHandleImpl::disable_vote(const bool need_check_log_missing)
     //step 1: check vote status.
     bool vote_disabled = false;
     do {
+      common::ObMemberList memberlist;
+      int64_t replica_num = 0;
+      AccessMode access_mode;
       RLockGuard guard(lock_);
-      if (!state_mgr_.is_allow_vote()) {
+      if (OB_FAIL(config_mgr_.get_curr_member_list(memberlist, replica_num))) {
+        PALF_LOG(WARN, "get_curr_member_list failed", KPC(this));
+      } else if (OB_FAIL(mode_mgr_.get_access_mode(access_mode))) {
+        PALF_LOG(WARN, "get_access_mode failed", K(ret), KPC(this));
+      } else if (state_mgr_.is_leader_active() &&
+          (1 == replica_num || AccessMode::APPEND == access_mode)) {
+        ret = OB_ERR_UNEXPECTED;
+        PALF_LOG(ERROR, "can not disable_vote in leader", KPC(this),
+            K(memberlist), K(replica_num), K(access_mode));
+      } else if (!state_mgr_.is_allow_vote()) {
         PALF_LOG(INFO, "vote has already been disabled", KPC(this));
         vote_disabled = true;
       }
     } while(0);
 
-    if (!vote_disabled) {
+    if (OB_SUCC(ret) && !vote_disabled) {
       if (OB_FAIL(election_.add_inner_priority_seed_bit(new_election_inner_priority_seed)) && OB_ENTRY_EXIST != ret) {
         // Because this interface is idempotent, so we need ignore err code OB_ENTRY_EXIST.
         PALF_LOG(WARN, "election add_inner_priority_seed_bit for rebuild failed", KPC(this));
