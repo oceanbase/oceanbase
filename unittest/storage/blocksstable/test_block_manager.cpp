@@ -169,18 +169,18 @@ TEST_F(TestBlockManager, test_mark_and_sweep)
   ret = macro_id_set.create(MAX(2, OB_SERVER_BLOCK_MGR.block_map_.count()));
   ASSERT_EQ(OB_SUCCESS, ret);
   int64_t safe_ts = ObTimeUtility::current_time();
-  int64_t disk_blk_cnt = 0;
   int64_t hold_cnt = 0;
-  ObBlockManager::GetPendingFreeBlockFunctor functor(mark_info, disk_blk_cnt, hold_cnt);
+  ObBlockManager::GetPendingFreeBlockFunctor functor(mark_info, hold_cnt);
   ret = OB_SERVER_BLOCK_MGR.block_map_.for_each(functor);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(blk_cnt - 1, mark_info.count());
 
-  ret = OB_SERVER_BLOCK_MGR.mark_server_meta_blocks(mark_info, macro_id_set);
+  ObMacroBlockMarkerStatus tmp_status;
+  ret = OB_SERVER_BLOCK_MGR.mark_server_meta_blocks(mark_info, macro_id_set, tmp_status);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(blk_cnt - 1, mark_info.count());
 
-  ret = OB_SERVER_BLOCK_MGR.mark_tmp_file_blocks(mark_info, macro_id_set);
+  ret = OB_SERVER_BLOCK_MGR.mark_tmp_file_blocks(mark_info, macro_id_set, tmp_status);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(blk_cnt - 1, mark_info.count());
 

@@ -244,7 +244,7 @@ TEST_F(TestRefCnt, test_1_0_1)
     ret = OB_SERVER_BLOCK_MGR.inc_ref(macro_id);
     ASSERT_EQ(OB_SUCCESS, ret);
   }
-  count = 10;
+  count = 9;
   while (count--) {
     ret = OB_SERVER_BLOCK_MGR.dec_ref(macro_id);
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -252,9 +252,9 @@ TEST_F(TestRefCnt, test_1_0_1)
   ObMacroBlockInfo block_info;
   ret = OB_SERVER_BLOCK_MGR.get_macro_block_info(macro_id, block_info);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(0, block_info.ref_cnt_);
+  ASSERT_EQ(1, block_info.ref_cnt_);
 
-  count = 10;
+  count = 9;
   while (count--) {
     ret = OB_SERVER_BLOCK_MGR.inc_ref(macro_id);
     ASSERT_EQ(OB_SUCCESS, ret);
@@ -268,6 +268,9 @@ TEST_F(TestRefCnt, test_1_0_1)
   ret = OB_SERVER_BLOCK_MGR.get_macro_block_info(macro_id, block_info);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(1, block_info.ref_cnt_);
+
+  ret = OB_SERVER_BLOCK_MGR.dec_ref(macro_id);
+  ASSERT_NE(OB_SUCCESS, OB_SERVER_BLOCK_MGR.inc_ref(macro_id));
 }
 
 /*TEST_F(TestStorageFile, test_not_enough_mem)

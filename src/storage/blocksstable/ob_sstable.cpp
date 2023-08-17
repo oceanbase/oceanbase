@@ -1122,6 +1122,10 @@ void ObSSTable::dec_macro_ref() const
   common::ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "CacheSST"));
   ObSafeArenaAllocator safe_allocator(tmp_allocator);
   ObSSTableMetaHandle meta_handle;
+  if (OB_FAIL(dec_used_size())) {// ignore ret
+    LOG_WARN("fail to dec used size of shared block", K(ret));
+  }
+  // ignore ret and decrease ref cnt
   if (OB_FAIL(get_meta(meta_handle, &safe_allocator))) {
     LOG_ERROR("fail to get sstable meta", K(ret));
   } else if (OB_UNLIKELY(!meta_handle.is_valid())) {
@@ -1163,10 +1167,6 @@ void ObSSTable::dec_macro_ref() const
         }
       }
     }
-  }
-
-  if (OB_FAIL(dec_used_size())) {// ignore ret
-    LOG_ERROR("fail to dec used size of shared block", K(ret));
   }
 }
 
