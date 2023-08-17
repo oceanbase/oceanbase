@@ -222,7 +222,8 @@ int ObSqlParameterization::is_fast_parse_const(TransformTreeCtx& ctx)
             (IS_DATATYPE_OP(ctx.tree_->type_) || T_QUESTIONMARK == ctx.tree_->type_ ||
                 T_COLLATION == ctx.tree_->type_ || T_CAST_ARGUMENT == ctx.tree_->type_ ||
                 (T_SFU_INT == ctx.tree_->type_ && -1 != ctx.tree_->value_) || T_SFU_DECIMAL == ctx.tree_->type_ ||
-                T_LIMIT_INT == ctx.tree_->type_ || T_LIMIT_UINT == ctx.tree_->type_);
+                T_LIMIT_INT == ctx.tree_->type_ || T_LIMIT_UINT == ctx.tree_->type_ ||
+                T_WEIGHT_STRING_LEVEL_PARAM == ctx.tree_->type_);
       }
     } else {
       ctx.is_fast_parse_const_ = false;
@@ -555,7 +556,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx& ctx, const ObSQLSess
           }
 
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(mark_tree(ctx.tree_ , *ctx.sql_info_))) {
+            if (OB_FAIL(mark_tree(ctx.tree_))) {
               SQL_PC_LOG(WARN, "fail to mark function tree", K(ctx.tree_), K(ret));
             }
           }
@@ -610,17 +611,12 @@ int ObSqlParameterization::check_and_generate_param_info(
   if (sql_info.total_ != raw_params.count()) {
     ret = OB_NOT_SUPPORTED;
 #if !defined(NDEBUG)
-    if ( sql_info.sql_traits_.has_weight_string_func_stmt_ ) {
-      // do nothing
-    }
-    else {
-      SQL_PC_LOG(ERROR,
+    SQL_PC_LOG(ERROR,
         "const number of fast parse and normal parse is different",
         "fast_parse_const_num",
         raw_params.count(),
         "normal_parse_const_num",
         sql_info.total_);
-    }
 #endif
   }
   ObPCParam* pc_param = NULL;
@@ -1029,7 +1025,8 @@ int ObSqlParameterization::add_not_param_flag(const ParseNode* node, SqlInfo& sq
   if (OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid argument", K(ret));
-  } else if (T_CAST_ARGUMENT == node->type_ || T_COLLATION == node->type_) {
+  } else if (T_CAST_ARGUMENT == node->type_ || T_COLLATION == node->type_
+             || T_WEIGHT_STRING_LEVEL_PARAM == node->type_) {
     for (int i = 0; OB_SUCC(ret) && i < node->param_num_; ++i) {
       if (OB_FAIL(sql_info.not_param_index_.add_member(sql_info.total_++))) {
         SQL_PC_LOG(WARN, "failed to add member", K(sql_info.total_));
@@ -1081,7 +1078,7 @@ int ObSqlParameterization::mark_args(ParseNode* arg_tree, const bool* mark_arr, 
 // After mark this node, it has following mechanism:
 //       If a node is marked as cannot be parameterized,
 //       CUREENT NODE AND ALL NODES OF IT'S SUBTREE cannot be parameterized.
-int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
+int ObSqlParameterization::mark_tree(ParseNode *tree)
 {
   int ret = OB_SUCCESS;
   if (NULL == tree) {
@@ -1112,7 +1109,6 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
           && (5 == node[1]->num_child_)) {
         const int64_t ARGS_NUMBER_FIVE = 5;
         bool mark_arr[ARGS_NUMBER_FIVE] = {0, 1, 1, 1, 1}; //0 for parameterization , 1 for not parameterization
-        sql_info.sql_traits_.has_weight_string_func_stmt_ = true;
         if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_FIVE))) {
           SQL_PC_LOG(WARN, "fail to mark weight_string arg", K(ret));
         }

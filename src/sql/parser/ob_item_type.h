@@ -629,6 +629,7 @@ typedef enum ObItemType
   T_FUN_SYS_JSON_VALUE = 1624,
   T_FUN_JSON_ARRAYAGG = 1625,
   T_FUN_JSON_OBJECTAGG = 1626,
+  T_WEIGHT_STRING_LEVEL_PARAM = 1689,  // `level 1-2` and `level 1,2,3` clause on weight_string expr
   ///< @note add new oracle only function type before this line
   
   T_FUN_SYS_END = 2000,

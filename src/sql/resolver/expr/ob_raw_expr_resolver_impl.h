@@ -98,6 +98,7 @@ private:
   int process_isnull_node(const ParseNode* node, ObRawExpr*& expr);
   int process_lnnvl_node(const ParseNode* node, ObRawExpr*& expr);
   int process_json_value_node(const ParseNode *node, ObRawExpr *&expr);
+  static void modification_type_to_int(ParseNode &node);
   int process_fun_sys_node(const ParseNode* node, ObRawExpr*& expr);
   int process_dll_udf_node(const ParseNode* node, ObRawExpr*& expr);
   int process_agg_udf_node(const ParseNode* node, const share::schema::ObUDF& udf_info, ObAggFunRawExpr*& expr);

@@ -2141,7 +2141,6 @@ ObSqlTraits::ObSqlTraits()
       is_modify_tenant_stmt_(false),
       is_cause_implicit_commit_(false),
       is_commit_stmt_(false),
-      has_weight_string_func_stmt_(false),
       stmt_type_(T_INVALID)
 {
   sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';

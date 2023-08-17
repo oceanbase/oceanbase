@@ -777,6 +777,14 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode* node, ObRawExpr
           }
           break;
         }
+        case T_WEIGHT_STRING_LEVEL_PARAM: {
+          modification_type_to_int(const_cast<ParseNode &>(*node));
+          // deal node
+          if (OB_FAIL(SMART_CALL(recursive_resolve(node, expr)))) {
+            LOG_WARN("fail to process node with children only", K(ret), K(node->type_), K(node));
+          }
+          break;
+        }
         case T_FUN_SYS_REGEXP_LIKE:
         case T_FUN_SYS: {
           if (OB_FAIL(process_fun_sys_node(node, expr))) {
@@ -3519,6 +3527,11 @@ int ObRawExprResolverImpl::process_lnnvl_node(const ParseNode* node, ObRawExpr*&
   return ret;
 }
 
+// weight_string expr change T_WEIGHT_STRING_LEVEL_PARAM to T_INT
+void ObRawExprResolverImpl::modification_type_to_int(ParseNode &node)
+{
+  node.type_ = T_INT;
+}
 int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawExpr *&expr)
 {
   INIT_SUCC(ret);
