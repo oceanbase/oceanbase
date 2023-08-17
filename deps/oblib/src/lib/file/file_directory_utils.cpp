@@ -64,7 +64,11 @@ int FileDirectoryUtils::is_accessible(const char *file_path, bool &result)
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "invalid arguments.", KCSTRING(file_path), K(ret));
   } else {
-    result = (0 == access(file_path, R_OK) && ENOENT != errno);
+    if (0 == access(file_path, R_OK)) {
+      result = true;
+    } else {
+      LIB_LOG(WARN, "access file failed", KERRMSG, K(file_path));
+    }
   }
   return ret;
 }
