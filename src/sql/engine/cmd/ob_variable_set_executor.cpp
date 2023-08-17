@@ -823,7 +823,7 @@ int ObVariableSetExecutor::check_and_convert_sys_var(ObExecContext &ctx,
 
   //do not support modify now
   if (OB_FAIL(ret)) {
-  } else if (lib::is_oracle_mode() && set_var.var_name_.prefix_match("nls_")) {
+  } else if (set_var.var_name_.prefix_match("nls_")) {
     static const common::ObString DEFAULT_VALUE_LANGUAGE("AMERICAN");
     static const common::ObString DEFAULT_VALUE_TERRITORY("AMERICA");
     static const common::ObString DEFAULT_VALUE_SORT("BINARY");
