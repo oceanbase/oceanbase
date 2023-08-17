@@ -214,6 +214,7 @@ int ObMPStmtPrepare::process()
     } else if (FALSE_IT(session.post_sync_session_info())) {
     } else if (OB_UNLIKELY(packet_len > session.get_max_packet_size())) {
       ret = OB_ERR_NET_PACKET_TOO_LARGE;
+      need_disconnect = false;
       LOG_WARN("packet too large than allowd for the session", K_(sql), K(ret));
     } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
                             conn->proxy_cap_flags_.is_full_link_trace_support()))) {

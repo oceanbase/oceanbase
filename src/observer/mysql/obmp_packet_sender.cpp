@@ -1106,7 +1106,8 @@ bool ObMPPacketSender::has_pl()
 {
   bool has_pl = false;
   const obmysql::ObMySQLRawPacket &pkt = reinterpret_cast<const obmysql::ObMySQLRawPacket&>(req_->get_packet());
-  if (obmysql::COM_STMT_EXECUTE == pkt.get_cmd()
+  if (obmysql::COM_STMT_PREPARE == pkt.get_cmd()
+        || obmysql::COM_STMT_EXECUTE == pkt.get_cmd()
         || obmysql::COM_QUERY == pkt.get_cmd()
         || obmysql::COM_STMT_PREXECUTE == pkt.get_cmd()
         || obmysql::COM_STMT_FETCH == pkt.get_cmd()) {
