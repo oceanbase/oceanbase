@@ -421,7 +421,7 @@ int ObTenantStorageCheckpointWriter::do_rollback(
   char *buf = nullptr;
   int64_t pos = 0;
   read_info.addr_ = load_addr;
-  read_info.io_desc_.set_wait_event(ObWaitEventIds::SLOG_CKPT_LOCK_WAIT);
+  read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
 
   if (OB_FAIL(ObSharedBlockReaderWriter::async_read(read_info, block_handle))) {
     LOG_WARN("fail to read tablet buf from macro block", K(ret), K(read_info));
@@ -451,7 +451,7 @@ int ObTenantStorageCheckpointWriter::get_tablet_with_addr(
   char *buf = nullptr;
   int64_t pos = 0;
   read_info.addr_ = addr_info.new_addr_;
-  read_info.io_desc_.set_wait_event(ObWaitEventIds::SLOG_CKPT_LOCK_WAIT);
+  read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
 
   do {
     ObArenaAllocator allocator("SlogCkptWriter");

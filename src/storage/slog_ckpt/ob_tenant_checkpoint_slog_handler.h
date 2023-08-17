@@ -225,7 +225,7 @@ private:
   int64_t finished_replay_tablet_cnt_;
   int replay_create_tablet_errcode_;
   common::TCRWLock lock_;  // protect block_handle
-  lib::ObMutex mutex_;
+  common::TCRWLock slog_check_lock_; // protect is_copying_tablets_
   common::hash::ObHashSet<ObTabletMapKey> tablet_key_set_;
   bool is_copying_tablets_;
   ObLogCursor ckpt_cursor_;

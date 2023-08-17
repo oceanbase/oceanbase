@@ -234,7 +234,7 @@ ObTenantCheckpointSlogHandler::ObTenantCheckpointSlogHandler()
     finished_replay_tablet_cnt_(0),
     replay_create_tablet_errcode_(OB_SUCCESS),
     lock_(common::ObLatchIds::SLOG_CKPT_LOCK),
-    mutex_(),
+    slog_check_lock_(common::ObLatchIds::SLOG_CKPT_LOCK),
     tablet_key_set_(),
     is_copying_tablets_(false),
     ckpt_cursor_(),
@@ -587,7 +587,7 @@ int ObTenantCheckpointSlogHandler::read_from_share_blk(
   int ret = OB_SUCCESS;
   ObSharedBlockReadHandle read_handle;
   ObSharedBlockReadInfo read_info;
-  read_info.io_desc_.set_wait_event(ObWaitEventIds::SLOG_CKPT_LOCK_WAIT);
+  read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   read_info.addr_ = addr;
   if (OB_FAIL(shared_block_rwriter_.async_read(read_info, read_handle))) {
     LOG_WARN("fail to read tablet from macro block", K(ret), K(read_info));
@@ -852,7 +852,7 @@ int ObTenantCheckpointSlogHandler::report_slog(
     int64_t file_id;
     int64_t offset;
     int64_t size;
-    lib::ObMutexGuard guard(mutex_);
+    TCRLockGuard guard(slog_check_lock_);
     if (is_copying_tablets_) {
       if (OB_UNLIKELY(!ckpt_cursor_.is_valid())) {
         LOG_WARN("checkpoint cursor is invalid", K(ret), K(ckpt_cursor_));
@@ -880,7 +880,6 @@ int ObTenantCheckpointSlogHandler::check_slog(const ObTabletMapKey &tablet_key, 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet key is invalid", K(ret), K(tablet_key));
   } else {
-    lib::ObMutexGuard guard(mutex_);
     int tmp_ret = tablet_key_set_.exist_refactored(tablet_key);
     if (OB_HASH_EXIST == tmp_ret) {
       has_slog = true;
@@ -996,7 +995,7 @@ int ObTenantCheckpointSlogHandler::write_checkpoint(bool is_force)
 int ObTenantCheckpointSlogHandler::get_cur_cursor()
 {
   int ret = OB_SUCCESS;
-  lib::ObMutexGuard guard(mutex_);
+  TCWLockGuard guard(slog_check_lock_);
   tablet_key_set_.destroy();
   if (OB_FAIL(MTL(ObStorageLogger *)->get_active_cursor(ckpt_cursor_))) {
     LOG_WARN("fail to get current cursor", K(ret));
@@ -1010,7 +1009,7 @@ int ObTenantCheckpointSlogHandler::get_cur_cursor()
 
 void ObTenantCheckpointSlogHandler::clean_copy_status()
 {
-  lib::ObMutexGuard guard(mutex_);
+  TCWLockGuard guard(slog_check_lock_);
   is_copying_tablets_ = false;
   tablet_key_set_.destroy();
 }
