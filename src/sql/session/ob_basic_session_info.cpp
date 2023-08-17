@@ -3716,7 +3716,9 @@ int ObBasicSessionInfo::get_sync_sys_vars(ObIArray<ObSysVarClassType>
         sys_vars_[sys_var_idx]->get_value())||ObSysVariables::get_base_value(sys_var_idx) !=
         sys_vars_[sys_var_idx]->get_value() ||
         ObSysVariables::get_base_value(sys_var_idx).get_scale()
-        != sys_vars_[sys_var_idx]->get_value().get_scale()) {
+        != sys_vars_[sys_var_idx]->get_value().get_scale() ||
+        ObSysVariables::get_base_value(sys_var_idx).get_type()
+        != sys_vars_[sys_var_idx]->get_value().get_type()) {
         // need serialize delta vars
         if (is_sync_sys_var(ids.at(i))){
           // do nothing
