@@ -37,10 +37,6 @@ class ObRequest;
 namespace omt
 {
 class ObTenantConfig;
-#define VIRTUAL_TENANTS_CPU_RESERVED_QUOTA \
-  (GCONF.user_location_cpu_quota() + GCONF.sys_location_cpu_quota() \
-  + GCONF.root_location_cpu_quota() + GCONF.core_location_cpu_quota() \
-  + OB_SVR_BLACKLIST_CPU + OB_DATA_CPU + OB_DTL_CPU + OB_DIAG_CPU)
 
 struct ObCtxMemConfig
 {

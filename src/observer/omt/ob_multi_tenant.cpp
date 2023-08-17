@@ -662,17 +662,20 @@ int ObMultiTenant::create_hidden_sys_tenant()
 int ObMultiTenant::create_virtual_tenants()
 {
   int ret = OB_SUCCESS;
+  const int64_t phy_cpu_cnt = sysconf(_SC_NPROCESSORS_ONLN);
+  const double data_cpu = (phy_cpu_cnt <= 4) ? 1.0 : OB_DATA_CPU;
+  const double dtl_cpu = (phy_cpu_cnt <= 4) ? 1.0 : OB_DTL_CPU;
 
   if (OB_FAIL(create_tenant_without_unit(
                          OB_DATA_TENANT_ID,
-                         OB_DATA_CPU,
-                         OB_DATA_CPU))) {
+                         data_cpu,
+                         data_cpu))) {
     LOG_ERROR("add data tenant fail", K(ret));
 
   } else if (OB_FAIL(create_tenant_without_unit(
                          OB_DTL_TENANT_ID,
-                         OB_DTL_CPU,
-                         OB_DTL_CPU))) {
+                         dtl_cpu,
+                         dtl_cpu))) {
     LOG_ERROR("add DTL tenant fail", K(ret));
 
   } else {
