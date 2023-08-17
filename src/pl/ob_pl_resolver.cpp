@@ -11388,7 +11388,7 @@ int ObPLResolver::resolve_udf_info(
   OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()));
   OZ (ObRawExprUtils::rebuild_expr_params(udf_info, &expr_factory_, expr_params), K(udf_info), K(access_idxs));
   {
-    ObPLMockSelfArg self(access_idxs, expr_params, expr_factory_);
+    ObPLMockSelfArg self(access_idxs, expr_params, expr_factory_, resolve_ctx_.session_info_);;
     OZ (self.mock());
     OZ (current_block_->get_namespace().resolve_routine(resolve_ctx_,
                                                         udf_info.udf_database_,
@@ -13046,6 +13046,10 @@ int ObPLMockSelfArg::mock()
 {
   int ret = OB_SUCCESS;
   if (access_idxs_.count() > 0 && expr_params_.count() > 0) {
+    if (expr_params_.at(0)->get_expr_type() != T_SP_CPARAM) {
+      // for compatible, here only try deduce, if has error, will report at later logic.
+      IGNORE_RETURN expr_params_.at(0)->formalize(&session_info_);
+    }
     if (expr_params_.at(0)->has_flag(IS_UDT_UDF_SELF_PARAM)) {
       // already has self argument, do nothing ...
     } else if (ObObjAccessIdx::IS_UDT_NS == access_idxs_.at(access_idxs_.count() - 1).access_type_
@@ -13124,7 +13128,7 @@ int ObPLResolver::resolve_routine(ObObjAccessIdent &access_ident,
   } else {
 
     {
-      ObPLMockSelfArg self(access_idxs, expr_params, expr_factory_);
+      ObPLMockSelfArg self(access_idxs, expr_params, expr_factory_, resolve_ctx_.session_info_);
       OZ (self.mock());
       OZ (ns.resolve_routine(resolve_ctx_,
                              database_name,

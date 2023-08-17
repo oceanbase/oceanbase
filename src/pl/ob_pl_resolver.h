@@ -128,10 +128,14 @@ class ObPLMockSelfArg
 {
 public:
   ObPLMockSelfArg(
-    const ObIArray<ObObjAccessIdx> &access_idxs, ObSEArray<ObRawExpr*, 4> &expr_params, ObRawExprFactory &expr_factory)
+    const ObIArray<ObObjAccessIdx> &access_idxs,
+    ObSEArray<ObRawExpr*, 4> &expr_params,
+    ObRawExprFactory &expr_factory,
+    ObSQLSessionInfo &session_info)
     : access_idxs_(access_idxs),
       expr_params_(expr_params),
       expr_factory_(expr_factory),
+      session_info_(session_info),
       mark_only_(false),
       mocked_(false) {}
   int mock();
@@ -140,6 +144,7 @@ private:
   const ObIArray<ObObjAccessIdx> &access_idxs_;
   ObSEArray<ObRawExpr*, 4> &expr_params_;
   ObRawExprFactory &expr_factory_;
+  ObSQLSessionInfo &session_info_;
   bool mark_only_;
   bool mocked_;
 };
