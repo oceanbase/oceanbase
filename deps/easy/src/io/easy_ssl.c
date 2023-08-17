@@ -1268,6 +1268,13 @@ int easy_ssl_ob_config_check(const char *ssl_ca,
   } else if ((ctx_client = easy_ssl_ctx_load(pool, ssl_ca, ssl_cert, ssl_key, ssl_enc_cert, ssl_enc_key, is_from_file, is_babassl, 0)) == NULL) {
     ret = EASY_ERROR;
     easy_error_log("easy_ssl_ctx_load easy_ssl_t failed");
+  } else {
+    if (NULL != ctx_server->ctx) {
+      SSL_CTX_free(ctx_server->ctx);
+    }
+    if (NULL != ctx_client->ctx) {
+      SSL_CTX_free(ctx_client->ctx);
+    }
   }
 
   if (pool != NULL) {
