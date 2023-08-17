@@ -66,6 +66,7 @@ set(BITCODE_TO_ELF_LIST "")
 if (OB_BUILD_OPENSOURCE)
 install(PROGRAMS
   tools/import_time_zone_info.py
+  tools/import_srs_data.py
   ${CMAKE_BINARY_DIR}/src/observer/observer
   DESTINATION bin
   COMPONENT server)
