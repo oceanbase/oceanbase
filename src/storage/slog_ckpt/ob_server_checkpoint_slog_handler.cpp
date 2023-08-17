@@ -26,6 +26,7 @@
 #include "storage/slog/ob_storage_logger.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/high_availability/ob_transfer_service.h"
 
 namespace oceanbase
 {
@@ -249,6 +250,7 @@ int ObServerCheckpointSlogHandler::enable_replay_clog()
   int ret = OB_SUCCESS;
   common::ObArray<uint64_t> tenant_ids;
   omt::ObMultiTenant *omt = GCTX.omt_;
+  ObTransferService *transfer_service = nullptr;
   if (OB_ISNULL(omt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, omt is nullptr", K(ret));
@@ -260,6 +262,11 @@ int ObServerCheckpointSlogHandler::enable_replay_clog()
     MTL_SWITCH(tenant_id) {
       if (OB_FAIL(OB_FAIL(MTL(ObLSService*)->enable_replay()))) {
         LOG_WARN("fail enable replay clog", K(ret));
+      } else if (OB_ISNULL(transfer_service = (MTL(ObTransferService *)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("transfer service should not be NULL", K(ret), KP(transfer_service));
+      } else {
+        transfer_service->wakeup();
       }
     }
   }
