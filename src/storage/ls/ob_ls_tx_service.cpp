@@ -220,7 +220,7 @@ int ObLSTxService::check_all_tx_clean_up() const
   if (OB_ISNULL(mgr_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
-  } else if (mgr_->get_tx_ctx_count() > 0) {
+  } else if (mgr_->get_active_tx_count() > 0) {
     // there is some tx not finished, retry.
     ret = OB_EAGAIN;
   } else {

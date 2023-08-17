@@ -686,13 +686,9 @@ bool ObGCHandler::is_tablet_clear_(const ObGarbageCollector::LSStatus &ls_status
   bool bool_ret = false;
   ObLSID ls_id = ls_->get_ls_id();
   if (ObGarbageCollector::is_ls_dropping_ls_status(ls_status)) {
-    //TODO: transfer完成前先统一检查事务结束
     if (OB_FAIL(ls_->check_all_tx_clean_up())) {
       if (OB_EAGAIN == ret) {
         CLOG_LOG(INFO, "check_all_tx_clean_up need retry", K(ls_id), K(ret));
-        if (OB_FAIL(ls_->kill_all_tx(true))) { //gracefully kill
-          CLOG_LOG(WARN, "gracefully kill_all_tx failed", K(ret), K(ls_id));
-        }
       } else {
         CLOG_LOG(WARN, "check_all_tx_clean_up failed", K(ls_id), K(ret));
       }
