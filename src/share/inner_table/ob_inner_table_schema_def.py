@@ -12650,6 +12650,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keyword
 # 15373: idx_rls_policy_group_id_real_agent
 # 15374: idx_rls_group_table_id_real_agent
 # 15375: idx_rls_context_table_id_real_agent
+
 #######################################################################
 # end for oracle agent table index
 #######################################################################
@@ -12704,6 +12705,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15402', all_def_ke
 # 15412: __all_virtual_import_table_task_history
 # 15413: __all_virtual_import_stmt_exec_history
 # 15414: __all_virtual_ls_info
+# 15415: idx_dbms_lock_allocated_lockhandle_real_agent
 
 # 余留位置
 
@@ -52839,9 +52841,10 @@ def_sys_index_table(
   keywords = all_def_keywords['__all_rls_context_history'])
 
 # 101089 : placeholder for unique index of __all_tenant_snapshots
+# 101090 : placeholder for index of __all_dbms_lock_allocated
 
 ################################################################################
-# Oracle Agent table Index [15306, 15375]
+# Oracle Agent table Index
 def_agent_index_table(
   index_name = 'idx_data_table_id_real_agent',
   index_table_id = 15306,
@@ -53551,5 +53554,5 @@ def_agent_index_table(
   real_index_name = 'idx_rls_context_table_id',
   keywords = all_def_keywords['ALL_VIRTUAL_RLS_CONTEXT_REAL_AGENT_ORA'])
 
-# End Oracle Agent table Index [15306, 15375]
+# End Oracle Agent table Index
 ################################################################################
