@@ -564,7 +564,8 @@ public:
       has_nested_sql_(false),
       tz_info_(NULL),
       res_map_rule_id_(common::OB_INVALID_ID),
-      res_map_rule_param_idx_(common::OB_INVALID_INDEX)
+      res_map_rule_param_idx_(common::OB_INVALID_INDEX),
+      forbid_parallel_execute_(false)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -604,6 +605,7 @@ public:
     tz_info_ = NULL;
     res_map_rule_id_ = common::OB_INVALID_ID;
     res_map_rule_param_idx_ = common::OB_INVALID_INDEX;
+    forbid_parallel_execute_ = false;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -678,6 +680,7 @@ public:
   const common::ObTimeZoneInfo *tz_info_;
   uint64_t res_map_rule_id_;
   int64_t res_map_rule_param_idx_;
+  bool forbid_parallel_execute_; // only allow select + select parallel execute in oracle mode
 };
 } /* ns sql*/
 } /* ns oceanbase */

@@ -755,7 +755,16 @@ int ObOptimizer::check_whether_contain_nested_sql(const ObDMLStmt &stmt)
 {
   int ret = OB_SUCCESS;
   const ObDelUpdStmt *del_upd_stmt = nullptr;
-  if (stmt.get_query_ctx()->has_pl_udf_) {
+  // if outer sql stmt is pure select stmt not containing for upate in oracle mode, the udf must be no sql or contain select stmt,
+  // otherwise, when executing dml stmt inner udf, it will report error.
+  // and select + select can parallel exec in oracle mode. so allow select + select parallel execute in oracle mode
+  if (stmt.get_query_ctx()->has_pl_udf_ &&
+      stmt.get_query_ctx()->forbid_parallel_execute_ && lib::is_oracle_mode()) {
+    if (stmt.is_select_stmt()) {
+      stmt.get_query_ctx()->forbid_parallel_execute_ = stmt.has_for_update();
+    }
+  }
+  if (stmt.get_query_ctx()->forbid_parallel_execute_) {
     ctx_.set_has_pl_udf(true);
   }
   if (ObSQLUtils::is_nested_sql(ctx_.get_exec_ctx())) {

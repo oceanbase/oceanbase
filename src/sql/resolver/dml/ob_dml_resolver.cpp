@@ -1496,6 +1496,13 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
             OZ (stmt->add_global_dependency_table(udf_version));
             OZ (stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, udf_version, *allocator_));
           }
+          if (OB_SUCC(ret)) {
+            if (lib::is_mysql_mode()) {
+              stmt_->get_query_ctx()->forbid_parallel_execute_ = true;
+            } else if (!udf_expr->is_parallel_enable()) {
+              stmt_->get_query_ctx()->forbid_parallel_execute_ = true;
+            }
+          }
         }
       }
     }
@@ -2218,9 +2225,12 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
       } else if (udf->is_pkg_body_udf()) {
         ret = OB_ERR_PRIVATE_UDF_USE_IN_SQL;
         LOG_WARN("function 'string' may not be used in SQL", K(ret), KPC(udf));
-      } else {
-        stmt_->get_query_ctx()->has_pl_udf_ = true;
+      } else if (lib::is_mysql_mode()) {
+        stmt_->get_query_ctx()->forbid_parallel_execute_ = true;
+      } else if (!udf->is_parallel_enable()) {
+        stmt_->get_query_ctx()->forbid_parallel_execute_ = true;
       }
+      stmt_->get_query_ctx()->has_pl_udf_ = true;
     } else if (T_FUN_PL_COLLECTION_CONSTRUCT == real_ref_expr->get_expr_type()) {
       if (!params_.is_resolve_table_function_expr_) {
         //such as insert into tbl values(1,3, coll('a', 1));
@@ -2315,7 +2325,13 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
         }
       }
       if (OB_SUCC(ret) && OB_NOT_NULL(real_ref_expr) && real_ref_expr->is_udf_expr()) {
+        ObUDFRawExpr *udf = static_cast<ObUDFRawExpr *>(real_ref_expr);
         stmt_->get_query_ctx()->has_pl_udf_ = true;
+        if (lib::is_mysql_mode()) {
+          stmt_->get_query_ctx()->forbid_parallel_execute_ = true;
+        } else if (!udf->is_parallel_enable()) {
+          stmt_->get_query_ctx()->forbid_parallel_execute_ = true;
+        }
       }
     }
   }
@@ -10206,8 +10222,10 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
       OX (expr->set_is_called_in_sql(true));
     } else if (T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type()) {
       stmt_->get_query_ctx()->has_pl_udf_ = true;
+      stmt_->get_query_ctx()->forbid_parallel_execute_ = true;
     } else if (T_FUN_PL_COLLECTION_CONSTRUCT == expr->get_expr_type()) {
       stmt_->get_query_ctx()->has_pl_udf_ = true;
+      stmt_->get_query_ctx()->forbid_parallel_execute_ = true;
     }
     OZ (collect_schema_version(expr));
   }
