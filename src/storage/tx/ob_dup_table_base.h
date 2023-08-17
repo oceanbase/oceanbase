@@ -741,7 +741,7 @@ public:
   bool need_block_confirming() const { return DUP_SPECIAL_OP_BLOCK_CONFIRMING == sp_op_type_; }
   // bool contain_special_op(uint64_t special_op) const { return get_special_op_() == special_op; }
   bool no_specail_op() const { return INVALID_SPECIAL_OP == sp_op_type_; }
-  void copy_tablet_set_type(const DupTabletSetCommonHeader &src_common_header)
+  void copy_tablet_set_common_header(const DupTabletSetCommonHeader &src_common_header)
   {
     set_unique_id_(src_common_header.get_unique_id());
     set_special_op_(src_common_header.get_special_op());

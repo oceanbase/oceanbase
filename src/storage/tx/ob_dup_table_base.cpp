@@ -550,6 +550,7 @@ void ObDupTableLogOperator::reset()
 int ObDupTableLogOperator::submit_log_entry()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
 
   SpinWLockGuard guard(log_lock_);
 
@@ -559,6 +560,9 @@ int ObDupTableLogOperator::submit_log_entry()
   bool submit_result = false;
   DupLogTypeArray type_array;
   if (OB_SUCC(ret)) {
+    if (OB_TMP_FAIL(tablet_mgr_ptr_->scan_readable_set_for_gc())) {
+      DUP_TABLE_LOG(WARN, "scan readable set failed", K(tmp_ret));
+    }
     if (OB_FAIL(prepare_serialize_log_entry_(max_ser_size, type_array))) {
       DUP_TABLE_LOG(WARN, "prepare serialize log entry failed", K(ret));
     } else if (!type_array.empty()) {
