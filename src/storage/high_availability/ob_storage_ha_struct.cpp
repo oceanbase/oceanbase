@@ -24,6 +24,7 @@ namespace oceanbase
 {
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_REBUILD_FAILED_STATUS);
 
 /******************ObMigrationOpType*********************/
 static const char *migration_op_type_strs[] = {
@@ -590,7 +591,8 @@ int ObMigrationStatusHelper::check_can_change_status(
     case OB_MIGRATION_STATUS_REBUILD: {
       if (OB_MIGRATION_STATUS_NONE == change_status
           || OB_MIGRATION_STATUS_REBUILD == change_status
-          || OB_MIGRATION_STATUS_REBUILD_WAIT == change_status) {
+          || OB_MIGRATION_STATUS_REBUILD_WAIT == change_status
+          || OB_MIGRATION_STATUS_REBUILD_FAIL == change_status) {
         can_change = true;
       }
       break;
@@ -635,7 +637,8 @@ int ObMigrationStatusHelper::check_can_change_status(
     case OB_MIGRATION_STATUS_REBUILD_WAIT: {
       if (OB_MIGRATION_STATUS_NONE == change_status
           || OB_MIGRATION_STATUS_REBUILD_WAIT == change_status
-          || OB_MIGRATION_STATUS_REBUILD == change_status) {
+          || OB_MIGRATION_STATUS_REBUILD == change_status
+          || OB_MIGRATION_STATUS_REBUILD_FAIL == change_status) {
         can_change = true;
       }
       break;
@@ -684,6 +687,16 @@ int ObMigrationStatusHelper::trans_rebuild_fail_status(
   } else {
     fail_status = OB_MIGRATION_STATUS_REBUILD;
   }
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = EN_REBUILD_FAILED_STATUS ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        fail_status = OB_MIGRATION_STATUS_REBUILD_FAIL;
+        ret = OB_SUCCESS;
+      }
+    }
+#endif
+
   return ret;
 }
 

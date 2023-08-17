@@ -568,7 +568,8 @@ int ObLSMigrationHandler::do_init_status_()
           || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD == migration_status) {
         //do nothing
       } else if (ObMigrationStatus::OB_MIGRATION_STATUS_ADD_FAIL != migration_status
-          && ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_FAIL != migration_status) {
+          && ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_FAIL != migration_status
+          && ObMigrationStatus::OB_MIGRATION_STATUS_GC != migration_status) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls migration handler in init status but ls migration status is in failed status",
             K(ret), K(is_empty), K(migration_status), KPC(ls_));
@@ -1004,13 +1005,21 @@ int ObLSMigrationHandler::check_can_skip_prepare_status_(bool &can_skip)
   int ret = OB_SUCCESS;
   ObLSMigrationTask task;
   can_skip = false;
+  ObMigrationStatus status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls migration handler do not init", K(ret));
   } else if (OB_FAIL(get_ls_migration_task_(task))) {
     LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
   } else if (ObMigrationOpType::REBUILD_LS_OP == task.arg_.type_) {
-    can_skip = false;
+    if (OB_FAIL(ls_->get_migration_status(status))) {
+      LOG_WARN("failed to get migration status", K(ret), K(status));
+    } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == status) {
+      can_skip = false;
+    } else {
+      can_skip = true;
+      LOG_INFO("skip ls migration prepare status", K(status));
+    }
   } else {
     can_skip = true;
   }

@@ -30,6 +30,7 @@ using namespace common;
 using namespace share;
 using namespace storage;
 
+ERRSIM_POINT_DEF(WAIT_CLOG_SYNC_FAILED);
 /******************ObLSCompleteMigrationCtx*********************/
 ObLSCompleteMigrationCtx::ObLSCompleteMigrationCtx()
   : ObIHADagNetCtx(),
@@ -1058,6 +1059,15 @@ int ObStartCompleteMigrationTask::wait_log_sync_()
       LOG_WARN("log is not sync", K(ret), KPC(ctx_), K(cost_ts));
     }
   }
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = WAIT_CLOG_SYNC_FAILED ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake WAIT_CLOG_SYNC_FAILED", K(ret));
+      }
+    }
+#endif
   return ret;
 }
 
