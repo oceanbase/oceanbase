@@ -63,8 +63,8 @@ int ObTableColumns::inner_get_next_row(ObNewRow *&row)
       if (OB_FAIL(calc_show_table_id(show_table_id))) {
         LOG_WARN("fail to calc show table id", K(ret), K(show_table_id));
       } else if (OB_UNLIKELY(OB_INVALID_ID == show_table_id)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_USER_ERROR(OB_ERR_UNEXPECTED, "this table is used for show clause, can't be selected");
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "select a table which is used for show clause");
       } else if (OB_FAIL(schema_guard_->get_table_schema(effective_tenant_id_, show_table_id, table_schema))) {
        LOG_WARN("fail to get table schema", K(ret), K(effective_tenant_id_));
       } else if (OB_UNLIKELY(NULL == table_schema)) {

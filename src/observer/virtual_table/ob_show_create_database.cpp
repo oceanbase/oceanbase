@@ -50,8 +50,8 @@ int ObShowCreateDatabase::inner_get_next_row(common::ObNewRow *&row)
       if (OB_FAIL(calc_show_database_id(show_database_id))) {
         LOG_WARN("fail to calc show database id", K(ret));
       } else if (OB_UNLIKELY(OB_INVALID_ID == show_database_id)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_USER_ERROR(OB_ERR_UNEXPECTED, "this table is used for show clause, can't be selected");
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "select a table which is used for show clause");
       } else if (OB_FAIL(schema_guard_->get_database_schema(effective_tenant_id_,
                  show_database_id, db_schema))) {
         LOG_WARN("failed to get database_schema", K(ret), K_(effective_tenant_id), K(show_database_id));
