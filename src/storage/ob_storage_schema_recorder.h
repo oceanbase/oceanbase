@@ -53,6 +53,7 @@ public:
   void destroy();
   void reset();
   bool is_inited() const { return is_inited_; }
+  int64_t get_max_column_cnt() const { return max_column_cnt_; }
 
   // follower
   int replay_schema_log(const share::SCN &scn, const char *buf, const int64_t size, int64_t &pos);
@@ -113,7 +114,7 @@ private:
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   int64_t table_id_;
-
+  int64_t max_column_cnt_;
 };
 
 } // storage

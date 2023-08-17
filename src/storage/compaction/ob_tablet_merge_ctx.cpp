@@ -1060,6 +1060,7 @@ int ObTabletMergeCtx::get_storage_schema_to_merge(const ObTablesHandleArray &mer
   const ObMergeType &merge_type = param_.merge_type_;
   const ObStorageSchema *schema_on_tablet = nullptr;
   int64_t max_column_cnt_in_memtable = 0;
+  int64_t max_column_cnt_on_recorder = 0;
   int64_t max_schema_version_in_memtable = 0;
   int64_t column_cnt_in_schema = 0;
   bool use_schema_on_tablet = true; // for minor & tx_mini, use storage schema on tablet
@@ -1085,8 +1086,10 @@ int ObTabletMergeCtx::get_storage_schema_to_merge(const ObTablesHandleArray &mer
       }
     } // end of for
 
-    if (OB_FAIL(ret)) {
+    if (FAILEDx(tablet_handle_.get_obj()->get_max_column_cnt_on_schema_recorder(max_column_cnt_on_recorder))) {
+      LOG_WARN("failed to get max column cnt on schema recorder", KR(ret));
     } else if (max_column_cnt_in_memtable <= column_cnt_in_schema
+            && max_column_cnt_on_recorder <= column_cnt_in_schema
             && max_schema_version_in_memtable <= schema_on_tablet->get_schema_version()) {
       // do nothing
     } else {
@@ -1103,6 +1106,7 @@ int ObTabletMergeCtx::get_storage_schema_to_merge(const ObTablesHandleArray &mer
           storage_schema = nullptr;
         } else {
           // only update column cnt by memtable, use schema version on tablet_schema
+          storage_schema->column_cnt_ = MAX(storage_schema->column_cnt_, max_column_cnt_on_recorder);
           storage_schema->column_cnt_ = MAX(storage_schema->column_cnt_, max_column_cnt_in_memtable);
           storage_schema->store_column_cnt_ = MAX(column_cnt_in_schema, max_column_cnt_in_memtable);
           storage_schema->schema_version_ = MAX(max_schema_version_in_memtable, schema_on_tablet->get_schema_version());
@@ -1119,7 +1123,7 @@ int ObTabletMergeCtx::get_storage_schema_to_merge(const ObTablesHandleArray &mer
     }
     schema_ctx_.schema_version_ = schema_ctx_.storage_schema_->get_schema_version();
     FLOG_INFO("get storage schema to merge", K_(param), K_(schema_ctx), K(use_schema_on_tablet),
-      K(max_column_cnt_in_memtable), K(max_schema_version_in_memtable));
+      K(max_column_cnt_in_memtable), K(max_schema_version_in_memtable), K(max_column_cnt_on_recorder));
     if (!use_schema_on_tablet) {
       // destroy loaded schema memory after print log
       ObTablet::free_storage_schema(allocator_, schema_on_tablet);
