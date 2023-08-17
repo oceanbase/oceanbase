@@ -276,7 +276,8 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
         LOG_WARN("inconsistent datatypes", "expected", type_tc, "got", value_tc);
       } else {
         type_ctx.set_cast_mode(
-            type_ctx.get_cast_mode() | type_ctx.get_raw_expr()->get_extra() | CM_COLUMN_CONVERT);
+            type_ctx.get_cast_mode() | type_ctx.get_raw_expr()->get_extra() | CM_COLUMN_CONVERT
+            | CM_CHARSET_CONVERT_IGNORE_ERR);
         types[4].set_calc_meta(type);
       }
     }

@@ -8476,7 +8476,9 @@ int anytype_to_varchar_char_explicit(const sql::ObExpr &expr,
           src_meta = expr.args_[0]->datum_meta_;
         }
         if (OB_LIKELY(OB_ERR_DATA_TOO_LONG == ret)) {
-          if (ob_is_character_type(src_meta.type_, src_meta.cs_type_) && lib::is_oracle_mode()) {
+          if (lib::is_oracle_mode() &&
+              (ob_is_character_type(src_meta.type_, src_meta.cs_type_) ||
+              ob_is_raw(src_meta.type_))) {
             ret = OB_SUCCESS;
           } else if ((ob_is_clob(src_meta.type_, src_meta.cs_type_) ||
                   ob_is_clob_locator(src_meta.type_, src_meta.cs_type_)) && lib::is_oracle_mode()) {
