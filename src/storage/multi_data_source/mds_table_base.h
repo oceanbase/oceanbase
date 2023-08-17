@@ -278,11 +278,12 @@ protected:
     init_ts_(0),
     last_reset_ts_(0),
     remove_ts_(0),
+    switch_to_empty_shell_ts_(0),
     last_flush_ts_(0),
     init_trace_id_(),
     remove_trace_id_() {}
     TO_STRING_KV(KP_(do_init_tablet_pointer), KP_(do_remove_tablet_pointer), KTIME_(init_ts), KTIME_(last_reset_ts),
-                 KTIME_(remove_ts), KTIME_(last_flush_ts), K_(switch_to_empty_shell_ts), K_(init_trace_id), K_(remove_trace_id));
+                 KTIME_(remove_ts), KTIME_(last_flush_ts), KTIME_(switch_to_empty_shell_ts), K_(init_trace_id), K_(remove_trace_id));
     ObTabletPointer *do_init_tablet_pointer_;// can not be accessed, just record it to debug
     ObTabletPointer *do_remove_tablet_pointer_;// can not be accessed, just record it to debug
     int64_t init_ts_;
