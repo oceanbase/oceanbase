@@ -719,7 +719,6 @@ int ObPlanCache::construct_fast_parser_result(common::ObIAllocator &allocator,
                                                  first_truncated_sql))) {
         LOG_WARN("fail to do insert optimization", K(ret));
       } else if (!can_do_batch_insert) {
-        LOG_INFO("can't do batch insert optimization", K(raw_sql));
         // can't do batch insert
       } else if (OB_FAIL(rebuild_raw_params(allocator,
                                             pc_ctx,
