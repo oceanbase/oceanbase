@@ -1657,6 +1657,9 @@ int ObBasicSessionInfo::sys_variable_exists(const ObString& var, bool& is_exists
     LOG_ERROR("got store_idx is invalid", K(store_idx), K(ret));
   } else {
     is_exists = (NULL != sys_vars_[store_idx]);
+    if (NULL != sys_vars_[store_idx]) {
+      is_exists = !sys_vars_[store_idx]->is_base_value_empty();
+    }
   }
   return ret;
 }
