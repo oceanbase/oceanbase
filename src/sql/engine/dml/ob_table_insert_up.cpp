@@ -859,7 +859,6 @@ int ObTableInsertUp::calc_update_rows(
     for (int64_t i = 0; i < duplicate_row.get_count(); i++) {
       update_ctx->get_update_row().cells_[i] = duplicate_row.get_cell(i);
     }
-    SQL_ENG_LOG(DEBUG, "get conflict row", K(ret), K(update_ctx->get_update_row()));
   }
   if (OB_SUCC(ret)) {
     // before calc new row, to be compatible with MySQL
