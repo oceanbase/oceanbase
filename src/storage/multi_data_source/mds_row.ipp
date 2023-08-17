@@ -562,7 +562,7 @@ int MdsRow<K, V>::scan_dump_node_from_tail_to_head(DUMP_OP &&op,
       } else if (for_flush) {
         report_event_("DUMP_NODE_FOR_FLUSH", node);
       } else {
-        report_event_("DUMP_NODE", node);
+        // report_event_("DUMP_NODE", node);
       }
       return need_break || OB_SUCCESS != ret;
     }
