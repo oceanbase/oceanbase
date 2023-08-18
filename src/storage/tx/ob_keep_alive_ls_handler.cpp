@@ -87,6 +87,7 @@ void ObKeepAliveLSHandler::reset()
   is_master_ = false;
   is_stopped_ = false;
   last_gts_.set_min();
+  sys_ls_end_scn_.set_min();
   ls_id_.reset();
   tmp_keep_alive_info_.reset();
   durable_keep_alive_info_.reset();
@@ -115,13 +116,14 @@ int ObKeepAliveLSHandler::try_submit_log(const SCN &min_start_scn, MinStartScnSt
     // ret = OB_OP_NOT_ALLOW;
   } else {
     ATOMIC_STORE(&is_busy_, true);
+    share::SCN ref_scn = get_ref_scn_();
     if (ATOMIC_LOAD(&is_stopped_)) {
       ATOMIC_STORE(&is_busy_, false);
       TRANS_LOG(INFO, "ls hash stopped", K(ret));
     } else if (OB_FAIL(serialize_keep_alive_log_(min_start_scn, min_start_status))) {
       ATOMIC_STORE(&is_busy_, false);
       TRANS_LOG(WARN, "[Keep Alive] serialize keep alive log failed", K(ret), K(ls_id_));
-    } else if (OB_FAIL(log_handler_ptr_->append(submit_buf_, submit_buf_pos_, last_gts_, true, this,
+    } else if (OB_FAIL(log_handler_ptr_->append(submit_buf_, submit_buf_pos_, ref_scn, true, this,
                                                 lsn, scn))) {
       stat_info_.other_error_cnt += 1;
       ATOMIC_STORE(&is_busy_, false);
@@ -208,7 +210,8 @@ void ObKeepAliveLSHandler::print_stat_info()
                                                           "last_lsn",           stat_info_.stat_keepalive_info_.lsn_,
                                                           "last_gts",           last_gts_,
                                                           "min_start_scn",      to_cstring(stat_info_.stat_keepalive_info_.min_start_scn_),
-                                                          "min_start_status",   stat_info_.stat_keepalive_info_.min_start_status_);
+                                                          "min_start_status",   stat_info_.stat_keepalive_info_.min_start_status_,
+                                                          "sys_ls_end_scn",     sys_ls_end_scn_);
   stat_info_.clear_cnt();
 }
 
@@ -228,8 +231,9 @@ bool ObKeepAliveLSHandler::check_gts_()
   bool need_submit = true;
   SCN gts;
   SCN max_scn;
+  SCN end_scn;
   int ret = OB_SUCCESS;
-
+  SCN sys_ls_end_scn = sys_ls_end_scn_.atomic_load();
   if (OB_ISNULL(log_handler_ptr_)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid arguments", K(ret), KP(log_handler_ptr_));
@@ -237,7 +241,14 @@ bool ObKeepAliveLSHandler::check_gts_()
     TRANS_LOG(WARN, "get gts error", K(ret));
   } else if (OB_FAIL(log_handler_ptr_->get_max_scn(max_scn))) {
     TRANS_LOG(WARN, "get max log_ts failed", K(ret));
-  } else if (!last_gts_.is_valid_and_not_min() || last_gts_ == gts) {
+  } else if (OB_FAIL(log_handler_ptr_->get_end_scn(end_scn))) {
+    TRANS_LOG(WARN, "get end scn failed", K(ret));
+  } else if (!last_gts_.is_valid_and_not_min()
+      || last_gts_ == gts) {
+    need_submit = true;
+  } else if (end_scn.is_valid_and_not_min()
+      && sys_ls_end_scn.is_valid_and_not_min()
+      && end_scn < sys_ls_end_scn) {
     need_submit = true;
   } else if (gts.convert_to_ts() < max_scn.convert_to_ts() + KEEP_ALIVE_GTS_INTERVAL) {
     need_submit = false;
@@ -248,6 +259,16 @@ bool ObKeepAliveLSHandler::check_gts_()
   }
 
   return need_submit;
+}
+
+share::SCN ObKeepAliveLSHandler::get_ref_scn_()
+{
+  share::SCN ref_scn = last_gts_;
+  share::SCN sys_ls_end_scn = sys_ls_end_scn_.atomic_load();
+  if (ref_scn.is_valid_and_not_min() && sys_ls_end_scn.is_valid_and_not_min()) {
+    ref_scn = sys_ls_end_scn > ref_scn ? sys_ls_end_scn : ref_scn;
+  }
+  return ref_scn;
 }
 
 int ObKeepAliveLSHandler::serialize_keep_alive_log_(const SCN &min_start_scn, MinStartScnStatus status)

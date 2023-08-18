@@ -3207,16 +3207,19 @@ public:
                         ls_id_(),
                         mode_version_(palf::INVALID_PROPOSAL_ID),
                         access_mode_(palf::AccessMode::INVALID_ACCESS_MODE),
-                        ref_scn_(), addr_() {}
+                        ref_scn_(),
+                        addr_(),
+                        sys_ls_end_scn_() {}
   ~ObLSAccessModeInfo() {}
   bool is_valid() const;
   int init(uint64_t tenant_id, const share::ObLSID &ls_idd,
            const int64_t mode_version,
            const palf::AccessMode &access_mode,
-           const share::SCN &ref_scn);
+           const share::SCN &ref_scn,
+           const share::SCN &sys_ls_end_scn);
   int assign(const ObLSAccessModeInfo &other);
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(mode_version),
-               K_(access_mode), K_(ref_scn));
+               K_(access_mode), K_(ref_scn), K_(sys_ls_end_scn));
   uint64_t get_tenant_id() const
   {
     return tenant_id_;
@@ -3237,6 +3240,10 @@ public:
   {
     return ref_scn_;
   }
+  const share::SCN &get_sys_ls_end_scn() const
+  {
+    return sys_ls_end_scn_;
+  }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSAccessModeInfo);
 private:
@@ -3246,6 +3253,7 @@ private:
   palf::AccessMode access_mode_;
   share::SCN ref_scn_;
   ObAddr addr_;//no used, add in 4200 RC1
+  share::SCN sys_ls_end_scn_; // new arg in V4.2.0
 };
 
 struct ObChangeLSAccessModeRes

@@ -169,9 +169,11 @@ public:
   int flush(share::SCN &rec_scn) { return OB_SUCCESS;}
 
   void get_min_start_scn(share::SCN &min_start_scn, share::SCN &keep_alive_scn, MinStartScnStatus &status);
+  void set_sys_ls_end_scn(const share::SCN &sys_ls_end_scn) { sys_ls_end_scn_.inc_update(sys_ls_end_scn);}
 private:
   bool check_gts_();
   int serialize_keep_alive_log_(const share::SCN &min_start_scn, MinStartScnStatus status);
+  share::SCN get_ref_scn_();
 private :
   SpinRWLock lock_;
 
@@ -187,6 +189,7 @@ private :
   int64_t submit_buf_pos_;
 
   share::SCN last_gts_;
+  share::SCN sys_ls_end_scn_;
 
   KeepAliveLsInfo tmp_keep_alive_info_;
   KeepAliveLsInfo durable_keep_alive_info_;

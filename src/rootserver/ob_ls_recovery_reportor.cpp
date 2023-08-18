@@ -147,34 +147,40 @@ void ObLSRecoveryReportor::run2()
         LOG_WARN("failed to update_replayable_point", KR(tmp_ret));
       }
 
-      const int64_t idle_time = get_idle_time_();
-
       if (!stop_) {
-        get_cond().wait_us(idle_time);
+        (void) idle_some_time_();
       }
     }//end while
   }
 }
 
-int64_t ObLSRecoveryReportor::get_idle_time_()
+void ObLSRecoveryReportor::idle_some_time_()
 {
   int ret = OB_SUCCESS;
   rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
-  bool is_primary_normal_status = false;
-  int64_t idle_time = ObTenantRoleTransitionConstants::STANDBY_UPDATE_LS_RECOVERY_STAT_TIME_US;
-
+  const int64_t IDLE_TIME = ObTenantRoleTransitionConstants::STANDBY_UPDATE_LS_RECOVERY_STAT_TIME_US;
+  int idle_count = 0;
+  int idle_target_cnt = 10; // primary_normal: 10, others: 1
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (OB_ISNULL(tenant_info_loader)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("pointer is null", KR(ret), KP(tenant_info_loader));
-  } else if (OB_FAIL(tenant_info_loader->check_is_primary_normal_status(is_primary_normal_status))) {
-    LOG_WARN("fail to get tenant status", KR(ret), K_(tenant_id));
-  } else if (is_primary_normal_status) {
-    idle_time = ObTenantRoleTransitionConstants::PRIMARY_UPDATE_LS_RECOVERY_STAT_TIME_US;
   }
-  return idle_time;
+  while (idle_count < idle_target_cnt && !stop_) {
+    bool is_primary_normal_status = true;
+    idle_count++;
+    if (OB_FAIL(ret)) {
+      idle_target_cnt = 1;
+    } else if (OB_FAIL(tenant_info_loader->check_is_primary_normal_status(is_primary_normal_status))) {
+      idle_target_cnt = 1;
+      LOG_WARN("fail to get tenant status", KR(ret), K_(tenant_id));
+    } else if (!is_primary_normal_status) {
+      idle_target_cnt = 1;
+    }
+    get_cond().wait_us(IDLE_TIME);
+  }
 }
 
 int ObLSRecoveryReportor::submit_tenant_refresh_schema_task_()

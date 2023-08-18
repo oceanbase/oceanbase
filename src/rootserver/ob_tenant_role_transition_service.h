@@ -160,12 +160,21 @@ private:
   int do_failover_to_primary_(const share::ObAllTenantInfo &tenant_info);
   int do_prepare_flashback_(share::ObAllTenantInfo &tenant_info);
   int do_flashback_();
-  int change_ls_access_mode_(palf::AccessMode target_access_mode,
-                             const share::SCN &ref_scn);
-  int get_ls_access_mode_(ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info);
+  int get_status_and_change_ls_access_mode_(
+      palf::AccessMode target_access_mode,
+      const SCN &ref_scn);
+  int change_ls_access_mode_(
+      const share::ObLSStatusInfoArray &status_info_array,
+      const palf::AccessMode target_access_mode,
+      const share::SCN &ref_scn,
+      const share::SCN &sys_ls_sync_scn);
+  int get_ls_access_mode_(
+      const share::ObLSStatusInfoArray &status_info_array,
+      ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info);
   int do_change_ls_access_mode_(const ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info,
-                                palf::AccessMode target_access_mode,
-                                const share::SCN &ref_scn);
+                                const palf::AccessMode target_access_mode,
+                                const share::SCN &ref_scn,
+                                const share::SCN &sys_ls_sync_scn);
   int do_switch_access_mode_to_flashback(
     const share::ObAllTenantInfo &tenant_info);
 
@@ -186,6 +195,11 @@ private:
    * @param[in] checkpoints checkpoint
    * @return return code
    */
+  int get_sys_ls_sync_scn_(
+    const uint64_t tenant_id,
+    const bool need_check_sync_to_latest,
+    share::SCN &sys_ls_sync_scn,
+    bool &is_sync_to_latest);
   int get_sys_ls_sync_scn_(
       const ObIArray<obrpc::ObCheckpoint> &checkpoints,
       share::SCN &sys_ls_sync_scn,
@@ -212,6 +226,10 @@ private:
       const SCN &max_sys_ls_sync_scn/* SYS LS real max sync scn */,
       const SCN &target_tenant_sync_scn/* tenant target sync scn in switchover */);
   int wait_ls_balance_task_finish_();
+  int get_all_ls_status_and_change_access_mode_(
+      const palf::AccessMode target_access_mode,
+      const share::SCN &ref_scn,
+      const share::SCN &sys_ls_sync_scn);
 
 private:
   const static int64_t SEC_UNIT = 1000L * 1000L;

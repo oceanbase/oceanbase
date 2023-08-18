@@ -24,6 +24,7 @@
 #include "share/rc/ob_context.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/cache/ob_cache_name_define.h"
+#include "share/ob_share_util.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
 #include "storage/memtable/ob_memtable.h"
 #include "storage/blocksstable/ob_block_manager.h"
@@ -1601,7 +1602,7 @@ int ObRpcGetLSAccessModeP::process()
       const SCN ref_scn = SCN::min_scn();
       if (OB_FAIL(log_handler->get_access_mode(mode_version, mode))) {
         LOG_WARN("failed to get access mode", KR(ret), K(ls_id));
-      } else if (OB_FAIL(result_.init(tenant_id, ls_id, mode_version, mode, ref_scn))) {
+      } else if (OB_FAIL(result_.init(tenant_id, ls_id, mode_version, mode, ref_scn, share::SCN::min_scn()))) {
         LOG_WARN("failed to init res", KR(ret), K(tenant_id), K(ls_id), K(mode_version), K(mode));
       } else if (OB_FAIL(log_ls_svr->get_palf_role(ls_id, role, second_proposal_id))) {
         COMMON_LOG(WARN, "failed to get palf role", KR(ret), K(ls_id));
@@ -1640,22 +1641,33 @@ int ObRpcChangeLSAccessModeP::process()
       COMMON_LOG(ERROR, "ls should not be null", KR(ret));
     } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("log_handler is null", KR(ret), K(ls_id));
+      LOG_WARN("log_handler is null", KR(ret), K(ls_id), KP(log_handler));
+    } else if (palf::AccessMode::RAW_WRITE == arg_.get_access_mode() && !ls_id.is_sys_ls()) {
+      // switchover to standby
+      // user ls end scn should be larger than sys ls end scn at first
+      if (OB_UNLIKELY(!arg_.get_sys_ls_end_scn().is_valid_and_not_min())) {
+        FLOG_WARN("invalid sys_ls_end_scn, no need to let user ls wait, "
+            "the version might be smaller than V4.2.0", KR(ret), K(arg_.get_sys_ls_end_scn()));
+      } else if (OB_FAIL(share::ObShareUtil::wait_user_ls_sync_scn_locally(
+            arg_.get_sys_ls_end_scn(),
+            *ls))) {
+        LOG_WARN("fail to wait user ls sync scn locally", KR(ret), K(ls_id), K(arg_.get_sys_ls_end_scn()));
+      }
+    }
+    const int64_t timeout = THIS_WORKER.get_timeout_remain();
+    if (FAILEDx(log_handler->change_access_mode(
+        arg_.get_mode_version(),
+        arg_.get_access_mode(),
+        arg_.get_ref_scn()))) {
+      LOG_WARN("failed to change access mode", KR(ret), K(arg_), K(timeout));
+    }
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = result_.init(tenant_id, ls_id, ret))) {
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+      LOG_WARN("failed to init res", KR(ret), K(tenant_id), K(ls_id), KR(tmp_ret));
     } else {
-      const int64_t timeout = THIS_WORKER.get_timeout_remain();
-      if (OB_FAIL(log_handler->change_access_mode(arg_.get_mode_version(),
-                                      arg_.get_access_mode(),
-                                      arg_.get_ref_scn()))) {
-        LOG_WARN("failed to change access mode", KR(ret), K(arg_), K(timeout));
-      }
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = result_.init(tenant_id, ls_id, ret))) {
-        ret = OB_SUCC(ret) ? tmp_ret : ret;
-        LOG_WARN("failed to init res", KR(ret), K(tenant_id), K(ls_id), KR(tmp_ret));
-      } else {
-        //if ret  not OB_SUCCESS, res can not return
-        ret = OB_SUCCESS;
-      }
+      //if ret  not OB_SUCCESS, res can not return
+      ret = OB_SUCCESS;
     }
   }
   return ret;

@@ -586,7 +586,7 @@ int ObLSServiceHelper::wait_all_tenants_user_ls_sync_scn(
       if (OB_UNLIKELY(timeout_ctx.is_timeouted())) {
         ret = OB_TIMEOUT;
         LOG_WARN("wait tenant_sync_scn timeout", KR(ret), K(timeout_ctx));
-      } else if (OB_FAIL(check_if_need_wait_user_ls_sync_scn(tenant_id, sys_ls_target_scn))) {
+      } else if (OB_FAIL(check_if_need_wait_user_ls_sync_scn_(tenant_id, sys_ls_target_scn))) {
         if (OB_NEED_WAIT != ret) {
           LOG_WARN("fail to check tenant_sync_scn", KR(ret), K(tenant_id), K(sys_ls_target_scn));
         } else {
@@ -603,8 +603,7 @@ int ObLSServiceHelper::wait_all_tenants_user_ls_sync_scn(
   return ret;
 }
 
-ERRSIM_POINT_DEF(ERRSIM_USER_LS_SYNC_SCN);
-int ObLSServiceHelper::check_if_need_wait_user_ls_sync_scn(
+int ObLSServiceHelper::check_if_need_wait_user_ls_sync_scn_(
     const uint64_t tenant_id,
     const share::SCN &sys_ls_target_scn)
 {
@@ -624,14 +623,10 @@ int ObLSServiceHelper::check_if_need_wait_user_ls_sync_scn(
   } else if (OB_FAIL(ls_recovery.get_user_ls_sync_scn(tenant_id, *GCTX.sql_proxy_, user_ls_sync_scn))) {
     LOG_WARN("failed to get user scn", KR(ret), K(tenant_id));
   } else {
-    bool is_errsim_opened = ERRSIM_USER_LS_SYNC_SCN ? true : false;
-    user_ls_sync_scn = is_errsim_opened ? SCN::scn_dec(sys_ls_target_scn) : user_ls_sync_scn;
-    // if ERRSIM_USER_LS_SYNC_SCN is true, user_ls_sync_scn will be always smaller than sys_ls_target_scn
-    // thus, the related operation will fail due to timeout.
     if (user_ls_sync_scn < sys_ls_target_scn) {
       ret = OB_NEED_WAIT;
       LOG_WARN("wait some time, user_ls_sync_scn cannot be smaller than sys_ls_target_scn",
-          KR(ret), K(tenant_id), K(user_ls_sync_scn), K(sys_ls_target_scn), K(is_errsim_opened));
+          KR(ret), K(tenant_id), K(user_ls_sync_scn), K(sys_ls_target_scn));
     } else {
       LOG_INFO("user_ls_sync_scn >= sys_ls_target_scn now", K(tenant_id), K(user_ls_sync_scn), K(sys_ls_target_scn));
     }
