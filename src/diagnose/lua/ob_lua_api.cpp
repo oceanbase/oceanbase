@@ -71,7 +71,9 @@ public:
 #if defined(OB_USE_ASAN) || defined(ENABLE_SANITY)
       if (OB_NOT_NULL(ret = ::malloc(size + 8))) {
 #else
-      if (OB_NOT_NULL(ret = ::mmap(nullptr, size + 8, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
+      if (MAP_FAILED == (ret = ::mmap(nullptr, size + 8, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
+        ret = nullptr;
+      } else {
 #endif
         *static_cast<uint64_t *>(ret) = size;
         ret = (char*)ret + 8;
