@@ -4100,6 +4100,9 @@ int ObStaticEngineCG::generate_pump_exprs(ObLogJoin &op, ObNLConnectBySpecBase &
   if (OB_ISNULL(left_op) || OB_ISNULL(right_op)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected status: child is null", K(ret));
+  } else if (OB_UNLIKELY(left_output.count() != right_output.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status: left and right output size not same", K(ret));
   } else if (OB_FAIL(generate_pseudo_column_expr(op, spec))) {
     LOG_WARN("failed to generate pseudo column", K(ret));
   } else if (OB_FAIL(spec.connect_by_prior_exprs_.init(left_output.count()))) {
@@ -4131,7 +4134,7 @@ int ObStaticEngineCG::generate_pump_exprs(ObLogJoin &op, ObNLConnectBySpecBase &
       } else if (OB_FAIL(spec.left_prior_exprs_.push_back(left_expr))) {
         LOG_WARN("failed to push back left expr", K(ret));
       } else if (OB_FAIL(spec.right_prior_exprs_.push_back(right_expr))) {
-        LOG_WARN("failed to push back left expr", K(ret));
+        LOG_WARN("failed to push back right expr", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
