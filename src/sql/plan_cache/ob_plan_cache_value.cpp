@@ -1755,12 +1755,7 @@ int ObPlanCacheValue::handle_varchar_charset(ObCharsetType charset_type,
     if (OB_ISNULL(charset_node) || OB_ISNULL(varchar_node)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
-      const char *name = NULL;
-      if (CHARSET_BINARY ==  charset_type) {
-        name = "binary";
-      } else if (CHARSET_UTF8MB4 == charset_type) {
-        name = "utf8mb4";
-      }
+      const char *name = ObCharset::charset_name(charset_type);
       charset_node->str_value_ = parse_strdup(name, &allocator, &(charset_node->str_len_));
       if (NULL == charset_node->str_value_) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
