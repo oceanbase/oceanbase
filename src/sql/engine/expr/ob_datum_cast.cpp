@@ -1380,37 +1380,10 @@ static int common_string_string(const ObExpr &expr,
       LOG_WARN("alloc memory failed", K(ret));
     } else if (OB_FAIL(ObCharset::charset_convert(in_cs_type, in_str.ptr(),
                                                   in_str.length(), out_cs_type, buf,
-                                                  buf_len, result_len))) {
-      if (CM_IS_IGNORE_CHARSET_CONVERT_ERR(expr.extra_)) {
-        ObString question_mark = ObCharsetUtils::get_const_str(out_cs_type, '?');
-        int32_t str_offset = 0;
-        int64_t buf_offset = 0;
-        while (str_offset < in_str.length() && buf_offset + question_mark.length() <= buf_len) {
-          int64_t offset = ObCharset::charpos(in_cs_type,
-              in_str.ptr() + str_offset, in_str.length() - str_offset, 1);
-          if (OB_UNLIKELY(0 == offset)) {
-            break;
-          }
-          ret = ObCharset::charset_convert(in_cs_type, in_str.ptr() + str_offset,
-              offset, out_cs_type, buf + buf_offset, buf_len - buf_offset, result_len);
-          str_offset += offset;
-          if (OB_SUCCESS == ret) {
-            buf_offset += result_len;
-          } else {
-            MEMCPY(buf + buf_offset, question_mark.ptr(), question_mark.length());
-            buf_offset += question_mark.length();
-          }
-        }
-        if (buf_offset > buf_len) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("buf_offset > buf_len, unexpected", K(ret));
-        } else {
-          result_len = buf_offset;
-          ret = OB_SUCCESS;
-          LOG_WARN("charset convert failed", K(ret), K(in_cs_type), K(out_cs_type));
-          res_datum.set_string(buf, result_len);
-        }
-      }
+                                                  buf_len, result_len, lib::is_mysql_mode(),
+                                                  !CM_IS_IGNORE_CHARSET_CONVERT_ERR(expr.extra_),
+                                                  ObCharset::is_cs_unicode(out_cs_type) ? 0xFFFD : '?'))) {
+      LOG_WARN("charset convert failed", K(ret));
     } else {
       res_datum.set_string(buf, result_len);
     }

@@ -103,7 +103,24 @@ int ObExprToClob::calc_to_clob_expr(const ObExpr &expr, ObEvalCtx &ctx,
   } else {
     ObString raw_string = arg->get_string();
     ObTextStringDatumResult str_result(expr.datum_meta_.type_, &expr, &ctx, &res);
-    if (OB_FAIL(str_result.init(raw_string.length()))) {
+    uint32_t result_len = 0;
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    char *buf = NULL;
+    int64_t reserve_len = raw_string.length() * 4;
+    if (OB_ISNULL(buf = (char*)temp_allocator.alloc(reserve_len))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc mem failed", K(ret));
+    } else if (OB_FAIL(ObCharset::charset_convert(cs_type, raw_string.ptr(), raw_string.length(),
+                                                  cs_type, buf, reserve_len, result_len, false, false,
+                                                  ObCharset::is_cs_unicode(cs_type) ? 0xFFFD : '?'))) {
+      LOG_WARN("charset convert failed", K(ret));
+    } else {
+      raw_string.assign_ptr(buf, result_len);
+    }
+    LOG_DEBUG("try convert param value", K(raw_string), K(ObHexStringWrap(raw_string)), K(cs_type));
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(str_result.init(raw_string.length()))) {
       LOG_WARN("init lob result failed");
     } else if (OB_FAIL(str_result.append(raw_string.ptr(), raw_string.length()))) {
       LOG_WARN("append lob result failed");

@@ -6417,9 +6417,7 @@ INSERT INTO `table10_bigint` VALUES (9,3,NULL,7,6.00000,NULL,NULL,NULL,NULL,8,1,
 set names GB18030;
 SELECT TRIM( SUBSTRING( SUBSTRING( '‚à∑ ‚à∂ ‚à´ ‚àÆ ‚àù ‚àû ‚àß ‚à® ‚àë ‚àè ‚à™ ‚à© ‚àà ‚àµ ‚à¥ ‚ä• ‚à• ‚à† ‚åí ‚äô ‚àö‚àü‚äø „èí „èë % ‚Ä∞' , 1, LEAST( 228, 20 ) ) , 1 , LEAST( 228, 20 ) ) ) NOT REGEXP CONCAT( 'tu', '%' ) FROM table10_bigint WHERE col_int NOT IN ( 5387431054241955840 , 13633803446934044672 , 65066 , 45808 , 6755399441055744000 ) ORDER BY col_char_20 DESC , pk ASC LIMIT 6 OFFSET 1;
 TRIM( SUBSTRING( SUBSTRING( '‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚ä ‚à ‚à ‚å ‚ä ‚àö‚àü‚ä „è „è % ‚Ä' , 1, LEAST( 228, 20 ) ) , 1 , LEAST( 228, 20 ) ) ) NOT REGEXP CONCAT( 'tu', '%' )
-NULL
-NULL
-NULL
-Warnings:
-Warning	1300	Invalid utf16 character string: ''
+1
+1
+1
 drop database ly;

@@ -3695,6 +3695,7 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
       // setup zerofill cm
       // eg: select concat(cast(c_zf as char(10)), cast(col_no_zf as char(10))) from t1;
       ObCastMode cm_zf = cm;
+      cm_zf |= CM_CHARSET_CONVERT_IGNORE_ERR;
       if (expr.get_result_type().has_result_flag(ZEROFILL_FLAG)) {
         cm_zf |= CM_ZERO_FILL;
       }
