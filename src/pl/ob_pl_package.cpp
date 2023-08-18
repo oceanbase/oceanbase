@@ -304,7 +304,8 @@ int ObPLPackage::get_var(const ObString &var_name, const ObPLVar *&var, int64_t 
   var_idx = OB_INVALID_INDEX;
   for (int64_t i = 0; OB_ISNULL(var) && i < var_table_.count(); ++i) {
     ObPLVar *tmp_var = var_table_.at(i);
-    if (ObCharset::case_insensitive_equal(var_name, tmp_var->get_name())) {
+    if (!tmp_var->is_formal_param()
+        && ObCharset::case_insensitive_equal(var_name, tmp_var->get_name())) {
       var = tmp_var;
       var_idx = i;
     }
