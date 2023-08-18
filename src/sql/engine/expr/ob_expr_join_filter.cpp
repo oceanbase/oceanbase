@@ -55,6 +55,7 @@ ObExprJoinFilter::ObExprJoinFilterContext::~ObExprJoinFilterContext()
   }
   hash_funcs_.reset();
   cmp_funcs_.reset();
+  cur_row_.reset();
 }
 
 void ObExprJoinFilter::ObExprJoinFilterContext::reset_monitor_info()
@@ -224,6 +225,51 @@ void ObExprJoinFilter::check_need_dynamic_diable_bf(
           (join_filter_ctx->window_size_ * join_filter_ctx->window_cnt_);
       join_filter_ctx->dynamic_disable_ = true;
     }
+  }
+}
+
+void ObExprJoinFilter::collect_sample_info_batch(
+    ObExprJoinFilter::ObExprJoinFilterContext &join_filter_ctx,
+    int64_t filter_count, int64_t total_count)
+{
+  if (!join_filter_ctx.dynamic_disable()) {
+    join_filter_ctx.partial_filter_count_ += filter_count;
+    join_filter_ctx.partial_total_count_ += total_count;
+  }
+  check_need_dynamic_diable_bf_batch(join_filter_ctx);
+}
+
+void ObExprJoinFilter::check_need_dynamic_diable_bf_batch(
+    ObExprJoinFilter::ObExprJoinFilterContext &join_filter_ctx)
+{
+  if (join_filter_ctx.cur_pos_ >= join_filter_ctx.next_check_start_pos_
+      && join_filter_ctx.need_reset_sample_info_) {
+    join_filter_ctx.partial_total_count_ = 0;
+    join_filter_ctx.partial_filter_count_ = 0;
+    join_filter_ctx.need_reset_sample_info_ = false;
+    if (join_filter_ctx.dynamic_disable()) {
+      join_filter_ctx.dynamic_disable_ = false;
+    }
+  } else if (join_filter_ctx.cur_pos_ >=
+            join_filter_ctx.next_check_start_pos_ + join_filter_ctx.window_size_) {
+    if (join_filter_ctx.partial_total_count_ -
+          join_filter_ctx.partial_filter_count_ <
+          join_filter_ctx.partial_filter_count_) {
+      // partial_filter_count_ / partial_total_count_ > 0.5
+      // The optimizer choose the bloom filter when the filter threshold is larger than 0.6
+      // 0.5 is a acceptable value
+      // if enabled, the slide window not needs to expand
+      join_filter_ctx.window_cnt_ = 0;
+      join_filter_ctx.next_check_start_pos_ = join_filter_ctx.cur_pos_;
+    } else {
+      join_filter_ctx.window_cnt_++;
+      join_filter_ctx.next_check_start_pos_ = join_filter_ctx.cur_pos_ +
+          (join_filter_ctx.window_size_ * join_filter_ctx.window_cnt_);
+      join_filter_ctx.dynamic_disable_ = true;
+    }
+    join_filter_ctx.partial_total_count_ = 0;
+    join_filter_ctx.partial_filter_count_ = 0;
+    join_filter_ctx.need_reset_sample_info_ = true;
   }
 }
 

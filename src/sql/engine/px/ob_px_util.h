@@ -665,6 +665,14 @@ static int get_location_addrs(const T &locations,
   return ret;
 }
 
+class LowestCommonAncestorFinder
+{
+public:
+  static int find_op_common_ancestor(
+      const ObOpSpec *left, const ObOpSpec *right, const ObOpSpec *&ancestor);
+  static int get_op_dfo(const ObOpSpec *op, ObDfo *root_dfo, ObDfo *&op_dfo);
+};
+
 }
 }
 

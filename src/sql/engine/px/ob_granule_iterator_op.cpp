@@ -39,6 +39,7 @@ ObGIOpInput::ObGIOpInput(ObExecContext &ctx, const ObOpSpec &spec)
     worker_id_(common::OB_INVALID_INDEX),
     pump_(nullptr),
     px_sequence_id_(OB_INVALID_ID),
+    rf_max_wait_time_(0),
     deserialize_allocator_(nullptr)
 {}
 
@@ -176,6 +177,7 @@ ObGranuleIteratorOp::ObGranuleIteratorOp(ObExecContext &exec_ctx, const ObOpSpec
   total_count_(0),
   rf_msg_(NULL),
   rf_key_(),
+  rf_start_wait_time_(0),
   tablet2part_id_map_(),
   real_child_(NULL),
   is_parallel_runtime_filtered_(false)
@@ -645,7 +647,9 @@ int ObGranuleIteratorOp::do_get_next_granule_task(bool &partition_pruning)
           LOG_WARN("fail to fetch rescan pw task infos", K(ret));
         }
       } else if (OB_FAIL(fetch_normal_pw_task_infos(*op_ids_pointer, gi_prepare_map, gi_task_infos))) {
-        LOG_WARN("fail to fetch normal pw task infos", K(ret));
+        if (OB_ITER_END != ret) {
+          LOG_WARN("fail to fetch normal pw task infos", K(ret));
+        }
       }
     }
 
@@ -663,13 +667,12 @@ int ObGranuleIteratorOp::do_get_next_granule_task(bool &partition_pruning)
   return ret;
 }
 
-
-int ObGranuleIteratorOp::do_join_filter_partition_pruning(
-    int64_t tablet_id,
-    bool &partition_pruning)
-{
+int ObGranuleIteratorOp::wait_runtime_ready(bool &partition_pruning) {
   int ret = OB_SUCCESS;
-  bool is_match = false;
+  if (0 == rf_start_wait_time_) {
+    rf_start_wait_time_ = ObTimeUtility::current_time();
+  }
+  ObGIOpInput *gi_input = static_cast<ObGIOpInput*>(input_);
   while (OB_SUCC(ret) && (OB_ISNULL(rf_msg_) || !rf_msg_->check_ready())) {
     if (OB_ISNULL(rf_msg_) && OB_FAIL(PX_P2P_DH.atomic_get_msg(rf_key_, rf_msg_))) {
       if (OB_HASH_NOT_EXIST == ret) {
@@ -686,13 +689,34 @@ int ObGranuleIteratorOp::do_join_filter_partition_pruning(
     if (OB_SUCC(ret)) {
       if (OB_ISNULL(rf_msg_) || !rf_msg_->check_ready()) {
         if (MY_SPEC.bf_info_.is_shuffle_) {
+          // For shuffled msg, no waiting time is required.
           partition_pruning = false;
           break;
+        } else {
+          // For local messages, the maximum waiting time does not exceed rf_max_wait_time.
+          int64_t cur_time = ObTimeUtility::current_time();
+          if (cur_time - rf_start_wait_time_ > gi_input->get_rf_max_wait_time() * 1000) {
+            partition_pruning = false;
+            break;
+          } else {
+            ob_usleep(100);
+          }
         }
       }
     }
   }
+  return ret;
+}
 
+int ObGranuleIteratorOp::do_join_filter_partition_pruning(
+    int64_t tablet_id,
+    bool &partition_pruning)
+{
+  int ret = OB_SUCCESS;
+  bool is_match = false;
+  if (OB_FAIL(wait_runtime_ready(partition_pruning))) {
+    LOG_WARN("failed to wait wait_runtime_ready");
+  }
   if (OB_SUCC(ret) && OB_NOT_NULL(rf_msg_) && rf_msg_->check_ready()) {
     uint64_t hash_val = ObExprJoinFilter::JOIN_FILTER_SEED;
     if (MY_SPEC.bf_info_.skip_subpart_) {

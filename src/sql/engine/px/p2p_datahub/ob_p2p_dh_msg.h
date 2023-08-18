@@ -86,7 +86,7 @@ public:
   virtual int process_msg_internal(bool &need_free);
   virtual int reuse() { return OB_SUCCESS; }
   virtual int regenerate() { return OB_SUCCESS; }
-  void check_finish_receive();
+  virtual void check_finish_receive();
   bool check_ready() const { return is_ready_; }
   ObP2PDatahubMsgType get_msg_type() const { return msg_type_; }
   void set_msg_type(ObP2PDatahubMsgType type) { msg_type_ = type; }
@@ -137,7 +137,7 @@ protected:
   common::ObArenaAllocator allocator_;
   int64_t msg_receive_cur_cnt_;
   int64_t msg_receive_expect_cnt_;
-  bool is_active_;
+  bool is_active_; //only for ObRFInFilterMsg, when NDV>1024, set is_active_ = false;
   bool is_ready_;
   bool is_empty_;
   int64_t ref_count_;

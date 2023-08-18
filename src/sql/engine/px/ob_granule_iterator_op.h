@@ -59,6 +59,8 @@ public:
   int64_t get_px_sequence_id() { return px_sequence_id_; }
   void set_px_sequence_id(int64_t id) { px_sequence_id_ = id; }
   int add_table_location_keys(common::ObIArray<const ObTableScanSpec*> &tscs);
+  int64_t get_rf_max_wait_time() { return rf_max_wait_time_; }
+  void set_rf_max_wait_time(int64_t rf_max_wait_time) { rf_max_wait_time_ = rf_max_wait_time; }
 private:
   int deep_copy_range(ObIAllocator *allocator, const ObNewRange &src, ObNewRange &dst);
 public:
@@ -72,6 +74,7 @@ public:
   //for partition pruning
   common::ObSEArray<uint64_t, 2> table_location_keys_;
   int64_t px_sequence_id_;
+  int64_t rf_max_wait_time_;
 private:
   common::ObIAllocator *deserialize_allocator_;
 };
@@ -211,6 +214,7 @@ private:
   bool enable_single_runtime_filter_pruning();
   int do_single_runtime_filter_pruning(const ObGranuleTaskInfo &gi_task_info, bool &partition_pruning);
   int do_parallel_runtime_filter_pruning();
+  int wait_runtime_ready(bool &partition_pruning);
   int do_join_filter_partition_pruning(int64_t tablet_id, bool &partition_pruning);
   int try_build_tablet2part_id_map();
   //---end----
@@ -241,6 +245,7 @@ private:
   int64_t total_count_; // total partition count or block count processed, rescan included
   ObP2PDatahubMsgBase *rf_msg_;
   ObP2PDhKey rf_key_;
+  int64_t rf_start_wait_time_;
   ObPxTablet2PartIdMap tablet2part_id_map_;
   ObOperator *real_child_;
   bool is_parallel_runtime_filtered_;

@@ -3836,3 +3836,79 @@ bool ObPxCheckAlive::is_in_blacklist(const common::ObAddr &addr, int64_t server_
   }
   return in_blacklist;
 }
+
+int LowestCommonAncestorFinder::find_op_common_ancestor(
+    const ObOpSpec *left, const ObOpSpec *right, const ObOpSpec *&ancestor)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<const ObOpSpec *, 32> ancestors;
+
+  const ObOpSpec *parent = left;
+  while (OB_NOT_NULL(parent) && OB_SUCC(ret)) {
+    if (OB_FAIL(ancestors.push_back(parent))) {
+      LOG_WARN("failed to push back");
+    } else {
+      parent = parent->get_parent();
+    }
+  }
+
+  parent = right;
+  bool find = false;
+  while (OB_NOT_NULL(parent) && OB_SUCC(ret) && !find) {
+    for (int64_t i = 0; i < ancestors.count() && OB_SUCC(ret); ++i) {
+      if (parent == ancestors.at(i)) {
+        find = true;
+        ancestor = parent;
+        break;
+      }
+    }
+    parent = parent->get_parent();
+  }
+  return ret;
+}
+
+int LowestCommonAncestorFinder::get_op_dfo(const ObOpSpec *op, ObDfo *root_dfo, ObDfo *&op_dfo)
+{
+  int ret = OB_SUCCESS;
+  const ObOpSpec *parent = op;
+  const ObOpSpec *dfo_root_op = nullptr;
+  while (OB_NOT_NULL(parent) && OB_SUCC(ret)) {
+    if (IS_PX_COORD(parent->type_) || IS_PX_TRANSMIT(parent->type_)) {
+      dfo_root_op = parent;
+      break;
+    } else {
+      parent = parent->get_parent();
+    }
+  }
+  ObDfo *dfo = nullptr;
+  bool find = false;
+
+  ObSEArray<ObDfo *, 16> dfo_queue;
+  int64_t cur_que_front = 0;
+  if (OB_FAIL(dfo_queue.push_back(root_dfo))) {
+    LOG_WARN("failed to push back");
+  }
+
+  while (cur_que_front < dfo_queue.count() && !find && OB_SUCC(ret)) {
+    int64_t cur_que_size = dfo_queue.count() - cur_que_front;
+    for (int64_t i = 0; i < cur_que_size && OB_SUCC(ret); ++i) {
+      dfo = dfo_queue.at(cur_que_front);
+      if (dfo->get_root_op_spec() == dfo_root_op) {
+        op_dfo = dfo;
+        find = true;
+        break;
+      } else {
+        // push child into the queue
+        for (int64_t child_idx = 0; OB_SUCC(ret) && child_idx < dfo->get_child_count(); ++child_idx) {
+          if (OB_FAIL(dfo_queue.push_back(dfo->get_child_dfos().at(child_idx)))) {
+            LOG_WARN("failed to push back child dfo");
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        cur_que_front++;
+      }
+    }
+  }
+  return ret;
+}

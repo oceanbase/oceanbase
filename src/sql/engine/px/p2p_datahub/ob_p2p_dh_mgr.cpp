@@ -188,18 +188,6 @@ int ObP2PDatahubManager::P2PMsgMergeCall::operator() (common::hash::HashMapPair<
   return ret;
 }
 
-int ObP2PDatahubManager::P2PRegenerateCall::operator() (common::hash::HashMapPair<ObP2PDhKey,
-    ObP2PDatahubMsgBase *> &entry)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(entry.second->regenerate())) {
-    LOG_WARN("fail to do regenerate", K(ret));
-  }
-  ret_ = ret;
-  return ret;
-}
-
-
 int ObP2PDatahubManager::send_local_msg(ObP2PDatahubMsgBase *msg)
 {
   int ret = OB_SUCCESS;
@@ -212,7 +200,7 @@ int ObP2PDatahubManager::send_local_msg(ObP2PDatahubMsgBase *msg)
         msg->get_task_id(),
         ObTimeUtility::current_time(), msg->get_timeout_ts());
     if (OB_FAIL(map_.set_refactored(dh_key, msg))) {
-      LOG_TRACE("fail to insert p2p dh msg", K(ret));
+      LOG_TRACE("fail to insert p2p dh msg", K(ret), K(dh_key));
     } else {
       msg->set_is_ready(true);
     }
@@ -266,7 +254,10 @@ int ObP2PDatahubManager::erase_msg_if(ObP2PDhKey &dh_key,
     }
     PX_P2P_DH.free_msg(msg);
   } else {
-    ret = OB_ERR_UNEXPECTED;
+    // If erase failed, means other threads still referencing the msg.
+    // If the caller is an RPC thread, the clearing task will be delegated to DM;
+    // If the caller is DM, the retry policy is utilized to ensure that the message is deleted.
+    ret = OB_EAGAIN;
     LOG_WARN("failed to erase msg, other threads still referencing it", K(dh_key), K(need_unreg_dm));
   }
   return ret;
@@ -368,7 +359,7 @@ void ObP2PDatahubManager::P2PMsgGetCall::operator() (common::hash::HashMapPair<O
   if (OB_NOT_NULL(dh_msg_)) {
     dh_msg_->inc_ref_count();
   } else {
-    int ret = OB_UNEXPECT_INTERNAL_ERROR;
+    int ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dh_msg_ is null", K(ret));
   }
 }
@@ -383,7 +374,7 @@ bool ObP2PDatahubManager::P2PMsgEraseIfCall::operator() (common::hash::HashMapPa
       need_erase = true;
     }
   } else {
-    int ret = OB_UNEXPECT_INTERNAL_ERROR;
+    int ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dh_msg_ is null", K(ret));
   }
   return need_erase;

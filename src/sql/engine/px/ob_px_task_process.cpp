@@ -613,6 +613,9 @@ int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,
       } else {
         input->set_worker_id(task_id_);
         input->set_px_sequence_id(task_->px_int_id_.px_interrupt_id_.first_);
+        if (OB_NOT_NULL(ctx.get_my_session())) {
+          input->set_rf_max_wait_time(ctx.get_my_session()->get_runtime_filter_wait_time_ms());
+        }
         if (ObGranuleUtil::pwj_gi(gi->gi_attri_flag_)) {
           pw_gi_spec_ = gi;
           on_set_tscs_ = true;

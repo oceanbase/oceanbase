@@ -40,6 +40,7 @@
 #include "sql/engine/px/ob_px_sqc_proxy.h"
 #include "storage/tx/ob_trans_service.h"
 #include "share/detect/ob_detect_manager_utils.h"
+#include "sql/engine/join/ob_join_filter_op.h"
 
 namespace oceanbase
 {
@@ -713,6 +714,42 @@ int ObPxTerminateMsgProc::startup_msg_loop(ObExecContext &ctx)
   int ret = OB_ERR_UNEXPECTED;
   UNUSED(ctx);
   LOG_WARN("terminate msg proc on sqc startup loop", K(ret));
+  return ret;
+}
+
+int RuntimeFilterDependencyInfo::describe_dependency(ObDfo *root_dfo)
+{
+  int ret = OB_SUCCESS;
+  // for each rf create op, find its pair rf use op,
+  // then get the lowest common ancestor of them, mark force_bushy of the dfo which the ancestor belongs to.
+  for (int64_t i = 0; i < rf_create_ops_.count() && OB_SUCC(ret); ++i) {
+    const ObJoinFilterSpec *create_op = static_cast<const ObJoinFilterSpec *>(rf_create_ops_.at(i));
+    for (int64_t j = 0; j < rf_use_ops_.count() && OB_SUCC(ret); ++j) {
+      const ObJoinFilterSpec *use_op = static_cast<const ObJoinFilterSpec *>(rf_use_ops_.at(j));
+      if (create_op->get_filter_id() == use_op->get_filter_id()) {
+        const ObOpSpec *ancestor_op = nullptr;
+        ObDfo *op_dfo = nullptr;;
+        if (OB_FAIL(LowestCommonAncestorFinder::find_op_common_ancestor(create_op, use_op, ancestor_op))) {
+          LOG_WARN("failed to find op common ancestor");
+        } else if (OB_ISNULL(ancestor_op)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("op common ancestor not found");
+        } else if (OB_FAIL(LowestCommonAncestorFinder::get_op_dfo(ancestor_op, root_dfo, op_dfo))) {
+          LOG_WARN("failed to find op common ancestor");
+        } else if (OB_ISNULL(op_dfo)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("the dfo of ancestor_op not found");
+        } else {
+          // Once the DFO which the ancestor belongs to has set the flag "force_bushy",
+          // the DfoTreeNormalizer will not attempt to transform a right-deep DFO tree
+          // into a left-deep DFO tree. Consequently, the "join filter create" operator
+          // can be scheduled earlier than the "join filter use" operator.
+          op_dfo->set_force_bushy(true);
+        }
+        break;
+      }
+    }
+  }
   return ret;
 }
 

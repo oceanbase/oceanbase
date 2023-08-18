@@ -440,7 +440,9 @@ int ObJoinFilterOp::mark_not_need_send_bf_msg()
         } else {
           // only the msg is a shared and shuffled BLOOM_FILTER_MSG
           // let other worker threads stop trying send join_filter
-          shared_bf_msg->need_send_msg_ = false;
+          if (!*shared_bf_msg->create_finish_) {
+            shared_bf_msg->need_send_msg_ = false;
+          }
         }
       }
     }
@@ -448,12 +450,17 @@ int ObJoinFilterOp::mark_not_need_send_bf_msg()
   return ret;
 }
 
-// need add mark_not_need_send_bf_msg for shared shuffled bloom filter
+// for create mode, need add mark_not_need_send_bf_msg for shared shuffled bloom filter
+// for use mode, update_plan_monitor_info cause get_next_batch may not get iter end
 int ObJoinFilterOp::inner_drain_exch()
 {
   int ret = OB_SUCCESS;
-  if (MY_SPEC.is_create_mode()) {
+  if (row_reach_end_ || batch_reach_end_) {
+  // already iter end, not need to mark not send or update_plan_monitor_info again (already done in get_next_row/batch)
+  } else if (MY_SPEC.is_create_mode()) {
     ret = mark_not_need_send_bf_msg();
+  } else if (MY_SPEC.is_use_mode()) {
+    ret = update_plan_monitor_info();
   }
   return ret;
 }
@@ -764,6 +771,8 @@ int ObJoinFilterOp::update_plan_monitor_info()
   op_monitor_info_.otherstat_5_value_ = MY_SPEC.filter_id_;
   op_monitor_info_.otherstat_6_id_ = ObSqlMonitorStatIds::JOIN_FILTER_LENGTH;
   op_monitor_info_.otherstat_6_value_ = MY_SPEC.filter_len_;
+  int64_t check_count = 0;
+  int64_t total_count = 0;
   for (int i = 0; i < MY_SPEC.rf_infos_.count() && OB_SUCC(ret); ++i) {
     if (OB_INVALID_ID != MY_SPEC.rf_infos_.at(i).filter_expr_id_) {
       ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx = NULL;
@@ -772,11 +781,15 @@ int ObJoinFilterOp::update_plan_monitor_info()
         LOG_TRACE("join filter expr ctx is null");
       } else {
         op_monitor_info_.otherstat_1_value_ += join_filter_ctx->filter_count_;
-        op_monitor_info_.otherstat_2_value_ += join_filter_ctx->total_count_;
-        op_monitor_info_.otherstat_3_value_ += join_filter_ctx->check_count_;
+        total_count = max(total_count, join_filter_ctx->total_count_);
+        check_count = max(check_count, join_filter_ctx->check_count_);
         op_monitor_info_.otherstat_4_value_ = max(join_filter_ctx->ready_ts_, op_monitor_info_.otherstat_4_value_);
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    op_monitor_info_.otherstat_2_value_ += total_count;
+    op_monitor_info_.otherstat_3_value_ += check_count;
   }
   return ret;
 }
@@ -854,6 +867,8 @@ int ObJoinFilterOp::open_join_filter_use()
             LOG_WARN("failed to assign hash_func");
           } else if (OB_FAIL(join_filter_ctx->cmp_funcs_.assign(MY_SPEC.cmp_funcs_))) {
             LOG_WARN("failed to assign cmp_funcs_");
+          } else if (OB_FAIL(join_filter_ctx->cur_row_.reserve(MY_SPEC.cmp_funcs_.count()))) {
+            LOG_WARN("failed to reserve cur_row_");
           }
         }
       } else {

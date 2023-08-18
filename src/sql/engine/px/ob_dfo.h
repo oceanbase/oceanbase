@@ -498,7 +498,8 @@ public:
     p2p_dh_loc_(nullptr),
     need_p2p_info_(false),
     p2p_dh_map_info_(),
-    coord_info_ptr_(nullptr)
+    coord_info_ptr_(nullptr),
+    force_bushy_(false)
   {
   }
 

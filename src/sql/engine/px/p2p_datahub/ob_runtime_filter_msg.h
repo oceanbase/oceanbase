@@ -79,6 +79,7 @@ public:
       ObRFBloomFilterMsg &msg, bool &first_phase_end);
   virtual int process_msg_internal(bool &need_free);
   virtual int regenerate() override;
+  int atomic_merge(ObP2PDatahubMsgBase &other_msg);
 private:
 int calc_hash_value(
     const common::ObIArray<ObExpr *> &expr_array,
@@ -162,6 +163,13 @@ private:
   int get_min(ObCmpFunc &func, ObDatum &l, ObDatum &r, int64_t &cell_size);
   int get_max(ObCmpFunc &func, ObDatum &l, ObDatum &r, int64_t &cell_size);
   int dynamic_copy_cell(const ObDatum &src, ObDatum &target, int64_t &cell_size);
+  // only used in might_contain_batch,
+  // without adding filter_count, total_count, check_count in filter_ctx
+  int do_might_contain_batch(const ObExpr &expr,
+      ObEvalCtx &ctx,
+      const ObBitVector &skip,
+      const int64_t batch_size,
+      ObExprJoinFilter::ObExprJoinFilterContext &filter_ctx);
 
 public:
   ObFixedArray<ObDatum, common::ObIAllocator> lower_bounds_;
@@ -221,9 +229,17 @@ public:
     ObEvalCtx &eval_ctx,
     uint64_t *batch_hash_values) override;
   virtual int reuse() override;
+  void check_finish_receive() override final;
 private:
   int append_row();
   int insert_node();
+  // only used in might_contain_batch,
+  // without adding filter_count, total_count, check_count in filter_ctx
+  int do_might_contain_batch(const ObExpr &expr,
+      ObEvalCtx &ctx,
+      const ObBitVector &skip,
+      const int64_t batch_size,
+      ObExprJoinFilter::ObExprJoinFilterContext &filter_ctx);
 public:
   hash::ObHashSet<ObRFInFilterNode, hash::NoPthreadDefendMode> rows_set_;
   ObCmpFuncs cmp_funcs_;

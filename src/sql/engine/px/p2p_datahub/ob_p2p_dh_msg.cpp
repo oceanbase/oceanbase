@@ -93,8 +93,8 @@ int ObP2PDatahubMsgBase::process_receive_count(ObP2PDatahubMsgBase &msg)
   int ret = OB_SUCCESS;
   CK(msg.get_msg_receive_expect_cnt() > 0 && msg_receive_expect_cnt_ > 0);
   if (OB_SUCC(ret)) {
-    ATOMIC_AAF(&msg_receive_cur_cnt_, msg.get_msg_receive_cur_cnt());
-    if (msg_receive_cur_cnt_ > msg_receive_expect_cnt_) {
+    int64_t cur_cnt = ATOMIC_AAF(&msg_receive_cur_cnt_, msg.get_msg_receive_cur_cnt());
+    if (cur_cnt > msg_receive_expect_cnt_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected receive count", K(ret));
     }
@@ -105,10 +105,8 @@ int ObP2PDatahubMsgBase::process_receive_count(ObP2PDatahubMsgBase &msg)
 
 void ObP2PDatahubMsgBase::check_finish_receive()
 {
-  if (is_active_) {
-    if (msg_receive_cur_cnt_ == msg_receive_expect_cnt_) {
-      is_ready_ = true;
-    }
+  if (msg_receive_expect_cnt_ == ATOMIC_LOAD(&msg_receive_cur_cnt_)) {
+    is_ready_ = true;
   }
 }
 

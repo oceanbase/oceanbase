@@ -206,7 +206,7 @@ int DfoTreeNormalizer<T>::normalize(T &root)
   int ret = OB_SUCCESS;
   int64_t non_leaf_cnt = 0;
   int64_t non_leaf_pos = -1;
-  bool need_force_bushy = false;
+  bool need_force_bushy = root.force_bushy();
   ARRAY_FOREACH_X(root.child_dfos_, idx, cnt, OB_SUCC(ret)) {
     T *dfo = root.child_dfos_.at(idx);
     if (0 < dfo->get_child_count()) {
@@ -214,9 +214,6 @@ int DfoTreeNormalizer<T>::normalize(T &root)
       if (-1 == non_leaf_pos) {
         non_leaf_pos = idx;
       }
-    }
-    if (dfo->force_bushy() && !need_force_bushy) {
-      need_force_bushy = true;
     }
   }
   if (non_leaf_cnt > 1 || need_force_bushy) {

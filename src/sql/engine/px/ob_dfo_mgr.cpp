@@ -419,6 +419,9 @@ int ObDfoMgr::init(ObExecContext &exec_ctx,
   } else if (OB_ISNULL(root_dfo_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL dfo unexpected", K(ret));
+  } else if (!px_coord_info.rf_dpd_info_.is_empty()
+      && OB_FAIL(px_coord_info.rf_dpd_info_.describe_dependency(root_dfo_))) {
+    LOG_WARN("failed to describe rf dependency");
   } else if (OB_FAIL(ObDfoSchedOrderGenerator::generate_sched_order(*this))) {
     LOG_WARN("fail init dfo mgr", K(ret));
   } else if (OB_FAIL(ObDfoSchedDepthGenerator::generate_sched_depth(exec_ctx, *this))) {
@@ -521,10 +524,12 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     }
   } else if (IS_PX_JOIN_FILTER(phy_op->get_type()) && NULL != parent_dfo) {
     const ObJoinFilterSpec *filter_spec = static_cast<const ObJoinFilterSpec *>(phy_op);
-    if (filter_spec->is_create_mode() && !parent_dfo->force_bushy()) {
-      parent_dfo->set_force_bushy(true);
+    if (filter_spec->is_create_mode() && OB_FAIL(px_coord_info.rf_dpd_info_.rf_create_ops_.push_back(phy_op))) {
+      LOG_WARN("failed to push back create op");
+    } else if (filter_spec->is_use_mode() && OB_FAIL(px_coord_info.rf_dpd_info_.rf_use_ops_.push_back(phy_op))) {
+      LOG_WARN("failed to push back use op");
     }
-    if(filter_spec->is_shared_join_filter() && filter_spec->is_shuffle_) {
+    if (OB_SUCC(ret) && filter_spec->is_shared_join_filter() && filter_spec->is_shuffle_) {
       ObP2PDfoMapNode node;
       node.target_dfo_id_ = parent_dfo->get_dfo_id();
       for (int i = 0; i < filter_spec->rf_infos_.count() && OB_SUCC(ret); ++i) {
