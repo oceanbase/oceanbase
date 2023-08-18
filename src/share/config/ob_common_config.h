@@ -95,8 +95,7 @@ public:
   virtual ObServerRole get_server_type() const = 0;
   virtual int add_extra_config(const char *config_str,
                                const int64_t version = 0,
-                               const bool check_name = false,
-                               const bool check_unit = true);
+                               const bool check_config = true);
   virtual bool is_debug_sync_enabled() const { return false; }
 
   OB_UNIS_VERSION_V(1);

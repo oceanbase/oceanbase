@@ -92,8 +92,7 @@ public:
                    bool save2file = true);
   int add_extra_config(const char *config_str,
                        int64_t version = 0 ,
-                       bool check_name = false,
-                       bool check_unit = true);
+                       bool check_config = true);
 
   OB_UNIS_VERSION(1);
 private:

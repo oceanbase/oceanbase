@@ -27,6 +27,7 @@
 #include "sql/optimizer/ob_log_join_filter.h"
 #include "share/ob_encryption_util.h"
 #include "share/ob_resource_limit.h"
+#include "src/observer/ob_server.h"
 
 namespace oceanbase
 {
@@ -376,7 +377,9 @@ bool ObConfigMemoryLimitChecker::check(const ObConfigItem &t) const
   bool is_valid = false;
   int64_t value = ObConfigCapacityParser::get(t.str(), is_valid, false);
   if (is_valid) {
-    is_valid = 0 == value || value >= lib::ObRunningModeConfig::instance().MIN_MEM;
+    int64_t min_memory_size = OBSERVER.is_arbitration_mode() ? lib::ObRunningModeConfig::instance().MIN_MEM :
+                                                               lib::ObRunningModeConfig::instance().MINI_MEM_LOWER;
+    is_valid = 0 == value || value >= min_memory_size;
   }
   return is_valid;
 }

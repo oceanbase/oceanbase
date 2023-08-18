@@ -333,8 +333,7 @@ int ObTenantConfig::publish_special_config_after_dump()
 
 int ObTenantConfig::add_extra_config(const char *config_str,
                                      int64_t version /* = 0 */ ,
-                                     bool check_name /* = false */,
-                                     bool check_unit /* = true */)
+                                     bool check_config /* = true */)
 {
   int ret = OB_SUCCESS;
   const int64_t MAX_OPTS_LENGTH = sysconf(_SC_ARG_MAX);
@@ -394,8 +393,7 @@ int ObTenantConfig::add_extra_config(const char *config_str,
               LOG_WARN("failed to alloc", K(ret));
             } else if (FALSE_IT(external_info_val[0] = '\0')) {
             } else if (OB_ISNULL(pp_item = container_.get(ObConfigStringKey(name)))) {
-              /* make compatible with previous configuration */
-              ret = check_name ? OB_INVALID_CONFIG : OB_SUCCESS;
+              ret = OB_SUCCESS;
               LOG_WARN("Invalid config string, no such config item", K(name), K(value), K(ret));
             }
             if (OB_FAIL(ret) || OB_ISNULL(pp_item)) {
@@ -408,25 +406,20 @@ int ObTenantConfig::add_extra_config(const char *config_str,
                 (*pp_item)->set_version(version);
                 LOG_INFO("Load tenant config dump value succ", K(name), K((*pp_item)->spfile_str()), K((*pp_item)->str()));
               }
-            } else if (check_unit && !(*pp_item)->check_unit(value)) {
+            } else if (!(*pp_item)->set_value(value)) {
               ret = OB_INVALID_CONFIG;
-              LOG_ERROR("Invalid config value", K(name), K(value), K(ret));
-            } else {
-              if (!(*pp_item)->set_value(value)) {
-                ret = OB_INVALID_CONFIG;
-                LOG_WARN("Invalid config value", K(name), K(value), K(ret));
-              } else if (!(*pp_item)->check()) {
-                ret = OB_INVALID_CONFIG;
-                const char* range = (*pp_item)->range();
-                if (OB_ISNULL(range) || strlen(range) == 0) {
-                  LOG_ERROR("Invalid config, value out of range", K(name), K(value), K(ret));
-                } else {
-                  _LOG_ERROR("Invalid config, value out of %s (for reference only). name=%s, value=%s, ret=%d", range, name, value, ret);
-                }
+              LOG_WARN("Invalid config value", K(name), K(value), K(ret));
+            } else if (check_config && (!(*pp_item)->check_unit(value) || !(*pp_item)->check())) {
+              ret = OB_INVALID_CONFIG;
+              const char* range = (*pp_item)->range();
+              if (OB_ISNULL(range) || strlen(range) == 0) {
+                LOG_ERROR("Invalid config, value out of range", K(name), K(value), K(ret));
               } else {
-                (*pp_item)->set_version(version);
-                LOG_INFO("Load tenant config succ", K(name), K(value));
+                _LOG_ERROR("Invalid config, value out of %s (for reference only). name=%s, value=%s, ret=%d", range, name, value, ret);
               }
+            } else {
+              (*pp_item)->set_version(version);
+              LOG_INFO("Load tenant config succ", K(name), K(value));
             }
           }
         }

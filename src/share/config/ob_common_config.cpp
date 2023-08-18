@@ -285,8 +285,7 @@ ObCommonConfig::~ObCommonConfig()
 
 int ObCommonConfig::add_extra_config(const char *config_str,
                                      int64_t version /* = 0 */ ,
-                                     bool check_name /* = false */,
-                                     bool check_unit /* = true */)
+                                     bool check_config /* = true */)
 {
   int ret = OB_SUCCESS;
   const int64_t MAX_OPTS_LENGTH = sysconf(_SC_ARG_MAX);
@@ -340,8 +339,7 @@ int ObCommonConfig::add_extra_config(const char *config_str,
           LOG_ERROR("failed to alloc", K(ret));
         } else if (FALSE_IT(external_info_val[0] = '\0')) {
         } else if (OB_ISNULL(pp_item = container_.get(ObConfigStringKey(name)))) {
-          /* make compatible with previous configuration */
-          ret = check_name ? OB_INVALID_CONFIG : OB_SUCCESS;
+          ret = OB_SUCCESS;
           LOG_WARN("Invalid config string, no such config item", K(name), K(value), K(ret));
         } else if (external_kms_info_cfg.case_compare(name) == 0
                    || ssl_external_kms_info_cfg.case_compare(name) == 0) {
@@ -353,13 +351,10 @@ int ObCommonConfig::add_extra_config(const char *config_str,
           }
         }
         if (OB_FAIL(ret) || OB_ISNULL(pp_item)) {
-        } else if (check_unit && !(*pp_item)->check_unit(value)) {
-          ret = OB_INVALID_CONFIG;
-          LOG_ERROR("Invalid config value", K(name), K(value), K(ret));
         } else if (!(*pp_item)->set_value(value)) {
           ret = OB_INVALID_CONFIG;
           LOG_ERROR("Invalid config value", K(name), K(value), K(ret));
-        } else if (!(*pp_item)->check()) {
+        } else if (check_config && (!(*pp_item)->check_unit(value) || !(*pp_item)->check())) {
           ret = OB_INVALID_CONFIG;
           const char* range = (*pp_item)->range();
           if (OB_ISNULL(range) || strlen(range) == 0) {
@@ -463,7 +458,7 @@ OB_DEF_DESERIALIZE(ObCommonConfig)
     } else {
       MEMSET(copy_buf, '\0', data_len + 1);
       MEMCPY(copy_buf, buf + pos, data_len);
-      if (OB_FAIL(ObCommonConfig::add_extra_config(copy_buf, 0, false, false))) {
+      if (OB_FAIL(ObCommonConfig::add_extra_config(copy_buf, 0, false))) {
         LOG_ERROR("Read server config failed", K(ret));
       }
 

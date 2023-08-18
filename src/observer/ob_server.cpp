@@ -1794,10 +1794,20 @@ int ObServer::init_config()
     config_.rootservice_list.set_version(start_time_);
   }
 
+  if (opts_.startup_mode_) {
+    config_.ob_startup_mode.set_value(opts_.startup_mode_);
+    config_.ob_startup_mode.set_version(start_time_);
+    LOG_INFO("mode is not null", "mode", opts_.startup_mode_);
+  }
+  // update gctx_.startup_mode_
+  if (FAILEDx(parse_mode())) {
+    LOG_ERROR("parse_mode failed", KR(ret));
+  }
+
   config_.syslog_level.set_value(OB_LOGGER.get_level_str());
 
   if (opts_.optstr_ && strlen(opts_.optstr_) > 0) {
-    if (OB_FAIL(config_.add_extra_config(opts_.optstr_, start_time_))) {
+    if (FAILEDx(config_.add_extra_config(opts_.optstr_, start_time_))) {
       LOG_ERROR("invalid config from cmdline options", K(opts_.optstr_), KR(ret));
     }
   }
@@ -1830,16 +1840,6 @@ int ObServer::init_config()
   if (opts_.use_ipv6_) {
     config_.use_ipv6 = opts_.use_ipv6_;
     config_.use_ipv6.set_version(start_time_);
-  }
-
-  if (opts_.startup_mode_) {
-    config_.ob_startup_mode.set_value(opts_.startup_mode_);
-    config_.ob_startup_mode.set_version(start_time_);
-    LOG_INFO("mode is not null", "mode", opts_.startup_mode_);
-  }
-  // update gctx_.startup_mode_
-  if (FAILEDx(parse_mode())) {
-    LOG_ERROR("parse_mode failed", KR(ret));
   }
 
   config_.print();
