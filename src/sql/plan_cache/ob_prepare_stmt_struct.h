@@ -150,6 +150,8 @@ public:
   inline int64_t get_num_of_column() const { return ps_sql_meta_.get_column_size(); }
   inline stmt::StmtType get_stmt_type() const { return stmt_type_; }
   inline void set_stmt_type(stmt::StmtType stmt_type) { stmt_type_ = stmt_type; }
+  inline stmt::StmtType get_literal_stmt_type() const { return literal_stmt_type_; }
+  inline void set_literal_stmt_type(stmt::StmtType stmt_type) { literal_stmt_type_ = stmt_type; }
   const ObPsSqlKey& get_sql_key() const { return ps_key_; }
   inline const common::ObString &get_ps_sql() const { return ps_key_.ps_sql_; }
   inline const common::ObString &get_no_param_sql() const { return no_param_sql_; }
@@ -257,6 +259,7 @@ private:
   // raw_params_idx_: 0, 2
   ObFixedArray<ObPCParam *, common::ObIAllocator> raw_params_;
   ObFixedArray<int64_t, common::ObIAllocator> raw_params_idx_;
+  stmt::StmtType literal_stmt_type_;
 };
 
 struct TypeInfo {
