@@ -338,6 +338,12 @@ public:
                                       int64_t expr_idx,
                                       ObObjParam *result);
 
+  static int spi_calc_package_expr_v1(const pl::ObPLResolveCtx &resolve_ctx,
+                                      sql::ObExecContext &exec_ctx,
+                                      ObIAllocator &allocator,
+                                      uint64_t package_id,
+                                      int64_t expr_idx,
+                                      ObObjParam *result);
   static int spi_calc_package_expr(pl::ObPLExecCtx *ctx,
                            uint64_t package_id,
                            int64_t expr_idx,

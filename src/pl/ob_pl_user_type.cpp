@@ -1267,17 +1267,33 @@ int ObRecordType::init_session_var(const ObPLResolveCtx &resolve_ctx,
     ObPLRecord *record = reinterpret_cast<ObPLRecord*>(data);
     ObObj *member = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < get_member_count(); ++i) {
+      const ObRecordMember* record_member = get_record_member(i);
+      const ObPLDataType* member_type = get_record_member_type(i);
       CK (OB_NOT_NULL(get_member(i)));
       OZ (record->get_element(i, member));
       CK (OB_NOT_NULL(member));
-      if (get_member(i)->is_obj_type()) {
-        OX (new (member) ObObj(ObNullType));
+      CK (OB_NOT_NULL(record_member));
+      CK (OB_NOT_NULL(member_type));
+      if (OB_FAIL(ret)) {
+      } else if (record_member->get_default() != OB_INVALID_INDEX) {
+        uint64_t package_id = extract_package_id(get_user_type_id());
+        int64_t expr_idx = record_member->get_default();
+        ObObjParam result;
+        OV (is_package_type(), OB_ERR_UNEXPECTED, KPC(this));
+        OV (package_id != OB_INVALID_ID, OB_ERR_UNEXPECTED, KPC(this));
+        OV (expr_idx != OB_INVALID_INDEX, OB_ERR_UNEXPECTED, KPC(this));
+        OZ (sql::ObSPIService::spi_calc_package_expr_v1(resolve_ctx, exec_ctx, obj_allocator, package_id, expr_idx, &result));
+        OX (*member = result);
       } else {
-        int64_t init_size = OB_INVALID_SIZE;
-        int64_t member_ptr = 0;
-        OZ (get_member(i)->get_size(resolve_ctx, PL_TYPE_INIT_SIZE, init_size));
-        OZ (get_member(i)->newx(obj_allocator, &resolve_ctx, member_ptr));
-        OX (member->set_extend(member_ptr, get_member(i)->get_type(), init_size));
+        if (get_member(i)->is_obj_type()) {
+          OX (new (member) ObObj(ObNullType));
+        } else {
+          int64_t init_size = OB_INVALID_SIZE;
+          int64_t member_ptr = 0;
+          OZ (get_member(i)->get_size(resolve_ctx, PL_TYPE_INIT_SIZE, init_size));
+          OZ (get_member(i)->newx(obj_allocator, &resolve_ctx, member_ptr));
+          OX (member->set_extend(member_ptr, get_member(i)->get_type(), init_size));
+        }
       }
     }
   }

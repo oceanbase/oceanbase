@@ -960,6 +960,43 @@ int ObSPIService::spi_calc_subprogram_expr(ObPLExecCtx *ctx,
   return ret;
 }
 
+int ObSPIService::spi_calc_package_expr_v1(const pl::ObPLResolveCtx &resolve_ctx,
+                                           sql::ObExecContext &exec_ctx,
+                                           ObIAllocator &allocator,
+                                           uint64_t package_id,
+                                           int64_t expr_idx,
+                                           ObObjParam *result)
+{
+  int ret = OB_SUCCESS;
+  ObSqlExpression *sql_expr = NULL;
+  ObPLPackageManager &pl_manager = resolve_ctx.session_info_.get_pl_engine()->get_package_manager();
+  ObCacheObjGuard *cache_obj_guard = NULL;
+  ObPLPackage *package = NULL;
+   ObPLPackageGuard &guard = resolve_ctx.package_guard_;
+  OZ (pl_manager.get_package_expr(resolve_ctx, package_id, expr_idx, sql_expr));
+  CK (OB_NOT_NULL(sql_expr));
+  OZ (guard.get(package_id, cache_obj_guard));
+  CK (OB_NOT_NULL(cache_obj_guard));
+  CK (OB_NOT_NULL(package = static_cast<ObPLPackage*>(cache_obj_guard->get_cache_obj())));
+  if (OB_SUCC(ret)) {
+    ExecCtxBak exec_ctx_bak;
+    sql::ObPhysicalPlanCtx phy_plan_ctx(exec_ctx.get_allocator());
+    OX (exec_ctx_bak.backup(exec_ctx));
+    OX (exec_ctx.set_physical_plan_ctx(&phy_plan_ctx));
+    if (OB_SUCC(ret) && package->get_expr_op_size() > 0)  {
+      OZ (exec_ctx.init_expr_op(package->get_expr_op_size()));
+    }
+    OZ (package->get_frame_info().pre_alloc_exec_memory(exec_ctx));
+    OZ (ObSQLUtils::calc_sql_expression_without_row(exec_ctx, *sql_expr, *result, &allocator));
+    if (package->get_expr_op_size() > 0) {
+      exec_ctx.reset_expr_op();
+      exec_ctx.get_allocator().free(exec_ctx.get_expr_op_ctx_store());
+    }
+    exec_ctx_bak.restore(exec_ctx);
+  }
+  return ret;
+}
+
 int ObSPIService::spi_calc_package_expr(ObPLExecCtx *ctx,
                                         uint64_t package_id, 
                                         int64_t expr_idx,

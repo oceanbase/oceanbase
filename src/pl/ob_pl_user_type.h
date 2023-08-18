@@ -462,6 +462,7 @@ public:
   virtual int convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const;
 
   TO_STRING_KV(K_(type),
+               K_(type_from),
                K_(user_type_id),
                K_(record_members));
 private:
