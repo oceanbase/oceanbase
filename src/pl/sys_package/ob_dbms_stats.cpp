@@ -2470,7 +2470,7 @@ int ObDbmsStats::purge_stats(sql::ObExecContext &ctx,
     }
   }
   if (OB_SUCC(ret)) {
-    if (ObDbmsStatsHistoryManager::purge_stats(ctx, specify_time)) {
+    if (OB_FAIL(ObDbmsStatsHistoryManager::purge_stats(ctx, specify_time))) {
       LOG_WARN("failed to purge stats", K(ret));
     } else {/*do nothing*/}
   }

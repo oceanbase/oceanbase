@@ -59,11 +59,13 @@ struct ObOptKeyInfo
 
 struct ObOptKeyColumnStat
 {
-  ObOptKeyColumnStat() : key_(NULL), stat_(NULL) {}
+  ObOptKeyColumnStat() : key_(NULL), stat_(NULL), only_histogram_stat_(false) {}
   const ObOptColumnStat::Key *key_;
   ObOptColumnStat *stat_;
+  bool only_histogram_stat_;
   TO_STRING_KV(KPC_(key),
-               KPC_(stat));
+               KPC_(stat),
+               K(only_histogram_stat_));
 };
 /**
  * SQL Service for fetching/updating table level statistics and column level statistics
@@ -85,8 +87,7 @@ public:
   int fill_column_stat(ObIAllocator &allocator,
                        common::sqlclient::ObMySQLResult &result,
                        hash::ObHashMap<ObOptKeyInfo, int64_t> &key_index_map,
-                       ObIArray<ObOptKeyColumnStat> &key_col_stats,
-                       ObIArray<ObOptKeyColumnStat> &need_hist_key_col_stats);
+                       ObIArray<ObOptKeyColumnStat> &key_col_stats);
   int fetch_column_stat(const uint64_t tenant_id,
                         ObIAllocator &allocator,
                         ObIArray<ObOptKeyColumnStat> &key_col_stats);
@@ -234,17 +235,13 @@ private:
                                      bool &need_histogram,
                                      const ObObjPrintParams &print_params);
 
-  int generate_specified_keys_list_str(const uint64_t tenant_id,
-                                       ObIArray<ObOptKeyColumnStat> &key_col_stats,
-                                       ObSqlString &keys_list_str);
+  int generate_specified_keys_list_str_for_column(const uint64_t tenant_id,
+                                                  ObIArray<ObOptKeyColumnStat> &key_col_stats,
+                                                  ObSqlString &keys_list_str);
 
   int generate_key_index_map(const uint64_t tenant_id,
                              ObIArray<ObOptKeyColumnStat> &key_col_stats,
                              hash::ObHashMap<ObOptKeyInfo, int64_t> &key_index_map);
-
-  int fetch_histogram_stat(const uint64_t tenant_id,
-                           ObIAllocator &allocator,
-                           ObIArray<ObOptKeyColumnStat> &key_col_stats);
 
   int fill_bucket_stat(ObIAllocator &allocator,
                        sqlclient::ObMySQLResult &result,

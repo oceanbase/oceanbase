@@ -190,6 +190,8 @@ int ObDbmsStatsHistoryManager::purge_stats(ObExecContext &ctx, const int64_t spe
       LOG_WARN("fail to exec sql", K(del_task_opt_stat_gather_history), K(ret));
     } else if (OB_FAIL(trans1.write(gen_meta_tenant_id(tenant_id), del_table_opt_stat_gather_history.ptr(), affected_rows))) {
       LOG_WARN("fail to exec sql", K(del_table_opt_stat_gather_history), K(ret));
+    } else if (OB_FAIL(remove_useless_column_stats(trans, tenant_id))) {
+      LOG_WARN("failed to remove useless column stats", K(ret));
     } else {
       LOG_TRACE("Succeed to do execute sql", K(del_tab_history), K(del_col_history),
                                              K(del_hist_history), K(del_task_opt_stat_gather_history),
@@ -844,6 +846,41 @@ int ObDbmsStatsHistoryManager::gen_partition_list(const ObTableStatParam &param,
         LOG_WARN("failed to append sql", K(ret));
       } else {/*do nothing*/}
     }
+  }
+  return ret;
+}
+
+//here we remove useless column stats, because drop table won't delete column stats.
+int ObDbmsStatsHistoryManager::remove_useless_column_stats(ObMySQLTransaction &trans,
+                                                           uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString delete_col_stat_sql;
+  ObSqlString delete_hist_stat_sql;
+  int64_t affected_rows1 = 0;
+  int64_t affected_rows2 = 0;
+  if (OB_FAIL(delete_col_stat_sql.append_fmt("DELETE FROM %s c WHERE (NOT EXISTS (SELECT 1 " \
+                                          "FROM %s t, %s db WHERE t.tenant_id = db.tenant_id AND t.database_id = db.database_id "\
+                                          "AND t.table_id = c.table_id AND t.tenant_id = c.tenant_id AND db.database_name != '__recyclebin')) "\
+                                          "AND table_id > %ld;",
+                                          share::OB_ALL_COLUMN_STAT_TNAME,
+                                          share::OB_ALL_TABLE_TNAME,
+                                          share::OB_ALL_DATABASE_TNAME,
+                                          OB_MAX_INNER_TABLE_ID))) {
+  } else if (OB_FAIL(delete_hist_stat_sql.append_fmt("DELETE FROM %s hist WHERE (NOT EXISTS (SELECT 1 " \
+                                                     "FROM %s t, %s db WHERE t.tenant_id = db.tenant_id AND t.database_id = db.database_id "\
+                                                     "AND t.table_id = hist.table_id AND t.tenant_id = hist.tenant_id AND db.database_name != '__recyclebin')) "\
+                                                     "AND table_id > %ld;",
+                                                     share::OB_ALL_HISTOGRAM_STAT_TNAME,
+                                                     share::OB_ALL_TABLE_TNAME,
+                                                     share::OB_ALL_DATABASE_TNAME,
+                                                     OB_MAX_INNER_TABLE_ID))) {
+  } else if (OB_FAIL(trans.write(tenant_id, delete_col_stat_sql.ptr(), affected_rows1))) {
+    LOG_WARN("fail to exec sql", K(delete_col_stat_sql), K(ret));
+  } else if (OB_FAIL(trans.write(tenant_id, delete_hist_stat_sql.ptr(), affected_rows2))) {
+    LOG_WARN("fail to exec sql", K(delete_hist_stat_sql), K(ret));
+  } else {
+    LOG_TRACE("Succeed to do execute sql", K(delete_col_stat_sql), K(delete_hist_stat_sql), K(affected_rows1), K(affected_rows2));
   }
   return ret;
 }

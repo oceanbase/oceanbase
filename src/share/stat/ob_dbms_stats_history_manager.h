@@ -96,6 +96,8 @@ private:
   static int gen_partition_list(const ObTableStatParam &param,
                                 ObSqlString &partition_list);
 
+  static int remove_useless_column_stats(ObMySQLTransaction &trans, uint64_t tenant_id);
+
 };
 
 
