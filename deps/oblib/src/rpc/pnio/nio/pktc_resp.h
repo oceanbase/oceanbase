@@ -56,7 +56,7 @@ static void pktc_resp_cb_on_msg(pktc_t* io, pktc_msg_t* msg) {
     dlink_delete(&cb->sk_dlink);
     pktc_do_cb(io, cb, msg);
   } else {
-    rk_debug("resp cb not found: packet_id=%lu", id);
+    rk_info("resp cb not found: packet_id=%lu", id);
   }
 }
 

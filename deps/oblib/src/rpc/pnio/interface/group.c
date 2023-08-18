@@ -324,14 +324,11 @@ static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, co
   return r;
 }
 
-static uint64_t global_next_pkt_id;
-static uint64_t gen_pkt_id()
+static uint32_t global_next_pkt_id RK_CACHE_ALIGNED;
+static uint32_t gen_pkt_id()
 {
-  static __thread uint64_t next_pkt_id = 0;
-  if (0 == (next_pkt_id & 0xff)) {
-    next_pkt_id = FAA(&global_next_pkt_id, 256);
-  }
-  return next_pkt_id++;
+  uint32_t next_pkt_id = FAA(&global_next_pkt_id, 1);
+  return next_pkt_id;
 }
 
 static pn_t* get_pn_for_send(pn_grp_t* pgrp, int tid)
@@ -345,6 +342,7 @@ PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const char* buf, int
   pn_grp_t* pgrp = locate_grp(gtid>>32);
   pn_t* pn = get_pn_for_send(pgrp, gtid & 0xffffffff);
   addr_t dest = {.ip=addr->sin_addr.s_addr, .port=htons(addr->sin_port), .tid=0};
+  uint32_t pkt_id = gen_pkt_id();
   if (addr->sin_addr.s_addr == 0 || htons(addr->sin_port) == 0) {
     err = -EINVAL;
     rk_warn("invalid sin_addr: %x:%d", addr->sin_addr.s_addr, addr->sin_port);
@@ -354,7 +352,7 @@ PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const char* buf, int
   } else if (LOAD(&pn->is_stop_)) {
     err = PNIO_STOPPED;
   } else {
-    pktc_req_t* r = pn_create_pktc_req(pn, gen_pkt_id(), dest, buf, sz, categ_id, expire_us, cb, arg);
+    pktc_req_t* r = pn_create_pktc_req(pn, pkt_id, dest, buf, sz, categ_id, expire_us, cb, arg);
     if (NULL == r) {
       err = ENOMEM;
     } else {
@@ -364,6 +362,7 @@ PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const char* buf, int
       err = pktc_post(&pn->pktc, r);
     }
   }
+  rk_trace("send rpc packet, gtid=%lx, pkt_id=%u, catg_id=%d, expire_us=%ld, sz=%ld, err=%d", gtid, pkt_id, categ_id, expire_us, sz, err);
   return err;
 }
 
