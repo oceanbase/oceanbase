@@ -180,6 +180,7 @@ private:
   int wait_transfer_tablets_ready_();
   int wait_transfer_out_tablet_ready_(
       ObLS *ls, ObTablet *tablet);
+  int build_tablet_backfill_info_(common::ObArray<ObTabletBackfillInfo> &tablet_infos);
 
 private:
   bool is_inited_;

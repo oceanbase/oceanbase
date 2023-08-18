@@ -31,27 +31,27 @@ struct ObBackfillTXCtx
 public:
   ObBackfillTXCtx();
   virtual ~ObBackfillTXCtx();
-  int get_tablet_id(common::ObTabletID &tablet_id);
+  int get_tablet_info(ObTabletBackfillInfo &tablet_info);
   bool is_valid() const;
   void reset();
   int build_backfill_tx_ctx(
       const share::ObTaskId &task_id,
       const share::ObLSID &ls_id,
       const share::SCN log_sync_scn,
-      const common::ObIArray<common::ObTabletID> &tablet_id_array);
+      const common::ObIArray<ObTabletBackfillInfo> &tablet_info_array);
   bool is_empty() const;
   int check_is_same(
       const ObBackfillTXCtx &backfill_tx_ctx,
       bool &is_same) const;
-  int get_tablet_id_array(common::ObIArray<common::ObTabletID> &tablet_id_array) const;
+  int get_tablet_info_array(common::ObIArray<ObTabletBackfillInfo> &tablet_info_array) const;
   int64_t hash() const;
 
   VIRTUAL_TO_STRING_KV(
       K_(task_id),
       K_(ls_id),
       K_(log_sync_scn),
-      K_(tablet_id_index),
-      K_(tablet_id_array));
+      K_(tablet_info_index),
+      K_(tablet_info_array));
 public:
   share::ObTaskId task_id_;
   share::ObLSID ls_id_;
@@ -60,8 +60,8 @@ private:
   bool inner_is_valid_() const;
 private:
   common::SpinRWLock lock_;
-  int64_t tablet_id_index_;
-  common::ObArray<common::ObTabletID> tablet_id_array_;
+  int64_t tablet_info_index_;
+  common::ObArray<ObTabletBackfillInfo> tablet_info_array_;
   DISALLOW_COPY_AND_ASSIGN(ObBackfillTXCtx);
 };
 
@@ -79,7 +79,7 @@ public:
   int init(
       const share::ObTaskId &dag_net_id,
       const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
+      const storage::ObTabletBackfillInfo &tablet_info,
       ObIHADagNetCtx *ha_dag_net_ctx,
       ObBackfillTXCtx *backfill_tx_ctx);
   virtual int generate_next_dag(share::ObIDag *&dag);
@@ -90,7 +90,7 @@ protected:
   bool is_inited_;
   share::ObTaskId dag_net_id_;
   share::ObLSID ls_id_;
-  common::ObTabletID tablet_id_;
+  ObTabletBackfillInfo tablet_info_;
   ObBackfillTXCtx *backfill_tx_ctx_;
   ObTabletHandle tablet_handle_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletBackfillTXDag);
@@ -105,9 +105,9 @@ public:
   int init(
       const share::ObTaskId &dag_net_id,
       const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id);
+      const ObTabletBackfillInfo &tablet_info);
   virtual int process() override;
-  VIRTUAL_TO_STRING_KV(K("ObTabletBackfillTXTask"), KP(this), KPC(ha_dag_net_ctx_), K_(tablet_id));
+  VIRTUAL_TO_STRING_KV(K("ObTabletBackfillTXTask"), KP(this), KPC(ha_dag_net_ctx_), K_(tablet_info));
 private:
   int generate_backfill_tx_task_();
   int generate_table_backfill_tx_task_(
@@ -127,7 +127,7 @@ private:
   ObBackfillTXCtx *backfill_tx_ctx_;
   ObIHADagNetCtx *ha_dag_net_ctx_;
   share::ObLSID ls_id_;
-  common::ObTabletID tablet_id_;
+  ObTabletBackfillInfo tablet_info_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletBackfillTXTask);
 };
 
@@ -203,7 +203,7 @@ public:
       const share::ObTaskId &task_id,
       const share::ObLSID &ls_id,
       const share::SCN &log_sync_scn,
-      ObArray<common::ObTabletID> &tablet_id_array,
+      common::ObArray<ObTabletBackfillInfo> &tablet_info_array,
       ObIHADagNetCtx *ha_dag_net_ctx);
   ObBackfillTXCtx *get_backfill_tx_ctx() { return &backfill_tx_ctx_; }
   INHERIT_TO_STRING_KV("ObStorageHADag", ObStorageHADag, KP(this));

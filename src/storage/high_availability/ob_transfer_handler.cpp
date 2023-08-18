@@ -1946,7 +1946,7 @@ int ObTransferHandler::stop_ls_schedule_medium_(const share::ObLSID &ls_id, bool
   int ret = OB_SUCCESS;
   succ_stop = false;
   if (OB_FAIL(MTL(ObTenantTabletScheduler*)->stop_ls_schedule_medium(ls_id))) {
-    LOG_WARN("failed to resume ls schedule medium", K(ret), K(ls_id));
+    LOG_WARN("failed to stop ls schedule medium", K(ret), K(ls_id));
   } else {
     succ_stop = true;
   }

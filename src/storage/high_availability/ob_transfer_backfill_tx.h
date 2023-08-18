@@ -29,13 +29,13 @@ public:
   virtual ~ObTransferBackfillTXParam() {}
   virtual bool is_valid() const override;
   void reset();
-  VIRTUAL_TO_STRING_KV(K_(task_id), K_(src_ls_id), K_(dest_ls_id), K_(backfill_scn), K_(tablet_ids));
+  VIRTUAL_TO_STRING_KV(K_(task_id), K_(src_ls_id), K_(dest_ls_id), K_(backfill_scn), K_(tablet_infos));
   uint64_t tenant_id_;
   share::ObTaskId task_id_;
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
   share::SCN backfill_scn_;
-  ObArray<common::ObTabletID> tablet_ids_;
+  common::ObArray<ObTabletBackfillInfo> tablet_infos_;
 };
 
 class ObTransferWorkerMgr final
@@ -85,7 +85,7 @@ public:
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
   share::SCN backfill_scn_;
-  ObArray<common::ObTabletID> tablet_ids_;
+  common::ObArray<ObTabletBackfillInfo> tablet_infos_;
   INHERIT_TO_STRING_KV(
       "ObIHADagNetCtx", ObIHADagNetCtx,
       K_(tenant_id),
@@ -205,11 +205,11 @@ private:
   int do_replace_logical_tables_(ObLS *ls);
   int transfer_replace_tables_(
       ObLS *ls,
-      const common::ObTabletID &tablet_id,
+      const ObTabletBackfillInfo &tablet_info,
       const ObTablet *tablet);
   int get_source_tablet_tables_(
       const ObTablet *dest_tablet,
-      const common::ObTabletID &tablet_id,
+      const ObTabletBackfillInfo &tablet_info,
       ObTableStoreIterator &sstable_iter,
       ObTabletHandle &tablet_handle,
       ObTabletRestoreStatus::STATUS &restore_status,

@@ -943,6 +943,22 @@ int ObStartPrepareMigrationTask::prepare_backfill_tx_tablets_()
   return ret;
 }
 
+int ObStartPrepareMigrationTask::build_tablet_backfill_info_(common::ObArray<ObTabletBackfillInfo> &tablet_infos)
+{
+  int ret = OB_SUCCESS;
+  ObTabletBackfillInfo tablet_info;
+  for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->tablet_id_array_.count(); ++i) {
+    ObTabletID tablet_id = ctx_->tablet_id_array_.at(i);
+    if (OB_FAIL(tablet_info.init(tablet_id, true/*is_committed*/))) {
+      LOG_WARN("failed to init tablet info", K(ret), K(tablet_id));
+    } else if (OB_FAIL(tablet_infos.push_back(tablet_info))) {
+      LOG_WARN("failed to push tablet info into array", K(ret), K(tablet_info));
+    }
+  }
+  return ret;
+}
+
+
 int ObStartPrepareMigrationTask::generate_prepare_migration_dags_()
 {
   int ret = OB_SUCCESS;
@@ -952,11 +968,11 @@ int ObStartPrepareMigrationTask::generate_prepare_migration_dags_()
   ObTenantDagScheduler *scheduler = nullptr;
   ObIDagNet *dag_net = nullptr;
   ObBackfillTXCtx *backfill_tx_ctx = nullptr;
-  ObTabletID tablet_id;
   ObStartPrepareMigrationDag *start_prepare_migration_dag = nullptr;
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
-
+  common::ObArray<ObTabletBackfillInfo> tablet_infos;
+  storage::ObTabletBackfillInfo tablet_info;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start prepare migration task do not init", K(ret));
@@ -979,7 +995,9 @@ int ObStartPrepareMigrationTask::generate_prepare_migration_dags_()
   } else {
     if (OB_FAIL(scheduler->alloc_dag(finish_backfill_tx_dag))) {
       LOG_WARN("failed to alloc finish backfill tx migration dag ", K(ret));
-    } else if (OB_FAIL(finish_backfill_tx_dag->init(ctx_->task_id_, ctx_->arg_.ls_id_, ctx_->log_sync_scn_, ctx_->tablet_id_array_, ctx_))) {
+    } else if (OB_FAIL(build_tablet_backfill_info_(tablet_infos))) {
+      LOG_WARN("failed to build tablet backfill info", K(ret));
+    } else if (OB_FAIL(finish_backfill_tx_dag->init(ctx_->task_id_, ctx_->arg_.ls_id_, ctx_->log_sync_scn_, tablet_infos, ctx_))) {
       LOG_WARN("failed to init data tablets migration dag", K(ret), K(*ctx_));
     } else if (OB_ISNULL(backfill_tx_ctx = finish_backfill_tx_dag->get_backfill_tx_ctx())) {
       ret = OB_ERR_UNEXPECTED;
@@ -989,11 +1007,11 @@ int ObStartPrepareMigrationTask::generate_prepare_migration_dags_()
         LOG_WARN("failed to add finish backfill tx dag as chilid", K(ret), K(*ctx_));
       }
     } else {
-      if (OB_FAIL(backfill_tx_ctx->get_tablet_id(tablet_id))) {
+      if (OB_FAIL(backfill_tx_ctx->get_tablet_info(tablet_info))) {
         LOG_WARN("failed to get tablet id", K(ret), KPC(ctx_));
       } else if (OB_FAIL(scheduler->alloc_dag(tablet_backfill_tx_dag))) {
         LOG_WARN("failed to alloc tablet backfill tx migration dag ", K(ret));
-      } else if (OB_FAIL(tablet_backfill_tx_dag->init(ctx_->task_id_, ctx_->arg_.ls_id_, tablet_id, ctx_, backfill_tx_ctx))) {
+      } else if (OB_FAIL(tablet_backfill_tx_dag->init(ctx_->task_id_, ctx_->arg_.ls_id_, tablet_info, ctx_, backfill_tx_ctx))) {
         LOG_WARN("failed to init tablet backfill tx dag", K(ret), K(*ctx_));
       } else if (OB_FAIL(this->get_dag()->add_child(*tablet_backfill_tx_dag))) {
         LOG_WARN("failed to add tablet backfill tx dag as chilid", K(ret), K(*ctx_));

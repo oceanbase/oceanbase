@@ -1267,6 +1267,48 @@ bool ObLSRebuildInfo::operator ==(const ObLSRebuildInfo &other) const
 
 OB_SERIALIZE_MEMBER(ObLSRebuildInfo, status_, type_);
 
+ObTabletBackfillInfo::ObTabletBackfillInfo()
+  : tablet_id_(),
+    is_committed_(false)
+{}
+
+int ObTabletBackfillInfo::init(const common::ObTabletID &tablet_id, bool is_committed)
+{
+  int ret = OB_SUCCESS;
+  if (!tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet it", K(ret), K(tablet_id));
+  } else {
+    tablet_id_ = tablet_id;
+    is_committed_ = is_committed;
+  }
+  return ret;
+}
+
+void ObTabletBackfillInfo::reset()
+{
+  tablet_id_.reset();
+  is_committed_ = false;
+}
+
+bool ObTabletBackfillInfo::is_valid() const
+{
+  return tablet_id_.is_valid();
+}
+
+bool ObTabletBackfillInfo::operator == (const ObTabletBackfillInfo &other) const
+{
+  bool is_same = true;
+  if (this == &other) {
+    // same
+  } else if (tablet_id_ != other.tablet_id_
+      || is_committed_ != other.is_committed_) {
+    is_same = false;
+  } else {
+    is_same = true;
+  }
+  return is_same;
+}
 }
 }
 

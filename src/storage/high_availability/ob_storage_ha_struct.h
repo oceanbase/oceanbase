@@ -405,6 +405,22 @@ public:
   ObLSRebuildType type_;
 };
 
+struct ObTabletBackfillInfo final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTabletBackfillInfo();
+  virtual ~ObTabletBackfillInfo() = default;
+  int init(const common::ObTabletID &tablet_id, bool is_committed);
+  bool is_valid() const;
+  void reset();
+  bool operator == (const ObTabletBackfillInfo &other) const;
+  TO_STRING_KV(
+      K_(tablet_id),
+      K_(is_committed));
+  common::ObTabletID tablet_id_;
+  bool is_committed_;
+};
 
 
 }
