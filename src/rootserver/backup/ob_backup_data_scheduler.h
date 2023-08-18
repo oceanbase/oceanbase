@@ -82,7 +82,7 @@ private:
   int get_need_cancel_tenants_(const uint64_t tenant_id, const common::ObIArray<uint64_t> &backup_tenant_ids, 
       common::ObIArray<uint64_t> &need_cancel_backup_tenants);
   int do_get_need_reload_task_(const share::ObBackupJobAttr &job, const share::ObBackupSetTaskAttr &set_task_attr, 
-      const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
+      ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
       common::ObIAllocator &allocator, ObIArray<ObBackupScheduleTask *> &tasks);
   int build_task_(const share::ObBackupJobAttr &job, const share::ObBackupSetTaskAttr &set_task_attr, 
       const share::ObBackupLSTaskAttr &ls_task,

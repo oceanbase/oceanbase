@@ -311,7 +311,7 @@ int ObBackupDataLSTaskMgr::handle_execute_over(
   } else if (OB_FALSE_IT(new_ls_attr.end_ts_ = ObTimeUtility::current_time())) {
   } else if (OB_FAIL(ObBackupUtils::get_full_replica_num(ls_attr.tenant_id_, full_replica_num))) {
     LOG_WARN("failed to get full replica num", K(ret));
-  } else if (new_ls_attr.black_servers_.count() + 1 == full_replica_num && OB_FALSE_IT(new_ls_attr.black_servers_.reset())) {
+  } else if (new_ls_attr.black_servers_.count() + 1 >= full_replica_num && OB_FALSE_IT(new_ls_attr.black_servers_.reset())) {
   } else if (OB_SUCCESS != result_info.result_ && OB_FAIL(new_ls_attr.black_servers_.push_back(result_info.addr_))) {
     LOG_WARN("failed to push back black server", K(ret), K(result_info));
   } else if (OB_FALSE_IT(new_ls_attr.result_ = result_info.result_)) {
