@@ -2817,7 +2817,7 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_TRIGGERS_LIKE,
                        NULL,
                        "select t.trigger_name as `Trigger`, t.event_manipulation as `Event`, t.event_object_table as `Table`, t.action_statement as `Statement`, t.action_timing as `Timing`, t.created as `Created`, t.sql_mode as `sql_mode`, t.definer as `Definer`, t.character_set_client as `character_set_client`, t.collation_connection as `collation_connection`, t.database_collation as `Database Collation` from %s.%s t, %s.%s d where t.event_object_schema = d.database_name and d.database_id = %ld ",
                        NULL,
-                       "Trigger");
+                       "Table");
 DEFINE_SHOW_CLAUSE_SET(SHOW_WARNINGS,
                        NULL,
                        "SELECT `level` AS `Level`, `code` AS `Code`, `message` AS `Message` FROM %s.%s ",
