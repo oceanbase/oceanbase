@@ -106,6 +106,8 @@ private:
   int store_params_value_to_str(ObIAllocator &allocator,
                                 sql::ObSQLSessionInfo &session,
                                 common::ParamStore &params);
+  
+  // use for query cache.
   int can_insert_query_cache(sql::ObSQLSessionInfo &session,
                             ObMySQLResultSet &result,
                             bool &insert_query_cache);

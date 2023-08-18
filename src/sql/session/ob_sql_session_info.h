@@ -1219,6 +1219,15 @@ public:
   void set_insert_query_cache(bool insert_query_cache) { insert_query_cache_ = insert_query_cache; }
   bool get_insert_query_cache() { return insert_query_cache_; }
   ObQueryCache *get_query_cache() { return ObQueryCache::get_instance(); }
+  int set_query_cache_key(const ObString &sql) 
+  { 
+    query_cache_key_ = ObQueryCacheKey(get_login_tenant_id(),
+                                      get_database_id(),
+                                      sql,
+                                      *this);
+    return OB_SUCCESS;
+  }
+  const ObQueryCacheKey &get_query_cache_key() { return query_cache_key_; }
   void set_query_cache_handle(ObQueryCacheValueHandle query_cache_handle) { query_cache_handle_ = query_cache_handle;}
   ObQueryCacheValueHandle get_query_cache_handle() { return query_cache_handle_; }
 
@@ -1409,6 +1418,7 @@ private:
   bool insert_query_cache_ = false;
   bool is_select_sql_cache_ = false;
   bool is_select_sql_no_cache_ = false;
+  ObQueryCacheKey query_cache_key_;
   ObQueryCacheValueHandle query_cache_handle_;
 
   ObSessInfoEncoder* sess_encoders_[SESSION_SYNC_MAX_TYPE] = {

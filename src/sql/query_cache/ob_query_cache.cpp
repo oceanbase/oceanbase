@@ -225,6 +225,9 @@ ObQueryCacheValue::ObQueryCacheValue(common::ObIAllocator *alloc)
 
 ObQueryCacheValue::~ObQueryCacheValue()
 {
+  for (int i = 0; i < row_array_.count(); ++i) {
+    alloc_->free(row_array_.at(i));
+  }
 }
 
 int64_t ObQueryCacheValue::size() const
@@ -238,10 +241,12 @@ int ObQueryCacheValue::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheVal
   if (OB_UNLIKELY(NULL == buf || buf_len < size())) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "ObQueryCacheValue : buf is null or buf len is small", K(ret));
-  } else if (OB_UNLIKELY(!is_valid())) {
-    ret = OB_INVALID_DATA;
-    COMMON_LOG(WARN, "ObQueryCacheValue : value is invalid", K(ret));
-  } else {
+  } 
+  // else if (OB_UNLIKELY(!is_valid())) {
+  //   ret = OB_INVALID_DATA;
+  //   COMMON_LOG(WARN, "ObQueryCacheValue : value is invalid", K(ret));
+  // } 
+   else {
     ObQueryCacheValue *pvalue = new (buf) ObQueryCacheValue(alloc_);
     pvalue->valid_ = valid_;
 
@@ -256,15 +261,31 @@ int ObQueryCacheValue::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheVal
 
     pvalue->weight_ = weight_;
 
-    pvalue->row_array_ = row_array_;
+    // deep copy for row_array
+    // pvalue->row_array_ = row_array_;
+    pvalue->row_array_.reserve(row_array_.count());
+    for (int i = 0; i < row_array_.count() && OB_SUCC(ret); ++i) {
+      const common::ObNewRow &row = *row_array_.at(i);
+      int buf_size = row.get_deep_copy_size() + sizeof(common::ObNewRow);
+      void *buf = pvalue->alloc_->alloc(buf_size);
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        common::ObNewRow *cur_row = static_cast<common::ObNewRow *>(buf);
+        char *deep_copy_buf = (char *)buf + sizeof(common::ObNewRow);
+        int64_t pos = 0;
+        cur_row->deep_copy(row, deep_copy_buf, row.get_deep_copy_size(), pos);
+        pvalue->row_array_.push_back(cur_row);
+      }
+    }
+ 
     if (fields_.count() != 0 && OB_FAIL(pl::ObDbmsInfo::deep_copy_field_columns(
                 *(pvalue->alloc_),
                 fields_,
                 pvalue->fields_))) {
       COMMON_LOG(WARN, "deep copy ObQueryCacheValue fields error", K(ret));
     }
-    pvalue->fields_ = fields_;
-    
+    // this->~ObQueryCacheValue();
     value = pvalue;
   }
   return ret;
@@ -288,14 +309,19 @@ uint64_t ObQueryCacheValue::get_trans_id(uint32_t idx) const
 
 int ObQueryCacheValue::add_row(const common::ObNewRow &row)
 {
-  
   int ret = OB_SUCCESS;
-  common::ObNewRow *cur_row = static_cast<common::ObNewRow *>(alloc_->alloc(sizeof(common::ObNewRow)));
-  char *buf = (char*)(alloc_->alloc(row.get_deep_copy_size()));
-  int64_t pos = 0;
-  cur_row->deep_copy(row, buf, row.get_deep_copy_size(), pos);
-  mem_hold_ += row.get_deep_copy_size() + sizeof(common::ObNewRow);
-  row_array_.push_back(cur_row);
+  int buf_size = row.get_deep_copy_size() + sizeof(common::ObNewRow);
+  void *buf = alloc_->alloc(buf_size);
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    common::ObNewRow *cur_row = static_cast<common::ObNewRow *>(buf);
+    char *deep_copy_buf = (char *)buf + sizeof(common::ObNewRow);
+    int64_t pos = 0;
+    cur_row->deep_copy(row, deep_copy_buf, row.get_deep_copy_size(), pos);
+    mem_hold_ += buf_size;
+    row_array_.push_back(cur_row);
+  }
   return ret;
 }
 
@@ -303,12 +329,6 @@ int ObQueryCacheValue::get_row(const int64_t row_id, const common::ObNewRow *&ro
 {
   int ret = OB_SUCCESS;
   row = row_array_.at(row_id);
-  return ret;
-}
-
-int ObQueryCacheValue::get_row(const int64_t row_id, const common::ObNewRow &row)
-{
-  int ret = OB_SUCCESS;
   return ret;
 }
 
@@ -343,13 +363,10 @@ int ObQueryCache::query(const ObQueryCacheKey &key, ObQueryCacheValueHandle &han
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "ObQueryCache : key is invalid", K(ret));
-  } else {
-    {
-      DRWLock::RDLockGuard guard(lock_);
-      if (OB_FAIL(get(key, value, handle.handle_))) {
-        if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
-          COMMON_LOG(WARN, "ObQueryCache : get failed", K(ret));
-        }
+  } else {   
+    if (OB_FAIL(get(key, value, handle.handle_))) {
+      if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+        COMMON_LOG(WARN, "ObQueryCache : get failed", K(ret));
       }
     }
     if (OB_FAIL(ret)) {
@@ -367,48 +384,35 @@ int ObQueryCache::query(const ObQueryCacheKey &key, ObQueryCacheValueHandle &han
   return ret;
 }
 
-int ObQueryCache::register_query(const ObQueryCacheKey &key, ObQueryCacheValueHandle &handle)
+int ObQueryCache::insert(const ObQueryCacheKey &key,
+                        const common::ColumnsFieldArray &fields,
+                        ObQueryCacheValueHandle &handle)
 {
   int ret = OB_SUCCESS;
-  bool overwrite = true;
-  ObQueryCacheValue tmp_value(&arena_alloc_);
-  
-  // only for deep copy
-  tmp_value.set_valid(true);
-  
   const ObQueryCacheValue *value = NULL;
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "ObQueryCache : key is invalid", K(ret));
   } else {
-    // {
-    //   DRWLock::RDLockGuard guard(lock_);
-    //   if (OB_FAIL(get(key, value, handle.handle_))) {
-    //     if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
-    //       COMMON_LOG(WARN, "ObQueryCache : get failed", K(ret));
-    //     }
-    //   }
-    // }
-    // if (OB_ENTRY_NOT_EXIST == ret) {
-      {
-        DRWLock::WRLockGuard guard(lock_);
-        if (OB_FAIL(put_and_fetch(key, tmp_value, value, handle.handle_))) {
-          COMMON_LOG(WARN, "ObQueryCache : put and fetch schema cache failed", K(ret));
-        }
+    // Only allow one thread insert query.
+    ObQueryCacheValue tmp_value((&alloc_));
+    // Only for deep copy.
+    // tmp_value.set_valid(true);
+    if (OB_FAIL(put_and_fetch(key, tmp_value, value, handle.handle_, 0))) {
+      if (OB_ENTRY_EXIST != ret) {
+        COMMON_LOG(WARN, "ObQueryCache : put and fetch schema cache failed", K(ret));
       }
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (OB_ISNULL(value)) {
-        ret = OB_ERR_UNEXPECTED;
-        COMMON_LOG(WARN, "ObQueryCache : value is null", K(ret));
-      } else {
-        handle.query_cache_value_ = const_cast<ObQueryCacheValue*>(value);
-        // If set valid is false, means no have resultset.
-        handle.query_cache_value_->set_valid(false);
-
+    } else if (OB_FAIL(ret) || OB_ISNULL(value)) {
+      // do nothing
+    } else {
+      handle.query_cache_value_ = const_cast<ObQueryCacheValue*>(value);
+      if (OB_FAIL(pl::ObDbmsInfo::deep_copy_field_columns(alloc_,
+                                                          fields,
+                                                          handle.query_cache_value_->get_fields()))) {
+        COMMON_LOG(WARN, "push query cache fields error", K(ret));
       }
-    // }
-    
+      // handle.query_cache_value_->get_fields() = fields;
+    }
   }
   return ret;
 }
@@ -416,11 +420,8 @@ int ObQueryCache::register_query(const ObQueryCacheKey &key, ObQueryCacheValueHa
 int ObQueryCache::remove(const ObQueryCacheKey &key)
 {
   int ret = OB_SUCCESS;
-  {
-    DRWLock::WRLockGuard guard(lock_);
-    if (OB_FAIL(erase(key))) {
-      COMMON_LOG(WARN, "ObQueryCache erase key error", K(ret), K(key));
-    }
+  if (OB_FAIL(erase(key))) {
+    COMMON_LOG(WARN, "ObQueryCache erase key error", K(ret), K(key));
   }
   return ret;
 }
@@ -498,7 +499,7 @@ ObQueryCache* ObQueryCache::get_instance()
     ObMemAttr attr(ob_thread_tenant_id(), "query_cache");
     SET_USE_500(attr);
     query_cache.instance_ = OB_NEW(ObQueryCache, attr);
-    query_cache.instance_->init("ob_query_cache");
+    query_cache.instance_->init("ob_query_cache", 5);
     // COMMON_LOG(INFO, "ObQueryCache : create instance sucessful");
   }
   return query_cache.instance_;

@@ -80,7 +80,6 @@ private:
   uint64_t database_id_;
   ObString sql_;
   ObQueryCacheFlag flag_;
-  DISALLOW_COPY_AND_ASSIGN(ObQueryCacheKey);
 };
 
 struct ObQueryCacheValueWeight
@@ -122,7 +121,7 @@ public:
   inline ObQueryCacheValueWeight get_weight() const { return weight_; }
   int add_row(const common::ObNewRow &row);
   int get_row(const int64_t row_id, const common::ObNewRow *&row);
-  int get_row(const int64_t row_id, const common::ObNewRow &row);
+  
   inline common::ObIAllocator *get_alloc() { return alloc_; }
   inline common::ColumnsFieldArray &get_fields() { return fields_; }
   void init_ref_table_info(uint32_t tables_num);
@@ -171,9 +170,12 @@ public:
   inline void add_mem_size(int64_t row_mem_size) { row_mem_size_ += row_mem_size; }
   inline void add_row_cnt(int64_t row_cnt) { row_cnt_ += row_cnt; }
   inline uint64_t get_size() const { return size() + row_mem_size_; }
+  inline DRWLock &get_lock() { return lock_; } 
   OB_INLINE bool is_valid() { return OB_NOT_NULL(instance_) && PLACE_HOLDER != (uint64_t)instance_; }
   int query(const ObQueryCacheKey &key, ObQueryCacheValueHandle &handle);
-  int register_query(const ObQueryCacheKey &key, ObQueryCacheValueHandle &handle);
+  int insert(const ObQueryCacheKey &key,
+            const common::ColumnsFieldArray &fields,
+            ObQueryCacheValueHandle &handle);
   int remove(const ObQueryCacheKey &key);
   int eviction(const ObSQLSessionInfo &session);
   int flush();
@@ -181,13 +183,14 @@ public:
   DISALLOW_COPY_AND_ASSIGN(ObQueryCache);
 
 private:
-	ObQueryCache() : instance_(nullptr), row_mem_size_(0), row_cnt_(0) {}
+	ObQueryCache() : instance_(nullptr), row_mem_size_(0), row_cnt_(0), alloc_(inner_alloc_) {}
 
 private:
   ObQueryCache *instance_;
   int64_t row_mem_size_;
   int64_t row_cnt_;
-  common::ObArenaAllocator arena_alloc_;
+  common::ObArenaAllocator inner_alloc_;
+  common::ObSafeArenaAllocator alloc_;
   DRWLock lock_;
 };
 

@@ -105,13 +105,19 @@ int ObQueryDriver::response_query_header(const ColumnsFieldIArray &fields,
     }
 
     // Store fields to query cache.
-    if (session_.get_insert_query_cache()) {
-      if (OB_FAIL(pl::ObDbmsInfo::deep_copy_field_columns(
-                  *(session_.get_query_cache_handle().query_cache_value_->get_alloc()),
-                  result.get_field_columns(),
-                  session_.get_query_cache_handle().query_cache_value_->get_fields()))) {
-        LOG_WARN("push query cache fields error", K(ret));
+    ObQueryCacheValueHandle handle;
+    const ColumnsFieldArray *real_fields = reinterpret_cast<const ColumnsFieldArray *>(fields);
+    if (session_.get_insert_query_cache() && OB_FAIL(session_.get_query_cache()->insert(session_.get_query_cache_key(),
+                                                                                        *real_fields,
+                                                                                        handle))) {
+      // The resultset will not be inserted into the query cache if there is a key that already exists.
+      // Only allow one thread insert key successfully when them have same key.
+      if (ret == OB_ENTRY_EXIST) {
+        session_.set_insert_query_cache(false);;
+        ret = OB_SUCCESS;
       }
+    } else {
+      session_.set_query_cache_handle(handle);
     }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < fields.count(); ++i) {
@@ -216,7 +222,7 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
       LOG_WARN("fields is null", K(ret), KP(fields));
     }
   }
-  const int64_t query_cache_limit = 64 * 1024;
+  const int64_t query_cache_limit = 64 * 1024; // 64KB
   int64_t cur_row_size = 0;
   while (OB_SUCC(ret) && row_num < limit_count && !OB_FAIL(result.get_next_row(result_row)) ) {
     ObNewRow *row = const_cast<ObNewRow*>(result_row);
@@ -246,11 +252,11 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
           ObCastCtx cast_ctx(&result.get_mem_pool(), NULL, CM_WARN_ON_FAIL,
             fields->at(i).type_.get_collation_type());
           if (OB_FAIL(common::ObObjCaster::to_type(fields->at(i).type_.get_type(),
-                                           cast_ctx,
-                                           value,
-                                           value))) {
+                                                  cast_ctx,
+                                                  value,
+                                                  value))) {
             LOG_WARN("failed to cast object", K(ret), K(value),
-                     K(value.get_type()), K(fields->at(i).type_.get_type()));
+                    K(value.get_type()), K(fields->at(i).type_.get_type()));
           }
         }
       }
@@ -292,20 +298,26 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
       if (cur_row_size < query_cache_limit) {
         if (OB_SUCC(ret) && OB_FAIL(session_.get_query_cache_handle().query_cache_value_->add_row(tmp_row))) {
           LOG_WARN("failed to add row to row store", K(ret));
+          session_.set_insert_query_cache(false);
+          if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+            if (OB_FAIL(session_.get_query_cache()->remove(session_.get_query_cache_key()))) {
+              // do nothing
+            }
+            ret = OB_SUCCESS;
+          }
         }
       } else {
         session_.set_insert_query_cache(false);
-        // session_.get_query_cache()->remove(session_.get_query_cache_handle().query_cache_key_);
-        LOG_WARN("resultset size over query cache limit, erase value", K(ret));
+        LOG_WARN("resultset size over query cache limit", K(ret), K(cur_row_size));
       }
     }
 
     if (OB_SUCC(ret)) {
       const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(&session_);
       ObSMRow sm(protocol_type, *row, dtc_params,
-                         result.get_field_columns(),
-                         ctx_.schema_guard_,
-                         session_.get_effective_tenant_id());
+                result.get_field_columns(),
+                ctx_.schema_guard_,
+                session_.get_effective_tenant_id());
       sm.set_packed(is_packed);
       OMPKRow rp(sm);
       rp.set_is_packed(is_packed);

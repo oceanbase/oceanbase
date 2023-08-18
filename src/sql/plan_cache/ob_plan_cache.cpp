@@ -2587,7 +2587,7 @@ void ObPlanCacheEliminationTask::runTimerTask()
     run_free_cache_obj_task();
   }
 
-  //
+  // use for query cache debug.
   ObQueryCache::get_instance()->debug_info();
 
   SQL_PC_LOG(INFO, "schedule next cache evict task",
