@@ -716,15 +716,6 @@ int ObTabletStartTransferInHelper::on_register_success_(
   const int64_t start_ts = ObTimeUtil::current_time();
   LOG_INFO("[TRANSFER] start tx start transfer in on_register_success_",
       K(tx_start_transfer_in_info));
-#ifdef ERRSIM
-  SERVER_EVENT_ADD("transfer", "tx_start_transfer_in",
-                   "stage", "on_register_success",
-                   "tenant_id", MTL_ID(),
-                   "src_ls_id", tx_start_transfer_in_info.src_ls_id_.id(),
-                   "dest_ls_id", tx_start_transfer_in_info.dest_ls_id_.id(),
-                   "start_scn", tx_start_transfer_in_info.start_scn_);
-#endif
-
   if (!tx_start_transfer_in_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("on register success get invalid argument", K(ret), K(tx_start_transfer_in_info));
@@ -741,6 +732,14 @@ int ObTabletStartTransferInHelper::on_register_success_(
   } else {
     LOG_INFO("[TRANSFER] finish tx start transfer in on_register_success_", K(tx_start_transfer_in_info),
         "cost_ts", ObTimeUtil::current_time() - start_ts);
+#ifdef ERRSIM
+  SERVER_EVENT_ADD("transfer", "tx_start_transfer_in",
+                   "stage", "on_register_success",
+                   "tenant_id", MTL_ID(),
+                   "src_ls_id", tx_start_transfer_in_info.src_ls_id_.id(),
+                   "dest_ls_id", tx_start_transfer_in_info.dest_ls_id_.id(),
+                   "start_scn", tx_start_transfer_in_info.start_scn_);
+#endif
   }
   return ret;
 }
