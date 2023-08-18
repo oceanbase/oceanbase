@@ -157,6 +157,73 @@ TEST_F(TestCharset, sortkey)
   ASSERT_EQ(size1, 1);
   ASSERT_FALSE(is_valid_unicode);
 
+  //std::map<int, int> charset{
+    //{8,0},{28,1},{45,2}};
+  std::map<int, int> charset{
+    {8,0},{28,1},{45,2},{46,3},{47,4},{54,5},{55,6},{63,7},{87,8},{101,9},{216,10},{224,11},
+    {248,12},{249,13},{251,14}};
+  // init test_string, the order should be same as charset's second param
+  // test_string.first is a valid unicode for correspond charset while the second is invalid
+  // but for some charset it is all valid, like latin1, utf8
+  std::vector<std::pair<std::string, std::string >> test_string;
+
+  const char ascii_string[] = {'\x7f','\0'};
+  const char non_ascii_string[] = {'\xff','\0'};
+  const char gbk_string[] = { '\xc4', '\xe3', '\xba', '\xc3','\0' };//meaing is '你好'
+  const char gb18030_string[] = { '\xc4', '\xe3', '\xba', '\xc3','\0' };//meaing is '你好'
+  const char utf8_string[] = { '\xe4', '\xbd', '\xa0', '\xe5', '\xa5', '\xbd','\0'};//meaing is '你好'
+  const char utf16_string[] = { '\x4f', '\x60', '\x59', '\x7d','\0'};//meaing is '你好'
+  test_string.push_back(std::make_pair(std::string(ascii_string),std::string((non_ascii_string)))); //CS_TYPE_LATIN1_SWEDISH_CI
+  test_string.push_back(std::make_pair(std::string(gbk_string),std::string((non_ascii_string)))); //CS_TYPE_GBK_CHINESE_CI
+  test_string.push_back(std::make_pair(std::string(utf8_string),std::string((non_ascii_string)))); //CS_TYPE_UTF8MB4_GENERAL_CI
+  test_string.push_back(std::make_pair(std::string(utf8_string),std::string((non_ascii_string)))); //CS_TYPE_UTF8MB4_BIN
+  test_string.push_back(std::make_pair(std::string(ascii_string),std::string((non_ascii_string)))); //CS_TYPE_LATIN1_BIN
+  test_string.push_back(std::make_pair(std::string(utf16_string),std::string((non_ascii_string)))); //CS_TYPE_UTF16_GENERAL_CI
+  test_string.push_back(std::make_pair(std::string(utf16_string),std::string((non_ascii_string)))); //CS_TYPE_UTF16_BIN
+  test_string.push_back(std::make_pair(std::string(ascii_string),std::string((non_ascii_string)))); //CS_TYPE_BINARY
+  test_string.push_back(std::make_pair(std::string(gbk_string),std::string((non_ascii_string)))); //CS_TYPE_GBK_BIN
+  test_string.push_back(std::make_pair(std::string(utf16_string),std::string((non_ascii_string)))); //CS_TYPE_UTF16_UNICODE_CI
+  test_string.push_back(std::make_pair(std::string(gb18030_string),std::string((non_ascii_string)))); //CS_TYPE_GB18030_2022_BIN
+  test_string.push_back(std::make_pair(std::string(utf8_string),std::string((non_ascii_string))));//CS_TYPE_UTF8MB4_UNICODE_CI
+  test_string.push_back(std::make_pair(std::string(gb18030_string),std::string((non_ascii_string)))); //CS_TYPE_GB18030_CHINESE_CI
+  test_string.push_back(std::make_pair(std::string(gb18030_string),std::string((non_ascii_string)))); //CS_TYPE_GB18030_BIN
+  test_string.push_back(std::make_pair(std::string(gb18030_string),std::string((non_ascii_string)))); //CS_TYPE_GB18030_CHINESE_CS
+
+  //result[0]: charset index
+  //result[1],result[2]: the size and validility of the first string
+  //result[3],result[4]: the size and validility of the second string
+  std::vector<std::vector<int>>result{
+    {0,1,1,1,1},
+    {1,4,1,1,0},
+    {2,6,1,0,0},
+    {3,6,1,0,0},
+    {4,1,1,1,1},
+    {5,4,1,0,0},
+    {6,4,1,0,0},
+    {7,1,1,1,1},
+    {8,4,1,1,1},
+    {9,10,1,10,1},
+    {10,4,1,1,1},
+    {11,10,1,10,1},
+    {12,8,1,1,0},
+    {13,4,1,1,1},
+    {14,8,1,1,0}
+  };
+  for (auto it : charset) {
+    bool is_valid_collation = ObCharset::is_valid_collation(it.first);
+    ASSERT_TRUE(is_valid_collation);
+    const char* p1 = test_string[it.second].first.data();
+    int p1_len = test_string[it.second].first.length();
+    const char* p2 = test_string[it.second].second.data();
+    int p2_len = test_string[it.second].second.length();
+    size1 = ObCharset::sortkey((ObCollationType)it.first, p1, p1_len, aa1, 10, is_valid_unicode);
+    ASSERT_TRUE(size1 == result[it.second][1]);
+    ASSERT_TRUE(is_valid_unicode == result[it.second][2]);
+
+    size1 = ObCharset::sortkey((ObCollationType)it.first, p2, p2_len, aa1, 10, is_valid_unicode);
+    ASSERT_TRUE(size1 == result[it.second][3]);
+    ASSERT_TRUE(is_valid_unicode == result[it.second][4]);
+  }
   // The parameter of sortkey cannot be NULL
   //char *p = NULL;
   //size1 = ObCharset::sortkey(CS_TYPE_UTF8MB4_GENERAL_CI, true, p, 0, aa1, 10);

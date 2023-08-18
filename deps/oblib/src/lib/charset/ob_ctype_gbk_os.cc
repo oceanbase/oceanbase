@@ -27,7 +27,6 @@
 #define gbkcode(c,d)   ((((unsigned int) (unsigned char) (c)) <<8) | (unsigned char)(d))
 #define gbkhead(e)     ((unsigned char)(e>>8))
 #define gbktail(e)     ((unsigned char)(e&0xff))
-
 static unsigned char ctype_gbk[257] =
 {
   0,				  
@@ -3519,10 +3518,8 @@ ob_strnxfrm_gbk(const ObCharsetInfo *cs,
       }
       src+= 2;
     } else {
+      *is_valid_unicode = is_valid_ascii(*src);
       *dst++= sort_order ? sort_order[*src++] : *src++;
-      if (src < se) {
-        *is_valid_unicode = 0;
-      }
     }
   }
   return ob_strxfrm_pad_desc_and_reverse(cs, d0, dst, de, nweights, flags, 0);
@@ -3559,15 +3556,13 @@ size_t ob_varlen_encoding_gbk_for_memcmp(const struct ObCharsetInfo* cs,
         *dst++ = 0x01;
       }
     } else {
+      *is_valid_unicode = is_valid_ascii(*src);
       uint16_t e = sort_order ? sort_order[*src++] : *src++;
       *dst++ = gbkhead(e);
       *dst++ = gbktail(e);
       if (e == 0) {
         *dst++ = 0x00;
         *dst++ = 0x01;
-      }
-      if (src < se) {
-        *is_valid_unicode = 0;
       }
     }
   }
@@ -3611,10 +3606,8 @@ size_t ob_varlen_encoding_gbk_for_spacecmp(const struct ObCharsetInfo* cs,
       e = gbksortorder((uint16) gbkcode(*src, *(src + 1)));
       src+= 2;
     } else {
+      *is_valid_unicode = is_valid_ascii(*src);
       e = sort_order ? sort_order[*src++] : *src++;
-      if (src < se) {
-        *is_valid_unicode = 0;
-      }
     }
     if (space_cnt != 0) {
       *dst++ = 0x00;
