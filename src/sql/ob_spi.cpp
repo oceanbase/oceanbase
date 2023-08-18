@@ -1414,28 +1414,37 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
 #else
           transaction::ObXATransID xid = my_session->get_xid();
           transaction::ObGlobalTxType global_tx_type = my_session->get_tx_desc()->get_global_tx_type(xid);
+          bool is_dblink = (transaction::ObGlobalTxType::DBLINK_TRANS == global_tx_type);
+          transaction::ObTransID tx_id;
           if (is_rollback) {
             //Rollback can be executed in the xa transaction,
             //the role is to roll back all modifications,
             //but does not end the xa transaction
-            if (transaction::ObGlobalTxType::DBLINK_TRANS == global_tx_type) {
-              transaction::ObTransID tx_id;
+            if (is_dblink) {
               if (OB_FAIL(ObTMService::tm_rollback(*ctx->exec_ctx_, tx_id))) {
                 LOG_WARN("fail to do rollback for dblink trans", K(ret), K(tx_id), K(xid), K(global_tx_type));
-              }
-              const bool force_disconnect = false;
-              int tmp_ret = OB_SUCCESS;
-              if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret =
-                  my_session->get_dblink_context().clean_dblink_conn(force_disconnect)))) {
-                LOG_WARN("dblink transaction failed to release dblink connections", K(tmp_ret), K(tx_id), K(xid));
               }
             } else if (OB_FAIL(pl::ObDbmsXA::xa_rollback_origin_savepoint(*(ctx->exec_ctx_)))) {
               LOG_WARN("rollback xa changes failed", K(ret), K(xid));
             }
           } else {
-            //Commit is prohibited in xa transaction
-            ret = OB_TRANS_XA_ERR_COMMIT;
-            LOG_WARN("COMMIT is not allowed in a xa trans", K(ret), K(xid));
+            if (is_dblink) {
+              if (OB_FAIL(ObTMService::tm_commit(*ctx->exec_ctx_, tx_id))) {
+                LOG_WARN("fail to do commit for dblink trans", K(ret), K(tx_id), K(xid), K(global_tx_type));
+              }
+            } else {
+              //Commit is prohibited in xa transaction
+              ret = OB_TRANS_XA_ERR_COMMIT;
+              LOG_WARN("COMMIT is not allowed in a xa trans", K(ret), K(xid));
+            }
+          }
+          if (is_dblink) {
+            const bool force_disconnect = false;
+            int tmp_ret = OB_SUCCESS;
+            if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret =
+                my_session->get_dblink_context().clean_dblink_conn(force_disconnect)))) {
+              LOG_WARN("dblink transaction failed to release dblink connections", K(tmp_ret), K(tx_id), K(xid));
+            }
           }
           ctx->exec_ctx_->set_need_disconnect(false);
 #endif
