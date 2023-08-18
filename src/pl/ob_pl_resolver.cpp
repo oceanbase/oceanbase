@@ -4399,7 +4399,8 @@ int ObPLResolver::resolve_cursor_for_loop(
 
         // 解析Cursor
         OZ (resolve_cursor(
-          cursor_node->children_[0], current_block_->get_namespace(), cursor_index, func));
+          (T_FUN_SYS == cursor_node->type_) ? cursor_node->children_[0] : cursor_node,
+          current_block_->get_namespace(), cursor_index, func));
         OX (stmt->set_cursor_index(cursor_index));
 
         //解析实参
