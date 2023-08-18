@@ -546,6 +546,16 @@ int ObTransformLeftJoinToAnti::check_can_be_trans(ObDMLStmt *stmt,
       is_table_valid = false;
     }
   }
+  // ObQueryRefRawExpr not support copy on replace in copier, disable this condition
+  for (int64_t i = 0; OB_SUCC(ret) && is_table_valid &&
+                      i < joined_table->get_join_conditions().count(); ++i) {
+    if (OB_ISNULL(joined_table->get_join_conditions().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (joined_table->get_join_conditions().at(i)->has_flag(CNT_SUB_QUERY)) {
+      is_table_valid = false;
+    }
+  }
   for (int64_t i = 0; OB_SUCC(ret) && is_table_valid &&
                       i < cond_exprs.count(); ++i) {
     bool tmp_cond_valid = false;

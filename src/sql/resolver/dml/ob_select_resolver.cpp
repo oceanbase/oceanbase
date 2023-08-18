@@ -1671,6 +1671,8 @@ int ObSelectResolver::resolve_order_item(const ParseNode &sort_node, OrderItem &
        LOG_WARN("resolve sql expression failed", K(ret));
     } else if (OB_FAIL(resolve_literal_order_item(*(sort_node.children_[0]), order_item.expr_, order_item, select_stmt))) {
       LOG_WARN("fail to resolve literal order item", K(ret), K(*order_item.expr_));
+    } else if (OB_FAIL(resolve_shared_order_item(order_item, select_stmt))) {
+      LOG_WARN("failed to resolve shared order item", K(ret));
     } else { }
   }
   if (OB_SUCC(ret) && is_only_full_group_by_on(session_info_->get_sql_mode())) {
@@ -6458,6 +6460,41 @@ int ObSelectResolver::add_name_for_anonymous_view()
     }
   }
 
+  return ret;
+}
+
+int ObSelectResolver::resolve_shared_order_item(OrderItem &order_item, ObSelectStmt *select_stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> select_exprs;
+  ObRawExpr *expr = NULL;
+  bool find = false;
+  ObQuestionmarkEqualCtx cmp_ctx(false);
+  if (OB_ISNULL(select_stmt) ||
+      OB_ISNULL(params_.query_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null pointer", K(ret));
+  } else if (select_stmt->is_order_siblings()) {
+    // do noting
+  } else if (OB_FAIL(select_stmt->get_select_exprs(select_exprs))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else if (ObOptimizerUtil::find_item(select_exprs, order_item.expr_)) {
+    find = true;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !find && i < select_exprs.count(); ++i) {
+    if (OB_ISNULL(expr = select_exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (!expr->same_as(*order_item.expr_, &cmp_ctx)) {
+      cmp_ctx.equal_pairs_.reuse();
+    } else if (OB_FAIL(append(params_.query_ctx_->all_equal_param_constraints_,
+                              cmp_ctx.equal_pairs_))) {
+      LOG_WARN("failed to add equal constraint", K(ret));
+    } else {
+      order_item.expr_ = expr;
+      find = true;
+    }
+  }
   return ret;
 }
 
