@@ -1045,7 +1045,6 @@ int ObTabletMergePrepareTask::build_merge_ctx(bool &skip_rest_operation)
   int ret = OB_SUCCESS;
   skip_rest_operation = false;
   ObTabletMergeCtx *ctx = nullptr;
-  const common::ObTabletID &tablet_id = ctx->param_.tablet_id_;
 
   // only ctx.param_ is inited, fill other fields here
   if (OB_ISNULL(ctx = merge_dag_->get_ctx())) {
