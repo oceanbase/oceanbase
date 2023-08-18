@@ -788,6 +788,7 @@ int ObSharedBlockReaderWriter::inner_write_block(
       macro_info.offset_ = align_offset_;
       macro_info.size_ = align_store_size;
       macro_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
+      macro_info.io_desc_.set_group_id(ObIOModule::SHARED_BLOCK_RW_IO);
       // io_callback
       if (OB_FAIL(addr.set_block_addr(macro_handle_.get_macro_id(),
                                       offset_,
