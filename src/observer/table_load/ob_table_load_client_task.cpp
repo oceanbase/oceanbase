@@ -78,7 +78,7 @@ ObTableLoadClientTask::~ObTableLoadClientTask()
 }
 
 int ObTableLoadClientTask::init(uint64_t tenant_id, uint64_t user_id, uint64_t database_id,
-                                uint64_t table_id, int64_t timeout_us)
+                                uint64_t table_id, int64_t timeout_us, int64_t heartbeat_timeout_us)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -98,7 +98,7 @@ int ObTableLoadClientTask::init(uint64_t tenant_id, uint64_t user_id, uint64_t d
       LOG_WARN("fail to create session info", KR(ret));
     } else if (OB_FAIL(init_column_names_and_idxs())) {
       LOG_WARN("fail to init column names and idxs", KR(ret));
-    } else if (OB_FAIL(init_exec_ctx(timeout_us))) {
+    } else if (OB_FAIL(init_exec_ctx(timeout_us, heartbeat_timeout_us))) {
       LOG_WARN("fail to init client exec ctx", KR(ret));
     } else if (OB_FAIL(task_allocator_.init("TLD_TaskPool", MTL_ID()))) {
       LOG_WARN("fail to init task allocator", KR(ret));
@@ -212,7 +212,7 @@ int ObTableLoadClientTask::init_column_names_and_idxs()
   return ret;
 }
 
-int ObTableLoadClientTask::init_exec_ctx(int64_t timeout_us)
+int ObTableLoadClientTask::init_exec_ctx(int64_t timeout_us, int64_t heartbeat_timeout_us)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(exec_ctx_ = OB_NEWx(ObTableLoadClientExecCtx, &allocator_))) {
@@ -222,6 +222,8 @@ int ObTableLoadClientTask::init_exec_ctx(int64_t timeout_us)
     exec_ctx_->allocator_ = &allocator_;
     exec_ctx_->session_info_ = session_info_;
     exec_ctx_->timeout_ts_ = ObTimeUtil::current_time() + timeout_us;
+    exec_ctx_->last_heartbeat_time_ = ObTimeUtil::current_time();
+    exec_ctx_->heartbeat_timeout_us_ = heartbeat_timeout_us;
   }
   return ret;
 }

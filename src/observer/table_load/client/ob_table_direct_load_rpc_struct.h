@@ -31,17 +31,19 @@ public:
       max_error_row_count_(0),
       dup_action_(sql::ObLoadDupActionType::LOAD_INVALID_MODE),
       timeout_(0),
+      heartbeat_timeout_(0),
       force_create_(false)
   {
   }
   TO_STRING_KV(K_(table_name), K_(parallel), K_(max_error_row_count), K_(dup_action), K_(timeout),
-               K_(force_create));
+                K_(heartbeat_timeout), K_(force_create));
 public:
   ObString table_name_;
   int64_t parallel_;
   uint64_t max_error_row_count_;
   sql::ObLoadDupActionType dup_action_;
   int64_t timeout_;
+  int64_t heartbeat_timeout_;
   bool force_create_;
 };
 
@@ -122,6 +124,31 @@ public:
   uint64_t table_id_;
   int64_t task_id_;
   ObString payload_;
+};
+
+struct ObTableDirectLoadHeartBeatArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableDirectLoadHeartBeatArg() : table_id_(common::OB_INVALID_ID), task_id_(0) {}
+  TO_STRING_KV(K_(table_id), K_(task_id));
+public:
+  uint64_t table_id_;
+  int64_t task_id_;
+};
+
+struct ObTableDirectLoadHeartBeatRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableDirectLoadHeartBeatRes()
+    : status_(table::ObTableLoadClientStatus::MAX_STATUS), error_code_(0)
+  {
+  }
+  TO_STRING_KV(K_(status), K_(error_code));
+public:
+  table::ObTableLoadClientStatus status_;
+  int32_t error_code_;
 };
 
 } // namespace observer

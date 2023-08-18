@@ -56,7 +56,14 @@ public:
 class ObTableLoadClientExecCtx : public ObTableLoadExecCtx
 {
 public:
-  ObTableLoadClientExecCtx() : allocator_(nullptr), session_info_(nullptr), timeout_ts_(0) {}
+  ObTableLoadClientExecCtx()
+    : allocator_(nullptr),
+      session_info_(nullptr),
+      timeout_ts_(0),
+      heartbeat_timeout_us_(0),
+      last_heartbeat_time_(0)
+  {
+  }
   virtual ~ObTableLoadClientExecCtx() = default;
   common::ObIAllocator *get_allocator() override { return allocator_; }
   sql::ObSQLSessionInfo *get_session_info() override { return session_info_; }
@@ -68,6 +75,8 @@ public:
   common::ObIAllocator *allocator_;
   sql::ObSQLSessionInfo *session_info_;
   int64_t timeout_ts_;
+  int64_t heartbeat_timeout_us_;
+  int64_t last_heartbeat_time_;
 };
 
 } // namespace observer

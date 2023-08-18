@@ -161,5 +161,26 @@ private:
   int set_batch_seq_no(int64_t batch_id, table::ObTableLoadObjRowArray &obj_row_array);
 };
 
+// heart_beat
+class ObTableDirectLoadHeartBeatExecutor
+  : public ObTableDirectLoadRpcExecutor<table::ObTableDirectLoadOperationType::HEART_BEAT>
+{
+  typedef ObTableDirectLoadRpcExecutor<table::ObTableDirectLoadOperationType::HEART_BEAT>
+    ParentType;
+
+public:
+  ObTableDirectLoadHeartBeatExecutor(ObTableDirectLoadExecContext &ctx,
+                                     const table::ObTableDirectLoadRequest &request,
+                                     table::ObTableDirectLoadResult &result)
+    : ParentType(ctx, request, result)
+  {
+  }
+  virtual ~ObTableDirectLoadHeartBeatExecutor() = default;
+
+protected:
+  int check_args() override;
+  int process() override;
+};
+
 } // namespace observer
 } // namespace oceanbase

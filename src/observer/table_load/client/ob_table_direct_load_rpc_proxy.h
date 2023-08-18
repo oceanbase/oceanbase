@@ -26,6 +26,7 @@ class ObTableDirectLoadCommitExecutor;
 class ObTableDirectLoadAbortExecutor;
 class ObTableDirectLoadGetStatusExecutor;
 class ObTableDirectLoadInsertExecutor;
+class ObTableDirectLoadHeartBeatExecutor;
 
 class ObTableDirectLoadRpcProxy
 {
@@ -148,6 +149,11 @@ public:
   // insert
   OB_DEFINE_TABLE_DIRECT_LOAD_RPC(insert, table::ObTableDirectLoadOperationType::INSERT,
                                   ObTableDirectLoadInsertExecutor, ObTableDirectLoadInsertArg);
+
+  // heart_beat
+  OB_DEFINE_TABLE_DIRECT_LOAD_RPC(heartbeat, table::ObTableDirectLoadOperationType::HEART_BEAT,
+                                  ObTableDirectLoadHeartBeatExecutor, ObTableDirectLoadHeartBeatArg,
+                                  ObTableDirectLoadHeartBeatRes);
 
 private:
   obrpc::ObTableRpcProxy &rpc_proxy_;

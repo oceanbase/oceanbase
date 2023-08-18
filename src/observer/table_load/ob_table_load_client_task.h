@@ -33,7 +33,7 @@ public:
   ObTableLoadClientTask();
   ~ObTableLoadClientTask();
   int init(uint64_t tenant_id, uint64_t user_id, uint64_t database_id, uint64_t table_id,
-           int64_t timeout_us);
+           int64_t timeout_us, int64_t heartbeat_timeout_us);
   bool is_inited() const { return is_inited_; }
   int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
   int64_t inc_ref_count() { return ATOMIC_AAF(&ref_count_, 1); }
@@ -70,7 +70,7 @@ private:
                                  sql::ObSQLSessionInfo *&session_info,
                                  sql::ObFreeSessionCtx &free_session_ctx);
   int init_column_names_and_idxs();
-  int init_exec_ctx(int64_t timeout_us);
+  int init_exec_ctx(int64_t timeout_us, int64_t heartbeat_timeout_us);
 public:
   uint64_t tenant_id_;
   uint64_t user_id_;

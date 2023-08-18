@@ -139,8 +139,8 @@ int ObTableDirectLoadBeginExecutor::process()
       if (OB_ISNULL(client_task_ = ObTableLoadClientService::alloc_task())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc client task", KR(ret));
-      } else if (OB_FAIL(
-                   client_task_->init(tenant_id, user_id, database_id, table_id, arg_.timeout_))) {
+      } else if (OB_FAIL(client_task_->init(tenant_id, user_id, database_id, table_id,
+                                            arg_.timeout_, arg_.heartbeat_timeout_))) {
         LOG_WARN("fail to init client task", KR(ret));
       } else {
         // create table ctx
@@ -518,6 +518,36 @@ int ObTableDirectLoadInsertExecutor::set_batch_seq_no(int64_t batch_id,
       row.seq_no_.batch_id_ = batch_id;
       row.seq_no_.batch_seq_no_ = i;
     }
+  }
+  return ret;
+}
+
+//heart_beat
+int ObTableDirectLoadHeartBeatExecutor::check_args()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == arg_.table_id_ || 0 == arg_.task_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(arg_));
+  }
+  return ret;
+}
+
+int ObTableDirectLoadHeartBeatExecutor::process()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("table direct load heart beat", K_(arg));
+  ObTableLoadClientTask *client_task = nullptr;
+  ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
+  if (OB_FAIL(ObTableLoadClientService::get_task(key, client_task))) {
+    LOG_WARN("fail to get client task", KR(ret), K(key));
+  } else {
+    client_task->get_exec_ctx()->last_heartbeat_time_ = ObTimeUtil::current_time();
+    client_task->get_status(res_.status_, res_.error_code_);
+  }
+  if (nullptr != client_task) {
+    ObTableLoadClientService::revert_task(client_task);
+    client_task = nullptr;
   }
   return ret;
 }

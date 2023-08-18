@@ -900,6 +900,7 @@ enum class ObTableDirectLoadOperationType {
   ABORT = 2,
   GET_STATUS = 3,
   INSERT = 4,
+  HEART_BEAT = 5,
   MAX_TYPE
 };
 
