@@ -39,7 +39,7 @@ void ObRetryPolicy::try_packet_retry(ObRetryParam &v) const
   const ObMultiStmtItem &multi_stmt_item = v.ctx_.multi_stmt_item_;
   if (v.force_local_retry_) {
     v.retry_type_ = RETRY_TYPE_LOCAL;
-  } else if (v.ctx_.is_batch_params_execute()) {
+  } else if (multi_stmt_item.is_batched_multi_stmt()) {
     // in batch optimization, can't do packet retry
     v.retry_type_ = RETRY_TYPE_LOCAL;
   } else if (multi_stmt_item.is_part_of_multi_stmt() && multi_stmt_item.get_seq_num() > 0) {
@@ -447,9 +447,12 @@ public:
     if (v.force_local_retry_ || (v.local_retry_times_ <= 1 && !v.result_.is_pl_stmt(v.result_.get_stmt_type()))) {
       v.retry_type_ = RETRY_TYPE_LOCAL;
     } else {
+      const ObMultiStmtItem &multi_stmr_item = v.ctx_.multi_stmt_item_;
       try_packet_retry(v);
-      if (RETRY_TYPE_LOCAL == v.retry_type_ && !v.ctx_.multi_stmt_item_.is_part_of_multi_stmt()) {
-        // rewrite err
+      if (RETRY_TYPE_LOCAL == v.retry_type_ &&
+          !(multi_stmr_item.is_part_of_multi_stmt() || multi_stmr_item.is_batched_multi_stmt())) {
+        // 1. multi_query without batch_optimization must do local_retry
+        // 2. If is multi_query with batch_optimization, must do local_retry
         v.client_ret_ = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
         v.retry_type_ = RETRY_TYPE_NONE;
         v.no_more_test_ = true;
