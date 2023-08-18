@@ -886,6 +886,12 @@ private:
                                  bool for_write,
                                  ObString &result);
   static
+  int set_write_property(ObRawExpr *obj_expr,
+                         ObRawExprFactory &expr_factory,
+                         const ObSQLSessionInfo *session_info,
+                         ObSchemaGetterGuard *schema_guard,
+                         bool for_write);
+  static
   int make_var_from_access(const ObIArray<ObObjAccessIdx> &access_idxs,
                            ObRawExprFactory &expr_factory,
                            const sql::ObSQLSessionInfo *session_info,

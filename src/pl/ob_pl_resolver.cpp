@@ -6664,6 +6664,51 @@ int ObPLResolver::resolve_cparams_expr(const ParseNode *params_node,
   return ret;
 }
 
+int ObPLResolver::set_write_property(ObRawExpr *raw_expr,
+                                     ObRawExprFactory &expr_factory,
+                                     const ObSQLSessionInfo *session_info,
+                                     ObSchemaGetterGuard *schema_guard,
+                                     bool for_write)
+{
+  int ret = OB_SUCCESS;
+  ObObjAccessRawExpr *obj_expr = static_cast<ObObjAccessRawExpr *>(raw_expr);
+  ObString func_name;
+  CK (OB_NOT_NULL(obj_expr));
+  OX (obj_expr->set_write(for_write));
+  OZ (build_obj_access_func_name(obj_expr->get_orig_access_idxs(),
+                                 expr_factory,
+                                 session_info,
+                                 schema_guard,
+                                 for_write,
+                                 func_name));
+  OX (obj_expr->set_func_name(func_name));
+  OZ (obj_expr->formalize(session_info));
+  for (int64_t i = 0; OB_SUCC(ret) && i < obj_expr->get_param_count(); ++i) {
+    if (T_FUN_PL_ASSOCIATIVE_INDEX == obj_expr->get_param_expr(i)->get_expr_type()) {
+      ObPLAssocIndexRawExpr* index_expr = static_cast<ObPLAssocIndexRawExpr*>(obj_expr->get_param_expr(i));
+      CK (OB_NOT_NULL(index_expr));
+      OX (index_expr->set_write(for_write));
+      if (OB_SUCC(ret) && index_expr->get_param_expr(0)->is_obj_access_expr()) {
+        ObObjAccessRawExpr *obj_access_expr = static_cast<ObObjAccessRawExpr*>(index_expr->get_param_expr(0));
+        CK (OB_NOT_NULL(obj_access_expr));
+        if (obj_access_expr->for_write() != for_write) {
+          ObString func_name;
+          OX (obj_access_expr->set_write(for_write));
+          OZ (build_obj_access_func_name(obj_access_expr->get_orig_access_idxs(),
+                                         expr_factory,
+                                         session_info,
+                                         schema_guard,
+                                         for_write,
+                                         func_name));
+          OX (obj_access_expr->set_func_name(func_name));
+          OZ (obj_access_expr->formalize(session_info));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPLResolver::resolve_inout_param(ObRawExpr *param_expr, ObPLRoutineParamMode param_mode, int64_t &out_idx)
 {
   int ret = OB_SUCCESS;
@@ -6705,19 +6750,8 @@ int ObPLResolver::resolve_inout_param(ObRawExpr *param_expr, ObPLRoutineParamMod
       ret = OB_ERR_EXP_NOT_ASSIGNABLE;
       LOG_WARN("expression cannot be used as an assignment", K(ret), K(access_idxs));
     }
-    OX (obj_expr->set_write(true));
     OZ (obj_expr->formalize(&get_resolve_ctx().session_info_));
-    for (int64_t i = 0; OB_SUCC(ret) && i < obj_expr->get_param_count(); ++i) {
-      if (T_FUN_PL_ASSOCIATIVE_INDEX == obj_expr->get_param_expr(i)->get_expr_type()) {
-        ObPLAssocIndexRawExpr* index_expr = static_cast<ObPLAssocIndexRawExpr*>(obj_expr->get_param_expr(i));
-        CK (OB_NOT_NULL(index_expr));
-        OX (index_expr->set_write(true));
-        if (OB_SUCC(ret) && index_expr->get_param_expr(0)->is_obj_access_expr()) {
-          CK (OB_NOT_NULL(static_cast<ObObjAccessRawExpr*>(index_expr->get_param_expr(0))));
-          OX (static_cast<ObObjAccessRawExpr*>(index_expr->get_param_expr(0))->set_write(true));
-        }
-      }
-    }
+    OZ (set_write_property(obj_expr, expr_factory_, &resolve_ctx_.session_info_, &resolve_ctx_.schema_guard_, true));
   } else if (param_expr->is_const_raw_expr()) { // 本地变量做出参
     const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(param_expr);
     const ObPLSymbolTable *table = current_block_->get_symbol_table();
@@ -10049,20 +10083,12 @@ int ObPLResolver::resolve_raw_expr(const ParseNode &node,
   }
 
   if (OB_SUCC(ret) && expr->is_obj_access_expr()) {
-    static_cast<ObObjAccessRawExpr*>(expr)->set_write(for_write);
     OZ(expr->formalize(&ns.get_external_ns()->get_resolve_ctx().session_info_));
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (T_FUN_PL_ASSOCIATIVE_INDEX == expr->get_param_expr(i)->get_expr_type()) {
-        ObPLAssocIndexRawExpr* index_expr = static_cast<ObPLAssocIndexRawExpr*>(expr->get_param_expr(i));
-        CK (OB_NOT_NULL(index_expr));
-        OX (index_expr->set_write(for_write));
-        if (OB_SUCC(ret) && index_expr->get_param_expr(0)->is_obj_access_expr()) {
-          CK (OB_NOT_NULL(static_cast<ObObjAccessRawExpr*>(index_expr->get_param_expr(0))));
-          OX (static_cast<ObObjAccessRawExpr*>(index_expr->get_param_expr(0))->set_write(for_write));
-        }
-
-      }
-    }
+    OZ (set_write_property(expr,
+                           expr_factory,
+                           &ns.get_external_ns()->get_resolve_ctx().session_info_,
+                           &ns.get_external_ns()->get_resolve_ctx().schema_guard_,
+                           for_write));
   }
   return ret;
 }
@@ -12692,7 +12718,7 @@ int ObPLResolver::build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &acc
   ObSqlString buf;
   OZ (buf.append_fmt("%s", "get_attr"));
   if (for_write /*&& ObObjAccessIdx::is_contain_object_type(access_idxs)*/) {
-    OZ (buf.append_fmt("%s", "for_write"));
+    OZ (buf.append_fmt("%s", "_for_write"));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < access_idxs.count(); ++i) {
     if (ObObjAccessIdx::IS_TYPE_METHOD == access_idxs.at(i).access_type_) {
@@ -12716,7 +12742,7 @@ int ObPLResolver::build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &acc
                K(access_idxs), K(ret));
     }
     if (NULL != access_idxs.at(i).get_sysfunc_) {
-      OZ (buf.append_fmt("_get_sysfunc_"), i, access_idxs);
+      OZ (buf.append_fmt("_get_sysfunc_"), K(i), K(access_idxs));
       if (OB_SUCC(ret)) {
         HEAP_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], expr_str_buf) {
           MEMSET(expr_str_buf, 0, sizeof(expr_str_buf));
@@ -12790,29 +12816,13 @@ int ObPLResolver::make_var_from_access(const ObIArray<ObObjAccessIdx> &access_id
     OZ (formalize_expr(*expr, session_info, ns), expr, access_idxs);
   } else {
     ObObjAccessRawExpr *obj_access_ref = NULL;
-    ObString func_name;
 
     OZ (expr_factory.create_raw_expr(T_OBJ_ACCESS_REF, obj_access_ref));
     CK (OB_NOT_NULL(obj_access_ref));
     OZ (obj_access_ref->add_access_indexs(access_idxs), K(access_idxs));
 
-    OZ (build_obj_access_func_name(access_idxs, expr_factory, session_info, schema_guard, for_write, func_name));
     OX (obj_access_ref->set_enum_set_values(access_idxs.at(access_idxs.count() - 1).elem_type_.get_type_info()));
-    OX (obj_access_ref->set_func_name(func_name));
-    OX (obj_access_ref->set_write(for_write));
-    for (int64_t i = 0; OB_SUCC(ret) && i < obj_access_ref->get_param_count(); ++i) {
-      CK (OB_NOT_NULL(obj_access_ref->get_param_expr(i)));
-      if (OB_SUCC(ret)
-          && T_FUN_PL_ASSOCIATIVE_INDEX == obj_access_ref->get_param_expr(i)->get_expr_type()) {
-        ObPLAssocIndexRawExpr* index_expr = static_cast<ObPLAssocIndexRawExpr*>(obj_access_ref->get_param_expr(i));
-        CK (OB_NOT_NULL(index_expr));
-        OX (index_expr->set_write(for_write));
-        if (OB_SUCC(ret) && index_expr->get_param_expr(0)->is_obj_access_expr()) {
-          CK (OB_NOT_NULL(static_cast<ObObjAccessRawExpr*>(index_expr->get_param_expr(0))));
-          OX (static_cast<ObObjAccessRawExpr*>(index_expr->get_param_expr(0))->set_write(for_write));
-        }
-      }
-    }
+    OZ (set_write_property(obj_access_ref, expr_factory, session_info, schema_guard, for_write));
     OZ (obj_access_ref->formalize(session_info));
     OZ (formalize_expr(*obj_access_ref, session_info, ns));
     OX (expr = obj_access_ref);

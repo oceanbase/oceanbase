@@ -1457,10 +1457,10 @@ int ObPL::execute(ObExecContext &ctx,
   int64_t execute_end = ObTimeUtility::current_time();
 #ifndef NDEBUG
     LOG_INFO(">>>>>>>>>Execute Time: ", K(ret),
-      K(routine.get_package_id()), K(routine.get_object_id()), K(execute_end - execute_start));
+      K(routine.get_package_id()), K(routine.get_routine_id()), K(routine.get_package_name()), K(routine.get_function_name()), K(execute_end - execute_start));
 #else
     LOG_DEBUG(">>>>>>>>Execute Time: ", K(ret),
-      K(routine.get_package_id()), K(routine.get_object_id()), K(execute_end - execute_start));
+      K(routine.get_package_id()), K(routine.get_routine_id()), K(routine.get_package_name()), K(routine.get_function_name()), K(execute_end - execute_start));
 #endif
 
   return ret;

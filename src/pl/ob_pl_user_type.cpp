@@ -1,5 +1,4 @@
 /**
- * 
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
@@ -1834,6 +1833,7 @@ int ObCollectionType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, i
       OX (new (table)class(user_type_id_)); \
       OX (collection_allocator = new(collection_allocator)ObPLCollAllocator(table)); \
       OX (table->set_allocator(collection_allocator)); \
+      OX (table->set_count(0)); \
       if (OB_SUCC(ret)) { \
         ObElemDesc elem_desc; \
         elem_desc.set_pl_type(element_type_.get_type()); \
