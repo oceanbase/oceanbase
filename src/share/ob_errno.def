@@ -10,6 +10,13 @@
 // 致命错误[-8000, -9000)，客户端收到8xxx错误，需要关闭SQL连接
 // backup [-9000, -9500)
 // pl [-9500, -10000)
+// OBProxy整体通用错误码，针对公共模块的代码抛出的错误，值域：[-10000, -10100)
+// OBProxy业务错误码，值域：[-10100, -10300)
+// OBSharding错误码，值域：[-10300, -10500)
+// OBKV错误码，值域：[-10500, -10700)
+// 富客户端错误码，值域：[-10700, -10900)
+// SQL扩展区段1：[-11000, -12000)
+
 ////////////////////////////////////////////////////////////////
 //error code -1~-999 are reserved
 //error code -1000~-1999 are reserved for mysql server error, see mysql_errno.h
@@ -2321,6 +2328,12 @@ DEFINE_ORACLE_ERROR(OB_ERR_TABLE_OUT_OF_RANGE, -9750, -1, "HY000", "PL/SQL: inde
 DEFINE_ERROR_EXT(OB_ERR_WRONG_USAGE, -9751, ER_WRONG_USAGE, "HY000", "Incorrect usage", "Incorrect usage of %s", 600, "Incorrect usage", "Incorrect usage of %s");
 DEFINE_PLS_ERROR(OB_ERR_FORALL_ON_REMOTE_TABLE, -9752, -1, "HY000", "FORALL INSERT/UPDATE/DELETE not support on remote tables", 739, "FORALL INSERT/UPDATE/DELETE not support on remote tables");
 DEFINE_ORACLE_ERROR(OB_ERR_SEQUENCE_NOT_DEFINE, -9753, -1, "HY000", "sequence is not yet defined in this session", 8002, "sequence is not yet defined in this session");
+
+////////////////////////////////////////////////////////////////
+//error code for SQL [-11000 ---- -12000)
+////////////////////////////////////////////////////////////////
+DEFINE_ERROR(OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN, -11000, ER_VALUES_CLAUSE_NEED_HAVE_COLUMN, "HY000", "Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement.");
+DEFINE_ERROR(OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES, -11001, ER_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES, "HY000", "A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement.");
 
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code
