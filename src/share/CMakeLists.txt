@@ -492,6 +492,10 @@ if (OB_ERRSIM)
  )
 endif()
 
+ob_set_subtarget(ob_share throttle
+  throttle/ob_throttle_common.cpp
+)
+
 ob_add_new_object_target(ob_share ob_share)
 
 target_compile_options(ob_share PRIVATE -Wshorten-64-to-32)

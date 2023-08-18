@@ -14,6 +14,7 @@
 
 #include "storage/ob_storage_table_guard.h"
 #include "share/allocator/ob_memstore_allocator_mgr.h"
+#include "share/throttle/ob_throttle_common.h"
 #include "storage/memtable/ob_memtable.h"
 #include "storage/ob_i_table.h"
 #include "storage/ob_relative_table.h"
@@ -51,6 +52,12 @@ ObStorageTableGuard::ObStorageTableGuard(
 ObStorageTableGuard::~ObStorageTableGuard()
 {
   bool &need_speed_limit = tl_need_speed_limit();
+  ObThrottleStat &stat = get_throttle_stat();
+  int64_t total_expected_wait_us = 0;
+  int64_t user_timeout_skip_us = 0;
+  int64_t frozen_memtable_skip_us = 0;
+  int64_t replay_frozen_skip_us = 0;
+  int64_t from_user_skip_us = 0;  // does not used now
   if (need_control_mem_ && need_speed_limit) {
     bool need_sleep = true;
     int64_t left_interval = INT64_MAX;
@@ -71,47 +78,49 @@ ObStorageTableGuard::~ObStorageTableGuard()
     int time = 0;
     const int64_t &seq = get_seq();
     int64_t clock = 0;
-    if (store_ctx_.mvcc_acc_ctx_.is_write()) {
-      ObGMemstoreAllocator* memstore_allocator = NULL;
-      if (OB_SUCCESS != (tmp_ret = ObMemstoreAllocatorMgr::get_instance().get_tenant_memstore_allocator(
-          MTL_ID(), memstore_allocator))) {
-      } else if (OB_ISNULL(memstore_allocator)) {
-        LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "get_tenant_mutil_allocator failed", K(store_ctx_.tablet_id_), K(tmp_ret));
-      } else {
-        clock = memstore_allocator->get_clock();
-        while (need_sleep &&
-               !memstore_allocator->check_clock_over_seq(seq) &&
-               (left_interval > 0)) {
-          if (for_replay_) {
-            if(MTL(ObTenantFreezer *)->exist_ls_freezing()) {
-              break;
-            }
-          }
-          int64_t expected_wait_time = memstore_allocator->expected_wait_time(seq);
-          if (expected_wait_time < 0) {
-            LOG_ERROR("expected wait time should not smaller than 0", K(expected_wait_time), K(seq), K(clock), K(left_interval));
-          }
-          if (expected_wait_time <= 0) {
+    ObGMemstoreAllocator* memstore_allocator = NULL;
+    if (OB_SUCCESS != (tmp_ret = ObMemstoreAllocatorMgr::get_instance().get_tenant_memstore_allocator(
+        MTL_ID(), memstore_allocator))) {
+    } else if (OB_ISNULL(memstore_allocator)) {
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "get_tenant_mutil_allocator failed", K(store_ctx_.tablet_id_), K(tmp_ret));
+    } else {
+      clock = memstore_allocator->get_clock();
+      total_expected_wait_us = memstore_allocator->expected_wait_time(seq);
+      user_timeout_skip_us = max(0, total_expected_wait_us - left_interval);
+      frozen_memtable_skip_us = need_sleep ? 0 : max(0, total_expected_wait_us - user_timeout_skip_us);
+      while (need_sleep &&
+             !memstore_allocator->check_clock_over_seq(seq) &&
+             (left_interval > 0)) {
+        if (for_replay_) {
+          if(MTL(ObTenantFreezer *)->exist_ls_freezing()) {
+            replay_frozen_skip_us = max(0, total_expected_wait_us - user_timeout_skip_us - sleep_time);
             break;
           }
-          int64_t sleep_interval = min(min(left_interval, SLEEP_INTERVAL_PER_TIME), expected_wait_time);
-          // don't use ob_usleep, as we are already in the scope of 'wait_guard'
-          if (sleep_interval < 0) {
-            LOG_ERROR("sleep interval should not smaller than 0", K(expected_wait_time), K(seq), K(clock), K(left_interval));
-          }
-          if (sleep_interval > 10 * 60 * 1000 * 1000L) {
-            LOG_WARN("sleep interval greater than 10 minutes, pay attention", K(expected_wait_time), K(seq), K(clock), K(left_interval));
-          }
-          if (sleep_interval <= 0) {
-            break;
-          }
-          ::usleep(sleep_interval);
-          sleep_time += sleep_interval;
-          time++;
-          left_interval -= sleep_interval;
-          has_sleep = true;
-          need_sleep = memstore_allocator->need_do_writing_throttle();
         }
+        int64_t expected_wait_time = memstore_allocator->expected_wait_time(seq);
+        if (expected_wait_time < 0) {
+          LOG_ERROR("expected wait time should not smaller than 0", K(expected_wait_time), K(seq), K(clock), K(left_interval));
+        }
+        if (expected_wait_time <= 0) {
+          break;
+        }
+        int64_t sleep_interval = min(min(left_interval, SLEEP_INTERVAL_PER_TIME), expected_wait_time);
+        // don't use ob_usleep, as we are already in the scope of 'wait_guard'
+        if (sleep_interval < 0) {
+          LOG_ERROR("sleep interval should not smaller than 0", K(expected_wait_time), K(seq), K(clock), K(left_interval));
+        }
+        if (sleep_interval > 10 * 60 * 1000 * 1000L) {
+          LOG_WARN("sleep interval greater than 10 minutes, pay attention", K(expected_wait_time), K(seq), K(clock), K(left_interval));
+        }
+        if (sleep_interval <= 0) {
+          break;
+        }
+        ::usleep(sleep_interval);
+        sleep_time += sleep_interval;
+        time++;
+        left_interval -= sleep_interval;
+        has_sleep = true;
+        need_sleep = memstore_allocator->need_do_writing_throttle();
       }
     }
 
@@ -127,6 +136,19 @@ ObStorageTableGuard::~ObStorageTableGuard()
     }
   }
   reset();
+  stat.update(total_expected_wait_us,
+              from_user_skip_us,
+              user_timeout_skip_us,
+              frozen_memtable_skip_us,
+              replay_frozen_skip_us);
+  const bool last_throttle_status = stat.last_throttle_status;
+  const int64_t last_print_log_time = stat.last_log_timestamp;
+  if (stat.need_log(need_speed_limit)) {
+    LOG_INFO("throttle statics", K(need_speed_limit), K(last_throttle_status), K(last_print_log_time), K(stat));
+    if (!need_speed_limit && last_throttle_status) {
+      stat.reset();
+    }
+  }
 }
 
 int ObStorageTableGuard::refresh_and_protect_table(ObRelativeTable &relative_table)
