@@ -640,7 +640,7 @@ int ObPLObjectValue::set_stored_schema_objs(const DependenyTableStore &dep_table
   return ret;
 }
 
-bool ObPLObjectValue::match_params_info(const Ob2DArray<ObParamInfo,
+bool ObPLObjectValue::match_params_info(const Ob2DArray<ObPlParamInfo,
                                         OB_MALLOC_BIG_BLOCK_SIZE,
                                         ObWrapperAllocator, false> &infos)
 {
@@ -671,7 +671,44 @@ bool ObPLObjectValue::match_params_info(const Ob2DArray<ObParamInfo,
   return is_same;
 }
 
-int ObPLObjectValue::match_param_info(const ObParamInfo &param_info,
+int ObPLObjectValue::match_complex_type_info(const ObPlParamInfo &param_info,
+                                              const ObObjParam &param,
+                                              bool &is_same) const
+{
+  int ret = OB_SUCCESS;
+  is_same = true;
+  if (!param.is_pl_extend()) {
+    is_same = false;
+  } else if (param.get_meta().get_extend_type() != param_info.pl_type_) {
+    is_same = false;
+  } else if (param_info.pl_type_ == pl::PL_NESTED_TABLE_TYPE ||
+             param_info.pl_type_ == pl::PL_ASSOCIATIVE_ARRAY_TYPE ||
+             param_info.pl_type_ == pl::PL_VARRAY_TYPE ||
+             param_info.pl_type_ == pl::PL_RECORD_TYPE) {
+    const pl::ObPLComposite *composite =
+            reinterpret_cast<const pl::ObPLComposite*>(param.get_ext());
+    if (OB_ISNULL(composite)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("nested table is null", K(ret));
+    } else if (param_info.udt_id_ != composite->get_id()) {
+      is_same = false;
+    }
+  } else {
+    ObDataType data_type;
+    if (OB_FAIL(ObSQLUtils::get_ext_obj_data_type(param, data_type))) {
+      LOG_WARN("fail to get obj data_type", K(ret), K(param));
+    } else if (data_type.get_scale() == param_info.scale_ &&
+                data_type.get_obj_type() == param_info.ext_real_type_) {
+      is_same = true;
+    } else {
+      is_same = false;
+    }
+  }
+
+  return ret;
+}
+
+int ObPLObjectValue::match_param_info(const ObPlParamInfo &param_info,
                                               const ObObjParam &param,
                                               bool &is_same) const
 {
@@ -696,13 +733,8 @@ int ObPLObjectValue::match_param_info(const ObParamInfo &param_info,
       ObDataType data_type;
       if (!param_info.flag_.need_to_check_extend_type_) {
         // do nothing
-      } else if (OB_FAIL(ObSQLUtils::get_ext_obj_data_type(param, data_type))) {
-        LOG_WARN("fail to get obj data_type", K(ret), K(param));
-      } else if (data_type.get_scale() == param_info.scale_ &&
-                 data_type.get_obj_type() == param_info.ext_real_type_) {
-        is_same = true;
-      } else {
-        is_same = false;
+      } else if (OB_FAIL(match_complex_type_info(param_info, param, is_same))) {
+        LOG_WARN("fail to match complex type info", K(ret), K(param), K(param_info));
       }
       LOG_DEBUG("ext match param info", K(data_type), K(param_info), K(is_same), K(ret));
     } else if (param_info.is_oracle_empty_string_ && !param.is_null()) { //Plain strings do not match the scheme of the empty string

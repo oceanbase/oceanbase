@@ -29,6 +29,36 @@ namespace oceanbase
 namespace pl
 {
 
+struct ObPlParamInfo : public sql::ObParamInfo
+{
+  ObPlParamInfo() :
+    sql::ObParamInfo(),
+    pl_type_(PL_INVALID_TYPE),
+    udt_id_(OB_INVALID_ID)
+  {}
+  ~ObPlParamInfo() {}
+  void reset()
+  {
+    ObParamInfo::reset();
+    pl_type_ = PL_INVALID_TYPE;
+    udt_id_ = OB_INVALID_ID;
+  }
+
+  TO_STRING_KV(K_(flag),
+               K_(scale),
+               K_(type),
+               K_(ext_real_type),
+               K_(is_oracle_empty_string),
+               K_(col_type),
+               K_(pl_type),
+               K_(udt_id));
+
+  uint8_t pl_type_;
+  uint64_t udt_id_;
+
+  OB_UNIS_VERSION_V(1);
+};
+
 class ObPLCacheObject : public sql::ObILibCacheObject
 {
 public:
@@ -60,7 +90,7 @@ public:
   int init_dependency_table_store(int64_t dependency_table_cnt) { return dependency_tables_.init(dependency_table_cnt); }
   inline sql::DependenyTableStore &get_dependency_table() { return dependency_tables_; }
   int set_params_info(const ParamStore &params);
-  const common::Ob2DArray<sql::ObParamInfo,
+  const common::Ob2DArray<ObPlParamInfo,
                           common::OB_MALLOC_BIG_BLOCK_SIZE,
                           common::ObWrapperAllocator, false> &get_params_info() const { return params_info_; }
 
@@ -84,7 +114,7 @@ protected:
   int64_t sys_schema_version_;
   sql::DependenyTableStore dependency_tables_;
   // stored args information after paramalization
-  common::Ob2DArray<sql::ObParamInfo,
+  common::Ob2DArray<ObPlParamInfo,
                     common::OB_MALLOC_BIG_BLOCK_SIZE,
                     common::ObWrapperAllocator, false> params_info_;
   sql::ObRawExprFactory expr_factory_;

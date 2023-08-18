@@ -19,6 +19,16 @@ namespace oceanbase
 namespace pl
 {
 
+OB_SERIALIZE_MEMBER(ObPlParamInfo,
+                    flag_,
+                    scale_,
+                    type_,
+                    ext_real_type_,
+                    is_oracle_empty_string_,
+                    col_type_,
+                    pl_type_,
+                    udt_id_);
+
 void ObPLCacheObject::reset()
 {
   ObILibCacheObject::reset();
@@ -34,7 +44,7 @@ int ObPLCacheObject::set_params_info(const ParamStore &params)
 {
   int ret = OB_SUCCESS;
   int64_t N = params.count();
-  sql::ObParamInfo param_info;
+  ObPlParamInfo param_info;
   if (N > 0 && OB_FAIL(params_info_.reserve(N))) {
     OB_LOG(WARN, "fail to reserve params info", K(ret));
   }
@@ -51,14 +61,28 @@ int ObPLCacheObject::set_params_info(const ParamStore &params)
                 K(params.at(i).get_type()),
                 K(common::lbt()));
     }
-    //todo:it is for arraybinding check, not pl ext check
-    if (params.at(i).is_ext()) {
+    if (params.at(i).is_pl_extend()) {
       ObDataType data_type;
-      if (OB_FAIL(sql::ObSQLUtils::get_ext_obj_data_type(params.at(i), data_type))) {
-        LOG_WARN("fail to get ext obj data type", K(ret));
+      param_info.pl_type_ = params.at(i).get_meta().get_extend_type();
+      if (param_info.pl_type_ == pl::PL_NESTED_TABLE_TYPE ||
+          param_info.pl_type_ == pl::PL_ASSOCIATIVE_ARRAY_TYPE ||
+          param_info.pl_type_ == pl::PL_VARRAY_TYPE ||
+          param_info.pl_type_ == pl::PL_RECORD_TYPE) {
+        const pl::ObPLComposite *composite =
+                reinterpret_cast<const pl::ObPLComposite*>(params.at(i).get_ext());
+        if (OB_ISNULL(composite)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("nested table is null", K(ret));
+        } else {
+          param_info.udt_id_ = composite->get_id();
+        }
       } else {
-        param_info.ext_real_type_ = data_type.get_obj_type();
-        param_info.scale_ = data_type.get_scale();
+        if (OB_FAIL(sql::ObSQLUtils::get_ext_obj_data_type(params.at(i), data_type))) {
+          LOG_WARN("fail to get ext obj data type", K(ret));
+        } else {
+          param_info.ext_real_type_ = data_type.get_obj_type();
+          param_info.scale_ = data_type.get_scale();
+        }
       }
       LOG_DEBUG("ext params info", K(data_type), K(param_info), K(params.at(i)));
     } else {

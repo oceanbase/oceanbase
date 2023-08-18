@@ -197,11 +197,15 @@ public:
                       ObILibCacheKey *key,
                       const ObILibCacheObject &cache_obj);
 
-  bool match_params_info(const Ob2DArray<ObParamInfo,
+  bool match_params_info(const Ob2DArray<ObPlParamInfo,
                                 OB_MALLOC_BIG_BLOCK_SIZE,
                                 ObWrapperAllocator, false> &infos);
 
-  int match_param_info(const ObParamInfo &param_info,
+  int match_complex_type_info(const ObPlParamInfo &param_info,
+                              const ObObjParam &param,
+                              bool &is_same) const;
+
+  int match_param_info(const ObPlParamInfo &param_info,
                               const ObObjParam &param,
                               bool &is_same) const;
 
@@ -236,7 +240,7 @@ public:
      so schema checks are always performed on classes containing system packages/classes*/
   bool contain_sys_pl_object_;
   common::ObFixedArray<PCVPlSchemaObj *, common::ObIAllocator> stored_schema_objs_;
-  common::Ob2DArray<ObParamInfo, common::OB_MALLOC_BIG_BLOCK_SIZE,
+  common::Ob2DArray<ObPlParamInfo, common::OB_MALLOC_BIG_BLOCK_SIZE,
                     common::ObWrapperAllocator, false> params_info_;
   pl::ObPLCacheObject *pl_routine_obj_;
 private:
