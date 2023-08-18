@@ -155,7 +155,16 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
               MEMCPY(&value_node, set_node->children_[1], sizeof(ParseNode));
             }
             if (OB_SUCC(ret)) {
-              if (OB_FAIL(ObResolverUtils::resolve_const_expr(params_, value_node, var_node.value_expr_, NULL))) {
+#ifndef OB_BUILD_ORACLE_PARSER
+              if (0 == var_node.variable_name_.case_compare("ob_compatibility_mode") &&
+                  0 == strncasecmp(value_node.str_value_, "oracle",
+                                   std::min(static_cast<int32_t>(value_node.str_len_), 6))) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "Not support oracle mode");
+              }
+#endif
+              if (OB_SUCC(ret) &&
+                  OB_FAIL(ObResolverUtils::resolve_const_expr(params_, value_node, var_node.value_expr_, NULL))) {
                 LOG_WARN("resolve variable value failed", K(ret));
               }
             }
