@@ -580,6 +580,7 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
   ObSqlString select_sql;
   bool is_valid = true;
   no_regather_first_part_cnt = 0;
+  ObSEArray<int64_t, 4> monitor_modified_part_ids;
   if (OB_FAIL(ObDbmsStatsUtils::check_table_read_write_valid(tenant_id, is_valid))) {
     LOG_WARN("failed to check table read write valid", K(ret));
   } else if (!is_valid) {
@@ -636,6 +637,10 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
                                                         no_regather_partition_ids,
                                                         no_regather_first_part_cnt))) {
             LOG_WARN("failed to check partition stat state", K(ret));
+          } else if (OB_FAIL(monitor_modified_part_ids.push_back(dst_partition))) {
+            LOG_WARN("failed to push back part ids occurred in monitor_modified", K(ret));
+          } else if (OB_FAIL(add_var_to_array_no_dup(monitor_modified_part_ids, cur_part_id))) {
+            LOG_WARN("failed to push back part ids occurred in monitor_modified", K(ret));
           } else if (ObDbmsStatsUtils::is_subpart_id(partition_infos, dst_partition, dst_part_id)) {
             if (cur_part_id == dst_part_id) {
               cur_inc_mod_count += inc_mod_count;
@@ -682,9 +687,29 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
         }
       }
     }
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_infos.count(); ++i) {
+      int64_t partition_id = partition_infos.at(i).part_id_;
+      int64_t first_part_id = partition_infos.at(i).first_part_id_;
+      // Partitions who not have dml infos are no need to regather stats
+      if (!is_contain(monitor_modified_part_ids, partition_id)) {
+        int64_t part_id = -1;
+        if (OB_FAIL(no_regather_partition_ids.push_back(partition_id))) {
+          LOG_WARN("failed to push back part id that does not have dml info", K(ret));
+        } else if (!ObDbmsStatsUtils::is_subpart_id(partition_infos, partition_id, part_id)) {
+          ++no_regather_first_part_cnt;
+        }
+      }
+      if (first_part_id != OB_INVALID_ID && !is_contain(monitor_modified_part_ids, first_part_id)) {
+        ret = no_regather_partition_ids.push_back(first_part_id);
+      }
+    }
   }
-  LOG_TRACE("succeed to estimate stale partition", K(stale_percent_threshold),
-               K(partition_stat_infos), K(no_regather_partition_ids),K(no_regather_first_part_cnt));
+  LOG_INFO("succeed to estimate stale partition", K(stale_percent_threshold),
+                                                   K(partition_stat_infos),
+                                                   K(partition_infos),
+                                                   K(monitor_modified_part_ids),
+                                                   K(no_regather_partition_ids),
+                                                   K(no_regather_first_part_cnt));
   return ret;
 }
 
