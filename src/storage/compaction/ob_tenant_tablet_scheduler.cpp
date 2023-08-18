@@ -583,28 +583,6 @@ int ObTenantTabletScheduler::schedule_build_bloomfilter(
   return ret;
 }
 
-int ObTenantTabletScheduler::schedule_load_bloomfilter(const blocksstable::MacroBlockId &macro_id)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("The ObTenantTabletScheduler has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!macro_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid macro block id", K(ret), K(macro_id));
-  } else {
-    ObBloomFilterLoadTask task(MTL_ID(), macro_id);
-    if (OB_FAIL(bf_queue_.add_task(task))) {
-      if (OB_EAGAIN == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("Failed to add bloomfilter load task", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTenantTabletScheduler::schedule_merge(const int64_t broadcast_version)
 {
   int ret = OB_SUCCESS;

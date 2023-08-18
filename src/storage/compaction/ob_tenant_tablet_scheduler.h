@@ -258,7 +258,6 @@ public:
       const uint64_t table_id,
       const blocksstable::MacroBlockId &macro_id,
       const int64_t prefix_len);
-  int schedule_load_bloomfilter(const blocksstable::MacroBlockId &macro_id);
   static bool check_tx_table_ready(ObLS &ls, const share::SCN &check_scn);
   static int check_ls_state(ObLS &ls, bool &need_merge);
   static int check_ls_state_in_major(ObLS &ls, bool &need_merge);

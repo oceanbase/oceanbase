@@ -43,9 +43,11 @@ ObBloomFilterBuildTask::ObBloomFilterBuildTask(
       tenant_id_(tenant_id),
       table_id_(table_id),
       macro_id_(macro_id),
+      macro_handle_(),
       prefix_len_(prefix_len),
       allocator_(ObModIds::OB_BLOOM_FILTER)
 {
+  abort_unless(OB_SUCCESS == macro_handle_.set_macro_block_id(macro_id));
 }
 
 ObBloomFilterBuildTask::~ObBloomFilterBuildTask()
@@ -198,96 +200,11 @@ int ObBloomFilterBuildTask::build_bloom_filter()
         ob_free(macro_bare_iter);
       }
     }
+    macro_handle_.reset();
   }
 
   return ret;
 }
-
-/*
- * ObBloomFilterLoadTask
- * */
-ObBloomFilterLoadTask::ObBloomFilterLoadTask(
-    const uint64_t tenant_id,
-    const blocksstable::MacroBlockId &macro_id)
-    : IObDedupTask(T_BLOOMFILTER_LOAD),
-      tenant_id_(tenant_id),
-      macro_id_(macro_id)
-{
-}
-
-ObBloomFilterLoadTask::~ObBloomFilterLoadTask()
-{
-}
-
-int64_t ObBloomFilterLoadTask::hash() const
-{
-  uint64_t hash_val = macro_id_.hash();
-  hash_val = murmurhash(&tenant_id_, sizeof(uint64_t), hash_val);
-  return hash_val;
-}
-
-bool ObBloomFilterLoadTask::operator ==(const IObDedupTask &other) const
-{
-  bool is_equal = false;
-  if (this == &other) {
-    is_equal = true;
-  } else {
-    if (get_type() == other.get_type()) {
-      // it's safe to do this transformation, we have checked the task's type
-      const ObBloomFilterLoadTask &o = static_cast<const ObBloomFilterLoadTask &>(other);
-      is_equal = (o.tenant_id_ == tenant_id_) && (o.macro_id_ == macro_id_);
-    }
-  }
-  return is_equal;
-}
-
-int64_t ObBloomFilterLoadTask::get_deep_copy_size() const
-{
-  return sizeof(*this);
-}
-
-IObDedupTask *ObBloomFilterLoadTask::deep_copy(char *buffer, const int64_t buf_size) const
-{
-  ObBloomFilterLoadTask *task = NULL;
-  if (NULL != buffer && buf_size >= get_deep_copy_size()) {
-    task = new (buffer) ObBloomFilterLoadTask(
-        tenant_id_,
-        macro_id_);
-  }
-  return task;
-}
-
-int ObBloomFilterLoadTask::process()
-{
-  int ret = OB_SUCCESS;
-
-  ObTenantStatEstGuard stat_est_guard(MTL_ID());
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id_) || OB_UNLIKELY(!macro_id_.is_valid())) {
-    ret = OB_INVALID_DATA;
-    LOG_WARN("The bloom filter build task is not valid, ", K_(tenant_id), K_(macro_id), K(ret));
-  } else {
-    ObBloomFilterCacheValue bf_cache_value;
-    ObBloomFilterDataReader bf_macro_reader;
-
-    if (OB_FAIL(bf_macro_reader.read_bloom_filter(macro_id_, bf_cache_value))) {
-      LOG_WARN("Failed to read bloomfilter cache", K_(tenant_id), K_(macro_id), K(ret));
-    } else if (OB_UNLIKELY(!bf_cache_value.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected bloomfilter cache value", K_(tenant_id), K_(macro_id), K(bf_cache_value),
-                K(ret));
-    } else if (OB_FAIL(ObStorageCacheSuite::get_instance().get_bf_cache().put_bloom_filter(
-        tenant_id_, macro_id_, bf_cache_value))) {
-      LOG_WARN("Fail to put value to bloom filter cache",
-          K_(tenant_id), K_(macro_id), K(bf_cache_value), K(ret));
-    } else {
-      LOG_INFO("Success to load bloom filter", K_(tenant_id), K_(macro_id));
-    }
-  }
-
-  return ret;
-}
-
-
 
 } // namespace storage
 } // namespace oceanbase
