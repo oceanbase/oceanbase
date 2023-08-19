@@ -1233,6 +1233,8 @@ public:
 
   static int simple_execute(ObPLExecCtx *ctx, int64_t argc, int64_t *argv);
 
+  static int check_trigger_arg(const ParamStore &params, const ObPLFunction &func);
+
 private:
   common::ObMySQLProxy *sql_proxy_;
   ObPLPackageManager package_manager_;
