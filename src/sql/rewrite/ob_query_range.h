@@ -706,7 +706,7 @@ private:
   int do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart *&res_gt);
   int do_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart *&res_gt);
   int link_or_graphs(ObKeyPartList &storage, ObKeyPart *&out_key_part);
-  int definite_key_part(ObKeyPart *&key_part, ObExecContext &exec_ctx,
+  int definite_key_part(ObKeyPart *key_part, ObExecContext &exec_ctx,
                         const common::ObDataTypeCastParams &dtc_params);
   int replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx,
                            const common::ObDataTypeCastParams &dtc_params);
