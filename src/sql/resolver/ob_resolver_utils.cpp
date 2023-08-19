@@ -4997,6 +4997,11 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
                                        const bool convert_real_type_to_decimal /*false*/)
 {
   int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ob_is_valid_obj_type(static_cast<ObObjType>(type_node.type_)))) {
+    ret = OB_ERR_ILLEGAL_TYPE;
+    SQL_RESV_LOG(WARN, "Unsupport data type of column definiton",
+                        K(ident_name), K((type_node.type_)), K(ret));
+  } else {
   data_type.set_obj_type(static_cast<ObObjType>(type_node.type_));
   int32_t length = type_node.int32_values_[0];
   int16_t precision = type_node.int16_values_[0];
@@ -5430,6 +5435,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
       ret = OB_ERR_ILLEGAL_TYPE;
       SQL_RESV_LOG(WARN, "Unsupport data type of column definiton", K(ident_name), K(data_type), K(ret));
       break;
+  }
   }
   LOG_DEBUG("resolve data type", K(ret), K(data_type), K(lbt()));
   return ret;
