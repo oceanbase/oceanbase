@@ -24,15 +24,13 @@ class ObStorageFileUtil: public ObIStorageUtil
 public:
   ObStorageFileUtil();
   virtual ~ObStorageFileUtil();
-  virtual int open(void* base_info)
+  virtual int open(common::ObObjectStorageInfo *storage_info)
   {
-    UNUSED(base_info);
+    UNUSED(storage_info);
     return OB_SUCCESS;
   }
 
-  virtual void close()
-  {
-  }
+  virtual void close() {}
 
   virtual int is_exist(const common::ObString &uri, bool &exist);
   virtual int get_file_length(const common::ObString &uri, int64_t &file_length);
@@ -41,14 +39,10 @@ public:
   virtual int mkdir(const common::ObString &uri);
   virtual int list_files(const common::ObString &uri, common::ObBaseDirEntryOperator &op);
   virtual int del_dir(const common::ObString &uri);
-  virtual int check_backup_dest_lifecycle(const common::ObString &dir_path, bool &is_set_lifecycle);
   virtual int list_directories(const common::ObString &uri, common::ObBaseDirEntryOperator &op);
   virtual int is_tagging(const common::ObString &uri, bool &is_tagging);
 private:
-  int get_tmp_file_format_timestamp(
-      const char *file_name,
-      bool &is_tmp_file,
-      int64_t &timestamp);
+  int get_tmp_file_format_timestamp(const char *file_name, bool &is_tmp_file, int64_t &timestamp);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageFileUtil);
@@ -59,7 +53,7 @@ class ObStorageFileReader: public ObIStorageReader
 public:
   ObStorageFileReader();
   virtual ~ObStorageFileReader();
-  virtual int open(const common::ObString &uri, void* device_handle = NULL);
+  virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info = NULL);
   virtual int pread(char *buf,const int64_t buf_size, int64_t offset, int64_t &read_size);
   virtual int close();
   virtual int64_t get_length() const { return file_length_; }
@@ -78,7 +72,7 @@ class ObStorageFileBaseWriter: public ObIStorageWriter
 public:
   ObStorageFileBaseWriter();
   virtual ~ObStorageFileBaseWriter();
-  virtual int open(const common::ObString &uri, void* device_handle = NULL) = 0;
+  virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info = NULL) = 0;
   virtual int open(const int flags);
   virtual int write(const char *buf,const int64_t size);
   virtual int pwrite(const char *buf, const int64_t size, const int64_t offset);
@@ -101,7 +95,7 @@ class ObStorageFileWriter: public ObStorageFileBaseWriter
 public:
   ObStorageFileWriter();
   virtual ~ObStorageFileWriter();
-  virtual int open(const common::ObString &uri, void* device_handle = NULL);
+  virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info = NULL);
   virtual int close() override;
 private:
   char real_path_[OB_MAX_URI_LENGTH];
@@ -116,7 +110,7 @@ public:
   ObStorageFileAppender();
   ObStorageFileAppender(StorageOpenMode mode);
   virtual ~ObStorageFileAppender();
-  virtual int open(const common::ObString &uri, void* device_handle = NULL);
+  virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info = NULL);
   virtual int close() override;
   void set_open_mode(StorageOpenMode mode) {open_mode_ = mode;}
 private:

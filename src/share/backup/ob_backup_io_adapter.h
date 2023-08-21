@@ -54,9 +54,6 @@ public:
   int is_empty_directory(const common::ObString &uri, 
       const share::ObBackupStorageInfo *storage_info, 
       bool &is_empty_directory);
-  int check_backup_dest_lifecycle(const common::ObString &path,  
-      const share::ObBackupStorageInfo *storage_info,
-      bool &is_set_lifecycle);
   int open_with_access_type(ObIODevice*& device_handle, ObIOFd &fd, 
               const share::ObBackupStorageInfo *storage_info, const common::ObString &uri,
               ObStorageAccessType access_type);

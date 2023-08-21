@@ -86,16 +86,20 @@ int ObBackupIoAdapter::get_and_init_device(ObIODevice*& dev_handle,
                                            const common::ObString &storage_type_prefix)
 {
   int ret = OB_SUCCESS;
-  char storage_info_str[share::OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
+  char storage_info_str[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
   ObIODOpts opts;
   ObIODOpt opt; //only one para
   opts.opts_ = &(opt);
   opts.opt_cnt_ = 1;
   opt.key_ = "storage_info";
+  common::ObObjectStorageInfo storage_info_base;
   if (NULL == storage_info) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "storage info is null", K(ret)); 
-  } else if (OB_FAIL(storage_info->get_storage_info_str(storage_info_str, sizeof(storage_info_str), false/*no need encrypt*/))) {
+  } else if (OB_FAIL(storage_info_base.assign(*storage_info))) {
+    OB_LOG(WARN, "fail to assign storage info base!", K(ret), KP(storage_info));
+  } else if (OB_FAIL(storage_info_base.get_storage_info_str(storage_info_str, sizeof(storage_info_str)))) {
+    // no need encrypt
     OB_LOG(WARN, "fail to get storage info str!", K(ret), KP(storage_info));
   } else if (FALSE_IT(opt.value_.value_str = storage_info_str)) {
   } else if (OB_FAIL(ObDeviceManager::get_instance().get_device(storage_info_str, storage_type_prefix, dev_handle))) {
@@ -597,34 +601,6 @@ int ObBackupIoAdapter::is_empty_directory(const common::ObString &uri,
       ret = OB_SUCCESS;
     } else {
       OB_LOG(WARN, "fail to scan dir!", K(ret), K(uri));
-    }
-  }
-  release_device(device_handle);
-  return ret;
-}
-
-int ObBackupIoAdapter::check_backup_dest_lifecycle(const common::ObString &path,  
-                      const share::ObBackupStorageInfo *storage_info,
-                      bool &is_set_lifecycle)
-{
-  int ret = OB_SUCCESS;
-  is_set_lifecycle = false;
-  ObIODevice* device_handle = NULL; 
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, path))) {
-    OB_LOG(WARN, "fail to get device!", K(ret));
-  } else {
-    ObIODOpts opts;
-    ObIODOpt opt[2];
-    
-    opts.opts_ = opt;
-    opts.opt_cnt_ = 2;
-    opt[0].set("get_bucket_lifecycle", false);
-    opt[1].set("path", path.ptr());
-    
-    if (OB_FAIL(device_handle->get_config(opts))) {
-      OB_LOG(WARN, "fail to get config for backup lifecycle!", K(ret), K(path), KP(storage_info));
-    } else {
-      is_set_lifecycle = opt[0].value_.value_bool;
     }
   }
   release_device(device_handle);

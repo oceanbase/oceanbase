@@ -55,14 +55,7 @@ const int64_t OB_BACKUP_DEFAULT_PG_NUM = 10000;
 const int64_t OB_MAX_BACKUP_DEST_LENGTH = 2048;
 const int64_t OB_MAX_RESTORE_DEST_LENGTH = OB_MAX_BACKUP_DEST_LENGTH * 10;
 const int64_t OB_MAX_BACKUP_PATH_LENGTH = 1024;
-const int64_t OB_MAX_BACKUP_STORAGE_INFO_LENGTH = 1536;
-const int64_t OB_MAX_BACKUP_ENDPOINT_LENGTH = 256;
-const int64_t OB_MAX_BACKUP_ACCESSID_LENGTH = 256;
-const int64_t OB_MAX_BACKUP_ACCESSKEY_LENGTH = 256;
-const int64_t OB_MAX_BACKUP_ENCRYPTKEY_LENGTH = OB_MAX_BACKUP_ACCESSKEY_LENGTH + 32;
-const int64_t OB_MAX_BACKUP_SERIALIZEKEY_LENGTH = OB_MAX_BACKUP_ENCRYPTKEY_LENGTH * 2;
 const int64_t OB_MAX_BACKUP_AUTHORIZATION_LENGTH = 1024;
-const int64_t OB_MAX_BACKUP_EXTENSION_LENGTH = 512;
 const int64_t OB_MAX_BACKUP_CHECK_FILE_LENGTH = OB_MAX_BACKUP_PATH_LENGTH;
 const int64_t OB_MAX_BACKUP_CHECK_FILE_NAME_LENGTH = 256;
 const int64_t OB_MAX_KEPT_LOG_ARCHIVE_BACKUP_ROUND = 10 * 10000; // 10w
@@ -357,9 +350,6 @@ const char *const OB_RESTORE_PREVIEW_BACKUP_CLUSTER_NAME_SESSION_STR = "__ob_res
 const char *const OB_RESTORE_PREVIEW_BACKUP_CLUSTER_ID_SESSION_STR = "__ob_restore_preview_backup_cluster_id__";
 const char *const MULTI_BACKUP_SET_PATH_PREFIX = "BACKUPSET";
 const char *const MULTI_BACKUP_PIECE_PATH_PREFIX = "BACKUPPIECE";
-
-const char *const ACCESS_ID = "access_id=";
-const char *const ACCESS_KEY = "access_key=";
 
 const char *const ENCRYPT_KEY = "encrypt_key=";
 const char *const OB_STR_INITIATOR_JOB_ID = "initiator_job_id";
@@ -855,47 +845,29 @@ struct ObNonFrozenBackupPieceInfo final
   DECLARE_TO_STRING;
 };
 
-class ObBackupStorageInfo final
+class ObBackupStorageInfo final : public common::ObObjectStorageInfo
 {
 public:
-  ObBackupStorageInfo();
-  ~ObBackupStorageInfo();
-  int set(
-      const common::ObStorageType device_type,
-      const char *storage_info);
+  using common::ObObjectStorageInfo::set;
+
+public:
+  ObBackupStorageInfo() {}
+  virtual ~ObBackupStorageInfo();
+
   int set(
       const common::ObStorageType device_type,
       const char *endpoint,
       const char *authorization,
       const char *extension);
-  int set(
-      const char *uri,
-      const char *storage_info);
-  int get_storage_info_str(char *storage_info, int64_t info_len, const bool need_encrypt) const;
-  int get_authorization_info(char *authorization, int64_t length);
-  bool is_valid() const;
-  void reset();
-  bool operator ==(const ObBackupStorageInfo &storage_info) const;
-  bool operator !=(const ObBackupStorageInfo &storage_info) const;
-  const char *get_type_str() const;
-  int64_t hash() const;
-  int assign(const ObBackupStorageInfo &storage_info);
-  TO_STRING_KV(K_(endpoint), K_(access_id), K_(extension), "type", get_type_str());
+  int get_authorization_info(char *authorization, const int64_t length) const;
+
 private:
-  int set_storage_info_field_(const char *info, char *field, const int64_t length);
 #ifdef OB_BUILD_TDE_SECURITY
-  int encrypt_access_key_(char *encrypt_key, int64_t length) const;
+  virtual int get_access_key_(char *key_buf, const int64_t key_buf_len) const override;
+  virtual int parse_storage_info_(const char *storage_info, bool &has_appid) override;
+  int encrypt_access_key_(char *encrypt_key, const int64_t length) const;
   int decrypt_access_key_(const char *buf);
 #endif
-  int set_access_key_(const char *buf, const bool need_decrypt);
-  int parse_authorization_(const char *authorization);
-  int check_delete_mode_(const char *delete_mode);
-public:
-  common::ObStorageType device_type_;
-  char endpoint_[OB_MAX_BACKUP_ENDPOINT_LENGTH];
-  char access_id_[OB_MAX_BACKUP_ACCESSID_LENGTH];
-  char access_key_[OB_MAX_BACKUP_ACCESSKEY_LENGTH];
-  char extension_[OB_MAX_BACKUP_EXTENSION_LENGTH];
 };
 
 class ObBackupDest final

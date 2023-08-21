@@ -124,14 +124,14 @@ public:
                         bool &is_file_exist, char *&remote_md5, int64_t &file_length);
   void print_oss_info(aos_table_t *resp_headers, aos_status_s *aos_ret);
 
-  int init_with_oss_account(void* account);
+  int init_with_storage_info(common::ObObjectStorageInfo *storage_info);
   int init_oss_endpoint();
 
   aos_pool_t *aos_pool_;
   oss_request_options_t *oss_option_;
   char oss_endpoint_[MAX_OSS_ENDPOINT_LENGTH];
   bool is_inited_;
-  ObOssAccount* oss_account_;
+  ObOssAccount oss_account_;
   
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssBase);
 };
@@ -141,7 +141,7 @@ class ObStorageOssWriter : public ObStorageOssBase, public ObIStorageWriter
 public:
   ObStorageOssWriter();
   ~ObStorageOssWriter();
-  int open(const common::ObString &uri, void* oss_base);
+  int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
   int write(const char *buf,const int64_t size);
   int pwrite(const char *buf, const int64_t size, const int64_t offset);
   int close();
@@ -162,7 +162,7 @@ class ObStorageOssMultiPartWriter: public ObStorageOssBase, public ObIStorageWri
 public:
   ObStorageOssMultiPartWriter();
   virtual ~ObStorageOssMultiPartWriter();
-  int open(const common::ObString &uri, void* oss_base);
+  int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
   int write(const char *buf,const int64_t size);
   int pwrite(const char *buf, const int64_t size, const int64_t offset);
   int close();
@@ -196,7 +196,7 @@ class ObStorageOssReader: public ObStorageOssBase, public ObIStorageReader
 public:
   ObStorageOssReader();
   virtual ~ObStorageOssReader();
-  int open(const common::ObString &uri, void* oss_base);
+  int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
   int pread(char *buf,const int64_t buf_size, int64_t offset, int64_t &read_size);
   int close();
   int64_t get_length() const { return file_length_; }
@@ -217,7 +217,7 @@ class ObStorageOssUtil: public ObIStorageUtil
 public:
   ObStorageOssUtil();
   virtual ~ObStorageOssUtil();
-  virtual int open(void* account);
+  virtual int open(common::ObObjectStorageInfo *storage_info);
   virtual void close();
   virtual int is_exist(const common::ObString &uri, bool &exist);
   virtual int get_file_length(const common::ObString &uri, int64_t &file_length);
@@ -229,8 +229,6 @@ public:
   virtual int del_file(const common::ObString &uri);
   virtual int list_files(const common::ObString &dir_path, common::ObBaseDirEntryOperator &op);
   virtual int del_dir(const common::ObString &uri);
-  virtual int check_backup_dest_lifecycle(const common::ObString &path, 
-                                          bool &is_set_lifecycle);
   virtual int list_directories(const common::ObString &uri, common::ObBaseDirEntryOperator &op);
   virtual int is_tagging(const common::ObString &uri, bool &is_tagging);
 private:
@@ -246,7 +244,7 @@ private:
       const common::ObString &bucket_str,
       const common::ObString &object_str);
   bool is_opened_;
-  ObOssAccount* oss_account_;
+  common::ObObjectStorageInfo *storage_info_;
 };
 
 class ObStorageOssAppendWriter : public ObStorageOssBase, public ObIStorageWriter
@@ -256,7 +254,7 @@ public:
   virtual ~ObStorageOssAppendWriter();
 
 public:
-  int open(const common::ObString &uri, void* oss_base);
+  int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
   int write(const char *buf, const int64_t size);
   int pwrite(const char *buf, const int64_t size, const int64_t offset);
   int close();

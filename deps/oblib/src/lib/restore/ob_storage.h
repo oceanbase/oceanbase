@@ -15,6 +15,7 @@
 #include "ob_i_storage.h"
 #include "ob_storage_file.h"
 #include "ob_storage_oss_base.h"
+#include "ob_storage_cos_base.h"
 
 namespace oceanbase
 {
@@ -112,7 +113,7 @@ public:
   // When physical backup lease is timeout, retry won't stop until 300s.
   explicit ObStorageUtil();
   virtual ~ObStorageUtil() {}
-  int open(void* obj_base, int device_type);
+  int open(common::ObObjectStorageInfo *storage_info);
   void close();
   int is_exist(const common::ObString &uri, bool &exist);
   int get_file_length(const common::ObString &uri, int64_t &file_length);
@@ -121,18 +122,18 @@ public:
   int write_single_file(const common::ObString &uri, const char *buf, const int64_t size);
   int list_files(const common::ObString &dir_path, common::ObBaseDirEntryOperator &op);
   int del_dir(const common::ObString &uri);
-  int check_backup_dest_lifecycle(const common::ObString &path, bool &is_set_lifecycle);
   int list_directories(const common::ObString &dir_path, common::ObBaseDirEntryOperator &op);
   int is_tagging(const common::ObString &uri, bool &is_tagging);
 
 private:
-//we does not use obj_base_info_ to judge init, since for nfs&local, obj_base_info_ is null
+  // we does not use storage_info_ to judge init, since for nfs&local, storage_info_ is null
   bool is_init() {return init_state;}
 
   ObStorageFileUtil file_util_;
   ObStorageOssUtil oss_util_;
+  ObStorageCosUtil cos_util_;
   ObIStorageUtil* util_;
-  void* obj_base_info_;
+  common::ObObjectStorageInfo* storage_info_;
   bool init_state;
   DISALLOW_COPY_AND_ASSIGN(ObStorageUtil);
 };
@@ -142,7 +143,7 @@ class ObStorageReader
 public:
   ObStorageReader();
   virtual ~ObStorageReader();
-  int open(const common::ObString &uri, void* obj_base_info);
+  int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
   int pread(char *buf,const int64_t buf_size, int64_t offset, int64_t &read_size);
   int close();
   int64_t get_length() const { return file_length_; }
@@ -151,6 +152,7 @@ private:
   ObIStorageReader *reader_;
   ObStorageFileReader file_reader_;
   ObStorageOssReader oss_reader_;
+  ObStorageCosReader cos_reader_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   DISALLOW_COPY_AND_ASSIGN(ObStorageReader);
@@ -161,13 +163,14 @@ class ObStorageWriter
 public:
   ObStorageWriter();
   virtual ~ObStorageWriter();
-  int open(const common::ObString &uri, void* obj_base_info);
+  int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
   int write(const char *buf,const int64_t size);
   int close();
 private:
   ObIStorageWriter *writer_;
   ObStorageFileWriter file_writer_;
   ObStorageOssWriter oss_writer_;
+  ObStorageCosWriter cos_writer_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   DISALLOW_COPY_AND_ASSIGN(ObStorageWriter);
@@ -186,7 +189,7 @@ public:
     ObStorageObjectVersionParam version_param_;
   };
 
-  int open(const common::ObString &uri, void* obj_base_info, const AppenderParam &param);
+  int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
   int write(const char *buf,const int64_t size);
   int pwrite(const char *buf, const int64_t size, const int64_t offset);
   int close();
@@ -198,10 +201,11 @@ private:
   ObIStorageWriter *appender_;
   ObStorageFileAppender file_appender_;
   ObStorageOssAppendWriter oss_appender_;
+  ObStorageCosAppendWriter cos_appender_;
   int64_t start_ts_;
   bool is_opened_;
   char uri_[OB_MAX_URI_LENGTH];
-  void *storage_info_;
+  common::ObObjectStorageInfo storage_info_;
   ObArenaAllocator allocator_;
 
   int repeatable_pwrite_(const char *buf, const int64_t size, const int64_t offset);

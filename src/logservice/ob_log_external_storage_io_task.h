@@ -162,7 +162,7 @@ protected:
   ObString uri_ob_str_;
   char uri_str_[OB_MAX_URI_LENGTH];
   ObString storage_info_ob_str_;
-  char storage_info_str_[share::OB_MAX_BACKUP_STORAGE_INFO_LENGTH];
+  char storage_info_str_[common::OB_MAX_BACKUP_STORAGE_INFO_LENGTH];
   int64_t generate_ts_;
   int64_t do_task_ts_;
   RunningStatus *running_status_;

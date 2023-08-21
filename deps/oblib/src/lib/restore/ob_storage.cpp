@@ -56,6 +56,7 @@ int validate_uri_type(const common::ObString &uri)
 {
   int ret = OB_SUCCESS;
   if (!uri.prefix_match(OB_OSS_PREFIX) &&
+      !uri.prefix_match(OB_COS_PREFIX) &&
       !uri.prefix_match(OB_FILE_PREFIX)) {
     ret = OB_INVALID_BACKUP_DEST;
     STORAGE_LOG(ERROR, "invalid backup uri", K(ret), K(uri));
@@ -70,6 +71,8 @@ int get_storage_type_from_path(const common::ObString &uri, ObStorageType &type)
 
   if (uri.prefix_match(OB_OSS_PREFIX)) {
     type = OB_STORAGE_OSS;
+  } else if (uri.prefix_match(OB_COS_PREFIX)) {
+    type = OB_STORAGE_COS;
   } else if (uri.prefix_match(OB_FILE_PREFIX)) {
     type = OB_STORAGE_FILE;
   } else {
@@ -91,7 +94,7 @@ const char *get_storage_type_str(const ObStorageType &type)
 
 bool is_io_error(const int result)
 {
-  return OB_IO_ERROR == result || OB_OSS_ERROR == result;
+  return OB_IO_ERROR == result || OB_OSS_ERROR == result || OB_COS_ERROR == result;
 }
 
 int get_storage_type_from_name(const char *type_str, ObStorageType &type)
@@ -187,21 +190,30 @@ ObExternalIOCounterGuard::~ObExternalIOCounterGuard()
 ObStorageUtil::ObStorageUtil()
   : file_util_(),
     oss_util_(),
+    cos_util_(),
     util_(NULL),
-    obj_base_info_(NULL),
+    storage_info_(NULL),
     init_state(false)
 {
 }
 
 /*this fun just like the get_util*/
-int ObStorageUtil::open(void* obj_base, int device_type)
+int ObStorageUtil::open(common::ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
+  ObStorageType device_type = OB_STORAGE_MAX_TYPE;
+
   if (is_init()) {
     ret = OB_INIT_TWICE;
-    STORAGE_LOG(WARN, "double init the storage util", K(ret), K(device_type));
+    STORAGE_LOG(WARN, "double init the storage util", K(ret));
+  } else if (OB_ISNULL(storage_info) || OB_UNLIKELY(!storage_info->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), KP(storage_info));
+  } else if (OB_FALSE_IT(device_type = storage_info->get_type())) {
   } else if (OB_STORAGE_OSS == device_type) {
     util_ = &oss_util_;
+  } else if (OB_STORAGE_COS == device_type) {
+    util_ = &cos_util_;
   } else if (OB_STORAGE_FILE == device_type) {
     util_ = &file_util_;
   } else {
@@ -210,11 +222,11 @@ int ObStorageUtil::open(void* obj_base, int device_type)
   }
 
   if (OB_SUCC(ret) && NULL != util_) {
-    if (OB_FAIL(util_->open(obj_base))) {
+    if (OB_FAIL(util_->open(storage_info))) {
       STORAGE_LOG(WARN, "failed to open util", K(ret), K(device_type));
       util_ = NULL;
     } else {
-      obj_base_info_ = obj_base;
+      storage_info_ = storage_info;
       init_state = true;
     }
   }
@@ -226,7 +238,7 @@ void ObStorageUtil::close()
   if (NULL != util_) {
     util_->close();
     util_ = NULL;
-    obj_base_info_ = NULL;
+    storage_info_ = NULL;
     init_state = false;
   }
 }
@@ -462,37 +474,6 @@ int ObStorageUtil::del_dir(const common::ObString &uri)
   return ret;
 }
 
-int ObStorageUtil::check_backup_dest_lifecycle(
-    const common::ObString &path,
-    bool &is_set_lifecycle)
-{
-  int ret = OB_NOT_SUPPORTED;
-  UNUSED(path);
-  UNUSED(is_set_lifecycle);
-  // Forbidden check backup dest lifecycle, because oss has bug which make observer core
-  /*
-  const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil *util = NULL;
-  is_set_lifecycle = false;
-
-  if (OB_FAIL(ret)) {
-  } else if (!is_init()) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "util is not inited", K(ret), K(path));
-  } else if (path.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "delete tmp files get invalid argument", K(ret), K(path));
-  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
-    ret = OB_BACKUP_IO_PROHIBITED;
-    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(path));
-  } else if (OB_FAIL(util_->check_backup_dest_lifecycle(path, is_set_lifecycle))) {
-    STORAGE_LOG(WARN, "failed to delete tmp files", K(ret), K(path));
-  }
-  print_access_storage_log("check_bucket_lifecycle", path, start_ts, 0);
-  */
-  return ret;
-}
-
 int ObStorageUtil::list_directories(const common::ObString &uri, common::ObBaseDirEntryOperator &op)
 {
   int ret = OB_SUCCESS;
@@ -540,6 +521,7 @@ ObStorageReader::ObStorageReader()
     reader_(NULL),
     file_reader_(),
     oss_reader_(),
+    cos_reader_(),
     start_ts_(0)
 {
   uri_[0] = '\0';
@@ -552,7 +534,7 @@ ObStorageReader::~ObStorageReader()
   }
 }
 
-int ObStorageReader::open(const common::ObString &uri, void* obj_base_info)
+int ObStorageReader::open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -575,6 +557,8 @@ int ObStorageReader::open(const common::ObString &uri, void* obj_base_info)
     STORAGE_LOG(WARN, "failed to get type", K(ret), K(uri));
   } else if (OB_STORAGE_OSS == type) {
     reader_ = &oss_reader_;
+  } else if (OB_STORAGE_COS == type) {
+    reader_ = &cos_reader_;
   } else if (OB_STORAGE_FILE == type) {
     reader_ = &file_reader_;
   } else {
@@ -586,7 +570,7 @@ int ObStorageReader::open(const common::ObString &uri, void* obj_base_info)
     if (OB_ISNULL(reader_)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "reader_ is null", K(ret), K(uri));
-    } else if (OB_FAIL(reader_->open(uri, obj_base_info))) {
+    } else if (OB_FAIL(reader_->open(uri, storage_info))) {
       STORAGE_LOG(WARN, "failed to open reader", K(ret), K(uri));
     } else {
       file_length_ = reader_->get_length();
@@ -661,6 +645,7 @@ ObStorageWriter::ObStorageWriter()
   : writer_(NULL),
     file_writer_(),
     oss_writer_(),
+    cos_writer_(),
     start_ts_(0)
 {
     uri_[0] = '\0';
@@ -673,7 +658,7 @@ ObStorageWriter::~ObStorageWriter()
   }
 }
 
-int ObStorageWriter::open(const common::ObString &uri, void* obj_base_info)
+int ObStorageWriter::open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -696,6 +681,8 @@ int ObStorageWriter::open(const common::ObString &uri, void* obj_base_info)
     STORAGE_LOG(WARN, "failed to get type", K(ret), K(uri));
   } else if (OB_STORAGE_OSS == type) {
     writer_ = &oss_writer_;
+  } else if (OB_STORAGE_COS == type) {
+    writer_ = &cos_writer_;
   } else if (OB_STORAGE_FILE == type) {
     writer_ = &file_writer_;
   } else {
@@ -707,7 +694,7 @@ int ObStorageWriter::open(const common::ObString &uri, void* obj_base_info)
     if (OB_ISNULL(writer_)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "writer_ is null", K(ret), K(uri));
-    } else if (OB_FAIL(writer_->open(uri, obj_base_info))) {
+    } else if (OB_FAIL(writer_->open(uri, storage_info))) {
       STORAGE_LOG(WARN, "failed to open writer", K(ret), K(uri));
     }
   }
@@ -774,9 +761,10 @@ ObStorageAppender::ObStorageAppender()
   : appender_(NULL),
     file_appender_(),
     oss_appender_(),
+    cos_appender_(),
     start_ts_(0),
     is_opened_(false),
-    storage_info_(NULL)
+    storage_info_()
 {
     uri_[0] = '\0';
 }
@@ -785,9 +773,10 @@ ObStorageAppender::ObStorageAppender(StorageOpenMode mode)
   : appender_(NULL),
     file_appender_(mode),
     oss_appender_(),
+    cos_appender_(),
     start_ts_(0),
     is_opened_(false),
-    storage_info_(NULL)
+    storage_info_()
 {
     uri_[0] = '\0';
 }
@@ -801,8 +790,7 @@ ObStorageAppender::~ObStorageAppender()
 
 int ObStorageAppender::open(
     const common::ObString &uri, 
-    void* obj_base_info, 
-	const AppenderParam &param)
+    common::ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -819,17 +807,20 @@ int ObStorageAppender::open(
   } else if (NULL != appender_) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "cannot open twice", K(ret), K(uri));
+  } else if (OB_UNLIKELY(uri.empty()) || OB_ISNULL(storage_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(uri), KP(storage_info));
   } else if (OB_FAIL(databuff_printf(uri_, sizeof(uri_), "%.*s", uri.length(), uri.ptr()))) {
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (OB_FAIL(get_storage_type_from_path(uri, type))) {
     STORAGE_LOG(WARN, "failed to get type", K(ret), K(uri));
-  } else if (OB_STORAGE_OSS == type) {
-    appender_ = &oss_appender_;
-    if (OB_ISNULL(storage_info_ = allocator_.alloc(sizeof(ObOssAccount)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(WARN, "failed to alloc memory", K(ret), K(sizeof(ObOssAccount)));
-    } else {
-      MEMCPY(storage_info_, obj_base_info, sizeof(ObOssAccount));
+  } else if (OB_STORAGE_OSS == type || OB_STORAGE_COS == type) {
+    if (OB_FAIL(storage_info_.assign(*storage_info))) {
+      STORAGE_LOG(WARN, "failed to copy storage info", K(ret));
+    } else if (OB_STORAGE_OSS == type) {
+      appender_ = &oss_appender_;
+    } else if (OB_STORAGE_COS == type) {
+      appender_ = &cos_appender_;
     }
   } else if (OB_STORAGE_FILE == type) {
     appender_ = &file_appender_;
@@ -842,7 +833,7 @@ int ObStorageAppender::open(
     if (OB_ISNULL(appender_)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "appender_ is null", K(ret), K(uri));
-    } else if (OB_FAIL(appender_->open(uri, obj_base_info))) {
+    } else if (OB_FAIL(appender_->open(uri, storage_info))) {
       STORAGE_LOG(WARN, "failed to open writer", K(ret), K(uri));
     } else {
       is_opened_ = true;
@@ -900,7 +891,7 @@ int ObStorageAppender::repeatable_pwrite_(const char *buf, const int64_t size, c
   if (OB_ISNULL(appender_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not opened", K(ret));
-  } else if (OB_FAIL(reader.open(uri_, storage_info_))) {
+  } else if (OB_FAIL(reader.open(uri_, &storage_info_))) {
     STORAGE_LOG(WARN, "failed to open reader", K(ret));
   } else if (reader.get_length() <= offset) {
     // This situation also has concurrency issues.
@@ -982,7 +973,7 @@ int ObStorageAppender::close()
     print_access_storage_log("storage appender_", uri_, start_ts_, appender_->get_length());
   }
 
-  if (OB_ISNULL(appender_) || !is_opened_) {
+  if (OB_ISNULL(appender_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not opened", K(ret));
   } else if (OB_FAIL(appender_->close())) {

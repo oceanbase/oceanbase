@@ -793,7 +793,8 @@ bool ObArchiveSender::is_retry_ret_code_(const int ret_code) const
   return is_io_error(ret_code)
     || OB_ALLOCATE_MEMORY_FAILED == ret_code
     || OB_BACKUP_DEVICE_OUT_OF_SPACE == ret_code
-    || OB_BACKUP_PWRITE_OFFSET_NOT_MATCH == ret_code;
+    || OB_BACKUP_PWRITE_OFFSET_NOT_MATCH == ret_code
+    || OB_IO_LIMIT == ret_code;
 }
 
 bool ObArchiveSender::is_ignore_ret_code_(const int ret_code) const

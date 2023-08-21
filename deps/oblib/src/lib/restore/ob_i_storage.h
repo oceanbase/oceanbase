@@ -17,6 +17,7 @@
 #include "lib/string/ob_string.h"
 #include "lib/container/ob_array.h"
 #include "common/storage/ob_device_common.h"
+#include "ob_storage_info.h"
 
 namespace oceanbase
 {
@@ -39,7 +40,7 @@ public:
     TAGGING = 2,
     MAX
   };
-  virtual int open(void* base_info) = 0;
+  virtual int open(common::ObObjectStorageInfo *storage_info) = 0;
   virtual void close() = 0;
   virtual int is_exist(const common::ObString &uri, bool &exist) = 0;
   virtual int get_file_length(const common::ObString &uri, int64_t &file_length) = 0;
@@ -48,7 +49,6 @@ public:
   virtual int mkdir(const common::ObString &uri) = 0;
   virtual int list_files(const common::ObString &dir_path, common::ObBaseDirEntryOperator &op) = 0;
   virtual int del_dir(const common::ObString &uri) = 0;
-  virtual int check_backup_dest_lifecycle(const common::ObString &path, bool &is_set_lifecycle) = 0;
   virtual int list_directories(const common::ObString &dir_path, common::ObBaseDirEntryOperator &op) = 0;
   virtual int is_tagging(const common::ObString &uri, bool &is_tagging) = 0;
 };
@@ -56,7 +56,7 @@ public:
 class ObIStorageReader
 {
 public:
-  virtual int open(const common::ObString &uri, void* handle) = 0;
+  virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info) = 0;
   virtual int pread(char *buf,const int64_t buf_size, int64_t offset, int64_t &read_size) = 0;
   virtual int close() = 0;
   virtual int64_t get_length() const = 0;
@@ -66,7 +66,7 @@ public:
 class ObIStorageWriter
 {
 public:
-  virtual int open(const common::ObString &uri, void* handle) = 0;
+  virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info) = 0;
   virtual int write(const char *buf,const int64_t size) = 0;
   virtual int pwrite(const char *buf, const int64_t size, const int64_t offset) = 0;
   virtual int close() = 0;

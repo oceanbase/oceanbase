@@ -48,6 +48,8 @@ int ObDeviceManager::init_devices_env()
       OB_LOG(WARN, "Fail to init allocator ", K(ret));
     } else if (OB_FAIL(init_oss_env())) {
       OB_LOG(WARN, "fail to init oss storage", K(ret));
+    } else if (OB_FAIL(init_cos_env())) {
+      OB_LOG(WARN, "fail to init cos storage", K(ret));
     }
   }
 
@@ -81,6 +83,7 @@ void ObDeviceManager::destroy()
     }
     allocator_.reset();
     fin_oss_env();
+    fin_cos_env();
     is_init_ = false;
     device_count_ = 0;
     OB_LOG_RET(WARN, ret_dev, "release the init resource", K(ret_dev), K(ret_handle));

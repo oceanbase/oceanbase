@@ -472,7 +472,10 @@ int LocationDataGenerator::read_file_(const ObString &base,
     ObString uri(path.get_obstr());
     char storage_info_cstr[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = {'\0'};
     int64_t real_size = 0;
-    if (OB_FAIL(storage_info->get_storage_info_str(storage_info_cstr, OB_MAX_BACKUP_STORAGE_INFO_LENGTH, false))) {
+    common::ObObjectStorageInfo storage_info_base;
+    if (OB_FAIL(storage_info_base.assign(*storage_info))) {
+      OB_LOG(WARN, "fail to assign storage info base!", K(ret), KP(storage_info));
+    } else if (OB_FAIL(storage_info_base.get_storage_info_str(storage_info_cstr, OB_MAX_BACKUP_STORAGE_INFO_LENGTH))) {
       LOG_WARN("get_storage_info_str failed", K(ret), K(uri), K(storage_info));
     } else {
       ObString storage_info_ob_str(storage_info_cstr);

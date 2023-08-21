@@ -6,8 +6,15 @@ oblib_add_library(restore OBJECT
   ob_storage.h
   ob_storage_oss_base.cpp
   ob_storage_oss_base.h
+  ob_storage_cos_base.cpp
+  ob_storage_cos_base.h
   ob_storage_path.cpp
   ob_storage_path.h
+  ob_storage_info.cpp
+  ob_storage_info.h
+  cos/ob_cos_wrapper_handle.cpp
+  cos/ob_cos_wrapper_handle.h
+  cos/ob_singleton.h
   ob_object_device.cpp
   ob_object_device.h)
 
@@ -28,4 +35,6 @@ target_link_libraries(oss
   ${DEP_DIR}/lib/libmxml.a)
 
 
-target_link_libraries(restore PUBLIC oss  oblib_base)
+target_link_libraries(restore PUBLIC oss cos_sdk oblib_base)
+
+add_subdirectory(cos)

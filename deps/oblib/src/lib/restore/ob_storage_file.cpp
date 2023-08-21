@@ -426,16 +426,6 @@ int ObStorageFileUtil::del_dir(const common::ObString &uri)
   return ret;
 }
 
-int ObStorageFileUtil::check_backup_dest_lifecycle(
-    const common::ObString &path,
-    bool &is_set_lifecycle)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(path);
-  is_set_lifecycle = false;
-  return ret;
-}
-
 int ObStorageFileUtil::list_directories(
     const ObString &uri,
     ObBaseDirEntryOperator &op)
@@ -547,13 +537,13 @@ ObStorageFileReader::~ObStorageFileReader()
   }
 }
 
-int ObStorageFileReader::open(const common::ObString &uri, void* device_handle)
+int ObStorageFileReader::open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   char errno_buf[OB_MAX_ERROR_MSG_LEN] = "";
   struct stat64 file_info;
-  UNUSED(device_handle);
+  UNUSED(storage_info);
 
   if (is_opened_) {
     ret = OB_INIT_TWICE;
@@ -813,9 +803,9 @@ ObStorageFileWriter::~ObStorageFileWriter()
   }
 }
 
-int ObStorageFileWriter::open(const common::ObString &uri, void* device_handle)
+int ObStorageFileWriter::open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info)
 {
-  UNUSED(device_handle);
+  UNUSED(storage_info);
   int ret = OB_SUCCESS;
   const char *TMP_NAME_FORMAT = "%s.tmp.%ld";
   ObStorageFileUtil util;
@@ -901,9 +891,9 @@ ObStorageFileAppender::~ObStorageFileAppender()
   }
 }
 
-int ObStorageFileAppender::open(const common::ObString &uri, void* device_hanlde)
+int ObStorageFileAppender::open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info)
 {
-  UNUSED(device_hanlde);
+  UNUSED(storage_info);
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObStorageFileUtil util;

@@ -2001,7 +2001,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
               OZ (ObSQLUtils::split_remote_object_storage_url(url, storage_info));
             }
             OZ (tmp_location.append(url));
-            OZ (storage_info.get_storage_info_str(storage_info_buf, sizeof(storage_info_buf), true));
+            OZ (storage_info.get_storage_info_str(storage_info_buf, sizeof(storage_info_buf)));
             OZ (arg.schema_.set_external_file_location(tmp_location.string()));
             OZ (arg.schema_.set_external_file_location_access_info(storage_info_buf));
           }

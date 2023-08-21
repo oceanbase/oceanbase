@@ -82,20 +82,18 @@ private:
   int open_for_overwriter(const char *pathname, void*& ctx);
   int open_for_appender(const char *pathname, ObIODOpts *opts, void*& ctx);
   int release_res(void* ctx, const ObIOFd &fd, ObStorageAccessType access_type);
-  int ob_get_bucket_lifecycle(ObIODOpts &opts);
 private:
   //maybe fd mng can be device level
   common::ObFdSimulator    fd_mng_;
-  ObOssAccount oss_account_;
   
   ObStorageUtil            util_;
   /*obj ctx pool: use to create fd ctx(reader/writer)*/
   common::ObPooledAllocator<ObStorageReader, ObMalloc, ObSpinLock> reader_ctx_pool_;
   common::ObPooledAllocator<ObStorageAppender, ObMalloc, ObSpinLock> appender_ctx_pool_;
   common::ObPooledAllocator<ObStorageWriter, ObMalloc, ObSpinLock> overwriter_ctx_pool_;
-  void* base_info_;
+  common::ObObjectStorageInfo storage_info_;
   bool is_started_;
-  char storage_info_[OB_MAX_URI_LENGTH];
+  char storage_info_str_[OB_MAX_URI_LENGTH];
   common::ObSpinLock lock_;
 
 private:

@@ -193,7 +193,7 @@ private:
       storage::ObExternTenantLocalityInfoDesc &locality_info);
 private:
   char backup_path_[common::OB_MAX_URI_LENGTH];
-  char storage_info_[share::OB_MAX_BACKUP_STORAGE_INFO_LENGTH];
+  char storage_info_[common::OB_MAX_BACKUP_STORAGE_INFO_LENGTH];
   int64_t offset_;
   int64_t length_;
   int64_t file_type_;

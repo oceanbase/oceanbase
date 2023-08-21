@@ -510,7 +510,7 @@ ObAdminDumpBackupDataExecutor::ObAdminDumpBackupDataExecutor() : offset_(), leng
     allocator_()
 {
   MEMSET(backup_path_, 0, common::OB_MAX_URI_LENGTH);
-  MEMSET(storage_info_, 0, share::OB_MAX_BACKUP_STORAGE_INFO_LENGTH);
+  MEMSET(storage_info_, 0, common::OB_MAX_BACKUP_STORAGE_INFO_LENGTH);
 }
 
 ObAdminDumpBackupDataExecutor::~ObAdminDumpBackupDataExecutor()
