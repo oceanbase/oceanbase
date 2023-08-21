@@ -198,3 +198,121 @@ insert into orders values(314268, 314268, 678, "192.168.1.8");
 select t1.pname,t2.oid,t2.amount from product t1,orders t2 where t2.oid = 314265 and t1.pid=t2.pid;
 pname	oid	amount
 abcd	314265	678
+drop table if exists rf_t1, rf_t2, rf_t3, rf_t4;
+CREATE TABLE rf_t1 (c1 INT, c2 INT);
+CREATE TABLE rf_t2 (c1 INT PRIMARY KEY, c2 INT) PARTITION BY hash(c1) PARTITIONS 3;
+CREATE TABLE rf_t3 (c1 INT PRIMARY KEY, c2 INT);
+CREATE TABLE rf_t4 (c1 INT PRIMARY KEY, c2 INT);
+insert into rf_t1 values(1, 1),(2, 2),(3, 3),(4, 4),(5, 5);
+insert into rf_t2 values(1, 1),(2, 2),(3, 3),(4, 4),(5, 5);
+insert into rf_t3 values(1, 1),(2, 2),(3, 3),(4, 4),(5, 5);
+insert into rf_t4 values(1, 1),(2, 2),(3, 3),(4, 4),(5, 5);
+explain select /*+pq_distribute(rf_t2 NONE, ALL), parallel(2), leading(rf_t1), use_nl(rf_t1, rf_t2) */ * from rf_t1 join rf_t2 on rf_t1.c1 = rf_t2.c1;
+Query Plan
+=======================================================================
+|ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |PX COORDINATOR                     |        |5       |144         |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001|5       |141         |
+|2 |  └─NESTED-LOOP JOIN               |        |5       |138         |
+|3 |    ├─EXCHANGE IN DISTR            |        |5       |5           |
+|4 |    │ └─EXCHANGE OUT DISTR (RANDOM)|:EX10000|5       |4           |
+|5 |    │   └─PX BLOCK ITERATOR        |        |5       |3           |
+|6 |    │     └─TABLE FULL SCAN        |rf_t1   |5       |3           |
+|7 |    └─DISTRIBUTED TABLE GET        |rf_t2   |1       |53          |
+=======================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(rf_t1.c1, rf_t1.c2, rf_t2.c1, rf_t2.c2)]), filter(nil), rowset=16
+  1 - output([INTERNAL_FUNCTION(rf_t1.c1, rf_t1.c2, rf_t2.c1, rf_t2.c2)]), filter(nil), rowset=16
+      dop=2
+  2 - output([rf_t1.c1], [rf_t1.c2], [rf_t2.c1], [rf_t2.c2]), filter(nil), rowset=16
+      conds(nil), nl_params_([rf_t1.c1(:0)]), use_batch=true
+  3 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=16
+  4 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=16
+      dop=2
+  5 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=16
+  6 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=16
+      access([rf_t1.c1], [rf_t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([rf_t1.__pk_increment]), range(MIN ; MAX)always true
+  7 - output([rf_t2.c1], [rf_t2.c2]), filter(nil), rowset=16
+      access([GROUP_ID], [rf_t2.c1], [rf_t2.c2]), partitions(p[0-2])
+      is_index_back=false, is_global_index=false,
+      range_key([rf_t2.c1]), range(MIN ; MAX),
+      range_cond([:0 = rf_t2.c1])
+explain select * from rf_t1 join
+(
+select /*+parallel(10), leading(rf_t1), pq_distribute(rf_t2 NONE, ALL), use_nl(rf_t1, rf_t2, rf_t3, rf_t4) */ rf_t4.c1 cc
+from rf_t2 join rf_t4 on rf_t4.c1 = rf_t2.c1
+)
+on rf_t1.c1 = cc;
+Query Plan
+===============================================================================
+|ID|OPERATOR                                   |NAME    |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------------
+|0 |PX COORDINATOR                             |        |5       |76          |
+|1 |└─EXCHANGE OUT DISTR                       |:EX10002|5       |74          |
+|2 |  └─NESTED-LOOP JOIN                       |        |5       |73          |
+|3 |    ├─EXCHANGE IN DISTR                    |        |5       |55          |
+|4 |    │ └─EXCHANGE OUT DISTR (RANDOM)        |:EX10001|5       |55          |
+|5 |    │   └─MATERIAL                         |        |5       |54          |
+|6 |    │     └─NESTED-LOOP JOIN               |        |5       |54          |
+|7 |    │       ├─EXCHANGE IN DISTR            |        |5       |1           |
+|8 |    │       │ └─EXCHANGE OUT DISTR (RANDOM)|:EX10000|5       |1           |
+|9 |    │       │   └─PX BLOCK ITERATOR        |        |5       |1           |
+|10|    │       │     └─TABLE FULL SCAN        |rf_t1   |5       |1           |
+|11|    │       └─DISTRIBUTED TABLE GET        |rf_t2   |1       |53          |
+|12|    └─DISTRIBUTED TABLE GET                |rf_t4   |1       |18          |
+===============================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(rf_t1.c1, rf_t1.c2, rf_t4.c1)]), filter(nil), rowset=16
+  1 - output([INTERNAL_FUNCTION(rf_t1.c1, rf_t1.c2, rf_t4.c1)]), filter(nil), rowset=16
+      dop=10
+  2 - output([rf_t1.c1], [rf_t1.c2], [rf_t4.c1]), filter(nil), rowset=16
+      conds(nil), nl_params_([rf_t1.c1(:1)]), use_batch=true
+  3 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=16
+  4 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=16
+      dop=10
+  5 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=16
+  6 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=16
+      conds(nil), nl_params_([rf_t1.c1(:0)]), use_batch=true
+  7 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=16
+  8 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=16
+      dop=10
+  9 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=16
+ 10 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=16
+      access([rf_t1.c1], [rf_t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([rf_t1.__pk_increment]), range(MIN ; MAX)always true
+ 11 - output(nil), filter(nil), rowset=16
+      access([GROUP_ID]), partitions(p[0-2])
+      is_index_back=false, is_global_index=false,
+      range_key([rf_t2.c1]), range(MIN ; MAX),
+      range_cond([:0 = rf_t2.c1])
+ 12 - output([rf_t4.c1]), filter(nil), rowset=16
+      access([GROUP_ID], [rf_t4.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([rf_t4.c1]), range(MIN ; MAX),
+      range_cond([:1 = rf_t4.c1])
+select /*+pq_distribute(rf_t2 NONE, ALL), parallel(2), leading(rf_t1), use_nl(rf_t1, rf_t2) */ * from rf_t1 join rf_t2 on rf_t1.c1 = rf_t2.c1;
+c1	c2	c1	c2
+1	1	1	1
+2	2	2	2
+3	3	3	3
+4	4	4	4
+5	5	5	5
+select * from rf_t1 join
+(
+select /*+parallel(10), leading(rf_t1), pq_distribute(rf_t2 NONE, ALL), use_nl(rf_t1, rf_t2, rf_t3, rf_t4) */ rf_t4.c1 cc
+from rf_t2 join rf_t4 on rf_t4.c1 = rf_t2.c1
+)
+on rf_t1.c1 = cc;
+c1	c2	cc
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+5	5	5
+drop table if exists rf_t1, rf_t2, rf_t3, rf_t4;
