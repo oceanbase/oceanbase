@@ -185,7 +185,14 @@ DEF_TO_STRING(ObTxSavePoint)
 }
 OB_SERIALIZE_MEMBER(ObTxExecResult, incomplete_, parts_, cflict_txs_);
 OB_SERIALIZE_MEMBER(ObTxSnapshot, tx_id_, version_, scn_, elr_);
-OB_SERIALIZE_MEMBER(ObTxReadSnapshot, valid_, core_, source_, uncertain_bound_, snapshot_lsid_, parts_);
+OB_SERIALIZE_MEMBER(ObTxReadSnapshot,
+                    valid_,
+                    core_,
+                    source_,
+                    uncertain_bound_,
+                    snapshot_lsid_,
+                    parts_,
+                    snapshot_ls_role_);
 OB_SERIALIZE_MEMBER(ObTxPart, id_, addr_, epoch_, first_scn_, last_scn_);
 OB_SERIALIZE_MEMBER(ObTxDesc,
                     tenant_id_,
@@ -1035,6 +1042,7 @@ ObTxReadSnapshot::ObTxReadSnapshot()
     core_(),
     source_(SRC::INVL),
     snapshot_lsid_(),
+    snapshot_ls_role_(common::ObRole::INVALID_ROLE),
     uncertain_bound_(0),
     parts_()
 {}
@@ -1043,6 +1051,7 @@ ObTxReadSnapshot::~ObTxReadSnapshot()
 {
   valid_ = false;
   source_ = SRC::INVL;
+  snapshot_ls_role_ = common::INVALID_ROLE;
   uncertain_bound_ = 0;
 }
 
@@ -1052,6 +1061,7 @@ void ObTxReadSnapshot::reset()
   core_.reset();
   source_ = SRC::INVL;
   snapshot_lsid_.reset();
+  snapshot_ls_role_ = common::INVALID_ROLE;
   uncertain_bound_ = 0;
   parts_.reset();
 }
@@ -1063,6 +1073,7 @@ int ObTxReadSnapshot::assign(const ObTxReadSnapshot &from)
   core_ = from.core_;
   source_ = from.source_;
   snapshot_lsid_ = from.snapshot_lsid_;
+  snapshot_ls_role_ = from.snapshot_ls_role_;
   uncertain_bound_ = from.uncertain_bound_;
   if (OB_FAIL(parts_.assign(from.parts_))) {
    TRANS_LOG(WARN, "assign snapshot fail", K(ret), K(from));

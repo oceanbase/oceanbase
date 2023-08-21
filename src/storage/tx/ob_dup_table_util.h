@@ -212,14 +212,16 @@ public:
 
   logservice::ObLogHandler *get_log_handler() { return log_handler_; }
 
-  void inc_committing_dup_trx_cnt() { ATOMIC_INC(&committing_dup_trx_cnt_); }
-  void dec_committing_dup_trx_cnt() { ATOMIC_DEC(&committing_dup_trx_cnt_); }
-  int64_t get_committing_dup_trx_cnt() { return ATOMIC_LOAD(&committing_dup_trx_cnt_); }
-
+  // void inc_committing_dup_trx_cnt() { ATOMIC_INC(&committing_dup_trx_cnt_); }
+  // void dec_committing_dup_trx_cnt() { ATOMIC_DEC(&committing_dup_trx_cnt_); }
 public:
   int64_t get_total_block_confirm_ref() { return ATOMIC_LOAD(&total_block_confirm_ref_); }
 
   int check_and_update_max_replayed_scn(const share::SCN &max_replayed_scn);
+
+  int64_t get_committing_dup_trx_cnt();
+  int add_commiting_dup_trx(const ObTransID &tx_id);
+  int remove_commiting_dup_trx(const ObTransID &tx_id);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDupTableLSHandler);
@@ -243,7 +245,8 @@ private:
 
   int64_t total_block_confirm_ref_; // block new dup tablet confirmed
 
-  int64_t committing_dup_trx_cnt_;
+  ObSpinLock committing_dup_trx_lock_;
+  common::hash::ObHashSet<ObTransID> committing_dup_trx_set_;
 
   share::SCN self_max_replayed_scn_;
   int64_t last_max_replayed_scn_update_ts_;
@@ -310,6 +313,8 @@ public:
   int iterate_dup_ls(ObDupLSLeaseMgrStatIterator &collect_iter);
   int iterate_dup_ls(ObDupLSTabletSetStatIterator &collect_iter);
   int iterate_dup_ls(ObDupLSTabletsStatIterator &collect_iter);
+
+  bool is_useful_dup_ls(const share::ObLSID ls_id);
 
   TO_STRING_KV(K(is_inited_), K(dup_ls_id_set_.size()));
 

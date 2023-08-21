@@ -217,6 +217,11 @@ void ObPartTransCtx::destroy()
     }
 
 
+    if (exec_info_.is_dup_tx_ && OB_NOT_NULL(ls_tx_ctx_mgr_)) {
+      if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->remove_commiting_dup_trx(trans_id_))) {
+        TRANS_LOG(WARN, "remove committing dup table trx failed", K(ret), KPC(this));
+      }
+    }
 
     if (NULL == ls_tx_ctx_mgr_) {
       TRANS_LOG(ERROR, "ls_tx_ctx_mgr_ is null, unexpected error", KP(ls_tx_ctx_mgr_), "context",
@@ -971,6 +976,15 @@ int ObPartTransCtx::trans_replay_abort_(const SCN &final_log_ts)
     TRANS_LOG(WARN, "transaction replay end error", KR(ret), KPC(this));
   }
 
+  if (OB_SUCC(ret)) {
+    if (exec_info_.is_dup_tx_) {
+      if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->remove_commiting_dup_trx(trans_id_))) {
+        TRANS_LOG(WARN, "remove committing dup table trx failed", K(ret), K(final_log_ts),
+                  KPC(this));
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -994,6 +1008,15 @@ int ObPartTransCtx::trans_replay_commit_(const SCN &commit_version,
                                          checksum))) {
       TRANS_LOG(WARN, "transaction replay end error", KR(ret), K(commit_version), K(checksum),
                 "context", *this);
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (exec_info_.is_dup_tx_) {
+      if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->remove_commiting_dup_trx(trans_id_))) {
+        TRANS_LOG(WARN, "remove committing dup table trx failed", K(ret), K(commit_version), K(final_log_ts),
+                  KPC(this));
+      }
     }
   }
 
@@ -1521,6 +1544,14 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
         // do nothing
       } else if (OB_FAIL(dup_table_before_preapre_(exec_info_.max_applied_log_ts_, true/*before_replay*/))) {
         TRANS_LOG(WARN, "set commit_info scn as before_prepare_version failed", K(ret), KPC(this));
+      }
+    }
+
+    if (exec_info_.is_dup_tx_
+        && (get_downstream_state() >= ObTxState::REDO_COMPLETE
+            && get_downstream_state() < ObTxState::COMMIT)) {
+      if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->add_commiting_dup_trx(trans_id_))) {
+        TRANS_LOG(WARN, "add committing dup table trx failed", K(ret), KPC(this));
       }
     }
 
@@ -2151,6 +2182,14 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
             }
           }
         }
+        if (OB_SUCC(ret)) {
+          if (exec_info_.is_dup_tx_) {
+            if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->remove_commiting_dup_trx(trans_id_))) {
+              TRANS_LOG(WARN, "remove committing dup table trx failed", K(ret),
+                        KPC(this));
+            }
+          }
+        }
       } else if (ObTxLogType::TX_ABORT_LOG == log_type) {
         if (OB_SUCC(ret)) {
           if (exec_info_.multi_data_source_.count() > 0 && get_retain_cause() == RetainCause::UNKOWN
@@ -2182,6 +2221,14 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
               TRANS_LOG(WARN, "switch log type failed", KR(ret), K(*this), K(log_type));
             } else if (OB_FAIL(ObTxCycleTwoPhaseCommitter::apply_log(two_phase_log_type))) {
               TRANS_LOG(ERROR, "dist tx apply log failed", KR(ret), K(*this), K(two_phase_log_type));
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (exec_info_.is_dup_tx_) {
+            if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->remove_commiting_dup_trx(trans_id_))) {
+              TRANS_LOG(WARN, "remove committing dup table trx failed", K(ret),
+                        KPC(this));
             }
           }
         }
@@ -2851,7 +2898,18 @@ int ObPartTransCtx::submit_redo_commit_info_log_(ObTxLogBlock &log_block,
         trace_info_.get_app_trace_info(), exec_info_.prev_record_lsn_, exec_info_.redo_lsns_,
         exec_info_.incremental_participants_, cluster_version_, exec_info_.xid_);
 
-    if (OB_FAIL(validate_commit_info_log_(commit_info_log))) {
+    if (OB_SUCC(ret)) {
+      if (exec_info_.is_dup_tx_) {
+        if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->add_commiting_dup_trx(trans_id_))) {
+          TRANS_LOG(WARN, "add committing dup table trx failed", K(ret),
+                    KPC(this));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      //do nothing
+    } else if (OB_FAIL(validate_commit_info_log_(commit_info_log))) {
       TRANS_LOG(WARN, "invalid commit info log", K(ret), K(commit_info_log), K(trans_id_),
                 K(ls_id_));
     } else if (OB_FAIL(log_block.add_new_log(commit_info_log))) {
@@ -4800,6 +4858,15 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
         TRANS_LOG(WARN, "set commit_info scn as before_prepare_version failed", K(ret), KPC(this));
       }
     }
+
+    if (OB_SUCC(ret)) {
+      if (exec_info_.is_dup_tx_) {
+        if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->add_commiting_dup_trx(trans_id_))) {
+          TRANS_LOG(WARN, "add committing dup table trx failed", K(ret), K(timestamp),
+                    KPC(this));
+        }
+      }
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -4980,6 +5047,7 @@ int ObPartTransCtx::replay_commit(const ObTxCommitLog &commit_log,
       }
     }
   }
+
   if (OB_SUCC(ret)) {
     const uint64_t checksum =
         (exec_info_.need_checksum_ && !is_incomplete_replay_ctx_ ? commit_log.get_checksum() : 0);

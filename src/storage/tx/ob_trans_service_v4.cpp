@@ -1005,7 +1005,7 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
 
   // need continue to check replica's readability
   if (OB_SUCC(ret) && !check_readable_ok &&
-      OB_FAIL(check_replica_readable_(snapshot.core_.version_,
+      OB_FAIL(check_replica_readable_(snapshot,
                                       snapshot.core_.elr_,
                                       snapshot.source_,
                                       ls_id,
@@ -1083,13 +1083,19 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   ObTxSnapshot snap = snapshot.core_;
   ObTxTableGuard tx_table_guard;
   bool access_started = false;
+  bool acquire_local_snapshot_from_follower  = false;
+
   if (tx.access_mode_ == ObTxAccessMode::RD_ONLY) {
     ret = OB_ERR_READ_ONLY_TRANSACTION;
     TRANS_LOG(WARN, "tx is readonly", K(ret), K(ls_id), K(tx), KPC(this));
   } else if (!snapshot.valid_) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "snapshot invalid", K(ret), K(snapshot));
-  } else if (snapshot.is_none_read() && OB_FAIL(acquire_local_snapshot_(ls_id, snap.version_))) {
+  } else if (snapshot.is_none_read()
+             && OB_FAIL(acquire_local_snapshot_(ls_id,
+                                                snap.version_,
+                                                false /*is_read_only*/,
+                                                acquire_local_snapshot_from_follower))) {
     TRANS_LOG(WARN, "acquire ls snapshot for mvcc write fail", K(ret), K(ls_id));
   } else if (snapshot.is_ls_snapshot() && snapshot.snapshot_lsid_ != ls_id) {
     ret = OB_NOT_SUPPORTED;
@@ -1388,7 +1394,7 @@ int ObTransService::validate_snapshot_version_(const SCN snapshot,
  *    if so, update replica_readable_snapshot = v and return OK, otherwise
  * 4. return OB_REPLICA_NOT_READABLE
  */
-int ObTransService::check_replica_readable_(const SCN &snapshot,
+int ObTransService::check_replica_readable_(const ObTxReadSnapshot &snapshot,
                                             const bool elr,
                                             const ObTxReadSnapshot::SRC src,
                                             const share::ObLSID &ls_id,
@@ -1402,7 +1408,7 @@ int ObTransService::check_replica_readable_(const SCN &snapshot,
   bool dup_table_readable = false;
   share::SCN max_replayed_scn;
   max_replayed_scn.reset();
-  bool readable = check_ls_readable_(ls, snapshot, src);
+  bool readable = check_ls_readable_(ls, snapshot.core_.version_, src);
 
   if (!readable) {
     if (OB_FAIL(ls.get_tx_svr()->get_tx_ls_log_adapter()->get_role(leader, epoch))) {
@@ -1419,7 +1425,7 @@ int ObTransService::check_replica_readable_(const SCN &snapshot,
       ret = OB_NOT_MASTER;
     } else if (OB_FAIL(ls.get_tx_svr()->get_tx_ls_log_adapter()->check_dup_tablet_readable(
                    tablet_id,
-                   snapshot,
+                   snapshot.core_.version_,
                    leader,
                    max_replayed_scn,
                    dup_table_readable))) {
@@ -1437,7 +1443,7 @@ int ObTransService::check_replica_readable_(const SCN &snapshot,
                 K(expire_ts));
       ret = OB_SUCCESS;
     } else {
-      if (OB_SUCC(wait_follower_readable_(ls, expire_ts, snapshot, src))) {
+      if (OB_SUCC(wait_follower_readable_(ls, expire_ts, snapshot.core_.version_, src))) {
         TRANS_LOG(INFO, "read from follower", K(snapshot),  K(snapshot), K(ls));
       } else if (MTL_IS_PRIMARY_TENANT()) {
         ret = OB_NOT_MASTER;
@@ -1446,6 +1452,41 @@ int ObTransService::check_replica_readable_(const SCN &snapshot,
       }
     }
   }
+
+  if (OB_SUCC(ret) && !dup_table_readable && ObTxReadSnapshot::SRC::LS == src
+      && ObRole::FOLLOWER == snapshot.snapshot_ls_role_) {
+    int tmp_ret = OB_SUCCESS;
+    if (readable) {
+      if (OB_TMP_FAIL(ls.get_tx_svr()->get_tx_ls_log_adapter()->get_role(leader, epoch))) {
+        TRANS_LOG(WARN, "get replica status fail", K(tmp_ret), K(ls_id));
+      } else if (leader) {
+        tmp_ret = OB_SUCCESS;
+      } else if (OB_TMP_FAIL(ls.get_max_decided_scn(max_replayed_scn))) {
+        TRANS_LOG(WARN, "get max decided scn failed", K(ret), K(tmp_ret), K(ls_id));
+        // rewrite ret code when get max decided scn failed
+        tmp_ret = OB_NOT_MASTER;
+      } else if (OB_TMP_FAIL(ls.get_tx_svr()->get_tx_ls_log_adapter()->check_dup_tablet_readable(
+                     tablet_id, snapshot.core_.version_, leader, max_replayed_scn,
+                     dup_table_readable))) {
+        TRANS_LOG(WARN, "check dup tablet readable error", K(ret), K(tmp_ret));
+      } else if (dup_table_readable) {
+        TRANS_LOG(INFO, "the dup tablet is readable with the max_commit_ts from a follower", K(ret),
+                  K(tmp_ret), K(tablet_id), K(snapshot), K(leader), K(max_replayed_scn),
+                  K(dup_table_readable), K(ls_id), K(expire_ts));
+        tmp_ret = OB_SUCCESS;
+      }
+    }
+
+    if (tmp_ret == OB_SUCCESS && dup_table_readable) {
+      // do nothing
+    } else {
+      ret = OB_NOT_MASTER;
+      TRANS_LOG(WARN, "we can not use a max_commit_ts from the follower", K(ret), K(tablet_id),
+                K(snapshot), K(leader), K(max_replayed_scn), K(dup_table_readable), K(ls_id),
+                K(expire_ts), K(MTL_IS_PRIMARY_TENANT()));
+    }
+  }
+
   TRANS_LOG(TRACE, "check replica readable", K(ret), K(snapshot), K(ls_id));
   return ret;
 }
@@ -1570,9 +1611,12 @@ int ObTransService::abort_participants_(const ObTxDesc &tx_desc)
 }
 
 int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
-                                            SCN &snapshot)
+                                            SCN &snapshot,
+                                            const bool is_read_only,
+                                            bool &acquire_from_follower)
 {
   int ret = OB_SUCCESS;
+  acquire_from_follower = false;
   int64_t epoch = 0;
   bool leader = false;
   SCN snapshot0;
@@ -1590,6 +1634,62 @@ int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
     TRANS_LOG(WARN, "get replica role fail", K(ret), K(ls_id));
   } else if (!leader) {
     ret = OB_NOT_MASTER;
+  }
+
+  if (OB_NOT_MASTER == ret && is_read_only) {
+    const int64_t committing_dup_trx_cnt =
+        ls_tx_ctx_mgr->get_ls_log_adapter()->get_committing_dup_trx_cnt();
+    if (!MTL_IS_PRIMARY_TENANT()) {
+      ret = OB_NOT_MASTER;
+      TRANS_LOG(WARN, "the max_commmit_ts can not be used as a snapshot in standby tenant ", K(ret),
+                K(ls_id), K(snapshot), K(MTL_IS_PRIMARY_TENANT()), K(committing_dup_trx_cnt));
+    } else if (!MTL(ObTransService*)->get_dup_table_loop_worker().is_useful_dup_ls(ls_id)) {
+      ret = OB_NOT_MASTER;
+    } else if (committing_dup_trx_cnt > 0) {
+      ret = OB_NOT_MASTER;
+      TRANS_LOG(WARN, "discover commiting dup table trx, can not use max_commit_ts", K(ret), K(ls_id),
+                K(committing_dup_trx_cnt));
+    } else {
+      ret = OB_SUCCESS;
+      acquire_from_follower = true;
+      TRANS_LOG(INFO,
+                "acquire local snapshot from a dup ls follower",
+                K(ret),
+                K(leader),
+                K(epoch),
+                K(acquire_from_follower),
+                K(ls_id),
+                K(committing_dup_trx_cnt),
+                K(can_elr),
+                K(MTL_IS_PRIMARY_TENANT()));
+    }
+      //                                 +----------------------------------------------------------------+
+      //                                 |         get max_commit_ts from a follower as snapshot          |
+      //                                 +----------------------------------------------------------------+
+      //                                   |
+      //                                   | may be smaller than a pre_commit trx
+      //                                   v
+      // +----------------+  count > 0   +----------------------------------------------------------------+
+      // |   Not Master   | <----------- |                 commiting dup table trx count                  |
+      // +----------------+              +----------------------------------------------------------------+
+      //                                   |
+      //                                   | count == 0
+      //                                   v
+      // +----------------+  false       +----------------------------------------------------------------+
+      // |   Not Master   | <----------- | check_replica_readable : read a dup table tablet on a follower |
+      // +----------------+              +----------------------------------------------------------------+
+      //                                   |
+      //                                   | true
+      //                                   v
+      //                                 +----------------------------------------------------------------+
+      //                                 |       use max_commit_ts to read a dup table follower           |
+      //                                 +----------------------------------------------------------------+
+      //
+  }
+
+
+  if(OB_FAIL(ret)) {
+    //do nothing
   } else if (FALSE_IT(snapshot0 = tx_version_mgr_.get_max_commit_ts(can_elr))) {
   } else if (!snapshot0.is_valid_and_not_min()) {
     ret = OB_EAGAIN;

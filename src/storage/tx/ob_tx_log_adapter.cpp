@@ -75,6 +75,18 @@ int ObITxLogAdapter::check_redo_sync_completed(const ObTransID &tx_id,
 
 int64_t ObITxLogAdapter::get_committing_dup_trx_cnt() { return 0; }
 
+int ObITxLogAdapter::add_commiting_dup_trx(const ObTransID &tx_id)
+{
+  UNUSED(tx_id);
+  return OB_SUCCESS;
+}
+
+int ObITxLogAdapter::remove_commiting_dup_trx(const ObTransID &tx_id)
+{
+  UNUSED(tx_id);
+  return OB_SUCCESS;
+}
+
 int ObLSTxLogAdapter::init(ObITxLogParam *param)
 {
   int ret = OB_SUCCESS;
@@ -142,6 +154,18 @@ int ObLSTxLogAdapter::get_role(bool &is_leader, int64_t &epoch)
     is_leader = false;
   }
 
+  return ret;
+}
+
+int ObLSTxLogAdapter::get_max_decided_scn(SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(log_handler_) || !log_handler_->is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), KP(log_handler_));
+  } else {
+    ret = log_handler_->get_max_decided_scn(scn);
+  }
   return ret;
 }
 
@@ -239,15 +263,33 @@ int64_t ObLSTxLogAdapter::get_committing_dup_trx_cnt()
   return committing_dup_trx_cnt;
 }
 
-int ObLSTxLogAdapter::get_max_decided_scn(SCN &scn)
+int ObLSTxLogAdapter::add_commiting_dup_trx(const ObTransID &tx_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(log_handler_) || !log_handler_->is_valid()) {
+
+  if (OB_ISNULL(dup_table_ls_handler_)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), KP(log_handler_));
-  } else {
-    ret = log_handler_->get_max_decided_scn(scn);
+    TRANS_LOG(WARN, "invalid dup table ls handler", KP(dup_table_ls_handler_), K(tx_id),
+              KPC(log_handler_));
+  } else if (OB_FAIL(dup_table_ls_handler_->add_commiting_dup_trx(tx_id))) {
+    TRANS_LOG(WARN, "add commiting dup trx failed", K(ret), K(tx_id));
   }
+
+  return ret;
+}
+
+int ObLSTxLogAdapter::remove_commiting_dup_trx(const ObTransID &tx_id)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(dup_table_ls_handler_)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid dup table ls handler", KP(dup_table_ls_handler_), K(tx_id),
+              KPC(log_handler_));
+  } else if (OB_FAIL(dup_table_ls_handler_->remove_commiting_dup_trx(tx_id))) {
+    TRANS_LOG(WARN, "remove commiting dup trx failed", K(ret), K(tx_id));
+  }
+
   return ret;
 }
 

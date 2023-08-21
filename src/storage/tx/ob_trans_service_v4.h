@@ -236,7 +236,7 @@ int revert_tx_ctx_(ObPartTransCtx *ctx);
 int validate_snapshot_version_(const share::SCN snapshot,
                                const int64_t expire_ts,
                                ObLS &ls);
-int check_replica_readable_(const share::SCN &snapshot,
+int check_replica_readable_(const ObTxReadSnapshot &snapshot,
                             const bool elr,
                             const ObTxReadSnapshot::SRC src,
                             const share::ObLSID &ls_id,
@@ -248,7 +248,10 @@ bool check_ls_readable_(ObLS &ls,
                         const ObTxReadSnapshot::SRC src);
 int build_tx_commit_msg_(const ObTxDesc &tx, ObTxCommitMsg &msg);
 int abort_participants_(const ObTxDesc &tx_desc);
-int acquire_local_snapshot_(const share::ObLSID &ls_id, share::SCN &snapshot);
+int acquire_local_snapshot_(const share::ObLSID &ls_id,
+                            share::SCN &snapshot,
+                            const bool is_read_only,
+                            bool &acquire_from_follower);
 int sync_acquire_global_snapshot_(ObTxDesc &tx,
                                   const int64_t expire_ts,
                                   share::SCN &snapshot,

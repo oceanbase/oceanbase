@@ -86,6 +86,8 @@ public:
                                         share::SCN &total_max_read_version);
   virtual bool has_dup_tablet() { return false; }
   virtual int64_t get_committing_dup_trx_cnt();
+  virtual int add_commiting_dup_trx(const ObTransID &tx_id);
+  virtual int remove_commiting_dup_trx(const ObTransID &tx_id);
 };
 
 class ObLSTxLogAdapter : public ObITxLogAdapter
@@ -123,6 +125,8 @@ public:
                                 share::SCN &total_max_read_version);
   bool has_dup_tablet();
   int64_t get_committing_dup_trx_cnt();
+  int add_commiting_dup_trx(const ObTransID &tx_id);
+  int remove_commiting_dup_trx(const ObTransID &tx_id);
 private:
   logservice::ObLogHandler *log_handler_;
   ObDupTableLSHandler *dup_table_ls_handler_;

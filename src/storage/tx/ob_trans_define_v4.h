@@ -23,6 +23,7 @@
 #include "lib/trace/ob_trace_event.h"
 #include "lib/utility/ob_unify_serialize.h"
 #include "lib/container/ob_tuple.h"
+#include "common/ob_role.h"
 #include "share/ob_cluster_version.h"
 #include "share/ob_ls_id.h"
 #include "ob_trans_hashmap.h"
@@ -252,7 +253,9 @@ struct ObTxReadSnapshot
     SPECIAL = 4,            // user specify
     NONE = 5,               // won't read, global snapshot not required
   } source_;
-  share::ObLSID snapshot_lsid_;    // for source_ = LOCAL
+  share::ObLSID snapshot_lsid_;    // for source_ = LOCAL                                  //
+  common::ObRole snapshot_ls_role_; // for source_ = LS, only can be used for dup_table with a
+                                    // max_commit_ts from the follower
   int64_t uncertain_bound_; // for source_ GLOBAL
   ObSEArray<ObTxLSEpochPair, 1> parts_;
 
@@ -277,6 +280,7 @@ struct ObTxReadSnapshot
                K_(core),
                K_(uncertain_bound),
                K_(snapshot_lsid),
+               K_(snapshot_ls_role),
                K_(parts));
   OB_UNIS_VERSION(1);
 };

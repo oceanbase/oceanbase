@@ -592,7 +592,6 @@ void ObDupTableLSHandler::reset()
 
   total_block_confirm_ref_ = 0;
   self_max_replayed_scn_.reset();
-  committing_dup_trx_cnt_ = 0;
 
   interface_stat_.reset();
   for (int i = 0; i < DupTableDiagStd::TypeIndex::MAX_INDEX; i++) {
@@ -1549,6 +1548,57 @@ int ObDupTableLSHandler::check_and_update_max_replayed_scn(const share::SCN &max
   return ret;
 }
 
+int64_t ObDupTableLSHandler::get_committing_dup_trx_cnt()
+{
+  ObSpinLockGuard guard(committing_dup_trx_lock_);
+  int64_t cnt = committing_dup_trx_set_.size();
+  if (cnt > 0) {
+    if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+      TRANS_LOG(INFO, "print committing dup trx cnt", K(cnt), K(committing_dup_trx_set_));
+    }
+  }
+  return cnt;
+}
+
+int ObDupTableLSHandler::add_commiting_dup_trx(const ObTransID &tx_id)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(committing_dup_trx_lock_);
+  if (!committing_dup_trx_set_.created()) {
+    if (OB_FAIL(committing_dup_trx_set_.create(128, "DupTrxBucket", "DupTrxCnt", MTL_ID()))) {
+      TRANS_LOG(WARN, "create dup trx set failed", K(ret), K(ls_id_), K(tx_id));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(committing_dup_trx_set_.set_refactored(tx_id))) {
+      TRANS_LOG(WARN, "insert into committing_dup_trx_cnt_ failed", K(ret), K(ls_id_), K(tx_id));
+    }
+  }
+  return ret;
+}
+
+int ObDupTableLSHandler::remove_commiting_dup_trx(const ObTransID &tx_id)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(committing_dup_trx_lock_);
+
+  if (OB_SUCC(ret)) {
+    if (!committing_dup_trx_set_.created()) {
+      ret = OB_SUCCESS;
+      TRANS_LOG(WARN, "removing a dup table trx with the empty set", K(ret), K(ls_id_), K(tx_id));
+    } else if (OB_FAIL(committing_dup_trx_set_.erase_refactored(tx_id))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        TRANS_LOG(WARN, "remove from committing_dup_trx_set_ failed", K(ret), K(ls_id_), K(tx_id));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+
+  return  ret;
+}
+
 int ObDupTableLSHandler::get_min_lease_ts_info_(DupTableTsInfo &min_ts_info)
 {
   int ret = OB_SUCCESS;
@@ -1906,5 +1956,18 @@ int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSTabletsStatIterator &collect_ite
 
   return ret;
 }
+
+
+bool ObDupTableLoopWorker::is_useful_dup_ls(const share::ObLSID ls_id)
+{
+  bool is_useful = false;
+
+  if (OB_HASH_EXIST == (dup_ls_id_set_.exist_refactored(ls_id))) {
+    is_useful = true;
+  }
+
+  return is_useful;
+}
+
 } // namespace transaction
 } // namespace oceanbase
