@@ -244,10 +244,6 @@ int ObExprToTemporalBase::calc_result_typeN(ObExprResType &type,
     //result type
     if (OB_SUCC(ret)) {
       type.set_type(get_my_target_obj_type());
-      if (ObDateTimeType == get_my_target_obj_type() && input_char.is_null()) {
-        //set to_date(null) to null type
-        type.set_null();
-      }
     }
     //result scale
     if (OB_SUCC(ret)) {
