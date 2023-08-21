@@ -50,7 +50,8 @@ public:
                              bool &is_drop_column,
                              ObReducedVisibleColSet &reduced_visible_col_set);
   int resolve_index_options_oracle(const ParseNode &node);
-  int resolve_index_options(const ParseNode &action_node_list, const ParseNode &node);
+  int resolve_index_options(const ParseNode &action_node_list, const ParseNode &node,
+                            bool &is_add_index);
   int resolve_partition_options(const ParseNode &node);
   int resolve_constraint_options(const ParseNode &node, const bool is_multi_actions);
   int resolve_modify_foreign_key_state(const ParseNode *node);

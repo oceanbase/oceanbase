@@ -1918,6 +1918,7 @@ int ObRawExprUtils::check_deterministic_single(const ObRawExpr *expr,
  * @param table_schema table_schema
  * @param expr 生成好的表达式
  * @param schema_checker checker
+ * @param resolved_cols Default null. Only use in 'alter table'. Columns which have been resolved in alter table.
  * @return ret
  */
 int ObRawExprUtils::build_generated_column_expr(const obrpc::ObCreateIndexArg *arg,
@@ -1928,7 +1929,8 @@ int ObRawExprUtils::build_generated_column_expr(const obrpc::ObCreateIndexArg *a
                                                 ObRawExpr *&expr,
                                                 const ObSchemaChecker *schema_checker,
                                                 const ObResolverUtils::PureFunctionCheckStatus
-                                                  check_status)
+                                                  check_status,
+                                                ObIArray<share::schema::ObColumnSchemaV2*> *resolved_cols)
 {
   int ret = OB_SUCCESS;
   const ParseNode *node = NULL;
@@ -1980,8 +1982,16 @@ int ObRawExprUtils::build_generated_column_expr(const obrpc::ObCreateIndexArg *a
         ret = OB_ERR_BAD_TABLE;
         LOG_USER_ERROR(OB_ERR_BAD_TABLE, q_name.tbl_name_.length(), q_name.tbl_name_.ptr());
       } else if (OB_ISNULL(col_schema = table_schema.get_column_schema(q_name.col_name_))) {
-        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
-        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, q_name.col_name_.length(), q_name.col_name_.ptr());
+        if (OB_NOT_NULL(resolved_cols)) {
+          col_schema = ObResolverUtils::get_column_schema_from_array(*resolved_cols, q_name.col_name_);
+        }
+        if (OB_ISNULL(col_schema)) {
+          ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+          LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, q_name.col_name_.length(), q_name.col_name_.ptr());
+        }
+      }
+      if (OB_FAIL(ret)) {
+        //do nothing
       } else if (OB_UNLIKELY(col_schema->is_generated_column())) {
         ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
         LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN,

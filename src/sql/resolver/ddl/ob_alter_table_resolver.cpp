@@ -611,6 +611,8 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
     int64_t alter_column_times = 0;
     int64_t alter_column_visibility_times = 0;
     ObReducedVisibleColSet reduced_visible_col_set;
+    //in mysql mode, resolve add index after resolve column actions
+    ObSEArray<int64_t, 4> add_index_action_idxs;
     for (int64_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
       ParseNode *action_node = node.children_[i];
       if (OB_ISNULL(action_node)) {
@@ -679,9 +681,14 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         //deal with add index drop index rename index
         case T_ALTER_INDEX_OPTION: {
             // mysql对应alter index
+            bool is_add_index = false;
             alter_table_stmt->set_alter_table_index();
-            if (OB_FAIL(resolve_index_options(node, *action_node))) {
+            if (OB_FAIL(resolve_index_options(node, *action_node, is_add_index))) {
               SQL_RESV_LOG(WARN, "Resolve index option failed!", K(ret));
+            } else if (is_add_index) {
+              if (OB_FAIL(add_index_action_idxs.push_back(i))) {
+                LOG_WARN("push back add index failed", K(ret));
+              }
             }
             break;
           }
@@ -869,6 +876,25 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
       for (uint64_t i = 0; OB_SUCC(ret) && i < drop_col_act_position_list.count(); ++i) {
         if (OB_FAIL(resolve_drop_column_nodes_for_mysql(*node.children_[drop_col_act_position_list.at(i)], reduced_visible_col_set))) {
           SQL_RESV_LOG(WARN, "Resolve drop column error!", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < add_index_action_idxs.count(); ++i) {
+        ParseNode *action_node = NULL;
+        if (add_index_action_idxs.at(i) < 0 || add_index_action_idxs.at(i) > node.num_child_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid id", K(ret), K(node.num_child_), K(add_index_action_idxs));
+        } else if (OB_ISNULL(action_node = node.children_[add_index_action_idxs.at(i)])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (action_node->num_child_ <= 0
+                   || OB_ISNULL(action_node->children_)
+                   || OB_ISNULL(action_node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected action node", K(ret));
+        } else if (OB_FAIL(resolve_add_index(*(action_node->children_[0])))) {
+          LOG_WARN("resolve add index failed", K(ret));
         }
       }
     }
@@ -1144,10 +1170,17 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
         if (OB_FAIL(ret)) {
           // do nothing
         } else {
+          ObSEArray<ObColumnSchemaV2 *, 8> resolved_cols;
+          ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
           bool is_explicit_order = (NULL != sort_column_node->children_[2]
               && 1 != sort_column_node->children_[2]->is_empty_);
-          if (OB_FAIL(resolve_spatial_index_constraint(*table_schema_, sort_item.column_name_,
-              node.num_child_, index_name_value, is_explicit_order, sort_item.is_func_index_))) {
+          if (OB_ISNULL(alter_table_stmt)) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_RESV_LOG(WARN, "alter table stmt should not be null", K(ret));
+          } else if (OB_FAIL(get_table_schema_all_column_schema(resolved_cols, alter_table_stmt->get_alter_table_schema()))) {
+            SQL_RESV_LOG(WARN, "failed to get table column schema", K(ret));
+          } else if (OB_FAIL(resolve_spatial_index_constraint(*table_schema_, sort_item.column_name_,
+              node.num_child_, index_name_value, is_explicit_order, sort_item.is_func_index_, &resolved_cols))) {
             SQL_RESV_LOG(WARN, "check spatial index constraint fail",K(ret),
                 K(sort_item.column_name_), K(node.num_child_));
           }
@@ -3014,7 +3047,8 @@ int ObAlterTableResolver::resolve_index_options_oracle(const ParseNode &node)
 
 // 这里不只处理 index，还会处理 oracle 模式下 alter table 时追加约束
 int ObAlterTableResolver::resolve_index_options(const ParseNode &action_node_list,
-                                                const ParseNode &node)
+                                                const ParseNode &node,
+                                                bool &is_add_index)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(T_ALTER_INDEX_OPTION != node.type_ ||
@@ -3027,7 +3061,9 @@ int ObAlterTableResolver::resolve_index_options(const ParseNode &action_node_lis
     switch(node.children_[0]->type_) {
     case T_INDEX_ADD: {
         ParseNode *index_node = node.children_[0];
-        if (OB_FAIL(resolve_add_index(*index_node))) {
+        if (is_mysql_mode()) {
+          is_add_index = true;
+        } else if (OB_FAIL(resolve_add_index(*index_node))) {
           SQL_RESV_LOG(WARN, "Resolve add index error!", K(ret));
         }
         break;

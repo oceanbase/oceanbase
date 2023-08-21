@@ -422,13 +422,15 @@ public:
   int resolve_subpartition_option(ObPartitionedStmt *stmt,
                                   ParseNode *subpart_node,
                                   share::schema::ObTableSchema &table_schema);
+  // @param [in] resolved_cols the columns which have been resolved in alter table, default null
   int resolve_spatial_index_constraint(
       const share::schema::ObTableSchema &table_schema,
       const common::ObString &column_name,
       int64_t column_num,
       const int64_t index_keyname_value,
       bool is_explicit_order,
-      bool is_func_index);
+      bool is_func_index,
+      ObIArray<share::schema::ObColumnSchemaV2*> *resolved_cols = NULL);
   int resolve_spatial_index_constraint(
       const share::schema::ObColumnSchemaV2 &column_schema,
       int64_t column_num,

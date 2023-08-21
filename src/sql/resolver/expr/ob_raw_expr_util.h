@@ -275,7 +275,8 @@ public:
                                          ObRawExpr *&expr,
                                          const ObSchemaChecker *schema_checker = NULL,
                                          const ObResolverUtils::PureFunctionCheckStatus
-                                           check_status = ObResolverUtils::DISABLE_CHECK);
+                                           check_status = ObResolverUtils::DISABLE_CHECK,
+                                         ObIArray<share::schema::ObColumnSchemaV2*> *resolved_cols = NULL);
   static int build_generated_column_expr(const common::ObString &expr_str,
                                          ObRawExprFactory &expr_factory,
                                          const ObSQLSessionInfo &session_info,

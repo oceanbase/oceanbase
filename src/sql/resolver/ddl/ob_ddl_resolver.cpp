@@ -6066,7 +6066,8 @@ int ObDDLResolver::resolve_spatial_index_constraint(
     int64_t column_num,
     const int64_t index_keyname_value,
     bool is_explicit_order,
-    bool is_func_index)
+    bool is_func_index,
+    ObIArray<share::schema::ObColumnSchemaV2*> *resolved_cols)
 {
   int ret = OB_SUCCESS;
   const ObColumnSchemaV2 *column_schema = NULL;
@@ -6089,7 +6090,8 @@ int ObDDLResolver::resolve_spatial_index_constraint(
                                                             table_schema,
                                                             expr,
                                                             schema_checker_,
-                                                            ObResolverUtils::CHECK_FOR_FUNCTION_INDEX))) {
+                                                            ObResolverUtils::CHECK_FOR_FUNCTION_INDEX,
+                                                            resolved_cols))) {
       LOG_WARN("build generated column expr failed", K(ret));
     } else if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
