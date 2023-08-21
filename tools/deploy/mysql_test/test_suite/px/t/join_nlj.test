@@ -67,6 +67,7 @@ select * from rf_t1 join
 on rf_t1.c1 = cc;
 
 ##bugfix:
+explain select /*+parallel(10), px_join_filter(a), pq_map(a), use_hash(a, b)*/  * from rf_t1 a join rf_t2 b  on a.c1 = b.c1;
 --sorted_result
 select /*+parallel(10), px_join_filter(a), pq_map(a), use_hash(a, b)*/  * from rf_t1 a join rf_t2 b  on a.c1 = b.c1;
 

@@ -349,6 +349,53 @@ c1	c2	cc
 3	3	3
 4	4	4
 5	5	5
+explain select /*+parallel(10), px_join_filter(a), pq_map(a), use_hash(a, b)*/  * from rf_t1 a join rf_t2 b  on a.c1 = b.c1;
+Query Plan
+================================================================================
+|ID|OPERATOR                                    |NAME    |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------------
+|0 |PX COORDINATOR                              |        |5       |7           |
+|1 |└─EXCHANGE OUT DISTR                        |:EX10002|5       |4           |
+|2 |  └─HASH JOIN                               |        |5       |3           |
+|3 |    ├─JOIN FILTER CREATE                    |:RF0000 |5       |2           |
+|4 |    │ └─EXCHANGE IN DISTR                   |        |5       |2           |
+|5 |    │   └─EXCHANGE OUT DISTR (HASH LOCAL)   |:EX10000|5       |2           |
+|6 |    │     └─PX BLOCK ITERATOR               |        |5       |2           |
+|7 |    │       └─TABLE FULL SCAN               |b       |5       |2           |
+|8 |    └─EXCHANGE IN DISTR                     |        |5       |1           |
+|9 |      └─EXCHANGE OUT DISTR (PKEY HASH LOCAL)|:EX10001|5       |1           |
+|10|        └─JOIN FILTER USE                   |:RF0000 |5       |1           |
+|11|          └─PX BLOCK ITERATOR               |        |5       |1           |
+|12|            └─TABLE FULL SCAN               |a       |5       |1           |
+================================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(a.c1, a.c2, b.c1, b.c2)]), filter(nil), rowset=16
+  1 - output([INTERNAL_FUNCTION(a.c1, a.c2, b.c1, b.c2)]), filter(nil), rowset=16
+      dop=10
+  2 - output([a.c1], [b.c1], [b.c2], [a.c2]), filter(nil), rowset=16
+      equal_conds([a.c1 = b.c1]), other_conds(nil)
+  3 - output([b.c1], [b.c2]), filter(nil), rowset=16
+      RF_TYPE(in, range, bloom), RF_EXPR[b.c1]
+  4 - output([b.c1], [b.c2]), filter(nil), rowset=16
+  5 - output([b.c1], [b.c2]), filter(nil), rowset=16
+      (#keys=1, [b.c1]), dop=10
+  6 - output([b.c1], [b.c2]), filter(nil), rowset=16
+      slave mapping
+  7 - output([b.c1], [b.c2]), filter(nil), rowset=16
+      access([b.c1], [b.c2]), partitions(p[0-2])
+      is_index_back=false, is_global_index=false,
+      range_key([b.c1]), range(MIN ; MAX)always true
+  8 - output([a.c1], [a.c2]), filter(nil), rowset=16
+  9 - output([a.c1], [a.c2]), filter(nil), rowset=16
+      (#keys=1, [a.c1]), dop=10
+ 10 - output([a.c1], [a.c2]), filter(nil), rowset=16
+ 11 - output([a.c1], [a.c2]), filter(nil), rowset=16
+      slave mapping
+ 12 - output([a.c1], [a.c2]), filter([RF_IN_FILTER(a.c1)], [RF_RANGE_FILTER(a.c1)], [RF_BLOOM_FILTER(a.c1)]), rowset=16
+      access([a.c1], [a.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false],
+      range_key([a.__pk_increment]), range(MIN ; MAX)always true
 select /*+parallel(10), px_join_filter(a), pq_map(a), use_hash(a, b)*/  * from rf_t1 a join rf_t2 b  on a.c1 = b.c1;
 c1	c2	c1	c2
 1	1	1	1
