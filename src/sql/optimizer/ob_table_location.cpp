@@ -725,6 +725,7 @@ int ObTableLocation::assign(const ObTableLocation &other)
     is_non_partition_optimized_ = other.is_non_partition_optimized_;
     tablet_id_ = other.tablet_id_;
     object_id_ = other.object_id_;
+    check_no_partiton_ = other.check_no_partiton_;
     if (OB_FAIL(loc_meta_.assign(other.loc_meta_))) {
       LOG_WARN("assign loc meta failed", K(ret), K(other.loc_meta_));
     }
@@ -852,6 +853,7 @@ void ObTableLocation::reset()
   is_non_partition_optimized_ = false;
   tablet_id_.reset();
   object_id_ = OB_INVALID_ID;
+  check_no_partiton_ = false;
 }
 int ObTableLocation::init(share::schema::ObSchemaGetterGuard &schema_guard,
     const ObDMLStmt &stmt,
@@ -1700,7 +1702,9 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
 
     if ( OB_SUCC(ret)
         && 0 == partition_ids.count()
-        && (stmt::T_INSERT == stmt_type_ || stmt::T_REPLACE == stmt_type_)) {
+        && (stmt::T_INSERT == stmt_type_
+            || stmt::T_REPLACE == stmt_type_
+            || check_no_partiton_)) {
       ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
       LOG_USER_WARN(OB_NO_PARTITION_FOR_GIVEN_VALUE);
     }
@@ -4739,6 +4743,7 @@ OB_DEF_SERIALIZE(ObTableLocation)
   OB_UNIS_ENCODE(object_id_);
   OB_UNIS_ENCODE(related_list_);
   OB_UNIS_ENCODE(table_type_);
+  OB_UNIS_ENCODE(check_no_partiton_);
   return ret;
 }
 
@@ -4816,6 +4821,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableLocation)
   OB_UNIS_ADD_LEN(object_id_);
   OB_UNIS_ADD_LEN(related_list_);
   OB_UNIS_ADD_LEN(table_type_);
+  OB_UNIS_ADD_LEN(check_no_partiton_);
   return len;
 }
 
@@ -4971,6 +4977,7 @@ OB_DEF_DESERIALIZE(ObTableLocation)
   OB_UNIS_DECODE(object_id_);
   OB_UNIS_DECODE(related_list_);
   OB_UNIS_DECODE(table_type_);
+  OB_UNIS_DECODE(check_no_partiton_);
   return ret;
 }
 

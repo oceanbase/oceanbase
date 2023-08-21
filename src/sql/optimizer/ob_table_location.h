@@ -497,7 +497,8 @@ public:
     is_non_partition_optimized_(false),
     tablet_id_(ObTabletID::INVALID_TABLET_ID),
     object_id_(OB_INVALID_ID),
-    related_list_(allocator_)
+    related_list_(allocator_),
+    check_no_partiton_(false)
   {
   }
 
@@ -545,7 +546,8 @@ public:
     is_non_partition_optimized_(false),
     tablet_id_(ObTabletID::INVALID_TABLET_ID),
     object_id_(OB_INVALID_ID),
-    related_list_(allocator_)
+    related_list_(allocator_),
+    check_no_partiton_(false)
   {
   }
   virtual ~ObTableLocation() { reset(); }
@@ -768,7 +770,10 @@ public:
                                           const bool is_dml_table = true);
 
   int calc_not_partitioned_table_ids(ObExecContext &exec_ctx);
-
+  void set_check_no_partiton(const bool check)
+  {
+    check_no_partiton_ = check;
+  }
   TO_STRING_KV(K_(loc_meta),
                K_(part_projector),
                K_(has_dynamic_exec_param),
@@ -1165,6 +1170,7 @@ private:
   ObTabletID tablet_id_;
   ObObjectID object_id_;
   common::ObList<DASRelatedTabletMap::MapEntry, common::ObIAllocator> related_list_;
+  bool check_no_partiton_;
 };
 
 }
