@@ -35,6 +35,7 @@ struct ObLockWaitNode: public common::SpHashNode
            const int64_t last_compact_cnt,
            const int64_t total_trans_node_cnt,
            const char* key,
+           const uint32_t sess_id,
            int64_t tx_id,
            int64_t holder_tx_id);
   void change_hash(const int64_t hash, const int64_t lock_seq);

@@ -2986,6 +2986,7 @@ int ObMemtable::post_row_write_conflict_(ObMvccAccessCtx &acc_ctx,
                                        remote_tx,
                                        last_compact_cnt,
                                        total_trans_node_cnt,
+                                       acc_ctx.tx_desc_->get_session_id(),
                                        tx_id,
                                        conflict_tx_id,
                                        recheck_func);

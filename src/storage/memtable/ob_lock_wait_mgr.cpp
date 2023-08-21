@@ -571,6 +571,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                              const bool is_remote_sql,
                              const int64_t last_compact_cnt,
                              const int64_t total_trans_node_cnt,
+                             const uint32_t sess_id,
                              const ObTransID &tx_id,
                              const ObTransID &holder_tx_id,
                              ObFunction<int(bool&, bool&)> &rechecker)
@@ -604,6 +605,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                 last_compact_cnt,
                 total_trans_node_cnt,
                 to_cstring(row_key),// just for virtual table display
+                sess_id,
                 tx_id,
                 holder_tx_id);
         node->set_need_wait();
@@ -621,6 +623,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                              const bool is_remote_sql,
                              const int64_t last_compact_cnt,
                              const int64_t total_trans_node_cnt,
+                             const uint32_t sess_id,
                              const transaction::ObTransID &tx_id,
                              const transaction::ObTransID &holder_tx_id,
                              const ObTableLockMode &lock_mode,
@@ -659,6 +662,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                 last_compact_cnt,
                 total_trans_node_cnt,
                 lock_id_buf, // just for virtual table display
+                sess_id,
                 tx_id,
                 holder_tx_id);
       node->set_need_wait();

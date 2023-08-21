@@ -158,6 +158,7 @@ int ObRowConflictHandler::post_row_read_conflict(ObMvccAccessCtx &acc_ctx,
                                        remote_tx,
                                        last_compact_cnt,
                                        total_trans_node_cnt,
+                                       tx_desc->get_session_id(),
                                        tx_id,
                                        conflict_tx_id,
                                        recheck_func);

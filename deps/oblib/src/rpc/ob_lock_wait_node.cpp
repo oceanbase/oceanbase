@@ -31,6 +31,7 @@ void ObLockWaitNode::set(void* addr,
                          const int64_t last_compact_cnt,
                          const int64_t total_trans_node_cnt,
                          const char* key,
+                         const uint32_t sess_id,
                          int64_t tx_id,
                          int64_t holder_tx_id) {
   hash_ = hash | 1;
@@ -39,6 +40,7 @@ void ObLockWaitNode::set(void* addr,
   lock_seq_ = lock_seq;
   abs_timeout_ = timeout;
   tablet_id_ = tablet_id;//used for gv$lock_wait_stat
+  sessid_ = sess_id;
   tx_id_ = tx_id;//requester used for deadlock detection
   holder_tx_id_ = holder_tx_id; // txn id of lock holder
   last_compact_cnt_ = last_compact_cnt,
