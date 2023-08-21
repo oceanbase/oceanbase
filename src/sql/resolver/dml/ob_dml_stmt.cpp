@@ -1761,6 +1761,36 @@ int ObDMLStmt::formalize_child_stmt_expr_reference()
   return ret;
 }
 
+int ObDMLStmt::get_table_pseudo_column_like_exprs(uint64_t table_id,
+                                                  ObIArray<ObRawExpr *> &pseudo_columns)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < pseudo_column_like_exprs_.count(); i++) {
+    if (OB_ISNULL(pseudo_column_like_exprs_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("pseudo column like expr is null", K(ret));
+    } else if (pseudo_column_like_exprs_.at(i)->is_pseudo_column_expr() &&
+               static_cast<ObPseudoColumnRawExpr *>(pseudo_column_like_exprs_.at(i))->get_table_id() == table_id) {
+      if (OB_FAIL(pseudo_columns.push_back(pseudo_column_like_exprs_.at(i)))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_table_pseudo_column_like_exprs(ObIArray<uint64_t> &table_ids,
+                                                  ObIArray<ObRawExpr *> &pseudo_columns)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); i++) {
+    if (OB_FAIL(get_table_pseudo_column_like_exprs(table_ids.at(i), pseudo_columns))) {
+      LOG_WARN("get table pseduo column like expr failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDMLStmt::check_pseudo_column_valid()
 {
   int ret = OB_SUCCESS;

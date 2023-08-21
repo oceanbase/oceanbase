@@ -1131,6 +1131,9 @@ int ObTransformWinMagic::adjust_column_and_table(ObDMLStmt *main_stmt,
   ObSEArray<ObRawExpr *, 4> merged_column_expr;
   ObSEArray<ObRawExpr *, 4> pushed_column_exprs;
   
+  ObSEArray<ObRawExpr *, 4> merged_pseudo_column_exprs;
+  ObSEArray<ObRawExpr *, 4> pushed_pseudo_column_exprs;
+
   ObArray<SemiInfo *> rm_semi_infos;
   
   if (OB_ISNULL(main_stmt) || OB_ISNULL(view) || 
@@ -1162,15 +1165,23 @@ int ObTransformWinMagic::adjust_column_and_table(ObDMLStmt *main_stmt,
   }
   
   // push down column
-  for (int64_t i = 0; OB_SUCC(ret) && i < main_stmt->get_column_size(); i++) {
-    if (!ObOptimizerUtil::find_item(main_table_ids, 
-                                    main_stmt->get_column_items().at(i).table_id_)) {
-      //do nothing.
-    } else if (OB_FAIL(view_stmt->add_column_item(main_stmt->get_column_items().at(i)))) {
-      LOG_WARN("add column item failed", K(ret));
-    }
+  ObArray<ColumnItem> column_items;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(main_stmt->get_column_items(main_table_ids, column_items))) {
+    LOG_WARN("get column items failed", K(ret));
+  } else if (OB_FAIL(view_stmt->add_column_item(column_items))) {
+    LOG_WARN("add column item failed", K(ret));
   }
-  
+
+  // push down pseudo column
+  ObArray<ObRawExpr *> pseudo_columns;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(main_stmt->get_table_pseudo_column_like_exprs(main_table_ids, pseudo_columns))) {
+    LOG_WARN("get table pseudo column like exprs failed", K(ret));
+  } else if (OB_FAIL(append(view_stmt->get_pseudo_column_like_exprs(), pseudo_columns))) {
+    LOG_WARN("append failed", K(ret));
+  }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < map_info.semi_info_map_.count(); ++i) {
     int64_t idx = map_info.semi_info_map_.at(i);
     SemiInfo *semi = NULL;
@@ -1202,14 +1213,16 @@ int ObTransformWinMagic::adjust_column_and_table(ObDMLStmt *main_stmt,
                                                            main_table, 
                                                            NULL, 
                                                            &pushed_column_exprs, 
-                                                           &merged_column_expr))) {
+                                                           &merged_column_expr,
+                                                           &pushed_pseudo_column_exprs,
+                                                           &merged_pseudo_column_exprs))) {
       LOG_WARN("failed to merge table items", K(ret));
     } else if (OB_FAIL(ObTransformUtils::replace_table_in_semi_infos(main_stmt, view_table,
                                                                      main_table))) {
       LOG_WARN("failed to replace table info in semi infos", K(ret));
     }
   }
-  
+
   for (int64_t i = 0; OB_SUCC(ret) && i < map_info.from_map_.count(); i++) {
     int64_t from_idx = map_info.from_map_.at(i);
     if (from_idx != OB_INVALID_ID && 
@@ -1252,13 +1265,26 @@ int ObTransformWinMagic::adjust_column_and_table(ObDMLStmt *main_stmt,
     }
   }
 
+
+  ObSEArray<ObRawExpr *, 4> new_col_for_pseudo_cols;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(main_stmt->get_pseudo_column_like_exprs(),
+                                                  pushed_pseudo_column_exprs))) {
+    LOG_WARN("remove item failed", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_,
+                                                               *view,
+                                                               main_stmt,
+                                                               merged_pseudo_column_exprs,
+                                                               new_col_for_pseudo_cols))) {
+    LOG_WARN("create columns for view failed", K(ret));
+  } else if (OB_FAIL(main_stmt->replace_relation_exprs(pushed_pseudo_column_exprs, new_col_for_pseudo_cols))) {
+    LOG_WARN("replace inner stmt expr failed", K(ret));
+  }
+
   ObSEArray<ObRawExpr *, 4> new_col_in_main;
-  ObSEArray<ObRawExpr *, 4> select_exprs;
   //create select item for view
   if (OB_FAIL(ret)) {
     //do nothing.
-  } else if (OB_FAIL(view_stmt->get_select_exprs(select_exprs)))  {
-    LOG_WARN("failed to get select exprs", K(ret));
   } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_, 
                                                                *view, 
                                                                main_stmt, 

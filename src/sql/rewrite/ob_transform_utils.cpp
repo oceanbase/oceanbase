@@ -5330,12 +5330,17 @@ int ObTransformUtils::merge_table_items(ObDMLStmt *stmt,
                                         const TableItem *target_table,
                                         const ObIArray<int64_t> *output_map,
                                         ObIArray<ObRawExpr *> *pushed_col_exprs,
-                                        ObIArray<ObRawExpr *> *merged_col_exprs)
+                                        ObIArray<ObRawExpr *> *merged_col_exprs,
+                                        ObIArray<ObRawExpr *> *pushed_pseudo_col_exprs,
+                                        ObIArray<ObRawExpr *> *merged_pseudo_col_exprs)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 16> from_col_exprs;
   ObSEArray<ObRawExpr *, 16> to_col_exprs;
+  ObSEArray<ObRawExpr *, 16> from_pseudo_col_exprs;
+  ObSEArray<ObRawExpr *, 16> to_pseudo_col_exprs;
   ObSEArray<ColumnItem, 16> target_column_items;
+  ObStmtExprReplacer replacer;
   if (OB_ISNULL(stmt) || OB_ISNULL(source_table) || OB_ISNULL(target_table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parameters", K(ret), K(stmt), K(source_table),
@@ -5346,6 +5351,63 @@ int ObTransformUtils::merge_table_items(ObDMLStmt *stmt,
   } else {
     uint64_t source_table_id = source_table->table_id_;
     uint64_t target_table_id = target_table->table_id_;
+
+    ObArray<ObRawExpr *> target_pseudo_like_column_exprs;
+    ObArray<ObRawExpr *> source_pseudo_like_column_exprs;
+    if (OB_FAIL(stmt->get_table_pseudo_column_like_exprs(target_table_id, target_pseudo_like_column_exprs))) {
+      LOG_WARN("get table pseudo column expr failed", K(ret));
+    } else if (OB_FAIL(stmt->get_table_pseudo_column_like_exprs(source_table_id, source_pseudo_like_column_exprs))) {
+      LOG_WARN("get table pseudo column expr failed", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < target_pseudo_like_column_exprs.count(); i++) {
+      if (OB_ISNULL(target_pseudo_like_column_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pseudo col expr is null", K(ret));
+      } else if (OB_UNLIKELY(!target_pseudo_like_column_exprs.at(i)->is_pseudo_column_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pseudo col expr is not pseudo column expr type", K(ret));
+      } else {
+        bool found = false;
+        ObRawExpr *merged_pseudo_col_expr = NULL;
+        for (int64_t j = 0; OB_SUCC(ret) && !found && j < source_pseudo_like_column_exprs.count(); j++) {
+          if (OB_ISNULL(source_pseudo_like_column_exprs.at(j))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("stmt pseudo like column expr is null", K(ret));
+          } else if (source_pseudo_like_column_exprs.at(j)->get_expr_type() ==
+                                                            target_pseudo_like_column_exprs.at(i)->get_expr_type()) {
+            found = true;
+            if (OB_FAIL(from_pseudo_col_exprs.push_back(target_pseudo_like_column_exprs.at(i)))
+                    || OB_FAIL(to_pseudo_col_exprs.push_back(source_pseudo_like_column_exprs.at(j)))) {
+              LOG_WARN("push expr into array failed", K(ret));
+            } else {
+              merged_pseudo_col_expr = source_pseudo_like_column_exprs.at(j);
+            }
+          }
+        }
+
+        if (OB_SUCC(ret) && !found) {
+          static_cast<ObPseudoColumnRawExpr *>(target_pseudo_like_column_exprs.at(i))->set_table_id(source_table_id);
+          static_cast<ObPseudoColumnRawExpr *>(target_pseudo_like_column_exprs.at(i))->set_table_name(
+                                                                                    source_table->get_table_name());
+          merged_pseudo_col_expr = target_pseudo_like_column_exprs.at(i);
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (pushed_pseudo_col_exprs == NULL || merged_pseudo_col_exprs == NULL) {
+          //do nothing
+        } else if (OB_FAIL(pushed_pseudo_col_exprs->push_back(target_pseudo_like_column_exprs.at(i)))
+                  || OB_FAIL(merged_pseudo_col_exprs->push_back(merged_pseudo_col_expr))) {
+          LOG_WARN("append failed", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(replacer.add_replace_exprs(from_pseudo_col_exprs, to_pseudo_col_exprs))) {
+      LOG_WARN("failed to add replace exprs", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_pseudo_column_like_exprs(), from_pseudo_col_exprs))) {
+      LOG_WARN("remove item failed", K(ret));
+    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < target_column_items.count(); ++i) {
       ColumnItem *target_col = NULL;
       ColumnItem *source_col = NULL;
@@ -5410,7 +5472,6 @@ int ObTransformUtils::merge_table_items(ObDMLStmt *stmt,
     }
 
     if (OB_SUCC(ret) && !from_col_exprs.empty()) {
-      ObStmtExprReplacer replacer;
       if (OB_FAIL(replacer.add_replace_exprs(from_col_exprs, to_col_exprs))) {
         LOG_WARN("failed to add replace exprs", K(ret));
       } else if (OB_FAIL(stmt->iterate_stmt_expr(replacer))) {

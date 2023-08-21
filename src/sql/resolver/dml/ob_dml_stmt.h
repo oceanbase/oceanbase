@@ -927,6 +927,8 @@ public:
   { return pseudo_column_like_exprs_; }
   const common::ObIArray<ObRawExpr *> &get_pseudo_column_like_exprs() const
   { return pseudo_column_like_exprs_; }
+  int get_table_pseudo_column_like_exprs(uint64_t table_id, ObIArray<ObRawExpr *> &pseudo_columns);
+  int get_table_pseudo_column_like_exprs(ObIArray<uint64_t> &table_id, ObIArray<ObRawExpr *> &pseudo_columns);
   int rebuild_tables_hash();
   int update_rel_ids(ObRelIds &rel_ids, const ObIArray<int64_t> &bit_index_map);
   int update_column_item_rel_id();

@@ -982,7 +982,9 @@ public:
                                const TableItem *target_table,
                                const ObIArray<int64_t> *output_map,
                                ObIArray<ObRawExpr *> *old_target_col_expr = NULL,
-                               ObIArray<ObRawExpr *> *new_target_col_expr = NULL);
+                               ObIArray<ObRawExpr *> *new_target_col_expr = NULL,
+                               ObIArray<ObRawExpr *> *pushed_pseudo_col_exprs = NULL,
+                               ObIArray<ObRawExpr *> *merged_pseudo_col_exprs = NULL);
 
   static int merge_table_items(ObSelectStmt *source_stmt,
                                ObSelectStmt *target_stmt,
