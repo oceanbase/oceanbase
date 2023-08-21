@@ -314,7 +314,7 @@ int ObOptStatSqlService::fetch_table_stat(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObOptTableStat stat;
   stat.set_table_id(key.get_table_id());
-  ObSQLClientRetryWeak sql_client_retry_weak(mysql_proxy_);
+  ObSQLClientRetryWeak sql_client_retry_weak(mysql_proxy_, false, OB_INVALID_TIMESTAMP, false);
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     sqlclient::ObMySQLResult *result = NULL;
     ObSqlString sql;
@@ -1263,7 +1263,7 @@ int ObOptStatSqlService::fetch_column_stat(const uint64_t tenant_id,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(key_col_stats), K(ret));
   } else {
-    ObSQLClientRetryWeak sql_client_retry_weak(mysql_proxy_);
+    ObSQLClientRetryWeak sql_client_retry_weak(mysql_proxy_, false, OB_INVALID_TIMESTAMP, false);
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
       ObSqlString sql;
@@ -1987,7 +1987,7 @@ int ObOptStatSqlService::fetch_table_rowcnt(const uint64_t tenant_id,
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
       sqlclient::ObMySQLResult *client_result = NULL;
-      ObSQLClientRetryWeak sql_client_retry_weak(mysql_proxy_);
+      ObSQLClientRetryWeak sql_client_retry_weak(mysql_proxy_, false, OB_INVALID_TIMESTAMP, false);
       if (OB_FAIL(sql_client_retry_weak.read(proxy_result, tenant_id, raw_sql.ptr()))) {
         LOG_WARN("failed to execute sql", K(ret), K(raw_sql));
       } else if (OB_ISNULL(client_result = proxy_result.get_result())) {
