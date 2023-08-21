@@ -98,19 +98,12 @@ int ObQueryDriver::response_query_header(const ColumnsFieldIArray &fields,
 
   // 发送 field 信息
   if (OB_SUCC(ret)) {
-    const ColumnsFieldIArray *fields = result.get_field_columns();
-    if (OB_ISNULL(fields)) {
-      ret = OB_INVALID_ARGUMENT;
-      result.set_errcode(ret);
-    }
-
-    
     if (session_.get_insert_query_cache()) {
       // Store fields to query cache.
       ObQueryCacheValueHandle handle;
-      const ColumnsFieldArray *real_fields = reinterpret_cast<const ColumnsFieldArray *>(fields);
+      const ColumnsFieldArray &real_fields = reinterpret_cast<const ColumnsFieldArray &>(fields);
       if (OB_FAIL(session_.get_query_cache()->insert(session_.get_query_cache_key(),
-                                                    *real_fields,
+                                                    real_fields,
                                                     handle))) {
         // The resultset will not be inserted into the query cache
         // if there is a key that already exists.

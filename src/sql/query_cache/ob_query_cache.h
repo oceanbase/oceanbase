@@ -170,8 +170,8 @@ class ObQueryCache : public common::ObKVCache<ObQueryCacheKey, ObQueryCacheValue
 public:
   virtual ~ObQueryCache();
   static ObQueryCache* get_instance();
-  inline void add_mem_size(int64_t row_mem_size) { row_mem_size_ += row_mem_size; }
-  inline void add_row_cnt(int64_t row_cnt) { row_cnt_ += row_cnt; }
+  inline void add_mem_size(int64_t row_mem_size) { ATOMIC_AAF(&row_mem_size_, row_mem_size); }
+  inline void add_row_cnt(int64_t row_cnt) { ATOMIC_AAF(&row_cnt_, row_cnt); }
   inline uint64_t get_size() const { return size() + row_mem_size_; }
   inline DRWLock &get_lock() { return lock_; } 
   OB_INLINE bool is_valid() { return OB_NOT_NULL(instance_) && PLACE_HOLDER != (uint64_t)instance_; }
