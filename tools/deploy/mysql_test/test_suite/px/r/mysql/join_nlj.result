@@ -207,6 +207,40 @@ insert into rf_t1 values(1, 1),(2, 2),(3, 3),(4, 4),(5, 5);
 insert into rf_t2 values(1, 1),(2, 2),(3, 3),(4, 4),(5, 5);
 insert into rf_t3 values(1, 1),(2, 2),(3, 3),(4, 4),(5, 5);
 insert into rf_t4 values(1, 1),(2, 2),(3, 3),(4, 4),(5, 5);
+explain select /*+pq_distribute(rf_t2 NONE, ALL), parallel(1), leading(rf_t1), use_nl(rf_t1, rf_t2) */ * from rf_t1 join rf_t2 on rf_t1.c1 = rf_t2.c1;
+Query Plan
+=====================================================================
+|ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |PX COORDINATOR                   |        |5       |33          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|5       |30          |
+|2 |  └─HASH JOIN                    |        |5       |23          |
+|3 |    ├─EXCHANGE IN DISTR          |        |5       |10          |
+|4 |    │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000|5       |8           |
+|5 |    │   └─TABLE FULL SCAN        |rf_t1   |5       |5           |
+|6 |    └─PX PARTITION ITERATOR      |        |5       |12          |
+|7 |      └─TABLE FULL SCAN          |rf_t2   |5       |12          |
+=====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(rf_t1.c1, rf_t1.c2, rf_t2.c1, rf_t2.c2)]), filter(nil), rowset=16
+  1 - output([INTERNAL_FUNCTION(rf_t1.c1, rf_t1.c2, rf_t2.c1, rf_t2.c2)]), filter(nil), rowset=16
+      dop=1
+  2 - output([rf_t1.c1], [rf_t2.c1], [rf_t1.c2], [rf_t2.c2]), filter(nil), rowset=16
+      equal_conds([rf_t1.c1 = rf_t2.c1]), other_conds(nil)
+  3 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=16
+  4 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=16
+      (#keys=1, [rf_t1.c1]), is_single, dop=1
+  5 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=16
+      access([rf_t1.c1], [rf_t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([rf_t1.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([rf_t2.c1], [rf_t2.c2]), filter(nil), rowset=16
+      affinitize, force partition granule
+  7 - output([rf_t2.c1], [rf_t2.c2]), filter(nil), rowset=16
+      access([rf_t2.c1], [rf_t2.c2]), partitions(p[0-2])
+      is_index_back=false, is_global_index=false, 
+      range_key([rf_t2.c1]), range(MIN ; MAX)always true
 explain select /*+pq_distribute(rf_t2 NONE, ALL), parallel(2), leading(rf_t1), use_nl(rf_t1, rf_t2) */ * from rf_t1 join rf_t2 on rf_t1.c1 = rf_t2.c1;
 Query Plan
 =======================================================================
@@ -284,12 +318,12 @@ Outputs & filters:
   9 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=16
  10 - output([rf_t1.c1], [rf_t1.c2]), filter(nil), rowset=16
       access([rf_t1.c1], [rf_t1.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      is_index_back=false, is_global_index=false, 
       range_key([rf_t1.__pk_increment]), range(MIN ; MAX)always true
  11 - output(nil), filter(nil), rowset=16
       access([GROUP_ID]), partitions(p[0-2])
-      is_index_back=false, is_global_index=false,
-      range_key([rf_t2.c1]), range(MIN ; MAX),
+      is_index_back=false, is_global_index=false, 
+      range_key([rf_t2.c1]), range(MIN ; MAX), 
       range_cond([:0 = rf_t2.c1])
  12 - output([rf_t4.c1]), filter(nil), rowset=16
       access([GROUP_ID], [rf_t4.c1]), partitions(p0)
@@ -315,4 +349,11 @@ c1	c2	cc
 3	3	3
 4	4	4
 5	5	5
+select /*+parallel(10), px_join_filter(a), pq_map(a), use_hash(a, b)*/  * from rf_t1 a join rf_t2 b  on a.c1 = b.c1;
+c1	c2	c1	c2
+1	1	1	1
+2	2	2	2
+3	3	3	3
+4	4	4	4
+5	5	5	5
 drop table if exists rf_t1, rf_t2, rf_t3, rf_t4;

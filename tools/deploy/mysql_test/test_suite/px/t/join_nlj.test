@@ -47,6 +47,7 @@ insert into rf_t2 values(1, 1),(2, 2),(3, 3),(4, 4),(5, 5);
 insert into rf_t3 values(1, 1),(2, 2),(3, 3),(4, 4),(5, 5);
 insert into rf_t4 values(1, 1),(2, 2),(3, 3),(4, 4),(5, 5);
 
+explain select /*+pq_distribute(rf_t2 NONE, ALL), parallel(1), leading(rf_t1), use_nl(rf_t1, rf_t2) */ * from rf_t1 join rf_t2 on rf_t1.c1 = rf_t2.c1;
 explain select /*+pq_distribute(rf_t2 NONE, ALL), parallel(2), leading(rf_t1), use_nl(rf_t1, rf_t2) */ * from rf_t1 join rf_t2 on rf_t1.c1 = rf_t2.c1;
 explain select * from rf_t1 join 
 (
@@ -64,5 +65,9 @@ select * from rf_t1 join
   from rf_t2 join rf_t4 on rf_t4.c1 = rf_t2.c1
 ) 
 on rf_t1.c1 = cc;
+
+##bugfix:
+--sorted_result
+select /*+parallel(10), px_join_filter(a), pq_map(a), use_hash(a, b)*/  * from rf_t1 a join rf_t2 b  on a.c1 = b.c1;
 
 drop table if exists rf_t1, rf_t2, rf_t3, rf_t4;
