@@ -6,6 +6,7 @@
 #include "lib/utility/serialization.h"
 #include "meta_programming/ob_meta_serialization.h"
 #include "common_define.h"
+
 namespace oceanbase {
 namespace unittest {
 struct ExampleUserKey {

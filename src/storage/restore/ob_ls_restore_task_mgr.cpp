@@ -780,7 +780,10 @@ int ObLSRestoreTaskMgr::check_need_discard_transfer_tablet_(
         // overwrite error code if transfer start has stepped into 2-phase transaction before recover finished.
         ret = OB_SUCCESS;
       } else {
-        // TODO(wangxiaohui.wxh): 4.3, cannot let restore failed if restore_scn is between prepare and commit.
+        discard = true;
+        ObTablet *tablet = tablet_handle.get_obj();
+        LOG_INFO("uncommitted tablet created by transfer, but log has been recovered, "
+                 "discard this tablet from restore task mgr", KPC(tablet), K(discard));
       }
     } else {
       LOG_WARN("fail to check transfer start finish", K(ret), K_(ls_id), K(tablet_handle));

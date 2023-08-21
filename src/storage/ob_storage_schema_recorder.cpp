@@ -47,7 +47,8 @@ ObStorageSchemaRecorder::ObStorageSchemaRecorder()
     allocator_(nullptr),
     ls_id_(),
     tablet_id_(),
-    table_id_(0)
+    table_id_(0),
+    max_column_cnt_(0)
 {
 #if defined(__x86_64__)
   STATIC_ASSERT(sizeof(ObStorageSchemaRecorder) <= 128, "size of schema recorder is oversize");
@@ -76,6 +77,7 @@ void ObStorageSchemaRecorder::reset()
 {
   if (is_inited_) {
     ObIStorageClogRecorder::reset();
+    max_column_cnt_ = 0;
   }
 }
 
@@ -143,6 +145,7 @@ int ObStorageSchemaRecorder::inner_replay_clog(
   ObArenaAllocator tmp_allocator;
   ObStorageSchema replay_storage_schema;
   ObTabletHandle tmp_tablet_handle;
+  int64_t stored_col_cnt = 0;
 
   if (OB_FAIL(replay_get_tablet_handle(ls_id_, tablet_id_, scn, tmp_tablet_handle))) {
     if (OB_OBSOLETE_CLOG_NEED_SKIP == ret) {
@@ -152,10 +155,13 @@ int ObStorageSchemaRecorder::inner_replay_clog(
     }
   } else if (OB_FAIL(replay_storage_schema.deserialize(tmp_allocator, buf, size, pos))) {
     LOG_WARN("fail to deserialize table schema", K(ret), K_(tablet_id));
+  } else if (OB_FAIL(replay_storage_schema.get_store_column_count(stored_col_cnt, true/*full_col*/))) {
+    LOG_WARN("failed to get store column count from replay schema", KR(ret),K(replay_storage_schema));
   } else {
-    // just replay schema clog, do not save storage schema
-    // DDL is forbidden during upgrade
-    LOG_INFO("success to replay schema clog", K(ret), K(replay_storage_schema));
+    // replay schema clog and update to ObStorageSchemaRecorder
+    // need get column_cnt on schema_recorder to mini merge
+    max_column_cnt_ = MAX(max_column_cnt_, stored_col_cnt);
+    FLOG_INFO("success to replay schema clog", K(ret), K(replay_storage_schema), K(stored_col_cnt), K(max_column_cnt_));
   }
   replay_storage_schema.reset();
   tmp_tablet_handle.reset();

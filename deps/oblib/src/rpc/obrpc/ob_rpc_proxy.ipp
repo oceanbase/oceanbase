@@ -70,9 +70,8 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
     }
     if (OB_FAIL(rpc_encode_req(proxy_, pool, pcode_, NULL, opts_, pnio_req, pnio_req_sz, false, true, false, sessid_))) {
       RPC_LOG(WARN, "rpc encode req fail", K(ret));
-    } else if(!dst_.is_valid()) {
-      ret = common::OB_INVALID_ARGUMENT;
-      RPC_LOG(WARN, "invalid addr", K(ret));
+    } else if(OB_FAIL(ObPocClientStub::check_blacklist(dst_))) {
+      RPC_LOG(WARN, "check_blacklist failed", K(ret));
     } else if (0 != (pn_err = pn_send(
         (pnio_group_id<<32) + thread_id,
         ObPocClientStub::obaddr2sockaddr(&sock_addr, dst_),
@@ -207,9 +206,8 @@ int SSHandle<pcodeStruct>::abort()
     }
     if (OB_FAIL(rpc_encode_req(proxy_, pool, pcode_, NULL, opts_, pnio_req, pnio_req_sz, false, false, true, sessid_))) {
       RPC_LOG(WARN, "rpc encode req fail", K(ret));
-    } else if(!dst_.is_valid()) {
-      ret = common::OB_INVALID_ARGUMENT;
-      RPC_LOG(WARN, "invalid addr", K(ret));
+    } else if(OB_FAIL(ObPocClientStub::check_blacklist(dst_))) {
+      RPC_LOG(WARN, "check_blacklist failed", K(ret));
     } else if (0 != (pn_err = pn_send(
         (pnio_group_id<<32) + thread_id,
         ObPocClientStub::obaddr2sockaddr(&sock_addr, dst_),

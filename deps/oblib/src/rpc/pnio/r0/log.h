@@ -39,5 +39,6 @@ int tranlate_to_ob_error(int err) {
 #define rk_error(...) do_rk_log_macro(ERROR, tranlate_to_ob_error(err), ##__VA_ARGS__)
 #define rk_info(...) do_rk_log_macro(INFO, oceanbase::common::OB_SUCCESS, ##__VA_ARGS__)
 #define rk_warn(...) do_rk_log_macro(WARN, oceanbase::common::OB_SUCCESS, ##__VA_ARGS__)
+#define rk_trace(...) do_rk_log_macro(WARN, oceanbase::common::OB_SUCCESS, ##__VA_ARGS__)
 #define rk_fatal(...) { rk_error(__VA_ARGS__); exit(1); }
 #define T2S(type, obj) type ## _str(&g_log_fbuf, obj)

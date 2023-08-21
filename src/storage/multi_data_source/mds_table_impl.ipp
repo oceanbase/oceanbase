@@ -64,8 +64,14 @@ MdsTableImpl<MdsTableType>::MdsTableImpl() : MdsTableBase::MdsTableBase()
 template <typename MdsTableType>
 MdsTableImpl<MdsTableType>::~MdsTableImpl() {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(unregister_from_mds_table_mgr())) {
-    MDS_LOG(ERROR, "fail to unregister from mds table mgr", K(*this));
+  if (!is_removed_from_t3m()) {
+    if (OB_FAIL(unregister_from_mds_table_mgr())) {
+      MDS_LOG(ERROR, "fail to unregister from mds table mgr", K(*this));
+      ret = OB_SUCCESS;
+    }
+  }
+  if (OB_FAIL(unregister_from_removed_recorder())) {
+    MDS_LOG(ERROR, "fail to unregister from removed_recorder", K(*this));
   }
   MDS_LOG(INFO, "mds table destructed", K(*this));
 }
@@ -1198,7 +1204,7 @@ template <typename T>
 int MdsTableImpl<MdsTableType>::is_locked_by_others(bool &is_locked, const MdsWriter &self) const
 {
   auto read_op_wrapper = [&is_locked, &self](const UserMdsNode<DummyKey, T> &node) -> int {
-    OB_ASSERT(node.status_.union_.field_.state_ != TwoPhaseCommitState::ON_ABORT);
+    MDS_ASSERT(node.status_.union_.field_.state_ != TwoPhaseCommitState::ON_ABORT);
     if (node.status_.union_.field_.state_ == TwoPhaseCommitState::ON_COMMIT) {// no lock on decided node
       is_locked = false;
     } else if (node.status_.union_.field_.writer_type_ == self.writer_type_ &&
@@ -1317,7 +1323,7 @@ int MdsTableImpl<MdsTableType>::is_locked_by_others(const Key &key,
                                                     const MdsWriter &self) const
 {
   auto read_op_wrapper = [&is_locked, &self](const UserMdsNode<Key, Value> &node) -> int {
-    OB_ASSERT(node.status_.union_.field_.state_ != TwoPhaseCommitState::ON_ABORT);
+    MDS_ASSERT(node.status_.union_.field_.state_ != TwoPhaseCommitState::ON_ABORT);
     if (node.status_.union_.field_.state_ == TwoPhaseCommitState::ON_COMMIT) {
       is_locked = false;
     } else if (node.status_.union_.field_.writer_type_ == self.writer_type_ &&
@@ -1358,7 +1364,7 @@ struct RecycleNodeOp
         MDS_TG(1_ms);
         {
           CLICK();
-          OB_ASSERT(!mds_node.is_aborted_());// should not see aborted node cause cause it is deleted immediatly
+          MDS_ASSERT(!mds_node.is_aborted_());// should not see aborted node cause cause it is deleted immediatly
           if (mds_node.is_committed_()) {
             if (mds_node.end_scn_ == share::SCN::max_scn()) {// must has an associated valid end LOG to commit/abort
               ret = OB_ERR_UNEXPECTED;
@@ -1460,13 +1466,16 @@ int MdsTableImpl<MdsTableType>::forcely_reset_mds_table(const char *reason)
 }
 
 template <typename MdsTableType>
-inline int MdsTableImpl<MdsTableType>::dump_status() const
+inline int MdsTableImpl<MdsTableType>::operate(const ObFunction<int(MdsTableBase &)> &operation)
 {
-  #define PRINT_WRAPPER K(*this)
+  #define PRINT_WRAPPER KR(ret), K(*this)
+  int ret = OB_SUCCESS;
   MDS_TG(10_ms);
   MdsWLockGuard lg(lock_);
-  MDS_LOG_NONE(INFO, "dump mds table status");
-  return OB_SUCCESS;
+  if (OB_FAIL(operation(*this))) {
+    MDS_LOG_NONE(INFO, "fail to apply upper layer operation");
+  }
+  return ret;
   #undef PRINT_WRAPPER
 }
 

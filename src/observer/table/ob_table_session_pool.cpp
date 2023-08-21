@@ -77,10 +77,36 @@ int ObTableApiSessPoolMgr::get_sess_info(ObTableApiCredential &credential,
 {
   int ret = OB_SUCCESS;
   ObTableApiSessPoolGuard &pool_guard = guard.get_sess_pool_guard();
-  if (OB_FAIL(get_session_pool(credential.tenant_id_, pool_guard))) {
-    LOG_WARN("fail to get session pool", K(ret));
+  if (OB_FAIL(get_or_create_sess_pool(credential, pool_guard))) {
+    LOG_WARN("fail to get session or create pool", K(ret));
   } else if (OB_FAIL(pool_guard.get_sess_pool()->get_sess_info(credential, guard))) {
     LOG_WARN("fail to get sess info", K(ret), K(credential));
+  }
+
+  return ret;
+}
+
+int ObTableApiSessPoolMgr::get_or_create_sess_pool(ObTableApiCredential &credential,
+                                                   ObTableApiSessPoolGuard &guard)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = credential.tenant_id_;
+
+  if (OB_FAIL(get_session_pool(tenant_id, guard))) {
+    if (OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("fail to get session pool", K(ret), K(credential));
+    } else { // ret = OB_HASH_NOT_EXIST
+      ObLockGuard<ObSpinLock> lock_guard(lock_); // lock first
+      if (OB_FAIL(get_session_pool(tenant_id, guard))) { // double check
+        if (OB_HASH_NOT_EXIST != ret) {
+          LOG_WARN("fail to get session pool", K(ret), K(credential));
+        } else { // ret = OB_HASH_NOT_EXIST
+          if (OB_FAIL(extend_sess_pool(tenant_id, guard))) {
+            LOG_WARN("fail to extend sess pool", K(ret), K(tenant_id));
+          }
+        }
+      }
+    }
   }
 
   return ret;
@@ -355,7 +381,10 @@ int ObTableApiSessPool::move_sess_to_retired_list(ObTableApiSessNode *node)
   int ret = OB_SUCCESS;
 
   ObLockGuard<ObSpinLock> guard(lock_);
-  if (false == (retired_nodes_.add_last(node))) {
+  if (OB_ISNULL(node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("session node is null", K(ret));
+  } else if (false == (retired_nodes_.add_last(node))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to add retired sess node to retired list", K(ret), K(*node));
   }
@@ -687,6 +716,7 @@ int ObTableApiSessNode::extend_sess_val(ObTableApiSessGuard &guard)
 {
   int ret = OB_SUCCESS;
 
+  ObLockGuard<ObSpinLock> alloc_guard(lock_); // avoid concurrent allocator_.alloc
   void *buf = nullptr;
   if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObTableApiSessNodeVal)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

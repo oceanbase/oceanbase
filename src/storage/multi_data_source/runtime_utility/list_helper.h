@@ -4,6 +4,7 @@
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "common_define.h"
+#include "lib/utility/utility.h"
 #include "src/share/ob_delegate.h"
 
 namespace oceanbase
@@ -58,26 +59,26 @@ struct ListBase// erase List Type
   void check_invariance_() const {
 #ifdef UNITTEST_DEBUG
     if (OB_NOT_NULL(list_head_)) {
-      OB_ASSERT(OB_NOT_NULL(list_tail_));
-      OB_ASSERT(OB_ISNULL(list_head_->prev_));
-      OB_ASSERT(OB_ISNULL(list_tail_->next_));
+      MDS_ASSERT(OB_NOT_NULL(list_tail_));
+      MDS_ASSERT(OB_ISNULL(list_head_->prev_));
+      MDS_ASSERT(OB_ISNULL(list_tail_->next_));
       // can reach tail from head
       const ListNodeBase *iter = list_head_;
       while (iter != list_tail_) {
         iter = iter->next_;
       }
-      OB_ASSERT(iter == list_tail_);
+      MDS_ASSERT(iter == list_tail_);
     }
     if (OB_NOT_NULL(list_tail_)) {
-      OB_ASSERT(OB_NOT_NULL(list_tail_));
-      OB_ASSERT(OB_ISNULL(list_head_->prev_));
-      OB_ASSERT(OB_ISNULL(list_tail_->next_));
+      MDS_ASSERT(OB_NOT_NULL(list_tail_));
+      MDS_ASSERT(OB_ISNULL(list_head_->prev_));
+      MDS_ASSERT(OB_ISNULL(list_tail_->next_));
       // can reach head from tail
       const ListNodeBase *iter = list_tail_;
       while (iter != list_head_) {
         iter = iter->prev_;
       }
-      OB_ASSERT(iter == list_head_);
+      MDS_ASSERT(iter == list_head_);
     }
 #endif
   }
@@ -104,14 +105,14 @@ struct ListBase// erase List Type
   void append(ListNodeBase *new_node) {
     new_node->reset();
     if (OB_ISNULL(list_head_)) {// insert into head
-      OB_ASSERT(OB_ISNULL(list_tail_));
+      MDS_ASSERT(OB_ISNULL(list_tail_));
       list_head_ = new_node;
       list_tail_ = new_node;
     } else {// insert after tail
-      OB_ASSERT(OB_ISNULL(list_tail_->next_));
-      OB_ASSERT(OB_NOT_NULL(new_node));
-      OB_ASSERT(OB_ISNULL(new_node->prev_));
-      OB_ASSERT(OB_ISNULL(new_node->next_));
+      MDS_ASSERT(OB_ISNULL(list_tail_->next_));
+      MDS_ASSERT(OB_NOT_NULL(new_node));
+      MDS_ASSERT(OB_ISNULL(new_node->prev_));
+      MDS_ASSERT(OB_ISNULL(new_node->next_));
       list_tail_->next_ = new_node;
       new_node->prev_ = list_tail_;
       new_node->next_ = nullptr;
@@ -120,11 +121,11 @@ struct ListBase// erase List Type
     check_invariance_();
   }
   void del(ListNodeBase *list_node) {
-    OB_ASSERT(OB_NOT_NULL(list_node));
+    MDS_ASSERT(OB_NOT_NULL(list_node));
     ListNodeBase *before = list_node->prev_;
     ListNodeBase *after = list_node->next_;
     if (OB_ISNULL(before)) {// the first node
-      OB_ASSERT(list_head_ == list_node);
+      MDS_ASSERT(list_head_ == list_node);
       list_head_ = after;
       if (OB_NOT_NULL(list_head_)) {
         list_head_->prev_ = nullptr;
@@ -133,7 +134,7 @@ struct ListBase// erase List Type
       before->next_ = list_node->next_;
     }
     if (OB_ISNULL(after)) {// the last node
-      OB_ASSERT(list_tail_ == list_node);
+      MDS_ASSERT(list_tail_ == list_node);
       list_tail_ = before;
       if (OB_NOT_NULL(list_tail_)) {
         list_tail_->next_ = nullptr;
@@ -207,16 +208,16 @@ public:
     return head;
   }
   void insert_into_head(ListNode<T> *new_node) {
-    OB_ASSERT(OB_NOT_NULL(new_node));
+    MDS_ASSERT(OB_NOT_NULL(new_node));
     new_node->reset();
     if (OB_ISNULL(list_head_)) {// insert into head
-      OB_ASSERT(OB_ISNULL(list_tail_));
+      MDS_ASSERT(OB_ISNULL(list_tail_));
       list_head_ = new_node;
       list_tail_ = new_node;
     } else {// insert before head
-      OB_ASSERT(OB_ISNULL(list_head_->prev_));
-      OB_ASSERT(OB_ISNULL(new_node->prev_));
-      OB_ASSERT(OB_ISNULL(new_node->next_));
+      MDS_ASSERT(OB_ISNULL(list_head_->prev_));
+      MDS_ASSERT(OB_ISNULL(new_node->prev_));
+      MDS_ASSERT(OB_ISNULL(new_node->next_));
       list_head_->prev_ = new_node;
       new_node->next_ = list_head_;
       new_node->prev_ = nullptr;
@@ -251,9 +252,9 @@ public:
   SortedList<T, SORT_TYPE> &operator=(const SortedList<T, SORT_TYPE> &) = delete;
   SortedList<T, SORT_TYPE> &operator=(SortedList<T, SORT_TYPE> &&) = delete;
   void insert(ListNode<T> *new_node) {
-    OB_ASSERT(OB_NOT_NULL(new_node));
-    OB_ASSERT(OB_ISNULL(new_node->next_));
-    OB_ASSERT(OB_ISNULL(new_node->prev_));
+    MDS_ASSERT(OB_NOT_NULL(new_node));
+    MDS_ASSERT(OB_ISNULL(new_node->next_));
+    MDS_ASSERT(OB_ISNULL(new_node->prev_));
     if (ListBase::empty()) {
       ListBase::list_head_ = new_node;
       ListBase::list_tail_ = new_node;
@@ -276,7 +277,7 @@ public:
         new_node->prev_ = ListBase::list_tail_;
         ListBase::list_tail_ = new_node;
       } else if (OB_ISNULL(next_node->prev_)) {// insert to head
-        OB_ASSERT(ListBase::list_head_ == next_node);
+        MDS_ASSERT(ListBase::list_head_ == next_node);
         ListBase::list_head_->prev_ = new_node;
         new_node->next_ = ListBase::list_head_;
         ListBase::list_head_ = new_node;
@@ -291,12 +292,12 @@ public:
   }
   T &get_head() {
     T *data = nullptr;
-    OB_ASSERT(OB_NOT_NULL(data = dynamic_cast<T*>(ListBase::list_head_)));
+    MDS_ASSERT(OB_NOT_NULL(data = dynamic_cast<T*>(ListBase::list_head_)));
     return *data;
   }
   T &get_tail() {
     T *data = nullptr;
-    OB_ASSERT(OB_NOT_NULL(data = dynamic_cast<T*>(ListBase::list_tail_)));
+    MDS_ASSERT(OB_NOT_NULL(data = dynamic_cast<T*>(ListBase::list_tail_)));
     return *data;
   }
 };

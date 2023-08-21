@@ -548,14 +548,6 @@ inline int MdsTableHandle::get_rec_scn(share::SCN &rec_scn) const
   return ret;
 }
 
-inline int MdsTableHandle::dump_status() const
-{
-  int ret = OB_SUCCESS;
-  CHECK_MDS_TABLE_INIT();
-  p_mds_table_base_->dump_status();
-  return ret;
-}
-
 inline int MdsTableHandle::get_node_cnt(int64_t &valid_cnt) const
 {
   int ret = OB_SUCCESS;

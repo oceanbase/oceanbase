@@ -5311,12 +5311,7 @@ int ObSql::get_first_batched_multi_stmt(ObPlanCacheCtx &pc_ctx, ObMultiStmtItem 
   int ret = OB_SUCCESS;
   if (pc_ctx.sql_ctx_.is_do_insert_batch_opt()) {
     // Restore the original SQL according to the first row of parameters
-    if (OB_FAIL(ObPlanCache::do_construct_sql(pc_ctx.allocator_,
-                                              pc_ctx,
-                                              *pc_ctx.insert_batch_opt_info_.multi_raw_params_.at(0),
-                                              pc_ctx.insert_batch_opt_info_.insert_params_count_,
-                                              pc_ctx.insert_batch_opt_info_.sql_delta_length_,
-                                              pc_ctx.fp_result_.pc_key_.name_))) {
+    if (OB_FAIL(ObPlanCache::restore_param_to_truncated_sql(pc_ctx))) {
       LOG_WARN("fail to do construct sql",
           K(ret), K(pc_ctx.fp_result_.pc_key_.name_), K(pc_ctx.insert_batch_opt_info_.new_reconstruct_sql_));
       // if rebuild origin sql fail, this sql would rollback

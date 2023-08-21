@@ -844,8 +844,8 @@ const double MONITOR_MEM_FACTOR = 0.01;
 const double KVCACHE_FACTOR = TENANT_RESERVE_MEM_RATIO;
 
 const double MIN_TENANT_QUOTA = .5;
-const double OB_DTL_CPU = (sysconf(_SC_NPROCESSORS_ONLN) <= 4) ? 1. : 5.;
-const double OB_DATA_CPU = (sysconf(_SC_NPROCESSORS_ONLN) <= 4) ? 1. : 2.5;
+const double OB_DTL_CPU = 5.;
+const double OB_DATA_CPU = 2.5;
 
 const uint64_t OB_INVALID_TENANT_ID = 0;
 const uint64_t OB_SYS_TENANT_ID = 1;

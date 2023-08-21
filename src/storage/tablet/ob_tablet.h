@@ -494,6 +494,7 @@ public:
       common::ObArenaAllocator &allocator,
       ObTabletFullMemoryMdsData &mds_data);
   int64_t to_string(char *buf, const int64_t buf_len) const;
+  int get_max_column_cnt_on_schema_recorder(int64_t &max_column_cnt);
 protected:// for MDS use
   virtual bool check_is_inited_() const override final { return is_inited_; }
   virtual const ObTabletMdsData &get_mds_data_() const override final { return mds_data_; }
@@ -515,13 +516,13 @@ private:
   static int inc_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr, bool &inc_success);
   static void dec_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr);
   int64_t get_try_cache_size() const;
-
 private:
   int inner_check_valid(const bool ignore_ha_status = false) const;
   int get_min_medium_snapshot(int64_t &min_medium_snapshot) const;
 
   int64_t get_self_size() const;
   int get_memtable_mgr(ObIMemtableMgr *&memtable_mgr) const;
+  int get_tablet_memtable_mgr(ObTabletMemtableMgr *&memtable_mgr) const;
   int check_schema_version(const int64_t schema_version);
   int check_snapshot_readable(const int64_t snapshot_version);
 

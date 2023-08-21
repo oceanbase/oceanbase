@@ -512,6 +512,7 @@ int ObPartitionMacroMergeIter::exist(const ObDatumRow *row, bool &is_exist)
       } else {
         is_exist = false;
       }
+      iter->reset();
     }
   }
   return ret;

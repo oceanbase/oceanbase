@@ -19,6 +19,7 @@
 #include "share/stat/ob_dbms_stats_lock_unlock.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "share/stat/ob_opt_stat_manager.h"
+#include "share/stat/ob_opt_stat_monitor_manager.h"
 
 //#define COMPUTE_FREQUENCY_HISTOGRAM
 //   "SELECT /*+NO_USE_PX*/ col, sum(val) over (order by col rows between unbounded preceding and current row) "
@@ -78,6 +79,8 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
         LOG_WARN("failed to add table info", K(ret));
       } else if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, param))) {
         LOG_WARN("failed check stat locked", K(ret));
+      } else if (OB_FAIL(ObOptStatMonitorManager::flush_database_monitoring_info(ctx, false, true))) {
+        LOG_WARN("failed to do flush database monitoring info", K(ret));
       } else if (OB_FAIL(ObDbmsStatsExecutor::gather_table_stats(ctx, param))) {
         LOG_WARN("failed to gather table stats", K(ret));
       } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(session->get_rpc_tenant_id(), param))) {

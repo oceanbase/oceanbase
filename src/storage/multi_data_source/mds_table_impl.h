@@ -138,7 +138,7 @@ public:
   virtual int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(
                                   ObFunction<int(const MdsDumpKV&)> &for_each_op,
                                   const bool for_flush) const override;
-  virtual int dump_status() const override;
+  virtual int operate(const ObFunction<int(MdsTableBase &)> &operation) override;
   int calculate_flush_scn_and_need_dumped_nodes_cnt_(share::SCN need_advanced_rec_scn_lower_limit,
                                                      share::SCN &flush_scn,
                                                      int64_t &need_dumped_nodes_cnt);

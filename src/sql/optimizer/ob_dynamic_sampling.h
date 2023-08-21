@@ -54,7 +54,8 @@ struct ObDSTableParam
     max_ds_timeout_(0),
     degree_(1),
     need_specify_partition_(false),
-    partition_infos_()
+    partition_infos_(),
+    specify_ds_(false)
  {}
 
   bool is_valid() const { return tenant_id_ != 0 &&
@@ -74,6 +75,7 @@ struct ObDSTableParam
   int64_t degree_;
   bool need_specify_partition_;
   ObSEArray<PartInfo, 4, common::ModulePageAllocator, true> partition_infos_;
+  bool specify_ds_;
 
   TO_STRING_KV(K(tenant_id_),
                K(table_id_),
@@ -87,7 +89,8 @@ struct ObDSTableParam
                K(degree_),
                K(sample_block_cnt_),
                K(need_specify_partition_),
-               K(partition_infos_));
+               K(partition_infos_),
+               K(specify_ds_));
 };
 
 enum ObDSResultItemType
@@ -228,7 +231,8 @@ public:
 
   int estimate_table_rowcount(const ObDSTableParam &param,
                               ObIArray<ObDSResultItem> &ds_result_items,
-                              bool &throw_ds_error);
+                              bool &throw_ds_error,
+                              bool &ds_succeed);
   int add_table_info(const ObString &db_name,
                      const ObString &table_name,
                      const ObString &alias_name);
@@ -262,7 +266,7 @@ public:
 template <class T>
   int add_ds_stat_item(const T &item);
 private:
-  int do_estimate_table_rowcount(const ObDSTableParam &param, bool &throw_ds_error);
+  int do_estimate_table_rowcount(const ObDSTableParam &param, bool &throw_ds_error, bool &ds_succeed);
   int get_ds_table_result_from_cache(const ObDSTableParam &param,
                                      ObOptDSStat::Key &key,
                                      ObOptDSStatHandle &ds_stat_handle,

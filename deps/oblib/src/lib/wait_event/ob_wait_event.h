@@ -368,6 +368,7 @@ WAIT_EVENT_DEF(GC_HANDLER_WAIT, 16054, "gc handler lock wait", "", "", "", CONCU
 WAIT_EVENT_DEF(FREEZE_THREAD_POOL_WAIT, 16055, "freeze thread pool wait", "", "", "", CONCURRENCY, "FREEZE_THREAD_POOL_WAIT", true)
 WAIT_EVENT_DEF(DDL_EXECUTE_LOCK_WAIT, 16056, "ddl execute lock wait", "", "", "", CONCURRENCY, "DDL_EXECUTE_LOCK_WAIT", true)
 WAIT_EVENT_DEF(DUP_TABLET_LOCK_WAIT, 16057, "dup tablet lock wait", "", "", "", CONCURRENCY, "DUP_TABLET_LOCK_WAIT", true)
+WAIT_EVENT_DEF(MDS_TABLE_HANDLER_WAIT, 16058, "mds table handler wait", "", "", "", CONCURRENCY, "MDS_TABLE_HANDLER_WAIT", true)
 
 // WAIT_EVENT_DEF(TENANT_MGR_TENANT_BUCKET_LOCK_WAIT, 16056, "tenant mgr tenant bucket lock wait", "", "", "", CONCURRENCY, "TENANT_MGR_TENANT_BUCKET_LOCK_WAIT", true)
 

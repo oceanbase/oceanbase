@@ -738,6 +738,7 @@ private:
   share::SCN compl_end_scn_;
   int64_t turn_id_;
   int64_t retry_id_;
+  share::ObBackupDest archive_dest_;
 
   ObBackupReportCtx report_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupComplementLogTask);

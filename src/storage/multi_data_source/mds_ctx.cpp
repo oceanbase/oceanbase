@@ -35,7 +35,7 @@ MdsCtx::~MdsCtx()
     MdsWLockGuard lg(lock_);
     list_empty = write_list_.empty();
     if (!list_empty) {
-      OB_ASSERT(state_ != TwoPhaseCommitState::ON_COMMIT);// if decided, list is empty
+      MDS_ASSERT(state_ != TwoPhaseCommitState::ON_COMMIT);// if decided, list is empty
       MDS_LOG_RET(INFO, OB_SUCCESS, "nodes not commit or abort when mds ctx destroyed", K(*this));
     }
   }
@@ -79,7 +79,7 @@ void MdsCtx::record_written_node(ListNode<MdsNode> *node)
 
 void MdsCtx::on_redo(const share::SCN &redo_scn)
 {
-  OB_ASSERT(writer_.writer_type_ == WriterType::TRANSACTION);// can only called by TRANS, or must call single_log_commit()
+  MDS_ASSERT(writer_.writer_type_ == WriterType::TRANSACTION);// can only called by TRANS, or must call single_log_commit()
   do_while_retry_with_lock_until_success_for_all_([this, redo_scn]() {// if failed on any node, will release lock and try from first node again
     return for_each_node_try_([redo_scn](MdsNode &node) {// the operation tried on each node
       bool try_success = true;
@@ -93,11 +93,13 @@ void MdsCtx::on_redo(const share::SCN &redo_scn)
 
 void MdsCtx::before_prepare()
 {
-  OB_ASSERT(writer_.writer_type_ == WriterType::TRANSACTION);// can only called by TRANS, or must call single_log_commit()
+  MDS_ASSERT(writer_.writer_type_ == WriterType::TRANSACTION);// can only called by TRANS, or must call single_log_commit()
   do_while_retry_with_lock_until_success_for_all_([this]() {// if failed on any node, will release lock and try from first node again
     return for_each_node_try_([](MdsNode &node) {// the operation tried on each node
       bool try_success = true;
-      if (node.status_.get_state() < TwoPhaseCommitState::BEFORE_PREPARE) {// avoid try lock
+      if (node.status_.get_state() == TwoPhaseCommitState::ON_PREPARE) {// due to force majeure
+        // do nothing, just accept it
+      } else if (node.status_.get_state() < TwoPhaseCommitState::BEFORE_PREPARE) {// avoid try lock
         try_success = node.try_before_prepare();
       }
       return try_success;
@@ -107,7 +109,7 @@ void MdsCtx::before_prepare()
 
 void MdsCtx::on_prepare(const share::SCN &prepare_version)
 {
-  OB_ASSERT(writer_.writer_type_ == WriterType::TRANSACTION);// can only called by TRANS, or must call single_log_commit()
+  MDS_ASSERT(writer_.writer_type_ == WriterType::TRANSACTION);// can only called by TRANS, or must call single_log_commit()
   do_while_retry_with_lock_until_success_for_all_([this, prepare_version]() {// if failed on any node, will release lock and try from first node again
     return for_each_node_try_([prepare_version](MdsNode &node) {// the operation tried on each node
       bool try_success = true;
@@ -121,7 +123,7 @@ void MdsCtx::on_prepare(const share::SCN &prepare_version)
 
 void MdsCtx::on_commit(const share::SCN &commit_version, const share::SCN &commit_scn)
 {
-  OB_ASSERT(writer_.writer_type_ == WriterType::TRANSACTION);// can only called by TRANS, or must call single_log_commit()
+  MDS_ASSERT(writer_.writer_type_ == WriterType::TRANSACTION);// can only called by TRANS, or must call single_log_commit()
   do_while_retry_with_lock_until_success_for_all_([this, commit_version, commit_scn]() {// if failed on any node, will release lock and try from first node again
     return for_each_node_fetch_to_try_([commit_version, commit_scn](MdsNode &node) {// the operation tried on each node, if failed, the fetched node will be insert to head again to rollback
       bool try_success = true;
@@ -161,7 +163,7 @@ void MdsCtx::single_log_commit(const share::SCN commit_version, const share::SCN
 
 void MdsCtx::single_log_abort()
 {
-  OB_ASSERT(writer_.writer_type_ != WriterType::TRANSACTION);// TRANSACTION use two-phase-commit
+  MDS_ASSERT(writer_.writer_type_ != WriterType::TRANSACTION);// TRANSACTION use two-phase-commit
   do_while_retry_with_lock_until_success_for_all_([this]() {// if failed on any node, will release lock and try from first node again
     return for_each_node_fetch_to_try_([](MdsNode &node) {// the operation tried on each node, if failed, the fetched node will be insert to head again to rollback
       bool try_success = true;

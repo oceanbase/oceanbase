@@ -1170,7 +1170,7 @@ int ObBasicStatsEstimator::fill_hints(common::ObIAllocator &alloc,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(table_name));
   } else {
-    const char *fmt_str = "NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS FULL(%.*s)";
+    const char *fmt_str = "NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS FULL(%.*s) OPT_PARAM('ROWSETS_MAX_ROWS', 256)";
     int64_t buf_len = table_name.length() + strlen(fmt_str);
     char *buf = NULL;
     if (OB_ISNULL(buf = static_cast<char *>(alloc.alloc(buf_len)))) {

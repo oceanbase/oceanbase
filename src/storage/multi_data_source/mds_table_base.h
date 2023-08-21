@@ -145,7 +145,7 @@ public:
   share::ObLSID get_ls_id() const;
   int64_t get_node_cnt() const;
   virtual share::SCN get_rec_scn();
-  virtual int dump_status() const = 0;
+  virtual int operate(const ObFunction<int(MdsTableBase &)> &operation) = 0;
   virtual int flush(share::SCN need_advanced_rec_scn_lower_limit) = 0;
   virtual ObTabletID get_tablet_id() const;
   virtual bool is_flushing() const;
@@ -162,7 +162,8 @@ protected:
   void try_decline_rec_scn(const share::SCN scn);
   int get_ls_max_consequent_callbacked_scn_(share::SCN &max_consequent_callbacked_scn) const;
   int register_to_mds_table_mgr();
-  int unregister_from_mds_table_mgr();
+  int unregister_from_mds_table_mgr();// call when marked deleted or released directly
+  int unregister_from_removed_recorder();// call when marked deleted
   int merge(const share::SCN &flushing_scn);
   template <int N>
   void report_rec_scn_event_(const char (&event_str)[N],

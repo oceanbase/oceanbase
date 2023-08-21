@@ -243,16 +243,9 @@ public:
   static int rebuild_raw_params(common::ObIAllocator &allocator,
                                 ObPlanCacheCtx &pc_ctx,
                                 ObFastParserResult &fp_result,
-                                int64_t row_count,
-                                int64_t insert_param_count,
-                                int64_t upd_param_count);
+                                int64_t row_count);
 
-  static int do_construct_sql(common::ObIAllocator &allocator,
-                              ObPlanCacheCtx &pc_ctx,
-                              const ObIArray<ObPCParam *> &raw_params,
-                              int64_t ins_params_count,
-                              int64_t delta_length,
-                              ObString &no_param_sql);
+  static int restore_param_to_truncated_sql(ObPlanCacheCtx &pc_ctx);
 
   static bool can_do_insert_batch_opt(ObPlanCacheCtx &pc_ctx);
 

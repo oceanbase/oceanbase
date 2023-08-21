@@ -131,11 +131,12 @@ int ObCodeGenerator::detect_batch_size(
           0,
           exec_ctx->get_min_cluster_version());
       int64_t rowsets_max_rows = tenant_config->_rowsets_max_rows;
-      OZ(opt_params->get_integer_opt_param(ObOptParamHint::ROWSETS_MAX_ROWS, rowsets_max_rows));
       OZ(expr_cg.detect_batch_size(flattened_exprs, batch_size,
                                    rowsets_max_rows,
                                    tenant_config->_rowsets_target_maxsize,
                                    scan_cardinality));
+      // overwrite batch size if hint is specified
+      OZ(opt_params->get_integer_opt_param(ObOptParamHint::ROWSETS_MAX_ROWS, batch_size));
     }
     // TODO qubin.qb: remove the tracelog when rowsets/batch_size is displayed
     // in plan

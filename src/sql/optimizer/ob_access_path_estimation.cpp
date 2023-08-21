@@ -1398,7 +1398,8 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
     ObDynamicSampling dynamic_sampling(ctx, allocator);
     int64_t start_time = ObTimeUtility::current_time();
     bool throw_ds_error = false;
-    if (OB_FAIL(dynamic_sampling.estimate_table_rowcount(ds_table_param, ds_result_items, throw_ds_error))) {
+    bool ds_succeed = false;
+    if (OB_FAIL(dynamic_sampling.estimate_table_rowcount(ds_table_param, ds_result_items, throw_ds_error, ds_succeed))) {
       if (!throw_ds_error) {
         LOG_WARN("failed to estimate table rowcount caused by some reason, please check!!!", K(ret),
                  K(start_time), K(ObTimeUtility::current_time() - start_time), K(ds_table_param),
@@ -1413,6 +1414,10 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
       } else {
         LOG_WARN("failed to dynamic sampling", K(ret), K(start_time), K(ds_table_param));
       }
+    } else if (!ds_succeed) {
+      if (OB_FAIL(no_ds_paths.assign(paths))) {
+        LOG_WARN("failed to assign", K(ret));
+      } else {/*do nothing*/}
     } else if (OB_FAIL(update_table_stat_info_by_dynamic_sampling(paths.at(0),
                                                                   ds_table_param.ds_level_,
                                                                   ds_result_items,

@@ -40,22 +40,18 @@ public:
   {
     int fd_;
     int status_;
-    int is_negotiated_;
+    bool wait_resp_;
   };
   #define MAX_PIN_KEEP_CNT        10
-  struct rpc_server
+  struct DestKeepAliveState
   {
     easy_addr_t svr_addr_;
     int64_t last_write_ts_;
     int64_t last_read_ts_;
+    int64_t last_access_ts_;
     struct client *c_;
     char client_buf_[sizeof(client)];
-    int64_t rpins_[MAX_PIN_KEEP_CNT];
-    int64_t n_rpin_;
-    int64_t wpins_[MAX_PIN_KEEP_CNT];
-    int64_t n_wpin_;
     int in_black_;
-    int64_t in_black_ts_;
     ObNetKeepAliveData ka_data_;
   };
 
@@ -74,11 +70,13 @@ private:
   void do_server_loop();
   void do_client_loop();
   void mark_white_black();
-  rpc_server *regist_rs_if_need(const easy_addr_t &addr);
+  DestKeepAliveState *regist_dest_if_need(const easy_addr_t &addr);
 private:
   int pipefd_;
   static const int MAX_RS_COUNT = 1543;
-  struct rpc_server *rss_[MAX_RS_COUNT];
+  struct DestKeepAliveState *regist_dests_map_[MAX_RS_COUNT];
+  struct DestKeepAliveState *regist_dests_[MAX_RS_COUNT];
+  int64_t regist_dest_count_;
 };
 
 extern void keepalive_init_data(ObNetKeepAliveData &ka_data);

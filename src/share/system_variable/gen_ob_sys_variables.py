@@ -204,6 +204,8 @@ def make_head_file(pdir, head_file_name, sorted_list):
   head_file.write("  static int64_t get_amount();\n");
   head_file.write("  static int set_value(const char *name, const char * new_value);\n");
   head_file.write("  static int set_value(const common::ObString &name, const common::ObString &new_value);\n");
+  head_file.write("  static int set_base_value(const char *name, const char * new_value);\n");
+  head_file.write("  static int set_base_value(const common::ObString &name, const common::ObString &new_value);\n");
   head_file.write("  static int init_default_values();\n");
   head_file.write("};\n");
   head_file.write("\n");
@@ -343,6 +345,30 @@ def make_cpp_file(pdir, cpp_file_name, sorted_list):
   cpp_file.write("  for (int64_t i = 0; OB_SUCC(ret) && false == name_exist && i < var_amount; ++i){\n")
   cpp_file.write("    if (0 == ObSysVars[i].name_.compare(name)) {\n")
   cpp_file.write("      ObSysVars[i].default_value_.assign_ptr(new_value.ptr(), new_value.length());\n")
+  cpp_file.write("      name_exist = true;\n")
+  cpp_file.write("    }\n")
+  cpp_file.write("  }\n")
+  cpp_file.write("  if (OB_SUCC(ret)) {\n")
+  cpp_file.write("    if (false == name_exist) {\n")
+  cpp_file.write("      ret = OB_ENTRY_NOT_EXIST;\n")
+  cpp_file.write("    }\n")
+  cpp_file.write("  }\n")
+  cpp_file.write("  return ret;\n")
+  cpp_file.write("}\n")
+  cpp_file.write("\n")
+  cpp_file.write("int ObSysVariables::set_base_value(const char *name, const char * new_value)\n")
+  cpp_file.write("{\n")
+  cpp_file.write("  ObString tmp_name(static_cast<int32_t>(strlen(name)), name);\n")
+  cpp_file.write("  ObString tmp_value(static_cast<int32_t>(strlen(new_value)), new_value);\n")
+  cpp_file.write("  return set_base_value(tmp_name, tmp_value);\n")
+  cpp_file.write("}\n")
+  cpp_file.write("int ObSysVariables::set_base_value(const common::ObString &name, const common::ObString &new_value)\n")
+  cpp_file.write("{\n")
+  cpp_file.write("  int ret = OB_SUCCESS;\n")
+  cpp_file.write("  bool name_exist = false;\n")
+  cpp_file.write("  for (int64_t i = 0; OB_SUCC(ret) && false == name_exist && i < var_amount; ++i){\n")
+  cpp_file.write("    if (0 == ObSysVars[i].name_.compare(name)) {\n")
+  cpp_file.write("      ObSysVars[i].base_value_.assign_ptr(new_value.ptr(), new_value.length());\n")
   cpp_file.write("      name_exist = true;\n")
   cpp_file.write("    }\n")
   cpp_file.write("  }\n")

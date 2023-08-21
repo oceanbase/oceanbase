@@ -5233,6 +5233,11 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
                                        const bool convert_real_type_to_decimal /*false*/)
 {
   int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ob_is_valid_obj_type(static_cast<ObObjType>(type_node.type_)))) {
+    ret = OB_ERR_ILLEGAL_TYPE;
+    SQL_RESV_LOG(WARN, "Unsupport data type of column definiton",
+                        K(ident_name), K((type_node.type_)), K(ret));
+  } else {
   data_type.set_obj_type(static_cast<ObObjType>(type_node.type_));
   int32_t length = type_node.int32_values_[0];
   int16_t precision = type_node.int16_values_[0];
@@ -5245,11 +5250,11 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
       (precision >= 0 && scale >= 0)) {
       if (static_cast<ObObjType>(type_node.type_) == ObFloatType ||
           static_cast<ObObjType>(type_node.type_) == ObDoubleType) {
-         data_type.set_obj_type(ObNumberType);
-       } else if (static_cast<ObObjType>(type_node.type_) == ObUFloatType ||
+        data_type.set_obj_type(ObNumberType);
+      } else if (static_cast<ObObjType>(type_node.type_) == ObUFloatType ||
                   static_cast<ObObjType>(type_node.type_) == ObUDoubleType) {
-         data_type.set_obj_type(ObUNumberType);
-       }
+        data_type.set_obj_type(ObUNumberType);
+      }
   }
   const ObAccuracy &default_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY2[is_oracle_mode][data_type.get_obj_type()];
 
@@ -5282,17 +5287,17 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
           LOG_USER_ERROR(OB_ERR_TOO_BIG_SCALE, scale, ident_name.ptr(), OB_MAX_DOUBLE_FLOAT_SCALE);
           LOG_WARN("scale of double overflow", K(ret), K(scale), K(precision));
         } else if (OB_UNLIKELY(OB_DECIMAL_NOT_SPECIFIED == scale &&
-                               precision > OB_MAX_DOUBLE_FLOAT_PRECISION)) {
+                              precision > OB_MAX_DOUBLE_FLOAT_PRECISION)) {
           ret = OB_ERR_COLUMN_SPEC;
           LOG_USER_ERROR(OB_ERR_COLUMN_SPEC, ident_name.length(), ident_name.ptr());
           LOG_WARN("precision of double overflow", K(ret), K(scale), K(precision));
         } else if (OB_UNLIKELY(OB_DECIMAL_NOT_SPECIFIED != scale &&
-                   precision > OB_MAX_DOUBLE_FLOAT_DISPLAY_WIDTH ||
-                   (0 == scale && 0 == precision))) {
+                  precision > OB_MAX_DOUBLE_FLOAT_DISPLAY_WIDTH ||
+                  (0 == scale && 0 == precision))) {
           ret = OB_ERR_TOO_BIG_DISPLAYWIDTH;
           LOG_USER_ERROR(OB_ERR_TOO_BIG_DISPLAYWIDTH,
-                         ident_name.ptr(),
-                         OB_MAX_INTEGER_DISPLAY_WIDTH);
+                        ident_name.ptr(),
+                        OB_MAX_INTEGER_DISPLAY_WIDTH);
         } else if (OB_UNLIKELY(precision < scale)) {
           ret = OB_ERR_M_BIGGER_THAN_D;
           LOG_USER_ERROR(OB_ERR_M_BIGGER_THAN_D, to_cstring(ident_name));
@@ -5347,7 +5352,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
       } else if (is_oracle_mode) {
         if ((number_type == NPT_PERC_SCALE || number_type == NPT_PERC)
             &&(OB_UNLIKELY(precision < OB_MIN_NUMBER_PRECISION)
-               || OB_UNLIKELY(precision > OB_MAX_NUMBER_PRECISION))) {
+              || OB_UNLIKELY(precision > OB_MAX_NUMBER_PRECISION))) {
           ret = OB_NUMERIC_PRECISION_OUT_RANGE;
           LOG_WARN("precision of number overflow", K(ret), K(scale), K(precision));
         } else if (-86 == scale) {
@@ -5358,8 +5363,8 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
 
         if (OB_SUCC(ret)) {
           if ((number_type == NPT_PERC_SCALE || number_type == NPT_STAR_SCALE)
-               && (OB_UNLIKELY(scale < OB_MIN_NUMBER_SCALE)
-                   || OB_UNLIKELY(scale > OB_MAX_NUMBER_SCALE))) {
+              && (OB_UNLIKELY(scale < OB_MIN_NUMBER_SCALE)
+                  || OB_UNLIKELY(scale > OB_MAX_NUMBER_SCALE))) {
             ret = OB_NUMERIC_SCALE_OUT_RANGE;
             LOG_WARN("scale of number out of range", K(ret), K(scale));
           }
@@ -5465,9 +5470,9 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
         ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
         LOG_WARN("column data length is invalid", K(ret), K(length), K(data_type));
         LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, ident_name.ptr(),
-             static_cast<int>((ObVarcharType == data_type.get_obj_type() || ObNVarchar2Type == data_type.get_obj_type())
-                 ? OB_MAX_ORACLE_VARCHAR_LENGTH :
-                 (is_for_pl_type ? OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE : OB_MAX_ORACLE_CHAR_LENGTH_BYTE)));
+            static_cast<int>((ObVarcharType == data_type.get_obj_type() || ObNVarchar2Type == data_type.get_obj_type())
+                ? OB_MAX_ORACLE_VARCHAR_LENGTH :
+                (is_for_pl_type ? OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE : OB_MAX_ORACLE_CHAR_LENGTH_BYTE)));
       } else if (ObVarcharType != data_type.get_obj_type()
           && ObCharType != data_type.get_obj_type()
           && ObNVarchar2Type != data_type.get_obj_type()
@@ -5476,7 +5481,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
         SQL_RESV_LOG(ERROR,"column type must be ObVarcharType or ObCharType", K(ret));
       } else if (type_node.int32_values_[1]/*is binary*/) {
         if (is_for_pl_type && ObVarcharType == data_type.get_obj_type()
-                           && OB_MAX_MYSQL_VARCHAR_LENGTH < length) {
+                          && OB_MAX_MYSQL_VARCHAR_LENGTH < length) {
           ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
           LOG_WARN("column data length is invalid", K(ret), K(length), K(data_type));
           LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, ident_name.ptr(),
@@ -5496,22 +5501,22 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
           ret = OB_ERR_ZERO_LEN_COL;
           LOG_WARN("Oracle not allowed zero length", K(ret));
         } else if (OB_FAIL(ObCharset::get_mbminlen_by_coll(
-                             nls_session_param.nls_nation_collation_, nchar_mbminlen))) {
+                            nls_session_param.nls_nation_collation_, nchar_mbminlen))) {
           LOG_WARN("fail to get mbminlen of nchar", K(ret), K(nls_session_param));
         } else if (((ObVarcharType == data_type.get_obj_type() || ObNVarchar2Type == data_type.get_obj_type()) && OB_MAX_ORACLE_VARCHAR_LENGTH < length)
-                   || (ObCharType == data_type.get_obj_type()
-                   && (is_for_pl_type ? OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE < length :
+                  || (ObCharType == data_type.get_obj_type()
+                  && (is_for_pl_type ? OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE < length :
                                         OB_MAX_ORACLE_CHAR_LENGTH_BYTE < length))
-                   || (ObNCharType == data_type.get_obj_type()
-                       && (is_for_pl_type ? OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE < length * nchar_mbminlen:
+                  || (ObNCharType == data_type.get_obj_type()
+                      && (is_for_pl_type ? OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE < length * nchar_mbminlen:
                                             OB_MAX_ORACLE_CHAR_LENGTH_BYTE < length * nchar_mbminlen))) {
           ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
           LOG_WARN("column data length is invalid",
-                   K(ret), K(length), K(data_type), K(nchar_mbminlen));
+                  K(ret), K(length), K(data_type), K(nchar_mbminlen));
           LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, ident_name.ptr(),
-             static_cast<int>((ObVarcharType == data_type.get_obj_type() || ObNVarchar2Type == data_type.get_obj_type())
-                 ? OB_MAX_ORACLE_VARCHAR_LENGTH :
-                 (is_for_pl_type ? OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE : OB_MAX_ORACLE_CHAR_LENGTH_BYTE)));
+            static_cast<int>((ObVarcharType == data_type.get_obj_type() || ObNVarchar2Type == data_type.get_obj_type())
+                ? OB_MAX_ORACLE_VARCHAR_LENGTH :
+                (is_for_pl_type ? OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE : OB_MAX_ORACLE_CHAR_LENGTH_BYTE)));
         } else if (type_node.length_semantics_ == LS_DEFAULT) {
           data_type.set_length_semantics(nls_session_param.nls_length_semantics_);
         } else if (OB_UNLIKELY(type_node.length_semantics_ != LS_BYTE && type_node.length_semantics_ != LS_CHAR)) {
@@ -5524,12 +5529,12 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
         data_type.set_collation_type(cs_type);
         LOG_DEBUG("check data type after resolve", K(ret), K(data_type));
       } else if (!is_oracle_mode && ObCharType == data_type.get_obj_type()
-                                 && OB_MAX_CHAR_LENGTH < length) {
+                                && OB_MAX_CHAR_LENGTH < length) {
         // varchar length check , TODO:
         ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
         LOG_WARN("column data length is invalid", K(ret), K(length), K(data_type));
         LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, ident_name.ptr(),
-                       static_cast<int>(OB_MAX_CHAR_LENGTH));
+                      static_cast<int>(OB_MAX_CHAR_LENGTH));
       } else {}
       break;
     case ObRawTC:
@@ -5656,7 +5661,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
           ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
           LOG_WARN("column data length is invalid", K(ret), K(length), K(data_type));
           LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, ident_name.ptr(),
-             static_cast<int>(OB_MAX_USER_ROW_KEY_LENGTH));
+            static_cast<int>(OB_MAX_USER_ROW_KEY_LENGTH));
         } else {
           data_type.set_length(length);
         }
@@ -5689,6 +5694,7 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
       ret = OB_ERR_ILLEGAL_TYPE;
       SQL_RESV_LOG(WARN, "Unsupport data type of column definiton", K(ident_name), K(data_type), K(ret));
       break;
+  }
   }
   LOG_DEBUG("resolve data type", K(ret), K(data_type), K(lbt()));
   return ret;

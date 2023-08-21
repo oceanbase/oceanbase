@@ -630,7 +630,8 @@ int ObOptSelectivity::calc_selectivity_by_dynamic_sampling(const OptSelectivityC
     ObDynamicSampling dynamic_sampling(const_cast<ObOptimizerContext &>(ctx.get_opt_ctx()), allocator);
     int64_t start_time = ObTimeUtility::current_time();
     bool throw_ds_error = false;
-    if (OB_FAIL(dynamic_sampling.estimate_table_rowcount(ds_table_param, ds_result_items, throw_ds_error))) {
+    bool ds_succeed = false;
+    if (OB_FAIL(dynamic_sampling.estimate_table_rowcount(ds_table_param, ds_result_items, throw_ds_error, ds_succeed))) {
       if (!throw_ds_error) {
         LOG_WARN("failed to estimate filter rowcount caused by some reason, please check!!!", K(ret),
                 K(start_time), K(ObTimeUtility::current_time() - start_time), K(ds_table_param),
@@ -643,6 +644,8 @@ int ObOptSelectivity::calc_selectivity_by_dynamic_sampling(const OptSelectivityC
       } else {
         LOG_WARN("failed to dynamic sampling", K(ret), K(start_time), K(ds_table_param));
       }
+    } else if (!ds_succeed) {
+      //do nothing
     } else if (OB_FAIL(add_ds_result_into_selectivity(ds_result_items,
                                                       ds_param.table_meta_->get_ref_table_id(),
                                                       all_predicate_sel))) {

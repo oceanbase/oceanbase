@@ -317,7 +317,7 @@ int ObHybridHistEstimator::gen_query_sql(ObIAllocator &allocator,
   reset_select_items();
   sample_hint_ = simple_hint;
   int64_t duration_time = -1;
-  ObString hint_str("NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS");
+  ObString hint_str("NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS OPT_PARAM('ROWSETS_MAX_ROWS', 256)");
   //add select items
   if (OB_ISNULL(dst_opt_stat.table_stat_)) {
     ret = OB_ERR_UNEXPECTED;

@@ -1413,7 +1413,7 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp &op, void *ctx
       } else if (OB_FAIL(allocate_expr_pre(*alloc_expr_context))) {
         LOG_WARN("failed to do allocate expr pre", K(ret));
       } else {
-        LOG_TRACE("succeed to do allcoate expr pre", K(get_type()), K(get_name()), K(get_op_id()), K(ret));
+        LOG_TRACE("succeed to do allocate expr pre", K(get_type()), K(get_name()), K(get_op_id()), K(ret));
       }
       break;
     }

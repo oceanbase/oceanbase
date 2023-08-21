@@ -5843,8 +5843,21 @@ int ObPartTransCtx::refresh_rec_log_ts_()
       // need replay from the on-going log ts.
       if (exec_info_.max_applied_log_ts_ != exec_info_.max_applying_log_ts_) {
         rec_log_ts_ = exec_info_.max_applying_log_ts_;
-      } else {
+      } else if (busy_cbs_.is_empty()) {
         rec_log_ts_.reset();
+      } else {
+        // Case 1.1: As follower, there may also exist log which is proposed
+        // while not committed because of the current leader's switch mechinism
+        // (leader in txn layer will be switched from follower even before all
+        // proposed log has been synced). So we need refer to the log ts in the
+        // current log_cb.
+        const ObTxLogCb *log_cb = busy_cbs_.get_first();
+        if (OB_ISNULL(log_cb)) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "unexpected null ptr", K(*this));
+        } else {
+          rec_log_ts_ = log_cb->get_log_ts();
+        }
       }
     } else {
       // Case 2: As leader, the application is discrete and not in order, so we

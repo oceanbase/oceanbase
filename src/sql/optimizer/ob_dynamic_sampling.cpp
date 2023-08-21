@@ -48,18 +48,23 @@ int ObDynamicSampling::add_ds_stat_item(const T &item)
 
 int ObDynamicSampling::estimate_table_rowcount(const ObDSTableParam &param,
                                                ObIArray<ObDSResultItem> &ds_result_items,
-                                               bool &throw_ds_error)
+                                               bool &throw_ds_error,
+                                               bool &ds_succeed)
 {
   int ret = OB_SUCCESS;
   throw_ds_error = false;
+  ds_succeed = false;
   LOG_TRACE("begine to estimate table rowcount", K(param), K(ds_result_items));
   if (OB_FAIL(get_ds_stat_items(param, ds_result_items))) {
     LOG_WARN("failed to get ds stat items");
   } else if (get_ds_item_size() == 0) {
     //all ds item can get from cache.
+    ds_succeed = true;
     LOG_TRACE("suceed to get ds item from cache", K(param));
-  } else if (OB_FAIL(do_estimate_table_rowcount(param, throw_ds_error))) {
+  } else if (OB_FAIL(do_estimate_table_rowcount(param, throw_ds_error, ds_succeed))) {
     LOG_WARN("failed to do estimate table rowcount", K(ret));
+  } else if (!ds_succeed) {
+    //do nothing
   } else if (OB_FAIL(add_ds_result_cache(ds_result_items))) {
     LOG_WARN("failed to ds result cache", K(ret));
   }
@@ -452,7 +457,9 @@ int ObDynamicSampling::construct_ds_stat_key(const ObDSTableParam &param,
   return ret;
 }
 
-int ObDynamicSampling::do_estimate_table_rowcount(const ObDSTableParam &param, bool &throw_ds_error)
+int ObDynamicSampling::do_estimate_table_rowcount(const ObDSTableParam &param,
+                                                  bool &throw_ds_error,
+                                                  bool &ds_succeed)
 {
   int ret = OB_SUCCESS;
   double sample_ratio = 0.0;
@@ -464,6 +471,8 @@ int ObDynamicSampling::do_estimate_table_rowcount(const ObDSTableParam &param, b
   ObString tmp_str;
   ObSEArray<ObRawExpr*, 4> tmp_filters;
   throw_ds_error = false;
+  ds_succeed = false;
+  bool force_ds = (OB_E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS) != OB_SUCCESS;
   LOG_TRACE("begin estimate table rowcount", K(param));
   if (OB_FAIL(add_table_info(param.db_name_,
                              param.table_name_,
@@ -476,17 +485,15 @@ int ObDynamicSampling::do_estimate_table_rowcount(const ObDSTableParam &param, b
     LOG_WARN("failed to add partition info", K(ret));
   } else if (OB_FAIL(calc_table_sample_block_ratio(param))) {
     LOG_WARN("failed to calc sample block ratio", K(ret));
+  } else if (sample_block_ratio_ == 100.0 && !param.specify_ds_ && !force_ds) {
+    LOG_INFO("skip dynamic sampling, maybe rows in memtable is too many", K(macro_block_num_),
+                                                                          K(micro_block_num_));
   } else if (OB_FAIL(add_block_info_for_stat_items())) {
     LOG_WARN("failed to add block info for stat items", K(ret));
-  } else if (macro_block_num_ <= 1 &&
-             sample_block_ratio_ == 100.0 &&
-             param.partition_infos_.count() <= 1 &&
-             param.max_ds_timeout_ <= param.est_rowcount_ *  2) {
-    //do nothing, rows in memtable is too many, don't dynamic sampling
-    LOG_TRACE("just skip dynamic sampling, because the rows in memtable is too many", K(param),
-                                                                               K(macro_block_num_));
   } else if (OB_FAIL(estimte_rowcount(param.max_ds_timeout_, param.degree_, throw_ds_error))) {
     LOG_WARN("failed to estimate rowcount", K(ret));
+  } else {
+    ds_succeed = true;
   }
   return ret;
 }
@@ -794,9 +801,7 @@ int ObDynamicSampling::calc_table_sample_block_ratio(const ObDSTableParam &param
     LOG_WARN("get unexpected error", K(ret), K(param));
   } else if (OB_FAIL(estimate_table_micro_block_count(param))) {
     LOG_WARN("failed to estimate table micro block count", K(ret));
-  } else if (macro_block_num_ <= 1 ||
-             sample_micro_cnt >= micro_block_num_ ||
-             (param.partition_infos_.count() <= 1 && param.est_rowcount_ < MAX_FULL_SCAN_ROW_COUNT)) {
+  } else if (sample_micro_cnt >= micro_block_num_) {
     sample_block_ratio_ = 100.0;
     seed_ = param.degree_ > 1 ? 0 : 1;
   } else {
@@ -1314,6 +1319,7 @@ int ObDynamicSamplingUtils::get_ds_table_param(ObOptimizerContext &ctx,
       ds_table_param.db_name_ = table_item->database_name_;
       ds_table_param.table_name_ = table_item->table_name_;
       ds_table_param.alias_name_ = table_item->alias_name_;
+      ds_table_param.specify_ds_ = specify_ds;
     }
   }
   return ret;

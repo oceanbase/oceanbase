@@ -17,6 +17,7 @@
 #include "lib/string/ob_string_holder.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/utility/utility.h"
+#include "ob_clock_generator.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/meta_mem/ob_tablet_map_key.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
@@ -256,10 +257,10 @@ void ObTenantMdsTimer::try_recycle_mds_table_task()
 
 void ObTenantMdsTimer::dump_special_mds_table_status_task()
 {
-  #define PRINT_WRAPPER KR(ret), KPC(this)
+  #define PRINT_WRAPPER KR(ret)
   MDS_TG(1_s);
   ObCurTraceId::init(GCONF.self_addr_);
-  ObTenantMdsService::for_each_ls_in_tenant([this](ObLS &ls) -> int {
+  ObTenantMdsService::for_each_ls_in_tenant([](ObLS &ls) -> int {
     int ret = OB_SUCCESS;
     MDS_TG(1_s);
     MdsTableMgrHandle mds_table_mge_handle;
@@ -268,24 +269,25 @@ void ObTenantMdsTimer::dump_special_mds_table_status_task()
       MDS_LOG_NONE(WARN, "fail to get mds table mgr");
     } else if (FALSE_IT(ls_mds_freezing_scn = mds_table_mge_handle.get_mds_table_mgr()->get_freezing_scn())) {
     } else {
-      ObTenantMdsService::for_each_mds_table_in_ls(ls, [this, ls_mds_freezing_scn](ObTablet &tablet) -> int {
-        int ret = OB_SUCCESS;
-        MDS_TG(1_s);
-        MdsTableHandle mds_table_handle;
-        share::SCN rec_scn;
-        const ObTablet::ObTabletPointerHandle &pointer_handle = tablet.get_pointer_handle();
-        ObMetaPointer<oceanbase::storage::ObTablet> *resource_ptr = pointer_handle.get_resource_ptr();
-        ObTabletPointer *tablet_pointer = dynamic_cast<ObTabletPointer *>(resource_ptr);
-        if (OB_FAIL(tablet_pointer->get_mds_table(mds_table_handle))) {
-          if (OB_ENTRY_NOT_EXIST != ret) {
-            MDS_LOG_NONE(WARN, "fail to get mds table", K(tablet.get_tablet_meta().tablet_id_));
+      (void)mds_table_mge_handle.get_mds_table_mgr()->for_each_in_t3m_mds_table([ls_mds_freezing_scn](MdsTableBase &mds_table) -> int {// with hash map bucket's lock protected
+        (void) mds_table.operate([ls_mds_freezing_scn](MdsTableBase &mds_table)-> int {// with MdsTable's lock protected
+          int ret = OB_SUCCESS;
+          if (mds_table.get_rec_scn() <= ls_mds_freezing_scn) {
+            MDS_LOG_NOTICE(WARN, "dump rec_scn lagging freeze_scn mds_table", K(ls_mds_freezing_scn), K(mds_table));
           }
-        } else if (OB_FAIL(mds_table_handle.get_rec_scn(rec_scn))) {
-          MDS_LOG_NONE(WARN, "fail to get mds table rec_scn", K(tablet.get_tablet_meta().tablet_id_));
-        } else if (rec_scn <= ls_mds_freezing_scn) {
-          mds_table_handle.dump_status();
-        }
-        return OB_SUCCESS;// keep doing ignore error
+          return OB_SUCCESS;// keep iterating
+        });
+        return OB_SUCCESS;// keep iterating
+      });
+      (void)mds_table_mge_handle.get_mds_table_mgr()->for_each_removed_mds_table([](MdsTableBase &mds_table) -> int {
+        (void) mds_table.operate([](MdsTableBase &mds_table)-> int {// with MdsTable's lock protected
+          int ret = OB_SUCCESS;
+          if (ObClockGenerator::getClock() - mds_table.get_removed_from_t3m_ts() > 1_min) {
+            MDS_LOG_NOTICE(WARN, "dump maybe leaked mds_table", K(mds_table));
+          }
+          return OB_SUCCESS;// keep iterating
+        });
+        return OB_SUCCESS;// keep iterating
       });
     };
     return OB_SUCCESS;// keep doing ignore error
@@ -378,51 +380,18 @@ int ObTenantMdsService::for_each_mds_table_in_ls(ObLS &ls, const ObFunction<int(
   ObArray<ObTabletID> ids_in_t3m_array;
   if (MDS_FAIL(ls.get_mds_table_mgr(mgr_handle))) {
     MDS_LOG_NONE(WARN, "fail to get mds table mgr");
-  } else if (MDS_FAIL(mgr_handle.get_mds_table_mgr()->for_each_mds_table_list(
-    [&mds_table_total_num, &ids_in_t3m_array, &ls](const ObTabletID &tablet_id, List<MdsTableBase> &mds_table_list) -> bool {// with map's bucket lock protected
+  } else if (MDS_FAIL(mgr_handle.get_mds_table_mgr()->for_each_in_t3m_mds_table(
+    [&mds_table_total_num, &ids_in_t3m_array, &ls](MdsTableBase &mds_table) -> int {// with map's bucket lock protected
       MDS_TG(1_s);
       int ret = OB_SUCCESS;
-      if (mds_table_list.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        MDS_LOG_NONE(ERROR, "meet empty mds_table_list", K(tablet_id));
-      } else {
-        MdsTableBase *p_mds_table = static_cast<MdsTableBase *>(mds_table_list.list_head_);
-        if (!p_mds_table->is_removed_from_t3m()) {
-          MDS_LOG_NONE(TRACE, "process with mds_table", KPC(p_mds_table));
-          if (MDS_FAIL(ids_in_t3m_array.push_back(p_mds_table->get_tablet_id()))) {
-            MDS_LOG_NONE(WARN, "fail to push array", KPC(p_mds_table));
-          }
-        } else {
-          MDS_LOG_NONE(WARN, "consider mds_table leaked if this log keep printing", KPC(p_mds_table));
-        }
-        ++mds_table_total_num;
-        MdsTableBase *iter = static_cast<MdsTableBase *>(p_mds_table->next_);
-        while (OB_NOT_NULL(iter)) {
-          if (ObTimeUtility::fast_current_time() - iter->get_removed_from_t3m_ts() > 5_min) {
-            MDS_LOG_NONE(WARN, "consider mds_table leaked if this log keep printing", KPC(iter));
-          }
-          ++mds_table_total_num;
-          iter = static_cast<MdsTableBase *>(iter->next_);
-        }
+      if (MDS_FAIL(ids_in_t3m_array.push_back(mds_table.get_tablet_id()))) {
+        MDS_LOG_NONE(WARN, "fail to push array");
       }
-      return true;// keep iter
+      return ret;
     }
   ))) {
     MDS_LOG_NONE(WARN, "fail to scan mds_table");
   } else {
-    MDS_LOG_NONE(INFO, "succ to scan mds_table");
-    constexpr int64_t PRINT_SIZE = 128;
-    // print those in t3m array ids, and if ids too many, print random part of them
-    if (ids_in_t3m_array.count() < PRINT_SIZE) {
-      MDS_LOG_NONE(INFO, "dump tablet ids in t3m", K(ids_in_t3m_array));
-    } else {
-      int64_t random_start = rand() % ids_in_t3m_array.count();
-      ObSEArray<ObTabletID, PRINT_SIZE> print_array;
-      for (int64_t idx = 0; idx < PRINT_SIZE; ++idx) {
-        print_array.push_back(ids_in_t3m_array[(random_start + idx) % ids_in_t3m_array.count()]);
-      }
-      MDS_LOG_NONE(INFO, "dump random part tablet ids in t3m", K(print_array), K(ids_in_t3m_array.count()), K(PRINT_SIZE));
-    }
     for (int64_t idx = 0; idx < ids_in_t3m_array.count(); ++idx) {// ignore ret
       ObTabletHandle tablet_handle;
       if (OB_FAIL(ls.get_tablet(ids_in_t3m_array[idx], tablet_handle, 1_s, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {

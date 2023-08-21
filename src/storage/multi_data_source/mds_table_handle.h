@@ -108,7 +108,6 @@ public:
   int get_ref_cnt(int64_t &ref_cnt) const;
   int get_node_cnt(int64_t &valid_cnt) const;
   int get_rec_scn(share::SCN &rec_scn) const;
-  int dump_status() const;
   bool is_valid() const;
   void reset();
   MdsTableBase *get_mds_table_ptr() { return p_mds_table_base_.ptr(); }

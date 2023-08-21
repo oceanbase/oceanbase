@@ -2048,16 +2048,14 @@ int ObTablet::get_max_sync_medium_scn(int64_t &max_medium_snapshot) const
 {
   int ret = OB_SUCCESS;
   max_medium_snapshot = 0;
-  ObIMemtableMgr *memtable_mgr = nullptr;
   ObTabletMemtableMgr *data_memtable_mgr = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
   } else if (tablet_meta_.tablet_id_.is_special_merge_tablet()) {
     // do nothing
-  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
+  } else if (OB_FAIL(get_tablet_memtable_mgr(data_memtable_mgr))) {
     LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (FALSE_IT(data_memtable_mgr = static_cast<ObTabletMemtableMgr *>(memtable_mgr))) {
   } else {
     max_medium_snapshot = data_memtable_mgr->get_medium_info_recorder().get_max_saved_version();
   }
@@ -2068,13 +2066,11 @@ int ObTablet::get_max_sync_storage_schema_version(int64_t &max_schema_version) c
 {
   int ret = OB_SUCCESS;
   max_schema_version = 0;
-  ObIMemtableMgr *memtable_mgr = nullptr;
   ObTabletMemtableMgr *data_memtable_mgr = nullptr;
   if (is_ls_inner_tablet()) {
     // do nothing
-  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
+  } else if (OB_FAIL(get_tablet_memtable_mgr(data_memtable_mgr))) {
     LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (FALSE_IT(data_memtable_mgr = static_cast<ObTabletMemtableMgr *>(memtable_mgr))) {
   } else {
     max_schema_version = data_memtable_mgr->get_storage_schema_recorder().get_max_saved_version();
   }
@@ -2088,7 +2084,6 @@ int ObTablet::try_update_storage_schema(
     const int64_t timeout_ts)
 {
   int ret = OB_SUCCESS;
-  ObIMemtableMgr *memtable_mgr = nullptr;
   ObTabletMemtableMgr *data_memtable_mgr = nullptr;
 
   if (IS_NOT_INIT) {
@@ -2096,12 +2091,29 @@ int ObTablet::try_update_storage_schema(
     LOG_WARN("not inited", K(ret));
   } else if (tablet_meta_.tablet_id_.is_special_merge_tablet()) {
     // do nothing
-  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
+  } else if (OB_FAIL(get_tablet_memtable_mgr(data_memtable_mgr))) {
     LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (FALSE_IT(data_memtable_mgr = static_cast<ObTabletMemtableMgr *>(memtable_mgr))) {
   } else if (OB_FAIL(data_memtable_mgr->get_storage_schema_recorder().try_update_storage_schema(
       table_id, schema_version, allocator, timeout_ts))) {
     LOG_WARN("fail to record storage schema", K(ret), K(table_id), K(schema_version), K(timeout_ts));
+  }
+  return ret;
+}
+
+int ObTablet::get_max_column_cnt_on_schema_recorder(int64_t &max_column_cnt)
+{
+  int ret = OB_SUCCESS;
+  ObTabletMemtableMgr *data_memtable_mgr = nullptr;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (tablet_meta_.tablet_id_.is_special_merge_tablet()) {
+    // do nothing
+  } else if (OB_FAIL(get_tablet_memtable_mgr(data_memtable_mgr))) {
+    LOG_WARN("failed to get memtable mgr", K(ret));
+  } else {
+    max_column_cnt = data_memtable_mgr->get_storage_schema_recorder().get_max_column_cnt();
   }
   return ret;
 }
@@ -3105,9 +3117,9 @@ int ObTablet::choose_and_save_storage_schema(
     LOG_WARN("input schema is invalid", K(ret), K(ls_id), K(tablet_id), K(tablet_schema), K(param_schema));
   } else if (FALSE_IT(tablet_schema_version = tablet_schema.schema_version_)) {
   } else if (FALSE_IT(param_schema_version = param_schema.schema_version_)) {
-  } else if (OB_FAIL(tablet_schema.get_stored_column_count_in_sstable(tablet_schema_stored_col_cnt))) {
+  } else if (OB_FAIL(tablet_schema.get_store_column_count(tablet_schema_stored_col_cnt, true/*full_col*/))) {
     LOG_WARN("failed to get stored column count from schema", KR(ret), K(ls_id), K(tablet_id), K(tablet_schema));
-  } else if (OB_FAIL(param_schema.get_stored_column_count_in_sstable(param_schema_stored_col_cnt))) {
+  } else if (OB_FAIL(param_schema.get_store_column_count(param_schema_stored_col_cnt, true/*full_col*/))) {
     LOG_WARN("failed to get stored column count from schema", KR(ret), K(ls_id), K(tablet_id), K(param_schema));
   } else if ((tablet_schema_version > param_schema_version && tablet_schema_stored_col_cnt < param_schema_stored_col_cnt)
           || (tablet_schema_version < param_schema_version && tablet_schema_stored_col_cnt > param_schema_stored_col_cnt)) {
@@ -3121,7 +3133,7 @@ int ObTablet::choose_and_save_storage_schema(
       allocator.free(tmp_storage_schema);
       tmp_storage_schema = nullptr;
     } else {
-      tmp_storage_schema->column_cnt_ = MAX(tablet_schema_stored_col_cnt, param_schema_stored_col_cnt);
+      tmp_storage_schema->column_cnt_ = MAX(tablet_schema.get_column_count(), param_schema.get_column_count());
       tmp_storage_schema->store_column_cnt_ = MAX(tablet_schema_stored_col_cnt, param_schema_stored_col_cnt);
       tmp_storage_schema->schema_version_ = MAX(tablet_schema_version, param_schema_version);
       chosen_schema = tmp_storage_schema;
@@ -3186,7 +3198,6 @@ int ObTablet::replay_update_storage_schema(
 {
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
-  ObIMemtableMgr *memtable_mgr = nullptr;
   ObTabletMemtableMgr *data_memtable_mgr = nullptr;
 
   if (IS_NOT_INIT) {
@@ -3194,9 +3205,8 @@ int ObTablet::replay_update_storage_schema(
     LOG_WARN("not inited", K(ret));
   } else if (tablet_meta_.tablet_id_.is_special_merge_tablet()) {
     // do nothing
-  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
+  } else if (OB_FAIL(get_tablet_memtable_mgr(data_memtable_mgr))) {
     LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (FALSE_IT(data_memtable_mgr = static_cast<ObTabletMemtableMgr *>(memtable_mgr))) {
   } else if (OB_FAIL(data_memtable_mgr->get_storage_schema_recorder().replay_schema_log(scn, buf, buf_size, new_pos))) {
     LOG_WARN("storage schema recorder replay fail", K(ret), K(scn));
   } else {
@@ -3213,7 +3223,6 @@ int ObTablet::submit_medium_compaction_clog(
     ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  ObIMemtableMgr *memtable_mgr = nullptr;
   ObTabletMemtableMgr *data_memtable_mgr = nullptr;
 
   if (IS_NOT_INIT) {
@@ -3221,9 +3230,8 @@ int ObTablet::submit_medium_compaction_clog(
     LOG_WARN("not inited", K(ret));
   } else if (tablet_meta_.tablet_id_.is_special_merge_tablet()) {
     // do nothing
-  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
+  } else if (OB_FAIL(get_tablet_memtable_mgr(data_memtable_mgr))) {
     LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (FALSE_IT(data_memtable_mgr = static_cast<ObTabletMemtableMgr *>(memtable_mgr))) {
   } else if (OB_FAIL(data_memtable_mgr->get_medium_info_recorder().submit_medium_compaction_info(
       medium_info, allocator))) {
     LOG_WARN("medium compaction recorder submit fail", K(ret), K(medium_info));
@@ -3241,7 +3249,6 @@ int ObTablet::replay_medium_compaction_clog(
 {
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
-  ObIMemtableMgr *memtable_mgr = nullptr;
   ObTabletMemtableMgr *data_memtable_mgr = nullptr;
 
   if (IS_NOT_INIT) {
@@ -3251,9 +3258,8 @@ int ObTablet::replay_medium_compaction_clog(
     LOG_WARN("invalid argument", K(ret), K(buf_size), K(pos));
   } else if (tablet_meta_.tablet_id_.is_ls_inner_tablet()) {
     // do nothing
-  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
+  } else if (OB_FAIL(get_tablet_memtable_mgr(data_memtable_mgr))) {
     LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (FALSE_IT(data_memtable_mgr = static_cast<ObTabletMemtableMgr *>(memtable_mgr))) {
   } else if (OB_FAIL(data_memtable_mgr->get_medium_info_recorder().replay_medium_compaction_log(scn, buf, buf_size, new_pos))) {
     LOG_WARN("medium compaction recorder replay fail", K(ret), KPC(this), K(buf_size), K(new_pos));
   } else {
@@ -3511,6 +3517,21 @@ int ObTablet::get_memtable_mgr(ObIMemtableMgr *&memtable_mgr) const
     memtable_mgr = memtable_mgr_handle.get_memtable_mgr();
   }
 
+  return ret;
+}
+
+int ObTablet::get_tablet_memtable_mgr(ObTabletMemtableMgr *&tablet_memtable_mgr) const
+{
+  int ret = OB_SUCCESS;
+  tablet_memtable_mgr = nullptr;
+  ObIMemtableMgr *memtable_mgr = nullptr;
+  if (tablet_meta_.tablet_id_.is_ls_inner_tablet()) {
+    // do nothing
+  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
+    LOG_WARN("failed to get memtable mgr", K(ret));
+  } else {
+    tablet_memtable_mgr = static_cast<ObTabletMemtableMgr *>(memtable_mgr);
+  }
   return ret;
 }
 

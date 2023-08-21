@@ -305,7 +305,7 @@ int ObUserDefinedType::deep_copy_obj(
   return ret;
 }
 
-int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session)
+int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session, bool set_null)
 {
   int ret = OB_SUCCESS;
 
@@ -330,7 +330,7 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session)
       for (int64_t i = 0; OB_SUCC(ret) && i < record->get_count(); ++i) {
         OZ (destruct_obj(record->get_element()[i], session));
       }
-      OX (record->set_null());
+      OX (set_null ? src.set_null() : record->set_null());
     }
       break;
     default: {

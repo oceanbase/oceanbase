@@ -4607,7 +4607,19 @@ int ObSPIService::spi_raise_application_error(pl::ObPLExecCtx *ctx,
    CALC(errcode_expr, int32, errcode_result);
    CALC(errmsg_expr, varchar, errmsg_result);
    OX (sqlcode_info->set_sqlcode(errcode_result.get_int32()));
-   OX (sqlcode_info->set_sqlmsg(errmsg_result.get_string()));
+   if (OB_SUCC(ret)) {
+    ObPLContext *pl_ctx = NULL;
+    ObPLExecState *frame = NULL;
+    ObIAllocator *pl_allocator = NULL;
+    ObString deep_sqlmsg;
+    CK (OB_NOT_NULL(pl_ctx = ctx->exec_ctx_->get_my_session()->get_pl_context()));
+    CK (pl_ctx->get_exec_stack().count() > 0);
+    CK (OB_NOT_NULL(frame = pl_ctx->get_exec_stack().at(0)));
+    CK (frame->is_top_call());
+    CK (OB_NOT_NULL(pl_allocator = frame->get_exec_ctx().allocator_));
+    OZ (ob_write_string(*pl_allocator, errmsg_result.get_string(), deep_sqlmsg));
+    OX (sqlcode_info->set_sqlmsg(deep_sqlmsg));
+  }
   
   if (OB_SUCC(ret)) {
     if (sqlcode_info->get_sqlcode() <= OB_MAX_RAISE_APPLICATION_ERROR
@@ -6400,7 +6412,8 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
     } else if (!(obj.is_pl_extend()
                  || obj.is_user_defined_sql_type()
                  || (obj.is_null() && current_type.at(i).get_meta_type().is_user_defined_sql_type()))
-               && result_types[i].get_meta_type().is_ext()) {
+               && result_types[i].get_meta_type().is_ext()
+               && !ob_is_xml_pl_type(result_types[i].get_obj_type(), result_types[i].get_udt_id())) {
       // sql udt can cast to pl extend, null from sql udt type can cast to pl extend(xmltype)
       // but null may not cast to other pl extends (return error 4016 in store_datums)
       // support: select extract(xmlparse(document '<a>a</a>'), '/b') into xml_data from dual;
