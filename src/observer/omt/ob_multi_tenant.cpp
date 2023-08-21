@@ -958,9 +958,8 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
   if (!is_virtual_tenant_id(tenant_id) && OB_TMP_FAIL(update_tenant_config(tenant_id))) {
     LOG_WARN("update tenant config fail", K(tenant_id), K(tmp_ret));
   }
-  // no need rollback when replaying slog and creating a virtual tenant,
-  // in which two case the write_slog flag is set to false
-  if (OB_FAIL(ret) && write_slog) {
+
+  if (OB_FAIL(ret)) {
     do {
       tmp_ret = OB_SUCCESS;
       if (create_step >= ObTenantCreateStep::STEP_TENANT_NEWED) {
@@ -973,7 +972,9 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
           ob_delete(tenant);
           tenant = nullptr;
         }
-        if (OB_SUCCESS != (tmp_ret = clear_persistent_data(tenant_id))) {
+        // no need rollback when replaying slog and creating a virtual tenant,
+        // in which two case the write_slog flag is set to false
+        if (write_slog && OB_SUCCESS != (tmp_ret = clear_persistent_data(tenant_id))) {
           LOG_ERROR("fail to clear persistent data", K(tenant_id), K(tmp_ret));
           SLEEP(1);
         }
