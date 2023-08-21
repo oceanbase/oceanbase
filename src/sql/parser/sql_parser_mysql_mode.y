@@ -2169,6 +2169,11 @@ INTNUM
   malloc_non_terminal_node($$, result->malloc_pool_, T_WIN_INTERVAL, 1, $1);
   $$->value_ = 1;
 }
+| QUESTIONMARK
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WIN_INTERVAL, 1, $1);
+  $$->value_ = 1;
+}
 | UNBOUNDED
 {
   get_non_reserved_node($$, result->malloc_pool_, @1.first_column, @1.last_column);

@@ -6378,8 +6378,6 @@ drop database ly;
 create database ly character set GB18030;
 use ly;
 DROP TABLE IF EXISTS `table10_bigint`;
-Warnings:
-Note	1051	Unknown table 'ly.table10_bigint'
 CREATE TABLE `table10_bigint` (
 `col_smallint_signed` smallint(6) DEFAULT NULL,
 `col_decimal_20_0_signed` decimal(20,0) DEFAULT NULL,
@@ -6420,6 +6418,4 @@ TRIM( SUBSTRING( SUBSTRING( '‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚ä ‚à 
 NULL
 NULL
 NULL
-Warnings:
-Warning	1300	Invalid utf16 character string: ''
 drop database ly;

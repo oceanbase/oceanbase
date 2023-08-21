@@ -492,6 +492,7 @@ drop database ly;
 create database ly character set GB18030;
 use ly;
 
+--disable_warnings
 DROP TABLE IF EXISTS `table10_bigint`;
 CREATE TABLE `table10_bigint` (
   `col_smallint_signed` smallint(6) DEFAULT NULL,
@@ -533,5 +534,6 @@ INSERT INTO `table10_bigint` VALUES (9,3,NULL,7,6.00000,NULL,NULL,NULL,NULL,8,1,
 set names GB18030;
 
 SELECT TRIM( SUBSTRING( SUBSTRING( '∷ ∶ ∫ ∮ ∝ ∞ ∧ ∨ ∑ ∏ ∪ ∩ ∈ ∵ ∴ ⊥ ∥ ∠ ⌒ ⊙ √∟⊿ ㏒ ㏑ % ‰' , 1, LEAST( 228, 20 ) ) , 1 , LEAST( 228, 20 ) ) ) NOT REGEXP CONCAT( 'tu', '%' ) FROM table10_bigint WHERE col_int NOT IN ( 5387431054241955840 , 13633803446934044672 , 65066 , 45808 , 6755399441055744000 ) ORDER BY col_char_20 DESC , pk ASC LIMIT 6 OFFSET 1;
+--enable_warnings
 
 drop database ly;
