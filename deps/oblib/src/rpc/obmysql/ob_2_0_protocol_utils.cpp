@@ -564,7 +564,8 @@ inline int ObProto20Utils::fill_proto20_header(ObProtoEncodeParam &param) {
   int64_t pos = 0;
   char *start = easy_buffer.begin();
   if (OB_ISNULL(param.req_)) {
-    LOG_ERROR("request is null");
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("request is null", K(ret));
   } else if (FALSE_IT(packet_seq = param.conn_->proto20_pkt_context_.proto20_last_pkt_seq_ + 1)) {
   } else if (OB_UNLIKELY(compress_len > OB_MYSQL_MAX_PAYLOAD_LENGTH)) {
     ret = OB_ERR_UNEXPECTED;

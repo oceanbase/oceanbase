@@ -267,14 +267,16 @@ void FetchLogEngine::handle(void *task)
   if (!is_inited_) {
     PALF_LOG(WARN, "FetchLogEngine not init");
   } else if (OB_ISNULL(task)) {
-    PALF_LOG(WARN, "invalid argument", KP(task));
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(WARN, "invalid argument", KR(ret), KP(task));
   } else {
     int64_t handle_start_time_us = ObTimeUtility::current_time();
     FetchLogTask *fetch_log_task = static_cast<FetchLogTask *>(task);
     int64_t palf_id = -1;
     FetchLogStat fetch_stat;
     if (OB_ISNULL(fetch_log_task)) {
-      PALF_LOG(ERROR, "fetch_log_task is NULL");
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(ERROR, "fetch_log_task is NULL", KR(ret));
     } else {
       palf_id = fetch_log_task->get_id();
       PALF_LOG(INFO, "handle fetch_log_task", KPC(fetch_log_task));

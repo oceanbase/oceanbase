@@ -2311,9 +2311,9 @@ void ObLogInstance::global_flow_control_()
     if (OB_ISNULL(fetcher_) || OB_ISNULL(dml_parser_)
         || OB_ISNULL(formatter_)
         || OB_ISNULL(sys_ls_handler_) || OB_ISNULL(resource_collector_)) {
-      LOG_ERROR("invalid arguments", K(fetcher_), K(dml_parser_),
-          K(formatter_), K(sys_ls_handler_), K(resource_collector_));
       ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid arguments", KR(ret), K(fetcher_), K(dml_parser_),
+          K(formatter_), K(sys_ls_handler_), K(resource_collector_));
     } else {
       int64_t part_trans_task_active_count_upper_bound =
         TCONF.part_trans_task_active_count_upper_bound;
@@ -2580,9 +2580,9 @@ int ObLogInstance::get_task_count_(int64_t &ready_to_seq_task_count,
       || OB_ISNULL(storager_)
       || OB_ISNULL(sequencer_) || OB_ISNULL(reader_) || OB_ISNULL(committer_)
       || OB_ISNULL(sys_ls_handler_) || OB_ISNULL(resource_collector_)) {
-    LOG_ERROR("invalid arguments", K(fetcher_), K(dml_parser_), K(formatter_), K(storager_),
-        K(sequencer_), K(reader_), K(committer_), K(sys_ls_handler_), K(resource_collector_));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid arguments", K(ret), K(fetcher_), K(dml_parser_), K(formatter_), K(storager_),
+        K(sequencer_), K(reader_), K(committer_), K(sys_ls_handler_), K(resource_collector_));
   } else {
     // I. Get the number of tasks to be processed by each module
     int64_t dml_parser_log_count = 0;

@@ -1002,7 +1002,7 @@ int ObNetEasy::stop()
       LOG_WARN("stop rpc eio error", K(ret));
     }
 
-    if (!OB_ISNULL(high_prio_rpc_eio_)) {
+    if (OB_SUCC(ret) && !OB_ISNULL(high_prio_rpc_eio_)) {
       eret = easy_eio_stop(high_prio_rpc_eio_);
       if (eret != EASY_OK) {
         ret = OB_IO_ERROR;
@@ -1010,13 +1010,15 @@ int ObNetEasy::stop()
       }
     }
 
-    eret = easy_eio_stop(mysql_eio_);
-    if (eret != EASY_OK) {
-      ret = OB_IO_ERROR;
-      LOG_WARN("stop mysql eio error", K(ret));
+    if (OB_SUCC(ret)) {
+      eret = easy_eio_stop(mysql_eio_);
+      if (eret != EASY_OK) {
+        ret = OB_IO_ERROR;
+        LOG_WARN("stop mysql eio error", K(ret));
+      }
     }
 
-    if (NULL != mysql_unix_eio_) {
+    if (OB_SUCC(ret) && NULL != mysql_unix_eio_) {
       eret = easy_eio_stop(mysql_unix_eio_);
       if (eret != EASY_OK) {
         ret = OB_IO_ERROR;
@@ -1024,12 +1026,14 @@ int ObNetEasy::stop()
       }
     }
 
-    eret = easy_eio_stop(batch_rpc_eio_);
-    if (eret != EASY_OK) {
-      ret = OB_IO_ERROR;
-      LOG_WARN("stop batch rpc eio error", K(ret));
+    if (OB_SUCC(ret)) {
+      eret = easy_eio_stop(batch_rpc_eio_);
+      if (eret != EASY_OK) {
+        ret = OB_IO_ERROR;
+        LOG_WARN("stop batch rpc eio error", K(ret));
+      }
+      rpc_listener_.stop();
     }
-    rpc_listener_.stop();
 
     if (NULL != rpc_unix_eio_) {
       eret = easy_eio_stop(rpc_unix_eio_);

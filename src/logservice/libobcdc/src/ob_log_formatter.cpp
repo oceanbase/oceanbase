@@ -1730,9 +1730,9 @@ int ObLogFormatter::format_dml_delete_(IBinlogRecord *br_data, const RowValue *r
           }
 
           if (OB_ISNULL(str)) {
-            LOG_ERROR("old column value and original default value are all invalid",
-                K(i), "column_num", row_value->column_num_);
             ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("old column value and original default value are all invalid", KR(ret),
+                K(i), "column_num", row_value->column_num_);
           } else {
             br_data->putOld(str->ptr(), str->length());
           }
@@ -1774,9 +1774,9 @@ int ObLogFormatter::format_dml_insert_(IBinlogRecord *br_data, const RowValue *r
         ObString *str_val = row_value->new_columns_[i];
 
         if (OB_ISNULL(str_val)) {
-          LOG_ERROR("changed column new value is NULL", K(i),
-              "column_num", row_value->column_num_);
           ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("changed column new value is NULL", KR(ret), K(i),
+              "column_num", row_value->column_num_);
         } else {
           br_data->putNew(str_val->ptr(), str_val->length());
         }
@@ -1809,10 +1809,10 @@ int ObLogFormatter::format_dml_update_(IBinlogRecord *br_data, const RowValue *r
           }
 
           if (OB_ISNULL(str_val)) {
-            LOG_ERROR("new column value, old column value and original default value "
-                "are all invalid",
-                K(i), "column_num", row_value->column_num_);
             ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("new column value, old column value and original default value "
+                "are all invalid", KR(ret),
+                K(i), "column_num", row_value->column_num_);
           } else {
             br_data->putNew(str_val->ptr(), str_val->length());
           }
@@ -1824,9 +1824,9 @@ int ObLogFormatter::format_dml_update_(IBinlogRecord *br_data, const RowValue *r
         ObString *str_val = row_value->new_columns_[i];
 
         if (OB_ISNULL(str_val)) {
-          LOG_ERROR("changed column new value is NULL", K(i),
-              "column_num", row_value->column_num_);
           ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("changed column new value is NULL", KR(ret), K(i),
+              "column_num", row_value->column_num_);
         } else {
           br_data->putNew(str_val->ptr(), str_val->length());
         }
@@ -1850,7 +1850,7 @@ int ObLogFormatter::format_dml_update_(IBinlogRecord *br_data, const RowValue *r
               LOG_DEBUG("old_column is invalid, may outrow lob updated to inrow", K(i), K(row_value));
             } else {
               ret = OB_ERR_UNEXPECTED;
-              LOG_ERROR("old column value and original default value are all invalid",
+              LOG_ERROR("old column value and original default value are all invalid", KR(ret),
                   K(i), "column_num", row_value->column_num_,
                   "is_changed", row_value->is_changed_[i]);
             }

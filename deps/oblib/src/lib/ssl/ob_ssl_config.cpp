@@ -467,8 +467,10 @@ int ob_ssl_load_config(int ctx_id, const ObSSLConfig& ssl_config)
     if (OB_FAIL(ob_ssl_config_check(ssl_config))) {
       COMMON_LOG(WARN, "ob_ssl_config_check failed", K(ctx_id), K(ret));
     } else if (OB_ISNULL(client_ssl_ctx = ob_ssl_create_ssl_ctx(ssl_config))) {
+      ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(WARN, "ob_ssl_create_client_ctx failed", K(ctx_id), K(ret));
     } else if (OB_ISNULL(server_ssl_ctx = ob_ssl_create_ssl_ctx(ssl_config))) {
+      ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(WARN, "ob_ssl_create_server_ctx failed", K(ctx_id), K(ret));
     } else {
       SpinWLockGuard guard(gs_ssl_array_lock);

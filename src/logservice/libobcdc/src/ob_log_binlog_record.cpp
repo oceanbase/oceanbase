@@ -204,6 +204,7 @@ int ObLogBR::init_data(const RecordType type,
     // put major version(from int32_t to char*) to the forth field
     if (EBEGIN == type) {
       if (OB_ISNULL(major_version_str)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("major version str for EBEGIN statement should not be null!", KR(ret), K(cluster_id),
             K(type), K(trace_id));
       } else {

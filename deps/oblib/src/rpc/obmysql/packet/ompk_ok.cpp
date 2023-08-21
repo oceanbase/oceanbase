@@ -307,10 +307,10 @@ int OMPKOK::serialize(char *buffer, const int64_t length, int64_t &pos) const
                     if (OB_FAIL(ObMySQLUtil::store_int1(buffer, length, SESSION_TRACK_SYSTEM_VARIABLES, pos))) {
                       LOG_WARN("store int fail", KP(buffer), K(length), K(pos), K(ret));
                     } else if (FALSE_IT(string_kv = system_vars_.at(i))) {
-                    } else if (ObMySQLUtil::store_length(buffer, length, get_kv_encode_len(string_kv), pos)) {
-                      LOG_WARN("store_length fail", KP(buffer), K(length), K(pos), K(string_kv), K(ret));
-                    } else if (serialize_string_kv(buffer, length, pos, string_kv)) {
-                      LOG_WARN("store_length fail", KP(buffer), K(length), K(pos), K(string_kv), K(ret));
+                    } else if (OB_FAIL(ObMySQLUtil::store_length(buffer, length, get_kv_encode_len(string_kv), pos))) {
+                      LOG_WARN("store_length fail", K(length), K(pos), K(string_kv), K(ret));
+                    } else if (OB_FAIL(serialize_string_kv(buffer, length, pos, string_kv))) {
+                      LOG_WARN("store_length fail", K(length), K(pos), K(string_kv), K(ret));
                     }
                   }
                 } else {

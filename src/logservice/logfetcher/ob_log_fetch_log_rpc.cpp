@@ -1021,7 +1021,8 @@ void FetchLogARpc::clear_result_()
   if (res_queue_.count() > 0) {
     // Require result_pool_ be valid
     if (OB_ISNULL(result_pool_)) {
-      LOG_ERROR("invalid rpc result pool, can not clear results", K(result_pool_));
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid rpc result pool, can not clear results", KR(ret), K(result_pool_));
     } else {
       while (OB_SUCC(res_queue_.pop(data))) {
         FetchLogARpcResult *result = static_cast<FetchLogARpcResult *>(data);

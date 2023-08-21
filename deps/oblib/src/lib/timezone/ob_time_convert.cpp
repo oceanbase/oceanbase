@@ -3434,8 +3434,8 @@ int ObTimeConverter::str_to_ob_time_by_dfm_elems(const ObString &str,
       if (OB_ISNULL(cvrt_ctx.tz_info_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("session timezone info is null", K(ret));
-      } else if (sub_timezone_offset(*(cvrt_ctx.tz_info_), ObString(),
-                                     utc_curr_time_copy, session_tz_offset, session_tz_id, session_tran_type_id)) {
+      } else if (OB_FAIL(sub_timezone_offset(*(cvrt_ctx.tz_info_), ObString(),
+                                     utc_curr_time_copy, session_tz_offset, session_tz_id, session_tran_type_id))) {
         LOG_WARN("get session timezone offset failed", K(ret));
       } else if (OB_FAIL(datetime_to_date(utc_curr_time, cvrt_ctx.tz_info_, cur_date))) {
         LOG_WARN("timestamp to date failed", K(ret));
