@@ -63,11 +63,11 @@ deleting plan x                  |
 void ObCacheObjAtomicOp::operator()(ObjKV &entry)
 {
   if (NULL != entry.second) {
-    if (0 == entry.second->get_ref_count()) {
-      // do nothing
-    } else {
+    int64_t ref_cnt = entry.second->inc_ref_count(ref_handle_);
+    if (ref_cnt > 1) {
       cache_obj_ = entry.second;
-      cache_obj_->inc_ref_count(ref_handle_);
+    } else {
+      cache_obj_ = nullptr;
     }
     SQL_PC_LOG(DEBUG, "succ to get plan", "ref_count", cache_obj_->get_ref_count());
   } else {
