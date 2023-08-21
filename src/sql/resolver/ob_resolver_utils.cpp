@@ -392,7 +392,7 @@ int ObResolverUtils::get_candidate_routines(ObSchemaChecker &schema_checker,
   const ObString &package_name, const ObString &routine_name,
   const share::schema::ObRoutineType routine_type,
   common::ObIArray<const share::schema::ObIRoutineInfo *> &routines,
-  uint64_t udt_id)
+  uint64_t udt_id, const pl::ObPLResolveCtx *resolve_ctx)
 {
   int ret = OB_SUCCESS;
 
@@ -483,6 +483,18 @@ if ((OB_FAIL(ret) || 0 == routines.count())   \
     TRY_SYNONYM(routine_name);
     if (OB_SUCC(ret) && need_try_synonym) {
       GET_STANDALONE_ROUTINE();
+      if (OB_SUCC(ret) && OB_ISNULL(routine_info) && OB_NOT_NULL(resolve_ctx)) {
+        // try dblink synonym
+        ObString tmp_name = object_name;
+        ObString full_object_name = tmp_name.split_on('@');
+        if (full_object_name.empty()) {
+          // not a dblink
+        } else {
+          ObString remote_db_name = full_object_name.split_on('.');
+          OZ (resolve_ctx->package_guard_.dblink_guard_.get_routine_infos_with_synonym(resolve_ctx->session_info_,
+              resolve_ctx->schema_guard_, tmp_name, remote_db_name, ObString(""), full_object_name, routines));
+        }
+      }
     }
   } else { // try package routines
     OZ (schema_checker.get_database_id(tenant_id, real_db_name, database_id));
@@ -998,7 +1010,9 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
                                                   resolve_ctx.session_info_,
                                                   resolve_ctx.allocator_,
                                                   resolve_ctx.sql_proxy_,
-                                                  dst_pl_type));
+                                                  dst_pl_type,
+                                                  NULL,
+                                                  &resolve_ctx.package_guard_.dblink_guard_));
 #ifdef OB_BUILD_ORACLE_PL
       if (OB_SUCC(ret) && dst_pl_type.is_subtype()) {
         const ObUserDefinedType *user_type = NULL;
@@ -1035,7 +1049,7 @@ int ObResolverUtils::match_vacancy_parameters(
   // 处理空缺参数, 如果有默认值填充默认值, 否则报错
   for (int64_t i = 0; OB_SUCC(ret) && i < match_info.match_info_.count(); ++i) {
     ObIRoutineParam *routine_param = NULL;
-    if (ObMaxType == match_info.match_info_.at(i).dest_type_) {
+    if(ObMaxType == match_info.match_info_.at(i).dest_type_) {
       OZ (routine_info.get_routine_param(i, routine_param));
       CK (OB_NOT_NULL(routine_param));
       if (OB_FAIL(ret)) {
@@ -1237,7 +1251,8 @@ int ObResolverUtils::pick_routine(const pl::ObPLResolveCtx &resolve_ctx,
   return ret;
 }
 
-int ObResolverUtils::get_routine(ObResolverParams &params,
+int ObResolverUtils::get_routine(pl::ObPLPackageGuard &package_guard,
+                                 ObResolverParams &params,
                                  uint64_t tenant_id,
                                  const ObString &current_database,
                                  const ObString &db_name,
@@ -1245,16 +1260,26 @@ int ObResolverUtils::get_routine(ObResolverParams &params,
                                  const ObString &routine_name,
                                  const share::schema::ObRoutineType routine_type,
                                  const common::ObIArray<ObRawExpr *> &expr_params,
-                                 const ObRoutineInfo *&routine)
+                                 const ObRoutineInfo *&routine,
+                                 const ObString &dblink_name,
+                                 ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
+#define COPY_DBLINK_ROUTINE(dblink_routine) \
+  ObRoutineInfo *copy_routine = NULL; \
+  CK (OB_NOT_NULL(allocator)); \
+  OZ (ObSchemaUtils::alloc_schema(*allocator, \
+                                  *(static_cast<const ObRoutineInfo *>(dblink_routine)), \
+                                  copy_routine)); \
+  OX (routine = copy_routine);
+
+  const ObRoutineInfo *tmp_routine_info = NULL;
   CK (OB_NOT_NULL(params.allocator_));
   CK (OB_NOT_NULL(params.session_info_));
   CK (OB_NOT_NULL(params.schema_checker_));
   CK (OB_NOT_NULL(params.schema_checker_->get_schema_guard()));
   CK (OB_NOT_NULL(GCTX.sql_proxy_));
   if (OB_SUCC(ret)) {
-    ObPLPackageGuard package_guard(params.session_info_->get_effective_tenant_id());
     ObPLResolveCtx resolve_ctx(*(params.allocator_),
                                *(params.session_info_),
                                *(params.schema_checker_->get_schema_guard()),
@@ -1268,15 +1293,104 @@ int ObResolverUtils::get_routine(ObResolverParams &params,
     resolve_ctx.params_.param_list_ = params.param_list_;
     resolve_ctx.params_.is_execute_call_stmt_ = params.is_execute_call_stmt_;
     OZ (package_guard.init());
-    OZ (get_routine(resolve_ctx,
-                    tenant_id,
-                    current_database,
-                    db_name,
-                    package_name,
-                    routine_name,
-                    routine_type,
-                    expr_params,
-                    routine));
+    if (dblink_name.empty()) {
+      OZ (get_routine(resolve_ctx,
+                      tenant_id,
+                      current_database,
+                      db_name,
+                      package_name,
+                      routine_name,
+                      routine_type,
+                      expr_params,
+                      tmp_routine_info));
+      if (OB_SUCC(ret)) {
+        if (OB_INVALID_ID == tmp_routine_info->get_dblink_id()) {
+          routine = tmp_routine_info;
+        } else {
+          COPY_DBLINK_ROUTINE(tmp_routine_info);
+        }
+      }
+      if (OB_ERR_SP_DOES_NOT_EXIST == ret) {
+        /* Example 1: create or replace synonym test.pkg100_syn for webber.pkg100@oci_link;
+        *    `pkg100` is a package name in remote database `webber`.
+        * Example 2: create or replace synonym test.p101_syn for webber.p101@oci_link;
+        *    `p101` is a procedure name in remote database `webber`.
+        *
+        * If the code executes here, there are the following situations
+        * 1. Only `db_name.empty()` is true , this is not possible;
+        * 2. Only `package_name.empty()` is true, user call statement is `call test.p101_syn(1)`;
+        * 3. `(db_name.empty() && package_name.empty()` is true,  user call statement is `call p101_syn(1)`;
+        * 4. `db_name.empty()` is false and `package_name.empty()` is false,
+        *     user call statement is `call test.pkg100_syn.p1(1)`
+        */
+
+        ret = OB_SUCCESS;
+        uint64_t database_id = OB_INVALID_ID;
+        uint64_t object_db_id = OB_INVALID_ID;
+        bool exist = false;
+        ObString object_name;
+        ObSchemaChecker schema_checker;
+        ObSynonymChecker synonym_checker;
+        bool routine_name_is_synonym = package_name.empty();
+        const ObString &synonym_name = routine_name_is_synonym ? routine_name : package_name;
+        OZ (schema_checker.init(resolve_ctx.schema_guard_));
+        OZ (schema_checker.get_database_id(tenant_id, (db_name.empty() ? current_database : db_name), database_id));
+        OZ (resolve_synonym_object_recursively(schema_checker, synonym_checker, tenant_id, database_id,
+                                               synonym_name, object_db_id, object_name, exist));
+        LOG_INFO("after find synonym", K(ret), K(synonym_name), K(object_name), K(object_db_id), K(exist));
+        if (OB_SUCC(ret) && exist) {
+          ObString tmp_name;
+          if (OB_FAIL(ob_write_string(*params.allocator_, object_name, tmp_name))) {
+            LOG_WARN("write string failed", K(ret));
+          } else {
+            ObString full_object_name = tmp_name.split_on('@');
+            if (full_object_name.empty()) {
+              exist = false;
+            } else {
+              ObString remote_db_name = full_object_name.split_on('.');
+              const ObIRoutineInfo *dblink_routine_info = NULL;
+              // ObRoutineInfo *tmp_routine_info = NULL;
+              if (routine_name_is_synonym) {
+                OZ (ObPLResolver::resolve_dblink_routine(resolve_ctx,
+                                                        tmp_name,
+                                                        remote_db_name,
+                                                        ObString(""),
+                                                        full_object_name,
+                                                        expr_params,
+                                                        dblink_routine_info));
+              } else {
+                OZ (ObPLResolver::resolve_dblink_routine(resolve_ctx,
+                                                         tmp_name,
+                                                         remote_db_name,
+                                                         full_object_name,
+                                                         routine_name,
+                                                         expr_params,
+                                                         dblink_routine_info));
+              }
+              if (OB_SUCC(ret) && OB_NOT_NULL(dblink_routine_info)) {
+                COPY_DBLINK_ROUTINE(dblink_routine_info);
+              }
+            }
+          }
+        }
+        if (OB_SUCC(ret) && !exist) {
+          ret = OB_ERR_SP_DOES_NOT_EXIST;
+          LOG_WARN("routine not exist", K(ret));
+        }
+      }
+    } else {
+      const ObIRoutineInfo *dblink_routine_info = NULL;
+      OZ (ObPLResolver::resolve_dblink_routine(resolve_ctx,
+                                              dblink_name,
+                                              db_name,
+                                              package_name,
+                                              routine_name,
+                                              expr_params,
+                                              dblink_routine_info));
+      if (OB_SUCC(ret) && OB_NOT_NULL(dblink_routine_info)) {
+        COPY_DBLINK_ROUTINE(dblink_routine_info);
+      }
+    }
   }
   return ret;
 }
@@ -1306,7 +1420,8 @@ int ObResolverUtils::get_routine(const pl::ObPLResolveCtx &resolve_ctx,
                                      routine_name,
                                      routine_type,
                                      candidate_routine_infos,
-                                     udt_id))) {
+                                     udt_id,
+                                     &resolve_ctx))) {
     LOG_WARN("failed to get candidate routine infos",
              K(db_name), K(package_name), K(routine_name), K(ret));
   } else {
@@ -1355,6 +1470,7 @@ int ObResolverUtils::resolve_sp_access_name(ObSchemaChecker &schema_checker,
 {
   int ret = OB_SUCCESS;
   ParseResult parser_result;
+  ObString dblink_name;
   ObStmtNodeTree *parser_tree = NULL;
   lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::MYSQL;
   if (OB_FAIL(share::ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
@@ -1391,7 +1507,7 @@ int ObResolverUtils::resolve_sp_access_name(ObSchemaChecker &schema_checker,
                                               tenant_id,
                                               current_database,
                                               *(parser_tree->children_[0]->children_[0]),
-                                              database_name, package_name, routine_name))) {
+                                              database_name, package_name, routine_name, dblink_name))) {
       LOG_WARN("failed to resolve_sp_access_name",
                K(ret), K(procedure_name), K(tenant_id), K(current_database));
     }
@@ -1447,7 +1563,8 @@ int ObResolverUtils::resolve_sp_access_name(ObSchemaChecker &schema_checker,
                                             const ParseNode &sp_access_name_node,
                                             ObString &db_name,
                                             ObString &package_name,
-                                            ObString &routine_name)
+                                            ObString &routine_name,
+                                            ObString &dblink_name)
 {
   int ret = OB_SUCCESS;
 
@@ -1483,6 +1600,7 @@ int ObResolverUtils::resolve_sp_access_name(ObSchemaChecker &schema_checker,
         ObString package_or_db_name;
         uint64_t package_id = OB_INVALID_ID;
         uint64_t database_id = OB_INVALID_ID;
+        bool is_dblink_routine = false;
         if (OB_UNLIKELY(package_or_db_node->type_ != T_IDENT)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("package_or_db_node is invalid", K(package_or_db_node));
@@ -1521,6 +1639,22 @@ int ObResolverUtils::resolve_sp_access_name(ObSchemaChecker &schema_checker,
                 } else if (OB_FAIL(schema_checker.get_package_id(
                                     tenant_id, object_db_id, object_name, COMPATIBLE_ORACLE_MODE, package_id))) {
                   LOG_WARN("failed to get package id", K(ret), K(object_db_id), K(object_name));
+                  // If failed, object_name may be a dblink object
+                  if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
+                    ret = OB_SUCCESS;
+                    ObString full_pkg_name = object_name.split_on('@');
+                    if (full_pkg_name.empty()) {
+                      // not a dblink
+                    } else {
+                      dblink_name = object_name;
+                      db_name = full_pkg_name.split_on('.');
+                      package_name = full_pkg_name;
+                      is_dblink_routine = true;
+                    }
+                    if (OB_SUCC(ret) && !is_dblink_routine) {
+                      ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
+                    }
+                  }
                 } else {
                   package_name = object_name;
                 }
@@ -1529,7 +1663,8 @@ int ObResolverUtils::resolve_sp_access_name(ObSchemaChecker &schema_checker,
                 object_name = package_or_db_name;
               }
             }
-            if (OB_FAIL(ret) || OB_INVALID_ID == package_id) {
+            if (is_dblink_routine) {
+            } else if (OB_FAIL(ret) || OB_INVALID_ID == package_id) {
               if (OB_FAIL(schema_checker.get_package_id(
                     OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID,
                     object_name, COMPATIBLE_ORACLE_MODE, package_id))) {

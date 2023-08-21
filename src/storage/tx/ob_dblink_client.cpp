@@ -93,9 +93,9 @@ int ObDBLinkClient::rm_xa_start(const ObXATransID &xid, const ObTxIsolationLevel
     }
   // TODO, check connection
   } else {
-    int64_t flag = ObXAFlag::TMNOFLAGS;
+    int64_t flag = ObXAFlag::OBTMNOFLAGS;
     if (ObTxIsolationLevel::RR == isolation || ObTxIsolationLevel::SERIAL == isolation) {
-      flag = ObXAFlag::TMSERIALIZABLE;
+      flag = ObXAFlag::OBTMSERIALIZABLE;
     }
     if (OB_FAIL(init_query_impl_(isolation))) {
       TRANS_LOG(WARN, "fail to init query impl", K(ret), K(xid), K(isolation), K(*this));
@@ -220,7 +220,7 @@ int ObDBLinkClient::rm_xa_commit()
     }
   } else {
     // two phase commit
-    const int64_t flags = ObXAFlag::TMNOFLAGS;
+    const int64_t flags = ObXAFlag::OBTMNOFLAGS;
     state_ = ObDBLinkClientState::COMMITTING;
     if (OB_FAIL(impl_->xa_commit(xid_, flags))) {
       TRANS_LOG(WARN, "fail to execute query", K(ret), K(*this));
@@ -302,7 +302,7 @@ int ObDBLinkClient::rm_xa_end_()
       TRANS_LOG(WARN, "unexpected dblink client", K(ret), K(*this));
     }
   } else {
-    if (OB_FAIL(impl_->xa_end(xid_, ObXAFlag::TMSUCCESS))) {
+    if (OB_FAIL(impl_->xa_end(xid_, ObXAFlag::OBTMSUCCESS))) {
       TRANS_LOG(WARN, "fail to do xa end", K(ret), K(*this));
     } else {
       state_ = ObDBLinkClientState::END;

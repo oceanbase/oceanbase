@@ -92,19 +92,6 @@ void ObMySQLConnection::reset()
   set_last_error(OB_SUCCESS);
 }
 
-int ObMySQLConnection::create_statement(ObMySQLStatement &stmt, const uint64_t tenant_id, const char *sql)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(switch_tenant(tenant_id))) {
-    LOG_WARN("switch tenant failed", K(tenant_id), K(ret));
-  } else if (OB_FAIL(reset_read_consistency())) {
-    LOG_WARN("fail to set read consistency", K(ret));
-  } else if (OB_FAIL(stmt.init(*this, sql))) {
-    LOG_WARN("fail to init prepared statement", K(ret));
-  }
-  return ret;
-}
-
 int ObMySQLConnection::prepare_statement(ObMySQLPreparedStatement &stmt, const char *sql)
 {
   int ret = OB_SUCCESS;
@@ -519,6 +506,31 @@ int ObMySQLConnection::execute_write(const uint64_t tenant_id, const char *sql,
       LOG_WARN("create statement failed", KCSTRING(sql), K(ret));
     } else if (OB_FAIL(stmt.execute_update(affected_rows))) {
       LOG_WARN("statement execute update failed", KCSTRING(sql), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMySQLConnection::execute_proc(const uint64_t tenant_id,
+                                    ObIAllocator &allocator,
+                                    ParamStore &params,
+                                    ObString &sql,
+                                    const share::schema::ObRoutineInfo &routine_info,
+                                    const common::ObIArray<const pl::ObUserDefinedType *> &udts,
+                                    const ObTimeZoneInfo *tz_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(closed_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("connection not established. call connect first", K(ret));
+  } else {
+    ObMySQLProcStatement stmt;
+    if (OB_FAIL(create_statement(stmt, tenant_id, sql.ptr()))) {
+      LOG_WARN("create statement failed", K(sql), K(ret));
+    } else if (OB_FAIL(stmt.execute_proc(allocator, params, routine_info, tz_info))) {
+      LOG_WARN("statement execute update failed", K(sql), K(ret));
+    } else if (OB_FAIL(stmt.close())) {
+      LOG_WARN("fail to close stmt", K(ret));
     }
   }
   return ret;

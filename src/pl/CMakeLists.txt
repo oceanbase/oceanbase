@@ -53,4 +53,8 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_user_define_rule.cpp
 )
 
+ob_set_subtarget(ob_pl dblink
+  dblink/ob_pl_dblink_guard.cpp
+)
+
 ob_server_add_target(ob_pl)

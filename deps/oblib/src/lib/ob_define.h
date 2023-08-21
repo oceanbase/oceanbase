@@ -1304,6 +1304,8 @@ const uint64_t OB_MOCK_TRIGGER_PACKAGE_ID_MASK = 0x4000000000000000;
 const uint64_t OB_MOCK_OBJECT_PACAKGE_ID_MASK = 0x2000000000000000;
 // 64bit : use for mock package spec/body mask, 0 means spec, 1 means body
 const uint64_t OB_MOCK_PACKAGE_BODY_ID_MASK = 0x8000000000000000;
+// 61bit : use for mock dblink udt id
+const uint64_t OB_MOCK_DBLINK_UDT_ID_MASK = 0x1000000000000000;
 /* low 21bits used as package type id */
 #define OB_MOCK_MASK_SHIFT  40
 #define OB_PACKAGE_ID_SHIFT 24
@@ -1311,7 +1313,8 @@ OB_INLINE uint64_t extract_package_id(uint64_t global_type_id)
 {
   uint64_t mask = OB_MOCK_PACKAGE_BODY_ID_MASK |
                   OB_MOCK_TRIGGER_PACKAGE_ID_MASK |
-                  OB_MOCK_OBJECT_PACAKGE_ID_MASK;
+                  OB_MOCK_OBJECT_PACAKGE_ID_MASK |
+                  OB_MOCK_DBLINK_UDT_ID_MASK;
   uint64_t mock_val = global_type_id & (mask >> OB_MOCK_MASK_SHIFT);
   uint64_t package_id = ((int64_t)global_type_id >> OB_PACKAGE_ID_SHIFT) |
                         (mock_val << OB_MOCK_MASK_SHIFT);
@@ -1320,14 +1323,15 @@ OB_INLINE uint64_t extract_package_id(uint64_t global_type_id)
 
 OB_INLINE int64_t extract_type_id(uint64_t global_type_id)
 {
-  return global_type_id & (~(UINT64_MAX << (OB_PACKAGE_ID_SHIFT - 3)));
+  return global_type_id & (~(UINT64_MAX << (OB_PACKAGE_ID_SHIFT - 4)));
 }
 
 OB_INLINE uint64_t combine_pl_type_id(uint64_t package_id, int64_t type_idx)
 {
   uint64_t mask = OB_MOCK_PACKAGE_BODY_ID_MASK |
                   OB_MOCK_TRIGGER_PACKAGE_ID_MASK |
-                  OB_MOCK_OBJECT_PACAKGE_ID_MASK;
+                  OB_MOCK_OBJECT_PACAKGE_ID_MASK |
+                  OB_MOCK_DBLINK_UDT_ID_MASK;
   type_idx |= ((uint64_t)(package_id & mask) >> OB_MOCK_MASK_SHIFT);
   return (package_id << OB_PACKAGE_ID_SHIFT | type_idx);
 }
@@ -1347,6 +1351,13 @@ OB_INLINE bool is_inner_pl_object_id(const uint64_t object_id)
   return object_id > OB_MIN_SYS_PL_UDT_ID
          && object_id < OB_MAX_SYS_PL_OBJECT_ID;
 }
+
+OB_INLINE bool is_dblink_type_id(uint64_t type_id)
+{
+  return type_id != common::OB_INVALID_ID
+          && ((type_id <<  OB_MOCK_MASK_SHIFT) & OB_MOCK_DBLINK_UDT_ID_MASK) != 0;
+}
+
 
 /* ################################################################################ */
 

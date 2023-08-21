@@ -17,6 +17,7 @@
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "lib/timezone/ob_timezone_info.h"
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
+#include "common/object/ob_object.h"
 
 namespace oceanbase
 {
@@ -25,6 +26,19 @@ namespace sql
 class ObSql;
 struct ObSqlCtx;
 class ObResultSet;
+}
+namespace share
+{
+namespace schema
+{
+class ObRoutineInfo;
+}
+
+}
+
+namespace pl
+{
+class ObUserDefinedType;
 }
 namespace common
 {
@@ -110,6 +124,48 @@ public:
   virtual int execute_write(const uint64_t tenant_id, const ObString &sql,
       int64_t &affected_rows, bool is_user_sql = false,
       const common::ObAddr *sql_exec_addr = nullptr) = 0;
+  virtual int execute_proc() { return OB_NOT_SUPPORTED; }
+  virtual int execute_proc(const uint64_t tenant_id,
+                        ObIAllocator &allocator,
+                        ParamStore &params,
+                        ObString &sql,
+                        const share::schema::ObRoutineInfo &routine_info,
+                        const common::ObIArray<const pl::ObUserDefinedType *> &udts,
+                        const ObTimeZoneInfo *tz_info) = 0;
+  virtual int prepare(const char *sql) {
+    UNUSED(sql);
+    return OB_NOT_SUPPORTED;
+  }
+  virtual int bind_basic_type_by_pos(uint64_t position,
+                                     void *param,
+                                     int64_t param_size,
+                                     int32_t datatype,
+                                     int32_t &indicator)
+  {
+    UNUSEDx(position, param, param_size, datatype);
+    return OB_NOT_SUPPORTED;
+  }
+  virtual int bind_array_type_by_pos(uint64_t position,
+                                     void *array,
+                                     int32_t *indicators,
+                                     int64_t ele_size,
+                                     int32_t ele_datatype,
+                                     uint64_t array_size,
+                                     uint32_t *out_valid_array_size)
+  {
+    UNUSEDx(position, array, ele_size, ele_datatype, array_size, out_valid_array_size);
+    return OB_NOT_SUPPORTED;
+  }
+  virtual int get_server_major_version(int64_t &major_version) {
+    return OB_NOT_SUPPORTED;
+  }
+  virtual int get_package_udts(ObIAllocator &alloctor,
+                               const common::ObString &database_name,
+                               const common::ObString &package_name,
+                               common::ObIArray<pl::ObUserDefinedType *> &udts,
+                               uint64_t dblink_id,
+                               uint64_t &next_object_id)
+  { return OB_NOT_SUPPORTED; }
 
   // transaction interface
   virtual int start_transaction(const uint64_t &tenant_id, bool with_snap_shot = false) = 0;

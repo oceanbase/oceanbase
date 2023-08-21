@@ -1182,7 +1182,8 @@ public:
                           uint64_t line_num, /* call position line number, for call_stack info*/
                           int64_t argc,
                           common::ObObjParam **argv,
-                          int64_t *nocopy_argv);
+                          int64_t *nocopy_argv,
+                          uint64_t dblink_id);
 
   static int set_user_type_var(ObPLExecCtx *ctx,
                                int64_t var_index,

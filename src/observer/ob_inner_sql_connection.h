@@ -156,6 +156,13 @@ public:
   virtual int execute_write(const uint64_t tenant_id, const ObString &sql,
                             int64_t &affected_rows, bool is_user_sql = false,
                             const common::ObAddr *sql_exec_addr = nullptr) override;
+  virtual int execute_proc(const uint64_t tenant_id,
+                          ObIAllocator &allocator,
+                          ParamStore &params,
+                          ObString &sql,
+                          const share::schema::ObRoutineInfo &routine_info,
+                          const common::ObIArray<const pl::ObUserDefinedType *> &udts,
+                          const ObTimeZoneInfo *tz_info) override;
   virtual int start_transaction(const uint64_t &tenant_id, bool with_snap_shot = false) override;
   virtual int register_multi_data_source(const uint64_t &tenant_id,
                                          const share::ObLSID ls_id,

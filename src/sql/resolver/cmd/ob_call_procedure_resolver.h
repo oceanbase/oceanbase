@@ -56,6 +56,12 @@ private:
   int find_call_proc_info(ObCallProcedureStmt &stmt);
   int add_call_proc_info(ObCallProcedureInfo *call_info);
   int generate_pl_cache_ctx(pl::ObPLCacheCtx &pc_ctx);
+  int resolve_dblink_routine_name(const ParseNode &access_node,
+                                  const ParseNode &dblink_node,
+                                  ObString &dblink_name,
+                                  ObString &db_name,
+                                  ObString &pkg_name,
+                                  ObString &sp_name);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCallProcedureResolver);

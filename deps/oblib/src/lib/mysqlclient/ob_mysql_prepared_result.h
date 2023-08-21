@@ -25,6 +25,7 @@ namespace common
 class ObIAllocator;
 namespace sqlclient
 {
+class ObBindParam;
 class ObMySQLPreparedStatement;
 class ObMySQLPreparedResult
 {
@@ -46,13 +47,9 @@ public:
    */
   int get_int(const int64_t col_idx, int64_t &int_val) const;
   int get_varchar(const int64_t col_idx, common::ObString &varchar_val) const;
-  // TODO: more types
+  int64_t get_result_column_count() const { return result_column_count_; }
 
-  /*
-   * bind data output buffer
-   */
-  int bind_result(const int64_t col_idx, enum_field_types buf_type, char *out_buf, const int64_t buf_len,
-                  unsigned long &res_len);
+  int bind_result(ObBindParam &param);
 private:
   ObMySQLPreparedStatement &stmt_;
   common::ObIAllocator &alloc_;

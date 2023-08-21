@@ -3453,6 +3453,11 @@ int ObElemDesc::deserialize(const char* buf, const int64_t len, int64_t &pos)
   return ret;
 }
 
+ObIAllocator* ObPLCollection::get_coll_allocator()
+{
+  return dynamic_cast<ObPLCollAllocator *>(allocator_);
+}
+
 /*
  * 我们约定一个原则：
  * 1、所有Collection内部的data域的ObObj数组（包括sort域和key域的内存）的内存都必须由该Collection自己的allocator分配，而不允许是其他任何allocator；

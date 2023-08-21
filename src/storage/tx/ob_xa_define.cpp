@@ -228,20 +228,20 @@ bool ObXAFlag::is_valid(const int64_t flag, const int64_t xa_req_type)
 
   switch (xa_req_type) {
     case ObXAReqType::XA_START: {
-      if (((flag & TMRESUME) && ((flag & TMJOIN) || (flag & LOOSELY)))
-         || ((flag & LOOSELY) && (flag & TMJOIN))) {
+      if (((flag & OBTMRESUME) && ((flag & OBTMJOIN) || (flag & OBLOOSELY)))
+         || ((flag & OBLOOSELY) && (flag & OBTMJOIN))) {
         ret_bool = false;
       } else {
-        const bool is_resumejoin = flag & (TMRESUME | TMJOIN);
+        const bool is_resumejoin = flag & (OBTMRESUME | OBTMJOIN);
         if (!is_resumejoin) {
-          const int64_t mask = LOOSELY | TMREADONLY | TMSERIALIZABLE;
+          const int64_t mask = OBLOOSELY | OBTMREADONLY | OBTMSERIALIZABLE;
           if (mask != (flag | mask)) {
             ret_bool = false;
           } else {
             ret_bool = true;
           }
         } else {
-          if ((flag & TMJOIN) && (flag & TMRESUME)) {
+          if ((flag & OBTMJOIN) && (flag & OBTMRESUME)) {
             ret_bool = false;
           } else {
             ret_bool = true;
@@ -252,7 +252,7 @@ bool ObXAFlag::is_valid(const int64_t flag, const int64_t xa_req_type)
     }
     case ObXAReqType::XA_END: {
       const int64_t mask = 0x00000000FFFFFFFF;
-      if ((flag & mask) != TMSUSPEND && (flag & mask) != TMSUCCESS && (flag & mask) != TMFAIL) {
+      if ((flag & mask) != OBTMSUSPEND && (flag & mask) != OBTMSUCCESS && (flag & mask) != OBTMFAIL) {
         ret_bool = false;
       } else {
         ret_bool = true;
@@ -267,7 +267,7 @@ bool ObXAFlag::is_valid(const int64_t flag, const int64_t xa_req_type)
     }
     case ObXAReqType::XA_COMMIT: {
       // noflags or onephase
-      if (flag != TMNOFLAGS && flag != TMONEPHASE) {
+      if (flag != OBTMNOFLAGS && flag != OBTMONEPHASE) {
         ret_bool = false;
       } else {
         ret_bool = true;
@@ -293,9 +293,9 @@ bool ObXAFlag::is_valid(const int64_t flag, const int64_t xa_req_type)
 bool ObXAFlag::is_valid_inner_flag(const int64_t flag)
 {
   bool ret_bool = true;
-  if ((flag & TMSUSPEND) && (flag & TMSUCCESS)) {
+  if ((flag & OBTMSUSPEND) && (flag & OBTMSUCCESS)) {
     ret_bool = false;
-  } else if (!(flag & TMSUSPEND) && !(flag & TMSUCCESS)) {
+  } else if (!(flag & OBTMSUSPEND) && !(flag & OBTMSUCCESS)) {
     ret_bool = false;
   } else {
     ret_bool = true;
@@ -308,10 +308,10 @@ bool ObXAFlag::is_tmnoflags(const int64_t flag, const int64_t xa_req_type)
 {
   bool ret_bool = true;
   if (ObXAReqType::XA_START == xa_req_type) {
-    const int64_t mask = LOOSELY | TMREADONLY | TMSERIALIZABLE;
+    const int64_t mask = OBLOOSELY | OBTMREADONLY | OBTMSERIALIZABLE;
     ret_bool = ((mask | flag) == mask);
   } else {
-    ret_bool = (TMNOFLAGS == flag);
+    ret_bool = (OBTMNOFLAGS == flag);
   }
   TRANS_LOG(INFO, "check tmnoflags", K(ret_bool), K(xa_req_type), KPHEX(&flag, sizeof(int64_t)));
   return ret_bool;

@@ -104,21 +104,22 @@ class ObXAFlag
 public:
   enum
   {
-    TMNOFLAGS = 0,
+    OBTMNOFLAGS = 0,
     // non-standard xa protocol, to denote a readonly xa trans
-    TMREADONLY = 0x100,
+    OBTMREADONLY = 0x100,
     // non-standard xa protocol, to denote a serializable xa trans
-    TMSERIALIZABLE = 0x400,
+    OBTMSERIALIZABLE = 0x400,
     // non-standard xa protocol, to denote loosely coupled xa trans
-    LOOSELY = 0x10000,
-    TMJOIN = 0x200000,
-    TMSUSPEND = 0x2000000,
-    TMSUCCESS = 0x4000000,
-    TMRESUME = 0x8000000,
-    TMFAIL = 0x20000000,
-    TMONEPHASE = 0x40000000,
+
+    OBLOOSELY = 0x10000,
+    OBTMJOIN = 0x200000,
+    OBTMSUSPEND = 0x2000000,
+    OBTMSUCCESS = 0x4000000,
+    OBTMRESUME = 0x8000000,
+    OBTMFAIL = 0x20000000,
+    OBTMONEPHASE = 0x40000000,
     // non-standard xa protocol, to denote temp table xa trans
-    TEMPTABLE = 0x100000000,
+    OBTEMPTABLE = 0x100000000,
   };
 public:
   // 用于检查xa请求传入的flag
@@ -126,30 +127,30 @@ public:
   static bool is_valid(const int64_t flag, const int64_t xa_req_type);
   // check the flag stored in inner table
   static bool is_valid_inner_flag(const int64_t flag);
-  static bool contain_tmreadonly(const int64_t flag) { return flag & TMREADONLY; }
-  static bool contain_tmserializable(const int64_t flag) { return flag & TMSERIALIZABLE; }
+  static bool contain_tmreadonly(const int64_t flag) { return flag & OBTMREADONLY; }
+  static bool contain_tmserializable(const int64_t flag) { return flag & OBTMSERIALIZABLE; }
   static bool is_tmnoflags(const int64_t flag, const int64_t xa_req_type);
-  static bool contain_loosely(const int64_t flag) { return flag & LOOSELY; }
-  static bool contain_tmjoin(const int64_t flag) { return flag & TMJOIN; }
-  static bool is_tmjoin(const int64_t flag) { return flag == TMJOIN; }
-  static bool contain_tmresume(const int64_t flag) { return flag & TMRESUME; }
-  static bool is_tmresume(const int64_t flag) { return flag == TMRESUME; }
-  static bool contain_tmsuccess(const int64_t flag) { return flag & TMSUCCESS; }
-  static bool contain_tmsuspend(const int64_t flag) { return flag & TMSUSPEND; }
-  static bool contain_tmonephase(const int64_t flag) { return flag & TMONEPHASE; }
-  static bool is_tmonephase(const int64_t flag) { return flag == TMONEPHASE; }
-  static bool contain_tmfail(const int64_t flag) { return flag & TMFAIL; }
+  static bool contain_loosely(const int64_t flag) { return flag & OBLOOSELY; }
+  static bool contain_tmjoin(const int64_t flag) { return flag & OBTMJOIN; }
+  static bool is_tmjoin(const int64_t flag) { return flag == OBTMJOIN; }
+  static bool contain_tmresume(const int64_t flag) { return flag & OBTMRESUME; }
+  static bool is_tmresume(const int64_t flag) { return flag == OBTMRESUME; }
+  static bool contain_tmsuccess(const int64_t flag) { return flag & OBTMSUCCESS; }
+  static bool contain_tmsuspend(const int64_t flag) { return flag & OBTMSUSPEND; }
+  static bool contain_tmonephase(const int64_t flag) { return flag & OBTMONEPHASE; }
+  static bool is_tmonephase(const int64_t flag) { return flag == OBTMONEPHASE; }
+  static bool contain_tmfail(const int64_t flag) { return flag & OBTMFAIL; }
   static int64_t add_end_flag(const int64_t flag, const int64_t end_flag)
   {
     int64_t ret = end_flag;
     if (contain_loosely(flag)) {
-      ret |= LOOSELY;
+      ret |= OBLOOSELY;
     }
     return ret;
   }
   static bool contain_temp_table(const int64_t flag)
   {
-    return flag & ObXAFlag::TEMPTABLE;
+    return flag & ObXAFlag::OBTEMPTABLE;
   }
 };
 
@@ -221,7 +222,7 @@ struct ObXABranchInfo
            const common::ObAddr &addr,
            const int64_t unrespond_msg_cnt,
            const int64_t last_hb_ts,
-           const int64_t end_flag = ObXAFlag::TMNOFLAGS);
+           const int64_t end_flag = ObXAFlag::OBTMNOFLAGS);
   TO_STRING_KV(K_(xid), K_(state), K_(timeout_seconds), K_(addr),
                K_(unrespond_msg_cnt), K_(last_hb_ts), K_(end_flag));
   ObXATransID xid_;

@@ -593,7 +593,7 @@ int ObXAQueryOraImpl::convert_flag_(const int64_t xa_flag,
 {
   int ret = OB_SUCCESS;
   switch (xa_flag) {
-    case ObXAFlag::TMNOFLAGS: {
+    case ObXAFlag::OBTMNOFLAGS: {
       if (ObXAReqType::XA_START == xa_req_type) {
         oci_flag = OCI_TRANS_NEW;
       } else if (ObXAReqType::XA_COMMIT == xa_req_type) {
@@ -603,7 +603,7 @@ int ObXAQueryOraImpl::convert_flag_(const int64_t xa_flag,
       }
       break;
     }
-    case ObXAFlag::TMSUCCESS: {
+    case ObXAFlag::OBTMSUCCESS: {
       if (ObXAReqType::XA_END == xa_req_type) {
         oci_flag = OCI_DEFAULT;
       } else {
@@ -611,7 +611,7 @@ int ObXAQueryOraImpl::convert_flag_(const int64_t xa_flag,
       }
       break;
     }
-    case ObXAFlag::TMSERIALIZABLE: {
+    case ObXAFlag::OBTMSERIALIZABLE: {
       if (ObXAReqType::XA_START == xa_req_type) {
         oci_flag = OCI_TRANS_SERIALIZABLE;
       } else {

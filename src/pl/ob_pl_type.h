@@ -77,6 +77,7 @@ class ObPLRoutineParam;
 class ObPLUserTypeTable;
 class ObUserDefinedType;
 class ObPLStmt;
+class ObPLDbLinkGuard;
 
 enum ObProcType
 {
@@ -196,6 +197,7 @@ enum ObPLTypeFrom
   PL_TYPE_ATTR_ROWTYPE,
   PL_TYPE_ATTR_TYPE,
   PL_TYPE_SYS_REFCURSOR,
+  PL_TYPE_DBLINK,
 };
 
 enum ObPLTypeSize
@@ -561,7 +563,8 @@ public:
                                   common::ObIAllocator &allocator,
                                   common::ObMySQLProxy &sql_proxy,
                                   pl::ObPLDataType &pl_type,
-                                  share::schema::ObSchemaObjVersion *obj_version = NULL);
+                                  share::schema::ObSchemaObjVersion *obj_version = NULL,
+                                  pl::ObPLDbLinkGuard *dblink_guard = NULL);
   static int transform_and_add_routine_param(const pl::ObPLRoutineParam *param,
                                   int64_t position,
                                   int64_t level,
@@ -639,6 +642,8 @@ public:
     IS_UDF_NS = 20,
     IS_LOCAL_TYPE = 21,     // 本地的自定义类型
     IS_PKG_TYPE = 22,       // 包中的自定义类型
+    IS_SELF_ATTRIBUTE = 23, // self attribute for udt
+    IS_DBLINK_PKG_NS = 24,  // dblink package
   };
 
   ObObjAccessIdx()

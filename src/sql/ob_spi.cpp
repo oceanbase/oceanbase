@@ -38,7 +38,10 @@
 #include "storage/tx/ob_trans_service.h"
 #include "pl/sys_package/ob_dbms_sql.h"
 #include "pl/ob_pl.h"
-#include "src/sql/dblink/ob_tm_service.h"
+#include "sql/dblink/ob_tm_service.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/dblink/ob_pl_dblink_util.h"
+#endif
 
 namespace oceanbase
 {
@@ -8438,6 +8441,140 @@ int ObSPIService::spi_update_location(pl::ObPLExecCtx *ctx, uint64_t location)
   }
   return ret;
 }
+
+#ifdef OB_BUILD_ORACLE_PL
+int ObSPIService::spi_execute_dblink(pl::ObPLExecCtx *ctx,
+                                     uint64_t dblink_id,
+                                     uint64_t package_id,
+                                     uint64_t proc_id,
+                                     ParamStore &params)
+{
+  int ret = OB_SUCCESS;
+  ObExecContext *exec_ctx = NULL;
+  const ObRoutineInfo *routine_info = NULL;
+  const pl::ObPLDbLinkInfo *dblink_info = NULL;
+  CK (OB_NOT_NULL(ctx), ctx->valid());
+  CK (OB_NOT_NULL(ctx->guard_));
+  CK (OB_NOT_NULL(ctx->allocator_));
+  CK (OB_NOT_NULL(exec_ctx = ctx->exec_ctx_));
+  OZ (ctx->guard_->dblink_guard_.get_dblink_routine_info(dblink_id, package_id, proc_id, routine_info),
+      dblink_id, package_id, proc_id);
+  CK (OB_NOT_NULL(routine_info));
+  OZ (ctx->guard_->dblink_guard_.get_dblink_info(dblink_id, dblink_info));
+  CK (OB_NOT_NULL(dblink_info));
+  OZ (spi_execute_dblink(*exec_ctx, *ctx->allocator_, dblink_info, routine_info, params));
+  return ret;
+}
+
+int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
+                                     ObIAllocator &allocator,
+                                     const pl::ObPLDbLinkInfo *dblink_info,
+                                     const ObRoutineInfo *routine_info,
+                                     ParamStore &params)
+{
+  int ret = OB_SUCCESS;
+  sql::DblinkGetConnType conn_type = sql::DblinkGetConnType::DBLINK_POOL;
+  ObSQLSessionInfo *session = NULL;
+  uint64_t tenant_id = OB_INVALID_ID;
+  common::ObDbLinkProxy *dblink_proxy = NULL;
+  common::sqlclient::ObISQLConnection *dblink_conn = NULL;
+  ObString call_stmt;
+  typedef common::sqlclient::DblinkDriverProto DbLinkType;
+  DbLinkType link_type = DBLINK_UNKNOWN;
+  int64_t affected_rows;
+  transaction::ObTransID tx_id;
+  CK (OB_NOT_NULL(session = exec_ctx.get_my_session()));
+  CK (OB_NOT_NULL(routine_info));
+  CK (OB_NOT_NULL(dblink_proxy = GCTX.dblink_proxy_));
+  OX (tenant_id = session->get_effective_tenant_id());
+  OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, routine_info->get_dblink_id(), *session, link_type));
+  CK (OB_NOT_NULL(dblink_conn));
+  if (DBLINK_DRV_OB == link_type) {
+    OZ (ObPLDblinkUtil::print_dblink_call_stmt(allocator, *session, call_stmt, params, routine_info));
+    OZ (dblink_proxy->dblink_write(dblink_conn, affected_rows, call_stmt.ptr()), call_stmt);
+  } else {
+    const int64_t out_param_cnt = routine_info->get_out_param_count();
+    int64_t out_param_idx[out_param_cnt];
+    for (int64_t i = 0; i < out_param_cnt; i++) {
+      out_param_idx[i] = 0;
+    }
+    common::ObSEArray<const pl::ObUserDefinedType *, 1> udts;
+    ParamStore exec_params((ObWrapperAllocator(allocator)));
+    for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); i++) {
+      ObObjParam param_value;
+      if (params.at(i).is_pl_extend()) {
+        OZ (ObUserDefinedType::deep_copy_obj(allocator, params.at(i), param_value));
+      } else {
+        OZ (deep_copy_obj(allocator, params.at(i), param_value));
+      }
+      OX (param_value.set_is_pl_mock_default_param(params.at(i).is_pl_mock_default_param()));
+      OX (param_value.set_param_meta());
+      OX (param_value.set_accuracy(params.at(i).get_accuracy()));
+      OZ (exec_params.push_back(param_value));
+    }
+    OZ (ObPLDblinkUtil::print_dblink_ps_call_stmt(allocator, dblink_info,
+                                                  call_stmt, params, routine_info,
+                                                  udts, out_param_idx, out_param_cnt));
+    OZ (ObTMService::tm_rm_start(exec_ctx, link_type, dblink_conn, tx_id));
+    OZ (dblink_proxy->dblink_execute_proc(OB_INVALID_TENANT_ID, dblink_conn, allocator,
+                                          exec_params, call_stmt, *routine_info, udts,
+                                          session->get_timezone_info()), call_stmt);
+    OZ (spi_after_execute_dblink(session, routine_info, allocator, params, exec_params));
+  }
+
+  if (OB_NOT_NULL(dblink_conn)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = dblink_proxy->release_dblink(link_type, dblink_conn))) {
+      LOG_WARN("failed to relese connection", K(tmp_ret));
+    }
+  }
+  return ret;
+}
+
+int ObSPIService::spi_after_execute_dblink(ObSQLSessionInfo *session,
+                                           const ObRoutineInfo *routine_info,
+                                           ObIAllocator &allocator,
+                                           ParamStore &params,
+                                           ParamStore &exec_params)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(routine_info));
+  for (int64_t i = 0; OB_SUCC(ret) && i < routine_info->get_routine_params().count(); i++) {
+    ObRoutineParam *param = routine_info->get_routine_params().at(i);
+    if (OB_ISNULL(param)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param is NULL", K(ret), K(i));
+    } else if (param->is_out_sp_param() || param->is_inout_sp_param()) {
+      if (ob_is_string_or_lob_type(exec_params.at(i).get_type())
+          && (0 == exec_params.at(i).get_varchar().case_compare(""))) {
+        params.at(i).set_null();
+      } else {
+        if (ob_is_extend(param->get_param_type().get_obj_type())) {
+          OZ (ObUserDefinedType::deep_copy_obj(allocator, exec_params.at(i),  params.at(i), true));
+          ObUserDefinedType::destruct_obj(exec_params.at(i));
+        } else if (param->get_param_type().get_obj_type() != exec_params.at(i).get_param_meta().get_type()) {
+          const ObDataType &datatype = param->get_param_type();
+          ObObjParam result_value;
+          ObExprResType result_type;
+          result_type.reset();
+          result_type.set_meta(datatype.get_meta_type());
+          result_type.set_accuracy(datatype.get_accuracy());
+          OZ (spi_convert(session, &allocator, exec_params.at(i), result_type, result_value));
+          OZ (deep_copy_obj(allocator, result_value, params.at(i)));
+          OX (params.at(i).set_param_meta());
+        } else {
+          OZ (deep_copy_obj(allocator, exec_params.at(i), params.at(i)));
+          OX (params.at(i).set_param_meta());
+        }
+      }
+    } else if ((ob_is_extend(param->get_param_type().get_obj_type()))) {
+      ObUserDefinedType::destruct_obj(exec_params.at(i));
+    }
+  }
+  return ret;
+}
+
+#endif
 
 }
 }

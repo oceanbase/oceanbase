@@ -81,8 +81,8 @@ int ObSingleConnectionProxy::read(ReadResult &res,
     LOG_WARN("check inner stat failed");
   } else if (OB_FAIL(conn_->execute_read(tenant_id, sql, res))) {
     errno_ = ret;
-    const int ER_LOCK_WAIT_TIMEOUT = -1205;
-    if (ER_LOCK_WAIT_TIMEOUT == ret) {
+    const int ERR_LOCK_WAIT_TIMEOUT = -1205;
+    if (ERR_LOCK_WAIT_TIMEOUT == ret) {
       LOG_INFO("execute query failed", K(ret), KCSTRING(sql), K_(conn));
     } else {
       LOG_WARN("execute query failed", K(ret), KCSTRING(sql), K_(conn));
@@ -103,8 +103,8 @@ int ObSingleConnectionProxy::read(ReadResult &res,
     LOG_WARN("check inner stat failed");
   } else if (OB_FAIL(conn_->execute_read(cluster_id, tenant_id, sql, res))) {
     errno_ = ret;
-    const int ER_LOCK_WAIT_TIMEOUT = -1205;
-    if (ER_LOCK_WAIT_TIMEOUT == ret) {
+    const int ERR_LOCK_WAIT_TIMEOUT = -1205;
+    if (ERR_LOCK_WAIT_TIMEOUT == ret) {
       LOG_INFO("execute query failed", K(ret), K(sql), K_(conn), K(cluster_id));
     } else {
       LOG_WARN("execute query failed", K(ret), K(sql), K_(conn), K(cluster_id));

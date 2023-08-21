@@ -55,7 +55,8 @@ public:
   void close();
   virtual bool is_closed() const;
   // use user provided the statement
-  int create_statement(ObMySQLStatement &stmt, const uint64_t tenant_id, const char *sql);
+  template<typename T>
+  int create_statement(T &stmt, const uint64_t tenant_id, const char *sql);
   int prepare_statement(ObMySQLPreparedStatement &stmt, const char *sql);
   int escape(const char *from, const int64_t from_size, char *to,
       const int64_t to_size, int64_t &out_size);
@@ -83,6 +84,13 @@ public:
   virtual int execute_write(const uint64_t tenant_id, const char *sql,
                             int64_t &affected_rows, bool is_user_sql = false,
                             const common::ObAddr *sql_exec_addr = nullptr) override;
+  virtual int execute_proc(const uint64_t tenant_id,
+                        ObIAllocator &allocator,
+                        ParamStore &params,
+                        ObString &sql,
+                        const share::schema::ObRoutineInfo &routine_info,
+                        const common::ObIArray<const pl::ObUserDefinedType *> &udts,
+                        const ObTimeZoneInfo *tz_info) override;
   virtual int start_transaction(const uint64_t &tenant_id, bool with_snap_shot = false) override;
   virtual int rollback() override;
   virtual int commit() override;
@@ -169,6 +177,20 @@ inline void ObMySQLConnection::set_connection_version(const int64_t version)
 inline int64_t ObMySQLConnection::connection_version() const
 {
   return connection_version_;
+}
+
+template<typename T>
+int ObMySQLConnection::create_statement(T &stmt, const uint64_t tenant_id, const char *sql)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(switch_tenant(tenant_id))) {
+    _OB_LOG(WARN, "switch tenant failed, tenant_id=%ld, ret=%d", tenant_id, ret);
+  } else if (OB_FAIL(reset_read_consistency())) {
+    _OB_LOG(WARN, "fail to set read consistency, ret=%d", ret);
+  } else if (OB_FAIL(stmt.init(*this, sql))) {
+    _OB_LOG(WARN, "fail to init statement, ret=%d", ret);
+  }
+  return ret;
 }
 }
 }

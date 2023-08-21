@@ -1439,7 +1439,8 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
                                     const ObString &object_name,
                                     ExternalType &type,
                                     uint64_t &parent_id,
-                                    int64_t &var_idx) const
+                                    int64_t &var_idx,
+                                    const ObString &synonym_name) const
 {
   int ret = OB_SUCCESS;
   uint64_t object_id = OB_INVALID_ID;
@@ -1459,8 +1460,32 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
       if (OB_FAIL(schema_guard.get_udt_id(
                   tenant_id, object_db_id, OB_INVALID_ID/*package_id*/, object_name, object_id))
           || OB_INVALID_ID == object_id) {
-        LOG_WARN("resolve synonym failed!",
-                 K(ret), K(object_db_id), K(object_name));
+        // try dblink synonym
+        ObString tmp_name;
+        uint64_t dblink_id = OB_INVALID_ID;
+        if (OB_FAIL(ob_write_string(resolve_ctx_.allocator_, object_name, tmp_name))) {
+          LOG_WARN("write string failed", K(ret));
+        } else {
+          ObString full_object_name = tmp_name.split_on('@');
+          bool exist = false;
+          if (!full_object_name.empty()) {
+            if (OB_FAIL(schema_guard.get_dblink_id(tenant_id, tmp_name, dblink_id))
+                || OB_INVALID_ID == dblink_id) {
+              LOG_WARN("resolve synonym failed!", K(ret), K(object_db_id), K(tmp_name));
+            } else if (OB_FAIL(schema_guard.check_synonym_exist_with_name(tenant_id, object_db_id, synonym_name,
+                                                                          exist, object_id))) {
+              LOG_WARN("check_synonym_exist_with_name failed", K(ret),
+                       K(object_db_id), K(synonym_name), K(object_name));
+            } else if (!exist || OB_INVALID_ID == object_id) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("synonym not exist", K(ret), K(tenant_id), K(object_db_id), K(object_name), K(synonym_name));
+            } else {
+              type = DBLINK_PKG_NS;
+            }
+          } else {
+            LOG_WARN("resolve synonym failed!", K(ret), K(object_db_id), K(object_name));
+          }
+        }
       } else {
         type = UDT_NS;
       }
@@ -1659,7 +1684,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
           schema_checker, synonym_checker,
           tenant_id, db_id, name, object_db_id, object_name, exist));
         if (exist) {
-          OZ (resolve_synonym(object_db_id, object_name, type, parent_id, var_idx));
+          OZ (resolve_synonym(object_db_id, object_name, type, parent_id, var_idx, name));
         }
       }
       // 尝试看是不是系统变量的特殊写法，如 set SQL_MODE='ONLY_FULL_GROUP_BY';

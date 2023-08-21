@@ -180,6 +180,39 @@ public:
   int release_dblink(sqlclient::DblinkDriverProto dblink_type, sqlclient::ObISQLConnection *dblink_conn);
   int dblink_read(sqlclient::ObISQLConnection *dblink_conn, ReadResult &result, const char *sql);
   int dblink_write(sqlclient::ObISQLConnection *dblink_conn, int64_t &affected_rows, const char *sql);
+  int dblink_execute_proc(sqlclient::ObISQLConnection *dblink_conn);
+  int dblink_execute_proc(const uint64_t tenant_id,
+                          sqlclient::ObISQLConnection *dblink_conn,
+                          ObIAllocator &allocator,
+                          ParamStore &params,
+                          ObString &sql,
+                          const share::schema::ObRoutineInfo &routine_info,
+                          const common::ObIArray<const pl::ObUserDefinedType *> &udts,
+                          const ObTimeZoneInfo *tz_info);
+  int dblink_prepare(sqlclient::ObISQLConnection *dblink_conn, const char *sql);
+  int dblink_bind_basic_type_by_pos(sqlclient::ObISQLConnection *dblink_conn,
+                                    uint64_t position,
+                                    void *param,
+                                    int64_t param_size,
+                                    int32_t datatype,
+                                    int32_t &indicator);
+  int dblink_bind_array_type_by_pos(sqlclient::ObISQLConnection *dblink_conn,
+                                    uint64_t position,
+                                    void *array,
+                                    int32_t *indicators,
+                                    int64_t ele_size,
+                                    int32_t ele_datatype,
+                                    uint64_t array_size,
+                                    uint32_t *out_valid_array_size);
+  int dblink_get_server_major_version(sqlclient::ObISQLConnection *dblink_conn,
+                                      int64_t &major_version);
+  int dblink_get_package_udts(common::sqlclient::ObISQLConnection *dblink_conn,
+                              ObIAllocator &alloctor,
+                              const common::ObString &database_name,
+                              const common::ObString &package_name,
+                              common::ObIArray<pl::ObUserDefinedType *> &udts,
+                              uint64_t dblink_id,
+                              uint64_t &next_object_id);
   int rollback(sqlclient::ObISQLConnection *dblink_conn);
   int switch_dblink_conn_pool(sqlclient::DblinkDriverProto type, sqlclient::ObISQLConnectionPool *&dblink_conn_pool);
   int set_dblink_pool_charset(uint64_t dblink_id);

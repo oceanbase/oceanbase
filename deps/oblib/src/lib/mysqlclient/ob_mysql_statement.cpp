@@ -156,8 +156,8 @@ ObMySQLResult *ObMySQLStatement::execute_query(bool enable_use_result)
       char errmsg[256] = {0};
       const char *srcmsg = mysql_error(stmt_);
       MEMCPY(errmsg, srcmsg, MIN(255, STRLEN(srcmsg)));
-      const int ER_LOCK_WAIT_TIMEOUT = -1205;
-      if (ER_LOCK_WAIT_TIMEOUT == ret) {
+      const int ERR_LOCK_WAIT_TIMEOUT = -1205;
+      if (ERR_LOCK_WAIT_TIMEOUT == ret) {
         LOG_INFO("fail to query server", "sessid", conn_->get_sessid(), "host", stmt_->host, "port", stmt_->port,
                "err_msg", errmsg, K(ret), K(sql_str_));
       } else {

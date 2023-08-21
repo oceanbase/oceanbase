@@ -442,7 +442,7 @@ public:
                                share::schema::ObIRoutineInfo *routine_info,
                                ObProcType &routine_type,
                                const ObPLDataType &ret_type);
-
+  static int build_pl_integer_type(ObPLIntegerType type, ObPLDataType &data_type);
 
   int get_caller_accessor_item(
     const ObPLStmtBlock *caller, AccessorItem &caller_item);
@@ -556,6 +556,28 @@ public:
     sql::ObUDFInfo &udf_info, ObIArray<ObObjAccessIdx> &access_idxs, ObPLCompileUnitAST &func);
 
   int construct_name(ObString &database_name, ObString &package_name, ObString &routine_name, ObSqlString &object_name);
+  static int resolve_dblink_routine(ObPLResolveCtx &resolve_ctx,
+                                    const ObString &dblink_name,
+                                    const ObString &db_name,
+                                    const ObString &pkg_name,
+                                    const ObString &routine_name,
+                                    const common::ObIArray<sql::ObRawExpr *> &expr_params,
+                                    const ObIRoutineInfo *&routine_info);
+  static int resolve_dblink_routine_with_synonym(ObPLResolveCtx &resolve_ctx,
+                                                 const uint64_t pkg_syn_id,
+                                                 const ObString &routine_name,
+                                                 const common::ObIArray<sql::ObRawExpr *> &expr_params,
+                                                 const ObIRoutineInfo *&routine_info);
+  int resolve_dblink_type_with_synonym(const uint64_t pkg_syn_id,
+                                       const ObString &type_name,
+                                       ObPLCompileUnitAST &func,
+                                       ObPLDataType &pl_type);
+  int resolve_dblink_type(const ObString &dblink_name,
+                          const ObString &db_name,
+                          const ObString &pkg_name,
+                          const ObString &udt_name,
+                          ObPLCompileUnitAST &func,
+                          ObPLDataType &pl_type);
 private:
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLDeclareVarStmt *stmt, ObPLFunctionAST &func_ast);
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLPackageAST &package_ast);
@@ -587,6 +609,9 @@ private:
                           ObPLDataType &pl_type,
                           ObPLExternTypeInfo *extern_type_info = NULL,
                           bool with_rowid = false);
+  int resolve_dblink_type(const ParseNode *node,
+                          ObPLCompileUnitAST &func,
+                          ObPLDataType &pl_type);
   int resolve_sp_composite_type(const ParseNode *sp_data_type_node,
                                 ObPLCompileUnitAST &func,
                                 ObPLDataType &data_type,
@@ -917,6 +942,10 @@ private:
   int resolve_obj_access_idents(const ParseNode &node,
                                 common::ObIArray<ObObjAccessIdent> &obj_access_idents,
                                 ObPLCompileUnitAST &func);
+  int resolve_dblink_idents(const ParseNode &node,
+                            common::ObIArray<ObObjAccessIdent> &obj_access_idents,
+                            ObPLCompileUnitAST &func,
+                            common::ObIArray<ObObjAccessIdx> &access_idexs);
   int build_collection_attribute_access(ObRawExprFactory &expr_factory,
                                         const ObSQLSessionInfo *session_info,
                                         const ObPLBlockNS &ns,
@@ -951,7 +980,6 @@ private:
                                   int32_t upper,
                                   ObRawExpr *&expr);
   int add_pl_integer_checker_expr(ObRawExprFactory &expr_factory, ObRawExpr *&expr, bool &need_replace);
-  static int build_pl_integer_type(ObPLIntegerType type, ObPLDataType &data_type);
 
   int check_use_idx_illegal(ObRawExpr* expr, int64_t idx);
 

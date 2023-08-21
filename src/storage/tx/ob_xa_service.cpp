@@ -355,7 +355,7 @@ int ObXAService::insert_xa_lock(ObISQLClient &client,
                                     LOCK_FORMAT_ID, trans_id.get_id(),
                                     scheduler_ip_buf, GCTX.self_addr().get_port(),
                                     ObXATransState::ACTIVE,
-                                    (long)ObXAFlag::TMNOFLAGS))) {
+                                    (long)ObXAFlag::OBTMNOFLAGS))) {
     TRANS_LOG(WARN, "generate insert xa trans sql fail",
               KR(ret), K(exec_tenant_id), K(tenant_id), K(sql));
   } else if (OB_FAIL(client.write(exec_tenant_id, sql.ptr(), affected_rows))) {
@@ -600,7 +600,7 @@ int ObXAService::delete_xa_all_tightly_branch(const uint64_t tenant_id,
                                     OB_ALL_TENANT_GLOBAL_TRANSACTION_TNAME,
                                     tenant_id,
                                     (int)gtrid_len, gtrid_str,
-                                    (long)ObXAFlag::LOOSELY))) {
+                                    (long)ObXAFlag::OBLOOSELY))) {
     TRANS_LOG(WARN, "generate delete xa trans sql fail", K(ret), K(xid));
   } else if (OB_FAIL(mysql_proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
     TRANS_LOG(WARN, "execute delete xa trans sql fail",
@@ -2713,7 +2713,7 @@ int ObXAService::update_coord(const uint64_t tenant_id,
   
   int64_t mask = 0;
   if (has_tx_level_temp_table) {
-    mask = ObXAFlag::TEMPTABLE;
+    mask = ObXAFlag::OBTEMPTABLE;
   }
 
   THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + XA_INNER_TABLE_TIMEOUT);

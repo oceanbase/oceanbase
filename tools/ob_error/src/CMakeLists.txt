@@ -6,6 +6,7 @@ add_executable(ob_error ${SRC_LIST})
 add_library(oberror SHARED ${SRC_LIST})
 
 include_directories(
+    ${CMAKE_SOURCE_DIR}/
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/deps/oblib/src
 )

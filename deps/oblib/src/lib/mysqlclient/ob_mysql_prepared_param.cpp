@@ -80,22 +80,22 @@ void ObMySQLPreparedParam::close()
   }
 }
 
-int ObMySQLPreparedParam::bind_param(const int64_t col_idx, enum_field_types buffer_type, char *out_buf,
-                                     const int64_t buf_len, unsigned long &res_len)
+int ObMySQLPreparedParam::bind_param(ObBindParam &param)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(bind_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("result not init. call init() first", K(ret));
-  } else if (OB_LIKELY(col_idx >= 0) && OB_LIKELY(col_idx < param_count_)) {
-    bind_[col_idx].buffer_type = buffer_type;
-    bind_[col_idx].buffer = out_buf;
-    bind_[col_idx].buffer_length = buf_len;
-    bind_[col_idx].is_null = NULL;
-    bind_[col_idx].length = &res_len;
+  } else if (OB_LIKELY(param.col_idx_ >= 0) && OB_LIKELY(param.col_idx_ < param_count_)) {
+    bind_[param.col_idx_].buffer_type = param.buffer_type_;
+    bind_[param.col_idx_].buffer = param.buffer_;
+    bind_[param.col_idx_].buffer_length = param.buffer_len_;
+    bind_[param.col_idx_].length = &param.length_;
+    bind_[param.col_idx_].is_null = &param.is_null_;
+    bind_[param.col_idx_].is_unsigned = param.is_unsigned_;
   } else {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid index", K(col_idx), K(param_count_));
+    LOG_WARN("invalid index", K(param), K(param_count_));
   }
   return ret;
 }

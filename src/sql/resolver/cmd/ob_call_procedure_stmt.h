@@ -135,7 +135,9 @@ public:
   explicit ObCallProcedureStmt()
       : ObCMDStmt(NULL, stmt::T_CALL_PROCEDURE),
         call_proc_info_(NULL),
-        cache_call_info_guard_(MAX_HANDLE) {
+        cache_call_info_guard_(MAX_HANDLE),
+        dblink_routine_info_(NULL)
+  {
   }
 
   virtual ~ObCallProcedureStmt() {
@@ -147,11 +149,12 @@ public:
   }
   ObCallProcedureInfo *get_call_proc_info() { return call_proc_info_; }
   ObCacheObjGuard &get_cacheobj_guard() { return cache_call_info_guard_; }
-
+  void set_dblink_routine_info(const ObRoutineInfo *routine_info) { dblink_routine_info_ = routine_info; }
+  const ObRoutineInfo *get_dblink_routine_info() const { return dblink_routine_info_; }
 private:
   ObCallProcedureInfo *call_proc_info_;
   ObCacheObjGuard cache_call_info_guard_;
-
+  const ObRoutineInfo *dblink_routine_info_;
   DISALLOW_COPY_AND_ASSIGN(ObCallProcedureStmt);
 };
 

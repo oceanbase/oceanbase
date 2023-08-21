@@ -34,10 +34,14 @@ then
   libtool --mode=install cp $BUILD_DIR/src/observer/observer $BIN_DIR/observer
   libtool --mode=install cp $SOURCE_DIR/src/share/inner_table/sys_package/*.sql $ADMIN_DIR
 
-  libtool --mode=install cp ./usr/lib/oracle/11.2/client64/lib/libclntsh.so.11.1 $LIB_DIR
-  libtool --mode=install cp ./usr/lib/oracle/11.2/client64/lib/libclntsh.so.11.1 $LIB_DIR/libclntsh.so
-  libtool --mode=install cp ./usr/lib/oracle/11.2/client64/lib/libnnz11.so $LIB_DIR
-  libtool --mode=install cp ./usr/lib/oracle/11.2/client64/lib/libociei.so $LIB_DIR
+  libtool --mode=install cp ./usr/lib/oracle/12.2/client64/lib/libclntsh.so.12.1 $LIB_DIR
+  libtool --mode=install cp ./usr/lib/oracle/12.2/client64/lib/libclntsh.so.12.1 $LIB_DIR/libclntsh.so
+  libtool --mode=install cp ./usr/lib/oracle/12.2/client64/lib/libclntshcore.so.12.1 $LIB_DIR
+  libtool --mode=install cp ./usr/lib/oracle/12.2/client64/lib/libnnz12.so $LIB_DIR
+  libtool --mode=install cp ./usr/lib/oracle/12.2/client64/lib/libons.so $LIB_DIR
+  libtool --mode=install cp ./usr/lib/oracle/12.2/client64/lib/libociei.so $LIB_DIR
+  libtool --mode=install cp ./usr/lib/oracle/12.2/client64/lib/libmql1.so $LIB_DIR
+  libtool --mode=install cp ./usr/lib/oracle/12.2/client64/lib/libipc1.so $LIB_DIR
 
   libtool --mode=install cp $SOURCE_DIR/deps/3rd/usr/local/oceanbase/devtools/bin/llvm-symbolizer $TOOL_DIR/
 

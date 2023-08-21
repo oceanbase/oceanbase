@@ -25,6 +25,7 @@
 #include "common/ob_smart_call.h"
 #include "sql/resolver/expr/ob_raw_expr_copier.h"
 #include "pl/ob_pl_user_type.h"
+#include "dblink/ob_pl_dblink_guard.h"
 namespace oceanbase
 {
 using namespace common;
@@ -255,7 +256,8 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                         ObIAllocator &allocator,
                                         common::ObMySQLProxy &sql_proxy,
                                         pl::ObPLDataType &pl_type,
-                                        ObSchemaObjVersion *obj_version)
+                                        ObSchemaObjVersion *obj_version,
+                                        ObPLDbLinkGuard *dblink_guard)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(iparam));
@@ -395,6 +397,21 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
         }
         break;
       }
+#ifdef OB_BUILD_ORACLE_PL
+      case SP_EXTERN_DBLINK :{
+        const ObUserDefinedType *udt = NULL;
+        const ObRoutineParam *param = static_cast<const ObRoutineParam*>(iparam);
+        CK (OB_NOT_NULL(param));
+        CK (OB_NOT_NULL(dblink_guard));
+        CK (param->get_extended_type_info().count() > 0);
+        OZ (dblink_guard->get_dblink_type_by_name(param->get_type_owner(), param->get_extended_type_info().at(0),
+                                                  param->get_type_subname(), param->get_type_name(), udt));
+        CK (OB_NOT_NULL(udt));
+        OX (pl_type.set_user_type_id(udt->get_type(), udt->get_user_type_id()));
+        OX (pl_type.set_type_from(ObPLTypeFrom::PL_TYPE_DBLINK));
+      }
+      break;
+#endif
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected extern type", K(ret), K(type));
@@ -1206,7 +1223,15 @@ int ObPLDataType::get_external_user_type(const ObPLResolveCtx &resolve_ctx,
 {
   int ret = OB_SUCCESS;
   uint64_t user_type_id = get_user_type_id();
-  if (is_package_type()) { // other package type
+  if (common::is_dblink_type_id(user_type_id)) {
+    if (OB_FAIL(resolve_ctx.package_guard_.dblink_guard_.get_dblink_type_by_id(
+                extract_package_id(user_type_id), user_type_id, user_type))) {
+      LOG_WARN("failed to get dblink package id", K(ret), K(user_type_id));
+    } else if (OB_ISNULL(user_type)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get dblink type is null", K(ret), K(user_type_id));
+    }
+  } else if (is_package_type()) { // other package type
     ObPLPackageManager &pl_manager = resolve_ctx.session_info_.get_pl_engine()->get_package_manager();
     uint64_t package_id = extract_package_id(user_type_id);
     uint64_t type_id = extract_type_id(user_type_id);

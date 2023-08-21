@@ -517,7 +517,7 @@ int ObXAService::commit_for_dblink_trans(ObTxDesc *&tx_desc)
         }
       }
       // step 1.2, xa end for local branch
-      if (OB_SUCCESS != (tmp_ret = xa_end(xid, ObXAFlag::TMSUCCESS, tx_desc))) {
+      if (OB_SUCCESS != (tmp_ret = xa_end(xid, ObXAFlag::OBTMSUCCESS, tx_desc))) {
         TRANS_LOG(WARN, "xa end failed", K(tmp_ret), K(xid), K(tx_id));
         need_rollback = true;
       }
@@ -571,7 +571,7 @@ int ObXAService::commit_for_dblink_trans(ObTxDesc *&tx_desc)
           // do nothing
         } else {
           ObTransID unused_tx_id;
-          if (OB_SUCCESS != (tmp_ret = xa_commit(xid, ObXAFlag::TMNOFLAGS, timeout_seconds,
+          if (OB_SUCCESS != (tmp_ret = xa_commit(xid, ObXAFlag::OBTMNOFLAGS, timeout_seconds,
                   has_tx_level_temp_table, unused_tx_id))) {
             TRANS_LOG(WARN, "xa rollback for local failed", K(tmp_ret), K(xid), K(tx_id),
                 K(has_tx_level_temp_table));
@@ -651,7 +651,7 @@ int ObXAService::rollback_for_dblink_trans(ObTxDesc *&tx_desc)
         }
       }
       // step 1.2, xa end for local branch
-      if (OB_SUCCESS != (tmp_ret = xa_end(xid, ObXAFlag::TMSUCCESS, tx_desc))) {
+      if (OB_SUCCESS != (tmp_ret = xa_end(xid, ObXAFlag::OBTMSUCCESS, tx_desc))) {
         TRANS_LOG(WARN, "xa end failed", K(tmp_ret), K(xid), K(tx_id));
       }
       // step 2, xa rollback for each participant

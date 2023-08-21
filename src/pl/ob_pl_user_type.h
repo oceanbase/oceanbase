@@ -43,6 +43,7 @@ struct ObPLExecCtx;
 class ObPLResolveCtx;
 class ObPLResolver;
 class ObPLStmt;
+class ObPLCollAllocator;
 
 class ObUserDefinedType : public ObPLDataType
 {
@@ -968,6 +969,7 @@ public:
       first_(OB_INVALID_INDEX),
       last_(OB_INVALID_INDEX),
       data_(NULL) {}
+  common::ObIAllocator *get_coll_allocator();
   inline common::ObIAllocator *get_allocator() { return allocator_; }
   inline void set_allocator(common::ObIAllocator *allocator) { allocator_ = allocator; }
   inline const ObElemDesc &get_element_desc() const { return element_; }

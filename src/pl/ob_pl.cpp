@@ -48,7 +48,7 @@
 #include "pl/debug/ob_pl_debugger_manager.h"
 #endif
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
-#include "src/sql/engine/dml/ob_trigger_handler.h"
+#include "sql/engine/dml/ob_trigger_handler.h"
 namespace oceanbase
 {
 using namespace common;
@@ -239,7 +239,8 @@ int ObPL::execute_proc(ObPLExecCtx &ctx,
                        uint64_t loc,
                        int64_t argc,
                        common::ObObjParam **argv,
-                       int64_t *nocopy_argv)
+                       int64_t *nocopy_argv,
+                       uint64_t dblink_id)
 {
   int ret = OB_SUCCESS;
   lib::MemoryContext mem_context;
@@ -253,7 +254,7 @@ int ObPL::execute_proc(ObPLExecCtx &ctx,
       || (NULL != subprogram_path && 0 == path_length)
       || (NULL == nocopy_argv && argc > 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("argument is NULL",
+  LOG_WARN("argument is NULL",
              K(GCTX.schema_service_),
              K(ctx.exec_ctx_),
              K(ctx.result_),
@@ -298,7 +299,21 @@ int ObPL::execute_proc(ObPLExecCtx &ctx,
         }
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(ret)) {
+#ifdef OB_BUILD_ORACLE_PL
+    } else if (OB_INVALID_ID != dblink_id) {
+      if (OB_FAIL(ObSPIService::spi_execute_dblink(&ctx, dblink_id, package_id, proc_id, proc_params))) {
+        LOG_WARN("execute dblink routine failed", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        if (NULL != argv && argc > 0) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < argc; ++i) {
+            *argv[i] = proc_params.at(i);
+          }
+        }
+      }
+#endif
+    } else {
       share::schema::ObSchemaGetterGuard schema_guard;
       const uint64_t tenant_id = ctx.exec_ctx_->get_my_session()->get_effective_tenant_id();
       if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {

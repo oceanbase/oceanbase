@@ -19,6 +19,9 @@
 #include "sql/engine/basic/ob_ra_row_store.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_result_set.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/dblink/ob_pl_dblink_info.h"
+#endif
 namespace oceanbase
 {
 namespace observer
@@ -707,6 +710,23 @@ public:
   static void adjust_pl_status_for_xa(sql::ObExecContext &ctx, int &result);
   static int fill_cursor(ObResultSet &result_set, ObSPICursor *cursor);
 
+#ifdef OB_BUILD_ORACLE_PL
+  static int spi_execute_dblink(pl::ObPLExecCtx *ctx,
+                                uint64_t dblink_id,
+                                uint64_t package_id,
+                                uint64_t proc_id,
+                                ParamStore &params);
+  static int spi_execute_dblink(ObExecContext &exec_ctx,
+                                ObIAllocator &allocator,
+                                const pl::ObPLDbLinkInfo *dblink_info,
+                                const ObRoutineInfo *routine_info,
+                                ParamStore &params);
+  static int spi_after_execute_dblink(ObSQLSessionInfo *session,
+                                      const ObRoutineInfo *routine_info,
+                                      ObIAllocator &allocator,
+                                      ParamStore &params,
+                                      ParamStore &exec_params);
+#endif
 private:
   static int recreate_implicit_savapoint_if_need(pl::ObPLExecCtx *ctx, int &result);
   static int recreate_implicit_savapoint_if_need(sql::ObExecContext &ctx, int &result);

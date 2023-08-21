@@ -274,7 +274,7 @@ EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE
 if( ${ARCHITECTURE} STREQUAL "x86_64" )
     set(MTUNE_CFLAGS -mtune=core2)
     set(ARCH_LDFLAGS "")
-    set(OCI_DEVEL_INC "${DEP_3RD_DIR}/usr/include/oracle/11.2/client64")
+    set(OCI_DEVEL_INC "${DEP_3RD_DIR}/usr/include/oracle/12.2/client64")
 else()
     set(MARCH_CFLAGS "-march=armv8-a+crc" )
     set(MTUNE_CFLAGS "-mtune=generic" )

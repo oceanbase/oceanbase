@@ -312,10 +312,12 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
   int ret = OB_SUCCESS;
   ObCallProcedureStmt *stmt = NULL;
   ParseNode *name_node = parse_tree.children_[0];
-  ParseNode *params_node = parse_tree.children_[1];
+  ParseNode *dblink_node = lib::is_oracle_mode() ? parse_tree.children_[1] : NULL;
+  ParseNode *params_node = lib::is_oracle_mode() ? parse_tree.children_[2] : parse_tree.children_[1];
   ObString db_name;
   ObString package_name;
   ObString sp_name;
+  ObString dblink_name;
   ObCallProcedureInfo *call_proc_info = NULL;
   const ObRoutineInfo *proc_info = NULL;
   if (OB_ISNULL(schema_checker_) || OB_ISNULL(session_info_)) {
@@ -346,12 +348,13 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
       if (T_SP_ACCESS_NAME != name_node->type_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid procedure name node", K(name_node->type_), K(ret));
-      } else {
+      } else if (OB_ISNULL(dblink_node)) {
         if (OB_FAIL(ObResolverUtils::resolve_sp_access_name(*schema_checker_,
                                                             session_info_->get_effective_tenant_id(),
                                                             session_info_->get_database_name(),
                                                             *name_node,
-                                                            db_name, package_name, sp_name))) {
+                                                            db_name, package_name, sp_name,
+                                                            dblink_name))) {
           LOG_WARN("resolve sp name failed", K(ret));
         } else if (db_name.empty() && session_info_->get_database_name().empty()) {
           ret = OB_ERR_NO_DB_SELECTED;
@@ -364,23 +367,35 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
           }
 
         }
+      } else {
+        CK (OB_NOT_NULL(parse_tree.children_[1]->children_[0]));
+        OZ (resolve_dblink_routine_name(*parse_tree.children_[0],
+                                        *parse_tree.children_[1]->children_[0],
+                                        dblink_name,
+                                        db_name,
+                                        package_name,
+                                        sp_name));
       }
     }
     ObSEArray<ObRawExpr*, 16> expr_params;
+    pl::ObPLPackageGuard package_guard(params_.session_info_->get_effective_tenant_id());
     // 获取routine schem info
     if (OB_SUCC(ret)) {
       if (OB_NOT_NULL(params_node)
           && OB_FAIL(resolve_param_exprs(params_node, expr_params))) {
         LOG_WARN("failed to resolve param exprs", K(ret));
-      } else if (OB_FAIL(ObResolverUtils::get_routine(params_,
-                                              (*session_info_).get_effective_tenant_id(),
-                                              (*session_info_).get_database_name(),
-                                              db_name,
-                                              package_name,
-                                              sp_name,
-                                              ROUTINE_PROCEDURE_TYPE,
-                                              expr_params,
-                                              proc_info))) {
+      } else if (OB_FAIL(ObResolverUtils::get_routine(package_guard,
+                                                      params_,
+                                                      (*session_info_).get_effective_tenant_id(),
+                                                      (*session_info_).get_database_name(),
+                                                      db_name,
+                                                      package_name,
+                                                      sp_name,
+                                                      ROUTINE_PROCEDURE_TYPE,
+                                                      expr_params,
+                                                      proc_info,
+                                                      dblink_name,
+                                                      &(call_proc_info->get_allocator())))) {
         LOG_WARN("failed to get routine info", K(ret), K(db_name), K(package_name), K(sp_name));
       } else if (OB_ISNULL(proc_info)) {
         ret = OB_ERR_UNEXPECTED;
@@ -445,7 +460,9 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
                                                       *(session_info_),
                                                       *(params_.allocator_),
                                                       *(params_.sql_proxy_),
-                                                      pl_type));
+                                                      pl_type,
+                                                      NULL,
+                                                      &package_guard.dblink_guard_));
         }
         if (OB_SUCC(ret)) {
           if (param_info->is_out_sp_param() || param_info->is_inout_sp_param()) {
@@ -519,13 +536,17 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
         }
       }
     }
-
+    if (OB_SUCC(ret) && OB_NOT_NULL(proc_info) && (OB_INVALID_ID != proc_info->get_dblink_id())) {
+      stmt->set_dblink_routine_info(proc_info);
+    }
     // Step 4: cg raw expr
     OX (call_proc_info->set_param_cnt(params.count()));
     OZ (call_proc_info->prepare_expression(params));
     OZ (call_proc_info->final_expression(params, session_info_, schema_checker_->get_schema_mgr()));
     OX (stmt->set_call_proc_info(call_proc_info));
-    if (params_.is_execute_call_stmt_ && 0 != params_.cur_sql_.length()) {
+    if (params_.is_execute_call_stmt_
+        && 0 != params_.cur_sql_.length()
+        && NULL == stmt->get_dblink_routine_info()) {
       if (NULL != params_.param_list_) {
         OZ (call_proc_info->set_params_info(*params_.param_list_));
       }
@@ -535,6 +556,43 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
     OZ (stmt->add_global_dependency_table(call_proc_info->get_dependency_table().at(0)));
   }
 
+  return ret;
+}
+
+int ObCallProcedureResolver::resolve_dblink_routine_name(const ParseNode &access_node,
+                                                         const ParseNode &dblink_node,
+                                                         ObString &dblink_name,
+                                                         ObString &db_name,
+                                                         ObString &pkg_name,
+                                                         ObString &sp_name)
+{
+  int ret = OB_SUCCESS;
+  const ParseNode *db_node = access_node.children_[0];
+  const ParseNode *pkg_node = access_node.children_[1];
+  const ParseNode *sp_node = access_node.children_[2];
+  CK (OB_LIKELY(T_SP_ACCESS_NAME == access_node.type_));
+  CK (OB_LIKELY(T_USER_VARIABLE_IDENTIFIER == dblink_node.type_));
+  if (OB_SUCC(ret)) {
+    OX (dblink_name.assign_ptr(dblink_node.str_value_, static_cast<int32_t>(dblink_node.str_len_)));
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(db_node)) {
+    if (OB_LIKELY(T_IDENT == db_node->type_)) {
+      db_name.assign_ptr(db_node->str_value_, static_cast<int32_t>(db_node->str_len_));
+    }
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(pkg_node)) {
+    if (OB_LIKELY(T_IDENT == pkg_node->type_)) {
+      pkg_name.assign_ptr(pkg_node->str_value_, static_cast<int32_t>(pkg_node->str_len_));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(sp_node) && OB_UNLIKELY(T_IDENT != sp_node->type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sp_node is invalid", K(ret), K(sp_node));
+    } else {
+      sp_name.assign_ptr(sp_node->str_value_, static_cast<int32_t>(sp_node->str_len_));
+    }
+  }
   return ret;
 }
 

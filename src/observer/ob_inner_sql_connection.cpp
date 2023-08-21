@@ -1403,6 +1403,19 @@ int ObInnerSQLConnection::execute_write(const uint64_t tenant_id, const ObString
   return ret;
 }
 
+int ObInnerSQLConnection::execute_proc(const uint64_t tenant_id,
+                                      ObIAllocator &allocator,
+                                      ParamStore &params,
+                                      ObString &sql,
+                                      const share::schema::ObRoutineInfo &routine_info,
+                                      const common::ObIArray<const pl::ObUserDefinedType *> &udts,
+                                      const ObTimeZoneInfo *tz_info)
+{
+  UNUSEDx(tenant_id, allocator, params, sql, routine_info, udts, tz_info);
+  int ret = OB_SUCCESS;
+  return ret;
+}
+
 int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const ObString &sql,
     int64_t &affected_rows, bool is_user_sql, const common::ObAddr *sql_exec_addr)
 {

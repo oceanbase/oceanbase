@@ -297,6 +297,7 @@ ObRoutineInfo &ObRoutineInfo::operator =(const ObRoutineInfo &src_schema)
     comp_flag_ = src_schema.comp_flag_;
     type_id_ = src_schema.type_id_;
     tg_timing_event_ = src_schema.tg_timing_event_;
+    dblink_id_ = src_schema.dblink_id_;
     if (OB_FAIL(deep_copy_str(src_schema.routine_name_, routine_name_))) {
       LOG_WARN("deep copy name failed", K(ret), K_(src_schema.routine_name));
     } else if (OB_FAIL(deep_copy_str(src_schema.priv_user_, priv_user_))) {
@@ -308,9 +309,13 @@ ObRoutineInfo &ObRoutineInfo::operator =(const ObRoutineInfo &src_schema)
     } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
       LOG_WARN("deep copy comment failed", K(ret), K_(src_schema.comment));
     } else if (OB_FAIL(deep_copy_str(src_schema.route_sql_, route_sql_))) {
-      LOG_WARN("deep copy comment failed", K(ret), K_(src_schema.route_sql));
+      LOG_WARN("deep copy route sql failed", K(ret), K_(src_schema.route_sql));
     } else if (OB_FAIL(routine_params_.reserve(src_schema.routine_params_.count()))) {
       LOG_WARN("failed to reserve routine params size", K(ret), K(src_schema));
+    } else if (OB_FAIL(deep_copy_str(src_schema.dblink_db_name_, dblink_db_name_))) {
+      LOG_WARN("deep copy dblink database name failed", K(ret), K(src_schema.dblink_db_name_));
+    } else if (OB_FAIL(deep_copy_str(src_schema.dblink_pkg_name_, dblink_pkg_name_))) {
+      LOG_WARN("deep copy dblink pkg name failed", K(ret), K(src_schema.dblink_pkg_name_));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < src_schema.routine_params_.count(); ++i) {
       if (OB_ISNULL(src_schema.routine_params_.at(i))) {
@@ -382,6 +387,9 @@ void ObRoutineInfo::reset()
   routine_params_.reset();
   ObSchema::reset();
   tg_timing_event_ = TgTimingEvent::TG_TIMING_EVENT_INVALID;
+  dblink_id_ = OB_INVALID_ID;
+  reset_string(dblink_db_name_);
+  reset_string(dblink_pkg_name_);
   // routine_params_.set_allocator(get_allocator());
   // routine_params_.set_capacity(OB_MAX_PROC_PARAM_COUNT+1); //one more ret type param for function
 }
@@ -398,6 +406,8 @@ int64_t ObRoutineInfo::get_convert_size() const
   len += route_sql_.length() + 1;
   len += (routine_params_.count()+1) * sizeof(ObRoutineParam *);
   len += routine_params_.get_data_size();
+  len += dblink_db_name_.length() + 1;
+  len += dblink_pkg_name_.length() + 1;
   ARRAY_FOREACH_NORET(routine_params_, i) {
     if (routine_params_.at(i) != NULL) {
       len += routine_params_.at(i)->get_convert_size();
@@ -523,6 +533,18 @@ int ObRoutineInfo::find_param_by_name(const ObString &name, int64_t &position) c
   return ret;
 }
 
+int64_t ObRoutineInfo::get_out_param_count() const
+{
+  int64_t count = 0;
+  for (uint64_t i = 0; i < get_routine_params().count(); i++) {
+    if (get_routine_params().at(i)->is_out_sp_param()
+        || get_routine_params().at(i)->is_inout_sp_param()) {
+      count++;
+    }
+  }
+  return count;
+}
+
 OB_DEF_SERIALIZE(ObRoutineInfo)
 {
   int ret = OB_SUCCESS;
@@ -546,7 +568,9 @@ OB_DEF_SERIALIZE(ObRoutineInfo)
               route_sql_,
               type_id_,
               param_cnt,
-              tg_timing_event_);
+              tg_timing_event_,
+              dblink_db_name_,
+              dblink_pkg_name_);
   for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
     if (OB_ISNULL(routine_params_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -583,7 +607,9 @@ OB_DEF_DESERIALIZE(ObRoutineInfo)
               route_sql_,
               type_id_,
               param_cnt,
-              tg_timing_event_);
+              tg_timing_event_,
+              dblink_db_name_,
+              dblink_pkg_name_);
   for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
     routine_param.reset();
     if (OB_FAIL(routine_param.deserialize(buf, data_len, pos))) {
@@ -618,7 +644,9 @@ OB_DEF_SERIALIZE_SIZE(ObRoutineInfo)
               route_sql_,
               type_id_,
               param_cnt,
-              tg_timing_event_);
+              tg_timing_event_,
+              dblink_db_name_,
+              dblink_pkg_name_);
   for (int64_t i = 0; i < param_cnt; ++i) {
     if (routine_params_.at(i) != NULL) {
       len += routine_params_.at(i)->get_serialize_size();

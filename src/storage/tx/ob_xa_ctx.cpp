@@ -755,7 +755,7 @@ int ObXACtx::process_xa_start_loosely_(const obrpc::ObXAStartRPCRequest &req)
   const ObXATransID &xid = req.get_xid();
   const ObAddr &sender = req.get_sender();
   const int64_t timeout_seconds = req.get_timeout_seconds();
-  const int64_t unused_flag = ObXAFlag::TMNOFLAGS;
+  const int64_t unused_flag = ObXAFlag::OBTMNOFLAGS;
   const bool is_new_branch = req.is_new_branch();
   ObXABranchInfo info;
 

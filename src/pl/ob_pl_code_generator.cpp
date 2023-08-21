@@ -2755,6 +2755,10 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
           LOG_WARN("failed to get int64_t array", K(ret));
         } else if (OB_FAIL(args.push_back(nocopy_array_value))) {
           LOG_WARN("failed to push back", K(ret));
+        } else if (OB_FAIL(generator_.get_helper().get_int64(s.get_dblink_id(), int_value))) {
+          LOG_WARN("failed to get int64", K(ret));
+        } else if (OB_FAIL(args.push_back(int_value))) { //PL的dblink id
+          LOG_WARN("push_back error", K(ret));
         } else {
           ObLLVMValue result;
           if (NULL == generator_.get_current_exception()) {
@@ -3573,6 +3577,8 @@ int ObPLCodeGenerator::init()
       } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t[] ArgV
         LOG_WARN("push_back error", K(ret));
       } else if (OB_FAIL(arg_types.push_back(int64_pointer_type))) { //int64_t* nocopy params
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t dblink id
         LOG_WARN("push_back error", K(ret));
       } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
         LOG_WARN("failed to get function type", K(ret));

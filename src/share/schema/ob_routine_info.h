@@ -44,6 +44,7 @@ enum ObParamExternType
   SP_EXTERN_PKGVAR_OR_TABCOL, // package.var%type or table.col%type
   SP_EXTERN_LOCAL_VAR,        // declare v number; function f return is v%type;
   SP_EXTERN_SYS_REFCURSOR,
+  SP_EXTERN_DBLINK,
 };
 
 enum ObRoutineParamInOut
@@ -169,6 +170,8 @@ public:
   virtual void set_external_state() = 0;
   virtual int64_t get_param_start_idx() const { return 0; }
   virtual const common::ObString &get_routine_name() const = 0;
+  virtual uint64_t get_dblink_id() const { return OB_INVALID_ID; }
+
   TO_STRING_EMPTY();
 };
 
@@ -273,6 +276,7 @@ public:
   {
     return SP_EXTERN_SYS_REFCURSOR == get_extern_type_flag();
   }
+  OB_INLINE bool is_dblink_type() const { return SP_EXTERN_DBLINK == get_extern_type_flag(); }
 
   OB_INLINE bool is_pl_integer_type() const
   {
@@ -414,6 +418,7 @@ public:
   int get_routine_param(int64_t idx, ObIRoutineParam*& param) const;
   const ObIRoutineParam* get_ret_info() const;
   // getter
+  int64_t get_out_param_count() const;
   OB_INLINE uint64_t get_tenant_id() const { return tenant_id_; }
   OB_INLINE uint64_t get_database_id() const { return database_id_; }
   OB_INLINE uint64_t get_package_id() const { return package_id_; }
@@ -439,6 +444,9 @@ public:
   OB_INLINE common::ObIArray<ObRoutineParam*> &get_routine_params() { return routine_params_; }
   OB_INLINE int64_t get_type_id() const { return type_id_; }
   OB_INLINE TgTimingEvent get_tg_timing_event() const { return tg_timing_event_; }
+  OB_INLINE uint64_t get_dblink_id() const { return dblink_id_; }
+  OB_INLINE const common::ObString &get_dblink_db_name() const { return dblink_db_name_; }
+  OB_INLINE const common::ObString &get_dblink_pkg_name() const { return dblink_pkg_name_; }
 
   // setter
   OB_INLINE void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
@@ -465,7 +473,10 @@ public:
   OB_INLINE int64_t get_param_start_idx() const { return is_procedure()?0:1; }
   OB_INLINE void set_type_id(int64_t type_id) { type_id_ = type_id; }
   OB_INLINE void set_tg_timing_event(TgTimingEvent tg) { tg_timing_event_ = tg; }
-
+  OB_INLINE void set_dblink_id(uint64_t dblink_id) { dblink_id_ = dblink_id; }
+  OB_INLINE int set_dblink_db_name(const common::ObString &db_name) { return deep_copy_str(db_name, dblink_db_name_); }
+  OB_INLINE int set_dblink_pkg_name(const common::ObString &pkg_name)
+                  { return deep_copy_str(pkg_name, dblink_pkg_name_); }
   OB_INLINE void set_routine_invalid() { flag_ |= SP_FLAG_INVALID; }
   OB_INLINE void set_noneditionable() { flag_ |= SP_FLAG_NONEDITIONABLE; }
   OB_INLINE void set_deterministic() { flag_ |= SP_FLAG_DETERMINISTIC; }
@@ -609,6 +620,9 @@ private:
   common::ObSEArray<ObRoutineParam *, 64> routine_params_;
   //set by user, for function, idx 0 param is ret type
   TgTimingEvent tg_timing_event_;
+  uint64_t dblink_id_;
+  common::ObString dblink_db_name_;
+  common::ObString dblink_pkg_name_;
 };
 }  // namespace schema
 }  // namespace share

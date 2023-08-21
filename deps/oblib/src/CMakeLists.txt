@@ -6,6 +6,7 @@ get_property(EASY_INCLUDE_DIRS GLOBAL PROPERTY "EASY_INCLUDE_DIRS" )
 target_include_directories(
   oblib_base_base_base INTERFACE
   ${CMAKE_SOURCE_DIR}
+  ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_SOURCE_DIR}/deps/easy/src
   ${CMAKE_SOURCE_DIR}/deps/oblib/src
   ${CMAKE_SOURCE_DIR}/deps/oblib/src/common
