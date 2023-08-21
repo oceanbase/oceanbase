@@ -835,6 +835,7 @@ int ObSql::fill_result_set(const ObPsStmtId stmt_id, const ObPsStmtInfo &stmt_in
   int ret = OB_SUCCESS;
   result.set_statement_id(stmt_id);
   result.set_stmt_type(stmt_info.get_stmt_type());
+  result.set_literal_stmt_type(stmt_info.get_literal_stmt_type());
   const ObPsSqlMeta &sql_meta = stmt_info.get_ps_sql_meta();
   result.set_p_param_fileds(const_cast<common::ParamsFieldIArray *>(&sql_meta.get_param_fields()));
   result.set_p_column_fileds(const_cast<common::ParamsFieldIArray *>(&sql_meta.get_column_fields()));
@@ -891,6 +892,8 @@ int ObSql::do_add_ps_cache(const PsCacheInfoCtx &info_ctx,
     } else if (OB_ISNULL(ps_stmt_item) || OB_ISNULL(ref_stmt_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("stmt_item or stmt_info is NULL", K(ret), KP(ps_stmt_item), KP(ref_stmt_info));
+    } else {
+      ref_stmt_info->set_literal_stmt_type(result.get_literal_stmt_type());
     }
     if (NULL != ref_stmt_info) {
       ref_stmt_info->set_is_sensitive_sql(info_ctx.is_sensitive_sql_);

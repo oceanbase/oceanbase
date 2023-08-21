@@ -294,7 +294,8 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator)
     is_sensitive_sql_(false),
     raw_sql_(),
     raw_params_(inner_allocator),
-    raw_params_idx_(inner_allocator)
+    raw_params_idx_(inner_allocator),
+    literal_stmt_type_(stmt::T_NONE)
 
 {
 }
@@ -324,7 +325,8 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator,
     is_sensitive_sql_(false),
     raw_sql_(),
     raw_params_(inner_allocator),
-    raw_params_idx_(inner_allocator)
+    raw_params_idx_(inner_allocator),
+    literal_stmt_type_(stmt::T_NONE)
 {
 }
 
@@ -470,6 +472,7 @@ int ObPsStmtInfo::deep_copy(const ObPsStmtInfo &other)
     tenant_version_ = other.tenant_version_;
     is_expired_ = other.is_expired_;
     is_expired_evicted_ = other.is_expired_evicted_;
+    literal_stmt_type_ = other.literal_stmt_type_;
     if (other.get_dep_objs_cnt() > 0) {
       dep_objs_cnt_ = other.get_dep_objs_cnt();
       if (NULL == (dep_objs_ = reinterpret_cast<ObSchemaObjVersion *>
