@@ -1493,6 +1493,7 @@ constexpr int OB_CANNOT_SET_BACKUP_ZONE = -9058;
 constexpr int OB_BACKUP_BACKUP_REACH_MAX_BACKUP_TIMES = -9059;
 constexpr int OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA = -9064;
 constexpr int OB_AGENT_HAS_SUSPENDED = -9065;
+constexpr int OB_BACKUP_CONFLICT_VALUE = -9066;
 constexpr int OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED = -9069;
 constexpr int OB_BACKUP_DEST_NOT_CONNECT = -9070;
 constexpr int OB_ESI_SESSION_CONFLICTS = -9072;
@@ -3608,6 +3609,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_IO_PROHIBITED__USER_ERROR_MSG "backup io is prohibited"
 #define OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA__USER_ERROR_MSG "the archive log and backup data are not continuous"
 #define OB_AGENT_HAS_SUSPENDED__USER_ERROR_MSG "agent has suspended"
+#define OB_BACKUP_CONFLICT_VALUE__USER_ERROR_MSG "%.*s is conflict with %.*s"
 #define OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED__USER_ERROR_MSG "deleting backup piece is not allowed"
 #define OB_BACKUP_DEST_NOT_CONNECT__USER_ERROR_MSG "can not connect to backup destination"
 #define OB_BACKUP_PERMISSION_DENIED__USER_ERROR_MSG "no I/O operation permission at the backup destination"
@@ -5732,6 +5734,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_IO_PROHIBITED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9063, backup io is prohibited"
 #define OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9064, the archive log and backup data are not continuous"
 #define OB_AGENT_HAS_SUSPENDED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9065, agent has suspended"
+#define OB_BACKUP_CONFLICT_VALUE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9066, %.*s is conflict with %.*s"
 #define OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9069, deleting backup piece is not allowed"
 #define OB_BACKUP_DEST_NOT_CONNECT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9070, can not connect to backup destination"
 #define OB_BACKUP_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9071, no I/O operation permission at the backup destination"
@@ -6032,7 +6035,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2120];
+extern int g_all_ob_errnos[2121];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
