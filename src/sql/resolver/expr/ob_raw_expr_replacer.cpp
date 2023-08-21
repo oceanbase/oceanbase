@@ -421,9 +421,6 @@ int ObRawExprReplacer::check_from_expr_existed(const ObRawExpr *from_expr,
   } else if (OB_UNLIKELY(old_expr != to_expr)) {
     if (overwrite) {
       is_existed = false;
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("conflict expr replace rules", K(ret), KPC(from_expr), KPC(to_expr), KPC(old_expr));
     }
   }
   return ret;
