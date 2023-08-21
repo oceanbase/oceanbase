@@ -2251,9 +2251,11 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       break;
     }
     case SYS_VAR_SQL_SELECT_LIMIT: {
-      int64_t int_val = 0;
-      OZ (val.get_int(int_val), val);
-      OX (sys_vars_cache_.set_sql_select_limit(int_val));
+      if (!lib::is_oracle_mode()) {
+        int64_t int_val = 0;
+        OZ (val.get_int(int_val), val);
+        OX (sys_vars_cache_.set_sql_select_limit(int_val));
+      }
       break;
     }
     case SYS_VAR_AUTO_INCREMENT_OFFSET: {

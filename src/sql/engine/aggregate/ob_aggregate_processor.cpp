@@ -2329,6 +2329,24 @@ int ObAggregateProcessor::rollup_aggregation(AggrCell &aggr_cell, AggrCell &roll
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "rollup contain agg udfs");
       break;
     }
+    case T_FUN_SYS_BIT_AND: {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("rollup contain bit_and still not supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "rollup contain bit_and");
+      break;
+    }
+    case T_FUN_SYS_BIT_OR: {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("rollup contain bit_or still not supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "rollup contain bit_or");
+      break;
+    }
+    case T_FUN_SYS_BIT_XOR: {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("rollup contain bit_xor still not supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "rollup contain bit_xor");
+      break;
+    }
     default:
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unknown aggr function type", K(aggr_fun));

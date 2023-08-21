@@ -3113,7 +3113,6 @@ int ObSchemaGetterGuard::check_db_access(
   int ret = OB_SUCCESS;
   uint64_t tenant_id = session_priv.tenant_id_;
   const ObSchemaMgr *mgr = NULL;
-  ObPrivSet need_priv = OB_PRIV_SHOW_DB;
   if (!session_priv.is_valid() || 0 == db.length()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", K(session_priv), KR(ret));
@@ -3121,7 +3120,7 @@ int ObSchemaGetterGuard::check_db_access(
     LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
   } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
-  } else if (!OB_TEST_PRIVS(session_priv.user_priv_set_, need_priv)) {
+  } else {
     const ObPrivMgr &priv_mgr = mgr->priv_mgr_;
     ObOriginalDBKey db_priv_key(session_priv.tenant_id_,
                                 session_priv.user_id_,
@@ -3221,11 +3220,16 @@ int ObSchemaGetterGuard::check_db_show(const ObSessionPrivInfo &session_priv,
   uint64_t tenant_id = session_priv.tenant_id_;
   allow_show = true;
   ObPrivSet db_priv_set = 0;
+  ObPrivSet need_priv = OB_PRIV_SHOW_DB;
   if (sql::ObSchemaChecker::is_ora_priv_check()) {
   } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
     LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
-  } else if (OB_SUCCESS != (can_show = check_db_access(session_priv, db,
-                                                       db_priv_set, false))) {
+  } else if (!session_priv.is_valid() || 0 == db.length()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid arguments", K(session_priv), KR(ret));
+  } else if (OB_TEST_PRIVS(session_priv.user_priv_set_, need_priv)) {
+    /* user priv level has show_db */
+  } else if (OB_SUCCESS != (can_show = check_db_access(session_priv, db, db_priv_set, false))) {
     allow_show = false;
   }
   return ret;

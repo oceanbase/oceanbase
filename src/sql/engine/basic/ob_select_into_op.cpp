@@ -61,11 +61,14 @@ int ObSelectIntoOp::inner_open()
                                                   line_str_,
                                                   need_check))) {
     LOG_WARN("get param value failed", K(ret));
-  } else if (OB_FAIL(session->get_sql_select_limit(top_limit_cnt_))) {
-    LOG_WARN("fail tp get sql select limit", K(ret));
   } else {
     // since we call get_next_row in inner_open, we have to set opened_ first in avoid to a infinite loop.
     opened_ = true;
+    if (!lib::is_oracle_mode()) {
+      if (OB_FAIL(session->get_sql_select_limit(top_limit_cnt_))) {
+        LOG_WARN("fail tp get sql select limit", K(ret));
+      }
+    }
   }
 
   if (OB_SUCC(ret)) {

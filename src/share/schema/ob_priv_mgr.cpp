@@ -399,7 +399,7 @@ int ObPrivMgr::get_db_priv_set(const ObOriginalDBKey &db_priv_key,
   const ObDBPriv *db_priv = NULL;
   if (0 == db.case_compare(OB_INFORMATION_SCHEMA_NAME)) {
     //users have 'select' privilege for information_schema database
-    priv_set = OB_PRIV_SELECT;
+    priv_set = OB_PRIV_SHOW_VIEW | OB_PRIV_SELECT;
   } else if (OB_FAIL(get_db_priv(db_priv_key, db_priv, is_pattern))) {
     LOG_WARN("get db priv failed", K(ret), K(db_priv_key));
   } else if (NULL != db_priv) {

@@ -471,7 +471,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
               LOG_WARN("fail to resolve show from table", K(ret));
             }
             if (OB_FAIL(ret)) {
-            } else if (T_SHOW_CREATE_VIEW == parse_tree.type_) {
+            } else if (T_SHOW_CREATE_VIEW == parse_tree.type_ || is_view) {
               if (ObSchemaChecker::is_ora_priv_check()) {
               } else {
                 ObNeedPriv need_priv;

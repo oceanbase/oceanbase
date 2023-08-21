@@ -185,8 +185,10 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
   ObSqlCtx *sql_ctx = result.get_exec_context().get_sql_ctx();
   if (!has_top_limit && OB_INVALID_COUNT == fetch_limit) {
     limit_count = INT64_MAX;
-    if (OB_FAIL(session_.get_sql_select_limit(limit_count))) {
-      LOG_WARN("fail tp get sql select limit", K(ret));
+    if (!lib::is_oracle_mode()) {
+      if (OB_FAIL(session_.get_sql_select_limit(limit_count))) {
+        LOG_WARN("fail tp get sql select limit", K(ret));
+      }
     }
   }
   bool is_packed = result.get_physical_plan() ? result.get_physical_plan()->is_packed() : false;
