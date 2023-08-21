@@ -5899,6 +5899,9 @@ int ObBasicSessionInfo::trans_restore_session(TransSavedValue &saved_value)
     LOG_WARN("failed to assign trans result", K(tmp_ret));
     ret = COVER_SUCC(tmp_ret);
   }
+  if (OB_NOT_NULL(tx_desc_)) {
+    MTL(transaction::ObTransService *)->release_tx(*tx_desc_);
+  }
   tx_desc_ = saved_value.tx_desc_;
   if (OB_TMP_FAIL(base_restore_session(saved_value))) {
     LOG_WARN("failed to restore base session", K(tmp_ret));
