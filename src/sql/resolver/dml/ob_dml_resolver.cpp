@@ -2625,6 +2625,8 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
 {
   int ret = OB_SUCCESS;
   ObArray<ObRawExpr*> real_exprs;
+  ObArray<ObRawExpr*> ref_exprs;
+  ObArray<ObRawExpr*> replace_ref_exprs;
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
     ObQualifiedName& q_name = columns.at(i);
     ObRawExpr* real_ref_expr = NULL;
@@ -2640,9 +2642,14 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
     } else if (OB_FAIL(ObRawExprUtils::implict_cast_pl_udt_to_sql_udt(params_.expr_factory_,
                                         params_.session_info_, real_ref_expr))) {
       LOG_WARN("add implict cast to pl udt expr failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, q_name.ref_expr_, real_ref_expr))) {
-      LOG_WARN("replace column ref expr failed", K(ret));
+    } else if (OB_FAIL(ref_exprs.push_back(q_name.ref_expr_))
+              || OB_FAIL(replace_ref_exprs.push_back(real_ref_expr))) {
+      LOG_WARN("push back failed", K(ret));
     } else { /*do nothing*/ }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, ref_exprs, replace_ref_exprs))) {
+    LOG_WARN("replace column ref expr failed", K(ret));
   }
 
   if (OB_SUCC(ret) && OB_NOT_NULL(expr) && expr->is_sys_func_expr()

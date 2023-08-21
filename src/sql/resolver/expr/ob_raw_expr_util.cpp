@@ -3192,6 +3192,51 @@ int ObRawExprUtils::replace_ref_column(ObRawExpr *&raw_expr, ObRawExpr *from,
   return ret;
 }
 
+int ObRawExprUtils::replace_ref_column(ObRawExpr *&raw_expr,
+                                ObIArray<ObRawExpr *> &from,
+                                ObIArray<ObRawExpr *> &to,
+                                const ObIArray<ObRawExpr*> *except_exprs)
+{
+  int ret = OB_SUCCESS;
+  int64_t idx = -1;
+  if (OB_ISNULL(raw_expr) || OB_UNLIKELY(from.count() != to.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(raw_expr), K(from), K(to));
+  } else if (from.count() == 0) {
+    //do nothing
+  } else if (NULL != except_exprs && is_contain(*except_exprs, raw_expr)) {
+    //do nothing
+  } else if (ObOptimizerUtil::find_item(from, raw_expr, &idx)) {
+    if (OB_UNLIKELY(idx < 0 || idx >= to.count())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("find item failed", K(ret));
+    } else {
+      raw_expr = to.at(idx);
+    }
+  } else if (raw_expr->is_query_ref_expr()) {
+    ObSelectStmt *ref_stmt = static_cast<ObQueryRefRawExpr*>(raw_expr)->get_ref_stmt();
+    ObSEArray<ObRawExpr*, 16> relation_exprs;
+    if (OB_ISNULL(ref_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(ref_stmt));
+    } else if (OB_FAIL(ref_stmt->get_relation_exprs(relation_exprs))) {
+      LOG_WARN("failed to get relation exprs", K(ret));
+    } else if (OB_FAIL(SMART_CALL(replace_ref_column(relation_exprs, from, to, except_exprs)))) {
+      LOG_WARN("replace reference column failed", K(ret));
+    }
+  } else {
+    int64_t N = raw_expr->get_param_count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+      ObRawExpr *&child_expr = raw_expr->get_param_expr(i);
+      if (OB_FAIL(SMART_CALL(replace_ref_column(child_expr, from, to, except_exprs)))) {
+        LOG_WARN("replace reference column failed", K(ret));
+      }
+    } // end for
+  }
+  return ret;
+}
+
+
 int ObRawExprUtils::replace_ref_column(ObIArray<ObRawExpr *>&exprs, ObRawExpr *from, ObRawExpr *to,
                                        const ObIArray<ObRawExpr*> *except_exprs)
 {
@@ -3203,6 +3248,35 @@ int ObRawExprUtils::replace_ref_column(ObIArray<ObRawExpr *>&exprs, ObRawExpr *f
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret));
   } else if (OB_ISNULL(from) || OB_ISNULL(to)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(from), K(to), K(ret));
+  } else {
+    ObRawExpr *tmp_raw_expr = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+      ObRawExpr *&raw_expr = tmp_raw_expr;
+      if (OB_FAIL(exprs.at(i, raw_expr))) {
+        LOG_WARN("failed to get raw expr", K(i), K(ret));
+      } else if (OB_FAIL(SMART_CALL(replace_ref_column(raw_expr, from, to, except_exprs)))) {
+        LOG_WARN("failed to replace_ref_column", K(from), K(to), K(ret));
+      } else {/*do nothing*/}
+    }
+  }
+  return ret;
+}
+
+int ObRawExprUtils::replace_ref_column(ObIArray<ObRawExpr *> &exprs,
+                                      ObIArray<ObRawExpr *> &from,
+                                      ObIArray<ObRawExpr *> &to,
+                                      const ObIArray<ObRawExpr*> *except_exprs)
+{
+  int ret = OB_SUCCESS;
+  bool is_stack_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("check stack overflow failed", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret));
+  } else if (OB_UNLIKELY(from.count() != to.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(from), K(to), K(ret));
   } else {

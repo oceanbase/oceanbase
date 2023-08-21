@@ -364,10 +364,20 @@ public:
                                 ObRawExpr *from,
                                 ObRawExpr *to,
                                 const ObIArray<ObRawExpr*> *except_exprs = NULL);
+
+  static int replace_ref_column(ObRawExpr *&raw_expr,
+                                ObIArray<ObRawExpr *> &from,
+                                ObIArray<ObRawExpr *> &to,
+                                const ObIArray<ObRawExpr*> *except_exprs = NULL);
   static int replace_level_column(ObRawExpr *&raw_expr, ObRawExpr *to, bool &replaced);
   static int replace_ref_column(common::ObIArray<ObRawExpr *> &exprs,
                                 ObRawExpr *from,
                                 ObRawExpr *to,
+                                const ObIArray<ObRawExpr*> *except_exprs = NULL);
+
+  static int replace_ref_column(common::ObIArray<ObRawExpr *> &exprs,
+                                ObIArray<ObRawExpr *> &from,
+                                ObIArray<ObRawExpr *> &to,
                                 const ObIArray<ObRawExpr*> *except_exprs = NULL);
   static int contain_virtual_generated_column(ObRawExpr *&expr,
                                   bool &is_contain_vir_gen_column);
