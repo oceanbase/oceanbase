@@ -121,11 +121,10 @@ int ObBitmap::load_blocks_from_array(size_type *block_data, size_type num_bits)
     LIB_LOG(WARN, "Trying to load data to Bitmap from null array", K(ret), K(block_data), K(num_bits));
   } else {
     valid_bits_ = num_bits;
+    MemBlock *walk_ptr = header_;
     if (OB_FAIL(reserve(num_bits))) {
       LIB_LOG(WARN, "Failed to reserve bitmap with num_bits", K(ret), K(num_bits));
-    }
-    MemBlock *walk_ptr = header_;
-    if (OB_ISNULL(walk_ptr)) {
+    } else if (OB_ISNULL(walk_ptr)) {
       ret = OB_INVALID_ARGUMENT;
       LIB_LOG(WARN, "Null pointer from bitmap memblock header", K_(valid_bits), K_(num_bits), K_(header), K_(tailer));
     } else {

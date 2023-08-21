@@ -743,6 +743,7 @@ int ObDbLinkProxy::rollback(ObISQLConnection *dblink_conn)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(dblink_conn)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dblink conn is NULL", K(ret));
   } else if (OB_FAIL(dblink_conn->rollback())) {
     LOG_WARN("read from dblink failed", K(ret));

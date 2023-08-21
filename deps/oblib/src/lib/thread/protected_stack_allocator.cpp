@@ -66,6 +66,7 @@ void *ProtectedStackAllocator::alloc(const uint64_t tenant_id, const ssize_t sta
   if (stack_size < ps || ACHUNK_PURE_HEADER_SIZE + sizeof(ObStackHeader) > ps) {
     LOG_ERROR("invalid arg", K(stack_size), K(alloc_size));
   } else if (OB_ISNULL(ptr = __alloc(tenant_id, alloc_size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc failed", K(ret));
   } else {
     // do nothing

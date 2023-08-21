@@ -27,6 +27,7 @@ int ObParamedSelectItemCtx::deep_copy(const ObParamedSelectItemCtx &other, ObIAl
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid null allocator", K(ret));
   } else if (OB_FAIL(ob_write_string(*allocator, other.paramed_cname_, paramed_cname_))) {
     LOG_WARN("failed to write stirng", K(ret));

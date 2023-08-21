@@ -41,7 +41,9 @@ int ObDirectLogReader::read_log(LogCommand &cmd, uint64_t &log_seq,
         SHARE_LOG(ERROR, "read log error", K(ret));
       }
     }
-    if (log_buffer_.get_remain_data_len() < entry.get_log_data_len()) {
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (log_buffer_.get_remain_data_len() < entry.get_log_data_len()) {
       ret = OB_LAST_LOG_NOT_COMPLETE;
       SHARE_LOG(ERROR, "last log not complete",
                      K(file_id_), K(log_buffer_.get_remain_data_len()),

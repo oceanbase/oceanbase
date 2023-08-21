@@ -1619,7 +1619,7 @@ int ObJsonBin::get_max_offset(const char* data, ObJsonNodeType cur_node, uint64_
       number::ObNumber number;
       if (OB_FAIL(serialization::decode_i16(data, curr_.length() - (data - curr_.ptr()), pos, &prec))) {
         LOG_WARN("fail to deserialize decimal precision.", K(ret), K(data - curr_.ptr()), K(curr_.length()));
-      } else if (serialization::decode_i16(data, curr_.length() - (data - curr_.ptr()), pos, &scale)) {
+      } else if (OB_FAIL(serialization::decode_i16(data, curr_.length() - (data - curr_.ptr()), pos, &scale))) {
         LOG_WARN("fail to deserialize decimal scale.", K(ret), K(data - curr_.ptr()), K(curr_.length()));
       } else if (OB_FAIL(number.deserialize(data, curr_.length() - (data - curr_.ptr()), pos))) {
         LOG_WARN("failed to deserialize decimal data", K(ret));
