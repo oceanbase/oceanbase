@@ -117,7 +117,8 @@ private:
   int query_cache_response_row(sql::ObSQLSessionInfo &session,
                                         ObMySQLResultSet &result,
                                         const common::ObNewRow &row,
-                                        const ColumnsFieldIArray *fields);
+                                        const ColumnsFieldIArray *fields,
+                                        bool is_packed);
   int query_cache_response_query_header(const ObQueryCacheValueHandle &handle,
                                         ObMySQLResultSet &result,
                                         sql::ObSQLSessionInfo &session);

@@ -125,12 +125,15 @@ public:
   inline common::ObIAllocator *get_alloc() { return alloc_; }
   inline common::ColumnsFieldArray &get_fields() { return fields_; }
   void init_ref_table_info(uint32_t tables_num);
+  inline void set_packed(bool is_packed) { is_packed_ = is_packed; }
+  inline bool is_packed() { return is_packed_; }
   inline void set_table_id(uint64_t table_id, uint32_t idx) { table_ids_[idx] = table_id; }
   inline void set_trans_id(uint64_t trans_id, uint32_t idx) { trans_ids_[idx] = trans_id; }
   inline bool is_valid() const { return valid_; }
-  TO_STRING_KV(K_(valid), K_(ref_table_cnt), K_(fields), K_(weight));
+  TO_STRING_KV(K_(valid), K_(is_packed), K_(ref_table_cnt), K_(fields), K_(weight));
 private:
   bool valid_;
+  bool is_packed_;
 
   // table_ids_ and trans_ids_ is used for check consistency.
   // Before add item to them, you must alloc suitable memory for them.

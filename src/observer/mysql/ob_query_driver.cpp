@@ -104,20 +104,25 @@ int ObQueryDriver::response_query_header(const ColumnsFieldIArray &fields,
       result.set_errcode(ret);
     }
 
-    // Store fields to query cache.
-    ObQueryCacheValueHandle handle;
-    const ColumnsFieldArray *real_fields = reinterpret_cast<const ColumnsFieldArray *>(fields);
-    if (session_.get_insert_query_cache() && OB_FAIL(session_.get_query_cache()->insert(session_.get_query_cache_key(),
-                                                                                        *real_fields,
-                                                                                        handle))) {
-      // The resultset will not be inserted into the query cache if there is a key that already exists.
-      // Only allow one thread insert key successfully when them have same key.
-      if (ret == OB_ENTRY_EXIST) {
-        session_.set_insert_query_cache(false);;
-        ret = OB_SUCCESS;
+    
+    if (session_.get_insert_query_cache()) {
+      // Store fields to query cache.
+      ObQueryCacheValueHandle handle;
+      const ColumnsFieldArray *real_fields = reinterpret_cast<const ColumnsFieldArray *>(fields);
+      if (OB_FAIL(session_.get_query_cache()->insert(session_.get_query_cache_key(),
+                                                    *real_fields,
+                                                    handle))) {
+        // The resultset will not be inserted into the query cache
+        // if there is a key that already exists.
+        // Only allow one thread insert key successfully when them have same key.
+        session_.set_insert_query_cache(false);
+        handle.handle_.reset();
+        if (ret == OB_ENTRY_EXIST) {
+          ret = OB_SUCCESS;
+        }
+      } else {
+        session_.set_query_cache_handle(handle);
       }
-    } else {
-      session_.set_query_cache_handle(handle);
     }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < fields.count(); ++i) {
@@ -300,14 +305,13 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
           LOG_WARN("failed to add row to row store", K(ret));
           session_.set_insert_query_cache(false);
           if (OB_ALLOCATE_MEMORY_FAILED == ret) {
-            if (OB_FAIL(session_.get_query_cache()->remove(session_.get_query_cache_key()))) {
-              // do nothing
-            }
             ret = OB_SUCCESS;
           }
+          session_.get_query_cache_handle().handle_.reset();
         }
       } else {
         session_.set_insert_query_cache(false);
+        session_.get_query_cache_handle().handle_.reset();
         LOG_WARN("resultset size over query cache limit", K(ret), K(cur_row_size));
       }
     }
@@ -335,6 +339,9 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
         }
       }
     }
+  }
+  if (session_.get_insert_query_cache()) {
+    session_.get_query_cache_handle().query_cache_value_->set_packed(is_packed);
   }
   if (is_cac_found_rows) {
     while (OB_SUCC(ret) && !OB_FAIL(result.get_next_row(result_row))) {

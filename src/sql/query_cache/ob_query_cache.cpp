@@ -214,6 +214,7 @@ int ObQueryCacheKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *
  */
 ObQueryCacheValue::ObQueryCacheValue(common::ObIAllocator *alloc)
   : valid_(false),
+    is_packed_(false),
     table_ids_(nullptr),
     trans_ids_(nullptr),
     ref_table_cnt_(0),
@@ -228,6 +229,7 @@ ObQueryCacheValue::~ObQueryCacheValue()
   for (int i = 0; i < row_array_.count(); ++i) {
     alloc_->free(row_array_.at(i));
   }
+  fields_.reset();
 }
 
 int64_t ObQueryCacheValue::size() const
@@ -241,12 +243,7 @@ int ObQueryCacheValue::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheVal
   if (OB_UNLIKELY(NULL == buf || buf_len < size())) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "ObQueryCacheValue : buf is null or buf len is small", K(ret));
-  } 
-  // else if (OB_UNLIKELY(!is_valid())) {
-  //   ret = OB_INVALID_DATA;
-  //   COMMON_LOG(WARN, "ObQueryCacheValue : value is invalid", K(ret));
-  // } 
-   else {
+  } else {
     ObQueryCacheValue *pvalue = new (buf) ObQueryCacheValue(alloc_);
     pvalue->valid_ = valid_;
 
@@ -279,7 +276,8 @@ int ObQueryCacheValue::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheVal
       }
     }
  
-    if (fields_.count() != 0 && OB_FAIL(pl::ObDbmsInfo::deep_copy_field_columns(
+    if (fields_.count() > 0
+        && OB_FAIL(pl::ObDbmsInfo::deep_copy_field_columns(
                 *(pvalue->alloc_),
                 fields_,
                 pvalue->fields_))) {

@@ -760,7 +760,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         } else if (OB_FAIL(query_cache_response_result(handle, result, session))) {
           LOG_WARN("failed to response result to client from query cache", K(ret), K(sql));
         }
-       // handle.handle_.reset();
+        handle.handle_.reset();
       } else if (OB_FAIL(gctx_.sql_engine_->stmt_query(sql, ctx_, result))) {
         exec_start_timestamp_ = ObTimeUtility::current_time();
         if (!THIS_WORKER.need_retry()) {
@@ -855,7 +855,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         session.get_query_cache_handle().query_cache_value_->set_valid(true);
         session.get_query_cache()->add_mem_size(value_cost);
         session.get_query_cache()->add_row_cnt(session.get_query_cache_handle().query_cache_value_->get_row_cnt());
-        // session.get_query_cache_handle().handle_.reset();
+        session.get_query_cache_handle().handle_.reset();
       }
 
       // some statistics must be recorded for plan stat, even though sql audit disabled
@@ -1078,7 +1078,7 @@ int ObMPQuery::can_insert_query_cache(sql::ObSQLSessionInfo &session,
   int ret = OB_SUCCESS;
   int64_t query_cache_type_temp;
   insert_query_cache = session.get_use_query_cache();
-  // insert_query_cache &= (session.get_query_cache()->count() <= 10000);
+  insert_query_cache &= (session.get_query_cache()->count() <= 100000);
   if (OB_FAIL(session.get_sys_variable(share::SYS_VAR_USE_QUERY_CACHE, query_cache_type_temp))) {
     LOG_WARN("failed to get sys variable query cache type", K(ret));
   } else if (insert_query_cache) {
@@ -1169,11 +1169,12 @@ int ObMPQuery::query_cache_response_query_header(const ObQueryCacheValueHandle &
 int ObMPQuery::query_cache_response_row(sql::ObSQLSessionInfo &session,
                                         ObMySQLResultSet &result,
                                         const common::ObNewRow &row,
-                                        const ColumnsFieldIArray *fields)
+                                        const ColumnsFieldIArray *fields,
+                                        bool is_packed)
 {
   int ret = OB_SUCCESS;
   bool has_charset_convert = false;
-  if (OB_ISNULL(fields) || row.get_count() != fields->count()) {
+  if (OB_ISNULL(fields)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fields is null", K(ret), KP(fields));
   } else {
@@ -1183,7 +1184,9 @@ int ObMPQuery::query_cache_response_row(sql::ObSQLSessionInfo &session,
                                                 fields,
                                                 ctx_.schema_guard_,  
                                                 session.get_effective_tenant_id());
+      sm_row.set_packed(is_packed);
       obmysql::OMPKRow rp(sm_row);
+      rp.set_is_packed(is_packed);
       if (OB_FAIL(response_packet(rp, &session))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("response packet fail", K(ret));
@@ -1201,9 +1204,10 @@ int ObMPQuery::query_cache_response_result(const ObQueryCacheValueHandle &handle
   const ColumnsFieldArray *fields = &handle.query_cache_value_->get_fields();
   const common::ObNewRow *row = NULL;
   int max_count = handle.query_cache_value_->get_row_cnt();
+  bool is_packed = handle.query_cache_value_->is_packed();
   for (int row_id = 0; row_id < max_count; ++row_id) {
     handle.query_cache_value_->get_row(row_id, row);
-    if (OB_FAIL(query_cache_response_row(session, result, *row, fields))) {
+    if (OB_FAIL(query_cache_response_row(session, result, *row, fields, is_packed))) {
       LOG_WARN("query cache response row fail.", K(ret), K(row_id));
     }
   }
