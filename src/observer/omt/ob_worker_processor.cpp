@@ -53,10 +53,11 @@ void ObWorkerProcessor::th_destroy()
 ERRSIM_POINT_DEF(EN_WORKER_PROCESS_REQUEST)
 #endif
 
-int ObWorkerProcessor::process_err_test()
+OB_NOINLINE int ObWorkerProcessor::process_err_test()
 {
   int ret = OB_SUCCESS;
 
+  LOG_WARN("process err_test", K(ret));
 #ifdef ERRSIM
   ret = EN_WORKER_PROCESS_REQUEST;
 #endif

@@ -404,9 +404,16 @@ public:
   bool need_gc_scan(int64_t gc_start_time) {
     bool bool_ret = false;
 
-    if (last_gc_scan_ts_ <= 0
-        || gc_start_time > last_gc_scan_ts_) {
+    if (get_related_set_op_type() == DupTableRelatedSetOpType::INVALID) {
       bool_ret = true;
+    }
+    if (bool_ret) {
+      if (last_gc_scan_ts_ <= 0
+          || gc_start_time > last_gc_scan_ts_) {
+        bool_ret = true;
+      } else {
+        bool_ret = false;
+      }
     }
 
     return bool_ret;
@@ -426,7 +433,7 @@ public:
   void clean_logging() { dup_set_attr_.change_status_.clean_logging(); }
 
   TO_STRING_KV(K(dup_set_attr_), K(DupTabletIdMap::size()), K(DupTabletIdMap::created()),
-               K(related_set_attr_));
+               K(related_set_attr_), K(last_gc_scan_ts_));
 
 private:
   DupTabletSetAttribute dup_set_attr_;

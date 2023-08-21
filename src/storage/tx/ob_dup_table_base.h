@@ -809,7 +809,7 @@ public:
                  K(lease_log_applied_scn_),
                  K(readable_tablets_base_scn_),
                  K(readable_tablets_min_base_applied_scn_),
-                 K(lease_item_array_));
+                 K(lease_item_array_.count()));
 
     ObLSDupTableMeta() { reset(); }
 

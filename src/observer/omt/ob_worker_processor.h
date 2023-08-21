@@ -36,7 +36,7 @@ public:
   virtual int process(rpc::ObRequest &req);
 
 public:
-  OB_NOINLINE int process_err_test();
+  int process_err_test();
 private:
   int process_one(rpc::ObRequest &req);
 

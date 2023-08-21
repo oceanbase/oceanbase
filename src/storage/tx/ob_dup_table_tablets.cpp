@@ -782,7 +782,6 @@ DupTabletChangeMap *ObLSDupTabletsMgr::get_need_gc_set_(bool &new_round)
     } else {
       while (OB_NOT_NULL(readable_set_in_gc_)
              && !readable_set_in_gc_->need_gc_scan(gc_start_time_)
-             && readable_set_in_gc_->get_related_set_op_type() != DupTableRelatedSetOpType::INVALID // skip operated set
              && readable_set_in_gc_ != readable_tablets_list_.get_header()) {
         readable_set_in_gc_ = readable_set_in_gc_->get_next();
       }
