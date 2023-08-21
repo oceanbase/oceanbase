@@ -2164,6 +2164,11 @@ INTNUM
   malloc_non_terminal_node($$, result->malloc_pool_, T_WIN_INTERVAL, 1, $1);
   $$->value_ = 1;
 }
+| QUESTIONMARK
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WIN_INTERVAL, 1, $1);
+  $$->value_ = 1;
+}
 | DECIMAL_VAL
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_WIN_INTERVAL, 1, $1);
