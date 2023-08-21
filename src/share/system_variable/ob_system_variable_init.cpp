@@ -3292,13 +3292,27 @@ static struct VarsInit{
     ObSysVars[232].alias_ = "OB_SV_OPTIMIZER_FEATURES_ENABLE" ;
     }();
 
+    [&] (){
+      ObSysVars[233].default_value_ = "0" ;
+      ObSysVars[233].info_ = "OFF = Do not cache or retrieve results. ON = Cache all results except SELECT SQL_NO_CACHE ... queries. DEMAND = Cache only SELECT SQL_CACHE ... queries(not used yet)" ;
+      ObSysVars[233].name_ = "use_query_cache" ;
+      ObSysVars[233].data_type_ = ObIntType ;
+      ObSysVars[233].enum_names_ = "[u'OFF', u'ON', u'DEMAND']" ;
+      ObSysVars[233].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[233].id_ = SYS_VAR_USE_QUERY_CACHE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_USE_QUERY_CACHE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_USE_QUERY_CACHE] = 233 ;
+      ObSysVars[233].base_value_ = "0" ;
+    ObSysVars[233].alias_ = "OB_SV_USE_QUERY_CACHE" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 233;
+static int64_t var_amount = 234;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
