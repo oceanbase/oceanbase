@@ -373,6 +373,7 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
       LOG_INFO("finish one round of loop in do_one_round_major_merge", K(expected_epoch),
                "merge_time_statistics", progress_checker_.merge_time_statistics_);
     }
+    add_merge_time_stat(total_merge_time_statistics.update_merge_status_us_, global_info);
   }
   LOG_INFO("finish do_one_round_major_merge", K(expected_epoch), K(total_merge_time_statistics));
 
@@ -1018,6 +1019,18 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
       }
     }
   }
+}
+
+void ObMajorMergeScheduler::add_merge_time_stat(
+     const ObUpdateMergeStatusTime &stat,
+     const ObGlobalMergeInfo &global_info)
+{
+  char extra_info[256] = { 0 };
+  IGNORE_RETURN databuff_printf(extra_info, 256, "%s: %ld", "write_tablet_checksum_us", stat.write_tablet_checksum_us_);
+  ROOTSERVICE_EVENT_ADD("daily_merge", "merge_stat", K_(tenant_id), "global_broadcast_scn",
+    global_info.global_broadcast_scn_.get_scn_val(), "tablet_validator_us", stat.tablet_validator_us_,
+    "index_validator_us", stat.index_validator_us_, "cross_cluster_validator_us",
+    stat.cross_cluster_validator_us_, "update_report_scn_us", stat.update_report_scn_us_, extra_info);
 }
 
 } // end namespace rootserver

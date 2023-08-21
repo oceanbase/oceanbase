@@ -160,7 +160,7 @@ int ObMajorMergeProgressChecker::handle_table_with_first_tablet_in_sys_ls(
   const ObSimpleTableSchemaV2 *simple_schema = nullptr;
   ObTableCompactionInfo cur_compaction_info;
   // table_id of the table containing first tablet in sys ls
-  const uint64_t major_merge_special_table_id = ObCrossClusterTabletChecksumValidator::MAJOR_MERGE_SPECIAL_TABLE_ID;
+  const uint64_t major_merge_special_table_id = ObChecksumValidatorBase::MAJOR_MERGE_SPECIAL_TABLE_ID;
   // only primary major_freeze_service need to handle table with frist tablet in sys ls here
   if (!is_primary_service) {
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(tenant_id_, schema_guard))) {
@@ -531,6 +531,7 @@ int ObMajorMergeProgressChecker::check_verification(
   else if (FALSE_IT(index_validator_.check_and_set_validate(is_primary_service))) {
   } else if (OB_FAIL(cross_cluster_validator_.check_and_set_validate(is_primary_service, global_broadcast_scn))) {
     LOG_WARN("fail to check and set validate for cross_cluster_validator", KR(ret), K(global_broadcast_scn));
+  } else if (FALSE_IT(index_validator_.set_need_val_cross_cluster_ckm(cross_cluster_validator_.need_validate()))) {
   } else if (OB_FAIL(tablet_validator_.validate_checksum(stop, global_broadcast_scn, tablet_compaction_map_,
       table_count_, table_compaction_map_, table_ids_, merge_time_statistics_, expected_epoch))) {
     LOG_WARN("fail to validate checksum of tablet validator", KR(ret), K(global_broadcast_scn));
