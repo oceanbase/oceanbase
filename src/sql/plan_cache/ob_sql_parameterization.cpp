@@ -648,9 +648,13 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
     }
 
     // sql with charset need not ps parameterize
-    if (OB_SUCC(ret) && T_QUESTIONMARK == ctx.tree_->type_ && OB_NOT_NULL(ctx.tree_->children_)
-        && OB_NOT_NULL(ctx.tree_->children_[0]) && ctx.tree_->children_[0]->type_ == T_CHARSET) {
-      ctx.sql_info_->ps_need_parameterized_ = false;
+    if (OB_SUCC(ret)) {
+      if (T_QUESTIONMARK == ctx.tree_->type_ && OB_NOT_NULL(ctx.tree_->children_)
+          && OB_NOT_NULL(ctx.tree_->children_[0]) && ctx.tree_->children_[0]->type_ == T_CHARSET) {
+        ctx.sql_info_->ps_need_parameterized_ = false;
+      } else if (T_INTO_OUTFILE == ctx.tree_->type_) {
+        ctx.sql_info_->ps_need_parameterized_ = false;
+      }
     }
 
     //判断insert中values()在tree中的哪一层，当某结点value_father_level_处于VALUE_VECTOR_LEVEL时,
@@ -1601,6 +1605,10 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
           SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
         }
       } else if ((0 == func_name.case_compare("concat")) && 1 == node[0]->reserved_) {
+        sql_info.ps_need_parameterized_ = false;
+      } else if ((0 == func_name.case_compare("json_equal"))) {
+        sql_info.ps_need_parameterized_ = false;
+      } else if ((0 == func_name.case_compare("json_extract"))) {
         sql_info.ps_need_parameterized_ = false;
       }
     }
