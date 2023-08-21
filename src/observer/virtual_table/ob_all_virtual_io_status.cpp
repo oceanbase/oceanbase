@@ -438,19 +438,23 @@ int ObAllVirtualIOQuota::record_sys_group(const uint64_t tenant_id, ObSysIOUsage
     ObSysIOUsage::SysAvgItems sys_avg_iops, sys_avg_size, sys_avg_rt;
     sys_io_usage.calculate_io_usage();
     sys_io_usage.get_io_usage(sys_avg_iops, sys_avg_size, sys_avg_rt);
-    for (int64_t i = 0; i < SYS_RESOURCE_GROUP_CNT; ++i) {
-      for (int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOMode::MAX_MODE); ++j) {
-        if (sys_avg_size.at(i).at(j) > std::numeric_limits<double>::epsilon()) {
-          QuotaInfo item;
-          item.tenant_id_ = tenant_id;
-          item.mode_ = static_cast<ObIOMode>(j);
-          item.group_id_ = SYS_RESOURCE_GROUP_START_ID + j;
-          item.size_ = sys_avg_size.at(i).at(j);
-          item.real_iops_ = sys_avg_iops.at(i).at(j);
-          item.min_iops_ = INT64_MAX;
-          item.max_iops_ = INT64_MAX;
-          if (OB_FAIL(quota_infos_.push_back(item))) {
-            LOG_WARN("push back io group item failed", K(j), K(ret), K(item));
+    for (int64_t i = 0; i < sys_avg_size.count(); ++i) {
+      if (i >= sys_avg_size.count() || i >= sys_avg_iops.count() || i >= sys_avg_rt.count()) {
+        //ignore
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOMode::MAX_MODE); ++j) {
+          if (sys_avg_size.at(i).at(j) > std::numeric_limits<double>::epsilon()) {
+            QuotaInfo item;
+            item.tenant_id_ = tenant_id;
+            item.mode_ = static_cast<ObIOMode>(j);
+            item.group_id_ = SYS_RESOURCE_GROUP_START_ID + i;
+            item.size_ = sys_avg_size.at(i).at(j);
+            item.real_iops_ = sys_avg_iops.at(i).at(j);
+            item.min_iops_ = INT64_MAX;
+            item.max_iops_ = INT64_MAX;
+            if (OB_FAIL(quota_infos_.push_back(item))) {
+              LOG_WARN("push back io group item failed", K(j), K(ret), K(item));
+            }
           }
         }
       }

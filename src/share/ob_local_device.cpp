@@ -1131,6 +1131,7 @@ int ObLocalDevice::io_submit(
     common::ObIOCB *iocb)
 {
   int ret = OB_SUCCESS;
+  ObTimeGuard time_guard("LocalDevice", 5000); //5ms
   ObLocalIOContext *local_io_context = nullptr;
   ObLocalIOCB *local_iocb = nullptr;
   struct iocb *iocbp = nullptr;
@@ -1150,6 +1151,7 @@ int ObLocalDevice::io_submit(
   } else {
     iocbp = &(local_iocb->iocb_);
     int submit_ret = ::io_submit(local_io_context->io_context_, 1, &iocbp);
+    time_guard.click("LocalDevice_submit");
     if (1 != submit_ret) {
       ret = OB_IO_ERROR;
       SHARE_LOG(WARN, "Fail to submit aio, ", K(ret), K(submit_ret), K(errno), KERRMSG);

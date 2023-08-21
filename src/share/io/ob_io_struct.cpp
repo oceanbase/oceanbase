@@ -1971,7 +1971,7 @@ int ObAsyncIOChannel::submit(ObIORequest &req)
     }
   } else if (device_channel_->used_io_depth_ > device_channel_->max_io_depth_) {
     ret = OB_EAGAIN;
-    LOG_INFO("reach max io depth", K(ret), K(device_channel_->used_io_depth_), K(device_channel_->max_io_depth_));
+    FLOG_INFO("reach max io depth", K(ret), K(device_channel_->used_io_depth_), K(device_channel_->max_io_depth_));
   } else {
     ATOMIC_INC(&submit_count_);
     ATOMIC_FAA(&device_channel_->used_io_depth_, get_io_depth(req.io_size_));
