@@ -1644,6 +1644,7 @@ int ObNewTableTabletAllocator::check_and_replace_ls_(
               locked_ls_id_array,
               new_ls_id,
               new_ls_attr))) {
+            // new ls should not be OB_STATE_NOT_MATCH
             LOG_WARN("check and lock ls failed", KR(ret),
                 K(tenant_id), K(locked_ls_id_array), K(new_ls_id), K(new_ls_attr));
           } else {
@@ -1714,7 +1715,13 @@ int ObNewTableTabletAllocator::lock_and_check_ls_(
         SHARE))) {
       LOG_WARN("lock ls in trans failed", KR(ret), K(tenant_id), K(ls_id));
     } else if (OB_FAIL(ls_operator.get_ls_attr(ls_id, false/*for_update*/, trans, ls_attr))) {
-      LOG_WARN("get ls attr failed", KR(ret), K(ls_id), K(ls_attr));
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ls_attr.reset();
+        ret = OB_STATE_NOT_MATCH;
+        LOG_INFO("ls has been deleted when creating tablet", KR(ret), K(ls_id));
+      } else {
+        LOG_WARN("get ls attr failed", KR(ret), K(ls_id), K(ls_attr));
+      }
     } else if (!ls_attr.ls_is_normal() || ls_attr.get_ls_flag().is_block_tablet_in()) {
       ret = OB_STATE_NOT_MATCH;
       LOG_TRACE("can not create tablet on this ls beacuse it is not in normal status or is block tablet in",
@@ -1734,10 +1741,7 @@ int ObNewTableTabletAllocator::choose_new_ls_(
   if (OB_UNLIKELY(!inited_) || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObNewTableTabletAllocator not init", KR(ret));
-  } else if (!old_ls_attr.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(old_ls_attr));
-  } else if (!old_ls_attr.ls_is_normal()) {
+  } else if (!old_ls_attr.is_valid() || !old_ls_attr.ls_is_normal()) {
     if (prev_ls_id.is_valid()) {
       new_ls_id = prev_ls_id;
     } else {
