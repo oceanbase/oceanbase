@@ -279,6 +279,8 @@ int ObStmtFactory::create_stmt<ObSelectStmt>(ObSelectStmt *&stmt)
       SQL_RESV_LOG(WARN, "store stmt failed", K(ret));
       stmt->~ObSelectStmt();
       stmt = NULL;
+    } else if (OB_FAIL(stmt->init_stmt(table_hash_allocator_, wrapper_allocator_))) {
+      LOG_WARN("failed to init tables hash", K(ret));
     }
   }
   return ret;

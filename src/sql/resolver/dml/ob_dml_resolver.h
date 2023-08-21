@@ -240,18 +240,6 @@ public:
   int pre_process_json_object_contain_star(ParseNode *node, common::ObIAllocator &allocator);
   int transfer_to_inner_joined(const ParseNode &parse_node, JoinedTable *&joined_table);
   virtual int check_special_join_table(const TableItem &join_table, bool is_left_child, ObItemType join_type);
-  virtual int init_stmt()
-  {
-    int ret = common::OB_SUCCESS;
-    ObDMLStmt *stmt = get_stmt();
-    if (OB_ISNULL(stmt)) {
-      ret = common::OB_NOT_INIT;
-      SQL_RESV_LOG(ERROR, "stmt_ is null");
-    } else if (OB_FAIL(stmt->set_table_bit_index(common::OB_INVALID_ID))) {
-      SQL_RESV_LOG(ERROR, "add invalid id to table index desc failed", K(ret));
-    }
-    return ret;
-  }
   /**
    * 为一个 `JoinedTable` 分配内存
    * @param joined_table 新的`JoinedTable`

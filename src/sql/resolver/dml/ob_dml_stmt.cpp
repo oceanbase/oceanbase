@@ -449,7 +449,7 @@ int ObDMLStmt::assign(const ObDMLStmt &other)
     LOG_WARN("failed to copy stmt", K(ret));
   } else if (OB_FAIL(table_items_.assign(other.table_items_))) {
     LOG_WARN("assign table items failed", K(ret));
-  } else if (OB_FAIL(tables_hash_.assign(other.tables_hash_))) {
+  } else if (OB_FAIL(assign_tables_hash(other.tables_hash_))) {
     LOG_WARN("assign table hash desc failed", K(ret));
   } else if (OB_FAIL(column_items_.assign(other.column_items_))) {
     LOG_WARN("assign column items failed", K(ret));
@@ -595,7 +595,7 @@ int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
                                               other.table_items_,
                                               table_items_))) {
     LOG_WARN("failed to deep copy table items", K(ret));
-  } else if (OB_FAIL(tables_hash_.assign(other.tables_hash_))) {
+  } else if (OB_FAIL(assign_tables_hash(other.tables_hash_))) {
     LOG_WARN("assign table hash desc failed", K(ret));
   } else if (OB_FAIL(deep_copy_join_tables(allocator, expr_copier, other))) {
     LOG_WARN("failed to copy joined tables", K(ret));
@@ -1088,10 +1088,7 @@ int ObDMLStmt::update_stmt_table_id(const ObDMLStmt &other)
   }
   // reset tables hash
   if (OB_SUCC(ret)) {
-    tables_hash_.reset();
-    if (OB_FAIL(set_table_bit_index(common::OB_INVALID_ID))) {
-      LOG_WARN("failed to set table bit index", K(ret));
-    } else { /*do nothing*/ }
+    tables_hash_.reuse();
   }
   // reset table id from column items
   if (OB_SUCC(ret) && &other != this) {
@@ -2313,7 +2310,7 @@ int ObDMLStmt::add_table_item(const ObSQLSessionInfo *session_info, TableItem *t
       }
     }
   }
-  LOG_DEBUG("finish to add table item", K(*table_item), K(tables_hash_), KPC(table_item->ref_query_),
+  LOG_DEBUG("finish to add table item", K(*table_item), KPC(table_item->ref_query_),
                                         K(common::lbt()));
   return ret;
 }
@@ -2351,7 +2348,7 @@ int ObDMLStmt::add_table_item(const ObSQLSessionInfo *session_info, TableItem *t
       }
     }
   }
-  LOG_DEBUG("finish to add table item", K(*table_item), K(tables_hash_), K(common::lbt()));
+  LOG_DEBUG("finish to add table item", K(*table_item), K(common::lbt()));
   return ret;
 }
 
@@ -2683,13 +2680,45 @@ int ObDMLStmt::get_ddl_view_output(const TableItem &table,
 
 int32_t ObDMLStmt::get_table_bit_index(uint64_t table_id) const
 {
-  int64_t idx = tables_hash_.get_idx(table_id, OB_INVALID_ID);
+  int64_t idx = OB_INVALID_INDEX;
+  if (OB_UNLIKELY(OB_SUCCESS != tables_hash_.get_refactored(table_id, idx))) {
+    idx = OB_INVALID_INDEX;
+  }
   return static_cast<int32_t>(idx);
 }
 
 int ObDMLStmt::set_table_bit_index(uint64_t table_id)
 {
-  return tables_hash_.add_column_desc(table_id, OB_INVALID_ID);
+  int ret = OB_SUCCESS;
+  int64_t idx = tables_hash_.size() + 1;  // bit index is start from 1
+  if (OB_FAIL(tables_hash_.set_refactored(table_id, idx))) {
+    LOG_WARN("failed to set refactored", K(ret));
+  }
+  return ret;
+}
+
+int ObDMLStmt::assign_tables_hash(const ObDMLStmtTableHash &tables_hash)
+{
+  int ret = OB_SUCCESS;
+  tables_hash_.reuse();
+  ObDMLStmtTableHash::const_iterator it = tables_hash.begin();
+  ObDMLStmtTableHash::const_iterator it_end = tables_hash.end();
+  for (; OB_SUCC(ret) && it != it_end; ++it) {
+    if (OB_FAIL(tables_hash_.set_refactored(it->first, it->second))) {
+      LOG_WARN("failed to set refactored", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::init_stmt(TableHashAllocator &table_hash_alloc, ObWrapperAllocator &wrapper_alloc)
+{
+  int ret = OB_SUCCESS;
+  if (!tables_hash_.created() &&
+      OB_FAIL(tables_hash_.create(64, &table_hash_alloc, &wrapper_alloc))) {
+    LOG_WARN("failed to create qb name map", K(ret));
+  }
+  return ret;
 }
 
 int ObDMLStmt::relids_to_table_ids(const ObSqlBitSet<> &table_set,
@@ -3421,34 +3450,13 @@ int ObDMLStmt::rebuild_tables_hash()
 {
   int ret = OB_SUCCESS;
   TableItem *ti = NULL;
-  ObSEArray<uint64_t, 4> table_id_list;
-  ObSEArray<int64_t, 4> bit_index_map;
-  // dump old table id - rel id map
-  for (int64_t i = 0; OB_SUCC(ret) && i < tables_hash_.get_column_num(); ++i) {
-    uint64_t tid = OB_INVALID_ID;
-    uint64_t cid = OB_INVALID_ID;
-    if (OB_FAIL(tables_hash_.get_tid_cid(i, tid, cid))) {
-      LOG_WARN("failed to get tid cid", K(ret));
-    } else if (OB_FAIL(table_id_list.push_back(tid))) {
-      LOG_WARN("failed to push back table id", K(ret));
-    }
-  }
-  tables_hash_.reset();
-  if (OB_FAIL(set_table_bit_index(OB_INVALID_ID))) {
-    LOG_WARN("fail to add table_id to hash table", K(ret));
-  }
+  tables_hash_.reuse();
   for (int64_t i = 0; OB_SUCC(ret) && i < table_items_.count(); i++) {
     if (OB_ISNULL(ti = table_items_.at(i))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(table_items_), K(ret));
     } else if (OB_FAIL(set_table_bit_index(ti->table_id_))) {
       LOG_WARN("fail to add table_id to hash table", K(ret), K(ti), K(table_items_));
-    }
-  }
-  // create old rel id - new rel id map
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_id_list.count(); ++i) {
-    if (OB_FAIL(bit_index_map.push_back(get_table_bit_index(table_id_list.at(i))))) {
-      LOG_WARN("failed to push back new bit index", K(ret));
     }
   }
   return ret;
