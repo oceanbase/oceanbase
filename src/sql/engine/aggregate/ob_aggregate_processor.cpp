@@ -6559,7 +6559,8 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
           // get key and value, and append to json_object
           ObString key_data;
           ObIJsonBase *json_val = NULL;
-          if (OB_SUCC(ret) && OB_FAIL(deep_copy_ob_string(tmp_alloc, key_string, key_data))) {
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(deep_copy_ob_string(tmp_alloc, key_string, key_data))) {
             LOG_WARN("fail copy string", K(ret), K(key_string.length()));
           } else {
             ObDatum converted_datum;
@@ -6927,15 +6928,19 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
           ObString key_string = datum_key.get_string();
           ObIJsonBase *json_val = nullptr;
 
+          bool need_key_string_convert = (ObCharset::charset_type_by_coll(cs_type_key) != CHARSET_UTF8MB4);
+
           if (OB_ISNULL(key_string.ptr())) {
             ret = OB_ERR_NULL_VALUE;
             LOG_WARN("unexpected null result", K(ret));
           } else if (is_absent_on_null && ob_is_null(type_value)) {
             continue;
-          } else if (ObCharset::charset_type_by_coll(cs_type_key) != CHARSET_UTF8MB4
+          } else if (need_key_string_convert
             && OB_FAIL(ObExprUtil::convert_string_collation(key_string, cs_type_key, key_string,
                                                             CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {
             LOG_WARN("convert key string collation failed", K(ret), K(cs_type_key), K(key_string.length()));
+          } else if (!need_key_string_convert && OB_FAIL(deep_copy_ob_string(tmp_alloc, key_string, key_string))) {
+            LOG_WARN("fail to deep copy string.", K(ret), K(key_string));
           } else if (OB_FAIL(ObJsonExprHelper::oracle_datum2_json_val(&datum_value, meta_value, &tmp_alloc,
               eval_ctx_.exec_ctx_.get_my_session(), json_val, false, is_format_json, is_strict, false))) {
             LOG_WARN("failed to eval json val node.", K(ret), K(is_format_json), K(is_strict), K(meta_value));
