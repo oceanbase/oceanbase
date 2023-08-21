@@ -634,9 +634,11 @@ int ObIORequest::prepare()
 {
   int ret = OB_SUCCESS;
   ObTimeGuard tg("prepare", 100000); //100ms
-  if (OB_ISNULL(control_block_)
-      && (OB_ISNULL(io_info_.fd_.device_handle_) || OB_ISNULL(control_block_ = io_info_.fd_.device_handle_->alloc_iocb()))) {
+  if (OB_ISNULL(io_info_.fd_.device_handle_)) {
     ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("device handle is null", K(ret), K(*this));
+  } else if (OB_ISNULL(control_block_) && OB_ISNULL(control_block_ = io_info_.fd_.device_handle_->alloc_iocb())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc io control block failed", K(ret), K(*this));
   } else if (FALSE_IT(tg.click("alloc_iocb"))) {
   } else if (OB_ISNULL(io_buf_) && OB_FAIL(alloc_io_buf())) {
