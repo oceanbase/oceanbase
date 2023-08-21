@@ -46,10 +46,10 @@ extern TLOCAL(bool, TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR);
 namespace omt
 {
 int create_worker(ObThWorker* &worker, ObTenant *tenant, int32_t group_id,
-                  int32_t level, ObResourceGroup *group)
+                  int32_t level, bool force, ObResourceGroup *group)
 {
   int ret = OB_SUCCESS;
-  if (tenant->total_worker_cnt() >= tenant->max_worker_cnt()) {
+  if (!force && tenant->total_worker_cnt() >= tenant->max_worker_cnt()) {
     ret = OB_RESOURCE_OUT;
     LOG_WARN("create worker fail", K(ret), K(tenant->id()), K(group_id), K(level),
                                     K(tenant->total_worker_cnt()), K(tenant->max_worker_cnt()));

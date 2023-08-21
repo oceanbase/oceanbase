@@ -169,7 +169,7 @@ level: set worker's level, in ObResourceGroup level = INT32_MAX, in ObTenant lev
 group: set worker's group, in ObResourceGroup level = this, in ObTenant level = nullptr,
 */
 int create_worker(ObThWorker* &worker, ObTenant *tenant, int32_t group_id,
-                  int32_t level = INT32_MAX, ObResourceGroup *group = nullptr);
+                  int32_t level = INT32_MAX, bool force = false, ObResourceGroup *group = nullptr);
                     // defalut level=INT32_MAX, group=nullptr
 int destroy_worker(ObThWorker *worker);
 
