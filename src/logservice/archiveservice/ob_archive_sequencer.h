@@ -141,12 +141,14 @@ public:
                                const ArchiveKey &key,
                                const ObLSID &id,
                                ObLogService *log_service,
-                               ObArchiveFetcher *fetcher)
+                               ObArchiveFetcher *fetcher,
+                               ObArchiveLSMgr *ls_mgr)
     : tenant_id_(tenant_id),
     key_(key),
     max_delayed_id_(id),
     log_service_(log_service),
-    archive_fetcher_(fetcher) {}
+    archive_fetcher_(fetcher),
+    ls_mgr_(ls_mgr) {}
   bool operator()(const ObLSID &id, ObLSArchiveTask *ls_archive_task);
 
 private:
@@ -163,6 +165,7 @@ private:
   ObLSID max_delayed_id_;
   ObLogService *log_service_;
   ObArchiveFetcher *archive_fetcher_;
+  ObArchiveLSMgr *ls_mgr_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(GenFetchTaskFunctor);

@@ -171,7 +171,7 @@ int ObArchiveSequencer::produce_log_fetch_task_()
       ARCHIVE_LOG(INFO, "archive round not in doing status, just skip", K(key), K(state));
     }
   } else {
-    GenFetchTaskFunctor functor(tenant_id_, key, unused_id, log_service_, archive_fetcher_);
+    GenFetchTaskFunctor functor(tenant_id_, key, unused_id, log_service_, archive_fetcher_, ls_mgr_);
     if (OB_FAIL(ls_mgr_->foreach_ls(functor))) {
       ARCHIVE_LOG(WARN, "foreach ls failed", K(ret), K(key));
     }
@@ -308,6 +308,16 @@ int GenFetchTaskFunctor::generate_log_fetch_task_(const ObLSID &id,
     archive_fetcher_->free_log_fetch_task(tmp_task);
   }
 
+  if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
+    int tmp_ret = OB_CLOG_RECYCLE_BEFORE_ARCHIVE;
+    ObArchiveInterruptReason reason;
+    reason.set(ObArchiveInterruptReason::Factor::LOG_RECYCLE, lbt(), tmp_ret);
+    LOG_DBA_ERROR(OB_CLOG_RECYCLE_BEFORE_ARCHIVE, "msg", "observer clog is recycled "
+        "before archive, check if archive speed is less than clog writing speed "
+        "or archive device is full or archive device is not healthy",
+        "ret", tmp_ret);
+    ls_mgr_->mark_fatal_error(id, station.get_round(), reason);
+  }
   return ret;
 }
 
