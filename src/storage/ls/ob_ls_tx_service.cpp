@@ -237,6 +237,9 @@ int ObLSTxService::check_all_readonly_tx_clean_up() const
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
   } else if (mgr_->get_total_active_readonly_request_count() > 0) {
+    if (REACH_TIME_INTERVAL(5000000)) {
+      mgr_->dump_readonly_request(3);
+    }
     ret = OB_EAGAIN;
   } else {
     TRANS_LOG(INFO, "wait_all_readonly_tx_cleaned_up cleaned up success", K_(ls_id));

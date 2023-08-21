@@ -331,6 +331,8 @@ public:
   int start_readonly_request();
   int end_readonly_request();
 
+  void dump_readonly_request(const int64_t max_req_number);
+
   // check this ObLSTxCtxMgr contains the specified ObLSID
   bool contain(const share::ObLSID &ls_id)
   {
@@ -563,6 +565,7 @@ public:
   static const int64_t WAIT_SW_CB_TIMEOUT = 100 * 1000; // 100 ms
   static const int64_t WAIT_SW_CB_INTERVAL = 10 * 1000; // 10 ms
   static const int64_t WAIT_READONLY_REQUEST_TIME = 10 * 1000 * 1000;
+  static const int64_t READONLY_REQUEST_TRACE_ID_NUM = 8192;
 private:
   class State
   {
@@ -838,6 +841,7 @@ private:
 
   // Online timestamp for ObLSTxCtxMgr
   int64_t online_ts_;
+  ObCurTraceId::TraceId readonly_request_trace_id_set_[READONLY_REQUEST_TRACE_ID_NUM];
 };
 
 // Used to iteratively access TxCtx in ObLSTxCtxMgr;
