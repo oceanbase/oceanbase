@@ -231,7 +231,7 @@ int ObSchemaCacheValue::deep_copy(char *buf,
       DEEP_COPY_SCHEMA(ObTablespaceSchema);
       break;
     }
-    case MOCK_FK_PARENT_TABLE_SHCEMA: {
+    case MOCK_FK_PARENT_TABLE_SCHEMA: {
       DEEP_COPY_SCHEMA(ObMockFKParentTableSchema);
       break;
     }
@@ -1180,7 +1180,7 @@ int ObSchemaFetcher::fetch_schema(ObSchemaType schema_type,
           }
           break;
         }
-      case MOCK_FK_PARENT_TABLE_SHCEMA: {
+      case MOCK_FK_PARENT_TABLE_SCHEMA: {
         ObMockFKParentTableSchema *mock_fk_parent_table_schema = NULL;
           if (OB_FAIL(fetch_mock_fk_parent_table_info(schema_status, schema_id, schema_version, allocator, mock_fk_parent_table_schema))) {
             LOG_WARN("fetch mock_fk_parent_table_schema failed", K(ret), K(schema_status), K(schema_id), K(schema_version));

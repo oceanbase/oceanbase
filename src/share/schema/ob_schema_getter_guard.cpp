@@ -4486,7 +4486,7 @@ int ObSchemaGetterGuard::get_schema_version(
         GET_SCHEMA_VERSION(directory, ObDirectorySchema);
         break;
       }
-    case MOCK_FK_PARENT_TABLE_SHCEMA : {
+    case MOCK_FK_PARENT_TABLE_SCHEMA : {
         const ObSimpleMockFKParentTableSchema *schema = NULL;
         const ObSchemaMgr *mgr = NULL;
         if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
@@ -8126,7 +8126,7 @@ int ObSchemaGetterGuard::get_mock_fk_parent_table_schemas_in_database(
       if (OB_ISNULL(simple_schemas.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("NULL ptr", K(ret));
-      } else if (OB_FAIL(get_schema(MOCK_FK_PARENT_TABLE_SHCEMA,
+      } else if (OB_FAIL(get_schema(MOCK_FK_PARENT_TABLE_SCHEMA,
                                     simple_schemas.at(i)->get_tenant_id(),
                                     simple_schemas.at(i)->get_mock_fk_parent_table_id(),
                                     full_schema,
@@ -8203,7 +8203,7 @@ int ObSchemaGetterGuard::get_mock_fk_parent_table_schema_with_name(
   } else if (NULL == simple_mock_fk_parent_table) {
     mock_fk_parent_table_schema = NULL;
     LOG_DEBUG("mock_fk_parent_table schema not exist", K(tenant_id), K(database_id), K(name));
-  } else if (OB_FAIL(get_schema(MOCK_FK_PARENT_TABLE_SHCEMA, simple_mock_fk_parent_table->get_tenant_id(), simple_mock_fk_parent_table->get_mock_fk_parent_table_id(),
+  } else if (OB_FAIL(get_schema(MOCK_FK_PARENT_TABLE_SCHEMA, simple_mock_fk_parent_table->get_tenant_id(), simple_mock_fk_parent_table->get_mock_fk_parent_table_id(),
                                    mock_fk_parent_table_schema, simple_mock_fk_parent_table->get_schema_version()))) {
     LOG_WARN("get mock_fk_parent_table schema failed", K(ret), KPC(simple_mock_fk_parent_table));
   }
@@ -8222,7 +8222,7 @@ int ObSchemaGetterGuard::get_mock_fk_parent_table_schema_with_id(
   } else if (NULL == simple_mock_fk_parent_table) {
     mock_fk_parent_table_schema = NULL;
     LOG_DEBUG("mock_fk_parent_table not exist", K(mock_fk_parent_table_id));
-  } else if (OB_FAIL(get_schema(MOCK_FK_PARENT_TABLE_SHCEMA, simple_mock_fk_parent_table->get_tenant_id(), simple_mock_fk_parent_table->get_mock_fk_parent_table_id(),
+  } else if (OB_FAIL(get_schema(MOCK_FK_PARENT_TABLE_SCHEMA, simple_mock_fk_parent_table->get_tenant_id(), simple_mock_fk_parent_table->get_mock_fk_parent_table_id(),
                                    mock_fk_parent_table_schema, simple_mock_fk_parent_table->get_schema_version()))) {
     LOG_WARN("get mock_fk_parent_table schema failed", K(ret), KPC(simple_mock_fk_parent_table));
   }
