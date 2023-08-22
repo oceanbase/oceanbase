@@ -85,8 +85,6 @@ public:
   int get_binding(common::ObISQLClient &proxy, const bool need_lock, const int64_t dest_no, 
       ObLogArchiveDestAtrr::Binding &binding) const;
     
-  int get_lag_target(common::ObISQLClient &proxy, const bool need_lock, const int64_t dest_no, 
-      int64_t &lag_target) const;
 
   int get_dest_state(common::ObISQLClient &proxy, const bool need_lock, const int64_t dest_no,
       ObLogArchiveDestState &state) const;

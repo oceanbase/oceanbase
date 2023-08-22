@@ -1601,30 +1601,26 @@ struct ObLogArchiveDestAtrr final
   ~ObLogArchiveDestAtrr() {}
 
   int set_piece_switch_interval(const char *buf);
-  int set_lag_target(const char *buf);
   int set_log_archive_dest(const common::ObString &str);
   int set_binding(const char *buf);
 
   bool is_valid() const;
   bool is_dest_valid() const;
   bool is_piece_switch_interval_valid() const;
-  bool is_lag_target_valid() const;
 
   int get_binding(char *buf, int64_t len) const;
   int get_piece_switch_interval(char *buf, int64_t len) const;
-  int get_lag_target(char *buf, int64_t len) const;
 
   int gen_config_items(common::ObIArray<BackupConfigItemPair> &items) const;
   int gen_path_config_items(common::ObIArray<BackupConfigItemPair> &items) const;
 
   int assign(const ObLogArchiveDestAtrr& that);
 
-  TO_STRING_KV(K_(dest), K_(binding), K_(dest_id), K_(piece_switch_interval), K_(lag_target), K_(state));
+  TO_STRING_KV(K_(dest), K_(binding), K_(dest_id), K_(piece_switch_interval), K_(state));
   share::ObBackupDest dest_;
   Binding binding_;
   int64_t dest_id_;
   int64_t piece_switch_interval_;
-  int64_t lag_target_;
   ObLogArchiveDestState state_;
 };
 

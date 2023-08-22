@@ -191,6 +191,8 @@ int ObDestRoundCheckpointer::gen_new_round_info_(const ObTenantArchiveRoundAttr 
   } else if (old_round_info.state_.is_beginning()) {
     if (counter.not_start_cnt_ > 0) {
       need_checkpoint = false;
+    } else if (next_checkpoint_scn < old_round_info.start_scn_) {
+      need_checkpoint = false;
     } else if (OB_FALSE_IT(new_round_info.checkpoint_scn_ = next_checkpoint_scn)) {
     } else if (counter.interrupted_cnt_ > 0) {
       ObSqlString comment;
@@ -275,7 +277,7 @@ int ObDestRoundCheckpointer::generate_pieces_(const ObTenantArchiveRoundAttr &ol
 {
   int ret = OB_SUCCESS;
 
-  if (result.new_round_info_.max_scn_ == old_round_info.start_scn_) {
+  if (old_round_info.state_ == result.new_round_info_.state_ && result.new_round_info_.max_scn_ == old_round_info.start_scn_) {
     // No log stream started archive before disable archive, then no piece generated in the round.
     LOG_INFO("no piece generated.", K(old_round_info), K(result));
   } else {

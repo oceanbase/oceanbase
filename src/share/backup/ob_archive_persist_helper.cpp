@@ -288,32 +288,6 @@ int ObArchivePersistHelper::get_binding(common::ObISQLClient &proxy, const bool 
   return ret;
 }
 
-int ObArchivePersistHelper::get_lag_target(common::ObISQLClient &proxy, const bool need_lock, const int64_t dest_no,
-      int64_t &lag_target) const
-{
-  int ret = OB_SUCCESS;
-  common::ObSqlString value;
-  const common::ObString str(OB_STR_LAG_TARGET);
-  ObLogArchiveDestAtrr dest_attr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObArchivePersistHelper not init", K(ret));
-  } else if (OB_FAIL(get_string_value(proxy, dest_no, need_lock, str, value))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      // not exist, use default
-      lag_target = OB_DEFAULT_LAG_TARGET;
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("fail to get string value", K(ret));
-    }
-  } else if (OB_FAIL(dest_attr.set_lag_target(value.ptr()))) {
-    LOG_WARN("fail to set checkpoint interval", K(ret), K(value));
-  } else {
-    lag_target = dest_attr.lag_target_;
-  }
-  return ret;
-}
-
 int ObArchivePersistHelper::get_dest_state(
     common::ObISQLClient &proxy,
     const bool need_lock,
