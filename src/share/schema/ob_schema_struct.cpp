@@ -10268,7 +10268,12 @@ int ObDbLinkBaseInfo::dblink_encrypt(common::ObString &src, common::ObString &ds
     }
   }
 #else
-  ret = OB_NOT_SUPPORTED;
+  if (src.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src is empty", K(ret));
+  } else {
+    dst = src;
+  }
 #endif
   return ret;
 }
@@ -10309,7 +10314,13 @@ int ObDbLinkBaseInfo::dblink_decrypt(common::ObString &src, common::ObString &ds
     }
   }
 #else
-  ret = OB_NOT_SUPPORTED;
+  if (src.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src is empty", K(ret));
+  } else {
+    dst = src;
+  }
+
 #endif
   return ret;
 }

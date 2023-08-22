@@ -815,7 +815,6 @@ int ObMySQLResultImpl::get_col_meta(const int64_t col_idx, bool old_max_length,
                                     ObDataType &data_type) const
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_DBLINK
   ObObjType ob_type;
   if (OB_ISNULL(fields_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -827,7 +826,11 @@ int ObMySQLResultImpl::get_col_meta(const int64_t col_idx, bool old_max_length,
                      fields_[col_idx].flags & UNSIGNED_FLAG))) {
     LOG_WARN("failed to get ob type", K(ret), "mysql_type", fields_[col_idx].type);
   } else {
+#ifdef OB_BUILD_DBLINK
     int16_t precision = fields_[col_idx].precision;
+#else
+    int16_t precision = -1;
+#endif
     int16_t scale = fields_[col_idx].decimals;
     int32_t length = fields_[col_idx].length;
     name.assign_ptr(fields_[col_idx].name, STRLEN(fields_[col_idx].name));
@@ -843,7 +846,6 @@ int ObMySQLResultImpl::get_col_meta(const int64_t col_idx, bool old_max_length,
     data_type.set_length(length);
     LOG_DEBUG("get col type from obclient", K(ob_type), K(data_type), K(ret));
   }
-#endif
   return ret;
 }
 
