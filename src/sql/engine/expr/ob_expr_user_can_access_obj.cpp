@@ -258,16 +258,20 @@ int ObExprUserCanAccessObj::check_user_access_obj(
   }
   if (OB_SUCC(ret) && syn_base_obj_exists) {
     uint64_t dbid = OB_INVALID_ID;
+    const ObUserInfo *user_info = schema_guard->get_user_info(
+                                    session->get_effective_tenant_id(),
+                                    session->get_priv_user_id());
     OZ (build_raw_obj_priv(obj_type, raw_obj_priv_array));
+
     /* get dbid of same name as user */
     OZ (schema_guard->get_database_id(session->get_effective_tenant_id(),
-                                      session->get_user_name(),
+                                      user_info ? user_info->get_user_name_str() : session->get_user_name(),
                                       dbid));
     OZX2 (ObOraSysChecker::check_ora_obj_privs_or(
                 *schema_guard,
                 session->get_effective_tenant_id(),
                 dbid,   /* userid */
-                session->get_user_id(),
+                user_info ? user_info->get_user_id() : session->get_user_id(),
                 ObString(""),
                 obj_id,    /* object id */
                 OBJ_LEVEL_FOR_TAB_PRIV,
