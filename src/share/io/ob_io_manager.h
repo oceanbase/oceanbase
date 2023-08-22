@@ -117,6 +117,7 @@ public:
   int enqueue_callback(ObIORequest &req);
   ObTenantIOClock *get_io_clock() { return io_clock_; }
   ObIOUsage &get_io_usage() { return io_usage_; }
+  ObSysIOUsage &get_backup_io_usage() { return io_backup_usage_; }
   int update_basic_io_config(const ObTenantIOConfig &io_config);
   int alloc_io_request(ObIAllocator &allocator,const int64_t callback_size,  ObIORequest *&req);
   int alloc_io_clock(ObIAllocator &allocator, ObTenantIOClock *&io_clock);
@@ -168,6 +169,7 @@ private:
   ObIOScheduler *io_scheduler_;
   ObIOCallbackManager callback_mgr_;
   ObIOUsage io_usage_;
+  ObSysIOUsage io_backup_usage_; //for backup mock group
   ObIOTracer io_tracer_;
   DRWLock io_config_lock_; //for map and config
   hash::ObHashMap<uint64_t, uint64_t> group_id_index_map_; //key:group_id, value:index

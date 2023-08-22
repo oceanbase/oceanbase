@@ -256,7 +256,7 @@ int ObLogFileHandler::inner_read(const ObIOFd &io_fd, void *buf, const int64_t s
       io_info.offset_ = offset + read_sz;
       io_info.size_ = size - read_sz;
       io_info.flag_.set_mode(ObIOMode::READ);
-      io_info.flag_.set_group_id(THIS_WORKER.get_group_id());
+      io_info.flag_.set_group_id(ObIOModule::SLOG_IO);
       io_info.flag_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
       io_info.buf_ = nullptr;
       io_info.callback_ = nullptr;

@@ -64,6 +64,7 @@ int ObLinkedMacroBlockWriter::write_block(const char *buf, const int64_t buf_len
       write_info.size_ = macro_block_size;
       write_info.io_desc_ = io_desc_;
       write_info.buffer_ = buf;
+      write_info.io_desc_.set_group_id(ObIOModule::LINKED_MACRO_BLOCK_IO);
       MacroBlockId previous_block_id;
       previous_block_id.set_block_index(MacroBlockId::EMPTY_ENTRY_BLOCK_INDEX);
       if (!handle_.is_empty()) {
