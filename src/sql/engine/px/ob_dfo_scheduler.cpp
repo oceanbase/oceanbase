@@ -1408,7 +1408,7 @@ int ObParallelDfoScheduler::schedule_pair(ObExecContext &exec_ctx,
         // sqc。
         //
         // 下面只实现了第一种、第二种情况，第三种需求不明确，列为 TODO
-        if (parent.is_related_pair()) {
+        if (parent.is_related_pair() && !parent.has_dml_op()) {
             if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(
                             coord_info_.pruning_table_location_,
                             exec_ctx,
