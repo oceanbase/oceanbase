@@ -1589,9 +1589,7 @@ void ObTenant::check_resource_manager_plan()
   ObResourceColMappingRuleManager &col_rule_mgr = G_RES_MGR.get_col_mapping_rule_mgr();
   char data[OB_MAX_RESOURCE_PLAN_NAME_LENGTH];
   ObDataBuffer allocator(data, OB_MAX_RESOURCE_PLAN_NAME_LENGTH);
-  if (!cgroup_ctrl_.is_valid()) {
-    // The cgroup is not initialized successfully, no need to refresh the resource manager plan
-  } else if (OB_SYS_TENANT_ID != id_ && OB_MAX_RESERVED_TENANT_ID >= id_) {
+  if (OB_SYS_TENANT_ID != id_ && OB_MAX_RESERVED_TENANT_ID >= id_) {
     // Except for system rental outside, internal tenants do not use resource plan for internal isolation
   } else if (OB_FAIL(ObSchemaUtils::get_tenant_varchar_variable(
               id_,
