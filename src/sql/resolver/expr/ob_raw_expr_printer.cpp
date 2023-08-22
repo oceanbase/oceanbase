@@ -102,7 +102,8 @@ int ObRawExprPrinter::print(ObRawExpr *expr)
       && scope_ != T_GROUP_SCOPE
       && scope_ != T_WHERE_SCOPE
       && scope_ != T_NONE_SCOPE
-      && scope_ != T_ORDER_SCOPE) {
+      && scope_ != T_ORDER_SCOPE
+      && (scope_ == T_HAVING_SCOPE && lib::is_mysql_mode())) {
     //expr is a alias column ref
     //alias column target list
     PRINT_IDENT_WITH_QUOT(expr->get_alias_column_name());

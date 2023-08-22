@@ -792,7 +792,7 @@ int ObSelectStmtPrinter::print_having()
     if (having_exprs_size > 0) {
       DATA_PRINTF(" having ");
       for (int64_t i = 0; OB_SUCC(ret) && i < having_exprs_size; ++i) {
-        if (OB_FAIL(expr_printer_.do_print(having_exprs.at(i), T_NONE_SCOPE))) {
+        if (OB_FAIL(expr_printer_.do_print(having_exprs.at(i), T_HAVING_SCOPE))) {
           LOG_WARN("fail to print having expr", K(ret));
         }
         DATA_PRINTF(" and ");
