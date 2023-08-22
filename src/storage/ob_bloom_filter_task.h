@@ -43,31 +43,11 @@ private:
   uint64_t tenant_id_;
   uint64_t table_id_;
   blocksstable::MacroBlockId macro_id_;
+  blocksstable::ObMacroBlockHandle macro_handle_;
   int64_t prefix_len_;
   common::ObArenaAllocator allocator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBloomFilterBuildTask);
-};
-
-class ObBloomFilterLoadTask: public common::IObDedupTask
-{
-public:
-  ObBloomFilterLoadTask(
-      const uint64_t tenant_id,
-      const blocksstable::MacroBlockId &macro_id);
-  virtual ~ObBloomFilterLoadTask();
-  virtual int64_t hash() const;
-  virtual bool operator ==(const IObDedupTask &other) const;
-  virtual int64_t get_deep_copy_size() const;
-  virtual IObDedupTask *deep_copy(char *buffer, const int64_t buf_size) const;
-  virtual int64_t get_abs_expired_time() const {  return 0;  }
-  virtual int process();
-private:
-  int load_bloom_filter();
-  uint64_t tenant_id_;
-  blocksstable::MacroBlockId macro_id_;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObBloomFilterLoadTask);
 };
 
 } /* namespace storage */
