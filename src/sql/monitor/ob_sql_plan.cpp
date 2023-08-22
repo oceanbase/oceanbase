@@ -113,6 +113,7 @@ int ObSqlPlan::store_sql_plan_for_explain(ObLogPlan* plan,
   plan_text.type_ = type;
   ObSEArray<ObSqlPlanItem*, 16> sql_plan_infos;
   ObSEArray<ObPlanRealInfo, 2> dummy_plan_infos;
+  bool allocate_mem_failed = false;
   if (OB_FAIL(init_buffer(plan_text))) {
     LOG_WARN("failed to init buffer", K(ret));
   } else if (OB_FAIL(get_sql_plan_infos(plan_text,
@@ -124,21 +125,28 @@ int ObSqlPlan::store_sql_plan_for_explain(ObLogPlan* plan,
   // } else if (OB_FAIL(inner_store_sql_plan(sql_plan_infos, true))) {
   //   LOG_WARN("failed to store sql plan", K(ret));
   }
-  if (OB_FAIL(ret)) {
-    LOG_WARN("failed to store sql plan", K(ret));
-    ret = OB_SUCCESS;
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(format_sql_plan(sql_plan_infos,
-                                     type,
-                                     option,
-                                     dummy_plan_infos,
-                                     out_plan_text))) {
+  allocate_mem_failed |= OB_ALLOCATE_MEMORY_FAILED == ret;
+  if (OB_FAIL(format_sql_plan(sql_plan_infos,
+                              type,
+                              option,
+                              dummy_plan_infos,
+                              out_plan_text))) {
     LOG_WARN("failed to format sql plan", K(ret));
-  } else if (OB_FAIL(plan_text_to_strings(out_plan_text, plan_strs))) {
+  }
+  allocate_mem_failed |= OB_ALLOCATE_MEMORY_FAILED == ret;
+  if (OB_FAIL(plan_text_to_strings(out_plan_text, plan_strs))) {
     LOG_WARN("failed to convert plan text to strings", K(ret));
   }
-
+  if (OB_SUCC(ret)) {
+    if (allocate_mem_failed) {
+      if (OB_FAIL(plan_strs.push_back("Plan truncated due to insufficient memory!"))) {
+        LOG_WARN("failed to push back string", K(ret));
+      }
+    } else if (plan_strs.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to generate plan", K(ret));
+    }
+  }
   destroy_buffer(plan_text);
   return ret;
 }
