@@ -46,6 +46,11 @@
     - 4.2.0.0
   deprecated: True
 
+- version: 4.2.0.0-100010022023081817   # 4.2 RC2 hotfix版本 不能作为目标版本
+  can_be_upgraded_to:
+    - 4.2.0.0
+  deprecated: True
+
 - version: 4.2.0.0
   can_be_upgraded_to:
       - 4.3.0.0
