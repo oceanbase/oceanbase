@@ -474,8 +474,8 @@ int ObQueryCache::flush()
 {
   int ret = OB_SUCCESS;
   destroy();
-  ATOMIC_SET(row_mem_size_, 0);
-  ATOMIC_SET(row_cnt_, 0);
+  ATOMIC_SET(&row_mem_size_, 0);
+  ATOMIC_SET(&row_cnt_, 0);
   if (OB_FAIL(init("ob_query_cache", 5))){
     COMMON_LOG(WARN, "ObQueryCache init error", K(ret));
   }
