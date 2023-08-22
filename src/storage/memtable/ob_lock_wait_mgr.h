@@ -237,7 +237,6 @@ public:
                 const bool is_remote_sql,
                 const int64_t last_compact_cnt,
                 const int64_t total_trans_node_cnt,
-                const uint32_t sess_id,
                 const transaction::ObTransID &tx_id,
                 const transaction::ObTransID &holder_tx_id,
                 ObFunction<int(bool&, bool&)> &rechecker);
@@ -248,7 +247,6 @@ public:
                 const bool is_remote_sql,
                 const int64_t last_compact_cnt,
                 const int64_t total_trans_node_cnt,
-                const uint32_t sess_id,
                 const transaction::ObTransID &tx_id,
                 const transaction::ObTransID &holder_tx_id,
                 const transaction::tablelock::ObTableLockMode &lock_mode,
