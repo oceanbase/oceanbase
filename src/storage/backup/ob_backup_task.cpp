@@ -4607,6 +4607,7 @@ int ObLSBackupComplementLogTask::BackupPieceOp::func(const dirent *entry)
   char file_name[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   int64_t file_id = -1;
   int32_t len = 0;
+  ObString entry_suffix;
   if (OB_ISNULL(entry)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid entry", K(ret));
@@ -4614,6 +4615,11 @@ int ObLSBackupComplementLogTask::BackupPieceOp::func(const dirent *entry)
   } else if (len <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("file name without a unified suffix", K(ret), K(entry->d_name), K(OB_ARCHIVE_SUFFIX));
+  } else if (FALSE_IT(entry_suffix.assign_ptr(entry->d_name + len, strlen(OB_ARCHIVE_SUFFIX)))) {
+  } else if (!entry_suffix.prefix_match(OB_ARCHIVE_SUFFIX)) {
+    // not ended with archive suffix
+    ObString file_name_str(entry->d_name);
+    LOG_INFO("skip file which is not archive file", K(file_name_str), K(entry_suffix));
   } else if (OB_FAIL(databuff_printf(file_name, sizeof(file_name), "%.*s", len, entry->d_name))) {
     LOG_WARN("fail to save tmp file name", K(ret), K(file_name));
   } else if (0 == ObString::make_string(file_name).case_compare(OB_STR_LS_FILE_INFO)) {
