@@ -216,6 +216,7 @@ int ObTxDataMemtableScanIterator::init_iterate_range_(ObTxDataMemtable *tx_data_
     start_tx_id_ = 0;
   } else if (OB_ISNULL(start_obj
                        = range_.get_start_key().get_store_rowkey().get_rowkey().get_obj_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "get start obj from range failed.", KR(ret), K(range_));
   } else if (OB_FAIL(start_obj[0].get_int(start_tx_id_))) {
     STORAGE_LOG(WARN, "get start tx id from start obj failed", KR(ret), KPC(start_obj));
@@ -230,7 +231,7 @@ int ObTxDataMemtableScanIterator::init_iterate_range_(ObTxDataMemtable *tx_data_
     // iterate from sort list head
     if (OB_ISNULL(cur_node_ = tx_data_memtable->get_sorted_list_head())) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "unexpected error.", KR(ret), KPC(tx_data_memtable));
+STORAGE_LOG(WARN, "unexpected error.", KR(ret), KPC(tx_data_memtable));
     }
   } else {
     // iterate from range start
@@ -255,6 +256,7 @@ int ObTxDataMemtableScanIterator::init_iterate_range_(ObTxDataMemtable *tx_data_
     end_tx_id_ = INT64_MAX;
   } else if (OB_ISNULL(end_obj
                        = range_.get_end_key().get_store_rowkey().get_rowkey().get_obj_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "get end obj from range failed.", KR(ret), K(range_));
   } else if (OB_FAIL(end_obj[0].get_int(end_tx_id_))) {
     STORAGE_LOG(WARN, "get end tx id from end obj failed", KR(ret), KPC(end_obj));
