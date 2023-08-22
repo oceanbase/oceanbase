@@ -121,11 +121,11 @@ public:
                       const share::ObLSID &ls_id,
                       int64_t timeout_ts);
   void release_read_trans();
-  inline bool did_async_end_trans() const { return did_async_end_trans_; }
   inline transaction::ObTxDesc *get_trans_desc() { return trans_desc_; }
   int get_tablet_by_rowkey(uint64_t table_id, const ObIArray<ObRowkey> &rowkeys,
                            ObIArray<ObTabletID> &tablet_ids);
   inline transaction::ObTxReadSnapshot &get_tx_snapshot() { return tx_snapshot_; }
+  inline bool had_do_response() const { return had_do_response_; }
   int get_table_id(const ObString &table_name, const uint64_t arg_table_id, uint64_t &real_table_id) const;
 protected:
   virtual int check_arg() = 0;
@@ -165,11 +165,13 @@ protected:
   ObTableRetryPolicy retry_policy_;
   bool need_retry_in_queue_;
   int32_t retry_count_;
+  uint64_t table_id_;
+  ObTabletID tablet_id_;
 protected:
   // trans control
   sql::TransState trans_state_;
   transaction::ObTxDesc *trans_desc_;
-  bool did_async_end_trans_;
+  bool had_do_response_; // asynchronous transactions return packet in advance
   sql::TransState *trans_state_ptr_;
   transaction::ObTxReadSnapshot tx_snapshot_;
 };

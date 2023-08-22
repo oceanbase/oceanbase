@@ -141,6 +141,25 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
     timeout_ts_ = timeout_ts;
   }
 
+  if (OB_SUCC(ret)) {
+    void *buf = allocator_.alloc(sizeof(ObPhysicalPlanCtx));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc ObPhysicalPlanCtx", K(ret), K(sizeof(ObPhysicalPlanCtx)));
+    } else {
+      ObPhysicalPlanCtx *phy_plan_ctx = new(buf) ObPhysicalPlanCtx(allocator_);
+      phy_plan_ctx->set_timeout_timestamp(timeout_ts_); // ObConflictChecker::init_das_scan_rtdef 需要
+      phy_plan_ctx->set_tenant_schema_version(tenant_schema_version_);
+      exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
+      if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
+        phy_plan_ctx->~ObPhysicalPlanCtx();
+        allocator_.free(buf);
+        exec_ctx_.set_physical_plan_ctx(nullptr);
+        LOG_WARN("fail to add auto inc param", K(ret));
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -639,20 +658,12 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
 int ObTableCtx::init_insert()
 {
   int ret = OB_SUCCESS;
-  void *buf = allocator_.alloc(sizeof(ObPhysicalPlanCtx));
-  if (OB_ISNULL(buf)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc ObPhysicalPlanCtx", K(ret), K(sizeof(ObPhysicalPlanCtx)));
-  } else {
-    ObPhysicalPlanCtx *phy_plan_ctx = new(buf) ObPhysicalPlanCtx(allocator_);
-    phy_plan_ctx->set_timeout_timestamp(timeout_ts_); // ObConflictChecker::init_das_scan_rtdef 需要
-    phy_plan_ctx->set_tenant_schema_version(tenant_schema_version_);
-    exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
-    if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
-      LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
-    }
+
+  if (OB_FAIL(init_dml_related_tid())) {
+    LOG_WARN("fail to init dml related tids", K(ret));
   }
-  return init_dml_related_tid();
+
+  return ret;
 }
 
 int ObTableCtx::init_assign_ids(ObAssignIds &assign_ids,
@@ -772,20 +783,6 @@ int ObTableCtx::init_replace()
 
   if (OB_FAIL(init_dml_related_tid())) {
     LOG_WARN("fail to init dml related tids", K(ret));
-  } else {
-    void *buf = allocator_.alloc(sizeof(ObPhysicalPlanCtx));
-    if (OB_ISNULL(buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc ObPhysicalPlanCtx", K(ret), K(sizeof(ObPhysicalPlanCtx)));
-    } else {
-      ObPhysicalPlanCtx *phy_plan_ctx = new(buf) ObPhysicalPlanCtx(allocator_);
-      phy_plan_ctx->set_timeout_timestamp(timeout_ts_); // ObConflictChecker::init_das_scan_rtdef 需要
-      phy_plan_ctx->set_tenant_schema_version(tenant_schema_version_);
-      exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
-      if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
-        LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
-      }
-    }
   }
 
   return ret;
@@ -798,20 +795,6 @@ int ObTableCtx::init_insert_up()
 
   if (OB_FAIL(init_update())) {
     LOG_WARN("fail to init update", K(ret));
-  } else {
-    void *buf = allocator_.alloc(sizeof(ObPhysicalPlanCtx));
-    if (OB_ISNULL(buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc ObPhysicalPlanCtx", K(ret), K(sizeof(ObPhysicalPlanCtx)));
-    } else {
-      ObPhysicalPlanCtx *phy_plan_ctx = new(buf) ObPhysicalPlanCtx(allocator_);
-      phy_plan_ctx->set_timeout_timestamp(timeout_ts_); // ObConflictChecker::init_das_scan_rtdef 需要
-      phy_plan_ctx->set_tenant_schema_version(tenant_schema_version_);
-      exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
-      if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
-        LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
-      }
-    }
   }
 
   // reset for update flag

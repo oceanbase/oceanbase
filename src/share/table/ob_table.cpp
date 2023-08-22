@@ -1717,3 +1717,20 @@ int ObTableAggregation::deep_copy(ObIAllocator &allocator, ObTableAggregation &d
 OB_SERIALIZE_MEMBER(ObTableAggregation,
                     type_,
                     column_);
+
+////////////////////////////////////////////////////////////////
+OB_SERIALIZE_MEMBER(ObTableMoveReplicaInfo,
+                    table_id_,
+                    schema_version_,
+                    tablet_id_,
+                    server_,
+                    role_,
+                    replica_type_,
+                    part_renew_time_,
+                    reserved_);
+
+
+
+OB_SERIALIZE_MEMBER(ObTableMoveResult,
+                    replica_info_,
+                    reserved_);

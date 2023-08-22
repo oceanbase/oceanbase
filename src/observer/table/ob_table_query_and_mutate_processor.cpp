@@ -890,6 +890,8 @@ int ObTableQueryAndMutateP::try_process()
 
   if (OB_FAIL(init_scan_tb_ctx(cache_guard))) {
     LOG_WARN("fail to init scan table ctx", K(ret));
+  } else if (FALSE_IT(table_id_ = arg_.table_id_)) {
+  } else if (FALSE_IT(tablet_id_ = arg_.tablet_id_)) {
   } else if (OB_FAIL(start_trans(false, /* is_readonly */
                                  sql::stmt::T_UPDATE,
                                  consistency_level,

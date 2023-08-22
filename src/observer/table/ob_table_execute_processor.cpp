@@ -20,6 +20,7 @@
 #include "ob_table_scan_executor.h"
 #include "ob_table_cg_service.h"
 #include "observer/ob_req_time_service.h"
+#include "ob_table_move_response.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -199,10 +200,12 @@ int ObTableApiExecuteP::try_process()
   uint64_t table_id = arg_.table_id_;
   bool is_index_supported = true;
   const ObTableOperation &table_operation = arg_.table_operation_;
-  if (ObTableOperationType::GET != table_operation.type()) {
-    if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
-      LOG_WARN("failed to get table id", K(ret));
-    } else if (OB_FAIL(check_table_index_supported(table_id, is_index_supported))) {
+  if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
+    LOG_WARN("failed to get table id", K(ret));
+  } else if (FALSE_IT(table_id_ = arg_.table_id_)) {
+  } else if (FALSE_IT(tablet_id_ = arg_.tablet_id_)) {
+  } else if (ObTableOperationType::GET != table_operation.type()) {
+    if (OB_FAIL(check_table_index_supported(table_id, is_index_supported))) {
       LOG_WARN("fail to check index supported", K(ret), K(table_id));
     }
   }
@@ -291,12 +294,26 @@ uint64_t ObTableApiExecuteP::get_request_checksum()
 int ObTableApiExecuteP::response(const int retcode)
 {
   int ret = OB_SUCCESS;
-  if (!need_retry_in_queue_ && !did_async_end_trans()) {
+  if (!need_retry_in_queue_ && !had_do_response()) {
     if (OB_SUCC(ret) && ObTableEntityType::ET_HKV == arg_.entity_type_) {
       // @note modify the value of timestamp to be positive
       ret = ObTableRpcProcessorUtil::negate_htable_timestamp(result_entity_);
     }
-    if (OB_SUCC(ret)) {
+
+    // return the package even if negate_htable_timestamp fails
+    const ObRpcPacket *rpc_pkt = &reinterpret_cast<const ObRpcPacket&>(req_->get_packet());
+    if (is_require_rerouting_err(retcode) && rpc_pkt->require_rerouting()) {
+      // response rerouting packet
+      ObTableMoveResponseSender sender(req_, retcode);
+      if (OB_FAIL(sender.init(arg_.table_id_, arg_.tablet_id_, *gctx_.schema_service_))) {
+        LOG_WARN("fail to init move response sender", K(ret), K_(arg));
+      } else if (OB_FAIL(sender.response())) {
+        LOG_WARN("fail to do move response", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+        ret = ObRpcProcessor::response(retcode); // do common response when do move response failed
+      }
+    } else {
       ret = ObRpcProcessor::response(retcode);
     }
   }
@@ -401,7 +418,7 @@ ObTableAPITransCb *ObTableApiExecuteP::new_callback(rpc::ObRequest *req)
 int ObTableApiExecuteP::before_response(int error_code)
 {
   // NOTE: when check_timeout failed, the result.entity_ is null, and serialize result cause coredump
-  if (!did_async_end_trans() && OB_ISNULL(result_.get_entity())) {
+  if (!had_do_response() && OB_ISNULL(result_.get_entity())) {
     result_.set_entity(result_entity_);
   }
   return ObTableRpcProcessor::before_response(error_code);

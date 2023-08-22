@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef _OB_RPC_ASYNC_RESPONSE_H
-#define _OB_RPC_ASYNC_RESPONSE_H 1
+#ifndef _OB_TABLE_RPC_RESPONSE_SENDER_H
+#define _OB_TABLE_RPC_RESPONSE_SENDER_H 1
 #include "rpc/ob_request.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/frame/ob_req_processor.h"
@@ -25,30 +25,32 @@ namespace obrpc
 {
 // this class is copied from ObRpcProcessor
 template <class T>
-class ObRpcAsyncResponse
+class ObTableRpcResponseSender
 {
 public:
-  ObRpcAsyncResponse(rpc::ObRequest *req, T &result)
+  ObTableRpcResponseSender(rpc::ObRequest *req, T &result, const int exec_ret_code = common::OB_SUCCESS)
       :req_(req),
        result_(result),
+       exec_ret_code_(exec_ret_code),
        using_buffer_(NULL)
   {}
-  virtual ~ObRpcAsyncResponse() = default;
-  int response(const int retcode);
+  virtual ~ObTableRpcResponseSender() = default;
+  int response(const int cb_param);
 private:
   int serialize();
-  int do_response(ObRpcPacket *response_pkt, bool bad_routing);
+  int do_response(ObRpcPacket *response_pkt, bool require_rerouting);
   char *easy_alloc(int64_t size) const;
   // disallow copy
-  DISALLOW_COPY_AND_ASSIGN(ObRpcAsyncResponse);
+  DISALLOW_COPY_AND_ASSIGN(ObTableRpcResponseSender);
 private:
   rpc::ObRequest *req_;
   T &result_;
+  const int exec_ret_code_; // processor执行的返回码
   common::ObDataBuffer *using_buffer_;
 };
 
 template <class T>
-char *ObRpcAsyncResponse<T>::easy_alloc(int64_t size) const
+char *ObTableRpcResponseSender<T>::easy_alloc(int64_t size) const
 {
   void *buf = NULL;
   if (OB_ISNULL(req_)) {
@@ -60,7 +62,7 @@ char *ObRpcAsyncResponse<T>::easy_alloc(int64_t size) const
 }
 
 template <class T>
-int ObRpcAsyncResponse<T>::serialize()
+int ObTableRpcResponseSender<T>::serialize()
 {
   int ret = common::OB_SUCCESS;
   if (OB_ISNULL(using_buffer_)) {
@@ -77,7 +79,7 @@ int ObRpcAsyncResponse<T>::serialize()
 }
 
 template <class T>
-int ObRpcAsyncResponse<T>::do_response(ObRpcPacket *response_pkt, bool bad_routing)
+int ObTableRpcResponseSender<T>::do_response(ObRpcPacket *response_pkt, bool require_rerouting)
 {
   int ret = common::OB_SUCCESS;
   if (OB_ISNULL(req_)) {
@@ -95,6 +97,9 @@ int ObRpcAsyncResponse<T>::do_response(ObRpcPacket *response_pkt, bool bad_routi
     // }
     //copy packet into req buffer
     ObRpcPacketCode pcode = rpc_pkt->get_pcode();
+    if (observer::is_require_rerouting_err(exec_ret_code_) && rpc_pkt->require_rerouting()) {
+      pcode = obrpc::OB_TABLE_API_MOVE;
+    }
     ObRpcPacket *packet = NULL;
     req_->set_trace_point(rpc::ObRequest::OB_EASY_REQUEST_RPC_ASYNC_RSP);
     if (OB_SUCC(ret)) {
@@ -111,8 +116,8 @@ int ObRpcAsyncResponse<T>::do_response(ObRpcPacket *response_pkt, bool bad_routi
       packet->set_pop_process_start_diff(req_->get_pop_process_start_diff());
       packet->set_process_start_end_diff(req_->get_process_start_end_diff());
       packet->set_process_end_response_diff(req_->get_process_end_response_diff());
-      if (bad_routing) {
-        packet->set_bad_routing();
+      if (require_rerouting) {
+        packet->set_require_rerouting();
       }
       packet->calc_checksum();
     }
@@ -123,9 +128,10 @@ int ObRpcAsyncResponse<T>::do_response(ObRpcPacket *response_pkt, bool bad_routi
 }
 
 template <class T>
-int ObRpcAsyncResponse<T>::response(const int retcode)
+int ObTableRpcResponseSender<T>::response(const int cb_param)
 {
   int ret = common::OB_SUCCESS;
+  int retcode = (cb_param == OB_SUCCESS ? exec_ret_code_ : cb_param);
   if (OB_ISNULL(req_)) {
     ret = common::OB_INVALID_ARGUMENT;
     RPC_OBRPC_LOG(WARN, "invalid req, maybe stream rpc timeout", K(ret), K(retcode),
@@ -198,21 +204,22 @@ int ObRpcAsyncResponse<T>::response(const int retcode)
         using_buffer_->get_position()))) {
       RPC_OBRPC_LOG(WARN, "serialize result code fail", K(ret));
     } else {
-      // also send result if process successfully.
-      if (common::OB_SUCCESS == retcode) {
+      // 1. send result if process successfully.
+      // 2. send result if require rerouting
+      if (common::OB_SUCCESS == retcode || observer::is_require_rerouting_err(retcode)) {
         if (OB_FAIL(serialize())) {
           RPC_OBRPC_LOG(WARN, "serialize result fail", K(ret));
         }
       }
     }
 
-    // routing check : whether client should refresh location cache and retry
+    // rerouting: whether client should refresh location cache and retry
     // Now, following the same logic as in ../mysql/ob_query_retry_ctrl.cpp
-    bool bad_routing = false;
+    bool require_rerouting = false;
     if (OB_SUCC(ret)) {
-      if (common::OB_SUCCESS != retcode && observer::is_bad_routing_err(retcode)) {
-        bad_routing = true;
-        RPC_OBRPC_LOG(WARN, "bad routing", K(retcode), K(bad_routing));
+      if (common::OB_SUCCESS != retcode && observer::is_require_rerouting_err(retcode)) {
+        require_rerouting = true;
+        RPC_OBRPC_LOG(INFO, "require rerouting", K(retcode), K(require_rerouting));
       }
     }
 
@@ -220,8 +227,8 @@ int ObRpcAsyncResponse<T>::response(const int retcode)
       ObRpcPacket *pkt = new (pkt_buf) ObRpcPacket();
       //Response rsp(sessid, is_stream_, is_last, pkt);
       pkt->set_content(using_buffer_->get_data(), using_buffer_->get_position());
-      if (OB_FAIL(do_response(pkt, bad_routing))) {
-        RPC_OBRPC_LOG(WARN, "response data fail", K(ret));
+      if (OB_FAIL(do_response(pkt, require_rerouting))) {
+        RPC_OBRPC_LOG(WARN, "response data fail", K(ret), K(retcode));
       }
     }
 
@@ -232,4 +239,4 @@ int ObRpcAsyncResponse<T>::response(const int retcode)
 } // end namespace obrpc
 } // end namespace oceanbase
 
-#endif /* _OB_RPC_ASYNC_RESPONSE_H */
+#endif /* _OB_TABLE_RPC_RESPONSE_SENDER_H */

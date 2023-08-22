@@ -150,6 +150,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_query_common.cpp
   table/ob_table_aggregation.cpp
   table/ob_table_direct_load_processor.cpp
+  table/ob_table_move_response.cpp
 )
 
 ob_set_subtarget(ob_server table_load

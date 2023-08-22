@@ -118,7 +118,7 @@ int ObTableApiScanExecutor::prepare_das_task()
     scan_op = static_cast<ObDASScanOp*>(task_op);
     scan_op->set_scan_ctdef(&scan_spec_.get_ctdef().scan_ctdef_);
     scan_op->set_scan_rtdef(&tsc_rtdef_.scan_rtdef_);
-    scan_op->set_can_part_retry(nullptr == tsc_rtdef_.scan_rtdef_.sample_info_);
+    scan_op->set_can_part_retry(false);
     tsc_rtdef_.scan_rtdef_.table_loc_->is_reading_ = true;
     if (scan_spec_.get_ctdef().lookup_ctdef_ != nullptr) {
       //is local index lookup, need to set the lookup ctdef to the das scan op
