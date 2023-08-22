@@ -1387,9 +1387,9 @@ void ObTenantDagWorker::resume()
 int ObTenantDagWorker::set_dag_resource(const uint64_t group_id)
 {
   int ret = OB_SUCCESS;
-  if (nullptr == GCTX.cgroup_ctrl_ || OB_UNLIKELY(!GCTX.cgroup_ctrl_->is_valid())) {
-    //invalid cgroup, cannot bind thread and control resource
-  } else  {
+  if (OB_ISNULL(GCTX.cgroup_ctrl_)) {
+    //cgroup not init, cannot bind thread and control resource
+  } else {
     uint64_t consumer_group_id = 0;
     if (group_id != 0) {
       //user level
@@ -1399,9 +1399,11 @@ int ObTenantDagWorker::set_dag_resource(const uint64_t group_id)
       LOG_WARN("fail to get group id by function", K(ret), K(MTL_ID()), K(function_type_), K(consumer_group_id));
     }
     if (OB_SUCC(ret) && consumer_group_id != group_id_) {
-      if (OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_group(MTL_ID(), consumer_group_id))) {
+      // for CPU isolation, depend on cgroup
+      if (GCTX.cgroup_ctrl_->is_valid() && OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_group(MTL_ID(), consumer_group_id))) {
         LOG_WARN("bind back thread to group failed", K(ret), K(GETTID()), K(MTL_ID()), K(group_id));
       } else {
+        // for IOPS isolation, only depend on consumer_group_id
         ATOMIC_SET(&group_id_, consumer_group_id);
         THIS_WORKER.set_group_id(static_cast<int32_t>(consumer_group_id));
       }

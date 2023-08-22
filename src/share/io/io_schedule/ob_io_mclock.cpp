@@ -42,7 +42,7 @@ int ObMClock::init(const int64_t min_iops, const int64_t max_iops, const int64_t
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(min_iops <= 0 || max_iops < min_iops || weight < 0)) {
+  } else if (OB_UNLIKELY(min_iops < 0 || max_iops < min_iops || weight < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(min_iops), K(max_iops), K(weight));
   } else {
@@ -64,7 +64,7 @@ int ObMClock::update(const int64_t min_iops, const int64_t max_iops, const int64
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(min_iops <= 0 || max_iops < min_iops || weight < 0)) {
+  } else if (OB_UNLIKELY(min_iops < 0 || max_iops < min_iops || weight < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(min_iops), K(max_iops), K(weight));
   } else {
@@ -139,7 +139,7 @@ int ObMClock::dial_back_reservation_clock(const double iops_scale)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(iops_scale));
   } else {
-    const int64_t delta_ns = 1000L * 1000L * 1000L / (reservation_clock_.iops_ * iops_scale);
+    const int64_t delta_ns = reservation_clock_.iops_ == 0 ? 1000L * 1000L * 1000L / INT64_MAX : 1000L * 1000L * 1000L / (reservation_clock_.iops_ * iops_scale);
     ATOMIC_SAF(&reservation_clock_.last_ns_, delta_ns);
   }
   return ret;
