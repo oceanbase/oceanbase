@@ -101,7 +101,6 @@ private:
   ObMemtableRowSampleIterator *memtable_row_sample_iterator_;
   ObRowSampleIterator *row_sample_iterator_;
   ObBlockSampleIterator *block_sample_iterator_; // TODO: @yuanzhe refactor
-  // ObISampleIterator *i_sample_iter_;
   // we should consider the constructor cost
   ObTableAccessParam main_table_param_;
   ObTableAccessContext main_table_ctx_;
