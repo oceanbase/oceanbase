@@ -5843,6 +5843,9 @@ int ObSPIService::spi_copy_ref_cursor(ObPLExecCtx *ctx,
       if (need_inc_ref_cnt) {
         OX (src_cursor->inc_ref_count());
       }
+    } else if (!src_cursor->isopen() && 0 == src_cursor->get_ref_count() && NULL == dest_cursor) {
+      // src cursor is already closed and do not has any ref
+      // dest cursor is null do not need copy
     } else {
       if (OB_NOT_NULL(dest_cursor) && dest_cursor->isopen()) {
         LOG_DEBUG("copy ref cursor, dest ref count: ",K(*dest_cursor),
