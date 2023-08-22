@@ -2076,7 +2076,8 @@ int PalfHandleImpl::inner_append_log(const LSN &lsn,
     const int64_t time_cost = now - begin_ts;
     append_cost_stat_.stat(time_cost);
     if (time_cost >= 5 * 1000) {
-      PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "write log cost too much time", K(ret), KPC(this), K(lsn), K(scn), K(accum_size), K(time_cost));
+      PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "write log cost too much time", K(ret), KPC(this),
+                   K(lsn), K(scn), "size", write_buf.get_total_size(), K(accum_size), K(time_cost));
     }
     if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, last_accum_statistic_time_)) {
       PALF_LOG(INFO, "[PALF STAT INNER APPEND LOG]", KPC(this), K(accum_size));
@@ -2109,7 +2110,7 @@ int PalfHandleImpl::inner_append_log(const LSNArray &lsn_array,
     append_cost_stat_.stat(time_cost);
     if (time_cost > 10 * 1000) {
       PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "write log cost too much time", K(ret), KPC(this), K(lsn_array),
-               K(scn_array), K(curr_size), K(time_cost));
+               K(scn_array), K(curr_size), K(accum_size), K(time_cost));
     }
     if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, last_accum_statistic_time_)) {
       PALF_LOG(INFO, "[PALF STAT INNER APPEND LOG]", KPC(this), K(accum_size));
