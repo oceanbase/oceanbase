@@ -192,7 +192,6 @@ protected:
   virtual int do_parse_sub_config_(const common::ObString &config_str);
   int do_parse_log_archive_dest_(const common::ObString &dest_type_str, const common::ObString &url);
   int do_parse_piece_switch_interval_(const common::ObString &name, const common::ObString &value);
-  int do_parse_lag_target_(const common::ObString &name, const common::ObString &value);
   int do_parse_compression_(const common::ObString &name, const common::ObString &value);
   int do_parse_log_archive_mode_(const common::ObString &name, const common::ObString &value);
   int update_archive_dest_config_(common::ObISQLClient &trans);

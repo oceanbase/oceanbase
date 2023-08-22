@@ -685,10 +685,6 @@ int ObLogArchiveDestConfigParser::do_parse_sub_config_(const common::ObString &c
       if (OB_FAIL(do_parse_piece_switch_interval_(token, saveptr))) {
         LOG_WARN("fail to do parse piece switch interval", K(ret), K(token), K(saveptr));
       }
-    } else if (0 == STRCASECMP(token, OB_STR_LAG_TARGET)) {
-      if (OB_FAIL(do_parse_lag_target_(token, saveptr))) {
-        LOG_WARN("fail to do parse lag target", K(ret), K(token), K(saveptr));
-      }
     } else if (0 == STRCASECMP(token, OB_STR_COMPRESSION)) {
       if (OB_FAIL(do_parse_compression_(token, saveptr))) {
         LOG_WARN("fail to do parse compression", K(ret), K(token), K(saveptr));
@@ -747,21 +743,6 @@ int ObLogArchiveDestConfigParser::do_parse_piece_switch_interval_(const common::
     LOG_WARN("invalid piece_switch_interval", K(ret), K(value));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid piece_switch_interval out of range [1d,7d] is");
 #endif
-  }
-  return ret;
-}
-
-int ObLogArchiveDestConfigParser::do_parse_lag_target_(const common::ObString &name, const common::ObString &value)
-{
-  int ret = OB_SUCCESS;
-  if (name.empty() || value.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid log archve dest config", K(ret), K(name), K(value));
-  } else if (OB_FAIL(archive_dest_.set_lag_target(value.ptr()))) {
-    LOG_WARN("fail to set piece switch interval", K(ret), K(value));
-  } else if (!archive_dest_.is_lag_target_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("piece switch interval is not valid", K(ret), K(value));
   }
   return ret;
 }

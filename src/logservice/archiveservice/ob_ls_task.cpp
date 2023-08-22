@@ -304,7 +304,7 @@ int ObLSArchiveTask::get_max_archive_info(const ArchiveKey &key,
     info.incarnation_ = key.incarnation_;
     info.start_lsn_ = piece_min_lsn.val_;
     info.start_scn_ = piece_start_scn;
-    info.checkpoint_scn_ = scn > piece_start_scn ? scn : piece_start_scn;
+    info.checkpoint_scn_ = scn;
     info.lsn_ = lsn.val_;
     info.input_bytes_ = static_cast<int64_t>(info.lsn_ - info.start_lsn_);
     info.output_bytes_ = info.input_bytes_;

@@ -4160,7 +4160,6 @@ ObLogArchiveDestAtrr::ObLogArchiveDestAtrr()
   binding_ = Binding::OPTIONAL;
   dest_id_ = 0;
   piece_switch_interval_ = OB_DEFAULT_PIECE_SWITCH_INTERVAL;
-  lag_target_ = OB_DEFAULT_LAG_TARGET;
   state_.set_enable();
 }
 
@@ -4176,22 +4175,6 @@ int ObLogArchiveDestAtrr::set_piece_switch_interval(const char *buf)
     ret = OB_INVALID_ARGUMENT;
     piece_switch_interval_ = 0;
     LOG_WARN("invalid piece_switch_interval str", K(ret), K(buf));
-  }
-  return ret;
-}
-
-int ObLogArchiveDestAtrr::set_lag_target(const char *buf)
-{
-  int ret = OB_SUCCESS;
-  bool is_valid = false;
-  if (OB_ISNULL(buf)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), KP(buf));
-  } else if (OB_FALSE_IT(lag_target_ = ObConfigTimeParser::get(buf, is_valid))) {
-  } else if (!is_valid || !is_lag_target_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    lag_target_ = 0;
-    LOG_WARN("invalid lag_target", K(ret), K(buf));
   }
   return ret;
 }
@@ -4240,7 +4223,6 @@ bool ObLogArchiveDestAtrr::is_valid() const
   return is_dest_valid()
       && dest_id_ > 0
       && is_piece_switch_interval_valid()
-      && is_lag_target_valid()
       && state_.is_valid();
 };
 
@@ -4252,12 +4234,6 @@ bool ObLogArchiveDestAtrr::is_dest_valid() const
 bool ObLogArchiveDestAtrr::is_piece_switch_interval_valid() const
 {
   return piece_switch_interval_ >= OB_MIN_LOG_ARCHIVE_PIECE_SWITH_INTERVAL;
-}
-
-bool ObLogArchiveDestAtrr::is_lag_target_valid() const
-{
-  return lag_target_ >= OB_MIN_LAG_TARGET
-      && lag_target_ <= OB_MAX_LAG_TARGET;
 }
 
 int ObLogArchiveDestAtrr::gen_config_items(common::ObIArray<BackupConfigItemPair> &items) const
@@ -4310,18 +4286,6 @@ int ObLogArchiveDestAtrr::gen_config_items(common::ObIArray<BackupConfigItemPair
     LOG_WARN("failed to assign key", K(ret));
   } else if (OB_FAIL(get_piece_switch_interval(tmp.ptr(), tmp.capacity()))) {
     LOG_WARN("failed to get piece switch interval", K(ret));
-  } else if (OB_FAIL(config.value_.assign(tmp.ptr()))) {
-    LOG_WARN("failed to assign value", K(ret));
-  } else if(OB_FAIL(items.push_back(config))) {
-     LOG_WARN("failed to push backup config", K(ret));
-  }
-
-  // gen lag_target config
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(config.key_.assign(OB_STR_LAG_TARGET))) {
-    LOG_WARN("failed to assign key", K(ret));
-  } else if (OB_FAIL(get_lag_target(tmp.ptr(), tmp.capacity()))) {
-    LOG_WARN("failed to get lag target", K(ret));
   } else if (OB_FAIL(config.value_.assign(tmp.ptr()))) {
     LOG_WARN("failed to assign value", K(ret));
   } else if(OB_FAIL(items.push_back(config))) {
@@ -4381,11 +4345,6 @@ int ObLogArchiveDestAtrr::get_piece_switch_interval(char *buf, int64_t len) cons
   return ObBackupUtils::convert_timestamp_to_timestr(piece_switch_interval_, buf, len);
 }
 
-int ObLogArchiveDestAtrr::get_lag_target(char *buf, int64_t len) const
-{
-  return ObBackupUtils::convert_timestamp_to_timestr(lag_target_, buf, len);
-}
-
 int ObLogArchiveDestAtrr::assign(const ObLogArchiveDestAtrr& that)
 {
   int ret = OB_SUCCESS;
@@ -4396,7 +4355,6 @@ int ObLogArchiveDestAtrr::assign(const ObLogArchiveDestAtrr& that)
     binding_ = that.binding_;
     dest_id_ = that.dest_id_;
     piece_switch_interval_ = that.piece_switch_interval_;
-    lag_target_ = that.lag_target_;
     if (OB_FAIL(dest_.deep_copy(that.dest_))) {
       LOG_WARN("fail to deep copy dest", K(ret));
     } else if (OB_FAIL(state_.assign(that.state_))) {
