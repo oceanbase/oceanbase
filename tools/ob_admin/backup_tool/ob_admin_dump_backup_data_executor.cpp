@@ -2687,7 +2687,7 @@ int ObAdminDumpBackupDataExecutor::read_locality_info_file(const char *tenant_ba
   int ret = OB_SUCCESS;
   share::ObBackupDest tenant_backup_dest;
   share::ObBackupPath locality_info_path;
-  if (OB_FAIL(tenant_backup_dest.set(tenant_backup_path))) {
+  if (OB_FAIL(tenant_backup_dest.set(tenant_backup_path, storage_info_))) {
     STORAGE_LOG(WARN, "fail to set tenant backup set dest", K(ret), K(tenant_backup_path));
   } else if (OB_FAIL(ObBackupPathUtil::get_locality_info_path(tenant_backup_dest, latest_backup_set_desc, locality_info_path))) {
     STORAGE_LOG(WARN, "fail to get locality info path", K(ret), K(tenant_backup_dest), K(latest_backup_set_desc));
