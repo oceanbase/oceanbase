@@ -2921,30 +2921,43 @@ int ObServer::reload_bandwidth_throttle_limit(int64_t network_speed)
 
 void ObServer::check_user_tenant_schema_refreshed(const ObIArray<uint64_t> &tenant_ids, const int64_t expire_time)
 {
+  bool is_dropped = false;
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+
   for (int64_t i = 0; i < tenant_ids.count()
                       && ObTimeUtility::current_time() < expire_time; ++i) {
-    uint64_t tenant_id = tenant_ids.at(i);
-    bool tenant_schema_refreshed = false;
-    while (!tenant_schema_refreshed
+    tenant_id = tenant_ids.at(i);
+    if (OB_ISNULL(gctx_.schema_service_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema service is NULL", KR(ret));
+    } else if (OB_FAIL(gctx_.schema_service_->check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
+      LOG_WARN("fail to check tenant has been dropped at observer startup", KR(ret), K(tenant_id));
+    } else if (is_dropped) {
+      // ignore
+    } else {
+      bool tenant_schema_refreshed = false;
+      while (!tenant_schema_refreshed
           && !stop_
           && ObTimeUtility::current_time() < expire_time) {
 
-      tenant_schema_refreshed = is_user_tenant(tenant_id) ?
-          gctx_.schema_service_->is_tenant_refreshed(tenant_id) : true;
-      if (!tenant_schema_refreshed) {
-        // check wait and retry
-        usleep(1000 * 1000);
-        if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-          FLOG_INFO("[OBSERVER_NOTICE] Refreshing user tenant schema, need to wait ", K(tenant_id));
+        tenant_schema_refreshed = is_user_tenant(tenant_id) ?
+                                  gctx_.schema_service_->is_tenant_refreshed(tenant_id) : true;
+        if (!tenant_schema_refreshed) {
+          // check wait and retry
+          usleep(1000 * 1000);
+          if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+            FLOG_INFO("[OBSERVER_NOTICE] Refreshing user tenant schema, need to wait ", K(tenant_id));
+          }
+          // check success
+        } else if (i == tenant_ids.count() - 1) {
+          FLOG_INFO("[OBSERVER_NOTICE] Refresh all user tenant schema successfully ", K(tenant_ids));
+          // check timeout
+        } else if (ObTimeUtility::current_time() > expire_time) {
+          FLOG_INFO("[OBSERVER_NOTICE] Refresh user tenant schema timeout ", K(tenant_id));
+        } else {
+          FLOG_INFO("[OBSERVER_NOTICE] Refresh user tenant schema successfully ", K(tenant_id));
         }
-        // check success
-      } else if (i == tenant_ids.count() - 1) {
-        FLOG_INFO("[OBSERVER_NOTICE] Refresh all user tenant schema successfully ", K(tenant_ids));
-        // check timeout
-      } else if (ObTimeUtility::current_time() > expire_time) {
-        FLOG_INFO("[OBSERVER_NOTICE] Refresh user tenant schema timeout ", K(tenant_id));
-      } else {
-        FLOG_INFO("[OBSERVER_NOTICE] Refresh user tenant schema successfully ", K(tenant_id));
       }
     }
   }
