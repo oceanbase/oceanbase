@@ -301,6 +301,7 @@ public:
   { }
   virtual ~ObKeyPart() { reset(); }
   virtual void reset();
+  void reset_key();
   typedef common::hash::ObHashMap<int64_t, ObSEArray<int64_t, 16>> SameValIdxMap;
   static int try_cast_value(const ObDataTypeCastParams &dtc_params, ObIAllocator &alloc,
                             const ObKeyPartPos &pos, ObObj &value, int64_t &cmp);
@@ -407,6 +408,7 @@ public:
 
   // copy all except next_ pointer
   int deep_node_copy(const ObKeyPart &other);
+  int shallow_node_copy(const ObKeyPart &other);
   bool is_phy_rowid_key_part() const { return is_phy_rowid_key_part_; }
   bool is_logical_rowid_key_part() const {
     return !is_phy_rowid_key_part_ && rowid_column_idx_ != OB_INVALID_ID; }

@@ -5152,7 +5152,7 @@ int ObQueryRange::link_or_graphs(ObKeyPartList &storage, ObKeyPart  *&out_key_pa
 // Replace unknown value in item_next_ list,
 // and intersect them.
 
-int ObQueryRange::definite_key_part(ObKeyPart *&key_part, ObExecContext &exec_ctx,
+int ObQueryRange::definite_key_part(ObKeyPart *key_part, ObExecContext &exec_ctx,
                                     const ObDataTypeCastParams &dtc_params,
                                     bool &is_bound_modified)
 {
@@ -5182,7 +5182,10 @@ int ObQueryRange::definite_key_part(ObKeyPart *&key_part, ObExecContext &exec_ct
           }
         } else if (key_part->is_in_key()) {
           if (cur->is_phy_rowid_key_part_) {
-            key_part = cur;
+            // in and rowid, always make the result becomes rowid
+            if (OB_FAIL(key_part->shallow_node_copy(*cur))) {
+              LOG_WARN("failed to shallow copy cur", K(ret));
+            }
           } else if (OB_FAIL(key_part->intersect_in(cur))) {
             LOG_WARN("failed to intersect in", K(ret));
           }
@@ -5192,17 +5195,8 @@ int ObQueryRange::definite_key_part(ObKeyPart *&key_part, ObExecContext &exec_ct
             // in and rowid, always make the result becomes rowid
           } else if (OB_FAIL(cur->intersect_in(key_part))) {
             LOG_WARN("failed to intersect in", K(ret));
-          } else {
-            // after intersect, key_part always be false
-            // so change the pointer of key_part
-            ObKeyPart *key_part_or_next = key_part->or_next_;
-            key_part = cur;
-            ObKeyPart *or_tail = key_part;
-            while (key_part_or_next != NULL) {
-              or_tail->or_next_ = key_part_or_next;
-              or_tail = or_tail->or_next_;
-              key_part_or_next = key_part_or_next->or_next_;
-            }
+          } else if (OB_FAIL(key_part->shallow_node_copy(*cur))) {
+            LOG_WARN("failed to shallow copy cur", K(ret));
           }
         } else if (OB_FAIL(key_part->intersect(cur, contain_row_))) {
           LOG_WARN("Intersect key part failed", K(ret));
@@ -6696,6 +6690,7 @@ int ObQueryRange::direct_get_tablet_ranges(ObIAllocator &allocator,
   } else {
     OZ(gen_simple_scan_range(allocator, exec_ctx, ranges, all_single_value_ranges, dtc_params));
   }
+  LOG_TRACE("get range success", K(ret), K(table_graph_.is_precise_get_), K(ranges));
   return ret;
 }
 
@@ -7167,7 +7162,9 @@ OB_NOINLINE int ObQueryRange::final_extract_query_range(ObExecContext &exec_ctx,
                                                         const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
-  SQL_REWRITE_LOG(DEBUG, "final extract query range", K(table_graph_.is_equal_range_));
+  SQL_REWRITE_LOG(TRACE, "final extract query range", KPC(table_graph_.key_part_head_),
+                                                      K(table_graph_.is_equal_range_),
+                                                      K(contain_in_), K(contain_row_));
   if (state_ == NEED_PREPARE_PARAMS && NULL != table_graph_.key_part_head_) {
     ObKeyPartList or_array;
     // find all key part path and do OR option

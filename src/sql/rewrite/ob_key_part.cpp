@@ -26,9 +26,20 @@ namespace sql
 void ObKeyPart::reset()
 {
   common::ObDLinkBase<ObKeyPart>::reset();
+  reset_key();
   id_.table_id_ = OB_INVALID_ID;
   id_.column_id_ = OB_INVALID_ID;
   pos_.offset_ = -1;
+  key_type_ = T_NORMAL_KEY;
+  item_next_ = NULL;
+  or_next_ = NULL;
+  and_next_ = NULL;
+  rowid_column_idx_ = OB_INVALID_ID;
+  is_phy_rowid_key_part_ = false;
+}
+
+void ObKeyPart::reset_key()
+{
   if (is_normal_key()) {
     normal_keypart_->start_.reset();
     normal_keypart_->end_.reset();
@@ -41,13 +52,10 @@ void ObKeyPart::reset()
     like_keypart_->escape_.reset();
   } else if (is_in_key()) {
     in_keypart_->reset();
+  } else if (is_geo_key()) {
+    geo_keypart_->wkb_.reset();
+    geo_keypart_->distance_.reset();
   }
-  key_type_ = T_NORMAL_KEY;
-  item_next_ = NULL;
-  or_next_ = NULL;
-  and_next_ = NULL;
-  rowid_column_idx_ = OB_INVALID_ID;
-  is_phy_rowid_key_part_ = false;
 }
 
 // can be unioned as one
@@ -723,6 +731,31 @@ int ObKeyPart::deep_node_copy(const ObKeyPart &other)
     } else {
       geo_keypart_->geo_type_ = other.geo_keypart_->geo_type_;
     }
+  }
+  return ret;
+}
+
+int ObKeyPart::shallow_node_copy(const ObKeyPart &other)
+{
+  int ret = OB_SUCCESS;
+  reset_key();
+  id_ = other.id_;
+  pos_ = other.pos_;
+  null_safe_ = other.null_safe_;
+  rowid_column_idx_ = other.rowid_column_idx_;
+  is_phy_rowid_key_part_ = other.is_phy_rowid_key_part_;
+  if (other.is_normal_key()) {
+    normal_keypart_ = other.normal_keypart_;
+    key_type_ = other.key_type_;
+  } else if (other.is_like_key()) {
+    like_keypart_ = other.like_keypart_;
+    key_type_ = other.key_type_;
+  } else if (other.is_in_key()) {
+    in_keypart_ = other.in_keypart_;
+    key_type_ = other.key_type_;
+  } else if (other.is_geo_key()) {
+    geo_keypart_ = other.geo_keypart_;
+    key_type_ = other.key_type_;
   }
   return ret;
 }
