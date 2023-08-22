@@ -482,3 +482,56 @@ select 'a' collate latin1_swedish_ci regexp 'A' collate latin1_swedish_ci;
 select 'a' collate latin1_bin regexp 'A' collate latin1_swedish_ci;
 --error 1267
 select 'a' collate latin1_swedish_ci regexp 'A' collate latin1_bin;
+
+
+##bug:
+
+--error 0,1008
+drop database ly;
+
+create database ly character set GB18030;
+use ly;
+
+DROP TABLE IF EXISTS `table10_bigint`;
+CREATE TABLE `table10_bigint` (
+  `col_smallint_signed` smallint(6) DEFAULT NULL,
+  `col_decimal_20_0_signed` decimal(20,0) DEFAULT NULL,
+  `col_tinyint_unsigned` tinyint(3) unsigned DEFAULT NULL,
+  `col_mediumint_signed` mediumint(9) DEFAULT NULL,
+  `col_decimal_30_5_signed` decimal(30,5) DEFAULT NULL,
+  `col_int` int(11) DEFAULT NULL,
+  `col_smallint_unsigned` smallint(5) unsigned DEFAULT NULL,
+  `col_decimal_30_5` decimal(30,5) DEFAULT NULL,
+  `col_tinyint_signed` tinyint(4) DEFAULT NULL,
+  `col_decimal_20_0` decimal(20,0) DEFAULT NULL,
+  `pk` bigint(20) NOT NULL,
+  `col_int_unsigned` int(10) unsigned DEFAULT NULL,
+  `col_datetime` datetime DEFAULT NULL,
+  `col_mediumint_unsigned` mediumint(8) unsigned DEFAULT NULL,
+  `col_bigint_signed` bigint(20) DEFAULT NULL,
+  `col_integer_unsigned` int(10) unsigned DEFAULT NULL,
+  `col_char_30` char(30) DEFAULT NULL,
+  `col_integer` int(11) DEFAULT NULL,
+  `col_bigint_unsigned` bigint(20) unsigned DEFAULT NULL,
+  `col_int_signed` int(11) DEFAULT NULL,
+  `col_timestamp` timestamp NULL DEFAULT NULL,
+  `col_tinyint` tinyint(4) DEFAULT NULL,
+  `col_char_20` char(20) DEFAULT NULL,
+  `col_decimal_20_0_unsigned` decimal(20,0) unsigned DEFAULT NULL,
+  `col_smallint` smallint(6) DEFAULT NULL,
+  `col_decimal_30_5_unsigned` decimal(30,5) unsigned DEFAULT NULL,
+  `col_date` date DEFAULT NULL,
+  `col_integer_signed` int(11) DEFAULT NULL,
+  `col_mediumint` mediumint(9) DEFAULT NULL,
+  `col_bigint` bigint(20) DEFAULT NULL,
+  PRIMARY KEY (`pk`)
+) DEFAULT CHARSET = gb18030 ROW_FORMAT = DYNAMIC ;
+
+
+INSERT INTO `table10_bigint` VALUES (9,3,NULL,7,6.00000,NULL,NULL,NULL,NULL,8,1,4,'2007-12-25 08:02:41',2,8,NULL,'kqpbiirnugot',NULL,NULL,0,'2006-02-12 16:48:16',NULL,'get',NULL,NULL,NULL,'2006-10-20',NULL,5,3),(NULL,NULL,NULL,NULL,7.00000,7,9,NULL,9,2,2,NULL,'2000-08-08 04:39:35',7,NULL,NULL,'',5,NULL,NULL,'2003-10-07 10:09:45',1,'r',5,NULL,NULL,'2002-10-27',NULL,7,NULL),(NULL,6,NULL,NULL,1.00000,NULL,NULL,8.00000,4,8,3,NULL,'2004-08-13 10:53:30',5,8,6,'d',NULL,NULL,9,'2007-07-26 10:08:34',NULL,NULL,9,NULL,NULL,'2003-05-10',NULL,NULL,NULL),(3,2,NULL,NULL,1.00000,6,5,5.00000,NULL,NULL,4,NULL,'2000-06-15 20:10:58',NULL,NULL,0,'come',3,9,3,'2005-02-03 16:00:00',NULL,'',NULL,3,0.00000,'2001-07-11',NULL,NULL,3),(6,NULL,NULL,9,NULL,NULL,8,4.00000,8,NULL,5,NULL,'2000-11-19 22:25:40',NULL,1,6,'j',7,8,5,'2005-03-27 15:01:52',8,'w',NULL,5,NULL,'2003-02-27',6,NULL,NULL),(NULL,5,4,1,3.00000,NULL,NULL,NULL,2,6,6,NULL,'2009-03-12 00:00:00',8,NULL,4,'',6,3,NULL,'2002-05-23 11:10:50',NULL,'now',2,4,NULL,'2004-04-03',NULL,5,6),(7,NULL,4,NULL,1.00000,NULL,NULL,NULL,5,NULL,7,NULL,'2006-09-25 12:07:13',7,NULL,NULL,'z',7,NULL,9,'2001-01-07 16:00:00',0,'want',5,0,3.00000,'2009-07-12',NULL,NULL,3),(NULL,NULL,8,7,NULL,NULL,NULL,8.00000,NULL,1,8,0,'2001-10-23 00:00:00',1,6,NULL,'',NULL,8,7,'2008-02-20 03:04:52',2,'b',NULL,9,NULL,'2008-01-22',4,7,6),(NULL,9,NULL,8,7.00000,0,8,5.00000,3,8,9,7,'2002-07-27 22:52:55',4,NULL,NULL,'yes',NULL,3,NULL,'2008-02-24 08:16:18',9,'',NULL,0,NULL,'2003-11-02',6,9,NULL),(2,NULL,7,NULL,2.00000,1,NULL,2.00000,6,6,10,NULL,'2007-06-02 02:12:10',NULL,NULL,NULL,'',NULL,NULL,1,'2009-12-16 00:47:00',2,'I',NULL,3,1.00000,'2008-02-26',NULL,8,5);
+
+set names GB18030;
+
+SELECT TRIM( SUBSTRING( SUBSTRING( '∷ ∶ ∫ ∮ ∝ ∞ ∧ ∨ ∑ ∏ ∪ ∩ ∈ ∵ ∴ ⊥ ∥ ∠ ⌒ ⊙ √∟⊿ ㏒ ㏑ % ‰' , 1, LEAST( 228, 20 ) ) , 1 , LEAST( 228, 20 ) ) ) NOT REGEXP CONCAT( 'tu', '%' ) FROM table10_bigint WHERE col_int NOT IN ( 5387431054241955840 , 13633803446934044672 , 65066 , 45808 , 6755399441055744000 ) ORDER BY col_char_20 DESC , pk ASC LIMIT 6 OFFSET 1;
+
+drop database ly;

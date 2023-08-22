@@ -170,7 +170,16 @@ int ObExprRegexp::eval_regexp(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
   ObDatum *text = NULL;
   ObDatum *pattern = NULL;
   if (OB_FAIL(expr.eval_param_value(ctx, text, pattern))) {
-    LOG_WARN("evaluate parameters failed", K(ret));
+    if (ret == OB_ERR_INCORRECT_STRING_VALUE) {//compatible mysql
+      ret = OB_SUCCESS;
+      expr_datum.set_null();
+      const char *charset_name = ObCharset::charset_name(expr.args_[0]->datum_meta_.cs_type_);
+      int64_t charset_name_len = strlen(charset_name);
+      const char *tmp_char = NULL;
+      LOG_USER_WARN(OB_ERR_INVALID_CHARACTER_STRING, static_cast<int>(charset_name_len), charset_name, 0, tmp_char);
+    } else {
+      LOG_WARN("evaluate parameters failed", K(ret));
+    }
   } else if (text->is_null() || pattern->is_null()) {
     expr_datum.set_null();
   } else if (OB_UNLIKELY(expr.arg_cnt_ != 2 ||
