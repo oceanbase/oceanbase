@@ -204,12 +204,17 @@ int ObExprUserEnv::eval_schemaid_result1(const ObExpr &expr, ObEvalCtx &ctx, ObD
       // 所以在这里，ob返回databaseid，即user名字对应的相同名字的database的id
       uint64_t dbid = OB_INVALID_ID;
       share::schema::ObSchemaGetterGuard schema_guard;
+      const ObUserInfo *user_info = nullptr;
       if (OB_FAIL(ObExprSysContext::get_schema_guard(schema_guard,
                   ctx.exec_ctx_.get_my_session()->get_effective_tenant_id()))) {
         LOG_WARN("failed to get schema guard", K(ret));
+      } else if (FALSE_IT(user_info = schema_guard.get_user_info(
+                  ctx.exec_ctx_.get_my_session()->get_effective_tenant_id(),
+                  ctx.exec_ctx_.get_my_session()->get_priv_user_id()))) {
+        // do nothing
       } else if (OB_FAIL(schema_guard.get_database_id(
         ctx.exec_ctx_.get_my_session()->get_effective_tenant_id(),
-        ctx.exec_ctx_.get_my_session()->get_user_name(),
+        user_info ? user_info->get_user_name_str() : ctx.exec_ctx_.get_my_session()->get_user_name(),
         dbid))) {
         LOG_WARN("fail to get database id", K(ret));
       } else {
