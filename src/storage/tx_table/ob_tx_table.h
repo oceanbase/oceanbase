@@ -43,12 +43,25 @@ class ObTxTableGuard;
 
 class ObTxTable
 {
-  // Delay recycle tx data 5 minutes
-  const static int64_t TX_DATA_DELAY_RECYCLE_TIME_NS = 5L * 60L * 1000L * 1000L * 1000L;
+  struct RecycleSCNCache
+  {
+    share::SCN val_;
+    int64_t update_ts_;
+
+    RecycleSCNCache() { reset(); }
+
+    void reset() {
+      val_.reset();
+      update_ts_ = 0;
+    }
+
+    TO_STRING_KV(K(val_), K(update_ts_));
+  };
 
 public:
   static const int64_t INVALID_READ_EPOCH = -1;
   static const int64_t CHECK_AND_ONLINE_PRINT_INVERVAL_US = 5 * 1000 * 1000; // 5 seconds
+  static const int64_t DEFAULT_TX_RESULT_RETENTION_S = 300L;
 
   enum TxTableState : int64_t
   {
@@ -68,8 +81,8 @@ public:
         tx_data_table_(default_tx_data_table_),
         mini_cache_hit_cnt_(0),
         kv_cache_hit_cnt_(0),
-        read_tx_data_table_cnt_(0)
-
+        read_tx_data_table_cnt_(0),
+        recycle_scn_cache_()
   {}
 
   ObTxTable(ObTxDataTable &tx_data_table)
@@ -81,7 +94,8 @@ public:
         tx_data_table_(tx_data_table),
         mini_cache_hit_cnt_(0),
         kv_cache_hit_cnt_(0),
-        read_tx_data_table_cnt_(0)
+        read_tx_data_table_cnt_(0),
+        recycle_scn_cache_()
   {}
   ~ObTxTable() {}
 
@@ -320,6 +334,7 @@ private:
   int64_t mini_cache_hit_cnt_;
   int64_t kv_cache_hit_cnt_;
   int64_t read_tx_data_table_cnt_;
+  RecycleSCNCache recycle_scn_cache_;
 };
 }  // namespace storage
 }  // namespace oceanbase

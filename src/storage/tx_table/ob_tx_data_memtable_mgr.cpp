@@ -54,6 +54,7 @@ int ObTxDataMemtableMgr::init(const common::ObTabletID &tablet_id,
     freezer_ = freezer;
     tx_data_table_ = tx_table->get_tx_data_table();
     ls_tablet_svr_ = ls_handle.get_ls()->get_tablet_svr();
+    mini_merge_recycle_commit_versions_ts_ = 0;
     ObLSTxService *ls_tx_svr = nullptr;
     if (OB_ISNULL(ls_tx_svr = freezer_->get_ls_tx_svr())) {
       ret = OB_ERR_UNEXPECTED;
@@ -84,6 +85,7 @@ void ObTxDataMemtableMgr::destroy()
   tx_data_table_ = nullptr;
   ls_tablet_svr_ = nullptr;
   freezer_ = nullptr;
+  mini_merge_recycle_commit_versions_ts_ = 0;
   is_inited_ = false;
 }
 
@@ -93,6 +95,7 @@ int ObTxDataMemtableMgr::offline()
   if (OB_FAIL(release_memtables())) {
     STORAGE_LOG(WARN, "release tx data memtables failed", KR(ret));
   } else {
+    mini_merge_recycle_commit_versions_ts_ = 0;
     memtable_head_ = 0;
     memtable_tail_ = 0;
   }
@@ -112,6 +115,9 @@ int ObTxDataMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
     if (nullptr != tables_[idx] && memtable == tables_[idx]) {
       memtable->set_state(ObTxDataMemtable::State::RELEASED);
       memtable->set_release_time();
+      if (true == memtable->do_recycled()) {
+        mini_merge_recycle_commit_versions_ts_ = ObClockGenerator::getCurrentTime();
+      }
       STORAGE_LOG(INFO, "[TX DATA MERGE]tx data memtable mgr release head memtable", K(ls_id_), KP(memtable), KPC(memtable));
       release_head_memtable();
     } else {

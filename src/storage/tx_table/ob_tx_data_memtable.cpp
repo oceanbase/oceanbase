@@ -68,6 +68,7 @@ int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
     ls_id_ = freezer_->get_ls_id();
     construct_list_done_ = false;
     pre_process_done_ = false;
+    do_recycle_ = false;
     max_tx_scn_.set_min();
     inserted_cnt_ = 0;
     deleted_cnt_ = 0;
@@ -128,6 +129,7 @@ void ObTxDataMemtable::reset()
   }
   construct_list_done_ = false;
   pre_process_done_ = false;
+  do_recycle_ = false;
   key_.reset();
   max_tx_scn_.set_min();
   inserted_cnt_ = 0;
@@ -309,15 +311,27 @@ int ObTxDataMemtable::pre_process_commit_version_row_(ObTxData *fake_tx_data)
   int ret = OB_SUCCESS;
 
   SCN recycle_scn = SCN::min_scn();
+  do_recycle_ = true;
   ObCommitVersionsArray cur_commit_versions;
   ObCommitVersionsArray past_commit_versions;
   ObCommitVersionsArray merged_commit_versions;
+
+  int64_t current_time = ObClockGenerator::getCurrentTime();
+  int64_t prev_recycle_time = memtable_mgr_->get_mini_merge_recycle_commit_versions_ts();
+  if (current_time - prev_recycle_time < MINI_RECYCLE_COMMIT_VERSIONS_INTERVAL_US) {
+    // tx data mini merge do not recycle commit versions array every time
+    do_recycle_ = false;
+  } else {
+    do_recycle_ = true;
+  }
+  STORAGE_LOG(
+      INFO, "pre-process commit versions row", K(get_ls_id()), K(do_recycle_), K(current_time), K(prev_recycle_time));
 
   if (OB_FAIL(fill_in_cur_commit_versions_(cur_commit_versions)/*step 1*/)) {
     STORAGE_LOG(WARN, "periodical select commit version failed.", KR(ret));
   } else if (OB_FAIL(get_past_commit_versions_(past_commit_versions)/*step 2*/)) {
     STORAGE_LOG(WARN, "get past commit versions failed.", KR(ret));
-  } else if (OB_FAIL(memtable_mgr_->get_tx_data_table()->get_recycle_scn(recycle_scn) /*step 3*/)) {
+  } else if (do_recycle_ && OB_FAIL(memtable_mgr_->get_tx_data_table()->get_recycle_scn(recycle_scn) /*step 3*/)) {
     STORAGE_LOG(WARN, "get recycle ts failed.", KR(ret));
   } else if (OB_FAIL(merge_cur_and_past_commit_verisons_(recycle_scn, cur_commit_versions,/*step 4*/
                                                          past_commit_versions,
@@ -1046,13 +1060,14 @@ int ObTxDataMemtable::dump2text(const char *fname)
     auto tenant_id = MTL_ID();
     fprintf(fd, "tenant_id=%ld ls_id=%ld\n", tenant_id, ls_id);
     fprintf(fd,
-        "memtable: key=%s is_inited=%d construct_list_done=%d pre_process_done=%d min_tx_log_ts=%s max_tx_log_ts=%s "
+        "memtable: key=%s is_inited=%d construct_list_done=%d pre_process_done=%d do_recycle_=%d min_tx_log_ts=%s max_tx_log_ts=%s "
         "min_start_log_ts=%s inserted_cnt=%ld deleted_cnt=%ld write_ref=%ld occupied_size=%ld last_insert_ts=%ld "
         "state=%d\n",
         S(key_),
         is_inited_,
         construct_list_done_,
         pre_process_done_,
+        do_recycle_,
         to_cstring(get_min_tx_scn()),
         to_cstring(max_tx_scn_),
         to_cstring(get_min_start_scn()),

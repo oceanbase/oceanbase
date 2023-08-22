@@ -86,6 +86,7 @@ public:  // ObTxDataMemtableMgr
     : ObIMemtableMgr(LockType::OB_SPIN_RWLOCK, &lock_def_),
       is_freezing_(false),
       ls_id_(0),
+      mini_merge_recycle_commit_versions_ts_(0),
       tx_data_table_(nullptr),
       ls_tablet_svr_(nullptr),
       slice_allocator_(nullptr) {}
@@ -153,6 +154,7 @@ public:  // ObTxDataMemtableMgr
                        ObIMemtableMgr,
                        K_(is_freezing),
                        K_(ls_id),
+                       K_(mini_merge_recycle_commit_versions_ts),
                        KP_(tx_data_table),
                        KP_(ls_tablet_svr),
                        KP_(slice_allocator));
@@ -160,8 +162,10 @@ public:  // ObTxDataMemtableMgr
 public: // getter and setter
   ObLSTabletService *get_ls_tablet_svr() { return ls_tablet_svr_; }
   ObTxDataTable *get_tx_data_table() { return tx_data_table_; }
+  int64_t get_mini_merge_recycle_commit_versions_ts() { return mini_merge_recycle_commit_versions_ts_; }
 
   void set_slice_allocator(SliceAllocator *slice_allocator) { slice_allocator_ = slice_allocator; }
+
 protected:
   virtual int release_head_memtable_(memtable::ObIMemtable *imemtable,
                                      const bool force);
@@ -185,6 +189,7 @@ private:  // ObTxDataMemtableMgr
 private:  // ObTxDataMemtableMgr
   bool is_freezing_;
   share::ObLSID ls_id_;
+  int64_t mini_merge_recycle_commit_versions_ts_;
   ObTxDataTable *tx_data_table_;
   ObLSTabletService *ls_tablet_svr_;
   SliceAllocator *slice_allocator_;

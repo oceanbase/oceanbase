@@ -57,6 +57,7 @@ int ObTxTable::init(ObLS *ls)
     mini_cache_hit_cnt_ = 0;
     kv_cache_hit_cnt_ = 0;
     read_tx_data_table_cnt_ = 0;
+    recycle_scn_cache_.reset();
     LOG_INFO("init tx table successfully", K(ret), K(ls->get_ls_id()));
     is_inited_ = true;
   }
@@ -147,6 +148,7 @@ int ObTxTable::offline()
   } else if (OB_FAIL(offline_tx_data_table_())) {
     LOG_WARN("offline tx data table failed", K(ret));
   } else {
+    recycle_scn_cache_.reset();
     ATOMIC_STORE(&state_, TxTableState::OFFLINE);
     LOG_INFO("tx table offline succeed", K(ls_id_), KPC(this));
   }
@@ -169,6 +171,7 @@ int ObTxTable::online()
   } else if (OB_FAIL(load_tx_ctx_table_())) {
     LOG_WARN("failed to load tx ctx table", K(ret));
   } else {
+    recycle_scn_cache_.reset();
     ATOMIC_STORE(&state_, ObTxTable::ONLINE);
     LOG_INFO("tx table online succeed", K(ls_id_), KPC(this));
   }
@@ -939,31 +942,54 @@ int ObTxTable::get_recycle_scn(SCN &real_recycle_scn)
 {
   int ret = OB_SUCCESS;
   real_recycle_scn = SCN::min_scn();
+
+  int64_t current_time_us = ObClockGenerator::getCurrentTime();
+  int64_t tx_result_retention = DEFAULT_TX_RESULT_RETENTION_S;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    // use config value if config is valid
+    tx_result_retention = tenant_config->_tx_result_retention;
+  }
+
+  TxTableState state;
   int64_t prev_epoch = ATOMIC_LOAD(&epoch_);
   int64_t after_epoch = 0;
   SCN tablet_recycle_scn = SCN::min_scn();
-  SCN delay_recycle_scn = SCN::max_scn();
-  TxTableState state;
-  if (OB_FAIL(tx_data_table_.get_recycle_scn(tablet_recycle_scn))) {
+  const int64_t retain_tx_data_us = tx_result_retention * 1000L * 1000L;
+
+  if (current_time_us - recycle_scn_cache_.update_ts_ < retain_tx_data_us && recycle_scn_cache_.val_.is_valid()) {
+    // cache is valid, get recycle scn from cache
+    real_recycle_scn = recycle_scn_cache_.val_;
+    STORAGE_LOG(INFO, "use recycle scn cache", K(ls_id_), K(recycle_scn_cache_));
+  } else if (OB_FAIL(tx_data_table_.get_recycle_scn(tablet_recycle_scn))) {
     TRANS_LOG(WARN, "get recycle scn from tx data table failed.", KR(ret));
   } else if (FALSE_IT(state = ATOMIC_LOAD(&state_))) {
   } else if (FALSE_IT(after_epoch = ATOMIC_LOAD(&epoch_))) {
   } else if (TxTableState::ONLINE != state || prev_epoch != after_epoch) {
     real_recycle_scn = SCN::min_scn();
     ret = OB_REPLICA_NOT_READABLE;
-    STORAGE_LOG(WARN, "this tx table is migrating or has migrated", KR(ret), K(ls_id_), K(state), K(prev_epoch), K(after_epoch));
+    STORAGE_LOG(WARN,
+                "this tx table is migrating or has migrated",
+                KR(ret),
+                K(ls_id_),
+                K(state),
+                K(prev_epoch),
+                K(after_epoch));
   } else {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    if (tenant_config.is_valid()) {
-      delay_recycle_scn.convert_for_tx(ObTimeUtil::current_time_ns() -
-                                       (tenant_config->_tx_result_retention * 1000L * 1000L * 1000L));
-    }
+    SCN delay_recycle_scn = SCN::max_scn();
+    const int64_t current_time_ns = current_time_us * 1000L;
+    delay_recycle_scn.convert_for_tx(current_time_ns - (tx_result_retention * 1000L * 1000L * 1000L));
     if (delay_recycle_scn < tablet_recycle_scn) {
       real_recycle_scn = delay_recycle_scn;
     } else {
       real_recycle_scn = tablet_recycle_scn;
     }
+
+    // update cache
+    recycle_scn_cache_.val_ = real_recycle_scn;
+    recycle_scn_cache_.update_ts_ = ObClockGenerator::getCurrentTime();
   }
+
   return ret;
 }
 

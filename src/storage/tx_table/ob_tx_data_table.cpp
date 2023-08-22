@@ -722,7 +722,7 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
   ObLSTabletIterator iterator(ObMDSGetTabletMode::READ_READABLE_COMMITED);
   ObMigrationStatus migration_status;
   share::ObLSRestoreStatus restore_status;
-  ObTimeGuard tg("get recycle scn", 0);
+  ObTimeGuard tg("get recycle scn", 10L * 1000L * 1000L /* 10 seconds */);
   SCN min_end_scn = SCN::max_scn();
   SCN min_end_scn_from_old_tablets = SCN::max_scn();
   SCN min_end_scn_from_latest_tablets = SCN::max_scn();
@@ -743,9 +743,11 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
   } else if (ObLSRestoreStatus::RESTORE_NONE != restore_status) {
     recycle_scn.set_min();
     STORAGE_LOG(INFO, "logstream is in restore state. skip recycle tx data", "ls_id", ls_->get_ls_id());
+  } else if (FALSE_IT(tg.click("iterate tablets start"))) {
   } else if (OB_FAIL(ls_tablet_svr_->get_ls_min_end_scn(min_end_scn_from_latest_tablets,
                                                         min_end_scn_from_old_tablets))) {
     STORAGE_LOG(WARN, "fail to get ls min end log ts", KR(ret));
+  } else if (FALSE_IT(tg.click("iterate tablets finish"))) {
   } else {
     min_end_scn = std::min(min_end_scn_from_old_tablets, min_end_scn_from_latest_tablets);
     if (!min_end_scn.is_max()) {
@@ -767,8 +769,7 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
             "ls_id", ls_->get_ls_id(),
             K(recycle_scn),
             K(min_end_scn_from_old_tablets),
-            K(min_end_scn_from_latest_tablets),
-            K(tg));
+            K(min_end_scn_from_latest_tablets));
 
   return ret;
 }
