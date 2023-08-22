@@ -960,7 +960,7 @@ int ObInnerTableSchema::gv_ob_parameters_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   SVR_IP,   SVR_PORT,   ZONE,   SCOPE,   TENANT_ID,   NAME,   DATA_TYPE,   VALUE,   INFO,   SECTION,   EDIT_LEVEL FROM oceanbase.__all_virtual_tenant_parameter_stat )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   SVR_IP,   SVR_PORT,   ZONE,   SCOPE,   TENANT_ID,   NAME,   DATA_TYPE,   VALUE,   INFO,   SECTION,   EDIT_LEVEL,   DEFAULT_VALUE,   ISDEFAULT FROM oceanbase.__all_virtual_tenant_parameter_stat )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

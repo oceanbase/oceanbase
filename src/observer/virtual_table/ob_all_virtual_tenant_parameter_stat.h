@@ -64,6 +64,8 @@ private:
     SOURCE,
     EDIT_LEVEL,
     TENANT_ID,
+    DEFAULT_VALUE,
+    ISDEFAULT,
   };
 
 private:

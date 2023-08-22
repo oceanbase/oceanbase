@@ -1210,7 +1210,7 @@ int ObInnerTableSchema::dba_ob_tablegroups_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TABLEGROUP_NAME,                    CAST("NONE" AS CHAR(13)) AS PARTITIONING_TYPE,           CAST("NONE" AS CHAR(13)) AS SUBPARTITIONING_TYPE,           CAST(NULL AS SIGNED) AS PARTITION_COUNT,           CAST(NULL AS SIGNED) AS DEF_SUBPARTITION_COUNT,           CAST(NULL AS SIGNED) AS PARTITIONING_KEY_COUNT,           CAST(NULL AS SIGNED) AS SUBPARTITIONING_KEY_COUNT,           SHARDING            FROM OCEANBASE.__ALL_TABLEGROUP   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TABLEGROUP_NAME,           CAST("NONE" AS CHAR(13)) AS PARTITIONING_TYPE,           CAST("NONE" AS CHAR(13)) AS SUBPARTITIONING_TYPE,           CAST(NULL AS SIGNED) AS PARTITION_COUNT,           CAST(NULL AS SIGNED) AS DEF_SUBPARTITION_COUNT,           CAST(NULL AS SIGNED) AS PARTITIONING_KEY_COUNT,           CAST(NULL AS SIGNED) AS SUBPARTITIONING_KEY_COUNT,           SHARDING    FROM OCEANBASE.__ALL_TABLEGROUP   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1310,7 +1310,7 @@ int ObInnerTableSchema::dba_ob_tablegroup_partitions_schema(ObTableSchema &table
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT CAST("" AS CHAR(128)) AS TABLEGROUP_NAME,           CAST("NO" AS CHAR(3)) AS COMPOSITE,           CAST("" AS CHAR(64)) AS PARTITION_NAME,           CAST(NULL AS SIGNED) AS SUBPARTITION_COUNT,           CAST(NULL AS CHAR(4096)) AS HIGH_VALUE,           CAST(NULL AS SIGNED) AS HIGH_VALUE_LENGTH,           CAST(NULL AS UNSIGNED) AS PARTITION_POSITION   FROM      DUAL   WHERE      0 = 1   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT CAST("" AS CHAR(128)) AS TABLEGROUP_NAME,           CAST("NO" AS CHAR(3)) AS COMPOSITE,           CAST("" AS CHAR(64)) AS PARTITION_NAME,           CAST(NULL AS SIGNED) AS SUBPARTITION_COUNT,           CAST(NULL AS CHAR(4096)) AS HIGH_VALUE,           CAST(NULL AS SIGNED) AS HIGH_VALUE_LENGTH,           CAST(NULL AS UNSIGNED) AS PARTITION_POSITION   FROM     DUAL   WHERE     0 = 1   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1360,7 +1360,7 @@ int ObInnerTableSchema::cdb_ob_tablegroup_partitions_schema(ObTableSchema &table
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT CAST(NULL AS SIGNED) AS TENANT_ID,           CAST('' AS CHAR(128)) AS TABLEGROUP_NAME,           CAST('NO' AS CHAR(3)) AS COMPOSITE,           CAST('' AS CHAR(64)) AS PARTITION_NAME,           CAST(NULL AS SIGNED) AS SUBPARTITION_COUNT,           CAST(NULL AS CHAR(4096)) AS HIGH_VALUE,           CAST(NULL AS SIGNED) AS HIGH_VALUE_LENGTH,           CAST(NULL AS UNSIGNED) AS PARTITION_POSITION   FROM        DUAL   WHERE       0 = 1   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT CAST(NULL AS SIGNED) AS TENANT_ID,           CAST('' AS CHAR(128)) AS TABLEGROUP_NAME,           CAST('NO' AS CHAR(3)) AS COMPOSITE,           CAST('' AS CHAR(64)) AS PARTITION_NAME,           CAST(NULL AS SIGNED) AS SUBPARTITION_COUNT,           CAST(NULL AS CHAR(4096)) AS HIGH_VALUE,           CAST(NULL AS SIGNED) AS HIGH_VALUE_LENGTH,           CAST(NULL AS UNSIGNED) AS PARTITION_POSITION   FROM       DUAL   WHERE       0 = 1   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1410,7 +1410,7 @@ int ObInnerTableSchema::dba_ob_tablegroup_subpartitions_schema(ObTableSchema &ta
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT CAST("" AS CHAR(128)) AS TABLEGROUP_NAME,           CAST("" AS CHAR(64)) AS PARTITION_NAME,           CAST("" AS CHAR(64)) AS SUBPARTITION_NAME,           CAST(NULL AS CHAR(4096)) AS HIGH_VALUE,           CAST(NULL AS SIGNED) AS HIGH_VALUE_LENGTH,           CAST(NULL AS UNSIGNED) AS PARTITION_POSITION,           CAST(NULL AS UNSIGNED) AS SUBPARTITION_POSITION    FROM        DUAL    WHERE       0 = 1   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT CAST("" AS CHAR(128)) AS TABLEGROUP_NAME,           CAST("" AS CHAR(64)) AS PARTITION_NAME,           CAST("" AS CHAR(64)) AS SUBPARTITION_NAME,           CAST(NULL AS CHAR(4096)) AS HIGH_VALUE,           CAST(NULL AS SIGNED) AS HIGH_VALUE_LENGTH,           CAST(NULL AS UNSIGNED) AS PARTITION_POSITION,           CAST(NULL AS UNSIGNED) AS SUBPARTITION_POSITION    FROM       DUAL    WHERE       0 = 1   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1460,7 +1460,7 @@ int ObInnerTableSchema::cdb_ob_tablegroup_subpartitions_schema(ObTableSchema &ta
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT CAST(NULL AS SIGNED) AS TENANT_ID,           CAST("" AS CHAR(128)) AS TABLEGROUP_NAME,           CAST("" AS CHAR(64)) AS PARTITION_NAME,           CAST("" AS CHAR(64)) AS SUBPARTITION_NAME,           CAST(NULL AS CHAR(4096)) AS HIGH_VALUE,           CAST(NULL AS SIGNED) AS HIGH_VALUE_LENGTH,           CAST(NULL AS UNSIGNED) AS PARTITION_POSITION,           CAST(NULL AS UNSIGNED) AS SUBPARTITION_POSITION     FROM          DUAL    WHERE         0 = 1   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT CAST(NULL AS SIGNED) AS TENANT_ID,           CAST("" AS CHAR(128)) AS TABLEGROUP_NAME,           CAST("" AS CHAR(64)) AS PARTITION_NAME,           CAST("" AS CHAR(64)) AS SUBPARTITION_NAME,           CAST(NULL AS CHAR(4096)) AS HIGH_VALUE,           CAST(NULL AS SIGNED) AS HIGH_VALUE_LENGTH,           CAST(NULL AS UNSIGNED) AS PARTITION_POSITION,           CAST(NULL AS UNSIGNED) AS SUBPARTITION_POSITION     FROM         DUAL    WHERE         0 = 1   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

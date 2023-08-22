@@ -7629,6 +7629,8 @@ def_table_schema(
       ('scope', 'varchar:OB_MAX_CONFIG_SCOPE_LEN'),
       ('source', 'varchar:OB_MAX_CONFIG_SOURCE_LEN'),
       ('edit_level', 'varchar:OB_MAX_CONFIG_EDIT_LEVEL_LEN'),
+      ('default_value', 'varchar:OB_MAX_CONFIG_VALUE_LEN'),
+      ('isdefault', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -8368,7 +8370,9 @@ def_table_schema(
       ('scope', 'varchar:OB_MAX_CONFIG_SCOPE_LEN'),
       ('source', 'varchar:OB_MAX_CONFIG_SOURCE_LEN'),
       ('edit_level', 'varchar:OB_MAX_CONFIG_EDIT_LEVEL_LEN'),
-      ('tenant_id', 'int', 'true')
+      ('tenant_id', 'int', 'true'),
+      ('default_value', 'varchar:OB_MAX_CONFIG_VALUE_LEN'),
+      ('isdefault', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -21556,7 +21560,9 @@ SELECT
   VALUE,
   INFO,
   SECTION,
-  EDIT_LEVEL
+  EDIT_LEVEL,
+  DEFAULT_VALUE,
+  ISDEFAULT
 FROM oceanbase.__all_virtual_tenant_parameter_stat
 """.replace("\n", " ")
 )
@@ -52360,7 +52366,9 @@ SELECT
   VALUE,
   INFO,
   SECTION,
-  EDIT_LEVEL
+  EDIT_LEVEL,
+  DEFAULT_VALUE,
+  ISDEFAULT
 FROM SYS.ALL_VIRTUAL_TENANT_PARAMETER_STAT
 """.replace("\n", " ")
 )
