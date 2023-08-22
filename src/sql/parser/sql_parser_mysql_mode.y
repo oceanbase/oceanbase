@@ -11114,6 +11114,10 @@ JOIN
 {
   malloc_terminal_node($$, result->malloc_pool_, T_JOIN_INNER);
 }
+| STRAIGHT_JOIN
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_JOIN_INNER);
+}
 ;
 
 opt_inner:

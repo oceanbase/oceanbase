@@ -708,15 +708,11 @@ int ObTableSqlService::drop_table(const ObTableSchema &table_schema,
     }
   }
 
-  // delete from __all_table_stat, __all_column_stat and __all_histogram_stat
+  // delete from __all_table_stat, __all_monitor_modified, __all_column_usage, __all_optstat_user_prefs
   if (OB_SUCC(ret)) {
     if (OB_FAIL(delete_from_all_table_stat(sql_client, tenant_id, table_id))) {
       LOG_WARN("delete from all table stat failed", K(ret));
-    } else if (OB_FAIL(delete_from_all_column_stat(sql_client, tenant_id, table_id))) {
-      LOG_WARN("failed to delete all column stat", K(table_id),
-               "column count", table_schema.get_column_count(), K(ret));
-    } else if (OB_FAIL(delete_from_all_histogram_stat(sql_client, tenant_id, table_id))) {
-      LOG_WARN("failed to delete all histogram_stat", K(table_id), K(ret));
+    //column stat and histogram stat will be delete asynchronously by optimizer auto task, not delete here, avoid cost too much time.
     } else if (OB_FAIL(delete_from_all_column_usage(sql_client, tenant_id, table_id))) {
       LOG_WARN("failed to delete from all column usage", K(ret));
     } else if (OB_FAIL(delete_from_all_monitor_modified(sql_client, tenant_id, table_id))) {
@@ -2034,17 +2030,13 @@ int ObTableSqlService::update_table_options(ObISQLClient &sql_client,
       }
     }
   }
-  // delete from __all_table_stat, __all_column_stat and __all_histogram_stat
+  // delete from __all_table_stat, __all_monitor_modified, __all_column_usage, __all_optstat_user_prefs
   if (OB_SUCC(ret)) {
     if (operation_type != OB_DDL_DROP_TABLE_TO_RECYCLEBIN) {
       // do nothing
     } else if (OB_FAIL(delete_from_all_table_stat(sql_client, tenant_id, table_id))) {
       LOG_WARN("delete from all table stat failed", K(ret));
-    } else if (OB_FAIL(delete_from_all_column_stat(sql_client, tenant_id, table_id))) {
-      LOG_WARN("failed to delete all column stat", K(table_id),
-               "column count", table_schema.get_column_count(), K(ret));
-    } else if (OB_FAIL(delete_from_all_histogram_stat(sql_client, tenant_id, table_id))) {
-      LOG_WARN("failed to delete all histogram_stat", K(table_id), K(ret));
+    //column stat and histogram stat will be delete asynchronously by optimizer auto task, not delete here, avoid cost too much time.
     } else if (OB_FAIL(delete_from_all_column_usage(sql_client, tenant_id, table_id))) {
       LOG_WARN("failed to delete from all column usage", K(ret));
     } else if (OB_FAIL(delete_from_all_monitor_modified(sql_client, tenant_id, table_id))) {

@@ -60,10 +60,6 @@
                                      "density,"        \
                                      "last_analyzed"
 
-#define ALL_COLUMN_STATISTICS "__all_column_stat"
-#define ALL_TABLE_STATISTICS "__all_table_stat"
-#define ALL_HISTOGRAM_STATISTICS "__all_histogram_stat"
-
 #define INSERT_TABLE_STAT_SQL "REPLACE INTO __all_table_stat(tenant_id," \
                                                                "table_id," \
                                                                "partition_id," \
@@ -237,13 +233,41 @@
                                                          "properties) VALUES (%s);"
 
 
-#define DEFINE_SQL_CLIENT_RETRY_WEAK_FOR_STAT(sql_client, table_name)    \
-  const int64_t snapshot_timestamp = OB_INVALID_TIMESTAMP;         \
-  const bool check_sys_variable = false;                           \
-  ObSQLClientRetryWeak sql_client_retry_weak(sql_client,           \
-                                             false,                \
-                                             snapshot_timestamp,   \
-                                             check_sys_variable);  \
+#define ALL_HISTOGRAM_STAT_COLUMN_NAME "tenant_id, "     \
+                                       "table_id, "      \
+                                       "partition_id, "  \
+                                       "column_id, "     \
+                                       "endpoint_num, "    \
+                                       "b_endpoint_value," \
+                                       "endpoint_repeat_cnt"
+
+#define FETCH_ALL_COLUMN_STAT_SQL   "SELECT col_stat.tenant_id as tenant_id, "     \
+                                            "col_stat.table_id as table_id, "      \
+                                            "col_stat.partition_id as partition_id, "  \
+                                            "col_stat.column_id as column_id, "     \
+                                            "col_stat.object_type as stat_level, " \
+                                            "col_stat.distinct_cnt as num_distinct, "  \
+                                            "col_stat.null_cnt as num_null,"       \
+                                            "col_stat.b_max_value as b_max_value, "     \
+                                            "col_stat.b_min_value as b_min_value,"      \
+                                            "col_stat.avg_len as avg_len,"          \
+                                            "col_stat.distinct_cnt_synopsis as distinct_cnt_synopsis,"     \
+                                            "col_stat.distinct_cnt_synopsis_size as distinct_cnt_synopsis_size," \
+                                            "col_stat.histogram_type as histogram_type," \
+                                            "col_stat.sample_size as sample_size,"    \
+                                            "col_stat.bucket_cnt as bucket_cnt,"     \
+                                            "col_stat.density as density,"        \
+                                            "col_stat.last_analyzed as last_analyzed,"\
+                                            "hist_stat.endpoint_num as endpoint_num, "    \
+                                            "hist_stat.b_endpoint_value as b_endpoint_value," \
+                                            "hist_stat.endpoint_repeat_cnt as endpoint_repeat_cnt "\
+                                            "FROM %s col_stat LEFT JOIN %s hist_stat "\
+                                            "ON col_stat.tenant_id = hist_stat.tenant_id AND "\
+                                            "   col_stat.table_id = hist_stat.table_id AND "\
+                                            "   col_stat.partition_id = hist_stat.partition_id AND "\
+                                            "   col_stat.column_id = hist_stat.column_id "\
+                                            "WHERE %.*s "\
+                                            "ORDER BY tenant_id, table_id, partition_id, column_id, endpoint_num;"
 
 
 namespace oceanbase
@@ -290,7 +314,7 @@ int ObOptStatSqlService::fetch_table_stat(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObOptTableStat stat;
   stat.set_table_id(key.get_table_id());
-  DEFINE_SQL_CLIENT_RETRY_WEAK_FOR_STAT(mysql_proxy_, ALL_TABLE_STATISTICS);
+  ObSQLClientRetryWeak sql_client_retry_weak(mysql_proxy_, false, OB_INVALID_TIMESTAMP, false);
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     sqlclient::ObMySQLResult *result = NULL;
     ObSqlString sql;
@@ -305,7 +329,7 @@ int ObOptStatSqlService::fetch_table_stat(const uint64_t tenant_id,
                                       "macro_blk_cnt as macro_block_num, "
                                       "micro_blk_cnt as micro_block_num, "
                                       "stattype_locked as stattype_locked,"
-                                      "last_analyzed FROM %s ", ALL_TABLE_STATISTICS))) {
+                                      "last_analyzed FROM %s ", share::OB_ALL_TABLE_STAT_TNAME))) {
       LOG_WARN("fail to append SQL stmt string.", K(sql), K(ret));
     } else if (OB_FAIL(sql.append_fmt(" WHERE TENANT_ID = %ld AND TABLE_ID=%ld",
                                       ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
@@ -1229,18 +1253,17 @@ int ObOptStatSqlService::fetch_column_stat(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   ObSqlString keys_list_str;
-  ObSEArray<ObOptKeyColumnStat, 4> need_hist_key_col_stats;
   hash::ObHashMap<ObOptKeyInfo, int64_t> key_index_map;
   if (key_col_stats.empty()) {
-  } else if (OB_FAIL(generate_specified_keys_list_str(tenant_id, key_col_stats, keys_list_str))) {
-    LOG_WARN("failed to generate specified keys list str", K(ret), K(key_col_stats));
+  } else if (OB_FAIL(generate_specified_keys_list_str_for_column(tenant_id, key_col_stats, keys_list_str))) {
+    LOG_WARN("failed to generate specified keys list str for column", K(ret), K(key_col_stats));
   } else if (OB_FAIL(generate_key_index_map(tenant_id, key_col_stats, key_index_map))) {
     LOG_WARN("failed to init key index map", K(ret));
   } else if (OB_UNLIKELY(key_col_stats.count() < 1) || OB_ISNULL(key_col_stats.at(0).key_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(key_col_stats), K(ret));
   } else {
-    DEFINE_SQL_CLIENT_RETRY_WEAK_FOR_STAT(mysql_proxy_, ALL_COLUMN_STATISTICS);
+    ObSQLClientRetryWeak sql_client_retry_weak(mysql_proxy_, false, OB_INVALID_TIMESTAMP, false);
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
       ObSqlString sql;
@@ -1248,13 +1271,12 @@ int ObOptStatSqlService::fetch_column_stat(const uint64_t tenant_id,
       if (!inited_) {
         ret = OB_NOT_INIT;
         LOG_WARN("sql service has not been initialized.", K(ret));
-      } else if (OB_FAIL(sql.append_fmt("SELECT " ALL_COLUMN_STAT_COLUMN_NAME " FROM %s",
-                                        ALL_COLUMN_STATISTICS))) {
+      } else if (OB_FAIL(sql.append_fmt(FETCH_ALL_COLUMN_STAT_SQL,
+                                        share::OB_ALL_COLUMN_STAT_TNAME,
+                                        share::OB_ALL_HISTOGRAM_STAT_TNAME,
+                                        keys_list_str.string().length(),
+                                        keys_list_str.string().ptr()))) {
         LOG_WARN("fail to append SQL stmt string.", K(ret));
-      } else if (OB_FAIL(sql.append_fmt(" WHERE %.*s order by table_id, partition_id, column_id",
-                                         keys_list_str.string().length(),
-                                         keys_list_str.string().ptr()))) {
-        LOG_WARN("fail to append SQL where string.", K(ret));
       } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
         LOG_WARN("execute sql failed", "sql", sql.ptr(), K(ret));
       } else if (NULL == (result = res.get_result())) {
@@ -1272,14 +1294,8 @@ int ObOptStatSqlService::fetch_column_stat(const uint64_t tenant_id,
           } else if (OB_FAIL(fill_column_stat(allocator,
                                               *result,
                                               key_index_map,
-                                              key_col_stats,
-                                              need_hist_key_col_stats))) {
+                                              key_col_stats))) {
             LOG_WARN("read stat from result failed. ", K(ret));
-          } else {/*do nothing*/}
-        }
-        if (OB_SUCC(ret) && !need_hist_key_col_stats.empty()) {
-          if (OB_FAIL(fetch_histogram_stat(tenant_id, allocator, need_hist_key_col_stats))) {
-            LOG_WARN("fetch histogram statistics failed", K(need_hist_key_col_stats), K(ret));
           } else {/*do nothing*/}
         }
       }
@@ -1291,8 +1307,7 @@ int ObOptStatSqlService::fetch_column_stat(const uint64_t tenant_id,
 int ObOptStatSqlService::fill_column_stat(ObIAllocator &allocator,
                                           common::sqlclient::ObMySQLResult &result,
                                           hash::ObHashMap<ObOptKeyInfo, int64_t> &key_index_map,
-                                          ObIArray<ObOptKeyColumnStat> &key_col_stats,
-                                          ObIArray<ObOptKeyColumnStat> &need_hist_key_col_stats)
+                                          ObIArray<ObOptKeyColumnStat> &key_col_stats)
 {
   int ret = OB_SUCCESS;
   uint64_t pure_table_id = 0;
@@ -1315,202 +1330,128 @@ int ObOptStatSqlService::fill_column_stat(ObIAllocator &allocator,
         } else {
           LOG_WARN("failed to get refactored", K(ret), K(dst_key_info));
         }
-      } else if (OB_UNLIKELY(dst_idx < 0 || dst_idx >= key_col_stats.count())) {
+      } else if (OB_UNLIKELY(dst_idx < 0 || dst_idx >= key_col_stats.count()) ||
+                 OB_ISNULL(key_col_stats.at(dst_idx).stat_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(dst_idx), K(key_col_stats.count()));
+        LOG_WARN("get unexpected error", K(ret), K(dst_idx), K(key_col_stats));
       } else {
         ObOptKeyColumnStat &dst_key_col_stat = key_col_stats.at(dst_idx);
-        int64_t llc_bitmap_size = 0;
-        int64_t bucket_cnt = 0;
-        ObHistType histogram_type = ObHistType::INVALID_TYPE;
-        ObObjMeta obj_type;
-        ObOptColumnStat *stat = dst_key_col_stat.stat_;
-        ObHistogram &hist = stat->get_histogram();
-        stat->set_table_id(dst_key_col_stat.key_->table_id_);
-        EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, partition_id, *stat, uint64_t);
-        EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, column_id, *stat, uint64_t);
-        EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, stat_level, *stat, int64_t);
-        EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, num_distinct, *stat, int64_t);
-        EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, num_null, *stat, int64_t);
-        EXTRACT_INT_FIELD_MYSQL(result, "histogram_type", histogram_type, ObHistType);
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(result.get_type("sample_size", obj_type))) {
-            LOG_WARN("failed to get type", K(ret));
-          } else if (OB_LIKELY(obj_type.is_integer_type())) {
-            EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, sample_size, hist, int64_t);
-          } else {
-            EXTRACT_DOUBLE_FIELD_TO_CLASS_MYSQL(result, sample_size, hist, int64_t);
+        if (dst_key_col_stat.only_histogram_stat_) {
+          ObHistBucket bkt;
+          ObString str;
+          EXTRACT_INT_FIELD_MYSQL(result, "endpoint_num", bkt.endpoint_num_, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(result, "endpoint_repeat_cnt", bkt.endpoint_repeat_count_, int64_t);
+          EXTRACT_VARCHAR_FIELD_MYSQL(result, "b_endpoint_value", str);
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(hex_str_to_obj(str.ptr(), str.length(), allocator, bkt.endpoint_value_))) {
+              LOG_WARN("deserialize object value failed.", K(stat), K(ret));
+            } else if (OB_FAIL(dst_key_col_stat.stat_->get_histogram().add_bucket(bkt))) {
+              LOG_WARN("failed to push back buckets", K(ret));
+            } else {/*do nothing*/}
           }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(result.get_type("avg_len", obj_type))) {
-            LOG_WARN("failed to get type", K(ret));
-          } else if (OB_LIKELY(obj_type.is_double())) {
-            EXTRACT_DOUBLE_FIELD_TO_CLASS_MYSQL(result, avg_len, *stat, int64_t);
-          } else {
-            EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, avg_len, *stat, int64_t);
-          }
-        }
-        EXTRACT_INT_FIELD_MYSQL(result, "bucket_cnt", bucket_cnt, int64_t);
-        EXTRACT_DOUBLE_FIELD_TO_CLASS_MYSQL(result, density, hist, double);
-        EXTRACT_INT_FIELD_MYSQL(result, "distinct_cnt_synopsis_size", llc_bitmap_size, int64_t);
-        if (OB_SUCC(ret)) {
-          hist.set_type(histogram_type);
-          if (hist.is_valid() && OB_FAIL(hist.prepare_allocate_buckets(allocator, bucket_cnt))) {
-            LOG_WARN("failed to prepare allocate buckets", K(ret));
-          }
-        }
-        ObString hex_str;
-        common::ObObj obj;
-        if (OB_SUCC(ret)) {
-          int64_t int_value = 0;
-          if (OB_FAIL(result.get_timestamp("last_analyzed", NULL, int_value))) {
-            LOG_WARN("failed to get last analyzed field", K(ret));
-          } else {
-            stat->set_last_analyzed(int_value);
-          }
-        }
-        EXTRACT_VARCHAR_FIELD_MYSQL(result, "b_min_value", hex_str);
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(hex_str_to_obj(hex_str.ptr(), hex_str.length(), allocator, obj))) {
-            LOG_WARN("failed to convert hex str to obj", K(ret));
-          } else {
-            stat->set_min_value(obj);
-          }
-        }
-        EXTRACT_VARCHAR_FIELD_MYSQL(result, "b_max_value", hex_str);
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(hex_str_to_obj(hex_str.ptr(), hex_str.length(), allocator, obj))) {
-            LOG_WARN("failed to convert hex str to obj", K(ret));
-          } else {
-            stat->set_max_value(obj);
-          }
-        }
-        EXTRACT_VARCHAR_FIELD_MYSQL(result, "distinct_cnt_synopsis", hex_str);
-        char *bitmap_buf = NULL;
-        if (OB_SUCC(ret) && llc_bitmap_size > 0) {
-          if (NULL == (bitmap_buf = static_cast<char*>(allocator.alloc(hex_str.length())))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_ERROR("allocate memory for llc_bitmap failed.", K(hex_str.length()), K(ret));
-          } else {
-            common::str_to_hex(hex_str.ptr(), hex_str.length(), bitmap_buf, hex_str.length());
-            // decompress llc bitmap;
-            char *decomp_buf = NULL ;
-            int64_t decomp_size = ObOptColumnStat::NUM_LLC_BUCKET;
-            const int64_t bitmap_size = hex_str.length() / 2;
-            if (OB_FAIL(get_decompressed_llc_bitmap(allocator, bitmap_buf,
-                                                    bitmap_size, decomp_buf, decomp_size))) {
-              COMMON_LOG(WARN, "decompress bitmap buffer failed.", K(ret));
+        } else {//column stat has been obtained, just skip
+          int64_t llc_bitmap_size = 0;
+          int64_t bucket_cnt = 0;
+          ObHistType histogram_type = ObHistType::INVALID_TYPE;
+          ObObjMeta obj_type;
+          ObOptColumnStat *stat = dst_key_col_stat.stat_;
+          ObHistogram &hist = stat->get_histogram();
+          stat->set_table_id(dst_key_col_stat.key_->table_id_);
+          EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, partition_id, *stat, uint64_t);
+          EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, column_id, *stat, uint64_t);
+          EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, stat_level, *stat, int64_t);
+          EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, num_distinct, *stat, int64_t);
+          EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, num_null, *stat, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(result, "histogram_type", histogram_type, ObHistType);
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(result.get_type("sample_size", obj_type))) {
+              LOG_WARN("failed to get type", K(ret));
+            } else if (OB_LIKELY(obj_type.is_integer_type())) {
+              EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, sample_size, hist, int64_t);
             } else {
-              stat->set_llc_bitmap(decomp_buf, decomp_size);
+              EXTRACT_DOUBLE_FIELD_TO_CLASS_MYSQL(result, sample_size, hist, int64_t);
             }
           }
-        }
-        if (OB_SUCC(ret) && hist.is_valid()) {
-          if (OB_FAIL(need_hist_key_col_stats.push_back(dst_key_col_stat))) {
-            LOG_WARN("failed to push back", K(ret));
-          } else {/*do nothing*/}
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObOptStatSqlService::fetch_histogram_stat(const uint64_t tenant_id,
-                                              ObIAllocator &allocator,
-                                              ObIArray<ObOptKeyColumnStat> &key_col_stats)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString keys_list_str;
-  hash::ObHashMap<ObOptKeyInfo, int64_t> key_index_map;
-  if (key_col_stats.empty()) {
-  } else if (OB_FAIL(generate_specified_keys_list_str(tenant_id, key_col_stats, keys_list_str))) {
-    LOG_WARN("failed to generate specified keys list str", K(ret), K(key_col_stats));
-  } else if (OB_FAIL(generate_key_index_map(tenant_id, key_col_stats, key_index_map))) {
-    LOG_WARN("failed to init key index map", K(ret));
-  } else {
-    DEFINE_SQL_CLIENT_RETRY_WEAK_FOR_STAT(mysql_proxy_, ALL_HISTOGRAM_STATISTICS);
-    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      sqlclient::ObMySQLResult *result = NULL;
-      ObSqlString sql;
-      const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-      if (!inited_) {
-        ret = OB_NOT_INIT;
-        LOG_WARN("sql service has not been initialized.", K(ret));
-      } else if (OB_FAIL(sql.append_fmt("SELECT " ALL_HISTOGRAM_STAT_COLUMN_NAME " FROM %s",
-                                        ALL_HISTOGRAM_STATISTICS))) {
-        LOG_WARN("fail to append SQL stmt string.", K(ret));
-      } else if (OB_FAIL(sql.append_fmt(" WHERE %.*s ORDER BY ENDPOINT_NUM",
-                                         keys_list_str.string().length(),
-                                         keys_list_str.string().ptr()))) {
-        LOG_WARN("fail to append SQL where string.", K(ret));
-      } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
-        LOG_WARN("execute sql failed", "sql", sql.ptr(), K(ret));
-      } else if (NULL == (result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to execute ", "sql", sql.ptr(), K(ret));
-      } else {
-        while (OB_SUCC(ret)) {
-          if (OB_FAIL(result->next())) {
-            if (OB_ITER_END != ret) {
-              LOG_WARN("result next failed", K(ret));
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(result.get_type("avg_len", obj_type))) {
+              LOG_WARN("failed to get type", K(ret));
+            } else if (OB_LIKELY(obj_type.is_double())) {
+              EXTRACT_DOUBLE_FIELD_TO_CLASS_MYSQL(result, avg_len, *stat, int64_t);
             } else {
-              ret = OB_SUCCESS;
-              break;
+              EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, avg_len, *stat, int64_t);
             }
-          } else if (OB_FAIL(fill_bucket_stat(allocator, *result, key_index_map, key_col_stats))) {
-            LOG_WARN("fill bucket stat failed", K(ret));
-          } else {/*do nothing*/}
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObOptStatSqlService::fill_bucket_stat(ObIAllocator &allocator,
-                                          sqlclient::ObMySQLResult &result,
-                                          hash::ObHashMap<ObOptKeyInfo, int64_t> &key_index_map,
-                                          ObIArray<ObOptKeyColumnStat> &key_col_stats)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("sql service has not been initialized.", K(ret));
-  } else {
-    uint64_t pure_table_id = 0;
-    int64_t partition_id = 0;
-    uint64_t column_id = 0;
-    EXTRACT_INT_FIELD_MYSQL(result, "table_id", pure_table_id, uint64_t);
-    EXTRACT_INT_FIELD_MYSQL(result, "partition_id", partition_id, int64_t);
-    EXTRACT_INT_FIELD_MYSQL(result, "column_id", column_id, uint64_t);
-    if (OB_SUCC(ret)) {
-      ObOptKeyInfo dst_key_info(pure_table_id, partition_id, column_id);
-      int64_t dst_idx = -1;
-      if (OB_FAIL(key_index_map.get_refactored(dst_key_info, dst_idx))) {
-        if (ret == OB_HASH_NOT_EXIST) {
-          ret = OB_SUCCESS;
-          LOG_TRACE("the histogram stat doesn't process, have been get", K(dst_key_info));
-        } else {
-          LOG_WARN("failed to get refactored", K(ret), K(dst_key_info));
-        }
-      } else if (OB_UNLIKELY(dst_idx < 0 || dst_idx >= key_col_stats.count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(dst_idx), K(key_col_stats.count()));
-      } else {
-        ObOptKeyColumnStat &dst_key_col_stat = key_col_stats.at(dst_idx);
-        ObHistBucket bkt;
-        ObString str;
-        EXTRACT_INT_FIELD_MYSQL(result, "endpoint_num", bkt.endpoint_num_, int64_t);
-        EXTRACT_INT_FIELD_MYSQL(result, "endpoint_repeat_cnt", bkt.endpoint_repeat_count_, int64_t);
-        EXTRACT_VARCHAR_FIELD_MYSQL(result, "b_endpoint_value", str);
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(hex_str_to_obj(str.ptr(), str.length(), allocator, bkt.endpoint_value_))) {
-            LOG_WARN("deserialize object value failed.", K(stat), K(ret));
-          } else if (OB_FAIL(dst_key_col_stat.stat_->get_histogram().add_bucket(bkt))) {
-            LOG_WARN("failed to push back buckets", K(ret));
-          } else {/*do nothing*/}
+          }
+          EXTRACT_INT_FIELD_MYSQL(result, "bucket_cnt", bucket_cnt, int64_t);
+          EXTRACT_DOUBLE_FIELD_TO_CLASS_MYSQL(result, density, hist, double);
+          EXTRACT_INT_FIELD_MYSQL(result, "distinct_cnt_synopsis_size", llc_bitmap_size, int64_t);
+          if (OB_SUCC(ret)) {
+            hist.set_type(histogram_type);
+            if (hist.is_valid() && OB_FAIL(hist.prepare_allocate_buckets(allocator, bucket_cnt))) {
+              LOG_WARN("failed to prepare allocate buckets", K(ret));
+            }
+          }
+          ObString hex_str;
+          common::ObObj obj;
+          if (OB_SUCC(ret)) {
+            int64_t int_value = 0;
+            if (OB_FAIL(result.get_timestamp("last_analyzed", NULL, int_value))) {
+              LOG_WARN("failed to get last analyzed field", K(ret));
+            } else {
+              stat->set_last_analyzed(int_value);
+            }
+          }
+          EXTRACT_VARCHAR_FIELD_MYSQL(result, "b_min_value", hex_str);
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(hex_str_to_obj(hex_str.ptr(), hex_str.length(), allocator, obj))) {
+              LOG_WARN("failed to convert hex str to obj", K(ret));
+            } else {
+              stat->set_min_value(obj);
+            }
+          }
+          EXTRACT_VARCHAR_FIELD_MYSQL(result, "b_max_value", hex_str);
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(hex_str_to_obj(hex_str.ptr(), hex_str.length(), allocator, obj))) {
+              LOG_WARN("failed to convert hex str to obj", K(ret));
+            } else {
+              stat->set_max_value(obj);
+            }
+          }
+          EXTRACT_VARCHAR_FIELD_MYSQL(result, "distinct_cnt_synopsis", hex_str);
+          char *bitmap_buf = NULL;
+          if (OB_SUCC(ret) && llc_bitmap_size > 0) {
+            if (NULL == (bitmap_buf = static_cast<char*>(allocator.alloc(hex_str.length())))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_ERROR("allocate memory for llc_bitmap failed.", K(hex_str.length()), K(ret));
+            } else {
+              common::str_to_hex(hex_str.ptr(), hex_str.length(), bitmap_buf, hex_str.length());
+              // decompress llc bitmap;
+              char *decomp_buf = NULL ;
+              int64_t decomp_size = ObOptColumnStat::NUM_LLC_BUCKET;
+              const int64_t bitmap_size = hex_str.length() / 2;
+              if (OB_FAIL(get_decompressed_llc_bitmap(allocator, bitmap_buf,
+                                                      bitmap_size, decomp_buf, decomp_size))) {
+                COMMON_LOG(WARN, "decompress bitmap buffer failed.", K(ret));
+              } else {
+                stat->set_llc_bitmap(decomp_buf, decomp_size);
+              }
+            }
+          }
+          if (OB_SUCC(ret) && hist.is_valid()) {
+            ObHistBucket bkt;
+            ObString str;
+            EXTRACT_INT_FIELD_MYSQL(result, "endpoint_num", bkt.endpoint_num_, int64_t);
+            EXTRACT_INT_FIELD_MYSQL(result, "endpoint_repeat_cnt", bkt.endpoint_repeat_count_, int64_t);
+            EXTRACT_VARCHAR_FIELD_MYSQL(result, "b_endpoint_value", str);
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(hex_str_to_obj(str.ptr(), str.length(), allocator, bkt.endpoint_value_))) {
+                LOG_WARN("deserialize object value failed.", K(stat), K(ret));
+              } else if (OB_FAIL(hist.add_bucket(bkt))) {
+                LOG_WARN("failed to push back buckets", K(ret));
+              } else {
+                dst_key_col_stat.only_histogram_stat_ = true;
+              }
+            }
+          }
         }
       }
     }
@@ -1667,9 +1608,9 @@ int ObOptStatSqlService::get_valid_obj_str(const ObObj &src_obj,
   return ret;
 }
 
-int ObOptStatSqlService::generate_specified_keys_list_str(const uint64_t tenant_id,
-                                                          ObIArray<ObOptKeyColumnStat> &key_col_stats,
-                                                          ObSqlString &keys_list_str)
+int ObOptStatSqlService::generate_specified_keys_list_str_for_column(const uint64_t tenant_id,
+                                                                     ObIArray<ObOptKeyColumnStat> &key_col_stats,
+                                                                     ObSqlString &keys_list_str)
 {
   int ret = OB_SUCCESS;
   uint64_t table_id = 0;
@@ -1734,7 +1675,7 @@ int ObOptStatSqlService::generate_specified_keys_list_str(const uint64_t tenant_
     }
     if (OB_SUCC(ret)) {
       const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-      if (OB_FAIL(keys_list_str.append_fmt(" (TENANT_ID=%lu AND TABLE_ID=%ld AND PARTITION_ID IN (%.*s) AND COLUMN_ID IN (%.*s))",
+      if (OB_FAIL(keys_list_str.append_fmt(" (col_stat.TENANT_ID=%lu AND col_stat.TABLE_ID=%ld AND col_stat.PARTITION_ID IN (%.*s) AND col_stat.COLUMN_ID IN (%.*s))",
                                             ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
                                             ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id),
                                             partition_list_str.string().length(),
@@ -1755,7 +1696,7 @@ int ObOptStatSqlService::generate_key_index_map(const uint64_t tenant_id,
                                                 hash::ObHashMap<ObOptKeyInfo, int64_t> &key_index_map)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(key_index_map.create(key_col_stats.count(), "OptKeyColStat"))) {
+  if (OB_FAIL(key_index_map.create(key_col_stats.count(), "OptKeyColStat", "OptColStatNode", tenant_id))) {
     LOG_WARN("fail to create hash map", K(ret), K(key_col_stats.count()));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < key_col_stats.count(); ++i) {
@@ -2046,7 +1987,7 @@ int ObOptStatSqlService::fetch_table_rowcnt(const uint64_t tenant_id,
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
       sqlclient::ObMySQLResult *client_result = NULL;
-      ObSQLClientRetryWeak sql_client_retry_weak(mysql_proxy_);
+      ObSQLClientRetryWeak sql_client_retry_weak(mysql_proxy_, false, OB_INVALID_TIMESTAMP, false);
       if (OB_FAIL(sql_client_retry_weak.read(proxy_result, tenant_id, raw_sql.ptr()))) {
         LOG_WARN("failed to execute sql", K(ret), K(raw_sql));
       } else if (OB_ISNULL(client_result = proxy_result.get_result())) {
@@ -2242,9 +2183,6 @@ int ObOptStatSqlService::get_gather_stat_value(const ObOptStatGatherStat &gather
 
 #undef ALL_HISTOGRAM_STAT_COLUMN_NAME
 #undef ALL_COLUMN_STAT_COLUMN_NAME
-#undef ALL_COLUMN_STATISTICS
-#undef ALL_TABLE_STATISTICS
-#undef ALL_HISTOGRAM_STATISTICS
 #undef INSERT_TABLE_STAT_SQL
 #undef REPLACE_COL_STAT_SQL
 #undef INSERT_HISTOGRAM_STAT_SQL
@@ -2256,4 +2194,3 @@ int ObOptStatSqlService::get_gather_stat_value(const ObOptStatGatherStat &gather
 #undef INSERT_ONLINE_TABLE_STAT_DUPLICATE
 #undef INSERT_ONLINE_COL_STAT_SQL
 #undef INSERT_ONLINE_COL_STAT_DUPLICATE
-#undef DEFINE_SQL_CLIENT_RETRY_WEAK_FOR_STAT

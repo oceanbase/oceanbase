@@ -11680,9 +11680,7 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
               table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list();
     for (int64_t i = 0; OB_SUCC(ret) && i < part_loc_info_array.count(); ++i) {
       const ObOptTabletLoc &part_loc = part_loc_info_array.at(i).get_partition_location();
-      int64_t part_id = (!table_schema.is_partitioned_table() && is_virtual_table(ref_table_id))
-                                                       ? ref_table_id : part_loc.get_partition_id();
-      if (OB_FAIL(all_used_part_id.push_back(part_id))) {
+      if (OB_FAIL(all_used_part_id.push_back(part_loc.get_partition_id()))) {
         LOG_WARN("failed to push back partition id", K(ret));
       } else if (OB_FAIL(all_used_tablet_id.push_back(part_loc.get_tablet_id()))) {
         LOG_WARN("failed to push back tablet id", K(ret));
@@ -11922,10 +11920,12 @@ int ObJoinOrder::check_use_global_stat(const uint64_t ref_table_id,
       OB_ISNULL(OPT_CTX.get_exec_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (all_used_parts.count() <= 1) {
+  } else if (all_used_parts.count() <= 1 && !is_virtual_table(ref_table_id)) {
     // at most one partition are used
     // directly use the partition
-  } else if (all_used_parts.count() == schema.get_all_part_num()) {
+  } else if (all_used_parts.count() == schema.get_all_part_num() ||
+             is_virtual_table(ref_table_id)) {
+    global_part_id = schema.is_partitioned_table() ? -1 : ref_table_id;
     if (OB_ISNULL(OPT_CTX.get_opt_stat_manager())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(OPT_CTX.get_opt_stat_manager()));
