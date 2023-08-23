@@ -110,8 +110,8 @@
 #endif
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_dbms_audit_mgmt.h" // ObDbmsAuditMgmt
-#include "share/backup/ob_log_restore_config.h"//ObLogRestoreSourceServiceConfigParser
 #endif
+#include "share/backup/ob_log_restore_config.h"//ObLogRestoreSourceServiceConfigParser
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
