@@ -759,14 +759,26 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
     case ObUSmallIntType:
     case ObUMediumIntType:
     case ObUInt32Type:
-    case ObUInt64Type:
-    case ObYearType: {
+    case ObUInt64Type: {
       buf = allocator->alloc(sizeof(ObJsonUint));
       if (OB_ISNULL(buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("buf allocate failed", K(ret), K(type));
       } else {
         json_node = (ObJsonInt*)new(buf)ObJsonUint(datum.get_uint64());
+      }
+      break;
+    }
+    case ObYearType: {
+      buf = allocator->alloc(sizeof(ObJsonInt));
+      int64_t value = 0;
+      if (OB_FAIL(ObTimeConverter::year_to_int(datum.get_year(), value))) {
+        LOG_WARN("fail to get year data", K(ret));
+      } else if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("buf allocate failed", K(ret), K(type));
+      } else {
+        json_node = (ObJsonInt*)new(buf)ObJsonInt(value);
       }
       break;
     }
