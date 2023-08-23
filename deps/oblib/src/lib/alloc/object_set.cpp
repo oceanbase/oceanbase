@@ -296,6 +296,7 @@ ABlock *ObjectSet::alloc_block(const uint64_t size, const ObMemAttr &attr)
   ABlock *block = blk_mgr_->alloc_block(size, attr);
 
   if (NULL != block) {
+    hold_bytes_ += block->hold();
     if (NULL != blist_) {
       block->prev_ = blist_->prev_;
       block->next_ = blist_;
@@ -305,7 +306,6 @@ ABlock *ObjectSet::alloc_block(const uint64_t size, const ObMemAttr &attr)
       block->prev_ = block->next_ = block;
       blist_ = block;
     }
-    hold_bytes_ += block->hold();
     block->obj_set_ = this;
     block->ablock_size_ = ablock_size_;
     block->mem_context_ = reinterpret_cast<int64_t>(mem_context_);
@@ -319,7 +319,6 @@ void ObjectSet::free_block(ABlock *block)
   abort_unless(NULL != block);
   abort_unless(block->is_valid());
 
-  hold_bytes_ -= block->hold();
   if (block == blist_) {
     blist_ = blist_->next_;
     if (block == blist_) {
@@ -330,6 +329,7 @@ void ObjectSet::free_block(ABlock *block)
   block->prev_->next_ = block->next_;
   block->next_->prev_ = block->prev_;
 
+  hold_bytes_ -= block->hold();
   // The pbmgr shouldn't be NULL or there'll be memory leak.
   blk_mgr_->free_block(block);
 }
