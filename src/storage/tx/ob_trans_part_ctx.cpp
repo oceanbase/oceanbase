@@ -5440,6 +5440,9 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
 {
   int ret = OB_SUCCESS;
 
+  share::SCN append_mode_initial_scn;
+  append_mode_initial_scn.set_invalid();
+
   common::ObTimeGuard timeguard("switch to leader", 10 * 1000);
   CtxLockGuard guard(lock_);
   TxCtxStateHelper state_helper(role_state_);
@@ -5449,23 +5452,39 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(is_exiting_)) {
     TRANS_LOG(DEBUG, "transaction is exiting", "context", *this);
+  } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->get_append_mode_initial_scn(
+                 append_mode_initial_scn))) {
+    /* We can not ensure whether there are some redo logs after the append_mode_initial_scn.
+     * All running trans must be be killed by the append_mode_initial_scn.*/
+    TRANS_LOG(WARN, "get append mode initial scn from the palf failed", K(ret), KPC(this));
   } else if (OB_FAIL(state_helper.switch_state(TxCtxOps::TAKEOVER))) {
     TRANS_LOG(WARN, "switch role state error", KR(ret), K(*this));
   } else {
-    const bool need_kill_tx = is_contain_mds_type_(ObTxDataSourceType::TABLE_LOCK)
-                           || is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT);
+    const bool contain_mds_table_lock = is_contain_mds_type_(ObTxDataSourceType::TABLE_LOCK);
+    const bool contain_mds_transfer_out =
+        is_contain_mds_type_(ObTxDataSourceType::START_TRANSFER_OUT);
+    bool kill_by_append_mode_initial_scn = false;
+    if (append_mode_initial_scn.is_valid()) {
+      kill_by_append_mode_initial_scn = exec_info_.max_applying_log_ts_ <= append_mode_initial_scn;
+    }
+
     if (ObTxState::INIT == exec_info_.state_) {
-      if (exec_info_.data_complete_ && !need_kill_tx) {
+      if (exec_info_.data_complete_ && !contain_mds_table_lock && !contain_mds_transfer_out
+          && !kill_by_append_mode_initial_scn) {
         if (OB_FAIL(mt_ctx_.replay_to_commit(false /*is_resume*/))) {
           TRANS_LOG(WARN, "replay to commit failed", KR(ret), K(*this));
         }
       } else {
-        TRANS_LOG(WARN, "txn data incomplete, will be aborted", K(need_kill_tx), KPC(this));
+        TRANS_LOG(WARN, "txn data incomplete, will be aborted", K(contain_mds_table_lock),
+                  K(contain_mds_transfer_out), K(kill_by_append_mode_initial_scn),
+                  K(append_mode_initial_scn), KPC(this));
         if (has_persisted_log_()) {
-          if (ObPartTransAction::COMMIT == part_trans_action_ || get_upstream_state() >= ObTxState::REDO_COMPLETE) {
+          if (ObPartTransAction::COMMIT == part_trans_action_
+              || get_upstream_state() >= ObTxState::REDO_COMPLETE) {
 
-            TRANS_LOG(WARN, "abort self instantly with a tx_commit request", K(need_kill_tx),
-                      KPC(this));
+            TRANS_LOG(WARN, "abort self instantly with a tx_commit request",
+                      K(contain_mds_table_lock), K(contain_mds_transfer_out),
+                      K(kill_by_append_mode_initial_scn), K(append_mode_initial_scn), KPC(this));
             if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
               TRANS_LOG(WARN, "abort tx failed", KR(ret), KPC(this));
             }
@@ -5525,10 +5544,8 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
     TRANS_LOG(INFO, "switch to leader succeed", KPC(this));
 #endif
   }
-  REC_TRANS_TRACE_EXT2(tlog_, switch_to_leader,
-                              OB_ID(ret), ret, OB_ID(used),
-                              timeguard.get_diff(),
-                              OB_ID(ctx_ref), get_ref());
+  REC_TRANS_TRACE_EXT2(tlog_, switch_to_leader, OB_ID(ret), ret, OB_ID(used), timeguard.get_diff(),
+                       OB_ID(ctx_ref), get_ref());
   return ret;
 }
 

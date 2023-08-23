@@ -2218,6 +2218,21 @@ int PalfHandleImpl::get_access_mode(int64_t &mode_version, AccessMode &access_mo
   return ret;
 }
 
+int PalfHandleImpl::get_access_mode_ref_scn(int64_t &mode_version,
+                                            AccessMode &access_mode,
+                                            SCN &ref_scn) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImpl is not inited", K(ret), KPC(this));
+  } else if (OB_FAIL(mode_mgr_.get_access_mode_ref_scn(mode_version, access_mode, ref_scn))) {
+    PALF_LOG(WARN, "get_access_mode_ref_scn failed", K(ret), KPC(this));
+  }
+  return ret;
+}
+
 int PalfHandleImpl::alloc_palf_buffer_iterator(const LSN &offset,
                                                PalfBufferIterator &iterator)
 {

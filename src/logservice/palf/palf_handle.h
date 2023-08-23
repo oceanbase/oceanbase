@@ -447,6 +447,9 @@ public:
   //   OB_SUCCESS
   int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const;
   int get_access_mode(AccessMode &access_mode) const;
+  int get_access_mode_ref_scn(int64_t &mode_version,
+                              AccessMode &access_mode,
+                              SCN &ref_scn) const;
 
   // @brief: check whether the palf instance is allowed to vote for logs
   // By default, return true;

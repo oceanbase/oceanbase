@@ -65,6 +65,8 @@ public:
   virtual int get_role(bool &is_leader, int64_t &epoch) = 0;
   virtual int get_max_decided_scn(share::SCN &scn) = 0;
 
+  virtual int get_append_mode_initial_scn(share::SCN &ref_scn) = 0;
+
   /**
    * Dup Table Inerface
    * */
@@ -103,6 +105,8 @@ public:
                  const bool need_nonblock);
   int get_role(bool &is_leader, int64_t &epoch);
   int get_max_decided_scn(share::SCN &scn);
+
+  int get_append_mode_initial_scn(share::SCN &ref_scn);
 
   /**
    * Dup Table Inerface

@@ -82,6 +82,12 @@ public:
     return OB_SUCCESS;
   }
 
+  virtual int get_append_mode_initial_scn(SCN &initial_scn) const
+  {
+    UNUSED(initial_scn);
+    return OB_SUCCESS;
+  }
+
   virtual int change_access_mode(const int64_t mode_version,
                                  const AccessMode &access_mode,
                                  const share::SCN &ref_scn)

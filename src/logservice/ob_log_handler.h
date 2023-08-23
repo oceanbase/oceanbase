@@ -82,6 +82,7 @@ public:
                                  const palf::AccessMode &access_mode,
                                  const share::SCN &ref_scn) = 0;
   virtual int get_access_mode(int64_t &mode_version, palf::AccessMode &access_mode) const = 0;
+  virtual int get_append_mode_initial_scn(SCN &ref_scn) const = 0;
   virtual int seek(const palf::LSN &lsn, palf::PalfBufferIterator &iter) = 0;
   virtual int seek(const palf::LSN &lsn, palf::PalfGroupBufferIterator &iter) = 0;
   virtual int seek(const share::SCN &scn, palf::PalfGroupBufferIterator &iter) = 0;
@@ -245,6 +246,11 @@ public:
   // @retval
   //   OB_SUCCESS
   int get_access_mode(int64_t &mode_version, palf::AccessMode &access_mode) const override final;
+  // @description: get ref_scn of APPEND mode
+  // @return
+  // - OB_SUCCESS
+  // - OB_STATE_NOT_MATCH: current access mode is not APPEND
+  int get_append_mode_initial_scn(share::SCN &initial_scn) const override final;
   // @brief change AccessMode of palf.
   // @param[in] const int64_t &mode_version: mode_version corresponding to AccessMode,
   // can be gotted by get_access_mode

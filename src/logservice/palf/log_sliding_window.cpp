@@ -2551,22 +2551,17 @@ int LogSlidingWindow::to_leader_active()
   // Resize group_buffer
   int ret = OB_SUCCESS;
   SCN ref_scn;
-  int64_t mode_version1 = INVALID_PROPOSAL_ID, mode_version2 = INVALID_PROPOSAL_ID;
+  int64_t mode_version = INVALID_PROPOSAL_ID;
   AccessMode access_mode = AccessMode::INVALID_ACCESS_MODE;
   const int64_t curr_proposal_id = state_mgr_->get_proposal_id();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(mode_mgr_->get_ref_scn(mode_version1, ref_scn))) {
-    PALF_LOG(INFO, "get_ref_scn failed", K(ret), K_(palf_id), K_(self));
-  } else if (OB_FAIL(mode_mgr_->get_access_mode(mode_version2, access_mode))) {
-    PALF_LOG(INFO, "get_ref_scn failed", K(ret), K_(palf_id), K_(self));
-  } else if (mode_version1 != mode_version2) {
-    ret = OB_ERR_UNEXPECTED;
-    PALF_LOG(ERROR, "mode_version has been changed", K(ret), K(mode_version1), K(mode_version2));
-  } else if (curr_proposal_id < mode_version1) {
+  } else if (OB_FAIL(mode_mgr_->get_access_mode_ref_scn(mode_version, access_mode, ref_scn))) {
+    PALF_LOG(INFO, "get_access_mode_ref_scn failed", K(ret), K_(palf_id), K_(self));
+  } else if (curr_proposal_id < mode_version) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "curr_proposal_id is less than proposal_id in ModeMeta", K(ret),
-        K_(palf_id), K_(self), K(mode_version1), K(curr_proposal_id));
+        K_(palf_id), K_(self), K(mode_version), K(curr_proposal_id));
   } else if (!is_all_log_flushed_()) {
     ret = OB_EAGAIN;
     PALF_LOG(WARN, "to_leader_active need retry, because there is some log has not been flushed", K(ret),

@@ -169,6 +169,18 @@ int ObLSTxLogAdapter::get_max_decided_scn(SCN &scn)
   return ret;
 }
 
+int ObLSTxLogAdapter::get_append_mode_initial_scn(share::SCN &ref_scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(log_handler_) || !log_handler_->is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), KP(log_handler_));
+  } else {
+    ret = log_handler_->get_append_mode_initial_scn(ref_scn);
+  }
+  return ret;
+}
+
 int ObLSTxLogAdapter::block_confirm_with_dup_tablet_change_snapshot(
     share::SCN &dup_tablet_change_snapshot)
 {

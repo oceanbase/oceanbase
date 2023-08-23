@@ -146,7 +146,9 @@ int LogModeMgr::get_access_mode(int64_t &mode_version, AccessMode &access_mode) 
   return ret;
 }
 
-int LogModeMgr::get_ref_scn(int64_t &mode_version, SCN &ref_scn) const
+int LogModeMgr::get_access_mode_ref_scn(int64_t &mode_version,
+                                        AccessMode &access_mode,
+                                        SCN &ref_scn) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -154,6 +156,7 @@ int LogModeMgr::get_ref_scn(int64_t &mode_version, SCN &ref_scn) const
     PALF_LOG(WARN, "LogModeMgr has inited", K(ret));
   } else {
     mode_version = applied_mode_meta_.mode_version_;
+    access_mode = applied_mode_meta_.access_mode_;
     ref_scn = applied_mode_meta_.ref_scn_;
   }
   return ret;

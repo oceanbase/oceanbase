@@ -290,6 +290,28 @@ int ObLogHandler::get_access_mode(int64_t &mode_version, palf::AccessMode &acces
   return ret;
 }
 
+int ObLogHandler::get_append_mode_initial_scn(share::SCN &ref_scn) const
+{
+  int ret = OB_SUCCESS;
+  int64_t mode_version = INVALID_PROPOSAL_ID;
+  AccessMode access_mode = AccessMode::INVALID_ACCESS_MODE;
+  share::SCN curr_ref_scn;
+  ref_scn.reset();
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else if (OB_FAIL(palf_handle_.get_access_mode_ref_scn(mode_version, access_mode, curr_ref_scn))) {
+    CLOG_LOG(WARN, "get_access_mode_ref_scn failed", K(ret), K_(id));
+  } else if (AccessMode::APPEND == access_mode) {
+    ref_scn = curr_ref_scn;
+  } else {
+    ret = OB_STATE_NOT_MATCH;
+  }
+  return ret;
+}
+
 int ObLogHandler::change_access_mode(const int64_t mode_version,
                                      const palf::AccessMode &access_mode,
                                      const SCN &ref_scn)

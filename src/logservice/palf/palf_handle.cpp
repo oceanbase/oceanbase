@@ -495,6 +495,16 @@ int PalfHandle::get_access_mode(AccessMode &access_mode) const
   return ret;
 }
 
+int PalfHandle::get_access_mode_ref_scn(int64_t &mode_version,
+                                        AccessMode &access_mode,
+                                        SCN &ref_scn) const
+{
+  int ret = OB_SUCCESS;
+  CHECK_VALID;
+  ret = palf_handle_impl_->get_access_mode_ref_scn(mode_version, access_mode, ref_scn);
+  return ret;
+}
+
 int PalfHandle::disable_vote(const bool need_check_log_missing)
 {
   int ret = OB_SUCCESS;

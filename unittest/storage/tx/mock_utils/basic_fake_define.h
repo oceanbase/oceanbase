@@ -550,6 +550,12 @@ public:
     return OB_SUCCESS;
   }
 
+  int get_append_mode_initial_scn(share::SCN &ref_scn) {
+    int ret = OB_SUCCESS;
+    ref_scn = share::SCN::invalid_scn();
+    return ret;
+  }
+
   int get_inflight_cnt() {
     return ATOMIC_LOAD(&inflight_cnt_);
   }

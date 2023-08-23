@@ -752,6 +752,9 @@ public:
                                  const share::SCN &ref_scn) = 0;
   virtual int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const = 0;
   virtual int get_access_mode(AccessMode &access_mode) const = 0;
+  virtual int get_access_mode_ref_scn(int64_t &mode_version,
+                                      AccessMode &access_mode,
+                                      SCN &ref_scn) const = 0;
   virtual int handle_committed_info(const common::ObAddr &server,
                             const int64_t &msg_proposal_id,
                             const int64_t prev_log_id,
@@ -969,6 +972,9 @@ public:
   int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const override final;
   int get_access_mode(AccessMode &access_mode) const override final;
   int get_access_mode_version(int64_t &mode_version) const;
+  int get_access_mode_ref_scn(int64_t &mode_version,
+                              AccessMode &access_mode,
+                              SCN &ref_scn) const override final;
   // =========================== Iterator start ============================
   int alloc_palf_buffer_iterator(const LSN &offset, PalfBufferIterator &iterator) override final;
   int alloc_palf_group_buffer_iterator(const LSN &offset, PalfGroupBufferIterator &iterator) override final;
