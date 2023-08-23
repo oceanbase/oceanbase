@@ -402,7 +402,7 @@ int ObLSDupTabletsMgr::init_free_tablet_pool_()
     DUP_TABLE_LOG(WARN, "get free tablet set failed", K(ret));
   } else {
     removing_old_set_->get_common_header().set_old();
-    removing_old_set_->set_related_set_op_type(DupTableRelatedSetOpType::NEW_GC);
+    removing_old_set_->set_related_set_op_type(DupTableRelatedSetOpType::OLD_GC);
   }
 
   DUP_TABLE_LOG(INFO, "finish init tablet map", K(ret), KPC(removing_old_set_),
@@ -2447,7 +2447,7 @@ int ObLSDupTabletsMgr::return_tablet_set_(DupTabletChangeMap *need_free_set)
   } else if (need_free_set->get_common_header().is_old_set()) {
     need_free_set->reuse();
     need_free_set->get_common_header().set_old();
-    need_free_set->set_related_set_op_type(DupTableRelatedSetOpType::NEW_GC);
+    need_free_set->set_related_set_op_type(DupTableRelatedSetOpType::OLD_GC);
   } else {
     if (OB_FAIL(ret)) {
     } else {
