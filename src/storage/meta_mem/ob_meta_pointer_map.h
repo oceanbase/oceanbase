@@ -514,13 +514,10 @@ int ObMetaPointerMap<Key, T>::load_meta_obj(
     common::ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "LoadMetaObj"));
     char *buf = nullptr;
     int64_t buf_len = 0;
-    {
-      common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
-      if (OB_FAIL(meta_pointer->read_from_disk(arena_allocator, buf, buf_len, load_addr))) {
-        STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer));
-      }
-    }
-    if (OB_SUCC(ret)) {
+    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
+    if (OB_FAIL(meta_pointer->read_from_disk(arena_allocator, buf, buf_len, load_addr))) {
+      STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer));
+    } else {
       t->tablet_addr_ = load_addr;
       if (OB_FAIL(meta_pointer->deserialize(allocator, buf, buf_len, t))) {
         STORAGE_LOG(WARN, "fail to deserialize object", K(ret), K(key), KPC(meta_pointer));
@@ -553,13 +550,10 @@ int ObMetaPointerMap<Key, T>::load_meta_obj(
     common::ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "LoadMetaObj"));
     char *buf = nullptr;
     int64_t buf_len = 0;
-    {
-      common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
-      if (OB_FAIL(meta_pointer->read_from_disk(arena_allocator, buf, buf_len, load_addr))) {
-        STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer));
-      }
-    }
-    if (OB_SUCC(ret)) {
+    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
+    if (OB_FAIL(meta_pointer->read_from_disk(arena_allocator, buf, buf_len, load_addr))) {
+      STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer));
+    } else {
       t->tablet_addr_ = load_addr;
       if (OB_FAIL(meta_pointer->deserialize(buf, buf_len, t))) {
         STORAGE_LOG(WARN, "fail to deserialize object", K(ret), K(key), KPC(meta_pointer));
