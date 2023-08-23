@@ -116,7 +116,8 @@ int ObRpcCheckBackupSchuedulerWorkingP::process()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(gctx_.root_service_)) {
-    LOG_ERROR("invalid argument", K(gctx_.root_service_));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid argument", K(ret), K(gctx_.root_service_));
   } else {
     ret = gctx_.root_service_->check_backup_scheduler_working(result_);
   }
@@ -764,7 +765,8 @@ int ObRpcGetRoleP::process()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(gctx_.root_service_)) {
-    LOG_ERROR("invalid argument", K(gctx_.root_service_));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid argument", K(ret), K(gctx_.root_service_));
   } else {
     ret = gctx_.ob_service_->get_root_server_status(result_);
   }

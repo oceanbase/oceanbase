@@ -272,7 +272,8 @@ void ObInnerSQLConnection::unref()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(lbt()));
   } else if (OB_ISNULL(pool_)) {
-    LOG_ERROR("not init conn pool");
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("not init conn pool", K(ret));
   } else {
     if (0 == --ref_cnt_) {
       if (OB_FAIL(pool_->revert(this))) {

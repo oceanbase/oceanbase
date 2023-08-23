@@ -541,9 +541,9 @@ int TransCtx::build_ready_participants_list_()
     // Linked list of participants
     for (int64_t index = 0; OB_SUCCESS == ret && index < participant_count_; index++) {
       if (OB_ISNULL(participants_[index].obj_)) {
-        LOG_ERROR("participant object is NULL", K(participants_[index]), K(index),
-            K(participant_count_), K(state_), K(trans_id_));
         ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("participant object is NULL", KR(ret), K(participants_[index]), K(index),
+            K(participant_count_), K(state_), K(trans_id_));
       } else if (index < participant_count_ - 1) {
         participants_[index].obj_->set_next_task(participants_[index + 1].obj_);
       } else {
@@ -663,9 +663,9 @@ int TransCtx::commit()
   ObSpinLockGuard guard(lock_);
 
   if (OB_ISNULL(ready_participant_objs_)) {
-    LOG_ERROR("ready participant objs is null",
-        KPC(ready_participant_objs_), KPC(this));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ready participant objs is null", KR(ret),
+        KPC(ready_participant_objs_), KPC(this));
   } else {
     const bool is_ddl_trans = ready_participant_objs_->is_ddl_trans();
 
@@ -754,9 +754,9 @@ int TransCtx::get_tenant_id(uint64_t &tenant_id) const
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
   if (OB_ISNULL(ready_participant_objs_)) {
-    LOG_ERROR("ready participant objs is null, can not decide tenant id",
-        KPC(ready_participant_objs_), KPC(this));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ready participant objs is null, can not decide tenant id", KR(ret),
+        KPC(ready_participant_objs_), KPC(this));
   } else {
     // The tenant ID of the first participant is used as the tenant ID of the distributed transaction
     // TODO: support for cross-tenant transactions

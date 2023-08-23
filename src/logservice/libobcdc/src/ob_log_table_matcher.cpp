@@ -491,9 +491,9 @@ int ObLogTableMatcher::init(const char *tb_white_list,
 
   if (OB_ISNULL(tb_white_list) || OB_ISNULL(tb_black_list)
       || OB_ISNULL(tg_white_list) || OB_ISNULL(tg_black_list)) {
-    OBLOG_LOG(ERROR, "invalid_argument", K(tb_white_list), K(tb_black_list),
-        K(tg_white_list), K(tg_black_list));
     ret = OB_INVALID_ARGUMENT;
+    OBLOG_LOG(ERROR, "invalid_argument", KR(ret), K(tb_white_list), K(tb_black_list),
+        K(tg_white_list), K(tg_black_list));
   } else if (OB_FAIL(set_pattern_(tb_white_list))) {
     OBLOG_LOG(ERROR, "set table white list pattern fail", KR(ret), K(tb_white_list));
   } else if (OB_FAIL(set_black_pattern_(tb_black_list))) {

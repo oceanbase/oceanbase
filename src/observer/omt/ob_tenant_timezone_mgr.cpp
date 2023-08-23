@@ -344,7 +344,7 @@ int ObTenantTimezoneMgr::update_timezone_map()
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (add_new_tenants(latest_tenant_ids)) {
+  } else if (OB_FAIL(add_new_tenants(latest_tenant_ids))) {
     LOG_WARN("add new tenants failed", K(ret));
   }
   return ret;
@@ -361,6 +361,7 @@ int ObTenantTimezoneMgr::get_tenant_tz(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(tenant_tz_map_getter_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tenant tz map getter is null", K(ret), K(tenant_id));
   } else if (OB_FAIL(tenant_tz_map_getter_(tenant_id, timezone_wrap))) {
     LOG_WARN("get tenant tz map failed", K(ret), K(tenant_id));

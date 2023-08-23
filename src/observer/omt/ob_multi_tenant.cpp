@@ -2073,7 +2073,8 @@ void ObMultiTenant::get_tenant_ids(TenantIdList &id_list)
        it != tenants_.end() && OB_SUCCESS == ret;
        it++) {
     if (OB_ISNULL(*it)) {
-      LOG_ERROR("unexpected condition", K(*it));
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("unexpected condition", K(ret), K(*it));
     } else if (OB_FAIL(id_list.push_back((*it)->id()))) {
       LOG_ERROR("push tenant id to id list fail", K(ret));
     }

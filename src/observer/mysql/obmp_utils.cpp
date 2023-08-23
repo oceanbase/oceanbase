@@ -115,8 +115,7 @@ int ObMPUtils::add_changed_session_info(OMPKOK &ok_pkt, sql::ObSQLSessionInfo &s
       if (name.empty()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid variable name", K(name), K(ret));
-      }
-      if (OB_FAIL(user_map.get_refactored(name, sess_var))) {
+      } else if (OB_FAIL(user_map.get_refactored(name, sess_var))) {
         LOG_WARN("unknown user variable", K(name), K(ret));
       } else {
         ObStringKV str_kv;

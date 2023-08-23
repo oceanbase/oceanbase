@@ -256,7 +256,8 @@ void ObTenantSrs::TenantSrsUpdateTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(tenant_srs_)) {
-    LOG_WARN("failed to do srs update task. tenant_srs is null");
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to do srs update task. tenant_srs is null", K(ret));
   } else if (OB_FAIL(tenant_srs_->refresh_sys_srs())) {
     if (ret != OB_ERR_EMPTY_QUERY) {
       LOG_WARN("failed to refresh sys srs", K(ret), K(tenant_srs_->remote_sys_srs_version_),

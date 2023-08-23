@@ -218,7 +218,9 @@ int ObSqlWorkareaMemoryInfo::inner_get_next_row(common::ObNewRow *&row)
   }
   ObSqlWorkareaCurrentMemoryInfo *memory_info = nullptr;
   uint64_t tenant_id = 0;
-  if (OB_FAIL(iter_.get_next_wa_memory_info(memory_info, tenant_id))) {
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(iter_.get_next_wa_memory_info(memory_info, tenant_id))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("failed to get next channel", K(ret));
     }

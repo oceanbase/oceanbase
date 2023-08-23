@@ -355,8 +355,8 @@ int ObAdminDumpsstExecutor::init_master_key_getter()
   //   if (OB_FAIL(common::hex_to_cstr(key_hex_str_, len,
   //     master_key, share::OB_MAX_MASTER_KEY_LENGTH + 1))) {
   //     STORAGE_LOG(WARN, "fail to hex to cstr", K(ret));
-  //   } else if (share::ObMasterKeyGetter::instance().set_master_key(
-  //       master_key_id_, master_key, STRLEN(master_key))) {
+  //   } else if (OB_FAIL(share::ObMasterKeyGetter::instance().set_master_key(
+  //       master_key_id_, master_key, STRLEN(master_key)))) {
   //     STORAGE_LOG(WARN, "fail to set master key", K(ret));
   //   }
   // }

@@ -677,6 +677,7 @@ int ObAllVirtualProxySchema::get_view_decoded_schema_(
         resolver_ctx.expr_factory_ = &expr_factory;
         resolver_ctx.stmt_factory_ = &stmt_factory;
         if (OB_ISNULL(resolver_ctx.query_ctx_ = stmt_factory.get_query_ctx())) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("create query context failed", KR(ret));
         } else {
           // set # of question marks

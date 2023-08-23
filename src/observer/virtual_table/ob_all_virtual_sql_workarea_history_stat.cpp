@@ -282,7 +282,9 @@ int ObSqlWorkareaHistoryStat::inner_get_next_row(common::ObNewRow *&row)
   }
   ObSqlWorkAreaStat *wa_stat = nullptr;
   uint64_t tenant_id = 0;
-  if (OB_FAIL(iter_.get_next_wa_stat(wa_stat, tenant_id))) {
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(iter_.get_next_wa_stat(wa_stat, tenant_id))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("failed to get next channel", K(ret));
     }

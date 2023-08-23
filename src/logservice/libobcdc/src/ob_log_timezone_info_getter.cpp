@@ -325,8 +325,8 @@ int ObLogTimeZoneInfoGetter::fetch_tenant_timezone_info_(
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = nullptr;
       if (OB_ISNULL(mysql_proxy_)) {
-        LOG_ERROR("mysql_proxy_ is null", K(mysql_proxy_));
         ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("mysql_proxy_ is null", KR(ret), K(mysql_proxy_));
       } else if (! need_fetch_timezone_info_by_tennat_()) {
         if (OB_FAIL(mysql_proxy_->read(res, ObTimeZoneInfoManager::FETCH_TZ_INFO_SQL))) {
           LOG_WARN("fail to execute sql", KR(ret));
