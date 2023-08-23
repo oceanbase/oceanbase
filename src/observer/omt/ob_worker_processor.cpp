@@ -57,9 +57,9 @@ OB_NOINLINE int ObWorkerProcessor::process_err_test()
 {
   int ret = OB_SUCCESS;
 
-  LOG_WARN("process err_test", K(ret));
 #ifdef ERRSIM
   ret = EN_WORKER_PROCESS_REQUEST;
+  LOG_DEBUG("process err_test", K(ret));
 #endif
   return ret;
 }
