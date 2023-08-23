@@ -253,6 +253,8 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_GET_SERVER_RESOURCE_INFO, ObRpcGetServerResourceIn
 OB_DEFINE_PROCESSOR_S(Srv, OB_UPDATE_TENANT_INFO_CACHE, ObUpdateTenantInfoCacheP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_BROADCAST_CONSENSUS_VERSION, ObBroadcastConsensusVersionP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_GET_LS_REPLAYED_SCN, ObRpcGetLSReplayedScnP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_HA_UNLOCK_MEMBER_LIST, ObAdminUnlockMemberListP);
+
 } // end of namespace observer
 } // end of namespace oceanbase
 

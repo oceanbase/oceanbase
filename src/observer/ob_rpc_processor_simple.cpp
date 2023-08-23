@@ -2798,5 +2798,18 @@ int ObRpcGetLSReplayedScnP::process()
   return ret;
 }
 
+int ObAdminUnlockMemberListP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_service is null", KR(ret));
+  } else if (OB_FAIL(gctx_.ob_service_->ob_admin_unlock_member_list(arg_))) {
+    COMMON_LOG(WARN, "failed to unlock member list", KR(ret), K(arg_));
+  }
+  return ret;
+}
+
+
 } // end of namespace observer
 } // end of namespace oceanbase

@@ -1552,6 +1552,7 @@ int ObTransferHandler::update_transfer_status_aborted_(
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
   } else if (!task_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("update transfer status aborted get invalid argument", K(ret), K(task_info));
   } else if (OB_FAIL(start_trans_(timeout_ctx, trans))) {
     LOG_WARN("failed to start trans", K(ret), K(task_info));

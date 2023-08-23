@@ -9949,6 +9949,25 @@ public:
   uint64_t load_count_;
 };
 
+struct ObAdminUnlockMemberListOpArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAdminUnlockMemberListOpArg();
+  ~ObAdminUnlockMemberListOpArg();
+  int set(const uint64_t tenant_id,
+          const share::ObLSID &ls_id,
+          const int64_t lock_id);
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(lock_id));
+public:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  int64_t lock_id_;
+};
+
+
 }//end namespace obrpc
 }//end namespace oceanbase
 #endif
