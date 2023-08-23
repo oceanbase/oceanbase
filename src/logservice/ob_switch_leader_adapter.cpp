@@ -68,6 +68,24 @@ int ObSwitchLeaderAdapter::remove_from_election_blacklist(const int64_t palf_id,
   return ret;
 }
 
+int ObSwitchLeaderAdapter::set_election_blacklist(const int64_t palf_id, const common::ObAddr &server)
+{
+  int ret = OB_SUCCESS;
+  if (palf_id < 0 || !server.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    logservice::coordinator::LsElectionReferenceInfoRow row(MTL_ID(), share::ObLSID(palf_id));
+    if (OB_FAIL(row.set_or_replace_server_in_blacklist(server, logservice::coordinator::InsertElectionBlacklistReason::MIGRATE)) &&
+        OB_ENTRY_EXIST != ret) {
+      CLOG_LOG(WARN, "set_election_blacklist failed", K(ret), K(palf_id), K(server));
+    } else {
+      ret = OB_SUCCESS;
+      CLOG_LOG(INFO, "set_election_blacklist success", K(ret), K(palf_id), K(server));
+    }
+  }
+  return ret;
+}
+
 int ObSwitchLeaderAdapter::is_meta_tenant_dropped_(const uint64_t tenant_id, bool &is_dropped)
 {
   int ret = OB_SUCCESS;

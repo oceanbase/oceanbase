@@ -28,6 +28,7 @@ public:
 
   static int add_to_election_blacklist(const int64_t palf_id, const common::ObAddr &server);
   static int remove_from_election_blacklist(const int64_t palf_id, const common::ObAddr &server);
+  static int set_election_blacklist(const int64_t palf_id, const common::ObAddr &server);
 
 private:
   static int is_meta_tenant_dropped_(const uint64_t tenant_id, bool &is_dropped);

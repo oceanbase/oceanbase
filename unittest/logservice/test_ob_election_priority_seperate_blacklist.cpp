@@ -64,6 +64,40 @@ TEST_F(TestPrioritySeperateBlackList, main)
   ELECT_LOG(INFO, "print", K(row));
 }
 
+TEST_F(TestPrioritySeperateBlackList, test_set_user_row_for_specific_reason)
+{
+  // OB_ENTRY_EXIST
+  {
+    logservice::coordinator::LsElectionReferenceInfoRow row(1, share::ObLSID(1));
+    row.row_for_table_.element<0>() = 1;
+    row.row_for_table_.element<1>() = 1;
+    row.row_for_table_.element<2>().assign("z4,z5;z3;z2,z1");
+    row.row_for_table_.element<3>().assign("127.0.0.1:1080");
+    row.row_for_table_.element<4>().assign("127.0.0.1:1080(MIGRATE)");
+    row.convert_table_info_to_user_info_();
+    ASSERT_EQ(OB_ENTRY_EXIST, row.set_user_row_for_specific_reason_(ObAddr(ObAddr::IPV4, "127.0.0.1", 1080),
+        logservice::coordinator::InsertElectionBlacklistReason::MIGRATE));
+    ASSERT_EQ(row.row_for_user_.element<4>().count(), 1);
+    ELECT_LOG(INFO, "print", K(row));
+  }
+  // OB_SUCCESS
+  {
+    logservice::coordinator::LsElectionReferenceInfoRow row(1, share::ObLSID(1));
+    row.row_for_table_.element<0>() = 1;
+    row.row_for_table_.element<1>() = 1;
+    row.row_for_table_.element<2>().assign("z4,z5;z3;z2,z1");
+    row.row_for_table_.element<3>().assign("127.0.0.1:1080");
+    row.row_for_table_.element<4>().assign("127.0.0.1:1080(MIGRATE);127.0.0.1:1081(MIGRATE);127.0.0.1:1082(SWITCH REPLICA)");
+    row.convert_table_info_to_user_info_();
+    const ObAddr new_addr = ObAddr(ObAddr::IPV4, "127.0.0.1", 1083);
+    ASSERT_EQ(OB_SUCCESS, row.set_user_row_for_specific_reason_(new_addr,
+        logservice::coordinator::InsertElectionBlacklistReason::MIGRATE));
+    ASSERT_EQ(row.row_for_user_.element<4>().count(), 2);
+    ASSERT_EQ(new_addr, row.row_for_user_.element<4>().at(1).element<0>());
+    ELECT_LOG(INFO, "print", K(row));
+  }
+}
+
 }
 }
 

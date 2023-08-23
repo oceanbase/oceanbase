@@ -234,6 +234,83 @@ int LsElectionReferenceInfoRow::delete_server_from_blacklist(const common::ObAdd
   #undef PRINT_WRAPPER
 }
 
+int LsElectionReferenceInfoRow::set_or_replace_server_in_blacklist(
+    const common::ObAddr &server,
+    InsertElectionBlacklistReason reason)
+{
+  LC_TIME_GUARD(1_s);
+  #define PRINT_WRAPPER K(*this), KR(ret), K(server), K(reason)
+  int ret = OB_SUCCESS;
+  if (!server.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    COORDINATOR_LOG_(WARN, "server is invalid or reason is empty");
+  } else if (CLICK_FAIL(start_and_read_())) {
+    COORDINATOR_LOG_(WARN, "failed when start trans, read row, convert info");
+  } else if (CLICK_FAIL(set_user_row_for_specific_reason_(server, reason))) {
+    COORDINATOR_LOG_(WARN, "set_user_row_for_specific_reason_ failed");
+  } else if (CLICK_FAIL(write_and_commit_())) {
+    COORDINATOR_LOG_(WARN, "failed when convert info, write row, end trans");
+  } else {
+    COORDINATOR_LOG_(INFO, "set_or_replace_server_in_blacklist", K(server), "reason", to_cstring(reason));
+  }
+  if (trans_.is_started()) {
+    COORDINATOR_LOG_(WARN, "transaction execute failed");
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = end_(false))) {
+      COORDINATOR_LOG_(WARN, "fail to roll back transaction");
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(schedule_refresh_priority_task_())) {
+    COORDINATOR_LOG_(WARN, "failed to schedule refresh priority task", KR(ret));
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+int LsElectionReferenceInfoRow::set_user_row_for_specific_reason_(
+    const common::ObAddr &server,
+    InsertElectionBlacklistReason reason)
+{
+  LC_TIME_GUARD(1_s);
+  #define PRINT_WRAPPER K(*this), KR(ret), K(server), K(reason)
+  int ret = OB_SUCCESS;
+  const char *reason_str = to_cstring(reason);
+  int64_t server_idx = -1;
+  int64_t number_of_the_reason = 0;
+  for (int64_t idx = 0; idx < row_for_user_.element<4>().count(); ++idx) {
+    if (row_for_user_.element<4>().at(idx).element<0>() == server) {
+      server_idx = idx;
+    }
+    if (row_for_user_.element<4>().at(idx).element<1>() == reason_str) {
+      number_of_the_reason += 1;
+    }
+  }
+  if (-1 != server_idx && 1 == number_of_the_reason) {
+    ret = OB_ENTRY_EXIST;
+  } else {
+    ObArray<ObTuple<ObAddr, ObStringHolder>> &old_array = row_for_user_.element<4>();
+    ObArray<ObTuple<ObAddr, ObStringHolder>> new_array;
+    for (int64_t idx = 0; idx < old_array.count() && OB_SUCC(ret); ++idx) {
+      if (old_array.at(idx).element<1>() != reason_str) {
+        if (CLICK_FAIL(new_array.push_back(old_array.at(idx)))) {
+          COORDINATOR_LOG_(WARN, "push tuple to new array failed");
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (CLICK_FAIL(old_array.assign(new_array))) {
+      COORDINATOR_LOG_(WARN, "replace old array with new array failed");
+    } else if (CLICK_FAIL(row_for_user_.element<4>().push_back(ObTuple<ObAddr, ObStringHolder>()))) {
+      COORDINATOR_LOG_(WARN, "failed to create new tuple for reason");
+    } else if (FALSE_IT(row_for_user_.element<4>().at(row_for_user_.element<4>().count() - 1).element<0>() = server)) {
+    } else if (CLICK_FAIL(row_for_user_.element<4>().at(row_for_user_.element<4>().count() - 1).element<1>().assign(to_cstring(reason)))) {
+      COORDINATOR_LOG_(WARN, "copy reason failed");
+    }
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
 int LsElectionReferenceInfoRow::start_and_read_()
 {
   LC_TIME_GUARD(1_s);

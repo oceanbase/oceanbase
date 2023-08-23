@@ -107,6 +107,12 @@ public:
     }
     return ret;
   }
+  bool operator==(const ObString &str) const {
+    return str == ObString(len_, buffer_);
+  }
+  bool operator!=(const ObString &str) const {
+    return !(*this == str);
+  }
 private:
   void copy_from_tiny_ob_str_(const ObString &tiny_str) {
     reset();

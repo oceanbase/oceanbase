@@ -105,6 +105,14 @@ public:
    * @Date: 2022-01-29 16:44:51
    */
   int delete_server_from_blacklist(const common::ObAddr &server);
+  /**
+   * @description: 将该原因的选举黑名单设置为对应 server,会清除掉选举黑名单中已有的该原因的 server
+   * @param {ObAddr} &server 不允许当leader的server
+   * @param {ObString} &reason 不允许当leader的原因
+   * @return {*}
+   * @Date: 2022-01-29 16:43:19
+   */
+  int set_or_replace_server_in_blacklist(const common::ObAddr &server, InsertElectionBlacklistReason reason);
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(exec_tenant_id), K_(row_for_table), K_(row_for_user));
 private:
   int begin_();
@@ -116,6 +124,7 @@ private:
   int start_and_read_();
   int write_and_commit_();
   int schedule_refresh_priority_task_();
+  int set_user_row_for_specific_reason_(const common::ObAddr &server, InsertElectionBlacklistReason reason);
 private:
   const uint64_t tenant_id_;
   const share::ObLSID ls_id_;

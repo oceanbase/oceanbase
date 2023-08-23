@@ -1313,12 +1313,13 @@ int ObLogHandler::submit_config_change_cmd_(const LogConfigChangeCmd &req,
         ret = OB_SUCCESS;
         int tmp_ret = OB_SUCCESS;
         // if removed_member is leader, switch leadership to another node and try again
-        // if meta tenant's leader is down, add_to_election_blacklist may return fail,
-        // need to retry add_to_election_blacklist until timeout/success
+        // if meta tenant's leader is down, set_election_blacklist may return fail,
+        // need to retry set_election_blacklist until timeout/success
+        // Note: set_election_blacklist will clear other MIGRATE servers in blacklist
         if (true == has_added_to_blacklist ||
-            OB_SUCCESS != (tmp_ret = switch_leader_adapter.add_to_election_blacklist(id_, leader))) {
+            OB_SUCCESS != (tmp_ret = switch_leader_adapter.set_election_blacklist(id_, leader))) {
           if (tmp_ret != OB_SUCCESS && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-            CLOG_LOG(WARN, "add_to_election_blacklist failed", KR(tmp_ret), K_(id), K_(self));
+            CLOG_LOG(WARN, "set_election_blacklist failed", KR(tmp_ret), K_(id), K_(self));
           }
         } else {
           has_added_to_blacklist = true;
