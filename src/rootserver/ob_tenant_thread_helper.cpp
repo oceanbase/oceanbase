@@ -85,13 +85,18 @@ int ObTenantThreadHelper::start()
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SKIP_TENANT_THREAD_STOP);
 void ObTenantThreadHelper::stop()
 {
+  int ret = OB_SUCCESS;
   LOG_INFO("[TENANT THREAD] thread stop start", K(tg_id_), K(thread_name_));
-  if (-1 != tg_id_) {
+  ret = ERRSIM_SKIP_TENANT_THREAD_STOP;
+  if (OB_UNLIKELY(ERRSIM_SKIP_TENANT_THREAD_STOP)) {
+    LOG_ERROR("[TENANT THREAD] skip tenant thread stop");
+  } else if (-1 != tg_id_) {
     TG_REENTRANT_LOGICAL_STOP(tg_id_);
   }
-  LOG_INFO("[TENANT THREAD] thread stop finish", K(tg_id_), K(thread_name_));
+  LOG_INFO("[TENANT THREAD] thread stop finish", K(tg_id_), K(thread_name_), KR(ret));
 }
 
 void ObTenantThreadHelper::wait()
