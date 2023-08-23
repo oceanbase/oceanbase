@@ -124,6 +124,10 @@ public:
   { return get_group_idx_col_index() != common::OB_INVALID_INDEX; }
   OB_INLINE int64_t get_ss_rowkey_prefix_cnt() const
   { return ss_rowkey_prefix_cnt_; }
+  OB_INLINE double get_mem2sst_rowcnt_ratio() const
+  { return mem2sst_rowcnt_ratio_; }
+  OB_INLINE void set_mem2sst_rowcnt_ratio(double mrr)
+  { mem2sst_rowcnt_ratio_ = mrr; }
   OB_INLINE void disable_blockscan()
   { pd_blockscan_ = 0; }
   OB_INLINE bool enable_pd_blockscan() const
@@ -161,6 +165,7 @@ public:
   bool is_for_foreign_check_;
   bool limit_prefetch_;
   int64_t ss_rowkey_prefix_cnt_;
+  double mem2sst_rowcnt_ratio_;
   sql::ObPushdownOperator *op_;
   union {
     struct {

@@ -31,6 +31,10 @@ class ObIMicroBlockRowScanner;
 class ObMicroBlockDecoder;
 class ObStorageDatum;
 }
+namespace memtable
+{
+class ObMemtableBlockRowScanner;
+}
 namespace storage
 {
 struct ObTableAccessContext;
@@ -70,15 +74,22 @@ public:
   OB_INLINE bool is_disabled() const { return disabled_; }
   OB_INLINE void disable() { disabled_ = true; }
   // for blockscan
+  OB_INLINE void set_blockscan() { can_blockscan_ = true; }
   OB_INLINE void reset_blockscan() { can_blockscan_ = false; filter_applied_ = false; }
   OB_INLINE bool can_blockscan() const { return can_blockscan_; }
   OB_INLINE bool filter_applied() const { return filter_applied_; }
   OB_INLINE bool filter_is_null() const { return pd_filter_info_.is_pd_filter_ && nullptr == pd_filter_info_.filter_; }
+  OB_INLINE sql::ObPushdownFilterExecutor *get_filter() { return filter_is_null() ? nullptr : pd_filter_info_.filter_; }
   int apply_blockscan(
       blocksstable::ObIMicroBlockRowScanner &micro_scanner,
       const int64_t row_count,
       const bool can_pushdown,
       ObTableStoreStat &table_store_stat);
+  // TODO(jianxian): this function is highly overlapped with the upper one,
+  // and it needs to be considered whether it can be reused.
+  int apply_blockscan(
+      memtable::ObMemtableBlockRowScanner &mt_blk_scanner,
+      const int64_t row_count);
   int get_result_bitmap(const common::ObBitmap *&bitmap);
   virtual bool is_end() const { return false; }
   virtual bool is_empty() const { return true; }
@@ -96,6 +107,13 @@ protected:
   int filter_micro_block(
       const int64_t row_count,
       blocksstable::ObIMicroBlockRowScanner &micro_scanner,
+      sql::ObPushdownFilterExecutor *parent,
+      sql::ObPushdownFilterExecutor *filter);
+  // TODO(jianxian): this function is highly overlapped with filter_micro_block,
+  // and it needs to be considered whether it can be reused.
+  int filter_memtable_block(
+      const int64_t row_count,
+      memtable::ObMemtableBlockRowScanner &mt_blk_scanner,
       sql::ObPushdownFilterExecutor *parent,
       sql::ObPushdownFilterExecutor *filter);
   bool is_inited_;

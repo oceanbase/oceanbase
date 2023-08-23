@@ -42,6 +42,7 @@ ObTableIterParam::ObTableIterParam()
       is_for_foreign_check_(false),
       limit_prefetch_(false),
       ss_rowkey_prefix_cnt_(0),
+      mem2sst_rowcnt_ratio_(0),
       op_(nullptr),
       pd_storage_flag_(0)
 {
@@ -65,6 +66,7 @@ void ObTableIterParam::reset()
   pd_storage_flag_ = 0;
   pushdown_filter_ = nullptr;
   ss_rowkey_prefix_cnt_ = 0;
+  mem2sst_rowcnt_ratio_ = 0;
   vectorized_enabled_ = false;
   has_virtual_columns_ = false;
   has_lob_column_out_ = false;
@@ -132,7 +134,8 @@ DEF_TO_STRING(ObTableIterParam)
        K_(has_lob_column_out),
        K_(is_for_foreign_check),
        K_(limit_prefetch),
-       K_(ss_rowkey_prefix_cnt));
+       K_(ss_rowkey_prefix_cnt),
+       K_(mem2sst_rowcnt_ratio));
   J_OBJ_END();
   return pos;
 }
