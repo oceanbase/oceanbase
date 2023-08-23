@@ -25430,6 +25430,14 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
       if (OB_SUCC(ret)) {
         break;
       } else {
+        int tmp_ret = OB_SUCCESS;
+        bool is_dropped = false;
+        if (OB_TMP_FAIL(schema_service_->check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
+          LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tmp_ret), K(tenant_id));
+        } else if (is_dropped) {
+          LOG_WARN("tenant has been dropped, just exit", KR(ret), K(tenant_id));
+          break;
+        }
         ++refresh_count;
         LOG_WARN("refresh schema failed", KR(ret), K(refresh_count), "refresh_schema_interval",
                  static_cast<int64_t>(REFRESH_SCHEMA_INTERVAL_US));
