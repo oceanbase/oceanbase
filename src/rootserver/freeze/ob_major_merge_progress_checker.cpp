@@ -532,11 +532,11 @@ int ObMajorMergeProgressChecker::check_verification(
   } else if (OB_FAIL(cross_cluster_validator_.check_and_set_validate(is_primary_service, global_broadcast_scn))) {
     LOG_WARN("fail to check and set validate for cross_cluster_validator", KR(ret), K(global_broadcast_scn));
   } else if (FALSE_IT(index_validator_.set_need_val_cross_cluster_ckm(cross_cluster_validator_.need_validate()))) {
-  } else if (OB_FAIL(tablet_validator_.validate_checksum(stop, global_broadcast_scn, tablet_compaction_map_,
-      table_count_, table_compaction_map_, table_ids_, merge_time_statistics_, expected_epoch))) {
-    LOG_WARN("fail to validate checksum of tablet validator", KR(ret), K(global_broadcast_scn));
   } else if (!tablet_compaction_map_.empty()) {
-    if (OB_FAIL(index_validator_.validate_checksum(stop, global_broadcast_scn,
+    if (OB_FAIL(tablet_validator_.validate_checksum(stop, global_broadcast_scn, tablet_compaction_map_,
+      table_count_, table_compaction_map_, table_ids_, merge_time_statistics_, expected_epoch))) {
+      LOG_WARN("fail to validate checksum of tablet validator", KR(ret), K(global_broadcast_scn));
+    } else if (OB_FAIL(index_validator_.validate_checksum(stop, global_broadcast_scn,
         tablet_compaction_map_, table_count_, table_compaction_map_, table_ids_, merge_time_statistics_, expected_epoch))) {
       LOG_WARN("fail to validate checksum of index validator", KR(ret), K(global_broadcast_scn));
     } else if (OB_FAIL(cross_cluster_validator_.validate_checksum(stop, global_broadcast_scn,

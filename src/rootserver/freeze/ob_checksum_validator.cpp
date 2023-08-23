@@ -1327,6 +1327,12 @@ int ObIndexChecksumValidator::handle_table_verification_finished(
                          table_compaction_map, merge_time_statistics, expected_epoch))) {
         LOG_WARN("fail to write tablet checksum and update report_scn", KR(ret), K_(tenant_id),
                  K(frozen_scn), KPC(simple_schema), K(expected_epoch));
+        // revert status to COMPACTED, so as to retry write_ckm_and_update_report_scn of this table
+        int tmp_ret = OB_SUCCESS;
+        cur_compaction_info.set_compacted();
+        if (OB_TMP_FAIL(table_compaction_map.set_refactored(table_id, cur_compaction_info, true/*overwrite*/))) {
+          LOG_WARN("fail to set refactored", KR(tmp_ret), K(table_id), K(cur_compaction_info));
+        }
       }
     }
   }
