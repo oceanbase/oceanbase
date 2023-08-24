@@ -32,6 +32,8 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/geo/ob_geometry_cast.h"
+#include "sql/engine/expr/ob_datum_cast.h"
+
 #ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_xml_util.h"
 #include "lib/xml/ob_xml_parser.h"
@@ -13147,14 +13149,30 @@ int ObObjCaster::to_type(const ObExpectType &expect_type,
 
 const char OB_JSON_NULL[2] = {'\0', '\0'}; // binary json null
 
-int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType expect_cs_type, ObObj &zero_obj)
+int ObObjCaster::get_zero_value(const ObObjType expect_type,
+                                ObCollationType expect_cs_type,
+                                int64_t data_len,
+                                ObIAllocator &alloc,
+                                ObObj &zero_obj)
 {
   int ret = OB_SUCCESS;
   ObObjCastParams params; //构造一个空的cast_param对象，适配SET_RES_XXX宏定义
   ObCastMode cast_mode = CM_WARN_ON_FAIL;
   params.warning_ = 1; //将warning code设置为1，避免SET_RES_XXX宏将其当做真实的warning处理
-  if (ob_is_string_tc(expect_type) || ob_is_text_tc(expect_type)) {
-    zero_obj.set_string(expect_type, "");
+  if (ob_is_string_tc(expect_type)) {
+    //zero_obj.set_string(expect_type, "");
+    ObString padding_res;
+    if (ObVarcharType == expect_type) {
+      zero_obj.set_string(expect_type, "");
+    } else if (0 > data_len) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("The length of fix-len string is less than zero", K(ret), K(data_len));
+    } else if (OB_FAIL(sql::padding_char_for_cast(data_len, expect_cs_type, alloc,
+                                      padding_res))) {
+      LOG_WARN("padding char failed", K(ret), K(data_len), K(expect_cs_type));
+    } else {
+      zero_obj.set_string(expect_type, padding_res);
+    }
   } else if (ob_is_text_tc(expect_type)) {
     zero_obj.set_lob_value(expect_type, static_cast<const char *>(NULL), 0);
   } else if (ob_is_int_tc(expect_type)) {
