@@ -429,7 +429,7 @@ static SSL_CTX *ob_ssl_create_ssl_ctx(const ssl_config_item_t *ssl_config, int t
   if (CLIENT == type) {
     verify_flag = SSL_VERIFY_NONE;
   } else {
-    verify_flag = SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
+    verify_flag = SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
   }
 
   if (ssl_config->is_sm) {

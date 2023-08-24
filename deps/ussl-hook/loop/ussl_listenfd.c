@@ -35,7 +35,7 @@ void ussl_on_accept(int fd, ussl_sf_t *sf, ussl_eloop_t *ep)
       add_succ = 1;
       add_to_timeout_list(&accept_sk->timeout_link);
       char src_addr[IP_STRING_MAX_LEN] = {0};
-      get_src_addr(fd, src_addr, IP_STRING_MAX_LEN);
+      ussl_get_peer_addr(fd, src_addr, IP_STRING_MAX_LEN);
       ussl_log_info("accept new connection, fd:%d, src_addr:%s", fd, src_addr);
     }
   }
