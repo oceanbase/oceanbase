@@ -2056,7 +2056,8 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
             tmp_schema_obj.schema_type_ = pcv_schema->schema_type_;
           }
         }
-        if (OB_FAIL(schema_guard.get_schema_version(pcv_schema->schema_type_,
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(schema_guard.get_schema_version(pcv_schema->schema_type_,
                                                     tenant_id,
                                                     pcv_schema->schema_id_,
                                                     new_version))) {
