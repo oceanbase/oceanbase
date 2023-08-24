@@ -286,6 +286,10 @@ struct ObTrace
   OB_INLINE bool is_auto_flush() { return auto_flush_; }
   OB_INLINE void set_enable_show_trace(bool enable_show_trace) { enable_show_trace_ = enable_show_trace; }
   OB_INLINE bool is_enable_show_trace() { return enable_show_trace_; }
+  OB_INLINE void set_in_transaction(bool is_in_trans) { is_in_trans_ = is_in_trans; }
+  OB_INLINE bool is_in_transaction() { return is_in_trans_; }
+  OB_INLINE void set_is_query_trace(bool is_query_trc) { is_query_trc_ = is_query_trc; }
+  OB_INLINE bool is_query_trace() { return is_query_trc_; }
   void check_leak_span();
   void reset();
   void dump_span();
@@ -342,6 +346,8 @@ private:
 private:
   static thread_local ObTrace* save_buffer;
   uint64_t magic_code_;
+  bool is_in_trans_;
+  bool is_query_trc_;
 public:
   int64_t buffer_size_;
   int64_t offset_;
