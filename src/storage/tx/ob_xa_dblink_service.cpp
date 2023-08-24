@@ -429,7 +429,8 @@ int ObXAService::xa_start_for_tm_(const int64_t flags,
 
 int ObXAService::xa_start_for_dblink_client(const DblinkDriverProto dblink_type,
                                             ObISQLConnection *dblink_conn,
-                                            ObTxDesc *&tx_desc)
+                                            ObTxDesc *&tx_desc,
+                                            ObXATransID &remote_xid)
 {
   int ret = OB_SUCCESS;
   if (NULL == tx_desc || !tx_desc->is_valid()) {
@@ -453,9 +454,9 @@ int ObXAService::xa_start_for_dblink_client(const DblinkDriverProto dblink_type,
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unexpected dblink client", K(ret), K(xid), K(tx_id));
     } else {
-      ObXATransID remote_xid;
       if (client->is_started(xid)) {
         // return success
+        remote_xid = client->get_xid();
       } else if (OB_FAIL(ObXAService::generate_xid_with_new_bqual(xid,
               client->get_index(), remote_xid))) {
         TRANS_LOG(WARN, "fail to generate xid", K(ret), K(xid), K(tx_id), K(remote_xid));

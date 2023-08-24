@@ -103,7 +103,8 @@ public:
                       ObXATransID &xid);
   int xa_start_for_dblink_client(const common::sqlclient::DblinkDriverProto dblink_type,
                                  common::sqlclient::ObISQLConnection *dblink_conn,
-                                 ObTxDesc *&tx_desc);
+                                 ObTxDesc *&tx_desc,
+                                 ObXATransID &remote_xid);
   int commit_for_dblink_trans(ObTxDesc *&tx_desc);
   int rollback_for_dblink_trans(ObTxDesc *&tx_desc);
   static int generate_xid(const ObTransID &tx_id, ObXATransID &new_xid);
