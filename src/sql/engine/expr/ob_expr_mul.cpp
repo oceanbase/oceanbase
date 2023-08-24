@@ -442,7 +442,8 @@ int ObExprMul::mul_int_int(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& datum)
   } else {
     int64_t left_i = left->get_int();
     int64_t right_i = right->get_int();
-    if (OB_UNLIKELY(is_multi_overflow64(left_i, right_i))) {
+    long long res;
+    if (OB_UNLIKELY(ObExprMul::is_mul_out_of_range(left_i, right_i, res))) {
       char expr_str[OB_MAX_TWO_OPERATOR_EXPR_LENGTH];
       int64_t pos = 0;
       ret = OB_OPERATE_OVERFLOW;
