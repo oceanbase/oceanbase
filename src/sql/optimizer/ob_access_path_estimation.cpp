@@ -229,9 +229,13 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("task is null", K(ret));
     } else if (OB_FAIL(do_storage_estimation(ctx, *tasks.at(i)))) {
-      LOG_WARN("failed to process storage estimation", K(ret));
-      need_fallback = true;
-      ret = OB_SUCCESS;
+      if (is_retry_ret(ret)) {
+        //retry code throw error, and retry
+      } else {
+        LOG_WARN("failed to process storage estimation", K(ret));
+        need_fallback = true;
+        ret = OB_SUCCESS;
+      }
       break;
     } else if (!tasks.at(i)->check_result_reliable()) {
       need_fallback = true;
@@ -991,8 +995,12 @@ int ObAccessPathEstimation::storage_estimate_full_table_rowcount(ObOptimizerCont
       } else if (OB_FAIL(arg.index_params_.push_back(path_arg))) {
         LOG_WARN("failed to add primary key estimation arg", K(ret));
       } else if (OB_FAIL(do_storage_estimation(ctx, task))) {
-        LOG_WARN("failed to do storage estimation", K(ret));
-        ret = OB_SUCCESS;
+        if (is_retry_ret(ret)) {
+          //retry code throw error, and retry
+        } else {
+          LOG_WARN("failed to do storage estimation", K(ret));
+          ret = OB_SUCCESS;
+        }
       } else if (OB_UNLIKELY(res.index_param_res_.count() != 1)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("storage estimation result size is unexpected", K(ret));
@@ -1230,6 +1238,16 @@ int ObAccessPathEstimation::estimate_full_table_rowcount_by_meta_table(ObOptimiz
   return ret;
 }
 
+
+bool ObAccessPathEstimation::is_retry_ret(int ret)
+{
+  return ret == OB_NOT_MASTER ||
+         ret == OB_RS_NOT_MASTER ||
+         ret == OB_TENANT_NOT_IN_SERVER ||
+         ret == OB_NO_READABLE_REPLICA ||
+         ret == OB_LS_NOT_EXIST ||
+         ret == OB_TABLET_NOT_EXIST;
+}
 
 } // end of sql
 } // end of oceanbase

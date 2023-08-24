@@ -98,6 +98,14 @@ public:
     common::ObIArray<ObOptColumnStat*> &dst_column_stat);
 
   static int check_part_id_valid(const ObTableStatParam &param, const ObObjectID part_id, bool &is_valid);
+
+  static int truncate_string_for_opt_stats(const ObObj *old_obj,
+                                           ObIAllocator &alloc,
+                                           ObObj *&new_obj);
+
+  static int shadow_truncate_string_for_opt_stats(ObObj &obj);
+
+  static int64_t get_truncated_str_len(const ObString &str, const ObCollationType cs_type);
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t tenant_id,

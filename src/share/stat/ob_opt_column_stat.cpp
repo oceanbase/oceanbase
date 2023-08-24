@@ -19,7 +19,7 @@
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
 #include "sql/engine/expr/ob_expr_sys_op_opnsize.h"
 #include "share/rc/ob_tenant_base.h"
-#include "sql/optimizer/ob_optimizer_util.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 namespace oceanbase {
 namespace common {
 using namespace sql;
@@ -519,11 +519,11 @@ int ObOptColumnStat::merge_obj(const ObObj &obj)
     num_not_null_++;
     if (!obj.get_meta().is_enum_or_set()) {//disable online gather enum/set max/min value. TODO,jiangxiu.wt
       // max/min
-      const ObObj *tmp_obj = NULL;
+      ObObj *tmp_obj = NULL;
       if (min_value_.is_null() || obj < min_value_) {
         inner_min_allocator_.reuse();
         if (obj.is_string_type()) {
-          if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(&obj, inner_min_allocator_, tmp_obj))) {
+          if (OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(&obj, inner_min_allocator_, tmp_obj))) {
             LOG_WARN("fail to truncate string", K(ret));
           } else {
             if (OB_FAIL(ob_write_obj(inner_min_allocator_, *tmp_obj, min_value_))) {
@@ -539,7 +539,7 @@ int ObOptColumnStat::merge_obj(const ObObj &obj)
       if (OB_SUCC(ret) && (max_value_.is_null() || obj > max_value_)) {
         inner_max_allocator_.reuse();
         if (obj.is_string_type()) {
-          if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(&obj, inner_max_allocator_, tmp_obj))) {
+          if (OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(&obj, inner_max_allocator_, tmp_obj))) {
             LOG_WARN("fail to truncate string", K(ret));
           } else {
             if (OB_FAIL(ob_write_obj(inner_max_allocator_, *tmp_obj, max_value_))) {

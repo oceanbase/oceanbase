@@ -887,11 +887,6 @@ private:
                                 const ObHistogram &right_histogram,
                                 const bool is_semi,
                                 double &rows);
-
-  static int convert_valid_obj_for_opt_stats(const ObObj *old_obj,
-                                             ObIAllocator &alloc,
-                                             const ObObj *&new_obj);
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptSelectivity);
 };

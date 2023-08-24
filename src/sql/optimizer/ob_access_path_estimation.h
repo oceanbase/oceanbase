@@ -153,6 +153,8 @@ private:
                                                         const ObIArray<ObLSID> &all_ls_ids,
                                                         ObTableMetaInfo &meta);
 
+  static bool is_retry_ret(int ret);
+
 };
 
 }

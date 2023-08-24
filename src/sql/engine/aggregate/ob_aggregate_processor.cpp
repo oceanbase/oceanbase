@@ -27,7 +27,7 @@
 #include "sql/engine/sort/ob_sort_op_impl.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
-
+#include "share/stat/ob_dbms_stats_utils.h"
 
 namespace oceanbase
 {
@@ -2216,6 +2216,8 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
         ObObj obj;
         if (OB_FAIL(stored_row.cells()[0].to_obj(obj, aggr_info.param_exprs_.at(0)->obj_meta_))) {
           LOG_WARN("failed to obj", K(ret));
+        } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
+          LOG_WARN("fail to truncate string", K(ret));
         } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(obj))) {
           LOG_WARN("failed to process row", K(ret));
         } else {/*do nothing*/}
@@ -2625,6 +2627,8 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
         ObObj obj;
         if (OB_FAIL(stored_row.cells()[0].to_obj(obj, aggr_info.param_exprs_.at(0)->obj_meta_))) {
           LOG_WARN("failed to obj", K(ret));
+        } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
+          LOG_WARN("fail to truncate string", K(ret));
         } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(obj))) {
           LOG_WARN("failed to process row", K(ret));
         } else {/*do nothing*/}
@@ -4431,6 +4435,8 @@ int ObAggregateProcessor::top_fre_hist_calc_batch(
     ObObj obj;
     if (OB_FAIL(datum->to_obj(obj, obj_meta))) {
       LOG_WARN("failed to obj", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj))) {
+      LOG_WARN("fail to truncate string", K(ret));
     } else if (OB_FAIL(extra_info->topk_fre_hist_.add_top_k_frequency_item(obj))) {
       LOG_WARN("failed to process row", K(ret));
     } else {/*do nothing*/}
@@ -5617,6 +5623,8 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
       } else if (OB_FAIL(stored_row->cells()[0].to_obj(cur_obj,
                                                        aggr_info.param_exprs_.at(0)->obj_meta_))) {
         LOG_WARN("failed to obj", K(ret));
+      } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(cur_obj))) {
+        LOG_WARN("failed to shadow truncate string for hybird hist", K(ret));
       } else {
         ++ total_count;
         if (cur_obj.is_null()) {
