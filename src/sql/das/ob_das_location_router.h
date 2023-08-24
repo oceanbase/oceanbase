@@ -303,11 +303,12 @@ public:
   int get_full_ls_replica_loc(const common::ObObjectID &tenant_id,
                               const ObDASTabletLoc &tablet_loc,
                               share::ObLSReplicaLocation &replica_loc);
-  void refresh_location_cache(bool is_nonblock, int err_no);
-  void refresh_location_cache(const common::ObTabletID &tablet_id, bool is_nonblock, int err_no);
+  void refresh_location_cache_by_errno(bool is_nonblock, int err_no);
+  void force_refresh_location_cache(bool is_nonblock, int err_no);
   int block_renew_tablet_location(const common::ObTabletID &tablet_id, share::ObLSLocation &ls_loc);
   int save_touched_tablet_id(const common::ObTabletID &tablet_id) { return all_tablet_list_.push_back(tablet_id); }
   void set_last_errno(int err_no) { last_errno_ = err_no; }
+  int get_last_errno() const { return last_errno_; }
   void set_retry_cnt(int64_t retry_cnt) { retry_cnt_ = retry_cnt; }
   void inc_retry_cnt() { ++retry_cnt_; }
   void set_retry_info(const ObQueryRetryInfo* retry_info);

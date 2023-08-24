@@ -113,7 +113,7 @@ public:
   ~ObRefreshLocationCachePolicy() = default;
   virtual void test(ObRetryParam &v) const override
   {
-    v.result_.refresh_location_cache(is_async, v.err_);
+    v.result_.force_refresh_location_cache(is_async, v.err_);
   }
 };
 
@@ -238,7 +238,7 @@ public:
                K(v.session_.get_retry_info().get_last_query_retry_err()));
       if (v.session_.get_retry_info().is_rpc_timeout() || is_transaction_rpc_timeout_err(v.err_)) {
         // rpc超时了，可能是location cache不对，异步刷新location cache
-        v.result_.refresh_location_cache(true, v.err_); // 非阻塞
+        v.result_.force_refresh_location_cache(true, v.err_); // 非阻塞
         LOG_WARN("sql rpc timeout, or trans rpc timeout, maybe location is changed, "
                  "refresh location cache non blockly", K(v),
                  K(v.session_.get_retry_info().is_rpc_timeout()));

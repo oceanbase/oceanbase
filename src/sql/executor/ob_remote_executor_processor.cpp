@@ -717,7 +717,7 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
                NULL, session->get_effective_tenant_id())) {
           ret = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
         }
-        DAS_CTX(exec_ctx_).get_location_router().refresh_location_cache(true, ret);
+        DAS_CTX(exec_ctx_).get_location_router().refresh_location_cache_by_errno(true, ret);
       }
       //监控项统计结束
       exec_end_timestamp_ = ObTimeUtility::current_time();

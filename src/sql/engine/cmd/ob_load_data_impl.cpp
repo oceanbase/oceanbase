@@ -393,7 +393,7 @@ int ObLoadDataBase::memory_wait_local(ObExecContext &ctx,
       }
       //if it is location exception, refresh location cache with block interface
       //because load data can only local retry
-      loc_router.refresh_location_cache(false, ret);
+      loc_router.refresh_location_cache_by_errno(false, ret);
     }
 
     //print info

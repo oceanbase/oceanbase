@@ -267,20 +267,22 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
         //When das scan under px gi with transfor case, we need to disable das retry.
         need_retry = false;
         retry_continue = false;
+        LOG_INFO("[DAS RETRY] The PX task has retried too many times and has exited the DAS retry process");
       }
       if (need_retry) {
         task_op.in_part_retry_ = true;
         location_router.set_last_errno(task_op.get_errcode());
         location_router.inc_retry_cnt();
+        oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
         if (OB_TMP_FAIL(clear_task_exec_env(das_ref, task_op))) {
           LOG_WARN("clear task execution environment failed", K(tmp_ret));
         }
         if (OB_FAIL(das_ref.get_exec_ctx().check_status())) {
-          LOG_WARN("query is timeout, terminate retry", K(ret));
+          LOG_WARN("query is timeout or interrupted, terminate retry", KR(ret));
         } else if (OB_FAIL(refresh_task_location_info(das_ref, task_op))) {
           LOG_WARN("refresh task location failed", K(ret));
         } else {
-          LOG_INFO("start to retry DAS task now", KPC(task_op.get_tablet_loc()));
+          LOG_INFO("[DAS RETRY] Start retrying the DAS task now", KPC(task_op.get_tablet_loc()));
           das_task_wrapper.reuse();
           task_op.set_task_status(ObDasTaskStatus::UNSTART);
           if (OB_FAIL(das_task_wrapper.push_back_task(&task_op))) {
@@ -288,6 +290,7 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
           } else if (OB_FAIL(execute_dist_das_task(das_ref, das_task_wrapper, false))) {
             LOG_WARN("execute dist DAS task failed", K(ret));
           }
+          LOG_INFO("[DAS RETRY] Retry completing the DAS Task", KPC(task_op.get_tablet_loc()));
         }
         task_op.errcode_ = ret;
         retry_continue = (OB_SUCCESS != ret);

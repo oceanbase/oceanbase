@@ -195,7 +195,8 @@ public:
   const common::ObString& get_stmt_ps_sql() const { return ps_sql_; }
   common::ObString& get_stmt_ps_sql() { return ps_sql_; }
   int64_t get_query_string_id() const;
-  void refresh_location_cache(bool is_nonblock, int err);
+  void refresh_location_cache_by_errno(bool is_nonblock, int err);
+  void force_refresh_location_cache(bool is_nonblock, int err);
   bool need_execute_remote_sql_async() const
   { return get_exec_context().use_remote_sql() && !is_inner_result_set_; }
 

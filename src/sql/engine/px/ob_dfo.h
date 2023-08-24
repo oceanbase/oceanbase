@@ -901,6 +901,7 @@ public:
       task_channel_(NULL),
       sqc_channel_(NULL),
       rc_(TASK_DEFAULT_RET_VALUE), // 小于等于 0 表示设置了 rc 值
+      das_retry_rc_(common::OB_SUCCESS),
       state_(0),
       task_co_id_(0),
       px_int_id_(),
@@ -955,6 +956,7 @@ public:
                K_(exec_addr),
                K_(qc_addr),
                K_(rc),
+               K_(das_retry_rc),
                K_(task_co_id),
                K_(px_int_id),
                K_(is_fulltree),
@@ -989,6 +991,9 @@ public:
   inline void set_result(int rc) { rc_ = rc; }
   inline bool has_result() const { return rc_ <= 0; }
   inline int get_result() const { return rc_; }
+  void set_das_retry_rc(int das_retry_rc)
+  { das_retry_rc_ = (das_retry_rc_ == common::OB_SUCCESS ? das_retry_rc : das_retry_rc_); }
+  int get_das_retry_rc() const { return das_retry_rc_; }
   void set_exec_addr(const common::ObAddr &addr) {   exec_addr_ = addr; }
   void set_sqc_addr(const common::ObAddr &addr) {   sqc_addr_ = addr; }
   void set_qc_addr(const common::ObAddr &addr) {   qc_addr_ = addr; }
@@ -1024,6 +1029,7 @@ public:
   common::ObAddr exec_addr_; /* Task 的运行地址 */
   common::ObAddr qc_addr_;  /*记录 QC 的地址，用于中断*/
   int rc_;
+  int das_retry_rc_;
   volatile int32_t state_; // 被 task 线程设置
   volatile uint64_t task_co_id_; /* task 的协程 id */
   ObPxInterruptID px_int_id_;

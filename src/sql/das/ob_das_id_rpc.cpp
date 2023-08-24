@@ -111,6 +111,7 @@ int ObDASIDRequestRpc::fetch_new_range(const ObDASIDRequest &msg,
                      .sync_fetch_das_id(msg, res))) {
       LOG_WARN("fetch new range failed", KR(ret), K(server), K(msg));
   }
+  LOG_INFO("fetch new DAS ID range finish", KR(ret), K(msg), K(res));
   return ret;
 }
 } // namespace sql

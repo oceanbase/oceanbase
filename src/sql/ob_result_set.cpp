@@ -1128,9 +1128,14 @@ int ObResultSet::init_cmd_exec_context(ObExecContext &exec_ctx)
 }
 
 // obmp_query中重试整个SQL之前，可能需要调用本接口来刷新Location，以避免总是发给了错误的服务器
-void ObResultSet::refresh_location_cache(bool is_nonblock, int err)
+void ObResultSet::refresh_location_cache_by_errno(bool is_nonblock, int err)
 {
-  DAS_CTX(get_exec_context()).get_location_router().refresh_location_cache(is_nonblock, err);
+  DAS_CTX(get_exec_context()).get_location_router().refresh_location_cache_by_errno(is_nonblock, err);
+}
+
+void ObResultSet::force_refresh_location_cache(bool is_nonblock, int err)
+{
+  DAS_CTX(get_exec_context()).get_location_router().force_refresh_location_cache(is_nonblock, err);
 }
 
 // 告诉mysql是否要传入一个EndTransCallback
