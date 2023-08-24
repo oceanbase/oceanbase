@@ -419,7 +419,6 @@ int ObSchemaGetterGuard::get_tenant_system_variable(
   int ret = OB_SUCCESS;
   const ObSysVariableSchema* sys_variable_schema = NULL;
   if (OB_FAIL(get_sys_variable_schema(tenant_id, sys_variable_schema))) {
-    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get tenant info failed", K(ret), K(tenant_id));
   } else if (NULL == sys_variable_schema) {
     ret = OB_TENANT_NOT_EXIST;
