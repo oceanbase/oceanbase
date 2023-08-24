@@ -2563,6 +2563,7 @@ int ObCollectionType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
     for (int64_t i = 0; OB_SUCC(ret) && i < src_table->get_count(); i++) {
       ObObj *src_table_pos = reinterpret_cast<ObObj*>(src_table->get_data()) + i;
       ObObj *dst_table_pos = reinterpret_cast<ObObj*>(table_data) + i;
+      OX (new (dst_table_pos)ObObj());
       OZ (element_type_.convert(ctx, src_table_pos, dst_table_pos));
     }
   }
