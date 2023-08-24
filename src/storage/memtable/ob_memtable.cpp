@@ -2511,11 +2511,6 @@ int ObMemtable::get_active_table_ids(common::ObIArray<uint64_t> &table_ids)
   return ret;
 }
 
-bool ObMemtable::is_partition_memtable_empty(const uint64_t table_id) const
-{
-  return query_engine_.is_partition_memtable_empty(table_id);
-}
-
 #ifdef OB_BUILD_TDE_SECURITY
 int ObMemtable::save_encrypt_meta(const uint64_t table_id, const share::ObEncryptMeta *encrypt_meta)
 {

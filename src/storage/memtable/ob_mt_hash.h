@@ -157,7 +157,10 @@ public:
   {
   }
   ~ObMtArrayBase() { destroy(); }
-  void destroy() {}
+  void destroy() {
+    dir_ = nullptr;
+    alloc_memory_ = 0;
+  }
   int64_t get_alloc_memory() const { return ATOMIC_LOAD(&alloc_memory_) + sizeof(*this); }
   // 1. caller guraantees the validity of idx
   // 2. allocate dir_/seg on demand
@@ -353,6 +356,10 @@ public:
   {
     arr_.destroy();
     arr_size_ = 0;
+    tail_node_.hash_ = 0xFFFFFFFFFFFFFFFF; // can be any value
+    tail_node_.next_ = NULL;
+    zero_node_.set_bucket_filled(0);
+    zero_node_.next_ = &tail_node_;
   }
   int64_t get_arr_size() const { return ATOMIC_LOAD(&arr_size_); }
   int64_t get_alloc_memory() const { return sizeof(*this) + arr_.get_alloc_memory() + get_arr_size() * sizeof(ObMtHashNode) - sizeof(arr_);}
@@ -580,7 +587,7 @@ private:
         // or searches the whole link list
         ret = common::OB_ENTRY_NOT_EXIST;
       }
-      TRANS_LOG(DEBUG, "do_get finish", K(arr_size), K(query_key_so_hash), KP(bucket_node),
+      TRANS_LOG(DEBUG, "do_get finish", K(ret), K(arr_size), K(query_key_so_hash), KP(bucket_node),
                 K(op_bucket_node), K(genealogy), KP(prev_node), KP(next_node));
     }
     return ret;

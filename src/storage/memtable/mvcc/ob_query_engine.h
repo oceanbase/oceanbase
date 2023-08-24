@@ -139,47 +139,16 @@ public:
     DISALLOW_COPY_AND_ASSIGN(IteratorAlloc);
   };
 
-  class TableIndex
-  {
-  public:
-    explicit TableIndex(BtreeNodeAllocator &btree_allocator,
-                            common::ObIAllocator &memstore_allocator,
-                            int64_t obj_cnt)
-      : is_inited_(false),
-        keybtree_(btree_allocator),
-        keyhash_(memstore_allocator),
-        obj_cnt_(obj_cnt)
-    {}
-    ~TableIndex() { destroy(); }
-    int init();
-    void destroy();
-    void check_cleanout(bool &is_all_cleanout,
-                        bool &is_all_delay_cleanout,
-                        int64_t &count);
-    void dump2text(FILE* fd);
-    int dump_keyhash(FILE *fd) const;
-    int dump_keybtree(FILE *fd);
-    int64_t hash_size() const;
-    int64_t hash_alloc_memory() const;
-    int64_t btree_size() const;
-    int64_t btree_alloc_memory() const;
-    KeyBtree &get_keybtree() { return keybtree_; }
-    KeyHash &get_keyhash() { return keyhash_; }
-    int64_t get_obj_cnt() { return obj_cnt_; }
-  private:
-    DISALLOW_COPY_AND_ASSIGN(TableIndex);
-    bool is_inited_;
-    KeyBtree keybtree_;
-    KeyHash keyhash_;
-    int64_t obj_cnt_;
-  };
-
 public:
   enum { ESTIMATE_CHILD_COUNT_THRESHOLD = 1024, MAX_RANGE_SPLIT_COUNT = 1024 * 1024};
   explicit ObQueryEngine(ObIAllocator &memstore_allocator)
-      : is_inited_(false), is_expanding_(false), tenant_id_(common::OB_SERVER_TENANT_ID), 
-        index_(nullptr), memstore_allocator_(memstore_allocator),
-        btree_allocator_(memstore_allocator_) {}
+      : is_inited_(false),
+        is_expanding_(false),
+        tenant_id_(common::OB_SERVER_TENANT_ID),
+        memstore_allocator_(memstore_allocator),
+        btree_allocator_(memstore_allocator_),
+        keybtree_(btree_allocator_),
+        keyhash_(memstore_allocator_) {}
   ~ObQueryEngine() { destroy(); }
   int init(const uint64_t tenant_id);
   void destroy();
@@ -203,46 +172,17 @@ public:
                          const ObMemtableKey *start_key, const int start_exclude,
                          const ObMemtableKey *end_key, const int end_exclude,
                          int64_t &logical_row_count, int64_t &physical_row_count);
-  int dump_keyhash(FILE *fd) const
-  {
-    TableIndex *index = ATOMIC_LOAD(&index_);
-    return OB_NOT_NULL(index) && NOT_PLACE_HOLDER(index) ? index->dump_keyhash(fd) : OB_SUCCESS;
-  }
-  int64_t hash_size() const
-  {
-    TableIndex *index = ATOMIC_LOAD(&index_);
-    return OB_NOT_NULL(index) && NOT_PLACE_HOLDER(index) ? index->hash_size() : 0;
-  }
-  int64_t hash_alloc_memory() const
-  {
-    TableIndex *index = ATOMIC_LOAD(&index_);
-    return OB_NOT_NULL(index) && NOT_PLACE_HOLDER(index) ? index->hash_alloc_memory() : 0;
-  }
-  int dump_keybtree(FILE *fd)
-  {
-    TableIndex *index = ATOMIC_LOAD(&index_);
-    return OB_NOT_NULL(index) && NOT_PLACE_HOLDER(index) ? index->dump_keybtree(fd) : OB_SUCCESS;
-  }
-  int64_t btree_size() const
-  {
-    TableIndex *index = ATOMIC_LOAD(&index_);
-    return OB_NOT_NULL(index) && NOT_PLACE_HOLDER(index) ? index->btree_size() : 0;
-  }
-  int64_t btree_alloc_memory() const
-  {
-    TableIndex *index = ATOMIC_LOAD(&index_);
-    return OB_NOT_NULL(index) && NOT_PLACE_HOLDER(index)
-               ? index->btree_alloc_memory() + btree_allocator_.get_allocated()
-               : 0;
-  }
 
+  int dump_keyhash(FILE *fd) const;
+  int dump_keybtree(FILE *fd);
+  int64_t hash_size() const;
+  int64_t hash_alloc_memory() const;
+  int64_t btree_size() const;
+  int64_t btree_alloc_memory() const;
   void check_cleanout(bool &is_all_cleanout,
                       bool &is_all_delay_cleanout,
                       int64_t &count);
   void dump2text(FILE *fd);
-  int get_table_index(TableIndex *&return_ptr) const;
-  int set_table_index(const int64_t obj_cnt, TableIndex *&return_ptr);
-  bool is_partition_memtable_empty(const uint64_t table_id) const;
 private:
   int sample_rows(Iterator<BtreeRawIterator> *iter, const ObMemtableKey *start_key,
                   const int start_exclude, const ObMemtableKey *end_key, const int end_exclude,
@@ -251,8 +191,6 @@ private:
   int init_raw_iter_for_estimate(Iterator<BtreeRawIterator>*& iter,
                                  const ObMemtableKey *start_key,
                                  const ObMemtableKey *end_key);
-  int set_table_index_(const int64_t obj_cnt, TableIndex *&return_ptr);
-
   int find_split_range_level_(const ObMemtableKey *start_key,
                               const ObMemtableKey *end_key,
                               const int64_t range_count,
@@ -274,15 +212,15 @@ private:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryEngine);
-  static TableIndex * const PLACE_HOLDER;
   bool is_inited_;
   bool is_expanding_;
   uint64_t tenant_id_;
-  TableIndex *index_;
   ObIAllocator &memstore_allocator_;
   BtreeNodeAllocator btree_allocator_;
   IteratorAlloc<BtreeIterator> iter_alloc_;
   IteratorAlloc<BtreeRawIterator> raw_iter_alloc_;
+  KeyBtree keybtree_;
+  KeyHash keyhash_;
 };
 
 } // namespace memtable
