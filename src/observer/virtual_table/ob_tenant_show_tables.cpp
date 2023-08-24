@@ -68,8 +68,8 @@ int ObTenantShowTables::inner_open()
     if (OB_SUCC(ret)) {
       if (OB_UNLIKELY(!is_valid_id(database_id_))) {
         // FIXME(tingshuai.yts):暂时定为显示该错误信息，只有直接查询该虚拟表才可能出现
-        ret = OB_ERR_UNEXPECTED;
-        LOG_USER_ERROR(OB_ERR_UNEXPECTED, "this table is used for show clause, can't be selected");
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "select a table which is used for show clause");
       } else {
         if (OB_FAIL(schema_guard_->get_table_schemas_in_database(tenant_id_,
                                                                  database_id_,
