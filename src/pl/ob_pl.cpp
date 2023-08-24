@@ -799,7 +799,7 @@ void ObPLContext::destory(
     }
     if (has_stash_savepoint_) {
       const ObString stash_savepoint_name("PL stash savepoint");
-      int pop_ret = ObSqlTransControl::release_savepoint(ctx, stash_savepoint_name);
+      int pop_ret = ObSqlTransControl::release_stash_savepoint(ctx, stash_savepoint_name);
       if (OB_SUCCESS != pop_ret) {
         LOG_WARN("fail to release stash savepoint", K(pop_ret));
         ret = OB_SUCCESS == ret ? pop_ret : ret;

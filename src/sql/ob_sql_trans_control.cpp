@@ -892,6 +892,20 @@ int ObSqlTransControl::rollback_savepoint(ObExecContext &exec_ctx,
   return ret;
 }
 
+int ObSqlTransControl::release_stash_savepoint(ObExecContext &exec_ctx,
+                                               const ObString &sp_name)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
+  transaction::ObTransService *txs = NULL;
+  CK (OB_NOT_NULL(session));
+  CHECK_SESSION (session);
+  OZ (get_tx_service(session, txs), *session);
+  OZ (acquire_tx_if_need_(txs, *session));
+  OZ (txs->release_explicit_savepoint(*session->get_tx_desc(), sp_name, get_real_session_id(*session)), *session, sp_name);
+  return ret;
+}
+
 int ObSqlTransControl::release_savepoint(ObExecContext &exec_ctx,
                                          const ObString &sp_name)
 {
