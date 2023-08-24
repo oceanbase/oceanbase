@@ -96,6 +96,10 @@ private:
   int update_migration_status_(ObLS *ls);
   int report_ls_meta_table_(ObLS *ls);
   int report_result_();
+  int trans_rebuild_fail_status_(
+      ObLS &ls,
+      const ObMigrationStatus &current_migration_status,
+      ObMigrationStatus &new_migration_status);
 
 private:
   bool is_inited_;
