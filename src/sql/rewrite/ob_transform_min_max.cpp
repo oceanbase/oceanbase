@@ -176,7 +176,7 @@ int ObTransformMinMax::check_transform_validity(ObTransformerCtx &ctx,
 {
   int ret = OB_SUCCESS;
   is_valid = false;
-  if (OB_ISNULL(select_stmt)) {
+    if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(select_stmt));
   } else if (select_stmt->has_recursive_cte() || select_stmt->has_hierarchical_query()) {
@@ -573,6 +573,7 @@ int ObTransformMinMax::check_valid_aggr_expr(const ObRawExpr *expr,
           break;
         }
       } else {
+        is_valid = false;
         break;
       }
     }
