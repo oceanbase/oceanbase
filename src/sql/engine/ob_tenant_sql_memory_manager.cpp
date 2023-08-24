@@ -58,7 +58,7 @@ uint64_t ObSqlWorkAreaProfile::get_exec_id()
 
 const char* ObSqlWorkAreaProfile::get_sql_id()
 {
-  return sql_id_.ptr();
+  return sql_id_;
 }
 
 uint64_t ObSqlWorkAreaProfile::get_session_id()
@@ -75,9 +75,12 @@ int ObSqlWorkAreaProfile::set_exec_info(ObExecContext &exec_ctx)
     session_id_ = ObPxSqcUtil::get_session_id(&exec_ctx);
     ObPhysicalPlanCtx *plan_ctx = exec_ctx.get_physical_plan_ctx();
     if (OB_NOT_NULL(plan_ctx) && OB_NOT_NULL(plan_ctx->get_phy_plan())) {
-      OZ (ob_write_string(exec_ctx.get_allocator(),
-                          plan_ctx->get_phy_plan()->get_sql_id_string(),
-                          sql_id_));
+      if (nullptr == plan_ctx->get_phy_plan()->get_sql_id()) {
+        sql_id_[0] = '\0';
+      } else {
+        memcpy(sql_id_, plan_ctx->get_phy_plan()->get_sql_id(), OB_MAX_SQL_ID_LENGTH);
+        sql_id_[OB_MAX_SQL_ID_LENGTH] = '\0';
+      }
     }
     return ret;
   }

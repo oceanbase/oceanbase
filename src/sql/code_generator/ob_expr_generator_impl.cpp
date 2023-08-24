@@ -844,6 +844,7 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr &expr, ObExprInOrNotIn
       bool param_all_same_cs_type = true;
       bool param_all_is_ext = true;
       bool param_all_same_cs_level = true;
+      bool param_all_can_vectorize = param_all_const;
       ObObjType first_obj_type = param1->get_param_expr(0)->get_data_type();
       ObObjType cur_obj_type = ObMaxType;
       ObCollationType first_obj_cs_type = param1->get_param_expr(0)->get_collation_type();
@@ -859,6 +860,7 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr &expr, ObExprInOrNotIn
           first_obj_type = cur_obj_type;
           first_obj_cs_type = cur_obj_cs_type;
         }
+        param_all_can_vectorize &= param1->get_param_expr(i)->is_static_const_expr();
         if (ObNullType != first_obj_type && ObNullType != cur_obj_type) {
           param_all_const &= param1->get_param_expr(i)->is_static_const_expr();
           param_all_same_type &= (first_obj_type == cur_obj_type);
@@ -874,7 +876,7 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr &expr, ObExprInOrNotIn
                                         : (param_all_same_cs_type &= param_all_same_cs_level));
       in_op->set_param_is_ext_type_oracle(param_all_is_ext);
       //now only support c1 in (1,2,3,4,5...) to vecotrized
-      if (param_all_const && expr.get_param_expr(0)->is_vectorize_result()) {
+      if (param_all_can_vectorize && expr.get_param_expr(0)->is_vectorize_result()) {
         in_op->set_param_can_vectorized();
       }
     }
