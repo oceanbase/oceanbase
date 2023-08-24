@@ -8232,7 +8232,7 @@ int ObDDLResolver::check_foreign_key_reference(
               && OB_FAIL(alter_table_stmt->get_alter_table_arg().based_schema_object_infos_.push_back(
                  ObBasedSchemaObjectInfo(
                      mock_fk_parent_table_schema->get_mock_fk_parent_table_id(),
-                     MOCK_FK_PARENT_TABLE_SHCEMA,
+                     MOCK_FK_PARENT_TABLE_SCHEMA,
                      mock_fk_parent_table_schema->get_schema_version())))) {
             LOG_WARN("failed to add based_schema_object_info to arg",
                          K(ret), K(mock_fk_parent_table_schema->get_mock_fk_parent_table_id()),
@@ -8241,7 +8241,7 @@ int ObDDLResolver::check_foreign_key_reference(
                      && OB_FAIL(create_table_stmt->get_create_table_arg().based_schema_object_infos_.push_back(
                      ObBasedSchemaObjectInfo(
                          mock_fk_parent_table_schema->get_mock_fk_parent_table_id(),
-                         MOCK_FK_PARENT_TABLE_SHCEMA,
+                         MOCK_FK_PARENT_TABLE_SCHEMA,
                          mock_fk_parent_table_schema->get_schema_version())))) {
             LOG_WARN("failed to add based_schema_object_info to arg",
                          K(ret), K(mock_fk_parent_table_schema->get_mock_fk_parent_table_id()),

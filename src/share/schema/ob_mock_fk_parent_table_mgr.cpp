@@ -412,7 +412,7 @@ int ObMockFKParentTableMgr::get_schema_statistics(ObSchemaStatisticsInfo &schema
 {
   int ret = OB_SUCCESS;
   schema_info.reset();
-  schema_info.schema_type_ = MOCK_FK_PARENT_TABLE_SHCEMA;
+  schema_info.schema_type_ = MOCK_FK_PARENT_TABLE_SCHEMA;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));

@@ -3295,7 +3295,7 @@ int ObMultiVersionSchemaService::get_gc_candidates(ObHashSet<uint64_t> &candidat
   ObHashSet<uint64_t> tenant_id_set;
   // The purpose of locking here is to ensure that there are no new tenants in the GC phase,
   // and to prevent the new tenant schema from being considered as dropped tenants and being GC dropped
-  // during the shcema refresh process.
+  // during the schema refresh process.
   lib::ObMutexGuard guard(schema_refresh_mutex_);
   if (!is_sys_full_schema()) {
     ret = OB_SCHEMA_EAGAIN;

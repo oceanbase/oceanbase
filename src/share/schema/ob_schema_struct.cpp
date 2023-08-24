@@ -9075,7 +9075,7 @@ bool is_normal_schema(const ObSchemaType schema_type)
       schema_type == LABEL_SE_USER_LEVEL_SCHEMA ||
       schema_type == PROFILE_SCHEMA ||
       schema_type == DBLINK_SCHEMA ||
-      schema_type == MOCK_FK_PARENT_TABLE_SHCEMA ||
+      schema_type == MOCK_FK_PARENT_TABLE_SCHEMA ||
       false;
 }
 
