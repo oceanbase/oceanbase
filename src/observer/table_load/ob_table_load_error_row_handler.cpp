@@ -134,6 +134,7 @@ int ObTableLoadErrorRowHandler::handle_update_row(
         }
       }
       ATOMIC_AAF(&job_stat_->detected_error_rows_, duplicate_row_count);
+      row = rows.at(0);
     } else if (ObLoadDupActionType::LOAD_REPLACE == dup_action_) {
       ATOMIC_AAF(&result_info_->rows_affected_, 2 * duplicate_row_count);
       ATOMIC_AAF(&result_info_->deleted_, duplicate_row_count);
@@ -179,6 +180,7 @@ int ObTableLoadErrorRowHandler::handle_update_row(
         }
       }
       ATOMIC_AAF(&job_stat_->detected_error_rows_, duplicate_row_count);
+      row = rows.at(0);
     } else if (ObLoadDupActionType::LOAD_REPLACE == dup_action_) {
       ATOMIC_AAF(&result_info_->rows_affected_, 2 * duplicate_row_count);
       ATOMIC_AAF(&result_info_->deleted_, duplicate_row_count);
