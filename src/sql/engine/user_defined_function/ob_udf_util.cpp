@@ -269,8 +269,12 @@ int ObUdfUtil::init_udf_args(ObIAllocator& allocator, const common::ObIArray<com
           K(udf_attributes_types.at(i).get_type()),
           K(udf_attributes_types.at(i).get_calc_type()));
     } else if (udf_args.attribute_lengths[i] > 0) {
-      udf_args.attributes[i] = (char*)allocator.alloc(udf_args.attribute_lengths[i]);
-      IGNORE_RETURN MEMCPY(udf_args.attributes[i], udf_attributes.at(i).ptr(), udf_attributes.at(i).length());
+      if (OB_ISNULL(udf_args.attributes[i] = (char*)allocator.alloc(udf_args.attribute_lengths[i]))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret), K(udf_args.attribute_lengths[i]));
+      } else {
+        IGNORE_RETURN MEMCPY(udf_args.attributes[i], udf_attributes.at(i).ptr(), udf_attributes.at(i).length());
+      }
     } else {
       udf_args.attributes[i] = nullptr;
     }
