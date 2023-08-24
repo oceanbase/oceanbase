@@ -81,6 +81,7 @@
 #include "share/backup/ob_backup_struct.h"
 #include "observer/ob_heartbeat_handler.h"
 #include "storage/slog/ob_storage_logger_manager.h"
+#include "storage/high_availability/ob_transfer_lock_utils.h"
 
 namespace oceanbase
 {
@@ -2963,6 +2964,34 @@ int ObService::update_tenant_info_cache(
   }
   return ret;
 }
+
+int ObService::ob_admin_unlock_member_list(
+    const obrpc::ObAdminUnlockMemberListOpArg &arg)
+{
+  LOG_INFO("start ob_admin_unlock_member_list", K(arg));
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invaild", KR(ret), K(arg));
+  } else if (arg.tenant_id_ != MTL_ID() && OB_FAIL(guard.switch_to(arg.tenant_id_))) {
+    LOG_WARN("switch tenant failed", KR(ret), K(arg));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObMemberListLockUtils::unlock_for_ob_admin(arg.tenant_id_, arg.ls_id_, arg.lock_id_))) {
+      LOG_WARN("failed to unlock member list", K(ret), K(arg));
+    } else {
+      LOG_INFO("finish ob_admin_unlock_member_list", K(arg));
+    }
+  }
+  return ret;
+}
+
 
 }// end namespace observer
 }// end namespace oceanbase

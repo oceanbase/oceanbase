@@ -630,5 +630,41 @@ void ObMemberListLockUtils::destory_storage_rpc_(
   storage_rpc.destroy();
 }
 
+int ObMemberListLockUtils::unlock_for_ob_admin(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const int64_t lock_id)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  const int64_t lock_timeout = CONFIG_CHANGE_TIMEOUT;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  bool palf_is_locked = false;
+  int64_t palf_lock_owner = -1;
+
+  if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || lock_id < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id), K(lock_id));
+  } else if (OB_FAIL(get_ls_handle(tenant_id, ls_id, ls_handle))) {
+    LOG_WARN("failed to get ls handle", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be null", K(ret));
+  } else if (OB_FAIL(ls->get_config_change_lock_stat(palf_lock_owner, palf_is_locked))) {
+    LOG_WARN("failed to get config change lock stat", K(ret));
+  } else if (!palf_is_locked) {
+    //do nothing
+  } else if (lock_id != palf_lock_owner) {
+    ret = OB_ERR_UNEXPECTED_LOCK_OWNER;
+    LOG_WARN("palf lock owner and inner table not same", K(ret), K(palf_lock_owner), K(lock_id));
+  } else if (OB_FAIL(ls->unlock_config_change(palf_lock_owner, lock_timeout))) {
+    LOG_WARN("failed to unlock config change", K(ret), K(palf_lock_owner));
+  }
+
+  LOG_INFO("unlock for ob admin", K(ret), K(tenant_id), K(ls_id), K(palf_is_locked), K(palf_lock_owner));
+  return ret;
+}
+
 }  // namespace storage
 }  // namespace oceanbase

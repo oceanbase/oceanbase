@@ -8649,5 +8649,49 @@ int ObLoadBaselineRes::assign(const ObLoadBaselineRes &other)
 }
 OB_SERIALIZE_MEMBER(ObLoadBaselineRes, load_count_);
 
+ObAdminUnlockMemberListOpArg::ObAdminUnlockMemberListOpArg()
+  : tenant_id_(OB_INVALID_ID),
+    ls_id_(),
+    lock_id_(-1)
+{
+}
+
+ObAdminUnlockMemberListOpArg::~ObAdminUnlockMemberListOpArg()
+{
+}
+
+void ObAdminUnlockMemberListOpArg::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+  ls_id_.reset();
+  lock_id_ = -1;
+}
+
+bool ObAdminUnlockMemberListOpArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_
+      && ls_id_.is_valid()
+      && lock_id_ >= 0;
+}
+
+int ObAdminUnlockMemberListOpArg::set(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const int64_t lock_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || lock_id < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("set unlock mmeber list arg get invalid argument", K(ret), K(tenant_id), K(ls_id), K(lock_id));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    lock_id_ = lock_id;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObAdminUnlockMemberListOpArg, tenant_id_, ls_id_, lock_id_);
+
 }//end namespace obrpc
 }//end namepsace oceanbase

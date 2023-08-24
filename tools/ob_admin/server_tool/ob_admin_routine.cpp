@@ -786,3 +786,43 @@ DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
   COMMON_LOG(INFO, "update_lock", K(arg));
   return ret;
 }
+
+
+// unlock_member_list
+// @params [in]  tenant_id, which tenant to modify
+// @params [in]  ls_id, which log stream to modify
+DEF_COMMAND(SERVER, unlock_member_list, 1, "tenant_id:ls_id:lock_id # unlock_member_list")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  ObAdminUnlockMemberListOpArg arg;
+  uint64_t tenant_id_to_set = OB_INVALID_TENANT_ID;
+  int64_t ls_id_to_set = 0;
+  int64_t lock_id = -1;
+
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("should provide tenant_id, ls_id");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (3 != sscanf(arg_str.c_str(), "%ld:%ld:%ld", &tenant_id_to_set, &ls_id_to_set, &lock_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()), K(cmd_.c_str()),
+               K(tenant_id_to_set), K(ls_id_to_set), K(lock_id));
+  } else {
+    share::ObLSID ls_id(ls_id_to_set);
+    if (OB_INVALID_ID == tenant_id_to_set || !ls_id.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "argument is invalid", K(ret), K(tenant_id_to_set), K(ls_id));
+    } else if (OB_FAIL(arg.set(tenant_id_to_set, ls_id, lock_id))) {
+      COMMON_LOG(WARN, "failed to set unlock member list op arg", K(ret), K(tenant_id_to_set), K(ls_id), K(lock_id));
+    } else if (OB_FAIL(client_->admin_unlock_member_list_op(arg))) {
+      COMMON_LOG(ERROR, "send req fail", K(ret));
+    }
+  }
+  COMMON_LOG(INFO, "unlock_member_list", K(ret), K(arg));
+  return ret;
+}

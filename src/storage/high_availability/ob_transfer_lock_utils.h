@@ -32,6 +32,7 @@ public:
       const common::ObMemberList &member_list, const ObTransferLockStatus &status, common::ObMySQLProxy &sql_proxy);
   static int unlock_ls_member_list(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id,
       const common::ObMemberList &member_list, const ObTransferLockStatus &status, common::ObMySQLProxy &sql_proxy);
+  static int unlock_for_ob_admin(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t lock_id);
 
 public:
   /* interface used for primary switch over to standby */

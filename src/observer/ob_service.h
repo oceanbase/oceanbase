@@ -248,6 +248,9 @@ public:
   int handle_heartbeat(
       const share::ObHBRequest &hb_request,
       share::ObHBResponse &hb_response);
+  int ob_admin_unlock_member_list(
+      const obrpc::ObAdminUnlockMemberListOpArg &arg);
+
 private:
   int get_role_from_palf_(
       logservice::ObLogService &log_service,
