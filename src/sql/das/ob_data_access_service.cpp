@@ -294,6 +294,10 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
         }
         task_op.errcode_ = ret;
         retry_continue = (OB_SUCCESS != ret);
+        if (retry_continue && IS_INTERRUPTED()) {
+          retry_continue = false;
+          LOG_INFO("[DAS RETRY] Retry is interrupted by worker interrupt signal", KR(ret));
+        }
       } else {
         ret = task_op.errcode_;
       }
