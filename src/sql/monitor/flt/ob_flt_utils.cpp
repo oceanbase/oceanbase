@@ -48,11 +48,11 @@ namespace sql
     return ret;
   }
 
-  void ObFLTUtils::clean_flt_env(sql::ObSQLSessionInfo &session) {
-    if (session.is_query_trc_granuality()) {
+  void ObFLTUtils::clean_flt_env() {
+    if (OBTRACE->is_query_trace()) {
       FLT_END_TRACE();
     } else {
-      if (session.get_in_transaction()) {
+      if (OBTRACE->is_in_transaction()) {
         // do nothing
       } else {
         FLT_END_TRACE();
@@ -62,7 +62,7 @@ namespace sql
 
   int ObFLTUtils::clean_flt_show_trace_env(sql::ObSQLSessionInfo &session) {
     int ret = OB_SUCCESS;
-    if (session.is_query_trc_granuality()) {
+    if (OBTRACE->is_query_trace()) {
       // record current trace id
       if (OB_FAIL(record_flt_last_trace_id(session))) {
         LOG_WARN("failed to record last flt trace id", K(ret));
@@ -71,7 +71,7 @@ namespace sql
       }
       // transaction level show trace
     } else {
-      if (session.get_in_transaction()) {
+      if (OBTRACE->is_in_transaction()) {
         // do nothing
       } else {
         // record current trace id
@@ -346,7 +346,9 @@ namespace sql
     // initialize log framework
     int ret = OB_SUCCESS;
     FLT_RESET_SPAN();
-    if (sess.is_query_trc_granuality()) {
+    OBTRACE->set_in_transaction(sess.is_server_status_in_transaction());
+    OBTRACE->set_is_query_trace(sess.is_query_trc_granuality());
+    if (OBTRACE->is_query_trace()) {
       // reset trace_enable and flush trace in transcation granularity
       // init flush trace and trace enable
       if (!is_client_support_flt) {
@@ -358,7 +360,7 @@ namespace sql
         //set by client
       }
     } else {
-      if (sess.is_server_status_in_transaction()) {
+      if (OBTRACE->is_in_transaction()) {
         // in the trans, do nothing
       } else {
         // reset trace_enable and flush trace in transcation granularity
@@ -410,11 +412,11 @@ namespace sql
     // update trace_id by server self
     } else {
       // update trace_id in query granularity
-      if (sess.is_query_trc_granuality()) {
+      if (OBTRACE->is_query_trace()) {
         FLT_BEGIN_TRACE();
       } else {
         // update trace_id in transaction granularity
-        if (!sess.get_in_transaction()) {
+        if (!OBTRACE->is_in_transaction()) {
           // begin new trace
           FLT_BEGIN_TRACE();
         } else {
