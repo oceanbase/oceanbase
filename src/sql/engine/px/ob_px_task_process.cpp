@@ -456,9 +456,6 @@ int ObPxTaskProcess::do_process()
       }
     }
   }
-  if (OB_NOT_NULL(arg_.exec_ctx_)) {
-    DAS_CTX(*arg_.exec_ctx_).get_location_router().refresh_location_cache(true, ret);
-  }
 
   // for forward warning msg and user error msg
   (void)record_user_error_msg(ret);
@@ -474,6 +471,10 @@ int ObPxTaskProcess::do_process()
   // Task 和 Sqc 在两个不同线程中时，task 需要和 sqc 通信
   if (NULL != arg_.sqc_task_ptr_) {
     arg_.sqc_task_ptr_->set_result(ret);
+    if (OB_NOT_NULL(arg_.exec_ctx_)) {
+      int das_retry_rc = DAS_CTX(*arg_.exec_ctx_).get_location_router().get_last_errno();
+      arg_.sqc_task_ptr_->set_das_retry_rc(das_retry_rc);
+    }
     if (OB_SUCC(ret)) {
       // nop
     } else if (IS_INTERRUPTED()) {

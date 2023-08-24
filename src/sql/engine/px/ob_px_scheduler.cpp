@@ -384,10 +384,12 @@ int ObPxMsgProc::on_sqc_finish_msg(ObExecContext &ctx,
   ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_, pkt.rc_, pkt.err_msg_);
   if (OB_SUCC(ret)) {
     if (OB_FAIL(pkt.rc_)) {
+      DAS_CTX(ctx).get_location_router().save_cur_exec_status(pkt.rc_);
       LOG_WARN("sqc fail, abort qc", K(pkt), K(ret), "sqc_addr", sqc->get_exec_addr());
     } else {
       // pkt rc_ == OB_SUCCESS
       // 处理 dml + px 框架下的affected row
+      DAS_CTX(ctx).get_location_router().save_cur_exec_status(pkt.das_retry_rc_);
       if (OB_ISNULL(ctx.get_physical_plan_ctx())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("phy plan ctx is null", K(ret));

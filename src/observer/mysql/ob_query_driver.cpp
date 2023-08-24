@@ -307,6 +307,9 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
       LOG_WARN("fail to response query header", K(ret), K(row_num), K(can_retry));
     }
   }
+  if (OB_FAIL(ret) && !can_retry) {
+    FLOG_INFO("The query has already returned partial results to the client and cannot be retried", KR(ret));
+  }
 
   return ret;
 }

@@ -384,6 +384,7 @@ public:
       : dfo_id_(common::OB_INVALID_ID),
         sqc_id_(common::OB_INVALID_ID),
         rc_(common::OB_SUCCESS),
+        das_retry_rc_(common::OB_SUCCESS),
         task_monitor_info_array_(),
         sqc_affected_rows_(0),
         dml_row_info_(),
@@ -396,20 +397,22 @@ public:
   transaction::ObTxExecResult &get_trans_result() { return trans_result_; }
   void reset()
   {
-    dfo_id_ = OB_INVALID_ID;
-    sqc_id_ = OB_INVALID_ID;
-    rc_ = OB_SUCCESS;
+    dfo_id_ = common::OB_INVALID_ID;
+    sqc_id_ = common::OB_INVALID_ID;
+    rc_ = common::OB_SUCCESS;
+    das_retry_rc_ = common::OB_SUCCESS;
     trans_result_.reset();
     task_monitor_info_array_.reset();
     dml_row_info_.reset();
     fb_info_.reset();
     err_msg_.reset();
   }
-  TO_STRING_KV(K_(dfo_id), K_(sqc_id), K_(rc), K_(sqc_affected_rows));
+  TO_STRING_KV(K_(dfo_id), K_(sqc_id), K_(rc), K_(das_retry_rc), K_(sqc_affected_rows));
 public:
   int64_t dfo_id_;
   int64_t sqc_id_;
   int rc_; // 错误码
+  int das_retry_rc_; //record the error code that cause DAS to retry
   transaction::ObTxExecResult trans_result_;
   ObPxTaskMonitorInfoArray task_monitor_info_array_; // deprecated, keep for compatiablity
   int64_t sqc_affected_rows_; // pdml情况下，一个sqc 影响的行数

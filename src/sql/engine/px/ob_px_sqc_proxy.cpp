@@ -456,6 +456,13 @@ int ObPxSQCProxy::report(int end_ret) const
     // overwrite ret
     ObPxTask &task = tasks.at(i);
     ObPxErrorUtil::update_sqc_error_code(sqc_ret, task.get_result(), task.err_msg_, finish_msg.err_msg_);
+    if (OB_SUCCESS == finish_msg.das_retry_rc_) {
+      //Even if the PX task is successfully retried by DAS,
+      //it is necessary to collect the retry error code of each task and provide feedback to the QC node of PX,
+      //so that the QC node can refresh the location cache in a timely manner,
+      //avoiding the next execution from being sent to the same erroneous node.
+      finish_msg.das_retry_rc_ = task.get_das_retry_rc();
+    }
     affected_rows += task.get_affected_rows();
     finish_msg.dml_row_info_.add_px_dml_row_info(task.dml_row_info_);
     finish_msg.temp_table_id_ = task.temp_table_id_;
