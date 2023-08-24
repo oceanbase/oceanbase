@@ -253,6 +253,19 @@ int ObLSTxLogAdapter::check_redo_sync_completed(const ObTransID &tx_id,
   return ret;
 }
 
+bool ObLSTxLogAdapter::is_dup_table_lease_valid()
+{
+  bool is_follower_lease = false;
+
+  if (OB_ISNULL(dup_table_ls_handler_)) {
+    DUP_TABLE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "invalid dup table ls handler");
+  } else {
+    is_follower_lease = dup_table_ls_handler_->is_dup_table_lease_valid();
+  }
+
+  return is_follower_lease;
+}
+
 bool ObLSTxLogAdapter::has_dup_tablet()
 {
   bool has_dup = false;

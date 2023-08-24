@@ -174,6 +174,7 @@ public:
   int calculate_trans_cost(const ObTransID &tid, uint64_t &cost);
   int get_ls_min_uncommit_prepare_version(const share::ObLSID &ls_id, share::SCN &min_prepare_version);
   int get_min_undecided_log_ts(const share::ObLSID &ls_id, share::SCN &log_ts);
+  int check_dup_table_lease_valid(const ObLSID ls_id, bool &is_dup_ls, bool &is_lease_valid);
   //get the memory used condition of transaction module
   int iterate_trans_memory_stat(ObTransMemStatIterator &mem_stat_iter);
   int dump_elr_statistic();

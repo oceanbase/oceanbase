@@ -86,6 +86,7 @@ public:
                                         const share::SCN &redo_completed_scn,
                                         bool &redo_sync_finish,
                                         share::SCN &total_max_read_version);
+  virtual bool is_dup_table_lease_valid() { return false; }
   virtual bool has_dup_tablet() { return false; }
   virtual int64_t get_committing_dup_trx_cnt();
   virtual int add_commiting_dup_trx(const ObTransID &tx_id);
@@ -127,6 +128,7 @@ public:
                                 const share::SCN &redo_completed_scn,
                                 bool &redo_sync_finish,
                                 share::SCN &total_max_read_version);
+  bool is_dup_table_lease_valid();
   bool has_dup_tablet();
   int64_t get_committing_dup_trx_cnt();
   int add_commiting_dup_trx(const ObTransID &tx_id);

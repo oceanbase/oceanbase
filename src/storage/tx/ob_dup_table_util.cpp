@@ -1058,8 +1058,8 @@ int ObDupTableLSHandler::check_dup_tablet_in_redo(const ObTabletID &tablet_id,
     is_dup_tablet = false;
   } else if (!has_dup_tablet()) {
     is_dup_tablet = false;
-  } else if (OB_FAIL(tablets_mgr_ptr_->find_dup_tablet_in_set(tablet_id, is_dup_tablet,
-                                                              base_snapshot, redo_scn))) {
+  } else if (OB_FAIL(tablets_mgr_ptr_->search_dup_tablet_in_redo_log(tablet_id, is_dup_tablet,
+                                                                     base_snapshot, redo_scn))) {
     DUP_TABLE_LOG(WARN, "check dup tablet failed", K(ret), K(tablet_id), K(base_snapshot),
                   K(redo_scn));
   }
@@ -1120,6 +1120,28 @@ int ObDupTableLSHandler::check_dup_tablet_readable(const ObTabletID &tablet_id,
   return ret;
 }
 
+bool ObDupTableLSHandler::is_dup_table_lease_valid()
+{
+  bool is_dup_lease_ls = false;
+  const bool is_election_leader = false;
+
+  if (has_dup_tablet()) {
+    if (OB_ISNULL(lease_mgr_ptr_)) {
+      is_dup_lease_ls = false;
+    } else if (ls_state_helper_.is_leader()) {
+      is_dup_lease_ls = true;
+      DUP_TABLE_LOG(INFO, "the lease is always valid for a dup ls leader", K(is_dup_lease_ls),
+                    KPC(this));
+    } else {
+      is_dup_lease_ls = lease_mgr_ptr_->is_follower_lease_valid();
+    }
+  } else {
+    is_dup_lease_ls = false;
+  }
+
+  return is_dup_lease_ls;
+}
+
 int64_t ObDupTableLSHandler::get_dup_tablet_count()
 {
   int64_t dup_tablet_cnt = 0;
@@ -1142,6 +1164,24 @@ bool ObDupTableLSHandler::has_dup_tablet()
     has_dup = tablets_mgr_ptr_->has_dup_tablet();
   }
   return has_dup;
+}
+
+bool ObDupTableLSHandler::is_dup_tablet(const common::ObTabletID &tablet_id)
+{
+  bool is_dup_tablet = false;
+  int ret = OB_SUCCESS;
+
+  if (!tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    DUP_TABLE_LOG(WARN, "invalid argument", K(ret), K(tablet_id));
+  } else if (OB_ISNULL(tablets_mgr_ptr_)) {
+    is_dup_tablet = false;
+  } else if (OB_FAIL(tablets_mgr_ptr_->search_dup_tablet_for_read(tablet_id, is_dup_tablet))) {
+    DUP_TABLE_LOG(WARN, "check dup tablet failed", K(ret), K(tablet_id), K(is_dup_tablet));
+    is_dup_tablet = false;
+  }
+
+  return is_dup_tablet;
 }
 
 // if return false, there are no tablets and tablet set need log

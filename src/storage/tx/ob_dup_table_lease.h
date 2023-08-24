@@ -89,6 +89,8 @@ public:
 
   int get_lease_valid_array(LeaseAddrArray &lease_array);
 
+  bool is_follower_lease_valid();
+
   bool check_follower_lease_serving(const bool election_is_leader,
                                     const share::SCN &max_replayed_scn);
 

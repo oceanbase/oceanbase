@@ -602,12 +602,13 @@ public:
                      bool &readable,
                      const share::SCN &snapshot,
                      DupTableInterfaceStat interface_stat);
+  int search_dup_tablet_for_read(const common::ObTabletID &tablet_id, bool &is_dup_table);
   // For part_ctx, check_dup_table will be invoked after submit_log in LS which has dup_table
   // tablets. It will bring performance effect for normal part_ctx without dup_table tablets.
-  int find_dup_tablet_in_set(const common::ObTabletID &tablet_id,
-                             bool &is_dup_table,
-                             const share::SCN &from_scn,
-                             const share::SCN &to_scn);
+  int search_dup_tablet_in_redo_log(const common::ObTabletID &tablet_id,
+                                    bool &is_dup_table,
+                                    const share::SCN &from_scn,
+                                    const share::SCN &to_scn);
   int gc_dup_tablets(const int64_t gc_ts, const int64_t max_task_interval);
   // new gc methods
   int scan_readable_set_for_gc();

@@ -697,7 +697,7 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
                                                    stmt_expire_ts,
                                                    snapshot))) {
       } else {
-        local_single_ls_plan = has_same_lsid(das_ctx, snapshot.core_.version_, first_ls_id);
+        local_single_ls_plan = has_same_lsid(das_ctx, snapshot, first_ls_id);
       }
     }
     if (OB_SUCC(ret) && !local_single_ls_plan) {
@@ -798,12 +798,13 @@ int ObSqlTransControl::get_first_lsid(const ObDASCtx &das_ctx, share::ObLSID &fi
 }
 
 bool ObSqlTransControl::has_same_lsid(const ObDASCtx &das_ctx,
-                                      const share::SCN &snapshot_version,
+                                      const transaction::ObTxReadSnapshot &snapshot,
                                       share::ObLSID &first_lsid)
 {
   int ret = OB_SUCCESS;
   bool bret = true;
   ObLSHandle ls_handle;
+  const share::SCN snapshot_version = snapshot.core_.version_;
   const DASTableLocList &table_locs = das_ctx.get_table_loc_list();
   FOREACH_X(table_node, table_locs, bret) {
     ObDASTableLoc *table_loc = *table_node;
@@ -845,6 +846,17 @@ bool ObSqlTransControl::has_same_lsid(const ObDASCtx &das_ctx,
           } else {
             // do nothing
           }
+        }
+      }
+      if (bret && common::ObRole::FOLLOWER == snapshot.snapshot_ls_role_) {
+        ObLS *ls = NULL;
+        if (OB_ISNULL(ls = ls_handle.get_ls())) {
+          bret = false;
+          LOG_WARN("invalid ls", K(bret), K(first_lsid), K(snapshot));
+        } else if (!(ls->get_dup_table_ls_handler()->is_dup_tablet(tablet_id))) {
+          bret = false;
+          LOG_WARN("There is a normal tablet, retry to acquire snapshot with gts", K(bret), K(first_lsid),
+                   K(snapshot), K(tablet_loc));
         }
       }
     }

@@ -573,6 +573,16 @@ int ObDupTableLSLeaseMgr::leader_revoke()
   return ret;
 }
 
+bool ObDupTableLSLeaseMgr::is_follower_lease_valid()
+{
+  bool is_follower_lease = false;
+
+  SpinRLockGuard guard(lease_lock_);
+  is_follower_lease = follower_lease_info_.lease_expired_ts_ > ObTimeUtility::current_time();
+
+  return is_follower_lease;
+}
+
 bool ObDupTableLSLeaseMgr::check_follower_lease_serving(const bool is_election_leader,
                                                         const share::SCN &max_replayed_scn)
 {

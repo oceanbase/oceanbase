@@ -31,6 +31,7 @@
 #include "wrs/ob_weak_read_util.h"               // ObWeakReadUtil
 #include "storage/memtable/ob_memtable_context.h"
 #include "storage/memtable/ob_memtable.h"
+#include "storage/tx_storage/ob_ls_service.h"
 #include "common/storage/ob_sequence.h"
 #include "observer/ob_srv_network_frame.h"
 #include "share/rc/ob_tenant_module_init_ctx.h"
@@ -610,6 +611,38 @@ int ObTransService::get_max_decided_scn(const share::ObLSID &ls_id, share::SCN &
     }
     tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_mgr_ptr);
   }
+  return ret;
+}
+
+int ObTransService::check_dup_table_lease_valid(const ObLSID ls_id,
+                                                bool &is_dup_ls,
+                                                bool &is_lease_valid)
+{
+  int ret = OB_SUCCESS;
+
+  ObLSHandle ls_handle;
+  is_dup_ls = false;
+  is_lease_valid = false;
+
+  if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(ls_id));
+  } else if (!dup_table_loop_worker_.is_useful_dup_ls(ls_id)) {
+    is_dup_ls = false;
+    ret = OB_SUCCESS;
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+    is_dup_ls = false;
+    TRANS_LOG(WARN, "get ls failed", K(ret), K(ls_id), K(ls_handle));
+  } else if (!ls_handle.is_valid()) {
+    is_dup_ls = false;
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "invalid ls handle", K(ret), K(ls_id), K(ls_handle));
+  } else if (ls_handle.get_ls()->get_dup_table_ls_handler()->is_dup_table_lease_valid()) {
+    is_dup_ls = true;
+    is_lease_valid = true;
+    ret = OB_SUCCESS;
+  }
+
   return ret;
 }
 

@@ -177,10 +177,13 @@ public:
                                 const share::SCN &max_replayed_scn,
                                 bool &readable);
 
+  bool is_dup_table_lease_valid();
+
 public:
   int64_t get_dup_tablet_count();
   bool check_tablet_set_exist();
   bool has_dup_tablet();
+  bool is_dup_tablet(const common::ObTabletID &tablet_id);
   int gc_dup_tablets(const int64_t gc_ts, const int64_t max_task_interval);
   int get_local_ts_info(DupTableTsInfo &ts_info);
   int get_cache_ts_info(const common::ObAddr &addr, DupTableTsInfo &ts_info);

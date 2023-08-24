@@ -257,7 +257,7 @@ private:
   static uint32_t get_real_session_id(ObSQLSessionInfo &session);
   static int get_first_lsid(const ObDASCtx &das_ctx, share::ObLSID &first_lsid);
   static bool has_same_lsid(const ObDASCtx &das_ctx,
-                            const share::SCN &snapshot_version,
+                            const transaction::ObTxReadSnapshot &snapshot,
                             share::ObLSID &first_lsid);
 public:
   /*
