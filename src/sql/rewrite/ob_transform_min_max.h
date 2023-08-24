@@ -111,6 +111,8 @@ private:
   static int is_valid_index_column(ObTransformerCtx &ctx,
                                    const ObSelectStmt *stmt,
                                    const ObRawExpr *expr,
+                                   EqualSets &equal_sets,
+                                   ObIArray<ObRawExpr*> &const_exprs,
                                    bool &is_expected_index);
 
   static int check_valid_aggr_expr(const ObRawExpr *expr,
