@@ -71,8 +71,8 @@ int ObExprAesEncrypt::calc_result_typeN(ObExprResType& type,
       types_stack[i].set_calc_collation_level(types_stack[i].get_collation_level());
     }
     type.set_varbinary();
-    type.set_length((types_stack[0].get_length() * 3 / ObAesEncryption::OB_AES_BLOCK_SIZE + 1) *
-                     ObAesEncryption::OB_AES_BLOCK_SIZE);
+    type.set_length((types_stack[0].get_length() * 3 / ObBlockCipher::OB_CIPHER_BLOCK_LENGTH + 1) *
+                     ObBlockCipher::OB_CIPHER_BLOCK_LENGTH);
     type.set_collation_level(CS_LEVEL_COERCIBLE);
   }
   return ret;
@@ -94,16 +94,15 @@ int ObExprAesEncrypt::eval_aes_encrypt(const ObExpr &expr, ObEvalCtx &ctx,
     CK(2 == expr.arg_cnt_ || 3 == expr.arg_cnt_);
     if (OB_SUCC(ret)) {
       const ObString &src_str = expr.locate_param_datum(ctx, 0).get_string();
-      ObString key_str = expr.locate_param_datum(ctx, 1).get_string();
-      char *buf = NULL;
+      const ObString &key_str = expr.locate_param_datum(ctx, 1).get_string();
       int64_t out_len = 0;
-      int64_t block_size = ObAesEncryption::OB_AES_BLOCK_SIZE;
       ObEvalCtx::TempAllocGuard alloc_guard(ctx);
       ObIAllocator &calc_alloc = alloc_guard.get_allocator();
-      int buf_length = (src_str.length() / block_size + 1) * block_size;
-      buf = static_cast<char *>(calc_alloc.alloc(buf_length));
-      bool is_ecb = encryption <= static_cast<int64_t>(ObAesOpMode::ob_aes_256_ecb) &&
-                    encryption >= static_cast<int64_t>(ObAesOpMode::ob_aes_128_ecb);
+      ObCipherOpMode opmode = static_cast<ObCipherOpMode>(encryption);
+      int buf_length = (src_str.length() / ObBlockCipher::OB_CIPHER_BLOCK_LENGTH + 1) * ObBlockCipher::OB_CIPHER_BLOCK_LENGTH;
+      char *buf = static_cast<char *>(calc_alloc.alloc(buf_length));
+      bool is_ecb = opmode <= ObCipherOpMode::ob_aes_256_ecb &&
+                    opmode >= ObCipherOpMode::ob_aes_128_ecb;
       if (OB_ISNULL(buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
@@ -116,17 +115,16 @@ int ObExprAesEncrypt::eval_aes_encrypt(const ObExpr &expr, ObEvalCtx &ctx,
       }
       if (OB_SUCC(ret)) {
         if (2 == expr.arg_cnt_ || is_ecb) {
-          OZ(ObAesEncryption::aes_encrypt(key_str.ptr(), key_str.length(), src_str.ptr(),
-                                          src_str.length(), buf_length, NULL, 0,
-                                          static_cast<ObAesOpMode>(encryption), buf, out_len));
+          OZ(ObBlockCipher::encrypt(key_str.ptr(), key_str.length(), src_str.ptr(),
+                                    src_str.length(), buf_length, NULL, 0, NULL, 0, 0, opmode, buf,
+                                    out_len, NULL));
         } else {
           ObString iv_str = expr.locate_param_datum(ctx, 2).get_string();
-          OV(iv_str.length() >= ObAesEncryption::OB_AES_IV_SIZE, OB_ERR_AES_IV_LENGTH);
-          OX(iv_str.assign(iv_str.ptr(), (int32_t)ObAesEncryption::OB_AES_IV_SIZE));
-          OZ(ObAesEncryption::aes_encrypt(key_str.ptr(), key_str.length(), src_str.ptr(),
-                                          src_str.length(), buf_length, iv_str.ptr(),
-                                          iv_str.length(), static_cast<ObAesOpMode>(encryption),
-                                          buf, out_len));
+          OV(iv_str.length() >= ObBlockCipher::OB_DEFAULT_IV_LENGTH, OB_ERR_AES_IV_LENGTH);
+          OX(iv_str.assign(iv_str.ptr(), ObBlockCipher::OB_DEFAULT_IV_LENGTH));
+          OZ(ObBlockCipher::encrypt(key_str.ptr(), key_str.length(), src_str.ptr(), src_str.length(),
+                                    buf_length, iv_str.ptr(), iv_str.length(), NULL, 0, 0, opmode,
+                                    buf, out_len, NULL));
         }
       }
       if (OB_SUCC(ret)) {
@@ -205,14 +203,15 @@ int ObExprAesDecrypt::eval_aes_decrypt(const ObExpr &expr, ObEvalCtx &ctx,
     bool is_null = false;
     if (OB_SUCC(ret)) {
       const ObString &src_str = expr.locate_param_datum(ctx, 0).get_string();
-      ObString key_str = expr.locate_param_datum(ctx, 1).get_string();
-      char *buf = NULL;
+      const ObString &key_str = expr.locate_param_datum(ctx, 1).get_string();
       int64_t out_len = 0;
       ObEvalCtx::TempAllocGuard alloc_guard(ctx);
       ObIAllocator &calc_alloc = alloc_guard.get_allocator();
-      buf = static_cast<char *>(calc_alloc.alloc((src_str.length() + 1)));
-      bool is_ecb = encryption <= static_cast<int64_t>(ObAesOpMode::ob_aes_256_ecb) &&
-                    encryption >= static_cast<int64_t>(ObAesOpMode::ob_aes_128_ecb);
+      ObCipherOpMode opmode = static_cast<ObCipherOpMode>(encryption);
+      const int64_t buf_len = src_str.length() + 1;
+      char *buf = static_cast<char *>(calc_alloc.alloc(buf_len));
+      bool is_ecb = opmode <= ObCipherOpMode::ob_aes_256_ecb &&
+                    opmode >= ObCipherOpMode::ob_aes_128_ecb;
       if (OB_ISNULL(buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc mem failed", K(ret));
@@ -225,17 +224,16 @@ int ObExprAesDecrypt::eval_aes_decrypt(const ObExpr &expr, ObEvalCtx &ctx,
       }
       if (OB_SUCC(ret)) {
         if (2 == expr.arg_cnt_ || is_ecb) {
-          OZ(ObAesEncryption::aes_decrypt(key_str.ptr(), key_str.length(), src_str.ptr(),
-                                          src_str.length(), src_str.length(), NULL, 0,
-                                          static_cast<ObAesOpMode>(encryption), buf, out_len));
+          OZ(ObBlockCipher::decrypt(key_str.ptr(), key_str.length(), src_str.ptr(),
+                                    src_str.length(), src_str.length(), NULL, 0, NULL, 0, NULL, 0,
+                                    opmode, buf, out_len));
         } else {
           ObString iv_str = expr.locate_param_datum(ctx, 2).get_string();
-          OV(iv_str.length() >= ObAesEncryption::OB_AES_IV_SIZE, OB_ERR_AES_IV_LENGTH);
-          OX(iv_str.assign(iv_str.ptr(), (int32_t)ObAesEncryption::OB_AES_IV_SIZE));
-          OZ(ObAesEncryption::aes_decrypt(key_str.ptr(), key_str.length(), src_str.ptr(),
-                                          src_str.length(), src_str.length(), iv_str.ptr(),
-                                          iv_str.length(), static_cast<ObAesOpMode>(encryption),
-                                          buf, out_len));
+          OV(iv_str.length() >= ObBlockCipher::OB_DEFAULT_IV_LENGTH, OB_ERR_AES_IV_LENGTH);
+          OX(iv_str.assign(iv_str.ptr(), ObBlockCipher::OB_DEFAULT_IV_LENGTH));
+          OZ(ObBlockCipher::decrypt(key_str.ptr(), key_str.length(), src_str.ptr(), src_str.length(),
+                                    src_str.length(), iv_str.ptr(), iv_str.length(), NULL, 0, NULL, 0,
+                                    opmode, buf, out_len));
         }
         if (OB_ERR_AES_DECRYPT == ret) {
           //按照mysql兼容的做法,如果解密失败,则将结果设置为null

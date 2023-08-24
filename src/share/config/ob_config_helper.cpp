@@ -341,7 +341,7 @@ bool ObConfigLogArchiveOptionsChecker::check(const ObConfigItem &t) const
             }
             key_idx = -1;
           } else if (LOG_ARCHIVE_ENCRYPTION_ALGORITHM_IDX == key_idx) {
-            share::ObAesOpMode encryption_algorithm;
+            share::ObCipherOpMode encryption_algorithm;
             if (OB_FAIL(ObEncryptionUtil::parse_encryption_algorithm(s, encryption_algorithm))) {
               bret = false;
               OB_LOG(WARN, "invalid encrytion algorithm", K(s));

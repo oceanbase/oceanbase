@@ -2021,7 +2021,7 @@ all_tenant_keystore_def = dict(
     ('password', 'varchar:OB_MAX_PASSWORD_LENGTH'),
     ('status', 'int', 'false', 0),
     ('master_key_id', 'int'),
-    ('master_key', 'varchar:OB_MAX_MASTER_KEY_LENGTH'),
+    ('master_key', 'varchar:OB_INTERNAL_MASTER_KEY_LENGTH'),
     ('encrypted_key', 'varbinary:OB_MAX_ENCRYPTED_KEY_LENGTH', 'false', ''),
   ],
 )
@@ -2143,7 +2143,7 @@ all_tenant_tablespace_def = dict(
   normal_columns = [
     ('tablespace_name', 'varchar:MAX_ORACLE_NAME_LENGTH'),
     ('encryption_name', 'varchar:MAX_ORACLE_NAME_LENGTH'),
-    ('encrypt_key', 'varbinary:OB_MAX_MASTER_KEY_LENGTH'),
+    ('encrypt_key', 'varbinary:OB_ENCRYPTED_TABLE_KEY_LEN'),
     ('master_key_id', 'uint'),
   ],
 )

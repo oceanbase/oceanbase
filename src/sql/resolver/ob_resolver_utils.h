@@ -754,6 +754,8 @@ public:
                                             ObSQLSessionInfo &session_info,
                                             ObDataTypeCastParams &dtc_params);
   static bool is_expr_can_be_used_in_table_function(const ObRawExpr &expr);
+  static int check_keystore_status(const uint64_t tenant_id, ObSchemaChecker &schema_checker);
+  static int check_encryption_name(common::ObString &encryption_name, bool &need_encrypt);
 private:
   static int try_convert_to_unsiged(const ObExprResType restype,
                                     ObRawExpr& src_expr,

@@ -109,7 +109,6 @@ int ObEncryptKey<BUFSIZE>::set_content(const char *ptr, const int64_t len)
   return ret;
 }
 
-typedef ObEncryptKey<OB_CLOG_ENCRYPT_RANDOM_LEN> ObEncryptRandomString;
 typedef ObEncryptKey<OB_CLOG_ENCRYPT_MASTER_KEY_LEN> ObEncryptMasterKeyString;
 typedef ObEncryptKey<OB_ENCRYPTED_TABLE_KEY_LEN> ObEncryptTableKeyString;
 
@@ -120,13 +119,12 @@ struct ObEncryptMeta
   //The actual length of table_key is 15, and OB_ENCRYPTED_TABLE_KEY_LEN is used here, in order to avoid defining one more String
   ObEncryptTableKeyString table_key_;
   ObEncryptTableKeyString encrypted_table_key_;
-  ObEncryptRandomString random_;
   uint64_t tenant_id_;  // no need to serialize
   int64_t master_key_version_;
   int64_t encrypt_algorithm_;
   ObEncryptMeta() : tenant_id_(OB_INVALID_ID), master_key_version_(-1), encrypt_algorithm_(-1) {}
-  TO_STRING_KV(K_(tenant_id), K_(master_key_version), K_(encrypt_algorithm), K_(random),
-                  K_(master_key), K_(table_key));
+  TO_STRING_KV(K_(tenant_id), K_(master_key_version), K_(encrypt_algorithm), K_(master_key),
+               K_(table_key));
   int assign(const ObEncryptMeta &other);
   void reset();
   int replace_tenant_id(const uint64_t real_tenant_id);
@@ -134,14 +132,12 @@ struct ObEncryptMeta
   {
     return encrypt_algorithm_ > 0
            && master_key_version_ > 0
-           && random_.size() > 0
            && encrypted_table_key_.size() > 0;
   }
   bool is_valid() const
   {
     return encrypt_algorithm_ > 0
            && master_key_version_ > 0
-           && random_.size() > 0
            && master_key_.size() > 0
            && table_key_.size() > 0
            && encrypted_table_key_.size() > 0;
@@ -159,14 +155,13 @@ public:
   bool is_valid() const;
   int assign(const ObZoneEncryptMeta &other);
   void set_master_key_version(int64_t master_key_version) {master_key_version_ = master_key_version;}
-  TO_STRING_KV(K_(master_key_version), K_(encrypt_algorithm), K_(random));
+  TO_STRING_KV(K_(master_key_version), K_(encrypt_algorithm));
   OB_UNIS_VERSION(1);
 public:
   static const int64_t VERSION = 1;
   int16_t version_;
   int64_t master_key_version_;
   int64_t encrypt_algorithm_;
-  ObEncryptRandomString random_;
 };
 
 enum CLogEncryptStatBitIndex

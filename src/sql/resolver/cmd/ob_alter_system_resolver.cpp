@@ -2114,10 +2114,17 @@ int ObSetConfigResolver::check_param_valid(int64_t tenant_id ,
   if (OB_SUCC(ret)) {
     if (0 == name.case_compare("tde_method")) {
       ObString tde_method;
+      uint64_t compat_version = 0;
       if (!ObTdeMethodUtil::is_valid(value)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not supported other method", K(value), K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter invalid tde_method");
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+        LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+      } else if (compat_version < DATA_VERSION_4_2_1_0
+                 && ObTdeMethodUtil::is_aes256_algorithm(value)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("encrypt table key with aes256 is not supported", K(ret), K(value));
       } else if (OB_FAIL(share::ObEncryptionUtil::get_tde_method(tenant_id, tde_method))) {
         LOG_WARN("fail to check tenant is method internal", K(ret));
       } else if (0 != tde_method.case_compare("none") && 0 != value.case_compare(tde_method)) {
@@ -3634,10 +3641,17 @@ int ObAlterSystemSetResolver::check_param_valid(int64_t tenant_id ,
 #ifdef OB_BUILD_TDE_SECURITY
   if (0 == name.case_compare("tde_method")) {
     ObString tde_method;
-      if (!ObTdeMethodUtil::is_valid(value)) {
+    uint64_t compat_version = 0;
+    if (!ObTdeMethodUtil::is_valid(value)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported other method", K(value), K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter invalid tde_method");
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+    } else if (compat_version < DATA_VERSION_4_2_1_0
+               && ObTdeMethodUtil::is_aes256_algorithm(value)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("encrypt table key with aes256 is not supported", K(ret), K(value));
     } else if (OB_FAIL(share::ObEncryptionUtil::get_tde_method(tenant_id, tde_method))) {
       LOG_WARN("fail to check tenant is method internal", K(ret));
     } else if (0 != tde_method.case_compare("none") && 0 != value.case_compare(tde_method)) {

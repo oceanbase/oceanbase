@@ -338,7 +338,8 @@ int ObMacroBlockReader::decrypt_and_decompress_data(
 #ifndef OB_BUILD_TDE_SECURITY
     is_compressed = header.is_compressed_data();
 #else
-    if (OB_UNLIKELY(share::ObEncryptionUtil::need_encrypt(deserialize_meta.encrypt_id_))) {
+    if (OB_UNLIKELY(ObEncryptionUtil::need_encrypt(
+                                      static_cast<ObCipherOpMode>(deserialize_meta.encrypt_id_)))) {
       LOG_DEBUG("Macro data need decrypt", K(deserialize_meta.encrypt_id_), K(data_buf_size));
       const char *decrypt_buf = NULL;
       int64_t decrypt_size = 0;
@@ -412,7 +413,8 @@ int ObMacroBlockReader::decrypt_buf(
   if (OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument of input data", K(ret), KP(buf));
-  } else if (OB_UNLIKELY(!share::ObEncryptionUtil::need_encrypt(deserialize_meta.encrypt_id_))) {
+  } else if (OB_UNLIKELY(!ObEncryptionUtil::need_encrypt(
+                                      static_cast<ObCipherOpMode>(deserialize_meta.encrypt_id_)))) {
     decrypt_buf = buf;
     decrypt_size = size;
   } else if (OB_FAIL(init_encrypter_if_needed())) {

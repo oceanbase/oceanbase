@@ -39,52 +39,14 @@ int ObKeyGenerator::generate_encrypt_key(char *buf, int64_t len)
   if (len <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("the buf of len is invalid", K(ret));
-  } else {
-    int i;
-    for (i = 0; i < len; ++i) {
-      switch (common::ObRandom::rand(0, 2)) {
-        case 1:
-        buf[i] = 'A' + common::ObRandom::rand(0, 25);
-        break;
-        case 2:
-        buf[i] = 'a' + common::ObRandom::rand(0, 25);
-        break;
-        default:
-        buf[i] = '0' + common::ObRandom::rand(0, 9);
-        break;
-      }
-    }
+  } else if (!RAND_bytes((unsigned char*)buf, (int)len)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("failed to get a rand bytes");
   }
   return ret;
 }
 
-static int ob_aes_opmode_key_sizes_impl[]=
-{
-  0   /* invlid_mode*/,
-  128 /* aes-128-ecb */,
-  192 /* aes-192-ecb */,
-  256 /* aes-256-ecb */,
-  128 /* aes-128-cbc */,
-  192 /* aes-192-cbc */,
-  256 /* aes-256-cbc */,
-  128 /* aes-128-cfb1 */,
-  192 /* aes-192-cfb1 */,
-  256 /* aes-256-cfb1 */,
-  128 /* aes-128-cfb8 */,
-  192 /* aes-192-cfb8 */,
-  256 /* aes-256-cfb8 */,
-  128 /* aes-128-cfb128 */,
-  192 /* aes-192-cfb128 */,
-  256 /* aes-256-cfb128 */,
-  128 /* aes-128-ofb */,
-  192 /* aes-192-ofb */,
-  256 /* aes-256-ofb */,
-  128 /* sm4-mode*/,
-  128 /* sm4-cbc-mode*/
-};
-STATIC_ASSERT(ob_max_mode == ARRAYSIZEOF(ob_aes_opmode_key_sizes_impl), "key size count mismatch");
-
-static const EVP_CIPHER *aes_evp_type(const ObAesOpMode mode)
+static const EVP_CIPHER *get_evp_cipher(const ObCipherOpMode mode)
 {
   switch (mode)
   {
@@ -106,35 +68,97 @@ static const EVP_CIPHER *aes_evp_type(const ObAesOpMode mode)
     case ob_aes_256_cfb8:   return EVP_aes_256_cfb8();
     case ob_aes_256_cfb128: return EVP_aes_256_cfb128();
     case ob_aes_256_ofb:    return EVP_aes_256_ofb();
+    case ob_aes_128_gcm:    return EVP_aes_128_gcm();
+    case ob_aes_192_gcm:    return EVP_aes_192_gcm();
+    case ob_aes_256_gcm:    return EVP_aes_256_gcm();
 #ifdef OB_USE_BABASSL
     case ob_sm4_mode:       return EVP_sm4_ctr();
     case ob_sm4_cbc_mode:   return EVP_sm4_cbc();
+    case ob_sm4_cbc:        return EVP_sm4_cbc();
+    case ob_sm4_ecb:        return EVP_sm4_ecb();
+    case ob_sm4_ofb:        return EVP_sm4_ofb();
+    case ob_sm4_cfb128:     return EVP_sm4_cfb128();
+    case ob_sm4_ctr:        return EVP_sm4_ctr();
+    case ob_sm4_gcm:        return EVP_sm4_gcm();
 #endif
     default: return NULL;
   }
 }
 
-/**
-  判断当前加密算法是否需要一个初始向量,只有ecb模式无需初始化向量,其他则需要.
-*/
-
-int ObAesEncryption::aes_needs_iv(ObAesOpMode opmode, bool &need_iv)
+int ObBlockCipher::get_key_length(const ObCipherOpMode opmode)
 {
-  int ret = OB_SUCCESS;
-  const EVP_CIPHER *cipher= aes_evp_type(opmode);
-  int iv_length = 0;
-  iv_length= EVP_CIPHER_iv_length(cipher);
-  if (iv_length != 0 && iv_length != OB_AES_IV_SIZE) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid iv length", K(ret));
-  } else {
-    need_iv = (iv_length != 0 ? true : false);
+  int length = 0;
+  const EVP_CIPHER *cipher = get_evp_cipher(opmode);
+  if (NULL != cipher) {
+    length = EVP_CIPHER_key_length(cipher);
   }
-  return ret;
+  return length;
 }
-void ObAesEncryption::aes_create_key(const unsigned char *key, int key_length, char *rkey, enum ObAesOpMode opmode)
+
+bool ObBlockCipher::is_need_iv(const ObCipherOpMode opmode)
 {
-  const int key_size= ob_aes_opmode_key_sizes_impl[opmode] / 8;
+  bool need_iv = false;
+  const EVP_CIPHER *cipher = get_evp_cipher(opmode);
+  if (NULL != cipher) {
+    int default_iv_length = EVP_CIPHER_iv_length(cipher);
+    need_iv = default_iv_length == 0 ? false : true;
+  }
+  return need_iv;
+}
+
+bool ObBlockCipher::is_need_aead(const ObCipherOpMode opmode)
+{
+  bool need_aead = false;
+  const EVP_CIPHER *cipher = get_evp_cipher(opmode);
+  if (NULL != cipher) {
+    need_aead = EVP_CIPHER_mode(cipher) == EVP_CIPH_GCM_MODE;
+  }
+  return need_aead;
+}
+
+bool ObBlockCipher::is_need_padding(const ObCipherOpMode opmode)
+{
+  bool need_padding = false;
+  const EVP_CIPHER *cipher = get_evp_cipher(opmode);
+  if (NULL != cipher) {
+    need_padding = EVP_CIPH_ECB_MODE == EVP_CIPHER_mode(cipher) ||
+                   EVP_CIPH_CBC_MODE == EVP_CIPHER_mode(cipher);
+  }
+  return need_padding;
+}
+
+int64_t ObBlockCipher::get_iv_length(const ObCipherOpMode opmode)
+{
+  int64_t iv_length = 0;
+  const EVP_CIPHER *cipher = get_evp_cipher(opmode);
+  if (NULL != cipher) {
+    iv_length = EVP_CIPHER_iv_length(cipher);
+  }
+  return iv_length;
+}
+
+int64_t ObBlockCipher::get_aead_tag_length(const ObCipherOpMode opmode)
+{
+  return is_need_aead(opmode) ? OB_DEFAULT_AEAD_TAG_LENGTH : 0;
+}
+
+int64_t ObBlockCipher::get_ciphertext_length(const ObCipherOpMode opmode, const int64_t data_len)
+{
+  return is_need_padding(opmode) ?
+         (data_len / OB_CIPHER_BLOCK_LENGTH + 1) * OB_CIPHER_BLOCK_LENGTH : data_len;
+}
+
+int64_t ObBlockCipher::get_max_plaintext_length(const ObCipherOpMode opmode,
+                                                const int64_t encrypt_len)
+{
+  return is_need_padding(opmode) ?
+         encrypt_len - 1 - (encrypt_len % OB_CIPHER_BLOCK_LENGTH) : encrypt_len;
+}
+
+void ObBlockCipher::create_key(const unsigned char *key, int key_length, char *rkey,
+                               enum ObCipherOpMode opmode)
+{
+  const int key_size= get_key_length(opmode);
   char *rkey_end = NULL;
   char *ptr = NULL;                                   /* 真正的key的起始位置 */
   char *sptr = NULL;
@@ -149,59 +173,80 @@ void ObAesEncryption::aes_create_key(const unsigned char *key, int key_length, c
   }
 }
 
-int ObAesEncryption::aes_encrypt(const char *key, const int64_t &key_len, const char *data,
-                                 const int64_t data_len, const int64_t &buf_len, const char *iv,
-                                 const int64_t iv_len,  enum ObAesOpMode mode, char *buf, int64_t &out_len)
+bool ObBlockCipher::is_valid_cipher_opmode(const ObCipherOpMode opmode)
+{
+  return opmode > ObCipherOpMode::ob_invalid_mode && opmode < ObCipherOpMode::ob_max_mode &&
+         opmode != ObCipherOpMode::ob_sm4_mode;
+}
+
+int ObBlockCipher::encrypt(const char *key, const int64_t key_len,
+                           const char *data, const int64_t data_len, const int64_t buf_len,
+                           const char *iv, const int64_t iv_len,
+                           const char *aad, const int64_t aad_len, const int64_t tag_len,
+                           enum ObCipherOpMode mode, char *buf, int64_t &out_len, char *tag)
 {
   int ret = OB_SUCCESS;
-  int64_t expect_buf_len = (data_len / OB_AES_BLOCK_SIZE + 1) * OB_AES_BLOCK_SIZE;
-  bool need_iv = false;
-  ENGINE *engine = NULL;
-  common::ObString err_reason;
-  if (OB_ISNULL(buf) || buf_len < expect_buf_len || key_len < 0 ||
-      ObAesOpMode::ob_invalid_mode == mode ||
-      (iv_len != 0 && iv_len != OB_AES_IV_SIZE) ||
-      (OB_ISNULL(data) && data_len != 0) ||
-      (OB_ISNULL(key) && key_len != 0)) {
+  bool need_iv = is_need_iv(mode);
+  bool need_aead = is_need_aead(mode);
+  bool need_padding = is_need_padding(mode);
+  if (!is_valid_cipher_opmode(mode) ||
+      (OB_ISNULL(key) && key_len != 0) || key_len < 0 ||  // allow NULL key
+      (OB_ISNULL(data) && data_len != 0) ||   data_len < 0 || // allow NULL data
+      OB_ISNULL(buf) || buf_len < get_ciphertext_length(mode, data_len)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(data_len), K(buf_len), K(iv_len), K(expect_buf_len), K(data), K(key));
-  } else if (OB_FAIL(aes_needs_iv(mode, need_iv))) {
-    LOG_WARN("fail to check whether need iv", K(ret));
+    LOG_WARN("invalid argument", K(ret), K(data_len), K(key_len), K(buf_len), KP(buf), KP(data),
+             KP(key), K(mode));
+  } else if (need_iv && ((iv_len != 0 && OB_ISNULL(iv)) ||
+                         (iv_len != 0 && iv_len != get_iv_length(mode)))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid initial vector argument", K(ret), K(iv_len), KP(iv), K(mode));
+  } else if (need_aead && ((aad_len != 0 && OB_ISNULL(aad)) ||
+                           (aad_len != 0 && aad_len != OB_DEFAULT_AEAD_AAD_LENGTH) ||
+                           tag_len != OB_DEFAULT_AEAD_TAG_LENGTH || OB_ISNULL(tag))){
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid aead argument", K(ret), K(aad_len), K(tag_len), KP(aad), K(mode));
   } else {
     int u_len=0, f_len=0;
-    unsigned char rkey[OB_MAX_AES_KEY_LENGTH / 8];
-    unsigned char *iv_encrypt = need_iv ? (unsigned char *)iv : NULL;
-    engine = ObTdeEncryptEngineLoader::get_instance().get_tde_engine(mode);
+    unsigned char rkey[OB_MAX_CIPHER_KEY_LENGTH / 8];
+    unsigned char *iv_encrypt = (!need_iv || iv_len == 0) ? NULL : (unsigned char *)iv;
+    unsigned char *add_encrypt = (!need_aead || aad_len == 0) ? NULL : (unsigned char *)aad;
+    ENGINE *engine = ObTdeEncryptEngineLoader::get_instance().get_tde_engine(mode);
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    const EVP_CIPHER *cipher = get_evp_cipher(mode);
     if (NULL != engine) {
       if (EXECUTE_COUNT_PER_SEC(10)) {
         LOG_INFO("tde use engine to encrypt data", K(mode));
       }
     }
-    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-    if (OB_ISNULL(ctx)) {
+    if (OB_ISNULL(ctx) ||OB_ISNULL(cipher)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("fail to to init cipher ctx in aes_encrypt", K(ret));
+      LOG_WARN("get EVP_ctx or EVP_cipher is NULL", K(ret), KP(ctx), KP(cipher));
+    } else if (FALSE_IT(create_key((const unsigned char *)key, (int)key_len, (char *)rkey, mode))) {
     } else if (FALSE_IT(EVP_CIPHER_CTX_init(ctx))) {
-    } else if (FALSE_IT(aes_create_key((const unsigned char *)key, (int)key_len,
-        (char *)rkey, mode))) {
-    } else if (!EVP_EncryptInit_ex(ctx, aes_evp_type(mode), engine, rkey, iv_encrypt)) {
+    } else if (!EVP_EncryptInit_ex(ctx, cipher, engine, rkey, (unsigned char*)iv_encrypt)) {
       ret = OB_ERR_AES_ENCRYPT;
-      LOG_WARN("fail to init evp ctx in aes_encrypt", K(ret));
-    } else if (!EVP_CIPHER_CTX_set_padding(ctx, true)) {
+      LOG_WARN("fail to init evp encrytion cipher and engine in encrypt", K(ret));
+    } else if (need_padding && !EVP_CIPHER_CTX_set_padding(ctx, true)) {
       ret = OB_ERR_AES_ENCRYPT;
-      LOG_WARN("fail to set padding in aes_encrypt", K(ret));
+      LOG_WARN("fail to set padding in encrypt", K(ret));
+    } else if (need_aead && NULL != add_encrypt && !EVP_EncryptUpdate(ctx, NULL, &u_len, (unsigned char *)add_encrypt, (int)aad_len)) {
+      ret = OB_ERR_AES_ENCRYPT;
+      LOG_WARN("fail to set AAD in encrypt", K(ret));
     } else if (!EVP_EncryptUpdate(ctx, (unsigned char *)buf, &u_len, (unsigned char *)data, (int)data_len)) {
       ret = OB_ERR_AES_ENCRYPT;
-      LOG_WARN("fail to encrypt data in aes_encrypt", K(ret));
+      LOG_WARN("fail to encrypt data in encrypt", K(ret));
     } else if (!EVP_EncryptFinal(ctx, (unsigned char*)buf + u_len, &f_len)) {
       ret = OB_ERR_AES_ENCRYPT;
-      LOG_WARN("fail to encrypt final frame data in aes_encrypt", K(ret));
+      LOG_WARN("fail to encrypt final frame data in encrypt", K(ret));
+    } else if (need_aead && !EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, (int)tag_len, (unsigned char*)tag)) {
+      ret = OB_ERR_AES_ENCRYPT;
+      LOG_WARN("fail to encrypt final frame data in encrypt", K(ret));
     } else {
       out_len = u_len + f_len;
     }
-    if (OB_FAIL(ret)) {
-      err_reason = common::ObString::make_string(ERR_reason_error_string(ERR_get_error()));
-      LOG_WARN("tde encrypt failed", K(err_reason));
+    if (OB_UNLIKELY(OB_ERR_AES_ENCRYPT == ret)) {
+      common::ObString err_reason = common::ObString::make_string(ERR_reason_error_string(ERR_get_error()));
+      LOG_WARN("encrypt failed", K(err_reason));
     }
     if (OB_NOT_NULL(ctx)) {
       EVP_CIPHER_CTX_free(ctx);
@@ -210,58 +255,73 @@ int ObAesEncryption::aes_encrypt(const char *key, const int64_t &key_len, const 
   return ret;
 }
 
-int ObAesEncryption::aes_decrypt(const char *key, const int64_t &key_len, const char *data,
-                                 const int64_t data_len, const int64_t &buf_len, const char *iv,
-                                 const int64_t iv_len, enum ObAesOpMode mode, char *buf, int64_t &out_len)
+int ObBlockCipher::decrypt(const char *key, const int64_t key_len,
+                           const char *data, const int64_t data_len, const int64_t buf_len,
+                           const char *iv, const int64_t iv_len, const char *aad,
+                           const int64_t aad_len, const char *tag, const int64_t tag_len,
+                           enum ObCipherOpMode mode, char *buf, int64_t &out_len)
 {
   int ret = OB_SUCCESS;
-  bool need_iv = false;
-  ENGINE *engine = NULL;
-  common::ObString err_reason;
-  if (OB_ISNULL(buf) || key_len < 0 || buf_len < data_len ||
-      ObAesOpMode::ob_invalid_mode == mode ||
-      (iv_len != 0 && iv_len != OB_AES_IV_SIZE) ||
-      (OB_ISNULL(key) && key_len != 0) ||
-      (OB_ISNULL(data) && data_len != 0)) {
+  bool need_iv = is_need_iv(mode);
+  bool need_aead = is_need_aead(mode);
+  bool need_padding = is_need_padding(mode);
+  if (!is_valid_cipher_opmode(mode) ||
+      (OB_ISNULL(key) && key_len != 0) || key_len < 0 ||
+      (OB_ISNULL(data) && data_len != 0) || data_len < 0 ||
+      OB_ISNULL(buf) || buf_len < data_len) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(data_len), K(data),  K(key));
-  } else if (OB_FAIL(aes_needs_iv(mode, need_iv))) {
-    LOG_WARN("fail to check whether need iv", K(ret));
+    LOG_WARN("invalid argument", K(ret), K(data_len), K(key_len), K(buf_len), KP(buf), KP(data),
+             KP(key), K(mode));
+  } else if (need_iv && ((iv_len != 0 && OB_ISNULL(iv)) ||
+                         (iv_len != 0 && iv_len != get_iv_length(mode)))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid initial vector argument", K(ret), K(iv_len), KP(iv), K(mode));
+  } else if (need_aead && ((aad_len != 0 && OB_ISNULL(aad)) ||
+                           (aad_len != 0 && aad_len != OB_DEFAULT_AEAD_AAD_LENGTH) ||
+                           tag_len != OB_DEFAULT_AEAD_TAG_LENGTH || OB_ISNULL(tag))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid aead argument", K(ret), K(aad_len), K(tag_len), KP(aad), KP(tag), K(mode));
   } else {
     int u_len=0, f_len=0;
-    unsigned char rkey[OB_MAX_AES_KEY_LENGTH / 8];
-    unsigned char *iv_encrypt = need_iv ? (unsigned char *)iv : NULL;
-    engine = ObTdeEncryptEngineLoader::get_instance().get_tde_engine(mode);
+    unsigned char rkey[OB_MAX_CIPHER_KEY_LENGTH / 8];
+    unsigned char *iv_decrypt = (!need_iv || iv_len == 0) ? NULL : (unsigned char *)iv;
+    unsigned char *add_decrypt = (!need_aead || aad_len == 0) ? NULL : (unsigned char *)aad;
+    ENGINE *engine = ObTdeEncryptEngineLoader::get_instance().get_tde_engine(mode);
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    const EVP_CIPHER *cipher = get_evp_cipher(mode);
     if (NULL != engine) {
       if (EXECUTE_COUNT_PER_SEC(10)) {
-        LOG_INFO("tde use engine to decrypt data", K(mode));
+        LOG_INFO("use engine to decrypt data", K(mode));
       }
     }
-    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-    if (OB_ISNULL(ctx)) {
+    if (OB_ISNULL(ctx) || OB_ISNULL(cipher)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("fail to to init cipher ctx in aes_decrypt", K(ret));
+      LOG_WARN("fail to to init cipher ctx in decrypt", K(ret), KP(ctx), KP(cipher));
+    } else if (FALSE_IT(create_key((const unsigned char *)key, (int)key_len, (char *)rkey, mode))) {
     } else if (FALSE_IT(EVP_CIPHER_CTX_init(ctx))) {
-    } else if (FALSE_IT(aes_create_key((const unsigned char *)key, (int)key_len,
-        (char *)rkey, mode))) {
-    } else if (!EVP_DecryptInit_ex(ctx, aes_evp_type(mode), engine, rkey, iv_encrypt)) {
+    } else if (!EVP_DecryptInit_ex(ctx, cipher, engine, rkey, (unsigned char*)iv_decrypt)) {
       ret = OB_ERR_AES_DECRYPT;
-      LOG_WARN("fail to init evp ctx in aes_decrypt", K(ret));
-    } else if (!EVP_CIPHER_CTX_set_padding(ctx, true)) {
+      LOG_WARN("fail to init evp ctx in decrypt", K(ret));
+    } else if (need_padding && !EVP_CIPHER_CTX_set_padding(ctx, true)) {
       ret = OB_ERR_AES_DECRYPT;
-      LOG_WARN("fail to set padding in aes_decrypt", K(ret));
-    } else if (!EVP_DecryptUpdate(ctx, (unsigned char *)buf, &u_len, (unsigned char *)data, (int)data_len)) {
+      LOG_WARN("fail to set padding in decrypt", K(ret));
+    } else if (need_aead && NULL != add_decrypt && !EVP_DecryptUpdate(ctx, NULL, &u_len, (const unsigned char *)add_decrypt, (int)aad_len)) {
       ret = OB_ERR_AES_DECRYPT;
-      LOG_WARN("fail to decrypt data in aes_decrypt", K(ret));
+      LOG_WARN("fail to set AAD in decrypt", K(ret));
+    } else if (!EVP_DecryptUpdate(ctx, (unsigned char *)buf, &u_len, (const unsigned char *)data, (int)data_len)) {
+      ret = OB_ERR_AES_DECRYPT;
+      LOG_WARN("fail to decrypt data in decrypt", K(ret));
+    } else if (need_aead && !EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, (int)tag_len, (unsigned char *)tag)) {
+      ret = OB_ERR_AES_DECRYPT;
     } else if (!EVP_DecryptFinal(ctx, (unsigned char*)buf + u_len, &f_len)) {
       ret = OB_ERR_AES_DECRYPT;
-      LOG_WARN("fail to decrypt final frame data in aes_decrypt", K(ret), K(u_len), K(f_len));
+      LOG_WARN("fail to decrypt final frame data in decrypt", K(ret), K(u_len), K(f_len));
     } else {
       out_len = u_len + f_len;
     }
-    if (OB_FAIL(ret)) {
-      err_reason = common::ObString::make_string(ERR_reason_error_string(ERR_get_error()));
-      LOG_WARN("tde decrypt failed", K(err_reason));
+    if (OB_UNLIKELY(OB_ERR_AES_DECRYPT == ret)) {
+      common::ObString err_reason = common::ObString::make_string(ERR_reason_error_string(ERR_get_error()));
+      LOG_WARN("decrypt failed", K(err_reason));
     }
     if (OB_NOT_NULL(ctx)) {
       EVP_CIPHER_CTX_free(ctx);
@@ -269,6 +329,7 @@ int ObAesEncryption::aes_decrypt(const char *key, const int64_t &key_len, const 
   }
   return ret;
 }
+
 
 #ifndef OB_USE_BABASSL
 static void* ob_malloc_openssl(size_t nbytes)
@@ -324,25 +385,29 @@ int ObEncryptionUtil::init_ssl_malloc()
 }
 
 int ObEncryptionUtil::parse_encryption_algorithm(const char *str,
-                                                 ObAesOpMode &encryption_algorithm)
+                                                 ObCipherOpMode &encryption_algorithm)
 {
   int ret = OB_SUCCESS;
-  encryption_algorithm = ObAesOpMode::ob_invalid_mode;
+  encryption_algorithm = ObCipherOpMode::ob_invalid_mode;
   return ret;
 }
 
 int ObEncryptionUtil::parse_encryption_id(const ObString &str, int64_t &encrypt_id)
 {
   int ret = OB_SUCCESS;
-  ObAesOpMode encryption_algorithm = ObAesOpMode::ob_invalid_mode;
+  ObCipherOpMode encryption_algorithm = ObCipherOpMode::ob_invalid_mode;
   return ret;
 }
 
-int64_t ObEncryptionUtil::encrypted_length(const int64_t data_len)
-{
-  return ObAesEncryption::aes_encrypted_length(data_len);
+bool ObEncryptionUtil::is_aes_encryption(const ObCipherOpMode opmode) {
+  return (opmode >= ObCipherOpMode::ob_aes_128_ecb && opmode <= ObCipherOpMode::ob_aes_256_ofb) ||
+         (opmode >= ObCipherOpMode::ob_aes_128_gcm && opmode <= ObCipherOpMode::ob_aes_256_gcm);
 }
 
+bool ObEncryptionUtil::is_sm4_encryption(const ObCipherOpMode opmode) {
+  return (opmode >= ObCipherOpMode::ob_sm4_mode && opmode <= ObCipherOpMode::ob_sm4_cbc_mode) ||
+         (opmode >= ObCipherOpMode::ob_sm4_cbc && opmode <= ObCipherOpMode::ob_sm4_gcm);
+}
 
 bool ObBackupEncryptionMode::is_valid(const EncryptionMode &mode)
 {
@@ -587,38 +652,15 @@ void ObTdeEncryptEngineLoader::destroy()
   }
 }
 
-ENGINE* ObTdeEncryptEngineLoader::get_tde_engine(ObAesOpMode &mode) const
+ENGINE* ObTdeEncryptEngineLoader::get_tde_engine(ObCipherOpMode &mode) const
 {
   ObEncryptEngineType type = OB_INVALID_ENGINE;
-  switch(mode) {
-    case ob_sm4_mode:
-    case ob_sm4_cbc_mode:
-      type = OB_SM4_ENGINE;
-      break;
-    case ob_aes_128_ecb:
-    case ob_aes_128_cbc:
-    case ob_aes_128_cfb1:
-    case ob_aes_128_cfb8:
-    case ob_aes_128_cfb128:
-    case ob_aes_128_ofb:
-    case ob_aes_192_ecb:
-    case ob_aes_192_cbc:
-    case ob_aes_192_cfb1:
-    case ob_aes_192_cfb8:
-    case ob_aes_192_cfb128:
-    case ob_aes_192_ofb:
-    case ob_aes_256_ecb:
-    case ob_aes_256_cbc:
-    case ob_aes_256_cfb1:
-    case ob_aes_256_cfb8:
-    case ob_aes_256_cfb128:
-    case ob_aes_256_ofb:
-      type = OB_AES_ENGINE;
-      break;
-    case ob_invalid_mode:
-    case ob_max_mode:
-      type = OB_INVALID_ENGINE;
-      break;
+  if (ObEncryptionUtil::is_aes_encryption(mode)) {
+    type = OB_AES_ENGINE;
+  } else if (ObEncryptionUtil::is_sm4_encryption(mode)) {
+    type = OB_SM4_ENGINE;
+  } else {
+    type = OB_INVALID_ENGINE;
   }
   return tde_engine_[type];
 }

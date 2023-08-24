@@ -49,11 +49,11 @@ void TestMicroBlockEncryption::SetUp()
   ASSERT_EQ(OB_SUCCESS, share::ObMasterKeyGetter::instance().init(nullptr));
   ASSERT_EQ(OB_SUCCESS, share::ObMasterKeyGetter::instance().set_master_key(
       tenant_id_, master_key_id_, master_key_, strlen(master_key_)));
-  ObAesOpMode mode = ObAesOpMode::ob_invalid_mode;
+  ObCipherOpMode mode = ObCipherOpMode::ob_invalid_mode;
   ASSERT_EQ(OB_SUCCESS, share::ObMasterKeyGetter::get_table_key_algorithm(tenant_id_, mode));
-  ASSERT_EQ(OB_SUCCESS, share::ObAesEncryption::aes_encrypt(master_key_, strlen(master_key_),
-      raw_key_, strlen(raw_key_), OB_MAX_ENCRYPTION_KEY_NAME_LENGTH, nullptr, 0, mode,
-      encrypt_key_, encrypt_key_len_));
+  ASSERT_EQ(OB_SUCCESS, share::ObBlockCipher::encrypt(master_key_, strlen(master_key_), raw_key_,
+                        strlen(raw_key_), OB_MAX_ENCRYPTION_KEY_NAME_LENGTH, nullptr, 0, nullptr, 0,
+                        0, mode, encrypt_key_, encrypt_key_len_, nullptr));
 }
 
 void TestMicroBlockEncryption::TearDown()

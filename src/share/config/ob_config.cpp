@@ -1014,7 +1014,7 @@ int ObConfigLogArchiveOptionsItem::ObInnerConfigLogArchiveOptionsItem::set_defau
   if (ObBackupEncryptionMode::NONE == encryption_mode_) {
     //do nothing
   } else if (ObBackupEncryptionMode::TRANSPARENT_ENCRYPTION == encryption_mode_) {
-    encryption_algorithm_ = ObAesOpMode::ob_aes_128_ecb;
+    encryption_algorithm_ = ObCipherOpMode::ob_aes_128_ecb;
   } else {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid mode for log_archive", K(encryption_mode_));
@@ -1028,10 +1028,44 @@ bool ObConfigLogArchiveOptionsItem::ObInnerConfigLogArchiveOptionsItem::is_encry
   if (ObBackupEncryptionMode::NONE == encryption_mode_) {
     //do nothing
   } else if (ObBackupEncryptionMode::TRANSPARENT_ENCRYPTION == encryption_mode_) {
-    is_valid = (ObAesOpMode::ob_aes_128_ecb == encryption_algorithm_
-                || ObAesOpMode::ob_aes_192_ecb == encryption_algorithm_
-                || ObAesOpMode::ob_aes_256_ecb == encryption_algorithm_
-                || ObAesOpMode::ob_sm4_cbc_mode == encryption_algorithm_);
+    switch (encryption_algorithm_) {
+      case ObCipherOpMode::ob_aes_128_ecb:
+      case ObCipherOpMode::ob_aes_192_ecb:
+      case ObCipherOpMode::ob_aes_256_ecb:
+      case ObCipherOpMode::ob_aes_128_gcm:
+      case ObCipherOpMode::ob_aes_192_gcm:
+      case ObCipherOpMode::ob_aes_256_gcm:
+      case ObCipherOpMode::ob_sm4_cbc_mode:
+      case ObCipherOpMode::ob_sm4_gcm:
+        is_valid = true;
+        break;
+      case ObCipherOpMode::ob_aes_128_cbc:
+      case ObCipherOpMode::ob_aes_192_cbc:
+      case ObCipherOpMode::ob_aes_256_cbc:
+      case ObCipherOpMode::ob_aes_128_cfb1:
+      case ObCipherOpMode::ob_aes_192_cfb1:
+      case ObCipherOpMode::ob_aes_256_cfb1:
+      case ObCipherOpMode::ob_aes_128_cfb8:
+      case ObCipherOpMode::ob_aes_192_cfb8:
+      case ObCipherOpMode::ob_aes_256_cfb8:
+      case ObCipherOpMode::ob_aes_128_cfb128:
+      case ObCipherOpMode::ob_aes_192_cfb128:
+      case ObCipherOpMode::ob_aes_256_cfb128:
+      case ObCipherOpMode::ob_aes_128_ofb:
+      case ObCipherOpMode::ob_aes_192_ofb:
+      case ObCipherOpMode::ob_aes_256_ofb:
+      case ObCipherOpMode::ob_sm4_mode:
+      case ObCipherOpMode::ob_sm4_cbc:
+      case ObCipherOpMode::ob_sm4_ecb:
+      case ObCipherOpMode::ob_sm4_ofb:
+      case ObCipherOpMode::ob_sm4_ctr:
+      case ObCipherOpMode::ob_sm4_cfb128:
+        is_valid = false;
+        break;
+      default:
+        is_valid = false;
+        break;
+    }
   } else {
     is_valid = false;
   }

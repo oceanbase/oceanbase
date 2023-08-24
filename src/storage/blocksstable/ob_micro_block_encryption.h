@@ -13,6 +13,7 @@
 #ifndef OB_MICRO_BLOCK_ENCRYPTION_H_
 #define OB_MICRO_BLOCK_ENCRYPTION_H_
 #include "ob_data_buffer.h"
+#include "share/ob_encryption_util.h"
 
 namespace oceanbase {
 
@@ -32,6 +33,7 @@ public:
            const int64_t master_key_id = 0, const char *encrypt_key = NULL, const int64_t encrypt_key_len = 0);
   int encrypt(const char *in, const int64_t in_size, const char *&out, int64_t &out_size);
   int decrypt(const char *in, const int64_t in_size, const char *&out, int64_t &out_size);
+  int generate_iv(const int64_t macro_seq, const int64_t block_offset);
 private:
   //此密钥用于mysql模式下表加解密
   int generate_key();
@@ -49,8 +51,10 @@ private:
   int64_t raw_key_len_;
   char raw_key_[common::OB_MAX_ENCRYPTION_KEY_NAME_LENGTH];      // 真正用于数据加解密的密钥
   char encrypt_key_[common::OB_MAX_ENCRYPTION_KEY_NAME_LENGTH];  // 密钥的密文
+  char iv_[share::ObBlockCipher::OB_DEFAULT_IV_LENGTH];
   int64_t encrypt_key_len_;                                      // 密钥的密文的长度
   int64_t master_key_id_;                                        // 主密钥版本
+  int64_t iv_len_;
 #endif
 DISALLOW_COPY_AND_ASSIGN(ObMicroBlockEncryption);
 };

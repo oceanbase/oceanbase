@@ -818,16 +818,15 @@ public:
                                                               OB_MAX_MASTER_KEY_LENGTH,
                                                               master_key_len));
       meta.master_key_.get_content().set_length(master_key_len);
-      EXPECT_EQ(OB_SUCCESS, ObAesEncryption::aes_decrypt(meta.master_key_.ptr(),
-                                                         meta.master_key_.size(),
-                                                         meta.encrypted_table_key_.ptr(),
-                                                         meta.encrypted_table_key_.size(),
-                                                         OB_ENCRYPTED_TABLE_KEY_LEN,
-                                                         NULL,
-                                                         0,
-                                                         static_cast<ObAesOpMode>(meta.encrypt_algorithm_),
-                                                         decrypted_table_key,
-                                                         out_len));
+      EXPECT_EQ(OB_SUCCESS, ObBlockCipher::decrypt(meta.master_key_.ptr(),
+                                                   meta.master_key_.size(),
+                                                   meta.encrypted_table_key_.ptr(),
+                                                   meta.encrypted_table_key_.size(),
+                                                   OB_ENCRYPTED_TABLE_KEY_LEN,
+                                                   NULL, 0, NULL, 0, NULL, 0,
+                                                   static_cast<ObCipherOpMode>(meta.encrypt_algorithm_),
+                                                   decrypted_table_key,
+                                                   out_len));
       meta.table_key_.set_content(decrypted_table_key, out_len);
 
       EXPECT_EQ(true, meta.is_valid());
@@ -1114,13 +1113,13 @@ public:
     char encrypt_table_key[OB_ENCRYPTED_TABLE_KEY_LEN] = {0};
 
     int64_t encrypt_out_len = 0;
-    int algorithm = ObAesOpMode::ob_invalid_mode + 3;
+    int algorithm = ObCipherOpMode::ob_invalid_mode + 3;
     EXPECT_EQ(OB_SUCCESS, ObKeyGenerator::generate_encrypt_key(origin_table_key, OB_ORIGINAL_TABLE_KEY_LEN));
-    EXPECT_EQ(OB_SUCCESS, ObAesEncryption::aes_encrypt(cur_master_key, strlen(cur_master_key),
-                                                       origin_table_key, OB_ORIGINAL_TABLE_KEY_LEN,
-                                                       OB_ENCRYPTED_TABLE_KEY_LEN, NULL, 0,
-                                                       static_cast<ObAesOpMode>(algorithm),
-                                                       encrypt_table_key, encrypt_out_len));
+    EXPECT_EQ(OB_SUCCESS, ObBlockCipher::encrypt(cur_master_key, strlen(cur_master_key),
+                                                 origin_table_key, OB_ORIGINAL_TABLE_KEY_LEN,
+                                                 OB_ENCRYPTED_TABLE_KEY_LEN, NULL, 0, NULL, 0, 0,
+                                                 static_cast<ObCipherOpMode>(algorithm),
+                                                 encrypt_table_key, encrypt_out_len, NULL));
     encrypt_table_key[encrypt_out_len] = '\0';
     EXPECT_STRNE(origin_table_key, encrypt_table_key);
 
@@ -1132,13 +1131,9 @@ public:
     EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::get_master_key(tenant_id, master_key_id, master_key, OB_MAX_MASTER_KEY_LENGTH, master_key_len));
     EXPECT_STREQ(master_key, cur_master_key);
 
-    char random_string[OB_CLOG_ENCRYPT_RANDOM_LEN] = {0};
-    EXPECT_EQ(OB_SUCCESS, ObKeyGenerator::generate_encrypt_key(random_string, OB_CLOG_ENCRYPT_RANDOM_LEN));
-
     encrypt_meta.master_key_.set_content(master_key, master_key_len);
     encrypt_meta.table_key_.set_content(origin_table_key, OB_ORIGINAL_TABLE_KEY_LEN);
     encrypt_meta.encrypted_table_key_.set_content(encrypt_table_key, OB_ENCRYPTED_TABLE_KEY_LEN);
-    encrypt_meta.random_.set_content(random_string, OB_CLOG_ENCRYPT_RANDOM_LEN);
     encrypt_meta.tenant_id_ = tenant_id;
     encrypt_meta.master_key_version_ = master_key_id;
     encrypt_meta.encrypt_algorithm_ = algorithm;

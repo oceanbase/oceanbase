@@ -129,8 +129,8 @@ OB_DEF_SERIALIZE_SIZE(ObCLogEncryptInfo)
   return size;
 }
 
-OB_SERIALIZE_MEMBER(ObSerializeEncryptMeta, master_key_version_, encrypt_algorithm_,
-    random_, master_key_, table_key_, encrypted_table_key_);
+OB_SERIALIZE_MEMBER(ObSerializeEncryptMeta, master_key_version_, encrypt_algorithm_, master_key_,
+                    table_key_, encrypted_table_key_);
 OB_SERIALIZE_MEMBER(ObEncryptMetaCache, table_id_, local_index_id_, meta_);
 
 }//transaction

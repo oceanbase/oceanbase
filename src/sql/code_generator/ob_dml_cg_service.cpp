@@ -2877,7 +2877,6 @@ int ObDmlCgService::init_encrypt_table_meta_(
   int ret = OB_SUCCESS;
   transaction::ObEncryptMetaCache meta_cache;
   char master_key[OB_MAX_MASTER_KEY_LENGTH];
-  char random_string[OB_CLOG_ENCRYPT_RANDOM_LEN];
   int64_t master_key_length = 0;
   if (OB_ISNULL(table_schema) || OB_ISNULL(guard)) {
     ret = OB_INVALID_ARGUMENT;
@@ -2899,12 +2898,6 @@ int ObDmlCgService::init_encrypt_table_meta_(
     if (OB_FAIL(meta_cache.meta_.encrypted_table_key_.set_content(
         table_schema->get_encrypt_key()))) {
       LOG_WARN("fail to assign encrypt key", K(ret));
-    } else if (OB_FAIL(share::ObKeyGenerator::generate_encrypt_key(
-                  random_string, OB_CLOG_ENCRYPT_RANDOM_LEN))) {
-      LOG_WARN("fail to generate random string", K(ret));
-    } else if (OB_FAIL(meta_cache.meta_.random_.set_content(ObString(
-                  OB_CLOG_ENCRYPT_RANDOM_LEN, random_string)))) {
-      LOG_WARN("fail to assign random string", K(ret));
     }
     #ifdef ERRSIM
       else if (OB_FAIL(OB_E(EventTable::EN_ENCRYPT_GET_MASTER_KEY_FAILED) OB_SUCCESS)) {
@@ -2912,8 +2905,8 @@ int ObDmlCgService::init_encrypt_table_meta_(
     }
     #endif
       else if (OB_FAIL(share::ObMasterKeyGetter::get_master_key(table_schema->get_tenant_id(),
-                  table_schema->get_master_key_id(),
-                  master_key, OB_MAX_MASTER_KEY_LENGTH, master_key_length))) {
+                       table_schema->get_master_key_id(), master_key, OB_MAX_MASTER_KEY_LENGTH,
+                       master_key_length))) {
       LOG_WARN("fail to get master key", K(ret));
       // 如果在cg阶段获取主密钥失败了, 有可能是因为RS执行内部sql没有租户资源引起的.
       // 在没有租户资源的情况下获取主密钥, 获取加密租户配置项时会失败
@@ -2922,12 +2915,10 @@ int ObDmlCgService::init_encrypt_table_meta_(
       // 兜底是执行期再次获取, 再次获取成功了则继续往下走, 失败了则报错出来.
       // 见bug
       ret = OB_SUCCESS;
-    } else if (OB_FAIL(meta_cache.meta_.master_key_.set_content(ObString(
-                  master_key_length, master_key)))) {
+    } else if (OB_FAIL(meta_cache.meta_.master_key_.set_content(
+                                                        ObString(master_key_length, master_key)))) {
       LOG_WARN("fail to assign master_key", K(ret));
-    } else if (OB_FAIL(ObEncryptionUtil::decrypt_table_key(meta_cache.meta_,
-                                                           meta_cache.meta_.encrypted_table_key_.ptr(),
-                                                           meta_cache.meta_.encrypted_table_key_.size()))) {
+    } else if (OB_FAIL(ObEncryptionUtil::decrypt_table_key(meta_cache.meta_))) {
       LOG_WARN("failed to decrypt_table_key", K(ret));
     } else {/*do nothing*/}
 

@@ -405,7 +405,8 @@ int ObMemtableMutatorRow::handle_encrypt_row_(char *buf, const int64_t buf_len,
 {
   int ret = OB_SUCCESS;
   int64_t encrypted_len = 0;
-  const int64_t expected_encrypted_len = ObEncryptionUtil::encrypted_length(end_pos - start_pos);
+  const int64_t expected_encrypted_len = ObEncryptionUtil::encrypted_length(
+                         static_cast<ObCipherOpMode>(meta.encrypt_algorithm_), end_pos - start_pos);
   char *encrypted_buf = nullptr;
   int64_t encrypted_buf_size = 0;
   ObEncryptRowBuf row_buf;
@@ -624,9 +625,9 @@ int ObMemtableMutatorRow::deserialize(const char *buf, const int64_t buf_len, in
           new_pos = 0;
           if (need_extract_encrypt_meta) {
             encrypt_stat_map.set_map(CLOG_CONTAIN_ENCRYPTED_ROW);
-            ObAesOpMode final_mode = static_cast<ObAesOpMode>(final_encrypt_meta.encrypt_algorithm_);
-            ObAesOpMode cur_mode = static_cast<ObAesOpMode>(encrypt_meta->meta_.encrypt_algorithm_);
-            if (ObAesEncryption::compare_aes_mod_safety(final_mode, cur_mode)) {
+            ObCipherOpMode final_mode = static_cast<ObCipherOpMode>(final_encrypt_meta.encrypt_algorithm_);
+            ObCipherOpMode cur_mode = static_cast<ObCipherOpMode>(encrypt_meta->meta_.encrypt_algorithm_);
+            if (ObBlockCipher::compare_aes_mod_safety(final_mode, cur_mode)) {
               if (OB_FAIL(final_encrypt_meta.assign(encrypt_meta->meta_))) {
                 TRANS_LOG(WARN, "failed to assign encrypt_meta", K(ret), K(table_id_));
               }
@@ -1297,7 +1298,8 @@ int ObMutatorWriter::encrypt_big_row_data(
       TRANS_LOG(WARN, "failed to encode table id", K(ret));
     } else {
       int64_t encrypted_len = 0;
-      int64_t data_len = ObEncryptionUtil::decrypted_length(out_buf_len - out_buf_pos);
+      ObCipherOpMode opmode = static_cast<ObCipherOpMode>(encrypt_meta->meta_.encrypt_algorithm_);
+      int64_t data_len = ObEncryptionUtil::decrypted_length(opmode, out_buf_len - out_buf_pos);
       data_len = min(data_len, in_buf_len - in_buf_pos);
       if (OB_UNLIKELY(data_len < 0)) {
         TRANS_LOG(WARN, "buf to short to hold encrypted data",

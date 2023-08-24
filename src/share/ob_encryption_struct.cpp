@@ -31,8 +31,6 @@ OB_DEF_SERIALIZE(ObEncryptMeta)
     SHARE_LOG(WARN, "serialize master key verison failed", K(ret), K(buf_len), K(pos));
   } else if (OB_FAIL(serialization::encode(buf, buf_len, pos, encrypt_algorithm_))) {
     SHARE_LOG(WARN, "serialize encrypt algorithm failed", K(ret), K(buf_len), K(pos));
-  } else if (OB_FAIL(random_.serialize(buf, buf_len, pos))) {
-    SHARE_LOG(WARN, "serialize random failed", K(ret), K(buf_len), K(pos));
   } else if (OB_FAIL(encrypted_table_key_.serialize(buf, buf_len, pos))) {
     SHARE_LOG(WARN, "serialize table key failed", K(ret), K(buf_len), K(pos));
   }
@@ -49,8 +47,6 @@ OB_DEF_DESERIALIZE(ObEncryptMeta)
     SHARE_LOG(WARN, "deserialize master key version failed", K(ret), K(data_len), K(pos));
   } else if (OB_FAIL(serialization::decode(buf, data_len, pos, encrypt_algorithm_))) {
     SHARE_LOG(WARN, "deserialize encrypt algorithm failed", K(ret), K(data_len), K(pos));
-  } else if (OB_FAIL(random_.deserialize(buf, data_len, pos))) {
-    SHARE_LOG(WARN, "deserialize random failed", K(ret), K(data_len), K(pos));
   } else if (OB_FAIL(encrypted_table_key_.deserialize(buf, data_len, pos))) {
     SHARE_LOG(WARN, "deserialize table key failed", K(ret), K(data_len), K(pos));
   }
@@ -62,7 +58,6 @@ OB_DEF_SERIALIZE_SIZE(ObEncryptMeta)
   int64_t size = 0;
   size += serialization::encoded_length(master_key_version_);
   size += serialization::encoded_length(encrypt_algorithm_);
-  size += random_.get_serialize_size();
   size += encrypted_table_key_.get_serialize_size();
   return size;
 }
@@ -70,9 +65,7 @@ OB_DEF_SERIALIZE_SIZE(ObEncryptMeta)
 int ObEncryptMeta::assign(const ObEncryptMeta &other)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(random_.assign(other.random_))) {
-    SHARE_LOG(WARN, "failed to assign random_", KR(ret), K(other));
-  } else if (OB_FAIL(master_key_.assign(other.master_key_))) {
+  if (OB_FAIL(master_key_.assign(other.master_key_))) {
     SHARE_LOG(WARN, "failed to assign master_key_", KR(ret), K(other));
   } else if (OB_FAIL(table_key_.assign(other.table_key_))) {
     SHARE_LOG(WARN, "failed to assign table_key_", KR(ret), K(other));
@@ -89,7 +82,6 @@ void ObEncryptMeta::reset()
 {
   master_key_version_ = -1;
   encrypt_algorithm_ = -1;
-  random_.reset();
   master_key_.reset();
   table_key_.reset();
   encrypted_table_key_.reset();
@@ -114,8 +106,6 @@ OB_DEF_SERIALIZE(ObZoneEncryptMeta)
     SHARE_LOG(WARN, "serialize master key verison failed", K(ret), K(buf_len), K(pos));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, encrypt_algorithm_))) {
     SHARE_LOG(WARN, "serialize encrypt algorithm failed", K(ret), K(buf_len), K(pos));
-  } else if (OB_FAIL(random_.serialize(buf, buf_len, pos))) {
-    SHARE_LOG(WARN, "serialize random failed", K(ret), K(buf_len), K(pos));
   }
   return ret;
 }
@@ -132,8 +122,6 @@ OB_DEF_DESERIALIZE(ObZoneEncryptMeta)
     SHARE_LOG(WARN, "deserialize master key version failed", K(ret), K(data_len), K(pos));
   } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &encrypt_algorithm_))) {
     SHARE_LOG(WARN, "deserialize encrypt algorithm failed", K(ret), K(data_len), K(pos));
-  } else if (OB_FAIL(random_.deserialize(buf, data_len, pos))) {
-    SHARE_LOG(WARN, "deserialize random failed", K(ret), K(data_len), K(pos));
   }
   return ret;
 }
@@ -144,7 +132,6 @@ OB_DEF_SERIALIZE_SIZE(ObZoneEncryptMeta)
   size += serialization::encoded_length_i16(version_);
   size += serialization::encoded_length_i64(master_key_version_);
   size += serialization::encoded_length_i64(encrypt_algorithm_);
-  size += random_.get_serialize_size();
   return size;
 }
 
@@ -153,23 +140,11 @@ void ObZoneEncryptMeta::reset()
   version_ = 0;
   master_key_version_ = -1;
   encrypt_algorithm_ = -1;
-  random_.reset();
 }
 
 bool ObZoneEncryptMeta::is_valid_except_master_key_version() const
 {
-  bool b_ret = false;
-  int ret = OB_SUCCESS;
-  bool need_iv = false;
-  if (OB_UNLIKELY(encrypt_algorithm_ <= 0)) {
-    b_ret = false;
-  } else if (OB_FAIL(ObAesEncryption::aes_needs_iv(static_cast<ObAesOpMode>(encrypt_algorithm_), need_iv))) {
-    b_ret = false;
-    SHARE_LOG(WARN, "aes_needs_iv failed", K(ret), K(encrypt_algorithm_));
-  } else {
-    b_ret = (!need_iv) || (random_.size() > 0);
-  }
-  return b_ret;
+  return ObBlockCipher::is_valid_cipher_opmode(static_cast<ObCipherOpMode>(encrypt_algorithm_));
 }
 
 bool ObZoneEncryptMeta::is_valid() const
@@ -180,13 +155,9 @@ bool ObZoneEncryptMeta::is_valid() const
 int ObZoneEncryptMeta::assign(const ObZoneEncryptMeta &other)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(random_.assign(other.random_))) {
-    SHARE_LOG(WARN, "failed to assign random", K(ret), K(other));
-  } else {
-    version_ = other.version_;
-    master_key_version_ = other.master_key_version_;
-    encrypt_algorithm_ = other.encrypt_algorithm_;
-  }
+  version_ = other.version_;
+  master_key_version_ = other.master_key_version_;
+  encrypt_algorithm_ = other.encrypt_algorithm_;
   return ret;
 }
 

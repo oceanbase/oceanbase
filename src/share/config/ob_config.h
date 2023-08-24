@@ -994,7 +994,7 @@ public:
   share::ObBackupEncryptionMode::EncryptionMode get_encryption_mode() const
   {return value_.encryption_mode_;}
 
-  share::ObAesOpMode get_encryption_algorithm() const
+  share::ObCipherOpMode get_encryption_algorithm() const
   {return value_.encryption_algorithm_;}
   virtual ObConfigItemType get_config_item_type() const {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_LOGARCHIVEOPT;
@@ -1007,7 +1007,7 @@ public:
       is_compress_enabled_(false),
       compressor_type_(common::INVALID_COMPRESSOR),
       encryption_mode_(share::ObBackupEncryptionMode::NONE),
-      encryption_algorithm_(share::ObAesOpMode::ob_invalid_mode)
+      encryption_algorithm_(share::ObCipherOpMode::ob_invalid_mode)
     {}
     ~ObInnerConfigLogArchiveOptionsItem() {}
 
@@ -1052,7 +1052,7 @@ public:
     bool is_compress_enabled_;
     common::ObCompressorType compressor_type_;
     share::ObBackupEncryptionMode::EncryptionMode encryption_mode_;
-    share::ObAesOpMode encryption_algorithm_;
+    share::ObCipherOpMode encryption_algorithm_;
   };
 
 public:

@@ -77,29 +77,29 @@ TEST_F(TestLogArchiveConfig, log_archive)
 //  ASSERT_EQ(true, log_archive_item.value_.is_mandatory_);
 //  ASSERT_EQ(false, log_archive_item.value_.is_compress_enabled_);
 //  ASSERT_EQ(ObBackupEncryptionMode::TRANSPARENT_ENCRYPTION, log_archive_item.value_.encryption_mode_);
-//  ASSERT_EQ(share::ObAesOpMode::ob_aes_128_ecb, log_archive_item.value_.encryption_algorithm_);
+//  ASSERT_EQ(share::ObCipherOpMode::ob_aes_128_ecb, log_archive_item.value_.encryption_algorithm_);
 //
 //  ret = log_archive_item.set_value("MANDATORY encryption_mode= none ENCRYPTION_ALGORITHM = aes-128");
 //  ASSERT_EQ(true, log_archive_item.value_.valid_);
 //  ASSERT_EQ(true, log_archive_item.value_.is_mandatory_);
 //  ASSERT_EQ(false, log_archive_item.value_.is_compress_enabled_);
 //  ASSERT_EQ(ObBackupEncryptionMode::NONE, log_archive_item.value_.encryption_mode_);
-//  ASSERT_EQ(share::ObAesOpMode::ob_aes_128_ecb, log_archive_item.value_.encryption_algorithm_);
+//  ASSERT_EQ(share::ObCipherOpMode::ob_aes_128_ecb, log_archive_item.value_.encryption_algorithm_);
 //
 //  ret = log_archive_item.set_value("MANDATORY encryption_mode= none ENCRYPTION_ALGORITHM = aes-192");
 //  ASSERT_EQ(true, log_archive_item.value_.valid_);
 //  ASSERT_EQ(ObBackupEncryptionMode::NONE, log_archive_item.value_.encryption_mode_);
-//  ASSERT_EQ(share::ObAesOpMode::ob_aes_192_ecb, log_archive_item.value_.encryption_algorithm_);
+//  ASSERT_EQ(share::ObCipherOpMode::ob_aes_192_ecb, log_archive_item.value_.encryption_algorithm_);
 //
 //  ret = log_archive_item.set_value("MANDATORY encryption_mode= none ENCRYPTION_ALGORITHM = aes-256");
 //  ASSERT_EQ(true, log_archive_item.value_.valid_);
 //  ASSERT_EQ(ObBackupEncryptionMode::NONE, log_archive_item.value_.encryption_mode_);
-//  ASSERT_EQ(share::ObAesOpMode::ob_aes_256_ecb, log_archive_item.value_.encryption_algorithm_);
+//  ASSERT_EQ(share::ObCipherOpMode::ob_aes_256_ecb, log_archive_item.value_.encryption_algorithm_);
 //
 //  ret = log_archive_item.set_value("MANDATORY encryption_mode= none ENCRYPTION_ALGORITHM = sm4");
 //  ASSERT_EQ(true, log_archive_item.value_.valid_);
 //  ASSERT_EQ(ObBackupEncryptionMode::NONE, log_archive_item.value_.encryption_mode_);
-//  ASSERT_EQ(share::ObAesOpMode::ob_sm4_mode, log_archive_item.value_.encryption_algorithm_);
+//  ASSERT_EQ(share::ObCipherOpMode::ob_sm4_mode, log_archive_item.value_.encryption_algorithm_);
 //
 //  ret = log_archive_item.set_value("encryption_mode= none ENCRYPTION_ALGORITHM = aes-120");
 //  ASSERT_EQ(false, ret);

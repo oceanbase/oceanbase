@@ -8000,5 +8000,54 @@ int ObResolverUtils::resolve_file_format_string_value(const ParseNode *node,
   return ret;
 }
 
+int ObResolverUtils::check_keystore_status(const uint64_t tenant_id,
+                                           ObSchemaChecker &schema_checker)
+{
+  int ret = OB_SUCCESS;
+  const ObKeystoreSchema *keystore_schema = NULL;
+  if (OB_FAIL(schema_checker.get_keystore_schema(tenant_id, keystore_schema))) {
+    LOG_WARN("fail to get keystore schema", K(ret));
+  } else if (OB_ISNULL(keystore_schema)) {
+    ret = OB_KEYSTORE_NOT_EXIST;
+    LOG_WARN("the keystore is not exist", K(ret));
+  } else if (0 == keystore_schema->get_status()) {
+    ret = OB_KEYSTORE_NOT_OPEN;
+    LOG_WARN("the keystore is not open", K(ret));
+  } else if (2 == keystore_schema->get_status()) {
+    ret = OB_KEYSTORE_OPEN_NO_MASTER_KEY;
+    LOG_WARN("the keystore dont have any master key", K(ret));
+  }
+  return ret;
+}
+
+int ObResolverUtils::check_encryption_name(ObString &encryption_name, bool &need_encrypt)
+{
+  int ret = OB_SUCCESS;
+  bool is_oracle = lib::is_oracle_mode();
+  if (0 == encryption_name.length()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("encryption name cannot be empty", K(ret));
+  } else if (0 == encryption_name.case_compare("aes-128") ||
+             0 == encryption_name.case_compare("aes-192") ||
+             0 == encryption_name.case_compare("aes-256") ||
+             0 == encryption_name.case_compare("aes-128-gcm") ||
+             0 == encryption_name.case_compare("aes-192-gcm") ||
+             0 == encryption_name.case_compare("aes-256-gcm") ||
+             0 == encryption_name.case_compare("sm4-cbc") ||
+             0 == encryption_name.case_compare("sm4-gcm")) {
+    need_encrypt = true;
+  } else if (!is_oracle && 0 == encryption_name.case_compare("y")) {
+    need_encrypt = true;
+    encryption_name = common::ObString::make_string("aes-256");
+  } else if (!is_oracle && 0 == encryption_name.case_compare("n")) {
+    need_encrypt = false;
+  } else if (is_oracle && 0 == encryption_name.case_compare("none")){
+    need_encrypt = false;
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the encryption name is invalid", K(ret), K(encryption_name));
+  }
+  return ret;
+}
 }  // namespace sql
 }  // namespace oceanbase

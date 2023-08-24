@@ -59,7 +59,7 @@ public:
       ObDataStoreDesc &data_store_desc,
       const ObITableReadInfo &read_info,
       common::ObIAllocator &allocator);
-  int compress_encrypt_micro_block(ObMicroBlockDesc &micro_block_desc);
+  int compress_encrypt_micro_block(ObMicroBlockDesc &micro_block_desc, const int64_t macro_seq, const int64_t micro_offset);
   int dump_micro_block_writer_buffer(const char *buf, const int64_t size);
   void reset();
 private:

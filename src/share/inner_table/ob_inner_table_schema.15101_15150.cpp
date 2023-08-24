@@ -12670,7 +12670,7 @@ int ObInnerTableSchema::all_virtual_tenant_keystore_real_agent_ora_schema(ObTabl
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      OB_MAX_MASTER_KEY_LENGTH, //column_length
+      OB_INTERNAL_MASTER_KEY_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
       false, //is_nullable

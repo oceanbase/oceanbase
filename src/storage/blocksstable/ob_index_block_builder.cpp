@@ -1663,8 +1663,12 @@ int ObDataIndexBlockBuilder::cal_macro_meta_block_size(
         STORAGE_LOG(WARN, "unexpected meta block desc", K(ret), K(meta_block_desc));
       } else {
         estimate_meta_block_size = meta_block_desc.buf_size_ + meta_block_desc.header_->header_size_;
-        const int64_t encrypted_size = share::ObEncryptionUtil::encrypted_length(estimate_meta_block_size);
+#ifdef OB_BUILD_TDE_SECURITY
+        const int64_t encrypted_size = share::ObEncryptionUtil::encrypted_length(
+                                 static_cast<share::ObCipherOpMode>(index_store_desc_->encrypt_id_),
+                                 estimate_meta_block_size);
         estimate_meta_block_size = max(estimate_meta_block_size, encrypted_size);
+#endif
       }
     }
   }
@@ -1785,7 +1789,9 @@ int ObDataIndexBlockBuilder::write_meta_block(
   } else if (OB_FAIL(meta_block_writer_->build_micro_block_desc(meta_block_desc))) {
     STORAGE_LOG(WARN, "fail to build meta block", K(ret));
   } else if (FALSE_IT(meta_block_desc.last_rowkey_ = last_rowkey_)) {
-  } else if (OB_FAIL(micro_helper_.compress_encrypt_micro_block(meta_block_desc))) {
+  } else if (OB_FAIL(micro_helper_.compress_encrypt_micro_block(meta_block_desc,
+                                                                macro_block.get_current_macro_seq(),
+                                                                macro_block.get_data_size()))) {
     STORAGE_LOG(WARN, "fail to compress and encrypt micro block", K(ret));
   } else if (OB_FAIL(macro_block.write_index_micro_block(meta_block_desc, false, data_offset))) {
     STORAGE_LOG(WARN, "fail to write meta index block", K(ret), K(meta_block_desc));
@@ -1822,7 +1828,9 @@ int ObDataIndexBlockBuilder::append_index_micro_block(ObMacroBlock &macro_block,
         STORAGE_LOG(WARN, "Fail to reserve index block value", K(tmp_ret));
       }
     }
-    if (OB_FAIL(micro_helper_.compress_encrypt_micro_block(leaf_block_desc))) {
+    if (OB_FAIL(micro_helper_.compress_encrypt_micro_block(leaf_block_desc,
+                                                           macro_block.get_current_macro_seq(),
+                                                           macro_block.get_data_size()))) {
       STORAGE_LOG(WARN, "fail to compress and encrypt micro block", K(ret));
     } else if (OB_FAIL(macro_block.write_index_micro_block(leaf_block_desc, true, data_offset))) {
       STORAGE_LOG(WARN, "fail to write n-1 level index block", K(ret), K(leaf_block_desc));

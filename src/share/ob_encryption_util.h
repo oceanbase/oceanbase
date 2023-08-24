@@ -34,7 +34,7 @@ public:
   static int generate_encrypt_key(char *buf, int64_t len);
 };
 
-enum ObAesOpMode {
+enum ObCipherOpMode {
   ob_invalid_mode = 0,
   ob_aes_128_ecb = 1,
   ob_aes_192_ecb = 2,
@@ -54,57 +54,70 @@ enum ObAesOpMode {
   ob_aes_128_ofb = 16,
   ob_aes_192_ofb = 17,
   ob_aes_256_ofb = 18,
-  ob_sm4_mode = 19,
-  ob_sm4_cbc_mode = 20,
-  //attention:remember to modify compare_aes_mod_safety when add new mode
+  ob_sm4_mode = 19,     // old sm4_ctr using NULL as IV which is wrong, should not be used
+  ob_sm4_cbc_mode = 20, // sm4_cbc, use NULL as IV
+  ob_aes_128_gcm = 21,
+  ob_aes_192_gcm = 22,
+  ob_aes_256_gcm = 23,
+  ob_sm4_cbc = 24,     // sm4_cbc, use random iv
+  ob_sm4_ecb = 25,
+  ob_sm4_ofb = 26,
+  ob_sm4_cfb128 = 27,
+  ob_sm4_ctr = 28, // sm4_ctr using unique iv
+  ob_sm4_gcm = 29,
+  /* attention:
+    1.remember to modify compare_aes_mod_safety when add new mode
+    2.considering compatibility of parse_encryption_id, only add modes sequentially
+  */
   ob_max_mode
 };
 
-class ObAesEncryption
+class ObBlockCipher
 {
 public:
-//高级对称加密算法AES
-  static int aes_encrypt(const char *key, const int64_t &key_len, const char *data,
-                         const int64_t data_len, const int64_t &buf_len, const char *iv,
-                         const int64_t iv_len, enum ObAesOpMode mode, char *buf, int64_t &out_len);
-  static int aes_decrypt(const char *key, const int64_t &key_len, const char *data,
-                         const int64_t data_len, const int64_t &buf_len, const char *iv,
-                         const int64_t iv_len, enum ObAesOpMode mode, char *buf, int64_t &out_len);
-  static int aes_needs_iv(ObAesOpMode opmode, bool &need_iv);
-  static int64_t aes_encrypted_length(const int64_t data_len)
-  {
-    return (data_len / OB_AES_BLOCK_SIZE + 1) * OB_AES_BLOCK_SIZE;
-  }
-  static int64_t aes_max_decrypted_length(const int64_t encrypt_len)
-  {
-    /*encrypt_len is supposed >= OB_AES_BLOCK_SIZE*/
-    return encrypt_len - 1 - (encrypt_len % OB_AES_BLOCK_SIZE);
-  }
-  static int64_t aes_safe_buffer_length(const int64_t data_len)
-  {
-    return data_len + OB_AES_BLOCK_SIZE;
-  }
+  static int encrypt(const char *key, const int64_t key_len,
+                     const char *data, const int64_t data_len, const int64_t buf_len,
+                     const char *iv, const int64_t iv_len, const char *aad, const int64_t aad_len,
+                     const int64_t tag_len, const ObCipherOpMode mode, char *buf, int64_t &out_len,
+                     char *tag);
+  static int decrypt(const char *key, const int64_t key_len,
+                     const char *data, const int64_t data_len, const int64_t buf_len,
+                     const char *iv, const int64_t iv_len, const char *aad, const int64_t aad_len,
+                     const char *tag, const int64_t tag_len, const ObCipherOpMode mode, char *buf,
+                     int64_t &out_len);
+  static bool is_valid_cipher_opmode(const ObCipherOpMode opmode);
+  static bool is_need_iv(const ObCipherOpMode opmode);
+  static bool is_need_aead(const ObCipherOpMode opmode);
+  static int get_key_length(const ObCipherOpMode opmode);
+  static int64_t get_iv_length(const ObCipherOpMode opmode);
+  static int64_t get_aead_tag_length(const ObCipherOpMode opmode);
+  static int64_t get_ciphertext_length(const ObCipherOpMode opmode, const int64_t plaintext_len);
+  static int64_t get_max_plaintext_length(const ObCipherOpMode opmode,
+                                          const int64_t ciphertext_len);
   //return true if right is more safe then left
-  static bool compare_aes_mod_safety(ObAesOpMode left, ObAesOpMode right);
+  static bool compare_aes_mod_safety(ObCipherOpMode left, ObCipherOpMode right);
 private:
-  static void aes_create_key(const unsigned char *key, int key_length, char *rkey, enum ObAesOpMode opmode);
+  static bool is_need_padding(const ObCipherOpMode opmode);
+  static void create_key(const unsigned char *key, int key_length, char *rkey,
+                         enum ObCipherOpMode opmode);
 public:
-  static const int OB_MAX_AES_KEY_LENGTH = 256;
-  static const int OB_AES_IV_SIZE = 16;
-  static const int OB_AES_BLOCK_SIZE = 16;
+  static const int OB_MAX_CIPHER_KEY_LENGTH = 256; // max aes key bit length
+  static const int OB_DEFAULT_IV_LENGTH = 16;
+  static const int OB_CIPHER_BLOCK_LENGTH = 16;
+  static const int OB_DEFAULT_AEAD_AAD_LENGTH = 16;
+  static const int OB_DEFAULT_AEAD_TAG_LENGTH = 16;
 };
 
 const int64_t OB_ROOT_KEY_LEN = 16;
 const int64_t OB_ORIGINAL_TABLE_KEY_LEN = 15;
 const int64_t OB_ENCRYPTED_TABLE_KEY_LEN = 16;
-const int64_t OB_MAX_MASTER_KEY_LENGTH = 16;
+const int64_t OB_INTERNAL_MASTER_KEY_LENGTH = 16;
+const int64_t OB_MAX_MASTER_KEY_LENGTH = 32;
 const int64_t OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH = 16;
 const int64_t OB_ENCRYPT_KEY_SALT_LEN = 8;
-const int64_t OB_SALTED_MASTER_KEY_LEN = OB_MAX_MASTER_KEY_LENGTH + OB_ENCRYPT_KEY_SALT_LEN;
-const int64_t OB_MAX_ENCRYPTED_KEY_LENGTH = 80;
+const int64_t OB_SALTED_MASTER_KEY_LEN = OB_INTERNAL_MASTER_KEY_LENGTH + OB_ENCRYPT_KEY_SALT_LEN;
+const int64_t OB_MAX_ENCRYPTED_KEY_LENGTH = 256;
 const int64_t OB_INTERNAL_ENCRYPTED_KEY_LENGTH = 32;
-
-const int64_t OB_CLOG_ENCRYPT_RANDOM_LEN = 16;
 const int64_t OB_CLOG_ENCRYPT_MASTER_KEY_LEN = 32;
 const int64_t OB_CLOG_ENCRYPT_TABLE_KEY_LEN = 32;
 
@@ -114,47 +127,61 @@ public:
 
   static int init_ssl_malloc();
 #ifdef OB_BUILD_TDE_SECURITY
-  static bool need_encrypt(int64_t encrypt_id);
+  static bool need_encrypt(const ObCipherOpMode opmode);
   static int get_tde_method(int64_t tenant_id, common::ObString &tde_method);
   static int get_tde_kms_info(int64_t tenant_id, common::ObString &kms_info);
 #endif
-  static int parse_encryption_algorithm(const common::ObString &str, ObAesOpMode &encryption_algorithm);
-  static int parse_encryption_algorithm(const char *str, ObAesOpMode &encryption_algorithm);
+  static int parse_encryption_algorithm(const common::ObString &str,
+                                        ObCipherOpMode &encryption_algorithm);
+  static int parse_encryption_algorithm(const char *str,
+                                        ObCipherOpMode &encryption_algorithm);
   static int parse_encryption_id(const char *str, int64_t &encrypt_id);
   static int parse_encryption_id(const common::ObString &str, int64_t &encrypt_id);
+  static bool is_aes_encryption(const ObCipherOpMode opmode);
+  static bool is_sm4_encryption(const ObCipherOpMode opmode);
 
 #ifdef OB_BUILD_TDE_SECURITY
+  static const ObCipherOpMode DEFAULT_TABLE_KEY_AES_ENCRYPT_ALGORITHM =
+                                                              share::ObCipherOpMode::ob_aes_128_ecb;
+  static const ObCipherOpMode DEFAULT_TABLE_KEY_SM4_ENCRYPT_ALGORITHM =
+                                                             share::ObCipherOpMode::ob_sm4_cbc_mode;
+  static const ObCipherOpMode DEFAULT_TABLE_KEY_AES256_ENCRYPT_ALGORITHM =
+                                                             share::ObCipherOpMode::ob_aes_256_ecb;
+  static const ObCipherOpMode SYS_DATA_ENCRYPT_ALGORITHM = share::ObCipherOpMode::ob_aes_128_cbc;
   static int64_t sys_encrypted_length(int64_t data_len);
-
-  static int encrypt_data(const char *key, const int64_t key_len, enum ObAesOpMode mode,
+  // encrypt data with create a random iv and store iv in buf if needed.
+  static int encrypt_data(const char *key, const int64_t key_len, enum ObCipherOpMode mode,
                           const char *data, const int64_t data_len,
                           char *buf, const int64_t buf_len, int64_t &out_len);
-  static int decrypt_data(const char *key, const int64_t key_len, enum ObAesOpMode mode,
+  // using to decrypt data which encrypted by encrypt_data
+  static int decrypt_data(const char *key, const int64_t key_len, enum ObCipherOpMode mode,
                           const char *data, const int64_t data_len,
                           char *buf, const int64_t buf_len, int64_t &out_len);
+  static int encrypt_data(const char *key, const int64_t key_len, enum ObCipherOpMode mode,
+                          const char *data, const int64_t data_len, const char *iv,
+                          const int64_t iv_len, char *buf, const int64_t buf_len, int64_t &out_len);
   static int encrypt_data(const share::ObEncryptMeta &meta,
-                          const char *from_buf, const int64_t from_len,
-                          char *to_buf, int64_t to_buf_size, int64_t &to_len);
+                          const char *data, const int64_t data_len,
+                          char *buf, int64_t const buf_len, int64_t &out_len);
   static int decrypt_data(const share::ObEncryptMeta &meta,
-                          const char *from_buf, const int64_t from_len,
-                          char *to_buf, int64_t to_buf_size, int64_t &to_len);
-  static int encrypt_table_key(const share::ObEncryptMeta &meta,
+                          const char *data, const int64_t data_len,
+                          char *buf, int64_t const buf_len, int64_t &out_len);
+  static int create_encrypted_table_key(const uint64_t tenant_id, uint64_t &master_key_id,
+                                        char *out_buf, const int64_t out_buf_len, int64_t &out_len,
+                                        int retry_times = 3);
+  static int decrypt_table_key(const uint64_t tenant_id,
+                               const char *master_key, const int64_t master_key_len,
+                               const char *encrypt_key, const int64_t encrypt_key_len,
                                char *out_buf, const int64_t out_buf_len, int64_t &out_len);
-  static int decrypt_table_key(share::ObEncryptMeta &meta,
-                               const char *in_buf, const int64_t in_buf_len);
+  static int decrypt_table_key(share::ObEncryptMeta &meta);
   static int encrypt_master_key(const uint64_t tenant_id, const char *data, const int64_t data_len,
                                 char *buf, const int64_t buf_len, int64_t &out_len);
   static int decrypt_master_key(const uint64_t tenant_id, const char *data, const int64_t data_len,
                                 char *buf, const int64_t buf_len, int64_t &out_len);
   static int encrypt_sys_data(const uint64_t tenant_id, const char *data, const int64_t data_len,
                               char *buf, const int64_t buf_len, int64_t &out_len);
-  static int encrypt_sys_data_default(const char *data, const int64_t data_len,
-                                      char *buf, const int64_t buf_len, int64_t &out_len);
-
   static int decrypt_sys_data(const uint64_t tenant_id, const char *data, const int64_t data_len,
                               char *buf, const int64_t buf_len, int64_t &out_len);
-  static int decrypt_sys_data_default(const char *data, const int64_t data_len,
-                                      char *buf, const int64_t buf_len, int64_t &out_len);
   static int encrypt_zone_data(share::ObZoneEncryptMeta &meta,
                                const char *data, const int64_t data_len,
                                char *buf, const int64_t buf_len, int64_t &out_len);
@@ -162,13 +189,19 @@ public:
                                const char *data, const int64_t data_len,
                                char *buf, const int64_t buf_len, int64_t &out_len);
 #endif
-  // return the max length after encryption
-  static int64_t encrypted_length(const int64_t data_len);
+
+#ifdef OB_BUILD_TDE_SECURITY
+  // return the max buf length after encryption
+  static int64_t encrypted_length(const ObCipherOpMode mode, const int64_t data_len);
   // return an unencrypted data length whose length after encryption is always less than data_len
-  static int64_t decrypted_length(const int64_t data_len);
+  static int64_t decrypted_length(const ObCipherOpMode mode, const int64_t data_len);
   // return the max length after decryption
   static int64_t safe_buffer_length(const int64_t data_len);
-#ifdef OB_BUILD_TDE_SECURITY
+private:
+  static int encrypt_sys_data_default(const char *data, const int64_t data_len,
+                                      char *buf, const int64_t buf_len, int64_t &out_len);
+  static int decrypt_sys_data_default(const char *data, const int64_t data_len,
+                                      char *buf, const int64_t buf_len, int64_t &out_len);
 private:
   static const char* system_encrypt_key_;
   static const char* system_encrypt_iv_;
@@ -201,7 +234,15 @@ public:
   static bool is_internal(const common::ObString &tde_method);
   static bool is_kms(const common::ObString &tde_method);
   static bool is_sm_algorithm(const common::ObString &tde_method);
+  static bool is_aes256_algorithm(const common::ObString &tde_method);
   static bool use_external_key_id(const common::ObString &tde_method);
+  static ObString extract_kms_name(const common::ObString &tde_method);
+  static ObString extract_mode_name(const common::ObString &tde_method);
+private:
+  static bool inner_is_internal(const common::ObString &kms_name);
+  static bool inner_is_kms(const common::ObString &kms_name);
+  static bool is_valid_kms(const common::ObString &kms_name);
+  static bool is_valid_mode(const common::ObString &mode_name);
 };
 #endif
 
@@ -249,7 +290,7 @@ public:
   void destroy();
   int  load(const common::ObString& engine);
   ObEncryptEngineType get_engine_type(const common::ObString& engine);
-  ENGINE* get_tde_engine(ObAesOpMode &mode) const;
+  ENGINE* get_tde_engine(ObCipherOpMode &mode) const;
   int reload_config();
 private:
   bool is_inited_;

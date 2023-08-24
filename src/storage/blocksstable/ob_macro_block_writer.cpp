@@ -91,7 +91,9 @@ void ObMicroBlockBufferHelper::reset()
   check_datum_row_.reset();
 }
 
-int ObMicroBlockBufferHelper::compress_encrypt_micro_block(ObMicroBlockDesc &micro_block_desc)
+int ObMicroBlockBufferHelper::compress_encrypt_micro_block(ObMicroBlockDesc &micro_block_desc,
+                                                           const int64_t seq,
+                                                           const int64_t offset)
 {
   int ret = OB_SUCCESS;
   const char *block_buffer = micro_block_desc.buf_;
@@ -114,6 +116,8 @@ int ObMicroBlockBufferHelper::compress_encrypt_micro_block(ObMicroBlockDesc &mic
     micro_block_desc.buf_ = compress_buf;
     micro_block_desc.buf_size_ = compress_buf_size;
 #else
+  } else if (OB_FAIL(encryption_.generate_iv(seq, offset))) {
+    STORAGE_LOG(WARN, "failed to generate iv", K(ret));
   } else if (OB_FAIL(encryption_.encrypt(compress_buf, compress_buf_size, micro_block_desc.buf_, micro_block_desc.buf_size_))) {
     STORAGE_LOG(WARN, "fail to encrypt micro block", K(ret));
   } else {
@@ -904,7 +908,9 @@ int ObMacroBlockWriter::append_index_micro_block(ObMicroBlockDesc &micro_block_d
   } else if (OB_UNLIKELY(nullptr != builder_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "expect null builder for index macro writer", K(ret), K_(builder));
-  } else if (OB_FAIL(micro_helper_.compress_encrypt_micro_block(micro_block_desc))) {
+  } else if (OB_FAIL(micro_helper_.compress_encrypt_micro_block(micro_block_desc,
+                                              macro_blocks_[current_index_].get_current_macro_seq(),
+                                              macro_blocks_[current_index_].get_data_size()))) {
     // do not dump micro_writer_ here
     STORAGE_LOG(WARN, "failed to compress and encrypt micro block", K(ret), K(micro_block_desc));
   } else if (OB_FAIL(write_micro_block(micro_block_desc))) {
@@ -936,8 +942,9 @@ int ObMacroBlockWriter::build_micro_block()
         STORAGE_LOG(WARN, "Fail to reserve data block cache value", K(tmp_ret));
       }
     }
-
-    if (OB_FAIL(micro_helper_.compress_encrypt_micro_block(micro_block_desc))) {
+    if (OB_FAIL(micro_helper_.compress_encrypt_micro_block(micro_block_desc,
+                                              macro_blocks_[current_index_].get_current_macro_seq(),
+                                              macro_blocks_[current_index_].get_data_size()))) {
       micro_writer_->dump_diagnose_info(); // ignore dump error
       STORAGE_LOG(WARN, "failed to compress and encrypt micro block", K(ret), K(micro_block_desc));
     } else {

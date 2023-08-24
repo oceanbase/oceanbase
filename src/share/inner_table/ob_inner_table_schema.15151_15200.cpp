@@ -127,7 +127,7 @@ int ObInnerTableSchema::all_virtual_tenant_tablespace_real_agent_ora_schema(ObTa
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_BINARY, //column_collation_type
-      OB_MAX_MASTER_KEY_LENGTH, //column_length
+      OB_ENCRYPTED_TABLE_KEY_LEN, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable

@@ -227,6 +227,7 @@ public:
   OB_INLINE bool is_dirty() const { return is_dirty_; }
   int64_t get_data_size() const;
   int64_t get_remain_size() const;
+  int64_t get_current_macro_seq() const {return cur_macro_seq_; }
   OB_INLINE char *get_data_buf() { return data_.data(); }
   OB_INLINE int32_t get_row_count() const { return macro_header_.fixed_header_.row_count_; }
   OB_INLINE int32_t get_micro_block_count() const { return macro_header_.fixed_header_.micro_block_count_; }

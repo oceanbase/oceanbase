@@ -56,9 +56,8 @@ struct ObTxEncryptMeta
   //for memtable compare
   bool is_memtable_equal(const share::ObEncryptMeta &other)
   {
-    //now, we only take random_、table_key_、master_key_version_、encrypt_algorithm_ into consideration.
-    return (meta_.random_.get_content() == other.random_.get_content() &&
-            meta_.table_key_.get_content() == other.table_key_.get_content() &&
+    //now, we only take table_key_、master_key_version_、encrypt_algorithm_ into consideration.
+    return (meta_.table_key_.get_content() == other.table_key_.get_content() &&
             meta_.master_key_version_ == other.master_key_version_ &&
             meta_.encrypt_algorithm_ == other.encrypt_algorithm_);
   }

@@ -73,7 +73,7 @@ void TestRootBlockInfo::SetUp()
 {
   TestDataFilePrepare::SetUp();
   prepare_tablet_read_info();
-  des_meta_.encrypt_id_ = ObAesOpMode::ob_invalid_mode;
+  des_meta_.encrypt_id_ = ObCipherOpMode::ob_invalid_mode;
   des_meta_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   ASSERT_TRUE(!root_info_.is_valid());
   root_info_.reset();

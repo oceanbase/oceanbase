@@ -7233,7 +7233,7 @@ int ObInnerTableSchema::all_virtual_tenant_keystore_schema(ObTableSchema &table_
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      OB_MAX_MASTER_KEY_LENGTH, //column_length
+      OB_INTERNAL_MASTER_KEY_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -7467,7 +7467,7 @@ int ObInnerTableSchema::all_virtual_tenant_keystore_history_schema(ObTableSchema
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      OB_MAX_MASTER_KEY_LENGTH, //column_length
+      OB_INTERNAL_MASTER_KEY_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable
@@ -9205,7 +9205,7 @@ int ObInnerTableSchema::all_virtual_tenant_tablespace_schema(ObTableSchema &tabl
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_BINARY, //column_collation_type
-      OB_MAX_MASTER_KEY_LENGTH, //column_length
+      OB_ENCRYPTED_TABLE_KEY_LEN, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -9401,7 +9401,7 @@ int ObInnerTableSchema::all_virtual_tenant_tablespace_history_schema(ObTableSche
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_BINARY, //column_collation_type
-      OB_MAX_MASTER_KEY_LENGTH, //column_length
+      OB_ENCRYPTED_TABLE_KEY_LEN, //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable
