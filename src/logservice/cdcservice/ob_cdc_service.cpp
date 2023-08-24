@@ -20,6 +20,39 @@ namespace oceanbase
 {
 namespace cdc
 {
+/////////////////////////////// ExpiredLSArchiveEntryFunctor /////////////////////////////////
+
+ExpiredArchiveClientLSFunctor::ExpiredArchiveClientLSFunctor(const int64_t current_time):
+    current_time_us_(current_time),
+    valid_client_ls_cnt_(0),
+    other_client_ls_cnt_(0)
+{
+}
+
+ExpiredArchiveClientLSFunctor::~ExpiredArchiveClientLSFunctor()
+{
+  valid_client_ls_cnt_ = 0;
+  other_client_ls_cnt_ = 0;
+}
+
+bool ExpiredArchiveClientLSFunctor::operator()(const ClientLSKey &key, ClientLSCtx *value)
+{
+  int ret = OB_SUCCESS;
+  bool bret = true;
+  if (OB_ISNULL(value)) {
+    EXTLOG_LOG(WARN, "get null clientls ctx", K(key));
+  } else {
+    const FetchMode fetch_mode = value->get_fetch_mode();
+    if (FetchMode::FETCHMODE_ARCHIVE == fetch_mode) {
+      valid_client_ls_cnt_++;
+    } else {
+      other_client_ls_cnt_++;
+    }
+  }
+
+  return bret;
+}
+
 ///////////////////////////////////////////ObCdcService///////////////////////////////////////////
 
 // suppose archive log only has one destination.
@@ -78,7 +111,7 @@ int ObCdcService::init(const uint64_t tenant_id,
     EXTLOG_LOG(WARN, "ObCdcStartLsnLocator init failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(fetcher_.init(tenant_id, ls_service, &large_buffer_pool_, &log_ext_handler_))) {
     EXTLOG_LOG(WARN, "ObCdcFetcher init failed", KR(ret), K(tenant_id));
-  }  else if (OB_FAIL(create_tenant_tg_(tenant_id))) {
+  } else if (OB_FAIL(create_tenant_tg_(tenant_id))) {
     EXTLOG_LOG(WARN, "cdc thread group create failed", KR(ret), K(tenant_id));
   } else {
     is_inited_ = true;
@@ -100,9 +133,11 @@ void ObCdcService::run1()
     static const int64_t QUERY_INTERVAL = 10L * BASE_INTERVAL;
     static const int64_t RECYCLE_INTERVAL = 10L * 60 * BASE_INTERVAL;
     static const int64_t BUFFER_POOL_PURGE_INTERVAL = 10L * 60 * BASE_INTERVAL;
+    static const int64_t CHECK_CDC_READ_ARCHIVE_INTERVAL = 10L * BASE_INTERVAL;
     int64_t last_query_ts = 0;
     int64_t last_recycle_ts = 0;
     int64_t last_purge_ts = 0;
+    int64_t last_check_cdc_read_archive_ts = 0;
     while(! is_stoped()) {
       // archive is always off for sys tenant, no need to query archive dest
       int64_t current_ts = ObTimeUtility::current_time();
@@ -134,6 +169,13 @@ void ObCdcService::run1()
         large_buffer_pool_.weed_out();
         last_purge_ts = current_ts;
       }
+
+      if (current_ts - last_check_cdc_read_archive_ts >= CHECK_CDC_READ_ARCHIVE_INTERVAL) {
+        if (OB_FAIL(resize_log_ext_handler_())) {
+          EXTLOG_LOG(WARN, "failed to resize log ext handler");
+        }
+        last_check_cdc_read_archive_ts = current_ts;
+      }
       ob_usleep(static_cast<uint32_t>(BASE_INTERVAL));
     }
   }
@@ -146,7 +188,6 @@ int ObCdcService::start()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     EXTLOG_LOG(WARN, "ObCdcService not init", K(ret));
-    // TODO by wenyue.zxl: change the concurrency of 'log_ext_handler_'(see resize interface)
   } else if (OB_FAIL(log_ext_handler_.start(0))) {
     EXTLOG_LOG(WARN, "log ext handler start failed", K(ret));
   } else if (OB_FAIL(start_tenant_tg_(MTL_ID()))) {
@@ -302,6 +343,37 @@ int ObCdcService::recycle_expired_ctx_(const int64_t cur_ts)
     EXTLOG_LOG(WARN, "recycle expired ctx failed", KR(ret), K(cur_ts));
   }
   return OB_SUCCESS;
+}
+
+int ObCdcService::resize_log_ext_handler_()
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t current_ts = ObTimeUtility::current_time();
+  const int64_t tenant_max_cpu = MTL_CPU_COUNT();
+  ExpiredArchiveClientLSFunctor functor(current_ts);
+  ObStorageType type = common::OB_STORAGE_MAX_TYPE;
+  ObArchiveDestInfo dest_info = get_archive_dest_info();
+
+  if (OB_FAIL(ls_ctx_map_.for_each(functor))) {
+    EXTLOG_LOG(ERROR, "failed to get expired archive client ls key in ls_ctx_map");
+  } else {
+    const int64_t other_ls_count = functor.get_other_client_ls_cnt();
+    const int64_t valid_ls_count = functor.get_valid_client_ls_cnt();
+    const int64_t single_read_concurrency = 8; // default 8
+    const int64_t new_concurrency = min(tenant_max_cpu, (single_read_concurrency - 1) * valid_ls_count);
+
+    if (OB_FAIL(log_ext_handler_.resize(new_concurrency))) {
+      EXTLOG_LOG(WARN, "log_ext_handler failed to resize", K(new_concurrency));
+    }
+
+    if (OB_SUCC(ret)) {
+      EXTLOG_LOG(INFO, "finish to resize log external storage handler", K(current_ts),
+          K(tenant_max_cpu), K(valid_ls_count), K(other_ls_count), K(new_concurrency));
+    }
+  }
+
+  return ret;
 }
 
 void ObCdcService::do_monitor_stat_(const int64_t start_ts,

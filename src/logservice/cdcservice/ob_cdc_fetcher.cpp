@@ -500,6 +500,11 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
     LogGroupEntry log_group_entry;
     LSN lsn;
     FetchMode fetch_mode = get_fetch_mode_when_fetching_log_(ctx, fetch_archive_only);
+    if (fetch_mode != ctx.get_fetch_mode()) {
+      // when in force_fetch_archive mode, if we don't set fetch mode here,
+      // the ability of reading archive log concurrently can't be utilized
+      ctx.set_fetch_mode(fetch_mode, "ModeConsistence");
+    }
     int64_t finish_fetch_ts = OB_INVALID_TIMESTAMP;
     // update fetching rounds
     scan_round_count++;
@@ -603,9 +608,9 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
     if (OB_SUCC(ret) && fetch_log_succ) {
       check_next_group_entry_(lsn, log_group_entry, fetched_log_count, resp, frt, reach_upper_limit, ctx);
       resp.set_progress(ctx.get_progress());
-      if (frt.is_stopped()) {
-        // Stop fetching log
-      } else if (OB_FAIL(prefill_resp_with_group_entry_(ls_id, lsn, log_group_entry, resp, fetch_time_stat))) {
+      // There is reserved space for the last log group entry, so we assume that the buffer is always enough here,
+      // So we could fill response buffer without checking buffer full
+      if (OB_FAIL(prefill_resp_with_group_entry_(ls_id, lsn, log_group_entry, resp, fetch_time_stat))) {
         if (OB_BUF_NOT_ENOUGH == ret) {
           handle_when_buffer_full_(frt); // stop
           ret = OB_SUCCESS;

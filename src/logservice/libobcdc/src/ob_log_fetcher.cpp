@@ -45,6 +45,7 @@ ObLogFetcher::ObLogFetcher() :
     fetching_mode_(ClientFetchingMode::FETCHING_MODE_UNKNOWN),
     archive_dest_(),
     large_buffer_pool_(),
+    log_ext_handler_concurrency_(0),
     log_ext_handler_(),
     task_pool_(NULL),
     sys_ls_handler_(NULL),
@@ -144,7 +145,7 @@ int ObLogFetcher::init(
       LOG_ERROR("init part trans resolver factory fail", KR(ret));
     } else if (OB_FAIL(large_buffer_pool_.init("ObLogFetcher", 1L * 1024 * 1024 * 1024))) {
       LOG_ERROR("init large buffer pool failed", KR(ret));
-    } else if (OB_FAIL(log_ext_handler_.init())) {
+    } else if (is_direct_fetching_mode(fetching_mode) && OB_FAIL(log_ext_handler_.init())) {
       LOG_ERROR("init log ext handler failed", KR(ret));
     } else if (OB_FAIL(ls_fetch_mgr_.init(
         max_cached_ls_fetch_ctx_count,
@@ -199,6 +200,7 @@ int ObLogFetcher::init(
       is_loading_data_dict_baseline_data_ = is_loading_data_dict_baseline_data;
       fetching_mode_ = fetching_mode;
       archive_dest_ = archive_dest;
+      log_ext_handler_concurrency_ = cfg.cdc_read_archive_log_concurrency;
       stop_flag_ = true;
       is_inited_ = true;
 
@@ -255,9 +257,13 @@ void ObLogFetcher::destroy()
     log_route_service_.destroy();
   }
   // Finally reset fetching_mode_ because of some processing dependencies, such as ObLogRouteService
+  if (is_direct_fetching_mode(fetching_mode_)) {
+    log_ext_handler_.wait();
+    log_ext_handler_.destroy();
+  }
   fetching_mode_ = ClientFetchingMode::FETCHING_MODE_UNKNOWN;
-  log_ext_handler_.wait();
-  log_ext_handler_.destroy();
+  log_ext_handler_concurrency_ = 0;
+
 
   LOG_INFO("destroy fetcher succ");
 }
@@ -278,8 +284,8 @@ int ObLogFetcher::start()
   } else {
     stop_flag_ = false;
 
-    // TODO by wenyue.zxl: change the concurrency of 'log_ext_handler_'(see resize interface)
-    if (OB_FAIL(log_ext_handler_.start(0))) {
+    if (is_direct_fetching_mode(fetching_mode_) &&
+        OB_FAIL(log_ext_handler_.start(log_ext_handler_concurrency_))) {
       LOG_ERROR("start ObLogExternalStorageHandler fail", KR(ret));
     } else if (is_integrated_fetching_mode(fetching_mode_) && OB_FAIL(log_route_service_.start())) {
       LOG_ERROR("start LogRouterService fail", KR(ret));
@@ -336,7 +342,9 @@ void ObLogFetcher::stop()
     if (is_integrated_fetching_mode(fetching_mode_)) {
       log_route_service_.stop();
     }
-    log_ext_handler_.stop();
+    if (is_direct_fetching_mode(fetching_mode_)) {
+      log_ext_handler_.stop();
+    }
 
     LOG_INFO("stop fetcher succ");
   }
@@ -386,6 +394,9 @@ void ObLogFetcher::mark_stop_flag()
     dead_pool_.mark_stop_flag();
     idle_pool_.mark_stop_flag();
     start_lsn_locator_.mark_stop_flag();
+    if (is_direct_fetching_mode(fetching_mode_)) {
+      log_ext_handler_.stop();
+    }
     LOG_INFO("mark fetcher stop succ",K_(is_loading_data_dict_baseline_data));
   }
 }
@@ -541,6 +552,7 @@ void ObLogFetcher::configure(const ObLogConfig &cfg)
   const int64_t blacklist_survival_time_penalty_period_min = cfg.blacklist_survival_time_penalty_period_min;
   const int64_t blacklist_history_overdue_time_min = cfg.blacklist_history_overdue_time_min;
   const int64_t blacklist_history_clear_interval_min = cfg.blacklist_history_clear_interval_min;
+  const int64_t log_ext_handler_concurrency = cfg.cdc_read_archive_log_concurrency;
 
   ATOMIC_STORE(&g_print_ls_heartbeat_info, print_ls_heartbeat_info);
   ATOMIC_STORE(&g_inner_heartbeat_interval, inner_heartbeat_interval);
@@ -578,6 +590,12 @@ void ObLogFetcher::configure(const ObLogConfig &cfg)
     } else if (OB_FAIL(log_route_service_.update_background_refresh_time(log_router_background_refresh_interval_sec))) {
       LOG_ERROR("update_background_refresh_time failed", KR(ret),
           "log_router_background_refresh_interval_sec", log_router_background_refresh_interval_sec);
+    }
+  } else if (IS_INIT && is_direct_fetching_mode(fetching_mode_)) {
+    if (OB_FAIL(log_ext_handler_.resize(log_ext_handler_concurrency))) {
+      LOG_ERROR("log_ext_handler failed to resize when reloading configure", K(log_ext_handler_concurrency));
+    } else {
+      log_ext_handler_concurrency_ = log_ext_handler_concurrency;
     }
   }
 }

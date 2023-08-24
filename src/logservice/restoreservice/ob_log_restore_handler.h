@@ -118,7 +118,7 @@ public:
 // The interface to submit log for physical restore and physical standby
 class ObLogRestoreHandler : public ObLogHandlerBase
 {
-  static const int64_t MAX_RAW_WRITE_RETRY_TIMES = 1000;
+  static const int64_t MAX_RAW_WRITE_RETRY_TIMES = 10000;
   static const int64_t MAX_RETRY_SLEEP_US = 100;
 public:
   ObLogRestoreHandler();

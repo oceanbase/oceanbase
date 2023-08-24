@@ -291,6 +291,7 @@ private:
   ClientFetchingMode                       fetching_mode_;
   ObBackupPathString                       archive_dest_;
   archive::LargeBufferPool                 large_buffer_pool_;
+  int64_t                                  log_ext_handler_concurrency_;
   logservice::ObLogExternalStorageHandler  log_ext_handler_;
   ObILogFetcherLSCtxAddInfoFactory         *ls_ctx_add_info_factory_;
   IObLogErrHandler                         *err_handler_;

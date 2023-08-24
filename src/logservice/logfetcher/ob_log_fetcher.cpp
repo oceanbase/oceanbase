@@ -46,6 +46,7 @@ ObLogFetcher::ObLogFetcher() :
     fetching_mode_(ClientFetchingMode::FETCHING_MODE_UNKNOWN),
     archive_dest_(),
     large_buffer_pool_(),
+    log_ext_handler_concurrency_(0),
     log_ext_handler_(),
     ls_ctx_add_info_factory_(NULL),
     err_handler_(NULL),
@@ -131,7 +132,7 @@ int ObLogFetcher::init(
       LOG_ERROR("init progress controller fail", KR(ret));
     } else if (OB_FAIL(large_buffer_pool_.init("ObLogFetcher", 1L * 1024 * 1024 * 1024))) {
       LOG_ERROR("init large buffer pool failed", KR(ret));
-    } else if (OB_FAIL(log_ext_handler_.init())) {
+    } else if (is_direct_fetching_mode(fetching_mode) && OB_FAIL(log_ext_handler_.init())) {
       LOG_ERROR("init failed", KR(ret));
     } else if (OB_FAIL(ls_fetch_mgr_.init(
             progress_controller_,
@@ -193,6 +194,7 @@ int ObLogFetcher::init(
       paused_ = false;
       pause_time_ = OB_INVALID_TIMESTAMP;
       resume_time_ = OB_INVALID_TIMESTAMP;
+      log_ext_handler_concurrency_ = cfg.cdc_read_archive_log_concurrency;
       stop_flag_ = true;
       is_inited_ = true;
 
@@ -236,8 +238,11 @@ void ObLogFetcher::destroy()
     log_route_service_.wait();
     log_route_service_.destroy();
   }
-  log_ext_handler_.wait();
-  log_ext_handler_.destroy();
+  log_ext_handler_concurrency_ = 0;
+  if (is_direct_fetching_mode(fetching_mode_)) {
+    log_ext_handler_.wait();
+    log_ext_handler_.destroy();
+  }
   // Finally reset fetching_mode_ because of some processing dependencies, such as ObLogRouteService
   fetching_mode_ = ClientFetchingMode::FETCHING_MODE_UNKNOWN;
   log_fetcher_user_ = LogFetcherUser::UNKNOWN;
@@ -271,7 +276,8 @@ int ObLogFetcher::start()
     } else if (OB_FAIL(stream_worker_.start())) {
       LOG_ERROR("start stream worker fail", KR(ret));
       // TODO by wenyue.zxl: change the concurrency of 'log_ext_handler_'(see resize interface)
-    } else if (OB_FAIL(log_ext_handler_.start(0))) {
+    } else if (is_direct_fetching_mode(fetching_mode_) &&
+        OB_FAIL(log_ext_handler_.start(log_ext_handler_concurrency_))) {
       LOG_ERROR("start log external handler failed", KR(ret));
     } else {
       LOG_INFO("LogFetcher start success");
@@ -297,7 +303,9 @@ void ObLogFetcher::stop()
     if (is_integrated_fetching_mode(fetching_mode_)) {
       log_route_service_.stop();
     }
-    log_ext_handler_.stop();
+    if (is_direct_fetching_mode(fetching_mode_)) {
+      log_ext_handler_.stop();
+    }
 
     LOG_INFO("LogFetcher stop success");
   }
@@ -348,6 +356,9 @@ void ObLogFetcher::mark_stop_flag()
     idle_pool_.mark_stop_flag();
     if (is_cdc(log_fetcher_user_)) {
       start_lsn_locator_.mark_stop_flag();
+    }
+    if (is_direct_fetching_mode(fetching_mode_)) {
+      log_ext_handler_.stop();
     }
     LOG_INFO("LogFetcher mark stop succ");
   }
@@ -641,6 +652,7 @@ void ObLogFetcher::configure(const ObLogFetcherConfig &cfg)
   const int64_t blacklist_survival_time_penalty_period_min = cfg.blacklist_survival_time_penalty_period_min;
   const int64_t blacklist_history_overdue_time_min = cfg.blacklist_history_overdue_time_min;
   const int64_t blacklist_history_clear_interval_min = cfg.blacklist_history_clear_interval_min;
+  const int64_t log_ext_handler_concurrency = cfg.cdc_read_archive_log_concurrency;
 
   ATOMIC_STORE(&g_print_ls_heartbeat_info, print_ls_heartbeat_info);
 
@@ -675,6 +687,12 @@ void ObLogFetcher::configure(const ObLogFetcherConfig &cfg)
     } else if (OB_FAIL(log_route_service_.update_background_refresh_time(log_router_background_refresh_interval_sec))) {
       LOG_ERROR("update_background_refresh_time failed", KR(ret),
           "log_router_background_refresh_interval_sec", log_router_background_refresh_interval_sec);
+    }
+  } else if (IS_INIT && is_direct_fetching_mode(fetching_mode_)) {
+    if (OB_FAIL(log_ext_handler_.resize(log_ext_handler_concurrency))) {
+      LOG_ERROR("log_ext_handler failed to resize when reloading configure", K(log_ext_handler_concurrency));
+    } else {
+      log_ext_handler_concurrency_ = log_ext_handler_concurrency;
     }
   }
 }
