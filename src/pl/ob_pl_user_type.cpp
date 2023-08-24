@@ -1812,7 +1812,7 @@ int ObCollectionType::generate_construct(ObPLCodeGenerator &generator,
   OX (elem_desc.set_not_null(element_type_.get_not_null()));
   OZ (generator.store_elem_desc(elem_desc, element_type_ptr));
   OZ (generator.extract_count_ptr_from_collection(value, count_ptr));
-  OZ (generator.get_helper().create_istore(OB_INVALID_COUNT, count_ptr));
+  OZ (generator.get_helper().create_istore(is_associative_array_type() ? 0 : OB_INVALID_COUNT, count_ptr));
   OZ (generator.extract_first_ptr_from_collection(value, first_ptr));
   OZ (generator.get_helper().create_istore(OB_INVALID_INDEX, first_ptr));
   OZ (generator.extract_last_ptr_from_collection(value, last_ptr));
