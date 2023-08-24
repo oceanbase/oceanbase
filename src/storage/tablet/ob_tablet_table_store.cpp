@@ -1606,7 +1606,7 @@ int ObTabletTableStore::check_ready_for_read(const ObTablet &tablet)
     const SCN &last_minor_end_scn = minor_tables_.get_boundary_table(true/*last*/)->get_end_scn();
     if (OB_UNLIKELY(clog_checkpoint_scn != last_minor_end_scn)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("last minor table's end_scn must be equal to clog_checkpoint_scn",
+      LOG_WARN("last minor table's end_scn must be equal to clog_checkpoint_scn",
           K(ret), K(last_minor_end_scn), K(clog_checkpoint_scn), KPC(this), K(tablet));
     } else {
       is_ready_for_read_ = true;
@@ -1804,9 +1804,7 @@ int ObTabletTableStore::need_remove_old_table(
   } else if (multi_version_start <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(multi_version_start));
-  } else if (minor_tables_.empty() || INT64_MAX == minor_tables_[0]->get_upper_trans_version()) {
-    // do nothing
-  } else if (minor_tables_[0]->get_upper_trans_version() <= major_tables_[0]->get_snapshot_version()) {
+  } else if (minor_tables_.count() > 0 && minor_tables_[0]->get_upper_trans_version() <= major_tables_[0]->get_snapshot_version()) {
     // at least one minor sstable is coverd by major sstable
     // don't need to care about kept_multi_version_start here
     // becase major_tables_[0]::snapshot_version must <= kept_multi_version_start
