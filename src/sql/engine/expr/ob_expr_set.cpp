@@ -174,6 +174,22 @@ int ObExprSet::calc_set(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
     CK (OB_NOT_NULL(coll));
     OX (obj->set_extend(reinterpret_cast<int64_t>(coll), coll->get_type()));
     OZ (expr_datum.from_obj(*obj));
+    //Collection constructed here must be recorded and destructed at last
+    if (OB_NOT_NULL(coll->get_allocator()) &&
+        OB_NOT_NULL(dynamic_cast<pl::ObPLCollAllocator*>(coll->get_allocator()))) {
+      int tmp_ret = OB_SUCCESS;
+      auto &exec_ctx = ctx.exec_ctx_;
+      if (OB_ISNULL(exec_ctx.get_pl_ctx())) {
+        tmp_ret = exec_ctx.init_pl_ctx();
+      }
+      if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(exec_ctx.get_pl_ctx())) {
+        tmp_ret = exec_ctx.get_pl_ctx()->add(*obj);
+      }
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
+      }
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    }
   }
 #endif
   return ret;
