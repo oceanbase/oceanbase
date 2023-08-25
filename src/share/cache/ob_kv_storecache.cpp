@@ -795,31 +795,31 @@ int ObKVGlobalCache::reload_wash_interval()
     const int64_t wash_interval = GCONF._cache_wash_interval;
     bool is_exist = false;
     if (OB_FAIL(TG_TASK_EXIST(lib::TGDefIDs::KVCacheWash, wash_task_, is_exist))) {
-      COMMON_LOG(ERROR, "failed to check wash task exist", K(ret));
+      COMMON_LOG(WARN, "failed to check wash task exist", K(ret));
     } else if (is_exist && OB_FAIL(TG_CANCEL_R(lib::TGDefIDs::KVCacheWash, wash_task_))) {
       COMMON_LOG(WARN, "failed to cancel wash task", K(ret));
     } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::KVCacheWash, wash_task_, wash_interval, true))) {
-      COMMON_LOG(ERROR, "failed to schedule wash task", K(ret));
+      COMMON_LOG(WARN, "failed to schedule wash task", K(ret));
     }
 
     is_exist = false;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(TG_TASK_EXIST(lib::TGDefIDs::KVCacheRep, replace_task_, is_exist))) {
-      COMMON_LOG(ERROR, "failed to check replace task exist", K(ret));
+      COMMON_LOG(WARN, "failed to check replace task exist", K(ret));
     } else if (is_exist && OB_FAIL(TG_CANCEL_R(lib::TGDefIDs::KVCacheRep, replace_task_))) {
       COMMON_LOG(WARN, "failed to cancel replace task", K(ret));
     } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::KVCacheRep, replace_task_, wash_interval, true))) {
-      COMMON_LOG(ERROR, "failed to schedule replace task", K(ret));
+      COMMON_LOG(WARN, "failed to schedule replace task", K(ret));
     }
     if (OB_SUCC(ret)) {
       COMMON_LOG(INFO, "success to reload_wash_interval", K(wash_interval));
     }
   } else if (!inited_) {
     if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::KVCacheWash, wash_task_, cache_wash_interval_, true))) {
-      COMMON_LOG(ERROR, "failed to schedule wash task", K(ret));
+      COMMON_LOG(WARN, "failed to schedule wash task", K(ret));
     } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::KVCacheRep, replace_task_,
                                    cache_wash_interval_, true))) {
-      COMMON_LOG(ERROR, "failed to schedule replace task", K(ret));
+      COMMON_LOG(WARN, "failed to schedule replace task", K(ret));
     }
   }
   return ret;
