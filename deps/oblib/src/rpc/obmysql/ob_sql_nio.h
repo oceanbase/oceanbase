@@ -59,6 +59,7 @@ public:
   }
   void update_tcp_keepalive_params(int keepalive_enabled, uint32_t tcp_keepidle, uint32_t tcp_keepintvl, uint32_t tcp_keepcnt);
   int write_handshake_packet(void* sess, const char* buf, int64_t sz);
+  void set_tls_version_option(void* sess, uint64_t tls_option);
 private:
   void run(int64_t idx);
 private:

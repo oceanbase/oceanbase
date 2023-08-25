@@ -417,6 +417,7 @@ struct easy_connection_t {
     int64_t                 keepalive_enabled;
     int64_t                 tx_keepalive_cnt;
     int64_t                 rx_keepalive_cnt;
+    uint64_t                tls_version_option;
     ev_tstamp               last_tx_tstamp;
     ev_tstamp               last_rx_tstamp;
     uint8_t                 local_magic_ver;

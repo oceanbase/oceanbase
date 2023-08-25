@@ -178,5 +178,10 @@ int ObSqlSockSession::write_hanshake_packet(const char *buf, int64_t sz)
   return nio_->write_handshake_packet((void *)this, buf, sz);
 }
 
+void ObSqlSockSession::set_tls_version_option(uint64_t tls_option)
+{
+  nio_->set_tls_version_option((void *)this, tls_option);
+}
+
 }; // end namespace obmysql
 }; // end namespace oceanbase

@@ -33,7 +33,7 @@ enum OB_SSL_ROLE {
 };
 
 int  ob_ssl_load_config(int ctx_id, const ObSSLConfig& ssl_config);
-int  ob_fd_enable_ssl_for_server(int fd, int ctx_id);
+int  ob_fd_enable_ssl_for_server(int fd, int ctx_id, uint64_t tls_option);
 int  ob_fd_enable_ssl_for_client(int fd, int ctx_id);
 void  ob_fd_disable_ssl(int fd);
 SSL* ob_fd_get_ssl_st(int fd);

@@ -30,6 +30,9 @@ namespace oceanbase
 using namespace rpc;
 using namespace common;
 using namespace name;
+namespace obmysql {
+extern uint64_t ob_calculate_tls_version_option(const ObString &tls_min_version);
+}
 namespace observer
 {
 bool enable_proto_dia()
@@ -113,6 +116,9 @@ int ObSMHandler::on_connect(easy_connection_t *c)
           eret = EASY_ERROR;
           LOG_WARN_RET(tmp_ret, "send handshake packet failed", K(tmp_ret), K(eret));
         } else {
+          uint64_t tls_version_option = obmysql::ob_calculate_tls_version_option(
+                                         GCONF.sql_protocol_min_tls_version.str());
+          c->tls_version_option = tls_version_option;
           LOG_INFO("new mysql sessid created", K(easy_connection_str(c)), K(sessid), K(crt_id_ret));
         }
       }

@@ -63,6 +63,7 @@ public:
   SSL* get_ssl_st();
   bool is_inited() const { return is_inited_; }
   int write_hanshake_packet(const char *buf, int64_t sz);
+  void set_tls_version_option(uint64_t tls_option);
   ObSqlNio* nio_;
   ObISMConnectionCallback& sm_conn_cb_;
   rpc::ObRequest sql_req_;

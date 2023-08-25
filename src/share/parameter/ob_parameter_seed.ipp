@@ -1575,4 +1575,9 @@ ERRSIM_DEF_STR_LIST(errsim_module_types, OB_TENANT_PARAMETER, "",
 ERRSIM_DEF_DBL(errsim_module_error_percentage, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the percentage of the error happened to errsim module. "
         "Range: [0, 100] in percentage",
-        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(sql_protocol_min_tls_version, OB_CLUSTER_PARAMETER, "none",
+                     common::ObConfigSQLTlsVersionChecker,
+                     "SQL SSL control options, used to specify the minimum SSL/TLS version number. "
+                     "values: none, TLSv1, TLSv1.1, TLSv1.2, TLSv1.3",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

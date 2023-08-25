@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX RPC_OBMYSQL
+#include <openssl/ssl.h>
 #include "observer/mysql/obsm_conn_callback.h"
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "rpc/obmysql/obsm_struct.h"
@@ -28,6 +29,22 @@ using namespace common;
 using namespace observer;
 namespace obmysql
 {
+
+uint64_t ob_calculate_tls_version_option(const ObString &tls_min_version)
+{
+  uint64_t tls_option = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
+  if (0 == tls_min_version.case_compare("NONE")) {
+  } else if (0 == tls_min_version.case_compare("TLSV1")) {
+    //no need to set because OPENSSL support all protocol by default
+  } else if (0 == tls_min_version.case_compare("TLSV1.1")) {
+    tls_option |= SSL_OP_NO_TLSv1;
+  } else if (0 == tls_min_version.case_compare("TLSV1.2")) {
+    tls_option |= (SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
+  } else if (0 == tls_min_version.case_compare("TLSV1.3")) {
+    tls_option |= (SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_TLSv1_2);
+  }
+  return tls_option;
+}
 
 static int create_scramble_string(char *scramble_buf, const int64_t buf_len, common::ObMysqlRandom &thread_rand)
 {
@@ -118,6 +135,9 @@ int ObSMConnectionCallback::init(ObSqlSockSession& sess, ObSMConnection& conn)
     LOG_WARN("send handshake fail", K(ret), K(sess.client_addr_));
   } else {
     sess.sql_session_id_ = conn.sessid_;
+    uint64_t tls_version_option = ob_calculate_tls_version_option(
+                                   GCONF.sql_protocol_min_tls_version.str());
+    sess.set_tls_version_option(tls_version_option);
     LOG_INFO("sm conn init succ", K(conn.sessid_), K(sess.client_addr_));
   }
 

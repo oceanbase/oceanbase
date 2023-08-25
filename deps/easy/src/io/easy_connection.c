@@ -2543,6 +2543,7 @@ static easy_connection_t *easy_connection_new()
     c->write = easy_socket_write;
     c->fd = -1;
     c->armed_ack_timeout = -1;
+    c->tls_version_option = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
 
     easy_list_init(&c->message_list);
     easy_list_init(&c->server_session_list);

@@ -857,5 +857,16 @@ bool ObConfigRuntimeFilterChecker::check(const ObConfigItem &t) const
   int64_t rf_type = get_runtime_filter_type(t.str(), len);
   return rf_type >= 0;
 }
+
+bool ObConfigSQLTlsVersionChecker::check(const ObConfigItem &t) const
+{
+  const ObString tmp_str(t.str());
+  return 0 == tmp_str.case_compare("NONE")    ||
+         0 == tmp_str.case_compare("TLSV1")   ||
+         0 == tmp_str.case_compare("TLSV1.1") ||
+         0 == tmp_str.case_compare("TLSV1.2") ||
+         0 == tmp_str.case_compare("TLSV1.3");
+}
+
 } // end of namepace common
 } // end of namespace oceanbase

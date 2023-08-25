@@ -233,7 +233,7 @@ int easy_ssl_connection_create(easy_ssl_ctx_t *ssl, easy_connection_t *c)
         easy_error_log("SSL_set_ex_data() failed");
         return EASY_ERROR;
     }
-
+    SSL_set_options(sc->connection, c->tls_version_option);
     sc->session_reuse = ssl->conf.session_reuse;
     c->sc = sc;
 
@@ -1614,9 +1614,7 @@ static int easy_ssl_ctx_create_for_mysql(easy_ssl_ctx_t *ssl, int is_babassl)
     /* server side options */
     SSL_CTX_set_options(ssl->ctx, SSL_OP_SSLREF2_REUSE_CERT_TYPE_BUG);
     SSL_CTX_set_options(ssl->ctx, SSL_OP_MICROSOFT_BIG_SSLV3_BUFFER);
-#if OPENSSL_VERSION_NUMBER >= 0x10101000L
-    SSL_CTX_set_options(ssl->ctx, SSL_OP_NO_TLSv1_3);
-#endif
+
     /* this option allow a potential SSL 2.0 rollback (CAN-2005-2969) */
     SSL_CTX_set_options(ssl->ctx, SSL_OP_MSIE_SSLV2_RSA_PADDING);
 
