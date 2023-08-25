@@ -320,6 +320,33 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
   return ret;
 }
 
+int ObLSCompleteMigrationDagNet::trans_rebuild_fail_status_(
+    ObLS &ls,
+    const ObMigrationStatus &current_migration_status,
+    ObMigrationStatus &new_migration_status)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid_member = false;
+  bool is_ls_deleted = true;
+  new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+  if (!ObMigrationStatusHelper::is_valid(current_migration_status)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("current migration status is invalid", K(ret), K(current_migration_status));
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD != current_migration_status
+      && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != current_migration_status
+      && ObMigrationStatus::OB_MIGRATION_STATUS_NONE != current_migration_status) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("migration status is unexpected", K(ret), K(current_migration_status), K(ctx_));
+  } else if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member(ls.get_ls_id(), is_valid_member))) {
+    LOG_WARN("failed to check self is valid member", K(ret), K(ctx_));
+  } else if (OB_FAIL(ObStorageHAUtils::check_ls_deleted(ls.get_ls_id(), is_ls_deleted))) {
+    LOG_WARN("failed to get ls status from inner table", K(ret), K(ls));
+  } else if (OB_FAIL(ObMigrationStatusHelper::trans_rebuild_fail_status(
+      current_migration_status, is_valid_member, is_ls_deleted, new_migration_status))) {
+    LOG_WARN("failed to trans rebuild fail status", K(ret), K(ctx_));
+  }
+  return ret;
+}
 int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
 {
   int ret = OB_SUCCESS;
@@ -349,9 +376,7 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
     while (!is_finish) {
       ObMigrationStatus current_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
       ObMigrationStatus new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-      bool is_ls_deleted = true;
       bool need_update_status = true;
-
       if (ls->is_stopped()) {
         ret = OB_NOT_RUNNING;
         LOG_WARN("ls is not running, stop migration dag net", K(ret), K(ctx_));
@@ -365,29 +390,31 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
         LOG_WARN("tenant has been stopped, stop migration dag net", K(ret), K(ctx_));
         break;
       } else {
+        bool in_final_state = false;
         if (OB_FAIL(ls->get_migration_status(current_migration_status))) {
           LOG_WARN("failed to get migration status", K(ret), K(ctx_));
         } else if (OB_FAIL(ctx_.get_result(result))) {
           LOG_WARN("failed to get result", K(ret), K(ctx_));
+        } else if (OB_FAIL(ObMigrationStatusHelper::check_migration_in_final_state(current_migration_status, in_final_state))) {
+          LOG_WARN("failed to check migration in final state", K(ret), K(ctx_));
+        } else if (in_final_state) {
+          need_update_status = false;
+          if (ObMigrationOpType::REBUILD_LS_OP == ctx_.arg_.type_
+              && ObMigrationStatus::OB_MIGRATION_STATUS_NONE == current_migration_status) {
+            LOG_INFO("current migration status is none, no need update migration status", K(current_migration_status), K(ctx_));
+          } else {
+            if (!ctx_.is_failed()) {
+              result = OB_ERR_UNEXPECTED;
+              if (OB_FAIL(ctx_.set_result(result, false/*need_retry*/))) {
+                LOG_WARN("failed to set result", K(ret), K(result), K(ctx_));
+              }
+            }
+            LOG_ERROR("current migration status is final state and unexpected", K(OB_ERR_UNEXPECTED), K(current_migration_status), K(ctx_));
+          }
         } else if (ctx_.is_failed()) {
-          bool is_valid_member = false;
           if (ObMigrationOpType::REBUILD_LS_OP == ctx_.arg_.type_) {
-            if (ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD != current_migration_status
-                && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != current_migration_status
-                && ObMigrationStatus::OB_MIGRATION_STATUS_NONE != current_migration_status) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("migration status is unexpected", K(ret), K(current_migration_status), K(ctx_));
-            } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == current_migration_status) {
-              need_update_status = false;
-              LOG_INFO("current migration status is none, no need update migration status",
-                  K(current_migration_status), K(ctx_));
-            } else if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member(ls->get_ls_id(), is_valid_member))) {
-              LOG_WARN("failed to check self is valid member", K(ret), K(ctx_));
-            } else if (OB_FAIL(ObStorageHAUtils::check_ls_deleted(ls->get_ls_id(), is_ls_deleted))) {
-              LOG_WARN("failed to get ls status from inner table", K(ret), KPC(ls));
-            } else if (OB_FAIL(ObMigrationStatusHelper::trans_rebuild_fail_status(
-                current_migration_status, is_valid_member, is_ls_deleted, new_migration_status))) {
-              LOG_WARN("failed to trans rebuild fail status", K(ret), K(ctx_));
+            if (OB_FAIL(trans_rebuild_fail_status_(*ls, current_migration_status, new_migration_status))) {
+              LOG_WARN("failed check rebuild status", K(ret), K(current_migration_status), K(new_migration_status));
             }
           } else if (OB_FAIL(ObMigrationStatusHelper::trans_fail_status(current_migration_status, new_migration_status))) {
             LOG_WARN("failed to trans fail status", K(ret), K(current_migration_status), K(new_migration_status));

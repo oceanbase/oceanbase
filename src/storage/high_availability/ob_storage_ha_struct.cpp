@@ -713,7 +713,8 @@ int ObMigrationStatusHelper::check_migration_in_final_state(
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == status
       || ObMigrationStatus::OB_MIGRATION_STATUS_ADD_FAIL == status
       || ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_FAIL == status
-      || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_FAIL == status) {
+      || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_FAIL == status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_GC == status) {
     in_final_state = true;
   } else {
     in_final_state = false;
