@@ -874,12 +874,6 @@ int ObServer::start()
       FLOG_INFO("success to start server checkpoint slog handler");
     }
 
-    if (FAILEDx(ObServerCheckpointSlogHandler::enable_replay_clog())) {
-      LOG_ERROR("fail to enable replay clog", KR(ret));
-    } else {
-      FLOG_INFO("success to enable replay clog");
-    }
-
     if (FAILEDx(log_block_mgr_.start(storage_env_.log_disk_size_))) {
       LOG_ERROR("fail to start log pool", KR(ret));
     } else {

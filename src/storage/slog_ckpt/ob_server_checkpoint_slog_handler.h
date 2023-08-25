@@ -74,7 +74,6 @@ public:
   int load_all_tenant_metas(); // for obadmin
   int write_tenant_super_block_slog(const ObTenantSuperBlock &super_block);
   const TENANT_META_MAP &get_tenant_meta_map() const { return tenant_meta_map_for_replay_; } // for obadmin
-  static int enable_replay_clog();
 
 
 private:
@@ -102,6 +101,7 @@ private:
 
   int handle_tenant_deleting(const uint64_t tenant_id);
   int finish_slog_replay();
+  static int enable_replay_clog();
   int mock_start(); // for test;
 
 private:
