@@ -160,7 +160,8 @@ void TestIndexTree::TearDown()
   row_generate_.reset();
   index_row_generate_.reset();
   table_schema_.reset();
-  tenant_base_.destroy(); // stop threads
+  tenant_base_.destroy_mtl_module(); // stop threads
+  tenant_base_.destroy();
   share::ObTenantEnv::set_tenant(nullptr);
 }
 

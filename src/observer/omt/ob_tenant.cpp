@@ -966,6 +966,18 @@ void ObTenant::destroy()
   }
   group_map_.destroy_group();
   ObTenantSwitchGuard guard(this);
+  destroy_mtl_module();
+  // 1.some mtl module(eg: ObDataAccessService) remove tmp file when destroy,
+  //   so free_tenant_file_store must be after destroy_mtl_module.
+  // 2.there is tg in ObTmpTenantMemBlockManager, so free_tenant_file_store must be before
+  //   ObTenantBase::destroy() in which tg leak is checked.
+  if (OB_TMP_FAIL(OB_TMP_FILE_STORE.free_tenant_file_store(id_))) {
+    if (OB_ENTRY_NOT_EXIST == tmp_ret) {
+      tmp_ret = OB_SUCCESS;
+    } else {
+      LOG_WARN_RET(tmp_ret, "fail to free tmp tenant file store", K(ret), K_(id));
+    }
+  }
   ObTenantBase::destroy();
 
   if (nullptr != multi_level_queue_) {

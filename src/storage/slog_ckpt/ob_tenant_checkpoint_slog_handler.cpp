@@ -785,7 +785,9 @@ int ObTenantCheckpointSlogHandler::add_replay_create_tablet_task(ObReplayCreateT
 {
   int ret = OB_SUCCESS;
   bool need_retry = false;
+  FLOG_INFO("add replay tablet task", KPC(task), K(inflight_replay_tablet_task_cnt_));
   do {
+    need_retry = false;
     if (OB_FAIL(ATOMIC_LOAD(&replay_create_tablet_errcode_))) {
       LOG_WARN("ObReplayCreateTabletTask has failed", K(ret), K(inflight_replay_tablet_task_cnt_));
     } else if (OB_FAIL(SERVER_STARTUP_TASK_HANDLER.push_task(task))) {
@@ -796,8 +798,6 @@ int ObTenantCheckpointSlogHandler::add_replay_create_tablet_task(ObReplayCreateT
       } else {
         LOG_WARN("fail to push task", K(ret), KPC(task), K(inflight_replay_tablet_task_cnt_));
       }
-    } else {
-      FLOG_INFO("add task success", KPC(task), K(inflight_replay_tablet_task_cnt_));
     }
   } while(OB_FAIL(ret) && need_retry);
 

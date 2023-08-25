@@ -236,7 +236,6 @@ void ObTenantBase::wait_mtl_module()
 
 void ObTenantBase::destroy()
 {
-  destroy_mtl_module();
   if (tg_set_.size() > 0) {
     TGSetDumpFunc tg_set_dump_func;
     tg_set_.foreach_refactored(tg_set_dump_func);
