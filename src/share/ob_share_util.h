@@ -87,6 +87,7 @@ public:
   static int wait_user_ls_sync_scn_locally(const share::SCN &sys_ls_target_scn, storage::ObLS &ls);
 
   static bool is_tenant_enable_rebalance(const uint64_t tenant_id);
+  static bool is_tenant_enable_transfer(const uint64_t tenant_id);
 };
 }//end namespace share
 }//end namespace oceanbase

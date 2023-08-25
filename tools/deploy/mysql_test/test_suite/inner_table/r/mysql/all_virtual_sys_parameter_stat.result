@@ -92,6 +92,7 @@ enable_syslog_wf
 enable_sys_table_ddl
 enable_sys_unit_standalone
 enable_tcp_keepalive
+enable_transfer
 enable_upgrade_mode
 enable_user_defined_rewrite_rules
 external_kms_info

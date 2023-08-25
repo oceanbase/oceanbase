@@ -98,7 +98,6 @@ private:
                             ObArray<share::ObBalanceTask> &tasks);
   int construct_dependency_of_each_task_(ObArray<share::ObBalanceTask> &tasks);
   int lock_and_check_balance_job_(common::ObMySQLTransaction &trans, const uint64_t tenant_id);
-  int balance_primary_zone_();
   int try_update_job_comment_(const share::ObBalanceJob &job, const common::ObSqlString &comment);
   int try_do_partition_balance_(int64_t &last_partition_balance_time);
   int try_statistic_balance_group_status_(int64_t &last_statistic_bg_stat_time);

@@ -525,7 +525,7 @@ int ObBalanceTaskExecuteService::cancel_other_init_task_(
       } else {
         //set task status to failed
         if (OB_FAIL(comment.assign_fmt("Canceled due to parent task %ld was canceled",
-                other_task.get_balance_task_id().id()))) {
+                task.get_balance_task_id().id()))) {
           LOG_WARN("failed to assign fmt", KR(tmp_ret), K(task), K(other_task));
         } else if (OB_FAIL(try_update_task_comment_(other_task, comment, trans))) {
           LOG_WARN("failed to update task comment", KR(tmp_ret), KR(ret), K(task), K(comment));

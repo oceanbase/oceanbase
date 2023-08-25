@@ -67,28 +67,9 @@ void ObTenantBalanceService::destroy()
   inited_ = false;
 }
 
-int ObTenantBalanceService::balance_primary_zone_()
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
-  } else if (OB_ISNULL(GCTX.sql_proxy_)
-             || OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ptr is null", KR(ret), KP(GCTX.sql_proxy_), KP(GCTX.schema_service_));
-  } else {
-    ObTenantSchema tenant_schema_copy;
-    if (OB_FAIL(get_tenant_schema(tenant_id_, tenant_schema_copy))) {
-      LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id_));
-    } else if (OB_FAIL(ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(tenant_schema_copy))) {
-      LOG_WARN("failed to adjust user tenant primary zone", KR(ret),
-               K(tenant_id_));
-    }
-  }
-  return ret;
-}
-
+// enable_balance = true, enable_transfer = true: balance with LS dynamic change
+// enable_balance = true, enable_transfer = false: balance without LS dynamic change
+// enable_balance = false, enable_transfer does not take effect: do not balance
 void ObTenantBalanceService::do_work()
 {
   int ret = OB_SUCCESS;
@@ -115,16 +96,25 @@ void ObTenantBalanceService::do_work()
       } else if (0 == job_cnt && ObShareUtil::is_tenant_enable_rebalance(tenant_id_)) {
         //check ls status is match with __all_ls
         //TODO
-        if (OB_FAIL(gather_ls_status_stat_())) {
-          LOG_WARN("failed to gather ls status", KR(ret));
-        } else if (OB_FAIL(ls_balance_(job_cnt))) {
-          LOG_WARN("failed to do ls balance", KR(ret));
-        } else if (0 == job_cnt) {
-          //balance primary zone
-          if (OB_FAIL(balance_primary_zone_())) {
-            LOG_WARN("failed to balance primary zone", KR(ret));
-          } else if (OB_FAIL(try_do_partition_balance_(last_partition_balance_time))) {
-            LOG_WARN("try do partition balance failed", KR(ret), K(last_partition_balance_time));
+        if (ObShareUtil::is_tenant_enable_transfer(tenant_id_)) {
+          if (OB_FAIL(gather_ls_status_stat_())) {
+            LOG_WARN("failed to gather ls status", KR(ret));
+          } else if (OB_FAIL(ls_balance_(job_cnt))) {
+            LOG_WARN("failed to do ls balance", KR(ret));
+          } else if (0 == job_cnt) {
+            if (OB_FAIL(try_do_partition_balance_(last_partition_balance_time))) {
+              LOG_WARN("try do partition balance failed", KR(ret), K(last_partition_balance_time));
+            }
+          }
+        } else { // disable transfer
+          ObTenantSchema tenant_schema_copy;
+          if (OB_FAIL(get_tenant_schema(tenant_id_, tenant_schema_copy))) {
+            LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id_));
+          } else {
+            ObTenantLSInfo tenant_info(GCTX.sql_proxy_, &tenant_schema_copy, tenant_id_);
+            if (OB_FAIL(ObLSServiceHelper::balance_ls_group(tenant_info))) {
+              LOG_WARN("failed to balance ls group", KR(ret));
+            }
           }
         }
       }
@@ -144,7 +134,8 @@ void ObTenantBalanceService::do_work()
       ISTAT("finish one round", KR(ret), KR(tmp_ret), K_(tenant_id), K(job_cnt),
                 K(primary_zone_num_), K(unit_group_array_),
                 K(ls_array_), K(idle_time_us), K(last_partition_balance_time), K(last_statistic_bg_stat_time),
-                "enable_rebalance", ObShareUtil::is_tenant_enable_rebalance(tenant_id_));
+                "enable_rebalance", ObShareUtil::is_tenant_enable_rebalance(tenant_id_),
+                "enable_transfer", ObShareUtil::is_tenant_enable_transfer(tenant_id_));
       reset();
       idle(idle_time_us);
     }// end while
@@ -465,12 +456,14 @@ int ObTenantBalanceService::check_ls_job_need_cancel_(const share::ObBalanceJob 
   } else if (OB_UNLIKELY(!job.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("job is invalid", KR(ret), K(job));
-  } else if (!ObShareUtil::is_tenant_enable_rebalance(tenant_id_)) {
+  } else if (!ObShareUtil::is_tenant_enable_transfer(tenant_id_)) {
     need_cancel = true;
-    if (OB_TMP_FAIL(comment.assign_fmt("Canceled due to tenant balance is disabled"))) {
+    if (OB_TMP_FAIL(comment.assign_fmt("Canceled due to tenant balance or transfer is disabled"))) {
       LOG_WARN("failed to assign fmt", KR(tmp_ret), K(job));
     }
-    ISTAT("tenant balance is disabled, need cancel current job", K(job), K(comment));
+    ISTAT("tenant balance or transfer is disabled, need cancel current job", K(job), K(comment),
+        "enable_balance", ObShareUtil::is_tenant_enable_transfer(tenant_id_),
+        "enable_transfer", ObShareUtil::is_tenant_enable_transfer(tenant_id_));
   } else if (job.get_primary_zone_num() != primary_zone_num_) {
     need_cancel = true;
     if (OB_TMP_FAIL(comment.assign_fmt("Canceled due to primary zone num change from %ld to %ld",

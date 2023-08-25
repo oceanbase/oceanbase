@@ -614,6 +614,11 @@ DEF_BOOL(enable_rebalance, OB_TENANT_PARAMETER, "True",
          "specifies whether the tenant load-balancing is turned on. "
          "Value:  True:turned on  False: turned off",
          ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_transfer, OB_TENANT_PARAMETER, "True",
+         "controls whether transfers are allowed in the tenant. "
+         "This config does not take effect when enable_rebalance is disabled. "
+         "Value:  True:turned on  False:turned off",
+         ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(balancer_idle_time, OB_TENANT_PARAMETER, "10s", "[10s,]",
          "the time interval between the schedules of the tenant load-balancing task. "
          "Range: [10s, +∞)",

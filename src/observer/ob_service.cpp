@@ -255,8 +255,8 @@ int ObService::register_self()
     LOG_WARN("register self failed", KR(ret));
   } else if (!lease_state_mgr_.is_valid_heartbeat()) {
     ret = OB_ERROR;
-    LOG_ERROR("can't renew lease", KR(ret),
-              "heartbeat_expire_time", lease_state_mgr_.get_heartbeat_expire_time());
+    LOG_ERROR("can't renew lease, the time difference between local and RS may be more than 2s",
+        KR(ret), "heartbeat_expire_time", lease_state_mgr_.get_heartbeat_expire_time());
   } else {
     in_register_process_ = false;
     service_started_ = true;

@@ -333,6 +333,23 @@ bool ObShareUtil::is_tenant_enable_rebalance(const uint64_t tenant_id)
   return bret;
 }
 
+bool ObShareUtil::is_tenant_enable_transfer(const uint64_t tenant_id)
+{
+  bool bret = false;
+  if (is_valid_tenant_id(tenant_id)) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "tenant config is invalid", K(tenant_id));
+    } else if (!tenant_config->enable_rebalance) {
+      // if enable_rebalance is disabled, transfer is not allowed
+      bret = false;
+    } else {
+      bret = tenant_config->enable_transfer;
+    }
+  }
+  return bret;
+}
+
 ERRSIM_POINT_DEF(ERRSIM_USER_LS_SYNC_SCN);
 int ObShareUtil::wait_user_ls_sync_scn_locally(const share::SCN &sys_ls_target_scn, storage::ObLS &ls)
 {
