@@ -581,7 +581,8 @@ int TransCtx::inc_ls_trans_count_on_serving_(
         tls_id,
         commit_log_lsn,
         print_participant_not_serve_info,
-        DATA_OP_TIMEOUT);
+        DATA_OP_TIMEOUT,
+        stop_flag);
 
     if (OB_SUCC(ret)) {
       _TCTX_DSTAT("[INC_TRANS_COUNT] IS_SERVING=%d TRANS_ID=%s PART=%s LOG_LSN=%s",
