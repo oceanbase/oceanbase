@@ -187,7 +187,7 @@ int ObUnitManager::init(ObMySQLProxy &proxy,
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(ut_operator_.init(proxy, NULL))) {
+  } else if (OB_FAIL(ut_operator_.init(proxy))) {
     LOG_WARN("init unit table operator failed", K(ret));
   } else if (OB_FAIL(pool_unit_map_.create(
               POOL_MAP_BUCKET_NUM, ObModIds::OB_HASH_BUCKET_POOL_UNIT_MAP))) {
@@ -4804,7 +4804,7 @@ int ObUnitManager::get_excluded_servers(
         // server which can be migrated in must have its resource_info
         LOG_WARN("fail to get server_resource_info", KR(ret), K(report_servers_resource_info), K(server));
       } else {
-        int64_t required_size = unit_stat.required_size_ + server_resource_info.disk_in_use_;
+        int64_t required_size = unit_stat.get_required_size() + server_resource_info.disk_in_use_;
         int64_t total_size = server_resource_info.disk_total_;
         if (total_size <= required_size || total_size <= 0) {
           is_exclude = true;
@@ -8162,34 +8162,21 @@ int ObUnitManager::try_migrate_unit(const uint64_t unit_id,
                                     const bool is_manual)
 {
   int ret = OB_SUCCESS;
-  if (unit_id != unit_stat.unit_id_) {
+  ObServerStatus server_status;
+  if (unit_id != unit_stat.get_unit_id()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid unit stat", K(unit_id), K(unit_stat), K(ret));
   } else {
-    int64_t mig_partition_cnt = 0;
     int64_t mig_required_size = 0;
     for (int64_t i = 0; i < migrating_unit_stat.count(); ++i) {
-      mig_partition_cnt += migrating_unit_stat.at(i).partition_cnt_;
-      mig_required_size +=  migrating_unit_stat.at(i).required_size_;
+      mig_required_size +=  migrating_unit_stat.at(i).get_required_size();
     }
-    //// partition number list
-    //int64_t required_cnt =
-    //    mig_partition_cnt + unit_stat.partition_cnt_ + server_status.resource_info_.partition_cnt_;
     // sstable Space constraints
     int64_t required_size =
-        mig_required_size + unit_stat.required_size_ + dst_resource_info.disk_in_use_;
+        mig_required_size + unit_stat.get_required_size() + dst_resource_info.disk_in_use_;
     int64_t total_size = dst_resource_info.disk_total_;
     int64_t required_percent = (100 * required_size) / total_size;
     int64_t limit_percent = GCONF.data_disk_usage_limit_percentage;
-// 4.0 does not restrict OB_MAX_PARTITION_NUM_PER_SERVER
-//
-//    if (server_status.resource_info_.partition_cnt_ < 0) {
-//      // The old version of the server cannot get the count and size information, it is always allowed to move in
-//    if ( required_cnt > OB_MAX_PARTITION_NUM_PER_SERVER) {
-//      ret = OB_OP_NOT_ALLOW;
-//      LOG_ERROR("migrate unit fail. dest server has too many partitions",
-//                K(unit_id), K(unit_stat), K(dst),
-//                K(required_cnt), "limit_cnt", OB_MAX_PARTITION_NUM_PER_SERVER, K(ret));
     if (required_percent >= limit_percent) {
       ret = OB_OP_NOT_ALLOW;
       LOG_ERROR("migrate unit fail. dest server out of space",

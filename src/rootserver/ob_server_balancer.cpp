@@ -25,6 +25,7 @@
 #include "share/ob_server_table_operator.h"
 #include "rootserver/ob_heartbeat_service.h"
 #include "share/ob_share_util.h" // ObShareUtil
+#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
@@ -32,12 +33,11 @@ using namespace oceanbase::rootserver;
 using namespace oceanbase::share;
 ObServerBalancer::ObServerBalancer()
     :inited_(false),
-     unit_migrated_(false),
      schema_service_(NULL),
      unit_mgr_(NULL),
      zone_mgr_(NULL),
      server_mgr_(NULL),
-     unit_stat_mgr_(NULL),
+     unit_stat_mgr_(),
      count_balance_strategy_(*this),
      inner_ttg_balance_strategy_(count_balance_strategy_),
      zone_disk_statistic_()
@@ -50,17 +50,18 @@ int ObServerBalancer::init(
     ObUnitManager &unit_manager,
     ObZoneManager &zone_mgr,
     ObServerManager &server_mgr,
-    ObUnitStatManager &unit_stat_mgr)
+    common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
     ret = OB_INIT_TWICE;
+  } else if (OB_FAIL(unit_stat_mgr_.init(sql_proxy))) {
+    LOG_WARN("init unit_stat_mgr failed", KR(ret));
   } else {
     schema_service_ = &schema_service;
     unit_mgr_ = &unit_manager;
     zone_mgr_ = &zone_mgr;
     server_mgr_ = &server_mgr;
-    unit_stat_mgr_ = &unit_stat_mgr;
     inited_ = true;
   }
   return ret;
@@ -112,6 +113,10 @@ int ObServerBalancer::tenant_group_balance()
     if (!check_inner_stat()) {
       ret = OB_INNER_STAT_ERROR;
       LOG_WARN("fail to check inner stat", K(ret));
+    } else if (OB_FAIL(unit_stat_mgr_.gather_stat())) {
+      LOG_WARN("gather all tenant unit stat failed, refuse to do server_balance", K(ret));
+      unit_stat_mgr_.reuse();
+      ret = OB_SUCCESS;
     } else if (OB_FAIL(ObRootBalanceHelp::parse_balance_info(
             switch_config_str, balance_controller))) {
       LOG_WARN("fail to parse balance switch", K(ret), "balance switch", switch_config_str);
@@ -172,7 +177,6 @@ int ObServerBalancer::balance_servers()
 {
   int ret = OB_SUCCESS;
   LOG_INFO("start do unit balance");
-  unit_migrated_ = false;
   ObRootBalanceHelp::BalanceController balance_controller;
   ObString switch_config_str = GCONF.__balance_controller.str();
   DEBUG_SYNC(START_UNIT_BALANCE);
@@ -184,6 +188,10 @@ int ObServerBalancer::balance_servers()
       LOG_WARN("check_inner_stat failed", K(inited_), K(ret));
     } else if (OB_FAIL(ObRootBalanceHelp::parse_balance_info(switch_config_str, balance_controller))) {
       LOG_WARN("fail to parse balance switch", K(ret), "balance_swtich", switch_config_str);
+    } else if (OB_FAIL(unit_stat_mgr_.gather_stat())) {
+      LOG_WARN("gather all tenant unit stat failed, refuse to do balance for status change", K(ret));
+      unit_stat_mgr_.reuse();
+      ret = OB_SUCCESS;
     } else {
       // When the server status changes,
       // try to adjust the unit on the server without configuration item control
@@ -261,7 +269,7 @@ int ObServerBalancer::distribute_pool_for_standalone_sys_unit(
         LOG_INFO("unit server status not active", K(ret), K(server_info), K(*unit));
       } else if (!has_exist_in_array(sys_unit_server_array, unit->server_)) {
         // bypass
-      } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+      } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
               unit->unit_id_,
               unit->zone_,
               unit_stat))) {
@@ -584,7 +592,7 @@ int ObServerBalancer::distribute_for_permanent_offline_or_delete(
   } else if (OB_ISNULL(unit_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unit_mgr_ is null", KR(ret), KP(unit_mgr_));
-  } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+  } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
           unit_info.unit_.unit_id_,
           unit_info.unit_.zone_,
           unit_stat))) {
@@ -748,7 +756,7 @@ int ObServerBalancer::get_unit_resource_reservation(uint64_t unit_id,
           // by pass
         } else if (!load.unit_->migrate_from_server_.is_valid()) {
           // by pass
-        } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+        } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
                 load.unit_->unit_id_, load.unit_->zone_, in_mig_stat))) {
           LOG_WARN("get unit stat fail", "unit_id", load.unit_->unit_id_, K(ret));
         } else if (OB_FAIL(in_migrate_unit_stat.push_back(in_mig_stat))) {
@@ -784,7 +792,6 @@ int ObServerBalancer::try_migrate_unit(const uint64_t unit_id,
         migrating_unit_stat,
         dst,
         dst_resource_info);
-    unit_migrated_ = true;
   }
   return ret;
 }
@@ -848,7 +855,7 @@ int ObServerBalancer::check_can_execute_rebalance(
       LOG_WARN("fail to get zone info", K(ret), K(zone));
     } else if (ObZoneStatus::ACTIVE != zone_info.status_) {
       can_execute_rebalance = false;
-      LOG_INFO("cannot execute server rebalance since zone inactive", K(zone));
+      LOG_INFO("cannot execute server rebalance: zone inactive", K(zone));
     } else if (OB_FAIL(SVR_TRACER.get_servers_of_zone(zone, server_list))) {
       LOG_WARN("fail to get servers of zone", K(ret), K(zone));
     } else if (OB_FAIL(unit_mgr_->inner_get_unit_ids(unit_ids))) {
@@ -880,14 +887,15 @@ int ObServerBalancer::check_can_execute_rebalance(
           LOG_WARN("fail to get server status", K(ret));
         } else if (server_info.is_temporary_offline() || server_info.is_stopped()) {
           can_execute_rebalance = false;
-          LOG_INFO("cannot execute server rebalance", K(server_info));
+          LOG_INFO("cannot execute server rebalance: Server status is not normal", K(zone), K(server_info));
         } else if (OB_FAIL(server_mgr_->get_server_resource_info(server_info.get_server(), resource_info))) {
           LOG_WARN("fail to execute get_server_resource_info", KR(ret), K(server_info.get_server()));
         } else if (fabs(resource_info.report_cpu_assigned_ - sum_load.min_cpu()) > CPU_EPSILON
             || fabs(resource_info.report_cpu_max_assigned_ - sum_load.max_cpu()) > CPU_EPSILON
             || resource_info.report_mem_assigned_ != sum_load.memory_size()) {
           can_execute_rebalance = false;
-          LOG_INFO("cannot execute server rebalance", K(resource_info), K(sum_load));
+          LOG_INFO("cannot execute server rebalance: "
+                   "Server resource_info and unit_manager sum_load not equal", K(zone), K(resource_info), K(sum_load));
         } else {} // no more to do
       }
       for (int64_t j = 0; can_execute_rebalance && OB_SUCC(ret) && j < unit_ids.count(); ++j) {
@@ -900,10 +908,10 @@ int ObServerBalancer::check_can_execute_rebalance(
           LOG_WARN("unit ptr is null", K(ret), KP(unit));
         } else if (ObUnit::UNIT_STATUS_DELETING == unit->status_) {
           can_execute_rebalance = false;
-          LOG_INFO("cannot execute server rebalance", "unit", *unit);
+          LOG_INFO("cannot execute server rebalance: unit deleting", K(zone), "unit", *unit);
         } else if (unit->migrate_from_server_.is_valid()) {
           can_execute_rebalance = false;
-          LOG_INFO("cannot execute server rebalance", "unit", *unit);
+          LOG_INFO("cannot execute server rebalance: unit migrating", K(zone), "unit", *unit);
         } else {} // unit in stable status
       }
     }
@@ -1333,10 +1341,7 @@ int ObServerBalancer::try_balance_single_unit_by_disk(
   } else if (OB_UNLIKELY(!unit_load.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid unit load", K(ret), K(unit_load));
-  } else if (OB_UNLIKELY(NULL == unit_stat_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit_stat_mgr_ ptr is null", K(ret), KP(unit_stat_mgr_));
-  } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+  } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
           unit_load.unit_->unit_id_,
           unit_load.unit_->zone_,
           unit_stat))) {
@@ -1379,7 +1384,7 @@ int ObServerBalancer::try_balance_single_unit_by_disk(
         } else if (!enough) {
           // no enough
         } else if (OB_FAIL(do_update_dst_server_load(
-                unit_load, unit_migrate_stat, *server_load, unit_stat, pool_occupation))) {
+                unit_load, *server_load, unit_stat, pool_occupation))) {
           LOG_WARN("fail to append migrate unit task", K(ret));
         } else if (OB_FAIL(task_array.push_back(unit_migrate_stat))) {
           LOG_WARN("fail to push back", K(ret));
@@ -1411,17 +1416,18 @@ int ObServerBalancer::do_update_src_server_load(
   } else if (OB_UNLIKELY(!unit_load.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid unit load", K(ret));
-  } else if (OB_FAIL(unit_mgr_->get_unit_by_id(unit_stat.unit_id_, unit))) {
-    LOG_WARN("fail to get unit by id", K(ret), "unit_id", unit_stat.unit_id_);
+  } else if (OB_FAIL(unit_mgr_->get_unit_by_id(unit_stat.get_unit_id(), unit))) {
+    LOG_WARN("fail to get unit by id", K(ret), "unit_id", unit_stat.get_unit_id());
   } else if (OB_UNLIKELY(NULL == unit)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unit ptr is null", K(ret));
   } else if (common::REPLICA_TYPE_LOGONLY == unit->replica_type_) {
-    my_unit_stat.required_size_ = 0;
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Replica type LOGONLY is unexpected", KR(ret), KP(unit));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(zone_disk_statistic_.reduce_server_disk_use(
-          this_server_load.server_, my_unit_stat.required_size_))) {
+          this_server_load.server_, my_unit_stat.get_required_size()))) {
     LOG_WARN("fail to reduce server disk use", K(ret));
   } else if (OB_FAIL(this_server_load.load_sum_.remove_load(unit_load))) {
     LOG_WARN("fail to remove load", K(ret));
@@ -1433,13 +1439,11 @@ int ObServerBalancer::do_update_src_server_load(
 
 int ObServerBalancer::do_update_dst_server_load(
     const ObUnitManager::ObUnitLoad &unit_load,
-    const UnitMigrateStat &unit_migrate_stat,
     ServerTotalLoad &this_server_load,
     const share::ObUnitStat &unit_stat,
     common::ObIArray<PoolOccupation> &pool_occupation)
 {
   int ret = OB_SUCCESS;
-  UNUSED(unit_migrate_stat);
   share::ObUnit *unit = NULL;
   share::ObUnitStat my_unit_stat = unit_stat;
   if (OB_UNLIKELY(!inited_)) {
@@ -1448,13 +1452,14 @@ int ObServerBalancer::do_update_dst_server_load(
   } else if (OB_UNLIKELY(!unit_load.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid unit load", K(ret), K(unit_load));
-  } else if (OB_FAIL(unit_mgr_->get_unit_by_id(unit_stat.unit_id_, unit))) {
-    LOG_WARN("fail to get unit by id", K(ret), "unit_id", unit_stat.unit_id_);
+  } else if (OB_FAIL(unit_mgr_->get_unit_by_id(unit_stat.get_unit_id(), unit))) {
+    LOG_WARN("fail to get unit by id", K(ret), "unit_id", unit_stat.get_unit_id());
   } else if (OB_UNLIKELY(NULL == unit)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unit ptr is null", K(ret));
   } else if (common::REPLICA_TYPE_LOGONLY == unit->replica_type_) {
-    my_unit_stat.required_size_ = 0;
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Replica type LOGONLY is unexpected", KR(ret), KP(unit));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(pool_occupation.push_back(
@@ -1463,7 +1468,7 @@ int ObServerBalancer::do_update_dst_server_load(
                          this_server_load.server_)))) {
     LOG_WARN("fail to push back", K(ret));
   } else if (OB_FAIL(zone_disk_statistic_.raise_server_disk_use(
-          this_server_load.server_, my_unit_stat.required_size_))) {
+          this_server_load.server_, my_unit_stat.get_required_size()))) {
     LOG_WARN("fail to raise server disk use", K(ret));
   } else if (OB_FAIL(this_server_load.load_sum_.append_load(unit_load))) {
     LOG_WARN("fail to append load", K(ret));
@@ -1489,10 +1494,7 @@ int ObServerBalancer::try_balance_single_unit_by_cm(
   } else if (OB_UNLIKELY(!unit_load.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(unit_load));
-  } else if (OB_UNLIKELY(NULL == unit_stat_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit_stat_mgr_ ptr is null", K(ret), KP(unit_stat_mgr_));
-  } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+  } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
           unit_load.unit_->unit_id_,
           unit_load.unit_->zone_,
           unit_stat))) {
@@ -1527,7 +1529,7 @@ int ObServerBalancer::try_balance_single_unit_by_cm(
         } else if (!enough) {
           // The resources of this machine are not enough to support the move of this unit
         } else if (OB_FAIL(do_update_dst_server_load(
-                unit_load, unit_migrate_stat, *server_load, unit_stat, pool_occupation))) {
+                unit_load, *server_load, unit_stat, pool_occupation))) {
           LOG_WARN("fail to append migrate unit task", K(ret));
         } else if (OB_FAIL(task_array.push_back(unit_migrate_stat))) {
           LOG_WARN("fail to push back", K(ret));
@@ -2101,9 +2103,6 @@ int ObServerBalancer::check_exchange_ug_make_sense(
     LOG_WARN("invalid argument", K(ret), K(left_idx), K(right_idx),
              "ug_loads_count", simple_ug_loads.count(),
              "unit_matrix_column", unit_migrate_stat_matrix.get_column_count());
-  } else if (OB_UNLIKELY(NULL == unit_stat_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit stat mgr ptr is null", K(ret), KP(unit_stat_mgr_));
   } else if (OB_FAIL(get_server_balance_critical_disk_waterlevel(disk_waterlevel))) {
     LOG_WARN("fail to get disk waterlevel", K(ret));
   } else if (OB_FAIL(get_server_data_disk_usage_limit(disk_usage_limit))) {
@@ -2131,7 +2130,7 @@ int ObServerBalancer::check_exchange_ug_make_sense(
       } else if (OB_UNLIKELY(!left_unit_migrate.unit_load_.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unit load is invalid", K(ret));
-      } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+      } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
               left_unit_migrate.unit_load_.unit_->unit_id_,
               left_unit_migrate.unit_load_.unit_->zone_,
               left_unit_stat))) {
@@ -2141,14 +2140,14 @@ int ObServerBalancer::check_exchange_ug_make_sense(
       } else if (OB_UNLIKELY(!right_unit_migrate.unit_load_.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unit load is invalid", K(ret));
-      } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+      } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
               right_unit_migrate.unit_load_.unit_->unit_id_,
               right_unit_migrate.unit_load_.unit_->zone_,
               right_unit_stat))) {
         LOG_WARN("fail to get unit stat", K(ret));
       } else {
-        left_unit_use += left_unit_stat.required_size_;
-        right_unit_use += right_unit_stat.required_size_;
+        left_unit_use += left_unit_stat.get_required_size();
+        right_unit_use += right_unit_stat.get_required_size();
       }
     }
     if (OB_SUCC(ret)) {
@@ -2280,7 +2279,7 @@ int ObServerBalancer::generate_exchange_ug_migrate_task(
       } else if (OB_UNLIKELY(!left_unit_migrate.unit_load_.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unit load is invalid", K(ret));
-      } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+      } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
               left_unit_migrate.unit_load_.unit_->unit_id_,
               left_unit_migrate.unit_load_.unit_->zone_,
               left_unit_stat))) {
@@ -2290,7 +2289,7 @@ int ObServerBalancer::generate_exchange_ug_migrate_task(
       } else if (OB_UNLIKELY(!right_unit_migrate.unit_load_.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unit load is invalid", K(ret));
-      } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+      } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
               right_unit_migrate.unit_load_.unit_->unit_id_,
               right_unit_migrate.unit_load_.unit_->zone_,
               right_unit_stat))) {
@@ -2300,8 +2299,8 @@ int ObServerBalancer::generate_exchange_ug_migrate_task(
       } else if (OB_FAIL(task_array.push_back(right_unit_migrate))) {
         LOG_WARN("fail to push back", K(ret));
       } else {
-        left_unit_use += left_unit_stat.required_size_;
-        right_unit_use += right_unit_stat.required_size_;
+        left_unit_use += left_unit_stat.get_required_size();
+        right_unit_use += right_unit_stat.get_required_size();
       }
     }
     if (OB_SUCC(ret)) {
@@ -3353,7 +3352,7 @@ int ObServerBalancer::do_migrate_unit_task(
         LOG_WARN("fail to check can migrate in", K(ret));
       } else if (!can_migrate_in) {
         // bypass
-      } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+      } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
               unit_migrate_stat.unit_load_.unit_->unit_id_,
               unit_migrate_stat.unit_load_.unit_->zone_,
               unit_stat))) {
@@ -3410,7 +3409,7 @@ int ObServerBalancer::do_migrate_unit_task(
         LOG_WARN("fail to check can migrate in", K(ret));
       } else if (!can_migrate_in) {
         // bypass
-      } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+      } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
               unit_migrate_stat->unit_load_.unit_->unit_id_,
               unit_migrate_stat->unit_load_.unit_->zone_,
               unit_stat))) {
@@ -3521,9 +3520,6 @@ int ObServerBalancer::accumulate_balance_task_loadsum(
   } else if (OB_UNLIKELY(!unit_migrate_stat.unit_load_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
-  } else if (OB_UNLIKELY(NULL == unit_stat_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit stat mgr ptr is null", K(ret), KP(unit_stat_mgr_));
   } else {
     ObUnitStat unit_stat;
     int64_t idx = 0;
@@ -3549,13 +3545,13 @@ int ObServerBalancer::accumulate_balance_task_loadsum(
     } else if (OB_FAIL(server_load_sums.at(idx).load_sum_.append_load(
             *unit_migrate_stat.unit_load_.unit_config_))) {
       LOG_WARN("fail to append load", K(ret));
-    } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+    } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
             unit_migrate_stat.unit_load_.unit_->unit_id_,
             unit_migrate_stat.unit_load_.unit_->zone_,
             unit_stat))) {
       LOG_WARN("fail to get unit stat", K(ret));
     } else {
-      server_load_sums.at(idx).disk_in_use_ += unit_stat.required_size_;
+      server_load_sums.at(idx).disk_in_use_ += unit_stat.get_required_size();
     }
   }
   return ret;
@@ -3573,7 +3569,7 @@ int ObServerBalancer::check_servers_resource_enough(
     LOG_WARN("not init", K(ret));
   } else if (OB_ISNULL(unit_mgr_) || OB_ISNULL(server_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit_mgr_ or server_mgr_ is null", KR(ret), KP(unit_mgr_), KP(server_mgr_));
+    LOG_WARN("unit_mgr_ or server_mgr_is null", K(ret), KP(unit_mgr_), KP(server_mgr_));
   } else if (OB_FAIL(unit_mgr_->get_hard_limit(hard_limit))) {
     LOG_WARN("fail to hard limit", K(ret));
   } else if (OB_FAIL(get_server_balance_critical_disk_waterlevel(disk_waterlevel))) {
@@ -3939,10 +3935,10 @@ int ObServerBalancer::do_migrate_out_collide_unit(
                          || !collide_unit_load.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(unit_migrate_stat), K(collide_unit_load));
-  } else if (OB_UNLIKELY(NULL == unit_mgr_ || NULL == unit_stat_mgr_)) {
+  } else if (OB_UNLIKELY(NULL == unit_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit_mgr_ or unit_stat_mgr_ ptr is null", K(ret));
-  } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+    LOG_WARN("unit_mgr_ ptr is null", K(ret));
+  } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
           collide_unit_load.unit_->unit_id_, collide_unit_load.unit_->zone_, unit_stat))) {
     LOG_WARN("fail to get unit stat", K(ret), K(collide_unit_load));
   } else if (OB_FAIL(unit_mgr_->get_tenant_zone_all_unit_loads(
@@ -3993,7 +3989,7 @@ int ObServerBalancer::do_migrate_out_collide_unit(
                 collide_unit_load, *server_load_to_vacate, unit_stat))) {
           LOG_WARN("fail to update src server load", K(ret));
         } else if (OB_FAIL(do_update_dst_server_load(
-                collide_unit_load, unit_migrate_stat, *server_load, unit_stat, pool_occupation))) {
+                collide_unit_load, *server_load, unit_stat, pool_occupation))) {
           LOG_WARN("fail to do update dst server load", K(ret));
         } else if (OB_FAIL(task_array.push_back(unit_migrate_stat))) {
           LOG_WARN("fail to push back", K(ret));
@@ -4076,12 +4072,12 @@ int ObServerBalancer::do_vacate_space_for_ttg_balance(
   } else if (OB_UNLIKELY(!unit_load_to_vacate.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(unit_load_to_vacate));
-  } else if (OB_UNLIKELY(NULL == unit_mgr_ || NULL == unit_stat_mgr_)) {
+  } else if (OB_UNLIKELY(NULL == unit_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit_mgr_ or unit_stat_mgr_ is null", K(ret), KP(unit_mgr_), KP(unit_stat_mgr_));
+    LOG_WARN("unit_mgr_ is null", K(ret), KP(unit_mgr_));
   } else if (OB_FAIL(unit_mgr_->get_hard_limit(hard_limit))) {
     LOG_WARN("fail to get hard limit", K(ret));
-  } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+  } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
           unit_load_to_vacate.unit_->unit_id_, unit_load_to_vacate.unit_->zone_, unit_stat))) {
     LOG_WARN("fail to get unit stat", K(ret), "unit", *unit_load_to_vacate.unit_);
   } else if (OB_FAIL(pick_vacate_server_load(
@@ -4174,10 +4170,7 @@ int ObServerBalancer::vacate_space_by_tenantgroup(
   } else if (OB_UNLIKELY(!unit_load_to_vacate.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(unit_load_to_vacate));
-  } else if (OB_UNLIKELY(NULL == unit_stat_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit_stat_mgr_ ptr is null", K(ret), KP(unit_stat_mgr_));
-  } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+  } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
           unit_load_to_vacate.unit_->unit_id_, unit_load_to_vacate.unit_->zone_, unit_stat))) {
     LOG_WARN("fail to get unit stat", K(ret), "unit", *unit_load_to_vacate.unit_);
   } else {
@@ -4222,10 +4215,7 @@ int ObServerBalancer::vacate_space_by_unit_array(
   } else if (OB_UNLIKELY(!unit_load_to_vacate.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid unit load", K(ret), K(unit_load_to_vacate));
-  } else if (OB_UNLIKELY(NULL == unit_stat_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit_stat_mgr_ ptr is null", K(ret), KP(unit_stat_mgr_));
-  } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+  } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
           unit_load_to_vacate.unit_->unit_id_, unit_load_to_vacate.unit_->zone_, unit_stat))) {
     LOG_WARN("fail to get unit stat", K(ret), "unit", *unit_load_to_vacate.unit_);
   } else if (OB_FAIL(generate_pool_occupation_array(units, pool_occupation))) {
@@ -4269,9 +4259,9 @@ int ObServerBalancer::check_single_server_resource_enough(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(NULL == unit_mgr_ || NULL == unit_stat_mgr_)) {
+  } else if (OB_UNLIKELY(NULL == unit_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit_mgr_ or unit_stat_mgr_ is null", K(ret), KP(unit_mgr_), KP(unit_stat_mgr_));
+    LOG_WARN("unit_mgr_ is null", K(ret), KP(unit_mgr_));
   } else if (OB_FAIL(unit_mgr_->get_hard_limit(hard_limit))) {
     LOG_WARN("fail to get hard limit", K(ret));
   } else if (OB_FAIL(zone_disk_statistic_.get_server_disk_statistic(
@@ -4286,13 +4276,14 @@ int ObServerBalancer::check_single_server_resource_enough(
   }
   if (OB_SUCC(ret)) {
     ObUnit *unit = NULL;
-    if (OB_FAIL(unit_mgr_->get_unit_by_id(unit_stat.unit_id_, unit))) {
-      LOG_WARN("fail to get unit by id", K(ret), "unit_id", unit_stat.unit_id_);
+    if (OB_FAIL(unit_mgr_->get_unit_by_id(unit_stat.get_unit_id(), unit))) {
+      LOG_WARN("fail to get unit by id", K(ret), "unit_id", unit_stat.get_unit_id());
     } else if (OB_UNLIKELY(NULL == unit)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unit ptr is null", K(ret));
     } else if (common::REPLICA_TYPE_LOGONLY == unit->replica_type_) {
-      my_unit_stat.required_size_ = 0;
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Replica type LOGONLY is unexpected", KR(ret), KP(unit));
     }
   }
   if (OB_SUCC(ret)) {
@@ -4306,7 +4297,7 @@ int ObServerBalancer::check_single_server_resource_enough(
               && (static_cast<double>(this_load.load_sum_.log_disk_size())
                   + static_cast<double>(server_load.load_sum_.load_sum_.log_disk_size())
                 <= static_cast<double>(server_load.resource_info_.log_disk_total_))
-              && (static_cast<double>(my_unit_stat.required_size_ + disk_statistic.disk_in_use_)
+              && (static_cast<double>(my_unit_stat.get_required_size() + disk_statistic.disk_in_use_)
                 <= static_cast<double>(disk_statistic.disk_total_) * disk_waterlevel));
   }
   return ret;
@@ -4330,10 +4321,7 @@ int ObServerBalancer::vacate_space_by_single_unit(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), "unit_server", unit_load.unit_->server_,
              "server", server_load_to_vacate.server_);
-  } else if (OB_UNLIKELY(NULL == unit_stat_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit_stat_mgr_ ptr is null", K(ret), KP(unit_stat_mgr_));
-  } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+  } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
           unit_load.unit_->unit_id_, unit_load.unit_->zone_, unit_stat))) {
     LOG_WARN("fail to get unit stat", K(ret), "unit", *unit_load.unit_);
   } else if (OB_FAIL(get_pool_occupation_excluded_dst_servers(
@@ -4365,7 +4353,7 @@ int ObServerBalancer::vacate_space_by_single_unit(
         if (OB_FAIL(do_update_src_server_load(unit_load, server_load_to_vacate, unit_stat))) {
           LOG_WARN("fail to update src server load", K(ret));
         } else if (OB_FAIL(do_update_dst_server_load(
-                unit_load, unit_migrate_stat, *server_load, unit_stat, pool_occupation))) {
+                unit_load, *server_load, unit_stat, pool_occupation))) {
           LOG_WARN("fail to do update dst server load", K(ret));
         } else if (OB_FAIL(task_array.push_back(unit_migrate_stat))) {
           LOG_WARN("fail to push back", K(ret));
@@ -4727,58 +4715,55 @@ int ObServerBalancer::make_non_ttg_balance_under_load_by_disk(
   int ret = OB_SUCCESS;
   common::ObArray<common::ObAddr> excluded_servers;
   double disk_waterlevel = 0.0;
+  bool is_disk_over_waterlevel = true;
+  ObUnitStat unit_stat;
+  LoadSum this_load;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (NULL == src_server_load || !unit_load.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(src_server_load), K(unit_load));
-  } else if (NULL == unit_stat_mgr_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit stat mgr ptr is null", K(ret), KP(unit_stat_mgr_));
   } else if (OB_FAIL(get_server_balance_critical_disk_waterlevel(disk_waterlevel))) {
     LOG_WARN("fail to get server balance critical disk waterlevel", K(ret));
+  } else if (OB_FAIL(zone_disk_statistic_.check_server_over_disk_waterlevel(
+          src_server_load->server_, disk_waterlevel, is_disk_over_waterlevel))) {
+    LOG_WARN("fail to check disk over waterlevel", K(ret));
+  } else if (!is_disk_over_waterlevel) {
+    // do_nothing, it is already below the water mark, no need to migrate out unit
   } else if (OB_FAIL(get_pool_occupation_excluded_dst_servers(
           unit_load, pool_occupation, excluded_servers))) {
     LOG_WARN("fail to get excluded servers", K(ret));
+  } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
+          unit_load.unit_->unit_id_, unit_load.unit_->zone_, unit_stat))) {
+    LOG_WARN("fail to get unit stat", K(ret), "unit", *unit_load.unit_);
+  } else if (0 == unit_stat.get_required_size()) {
+    // do nothing, skip unit with 0 data disk usage
+  } else if (OB_FAIL(this_load.append_load(unit_load))) {
+    LOG_WARN("fail to append load", K(ret));
   } else {
     for (int64_t i = 0;
          OB_SUCC(ret) && i < zone_disk_statistic_.server_disk_statistic_array_.count();
          ++i) {
-      LoadSum this_load;
-      ServerDiskStatistic &disk_statistic
-        = zone_disk_statistic_.server_disk_statistic_array_.at(i);
-      ObUnitStat unit_stat;
+      ServerDiskStatistic &disk_statistic = zone_disk_statistic_.server_disk_statistic_array_.at(i);
       bool enough = true;
-      bool disk_over_waterlevel = true;
       UnitMigrateStat unit_migrate;
       unit_migrate.unit_load_ = unit_load;
       unit_migrate.original_pos_ = src_server_load->server_;
       unit_migrate.arranged_pos_ = disk_statistic.server_;
       ServerTotalLoad *dst_server_load = NULL;
-      if (OB_FAIL(zone_disk_statistic_.check_server_over_disk_waterlevel(
-              src_server_load->server_, disk_waterlevel, disk_over_waterlevel))) {
-        LOG_WARN("fail to check disk over waterlevel", K(ret));
-      } else if (!disk_over_waterlevel) {
-        break;
-        // It is already below the water mark, no need to move out of the unit
-      } else if (disk_statistic.wild_server_) {
-        // wild server
+      if (disk_statistic.wild_server_) {
+        // skip, wild server
       } else if (has_exist_in_array(excluded_servers, disk_statistic.server_)) {
-        // dst in excluded servers
+        // skip, dst in excluded servers
       } else if (has_exist_in_array(disk_over_servers, disk_statistic.server_)) {
-        // dst in disk over servers
-      } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
-              unit_load.unit_->unit_id_, unit_load.unit_->zone_, unit_stat))) {
-        LOG_WARN("fail to get unit stat", K(ret), "unit", *unit_load.unit_);
+        // skip, dst in disk over servers
       } else if (OB_FAIL(pick_server_load(
               disk_statistic.server_, available_server_loads, dst_server_load))) {
         LOG_WARN("fail to pick server load", K(ret));
       } else if (OB_UNLIKELY(NULL == dst_server_load)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("dst server load ptr is null", K(ret), KP(dst_server_load));
-      } else if (OB_FAIL(this_load.append_load(unit_load))) {
-        LOG_WARN("fail to append load", K(ret));
       } else if (OB_FAIL(check_single_server_resource_enough(
               this_load, unit_stat, *dst_server_load, enough))) {
         LOG_WARN("fail to check server resource enough", K(ret));
@@ -4787,11 +4772,12 @@ int ObServerBalancer::make_non_ttg_balance_under_load_by_disk(
       } else if (OB_FAIL(do_update_src_server_load(unit_load, *src_server_load, unit_stat))) {
         LOG_WARN("fail to do update src server load", K(ret));
       } else if (OB_FAIL(do_update_dst_server_load(
-              unit_load, unit_migrate, *dst_server_load, unit_stat, pool_occupation))) {
+              unit_load, *dst_server_load, unit_stat, pool_occupation))) {
         LOG_WARN("fail to update dst server load", K(ret));
       } else if (OB_FAIL(task_array.push_back(unit_migrate))) {
         LOG_WARN("fail to push back", K(ret));
       } else {
+        LOG_INFO("unit migration task generated for disk in use over waterlevel", KR(ret), K(unit_stat), K(unit_migrate));
         break;
         // unit migrate success
       }
@@ -4816,9 +4802,6 @@ int ObServerBalancer::make_available_servers_balance_by_disk(
     LOG_WARN("fail to get disk over servers", K(ret));
   } else if (OB_FAIL(generate_pool_occupation_array(standalone_units, pool_occupation))) {
     LOG_WARN("fail to generate pool occupation array", K(ret));
-  } else if (NULL == unit_stat_mgr_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit stat mgr ptr is null", K(ret));
   } else {
     common::ObArray<const ObUnitManager::ObUnitLoad *> standalone_unit_ptrs;
     for (int64_t i = 0; OB_SUCC(ret) && i < standalone_units.count(); ++i) {
@@ -4827,7 +4810,7 @@ int ObServerBalancer::make_available_servers_balance_by_disk(
       }
     }
     if (OB_SUCC(ret)) {
-      UnitLoadDiskCmp cmp(*unit_stat_mgr_);
+      UnitLoadDiskCmp cmp(unit_stat_mgr_);
       std::sort(standalone_unit_ptrs.begin(), standalone_unit_ptrs.end(), cmp);
       if (OB_FAIL(cmp.get_ret())) {
         LOG_WARN("fail to get ret", K(ret));
@@ -4848,7 +4831,8 @@ int ObServerBalancer::make_available_servers_balance_by_disk(
         } else if (src_server != unit_load->unit_->server_) {
           // no this server
         } else if (common::REPLICA_TYPE_LOGONLY == unit_load->unit_->replica_type_) {
-          // this cannot balance the disk
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Replica type LOGONLY is unexpected", KR(ret), KP(unit_load));
         } else if (OB_FAIL(pick_server_load(
                 src_server, available_server_loads, src_server_load))) {
           LOG_WARN("fail to pick server load", K(ret));
@@ -5065,9 +5049,6 @@ int ObServerBalancer::make_server_disk_underload_by_unit(
     LOG_WARN("server not match", K(ret),
              "left_server", src_server_load->server_,
              "right_server", unit_load.unit_->server_);
-  } else if (OB_UNLIKELY(NULL == unit_stat_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit stat mgr ptr is null", K(ret));
   } else {
     ObArray<common::ObAddr> excluded_servers;
     ObUnitStat unit_stat;
@@ -5075,7 +5056,7 @@ int ObServerBalancer::make_server_disk_underload_by_unit(
     if (OB_FAIL(get_pool_occupation_excluded_dst_servers(
             unit_load, pool_occupation, excluded_servers))) {
       LOG_WARN("fail to get excluded dst servers", K(ret));
-    } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+    } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
             unit_load.unit_->unit_id_, unit_load.unit_->zone_, unit_stat))) {
       LOG_WARN("fail to get unit stat", K(ret), "unit", *unit_load.unit_);
     } else if (OB_FAIL(this_load.append_load(unit_load))) {
@@ -5102,7 +5083,7 @@ int ObServerBalancer::make_server_disk_underload_by_unit(
           LOG_WARN("fail to check server resource enough", K(ret));
         } else if (!enough) {
           // resource not enough
-        } else if (under_server->get_disk_used_percent_if_add(unit_stat.required_size_)
+        } else if (under_server->get_disk_used_percent_if_add(unit_stat.get_required_size())
                    > upper_lmt) {
           // Exceeds the upper_lmt value
         } else {
@@ -5114,7 +5095,7 @@ int ObServerBalancer::make_server_disk_underload_by_unit(
           if (OB_FAIL(do_update_src_server_load(unit_load, *src_server_load, unit_stat))) {
             LOG_WARN("fail to do update srce server load", K(ret));
           } else if (OB_FAIL(do_update_dst_server_load(
-                  unit_load, unit_migrate, *dst_server_load, unit_stat, pool_occupation))) {
+                  unit_load, *dst_server_load, unit_stat, pool_occupation))) {
             LOG_WARN("fail to update dst server load", K(ret));
           } else if (OB_FAIL(task_array.push_back(unit_migrate))) {
             LOG_WARN("fail to push back", K(ret));
@@ -5146,9 +5127,6 @@ int ObServerBalancer::make_server_disk_underload(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(NULL == unit_stat_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit stat mgr ptr is null", K(ret));
   } else {
     common::ObArray<const ObUnitManager::ObUnitLoad *> standalone_unit_ptrs;
     for (int64_t i = 0; OB_SUCC(ret) && i < standalone_units.count(); ++i) {
@@ -5157,7 +5135,7 @@ int ObServerBalancer::make_server_disk_underload(
       }
     }
     if (OB_SUCC(ret)) {
-      UnitLoadDiskCmp cmp(*unit_stat_mgr_);
+      UnitLoadDiskCmp cmp(unit_stat_mgr_);
       std::sort(standalone_unit_ptrs.begin(), standalone_unit_ptrs.end(), cmp);
       if (OB_FAIL(cmp.get_ret())) {
         LOG_WARN("fail to get ret", K(ret));
@@ -5417,9 +5395,9 @@ int ObServerBalancer::make_non_ttg_balance_under_load_by_cm(
   } else if (OB_UNLIKELY(src_server_load->wild_server_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("should not be here", K(ret), "wild_server", src_server_load->wild_server_);
-  } else if (OB_UNLIKELY(NULL == unit_mgr_ || NULL == unit_stat_mgr_)) {
+  } else if (OB_UNLIKELY(NULL == unit_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit_mgr_ or unit_stat_mgr_ ptr is null", K(ret), K(unit_mgr_), KP(unit_stat_mgr_));
+    LOG_WARN("unit_mgr_ ptr is null", K(ret), K(unit_mgr_));
   } else if (OB_FAIL(unit_mgr_->get_hard_limit(hard_limit))) {
     LOG_WARN("fail to get hard limit", K(ret));
   } else {
@@ -5441,7 +5419,7 @@ int ObServerBalancer::make_non_ttg_balance_under_load_by_cm(
         LOG_WARN("unit load is invalid", K(ret), K(unit_load));
       } else if (src_server_load->server_ != unit_load.unit_->server_) {
         // not in this src, ignore
-      } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
+      } else if (OB_FAIL(unit_stat_mgr_.get_unit_stat(
               unit_load.unit_->unit_id_, unit_load.unit_->zone_, unit_stat))) {
         LOG_WARN("fail to get unit stat", K(ret), "unit", *unit_load.unit_);
       } else if (OB_FAIL(get_pool_occupation_excluded_dst_servers(
@@ -5463,7 +5441,7 @@ int ObServerBalancer::make_non_ttg_balance_under_load_by_cm(
       } else if (OB_FAIL(do_update_src_server_load(unit_load, *src_server_load, unit_stat))) {
         LOG_WARN("fail to do update src server load", K(ret));
       } else if (OB_FAIL(do_update_dst_server_load(
-              unit_load, unit_migrate, *dst_server_load, unit_stat, pool_occupation))) {
+              unit_load, *dst_server_load, unit_stat, pool_occupation))) {
         LOG_WARN("fail to update dst server load", K(ret));
       } else if (OB_FAIL(task_array.push_back(unit_migrate))) {
         LOG_WARN("fail to push back", K(ret));
@@ -7850,6 +7828,8 @@ int ObServerBalancer::get_server_balance_critical_disk_waterlevel(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SERVER_DISK_ASSIGN);
+
 int ObServerBalancer::generate_zone_server_disk_statistic(
     const common::ObZone &zone)
 {
@@ -7890,7 +7870,22 @@ int ObServerBalancer::generate_zone_server_disk_statistic(
       } else if (server_info.is_active()) {
         disk_statistic.server_ = server;
         disk_statistic.wild_server_ = false;
-        disk_statistic.disk_in_use_ = server_resource_info.disk_in_use_;
+        if (OB_SUCC(ERRSIM_SERVER_DISK_ASSIGN)) {
+          disk_statistic.disk_in_use_ = server_resource_info.disk_in_use_;
+        } else {
+          // ONLY FOR TEST, errsim triggered, make disk_in_use equal to (1GB * unit_num)
+          ObArray<ObUnitManager::ObUnitLoad> *unit_loads_ptr;
+          if (OB_FAIL(unit_mgr_->get_loads_by_server(server, unit_loads_ptr))) {
+            if(OB_ENTRY_NOT_EXIST == ret) {
+              ret = OB_SUCCESS; // disk_in_use is 0
+            } else {
+              LOG_WARN("fail to get_loads_by_server", KR(ret), K(server));
+            }
+          } else {
+            disk_statistic.disk_in_use_ = unit_loads_ptr->count() * (1024 * 1024 * 1024);
+          }
+          LOG_ERROR("errsim triggered, assign server disk_in_use as unit count * 1GB", KR(ret), K(disk_statistic));
+        }
         disk_statistic.disk_total_ = server_resource_info.disk_total_;
         if (static_cast<double>(disk_statistic.disk_in_use_)
             > disk_waterlevel * static_cast<double>(disk_statistic.disk_total_)) {
@@ -8157,7 +8152,7 @@ bool ObServerBalancer::UnitLoadDiskCmp::operator()(
   } else if (OB_SUCCESS != (ret_ = unit_stat_mgr_.get_unit_stat(
           right->unit_->unit_id_, right->unit_->zone_, right_stat))) {
     LOG_WARN("fail to get right unit stat", K(ret_));
-  } else if (left_stat.required_size_ > right_stat.required_size_) {
+  } else if (left_stat.get_required_size() > right_stat.get_required_size()) {
     bool_ret = true;
   } else {
     bool_ret = false;
