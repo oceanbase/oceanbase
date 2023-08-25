@@ -1303,7 +1303,9 @@ int ObStorageStreamRpcP<RPC_CODE>::flush_and_wait()
       STORAGE_LOG(WARN, "failed limit out band", K(tmp_ret));
     }
 
-    if (OB_FAIL(this->flush(OB_DEFAULT_STREAM_WAIT_TIMEOUT))) {
+    if (OB_FAIL(this->check_timeout())) {
+      LOG_WARN("rpc is timeout, no need flush", K(ret));
+    } else if (OB_FAIL(this->flush(OB_DEFAULT_STREAM_WAIT_TIMEOUT))) {
       STORAGE_LOG(WARN, "failed to flush", K(ret));
     } else {
       this->result_.get_position() = 0;
@@ -1361,9 +1363,11 @@ int ObHAFetchMacroBlockP::process()
   MTL_SWITCH(arg_.tenant_id_) {
     blocksstable::ObBufferReader data;
     char *buf = NULL;
-    last_send_time_ = ObTimeUtility::current_time();
+    last_send_time_ = this->get_receive_timestamp();
     int64_t occupy_size = 0;
     ObCopyMacroBlockHeader copy_macro_block_header;
+    const int64_t start_ts = ObTimeUtil::current_time();
+    const int64_t first_receive_ts = this->get_receive_timestamp();
 
     if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1430,6 +1434,10 @@ int ObHAFetchMacroBlockP::process()
         }
       }
     }
+
+    LOG_INFO("finish fetch macro block", K(ret), K(total_macro_block_count_),
+        "cost_ts", ObTimeUtil::current_time() - start_ts,
+        "in rpc queue time", start_ts - first_receive_ts);
   }
   return ret;
 }
@@ -1452,6 +1460,8 @@ int ObFetchTabletInfoP::process()
     ObCopyTabletInfo tablet_info;
     int64_t max_tablet_num = 32;
     int64_t tablet_count = 0;
+    const int64_t start_ts = ObTimeUtil::current_time();
+    const int64_t first_receive_ts = this->get_receive_timestamp();
 
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (tenant_config.is_valid()) {
@@ -1463,7 +1473,7 @@ int ObFetchTabletInfoP::process()
 
     LOG_INFO("start to fetch tablet info", K(arg_));
 
-    last_send_time_ = ObTimeUtility::current_time();
+    last_send_time_ = this->get_receive_timestamp();
     const int64_t cost_time = 10 * 1000 * 1000;
     common::ObTimeGuard timeguard("ObFetchTabletInfoP", cost_time);
     timeguard.click();
@@ -1535,6 +1545,9 @@ int ObFetchTabletInfoP::process()
         }
       }
     }
+
+    LOG_INFO("finish fetch tablet info", K(ret), "cost_ts", ObTimeUtil::current_time() - start_ts,
+        "in rpc queue time", start_ts - first_receive_ts);
   }
   return ret;
 }
@@ -1554,9 +1567,11 @@ int ObFetchSSTableInfoP::process()
     ObCopyTabletSSTableInfo sstable_info;
     ObMigrationStatus migration_status;
     ObLS *ls = nullptr;
+    const int64_t start_ts = ObTimeUtil::current_time();
+    const int64_t first_receive_ts = this->get_receive_timestamp();
     LOG_INFO("start to fetch tablet sstable info", K(arg_));
 
-    last_send_time_ = ObTimeUtility::current_time();
+    last_send_time_ = this->get_receive_timestamp();
 
     if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1590,6 +1605,8 @@ int ObFetchSSTableInfoP::process()
         }
       }
     }
+    LOG_INFO("finish fetch sstable info", K(ret), "cost_ts", ObTimeUtil::current_time() - start_ts,
+        "in rpc queue time", start_ts - first_receive_ts);
   }
   return ret;
 }
@@ -1947,9 +1964,11 @@ int ObFetchSSTableMacroInfoP::process()
   ObLS *ls = nullptr;
   char * buf = NULL;
   ObMigrationStatus migration_status;
+  const int64_t start_ts = ObTimeUtil::current_time();
+  const int64_t first_receive_ts = this->get_receive_timestamp();
   LOG_INFO("start to fetch sstable macro info", K(arg_));
 
-  last_send_time_ = ObTimeUtility::current_time();
+  last_send_time_ = this->get_receive_timestamp();
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
 
   if (OB_FAIL(guard.switch_to(arg_.tenant_id_))) {
@@ -1986,6 +2005,9 @@ int ObFetchSSTableMacroInfoP::process()
       }
     }
   }
+
+  LOG_INFO("finish fetch sstable macro info", K(ret), "cost_ts", ObTimeUtil::current_time() - start_ts,
+      "in rpc queue time", start_ts - first_receive_ts);
   return ret;
 }
 
@@ -2901,6 +2923,8 @@ int ObStorageFetchLSViewP::process()
     ObLS *ls = NULL;
     char * buf = NULL;
     max_tablet_num_ = 32;
+    const int64_t start_ts = ObTimeUtil::current_time();
+    const int64_t first_receive_ts = this->get_receive_timestamp();
 
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (tenant_config.is_valid()) {
@@ -2912,7 +2936,7 @@ int ObStorageFetchLSViewP::process()
 
     int64_t filled_tablet_count = 0;
     int64_t total_tablet_count = 0;
-    last_send_time_ = ObTimeUtility::current_time();
+    last_send_time_ = this->get_receive_timestamp();
 
     auto fill_ls_meta_f = [this](const ObLSMetaPackage &ls_meta)->int {
       int ret = OB_SUCCESS;
@@ -2978,9 +3002,9 @@ int ObStorageFetchLSViewP::process()
                        fill_ls_meta_f,
                        fill_tablet_meta_f))) {
       LOG_WARN("failed to get ls meta package and tablet metas", K(ret), K_(arg));
-    } else {
-      LOG_INFO("succeed fetch ls view", K_(arg), K(total_tablet_count));
     }
+    LOG_INFO("finish fetch ls view", K(ret), K(total_tablet_count), "cost_ts", ObTimeUtil::current_time() - start_ts,
+        "in rpc queue time", start_ts - first_receive_ts);
     timeguard.click();
   }
   return ret;

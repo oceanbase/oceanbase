@@ -2269,8 +2269,8 @@ int ObLS::set_ls_rebuild()
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKLS;
   int64_t write_lock = LSLOCKLOGMETA;
-  const bool try_lock = true; // the upper layer should deal with try lock fail.
-  ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock, try_lock);
+  const int64_t abs_timeout_us = ObTimeUtil::current_time() + 100 * 1000 * 1000L; //100ms
+  ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock, abs_timeout_us);
 
   if (!lock_myself.locked()) {
     ret = OB_LS_LOCK_CONFLICT;
