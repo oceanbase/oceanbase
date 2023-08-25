@@ -11223,6 +11223,7 @@ int ObDMLResolver::resolve_outer_join_symbol(const ObStmtScope scope,
 {
   int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(expr));
+  CK(OB_NOT_NULL(get_stmt()));
   if (OB_SUCC(ret) && (expr->has_flag(CNT_OUTER_JOIN_SYMBOL))) {
     if (OB_UNLIKELY(T_FIELD_LIST_SCOPE == scope
                     || T_CONNECT_BY_SCOPE == scope
@@ -11240,7 +11241,12 @@ int ObDMLResolver::resolve_outer_join_symbol(const ObStmtScope scope,
       LOG_WARN("outer join operator (+) is not allowed here", K(ret));
     } else if (T_WHERE_SCOPE != current_scope_) {
       if (T_ON_SCOPE  == current_scope_) {
-        OZ(check_oracle_outer_join_condition(expr));
+        if (stmt::T_MERGE == get_stmt()->get_stmt_type()) {
+          ret = OB_ERR_OUTER_JOIN_ON_CORRELATION_COLUMN;
+          LOG_WARN("an outer join cannot be specified on a correlation column", K(ret));
+        } else {
+          OZ(check_oracle_outer_join_condition(expr));
+        }
       }
       OZ(remove_outer_join_symbol(expr));
     } else {
