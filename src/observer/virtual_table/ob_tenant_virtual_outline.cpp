@@ -61,6 +61,17 @@ int ObTenantVirtualOutlineBase::set_database_infos_and_get_value(uint64_t databa
   if (OB_ISNULL(schema_guard_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parameter is NULL", K(ret), K(schema_guard_), K(allocator_));
+  } else if (database_id == OB_OUTLINE_DEFAULT_DATABASE_ID) {
+    // virtual outline database
+    if (OB_FAIL(ob_write_string(*allocator_, OB_OUTLINE_DEFAULT_DATABASE_NAME, db_name))) {
+      LOG_WARN("fail to write string", K(ret), K(db_schema->get_database_name_str()));
+    } else if (FALSE_IT(db_info.db_name_ = db_name)) {
+    } else if (FALSE_IT(db_info.is_recycle_ = false)) {
+    } else if (OB_FAIL(database_infos_.set_refactored(database_id, db_info))) {
+      LOG_WARN("fail to set hash_map", K(ret), K(database_id));
+    } else {
+      is_recycle = false;
+    }
   } else if (OB_FAIL(schema_guard_->get_database_schema(tenant_id_, database_id, db_schema))) {
     LOG_WARN("fail to get database schema", K(ret), K_(tenant_id), K(database_id));
   } else if (OB_ISNULL(db_schema)) {
