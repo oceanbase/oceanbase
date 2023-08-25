@@ -348,7 +348,7 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
   // stat data amount and checkpoint ts for current piece.
   const ObArray<ObLSDestRoundSummary> &ls_round_list = summary.ls_round_list_;
   piece.piece_info_.checkpoint_scn_ = SCN::max_scn();
-  piece.piece_info_.max_scn_ = SCN::min_scn();
+  piece.piece_info_.max_scn_ = piece.piece_info_.start_scn_;
   for (int64_t i = 0; OB_SUCC(ret) && i < ls_round_list.count(); i++) {
     const ObLSDestRoundSummary &ls_round = ls_round_list.at(i);
     // search the piece
@@ -371,7 +371,7 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
 
 
       // fill piece
-      piece.piece_info_.checkpoint_scn_ = MIN(piece.piece_info_.checkpoint_scn_, ls_piece.checkpoint_scn_);
+      piece.piece_info_.checkpoint_scn_ = MAX(piece.piece_info_.start_scn_, MIN(piece.piece_info_.checkpoint_scn_, ls_piece.checkpoint_scn_));
       piece.piece_info_.max_scn_ = MAX(piece.piece_info_.max_scn_, ls_piece.checkpoint_scn_);
       piece.piece_info_.input_bytes_ += ls_piece.input_bytes_;
       piece.piece_info_.output_bytes_ += ls_piece.output_bytes_;
