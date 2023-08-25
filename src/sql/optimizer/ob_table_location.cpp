@@ -4960,10 +4960,10 @@ OB_DEF_DESERIALIZE(ObTableLocation)
   if (OB_SUCC(ret)) {
     int64_t part_hint_ids_count = 0;
     OB_UNIS_DECODE(part_hint_ids_count);
+    OZ(part_hint_ids_.init(part_hint_ids_count));
     for (int64_t i = 0; OB_SUCC(ret) && i < part_hint_ids_count; i++) {
       ObObjectID part_hint_id;
       OB_UNIS_DECODE(part_hint_id);
-      OZ(part_hint_ids_.init(part_hint_ids_count));
       OZ(part_hint_ids_.push_back(part_hint_id));
     }
   }
