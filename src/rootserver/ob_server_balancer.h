@@ -13,6 +13,7 @@
 #ifndef _OB_SERVER_BALANCER_H
 #define _OB_SERVER_BALANCER_H 1
 #include "ob_unit_manager.h"
+#include "ob_unit_stat_manager.h"
 namespace oceanbase
 {
 namespace rootserver
@@ -239,7 +240,6 @@ int Matrix<T>::sort_column_group(
 }
 
 class ObZoneManager;
-class ObUnitStatManager;
 // To balance the load of servers by migrating units.
 class ObServerBalancer
 {
@@ -267,20 +267,13 @@ public:
            ObUnitManager &unit_manager,
            ObZoneManager &zone_mgr,
            ObServerManager &server_mgr,
-           ObUnitStatManager &unit_stat_mgr);
+           common::ObMySQLProxy &sql_proxy);
   int build_active_servers_resource_info();
   // 1. migrate units to balance the load
   // 2. migrate units from offline servers
   int balance_servers();
 
   int tenant_group_balance();
-
-  // need to sleep for seconds to wait tenant node balancer
-  // allocating resource for unit
-  bool unit_migrated()
-  {
-    return unit_migrated_;
-  }
 
   int check_tenant_group_config_legality(
       common::ObIArray<ObTenantGroupParser::TenantNameGroup> &tenant_groups,
@@ -957,7 +950,6 @@ protected:
       const share::ObUnitStat &unit_stat);
   int do_update_dst_server_load(
       const ObUnitManager::ObUnitLoad &unit_load,
-      const UnitMigrateStat &unit_migrate_stat,
       ServerTotalLoad &this_server_load,
       const share::ObUnitStat &unit_stat,
       common::ObIArray<PoolOccupation> &pool_occupation);
@@ -1409,12 +1401,11 @@ protected:
 
 protected:
   bool inited_;
-  bool unit_migrated_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
   ObUnitManager *unit_mgr_;
   ObZoneManager *zone_mgr_;
   ObServerManager *server_mgr_;
-  ObUnitStatManager *unit_stat_mgr_;
+  ObUnitStatManager unit_stat_mgr_;
   CountBalanceStrategy count_balance_strategy_;
   InnerTenantGroupBalanceStrategy &inner_ttg_balance_strategy_;
   // Each time the unit balance between servers is executed,

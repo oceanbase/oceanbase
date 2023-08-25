@@ -95,7 +95,6 @@ private:
   volatile int64_t active_;
   mutable ObRootBalanceIdling idling_;
 
-  ObUnitStatManager unit_stat_mgr_;
   ObServerBalancer server_balancer_;
 
   ObDRWorker disaster_recovery_worker_;

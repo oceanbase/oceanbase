@@ -23,29 +23,60 @@ namespace oceanbase
 namespace share
 {
 
-struct ObUnitStat
+// Unit statistic info
+class ObUnitStat
 {
-  ObUnitStat() : unit_id_(common::OB_INVALID_ID), required_size_(0), partition_cnt_(0) {}
+public:
+  ObUnitStat() : unit_id_(common::OB_INVALID_ID), required_size_(0), is_migrating_(false) {}
   ~ObUnitStat() {}
+  int init(uint64_t unit_id, int64_t required_size, bool is_migrating) {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(common::OB_INVALID_ID == unit_id)) {
+      ret = OB_INVALID_ARGUMENT;
+      RS_LOG(WARN, "Invalid unit_id", KR(ret), K(unit_id), K(required_size), K(is_migrating));
+    } else if (OB_UNLIKELY(required_size < 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      RS_LOG(WARN, "required_size should not be negative", KR(ret), K(unit_id), K(required_size), K(is_migrating));
+    } else {
+      set(unit_id, required_size, is_migrating);
+    }
+    return ret;
+  }
+  void deep_copy(const ObUnitStat& other) {
+    set(other.unit_id_, other.required_size_, other.is_migrating_);
+  }
+  void reset()
+  {
+    set(common::OB_INVALID_ID, 0/*required_size*/, false/*is_migrating*/);
+  }
   bool is_valid() const
   {
     return common::OB_INVALID_ID != unit_id_;
   }
-  void reset()
-  {
-    unit_id_ = common::OB_INVALID_ID;
-    required_size_ = 0;
-    partition_cnt_ = 0;
+  // get methods
+  uint64_t get_unit_id() const {
+    return unit_id_;
+  }
+  int64_t get_required_size() const {
+    return required_size_;
+  }
+  bool get_is_migrating() const {
+    return is_migrating_;
   }
   // ObReferedMap template method
   void set_key(const int64_t unit_id) { unit_id_ = unit_id; }
   const uint64_t &get_key() const { return unit_id_; }
 
-  TO_STRING_KV(K_(unit_id), K_(required_size), K_(partition_cnt));
-
+  TO_STRING_KV(K_(unit_id), K_(required_size), K_(is_migrating));
+private:
+  void set(uint64_t unit_id, int64_t required_size, bool is_migrating) {
+    unit_id_ = unit_id;
+    required_size_ = required_size;
+    is_migrating_ = is_migrating;
+  }
   uint64_t unit_id_;
   int64_t required_size_;
-  int64_t partition_cnt_;
+  bool is_migrating_;
 };
 
 typedef common::hash::ObReferedMap<uint64_t, ObUnitStat> ObUnitStatMap;

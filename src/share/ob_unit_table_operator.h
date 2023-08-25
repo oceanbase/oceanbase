@@ -16,6 +16,7 @@
 #include "lib/string/ob_sql_string.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/unit/ob_unit_info.h"
+#include "share/ob_unit_stat.h"
 
 namespace oceanbase
 {
@@ -31,7 +32,7 @@ public:
   ObUnitTableOperator();
   virtual ~ObUnitTableOperator();
 
-  int init(common::ObMySQLProxy &proxy, common::ObServerConfig *config = NULL);
+  int init(common::ObMySQLProxy &proxy);
   // return unit count of sys resource pool
   virtual int get_sys_unit_count(int64_t &cnt) const;
   virtual int get_units(common::ObIArray<ObUnit> &units) const;
@@ -79,6 +80,8 @@ public:
   int get_unit_groups_by_tenant(const uint64_t tenant_id,
                           common::ObIArray<ObSimpleUnitGroup> &unit_groups) const;
 
+
+  virtual int get_unit_stats(common::ObIArray<ObUnitStat> &unit_stats) const;
 private:
   static int zone_list2str(const common::ObIArray<common::ObZone> &zone_list,
                            char *str, const int64_t buf_size);
@@ -101,10 +104,12 @@ private:
                    common::ObIArray<uint64_t> &tenants) const;
   int read_unit_group(const common::sqlclient::ObMySQLResult &result, ObSimpleUnitGroup &unit_group) const;
   int read_unit_groups(common::ObSqlString &sql, common::ObIArray<ObSimpleUnitGroup> &unit_groups) const;
+  int read_unit_stat(const common::sqlclient::ObMySQLResult &result, ObUnitStat &unit_stat) const;
+  int read_unit_stats(common::ObSqlString &sql,
+                 common::ObIArray<ObUnitStat> &unit_stats) const;
 private:
   bool inited_;
   common::ObMySQLProxy *proxy_;
-  common::ObServerConfig *config_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUnitTableOperator);
 };

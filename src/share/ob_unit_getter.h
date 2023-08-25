@@ -15,7 +15,6 @@
 
 #include "lib/container/ob_array.h"
 #include "share/ob_unit_table_operator.h"
-#include "share/ob_unit_stat_table_operator.h"
 #include "share/ob_unit_stat.h"
 #include "share/ob_check_stop_provider.h"
 #include "share/rc/ob_tenant_base.h"
@@ -167,21 +166,6 @@ private:
 };
 
 typedef common::ObSEArray<ObUnitInfoGetter::ObTenantConfig, 16> TenantUnits;
-
-class ObUnitStatGetter
-{
-public:
-  ObUnitStatGetter();
-  virtual ~ObUnitStatGetter();
-  int init(share::ObCheckStopProvider &check_stop_provider);
-  virtual int get_unit_stat(uint64_t tenant_id, uint64_t unit_id, ObUnitStat &unit_stat) const;
-  virtual int get_unit_stat(uint64_t tenant_id, share::ObUnitStatMap &unit_stat_map) const;
-private:
-  bool inited_;
-  ObUnitStatTableOperator ut_stat_operator_;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObUnitStatGetter);
-};
 
 }//end namespace share
 }//end namespace oceanbase
