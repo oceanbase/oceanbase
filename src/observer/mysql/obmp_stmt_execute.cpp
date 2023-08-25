@@ -2683,7 +2683,6 @@ int ObMPStmtExecute::parse_integer_value(const uint32_t type,
   int ret = OB_SUCCESS;
   bool cast_to_number = !(lib::is_mysql_mode() || is_complex_element || MYSQL_TYPE_TINY == type);
   int64_t res_val = 0;
-  ObObjType unsigned_type = is_unsigned ? ObUInt64Type : ObNumberType;
   switch(type) {
     case MYSQL_TYPE_TINY: {
       PS_STATIC_DEFENSE_CHECK(checker, 1)
@@ -2702,10 +2701,15 @@ int ObMPStmtExecute::parse_integer_value(const uint32_t type,
         if (!cast_to_number) {
           is_unsigned ? param.set_usmallint(value) : param.set_smallint(value);
         } else {
-          if (is_unsigned) {
-            unsigned_type = ObUSmallIntType;
-          }
           res_val = static_cast<int64_t>(value);
+          if (is_unsigned) {
+            if (((1LL << 16) + res_val) < 1 || res_val > 0xFFFF) {
+              ret = OB_DECIMAL_OVERFLOW_WARN;
+              LOG_WARN("param is over flower.", K(res_val), K(type), K(ret));
+            } else {
+              res_val = res_val < 0 ? ((1LL << 16) + res_val) : res_val;
+            }
+          }
         }
       }
       break;
@@ -2718,10 +2722,15 @@ int ObMPStmtExecute::parse_integer_value(const uint32_t type,
         if (!cast_to_number) {
           is_unsigned ? param.set_uint32(value) : param.set_int32(value);
         } else {
-          if (is_unsigned) {
-            unsigned_type = ObUInt32Type;
-          }
           res_val = static_cast<int64_t>(value);
+          if (is_unsigned) {
+            if (((1LL << 32) + res_val) < 1 || res_val > 0xFFFFFFFF) {
+              ret = OB_DECIMAL_OVERFLOW_WARN;
+              LOG_WARN("param is over flower.", K(res_val), K(type), K(ret));
+            } else {
+              res_val = res_val < 0 ? ((1LL << 32) + res_val) : res_val;
+            }
+          }
         }
       }
       break;
@@ -2734,9 +2743,6 @@ int ObMPStmtExecute::parse_integer_value(const uint32_t type,
         if (!cast_to_number) {
           is_unsigned ? param.set_uint(ObUInt64Type, value) : param.set_int(value);
         } else {
-          if (is_unsigned) {
-            unsigned_type = ObUInt64Type;
-          }
           res_val = value;
         }
       }
@@ -2750,14 +2756,12 @@ int ObMPStmtExecute::parse_integer_value(const uint32_t type,
   }
   if (OB_SUCC(ret) && cast_to_number) {
     number::ObNumber nb;
-    if (OB_FAIL(nb.from(res_val, allocator))) {
+    if (is_unsigned && OB_FAIL(nb.from(static_cast<uint64_t>(res_val), allocator))) {
+      LOG_WARN("decode param to number failed", K(ret), K(res_val));
+    } else if (!is_unsigned && OB_FAIL(nb.from(static_cast<int64_t>(res_val), allocator))) {
       LOG_WARN("decode param to number failed", K(ret), K(res_val));
     } else {
-      if (is_unsigned) {
-        param.set_number(unsigned_type, nb);
-      } else {
-        param.set_number(nb);
-      }
+      param.set_number(nb);
     }
   }
   return ret;
