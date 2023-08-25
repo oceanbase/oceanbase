@@ -695,6 +695,9 @@ int ObProhibitScheduleMediumMap::add_flag(const ObLSID &ls_id, const ProhibitFla
     } else if (tmp_flag != input_flag) {
       ret = OB_EAGAIN;
       LOG_TRACE("flag in conflict", K(ret), K(ls_id), K(tmp_flag), K(input_flag));
+    } else { // tmp_flag == input_flag
+      ret = OB_ERR_UNEXPECTED;
+      LOG_TRACE("flag in already exist", K(ret), K(ls_id), K(tmp_flag), K(input_flag));
     }
   }
   return ret;

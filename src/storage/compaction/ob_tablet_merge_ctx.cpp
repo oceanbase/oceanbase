@@ -125,7 +125,7 @@ void ObTabletMergeInfo::build_sstable_merge_info(const ObTabletMergeCtx &ctx)
   sstable_merge_info_.ls_id_ = ctx.param_.ls_id_;
   sstable_merge_info_.tablet_id_ = ctx.param_.tablet_id_;
   sstable_merge_info_.compaction_scn_ = ctx.get_compaction_scn();
-  sstable_merge_info_.merge_start_time_ = ObTimeUtility::fast_current_time();
+  sstable_merge_info_.merge_start_time_ = ctx.start_time_;
   sstable_merge_info_.merge_type_ = ctx.is_tenant_major_merge_ ? ObMergeType::MAJOR_MERGE : ctx.param_.merge_type_;
   sstable_merge_info_.progressive_merge_round_ = ctx.progressive_merge_round_;
   sstable_merge_info_.progressive_merge_num_ = ctx.progressive_merge_num_;
@@ -518,6 +518,7 @@ ObTabletMergeCtx::ObTabletMergeCtx(
     ls_handle_(),
     tablet_handle_(),
     sstable_logic_seq_(0),
+    start_time_(0),
     progressive_merge_num_(0),
     progressive_merge_round_(0),
     progressive_merge_step_(0),

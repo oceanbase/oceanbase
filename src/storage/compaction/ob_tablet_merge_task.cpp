@@ -724,6 +724,7 @@ int ObTabletMergeExecutePrepareTask::process()
   } else if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is unexpected null", K(ret), K(ctx_));
+  } else if (FALSE_IT(ctx_->start_time_ = ObTimeUtility::fast_current_time())) {
   } else if (OB_FAIL(get_tablet_and_result())) {
     LOG_WARN("failed to get tablet and result", K(ret));
   } else if (OB_FAIL(ctx_->get_schema_and_gene_from_result(result_))) {
@@ -943,6 +944,7 @@ int ObTabletMergePrepareTask::process()
   } else if (OB_ISNULL(ctx = merge_dag_->get_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is unexpected null", K(ret), KP(ctx), KPC(merge_dag_));
+  } else if (FALSE_IT(ctx->start_time_ = ObTimeUtility::fast_current_time())) {
   } else if (OB_UNLIKELY(is_major_merge_type(ctx->param_.merge_type_)
                          && !MTL(ObTenantTabletScheduler *)->could_major_merge_start())) {
     ret = OB_CANCELED;
