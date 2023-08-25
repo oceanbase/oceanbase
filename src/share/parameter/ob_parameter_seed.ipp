@@ -350,6 +350,16 @@ DEF_BOOL(_enable_convert_real_to_decimal, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_ob_enable_dynamic_worker, OB_TENANT_PARAMETER, "True",
          "specifies whether worker count increases when all workers were in blocking.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_hash_join_enabled, OB_TENANT_PARAMETER, "True",
+         "enable/disable hash join",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_optimizer_sortmerge_join_enabled, OB_TENANT_PARAMETER, "True",
+         "enable/disable merge join",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+//
+DEF_BOOL(_nested_loop_join_enabled, OB_TENANT_PARAMETER, "True",
+         "enable/disable nested loop join",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // tenant memtable consumption related
 DEF_INT(memstore_limit_percentage, OB_CLUSTER_PARAMETER, "50", "(0, 100)",
