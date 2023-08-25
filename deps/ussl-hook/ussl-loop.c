@@ -166,26 +166,22 @@ void check_and_handle_timeout_event()
     if (CLIENT_SOCK == type) {
       clientfd_sk_t *client_sk = ussl_structof(p, clientfd_sk_t, timeout_link);
       if (cur_time - client_sk->start_time > TIMEOUT_THRESHOLD_SEC) {
-        ussl_log_warn("clientfd timeout, fd:%d", client_sk->fd);
+        char dst_addr[IP_STRING_MAX_LEN] = {0};
+        ussl_get_peer_addr(client_sk->fd, dst_addr, IP_STRING_MAX_LEN);
+        ussl_log_warn("clientfd timeout, fd:%d, dst_addr:%s", client_sk->fd, dst_addr);
         ussl_dlink_delete(&client_sk->ready_link);
         ussl_dlink_delete(p);
         handle_client_timeout_event(client_sk);
-      } else {
-        char src_addr[IP_STRING_MAX_LEN] = {0};
-        get_src_addr(client_sk->fd, src_addr, IP_STRING_MAX_LEN);
-        ussl_log_info("fd is in processing, fd:%d, type:clientfd, peer_addr:%s", client_sk->fd, src_addr);
       }
     } else {
       acceptfd_sk_t *accept_sk = ussl_structof(p, acceptfd_sk_t, timeout_link);
       if (cur_time - accept_sk->start_time > TIMEOUT_THRESHOLD_SEC) {
-        ussl_log_warn("acceptfd timeout, fd:%d", accept_sk->fd);
+        char src_addr[IP_STRING_MAX_LEN] = {0};
+        ussl_get_peer_addr(accept_sk->fd, src_addr, IP_STRING_MAX_LEN);
+        ussl_log_warn("acceptfd timeout, fd:%d, src_addr:%s", accept_sk->fd, src_addr);
         ussl_dlink_delete(&accept_sk->ready_link);
         ussl_dlink_delete(p);
         handle_server_timeout_event(accept_sk);
-      } else {
-        char src_addr[IP_STRING_MAX_LEN] = {0};
-        get_src_addr(accept_sk->fd, src_addr, IP_STRING_MAX_LEN);
-        ussl_log_info("fd is in processing, fd:%d, type:acceptfd, peer_addr:%s", accept_sk->fd, src_addr);
       }
     }
   }
