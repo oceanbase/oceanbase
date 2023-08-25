@@ -87,8 +87,8 @@ int ObTenantVirtualCurrentTenant::inner_get_next_row(ObNewRow *&row)
           SERVER_LOG(ERROR, "fail to alloc memory", K(ret));
         } else if (OB_UNLIKELY(OB_INVALID_ID == show_tenant_id)) {
           // FIXME(tingshuai.yts):暂时定为显示该错误信息，只有直接查询该虚拟表才可能出现
-          ret = OB_ERR_UNEXPECTED;
-          LOG_USER_ERROR(OB_ERR_UNEXPECTED, "this table is used for show clause, can't be selected");
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "select a table which is used for show clause");
         } else if (OB_FAIL(schema_guard_->get_tenant_info(show_tenant_id, tenant_schema))) {
           SERVER_LOG(WARN, "get tenant info failed", K(show_tenant_id), K(ret));
         } else if (OB_ISNULL(tenant_schema)) {
