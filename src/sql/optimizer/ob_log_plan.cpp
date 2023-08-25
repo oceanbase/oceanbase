@@ -10370,6 +10370,7 @@ int ObLogPlan::add_candidate_plan(ObIArray<CandidatePlan> &current_plans,
   } else if (new_plan.plan_tree_->get_contains_match_all_fake_cte() &&
              !new_plan.plan_tree_->is_remote()) {
     should_add = false;
+    OPT_TRACE("containt match all fake cte, but not remote plan, will not add plan");
   }
   for (int64_t i = current_plans.count() - 1;
        OB_SUCC(ret) && should_add && i >= 0; --i) {
@@ -13388,9 +13389,18 @@ int ObLogPlan::allocate_material_for_recursive_cte_plan(ObIArray<ObLogicalOperat
         } else { /*do nothing*/ }
       } else if (log_op_def::LOG_MATERIAL != child_ops.at(i)->get_type() &&
                  log_op_def::LOG_TABLE_SCAN != child_ops.at(i)->get_type() &&
-                 log_op_def::LOG_EXPR_VALUES != child_ops.at(i)->get_type() &&
-                 OB_FAIL(log_plan->allocate_material_as_top(child_ops.at(i)))) {
-        LOG_WARN("failed to allocate materialize as top", K(ret));
+                 log_op_def::LOG_EXPR_VALUES != child_ops.at(i)->get_type()) {
+        bool is_plan_root = child_ops.at(i)->is_plan_root();
+        child_ops.at(i)->set_is_plan_root(false);
+        if (OB_FAIL(log_plan->allocate_material_as_top(child_ops.at(i)))) {
+          LOG_WARN("failed to allocate materialize as top", K(ret));
+        } else if (is_plan_root) {
+          child_ops.at(i)->mark_is_plan_root();
+          child_ops.at(i)->get_plan()->set_plan_root(child_ops.at(i));
+          if (OB_FAIL(child_ops.at(i)->set_plan_root_output_exprs())) {
+            LOG_WARN("failed to set plan root output", K(ret));
+          }
+        }
       } else { /*do nothing*/ }
     }
   }
