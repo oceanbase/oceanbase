@@ -128,9 +128,14 @@ private:
                                 ObIArray<ObRawExpr *> &local_preds,
                                 ObIArray<ObRawExpr *> &pull_up_preds);
 
-  int check_expr_pullup_validity(const ObRawExpr *expr,
+  int check_expr_pullup_validity(ObRawExpr *expr,
                                  const ObIArray<ObRawExpr *> &pullup_list,
                                  int64_t &state);
+
+  int recursive_check_expr_pullup_validity(ObRawExpr *expr,
+                                           const ObIArray<ObRawExpr *> &pullup_list,
+                                           ObIArray<ObRawExpr *> &parent_exprs,
+                                           int64_t &state);
 
   int rename_pullup_predicates(ObDMLStmt &stmt,
                                TableItem &view,
@@ -170,7 +175,8 @@ private:
                                 ObIArray<ObRawExpr *> &right_pushdown_preds,
                                 ObIArray<ObRawExpr *> &output_pushdown_preds);
 
-  int extract_valid_preds(ObIArray<ObRawExpr *> &all_preds,
+  int extract_valid_preds(ObSelectStmt *stmt,
+                          ObIArray<ObRawExpr *> &all_preds,
                           ObIArray<ObRawExpr *> &valid_exprs,
                           ObIArray<ObRawExpr *> &invalid_exprs);
 

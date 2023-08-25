@@ -1028,7 +1028,21 @@ int ObTransformPredicateMoveAround::compute_pullup_predicates(
 }
 
 int ObTransformPredicateMoveAround::check_expr_pullup_validity(
-    const ObRawExpr *expr, const ObIArray<ObRawExpr *> &pullup_list, int64_t &state)
+    ObRawExpr *expr, const ObIArray<ObRawExpr *> &pullup_list, int64_t &state)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> parent_exprs;
+  if (OB_FAIL(recursive_check_expr_pullup_validity(expr, pullup_list, parent_exprs, state))) {
+    LOG_WARN("failed to check pullup validity", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformPredicateMoveAround::recursive_check_expr_pullup_validity(
+    ObRawExpr *expr,
+    const ObIArray<ObRawExpr *> &pullup_list,
+    ObIArray<ObRawExpr *> &parent_exprs,
+    int64_t &state)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
@@ -1038,13 +1052,29 @@ int ObTransformPredicateMoveAround::check_expr_pullup_validity(
              expr->is_win_func_expr() ||
              expr->is_column_ref_expr() ||
              expr->is_set_op_expr()) {
-    state = ObOptimizerUtil::find_item(pullup_list, expr) ? 1 : -1;
+    bool can_replace = false;
+    if (OB_FAIL(ObTransformUtils::check_can_replace(expr, parent_exprs, false, can_replace))) {
+      LOG_WARN("failed to check can replace expr", K(ret));
+    } else if (!can_replace) {
+      state = -1;
+    } else {
+      state = ObOptimizerUtil::find_item(pullup_list, expr) ? 1 : -1;
+    }
   } else if (expr->is_generalized_column()) {
     state = -1;
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && state >= 0 && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(check_expr_pullup_validity(expr->get_param_expr(i), pullup_list, state))) {
+      if (OB_FAIL(parent_exprs.push_back(expr))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+      if (OB_FAIL(SMART_CALL(recursive_check_expr_pullup_validity(expr->get_param_expr(i),
+                                                                  pullup_list,
+                                                                  parent_exprs,
+                                                                  state)))) {
         LOG_WARN("failed to check pullup validity", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        parent_exprs.pop_back();
       }
     }
   }
@@ -1627,8 +1657,8 @@ int ObTransformPredicateMoveAround::pushdown_into_set_stmt(ObSelectStmt *stmt,
     ObSEArray<ObRawExpr*, 16> invalid_pushdown_preds;
     ObSEArray<ObRawExpr*, 16> invalid_pullup_preds;
     const int64_t pushdown_preds_cnt = pushdown_preds.count();
-    if (OB_FAIL(extract_valid_preds(pushdown_preds, valid_preds, invalid_pushdown_preds))
-        || OB_FAIL(extract_valid_preds(pullup_preds, valid_preds, invalid_pullup_preds))) {
+    if (OB_FAIL(extract_valid_preds(parent_stmt, pushdown_preds, valid_preds, invalid_pushdown_preds))
+        || OB_FAIL(extract_valid_preds(parent_stmt, pullup_preds, valid_preds, invalid_pullup_preds))) {
       LOG_WARN("failed to check push down", K(ret));
     } else if (OB_FAIL(rename_preds.assign(valid_preds))) {
       LOG_WARN("failed to assign rename preds", K(ret));
@@ -1671,44 +1701,45 @@ int ObTransformPredicateMoveAround::pushdown_into_set_stmt(ObSelectStmt *stmt,
 
 /**
  * @brief 
- *  predicates that contains subquery or IS_OP_OPERAND_IMPLICIT_CAST flag
- *  are now allowed to be pushed down
+ *  predicates that contains subquery flag or string type set op expr
+ *  are now allowed to be pushed down into set stmt
  * @param all_preds 
  * @param valid_preds 
  * @param invalid_preds 
  * @return int 
  */
-int ObTransformPredicateMoveAround::extract_valid_preds(ObIArray<ObRawExpr *> &all_preds,
+int ObTransformPredicateMoveAround::extract_valid_preds(ObSelectStmt *stmt,
+                                                        ObIArray<ObRawExpr *> &all_preds,
                                                         ObIArray<ObRawExpr *> &valid_preds,
                                                         ObIArray<ObRawExpr *> &invalid_preds)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> parent_set_exprs;
+  if (OB_ISNULL(stmt)) {
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(stmt->get_pure_set_exprs(parent_set_exprs))) {
+    LOG_WARN("failed to get parent set exprs", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < all_preds.count(); ++i) {
-    bool is_op_implicit_cast = false;
+    bool is_valid = true;
     bool is_subquery = false;
     ObRawExpr *expr = all_preds.at(i);
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null expr", K(ret));
-    }
-    // todo sean.yyj: try to remove the restriction of implicit cast
-    for (int64_t i = 0; OB_SUCC(ret) && !is_op_implicit_cast && i < expr->get_param_count(); ++i) {
-      ObRawExpr *param_expr = expr->get_param_expr(i);
-      if (OB_ISNULL(param_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr is null", K(ret));
-      } else {
-        is_op_implicit_cast = !param_expr->has_flag(IS_CONST_EXPR) &&
-                              param_expr->has_flag(IS_OP_OPERAND_IMPLICIT_CAST);
-      }
-    }
-    if (OB_FAIL(ret)) {
     } else if (expr->has_flag(CNT_SUB_QUERY) ||
                expr->has_flag(CNT_ONETIME)) {
-      is_subquery = true;
+      is_valid = false;
+    }
+    if (OB_SUCC(ret) && is_valid) {
+      if (OB_FAIL(ObTransformUtils::check_pushdown_into_set_valid(expr,
+                                                                  parent_set_exprs,
+                                                                  is_valid))) {
+        LOG_WARN("failed to check expr pushdown validity", K(ret));
+      }
     }
     if (OB_SUCC(ret)) {
-      if (is_op_implicit_cast || is_subquery) {
+      if (!is_valid) {
         if (OB_FAIL(invalid_preds.push_back(expr))) {
           LOG_WARN("failed to push back no push down preds", K(ret));
         }
