@@ -353,6 +353,7 @@ int ObLSMemberListService::check_ls_transfer_scn_validity_for_primary_(palf::Log
 int ObLSMemberListService::check_ls_transfer_scn_validity_for_standby_(palf::LogConfigVersion &leader_config_version)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObArray<ObAddr> addr_list;
   ObAddr leader_addr;
   if (OB_ISNULL(ls_)) {
@@ -370,7 +371,7 @@ int ObLSMemberListService::check_ls_transfer_scn_validity_for_standby_(palf::Log
       share::SCN transfer_scn;
       palf::LogConfigVersion config_version;
       bool need_get_config_version = (addr == leader_addr);
-      if (OB_FAIL(get_config_version_and_transfer_scn_(need_get_config_version, addr, config_version, transfer_scn))) {
+      if (OB_TMP_FAIL(get_config_version_and_transfer_scn_(need_get_config_version, addr, config_version, transfer_scn))) {
         STORAGE_LOG(WARN, "failed to get config version and transfer scn", K(ret), K(addr));
       } else if (OB_FAIL(check_ls_transfer_scn_(transfer_scn, check_pass))) {
         STORAGE_LOG(WARN, "failed to check ls transfer scn", K(ret), K(transfer_scn));
