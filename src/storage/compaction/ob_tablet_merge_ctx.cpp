@@ -883,6 +883,8 @@ int ObTabletMergeCtx::update_tablet_directly(const ObGetMergeTablesResult &get_m
       get_merge_table_result.version_range_.multi_version_start_,
       schema_ctx_.storage_schema_,
       rebuild_seq_,
+      true/*need_check_transfer_seq*/,
+      tablet_handle_.get_obj()->get_tablet_meta().transfer_info_.transfer_seq_,
       is_major_merge_type(param_.merge_type_),
       SCN::min_scn()/*clog_checkpoint_scn*/);
   ObTabletHandle new_tablet_handle;

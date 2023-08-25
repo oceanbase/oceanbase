@@ -1266,6 +1266,8 @@ int ObTabletMergeFinishTask::add_sstable_for_merge(ObTabletMergeCtx &ctx)
                                   ctx.sstable_version_range_.multi_version_start_,
                                   ctx.schema_ctx_.storage_schema_,
                                   ctx.rebuild_seq_,
+                                  true/*need_check_transfer_seq*/,
+                                  ctx.tablet_handle_.get_obj()->get_tablet_meta().transfer_info_.transfer_seq_,
                                   is_major_merge_type(merge_type)/*need_report*/,
                                   clog_checkpoint_scn,
                                   is_minor_merge(ctx.param_.merge_type_)/*need_check_sstable*/,

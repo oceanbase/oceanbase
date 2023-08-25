@@ -166,6 +166,7 @@ private:
   common::ObArenaAllocator allocator_;
   compaction::ObTabletMergeCtx tablet_merge_ctx_;
   compaction::ObPartitionMerger *merger_;
+  int64_t transfer_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletTableBackfillTXTask);
 };
 
