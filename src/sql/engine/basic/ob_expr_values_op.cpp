@@ -19,6 +19,7 @@
 #include "sql/engine/expr/ob_expr_type_to_str.h"
 #include "sql/engine/px/ob_dfo.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/dml/ob_dml_service.h"
 
 namespace oceanbase
 {
@@ -81,6 +82,7 @@ int ObExprValuesSpec::serialize(char *buf,
       OB_UNIS_ENCODE(err_log_ct_def_);
       OB_UNIS_ENCODE(contain_ab_param_);
       OB_UNIS_ENCODE(ins_values_batch_opt_);
+      OB_UNIS_ENCODE(column_names_);
     }
   }
 
@@ -104,6 +106,7 @@ OB_DEF_SERIALIZE_SIZE(ObExprValuesSpec)
   OB_UNIS_ADD_LEN(err_log_ct_def_);
   OB_UNIS_ADD_LEN(contain_ab_param_);
   OB_UNIS_ADD_LEN(ins_values_batch_opt_);
+  OB_UNIS_ADD_LEN(column_names_);
   return len;
 }
 
@@ -116,6 +119,7 @@ OB_DEF_SERIALIZE(ObExprValuesSpec)
   OB_UNIS_ENCODE(err_log_ct_def_);
   OB_UNIS_ENCODE(contain_ab_param_);
   OB_UNIS_ENCODE(ins_values_batch_opt_);
+  OB_UNIS_ENCODE(column_names_);
   return ret;
 }
 
@@ -128,6 +132,7 @@ OB_DEF_DESERIALIZE(ObExprValuesSpec)
   OB_UNIS_DECODE(err_log_ct_def_);
   OB_UNIS_DECODE(contain_ab_param_);
   OB_UNIS_DECODE(ins_values_batch_opt_);
+  OB_UNIS_DECODE(column_names_);
   return ret;
 }
 
@@ -174,7 +179,7 @@ int64_t ObExprValuesSpec::get_serialize_size_(const ObPhyOpSeriCtx &seri_ctx) co
   OB_UNIS_ADD_LEN(err_log_ct_def_);
   OB_UNIS_ADD_LEN(contain_ab_param_);
   OB_UNIS_ADD_LEN(ins_values_batch_opt_);
-
+  OB_UNIS_ADD_LEN(column_names_);
   return len;
 }
 
@@ -447,6 +452,7 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
     }
     while (OB_SUCC(ret) && node_idx_ < real_value_cnt && !is_break) {
       int64_t real_node_idx = node_idx_ % MY_SPEC.get_value_count();
+      int64_t row_num = real_node_idx / col_num + 1;
       ObExpr *src_expr = MY_SPEC.values_.at(real_node_idx);
       ObExpr *dst_expr = MY_SPEC.output_.at(col_idx);
       ObDatumMeta src_meta = src_expr->datum_meta_;
@@ -547,6 +553,8 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
             if (OB_FAIL(datum_caster_.to_type(dst_expr->datum_meta_, str_values,
                                               real_src_expr, cm_, datum))) {
               LOG_WARN("fail to do to_type", K(ret), K(*dst_expr), K(real_src_expr));
+              ObString column_name = MY_SPEC.column_names_.at(col_idx);
+              ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, ctx_);
             }
           }
         } else if (!dst_expr->obj_meta_.is_lob_storage()) {
@@ -558,6 +566,8 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
               ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
               LOG_USER_WARN(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
             }
+            ObString column_name = MY_SPEC.column_names_.at(col_idx);
+            ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, ctx_);
           }
         } else { // dst type is lob
           if (OB_FAIL(eval_values_op_dynamic_cast_to_lob(real_src_expr, src_obj_meta, dst_expr))) {

@@ -1649,7 +1649,6 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             ret = OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD;
             SQL_RESV_LOG(WARN, "failed, invalid value", K(auto_increment),
                          K(node_str), K(err), K(ret));
-            LOG_USER_ERROR(OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD, node_str.length(), node_str.ptr());
           } else {
             auto_increment_ = auto_increment;
           }

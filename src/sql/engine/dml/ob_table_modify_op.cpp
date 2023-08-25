@@ -1017,56 +1017,6 @@ OperatorOpenOrder ObTableModifyOp::get_operator_open_order() const
   return open_order;
 }
 
-void ObTableModifyOp::log_user_error_inner(int ret, int64_t col_idx, int64_t row_num,
-                                           const ObIArray<ColumnContent> &column_infos) const
-{
-  if (OB_DATA_OUT_OF_RANGE == ret &&
-      (0 <= col_idx && col_idx < column_infos.count())) {
-    ObString column_name = column_infos.at(col_idx).column_name_;
-    LOG_USER_ERROR(OB_DATA_OUT_OF_RANGE, column_name.length(), column_name.ptr(), row_num);
-  } else if (OB_ERR_DATA_TOO_LONG == ret &&
-      (0 <= col_idx && col_idx < column_infos.count())) {
-    ObString column_name = column_infos.at(col_idx).column_name_;
-    if (lib::is_mysql_mode()) {
-      //for error code OB_ERR_DATA_TOO_LONG, oracle and mysql has the different error msg
-      //oracle error msg has output in ObExprColumnConv, so need to skip oracle mode here
-      LOG_USER_ERROR(OB_ERR_DATA_TOO_LONG, column_name.length(), column_name.ptr(), row_num);
-    }
-  } else if (OB_ERR_VALUE_LARGER_THAN_ALLOWED == ret && col_idx >= 0) {
-    LOG_USER_ERROR(OB_ERR_VALUE_LARGER_THAN_ALLOWED);
-  } else if ((OB_INVALID_DATE_VALUE == ret || OB_INVALID_DATE_FORMAT == ret)
-            && (0 <= col_idx && col_idx < column_infos.count())) {
-    ObString column_name = column_infos.at(col_idx).column_name_;
-    LOG_USER_ERROR(OB_ERR_INVALID_DATE_MSG_FMT_V2, column_name.length(),
-                   column_name.ptr(), row_num);
-  } else {
-    LOG_WARN("fail to operate row", K(ret));
-  }
-}
-
-void ObTableModifyOp::log_user_error_inner(int ret, int64_t row_num, const ColumnContent &column_info) const
-{
-  if (OB_DATA_OUT_OF_RANGE == ret) {
-    ObString column_name = column_info.column_name_;
-    LOG_USER_ERROR(OB_DATA_OUT_OF_RANGE, column_name.length(), column_name.ptr(), row_num);
-  } else if (OB_ERR_DATA_TOO_LONG == ret) {
-    ObString column_name = column_info.column_name_;
-    if (lib::is_mysql_mode()) {
-      //for error code OB_ERR_DATA_TOO_LONG, oracle and mysql has the different error msg
-      //oracle error msg has output in ObExprColumnConv, so need to skip oracle mode here
-      LOG_USER_ERROR(OB_ERR_DATA_TOO_LONG, column_name.length(), column_name.ptr(), row_num);
-    }
-  } else if (OB_ERR_VALUE_LARGER_THAN_ALLOWED == ret) {
-    LOG_USER_ERROR(OB_ERR_VALUE_LARGER_THAN_ALLOWED);
-  } else if (OB_INVALID_DATE_VALUE == ret || OB_INVALID_DATE_FORMAT == ret) {
-    ObString column_name = column_info.column_name_;
-    LOG_USER_ERROR(OB_ERR_INVALID_DATE_MSG_FMT_V2, column_name.length(),
-                   column_name.ptr(), row_num);
-  } else {
-    LOG_WARN("fail to operate row", K(ret));
-  }
-}
-
 int ObTableModifyOp::submit_all_dml_task()
 {
   int ret = OB_SUCCESS;

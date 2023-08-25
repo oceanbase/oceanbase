@@ -210,9 +210,6 @@ public:
   bool is_fk_root_session();
   const ObObjPrintParams &get_obj_print_params() { return obj_print_params_; }
   int init_foreign_key_operation();
-  void log_user_error_inner(int ret, int64_t col_idx, int64_t row_num,
-                            const ObIArray<ColumnContent> &column_infos) const;
-  void log_user_error_inner(int ret, int64_t row_num, const ColumnContent &column_info) const;
   void clear_dml_evaluated_flag();
   void clear_dml_evaluated_flag(int64_t parent_cnt, ObExpr **parent_exprs);
   void clear_dml_evaluated_flag(ObExpr *clear_expr);

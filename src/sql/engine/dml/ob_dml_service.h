@@ -235,6 +235,10 @@ public:
   static int add_trans_info_datum(ObExpr *trans_info_expr,
                                   ObEvalCtx &eval_ctx,
                                   ObChunkDatumStore::StoredRow *stored_row);
+  static int log_user_error_inner(int ret,
+                                  int64_t row_num,
+                                  common::ObString &column_name,
+                                  ObExecContext &ctx);
 
 private:
   template <int N>

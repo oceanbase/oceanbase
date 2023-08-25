@@ -31,6 +31,7 @@ public:
   ObExprValuesSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
     : ObOpSpec(alloc, type),
       values_(alloc),
+      column_names_(alloc),
       is_strict_json_desc_(alloc),
       str_values_array_(alloc),
       err_log_ct_def_(alloc),
@@ -50,6 +51,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObExprValuesSpec);
 public:
   common::ObFixedArray<ObExpr *, common::ObIAllocator> values_;
+  common::ObFixedArray<common::ObString, common::ObIAllocator> column_names_;
   common::ObFixedArray<bool, common::ObIAllocator> is_strict_json_desc_;
   common::ObFixedArray<ObStrValues, common::ObIAllocator> str_values_array_;
   ObErrLogCtDef err_log_ct_def_;

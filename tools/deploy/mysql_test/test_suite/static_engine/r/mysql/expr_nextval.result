@@ -52,7 +52,7 @@ insert into t2 (c1, c2) values ('-10', '8');
 insert into t2 (c1, c2) values (-12.1, '9');
 insert into t2 (c1, c2) values (-13.9, '10');
 insert into t2 (c1, c2) values ('abc', '11');
-ERROR HY000: Incorrect integer value
+ERROR HY000: Incorrect integer value for column 'c1' at row 1
 insert into t2 (c1, c2) values (0.0, '12');
 select * from t2;
 +-----+------+
@@ -73,7 +73,7 @@ select * from t2;
 
 insert into t3 (c1, c2) values (NULL, '1');
 insert into t3 (c1, c2) values (-1, '2');
-ERROR 22003: Out of range value for column
+ERROR 22003: Out of range value for column 'c1' at row 1
 insert into t3 (c1, c2) values (0, '3');
 insert into t3 (c1, c2) values (10, '4');
 insert into t3 (c1, c2) values (0, '5');

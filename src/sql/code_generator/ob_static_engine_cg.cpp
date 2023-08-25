@@ -1867,6 +1867,8 @@ int ObStaticEngineCG::generate_spec(ObLogExprValues &op,
     }
     if (OB_FAIL(spec.values_.prepare_allocate(op.get_value_exprs().count()))) {
       LOG_WARN("init fixed array failed", K(ret), K(op.get_value_exprs().count()));
+    } else if (OB_FAIL(spec.column_names_.prepare_allocate(op.get_value_desc().count()))) {
+      LOG_WARN("init fixed array failed", K(ret), K(op.get_value_desc().count()));
     } else if (OB_FAIL(spec.str_values_array_.prepare_allocate(op.get_output_exprs().count()))) {
       LOG_WARN("init fixed array failed", K(ret), K(op.get_output_exprs().count()));
     } else if (OB_FAIL(spec.is_strict_json_desc_.prepare_allocate(op.get_value_desc().count()))) {
@@ -1892,6 +1894,13 @@ int ObStaticEngineCG::generate_spec(ObLogExprValues &op,
       for (int64_t i = 0; OB_SUCC(ret) && i < op.get_value_desc().count(); i++) {
         ObColumnRefRawExpr *col_expr = op.get_value_desc().at(i);
         spec.is_strict_json_desc_.at(i) = (col_expr->is_strict_json_column() == IS_JSON_CONSTRAINT_STRICT);
+        if (OB_FAIL(
+            deep_copy_ob_string(
+                phy_plan_->get_allocator(),
+                col_expr->get_column_name(),
+                spec.column_names_.at(i)))) {
+          LOG_WARN("failed to deep copy string", K(ret));
+        }
       }
       // Add str_values to spec: str_values_ is worked for enum/set type for type conversion.
       // According to code in ob_expr_values_op.cpp, it should be in the same order as output_exprs.

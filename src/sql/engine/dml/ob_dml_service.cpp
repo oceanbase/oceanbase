@@ -58,7 +58,8 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
     const bool is_nullable = column_infos.at(i).is_nullable_;
     uint64_t col_idx = column_infos.at(i).projector_index_;
     if (OB_FAIL(row.at(col_idx)->eval(eval_ctx, datum))) {
-      dml_op.log_user_error_inner(ret, row_num, column_infos.at(i));
+      common::ObString column_name = column_infos.at(i).column_name_;
+      ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, dml_op.get_exec_ctx());
     } else if (!is_nullable && datum->is_null()) {
       if (is_ignore ||
           (lib::is_mysql_mode() && !is_single_value && !is_strict_mode(session->get_sql_mode()))) {
@@ -118,7 +119,8 @@ int ObDMLService::check_column_type(const ExprFixedArray &dml_row,
     ObExpr *expr = dml_row.at(column_info.projector_index_);
     ObDatum *datum = nullptr;
     if (OB_FAIL(expr->eval(dml_op.get_eval_ctx(), datum))) {
-      dml_op.log_user_error_inner(ret, row_num, column_info);
+      common::ObString column_name = column_infos.at(i).column_name_;
+      ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, dml_op.get_exec_ctx());
     } else if (!datum->is_null() && expr->obj_meta_.is_geometry()) {
       // geo column type
       const uint32_t column_srid = column_info.srs_info_.srid_;
@@ -2198,5 +2200,82 @@ int ObDMLService::handle_after_row_processing(bool execute_single_row, ObDMLModi
   }
   return ret;
 }
+
+int ObDMLService::log_user_error_inner(
+    int ret,
+    int64_t row_num,
+    common::ObString &column_name,
+    ObExecContext &ctx)
+{
+  if (OB_DATA_OUT_OF_RANGE == ret) {
+    ObSQLUtils::copy_and_convert_string_charset(
+        ctx.get_allocator(),
+        column_name,
+        column_name,
+        CS_TYPE_UTF8MB4_BIN,
+        ctx.get_my_session()->get_local_collation_connection());
+    LOG_USER_ERROR(OB_DATA_OUT_OF_RANGE, column_name.length(), column_name.ptr(), row_num);
+  } else if (OB_ERR_DATA_TOO_LONG == ret && lib::is_mysql_mode()) {
+    ObSQLUtils::copy_and_convert_string_charset(
+        ctx.get_allocator(),
+        column_name,
+        column_name,
+        CS_TYPE_UTF8MB4_BIN,
+        ctx.get_my_session()->get_local_collation_connection());
+    LOG_USER_ERROR(OB_ERR_DATA_TOO_LONG, column_name.length(), column_name.ptr(), row_num);
+  } else if (OB_ERR_VALUE_LARGER_THAN_ALLOWED == ret) {
+    LOG_USER_ERROR(OB_ERR_VALUE_LARGER_THAN_ALLOWED);
+  } else if (OB_INVALID_DATE_VALUE == ret || OB_INVALID_DATE_FORMAT == ret) {
+    ret = OB_INVALID_DATE_VALUE;
+    ObSQLUtils::copy_and_convert_string_charset(
+        ctx.get_allocator(),
+        column_name,
+        column_name,
+        CS_TYPE_UTF8MB4_BIN,
+        ctx.get_my_session()->get_local_collation_connection());
+    LOG_USER_ERROR(
+        OB_ERR_INVALID_DATE_MSG_FMT_V2,
+        column_name.length(),
+        column_name.ptr(),
+        row_num);
+  } else if ((OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD == ret || OB_INVALID_NUMERIC == ret)
+      && lib::is_mysql_mode()) {
+    ret = OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD;
+    ObSQLUtils::copy_and_convert_string_charset(
+        ctx.get_allocator(),
+        column_name,
+        column_name,
+        CS_TYPE_UTF8MB4_BIN,
+        ctx.get_my_session()->get_local_collation_connection());
+    LOG_USER_ERROR(
+        OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD,
+        column_name.length(),
+        column_name.ptr(),
+        row_num);
+  } else if (OB_ERR_WARN_DATA_OUT_OF_RANGE == ret && lib::is_mysql_mode()) {
+    ObSQLUtils::copy_and_convert_string_charset(
+        ctx.get_allocator(),
+        column_name,
+        column_name,
+        CS_TYPE_UTF8MB4_BIN,
+        ctx.get_my_session()->get_local_collation_connection());
+    LOG_USER_ERROR(OB_ERR_WARN_DATA_OUT_OF_RANGE, column_name.length(), column_name.ptr(), row_num);
+  } else if ((OB_ERR_DATA_TRUNCATED == ret || OB_ERR_DOUBLE_TRUNCATED == ret)
+      && lib::is_mysql_mode()) {
+    ret = OB_ERR_DATA_TRUNCATED;
+    ob_reset_tsi_warning_buffer();
+    ObSQLUtils::copy_and_convert_string_charset(
+        ctx.get_allocator(),
+        column_name,
+        column_name,
+        CS_TYPE_UTF8MB4_BIN,
+        ctx.get_my_session()->get_local_collation_connection());
+    LOG_USER_ERROR(OB_ERR_DATA_TRUNCATED, column_name.length(), column_name.ptr(), row_num);
+  } else {
+    LOG_WARN("fail to operate row", K(ret));
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase
