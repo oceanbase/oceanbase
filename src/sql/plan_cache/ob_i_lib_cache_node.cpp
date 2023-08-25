@@ -210,11 +210,6 @@ int64_t ObILibCacheNode::dec_ref_count(const CacheRefHandleID ref_handle)
       LOG_ERROR("invalid null lib cache");
     } else {
       ObLCNodeFactory &ln_factory = lib_cache_->get_cache_node_factory();
-      if (OB_FAIL(before_cache_evicted())) {
-        LOG_WARN("failed to process before_cache_evicted", K(ret));
-      }
-      // regardless of whether before_cache_evicted succeeds or fails, the cache node
-      // will be evicted. so ignore the error code here
       lib_cache_->dec_mem_used(get_mem_size());
       ln_factory.destroy_cache_node(this);
     }

@@ -54,7 +54,7 @@ public:
   ObPlanBaselineMgr* baseline_mgr_;
 };
 
-typedef ObList<EvolutionTaskResult*, ObIAllocator> task_result_list;
+typedef ObList<EvoResultUpdateTask*, ObIAllocator> task_result_list;
 
 class ObPlanBaselineMgr
 {
@@ -90,7 +90,6 @@ public:
   int force_accept_new_plan_baseline(ObSpmCacheCtx& spm_ctx, uint64_t plan_hash, const bool with_plan_hash);
   int sync_baseline_from_inner_table();
   int sync_baseline_from_server();
-  int sync_baseline_before_evict(ObBaselineKey &key, ObIArray<ObPlanBaselineItem*>& baselines);
 
   int alter_plan_baseline(const uint64_t tenant_id,
                           const uint64_t database_id,

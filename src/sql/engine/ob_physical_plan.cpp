@@ -555,6 +555,7 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
       //            - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
       ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_), record.exec_timestamp_.executor_t_);
       ATOMIC_AAF(&(stat_.evolution_stat_.elapsed_time_), record.get_elapsed_time());
+      ATOMIC_STORE(&(stat_.evolution_stat_.last_exec_ts_), record.exec_timestamp_.executor_end_ts_);
     }
     if (stat_.is_bind_sensitive_ && execute_count > 0) {
       int64_t pos = execute_count % ObPlanStat::MAX_SCAN_STAT_SIZE;

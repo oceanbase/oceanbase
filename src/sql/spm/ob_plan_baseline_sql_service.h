@@ -113,6 +113,26 @@ public:
                          const ObString &input_str,
                          ObString &output_str);
 
+  int update_plan_baselines_result(const uint64_t tenant_id,
+                                   EvoResultUpdateTask& evo_res);
+
+  int update_baseline_item_evolving_result(ObMySQLTransaction& trans,
+                                           const uint64_t tenant_id,
+                                           const ObBaselineKey& key,
+                                           const uint64_t& plan_hash,
+                                           const ObEvolutionStat &evo_stat,
+                                           int64_t& affected_rows);
+
+  int insert_new_baseline(ObIAllocator& allocator,
+                          const uint64_t tenant_id,
+                          const ObBaselineKey& key,
+                          ObPlanBaselineItem* baseline);
+
+  int insert_new_baseline_item(ObMySQLTransaction& trans,
+                               ObIAllocator& allocator,
+                               const uint64_t tenant_id,
+                               const ObBaselineKey& key,
+                               const ObPlanBaselineItem& baseline_item);
 private:
   const static char *EMPTY_STR;
   bool inited_;
