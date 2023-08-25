@@ -3907,7 +3907,7 @@ int ObTablet::get_kept_multi_version_start(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   multi_version_start = 0;
-  int64_t max_merged_snapshot = 0;
+  int64_t last_major_snapshot_version = 0;
   int64_t min_reserved_snapshot = 0;
   int64_t min_medium_snapshot = INT64_MAX;
   int64_t ls_min_reserved_snapshot = INT64_MAX;
@@ -3922,13 +3922,13 @@ int ObTablet::get_kept_multi_version_start(
   } else if (OB_FAIL(table_store_wrapper.get_member(table_store))) {
     LOG_WARN("fail to get table store", K(ret), K(table_store_wrapper));
   } else if (0 != table_store->get_major_sstables().count()) {
-    max_merged_snapshot = table_store->get_major_sstables().get_boundary_table(true/*last*/)->get_snapshot_version();
+    last_major_snapshot_version = table_store->get_major_sstables().get_boundary_table(true/*last*/)->get_snapshot_version();
   }
 
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(multi_version_start = tablet.get_multi_version_start())) {
   } else if (OB_FAIL(MTL(ObTenantFreezeInfoMgr*)->get_min_reserved_snapshot(
-      tablet_id, max_merged_snapshot, min_reserved_snapshot))) {
+      tablet_id, last_major_snapshot_version, min_reserved_snapshot))) {
     LOG_WARN("failed to get multi version from freeze info mgr", K(ret), K(tablet_id));
   } else if (!tablet.is_ls_inner_tablet()) {
     ObTabletMediumInfoReader medium_info_reader(tablet);
@@ -3955,13 +3955,14 @@ int ObTablet::get_kept_multi_version_start(
       if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000L /*10s*/)) {
         LOG_INFO("tablet multi version start not advance for a long time", K(ret), K(ls_id), K(tablet_id),
                 K(multi_version_start), K(old_min_reserved_snapshot), K(min_medium_snapshot),
-                "ls_min_reserved_snapshot", ls.get_min_reserved_snapshot(), K(tablet));
+                K(ls_min_reserved_snapshot), "old_tablet_multi_version_start", tablet.get_multi_version_start(),
+                "old_tablet_snaphsot_version", tablet.get_snapshot_version(), K(tablet));
       }
     }
   }
   LOG_DEBUG("get multi version start", K(ret), K(ls_id), K(tablet_id),
       K(multi_version_start), K(min_reserved_snapshot), K(min_medium_snapshot),
-      K(ls.get_min_reserved_snapshot()), K(max_merged_snapshot));
+      K(ls_min_reserved_snapshot), K(last_major_snapshot_version));
   return ret;
 }
 

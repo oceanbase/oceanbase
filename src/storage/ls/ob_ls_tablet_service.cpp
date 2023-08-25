@@ -1971,25 +1971,7 @@ int ObLSTabletService::create_tablet(
   table_store_flag.set_with_major_sstable();
   tablet_handle.reset();
 
-  // ddl schema version defense
-  if (table_schema.is_index_table()) {
-    const int64_t table_schema_version = table_schema.get_schema_version();
-    ObTenantFreezeInfoMgr::FreezeInfo freeze_info;
-
-    if (OB_FAIL(MTL_CALL_FREEZE_INFO_MGR(get_freeze_info_behind_snapshot_version, snapshot_version, freeze_info))) {
-      if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("failed to get freeze info behind snapshot version", K(ret), K(snapshot_version));
-      } else {
-        ret = OB_SUCCESS;
-      }
-    } else if (OB_UNLIKELY(table_schema_version > freeze_info.schema_version)) {
-      ret = OB_SCHEMA_ERROR;
-      LOG_ERROR("schema version in freeze info is less than table schema version", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
-        K(snapshot_version), K(table_schema_version), K(freeze_info), K(create_scn), K(table_schema));
-    }
-  }
-
-  if (FAILEDx(ObTabletCreateDeleteHelper::prepare_create_msd_tablet())) {
+  if (OB_FAIL(ObTabletCreateDeleteHelper::prepare_create_msd_tablet())) {
     LOG_WARN("fail to prepare create msd tablet", K(ret));
   }
 
