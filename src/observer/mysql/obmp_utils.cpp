@@ -634,18 +634,32 @@ int ObMPUtils::get_user_sql_literal(ObIAllocator &allocator, const ObObj &obj, O
   int64_t pos = 0;
   const bool is_plain = false;
   int64_t user_sql_print_length = 0;
+  bool need_cast_collation = lib::is_mysql_mode() && obj.is_string_type()
+                             && ObCharset::is_valid_collation(obj.get_collation_type())
+                             && CS_TYPE_BINARY != obj.get_collation_type();
+  int64_t extra_length = need_cast_collation ? 100 : 0;
   if (OB_FAIL(get_literal_print_length(obj, is_plain, user_sql_print_length, print_param))) {
     LOG_WARN("fail to get buffer length", K(ret), K(obj), K(user_sql_print_length));
   } else if (OB_UNLIKELY(user_sql_print_length <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid buffer length", K(ret), K(obj), K(user_sql_print_length));
-  } else if (NULL == (data = static_cast<char *>(allocator.alloc(user_sql_print_length)))) {
+  } else if (NULL == (data = static_cast<char *>(allocator.alloc(user_sql_print_length + extra_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to alloc mem", K(user_sql_print_length), K(ret));
   } else if (OB_FAIL(obj.print_sql_literal(data, user_sql_print_length, pos, print_param))) {
     LOG_WARN("fail to print sql  literal", K(ret), K(pos), K(user_sql_print_length), K(obj));
   } else {
-    value_str.assign_ptr(data, static_cast<uint32_t>(pos));
+    value_str = ObString(static_cast<uint32_t>(user_sql_print_length + extra_length), static_cast<uint32_t>(pos), data);
+    if (need_cast_collation) {
+      #define STR_WITH_LEN(str) (str),strlen((str))
+      value_str.write_front(STR_WITH_LEN("cast("));
+      value_str.write(STR_WITH_LEN(" as char charset "));
+      value_str.write(STR_WITH_LEN(ObCharset::get_charset(obj.get_collation_type())->csname));
+      value_str.write(STR_WITH_LEN(")"));
+      value_str.write(STR_WITH_LEN(" collate "));
+      value_str.write(STR_WITH_LEN(ObCharset::get_charset(obj.get_collation_type())->name));
+      #undef STR_WITH_LEN
+    }
   }
   return ret;
 }
