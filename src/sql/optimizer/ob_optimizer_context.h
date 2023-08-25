@@ -158,7 +158,10 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     has_var_assign_(false),
     is_var_assign_only_in_root_stmt_(false),
     failed_ds_tab_list_(),
-    has_multiple_link_stmt_(false)
+    has_multiple_link_stmt_(false),
+    hash_join_enabled_(true),
+    optimizer_sortmerge_join_enabled_(true),
+    nested_loop_join_enabled_(true)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -518,6 +521,12 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   common::ObIArray<ObDSFailTabInfo> &get_failed_ds_tab_list() { return failed_ds_tab_list_; }
   inline bool has_multiple_link_stmt() const { return has_multiple_link_stmt_; }
   inline void set_has_multiple_link_stmt(bool v) { has_multiple_link_stmt_ = v; }
+  inline bool is_hash_join_enabled() const { return hash_join_enabled_; }
+  inline void set_hash_join_enabled(bool enabled) { hash_join_enabled_ = enabled; }
+  inline bool is_merge_join_enabled() const { return optimizer_sortmerge_join_enabled_; }
+  inline void set_merge_join_enabled(bool enabled) { optimizer_sortmerge_join_enabled_ = enabled; }
+  inline bool is_nested_join_enabled() const { return nested_loop_join_enabled_; }
+  inline void set_nested_join_enabled(bool enabled) { nested_loop_join_enabled_ = enabled; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -598,6 +607,9 @@ private:
   //record the dynamic sampling falied table list, avoid repeated dynamic sampling.
   common::ObSEArray<ObDSFailTabInfo, 1, common::ModulePageAllocator, true> failed_ds_tab_list_;
   bool has_multiple_link_stmt_;
+  bool hash_join_enabled_;
+  bool optimizer_sortmerge_join_enabled_;
+  bool nested_loop_join_enabled_;
 };
 }
 }

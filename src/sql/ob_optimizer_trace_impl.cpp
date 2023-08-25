@@ -786,6 +786,9 @@ int ObOptimizerTraceImpl::trace_parameters()
     //for tenant parameters
     TRACE_PARAMETER(_rowsets_enabled, bool);
     TRACE_PARAMETER(_enable_px_batch_rescan, bool);
+    TRACE_PARAMETER(_hash_join_enabled, bool);
+    TRACE_PARAMETER(_optimizer_sortmerge_join_enabled, bool);
+    TRACE_PARAMETER(_nested_loop_join_enabled, bool);
     //for system variables
     TRACE_SYS_VAR(_PX_SHARED_HASH_JOIN, int64_t);
     TRACE_SYS_VAR(_ENABLE_PARALLEL_DML, int64_t);
