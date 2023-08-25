@@ -144,6 +144,9 @@ public:
     return OB_SUCCESS;
   }
 
+  int report_start_replay_clog_lsn_();
+  int report_finish_replay_clog_lsn_();
+
   TO_STRING_KV(K_(*ls), K_(ls_restore_status));
 protected:
   int leader_fill_tablet_group_restore_arg_(const ObIArray<ObTabletID> &tablet_need_restore,
@@ -213,6 +216,7 @@ protected:
   storage::ObStorageRpc *storage_rpc_;
   common::ObMySQLProxy *proxy_;
   common::ObAddr self_addr_;
+  bool need_report_clog_lsn_;
   
   DISALLOW_COPY_AND_ASSIGN(ObILSRestoreState);
 };

@@ -689,7 +689,8 @@ ObILSRestoreState::ObILSRestoreState(const share::ObLSRestoreStatus::Status &sta
     svr_rpc_proxy_(nullptr),
     storage_rpc_(nullptr),
     proxy_(nullptr),
-    self_addr_()
+    self_addr_(),
+    need_report_clog_lsn_(true)
 {
 }
 
@@ -1447,6 +1448,44 @@ int ObILSRestoreState::check_replay_to_target_scn_(
   return ret;
 }
 
+int ObILSRestoreState::report_start_replay_clog_lsn_()
+{
+  int ret = OB_SUCCESS;
+  LSN lsn;
+  if (need_report_clog_lsn_) {
+    if (OB_FAIL(ls_->get_log_handler()->get_end_lsn(lsn))) {
+      LOG_WARN("failed to get end lsn", K(ret), KPC_(ls));
+    } else {
+      SERVER_EVENT_ADD("storage_ha", "log_restore_start_lsn",
+        "tenant_id", MTL_ID(),
+        "ls_id", ls_->get_ls_id().id(),
+        "lsn", lsn.val_,
+        "curr_status_str", ObLSRestoreStatus::get_restore_status_str(ls_restore_status_));
+      ATOMIC_SET(&need_report_clog_lsn_, false);
+    }
+  }
+  return ret;
+}
+
+int ObILSRestoreState::report_finish_replay_clog_lsn_()
+{
+  int ret = OB_SUCCESS;
+  LSN lsn;
+  if (need_report_clog_lsn_) {
+    if (OB_FAIL(ls_->get_log_handler()->get_end_lsn(lsn))) {
+      LOG_WARN("failed to get end lsn", K(ret), KPC_(ls));
+    } else {
+      SERVER_EVENT_ADD("storage_ha", "log_restore_finish_lsn",
+        "tenant_id", MTL_ID(),
+        "ls_id", ls_->get_ls_id().id(),
+        "lsn", lsn.val_,
+        "curr_status_str", ObLSRestoreStatus::get_restore_status_str(ls_restore_status_));
+      ATOMIC_SET(&need_report_clog_lsn_, false);
+    }
+  }
+  return ret;
+}
+
 //================================ObLSRestoreStartState=======================================
 ObLSRestoreStartState::ObLSRestoreStartState()
   : ObILSRestoreState(ObLSRestoreStatus::Status::RESTORE_START)
@@ -1538,6 +1577,8 @@ int ObLSRestoreStartState::do_with_no_ls_meta_()
   ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::RESTORE_TO_CONSISTENT_SCN);
   if (OB_FAIL(online_())) {
     LOG_WARN("fail to enable log", K(ret));
+  } else if (OB_FAIL(report_start_replay_clog_lsn_())) {
+    LOG_WARN("fail to report start replay clog lsn", K(ret));
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
     LOG_WARN("fail to advance status", K(ret), K(*ls_), K(next_status));
   }
@@ -2057,6 +2098,8 @@ int ObLSRestoreConsistentScnState::do_restore()
     }
   } else if (OB_FAIL(set_empty_for_transfer_tablets_())) {
     LOG_WARN("fail to set empty for transfer tablets", K(ret), KPC_(ls));
+  } else if (OB_FAIL(report_finish_replay_clog_lsn_())) {
+    LOG_WARN("fail to report finish replay clog lsn", K(ret));
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
     LOG_WARN("fail to advance status", K(ret), KPC_(ls), K(next_status));
   } else {
@@ -2196,6 +2239,8 @@ int ObLSQuickRestoreState::leader_quick_restore_()
       if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
         LOG_INFO("clog replay not finish, wait later", KPC(ls_));
       }
+    } else if (OB_FAIL(report_finish_replay_clog_lsn_())) {
+      LOG_WARN("fail to report finish replay clog lsn", K(ret));
     } else if (!tablet_mgr_.is_restore_completed()) {
     } else if (!has_rechecked_after_clog_recovered_) {
       // Force reload all tablets, ensure all transfer tablets has no transfer table.
@@ -2261,6 +2306,8 @@ int ObLSQuickRestoreState::follower_quick_restore_()
       if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
         LOG_INFO("clog replay not finish, wait later", KPC(ls_));
       }
+    } else if (OB_FAIL(report_finish_replay_clog_lsn_())) {
+      LOG_WARN("fail to report finish replay clog lsn", K(ret));
     } else if (!tablet_mgr_.is_restore_completed()) {
     } else if (!has_rechecked_after_clog_recovered_) {
       // Force reload all tablets, ensure all transfer tablets has no transfer table.
@@ -2725,6 +2772,8 @@ int ObLSRestoreWaitState::leader_wait_follower_()
     LOG_WARN("fail to check can advance status", K(ret), KPC(ls_));
   } else if (!can_advance) {
     // do nothing
+  } else if ((next_status.is_quick_restore() || next_status.is_restore_to_consistent_scn()) && OB_FAIL(report_start_replay_clog_lsn_())) {
+    LOG_WARN("fail to report start replay clog lsn", K(ret));
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
     LOG_WARN("fail to advance status", K(ret), K(next_status), KPC(ls_));
   }
@@ -2757,6 +2806,8 @@ int ObLSRestoreWaitState::follower_wait_leader_()
       LOG_WARN("fail to check can advance status", K(ret), KPC(ls_));
     } else if (!can_advance) {
       // do nothing
+    } else if ((next_status.is_quick_restore() || next_status.is_restore_to_consistent_scn()) && OB_FAIL(report_start_replay_clog_lsn_())) {
+      LOG_WARN("fail to report start replay clog lsn", K(ret));
     } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
       LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
     } else {
