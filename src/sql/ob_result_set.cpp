@@ -577,7 +577,10 @@ OB_INLINE void ObResultSet::store_affected_rows(ObPhysicalPlanCtx &plan_ctx)
       && (lib::is_oracle_mode() || !is_pl_stmt(get_stmt_type()))) {
     affected_row = 0;
   } else if (stmt::T_SELECT == get_stmt_type()) {
-    affected_row = lib::is_oracle_mode() ? plan_ctx.get_affected_rows() : -1;
+    affected_row = plan_ctx.get_affected_rows();
+    if (lib::is_mysql_mode() && 0 == affected_row) {
+      affected_row = -1;
+    }
   } else {
     affected_row = get_affected_rows();
   }
