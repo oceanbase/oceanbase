@@ -859,6 +859,7 @@ typedef enum ObItemType
   T_WIN_FUN_LAG,
   T_WIN_FUN_AVG,
   T_WIN_FUN_RATIO_TO_REPORT,
+  T_TABLET_AUTOINC_NEXTVAL = 3266, // hidden_pk for heap table
 
   ///< @note values of the following symbols are insiginificant
   T_DEFAULT,
@@ -1074,8 +1075,6 @@ typedef enum ObItemType
   T_CONNECT_BY_ISLEAF,
   T_CTE_SEARCH_COLUMN,
   T_CTE_CYCLE_COLUMN,
-  T_TABLET_AUTOINC_NEXTVAL, // hidden_pk for heap table
-
 
   T_RENAME_TABLE,
   T_RENAME_TABLE_ACTION,
