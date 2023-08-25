@@ -333,14 +333,13 @@ bool ObTransferUtils::is_need_retry_error(const int err)
   return bool_ret;
 }
 
-int ObTransferUtils::block_tx(const uint64_t tenant_id, const share::ObLSID &ls_id)
+int ObTransferUtils::block_tx(const uint64_t tenant_id, const share::ObLSID &ls_id, share::SCN &gts)
 {
   int ret = OB_SUCCESS;
   ObLSService *ls_svr = NULL;
   common::ObAddr leader_addr;
   ObStorageHASrcInfo src_info;
   ObStorageRpc *storage_rpc = NULL;
-  share::SCN gts;
   if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
@@ -362,14 +361,13 @@ int ObTransferUtils::block_tx(const uint64_t tenant_id, const share::ObLSID &ls_
 }
 
 // TODO(yangyi.yyy): get gts before block and kill tx, unblock no need get gts
-int ObTransferUtils::kill_tx(const uint64_t tenant_id, const share::ObLSID &ls_id)
+int ObTransferUtils::kill_tx(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &gts)
 {
   int ret = OB_SUCCESS;
   ObLSService *ls_svr = NULL;
   common::ObAddr leader_addr;
   ObStorageHASrcInfo src_info;
   ObStorageRpc *storage_rpc = NULL;
-  share::SCN gts;
   if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
@@ -378,8 +376,6 @@ int ObTransferUtils::kill_tx(const uint64_t tenant_id, const share::ObLSID &ls_i
     LOG_WARN("storage rpc should not be NULL", K(ret), KP(storage_rpc));
   } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(tenant_id, ls_id, leader_addr))) {
     LOG_WARN("failed to get ls leader", K(ret), K(tenant_id));
-  } else if (OB_FAIL(get_gts(tenant_id, gts))) {
-    LOG_WARN("failed to get gts", K(ret), K(tenant_id));
   } else {
     src_info.src_addr_ = leader_addr;
     src_info.cluster_id_ = GCONF.cluster_id;
@@ -390,14 +386,15 @@ int ObTransferUtils::kill_tx(const uint64_t tenant_id, const share::ObLSID &ls_i
   return ret;
 }
 
-int ObTransferUtils::unblock_tx(const uint64_t tenant_id, const share::ObLSID &ls_id)
+int ObTransferUtils::unblock_tx(const uint64_t tenant_id, const share::ObLSID &ls_id,
+    const bool need_get_gts, const share::SCN &gts)
 {
   int ret = OB_SUCCESS;
   ObLSService *ls_svr = NULL;
   common::ObAddr leader_addr;
   ObStorageHASrcInfo src_info;
   ObStorageRpc *storage_rpc = NULL;
-  share::SCN gts;
+  share::SCN new_gts = gts;
 
   if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
     ret = OB_ERR_UNEXPECTED;
@@ -407,12 +404,12 @@ int ObTransferUtils::unblock_tx(const uint64_t tenant_id, const share::ObLSID &l
     LOG_WARN("storage rpc should not be NULL", K(ret), KP(storage_rpc));
   } else if (OB_FAIL(ObStorageHAUtils::get_ls_leader(tenant_id, ls_id, leader_addr))) {
     LOG_WARN("failed to get ls leader", K(ret), K(tenant_id));
-  } else if (OB_FAIL(get_gts(tenant_id, gts))) {
+  } else if (need_get_gts && OB_FAIL(get_gts(tenant_id, new_gts))) {
     LOG_WARN("failed to get gts", K(ret), K(tenant_id));
   } else {
     src_info.src_addr_ = leader_addr;
     src_info.cluster_id_ = GCONF.cluster_id;
-    if (OB_FAIL(storage_rpc->unblock_tx(tenant_id, src_info, ls_id, gts))) {
+    if (OB_FAIL(storage_rpc->unblock_tx(tenant_id, src_info, ls_id, new_gts))) {
       LOG_WARN("failed to block tx", K(ret), K(tenant_id), K(src_info), K(ls_id), K(gts));
     }
   }

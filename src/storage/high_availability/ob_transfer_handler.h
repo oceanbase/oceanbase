@@ -132,6 +132,7 @@ private:
       common::ObAddr &addr);
   int do_trans_transfer_start_(
       const share::ObTransferTaskInfo &task_info,
+      const palf::LogConfigVersion &config_version,
       ObTimeoutCtx &timeout_ctx,
       ObMySQLTransaction &trans);
   int start_trans_(
@@ -206,13 +207,18 @@ private:
       const share::ObLSID &ls_id);
   int unblock_tx_(
       const uint64_t tenant_id,
-      const share::ObLSID &ls_id);
+      const share::ObLSID &ls_id,
+      const bool is_abort);
   int get_gts_(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id);
   int record_server_event_(const int32_t ret, const int64_t round, const share::ObTransferTaskInfo &task_info) const;
   int clear_prohibit_medium_flag_(const share::ObLSID &ls_id);
   int stop_ls_schedule_medium_(const share::ObLSID &ls_id, bool &succ_stop);
+  int get_config_version_(
+      palf::LogConfigVersion &config_version);
+  int check_config_version_(
+      const palf::LogConfigVersion &config_version);
 
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
@@ -228,6 +234,7 @@ private:
   int64_t retry_count_;
   ObTransferWorkerMgr transfer_worker_mgr_;
   int64_t round_;
+  share::SCN local_block_tx_scn_;
   DISALLOW_COPY_AND_ASSIGN(ObTransferHandler);
 };
 }

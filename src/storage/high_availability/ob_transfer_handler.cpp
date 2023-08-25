@@ -61,7 +61,8 @@ ObTransferHandler::ObTransferHandler()
     sql_proxy_(nullptr),
     retry_count_(0),
     transfer_worker_mgr_(),
-    round_(0)
+    round_(0),
+    local_block_tx_scn_()
 {
 }
 
@@ -416,6 +417,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   ObMySQLTransaction trans;
   bool enable_kill_trx = false;
   bool succ_stop_medium = false;
+  palf::LogConfigVersion config_version;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -454,7 +456,9 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
     } else if (OB_FAIL(lock_src_and_dest_ls_member_list_(task_info, task_info.src_ls_id_, task_info.dest_ls_id_))) {
       LOG_WARN("failed to lock src and dest ls member list", K(ret), K(task_info));
     } // The transaction can only be killed after checking the tablet, so as to avoid too long writing ban time.
-    else if (OB_FAIL(check_start_status_transfer_tablets_(task_info))) {
+    else if (OB_FAIL(get_config_version_(config_version))) {
+      LOG_WARN("failed to get config version", K(ret), K(task_info));
+    } else if (OB_FAIL(check_start_status_transfer_tablets_(task_info))) {
       LOG_WARN("failed to check start status transfer tablets", K(ret), K(task_info));
     } else if (!enable_kill_trx && OB_FAIL(check_src_ls_has_active_trans_(task_info.src_ls_id_))) {
       LOG_WARN("failed to check src ls active trans", K(ret), K(task_info));
@@ -462,7 +466,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       LOG_WARN("failed to block and kill tx", K(ret), K(task_info));
     } else if (OB_FAIL(reset_timeout_for_trans_(timeout_ctx))) {
       LOG_WARN("failed to reset timeout for trans", K(ret));
-    } else if (OB_FAIL(do_trans_transfer_start_(task_info, timeout_ctx, trans))) {
+    } else if (OB_FAIL(do_trans_transfer_start_(task_info, config_version, timeout_ctx, trans))) {
       LOG_WARN("failed to do trans transfer start", K(ret), K(task_info));
     } else {
       DEBUG_SYNC(BEFORE_TRANSFER_START_COMMIT);
@@ -485,7 +489,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   if (OB_FAIL(ret)) {
     if (can_retry_(task_info, ret)) {
       LOG_INFO("transfer task can retry", K(ret), K(task_info));
-      if (OB_TMP_FAIL(unblock_tx_(task_info.tenant_id_, task_info.src_ls_id_))) {
+      if (OB_TMP_FAIL(unblock_tx_(task_info.tenant_id_, task_info.src_ls_id_, false/*is_abort*/))) {
         LOG_WARN("failed to unblock tx", K(ret));
       } else if (OB_TMP_FAIL(unlock_src_and_dest_ls_member_list_(task_info))) {
         LOG_WARN("failed to unlock src and dest ls member list", K(tmp_ret), K(ret), K(task_info));
@@ -870,6 +874,7 @@ int ObTransferHandler::get_ls_leader_(
 
 int ObTransferHandler::do_trans_transfer_start_(
     const share::ObTransferTaskInfo &task_info,
+    const palf::LogConfigVersion &config_version,
     ObTimeoutCtx &timeout_ctx,
     ObMySQLTransaction &trans)
 {
@@ -883,16 +888,18 @@ int ObTransferHandler::do_trans_transfer_start_(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
-  } else if (!task_info.is_valid()) {
+  } else if (!task_info.is_valid() || !config_version.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("do trans transfer start get invalid argument", K(ret), K(task_info));
   } else if (OB_FAIL(do_tx_start_transfer_out_(task_info, trans))) {
     LOG_WARN("failed to do tx start transfer out", K(ret), K(task_info));
+  } else if (OB_FAIL(check_config_version_(config_version))) {
+    LOG_WARN("failed to check config version", K(ret), K(task_info));
   } else if (OB_FAIL(get_start_transfer_out_scn_(task_info, timeout_ctx, start_scn))) {
     LOG_WARN("failed to get start transfer out log ts", K(ret), K(task_info));
   } else if (OB_FAIL(check_src_ls_has_active_trans_(task_info.src_ls_id_, 1/*transfer out trans*/))) {
     LOG_WARN("failed to check src ls has active trans", K(ret), K(task_info));
-  } else if (OB_FAIL(unblock_tx_(task_info.tenant_id_, task_info.src_ls_id_))) {
+  } else if (OB_FAIL(unblock_tx_(task_info.tenant_id_, task_info.src_ls_id_, false/*is_abort*/))) {
     LOG_WARN("failed to unblock tx", K(ret), K(task_info));
   } else if (OB_FAIL(wait_src_ls_replay_to_start_scn_(task_info, start_scn, timeout_ctx))) {
     LOG_WARN("failed to wait src ls replay to start scn", K(ret), K(task_info));
@@ -1717,7 +1724,7 @@ int ObTransferHandler::do_with_aborted_status_(
         LOG_WARN("failed to lock transfer task", K(ret), K(task_info));
       } else if (OB_FAIL(update_transfer_status_(task_info, next_status, scn, result, trans))) {
         LOG_WARN("failed to update transfer status", K(ret), K(task_info), K(next_status));
-      } else if (OB_FAIL(unblock_tx_(task_info.tenant_id_, task_info.src_ls_id_))) {
+      } else if (OB_FAIL(unblock_tx_(task_info.tenant_id_, task_info.src_ls_id_, true/*is_abort*/))) {
         LOG_WARN("failed to unblock tx", K(ret), K(task_info));
       } else if (OB_FAIL(unlock_src_and_dest_ls_member_list_(task_info))) {
         LOG_WARN("failed to unlock src and dest ls member list", K(ret), K(task_info));
@@ -1859,7 +1866,7 @@ int ObTransferHandler::block_tx_(
     const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTransferUtils::block_tx(tenant_id, ls_id))) {
+  if (OB_FAIL(ObTransferUtils::block_tx(tenant_id, ls_id, local_block_tx_scn_))) {
     LOG_WARN("failed to block tx", K(ret), K(tenant_id), K(ls_id));
   }
   return ret;
@@ -1870,7 +1877,7 @@ int ObTransferHandler::kill_tx_(
     const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTransferUtils::kill_tx(tenant_id, ls_id))) {
+  if (OB_FAIL(ObTransferUtils::kill_tx(tenant_id, ls_id, local_block_tx_scn_))) {
     LOG_WARN("failed to kill tx", K(ret), K(tenant_id), K(ls_id));
   }
   return ret;
@@ -1878,10 +1885,12 @@ int ObTransferHandler::kill_tx_(
 
 int ObTransferHandler::unblock_tx_(
     const uint64_t tenant_id,
-    const share::ObLSID &ls_id)
+    const share::ObLSID &ls_id,
+    const bool is_abort)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTransferUtils::unblock_tx(tenant_id, ls_id))) {
+  const bool need_get_gts = is_abort;
+  if (OB_FAIL(ObTransferUtils::unblock_tx(tenant_id, ls_id, need_get_gts, local_block_tx_scn_))) {
     LOG_WARN("failed to unblock tx", K(ret), K(tenant_id), K(ls_id));
   }
 #ifdef ERRSIM
@@ -1972,6 +1981,39 @@ int ObTransferHandler::clear_prohibit_medium_flag_(const share::ObLSID &ls_id)
   }
   return ret;
 }
+
+int ObTransferHandler::get_config_version_(
+    palf::LogConfigVersion &config_version)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls transfer handler do not init", K(ret));
+  } else if (OB_FAIL(ls_->get_log_handler()->get_leader_config_version(config_version))) {
+    LOG_WARN("failed to get leader config version", K(ret), K(config_version), KPC(ls_));
+  }
+  return ret;
+}
+int ObTransferHandler::check_config_version_(
+    const palf::LogConfigVersion &config_version)
+{
+  int ret = OB_SUCCESS;
+  palf::LogConfigVersion current_config_version;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls transfer handler do not init", K(ret));
+  } else if (!config_version.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check config version get invalid arugment", K(ret), K(config_version));
+  } else if (OB_FAIL(get_config_version_(current_config_version))) {
+    LOG_WARN("failed to get config version", K(ret), KPC(ls_));
+  } else if (config_version != current_config_version) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("ls leader has been changed", K(ret), KPC(ls_), K(config_version), K(current_config_version));
+  }
+  return ret;
+}
+
 }
 }
 

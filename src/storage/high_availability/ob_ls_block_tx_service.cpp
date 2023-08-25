@@ -229,7 +229,9 @@ int ObLSBlockTxService::update_seq_(const share::SCN &new_seq)
   if (!new_seq.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "seq is not valid", K(ret), K(new_seq), K(cur_seq_));
-  } else if (new_seq <= cur_seq_) {
+  } else if (new_seq == cur_seq_) {
+    // do nothing
+  } else if (new_seq < cur_seq_) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "seq is too old", K(ret), K(new_seq), K(cur_seq_));
   } else {

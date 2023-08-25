@@ -58,9 +58,10 @@ private:
 struct ObTransferUtils
 {
   static bool is_need_retry_error(const int err);
-  static int block_tx(const uint64_t tenant_id, const share::ObLSID &ls_id);
-  static int kill_tx(const uint64_t tenant_id, const share::ObLSID &ls_id);
-  static int unblock_tx(const uint64_t tenant_id, const share::ObLSID &ls_id);
+  static int block_tx(const uint64_t tenant_id, const share::ObLSID &ls_id, share::SCN &gts);
+  static int kill_tx(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &gts);
+  static int unblock_tx(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const bool need_get_gts, const share::SCN &gts);
   static int get_gts(const uint64_t tenant_id, share::SCN &gts);
 };
 
