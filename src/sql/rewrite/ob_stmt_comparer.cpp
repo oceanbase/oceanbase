@@ -478,26 +478,21 @@ int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
     // check group by exprs
     if (OB_SUCC(ret) && QueryRelation::QUERY_UNCOMPARABLE != relation) {
       bool is_consistent = false;
-      common::ObSEArray<ObRawExpr*, 4> first_groupby_rollup_exprs;
-      common::ObSEArray<ObRawExpr*, 4> second_groupby_rollup_exprs;
-      if (OB_FAIL(append(first_groupby_rollup_exprs, first_sel->get_group_exprs()))) {
-        LOG_WARN("failed to append group by rollup exprs.", K(ret));
-      } else if (OB_FAIL(append(first_groupby_rollup_exprs, first_sel->get_rollup_exprs()))) {
-        LOG_WARN("failed to append group by rollup exprs.", K(ret));
-      } else if (OB_FAIL(append(second_groupby_rollup_exprs, second_sel->get_group_exprs()))) {
-        LOG_WARN("failed to append group by rollup exprs.", K(ret));
-      } else if (OB_FAIL(append(second_groupby_rollup_exprs, second_sel->get_rollup_exprs()))) {
-        LOG_WARN("failed to append group by rollup exprs.", K(ret));
-      } else { /*do nothing.*/ }
-      first_count = first_groupby_rollup_exprs.count();
-      second_count = second_groupby_rollup_exprs.count();
-      if (OB_FAIL(ret)) {
-      } else if ((first_sel->get_aggr_item_size() > 0 ||
+      first_count = first_sel->get_group_exprs().count();
+      second_count = second_sel->get_group_exprs().count();
+      int64_t first_rollup_count = first_sel->get_rollup_exprs().count();
+      int64_t second_rollup_count = second_sel->get_rollup_exprs().count();
+      if ((first_sel->get_aggr_item_size() > 0 ||
            second_sel->get_aggr_item_size() > 0)
            && relation != QueryRelation::QUERY_EQUAL) {
         relation = QueryRelation::QUERY_UNCOMPARABLE;
         LOG_TRACE("succeed to check group by map", K(relation), K(map_info));
-      } else if (0 == first_count && 0 == second_count) {
+      } else if (first_rollup_count != second_rollup_count ||
+                 first_count != second_count) {
+        relation = QueryRelation::QUERY_UNCOMPARABLE;
+        LOG_TRACE("succeed to check group by map", K(relation), K(map_info));
+      } else if (0 == first_count && 0 == second_count &&
+                 0 == first_rollup_count && 0 == second_rollup_count) {
         map_info.is_group_equal_ = true;
       } else if (OB_FAIL(ObTransformUtils::check_group_by_consistent(first_sel,
                                                                      is_consistent))) {
@@ -513,14 +508,27 @@ int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
         LOG_WARN("failed to allcoate group by map", K(ret));
       } else if (OB_FAIL(compute_conditions_map(first_sel,
                                                 second_sel,
-                                                first_groupby_rollup_exprs,
-                                                second_groupby_rollup_exprs,
+                                                first_sel->get_group_exprs(),
+                                                second_sel->get_group_exprs(),
                                                 map_info,
                                                 map_info.group_map_,
                                                 match_count))) {
         LOG_WARN("failed to compute group by expr map", K(ret));
       } else if (match_count != first_count || match_count != second_count) {
         relation = QueryRelation::QUERY_UNCOMPARABLE;
+        LOG_TRACE("succeed to check group by map", K(relation), K(map_info));
+      } else if (first_rollup_count != 0) {
+        ObStmtCompareContext context(first_sel, second_sel, map_info, &first_sel->get_query_ctx()->calculable_items_);
+        bool rollup_match = true;
+        for (int64_t i = 0; OB_SUCC(ret) && rollup_match && i < first_rollup_count; i++) {
+          if (OB_FAIL(is_same_condition(first_sel->get_rollup_exprs().at(i),
+                                        second_sel->get_rollup_exprs().at(i),
+                                        context,
+                                        rollup_match))) {
+            LOG_WARN("failed to check is condition equal", K(ret));
+          }
+        }
+        map_info.is_group_equal_ = rollup_match;
         LOG_TRACE("succeed to check group by map", K(relation), K(map_info));
       } else {
         // todo @guoping.wgp we can do better to check containment relationship for group by clause
