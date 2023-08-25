@@ -1846,11 +1846,13 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
                        (ObRawExpr::EXPR_CONST == expr->get_expr_class() ||
                         (ObRawExpr::EXPR_OPERATOR == expr->get_expr_class() &&
                          expr->is_static_const_expr())) &&
-                        !expr->get_result_type().is_null() &&
-                        !expr->get_result_type().is_datetime()) {
-              common::ObObj zero_obj(0);
-              if (OB_FAIL(column.set_cur_default_value(zero_obj))) {
-                LOG_WARN("set default value failed", K(ret));
+                        !expr->get_result_type().is_null()) {
+              common::ObObjType result_type = expr->get_result_type().get_obj_meta().get_type();
+              if (ob_is_numeric_type(result_type) || ob_is_string_tc(result_type) || ob_is_time_tc(result_type)) {
+                common::ObObj zero_obj(0);
+                if (OB_FAIL(column.set_cur_default_value(zero_obj))) {
+                  LOG_WARN("set default value failed", K(ret));
+                }
               }
             } else { /*do nothing*/ }
           }
