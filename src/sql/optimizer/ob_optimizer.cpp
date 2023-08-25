@@ -745,7 +745,20 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
       ctx_.set_has_subquery_in_function_table(has_subquery_in_function_table);
     }
   }
-
+  if (OB_SUCC(ret)) {
+    if (!tenant_config.is_valid() ||
+        (!tenant_config->_hash_join_enabled &&
+        !tenant_config->_optimizer_sortmerge_join_enabled &&
+        !tenant_config->_nested_loop_join_enabled)) {
+      ctx_.set_hash_join_enabled(true);
+      ctx_.set_merge_join_enabled(true);
+      ctx_.set_nested_join_enabled(true);
+    } else {
+      ctx_.set_hash_join_enabled(tenant_config->_hash_join_enabled);
+      ctx_.set_merge_join_enabled(tenant_config->_optimizer_sortmerge_join_enabled);
+      ctx_.set_nested_join_enabled(tenant_config->_nested_loop_join_enabled);
+    }
+  }
   LOG_TRACE("succeed to init optimization env", K(ctx_.use_pdml()), K(ctx_.get_parallel()));
   return ret;
 }
