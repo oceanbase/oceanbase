@@ -151,7 +151,7 @@ int ObMetaPointer<T>::read_from_disk(common::ObArenaAllocator &allocator, char *
     STORAGE_LOG(WARN, "slog handler is nullptr", K(ret), KP(ckpt_slog_hanlder));
   } else if (OB_FAIL(ckpt_slog_hanlder->read_from_disk(phy_addr_, allocator, r_buf, r_len))) {
     if (OB_SEARCH_NOT_FOUND != ret) {
-      STORAGE_LOG(ERROR, "fail to read from addr", K(ret), K(phy_addr_));
+      STORAGE_LOG(WARN, "fail to read from addr", K(ret), K(phy_addr_));
     }
   } else {
     addr = phy_addr_;
