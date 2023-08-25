@@ -310,6 +310,8 @@ struct ObUpdateTableStoreParam
     const int64_t multi_version_start,
     const ObStorageSchema *storage_schema,
     const int64_t rebuild_seq,
+    const bool need_check_transfer_seq,
+    const int64_t transfer_seq,
     const bool need_report = false,
     const share::SCN clog_checkpoint_scn = share::SCN::min_scn(),
     const bool need_check_sstable = false,
@@ -330,7 +332,8 @@ struct ObUpdateTableStoreParam
   TO_STRING_KV(KP_(sstable), K_(snapshot_version), K_(clog_checkpoint_scn), K_(multi_version_start),
                K_(need_report), KPC_(storage_schema), K_(rebuild_seq), K_(update_with_major_flag),
                K_(need_check_sstable), K_(ddl_info), K_(allow_duplicate_sstable),
-               K_(tx_data), K_(binding_info), K_(autoinc_seq), "merge_type", merge_type_to_str(merge_type_));
+               K_(tx_data), K_(binding_info), K_(autoinc_seq), "merge_type", merge_type_to_str(merge_type_),
+               K_(need_check_transfer_seq), K_(transfer_seq));
 
   const blocksstable::ObSSTable *sstable_;
   int64_t snapshot_version_;
@@ -343,6 +346,8 @@ struct ObUpdateTableStoreParam
   bool need_check_sstable_;
   ObDDLTableStoreParam ddl_info_;
   bool allow_duplicate_sstable_;
+  bool need_check_transfer_seq_;
+  int64_t transfer_seq_;
 
   // msd
   ObTabletTxMultiSourceDataUnit tx_data_;

@@ -335,7 +335,8 @@ private:
       const ObTableHandleV2 &table_handle,
       ObLS *ls,
       ObTablet *tablet,
-      const ObStorageSchema &storage_schema);
+      const ObStorageSchema &storage_schema,
+      const int64_t transfer_seq);
   static int inner_update_tablet_table_store_with_minor_(
       ObLS *ls,
       ObTablet *tablet,

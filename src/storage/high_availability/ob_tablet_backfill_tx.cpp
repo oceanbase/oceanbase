@@ -752,7 +752,8 @@ ObTabletTableBackfillTXTask::ObTabletTableBackfillTXTask()
     param_(),
     allocator_("TableBackfillTX"),
     tablet_merge_ctx_(param_, allocator_),
-    merger_(nullptr)
+    merger_(nullptr),
+    transfer_seq_()
 {
 }
 
@@ -788,6 +789,7 @@ int ObTabletTableBackfillTXTask::init(
     tablet_id_ = tablet_id;
     tablet_handle_ = tablet_handle;
     table_handle_ = table_handle;
+    transfer_seq_ = tablet_handle.get_obj()->get_tablet_meta().transfer_info_.transfer_seq_;
     is_inited_ = true;
   }
   return ret;
@@ -962,6 +964,8 @@ int ObTabletTableBackfillTXTask::update_merge_sstable_()
                                   tablet_merge_ctx_.sstable_version_range_.multi_version_start_,
                                   tablet_merge_ctx_.schema_ctx_.storage_schema_,
                                   rebuild_seq,
+                                  true/*need_check_transfer_seq*/,
+                                  transfer_seq_,
                                   is_major_merge_type(tablet_merge_ctx_.param_.merge_type_),
                                   tablet_merge_ctx_.merged_sstable_.get_end_scn());
 

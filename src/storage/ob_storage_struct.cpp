@@ -238,6 +238,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     need_check_sstable_(false),
     ddl_info_(),
     allow_duplicate_sstable_(false),
+    need_check_transfer_seq_(false),
+    transfer_seq_(-1),
     tx_data_(),
     binding_info_(),
     autoinc_seq_(),
@@ -252,6 +254,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     const int64_t multi_version_start,
     const ObStorageSchema *storage_schema,
     const int64_t rebuild_seq,
+    const bool need_check_transfer_seq,
+    const int64_t transfer_seq,
     const bool need_report,
     const SCN clog_checkpoint_scn,
     const bool need_check_sstable,
@@ -268,6 +272,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     need_check_sstable_(need_check_sstable),
     ddl_info_(),
     allow_duplicate_sstable_(allow_duplicate_sstable),
+    need_check_transfer_seq_(need_check_transfer_seq),
+    transfer_seq_(transfer_seq),
     tx_data_(),
     binding_info_(),
     autoinc_seq_(),
@@ -296,6 +302,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     need_check_sstable_(false),
     ddl_info_(),
     allow_duplicate_sstable_(false),
+    need_check_transfer_seq_(false),
+    transfer_seq_(-1),
     tx_data_(),
     binding_info_(),
     autoinc_seq_(),
@@ -306,12 +314,17 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
 
 bool ObUpdateTableStoreParam::is_valid() const
 {
-  return multi_version_start_ >= ObVersionRange::MIN_VERSION
+  bool bret = false;
+  bret = multi_version_start_ >= ObVersionRange::MIN_VERSION
       && snapshot_version_ >= ObVersionRange::MIN_VERSION
       && clog_checkpoint_scn_.is_valid()
       && nullptr != storage_schema_
       && storage_schema_->is_valid()
       && rebuild_seq_ >= 0;
+  if (need_check_transfer_seq_) {
+    bret = bret && transfer_seq_ >= 0;
+  }
+  return bret;
 }
 
 

@@ -292,6 +292,8 @@ int ObTablet::init(
       || OB_ISNULL(log_handler_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl), K_(memtable_mgr), K_(log_handler));
+  } else if (param.need_check_transfer_seq_ && OB_FAIL(check_transfer_seq_equal(old_tablet, param.transfer_seq_))) {
+    LOG_WARN("failed to check transfer seq eq", K(ret), K(old_tablet), K(param));
   } else if (OB_FAIL(old_tablet.get_max_sync_storage_schema_version(max_sync_schema_version))) {
     LOG_WARN("failed to get max sync storage schema version", K(ret));
   } else if (OB_FAIL(old_tablet.load_storage_schema(tmp_arena_allocator, old_storage_schema))) {
@@ -6044,6 +6046,17 @@ int ObTablet::check_snapshot_readable(int64_t snapshot_version)
   } else if (OB_UNLIKELY(!ddl_data_cache_.is_redefined() && snapshot_version < ddl_data_cache_.get_snapshot_version())) {
     ret = OB_SNAPSHOT_DISCARDED;
     LOG_WARN("read data before ddl", K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K_(ddl_data_cache));
+  }
+  return ret;
+}
+
+int ObTablet::check_transfer_seq_equal(const ObTablet &old_tablet, const int64_t transfer_seq)
+{
+  int ret = OB_SUCCESS;
+  if (old_tablet.get_tablet_meta().transfer_info_.transfer_seq_ != transfer_seq) {
+    ret = OB_TABLET_TRANSFER_SEQ_NOT_MATCH;
+    LOG_WARN("old tablet transfer seq not eq with new transfer seq",
+        "old_tablet_meta", old_tablet.get_tablet_meta(), K(transfer_seq));
   }
   return ret;
 }
