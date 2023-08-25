@@ -299,8 +299,12 @@ int add_alias_name(ParseNode *node, ParseResult *result, int end)
       if (OB_UNLIKELY(NULL == trans_buf)) {
         ret = OB_PARSER_ERR_NO_MEMORY;
       } else {
+        bool is_ansi_quotes = false;
+        IS_ANSI_QUOTES(result->sql_mode_, is_ansi_quotes);
         for (; index1 < node->str_len_; index1++) {
-          if ('\"' == node->str_value_[index1] && !(index1 > 0 && '\\' == node->str_value_[index1 - 1])) {
+          if (is_ansi_quotes && '\"' == node->str_value_[index1]) {
+            //do nothing, in mysql ansi quotes sql mode: " <==> `, just skip
+          } else if ('\"' == node->str_value_[index1] && !(index1 > 0 && '\\' == node->str_value_[index1 - 1])) {
             trans_buf[index2++] = '\\';
             trans_buf[index2++] = '\"';
           } else {

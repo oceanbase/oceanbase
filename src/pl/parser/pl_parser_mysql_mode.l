@@ -32,6 +32,8 @@ extern void obpl_mysql_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, yy
 %x sq
 %x dq
 %x bt
+/* the adq is used to process dq in ANSI_QUOTES sql_mode*/
+%x adq
 
 U  [\x80-\xbf]
 U_2  [\xc2-\xdf]
@@ -241,13 +243,22 @@ NULL {
 }
 
 {dqbegin} {
-  BEGIN(dq);
+  check_ptr(yylval);
   ObParseCtx *parse_ctx = (ObParseCtx *)yyextra;
   ObScannerCtx *scanner_ctx = &(parse_ctx->scanner_ctx_);
   scanner_ctx->first_column_ = yylloc->first_column;
   prepare_literal_buffer(scanner_ctx, parse_ctx->stmt_len_ + 1, parse_ctx->mem_pool_);
-  malloc_new_node(yylval->node, parse_ctx->mem_pool_, T_VARCHAR, 0);
-  yylval->node->str_len_ = 0;
+  bool is_ansi_quotes = false;
+  IS_ANSI_QUOTES(scanner_ctx->sql_mode_, is_ansi_quotes);
+  if (is_ansi_quotes) {
+    BEGIN(adq);
+    malloc_new_node(yylval->node, parse_ctx->mem_pool_, T_IDENT, 0);
+    yylval->node->str_len_ = 0;
+  } else {
+    BEGIN(dq);
+    malloc_new_node(yylval->node, parse_ctx->mem_pool_, T_VARCHAR, 0);
+    yylval->node->str_len_ = 0;
+  }
 }
 
 <dq>{dqend} {
@@ -315,6 +326,51 @@ NULL {
 }
 
 <dq><<EOF>>  {
+  obpl_mysql_yyerror(yylloc, yyextra, "unterminated doublequoted string\n");
+  return END_P;
+}
+
+<adq>{dqend} {
+  BEGIN(INITIAL);
+  check_ptr(yylval);
+  ObParseCtx *parse_ctx = (ObParseCtx *)yyextra;
+  ObScannerCtx *scanner_ctx = &(parse_ctx->scanner_ctx_);
+  char *tmp_literal = scanner_ctx->tmp_literal_;
+  yylloc->first_column = scanner_ctx->first_column_;
+  tmp_literal[yylval->node->str_len_] = '\0';
+
+  char *dup_value = NULL;
+  if (parse_ctx->is_not_utf8_connection_) {
+    dup_value = parse_str_convert_utf8(parse_ctx->charset_info_, tmp_literal,
+                                       parse_ctx->mem_pool_, &(yylval->node->str_len_),
+                                       &(parse_ctx->global_errno_));
+    check_identifier_convert_result(parse_ctx->global_errno_);
+  } else {
+    dup_value = parse_strndup(tmp_literal, yylval->node->str_len_ + 1, parse_ctx->mem_pool_);
+  }
+  check_ptr(dup_value);
+  yylval->node->str_value_ = dup_value;
+  return IDENT;
+}
+
+<adq>{dqdouble} {
+  check_ptr(yylval);
+  ObParseCtx *parse_ctx = (ObParseCtx *)yyextra;
+  ObScannerCtx *scanner_ctx = &(parse_ctx->scanner_ctx_);
+  char *tmp_literal = scanner_ctx->tmp_literal_;
+  tmp_literal[yylval->node->str_len_++] = '"';
+}
+
+<adq>{dqcontent} {
+  check_ptr(yylval);
+  ObParseCtx *parse_ctx = (ObParseCtx *)yyextra;
+  ObScannerCtx *scanner_ctx = &(parse_ctx->scanner_ctx_);
+  char *tmp_literal = scanner_ctx->tmp_literal_;
+  memmove(tmp_literal + yylval->node->str_len_, yytext, yyleng);
+  yylval->node->str_len_ += yyleng;
+}
+
+<adq><<EOF>>  {
   obpl_mysql_yyerror(yylloc, yyextra, "unterminated doublequoted string\n");
   return END_P;
 }

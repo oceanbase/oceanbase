@@ -7545,7 +7545,8 @@ int ObPLResolver::resolve_condition_compile(
   ObString old_sql;
   ObString new_sql;
   ObPLParser pl_parser(
-    resolve_ctx_.allocator_, resolve_ctx_.session_info_.get_local_collation_connection());
+    resolve_ctx_.allocator_, resolve_ctx_.session_info_.get_local_collation_connection(),
+    resolve_ctx_.session_info_.get_sql_mode());
   ParseResult parse_result;
 
   HEAP_VAR(ObPLFunctionAST, unit_ast, resolve_ctx_.allocator_) {
@@ -10734,7 +10735,7 @@ int ObPLResolver::resolve_package_accessible_by(
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
-  ObPLParser parser(allocator, CS_TYPE_UTF8MB4_BIN);
+  ObPLParser parser(allocator, CS_TYPE_UTF8MB4_BIN, resolve_ctx_.session_info_.get_sql_mode());
   ObStmtNodeTree *parse_tree = NULL;
   const ObStmtNodeTree *package_node = NULL;
   const ObStmtNodeTree *clause_node = NULL;
@@ -10780,7 +10781,7 @@ int ObPLResolver::resolve_routine_accessible_by(
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
-  ObPLParser parser(allocator, CS_TYPE_UTF8MB4_BIN);
+  ObPLParser parser(allocator, CS_TYPE_UTF8MB4_BIN, resolve_ctx_.session_info_.get_sql_mode());
   ObStmtNodeTree *parse_tree = NULL;
   const ObStmtNodeTree *routine_node = NULL;
   const ObStmtNodeTree *clause_node = NULL;

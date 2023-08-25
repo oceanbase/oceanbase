@@ -34,9 +34,10 @@ namespace pl
 class ObPLParser
 {
 public:
-  ObPLParser(common::ObIAllocator &allocator, common::ObCollationType conn_collation)
+  ObPLParser(common::ObIAllocator &allocator, common::ObCollationType conn_collation, ObSQLMode sql_mode = 0)
     : allocator_(allocator),
-      connection_collation_(conn_collation)
+      connection_collation_(conn_collation),
+      sql_mode_(sql_mode)
   {}
   int fast_parse(const ObString &stmt_block,
                  ParseResult &parse_result);
@@ -71,6 +72,7 @@ private:
 private:
   common::ObIAllocator &allocator_;
   common::ObCollationType connection_collation_;
+  ObSQLMode sql_mode_;
 };
 }  // namespace pl
 }  // namespace oceanbase
