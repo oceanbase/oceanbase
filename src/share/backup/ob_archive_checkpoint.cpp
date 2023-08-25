@@ -383,7 +383,8 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
         // is marked with deleted.
         gen_ls_piece.is_ls_deleted_ = true;
       } else {
-        piece.piece_info_.checkpoint_scn_ = MIN(piece.piece_info_.checkpoint_scn_, ls_piece.checkpoint_scn_);
+        // checkpoint scn may be smaller than start scn for empty piece.
+        piece.piece_info_.checkpoint_scn_ = MAX(piece.piece_info_.start_scn_, MIN(piece.piece_info_.checkpoint_scn_, ls_piece.checkpoint_scn_));
       }
 
       piece.piece_info_.max_scn_ = MAX(piece.piece_info_.max_scn_, ls_piece.checkpoint_scn_);
