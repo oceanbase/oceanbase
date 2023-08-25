@@ -303,6 +303,7 @@ int ObRemoteLogIterator<LogEntryType>::prepare_buf_()
   } else if (OB_FAIL(data_buffer_.set(lsn, buf, buf_size))) {
     CLOG_LOG(WARN, "data buffer set failed", K(ret), K(lsn), K(buf), K(buf_size), KPC(this));
   } else {
+    EVENT_TENANT_ADD(ObStatEventIds::RESTORE_READ_LOG_SIZE, buf_size, tenant_id_);
     CLOG_LOG(INFO, "data buffer init succ", K(ret), K_(data_buffer), KPC(this));
   }
   return ret;

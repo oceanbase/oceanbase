@@ -240,6 +240,25 @@
     } \
   }
 
+#define EXTRACT_DATETIME_FIELD_MYSQL_SKIP_RET(result, column_name, field, type) \
+  if (OB_SUCC(ret)) \
+  { \
+    int64_t int_value = 0; \
+    if (OB_SUCCESS == (ret = (result).get_datetime(column_name, int_value))) \
+    { \
+      field = static_cast<type>(int_value); \
+    } \
+    else if (OB_ERR_NULL_VALUE == ret || OB_ERR_COLUMN_NOT_FOUND == ret) \
+    { \
+      ret = OB_SUCCESS; \
+      field = static_cast<type>(0); \
+    } \
+    else \
+    { \
+      SQL_LOG(WARN, "fail to get column in row. ", K(column_name), K(ret)); \
+    } \
+  }
+
 #define EXTRACT_INT_FIELD_MYSQL(result, column_name, field, type) \
   if (OB_SUCC(ret)) \
   { \

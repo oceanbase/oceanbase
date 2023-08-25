@@ -126,7 +126,7 @@ int ObAllVirtualSysEvent::process_curr_tenant(ObNewRow *&row)
       }
     }
 
-    if (event_iter_ >= ObWaitEventIds::WAIT_EVENT_END) {
+    if (event_iter_ >= WAIT_EVENTS_TOTAL) {
       ret = OB_ITER_END;
     }
 

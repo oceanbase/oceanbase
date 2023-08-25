@@ -303,10 +303,9 @@ int ObAutoincrementService::init_for_backup(ObAddr &addr,
 int ObAutoincrementService::get_handle(AutoincParam &param,
                                        CacheHandle *&handle)
 {
-  ObActiveSessionGuard::get_stat().in_sequence_load_ = true;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sequence_load);
   int ret = param.autoinc_mode_is_order_ ?
     get_handle_order(param, handle) : get_handle_noorder(param, handle);
-  ObActiveSessionGuard::get_stat().in_sequence_load_ = false;
   return ret;
 }
 

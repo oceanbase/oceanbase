@@ -5668,9 +5668,119 @@ def_table_schema(
 # 453 : __all_zone_storage
 # 454 : __all_zone_storage_operation
 # 455 : __wr_active_session_history
+def_table_schema(
+  owner = 'roland.qk',
+  table_name    = '__wr_active_session_history',
+  table_id      = '455',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns    = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('cluster_id', 'int'),
+    ('snap_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('sample_id', 'int'),
+    ('session_id', 'int'),
+  ],
+  in_tenant_space=True,
+  is_cluster_private=True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('sample_time', 'timestamp'),
+    ('user_id', 'int', 'true'),
+    ('session_type', 'bool', 'true'),
+    ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH', 'true'),
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
+    ('event_no', 'int', 'true'),
+    ('time_waited', 'int', 'true'),
+    ('p1', 'int', 'true'),
+    ('p2', 'int', 'true'),
+    ('p3', 'int', 'true'),
+    ('sql_plan_line_id', 'int', 'true'),
+    ('time_model', 'uint', 'true'),
+    ('module', 'varchar:64', 'true'),
+    ('action', 'varchar:64', 'true'),
+    ('client_id', 'varchar:64', 'true'),
+    ('backtrace', 'varchar:512', 'true'),
+    ('plan_id', 'int', 'true'),
+  ],
+)
+
 # 456 : __wr_snapshot
+def_table_schema(
+    owner = 'yuchen.wyc',
+    table_id = 456,
+    table_name = '__wr_snapshot',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('cluster_id', 'int'),
+      ('snap_id', 'int'),
+      ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+      ('svr_port', 'int'),
+    ],
+
+    in_tenant_space=True,
+    is_cluster_private=True,
+    meta_record_in_sys = False,
+
+    normal_columns = [
+        ('begin_interval_time', 'timestamp'),
+        ('end_interval_time', 'timestamp'),
+        ('snap_flag', 'int','true'),
+        ('startup_time', 'timestamp','true'),
+        ('status', 'int','true')
+    ],
+)
+
 # 457 : __wr_statname
+def_table_schema(
+    owner = 'yuchen.wyc',
+    table_id = 457,
+    table_name = '__wr_statname',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+        ('tenant_id', 'int'),
+        ('cluster_id', 'int'),
+        ('stat_id', 'int'),
+    ],
+
+    in_tenant_space=True,
+    is_cluster_private=True,
+    meta_record_in_sys = False,
+
+    normal_columns = [
+        ('stat_name', 'varchar:64')
+    ],
+)
+
 # 458 : __wr_sysstat
+def_table_schema(
+    owner = 'yuchen.wyc',
+    table_id = 458,
+    table_name = '__wr_sysstat',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+        ('tenant_id', 'int'),
+        ('cluster_id', 'int'),
+        ('snap_id', 'int'),
+        ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+        ('svr_port', 'int'),
+        ('stat_id', 'int'),
+    ],
+
+    in_tenant_space=True,
+    is_cluster_private=True,
+    meta_record_in_sys = False,
+
+    normal_columns = [
+        ('value', 'int','true')
+    ],
+)
 
 def_table_schema(
   owner = 'msy164651',
@@ -5707,6 +5817,32 @@ def_table_schema(
 # 470 : __all_mview_refresh_stmt_stats
 # 471 : __all_dbms_lock_allocated
 # 472 : __wr_control
+def_table_schema(
+    owner = 'yuchen.wyc',
+    table_id = 472,
+    table_name = '__wr_control',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = [],
+    rowkey_columns = [
+      ('tenant_id', 'int')
+    ],
+
+    in_tenant_space=True,
+    is_cluster_private=True,
+    meta_record_in_sys = False,
+
+    normal_columns = [
+      ('snap_interval', 'varchar:64'),
+      ('snapint_num', 'int'),
+      ('retention', 'varchar:64'),
+      ('retention_num', 'int'),
+      ('most_recent_snap_id', 'int', 'true'),
+      ('most_recent_snap_time', 'timestamp', 'true'),
+      ('mrct_baseline_id', 'int', 'true'),
+      ('topnsql', 'int'),
+      ('mrct_bltmpl_id', 'int', 'true'),
+    ],
+)
 
 def_table_schema(
   owner = 'wanhong.wwh',
@@ -11089,10 +11225,18 @@ def_table_schema(
     ('ACTION', 'varchar:64', 'true'),
     ('CLIENT_ID', 'varchar:64', 'true'),
     ('BACKTRACE', 'varchar:512', 'true'),
-    ('PLAN_ID', 'int')
+    ('PLAN_ID', 'int'),
+    ('IS_WR_SAMPLE', 'bool', 'false', 'false'),
+    ('TIME_MODEL', 'uint', 'false', '0'),
+    ('IN_COMMITTING', 'bool'),
+    ('IN_STORAGE_READ', 'bool'),
+    ('IN_STORAGE_WRITE', 'bool'),
+    ('IN_REMOTE_DAS_EXECUTION', 'bool'),
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
+  index = {'all_virtual_ash_i1' : { 'index_columns' : ['SAMPLE_TIME'],
+                    'index_using_type' : 'USING_BTREE'}},
 )
 
 def_table_schema(
@@ -12147,9 +12291,29 @@ def_table_schema(
 
 
 # 12388: __all_virtual_wr_active_session_history
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12388',
+  table_name = '__all_virtual_wr_active_session_history',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__wr_active_session_history']))
 # 12389: __all_virtual_wr_snapshot
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12389',
+  table_name = '__all_virtual_wr_snapshot',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__wr_snapshot']))
 # 12390: __all_virtual_wr_statname
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12390',
+  table_name = '__all_virtual_wr_statname',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__wr_statname']))
 # 12391: __all_virtual_wr_sysstat
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12391',
+  table_name = '__all_virtual_wr_sysstat',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__wr_sysstat']))
 # 12392: __all_virtual_kv_connection
 def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12393', all_def_keywords['__all_virtual_long_ops_status']))
 
@@ -12274,8 +12438,11 @@ def_table_schema(
 # 12411: __all_virtual_mview_refresh_stats
 # 12412: __all_virtual_mview_refresh_change_stats
 # 12413: __all_virtual_mview_refresh_stmt_stats
-# 12414: __all_virtual_wr_control
-
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12414',
+  table_name = '__all_virtual_wr_control',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__wr_control']))
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12415',
   table_name = '__all_virtual_tenant_event_history',
@@ -12569,10 +12736,11 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15295'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15296', all_def_keywords['__all_virtual_opt_stat_gather_monitor'])))
 def_table_schema(**gen_sys_agent_virtual_table_def('15297', all_def_keywords['__all_virtual_long_ops_status']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298', all_def_keywords['__all_virtual_thread'])))
-# 15299: __all_virtual_wr_active_session_history
-# 15300: __all_virtual_wr_snapshot
-# 15301: __all_virtual_wr_statname
-# 15302: __all_virtual_wr_sysstat
+
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15299', all_def_keywords['__all_virtual_wr_active_session_history'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15300', all_def_keywords['__all_virtual_wr_snapshot'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15301', all_def_keywords['__all_virtual_wr_statname'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15302', all_def_keywords['__all_virtual_wr_sysstat'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15303', all_def_keywords['__all_virtual_arbitration_member_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304', all_def_keywords['__all_virtual_arbitration_service_status'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keywords['__all_virtual_obj_lock']))
@@ -12681,7 +12849,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15388'
 # 15396: __all_mview_refresh_stmt_stats
 # 15397: __all_dbms_lock_allocated
 # 15398: __all_virtual_wr_control
-
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15398', all_def_keywords['__all_virtual_wr_control'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15399', all_def_keywords['__all_virtual_tenant_event_history']))
 
 # 15400: __all_virtual_balance_task_helper
@@ -22690,6 +22858,10 @@ def_table_schema(
       CAST(IF (IN_SQL_EXECUTION = 1, 'Y', 'N') AS CHAR(1)) AS IN_SQL_EXECUTION,
       CAST(IF (IN_PX_EXECUTION = 1, 'Y', 'N') AS CHAR(1)) AS IN_PX_EXECUTION,
       CAST(IF (IN_SEQUENCE_LOAD = 1, 'Y', 'N') AS CHAR(1)) AS IN_SEQUENCE_LOAD,
+      CAST(IF (IN_COMMITTING = 1, 'Y', 'N') AS CHAR(1)) AS IN_COMMITTING,
+      CAST(IF (IN_STORAGE_READ = 1, 'Y', 'N') AS CHAR(1)) AS IN_STORAGE_READ,
+      CAST(IF (IN_STORAGE_WRITE = 1, 'Y', 'N') AS CHAR(1)) AS IN_STORAGE_WRITE,
+      CAST(IF (IN_REMOTE_DAS_EXECUTION = 1, 'Y', 'N') AS CHAR(1)) AS IN_REMOTE_DAS_EXECUTION,
       CAST(MODULE AS CHAR(64)) AS MODULE,
       CAST(ACTION AS CHAR(64)) AS ACTION,
       CAST(CLIENT_ID AS CHAR(64)) AS CLIENT_ID,
@@ -26960,13 +27132,288 @@ def_table_schema(
 )
 
 # 21389: DBA_WR_ACTIVE_SESSION_HISTORY
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'DBA_WR_ACTIVE_SESSION_HISTORY',
+  table_id        = '21389',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+      ASH.CLUSTER_ID AS CLUSTER_ID,
+      ASH.TENANT_ID AS TENANT_ID,
+      ASH.SNAP_ID AS SNAP_ID,
+      ASH.SVR_IP AS SVR_IP,
+      ASH.SVR_PORT AS SVR_PORT,
+      ASH.SAMPLE_ID AS SAMPLE_ID,
+      ASH.SESSION_ID AS SESSION_ID,
+      ASH.SAMPLE_TIME AS SAMPLE_TIME,
+      ASH.USER_ID AS USER_ID,
+      ASH.SESSION_TYPE AS SESSION_TYPE,
+      CAST(IF (ASH.EVENT_NO = 0, 'ON CPU', 'WAITING') AS CHAR(7)) AS SESSION_STATE,
+      ASH.SQL_ID AS SQL_ID,
+      ASH.TRACE_ID AS TRACE_ID,
+      ASH.EVENT_NO AS EVENT_NO,
+      ASH.TIME_WAITED AS TIME_WAITED,
+      ASH.P1 AS P1,
+      ASH.P2 AS P2,
+      ASH.P3 AS P3,
+      ASH.SQL_PLAN_LINE_ID AS SQL_PLAN_LINE_ID,
+      ASH.TIME_MODEL AS TIME_MODEL,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 1) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PARSE,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 2) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PL_PARSE,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 4) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PLAN_CACHE,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 8) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_SQL_OPTIMIZE,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 16) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_SQL_EXECUTION,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 32) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PX_EXECUTION,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 64) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_SEQUENCE_LOAD,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 128) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_COMMITTING,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 256) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_STORAGE_READ,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 512) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_STORAGE_WRITE,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 1024) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_REMOTE_DAS_EXECUTION,
+      ASH.MODULE AS MODULE,
+      ASH.ACTION AS ACTION,
+      ASH.CLIENT_ID AS CLIENT_ID,
+      ASH.BACKTRACE AS BACKTRACE,
+      ASH.PLAN_ID AS PLAN_ID
+  FROM
+    (
+      OCEANBASE.__ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH
+      JOIN OCEANBASE.__ALL_VIRTUAL_WR_SNAPSHOT SNAP
+      ON ASH.CLUSTER_ID = SNAP.CLUSTER_ID
+      AND ASH.TENANT_ID = SNAP.TENANT_ID
+      AND ASH.SNAP_ID = SNAP.SNAP_ID
+      AND ASH.SVR_IP = SNAP.SVR_IP
+      AND ASH.SVR_PORT = SNAP.SVR_PORT
+    )
+  WHERE
+    ASH.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND SNAP.STATUS = 0;
+  """.replace("\n", " ")
+)
 # 21390: CDB_WR_ACTIVE_SESSION_HISTORY
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'CDB_WR_ACTIVE_SESSION_HISTORY',
+  table_id        = '21390',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT
+      ASH.CLUSTER_ID AS CLUSTER_ID,
+      ASH.TENANT_ID AS TENANT_ID,
+      ASH.SNAP_ID AS SNAP_ID,
+      ASH.SVR_IP AS SVR_IP,
+      ASH.SVR_PORT AS SVR_PORT,
+      ASH.SAMPLE_ID AS SAMPLE_ID,
+      ASH.SESSION_ID AS SESSION_ID,
+      ASH.SAMPLE_TIME AS SAMPLE_TIME,
+      ASH.USER_ID AS USER_ID,
+      ASH.SESSION_TYPE AS SESSION_TYPE,
+      CAST(IF (ASH.EVENT_NO = 0, 'ON CPU', 'WAITING') AS CHAR(7)) AS SESSION_STATE,
+      ASH.SQL_ID AS SQL_ID,
+      ASH.TRACE_ID AS TRACE_ID,
+      ASH.EVENT_NO AS EVENT_NO,
+      ASH.TIME_WAITED AS TIME_WAITED,
+      ASH.P1 AS P1,
+      ASH.P2 AS P2,
+      ASH.P3 AS P3,
+      ASH.SQL_PLAN_LINE_ID AS SQL_PLAN_LINE_ID,
+      ASH.TIME_MODEL AS TIME_MODEL,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 1) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PARSE,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 2) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PL_PARSE,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 4) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PLAN_CACHE,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 8) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_SQL_OPTIMIZE,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 16) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_SQL_EXECUTION,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 32) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PX_EXECUTION,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 64) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_SEQUENCE_LOAD,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 128) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_COMMITTING,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 256) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_STORAGE_READ,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 512) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_STORAGE_WRITE,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 1024) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_REMOTE_DAS_EXECUTION,
+      ASH.MODULE AS MODULE,
+      ASH.ACTION AS ACTION,
+      ASH.CLIENT_ID AS CLIENT_ID,
+      ASH.BACKTRACE AS BACKTRACE,
+      ASH.PLAN_ID AS PLAN_ID
+  FROM
+    (
+      OCEANBASE.__ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH
+      JOIN OCEANBASE.__ALL_VIRTUAL_WR_SNAPSHOT SNAP
+      ON ASH.CLUSTER_ID = SNAP.CLUSTER_ID
+      AND ASH.TENANT_ID = SNAP.TENANT_ID
+      AND ASH.SNAP_ID = SNAP.SNAP_ID
+      AND ASH.SVR_IP = SNAP.SVR_IP
+      AND ASH.SVR_PORT = SNAP.SVR_PORT
+    )
+  WHERE
+    SNAP.STATUS = 0;
+  """.replace("\n", " ")
+)
 # 21391: DBA_WR_SNAPSHOT
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'DBA_WR_SNAPSHOT',
+  table_id        = '21391',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT CLUSTER_ID,
+         TENANT_ID,
+         SNAP_ID,
+         SVR_IP,
+         SVR_PORT,
+         BEGIN_INTERVAL_TIME,
+         END_INTERVAL_TIME,
+         SNAP_FLAG,
+         STARTUP_TIME
+  FROM OCEANBASE.__ALL_VIRTUAL_WR_SNAPSHOT
+  WHERE STATUS = 0
+        AND TENANT_ID=EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
 # 21392: CDB_WR_SNAPSHOT
-# 21393: DBA_WR_STAT_NAME
-# 21394: CDB_WR_STAT_NAME
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'CDB_WR_SNAPSHOT',
+  table_id        = '21392',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT CLUSTER_ID,
+         TENANT_ID,
+         SNAP_ID,
+         SVR_IP,
+         SVR_PORT,
+         BEGIN_INTERVAL_TIME,
+         END_INTERVAL_TIME,
+         SNAP_FLAG,
+         STARTUP_TIME
+  FROM OCEANBASE.__ALL_VIRTUAL_WR_SNAPSHOT
+  WHERE STATUS = 0;
+  """.replace("\n", " ")
+)
+# 21393: DBA_WR_STATNAME
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'DBA_WR_STATNAME',
+  table_id        = '21393',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT CLUSTER_ID,
+         TENANT_ID,
+         STAT_ID,
+         STAT_NAME
+  FROM OCEANBASE.__ALL_VIRTUAL_WR_STATNAME
+  WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
+# 21394: CDB_WR_STATNAME
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'CDB_WR_STATNAME',
+  table_id        = '21394',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT CLUSTER_ID,
+         TENANT_ID,
+         STAT_ID,
+         STAT_NAME
+  FROM OCEANBASE.__ALL_VIRTUAL_WR_STATNAME;
+  """.replace("\n", " ")
+)
+
 # 21395: DBA_WR_SYSSTAT
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'DBA_WR_SYSSTAT',
+  table_id        = '21395',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+      STAT.CLUSTER_ID AS CLUSTER_ID,
+      STAT.TENANT_ID AS TENANT_ID,
+      STAT.SNAP_ID AS SNAP_ID,
+      STAT.SVR_IP AS SVR_IP,
+      STAT.SVR_PORT AS SVR_PORT,
+      STAT.STAT_ID AS STAT_ID,
+      STAT.VALUE AS VALUE
+  FROM
+    (
+      OCEANBASE.__ALL_VIRTUAL_WR_SYSSTAT STAT
+      JOIN OCEANBASE.__ALL_VIRTUAL_WR_SNAPSHOT SNAP
+      ON STAT.CLUSTER_ID = SNAP.CLUSTER_ID
+      AND STAT.TENANT_ID = SNAP.TENANT_ID
+      AND STAT.SNAP_ID = SNAP.SNAP_ID
+      AND STAT.SVR_IP = SNAP.SVR_IP
+      AND STAT.SVR_PORT = SNAP.SVR_PORT
+    )
+  WHERE
+    STAT.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND SNAP.STATUS = 0;
+  """.replace("\n", " ")
+)
 # 21396: CDB_WR_SYSSTAT
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'CDB_WR_SYSSTAT',
+  table_id        = '21396',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT
+      STAT.CLUSTER_ID AS CLUSTER_ID,
+      STAT.TENANT_ID AS TENANT_ID,
+      STAT.SNAP_ID AS SNAP_ID,
+      STAT.SVR_IP AS SVR_IP,
+      STAT.SVR_PORT AS SVR_PORT,
+      STAT.STAT_ID AS STAT_ID,
+      STAT.VALUE AS VALUE
+  FROM
+    (
+      OCEANBASE.__ALL_VIRTUAL_WR_SYSSTAT STAT
+      JOIN OCEANBASE.__ALL_VIRTUAL_WR_SNAPSHOT SNAP
+      ON STAT.CLUSTER_ID = SNAP.CLUSTER_ID
+      AND STAT.TENANT_ID = SNAP.TENANT_ID
+      AND STAT.SNAP_ID = SNAP.SNAP_ID
+      AND STAT.SVR_IP = SNAP.SVR_IP
+      AND STAT.SVR_PORT = SNAP.SVR_PORT
+    )
+  WHERE
+    SNAP.STATUS = 0;
+  """.replace("\n", " ")
+)
 # 21397: GV$OB_KV_CONNECTIONS
 # 21398: V$OB_KV_CONNECTIONS
 
@@ -27934,8 +28381,48 @@ def_table_schema(
 # 21440: DBA_OB_MVIEW_REFRESH_STATS
 # 21441: DBA_OB_MVIEW_REFRESH_CHANGE_STATS
 # 21442: DBA_OB_MVIEW_REFRESH_STMT_STATS
-# 21443: DBA_WR_CONTROL
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'DBA_WR_CONTROL',
+  table_id        = '21443',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+      SETTING.TENANT_ID AS TENANT_ID,
+      SETTING.SNAP_INTERVAL AS SNAP_INTERVAL,
+      SETTING.RETENTION AS RETENTION,
+      SETTING.TOPNSQL AS TOPNSQL
+  FROM
+    OCEANBASE.__ALL_VIRTUAL_WR_CONTROL SETTING
+  WHERE
+    SETTING.TENANT_ID = EFFECTIVE_TENANT_ID()
+  """.replace("\n", " ")
+)
 # 21444: CDB_WR_CONTROL
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'CDB_WR_CONTROL',
+  table_id        = '21444',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT
+      SETTING.TENANT_ID AS TENANT_ID,
+      SETTING.SNAP_INTERVAL AS SNAP_INTERVAL,
+      SETTING.RETENTION AS RETENTION,
+      SETTING.TOPNSQL AS TOPNSQL
+  FROM
+    OCEANBASE.__ALL_VIRTUAL_WR_CONTROL SETTING
+  """.replace("\n", " ")
+)
 def_table_schema(
   owner           = 'msy164651',
   table_name      = 'DBA_OB_LS_HISTORY',
@@ -45416,10 +45903,154 @@ def_table_schema(
 )
 
 # 25229: DBA_WR_ACTIVE_SESSION_HISTORY
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'DBA_WR_ACTIVE_SESSION_HISTORY',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25229',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+      ASH.CLUSTER_ID AS CLUSTER_ID,
+      ASH.TENANT_ID AS TENANT_ID,
+      ASH.SNAP_ID AS SNAP_ID,
+      ASH.SVR_IP AS SVR_IP,
+      ASH.SVR_PORT AS SVR_PORT,
+      ASH.SAMPLE_ID AS SAMPLE_ID,
+      ASH.SESSION_ID AS SESSION_ID,
+      ASH.SAMPLE_TIME AS SAMPLE_TIME,
+      ASH.USER_ID AS USER_ID,
+      ASH.SESSION_TYPE AS SESSION_TYPE,
+      CAST(DECODE(ASH.EVENT_NO, 0, 'ON CPU', 'WAITING') AS VARCHAR2(7)) AS SESSION_STATE,
+      ASH.SQL_ID AS SQL_ID,
+      ASH.TRACE_ID AS TRACE_ID,
+      ASH.EVENT_NO AS EVENT_NO,
+      ASH.TIME_WAITED AS TIME_WAITED,
+      ASH.P1 AS P1,
+      ASH.P2 AS P2,
+      ASH.P3 AS P3,
+      ASH.SQL_PLAN_LINE_ID AS SQL_PLAN_LINE_ID,
+      ASH.TIME_MODEL AS TIME_MODEL,
+      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 1) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PARSE,
+      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 2) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PL_PARSE,
+      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 4) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PLAN_CACHE,
+      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 8) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_SQL_OPTIMIZE,
+      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 16) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_SQL_EXECUTION,
+      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 32) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PX_EXECUTION,
+      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 64) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_SEQUENCE_LOAD,
+      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 128) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_COMMITTING,
+      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 256) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_STORAGE_READ,
+      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 512) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_STORAGE_WRITE,
+      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 1024) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_REMOTE_DAS_EXECUTION,
+      ASH.MODULE AS MODULE,
+      ASH.ACTION AS ACTION,
+      ASH.CLIENT_ID AS CLIENT_ID,
+      ASH.BACKTRACE AS BACKTRACE,
+      ASH.PLAN_ID AS PLAN_ID
+  FROM
+    SYS.ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY ASH,
+    SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP
+  WHERE
+    ASH.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND ASH.CLUSTER_ID = SNAP.CLUSTER_ID
+    AND ASH.TENANT_ID = SNAP.TENANT_ID
+    AND ASH.SNAP_ID = SNAP.SNAP_ID
+    AND ASH.SVR_IP = SNAP.SVR_IP
+    AND ASH.SVR_PORT = SNAP.SVR_PORT
+    AND SNAP.STATUS = 0;
+  """.replace("\n", " ")
+)
 # 25230: DBA_WR_SNAPSHOT
-# 25231: DBA_WR_STAT_NAME
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'DBA_WR_SNAPSHOT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25230',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT CLUSTER_ID,
+         TENANT_ID,
+         SNAP_ID,
+         SVR_IP,
+         SVR_PORT,
+         BEGIN_INTERVAL_TIME,
+         END_INTERVAL_TIME,
+         SNAP_FLAG,
+         STARTUP_TIME
+  FROM SYS.ALL_VIRTUAL_WR_SNAPSHOT
+  WHERE STATUS = 0
+        AND TENANT_ID=EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
+# 25231: DBA_WR_STATNAME
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'DBA_WR_STATNAME',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25231',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT CLUSTER_ID,
+         TENANT_ID,
+         STAT_ID,
+         STAT_NAME
+  FROM SYS.ALL_VIRTUAL_WR_STATNAME
+  WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
 # 25232: DBA_WR_SYSSTAT
-
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'DBA_WR_SYSSTAT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25232',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    STAT.CLUSTER_ID AS CLUSTER_ID,
+    STAT.TENANT_ID AS TENANT_ID,
+    STAT.SNAP_ID AS SNAP_ID,
+    STAT.SVR_IP AS SVR_IP,
+    STAT.SVR_PORT AS SVR_PORT,
+    STAT.STAT_ID AS STAT_ID,
+    STAT.VALUE AS VALUE
+  FROM
+    SYS.ALL_VIRTUAL_WR_SYSSTAT STAT,
+    SYS.ALL_VIRTUAL_WR_SNAPSHOT SNAP
+  WHERE
+    STAT.TENANT_ID = EFFECTIVE_TENANT_ID()
+    AND STAT.CLUSTER_ID = SNAP.CLUSTER_ID
+    AND STAT.TENANT_ID = SNAP.TENANT_ID
+    AND STAT.SNAP_ID = SNAP.SNAP_ID
+    AND STAT.SVR_IP = SNAP.SVR_IP
+    AND STAT.SVR_PORT = SNAP.SVR_PORT
+    AND SNAP.STATUS = 0;
+  """.replace("\n", " ")
+)
 def_table_schema(
   owner           = 'shuning.tsn',
   table_name      = 'DBA_OB_LOG_RESTORE_SOURCE',
@@ -45964,6 +46595,30 @@ JOIN SYS.ALL_VIRTUAL_OPTSTAT_GLOBAL_PREFS_REAL_AGENT GP
 # 25255: DBA_OB_MVIEW_REFRESH_STMT_STATS
 # 25256: DBMS_LOCK_ALLOCATED
 # 25257: DBA_WR_CONTROL
+def_table_schema(
+  owner           = 'jiajingzhe.jjz',
+  table_name      = 'DBA_WR_CONTROL',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25257',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+      SETTING.TENANT_ID AS TENANT_ID,
+      SETTING.SNAP_INTERVAL AS SNAP_INTERVAL,
+      SETTING.RETENTION AS RETENTION,
+      SETTING.TOPNSQL AS TOPNSQL
+  FROM
+    SYS.ALL_VIRTUAL_WR_CONTROL SETTING
+  WHERE
+    SETTING.TENANT_ID = EFFECTIVE_TENANT_ID()
+  """.replace("\n", " ")
+)
 def_table_schema(
   owner           = 'msy164651',
   table_name      = 'DBA_OB_LS_HISTORY',
@@ -50737,6 +51392,10 @@ def_table_schema(
       CAST(DECODE(IN_SQL_EXECUTION, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_SQL_EXECUTION,
       CAST(DECODE(IN_PX_EXECUTION, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_PX_EXECUTION,
       CAST(DECODE(IN_SEQUENCE_LOAD, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_SEQUENCE_LOAD,
+      CAST(DECODE(IN_COMMITTING, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_COMMITTING,
+      CAST(DECODE(IN_STORAGE_READ, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_STORAGE_READ,
+      CAST(DECODE(IN_STORAGE_WRITE, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_STORAGE_WRITE,
+      CAST(DECODE(IN_REMOTE_DAS_EXECUTION, 1, 'Y', 'N') AS VARCHAR2(1)) AS IN_REMOTE_DAS_EXECUTION,
       CAST(MODULE AS VARCHAR2(64)) AS MODULE,
       CAST(ACTION AS VARCHAR2(64)) AS ACTION,
       CAST(CLIENT_ID AS VARCHAR2(64)) AS CLIENT_ID,

@@ -975,7 +975,7 @@ int ObIOSender::init(const int64_t sender_index)
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));
-  } else if (OB_FAIL(queue_cond_.init(ObWaitEventIds::IO_QUEUE_LOCK_WAIT))) {
+  } else if (OB_FAIL(queue_cond_.init(ObWaitEventIds::IO_QUEUE_COND_WAIT))) {
     LOG_WARN("init queue condition failed", K(ret));
   } else if (OB_FAIL(alloc_mclock_queue(allocator_, io_queue_))) {
     LOG_WARN("alloc io queue failed", K(ret));
@@ -1872,7 +1872,7 @@ int ObAsyncIOChannel::init(ObDeviceChannel *device_channel)
     LOG_WARN("init twice", K(ret), K(is_inited_));
   } else if (OB_FAIL(base_init(device_channel))) {
     LOG_WARN("base init failed", K(ret), KP(device_channel));
-  } else if (OB_FAIL(depth_cond_.init(ObWaitEventIds::IO_CHANNEL_LOCK_WAIT))) {
+  } else if (OB_FAIL(depth_cond_.init(ObWaitEventIds::IO_CHANNEL_COND_WAIT))) {
     LOG_WARN("init thread cond failed", K(ret));
   } else if (OB_FAIL(device_handle_->io_setup(MAX_AIO_EVENT_CNT, io_context_))) {
     LOG_ERROR("io setup failed, check config aio-max-nr of operating system", K(ret), KP(io_context_));
@@ -2195,7 +2195,7 @@ int ObSyncIOChannel::init(ObDeviceChannel *device_channel)
     LOG_WARN("base init failed", K(ret), KP(device_channel));
   } else if (OB_FAIL(req_queue_.init(MAX_SYNC_IO_QUEUE_COUNT))) {
     LOG_WARN("init requeust queue failed", K(ret));
-  } else if (OB_FAIL(cond_.init(ObWaitEventIds::IO_CHANNEL_LOCK_WAIT))) {
+  } else if (OB_FAIL(cond_.init(ObWaitEventIds::IO_CHANNEL_COND_WAIT))) {
     LOG_WARN("init queue condition failed", K(ret));
   } else {
     is_inited_ = true;

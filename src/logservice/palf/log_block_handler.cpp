@@ -13,6 +13,7 @@
 #include "log_block_handler.h"
 #include "lib/ob_define.h"                              // some constexpr
 #include "lib/ob_errno.h"                               // OB_SUCCESS...
+#include "lib/stat/ob_session_stat.h"         // Session
 #include "lib/time/ob_time_utility.h"
 #include "lib/utility/ob_macro_utils.h"                 // some macros
 #include "lib/utility/ob_tracepoint.h"                  // ERRSIM
@@ -146,6 +147,8 @@ LogBlockHandler::LogBlockHandler()
     total_write_size_(0),
     total_write_size_after_dio_(0),
     ob_pwrite_used_ts_(0),
+    last_accum_write_statistic_time_(OB_INVALID_TIMESTAMP),
+    accum_write_disk_size_(0),
     count_(0),
     trace_time_(OB_INVALID_TIMESTAMP),
     dir_fd_(-1),
@@ -175,6 +178,7 @@ int LogBlockHandler::init(const int dir_fd,
           align_buf_size))) {
     PALF_LOG(ERROR, "init dio_aligned_buf_ failed", K(ret));
   } else {
+    last_accum_write_statistic_time_ = ObTimeUtility::current_time();
     dir_fd_ = dir_fd;
     log_block_size_ = log_block_size;
     is_inited_ = true;
@@ -192,6 +196,8 @@ void LogBlockHandler::destroy()
       close_with_ret(io_fd_);
       io_fd_ = -1;
     }
+    last_accum_write_statistic_time_ = OB_INVALID_TIMESTAMP;
+    accum_write_disk_size_ = 0;
     log_block_size_ = 0;
     dio_aligned_buf_.destroy();
     PALF_LOG(INFO, "LogFileHandler destroy success");
@@ -456,6 +462,12 @@ int LogBlockHandler::inner_write_impl_(const int fd, const char *buf, const int6
     }
   } while (OB_FAIL(ret));
   int64_t cost_ts = ObTimeUtility::fast_current_time() - start_ts;
+  EVENT_TENANT_ADD(ObStatEventIds::PALF_WRITE_LOG_SIZE_TO_DISK, count, MTL_ID());
+  ATOMIC_AAF(&accum_write_disk_size_, count);
+  if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, last_accum_write_statistic_time_)) {
+    PALF_LOG(INFO, "[PALF STAT WRITE LOG SIZE TO DISK]", KPC(this), K(accum_write_disk_size_));
+    ATOMIC_STORE(&accum_write_disk_size_, 0);
+  }
   ob_pwrite_used_ts_ += cost_ts;
   return ret;
 }

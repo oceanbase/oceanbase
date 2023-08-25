@@ -208,7 +208,7 @@ int ObAllVirtualSessionEvent::inner_get_next_row(ObNewRow *&row)
     if (OB_SUCC(ret)) {
       event_iter_++;
       row = &cur_row_;
-      if (event_iter_ >= ObWaitEventIds::WAIT_EVENT_END) {
+      if (event_iter_ >= WAIT_EVENTS_TOTAL) {
         event_iter_ = 0;
         session_iter_++;
         collect_->lock_.unlock();

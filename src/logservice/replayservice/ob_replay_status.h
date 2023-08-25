@@ -135,6 +135,7 @@ public:
       log_size_(log_size),
       replay_hint_(std::abs(header.get_replay_hint())),
       is_raw_write_(is_raw_write),
+      init_task_ts_(OB_INVALID_TIMESTAMP),
       first_handle_ts_(OB_INVALID_TIMESTAMP),
       print_error_ts_(OB_INVALID_TIMESTAMP)
   {}
@@ -157,6 +158,7 @@ public:
   int64_t replay_hint_;
   //for standby replay control, need record for cached log replay task;
   bool is_raw_write_;
+  int64_t init_task_ts_;
   int64_t first_handle_ts_;
   int64_t print_error_ts_;
   int64_t replay_cost_; //此任务回放成功时的当次处理时间

@@ -75,6 +75,7 @@
 #endif
 
 #include "share/table/ob_table_rpc_proxy.h"
+#include "share/wr/ob_wr_service.h"
 
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "share/external_table/ob_external_table_file_rpc_proxy.h"
@@ -454,6 +455,7 @@ private:
   arbserver::ObArbGarbageCollectService arb_gcs_;
   arbserver::ObArbServerTimer arb_timer_;
 #endif
+  share::ObWorkloadRepositoryService wr_service_;
 }; // end of class ObServer
 
 inline ObServer &ObServer::get_instance()

@@ -106,7 +106,7 @@ private:
   public:
     BatchLogIOFlushLogTaskMgr();
     ~BatchLogIOFlushLogTaskMgr();
-    int init(int64_t batch_width, int64_t batch_depth, ObIAllocator *allocator);
+    int init(int64_t batch_width, int64_t batch_depth, ObIAllocator *allocator, ObMiniStat::ObStatItem *wait_cost_stat);
     void destroy();
     int insert(LogIOFlushLogTask *io_task);
     int handle(const int64_t tg_id, IPalfEnvImpl *palf_env_impl);
@@ -114,6 +114,7 @@ private:
     TO_STRING_KV(K_(batch_io_task_array), K_(usable_count), K_(batch_width));
   private:
     int find_usable_batch_io_task_(const int64_t palf_id, BatchLogIOFlushLogTask *&batch_io_task);
+    int statistics_wait_cost_(int64_t first_handle_time, BatchLogIOFlushLogTask *batch_io_task);
   private:
     typedef ObFixedArray<BatchLogIOFlushLogTask *, common::ObIAllocator> BatchLogIOFlushLogTaskArray;
     BatchLogIOFlushLogTaskArray batch_io_task_array_;
@@ -121,6 +122,7 @@ private:
     int64_t has_batched_size_;
     int64_t usable_count_;
     int64_t batch_width_;
+    ObMiniStat::ObStatItem *wait_cost_stat_;
   };
   typedef common::ObSpinLock SpinLock;
   typedef common::ObSpinLockGuard SpinLockGuard;
@@ -151,6 +153,7 @@ private:
   bool need_ignoring_throttling_;
   NeedPurgingThrottlingFunc need_purging_throttling_func_;
   SpinLock lock_;
+  ObMiniStat::ObStatItem wait_cost_stat_;
   bool is_inited_;
 };
 } // end namespace palf

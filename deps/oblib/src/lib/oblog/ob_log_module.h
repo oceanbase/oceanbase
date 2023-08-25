@@ -74,6 +74,7 @@ DEFINE_LOG_SUB_MOD(BALANCE)              // balance module
 DEFINE_LOG_SUB_MOD(MDS)                  // multi data source
 DEFINE_LOG_SUB_MOD(DATA_DICT)            // data_dictionary module
 DEFINE_LOG_SUB_MOD(MVCC)                 // concurrency_control
+DEFINE_LOG_SUB_MOD(WR)                 // workload repository
 LOG_MOD_END(ROOT)
 
 //statement of WRS's sub_modules
@@ -453,6 +454,8 @@ LOG_MOD_END(PL)
 #define _DDLOG(level, _fmt_, args...) _OB_MOD_LOG(DATA_DICT, level, _fmt_, ##args)
 #define MVCC_LOG(level, info_string, args...) OB_MOD_LOG(MVCC, level, info_string, ##args)
 #define _MVCC_LOG(level, _fmt_, args...) _OB_MOD_LOG(MVCC, level, _fmt_, ##args)
+#define WR_LOG(level, info_string, args...) OB_MOD_LOG(WR, level, info_string, ##args)
+#define _WR_LOG(level, _fmt_, args...) _OB_MOD_LOG(WR, level, _fmt_, ##args)
 
 //dfine ParMod_SubMod_LOG
 #define WRS_CLUSTER_LOG(level, info_string, args...) OB_SUB_MOD_LOG(WRS, CLUSTER, level,        \

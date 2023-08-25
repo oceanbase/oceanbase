@@ -1203,7 +1203,9 @@ int ObJoinOrder::virtual_table_heuristics(const uint64_t table_id,
       } else if (OB_ISNULL(query_range_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("query_range_info should not be null", K(ret));
-      } else if (query_range_info->is_index_column_get()) {
+      } else if (query_range_info->is_index_column_get() ||
+          (query_range_info->has_valid_range_condition() &&
+          virtual_table_index_can_range_scan(valid_index_ids.at(i)))) {
         idx_id = valid_index_ids.at(i);
         LOG_TRACE("OPT:[VT] found index to use", K(idx_id));
       } else {
@@ -14359,4 +14361,19 @@ int ObJoinOrder::extract_valid_range_expr_for_oracle_agent_table(const ObIArray<
     }
   }
   return ret;
+}
+
+static uint64_t virtual_table_index_scan_white_list[2]{
+    OB_ALL_VIRTUAL_ASH_ALL_VIRTUAL_ASH_I1_TID,
+    OB_ALL_VIRTUAL_ASH_ORA_ALL_VIRTUAL_ASH_I1_TID};
+
+bool ObJoinOrder::virtual_table_index_can_range_scan(uint64_t table_id) {
+  bool bret = false;
+  for (int i = 0; i < sizeof(virtual_table_index_scan_white_list); i++) {
+    if (table_id == virtual_table_index_scan_white_list[i]) {
+      bret = true;
+      break;
+    }
+  }
+  return bret;
 }

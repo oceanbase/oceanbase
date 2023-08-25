@@ -38,10 +38,11 @@ public:
         p1_(0),
         p2_(0),
         p3_(0),
-        exec_phase_(0),
+        time_model_(0),
         trace_id_(),
         plan_line_id_(-1),
         session_type_(false),
+        is_wr_sample_(false),
         last_stat_(nullptr)
   {
     sql_id_[0] = '\0';
@@ -71,6 +72,17 @@ public:
   {
     last_stat_ = stat;
   }
+  void reuse()
+  {
+    user_id_ = 0;
+    session_id_ = 0;
+    plan_id_ = 0;
+    sql_id_[0] = '\0';
+    time_model_ = 0;
+#ifndef NDEBUG
+    bt_[0] = '\0';
+#endif
+  }
 public:
   uint64_t id_;
   uint64_t tenant_id_;
@@ -85,7 +97,7 @@ public:
   uint64_t p3_; // event parameter 3
 
   union {
-    uint64_t exec_phase_; // phase of execution bitmap
+    uint64_t time_model_; // phase of execution bitmap
     struct {
       uint64_t in_parse_          : 1;
       uint64_t in_pl_parse_       : 1;
@@ -94,6 +106,10 @@ public:
       uint64_t in_sql_execution_  : 1;
       uint64_t in_px_execution_   : 1;
       uint64_t in_sequence_load_  : 1;
+      uint64_t in_committing_     : 1;
+      uint64_t in_storage_read_   : 1;
+      uint64_t in_storage_write_  : 1;
+      uint64_t in_das_remote_exec_: 1;
     };
   };
 
@@ -101,10 +117,11 @@ public:
   int32_t plan_line_id_; // which SQL operater the session is processing when sampling
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   bool session_type_; // false=0, FOREGROUND, true=1, BACKGROUND
+  bool is_wr_sample_;  // true represents this node should be sampled into wr.
 #ifndef NDEBUG
   char bt_[256];
 #endif
-  TO_STRING_KV("id", OB_WAIT_EVENTS[event_no_].event_id_, "event", OB_WAIT_EVENTS[event_no_].event_name_, K_(wait_time));
+  TO_STRING_KV("sess_id", session_id_, "id", OB_WAIT_EVENTS[event_no_].event_id_, "event", OB_WAIT_EVENTS[event_no_].event_name_, K_(wait_time));
 private:
   // `last_stat_` is for wait time fix-up.
   // Fixes-up values unknown at sampling time
@@ -124,6 +141,8 @@ public:
   // set ash_stat in session to the thread local ash_stat_
   static void setup_ash(ActiveSessionStat &stat);
   static ActiveSessionStat &get_stat();
+  static void setup_thread_local_ash();
+  static thread_local ActiveSessionStat thread_local_stat_;
 private:
   static ActiveSessionStat dummy_stat_;
   static ActiveSessionStat *&get_stat_ptr();
@@ -131,7 +150,35 @@ private:
 };
 
 
+#define DEF_ASH_FLAGS_SETTER_GUARD(ash_flag_type)                                                  \
+  class ObActiveSession_##ash_flag_type##_FlagSetterGuard                                          \
+  {                                                                                                \
+    public:                                                                                        \
+      ObActiveSession_##ash_flag_type##_FlagSetterGuard() {                                        \
+        ObActiveSessionGuard::get_stat().ash_flag_type##_ = true;                                  \
+      }                                                                                            \
+      ~ObActiveSession_##ash_flag_type##_FlagSetterGuard() {                                       \
+        ObActiveSessionGuard::get_stat().ash_flag_type##_ = false;                                 \
+      }                                                                                            \
+    private:                                                                                       \
+      DISALLOW_COPY_AND_ASSIGN(ObActiveSession_##ash_flag_type##_FlagSetterGuard);                 \
+  };
 
+DEF_ASH_FLAGS_SETTER_GUARD(in_parse)
+DEF_ASH_FLAGS_SETTER_GUARD(in_pl_parse)
+DEF_ASH_FLAGS_SETTER_GUARD(in_get_plan_cache)
+DEF_ASH_FLAGS_SETTER_GUARD(in_sql_optimize)
+DEF_ASH_FLAGS_SETTER_GUARD(in_sql_execution)
+DEF_ASH_FLAGS_SETTER_GUARD(in_px_execution)
+DEF_ASH_FLAGS_SETTER_GUARD(in_sequence_load)
+DEF_ASH_FLAGS_SETTER_GUARD(in_committing)
+DEF_ASH_FLAGS_SETTER_GUARD(in_storage_read)
+DEF_ASH_FLAGS_SETTER_GUARD(in_storage_write)
+
+#undef DEF_ASH_FLAGS_SETTER_GUARD
+
+#define ACTIVE_SESSION_FLAG_SETTER_GUARD(ash_flag_type)                                            \
+  ObActiveSession_##ash_flag_type##_FlagSetterGuard _ash_flag_setter_guard;
 
 }
 }

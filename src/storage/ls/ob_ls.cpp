@@ -65,6 +65,7 @@
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/tablet/ob_tablet_multi_source_data.h"
 #include "storage/high_availability/ob_rebuild_service.h"
+#include "share/wr/ob_wr_service.h"
 
 namespace oceanbase
 {
@@ -296,6 +297,10 @@ int ObLS::init(const share::ObLSID &ls_id,
         rootserver::ObIngressBWAllocService *ingress_service = GCTX.net_frame_->get_ingress_service();
         REGISTER_TO_LOGSERVICE(logservice::NET_ENDPOINT_INGRESS_LOG_BASE_TYPE, ingress_service);
         LOG_INFO("net endpoint ingress regist to logservice success");
+      }
+      if (OB_SUCC(ret) && is_sys_tenant(tenant_id) && ls_meta_.ls_id_.is_sys_ls()) {
+        REGISTER_TO_LOGSERVICE(logservice::WORKLOAD_REPOSITORY_SERVICE_LOG_BASE_TYPE,
+            GCTX.wr_service_);
       }
 
       if (OB_SUCC(ret) && is_sys_tenant(tenant_id) && ls_id.is_sys_ls()) {
@@ -835,6 +840,10 @@ void ObLS::destroy()
   if (is_sys_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
     rootserver::ObIngressBWAllocService *ingress_service = GCTX.net_frame_->get_ingress_service();
     UNREGISTER_FROM_LOGSERVICE(logservice::NET_ENDPOINT_INGRESS_LOG_BASE_TYPE, ingress_service);
+  }
+  if (is_sys_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
+    UNREGISTER_FROM_LOGSERVICE(logservice::WORKLOAD_REPOSITORY_SERVICE_LOG_BASE_TYPE,
+        GCTX.wr_service_);
   }
 
   tx_table_.destroy();

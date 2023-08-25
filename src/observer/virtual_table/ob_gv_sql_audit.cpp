@@ -732,7 +732,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           // max wait event related
         case EVENT: {
           int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
-          if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
+          if (event_no >= 0 && event_no < WAIT_EVENTS_TOTAL) {
             cells[cell_idx].set_varchar(OB_WAIT_EVENTS[event_no].event_name_);
           } else {
             cells[cell_idx].set_varchar("");
@@ -742,7 +742,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         }
         case P1TEXT: {
           int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
-          if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
+          if (event_no >= 0 && event_no < WAIT_EVENTS_TOTAL) {
             cells[cell_idx].set_varchar(OB_WAIT_EVENTS[event_no].param1_);
           } else {
             cells[cell_idx].set_varchar("");
@@ -756,7 +756,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         }
         case P2TEXT: {
           int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
-          if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
+          if (event_no >= 0 && event_no < WAIT_EVENTS_TOTAL) {
             cells[cell_idx].set_varchar(OB_WAIT_EVENTS[event_no].param2_);
           } else {
             cells[cell_idx].set_varchar("");
@@ -770,7 +770,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         }
         case P3TEXT: {
           int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
-          if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
+          if (event_no >= 0 && event_no < WAIT_EVENTS_TOTAL) {
             cells[cell_idx].set_varchar(OB_WAIT_EVENTS[event_no].param3_);
           } else {
             cells[cell_idx].set_varchar("");
@@ -788,7 +788,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         }
         case WAIT_CLASS_ID: {
           int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
-          if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
+          if (event_no >= 0 && event_no < WAIT_EVENTS_TOTAL) {
             cells[cell_idx].set_int(EVENT_NO_TO_CLASS_ID(event_no));
           } else {
             cells[cell_idx].set_int(common::OB_INVALID_ID);
@@ -797,7 +797,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         }
         case WAIT_CLASS_NO: {
           int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
-          if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
+          if (event_no >= 0 && event_no < WAIT_EVENTS_TOTAL) {
             cells[cell_idx].set_int(OB_WAIT_EVENTS[event_no].wait_class_);
           } else {
             cells[cell_idx].set_int(common::OB_INVALID_ID);
@@ -806,7 +806,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         }
         case WAIT_CLASS: {
           int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
-          if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
+          if (event_no >= 0 && event_no < WAIT_EVENTS_TOTAL) {
             cells[cell_idx].set_varchar(EVENT_NO_TO_CLASS(event_no));
           } else {
             cells[cell_idx].set_varchar("");

@@ -15,6 +15,7 @@
 using namespace oceanbase::common;
 
 ActiveSessionStat ObActiveSessionGuard::dummy_stat_;
+thread_local ActiveSessionStat ObActiveSessionGuard::thread_local_stat_;
 
 ActiveSessionStat *&ObActiveSessionGuard::get_stat_ptr()
 {
@@ -39,3 +40,7 @@ void ObActiveSessionGuard::setup_ash(ActiveSessionStat &stat)
   get_stat_ptr() = &stat;
 }
 
+void ObActiveSessionGuard::setup_thread_local_ash()
+{
+  get_stat_ptr() = &thread_local_stat_;
+}

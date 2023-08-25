@@ -60,6 +60,12 @@ void ObEndTransAsyncCallback::callback(int cb_param, const transaction::ObTransI
 
 void ObEndTransAsyncCallback::callback(int cb_param)
 {
+  sql::ObSQLSessionInfo *session_info = mysql_end_trans_cb_.get_sess_info_ptr();
+  if (NULL != session_info) {
+    ObActiveSessionGuard::setup_ash(session_info->get_ash_stat());
+    ObActiveSessionGuard::get_stat().in_committing_ = false;
+    ObActiveSessionGuard::get_stat().in_sql_execution_ = true;
+  }
   bool need_disconnect = false;
   if (OB_UNLIKELY(!has_set_need_rollback_)) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "is_need_rollback_ has not been set",
@@ -83,6 +89,7 @@ void ObEndTransAsyncCallback::callback(int cb_param)
     cb_param = this->last_err_;
     mysql_end_trans_cb_.callback(cb_param);
   }
+
 }
 
 }/* ns sql*/

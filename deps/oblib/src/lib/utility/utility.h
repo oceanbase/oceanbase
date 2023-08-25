@@ -1161,6 +1161,22 @@ public:
         }
       }
     }
+
+    void stat(const int64_t count, const int64_t total_time_cost)
+    {
+      const int64_t cur_ts = ::oceanbase::common::ObTimeUtility::fast_current_time();
+      const int64_t cur_stat_count = ATOMIC_AAF(&stat_count_, count);
+      const int64_t cur_accum_time = ATOMIC_AAF(&accum_count_, total_time_cost);
+      if (ATOMIC_LOAD(&last_ts_) + stat_interval_ < cur_ts) {
+        if (ATOMIC_BCAS(&lock_tag_, false, true)) {
+          LIB_LOG(INFO, NULL == item_ ? "" : item_, K(cur_stat_count), K_(stat_interval), "avg cost", cur_accum_time / cur_stat_count, K(this));
+          (void)ATOMIC_SET(&last_ts_, cur_ts);
+          (void)ATOMIC_SET(&stat_count_, 0);
+          (void)ATOMIC_SET(&accum_count_, 0);
+          ATOMIC_BCAS(&lock_tag_, true, false);
+        }
+      }
+    }
   private:
     const char *const item_;
     const int64_t stat_interval_;

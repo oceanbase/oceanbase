@@ -135,6 +135,7 @@ public:
   int splice_batch_delete_sql(const char *table_name, common::ObSqlString &sql) const;
   // "(c1, c2, c3) IN ((v11, v12, v13), (v21, v22, v23))"
   int splice_batch_predicates_sql(common::ObSqlString &sql) const;
+  int64_t get_row_count() const { return rows_end_pos_.count(); }
 private:
   struct Column
   {

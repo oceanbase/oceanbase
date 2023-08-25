@@ -266,10 +266,10 @@ ObApplyStatus::ObApplyStatus()
       mutex_(common::ObLatchIds::MAX_APPLY_SCN_LOCK),
       get_info_debug_time_(OB_INVALID_TIMESTAMP),
       try_wrlock_debug_time_(OB_INVALID_TIMESTAMP),
-      cb_append_stat_("[cb append statistic]", 5 * 1000 * 1000),
-      cb_wait_thread_stat_("[cb wait thread statistic]", 5 * 1000 * 1000),
-      cb_wait_commit_stat_("[cb wait commit statistic]", 5 * 1000 * 1000),
-      cb_execute_stat_("[cb execute statistic]", 5 * 1000 * 1000)
+      cb_append_stat_("[APPLY STAT CB APPEND COST TIME]", 5 * 1000 * 1000),
+      cb_wait_thread_stat_("[APPLY STAT CB IN QUEUE TIME]", 5 * 1000 * 1000),
+      cb_wait_commit_stat_("[APPLY STAT CB WAIT COMMIT TIME]", 5 * 1000 * 1000),
+      cb_execute_stat_("[APPLY STAT CB EXECUTE TIME]", 5 * 1000 * 1000)
 {
 }
 

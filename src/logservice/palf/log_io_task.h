@@ -50,6 +50,7 @@ public:
   int do_task(int tg_id, IPalfEnvImpl *palf_env_impl);
   int after_consume(IPalfEnvImpl *palf_env_impl);
   LogIOTaskType get_io_task_type();
+  int64_t get_init_task_ts();
   void free_this(IPalfEnvImpl *palf_env_impl);
   int64_t get_io_size();
   int64_t get_palf_id() const { return palf_id_; }
@@ -192,8 +193,11 @@ public:
   void destroy();
   int push_back(LogIOFlushLogTask *task);
   int do_task(int tg_id, IPalfEnvImpl *palf_env_impl);
+  void reset_accum_in_queue_time() { accum_in_queue_time_ = 0; }
   int64_t get_palf_id() const { return palf_id_; }
   int64_t get_count() const { return io_task_array_.count(); }
+  int64_t get_accum_in_queue_time() const { return accum_in_queue_time_; }
+
   TO_STRING_KV(K_(palf_id), "count", io_task_array_.count(), K_(lsn_array));
 private:
   int push_flush_cb_to_thread_pool_(int tg_id, IPalfEnvImpl *palf_env_impl);
@@ -205,6 +209,7 @@ private:
   SCNArray scn_array_;
   LSNArray lsn_array_;
   int64_t palf_id_;
+  int64_t accum_in_queue_time_;
   bool is_inited_;
 };
 

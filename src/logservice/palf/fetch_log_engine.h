@@ -112,6 +112,8 @@ private:
   share::SCN replayable_point_;
   mutable SpinLock cache_lock_;
   ObSEArray<FetchLogTask, DEFAULT_CACHED_FETCH_TASK_NUM> fetch_task_cache_;
+  ObMiniStat::ObStatItem fetch_wait_cost_stat_;
+  ObMiniStat::ObStatItem fetch_log_cost_stat_;
   DISALLOW_COPY_AND_ASSIGN(FetchLogEngine);
 };
 } // namespace logservice

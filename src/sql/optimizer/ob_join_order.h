@@ -2494,6 +2494,7 @@ struct NullAwareAntiJoinInfo {
     int is_valid_range_expr_for_oracle_agent_table(const ObRawExpr *range_expr, bool &is_valid);
     int extract_valid_range_expr_for_oracle_agent_table(const common::ObIArray<ObRawExpr *> &filters,
                                                         common::ObIArray<ObRawExpr *> &new_filters);
+    bool virtual_table_index_can_range_scan(uint64_t table_id);
     friend class ::test::TestJoinOrder_ob_join_order_param_check_Test;
     friend class ::test::TestJoinOrder_ob_join_order_src_Test;
   private:

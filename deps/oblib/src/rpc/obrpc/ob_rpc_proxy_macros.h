@@ -20,7 +20,7 @@
 #define ORSSH_(pcode) SSHandle<pcode> &handle
 #define ORACB_(pcode) AsyncCB<pcode> *cb
 
-// packet priority level
+// packet priority s
 #define PR1 )(ORPR1,
 #define PR2 )(ORPR2,
 #define PR3 )(ORPR3,

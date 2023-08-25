@@ -47,7 +47,7 @@ ObAsyncCmdDriver::~ObAsyncCmdDriver()
  */
 int ObAsyncCmdDriver::response_result(ObMySQLResultSet &result)
 {
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = true;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
   int ret = OB_SUCCESS;
   ObSqlEndTransCb &sql_end_cb = session_.get_mysql_end_trans_cb();
   ObEndTransCbPacketParam pkt_param;
@@ -102,7 +102,6 @@ int ObAsyncCmdDriver::response_result(ObMySQLResultSet &result)
       LOG_WARN("close result failed", K(close_ret));
     }
   }
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = false;
   return ret;
 }
 

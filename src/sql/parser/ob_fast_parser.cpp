@@ -38,7 +38,7 @@ int ObFastParser::parse(const common::ObString &stmt,
                         ParamList *&param_list,
                         int64_t &param_num)
 {
-  ObActiveSessionGuard::get_stat().in_parse_ = true;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_parse);
   int ret = OB_SUCCESS;
   int64_t values_token_pos = 0;
   if (!lib::is_oracle_mode()) {
@@ -52,7 +52,6 @@ int ObFastParser::parse(const common::ObString &stmt,
       LOG_WARN("failed to fast parser", K(stmt));
     }
   }
-  ObActiveSessionGuard::get_stat().in_parse_ = false;
   return ret;
 }
 
@@ -66,7 +65,7 @@ int ObFastParser::parse(const common::ObString &stmt,
                         ObQuestionMarkCtx &ctx,
                         int64_t &values_token_pos)
 {
-  ObActiveSessionGuard::get_stat().in_parse_ = true;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_parse);
   int ret = OB_SUCCESS;
   if (!lib::is_oracle_mode()) {
     ObFastParserMysql fp(allocator, fp_ctx);
@@ -83,7 +82,6 @@ int ObFastParser::parse(const common::ObString &stmt,
       ctx = fp.get_question_mark_ctx();
     }
   }
-  ObActiveSessionGuard::get_stat().in_parse_ = false;
   return ret;
 }
 

@@ -46,7 +46,7 @@ ObLogHandler::ObLogHandler() : self_(),
                                deps_lock_(),
                                lc_cb_(NULL),
                                rpc_proxy_(NULL),
-                               append_cost_stat_("[PALF STAT APPEND COST]", 1 * 1000 * 1000),
+                               append_cost_stat_("[PALF STAT APPEND COST TIME]", 1 * 1000 * 1000),
                                is_offline_(false),
                                get_max_decided_scn_debug_time_(OB_INVALID_TIMESTAMP)
 {
@@ -222,7 +222,7 @@ int ObLogHandler::append(const void *buffer,
     do {
       RLockGuard guard(lock_);
       CriticalGuard(ls_qs_);
-      cb->set_append_start_ts(ObClockGenerator::getClock());
+      cb->set_append_start_ts(ObTimeUtility::fast_current_time());
       if (IS_NOT_INIT) {
         ret = OB_NOT_INIT;
       } else if (is_in_stop_state_ || is_offline_) {
@@ -234,7 +234,7 @@ int ObLogHandler::append(const void *buffer,
           CLOG_LOG(WARN, "palf_handle_ append failed", K(ret), KPC(this));
         }
       } else {
-        cb->set_append_finish_ts(ObClockGenerator::getClock());
+        cb->set_append_finish_ts(ObTimeUtility::fast_current_time());
         cb->__set_lsn(lsn);
         cb->__set_scn(scn);
         ret = apply_status_->push_append_cb(cb);

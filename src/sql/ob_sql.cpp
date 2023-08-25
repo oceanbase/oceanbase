@@ -3821,7 +3821,7 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx,
                        int &get_plan_err,
                        bool &need_disconnect)
 {
-  ObActiveSessionGuard::get_stat().in_get_plan_cache_ = true;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_get_plan_cache);
   int ret = OB_SUCCESS;
   //NG_TRACE(cache_get_plan_begin);
   ObPlanCache *plan_cache = NULL;
@@ -3903,7 +3903,6 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx,
     // 如果sql需要二次路由，不应该断连接
     need_disconnect = false;
   }
-  ObActiveSessionGuard::get_stat().in_get_plan_cache_ = false;
   return ret;
 }
 

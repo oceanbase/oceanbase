@@ -388,13 +388,13 @@ int ObMPBase::do_after_process(sql::ObSQLSessionInfo &session,
                                bool async_resp_used) const
 {
   int ret = OB_SUCCESS;
-  session.set_session_sleep();
 
   // reset warning buffers
   // 注意，此处req_has_wokenup_可能为true，不能再访问req对象
   // @todo 重构wb逻辑
   if (!async_resp_used) { // 异步回包不重置warning buffer，重置操作在callback中做
     session.reset_warnings_buf();
+    session.set_session_sleep();
   }
   // clear tsi warning buffer
   ob_setup_tsi_warning_buffer(NULL);

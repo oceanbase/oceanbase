@@ -32,7 +32,7 @@ using namespace oceanbase::common;
 
 int ObOptimizer::optimize(ObDMLStmt &stmt, ObLogPlan *&logical_plan)
 {
-  ObActiveSessionGuard::get_stat().in_sql_optimize_ = true;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_optimize);
   int ret = OB_SUCCESS;
   ObLogPlan *plan = NULL;
   const ObQueryCtx *query_ctx = ctx_.get_query_ctx();
@@ -85,7 +85,6 @@ int ObOptimizer::optimize(ObDMLStmt &stmt, ObLogPlan *&logical_plan)
   }
   optimizer_mem_usage = ctx_.get_allocator().total() - last_mem_usage;
   LOG_TRACE("[SQL MEM USAGE]", K(optimizer_mem_usage), K(last_mem_usage));
-  ObActiveSessionGuard::get_stat().in_sql_optimize_ = false;
   return ret;
 }
 

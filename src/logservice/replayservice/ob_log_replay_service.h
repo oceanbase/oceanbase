@@ -203,6 +203,8 @@ private:
   void statistics_submit_(const int64_t submit_task_used,
                           const int64_t log_size,
                           const int64_t log_count);
+  int statistics_replay_cost_(const int64_t init_task_time,
+                               const int64_t first_handle_time);
   void on_replay_error_(ObLogReplayTask &replay_task, int ret);
   void on_replay_error_();
   // 析构前调用,归还所有日志流的replay status计数
@@ -232,6 +234,8 @@ private:
   // 考虑到迁出迁入场景, 不能只通过map管理replay status的生命周期
   common::ObLinearHashMap<share::ObLSID, ObReplayStatus*> replay_status_map_;
   int64_t pending_replay_log_size_;
+  ObMiniStat::ObStatItem wait_cost_stat_;
+  ObMiniStat::ObStatItem replay_cost_stat_;
   DISALLOW_COPY_AND_ASSIGN(ObLogReplayService);
 };
 

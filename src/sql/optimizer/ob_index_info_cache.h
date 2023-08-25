@@ -60,6 +60,10 @@ public:
   {
     return is_valid_ && (equal_prefix_count_ == range_columns_.count());
   }
+  bool has_valid_range_condition() const
+  {
+    return equal_prefix_count_ > 0 || range_prefix_count_ > 0;
+  }
   bool is_index_column_get() const
   {
     return is_valid_ && (equal_prefix_count_ >= index_column_count_);

@@ -37,8 +37,9 @@ public:
   void set_addr(const common::ObAddr &addr) { addr_ = addr; }
 private:
   int set_ip(const common::ObAddr &addr);
+protected:
   int convert_node_to_row(const common::ActiveSessionStat &node, ObNewRow *&row);
-private:
+protected:
   enum COLUMN_ID
   {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
@@ -68,7 +69,13 @@ private:
     ACTION,
     CLIENT_ID,
     BACKTRACE,
-    PLAN_ID
+    PLAN_ID,
+    IS_WR_SAMPLE,
+    TIME_MODEL,
+    IN_COMMITTING,
+    IN_STORAGE_READ,
+    IN_STORAGE_WRITE,
+    IN_REMOTE_DAS_EXECUTION,
   };
   DISALLOW_COPY_AND_ASSIGN(ObVirtualASH);
   share::ObActiveSessHistList::Iterator iterator_;
@@ -78,6 +85,20 @@ private:
   char server_ip_[common::MAX_IP_ADDR_LENGTH + 2];
   char trace_id_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
   bool is_first_get_;
+};
+
+class ObVirtualASHI1 : public ObVirtualASH
+{
+public:
+  ObVirtualASHI1() : current_key_range_index_(0) {}
+  virtual ~ObVirtualASHI1() {}
+  virtual int inner_get_next_row(common::ObNewRow *&row) override;
+
+protected:
+  DISALLOW_COPY_AND_ASSIGN(ObVirtualASHI1);
+private:
+  int init_next_query_range();
+  int64_t current_key_range_index_;
 };
 
 } //namespace observer

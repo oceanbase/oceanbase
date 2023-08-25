@@ -64,6 +64,7 @@
 #include "pl/sys_package/ob_xml_type.h"
 #endif
 #include "pl/sys_package/ob_dbms_session.h"
+#include "pl/sys_package/ob_dbms_workload_repository.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -657,6 +658,13 @@
   INTERFACE_DEF(INTERFACE_DBMS_UDR_ENABLE_RULE, "ENABLE_RULE", (ObDBMSUserDefineRule::enable_rule))
   INTERFACE_DEF(INTERFACE_DBMS_UDR_DISABLE_RULE, "DISABLE_RULE", (ObDBMSUserDefineRule::disable_rule))
   // end of dbms_udr
+
+  // start of dbms_workload_repository
+  INTERFACE_DEF(INTERFACE_DBMS_WR_CREATE_SNAPSHOT, "WR_CREATE_SNAPSHOT", (ObDbmsWorkloadRepository::create_snapshot))
+  INTERFACE_DEF(INTERFACE_DBMS_WR_DROP_SNAPSHOT_RANGE, "WR_DROP_SNAPSHOT_RANGE", (ObDbmsWorkloadRepository::drop_snapshot_range))
+  INTERFACE_DEF(INTERFACE_DBMS_WR_MODIFY_SNAPSHOT_SETTINGS, "WR_MODIFY_SNAPSHOT_SETTINGS", (ObDbmsWorkloadRepository::modify_snapshot_settings))
+  INTERFACE_DEF(INTERFACE_DBMS_GENERATE_ASH_REPORT_TEXT, "GENERATE_ASH_REPORT_TEXT", (ObDbmsWorkloadRepository::generate_ash_report_text))
+  // end of dbms_workload_repository
   /****************************************************************************/
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))

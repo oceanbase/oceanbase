@@ -26,7 +26,7 @@ namespace oceanbase
 namespace common
 {
 static const int16_t SESSION_WAIT_HISTORY_CNT = 10;
-typedef ObStatArray<ObWaitEventStat, ObWaitEventIds::WAIT_EVENT_END> ObWaitEventStatArray;
+typedef ObStatArray<ObWaitEventStat, WAIT_EVENTS_TOTAL> ObWaitEventStatArray;
 typedef ObStatArray<ObStatEventAddStat, ObStatEventIds::STAT_EVENT_ADD_END> ObStatEventAddStatArray;
 typedef ObStatArray<ObStatEventSetStat, ObStatEventIds::STAT_EVENT_SET_END - ObStatEventIds::STAT_EVENT_ADD_END -1> ObStatEventSetStatArray;
 
@@ -252,6 +252,10 @@ private:
       }                              \
     }                              \
   } while(0)
+
+#define EVENT_TENANT_ADD(stat_no, value, tenant_id)    \
+  oceanbase::common::ObTenantStatEstGuard tenant_guard(tenant_id); \
+  EVENT_ADD(stat_no, value);
 
 #define EVENT_INC(stat_no) EVENT_ADD(stat_no, 1)
 #define EVENT_DEC(stat_no) EVENT_ADD(stat_no, -1)

@@ -18,12 +18,12 @@ namespace oceanbase
 namespace common
 {
 const ObStatEvent OB_STAT_EVENTS[] = {
-#define STAT_EVENT_ADD_DEF(def, name, stat_class, display_name, stat_id, summary_in_session, can_visible) \
-  {name, stat_class, display_name, stat_id, summary_in_session, can_visible},
+#define STAT_EVENT_ADD_DEF(def, name, stat_class, stat_id, summary_in_session, can_visible) \
+  {name, stat_class, stat_id, summary_in_session, can_visible},
 #include "lib/statistic_event/ob_stat_event.h"
 #undef STAT_EVENT_ADD_DEF
-#define STAT_EVENT_SET_DEF(def, name, stat_class, display_name, stat_id, summary_in_session, can_visible) \
-  {name, stat_class, display_name, stat_id, summary_in_session, can_visible},
+#define STAT_EVENT_SET_DEF(def, name, stat_class, stat_id, summary_in_session, can_visible) \
+  {name, stat_class, stat_id, summary_in_session, can_visible},
 #include "lib/statistic_event/ob_stat_event.h"
 #undef STAT_EVENT_SET_DEF
 };
@@ -89,4 +89,3 @@ void ObStatEventSetStat::reset()
 
 }
 }
-

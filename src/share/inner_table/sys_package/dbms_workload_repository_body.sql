@@ -124,6 +124,15 @@ IS
   );
   top_latch_rec       TopLatchRecord;
 
+  TYPE NodeLoadCursor IS REF CURSOR;
+  node_load_cv        NodeLoadCursor;
+  TYPE NodeLoadRecord IS RECORD (
+    SVR_IP         SYS.V$ACTIVE_SESSION_HISTORY.SVR_IP%TYPE,
+    SVR_PORT       SYS.V$ACTIVE_SESSION_HISTORY.SVR_PORT%TYPE,
+    SAMPLE_CNT     NUMBER,
+    IDLE_WAIT_CNT  NUMBER
+  );
+  node_load_rec   NodeLoadRecord;
 
 
 
@@ -344,11 +353,15 @@ BEGIN
              ' SUM(CASE IN_SQL_OPTIMIZE WHEN ''N'' THEN 0 ELSE 1 END) IN_SQL_OPTIMIZE, ' ||
              ' SUM(CASE IN_SQL_EXECUTION WHEN ''N'' THEN 0 ELSE 1 END) IN_SQL_EXECUTION, ' ||
              ' SUM(CASE IN_PX_EXECUTION WHEN ''N'' THEN 0 ELSE 1 END) IN_PX_EXECUTION, ' ||
-             ' SUM(CASE IN_SEQUENCE_LOAD WHEN ''N'' THEN 0 ELSE 1 END) IN_SEQUENCE_LOAD ' ||
+             ' SUM(CASE IN_SEQUENCE_LOAD WHEN ''N'' THEN 0 ELSE 1 END) IN_SEQUENCE_LOAD, ' ||
+             ' SUM(CASE IN_COMMITTING WHEN ''N'' THEN 0 ELSE 1 END) IN_COMMITTING, ' ||
+             ' SUM(CASE IN_STORAGE_READ WHEN ''N'' THEN 0 ELSE 1 END) IN_STORAGE_READ, ' ||
+             ' SUM(CASE IN_STORAGE_WRITE WHEN ''N'' THEN 0 ELSE 1 END) IN_STORAGE_WRITE ' ||
+             ' SUM(CASE IN_REMOTE_DAS_EXECUTION WHEN ''N'' THEN 0 ELSE 1 END) IN_REMOTE_DAS_EXECUTION ' ||
              'FROM   (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') top_event ) phases ' ||
              ' unpivot ' ||
              ' (' ||
-             '  SAMPLES_CNT FOR EXECUTION_PHASE IN (IN_PARSE, IN_PL_PARSE, IN_PLAN_CACHE, IN_SQL_OPTIMIZE, IN_SQL_EXECUTION,IN_PX_EXECUTION, IN_SEQUENCE_LOAD )' ||
+             '  SAMPLES_CNT FOR EXECUTION_PHASE IN (IN_PARSE, IN_PL_PARSE, IN_PLAN_CACHE, IN_SQL_OPTIMIZE, IN_SQL_EXECUTION,IN_PX_EXECUTION, IN_SEQUENCE_LOAD, IN_COMMITTING, IN_STORAGE_READ, IN_STORAGE_WRITE, IN_REMOTE_DAS_EXECUTION )' ||
              ' ) ORDER BY SAMPLES_CNT DESC';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
@@ -610,6 +623,41 @@ BEGIN
   END LOOP;
   CLOSE top_event_cv;
   column_content := COLUMN_CONTENT_ARRAY('-', '-', '-');
+  APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
+
+  APPEND_ROW(' ');
+  APPEND_ROW('## Node Load:');
+  column_widths := COLUMN_WIDTH_ARRAY(40, 20, 20, 20, 30);
+  column_content := COLUMN_CONTENT_ARRAY('-', '-', '-', '-', '-');
+  APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
+  column_content := COLUMN_CONTENT_ARRAY('SVR IP', 'SVR PORT', 'Sampled Count', 'Idle Wait Count', 'Load');
+  APPEND_ROW(FORMAT_ROW(column_content, column_widths, ' ', '|'));
+  column_content := COLUMN_CONTENT_ARRAY('-', '-', '-', '-', '-');
+  APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
+  DYN_SQL := 'SELECT SVR_IP, SVR_PORT, count(1) SAMPLE_CNT , SUM(CASE WHEN wait_class_id = 106 THEN 1 ELSE 0 END) IDLE_WAIT_CNT FROM(' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') top_event ' ||
+             'GROUP BY SVR_IP, SVR_PORT';
+  OPEN node_load_cv FOR DYN_SQL
+  USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          ASH_BEGIN_TIME, ASH_END_TIME,
+          SQL_ID, SQL_ID,
+          TRACE_ID, TRACE_ID,
+          WAIT_CLASS, WAIT_CLASS,
+          NULL_CHAR, NULL_CHAR,
+          NULL_CHAR, NULL_CHAR,
+          NULL_CHAR, NULL_CHAR;
+  LOOP
+    FETCH node_load_cv INTO node_load_rec;
+    EXIT WHEN node_load_cv%NOTFOUND;
+    APPEND_ROW(FORMAT_ROW(COLUMN_CONTENT_ARRAY(
+          TO_CHAR(node_load_rec.SVR_IP),
+          TO_CHAR(node_load_rec.SVR_PORT),
+          TO_CHAR(node_load_rec.SAMPLE_CNT),
+          TO_CHAR(node_load_rec.IDLE_WAIT_CNT),
+          TO_CHAR(ROUND((node_load_rec.SAMPLE_CNT - node_load_rec.IDLE_WAIT_CNT)/DUR_ELAPSED, 2), DIG_2_FM)
+    ), column_widths, ' ', '|'));
+  END LOOP;
+  CLOSE node_load_cv;
+  column_content := COLUMN_CONTENT_ARRAY('-', '-', '-', '-', '-');
   APPEND_ROW(FORMAT_ROW(column_content, column_widths, '-', '+'));
 
 

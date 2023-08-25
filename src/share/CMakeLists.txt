@@ -495,6 +495,13 @@ ob_set_subtarget(ob_share throttle
   throttle/ob_throttle_common.cpp
 )
 
+ob_set_subtarget(ob_share wr
+  wr/ob_wr_service.cpp
+  wr/ob_wr_task.cpp
+  wr/ob_wr_snapshot_rpc_processor.cpp
+  wr/ob_wr_collector.cpp
+)
+
 ob_add_new_object_target(ob_share ob_share)
 
 target_compile_options(ob_share PRIVATE -Wshorten-64-to-32)

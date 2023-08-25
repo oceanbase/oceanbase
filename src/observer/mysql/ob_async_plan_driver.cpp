@@ -50,7 +50,7 @@ ObAsyncPlanDriver::~ObAsyncPlanDriver()
 
 int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
 {
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = true;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
   int ret = OB_SUCCESS;
   // result.open 后 pkt_param 所需的 last insert id 等各项参数都已经计算完毕
   // 对于异步增删改的情况，需要提前update last insert id，以确保回调pkt_param参数正确
@@ -153,7 +153,6 @@ int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
     //而SQL是要保证一定要调到end_trans的，调end_trans的时候判断了是否需要断连接，
     //所以这里不需要判断是否需要断连接了
   }
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = false;
   return ret;
 }
 

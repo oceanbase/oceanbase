@@ -29,6 +29,7 @@
         LogRequestHandler handler(palf_env_impl_);                                                                \
         ret = handler.handle_request(palf_id, server, req);                                                       \
         PALF_LOG(TRACE, "Processor handle_request success", K(ret), K(palf_id), K(req), KP(filter_));             \
+        EVENT_INC(ObStatEventIds::PALF_HANDLE_RPC_REQUEST_COUNT);                                                   \
       }                                                                                                           \
       return ret;                                                                                                 \
 

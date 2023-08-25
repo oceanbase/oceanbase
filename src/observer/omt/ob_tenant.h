@@ -605,7 +605,12 @@ OB_INLINE int64_t ObResourceGroup::min_worker_cnt() const
 {
   const uint64_t worker_concurrency = share::ObCgSet::instance().get_worker_concurrency(group_id_);
   int64_t cnt = worker_concurrency * (int64_t)ceil(tenant_->unit_min_cpu());
-  return (share::OBCG_CLOG == group_id_ || share::OBCG_LQ == group_id_) ? std::max(cnt, 8L) : cnt;
+  if (share::OBCG_CLOG == group_id_ || share::OBCG_LQ == group_id_) {
+    cnt =  std::max(cnt, 8L);
+  } else if (share::OBCG_WR == group_id_) {
+    cnt = 2;  // one for take snapshot, one for purge
+  }
+  return cnt;
 }
 
 OB_INLINE int64_t ObResourceGroup::max_worker_cnt() const
@@ -616,6 +621,8 @@ OB_INLINE int64_t ObResourceGroup::max_worker_cnt() const
     cnt = std::max(cnt, 8L);
   } else if (share::OBCG_LQ == group_id_) {
     cnt = std::max(cnt, tenant_->max_worker_cnt());
+  } else if (share::OBCG_WR == group_id_) {
+    cnt = 2;  // one for take snapshot, one for purge
   }
   return cnt;
 }

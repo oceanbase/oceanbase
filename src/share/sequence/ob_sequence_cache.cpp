@@ -390,7 +390,7 @@ int ObSequenceCache::nextval(const ObSequenceSchema &schema,
                              ObIAllocator &allocator, // 用于各种临时计算
                              ObSequenceValue &nextval)
 {
-  ObActiveSessionGuard::get_stat().in_sequence_load_ = true;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sequence_load);
   int ret = OB_SUCCESS;
   /* 1. if cache item not exist, create a obsolete cache item
    * 2. read and lock cache item
@@ -496,7 +496,6 @@ int ObSequenceCache::nextval(const ObSequenceSchema &schema,
   if (nullptr != item) {
     sequence_cache_.revert(item);
   }
-  ObActiveSessionGuard::get_stat().in_sequence_load_ = false;
   return ret;
 }
 

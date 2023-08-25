@@ -84,6 +84,8 @@ if(OB_BUILD_CLOSE_MODULES)
   ob_unittest(test_xpath_filter)
 endif()
 
+ob_unittest(test_ash_index)
+
 add_subdirectory(allocator)
 add_subdirectory(auto_increment)
 add_subdirectory(cache)

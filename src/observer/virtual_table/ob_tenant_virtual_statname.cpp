@@ -86,7 +86,7 @@ int ObTenantVirtualStatname::inner_get_next_row(ObNewRow *&row)
             break;
           }
           case DISPLAY_NAME: {
-            cells_[cell_idx].set_varchar(OB_STAT_EVENTS[stat_iter_].display_name_);
+            cells_[cell_idx].set_varchar(OB_STAT_EVENTS[stat_iter_].name_);
             cells_[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }

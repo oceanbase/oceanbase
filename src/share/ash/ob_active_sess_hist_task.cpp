@@ -18,10 +18,17 @@
 #include "share/ash/ob_active_sess_hist_task.h"
 #include "share/ash/ob_active_sess_hist_list.h"
 #include "sql/session/ob_sql_session_mgr.h"
+#include "lib/utility/ob_tracepoint.h"
+#include "lib/statistic_event/ob_stat_event.h"
+#include "lib/time/ob_time_utility.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::sql;
+
+#define GET_OTHER_TSI_ADDR(var_name, addr) \
+const int64_t var_name##_offset = ((int64_t)addr - (int64_t)pthread_self()); \
+decltype(*addr) var_name = *(decltype(addr))(thread_base + var_name##_offset);
 
 ObActiveSessHistTask &ObActiveSessHistTask::get_instance()
 {
@@ -75,10 +82,35 @@ void ObActiveSessHistTask::destroy()
 
 void ObActiveSessHistTask::runTimerTask()
 {
-  if (OB_NOT_NULL(GCTX.session_mgr_)) {
+  uint64_t ash_begin_time = common::ObTimeUtility::current_time();
+  int is_ash_close = EVENT_CALL(EventTable::EN_CLOSE_ASH);
+  if (OB_NOT_NULL(GCTX.session_mgr_) && (0 == is_ash_close)) {
+    // iter over session mgr
     sample_time_ = ObTimeUtility::current_time();
     GCTX.session_mgr_->for_each_session(*this);
+    // iter over each thread
+    StackMgr::Guard guard(g_stack_mgr);
+    for (auto* header = *guard; OB_NOT_NULL(header); header = guard.next()) {
+      auto* thread_base = (char*)(header->pth_);
+      if (OB_NOT_NULL(thread_base)) {
+        GET_OTHER_TSI_ADDR(tid, &get_tid_cache());
+        {
+          char path[64];
+          IGNORE_RETURN snprintf(path, 64, "/proc/self/task/%ld", tid);
+          if (-1 == access(path, F_OK)) {
+            // thread not exist, may have exited.
+            continue;
+          }
+        }
+        GET_OTHER_TSI_ADDR(ash_stat, &ObActiveSessionGuard::thread_local_stat_);
+        if (ash_stat.in_das_remote_exec_ == true) {
+          ash_stat.sample_time_ = sample_time_;
+          ObActiveSessHistList::get_instance().add(ash_stat);
+        }
+      }
+    }
   }
+  EVENT_ADD(ASH_SCHEDULAR_ELAPSE_TIME, common::ObTimeUtility::current_time() - ash_begin_time);
 }
 
 bool ObActiveSessHistTask::operator()(sql::ObSQLSessionMgr::Key key, ObSQLSessionInfo *sess_info)

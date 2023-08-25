@@ -18,6 +18,8 @@
 #include "observer/ob_server_struct.h"
 #include "storage/tx/ob_trans_service.h"
 #include "observer/ob_srv_network_frame.h"
+#include "lib/ash/ob_active_session_guard.h"
+
 namespace oceanbase
 {
 namespace sql
@@ -45,6 +47,15 @@ int ObDASBaseAccessP<pcode>::before_process()
   mem_attr.tenant_id_ = task.get_task_op()->get_tenant_id();
   mem_attr.label_ = "DASRpcPCtx";
   exec_ctx_.get_allocator().set_attr(mem_attr);
+  ObActiveSessionGuard::setup_thread_local_ash();
+  ObActiveSessionGuard::get_stat().in_das_remote_exec_ = true;
+  ObActiveSessionGuard::get_stat().tenant_id_ = task.get_task_op()->get_tenant_id();
+  ObActiveSessionGuard::get_stat().trace_id_ = *ObCurTraceId::get_trace_id();
+  ObActiveSessionGuard::get_stat().user_id_ = das_remote_info_.user_id_;
+  ObActiveSessionGuard::get_stat().session_id_ = das_remote_info_.session_id_;
+  ObActiveSessionGuard::get_stat().plan_id_ = das_remote_info_.plan_id_;
+  MEMCPY(ObActiveSessionGuard::get_stat().sql_id_, das_remote_info_.sql_id_,
+      min(sizeof(ObActiveSessionGuard::get_stat().sql_id_), sizeof(das_remote_info_.sql_id_)));
   if (OB_FAIL(RpcProcessor::before_process())) {
     LOG_WARN("do rpc processor before_process failed", K(ret));
   } else if (das_remote_info_.need_calc_expr_ &&
@@ -171,6 +182,7 @@ int ObDASBaseAccessP<pcode>::after_process(int error_code)
 template<obrpc::ObRpcPacketCode pcode>
 void ObDASBaseAccessP<pcode>::cleanup()
 {
+  ObActiveSessionGuard::get_stat().reuse();
   ObActiveSessionGuard::setup_default_ash();
   das_factory_.cleanup();
   ObDASBaseAccessP<pcode>::get_das_factory() = nullptr;

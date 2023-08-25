@@ -317,7 +317,9 @@ bool ObDbmsStatsUtils::is_virtual_index_table(const int64_t table_id)
          table_id == share::OB_ALL_VIRTUAL_SESSTAT_ORA_ALL_VIRTUAL_SESSTAT_I1_TID ||
          table_id == share::OB_ALL_VIRTUAL_SYSSTAT_ORA_ALL_VIRTUAL_SYSSTAT_I1_TID ||
          table_id == share::OB_ALL_VIRTUAL_SYSTEM_EVENT_ORA_ALL_VIRTUAL_SYSTEM_EVENT_I1_TID ||
-         table_id == share::OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_ORA_ALL_VIRTUAL_SQL_PLAN_MONITOR_I1_TID;
+         table_id == share::OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_ORA_ALL_VIRTUAL_SQL_PLAN_MONITOR_I1_TID ||
+         table_id == share::OB_ALL_VIRTUAL_ASH_ALL_VIRTUAL_ASH_I1_TID ||
+         table_id == share::OB_ALL_VIRTUAL_ASH_ORA_ALL_VIRTUAL_ASH_I1_TID;
 }
 
 int ObDbmsStatsUtils::parse_granularity(const ObString &granularity, ObGranularityType &granu_type)

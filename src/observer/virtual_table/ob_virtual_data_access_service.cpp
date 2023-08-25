@@ -11,6 +11,7 @@
  */
 
 #include "ob_virtual_data_access_service.h"
+#include "lib/ash/ob_active_session_guard.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -21,6 +22,7 @@ namespace observer
 {
 int ObVirtualDataAccessService::table_scan(ObVTableScanParam &param, ObNewRowIterator *&result)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
   int ret = OB_SUCCESS;
   ObVirtualTableIterator *vt_iter = NULL;
   if (OB_FAIL(vt_iter_factory_.create_virtual_table_iterator(param, vt_iter))) {
@@ -54,6 +56,7 @@ int ObVirtualDataAccessService::table_scan(ObVTableScanParam &param, ObNewRowIte
 
 int ObVirtualDataAccessService::revert_scan_iter(ObNewRowIterator *result)
 {
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_storage_read);
   int ret = OB_SUCCESS;
   if (NULL == result) {
     COMMON_LOG(DEBUG, "reuslt is null", K(ret), K(result));

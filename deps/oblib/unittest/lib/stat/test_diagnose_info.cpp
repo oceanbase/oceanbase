@@ -66,18 +66,18 @@ TEST(ObDISessionCache, multithread)
   ObDiagnoseTenantInfo tenant_info;
   ObWaitEventHistory &history = info.get_event_history();
   for (uint64_t i = 0; i <2; i++) {
-    info.notify_wait_begin(ObWaitEventIds::PT_LOCATION_CACHE_LOCK_WAIT, 0, 0, 0, 0);
+    info.notify_wait_begin(ObWaitEventIds::DEFAULT_COND_WAIT, 0, 0, 0, 0);
     EXPECT_EQ(1, history.curr_pos_);
     EXPECT_EQ(1, history.item_cnt_);
     EXPECT_EQ(1, history.nest_cnt_);
-    EXPECT_EQ(ObWaitEventIds::PT_LOCATION_CACHE_LOCK_WAIT, history.items_[(history.current_wait_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].event_no_);
+    EXPECT_EQ(ObWaitEventIds::DEFAULT_COND_WAIT, history.items_[(history.current_wait_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].event_no_);
     EXPECT_EQ(0, history.items_[(history.current_wait_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].level_);
     ::usleep(1);
     info.notify_wait_end(&tenant_info);
     EXPECT_EQ(1, history.curr_pos_);
     EXPECT_EQ(1, history.item_cnt_);
     EXPECT_EQ(0, history.nest_cnt_);
-    EXPECT_EQ(ObWaitEventIds::PT_LOCATION_CACHE_LOCK_WAIT, history.items_[(history.current_wait_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].event_no_);
+    EXPECT_EQ(ObWaitEventIds::DEFAULT_COND_WAIT, history.items_[(history.current_wait_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].event_no_);
     EXPECT_EQ(0, history.items_[(history.current_wait_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].level_);
     info.notify_wait_begin(ObWaitEventIds::MT_READ_LOCK_WAIT, 0, 0, 0, 0);
     EXPECT_EQ(2, history.curr_pos_);
@@ -128,10 +128,10 @@ TEST(ObDISessionCache, multithread)
     EXPECT_EQ(1, history.items_[(history.current_wait_ + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].level_);
     info.notify_wait_end(&tenant_info);
     if (1 == i) {
-      info.notify_wait_begin(ObWaitEventIds::PT_LOCATION_CACHE_LOCK_WAIT, 0, 0, 0, 0);
+      info.notify_wait_begin(ObWaitEventIds::DEFAULT_COND_WAIT, 0, 0, 0, 0);
       ::usleep(1);
       info.notify_wait_end(&tenant_info);
-      info.notify_wait_begin(ObWaitEventIds::PT_LOCATION_CACHE_LOCK_WAIT, 0, 0, 0, 0);
+      info.notify_wait_begin(ObWaitEventIds::DEFAULT_COND_WAIT, 0, 0, 0, 0);
       ::usleep(1);
       info.notify_wait_end(&tenant_info);
       info.notify_wait_end(&tenant_info);
@@ -147,7 +147,7 @@ TEST(ObDISessionCache, multithread)
       EXPECT_EQ(1, history.curr_pos_);
       EXPECT_EQ(1, history.item_cnt_);
       EXPECT_EQ(0, history.nest_cnt_);
-      EXPECT_EQ(ObWaitEventIds::PT_LOCATION_CACHE_LOCK_WAIT, history.items_[(history.curr_pos_ - 1 + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].event_no_);
+      EXPECT_EQ(ObWaitEventIds::DEFAULT_COND_WAIT, history.items_[(history.curr_pos_ - 1 + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].event_no_);
       EXPECT_EQ(0, history.items_[(history.curr_pos_ - 1 + SESSION_WAIT_HISTORY_CNT) % SESSION_WAIT_HISTORY_CNT].level_);
     }
     info.reset();
@@ -195,7 +195,7 @@ TEST(ObDiagnoseSessionInfo, normal)
       begin_time = ::oceanbase::common::ObTimeUtility::current_time();
       for (int i = 0; i < 1000000; i++) {
         ObWaitEventGuard wait_guard(ObWaitEventIds::MT_READ_LOCK_WAIT);
-        ObWaitEventGuard wait_guard1(ObWaitEventIds::PT_LOCATION_CACHE_LOCK_WAIT);
+        ObWaitEventGuard wait_guard1(ObWaitEventIds::DEFAULT_COND_WAIT);
       }
       end_time = ::oceanbase::common::ObTimeUtility::current_time();
       printf("scan sysstat time: %ld us\n", (end_time - begin_time));

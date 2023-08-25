@@ -456,14 +456,18 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
         LOG_WARN("fail to inc session ref", K(ret));
       } else {
         callback->handout();
+        ObActiveSessionGuard::get_stat().in_committing_ = true;
         if(OB_FAIL(txs->submit_commit_tx(*tx_ptr, expire_ts, *callback, &trace_info))) {
           LOG_WARN("submit commit tx fail", K(ret), KP(callback), K(expire_ts), KPC(tx_ptr));
           GCTX.session_mgr_->revert_session(session);
           callback->handin();
         }
       }
-    } else if (OB_FAIL(txs->commit_tx(*tx_ptr, expire_ts, &trace_info))) {
-      LOG_WARN("sync commit tx fail", K(ret), K(expire_ts), KPC(tx_ptr));
+    } else {
+      ACTIVE_SESSION_FLAG_SETTER_GUARD(in_committing);
+      if (OB_FAIL(txs->commit_tx(*tx_ptr, expire_ts, &trace_info))) {
+        LOG_WARN("sync commit tx fail", K(ret), K(expire_ts), KPC(tx_ptr));
+      }
     }
   }
 

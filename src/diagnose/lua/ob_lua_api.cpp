@@ -518,7 +518,7 @@ int get_tenant_sysstat_by_name(lua_State* L)
     int64_t value = 0;
     ret = OB_ENTRY_NOT_EXIST;
     for (int i = 0; i < ObStatEventIds::STAT_EVENT_SET_END; ++i) {
-      if (0 == strcmp(OB_STAT_EVENTS[i].display_name_, name)) {
+      if (0 == strcmp(OB_STAT_EVENTS[i].name_, name)) {
         if (OB_FAIL(get_tenant_sysstat(tenant_id, i, value))) {
           OB_LOG(ERROR, "failed to get tenant diag info", K(ret), K(tenant_id), K(i), K(name));
         } else {

@@ -122,7 +122,7 @@ void ObSyncCmdDriver::free_output_row(ObMySQLResultSet &result)
 
 int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
 {
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = true;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
   int ret = OB_SUCCESS;
   bool process_ok = false;
   // for select SQL
@@ -223,7 +223,6 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
       LOG_WARN("send error packet fail", K(sret), K(ret));
     }
   }
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = false;
   return ret;
 }
 

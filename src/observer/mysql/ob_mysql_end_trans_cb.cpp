@@ -152,6 +152,9 @@ void ObSqlEndTransCb::callback(int cb_param)
       }
     }
 
+    ObActiveSessionGuard::get_stat().in_sql_execution_ = false;
+    ObActiveSessionGuard::setup_default_ash();
+    session_info->set_session_sleep();
     if (OB_SUCCESS == ret) {
       if (need_disconnect_) {
         packet_sender_.force_disconnect();

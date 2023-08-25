@@ -167,7 +167,9 @@ ObLogReplayService::ObLogReplayService()
     allocator_(NULL),
     replayable_point_(),
     replay_status_map_(),
-    pending_replay_log_size_(0)
+    pending_replay_log_size_(0),
+    wait_cost_stat_("[REPLAY STAT REPLAY TASK IN QUEUE TIME]", 1 * 1000 * 1000L),
+    replay_cost_stat_("[REPLAY STAT REPLAY TASK EXECUTE COST TIME]", 1 * 1000 * 1000L)
   {}
 
 ObLogReplayService::~ObLogReplayService()
@@ -814,6 +816,7 @@ int ObLogReplayService::do_replay_task_(ObLogReplayTask *replay_task,
   get_replay_queue_index() = replay_queue_idx;
   ObLogReplayBuffer *replay_log_buff = NULL;
   bool need_replay = false;
+  replay_task->first_handle_ts_ = ObTimeUtility::fast_current_time();
   if (OB_ISNULL(replay_status) || OB_ISNULL(replay_task)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(ERROR, "invalid argument", KPC(replay_task), KPC(replay_status), KR(ret));
@@ -1180,6 +1183,9 @@ int ObLogReplayService::handle_replay_task_(ObReplayServiceReplayTask *task_queu
           CLOG_LOG(ERROR, "replay_task is NULL", KPC(replay_status), K(ret));
         } else if (OB_FAIL(do_replay_task_(replay_task, replay_status, task_queue->idx()))) {
           (void)process_replay_ret_code_(ret, *replay_status, *task_queue, *replay_task);
+        } else if (OB_FAIL(statistics_replay_cost_(replay_task->init_task_ts_, replay_task->first_handle_ts_))) {
+          ret = OB_ERR_UNEXPECTED;
+          CLOG_LOG(ERROR, "do statistics replay cost failed", KPC(replay_task), K(ret));
         } else if (OB_ISNULL(link_to_destroy = task_queue->pop())) {
           CLOG_LOG(ERROR, "failed to pop task after replay", KPC(replay_task), K(ret));
           //It's impossible to get to this branch. Use on_replay_error to defend it.
@@ -1275,6 +1281,18 @@ void ObLogReplayService::statistics_submit_(const int64_t single_submit_task_use
     SUBMIT_LOG_SIZE = 0;
     TASK_COUNT = 0;
   }
+}
+
+int ObLogReplayService::statistics_replay_cost_(const int64_t init_task_time,
+                                                 const int64_t first_handle_time)
+{
+  int ret = OB_SUCCESS;
+  int64_t handle_finish_time = ObTimeUtility::fast_current_time();
+  int64_t wait_cost_time = first_handle_time - init_task_time;
+  int64_t replay_cost_time = handle_finish_time - first_handle_time;
+  wait_cost_stat_.stat(wait_cost_time);
+  replay_cost_stat_.stat(replay_cost_time);
+  return ret;
 }
 
 void ObLogReplayService::statistics_replay_(const int64_t single_replay_task_used,

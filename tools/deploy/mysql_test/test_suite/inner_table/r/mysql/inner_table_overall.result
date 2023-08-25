@@ -243,7 +243,12 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 450	__all_external_table_file	0	201001	1
 451	__all_task_opt_stat_gather_history	0	201001	1
 452	__all_table_opt_stat_gather_history	0	201001	1
+455	__wr_active_session_history	0	201001	1
+456	__wr_snapshot	0	201001	1
+457	__wr_statname	0	201001	1
+458	__wr_sysstat	0	201001	1
 459	__all_balance_task_helper	0	201001	1
+472	__wr_control	0	201001	1
 473	__all_tenant_event_history	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
@@ -616,6 +621,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12384	__all_virtual_thread	2	201001	1
 12385	__all_virtual_arbitration_member_info	2	201001	1
 12387	__all_virtual_arbitration_service_status	2	201001	1
+12388	__all_virtual_wr_active_session_history	2	201001	1
+12389	__all_virtual_wr_snapshot	2	201001	1
+12390	__all_virtual_wr_statname	2	201001	1
+12391	__all_virtual_wr_sysstat	2	201001	1
 12393	__all_virtual_virtual_long_ops_status_mysql_sys_agent	2	201001	1
 12394	__all_virtual_ls_transfer_member_list_lock_info	2	201001	1
 12395	__all_virtual_timestamp_service	2	201001	1
@@ -624,6 +633,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12400	__all_virtual_ls_log_restore_status	2	201001	1
 12401	__all_virtual_tenant_parameter	2	201001	1
 12405	__all_virtual_tablet_buffer_info	2	201001	1
+12414	__all_virtual_wr_control	2	201001	1
 12415	__all_virtual_tenant_event_history	2	201001	1
 12416	__all_virtual_balance_task_helper	2	201001	1
 12417	__all_virtual_balance_group_ls_stat	2	201001	1
@@ -930,6 +940,14 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21383	V$OB_ARBITRATION_MEMBER_INFO	1	201001	1
 21387	GV$OB_ARBITRATION_SERVICE_STATUS	1	201001	1
 21388	V$OB_ARBITRATION_SERVICE_STATUS	1	201001	1
+21389	DBA_WR_ACTIVE_SESSION_HISTORY	1	201001	1
+21390	CDB_WR_ACTIVE_SESSION_HISTORY	1	201001	1
+21391	DBA_WR_SNAPSHOT	1	201001	1
+21392	CDB_WR_SNAPSHOT	1	201001	1
+21393	DBA_WR_STATNAME	1	201001	1
+21394	CDB_WR_STATNAME	1	201001	1
+21395	DBA_WR_SYSSTAT	1	201001	1
+21396	CDB_WR_SYSSTAT	1	201001	1
 21399	GV$OB_LOCKS	1	201001	1
 21400	V$OB_LOCKS	1	201001	1
 21401	CDB_OB_LOG_RESTORE_SOURCE	1	201001	1
@@ -957,6 +975,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21424	V$OB_LS_LOG_RESTORE_STATUS	1	201001	1
 21425	CDB_OB_EXTERNAL_TABLE_FILES	1	201001	1
 21426	DBA_DB_LINKS	1	201001	1
+21443	DBA_WR_CONTROL	1	201001	1
+21444	CDB_WR_CONTROL	1	201001	1
 21445	DBA_OB_LS_HISTORY	1	201001	1
 21446	CDB_OB_LS_HISTORY	1	201001	1
 21447	DBA_OB_TENANT_EVENT_HISTORY	1	201001	1

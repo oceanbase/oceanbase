@@ -245,6 +245,30 @@ int ObVirtualASH::convert_node_to_row(const ActiveSessionStat &node, ObNewRow *&
         cells[cell_idx].set_int(node.plan_id_);
         break;
       }
+      case IS_WR_SAMPLE: {
+        cells[cell_idx].set_bool(node.is_wr_sample_);
+        break;
+      }
+      case TIME_MODEL: {
+        cells[cell_idx].set_uint64(node.time_model_);
+        break;
+      }
+      case IN_COMMITTING: {
+        cells[cell_idx].set_bool(node.in_committing_);
+        break;
+      }
+      case IN_STORAGE_READ: {
+        cells[cell_idx].set_bool(node.in_storage_read_);
+        break;
+      }
+      case IN_STORAGE_WRITE: {
+        cells[cell_idx].set_bool(node.in_storage_write_);
+        break;
+      }
+      case IN_REMOTE_DAS_EXECUTION: {
+        cells[cell_idx].set_bool(node.in_das_remote_exec_);
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid column id", K(column_id), K(cell_idx),
@@ -259,3 +283,64 @@ int ObVirtualASH::convert_node_to_row(const ActiveSessionStat &node, ObNewRow *&
   return ret;
 }
 
+int ObVirtualASHI1::inner_get_next_row(common::ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+  do {
+    if (iterator_.has_next()) {
+      const ActiveSessionStat &node = iterator_.next();
+      if (OB_SYS_TENANT_ID == effective_tenant_id_ || node.tenant_id_ == effective_tenant_id_) {
+        if (OB_FAIL(convert_node_to_row(node, row))) {
+          LOG_WARN("fail convert row", K(ret));
+        }
+        break;
+      }
+    } else {
+      ret = init_next_query_range();
+    }
+  } while (OB_SUCC(ret));
+  return ret;
+}
+
+int ObVirtualASHI1::init_next_query_range()
+{
+  int ret = OB_SUCCESS;
+  if (current_key_range_index_ >= key_ranges_.count()) {
+    ret = OB_ITER_END;
+  } else {
+    ret = OB_SUCCESS;
+    const common::ObNewRange & cur_range = key_ranges_.at(current_key_range_index_);
+    if (OB_UNLIKELY(cur_range.start_key_.get_obj_cnt() != 1 ||
+                    cur_range.end_key_.get_obj_cnt() != 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ash index error", KR(ret),
+               K(cur_range.start_key_.get_obj_cnt()),
+               K(cur_range.end_key_.get_obj_cnt()));
+    } else {
+      int64_t left = cur_range.start_key_.get_obj_ptr()->get_timestamp();
+      int64_t right = cur_range.end_key_.get_obj_ptr()->get_timestamp();
+      // sample_time's smallest granularity is 1
+      if (!cur_range.border_flag_.inclusive_start()) {
+        ++left;
+      }
+      if (!cur_range.border_flag_.inclusive_end()) {
+        --right;
+      }
+      if (cur_range.start_key_.is_min_row()) {
+        left = 0;  // minimum sample time is 0
+      }
+      if (cur_range.end_key_.is_max_row()) {
+        right = INT64_MAX;  // maximum sample time is INT64_MAX
+      }
+      if (OB_UNLIKELY(cur_range.end_key_.is_min_row() || cur_range.start_key_.is_max_row())) {
+        left = INT64_MAX;
+        right = 0;
+      }
+      ++current_key_range_index_;
+      iterator_ = ObActiveSessHistList::get_instance().create_iterator();
+      iterator_.init_with_sample_time_index(left, right);
+      LOG_DEBUG("current ash query range", K(key_ranges_), K(left), K(right), K_(iterator));
+    }
+  }
+  return ret;
+}

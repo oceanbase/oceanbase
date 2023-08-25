@@ -2840,9 +2840,12 @@ int ObTableLockService::end_tx_(ObTableLockCtx &ctx, const bool is_rollback)
         LOG_WARN("fail rollback tx when session terminate",
                  K(ret), KPC(ctx.tx_desc_), K(stmt_timeout_ts));
       }
-    } else if (OB_FAIL(txs->commit_tx(*ctx.tx_desc_, stmt_timeout_ts))) {
-      LOG_WARN("fail end trans when session terminate",
-               K(ret), KPC(ctx.tx_desc_), K(stmt_timeout_ts));
+    } else {
+      ACTIVE_SESSION_FLAG_SETTER_GUARD(in_committing);
+      if (OB_FAIL(txs->commit_tx(*ctx.tx_desc_, stmt_timeout_ts))) {
+        LOG_WARN("fail end trans when session terminate",
+                K(ret), KPC(ctx.tx_desc_), K(stmt_timeout_ts));
+      }
     }
     if (OB_TMP_FAIL(txs->release_tx(*ctx.tx_desc_))) {
       LOG_ERROR("release tx failed", K(ret), K(tmp_ret), KPC(ctx.tx_desc_));

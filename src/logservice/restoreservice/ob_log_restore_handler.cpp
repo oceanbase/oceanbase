@@ -18,6 +18,7 @@
 #include "lib/ob_define.h"
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"         // K*
+#include "lib/stat/ob_session_stat.h"
 #include "lib/string/ob_string.h"            // ObString
 #include "lib/time/ob_time_utility.h"        // ObTimeUtility
 #include "lib/utility/ob_macro_utils.h"
@@ -380,6 +381,8 @@ int ObLogRestoreHandler::raw_write(const int64_t proposal_id,
         } else {
           ret = palf_handle_.raw_write(opts, lsn, buf, buf_size);
           if (OB_SUCC(ret)) {
+            uint64_t tenant_id = palf_env_->get_palf_env_impl()->get_tenant_id();
+            EVENT_TENANT_ADD(ObStatEventIds::RESTORE_WRITE_LOG_SIZE, buf_size, tenant_id);
             context_.max_fetch_lsn_ = lsn + buf_size;
             context_.max_fetch_scn_ = scn;
             context_.last_fetch_ts_ = ObTimeUtility::fast_current_time();

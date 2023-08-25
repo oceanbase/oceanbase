@@ -49,8 +49,8 @@ private:
 class AppendCb : public AppendCbBase
 {
 public:
-  AppendCb(){
-  };
+  AppendCb(): append_start_ts_(OB_INVALID_TIMESTAMP), append_finish_ts_(OB_INVALID_TIMESTAMP),
+      cb_first_handle_ts_(OB_INVALID_TIMESTAMP) {};
   ~AppendCb()
   {
     reset();

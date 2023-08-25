@@ -1423,8 +1423,10 @@ private:
   bool diskspace_enough_;
   ObMiniStat::ObStatItem append_cost_stat_;
   ObMiniStat::ObStatItem flush_cb_cost_stat_;
-  int64_t last_accum_statistic_time_;
+  int64_t last_accum_write_statistic_time_;
   int64_t accum_write_log_size_;  // the accum size of written logs
+  int64_t last_accum_fetch_statistic_time_;
+  int64_t accum_fetch_log_size_;
   // a spin lock for read/write replica_meta mutex
   SpinLock replica_meta_lock_;
   SpinLock rebuilding_lock_;

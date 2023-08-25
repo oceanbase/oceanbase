@@ -166,10 +166,13 @@ int ObTMService::tm_commit(ObExecContext &exec_ctx,
     ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
     tx_id = tx_desc->tid();
     my_session->get_raw_audit_record().trans_id_ = tx_id;
-    if (OB_FAIL(xa_service->commit_for_dblink_trans(tx_desc))) {
-      LOG_WARN("fail to commit for dblink trans", K(ret));
-    } else {
-      // do nothing
+    {
+      ACTIVE_SESSION_FLAG_SETTER_GUARD(in_committing);
+      if (OB_FAIL(xa_service->commit_for_dblink_trans(tx_desc))) {
+        LOG_WARN("fail to commit for dblink trans", K(ret));
+      } else {
+        // do nothing
+      }
     }
     // TODO, if fail, kill trans forcely and reset session
     // reset

@@ -204,6 +204,7 @@ ObServer::ObServer()
     ,arb_gcs_(),
     arb_timer_()
 #endif
+    ,wr_service_()
 {
   memset(&gctx_, 0, sizeof (gctx_));
 }
@@ -492,6 +493,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
 #endif
     else if (OB_FAIL(ObDetectManagerThread::instance().init(GCTX.self_addr(), net_frame_.get_req_transport()))) {
       LOG_WARN("init ObDetectManagerThread failed", KR(ret));
+    } else if (OB_FAIL(wr_service_.init())) {
+      LOG_WARN("failed to init wr service", K(ret));
     } else {
       GDS.set_rpc_proxy(&rs_rpc_proxy_);
     }
@@ -786,6 +789,10 @@ void ObServer::destroy()
     FLOG_INFO("ArbGarbageCollectSerivce destroyed");
 #endif
 
+    FLOG_INFO("begin to destroy WR service");
+    wr_service_.destroy();
+    FLOG_INFO("WR service destroyed");
+
     has_destroy_ = true;
     FLOG_INFO("[OBSERVER_NOTICE] destroy observer end");
   }
@@ -903,6 +910,12 @@ int ObServer::start()
       LOG_ERROR("fail to start root service monitor", KR(ret));
     } else {
       FLOG_INFO("success to start root service monitor");
+    }
+
+    if (FAILEDx(wr_service_.start())) {
+      LOG_ERROR("failed to start wr service", K(ret));
+    } else {
+      LOG_INFO("success to start wr service");
     }
 
     if (FAILEDx(ob_service_.start())) {
@@ -1361,7 +1374,6 @@ int ObServer::stop()
     FLOG_INFO("begin to stop multi tenant");
     multi_tenant_.stop();
     FLOG_INFO("multi tenant stopped");
-
     FLOG_INFO("begin to stop ob_service");
     ob_service_.stop();
     FLOG_INFO("ob_service stopped");
@@ -1382,6 +1394,10 @@ int ObServer::stop()
       arb_gcs_.stop();
       FLOG_INFO("ArbGarbageCollectSerivce stopped");
 #endif
+
+    FLOG_INFO("begin to stop WR service");
+    wr_service_.stop();
+    FLOG_INFO("WR service stopped");
 
     FLOG_INFO("begin to shutdown rpc network");
     if (OB_FAIL(net_frame_.rpc_shutdown())) {
@@ -1691,6 +1707,10 @@ int ObServer::wait()
      arb_gcs_.wait();
      FLOG_INFO("wait ArbGarbageCollectSerivce success");
    #endif
+
+    FLOG_INFO("begin to wait WR service");
+    wr_service_.wait();
+    FLOG_INFO("wait WR service success");
 
     FLOG_INFO("begin to wait rootservice event history");
     ROOTSERVICE_EVENT_INSTANCE.wait();
@@ -2546,6 +2566,7 @@ int ObServer::init_global_context()
   gctx_.arb_gcs_ = &arb_gcs_;
 #endif
   (void)gctx_.set_upgrade_stage(obrpc::OB_UPGRADE_STAGE_INVALID);
+  gctx_.wr_service_ = &wr_service_;
 
   gctx_.flashback_scn_ = opts_.flashback_scn_;
   gctx_.server_id_ = config_.observer_id;

@@ -61,6 +61,7 @@ public:
   void set_need_disconnect(bool need_disconnect) { need_disconnect_ = need_disconnect; }
   void set_stmt_id(int32_t id) { stmt_id_ = id; }
   void set_param_num(uint64_t num) { params_num_ = num; }
+  sql::ObSQLSessionInfo* get_sess_info_ptr() { return sess_info_; }
 
 protected:
   ObMPPacketSender packet_sender_;

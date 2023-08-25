@@ -53,7 +53,7 @@ ObSyncPlanDriver::~ObSyncPlanDriver()
 
 int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
 {
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = true;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
   int ret = OB_SUCCESS;
   bool process_ok = false;
   // for select SQL
@@ -258,7 +258,6 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
       }
     }
   }
-  ObActiveSessionGuard::get_stat().in_sql_execution_ = false;
   return ret;
 }
 }/* ns observer*/

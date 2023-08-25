@@ -12,9 +12,11 @@
 
 #define USING_LOG_PREFIX PALF
 #include "log_storage.h"
-#include "lib/ob_errno.h"            // OB_INVALID_ARGUMENT
-#include "log_reader_utils.h"        // ReadBuf
+#include "lib/ob_errno.h"             // OB_INVALID_ARGUMENT
+#include "lib/stat/ob_session_stat.h" // Session
+#include "log_reader_utils.h"         // ReadBuf
 #include "palf_handle_impl.h"        // LogHotCache
+#include "share/rc/ob_tenant_base.h"
 #include "share/scn.h"
 
 namespace oceanbase
@@ -112,6 +114,8 @@ void LogStorage::destroy()
   log_tail_.reset();
   log_reader_.destroy();
   block_mgr_.destroy();
+  last_accum_read_statistic_time_ = OB_INVALID_TIMESTAMP;
+  accum_read_log_size_ = 0;
   PALF_LOG(INFO, "LogStorage destroy success");
 }
 
@@ -629,6 +633,7 @@ int LogStorage::do_init_(const char *base_dir,
     update_manifest_cb_ = update_manifest_cb;
     plugins_ = plugins;
     hot_cache_ = hot_cache;
+    last_accum_read_statistic_time_ = ObTimeUtility::fast_current_time();
     is_inited_ = true;
   }
   if (OB_FAIL(ret) && OB_INIT_TWICE != ret) {
@@ -868,6 +873,12 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
              K(read_lsn),
              K(out_read_size),
              K(log_tail));
+    EVENT_TENANT_ADD(ObStatEventIds::PALF_READ_LOG_SIZE_FROM_DISK, out_read_size, MTL_ID());
+    ATOMIC_AAF(&accum_read_log_size_, out_read_size);
+    if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, last_accum_read_statistic_time_)) {
+      PALF_LOG(INFO, "[PALF STAT READ LOG SIZE FROM DISK]", KPC(this), K(accum_read_log_size_));
+      ATOMIC_STORE(&accum_read_log_size_, 0);
+    }
   }
 
   if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {

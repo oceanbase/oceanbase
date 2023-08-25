@@ -124,7 +124,7 @@ void ObPxTaskProcess::run()
 
 int ObPxTaskProcess::process()
 {
-  ObActiveSessionGuard::get_stat().in_px_execution_ = true;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_px_execution);
   int ret = OB_SUCCESS;
   common::ob_setup_default_tsi_warning_buffer();
   common::ob_reset_tsi_warning_buffer();
@@ -230,7 +230,6 @@ int ObPxTaskProcess::process()
     ObSQLUtils::handle_audit_record(false, EXECUTE_DIST, *session);
   }
   release();
-  ObActiveSessionGuard::get_stat().in_px_execution_ = false;
   return ret;
 }
 

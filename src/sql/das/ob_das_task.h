@@ -52,8 +52,13 @@ public:
       snapshot_(),
       ctdefs_(),
       rtdefs_(),
-      flags_(0)
-  { }
+      flags_(0),
+      user_id_(0),
+      session_id_(0),
+      plan_id_(0)
+  {
+    sql_id_[0] = '\0';
+  }
   OB_INLINE static ObDASRemoteInfo *&get_remote_info()
   {
     RLOCAL_INLINE(ObDASRemoteInfo*, g_remote_info);
@@ -79,6 +84,10 @@ public:
       uint64_t reserved_                        : 60;
     };
   };
+  char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
+  uint64_t user_id_;
+  uint64_t session_id_;
+  uint64_t plan_id_;
 };
 
 class ObIDASTaskOp

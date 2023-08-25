@@ -456,6 +456,7 @@ int ObLogReplayTask::init(void *log_buf)
     ObLogReplayBuffer *replay_log_buffer = static_cast<ObLogReplayBuffer *>(log_buf);
     replay_log_buffer->ref_ = REPLAY_TASK_QUEUE_SIZE;
   }
+  init_task_ts_ = ObTimeUtility::fast_current_time();
   CLOG_LOG(TRACE, "ObLogReplayTask init success", KPC(this));
   return ret;
 }
@@ -471,6 +472,7 @@ void ObLogReplayTask::reset()
   replay_hint_ = 0;
   log_type_ = ObLogBaseType::INVALID_LOG_BASE_TYPE;
   is_raw_write_ = false;
+  init_task_ts_ = common::OB_INVALID_TIMESTAMP;
   first_handle_ts_ = common::OB_INVALID_TIMESTAMP;
   print_error_ts_ = common::OB_INVALID_TIMESTAMP;
   replay_cost_ = common::OB_INVALID_TIMESTAMP;
@@ -501,6 +503,8 @@ void ObLogReplayTask::shallow_copy(const ObLogReplayTask &other)
   log_type_ = other.log_type_;
   is_raw_write_ = other.is_raw_write_;
   log_buf_ = other.log_buf_;
+  init_task_ts_ = other.init_task_ts_;
+  first_handle_ts_ = other.init_task_ts_;
 }
 
 int64_t ObLogReplayTask::to_string(char* buf, const int64_t buf_len) const

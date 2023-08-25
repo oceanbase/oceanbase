@@ -54,6 +54,7 @@ class ObSchemaStatusProxy;
 class ObRatelimitMgr;
 class ObAliveServerTracer;
 class ObCgroupCtrl;
+class ObWorkloadRepositoryService;
 
 namespace schema
 {
@@ -283,6 +284,7 @@ struct ObGlobalContext
   sql::ObConnectResourceMgr* conn_res_mgr_;
   storage::ObLocalityManager *locality_manager_;
   obrpc::ObExtenralTableRpcProxy *external_table_proxy_;
+  share::ObWorkloadRepositoryService *wr_service_;
 
   ObGlobalContext() { MEMSET(this, 0, sizeof(*this)); init(); }
   ObGlobalContext &operator = (const ObGlobalContext &other);

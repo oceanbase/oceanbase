@@ -734,6 +734,9 @@ class EventTable
       EN_ENABLE_SET_TRACE_CONTROL_INFO = 2100,
       EN_CHEN = 2101,
 
+      // WR && ASH
+      EN_CLOSE_ASH = 2201,
+
       EVENT_TABLE_MAX = SIZE_OF_EVENT_TABLE
     };
 

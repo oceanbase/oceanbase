@@ -55,7 +55,7 @@ int ObTenantVirtualEventName::inner_get_next_row(ObNewRow *&row)
     cur_row_.cells_ = cells_;
     cur_row_.count_ = reserved_column_cnt_;
 
-    if (event_iter_ >= ObWaitEventIds::WAIT_EVENT_END) {
+    if (event_iter_ >= WAIT_EVENTS_TOTAL) {
       ret = OB_ITER_END;
     }
 
@@ -82,7 +82,7 @@ int ObTenantVirtualEventName::inner_get_next_row(ObNewRow *&row)
             break;
           }
           case DISPLAY_NAME: {
-            cells_[cell_idx].set_varchar(OB_WAIT_EVENTS[event_iter_].display_name_);
+            cells_[cell_idx].set_varchar(OB_WAIT_EVENTS[event_iter_].event_name_);
             cells_[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }

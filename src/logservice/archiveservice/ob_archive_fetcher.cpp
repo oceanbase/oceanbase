@@ -18,6 +18,7 @@
 #include "ob_archive_fetcher.h"
 #include "lib/ob_define.h"
 #include "lib/ob_errno.h"
+#include "lib/stat/ob_session_stat.h"
 #include "lib/thread/ob_thread_name.h"        // lib::set_thread_name
 #include "logservice/ob_log_service.h"        // ObLogService
 #include "logservice/palf/log_group_entry.h"  // LogGroupEntry
@@ -990,10 +991,16 @@ int ObArchiveFetcher::submit_residual_log_fetch_task_(ObArchiveLogFetchTask &tas
 int ObArchiveFetcher::submit_send_task_(ObArchiveSendTask *send_task)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(archive_sender_->submit_send_task(send_task))) {
+  int64_t buf_size;
+  if (OB_ISNULL(send_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    ARCHIVE_LOG(WARN, "invalid argument", K(ret), KP(send_task));
+  } else if (FALSE_IT(buf_size = send_task->get_buf_size())) {
+  } else if (OB_FAIL(archive_sender_->submit_send_task(send_task))) {
     ARCHIVE_LOG(WARN, "submit send task failed", K(ret), KPC(send_task));
   } else {
     ARCHIVE_LOG(INFO, "submit send task succ", KP(send_task));
+    EVENT_TENANT_ADD(ObStatEventIds::ARCHIVE_WRITE_LOG_SIZE, buf_size, tenant_id_);
   }
   return ret;
 }
@@ -1063,6 +1070,7 @@ void ObArchiveFetcher::statistic(const int64_t log_size, const int64_t ts)
     READ_COST_TS = 0;
     READ_TASK_COUNT = 0;
   }
+  EVENT_TENANT_ADD(ObStatEventIds::ARCHIVE_READ_LOG_SIZE, log_size, tenant_id_);
 }
 
 // TmpMemoryHelper

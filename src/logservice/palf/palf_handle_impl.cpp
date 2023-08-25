@@ -68,10 +68,12 @@ PalfHandleImpl::PalfHandleImpl()
     last_record_append_lsn_(PALF_INITIAL_LSN_VAL),
     has_set_deleted_(false),
     palf_env_impl_(NULL),
-    append_cost_stat_("[PALF STAT WRITE LOG]", PALF_STAT_PRINT_INTERVAL_US),
-    flush_cb_cost_stat_("[PALF STAT FLUSH CB]", PALF_STAT_PRINT_INTERVAL_US),
-    last_accum_statistic_time_(OB_INVALID_TIMESTAMP),
+    append_cost_stat_("[PALF STAT APPEND LOG COST TIME]", PALF_STAT_PRINT_INTERVAL_US),
+    flush_cb_cost_stat_("[PALF STAT FLUSH CB COST TIME]", PALF_STAT_PRINT_INTERVAL_US),
+    last_accum_write_statistic_time_(OB_INVALID_TIMESTAMP),
     accum_write_log_size_(0),
+    last_accum_fetch_statistic_time_(OB_INVALID_TIMESTAMP),
+    accum_fetch_log_size_(0),
     replica_meta_lock_(),
     rebuilding_lock_(),
     config_change_lock_(),
@@ -152,7 +154,8 @@ int PalfHandleImpl::init(const int64_t palf_id,
     PALF_REPORT_INFO_KV(K_(palf_id));
     append_cost_stat_.set_extra_info(EXTRA_INFOS);
     flush_cb_cost_stat_.set_extra_info(EXTRA_INFOS);
-    last_accum_statistic_time_ = ObTimeUtility::current_time();
+    last_accum_write_statistic_time_ = ObTimeUtility::current_time();
+    last_accum_fetch_statistic_time_ = ObTimeUtility::current_time();
     PALF_EVENT("PalfHandleImpl init success", palf_id_, K(ret), K(self), K(access_mode), K(palf_base_info),
         K(replica_type), K(log_dir), K(log_meta), K(palf_epoch));
   }
@@ -242,6 +245,10 @@ void PalfHandleImpl::destroy()
       palf_env_impl_->remove_directory(log_dir_);
     }
     palf_env_impl_ = NULL;
+    last_accum_write_statistic_time_ = OB_INVALID_TIMESTAMP;
+    accum_write_log_size_ = 0;
+    last_accum_fetch_statistic_time_ = OB_INVALID_TIMESTAMP;
+    accum_fetch_log_size_ = 0;
   }
 }
 
@@ -435,6 +442,8 @@ int PalfHandleImpl::submit_log(
       }
     } else {
       PALF_LOG(TRACE, "submit_log success", K(ret), KPC(this), K(buf_len), K(lsn), K(scn));
+      EVENT_INC(ObStatEventIds::PALF_APPEND_LOG_ENTRY_COUNT);
+      EVENT_ADD(ObStatEventIds::PALF_APPEND_LOG_SIZE, buf_len);
       if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, append_size_stat_time_us_)) {
         PALF_LOG(INFO, "[PALF STAT APPEND DATA SIZE]", KPC(this), "append size", lsn.val_ - last_record_append_lsn_.val_);
         last_record_append_lsn_ = lsn;
@@ -2079,8 +2088,8 @@ int PalfHandleImpl::inner_append_log(const LSN &lsn,
       PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "write log cost too much time", K(ret), KPC(this),
                    K(lsn), K(scn), "size", write_buf.get_total_size(), K(accum_size), K(time_cost));
     }
-    if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, last_accum_statistic_time_)) {
-      PALF_LOG(INFO, "[PALF STAT INNER APPEND LOG]", KPC(this), K(accum_size));
+    if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, last_accum_write_statistic_time_)) {
+      PALF_LOG(INFO, "[PALF STAT INNER APPEND LOG SIZE]", KPC(this), K(accum_size));
       ATOMIC_STORE(&accum_write_log_size_, 0);
     }
   }
@@ -2112,8 +2121,8 @@ int PalfHandleImpl::inner_append_log(const LSNArray &lsn_array,
       PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "write log cost too much time", K(ret), KPC(this), K(lsn_array),
                K(scn_array), K(curr_size), K(accum_size), K(time_cost));
     }
-    if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, last_accum_statistic_time_)) {
-      PALF_LOG(INFO, "[PALF STAT INNER APPEND LOG]", KPC(this), K(accum_size));
+    if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, last_accum_write_statistic_time_)) {
+      PALF_LOG(INFO, "[PALF STAT INNER APPEND LOG SIZE]", KPC(this), K(accum_size));
       ATOMIC_STORE(&accum_write_log_size_, 0);
     }
   }
@@ -3417,6 +3426,11 @@ int PalfHandleImpl::fetch_log_from_storage(const common::ObAddr &server,
     if (OB_FAIL(mode_mgr_.submit_fetch_mode_meta_resp(server, msg_proposal_id, accepted_mode_pid))) {
       PALF_LOG(WARN, "submit_fetch_mode_meta_resp failed", K(ret), K_(palf_id), K_(self),
           K(msg_proposal_id), K(accepted_mode_pid));
+    }
+    const int64_t accum_size = ATOMIC_AAF(&accum_fetch_log_size_, fetch_stat.total_size_);
+    if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, last_accum_fetch_statistic_time_)) {
+      PALF_LOG(INFO, "[PALF STAT FETCH LOG SIZE]", KPC(this), K(accum_size));
+      ATOMIC_STORE(&accum_fetch_log_size_, 0);
     }
   }
   return ret;
