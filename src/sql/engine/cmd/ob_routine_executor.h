@@ -65,7 +65,7 @@ public:
   ObCallProcedureExecutor() {}
   virtual ~ObCallProcedureExecutor() {}
   int execute(ObExecContext &ctx, ObCallProcedureStmt &stmt);
-
+  int calc_param(ObExecContext &ctx, const ObISqlExpression &expr, ObObjParam &result);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCallProcedureExecutor);
 };
