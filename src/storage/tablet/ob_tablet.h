@@ -205,7 +205,6 @@ public:
   // fetch_$member: member may exist in memory or disk, if in memory, get it directly, if in disk,
   //                read from disk then put into kv cache, and return kv cache handle for caller
   int fetch_table_store(ObTabletMemberWrapper<ObTabletTableStore> &wrapper) const;
-  int fetch_autoinc_seq(ObTabletMemberWrapper<share::ObTabletAutoincSeq> &wrapper) const;
   int load_storage_schema(
       common::ObArenaAllocator &allocator,
       const ObStorageSchema *&storage_schema) const;
@@ -720,6 +719,7 @@ private:
   void reset_ddl_memtables();
   int wait_release_memtables_();
   int mark_mds_table_switched_to_empty_shell_();
+  int fetch_autoinc_seq(ObTabletMemberWrapper<share::ObTabletAutoincSeq> &wrapper) const;
 private:
   // ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE
   // Array size is too large, need to shrink it if possible

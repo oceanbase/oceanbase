@@ -481,7 +481,7 @@ int ObTablet::init(
       ObTabletCreateDeleteMdsUserData user_data;
       if (OB_FAIL(user_data.deserialize(data.ptr(), data.length(), pos))) {
         LOG_WARN("fail to deserialize tablet status cache", K(ret));
-      } else if (OB_FAIL(mds_data_.init(allocator, user_data))) {
+      } else if (OB_FAIL(mds_data_.init_empty_shell(user_data))) {
         LOG_WARN("failed to init mds data", K(ret), K(user_data));
       } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, table_store_addr_.ptr_))) {
         LOG_WARN("fail to allocate and new rowkey read info", K(ret));
@@ -747,8 +747,9 @@ int ObTablet::fetch_autoinc_seq(ObTabletMemberWrapper<ObTabletAutoincSeq> &wrapp
   } else if (OB_UNLIKELY(!auto_inc_seq_addr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid auto inc seq addr", K(ret));
-  } else if (auto_inc_seq_addr.is_memory_object()
-             || auto_inc_seq_addr.is_none_object()) {
+  } else if (auto_inc_seq_addr.is_none_object()) {
+    wrapper.set_member(nullptr);  // nullptr for none object
+  } else if (auto_inc_seq_addr.is_memory_object()) {
     if (OB_ISNULL(auto_inc_seq_addr.get_ptr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("auto inc seq addr ptr is null", K(ret), K_(mds_data_.auto_inc_seq));
@@ -961,7 +962,7 @@ int ObTablet::init_empty_shell(
     LOG_WARN("old tablet status is not deleted", K(ret), K(user_data.tablet_status_));
   } else if (OB_FAIL(tablet_meta_.assign(old_tablet.tablet_meta_))) {
     LOG_WARN("assign old tablet meta to empty shell failed", K(ret), K(old_tablet.tablet_meta_));
-  } else if (OB_FAIL(mds_data_.init(allocator, user_data))) {
+  } else if (OB_FAIL(mds_data_.init_empty_shell(user_data))) {
     LOG_WARN("failed to init mds data", K(ret), K(user_data));
   } else if (OB_FAIL(wait_release_memtables_())) {
     LOG_ERROR("fail to release memtables", K(ret), K(old_tablet));
@@ -1531,13 +1532,9 @@ int ObTablet::deserialize(
     if (OB_SUCC(ret)) {
       ObTabletAutoincSeq *auto_inc_seq = nullptr;
       if (mds_data_.auto_inc_seq_.addr_.is_none()) {
-        if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, auto_inc_seq))) {
-          LOG_WARN("fail to allocate and new rowkey read info", K(ret));
-        }
+        mds_data_.auto_inc_seq_.ptr_ = nullptr;
       } else {
         IO_AND_DESERIALIZE(allocator, mds_data_.auto_inc_seq_.addr_, auto_inc_seq);
-      }
-      if (OB_SUCC(ret)) {
         const int auto_inc_seq_size = auto_inc_seq->get_deep_copy_size();
         ObIStorageMetaObj *auto_inc_seq_obj = nullptr;
         if (OB_UNLIKELY(remain < auto_inc_seq_size)) {

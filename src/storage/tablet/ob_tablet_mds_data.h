@@ -93,9 +93,7 @@ public:
   int init_with_update_medium_info(
       common::ObIAllocator &allocator,
       const ObTabletMdsData &other);
-  int init(
-      ObArenaAllocator &allocator,
-      const ObTabletCreateDeleteMdsUserData &tablet_status);
+  int init_empty_shell(const ObTabletCreateDeleteMdsUserData &tablet_status);
   int set_tablet_status(
       ObArenaAllocator *allocator,
       const ObTabletStatus::Status &tablet_status,

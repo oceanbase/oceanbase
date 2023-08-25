@@ -424,9 +424,7 @@ int ObTabletMdsData::init_with_update_medium_info(
   return ret;
 }
 
-int ObTabletMdsData::init(
-    ObArenaAllocator &allocator,
-    const ObTabletCreateDeleteMdsUserData &tablet_status)
+int ObTabletMdsData::init_empty_shell(const ObTabletCreateDeleteMdsUserData &tablet_status)
 {
   int ret = OB_SUCCESS;
 
@@ -435,8 +433,6 @@ int ObTabletMdsData::init(
     LOG_WARN("init twice", K(ret), K_(is_inited));
   } else if (OB_FAIL(tablet_status_cache_.assign(tablet_status))) {
     LOG_WARN("failed to copy", K(ret), K(tablet_status));
-  } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, auto_inc_seq_.ptr_))) {
-    LOG_WARN("fail to allocate and new rowkey read info", K(ret));
   } else {
     tablet_status_.uncommitted_kv_.addr_.set_none_addr();
     tablet_status_.committed_kv_.addr_.set_none_addr();
@@ -444,6 +440,7 @@ int ObTabletMdsData::init(
     aux_tablet_info_.committed_kv_.addr_.set_none_addr();
     extra_medium_info_.reset();
     medium_info_list_.addr_.set_none_addr();
+    auto_inc_seq_.ptr_ = nullptr;
     auto_inc_seq_.addr_.set_none_addr();
 
     is_inited_ = true;

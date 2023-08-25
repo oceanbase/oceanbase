@@ -73,7 +73,7 @@ void ObTabletTransformArg::reset()
 
 bool ObTabletTransformArg::is_valid() const
 {
-  return nullptr != auto_inc_seq_ptr_
+  return auto_inc_seq_addr_.is_none() ^ (nullptr != auto_inc_seq_ptr_)
       && table_store_addr_.is_none() ^ (nullptr != rowkey_read_info_ptr_)
       && tablet_meta_.is_valid()
       && table_store_addr_.is_valid()
@@ -272,7 +272,7 @@ int ObTabletPersister::persist_and_fill_tablet(
   const ObTabletMeta &tablet_meta = old_tablet.get_tablet_meta();
   const ObTabletMapKey key(tablet_meta.ls_id_, tablet_meta.tablet_id_);
   ObTabletPoolType type = ObTabletPoolType::TP_NORMAL;
-  ObTabletMemberWrapper<share::ObTabletAutoincSeq> auto_inc_seq;
+  ObTabletMemberWrapper<share::ObTabletAutoincSeq> auto_inc_seq; // define here to keep auto_inc_seq_ptr safe
   bool try_smaller_pool = true;
 
   if (old_tablet.is_empty_shell()) {
@@ -524,20 +524,24 @@ int ObTabletPersister::transform(
 
     // auto_inc_seq related
     if (OB_SUCC(ret)) {
-      LOG_DEBUG("TINY TABLET: tablet + rowkey_read_info + tablet store", KP(buf), K(start_pos), K(remain));
-      ObIStorageMetaObj *auto_inc_obj = nullptr;
-      const int auto_inc_seq_size = arg.auto_inc_seq_ptr_->get_deep_copy_size();
-      if (OB_LIKELY((remain - auto_inc_seq_size) > 0)) {
-        if(CLICK_FAIL(arg.auto_inc_seq_ptr_->deep_copy(buf + start_pos, remain, auto_inc_obj))) {
-          LOG_WARN("fail to deep copy auto inc seq", K(ret), K(arg.auto_inc_seq_ptr_));
-        } else {
-          tiny_tablet->mds_data_.auto_inc_seq_.ptr_ = static_cast<share::ObTabletAutoincSeq *>(auto_inc_obj);
-          remain -= auto_inc_seq_size;
-          start_pos += auto_inc_seq_size;
-        }
+      if (OB_ISNULL(arg.auto_inc_seq_ptr_)) {
+        tiny_tablet->mds_data_.auto_inc_seq_.ptr_ = nullptr;
       } else {
-        LOG_DEBUG("TINY TABLET: no enough memory for auto inc seq", K(rowkey_read_info_size), K(remain),
-            K(auto_inc_seq_size));
+        LOG_DEBUG("TINY TABLET: tablet + rowkey_read_info + tablet store", KP(buf), K(start_pos), K(remain));
+        ObIStorageMetaObj *auto_inc_obj = nullptr;
+        const int auto_inc_seq_size = arg.auto_inc_seq_ptr_->get_deep_copy_size();
+        if (OB_LIKELY((remain - auto_inc_seq_size) > 0)) {
+          if(CLICK_FAIL(arg.auto_inc_seq_ptr_->deep_copy(buf + start_pos, remain, auto_inc_obj))) {
+            LOG_WARN("fail to deep copy auto inc seq", K(ret), K(arg.auto_inc_seq_ptr_));
+          } else {
+            tiny_tablet->mds_data_.auto_inc_seq_.ptr_ = static_cast<share::ObTabletAutoincSeq *>(auto_inc_obj);
+            remain -= auto_inc_seq_size;
+            start_pos += auto_inc_seq_size;
+          }
+        } else {
+          LOG_DEBUG("TINY TABLET: no enough memory for auto inc seq", K(rowkey_read_info_size), K(remain),
+              K(auto_inc_seq_size));
+        }
       }
     }
     if (OB_SUCC(ret)) {
