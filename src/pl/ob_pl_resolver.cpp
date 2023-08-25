@@ -4456,11 +4456,11 @@ int ObPLResolver::resolve_cursor_for_loop(
           const ObPLCursor *cursor = stmt->get_cursor();
           if (OB_FAIL(stmt->get_var(var))) {
             LOG_WARN("failed to get var", K(ret));
-          } else if (OB_ISNULL(cursor) || OB_ISNULL(var)) {
+          } else if (OB_ISNULL(cursor)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("value is NULL", K(ret));
           } else if (ObPLCursor::DEFINED != cursor->get_state()) {
-            if (var->get_pl_data_type().is_ref_cursor_type()) {
+            if (OB_NOT_NULL(var) && var->get_pl_data_type().is_ref_cursor_type()) {
               ret = OB_ERR_UNDEFINED;
               LOG_WARN("ref cursor not defined", KPC(var), K(ret));
               LOG_USER_ERROR(OB_ERR_UNDEFINED, var->get_name().ptr());
