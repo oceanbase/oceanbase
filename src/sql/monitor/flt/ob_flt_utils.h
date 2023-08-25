@@ -77,7 +77,7 @@ namespace sql
     static int init_flt_show_trace_env(sql::ObSQLSessionInfo &session);
     static int record_flt_last_trace_id(sql::ObSQLSessionInfo &session);
     static int clean_flt_show_trace_env(sql::ObSQLSessionInfo &session);
-    static void clean_flt_env(sql::ObSQLSessionInfo &session);
+    static void clean_flt_env();
   };
 } // namespace sql
 } // namespace oceanbase

@@ -144,8 +144,6 @@ int ObMPBase::after_process(int error_code)
         // slow query will flush cache
         FLUSH_TRACE();
       }
-    } else if (common::OB_SUCCESS != error_code) {
-      FLUSH_TRACE();
     } else if (can_force_print(error_code)) {
       // 需要打印TRACE日志的错误码添加在这里
       int process_ret = error_code;
@@ -158,7 +156,12 @@ int ObMPBase::after_process(int error_code)
     } else {
       PRINT_TRACE(THE_TRACE);
     }
+
+    if (common::OB_SUCCESS != error_code) {
+      FLUSH_TRACE();
+    }
   }
+  ObFLTUtils::clean_flt_env();
   return ret;
 }
 
@@ -406,7 +409,6 @@ int ObMPBase::record_flt_trace(sql::ObSQLSessionInfo &session) const
       }
     }
   }
-  ObFLTUtils::clean_flt_env(session);
   return ret;
 }
 
