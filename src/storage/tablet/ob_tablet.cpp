@@ -3146,9 +3146,9 @@ int ObTablet::choose_and_save_storage_schema(
     LOG_WARN("input schema is invalid", K(ret), K(ls_id), K(tablet_id), K(tablet_schema), K(param_schema));
   } else if (FALSE_IT(tablet_schema_version = tablet_schema.schema_version_)) {
   } else if (FALSE_IT(param_schema_version = param_schema.schema_version_)) {
-  } else if (OB_FAIL(tablet_schema.get_stored_column_count_in_sstable(tablet_schema_stored_col_cnt))) {
+  } else if (OB_FAIL(tablet_schema.get_store_column_count(tablet_schema_stored_col_cnt, true/*full_col*/))) {
     LOG_WARN("failed to get stored column count from schema", KR(ret), K(ls_id), K(tablet_id), K(tablet_schema));
-  } else if (OB_FAIL(param_schema.get_stored_column_count_in_sstable(param_schema_stored_col_cnt))) {
+  } else if (OB_FAIL(param_schema.get_store_column_count(param_schema_stored_col_cnt, true/*full_col*/))) {
     LOG_WARN("failed to get stored column count from schema", KR(ret), K(ls_id), K(tablet_id), K(param_schema));
   } else if ((tablet_schema_version > param_schema_version && tablet_schema_stored_col_cnt < param_schema_stored_col_cnt)
           || (tablet_schema_version < param_schema_version && tablet_schema_stored_col_cnt > param_schema_stored_col_cnt)) {
@@ -3162,7 +3162,7 @@ int ObTablet::choose_and_save_storage_schema(
       allocator.free(tmp_storage_schema);
       tmp_storage_schema = nullptr;
     } else {
-      tmp_storage_schema->column_cnt_ = MAX(tablet_schema_stored_col_cnt, param_schema_stored_col_cnt);
+      tmp_storage_schema->column_cnt_ = MAX(tablet_schema.get_column_count(), param_schema.get_column_count());
       tmp_storage_schema->store_column_cnt_ = MAX(tablet_schema_stored_col_cnt, param_schema_stored_col_cnt);
       tmp_storage_schema->schema_version_ = MAX(tablet_schema_version, param_schema_version);
       chosen_schema = tmp_storage_schema;
