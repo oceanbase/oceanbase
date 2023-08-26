@@ -1033,6 +1033,17 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           cells[cell_idx].set_uint64(record.data_.txn_free_route_version_);
           break;
         }
+        case FLT_TRACE_ID: {
+          if (OB_MAX_UUID_STR_LENGTH == strlen(record.data_.flt_trace_id_)) {
+            cells[cell_idx].set_varchar(record.data_.flt_trace_id_,
+                                        static_cast<ObString::obstr_size_t>(OB_MAX_UUID_STR_LENGTH));
+          } else {
+            cells[cell_idx].set_varchar("");
+          }
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
+
+        } break;
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(col_id));

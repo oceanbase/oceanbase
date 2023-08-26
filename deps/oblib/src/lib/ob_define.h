@@ -87,6 +87,7 @@ const int64_t OB_MAX_MOD_NAME_LENGTH = 48;
 const int64_t OB_MAX_ACT_NAME_LENGTH = 32;
 const int64_t OB_MAX_UUID_LENGTH = 16;
 const int64_t OB_MAX_UUID_STR_LENGTH = 36;
+const int64_t OB_MAX_CON_INFO_STR_LENGTH = 512;
 const int64_t MAX_ZONE_LENGTH = 128;
 const int64_t MAX_REGION_LENGTH = 128;
 const int64_t MAX_GTS_NAME_LENGTH = 128;
@@ -505,6 +506,14 @@ enum ObCSProtocolType
   OB_MYSQL_CS_TYPE,           // mysql standard protocol
   OB_MYSQL_COMPRESS_CS_TYPE,  // mysql compress protocol
   OB_2_0_CS_TYPE,             // oceanbase 2.0 protocol
+};
+
+enum ObClientType
+{
+  OB_CLIENT_INVALID_TYPE = 0,
+  OB_CLIENT_JDBC,             // JDBC client
+  OB_CLIENT_OCI,              // ob lib client
+  OB_CLIENT_NON_STANDARD      // non-standard client
 };
 
 inline const char *get_cs_protocol_type_name(const ObCSProtocolType type) {
@@ -1430,6 +1439,11 @@ const char *const OB_MYSQL_PROXY_SESSION_VARS = "__proxy_session_vars";
 const char *const OB_MYSQL_SCRAMBLE = "__proxy_scramble";
 const char *const OB_MYSQL_PROXY_VEERSION = "__proxy_version";
 
+const char *const OB_MYSQL_CLIENT_VERSION = "__ob_client_version";
+const char *const OB_MYSQL_CLIENT_NAME = "__ob_client_name";
+
+const char *const OB_MYSQL_JDBC_CLIENT_NAME = "OceanBase Connector/J";
+const char *const OB_MYSQL_OCI_CLIENT_NAME = "OceanBase Connector/C";
 // for java client
 const char *const OB_MYSQL_JAVA_CLIENT_MODE_NAME = "__ob_java_client";
 const char *const OB_MYSQL_OCI_CLIENT_MODE_NAME = "__ob_libobclient";

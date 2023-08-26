@@ -637,6 +637,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12415	__all_virtual_tenant_event_history	2	201001	1
 12416	__all_virtual_balance_task_helper	2	201001	1
 12417	__all_virtual_balance_group_ls_stat	2	201001	1
+12420	__all_virtual_flt_config	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -981,6 +982,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21446	CDB_OB_LS_HISTORY	1	201001	1
 21447	DBA_OB_TENANT_EVENT_HISTORY	1	201001	1
 21448	CDB_OB_TENANT_EVENT_HISTORY	1	201001	1
+21449	GV$OB_FLT_TRACE_CONFIG	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

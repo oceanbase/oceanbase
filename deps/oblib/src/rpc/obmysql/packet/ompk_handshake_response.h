@@ -60,6 +60,8 @@ public:
   bool is_java_client_mode() const;
   bool is_oci_client_mode() const;
   bool is_jdbc_client_mode() const;
+  bool is_ob_client_jdbc() const;
+  bool is_ob_client_oci() const;
   int64_t get_sql_request_level() const;
 
   inline void set_capability_flags(const ObMySQLCapabilityFlags &cap) { capability_ = cap; }

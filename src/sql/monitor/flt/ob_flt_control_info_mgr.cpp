@@ -1058,5 +1058,44 @@ int ObFLTControlInfoManager::find_appropriate_con_info(sql::ObSQLSessionInfo &se
   return ret;
 }
 
+int ObFLTControlInfoManager::get_all_flt_config(common::ObIArray<ObFLTConfRec> &rec_list, ObIAllocator &alloc) {
+  int ret = OB_SUCCESS;
+  // teannt_level
+  ObFLTConfRec rec;
+  rec.tenant_id_ = tenant_id_;
+  rec.type_ = FLT_TENANT_TYPE;
+  rec.control_info_ = tenant_info_;
+  if (OB_FAIL(rec_list.push_back(rec))) {
+    LOG_WARN("failed to push back flt config rec", K(ret));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < mod_infos_.count(); i++) {
+    ObFLTConfRec rec;
+    rec.tenant_id_ = tenant_id_;
+    rec.type_ = FLT_MOD_ACT_TYPE;
+    rec.control_info_ = mod_infos_.at(i).control_info_;
+    if (OB_FAIL(ob_write_string(alloc, mod_infos_.at(i).mod_name_, rec.mod_name_))) {
+      LOG_WARN("failed to write string", K(mod_infos_.at(i).mod_name_), K(ret));
+    } else if (OB_FAIL(ob_write_string(alloc, mod_infos_.at(i).act_name_, rec.act_name_))) {
+      LOG_WARN("failed to write string", K(mod_infos_.at(i).act_name_), K(ret));
+    } else if (OB_FAIL(rec_list.push_back(rec))) {
+      LOG_WARN("failed to push back flt config rec", K(ret));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < identifier_infos_.count(); i++) {
+    ObFLTConfRec rec;
+    rec.tenant_id_ = tenant_id_;
+    rec.type_ = FLT_CLIENT_ID_TYPE;
+    rec.control_info_ = identifier_infos_.at(i).control_info_;
+    if (OB_FAIL(ob_write_string(alloc, identifier_infos_.at(i).identifier_name_, rec.identifier_name_))) {
+      LOG_WARN("failed to write string", K(mod_infos_.at(i).mod_name_), K(ret));
+    } else if (OB_FAIL(rec_list.push_back(rec))) {
+      LOG_WARN("failed to push back flt config rec", K(ret));
+    }
+  }
+  return ret;
+}
+
 } // namespace sql
 } // namespace oceanbase

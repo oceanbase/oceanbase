@@ -17,6 +17,7 @@
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
+#include "lib/utility/ob_print_utils.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -380,6 +381,33 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             cur_row_->cells_[cell_idx].set_int(sess_info->get_effective_tenant_id());
             break;
           }
+          case LEVEL: {
+            cur_row_->cells_[cell_idx].set_int(sess_info->get_control_info().level_);
+          } break;
+          case SAMPLE_PERCENTAGE: {
+            cur_row_->cells_[cell_idx].set_int((sess_info->get_control_info().sample_pct_ == -1)
+                                                  ? -1 : sess_info->get_control_info().sample_pct_*100);
+          } break;
+          case RECORD_POLICY: {
+            if (sess_info->get_control_info().rp_ ==
+                                    sql::FLTControlInfo::RecordPolicy::RP_ALL) {
+              cur_row_->cells_[cell_idx].set_varchar("ALL");
+              cur_row_->cells_[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                         ObCharset::get_default_charset()));
+            } else if (sess_info->get_control_info().rp_ ==
+                                     sql::FLTControlInfo::RecordPolicy::RP_ONLY_SLOW_QUERY) {
+              cur_row_->cells_[cell_idx].set_varchar("ONLY_SLOW_QUERY");
+              cur_row_->cells_[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                         ObCharset::get_default_charset()));
+            } else if (sess_info->get_control_info().rp_ ==
+                                      sql::FLTControlInfo::RecordPolicy::RP_SAMPLE_AND_SLOW_QUERY) {
+              cur_row_->cells_[cell_idx].set_varchar("SAMPLE_AND_SLOW_QUERY");
+              cur_row_->cells_[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                         ObCharset::get_default_charset()));
+            } else {
+              cur_row_->cells_[cell_idx].set_null();
+            }
+          } break;
           default: {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),

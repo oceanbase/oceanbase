@@ -403,6 +403,7 @@ struct ObAuditRecordData {
   uint64_t txn_free_route_version_; // the version of txn's state
   bool partition_hit_;// flag for need das partition route or not
   bool is_perf_event_closed_;
+  char flt_trace_id_[OB_MAX_UUID_STR_LENGTH + 1];
 };
 
 } //namespace sql

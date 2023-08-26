@@ -209,6 +209,7 @@
 #include "observer/virtual_table/ob_all_virtual_px_p2p_datahub.h"
 #include "observer/virtual_table/ob_all_virtual_ls_log_restore_status.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_buffer_info.h"
+#include "observer/virtual_table/ob_virtual_flt_config.h"
 
 namespace oceanbase
 {
@@ -1404,6 +1405,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             } else {
               show_trace->set_addr(addr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(show_trace);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_FLT_CONFIG_TID:
+          {
+            ObVirtualFLTConfig *flt_conf = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObVirtualFLTConfig,
+                                          flt_conf))) {
+              SERVER_LOG(WARN, "fail to create virtual table", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(flt_conf);
             }
             break;
           }

@@ -65,7 +65,34 @@ namespace sql
     FLTControlInfo control_info_;
     TO_STRING_KV(K_(mod_name), K_(act_name), K_(control_info));
   };
+
+  enum ObFLTConfigType {
+    FLT_INVALID_TYPE = 0,
+    FLT_TENANT_TYPE = 1,
+    FLT_MOD_ACT_TYPE = 2,
+    FLT_CLIENT_ID_TYPE = 3
+  };
   
+  class ObFLTConfRec {
+  public:
+    ObFLTConfRec():
+      tenant_id_(OB_INVALID_ID),
+      type_(FLT_INVALID_TYPE),
+      mod_name_(),
+      act_name_(),
+      control_info_() {}
+  public:
+    uint64_t tenant_id_;
+    ObFLTConfigType type_;
+    ObString mod_name_;
+    ObString act_name_;
+    ObString identifier_name_;
+    FLTControlInfo control_info_;
+
+    TO_STRING_KV(K_(tenant_id), K_(type), K_(mod_name), K_(act_name), K_(identifier_name), K_(control_info));
+  };
+
+
   class ObFLTControlInfoManager {
     public:
     ObFLTControlInfoManager(uint64_t t_id) :
@@ -96,6 +123,7 @@ namespace sql
     int get_mod_act_con_info(common::ObString mod, common::ObString act, FLTControlInfo &coninfo);
     int get_client_id_con_info(common::ObString client_id, FLTControlInfo &coninfo);
     int find_appropriate_con_info(sql::ObSQLSessionInfo &sess);
+    int get_all_flt_config(common::ObIArray<ObFLTConfRec> &rec_list, ObIAllocator &allocator);
 
     bool is_valid_tenant_config() {
       return tenant_info_.is_valid();

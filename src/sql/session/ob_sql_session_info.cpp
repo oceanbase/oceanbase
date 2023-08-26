@@ -351,6 +351,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     sql_req_level_ = 0;
     optimizer_tracer_.reset();
     expect_group_id_ = OB_INVALID_ID;
+    flt_control_info_.reset();
     group_id_not_expected_ = false;
     //call at last time
     dblink_context_.reset(); // need reset before ObBasicSessionInfo::reset(skip_sys_var);
@@ -1794,6 +1795,14 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
 
   audit_record_.txn_free_route_flag_ = txn_free_route_ctx_.get_audit_record();
   audit_record_.txn_free_route_version_ = txn_free_route_ctx_.get_global_version();
+  trace::UUID trc_uuid = OBTRACE->get_trace_id();
+  int64_t pos = 0;
+  if (trc_uuid.is_inited()) {
+    trc_uuid.tostring(audit_record_.flt_trace_id_, OB_MAX_UUID_STR_LENGTH + 1, pos);
+  } else {
+    // do nothing
+  }
+  audit_record_.flt_trace_id_[pos] = '\0';
   return audit_record_;
 }
 

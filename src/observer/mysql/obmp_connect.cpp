@@ -101,6 +101,14 @@ int ObMPConnect::deserialize()
       if (hsr_.is_jdbc_client_mode()) {
         conn->is_jdbc_client_ = true;
       }
+
+      if (hsr_.is_ob_client_jdbc()) {
+        conn->client_type_ = common::OB_CLIENT_JDBC;
+      } else if (hsr_.is_ob_client_oci()) {
+        conn->client_type_ = common::OB_CLIENT_OCI;
+      } else {
+        conn->client_type_ = common::OB_CLIENT_NON_STANDARD;
+      }
       db_name_ = hsr_.get_database();
       LOG_DEBUG("database name", K(hsr_.get_database()));
     }
@@ -385,7 +393,7 @@ int ObMPConnect::process()
              K(from_java_client), K(from_oci_client), K(from_jdbc_client),
              K(capability), K(proxy_capability), K(use_ssl),
              "c/s protocol", get_cs_protocol_type_name(protoType),
-             K(autocommit), K(proc_ret), K(ret));
+             K(autocommit), K(proc_ret), K(ret), K(conn->client_type_), K(conn->client_version_));
   }
   return ret;
 }
@@ -1667,8 +1675,13 @@ int ObMPConnect::check_client_property(ObSMConnection &conn)
   int ret = OB_SUCCESS;
   ObMySQLCapabilityFlags client_cap = hsr_.get_capability_flags();
   ObString client_ip;
+  if (OB_FAIL(set_client_version(conn))) {
+    LOG_WARN("get proxy version fail", K(ret));
+  }
 
-  if (conn.is_java_client_) {
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (conn.is_java_client_) {
     // the connection is from oceanbase-connector-java(OCJ)
     if (OB_FAIL(check_common_property(conn, client_cap))) {
       LOG_WARN("fail to check common property", K(ret));
@@ -2037,6 +2050,46 @@ int ObMPConnect::set_proxy_version(ObSMConnection &conn)
         LOG_WARN("failed to get version", K(ret));
       } else {/*do nothing*/}
     }
+  }
+  return ret;
+}
+
+int ObMPConnect::set_client_version(ObSMConnection &conn)
+{
+  int ret = OB_SUCCESS;
+  bool is_found = false;
+  ObString key_str;
+  const char *client_version_str = NULL;
+  int64_t length = 0;
+  key_str.assign_ptr(OB_MYSQL_CLIENT_VERSION,
+                     static_cast<int32_t>(STRLEN(OB_MYSQL_CLIENT_VERSION)));
+  for (int64_t i = 0; !is_found && i < hsr_.get_connect_attrs().count(); ++i) {
+    const ObStringKV &kv =  hsr_.get_connect_attrs().at(i);
+    if (key_str == kv.key_) {
+      client_version_str = kv.value_.ptr();
+      length = kv.value_.length();
+      is_found = true;
+    }
+  }
+  int64_t min_len = 5;//传过来的合法version字符串最短的为“1.1.1”，长度至少为5
+  if (!is_found || OB_ISNULL(client_version_str) || length < min_len) {
+    conn.client_version_ = 0;
+  } else {
+    const int64_t VERSION_ITEM = 3;//版本号只需要取前三位就行，比如“1.7.6.1” 只需要取“1.7.6” 就能决定；
+    char buff[OB_MAX_VERSION_LENGTH];
+    memset(buff, 0, OB_MAX_VERSION_LENGTH);
+    int64_t cur_item = 0;
+    for (int64_t i = 0; cur_item != VERSION_ITEM && i < length; ++i) {
+      if (client_version_str[i] == '.') {
+        ++cur_item;
+      }
+      if (cur_item != VERSION_ITEM) {
+        buff[i] = client_version_str[i];
+      }
+    }
+    if (OB_FAIL(ObClusterVersion::get_version(buff, conn.client_version_))) {
+      LOG_WARN("failed to get version", K(ret));
+    } else {/*do nothing*/}
   }
   return ret;
 }

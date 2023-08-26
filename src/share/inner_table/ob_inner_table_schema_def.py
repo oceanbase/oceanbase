@@ -6104,7 +6104,10 @@ def_table_schema(
   ('sql_trace', 'bool'),
   ('plan_id', 'int'),
   ('tenant_id', 'int'),
-  ('effective_tenant_id', 'int')
+  ('effective_tenant_id', 'int'),
+  ('level', 'int'),
+  ('sample_percentage', 'int'),
+  ('record_policy', 'varchar:32')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -7146,7 +7149,8 @@ def_table_schema(
     ('tx_internal_route_flag', 'uint'),
 
     ('partition_hit', 'bool'),
-    ('tx_internal_route_version', 'uint')
+    ('tx_internal_route_version', 'uint'),
+    ('flt_trace_id', 'varchar:OB_MAX_SPAN_LENGTH')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -12464,6 +12468,26 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 
 # 12420: __all_virtual_flt_config
 
+def_table_schema(
+  owner = 'guoyun.lgy',
+  table_name = '__all_virtual_flt_config',
+  table_id = '12420',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+  ],
+  normal_columns = [
+  ('tenant_id', 'int'),
+  ('type', 'varchar:16'),
+  ('module_name', 'varchar:MAX_VALUE_LENGTH'),
+  ('action_name', 'varchar:MAX_VALUE_LENGTH'),
+  ('client_identifier', 'varchar:OB_MAX_CONTEXT_CLIENT_IDENTIFIER_LENGTH'),
+  ('level', 'int'),
+  ('sample_percentage', 'int'),
+  ('record_policy', 'varchar:32')
+  ]
+)
 # 12421: __all_virtual_tenant_scheduler_job_class
 
 # 12422: __all_virtual_recover_table_job
@@ -12858,6 +12882,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15399', all_def_keyword
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15402', all_def_keywords['__all_ls']))
 # 15403: __all_virtual_flt_config
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15403', all_def_keywords['__all_virtual_flt_config'])))
 
 # 15404: __all_virtual_tenant_scheduler_job_run_detail
 
@@ -14082,7 +14107,8 @@ def_table_schema(
                          partition_hit as PARTITION_HIT,
                          case when tx_internal_route_flag & 96 = 32 then 1 else 0 end
                            as TX_INTERNAL_ROUTING,
-                         tx_internal_route_version as TX_STATE_VERSION
+                         tx_internal_route_version as TX_STATE_VERSION,
+                        flt_trace_id as FLT_TRACE_ID
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -21097,7 +21123,10 @@ SELECT
   TRANS_STATE,
   ACTION,
   MODULE,
-  CLIENT_INFO
+  CLIENT_INFO,
+  LEVEL,
+  SAMPLE_PERCENTAGE,
+  RECORD_POLICY
 FROM oceanbase.__all_virtual_processlist
 """.replace("\n", " ")
 )
@@ -28557,6 +28586,31 @@ def_table_schema(
   """.replace("\n", " ")
 )
 # 21449: GV$OB_FLT_TRACE_CONFIG
+def_table_schema(
+  owner           = 'guoyun.lgy',
+  table_name      = 'GV$OB_FLT_TRACE_CONFIG',
+  table_id        = '21449',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+   a.TENANT_ID,
+   TYPE,
+   TENANT_NAME,
+   MODULE_NAME,
+   ACTION_NAME,
+   CLIENT_IDENTIFIER,
+   LEVEL,
+   SAMPLE_PERCENTAGE,
+   RECORD_POLICY
+  FROM OCEANBASE.__all_virtual_flt_config a, OCEANBASE.DBA_OB_TENANTS b
+  WHERE a.tenant_id = b.tenant_id
+  """.replace("\n", " ")
+)
 # 21459：GV$OB_SESSION
 # 21460：V$OB_SESSION
 
@@ -28580,7 +28634,6 @@ def_table_schema(
 
 # 21477: GV$OB_DUMP_TENANT_INFO
 # 21478: V$OB_DUMP_TENANT_INFO
-
 #
 # 余留位置
 
@@ -46813,7 +46866,8 @@ def_table_schema(
                          rule_name as RULE_NAME,
                          case when bitand(tx_internal_route_flag, 96) = 32 then 1 else 0 end
                            as TX_INTERNAL_ROUTING,
-                         tx_internal_route_version as TX_STATE_VERSION
+                         tx_internal_route_version as TX_STATE_VERSION,
+                         flt_trace_id as FLT_TRACE_ID
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
@@ -50769,7 +50823,10 @@ SELECT
   TRANS_STATE,
   ACTION,
   MODULE,
-  CLIENT_INFO
+  CLIENT_INFO,
+  "LEVEL",
+  SAMPLE_PERCENTAGE,
+  RECORD_POLICY
 FROM SYS.ALL_VIRTUAL_PROCESSLIST
 """.replace("\n", " ")
 )
@@ -52737,6 +52794,33 @@ def_table_schema(
   """.replace("\n", " ")
 )
 # 28195: GV$OB_FLT_TRACE_CONFIG
+def_table_schema(
+  owner           = 'guoyun.lgy',
+  table_name      = 'GV$OB_FLT_TRACE_CONFIG',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28195',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+   a.TENANT_ID,
+   TYPE,
+   TENANT_NAME,
+   MODULE_NAME,
+   ACTION_NAME,
+   CLIENT_IDENTIFIER,
+   "LEVEL",
+   SAMPLE_PERCENTAGE,
+   RECORD_POLICY
+  FROM SYS.ALL_VIRTUAL_FLT_CONFIG a, SYS.DBA_OB_TENANTS b
+  WHERE a.TENANT_ID = b.TENANT_ID;
+  """.replace("\n", " ")
+)
 # 28196: GV$OB_SESSION
 # 28197: V$OB_SESSION
 # 28198: GV$OB_PL_CACHE_OBJECT
