@@ -927,8 +927,9 @@ int ObTransferHandler::start_trans_(
   const uint64_t tenant_id = MTL_ID();
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   int64_t stmt_timeout = 10_s;
+  const int64_t LOCK_MEMBER_LIST_TIMEOUT = 10_s;
   if (tenant_config.is_valid()) {
-    stmt_timeout = tenant_config->_transfer_start_trans_timeout;
+    stmt_timeout = tenant_config->_transfer_start_trans_timeout + LOCK_MEMBER_LIST_TIMEOUT;
     if (tenant_config->_enable_balance_kill_transaction) {
       stmt_timeout += tenant_config->_balance_kill_transaction_threshold;
       stmt_timeout += tenant_config->_balance_wait_killing_transaction_end_threshold;

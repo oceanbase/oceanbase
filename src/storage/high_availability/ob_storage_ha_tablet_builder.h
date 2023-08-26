@@ -290,7 +290,7 @@ private:
   void free_sstable_macro_range_info_reader_(ObICopySSTableMacroInfoReader *&reader);
 
 private:
-  static const int64_t MACRO_RANGE_MAX_MACRO_COUNT = 1024;
+  static const int64_t MACRO_RANGE_MAX_MACRO_COUNT = 128;
   typedef hash::ObHashMap<ObITable::TableKey, ObCopySSTableMacroRangeInfo *> CopySSTableMacroRangeInfoMap;
   bool is_inited_;
   ObStorageHACopySSTableParam param_;

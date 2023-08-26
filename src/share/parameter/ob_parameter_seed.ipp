@@ -1402,9 +1402,9 @@ DEF_TIME(_transfer_finish_trans_timeout, OB_TENANT_PARAMETER, "10s", "[1s,600s]"
         "The default value is 10s",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(_transfer_start_trans_timeout, OB_TENANT_PARAMETER, "10s", "[1ms,600s]",
+DEF_TIME(_transfer_start_trans_timeout, OB_TENANT_PARAMETER, "1s", "[1ms,600s]",
         "transfer start transaction timeout, Range [1ms,600s]. "
-        "The default value is 10s",
+        "The default value is 1s",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_transfer_start_retry_count, OB_TENANT_PARAMETER, "3", "[0,64]",
