@@ -187,7 +187,6 @@ int ObLSMemberListService::get_max_tablet_transfer_scn(share::SCN &transfer_scn)
     ObTabletMapKey key;
     key.ls_id_ = ls_->get_ls_id();
     ObTabletCreateDeleteMdsUserData mds_data;
-    bool committed_flag = false;
     ObTabletHandle tablet_handle;
     const WashTabletPriority priority = WashTabletPriority::WTP_LOW;
     while (OB_SUCC(ret)) {
@@ -202,15 +201,20 @@ int ObLSMemberListService::get_max_tablet_transfer_scn(share::SCN &transfer_scn)
       } else if (OB_FALSE_IT(key.tablet_id_ = tablet_id)) {
       } else if (OB_FAIL(t3m->get_tablet(priority, key, tablet_handle))) {
         STORAGE_LOG(WARN, "failed to get tablet", K(ret), K(key));
-      } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_latest_tablet_status(mds_data, committed_flag))) {
-        if (OB_EMPTY_RESULT == ret || OB_ERR_SHARED_LOCK_CONFLICT == ret) {
+      } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), mds_data, 0/*timeout*/))) {
+        if (OB_EMPTY_RESULT == ret) {
           STORAGE_LOG(INFO, "committed tablet_status does not exist", K(ret), K(key));
           ret = OB_SUCCESS;
+        } else if (OB_ERR_SHARED_LOCK_CONFLICT == ret) {
+          if (MTL_IS_PRIMARY_TENANT()) {
+            STORAGE_LOG(INFO, "committed tablet_status does not exist", K(ret), K(tablet_id));
+            break;
+          } else {
+            ret = OB_SUCCESS;
+          }
         } else {
           STORAGE_LOG(WARN, "failed to get mds table", KR(ret), K(key));
         }
-      } else if (!committed_flag) {
-        continue;
       } else if (share::SCN::invalid_scn() == mds_data.transfer_scn_) {
         // do nothing
       } else {
