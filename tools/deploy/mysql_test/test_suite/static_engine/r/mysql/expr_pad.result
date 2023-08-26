@@ -269,7 +269,7 @@ select c1, c19, pad(c1, c1, c19) from t1;
 |    1 | 2019-12-01 12:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c1, c20, rpad(c1, c1, c20), lpad(c1, c1, c20) from t1;
 +------+---------------------+-------------------+-------------------+
 | c1   | c20                 | rpad(c1, c1, c20) | lpad(c1, c1, c20) |
@@ -283,7 +283,7 @@ select c1, c20, pad(c1, c1, c20) from t1;
 |    1 | 2019-12-03 06:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c1, c21, rpad(c1, c1, c21), lpad(c1, c1, c21) from t1;
 +------+------+-------------------+-------------------+
 | c1   | c21  | rpad(c1, c1, c21) | lpad(c1, c1, c21) |
@@ -537,7 +537,7 @@ select c2, c19, pad(c2, c2, c19) from t1;
 |    2 | 2019-12-01 12:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c2, c20, rpad(c2, c2, c20), lpad(c2, c2, c20) from t1;
 +------+---------------------+-------------------+-------------------+
 | c2   | c20                 | rpad(c2, c2, c20) | lpad(c2, c2, c20) |
@@ -551,7 +551,7 @@ select c2, c20, pad(c2, c2, c20) from t1;
 |    2 | 2019-12-03 06:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c2, c21, rpad(c2, c2, c21), lpad(c2, c2, c21) from t1;
 +------+------+-------------------+-------------------+
 | c2   | c21  | rpad(c2, c2, c21) | lpad(c2, c2, c21) |
@@ -805,7 +805,7 @@ select c3, c19, pad(c3, c3, c19) from t1;
 |    1 | 2019-12-01 12:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c3, c20, rpad(c3, c3, c20), lpad(c3, c3, c20) from t1;
 +------+---------------------+-------------------+-------------------+
 | c3   | c20                 | rpad(c3, c3, c20) | lpad(c3, c3, c20) |
@@ -819,7 +819,7 @@ select c3, c20, pad(c3, c3, c20) from t1;
 |    1 | 2019-12-03 06:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c3, c21, rpad(c3, c3, c21), lpad(c3, c3, c21) from t1;
 +------+------+-------------------+-------------------+
 | c3   | c21  | rpad(c3, c3, c21) | lpad(c3, c3, c21) |
@@ -1073,7 +1073,7 @@ select c4, c19, pad(c4, c4, c19) from t1;
 |    2 | 2019-12-01 12:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c4, c20, rpad(c4, c4, c20), lpad(c4, c4, c20) from t1;
 +------+---------------------+-------------------+-------------------+
 | c4   | c20                 | rpad(c4, c4, c20) | lpad(c4, c4, c20) |
@@ -1087,7 +1087,7 @@ select c4, c20, pad(c4, c4, c20) from t1;
 |    2 | 2019-12-03 06:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c4, c21, rpad(c4, c4, c21), lpad(c4, c4, c21) from t1;
 +------+------+-------------------+-------------------+
 | c4   | c21  | rpad(c4, c4, c21) | lpad(c4, c4, c21) |
@@ -1341,7 +1341,7 @@ select c5, c19, pad(c5, c5, c19) from t1;
 |    1 | 2019-12-01 12:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c5, c20, rpad(c5, c5, c20), lpad(c5, c5, c20) from t1;
 +------+---------------------+-------------------+-------------------+
 | c5   | c20                 | rpad(c5, c5, c20) | lpad(c5, c5, c20) |
@@ -1355,7 +1355,7 @@ select c5, c20, pad(c5, c5, c20) from t1;
 |    1 | 2019-12-03 06:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c5, c21, rpad(c5, c5, c21), lpad(c5, c5, c21) from t1;
 +------+------+-------------------+-------------------+
 | c5   | c21  | rpad(c5, c5, c21) | lpad(c5, c5, c21) |
@@ -1609,7 +1609,7 @@ select c6, c19, pad(c6, c6, c19) from t1;
 |    2 | 2019-12-01 12:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c6, c20, rpad(c6, c6, c20), lpad(c6, c6, c20) from t1;
 +------+---------------------+-------------------+-------------------+
 | c6   | c20                 | rpad(c6, c6, c20) | lpad(c6, c6, c20) |
@@ -1623,7 +1623,7 @@ select c6, c20, pad(c6, c6, c20) from t1;
 |    2 | 2019-12-03 06:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c6, c21, rpad(c6, c6, c21), lpad(c6, c6, c21) from t1;
 +------+------+-------------------+-------------------+
 | c6   | c21  | rpad(c6, c6, c21) | lpad(c6, c6, c21) |
@@ -1877,7 +1877,7 @@ select c7, c19, pad(c7, c7, c19) from t1;
 |    1 | 2019-12-01 12:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c7, c20, rpad(c7, c7, c20), lpad(c7, c7, c20) from t1;
 +------+---------------------+-------------------+-------------------+
 | c7   | c20                 | rpad(c7, c7, c20) | lpad(c7, c7, c20) |
@@ -1891,7 +1891,7 @@ select c7, c20, pad(c7, c7, c20) from t1;
 |    1 | 2019-12-03 06:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c7, c21, rpad(c7, c7, c21), lpad(c7, c7, c21) from t1;
 +------+------+-------------------+-------------------+
 | c7   | c21  | rpad(c7, c7, c21) | lpad(c7, c7, c21) |
@@ -2145,7 +2145,7 @@ select c8, c19, pad(c8, c8, c19) from t1;
 |    2 | 2019-12-01 12:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c8, c20, rpad(c8, c8, c20), lpad(c8, c8, c20) from t1;
 +------+---------------------+-------------------+-------------------+
 | c8   | c20                 | rpad(c8, c8, c20) | lpad(c8, c8, c20) |
@@ -2159,7 +2159,7 @@ select c8, c20, pad(c8, c8, c20) from t1;
 |    2 | 2019-12-03 06:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c8, c21, rpad(c8, c8, c21), lpad(c8, c8, c21) from t1;
 +------+------+-------------------+-------------------+
 | c8   | c21  | rpad(c8, c8, c21) | lpad(c8, c8, c21) |
@@ -2413,7 +2413,7 @@ select c9, c19, pad(c9, c9, c19) from t1;
 |    1 | 2019-12-01 12:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c9, c20, rpad(c9, c9, c20), lpad(c9, c9, c20) from t1;
 +------+---------------------+-------------------+-------------------+
 | c9   | c20                 | rpad(c9, c9, c20) | lpad(c9, c9, c20) |
@@ -2427,7 +2427,7 @@ select c9, c20, pad(c9, c9, c20) from t1;
 |    1 | 2019-12-03 06:00:00 | NULL             |
 +------+---------------------+------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c9, c21, rpad(c9, c9, c21), lpad(c9, c9, c21) from t1;
 +------+------+-------------------+-------------------+
 | c9   | c21  | rpad(c9, c9, c21) | lpad(c9, c9, c21) |
@@ -2681,7 +2681,7 @@ select c10, c19, pad(c10, c10, c19) from t1;
 |    2 | 2019-12-01 12:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c10, c20, rpad(c10, c10, c20), lpad(c10, c10, c20) from t1;
 +------+---------------------+---------------------+---------------------+
 | c10  | c20                 | rpad(c10, c10, c20) | lpad(c10, c10, c20) |
@@ -2695,7 +2695,7 @@ select c10, c20, pad(c10, c10, c20) from t1;
 |    2 | 2019-12-03 06:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c10, c21, rpad(c10, c10, c21), lpad(c10, c10, c21) from t1;
 +------+------+---------------------+---------------------+
 | c10  | c21  | rpad(c10, c10, c21) | lpad(c10, c10, c21) |
@@ -2949,7 +2949,7 @@ select c11, c19, pad(c11, c11, c19) from t1;
 |    1 | 2019-12-01 12:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c11, c20, rpad(c11, c11, c20), lpad(c11, c11, c20) from t1;
 +------+---------------------+---------------------+---------------------+
 | c11  | c20                 | rpad(c11, c11, c20) | lpad(c11, c11, c20) |
@@ -2963,7 +2963,7 @@ select c11, c20, pad(c11, c11, c20) from t1;
 |    1 | 2019-12-03 06:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c11, c21, rpad(c11, c11, c21), lpad(c11, c11, c21) from t1;
 +------+------+---------------------+---------------------+
 | c11  | c21  | rpad(c11, c11, c21) | lpad(c11, c11, c21) |
@@ -3217,7 +3217,7 @@ select c12, c19, pad(c12, c12, c19) from t1;
 |    2 | 2019-12-01 12:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c12, c20, rpad(c12, c12, c20), lpad(c12, c12, c20) from t1;
 +------+---------------------+---------------------+---------------------+
 | c12  | c20                 | rpad(c12, c12, c20) | lpad(c12, c12, c20) |
@@ -3231,7 +3231,7 @@ select c12, c20, pad(c12, c12, c20) from t1;
 |    2 | 2019-12-03 06:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c12, c21, rpad(c12, c12, c21), lpad(c12, c12, c21) from t1;
 +------+------+---------------------+---------------------+
 | c12  | c21  | rpad(c12, c12, c21) | lpad(c12, c12, c21) |
@@ -3485,7 +3485,7 @@ select c13, c19, pad(c13, c13, c19) from t1;
 |  3.5 | 2019-12-01 12:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c13, c20, rpad(c13, c13, c20), lpad(c13, c13, c20) from t1;
 +------+---------------------+---------------------+---------------------+
 | c13  | c20                 | rpad(c13, c13, c20) | lpad(c13, c13, c20) |
@@ -3499,7 +3499,7 @@ select c13, c20, pad(c13, c13, c20) from t1;
 |  3.5 | 2019-12-03 06:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c13, c21, rpad(c13, c13, c21), lpad(c13, c13, c21) from t1;
 +------+------+---------------------+---------------------+
 | c13  | c21  | rpad(c13, c13, c21) | lpad(c13, c13, c21) |
@@ -3753,7 +3753,7 @@ select c14, c19, pad(c14, c14, c19) from t1;
 |  4.5 | 2019-12-01 12:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c14, c20, rpad(c14, c14, c20), lpad(c14, c14, c20) from t1;
 +------+---------------------+---------------------+---------------------+
 | c14  | c20                 | rpad(c14, c14, c20) | lpad(c14, c14, c20) |
@@ -3767,7 +3767,7 @@ select c14, c20, pad(c14, c14, c20) from t1;
 |  4.5 | 2019-12-03 06:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c14, c21, rpad(c14, c14, c21), lpad(c14, c14, c21) from t1;
 +------+------+---------------------+---------------------+
 | c14  | c21  | rpad(c14, c14, c21) | lpad(c14, c14, c21) |
@@ -4021,7 +4021,7 @@ select c15, c19, pad(c15, c15, c19) from t1;
 |  5.5 | 2019-12-01 12:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c15, c20, rpad(c15, c15, c20), lpad(c15, c15, c20) from t1;
 +------+---------------------+---------------------+---------------------+
 | c15  | c20                 | rpad(c15, c15, c20) | lpad(c15, c15, c20) |
@@ -4035,7 +4035,7 @@ select c15, c20, pad(c15, c15, c20) from t1;
 |  5.5 | 2019-12-03 06:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c15, c21, rpad(c15, c15, c21), lpad(c15, c15, c21) from t1;
 +------+------+---------------------+---------------------+
 | c15  | c21  | rpad(c15, c15, c21) | lpad(c15, c15, c21) |
@@ -4289,7 +4289,7 @@ select c16, c19, pad(c16, c16, c19) from t1;
 |  6.5 | 2019-12-01 12:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c16, c20, rpad(c16, c16, c20), lpad(c16, c16, c20) from t1;
 +------+---------------------+---------------------+---------------------+
 | c16  | c20                 | rpad(c16, c16, c20) | lpad(c16, c16, c20) |
@@ -4303,7 +4303,7 @@ select c16, c20, pad(c16, c16, c20) from t1;
 |  6.5 | 2019-12-03 06:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c16, c21, rpad(c16, c16, c21), lpad(c16, c16, c21) from t1;
 +------+------+---------------------+---------------------+
 | c16  | c21  | rpad(c16, c16, c21) | lpad(c16, c16, c21) |
@@ -4557,7 +4557,7 @@ select c17, c19, pad(c17, c17, c19) from t1;
 |    8 | 2019-12-01 12:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c17, c20, rpad(c17, c17, c20), lpad(c17, c17, c20) from t1;
 +------+---------------------+---------------------+---------------------+
 | c17  | c20                 | rpad(c17, c17, c20) | lpad(c17, c17, c20) |
@@ -4571,7 +4571,7 @@ select c17, c20, pad(c17, c17, c20) from t1;
 |    8 | 2019-12-03 06:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c17, c21, rpad(c17, c17, c21), lpad(c17, c17, c21) from t1;
 +------+------+---------------------+---------------------+
 | c17  | c21  | rpad(c17, c17, c21) | lpad(c17, c17, c21) |
@@ -4825,7 +4825,7 @@ select c18, c19, pad(c18, c18, c19) from t1;
 |    9 | 2019-12-01 12:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c18, c20, rpad(c18, c18, c20), lpad(c18, c18, c20) from t1;
 +------+---------------------+---------------------+---------------------+
 | c18  | c20                 | rpad(c18, c18, c20) | lpad(c18, c18, c20) |
@@ -4839,7 +4839,7 @@ select c18, c20, pad(c18, c18, c20) from t1;
 |    9 | 2019-12-03 06:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c18, c21, rpad(c18, c18, c21), lpad(c18, c18, c21) from t1;
 +------+------+---------------------+---------------------+
 | c18  | c21  | rpad(c18, c18, c21) | lpad(c18, c18, c21) |
@@ -4871,8 +4871,8 @@ select c19, c1, rpad(c19, c19, c1), lpad(c19, c19, c1) from t1;
 | 2019-12-01 12:00:00 |    1 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c1, pad(c19, c19, c1) from t1;
 +---------------------+------+---------------------+
 | c19                 | c1   | pad(c19, c19, c1)   |
@@ -4886,8 +4886,8 @@ select c19, c2, rpad(c19, c19, c2), lpad(c19, c19, c2) from t1;
 | 2019-12-01 12:00:00 |    2 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c2, pad(c19, c19, c2) from t1;
 +---------------------+------+---------------------+
 | c19                 | c2   | pad(c19, c19, c2)   |
@@ -4901,8 +4901,8 @@ select c19, c3, rpad(c19, c19, c3), lpad(c19, c19, c3) from t1;
 | 2019-12-01 12:00:00 |    1 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c3, pad(c19, c19, c3) from t1;
 +---------------------+------+---------------------+
 | c19                 | c3   | pad(c19, c19, c3)   |
@@ -4916,8 +4916,8 @@ select c19, c4, rpad(c19, c19, c4), lpad(c19, c19, c4) from t1;
 | 2019-12-01 12:00:00 |    2 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c4, pad(c19, c19, c4) from t1;
 +---------------------+------+---------------------+
 | c19                 | c4   | pad(c19, c19, c4)   |
@@ -4931,8 +4931,8 @@ select c19, c5, rpad(c19, c19, c5), lpad(c19, c19, c5) from t1;
 | 2019-12-01 12:00:00 |    1 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c5, pad(c19, c19, c5) from t1;
 +---------------------+------+---------------------+
 | c19                 | c5   | pad(c19, c19, c5)   |
@@ -4946,8 +4946,8 @@ select c19, c6, rpad(c19, c19, c6), lpad(c19, c19, c6) from t1;
 | 2019-12-01 12:00:00 |    2 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c6, pad(c19, c19, c6) from t1;
 +---------------------+------+---------------------+
 | c19                 | c6   | pad(c19, c19, c6)   |
@@ -4961,8 +4961,8 @@ select c19, c7, rpad(c19, c19, c7), lpad(c19, c19, c7) from t1;
 | 2019-12-01 12:00:00 |    1 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c7, pad(c19, c19, c7) from t1;
 +---------------------+------+---------------------+
 | c19                 | c7   | pad(c19, c19, c7)   |
@@ -4976,8 +4976,8 @@ select c19, c8, rpad(c19, c19, c8), lpad(c19, c19, c8) from t1;
 | 2019-12-01 12:00:00 |    2 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c8, pad(c19, c19, c8) from t1;
 +---------------------+------+---------------------+
 | c19                 | c8   | pad(c19, c19, c8)   |
@@ -4991,8 +4991,8 @@ select c19, c9, rpad(c19, c19, c9), lpad(c19, c19, c9) from t1;
 | 2019-12-01 12:00:00 |    1 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c9, pad(c19, c19, c9) from t1;
 +---------------------+------+---------------------+
 | c19                 | c9   | pad(c19, c19, c9)   |
@@ -5006,8 +5006,8 @@ select c19, c10, rpad(c19, c19, c10), lpad(c19, c19, c10) from t1;
 | 2019-12-01 12:00:00 |    2 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c10, pad(c19, c19, c10) from t1;
 +---------------------+------+---------------------+
 | c19                 | c10  | pad(c19, c19, c10)  |
@@ -5021,8 +5021,8 @@ select c19, c11, rpad(c19, c19, c11), lpad(c19, c19, c11) from t1;
 | 2019-12-01 12:00:00 |    1 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c11, pad(c19, c19, c11) from t1;
 +---------------------+------+---------------------+
 | c19                 | c11  | pad(c19, c19, c11)  |
@@ -5036,8 +5036,8 @@ select c19, c12, rpad(c19, c19, c12), lpad(c19, c19, c12) from t1;
 | 2019-12-01 12:00:00 |    2 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c12, pad(c19, c19, c12) from t1;
 +---------------------+------+---------------------+
 | c19                 | c12  | pad(c19, c19, c12)  |
@@ -5051,8 +5051,8 @@ select c19, c13, rpad(c19, c19, c13), lpad(c19, c19, c13) from t1;
 | 2019-12-01 12:00:00 |  3.5 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c13, pad(c19, c19, c13) from t1;
 +---------------------+------+---------------------+
 | c19                 | c13  | pad(c19, c19, c13)  |
@@ -5066,8 +5066,8 @@ select c19, c14, rpad(c19, c19, c14), lpad(c19, c19, c14) from t1;
 | 2019-12-01 12:00:00 |  4.5 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c14, pad(c19, c19, c14) from t1;
 +---------------------+------+---------------------+
 | c19                 | c14  | pad(c19, c19, c14)  |
@@ -5081,8 +5081,8 @@ select c19, c15, rpad(c19, c19, c15), lpad(c19, c19, c15) from t1;
 | 2019-12-01 12:00:00 |  5.5 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c15, pad(c19, c19, c15) from t1;
 +---------------------+------+---------------------+
 | c19                 | c15  | pad(c19, c19, c15)  |
@@ -5096,8 +5096,8 @@ select c19, c16, rpad(c19, c19, c16), lpad(c19, c19, c16) from t1;
 | 2019-12-01 12:00:00 |  6.5 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c16, pad(c19, c19, c16) from t1;
 +---------------------+------+---------------------+
 | c19                 | c16  | pad(c19, c19, c16)  |
@@ -5111,8 +5111,8 @@ select c19, c17, rpad(c19, c19, c17), lpad(c19, c19, c17) from t1;
 | 2019-12-01 12:00:00 |    8 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c17, pad(c19, c19, c17) from t1;
 +---------------------+------+---------------------+
 | c19                 | c17  | pad(c19, c19, c17)  |
@@ -5126,8 +5126,8 @@ select c19, c18, rpad(c19, c19, c18), lpad(c19, c19, c18) from t1;
 | 2019-12-01 12:00:00 |    9 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c18, pad(c19, c19, c18) from t1;
 +---------------------+------+---------------------+
 | c19                 | c18  | pad(c19, c19, c18)  |
@@ -5141,8 +5141,8 @@ select c19, c19, rpad(c19, c19, c19), lpad(c19, c19, c19) from t1;
 | 2019-12-01 12:00:00 | 2019-12-01 12:00:00 | NULL                | NULL                |
 +---------------------+---------------------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c19, pad(c19, c19, c19) from t1;
 +---------------------+---------------------+--------------------+
 | c19                 | c19                 | pad(c19, c19, c19) |
@@ -5150,7 +5150,7 @@ select c19, c19, pad(c19, c19, c19) from t1;
 | 2019-12-01 12:00:00 | 2019-12-01 12:00:00 | NULL               |
 +---------------------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c20, rpad(c19, c19, c20), lpad(c19, c19, c20) from t1;
 +---------------------+---------------------+---------------------+---------------------+
 | c19                 | c20                 | rpad(c19, c19, c20) | lpad(c19, c19, c20) |
@@ -5158,8 +5158,8 @@ select c19, c20, rpad(c19, c19, c20), lpad(c19, c19, c20) from t1;
 | 2019-12-01 12:00:00 | 2019-12-03 06:00:00 | NULL                | NULL                |
 +---------------------+---------------------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c20, pad(c19, c19, c20) from t1;
 +---------------------+---------------------+--------------------+
 | c19                 | c20                 | pad(c19, c19, c20) |
@@ -5167,7 +5167,7 @@ select c19, c20, pad(c19, c19, c20) from t1;
 | 2019-12-01 12:00:00 | 2019-12-03 06:00:00 | NULL               |
 +---------------------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c21, rpad(c19, c19, c21), lpad(c19, c19, c21) from t1;
 +---------------------+------+---------------------+---------------------+
 | c19                 | c21  | rpad(c19, c19, c21) | lpad(c19, c19, c21) |
@@ -5175,8 +5175,8 @@ select c19, c21, rpad(c19, c19, c21), lpad(c19, c19, c21) from t1;
 | 2019-12-01 12:00:00 | 9.5  | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c21, pad(c19, c19, c21) from t1;
 +---------------------+------+---------------------+
 | c19                 | c21  | pad(c19, c19, c21)  |
@@ -5190,8 +5190,8 @@ select c19, c22, rpad(c19, c19, c22), lpad(c19, c19, c22) from t1;
 | 2019-12-01 12:00:00 | 10.5 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c19, c22, pad(c19, c19, c22) from t1;
 +---------------------+------+---------------------+
 | c19                 | c22  | pad(c19, c19, c22)  |
@@ -5205,8 +5205,8 @@ select c20, c1, rpad(c20, c20, c1), lpad(c20, c20, c1) from t1;
 | 2019-12-03 06:00:00 |    1 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c1, pad(c20, c20, c1) from t1;
 +---------------------+------+---------------------+
 | c20                 | c1   | pad(c20, c20, c1)   |
@@ -5220,8 +5220,8 @@ select c20, c2, rpad(c20, c20, c2), lpad(c20, c20, c2) from t1;
 | 2019-12-03 06:00:00 |    2 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c2, pad(c20, c20, c2) from t1;
 +---------------------+------+---------------------+
 | c20                 | c2   | pad(c20, c20, c2)   |
@@ -5235,8 +5235,8 @@ select c20, c3, rpad(c20, c20, c3), lpad(c20, c20, c3) from t1;
 | 2019-12-03 06:00:00 |    1 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c3, pad(c20, c20, c3) from t1;
 +---------------------+------+---------------------+
 | c20                 | c3   | pad(c20, c20, c3)   |
@@ -5250,8 +5250,8 @@ select c20, c4, rpad(c20, c20, c4), lpad(c20, c20, c4) from t1;
 | 2019-12-03 06:00:00 |    2 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c4, pad(c20, c20, c4) from t1;
 +---------------------+------+---------------------+
 | c20                 | c4   | pad(c20, c20, c4)   |
@@ -5265,8 +5265,8 @@ select c20, c5, rpad(c20, c20, c5), lpad(c20, c20, c5) from t1;
 | 2019-12-03 06:00:00 |    1 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c5, pad(c20, c20, c5) from t1;
 +---------------------+------+---------------------+
 | c20                 | c5   | pad(c20, c20, c5)   |
@@ -5280,8 +5280,8 @@ select c20, c6, rpad(c20, c20, c6), lpad(c20, c20, c6) from t1;
 | 2019-12-03 06:00:00 |    2 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c6, pad(c20, c20, c6) from t1;
 +---------------------+------+---------------------+
 | c20                 | c6   | pad(c20, c20, c6)   |
@@ -5295,8 +5295,8 @@ select c20, c7, rpad(c20, c20, c7), lpad(c20, c20, c7) from t1;
 | 2019-12-03 06:00:00 |    1 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c7, pad(c20, c20, c7) from t1;
 +---------------------+------+---------------------+
 | c20                 | c7   | pad(c20, c20, c7)   |
@@ -5310,8 +5310,8 @@ select c20, c8, rpad(c20, c20, c8), lpad(c20, c20, c8) from t1;
 | 2019-12-03 06:00:00 |    2 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c8, pad(c20, c20, c8) from t1;
 +---------------------+------+---------------------+
 | c20                 | c8   | pad(c20, c20, c8)   |
@@ -5325,8 +5325,8 @@ select c20, c9, rpad(c20, c20, c9), lpad(c20, c20, c9) from t1;
 | 2019-12-03 06:00:00 |    1 | NULL               | NULL               |
 +---------------------+------+--------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c9, pad(c20, c20, c9) from t1;
 +---------------------+------+---------------------+
 | c20                 | c9   | pad(c20, c20, c9)   |
@@ -5340,8 +5340,8 @@ select c20, c10, rpad(c20, c20, c10), lpad(c20, c20, c10) from t1;
 | 2019-12-03 06:00:00 |    2 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c10, pad(c20, c20, c10) from t1;
 +---------------------+------+---------------------+
 | c20                 | c10  | pad(c20, c20, c10)  |
@@ -5355,8 +5355,8 @@ select c20, c11, rpad(c20, c20, c11), lpad(c20, c20, c11) from t1;
 | 2019-12-03 06:00:00 |    1 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c11, pad(c20, c20, c11) from t1;
 +---------------------+------+---------------------+
 | c20                 | c11  | pad(c20, c20, c11)  |
@@ -5370,8 +5370,8 @@ select c20, c12, rpad(c20, c20, c12), lpad(c20, c20, c12) from t1;
 | 2019-12-03 06:00:00 |    2 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c12, pad(c20, c20, c12) from t1;
 +---------------------+------+---------------------+
 | c20                 | c12  | pad(c20, c20, c12)  |
@@ -5385,8 +5385,8 @@ select c20, c13, rpad(c20, c20, c13), lpad(c20, c20, c13) from t1;
 | 2019-12-03 06:00:00 |  3.5 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c13, pad(c20, c20, c13) from t1;
 +---------------------+------+---------------------+
 | c20                 | c13  | pad(c20, c20, c13)  |
@@ -5400,8 +5400,8 @@ select c20, c14, rpad(c20, c20, c14), lpad(c20, c20, c14) from t1;
 | 2019-12-03 06:00:00 |  4.5 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c14, pad(c20, c20, c14) from t1;
 +---------------------+------+---------------------+
 | c20                 | c14  | pad(c20, c20, c14)  |
@@ -5415,8 +5415,8 @@ select c20, c15, rpad(c20, c20, c15), lpad(c20, c20, c15) from t1;
 | 2019-12-03 06:00:00 |  5.5 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c15, pad(c20, c20, c15) from t1;
 +---------------------+------+---------------------+
 | c20                 | c15  | pad(c20, c20, c15)  |
@@ -5430,8 +5430,8 @@ select c20, c16, rpad(c20, c20, c16), lpad(c20, c20, c16) from t1;
 | 2019-12-03 06:00:00 |  6.5 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c16, pad(c20, c20, c16) from t1;
 +---------------------+------+---------------------+
 | c20                 | c16  | pad(c20, c20, c16)  |
@@ -5445,8 +5445,8 @@ select c20, c17, rpad(c20, c20, c17), lpad(c20, c20, c17) from t1;
 | 2019-12-03 06:00:00 |    8 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c17, pad(c20, c20, c17) from t1;
 +---------------------+------+---------------------+
 | c20                 | c17  | pad(c20, c20, c17)  |
@@ -5460,8 +5460,8 @@ select c20, c18, rpad(c20, c20, c18), lpad(c20, c20, c18) from t1;
 | 2019-12-03 06:00:00 |    9 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c18, pad(c20, c20, c18) from t1;
 +---------------------+------+---------------------+
 | c20                 | c18  | pad(c20, c20, c18)  |
@@ -5475,8 +5475,8 @@ select c20, c19, rpad(c20, c20, c19), lpad(c20, c20, c19) from t1;
 | 2019-12-03 06:00:00 | 2019-12-01 12:00:00 | NULL                | NULL                |
 +---------------------+---------------------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c19, pad(c20, c20, c19) from t1;
 +---------------------+---------------------+--------------------+
 | c20                 | c19                 | pad(c20, c20, c19) |
@@ -5484,7 +5484,7 @@ select c20, c19, pad(c20, c20, c19) from t1;
 | 2019-12-03 06:00:00 | 2019-12-01 12:00:00 | NULL               |
 +---------------------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c20, rpad(c20, c20, c20), lpad(c20, c20, c20) from t1;
 +---------------------+---------------------+---------------------+---------------------+
 | c20                 | c20                 | rpad(c20, c20, c20) | lpad(c20, c20, c20) |
@@ -5492,8 +5492,8 @@ select c20, c20, rpad(c20, c20, c20), lpad(c20, c20, c20) from t1;
 | 2019-12-03 06:00:00 | 2019-12-03 06:00:00 | NULL                | NULL                |
 +---------------------+---------------------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c20, pad(c20, c20, c20) from t1;
 +---------------------+---------------------+--------------------+
 | c20                 | c20                 | pad(c20, c20, c20) |
@@ -5501,7 +5501,7 @@ select c20, c20, pad(c20, c20, c20) from t1;
 | 2019-12-03 06:00:00 | 2019-12-03 06:00:00 | NULL               |
 +---------------------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c21, rpad(c20, c20, c21), lpad(c20, c20, c21) from t1;
 +---------------------+------+---------------------+---------------------+
 | c20                 | c21  | rpad(c20, c20, c21) | lpad(c20, c20, c21) |
@@ -5509,8 +5509,8 @@ select c20, c21, rpad(c20, c20, c21), lpad(c20, c20, c21) from t1;
 | 2019-12-03 06:00:00 | 9.5  | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c21, pad(c20, c20, c21) from t1;
 +---------------------+------+---------------------+
 | c20                 | c21  | pad(c20, c20, c21)  |
@@ -5524,8 +5524,8 @@ select c20, c22, rpad(c20, c20, c22), lpad(c20, c20, c22) from t1;
 | 2019-12-03 06:00:00 | 10.5 | NULL                | NULL                |
 +---------------------+------+---------------------+---------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
-Warning	1301	Result of lpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
+Warning	1301	Result of lpad() was larger than max_allowed_packet (16777216) - truncated
 select c20, c22, pad(c20, c20, c22) from t1;
 +---------------------+------+---------------------+
 | c20                 | c22  | pad(c20, c20, c22)  |
@@ -5761,7 +5761,7 @@ select c21, c19, pad(c21, c21, c19) from t1;
 | 9.5  | 2019-12-01 12:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c21, c20, rpad(c21, c21, c20), lpad(c21, c21, c20) from t1;
 +------+---------------------+---------------------+---------------------+
 | c21  | c20                 | rpad(c21, c21, c20) | lpad(c21, c21, c20) |
@@ -5775,7 +5775,7 @@ select c21, c20, pad(c21, c21, c20) from t1;
 | 9.5  | 2019-12-03 06:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c21, c21, rpad(c21, c21, c21), lpad(c21, c21, c21) from t1;
 +------+------+---------------------+---------------------+
 | c21  | c21  | rpad(c21, c21, c21) | lpad(c21, c21, c21) |
@@ -6029,7 +6029,7 @@ select c22, c19, pad(c22, c22, c19) from t1;
 | 10.5 | 2019-12-01 12:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c22, c20, rpad(c22, c22, c20), lpad(c22, c22, c20) from t1;
 +------+---------------------+---------------------+---------------------+
 | c22  | c20                 | rpad(c22, c22, c20) | lpad(c22, c22, c20) |
@@ -6043,7 +6043,7 @@ select c22, c20, pad(c22, c22, c20) from t1;
 | 10.5 | 2019-12-03 06:00:00 | NULL               |
 +------+---------------------+--------------------+
 Warnings:
-Warning	1301	Result of rpad() was larger than max_allowed_packet (4194304) - truncated
+Warning	1301	Result of rpad() was larger than max_allowed_packet (16777216) - truncated
 select c22, c21, rpad(c22, c22, c21), lpad(c22, c22, c21) from t1;
 +------+------+---------------------+---------------------+
 | c22  | c21  | rpad(c22, c22, c21) | lpad(c22, c22, c21) |

@@ -238,7 +238,7 @@
   "max_allowed_packet": {
     "id": 14,
     "name": "max_allowed_packet",
-    "default_value": "4194304",
+    "default_value": "16777216",
     "base_value": "4194304",
     "data_type": "int",
     "info": "Max packet length to send to or receive from the server",

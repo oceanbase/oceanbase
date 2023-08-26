@@ -275,7 +275,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[14].default_value_ = "4194304" ;
+      ObSysVars[14].default_value_ = "16777216" ;
       ObSysVars[14].info_ = "Max packet length to send to or receive from the server" ;
       ObSysVars[14].name_ = "max_allowed_packet" ;
       ObSysVars[14].data_type_ = ObIntType ;
