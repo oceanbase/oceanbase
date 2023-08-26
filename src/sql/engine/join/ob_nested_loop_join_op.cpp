@@ -772,7 +772,7 @@ int ObNestedLoopJoinOp::group_get_left_batch(const ObBatchRows *&left_brs)
     }
     if (OB_SUCC(ret)) {
       int64_t read_size = 0;
-      int64_t max_size = min(MY_SPEC.max_batch_size_, left_->get_spec().max_batch_size_);
+      int64_t max_size = op_max_batch_size_;
       if (OB_FAIL(group_join_buffer_.get_next_batch_from_store(max_size, read_size))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("get next batch from store failed", KR(ret));
