@@ -412,7 +412,7 @@ int ObArchiveSchedulerService::inner_process_(const uint64_t tenant_id)
 
   if (OB_FAIL(ret)) {
   } else if (no_dest) {
-  } else if (archive_mode.is_noarchivelog()) {
+  } else if (archive_mode.is_noarchivelog() || dest_state.is_disable()) {
     if (no_round || round.state_.is_stop()) {
     } else if (OB_FAIL(tenant_scheduler.disable_archive(dest_no))) {
       LOG_WARN("failed to disable archive", K(ret), K(tenant_id), K(dest_no), K(dest_state));

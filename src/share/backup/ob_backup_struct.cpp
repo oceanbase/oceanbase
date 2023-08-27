@@ -3818,7 +3818,8 @@ int ObLogArchiveDestState::set_state(const char *buf)
   ObString s(buf);
   const char *str[] = {
     "ENABLE",
-    "DEFER"
+    "DEFER",
+    "DISABLE"
   };
   STATIC_ASSERT(State::MAX == ARRAYSIZEOF(str), "count mismatch");
   const int64_t count = ARRAYSIZEOF(str);
@@ -3853,7 +3854,8 @@ const char *ObLogArchiveDestState::get_str() const
   const char *str = "UNKNOWN";
   const char *state_strs[] = {
     "ENABLE",
-    "DEFER"
+    "DEFER",
+    "DISABLE"
   };
   if (!is_valid()) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid state", K(state_));
