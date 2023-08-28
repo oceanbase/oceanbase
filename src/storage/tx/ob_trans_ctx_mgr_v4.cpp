@@ -1559,6 +1559,9 @@ int ObLSTxCtxMgr::start_readonly_request()
 
 int ObLSTxCtxMgr::end_readonly_request()
 {
+  if (is_all_blocked_()) {
+    TRANS_LOG(INFO, "end readonly request when ls is blocked");
+  }
   const ObCurTraceId::TraceId trace_id = *(ObCurTraceId::get_trace_id());
   const uint64_t idx = ((uint64_t)trace_id.hash()) % READONLY_REQUEST_TRACE_ID_NUM;
   if (readonly_request_trace_id_set_[idx] == trace_id) {
