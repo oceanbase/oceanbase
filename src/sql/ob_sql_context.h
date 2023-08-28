@@ -551,7 +551,7 @@ public:
       all_user_variable_(),
       need_match_all_params_(false),
       has_udf_(false),
-      has_pl_udf_(false),
+      pl_flags_(0),
       has_is_table_(false),
       reference_obj_tables_(),
       is_table_gen_col_with_udf_(false),
@@ -590,7 +590,7 @@ public:
     all_user_variable_.reset();
     need_match_all_params_= false;
     has_udf_ = false;
-    has_pl_udf_ = false;
+    pl_flags_ = 0;
     has_is_table_ = false;
     sql_schema_guard_.reset();
     reference_obj_tables_.reset();
@@ -665,7 +665,13 @@ public:
   common::hash::ObHashMap<uint64_t, ObObj, common::hash::NoPthreadDefendMode> calculable_expr_results_;
   bool need_match_all_params_; //only used for matching plans
   bool has_udf_;
-  bool has_pl_udf_; //used to mark query has pl udf
+  union {
+    int8_t pl_flags_;
+    struct {
+      int8_t has_pl_udf_                       : 1; //this sql has pl user defined function
+      int8_t has_pl_udt_                       : 1; //this sql has pl udt type
+    };
+  };
   bool has_is_table_; // used to mark query has information schema table
   ObSqlSchemaGuard sql_schema_guard_;
   share::schema::ObReferenceObjTable reference_obj_tables_;

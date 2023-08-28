@@ -6625,7 +6625,8 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     if (OB_ISNULL(log_plan.get_stmt())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (log_plan.get_stmt()->get_query_ctx()->has_pl_udf_) {
+    } else if (log_plan.get_stmt()->get_query_ctx()->has_pl_udf_ ||
+               log_plan.get_stmt()->get_query_ctx()->has_pl_udt_) {
       if (log_plan.get_stmt()->is_insert_stmt() ||
           log_plan.get_stmt()->is_update_stmt() ||
           log_plan.get_stmt()->is_delete_stmt() ||

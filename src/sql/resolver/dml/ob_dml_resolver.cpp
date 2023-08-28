@@ -10221,10 +10221,10 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
       //the flag will change to false;
       OX (expr->set_is_called_in_sql(true));
     } else if (T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type()) {
-      stmt_->get_query_ctx()->has_pl_udf_ = true;
+      stmt_->get_query_ctx()->has_pl_udt_ = true;
       stmt_->get_query_ctx()->forbid_parallel_execute_ = true;
     } else if (T_FUN_PL_COLLECTION_CONSTRUCT == expr->get_expr_type()) {
-      stmt_->get_query_ctx()->has_pl_udf_ = true;
+      stmt_->get_query_ctx()->has_pl_udt_ = true;
       stmt_->get_query_ctx()->forbid_parallel_execute_ = true;
     }
     OZ (collect_schema_version(expr));
