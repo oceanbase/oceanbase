@@ -330,8 +330,7 @@ int ObSchemaMgrCache::get_recycle_schema_version(int64_t& schema_version) const
   return ret;
 }
 
-static const char *ref_info_type_strs[] = {
-    "STACK",
+static const char *ref_info_type_strs[] = {"STACK",
     "VTABLE_SCAN_PARAM",
     "INNER_SQL_RESULT",
     "TABLE_API_ROW_ITER",
@@ -359,13 +358,11 @@ static const char *ref_info_type_strs[] = {
     "BACKUP_CHECKER",
     "DIS_TASK_SPLITER",
     "DAS_CTX",
-    "SCHEMA_RECORDER",
-    "MOD_MAX",
-};
+    "SCHEMA_RECORDER"};
 
 int ObSchemaMgrCache::get_ref_info_type_str_(const int64_t &index, const char *&type_str)
 {
-  STATIC_ASSERT(ARRAYSIZEOF(ref_info_type_strs) == (int64_t)ObSchemaMgrItem::Mod::MOD_MAX + 1,
+  STATIC_ASSERT(ARRAYSIZEOF(ref_info_type_strs) == (int64_t)ObSchemaMgrItem::Mod::MOD_MAX,
       "type string array size mismatch with enum Mod count");
   int ret = OB_SUCCESS;
   int type_str_len = ARRAYSIZEOF(ref_info_type_strs);
