@@ -5225,7 +5225,7 @@ int ObTablet::read_mds_table_medium_info_list(
   } else if (CLICK_FAIL(inner_get_mds_table(mds_table_handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_EMPTY_RESULT;
-      LOG_INFO("mds table does not exist, may be released", K(ret), K(ls_id), K(tablet_id));
+      LOG_DEBUG("mds table does not exist, may be released", K(ret), K(ls_id), K(tablet_id));
     } else {
       LOG_WARN("failed to get mds table", K(ret), K(ls_id), K(tablet_id));
     }
