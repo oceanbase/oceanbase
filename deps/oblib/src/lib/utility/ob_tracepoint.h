@@ -213,17 +213,18 @@ struct EventItem {
   int call(void) const
   {
     int ret = 0;
-    if (OB_LIKELY(trigger_freq_ == 0)) {
+    int64_t trigger_freq = trigger_freq_;
+    if (OB_LIKELY(trigger_freq == 0)) {
       ret = 0;
     } else if (get_tp_switch()) {  // true means skip errsim
       ret = 0;
-    } else if (trigger_freq_ == 1) {
+    } else if (trigger_freq == 1) {
       ret = static_cast<int>(error_code_);
       COMMON_LOG(WARN, "[ERRSIM] sim error", K(ret));
     } else {
-      if (rand() % trigger_freq_ == 0) {
+      if (rand() % trigger_freq == 0) {
         ret = static_cast<int>(error_code_);
-        COMMON_LOG(WARN, "[ERRSIM] sim error", K(ret), K_(error_code), K_(trigger_freq), K(lbt()));
+        COMMON_LOG(WARN, "[ERRSIM] sim error", K(ret), K_(error_code), K(trigger_freq), K(lbt()));
       } else {
         ret = 0;
       }
