@@ -511,6 +511,7 @@ int ObTenantTabletStatMgr::init(const int64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   const bool repeat = true;
+  int64_t bucket_num = DEFAULT_BUCKET_NUM;
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -519,7 +520,8 @@ int ObTenantTabletStatMgr::init(const int64_t tenant_id)
     LOG_WARN("failed to init tablet stream pool", K(ret));
   } else if (OB_FAIL(stream_map_.create(DEFAULT_BUCKET_NUM, ObMemAttr(tenant_id, "TabletStats")))) {
     LOG_WARN("failed to create TabletStats", K(ret));
-  } else if (OB_FAIL(bucket_lock_.init(DEFAULT_BUCKET_NUM, ObLatchIds::DEFAULT_BUCKET_LOCK,
+  } else if (FALSE_IT(bucket_num = stream_map_.bucket_count())) {
+  } else if (OB_FAIL(bucket_lock_.init(bucket_num, ObLatchIds::DEFAULT_BUCKET_LOCK,
                                        ObMemAttr(tenant_id, "TabStatMgrLock")))) {
     LOG_WARN("failed to init bucket lock", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TabletStatRpt, report_tg_id_))) {
@@ -803,6 +805,8 @@ void ObTenantTabletStatMgr::process_stats()
 
 void ObTenantTabletStatMgr::refresh_all(const int64_t step)
 {
+  ObBucketWLockAllGuard lock_guard(bucket_lock_);
+
   TabletStreamMap::iterator iter = stream_map_.begin();
   for ( ; iter != stream_map_.end(); ++iter) {
     for (int64_t i = 0; i < step; ++i) {

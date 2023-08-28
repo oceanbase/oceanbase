@@ -355,7 +355,13 @@ private:
 private:
   typedef common::hash::ObHashMap<ObTabletStatKey,
                           ObTabletStreamNode *,
-                          common::hash::NoPthreadDefendMode> TabletStreamMap;
+                          common::hash::NoPthreadDefendMode,
+                          common::hash::hash_func<ObTabletStatKey>,
+                          common::hash::equal_to<ObTabletStatKey>,
+                          common::hash::SimpleAllocer<typename common::hash::HashMapTypes<ObTabletStatKey, ObTabletStreamNode *>::AllocType>,
+                          common::hash::NormalPointer,
+                          common::ObMalloc,
+                          1 /*disable auto expansion */> TabletStreamMap;
 
   static constexpr int64_t TABLET_STAT_PROCESS_INTERVAL = 5 * 1000L * 1000L; //5s
   static constexpr int64_t CHECK_INTERVAL = 120L * 1000L * 1000L; //120s
@@ -363,7 +369,7 @@ private:
   static constexpr int64_t CHECK_SYS_STAT_INTERVAL = 10 * 1000LL * 1000LL; //10s
   static constexpr int32_t DEFAULT_MAX_FREE_STREAM_CNT = 5000;
   static constexpr int32_t DEFAULT_UP_LIMIT_STREAM_CNT = 20000;
-  static constexpr int32_t DEFAULT_BUCKET_NUM = 1000;
+  static constexpr int32_t DEFAULT_BUCKET_NUM = 1543; // should be a prime to guarantee the bucket nums of hashmap and bucketlock are equal
   static constexpr int32_t DEFAULT_MAX_PENDING_CNT = 40000;
   static constexpr int32_t MAX_REPORT_RETRY_CNT = 5;
 
