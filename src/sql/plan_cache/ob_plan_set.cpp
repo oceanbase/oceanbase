@@ -1408,14 +1408,6 @@ int ObSqlPlanSet::select_plan(ObPlanCacheCtx &pc_ctx, ObPlanCacheObject *&cache_
   if (OB_ISNULL(plan_cache_value_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("location cache not init", K(plan_cache_value_), K(ret));
-  } else if (0 == need_try_plan_ || is_multi_stmt_plan()) {
-    if (OB_FAIL(get_plan_normal(pc_ctx, plan))) {
-      if (OB_SQL_PC_NOT_EXIST == ret) {
-        LOG_TRACE("fail to get plan normal", K(ret));
-      } else {
-        LOG_WARN("fail to get plan normal", K(ret));
-      }
-    }
   } else {
     if (OB_FAIL(get_plan_special(pc_ctx, plan))) {
       if (OB_SQL_PC_NOT_EXIST == ret) {
@@ -1714,104 +1706,105 @@ int ObSqlPlanSet::add_evolution_plan_for_spm(ObPhysicalPlan *plan, ObPlanCacheCt
 }
 #endif
 
-int ObSqlPlanSet::get_plan_normal(ObPlanCacheCtx &pc_ctx,
-                                  ObPhysicalPlan *&plan)
-{
-  int ret = OB_SUCCESS;
-  plan = NULL;
-  ObSQLSessionInfo *session = pc_ctx.sql_ctx_.session_info_;
-  if (OB_ISNULL(session)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret));
-  }
-
-  if (OB_SQL_PC_NOT_EXIST == ret
-      || NULL == plan) {
-    pc_ctx.exec_ctx_.set_direct_local_plan(false);
-    // 进入该分支, 说明不走直接获取local plan的优化，
-    // 如果plan不为空, 说明已经拿到执行计划，
-    // 此时已经对该plan的引用计数+1, 在这里需要先减掉引用计数
-    if (NULL != plan) {
-      /*
-       * 以下并发场景会进入该分支
-       *                         切主
-       *     A线程                                  B线程
-       *
-       * 直接获取到local plan                 直接获取local plan
-       *
-       *
-       *  分区不在本地重试
-       *
-       *                                        发现其他线程已经
-       *                                        执行该local计划失败，
-       *                                        重新计算plan type获取
-       *                                        正确remote计划
-       *
-       *   进入plan cache，
-       *   重新计算plan type
-       *   获取remote 计划
-       * */
-      plan = NULL;
-    }
-    ObPhyPlanType plan_type = OB_PHY_PLAN_UNINITIALIZED;
-    typedef ObSEArray<ObCandiTableLoc, 4> PLS;
-    SMART_VAR(PLS, candi_table_locs) {
-      if (enable_inner_part_parallel_exec_) {
-        if (OB_FAIL(get_physical_plan(OB_PHY_PLAN_DISTRIBUTED, pc_ctx, plan))) {
-          LOG_TRACE("failed to get px plan", K(ret));
-        }
-      } else if (OB_FAIL(get_plan_type(table_locations_,
-                                       false,
-                                       pc_ctx,
-                                       candi_table_locs,
-                                       plan_type))) {
-        // ret = OB_SQL_PC_NOT_EXIST;
-        SQL_PC_LOG(TRACE, "failed to get plan type", K(ret));
-      }
-
-      if (OB_SUCC(ret) && !enable_inner_part_parallel_exec_) {
-        NG_TRACE(get_plan_type_end);
-        SQL_PC_LOG(DEBUG, "get plan type before select plan", K(ret), K(plan_type));
-        switch (plan_type) {
-          case OB_PHY_PLAN_LOCAL: {
-            if (/*has_array_binding_||*/ is_multi_stmt_plan()) {
-              if (NULL != array_binding_plan_) {
-                array_binding_plan_->set_dynamic_ref_handle(pc_ctx.handle_id_);
-                plan = array_binding_plan_;
-              }
-            } else if (OB_FAIL(get_physical_plan(OB_PHY_PLAN_LOCAL, pc_ctx, plan))) {
-              LOG_TRACE("failed to get local plan", K(ret));
-            }
-          } break;
-          case OB_PHY_PLAN_REMOTE: {
-            if (NULL != remote_plan_) {
-              remote_plan_->set_dynamic_ref_handle(pc_ctx.handle_id_);
-              plan = remote_plan_;
-            }
-          } break;
-          case OB_PHY_PLAN_DISTRIBUTED: {
-            if (OB_FAIL(get_physical_plan(OB_PHY_PLAN_DISTRIBUTED, pc_ctx, plan))) {
-              if (OB_SQL_PC_NOT_EXIST == ret) {
-                LOG_TRACE("fail to get dist plan", K(ret));
-              } else {
-                LOG_WARN("fail to get dist plan", K(ret));
-              }
-            }
-          } break;
-          default:
-            break;
-        }
-        if (NULL == plan) {
-          ret = OB_SQL_PC_NOT_EXIST;
-        }
-      }
-    }
-  }
-
-  return ret;
-}
+//int ObSqlPlanSet::get_plan_normal(ObPlanCacheCtx &pc_ctx,
+//                                  ObPhysicalPlan *&plan)
+//{
+//  int ret = OB_SUCCESS;
+//  plan = NULL;
+//  ObSQLSessionInfo *session = pc_ctx.sql_ctx_.session_info_;
+//  if (OB_ISNULL(session)) {
+//    ret = OB_INVALID_ARGUMENT;
+//    LOG_WARN("invalid argument", K(ret));
+//  }
+//
+//  if (OB_SQL_PC_NOT_EXIST == ret
+//      || NULL == plan) {
+//    pc_ctx.exec_ctx_.set_direct_local_plan(false);
+//    // 进入该分支, 说明不走直接获取local plan的优化，
+//    // 如果plan不为空, 说明已经拿到执行计划，
+//    // 此时已经对该plan的引用计数+1, 在这里需要先减掉引用计数
+//    if (NULL != plan) {
+//      /*
+//       * 以下并发场景会进入该分支
+//       *                         切主
+//       *     A线程                                  B线程
+//       *
+//       * 直接获取到local plan                 直接获取local plan
+//       *
+//       *
+//       *  分区不在本地重试
+//       *
+//       *                                        发现其他线程已经
+//       *                                        执行该local计划失败，
+//       *                                        重新计算plan type获取
+//       *                                        正确remote计划
+//       *
+//       *   进入plan cache，
+//       *   重新计算plan type
+//       *   获取remote 计划
+//       * */
+//      plan = NULL;
+//    }
+//    ObPhyPlanType plan_type = OB_PHY_PLAN_UNINITIALIZED;
+//    typedef ObSEArray<ObCandiTableLoc, 4> PLS;
+//    SMART_VAR(PLS, candi_table_locs) {
+//      if (enable_inner_part_parallel_exec_) {
+//        if (OB_FAIL(get_physical_plan(OB_PHY_PLAN_DISTRIBUTED, pc_ctx, plan))) {
+//          LOG_TRACE("failed to get px plan", K(ret));
+//        }
+//      } else if (OB_FAIL(get_plan_type(table_locations_,
+//                                       false,
+//                                       pc_ctx,
+//                                       candi_table_locs,
+//                                       plan_type))) {
+//        // ret = OB_SQL_PC_NOT_EXIST;
+//        SQL_PC_LOG(TRACE, "failed to get plan type", K(ret));
+//      }
+//
+//      if (OB_SUCC(ret) && !enable_inner_part_parallel_exec_) {
+//        NG_TRACE(get_plan_type_end);
+//        SQL_PC_LOG(DEBUG, "get plan type before select plan", K(ret), K(plan_type));
+//        switch (plan_type) {
+//          case OB_PHY_PLAN_LOCAL: {
+//            if (/*has_array_binding_||*/ is_multi_stmt_plan()) {
+//              if (NULL != array_binding_plan_) {
+//                array_binding_plan_->set_dynamic_ref_handle(pc_ctx.handle_id_);
+//                plan = array_binding_plan_;
+//              }
+//            } else if (OB_FAIL(get_physical_plan(OB_PHY_PLAN_LOCAL, pc_ctx, plan))) {
+//              LOG_TRACE("failed to get local plan", K(ret));
+//            }
+//          } break;
+//          case OB_PHY_PLAN_REMOTE: {
+//            if (NULL != remote_plan_) {
+//              remote_plan_->set_dynamic_ref_handle(pc_ctx.handle_id_);
+//              plan = remote_plan_;
+//            }
+//          } break;
+//          case OB_PHY_PLAN_DISTRIBUTED: {
+//            if (OB_FAIL(get_physical_plan(OB_PHY_PLAN_DISTRIBUTED, pc_ctx, plan))) {
+//              if (OB_SQL_PC_NOT_EXIST == ret) {
+//                LOG_TRACE("fail to get dist plan", K(ret));
+//              } else {
+//                LOG_WARN("fail to get dist plan", K(ret));
+//              }
+//            }
+//          } break;
+//          default:
+//            break;
+//        }
+//        if (NULL == plan) {
+//          ret = OB_SQL_PC_NOT_EXIST;
+//        }
+//      }
+//    }
+//  }
+//
+//  return ret;
+//}
 
 #ifdef OB_BUILD_SPM
+
 int ObSqlPlanSet::try_get_local_evolution_plan(ObPlanCacheCtx &pc_ctx,
                                                ObPhysicalPlan *&plan,
                                                bool &get_next)
