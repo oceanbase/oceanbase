@@ -358,7 +358,12 @@ int ObField::get_field_mb_length(const ObObjType type,
         if (OB_FAIL(common::ObCharset::get_mbmaxlen_by_coll(charsetnr, mbmaxlen))) {
           LOG_WARN("fail to get mbmaxlen", K(charsetnr), K(ret));
         } else {
-          length = static_cast<uint32_t>(accuracy.get_length() * mbmaxlen);
+          if (lib::is_mysql_mode() && tc == ObTextTC) {
+            // compat mysql-jdbc 8.x for judge text type by length
+            length = static_cast<uint32_t>(ObAccuracy::MAX_ACCURACY[type].get_length() - 1);
+          } else {
+            length = static_cast<uint32_t>(accuracy.get_length() * mbmaxlen);
+          }
         }
       }
       break;

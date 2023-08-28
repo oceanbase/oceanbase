@@ -265,7 +265,7 @@ def					substr(v,1)	253	512	0	Y	0	0	45
 ##cast test
 select substr(cast(date_c as char(1024)), 0) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					substr(cast(date_c as char(1024)), 0)	251	536870908	0	Y	16	0	45
+def					substr(cast(date_c as char(1024)), 0)	252	536870910	0	Y	16	0	45
 +---------------------------------------+
 | substr(cast(date_c as char(1024)), 0) |
 +---------------------------------------+
@@ -273,7 +273,7 @@ def					substr(cast(date_c as char(1024)), 0)	251	536870908	0	Y	16	0	45
 +---------------------------------------+
 select substr(cast(date_c as char(1024)), 10) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					substr(cast(date_c as char(1024)), 10)	251	536870908	17	Y	16	0	45
+def					substr(cast(date_c as char(1024)), 10)	252	536870910	17	Y	16	0	45
 +----------------------------------------+
 | substr(cast(date_c as char(1024)), 10) |
 +----------------------------------------+
@@ -289,7 +289,7 @@ def					substr(cast(1024 as char(1024)), 1, 2)	253	8	2	Y	0	0	45
 +----------------------------------------+
 select substr(cast(date_c as char(1024)) from 10) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					substr(cast(date_c as char(1024)) from 10)	251	536870908	17	Y	16	0	45
+def					substr(cast(date_c as char(1024)) from 10)	252	536870910	17	Y	16	0	45
 +--------------------------------------------+
 | substr(cast(date_c as char(1024)) from 10) |
 +--------------------------------------------+
@@ -573,7 +573,7 @@ def					trim(1)	253	4	1	Y	0	0	45
 +---------+
 select trim(cast(111 as char(1024))) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					trim(cast(111 as char(1024)))	252	65532	3	Y	16	0	45
+def					trim(cast(111 as char(1024)))	252	65535	3	Y	16	0	45
 +-------------------------------+
 | trim(cast(111 as char(1024))) |
 +-------------------------------+
@@ -581,7 +581,7 @@ def					trim(cast(111 as char(1024)))	252	65532	3	Y	16	0	45
 +-------------------------------+
 select trim(LEADING '1' from cast(111 as char(1024))) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					trim(LEADING '1' from cast(111 as char(1024)))	252	65532	0	Y	16	0	45
+def					trim(LEADING '1' from cast(111 as char(1024)))	252	65535	0	Y	16	0	45
 +------------------------------------------------+
 | trim(LEADING '1' from cast(111 as char(1024))) |
 +------------------------------------------------+
@@ -589,7 +589,7 @@ def					trim(LEADING '1' from cast(111 as char(1024)))	252	65532	0	Y	16	0	45
 +------------------------------------------------+
 select trim(TRAILING '1' from cast(111 as char(1024))) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					trim(TRAILING '1' from cast(111 as char(1024)))	252	65532	0	Y	16	0	45
+def					trim(TRAILING '1' from cast(111 as char(1024)))	252	65535	0	Y	16	0	45
 +-------------------------------------------------+
 | trim(TRAILING '1' from cast(111 as char(1024))) |
 +-------------------------------------------------+
@@ -2771,7 +2771,7 @@ def					unhex('123')	253	2	2	Y	128	0	63
 +--------------+
 select unhex(cast(repeat('123',5) as char(1024)));
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					unhex(cast(repeat('123',5) as char(1024)))	251	536870911	8	Y	144	0	63
+def					unhex(cast(repeat('123',5) as char(1024)))	252	536870910	8	Y	144	0	63
 +--------------------------------------------+
 | unhex(cast(repeat('123',5) as char(1024))) |
 +--------------------------------------------+

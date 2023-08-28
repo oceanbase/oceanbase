@@ -382,6 +382,7 @@ int ObMPStmtExecute::response_result_for_arraybinding(
       for (int64_t i = 0; OB_SUCC(ret) && i < arraybinding_columns_->count(); ++i) {
         ObMySQLField field;
         OZ (ObMySQLResultSet::to_mysql_field(arraybinding_columns_->at(i), field));
+        ObMySQLResultSet::replace_lob_type(session_info, arraybinding_columns_->at(i), field);
         OMPKField fp(field);
         OZ (response_packet(fp, &session_info));
       }

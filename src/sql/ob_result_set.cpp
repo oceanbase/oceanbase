@@ -1681,6 +1681,15 @@ void ObResultSet::replace_lob_type(const ObSQLSessionInfo &session,
       }
     }
     LOG_TRACE("init field", K(is_use_lob_locator), K(field), K(mfield.type_));
+  } else {
+    if (mfield.type_ == obmysql::EMySQLFieldType::MYSQL_TYPE_TINY_BLOB ||
+        mfield.type_ == obmysql::EMySQLFieldType::MYSQL_TYPE_MEDIUM_BLOB ||
+        mfield.type_ == obmysql::EMySQLFieldType::MYSQL_TYPE_LONG_BLOB) {
+      // compat mysql-jdbc
+      // for 5.x, always return MYSQL_TYPE_BLOB
+      // for 8.x always return MYSQL_TYPE_BLOB, and do text type judge in mysql-jdbc by length
+      mfield.type_ = obmysql::EMySQLFieldType::MYSQL_TYPE_BLOB;
+    }
   }
 }
 

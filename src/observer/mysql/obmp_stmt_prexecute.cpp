@@ -1208,8 +1208,8 @@ int ObMPStmtPrexecute::send_param_field_packet(ObSQLSessionInfo &session,
       if (OB_FAIL(ObMySQLResultSet::to_mysql_field(ob_field, field))) {
         LOG_WARN("fail to copy param field", K(ob_field));
       } else {
-        OMPKField fp(field);
         ObMySQLResultSet::replace_lob_type(session, ob_field, field);
+        OMPKField fp(field);
         if (OB_FAIL(response_packet(fp, &session))) {
           LOG_DEBUG("response packet fail", K(ret));
         } else {
@@ -1235,6 +1235,7 @@ int ObMPStmtPrexecute::send_param_packet(ObSQLSessionInfo &session,
     param_field.type_.set_type(ObIntType); // @bug
     param_field.cname_ = ObString::make_string("?");
     OZ (ObMySQLResultSet::to_mysql_field(param_field, field));
+    ObMySQLResultSet::replace_lob_type(session, param_field, field);
     OMPKField fp(field);
     OZ (response_packet(fp, &session));
   }
