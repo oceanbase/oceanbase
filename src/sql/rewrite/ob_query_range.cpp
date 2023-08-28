@@ -2753,12 +2753,21 @@ int ObQueryRange::and_single_gt_head_graphs(ObKeyPartList& l_array, ObKeyPartLis
           // false and everything is false
           if (l_cur_gt->is_always_false() || r_cur_gt->is_always_false()) {
             tmp_result = l_cur_gt->is_always_false() ? l_cur_gt : r_cur_gt;
+            if (contain_row_ && query_range_ctx_ != NULL) {
+              query_range_ctx_->precise_range_exprs_.reset();
+            }
             tmp_result->and_next_ = NULL;
           } else if (r_cur_gt->is_always_true()) {
             tmp_result = l_cur_gt;
+            if (contain_row_ && query_range_ctx_ != NULL) {
+              query_range_ctx_->precise_range_exprs_.reset();
+            }
             // tmp_result->and_next_ = NULL;
           } else if (l_cur_gt->is_always_true()) {
             tmp_result = r_cur_gt;
+            if (contain_row_ && query_range_ctx_ != NULL) {
+              query_range_ctx_->precise_range_exprs_.reset();
+            }
             // tmp_result->and_next_ = NULL;
           } else if (contain_row_) {
             if (OB_FAIL(do_row_gt_and(l_cur_gt, r_cur_gt, tmp_result))) {
