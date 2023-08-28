@@ -61,6 +61,9 @@ void ObEndTransAsyncCallback::callback(int cb_param, const transaction::ObTransI
 void ObEndTransAsyncCallback::callback(int cb_param)
 {
   sql::ObSQLSessionInfo *session_info = mysql_end_trans_cb_.get_sess_info_ptr();
+  // Add ASH flags to async commit of transactions
+  // In the start of async commit in func named ` ObSqlTransControl::do_end_trans_() `,
+  // set the ash flag named  `in_committing_` to true.
   if (NULL != session_info) {
     ObActiveSessionGuard::setup_ash(session_info->get_ash_stat());
     ObActiveSessionGuard::get_stat().in_committing_ = false;
