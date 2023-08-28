@@ -128,13 +128,24 @@ int ObTabletReplayExecutor::replay_get_tablet_(
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "log stream should not be NULL", KR(ret), K(scn));
-  } else if (is_replay_update_tablet_status_()) {
-    if (OB_FAIL(ls->replay_get_tablet_no_check(tablet_id, scn, tablet_handle))) {
-      CLOG_LOG(WARN, "replay get table failed", KR(ret), "ls_id", ls->get_ls_id());
+  } else {
+    const share::ObLSID &ls_id = ls->get_ls_id();
+    if (is_replay_update_tablet_status_()) {
+      if (OB_FAIL(ls->replay_get_tablet_no_check(tablet_id, scn, tablet_handle))) {
+        CLOG_LOG(WARN, "replay get table failed", KR(ret), K(ls_id), K(tablet_id));
+      }
+    } else if (OB_FAIL(ls->replay_get_tablet(tablet_id, scn, tablet_handle))) {
+      CLOG_LOG(WARN, "replay get table failed", KR(ret), K(ls_id), K(tablet_id));
     }
-  } else if (OB_FAIL(ls->replay_get_tablet(tablet_id, scn, tablet_handle))) {
-    CLOG_LOG(WARN, "replay get table failed", KR(ret), "ls_id", ls->get_ls_id());
+
+    if (OB_FAIL(ret)) {
+      if (OB_TIMEOUT == ret) {
+        ret = OB_EAGAIN;
+        CLOG_LOG(WARN, "retry get tablet for timeout error", KR(ret), K(ls_id), K(tablet_id));
+      }
+    }
   }
+
   return ret;
 }
 
