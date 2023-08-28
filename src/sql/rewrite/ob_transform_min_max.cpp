@@ -176,7 +176,7 @@ int ObTransformMinMax::check_transform_validity(ObTransformerCtx &ctx,
 {
   int ret = OB_SUCCESS;
   is_valid = false;
-    if (OB_ISNULL(select_stmt)) {
+  if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(select_stmt));
   } else if (select_stmt->has_recursive_cte() || select_stmt->has_hierarchical_query()) {
@@ -187,6 +187,8 @@ int ObTransformMinMax::check_transform_validity(ObTransformerCtx &ctx,
     OPT_TRACE("not a simple query");
   } else if (select_stmt->get_aggr_item_size() < 1) {
     OPT_TRACE("stmt has not agg expr");
+  } else if (select_stmt->get_aggr_item_size() > 1 && select_stmt->get_condition_size() > 0) {
+    OPT_TRACE("need to evaluate by cost estimation");
   } else {
     is_valid = true;
     ObArenaAllocator alloc;
