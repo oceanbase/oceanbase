@@ -205,7 +205,8 @@ int ObExprUDF::process_in_params(const ObObj *objs_stack,
                                  const ObIArray<ObUDFParamDesc> &params_desc,
                                  const ObIArray<ObExprResType> &params_type,
                                  ParamStore& iparams,
-                                 ObIAllocator &allocator)
+                                 ObIAllocator &allocator,
+                                 ObIArray<ObObj> *deep_in_objs)
 {
   int ret = OB_SUCCESS;
   CK (0 == param_num || OB_NOT_NULL(objs_stack));
@@ -221,6 +222,9 @@ int ObExprUDF::process_in_params(const ObObj *objs_stack,
         if (need_deep_copy_in_parameter(
             objs_stack, param_num, params_desc, params_type, objs_stack[i])) {
           OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, objs_stack[i], param, true));
+          if (OB_NOT_NULL(deep_in_objs)) {
+            OZ (deep_in_objs->push_back(param));
+          }
         } else {
           param.set_extend(objs_stack[i].get_ext(),
                          objs_stack[i].get_meta().get_extend_type(), objs_stack[i].get_val_len());
@@ -481,6 +485,7 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
     }
 
     ObObj *objs = nullptr;
+    ObSEArray<ObObj, 2> deep_in_objs;
     if (expr.arg_cnt_ > 0) {
       objs = static_cast<ObObj *> (allocator.alloc(expr.arg_cnt_ * sizeof(ObObj)));
       if (OB_ISNULL(objs)) {
@@ -489,7 +494,7 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
       }
       OZ (fill_obj_stack(expr, ctx, objs));
       OZ (process_in_params(
-        objs, expr.arg_cnt_, info->params_desc_, info->params_type_, *udf_params, alloc));
+        objs, expr.arg_cnt_, info->params_desc_, info->params_type_, *udf_params, alloc, &deep_in_objs));
     }
 
     if (OB_SUCC(ret) && info->is_udt_cons_) {
@@ -632,6 +637,15 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 
       if (OB_SUCC(ret) && info->is_udt_cons_) {
         OZ (pl::ObUserDefinedType::destruct_obj(udf_params->at(0), ctx.exec_ctx_.get_my_session()));
+      }
+    }
+    if (deep_in_objs.count() > 0) {
+      int tmp = OB_SUCCESS;
+      for (int64_t i = 0; i < deep_in_objs.count(); ++i) {
+        tmp = pl::ObUserDefinedType::destruct_obj(deep_in_objs.at(i), ctx.exec_ctx_.get_my_session());
+        if (OB_SUCCESS != tmp) {
+          LOG_WARN("fail to destruct obj of in param", K(tmp));
+        }
       }
     }
     if (need_end_stmt) {

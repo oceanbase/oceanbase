@@ -3666,13 +3666,23 @@ int ObPLCollection::trim_collection_elem(int64_t trim_number)
     } else if (0 == trim_number) {
       // do nothing
     } else {
-      count_ -= trim_number;
-      last_ = OB_INVALID_INDEX;
-      update_last_impl();
-      //全部
-      if (first_ >= count_) {
-        first_ = OB_INVALID_INDEX;
-        update_first_impl();
+      ObObj *obj = static_cast<ObObj *>(get_data());
+      for (int64_t index = count_ - trim_number; OB_SUCC(ret) && index < count_; ++index) {
+        if (OB_FAIL(ObUserDefinedType::destruct_obj(obj[index], NULL))) {
+          LOG_WARN("failed to destruct obj", K(ret), K(obj[index]), K(index));
+        } else {
+          obj[index].set_type(ObMaxType);
+        }
+      }
+      if (OB_SUCC(ret)) {
+        count_ -= trim_number;
+        last_ = OB_INVALID_INDEX;
+        update_last_impl();
+        //全部
+        if (first_ >= count_) {
+          first_ = OB_INVALID_INDEX;
+          update_first_impl();
+        }
       }
     }
   }

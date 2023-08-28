@@ -148,7 +148,8 @@ public:
                                const common::ObIArray<ObUDFParamDesc> &params_desc,
                                const common::ObIArray<ObExprResType> &params_type,
                                common::ParamStore& iparams,
-                               common::ObIAllocator &allocator);
+                               common::ObIAllocator &allocator,
+                               ObIArray<ObObj> *deep_in_objs = NULL);
   static int process_out_params(const common::ObObj *objs_stack,
                                 int64_t param_num,
                                 common::ParamStore& iparams,

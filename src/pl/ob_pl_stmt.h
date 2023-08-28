@@ -2121,6 +2121,13 @@ public:
       else_->~ObPLStmtBlock();
       else_ = NULL;
     }
+    int64_t when_count = when_.count();
+    for (int64_t i = 0; i < when_count; ++i) {
+      ObPLStmt *ret = when_[i].body_;
+      if (OB_NOT_NULL(ret)) {
+        ret->~ObPLStmt();
+      }
+    }
   }
 
   virtual int64_t get_child_size() const override { return when_.count() + 1; }
