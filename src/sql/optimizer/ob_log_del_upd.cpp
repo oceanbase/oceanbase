@@ -304,13 +304,7 @@ int ObLogDelUpd::allocate_exchange_post_pdml(AllocExchContext* ctx)
         need_alloc_part_id_expr_ = true;
         LOG_TRACE("partition level is one, use pkey reshuffle method");
       } else if (share::schema::PARTITION_LEVEL_TWO == part_level) {
-        if (sharding_info_.is_partition_single()) {
-          exch_info.repartition_type_ = OB_REPARTITION_ONE_SIDE_ONE_LEVEL_SUB;
-        } else if (sharding_info_.is_subpartition_single()) {
-          exch_info.repartition_type_ = OB_REPARTITION_ONE_SIDE_ONE_LEVEL_FIRST;
-        } else {
-          exch_info.repartition_type_ = OB_REPARTITION_ONE_SIDE_TWO_LEVEL;
-        }
+        exch_info.repartition_type_ = OB_REPARTITION_ONE_SIDE_TWO_LEVEL;
         exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_HASH;
         need_alloc_part_id_expr_ = true;
         LOG_TRACE("partition level is two, use pkey reshuffle method");

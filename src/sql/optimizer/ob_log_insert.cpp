@@ -961,13 +961,7 @@ int ObLogInsert::allocate_exchange_post_pdml(AllocExchContext* ctx)
           exch_info.dist_method_ = dist_method;
           need_alloc_part_id_expr_ = true;
         } else if (share::schema::PARTITION_LEVEL_TWO == part_level) {
-          if (sharding_info_.is_partition_single()) {
-            exch_info.repartition_type_ = OB_REPARTITION_ONE_SIDE_ONE_LEVEL_SUB;
-          } else if (sharding_info_.is_subpartition_single()) {
-            exch_info.repartition_type_ = OB_REPARTITION_ONE_SIDE_ONE_LEVEL_FIRST;
-          } else {
-            exch_info.repartition_type_ = OB_REPARTITION_ONE_SIDE_TWO_LEVEL;
-          }
+          exch_info.repartition_type_ = OB_REPARTITION_ONE_SIDE_TWO_LEVEL;
           exch_info.dist_method_ = dist_method;
           need_alloc_part_id_expr_ = true;
         } else if (share::schema::PARTITION_LEVEL_ZERO == part_level) {
