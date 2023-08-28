@@ -672,10 +672,6 @@ void ObServer::destroy()
     TG_DESTROY(lib::TGDefIDs::DiskUseReport);
     FLOG_INFO("disk usage report task destroyed");
 
-    FLOG_INFO("begin to destroy ob server block mgr");
-    OB_SERVER_BLOCK_MGR.destroy();
-    FLOG_INFO("ob server block mgr destroyed");
-
     FLOG_INFO("begin to destroy store cache");
     OB_STORE_CACHE.destroy();
     FLOG_INFO("store cache destroyed");
@@ -743,6 +739,10 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy server checkpoint slog handler");
     ObServerCheckpointSlogHandler::get_instance().destroy();
     FLOG_INFO("server checkpoint slog handler destroyed");
+
+    FLOG_INFO("begin to destroy ob server block mgr");
+    OB_SERVER_BLOCK_MGR.destroy();
+    FLOG_INFO("ob server block mgr destroyed");
 
     FLOG_INFO("begin to destroy server startup task handler");
     SERVER_STARTUP_TASK_HANDLER.destroy();
