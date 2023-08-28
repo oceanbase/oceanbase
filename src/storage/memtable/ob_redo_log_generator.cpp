@@ -211,7 +211,7 @@ int ObRedoLogGenerator::fill_big_row_redo_(char* buf, const int64_t buf_len, int
           meta.set_flags(ObTransRowFlag::BIG_ROW_MID);
         }
         meta.generate_new_header();
-        if (meta.serialize(buf, buf_len, orig_buf_pos)) {
+        if (OB_FAIL(meta.serialize(buf, buf_len, orig_buf_pos))) {
           TRANS_LOG(WARN, "failed to serialize meta", K(ret), K(buf_len), K(orig_buf_pos));
         } else if (!is_big_row_end) {
           ret = OB_EAGAIN;
