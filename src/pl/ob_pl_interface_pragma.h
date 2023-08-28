@@ -58,8 +58,8 @@
 #include "pl/sys_package/ob_dbms_rls.h"
 #include "pl/sys_package/ob_json_object_type.h"
 #include "pl/sys_package/ob_json_element_type.h"
-#include "pl/sys_package/ob_pl_dbms_resource_manager.h"
 #endif
+#include "pl/sys_package/ob_pl_dbms_resource_manager.h"
 #ifdef OB_BUILD_ORACLE_XML
 #include "pl/sys_package/ob_xml_type.h"
 #endif
@@ -277,6 +277,8 @@
   INTERFACE_DEF(INTERFACE_VALIDATE, "VALIDATE", (DbmsUtilityHelper::validate))
   // end dbms_utility
 
+#endif
+
   //start of resource manager
   INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_CREATE_PLAN, "CREATE_PLAN_INNER", (ObPlDBMSResourceManager::create_plan))
   INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_DELETE_PLAN, "DELETE_PLAN_INNER", (ObPlDBMSResourceManager::delete_plan))
@@ -287,8 +289,6 @@
   INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_DELETE_PLAN_DIRECTIVE, "DELETE_PLAN_DIRECTIVE_INNER", (ObPlDBMSResourceManager::delete_plan_directive))
   INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_SET_CONSUMER_GROUP_MAPPING, "SET_CONSUMER_GROUP_MAPPING_INNER", (ObPlDBMSResourceManager::set_consumer_group_mapping))
   //end of resource manager
-
-#endif
 
   //start of dbms_stat
   INTERFACE_DEF(INTERFACE_DBMS_STATS_GATHER_TABLE_STATS, "GATHER_TABLE_STATS", (ObDbmsStats::gather_table_stats))
