@@ -12899,6 +12899,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15403'
 # 15413: __all_virtual_import_stmt_exec_history
 # 15414: __all_virtual_ls_info
 # 15415: idx_dbms_lock_allocated_lockhandle_real_agent
+# 15416: idx_dbms_lock_allocated_expiration_real_agent
 
 # 余留位置
 
@@ -53595,7 +53596,8 @@ def_sys_index_table(
   keywords = all_def_keywords['__all_rls_context_history'])
 
 # 101089 : placeholder for unique index of __all_tenant_snapshots
-# 101090 : placeholder for index of __all_dbms_lock_allocated
+# 101090 : placeholder for index of __all_dbms_lock_allocated lockhandle column
+# 101091 : placeholder for index of __all_dbms_lock_allocated expiration column
 
 ################################################################################
 # Oracle Agent table Index
