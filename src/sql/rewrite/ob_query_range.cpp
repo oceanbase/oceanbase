@@ -5736,6 +5736,8 @@ int ObQueryRange::or_range_graph(ObKeyPartList &ranges,
     ObKeyPart *find_true = NULL;
     ObKeyPartList or_list;
     ObKeyPart *head_key_part = ranges.get_first();
+    bool find_phy_row_id = false;
+    bool find_not_phy_row_id = false;
     if (OB_ISNULL(head_key_part)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("head_key_part is null.", K(ret));
@@ -5754,7 +5756,23 @@ int ObQueryRange::or_range_graph(ObKeyPartList &ranges,
         if (OB_ISNULL(cur)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("cur is null.", K(ret));
-        } else if (OB_FALSE_IT(need_geo_rebuild |= cur->is_geo_key())) {
+        } else {
+          need_geo_rebuild |= cur->is_geo_key();
+          if (cur->is_phy_rowid_key_part()) {
+            find_phy_row_id = true;
+          } else {
+            find_not_phy_row_id = true;
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (find_phy_row_id && find_not_phy_row_id) {
+          // rowid = 'xxx' or c1 = 1
+          // physical rowid won't transform to rowkey at final stage. Then physical rowid node and
+          // other type node can't connected by or_next. Because final stage may compare node value
+          // with different or node.
+          min_offset = std::min(min_offset, cur->pos_.offset_);
+          ALLOC_TRUE_KEYPART(find_true, min_offset);
+          break;
         } else if (cur->is_always_false() && NULL == cur->or_next_) {
           if (!find_false) {
             cur->and_next_ = NULL;
