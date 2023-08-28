@@ -744,8 +744,12 @@ int ObLogInsert::need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sha
   } else if (OB_FAIL(ObLogicalOperator::compute_basic_sharding_info(input_sharding, output_sharding, is_basic))) {
     LOG_WARN("failed to compute basic sharding info", K(ret));
   } else if (is_basic) {
-    is_needed = false;
-    sharding_info.copy_with_part_keys(target_sharding_info);
+    if (is_one_part_table || !table_partition_info_.get_table_location().is_all_partition()) {
+      is_needed = false;
+      sharding_info.copy_with_part_keys(target_sharding_info);
+    } else {
+      is_needed = true;
+    }
   } else if (OB_FAIL(check_if_match_partition_wise_insert(
                  ctx, target_sharding_info, child->get_sharding_info(), is_match))) {
     LOG_WARN("failed to check partition wise", K(ret));
