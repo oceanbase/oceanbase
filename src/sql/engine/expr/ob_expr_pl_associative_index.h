@@ -52,7 +52,7 @@ public:
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
   static int eval_assoc_idx(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-private:
+
   struct Info {
     Info()
         : for_write_(false),
@@ -83,11 +83,17 @@ private:
                                  const Info &info,
                                  pl::ObPLAssocArray &assoc_array,
                                  const common::ObObj &key);
+  static int do_eval_assoc_index(int64_t &assoc_idx,
+                                 ObSQLSessionInfo *session,
+                                 const Info &info,
+                                 pl::ObPLAssocArray &assoc_array_ref,
+                                 const common::ObObj &key,
+                                 ObIAllocator &allocator);
 
   static int reserve_assoc_key(pl::ObPLAssocArray &assoc_array);
 #endif
   DISALLOW_COPY_AND_ASSIGN(ObExprPLAssocIndex);
-private:
+
   Info info_;
 };
 

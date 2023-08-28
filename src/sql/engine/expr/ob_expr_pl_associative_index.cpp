@@ -79,6 +79,21 @@ int ObExprPLAssocIndex::do_eval_assoc_index(int64_t &assoc_idx,
                                             pl::ObPLAssocArray &assoc_array_ref,
                                             const common::ObObj &key)
 {
+  return do_eval_assoc_index(assoc_idx,
+                             exec_ctx.get_my_session(),
+                             info,
+                             assoc_array_ref,
+                             key,
+                             exec_ctx.get_allocator());
+}
+
+int ObExprPLAssocIndex::do_eval_assoc_index(int64_t &assoc_idx,
+                                            ObSQLSessionInfo *session,
+                                            const Info &info,
+                                            pl::ObPLAssocArray &assoc_array_ref,
+                                            const common::ObObj &key,
+                                            ObIAllocator &allocator)
+{
   int ret = OB_SUCCESS;
   pl::ObPLAssocArray *assoc_array = &assoc_array_ref;
   if (assoc_array->get_count() >0 && OB_ISNULL(assoc_array->get_key())) {
@@ -110,9 +125,9 @@ int ObExprPLAssocIndex::do_eval_assoc_index(int64_t &assoc_idx,
   if (OB_SUCC(ret)) {
     if (info.for_write_) {
       if (OB_INVALID_INDEX == index) {
-        pl::ObPLExecCtx *pl_exec_ctx = exec_ctx.get_my_session()->get_pl_context()->get_current_ctx();
-        if (OB_FAIL(ObSPIService::spi_extend_assoc_array(exec_ctx.get_my_session()->get_effective_tenant_id(),
-                                                         pl_exec_ctx, exec_ctx.get_allocator(), *assoc_array, 1))) {
+        pl::ObPLExecCtx *pl_exec_ctx = session->get_pl_context()->get_current_ctx();
+        if (OB_FAIL(ObSPIService::spi_extend_assoc_array(session->get_effective_tenant_id(),
+                                                         pl_exec_ctx, allocator, *assoc_array, 1))) {
           LOG_WARN("failed to spi_set_collection_data", K(*assoc_array), K(ret));
         }
       }
