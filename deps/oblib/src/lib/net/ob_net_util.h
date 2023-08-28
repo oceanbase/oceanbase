@@ -15,6 +15,7 @@
 
 #include <stdint.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
@@ -29,20 +30,22 @@
 #include <linux/unistd.h>
 #include <string>
 
-namespace oceanbase {
-namespace obsys {
+namespace oceanbase
+{
+namespace obsys
+{
 
-class ObNetUtil {
+class ObNetUtil
+{
 public:
-    static int get_local_addr_ipv6(const char *dev_name, char *ipv6, int len, bool *is_linklocal=nullptr);
-    static uint32_t get_local_addr_ipv4(const char *dev_name);
-    static std::string addr_to_string(uint64_t ipport);
-    static uint64_t ip_to_addr(uint32_t ip, int port);
-    // get ipv4 by hostname, no need free the returned value
-    static char *get_addr_by_hostname(const char *hostname);
-    static int get_ifname_by_addr(const char *local_ip, char *if_name, uint64_t if_name_len);
+  static int get_local_addr_ipv6(const char *dev_name, char *ipv6, int len, bool *is_linklocal = nullptr);
+  static uint32_t get_local_addr_ipv4(const char *dev_name);
+  static std::string addr_to_string(uint64_t ipport);
+  static uint64_t ip_to_addr(uint32_t ip, int port);
+  // get ipv4 by hostname, no need free the returned value
+  static char *get_addr_by_hostname(const char *hostname);
+  static int get_ifname_by_addr(const char *local_ip, char *if_name, uint64_t if_name_len);
 };
-
-}
-}
+}  // namespace obsys
+}  // namespace oceanbase
 #endif

@@ -6107,7 +6107,12 @@ def_table_schema(
   ('effective_tenant_id', 'int'),
   ('level', 'int'),
   ('sample_percentage', 'int'),
-  ('record_policy', 'varchar:32')
+  ('record_policy', 'varchar:32'),
+  ('lb_vid', 'bigint', 'true'),
+  ('lb_vip', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
+  ('lb_vport', 'int', 'true'),
+  ('in_bytes', 'bigint'),
+  ('out_bytes', 'bigint')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -21127,7 +21132,12 @@ SELECT
   CLIENT_INFO,
   LEVEL,
   SAMPLE_PERCENTAGE,
-  RECORD_POLICY
+  RECORD_POLICY,
+  LB_VID,
+  LB_VIP,
+  LB_VPORT,
+  IN_BYTES,
+  OUT_BYTES
 FROM oceanbase.__all_virtual_processlist
 """.replace("\n", " ")
 )
@@ -50827,7 +50837,12 @@ SELECT
   CLIENT_INFO,
   "LEVEL",
   SAMPLE_PERCENTAGE,
-  RECORD_POLICY
+  RECORD_POLICY,
+  LB_VID,
+  LB_VIP,
+  LB_VPORT,
+  IN_BYTES,
+  OUT_BYTES
 FROM SYS.ALL_VIRTUAL_PROCESSLIST
 """.replace("\n", " ")
 )

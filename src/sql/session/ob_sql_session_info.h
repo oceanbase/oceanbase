@@ -1427,6 +1427,16 @@ public:
   transaction::ObTxnFreeRouteCtx &get_txn_free_route_ctx() { return txn_free_route_ctx_; }
   uint64_t get_txn_free_route_flag() const { return txn_free_route_ctx_.get_audit_record(); }
   void check_txn_free_route_alive();
+  inline int64_t get_vid() const { return vid_; }
+  inline void set_vid(int64_t vid) { vid_ = vid; }
+  inline const common::ObString get_vip() const { return ObString::make_string(vip_buf_);; }
+  inline void set_vip(char *vip_buf) { MEMCPY(vip_buf_, vip_buf, sizeof(vip_buf_)); }
+  inline int32_t get_vport() const { return vport_; }
+  inline void set_vport(int32_t vport) { vport_ = vport; }
+  inline int64_t get_in_bytes() const { return ATOMIC_LOAD(&in_bytes_); }
+  inline void inc_in_bytes(int64_t in_bytes) { IGNORE_RETURN ATOMIC_FAA(&in_bytes_, in_bytes); }
+  inline int64_t get_out_bytes() const { return ATOMIC_LOAD(&out_bytes_); }
+  inline void inc_out_bytes(int64_t out_bytes) { IGNORE_RETURN ATOMIC_FAA(&out_bytes_, out_bytes); }
 private:
   transaction::ObTxnFreeRouteCtx txn_free_route_ctx_;
   //save the current sql exec context in session
@@ -1448,6 +1458,11 @@ private:
   //storing table ids of accessed gtts in the session
   common::ObSEArray<uint64_t, 1> gtt_session_scope_ids_;
   common::ObSEArray<uint64_t, 1> gtt_trans_scope_ids_;
+  int64_t vid_;
+  char vip_buf_[MAX_IP_ADDR_LENGTH];
+  int32_t vport_;
+  int64_t in_bytes_;
+  int64_t out_bytes_;
 };
 
 inline bool ObSQLSessionInfo::is_terminate(int &ret) const

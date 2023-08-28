@@ -377,6 +377,14 @@ int ObSQLSessionMgr::create_session(ObSMConnection *conn, ObSQLSessionInfo *&ses
                                     conn->sess_create_time_,
                                     sess_info))) {
     LOG_WARN("create session failed", K(ret));
+  } else if (OB_ISNULL(sess_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sess_info is null", K(ret));
+  } else {
+    sess_info->set_vid(conn->vid_);
+    sess_info->set_vip(conn->vip_buf_);
+    sess_info->set_vport(conn->vport_);
+    sess_info->inc_in_bytes(conn->connect_in_bytes_);
   }
   return ret;
 }

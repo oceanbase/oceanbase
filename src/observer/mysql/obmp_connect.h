@@ -27,6 +27,9 @@ namespace observer
 {
 struct ObSMConnection;
 
+ObString extract_user_name(const ObString &in);
+int extract_user_tenant(const ObString &in, ObString &user_name, ObString &tenant_name);
+int extract_tenant_id(const ObString &tenant_name, uint64_t &tenant_id);
 class ObMPConnect
     : public ObMPBase
 {
@@ -41,7 +44,7 @@ protected:
   int load_privilege_info(sql::ObSQLSessionInfo &session);
 
 private:
-  int get_tenant_id(uint64_t &tenant_id);
+  int get_tenant_id(ObSMConnection &conn, uint64_t &tenant_id);
   int64_t get_user_id();
   int64_t get_database_id();
   int get_conn_id(uint32_t &conn_id) const;
@@ -53,8 +56,7 @@ private:
 
   int get_client_attribute_capability(uint64_t &cap) const;
 
-  int extract_user_tenant(const common::ObString &in);
-  common::ObString extract_user_name(const common::ObString &in) const;
+  int get_user_tenant(ObSMConnection &conn);
   int extract_real_scramble(const ObString &proxy_scramble);
 
   int check_client_property(ObSMConnection &conn);

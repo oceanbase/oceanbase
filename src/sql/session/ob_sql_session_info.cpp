@@ -193,9 +193,14 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       expect_group_id_(OB_INVALID_ID),
       group_id_not_expected_(false),
       gtt_session_scope_unique_id_(0),
-      gtt_trans_scope_unique_id_(0)
+      gtt_trans_scope_unique_id_(0),
+      vid_(OB_INVALID_ID),
+      vport_(0),
+      in_bytes_(0),
+      out_bytes_(0)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
+  MEMSET(vip_buf_, 0, sizeof(vip_buf_));
 }
 
 ObSQLSessionInfo::~ObSQLSessionInfo()
@@ -362,6 +367,11 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   gtt_trans_scope_unique_id_ = 0;
   gtt_session_scope_ids_.reset();
   gtt_trans_scope_ids_.reset();
+  vid_ = OB_INVALID_ID;
+  vport_ = 0;
+  in_bytes_ = 0;
+  out_bytes_ = 0;
+  MEMSET(vip_buf_, 0, sizeof(vip_buf_));
 }
 
 void ObSQLSessionInfo::clean_status()

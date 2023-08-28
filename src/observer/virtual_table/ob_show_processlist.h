@@ -72,7 +72,12 @@ private:
     EFFECTIVE_TENANT_ID,
     LEVEL,
     SAMPLE_PERCENTAGE,
-    RECORD_POLICY
+    RECORD_POLICY,
+    VID,
+    VIP,
+    VPORT,
+    IN_BYTES,
+    OUT_BYTES
   };
   class FillScanner
   {

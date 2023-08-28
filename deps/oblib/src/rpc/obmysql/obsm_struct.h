@@ -62,6 +62,12 @@ public:
     tenant_id_ = 0;
     proxy_cap_flags_.capability_ = 0,
     tenant_ = NULL;
+    MEMSET(tenant_name_buf_, 0, sizeof(tenant_name_buf_));
+    MEMSET(user_name_buf_, 0, sizeof(user_name_buf_));
+    vid_ = OB_INVALID_ID;
+    MEMSET(vip_buf_, 0, sizeof(vip_buf_));
+    vport_ = 0;
+    connect_in_bytes_ = 0;
     ret_ = common::OB_SUCCESS;
     scramble_buf_[SCRAMBLE_BUF_SIZE] = '\0';
     proxy_version_ = 0;
@@ -179,6 +185,12 @@ public:
   //而在on_connect中无法给客户端返回准确错误信息，因此记录到这里，在ObMPConnect::Process中处理
   int ret_;
   omt::ObTenant *tenant_;
+  char tenant_name_buf_[OB_MAX_TENANT_NAME_LENGTH + 1];
+  char user_name_buf_[OB_MAX_USER_NAME_LENGTH + 1];
+  int64_t vid_;
+  char vip_buf_[MAX_IP_ADDR_LENGTH];
+  int32_t vport_;
+  int64_t connect_in_bytes_;
   obmysql::ObMysqlPktContext mysql_pkt_context_;
   obmysql::ObCompressedPktContext compressed_pkt_context_;
   obmysql::ObProto20PktContext proto20_pkt_context_;

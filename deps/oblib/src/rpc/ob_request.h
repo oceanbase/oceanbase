@@ -28,6 +28,11 @@
 
 namespace oceanbase
 {
+namespace obmysql
+{
+  int get_fd_from_sess(void *sess);
+}
+
 namespace rpc
 {
 
@@ -115,6 +120,7 @@ public:
   int32_t get_process_end_response_diff() const;
   bool get_discard_flag() const;
   int32_t get_retry_times() const;
+  int get_connfd();
 
   void set_connection_phase(ConnectionPhaseEnum connection_phase) { connection_phase_ = connection_phase; }
   bool is_in_connected_phase() const { return ConnectionPhaseEnum:: CPE_CONNECTED == connection_phase_; }
@@ -309,6 +315,21 @@ inline void ObRequest::set_discard_flag(const bool discard_flag)
 inline int32_t ObRequest::get_retry_times() const
 {
   return retry_times_;
+}
+
+inline int ObRequest::get_connfd()
+{
+  int connfd = -1;
+  if (TRANSPORT_PROTO_EASY == nio_protocol_) {
+    if (OB_ISNULL(ez_req_)) {
+      RPC_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid argument", K(ez_req_));
+    } else {
+      connfd = ez_req_->ms->c->fd;
+    }
+  } else if (TRANSPORT_PROTO_POC == nio_protocol_) {
+    connfd = obmysql::get_fd_from_sess(handle_ctx_);
+  }
+  return connfd;
 }
 
 inline void ObRequest::set_retry_times(const int32_t retry_times)

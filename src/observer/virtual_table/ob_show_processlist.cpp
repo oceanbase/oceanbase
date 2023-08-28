@@ -408,6 +408,39 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
               cur_row_->cells_[cell_idx].set_null();
             }
           } break;
+          case VID: {
+            if (OB_INVALID_ID == sess_info->get_vid()) {
+              cur_row_->cells_[cell_idx].set_null();
+            } else {
+              cur_row_->cells_[cell_idx].set_int(sess_info->get_vid());
+            }
+            break;
+          }
+          case VIP: {
+            if (sess_info->get_vip().empty()) {
+              cur_row_->cells_[cell_idx].set_null();
+            } else {
+              cur_row_->cells_[cell_idx].set_varchar(sess_info->get_vip());
+              cur_row_->cells_[cell_idx].set_collation_type(default_collation);
+            }
+            break;
+          }
+          case VPORT: {
+            if (!sess_info->get_vport()) {
+              cur_row_->cells_[cell_idx].set_null();
+            } else {
+              cur_row_->cells_[cell_idx].set_int(sess_info->get_vport());
+            }
+            break;
+          }
+          case IN_BYTES: {
+            cur_row_->cells_[cell_idx].set_int(sess_info->get_in_bytes());
+            break;
+          }
+          case OUT_BYTES: {
+            cur_row_->cells_[cell_idx].set_int(sess_info->get_out_bytes());
+            break;
+          }
           default: {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),

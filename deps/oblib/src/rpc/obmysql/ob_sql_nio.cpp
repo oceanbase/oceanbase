@@ -488,6 +488,19 @@ static ObSqlSock *sess2sock(void *sess)
   return CONTAINER_OF(sess, ObSqlSock, sess_);
 }
 
+int get_fd_from_sess(void *sess)
+{
+  int fd = -1;
+  ObSqlSock *sock = nullptr;
+  if (OB_NOT_NULL(sess)) {
+    sock = sess2sock(sess);
+  }
+  if (OB_NOT_NULL(sock)) {
+    fd = sock->get_fd();
+  }
+  return fd;
+}
+
 int ObSqlSock::set_ssl_enabled()
 {
   int ret = OB_SUCCESS;

@@ -50,6 +50,87 @@ using namespace oceanbase::obmysql;
 using namespace oceanbase::observer;
 using namespace oceanbase::share::schema;
 
+namespace oceanbase
+{
+namespace observer
+{
+ObString extract_user_name(const ObString &in)
+{
+  ObString user_name;
+  if (in.length() > 1 && '\'' == in[0] && '\'' == in[in.length() - 1]) {
+    user_name.assign_ptr(in.ptr() + 1, in.length() - 2);
+  } else {
+    user_name = in;
+  }
+  return user_name;
+}
+
+int extract_user_tenant(const ObString &in, ObString &user_name, ObString &tenant_name)
+{
+  int ret = OB_SUCCESS;
+  const char *user_pos = in.ptr();
+  const char *at_pos = in.find('@');  // use @ as seperator, e.g. xiaochu@tenant
+  const char *tenant_pos = at_pos + 1;
+  // sanity check
+  if (NULL == at_pos) {
+    user_name = extract_user_name(in);
+    tenant_name = ObString::make_empty_string();
+    LOG_INFO("username and tenantname", K(user_name), K(tenant_name));
+  } else {
+    // Accept empty username.  Empty username is one of normal
+    // usernames that we can create user with empty name.
+
+    /* get tenant_name */
+    if (at_pos - user_pos < 0) {
+      ret = OB_ERR_USER_EMPTY;
+      LOG_WARN("Must Provide user name to login", K(ret));
+    } else {
+      int64_t tenant_len = in.length() - (tenant_pos - user_pos);
+      if (tenant_len > OB_MAX_TENANT_NAME_LENGTH || tenant_len <= 0) {
+        ret = OB_ERR_INVALID_TENANT_NAME;
+        LOG_WARN("Violate with tenant length limit", "max", OB_MAX_TENANT_NAME_LENGTH, "actual", tenant_len, K(ret));
+      }
+      // extract
+      if (OB_SUCC(ret)) {
+        ObString username(at_pos - user_pos, user_pos);
+        ObString tenantname(in.length() - (tenant_pos - user_pos), tenant_pos);
+        user_name = extract_user_name(username);
+        tenant_name = tenantname;
+        LOG_DEBUG("username and tenantname", K(user_name), K(tenant_name));
+      }
+    }
+  }
+  return ret;
+}
+
+int extract_tenant_id(const ObString &tenant_name, uint64_t &tenant_id)
+{
+  int ret = OB_SUCCESS;
+  tenant_id = OB_INVALID_ID;
+
+  if (tenant_name.empty()) {
+    tenant_id = OB_SYS_TENANT_ID;  // default to sys tenant
+  } else {
+    if (OB_ISNULL(GCTX.schema_service_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid schema service", K(ret), K(GCTX.schema_service_));
+    } else {
+      /* get tenant_id */
+      share::schema::ObSchemaGetterGuard guard;
+      if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+        LOG_WARN("get_schema_guard failed", K(ret));
+      } else if (OB_FAIL(guard.get_tenant_id(tenant_name, tenant_id))) {
+        LOG_WARN("get_tenant_id failed", K(ret), K(tenant_name));
+      }  else {
+        // do nothing
+      }
+    }
+  }
+  return ret;
+}
+}  // namespace observer
+}  // namespace oceanbase
+
 ObMPConnect::ObMPConnect(const ObGlobalContext &gctx)
     : ObMPBase(gctx),
       user_name_(),
@@ -233,8 +314,8 @@ int ObMPConnect::process()
   } else {
     if (OB_FAIL(conn->ret_)) {
       LOG_WARN("connection fail at obsm_handle process", K(conn->ret_));
-    } else if (OB_FAIL(extract_user_tenant(hsr_.get_username()))) {
-      LOG_WARN("parse user@tenant fail", K(ret), "str", hsr_.get_username());
+    } else if (OB_FAIL(get_user_tenant(*conn))) {
+      LOG_WARN("get user name and tenant name failed", K(ret));
     } else if ((SS_INIT == GCTX.status_ || SS_STARTING == GCTX.status_)
                && !tenant_name_.empty()
                && 0 != tenant_name_.compare(OB_SYS_TENANT_NAME)) {
@@ -1282,82 +1363,42 @@ int ObMPConnect::check_password_expired(const uint64_t tenant_id,
   return ret;
 }
 
-int ObMPConnect::extract_user_tenant(const ObString &in)
+int ObMPConnect::get_user_tenant(ObSMConnection &conn)
 {
   // resolve tenantname and username
   int ret = OB_SUCCESS;
-  const char *user_pos = in.ptr();
-  const char *at_pos = in.find('@'); // use @ as seperator, e.g. xiaochu@tenant
-  const char *tenant_pos = at_pos + 1;
-
-  // sanity check
-  if (NULL == at_pos) {
-      user_name_ = extract_user_name(in);
-      tenant_name_ = ObString::make_empty_string(); // default to sys tenant
-      LOG_INFO("username and tenantname", K_(user_name), K_(tenant_name));
-  } else {
-    // Accept empty username.  Empty username is one of normal
-    // usernames that we can create user with empty name.
-    if (at_pos - user_pos < 0) {
-      ret = OB_ERR_USER_EMPTY;
-      LOG_WARN("Must Provide user name to login", K(ret));
-    } else {
-      int64_t tenant_len = in.length() - (tenant_pos - user_pos);
-      if (tenant_len > OB_MAX_TENANT_NAME_LENGTH || tenant_len <= 0) {
-        ret = OB_ERR_INVALID_TENANT_NAME;
-        LOG_WARN("Violate with tenant length limit", "max", OB_MAX_TENANT_NAME_LENGTH, "actual", tenant_len, K(ret));
-      }
-      // extract
-      if (OB_SUCC(ret)) {
-        ObString username(at_pos - user_pos, user_pos);
-        ObString tenantname(in.length() - username.length() - 1, tenant_pos);
-        user_name_ = extract_user_name(username);
-        tenant_name_ = tenantname;
-        LOG_DEBUG("username and tenantname", K_(user_name), K_(tenant_name));
-      }
-    }
+  if (0 != STRLEN(conn.user_name_buf_)) {
+    user_name_.assign_ptr(conn.user_name_buf_, static_cast<int32_t>(STRLEN(conn.user_name_buf_)));
+    tenant_name_.assign_ptr(conn.tenant_name_buf_, static_cast<int32_t>(STRLEN(conn.tenant_name_buf_)));
+  } else if (OB_FAIL(extract_user_tenant(hsr_.get_username(), user_name_, tenant_name_))) {
+    LOG_WARN("extract username and tenantname failed", K(ret), "str", hsr_.get_username());
   }
   return ret;
 }
 
-ObString ObMPConnect::extract_user_name(const ObString &in) const
-{
-  ObString user_name;
-  if (in.length() > 1 && '\'' == in[0] && '\'' == in[in.length() - 1]) {
-    user_name.assign_ptr(in.ptr() + 1, in.length() - 2);
-  } else {
-    user_name = in;
-  }
-  return user_name;
-}
-
-int ObMPConnect::get_tenant_id(uint64_t &tenant_id)
+int ObMPConnect::get_tenant_id(ObSMConnection &conn, uint64_t &tenant_id)
 {
   int ret = OB_SUCCESS;
   tenant_id = OB_INVALID_ID;
-  if (tenant_name_.empty()) {
-    tenant_id = OB_SYS_TENANT_ID;
+  if (is_valid_tenant_id(conn.tenant_id_)) {
+    tenant_id = conn.tenant_id_;
   } else {
-    //OB_ASSERT(gctx_.schema_service_);
-    if (OB_ISNULL(gctx_.schema_service_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid schema service", K(ret), K(gctx_.schema_service_));
-    } else {
-      share::schema::ObSchemaGetterGuard guard;
-      if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
-        LOG_WARN("get_schema_guard failed", K(ret));
-      } else if (OB_FAIL(guard.get_tenant_id(tenant_name_, tenant_id))) {
-        LOG_WARN("get_tenant_id failed", K(ret), K_(tenant_name));
-      } else if (is_meta_tenant(tenant_id)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("can't login meta tenant", KR(ret), K_(tenant_name), K(tenant_id));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "login meta tenant");
-      } else if (!gctx_.schema_service_->is_tenant_refreshed(tenant_id)) {
-        ret = OB_SERVER_IS_INIT;
-        LOG_WARN("tenant schema not refreshed yet", KR(ret), K(tenant_id));
-      } else {
-        // do nothing
-      }
+    if (tenant_name_.case_compare(OB_DIAG_TENANT_NAME) == 0) {
+      tenant_name_ = user_name_;
+      conn.group_id_ = share::OBCG_DIAG_TENANT;
+    }
+    if (OB_FAIL(extract_tenant_id(tenant_name_, tenant_id))) {
+      LOG_WARN("extract_tenant_id failed", K(ret), K_(tenant_name));
+    }
+  }
+  if (OB_SUCC(ret) && !is_sys_tenant(tenant_id)) {
+    if (is_meta_tenant(tenant_id)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("can't login meta tenant", KR(ret), K_(tenant_name), K(tenant_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "login meta tenant");
+    } else if (!GCTX.schema_service_->is_tenant_refreshed(tenant_id)) {
+      ret = OB_SERVER_IS_INIT;
+      LOG_WARN("tenant schema not refreshed yet", KR(ret), K(tenant_id));
     }
   }
   return ret;
@@ -1822,11 +1863,7 @@ int ObMPConnect::verify_connection(const uint64_t tenant_id) const
 int ObMPConnect::check_update_tenant_id(ObSMConnection &conn, uint64_t &tenant_id)
 {
   int ret = OB_SUCCESS;
-  if (tenant_name_.case_compare(OB_DIAG_TENANT_NAME) == 0) {
-    tenant_name_ = user_name_;
-    conn.group_id_ = OBCG_DIAG_TENANT;
-  }
-  if (OB_FAIL(get_tenant_id(tenant_id))) {
+  if (OB_FAIL(get_tenant_id(conn, tenant_id))) {
     if (OB_ERR_TENANT_IS_LOCKED == ret) {
       LOG_WARN("tenant is locked", K(ret), K_(tenant_name));
       LOG_USER_ERROR(OB_ERR_TENANT_IS_LOCKED, tenant_name_.length(), tenant_name_.ptr());

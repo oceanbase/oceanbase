@@ -239,6 +239,10 @@ ob_set_subtarget(oblib_lib ssl
   ssl/ob_ssl_config.cpp
 )
 
+ob_set_subtarget(oblib_lib vtoa
+  vtoa/ob_vtoa_util.cpp
+)
+
 ob_lib_add_target(oblib_lib)
 
 ob_set_subtarget(ob_malloc_object_list common_alloc
@@ -276,6 +280,7 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
   allocator/ob_slice_alloc.cpp
   allocator/ob_tc_malloc.cpp
 )
+
 ob_add_new_object_target(ob_malloc_object ob_malloc_object_list)
 target_link_libraries(ob_malloc_object oblib_base_base_base)
 add_library(ob_malloc STATIC)

@@ -18,6 +18,7 @@
 #include "util/easy_inet.h"
 #include "easy_define.h"
 #include "lib/stat/ob_session_stat.h"
+#include "lib/vtoa/ob_vtoa_util.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obrpc/ob_rpc_session_handler.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
@@ -43,79 +44,203 @@ using namespace oceanbase::memtable;
 
 namespace oceanbase
 {
-int extract_tenant_id(ObRequest &req, uint64_t &tenant_id)
+namespace observer
+{
+ObString extract_user_name(const ObString &in);
+int extract_user_tenant(const ObString &in, ObString &user_name, ObString &tenant_name);
+int extract_tenant_id(const ObString &tenant_name, uint64_t &tenant_id);
+}  // namespace observer
+int get_endpoint_tenant(char *endpoint_tenant_mapping_buf, const int64_t vid, const ObAddr &vaddr, ObString &tenant_name)
 {
   int ret = OB_SUCCESS;
-  tenant_id = OB_INVALID_ID;
-  obmysql::OMPKHandshakeResponse hsr =
-      reinterpret_cast<const obmysql::OMPKHandshakeResponse &>(
-          req.get_packet());
-  if (OB_FAIL(hsr.decode())) {
-    LOG_WARN("decode hsr fail", K(ret));
+  const char *JSON_VID = "vid";
+  const char *JSON_VIP = "vip";
+  const char *JSON_VPORT = "vport";
+  const char *JSON_CLUSTER_NAME = "cluster_name";
+  const char *JSON_TENANT_NAME = "tenant_name";
+
+  const int64_t endpoint_tenant_mapping_buf_len = STRLEN(endpoint_tenant_mapping_buf);
+  ObArenaAllocator allocator;
+  json::Value* data = NULL;
+  json::Parser parser;
+
+  if (0 == endpoint_tenant_mapping_buf_len) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("_endpoint_tenant_mapping is null", K(ret));
+  } else if (OB_FAIL(parser.init(&allocator))) {
+    LOG_WARN("parser init failed", K(ret));
+  } else if (OB_FAIL(parser.parse(endpoint_tenant_mapping_buf, endpoint_tenant_mapping_buf_len, data))) {
+    LOG_WARN("parse json failed", K(ret));
+  } else if (NULL == data) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("no root value", K(ret));
+  } else if (json::JT_ARRAY != data->get_type()) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("error json format", K(ret));
   } else {
-    // resolve tenantname
-    ObString in = hsr.get_username();
-    const char *user_pos = in.ptr();
-    const char *at_pos =
-        in.find('@'); // use @ as seperator, e.g. xiaochu@tenant
-    const char *tenant_pos = at_pos + 1;
-    ObString tenant_name = ObString::make_empty_string();
-    // sanity check
-    if (NULL == at_pos) {
-      tenant_id = OB_SYS_TENANT_ID; // default to sys tenant
-      LOG_INFO("tenantname", K(tenant_name));
-    } else {
-      // Accept empty username.  Empty username is one of normal
-      // usernames that we can create user with empty name.
-
-      /* get tenant_name */
-      if (at_pos - user_pos < 0) {
-        ret = OB_ERR_USER_EMPTY;
-        LOG_WARN("Must Provide user name to login", K(ret));
-      } else {
-        int64_t tenant_len = in.length() - (tenant_pos - user_pos);
-        if (tenant_len > OB_MAX_TENANT_NAME_LENGTH || tenant_len <= 0) {
-          ret = OB_ERR_INVALID_TENANT_NAME;
-          LOG_WARN("Violate with tenant length limit", "max",
-                   OB_MAX_TENANT_NAME_LENGTH, "actual", tenant_len, K(ret));
-        }
-        // extract
-        if (OB_SUCC(ret)) {
-          ObString tenantname(in.length() - (tenant_pos - user_pos),
-                              tenant_pos);
-          tenant_name = tenantname;
-          LOG_DEBUG("get tenantname", K(tenant_name));
-
-          /* get tenant_id */
-          // OB_ASSERT(gctx_.schema_service_);
-          if (OB_ISNULL(GCTX.schema_service_)) {
+    int64_t virtual_id = -1;
+    char virtual_ip_buf[MAX_IP_ADDR_LENGTH] = "";
+    int32_t virtual_port = -1;
+    ObString clustername = ObString::make_empty_string();
+    ObString tenantname = ObString::make_empty_string();
+    bool is_found = false;
+    DLIST_FOREACH_X(it, data->get_array(), OB_SUCC(ret) && !is_found) {
+      if (json::JT_OBJECT != it->get_type()) {
+        ret = OB_INVALID_CONFIG;
+        LOG_WARN("not object in array", K(ret), "type", it->get_type());
+        break;
+      }
+      DLIST_FOREACH(p, it->get_object()) {
+        if (p->name_.case_compare(JSON_VID) == 0) {
+          if (NULL == p->value_) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("invalid schema service", K(ret),
-                      K(GCTX.schema_service_));
+            LOG_WARN("NULL value pointer", K(ret));
+          } else if (json::JT_NUMBER != p->value_->get_type()) {
+            ret = OB_INVALID_CONFIG;
+            LOG_WARN("unexpected vid type", K(ret), "type", p->value_->get_type());
           } else {
-            share::schema::ObSchemaGetterGuard guard;
-            if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
-                    OB_SYS_TENANT_ID, guard))) {
-              LOG_WARN("get_schema_guard failed", K(ret));
-            } else if (OB_FAIL(guard.get_tenant_id(tenant_name, tenant_id))) {
-              LOG_WARN("get_tenant_id failed", K(ret), K(tenant_name));
+            virtual_id = p->value_->get_number();
+          }
+        } else if (p->name_.case_compare(JSON_VIP) == 0) {
+          if (NULL == p->value_) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("NULL value pointer", K(ret));
+          } else if (json::JT_STRING != p->value_->get_type()) {
+            ret = OB_INVALID_CONFIG;
+            LOG_WARN("unexpected vip type", K(ret), "type", p->value_->get_type());
+          } else {
+            ObString virtual_ip = p->value_->get_string();
+            if (virtual_ip.ptr() != NULL) {
+              int64_t data_len = MIN(virtual_ip.length(), sizeof(virtual_ip_buf) - 1);
+              MEMCPY(virtual_ip_buf, virtual_ip.ptr(), data_len);
+              virtual_ip_buf[data_len] = '\0';
             }
+          }
+        } else if (p->name_.case_compare(JSON_VPORT) == 0) {
+          if (NULL == p->value_) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("NULL value pointer", K(ret));
+          } else if (json::JT_NUMBER != p->value_->get_type()) {
+            ret = OB_INVALID_CONFIG;
+            LOG_WARN("unexpected vport type", K(ret), "type", p->value_->get_type());
+          } else {
+            virtual_port = p->value_->get_number();
+          }
+        } else if (p->name_.case_compare(JSON_CLUSTER_NAME) == 0) {
+          if (NULL == p->value_) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("NULL value pointer", K(ret));
+          } else if (json::JT_STRING != p->value_->get_type()) {
+            ret = OB_INVALID_CONFIG;
+            LOG_WARN("unexpected cluster name type", K(ret), "type", p->value_->get_type());
+          } else {
+            clustername = p->value_->get_string();
+          }
+        } else if (p->name_.case_compare(JSON_TENANT_NAME) == 0) {
+          if (NULL == p->value_) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("NULL value pointer", K(ret));
+          } else if (json::JT_STRING != p->value_->get_type()) {
+            ret = OB_INVALID_CONFIG;
+            LOG_WARN("unexpected tenant name type", K(ret), "type", p->value_->get_type());
+          } else {
+            tenantname = p->value_->get_string();
           }
         }
       }
+
+      if (OB_SUCC(ret)) {
+        ObAddr virtual_addr(ObAddr::IPV4, virtual_ip_buf, virtual_port);
+        if (vid == virtual_id && virtual_addr == vaddr) {
+          if (GCONF.cluster.get_value_string() != clustername) {
+            ret = OB_INVALID_CONFIG;
+            LOG_WARN("cluster name not match", K(ret), K(GCONF.cluster.get_value_string()), K(clustername));
+          } else if (tenantname.empty()) {
+            ret = OB_INVALID_CONFIG;
+            LOG_WARN("null tenantname is unexpected", K(ret), K(vid), K(vaddr), K(tenantname));
+          } else {
+            is_found = true;
+            tenant_name = tenantname;
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !is_found) {
+      ret = OB_INVALID_CONFIG;
+      LOG_WARN("cannot get tenant name by vid and vaddr", K(ret), K(vid), K(vaddr));
     }
   }
   return ret;
 }
 
-int dispatch_req(ObRequest &req, QueueThread *global_mysql_queue)
+int get_user_tenant(ObRequest &req, char *user_name_buf, char *tenant_name_buf)
+{
+  int ret = OB_SUCCESS;
+
+  ObString user_name = ObString::make_empty_string();
+  ObString tenant_name = ObString::make_empty_string();
+
+  int fd = req.get_connfd();
+  bool is_slb = false;
+  int64_t vid = -1;
+  ObAddr vaddr;
+  char *endpoint_tenant_mapping_buf = nullptr;
+
+  obmysql::OMPKHandshakeResponse hsr = static_cast<const obmysql::OMPKHandshakeResponse &>(req.get_packet());
+  if (OB_FAIL(hsr.decode())) {
+    LOG_WARN("decode hsr fail", K(ret));
+    // ignore error and handle in ObMPConnect
+    ret = OB_SUCCESS;
+  } else if (OB_FAIL(extract_user_tenant(hsr.get_username(), user_name, tenant_name))) {
+    LOG_WARN("parse user@tenant fail", K(ret), "str", hsr.get_username());
+    // ignore error and handle in ObMPConnect
+    ret = OB_SUCCESS;
+  } else if (OB_FAIL(ObVTOAUtility::get_virtual_addr(fd, is_slb, vid, vaddr))) {
+    LOG_WARN("failed to get virtual addr", K(ret), K(fd));
+  } else {
+    if (!is_slb) {
+      // not from LB, do nothing
+    } else if (!tenant_name.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_DBA_WARN(OB_INVALID_CONFIG, "msg", "connect from LB, but tenant_name is not empty");
+    } else {
+      const int64_t endpoint_tenant_mapping_buf_len = STRLEN(GCONF._endpoint_tenant_mapping.str());
+      endpoint_tenant_mapping_buf =
+          static_cast<char *>(common::ob_malloc(sizeof(char) * (endpoint_tenant_mapping_buf_len + 1), "EndpointTenant"));
+      if (OB_ISNULL(endpoint_tenant_mapping_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        OB_LOG(ERROR, "failed to alloc memory", K(ret));
+      } else {
+        MEMCPY(endpoint_tenant_mapping_buf, GCONF._endpoint_tenant_mapping.str(), endpoint_tenant_mapping_buf_len);
+        endpoint_tenant_mapping_buf[endpoint_tenant_mapping_buf_len] = '\0';
+        if (OB_FAIL(get_endpoint_tenant(endpoint_tenant_mapping_buf, vid, vaddr, tenant_name))) {
+          LOG_WARN("fail to get tenant name by vaddr", K(ret), K(vid), K(vaddr));
+        } else {
+          ObSMConnection *conn = static_cast<ObSMConnection *>(SQL_REQ_OP.get_sql_session(&req));
+          conn->vid_ = vid;
+          vaddr.ip_to_string(conn->vip_buf_, sizeof(conn->vip_buf_));
+          conn->vport_ = vaddr.get_port();
+        }
+      }
+    }
+  }
+
+  MEMCPY(user_name_buf, user_name.ptr(), user_name.length());
+  user_name_buf[user_name.length()] = '\0';
+  MEMCPY(tenant_name_buf, tenant_name.ptr(), tenant_name.length());
+  tenant_name_buf[tenant_name.length()] = '\0';
+
+  if (OB_NOT_NULL(endpoint_tenant_mapping_buf)) {
+    ob_free(endpoint_tenant_mapping_buf);
+  }
+  return ret;
+}
+
+int dispatch_req(const uint64_t tenant_id, ObRequest &req, QueueThread *global_mysql_queue)
 {
   int ret = OB_SUCCESS;
   static const int64_t MAX_QUEUE_LEN = 10000;
-  uint64_t tenant_id = OB_INVALID_ID;
-  if (OB_FAIL(extract_tenant_id(req, tenant_id))) {
-    LOG_WARN("extract tenant_id fail", K(ret), K(tenant_id), K(req));
-  } else if (is_meta_tenant(tenant_id)) {
+  if (is_meta_tenant(tenant_id)) {
     // cannot login meta tenant
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cannot login meta tenant", K(ret), K(tenant_id));
@@ -515,7 +640,9 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
       if (need_update_stat) {
         EVENT_INC(MYSQL_PACKET_IN);
         EVENT_ADD(MYSQL_PACKET_IN_BYTES, pkt.get_clen() + OB_MYSQL_HEADER_LENGTH);
+        conn->connect_in_bytes_ = pkt.get_clen() + OB_MYSQL_HEADER_LENGTH;
       }
+
       if (OB_UNLIKELY(NULL != diagnose_queue_ && SQL_REQ_OP.get_peer(&req).get_port() <= 0)) {
         LOG_INFO("receive login request from unix domain socket");
         if (!diagnose_queue_->queue_.push(&req, MAX_QUEUE_LEN)) {
@@ -524,9 +651,35 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
           LOG_ERROR("deliver request fail", K(req));
         }
       } else if (OB_NOT_NULL(mysql_queue_)) {
-        if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread) {
-          if (OB_FAIL(dispatch_req(req, mysql_queue_))) {
-            LOG_ERROR("deliver request in dispatch_req fail", K(ret), K(req));
+        char user_name_buf[OB_MAX_USER_NAME_LENGTH] = "";
+        char tenant_name_buf[OB_MAX_TENANT_NAME_LENGTH] = "";
+        uint64_t tenant_id = OB_INVALID_TENANT_ID;
+        if (OB_FAIL(get_user_tenant(req, user_name_buf, tenant_name_buf))) {
+          LOG_WARN("fail to get username and tenant name", K(ret), K(req));
+        } else if (0 != STRLEN(user_name_buf)) {
+          if (0 == STRCMP(tenant_name_buf, OB_DIAG_TENANT_NAME)) {
+            MEMCPY(tenant_name_buf, user_name_buf, STRLEN(user_name_buf));
+            tenant_name_buf[STRLEN(user_name_buf)] = '\0';
+            conn->group_id_ = share::OBCG_DIAG_TENANT;
+          }
+          MEMCPY(conn->user_name_buf_, user_name_buf, STRLEN(user_name_buf));
+          conn->user_name_buf_[STRLEN(user_name_buf)] = '\0';
+          MEMCPY(conn->tenant_name_buf_, tenant_name_buf, STRLEN(tenant_name_buf));
+          conn->tenant_name_buf_[STRLEN(tenant_name_buf)] = '\0';
+          ObString tenant_name(tenant_name_buf);
+          if (OB_FAIL(extract_tenant_id(tenant_name, tenant_id))) {
+            LOG_WARN("extract tenant_id fail", K(ret), K(tenant_name), K(tenant_id));
+            // ignore error and handle in ObMPConnect
+            ret = OB_SUCCESS;
+          } else {
+            conn->tenant_id_ = tenant_id;
+          }
+        }
+
+        if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread &&
+            OB_SUCC(ret) && is_valid_tenant_id(tenant_id)) {
+          if (OB_FAIL(dispatch_req(tenant_id, req, mysql_queue_))) {
+            LOG_ERROR("deliver request in dispatch_req fail", K(ret), K(tenant_id), K(req));
           }
         } else {
           if (OB_SUCC(ret) && !mysql_queue_->queue_.push(&req, MAX_QUEUE_LEN)) {
@@ -547,6 +700,22 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
       if (need_update_stat) {
         EVENT_INC(MYSQL_PACKET_IN);
         EVENT_ADD(MYSQL_PACKET_IN_BYTES, pkt.get_clen() + OB_MYSQL_HEADER_LENGTH);
+        sql::ObSQLSessionInfo *sess_info = nullptr;
+        if (OB_ISNULL(conn) || OB_ISNULL(GCTX.session_mgr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("conn or sessoin mgr is NULL", K(ret), KP(conn), K(GCTX.session_mgr_));
+        } else if (OB_FAIL(GCTX.session_mgr_->get_session(conn->sessid_, sess_info))) {
+          LOG_WARN("get session fail", K(ret), "sessid", conn->sessid_,
+                    "proxy_sessid", conn->proxy_sessid_);
+        } else if (OB_ISNULL(sess_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sess_info is null", K(ret));
+        } else {
+          sess_info->inc_in_bytes(pkt.get_clen() + OB_MYSQL_HEADER_LENGTH);
+        }
+        if (OB_NOT_NULL(sess_info)) {
+          GCTX.session_mgr_->revert_session(sess_info);
+        }
       }
       // The tenant check has been done in the recv_request method. For performance considerations, the check here is removed;
       /*

@@ -19,6 +19,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include "lib/utility/utility.h"
+#include "lib/net/ob_net_util.h"
 #include "include/easy_define.h"
 
 namespace oceanbase
@@ -42,6 +43,28 @@ ObAddr::ObAddr(const easy_addr_t& addr)
     MEMCPY(ip_.unix_path_, addr.u.unix_path, sizeof(ip_.unix_path_));
   }
   port_ = addr.port;
+}
+
+ObAddr::ObAddr(const sockaddr &addr)
+{
+  if (AF_INET == addr.sa_family) {
+    version_ = IPV4;
+    const sockaddr_in &addr_in = *static_cast<const sockaddr_in *>(static_cast<const void *>(&addr));
+    ip_.v4_ = ntohl(addr_in.sin_addr.s_addr);
+    port_ = ntohs(addr_in.sin_port);
+  } else if (AF_INET6 == addr.sa_family) {
+    version_ = IPV6;
+    const sockaddr_in6 &addr_in6 = *static_cast<const sockaddr_in6 *>(static_cast<const void *>(&addr));
+    MEMCPY(ip_.v6_, &addr_in6.sin6_addr, sizeof(ip_.v6_));
+    port_ = ntohs(addr_in6.sin6_port);
+  } else if (AF_UNIX == addr.sa_family) {
+    version_ = UNIX;
+    const sockaddr_un &addr_un = *static_cast<const sockaddr_un *>(static_cast<const void *>(&addr));
+    MEMCPY(ip_.unix_path_, addr_un.sun_path, sizeof(ip_.unix_path_));
+    port_ = 0;
+  } else {
+    port_ = 0;
+  }
 }
 
 int ObAddr::convert_ipv4_addr(const char *ip)

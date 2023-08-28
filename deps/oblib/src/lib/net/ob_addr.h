@@ -74,6 +74,8 @@ public:
 
   explicit ObAddr(const easy_addr_t& addr);
 
+  explicit ObAddr(const sockaddr &addr);
+
   void reset()
   {
     port_ = 0;
