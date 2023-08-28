@@ -151,17 +151,18 @@ int ObStorageSchemaRecorder::inner_replay_clog(
     if (OB_OBSOLETE_CLOG_NEED_SKIP == ret) {
       ret = OB_SUCCESS;
     } else {
-      LOG_WARN("failed to get tablet handle", K(ret), K_(tablet_id), K(scn));
+      LOG_WARN("failed to get tablet handle", K(ret), K_(ls_id), K_(tablet_id), K(scn));
     }
   } else if (OB_FAIL(replay_storage_schema.deserialize(tmp_allocator, buf, size, pos))) {
-    LOG_WARN("fail to deserialize table schema", K(ret), K_(tablet_id));
+    LOG_WARN("fail to deserialize table schema", K(ret), K_(ls_id), K_(tablet_id));
   } else if (OB_FAIL(replay_storage_schema.get_store_column_count(stored_col_cnt, true/*full_col*/))) {
     LOG_WARN("failed to get store column count from replay schema", KR(ret),K(replay_storage_schema));
   } else {
     // replay schema clog and update to ObStorageSchemaRecorder
     // need get column_cnt on schema_recorder to mini merge
     max_column_cnt_ = MAX(max_column_cnt_, stored_col_cnt);
-    FLOG_INFO("success to replay schema clog", K(ret), K(replay_storage_schema), K(stored_col_cnt), K(max_column_cnt_));
+    FLOG_INFO("success to replay schema clog", K(ret), K_(ls_id), K_(tablet_id), K(replay_storage_schema),
+      K(stored_col_cnt), K(max_column_cnt_));
   }
   replay_storage_schema.reset();
   tmp_tablet_handle.reset();

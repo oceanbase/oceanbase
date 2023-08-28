@@ -1103,9 +1103,7 @@ int ObTabletMergeCtx::get_storage_schema_to_merge(const ObTablesHandleArray &mer
           storage_schema = nullptr;
         } else {
           // only update column cnt by memtable, use schema version on tablet_schema
-          storage_schema->column_cnt_ = MAX(storage_schema->column_cnt_, max_column_cnt_on_recorder);
-          storage_schema->column_cnt_ = MAX(storage_schema->column_cnt_, max_column_cnt_in_memtable);
-          storage_schema->store_column_cnt_ = MAX(column_cnt_in_schema, max_column_cnt_in_memtable);
+          storage_schema->update_column_cnt(MAX(max_column_cnt_on_recorder, max_column_cnt_in_memtable));
           storage_schema->schema_version_ = MAX(max_schema_version_in_memtable, schema_on_tablet->get_schema_version());
           schema_ctx_.storage_schema_ = storage_schema;
           use_schema_on_tablet = false;

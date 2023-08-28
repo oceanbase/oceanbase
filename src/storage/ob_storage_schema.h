@@ -132,6 +132,7 @@ public:
       const int64_t data_len,
       int64_t &pos);
   int64_t get_serialize_size() const;
+  void update_column_cnt(const int64_t input_col_cnt);
 
   // for new mds
   int assign(common::ObIAllocator &allocator, const ObStorageSchema &other);
