@@ -287,6 +287,7 @@ _force_hash_groupby_dump
 _force_hash_join_spill
 _force_skip_encoding_partition_id
 _hash_area_size
+_hash_join_enabled
 _ha_rpc_timeout
 _ha_tablet_info_batch_count
 _hidden_sys_tenant_memory
@@ -307,6 +308,7 @@ _migrate_block_verify_level
 _minor_compaction_amplification_factor
 _min_malloc_sample_interval
 _mvcc_gc_using_min_txn_snapshot
+_nested_loop_join_enabled
 _ob_ddl_timeout
 _ob_elr_fast_freeze_threshold
 _ob_enable_direct_load
@@ -325,6 +327,7 @@ _ob_trans_rpc_timeout
 _optimizer_ads_time_limit
 _optimizer_better_inlist_costing
 _optimizer_group_by_placement
+_optimizer_sortmerge_join_enabled
 _parallel_max_active_sessions
 _parallel_min_message_pool
 _parallel_server_sleep_time

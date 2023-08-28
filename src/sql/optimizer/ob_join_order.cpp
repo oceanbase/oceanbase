@@ -10736,6 +10736,20 @@ int ObJoinOrder::get_valid_path_info_from_hint(const ObRelIds &table_set,
       path_info.local_methods_ &= log_join_hint->local_methods_;
     } else if (OB_FAIL(log_hint.check_status())) {  // spm outline mode, must get local_methods_ from hint
       LOG_WARN("failed to get valid local methods from hint", K(ret));
+    } else {
+      ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
+      int64_t local_methods_mask = 0;
+      if (opt_ctx.is_hash_join_enabled()) {
+        local_methods_mask |= HASH_JOIN;
+      }
+      if (opt_ctx.is_merge_join_enabled()){
+        local_methods_mask |= MERGE_JOIN;
+      }
+      if (opt_ctx.is_nested_join_enabled()) {
+        local_methods_mask |= NESTED_LOOP_JOIN;
+      }
+      path_info.local_methods_ &= local_methods_mask;
+      path_info.prune_mj_ = path_info.local_methods_ != MERGE_JOIN;
     }
   }
   return ret;

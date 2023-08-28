@@ -696,6 +696,18 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     ctx_.set_has_dblink(has_dblink);
     ctx_.set_cost_model_type(rowsets_enabled ? ObOptEstCost::VECTOR_MODEL : ObOptEstCost::NORMAL_MODEL);
     ctx_.set_has_cursor_expression(has_cursor_expr);
+    if (!tenant_config.is_valid() ||
+        (!tenant_config->_hash_join_enabled &&
+         !tenant_config->_optimizer_sortmerge_join_enabled &&
+         !tenant_config->_nested_loop_join_enabled)) {
+      ctx_.set_hash_join_enabled(true);
+      ctx_.set_merge_join_enabled(true);
+      ctx_.set_nested_join_enabled(true);
+    } else {
+      ctx_.set_hash_join_enabled(tenant_config->_hash_join_enabled);
+      ctx_.set_merge_join_enabled(tenant_config->_optimizer_sortmerge_join_enabled);
+      ctx_.set_nested_join_enabled(tenant_config->_nested_loop_join_enabled);
+    }
   }
   return ret;
 }
