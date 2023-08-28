@@ -32,6 +32,8 @@ struct ObStmtMapInfo {
   common::ObSEArray<int64_t, 4> select_item_map_;
   common::ObSEArray<ObPCParamEqualInfo, 4> equal_param_map_;
 
+  bool is_select_item_equal_;
+
   void reset()
   {
     table_map_.reset();
@@ -41,6 +43,7 @@ struct ObStmtMapInfo {
     having_map_.reset();
     select_item_map_.reset();
     equal_param_map_.reset();
+    is_select_item_equal_ = false;
   }
   TO_STRING_KV(K_(table_map), K_(from_map), K_(cond_map), K_(group_map), K_(having_map), K_(select_item_map),
       K_(equal_param_map));

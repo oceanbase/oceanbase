@@ -482,6 +482,9 @@ int ObStmtComparer::check_stmt_containment(
                      map_info.select_item_map_,
                      match_count))) {
         LOG_WARN("failed to compute output expr map", K(ret));
+      } else if (match_count == first_exprs.count() && match_count == second_exprs.count()) {
+        map_info.is_select_item_equal_ = true;
+        LOG_TRACE("succeed to check select item map", K(relation), K(map_info));
       } else {
         LOG_TRACE("succeed to check stmt containment", K(relation), K(map_info));
       }

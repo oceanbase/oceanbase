@@ -337,6 +337,8 @@ int ObTransformSubqueryCoalesce::coalesce_same_any_all_exprs(
         } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(
                        first_query_ref->get_ref_stmt(), second_query_ref->get_ref_stmt(), map_info, relation))) {
           LOG_WARN("failed to check stmt containment", K(ret));
+        } else if (!map_info.is_select_item_equal_) {
+          // stmts have different select items, can not coalesce
         } else if (relation == QueryRelation::LEFT_SUBSET || relation == QueryRelation::EQUAL) {
           remove_index = (type == T_ANY ? j : i);
         } else if (relation == QueryRelation::RIGHT_SUBSET) {
