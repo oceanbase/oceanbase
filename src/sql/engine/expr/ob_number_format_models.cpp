@@ -841,7 +841,7 @@ int ObNFMBase::search_keyword(const char *cur_ch, const int32_t remain_len,
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cur_ch) || remain_len <= 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid fmt str", K(ret), K(cur_ch), K(remain_len));
+    LOG_WARN("invalid fmt str", K(ret), K(fmt_str_), K(remain_len));
   } else {
     // if the first character of an element is lowercase, it is interpreted as lowercase
     // otherwise, it is interpreted as uppercase
@@ -863,7 +863,7 @@ int ObNFMBase::search_keyword(const char *cur_ch, const int32_t remain_len,
     }
     if (ObNFMElem::MAX_TYPE_NUMBER == index) {
       ret = OB_ERR_INVALID_NUMBER_FORMAT_MODEL;
-      LOG_WARN("invalid fmt character ", K(ret), K(cur_ch), K(remain_len));
+      LOG_WARN("invalid fmt character ", K(ret), K(fmt_str_), K(remain_len));
     }
   }
   return ret;
@@ -874,7 +874,7 @@ int ObNFMBase::parse_fmt(const char* fmt_str, const int32_t fmt_len, bool need_c
   int ret = OB_SUCCESS;
   if (OB_ISNULL(fmt_str) || fmt_len <= 0) {
     ret = OB_ERR_CAST_VARCHAR_TO_NUMBER;
-    LOG_WARN("invalid fmt str", K(ret), K(fmt_str), K(fmt_len));
+    LOG_WARN("invalid fmt str", K(ret), K(fmt_len));
   } else {
     fmt_str_.assign_ptr(fmt_str, fmt_len);
     int32_t remain_len = fmt_len;
@@ -888,7 +888,7 @@ int ObNFMBase::parse_fmt(const char* fmt_str, const int32_t fmt_len, bool need_c
       const ObNFMKeyWord *match_keyword = NULL;
       ObNFMElem::ElemCaseMode case_mode = ObNFMElem::IGNORE_CASE;
       if (OB_FAIL(search_keyword(cur_ch, remain_len, match_keyword, case_mode))) {
-        LOG_WARN("fail to search match keyword", K(ret), K(cur_ch), K(remain_len));
+        LOG_WARN("fail to search match keyword", K(ret), K(fmt_str_), K(remain_len));
       } else if (OB_ISNULL(elem_buf = static_cast<char*>(allocator_.alloc(sizeof(ObNFMElem))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc memory");
@@ -929,7 +929,7 @@ int ObNFMBase::fill_str(char *str, const int32_t str_len, const int32_t offset,
   int ret = OB_SUCCESS;
   if (OB_ISNULL(str) || (str_len - offset < fill_len)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to fill str", K(ret), K(str), K(str_len), K(offset), K(fill_len));
+    LOG_WARN("fail to fill str", K(ret), K(str_len), K(offset), K(fill_len));
   } else {
     MEMSET(str + offset, fill_ch, fill_len);
   }
@@ -1244,7 +1244,7 @@ int ObNFMBase::process_fillmode(char *buf, const int64_t buf_len, int64_t &pos) 
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf) || buf_len < 0 || fmt_desc_.output_len_ < pos) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(buf), K(buf_len));
+    LOG_WARN("Invalid argument", K(ret), K(buf_len));
   } else {
     int32_t space_size = fmt_desc_.output_len_ - pos;
     if (!ObNFMElem::has_type(NFM_TME_FLAG, fmt_desc_.elem_flag_)
@@ -1300,7 +1300,7 @@ int ObNFMBase::conv_num_to_nfm_obj(const common::ObObj &obj,
   number::ObNumber num;
   if (OB_ISNULL(expr_ctx.calc_buf_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument.", K(ret), K(expr_ctx.calc_buf_));
+    LOG_WARN("Invalid argument.", K(ret));
   } else {
     EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
     if (obj.is_float() || obj.is_ufloat() || obj.is_double() || obj.is_udouble()) {
@@ -2133,7 +2133,7 @@ int ObNFMToChar::process_fmt_conv(const ObSQLSessionInfo &session,
   bool is_overflow = false;
   int32_t integer_part_len = 0;
   if (OB_FAIL(parse_fmt(fmt_str, fmt_len))) {
-    LOG_WARN("fail to parse fmt model", K(ret), K(fmt_str), K(fmt_len));
+    LOG_WARN("fail to parse fmt model", K(ret), K(fmt_len));
   } else {
     // processing calculation conversion element
     if (ObNFMElem::has_type(NFM_RN_FLAG, fmt_desc_.elem_flag_)) {
@@ -2227,7 +2227,7 @@ int ObNFMToChar::convert_num_to_fmt_str(const ObObj &obj,
   const int64_t res_buf_len = MAX_TO_CHAR_BUFFER_SIZE_IN_FORMAT_MODELS;
   if (OB_ISNULL(fmt_str) || OB_ISNULL(expr_ctx.calc_buf_) || OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(fmt_str), K(expr_ctx.calc_buf_),
+    LOG_WARN("Invalid argument", K(ret), K(expr_ctx.calc_buf_),
              K(session));
   } else if (fmt_len >= MAX_FMT_STR_LEN) {
     ret = OB_ERR_INVALID_NUMBER_FORMAT_MODEL;
@@ -2240,7 +2240,7 @@ int ObNFMToChar::convert_num_to_fmt_str(const ObObj &obj,
     LOG_WARN("fail to conv obj to nfm obj", K(ret));
   } else if (OB_FAIL(process_fmt_conv(*session, fmt_str, fmt_len, nfm_obj,
                                       res_buf, res_buf_len, offset))) {
-    LOG_WARN("fail to process fmt conversion", K(ret), K(fmt_str), K(fmt_len));
+    LOG_WARN("fail to process fmt conversion", K(ret), K(fmt_len));
   } else {
     res_str.assign_ptr(res_buf, offset);
   }
@@ -2282,7 +2282,7 @@ int ObNFMToChar::convert_num_to_fmt_str(const common::ObObjMeta &obj_meta,
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   if (OB_ISNULL(fmt_str) || OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(fmt_str), K(session));
+    LOG_WARN("Invalid argument", K(ret), K(session));
   } else if (fmt_len >= MAX_FMT_STR_LEN) {
     ret = OB_ERR_INVALID_NUMBER_FORMAT_MODEL;
     LOG_WARN("invalid fmt string", K(ret));
@@ -2293,7 +2293,7 @@ int ObNFMToChar::convert_num_to_fmt_str(const common::ObObjMeta &obj_meta,
     LOG_WARN("fail to conv obj to nfm obj", K(ret));
   } else if (OB_FAIL(process_fmt_conv(*session, fmt_str, fmt_len, nfm_obj,
                                       res_buf, res_buf_len, offset))) {
-    LOG_WARN("fail to process fmt conversion", K(ret), K(fmt_str), K(fmt_len));
+    LOG_WARN("fail to process fmt conversion", K(ret), K(fmt_len));
   } else {
     res_str.assign_ptr(res_buf, offset);
   }
@@ -2826,7 +2826,7 @@ int ObNFMToNumber::convert_char_to_num(const common::ObString &in_str,
   ObSQLSessionInfo *session = expr_ctx.my_session_;
   if (OB_ISNULL(expr_ctx.calc_buf_) || OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(expr_ctx.calc_buf_), K(session));
+    LOG_WARN("invalid argument", K(ret), K(session));
   } else if (in_fmt_str.length() >= MAX_FMT_STR_LEN) {
     ret = OB_ERR_INVALID_NUMBER_FORMAT_MODEL;
     LOG_WARN("invalid format string", K(ret));
