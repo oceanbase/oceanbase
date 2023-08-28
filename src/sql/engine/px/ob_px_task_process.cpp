@@ -622,7 +622,9 @@ int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,
         }
       }
     }
-  } else if (PHY_TABLE_SCAN == op.type_ && on_set_tscs_) {
+  } else if ((PHY_TABLE_SCAN == op.type_ ||
+              PHY_ROW_SAMPLE_SCAN == op.type_ ||
+              PHY_BLOCK_SAMPLE_SCAN == op.type_) && on_set_tscs_) {
     if (OB_ISNULL(pw_gi_spec_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("gi is null", K(ret));
