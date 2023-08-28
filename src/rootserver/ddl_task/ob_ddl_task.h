@@ -262,6 +262,12 @@ public:
       const uint64_t index_table_id,
       bool &has_index_task);
 
+  static int get_create_index_task_cnt(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    int64_t &task_cnt);
+
   static int insert_record(
       common::ObISQLClient &proxy,
       ObDDLTaskRecord &record);

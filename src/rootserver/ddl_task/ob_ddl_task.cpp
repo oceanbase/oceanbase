@@ -2854,6 +2854,39 @@ int ObDDLTaskRecordOperator::check_has_index_task(
   return ret;
 }
 
+int ObDDLTaskRecordOperator::get_create_index_task_cnt(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    int64_t &task_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id
+    || OB_INVALID_ID == data_table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(tenant_id), K(data_table_id));
+  } else {
+    ObSqlString sql_string;
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql_string.assign_fmt("SELECT COUNT(*) as cnt FROM %s WHERE object_id = %lu AND ddl_type = %d",
+          OB_ALL_DDL_TASK_STATUS_TNAME, data_table_id, ObDDLType::DDL_CREATE_INDEX))) {
+        LOG_WARN("assign sql string failed", K(ret));
+      } else if (OB_FAIL(proxy.read(res, tenant_id, sql_string.ptr()))) {
+        LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("result next failed", K(ret), K(tenant_id));
+      } else {
+        EXTRACT_INT_FIELD_MYSQL(*result, "cnt", task_cnt, int64_t);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLTaskRecordOperator::get_task_record(const uint64_t tenant_id,
                                              const ObSqlString &sql_string,
                                              common::ObMySQLProxy &proxy,
