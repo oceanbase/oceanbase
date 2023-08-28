@@ -9316,7 +9316,7 @@ int ObUnitManager::delete_units_in_zones(
   } else if (OB_UNLIKELY(OB_INVALID_ID == resource_pool_id) || OB_UNLIKELY(to_be_removed_zones.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(resource_pool_id), K(to_be_removed_zones));
-  } else if (get_units_by_pool(resource_pool_id, units)) {
+  } else if (OB_FAIL(get_units_by_pool(resource_pool_id, units))) {
     LOG_WARN("fail to get units by pool", K(ret), K(resource_pool_id));
   } else if (OB_UNLIKELY(NULL == units)) {
     ret = OB_ERR_UNEXPECTED;
