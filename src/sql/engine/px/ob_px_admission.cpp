@@ -115,7 +115,7 @@ int ObPxAdmission::enter_query_admission(ObSQLSessionInfo &session,
       && 1 != plan.get_px_dop()
       && plan.get_expected_worker_count() > 0) {
     // use for appointment
-    const ObHashMap<ObAddr, int64_t> &req_px_worker_map = plan.get_expected_worker_map();
+    const auto &req_px_worker_map = plan.get_expected_worker_map();
     ObHashMap<ObAddr, int64_t> &acl_px_worker_map = exec_ctx.get_admission_addr_map();
     if (acl_px_worker_map.created()) {
       acl_px_worker_map.clear();
@@ -123,7 +123,7 @@ int ObPxAdmission::enter_query_admission(ObSQLSessionInfo &session,
       LOG_WARN("create hash map failed", K(ret));
     }
     if (OB_SUCC(ret)) {
-      for (ObHashMap<ObAddr, int64_t>::const_iterator it = req_px_worker_map.begin(); 
+      for (auto it = req_px_worker_map.begin();
           OB_SUCC(ret) && it != req_px_worker_map.end(); ++it) {
         if (OB_FAIL(acl_px_worker_map.set_refactored(it->first, it->second))){
           LOG_WARN("set refactored failed", K(ret), K(it->first), K(it->second));

@@ -492,8 +492,15 @@ struct ObTableRowCount
 };
 
 
+
 struct ObPlanStat
 {
+  static const int64_t DEFAULT_ADDR_NODE_NUM = 16;
+  typedef common::hash::ObHashMap<ObAddr, int64_t,
+        common::hash::LatchReadWriteDefendMode, common::hash::hash_func<ObAddr>,
+        common::hash::equal_to<ObAddr>,
+        common::hash::SimpleAllocer<typename common::hash::HashMapTypes<ObAddr, int64_t>::AllocType,
+                                    DEFAULT_ADDR_NODE_NUM>> AddrMap;
   static const int32_t STMT_MAX_LEN = 4096;
   static const int32_t MAX_SCAN_STAT_SIZE = 100;
   static const int64_t CACHE_POLICY_UPDATE_INTERVAL = 60 * 1000 * 1000; // 1 min
@@ -605,8 +612,8 @@ struct ObPlanStat
 
   // following fields will be used for plan set memory management
   PreCalcExprHandler* pre_cal_expr_handler_; //the handler that pre-calculable expression holds
-  common::hash::ObHashMap<ObAddr, int64_t> expected_worker_map_; // px 全局预期分配线程数
-  common::hash::ObHashMap<ObAddr, int64_t> minimal_worker_map_;  // global minial threads required for query
+  AddrMap expected_worker_map_; // px 全局预期分配线程数
+  AddrMap minimal_worker_map_;  // global minial threads required for query
   uint64_t plan_hash_value_;
   common::ObString outline_data_;
   common::ObString hints_info_;

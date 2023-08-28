@@ -43,6 +43,7 @@ public:
   virtual int on_root_data_channel_setup() = 0;
 };
 
+
 struct ObExprExtraSerializeInfo
 {
   OB_UNIS_VERSION(1);

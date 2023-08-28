@@ -1115,8 +1115,7 @@ int ObPhysicalPlan::set_expected_worker_map(const common::hash::ObHashMap<ObAddr
   }
   return ret;
 }
-
-const common::hash::ObHashMap<ObAddr, int64_t>& ObPhysicalPlan:: get_expected_worker_map() const
+const ObPlanStat::AddrMap& ObPhysicalPlan:: get_expected_worker_map() const
 {
   return stat_.expected_worker_map_;
 }
@@ -1130,12 +1129,7 @@ int ObPhysicalPlan::set_minimal_worker_map(const common::hash::ObHashMap<ObAddr,
   return ret;
 }
 
-const common::hash::ObHashMap<ObAddr, int64_t>& ObPhysicalPlan::get_minimal_worker_map() const
-{
-  return stat_.minimal_worker_map_;
-}
-
-int ObPhysicalPlan::assign_worker_map(common::hash::ObHashMap<ObAddr, int64_t> &worker_map, const common::hash::ObHashMap<ObAddr, int64_t> &c)
+int ObPhysicalPlan::assign_worker_map(ObPlanStat::AddrMap &worker_map, const common::hash::ObHashMap<ObAddr, int64_t> &c)
 {
   int ret = OB_SUCCESS;
   ObMemAttr attr(MTL_ID(), "WorkerMap");
