@@ -65,18 +65,23 @@ int ObMicroBlockDataHandle::get_data_block_data(
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_loaded_block_data(block_data))) {
-    //try sync io
-    ObMicroBlockId micro_block_id;
-    micro_block_id.macro_id_ = macro_block_id_;
-    micro_block_id.offset_ = micro_info_.offset_;
-    micro_block_id.size_ = micro_info_.size_;
-    if (OB_FAIL(ObStorageCacheSuite::get_instance().get_block_cache().load_block(
-        micro_block_id,
-        des_meta_,
-        &block_reader,
-        block_data,
-        nullptr))) {
-      LOG_WARN("Fail to load micro block, ", K(ret), K_(tenant_id), K_(macro_block_id), K_(micro_info));
+    if (THIS_WORKER.get_timeout_remain() <= 0) {
+      // already timeout, don't retry
+      LOG_WARN("get data block data already timeout", K(ret), K(THIS_WORKER.get_timeout_remain()));
+    } else {
+      //try sync io
+      ObMicroBlockId micro_block_id;
+      micro_block_id.macro_id_ = macro_block_id_;
+      micro_block_id.offset_ = micro_info_.offset_;
+      micro_block_id.size_ = micro_info_.size_;
+      if (OB_FAIL(ObStorageCacheSuite::get_instance().get_block_cache().load_block(
+          micro_block_id,
+          des_meta_,
+          &block_reader,
+          block_data,
+          nullptr))) {
+        LOG_WARN("Fail to load micro block, ", K(ret), K_(tenant_id), K_(macro_block_id), K_(micro_info));
+      }
     }
   }
   return ret;
@@ -87,22 +92,27 @@ int ObMicroBlockDataHandle::get_index_block_data(ObMicroBlockData &index_block)
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_loaded_block_data(index_block))) {
     try_release_loaded_index_block();
-    //try sync io
-    ObMicroBlockId micro_block_id;
-    micro_block_id.macro_id_ = macro_block_id_;
-    micro_block_id.offset_ = micro_info_.offset_;
-    micro_block_id.size_ = micro_info_.size_;
-    is_loaded_index_block_ = true;
-    if (OB_FAIL(ObStorageCacheSuite::get_instance().get_index_block_cache().load_block(
-        micro_block_id,
-        des_meta_,
-        nullptr,
-        loaded_index_block_data_,
-        allocator_))) {
-      LOG_WARN("Fail to load index micro block", K(ret), K_(macro_block_id), K(micro_block_id));
-      try_release_loaded_index_block();
+    if (THIS_WORKER.get_timeout_remain() <= 0) {
+      LOG_WARN("get index block data already timeout", K(ret), K(THIS_WORKER.get_timeout_remain()));
+      // already timeout, don't retry
     } else {
-      index_block = loaded_index_block_data_;
+      //try sync io
+      ObMicroBlockId micro_block_id;
+      micro_block_id.macro_id_ = macro_block_id_;
+      micro_block_id.offset_ = micro_info_.offset_;
+      micro_block_id.size_ = micro_info_.size_;
+      is_loaded_index_block_ = true;
+      if (OB_FAIL(ObStorageCacheSuite::get_instance().get_index_block_cache().load_block(
+          micro_block_id,
+          des_meta_,
+          nullptr,
+          loaded_index_block_data_,
+          allocator_))) {
+        LOG_WARN("Fail to load index micro block", K(ret), K_(macro_block_id), K(micro_block_id));
+        try_release_loaded_index_block();
+      } else {
+        index_block = loaded_index_block_data_;
+      }
     }
   }
   return ret;
