@@ -290,7 +290,7 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
           } else if (OB_FAIL(execute_dist_das_task(das_ref, das_task_wrapper, false))) {
             LOG_WARN("execute dist DAS task failed", K(ret));
           }
-          LOG_INFO("[DAS RETRY] Retry completing the DAS Task", KPC(task_op.get_tablet_loc()));
+          LOG_INFO("[DAS RETRY] Retry completing the DAS Task", KPC(task_op.get_tablet_loc()), KR(ret));
         }
         task_op.errcode_ = ret;
         retry_continue = (OB_SUCCESS != ret);

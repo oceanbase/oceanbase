@@ -275,6 +275,7 @@ private:
 
 class ObDASLocationRouter
 {
+  OB_UNIS_VERSION(1);
   friend class ObDASCtx;
   typedef common::ObList<VirtualSvrPair, common::ObIAllocator> VirtualSvrList;
 public:
@@ -338,6 +339,8 @@ private:
   int last_errno_;
   int cur_errno_;
   int64_t retry_cnt_;
+  // NOTE: Only all_tablet_list_ needs to be serialized and send to other server to perform das remote execution;
+  // And other members will be collected by execution server self, No need to perform serialization;
   ObList<common::ObTabletID, common::ObIAllocator> all_tablet_list_;
   ObList<common::ObTabletID, common::ObIAllocator> succ_tablet_list_;
   VirtualSvrList virtual_server_list_;

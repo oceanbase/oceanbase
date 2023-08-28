@@ -1255,5 +1255,7 @@ int ObDASLocationRouter::get_external_table_ls_location(ObLSLocation &location)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObDASLocationRouter, all_tablet_list_);
+
 }  // namespace sql
 }  // namespace oceanbase
