@@ -91,6 +91,7 @@ public:
     :
       create_ls_proxy_(rpc_proxy, &obrpc::ObSrvRpcProxy::create_ls),
       set_member_list_proxy_(rpc_proxy, &obrpc::ObSrvRpcProxy::set_member_list),
+      quick_prepare_proxy_(rpc_proxy, &obrpc::ObSrvRpcProxy::quick_prepare),
       tenant_id_(tenant_id), id_(id), proxy_(proxy) {}
   virtual ~ObLSCreator() {}
   int create_tenant_sys_ls(const ObZone &primary_zone,
@@ -148,6 +149,7 @@ private:
      const ObTimeoutCtx &ctx,
      const obrpc::ObSetMemberListArgV2 &arg);
 #endif
+ int quick_prepare_(const common::ObMemberList &member_list);
  int persist_ls_member_list_(const common::ObMemberList &member_list,
                              const ObMember &arb_member,
                              const common::GlobalLearnerList &learner_list);
@@ -207,6 +209,7 @@ private:
 private:
   rootserver::ObLSCreatorProxy create_ls_proxy_;
   rootserver::ObSetMemberListProxy set_member_list_proxy_;
+  rootserver::ObQuickPrepareProxy quick_prepare_proxy_;
   const int64_t tenant_id_;
   const share::ObLSID id_;
   ObMySQLProxy *proxy_;

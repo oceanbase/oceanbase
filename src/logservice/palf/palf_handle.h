@@ -80,6 +80,7 @@ public:
                               const int64_t paxos_replica_num,
                               const common::GlobalLearnerList &learner_list);
 #endif
+  int quick_prepare();
   int set_region(const common::ObRegion &region);
   int set_paxos_member_region_map(const common::ObArrayHashMap<common::ObAddr, common::ObRegion> &region_map);
   //================ 文件访问相关接口 =======================

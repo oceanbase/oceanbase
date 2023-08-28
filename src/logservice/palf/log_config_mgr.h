@@ -352,6 +352,7 @@ public:
                                       const common::GlobalLearnerList &learner_list,
                                       const int64_t proposal_id,
                                       LogConfigVersion &config_version);
+  virtual int quick_prepare();
   // set region for self
   int set_region(const common::ObRegion &region);
   // set region hash_map for Paxos members

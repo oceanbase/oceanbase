@@ -108,6 +108,7 @@ private:
   int register_renew_lease_task_();
   bool is_self_in_memberlist_() const;
   int prepare_change_leader_to_(const ObAddr &dest_addr, const ObStringHolder &reason);
+  int quick_prepare();
 private:
   // 抽象该数据结构以达成以下目的:
   // lease与epoch是关联的变量值，需要原子的被外界获取以用于区分leader切换的ABA场景（更严格的讲，为保证正确性，外界至少要读取到一个lease值以及一个不会比该lease值更旧的epoch值）

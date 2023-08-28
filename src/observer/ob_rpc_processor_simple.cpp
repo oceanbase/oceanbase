@@ -1716,6 +1716,34 @@ int ObRpcSetMemberListP::process()
   return ret;
 }
 
+int ObRpcQuickPrepareP::process()
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle handle;
+  ObLS *ls = nullptr;
+  uint64_t tenant_id = arg_.get_tenant_id();
+  share::ObLSID ls_id = arg_.get_ls_id();
+  ObLSService *ls_svr = nullptr;
+  if (tenant_id != MTL_ID()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRpcQuickPrepareP::process tenant not match", K(ret), K(tenant_id));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(ERROR, "mtl ObLSService should not be null", K(ret));
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
+    COMMON_LOG(WARN, "get ls failed", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(ERROR, "ls should not be null", K(ret));
+  } else if (OB_FAIL(ls->quick_prepare())) {
+    COMMON_LOG(WARN, "failed to quick prepare", KR(ret), K(arg_));
+  }
+  result_.init(ret);
+  return ret;
+}
+
 int ObRpcDetectMasterRsLSP::process()
 {
   int ret = OB_SUCCESS;

@@ -68,6 +68,7 @@ public:
   int revoke(const RoleChangeReason &reason) override;
   virtual void stop() override final;
   virtual int set_memberlist(const MemberList &new_memberlist) override final;
+  virtual int quick_prepare() override final;
   virtual int change_leader_to(const common::ObAddr &dest_addr) override final;
   /**
    * @description: 返回选举对象当前的角色和epoch

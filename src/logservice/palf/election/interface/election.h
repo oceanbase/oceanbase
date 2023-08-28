@@ -65,6 +65,8 @@ public:
   virtual void stop() = 0;
   // 设置成员列表
   virtual int set_memberlist(const MemberList &new_member_list) = 0;
+  // rpc触发选举
+  virtual int quick_prepare() = 0;
   // 获取选举当前的角色
   virtual int get_role(common::ObRole &role, int64_t &epoch) const = 0;
   // 如果自己是leader，那么拿到的就是准确的leader，如果自己不是leader，那么拿到lease的owner

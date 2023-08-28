@@ -109,6 +109,12 @@ int PalfHandle::get_arbitration_member(common::ObMember &arb_member) const
 }
 #endif
 
+int PalfHandle::quick_prepare()
+{
+  CHECK_VALID;
+  return palf_handle_impl_->quick_prepare();
+}
+
 int PalfHandle::set_region(const common::ObRegion &region)
 {
   CHECK_VALID;

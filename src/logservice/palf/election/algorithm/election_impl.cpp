@@ -169,6 +169,19 @@ int ElectionImpl::set_memberlist(const MemberList &new_memberlist)
   #undef PRINT_WRAPPER
 }
 
+int ElectionImpl::quick_prepare()
+{
+  ELECT_TIME_GUARD(500_ms);
+  int ret = common::OB_SUCCESS;
+  #define PRINT_WRAPPER KR(ret), K(*this)
+  LockGuard lock_guard(lock_);
+  if(CLICK_FAIL(proposer_.quick_prepare())) {
+    LOG_SET_MEMBER(WARN, "quick prepare failed");
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
 int ElectionImpl::change_leader_to(const common::ObAddr &dest_addr)
 {
   ELECT_TIME_GUARD(500_ms);

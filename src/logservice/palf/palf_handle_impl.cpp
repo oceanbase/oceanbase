@@ -329,6 +329,21 @@ int PalfHandleImpl::set_initial_member_list(
 }
 #endif
 
+int PalfHandleImpl::quick_prepare()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImpl has not inited!!!", K(ret));
+  } else {
+    WLockGuard guard(lock_);
+    if (OB_FAIL(config_mgr_.quick_prepare())) {
+      PALF_LOG(WARN, "LogConfigMgr start_initial_jn failed", K(ret), KPC(this));
+    }
+  }
+	return ret;
+}
+
 int PalfHandleImpl::get_begin_lsn(LSN &lsn) const
 {
   int ret = OB_SUCCESS;

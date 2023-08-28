@@ -762,6 +762,9 @@ int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
         LOG_WARN("failed to check set member liset result", KR(ret), K(rpc_count),
             K(paxos_replica_num), K(return_code_array));
       }
+      if(OB_TMP_FAIL(quick_prepare_(member_list))) {
+        LOG_WARN("failed to quick prepare", KR(ret), KR(tmp_ret), K(member_list));
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -772,6 +775,35 @@ int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
     } else if (OB_TMP_FAIL(rootserver::ObRootUtils::notify_switch_leader(
             GCTX.srv_rpc_proxy_, tenant_id_, arg, server_list))) {
       LOG_WARN("failed to notiry switch leader", KR(ret), KR(tmp_ret), K(tenant_id_), K(arg), K(server_list));
+    }
+  }
+  return ret;
+}
+
+int ObLSCreator::quick_prepare_(const common::ObMemberList &member_list)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObTimeoutCtx ctx;
+  if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
+    LOG_WARN("fail to set timeout ctx", KR(ret));
+  } else {
+    ObArray<int> return_code_array;
+    for (int64_t i = 0; OB_SUCC(ret) && i < member_list.get_member_number(); ++i) {
+      ObAddr addr;
+      ObQuickPrepareArg arg;
+      if (OB_FAIL(arg.init(tenant_id_, id_))) {
+        LOG_WARN("failed to init set quick prepare arg", KR(ret), K_(id), K_(tenant_id), K(member_list));
+      } else if (OB_FAIL(member_list.get_server_by_index(i, addr))) {
+        LOG_WARN("failed to get member by index", KR(ret), K(i), K(member_list));
+      } 
+      if (OB_TMP_FAIL(quick_prepare_proxy_.call(addr, ctx.get_timeout(),
+              GCONF.cluster_id, tenant_id_, arg))) {
+        LOG_WARN("failed to quick prepare", KR(tmp_ret), K(ctx.get_timeout()), K(arg), K(tenant_id_));
+      }
+    }
+    if (OB_TMP_FAIL(quick_prepare_proxy_.wait_all(return_code_array))) {
+        LOG_WARN("failed to wait all async rpc", KR(ret), KR(tmp_ret), K(return_code_array));
     }
   }
   return ret;

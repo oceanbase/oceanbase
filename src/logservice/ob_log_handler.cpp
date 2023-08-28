@@ -372,6 +372,12 @@ int ObLogHandler::set_initial_member_list(const common::ObMemberList &member_lis
 }
 #endif
 
+int ObLogHandler::quick_prepare()
+{
+  RLockGuard guard(lock_);
+  return palf_handle_.quick_prepare();
+}
+
 int ObLogHandler::set_election_priority(palf::election::ElectionPriority *priority)
 {
   RLockGuard guard(lock_);
