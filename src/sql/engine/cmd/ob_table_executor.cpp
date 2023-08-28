@@ -319,12 +319,14 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
                                         obrpc::ObCommonRpcProxy *common_rpc_proxy)
 {
   int ret = OB_SUCCESS;
+  ObString cur_query;
   int64_t affected_rows = 0;
   ObMySQLProxy *sql_proxy = ctx.get_sql_proxy();
   common::ObCommonSqlProxy *user_sql_proxy;
   common::ObOracleSqlProxy oracle_sql_proxy;
   ObSQLSessionInfo *my_session = ctx.get_my_session();
   ObPhysicalPlanCtx *plan_ctx = ctx.get_physical_plan_ctx();
+  ObArenaAllocator allocator("CreateTableExec");
   HEAP_VAR(obrpc::ObAlterTableArg, alter_table_arg) {
     obrpc::ObDropTableArg drop_table_arg;
     obrpc::ObTableItem table_item;
@@ -341,6 +343,11 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
       OB_NOT_NULL(plan_ctx),
       OB_NOT_NULL(common_rpc_proxy),
       OB_NOT_NULL(ctx.get_sql_ctx()));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ob_write_string(allocator, my_session->get_current_query_string(), cur_query))) {
+        LOG_WARN("failed to write string to session", K(ret));
+      }
+    }
     if (OB_SUCC(ret)) {
       ObInnerSQLConnectionPool *pool = static_cast<observer::ObInnerSQLConnectionPool*>(sql_proxy->get_pool());
       if (OB_ISNULL(pool)) {
@@ -476,6 +483,7 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
         LOG_DEBUG("table exists, no need to CTAS", K(create_table_res.table_id_));
       }
     }
+    OZ(my_session->store_query_string(cur_query));
   }
   return ret;
 }
