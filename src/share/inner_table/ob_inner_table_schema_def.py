@@ -12505,6 +12505,7 @@ def_table_schema(
 
 # 12429: __all_virtual_data_activity_metrics
 
+# 12430: __all_virtual_column_group_mapping
 #
 # 余留位置
 #
@@ -12905,6 +12906,8 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15403'
 # 15414: __all_virtual_ls_info
 # 15415: idx_dbms_lock_allocated_lockhandle_real_agent
 # 15416: idx_dbms_lock_allocated_expiration_real_agent
+
+# 15417: __all_virtual_column_group_mapping
 
 # 余留位置
 
