@@ -1976,11 +1976,11 @@ int ObHashGroupByOp::batch_process_duplicate_data(
           agged_row_cnt_++;
           LOG_DEBUG("exist item", K(gri_cnt_per_batch_), K(*exist_curr_gr_item),
             K(i), K(agged_row_cnt_));
-        } else if (!enable_dump_
-                || local_group_rows_.size() < MIN_INMEM_GROUPS
-                || process_check_dump
-                || (NULL == bloom_filter
-                    && !need_start_dump(input_rows, est_part_cnt, force_check_dump))) {
+        } else if (NULL == bloom_filter
+                  && (!enable_dump_
+                  || local_group_rows_.size() < MIN_INMEM_GROUPS
+                  || process_check_dump
+                  || !need_start_dump(input_rows, est_part_cnt, force_check_dump))) {
           ++agged_row_cnt_;
           ++agged_group_cnt_;
           ObGroupRowItem *tmp_gr_item = NULL;
@@ -2267,11 +2267,11 @@ int ObHashGroupByOp::group_child_batch_rows(const ObChunkDatumStore::StoredRow *
         const_cast<ObGroupRowItem *>(exist_curr_gr_item)->group_row_count_in_batch_++;
         LOG_DEBUG("exist item", K(gri_cnt_per_batch_), K(*exist_curr_gr_item),
                                 K(i), K(agged_row_cnt_));
-      } else if (!enable_dump_
-              || local_group_rows_.size() < MIN_INMEM_GROUPS
-              || process_check_dump
-              || (NULL == bloom_filter
-                  && !need_start_dump(input_rows, est_part_cnt, force_check_dump))) {
+      } else if (NULL == bloom_filter
+                  && (!enable_dump_
+                    || local_group_rows_.size() < MIN_INMEM_GROUPS
+                    || process_check_dump
+                    || !need_start_dump(input_rows, est_part_cnt, force_check_dump))) {
         // add new local group
         if (!batch_hash_calculated) {
           calc_groupby_exprs_hash_batch(dup_groupby_exprs_, child_brs);
