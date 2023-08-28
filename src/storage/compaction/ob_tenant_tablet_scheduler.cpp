@@ -1449,9 +1449,6 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
       }
     }
 
-    if (REACH_TENANT_TIME_INTERVAL(CHECK_REPORT_SCN_INTERVAL)) {
-      medium_ls_tablet_iter_.set_report_scn_flag();
-    }
     if (REACH_TENANT_TIME_INTERVAL(CHECK_LS_LOCALITY_INTERVAL)) {
       if (OB_TMP_FAIL(ls_locality_cache_.refresh_ls_locality())) {
         LOG_WARN("failed to refresh ls locality", K(tmp_ret));
@@ -1459,9 +1456,6 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
           ObSuspectInfoType::SUSPECT_FAILED_TO_REFRESH_LS_LOCALITY, tmp_ret);
       }
     }
-#ifdef ERRSIM
-    medium_ls_tablet_iter_.set_report_scn_flag();
-#endif
 
     while (OB_SUCC(ret)) {
       if (OB_FAIL(medium_ls_tablet_iter_.get_next_ls(ls_handle))) {
@@ -1494,6 +1488,7 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
         LOG_INFO("try to update report scn as ls leader", K(tmp_ret), "ls_id", ls->get_ls_id()); // low printing frequency
 #endif
       }
+      LOG_TRACE("finish schedule ls medium merge", K(tmp_ret), K(ret), K_(medium_ls_tablet_iter), "ls_id", ls->get_ls_id());
     } // end while
 
     if (!medium_ls_tablet_iter_.tenant_merge_finish()) { // wait major compaction
@@ -1639,6 +1634,13 @@ int ObCompactionScheduleIterator::build_iter()
       ls_tablet_svr_ = nullptr;
       schedule_tablet_cnt_ = 0;
       report_scn_flag_ = false;
+      // check every time start loop all tablet
+      if (REACH_TENANT_TIME_INTERVAL(CHECK_REPORT_SCN_INTERVAL)) {
+        report_scn_flag_ = true;
+      }
+#ifdef ERRSIM
+      report_scn_flag_ = true;
+#endif
       LOG_TRACE("build iter", K(ret), KPC(this));
     }
   } else { // iter is invalid, no need to build, just set var to start cur batch
@@ -1759,7 +1761,8 @@ int64_t ObCompactionScheduleIterator::to_string(char *buf, const int64_t buf_len
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K_(ls_idx), K_(ls_ids), K_(tablet_idx), K(tablet_ids_.count()), K_(schedule_tablet_cnt), K_(max_batch_tablet_cnt));
+  J_KV(K_(ls_idx), K_(ls_ids), K_(tablet_idx), K(tablet_ids_.count()), K_(schedule_tablet_cnt), K_(max_batch_tablet_cnt),
+      K_(report_scn_flag));
   if (is_valid()) {
     J_COMMA();
     J_KV("cur_ls", ls_ids_.at(ls_idx_));
