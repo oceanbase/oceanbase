@@ -43,7 +43,6 @@ enum QueryRelation
   common::ObSEArray<int64_t, 4> cond_map_;
   common::ObSEArray<int64_t, 4> group_map_;
   common::ObSEArray<int64_t, 4> having_map_;
-  common::ObSEArray<int64_t, 4> order_map_;
   common::ObSEArray<int64_t, 4> select_item_map_;
   bool is_table_equal_;
   bool is_from_equal_;
@@ -80,7 +79,9 @@ enum QueryRelation
                K_(having_map),
                K_(select_item_map),
                K_(equal_param_map),
-               K_(view_select_item_map));
+               K_(view_select_item_map),
+               K_(is_order_equal),
+               K_(is_distinct_equal));
 };
 
 struct StmtCompareHelper {
@@ -236,7 +237,6 @@ public:
                                  const ObIArray<OrderItem> &first_orders,
                                  const ObIArray<OrderItem> &second_orders,
                                  ObStmtMapInfo &map_info,
-                                 ObIArray<int64_t> &order_map,
                                  int64_t &match_count);
 
   static int compute_from_items_map(const ObDMLStmt *first,
