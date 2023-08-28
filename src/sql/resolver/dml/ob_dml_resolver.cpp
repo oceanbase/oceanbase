@@ -1578,7 +1578,11 @@ int ObDMLResolver::transfer_to_inner_joined(const ParseNode& parse_node, JoinedT
           temp_table->table_id_ = generate_table_id();
           temp_table->type_ = TableItem::JOINED_TABLE;
           temp_table->left_table_ = cur_table;
-          cur_table = temp_table;
+          if (OB_FAIL(temp_table->single_table_ids_.assign(cur_table->single_table_ids_))) {
+            LOG_WARN("failed to assign table ids", K(ret));
+          } else {
+            cur_table = temp_table;
+          }
         }
       }
     }
