@@ -330,11 +330,12 @@ int ObPrimaryStandbyService::do_recover_tenant(
 {
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
+  uint64_t tenant_version = 0;
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
   common::ObMySQLTransaction trans;
+  ObTenantStatus tenant_status = TENANT_STATUS_MAX;
   ObLSRecoveryStatOperator ls_recovery_operator;
   ObLSRecoveryStat sys_ls_recovery;
-  ObTenantStatus tenant_status = TENANT_STATUS_MAX;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(inited));
   } else if (!obrpc::ObRecoverTenantArg::is_valid(recover_type, recovery_until_scn)
@@ -360,19 +361,30 @@ int ObPrimaryStandbyService::do_recover_tenant(
   } else if (tenant_info.get_switchover_status() != working_sw_status) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("unexpected tenant switchover status", KR(ret), K(working_sw_status), K(tenant_info));
+  } else if (obrpc::ObRecoverTenantArg::RecoverType::UNTIL == recover_type
+              && recovery_until_scn < tenant_info.get_sync_scn()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("recover before tenant sync_scn is not allow", KR(ret), K(tenant_info),
+             K(tenant_id), K(recover_type), K(recovery_until_scn));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recover before tenant sync_scn sync_scn is");
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
+    LOG_WARN("failed to get tenant min version", KR(ret), K(tenant_id));
+  } else if (tenant_version >= DATA_VERSION_4_2_1_0) {
+    //noting, no need check sys ls recovery stat
   } else if (OB_FAIL(ls_recovery_operator.get_ls_recovery_stat(tenant_id, share::SYS_LS,
                      true /*for_update*/, sys_ls_recovery, trans))) {
     LOG_WARN("failed to get ls recovery stat", KR(ret), K(tenant_id));
   } else if (obrpc::ObRecoverTenantArg::RecoverType::UNTIL == recover_type
-              && (recovery_until_scn < tenant_info.get_sync_scn()
-                  || recovery_until_scn < sys_ls_recovery.get_sync_scn())) {
+              && recovery_until_scn < sys_ls_recovery.get_sync_scn()) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("recover before tenant sync_scn or SYS LS sync_scn is not allow", KR(ret), K(tenant_info),
+    LOG_WARN("recover before SYS LS sync_scn is not allow", KR(ret), K(tenant_info),
              K(tenant_id), K(recover_type), K(recovery_until_scn), K(sys_ls_recovery));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recover before tenant sync_scn or SYS LS sync_scn is");
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recover before tenant SYS LS sync_scn is");
+  }
+  if (OB_FAIL(ret)) {
   } else if (is_tenant_normal(tenant_status)) {
     const SCN &recovery_until_scn_to_set = obrpc::ObRecoverTenantArg::RecoverType::UNTIL == recover_type ?
-                                        recovery_until_scn : SCN::max(tenant_info.get_sync_scn(), sys_ls_recovery.get_sync_scn());
+      recovery_until_scn : SCN::max(tenant_info.get_sync_scn(), sys_ls_recovery.get_sync_scn());
     if (tenant_info.get_recovery_until_scn() == recovery_until_scn_to_set) {
       LOG_WARN("recovery_until_scn is same with original", KR(ret), K(tenant_info), K(tenant_id),
                K(recover_type), K(recovery_until_scn));

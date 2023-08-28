@@ -700,8 +700,6 @@ int ObAllTenantInfoProxy::update_tenant_recovery_until_scn(
   ObSqlString sql;
   int64_t affected_rows = 0;
   ObTimeoutCtx ctx;
-  ObLSRecoveryStatOperator ls_recovery_operator;
-  ObLSRecoveryStat sys_ls_recovery;
   ObLogRestoreSourceMgr restore_source_mgr;
   uint64_t compat_version = 0;
 
@@ -717,13 +715,6 @@ int ObAllTenantInfoProxy::update_tenant_recovery_until_scn(
   } else if (OB_UNLIKELY(!recovery_until_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("recovery_until_scn invalid", KR(ret), K(recovery_until_scn));
-  } else if (OB_FAIL(ls_recovery_operator.get_ls_recovery_stat(tenant_id, share::SYS_LS,
-        true /*for_update*/, sys_ls_recovery, trans))) {
-    LOG_WARN("failed to get ls recovery stat", KR(ret), K(tenant_id));
-  } else if (recovery_until_scn < sys_ls_recovery.get_sync_scn()) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("recover before SYS LS sync_scn is not allowed", KR(ret), K(tenant_id), K(recovery_until_scn), K(sys_ls_recovery));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recover before SYS LS sync_scn is");
   } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
     LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
   } else if (OB_FAIL(sql.assign_fmt(
@@ -750,10 +741,10 @@ int ObAllTenantInfoProxy::update_tenant_recovery_until_scn(
   }
 
   int64_t cost = ObTimeUtility::current_time() - begin_time;
-  LOG_INFO("update_recovery_until_scn finish", KR(ret), K(tenant_id), K(sys_ls_recovery),
+  LOG_INFO("update_recovery_until_scn finish", KR(ret), K(tenant_id),
                       K(recovery_until_scn), K(affected_rows), K(switchover_epoch), K(sql), K(cost));
   ROOTSERVICE_EVENT_ADD("tenant_info", "update_recovery_until_scn", K(ret), K(tenant_id),
-                        K(recovery_until_scn), K(affected_rows), K(switchover_epoch), K(sys_ls_recovery));
+                        K(recovery_until_scn), K(affected_rows), K(switchover_epoch));
   return ret;
 }
 

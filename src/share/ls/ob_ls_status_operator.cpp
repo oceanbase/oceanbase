@@ -1361,6 +1361,8 @@ int ObLSStatusOperator::check_ls_log_stat_info_(
     // special case: support stop 1F in 2F1A
     need_retry = true;
     LOG_WARN("fail to generate arb replica num", KR(ret), KPC(tenant_schema), K(ls_log_stat_info));
+    ret = OB_OP_NOT_ALLOW;
+    //must be OB_OP_NOT_ALLOW && need_retry can retry
   } else if (valid_servers.count() + arb_replica_num < rootserver::majority(leader.get_paxos_replica_num())) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("ls doesn't have enough valid paxos member when checking ls_log_stat_info",
