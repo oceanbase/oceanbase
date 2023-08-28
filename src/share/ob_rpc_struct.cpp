@@ -6984,33 +6984,29 @@ bool ObLSAccessModeInfo::is_valid() const
          && ls_id_.is_valid()
          && palf::INVALID_PROPOSAL_ID != mode_version_
          && palf::AccessMode::INVALID_ACCESS_MODE != access_mode_
-         && ref_scn_.is_valid()
-         && addr_.is_valid();
+         && ref_scn_.is_valid();
 }
 int ObLSAccessModeInfo::init(
     uint64_t tenant_id, const ObLSID &ls_id,
     const int64_t mode_version,
     const palf::AccessMode &access_mode,
-    const SCN &ref_scn,
-    const ObAddr &addr)
+    const SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
                   || !ls_id.is_valid()
                   || palf::AccessMode::INVALID_ACCESS_MODE == access_mode
                   || palf::INVALID_PROPOSAL_ID == mode_version
-                  || !ref_scn.is_valid()
-                  || !addr.is_valid())) {
+                  || !ref_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id),
-    K(mode_version), K(access_mode), K(ref_scn), K(addr));
+    K(mode_version), K(access_mode), K(ref_scn));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     mode_version_ = mode_version;
     access_mode_ = access_mode;
     ref_scn_ = ref_scn;
-    addr_ = addr;
   }
   return ret;
 }
@@ -7023,7 +7019,6 @@ int ObLSAccessModeInfo::assign(const ObLSAccessModeInfo &other)
     mode_version_ = other.mode_version_;
     access_mode_ = other.access_mode_;
     ref_scn_ = other.ref_scn_;
-    addr_ = other.addr_;
   }
   return ret;
 }
