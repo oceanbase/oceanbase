@@ -51,6 +51,13 @@ typedef void (*dict_cmp_ref_func)(
                   const unsigned char *col_data,
                   sql::ObBitVector &result);
 
+enum class ObDictParamCmpType {
+  DUAL_POINTER,
+  BINARY_SEARCH_DICT,
+  BINARY_SEARCH,
+  HASH_SEARCH,
+};
+
 class ObDictDecoder : public ObIColumnDecoder
 {
 public:
@@ -105,9 +112,20 @@ public:
       const sql::ObWhiteFilterExecutor &filter,
       const char* meta_data,
       const ObIRowIndex* row_index,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const override;
 
   OB_INLINE const ObDictMetaHeader* get_dict_header() const { return meta_header_; }
+
+  int set_ref_exist_in_objs(
+      ObDictDecoderIterator &left_it,
+      ObDictDecoderIterator &right_it,
+      const ObDictDecoderIterator &begin_it,
+      bool is_sorted_dict,
+      const sql::ObWhiteFilterExecutor &filter,
+      sql::ObBitVector &ref_bitset,
+      bool &found,
+      bool const_in_result_set = false) const;
 public:
   ObDictDecoderIterator begin(const ObColumnDecoderCtx *ctx, int64_t meta_length) const;
   ObDictDecoderIterator end(const ObColumnDecoderCtx *ctx, int64_t meta_length) const;
@@ -193,6 +211,10 @@ private:
       const bool is_bit_packing,
       const unsigned char *col_data,
       int64_t &ref) const;
+  
+  OB_INLINE ObDictParamCmpType get_param_cmp_type(
+    const int64_t len_dict, 
+    const int64_t len_objs) const;
 
 private:
   ObObjTypeStoreClass store_class_;
@@ -270,6 +292,62 @@ OB_INLINE int ObDictDecoder::read_ref(
         meta_header_->row_ref_size_);
   }
   return ret;
+}
+
+OB_INLINE ObDictParamCmpType ObDictDecoder::get_param_cmp_type(
+  const int64_t len_dict, 
+  const int64_t len_objs) const
+{
+  // DELTA_THRESHOLD: means the threshold for the difference between len_dict and len_objs.
+  // Here is an example of delta below while DELTA_THRESHOLD=0.5:
+  //   delta in [-1, 1]
+  //   delta [-1, -0.5)   means b > 3*a
+  //   delta [-0.5, 0.5]  means b <= 3*a and a <= 3*b
+  //   delta (0.5, 1]     means a > 3*b
+  static constexpr double DELTA_THRESHOLD = 0.5;
+
+  // BINARY_HASH_THRESHOLD: means the threshold to choose BINARY_SEARCH or HASH_SEARCH
+  // When the dictionary is unordered, the only variable available for iteration is len_objs.
+  // Testing has shown that when the data size is small, the overhead of binary search is 
+  // lower than the overhead of computing hashes.
+  // Therefore, this threshold is temporarily set to a small value(8).
+  static constexpr int64_t BINARY_HASH_THRESHOLD = 8;
+  
+  // HASH_BUCKETS: means the number of buckets(slots) in hashset.
+  // This value is related to the performance of the hashset.
+  const int64_t HASH_BUCKETS = hash::cal_next_prime(len_objs * 2);
+
+  ObDictParamCmpType cmp_type = ObDictParamCmpType::HASH_SEARCH;
+  double delta = static_cast<double>(len_dict - len_objs) /
+                 static_cast<double>(len_dict + len_objs);
+  if (meta_header_->is_sorted_dict()) {
+    if (delta > DELTA_THRESHOLD) {
+      // len_dict >> len_objs
+      if (len_dict > HASH_BUCKETS * 4) {
+        cmp_type = ObDictParamCmpType::BINARY_SEARCH_DICT;
+      } else {
+        cmp_type = ObDictParamCmpType::DUAL_POINTER;
+      }
+    } else if (delta >= -DELTA_THRESHOLD) {
+      // len_dict ~~ len_objs
+      if (len_dict > HASH_BUCKETS) {
+        cmp_type = ObDictParamCmpType::DUAL_POINTER;
+      } else {
+        cmp_type = ObDictParamCmpType::HASH_SEARCH;
+      }
+    } else {
+      // len_dict << len_objs
+      cmp_type = ObDictParamCmpType::HASH_SEARCH;
+    }
+  } else {
+    // Unordered dict
+    if (len_objs <= BINARY_HASH_THRESHOLD) {
+      cmp_type = ObDictParamCmpType::BINARY_SEARCH;
+    } else {
+      cmp_type = ObDictParamCmpType::HASH_SEARCH;
+    }
+  }
+  return cmp_type;
 }
 
 /**

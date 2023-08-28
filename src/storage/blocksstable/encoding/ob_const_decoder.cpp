@@ -277,9 +277,10 @@ int ObConstDecoder::pushdown_operator(
     const sql::ObWhiteFilterExecutor &filter,
     const char* meta_data,
     const ObIRowIndex* row_index,
+    const sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap) const
 {
-  UNUSEDx(parent, meta_data, row_index);
+  UNUSEDx(parent, meta_data, row_index, pd_filter_info);
   int ret = OB_SUCCESS;
   const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
   if (OB_UNLIKELY(!is_inited())) {
@@ -589,7 +590,9 @@ int ObConstDecoder::bt_operator(
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(result_bitmap.size() != col_ctx.micro_block_header_->row_count_
-                  || filter.get_objs().count() != 2)) {
+                  || filter.get_objs().count() != 2
+                  || filter.get_op_type() != sql::WHITE_OP_BT
+                  || filter.null_param_contained())) {
     LOG_WARN("Invalid argument for BT operator", K(ret), K(filter), K(result_bitmap.size()));
   } else {
     const int64_t dict_count = dict_decoder_.get_dict_header()->count_;
@@ -663,13 +666,17 @@ int ObConstDecoder::in_operator(
     ObBitmap &result_bitmap) const
 {
   int ret = OB_SUCCESS;
+  const ObDictMetaHeader* dict_meta_header = dict_decoder_.get_dict_header();
   if (OB_UNLIKELY(result_bitmap.size() != col_ctx.micro_block_header_->row_count_
                   || filter.get_objs().count() == 0
-                  || filter.get_op_type() != sql::WHITE_OP_IN)) {
+                  || filter.get_op_type() != sql::WHITE_OP_IN
+                  || filter.null_param_contained())) {
     LOG_WARN("Invalid argument for IN operator",
              K(ret), K(result_bitmap.size()), K(filter));
+  } else if (OB_UNLIKELY(OB_ISNULL(dict_meta_header))) {
+    LOG_WARN("dict meta header is NULL", K(ret));
   } else {
-    int64_t dict_count = dict_decoder_.get_dict_header()->count_;
+    const int64_t dict_count = dict_meta_header->count_;
     const ObIntArrayFuncTable &row_ids = ObIntArrayFuncTable::instance(meta_header_->row_id_byte_);
     const int64_t dict_meta_length = col_ctx.col_header_->length_ - meta_header_->offset_;
     bool const_in_result_set = false;
@@ -694,29 +701,36 @@ int ObConstDecoder::in_operator(
       }
     }
 
-    if (OB_SUCC(ret)) {
-      bool found = false;
-      ObDictDecoderIterator trav_it = dict_decoder_.begin(&col_ctx, dict_meta_length);
-      ObDictDecoderIterator end_it = dict_decoder_.end(&col_ctx, dict_meta_length);
+    if (OB_SUCC(ret) && dict_count > 0) {
+      // iterators
+      ObDictDecoderIterator left_it = dict_decoder_.begin(&col_ctx, dict_meta_length);
+      ObDictDecoderIterator right_it = dict_decoder_.end(&col_ctx, dict_meta_length);
+      // init ref_bitset
       const int64_t ref_bitset_size = dict_count + 1;
       char ref_bitset_buf[sql::ObBitVector::memory_size(ref_bitset_size)];
       sql::ObBitVector *ref_bitset = sql::to_bit_vector(ref_bitset_buf);
       ref_bitset->init(ref_bitset_size);
-      int64_t dict_ref = 0;
-      while (OB_SUCC(ret) && trav_it != end_it) {
-        bool cur_in_result_set = false;
-        if (OB_UNLIKELY(((*trav_it).is_null_oracle() && lib::is_oracle_mode())
-                        || ((*trav_it).is_null() && lib::is_mysql_mode()))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("There should not be null object in dictionary", K(ret));
-        } else if (OB_FAIL(filter.exist_in_obj_set((*trav_it), cur_in_result_set))) {
-          LOG_WARN("Failed to check wheter current value is in set", K(ret));
-        } else if (!const_in_result_set == cur_in_result_set) {
-          found = true;
-          ref_bitset->set(dict_ref);
+      // common variables
+      bool found = false;
+      bool is_hit_shortcut = false;
+      bool is_sorted_dict = dict_meta_header->is_sorted_dict();
+
+      if (is_sorted_dict && filter.is_obj_array_sorted()) {
+        // Sorted dictionary, binary search here to find boundary element
+        left_it = std::lower_bound(left_it, right_it, filter.get_min_param());
+        right_it = std::upper_bound(left_it, right_it, filter.get_max_param());
+        if (left_it == right_it) {
+          is_hit_shortcut = true;
+          LOG_DEBUG("Hit shortcut, no cross, return all-false bitmap", K(*left_it));
         }
-        ++dict_ref;
-        ++trav_it;
+      }
+
+      if (!is_hit_shortcut &&
+          OB_FAIL(dict_decoder_.set_ref_exist_in_objs(
+              left_it, right_it,
+              dict_decoder_.begin(&col_ctx, dict_meta_length), is_sorted_dict,
+              filter, *ref_bitset, found, const_in_result_set))) {
+        LOG_WARN("Failed to check object in objs", K(ret));
       }
 
       if (OB_FAIL(ret)) {

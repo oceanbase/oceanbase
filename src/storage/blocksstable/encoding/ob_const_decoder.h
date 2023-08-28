@@ -70,6 +70,7 @@ public:
       const sql::ObWhiteFilterExecutor &filter,
       const char* meta_data,
       const ObIRowIndex* row_index,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const override;
 protected:
   int decode_without_dict(const ObColumnDecoderCtx &ctx, common::ObObj &cell) const;

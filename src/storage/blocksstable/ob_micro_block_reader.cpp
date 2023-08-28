@@ -543,7 +543,7 @@ int ObMicroBlockReader::get_multi_version_info(
 int ObMicroBlockReader::filter_pushdown_filter(
     const sql::ObPushdownFilterExecutor *parent,
     sql::ObPushdownFilterExecutor &filter,
-    const storage::PushdownFilterInfo &pd_filter_info,
+    const sql::PushdownFilterInfo &pd_filter_info,
     common::ObBitmap &result_bitmap)
 {
   int ret = OB_SUCCESS;

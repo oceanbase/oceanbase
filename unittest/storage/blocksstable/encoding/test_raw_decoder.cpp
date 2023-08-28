@@ -345,10 +345,11 @@ int TestRawDecoder::test_filter_pushdown(
     common::ObFixedArray<ObObj, ObIAllocator> &objs)
 {
   int ret = OB_SUCCESS;
-  storage::PushdownFilterInfo pd_filter_info;
+  sql::PushdownFilterInfo pd_filter_info;
   sql::ObExecContext exec_ctx(allocator_);
   sql::ObEvalCtx eval_ctx(exec_ctx);
   sql::ObPushdownExprSpec expr_spec(allocator_);
+  expr_spec.max_batch_size_ = 12;
   sql::ObPushdownOperator op(eval_ctx, expr_spec);
   sql::ObWhiteFilterExecutor filter(allocator_, filter_node, op);
   filter.col_offsets_.init(COLUMN_CNT);
@@ -356,16 +357,27 @@ int TestRawDecoder::test_filter_pushdown(
   const ObColumnParam *col_param = nullptr;
   filter.col_params_.push_back(col_param);
   filter.col_offsets_.push_back(col_idx);
-  filter.n_cols_ = 1;
   void *obj_buf = allocator_.alloc(sizeof(ObObj) * COLUMN_CNT);
   EXPECT_TRUE(obj_buf != nullptr);
+  storage::ObTableIterParam iter_param;
+  iter_param.op_ = &op;
+  iter_param.pd_filter_ = true;
+  iter_param.pushdown_filter_ = &filter;
+  iter_param.read_info_ = &read_info_;
+  iter_param.table_id_ = 0;
+  iter_param.vectorized_enabled_ = true;
+  pd_filter_info.init(iter_param ,allocator_, is_pad_char_to_full_length(SMO_MYSQL40));
   ObObj *col_buf = new (obj_buf) ObObj [COLUMN_CNT]();
+  // procedure like ObWhiteFilterExecutor::init_evaluated_datums
   filter.params_ = objs;
-  filter.init_obj_set();
+  if (sql::WHITE_OP_IN == filter.get_op_type()) {
+    filter.init_obj_set();
+  }
   pd_filter_info.col_buf_ = col_buf;
   pd_filter_info.col_capacity_ = full_column_cnt_;
   pd_filter_info.start_ = 0;
   pd_filter_info.end_ = decoder.row_count_;
+  pd_filter_info.filter_->n_cols_ = 1;
 
   ret = decoder.filter_pushdown_filter(nullptr, filter, pd_filter_info, result_bitmap);
   return ret;

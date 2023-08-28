@@ -26,7 +26,6 @@ namespace storage
 {
 struct ObTableIterParam;
 struct ObTableAccessContext;
-struct PushdownFilterInfo;
 class ObBlockRowStore;
 class ObTableStoreStat;
 }
@@ -62,7 +61,7 @@ public:
   int filter_pushdown_filter(
       sql::ObPushdownFilterExecutor *parent,
       sql::ObPushdownFilterExecutor *filter,
-      storage::PushdownFilterInfo &filter_info,
+      sql::PushdownFilterInfo &filter_info,
       common::ObBitmap &bitmap);
 
 protected:

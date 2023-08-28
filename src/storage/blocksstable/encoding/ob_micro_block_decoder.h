@@ -24,9 +24,6 @@
 
 namespace oceanbase
 {
-namespace storage {
-struct PushdownFilterInfo;
-}
 namespace blocksstable
 {
 struct ObBlockCachedDecoderHeader;
@@ -235,17 +232,17 @@ public:
   int filter_pushdown_filter(
       const sql::ObPushdownFilterExecutor *parent,
       sql::ObBlackFilterExecutor &filter,
-      const storage::PushdownFilterInfo &pd_filter_info,
+      const sql::PushdownFilterInfo &pd_filter_info,
       common::ObBitmap &result_bitmap);
   int filter_pushdown_filter(
       const sql::ObPushdownFilterExecutor *parent,
       sql::ObWhiteFilterExecutor &filter,
-      const storage::PushdownFilterInfo &pd_filter_info,
+      const sql::PushdownFilterInfo &pd_filter_info,
       common::ObBitmap &result_bitmap);
   int filter_pushdown_retro(
       const sql::ObPushdownFilterExecutor *parent,
       sql::ObWhiteFilterExecutor &filter,
-      const storage::PushdownFilterInfo &pd_filter_info,
+      const sql::PushdownFilterInfo &pd_filter_info,
       const int32_t col_offset,
       const share::schema::ObColumnParam *col_param,
       common::ObObj &decoded_obj,

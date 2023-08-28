@@ -15,6 +15,7 @@
 
 #include "lib/container/ob_bitmap.h"
 #include "lib/container/ob_fixed_array.h"
+#include "lib/container/ob_fixed_array_iterator.h"
 #include "lib/hash/ob_hashset.h"
 #include "common/object/ob_obj_compare.h"
 #include "share/datum/ob_datum.h"
@@ -49,6 +50,9 @@ class ObStaticEngineCG;
 class ObPushdownOperator;
 struct ObExprFrameInfo;
 typedef common::ObFixedArray<const share::schema::ObColumnParam*, common::ObIAllocator> ColumnParamFixedArray;
+typedef common::ObFixedArray<common::ObObj, common::ObIAllocator> ParamArray;
+typedef ParamArray::iterator ParamArrayIter;
+typedef ParamArray::const_iterator ParamArrayConstIter;
 
 enum PushdownFilterType
 {
@@ -160,6 +164,18 @@ public:
   // 下压临时保存的filter，如果发生merge，则所有的filter放入filter_exprs_
   // 如果没有发生merge，则将自己的tmp_expr_放入filter_exprs_中
   ObExpr *tmp_expr_;
+};
+
+struct ObWhiteFilterHashFunc
+{
+  int operator()(const common::ObObj &key, uint64_t &res) const;
+};
+
+struct ObWhiteFilterParamsCmpFunc
+{
+  OB_INLINE bool operator()(const common::ObObj &obj1, const common::ObObj &obj2) const {
+    return -1 == ObObjCmpFuncs::compare_nullsafe(obj1, obj2, CS_TYPE_INVALID);
+  }
 };
 
 enum ObWhiteFilterOperatorType
@@ -386,6 +402,65 @@ protected:
   ObPushdownOperator &op_;
 };
 
+struct PushdownFilterInfo
+{
+  PushdownFilterInfo() :
+      is_inited_(false),
+      is_pd_filter_(false),
+      start_(-1),
+      end_(-1),
+      col_capacity_(0),
+      batch_size_(0),
+      col_buf_(nullptr),
+      datum_buf_(nullptr),
+      filter_(nullptr),
+      cell_data_ptrs_(nullptr),
+      row_ids_(nullptr),
+      allocator_(nullptr)
+  {}
+  ~PushdownFilterInfo();
+  void reset();
+  void reuse();
+
+  OB_INLINE bool is_valid()
+  {
+    bool ret = is_inited_;
+    if (is_pd_filter_ && nullptr != filter_) {
+      ret = ret && (nullptr != col_buf_) && (nullptr != datum_buf_);
+      if (filter_->is_filter_white_node()) {
+        ret = ret && (nullptr != white_batch_datums_) && (nullptr != white_batch_datums_buf_);
+      }
+    }
+    if (0 < batch_size_) {
+      ret = ret && (nullptr != cell_data_ptrs_) && (nullptr != row_ids_);
+    }
+    return ret;
+  }
+  int init(const storage::ObTableIterParam &iter_param,
+           common::ObIAllocator &alloc, const bool is_padding);
+  TO_STRING_KV(K_(is_pd_filter), K_(col_capacity), K_(batch_size), KP_(col_buf),
+               KP_(datum_buf), KP_(filter), KP_(cell_data_ptrs), KP_(row_ids));
+  
+  bool is_inited_;
+  bool is_pd_filter_;
+  int64_t start_;
+  int64_t end_;
+  int64_t col_capacity_;
+  int64_t batch_size_;
+  // TODO remove col_buf_ later
+  common::ObObj *col_buf_;
+  blocksstable::ObStorageDatum *datum_buf_;
+  ObPushdownFilterExecutor *filter_;
+  // for black filter vectorize
+  // and white filter IN batch_decode
+  const char **cell_data_ptrs_;
+  int64_t *row_ids_;
+  common::ObIAllocator *allocator_;
+  // for white filter IN batch_decode
+  common::ObDatum *white_batch_datums_;
+  void *white_batch_datums_buf_;
+};
+
 class ObBlackFilterExecutor : public ObPushdownFilterExecutor
 {
 public:
@@ -449,23 +524,30 @@ public:
   OB_INLINE virtual common::ObIArray<uint64_t> &get_col_ids() override
   { return filter_.get_col_ids(); }
   virtual int init_evaluated_datums() override;
-  OB_INLINE const common::ObIArray<common::ObObj> &get_objs() const
+  OB_INLINE const ParamArray &get_objs() const
   { return params_; }
   OB_INLINE bool null_param_contained() const { return null_param_contained_; }
   int exist_in_obj_set(const common::ObObj &obj, bool &is_exist) const;
+  int exist_in_obj_array(const common::ObObj &obj, bool &is_exist) const;
   bool is_obj_set_created() const { return param_set_.created(); };
+  OB_INLINE bool is_obj_array_sorted() const { return obj_array_sorted_; };
+  OB_INLINE const ObObj &get_min_param() const { return params_.at(0); };
+  OB_INLINE const ObObj &get_max_param() const { return params_.at(params_.count() - 1); };
   OB_INLINE ObWhiteFilterOperatorType get_op_type() const
   { return filter_.get_op_type(); }
   INHERIT_TO_STRING_KV("ObPushdownWhiteFilterExecutor", ObPushdownFilterExecutor,
                        K_(null_param_contained), K_(params), K(param_set_.created()),
                        K_(filter));
 private:
+  int eval_in_right_val_to_objs();
+  int eval_right_val_to_objs();
   void check_null_params();
   int init_obj_set();
 private:
   bool null_param_contained_;
-  common::ObFixedArray<common::ObObj, common::ObIAllocator> params_;
-  common::hash::ObHashSet<common::ObObj> param_set_;
+  ParamArray params_;
+  bool obj_array_sorted_;
+  common::hash::ObHashSet<common::ObObj, common::hash::NoPthreadDefendMode, ObWhiteFilterHashFunc> param_set_;
   ObPushdownWhiteFilterNode &filter_;
 };
 

@@ -519,6 +519,7 @@ int ObRawDecoder::pushdown_operator(
     const sql::ObWhiteFilterExecutor &filter,
     const char* meta_data,
     const ObIRowIndex* row_index,
+    const sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap) const
 {
   int ret = OB_SUCCESS;
@@ -558,7 +559,10 @@ int ObRawDecoder::pushdown_operator(
     case sql::WHITE_OP_LE: {
       int32_t fix_len_tag = 0;
       bool is_signed_data = false;
-      if (fast_filter_valid(col_ctx, filter.get_objs().at(0).meta_.get_type(), fix_len_tag, is_signed_data)) {
+      if (filter.get_objs().count() == 0) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("objs count is zero for comparison: Invalid argument", K(ret));
+      } else if (fast_filter_valid(col_ctx, filter.get_objs().at(0).meta_.get_type(), fix_len_tag, is_signed_data)) {
         if (OB_FAIL(fast_comparison_operator(col_ctx, col_data,
           filter, fix_len_tag, is_signed_data, result_bitmap))) {
           LOG_WARN("Failed on fast comparison operator", K(ret), K(col_ctx));
@@ -573,7 +577,7 @@ int ObRawDecoder::pushdown_operator(
     }
     case sql::WHITE_OP_IN: {
       if (OB_FAIL(in_operator(parent, col_ctx, col_data, row_index,
-                  filter, result_bitmap))) {
+                  filter, pd_filter_info, result_bitmap))) {
         LOG_WARN("Failed on In Operator", K(ret), K(col_ctx));
       }
       break;
@@ -835,6 +839,7 @@ int ObRawDecoder::in_operator(
     const unsigned char* col_data,
     const ObIRowIndex* row_index,
     const sql::ObWhiteFilterExecutor &filter,
+    const sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap) const
 {
   int ret = OB_SUCCESS;
@@ -843,6 +848,59 @@ int ObRawDecoder::in_operator(
              || NULL == row_index)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Pushdown in operator: Invalid arguments", K(ret), K(filter.get_objs()));
+  } else if (OB_LIKELY(can_vectorized()) && OB_LIKELY(is_inited())) {
+    // prepare arguments
+    int64_t cur_row_id = 0;
+    int64_t end_row_id = col_ctx.micro_block_header_->row_count_;
+    int64_t last_start = cur_row_id;
+    int64_t row_cap = 0;
+    ObDatum *datums = pd_filter_info.white_batch_datums_;
+    bool null_value_contained = (result_bitmap.popcnt() > 0);
+    ObObj cur_obj;
+    bool result = false;
+    bool is_array_faster =
+        (8 >= filter.get_objs().count()) &&
+        (ObVarcharType == col_ctx.col_header_->get_store_obj_type());
+    // filter by batch
+    while (OB_SUCC(ret) && cur_row_id < end_row_id) {
+      last_start = cur_row_id;
+      row_cap = min(pd_filter_info.batch_size_, end_row_id - cur_row_id);
+      cur_row_id += row_cap;
+      // 1. prepare row_ids
+      for (int64_t i = 0; i < row_cap; ++i) {
+        pd_filter_info.row_ids_[i] = last_start + i;
+      }
+      // 2. batch decode
+      if (OB_FAIL(batch_decode(col_ctx, row_index, pd_filter_info.row_ids_,
+                               pd_filter_info.cell_data_ptrs_, row_cap,
+                               datums))) {
+        LOG_WARN("Failed to batch decode", K(ret), K(row_cap));
+      } else {
+        // 3. traverse all datums row by row
+        for (int64_t row_id = last_start; OB_SUCC(ret) && row_id < cur_row_id; ++row_id) {
+          const int64_t buf_id = row_id - last_start;
+          if (nullptr != parent && parent->can_skip_filter(row_id)) {
+            continue;
+          } else if (null_value_contained && result_bitmap.test(row_id)) {
+            // object in this row is null
+            if (OB_FAIL(result_bitmap.set(row_id, false))) {
+              LOG_WARN("Failed to set null value to false", K(ret));
+            }
+          } else {
+            if (OB_FAIL(datums[buf_id].to_obj(cur_obj, col_ctx.obj_meta_))) {
+              LOG_WARN("Failed to transform datum to obj", K(ret), K(datums[buf_id]));
+            } else if (is_array_faster && OB_FAIL(filter.exist_in_obj_array(cur_obj, result))) {
+              LOG_WARN("Failed to check object in obj set", K(ret), K(cur_obj));
+            } else if (!is_array_faster && OB_FAIL(filter.exist_in_obj_set(cur_obj, result))) {
+              LOG_WARN("Failed to check object in obj set", K(ret), K(cur_obj));
+            } else if (result && OB_FAIL(result_bitmap.set(row_id))) {
+              LOG_WARN("Failed to set result bitmap", K(ret), K(row_id), K(filter));
+            }
+          }
+        }
+      }
+    }
+    LOG_TRACE("in_operator use batch decode successfully", K(ret), K(col_ctx.is_fix_length()));
   } else if (OB_FAIL(traverse_all_data(parent, col_ctx, row_index, col_data,
                     filter, result_bitmap,
                     [](const ObObj &cur_obj,
@@ -850,7 +908,7 @@ int ObRawDecoder::in_operator(
                       bool &result) -> int {
                       int ret = OB_SUCCESS;
                       if (OB_FAIL(filter.exist_in_obj_set(cur_obj, result))) {
-                        LOG_WARN("Failed to check object in hashset", K(ret), K(cur_obj));
+                        LOG_WARN("Failed to check object in obj set", K(ret), K(cur_obj));
                       }
                       return ret;
                     }))) {

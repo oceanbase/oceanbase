@@ -14,7 +14,6 @@
 #include "ob_block_row_store.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
-#include "sql/engine/basic/ob_pushdown_filter.h"
 #include "storage/ob_i_store.h"
 #include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
 #include "storage/blocksstable/ob_micro_block_reader.h"
@@ -46,16 +45,7 @@ void ObBlockRowStore::reset()
   is_inited_ = false;
   can_blockscan_ = false;
   filter_applied_ = false;
-  if (nullptr != context_.stmt_allocator_ && nullptr != pd_filter_info_.col_buf_) {
-    context_.stmt_allocator_->free(pd_filter_info_.col_buf_);
-    pd_filter_info_.col_buf_ = nullptr;
-  }
-  if (nullptr != context_.stmt_allocator_ && nullptr != pd_filter_info_.datum_buf_) {
-    context_.stmt_allocator_->free(pd_filter_info_.datum_buf_);
-    pd_filter_info_.datum_buf_ = nullptr;
-  }
-  pd_filter_info_.col_capacity_ = 0;
-  pd_filter_info_.filter_ = nullptr;
+  pd_filter_info_.reset();
   disabled_ = false;
 }
 
@@ -69,38 +59,16 @@ void ObBlockRowStore::reuse()
 int ObBlockRowStore::init(const ObTableAccessParam &param)
 {
   int ret = OB_SUCCESS;
-  void *buf = nullptr;
-  const ObTableIterParam &iter_param = param.iter_param_;
-  int64_t out_col_cnt = iter_param.get_out_col_cnt();
-  pd_filter_info_.is_pd_filter_ = iter_param.enable_pd_filter();
   const bool need_padding = is_pad_char_to_full_length(context_.sql_mode_);
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObBlockRowStore init twice", K(ret));
-  } else if (OB_UNLIKELY(!iter_param.is_valid() || nullptr == context_.stmt_allocator_
-                         || nullptr == iter_param.get_col_params() || nullptr == iter_param.out_cols_project_)) {
+  } else if (OB_ISNULL(context_.stmt_allocator_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument to init store pushdown filter", K(ret), K(iter_param));
-  } else if (nullptr == iter_param.pushdown_filter_) {
-    // nothing to do without filter exprs
-    is_inited_ = true;
-  } else if (OB_UNLIKELY(0 == out_col_cnt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpceted empty output", K(ret), K(iter_param));
-  } else if (OB_ISNULL((buf = context_.stmt_allocator_->alloc(sizeof(ObObj) * out_col_cnt)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("Fail to allocate memory for pushdown filter col buf", K(ret), K(out_col_cnt));
-  } else if (FALSE_IT(pd_filter_info_.col_buf_ = new (buf) ObObj[out_col_cnt]())) {
-  } else if (OB_ISNULL((buf = context_.stmt_allocator_->alloc(sizeof(blocksstable::ObStorageDatum) * out_col_cnt)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("Fail to allocate memory for pushdown filter col buf", K(ret), K(out_col_cnt));
-  } else if (FALSE_IT(pd_filter_info_.datum_buf_ = new (buf) blocksstable::ObStorageDatum[out_col_cnt]())) {
-  } else if (OB_FAIL(iter_param.pushdown_filter_->init_filter_param(
-              *iter_param.get_col_params(), *iter_param.out_cols_project_, need_padding))) {
-    LOG_WARN("Failed to init pushdown filter executor", K(ret));
+    LOG_WARN("Invalid argument to init store pushdown filter", K(ret));
+  } else if (OB_FAIL(pd_filter_info_.init(param.iter_param_, *context_.stmt_allocator_, need_padding))) {
+    LOG_WARN("Fail to init pd filter info", K(ret));
   } else {
-    pd_filter_info_.filter_ = iter_param.pushdown_filter_;
-    pd_filter_info_.col_capacity_ = out_col_cnt;
     is_inited_ = true;
   }
 

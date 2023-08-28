@@ -64,6 +64,7 @@ public:
       const sql::ObWhiteFilterExecutor &filter_node,
       const char* meta_data,
       const ObIRowIndex* row_index,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const override;
 private:
   const ObHexStringHeader *header_;

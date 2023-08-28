@@ -104,6 +104,7 @@ public:
       const sql::ObWhiteFilterExecutor &filter,
       const char* meta_data,
       const ObIRowIndex* row_index,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const override;
 
   virtual int get_null_count(
@@ -165,6 +166,7 @@ private:
       const unsigned char* col_data,
       const ObIRowIndex* row_index,
       const sql::ObWhiteFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
   int load_data_to_obj_cell(const ObObjMeta cell_meta, const char *cell_data, int64_t cell_len, ObObj &load_obj) const;
