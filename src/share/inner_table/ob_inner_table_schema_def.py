@@ -53598,6 +53598,7 @@ def_sys_index_table(
 # 101089 : placeholder for unique index of __all_tenant_snapshots
 # 101090 : placeholder for index of __all_dbms_lock_allocated lockhandle column
 # 101091 : placeholder for index of __all_dbms_lock_allocated expiration column
+# 101092 : placeholder for index of __all_tablet_reorganize_history
 
 ################################################################################
 # Oracle Agent table Index
