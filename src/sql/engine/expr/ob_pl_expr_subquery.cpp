@@ -225,8 +225,8 @@ int ObExprOpSubQueryInPl::eval_subquery(const ObExpr &expr,
   if (OB_FAIL(ret)) {
     LOG_WARN("get result obj failed", K(ret));
   } else {
-    if (info->result_type_.get_type() != result.get_type() ||
-       info->result_type_.get_collation_type() != result.get_collation_type()) {
+    if (!info->result_type_.is_ext()
+        && (info->result_type_.get_obj_meta() != result.get_meta())) {
       ObObj conv_res;
       OZ (sql::ObSPIService::spi_convert(*session,
                                          alloc,
