@@ -2968,16 +2968,12 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
           LOG_WARN("unexpected param type of expr", K(ret), KPC(expr));
         } else {
           sub_pk_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(1));
-          ObString table_name = sub_pk_expr->get_table_name();
-          if (!table_name.empty()) {
-            PRINT_QUOT;
-            DATA_PRINTF("%.*s", LEN_AND_PTR(table_name));
-            PRINT_QUOT;
-            DATA_PRINTF(".");
-            PRINT_QUOT;
-            DATA_PRINTF("%.*s", LEN_AND_PTR(ObString(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME)));
-            PRINT_QUOT;
-          }
+          // Mock a rowid ColumnRefExpr temporarily
+          ObColumnRefRawExpr tmp_rowid_expr;
+          tmp_rowid_expr.set_expr_type(sub_pk_expr->get_expr_type());
+          tmp_rowid_expr.assign(*sub_pk_expr);
+          tmp_rowid_expr.set_column_name(ObString(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME));
+          PRINT_EXPR(&tmp_rowid_expr);
         }
         break;
       }
