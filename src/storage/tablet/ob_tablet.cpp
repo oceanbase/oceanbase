@@ -1112,8 +1112,16 @@ int ObTablet::rollback_ref_cnt(
   } else if (OB_UNLIKELY(length_ > len - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("buffer's length is not enough", K(ret), K(length_), K(len - new_pos));
-  } else if (OB_FAIL(load_deserialize_v2(allocator, buf, len, pos, new_pos, false))) {
-    LOG_WARN("fail to load deserialize tablet v2", K(ret), K(length_), K(len - new_pos), KPC(this));
+  } else {
+    do {
+      if (OB_FAIL(load_deserialize_v2(allocator, buf, len, pos, new_pos, false))) {
+        LOG_WARN("fail to load deserialize tablet v2", K(ret), K(length_), K(len - new_pos), KPC(this));
+      }
+    } while (ignore_ret(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else if (OB_UNLIKELY(length_ != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet's length doesn't match standard length", K(ret), K(new_pos), K(pos), K_(length));
