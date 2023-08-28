@@ -1244,6 +1244,8 @@ int ObWindowFunctionOp::init()
               aggr_func->aggr_processor_.set_in_window_func();
               if (OB_FAIL(aggr_func->aggr_processor_.init())) {
                 LOG_WARN("failed to initialize init_group_rows", K(ret));
+                aggr_func->~AggrCell();
+                aggr_func = NULL;
               } else {
                 aggr_func->aggr_processor_.set_dir_id(dir_id_);
                 aggr_func->aggr_processor_.set_io_event_observer(&io_event_observer_);
