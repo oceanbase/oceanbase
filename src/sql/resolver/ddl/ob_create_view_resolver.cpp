@@ -309,10 +309,13 @@ int ObCreateViewResolver::check_view_columns(ObSelectStmt &select_stmt,
   hash::ObHashSet<ObString> view_col_names;
   int64_t select_item_size = select_stmt.get_select_item_size();
   if (NULL != view_columns_node && view_columns_node->num_child_ > 0) {
+    ObCollationType cs_type = CS_TYPE_INVALID;
     if (OB_UNLIKELY(!is_force_view && select_item_size != view_columns_node->num_child_)) {
       ret = OB_ERR_VIEW_WRONG_LIST;
       LOG_WARN("view columns is not equal with select columns", K(select_item_size),
                                                       K(view_columns_node->num_child_));
+    } else if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
+        LOG_WARN("fail to get collation_connection", K(ret));
     } else if (OB_FAIL(view_col_names.create(view_columns_node->num_child_))) {
       LOG_WARN("failed to init hashset", K(ret), K(select_stmt.get_select_items().count()));
     } else if (is_force_view && select_item_size != view_columns_node->num_child_) {
@@ -328,6 +331,8 @@ int ObCreateViewResolver::check_view_columns(ObSelectStmt &select_stmt,
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid null children", K(ret), K(view_columns_node->children_[i]));
       } else if (FALSE_IT(dup_col_name = ObString::make_string(view_columns_node->children_[i]->str_value_))) {
+      } else if (OB_FAIL(ObCharset::tolower(cs_type, dup_col_name, dup_col_name, *allocator_))) {
+        LOG_WARN("fail to lower string", K(ret));
       } else if (OB_HASH_EXIST == (ret = view_col_names.set_refactored(dup_col_name, 0))) {
         is_col_dup = true;
         ret = OB_SUCCESS;
@@ -369,15 +374,11 @@ int ObCreateViewResolver::check_view_columns(ObSelectStmt &select_stmt,
     }
   } else if (lib::is_mysql_mode()) {
     ObArray<int64_t> index_array;
-    for (int64_t i = 0; OB_SUCC(ret) && i < select_item_size; ++i) {
-      if (OB_FAIL(check_select_stmt_col_name(select_stmt.get_select_item(i),
-                                             index_array, i,
-                                             view_col_names, is_col_dup, dup_col_name))) {
-        SQL_RESV_LOG(WARN, "check select stmt col name failed", K(ret),
-                                  K(select_stmt.get_select_item(i).alias_name_));
-      }
-    }
-    if (OB_SUCC(ret) && OB_FAIL(create_alias_names_auto(index_array, &select_stmt, view_col_names))) {
+    if (OB_FAIL(check_view_stmt_col_name(select_stmt,
+                                         index_array,
+                                         view_col_names))) {
+      SQL_RESV_LOG(WARN, "check select stmt col name failed", K(ret));
+    } else if (OB_FAIL(create_alias_names_auto(index_array, &select_stmt, view_col_names))) {
       SQL_RESV_LOG(WARN, "check and create alias name failed", K(ret), K(index_array));
     }
   }
@@ -552,62 +553,88 @@ int ObCreateViewResolver::stmt_print(const ObSelectStmt *stmt,
   return ret;
 }
 
-// 这个函数用于检查用户定义的列别名是否超长或重复，并记录非用户定义的超长列名的下标
-int ObCreateViewResolver::check_select_stmt_col_name(
-    SelectItem &select_item,
+int ObCreateViewResolver::check_view_stmt_col_name(
+    ObSelectStmt &select_stmt,
     ObArray<int64_t> &index_array,
-    int64_t pos,
-    common::hash::ObHashSet<ObString> &view_col_names,
-    bool &is_expr_or_col_dup,
-    ObString &dup_col_name)
+    common::hash::ObHashSet<ObString> &view_col_names)
 {
+  /*
+  * for real_alis name report error, otherwise auto gen col name
+  * 1. column name is to long
+  * 2. column name end with space
+  * 3. column name already exists
+  */
   int ret = OB_SUCCESS;
   int hash_ret = OB_HASH_NOT_EXIST;
-  bool is_real_alias_ = select_item.is_real_alias_ ||
-                        ObRawExprUtils::is_column_ref_skip_implicit_cast(select_item.expr_);
-  // 用于检查列名是否超长的标志
-  bool len_is_legal = false;
-  // 如果列没有被用户指定一个别名，那么 alias_name_ 就和 expr_name_ 保持一致
-  ObString col_name = select_item.alias_name_;
-  if (is_real_alias_) {
-    // 如果是真的别名，别名长度不允许超过 64，超过则报错
-    if (col_name.length() > static_cast<size_t>(OB_MAX_VIEW_COLUMN_NAME_LENGTH_MYSQL)) {
-      ret = OB_WRONG_COLUMN_NAME;
-      LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, col_name.length(), col_name.ptr());
-    } else {
-      len_is_legal = true;
-    }
-  } else if (col_name.length() > static_cast<size_t>(OB_MAX_VIEW_COLUMN_NAME_LENGTH_MYSQL)) {
-    // 如果列没有别名，超过 64 的话系统则自动为其会生成一个列别名
-    // 因为需要避免自动生成的列名和用户定义的列名相同的情况，所以这里暂时把这种情况的列序号记录下来
-    if (OB_FAIL(add_var_to_array_no_dup(index_array, pos))) {
-      LOG_WARN("failed to add var", K(ret));
-      SQL_RESV_LOG(WARN, "add var failed", K(ret), K(pos), K(col_name));
-    } else {
-      len_is_legal = true;
-    }
+  ObCollationType cs_type = CS_TYPE_INVALID;
+  bool need_gen_name = false;
+  int64_t select_item_size = select_stmt.get_select_item_size();
+  if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
+        LOG_WARN("fail to get collation_connection", K(ret));
   }
-
-  if (OB_SUCC(ret) && len_is_legal) {
-    // 如果不是超长列名，则检查是否有重名
-    if (OB_HASH_EXIST == (hash_ret = view_col_names.exist_refactored(col_name))) {
-      if (dup_col_name.empty() && is_real_alias_) {
-        is_expr_or_col_dup = true;
-        dup_col_name = select_item.alias_name_;
-      } else if ((!is_real_alias_) && OB_FAIL(add_var_to_array_no_dup(index_array, pos))) {
-        SQL_RESV_LOG(WARN, "add var failed", K(ret), K(pos), K(col_name));
-      }
-      ret = OB_SUCCESS;
-      // ret = OB_ERR_COLUMN_DUPLICATE;
-      // LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, col_name.length(), col_name.ptr());
-    } else {
-      // 向 hash set 插入 col_name
-      if (OB_FAIL(view_col_names.set_refactored(col_name, 0))) {
+  /*
+  *check real alias name first
+  *create view v as select 'K ','k','c' as 'k';
+  *->| Name_exp_1 | Name_exp_2 | k |
+  */
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_item_size; ++i) {
+    ObString dup_col_name;
+    ObString col_name = select_stmt.get_select_item(i).alias_name_;
+    SelectItem& select_item = select_stmt.get_select_item(i);
+    bool is_real_alias_ = select_item.is_real_alias_ ||
+                          ObRawExprUtils::is_column_ref_skip_implicit_cast(select_item.expr_);
+    if (is_real_alias_) {
+      if (OB_FAIL(ObCharset::tolower(cs_type, col_name, dup_col_name, *allocator_))) {
+        LOG_WARN("fail to lower string", K(ret));
+      } else if (dup_col_name.length() > static_cast<size_t>(OB_MAX_VIEW_COLUMN_NAME_LENGTH_MYSQL)) {
+        ret = OB_WRONG_COLUMN_NAME;
+        LOG_WARN("view col_name is too long", K(col_name), K(ret));
+        LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, col_name.length(), col_name.ptr());
+      } else if (OB_FAIL(ObSQLUtils::check_column_name(cs_type, dup_col_name))) {
+        LOG_WARN("fail to check_column_name", K(col_name), K(ret));
+      } else if ((OB_HASH_EXIST == (hash_ret = view_col_names.exist_refactored(dup_col_name)))) {
+        ret = OB_ERR_COLUMN_DUPLICATE;
+        LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, dup_col_name.length(), dup_col_name.ptr());
+        LOG_WARN("view col_name is real_alias and duplicated", K(col_name), K(ret));
+      } else if (OB_FAIL(view_col_names.set_refactored(dup_col_name, 0))) {
         SQL_RESV_LOG(WARN, "set column name to hash set failed", K(ret), K(col_name));
       }
     }
   }
-
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_item_size; ++i) {
+    ObString dup_col_name;
+    ObString col_name = select_stmt.get_select_item(i).alias_name_;
+    SelectItem& select_item = select_stmt.get_select_item(i);
+    bool need_gen_name = false;
+    bool is_real_alias_ = select_item.is_real_alias_ ||
+                          ObRawExprUtils::is_column_ref_skip_implicit_cast(select_item.expr_);
+    if (!is_real_alias_) {
+      if (OB_FAIL(ObCharset::tolower(cs_type, col_name, dup_col_name, *allocator_))) {
+        LOG_WARN("fail to lower string", K(ret));
+      } else if (dup_col_name.length() > static_cast<size_t>(OB_MAX_VIEW_COLUMN_NAME_LENGTH_MYSQL)) {
+          need_gen_name = true;
+      } else if (OB_FAIL(ObSQLUtils::check_column_name(cs_type, dup_col_name))) {
+        if (ret == OB_WRONG_COLUMN_NAME) {
+          need_gen_name = true;
+          ret = OB_SUCCESS;
+          LOG_TRACE("view column name end with space is not real_alias will auto gen col name");
+        } else {
+          LOG_WARN("fail to check column name", K(col_name), K(ret));
+        }
+      } else if ((OB_HASH_EXIST == (hash_ret = view_col_names.exist_refactored(dup_col_name)))) {
+        need_gen_name = true;
+        ret = OB_SUCCESS;
+        LOG_TRACE("view column name end with space is not real_alias will auto gen col name");
+      } else if (OB_FAIL(view_col_names.set_refactored(dup_col_name, 0))) {
+        SQL_RESV_LOG(WARN, "set column name to hash set failed", K(ret), K(col_name));
+      }
+      if (OB_SUCC(ret) && need_gen_name) {
+        if (OB_FAIL(add_var_to_array_no_dup(index_array, i))){
+          SQL_RESV_LOG(WARN, "add var failed", K(ret), K(i), K(col_name));
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -618,11 +645,16 @@ int ObCreateViewResolver::create_alias_names_auto(
     common::hash::ObHashSet<ObString> &view_col_names)
 {
   int ret = OB_SUCCESS;
-
   int64_t long_col_name_num = index_array.size();
   uint64_t auto_name_id = 1;
   ObString tmp_col_name;
   int hash_ret = OB_HASH_EXIST;
+  ObCollationType cs_type = CS_TYPE_INVALID;
+  bool need_gen_name = false;
+  ObString dup_col_name;
+  if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
+        LOG_WARN("fail to get collation_connection", K(ret));
+  }
   for (int64_t j = 0; OB_SUCC(ret) && j < long_col_name_num; ++j) {
     // 创建系统自动生成的列名，并检查冲突
     hash_ret = OB_HASH_EXIST;
@@ -633,8 +665,11 @@ int ObCreateViewResolver::create_alias_names_auto(
       }
       if (OB_SUCC(ret)) {
         tmp_col_name = ObString::make_string(temp_str_buf);
+        if (OB_FAIL(ObCharset::tolower(cs_type, tmp_col_name, dup_col_name, *allocator_))) {
+          LOG_WARN("fail to lower string", K(ret));
+        }
       }
-      if (OB_HASH_EXIST == (hash_ret = view_col_names.exist_refactored(tmp_col_name))) {
+      if (OB_HASH_EXIST == (hash_ret = view_col_names.exist_refactored(dup_col_name))) {
         ++auto_name_id;
       }
     }
@@ -645,7 +680,9 @@ int ObCreateViewResolver::create_alias_names_auto(
       } else {
         select_stmt->get_select_item(index_array[j]).alias_name_.assign_ptr(col_name.ptr(), col_name.length());
         // 向 hash set 插入 col_name
-        if (OB_FAIL(view_col_names.set_refactored(col_name, 0))) {
+        if (OB_FAIL(ObCharset::tolower(cs_type, col_name, dup_col_name, *allocator_))) {
+          LOG_WARN("fail to lower string", K(ret));
+        } else if (OB_FAIL(view_col_names.set_refactored(dup_col_name, 0))) {
           SQL_RESV_LOG(WARN, "set column name to hash set failed", K(ret), K(col_name));
         }
       }

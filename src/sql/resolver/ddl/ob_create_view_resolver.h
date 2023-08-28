@@ -64,13 +64,9 @@ private:
   int resolve_column_list(ParseNode *view_columns_node,
                           common::ObIArray<common::ObString> &column_list,
                           ObTableSchema &table_schema);
-  int check_select_stmt_col_name(
-      SelectItem &select_item,
-      ObArray<int64_t> &index_array,
-      int64_t pos,
-      common::hash::ObHashSet<ObString> &view_col_names,
-      bool &is_expr_or_col_dup,
-      ObString &dup_col_name);
+  int check_view_stmt_col_name(ObSelectStmt &select_stmt,
+                               ObArray<int64_t> &index_array,
+                               common::hash::ObHashSet<ObString> &view_col_names);
   int check_view_columns(ObSelectStmt &select_stmt,
                          ParseNode *view_columns_node,
                          share::schema::ObErrorInfo &error_info,

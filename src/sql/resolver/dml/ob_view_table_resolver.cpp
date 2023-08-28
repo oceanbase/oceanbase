@@ -215,7 +215,7 @@ int ObViewTableResolver::set_select_item(SelectItem &select_item, bool is_auto_g
         }
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(ObSQLUtils::check_column_name(cs_type, select_item.alias_name_))) {
+    if (OB_SUCC(ret) && OB_FAIL(ObSQLUtils::check_column_name(cs_type, select_item.alias_name_, true))) {
       LOG_WARN("fail to make field name", K(ret));
     }
     if (OB_SUCC(ret) && OB_FAIL(select_stmt->add_select_item(select_item))) {
