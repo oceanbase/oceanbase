@@ -34,72 +34,19 @@ int ObDistPlans::init(ObSqlPlanSet* ps)
   return ret;
 }
 
-int ObDistPlans::get_plan(ObPlanCacheCtx& pc_ctx, const uint64_t try_flags,
-    ObIPartitionLocationCache& location_cache_used, ObPhysicalPlan*& plan)
+int ObDistPlans::get_plan(ObPlanCacheCtx &pc_ctx, ObIPartitionLocationCache &location_cache_used,
+    ObPhysicalPlan *&plan)
 {
   int ret = OB_SUCCESS;
   plan = NULL;
   bool is_matched = false;
+  ObSEArray<ObPhyTableLocation, 4> out_phy_tbl_locs;
 
-  LOG_DEBUG("Get Plan", K(dist_plans_.count()), K(try_flags), K(should_get_plan_directly_));
+  LOG_DEBUG("Get Plan", K(dist_plans_.count()));
   if (OB_ISNULL(plan_set_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid null plan_set_", K(ret));
-  } else if (should_get_plan_directly_ && (0 == try_flags || plan_set_->is_multi_stmt_plan())) {
-    // must be single table dist paln if it is multi stmt plan
-    // single table should just return plan, do not match
-    if (0 == dist_plans_.count()) {
-      ret = OB_SQL_PC_NOT_EXIST;
-      LOG_DEBUG("dist plan list is empty", K(ret), K(dist_plans_.count()));
-    } else if (OB_ISNULL(dist_plans_.at(0))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get an unexpected null plan", K(ret), K(dist_plans_.at(0)));
-    } else {
-      dist_plans_.at(0)->inc_ref_count(pc_ctx.handle_id_);
-      plan = dist_plans_.at(0);
-      is_matched = true;
-
-      // fill table location for single plan using px
-      // for single dist plan without px, we already fill the phy locations while calculating plan type
-      // for multi table px plan, physical location is calculated in match step
-      ObSEArray<ObPhyTableLocationInfo, 4> out_phy_tbl_loc_infos;
-      ObSEArray<ObPhyTableLocation, 4> out_phy_tbl_locs;
-      bool need_check_on_same_server = false;
-      if (OB_ISNULL(plan_set_)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid null plan set", K(ret), K(plan_set_));
-      } else if (!plan_set_->enable_inner_part_parallel()) {
-        // do nothing
-      } else if (OB_FAIL(ObPhyLocationGetter::get_phy_locations(plan->get_table_locations(),
-                     pc_ctx,
-                     location_cache_used,
-                     out_phy_tbl_loc_infos,
-                     need_check_on_same_server))) {
-        LOG_WARN("failed to get physical table locations", K(ret));
-      } else if (OB_FAIL(out_phy_tbl_locs.prepare_allocate(out_phy_tbl_loc_infos.count()))) {
-        LOG_WARN("failed to preparep allocate array", K(ret), K(out_phy_tbl_loc_infos.count()));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < out_phy_tbl_loc_infos.count(); i++) {
-          if (OB_FAIL(out_phy_tbl_locs.at(i).assign_from_phy_table_loc_info(out_phy_tbl_loc_infos.at(i)))) {
-            LOG_WARN("failed to assign phy table location", K(ret));
-          } else {
-            // do nothing
-          }
-        }  // for end
-
-        if (OB_FAIL(ret)) {
-          // do nothing
-        } else if (OB_FAIL(set_phy_table_locations_for_ctx(pc_ctx, out_phy_tbl_locs))) {
-          LOG_WARN("failed to set physical table locations for exec ctx", K(ret));
-        } else {
-          // do nothing
-        }
-      }
-    }
   }
-
-  ObSEArray<ObPhyTableLocation, 4> out_phy_tbl_locs;
-
   for (int64_t i = 0; OB_SUCC(ret) && !is_matched && i < dist_plans_.count(); i++) {
     ObPhysicalPlan* tmp_plan = dist_plans_.at(i);
     if (OB_ISNULL(tmp_plan)) {
@@ -124,8 +71,7 @@ int ObDistPlans::get_plan(ObPlanCacheCtx& pc_ctx, const uint64_t try_flags,
   return ret;
 }
 
-int ObDistPlans::add_plan(
-    const bool is_single_table, const uint64_t try_flags, ObPhysicalPlan& plan, ObPlanCacheCtx& pc_ctx)
+int ObDistPlans::add_plan(ObPhysicalPlan &plan, ObPlanCacheCtx &pc_ctx)
 {
   int ret = OB_SUCCESS;
   bool is_same = false;
@@ -151,19 +97,8 @@ int ObDistPlans::add_plan(
           K(pc_ctx.sql_ctx_.base_constraints_),
           K(pc_ctx.sql_ctx_.strict_constraints_),
           K(pc_ctx.sql_ctx_.non_strict_constraints_));
-    } else if (is_single_table && dist_plans_.count() >= 1) {
-      // only one distributed plan is allowed for single table
-      ret = OB_SQL_PC_PLAN_DUPLICATE;
-      LOG_INFO("distributed plan already exists for single table query", K(ret), K(dist_plans_.count()));
     } else if (OB_FAIL(dist_plans_.push_back(&plan))) {
       LOG_WARN("fail to add plan", K(ret));
-    } else {
-      should_get_plan_directly_ = is_single_table && (0 == try_flags || plan.get_px_dop() > 1);
-      LOG_DEBUG("should get plan without matching constraint",
-          K(should_get_plan_directly_),
-          K(is_single_table),
-          K(try_flags),
-          K(plan.get_px_dop()));
     }
   }
 
@@ -254,10 +189,6 @@ int ObDistPlans::match(const ObPlanCacheCtx& pc_ctx, const ObPhysicalPlan* plan,
     } else if (has_duplicate_table &&
                OB_FAIL(reselect_duplicate_table_best_replica(base_cons, server, phy_tbl_infos))) {
       LOG_WARN("failed to reselect duplicate table replica", K(ret));
-    } else if (should_get_plan_directly_) {
-      // if should_get_plan_directly_ == true:
-      //  it is single table dist plan
-      //  no need to check if match the constraint
     } else if (OB_FAIL(cmp_table_types(base_cons, server, out_tbl_locations, phy_tbl_infos, is_matched))) {
       LOG_WARN("failed to compare table types", K(ret), K(base_cons));
     } else if (!is_matched) {

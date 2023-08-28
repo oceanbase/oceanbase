@@ -29,7 +29,7 @@ class ObSqlPlanSet;
 
 class ObDistPlans {
 public:
-  ObDistPlans() : plan_set_(NULL), should_get_plan_directly_(false)
+  ObDistPlans() : plan_set_(NULL)
   {}
 
   /**
@@ -45,7 +45,7 @@ public:
    * @param plan distribute physical plan to add
    * @param pc_ctx plan cache context
    */
-  int add_plan(const bool is_single_table, const uint64_t try_flags, ObPhysicalPlan& plan, ObPlanCacheCtx& pc_ctx);
+  int add_plan(ObPhysicalPlan &plan, ObPlanCacheCtx &pc_ctx);
 
   /**
    * @brief get plan from dist plan list
@@ -53,8 +53,7 @@ public:
    * @param pc_ctx plan cache contex
    * @retval plan physical plan returned if matched
    */
-  int get_plan(ObPlanCacheCtx& pc_ctx, const uint64_t try_flags, share::ObIPartitionLocationCache& location_cache_used,
-      ObPhysicalPlan*& plan);
+  int get_plan(ObPlanCacheCtx &pc_ctx, share::ObIPartitionLocationCache &location_cache_used, ObPhysicalPlan *&plan);
 
   /**
    * @brief remove all the plans the corresponding plan stats
@@ -91,7 +90,6 @@ public:
   void reset()
   {
     dist_plans_.reset();
-    should_get_plan_directly_ = false;
     plan_set_ = nullptr;
   }
 
@@ -169,9 +167,6 @@ private:
 private:
   common::ObSEArray<ObPhysicalPlan*, 4> dist_plans_;
   ObSqlPlanSet* plan_set_;
-  // optimize perf for single table distributed plan
-  bool should_get_plan_directly_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDistPlans);
 };

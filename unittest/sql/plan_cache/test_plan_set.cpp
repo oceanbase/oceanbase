@@ -356,14 +356,8 @@ TEST_F(TestPlanSet, basic)
   is_same = false;
   EXPECT_TRUE(OB_SUCCESS == plan_set->match_params_info(params, pc_ctx[6], OB_INVALID_INDEX, is_same));
   EXPECT_TRUE(false == is_same);
-  // test dist plan with single table
-  plan_set->reset();
-  plan_set->plan_cache_value_ = plan_cache_value;
-  plan_set->init_new_set(pc_ctx[3], *(phy_plan[3]), OB_INVALID_INDEX, plan_cache_value->get_pc_alloc());
-  EXPECT_TRUE(OB_SUCCESS == plan_set->add_cache_obj(*(phy_plan[3]), pc_ctx[3], OB_INVALID_INDEX));
-  ObCacheObject* plan_selected = NULL;
-  EXPECT_TRUE(OB_SUCCESS == plan_set->select_plan(test_sql->get_part_cache(), pc_ctx[3], plan_selected));
   // test dist plan with multi table, not support
+  ObCacheObject* plan_selected = NULL;
   plan_set->remove_all_plan();
   plan_set->reset();
   plan_set->plan_cache_value_ = plan_cache_value;

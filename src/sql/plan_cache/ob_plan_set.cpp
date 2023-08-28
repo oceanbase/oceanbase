@@ -963,10 +963,8 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan& plan, ObPlanCacheCtx& pc_ctx, int64_t
         } break;
         case OB_PHY_PLAN_DISTRIBUTED: {
           SQL_PC_LOG(DEBUG, "plan set add plan, distr plan", K(ret));
-          bool is_single_table = (1 == phy_location_infos.count());
-          int64_t need_try_plan = is_multi_stmt_plan() ? 0 : need_try_plan_;
-          if (OB_FAIL(dist_plans_.add_plan(is_single_table, need_try_plan, plan, pc_ctx))) {
-            LOG_WARN("failed to add dist plan", K(ret), K(is_single_table), K(plan));
+          if (OB_FAIL(dist_plans_.add_plan(plan, pc_ctx))) {
+            LOG_WARN("failed to add dist plan", K(ret), K(plan));
           } else {
             SQL_PC_LOG(DEBUG, "plan added to dist plan list", K(ret));
           }
@@ -1405,7 +1403,7 @@ int ObSqlPlanSet::get_plan_normal(
           }
           LOG_DEBUG("get from array binding plan", K(ret), K(plan_type), K(pc_ctx));
         } else if (enable_inner_part_parallel_exec_) {
-          if (OB_FAIL(dist_plans_.get_plan(pc_ctx, need_try_plan_, location_cache, plan))) {
+          if (OB_FAIL(dist_plans_.get_plan(pc_ctx, location_cache, plan))) {
             LOG_DEBUG("failed to get px plan", K(ret));
           }
         } else if (OB_FAIL(
@@ -1448,7 +1446,7 @@ int ObSqlPlanSet::get_plan_normal(
               }
             } break;
             case OB_PHY_PLAN_DISTRIBUTED: {
-              if (OB_FAIL(dist_plans_.get_plan(pc_ctx, need_try_plan_, location_cache, plan))) {
+              if (OB_FAIL(dist_plans_.get_plan(pc_ctx, location_cache, plan))) {
                 if (OB_SQL_PC_NOT_EXIST == ret) {
                   LOG_DEBUG("fail to get dist plan", K(ret));
                 } else {
@@ -1548,7 +1546,7 @@ int ObSqlPlanSet::get_plan_special(
 
   // try dist plan
   if (OB_SUCC(ret) && get_next) {
-    if (OB_FAIL(dist_plans_.get_plan(pc_ctx, need_try_plan_, location_cache, plan))) {
+    if (OB_FAIL(dist_plans_.get_plan(pc_ctx, location_cache, plan))) {
       LOG_DEBUG("failed to get dist plan", K(ret));
     } else if (plan != NULL) {
       LOG_DEBUG("succeed to get dist plan", K(*plan));
