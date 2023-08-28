@@ -158,7 +158,8 @@ int ObTabletPersister::convert_tablet_to_mem_arg(
   } else if (CLICK_FAIL(tablet.fetch_autoinc_seq(auto_inc_seq))) {
     LOG_WARN("fail to fetch autoinc seq", K(ret), K(tablet));
   } else {
-    arg.auto_inc_seq_ptr_ = auto_inc_seq.get_member();
+    arg.auto_inc_seq_addr_ = tablet.mds_data_.auto_inc_seq_.addr_;
+    arg.auto_inc_seq_ptr_ = arg.auto_inc_seq_addr_.is_none() ? nullptr : auto_inc_seq.get_member();
     arg.rowkey_read_info_ptr_ = tablet.rowkey_read_info_;
     arg.table_store_addr_ = tablet.table_store_addr_.addr_;
     arg.storage_schema_addr_ = tablet.storage_schema_addr_.addr_;
@@ -168,7 +169,6 @@ int ObTabletPersister::convert_tablet_to_mem_arg(
     arg.aux_tablet_info_committed_kv_addr_ = tablet.mds_data_.aux_tablet_info_.committed_kv_.addr_;
     arg.extra_medium_info_ = tablet.mds_data_.extra_medium_info_;
     arg.medium_info_list_addr_ = tablet.mds_data_.medium_info_list_.addr_;
-    arg.auto_inc_seq_addr_ = tablet.mds_data_.auto_inc_seq_.addr_;
     arg.ddl_kvs_ = tablet.ddl_kvs_;
     arg.ddl_kv_count_ = tablet.ddl_kv_count_;
     MEMCPY(arg.memtables_, tablet.memtables_, sizeof(memtable::ObIMemtable*) * MAX_MEMSTORE_CNT);
