@@ -787,7 +787,6 @@ public:
   int set_max_trx_size_config();
   // one phase commit
   int set_1pc_config();
-  int set_balance_strategy_config();
   int check_config_result(const char* name, const char* value);
   int set_enable_oracle_priv_check();
 

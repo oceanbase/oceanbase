@@ -2861,8 +2861,8 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg& arg)
       LOG_WARN("fail to set one phase commit config", K(ret));
     } else if (OB_FAIL(set_enable_oracle_priv_check())) {
       LOG_WARN("fail to set enable oracle priv check", K(ret));
-    } else if (OB_FAIL(set_balance_strategy_config())) {
-      LOG_WARN("fail to set balance strategy config", K(ret));
+    } else {
+      // nothing
     }
 
     // clear bootstrap flag, regardless failure or success
@@ -2873,18 +2873,6 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg& arg)
     ret = OB_SUCC(ret) ? tmp_ret : ret;
   }
   BOOTSTRAP_LOG(INFO, "execute_bootstrap finished", K(ret));
-  return ret;
-}
-
-int ObRootService::set_balance_strategy_config()
-{
-  int ret = OB_SUCCESS;
-  int64_t affected_rows = 0;
-  const char* CHANGE_SQL = "ALTER SYSTEM SET _partition_balance_strategy = 'standard'";
-  if (OB_FAIL(sql_proxy_.write(CHANGE_SQL, affected_rows))) {
-    LOG_WARN("execute sql failed", K(ret), K(CHANGE_SQL));
-  }
-
   return ret;
 }
 
