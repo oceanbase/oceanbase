@@ -243,10 +243,17 @@ ObSelectResolver *ObAggrExprPushUpAnalyzer::fetch_final_aggr_resolver(ObDMLResol
             || T_HAVING_SCOPE == cur_resolver->get_parent_namespace_resolver()->get_current_scope()
             || (T_ORDER_SCOPE == cur_resolver->get_parent_namespace_resolver()->get_current_scope()
                 && T_WHERE_SCOPE != cur_resolver->get_current_scope()))) {
-      if (cur_resolver->is_select_resolver() && static_cast<ObSelectResolver*>(cur_resolver)->is_in_set_query()) {
-        //当前resolver是位于union等关键字标识的set query中，aggr function不再铺上给union上层的查询
-        //例如：SELECT (SELECT MAX(t1.b) from t2 union select 1 from t2 where 12 < 3) FROM t1 GROUP BY t1.a;
-        //MAX(t1.b)中引用了第一层的属性，但是MAX(t1.b)整个表达式保留在union的左支中
+      if (lib::is_oracle_mode() && cur_resolver->is_select_resolver()) {
+        /*
+         * bug fix:
+         *
+         * SELECT (SELECT COUNT(t1.a) from dual) FROM t1 GROUP BY t1.a;
+         *                  *
+         * SELECT (SELECT COUNT(t1.a) union select 1 where 1>2) FROM t1 GROUP BY t1.a;
+         *                  *
+         * For oracle, aggr func always belongs to the subquery, does not need to push up.
+         * For mysql, aggr func belongs to the upper level, whether there is a "union" or not.
+         */
       } else {
         ObDMLResolver *next_resolver = cur_resolver->get_parent_namespace_resolver();
         final_resolver = fetch_final_aggr_resolver(next_resolver, min_level_resolver);
