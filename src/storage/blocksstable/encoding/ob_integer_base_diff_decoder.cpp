@@ -486,7 +486,7 @@ int ObIntegerBaseDiffDecoder::in_operator(
       // All rows are false
       result_bitmap.reuse();
       LOG_DEBUG("Hit shortcut, max(obj_set) < base_obj, return all-false bitmap", K(base_obj));
-    } else if (OB_LIKELY(can_vectorized()) && OB_LIKELY(is_inited())) {
+    } else {
       // prepare arguments
       int64_t cur_row_id = 0;
       int64_t end_row_id = col_ctx.micro_block_header_->row_count_;
@@ -534,24 +534,6 @@ int ObIntegerBaseDiffDecoder::in_operator(
         }
       }
       LOG_TRACE("in_operator use batch decode successfully", K(ret), K(col_ctx.is_fix_length()));
-    } else {
-      // traverse and decode all data
-      // do compare row by row
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(traverse_all_data(
-                     parent, col_ctx, col_data, filter, result_bitmap, FP_INT_OP_MAX,
-                     [](const ObObj &cur_obj,
-                        const sql::ObWhiteFilterExecutor &filter,
-                        bool &result,
-                        const ObFPIntCmpOpType &cmp_op_type) -> int {
-                       int ret = OB_SUCCESS;
-                       if (OB_FAIL(filter.exist_in_obj_set(cur_obj, result))) {
-                         LOG_WARN("Failed to check object in obj_set", K(ret), K(cur_obj));
-                       }
-                       return ret;
-                     }))) {
-        LOG_WARN("Failed to traverse all data in micro block", K(ret));
-      }
     }
   }
   return ret;
