@@ -973,8 +973,8 @@ private:
                                 ObIArray<ObDataType> &row_desc,
                                 bool is_type_record);
 
-  static int store_datums(ObObj &dest_addr, const ObIArray<ObObj> &result,
-                          ObIAllocator *alloc, bool is_schema_object);
+  static int store_datums(ObObj &dest_addr, ObIArray<ObObj> &result,
+                          ObIAllocator *alloc, ObSQLSessionInfo *session_info, bool is_schema_object);
 
   static int store_datum(int64_t &current_addr, const ObObj &obj);
 

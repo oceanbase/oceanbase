@@ -7520,14 +7520,14 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
           for (int64_t i = 0; OB_SUCC(ret) && i < calc_array->count(); ++i) {
             ObObj tmp;
             if (calc_array->at(i).is_pl_extend()) {
-              pl::ObUserDefinedType::deep_copy_obj(*alloc, calc_array->at(i), tmp);
+              OZ (pl::ObUserDefinedType::deep_copy_obj(*alloc, calc_array->at(i), tmp));
             } else {
               OZ (ob_write_obj(*alloc, calc_array->at(i), tmp));
             }
             OX (calc_array->at(i) = tmp);
           }
         }
-        OZ (store_datums(result_address, *calc_array, alloc, is_schema_object));
+        OZ (store_datums(result_address, *calc_array, alloc, ctx->exec_ctx_->get_my_session(), is_schema_object));
       }
     } else if (is_question_mark_expression(*result_expr)) { //通过question mark访问得到的基础变量
       int64_t param_idx = get_const_value(*result_expr).get_unknown();
@@ -7783,8 +7783,11 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
   return ret;
 }
 
-int ObSPIService::store_datums(ObObj &dest_addr, const ObIArray<ObObj> &obj_array,
-                               ObIAllocator *alloc, bool is_schema_object)
+int ObSPIService::store_datums(ObObj &dest_addr,
+                               ObIArray<ObObj> &obj_array,
+                               ObIAllocator *alloc,
+                               ObSQLSessionInfo *session_info,
+                               bool is_schema_object)
 {
   int ret = OB_SUCCESS;
   if (obj_array.empty() || OB_ISNULL(alloc)) {
@@ -7848,6 +7851,15 @@ int ObSPIService::store_datums(ObObj &dest_addr, const ObIArray<ObObj> &obj_arra
     } else { //must be a single Obj
       CK (1 == obj_array.count());
       OX (current_datum = reinterpret_cast<int64_t>(dest_addr.get_ext()));
+    }
+
+    if (OB_FAIL(ret)) {
+      for (int64_t i = 0; i < obj_array.count(); ++i) {
+        int tmp_ret = OB_SUCCESS;
+        if ((tmp_ret = ObUserDefinedType::destruct_obj(obj_array.at(i), session_info)) != OB_SUCCESS) {
+          LOG_WARN("failed to destruct obj, memory may leak", K(ret), K(tmp_ret), K(i), K(obj_array));
+        }
+      }
     }
 
     for (int64_t i = 0; OB_SUCC(ret) && !is_opaque && i < obj_array.count(); ++i) {
