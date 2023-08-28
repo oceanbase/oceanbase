@@ -479,7 +479,7 @@ int ObIntegerBaseDiffDecoder::in_operator(
     base_obj.copy_meta_type(col_ctx.obj_meta_);
     base_obj.v_.uint64_ = base_;
     // use max(obj_set) compare with base
-    bool filter_obj_smaller_than_base = filter.is_obj_array_sorted() && (filter.get_max_param() < base_obj);
+    bool filter_obj_smaller_than_base = filter.get_max_param() < base_obj;
 
     if (filter_obj_smaller_than_base) {
       // Do not need to decode the data

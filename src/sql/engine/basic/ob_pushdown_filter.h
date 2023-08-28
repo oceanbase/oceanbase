@@ -530,7 +530,6 @@ public:
   int exist_in_obj_set(const common::ObObj &obj, bool &is_exist) const;
   int exist_in_obj_array(const common::ObObj &obj, bool &is_exist) const;
   bool is_obj_set_created() const { return param_set_.created(); };
-  OB_INLINE bool is_obj_array_sorted() const { return obj_array_sorted_; };
   OB_INLINE const ObObj &get_min_param() const { return params_.at(0); };
   OB_INLINE const ObObj &get_max_param() const { return params_.at(params_.count() - 1); };
   OB_INLINE ObWhiteFilterOperatorType get_op_type() const
@@ -546,7 +545,6 @@ private:
 private:
   bool null_param_contained_;
   ParamArray params_;
-  bool obj_array_sorted_;
   common::hash::ObHashSet<common::ObObj, common::hash::NoPthreadDefendMode, ObWhiteFilterHashFunc> param_set_;
   ObPushdownWhiteFilterNode &filter_;
 };

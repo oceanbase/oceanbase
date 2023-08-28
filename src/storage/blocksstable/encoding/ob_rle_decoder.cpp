@@ -386,7 +386,7 @@ int ObRLEDecoder::in_operator(
       bool is_hit_shortcut = false;
       bool is_sorted_dict = dict_meta_header->is_sorted_dict();
 
-      if (is_sorted_dict && filter.is_obj_array_sorted()) {
+      if (is_sorted_dict) {
         // Sorted dictionary, binary search here to find boundary element
         left_it = std::lower_bound(left_it, right_it, filter.get_min_param());
         right_it = std::upper_bound(left_it, right_it, filter.get_max_param());

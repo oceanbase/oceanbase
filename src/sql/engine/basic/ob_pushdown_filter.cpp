@@ -1077,7 +1077,6 @@ void ObWhiteFilterExecutor::check_null_params()
 int ObWhiteFilterExecutor::init_obj_set()
 {
   int ret = OB_SUCCESS;
-  obj_array_sorted_ = false;
   // 1. create obj hashset
   if (param_set_.created()) {
     param_set_.destroy();
@@ -1095,11 +1094,7 @@ int ObWhiteFilterExecutor::init_obj_set()
     }
   }
   // 2. make params sorted
-  if (OB_FAIL(ret)) {
-  } else {
-    std::sort(params_.begin(), params_.end(), ObWhiteFilterParamsCmpFunc());
-    obj_array_sorted_ = true;
-  }
+  std::sort(params_.begin(), params_.end(), ObWhiteFilterParamsCmpFunc());
   return ret;
 }
 
@@ -1123,11 +1118,7 @@ int ObWhiteFilterExecutor::exist_in_obj_array(const ObObj &obj, bool &is_exist) 
   int ret = OB_SUCCESS;
   // If params_.count() is small(<=8), the overhead of comparing with max/min values 
   // becomes very large for the entire process, so skip it.
-  if (OB_UNLIKELY(!obj_array_sorted_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Failed to check if exist, obj array not sorted", K(ret), K_(obj_array_sorted));
-  } else if (params_.count() > 8 && (obj < get_min_param() || obj > get_max_param())) {
-    // obj > max_obj || obj < min_obj
+  if (params_.count() > 8 && (obj < get_min_param() || obj > get_max_param())) {
     is_exist = false;
   } else {
     is_exist = std::binary_search(params_.begin(), params_.end(), obj, ObWhiteFilterParamsCmpFunc());

@@ -1015,7 +1015,7 @@ int ObDictDecoder::in_operator(
       bool is_hit_shortcut = false;
       bool is_sorted_dict = meta_header_->is_sorted_dict();
 
-      if (is_sorted_dict && filter.is_obj_array_sorted()) {
+      if (is_sorted_dict) {
         // Sorted dictionary, binary search here to find boundary element
         left_it = std::lower_bound(left_it, right_it, filter.get_min_param());
         right_it = std::upper_bound(left_it, right_it, filter.get_max_param());
@@ -1258,7 +1258,7 @@ int ObDictDecoder::set_ref_exist_in_objs(
     break;
   }
   case ObDictParamCmpType::BINARY_SEARCH: {
-    is_binary_search = filter.is_obj_array_sorted();
+    is_binary_search = true;
   }
   case ObDictParamCmpType::HASH_SEARCH: {
     ObDictDecoderIterator &dict_it = left_it;
