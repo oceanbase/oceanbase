@@ -847,11 +847,14 @@ int ObTmpTenantMemBlockManager::init(const uint64_t tenant_id,
   } else if (OB_UNLIKELY(blk_nums_threshold <= 0) || OB_UNLIKELY(blk_nums_threshold > 1)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(blk_nums_threshold));
-  } else if (OB_FAIL(wait_handles_map_.create(MBLK_HASH_BUCKET_NUM, ObModIds::OB_TMP_BLOCK_MAP))) {
+  } else if (OB_FAIL(wait_handles_map_.create(MBLK_HASH_BUCKET_NUM, ObModIds::OB_TMP_BLOCK_MAP,
+          "WaitHdl", tenant_id))) {
     STORAGE_LOG(WARN, "fail to create wait handles map", K(ret));
-  } else if (OB_FAIL(t_mblk_map_.create(MBLK_HASH_BUCKET_NUM, ObModIds::OB_TMP_BLOCK_MAP))) {
+  } else if (OB_FAIL(t_mblk_map_.create(MBLK_HASH_BUCKET_NUM, ObModIds::OB_TMP_BLOCK_MAP,
+          "TmpMBlk", tenant_id))) {
     STORAGE_LOG(WARN, "Fail to create allocating block map, ", K(ret));
-  } else if (OB_FAIL(dir_to_blk_map_.create(MBLK_HASH_BUCKET_NUM, ObModIds::OB_TMP_MAP))) {
+  } else if (OB_FAIL(dir_to_blk_map_.create(MBLK_HASH_BUCKET_NUM, ObModIds::OB_TMP_MAP,
+          "DirToBlk", tenant_id))) {
     STORAGE_LOG(WARN, "Fail to create tmp dir map, ", K(ret));
   } else if (OB_FAIL(map_lock_.init(MBLK_HASH_BUCKET_NUM, ObLatchIds::TMP_FILE_MEM_BLOCK_LOCK, "TmpMemBlkMgr", MTL_ID()))) {
     STORAGE_LOG(WARN, "Fail to create tmp dir map, ", K(ret));
