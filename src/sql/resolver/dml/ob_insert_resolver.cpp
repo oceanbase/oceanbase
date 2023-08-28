@@ -983,6 +983,12 @@ int ObInsertResolver::resolve_insert_assign(const ParseNode& assign_list)
         LOG_WARN("Add value-row to ObInsertStmt error", K(ret));
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(check_need_match_all_params(
+              insert_stmt->get_values_desc(), insert_stmt->get_query_ctx()->need_match_all_params_))) {
+        LOG_WARN("check need match all params failed", K(ret));
+      }
+    }
   }
 
   return ret;
@@ -1452,6 +1458,12 @@ int ObInsertResolver::resolve_insert_values(const ParseNode* node)
       if (OB_FAIL(append(insert_stmt->get_values_desc(), tmp_values_desc))) {
         LOG_WARN("fail to append new values_desc");
       }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(check_need_match_all_params(
+            insert_stmt->get_values_desc(), insert_stmt->get_query_ctx()->need_match_all_params_))) {
+      LOG_WARN("check need match all params failed", K(ret));
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++) {
@@ -2495,5 +2507,40 @@ int ObInsertResolver::remove_dup_dep_cols_for_heap_table(ObInsertStmt& stmt)
   LOG_DEBUG("remove dup dep cols done", K(dep_cols));
   return ret;
 }
+
+int ObInsertResolver::check_need_match_all_params(
+    const common::ObIArray<ObColumnRefRawExpr *> &value_descs, bool &need_match)
+{
+  int ret = OB_SUCCESS;
+  need_match = false;
+  ObSEArray<uint64_t, 4> col_ids;
+  ObBitSet<> column_bs;
+  for (int64_t i = 0; OB_SUCC(ret) && i < value_descs.count() && !need_match; ++i) {
+    ObColumnRefRawExpr *value_desc = value_descs.at(i);
+    if (OB_ISNULL(value_desc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("value desc is null", K(ret), K(value_descs));
+    } else if (OB_FAIL(column_bs.add_member(value_desc->get_column_id()))) {
+      LOG_WARN("add column id failed", K(ret));
+    }
+  }
+  // if a depend column exists in value_desc, need match the datatypes of all params
+  for (int64_t i = 0; OB_SUCC(ret) && i < value_descs.count() && !need_match; ++i) {
+    if (value_descs.at(i)->is_generated_column()) {
+      col_ids.reset();
+      if (OB_FAIL(ObRawExprUtils::extract_column_ids(value_descs.at(i)->get_dependant_expr(), col_ids))) {
+        LOG_WARN("extract column exprs failed", K(ret));
+      } else {
+        for (int64_t j = 0; j < col_ids.count() && !need_match; ++j) {
+          if (column_bs.has_member(col_ids.at(j))) {
+            need_match = true;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase

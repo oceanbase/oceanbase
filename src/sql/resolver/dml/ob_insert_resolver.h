@@ -107,6 +107,7 @@ protected:
   int replace_gen_col_dependent_col();
   int replace_col_with_new_value(ObRawExpr*& expr);
   int remove_dup_dep_cols_for_heap_table(ObInsertStmt& stmt);
+  int check_need_match_all_params(const common::ObIArray<ObColumnRefRawExpr *> &value_descs, bool &need_match);
   ObSelectResolver*& get_sub_select_resolver()
   {
     return sub_select_resolver_;

@@ -240,6 +240,7 @@ ObSqlCtx::ObSqlCtx()
       all_possible_const_param_constraints_(nullptr),
       all_equal_param_constraints_(nullptr),
       trans_happened_route_(nullptr),
+      need_match_all_params_(false),
       is_ddl_from_primary_(false),
       cur_stmt_(NULL),
       can_reroute_sql_(false),
@@ -285,6 +286,7 @@ void ObSqlCtx::reset()
   all_equal_param_constraints_ = nullptr;
   trans_happened_route_ = nullptr;
   is_bushy_tree_ = false;
+  need_match_all_params_ = false;
   is_ddl_from_primary_ = false;
   can_reroute_sql_ = false;
   reroute_info_.reset();

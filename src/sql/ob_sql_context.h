@@ -385,6 +385,7 @@ public:
   common::ObIArray<ObPCConstParamInfo>* all_possible_const_param_constraints_;
   common::ObIArray<ObPCParamEqualInfo>* all_equal_param_constraints_;
   common::ObIArray<uint64_t>* trans_happened_route_;
+  bool need_match_all_params_;  // only used for matching plans
   bool is_ddl_from_primary_;  // The standby cluster synchronizes the ddl sql statement that needs to be processed from
                               // the main library
   const sql::ObStmt* cur_stmt_;
@@ -435,6 +436,7 @@ public:
         monitoring_ids_(),
         all_user_variable_(),
         forbid_use_px_(false),
+        need_match_all_params_(false),
         has_udf_(false),
         has_pl_udf_(false),
         temp_table_infos_()
@@ -461,6 +463,7 @@ public:
     forbid_use_px_ = false;
     monitoring_ids_.reset();
     all_user_variable_.reset();
+    need_match_all_params_ = false;
     has_udf_ = false;
     has_pl_udf_ = false;
     temp_table_infos_.reset();
@@ -597,6 +600,7 @@ public:
   common::ObSEArray<ObMonitorHint, 8> monitoring_ids_;
   common::ObSEArray<ObUserVarIdentRawExpr*, 8, common::ModulePageAllocator, true> all_user_variable_;
   bool forbid_use_px_;
+  bool need_match_all_params_;  // only used for matching plans
   bool has_udf_;
   bool has_pl_udf_;  // used to mark query has pl udf
   common::ObSEArray<ObSqlTempTableInfo*, 4, common::ModulePageAllocator, true> temp_table_infos_;

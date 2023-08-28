@@ -1458,6 +1458,7 @@ int ObSql::generate_stmt(ParseResult &parse_result, ObPlanCacheCtx *pc_ctx, ObSq
     context.all_possible_const_param_constraints_ = &(resolver_ctx.query_ctx_->all_possible_const_param_constraints_);
     context.all_equal_param_constraints_ = &(resolver_ctx.query_ctx_->all_equal_param_constraints_);
     context.trans_happened_route_ = &(resolver_ctx.query_ctx_->trans_happened_route_);
+    context.need_match_all_params_ = resolver_ctx.query_ctx_->need_match_all_params_;
     context.cur_stmt_ = stmt;
 
     LOG_DEBUG("got plan const param constraints", K(resolver_ctx.query_ctx_->all_plan_const_param_constraints_));

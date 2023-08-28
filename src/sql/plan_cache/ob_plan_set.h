@@ -103,6 +103,7 @@ public:
         related_user_sess_var_metas_(alloc_),
         all_possible_const_param_constraints_(alloc_),
         all_plan_const_param_constraints_(alloc_),
+        need_match_all_params_(false),
         multi_stmt_rowkey_pos_(alloc_),
         pre_cal_expr_handler_(NULL)
   {}
@@ -216,6 +217,8 @@ protected:
   ObSEArray<uint64_t, 4> trans_happened_route_;
   // record which T_CHAR const matches T_VARCHAR
   common::ObBitSet<> change_char_index_;
+  // if true, check the datatypes of all params
+  bool need_match_all_params_;
   // maintain the rowkey position for multi_stmt
   common::ObFixedArray<int64_t, common::ObIAllocator> multi_stmt_rowkey_pos_;
   // pre calculable expression list handler.

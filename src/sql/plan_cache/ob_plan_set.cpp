@@ -176,7 +176,7 @@ int ObPlanSet::match_param_info(const ObParamInfo& param_info, const ObObjParam&
   // insert into t values (:0)
   // two sql have the same key `insert into t values (?)`
   // but they have complete different plans
-  if (param_info.flag_.need_to_check_type_ || (is_batched_multi_stmt && param.is_ext())) {
+  if (param_info.flag_.need_to_check_type_ || (is_batched_multi_stmt && param.is_ext()) || need_match_all_params_) {
     if (param.get_param_meta().get_type() != param.get_type()) {
       LOG_TRACE("differ in match param info", K(param.get_param_meta().get_type()), K(param.get_type()));
     }
@@ -330,7 +330,7 @@ int ObPlanSet::match_params_info(
   } else {
     int64_t N = infos.count();
     for (int64_t i = 0; is_same && i < N; ++i) {
-      if (true == is_same && params_info_.at(i).flag_.need_to_check_type_) {
+      if (true == is_same && (params_info_.at(i).flag_.need_to_check_type_ || need_match_all_params_)) {
         if (infos.at(i).type_ != params_info_.at(i).type_ || infos.at(i).scale_ != params_info_.at(i).scale_ ||
             (params_info_.at(i).flag_.need_to_check_extend_type_ &&
                 infos.at(i).ext_real_type_ != params_info_.at(i).ext_real_type_)) {
@@ -466,6 +466,7 @@ int ObPlanSet::init_new_set(
         SQL_PC_LOG(WARN, "fail to push back param info", K(ret));
       }
     }
+    need_match_all_params_ = sql_ctx.need_match_all_params_;
 
     if (OB_SUCC(ret) && OB_FAIL(change_char_index_.add_members2(pc_ctx.change_char_index_))) {
       LOG_WARN("failed to add bitset membsers", K(ret));
