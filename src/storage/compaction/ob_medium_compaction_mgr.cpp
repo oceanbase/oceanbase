@@ -389,8 +389,8 @@ int ObTabletMediumCompactionInfoRecorder::submit_log(
       LOG_ERROR("failed to dec ref on memtable", K(tmp_ret), K_(ls_id), K_(tablet_id));
     }
   } else {
-    LOG_INFO("success to submit medium log", K(ret), K_(tablet_id), K(medium_info_), K_(clog_scn),
-        "max_saved_version", get_max_saved_version());
+    LOG_INFO("success to submit medium log", K(ret), K_(ls_id), K_(tablet_id), K(medium_info_),
+      K_(clog_scn), "max_saved_version", get_max_saved_version());
   }
 
   return ret;

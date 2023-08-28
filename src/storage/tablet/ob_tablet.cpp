@@ -4657,8 +4657,7 @@ int ObTablet::get_storage_schema_for_transfer_in(
   } else {
     int64_t old_column_cnt = storage_schema.get_column_count();
     int64_t old_schema_version = storage_schema.get_schema_version();
-    storage_schema.column_cnt_ = MAX(old_column_cnt, max_column_cnt_in_memtable);
-    storage_schema.store_column_cnt_ = MAX(store_column_cnt_in_schema, max_column_cnt_in_memtable);
+    storage_schema.update_column_cnt(max_column_cnt_in_memtable);
     storage_schema.schema_version_ = MAX(old_schema_version, max_schema_version_in_memtable);
     LOG_INFO("succeeded to get storage schema from transfer source tablet", K(ret), K(storage_schema), K(max_column_cnt_in_memtable),
         K(max_schema_version_in_memtable), K(old_column_cnt), K(store_column_cnt_in_schema), K(old_schema_version));
