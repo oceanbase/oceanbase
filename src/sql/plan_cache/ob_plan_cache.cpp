@@ -994,7 +994,7 @@ int ObPlanCache::cache_evict_all_pl()
     }
   }
 
-  SQL_PC_LOG(DEBUG, "cache evict all pl end", K(to_evict_keys));
+  SQL_PC_LOG(DEBUG, "cache evict all pl end");
   return ret;
 }
 
