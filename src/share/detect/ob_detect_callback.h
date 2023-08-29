@@ -18,6 +18,7 @@
 #include "sql/engine/px/ob_dfo.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_share_info.h"
 #include "lib/container/ob_se_array.h"
+#include "lib/list/ob_dlink_node.h"
 
 namespace oceanbase {
 
@@ -67,11 +68,21 @@ enum class DetectCallBackType
   P2P_DATAHUB_DETECT_CB = 5,
 };
 
+// detectable id with activate time, used for delay detect
+class ObDetectableIdDNode : public common::ObDLinkBase<ObDetectableIdDNode>
+{
+public:
+  ObDetectableIdDNode() : detectable_id_(), activate_tm_(0) {}
+  ObDetectableId detectable_id_;
+  int64_t activate_tm_;
+  TO_STRING_KV(K_(detectable_id), K_(activate_tm));
+};
+
 class ObIDetectCallback
 {
 public:
   // constructor for pass peer_states from derived class
-  explicit ObIDetectCallback(uint64_t tenant_id, const ObIArray<ObPeerTaskState> &peer_states);
+  ObIDetectCallback(uint64_t tenant_id, const ObIArray<ObPeerTaskState> &peer_states);
   virtual void destroy()
   {
     peer_states_.reset();
@@ -105,6 +116,8 @@ protected:
   common::ObAddr from_svr_addr_; // in which server the task is detected as finished
   common::ObCurTraceId::TraceId trace_id_;
   bool alloc_succ_;
+public:
+  ObDetectableIdDNode d_node_; // used for delay detect
 };
 
 class ObQcDetectCB : public ObIDetectCallback

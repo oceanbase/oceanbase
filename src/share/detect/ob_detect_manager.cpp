@@ -14,15 +14,10 @@
 #include "share/detect/ob_detect_manager.h"
 #include "lib/ob_running_mode.h"
 #include "share/rc/ob_context.h"
+#include "lib/lock/ob_spin_lock.h"
 
 namespace oceanbase {
 namespace common {
-
-struct ObDetectableIdWrapper : public common::ObLink
-{
-  ObDetectableId detectable_id_;
-  int64_t activate_tm_;
-};
 
 ObDetectableIdGen::ObDetectableIdGen()
 {
@@ -54,6 +49,110 @@ int ObDetectableIdGen::generate_detectable_id(ObDetectableId &detectable_id, uin
     detectable_id.tenant_id_ = tenant_id;
   }
   return ret;
+}
+
+int ObDMMultiDlist::init(int64_t tenant_id, int64_t bucket_num)
+{
+  int ret = OB_SUCCESS;
+  bucket_num_ = bucket_num;
+  allocator_.set_attr(ObMemAttr(tenant_id, "ObDMMDL"));
+  locks_.set_allocator(&allocator_);
+  buckets_.set_allocator(&allocator_);
+  if (OB_FAIL(locks_.init(bucket_num_))) {
+    LIB_LOG(WARN, "[DM] failed to init locks_");
+  } else if (OB_FAIL(buckets_.init(bucket_num_))) {
+    LIB_LOG(WARN, "[DM] failed to init buckets_");
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < bucket_num_; ++i) {
+    ObLockWrapper *lock = OB_NEWx(ObLockWrapper, &allocator_);
+    ObDList<ObDetectableIdDNode> *dlist = OB_NEWx(ObDList<ObDetectableIdDNode>, &allocator_);
+    if (OB_ISNULL(lock) || OB_ISNULL(dlist)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LIB_LOG(WARN, "[DM] failed to allocate");
+    } else if (OB_FAIL(locks_.push_back(lock))) {
+      LIB_LOG(WARN, "[DM] failed to push_back lock");
+    } else if (OB_FAIL(buckets_.push_back(dlist))) {
+      LIB_LOG(WARN, "[DM] failed to push_back dlist");
+    }
+  }
+  return ret;
+}
+
+void ObDMMultiDlist::destroy() {
+  for (int64_t i = 0; i < locks_.count(); ++i) {
+    locks_.at(i)->~ObLockWrapper();
+    allocator_.free(locks_.at(i));
+  }
+  for (int64_t i = 0; i < buckets_.count(); ++i) {
+    buckets_.at(i)->~ObDList<ObDetectableIdDNode>();
+    allocator_.free(buckets_.at(i));
+  }
+  locks_.destroy();
+  buckets_.destroy();
+  LIB_LOG(INFO, "[DM] destroy ObDMMultiDlist");
+}
+
+void ObDMMultiDlist::add_list_node_tail(const ObDetectableId &detectable_id, ObDetectableIdDNode *node)
+{
+  int64_t bucket_id = detectable_id.first_ % bucket_num_;
+  {
+    ObLockGuard<common::ObSpinLock> lock_guard(*locks_.at(bucket_id));
+    buckets_.at(bucket_id)->add_last(node);
+  }
+}
+
+void ObDMMultiDlist::remove_list_node(const ObDetectableId &detectable_id, ObDetectableIdDNode *node)
+{
+  int64_t bucket_id = detectable_id.first_ % bucket_num_;
+  {
+    ObLockGuard<common::ObSpinLock> lock_guard(*locks_.at(bucket_id));
+    buckets_.at(bucket_id)->remove(node);
+  }
+}
+
+void ObDMMultiDlist::pop_active_node(
+    hash::ObHashSet<ObDetectableId, hash::NoPthreadDefendMode> &still_need_check_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t cur_time = ObTimeUtil::current_time();
+  for (int64_t i = 0; OB_SUCC(ret) && i < bucket_num_; ++i) {
+    bool end_bucket_traverse = false;
+    // pop MAX_LOCK_LENGTH nodes per lock time
+    while (!end_bucket_traverse && OB_SUCC(ret)) {
+      int64_t poped_cnt = 0;
+      ObLockGuard<common::ObSpinLock> lock_guard(*locks_.at(i));
+      if (buckets_.at(i)->is_empty()) {
+        break;
+      }
+      ObDetectableIdDNode *cur = buckets_.at(i)->get_first();
+      ObDetectableIdDNode *next = nullptr;
+      while (OB_SUCC(ret) && ++poped_cnt <= MAX_LOCK_LENGTH) {
+        if (cur->activate_tm_ > cur_time) {
+          // all remain nodes in this bucket are not active, stopping traverse this bucket.
+          end_bucket_traverse = true;
+          break;
+        } else {
+          if (OB_FAIL(still_need_check_id.set_refactored(cur->detectable_id_))) {
+            if (OB_HASH_EXIST != ret) {
+              end_bucket_traverse = true;
+              LIB_LOG(WARN, "[DM] failed to set_refactored", K(ret), K(cur->detectable_id_));
+              break;
+            } else {
+              ret = OB_SUCCESS;
+            }
+          }
+          // pop cur node
+          next = cur->get_next();
+          buckets_.at(i)->remove(cur);
+          cur = next;
+          if (buckets_.at(i)->is_empty()) {
+            end_bucket_traverse = true;
+            break;
+          }
+        }
+      }
+    }
+  }
 }
 
 int ObDetectManager::mtl_init(ObDetectManager *&dm)
@@ -88,18 +187,9 @@ void ObDetectManager::mtl_destroy(ObDetectManager *&dm)
 void ObDetectManager::destroy()
 {
   int ret = OB_SUCCESS;
-  // destroy wrapper in fifo_que_
-  int64_t que_size = fifo_que_.size();
-  for (int64_t idx = 0; idx < que_size; ++idx) {
-    common::ObLink *p = nullptr;
-    IGNORE_RETURN fifo_que_.pop(p);
-    ObDetectableIdWrapper *wrapper = static_cast<ObDetectableIdWrapper *>(p);
-    if (OB_ISNULL(wrapper)) {
-      LIB_LOG(WARN, "[DM] wrapper is null");
-      continue;
-    }
-    mem_context_->get_malloc_allocator().free(wrapper);
-  }
+  // destroy dm_multi_list_
+  dm_multi_list_.destroy();
+
   // destroy node and callback in all_check_items_
   FOREACH(iter, all_check_items_) {
     const ObDetectableId &detectable_id = iter->first;
@@ -160,6 +250,9 @@ int ObDetectManager::init(const ObAddr &self, double mem_factor)
                                          tenant_id_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LIB_LOG(WARN, "[DM] create hash set failed", K(ret));
+  } else if (OB_FAIL(dm_multi_list_.init(tenant_id_,
+        is_meta_tenant(tenant_id_) ? DM_MDLIST_BUCKETS_COUNT_FOR_META_TENANT : DM_MDLIST_BUCKETS_COUNT))) {
+    LIB_LOG(WARN, "[DM] failed to init ObDMMultiDlist", K(ret));
   } else {
     self_ = self;
     is_inited_ = true;
@@ -202,67 +295,46 @@ int ObDetectManager::unregister_detectable_id(const ObDetectableId &detectable_i
   return ret;
 }
 
-int ObDetectManager::do_register_check_item(const ObDetectableId &detectable_id, ObIDetectCallback *cb,
+int ObDetectManager::do_register_check_item(const ObDetectableId &detectable_id, ObDetectCallbackNode *cb_node,
                                          uint64_t &node_sequence_id, bool need_ref)
 {
   int ret = OB_SUCCESS;
-  ObDetectCallbackNode *cb_node = nullptr;
-  if (OB_ISNULL(cb)) {
+  if (OB_ISNULL(cb_node)) {
     ret = OB_INVALID_ARGUMENT;
-    LIB_LOG(WARN, "[DM] invaild cb pointer");
-  } else if (OB_FAIL(create_cb_node(cb, cb_node))) {
-    cb->destroy();
-    mem_context_->free(cb);
-    LIB_LOG(WARN, "[DM] fail to create cb node", K(ret));
+    LIB_LOG(WARN, "[DM] invaild cb node pointer");
   } else {
-    ObDetectableIdWrapper *wrapper = OB_NEWx(ObDetectableIdWrapper, &mem_context_->get_malloc_allocator());
-    LIB_LOG(DEBUG, "[DM] dm new wrapper ", K(wrapper));
-    if (OB_ISNULL(wrapper)) {
-      delete_cb_node(cb_node);
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LIB_LOG(WARN, "[DM] failed to create wrapper");
-    } else {
-      // if need_ref is true, which means that work thread may use cb, so add ref_count in case of deleting cb during ObDetectCallbackNodeExecuteCall
-      // typical scene: qc may change sqc's task state in callback upon receiving the report message from sqc, but dm may free callback already
-      if (need_ref) {
-        cb->inc_ref_count();
-      }
-      node_sequence_id = cb_node->sequence_id_;
-      // A slightly more complicated but safe inspection operation
-      // Since map does not provide the operation of "create or modify", nor does it provide the ability to hold bucket locks
-      // Therefore, add cyclic verification to prevent the occurrence of
-      // thread a failed to create --> thread b erased --> thread a failed to modify
-      // Such a situation
-      do {
-        if (OB_HASH_EXIST == (ret = all_check_items_.set_refactored(detectable_id, cb_node))) {
-          ObDetectCallbackNodeAddCall add_node_call(cb_node);
-          ret = all_check_items_.atomic_refactored(detectable_id, add_node_call);
-          // If it is an empty queue, it means that another thread wants to delete the node but unexpectedly got the lock by this thread
-          // So do not delete, try to put again according to HASH_NOT_EXIST
-          if (add_node_call.is_empty()) {
-            ret = OB_HASH_NOT_EXIST;
-          }
+    // if need_ref is true, which means that work thread may use cb, so add ref_count in case of deleting cb during ObDetectCallbackNodeExecuteCall
+    // typical scene: qc may change sqc's task state in callback upon receiving the report message from sqc, but dm may free callback already
+    if (need_ref) {
+      cb_node->cb_->inc_ref_count();
+    }
+    node_sequence_id = cb_node->sequence_id_;
+    // A slightly more complicated but safe inspection operation
+    // Since map does not provide the operation of "create or modify", nor does it provide the ability to hold bucket locks
+    // Therefore, add cyclic verification to prevent the occurrence of
+    // thread a failed to create --> thread b erased --> thread a failed to modify
+    // Such a situation
+    ObObDetectCallbackNodeSetCall set_node_call(this);
+    do {
+      if (OB_HASH_EXIST == (ret = all_check_items_.set_refactored(detectable_id, cb_node, 0, 0, 0, &set_node_call))) {
+        ObDetectCallbackNodeAddCall add_node_call(cb_node, this);
+        ret = all_check_items_.atomic_refactored(detectable_id, add_node_call);
+        // If it is an empty queue, it means that another thread wants to delete the node but unexpectedly got the lock by this thread
+        // So do not delete, try to put again according to HASH_NOT_EXIST
+        if (add_node_call.is_empty()) {
+          ret = OB_HASH_NOT_EXIST;
         }
-      } while (ret == OB_HASH_NOT_EXIST);
-
-      if (OB_SUCC(ret)) {
-        // For short queries, we do not need to detect
-        // Use a fifo que to make detect delay, all queries existed more than ACTIVATE_DELAY_TIME will be activate and be detected by dm.
-        wrapper->detectable_id_ = detectable_id;
-        wrapper->activate_tm_ = ObTimeUtility::current_time() + ACTIVATE_DELAY_TIME;
-        // push is never fail
-        IGNORE_RETURN fifo_que_.push(wrapper);
       }
-      // hashmap may set_refactored for alloc failed
-      if OB_FAIL(ret) {
-        delete_cb_node(cb_node);
-      }
+    } while (ret == OB_HASH_NOT_EXIST);
+    // hashmap may set_refactored for alloc failed
+    if OB_FAIL(ret) {
+      delete_cb_node(cb_node);
     }
   }
 
   if (OB_SUCC(ret)) {
     LIB_LOG(DEBUG, "[DM] register_check_item", K(ret), K(detectable_id),
-            K(cb->get_detect_callback_type()), K(node_sequence_id));
+            K(cb_node->cb_->get_detect_callback_type()), K(node_sequence_id));
   }
   return ret;
 }
@@ -299,33 +371,8 @@ int ObDetectManager::unregister_check_item(const ObDetectableId &detectable_id, 
 int ObDetectManager::gather_requests(REQUEST_MAP &req_map, lib::MemoryContext &req_map_context)
 {
   int ret = OB_SUCCESS;
-  int64_t que_size = fifo_que_.size();
-  int64_t cur_time = ObTimeUtil::current_time();
-  // don't break if failed
-  for (int64_t idx = 0; idx < que_size; ++idx) {
-    common::ObLink *p = nullptr;
-    IGNORE_RETURN fifo_que_.pop(p);
-    ObDetectableIdWrapper *wrapper = static_cast<ObDetectableIdWrapper *>(p);
-    if (OB_ISNULL(wrapper)) {
-      LIB_LOG(WARN, "[DM] wrapper is null");
-      continue;
-    } else if (wrapper->activate_tm_ > cur_time) {
-      // the check item is not activated, push to fifo que again
-      // push_front never failed, because wrapper is not null
-      IGNORE_RETURN fifo_que_.push_front(wrapper);
-      break;
-    }
-    // push all activated check item into still_need_check_id_
-    if (OB_FAIL(still_need_check_id_.set_refactored(wrapper->detectable_id_, 0/* flag */))) {
-      if (OB_HASH_EXIST != ret) {
-        LIB_LOG(WARN, "[DM] failed to set_refactored", K(ret), K(wrapper->detectable_id_));
-      } else {
-        ret = OB_SUCCESS;
-      }
-    }
-    mem_context_->get_malloc_allocator().free(wrapper);
-    LIB_LOG(DEBUG, "[DM] dm free wrapper ", K(wrapper));
-  }
+  IGNORE_RETURN dm_multi_list_.pop_active_node(still_need_check_id_);
+
   ObSEArray<ObDetectableId, 32> remove_list;
   FOREACH(iter, still_need_check_id_) {
     const ObDetectableId &detectable_id = iter->first;
@@ -384,30 +431,24 @@ void ObDetectManager::do_handle_one_result(const ObDetectableId &detectable_id, 
   }
 }
 
-int ObDetectManager::create_cb_node(ObIDetectCallback *cb, ObDetectCallbackNode *&cb_node)
-{
-  int ret = OB_SUCCESS;
-  // each node has its own unique node_sequence_id for identify itself in the linked list
-  cb_node = OB_NEWx(ObDetectCallbackNode, &mem_context_->get_malloc_allocator(),
-                    cb, ObDetectableIdGen::instance().get_callback_node_sequence_id());
-  if (OB_ISNULL(cb_node)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LIB_LOG(WARN, "[DM] failed to new cb_node");
-  }
-  LIB_LOG(DEBUG, "[DM] dm new cb node ", K(cb_node));
-  return ret;
-}
-
 void ObDetectManager::delete_cb_node(ObDetectCallbackNode *&cb_node)
 {
   int ret = OB_SUCCESS;
+  // cb and cb_node allocated simultaneously, just need to free cb_node
   LIB_LOG(DEBUG, "[DM] dm free cb ", K(cb_node->cb_));
   cb_node->cb_->destroy();
-  mem_context_->free(cb_node->cb_);
   cb_node->cb_ = nullptr;
   LIB_LOG(DEBUG, "[DM] dm free cbnode ", K(cb_node));
   mem_context_->free(cb_node);
   cb_node = nullptr;
+}
+
+int ObDetectManager::ObObDetectCallbackNodeSetCall::operator()(const hash::HashMapPair<ObDetectableId,
+    ObDetectCallbackNode *> &entry)
+{
+  int ret = OB_SUCCESS;
+  (void) dm_->dm_multi_list_.add_list_node_tail(entry.first, &entry.second->cb_->d_node_);
+  return ret;
 }
 
 void ObDetectManager::ObDetectCallbackNodeAddCall::operator()(hash::HashMapPair<ObDetectableId,
@@ -418,6 +459,7 @@ void ObDetectManager::ObDetectCallbackNodeAddCall::operator()(hash::HashMapPair<
     cb_node_->next_ = entry.second;
     entry.second->prev_ = cb_node_;
     entry.second = cb_node_;
+    (void) dm_->dm_multi_list_.add_list_node_tail(entry.first, &cb_node_->cb_->d_node_);
     is_empty_ = false;
   } else {
     is_empty_ = true;
@@ -445,6 +487,7 @@ bool ObDetectManager::ObDetectCallbackNodeRemoveCall::operator()(hash::HashMapPa
         // Prev is empty, which means that the current deleted element is the head of the linked list pointed to by map_value, and head is set to next
         entry.second = node->next_;
       }
+      (void) dm_->dm_multi_list_.remove_list_node(entry.first, &node->cb_->d_node_);
       dm_->delete_cb_node(node);
       node_cnt--;
       break;
@@ -496,6 +539,7 @@ bool ObDetectManager::ObDetectCallbackNodeExecuteCall::operator()(hash::HashMapP
             // Prev is empty, which means that the current deleted element is the head of the linked list pointed to by map_value, and head is set to next
             entry.second = node->next_;
           }
+          (void) dm_->dm_multi_list_.remove_list_node(entry.first, &node->cb_->d_node_);
           dm_->delete_cb_node(node);
           node_cnt--;
         }

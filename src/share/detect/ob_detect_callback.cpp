@@ -22,7 +22,7 @@ namespace common {
 const int64_t DM_INTERRUPT_MSG_MAX_LENGTH = 128;
 
 ObIDetectCallback::ObIDetectCallback(uint64_t tenant_id, const ObIArray<ObPeerTaskState> &peer_states)
-    : ref_count_(0)
+    : ref_count_(0), d_node_()
 {
   int ret = OB_SUCCESS;
   peer_states_.set_attr(ObMemAttr(tenant_id, "DmCbStArr"));
