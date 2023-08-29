@@ -59,6 +59,7 @@ struct ObMtStat
   int64_t ready_for_flush_time_;
   int64_t create_flush_dag_time_;
   int64_t release_time_;
+  int64_t push_table_into_gc_queue_time_;
   int64_t last_print_time_;
 };
 
@@ -493,6 +494,7 @@ public:
                        K_(read_barrier), K_(is_flushed), K_(freeze_state), K_(allow_freeze),
                        K_(mt_stat_.frozen_time), K_(mt_stat_.ready_for_flush_time),
                        K_(mt_stat_.create_flush_dag_time), K_(mt_stat_.release_time),
+                       K_(mt_stat_.push_table_into_gc_queue_time),
                        K_(mt_stat_.last_print_time), K_(ls_id), K_(transfer_freeze_flag), K_(recommend_snapshot_version));
 private:
   static const int64_t OB_EMPTY_MEMSTORE_MAX_SIZE = 10L << 20; // 10MB

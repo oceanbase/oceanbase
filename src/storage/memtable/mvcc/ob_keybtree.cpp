@@ -1615,18 +1615,23 @@ void ObKeyBtree<BtreeKey, BtreeVal>::print(FILE *file) const
 template<typename BtreeKey, typename BtreeVal>
 int ObKeyBtree<BtreeKey, BtreeVal>::destroy()
 {
+  ObTimeGuard tg("keybtree destroy", 50L * 1000L); // 50ms
   destroy(ATOMIC_SET(&root_, nullptr));
+  tg.click();
   {
     HazardList reclaim_list;
     BtreeNode *p = nullptr;
     CriticalGuard(get_qsync());
     get_retire_station().purge(reclaim_list);
+    tg.click();
     while (OB_NOT_NULL(p = reinterpret_cast<BtreeNode *>(reclaim_list.pop()))) {
       free_node(p);
       p = nullptr;
     }
+    tg.click();
   }
   WaitQuiescent(get_qsync());
+  tg.click();
   return OB_SUCCESS;
 }
 

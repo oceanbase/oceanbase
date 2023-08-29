@@ -377,6 +377,19 @@ int ObTenantMetaMemMgr::push_table_into_gc_queue(ObITable *table, const ObITable
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to allocate memory for TableGCItem", K(ret), K(size));
   } else {
+    if (ObITable::TableType::DATA_MEMTABLE == table_type) {
+      ObMemtable *memtable = static_cast<ObMemtable *>(table);
+      memtable::ObMtStat& mt_stat = memtable->get_mt_stat();
+      if (0 == mt_stat.push_table_into_gc_queue_time_) {
+        mt_stat.push_table_into_gc_queue_time_ = ObTimeUtility::current_time();
+        if (0 != mt_stat.release_time_
+            && mt_stat.push_table_into_gc_queue_time_ -
+               mt_stat.release_time_ >= 10 * 1000 * 1000 /*10s*/) {
+          LOG_WARN("It cost too much time to dec ref cnt", K(ret), KPC(memtable), K(lbt()));
+        }
+      }
+    }
+
     item->table_ = table;
     item->table_type_ = table_type;
     if (OB_FAIL(free_tables_queue_.push((ObLink *)item))) {
