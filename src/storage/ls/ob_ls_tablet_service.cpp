@@ -5507,11 +5507,13 @@ int ObLSTabletService::get_ls_min_end_scn(
   } else if (OB_FAIL(tablet_id_set_.foreach(op))) {
     STORAGE_LOG(WARN, "fail to get all tablet ids from set", K(ret));
   } else {
+    SCN ls_checkpoint = ls_->get_clog_checkpoint_scn();
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
       ObTabletMapKey key(ls_id, tablet_ids.at(i));
       SCN min_end_scn_from_latest = SCN::max_scn();
       SCN min_end_scn_from_old = SCN::max_scn();
       if (OB_FAIL(t3m->get_min_end_scn_for_ls(key,
+                                              ls_checkpoint,
                                               min_end_scn_from_latest,
                                               min_end_scn_from_old))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
@@ -5520,10 +5522,18 @@ int ObLSTabletService::get_ls_min_end_scn(
           ret = OB_SUCCESS;
         }
       } else {
-        min_end_scn_from_latest_tablets = MIN(min_end_scn_from_latest_tablets, min_end_scn_from_latest);
-        min_end_scn_from_old_tablets = MIN(min_end_scn_from_old_tablets, min_end_scn_from_old);
+        if (min_end_scn_from_latest < min_end_scn_from_latest_tablets) {
+          LOG_DEBUG("update", K(key), K(min_end_scn_from_latest_tablets), K(min_end_scn_from_latest));
+          min_end_scn_from_latest_tablets = min_end_scn_from_latest;
+        }
+
+        if (min_end_scn_from_old < min_end_scn_from_old_tablets) {
+          LOG_DEBUG("update", K(key), K(min_end_scn_from_old_tablets), K(min_end_scn_from_old));
+          min_end_scn_from_old_tablets = min_end_scn_from_old;
+        }
       }
     }
+    LOG_INFO("get ls min end scn finish", K(ls_checkpoint));
   }
   return ret;
 }

@@ -186,6 +186,7 @@ public:
   //  - only for tx data table to find min log ts.
   int get_min_end_scn_for_ls(
       const ObTabletMapKey &key,
+      const SCN &ls_checkpoint,
       share::SCN &min_end_scn_from_latest,
       share::SCN &min_end_scn_from_old);
   int get_min_mds_ckpt_scn(const ObTabletMapKey &key, share::SCN &scn);
@@ -282,8 +283,11 @@ private:
   int64_t cal_adaptive_bucket_num();
   int push_tablet_into_gc_queue(ObTablet *tablet);
   void push_tablet_list_into_gc_queue(ObTablet *tablet);
-  int get_min_end_scn_from_single_tablet(
-      ObTablet *tablet, const bool is_old, share::SCN &min_end_scn);
+  int get_min_end_scn_from_single_tablet(ObTablet *tablet,
+                                         const bool is_old,
+                                         const SCN &ls_checkpoint,
+                                         share::SCN &min_end_scn);
+
 private:
   typedef ObResourceValueStore<ObMetaPointer<ObTablet>> TabletValueStore;
   typedef ObMetaObjBuffer<ObTablet, NORMAL_TABLET_POOL_SIZE> ObNormalTabletBuffer;

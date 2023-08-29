@@ -794,6 +794,7 @@ void *ObTenantMetaMemMgr::recycle_tablet(ObTablet *tablet, TabletBufferList *hea
 
 int ObTenantMetaMemMgr::get_min_end_scn_for_ls(
     const ObTabletMapKey &key,
+    const SCN &ls_checkpoint,
     SCN &min_end_scn_from_latest,
     SCN &min_end_scn_from_old)
 {
@@ -814,7 +815,7 @@ int ObTenantMetaMemMgr::get_min_end_scn_for_ls(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected invalid tablet handle", K(ret), K(key), K(handle));
   } else if (OB_FAIL(get_min_end_scn_from_single_tablet(
-      handle.get_obj(), false/*is_old*/, min_end_scn_from_latest))) {
+      handle.get_obj(), false/*is_old*/, ls_checkpoint, min_end_scn_from_latest))) {
     LOG_WARN("fail to get min end scn from latest tablet", K(ret), K(key), K(handle));
   } else {
     // get_ls_min_end_scn_in_latest_tablets must before get_ls_min_end_scn_in_old_tablets
@@ -829,7 +830,7 @@ int ObTenantMetaMemMgr::get_min_end_scn_for_ls(
     } else {
       // since the last tablet may not be the oldest, we traverse the wholo chain
       while (OB_SUCC(ret) && OB_NOT_NULL(tablet)) {
-        if (OB_FAIL(get_min_end_scn_from_single_tablet(tablet, true/*is_old*/, min_end_scn_from_old))) {
+        if (OB_FAIL(get_min_end_scn_from_single_tablet(tablet, true/*is_old*/, ls_checkpoint, min_end_scn_from_old))) {
           LOG_WARN("fail to get min end scn from old tablet", K(ret), KP(tablet));
         } else {
           tablet = tablet->get_next_tablet();
@@ -840,8 +841,10 @@ int ObTenantMetaMemMgr::get_min_end_scn_for_ls(
   return ret;
 }
 
-int ObTenantMetaMemMgr::get_min_end_scn_from_single_tablet(
-    ObTablet *tablet, const bool is_old, SCN &min_end_scn)
+int ObTenantMetaMemMgr::get_min_end_scn_from_single_tablet(ObTablet *tablet,
+                                                           const bool is_old,
+                                                           const SCN &ls_checkpoint,
+                                                           SCN &min_end_scn)
 {
   int ret = OB_SUCCESS;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
@@ -853,25 +856,24 @@ int ObTenantMetaMemMgr::get_min_end_scn_from_single_tablet(
   } else {
     ObITable *first_minor_mini_sstable =
         table_store_wrapper.get_member()->get_minor_sstables().get_boundary_table(false /*is_last*/);
-    ObITable *last_major_sstable = nullptr;
 
     SCN end_scn = SCN::max_scn();
     if (OB_NOT_NULL(first_minor_mini_sstable)) {
       // step 1 : get end_scn if minor/mini sstable exist
       end_scn = first_minor_mini_sstable->get_end_scn();
     } else if (is_old) {
+      // step 2 :
       /* If an old tablet has no minor sstable, it means that all the data inside it has been assigned version numbers,
          and therefore it does not depend on trx data.
          Thus, it's only necessary to focus on the recycle scn provided by the latest tablet. */
-    } else if (OB_NOT_NULL(last_major_sstable =
-        table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true /*is_last*/))) {
-      // step 2 : if minor/mini sstable do not exist, get end_scn from major sstable
-      end_scn = last_major_sstable->get_end_scn();
     } else {
-      // step 3 : if minor/major sstable do not exist, get end_scn from tablet clog_checkpoint
-      end_scn = tablet->get_tablet_meta().clog_checkpoint_scn_;
+      // step 3 : if minor sstable do not exist, us max{tablet_clog_checkpoint, ls_clog_checkpoint} as end_scn
+      end_scn = SCN::max(tablet->get_tablet_meta().clog_checkpoint_scn_, ls_checkpoint);
     }
-    min_end_scn = MIN(end_scn, min_end_scn);
+
+    if (end_scn < min_end_scn) {
+      min_end_scn = end_scn;
+    }
   }
   return ret;
 }
