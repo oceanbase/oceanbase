@@ -240,24 +240,26 @@ ObSelectResolver *ObAggrExprPushUpAnalyzer::fetch_final_aggr_resolver(ObDMLResol
     if (min_level_resolver != NULL && cur_resolver != min_level_resolver
         && NULL != cur_resolver->get_parent_namespace_resolver()
         && (lib::is_mysql_mode()
-            || T_HAVING_SCOPE == cur_resolver->get_parent_namespace_resolver()->get_current_scope()
-            || (T_ORDER_SCOPE == cur_resolver->get_parent_namespace_resolver()->get_current_scope()
-                && T_WHERE_SCOPE != cur_resolver->get_current_scope()))) {
-      if (lib::is_oracle_mode() && cur_resolver->is_select_resolver()) {
-        /*
-         * bug fix:
-         *
-         * SELECT (SELECT COUNT(t1.a) from dual) FROM t1 GROUP BY t1.a;
-         *                  *
-         * SELECT (SELECT COUNT(t1.a) union select 1 where 1>2) FROM t1 GROUP BY t1.a;
-         *                  *
-         * For oracle, aggr func always belongs to the subquery, does not need to push up.
-         * For mysql, aggr func belongs to the upper level, whether there is a "union" or not.
-         */
-      } else {
-        ObDMLResolver *next_resolver = cur_resolver->get_parent_namespace_resolver();
-        final_resolver = fetch_final_aggr_resolver(next_resolver, min_level_resolver);
-      }
+            || T_HAVING_SCOPE == cur_resolver->get_parent_namespace_resolver()->get_current_scope())) {
+      /*
+        * bug fix:
+        *
+        * For mysql, aggr func belongs to the upper level, whether there is a "union" or not.
+        *
+        * For oracle, aggr func not in "HAVING" belongs to the subquery, does not need to
+        * push up.
+        *
+        * SELECT (SELECT COUNT(t1.a) FROM dual) FROM t1 GROUP BY t1.a;
+        *                  *
+        * SELECT (SELECT COUNT(t1.a) union select 1 where 1>2) FROM t1 GROUP BY t1.a;
+        *                  *
+        * SELECT 1 FROM t1 HAVING 1 in (SELECT MAX(t1.n1) FROM dual);
+        *                                       *
+        * Here, for oracle mode, COUNT belongs to the subquery, but MAX belongs to the
+        * upper query.
+        */
+      ObDMLResolver *next_resolver = cur_resolver->get_parent_namespace_resolver();
+      final_resolver = fetch_final_aggr_resolver(next_resolver, min_level_resolver);
     }
     if (NULL == final_resolver && cur_resolver->is_select_resolver()) {
       ObSelectResolver *select_resolver = static_cast<ObSelectResolver*>(cur_resolver);
