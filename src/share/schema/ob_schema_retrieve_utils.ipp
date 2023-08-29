@@ -2042,9 +2042,9 @@ int ObSchemaRetrieveUtils::fill_dblink_schema(
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, reverse_password, dblink_schema, true, skip_column_error, default_val);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, database_name, dblink_schema, true, skip_column_error, default_val);
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(dblink_schema.do_decrypt_password())) {
+    } else if (!ObSchemaService::g_liboblog_mode_ && OB_FAIL(dblink_schema.do_decrypt_password())) {
       LOG_WARN("failed to decrypt password", K(ret));
-    } else if (OB_FAIL(dblink_schema.do_decrypt_reverse_password())) {
+    } else if (!ObSchemaService::g_liboblog_mode_ && OB_FAIL(dblink_schema.do_decrypt_reverse_password())) {
       LOG_WARN("failed to decrypt reverse_password", K(ret));
     } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
                 tenant_id, is_oracle_mode))) {

@@ -10239,13 +10239,24 @@ int ObDbLinkBaseInfo::do_encrypt_reverse_password()
 int ObDbLinkBaseInfo::dblink_encrypt(common::ObString &src, common::ObString &dst)
 {
   int ret = OB_SUCCESS;
-  ret = OB_NOT_SUPPORTED;
+  if (src.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src is empty", K(ret));
+  } else {
+    dst = src;
+  }
   return ret;
 }
 int ObDbLinkBaseInfo::dblink_decrypt(common::ObString &src, common::ObString &dst)
 {
   int ret = OB_SUCCESS;
-  ret = OB_NOT_SUPPORTED;
+  if (src.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src is empty", K(ret));
+  } else {
+    dst = src;
+  }
+
   return ret;
 }
 
