@@ -570,6 +570,7 @@ OB_DEF_SERIALIZE(ObDASCtx)
   }
   OB_UNIS_ENCODE(flags_);
   OB_UNIS_ENCODE(snapshot_);
+  OB_UNIS_ENCODE(location_router_);
   return ret;
 }
 
@@ -599,6 +600,7 @@ OB_DEF_DESERIALIZE(ObDASCtx)
   if (OB_SUCC(ret) && OB_FAIL(rebuild_tablet_loc_reference())) {
     LOG_WARN("rebuild tablet loc reference failed", K(ret));
   }
+  OB_UNIS_DECODE(location_router_);
   return ret;
 }
 
@@ -612,6 +614,7 @@ OB_DEF_SERIALIZE_SIZE(ObDASCtx)
   }
   OB_UNIS_ADD_LEN(flags_);
   OB_UNIS_ADD_LEN(snapshot_);
+  OB_UNIS_ADD_LEN(location_router_);
   return len;
 }
 }  // namespace sql
