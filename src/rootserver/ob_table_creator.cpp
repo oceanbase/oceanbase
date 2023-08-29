@@ -316,14 +316,17 @@ int ObTableCreator::add_create_tablets_of_tables_arg_(
         }
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !is_sys_table(table_schema.get_table_id())) {
+      int64_t start_time = ObTimeUtility::current_time();
       int64_t schema_version = table_schema.get_schema_version();
-      if (is_sys_table(table_schema.get_table_id())) {
-      } else if (OB_FAIL(share::ObTabletToTableHistoryOperator::create_tablet_to_table_history(
+      if (OB_FAIL(share::ObTabletToTableHistoryOperator::create_tablet_to_table_history(
                          trans_, tenant_id_, schema_version, pairs))) {
         LOG_WARN("fail to create tablet to table history",
                  KR(ret), K_(tenant_id), K(schema_version));
       }
+      int64_t end_time = ObTimeUtility::current_time();
+      LOG_INFO("finish create_tablet_to_table_history", KR(ret), K(table_schema.get_tenant_id()),
+                                                        K(table_schema.get_table_id()), "cost_ts", end_time - start_time);
     }
   }
   return ret;
@@ -356,7 +359,6 @@ int ObTableCreator::generate_create_tablet_arg_(
   } else {
     data_tablet_id = data_part->get_tablet_id();
   }
-
   for (int r = 0; r < schemas.count() && OB_SUCC(ret); r++) {
     const share::schema::ObTableSchema *table_schema_ptr = schemas.at(r);
     uint64_t table_id = OB_INVALID_ID;
@@ -409,4 +411,3 @@ int ObTableCreator::generate_create_tablet_arg_(
 
 } // rootserver
 } // oceanbase
-

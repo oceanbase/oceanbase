@@ -335,7 +335,7 @@ int ObTabletCreator::execute()
             LOG_WARN("fail to set timeout ctx", KR(ret), K(default_timeout_ts));
           } else {
             do {
-              LOG_INFO("generate create arg", K(buf_len), K(batch_arg->arg_.tablets_.count()), K(batch_arg->arg_));
+              int64_t start_time = ObTimeUtility::current_time();
               if (ctx.is_timeouted()) {
                 ret = OB_TIMEOUT;
                 LOG_WARN("already timeout", KR(ret), K(ctx));
@@ -348,6 +348,9 @@ int ObTabletCreator::execute()
                   LOG_WARN("fail to register_tx_data", KR(ret), K(batch_arg->arg_), K(buf), K(buf_len));
                 }
               }
+              int64_t end_time = ObTimeUtility::current_time();
+              LOG_INFO("generate create arg", KR(ret), K(buf_len), K(batch_arg->arg_.tablets_.count()),
+                                              K(batch_arg->arg_), "cost_ts", end_time - start_time);
             } while (need_retry(ret));
           }
           batch_arg = batch_arg->next_;

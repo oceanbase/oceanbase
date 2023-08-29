@@ -16693,6 +16693,8 @@ int ObDDLService::inner_drop_and_create_tablet_(const int64_t &schema_version,
   }
   if (OB_SUCC(ret)) {
     tenant_id = orig_table_schemas.at(0)->get_tenant_id();
+    LOG_INFO("start to drop_and_create_tablet", K(tenant_id), K(schema_version), K(orig_table_schemas.at(0)->get_table_id()));
+
     ObTabletDrop tablet_drop(tenant_id, trans, schema_version);
     // drop tablet
     if (FAILEDx(tablet_drop.init())) {
@@ -25421,7 +25423,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
     while (!stopped_) {
       common::ObTimeoutCtx ctx;
       if (OB_FAIL(schema_service_->set_timeout_ctx(ctx))) {
-        LOG_ERROR("fail to set timeout_ctx, refresh schema failed", K(ret));
+        LOG_ERROR("fail to set timeout_ctx, refresh schema failed", KR(ret), K(tenant_id));
         break;
       } else {
         ret = schema_service_->refresh_and_add_schema(tenant_ids);
@@ -25439,8 +25441,8 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
           break;
         }
         ++refresh_count;
-        LOG_WARN("refresh schema failed", KR(ret), K(refresh_count), "refresh_schema_interval",
-                 static_cast<int64_t>(REFRESH_SCHEMA_INTERVAL_US));
+        LOG_WARN("refresh schema failed", KR(ret), K(tenant_id), K(refresh_count),
+                                          "refresh_schema_interval", static_cast<int64_t>(REFRESH_SCHEMA_INTERVAL_US));
         if (refresh_count > 2 && REACH_TIME_INTERVAL(10 * 60 * 1000 * 1000L)) { // 10 min
           LOG_DBA_ERROR(OB_ERR_REFRESH_SCHEMA_TOO_LONG,
                         "msg", "refresh schema failed", KR(ret), K(refresh_count));
