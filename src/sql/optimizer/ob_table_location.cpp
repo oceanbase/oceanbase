@@ -818,7 +818,6 @@ void ObTableLocation::reset()
   is_col_subpart_expr_ = false;
   is_oracle_temp_table_ = false;
   table_type_ = MAX_TABLE_TYPE;
-
   calc_node_ = NULL;
   gen_col_node_ = NULL;
   subcalc_node_ = NULL;
@@ -829,14 +828,15 @@ void ObTableLocation::reset()
     }
   }
   calc_nodes_.reset();
-
-
   stmt_type_ = stmt::T_NONE;
-
+  vies_.reset();
+  sub_vies_.reset();
+  se_part_expr_ = NULL;
+  se_gen_col_expr_ = NULL;
+  se_subpart_expr_ = NULL;
+  se_sub_gen_col_expr_ = NULL;
   part_hint_ids_.reset();
-
-  related_list_.reset();
-
+  part_col_type_ = ObNullType;
   inner_allocator_.reset();
   part_collation_type_ = CS_TYPE_INVALID;
   subpart_col_type_ = ObNullType;
@@ -853,6 +853,7 @@ void ObTableLocation::reset()
   is_non_partition_optimized_ = false;
   tablet_id_.reset();
   object_id_ = OB_INVALID_ID;
+  related_list_.reset();
   check_no_partiton_ = false;
 }
 int ObTableLocation::init(share::schema::ObSchemaGetterGuard &schema_guard,
