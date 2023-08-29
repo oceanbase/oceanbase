@@ -5441,7 +5441,7 @@ int ObIJsonBase::to_datetime(int64_t &value, ObTimeConvertCtx *cvrt_ctx_t) const
           if (OB_FAIL(ObTimeConverter::str_to_date_oracle(str, cvrt_ctx, datetime))) {
             LOG_WARN("oracle fail to cast string to date", K(ret), K(str));
           }
-        }else {
+        } else {
           if (OB_FAIL(ObTimeConverter::str_to_datetime(str, cvrt_ctx, datetime))) {
             LOG_WARN("fail to cast string to datetime", K(ret), K(str));
           }
@@ -5603,6 +5603,16 @@ int ObIJsonBase::to_date(int32_t &value) const
       ret = OB_OPERATE_OVERFLOW;
       break;
     }
+    case ObJsonNodeType::J_INT: {
+      int64_t in_val = get_int();
+      ObDateSqlMode date_sql_mode;
+      date_sql_mode.allow_invalid_dates_ = false;
+      date_sql_mode.no_zero_date_ = false;
+      if (OB_FAIL(ObTimeConverter::int_to_date(in_val, date, date_sql_mode))) {
+        LOG_WARN("int_to_date failed", K(ret), K(in_val), K(date));
+      }
+      break;
+    }
 
     default: {
       ret = OB_ERR_UNEXPECTED;
@@ -5651,6 +5661,13 @@ int ObIJsonBase::to_time(int64_t &value) const
     case ObJsonNodeType::J_ARRAY:
     case ObJsonNodeType::J_OBJECT: {
       ret = OB_OPERATE_OVERFLOW;
+      break;
+    }
+    case ObJsonNodeType::J_INT: {
+      int64_t in_val = get_int();
+      if (OB_FAIL(ObTimeConverter::int_to_time(in_val, time))) {
+        LOG_WARN("int_to_date failed", K(ret), K(in_val), K(time));
+      }
       break;
     }
 
@@ -6550,6 +6567,17 @@ int ObJsonBaseUtil::get_bit_len(const ObString &str, int32_t &bit_len)
     }
   }
 
+  return ret;
+}
+
+int ObJsonBaseUtil::get_bit_len(uint64_t value, int32_t &bit_len)
+{
+  int ret = OB_SUCCESS;
+  if (0 == value) {
+    bit_len = 1;
+  } else {
+    bit_len = static_cast<int32_t>(sizeof(unsigned long long) * 8 - __builtin_clzll(value));
+  }
   return ret;
 }
 

@@ -321,6 +321,39 @@ int JtFuncHelpler::time_scale_check(const ObAccuracy &accuracy, int64_t &value, 
   return ret;
 }
 
+// padding %padding_cnt character, we also need to convert collation type here.
+// eg: select cast('abc' as nchar(100)) from dual;
+//     the space must be in utf16, because dst_type is nchar
+int JtFuncHelpler::padding_char_for_cast(int64_t padding_cnt, const ObCollationType &padding_cs_type,
+                          ObIAllocator &alloc, ObString &padding_res)
+{
+  int ret = OB_SUCCESS;
+  padding_res.reset();
+  const ObCharsetType &cs = ObCharset::charset_type_by_coll(padding_cs_type);
+  char padding_char = (CHARSET_BINARY == cs) ? OB_PADDING_BINARY : OB_PADDING_CHAR;
+  int64_t padding_str_size = sizeof(padding_char) * padding_cnt;
+  char *padding_str_ptr = reinterpret_cast<char*>(alloc.alloc(padding_str_size));
+  if (OB_ISNULL(padding_str_ptr)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc memory failed", K(ret));
+  } else if (CHARSET_BINARY == cs) {
+    MEMSET(padding_str_ptr, padding_char, padding_str_size);
+    padding_res.assign_ptr(padding_str_ptr, padding_str_size);
+  } else {
+    MEMSET(padding_str_ptr, padding_char, padding_str_size);
+    ObString padding_str(padding_str_size, padding_str_ptr);
+    if (OB_FAIL(ObExprUtil::convert_string_collation(padding_str,
+                                                     ObCharset::get_system_collation(),
+                                                     padding_res,
+                                                     padding_cs_type,
+                                                     alloc))) {
+      LOG_WARN("convert padding str collation faield", K(ret), K(padding_str),
+                K(padding_cs_type));
+    }
+  }
+  LOG_DEBUG("pad char done", K(ret), K(padding_cnt), K(padding_cs_type), K(padding_res));
+  return ret;
+}
 
 int JtFuncHelpler::cast_to_string(JtColNode* node,
                                   common::ObIAllocator *allocator,
@@ -351,7 +384,8 @@ int JtFuncHelpler::cast_to_string(JtColNode* node,
       ObString temp_str_val(j_buf.length(), j_buf.ptr());
       bool is_need_string_string_convert = ((CS_TYPE_BINARY == dst_cs_type) ||
                                             (ObCharset::charset_type_by_coll(in_cs_type) !=
-                                            ObCharset::charset_type_by_coll(dst_cs_type)));
+                                            ObCharset::charset_type_by_coll(dst_cs_type)))
+                                          && !(lib::is_mysql_mode() && temp_str_val.length() == 0);
       if (is_need_string_string_convert) {
         if (CS_TYPE_BINARY != in_cs_type
             && CS_TYPE_BINARY != dst_cs_type
@@ -402,49 +436,89 @@ int JtFuncHelpler::cast_to_string(JtColNode* node,
         val.assign_ptr(temp_str_val.ptr(), temp_str_val.length());
       }
 
-      ObLengthSemantics senmactics = node->col_info_.data_type_.get_length_semantics();
-      // do str length check
-      const int32_t str_len_char = static_cast<int32_t>(ObCharset::strlen_char(
-        senmactics == LS_BYTE ? CS_TYPE_BINARY : dst_cs_type, val.ptr(), val.length()));
-      ObLength max_accuracy_len = (dst_type == ObLongTextType) ? OB_MAX_LONGTEXT_LENGTH : accuracy.get_length();
-      max_accuracy_len *= (senmactics == LS_BYTE ? 1 : 2);
+      int32_t str_len_char;
+      ObLength max_accuracy_len;
+      if (lib::is_mysql_mode()) {
+        str_len_char = static_cast<int32_t>(ObCharset::strlen_char(dst_cs_type, val.ptr(), val.length()));
+        max_accuracy_len = (ob_obj_type_class(dst_type) == ObTextTC
+                            || ob_obj_type_class(dst_type) == ObJsonTC)
+                                ? ObAccuracy::DDL_DEFAULT_ACCURACY[dst_type].get_length()
+                                    : accuracy.get_length();
+        if (OB_SUCC(ret)) {
+          if (max_accuracy_len == DEFAULT_STR_LENGTH) { // default string len
+          } else if (max_accuracy_len <= 0 || str_len_char > max_accuracy_len) {
+            ret = OB_OPERATE_OVERFLOW;
+            LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "column", "json_table");
+            LOG_WARN("length oversize", K(ret), K(str_len_char), K(max_accuracy_len));
+          }
+        }
+        if (OB_SUCC(ret) && ObCharType == dst_type && CS_TYPE_BINARY == dst_cs_type) {   // binary need padding
+          int64_t text_length = val.length();
+          if (max_accuracy_len > text_length) {
+            int64_t padding_cnt = max_accuracy_len - text_length;
+            ObString padding_res;
+            if (OB_FAIL(JtFuncHelpler::padding_char_for_cast(padding_cnt, dst_cs_type, *allocator,
+                                              padding_res))) {
+              LOG_WARN("padding char failed", K(ret), K(padding_cnt), K(dst_cs_type));
+            } else {
+              int64_t padding_size = padding_res.length() + val.length();
+              char *buf = reinterpret_cast<char*>(allocator->alloc(padding_size));
+              if (OB_ISNULL(buf)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("allocate memory failed", K(ret));
+              } else {
+                MEMMOVE(buf, val.ptr(), val.length());
+                MEMMOVE(buf + val.length(), padding_res.ptr(), padding_res.length());
+                val.assign_ptr(buf, padding_size);
+              }
+            }
+          }
+        }
+      } else {
+        ObLengthSemantics senmactics = node->col_info_.data_type_.get_length_semantics();
+        // do str length check
+        str_len_char = static_cast<int32_t>(ObCharset::strlen_char(
+          senmactics == LS_BYTE ? CS_TYPE_BINARY : dst_cs_type, val.ptr(), val.length()));
+        max_accuracy_len = (dst_type == ObLongTextType) ? OB_MAX_LONGTEXT_LENGTH : accuracy.get_length();
+        max_accuracy_len *= (senmactics == LS_BYTE ? 1 : 2);
 
-      uint32_t byte_len = 0;
-      byte_len = ObCharset::charpos(senmactics == LS_BYTE ? CS_TYPE_BINARY : dst_cs_type, val.ptr(), str_len_char, max_accuracy_len);
+        uint32_t byte_len = 0;
+        byte_len = ObCharset::charpos(senmactics == LS_BYTE ? CS_TYPE_BINARY : dst_cs_type, val.ptr(), str_len_char, max_accuracy_len);
 
-      if (OB_SUCC(ret)) {
-        if (max_accuracy_len == DEFAULT_STR_LENGTH) { // default string len
-        } else if (is_trunc && max_accuracy_len < str_len_char) {
-          if (!is_const &&
-              (node->col_info_.col_type_ == static_cast<int>(COL_TYPE_EXISTS)
-               || j_base->json_type() == ObJsonNodeType::J_INT
-               || j_base->json_type() == ObJsonNodeType::J_UINT
-               || j_base->json_type() == ObJsonNodeType::J_BOOLEAN
-               || j_base->json_type() == ObJsonNodeType::J_DOUBLE
-               || j_base->json_type() == ObJsonNodeType::J_DECIMAL)) {
-            ret = OB_ERR_VALUE_EXCEEDED_MAX;
-          } else {
-            // bugfix:
-            // Q1:SELECT c1 ,jt.ww b_c1 FROM t1, json_table ( c2 columns( ww varchar2(2 char) truncate  path '$.a')) jt ;
-            // Q2:SELECT c1 ,jt.ww b_c1 FROM t1, json_table ( c2 columns( ww varchar2(2 byte) truncate path '$.a')) jt;
-            // should not split in the middle of char
-            if (byte_len == 0) { // value has zero length
-              val.assign_ptr("", 0);
-            } else if (senmactics == LS_BYTE && dst_cs_type != CS_TYPE_BINARY) {
-              int64_t char_len; // not used
-              // zero max_accuracy_len not allowed
-              byte_len = ObCharset::max_bytes_charpos(dst_cs_type, val.ptr(), str_len_char, max_accuracy_len, char_len);
-              if (byte_len == 0) { // buffer not enough for one bytes
-                ret = OB_OPERATE_OVERFLOW;
+        if (OB_SUCC(ret)) {
+          if (max_accuracy_len == DEFAULT_STR_LENGTH) { // default string len
+          } else if (is_trunc && max_accuracy_len < str_len_char) {
+            if (!is_const &&
+                (node->col_info_.col_type_ == static_cast<int>(COL_TYPE_EXISTS)
+                || j_base->json_type() == ObJsonNodeType::J_INT
+                || j_base->json_type() == ObJsonNodeType::J_UINT
+                || j_base->json_type() == ObJsonNodeType::J_BOOLEAN
+                || j_base->json_type() == ObJsonNodeType::J_DOUBLE
+                || j_base->json_type() == ObJsonNodeType::J_DECIMAL)) {
+              ret = OB_ERR_VALUE_EXCEEDED_MAX;
+            } else {
+              // bugfix:
+              // Q1:SELECT c1 ,jt.ww b_c1 FROM t1, json_table ( c2 columns( ww varchar2(2 char) truncate  path '$.a')) jt ;
+              // Q2:SELECT c1 ,jt.ww b_c1 FROM t1, json_table ( c2 columns( ww varchar2(2 byte) truncate path '$.a')) jt;
+              // should not split in the middle of char
+              if (byte_len == 0) { // value has zero length
+                val.assign_ptr("", 0);
+              } else if (senmactics == LS_BYTE && dst_cs_type != CS_TYPE_BINARY) {
+                int64_t char_len; // not used
+                // zero max_accuracy_len not allowed
+                byte_len = ObCharset::max_bytes_charpos(dst_cs_type, val.ptr(), str_len_char, max_accuracy_len, char_len);
+                if (byte_len == 0) { // buffer not enough for one bytes
+                  ret = OB_OPERATE_OVERFLOW;
+                } else {
+                  val.assign_ptr(val.ptr(), byte_len);
+                }
               } else {
                 val.assign_ptr(val.ptr(), byte_len);
               }
-            } else {
-              val.assign_ptr(val.ptr(), byte_len);
             }
+          } else if (max_accuracy_len <= 0 || str_len_char > max_accuracy_len) {
+            ret = OB_OPERATE_OVERFLOW;
           }
-        } else if (max_accuracy_len <= 0 || str_len_char > max_accuracy_len) {
-          ret = OB_OPERATE_OVERFLOW;
         }
       }
     }
@@ -473,28 +547,35 @@ int JtFuncHelpler::cast_to_datetime(JtColNode* node,
 {
   INIT_SUCC(ret);
   ObString json_string;
-  if (OB_ISNULL(session)) {
+  if (OB_ISNULL(j_base)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("json base is null", K(ret));
+  } else if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
   } else {
     oceanbase::common::ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(), false);
-    if (OB_FAIL(common_get_nls_format(session, ObDateTimeType,
-                                      true,
-                                      cvrt_ctx.oracle_nls_format_))) {
-      LOG_WARN("common_get_nls_format failed", K(ret));
-    } else if (type_cast_to_string(node, json_string, allocator, j_base, accuracy) && json_string.length() > 0) {
-      ObJsonString json_str(json_string.ptr(),json_string.length());
-      if (OB_FAIL(json_str.to_datetime(val, &cvrt_ctx))) {
+    if (lib::is_oracle_mode()) {
+      if (OB_FAIL(common_get_nls_format(session, ObDateTimeType,
+                                        true,
+                                        cvrt_ctx.oracle_nls_format_))) {
+        LOG_WARN("common_get_nls_format failed", K(ret));
+      } else if (type_cast_to_string(node, json_string, allocator, j_base, accuracy) && json_string.length() > 0) {
+        ObJsonString json_str(json_string.ptr(),json_string.length());
+        if (OB_FAIL(json_str.to_datetime(val, &cvrt_ctx))) {
+          LOG_WARN("wrapper to datetime failed.", K(ret), K(*j_base));
+        }
+      } else if (OB_FAIL(j_base->to_datetime(val, &cvrt_ctx))) {
         LOG_WARN("wrapper to datetime failed.", K(ret), K(*j_base));
+      } else if (OB_FAIL(datetime_scale_check(accuracy, val))) {
+        LOG_WARN("datetime_scale_check failed.", K(ret));
       }
-    } else if (OB_ISNULL(j_base)) {
-      ret = OB_ERR_NULL_VALUE;
-      LOG_WARN("json base is null", K(ret));
-    } else if (OB_FAIL(j_base->to_datetime(val, &cvrt_ctx))) {
-      LOG_WARN("wrapper to datetime failed.", K(ret), K(*j_base));
-    }
-    if (OB_SUCC(ret) && OB_FAIL(datetime_scale_check(accuracy, val))) {
-      LOG_WARN("datetime_scale_check failed.", K(ret));
+    } else {
+      if (OB_FAIL(j_base->to_datetime(val, &cvrt_ctx))) {
+        LOG_WARN("wrapper to datetime failed.", K(ret), K(*j_base));
+      } else if (OB_FAIL(datetime_scale_check(accuracy, val))) {
+        LOG_WARN("datetime_scale_check failed.", K(ret));
+      }
     }
   }
 
@@ -531,11 +612,22 @@ int JtFuncHelpler::cast_to_otimstamp(ObIJsonBase *j_base,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(j_base->to_datetime(val, &cvrt_ctx))) {
     LOG_WARN("wrapper to datetime failed.", K(ret), K(*j_base));
+  } else if (dst_type == ObTimestampType) {
+    int64_t t_out_val = 0;
+    ret = ObTimeConverter::datetime_to_timestamp(val,
+                                                cvrt_ctx.tz_info_,
+                                                t_out_val);
+    ret = OB_ERR_UNEXPECTED_TZ_TRANSITION == ret ? OB_INVALID_DATE_VALUE : ret;
+    out_val.time_us_ = t_out_val;
+    out_val.time_ctx_.tail_nsec_ = 0;
   } else {
-    ObScale scale = accuracy.get_scale();
     if (OB_FAIL(ObTimeConverter::odate_to_otimestamp(val, cvrt_ctx.tz_info_, dst_type, out_val))) {
       LOG_WARN("fail to timestamp_to_timestamp_tz", K(ret), K(val), K(dst_type));
-    } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_ORACLE_TEMPORAL)) {
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObScale scale = accuracy.get_scale();
+    if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_ORACLE_TEMPORAL)) {
       ObOTimestampData ot_data = ObTimeConverter::round_otimestamp(scale, out_val);
       if (ObTimeConverter::is_valid_otimestamp(ot_data.time_us_,
           static_cast<int32_t>(ot_data.time_ctx_.tail_nsec_))) {
@@ -597,7 +689,8 @@ int JtFuncHelpler::cast_to_year(ObIJsonBase *j_base, uint8_t &val)
     LOG_WARN("json base is null", K(ret));
   } else if (OB_FAIL(j_base->to_int(int_val))) {
     LOG_WARN("wrapper to year failed.", K(ret), K(*j_base));
-  } else if (0 != int_val && (int_val < min_year || int_val > max_year)) {
+  } else if (lib::is_oracle_mode()
+              && (0 != int_val && (int_val < min_year || int_val > max_year))) {
     // different with cast, if 0 < int val < 100, do not add base year
     LOG_DEBUG("int out of year range", K(int_val));
     ret = OB_DATA_OUT_OF_RANGE;
@@ -666,7 +759,7 @@ int JtFuncHelpler::cast_to_number(common::ObIAllocator *allocator,
   return ret;
 }
 
-int JtFuncHelpler::cast_to_bit(ObIJsonBase *j_base, uint64_t &val)
+int JtFuncHelpler::cast_to_bit(ObIJsonBase *j_base, uint64_t &val, common::ObAccuracy &accuracy)
 {
   INIT_SUCC(ret);
 
@@ -675,8 +768,31 @@ int JtFuncHelpler::cast_to_bit(ObIJsonBase *j_base, uint64_t &val)
     LOG_WARN("json base is null", K(ret));
   } else if (OB_FAIL(j_base->to_bit(val))) {
     LOG_WARN("fail get bit from json", K(ret));
+  } else if (OB_FAIL(bit_length_check(accuracy, val))) {
+    LOG_WARN("fail to check bit range", K(ret));
   }
 
+  return ret;
+}
+
+int JtFuncHelpler::bit_length_check(const ObAccuracy &accuracy,
+                                     uint64_t &value)
+{
+  int ret = OB_SUCCESS;
+  int32_t bit_len = 0;
+  int32_t dst_bit_len = accuracy.get_precision();
+  if (OB_FAIL(ObJsonBaseUtil::get_bit_len(value, bit_len))) {
+    LOG_WARN("fail to get_bit_length", K(ret), K(value), K(bit_len));
+  } else if(OB_UNLIKELY(bit_len <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("bit length is negative", K(ret), K(value), K(bit_len));
+  } else {
+    if (OB_UNLIKELY(bit_len > dst_bit_len)) {
+      ret = OB_ERR_DATA_TOO_LONG;
+      LOG_WARN("bit type length is too long", K(ret), K(bit_len),
+          K(dst_bit_len), K(value));
+    }
+  }
   return ret;
 }
 
@@ -703,6 +819,23 @@ int JtFuncHelpler::cast_to_res(JtScanCtx* ctx, ObIJsonBase* js_val, JtColNode& c
   ObExpr* expr = ctx->spec_ptr_->column_exprs_.at(col_info.output_column_idx_);
   ObDatum& res = expr->locate_datum_for_write(*ctx->eval_ctx_);
   ctx->res_obj_ = &res;
+  ObObjType dst_type = expr->datum_meta_.type_;
+
+  if (OB_FAIL(cast_json_to_res(ctx, js_val, col_node, res, enable_error))) {
+    LOG_WARN("fail to cast json to res", K(ret));
+  }
+  LOG_DEBUG("finish cast_to_res.", K(ret), K(dst_type));
+
+  return ret;
+}
+
+int JtFuncHelpler::cast_json_to_res(JtScanCtx* ctx, ObIJsonBase* js_val, JtColNode& col_node, ObDatum& res, bool enable_error)
+{
+  INIT_SUCC(ret);
+  ObJtColInfo& col_info = col_node.get_column_def();
+  bool is_truncate = static_cast<bool>(col_info.truncate_);
+
+  ObExpr* expr = ctx->spec_ptr_->column_exprs_.at(col_info.output_column_idx_);
 
   ObObjType dst_type = expr->datum_meta_.type_;
   ObCollationType coll_type = expr->datum_meta_.cs_type_;
@@ -713,241 +846,380 @@ int JtFuncHelpler::cast_to_res(JtScanCtx* ctx, ObIJsonBase* js_val, JtColNode& c
                                  : ctx->spec_ptr_->value_expr_->datum_meta_.cs_type_;
   ObCollationLevel dst_coll_level = col_info.data_type_.get_collation_level();
 
-  switch (dst_type) {
-    case ObNullType : {
-      res.set_null();
-      break;
-    }
-    case ObTinyIntType:
-    case ObSmallIntType:
-    case ObMediumIntType:
-    case ObInt32Type:
-    case ObIntType: {
-      int64_t val;
-      ret = cast_to_int(js_val, dst_type, val);
-      if (OB_FAIL(ret) && enable_error) {
-        int tmp_ret = set_error_val(ctx, col_node, ret);
-        if (tmp_ret != OB_SUCCESS) {
-          LOG_WARN("failed to set error val.", K(tmp_ret));
-        }
-      } else {
-        if (dst_type == ObIntType) {
-          res.set_int(val);
-        } else {
-          res.set_int32(static_cast<int32_t>(val));
-        }
-      }
-      break;
-    }
-    case ObUTinyIntType:
-    case ObUSmallIntType:
-    case ObUMediumIntType:
-    case ObUInt32Type:
-    case ObUInt64Type: {
-      uint64_t val;
-      ret = cast_to_uint(js_val, dst_type, val);
-      if (OB_FAIL(ret) && enable_error) {
-        int tmp_ret = set_error_val(ctx, col_node, ret);
-        if (tmp_ret != OB_SUCCESS) {
-          LOG_WARN("failed to set error val.", K(tmp_ret));
-        }
-      } else {
-        if (dst_type == ObUInt64Type) {
-          res.set_uint(val);
-        } else {
-          res.set_uint32(static_cast<uint32_t>(val));
-        }
-      }
-      break;
-    }
-    case ObDateTimeType: {
-      const ObBasicSessionInfo *session = ctx->exec_ctx_->get_my_session();
-      int64_t val;
-      ret = cast_to_datetime(&col_node, js_val, &ctx->row_alloc_, session, accuracy, val);
-      if (ret == OB_ERR_NULL_VALUE) {
+  if (OB_ISNULL(js_val)
+      || (lib::is_mysql_mode() && js_val->json_type() == common::ObJsonNodeType::J_NULL)) {
+    res.set_null();
+  } else {
+    switch (dst_type) {
+      case ObNullType : {
         res.set_null();
-      } else if (OB_FAIL(ret) && enable_error) {
-        int tmp_ret = set_error_val(ctx, col_node, ret);
-        if (tmp_ret != OB_SUCCESS) {
-          LOG_WARN("failed to set error val.", K(tmp_ret));
-        }
-      } else {
-        res.set_datetime(val);
+        break;
       }
-      break;
-    }
-    case ObTimestampNanoType:
-    case ObTimestampTZType:
-    case ObTimestampLTZType:
-    case ObTimestampType: {
-      const ObBasicSessionInfo *session = ctx->exec_ctx_->get_my_session();
-      ObOTimestampData val;
-      ret = cast_to_otimstamp(js_val, session, accuracy, dst_type, val);
-      if (OB_FAIL(ret) && enable_error) {
-        int tmp_ret = set_error_val(ctx, col_node, ret);
-        if (tmp_ret != OB_SUCCESS) {
-          LOG_WARN("failed to set error val.", K(tmp_ret));
-        }
-      } else {
-        res.set_otimestamp_tiny(val);
-      }
-      break;
-    }
-    case ObDateType: {
-      int32_t val;
-      ret = cast_to_date(js_val, val);
-      if (OB_FAIL(ret) && enable_error) {
-        int tmp_ret = set_error_val(ctx, col_node, ret);
-        if (tmp_ret != OB_SUCCESS) {
-          LOG_WARN("failed to set error val.", K(tmp_ret));
-        }
-      } else {
-        res.set_date(val);
-      }
-      break;
-    }
-    case ObTimeType: {
-      int64_t val;
-      ret = cast_to_time(js_val, accuracy, val);
-      if (OB_FAIL(ret) && enable_error) {
-        int tmp_ret = set_error_val(ctx, col_node, ret);
-        if (tmp_ret != OB_SUCCESS) {
-          LOG_WARN("failed to set error val.", K(tmp_ret));
-        }
-      } else {
-        res.set_time(val);
-      }
-      break;
-    }
-    case ObYearType: {
-      uint8_t val;
-      ret = cast_to_year(js_val, val);
-      if (OB_FAIL(ret) && enable_error) {
-        int tmp_ret = set_error_val(ctx, col_node, ret);
-        if (tmp_ret != OB_SUCCESS) {
-          LOG_WARN("failed to set error val.", K(tmp_ret));
-        }
-      } else {
-        res.set_year(val);
-      }
-      break;
-    }
-    case ObNumberFloatType:
-    case ObFloatType:
-    case ObUFloatType: {
-      float out_val;
-      ret = cast_to_float(js_val, dst_type, out_val);
-      if (OB_FAIL(ret) && enable_error) {
-        int tmp_ret = set_error_val(ctx, col_node, ret);
-        if (tmp_ret != OB_SUCCESS) {
-          LOG_WARN("failed to set error val.", K(tmp_ret));
-        }
-      } else {
-        res.set_float(out_val);
-      }
-      break;
-    }
-    case ObDoubleType:
-    case ObUDoubleType: {
-      double out_val;
-      ret = cast_to_double(js_val, dst_type, out_val);
-      if (OB_FAIL(ret) && enable_error) {
-        int tmp_ret = set_error_val(ctx, col_node, ret);
-        if (tmp_ret != OB_SUCCESS) {
-          LOG_WARN("failed to set error val.", K(tmp_ret));
-        }
-      } else {
-        res.set_double(out_val);
-      }
-      break;
-    }
-    case ObUNumberType:
-    case ObNumberType: {
-      number::ObNumber out_val;
-      ret = cast_to_number(&ctx->row_alloc_, js_val, accuracy, dst_type, out_val);
-      if (OB_FAIL(ret) && enable_error) {
-        int tmp_ret = set_error_val(ctx, col_node, ret);
-        if (tmp_ret != OB_SUCCESS) {
-          LOG_WARN("failed to set error val.", K(tmp_ret));
-        }
-      } else {
-        res.set_number(out_val);
-      }
-      break;
-    }
-    case ObVarcharType:
-    case ObRawType:
-    case ObNVarchar2Type:
-    case ObNCharType:
-    case ObCharType:
-    case ObTinyTextType:
-    case ObTextType :
-    case ObMediumTextType:
-    case ObHexStringType:
-    case ObLongTextType: {
-      ObString val;
-      bool is_quote = (col_info.col_type_ == COL_TYPE_QUERY && OB_NOT_NULL(js_val) && js_val->json_type() == ObJsonNodeType::J_STRING);
-      ret = cast_to_string(&col_node, &ctx->row_alloc_, js_val, in_coll_type, dst_coll_type,
-                          accuracy, dst_type, val, is_truncate, is_quote, ctx->is_const_input_);
-      if (OB_FAIL(ret) && enable_error) {
-        int tmp_ret = set_error_val(ctx, col_node, ret);
-        if (tmp_ret != OB_SUCCESS) {
-          LOG_WARN("failed to set error val.", K(tmp_ret));
-        }
-      } else {
-        res.set_string(val);
-      }
-      break;
-    }
-    case ObBitType: {
-      uint64_t out_val;
-      ret = cast_to_bit(js_val, out_val);
-      if (OB_FAIL(ret) && enable_error) {
-        int tmp_ret = set_error_val(ctx, col_node, ret);
-        if (tmp_ret != OB_SUCCESS) {
-          LOG_WARN("failed to set error val.", K(tmp_ret));
-        }
-      } else {
-        res.set_bit(out_val);
-      }
-      break;
-    }
-    case ObJsonType: {
-      ObString out_val;
-      ret = cast_to_json(&ctx->row_alloc_, js_val, out_val);
-      if (OB_FAIL(ret) && enable_error) {
-        int tmp_ret = set_error_val(ctx, col_node, ret);
-        if (tmp_ret != OB_SUCCESS) {
-          LOG_WARN("failed to set error val.", K(tmp_ret));
-        }
-      } else {
-        char *buf = static_cast<char *>(ctx->row_alloc_.alloc(out_val.length()));
-        if (OB_UNLIKELY(buf == NULL)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to alloc memory for json array result", K(ret), K(out_val.length()));
+      case ObTinyIntType:
+      case ObSmallIntType:
+      case ObMediumIntType:
+      case ObInt32Type:
+      case ObIntType: {
+        int64_t val;
+        ret = cast_to_int(js_val, dst_type, val);
+        if (OB_FAIL(ret) && enable_error) {
+          int tmp_ret = set_error_val(ctx, col_node, ret);
+          if (tmp_ret != OB_SUCCESS) {
+            LOG_WARN("failed to set error val.", K(tmp_ret));
+          }
         } else {
-          MEMCPY(buf, out_val.ptr(), out_val.length());
-          out_val.assign_ptr(buf, out_val.length());
-          res.set_string(out_val);
+          if (dst_type == ObIntType) {
+            res.set_int(val);
+          } else {
+            res.set_int32(static_cast<int32_t>(val));
+          }
         }
+        break;
       }
-      break;
-    }
-    default: {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected dst_type", K(dst_type));
-      break;
+      case ObUTinyIntType:
+      case ObUSmallIntType:
+      case ObUMediumIntType:
+      case ObUInt32Type:
+      case ObUInt64Type: {
+        uint64_t val;
+        ret = cast_to_uint(js_val, dst_type, val);
+        if (OB_FAIL(ret) && enable_error) {
+          int tmp_ret = set_error_val(ctx, col_node, ret);
+          if (tmp_ret != OB_SUCCESS) {
+            LOG_WARN("failed to set error val.", K(tmp_ret));
+          }
+        } else {
+          if (dst_type == ObUInt64Type) {
+            res.set_uint(val);
+          } else {
+            res.set_uint32(static_cast<uint32_t>(val));
+          }
+        }
+        break;
+      }
+      case ObDateTimeType: {
+        const ObBasicSessionInfo *session = ctx->exec_ctx_->get_my_session();
+        int64_t val;
+        ret = cast_to_datetime(&col_node, js_val, &ctx->row_alloc_, session, accuracy, val);
+        if (ret == OB_ERR_NULL_VALUE) {
+          res.set_null();
+        } else if (OB_FAIL(ret) && enable_error) {
+          int tmp_ret = set_error_val(ctx, col_node, ret);
+          if (tmp_ret != OB_SUCCESS) {
+            LOG_WARN("failed to set error val.", K(tmp_ret));
+          }
+        } else {
+          res.set_datetime(val);
+        }
+        break;
+      }
+      case ObTimestampNanoType:
+      case ObTimestampTZType:
+      case ObTimestampLTZType:
+      case ObTimestampType: {
+        const ObBasicSessionInfo *session = ctx->exec_ctx_->get_my_session();
+        ObOTimestampData val;
+        ret = cast_to_otimstamp(js_val, session, accuracy, dst_type, val);
+        if (OB_FAIL(ret) && enable_error) {
+          int tmp_ret = set_error_val(ctx, col_node, ret);
+          if (tmp_ret != OB_SUCCESS) {
+            LOG_WARN("failed to set error val.", K(tmp_ret));
+          }
+        } else {
+          if (dst_type == ObTimestampTZType) {
+            res.set_otimestamp_tz(val);
+          } else if (dst_type == ObTimestampType) {
+            res.set_datetime(val.time_us_);
+          } else {
+            res.set_otimestamp_tiny(val);
+          }
+        }
+        break;
+      }
+      case ObDateType: {
+        int32_t val;
+        ret = cast_to_date(js_val, val);
+        if (OB_FAIL(ret) && enable_error) {
+          int tmp_ret = set_error_val(ctx, col_node, ret);
+          if (tmp_ret != OB_SUCCESS) {
+            LOG_WARN("failed to set error val.", K(tmp_ret));
+          }
+        } else {
+          res.set_date(val);
+        }
+        break;
+      }
+      case ObTimeType: {
+        int64_t val;
+        ret = cast_to_time(js_val, accuracy, val);
+        if (OB_FAIL(ret) && enable_error) {
+          int tmp_ret = set_error_val(ctx, col_node, ret);
+          if (tmp_ret != OB_SUCCESS) {
+            LOG_WARN("failed to set error val.", K(tmp_ret));
+          }
+        } else {
+          res.set_time(val);
+        }
+        break;
+      }
+      case ObYearType: {
+        uint8_t val;
+        ret = cast_to_year(js_val, val);
+        if (OB_FAIL(ret) && enable_error) {
+          int tmp_ret = set_error_val(ctx, col_node, ret);
+          if (tmp_ret != OB_SUCCESS) {
+            LOG_WARN("failed to set error val.", K(tmp_ret));
+          }
+        } else {
+          res.set_year(val);
+        }
+        break;
+      }
+      case ObNumberFloatType:
+      case ObFloatType:
+      case ObUFloatType: {
+        float out_val;
+        ret = cast_to_float(js_val, dst_type, out_val);
+        if (OB_FAIL(ret) && enable_error) {
+          int tmp_ret = set_error_val(ctx, col_node, ret);
+          if (tmp_ret != OB_SUCCESS) {
+            LOG_WARN("failed to set error val.", K(tmp_ret));
+          }
+        } else {
+          res.set_float(out_val);
+        }
+        break;
+      }
+      case ObDoubleType:
+      case ObUDoubleType: {
+        double out_val;
+        ret = cast_to_double(js_val, dst_type, out_val);
+        if (OB_FAIL(ret) && enable_error) {
+          int tmp_ret = set_error_val(ctx, col_node, ret);
+          if (tmp_ret != OB_SUCCESS) {
+            LOG_WARN("failed to set error val.", K(tmp_ret));
+          }
+        } else {
+          res.set_double(out_val);
+        }
+        break;
+      }
+      case ObUNumberType:
+      case ObNumberType: {
+        number::ObNumber out_val;
+        ret = cast_to_number(&ctx->row_alloc_, js_val, accuracy, dst_type, out_val);
+        if (OB_FAIL(ret) && enable_error) {
+          int tmp_ret = set_error_val(ctx, col_node, ret);
+          if (tmp_ret != OB_SUCCESS) {
+            LOG_WARN("failed to set error val.", K(tmp_ret));
+          }
+        } else {
+          res.set_number(out_val);
+        }
+        break;
+      }
+      case ObVarcharType:
+      case ObRawType:
+      case ObNVarchar2Type:
+      case ObNCharType:
+      case ObCharType:
+      case ObTinyTextType:
+      case ObTextType :
+      case ObMediumTextType:
+      case ObHexStringType:
+      case ObLongTextType: {
+        ObString val;
+        bool is_quote = (col_info.col_type_ == COL_TYPE_QUERY && OB_NOT_NULL(js_val) && js_val->json_type() == ObJsonNodeType::J_STRING);
+        ret = cast_to_string(&col_node, &ctx->row_alloc_, js_val, in_coll_type, dst_coll_type,
+                            accuracy, dst_type, val, is_truncate, is_quote, ctx->is_const_input_);
+        if (OB_FAIL(ret) && enable_error) {
+          int tmp_ret = set_error_val(ctx, col_node, ret);
+          if (tmp_ret != OB_SUCCESS) {
+            LOG_WARN("failed to set error val.", K(tmp_ret));
+          }
+        } else {
+          res.set_string(val);
+        }
+        break;
+      }
+      case ObBitType: {
+        uint64_t out_val;
+        ret = cast_to_bit(js_val, out_val, accuracy);
+        if (OB_FAIL(ret) && enable_error) {
+          int tmp_ret = set_error_val(ctx, col_node, ret);
+          if (tmp_ret != OB_SUCCESS) {
+            LOG_WARN("failed to set error val.", K(tmp_ret));
+          }
+        } else {
+          res.set_bit(out_val);
+        }
+        break;
+      }
+      case ObJsonType: {
+        ObString out_val;
+        ret = cast_to_json(&ctx->row_alloc_, js_val, out_val);
+        if (OB_FAIL(ret) && enable_error) {
+          int tmp_ret = set_error_val(ctx, col_node, ret);
+          if (tmp_ret != OB_SUCCESS) {
+            LOG_WARN("failed to set error val.", K(tmp_ret));
+          }
+        } else {
+          char *buf = static_cast<char *>(ctx->row_alloc_.alloc(out_val.length()));
+          if (OB_UNLIKELY(buf == NULL)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc memory for json array result", K(ret), K(out_val.length()));
+          } else {
+            MEMCPY(buf, out_val.ptr(), out_val.length());
+            out_val.assign_ptr(buf, out_val.length());
+            res.set_string(out_val);
+          }
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected dst_type", K(dst_type));
+        break;
+      }
     }
   }
 
-  if (OB_SUCC(ret) && is_lob_storage(dst_type)) {
+  if (OB_SUCC(ret) && is_lob_storage(dst_type) && !res.is_null()) {
     ObString val = res.get_string();
     if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(*expr, *ctx->eval_ctx_, res, val, &ctx->row_alloc_))) {
       LOG_WARN("fail to pack res result.", K(ret));
     }
   }
-  LOG_DEBUG("finish cast_to_res.", K(ret), K(dst_type));
 
+  return ret;
+}
+
+int JtFuncHelpler::pre_default_value_check_mysql(JtScanCtx* ctx,
+                                                  ObIJsonBase* js_val,
+                                                  JtColNode& col_node)
+{
+  INIT_SUCC(ret);
+  ObJtColInfo& col_info = col_node.get_column_def();
+  bool is_truncate = static_cast<bool>(col_info.truncate_);
+
+  ObExpr* expr = ctx->spec_ptr_->column_exprs_.at(col_info.output_column_idx_);
+
+  ObObjType dst_type = expr->datum_meta_.type_;
+  ObCollationType coll_type = expr->datum_meta_.cs_type_;
+  ObAccuracy accuracy = col_info.data_type_.get_accuracy();
+  ObCollationType dst_coll_type = col_info.data_type_.get_collation_type();
+  ObCollationType in_coll_type = ctx->is_charset_converted_
+                                 ? CS_TYPE_UTF8MB4_BIN
+                                 : ctx->spec_ptr_->value_expr_->datum_meta_.cs_type_;
+  ObCollationLevel dst_coll_level = col_info.data_type_.get_collation_level();
+
+  if (OB_ISNULL(js_val)
+      || (js_val->json_type() == ObJsonNodeType::J_NULL)) {
+  } else {
+    switch (dst_type) {
+      case ObNullType : {
+        break;
+      }
+      case ObTinyIntType:
+      case ObSmallIntType:
+      case ObMediumIntType:
+      case ObInt32Type:
+      case ObIntType: {
+        int64_t val;
+        ret = cast_to_int(js_val, dst_type, val);
+        break;
+      }
+      case ObUTinyIntType:
+      case ObUSmallIntType:
+      case ObUMediumIntType:
+      case ObUInt32Type:
+      case ObUInt64Type: {
+        uint64_t val;
+        ret = cast_to_uint(js_val, dst_type, val);
+        break;
+      }
+      case ObDateTimeType: {
+        const ObBasicSessionInfo *session = ctx->exec_ctx_->get_my_session();
+        int64_t val;
+        ret = cast_to_datetime(&col_node, js_val, &ctx->row_alloc_, session, accuracy, val);
+        break;
+      }
+      case ObTimestampNanoType:
+      case ObTimestampTZType:
+      case ObTimestampLTZType:
+      case ObTimestampType: {
+        const ObBasicSessionInfo *session = ctx->exec_ctx_->get_my_session();
+        ObOTimestampData val;
+        ret = cast_to_otimstamp(js_val, session, accuracy, dst_type, val);
+        break;
+      }
+      case ObDateType: {
+        int32_t val;
+        ret = cast_to_date(js_val, val);
+        break;
+      }
+      case ObTimeType: {
+        int64_t val;
+        ret = cast_to_time(js_val, accuracy, val);
+        break;
+      }
+      case ObYearType: {
+        uint8_t val;
+        ret = cast_to_year(js_val, val);
+        break;
+      }
+      case ObNumberFloatType:
+      case ObFloatType:
+      case ObUFloatType: {
+        float out_val;
+        ret = cast_to_float(js_val, dst_type, out_val);
+        break;
+      }
+      case ObDoubleType:
+      case ObUDoubleType: {
+        double out_val;
+        ret = cast_to_double(js_val, dst_type, out_val);
+        break;
+      }
+      case ObUNumberType:
+      case ObNumberType: {
+        number::ObNumber out_val;
+        ret = cast_to_number(&ctx->row_alloc_, js_val, accuracy, dst_type, out_val);
+        break;
+      }
+      case ObVarcharType:
+      case ObRawType:
+      case ObNVarchar2Type:
+      case ObNCharType:
+      case ObCharType:
+      case ObTinyTextType:
+      case ObTextType :
+      case ObMediumTextType:
+      case ObHexStringType:
+      case ObLongTextType: {
+        ObString val;
+        bool is_quote = (col_info.col_type_ == COL_TYPE_QUERY && js_val->json_type() == ObJsonNodeType::J_STRING);
+        ret = cast_to_string(&col_node, &ctx->row_alloc_, js_val, in_coll_type, dst_coll_type,
+                            accuracy, dst_type, val, is_truncate, is_quote, ctx->is_const_input_);
+        break;
+      }
+      case ObBitType: {
+        uint64_t out_val;
+        ret = cast_to_bit(js_val, out_val, accuracy);
+        break;
+      }
+      case ObJsonType: {
+        ObString out_val;
+        ret = cast_to_json(&ctx->row_alloc_, js_val, out_val);
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected dst_type", K(dst_type));
+        break;
+      }
+    }
+  }
   return ret;
 }
 
@@ -955,6 +1227,10 @@ int JtFuncHelpler::set_error_val(JtScanCtx* ctx, JtColNode& col_node, int& ret)
 {
   INIT_SUCC(tmp_ret);
   if (ret == OB_SUCCESS) {
+  } else if (lib::is_mysql_mode()) {
+    if (OB_FAIL(set_error_val_mysql(ctx, col_node, ret))) {
+      LOG_WARN("fail to resolve error val in mysql mode", K(ret));
+    }
   } else {
     const ObJtColInfo& info = col_node.col_info_;
     JtColType col_type = col_node.type();
@@ -1092,6 +1368,96 @@ int JtFuncHelpler::set_error_val(JtScanCtx* ctx, JtColNode& col_node, int& ret)
   return ret;
 }
 
+int JtFuncHelpler::set_error_val_mysql(JtScanCtx* ctx, JtColNode& col_node, int& ret)
+{
+  const ObJtColInfo& info = col_node.col_info_;
+  if (ret == OB_SUCCESS) {
+  } else if (OB_ISNULL(ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx can not be null", K(ret));
+  } else if (OB_ISNULL(ctx->spec_ptr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("spec ptr can not be null in ctx", K(ret));
+  } else {
+    JtColType col_type = col_node.type();
+    ObExpr* expr = ctx->spec_ptr_->column_exprs_.at(col_node.col_info_.output_column_idx_);
+    if (col_type == COL_TYPE_VALUE || col_type == COL_TYPE_QUERY) {
+      if (info.on_error_ == JSN_VALUE_ERROR || (info.on_error_ == JSN_VALUE_IMPLICIT && info.on_empty_ == JSN_VALUE_ERROR)) {
+        EVAL_COVER_CODE(ctx, ret) ;
+        if (OB_SUCC(ret) && ctx->is_need_end_) {
+          ret = OB_ITER_END;
+        }
+      } else if (info.on_error_ == JSN_VALUE_DEFAULT) {
+        ObExpr* expr = ctx->spec_ptr_->column_exprs_.at(info.output_column_idx_);
+        ObObjType dst_type = expr->datum_meta_.type_;
+        ObExpr* default_expr = ctx->spec_ptr_->err_default_exprs_.at(col_node.col_info_.error_expr_id_);
+        if (OB_FAIL(col_node.get_default_value_pre_mysql(default_expr, ctx, col_node.err_val_, dst_type))) {
+          LOG_WARN("fail to process empty default value", K(ret), K(dst_type));
+        } else if (OB_FAIL(JtFuncHelpler::cast_to_res(ctx, col_node.err_val_, col_node, false))) {
+          LOG_WARN("failed do cast to returning type.", K(ret));
+        } else {
+          col_node.iter_ = col_node.curr_ = col_node.emp_val_;
+        }
+        ret = OB_SUCCESS;
+      } else if (info.on_error_ == JSN_VALUE_NULL
+                || info.on_error_ == JSN_VALUE_IMPLICIT
+                || info.on_empty_ == JSN_VALUE_NULL
+                || info.on_empty_ == JSN_VALUE_IMPLICIT) {
+        col_node.is_null_result_ = true;
+        ret = ctx->is_need_end_ ? OB_ITER_END : OB_SUCCESS;
+      }
+    } else if (col_type == COL_TYPE_EXISTS) {
+      int is_true = 0;
+      if (info.on_error_ == JSN_EXIST_ERROR) {
+        ret = ctx->error_code_;
+        if (OB_SUCC(ret) && ctx->is_need_end_) {
+          ret = OB_ITER_END;
+        }
+      } else if (info.on_error_ == JSN_EXIST_DEFAULT || info.on_error_ == JSN_EXIST_FALSE) {
+        col_node.is_null_result_ = false;
+        ret = ctx->is_need_end_ ? OB_ITER_END : OB_SUCCESS;
+      } else if (info.on_error_ == JSN_EXIST_TRUE) {
+        is_true = 0;
+        col_node.is_null_result_ = false;
+        ret = ctx->is_need_end_ ? OB_ITER_END : OB_SUCCESS;
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (ob_is_string_type(info.data_type_.get_obj_type())) {
+        ObString value = is_true ? ObString("1") : ObString("0");
+        void* buf = ctx->row_alloc_.alloc(sizeof(ObJsonString));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("buf allocate failed", K(ret));
+        } else {
+          col_node.curr_ = static_cast<ObJsonString*>(new(buf)ObJsonString(value.ptr(), value.length()));
+          col_node.is_null_result_ = false;
+        }
+      } else {
+        void* buf = ctx->row_alloc_.alloc(sizeof(ObJsonInt));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("buf allocate failed", K(ret));
+        } else {
+          col_node.curr_ = static_cast<ObJsonInt*>(new(buf)ObJsonInt(is_true));
+          col_node.is_null_result_ = false;
+        }
+      }
+
+      if (OB_SUCC(ret)
+          && !col_node.is_null_result_
+          && OB_FAIL(JtFuncHelpler::cast_to_res(ctx, col_node.curr_, col_node, false))) {
+        LOG_WARN("failed do cast defaut value to returning type.", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && col_node.is_null_result_) {
+      expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
+    }
+  }
+  return ret;
+}
+
 int JtFuncHelpler::check_default_val_accuracy(const ObAccuracy &accuracy,
                                               const ObObjType &type,
                                               const ObDatum *obj)
@@ -1167,7 +1533,8 @@ int JtFuncHelpler::check_default_value_inner(JtScanCtx* ctx,
   } else if (default_expr->datum_meta_.type_ == ObNullType && ob_is_string_type(col_info.data_type_.get_obj_type())) {
     ret = OB_ERR_DEFAULT_VALUE_NOT_LITERAL;
     LOG_WARN("default value not match returing type", K(ret));
-  } else if (OB_FAIL(ObJsonExprHelper::pre_default_value_check(col_expr->datum_meta_.type_, in_str, default_expr->datum_meta_.type_))) {
+  } else if ((lib::is_oracle_mode() && OB_FAIL(ObJsonExprHelper::pre_default_value_check(col_expr->datum_meta_.type_, in_str, default_expr->datum_meta_.type_)))
+            || (lib::is_mysql_mode() && !ob_is_string_tc(default_expr->datum_meta_.type_))) {
     LOG_WARN("default value pre check fail", K(ret), K(in_str));
   } else if (ob_obj_type_class(col_expr->datum_meta_.type_) == ob_obj_type_class(default_expr->datum_meta_.type_)
              && OB_FAIL(JtFuncHelpler::check_default_val_accuracy(col_info.data_type_.get_accuracy(), default_expr->datum_meta_.type_, emp_datum))) {
@@ -1370,7 +1737,11 @@ int JtColNode::set_val_on_empty(JtScanCtx* ctx, bool& need_cast_res)
   INIT_SUCC(ret);
   JtColType col_type = type();
 
-  if (col_type == COL_TYPE_QUERY) {
+  if (lib::is_mysql_mode()) {
+    if (OB_FAIL(set_val_on_empty_mysql(ctx, need_cast_res))) {
+      LOG_WARN("fail to eval mysql empty clause", K(ret));
+    }
+  } else if (col_type == COL_TYPE_QUERY) {
     switch (col_info_.on_empty_) {
       case JSN_QUERY_ERROR: {
         ret = OB_ERR_JSON_VALUE_NO_VALUE;
@@ -1465,6 +1836,9 @@ int JtColNode::set_val_on_empty(JtScanCtx* ctx, bool& need_cast_res)
               curr_ = iter_ = err_val_;
             }
           }
+        } else {
+          curr_ = nullptr;
+          is_null_result_ = true;
         }
         break;
       }
@@ -1504,6 +1878,7 @@ int JtColNode::set_val_on_empty(JtScanCtx* ctx, bool& need_cast_res)
             LOG_WARN("failed do cast to returning type.", K(ret));
           } else {
             iter_ = emp_val_;
+            curr_ = emp_val_;
           }
         }
 
@@ -1552,6 +1927,187 @@ int JtColNode::set_val_on_empty(JtScanCtx* ctx, bool& need_cast_res)
   return ret;
 }
 
+int JtColNode::set_val_on_empty_mysql(JtScanCtx* ctx, bool& need_cast_res)
+{
+  INIT_SUCC(ret);
+  JtColType col_type = type();
+  ctx->is_cover_error_ = false;  // error can not cover null value
+  if (col_type == COL_TYPE_QUERY || col_type == COL_TYPE_VALUE) {
+    switch (col_info_.on_empty_) {
+      case JSN_VALUE_ERROR: {
+        ret = OB_ERR_MISSING_JSON_VALUE;
+        LOG_USER_ERROR(OB_ERR_MISSING_JSON_VALUE, "json_table");
+        break;
+      }
+      case JSN_VALUE_IMPLICIT:
+      case JSN_VALUE_NULL: {
+        curr_ = nullptr;
+        is_null_result_ = true;
+        ret = OB_SUCCESS;
+        break;
+      }
+      case JSN_VALUE_DEFAULT: {
+        need_cast_res = false;
+        ObExpr* expr = ctx->spec_ptr_->column_exprs_.at(col_info_.output_column_idx_);
+        ObObjType dst_type = expr->datum_meta_.type_;
+        ObExpr* default_expr = ctx->spec_ptr_->emp_default_exprs_.at(col_info_.empty_expr_id_);
+        if (OB_FAIL(get_default_value_pre_mysql(default_expr, ctx, emp_val_, dst_type))) {
+          LOG_WARN("fail to process empty default value", K(ret), K(dst_type));
+        } else if (OB_FAIL(JtFuncHelpler::cast_to_res(ctx, emp_val_, *this, false))) {
+          LOG_WARN("failed do cast to returning type.", K(ret));
+        } else {
+          iter_ = curr_ = emp_val_;
+        }
+        break;
+      }
+      default:  // error_type from get_on_empty_or_error has done range check, do nothing for default
+        break;
+    }
+  } else if (col_type == COL_TYPE_EXISTS) {
+    switch (col_info_.on_empty_) {
+      case JSN_EXIST_FALSE:
+      case JSN_EXIST_TRUE:
+      case JSN_EXIST_ERROR:
+      case JSN_EXIST_DEFAULT: {
+        if (ob_is_string_type(col_info_.data_type_.get_obj_type())) {
+          ObString value = "0";
+          void* buf = ctx->row_alloc_.alloc(sizeof(ObJsonString));
+          if (OB_ISNULL(buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+          } else {
+            iter_ = curr_ = static_cast<ObJsonString*>(new(buf)ObJsonString(value.ptr(), value.length()));
+            is_null_result_ = false;
+          }
+        } else {
+          void* buf = ctx->row_alloc_.alloc(sizeof(ObJsonInt));
+          if (OB_ISNULL(buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("buf allocate failed", K(ret));
+          } else {
+            iter_ = curr_ = static_cast<ObJsonInt*>(new(buf)ObJsonInt(0));
+            is_null_result_ = false;
+          }
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return ret;
+}
+
+int JtColNode::get_default_value_pre_mysql(ObExpr* default_expr,
+                                            JtScanCtx* ctx,
+                                            ObIJsonBase *&res,
+                                            ObObjType &dst_type)
+{
+  INIT_SUCC(ret);
+  ObDatum* tmp_datum = nullptr;
+  if (OB_FAIL(default_expr->eval(*ctx->eval_ctx_, tmp_datum))) {
+    LOG_WARN("failed do cast to returning type.", K(ret));
+  } else {
+    ObBasicSessionInfo *session = ctx->exec_ctx_->get_my_session();
+    ObIJsonBase* tmp_node = nullptr;
+    const ObDatum& datum = *tmp_datum;
+
+    if (OB_FAIL(check_default_cast_allowed(default_expr))) {
+      LOG_WARN("check default value can't cast return type", K(ret), K(default_expr->datum_meta_));
+    } else if (ObJsonExprHelper::is_convertible_to_json(default_expr->datum_meta_.type_)) {
+      if (OB_FAIL(ObJsonExprHelper::transform_convertible_2jsonBase(datum,
+                                                                    default_expr->datum_meta_.type_,
+                                                                    &ctx->row_alloc_,
+                                                                    default_expr->datum_meta_.cs_type_,
+                                                                    res, false,
+                                                                    default_expr->obj_meta_.has_lob_header(),
+                                                                    false, lib::is_oracle_mode(), true))
+          || (dst_type != ObJsonType && !res->is_json_scalar(res->json_type()))) {
+        ret = OB_INVALID_DEFAULT;
+        LOG_USER_ERROR(OB_INVALID_DEFAULT, col_info_.col_name_.length(), col_info_.col_name_.ptr());
+      }
+    } else if (OB_FAIL(ObJsonExprHelper::transform_scalar_2jsonBase(datum,
+                                                                    default_expr->datum_meta_.type_,
+                                                                    &ctx->row_alloc_,
+                                                                    default_expr->datum_meta_.scale_,
+                                                                    session->get_timezone_info(),
+                                                                    session, res, false, default_expr->is_boolean_))
+                || (dst_type != ObJsonType && !res->is_json_scalar(res->json_type()))) {
+      ret = OB_INVALID_DEFAULT;
+      LOG_USER_ERROR(OB_INVALID_DEFAULT, col_info_.col_name_.length(), col_info_.col_name_.ptr());
+    }
+  }
+  return ret;
+}
+
+int JtColNode::process_default_value_pre_mysql(JtScanCtx* ctx)
+{
+  INIT_SUCC(ret);
+  const ObJtColInfo& info = col_info_;
+  ctx->is_cover_error_ = false;
+  ObExpr* expr = ctx->spec_ptr_->column_exprs_.at(info.output_column_idx_);
+  ObObjType dst_type = expr->datum_meta_.type_;
+  char col_str[col_info_.col_name_.length()];
+  if (is_emp_evaled_) {
+  } else if (col_info_.on_empty_ == JSN_VALUE_DEFAULT) {
+    ObExpr* default_expr = ctx->spec_ptr_->emp_default_exprs_.at(col_info_.empty_expr_id_);
+    if (OB_FAIL(get_default_value_pre_mysql(default_expr, ctx, emp_val_, dst_type))) {
+      LOG_WARN("fail to process empty default value", K(ret), K(dst_type));
+    } else if (OB_FAIL(JtFuncHelpler::pre_default_value_check_mysql(ctx, emp_val_, *this))) {
+      ret = OB_OPERATE_OVERFLOW;
+      databuff_printf(col_str, col_info_.col_name_.length(), 0, "%s", col_info_.col_name_.length(), col_info_.col_name_.ptr());
+      LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "JSON_TABLE", col_str);
+    } else {
+      is_emp_evaled_ = true;
+    }
+  }
+
+  if (is_err_evaled_) {
+  } else if (OB_SUCC(ret) && col_info_.on_error_ == JSN_VALUE_DEFAULT) {
+    ObExpr* default_expr = ctx->spec_ptr_->err_default_exprs_.at(col_info_.error_expr_id_);
+    if (OB_FAIL(get_default_value_pre_mysql(default_expr, ctx, err_val_, dst_type))) {
+      LOG_WARN("fail to process empty default value", K(ret), K(dst_type));
+    } else if (OB_FAIL(JtFuncHelpler::pre_default_value_check_mysql(ctx, err_val_, *this))) {
+      databuff_printf(col_str, col_info_.col_name_.length(), 0, "%s", col_info_.col_name_.length(), col_info_.col_name_.ptr());
+      LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "JSON_TABLE", col_str);
+    } else {
+      is_err_evaled_ = true;
+    }
+  }
+  return ret;
+}
+
+int JtColNode::wrapper2_json_array(JtScanCtx* ctx, ObJsonBaseVector &hit)
+{
+  INIT_SUCC(ret);
+  void* js_arr_buf = ctx->row_alloc_.alloc(sizeof(ObJsonArray));
+  ObJsonArray* js_arr_ptr = nullptr;
+  if (OB_ISNULL(js_arr_buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate json array buf", K(ret));
+  } else if (OB_ISNULL(js_arr_ptr = new (js_arr_buf) ObJsonArray(&ctx->row_alloc_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to new json array node", K(ret));
+  } else {
+    ObJsonNode *j_node = NULL;
+    ObIJsonBase *jb_node = NULL;
+    for (int32_t i = 0; OB_SUCC(ret) && i < hit.size(); i++) {
+      if (OB_FAIL(ObJsonBaseFactory::transform(&ctx->row_alloc_, hit[i], ObJsonInType::JSON_TREE, jb_node))) { // to tree
+        LOG_WARN("fail to transform to tree", K(ret), K(i), K(*(hit[i])));
+      } else {
+        j_node = static_cast<ObJsonNode *>(jb_node);
+        if (OB_FAIL(js_arr_ptr->array_append(j_node->clone(&ctx->row_alloc_)))) {
+          LOG_WARN("failed to array append", K(ret), K(i), K(*j_node));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      curr_ = js_arr_ptr;
+    }
+  }
+  return ret;
+}
+
 int JtColNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_value)
 {
   INIT_SUCC(ret);
@@ -1561,18 +2117,24 @@ int JtColNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_value
   bool need_cast_res = true;
   bool need_pro_emtpy = false;
 
-  if (col_type == COL_TYPE_ORDINALITY) {
-    col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_int(ctx->ord_val_);
+  if (lib::is_mysql_mode() && OB_ISNULL(in)) {
+    col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
+  } else if (col_type == COL_TYPE_ORDINALITY) {
+    if (OB_ISNULL(in)) {
+      col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_null();
+    } else {
+      col_expr->locate_datum_for_write(*ctx->eval_ctx_).set_int(ctx->ord_val_);
+    }
     col_expr->get_eval_info(*ctx->eval_ctx_).evaluated_ = true;
     if (ctx->is_need_end_) {
       ret = OB_ITER_END;
     }
-  } else if (OB_FAIL(check_col_res_type(ctx))) {
+  } else if (lib::is_oracle_mode() && OB_FAIL(check_col_res_type(ctx))) {
     LOG_WARN("check column res type failed", K(ret), K(col_info_.data_type_), K(col_info_.col_type_));
   } else if (OB_FAIL(init_js_path(ctx))) {
     RESET_COVER_CODE(ctx);
     LOG_WARN("fail to init js path", K(ret));
-  } else if (OB_FAIL(JtFuncHelpler::check_default_value(ctx, col_info_, col_expr))) {
+  } else if (lib::is_oracle_mode() && OB_FAIL(JtFuncHelpler::check_default_value(ctx, col_info_, col_expr))) {
     // json value empty need check default value first
     LOG_WARN("default value check fail", K(ret));
   } else if (OB_ISNULL(in)) {
@@ -1588,6 +2150,8 @@ int JtColNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_value
     if (OB_FAIL(in_->seek(*js_path_, js_path_->path_node_cnt(), true, false, hit))) {
       SET_COVER_ERROR(ctx, ret);
       LOG_WARN("json seek failed", K(col_info_.path_), K(ret));
+    } else if (lib::is_mysql_mode() && OB_FAIL(process_default_value_pre_mysql(ctx))) {
+      LOG_WARN("fail to resolve default value in mysql mode", K(ret));
     } else if (hit.size() == 0) {
       curr_ = iter_ = nullptr;
       total_ = 1;
@@ -1670,7 +2234,11 @@ int JtColNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_value
           }
         }
       } else if (col_type == COL_TYPE_VALUE) {
-        if (hit.size() > 1) {
+        if (lib::is_mysql_mode() && ob_is_json(col_expr->datum_meta_.type_) && hit.size() > 1) {
+          if (OB_FAIL(wrapper2_json_array(ctx, hit))) {
+            LOG_WARN("fail to get json value", K(ret));
+          }
+        } else if (hit.size() > 1) {
           ret = OB_ERR_JSON_VALUE_NO_SCALAR;
           SET_COVER_ERROR(ctx, ret);
         } else if (hit[0]->json_type() == ObJsonNodeType::J_NULL) {
@@ -1680,7 +2248,7 @@ int JtColNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_value
                   && (hit[0]->json_type() == ObJsonNodeType::J_ARRAY || hit[0]->json_type() == ObJsonNodeType::J_OBJECT)) {
           ret = OB_ERR_JSON_VALUE_NO_SCALAR;
           SET_COVER_ERROR(ctx, ret);
-        } else if (curr_->json_type() == ObJsonNodeType::J_BOOLEAN && ob_is_number_tc(col_info_.data_type_.get_obj_type())) {
+        } else if (lib::is_oracle_mode() && curr_->json_type() == ObJsonNodeType::J_BOOLEAN && ob_is_number_tc(col_info_.data_type_.get_obj_type())) {
           curr_ = nullptr;
           is_null_result_ = true;
           ret = OB_ERR_BOOL_CAST_NUMBER;
@@ -1709,6 +2277,9 @@ int JtColNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_value
       } else if (col_type == COL_TYPE_EXISTS) {
         if (ob_is_string_type(col_info_.data_type_.get_obj_type())) {
           ObString value("true");
+          if (lib::is_mysql_mode()) {
+            value.assign_ptr("1", 1);
+          }
           void* buf = ctx->row_alloc_.alloc(sizeof(ObJsonString));
           if (OB_ISNULL(buf)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1835,10 +2406,6 @@ int JtScanNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_valu
       if (OB_ISNULL(in_->get_allocator())) {
         in_->set_allocator(&ctx->row_alloc_);
       }
-
-      if (in->json_type() == ObJsonNodeType::J_NULL) {
-        in = in_ = nullptr;
-      }
     }
     if (OB_ISNULL(in)) {
       total_ = 1;
@@ -1852,7 +2419,9 @@ int JtScanNode::get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_valu
       is_null_value = is_null_result_ = true;
       curr_ = iter_ = nullptr;
       if (col_info_.parent_id_ == common::OB_INVALID_ID
-          || (ctx->jt_op_->get_root_param() == in && ctx->jt_op_->get_root_entry()->reg_column_count() == 0)) {
+          || (ctx->jt_op_->get_root_param() == in
+              && ctx->jt_op_->get_root_entry()->reg_column_count() == 0
+              && ctx->jt_op_->get_root_entry() == this)) {
         ret = OB_ITER_END;
       }
     } else if (hit.size() == 1) {
@@ -2735,20 +3304,20 @@ int ObJsonTableOp::inner_get_next_row()
 
       ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(doc_type);
       ObJsonInType expect_type = ObJsonInType::JSON_TREE;
-      uint32_t parse_flag = ObJsonParser::JSN_RELAXED_FLAG;
+      uint32_t parse_flag = lib::is_oracle_mode() ? ObJsonParser::JSN_RELAXED_FLAG : ObJsonParser::JSN_DEFAULT_FLAG;
 
       // json type input, or has is json check
-      bool is_ensure_json = (doc_type == ObJsonType);
+      bool is_ensure_json = lib::is_oracle_mode() && (doc_type != ObJsonType);
 
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&jt_ctx_.row_alloc_, j_str, j_in_type, expect_type, in_, parse_flag))
                  || (in_->json_type() != ObJsonNodeType::J_ARRAY && in_->json_type() != ObJsonNodeType::J_OBJECT)) {
-        if (OB_FAIL(ret) || (!is_ensure_json)) {
+        if (OB_FAIL(ret) || (is_ensure_json)) {
           in_= nullptr;
           ret = OB_ERR_JSON_SYNTAX_ERROR;
           SET_COVER_ERROR(&jt_ctx_, ret);
           jt_ctx_.is_need_end_ = 1;
-          if (jt_root_->col_info_.on_error_ != JSN_TABLE_ERROR) {
+          if (lib::is_oracle_mode() && jt_root_->col_info_.on_error_ != JSN_TABLE_ERROR) {
             ret = OB_SUCCESS;
           }
         } else {

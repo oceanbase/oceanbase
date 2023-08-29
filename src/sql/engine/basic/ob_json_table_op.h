@@ -99,7 +99,9 @@ public:
       is_emp_evaled_(false),
       is_err_evaled_(false),
       emp_val_(nullptr),
-      err_val_(nullptr) {
+      err_val_(nullptr),
+      emp_datum_(nullptr),
+      err_datum_(nullptr) {
       new (&col_info_) ObJtColInfo(col_info);
       node_type_ = REG_TYPE;
       is_ord_node_ = col_info_.col_type_ == COL_TYPE_ORDINALITY;
@@ -118,6 +120,13 @@ public:
   int check_default_cast_allowed(ObExpr* expr);
   int check_col_res_type(JtScanCtx* ctx);
   int set_val_on_empty(JtScanCtx* ctx, bool& need_cast_res);
+  int set_val_on_empty_mysql(JtScanCtx* ctx, bool& need_cast_res);
+  int process_default_value_pre_mysql(JtScanCtx* ctx);
+  int wrapper2_json_array(JtScanCtx* ctx, ObJsonBaseVector &hit);
+  int get_default_value_pre_mysql(ObExpr* default_expr,
+                                  JtScanCtx* ctx,
+                                  ObIJsonBase *&res,
+                                  ObObjType &dst_type);
   int64_t node_idx() { return node_idx_; }
   virtual int open();
   virtual int get_next_row(ObIJsonBase* in, JtScanCtx* ctx, bool& is_null_value);
@@ -152,6 +161,8 @@ public:
   ObIJsonBase *emp_val_;
   ObIJsonBase *err_val_;
   int32_t ord_val_;
+  ObDatum *emp_datum_;
+  ObDatum *err_datum_;
 
   TO_STRING_KV(K_(node_type),
                K_(node_idx),
@@ -258,8 +269,10 @@ class JtFuncHelpler
 {
 public:
   static int cast_to_res(JtScanCtx* ctx, ObIJsonBase* js_val, JtColNode& col_info, bool enable_error);
+  static int cast_json_to_res(JtScanCtx* ctx, ObIJsonBase* js_val, JtColNode& col_node, ObDatum& res, bool enable_error = true);
   static int cast_to_json(common::ObIAllocator *allocator, ObIJsonBase *j_base, ObString &val);
-  static int cast_to_bit(ObIJsonBase *j_base, uint64_t &val);
+  static int cast_to_bit(ObIJsonBase *j_base, uint64_t &val, common::ObAccuracy &accuracy);
+  static int bit_length_check(const ObAccuracy &accuracy, uint64_t &value);
   static int cast_to_number(common::ObIAllocator *allocator,
                             ObIJsonBase *j_base,
                             common::ObAccuracy &accuracy,
@@ -297,6 +310,8 @@ public:
                             bool is_trunc = false,
                             bool is_quote = false,
                             bool is_const = false);
+  static int padding_char_for_cast(int64_t padding_cnt, const ObCollationType &padding_cs_type,
+                                    ObIAllocator &alloc, ObString &padding_res);
   static int time_scale_check(const ObAccuracy &accuracy, int64_t &value, bool strict = false);
   static int datetime_scale_check(const ObAccuracy &accuracy, int64_t &value, bool strict = false);
   static int number_range_check(const ObAccuracy &accuracy,
@@ -313,10 +328,14 @@ public:
   static int cast_to_int(ObIJsonBase *j_base, ObObjType dst_type, int64_t &val);
 
   static int set_error_val(JtScanCtx* ctx, JtColNode& col_info, int& ret);
+  static int set_error_val_mysql(JtScanCtx* ctx, JtColNode& col_info, int& ret);
   static int check_default_value_inner(JtScanCtx* ctx,
                                        ObJtColInfo &col_info,
                                        ObExpr* col_expr,
                                        ObExpr* default_expr);
+  static int pre_default_value_check_mysql(JtScanCtx* ctx,
+                                          ObIJsonBase* js_val,
+                                          JtColNode& col_node);
 };
 
 struct JtColTreeNode {

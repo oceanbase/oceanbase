@@ -38,7 +38,7 @@ question_mask_size: 0
 			|--[0],[T_COLUMN_DEFINITION], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_COLUMN_REF], str_value_=[c1], value=[9223372036854775807]
 					|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
-				|--[1],[T_INT32], str_value_=[], value=[9223090566173032447]
+				|--[1],[T_INT32], str_value_=[], value=[65535]
 				|--[2],[T_COLUMN_ATTRIBUTES], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_CONSTR_PRIMARY_KEY], str_value_=[], value=[9223372036854775807]
 			|--[1],[T_COLUMN_DEFINITION], str_value_=[], value=[9223372036854775807]
@@ -65,7 +65,7 @@ question_mask_size: 0
 			|--[0],[T_COLUMN_DEFINITION], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_COLUMN_REF], str_value_=[c1], value=[9223372036854775807]
 					|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
-				|--[1],[T_INT32], str_value_=[], value=[9223090566173032447]
+				|--[1],[T_INT32], str_value_=[], value=[65535]
 				|--[2],[T_COLUMN_ATTRIBUTES], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_CONSTR_PRIMARY_KEY], str_value_=[], value=[9223372036854775807]
 			|--[1],[T_COLUMN_DEFINITION], str_value_=[], value=[9223372036854775807]
@@ -92,7 +92,7 @@ question_mask_size: 0
 			|--[0],[T_COLUMN_DEFINITION], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_COLUMN_REF], str_value_=[c1], value=[9223372036854775807]
 					|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
-				|--[1],[T_INT32], str_value_=[], value=[9223090566173032447]
+				|--[1],[T_INT32], str_value_=[], value=[65535]
 				|--[2],[T_COLUMN_ATTRIBUTES], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_CONSTR_PRIMARY_KEY], str_value_=[], value=[9223372036854775807]
 			|--[1],[T_COLUMN_DEFINITION], str_value_=[], value=[9223372036854775807]
@@ -850,13 +850,13 @@ question_mask_size: 0
 			|--[0],[T_COLUMN_DEFINITION], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_COLUMN_REF], str_value_=[c], value=[9223372036854775807]
 					|--[2],[T_IDENT], str_value_=[c], value=[9223372036854775807]
-				|--[1],[T_INT32], str_value_=[], value=[9223090566173032447]
+				|--[1],[T_INT32], str_value_=[], value=[65535]
 				|--[2],[T_COLUMN_ATTRIBUTES], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_CONSTR_PRIMARY_KEY], str_value_=[], value=[9223372036854775807]
 			|--[1],[T_COLUMN_DEFINITION], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_COLUMN_REF], str_value_=[c2], value=[9223372036854775807]
 					|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
-				|--[1],[T_INT32], str_value_=[], value=[9223090566173032447]
+				|--[1],[T_INT32], str_value_=[], value=[65535]
 
 **************   Case 43   ***************
 create table rongxuan(rongxuan.c int primary key, c2 int)
@@ -871,13 +871,13 @@ question_mask_size: 0
 				|--[0],[T_COLUMN_REF], str_value_=[c], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[rongxuan], value=[9223372036854775807]
 					|--[2],[T_IDENT], str_value_=[c], value=[9223372036854775807]
-				|--[1],[T_INT32], str_value_=[], value=[9223090566173032447]
+				|--[1],[T_INT32], str_value_=[], value=[65535]
 				|--[2],[T_COLUMN_ATTRIBUTES], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_CONSTR_PRIMARY_KEY], str_value_=[], value=[9223372036854775807]
 			|--[1],[T_COLUMN_DEFINITION], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_COLUMN_REF], str_value_=[c2], value=[9223372036854775807]
 					|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
-				|--[1],[T_INT32], str_value_=[], value=[9223090566173032447]
+				|--[1],[T_INT32], str_value_=[], value=[65535]
 
 **************   Case 44   ***************
 create table rongxuan(d.rongxuan.c int primary key, c2 int)
@@ -893,13 +893,13 @@ question_mask_size: 0
 					|--[0],[T_IDENT], str_value_=[d], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[rongxuan], value=[9223372036854775807]
 					|--[2],[T_IDENT], str_value_=[c], value=[9223372036854775807]
-				|--[1],[T_INT32], str_value_=[], value=[9223090566173032447]
+				|--[1],[T_INT32], str_value_=[], value=[65535]
 				|--[2],[T_COLUMN_ATTRIBUTES], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_CONSTR_PRIMARY_KEY], str_value_=[], value=[9223372036854775807]
 			|--[1],[T_COLUMN_DEFINITION], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_COLUMN_REF], str_value_=[c2], value=[9223372036854775807]
 					|--[2],[T_IDENT], str_value_=[c2], value=[9223372036854775807]
-				|--[1],[T_INT32], str_value_=[], value=[9223090566173032447]
+				|--[1],[T_INT32], str_value_=[], value=[65535]
 
 **************   Case 45   ***************
 drop table t1
@@ -938,7 +938,7 @@ question_mask_size: 0
 					|--[0],[T_COLUMN_DEFINITION], str_value_=[], value=[9223372036854775807]
 						|--[0],[T_COLUMN_REF], str_value_=[c3], value=[9223372036854775807]
 							|--[2],[T_IDENT], str_value_=[c3], value=[9223372036854775807]
-						|--[1],[T_INT32], str_value_=[], value=[9223090566173032447]
+						|--[1],[T_INT32], str_value_=[], value=[65535]
 
 **************   Case 48   ***************
 alter table rongxuan add rongxuan.c4 int;
@@ -955,7 +955,7 @@ question_mask_size: 0
 						|--[0],[T_COLUMN_REF], str_value_=[c4], value=[9223372036854775807]
 							|--[1],[T_IDENT], str_value_=[rongxuan], value=[9223372036854775807]
 							|--[2],[T_IDENT], str_value_=[c4], value=[9223372036854775807]
-						|--[1],[T_INT32], str_value_=[], value=[9223090566173032447]
+						|--[1],[T_INT32], str_value_=[], value=[65535]
 
 **************   Case 49   ***************
 alter table rongxuan add test.rongxuan.c5 int;
@@ -973,7 +973,7 @@ question_mask_size: 0
 							|--[0],[T_IDENT], str_value_=[test], value=[9223372036854775807]
 							|--[1],[T_IDENT], str_value_=[rongxuan], value=[9223372036854775807]
 							|--[2],[T_IDENT], str_value_=[c5], value=[9223372036854775807]
-						|--[1],[T_INT32], str_value_=[], value=[9223090566173032447]
+						|--[1],[T_INT32], str_value_=[], value=[65535]
 
 **************   Case 50   ***************
 drop database rongxuan

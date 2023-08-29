@@ -6066,6 +6066,7 @@ static int text_text(const ObObjType expect_type, ObObjCastParams &params,
   in_lob_locator.assign_buffer(row_str.ptr(), row_str.length(), in.has_lob_header());
   bool is_persist = in_lob_locator.is_valid() && in_lob_locator.is_persist_lob();
   bool is_delta = in_lob_locator.is_valid() && in_lob_locator.is_delta_temp_lob();
+  bool is_freed = in_lob_locator.is_valid() && in_lob_locator.is_freed();
   bool is_different_charset_type = (ObCharset::charset_type_by_coll(in_cs_type)
                                     != ObCharset::charset_type_by_coll(out_cs_type));
   bool is_any_cs = (in_cs_type == CS_TYPE_ANY || out_cs_type == CS_TYPE_ANY);
@@ -6075,7 +6076,7 @@ static int text_text(const ObObjType expect_type, ObObjCastParams &params,
       || OB_UNLIKELY(ObTextTC != ob_obj_type_class(expect_type)))) {
      ret = OB_ERR_UNEXPECTED;
      LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
-  } else if ((is_different_charset_type && !is_delta && !(is_persist && is_any_cs))
+  } else if ((is_different_charset_type && !is_delta && !(is_persist && is_any_cs) && !is_freed)
              || is_tiny_to_others ) {
     if (OB_FAIL(instr_iter.init(0, NULL, params.allocator_v2_))) {
       LOG_WARN("init lob str iter failed ", K(ret), K(in));

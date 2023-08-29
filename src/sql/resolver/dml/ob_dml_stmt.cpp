@@ -196,11 +196,11 @@ int ColumnItem::deep_copy(ObIRawExprCopier &expr_copier,
   if (OB_FAIL(ret)) {
   } else {
     col_idx_= other.col_idx_;
-    if (OB_NOT_NULL(default_value_expr_)
+    if (OB_NOT_NULL(other.default_value_expr_)
         && OB_FAIL(expr_copier.copy(other.default_value_expr_, default_value_expr_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to copy default value expr", K(ret));
-    } else if (OB_NOT_NULL(default_empty_expr_)
+    } else if (OB_NOT_NULL(other.default_empty_expr_)
                && OB_FAIL(expr_copier.copy(other.default_empty_expr_, default_empty_expr_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to copy default empty expr", K(ret));

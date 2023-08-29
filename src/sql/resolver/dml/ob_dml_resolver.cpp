@@ -3770,6 +3770,9 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
         if (OB_ISNULL(session_info_)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid argument", K(ret));
+        } else if (lib::is_mysql_mode() && GET_MIN_CLUSTER_VERSION() < DATA_VERSION_4_2_1_0) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("json table in mysql mode not support before 4.2.1", K(ret), K(GET_MIN_CLUSTER_VERSION()));
         }
         OZ (resolve_json_table_item(*table_node, table_item));
         break;
@@ -4505,6 +4508,11 @@ int ObDMLResolver::resolve_json_table_item(const ParseNode &parse_tree, TableIte
   } else {
     OZ (resolve_sql_expr(*(doc_node), json_doc_expr));
     CK (OB_NOT_NULL(json_doc_expr));
+    if (OB_SUCC(ret)) {
+      uint64_t extra = json_doc_expr->get_extra();
+      extra |= CM_ERROR_ON_SCALE_OVER;
+      json_doc_expr->set_extra(extra);
+    }
     OZ (json_doc_expr->deduce_type(session_info_));
   }
 
@@ -4524,7 +4532,10 @@ int ObDMLResolver::resolve_json_table_item(const ParseNode &parse_tree, TableIte
   if (OB_SUCC(ret)) {
     ObString alias_name;
     ParseNode *alias_node = parse_tree.children_[4];
-    if (OB_ISNULL(item = stmt->create_table_item(*allocator_))) {
+    if (lib::is_mysql_mode() && OB_ISNULL(alias_node)) {
+      ret = OB_ERR_TABLE_WITHOUT_ALIAS;
+      LOG_WARN("table function need alias", K(ret));
+    } else if (OB_ISNULL(item = stmt->create_table_item(*allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to create table item", K(ret));
     } else if (alias_node) {
@@ -8396,7 +8407,8 @@ int ObDMLResolver::resolve_json_table_column_name_and_path(const ParseNode *name
   } else if (path_node->type_ != T_NULL
               && (path_node->str_len_ > 0 && OB_NOT_NULL(path_node->str_value_))) {
     col_def->col_base_info_.path_.assign_ptr(path_node->str_value_, path_node->str_len_);
-    if (*path_node->str_value_ != '$' && path_node->value_ != 1
+    if (lib::is_mysql_mode()) { // do nothing
+    } else if (*path_node->str_value_ != '$' && path_node->value_ != 1
         && OB_FAIL(json_table_make_json_path(*path_node, allocator, col_def->col_base_info_.path_))) {
       LOG_WARN("failed to make json path", K(ret));
     }
@@ -8409,8 +8421,14 @@ int ObDMLResolver::resolve_json_table_column_name_and_path(const ParseNode *name
   }
 
   if (OB_SUCC(ret)) {
-    col_def->col_base_info_.col_name_.assign_ptr(name_node->str_value_, name_node->str_len_);
-    col_def->col_base_info_.is_name_quoted_ = name_node->is_input_quoted_;
+    if (lib::is_mysql_mode() && (name_node->str_value_[name_node->str_len_ - 1] == ' ')) {
+      ret = OB_WRONG_COLUMN_NAME;
+      LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, static_cast<int32_t>(name_node->str_len_), name_node->str_value_);
+    } else {
+      col_def->col_base_info_.col_name_.assign_ptr(name_node->str_value_, name_node->str_len_);
+      col_def->col_base_info_.is_name_quoted_ = name_node->is_input_quoted_;
+    }
+
   }
   return ret;
 }
@@ -8442,13 +8460,19 @@ int ObDMLResolver::resolve_json_table_check_dup_name(const ObJsonTableDef* table
 }
 int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
                                                   const int column_type,
-                                                  ObDataType &data_type)
+                                                  ObDataType &data_type,
+                                                  ObDmlJtColDef *col_def)
 {
   int ret = OB_SUCCESS;
 
   data_type.set_collation_level(CS_LEVEL_IMPLICIT);
   JtColType col_type = static_cast<JtColType>(column_type);
-  ObObjType obj_type = static_cast<ObObjType>(parse_tree.int16_values_[0]);
+  ObObjType obj_type;
+  if (lib::is_oracle_mode()) {
+    obj_type = static_cast<ObObjType>(parse_tree.int16_values_[0]);
+  } else {
+    obj_type = static_cast<ObObjType>(parse_tree.type_);
+  }
 
   if (col_type == COL_TYPE_ORDINALITY) {
     data_type.set_int();
@@ -8460,78 +8484,114 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
              || col_type == COL_TYPE_VALUE
              || col_type == COL_TYPE_QUERY
              || col_type == COL_TYPE_QUERY_JSON_COL) {
-    if (ObNumberType == obj_type
-        && parse_tree.int16_values_[2] == -1 && parse_tree.int16_values_[3] == 0) {
-      obj_type = ObIntType;
-    } else if (ObFloatType == obj_type) {
-      // boundaries already checked in calc result type
-      if (parse_tree.int16_values_[OB_NODE_CAST_N_PREC_IDX] > OB_MAX_FLOAT_PRECISION) {
-        obj_type = ObDoubleType;
-      }
-    }
 
-    common::ObAccuracy accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY2[1][obj_type];
-    common::ObLengthSemantics length_semantics = parse_tree.length_semantics_;
-    accuracy.set_length_semantics(length_semantics);
-    ObObjTypeClass dest_tc = ob_obj_type_class(obj_type);
-
-    if (ObStringTC == dest_tc) {
-      if (parse_tree.length_semantics_ == LS_DEFAULT) {
-        length_semantics = (OB_NOT_NULL(session_info_) ?
-              session_info_->get_actual_nls_length_semantics() : LS_BYTE);
-      }
-      accuracy.set_full_length(parse_tree.int32_values_[1], length_semantics, true);
-    } else if (ObRawTC == dest_tc) {
-      accuracy.set_length(parse_tree.int32_values_[1]);
-    } else if (ObTextTC == dest_tc || ObJsonTC == dest_tc) {
-      accuracy.set_length(parse_tree.int32_values_[1] <= 0 ?
-          ObAccuracy::DDL_DEFAULT_ACCURACY[obj_type].get_length() : parse_tree.int32_values_[1]);
-    } else if (ObIntervalTC == dest_tc) {
-      if (OB_UNLIKELY(!ObIntervalScaleUtil::scale_check(parse_tree.int16_values_[3]) ||
-                      !ObIntervalScaleUtil::scale_check(parse_tree.int16_values_[2]))) {
-        ret = OB_ERR_DATETIME_INTERVAL_PRECISION_OUT_OF_RANGE;
-        LOG_WARN("Invalid scale.", K(ret), KP(parse_tree.int16_values_[3]), KP(parse_tree.int16_values_[2]));
+    if (OB_UNLIKELY(!ob_is_valid_obj_type(obj_type))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid obj type", K(ret), K(obj_type));
+    } else if (lib::is_mysql_mode()) {
+      omt::ObTenantConfigGuard tcg(TENANT_CONF(session_info_->get_effective_tenant_id()));
+      bool convert_real_to_decimal = (tcg.is_valid() && tcg->_enable_convert_real_to_decimal);
+      uint64_t tenant_data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret));
+      } else if (OB_FAIL(ObResolverUtils::resolve_data_type(parse_tree,
+                                                          col_def->col_base_info_.col_name_,
+                                                          data_type,
+                                                          (OB_NOT_NULL(session_info_) && is_oracle_mode()),
+                                                          false,
+                                                          session_info_->get_session_nls_params(),
+                                                          session_info_->get_effective_tenant_id(),
+                                                          convert_real_to_decimal))) {
+        LOG_WARN("resolve data type failed", K(ret), K(col_def->col_base_info_.col_name_));
       } else {
-        ObScale scale = (obj_type == ObIntervalYMType) ?
-          ObIntervalScaleUtil::interval_ym_scale_to_ob_scale(static_cast<int8_t>(parse_tree.int16_values_[3]))
-          : ObIntervalScaleUtil::interval_ds_scale_to_ob_scale(
-              static_cast<int8_t>(parse_tree.int16_values_[2]),
-              static_cast<int8_t>(parse_tree.int16_values_[3]));
-        accuracy.set_scale(scale);
+        ObCollationType coll_type = data_type.get_collation_type();
+        if (CS_TYPE_INVALID != coll_type) {
+          data_type.set_collation_type(coll_type);
+        } else if (OB_ISNULL(session_info_)) { // use connection_collation. for cast('a' as char)
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected collation type", K(ret));
+        } else if (OB_FAIL(session_info_->get_collation_connection(coll_type))) {
+          LOG_WARN("failed to get collation", K(ret));
+        } else {
+          data_type.set_collation_type(coll_type);
+        }
+        if (OB_SUCC(ret) && ob_is_json_tc(obj_type)) {
+          data_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        }
       }
     } else {
-      const ObAccuracy &def_acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[1][obj_type];
-      if (ObNumberType == obj_type && parse_tree.int16_values_[2] == -1) {
-        accuracy.set_precision(parse_tree.int16_values_[2]);
-        accuracy.set_scale(parse_tree.int16_values_[3]);
-      } else if (ObIntType == obj_type) {
-        data_type.set_int();
-        accuracy = def_acc;
+      if (ObNumberType == obj_type
+          && parse_tree.int16_values_[2] == -1 && parse_tree.int16_values_[3] == 0) {
+        obj_type = ObIntType;
+      } else if (ObFloatType == obj_type) {
+        // boundaries already checked in calc result type
+        if (parse_tree.int16_values_[OB_NODE_CAST_N_PREC_IDX] > OB_MAX_FLOAT_PRECISION) {
+          obj_type = ObDoubleType;
+        }
+      }
+      common::ObAccuracy accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY2[1][obj_type];
+      common::ObLengthSemantics length_semantics = parse_tree.length_semantics_;
+      accuracy.set_length_semantics(length_semantics);
+      ObObjTypeClass dest_tc = ob_obj_type_class(obj_type);
+
+      if (ObStringTC == dest_tc) {
+        if (parse_tree.length_semantics_ == LS_DEFAULT) {
+          length_semantics = (OB_NOT_NULL(session_info_) ?
+                session_info_->get_actual_nls_length_semantics() : LS_BYTE);
+        }
+        accuracy.set_full_length(parse_tree.int32_values_[1], length_semantics, true);
+      } else if (ObRawTC == dest_tc) {
+        accuracy.set_length(parse_tree.int32_values_[1]);
+      } else if (ObTextTC == dest_tc || ObJsonTC == dest_tc) {
+        accuracy.set_length(parse_tree.int32_values_[1] <= 0 ?
+            ObAccuracy::DDL_DEFAULT_ACCURACY[obj_type].get_length() : parse_tree.int32_values_[1]);
+      } else if (ObIntervalTC == dest_tc) {
+        if (OB_UNLIKELY(!ObIntervalScaleUtil::scale_check(parse_tree.int16_values_[3]) ||
+                        !ObIntervalScaleUtil::scale_check(parse_tree.int16_values_[2]))) {
+          ret = OB_ERR_DATETIME_INTERVAL_PRECISION_OUT_OF_RANGE;
+          LOG_WARN("Invalid scale.", K(ret), KP(parse_tree.int16_values_[3]), KP(parse_tree.int16_values_[2]));
+        } else {
+          ObScale scale = (obj_type == ObIntervalYMType) ?
+            ObIntervalScaleUtil::interval_ym_scale_to_ob_scale(static_cast<int8_t>(parse_tree.int16_values_[3]))
+            : ObIntervalScaleUtil::interval_ds_scale_to_ob_scale(
+                static_cast<int8_t>(parse_tree.int16_values_[2]),
+                static_cast<int8_t>(parse_tree.int16_values_[3]));
+          accuracy.set_scale(scale);
+        }
       } else {
-        accuracy.set_precision(parse_tree.int16_values_[2]);
-        accuracy.set_scale(parse_tree.int16_values_[3]);
+        const ObAccuracy &def_acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[1][obj_type];
+        if (ObNumberType == obj_type && parse_tree.int16_values_[2] == -1) {
+          accuracy.set_precision(parse_tree.int16_values_[2]);
+          accuracy.set_scale(parse_tree.int16_values_[3]);
+        } else if (ObIntType == obj_type) {
+          data_type.set_int();
+          accuracy = def_acc;
+        } else {
+          accuracy.set_precision(parse_tree.int16_values_[2]);
+          accuracy.set_scale(parse_tree.int16_values_[3]);
+        }
+        if (ObDoubleType == obj_type) {
+          accuracy.set_accuracy(def_acc.get_precision());
+        }
       }
-      if (ObDoubleType == obj_type) {
-        accuracy.set_accuracy(def_acc.get_precision());
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else {
-      data_type.set_accuracy(accuracy);
-      data_type.set_obj_type(obj_type);
-      ObCollationType coll_type = static_cast<ObCollationType>(parse_tree.int16_values_[OB_NODE_CAST_COLL_IDX]);
-      if (CS_TYPE_INVALID != coll_type) {
-        data_type.set_collation_type(coll_type);
-      } else if (OB_ISNULL(session_info_)) { // use connection_collation. for cast('a' as char)
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected collation type", K(ret));
-      } else if (OB_FAIL(session_info_->get_collation_connection(coll_type))) {
-        LOG_WARN("failed to get collation", K(ret));
+      if (OB_FAIL(ret)) {
       } else {
-        data_type.set_collation_type(coll_type);
-      }
-      if (OB_SUCC(ret) && ob_is_json_tc(obj_type)) {
-        data_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        data_type.set_accuracy(accuracy);
+        data_type.set_obj_type(obj_type);
+        ObCollationType coll_type = static_cast<ObCollationType>(parse_tree.int16_values_[OB_NODE_CAST_COLL_IDX]);
+        if (CS_TYPE_INVALID != coll_type) {
+          data_type.set_collation_type(coll_type);
+        } else if (OB_ISNULL(session_info_)) { // use connection_collation. for cast('a' as char)
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected collation type", K(ret));
+        } else if (OB_FAIL(session_info_->get_collation_connection(coll_type))) {
+          LOG_WARN("failed to get collation", K(ret));
+        } else {
+          data_type.set_collation_type(coll_type);
+        }
+        if (OB_SUCC(ret) && ob_is_json_tc(obj_type)) {
+          data_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        }
       }
     }
   } else {
@@ -8570,7 +8630,7 @@ int ObDMLResolver::generate_json_table_output_column_item(TableItem *table_item,
   }
 
   OX (col_expr->set_database_name(table_item->database_name_));
-  if (OB_SUCC(ret) && ob_is_enumset_tc(col_expr->get_data_type())) {
+  if (OB_SUCC(ret) && lib::is_oracle_mode() && ob_is_enumset_tc(col_expr->get_data_type())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support enum set in table function", K(ret));
   }
@@ -8644,6 +8704,7 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
         } else {
           col_def->col_base_info_.col_name_.assign_ptr(name_node->str_value_, name_node->str_len_);
           col_def->col_base_info_.col_type_ = COL_TYPE_ORDINALITY;
+          col_def->col_base_info_.is_name_quoted_ = name_node->is_input_quoted_;
         }
       } else if (col_type == COL_TYPE_EXISTS) {
         const ParseNode* path_node = parse_tree.children_[3];
@@ -8740,7 +8801,8 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
           LOG_WARN("column in json table is ambiguous", K(col_def->col_base_info_.col_name_));
         } else if (OB_FAIL(resolve_json_table_column_type(*return_type,
                                                           static_cast<int>(col_type),
-                                                          data_type))) {
+                                                          data_type,
+                                                          col_def))) {
           LOG_WARN("failed to resolve json column type.", K(ret));
         } else if (OB_FAIL(generate_json_table_output_column_item(table_item,
                                                                   data_type,
@@ -9011,7 +9073,7 @@ int ObDMLResolver::resolve_json_table_column_item(const ParseNode &parse_tree,
         } else if (OB_ISNULL(cur_col_def)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("current col def is null", K(ret), KP(cur_col_def));
-        } else if (OB_FAIL(resolve_json_table_check_dup_path(col_def->nested_cols_, cur_col_def->col_base_info_.path_))) {
+        } else if (lib::is_oracle_mode() && OB_FAIL(resolve_json_table_check_dup_path(col_def->nested_cols_, cur_col_def->col_base_info_.path_))) {
           LOG_WARN("failed to check dup path.", K(ret), K(cur_node->value_));
         } else if (OB_FAIL(col_def->nested_cols_.push_back(cur_col_def))) {
           LOG_WARN("failed to store column defination.", K(ret), K(cur_node->value_));

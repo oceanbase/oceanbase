@@ -340,7 +340,6 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
       break;
     }
     case TableItem::JSON_TABLE: {
-      CK (lib::is_oracle_mode());
       DATA_PRINTF("JSON_TABLE(");
       OZ (expr_printer_.do_print(table_item->json_table_def_->doc_expr_, T_FROM_SCOPE));
       OZ (print_json_table(table_item));
@@ -374,91 +373,478 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
 int ObDMLStmtPrinter::print_json_return_type(int64_t value, ObDataType data_type)
 {
   int ret = OB_SUCCESS;
+  if (lib::is_mysql_mode()) {
+    if (OB_FAIL(print_mysql_json_return_type(value, data_type))) {
+      LOG_WARN("fail to print json table column in mysql mode", K(ret));
+    }
+  } else {
+    ParseNode parse_node;
+    parse_node.value_ = value;
+
+    int16_t cast_type = parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX];
+    const ObLengthSemantics length_semantics = data_type.get_length_semantics();
+    const ObScale scale = data_type.get_scale();
+
+    switch (cast_type) {
+      case T_CHAR: {
+        int16_t collation = parse_node.int16_values_[OB_NODE_CAST_COLL_IDX];
+        int32_t len = parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX];
+        DATA_PRINTF("char(%d %s)", len, get_length_semantics_str(length_semantics));
+        break;
+      }
+      case T_VARCHAR: {
+        int16_t collation = parse_node.int16_values_[OB_NODE_CAST_COLL_IDX];
+        int32_t len = parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX];
+        const int32_t DEFAULT_VARCHAR_LEN = 4000;
+        if (BINARY_COLLATION == collation) {
+          DATA_PRINTF("varbinary(%d)", len);
+        } else {
+          // CHARACTER
+          if (len == DEFAULT_VARCHAR_LEN) {
+            break;
+          } else if (length_semantics == LS_BYTE && len == -1) {
+            DATA_PRINTF(" VARCHAR2");
+            break;
+          } else {
+            DATA_PRINTF("varchar2(%d %s)", len, get_length_semantics_str(length_semantics));
+          }
+        }
+        break;
+      }
+      case T_NVARCHAR2: {
+        DATA_PRINTF("nvarchar2(%d)", parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX]);
+        break;
+      }
+      case T_NCHAR: {
+        DATA_PRINTF("nchar(%d)", parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX]);
+        break;
+      }
+      case T_DATETIME: {
+        //oracle mode treate date as datetime
+        DATA_PRINTF("date");
+        break;
+      }
+      case T_DATE: {
+        DATA_PRINTF("date");
+        break;
+      }
+      case T_TIME: {
+        int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+        if (scale >= 0) {
+          DATA_PRINTF("time(%d)", scale);
+        } else {
+          DATA_PRINTF("time");
+        }
+        break;
+      }
+      case T_NUMBER: {
+        int16_t precision = parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX];
+        int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+        DATA_PRINTF("number(%d,%d)", precision, scale);
+        break;
+      }
+      case T_NUMBER_FLOAT: {
+        int16_t precision = parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX];
+        DATA_PRINTF("float(%d)", precision);
+        break;
+      }
+      case T_TINYINT:
+      case T_SMALLINT:
+      case T_MEDIUMINT:
+      case T_INT32:
+      case T_INT: {
+        DATA_PRINTF("signed");
+        break;
+      }
+      case T_UTINYINT:
+      case T_USMALLINT:
+      case T_UMEDIUMINT:
+      case T_UINT32:
+      case T_UINT64: {
+        DATA_PRINTF("unsigned");
+        break;
+      }
+      case T_INTERVAL_YM: {
+        int year_scale = ObIntervalScaleUtil::ob_scale_to_interval_ym_year_scale(static_cast<int8_t>(scale));
+        DATA_PRINTF("interval year(%d) to month", year_scale);
+        break;
+      }
+      case T_INTERVAL_DS: {
+        int day_scale = ObIntervalScaleUtil::ob_scale_to_interval_ds_day_scale(static_cast<int8_t>(scale));
+        int fs_scale = ObIntervalScaleUtil::ob_scale_to_interval_ds_second_scale(static_cast<int8_t>(scale));
+        DATA_PRINTF("interval day(%d) to second(%d)", day_scale, fs_scale);
+        break;
+      }
+      case T_TIMESTAMP_TZ: {
+        int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+        if (scale >= 0) {
+          DATA_PRINTF("timestamp(%d) with time zone", scale);
+        } else {
+          DATA_PRINTF("timestamp with time zone");
+        }
+        break;
+      }
+      case T_TIMESTAMP_LTZ: {
+        int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+        if (scale >= 0) {
+          DATA_PRINTF("timestamp(%d) with local time zone", scale);
+        } else {
+          DATA_PRINTF("timestamp with local time zone");
+        }
+        break;
+      }
+      case T_TIMESTAMP_NANO: {
+        int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+        if (scale >= 0) {
+          DATA_PRINTF("timestamp(%d)", scale);
+        } else {
+          DATA_PRINTF("timestamp");
+        }
+        break;
+      }
+      case T_RAW: {
+        int32_t len = parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX];
+        DATA_PRINTF("raw(%d)", len);
+        break;
+      }
+      case T_FLOAT: {
+        const char *type_str = lib::is_oracle_mode() ? "binary_float" : "float";
+        DATA_PRINTF("%s", type_str);
+        break;
+      }
+      case T_DOUBLE: {
+        const char *type_str = lib::is_oracle_mode() ? "binary_double" : "double";
+        DATA_PRINTF("%s", type_str);
+        break;
+      }
+      case T_UROWID: {
+        DATA_PRINTF("urowid(%d)", parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX]);
+        break;
+      }
+      case T_LOB: {
+        int16_t collation = parse_node.int16_values_[OB_NODE_CAST_COLL_IDX];
+        if (BINARY_COLLATION == collation) {
+          DATA_PRINTF("blob");
+        } else {
+          DATA_PRINTF("clob");
+        }
+        break;
+      }
+      case T_JSON: {
+        DATA_PRINTF("json");
+        break;
+      }
+      case T_LONGTEXT: {
+        int16_t collation = parse_node.int16_values_[OB_NODE_CAST_COLL_IDX];
+        if (BINARY_COLLATION == collation) {
+          DATA_PRINTF("blob");
+        } else {
+          DATA_PRINTF("clob");
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unknown cast type", K(ret), K(cast_type));
+        break;
+      }
+    } // end switch
+  } // oracle mode
+  return ret;
+}
+
+int ObDMLStmtPrinter::print_binary_charset_collation(int64_t value, ObDataType data_type)
+{
+  INIT_SUCC(ret);
+  if (data_type.is_binary_collation()) {
+    DATA_PRINTF("binary ");
+  }
+  if (CHARSET_INVALID != data_type.get_charset_type()) {
+    DATA_PRINTF("CHARACTER SET %s ", ObCharset::charset_name(data_type.get_charset_type()));
+  }
+  if (CS_TYPE_INVALID != data_type.get_collation_type()) {
+    DATA_PRINTF("COLLATE %s ", ObCharset::collation_name(data_type.get_collation_type()));
+  }
+  return ret;
+}
+
+int ObDMLStmtPrinter::print_mysql_json_return_type(int64_t value, ObDataType data_type)
+{
+  int ret = OB_SUCCESS;
 
   ParseNode parse_node;
   parse_node.value_ = value;
 
-  int16_t cast_type = parse_node.int16_values_[OB_NODE_CAST_TYPE_IDX];
+  int16_t cast_type = data_type.get_obj_type();
   const ObLengthSemantics length_semantics = data_type.get_length_semantics();
   const ObScale scale = data_type.get_scale();
 
   switch (cast_type) {
     case T_CHAR: {
-      int16_t collation = parse_node.int16_values_[OB_NODE_CAST_COLL_IDX];
-      int32_t len = parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX];
-      DATA_PRINTF("char(%d %s)", len, get_length_semantics_str(length_semantics));
-      break;
-    }
-    case T_VARCHAR: {
-      int16_t collation = parse_node.int16_values_[OB_NODE_CAST_COLL_IDX];
-      int32_t len = parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX];
-      const int32_t DEFAULT_VARCHAR_LEN = 4000;
-      if (BINARY_COLLATION == collation) {
-        DATA_PRINTF("varbinary(%d)", len);
+      int32_t len = parse_node.int32_values_[0];
+      int32_t collation = parse_node.int32_values_[1];
+      if (1 == collation) {
+        DATA_PRINTF("binary(%d)", len);
       } else {
-        // CHARACTER
-        if (len == DEFAULT_VARCHAR_LEN) {
-          break;
-        } else if (length_semantics == LS_BYTE && len == -1) {
-          DATA_PRINTF(" VARCHAR2");
-          break;
-        } else {
-          DATA_PRINTF("varchar2(%d %s)", len, get_length_semantics_str(length_semantics));
+        DATA_PRINTF("char(%d) ", len);
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(print_binary_charset_collation(value, data_type))) {
+          LOG_WARN("fail to print binary,charset,collection clause", K(ret));
         }
       }
       break;
     }
-    case T_NVARCHAR2: {
-      DATA_PRINTF("nvarchar2(%d)", parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX]);
-      break;
-    }
-    case T_NCHAR: {
-      DATA_PRINTF("nchar(%d)", parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX]);
-      break;
-    }
-    case T_DATETIME: {
-      //oracle mode treate date as datetime
-      DATA_PRINTF("date");
-      break;
-    }
-    case T_DATE: {
-      DATA_PRINTF("date");
-      break;
-    }
-    case T_TIME: {
-      int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
-      if (scale >= 0) {
-        DATA_PRINTF("time(%d)", scale);
+    case T_VARCHAR: {
+      int32_t collation = parse_node.int32_values_[1];
+      int32_t len = parse_node.int32_values_[0];
+      const int32_t DEFAULT_VARCHAR_LEN = 4000;
+      if (1 == collation) {
+        DATA_PRINTF("varbinary(%d) ", len);
       } else {
-        DATA_PRINTF("time");
+        DATA_PRINTF("varchar(%d) ", len);
+        if (OB_SUCC(ret) && OB_FAIL(print_binary_charset_collation(value, data_type))) {
+          LOG_WARN("fail to print binary,charset,collection clause", K(ret));
+        }
       }
       break;
     }
-    case T_NUMBER: {
+    case T_BIT: {
+      int32_t len = parse_node.int16_values_[0];
+       DATA_PRINTF("bit(%d) ", len);
+      break;
+    }
+    case T_TINYTEXT: {
+      int16_t collation = parse_node.int32_values_[1];
+      if (1 == collation) {
+        DATA_PRINTF("TINYBLOB ");
+      } else {
+        DATA_PRINTF("TINYTEXT ");
+      }
+      if (OB_SUCC(ret) && !collation && OB_FAIL(print_binary_charset_collation(value, data_type))) {
+        LOG_WARN("fail to print binary,charset,collection clause", K(ret));
+      }
+      break;
+    }
+    case T_TEXT: {
+      int16_t collation = parse_node.int32_values_[1];
+      if (1 == collation) {
+        DATA_PRINTF("BLOB ");
+      } else {
+        DATA_PRINTF("TEXT ");
+      }
+      if (OB_SUCC(ret) && !collation && OB_FAIL(print_binary_charset_collation(value, data_type))) {
+        LOG_WARN("fail to print binary,charset,collection clause", K(ret));
+      }
+      break;
+    }
+    case T_MEDIUMTEXT: {
+      int16_t collation = parse_node.int32_values_[1];
+      if (1 == collation) {
+        DATA_PRINTF("MEDIUMBLOB ");
+      } else {
+        DATA_PRINTF("MEDIUMTEXT ");
+      }
+      if (OB_SUCC(ret) && !collation && OB_FAIL(print_binary_charset_collation(value, data_type))) {
+        LOG_WARN("fail to print binary,charset,collection clause", K(ret));
+      }
+      break;
+    }
+    case T_LONGTEXT: {
+      int16_t collation = parse_node.int32_values_[1];
+      if (1 == collation) {
+        DATA_PRINTF("LONGBLOB ");
+      } else {
+        DATA_PRINTF("LONGTEXT ");
+      }
+      if (OB_SUCC(ret) && !collation && OB_FAIL(print_binary_charset_collation(value, data_type))) {
+        LOG_WARN("fail to print binary,charset,collection clause", K(ret));
+      }
+      break;
+    }
+    case T_DATETIME: {
+      int16_t scale = parse_node.int16_values_[1];
+      if (scale >= 0) {
+        DATA_PRINTF("datetime(%d) ", scale);
+      } else {
+        DATA_PRINTF("datetime ");
+      }
+      break;
+    }
+    case T_DATE: {
+      DATA_PRINTF("date ");
+      break;
+    }
+    case T_YEAR: {
+      DATA_PRINTF("year ");
+      break;
+    }
+    case T_TIMESTAMP: {
+      int16_t scale = parse_node.int16_values_[1];
+      if (scale >= 0) {
+        DATA_PRINTF("timestamp(%d) ", scale);
+      } else {
+        DATA_PRINTF("timestamp ");
+      }
+      break;
+    }
+    case T_TIME: {
+      int16_t scale = parse_node.int16_values_[1];
+      if (scale >= 0) {
+        DATA_PRINTF("time(%d) ", scale);
+      } else {
+        DATA_PRINTF("time ");
+      }
+      break;
+    }
+    case T_NUMBER: {  // number, decimal, fixed, numeric
       int16_t precision = parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX];
       int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
-      DATA_PRINTF("number(%d,%d)", precision, scale);
+      DATA_PRINTF("DECIMAL(%d,%d) ", precision, scale);
+      if (OB_FAIL(ret)) {
+      } else if (parse_node.int16_values_[3]) {
+        DATA_PRINTF("UNSIGNED ");
+      } else {
+        DATA_PRINTF("SIGNED ");
+      }
+      if (OB_SUCC(ret) && parse_node.int16_values_[2]) {
+        DATA_PRINTF("ZEROFILL ");
+      }
       break;
     }
-    case T_NUMBER_FLOAT: {
-      int16_t precision = parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX];
-      DATA_PRINTF("float(%d)", precision);
+    case T_TINYINT: {
+      if (parse_node.int16_values_[OB_NODE_CAST_COLL_IDX] == 1) {
+        DATA_PRINTF("BOOL ");
+      } else if (parse_node.int16_values_[OB_NODE_CAST_COLL_IDX] == 2) {
+        DATA_PRINTF("BOOLEAN ");
+      } else {
+        DATA_PRINTF("TINYINT ");
+        if (OB_SUCC(ret) && parse_node.int16_values_[0] != -1){
+          DATA_PRINTF("(%d)", parse_node.int16_values_[0]);
+        }
+      }
+      if (OB_SUCC(ret) && parse_node.int16_values_[2]) {
+        DATA_PRINTF("ZEROFILL ");
+      }
       break;
     }
-    case T_TINYINT:
-    case T_SMALLINT:
-    case T_MEDIUMINT:
-    case T_INT32:
+    case T_SMALLINT: {
+      DATA_PRINTF("SMALLINT ");
+      if (OB_SUCC(ret) && parse_node.int16_values_[0] != -1){
+        DATA_PRINTF("(%d)", parse_node.int16_values_[0]);
+      }
+      if (OB_SUCC(ret) && parse_node.int16_values_[2]) {
+        DATA_PRINTF("ZEROFILL ");
+      }
+      break;
+    }
+    case T_MEDIUMINT: {
+      DATA_PRINTF("MEDIUMINT ");
+      if (OB_SUCC(ret) && parse_node.int16_values_[0] != -1){
+        DATA_PRINTF("(%d)", parse_node.int16_values_[0]);
+      }
+      if (OB_SUCC(ret) && parse_node.int16_values_[2]) {
+        DATA_PRINTF("ZEROFILL ");
+      }
+      break;
+    }
+    case T_INT32: {
+      DATA_PRINTF("INTEGER ");
+      if (OB_SUCC(ret) && parse_node.int16_values_[0] != -1){
+        DATA_PRINTF("(%d)", parse_node.int16_values_[0]);
+      }
+      if (OB_SUCC(ret) && parse_node.int16_values_[2]) {
+        DATA_PRINTF("ZEROFILL ");
+      }
+      break;
+    }
     case T_INT: {
-      DATA_PRINTF("signed");
+      DATA_PRINTF("BIGINT ");
+      if (OB_SUCC(ret) && parse_node.int16_values_[0] != -1){
+        DATA_PRINTF("(%d)", parse_node.int16_values_[0]);
+      }
+      if (OB_SUCC(ret) && parse_node.int16_values_[2]) {
+        DATA_PRINTF("ZEROFILL ");
+      }
       break;
     }
-    case T_UTINYINT:
-    case T_USMALLINT:
-    case T_UMEDIUMINT:
-    case T_UINT32:
+    case T_UTINYINT: {
+      DATA_PRINTF("TINYINT ");
+      if (OB_SUCC(ret) && parse_node.int16_values_[0] != -1){
+        DATA_PRINTF("(%d)", parse_node.int16_values_[0]);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (parse_node.int16_values_[3]) {
+        DATA_PRINTF("UNSIGNED ");
+      } else {
+        DATA_PRINTF("SIGNED ");
+      }
+      if (OB_SUCC(ret) && parse_node.int16_values_[2]) {
+        DATA_PRINTF("ZEROFILL ");
+      }
+      break;
+    }
+    case T_USMALLINT:{
+      DATA_PRINTF("SMALLINT ");
+      if (OB_SUCC(ret) && parse_node.int16_values_[0] != -1){
+        DATA_PRINTF("(%d)", parse_node.int16_values_[0]);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (parse_node.int16_values_[3]) {
+        DATA_PRINTF("UNSIGNED ");
+      } else {
+        DATA_PRINTF("SIGNED ");
+      }
+      if (OB_SUCC(ret) && parse_node.int16_values_[2]) {
+        DATA_PRINTF("ZEROFILL ");
+      }
+      break;
+    }
+    case T_UMEDIUMINT:{
+      DATA_PRINTF("MEDIUMINT ");
+      if (OB_SUCC(ret) && parse_node.int16_values_[0] != -1){
+        DATA_PRINTF("(%d)", parse_node.int16_values_[0]);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (parse_node.int16_values_[3]) {
+        DATA_PRINTF("UNSIGNED ");
+      } else {
+        DATA_PRINTF("SIGNED ");
+      }
+      if (OB_SUCC(ret) && parse_node.int16_values_[2]) {
+        DATA_PRINTF("ZEROFILL ");
+      }
+      break;
+    }
+    case T_UINT32: {
+      DATA_PRINTF("INTEGER ");
+      if (OB_SUCC(ret) && parse_node.int16_values_[0] != -1){
+        DATA_PRINTF("(%d)", parse_node.int16_values_[0]);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (parse_node.int16_values_[3]) {
+        DATA_PRINTF("UNSIGNED ");
+      } else {
+        DATA_PRINTF("SIGNED ");
+      }
+      if (OB_SUCC(ret) && parse_node.int16_values_[2]) {
+        DATA_PRINTF("ZEROFILL ");
+      }
+      break;
+    }
     case T_UINT64: {
-      DATA_PRINTF("unsigned");
+      DATA_PRINTF("BIGINT ");
+      if (OB_SUCC(ret) && parse_node.int16_values_[0] != -1){
+        DATA_PRINTF("(%d)", parse_node.int16_values_[0]);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (parse_node.int16_values_[3]) {
+        DATA_PRINTF("UNSIGNED ");
+      } else {
+        DATA_PRINTF("SIGNED ");
+      }
+      if (OB_SUCC(ret) && parse_node.int16_values_[2]) {
+        DATA_PRINTF("ZEROFILL ");
+      }
       break;
     }
     case T_INTERVAL_YM: {
@@ -472,71 +858,64 @@ int ObDMLStmtPrinter::print_json_return_type(int64_t value, ObDataType data_type
       DATA_PRINTF("interval day(%d) to second(%d)", day_scale, fs_scale);
       break;
     }
-    case T_TIMESTAMP_TZ: {
-      int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
-      if (scale >= 0) {
-        DATA_PRINTF("timestamp(%d) with time zone", scale);
-      } else {
-        DATA_PRINTF("timestamp with time zone");
-      }
-      break;
-    }
-    case T_TIMESTAMP_LTZ: {
-      int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
-      if (scale >= 0) {
-        DATA_PRINTF("timestamp(%d) with local time zone", scale);
-      } else {
-        DATA_PRINTF("timestamp with local time zone");
-      }
-      break;
-    }
-    case T_TIMESTAMP_NANO: {
-      int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
-      if (scale >= 0) {
-        DATA_PRINTF("timestamp(%d)", scale);
-      } else {
-        DATA_PRINTF("timestamp");
-      }
-      break;
-    }
-    case T_RAW: {
-      int32_t len = parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX];
-      DATA_PRINTF("raw(%d)", len);
-      break;
-    }
     case T_FLOAT: {
-      const char *type_str = lib::is_oracle_mode() ? "binary_float" : "float";
-      DATA_PRINTF("%s", type_str);
+      DATA_PRINTF("FLOAT ");
+      if (OB_FAIL(ret)) {
+      } else if (parse_node.int16_values_[0] <= 0) {
+      } else {
+        DATA_PRINTF("(%d,%d) ", parse_node.int16_values_[0], parse_node.int16_values_[1]);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (parse_node.int16_values_[3]) {
+        DATA_PRINTF("UNSIGNED ");
+      } else {
+        DATA_PRINTF("SIGNED ");
+      }
+      if (OB_SUCC(ret) && parse_node.int16_values_[2]) {
+        DATA_PRINTF("ZEROFILL ");
+      }
       break;
     }
     case T_DOUBLE: {
-      const char *type_str = lib::is_oracle_mode() ? "binary_double" : "double";
-      DATA_PRINTF("%s", type_str);
-      break;
-    }
-    case T_UROWID: {
-      DATA_PRINTF("urowid(%d)", parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX]);
-      break;
-    }
-    case T_LOB: {
-      int16_t collation = parse_node.int16_values_[OB_NODE_CAST_COLL_IDX];
-      if (BINARY_COLLATION == collation) {
-        DATA_PRINTF("blob");
+      DATA_PRINTF("DOUBLE ");
+      if (OB_FAIL(ret)) {
+      } else if (parse_node.int16_values_[0] <= 0) {
       } else {
-        DATA_PRINTF("clob");
+        DATA_PRINTF("(%d,%d) ", parse_node.int16_values_[0], parse_node.int16_values_[1]);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (parse_node.int16_values_[3]) {
+        DATA_PRINTF("UNSIGNED ");
+      } else {
+        DATA_PRINTF("SIGNED ");
+      }
+      if (OB_SUCC(ret) && parse_node.int16_values_[2]) {
+        DATA_PRINTF("ZEROFILL ");
       }
       break;
     }
     case T_JSON: {
-      DATA_PRINTF("json");
+      DATA_PRINTF("json ");
       break;
     }
-    case T_LONGTEXT: {
-      int16_t collation = parse_node.int16_values_[OB_NODE_CAST_COLL_IDX];
-      if (BINARY_COLLATION == collation) {
-        DATA_PRINTF("blob");
-      } else {
-        DATA_PRINTF("clob");
+    case T_GEOMETRY: {
+      int32_t flag = parse_node.int32_values_[1];
+      if (flag == 0) {
+        DATA_PRINTF("GEOMETRY ");
+      } else if (flag == 1) {
+        DATA_PRINTF("POINT ");
+      } else if (flag == 2) {
+        DATA_PRINTF("LINESTRING ");
+      } else if (flag == 3) {
+        DATA_PRINTF("POLYGON ");
+      } else if (flag == 4) {
+        DATA_PRINTF("MULTIPOINT ");
+      } else if (flag == 5) {
+        DATA_PRINTF("MULTILINESTRING ");
+      } else if (flag == 6) {
+        DATA_PRINTF("MULTIPOLYGON ");
+      } else if (flag == 7) {
+        DATA_PRINTF("GEOMETRYCOLLECTION ");
       }
       break;
     }
@@ -657,7 +1036,10 @@ int ObDMLStmtPrinter::print_json_table_nested_column(const TableItem *table_item
         DATA_PRINTF(", ");
       }
       if (col_info.is_name_quoted_) {
-        DATA_PRINTF("\"%.*s\" ", LEN_AND_PTR(col_info.col_name_));
+        PRINT_QUOT;
+        DATA_PRINTF("%.*s", LEN_AND_PTR(col_info.col_name_));
+        PRINT_QUOT;
+        DATA_PRINTF(" ");
       } else {
         DATA_PRINTF("%.*s ", LEN_AND_PTR(col_info.col_name_));
       }

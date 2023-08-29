@@ -724,7 +724,8 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
                                                  const ObTimeZoneInfo *tz_info,
                                                  ObBasicSessionInfo *session,
                                                  ObIJsonBase*& j_base,
-                                                 bool to_bin)
+                                                 bool to_bin,
+                                                 bool is_bool)
 {
   int ret = OB_SUCCESS;
   void* buf = NULL;
@@ -733,12 +734,22 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
   switch(type) {
     case ObTinyIntType: {
       // mysql boolean type 
-      buf = allocator->alloc(sizeof(ObJsonInt));
-      if (OB_ISNULL(buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("buf allocate failed", K(ret), K(type));
+      if (is_bool) {
+        buf = allocator->alloc(sizeof(ObJsonBoolean));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("buf allocate failed", K(ret), K(type));
+        } else {
+          json_node = (ObJsonBoolean*)new(buf)ObJsonBoolean(datum.get_bool());
+        }
       } else {
-        json_node = (ObJsonInt*)new(buf)ObJsonInt(datum.get_int());
+        buf = allocator->alloc(sizeof(ObJsonInt));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("buf allocate failed", K(ret), K(type));
+        } else {
+          json_node = (ObJsonInt*)new(buf)ObJsonInt(datum.get_int());
+        }
       }
       break;
     }

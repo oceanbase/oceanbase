@@ -1218,6 +1218,10 @@ int ObExprJsonValue::cast_to_date(ObIJsonBase *j_base, int32_t &val, uint8_t &is
   if (OB_ISNULL(j_base)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("json base is null", K(ret));
+  } else if (j_base->json_type() == ObJsonNodeType::J_INT) {
+    ret = OB_OPERATE_OVERFLOW;
+    LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "DATE", "json_value");
+    LOG_WARN("fail to cast json type to time", K(ret), K(j_base->json_type()));
   } else if (CAST_FAIL(j_base->to_date(val))) {
     is_type_cast = 1;
     LOG_WARN("wrapper to date failed.", K(ret), K(*j_base));
@@ -1236,6 +1240,9 @@ int ObExprJsonValue::cast_to_time(ObIJsonBase *j_base,
   if (OB_ISNULL(j_base)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("json base is null", K(ret));
+  } else if (j_base->json_type() == ObJsonNodeType::J_INT) {
+    ret = OB_OPERATE_OVERFLOW;
+    LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "TIME", "json_value");
   } else if (CAST_FAIL(j_base->to_time(val))) {
     LOG_WARN("wrapper to time failed.", K(ret), K(*j_base));
     ret = OB_OPERATE_OVERFLOW;

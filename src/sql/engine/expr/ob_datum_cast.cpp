@@ -3288,8 +3288,9 @@ CAST_FUNC_NAME(text, text)
     bool is_valid = input_locator.is_valid();
     bool is_delta_lob = is_valid && input_locator.is_delta_temp_lob();
     bool is_persist = is_valid && input_locator.is_persist_lob();
+    bool is_freed = is_valid && input_locator.is_freed();
     if (!is_tiny_to_others
-        && (is_same_charset || is_delta_lob || (is_persist && is_cs_any))) {
+        && (is_same_charset || is_delta_lob || (is_persist && is_cs_any) || is_freed)) {
       // persist with cs_any only in pl?
       res_datum.set_string(in_str.ptr(), in_str.length());
     } else {
@@ -3683,7 +3684,7 @@ CAST_FUNC_NAME(number, lob)
 
 CAST_FUNC_NAME(number, json)
 {
-  EVAL_ARG()
+  EVAL_ARG_FOR_CAST_TO_JSON()
   {
     const number::ObNumber nmb(child_res->get_number());
     ObObjType in_type = expr.args_[0]->datum_meta_.type_;

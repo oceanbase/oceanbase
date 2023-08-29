@@ -136,7 +136,8 @@ public:
                                         const ObTimeZoneInfo *tz_info,
                                         ObBasicSessionInfo *session,
                                         ObIJsonBase*& j_base,
-                                        bool to_bin);
+                                        bool to_bin,
+                                        bool is_bool = false);
   /*
   try to transfrom from type which is_convertible_to_json to jsonBase
   @param[in]  datum          the input datum

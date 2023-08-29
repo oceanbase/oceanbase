@@ -594,6 +594,9 @@ int ObLobLocatorV2::get_inrow_data(ObString &inrow_data) const
   } else if (OB_ISNULL(ptr_)) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "Lob: get null ptr", K(ret), K(size_), K(ptr_));
+  } else if (is_freed()) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "Lob: has been freed", K(ret), KPC(loc));
   } else if (!is_lob_disk_locator() && loc->is_simple()) {
     inrow_data.assign_ptr(ptr_ + MEM_LOB_COMMON_HEADER_LEN, size_ - MEM_LOB_COMMON_HEADER_LEN);
   } else if (OB_FAIL(get_disk_locator(disk_loc_buff))) {

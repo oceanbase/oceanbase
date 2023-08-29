@@ -1171,6 +1171,13 @@ public:
   // @return Returns OB_SUCCESS on success, error code otherwise.
   static int get_bit_len(const ObString &str, int32_t &bit_len);
 
+  // Get bit length from int64.
+  //
+  // @param [in]  int       The int64_t.
+  // @param [out] bit_len   The bit length of int
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  static int get_bit_len(uint64_t value, int32_t &bit_len);
+
   // ObString to uint64_t
   //
   // @param [in]  str       The ObString.

@@ -618,8 +618,8 @@ protected:
 
   int resolve_json_table_column_type(const ParseNode &parse_tree,
                                      const int col_type,
-                                     ObDataType &data_type);
-
+                                     ObDataType &data_type,
+                                     ObDmlJtColDef *col_def);
   int generate_json_table_output_column_item(TableItem *table_item,
                                           const ObDataType &data_type,
                                           const ObString &column_name,

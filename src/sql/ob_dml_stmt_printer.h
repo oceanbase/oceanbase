@@ -141,6 +141,8 @@ private:
   // added for json table
   int print_json_table_nested_column(const TableItem *table_item, const ObDmlJtColDef& col_def);
   int print_json_return_type(int64_t value, ObDataType data_type);
+  int print_mysql_json_return_type(int64_t value, ObDataType data_type);
+  int print_binary_charset_collation(int64_t value, ObDataType data_type);
   int get_json_table_column_if_exists(int32_t id, ObDmlJtColDef* root, ObDmlJtColDef*& col);
   int build_json_table_nested_tree(const TableItem* table_item, ObIAllocator* allocator, ObDmlJtColDef*& root);
   // disallow copy

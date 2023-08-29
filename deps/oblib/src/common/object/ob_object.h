@@ -675,7 +675,7 @@ struct ObMemLobCommon
 
   ObMemLobCommon(ObMemLobType type, bool is_simple) :
     lob_common_(), version_(MEM_LOB_LOCATOR_VERSION), type_(type), read_only_(0),
-    has_inrow_data_(1), is_open_(0), is_simple_(is_simple), has_extern_(0), reserved_(0)
+    has_inrow_data_(1), is_open_(0), is_simple_(is_simple), has_extern_(0), is_freed_(0), reserved_(0)
   { lob_common_.is_mem_loc_ = 1; }
 
   OB_INLINE void set_extern(bool has_extern) { has_extern_ = has_extern ? 1 : 0; };
@@ -683,12 +683,14 @@ struct ObMemLobCommon
   OB_INLINE void set_has_inrow_data(bool has_inrow_data) { has_inrow_data_ =  has_inrow_data ? 1 : 0 ; }
   OB_INLINE void set_open(bool is_open) { is_open_ = is_open ? 1 : 0; }
   OB_INLINE void set_simple(bool is_simple) { is_simple_ = is_simple ? 1 : 0; }
+  OB_INLINE void set_freed(bool freed) { is_freed_ = freed ? 1 : 0; };
 
   OB_INLINE bool is_read_only() { return read_only_ == 1; }
   OB_INLINE bool has_inrow_data() { return has_inrow_data_ == 1; }
   OB_INLINE bool is_open() { return is_open_ == 1; }
   OB_INLINE bool is_simple() { return is_simple_ == 1; }
   OB_INLINE bool has_extern() {return has_extern_ == 1; }
+  OB_INLINE bool is_freed() {return is_freed_ == 1; }
   OB_INLINE bool is_persist() { return type_ == PERSISTENT_LOB; }
   OB_INLINE bool is_temporary_full() { return type_ == TEMP_FULL_LOB; }
   OB_INLINE bool is_temporary_delta() { return type_ == TEMP_DELTA_LOB; }
@@ -709,7 +711,7 @@ struct ObMemLobCommon
   }
 
   TO_STRING_KV(K_(lob_common), K_(type), K_(read_only), K_(has_inrow_data), K_(is_open), K_(is_simple),
-               K_(has_extern), K_(reserved), K_(version));
+               K_(has_extern), K_(is_freed), K_(reserved), K_(version));
 
   ObLobCommon lob_common_;
 
@@ -726,7 +728,8 @@ struct ObMemLobCommon
   uint32_t is_simple_ : 1; // Indicate whether the lob has this common part only. Used for inrow lobs
                            // which do not need rowkey (Only used in mysql modes now)
   uint32_t has_extern_ : 1; // Indicate whether the lob locator has extern segment
-  uint32_t reserved_  : 15;
+  uint32_t is_freed_ : 1; // Indicate whether the temp lob locator has been freed
+  uint32_t reserved_  : 14;
 
 
   char data_[0];
@@ -988,6 +991,14 @@ public:
     return has_lob_header_ && OB_NOT_NULL(ptr_) &&
            !is_lob_disk_locator() && size_ >= MEM_LOB_COMMON_HEADER_LEN &&
            (reinterpret_cast<ObMemLobCommon *>(ptr_))->is_read_only();
+  }
+
+  OB_INLINE bool is_freed() const
+  {
+    validate_has_lob_header(has_lob_header_);
+    return has_lob_header_ && OB_NOT_NULL(ptr_) &&
+           !is_lob_disk_locator() && size_ >= MEM_LOB_COMMON_HEADER_LEN &&
+           (reinterpret_cast<ObMemLobCommon *>(ptr_))->is_freed();
   }
 
   OB_INLINE bool has_inrow_data() const

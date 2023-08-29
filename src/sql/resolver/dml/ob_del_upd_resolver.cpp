@@ -908,6 +908,9 @@ int ObDelUpdResolver::set_base_table_for_updatable_view(TableItem &table_item,
           } else if (new_table_item->is_fake_cte_table()) {
             ret = OB_ERR_ILLEGAL_VIEW_UPDATE;
             LOG_WARN("illegal view update", K(ret));
+          } else if (new_table_item->is_json_table()) {
+            ret = OB_ERR_NON_INSERTABLE_TABLE;
+            LOG_WARN("json table can not be insert", K(ret));
           } else {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("column is not updatable", K(ret), K(col_ref));

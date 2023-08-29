@@ -141,6 +141,8 @@ extern void obsql_oracle_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, 
 %nonassoc OVER
 %nonassoc LOWER_INTO
 %nonassoc INTO
+%nonassoc NESTED
+%nonassoc PATH
 %nonassoc LOWER_THAN_BY_ACCESS_SESSION
 
 %token ERROR /*used internal*/
@@ -285,7 +287,7 @@ END_P SET_VAR DELIMITER
         INNODB INSERT_METHOD INSTALL INSTANCE INVOKER IO IOPS_WEIGHT IO_THREAD IPC ISOLATE ISOLATION ISSUER
         INCREMENT IS_TENANT_SYS_POOL INVISIBLE MERGE ISNULL INTERSECT INCREMENTAL INNER_PARSE ILOGCACHE INPUT INDEXED
 
-        JOB JSON JSON_ARRAYAGG JSON_OBJECTAGG JSON_VALUE
+        JOB JSON JSON_ARRAYAGG JSON_OBJECTAGG JSON_VALUE JSON_TABLE
 
         KEY_BLOCK_SIZE KEY_VERSION KVCACHE
 
@@ -304,14 +306,14 @@ END_P SET_VAR DELIMITER
         MULTILINESTRING MULTIPOINT MULTIPOLYGON MUTEX MYSQL_ERRNO MIGRATION MAX_USED_PART_ID MAXIMIZE
         MATERIALIZED MEMBER MEMSTORE_PERCENT MINVALUE MY_NAME
 
-        NAME NAMES NAMESPACE NATIONAL NCHAR NDB NDBCLUSTER NEW NEXT NO NOAUDIT NODEGROUP NONE NORMAL NOW NOWAIT
+        NAME NAMES NAMESPACE NATIONAL NCHAR NDB NDBCLUSTER NESTED NEW NEXT NO NOAUDIT NODEGROUP NONE NORMAL NOW NOWAIT
         NOMINVALUE NOMAXVALUE NOORDER NOCYCLE NOCACHE NO_WAIT NULLS NUMBER NVARCHAR NTILE NTH_VALUE NOARCHIVELOG NETWORK NOPARALLEL
         NULL_IF_EXETERNAL
 
-        OBSOLETE OCCUR OF OFF OFFSET OLD OLD_PASSWORD ONE ONE_SHOT ONLY OPEN OPTIONS ORIG_DEFAULT OWNER OLD_KEY OVER
+        OBSOLETE OCCUR OF OFF OFFSET OLD OLD_PASSWORD ONE ONE_SHOT ONLY OPEN OPTIONS ORDINALITY ORIG_DEFAULT OWNER OLD_KEY OVER
         OBCONFIG_URL OJ
 
-        PACK_KEYS PAGE PARALLEL PARAMETERS PARSER PARTIAL PARTITION_ID PARTITIONING PARTITIONS PASSWORD PAUSE PERCENTAGE
+        PACK_KEYS PAGE PARALLEL PARAMETERS PARSER PARTIAL PARTITION_ID PARTITIONING PARTITIONS PASSWORD PATH PAUSE PERCENTAGE
         PERCENT_RANK PHASE PLAN PHYSICAL PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
         PROTECTION PRIORITY PL POLICY POOL PORT POSITION PREPARE PRESERVE PRETTY PRETTY_COLOR PREV PRIMARY_ZONE PRIVILEGES PROCESS
         PROCESSLIST PROFILE PROFILES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK
@@ -509,6 +511,9 @@ END_P SET_VAR DELIMITER
 %type <node> recover_tenant_stmt recover_point_clause
 %type <node> external_file_format_list external_file_format external_table_partition_option
 %type <node> dynamic_sampling_hint
+%type <node> json_table_expr mock_jt_on_error_on_empty jt_column_list json_table_column_def
+%type <node> json_table_ordinality_column_def json_table_exists_column_def json_table_value_column_def json_table_nested_column_def
+%type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
 
 %start sql_stmt
 %%
@@ -5189,7 +5194,9 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
 {
   malloc_terminal_node($$, result->malloc_pool_, ($3[0] || $4[0]) ? $1[0] + (T_UTINYINT - T_TINYINT) : $1[0]);
   $$->int16_values_[0] = $2[0];
+  $$->int16_values_[1] = 0;       /* distinct int and bool */
   $$->int16_values_[2] = $4[0];   /* 2 is the same index as float or number. */
+  $$->int16_values_[3] = $3[0];
   $$->sql_str_off_ = @1.first_column;
 }
 | float_type_i opt_float_precision opt_unsigned_i opt_zerofill_i
@@ -5204,6 +5211,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
     $$->int16_values_[1] = $2->int16_values_[1];
   }
   /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
+  $$->int16_values_[3] = $3[0];
   $$->int16_values_[2] = $4[0];
   $$->sql_str_off_ = @$.first_column;
 }
@@ -5215,6 +5223,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
     $$->int16_values_[1] = $2->int16_values_[1];
   }
   /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
+  $$->int16_values_[3] = $3[0];
   $$->int16_values_[2] = $4[0];
   $$->sql_str_off_ = $2->sql_str_off_;
 }
@@ -5226,6 +5235,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
     $$->int16_values_[1] = $2->int16_values_[1];
   }
   /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
+  $$->int16_values_[3] = $3[0];
   $$->int16_values_[2] = $4[0];
   $$->sql_str_off_ = $2->sql_str_off_;
 }
@@ -5237,6 +5247,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
     $$->int16_values_[1] = $2->int16_values_[1];
   }
   /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
+  $$->int16_values_[3] = $3[0];
   $$->int16_values_[2] = $4[0];
   $$->sql_str_off_ = $2->sql_str_off_;
 }
@@ -5248,6 +5259,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
     $$->int16_values_[1] = $2->int16_values_[1];
   }
   /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
+  $$->int16_values_[3] = $3[0];
   $$->int16_values_[2] = $4[0];
   $$->sql_str_off_ = $2->sql_str_off_;
 }
@@ -5255,12 +5267,14 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
 {
   malloc_terminal_node($$, result->malloc_pool_, T_TINYINT);
   $$->int16_values_[0] = 1;
+  $$->int16_values_[1] = 1;
   $$->int16_values_[2] = 0;  // zerofill always false
 }
 | BOOLEAN
 {
   malloc_terminal_node($$, result->malloc_pool_, T_TINYINT);
   $$->int16_values_[0] = 1;
+  $$->int16_values_[1] = 2;
   $$->int16_values_[2] = 0; // zerofill always false
 }
 | datetime_type_i opt_datetime_fsp_i
@@ -10229,6 +10243,10 @@ tbl_name
 | '(' table_references ')'
 {
   $$ = $2;
+}
+| json_table_expr
+{
+  $$ = $1;
 }
 ;
 
@@ -17416,6 +17434,151 @@ DAY
 ;
 
 /*===========================================================
+*
+*  JSON TABLE
+*
+*============================================================*/
+
+json_table_expr:
+JSON_TABLE '(' simple_expr ',' literal mock_jt_on_error_on_empty COLUMNS '(' jt_column_list ')' ')' relation_name
+{
+  ParseNode *params = NULL;
+  merge_nodes(params, result, T_EXPR_LIST, $9);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_JSON_TABLE_EXPRESSION, 5, $3, $5, $6, params, $12);
+  if (result->pl_parse_info_.is_pl_parse_ && !result->pl_parse_info_.is_pl_parse_expr_) {
+    result->pl_parse_info_.is_forbid_pl_fp_ = true;
+  }
+}
+| JSON_TABLE '(' simple_expr ',' literal mock_jt_on_error_on_empty COLUMNS '(' jt_column_list ')' ')' AS relation_name
+{
+  ParseNode *params = NULL;
+  merge_nodes(params, result, T_EXPR_LIST, $9);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_JSON_TABLE_EXPRESSION, 5, $3, $5, $6, params, $13);
+  if (result->pl_parse_info_.is_pl_parse_ && !result->pl_parse_info_.is_pl_parse_expr_) {
+    result->pl_parse_info_.is_forbid_pl_fp_ = true;
+  }
+}
+| JSON_TABLE '(' simple_expr ',' literal mock_jt_on_error_on_empty COLUMNS '(' jt_column_list ')' ')'
+{
+  ParseNode *params = NULL;
+  merge_nodes(params, result, T_EXPR_LIST, $9);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_JSON_TABLE_EXPRESSION, 5, $3, $5, $6, params, NULL);
+  if (result->pl_parse_info_.is_pl_parse_ && !result->pl_parse_info_.is_pl_parse_expr_) {
+    result->pl_parse_info_.is_forbid_pl_fp_ = true;
+  }
+}
+;
+
+mock_jt_on_error_on_empty:
+{
+  ParseNode *emp_node = NULL;
+  malloc_terminal_node(emp_node, result->malloc_pool_, T_INT);
+  emp_node->value_ = 3;
+  emp_node->is_hidden_const_ = 1;
+  ParseNode *err_node = NULL;
+  malloc_terminal_node(err_node, result->malloc_pool_, T_INT);
+  err_node->value_ = 3;
+  err_node->is_hidden_const_ = 1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, err_node, emp_node);
+}
+;
+
+jt_column_list:
+json_table_column_def
+{
+  $$ = $1;
+}
+| jt_column_list ',' json_table_column_def
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+json_table_column_def:
+  json_table_ordinality_column_def
+  | json_table_exists_column_def
+  | json_table_value_column_def
+  | json_table_nested_column_def
+  ;
+
+json_table_ordinality_column_def:
+column_name FOR ORDINALITY
+{
+  ParseNode* node = NULL;
+  malloc_terminal_node(node, result->malloc_pool_, T_INT);
+  node->is_hidden_const_ = 1;
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_JSON_TABLE_COLUMN, 2, $1, node);
+  $$->value_ = 1;
+}
+;
+
+json_table_exists_column_def:
+column_name data_type opt_collation EXISTS PATH literal mock_jt_on_error_on_empty
+{
+  ParseNode *truncate_node = NULL;
+  malloc_terminal_node(truncate_node, result->malloc_pool_, T_INT);
+  truncate_node->value_ = 0;
+  truncate_node->is_hidden_const_ = 1;
+  set_data_type_collation($2, $3, true, false);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_JSON_TABLE_COLUMN, 5, $1, $2, truncate_node, $6, $7);
+  $$->value_ = 2;
+}
+;
+
+json_table_value_column_def:
+column_name data_type opt_collation PATH literal opt_value_on_empty_or_error_or_mismatch
+{
+  ParseNode *truncate_node = NULL;
+  malloc_terminal_node(truncate_node, result->malloc_pool_, T_INT);
+  truncate_node->value_ = 0;
+  truncate_node->is_hidden_const_ = 1;
+  set_data_type_collation($2, $3, true, false);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_JSON_TABLE_COLUMN, 5, $1, $2, truncate_node, $5, $6);
+  $$->value_ = 4;
+}
+;
+
+json_table_nested_column_def:
+NESTED literal COLUMNS '(' jt_column_list ')'
+{
+  ParseNode *params = NULL;
+  merge_nodes(params, result, T_EXPR_LIST, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_JSON_TABLE_COLUMN, 2, $2, params);
+  $$->value_ = 5;
+}
+| NESTED PATH literal COLUMNS '(' jt_column_list ')'
+{
+  ParseNode *params = NULL;
+  merge_nodes(params, result, T_EXPR_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_JSON_TABLE_COLUMN, 2, $3, params);
+  $$->value_ = 5;
+}
+;
+
+opt_value_on_empty_or_error_or_mismatch:
+opt_on_empty_or_error opt_on_mismatch
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 5, $1->children_[0], $1->children_[1], $1->children_[2], $1->children_[3], $2);
+}
+;
+
+opt_on_mismatch:
+{
+  ParseNode *on_mismatch = NULL;
+  malloc_terminal_node(on_mismatch, result->malloc_pool_, T_INT);
+  on_mismatch->value_ = 3;
+  on_mismatch->is_hidden_const_ = 1;
+
+  ParseNode *mismatch_type = NULL;
+  malloc_terminal_node(mismatch_type, result->malloc_pool_, T_INT);
+  mismatch_type->value_ = 3;
+  mismatch_type->is_hidden_const_ = 1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, on_mismatch, mismatch_type);
+}
+;
+
+/*===========================================================
  *
  *	json value
  *
@@ -17873,6 +18036,7 @@ ACCOUNT
 |       JSON_VALUE
 |       JSON_ARRAYAGG
 |       JSON_OBJECTAGG
+|       JSON_TABLE
 |       KEY_BLOCK_SIZE
 |       KEY_VERSION
 |       LAG
@@ -17970,6 +18134,7 @@ ACCOUNT
 |       NCHAR
 |       NDB
 |       NDBCLUSTER
+|       NESTED
 |       NEW
 |       NEXT
 |       NO
@@ -18008,6 +18173,7 @@ ACCOUNT
 |       ONLY
 |       OPEN
 |       OPTIONS
+|       ORDINALITY
 |       ORIG_DEFAULT
 |       REMOTE_OSS
 |       OUTLINE
@@ -18019,6 +18185,7 @@ ACCOUNT
 |       PARSER
 |       PARTIAL
 |       PARTITION_ID
+|       PATH
 |       LS
 |       PARTITIONING
 |       PARTITIONS

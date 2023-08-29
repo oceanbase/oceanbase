@@ -1084,7 +1084,7 @@ DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_REDEFINE_ORDER_BY, -5440, ER_WINDOW_NO_REDEFIN
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_JSON_TYPE, -5441, -1, "42000", "invalid JSON type.", "invalid JSON type.", 40587, "invalid JSON type.", "invalid JSON type.")
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_JSON_PATH_SYNTAX_ERROR, -5442, -1, "42000", "JSON path expression syntax error ('INT')", "JSON path expression syntax error ('%s')", 40442, "JSON path expression syntax error ('INT')", "JSON path expression syntax error ('%s')");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_DATA_TYPE_RETURNING, -5443, -1, "42000", "invalid data type for return value", 40449, "invalid data type for return value");
-DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_JSON_VALUE_NO_SCALAR, -5444, -1, "42000", "JSON_VALUE evaluated to non-scalar value","JSON_VALUE evaluated to non-scalar value", 40456, "JSON_VALUE evaluated to non-scalar value", "JSON_VALUE evaluated to non-scalar value");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_JSON_VALUE_NO_SCALAR, -5444, ER_WRONG_JSON_TABLE_VALUE, "42000", "Can't store an array or an object in the scalar %s column 'jpath'","Can't store an array or an object in the scalar %s column 'jpath'", 40456, "JSON_VALUE evaluated to non-scalar value", "JSON_VALUE evaluated to non-scalar value");
 DEFINE_ORACLE_ERROR(OB_ERR_JSON_VALUE_NO_VALUE, -5445, -1, "42000", "JSON_VALUE evaluated to no value", 40462, "JSON_VALUE evaluated to no value");
 DEFINE_ORACLE_ERROR(OB_ERR_DEFAULT_VALUE_NOT_LITERAL, -5446, -1, "42000", "default value not a literal", 40455, "default value not a literal");
 DEFINE_ORACLE_ERROR(OB_ERR_JSON_SYNTAX_ERROR, -5447, -1, "42000", "JSON syntax error", 40441, "JSON syntax error");
@@ -1162,6 +1162,8 @@ DEFINE_ORACLE_ERROR(OB_ERR_DEFAULT_FOR_MODIFYING_VIEWS, -5511, -1, "42000", "Exp
 
 DEFINE_ERROR_EXT(OB_ERR_FK_COLUMN_NOT_NULL, -5512, ER_FK_COLUMN_NOT_NULL, "HY000", "Column cannot be NOT NULL: needed in a foreign key constraint SET NULL", "Column \'%s\' cannot be NOT NULL: needed in a foreign key constraint \'%s\' SET NULL");
 DEFINE_ORACLE_ERROR(OB_ERR_UNSUPPORTED_FK_SET_NULL_ON_GENERATED_COLUMN, -5513, ER_UNSUPPORTED_FK_SET_NULL_ON_GENERATED_COLUMN, "HY000", " Cannot define foreign key with ON DELETE SET NULL clause on a generated column", 54036, "cannot define referential constraint with ON DELETE SET NULL clause on virtual column");
+
+DEFINE_ERROR(OB_ERR_TABLE_WITHOUT_ALIAS, -5515, ER_TF_MUST_HAVE_ALIAS, "42000", "Every table function must have an alias");
 
 DEFINE_ERROR_EXT(OB_ERR_SP_ALREADY_EXISTS, -5541, ER_SP_ALREADY_EXISTS, "42000", "procedure/function already exists", "%s %.*s already exists");
 DEFINE_ERROR_EXT(OB_ERR_SP_DOES_NOT_EXIST, -5542, ER_SP_DOES_NOT_EXIST, "42000", "procedure/function does not exist", "%s %.*s.%.*s does not exist");

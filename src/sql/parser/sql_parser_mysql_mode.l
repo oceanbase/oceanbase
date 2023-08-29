@@ -608,6 +608,7 @@ FALSE {
     }
     check_malloc(dup_value);
     yylval->node->str_value_ = dup_value;
+    yylval->node->is_input_quoted_ = 1;
     yylval->node->sql_str_off_ = yylloc->first_column;
     setup_token_pos_info(yylval->node, yylloc->first_column, yylval->node->str_len_);
     return NAME_OB;
@@ -678,6 +679,7 @@ FALSE {
     }
     check_malloc(dup_value);
     yylval->node->str_value_ = dup_value;
+    yylval->node->is_input_quoted_ = 1;
     yylval->node->sql_str_off_ = yylloc->first_column;
     setup_token_pos_info(yylval->node, yylloc->first_column, yylval->node->str_len_);
     return NAME_OB;
