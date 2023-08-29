@@ -89,7 +89,11 @@ struct ListBase// erase List Type
     common::databuff_printf(buf, buf_len, pos, ", list_tail:0x%llx, list:", (unsigned long long)list_tail_);
     int64_t list_len = 0;
     while (OB_NOT_NULL(iter)) {
-      common::databuff_printf(buf, buf_len, pos, "[%s]<->", to_cstring(*iter));
+      if (list_len < MAX_PRINT_COUNT) {
+        common::databuff_printf(buf, buf_len, pos, "[%s]<->", to_cstring(*iter));
+      } else if(list_len == MAX_PRINT_COUNT) {
+        common::databuff_printf(buf, buf_len, pos, "...");
+      }
       ++list_len;
       iter = iter->next_;
     }
@@ -157,6 +161,7 @@ struct ListBase// erase List Type
 public:
   ListNodeBase *list_head_;
   ListNodeBase *list_tail_;
+  static const int64_t MAX_PRINT_COUNT = 16;
 };
 
 template <typename T>

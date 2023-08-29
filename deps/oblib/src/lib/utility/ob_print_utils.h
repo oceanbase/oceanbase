@@ -227,31 +227,6 @@ private:
 };
 
 template <typename T>
-const char *to_cstring(const T &obj, const bool verbose)
-{
-  char *buffer = NULL;
-  int64_t str_len = 0;
-  CStringBufMgr &mgr = CStringBufMgr::get_thread_local_instance();
-  mgr.inc_level();
-  buffer = mgr.acquire();
-  if (OB_ISNULL(buffer)) {
-    LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
-  } else {
-    const int64_t buf_len = mgr.get_buffer_len();
-    str_len = obj.to_string(buffer, buf_len -1, verbose);
-    if (str_len >= 0 && str_len < buf_len) {
-      buffer[str_len] = '\0';
-    } else {
-      buffer[0] = '\0';
-    }
-    mgr.update_position(str_len + 1);
-  }
-  mgr.try_clear_list();
-  mgr.dec_level();
-  return buffer;
-}
-
-template <typename T>
 const char *to_cstring(const T &obj, FalseType)
 {
   char *buffer = NULL;
