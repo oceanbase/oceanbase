@@ -399,8 +399,14 @@ int ObTableRedefinitionTask::copy_table_indexes()
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else {
+    const int64_t MAX_ACTIVE_TASK_CNT = 1;
+    int64_t active_task_cnt = 0;
     // check if has rebuild index
     if (has_rebuild_index_) {
+    } else if (OB_FAIL(ObDDLTaskRecordOperator::get_create_index_task_cnt(GCTX.root_service_->get_sql_proxy(), tenant_id_, object_id_, active_task_cnt))) {
+      LOG_WARN("failed to check index task cnt", K(ret));
+    } else if (active_task_cnt >= MAX_ACTIVE_TASK_CNT) {
+      ret = OB_EAGAIN;
     } else {
       ObSchemaGetterGuard schema_guard;
       const ObTableSchema *table_schema = nullptr;
@@ -465,6 +471,8 @@ int ObTableRedefinitionTask::copy_table_indexes()
               // index status is final
               need_rebuild_index = false;
               LOG_INFO("index status is final", K(ret), K(task_id_), K(index_id), K(need_rebuild_index));
+            } else if (active_task_cnt >= MAX_ACTIVE_TASK_CNT) {
+              ret = OB_EAGAIN;
             } else {
               ObCreateDDLTaskParam param(tenant_id_,
                                          ObDDLType::DDL_CREATE_INDEX,
@@ -472,7 +480,7 @@ int ObTableRedefinitionTask::copy_table_indexes()
                                          index_schema,
                                          0/*object_id*/,
                                          index_schema->get_schema_version(),
-                                         parallelism_ / index_ids.count()/*parallelism*/,
+                                         parallelism_,
                                          consumer_group_id_,
                                          &allocator_,
                                          &create_index_arg,
@@ -480,9 +488,11 @@ int ObTableRedefinitionTask::copy_table_indexes()
               if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, *GCTX.sql_proxy_, task_record))) {
                 if (OB_ENTRY_EXIST == ret) {
                   ret = OB_SUCCESS;
+                  active_task_cnt += 1;
                 } else {
                   LOG_WARN("submit ddl task failed", K(ret));
                 }
+              } else if (FALSE_IT(active_task_cnt += 1)) {
               } else if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
                 LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
               }

@@ -247,6 +247,12 @@ public:
       const share::ObDDLType ddl_type,
       bool &has_conflict_ddl);
 
+  static int get_create_index_task_cnt(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    int64_t &task_cnt);
+
   static int insert_record(
       common::ObISQLClient &proxy,
       ObDDLTaskRecord &record);
