@@ -708,6 +708,13 @@ int ObTablet::init(
 
   ObTablet::free_storage_schema(tmp_arena_allocator, old_storage_schema);
 
+#ifdef ERRSIM
+  ObErrsimBackfillPointType point_type(ObErrsimBackfillPointType::TYPE::ERRSIM_REPLACE_SWAP_BEFORE);
+  if (param.errsim_point_info_.is_errsim_point(point_type)) {
+    ret = OB_EAGAIN;
+    LOG_WARN("[ERRSIM TRANSFER] errsim transfer swap tablet before", K(ret), K(param));
+  }
+#endif
   return ret;
 }
 

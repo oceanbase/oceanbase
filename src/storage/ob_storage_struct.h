@@ -58,6 +58,48 @@ static const int64_t MERGE_READ_SNAPSHOT_VERSION = share::OB_MAX_SCN_TS_NS - 2;
 static const int64_t GET_BATCH_ROWS_READ_SNAPSHOT_VERSION = share::OB_MAX_SCN_TS_NS - 8;
 // static const int64_t GET_SCAN_COST_READ_SNAPSHOT_VERSION = INT64_MAX - 9;
 
+#ifdef ERRSIM
+struct ObErrsimBackfillPointType final
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum TYPE
+  {
+    ERRSIM_POINT_NONE = 0,
+    ERRSIM_START_BACKFILL_BEFORE = 1,
+    ERRSIM_REPLACE_SWAP_BEFORE = 2,
+    ERRSIM_REPLACE_AFTER = 3,
+    ERRSIM_MODULE_MAX
+  };
+  ObErrsimBackfillPointType() : type_(ERRSIM_POINT_NONE) {}
+  explicit ObErrsimBackfillPointType(const ObErrsimBackfillPointType::TYPE &type) : type_(type) {}
+  ~ObErrsimBackfillPointType() = default;
+  void reset();
+  bool is_valid() const;
+  bool operator == (const ObErrsimBackfillPointType &other) const;
+  int hash(uint64_t &hash_val) const;
+  int64_t hash() const;
+  TO_STRING_KV(K_(type));
+  TYPE type_;
+};
+
+class ObErrsimTransferBackfillPoint final
+{
+public:
+  ObErrsimTransferBackfillPoint();
+  virtual ~ObErrsimTransferBackfillPoint();
+  bool is_valid() const;
+  void reset();
+  int set_point_type(const ObErrsimBackfillPointType &point_type);
+  int set_point_start_time(int64_t start_time);
+  bool is_errsim_point(const ObErrsimBackfillPointType &point_type) const;
+  int64_t get_point_start_time() { return point_start_time_; }
+  TO_STRING_KV(K_(point_type), K_(point_start_time));
+private:
+  ObErrsimBackfillPointType point_type_;
+  int64_t point_start_time_;
+};
+#endif
 
 enum ObMigrateStatus
 {
@@ -369,6 +411,9 @@ struct ObBatchUpdateTableStoreParam final
       K_(start_scn), KP_(tablet_meta), K_(update_ddl_sstable), K_(restore_status));
 
   ObTablesHandleArray tables_handle_;
+#ifdef ERRSIM
+  ObErrsimTransferBackfillPoint errsim_point_info_;
+#endif
   int64_t rebuild_seq_;
   bool update_logical_minor_sstable_;
   bool is_transfer_replace_;

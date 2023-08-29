@@ -31,6 +31,9 @@ public:
   void reset();
   VIRTUAL_TO_STRING_KV(K_(task_id), K_(src_ls_id), K_(dest_ls_id), K_(backfill_scn), K_(tablet_infos));
   uint64_t tenant_id_;
+#ifdef ERRSIM
+  ObErrsimTransferBackfillPoint errsim_point_info_;
+#endif
   share::ObTaskId task_id_;
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
@@ -60,8 +63,12 @@ private:
       const ObTabletTransferInfo &transfer_info,
       bool &is_ready,
       ObTabletHAStatus &ha_status /* source tablet ha status */) const;
+  void set_errsim_backfill_point_();
 private:
   bool is_inited_;
+#ifdef ERRSIM
+  ObErrsimTransferBackfillPoint errsim_point_info_;
+#endif
   uint64_t tenant_id_;
   share::ObTaskId task_id_;
   ObLS *dest_ls_;
@@ -81,6 +88,9 @@ public:
   virtual DagNetCtxType get_dag_net_ctx_type() { return ObIHADagNetCtx::TRANSFER_BACKFILL_TX; }
 public:
   uint64_t tenant_id_;
+#ifdef ERRSIM
+  ObErrsimTransferBackfillPoint errsim_point_info_;
+#endif
   share::ObTaskId task_id_;
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
