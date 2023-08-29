@@ -6612,14 +6612,14 @@ int ObTransformUtils::create_simple_view(ObTransformerCtx *ctx,
 }
 
 /*
- * select c1, sum(c2) from t1 where c1 > 2 group by grouping sets(c1, c2) having sum(c2) > 3 order by c1
+ * select c1, sum(c2) from t1 where c1 > 2 group by grouping sets(c1, c2) having sum(c2) > 3 order by c1 limit 3
  * select v.c1, v.sum(c2) from v (
  *   select c1, sum(c2) from t1 where c1 > 2 group by grouping sets(c1, c2) having sum(c2) > 3
- * ) order by v.c1;
+ * ) order by v.c1 limit 3;
  */
 int ObTransformUtils::create_view_with_groupby_items(ObSelectStmt *stmt,
-                                               TableItem *&view_table_item,
-                                               ObTransformerCtx *ctx)
+                                                     TableItem *&view_table_item,
+                                                     ObTransformerCtx *ctx)
 {
   int ret = OB_SUCCESS;
   ObStmtFactory *stmt_factory = NULL;
@@ -6730,7 +6730,7 @@ int ObTransformUtils::create_view_with_groupby_items(ObSelectStmt *stmt,
   }
   if (OB_SUCC(ret)) {
     ctx->src_hash_val_.pop_back();
-    if (OB_FAIL(ObTransformUtils::generate_select_list(ctx, stmt, view_table_item, NULL, false))) {
+    if (OB_FAIL(ObTransformUtils::generate_select_list(ctx, stmt, view_table_item, &select_list))) {
       LOG_WARN("failed to generate_select_list", K(ret));
     } else if (OB_FAIL(stmt->formalize_stmt(session_info))) {
       LOG_WARN("failed to formalize stmt", K(ret));
@@ -7402,8 +7402,7 @@ int ObTransformUtils::create_inline_view(ObTransformerCtx *ctx,
 int ObTransformUtils::generate_select_list(ObTransformerCtx *ctx,
                                            ObDMLStmt *stmt,
                                            TableItem *table,
-                                           ObIArray<ObRawExpr *> *basic_select_exprs/*= NULL*/,
-                                           bool remove_const_expr/*= true*/)
+                                           ObIArray<ObRawExpr *> *basic_select_exprs/*= NULL*/)
 {
   int ret = OB_SUCCESS;
   ObSelectStmt *view_stmt = NULL;
@@ -7422,7 +7421,7 @@ int ObTransformUtils::generate_select_list(ObTransformerCtx *ctx,
   // The shared child exprs of basic_select_exprs should be extracted
   } else if (OB_FAIL(extract_shared_exprs(stmt, view_stmt, shared_exprs, basic_select_exprs))) {
     LOG_WARN("failed to extract shared expr", K(ret));
-  } else if (remove_const_expr && OB_FAIL(remove_const_exprs(shared_exprs, shared_exprs))) {
+  } else if (OB_FAIL(remove_const_exprs(shared_exprs, shared_exprs))) {
     LOG_WARN("failed to remove const exprs", K(ret));
   } else if (OB_FAIL(append(select_exprs, shared_exprs))) {
     LOG_WARN("failed to append", K(ret));

@@ -1731,8 +1731,7 @@ public:
   static int generate_select_list(ObTransformerCtx *ctx,
                                   ObDMLStmt *stmt,
                                   TableItem *table,
-                                  ObIArray<ObRawExpr *> *basic_select_exprs = NULL,
-                                  bool remove_const_expr = true);
+                                  ObIArray<ObRawExpr *> *basic_select_exprs = NULL);
 
   static int remove_const_exprs(ObIArray<ObRawExpr *> &input_exprs,
                                 ObIArray<ObRawExpr *> &output_exprs);
