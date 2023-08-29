@@ -3830,6 +3830,8 @@ int ObLogPlan::try_split_or_qual(const ObRelIds &table_ids,
     /* do nothing */
   } else if (OB_FAIL(table_quals.push_back(new_expr))) {
     LOG_WARN("failed to push back new expr", K(ret));
+  } else if (OB_FAIL(new_or_quals_.push_back(new_expr))) {
+    LOG_WARN("failed to push back expr", K(ret));
   }
   return ret;
 }

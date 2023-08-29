@@ -1336,6 +1336,8 @@ public:
 
   int perform_gather_stat_replace(ObLogicalOperator *op);
 
+  common::ObIArray<ObRawExpr *> &get_new_or_quals() { return new_or_quals_; }
+
 protected:
   virtual int generate_normal_raw_plan() = 0;
   virtual int generate_dblink_raw_plan();
@@ -1883,6 +1885,7 @@ private:
   common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> onetime_params_;
   common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 4,
                     common::ModulePageAllocator, true > onetime_replaced_exprs_;
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> new_or_quals_;
   DISALLOW_COPY_AND_ASSIGN(ObLogPlan);
 };
 

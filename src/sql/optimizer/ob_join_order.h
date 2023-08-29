@@ -1702,6 +1702,10 @@ struct NullAwareAntiJoinInfo {
     int compute_base_table_property(uint64_t table_id,
                                     uint64_t ref_table_id);
 
+    int extract_necessary_pushdown_quals(ObIArray<ObRawExpr *> &candi_quals,
+                                         ObIArray<ObRawExpr *> &necessary_pushdown_quals,
+                                         ObIArray<ObRawExpr *> &unnecessary_pushdown_quals);
+
     /**
      * @brief generate_subquery_path
      * 生成子查询路径
