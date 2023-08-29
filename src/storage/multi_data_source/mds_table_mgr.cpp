@@ -9,7 +9,9 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
+#include "lib/container/ob_se_array.h"
 #include "lib/ob_errno.h"
+#include "mds_ctx.h"
 #include "ob_tablet_id.h"
 #define USING_LOG_PREFIX MDS
 
@@ -129,38 +131,30 @@ void ObMdsTableMgr::unregister_from_removed_mds_table_recorder(MdsTableBase *p_m
   removed_mds_table_recorder_.del(p_mds_table);
 }
 
-int ObMdsTableMgr::first_scan_to_get_min_rec_scn_(share::SCN &min_rec_scn)
+int ObMdsTableMgr::first_scan_to_get_min_rec_scn_(share::SCN &min_rec_scn, ObIArray<ObTabletID> &min_rec_scn_ids)
 {
   MDS_TG(10_s);
   int ret = OB_SUCCESS;
   int64_t scan_cnt = 0;
-  auto get_max_min_rec_scn_op =
-  [&min_rec_scn, &scan_cnt](const common::ObTabletID &tablet_id, List<MdsTableBase> &mds_table_list) {
-    int tmp_ret = OB_SUCCESS;
-    if (mds_table_list.empty()) {
-      MDS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "meet empty mds table list", K(tablet_id));
-    } else {
-      MdsTableBase *mds_table = static_cast<MdsTableBase *>(mds_table_list.list_head_);
-      if (mds_table->is_removed_from_t3m() || mds_table->is_switched_to_empty_shell()) {
-        // jsut skip it
-      } else {
-        share::SCN rec_scn = mds_table->get_rec_scn();
-        min_rec_scn = std::min(rec_scn, min_rec_scn);
-        ++scan_cnt;
-      }
-    }
-    // true means iterating the next mds table
-    return true;
-  };
   auto get_min_rec_scn_op =
-  [&min_rec_scn, &scan_cnt](const common::ObTabletID &, MdsTableBase *&mds_table) {
-    share::SCN rec_scn = mds_table->get_rec_scn();
-    min_rec_scn = std::min(rec_scn, min_rec_scn);
-    ++scan_cnt;
+  [&min_rec_scn, &scan_cnt, &min_rec_scn_ids](const common::ObTabletID &, MdsTableBase *&mds_table) {
+    if (!mds_table->is_switched_to_empty_shell()) {
+      share::SCN rec_scn = mds_table->get_rec_scn();
+      if (rec_scn == min_rec_scn) {
+        if (min_rec_scn_ids.count() < 128) {
+          (void) min_rec_scn_ids.push_back(mds_table->get_tablet_id());
+        }
+      } else if (rec_scn < min_rec_scn) {
+        min_rec_scn = rec_scn;
+        min_rec_scn_ids.reset();
+        (void) min_rec_scn_ids.push_back(mds_table->get_tablet_id());
+      }
+      ++scan_cnt;
+    }
     return true;// true means iterating the next mds table
   };
   if (OB_FAIL(mds_table_map_.for_each(get_min_rec_scn_op))) {
-    MDS_LOG(WARN, "fail to do map for_each", KR(ret), K(*this), K(scan_cnt), K(min_rec_scn));
+    MDS_LOG(WARN, "fail to do map for_each", KR(ret), K(*this), K(scan_cnt), K(min_rec_scn), K(min_rec_scn_ids));
   }
   return ret;
 }
@@ -173,7 +167,9 @@ int ObMdsTableMgr::second_scan_to_do_flush_(share::SCN do_flush_limit_scn)
   auto flush_op = [do_flush_limit_scn, &scan_mds_table_cnt](const common::ObTabletID &tablet_id,
                                                             MdsTableBase *&mds_table) {
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(mds_table->flush(do_flush_limit_scn))) {
+    if (mds_table->is_switched_to_empty_shell()) {
+      MDS_LOG_RET(INFO, ret, "skip empty shell tablet mds_table flush", K(tablet_id), K(scan_mds_table_cnt));
+    } else if (OB_TMP_FAIL(mds_table->flush(do_flush_limit_scn))) {
       MDS_LOG_RET(WARN, ret, "flush mds table failed", KR(tmp_ret), K(tablet_id), K(scan_mds_table_cnt));
     } else {
       ++scan_mds_table_cnt;
@@ -200,13 +196,14 @@ int ObMdsTableMgr::flush(SCN recycle_scn, bool need_freeze)
   MdsTableHandle *flushing_mds_table = nullptr;
   share::SCN min_rec_scn = share::SCN::max_scn();
   share::SCN max_consequent_callbacked_scn;
+  ObSEArray<ObTabletID, 10> min_rec_scn_tablet_ids;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     MDS_LOG_FREEZE(ERROR, "mds table mgr not inited");
   } else if (!freeze_guard.can_freeze()) {
     MDS_LOG_FREEZE(INFO, "mds table mgr is doing flush, skip flush once");
-  } else if (MDS_FAIL(first_scan_to_get_min_rec_scn_(min_rec_scn))) {
+  } else if (MDS_FAIL(first_scan_to_get_min_rec_scn_(min_rec_scn, min_rec_scn_tablet_ids))) {
     MDS_LOG_FREEZE(WARN, "do first_scan_to_get_min_rec_scn_ failed");
   } else if (min_rec_scn == share::SCN::max_scn()) {// no mds table
     MDS_LOG_FREEZE(INFO, "no valid mds table there, no need do flush");
@@ -247,18 +244,28 @@ SCN ObMdsTableMgr::get_freezing_scn() const { return freezing_scn_.atomic_get();
 
 SCN ObMdsTableMgr::get_rec_scn()
 {
+  ObTabletID tablet_id;
+  return get_rec_scn(tablet_id);
+}
+
+share::SCN ObMdsTableMgr::get_rec_scn(ObTabletID &tablet_id)
+{
   MDS_TG(1_s);
   int ret = OB_SUCCESS;
   SCN min_rec_scn = share::SCN::max_scn();
+  ObSEArray<ObTabletID, 10> min_rec_scn_tablet_ids;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     MDS_LOG(ERROR, "regsiter mds table failed", KR(ret));
-  } else if (MDS_FAIL(first_scan_to_get_min_rec_scn_(min_rec_scn))) {
+  } else if (MDS_FAIL(first_scan_to_get_min_rec_scn_(min_rec_scn, min_rec_scn_tablet_ids))) {
     min_rec_scn = SCN::min_scn();
-    MDS_LOG(WARN, "fail to scan get min_rec_scn", KR(ret), K(min_rec_scn), K(*this));
+    MDS_LOG(WARN, "fail to scan get min_rec_scn", KR(ret), K(min_rec_scn), K(min_rec_scn_tablet_ids), K(*this));
   } else {
-    MDS_LOG(INFO, "get rec_scn from MdsTableMgr", KR(ret), K(min_rec_scn), K(*this));
+    if (!min_rec_scn_tablet_ids.empty()) {
+      tablet_id = min_rec_scn_tablet_ids.at(0);
+    }
+    MDS_LOG(INFO, "get rec_scn from MdsTableMgr", KR(ret), K(min_rec_scn), K(min_rec_scn_tablet_ids), K(*this));
   }
   return min_rec_scn;
 }

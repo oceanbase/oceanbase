@@ -554,8 +554,7 @@ int ObLSTxService::get_common_checkpoint_info(
       TRANS_LOG(WARN, "the common_checkpoint should not be null", K(i));
     } else {
       ObCommonCheckpointVTInfo info;
-      info.tablet_id = common_checkpoint->get_tablet_id();
-      info.rec_scn = common_checkpoint->get_rec_scn();
+      info.rec_scn = common_checkpoint->get_rec_scn(info.tablet_id);
       info.checkpoint_type = i;
       info.is_flushing = common_checkpoint->is_flushing();
       common_checkpoint_array.push_back(info);

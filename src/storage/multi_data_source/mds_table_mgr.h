@@ -16,6 +16,7 @@
 #include "lib/lock/ob_small_spin_lock.h"
 #include "lib/lock/ob_tc_rwlock.h"
 #include "meta_programming/ob_type_traits.h"
+#include "ob_tablet_id.h"
 #include "storage/checkpoint/ob_common_checkpoint.h"
 #include "storage/multi_data_source/runtime_utility/list_helper.h"
 #include "lib/hash/ob_linear_hash_map.h"
@@ -96,6 +97,7 @@ public:
 public: // derived from ObCommonCheckpoint
   share::SCN get_freezing_scn() const;
   virtual share::SCN get_rec_scn() override;
+  virtual share::SCN get_rec_scn(ObTabletID &tablet_id) override;
   virtual int flush(share::SCN recycle_scn, bool need_freeze = true) override;
   virtual ObTabletID get_tablet_id() const override { return ObTabletID(0); }
   virtual bool is_flushing() const override { return false; }
@@ -106,7 +108,7 @@ public: // getter and setter
   int64_t get_ref() { return ATOMIC_LOAD(&ref_cnt_); }
 
 private:
-  int first_scan_to_get_min_rec_scn_(share::SCN &min_rec_scn);
+  int first_scan_to_get_min_rec_scn_(share::SCN &min_rec_scn, ObIArray<ObTabletID> &min_rec_scn_ids);
   int second_scan_to_do_flush_(share::SCN min_rec_scn);
 
 private:

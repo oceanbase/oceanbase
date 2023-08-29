@@ -92,6 +92,11 @@ public:
   virtual int flush(share::SCN recycle_scn, bool need_freeze = true) = 0;
 
   virtual ObTabletID get_tablet_id() const = 0;
+  virtual share::SCN get_rec_scn(ObTabletID &tablet_id) {
+    share::SCN rec_scn = get_rec_scn();
+    tablet_id = get_tablet_id();
+    return rec_scn;
+  }
   virtual bool is_flushing() const = 0;
 
   VIRTUAL_TO_STRING_KV(KP(this));
