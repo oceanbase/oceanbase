@@ -2485,9 +2485,11 @@ int ObTablet::auto_get_read_tables(
       LOG_WARN("failed to get src ls read tables", K(ret), K(ls_id), K(tablet_id),
           K(snapshot_version), "has_transfer_table", tablet_meta_.has_transfer_table());
     } else {
+#ifdef ENABLE_DEBUG_LOG
       FLOG_INFO("get read tables during transfer",K(ret), K(ls_id), K(tablet_id),
           K(snapshot_version), "has_transfer_table", tablet_meta_.has_transfer_table(),
           K(iter.table_store_iter_.table_ptr_array_));
+#endif
     }
   }
   if (OB_FAIL(ret)) {
