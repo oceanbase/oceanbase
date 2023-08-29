@@ -274,7 +274,7 @@ private:
   {
   public:
     GetOldestHoldBlockFunctor(
-        common::hash::ObHashSet<MacroBlockId> &id_set,
+        common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &id_set,
         ObSimpleMacroBlockInfo &info)
       : ret_code_(common::OB_SUCCESS),
         macro_id_set_(id_set),
@@ -285,7 +285,7 @@ private:
     int get_ret_code() const { return ret_code_; }
   private:
     int ret_code_;
-    common::hash::ObHashSet<MacroBlockId> &macro_id_set_;
+    common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set_;
     ObSimpleMacroBlockInfo &oldest_hold_block_info_;
   };
 
@@ -332,51 +332,51 @@ private:
   bool is_bad_block(const MacroBlockId &macro_block_id);
   int mark_macro_blocks(
       MacroBlkIdMap &mark_info,
-      common::hash::ObHashSet<MacroBlockId> &macro_id_set,
+      common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);
   int mark_held_shared_block(
       const MacroBlockId &macro_id,
       MacroBlkIdMap &mark_info,
-      common::hash::ObHashSet<MacroBlockId> &macro_id_set,
+      common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);
   int mark_tenant_blocks(
       MacroBlkIdMap &mark_info,
-      common::hash::ObHashSet<MacroBlockId> &macro_id_set,
+      common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);
   int mark_sstable_blocks(
       MacroBlkIdMap &mark_info,
       storage::ObTabletHandle &handle,
-      common::hash::ObHashSet<MacroBlockId> &macro_id_set,
+      common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);
   int mark_sstable_meta_block(
       const blocksstable::ObSSTable &sstable,
       MacroBlkIdMap &mark_info,
-      common::hash::ObHashSet<MacroBlockId> &macro_id_set,
+      common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);
   int mark_tablet_meta_blocks(
       MacroBlkIdMap &mark_info,
       storage::ObTabletHandle &handle,
-      common::hash::ObHashSet<MacroBlockId> &macro_id_set,
+      common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);
   int mark_tenant_ckpt_blocks(
       MacroBlkIdMap &mark_info,
-      common::hash::ObHashSet<MacroBlockId> &macro_id_set,
+      common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       storage::ObTenantCheckpointSlogHandler &hdl,
       ObMacroBlockMarkerStatus &tmp_status);
   int mark_tmp_file_blocks(
       MacroBlkIdMap &mark_info,
-      common::hash::ObHashSet<MacroBlockId> &macro_id_set,
+      common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);
   int mark_server_meta_blocks(
       MacroBlkIdMap &mark_info,
-      common::hash::ObHashSet<MacroBlockId> &macro_id_set,
+      common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);
   bool continue_mark();
   int do_sweep(MacroBlkIdMap &mark_info);
 
   int update_mark_info(
       const common::ObIArray<MacroBlockId> &macro_block_list,
-      common::hash::ObHashSet<MacroBlockId> &macro_id_set,
+      common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       MacroBlkIdMap &mark_info);
   int update_mark_info(
       const MacroBlockId &macro_id,

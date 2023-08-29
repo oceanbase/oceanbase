@@ -165,7 +165,7 @@ TEST_F(TestBlockManager, test_mark_and_sweep)
   ret = mark_info.init(ObModIds::OB_STORAGE_FILE_BLOCK_REF, OB_SERVER_TENANT_ID);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  common::hash::ObHashSet<MacroBlockId> macro_id_set;
+  common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> macro_id_set;
   ret = macro_id_set.create(MAX(2, OB_SERVER_BLOCK_MGR.block_map_.count()));
   ASSERT_EQ(OB_SUCCESS, ret);
   int64_t safe_ts = ObTimeUtility::current_time();
