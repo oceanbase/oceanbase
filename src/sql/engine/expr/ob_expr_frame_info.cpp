@@ -635,6 +635,9 @@ int ObTempExpr::eval(ObExecContext &exec_ctx, const ObNewRow &row, ObObj &result
     ObTempExprCtxReplaceGuard exec_ctx_backup_guard(exec_ctx, *temp_expr_ctx);
     OZ(rt_exprs_.at(expr_idx_).eval(*temp_expr_ctx, res_datum));
     OZ(res_datum->to_obj(result, rt_exprs_.at(expr_idx_).obj_meta_));
+    if (!exec_ctx.use_temp_expr_ctx_cache()) {
+      temp_expr_ctx->~ObTempExprCtx();
+    }
     LOG_TRACE("temp expr result", K(result), K(row), K(rt_exprs_));
   }
 

@@ -469,6 +469,7 @@ public:
   ObExecFeedbackInfo &get_feedback_info() { return fb_info_; };
   void set_cur_rownum(int64_t cur_rownum) { cur_row_num_ = cur_rownum; }
   int64_t get_cur_rownum() { return cur_row_num_; }
+  bool use_temp_expr_ctx_cache() const { return use_temp_expr_ctx_cache_; }
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
   int set_phy_op_ctx_ptr(uint64_t index, void *phy_op);
