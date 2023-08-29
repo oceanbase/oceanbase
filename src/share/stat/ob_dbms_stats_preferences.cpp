@@ -1049,8 +1049,13 @@ int ObEstimateBlockPrefs::check_pref_value_validity(ObTableStatParam *param/*def
   int ret = OB_SUCCESS;
   if (pvalue_.empty() ||
       0 == pvalue_.case_compare("TRUE")) {
+    bool no_estimate_block = (OB_E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS) != OB_SUCCESS;
     if (param != NULL) {
-      param->need_estimate_block_ = true;
+      if (no_estimate_block) {
+        param->need_estimate_block_ = false;
+      } else {
+        param->need_estimate_block_ = true;
+      }
     }
   } else if (0 == pvalue_.case_compare("FALSE")) {
     if (param != NULL) {

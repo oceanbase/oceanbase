@@ -1,4 +1,3 @@
---source mysql_test/include/explain_init.inc
 --disable_query_log
 #set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
@@ -572,4 +571,3 @@ SELECT col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_deci
   ORDER BY col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk;
 
 drop database union_sort_opt_db;
---source mysql_test/include/explain_end.inc

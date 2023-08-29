@@ -5164,9 +5164,14 @@ int ObDbmsStats::gather_database_stats_job_proc(sql::ObExecContext &ctx,
   number::ObNumber num_duration;
   int64_t duration_time = -1;
   int64_t succeed_cnt = 0;
+  bool no_auto_gather = (OB_E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS) != OB_SUCCESS;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     ret = OB_SUCCESS;
     LOG_INFO("auto gather database statistics abort because of statistic table is unwriteable");
+  } else if (!ctx.get_my_session()->is_user_session() && no_auto_gather) {
+    //do nothing
+    LOG_INFO("auto gather stat abort because of the trace point and not user seesion",
+                                     K(ctx.get_my_session()->is_user_session()), K(no_auto_gather));
   } else if (lib::is_oracle_mode() && !params.empty() && !params.at(0).is_null() &&
              OB_FAIL(params.at(0).get_number(num_duration))) {
     LOG_WARN("failed to get duration", K(ret), K(params.at(0)));

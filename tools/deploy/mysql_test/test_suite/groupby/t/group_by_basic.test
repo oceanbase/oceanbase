@@ -268,7 +268,7 @@ CREATE TABLE `t1` (
 
 create sequence s1 cache 10000000;
 insert into t1 select s1.nextval c1, s1.nextval c2, s1.nextval c3 from table(generator(20000));
-explain SELECT t29_25.c1, t29_25.c8
+explain basic SELECT t29_25.c1, t29_25.c8
 FROM   (SELECT (SELECT t29_25.c1
                 FROM   t1 AS t29_25
                 ORDER  BY 1 DESC

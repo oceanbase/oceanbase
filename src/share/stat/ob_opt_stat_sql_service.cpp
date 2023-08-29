@@ -2070,7 +2070,9 @@ int ObOptStatSqlService::update_opt_stat_task_stat(const ObOptStatTaskInfo &task
   ObSqlString value_str;
   int64_t affected_rows = 0;
   const uint64_t tenant_id = gen_meta_tenant_id(task_info.tenant_id_);
-  if (OB_FAIL(get_gather_stat_task_value(task_info, value_str))) {
+  if (!is_valid_tenant_id(tenant_id)) {
+    //do nothing
+  } else if (OB_FAIL(get_gather_stat_task_value(task_info, value_str))) {
     LOG_WARN("failed to get gather stat values list", K(ret));
   } else if (OB_FAIL(raw_sql.append_fmt(INSERT_TASK_OPT_STAT_GATHER_SQL,
                                         share::OB_ALL_TASK_OPT_STAT_GATHER_HISTORY_TNAME,
@@ -2105,7 +2107,9 @@ int ObOptStatSqlService::update_opt_stat_gather_stat(const ObOptStatGatherStat &
   ObSqlString value_str;
   int64_t affected_rows = 0;
   const uint64_t tenant_id = gen_meta_tenant_id(gather_stat.get_tenant_id());
-  if (OB_FAIL(get_gather_stat_value(gather_stat, value_str))) {
+  if (!is_valid_tenant_id(tenant_id)) {
+    //do nothing
+  } else if (OB_FAIL(get_gather_stat_value(gather_stat, value_str))) {
     LOG_WARN("failed to get gather stat value", K(ret));
   } else if (OB_FAIL(raw_sql.append_fmt(INSERT_TABLE_OPT_STAT_GATHER_SQL,
                                         share::OB_ALL_TABLE_OPT_STAT_GATHER_HISTORY_TNAME,

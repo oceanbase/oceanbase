@@ -1,4 +1,3 @@
---source mysql_test/include/explain_init.inc
 # owner: dachuan.sdc
 # owner group: sql2
 # tags: optimizer
@@ -148,4 +147,3 @@ select sign( cast(a2 as char(1024)) ) , sign( cast(a4 as char(1024)) ) from t2 f
 --echo #
 select sign(1E-300) from dual;
 select sign(1E-400) from dual;
---source mysql_test/include/explain_end.inc

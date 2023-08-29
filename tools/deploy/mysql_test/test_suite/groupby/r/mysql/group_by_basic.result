@@ -417,7 +417,7 @@ CREATE TABLE `t1` (
 );
 create sequence s1 cache 10000000;
 insert into t1 select s1.nextval c1, s1.nextval c2, s1.nextval c3 from table(generator(20000));
-explain SELECT t29_25.c1, t29_25.c8
+explain basic SELECT t29_25.c1, t29_25.c8
 FROM   (SELECT (SELECT t29_25.c1
 FROM   t1 AS t29_25
 ORDER  BY 1 DESC
@@ -428,15 +428,15 @@ FROM   t1 AS t29_25) AS t29_25
 GROUP  BY t29_25.c1, t29_25.c8
 HAVING Count(t29_25.c4) <> 990;
 Query Plan
-=======================================================
-|ID|OPERATOR             |NAME  |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------
-|0 |HASH GROUP BY        |      |5       |2614        |
-|1 |└─SUBPLAN FILTER     |      |9999    |1598        |
-|2 |  ├─TABLE FULL SCAN  |t29_25|9999    |1004        |
-|3 |  └─TOP-N SORT       |      |1       |568         |
-|4 |    └─TABLE FULL SCAN|t29_25|9999    |541         |
-=======================================================
+=================================
+|ID|OPERATOR             |NAME  |
+---------------------------------
+|0 |HASH GROUP BY        |      |
+|1 |└─SUBPLAN FILTER     |      |
+|2 |  ├─TABLE FULL SCAN  |t29_25|
+|3 |  └─TOP-N SORT       |      |
+|4 |    └─TABLE FULL SCAN|t29_25|
+=================================
 Outputs & filters:
 -------------------------------------
   0 - output([:0], [t29_25.c8]), filter([T_FUN_COUNT(t29_25.c4) != 990]), rowset=256
