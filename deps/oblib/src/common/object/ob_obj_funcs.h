@@ -1188,7 +1188,7 @@ inline int obj_print_plain_str<ObHexStringType>(const ObObj &obj, char *buffer,
     if (CHARSET_BINARY == src_type && lib::is_mysql_mode()) {               \
       ret = obj_print_sql<ObHexStringType>(obj, buffer, length, pos, params);      \
     } else if (OB_FAIL(databuff_printf(buffer, length, pos, "'"))) {                        \
-    } else if (src_type == dst_type || src_type == CHARSET_INVALID || CHARSET_BINARY == dst_type) { \
+    } else if (src_type == dst_type || src_type == CHARSET_INVALID) { \
       ObHexEscapeSqlStr sql_str(obj.get_string(), params.skip_escape_);                     \
       pos += sql_str.to_string(buffer + pos, length - pos);                                 \
       ret = databuff_printf(buffer, length, pos, "'");                                      \
