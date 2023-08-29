@@ -2209,6 +2209,9 @@ typedef enum ObItemType
   T_NULL_IF_EXETERNAL,
   T_EMPTY_FIELD_AS_NULL,
   T_ADMIN_STORAGE,// used to support oss storage for clog/sstable
+  T_PARTITION_HASH_ELEMENT,
+  T_PARTITION_LIST_ELEMENT,
+  T_PARTITION_RANGE_ELEMENT,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
