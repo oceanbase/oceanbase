@@ -123,7 +123,7 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
         } else {
           param.reset();
           param.ObObj::reset();
-          if (OB_FAIL(calc_param(ctx, *expr, param))) {
+          if (OB_FAIL(ObSQLUtils::calc_sql_expression_without_row(ctx, *expr, param))) {
             LOG_WARN("failed to calc exec param expr", K(i), K(*expr), K(ret));
           } else {
             if (expr->get_is_pl_mock_default_expr()) {
@@ -288,21 +288,6 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
       } else { /*do nothing*/ }
     }
     ctx.get_sql_ctx()->cur_stmt_ = &stmt;
-  }
-  return ret;
-}
-
-int ObCallProcedureExecutor::calc_param(ObExecContext &ctx, const ObISqlExpression &expr, ObObjParam &result)
-{
-  int ret = OB_SUCCESS;
-  OZ (ObSQLUtils::calc_sql_expression_without_row(ctx, expr, result), K(expr));
-  if (OB_SUCC(ret) && !result.is_ext()) {
-    const sql::ObExpr *new_expr = expr.get_expr();
-    CK (OB_NOT_NULL(new_expr));
-    OX (result.set_length(new_expr->max_length_));
-    OX (result.set_precision(new_expr->datum_meta_.precision_));
-    OX (result.set_scale(new_expr->datum_meta_.scale_));
-    OX (result.set_length_semantics(new_expr->datum_meta_.length_semantics_));
   }
   return ret;
 }
