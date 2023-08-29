@@ -45045,7 +45045,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'zbf271370',
+  owner           = 'linqiucen.lqc',
   table_name      = 'DBA_OB_TENANTS',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
