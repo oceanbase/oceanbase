@@ -214,7 +214,7 @@ private:
         cur_idx_(0), brs_(), batch_size_(0), child_(NULL),
         match_groups_(match_groups), merge_join_op_(merge_join_op),
         all_exprs_(NULL), datum_store_(), backup_datums_(),
-        backup_rows_cnt_(0), brs_holder_(),
+        backup_rows_cnt_(0), backup_rows_used_(0), brs_holder_(),
         equal_param_idx_(allocator)
     {}
     int init(const uint64_t tenant_id, bool is_left, ObOperator *child,
@@ -242,6 +242,7 @@ private:
       datum_store_.reuse();
       backup_datums_.reuse();
       backup_rows_cnt_ = 0;
+      backup_rows_used_ = 0;
       brs_holder_.reset();
     }
     // for destroy
@@ -254,6 +255,7 @@ private:
       datum_store_.reset();
       backup_datums_.reset();
       backup_rows_cnt_ = 0;
+      backup_rows_used_ = 0;
       brs_holder_.reset();
     }
     int64_t cur_idx_;
@@ -269,6 +271,7 @@ private:
     // We need store these rows and output first, then get batch from child and output directly.
     ObSEArray<ObDatum *, 256> backup_datums_;
     int64_t backup_rows_cnt_;
+    int64_t backup_rows_used_;
     ObBatchResultHolder brs_holder_;
 
     common::ObFixedArray<int64_t, common::ObIAllocator> equal_param_idx_;
