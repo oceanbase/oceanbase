@@ -52,6 +52,7 @@ public:
       const ObLSRebuildInfo &curr_info,
       const ObLSRebuildType &rebuild_type,
       const int32_t result,
+      const ObMigrationStatus &status,
       ObLSRebuildInfo &next_info);
 };
 

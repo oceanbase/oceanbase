@@ -52,14 +52,15 @@ int ObLSRebuildInfoHelper::get_next_rebuild_info(
     const ObLSRebuildInfo &curr_info,
     const ObLSRebuildType &rebuild_type,
     const int32_t result,
+    const ObMigrationStatus &status,
     ObLSRebuildInfo &next_info)
 {
   int ret = OB_SUCCESS;
   next_info.reset();
 
-  if (!curr_info.is_valid() || !rebuild_type.is_valid()) {
+  if (!curr_info.is_valid() || !rebuild_type.is_valid() || !ObMigrationStatusHelper::is_valid(status)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get next change status get invalid argument", K(ret), K(curr_info), K(rebuild_type));
+    LOG_WARN("get next change status get invalid argument", K(ret), K(curr_info), K(rebuild_type), K(status));
   } else {
     switch (curr_info.status_) {
     case ObLSRebuildStatus::NONE: {
@@ -82,7 +83,8 @@ int ObLSRebuildInfoHelper::get_next_rebuild_info(
       break;
     }
     case ObLSRebuildStatus::DOING: {
-      if (OB_SUCCESS == result) {
+      if (OB_SUCCESS == result
+          || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_FAIL == status) {
         next_info.status_ = ObLSRebuildStatus::CLEANUP;
         next_info.type_ = rebuild_type;
       } else {
@@ -981,6 +983,7 @@ int ObLSRebuildMgr::switch_next_status_(
   bool can_change = false;
   ObRebuildService *rebuild_service = MTL(ObRebuildService*);
   ObLS *ls = nullptr;
+  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -988,6 +991,8 @@ int ObLSRebuildMgr::switch_next_status_(
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(rebuild_ctx_));
+  } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
+    LOG_WARN("failed to get migration status", K(ret), KPC(ls));
   } else if (OB_ISNULL(rebuild_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("storage ha handler service should not be NULL", K(ret), KP(rebuild_service));
@@ -995,8 +1000,8 @@ int ObLSRebuildMgr::switch_next_status_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("switch next status get invalid argument", K(ret), K(curr_rebuild_info));
   } else {
-    if (OB_FAIL(ObLSRebuildInfoHelper::get_next_rebuild_info(curr_rebuild_info, rebuild_ctx_.type_, result, next_rebuild_info))) {
-      LOG_WARN("failed to get next change status", K(ret), K(curr_rebuild_info), K(result), K(rebuild_ctx_));
+    if (OB_FAIL(ObLSRebuildInfoHelper::get_next_rebuild_info(curr_rebuild_info, rebuild_ctx_.type_, result, migration_status, next_rebuild_info))) {
+      LOG_WARN("failed to get next change status", K(ret), K(curr_rebuild_info), K(result), K(rebuild_ctx_), K(migration_status));
     } else if (OB_FAIL(ObLSRebuildInfoHelper::check_can_change_info(curr_rebuild_info, next_rebuild_info, can_change))) {
       LOG_WARN("failed to check can change status", K(ret), K(curr_rebuild_info), K(next_rebuild_info), K(rebuild_ctx_));
     } else if (!can_change) {

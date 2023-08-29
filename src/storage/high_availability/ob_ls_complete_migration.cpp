@@ -400,7 +400,8 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
         } else if (in_final_state) {
           need_update_status = false;
           if (ObMigrationOpType::REBUILD_LS_OP == ctx_.arg_.type_
-              && ObMigrationStatus::OB_MIGRATION_STATUS_NONE == current_migration_status) {
+              && (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == current_migration_status
+                  || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_FAIL == current_migration_status)) {
             LOG_INFO("current migration status is none, no need update migration status", K(current_migration_status), K(ctx_));
           } else {
             if (!ctx_.is_failed()) {
