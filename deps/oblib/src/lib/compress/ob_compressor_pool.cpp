@@ -92,25 +92,25 @@ int ObCompressorPool::get_compressor_type(const char *compressor_name,
   if (NULL == compressor_name) {
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "invalid compressor name argument, ", K(ret), KP(compressor_name));
-  } else if (!strcmp(compressor_name, "none")) {
+  } else if (!STRCASECMP(compressor_name, "none")) {
     compressor_type = NONE_COMPRESSOR;
-  } else if (!strcmp(compressor_name, "lz4_1.0")) {
+  } else if (!STRCASECMP(compressor_name, "lz4_1.0")) {
     compressor_type = LZ4_COMPRESSOR;
-  } else if (!strcmp(compressor_name, "snappy_1.0")) {
+  } else if (!STRCASECMP(compressor_name, "snappy_1.0")) {
     compressor_type = SNAPPY_COMPRESSOR;
-  } else if (!strcmp(compressor_name, "zlib_1.0")) {
+  } else if (!STRCASECMP(compressor_name, "zlib_1.0")) {
     compressor_type = ZLIB_COMPRESSOR;
-  } else if (!strcmp(compressor_name, "zstd_1.0")) {
+  } else if (!STRCASECMP(compressor_name, "zstd_1.0")) {
     compressor_type = ZSTD_COMPRESSOR;
-  } else if (!strcmp(compressor_name, "zstd_1.3.8")) {
+  } else if (!STRCASECMP(compressor_name, "zstd_1.3.8")) {
     compressor_type = ZSTD_1_3_8_COMPRESSOR;
-  } else if (!strcmp(compressor_name, "lz4_1.9.1")) {
+  } else if (!STRCASECMP(compressor_name, "lz4_1.9.1")) {
     compressor_type = LZ4_191_COMPRESSOR;
-  } else if (!strcmp(compressor_name, "stream_lz4_1.0")) {
+  } else if (!STRCASECMP(compressor_name, "stream_lz4_1.0")) {
     compressor_type = STREAM_LZ4_COMPRESSOR;
-  } else if (!strcmp(compressor_name, "stream_zstd_1.0")) {
+  } else if (!STRCASECMP(compressor_name, "stream_zstd_1.0")) {
     compressor_type = STREAM_ZSTD_COMPRESSOR;
-  } else if (!strcmp(compressor_name, "stream_zstd_1.3.8")) {
+  } else if (!STRCASECMP(compressor_name, "stream_zstd_1.3.8")) {
     compressor_type = STREAM_ZSTD_1_3_8_COMPRESSOR;
   } else {
     ret = OB_NOT_SUPPORTED;
