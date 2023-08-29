@@ -221,7 +221,7 @@ int ObFullTabletCreator::persist_tablet()
         LOG_INFO("memory addr changed, push back to queue", K(ret), K(key), K(old_addr), K(addr));
       }
     } else if (OB_FAIL(old_tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), mds_data, 0))) {
-      if (OB_EMPTY_RESULT != ret && OB_ERR_SHARED_LOCK_CONFLICT != ret) {
+      if (OB_EMPTY_RESULT != ret && OB_ERR_SHARED_LOCK_CONFLICT != ret && OB_VERSION_NOT_MATCH != ret) {
         LOG_ERROR("fail to get tablet status", K(ret), K(key), K(addr), K(old_handle), K(old_tablet->is_empty_shell()));
       } else {
         tmp_fail = true;
