@@ -52,7 +52,7 @@ static const int64_t ALLOC_ABLOCK_CONCURRENCY = 4;
 
 static ssize_t get_page_size()
 {
-  static ssize_t ps = sysconf(_SC_PAGESIZE);
+  static ssize_t ps = getpagesize();
   return ps;
 }
 
@@ -603,6 +603,14 @@ private:
   static thread_local ObMemAttr tl_mem_attr;
   ObMemAttr old_attr_;
 };
+
+extern void inc_divisive_mem_size(const int64_t size);
+extern void dec_divisive_mem_size(const int64_t size);
+extern int64_t get_divisive_mem_size();
+
+extern void set_ob_mem_mgr_path();
+extern void unset_ob_mem_mgr_path();
+extern bool is_ob_mem_mgr_path();
 
 #define FORCE_EXPLICT_500_MALLOC() \
   OB_UNLIKELY(oceanbase::lib::ObMallocAllocator::get_instance()->force_explict_500_malloc_)

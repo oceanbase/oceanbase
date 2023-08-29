@@ -128,7 +128,7 @@ int ObTabletLSMap::update(const ObTabletLSCache &tablet_ls_cache)
       } else if (OB_FAIL(tmp->assign(tablet_ls_cache))) {
         LOG_WARN("fail to assign tablet_ls_cache", KR(ret), K(tablet_ls_cache));
       } else {
-        try_update_access_ts_(tmp); // always update for insert
+        // try_update_access_ts_(tmp); // always update for insert
         tmp->next_ = ls_buckets_[pos];
         ls_buckets_[pos] = tmp;
         ATOMIC_INC(&size_);
@@ -138,7 +138,7 @@ int ObTabletLSMap::update(const ObTabletLSCache &tablet_ls_cache)
       if (OB_FAIL(curr->assign(tablet_ls_cache))) {
         LOG_WARN("fail to assign tablet_ls_cache", KR(ret), K(tablet_ls_cache));
       } else {
-        try_update_access_ts_(curr); // always update for update
+        // try_update_access_ts_(curr); // always update for update
       }
     }
   }
@@ -172,7 +172,7 @@ int ObTabletLSMap::get(
     if (OB_ISNULL(curr)) {
       ret = OB_ENTRY_NOT_EXIST;
     } else {
-      try_update_access_ts_(curr);
+      // try_update_access_ts_(curr);
       if (OB_FAIL(tablet_ls_cache.assign(*curr))) {
         LOG_WARN("fail to assign tablet_ls_cache", KR(ret), KPC(curr));
       }
@@ -241,13 +241,13 @@ int ObTabletLSMap::del(const ObTabletLSKey &key)
   return ret;
 }
 
-void ObTabletLSMap::try_update_access_ts_(ObTabletLSCache *cache_ptr)
-{
-  OB_ASSERT(NULL != cache_ptr);
-  if (common::ObClockGenerator::getClock() > cache_ptr->get_last_access_ts() + MAX_ACCESS_TIME_UPDATE_THRESHOLD) {
-    cache_ptr->set_last_access_ts(common::ObClockGenerator::getClock());
-  }
-}
+// void ObTabletLSMap::try_update_access_ts_(ObTabletLSCache *cache_ptr)
+// {
+//   OB_ASSERT(NULL != cache_ptr);
+//   if (common::ObClockGenerator::getClock() > cache_ptr->get_last_access_ts() + MAX_ACCESS_TIME_UPDATE_THRESHOLD) {
+//     cache_ptr->set_last_access_ts(common::ObClockGenerator::getClock());
+//   }
+// }
 
 } // end namespace share
 } // end namespace oceanbase

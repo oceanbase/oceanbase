@@ -700,19 +700,19 @@ int PalfEnvImpl::try_recycle_blocks()
         total_size_to_stop_write
         * disk_opts_for_stopping_writing.log_disk_utilization_limit_threshold_ / 100LL;
     const bool need_recycle =
-        usable_disk_size_to_recycle_blocks > total_used_size_byte ? false : true;
+        usable_disk_size_to_recycle_blocks >= total_used_size_byte ? false : true;
     const bool is_shrinking = disk_options_wrapper_.is_shrinking();
     // Assume that, recycle speed is higher than write speed, therefor, the abnormal case
     // is that, after each 'recycle_blocks_', the 'total_used_size_byte' is one PALF_BLOCK_SIZE
     // more than 'usable_disk_size'.
     const bool curr_diskspace_enough =
-        usable_disk_limit_size_to_stop_writing > total_used_size_byte ? true : false;
+        usable_disk_limit_size_to_stop_writing >= total_used_size_byte ? true : false;
     constexpr int64_t MB = 1024 * 1024LL;
     const int64_t print_error_log_disk_size =
         disk_opts_for_stopping_writing.log_disk_usage_limit_size_
         * disk_opts_for_stopping_writing.log_disk_utilization_threshold_ / 100LL;
     const bool need_print_error_log =
-        print_error_log_disk_size > total_used_size_byte ? false : true;
+        print_error_log_disk_size >= total_used_size_byte ? false : true;
 
     // step1. change SHRINKING_STATUS to normal
     // 1. when there is no possibility to stop writing,
@@ -720,7 +720,7 @@ int PalfEnvImpl::try_recycle_blocks()
     bool has_recycled = false;
     int64_t oldest_palf_id = INVALID_PALF_ID;
     if (OB_SUCC(ret) && PalfDiskOptionsWrapper::Status::SHRINKING_STATUS == status) {
-      if (total_used_size_byte < usable_disk_size_to_recycle_blocks) {
+      if (total_used_size_byte <= usable_disk_size_to_recycle_blocks) {
         disk_options_wrapper_.change_to_normal(sequence);
         PALF_LOG(INFO, "change_to_normal success", K(disk_options_wrapper_),
                  K(total_used_size_byte), K(usable_disk_size_to_recycle_blocks));

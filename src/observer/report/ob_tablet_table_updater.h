@@ -220,8 +220,8 @@ private:
 private:
   const int64_t MINI_MODE_UPDATE_TASK_THREAD_CNT = 1;
   const int64_t UPDATE_TASK_THREAD_CNT = 7;
-  const int64_t MINI_MODE_UPDATE_QUEUE_SIZE = 20 * 10000;
-  const int64_t UPDATE_QUEUE_SIZE = 100 * 10000;
+  const int64_t MINI_MODE_UPDATE_QUEUE_SIZE = 5 * 10000;
+  const int64_t UPDATE_QUEUE_SIZE = 10 * 10000;
   bool inited_;
   bool stopped_;
   ObService *ob_service_;

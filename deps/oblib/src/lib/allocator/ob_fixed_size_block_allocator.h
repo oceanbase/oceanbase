@@ -61,8 +61,7 @@ private:
   bool contains_internal(void* ptr) const;
 
 public:
-  static const int64_t MAX_MEMORY_ALLOCATION = OB_MAX_SYS_BKGD_THREAD_NUM * 6
-      * OB_DEFAULT_MACRO_BLOCK_SIZE;
+  static const int64_t MAX_MEMORY_ALLOCATION = OB_MAX_SYS_BKGD_THREAD_NUM * 2 * OB_DEFAULT_MACRO_BLOCK_SIZE; //256MB
 
 private:
   // TODO(zhuixin.gsy) reduce 128*2M size to 64*2M, which is expanded temporarily for generating index blocks

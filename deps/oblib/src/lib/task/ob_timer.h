@@ -41,7 +41,6 @@ class ObTimerTask
 public:
   ObTimerTask() : timeout_check_(true), timer_(nullptr) {}
   virtual ~ObTimerTask() { abort_unless(OB_ISNULL(ATOMIC_LOAD(&timer_))); }
-  virtual void cancelCallBack() {}
   virtual void runTimerTask() = 0;
   virtual int64_t to_string(char *buf, const int64_t buf_len) const
   {
@@ -55,7 +54,6 @@ public:
   inline void enable_timeout_check() { timeout_check_ = true; }
   inline void disable_timeout_check() { timeout_check_ = false; }
   inline bool timeout_check() { return timeout_check_; }
-  virtual bool need_retry() { return true; }
 private:
   bool timeout_check_;
   ObTimer* timer_;
@@ -67,7 +65,7 @@ class ObTimer
 public:
   friend class oceanbase::tests::blocksstable::FakeTabletManager;
   ObTimer(int64_t max_task_num = 32): tasks_num_(0), max_task_num_(max_task_num), wakeup_time_(0), is_inited_(false), is_stopped_(false),
-      is_destroyed_(false), tokens_(nullptr), has_running_task_(false), has_running_repeat_task_(false),
+      is_destroyed_(false), tokens_(nullptr), running_task_(nullptr), uncanceled_task_(nullptr), has_running_repeat_task_(false),
       thread_id_(-1), thread_name_(nullptr) {}
   ~ObTimer();
   int init(const char* thread_name = nullptr,
@@ -88,6 +86,8 @@ public:
     return OB_SUCCESS;
   }
   int cancel(const ObTimerTask &task);
+  int cancel_task(const ObTimerTask &task);
+  int wait_task(const ObTimerTask &task);
   void cancel_all();
   int32_t get_tasks_num() const { return tasks_num_; }
   void dump() const;
@@ -100,6 +100,7 @@ private:
     TO_STRING_KV(K(scheduled_time), K(delay), KP(task), KPC(task));
     int64_t scheduled_time;
     int64_t delay;
+    bool canceled_;
     ObTimerTask *task;
   };
   int insert_token(const Token &token);
@@ -116,7 +117,8 @@ private:
   bool is_destroyed_;
   obutil::ObMonitor<obutil::Mutex> monitor_;
   Token* tokens_;
-  bool has_running_task_;
+  ObTimerTask *running_task_;
+  ObTimerTask *uncanceled_task_;
   bool has_running_repeat_task_;
   int64_t thread_id_;
   const char* thread_name_;

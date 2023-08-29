@@ -23,7 +23,6 @@
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/thread/ob_simple_thread_pool.h"
 #include "lib/task/ob_timer.h"
-#include "lib/queue/ob_lighty_queue.h"
 #include "lib/container/ob_iarray.h"
 
 #include "share/schema/ob_schema_service.h"
@@ -43,7 +42,7 @@ class ObDBMSJobThread : public ObSimpleThreadPool
 };
 
 
-class ObDBMSJobKey
+class ObDBMSJobKey : public common::ObLink
 {
 public:
   ObDBMSJobKey(
@@ -52,7 +51,7 @@ public:
     bool check_job, bool check_new, bool check_new_tenant)
   : tenant_id_(tenant_id),
     job_id_(job_id),
-    execute_at_(execute_at), 
+    execute_at_(execute_at),
     delay_(delay),
     check_job_(check_job),
     check_new_(check_new),
@@ -120,7 +119,7 @@ public:
 
   virtual ~ObDBMSJobTask() {}
 
-  int init(common::ObLightyQueue *ready_queue);
+  int init(ObDBMSJobQueue *ready_queue);
   int start();
   int stop();
   int destroy();
@@ -139,7 +138,7 @@ public:
 private:
   bool inited_;
   ObDBMSJobKey *job_key_;
-  common::ObLightyQueue *ready_queue_;
+  ObDBMSJobQueue *ready_queue_;
   WaitVector wait_vector_;
 
   ObSpinLock lock_;
@@ -217,7 +216,7 @@ private:
   obrpc::ObDBMSJobRpcProxy *job_rpc_proxy_;
 
   common::ObAddr self_addr_;
-  common::ObLightyQueue ready_queue_;
+  ObDBMSJobQueue ready_queue_;
   ObDBMSJobTask scheduler_task_;
   ObDBMSJobThread scheduler_thread_;
   ObDBMSJobUtils job_utils_;

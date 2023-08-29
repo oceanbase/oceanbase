@@ -77,20 +77,32 @@ public:
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(ERROR, "timeout is invalid", K(ret), K(timeout_us));
     } else {
-      auto key = sem_.get_key();
-      sem_.wait(key, timeout_us);
       for(int i = 0; OB_ENTRY_NOT_EXIST == ret  && i < PRIO_CNT; i++) {
         if (OB_SUCCESS == queue_[i].pop(data)) {
           ret = OB_SUCCESS;
         }
       }
       if (OB_FAIL(ret)) {
+        auto key = sem_.get_key();
+        sem_.wait(key, timeout_us);
         data = NULL;
       } else {
         (void)ATOMIC_FAA(&size_, -1);
       }
     }
     return ret;
+  }
+
+  void destroy()
+  {
+    clear();
+  }
+
+  void clear()
+  {
+    ObLink* p = NULL;
+    while(OB_SUCCESS == pop(p, 0))
+      ;
   }
 
 private:

@@ -1507,6 +1507,8 @@ public:
   static int dba_ob_tenant_event_history_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_tenant_event_history_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_flt_trace_config_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_tenant_runtime_info_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_tenant_runtime_info_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -3933,6 +3935,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_tenant_event_history_schema,
   ObInnerTableSchema::cdb_ob_tenant_event_history_schema,
   ObInnerTableSchema::gv_ob_flt_trace_config_schema,
+  ObInnerTableSchema::gv_ob_tenant_runtime_info_schema,
+  ObInnerTableSchema::v_ob_tenant_runtime_info_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -11121,10 +11125,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 247;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 715;
-const int64_t OB_SYS_VIEW_COUNT = 757;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1724;
+const int64_t OB_SYS_VIEW_COUNT = 759;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1726;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1727;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1729;
 
 } // end namespace share
 } // end namespace oceanbase

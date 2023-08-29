@@ -158,7 +158,6 @@ TEST_F(TestCacheWorkingSet, cache_size_increase)
   // close background wash timer task
   // ObKVGlobalCache::get_instance().wash_timer_.stop();
   // ObKVGlobalCache::get_instance().wash_timer_.wait();
-  ObKVGlobalCache::get_instance().wash_task_.cancelCallBack();
   Key key;
   Value value;
 

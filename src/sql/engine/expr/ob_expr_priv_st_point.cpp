@@ -13,7 +13,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_priv_st_point.h"
-#include "observer/omt/ob_tenant_srs_mgr.h"
+#include "observer/omt/ob_tenant_srs.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "share/object/ob_obj_cast_util.h"
 #include "lib/geo/ob_geo_func_common.h"
@@ -180,7 +180,7 @@ int ObExprPrivSTPoint::eval_priv_st_point(const ObExpr &expr,
       LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "SRID", N_PRIV_ST_POINT);
       LOG_WARN("srid input value out of range", K(ret), K(datum_srid->get_int()));
     } else if (0 != (srid = datum_srid->get_uint32())) {
-      if (OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(MTL_ID(), srs_guard))) {
+      if (OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
         LOG_WARN("fail to get srs guard", K(ret));
       } else if (OB_FAIL(srs_guard.get_srs_item(srid, srs_item))) {
         LOG_WARN("fail to get srs item", K(ret));

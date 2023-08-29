@@ -531,6 +531,9 @@ STAT_EVENT_SET_DEF(IS_MINI_MODE, "is mini mode", ObStatClassIds::RESOURCE, 14001
 STAT_EVENT_SET_DEF(MEMORY_HOLD_SIZE, "observer memory hold size", ObStatClassIds::RESOURCE, 140011, false, true)
 STAT_EVENT_SET_DEF(WORKER_TIME, "worker time", ObStatClassIds::RESOURCE, 140012, false, true)
 STAT_EVENT_SET_DEF(CPU_TIME, "cpu time", ObStatClassIds::RESOURCE, 140013, false, true)
+STAT_EVENT_SET_DEF(MEMORY_LIMIT, "effective observer memory limit", ObStatClassIds::RESOURCE, 140014, false, true)
+STAT_EVENT_SET_DEF(SYSTEM_MEMORY, "effective system memory", ObStatClassIds::RESOURCE, 140015, false, true)
+STAT_EVENT_SET_DEF(HIDDEN_SYS_MEMORY, "effective hidden sys memory", ObStatClassIds::RESOURCE, 140016, false, true)
 
 //CLOG
 

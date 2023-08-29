@@ -22,6 +22,24 @@ using namespace sql;
 namespace observer
 {
 
+int ObAllVirtualDMmlStats::inner_open()
+{
+  int ret = OB_SUCCESS;
+  // sys tenant show all tenant infos
+  if (is_sys_tenant(effective_tenant_id_)) {
+    if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids_))) {
+      SERVER_LOG(WARN, "failed to add tenant id", K(ret));
+    }
+  } else {
+    // user tenant show self tenant infos
+    if (OB_FAIL(tenant_ids_.push_back(effective_tenant_id_))) {
+      SERVER_LOG(WARN, "failed to push back tenant id", KR(ret), K(effective_tenant_id_),
+          K(tenant_ids_));
+    }
+  }
+  return ret;
+}
+
 int ObOptDmlStatMapGetter::operator()(common::hash::HashMapPair<StatKey, ObOptDmlStat> &entry)
 {
   int ret = OB_SUCCESS;
@@ -77,27 +95,8 @@ int ObOptDmlStatMapGetter::operator()(common::hash::HashMapPair<StatKey, ObOptDm
   return ret;
 }
 
-int ObOptDmlStatMapsGetter::operator()(common::hash::HashMapPair<uint64_t, DmlStatMap *> &entry)
-{
-  int ret = OB_SUCCESS;
-  uint64_t tenant_id = entry.first;
-  DmlStatMap *dml_stat_map = entry.second;
-  if (effective_tenant_id_ != tenant_id && !is_sys_tenant(effective_tenant_id_)) {
-    SERVER_LOG(TRACE, "not full fill tenant id", K(effective_tenant_id_), K(tenant_id));
-  } else if (OB_ISNULL(dml_stat_map)) {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "get unexpected null", K(ret), K(dml_stat_map));
-  } else {
-    ObOptDmlStatMapGetter getter(scanner_, output_column_ids_, svr_ip_, port_, cur_row_, effective_tenant_id_);
-    if (OB_FAIL(dml_stat_map->foreach_refactored(getter))) {
-      SERVER_LOG(WARN, "fail to get dml stat", K(ret));
-    } else {/*do nothing*/}
-  }
-  return ret;
-}
-
 ObAllVirtualDMmlStats::ObAllVirtualDMmlStats()
-  : port_(0)
+  : port_(0), tenant_ids_(), tenant_idx_(0)
 {
   MEMSET(svr_ip_, 0, sizeof(svr_ip_));
 }
@@ -122,19 +121,27 @@ void ObAllVirtualDMmlStats::reset()
 int ObAllVirtualDMmlStats::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObObj *cells = cur_row_.cells_;
-  if (!start_to_read_) {
-    if (OB_FAIL(fill_scanner())) {
+  if (tenant_idx_ >= tenant_ids_.count()) {
+    ret = OB_ITER_END;
+  } else if (!start_to_read_) {
+    if (OB_FAIL(fill_scanner(tenant_ids_.at(tenant_idx_)))) {
       SERVER_LOG(WARN, "fill scanner failed", K(ret));
     } else {
       start_to_read_ = true;
     }
   }
-
-  if (OB_SUCCESS == ret && start_to_read_) {
+  if (OB_SUCC(ret) && start_to_read_) {
     if (OB_FAIL(scanner_it_.get_next_row(cur_row_))) {
       if (OB_ITER_END != ret) {
         SERVER_LOG(WARN, "fail to get next row", K(ret));
+      } else if (++ tenant_idx_ < tenant_ids_.count()) {//load a new tenant info
+        ret = OB_SUCCESS;
+        start_to_read_ = false;
+        if (OB_FAIL(SMART_CALL(inner_get_next_row(row)))) {
+          if (OB_ITER_END != ret) {
+            SERVER_LOG(WARN, "failed to inner get next row", K(ret));
+          }
+        }
       }
     } else {
       row = &cur_row_;
@@ -143,7 +150,7 @@ int ObAllVirtualDMmlStats::inner_get_next_row(ObNewRow *&row)
   return ret;
 }
 
-int ObAllVirtualDMmlStats::fill_scanner()
+int ObAllVirtualDMmlStats::fill_scanner(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObObj *cells = NULL;
@@ -156,12 +163,18 @@ int ObAllVirtualDMmlStats::fill_scanner()
     ret = OB_ERR_UNEXPECTED;
   } else {
     port_ = addr.get_port();
-    ObOptDmlStatMapsGetter getter(scanner_, output_column_ids_, svr_ip_, port_, cur_row_, effective_tenant_id_);
-    if (OB_FAIL(ObOptStatMonitorManager::get_instance().generate_opt_stat_monitoring_info_rows(getter))) {
-      SERVER_LOG(WARN, "generate monitor info array failed", K(ret));
-    } else {
-      scanner_it_ = scanner_.begin();
-      start_to_read_ = true;
+    MTL_SWITCH(tenant_id) {
+      ObOptDmlStatMapGetter getter(scanner_, output_column_ids_, svr_ip_, port_, cur_row_, tenant_id);
+      ObOptStatMonitorManager *optstat_monitor_mgr = MTL(ObOptStatMonitorManager*);
+      if (OB_ISNULL(optstat_monitor_mgr)) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "optstat monitor mgr is NULL", K(ret), K(tenant_id), K(effective_tenant_id_));
+      } else if (OB_FAIL(optstat_monitor_mgr->generate_opt_stat_monitoring_info_rows(getter))) {
+        SERVER_LOG(WARN, "generate monitor info array failed", K(ret));
+      } else {
+        scanner_it_ = scanner_.begin();
+        start_to_read_ = true;
+      }
     }
   }
   return ret;

@@ -30,10 +30,10 @@ uloop_t global_ussl_loop_struct;
 static int ussl_has_listened = 0;
 static ussl_sf_t acceptfd_fty;
 static ussl_sf_t clientfd_fty;
-static pthread_t ussl_bg_thread_id;
+static void *ussl_bg_thread_id;
 
-int ob_pthread_create(pthread_t *thread, const pthread_attr_t *attr,
-                      void *(*start_routine) (void *), void *arg);
+int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg);
+void ob_pthread_join(void *ptr);
 void ob_set_thread_name(const char* type);
 
 static int uloop_init(uloop_t *l)
@@ -102,7 +102,7 @@ int ussl_init_bg_thread()
   if (0 == ret) {
     if (0 != uloop_init(&global_ussl_loop_struct)) {
       ussl_log_error("initialize uloop failed.")
-    } else if (0 != ob_pthread_create(&ussl_bg_thread_id, NULL, bg_thread_func, NULL)) {
+    } else if (0 != ob_pthread_create(&ussl_bg_thread_id, bg_thread_func, NULL)) {
       ret = EIO;
       ussl_log_error("create background thread failed, errno:%d", errno);
     } else {
@@ -116,7 +116,8 @@ extern int is_ussl_bg_thread_started;
 void ussl_wait_bg_thread()
 {
   if (ATOMIC_LOAD(&is_ussl_bg_thread_started)) {
-    pthread_join(ussl_bg_thread_id, NULL);
+    ob_pthread_join(ussl_bg_thread_id);
+    ussl_bg_thread_id = NULL;
     ATOMIC_STORE(&is_ussl_bg_thread_started, 0);
   }
 }

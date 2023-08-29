@@ -1239,28 +1239,18 @@ struct SimpleAllocerBlock
   Block *next;
 };
 
-template <bool B, class T>
+template <class T, const int NODE_PAGE_SIZE=common::OB_MALLOC_NORMAL_BLOCK_SIZE>
 struct NodeNumTraits
 {
+  /*
+     24 :  sizeof(SimpleAllocerBlock 's members except nodes)
+     32 :  sizeof(SimpleAllocerNode's members except data)
+     128:  for robust
+  */
+  static const int32_t NODE_NUM = ((NODE_PAGE_SIZE - 24 - 128) < (32 + sizeof(T))) ? 1 : ((NODE_PAGE_SIZE -
+                                   24 - 128) /
+                                  (32 + sizeof(T)));
 };
-
-template <class T>
-struct NodeNumTraits<false, T>
-{
-  static const int32_t NODE_NUM = (common::OB_MALLOC_NORMAL_BLOCK_SIZE -
-                                   24/*=sizeof(SimpleAllocerBlock 's members except nodes)*/ - 128/*for robust*/) /
-                                  (32/*sizeof(SimpleAllocerNode's members except data)*/ + sizeof(T));
-};
-
-template <class T>
-struct NodeNumTraits<true, T>
-{
-  static const int32_t NODE_NUM = 1;
-};
-
-#define IS_BIG_OBJ(T) \
-  ((common::OB_MALLOC_NORMAL_BLOCK_SIZE - 24 - 128) < (32 + sizeof(T)))
-
 /*
 block_free_list_:
   Block C: node1->node2->node3...
@@ -1284,7 +1274,7 @@ free:
   4. neither
 */
 template <class T,
-          int32_t NODE_NUM = NodeNumTraits<IS_BIG_OBJ(T), T>::NODE_NUM,
+          int32_t NODE_NUM = NodeNumTraits<T>::NODE_NUM,
           class DefendMode = SpinMutexDefendMode,
           class Allocer = DefaultSimpleAllocerAllocator>
 class SimpleAllocer
@@ -1297,15 +1287,20 @@ class SimpleAllocer
   typedef typename DefendMode::lock_type lock_type;
   typedef typename DefendMode::lock_initer lock_initer;
 public:
-  SimpleAllocer() : block_remainder_(NULL), block_free_list_(NULL)
+  SimpleAllocer() : leak_check_(true), block_remainder_(NULL), block_free_list_(NULL)
   {
     lock_initer initer(lock_);
   }
   ~SimpleAllocer()
   {
-    OB_ASSERT(NULL == block_remainder_ &&
-              NULL == block_free_list_);
+    if (leak_check_) {
+      if (NULL != block_remainder_ ||
+          NULL != block_free_list_) {
+        HASH_WRITE_LOG_RET(HASH_FATAL, OB_ERR_UNEXPECTED, "SimpleAllocer memory leak");
+      }
+    }
   }
+  void set_leak_check(const bool check) { leak_check_ = check; }
   void set_attr(const ObMemAttr &attr) { allocer_.set_attr(attr); }
   void set_label(const lib::ObLabel &label) { allocer_.set_label(label); }
   template <class ... TYPES>
@@ -1413,6 +1408,7 @@ public:
     }
   }
 private:
+  bool leak_check_;
   Block *block_remainder_;
   Block *block_free_list_;
   lock_type lock_;

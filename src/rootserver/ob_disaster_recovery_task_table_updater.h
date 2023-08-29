@@ -154,8 +154,7 @@ private:
 private:
   const int64_t MINI_MODE_UPDATE_THREAD_CNT = 1;
   const int64_t UPDATE_THREAD_CNT = 1;
-  const int64_t MINI_MODE_TASK_QUEUE_SIZE = 20 * 10000;
-  const int64_t TASK_QUEUE_SIZE = 100 * 10000;
+  const int64_t TASK_QUEUE_SIZE = 10000;
   bool inited_;
   bool stopped_;
   ObDRTaskTableUpdateTaskQueue update_queue_;

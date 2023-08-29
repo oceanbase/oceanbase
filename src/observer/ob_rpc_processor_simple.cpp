@@ -2152,10 +2152,15 @@ int ObHandlePartTransCtxP::process()
 int ObFlushLocalOptStatMonitoringInfoP::process()
 {
   int ret = OB_SUCCESS;
-  ObOptStatMonitorManager &opt_stat_monitor_mgr = ObOptStatMonitorManager::get_instance();
-  if (OB_FAIL(opt_stat_monitor_mgr.update_opt_stat_monitoring_info(arg_))) {
-    LOG_WARN("failed to flush opt stat monitoring info", K(ret));
-  } else {/*do nothing*/}
+  MTL_SWITCH(arg_.tenant_id_) {
+    ObOptStatMonitorManager *optstat_monitor_mgr = NULL;
+    if (OB_ISNULL(optstat_monitor_mgr = MTL(ObOptStatMonitorManager*))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(optstat_monitor_mgr));
+    } else if (OB_FAIL(optstat_monitor_mgr->update_opt_stat_monitoring_info(arg_))) {
+      LOG_WARN("failed to flush opt stat monitoring info", K(ret));
+    } else {/*do nothing*/}
+  }
   return ret;
 }
 

@@ -92,7 +92,7 @@ public:
   {
     assert(NULL != tablet_ls_map);
     int ret = OB_SUCCESS;
-    int tid = get_tid();
+    uint64_t tid = get_thread_idx();
     LOG_INFO("thread start", K(tid), K(tablet_ls_map->size()));
 
     // generate data

@@ -35,6 +35,7 @@ OB_SERIALIZE_MEMBER(ObDebugSyncAction, sync_point_, timeout_,
 ObDSActionArray::ObDSActionArray(const bool is_const /* = false */)
    : active_cnt_(0), is_const_(is_const)
 {
+  STATIC_ASSERT(0 == INVALID_DEBUG_SYNC_POINT, "INVALID_DEBUG_SYNC_POINT shouble be zero");
   memset(action_ptrs_, 0, sizeof(action_ptrs_));
 }
 
@@ -42,6 +43,7 @@ void ObDSActionArray::clear(const ObDebugSyncPoint sync_point)
 {
   if (sync_point > INVALID_DEBUG_SYNC_POINT && sync_point < MAX_DEBUG_SYNC_POINT) {
     if (NULL != action_ptrs_[sync_point]) {
+      action_ptrs_[sync_point]->sync_point_ = INVALID_DEBUG_SYNC_POINT;
       action_ptrs_[sync_point] = NULL;
       active_cnt_--;
       LOG_INFO("clear sync point", K(sync_point));
@@ -55,6 +57,7 @@ void ObDSActionArray::clear_all()
 {
   if (!is_empty()) {
     memset(action_ptrs_, 0, sizeof(action_ptrs_));
+    memset(actions_, 0, sizeof(actions_));
     active_cnt_ = 0;
     LOG_INFO("clear all sync point");
   }
@@ -68,11 +71,29 @@ int ObDSActionArray::add_action(const ObDebugSyncAction &action)
     LOG_WARN("invalid action", K(ret), K(action));
   } else {
     if (!is_const_) {
-      actions_[action.sync_point_] = action;
       if (OB_ISNULL(action_ptrs_[action.sync_point_])) {
-        active_cnt_++;
+        if (active_cnt_ < MAX_DEBUG_SYNC_CACHED_POINT) {
+          ObDebugSyncAction *dst = NULL;
+          for (int i = 0; i < ARRAYSIZEOF(actions_); i++) {
+            if (INVALID_DEBUG_SYNC_POINT == actions_[i].sync_point_) {
+              dst = &actions_[i];
+              break;
+            }
+          }
+          if (dst != NULL) {
+            active_cnt_++;
+            action_ptrs_[action.sync_point_] = dst;
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+          }
+        } else {
+          ret = OB_SIZE_OVERFLOW;
+          LOG_WARN("sync action size overflow", K(active_cnt_));
+        }
       }
-      action_ptrs_[action.sync_point_] = &actions_[action.sync_point_];
+      if (OB_SUCC(ret)) {
+        *action_ptrs_[action.sync_point_] = action;
+      }
     }
   }
   return ret;
@@ -90,6 +111,7 @@ int ObDSActionArray::fetch_action(const ObDebugSyncPoint sync_point,
       action = *action_ptrs_[sync_point];
       action_ptrs_[sync_point]->execute_--;
       if (action_ptrs_[sync_point]->execute_ <= 0) {
+        action_ptrs_[sync_point]->sync_point_ = INVALID_DEBUG_SYNC_POINT;
         action_ptrs_[sync_point] = NULL;
         active_cnt_--;
       }

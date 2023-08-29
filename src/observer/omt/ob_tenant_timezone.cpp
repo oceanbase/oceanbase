@@ -21,53 +21,33 @@
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "share/ob_thread_mgr.h"
 #include "share/ob_time_zone_info_manager.h"
-#include "observer/ob_server.h"
 
 using namespace oceanbase::common;
 
 namespace oceanbase {
 namespace omt {
-
-ObTenantTimezone::ObTenantTimezone() : tenant_id_(OB_INVALID_TENANT_ID)
-{
-}
-
-ObTenantTimezone::ObTenantTimezone(uint64_t tenant_id)
-    : is_inited_(false), tenant_id_(tenant_id), tenant_tz_mgr_(nullptr),
-    tz_info_mgr_(nullptr), tz_info_map_(nullptr), update_task_not_exist_(false)
+ObTenantTimezone::ObTenantTimezone(common::ObMySQLProxy &sql_proxy, uint64_t tenant_id)
+    : is_inited_(false), tenant_id_(tenant_id),
+    tz_info_mgr_(sql_proxy, tenant_id), update_task_not_exist_(false)
 {
 }
 ObTenantTimezone::~ObTenantTimezone()
 {
 }
 
-int ObTenantTimezone::init(ObTenantTimezoneMgr *tz_mgr)
+int ObTenantTimezone::init()
 {
   int ret = OB_SUCCESS;
-  tenant_tz_mgr_ = tz_mgr;
-  is_inited_ = true;
-  tz_info_map_ = OB_NEW(ObTZInfoMap, SET_USE_500("TZInfoMap"));
-  tz_info_mgr_ = OB_NEW(ObTimeZoneInfoManager, SET_USE_500("TZInfoMgr"), OBSERVER.get_common_rpc_proxy(),
-                    OBSERVER.get_mysql_proxy(), OBSERVER.get_root_service(),
-                    *tz_info_map_, tenant_id_);
-  if (OB_ISNULL(tz_info_map_) || OB_ISNULL(tz_info_mgr_)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate mem for tz_info", K(ret), K(tz_info_map_), K(tz_info_mgr_));
-  } else if (OB_FAIL(tz_info_map_->init(SET_USE_500("TZInfoMap")))) {
-    LOG_WARN("fail to init tz_info_map_", K(ret));
-  } else if (OB_FAIL(tz_info_mgr_->init())) {
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(tz_info_mgr_.init())) {
     LOG_WARN("fail to init tz_info_mgr_", K(ret));
   } else {
-    LOG_INFO("tenant timezone init", K(tz_info_map_), K(tenant_id_));
+    is_inited_ = true;
   }
+  LOG_INFO("tenant timezone init", K(ret), K(tenant_id_), K(sizeof(ObTimeZoneInfoManager)));
   return ret;
-}
-
-void ObTenantTimezone::destroy()
-{
-  if (NULL != tz_info_map_) {
-    tz_info_map_->destroy();
-  }
 }
 
 } // omt

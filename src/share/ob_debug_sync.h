@@ -59,6 +59,7 @@ public:
 class ObDSActionArray
 {
 public:
+  static constexpr int MAX_DEBUG_SYNC_CACHED_POINT = 32;
   OB_UNIS_VERSION(1);
 
 public:
@@ -80,7 +81,7 @@ public:
 
 private:
   ObDebugSyncAction *action_ptrs_[MAX_DEBUG_SYNC_POINT];
-  ObDebugSyncAction actions_[MAX_DEBUG_SYNC_POINT];
+  ObDebugSyncAction actions_[MAX_DEBUG_SYNC_CACHED_POINT];
   volatile int64_t active_cnt_;
   const bool is_const_;
 

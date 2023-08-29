@@ -39,7 +39,7 @@ storage_unittest(test_dag_net_in_dag_scheduler scheduler/test_dag_net_in_dag_sch
 #ob_unittest(test_ob_log)
 #ob_unittest(test_truncated_string)
 #ob_unittest(test_latch)
-#ob_unittest(test_debug_sync)
+ob_unittest(test_debug_sync)
 #ob_unittest(test_locality_priority)
 #ob_unittest(test_primary_zone_util)
 #ob_unittest(test_time_zone_info_manager)

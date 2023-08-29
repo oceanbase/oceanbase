@@ -20,7 +20,7 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/location_cache/ob_location_service.h"
 #include "observer/ob_server_struct.h"
-#include "observer/omt/ob_tenant_srs_mgr.h"
+#include "observer/omt/ob_tenant_srs.h"
 #include "lib/geo/ob_s2adapter.h"
 #include "lib/geo/ob_geo_utils.h"
 namespace oceanbase
@@ -311,13 +311,13 @@ int ObDASUtils::generate_spatial_index_rows(
   if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb_str, srid))) {
     LOG_WARN("failed to get srid", K(ret), K(wkb_str));
   } else if (srid != 0 &&
-      OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(MTL_ID(), srs_guard))) {
+      OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
     LOG_WARN("failed to get srs guard", K(ret), K(MTL_ID()), K(srid));
   } else if (srid != 0 &&
       OB_FAIL(srs_guard.get_srs_item(srid, srs_item))) {
     LOG_WARN("failed to get srs item", K(ret), K(MTL_ID()), K(srid));
   } else if (((srid == 0) || !(srs_item->is_geographical_srs())) &&
-              OB_FAIL(OTSRS_MGR.get_srs_bounds(srid, srs_item, srs_bound))) {
+              OB_FAIL(OTSRS_MGR->get_srs_bounds(srid, srs_item, srs_bound))) {
     LOG_WARN("failed to get srs bound", K(ret), K(srid));
   } else {
     ObS2Adapter s2object(&allocator, srid != 0 ? srs_item->is_geographical_srs() : false);

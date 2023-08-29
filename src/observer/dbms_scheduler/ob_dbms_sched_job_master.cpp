@@ -56,7 +56,7 @@ int ObDBMSSchedJobTask::init()
   return ret;
 }
 
-int ObDBMSSchedJobTask::start(ObLightyQueue *ready_queue)
+int ObDBMSSchedJobTask::start(dbms_job::ObDBMSJobQueue *ready_queue)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -111,7 +111,7 @@ void ObDBMSSchedJobTask::runTimerTask()
           || OB_ISNULL(ready_queue_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null ptr", K(ret), K(job_key_), K(ready_queue_));
-  } else if (OB_FAIL(ready_queue_->push(static_cast<void*>(job_key_)))) {
+  } else if (OB_FAIL(ready_queue_->push(job_key_, 0))) {
     LOG_WARN("fail to push ready job to queue", K(ret), K(*job_key_));
   } else {
     job_key_ = NULL;
@@ -199,7 +199,7 @@ int ObDBMSSchedJobTask::immediately(ObDBMSSchedJobKey *job_key)
     LOG_WARN("NULL ptr", K(ret), K(job_key), K(ready_queue_));
   } else {
     ObSpinLockGuard guard(lock_);
-    if (OB_FAIL(ready_queue_->push(static_cast<void*>(job_key)))) {
+    if (OB_FAIL(ready_queue_->push(job_key, 0))) {
       LOG_WARN("fail to push ready job to queue", K(ret), K(*job_key));
     }
   }
@@ -258,8 +258,8 @@ int ObDBMSSchedJobMaster::init(ObUnitManager *unit_mgr,
           ) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null ptr", K(ret), K(unit_mgr), K(sql_client), K(schema_service));
-  } else if (OB_FAIL(ready_queue_.init(MAX_READY_JOBS_CAPACITY))) {
-    LOG_WARN("fail to init ready job queue for all jobs", K(ret));
+  } else if (FALSE_IT(ready_queue_.set_limit(MAX_READY_JOBS_CAPACITY))) {
+    // do-nothing
   } else if (OB_FAIL(scheduler_task_.init())) {
     LOG_WARN("fail to init ready queue", K(ret));
   } else if (OB_FAIL(scheduler_thread_.init(1, 1))) {
@@ -332,7 +332,7 @@ int ObDBMSSchedJobMaster::scheduler()
     LOG_INFO("NOTICE: DBMS Sched Job master start running!", K(ret), K(running_));
     lib::set_thread_name("DBMS_SCHEDULER");
     while (OB_SUCC(ret) && !stoped_) {
-      void* ptr = NULL;
+      ObLink* ptr = NULL;
       int64_t timeout = MIN_SCHEDULER_INTERVAL;
       ObDBMSSchedJobKey *job_key = NULL;
       if (OB_FAIL(ready_queue_.pop(ptr, timeout))) {
@@ -507,7 +507,7 @@ int ObDBMSSchedJobMaster::server_random_pick(int64_t tenant_id, ObString &pick_z
             }
           }
         }
-      } 
+      }
     }
   }
   if (OB_SUCC(ret) && 0 == total_server.count()) {
@@ -730,4 +730,3 @@ int ObDBMSSchedJobMaster::register_job(
 
 } // end for namespace dbms_scheduler
 } // end for namespace oceanbase
-

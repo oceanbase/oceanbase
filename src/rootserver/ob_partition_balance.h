@@ -83,21 +83,28 @@ public:
   class ObLSPartGroupDesc
   {
   public:
-    ObLSPartGroupDesc(ObLSID ls_id) : ls_id_(ls_id) {}
+    ObLSPartGroupDesc(ObLSID ls_id, ObIAllocator &alloc) :
+        ls_id_(ls_id),
+        alloc_(alloc),
+        part_groups_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(alloc, "LSPartGroupDesc")) {}
     ~ObLSPartGroupDesc() {
       ls_id_.reset();
       for (int64_t i = 0; i < part_groups_.count(); i++) {
         if (OB_NOT_NULL(part_groups_.at(i))) {
           part_groups_.at(i)->~ObTransferPartGroup();
+          alloc_.free(part_groups_.at(i));
+          part_groups_.at(i) = NULL;
         }
       }
       part_groups_.reset();
     }
     ObLSID get_ls_id() const { return ls_id_; }
     ObArray<ObTransferPartGroup *> &get_part_groups() { return part_groups_; }
+    int add_new_part_group(ObTransferPartGroup *&part_gourp);
     TO_STRING_KV(K_(ls_id), K_(part_groups));
   private:
     ObLSID ls_id_;
+    ObIAllocator &alloc_;
     ObArray<ObTransferPartGroup *> part_groups_;
   };
 
@@ -175,7 +182,7 @@ private:
   int generate_balance_job_from_logical_task_();
 
   int prepare_ls_();
-  int add_part_to_bg_map_(const ObLSID &ls_id, ObTransferPartGroup &part_group, ObBalanceGroup &bg);
+  int add_new_pg_to_bg_map_(const ObLSID &ls_id, ObBalanceGroup &bg, ObTransferPartGroup *&part_group);
   int add_transfer_task_(const ObLSID &src_ls_id, const ObLSID &dest_ls_id, ObTransferPartGroup *part_group, bool modify_ls_desc = true);
   int update_ls_desc_(const ObLSID &ls_id, int64_t cnt, int64_t size);
   int try_swap_part_group_(ObLSDesc &src_ls, ObLSDesc &dest_ls, int64_t part_group_min_size ,int64_t &swap_cnt);

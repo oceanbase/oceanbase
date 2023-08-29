@@ -28646,8 +28646,69 @@ def_table_schema(
 # 21475: CDB_OB_IMPORT_STMT_EXEC_HISTORY
 # 21476: DBA_OB_IMPORT_STMT_EXEC_HISTORY
 
-# 21477: GV$OB_DUMP_TENANT_INFO
-# 21478: V$OB_DUMP_TENANT_INFO
+def_table_schema(
+  owner = 'tushicheng.tsc',
+  table_name      = 'GV$OB_TENANT_RUNTIME_INFO',
+  table_id        = '21477',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition = """
+  SELECT
+    svr_ip AS SVR_IP,
+    svr_port AS SVR_PORT,
+    tenant_id AS TENANT_ID,
+    compat_mode AS COMPAT_MODE,
+    unit_min_cpu AS UNIT_MIN_CPU,
+    unit_max_cpu AS UNIT_MAX_CPU,
+    slice AS SLICE,
+    remain_slice AS REMAIN_SLICE,
+    token_cnt AS TOKEN_CNT,
+    ass_token_cnt AS ASS_TOKEN_CNT,
+    lq_tokens AS LQ_TOKENS,
+    used_lq_tokens AS USED_LQ_TOKENS,
+    stopped AS STOPPED,
+    idle_us AS IDLE_US,
+    recv_hp_rpc_cnt AS RECV_HP_RPC_CNT,
+    recv_np_rpc_cnt AS RECV_NP_RPC_CNT,
+    recv_lp_rpc_cnt AS RECV_LP_RPC_CNT,
+    recv_mysql_cnt AS RECV_MYSQL_CNT,
+    recv_task_cnt AS RECV_TASK_CNT,
+    recv_large_req_cnt AS RECV_LARGE_REQ_CNT,
+    recv_large_queries AS RECV_LARGE_QUERIES,
+    actives AS ACTIVES,
+    workers AS WORKERS,
+    lq_waiting_workers AS LQ_WAITING_WORKERS,
+    req_queue_total_size AS REQ_QUEUE_TOTAL_SIZE,
+    queue_0 AS QUEUE_0,
+    queue_1 AS QUEUE_1,
+    queue_2 AS QUEUE_2,
+    queue_3 AS QUEUE_3,
+    queue_4 AS QUEUE_4,
+    queue_5 AS QUEUE_5,
+    large_queued AS LARGE_QUEUED
+  FROM
+    oceanbase.__all_virtual_dump_tenant_info
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'tushicheng.tsc',
+  table_name      = 'V$OB_TENANT_RUNTIME_INFO',
+  table_id        = '21478',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition = """
+  SELECT *
+  FROM
+    oceanbase.GV$OB_TENANT_RUNTIME_INFO
+  WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " "),
+)
+
 #
 # 余留位置
 
@@ -52844,9 +52905,6 @@ def_table_schema(
 # 28197: V$OB_SESSION
 # 28198: GV$OB_PL_CACHE_OBJECT
 # 28199: V$OB_PL_CACHE_OBJECT
-
-# 28200: GV$OB_DUMP_TENANT_INFO
-# 28201: V$OB_DUMP_TENANT_INFO
 
 ################################################################################
 # Lob Table (50000, 70000)

@@ -269,6 +269,7 @@ public:
   int get_tablet_pointer_initial_state(const ObTabletMapKey &key, bool &initial_state);
   int get_tablet_ddl_kv_mgr(const ObTabletMapKey &key, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   ObFullTabletCreator &get_mstx_tablet_creator() { return full_tablet_creator_; }
+  common::ObIAllocator &get_meta_cache_io_allocator() { return meta_cache_io_allocator_; }
   OB_INLINE int64_t get_total_tablet_cnt() const { return tablet_map_.count(); }
 
   int has_meta_wait_gc(bool &is_wait);
@@ -476,8 +477,6 @@ private:
   void batch_gc_memtable_();
 
 private:
-  int cmp_ret_;
-  HeapCompare compare_;
   common::SpinRWLock wash_lock_;
   TryWashTabletFunc wash_func_;
   const uint64_t tenant_id_;
@@ -510,6 +509,8 @@ private:
   // for washing
   TabletBufferList normal_tablet_header_;
   TabletBufferList large_tablet_header_;
+
+  common::ObConcurrentFIFOAllocator meta_cache_io_allocator_;
 
   bool is_inited_;
 };

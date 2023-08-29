@@ -1072,7 +1072,8 @@ int ObTmpFile::aio_write(const ObTmpFileIOInfo &io_info, ObTmpFileIOHandle &hand
         } else {
           alloc_size = size;
         }
-        if (OB_ISNULL(buff = allocator_->alloc(sizeof(ObTmpFileExtent)))) {
+        lib::ObMemAttr attr(tenant_id_, "TmpFileExtent");
+        if (OB_ISNULL(buff = allocator_->alloc(sizeof(ObTmpFileExtent), attr))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           STORAGE_LOG(WARN, "fail to alloc a buf", K(ret));
         } else if (OB_ISNULL(extent = new (buff) ObTmpFileExtent(this))) {
@@ -1322,7 +1323,7 @@ int ObTmpFileManager::init()
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTmpFileManager has not been inited", K(ret));
-  } else if (OB_FAIL(files_.init(DEFAULT_BUCKET_NUM, attr, TOTAL_LIMIT, HOLD_LIMIT, BLOCK_SIZE))) {
+  } else if (OB_FAIL(files_.init(DEFAULT_BUCKET_NUM, attr, *lib::ObMallocAllocator::get_instance()))) {
     STORAGE_LOG(WARN, "fail to init map for temporary files", K(ret));
   } else if (OB_FAIL(OB_TMP_FILE_STORE.init())) {
     STORAGE_LOG(WARN, "fail to init the block manager for temporary files", K(ret));

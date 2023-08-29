@@ -49,6 +49,8 @@ public:
   bool operator >  (const ObCommonID &other) const { return id_ > other.id_; }
   bool operator != (const ObCommonID &other) const { return id_ != other.id_; }
   bool operator <  (const ObCommonID &other) const { return id_ < other.id_; }
+  bool operator <= (const ObCommonID &other) const { return id_ <= other.id_; }
+  bool operator >= (const ObCommonID &other) const { return id_ >= other.id_; }
   int compare(const ObCommonID &other) const
   {
     if (id_ == other.id_) {

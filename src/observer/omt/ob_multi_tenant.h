@@ -106,7 +106,8 @@ public:
   int convert_real_to_hidden_sys_tenant();
   int update_tenant_cpu(const uint64_t tenant_id, const double min_cpu, const double max_cpu);
   int update_tenant_memory(const uint64_t tenant_id, const int64_t mem_limit, int64_t &allowed_mem_limit);
-  int update_tenant_memory(const share::ObUnitInfoGetter::ObTenantConfig &unit);
+  int update_tenant_memory(const share::ObUnitInfoGetter::ObTenantConfig &unit,
+                           const int64_t extra_memory = 0);
   int update_tenant_log_disk_size(const uint64_t tenant_id,
                                   const int64_t old_log_disk_size,
                                   const int64_t new_log_disk_size,
@@ -255,6 +256,20 @@ bool ObMultiTenant::has_synced() const
 {
   return has_synced_;
 }
+
+class ObSharedTimer
+{
+public:
+  ObSharedTimer() : tg_id_(-1) {}
+  static int mtl_init(ObSharedTimer *&st);
+  static int mtl_start(ObSharedTimer *&st);
+  static void mtl_stop(ObSharedTimer *&st);
+  static void mtl_wait(ObSharedTimer *&st);
+  void destroy();
+  int get_tg_id() const { return tg_id_; }
+private:
+  int tg_id_;
+};
 
 } // end of namespace omt
 } // end of namespace oceanbase

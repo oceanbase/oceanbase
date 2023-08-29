@@ -994,6 +994,48 @@ int ObTransferTaskOperator::get_history_task(
   return ret;
 }
 
+int ObTransferTaskOperator::get_max_task_id_from_history(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    ObTransferTaskID &max_task_id)
+{
+  int ret = OB_SUCCESS;
+  max_task_id.reset();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    SMART_VAR(ObISQLClient::ReadResult, result) {
+      ObSqlString sql;
+      common::sqlclient::ObMySQLResult *res = NULL;
+      int64_t max_task_id_int64 = ObTransferTaskID::INVALID_ID;
+      if (OB_FAIL(sql.assign_fmt("SELECT max(task_id) as max_task_id FROM %s",
+          OB_ALL_TRANSFER_TASK_HISTORY_TNAME))) {
+        LOG_WARN("fail to assign sql", KR(ret), K(sql));
+      } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(res = result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get mysql result failed", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_FAIL(res->next())) {
+        LOG_WARN("next failed", KR(ret), K(sql));
+      } else if (OB_FAIL(res->get_int("max_task_id", max_task_id_int64))) {
+        if (OB_ERR_NULL_VALUE == ret) {
+          max_task_id.reset(); // return INVALID_ID when history is empty
+          LOG_TRACE("transfer history is empty", KR(ret), K(tenant_id), K(max_task_id));
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("get max task id failed", KR(ret), K(max_task_id), K(sql));
+        }
+      } else {
+        max_task_id = max_task_id_int64;
+        LOG_TRACE("get max transfer task_id from history success", KR(ret), K(tenant_id), K(max_task_id));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTransferTaskOperator::update_comment(
     common::ObISQLClient &sql_proxy,
     const uint64_t tenant_id,

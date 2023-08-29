@@ -137,7 +137,8 @@ int ObTabletDDLKvMgr::ddl_start_nolock(const ObITable::TableKey &table_key,
 // ddl start from checkpoint
 //    keep ddl sstable table
 
-int ObTabletDDLKvMgr::ddl_start(ObTablet &tablet,
+int ObTabletDDLKvMgr::ddl_start(ObLS &ls,
+                                ObTablet &tablet,
                                 const ObITable::TableKey &table_key,
                                 const SCN &start_scn,
                                 const int64_t data_format_version,
@@ -154,6 +155,8 @@ int ObTabletDDLKvMgr::ddl_start(ObTablet &tablet,
     ObLatchWGuard state_guard(state_lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
     if (OB_FAIL(ddl_start_nolock(table_key, start_scn, data_format_version, execution_id, checkpoint_scn))) {
       LOG_WARN("failed to ddl start", K(ret));
+    } else if (OB_FAIL(ls.get_ddl_log_handler()->add_tablet(tablet_id_))) {
+      LOG_WARN("add tablet failed", K(ret));
     } else {
       // save variables under lock
       saved_start_scn = start_scn_;
@@ -583,7 +586,8 @@ int ObTabletDDLKvMgr::online()
     table_key.version_range_.base_version_ = 0;
     table_key.version_range_.snapshot_version_ = tablet_meta.ddl_snapshot_version_;
     const SCN &start_scn = tablet_meta.ddl_start_scn_;
-    if (OB_FAIL(ddl_start(*tablet_handle.get_obj(),
+    if (OB_FAIL(ddl_start(*ls_handle.get_ls(),
+                          *tablet_handle.get_obj(),
                           table_key,
                           start_scn,
                           tablet_meta.ddl_data_format_version_,

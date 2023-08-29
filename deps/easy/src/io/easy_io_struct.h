@@ -148,7 +148,7 @@ enum {
 // async + spinlock
 #define EASY_BASETH_DEFINE                          \
     easy_baseth_on_start_pt         *on_start;      \
-    pthread_t                       tid;            \
+    void                            *tid;           \
     int                             idx, iot;       \
     struct ev_loop                  *loop;          \
     ev_tstamp                       lastrun;        \
@@ -690,7 +690,7 @@ struct easy_thread_pool_t {
     easy_list_t             list_node;
     easy_thread_pool_t      *next;
     char                    *last;
-    pthread_t               monitor_tid;
+    void                    *monitor_tid;
     easy_io_thread_t        *ratelimit_thread;
     char                    data[0];
 };

@@ -189,7 +189,7 @@ void TestSqlUtils::init()
   //common::ObDITenantCache::get_instance().init(100000, 4);
   schema_service_ = new MockSchemaService();
   ASSERT_TRUE(schema_service_);
-  ObVirtualTenantManager::get_instance().init(10);
+  ObVirtualTenantManager::get_instance().init();
   ObVirtualTenantManager::get_instance().add_tenant(sys_tenant_id_);
   ObVirtualTenantManager::get_instance().set_tenant_mem_limit(sys_tenant_id_, 1024L * 1024L * 1024L, 1024L * 1024L * 1024L);
   if (OB_SUCCESS != (ret = ObPreProcessSysVars::init_sys_var())) {

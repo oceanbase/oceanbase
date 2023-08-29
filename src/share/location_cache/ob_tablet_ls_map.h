@@ -50,7 +50,7 @@ public:
   int64_t size() const { return size_; }
 
 private:
-  void try_update_access_ts_(ObTabletLSCache *cache_ptr);
+  // void try_update_access_ts_(ObTabletLSCache *cache_ptr);
 
 private:
   static const int64_t MAX_ACCESS_TIME_UPDATE_THRESHOLD = 10000000; // 10s

@@ -13,7 +13,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_st_astext.h"
-#include "observer/omt/ob_tenant_srs_mgr.h"
+#include "observer/omt/ob_tenant_srs.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "lib/geo/ob_geo_reverse_coordinate_visitor.h"

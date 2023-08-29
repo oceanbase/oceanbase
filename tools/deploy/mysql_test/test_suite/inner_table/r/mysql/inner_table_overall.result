@@ -983,6 +983,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21447	DBA_OB_TENANT_EVENT_HISTORY	1	201001	1
 21448	CDB_OB_TENANT_EVENT_HISTORY	1	201001	1
 21449	GV$OB_FLT_TRACE_CONFIG	1	201001	1
+21477	GV$OB_TENANT_RUNTIME_INFO	1	201001	1
+21478	V$OB_TENANT_RUNTIME_INFO	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

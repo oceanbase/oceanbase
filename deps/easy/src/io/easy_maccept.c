@@ -30,7 +30,7 @@ typedef struct easy_ma_t {
     int flags;
     int efd;
     int lfd;
-    pthread_t th;
+    void *th;
     volatile int stop;
     int g_count;
     int g_start[MAX_GROUP_COUNT];
@@ -39,8 +39,8 @@ typedef struct easy_ma_t {
 } easy_ma_t;
 easy_ma_t g_ma;
 
-int ob_pthread_create(pthread_t *thread, const pthread_attr_t *attr,
-                      void *(*start_routine) (void *), void *arg);
+int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg);
+void ob_pthread_join(void *ptr);
 int ob_epoll_wait(int __epfd, struct epoll_event *__events,
 		          int __maxevents, int __timeout);
 void easy_ma_init(int port)
@@ -219,7 +219,7 @@ int easy_ma_start()
     g_ma.efd = efd;
     g_ma.lfd = lfd;
     g_ma.stop = 0;
-    if (0 != ob_pthread_create(&g_ma.th, NULL, (void*)easy_ma_thread_func, (void*)&g_ma)) {
+    if (0 != ob_pthread_create(&g_ma.th, (void*)easy_ma_thread_func, (void*)&g_ma)) {
         goto error_exit;
     }
     
@@ -236,7 +236,8 @@ void easy_ma_stop()
 {
     if (!g_ma.stop) {
         g_ma.stop = 1;
-        pthread_join(g_ma.th, NULL);
+        ob_pthread_join(g_ma.th);
+        g_ma.th = NULL;
     }
 }
 

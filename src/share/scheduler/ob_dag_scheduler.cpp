@@ -892,7 +892,7 @@ int ObIDagNet::add_dag_into_dag_net(ObIDag &dag)
     ret = OB_CANCELED;
     LOG_WARN("dag net is cancel, do not allow to add new dag", K(ret), K(is_cancel_));
   } else {
-    if (!dag_record_map_.created() && OB_FAIL(dag_record_map_.create(DEFAULT_DAG_BUCKET, "DagRecordMap"))) {
+    if (!dag_record_map_.created() && OB_FAIL(dag_record_map_.create(DEFAULT_DAG_BUCKET, "DagRecordMap", "DagRecordNode", MTL_ID()))) {
       COMMON_LOG(WARN, "failed to create dag record map", K(ret), K(dag));
     } else if (OB_HASH_NOT_EXIST != (hash_ret = dag_record_map_.get_refactored(&dag, dag_record))) {
       ret = OB_SUCCESS == hash_ret ? OB_ERR_UNEXPECTED : hash_ret;

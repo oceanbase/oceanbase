@@ -38,8 +38,8 @@ int ObEliminateTask::init(const ObMySQLRequestManager *request_manager)
   } else {
     request_manager_ = const_cast<ObMySQLRequestManager*>(request_manager);
     // can't call ObMySQLRequestManager::get_mem_limit for now, tenant not inited
-    // set config_mem_limit_ to 64M
-    config_mem_limit_ = 64 * 1024 * 1024; // 64M
+    // set config_mem_limit_ to 16M
+    config_mem_limit_ = 16 * 1024 * 1024; // 16M
     common::ObConcurrentFIFOAllocator  *allocator = request_manager_->get_allocator();
     if (OB_ISNULL(allocator)) {
       ret = OB_NOT_INIT;

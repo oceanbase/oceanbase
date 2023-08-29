@@ -97,7 +97,7 @@ public:
   virtual ~ObAsyncTaskQueue();
   //attention queue_size should be 2^n
   int init(const int64_t thread_cnt, const int64_t queue_size,
-           const char *thread_name = nullptr);
+           const char *thread_name = nullptr, const int64_t page_size = PAGE_SIZE);
   int start();
   void stop();
   void wait();
@@ -107,7 +107,7 @@ public:
 protected:
   static const int64_t TOTAL_LIMIT = 1024L * 1024L * 1024L;
   static const int64_t HOLD_LIMIT = 512L * 1024L * 1024L;
-  static const int64_t PAGE_SIZE = common::OB_MALLOC_BIG_BLOCK_SIZE;
+  static const int64_t PAGE_SIZE = common::OB_MALLOC_MIDDLE_BLOCK_SIZE;
   static const int64_t SLEEP_INTERVAL = 10000; //10ms
   virtual void run2();
   virtual int blocking_run() { BLOCKING_RUN_IMPLEMENT(); }

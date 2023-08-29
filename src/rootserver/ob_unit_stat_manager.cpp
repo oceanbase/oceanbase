@@ -37,7 +37,7 @@ int ObUnitStatManager::init(common::ObMySQLProxy &sql_proxy)
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret), K(inited_));
-  } else if (OB_FAIL(unit_stat_map_.init(500000))) { /// FIXME: use more accurate CONSTANT
+  } else if (OB_FAIL(unit_stat_map_.init(1000))) { /// FIXME: use more accurate CONSTANT
     LOG_WARN("fail init unit stat map", KR(ret));
   } else if (OB_FAIL(ut_operator_.init(sql_proxy))) {
     LOG_WARN("fail to init ut_operator_", KR(ret));
@@ -112,5 +112,3 @@ int ObUnitStatManager::get_unit_stat(
   }
   return ret;
 }
-
-

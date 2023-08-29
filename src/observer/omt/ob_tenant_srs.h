@@ -14,6 +14,8 @@
 #define OCEANBASE_TENANT_SRS_H_
 
 #include "share/ob_define.h"
+#include "share/rc/ob_tenant_base.h"
+#include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/hash/ob_pointer_hashmap.h"
 #include "lib/container/ob_vector.h"
 #include "lib/lock/ob_tc_rwlock.h"
@@ -47,10 +49,10 @@ class ObSrsCacheSnapShot
 {
 public:
   static const uint32_t SRS_ITEM_BUCKET_NUM = 6144;
-  explicit ObSrsCacheSnapShot(ObSrsCacheType srs_type)
-    : allocator_("SrsSnapShot"), srs_type_(srs_type), srs_version_(0), ref_count_(0) {}
+  explicit ObSrsCacheSnapShot(common::ObIAllocator *allocator, ObSrsCacheType srs_type)
+    : allocator_(allocator), srs_type_(srs_type), srs_version_(0), ref_count_(0) {}
   virtual ~ObSrsCacheSnapShot() { srs_item_map_.destroy(); }
-  int init() { return srs_item_map_.create(SRS_ITEM_BUCKET_NUM, "SrsSnapShot", "SrsSnapShot"); }
+  int init() { return srs_item_map_.create(SRS_ITEM_BUCKET_NUM, "SrsSnapShot", "SrsSnapShot", MTL_ID()); }
   int add_srs_item(uint64_t srid, const common::ObSrsItem* srs_item) { return srs_item_map_.set_refactored(srid, srs_item); }
   int get_srs_item(uint64_t srid, const common::ObSrsItem *&srs_item);
   void set_srs_version(uint64_t version) { srs_version_ = version; }
@@ -64,7 +66,7 @@ public:
   int add_pg_reserved_srs_item(const common::ObString &pg_wkt, const uint32_t srs_id);
 
 private:
-  common::ObArenaAllocator allocator_;
+  common::ObIAllocator *allocator_;
   ObSrsCacheType srs_type_;
   uint64_t srs_version_;
   volatile int64_t ref_count_;
@@ -86,7 +88,6 @@ private:
   ObSrsCacheSnapShot *srs_cache_;
 };
 
-class ObTenantSrsMgr;
 
 class ObTenantSrs
 {
@@ -94,32 +95,28 @@ public:
   class TenantSrsUpdatePeriodicTask : public common::ObTimerTask
   {
   public:
-    TenantSrsUpdatePeriodicTask() : tenant_srs_mgr_(nullptr),
-                                    tenant_srs_(nullptr) {}
+    TenantSrsUpdatePeriodicTask() : tenant_srs_(nullptr) {}
     virtual ~TenantSrsUpdatePeriodicTask() {}
-    int init(ObTenantSrsMgr *srs_mgr, ObTenantSrs *srs);
+    int init(ObTenantSrs *srs);
     TenantSrsUpdatePeriodicTask(const TenantSrsUpdatePeriodicTask &) = delete;
     TenantSrsUpdatePeriodicTask &operator=(const TenantSrsUpdatePeriodicTask &) = delete;
     void runTimerTask(void) override;
   private:
     static const uint64_t SLEEP_USECONDS = 5000000;
     static const uint64_t BOOTSTRAP_PERIOD = 1000000;
-    ObTenantSrsMgr *tenant_srs_mgr_;
     ObTenantSrs *tenant_srs_;
   };
 
   class TenantSrsUpdateTask : public common::ObTimerTask
   {
   public:
-    TenantSrsUpdateTask() : tenant_srs_mgr_(nullptr),
-                            tenant_srs_(nullptr) {}
+    TenantSrsUpdateTask() : tenant_srs_(nullptr) {}
     virtual ~TenantSrsUpdateTask() {}
-    int init(ObTenantSrsMgr *srs_mgr, ObTenantSrs *srs);
+    int init(ObTenantSrs *srs);
     TenantSrsUpdateTask(const TenantSrsUpdateTask &) = delete;
     TenantSrsUpdateTask &operator=(const TenantSrsUpdateTask &) = delete;
     void runTimerTask(void) override;
   private:
-    ObTenantSrsMgr *tenant_srs_mgr_;
     ObTenantSrs *tenant_srs_;
   };
 
@@ -131,19 +128,17 @@ public:
   static const uint32_t RETRY_TIMES = 45;
   static const uint32_t RETRY_INTERVAL_US = 100000;
 
-  explicit ObTenantSrs(common::ObArenaAllocator *allocator, uint64_t tenant_id)
-    : allocator_(allocator),tenant_id_(tenant_id),
-      page_allocator_(*allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
-      mode_arena_(DEFAULT_PAGE_SIZE, page_allocator_),
+  explicit ObTenantSrs()
+    : alloc_("TenantSrs"), sql_proxy_(nullptr), inited_(false),
       last_sys_snapshot_(nullptr), last_user_snapshot_(nullptr),
       srs_old_snapshots_(&mode_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
       remote_sys_srs_version_(0), remote_user_srs_version_(0),
-      local_sys_srs_version_(0), local_user_srs_version_(0),
-      srs_mgr_(nullptr) {}
+      local_sys_srs_version_(0), local_user_srs_version_(0), infinite_plane_() {}
   virtual ~ObTenantSrs() {};
-  int init(ObTenantSrsMgr *srs_mgr);
-  inline uint64_t tenant_id() { return tenant_id_; }
-
+  int init();
+  inline uint64_t tenant_id() { return MTL_ID(); }
+  int get_tenant_srs_guard(ObSrsCacheGuard &srs_guard);
+  int get_srs_bounds(uint64_t srid, const ObSrsItem *srs_item, const ObSrsBoundsItem *&bounds_item);
   int get_last_snapshot(ObSrsCacheGuard &srs_guard);
   TenantSrsUpdatePeriodicTask &get_update_srs_task() { return  srs_update_periodic_task_; }
   int try_get_last_snapshot(ObSrsCacheGuard &srs_guard);
@@ -151,6 +146,11 @@ public:
   void recycle_last_snapshots();
   uint32_t get_snapshots_size();
   int cancle_update_task();
+  static int mtl_init(ObTenantSrs* &tenant_srs);
+  int start();
+  void stop();
+  void wait();
+  void destroy();
 
 private:
   typedef common::PageArena<ObSrsCacheSnapShot*, common::ModulePageAllocator> ObCGeoModuleArena;
@@ -165,9 +165,10 @@ private:
   int get_last_user_snapshot(ObSrsCacheSnapShot *&user_cache);
   int generate_pg_reserved_srs(ObSrsCacheSnapShot *&srs_snapshot);
 
-
-  common::ObArenaAllocator *allocator_;
-  uint64_t tenant_id_;
+  common::ObFIFOAllocator allocator_;
+  common::ObArenaAllocator alloc_;
+  common::ObMySQLProxy *sql_proxy_;
+  bool inited_;
   common::ModulePageAllocator page_allocator_;
   ObCGeoModuleArena mode_arena_;
   common::TCRWLock lock_;
@@ -187,10 +188,11 @@ private:
   uint64_t local_user_srs_version_;
   TenantSrsUpdatePeriodicTask srs_update_periodic_task_;
   TenantSrsUpdateTask srs_update_task_;
-  ObTenantSrsMgr *srs_mgr_;
+  common::ObSrsBoundsItem infinite_plane_;
   DISALLOW_COPY_AND_ASSIGN(ObTenantSrs);
 };
 
+#define OTSRS_MGR (MTL(omt::ObTenantSrs*))
 
 }  // namespace omt
 }  // namespace oceanbase

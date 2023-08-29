@@ -25,6 +25,7 @@
 #include "share/ob_tablet_autoincrement_param.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
+#include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 
 namespace oceanbase
 {
@@ -486,13 +487,8 @@ int ObStorageMetaHandle::wait(const int64_t timeout_ms)
 int ObStorageMetaCache::init(const char *cache_name, const int64_t priority)
 {
   int ret = OB_SUCCESS;
-  const int64_t mem_limit = 4 * 1024 * 1024 * 1024LL;
   if (OB_FAIL((common::ObKVCache<ObStorageMetaKey, ObStorageMetaValue>::init(cache_name,  priority)))) {
     LOG_WARN("fail to init storage meta kv cache", K(ret), K(priority));
-  } else if (OB_FAIL(allocator_.init(mem_limit, OB_MALLOC_BIG_BLOCK_SIZE, OB_MALLOC_BIG_BLOCK_SIZE))) {
-    LOG_WARN("fail to init io allocator", K(ret));
-  } else {
-    allocator_.set_label("StorMetaCacheIO");
   }
   return ret;
 }
@@ -635,7 +631,7 @@ int ObStorageMetaCache::get_meta(
   if (OB_UNLIKELY(!key.is_valid() || type >= ObStorageMetaValue::MAX)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(key), K(type));
-  } else if (OB_FAIL(meta_handle.cache_handle_.new_value(allocator_))) {
+  } else if (OB_FAIL(meta_handle.cache_handle_.new_value(MTL(ObTenantMetaMemMgr *)->get_meta_cache_io_allocator()))) {
     LOG_WARN("fail to new cache handle value", K(ret));
   } else if (OB_FAIL(get(key, meta_handle.cache_handle_.get_cache_value()->value_,
       meta_handle.cache_handle_.get_cache_value()->cache_handle_))) {
@@ -720,7 +716,7 @@ int ObStorageMetaCache::prefetch(
     ObStorageMetaIOCallback callback(type,
                                      key,
                                      meta_handle.cache_handle_,
-                                     &allocator_,
+                                     &(MTL(ObTenantMetaMemMgr *)->get_meta_cache_io_allocator()),
                                      tablet);
     if (OB_FAIL(read_io(key.get_meta_addr(), callback, meta_handle))) {
       LOG_WARN("fail to read storage meta from io", K(ret), K(key), K(meta_handle));
@@ -739,13 +735,13 @@ int ObStorageMetaCache::get_meta_and_bypass_cache(
   if (OB_UNLIKELY(!key.is_valid() || type >= ObStorageMetaValue::MAX)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(key), K(type));
-  } else if (OB_FAIL(handle.cache_handle_.new_value(allocator_))) {
+  } else if (OB_FAIL(handle.cache_handle_.new_value(MTL(ObTenantMetaMemMgr *)->get_meta_cache_io_allocator()))) {
     LOG_WARN("fail to new cache handle value", K(ret));
   } else {
     ObStorageMetaIOCallback callback(type,
                                      key,
                                      handle.cache_handle_,
-                                     &allocator_,
+                                     &(MTL(ObTenantMetaMemMgr *)->get_meta_cache_io_allocator()),
                                      nullptr/*tablet*/,
                                      &allocator/*bypass_cache*/);
     if (OB_FAIL(read_io(key.get_meta_addr(), callback, handle))) {
@@ -782,7 +778,6 @@ int ObStorageMetaCache::read_io(
 }
 
 ObStorageMetaCache::ObStorageMetaCache()
-  : allocator_()
 {
 }
 

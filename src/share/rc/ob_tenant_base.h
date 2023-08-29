@@ -33,10 +33,13 @@ namespace common {
   class ObTenantIOManager;
   template<typename T> class ObServerObjectPool;
   class ObDetectManager;
+  class ObOptStatMonitorManager;
 }
 namespace omt {
  class ObPxPools;
  class ObTenant;
+ class ObSharedTimer;
+ class ObTenantSrs;
 }
 namespace obmysql {
   class ObMySQLRequestManager;
@@ -214,6 +217,7 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
 using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage::ObTableScanIterator>;
 #define MTL_MEMBERS                                  \
   MTL_LIST(                                          \
+      omt::ObSharedTimer*,                           \
       storage::ObTenantMetaMemMgr*,                  \
       ObPartTransCtxObjPool*,                        \
       ObTableScanIteratorObjPool*,                   \
@@ -302,7 +306,9 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       oceanbase::common::ObDetectManager*,          \
       TenantErrsimModule                            \
       TenantErrsimEvent                             \
-      oceanbase::sql::ObTenantSQLSessionMgr*        \
+      oceanbase::sql::ObTenantSQLSessionMgr*,       \
+      oceanbase::common::ObOptStatMonitorManager*,  \
+      omt::ObTenantSrs*                             \
   )
 
 

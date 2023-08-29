@@ -41,7 +41,7 @@ using namespace obrpc;
 namespace dbms_job
 {
 
-int ObDBMSJobTask::init(ObLightyQueue *ready_queue)
+int ObDBMSJobTask::init(ObDBMSJobQueue *ready_queue)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
@@ -110,7 +110,7 @@ void ObDBMSJobTask::runTimerTask()
           || OB_ISNULL(ready_queue_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null ptr", K(ret), K(job_key_), K(ready_queue_));
-  } else if (OB_FAIL(ready_queue_->push(static_cast<void*>(job_key_)))) {
+  } else if (OB_FAIL(ready_queue_->push(job_key_, 0))) {
     LOG_WARN("fail to push ready job to queue", K(ret), K(*job_key_));
   } else {
     job_key_ = NULL;
@@ -198,7 +198,7 @@ int ObDBMSJobTask::immediately(ObDBMSJobKey *job_key)
     LOG_WARN("NULL ptr", K(ret), K(job_key), K(ready_queue_));
   } else {
     ObSpinLockGuard guard(lock_);
-    if (OB_FAIL(ready_queue_->push(static_cast<void*>(job_key)))) {
+    if (OB_FAIL(ready_queue_->push(job_key, 0))) {
       LOG_WARN("fail to push ready job to queue", K(ret), K(*job_key));
     }
   }
@@ -240,10 +240,6 @@ int ObDBMSJobMaster::init(ObISQLClient *sql_client,
                           ObMultiVersionSchemaService *schema_service)
 {
   int ret = OB_SUCCESS;
-  uint64_t ready_queue_size = MAX_READY_JOBS_CAPACITY;
-  if (is_mini_mode()) {
-    ready_queue_size *= lib::mini_mode_resource_ratio();
-  }
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("dbms job master already inited", K(ret), K(inited_));
@@ -253,8 +249,8 @@ int ObDBMSJobMaster::init(ObISQLClient *sql_client,
           ) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null ptr", K(ret), K(sql_client), K(schema_service));
-  } else if (OB_FAIL(ready_queue_.init(ready_queue_size))) {
-    LOG_WARN("fail to init ready job queue for all jobs", K(ret));
+  } else if (FALSE_IT(ready_queue_.set_limit(MAX_READY_JOBS_CAPACITY))) {
+    // do-nothing
   } else if (OB_FAIL(scheduler_task_.init(&ready_queue_))) {
     LOG_WARN("fail to init ready queue", K(ret));
   } else if (OB_FAIL(scheduler_thread_.init(1, 1))) {
@@ -324,7 +320,7 @@ int ObDBMSJobMaster::scheduler()
     LOG_INFO("NOTICE: DBMS Job master start running!", K(ret), K(running_));
     lib::set_thread_name("DBMS_JOB_MASTER");
     while (OB_SUCC(ret) && !stoped_) {
-      void* ptr = NULL;
+      ObLink* ptr = NULL;
       int64_t timeout = MIN_SCHEDULER_INTERVAL;
       ObDBMSJobKey *job_key = NULL;
       if (OB_FAIL(ready_queue_.pop(ptr, timeout))) {

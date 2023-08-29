@@ -28,14 +28,17 @@ public:
 
   void runTimerTask()
   {
+    has_run_ = true;
     running_ = true;
     ++task_run_count_;
-    ::usleep(50000);//50ms
+    ::usleep(exec_time_);
     running_ = false;
   }
 
   volatile bool running_;
   int64_t task_run_count_;
+  int64_t exec_time_ = 50000; // 50ms
+  bool has_run_ = false;
 };
 
 TEST(TestTimer, timer_task)
@@ -117,6 +120,57 @@ TEST(TestTimer, start_stop)
 
   timer.start();
   ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 0, true));
+  timer.destroy();
+}
+
+TEST(TestTimer, task_cancel_wait)
+{
+  TestTimerTask task;
+  ObTimer timer;
+  ASSERT_EQ(OB_SUCCESS, timer.init());
+  ASSERT_EQ(OB_SUCCESS, timer.start());
+  // cancel from non-running
+  {
+    ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 1000000, true));
+    ASSERT_EQ(1, timer.get_tasks_num());
+    ASSERT_EQ(OB_SUCCESS, timer.cancel_task(task));
+    ASSERT_FALSE(timer.task_exist(task));
+    // repeat cancel
+    ASSERT_EQ(OB_SUCCESS, timer.cancel_task(task));
+    ASSERT_FALSE(timer.task_exist(task));
+  }
+  // cancel from running
+  {
+    task.exec_time_ = 1000000;
+    int64_t cur_time = ObTimeUtility::current_time();
+    ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 0, true));
+    usleep(10000);
+    ASSERT_EQ(OB_SUCCESS, timer.cancel_task(task));
+    // repeat cancel
+    ASSERT_EQ(OB_SUCCESS, timer.cancel_task(task));
+    ASSERT_LT(ObTimeUtility::current_time() - cur_time, 1000000);
+    ASSERT_EQ(OB_SUCCESS, timer.wait_task(task));
+    ASSERT_GT(ObTimeUtility::current_time() - cur_time, 1000000);
+    ASSERT_FALSE(timer.task_exist(task));
+    // wait non-exist task
+    ASSERT_EQ(OB_SUCCESS, timer.wait_task(task));
+    ASSERT_TRUE(NULL == timer.running_task_);
+    ASSERT_TRUE(NULL == timer.uncanceled_task_);
+  }
+  // cancel all
+  {
+    TestTimerTask task2;
+    TestTimerTask task3;
+    task2.exec_time_ = 1000000;
+    ASSERT_EQ(OB_SUCCESS, timer.schedule(task2, 0, true));
+    ASSERT_EQ(OB_SUCCESS, timer.schedule(task3, 1000, true));
+    usleep(10000);
+    timer.cancel_all();
+    ASSERT_TRUE(task2.has_run_);
+    ASSERT_FALSE(task3.has_run_);
+  }
+  timer.stop();
+  timer.wait();
   timer.destroy();
 }
 

@@ -24,12 +24,12 @@
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/thread/ob_simple_thread_pool.h"
 #include "lib/task/ob_timer.h"
-#include "lib/queue/ob_lighty_queue.h"
 #include "lib/container/ob_iarray.h"
 
 #include "share/schema/ob_schema_service.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 
+#include "observer/dbms_job/ob_dbms_job_utils.h"
 #include "rootserver/ob_ddl_service.h"
 
 
@@ -47,7 +47,7 @@ private:
   virtual void handle(void *task);
 };
 
-class ObDBMSSchedJobKey
+class ObDBMSSchedJobKey : public common::ObLink
 {
 public:
   ObDBMSSchedJobKey(
@@ -57,7 +57,7 @@ public:
   : tenant_id_(tenant_id),
     is_oracle_tenant_(is_oracle_tenant),
     job_id_(job_id),
-    execute_at_(execute_at), 
+    execute_at_(execute_at),
     delay_(delay),
     check_job_(check_job),
     check_new_(check_new),
@@ -130,7 +130,7 @@ public:
   virtual ~ObDBMSSchedJobTask() {}
 
   int init();
-  int start(common::ObLightyQueue *ready_queue);
+  int start(dbms_job::ObDBMSJobQueue *ready_queue);
   int stop();
   int destroy();
 
@@ -148,7 +148,7 @@ public:
 private:
   bool inited_;
   ObDBMSSchedJobKey *job_key_;
-  common::ObLightyQueue *ready_queue_;
+  dbms_job::ObDBMSJobQueue *ready_queue_;
   WaitVector wait_vector_;
 
   ObSpinLock lock_;
@@ -226,7 +226,7 @@ private:
   obrpc::ObDBMSSchedJobRpcProxy *job_rpc_proxy_;
 
   common::ObAddr self_addr_;
-  common::ObLightyQueue ready_queue_;
+  dbms_job::ObDBMSJobQueue ready_queue_;
   ObDBMSSchedJobTask scheduler_task_;
   ObDBMSSchedJobThread scheduler_thread_;
   ObDBMSSchedTableOperator table_operator_;

@@ -23,7 +23,7 @@
 #include "share/object/ob_obj_cast_util.h"
 #include "share/rc/ob_tenant_base.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
-#include "observer/omt/ob_tenant_srs_mgr.h"
+#include "observer/omt/ob_tenant_srs.h"
 #include "lib/json_type/ob_json_tree.h"
 #include "lib/json_type/ob_json_bin.h"
 #include "lib/json_type/ob_json_base.h"
@@ -1548,7 +1548,7 @@ static int common_get_srs_item(omt::ObSrsCacheGuard &srs_guard,
     // do nothing
   } else if (0 == srid) {
     // do nothing
-  } else if (OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(tenant_id, srs_guard))) {
+  } else if (OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
     LOG_WARN("fail to get srs guard", K(ret), K(tenant_id));
   } else if (OB_FAIL(srs_guard.get_srs_item(srid, srs))) {
     LOG_WARN("fail to get srs", K(ret), K(srid));

@@ -19,6 +19,7 @@
 #include "lib/lock/ob_thread_cond.h"//ObThreadCond
 #include "rootserver/ob_tenant_thread_helper.h"//ObTenantTheadHelper
 #include "share/ls/ob_ls_status_operator.h"//ObLSStatusInfoArray
+#include "share/ob_balance_define.h"
 
 namespace oceanbase
 {
@@ -100,7 +101,10 @@ private:
   int lock_and_check_balance_job_(common::ObMySQLTransaction &trans, const uint64_t tenant_id);
   int try_update_job_comment_(const share::ObBalanceJob &job, const common::ObSqlString &comment);
   int try_do_partition_balance_(int64_t &last_partition_balance_time);
-  int try_statistic_balance_group_status_(int64_t &last_statistic_bg_stat_time);
+  int try_statistic_balance_group_status_(
+      int64_t &last_statistic_bg_stat_time,
+      int64_t &last_statistic_schema_version,
+      share::ObTransferTaskID &last_statistic_max_transfer_task_id);
   int get_active_unit_num_(int64_t &active_unit_num) const;
 private:
   bool inited_;

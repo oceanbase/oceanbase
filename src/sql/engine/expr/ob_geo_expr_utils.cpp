@@ -14,7 +14,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_geo_expr_utils.h"
-#include "observer/omt/ob_tenant_srs_mgr.h"
+#include "observer/omt/ob_tenant_srs.h"
 #include "lib/geo/ob_geo_func_register.h"
 #include "lib/geo/ob_geo_coordinate_range_visitor.h"
 #include "lib/geo/ob_geo_wkb_size_visitor.h"
@@ -40,7 +40,7 @@ int ObGeoExprUtils::get_srs_item(uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
 
-  if (0 != srid && OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(tenant_id, srs_guard))) {
+  if (0 != srid && OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
     LOG_WARN("fail to get srs guard", K(ret), K(tenant_id));
   } else if (0 != srid && OB_FAIL(srs_guard.get_srs_item(srid, srs))) {
     LOG_WARN("fail to get srs", K(ret), K(srid));

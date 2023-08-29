@@ -311,7 +311,7 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info)
       LOG_WARN("fail to commit sql stats", KR(ret));
     } else if (OB_FAIL(store_ctx_->merger_->collect_dml_stat(dml_stats))) {
       LOG_WARN("fail to build dml stat", KR(ret));
-    } else if (OB_FAIL(ObOptStatMonitorManager::get_instance().update_dml_stat_info_from_direct_load(dml_stats.dml_stat_array_))) {
+    } else if (OB_FAIL(ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(dml_stats.dml_stat_array_))) {
       LOG_WARN("fail to update dml stat info", KR(ret));
     } else if (OB_FAIL(store_ctx_->set_status_commit())) {
       LOG_WARN("fail to set store status commit", KR(ret));

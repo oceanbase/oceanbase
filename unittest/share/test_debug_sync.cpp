@@ -428,11 +428,32 @@ TEST(debug_sync, ObDebugSync)
   }
 }
 
+TEST(debug_sync, debug_sync_action_overflow)
+{
+  ObDSActionArray dsa;
+  ObDebugSyncAction action;
+  action.sync_point_ = NOW;
+  action.signal_ = "a";
+  action.wait_ = "b";
+  action.execute_ = 1;
+  ASSERT_TRUE(action.is_valid());
+  for (int i = 0; i < ObDSActionArray::MAX_DEBUG_SYNC_CACHED_POINT; i++) {
+    action.sync_point_ = (oceanbase::common::ObDebugSyncPoint)(i + 1);
+    ASSERT_EQ(OB_SUCCESS, dsa.add_action(action));
+    ASSERT_TRUE(dsa.is_active((oceanbase::common::ObDebugSyncPoint)(i + 1 )));
+  }
+  action.sync_point_ = (oceanbase::common::ObDebugSyncPoint)(ObDSActionArray::MAX_DEBUG_SYNC_CACHED_POINT + 1);
+  ASSERT_EQ(OB_SIZE_OVERFLOW, dsa.add_action(action));
+  ASSERT_FALSE(dsa.is_active((oceanbase::common::ObDebugSyncPoint)(ObDSActionArray::MAX_DEBUG_SYNC_CACHED_POINT + 1)));
+}
+
 }
 }
 
 int main(int argc, char **argv)
 {
+  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
+  OB_LOGGER.set_log_level("INFO");
   ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

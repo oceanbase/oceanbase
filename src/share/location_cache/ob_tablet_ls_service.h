@@ -103,7 +103,7 @@ private:
   bool belong_to_sys_ls_(const uint64_t tenant_id, const ObTabletID &tablet_id) const;
 
   const int64_t MINI_MODE_UPDATE_THREAD_CNT = 1;
-  const int64_t USER_TASK_QUEUE_SIZE = 200 * 1000; // 20W partitions
+  const int64_t USER_TASK_QUEUE_SIZE = 100 * 1000; // 10W partitions
   const int64_t MINI_MODE_USER_TASK_QUEUE_SIZE = 10 * 1000; // 1W partitions
 
   bool inited_;

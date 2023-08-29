@@ -24,6 +24,7 @@ static void easy_request_dosess(easy_request_thread_t *th, easy_list_t *session_
 static void easy_request_cleanup(easy_buf_t *b, void *args);
 static const int64_t REQUEST_ITEM_COST_RT = 100 * 1000;
 
+pthread_t ob_pthread_get_pth(void *ptr);
 /**
  * 对request回复响应
  *
@@ -37,9 +38,9 @@ int easy_request_do_reply(easy_request_t *r)
     // encode
     m = (easy_message_t *)r->ms;
     c = m->c;
-
-    if (c->ioth->tid != pthread_self()) {
-        easy_fatal_log("not run at other thread: %lx <> %lx\n", r, pthread_self(), c->ioth->tid);
+    pthread_t pth = ob_pthread_get_pth(c->ioth->tid);
+    if (pth != pthread_self()) {
+        easy_fatal_log("not run at other thread: %lx <> %lx\n", r, pthread_self(), pth);
         return EASY_ERROR;
     }
 

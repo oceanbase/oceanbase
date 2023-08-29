@@ -137,6 +137,15 @@ public:
   {
     clear();
   }
+  _key_type *get(const _key_type &key) const
+  {
+    const _key_type *ret = NULL;
+    const pair_type *pair = NULL;
+    if (OB_SUCCESS == const_cast<hashtable &>(ht_).get_refactored(key, pair)) {
+      ret = &(pair->first);
+    }
+    return const_cast<_key_type*>(ret);
+  }
   // return:
   //   OB_HASH_EXIST node exists
   //   OB_HASH_NOT_EXIST node not exists

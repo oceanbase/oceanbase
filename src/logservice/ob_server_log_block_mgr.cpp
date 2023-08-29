@@ -362,7 +362,7 @@ int ObServerLogBlockMgr::update_tenant(const int64_t old_log_disk_size,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "ObServerLogBlockMGR is not inited", K(old_log_disk_size), K(new_log_disk_size), KPC(this));
-  } else if (old_log_disk_size <= 0 || new_log_disk_size <= 0 || OB_ISNULL(log_service)) {
+  } else if (old_log_disk_size < 0 || new_log_disk_size < 0 || OB_ISNULL(log_service)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(old_log_disk_size), K(new_log_disk_size), KP(log_service), KPC(this));
   } else if (OB_FAIL(log_service->get_palf_stable_disk_usage(used_log_disk_size, palf_log_disk_size))) {
@@ -387,7 +387,12 @@ int ObServerLogBlockMgr::update_tenant(const int64_t old_log_disk_size,
     //      2. if 'palf_log_disk_size' which get from palf is 50G, we think palf has been in normal status. and we will
     //         construct 'new_unit' with 80G because 'palf_log_disk_size' is smaller than new log disk size(80G), but udpate
     //         palf with 80G.
-  } else if (FALSE_IT(can_update_log_disk_size_with_expected_log_disk = (new_log_disk_size >= palf_log_disk_size))) {
+    //
+    // NB: when new_log_disk_size is zero(means convert real sys tenant to hidden sys tenant), need make allowed_new_log_disk_size
+    //     to zero directlly, otherwise, there is no chance to update log disk size to zero because hidden sys tenant is invisible
+    //     for ObTenantNodeBalancer, and min_log_disk_size_for_all_tenants_ can not be reduce.
+  } else if (FALSE_IT(can_update_log_disk_size_with_expected_log_disk =
+                      (new_log_disk_size >= palf_log_disk_size || 0 == new_log_disk_size))) {
     // For expanding log disk, we can update 'allowed_new_log_disk_size' to 'new_log_disk_size' directlly.
   } else if (can_update_log_disk_size_with_expected_log_disk && FALSE_IT(allowed_new_log_disk_size = new_log_disk_size)) {
     // For shrinking log disk, we still update log disk size of 'new_unit' to 'old_log_disk_size'.

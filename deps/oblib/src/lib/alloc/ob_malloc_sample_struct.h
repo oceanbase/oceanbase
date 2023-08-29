@@ -116,6 +116,7 @@ inline bool ObMallocSampleLimiter::malloc_sample_allowed(const int64_t size, con
 
 inline void ObMallocSampleLimiter::set_interval(int32_t max_interval, int32_t min_interval)
 {
+#if defined(__x86_64__)
   if (min_interval < 1 || max_interval > INTERVAL_UPPER_LIMIT
       || max_interval < min_interval) {
     _OB_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "set the min or max malloc times between two samples unexpected,"
@@ -126,6 +127,9 @@ inline void ObMallocSampleLimiter::set_interval(int32_t max_interval, int32_t mi
     _OB_LOG_RET(INFO, common::OB_SUCCESS, "set the min or max malloc times between two samples succeed,"
                 "max_interval=%d, min_interval=%d", max_interval, min_interval);
   }
+#else
+  UNUSEDx(max_interval, min_interval);
+#endif
 }
 
 inline int64_t ObMallocSampleKey::hash() const

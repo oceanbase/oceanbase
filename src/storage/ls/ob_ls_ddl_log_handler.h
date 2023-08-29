@@ -24,6 +24,37 @@ namespace storage
 
 class ObLS;
 
+class ObActiveDDLKVMgr final
+{
+public:
+  ObActiveDDLKVMgr();
+  ~ObActiveDDLKVMgr() = default;
+  int add_tablet(const ObTabletID &tablet_id);
+  int del_tablets(const common::ObIArray<ObTabletID> &tablet_ids);
+  int get_tablets(common::ObIArray<ObTabletID> &tablet_ids);
+private:
+  ObSpinLock lock_;
+  ObArray<ObTabletID> active_ddl_tablets_;
+};
+
+class ObActiveDDLKVIterator final
+{
+public:
+  ObActiveDDLKVIterator()
+    : active_ddl_tablets_(), to_del_tablets_(), mgr_(nullptr), idx_(0), ls_(nullptr), is_inited_(false)
+  {}
+  ~ObActiveDDLKVIterator() = default;
+  int init(ObLS *ls, ObActiveDDLKVMgr &mgr);
+  int get_next_ddl_kv_mgr(ObDDLKvMgrHandle &handle);
+private:
+  common::ObArray<ObTabletID> active_ddl_tablets_;
+  common::ObArray<ObTabletID> to_del_tablets_;
+  ObActiveDDLKVMgr *mgr_;
+  int64_t idx_;
+  ObLS *ls_;
+  bool is_inited_;
+};
+
 class ObLSDDLLogHandler : public logservice::ObIReplaySubHandler,
                           public logservice::ObIRoleChangeSubHandler,
                           public logservice::ObICheckpointSubHandler
@@ -55,6 +86,12 @@ public:
   // for checkpoint
   int flush(share::SCN &rec_scn) override final;
   share::SCN get_rec_scn() override final;
+
+  // manage active ddl kv mgr for ls
+  int add_tablet(const ObTabletID &tablet_id);
+  int del_tablets(const common::ObIArray<ObTabletID> &tablet_ids);
+  int get_tablets(common::ObIArray<ObTabletID> &tablet_ids);
+
 private:
   int replay_ddl_redo_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const share::SCN &scn);
   int replay_ddl_commit_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const share::SCN &scn);
@@ -67,6 +104,7 @@ private:
   common::TCRWLock online_lock_;
   ObDDLRedoLogReplayer ddl_log_replayer_;
   share::SCN last_rec_scn_;
+  ObActiveDDLKVMgr active_ddl_kv_mgr_;
 };
 
 } // storage

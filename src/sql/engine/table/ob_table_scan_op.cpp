@@ -27,7 +27,7 @@
 #include "observer/ob_server.h"
 #include "observer/virtual_table/ob_virtual_data_access_service.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
-#include "observer/omt/ob_tenant_srs_mgr.h"
+#include "observer/omt/ob_tenant_srs.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "lib/container/ob_array_wrap.h"
@@ -2946,13 +2946,13 @@ int ObTableScanOp::inner_get_next_spatial_index_row()
           } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(geo_wkb, srid))) {
             LOG_WARN("failed to get srid", K(ret), K(geo_wkb));
           } else if (srid != 0 &&
-              OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(tenant_id, srs_guard))) {
+              OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
             LOG_WARN("failed to get srs guard", K(ret), K(tenant_id), K(srid));
           } else if (srid != 0 &&
               OB_FAIL(srs_guard.get_srs_item(srid, srs_item))) {
             LOG_WARN("failed to get srs item", K(ret), K(tenant_id), K(srid));
           } else if (((srid == 0) || !(srs_item->is_geographical_srs())) &&
-                      OB_FAIL(OTSRS_MGR.get_srs_bounds(srid, srs_item, srs_bound))) {
+                      OB_FAIL(OTSRS_MGR->get_srs_bounds(srid, srs_item, srs_bound))) {
             LOG_WARN("failed to get srs bound", K(ret), K(srid));
           } else if (OB_FAIL(ObGeoTypeUtil::get_cellid_mbr_from_geom(geo_wkb, srs_item, srs_bound,
                                                                      cellids, mbr_val))) {

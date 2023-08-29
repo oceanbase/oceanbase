@@ -24,9 +24,13 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "observer/ob_sql_client_decorator.h"
 #include "storage/ob_locality_manager.h"
+#include "lib/rc/ob_rc.h"
+#include "observer/ob_server.h"
 
 namespace oceanbase
 {
+using namespace observer;
+
 namespace common
 {
 #define INSERT_COLUMN_USAGE "INSERT INTO __all_column_usage(tenant_id," \
@@ -68,105 +72,82 @@ namespace common
   "updates = updates + values(updates)," \
   "deletes = deletes + values(deletes);"
 
-int ObOptStatMonitorFlushAllTask::init(int tg_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("ObOptStatMonitorFlushAllTask init twice", K(ret));
-  } else {
-    is_inited_ = true;
-    disable_timeout_check();
-    if (OB_FAIL(TG_SCHEDULE(tg_id, *this, FLUSH_INTERVAL, true /*schedule repeatly*/))) {
-      LOG_WARN("fail to schedule ObOptStatMonitorFlushAllTask", K(ret));
-    }
-  }
-  return ret;
-}
-
 void ObOptStatMonitorFlushAllTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObOptStatMonitorManager::get_instance().update_opt_stat_monitoring_info(false))) {
-    LOG_WARN("failed to update column usage table", K(ret));
+  if (OB_NOT_NULL(optstat_monitor_mgr_) && optstat_monitor_mgr_->inited_) {
+    LOG_INFO("run opt stat monitor flush all task", K(optstat_monitor_mgr_->tenant_id_));
+    share::schema::ObMultiVersionSchemaService &schema_service = share::schema::ObMultiVersionSchemaService::get_instance();
+    share::schema::ObSchemaGetterGuard schema_guard;
+    bool in_restore = false;
+    if (OB_FAIL(schema_service.get_tenant_schema_guard(optstat_monitor_mgr_->tenant_id_, schema_guard))) {
+      LOG_WARN("failed to get schema guard", K(ret));
+    } else if (OB_FAIL(schema_guard.check_tenant_is_restore(optstat_monitor_mgr_->tenant_id_, in_restore))) {
+      LOG_WARN("failed to check tenant is restore", K(ret));
+    } else if (in_restore || GCTX.is_standby_cluster()) {
+      // do nothing
+    } else if (OB_FAIL(optstat_monitor_mgr_->update_column_usage_info(false))) {
+      LOG_WARN("failed to update column usage info", K(ret));
+    } else if (OB_FAIL(optstat_monitor_mgr_->update_dml_stat_info())) {
+      LOG_WARN("failed to failed to update dml stat info", K(ret));
+    } else {/*do nothing*/}
   }
-}
-
-int ObOptStatMonitorCheckTask::init(int tg_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("ObOptStatMonitorCheckTask init twice", K(ret));
-  } else {
-    is_inited_ = true;
-    disable_timeout_check();
-    if (OB_FAIL(TG_SCHEDULE(tg_id, *this, CHECK_INTERVAL, true /*schedule repeatly*/))) {
-      LOG_WARN("fail to schedule ObOptStatMonitorCheckTask", K(ret));
-    }
-  }
-  return ret;
 }
 
 void ObOptStatMonitorCheckTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObOptStatMonitorManager::get_instance().update_opt_stat_monitoring_info(true))) {
-    LOG_WARN("failed to update column usage table", K(ret));
+  if (OB_NOT_NULL(optstat_monitor_mgr_) && optstat_monitor_mgr_->inited_) {
+    LOG_INFO("run opt stat monitor check task", K(optstat_monitor_mgr_->tenant_id_));
+    share::schema::ObMultiVersionSchemaService &schema_service = share::schema::ObMultiVersionSchemaService::get_instance();
+    share::schema::ObSchemaGetterGuard schema_guard;
+    bool in_restore = false;
+    if (OB_FAIL(schema_service.get_tenant_schema_guard(optstat_monitor_mgr_->tenant_id_, schema_guard))) {
+      LOG_WARN("failed to get schema guard", K(ret));
+    } else if (OB_FAIL(schema_guard.check_tenant_is_restore(optstat_monitor_mgr_->tenant_id_, in_restore))) {
+      LOG_WARN("failed to check tenant is restore", K(ret));
+    } else if (in_restore || GCTX.is_standby_cluster()) {
+      // do nothing
+    } else if (OB_FAIL(optstat_monitor_mgr_->update_column_usage_info(true))) {
+      LOG_WARN("failed to update column usage info", K(ret));
+    } else if (OB_FAIL(optstat_monitor_mgr_->update_dml_stat_info())) {
+      LOG_WARN("failed to failed to update dml stat info", K(ret));
+    } else {/*do nothing*/}
   }
 }
 
-int ObOptStatMonitorManager::init(ObMySQLProxy *mysql_proxy)
+int ObOptStatMonitorManager::init(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObMemAttr attr(OB_SERVER_TENANT_ID, "DmlStatsHashMap");
-  SET_USE_500(attr);
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("column usage manager has already been initialized.", K(ret));
-  } else if (OB_ISNULL(mysql_proxy)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get null mysql proxy", K(ret));
-  } else if (OB_FAIL(column_usage_maps_.create(100, SET_USE_500("ColUsagHashMap")))) {
-    LOG_WARN("failed to create column usage maps", K(ret));
-  } else if (OB_FAIL(dml_stat_maps_.create(100, attr))) {
-    LOG_WARN("failed to create dml stats maps", K(ret));
-  } else if (OB_FAIL(flush_all_task_.init(lib::TGDefIDs::ServerGTimer))) {
-    LOG_WARN("failed to init column usage task", K(ret));
-  } else if (OB_FAIL(check_task_.init(lib::TGDefIDs::ServerGTimer))) {
-    LOG_WARN("failed to init column usage task", K(ret));
+  } else if (OB_FAIL(column_usage_map_.create(10000, "ColUsagHashMap", "ColUsagNode", tenant_id))) {
+    LOG_WARN("failed to column usage map", K(ret));
+  } else if (OB_FAIL(dml_stat_map_.create(10000, "DmlStatHashMap", "DmlStatNode", tenant_id))) {
+    LOG_WARN("failed to create dml stat map", K(ret));
   } else {
     inited_ = true;
-    mysql_proxy_ = mysql_proxy;
+    mysql_proxy_ = &ObServer::get_instance().get_mysql_proxy();
+    tenant_id_ = tenant_id;
+    destroyed_ = false;
+  }
+  if (OB_FAIL(ret) && !inited_) {
+    destroy();
   }
   return ret;
 }
 
 void ObOptStatMonitorManager::destroy()
 {
-  if (inited_) {
+  if (!destroyed_) {
+    destroyed_ = true;
     inited_ = false;
-    for (auto iter = column_usage_maps_.begin(); iter != column_usage_maps_.end(); ++iter) {
-      if (OB_ISNULL(iter->second)) {
-        BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "column usage map is null");
-      } else {
-        iter->second->destroy();
-      }
-    }
-    for (auto iter = dml_stat_maps_.begin(); iter != dml_stat_maps_.end(); ++iter) {
-      if (OB_ISNULL(iter->second)) {
-        BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "dml stats map is null");
-      } else {
-        iter->second->destroy();
-      }
-    }
+    TG_DESTROY(tg_id_);
+    SpinWLockGuard guard(lock_);
+    column_usage_map_.destroy();
+    dml_stat_map_.destroy();
   }
-}
-
-ObOptStatMonitorManager &ObOptStatMonitorManager::get_instance()
-{
-  static ObOptStatMonitorManager instance_;
-  return instance_;
 }
 
 int ObOptStatMonitorManager::flush_database_monitoring_info(sql::ObExecContext &ctx,
@@ -220,150 +201,76 @@ int ObOptStatMonitorManager::flush_database_monitoring_info(sql::ObExecContext &
   return ret;
 }
 
-int ObOptStatMonitorManager::erase_opt_stat_monitoring_info_map(uint64_t tenant_id)
+int ObOptStatMonitorManager::update_local_cache(common::ObIArray<ColumnUsageArg> &args)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(erase_column_usage_map(tenant_id))) {
-    LOG_WARN("failed to erase column usage map", K(ret), K(tenant_id));
-  } else if (OB_FAIL(erase_dml_stat_map(tenant_id))) {
-    LOG_WARN("failed to erase dml stat map", K(ret), K(tenant_id));
-  } else {/*do nothing*/}
-  return ret;
-}
-
-
-int ObOptStatMonitorManager::erase_column_usage_map(uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  ColumnUsageMap *col_map = nullptr;
-  if (OB_FAIL(column_usage_maps_.get_refactored(tenant_id, col_map))) {
-    LOG_WARN("failed to get column usage map", K(ret));
-  } else if (OB_FAIL(column_usage_maps_.erase_refactored(tenant_id))) {
-    LOG_WARN("failed to erase column usage map", K(ret));
-  } else {
-    col_map->destroy();
-    ob_free(col_map);
-  }
-  return ret;
-}
-
-int ObOptStatMonitorManager::erase_dml_stat_map(uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  DmlStatMap *dml_stat_map= nullptr;
-  if (OB_FAIL(dml_stat_maps_.get_refactored(tenant_id, dml_stat_map))) {
-    LOG_WARN("failed to get dml stat map", K(ret));
-  } else if (OB_FAIL(dml_stat_maps_.erase_refactored(tenant_id))) {
-    LOG_WARN("failed to erase dml stat map", K(ret));
-  } else {
-    dml_stat_map->destroy();
-    ob_free(dml_stat_map);
-  }
-  return ret;
-}
-
-int ObOptStatMonitorManager::update_local_cache(uint64_t tenant_id,
-                                                common::ObIArray<ColumnUsageArg> &args)
-{
-  int ret = OB_SUCCESS;
-  ReadMapAtomicOp atomic_op(&args);
-  ObMemAttr attr(OB_SERVER_TENANT_ID, "ColUsagHashMap");
-  SET_USE_500(attr);
   if (GCTX.is_standby_cluster()) {
     // standby cluster can't write __all_column_usage, so do not need to update local update
-  } else if (OB_FAIL(column_usage_maps_.read_atomic(tenant_id, atomic_op))) {
-    if (OB_HASH_NOT_EXIST == ret) {//not exists such tenant id map, need alloc new map
-      ColumnUsageMap *col_map = NULL;
-      ColumnUsageMap *tmp_col_map = NULL;
-      void *buff = ob_malloc(sizeof(ColumnUsageMap), attr);
-      if (OB_ISNULL(buff)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("alloc memory failed", K(ret));
-      } else if (OB_FALSE_IT(col_map = new(buff)ColumnUsageMap())) {
-      } else if (OB_FAIL(col_map->create(10000, attr))) {
-        LOG_WARN("failed to create column usage map", K(ret));
-      } else if (OB_FAIL(column_usage_maps_.set_refactored(tenant_id, col_map))) {
-        // set refacter failed, may created by other thread
-        if (OB_SUCCESS == column_usage_maps_.get_refactored(tenant_id, tmp_col_map)) {
-          LOG_TRACE("get column usage map succeed", K(tenant_id), K(tmp_col_map));
+  } else {
+    SpinRLockGuard guard(lock_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < args.count(); ++i) {
+      ColumnUsageArg &arg = args.at(i);
+      StatKey col_key(arg.table_id_, arg.column_id_);
+      int64_t flags = 0;
+      if (OB_FAIL(column_usage_map_.get_refactored(col_key, flags))) {
+        if (OB_LIKELY(ret == OB_HASH_NOT_EXIST)) {
+          if (OB_FAIL(column_usage_map_.set_refactored(col_key, arg.flags_))) {
+            // other thread set the refactor, try update again
+            if (OB_FAIL(column_usage_map_.get_refactored(col_key, flags))) {
+              LOG_WARN("failed to get refactored", K(ret));
+            } else if ((~flags) & arg.flags_) {
+              UpdateValueAtomicOp atomic_op(arg.flags_);
+              if (OB_FAIL(column_usage_map_.atomic_refactored(col_key, atomic_op))) {
+                LOG_WARN("failed to atomic refactored", K(ret));
+              }
+            }
+          }
         } else {
-          LOG_WARN("get column usage map failed", K(tenant_id), K(tmp_col_map));
+          LOG_WARN("failed to get refactored", K(ret));
+        }
+      } else if ((~flags) & arg.flags_) {
+        UpdateValueAtomicOp atomic_op(arg.flags_);
+        if (OB_FAIL(column_usage_map_.atomic_refactored(col_key, atomic_op))) {
+          LOG_WARN("failed to atomic refactored", K(ret));
         }
       }
-      if (OB_FAIL(ret) && OB_NOT_NULL(col_map)) {//free unused memory
-        col_map->~ColumnUsageMap();
-        ob_free(buff);
-        buff = NULL;
-        col_map = tmp_col_map;
-      }
-      if (OB_NOT_NULL(col_map)) {
-        //arrive at here, indicates get a valid dml_stat_map, we need reset error code, and atomic update values
-        if (OB_FAIL(column_usage_maps_.read_atomic(tenant_id, atomic_op))) {
-          LOG_WARN("failed to atomic refactored", K(ret), K(tenant_id));
-        }
-      }
-    } else {
-      LOG_WARN("failed to atomic refactored", K(ret));
     }
   }
   return ret;
 }
 
-int ObOptStatMonitorManager::update_local_cache(uint64_t tenant_id, ObOptDmlStat &dml_stat)
+int ObOptStatMonitorManager::update_local_cache(ObOptDmlStat &dml_stat)
 {
   int ret = OB_SUCCESS;
-  ReadMapAtomicOp atomic_op(dml_stat);
-  ObMemAttr attr(OB_SERVER_TENANT_ID, "DmlStatsHashMap");
-  SET_USE_500(attr);
   if (GCTX.is_standby_cluster()) {
     // standby cluster can't write __all_monitor_modified, so do not need to update local update
-  } else if (OB_FAIL(dml_stat_maps_.read_atomic(tenant_id, atomic_op))) {
-    if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {//not exists such tenant id map, need alloc new map
-      ret = OB_SUCCESS;
-      DmlStatMap *dml_stat_map = NULL;
-      DmlStatMap *tmp_dml_stat_map = NULL;
-      void *buff = ob_malloc(sizeof(DmlStatMap), attr);
-      if (OB_ISNULL(buff)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("alloc memory failed", K(ret));
-      } else if (OB_FALSE_IT(dml_stat_map = new(buff)DmlStatMap())) {
-      } else if (OB_FAIL(dml_stat_map->create(10000, attr))) {
-        LOG_WARN("failed to create column usage map", K(ret));
-      } else if (OB_FAIL(dml_stat_maps_.set_refactored(tenant_id, dml_stat_map))) {
-        // set refacter failed, may created by other thread
-        if (OB_SUCCESS == dml_stat_maps_.get_refactored(tenant_id, tmp_dml_stat_map)) {
-          LOG_TRACE("get dml stats succeed", K(tenant_id), K(tmp_dml_stat_map));
-        } else {
-          LOG_WARN("get dml stats failed", K(tenant_id), K(tmp_dml_stat_map), K(ret));
+  } else {
+    SpinRLockGuard guard(lock_);
+    StatKey key(dml_stat.table_id_, dml_stat.tablet_id_);
+    ObOptDmlStat tmp_dml_stat;
+    if (OB_FAIL(dml_stat_map_.get_refactored(key, tmp_dml_stat))) {
+      if (OB_LIKELY(ret == OB_HASH_NOT_EXIST)) {
+        if (OB_FAIL(dml_stat_map_.set_refactored(key, dml_stat))) {
+          // other thread set the refactor, try update again
+          if (OB_FAIL(dml_stat_map_.get_refactored(key, tmp_dml_stat))) {
+            LOG_WARN("failed to get refactored", K(ret));
+          } else {
+            UpdateValueAtomicOp atomic_op(dml_stat);
+            if (OB_FAIL(dml_stat_map_.atomic_refactored(key, atomic_op))) {
+              LOG_WARN("failed to atomic refactored", K(ret));
+            }
+          }
         }
-      }
-      if (OB_FAIL(ret) && OB_NOT_NULL(dml_stat_map)) {//free unused memory
-        dml_stat_map->~DmlStatMap();
-        ob_free(buff);
-        buff = NULL;
-        dml_stat_map = tmp_dml_stat_map;
-      }
-      if (OB_NOT_NULL(dml_stat_map)) {
-        //arrive at here, indicates get a valid dml_stat_map, we need reset error code, and atomic update values
-        if (OB_FAIL(dml_stat_maps_.read_atomic(tenant_id, atomic_op))) {
-          LOG_WARN("failed to atomic refactored", K(ret), K(tenant_id));
-        }
+      } else {
+        LOG_WARN("failed to get refactored", K(ret));
       }
     } else {
-      LOG_WARN("failed to atomic refactored", K(ret));
+      UpdateValueAtomicOp atomic_op(dml_stat);
+      if (OB_FAIL(dml_stat_map_.atomic_refactored(key, atomic_op))) {
+        LOG_WARN("failed to atomic refactored", K(ret));
+      } else {/*do nothing*/}
     }
   }
-  return ret;
-}
-
-int ObOptStatMonitorManager::update_opt_stat_monitoring_info(const bool with_check)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(update_column_usage_table(with_check))) {
-    LOG_WARN("failed to update column usage table", K(ret));
-  } else if (OB_FAIL(update_dml_stat_info(with_check))) {
-    LOG_WARN("failed to update dml stat info", K(ret));
-  } else {/*do nothing*/}
   return ret;
 }
 
@@ -373,64 +280,37 @@ int ObOptStatMonitorManager::update_opt_stat_monitoring_info(const obrpc::ObFlus
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(arg));
-  } else if (arg.is_flush_col_usage_ && OB_FAIL(update_tenant_column_usage_info(arg.tenant_id_))) {
+  } else if (arg.is_flush_col_usage_ && OB_FAIL(update_column_usage_info(false))) {
     LOG_WARN("failed to update tenant column usage info", K(ret));
-  } else if (arg.is_flush_dml_stat_ && OB_FAIL(update_tenant_dml_stat_info(arg.tenant_id_))) {
+  } else if (arg.is_flush_dml_stat_ && OB_FAIL(update_dml_stat_info())) {
     LOG_WARN("failed to update tenant column usage info", K(ret));
   } else { /*do nothing*/ }
   return ret;
 }
 
-int ObOptStatMonitorManager::update_column_usage_table(const bool with_check)
+int ObOptStatMonitorManager::update_column_usage_info(const bool with_check)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<uint64_t, 8> tenant_ids;
-  GetAllKeyOp get_all_key_op(&tenant_ids, with_check);
+  bool is_writeable = false;
+  ObArray<StatKey> col_stat_keys;
+  ObArray<int64_t> col_flags;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("opt stat monitor is not inited", K(ret));
-  } else if (OB_FAIL(column_usage_maps_.foreach_refactored(get_all_key_op))) {
-    LOG_WARN("failed to foreach refactored", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
-    if (OB_FAIL(update_tenant_column_usage_info(tenant_ids.at(i)))) {
-      LOG_WARN("failed to update tenant column usage info", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObOptStatMonitorManager::update_tenant_column_usage_info(uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  SwapMapAtomicOp swap_map_op;
-  ColumnUsageMap *col_map = NULL;
-  bool is_writeable = false;
-  if (OB_FAIL(check_table_writeable(tenant_id, is_writeable))) {
+  } else if (OB_FAIL(check_table_writeable(is_writeable))) {
     LOG_WARN("failed to check tabke writeable", K(ret));
   } else if (!is_writeable) {
     // do nothing
-  } else if (OB_FAIL(column_usage_maps_.atomic_refactored(tenant_id, swap_map_op))) {
-    if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
-      // tenant may not exsits on this server
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to atomic refactored", K(ret));
-    }
-  } else if (OB_ISNULL(col_map = swap_map_op.get_column_usage_map())) {
-    // NULL means column usage map is empty, do nothing
-  } else {
+  } else if (OB_FAIL(get_col_usage_info(with_check, col_stat_keys, col_flags))) {
+    LOG_WARN("failed to get col usage info", K(ret));
+  } else if (!col_stat_keys.empty() && col_stat_keys.count() == col_flags.count()) {
     ObSqlString value_sql;
     int count = 0;
-    for (auto iter = col_map->begin(); OB_SUCC(ret) && iter != col_map->end(); ++iter) {
-      if (OB_FAIL(get_column_usage_sql(tenant_id,
-                                       iter->first,
-                                       iter->second,
-                                       0 != count, // need_add_comma
-                                       value_sql))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_stat_keys.count(); ++i) {
+      if (OB_FAIL(get_column_usage_sql(col_stat_keys.at(i), col_flags.at(i), 0 != count, value_sql))) {
         LOG_WARN("failed to get column usage sql", K(ret));
       } else if (UPDATE_OPT_STAT_BATCH_CNT == ++count) {
-        if (OB_FAIL(exec_insert_column_usage_sql(tenant_id, value_sql))) {
+        if (OB_FAIL(exec_insert_column_usage_sql(value_sql))) {
           LOG_WARN("failed to exec insert sql", K(ret));
         } else {
           count = 0;
@@ -439,68 +319,36 @@ int ObOptStatMonitorManager::update_tenant_column_usage_info(uint64_t tenant_id)
       }
     }
     if (OB_SUCC(ret) && count != 0) {
-      if (OB_FAIL(exec_insert_column_usage_sql(tenant_id, value_sql))) {
+      if (OB_FAIL(exec_insert_column_usage_sql(value_sql))) {
         LOG_WARN("failed to exec insert sql", K(ret));
       }
-    }
-
-    if (OB_NOT_NULL(col_map)) {
-      col_map->~ColumnUsageMap();
-      ob_free(col_map);
-      col_map = NULL;
     }
   }
   return ret;
 }
 
-int ObOptStatMonitorManager::update_dml_stat_info(const bool with_check)
+int ObOptStatMonitorManager::update_dml_stat_info()
 {
   int ret = OB_SUCCESS;
-  ObSEArray<uint64_t, 8> tenant_ids;
-  GetAllKeyOp get_all_key_op(&tenant_ids, with_check);
+  bool is_writeable = false;
+  ObArray<ObOptDmlStat> dml_stats;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("opt stat monitor is not inited", K(ret));
-  } else if (OB_FAIL(dml_stat_maps_.foreach_refactored(get_all_key_op))) {
-    LOG_WARN("failed to foreach refactored", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
-    if (OB_FAIL(update_tenant_dml_stat_info(tenant_ids.at(i)))) {
-      LOG_WARN("failed to update tenant dml stat  info", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObOptStatMonitorManager::update_tenant_dml_stat_info(uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  SwapMapAtomicOp swap_map_op;
-  DmlStatMap *dml_stat_map = NULL;
-  bool is_writeable = false;
-  if (OB_FAIL(check_table_writeable(tenant_id, is_writeable))) {
+  } else if (OB_FAIL(check_table_writeable(is_writeable))) {
     LOG_WARN("failed to check tabke writeable", K(ret));
   } else if (!is_writeable) {
     // do nothing
-  } else if (OB_FAIL(dml_stat_maps_.atomic_refactored(tenant_id, swap_map_op))) {
-    if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
-      // tenant may not exsits on this server
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to atomic refactored", K(ret));
-    }
-  } else if (OB_ISNULL(dml_stat_map = swap_map_op.get_dml_stat_map())) {
-    // NULL means dml stats map is empty, do nothing
-  } else {
+  } else if (OB_FAIL(get_dml_stats(dml_stats))) {
+    LOG_WARN("failed to swap get dml stat", K(ret));
+  } else if (!dml_stats.empty()) {
     ObSqlString value_sql;
     int count = 0;
-    for (auto iter = dml_stat_map->begin(); OB_SUCC(ret) && iter != dml_stat_map->end(); ++iter) {
-      if (OB_FAIL(get_dml_stat_sql(tenant_id, iter->second,
-                                   0 != count, // need_add_comma
-                                   value_sql))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < dml_stats.count(); ++i) {
+      if (OB_FAIL(get_dml_stat_sql(dml_stats.at(i), 0 != count, value_sql))) {
         LOG_WARN("failed to get dml stat sql", K(ret));
       } else if (UPDATE_OPT_STAT_BATCH_CNT == ++count) {
-        if (OB_FAIL(exec_insert_monitor_modified_sql(tenant_id, value_sql))) {
+        if (OB_FAIL(exec_insert_monitor_modified_sql(value_sql))) {
           LOG_WARN("failed to exec insert sql", K(ret));
         } else {
           count = 0;
@@ -509,19 +357,12 @@ int ObOptStatMonitorManager::update_tenant_dml_stat_info(uint64_t tenant_id)
       }
     }
     if (OB_SUCC(ret) && count != 0) {
-      if (OB_FAIL(exec_insert_monitor_modified_sql(tenant_id, value_sql))) {
+      if (OB_FAIL(exec_insert_monitor_modified_sql(value_sql))) {
         LOG_WARN("failed to exec insert sql", K(ret));
       }
     }
-
-    if (OB_NOT_NULL(dml_stat_map)) {
-      dml_stat_map->~DmlStatMap();
-      ob_free(dml_stat_map);
-      dml_stat_map = NULL;
-    }
-
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(clean_useless_dml_stat_info(tenant_id))) {
+      if (OB_FAIL(clean_useless_dml_stat_info())) {
         LOG_WARN("failed to clean useless dml stat info", K(ret));
       } else {/*do nohting*/}
     }
@@ -529,8 +370,7 @@ int ObOptStatMonitorManager::update_tenant_dml_stat_info(uint64_t tenant_id)
   return ret;
 }
 
-int ObOptStatMonitorManager::get_column_usage_sql(const uint64_t tenant_id,
-                                                  const StatKey &col_key,
+int ObOptStatMonitorManager::get_column_usage_sql(const StatKey &col_key,
                                                   const int64_t flags,
                                                   const bool need_add_comma,
                                                   ObSqlString &sql_string)
@@ -538,8 +378,8 @@ int ObOptStatMonitorManager::get_column_usage_sql(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   share::ObDMLSqlSplicer dml_splicer;
   uint64_t table_id = col_key.first;
-  uint64_t ext_tenant_id = share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
-  uint64_t pure_table_id = share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, table_id);
+  uint64_t ext_tenant_id = share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id_, tenant_id_);
+  uint64_t pure_table_id = share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id_, table_id);
   int64_t equality_preds = flags & EQUALITY_PREDS ? 1 : 0;
   int64_t equijoin_preds = flags & EQUIJOIN_PREDS ? 1 : 0;
   int64_t nonequijion_preds = flags & NONEQUIJOIN_PREDS ? 1 : 0;
@@ -571,7 +411,7 @@ int ObOptStatMonitorManager::get_column_usage_sql(const uint64_t tenant_id,
   return ret;
 }
 
-int ObOptStatMonitorManager::exec_insert_column_usage_sql(uint64_t tenant_id,ObSqlString &values_sql)
+int ObOptStatMonitorManager::exec_insert_column_usage_sql(ObSqlString &values_sql)
 {
   int ret = OB_SUCCESS;
   ObSqlString insert_sql;
@@ -582,9 +422,9 @@ int ObOptStatMonitorManager::exec_insert_column_usage_sql(uint64_t tenant_id,ObS
     LOG_WARN("failed to append format", K(ret));
   } else if (OB_FAIL(insert_sql.append(ON_DUPLICATE_UPDATE))) {
     LOG_WARN("failed to append string", K(ret));
-  } else if (OB_FAIL(mysql_proxy_->write(tenant_id, insert_sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(mysql_proxy_->write(tenant_id_, insert_sql.ptr(), affected_rows))) {
     LOG_WARN("fail to exec sql", K(insert_sql), K(ret));
-  } else if (OB_FAIL(mysql_proxy_->write(tenant_id, "commit;", affected_rows))) {
+  } else if (OB_FAIL(mysql_proxy_->write(tenant_id_, "commit;", affected_rows))) {
     LOG_WARN("fail to exec sql", K(ret));
   }
   return ret;
@@ -691,7 +531,7 @@ int ObOptStatMonitorManager::construct_get_column_usage_sql(ObIArray<ObColumnSta
   return ret;
 }
 
-int ObOptStatMonitorManager::check_table_writeable(const uint64_t tenant_id, bool &is_writeable)
+int ObOptStatMonitorManager::check_table_writeable(bool &is_writeable)
 {
   int ret = OB_SUCCESS;
   is_writeable = true;
@@ -699,111 +539,10 @@ int ObOptStatMonitorManager::check_table_writeable(const uint64_t tenant_id, boo
   if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(GCTX.schema_service_->check_tenant_is_restore(NULL, tenant_id, in_restore))) {
+  } else if (OB_FAIL(GCTX.schema_service_->check_tenant_is_restore(NULL, tenant_id_, in_restore))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
   } else if (OB_UNLIKELY(in_restore) || GCTX.is_standby_cluster()) {
     is_writeable = false;
-  }
-  return ret;
-}
-
-int ObOptStatMonitorManager::GetAllKeyOp::operator()(common::hash::HashMapPair<uint64_t, ColumnUsageMap *> &entry)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(key_array_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("key_array not inited", K(ret));
-  } else if (with_check_ && entry.second->size() < 10000) {
-    // do nothing
-  } else if (OB_FAIL(key_array_->push_back(entry.first))) {
-    LOG_WARN("fail to push back key", K(ret));
-  }
-  return ret;
-}
-
-int ObOptStatMonitorManager::GetAllKeyOp::operator()(common::hash::HashMapPair<uint64_t, DmlStatMap *> &entry)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(key_array_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("key_array not inited", K(ret));
-  } else if (OB_FAIL(key_array_->push_back(entry.first))) {
-    LOG_WARN("fail to push back key", K(ret));
-  }
-  return ret;
-}
-
-// get old ColumnUsageMap, allocate a new one
-int ObOptStatMonitorManager::SwapMapAtomicOp::operator() (common::hash::HashMapPair<uint64_t, ColumnUsageMap *> &entry)
-{
-  int ret = OB_SUCCESS;
-  column_usage_map_ = NULL;
-  ObMemAttr attr(OB_SERVER_TENANT_ID, "DmlStatsHashMap");
-  SET_USE_500(attr);
-  if (OB_ISNULL(entry.second)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (entry.second->size() == 0) {
-    // do nothing
-  } else {
-    ColumnUsageMap *col_map = NULL;
-    void *buff = ob_malloc(sizeof(ColumnUsageMap), attr);
-    if (OB_ISNULL(buff)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("alloc memory failed", K(ret));
-    } else if (NULL == (col_map = new(buff)ColumnUsageMap())) {
-      ret = OB_NOT_INIT;
-      LOG_WARN("fail to constructor column usage map", K(ret));
-    } else if (OB_FAIL(col_map->create(10000, attr))) {
-      LOG_WARN("failed to create column usage map", K(ret));
-    } else {
-      column_usage_map_ = entry.second;
-      entry.second = col_map;
-    }
-
-    if (OB_FAIL(ret) && OB_NOT_NULL(col_map)) {
-      col_map->~ColumnUsageMap();
-      ob_free(buff);
-      buff = NULL;
-      col_map = NULL;
-    }
-  }
-  return ret;
-}
-
-// get old DmlStatMap, allocate a new one
-int ObOptStatMonitorManager::SwapMapAtomicOp::operator() (common::hash::HashMapPair<uint64_t, DmlStatMap *> &entry)
-{
-  int ret = OB_SUCCESS;
-  dml_stat_map_ = NULL;
-  ObMemAttr attr(OB_SERVER_TENANT_ID, "DmlStatMap");
-  SET_USE_500(attr);
-  if (OB_ISNULL(entry.second)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (entry.second->size() == 0) {
-    // do nothing
-  } else {
-    DmlStatMap *dml_stat_map = NULL;
-    void *buff = ob_malloc(sizeof(DmlStatMap), attr);
-    if (OB_ISNULL(buff)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("alloc memory failed", K(ret));
-    } else if (NULL == (dml_stat_map = new(buff)DmlStatMap())) {
-      ret = OB_NOT_INIT;
-      LOG_WARN("fail to constructor DmlStatMap", K(ret));
-    } else if (OB_FAIL(dml_stat_map->create(10000, attr))) {
-      LOG_WARN("failed to create column usage map", K(ret));
-    } else {
-      dml_stat_map_ = entry.second;
-      entry.second = dml_stat_map;
-    }
-    if (OB_FAIL(ret) && OB_NOT_NULL(dml_stat_map)) {
-      dml_stat_map->~DmlStatMap();
-      ob_free(buff);
-      buff = NULL;
-      dml_stat_map = NULL;
-    }
   }
   return ret;
 }
@@ -829,80 +568,7 @@ int ObOptStatMonitorManager::UpdateValueAtomicOp::operator() (common::hash::Hash
   return ret;
 }
 
-int ObOptStatMonitorManager::ReadMapAtomicOp::operator() (common::hash::HashMapPair<uint64_t, ColumnUsageMap *> &entry)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(entry.second) || OB_ISNULL(col_usage_args_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(entry.second), K(col_usage_args_));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < col_usage_args_->count(); ++i) {
-      ColumnUsageArg &arg = col_usage_args_->at(i);
-      StatKey col_key(arg.table_id_, arg.column_id_);
-      int64_t flags = 0;
-      if (OB_FAIL(entry.second->get_refactored(col_key, flags))) {
-        if (OB_LIKELY(ret == OB_HASH_NOT_EXIST)) {
-          if (OB_FAIL(entry.second->set_refactored(col_key, arg.flags_))) {
-            // other thread set the refactor, try update again
-            if (OB_FAIL(entry.second->get_refactored(col_key, flags))) {
-              LOG_WARN("failed to get refactored", K(ret));
-            } else if ((~flags) & arg.flags_) {
-              UpdateValueAtomicOp atomic_op(arg.flags_);
-              if (OB_FAIL(entry.second->atomic_refactored(col_key, atomic_op))) {
-                LOG_WARN("failed to atomic refactored", K(ret));
-              }
-            }
-          }
-        } else {
-          LOG_WARN("failed to get refactored", K(ret));
-        }
-      } else if ((~flags) & arg.flags_) {
-        UpdateValueAtomicOp atomic_op(arg.flags_);
-        if (OB_FAIL(entry.second->atomic_refactored(col_key, atomic_op))) {
-          LOG_WARN("failed to atomic refactored", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObOptStatMonitorManager::ReadMapAtomicOp::operator() (common::hash::HashMapPair<uint64_t, DmlStatMap *> &entry)
-{
-  int ret = OB_SUCCESS;
-  StatKey key(dml_stat_.table_id_, dml_stat_.tablet_id_);
-  UpdateValueAtomicOp atomic_op(dml_stat_);
-  ObOptDmlStat tmp_dml_stat;
-  if (OB_ISNULL(entry.second)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(entry.second->get_refactored(key, tmp_dml_stat))) {
-    if (OB_LIKELY(ret == OB_HASH_NOT_EXIST)) {
-      if (OB_FAIL(entry.second->set_refactored(key, dml_stat_))) {
-        // other thread set the refactor, try update again
-        if (OB_FAIL(entry.second->get_refactored(key, tmp_dml_stat))) {
-          LOG_WARN("failed to get refactored", K(ret));
-        } else {
-          UpdateValueAtomicOp atomic_op(dml_stat_);
-          if (OB_FAIL(entry.second->atomic_refactored(key, atomic_op))) {
-            LOG_WARN("failed to atomic refactored", K(ret));
-          }
-        }
-      }
-    } else {
-      LOG_WARN("failed to get refactored", K(ret));
-    }
-  } else {
-    UpdateValueAtomicOp atomic_op(dml_stat_);
-    if (OB_FAIL(entry.second->atomic_refactored(key, atomic_op))) {
-      LOG_WARN("failed to atomic refactored", K(ret));
-    } else {/*do nothing*/}
-  }
-  return ret;
-}
-
-int ObOptStatMonitorManager::exec_insert_monitor_modified_sql(uint64_t tenant_id,
-                                                              ObSqlString &values_sql)
+int ObOptStatMonitorManager::exec_insert_monitor_modified_sql(ObSqlString &values_sql)
 {
   int ret = OB_SUCCESS;
   ObSqlString insert_sql;
@@ -913,24 +579,23 @@ int ObOptStatMonitorManager::exec_insert_monitor_modified_sql(uint64_t tenant_id
     LOG_WARN("failed to append format", K(ret));
   } else if (OB_FAIL(insert_sql.append(ON_DUPLICATE_UPDATE_MONITOR_MODIFIED))) {
     LOG_WARN("failed to append string", K(ret));
-  } else if (OB_FAIL(mysql_proxy_->write(tenant_id, insert_sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(mysql_proxy_->write(tenant_id_, insert_sql.ptr(), affected_rows))) {
     LOG_WARN("fail to exec sql", K(insert_sql), K(ret));
   } else {
-    LOG_TRACE("succeed to exec insert monitor modified sql", K(tenant_id), K(values_sql));
+    LOG_TRACE("succeed to exec insert monitor modified sql", K(tenant_id_), K(values_sql));
   }
   return ret;
 }
 
-int ObOptStatMonitorManager::get_dml_stat_sql(const uint64_t tenant_id,
-                                              const ObOptDmlStat &dml_stat,
+int ObOptStatMonitorManager::get_dml_stat_sql(const ObOptDmlStat &dml_stat,
                                               const bool need_add_comma,
                                               ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
   share::ObDMLSqlSplicer dml_splicer;
   uint64_t table_id = dml_stat.table_id_;
-  uint64_t ext_tenant_id = share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
-  uint64_t pure_table_id = share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, table_id);
+  uint64_t ext_tenant_id = share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id_, tenant_id_);
+  uint64_t pure_table_id = share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id_, table_id);
   if (OB_FAIL(dml_splicer.add_pk_column("tenant_id", ext_tenant_id)) ||
       OB_FAIL(dml_splicer.add_pk_column("table_id", pure_table_id)) ||
       OB_FAIL(dml_splicer.add_pk_column("tablet_id", dml_stat.tablet_id_)) ||
@@ -948,16 +613,17 @@ int ObOptStatMonitorManager::get_dml_stat_sql(const uint64_t tenant_id,
   return ret;
 }
 
-int ObOptStatMonitorManager::generate_opt_stat_monitoring_info_rows(observer::ObOptDmlStatMapsGetter &getter)
+int ObOptStatMonitorManager::generate_opt_stat_monitoring_info_rows(observer::ObOptDmlStatMapGetter &getter)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(dml_stat_maps_.foreach_refactored(getter))) {
+  SpinRLockGuard guard(lock_);
+  if (OB_FAIL(dml_stat_map_.foreach_refactored(getter))) {
     LOG_WARN("fail to generate opt stat monitoring info rows", K(ret));
   } else {/*do nothing*/}
   return ret;
 }
 
-int ObOptStatMonitorManager::clean_useless_dml_stat_info(uint64_t tenant_id)
+int ObOptStatMonitorManager::clean_useless_dml_stat_info()
 {
   int ret = OB_SUCCESS;
   ObSqlString delete_table_sql;
@@ -965,7 +631,7 @@ int ObOptStatMonitorManager::clean_useless_dml_stat_info(uint64_t tenant_id)
   int64_t affected_rows1 = 0;
   int64_t affected_rows2 = 0;
   const char* all_table_name = NULL;
-  if (OB_FAIL(ObSchemaUtils::get_all_table_name(tenant_id, all_table_name))) {
+  if (OB_FAIL(ObSchemaUtils::get_all_table_name(tenant_id_, all_table_name))) {
     LOG_WARN("failed to get all table name", K(ret));
   } else if (OB_FAIL(delete_table_sql.append_fmt("DELETE FROM %s m WHERE (NOT EXISTS (SELECT 1 " \
             "FROM %s t, %s db WHERE t.tenant_id = db.tenant_id AND t.database_id = db.database_id "\
@@ -985,12 +651,12 @@ int ObOptStatMonitorManager::clean_useless_dml_stat_info(uint64_t tenant_id)
             all_table_name, share::OB_ALL_DATABASE_TNAME, share::OB_ALL_PART_TNAME,
             share::OB_ALL_SUB_PART_TNAME, OB_MAX_INNER_TABLE_ID))) {
     LOG_WARN("failed to append fmt", K(ret));
-  } else if (OB_FAIL(mysql_proxy_->write(tenant_id, delete_table_sql.ptr(), affected_rows1))) {
+  } else if (OB_FAIL(mysql_proxy_->write(tenant_id_, delete_table_sql.ptr(), affected_rows1))) {
     LOG_WARN("failed to execute sql", K(ret), K(delete_table_sql));
-  } else if (OB_FAIL(mysql_proxy_->write(tenant_id, delete_part_sql.ptr(), affected_rows2))) {
+  } else if (OB_FAIL(mysql_proxy_->write(tenant_id_, delete_part_sql.ptr(), affected_rows2))) {
     LOG_WARN("failed to execute sql", K(ret), K(delete_part_sql));
   } else {
-    LOG_TRACE("succeed to clean useless monitor modified_data", K(tenant_id), K(delete_table_sql),
+    LOG_TRACE("succeed to clean useless monitor modified_data", K(tenant_id_), K(delete_table_sql),
                                                                 K(affected_rows1), K(delete_part_sql),
                                                                 K(affected_rows2));
   }
@@ -1000,20 +666,37 @@ int ObOptStatMonitorManager::clean_useless_dml_stat_info(uint64_t tenant_id)
 int ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(const ObIArray<ObOptDmlStat *> &dml_stats)
 {
   int ret = OB_SUCCESS;
+  ObOptStatMonitorManager *optstat_monitor_mgr = NULL;
+  LOG_TRACE("begin to update dml stat info from direct load", K(dml_stats));
+  if (dml_stats.empty() || OB_ISNULL(dml_stats.at(0))) {
+    //do nothing
+  } else if (OB_UNLIKELY(dml_stats.at(0)->tenant_id_ != MTL_ID())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(dml_stats), K(MTL_ID()));
+  } else if (OB_ISNULL(optstat_monitor_mgr = MTL(ObOptStatMonitorManager*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(optstat_monitor_mgr));
+  } else if (OB_FAIL(optstat_monitor_mgr->update_dml_stat_info(dml_stats))) {
+    LOG_WARN("failed to update dml stat info", K(ret));
+  } else {/*do nothing*/}
+  return ret;
+}
+
+int ObOptStatMonitorManager::update_dml_stat_info(const ObIArray<ObOptDmlStat *> &dml_stats)
+{
+  int ret = OB_SUCCESS;
   ObSqlString value_sql;
   int count = 0;
-  uint64_t tenant_id = 0;
   LOG_TRACE("begin to update dml stat info from direct load", K(dml_stats));
   for (int64_t i = 0; OB_SUCC(ret) && i < dml_stats.count(); ++i) {
     if (OB_ISNULL(dml_stats.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpcted error", K(ret), K(dml_stats.at(i)));
     } else {
-      tenant_id = dml_stats.at(i)->tenant_id_;
-      if (OB_FAIL(get_dml_stat_sql(tenant_id, *dml_stats.at(i), 0 != count, value_sql))) {
+      if (OB_FAIL(get_dml_stat_sql(*dml_stats.at(i), 0 != count, value_sql))) {
         LOG_WARN("failed to get dml stat sql", K(ret));
       } else if (UPDATE_OPT_STAT_BATCH_CNT == ++count) {
-        if (OB_FAIL(exec_insert_monitor_modified_sql(tenant_id, value_sql))) {
+        if (OB_FAIL(exec_insert_monitor_modified_sql(value_sql))) {
           LOG_WARN("failed to exec insert sql", K(ret));
         } else {
           count = 0;
@@ -1023,8 +706,98 @@ int ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(const ObIArra
     }
   }
   if (OB_SUCC(ret) && count != 0) {
-    if (OB_FAIL(exec_insert_monitor_modified_sql(tenant_id, value_sql))) {
+    if (OB_FAIL(exec_insert_monitor_modified_sql(value_sql))) {
       LOG_WARN("failed to exec insert sql", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObOptStatMonitorManager::mtl_init(ObOptStatMonitorManager* &optstat_monitor_mgr)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = lib::current_resource_owner_id();
+  if (OB_LIKELY(nullptr != optstat_monitor_mgr)) {
+    if (OB_FAIL(optstat_monitor_mgr->init(tenant_id))) {
+      LOG_WARN("failed to init event list", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObOptStatMonitorManager::mtl_start(ObOptStatMonitorManager* &optstat_monitor_mgr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(nullptr != optstat_monitor_mgr)) {
+    if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer*)->get_tg_id(), optstat_monitor_mgr->get_flush_all_task(),
+                            ObOptStatMonitorFlushAllTask::FLUSH_INTERVAL, true))) {
+      LOG_WARN("failed to scheduler flush all task", K(ret));
+    } else if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer*)->get_tg_id(), optstat_monitor_mgr->get_check_task(),
+                                   ObOptStatMonitorCheckTask::CHECK_INTERVAL, true))) {
+      LOG_WARN("failed to scheduler check task", K(ret));
+    } else {
+      optstat_monitor_mgr->get_flush_all_task().disable_timeout_check();
+      optstat_monitor_mgr->get_flush_all_task().optstat_monitor_mgr_ = optstat_monitor_mgr;
+      optstat_monitor_mgr->get_check_task().disable_timeout_check();
+      optstat_monitor_mgr->get_check_task().optstat_monitor_mgr_ = optstat_monitor_mgr;
+    }
+  }
+  return ret;
+}
+
+void ObOptStatMonitorManager::mtl_stop(ObOptStatMonitorManager* &optstat_monitor_mgr)
+{
+  if (OB_LIKELY(nullptr != optstat_monitor_mgr)) {
+    TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), optstat_monitor_mgr->get_flush_all_task());
+    TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), optstat_monitor_mgr->get_check_task());
+  }
+}
+
+void ObOptStatMonitorManager::mtl_wait(ObOptStatMonitorManager* &optstat_monitor_mgr)
+{
+  if (OB_LIKELY(nullptr != optstat_monitor_mgr)) {
+    TG_WAIT_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), optstat_monitor_mgr->get_flush_all_task());
+    TG_WAIT_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), optstat_monitor_mgr->get_check_task());
+  }
+}
+
+int ObOptStatMonitorManager::get_col_usage_info(const bool with_check,
+                                                ObIArray<StatKey> &col_stat_keys,
+                                                ObIArray<int64_t> &col_flags)
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard guard(lock_);
+  if (column_usage_map_.empty() ||
+      (with_check && column_usage_map_.size() < 10000)) {
+    //do nothing
+  } else {
+    for (auto iter = column_usage_map_.begin(); OB_SUCC(ret) && iter != column_usage_map_.end(); ++iter) {
+      if (OB_FAIL(col_stat_keys.push_back(iter->first)) ||
+          OB_FAIL(col_flags.push_back(iter->second))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      column_usage_map_.reuse();
+    }
+  }
+  return ret;
+}
+
+int ObOptStatMonitorManager::get_dml_stats(ObIArray<ObOptDmlStat> &dml_stats)
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard guard(lock_);
+  if (dml_stat_map_.empty()) {
+    //do nothing
+  } else {
+    for (auto iter = dml_stat_map_.begin(); OB_SUCC(ret) && iter != dml_stat_map_.end(); ++iter) {
+      if (OB_FAIL(dml_stats.push_back(iter->second))) {
+        LOG_WARN("failed to get dml stat sql", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      dml_stat_map_.reuse();
     }
   }
   return ret;

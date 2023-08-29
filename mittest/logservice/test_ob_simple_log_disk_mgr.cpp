@@ -389,6 +389,47 @@ TEST_F(TestObSimpleLogDiskMgr, overshelling)
 
 }
 
+TEST_F(TestObSimpleLogDiskMgr, hidden_sys)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "hidden_sys");
+  int server_idx = 0;
+  PalfEnv *palf_env = NULL;
+  int64_t leader_idx = 0;
+  int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  int64_t total_used_size = 0, total_size = 0;
+  share::SCN create_scn = share::SCN::base_scn();
+  EXPECT_EQ(OB_SUCCESS, get_palf_env(0, palf_env));
+  {
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, palf_env->get_stable_disk_usage(total_used_size, total_size));
+    EXPECT_EQ(0, total_used_size);
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, create_scn, leader_idx, leader));
+    EXPECT_EQ(OB_SUCCESS, palf_env->get_stable_disk_usage(total_used_size, total_size));
+    EXPECT_NE(0, total_used_size);
+    EXPECT_EQ(OB_NOT_SUPPORTED, update_disk_options(0));
+  }
+  EXPECT_EQ(OB_SUCCESS, delete_paxos_group(id));
+  EXPECT_EQ(OB_SUCCESS, update_disk_options(0));
+  // tenant unit中记录的disk_opts直接生效
+  PalfDiskOptions disk_opts;
+  EXPECT_EQ(OB_SUCCESS, get_disk_options(0, disk_opts));
+  EXPECT_EQ(0, disk_opts.log_disk_usage_limit_size_);
+  EXPECT_EQ(PalfDiskOptionsWrapper::Status::SHRINKING_STATUS,
+            palf_env->palf_env_impl_.disk_options_wrapper_.status_);
+  usleep(palf::BlockGCTimerTask::BLOCK_GC_TIMER_INTERVAL_MS + 5*10000);
+  usleep(ObLooper::INTERVAL_US * 2);
+  EXPECT_EQ(PalfDiskOptionsWrapper::Status::NORMAL_STATUS,
+            palf_env->palf_env_impl_.disk_options_wrapper_.status_);
+  EXPECT_EQ(OB_SUCCESS, palf_env->get_stable_disk_usage(total_used_size, total_size));
+  EXPECT_EQ(0, total_used_size);
+  EXPECT_EQ(0, total_size);
+  EXPECT_EQ(OB_SUCCESS, update_disk_options(8));
+  PalfHandleImplGuard leader;
+  EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, create_scn, leader_idx, leader));
+  EXPECT_EQ(OB_SUCCESS, palf_env->get_stable_disk_usage(total_used_size, total_size));
+  EXPECT_NE(0, total_used_size);
+}
+
 } // namespace unittest
 } // namespace oceanbase
 

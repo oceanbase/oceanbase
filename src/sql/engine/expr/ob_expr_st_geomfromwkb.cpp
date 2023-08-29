@@ -19,7 +19,7 @@
 #include "lib/geo/ob_geo_to_tree_visitor.h"
 #include "lib/geo/ob_geo_wkb_check_visitor.h"
 #include "lib/geo/ob_geo_func_common.h"
-#include "observer/omt/ob_tenant_srs_mgr.h"
+#include "observer/omt/ob_tenant_srs.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -121,7 +121,7 @@ int ObIExprSTGeomFromWKB::eval_geom_wkb(const ObExpr &expr, ObEvalCtx &ctx, ObDa
          ret = OB_OPERATE_OVERFLOW;
          LOG_WARN("srid input value out of range", K(ret), K(datum->get_int()));
     } else if (0 != (srid = datum->get_uint32())) {
-      if (OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(session->get_effective_tenant_id(), srs_guard))) {
+      if (OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
         LOG_WARN("failed to get srs guard", K(ret));
       } else if (OB_FAIL(srs_guard.get_srs_item(srid, srs_item))) {
         LOG_WARN("failed to get srs item", K(ret));

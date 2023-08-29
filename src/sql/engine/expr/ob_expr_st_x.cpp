@@ -17,7 +17,7 @@
 #include "lib/geo/ob_geo.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "lib/geo/ob_srs_info.h"
-#include "observer/omt/ob_tenant_srs_mgr.h"
+#include "observer/omt/ob_tenant_srs.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"

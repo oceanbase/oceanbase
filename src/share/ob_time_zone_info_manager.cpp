@@ -21,6 +21,7 @@
 #include "observer/ob_server.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "observer/ob_sql_client_decorator.h"
+#include "lib/lock/ob_spin_rwlock.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::observer;
@@ -28,6 +29,10 @@ namespace oceanbase
 {
 namespace common
 {
+
+ObTZInfoMap ObTimeZoneInfoManager::shared_tz_info_map_;
+int64_t ObTimeZoneInfoManager::loaded_tz_info_count_ = 0;
+SpinRWLock ObTimeZoneInfoManager::sys_rwlock_;
 const char *ObTimeZoneInfoManager::FETCH_TZ_INFO_SQL =
     "SELECT * "
     "FROM ("
@@ -74,7 +79,14 @@ int ObTimeZoneInfoManager::init()
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
   } else {
-    inited_ = true;
+    ObMemAttr attr(OB_SERVER_TENANT_ID, "TZInfoMgrMap");
+    if (OB_FAIL(tz_info_map_buf_.init(attr))) {
+      LOG_WARN("init tz info map failed", K(ret), K(tenant_id_));
+    } else if (OB_FAIL(tz_info_map_.init(attr))) {
+      LOG_WARN("init tz info map failed", K(ret), K(tenant_id_));
+    } else {
+      inited_ = true;
+    }
   }
   return ret;
 }
@@ -118,7 +130,7 @@ int ObTimeZoneInfoManager::response_time_zone_info(ObRequestTZInfoResult &tz_res
     tz_result.tz_array_.reset();
     tz_result.last_version_ = last_version_;
     FillRequestTZInfoResult fr_func(tz_result);
-    if (OB_FAIL(tz_info_map_.id_map_.for_each(fr_func))) {
+    if (OB_FAIL(tz_info_map_.id_map_->for_each(fr_func))) {
       LOG_WARN("fail to call for_each", K(ret));
     }
   }
@@ -201,12 +213,50 @@ int ObTimeZoneInfoManager::fetch_time_zone_info_from_tenant_table(const int64_t 
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get result", K(result), K(ret));
-      } else if (OB_FAIL(fill_tz_info_map(*result, tz_info_map_))) {
-        LOG_ERROR("fail to fill tz_info_map", K(ret));
       } else {
-        last_version_ = current_tz_version;
-        LOG_INFO("success to fetch tz_info map", K(ret), K(last_version_), K(tenant_id_),
-                  "new_last_version", current_tz_version, K(tz_info_map_.id_map_.size()));
+        bool same_with_sys = false;
+        bool first_map = 1 == ATOMIC_AAF(&loaded_tz_info_count_, 1);
+        if (first_map) {
+          SpinWLockGuard wlock_guard(sys_rwlock_);
+          // the first tenant load timezone map into shared_tz_info_map_.
+          // Other tenants load timezone map into tz_info_map_buf_ and then cmp with shared_tz_info_map_.
+          ObMemAttr attr(OB_SERVER_TENANT_ID, "TZInfoMgrMap");
+          if (OB_FAIL(shared_tz_info_map_.init(attr))) {
+            LOG_WARN("init share tz info map failed", K(ret));
+          } else if (OB_FAIL(fill_tz_info_map(*result, shared_tz_info_map_, tenant_id_))) {
+            LOG_ERROR("fail to fill tz_info_map for shared map", K(ret), K(tenant_id_));
+          } else {
+            tz_info_map_.id_map_ = shared_tz_info_map_.id_map_;
+            tz_info_map_.name_map_ = shared_tz_info_map_.name_map_;
+          }
+        } else {
+          if (OB_FAIL(fill_tz_info_map(*result, tz_info_map_buf_, tenant_id_))) {
+            LOG_ERROR("fail to fill tz_info_map", K(ret));
+          } else {
+            same_with_sys = cmp_tz_info_map(shared_tz_info_map_, tz_info_map_buf_);
+            if (same_with_sys) {
+              // same with sys tenant, reset tz_info_map_buf_.
+              // if reset link hash map, memory of hash node will not be released, so use destroy.
+              tz_info_map_buf_.~ObTZInfoMap();
+              // Use destroyed ObTZInfoMap will lead to a crash.
+              // According to current design, upgrade timezone is not supported,
+              // so ObTZInfoMap will not be used again. This is a defense code.
+              new (&tz_info_map_buf_) ObTZInfoMap();
+              LOG_INFO("reset tz info map buf", K(tenant_id_));
+              tz_info_map_.id_map_ = shared_tz_info_map_.id_map_;
+              tz_info_map_.name_map_ = shared_tz_info_map_.name_map_;
+            } else {
+              tz_info_map_.id_map_ = tz_info_map_buf_.id_map_;
+              tz_info_map_.name_map_ = tz_info_map_buf_.name_map_;
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          last_version_ = current_tz_version;
+          LOG_INFO("success to fetch tz_info map", K(ret), K(last_version_), K(tenant_id_),
+                    "new_last_version", current_tz_version, K(same_with_sys),
+                    K(tz_info_map_.id_map_->size()));
+        }
       }
     }
   }
@@ -226,6 +276,7 @@ int ObTimeZoneInfoManager::set_tz_info_map(ObTimeZoneInfoPos *&stored_tz_info,
   ObTimeZoneInfoPos *tz_pos_value = NULL;
   ObTZNameIDInfo *name_id_value = NULL;
   bool is_equal = false;
+  lib::ObMemAttr attr1(OB_SERVER_TENANT_ID, "TZInfoArray");
   if (NULL == stored_tz_info) {
     if (OB_ISNULL(tz_pos_value = op_alloc(ObTimeZoneInfoPos))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -233,19 +284,24 @@ int ObTimeZoneInfoManager::set_tz_info_map(ObTimeZoneInfoPos *&stored_tz_info,
     } else if (OB_ISNULL(name_id_value = op_alloc(ObTZNameIDInfo))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("fail to alloc memory for ObTZNameIDInfo ", K(ret));
+    } else if (FALSE_IT(tz_pos_value->set_tz_type_attr(attr1))) {
     } else if (OB_FAIL(tz_pos_value->assign(new_tz_info))) {
       LOG_WARN("fail to assign ObTimeZoneInfoPos", K(new_tz_info), K(ret));
     } else if (FALSE_IT(name_id_value->set(new_tz_info.get_tz_id(), new_tz_info.get_tz_name()))) {
-    } else if (OB_FAIL(tz_info_map.id_map_.insert_and_get(new_tz_info.get_tz_id(), tz_pos_value))) {
+    } else if (OB_FAIL(tz_info_map.id_map_->insert_and_get(new_tz_info.get_tz_id(), tz_pos_value))) {
       LOG_WARN("fail to insert new_tz_info to tz_info_id_map", KPC(tz_pos_value), K(ret));
-    } else if (OB_FAIL(tz_info_map.name_map_.insert_and_get(new_tz_info.get_tz_name(), name_id_value))) {
-      tz_info_map.id_map_.revert(tz_pos_value);
-      tz_info_map.id_map_.del(new_tz_info.get_tz_id());
+    } else if (OB_FAIL(tz_info_map.name_map_->insert_and_get(new_tz_info.get_tz_name(), name_id_value))) {
+      tz_info_map.id_map_->revert(tz_pos_value);
+      tz_info_map.id_map_->del(new_tz_info.get_tz_id());
+      tz_pos_value = NULL;
       LOG_WARN("fail to insert new_tz_info to tz_info_name_map_", K(name_id_value), K(ret));
     } else {
-      tz_info_map.id_map_.revert(tz_pos_value);
-      tz_info_map.name_map_.revert(name_id_value);
-      LOG_INFO("succ to add new time zone info", KPC(name_id_value), KPC(tz_pos_value));
+      tz_info_map.id_map_->revert(tz_pos_value);
+      tz_info_map.name_map_->revert(name_id_value);
+      LOG_INFO("succ to add new time zone info", K(&tz_info_map), K(&(tz_info_map.name_map_)),
+               KPC(name_id_value), KPC(tz_pos_value));
+      tz_pos_value = NULL;
+      name_id_value = NULL;
     }
   } else if (OB_FAIL(stored_tz_info->compare_upgrade(new_tz_info, is_equal))) {
     LOG_WARN("fail to compare_upgrade", KPC(stored_tz_info), K(new_tz_info), K(ret));
@@ -309,7 +365,8 @@ int ObTimeZoneInfoManager::calc_default_tran_type(const ObIArray<ObTZTransitionT
 }
 
 int ObTimeZoneInfoManager::fill_tz_info_map(sqlclient::ObMySQLResult &result,
-    ObTZInfoMap &tz_info_map)
+    ObTZInfoMap &tz_info_map,
+    uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObString tz_name_str;
@@ -322,7 +379,6 @@ int ObTimeZoneInfoManager::fill_tz_info_map(sqlclient::ObMySQLResult &result,
   ObTimeZoneInfoPos *stored_tz_info = NULL;;
   ObArray<ObTZTransitionTypeInfo> types_with_null;
   bool is_tran_time_null = false;
-
   while(OB_SUCC(ret) && OB_SUCC(result.next())) {
     tz_tran_type.reset();
     is_tran_time_null = false;
@@ -381,7 +437,7 @@ int ObTimeZoneInfoManager::fill_tz_info_map(sqlclient::ObMySQLResult &result,
         } else {
           tz_info.reset();
           types_with_null.reset();
-          tz_info_map.id_map_.revert(stored_tz_info);
+          tz_info_map.id_map_->revert(stored_tz_info);
           stored_tz_info = NULL;
         }
       }
@@ -432,58 +488,8 @@ int ObTimeZoneInfoManager::fill_tz_info_map(sqlclient::ObMySQLResult &result,
     }
   }
 
-  tz_info_map.id_map_.revert(stored_tz_info);
+  tz_info_map.id_map_->revert(stored_tz_info);
   stored_tz_info = NULL;
-  return ret;
-}
-int ObTimeZoneInfoManager::fill_tz_info_map(ObRequestTZInfoResult &tz_result)
-{
-  int ret = OB_SUCCESS;
-  ObString tz_name_str;
-  ObTimeZoneInfoPos *stored_tz_info = NULL;
-
-  for(int64_t i = 0 ; OB_SUCC(ret) && i < tz_result.tz_array_.count(); ++i) {
-    if (NULL != stored_tz_info) {
-      tz_info_map_.id_map_.revert(stored_tz_info);
-      stored_tz_info = NULL;
-    }
-    ObTimeZoneInfoPos &new_tz_info = tz_result.tz_array_.at(i);
-    if (OB_FAIL(tz_info_map_.id_map_.get(new_tz_info.get_tz_id(), stored_tz_info))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("fail to get stored_tz_info, should not happened",
-                 "tz_id", new_tz_info.get_tz_id(), "tz_name", new_tz_info.get_tz_name(), K(ret));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(set_tz_info_map(stored_tz_info, new_tz_info, tz_info_map_))) {
-        LOG_WARN("fail to set tz_info map", K(ret));
-      }
-    }
-  }
-
-  if (NULL != stored_tz_info) {
-    tz_info_map_.id_map_.revert(stored_tz_info);
-    stored_tz_info = NULL;
-  }
-
-  if (OB_SUCC(ret)) {
-    (void)print_tz_info_map();
-    last_version_ = tz_result.last_version_;
-  }
-    return ret;
-}
-
-int ObTimeZoneInfoManager::print_tz_info_map()
-{
-  int ret = OB_SUCCESS;
-  //  SpinRLockGuard rd_guard(rw_lock_);
-  LOG_INFO("dump current time zone info", "version", last_version_);
-  if (OB_FAIL(tz_info_map_.print_tz_info_map())) {
-    LOG_WARN("fail to print_tz_info_map", K(ret));
-  }
   return ret;
 }
 
@@ -492,12 +498,66 @@ int ObTimeZoneInfoManager::find_time_zone_info(const common::ObString &tz_name, 
   int ret = OB_SUCCESS;
   if (OB_FAIL(tz_info_map_.get_tz_info_by_name(tz_name, tz_info))) {
     LOG_WARN("fail to get time zone info", K(tz_name), K(ret));
-  }
-
-  if (OB_ENTRY_NOT_EXIST == ret) {
-    ret = OB_ERR_UNKNOWN_TIME_ZONE;
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_ERR_UNKNOWN_TIME_ZONE;
+    }
   }
   return ret;
+}
+
+bool ObTimeZoneInfoManager::cmp_tz_info_map(ObTZInfoMap &map1, ObTZInfoMap &map2)
+{
+  bool same = true;
+  bool locked = false;
+  if (!(locked = sys_rwlock_.try_rdlock())) {
+    same = false;
+  } else if (map1.id_map_->size() != map2.id_map_->size() || map1.name_map_->size() != map2.name_map_->size()) {
+    same = false;
+    LOG_INFO("tz info map not same", K(map1.id_map_->size()), K(map2.id_map_->size()),
+             K(map1.name_map_->size()), K(map2.name_map_->size()));
+  }
+  if (same) {
+    // compare id map.
+    ObTZInfoIDPosMap::Iterator iter1(*map1.id_map_);
+    ObTZInfoIDPosMap::Iterator iter2(*map2.id_map_);
+    ObTimeZoneInfoPos *tz_pos1 = NULL;
+    ObTimeZoneInfoPos *tz_pos2 = NULL;
+    tz_pos1 = iter1.next(tz_pos1);
+    tz_pos2 = iter2.next(tz_pos2);
+    while (tz_pos1 != NULL && tz_pos2 != NULL && same) {
+      same = (*tz_pos1) == (*tz_pos2);
+      iter1.revert(tz_pos1);
+      iter2.revert(tz_pos2);
+      tz_pos1 = iter1.next(tz_pos1);
+      tz_pos2 = iter2.next(tz_pos2);
+    }
+      iter1.revert(tz_pos1);
+      iter2.revert(tz_pos2);
+    same = same && (NULL == tz_pos1) && (NULL == tz_pos2);
+  }
+  if (same) {
+    // compare name map.
+    ObTZInfoNameIDMap::Iterator iter1(*map1.name_map_);
+    ObTZInfoNameIDMap::Iterator iter2(*map2.name_map_);
+    ObTZNameIDInfo *tz_id_info1 = NULL;
+    ObTZNameIDInfo *tz_id_info2 = NULL;
+    tz_id_info1 = iter1.next(tz_id_info1);
+    tz_id_info2 = iter2.next(tz_id_info2);
+    while (tz_id_info1 != NULL && tz_id_info2 != NULL && same) {
+      same = (*tz_id_info1) == (*tz_id_info2);
+      iter1.revert(tz_id_info1);
+      iter2.revert(tz_id_info2);
+      tz_id_info1 = iter1.next(tz_id_info1);
+      tz_id_info2 = iter2.next(tz_id_info2);
+    }
+    iter1.revert(tz_id_info1);
+    iter2.revert(tz_id_info2);
+    same = same && (NULL == tz_id_info1) && (NULL == tz_id_info2);
+  }
+  if (locked) {
+    sys_rwlock_.unlock();
+  }
+  return same;
 }
 
 OB_SERIALIZE_MEMBER(ObRequestTZInfoArg, obs_addr_, tenant_id_);

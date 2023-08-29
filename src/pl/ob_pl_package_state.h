@@ -114,7 +114,7 @@ public:
                    const ObPackageStateVersion &state_version,
                    bool serially_reusable)
       : inner_allocator_(this),
-        cursor_allocator_(),
+        cursor_allocator_("PlPkgCursor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         package_id_(package_id),
         state_version_(state_version),
         serially_reusable_(serially_reusable),

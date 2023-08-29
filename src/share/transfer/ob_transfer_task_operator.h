@@ -377,6 +377,22 @@ public:
       int64_t &finish_time);
 
   /*
+   * get max transfer task id from __all_transfer_task_history
+   *
+   * @param [in] sql_proxy:     sql client
+   * @param [in] tenant_id:     target tenant_id
+   * @param [out] max_task_id:  max transfer task id
+   *                            return INVALID_ID(-1) when history is empty
+   * @return
+   * - OB_SUCCESS:          successful
+   * - other:               failed
+   */
+  static int get_max_task_id_from_history(
+      common::ObISQLClient &sql_proxy,
+      const uint64_t tenant_id,
+      ObTransferTaskID &max_task_id);
+
+  /*
    * update comment in __all_transfer_task according to task_id
    *
    * @param [in] sql_proxy: sql client

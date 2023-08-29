@@ -29,7 +29,7 @@ class ObVirtualTenantManager
   static const int64_t BUCKET_NUM = 16;
 public:
   static ObVirtualTenantManager &get_instance();
-  int init(const int64_t tenant_cnt = OB_DEFAULT_TENANT_COUNT);
+  int init();
   bool is_inited() const { return is_inited_; }
   void destroy();
   // get all the virtual tenant id.
@@ -110,12 +110,10 @@ private:
                         int64_t &kv_cache_mem);
   ObVirtualTenantManager();
   virtual ~ObVirtualTenantManager();
-  int init_tenant_map_(const int64_t tenant_cnt);
+  int init_tenant_map_();
 private:
   // a bucket map, every bucket content a ObTenantInfo list and a lock.
   ObTenantBucket *tenant_map_;
-  // the object pool of ObTenantInfo
-  ObFixedQueue<ObTenantInfo> tenant_pool_;
   // allocator and memattr for ObTenantInfo memory alloc
   ObArenaAllocator allocator_;
   ObMemAttr memattr_;

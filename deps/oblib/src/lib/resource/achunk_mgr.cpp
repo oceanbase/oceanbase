@@ -23,6 +23,7 @@
 #include "lib/alloc/alloc_struct.h"
 #include "lib/alloc/alloc_failed_reason.h"
 #include "lib/alloc/memory_sanity.h"
+#include "deps/oblib/src/lib/alloc/malloc_hook.h"
 
 using namespace oceanbase::lib;
 
@@ -143,9 +144,11 @@ void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bo
     huge_flags = flags | MAP_HUGETLB;
   }
 #endif
-  const int fd = -1;
+  // for debug more efficiently
+  const int fd = -1234;
   const int offset = 0;
   const int large_page_type = ObLargePageHelper::get_type();
+  set_ob_mem_mgr_path();
   if (SANITY_BOOL_EXPR(alloc_shadow)) {
     int64_t new_addr = ATOMIC_FAA(&global_canonical_addr, size);
     if (!SANITY_ADDR_IN_RANGE((void*)new_addr)) {
@@ -188,11 +191,13 @@ void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bo
       //SANITY_UNPOISON(ptr, size); // maybe no need?
     }
   }
+  unset_ob_mem_mgr_path();
   return ptr;
 }
 
 void AChunkMgr::low_free(const void *ptr, const uint64_t size)
 {
+  set_ob_mem_mgr_path();
   if (SANITY_ADDR_IN_RANGE(ptr)) {
     void *shad_ptr  = SANITY_TO_SHADOW((void*)ptr);
     ssize_t shad_size = SANITY_TO_SHADOW_SIZE(size);
@@ -200,6 +205,7 @@ void AChunkMgr::low_free(const void *ptr, const uint64_t size)
     ::munmap(shad_ptr, shad_size);
   }
   ::munmap((void*)ptr, size);
+  unset_ob_mem_mgr_path();
 }
 
 AChunk *AChunkMgr::alloc_chunk(const uint64_t size, bool high_prio)

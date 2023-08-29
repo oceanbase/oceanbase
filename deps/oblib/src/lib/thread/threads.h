@@ -93,6 +93,14 @@ public:
     IGNORE_RETURN lib::Thread::update_loop_ts();
     return stop_;
   }
+  pthread_t get_pthread(int64_t idx)
+  {
+    pthread_t pth = 0;
+    if (idx < n_threads_) {
+      pth = threads_[idx]->get_pthread();
+    }
+    return pth;
+  }
 protected:
   int64_t get_thread_count() const { return n_threads_; }
   uint64_t get_thread_idx() const { return thread_idx_; }
@@ -119,6 +127,21 @@ private:
   common::SpinRWLock lock_ __attribute__((__aligned__(16)));
   // tenant ctx
   IRunWrapper *run_wrapper_;
+};
+
+class ObPThread : public Threads
+{
+public:
+  ObPThread(void *(*start_routine) (void *), void *arg)
+    : start_routine_(start_routine), arg_(arg)
+  {}
+  void run1() override
+  {
+    start_routine_(arg_);
+  }
+private:
+  void *(*start_routine_)(void *);
+  void *arg_;
 };
 
 using ThreadPool = Threads;

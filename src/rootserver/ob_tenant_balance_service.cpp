@@ -28,6 +28,7 @@
 #include "storage/tablelock/ob_lock_utils.h" // ObInnerTableLockUtil
 #include "share/ob_cluster_version.h"
 #include "share/ob_share_util.h" // ObShareUtil
+#include "share/transfer/ob_transfer_task_operator.h"
 
 #define ISTAT(fmt, args...) FLOG_INFO("[TENANT_BALANCE] " fmt, ##args)
 #define WSTAT(fmt, args...) FLOG_WARN("[TENANT_BALANCE] " fmt, ##args)
@@ -83,8 +84,10 @@ void ObTenantBalanceService::do_work()
     int64_t idle_time_us = 10 * 1000 * 1000L;
     int tmp_ret = OB_SUCCESS;
     int64_t job_cnt = 0;
-    int64_t last_statistic_bg_stat_time = ObTimeUtility::current_time();
-    int64_t last_partition_balance_time = last_statistic_bg_stat_time;
+    int64_t last_partition_balance_time = ObTimeUtility::current_time();
+    int64_t last_statistic_bg_stat_time = OB_INVALID_TIMESTAMP; // statistic once when thread starts
+    int64_t last_statistic_schema_version = OB_INVALID_VERSION;
+    ObTransferTaskID last_statistic_max_transfer_task_id;
     while (!has_set_stop()) {
       ObCurTraceId::init(GCONF.self_addr_);
       reset();
@@ -120,9 +123,14 @@ void ObTenantBalanceService::do_work()
       }
 
       // separate statistic to avoid affecting balance jobs
+      // statistics balance group status periodically when tenant schema version changes or transfer occurs
       if (OB_FAIL(ret)) {
-      } else if (OB_TMP_FAIL(try_statistic_balance_group_status_(last_statistic_bg_stat_time))) {
-        LOG_WARN("try statistic balance group status failed", KR(tmp_ret), K(last_statistic_bg_stat_time));
+      } else if (OB_TMP_FAIL(try_statistic_balance_group_status_(
+          last_statistic_bg_stat_time,
+          last_statistic_schema_version,
+          last_statistic_max_transfer_task_id))) {
+        LOG_WARN("try statistic balance group status failed", KR(tmp_ret), K(last_statistic_bg_stat_time),
+            K(last_statistic_schema_version), K(last_statistic_max_transfer_task_id));
       }
 
       if (OB_FAIL(ret) && OB_NEED_WAIT != ret) {
@@ -134,6 +142,7 @@ void ObTenantBalanceService::do_work()
       ISTAT("finish one round", KR(ret), KR(tmp_ret), K_(tenant_id), K(job_cnt),
                 K(primary_zone_num_), K(unit_group_array_),
                 K(ls_array_), K(idle_time_us), K(last_partition_balance_time), K(last_statistic_bg_stat_time),
+                K(last_statistic_schema_version), K(last_statistic_max_transfer_task_id),
                 "enable_rebalance", ObShareUtil::is_tenant_enable_rebalance(tenant_id_),
                 "enable_transfer", ObShareUtil::is_tenant_enable_transfer(tenant_id_));
       reset();
@@ -663,26 +672,53 @@ int ObTenantBalanceService::try_do_partition_balance_(int64_t &last_partition_ba
   return ret;
 }
 
-int ObTenantBalanceService::try_statistic_balance_group_status_(int64_t &last_statistic_bg_stat_time)
+// when running normally, it will statistic balance group status every 10min when tenant schema version changes or transfer occurs
+// when thread starts, it will try to statistic bg stat every 10s until it is successful
+int ObTenantBalanceService::try_statistic_balance_group_status_(
+    int64_t &last_statistic_bg_stat_time,
+    int64_t &last_statistic_schema_version,
+    ObTransferTaskID &last_statistic_max_transfer_task_id)
 {
   int ret = OB_SUCCESS;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  const int64_t curr_time = ObTimeUtility::current_time();
+  const int64_t STATISTIC_BG_STAT_INTERVAL = 600 * 1000 * 1000L; // 10min
+  ObRefreshSchemaStatus schema_status;
+  schema_status.tenant_id_ = tenant_id_;
+  int64_t latest_tenant_schema_version = OB_INVALID_VERSION;
+  ObTransferTaskID latest_max_transfer_task_id; // default -1
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(!tenant_config.is_valid())) {
+  } else if (OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant config is invalid", KR(ret), K_(tenant_id));
+    LOG_WARN("GCTX has null ptr", KR(ret), KP(GCTX.sql_proxy_), KP(GCTX.schema_service_));
+  } else if (last_statistic_schema_version > OB_INVALID_VERSION
+      && curr_time - last_statistic_bg_stat_time < STATISTIC_BG_STAT_INTERVAL) {
+    // no need to statistic because interval is not reached
+  } else if (OB_FAIL(GCTX.schema_service_->get_schema_version_in_inner_table(
+      *GCTX.sql_proxy_,
+      schema_status,
+      latest_tenant_schema_version))) {
+    LOG_WARN("failed to get schema version in inner table", KR(ret), K(schema_status));
+  } else if (OB_FAIL(ObTransferTaskOperator::get_max_task_id_from_history(
+      *GCTX.sql_proxy_,
+      tenant_id_,
+      latest_max_transfer_task_id))) { // -1 when transfer history is empty
+    LOG_WARN("get max transfer task if from history failed",
+        KR(ret), K_(tenant_id), K(latest_max_transfer_task_id));
+  } else if (latest_tenant_schema_version <= last_statistic_schema_version
+      && latest_max_transfer_task_id <= last_statistic_max_transfer_task_id) {
+    // no need to statistics because distribution of tablets is not changed
+  } else if (OB_FAIL(partition_balance_(false/*need_balance*/))) { // just statistic balance group status
+    LOG_WARN("failed to save balance group status",
+        KR(ret), K(curr_time), K(last_statistic_bg_stat_time));
   } else {
-    const int64_t curr_time = ObTimeUtility::current_time();
-    if (curr_time - last_statistic_bg_stat_time > tenant_config->balancer_idle_time) {
-      if (OB_FAIL(partition_balance_(false/*need_balance*/))) { // just statistic balance group status
-        LOG_WARN("failed to save balance group status",
-            KR(ret), K(curr_time), K(last_statistic_bg_stat_time));
-      } else {
-        last_statistic_bg_stat_time = curr_time;
-      }
-    }
+    ISTAT("statistic balance group status successfully", K(curr_time), K(last_statistic_bg_stat_time),
+        K(latest_tenant_schema_version), K(last_statistic_schema_version),
+        K(latest_max_transfer_task_id), K(last_statistic_max_transfer_task_id));
+    last_statistic_bg_stat_time = curr_time;
+    last_statistic_schema_version = latest_tenant_schema_version;
+    last_statistic_max_transfer_task_id = latest_max_transfer_task_id;
   }
   return ret;
 }

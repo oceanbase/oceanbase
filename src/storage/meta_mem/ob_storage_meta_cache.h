@@ -275,7 +275,6 @@ private:
       ObStorageMetaIOCallback &callback,
       ObStorageMetaHandle &handle);
 private:
-  common::ObConcurrentFIFOAllocator allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageMetaCache);
 };
 

@@ -15,7 +15,7 @@
 #include "lib/geo/ob_geo_func_register.h"
 #include "ob_expr_priv_st_transform.h"
 #include "lib/geo/ob_srs_info.h"
-#include "observer/omt/ob_tenant_srs_mgr.h"
+#include "observer/omt/ob_tenant_srs.h"
 #include "lib/geo/ob_geo_normalize_visitor.h"
 #include "lib/geo/ob_geo_wkb_size_visitor.h"
 #include "lib/geo/ob_geo_wkb_visitor.h"
@@ -115,7 +115,7 @@ int ObExprPrivSTTransform::eval_priv_st_transform(const ObExpr &expr, ObEvalCtx 
       ret = OB_ERR_GIS_INVALID_DATA;
       LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_TRANSFORM);
       LOG_WARN("get srid from wkb failed", K(wkb), K(ret));
-    } else if (OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(session->get_effective_tenant_id(), srs_guard))) {
+    } else if (OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
       LOG_WARN("get tenant srs guard failed", K(session->get_effective_tenant_id()), K(src_srid), K(ret));
     } else if (src_srid != 0 && OB_FAIL(srs_guard.get_srs_item(src_srid, src_srs_item))) {
       LOG_WARN("failed to get srs item", K(ret), K(src_srid));

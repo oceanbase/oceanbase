@@ -15,6 +15,7 @@
 
 #include "lib/container/ob_se_array.h"
 #include "lib/hash/ob_hashmap.h"
+#include "lib/hash/ob_hashset.h"
 #include "lib/list/ob_dlink_node.h"
 #include "lib/thread/ob_thread_name.h"
 #include "lib/list/ob_dlist.h"
@@ -94,8 +95,8 @@ public:
   friend class TestBatchProcessQueue_test_update_process_Test;
   friend class TestBatchProcessQueue_test_single_update_Test;
   static const int64_t QUEUE_WAIT_INTERVAL_MS = 200; // 200ms
-  ObUniqTaskQueue() : inited_(false), queue_size_(0), thread_name_(nullptr), task_map_(),
-                      task_count_(0), group_map_(), processing_task_map_(), cur_group_(NULL),
+  ObUniqTaskQueue() : inited_(false), queue_size_(0), thread_name_(nullptr), task_set_(),
+                      task_count_(0), group_map_(), processing_task_set_(), cur_group_(NULL),
                       processing_thread_count_(0), barrier_task_count_(0),
   updater_(NULL) {}
   virtual ~ObUniqTaskQueue() { }
@@ -146,14 +147,13 @@ private:
   const char *thread_name_;
   common::ObThreadCond cond_;
   // FIXME baihua: half memory wasted here.
-  common::hash::ObHashMap<Task,
-      Task,
+  common::hash::ObHashSet<Task,
       common::hash::NoPthreadDefendMode,
       common::hash::hash_func<Task>,
       common::hash::equal_to<Task>,
-      common::hash::SimpleAllocer<typename common::hash::HashMapTypes<Task, Task>::AllocType,
-      common::hash::NodeNumTraits<IS_BIG_OBJ(Task), Task>::NODE_NUM,
-      common::hash::NoPthreadDefendMode, ObHighPrioMemAllocator> > task_map_;
+      common::hash::SimpleAllocer<typename common::hash::HashSetTypes<Task>::AllocType,
+      common::hash::NodeNumTraits<Task>::NODE_NUM,
+      common::hash::NoPthreadDefendMode, ObHighPrioMemAllocator> > task_set_;
   int64_t task_count_;
   common::hash::ObHashMap<uint64_t, Group,
       common::hash::NoPthreadDefendMode,
@@ -161,16 +161,15 @@ private:
       common::hash::equal_to<uint64_t>,
       common::hash::SimpleAllocer<
           typename common::hash::HashMapTypes<uint64_t, Group>::AllocType,
-      common::hash::NodeNumTraits<IS_BIG_OBJ(Group), Group>::NODE_NUM,
+      common::hash::NodeNumTraits<Group>::NODE_NUM,
       common::hash::NoPthreadDefendMode, ObHighPrioMemAllocator> > group_map_;
-  common::hash::ObHashMap<Task,
-      int,
+  common::hash::ObHashSet<Task,
       common::hash::NoPthreadDefendMode,
       common::hash::hash_func<Task>,
       CompareT<Task>,
-      common::hash::SimpleAllocer<typename common::hash::HashMapTypes<Task, int>::AllocType,
-      common::hash::NodeNumTraits<IS_BIG_OBJ(Task), Task>::NODE_NUM,
-      common::hash::NoPthreadDefendMode, ObHighPrioMemAllocator> > processing_task_map_;
+      common::hash::SimpleAllocer<typename common::hash::HashSetTypes<Task>::AllocType,
+      common::hash::NodeNumTraits<Task>::NODE_NUM,
+      common::hash::NoPthreadDefendMode, ObHighPrioMemAllocator> > processing_task_set_;
   common::ObDList<Group> groups_;
   Group *cur_group_;
   int64_t processing_thread_count_;
@@ -211,12 +210,13 @@ int ObUniqTaskQueue<Task, Process>::init_only(Process *updater, const int64_t th
     SERVER_LOG(WARN, "invalid argument", K(thread_num), K(queue_size), K(updater));
   } else if (OB_FAIL(cond_.init(common::ObWaitEventIds::PARTITION_TABLE_UPDATER_COND_WAIT))) {
     SERVER_LOG(WARN, "fai to init condition, ", K(ret));
-  } else if (OB_FAIL(task_map_.create(queue_size, attr, attr))) {
+  } else if (OB_FAIL(task_set_.create(queue_size, attr, attr))) {
     SERVER_LOG(WARN, "create hash map failed", K(ret), K(queue_size));
   } else if (OB_FAIL(group_map_.create(group_count,
                                        attr, attr))) {
     SERVER_LOG(WARN, "create hash map failed", K(ret), K(group_count));
-  } else if (OB_FAIL(processing_task_map_.create(queue_size, attr, attr))) {
+  } else if (OB_FAIL(processing_task_set_.create(common::UNIQ_TASK_QUEUE_BATCH_EXECUTE_NUM * thread_num,
+                                                 attr, attr))) {
     SERVER_LOG(WARN, "create hash map failed", K(ret));
   } else {
     this->set_thread_count(static_cast<int32_t>(thread_num));
@@ -259,7 +259,7 @@ int ObUniqTaskQueue<Task, Process>::check_exist(const Task &task, bool &exist)
     exist = false;
     common::ObThreadCondGuard guard(cond_);
     const Task *stored_task = nullptr;
-    if (nullptr == (stored_task = task_map_.get(task))) {
+    if (nullptr == (stored_task = task_set_.get(task))) {
       exist = false;
     } else {
       exist = true;
@@ -288,10 +288,10 @@ int ObUniqTaskQueue<Task, Process>::add(const Task &task)
       }
     } else {
       const Task *stored_task = NULL;
-      if (OB_FAIL(task_map_.set_refactored(task, task))) {
+      if (OB_FAIL(task_set_.set_refactored(task, 0))) {
         if (common::OB_HASH_EXIST == ret) {
           if (task.need_assign_when_equal()) {
-            if (NULL == (stored_task = task_map_.get(task))) {
+            if (NULL == (stored_task = task_set_.get(task))) {
               ret = common::OB_ERR_SYS;
               SERVER_LOG(WARN, "get inserted task failed", K(ret), K(task));
             } else if (OB_FAIL(const_cast<Task *>(stored_task)->assign_when_equal(task))) {
@@ -304,7 +304,7 @@ int ObUniqTaskQueue<Task, Process>::add(const Task &task)
         } else {
           SERVER_LOG(WARN, "insert into hash failed", K(ret), K(task));
         }
-      } else if (NULL == (stored_task = task_map_.get(task))) {
+      } else if (NULL == (stored_task = task_set_.get(task))) {
         ret = common::OB_ERR_SYS;
         SERVER_LOG(WARN, "get inserted task failed", K(ret), K(task));
       } else {
@@ -381,7 +381,7 @@ void ObUniqTaskQueue<Task, Process>::run1()
                 } else if (OB_FAIL(tasks.push_back(*t))) {
                   SERVER_LOG(WARN, "push_back failed", K(ret));
                 } else {
-                  if (OB_FAIL(task_map_.erase_refactored(*t))) {
+                  if (OB_FAIL(task_set_.erase_refactored(*t))) {
                     SERVER_LOG(WARN, "erase task from task map failed", K(ret), "task", *t);
                   } else {
                     --task_count_;
@@ -550,7 +550,7 @@ int ObUniqTaskQueue<Task, Process>::try_lock(const Task &task)
   if (!task.is_valid()) {
     ret = common::OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "get invalid task", K(ret), K(task));
-  } else if (OB_FAIL(processing_task_map_.set_refactored(task, 1))) {
+  } else if (OB_FAIL(processing_task_set_.set_refactored(task, 0))) {
     if (common::OB_HASH_EXIST == ret) {
       ret = common::OB_EAGAIN;
       SERVER_LOG(TRACE, "same task exist", K(task));
@@ -570,7 +570,7 @@ int ObUniqTaskQueue<Task, Process>::batch_unlock(const common::ObIArray<Task> &t
     if (OB_ISNULL(task)) {
       tmp_ret = common::OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "get invalid task", K(tmp_ret), K(task));
-    } else if (common::OB_SUCCESS != (tmp_ret = processing_task_map_.erase_refactored(*task))) {
+    } else if (common::OB_SUCCESS != (tmp_ret = processing_task_set_.erase_refactored(*task))) {
       SERVER_LOG(ERROR, "fail to erase task", K(tmp_ret), K(*task));
     }
     if (common::OB_SUCCESS != tmp_ret && OB_SUCC(ret)) {

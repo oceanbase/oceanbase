@@ -1247,10 +1247,12 @@ int ObAccessService::audit_tablet_opt_dml_stat(
     } else {
       dml_stat.delete_row_count_ = affected_rows;
     }
-    if (OB_FAIL(ObOptStatMonitorManager::get_instance().update_local_cache(tenant_id_, dml_stat))) {
-      LOG_WARN("failed to update dml stat local cache", K(ret));
-    } else {
-      LOG_TRACE("succeed to update dml stat local cache", K(dml_stat));
+    if (MTL(ObOptStatMonitorManager*) != NULL) {
+      if (OB_FAIL(MTL(ObOptStatMonitorManager*)->update_local_cache(dml_stat))) {
+        LOG_WARN("failed to update local cache", K(ret));
+      } else {
+        LOG_TRACE("succeed to update dml stat local cache", K(dml_stat));
+      }
     }
     //last_access_ts = ObClockGenerator::getClock();
   }

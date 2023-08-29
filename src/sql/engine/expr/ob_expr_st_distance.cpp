@@ -17,7 +17,7 @@
 #include "lib/geo/ob_geo_func_register.h"
 #include "lib/geo/ob_geo_ibin.h"
 #include "sql/engine/ob_exec_context.h"
-#include "observer/omt/ob_tenant_srs_mgr.h"
+#include "observer/omt/ob_tenant_srs.h"
 #include "ob_expr_st_distance.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"

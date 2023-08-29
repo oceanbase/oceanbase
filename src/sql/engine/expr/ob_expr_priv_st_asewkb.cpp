@@ -15,7 +15,7 @@
 #include "sql/engine/expr/ob_expr_priv_st_asewkb.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
-#include "observer/omt/ob_tenant_srs_mgr.h"
+#include "observer/omt/ob_tenant_srs.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

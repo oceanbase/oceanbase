@@ -88,6 +88,7 @@
 #include "share/io/ob_io_manager.h"
 #include "rootserver/freeze/ob_major_freeze_service.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "observer/omt/ob_tenant_srs.h"
 #include "observer/report/ob_tenant_meta_checker.h"
 #include "storage/high_availability/ob_storage_ha_service.h"
 #include "rootserver/ob_tenant_info_loader.h"//ObTenantInfoLoader
@@ -523,6 +524,9 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObTenantErrsimEventMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
 #endif
 
+    MTL_BIND2(mtl_new_default, ObSharedTimer::mtl_init, ObSharedTimer::mtl_start, ObSharedTimer::mtl_stop, ObSharedTimer::mtl_wait, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, ObOptStatMonitorManager::mtl_init, ObOptStatMonitorManager::mtl_start, ObOptStatMonitorManager::mtl_stop, ObOptStatMonitorManager::mtl_wait, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, ObTenantSrs::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
   }
 
   if (OB_SUCC(ret)) {
@@ -767,7 +771,6 @@ int ObMultiTenant::convert_hidden_to_real_sys_tenant(const ObUnitInfoGetter::ObT
   bool lock_succ = false;
   int64_t bucket_lock_idx = -1;
   int64_t lock_timeout_ts = abs_timeout_us - 3000000; // reserve 3s for converting tenant
-
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1071,12 +1074,14 @@ int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantCo
   return ret;
 }
 
-int ObMultiTenant::update_tenant_memory(const ObUnitInfoGetter::ObTenantConfig &unit)
+int ObMultiTenant::update_tenant_memory(const ObUnitInfoGetter::ObTenantConfig &unit,
+                                        const int64_t extra_memory /* = 0 */)
 {
   int ret = OB_SUCCESS;
   ObTenant *tenant = nullptr;
   const uint64_t tenant_id = unit.tenant_id_;
   int64_t allowed_mem_limit = 0;
+  int64_t memory_size = unit.config_.memory_size() + extra_memory;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -1085,9 +1090,9 @@ int ObMultiTenant::update_tenant_memory(const ObUnitInfoGetter::ObTenantConfig &
   } else if (OB_ISNULL(tenant)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tenant is nullptr", K(tenant_id));
-  } else if (OB_FAIL(update_tenant_memory(tenant_id, unit.config_.memory_size(), allowed_mem_limit))) {
+  } else if (OB_FAIL(update_tenant_memory(tenant_id, memory_size, allowed_mem_limit))) {
     LOG_WARN("fail to update tenant memory", K(ret), K(tenant_id));
-  } else if (OB_FAIL(update_tenant_freezer_mem_limit(tenant_id, unit.config_.memory_size(), allowed_mem_limit))) {
+  } else if (OB_FAIL(update_tenant_freezer_mem_limit(tenant_id, memory_size, allowed_mem_limit))) {
     LOG_WARN("fail to update_tenant_freezer_mem_limit", K(ret), K(tenant_id));
   } else if (FALSE_IT(tenant->set_unit_memory_size(allowed_mem_limit))) {
     // unreachable
@@ -1100,7 +1105,7 @@ int ObMultiTenant::construct_allowed_unit_config(const int64_t allowed_new_log_d
                                                  ObUnitInfoGetter::ObTenantConfig &allowed_new_unit)
 {
   int ret = OB_SUCCESS;
-  if (0 >= allowed_new_log_disk_size
+  if (0 > allowed_new_log_disk_size
       || !expected_unit_config.is_valid()) {
     ret= OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(allowed_new_unit.assign(expected_unit_config))) {
@@ -1637,15 +1642,6 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
       LOG_ERROR("failed to get multi allocator", K(ret));
     } else {
       allocator->try_purge();
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObOptStatMonitorManager::get_instance().erase_opt_stat_monitoring_info_map(tenant_id))) {
-      if (OB_HASH_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("failed to erase column usage map", K(ret));
-      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -2391,4 +2387,56 @@ int ObSrvNetworkFrame::reload_sql_thread_config()
     }
   }
   return ret;
+}
+
+int ObSharedTimer::mtl_init(ObSharedTimer *&st)
+{
+  int ret = common::OB_SUCCESS;
+  if (st != NULL) {
+    int &tg_id = st->tg_id_;
+    if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TntSharedTimer, tg_id))) {
+      LOG_WARN("init shared timer failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSharedTimer::mtl_start(ObSharedTimer *&st)
+{
+  int ret = common::OB_SUCCESS;
+  if (st != NULL) {
+    int &tg_id = st->tg_id_;
+    if (OB_FAIL(TG_START(tg_id))) {
+      LOG_WARN("init shared timer failed", K(ret), K(tg_id));
+    }
+  }
+  return ret;
+}
+
+void ObSharedTimer::mtl_stop(ObSharedTimer *&st)
+{
+  if (st != NULL) {
+    int &tg_id = st->tg_id_;
+    if (tg_id > 0) {
+      TG_STOP(tg_id);
+    }
+  }
+}
+
+void ObSharedTimer::mtl_wait(ObSharedTimer *&st)
+{
+  if (st != NULL) {
+    int &tg_id = st->tg_id_;
+    if (tg_id > 0) {
+      TG_WAIT(tg_id);
+    }
+  }
+}
+
+void ObSharedTimer::destroy()
+{
+  if (tg_id_ > 0) {
+    TG_DESTROY(tg_id_);
+    tg_id_ = -1;
+  }
 }

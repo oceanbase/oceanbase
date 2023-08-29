@@ -50,10 +50,28 @@ struct ObLatchStat
 
 struct ObLatchStatArray
 {
-  ObLatchStatArray();
+public:
+  ObLatchStatArray(ObIAllocator *allocator = NULL);
+  ~ObLatchStatArray();
   int add(const ObLatchStatArray &other);
   void reset();
-  ObLatchStat items_[ObLatchIds::LATCH_END];
+  ObLatchStat *get_item(int32_t idx) const
+  {
+    return items_[idx];
+  }
+  ObLatchStat *get_or_create_item(int32_t idx)
+  {
+    if (OB_ISNULL(items_[idx])) {
+      items_[idx] = create_item();
+    }
+    return items_[idx];
+  }
+private:
+  ObLatchStat *create_item();
+  void free_item(ObLatchStat *stat);
+private:
+  ObIAllocator *allocator_;
+  ObLatchStat *items_[ObLatchIds::LATCH_END] = {NULL};
 };
 
 class ObWaitEventHistoryIter
@@ -140,7 +158,7 @@ private:
 class ObDiagnoseTenantInfo final
 {
 public:
-  ObDiagnoseTenantInfo();
+  ObDiagnoseTenantInfo(ObIAllocator *allocator = NULL);
   ~ObDiagnoseTenantInfo();
   void add(const ObDiagnoseTenantInfo &other);
   void add_wait_event(const ObDiagnoseTenantInfo &other);

@@ -19,6 +19,7 @@
 #include "share/allocator/ob_memstore_allocator_mgr.h"     // ObMemstoreAllocatorMgr
 #include "storage/tx_storage/ob_tenant_freezer.h"          // ObTenantFreezer
 #include "storage/tx_storage/ob_tenant_memory_printer.h"
+#include "deps/oblib/src/lib/alloc/malloc_hook.h"
 
 namespace oceanbase
 {
@@ -68,8 +69,9 @@ int ObTenantMemoryPrinter::print_tenant_usage()
   } else {
     if (OB_FAIL(databuff_printf(print_buf, BUF_LEN, pos,
                                 "=== TENANTS MEMORY INFO ===\n"
-                                "all_tenants_memstore_used=% '15ld\n",
-                                allocator_mgr->get_all_tenants_memstore_used()))) {
+                                "all_tenants_memstore_used=% '15ld, divisive_memory_used=% '15ld\n",
+                                allocator_mgr->get_all_tenants_memstore_used(),
+                                get_divisive_mem_size()))) {
       LOG_WARN("print failed", K(ret));
     } else if (OB_FAIL(ObVirtualTenantManager::get_instance().print_tenant_usage(print_buf,
                                                                                  BUF_LEN,

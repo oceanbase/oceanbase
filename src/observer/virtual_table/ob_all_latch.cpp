@@ -131,7 +131,9 @@ int ObAllLatch::inner_get_next_row(ObNewRow *&row)
           OB_SUCC(ret) && cell_idx < output_column_ids_.count();
           ++cell_idx) {
         const uint64_t column_id = output_column_ids_.at(cell_idx);
-        const ObLatchStat& latch_stat = dipair.second->get_latch_stats().items_[latch_iter_];
+        ObLatchStat *p_latch_stat = dipair.second->get_latch_stats().get_item(latch_iter_);
+        if (OB_ISNULL(p_latch_stat)) continue;
+        const ObLatchStat& latch_stat = *p_latch_stat;
         switch(column_id) {
         case TENANT_ID: {
             cells[cell_idx].set_int(dipair.first);

@@ -108,15 +108,11 @@ private:
   };
 
 public:
-ObTimeZoneInfoManager(obrpc::ObCommonRpcProxy &rs_rpc_proxy,
-                      common::ObMySQLProxy &sql_proxy,
-                      rootserver::ObRootService &root_service,
-                      ObTZInfoMap &tz_info_map,
+ObTimeZoneInfoManager(common::ObMySQLProxy &sql_proxy,
                       int64_t tenant_id)
-    : rs_rpc_proxy_(rs_rpc_proxy),
-      sql_proxy_(sql_proxy),
-      root_service_(root_service),
-      tz_info_map_(tz_info_map),
+    : sql_proxy_(sql_proxy),
+      tz_info_map_(),
+      tz_info_map_buf_(),
       inited_(false),
       is_usable_(false),
       last_version_(-1),
@@ -134,19 +130,19 @@ ObTimeZoneInfoManager(obrpc::ObCommonRpcProxy &rs_rpc_proxy,
   int update_time_zone_info(int64_t tz_info_version);
   int get_time_zone();
   int find_time_zone_info(const common::ObString &tz_name, ObTimeZoneInfoPos &tz_info);
-  void free_tz_info_pos(ObTimeZoneInfoPos *&tz_info) { tz_info_map_.free_tz_info_pos(tz_info); }
   int64_t get_version() const { return last_version_; }
-  const ObTZInfoMap *get_tz_info_map() const { return &tz_info_map_; }
-  const ObTZInfoNameIDMap *get_tz_info_name_map() const { return &tz_info_map_.name_map_; }
+  ObTZInfoMap *get_tz_info_map() { return &tz_info_map_; }
 
   static const char *FETCH_TZ_INFO_SQL;
   static const char *FETCH_TENANT_TZ_INFO_SQL;
   static const char *FETCH_LATEST_TZ_VERSION_SQL;
-  static int fill_tz_info_map(common::sqlclient::ObMySQLResult &result, ObTZInfoMap &tz_info_map);
+  static int fill_tz_info_map(common::sqlclient::ObMySQLResult &result, ObTZInfoMap &tz_info_map,
+                              uint64_t tenant_id = common::OB_SERVER_TENANT_ID);
   static int set_tz_info_map(
       ObTimeZoneInfoPos *&stored_tz_info,
       ObTimeZoneInfoPos &new_tz_info,
       ObTZInfoMap &tz_info_map);
+  static bool cmp_tz_info_map(ObTZInfoMap &tz_info_map1, ObTZInfoMap &tz_info_map2);
 private:
 
   int fetch_time_zone_info_from_tenant_table(const int64_t current_tz_version);
@@ -154,14 +150,14 @@ private:
                              ObTimeZoneInfoPos &type_info);
   static int prepare_tz_info(const common::ObIArray<ObTZTransitionTypeInfo> &types_with_null,
                       ObTimeZoneInfoPos &type_info);
-  int fill_tz_info_map(ObRequestTZInfoResult &tz_result);
-  int print_tz_info_map();
 
 private:
-  obrpc::ObCommonRpcProxy &rs_rpc_proxy_;
+  static ObTZInfoMap shared_tz_info_map_;
+  static int64_t loaded_tz_info_count_;
+  static SpinRWLock sys_rwlock_;
   common::ObMySQLProxy &sql_proxy_;
-  rootserver::ObRootService &root_service_;
-  ObTZInfoMap &tz_info_map_;
+  ObTZInfoMap tz_info_map_;
+  ObTZInfoMap tz_info_map_buf_;
   bool inited_;
 
   //is_usable_ == true时，server才可以对外提供服务；设置其为true的情况

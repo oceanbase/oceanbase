@@ -211,7 +211,7 @@ int ObServerConfig::deserialize_with_compat(const char *buf, const int64_t data_
 }
 
 ObServerMemoryConfig::ObServerMemoryConfig()
-  : memory_limit_(0), system_memory_(0)
+  : memory_limit_(0), system_memory_(0), hidden_sys_memory_(0)
 {}
 
 ObServerMemoryConfig &ObServerMemoryConfig::get_instance()
@@ -220,75 +220,126 @@ ObServerMemoryConfig &ObServerMemoryConfig::get_instance()
   return memory_config;
 }
 
-int64_t ObServerMemoryConfig::get_capacity_default_memory(CapacityType type, int64_t memory_limit)
+int64_t ObServerMemoryConfig::get_adaptive_memory_config(const int64_t memory_size,
+                                                         DependentMemConfig dep_mem_config,
+                                                         AdaptiveMemConfig adap_mem_config)
 {
   // According to different memory_limit, the kernel can provide adaptive memory_size for default capacity.
-  // For example, memory_limit = 16G, adaptive system_memory and hidden_sys_memory are 6G and 2G.
-  static const int64_t      memory_limit_array[] = {4LL<<30, 8LL<<30, 14LL<<30, 28LL<<30, 48LL<<30, 56LL<<30, 65LL<<30, 96LL<<30, 128LL<<30};
-  static const int64_t     system_memory_array[] = {2LL<<30, 3LL<<30,  6LL<<30, 10LL<<30, 12LL<<30, 13LL<<30, 15LL<<30, 18LL<<30,  20LL<<30};
-  static const int64_t hidden_sys_memory_array[] = {1LL<<30, 2LL<<30,  2LL<<30,  2LL<<30,  4LL<<30,  4LL<<30,  6LL<<30,  7LL<<30,   8LL<<30};
+  static const int64_t      memory_limit_array[] = {4LL<<30, 12LL<<30, 20LL<<30, 36LL<<30, 60LL<<30, 80LL<<30, 100LL<<30, 120LL<<30, 130LL<<30};
+  static const int64_t     system_memory_array[] = {1LL<<30, 1LL<<30,  4LL<<30,  5LL<<30,  6LL<<30,  7LL<<30,  8LL<<30,   9LL<<30,   9LL<<30};
+  static const int64_t hidden_sys_memory_array[] = {1LL<<30, 1LL<<30,  1LL<<30,  1LL<<30,  2LL<<30,  2LL<<30,  2LL<<30,   3LL<<30,   3LL<<30};
+  static const int64_t array_size = ARRAYSIZEOF(memory_limit_array);
 
-  int64_t memory_size = 0;
-  for (int i = ARRAYSIZEOF(memory_limit_array) - 1; i >= 0; --i) {
-    if (memory_limit_array[i] <= memory_limit) {
-      switch (type) {
-        case SYSTEM_MEMORY:
-          memory_size = system_memory_array[i];
-          break;
-        case HIDDEN_SYS_MEMORY:
-          memory_size = hidden_sys_memory_array[i];
-          break;
-      }
+  int64_t adap_memory_size = 0;
+  int64_t dep_memory_limit = 0;
+  const int64_t *dep_array = NULL;
+  switch (dep_mem_config) {
+    case MEMORY_LIMIT:
+      dep_array = memory_limit_array;
+      dep_memory_limit = memory_size;
       break;
+    case SYSTEM_MEMORY:
+      dep_array = system_memory_array;
+      dep_memory_limit = memory_size / 0.08;
+      break;
+  }
+  if (memory_size < dep_array[array_size - 1]) {
+    // When memory_limit < 130G, adaptive memory is calculated by array.
+    // For example, memory_limit = 16G, adaptive system_memory and hidden_sys_memory are 1G and 1G.
+    for (int i = 0; i < array_size; ++i) {
+      if (memory_size < dep_array[i]) {
+        switch (adap_mem_config) {
+          case ADAPTIVE_SYSTEM_MEMORY:
+            adap_memory_size = system_memory_array[i];
+            break;
+          case ADAPTIVE_HIDDEN_SYS_MEMORY:
+            adap_memory_size = hidden_sys_memory_array[i];
+            break;
+        }
+        break;
+      }
+    }
+  } else {
+    // When memory_limit >= 130G or system_memory >= 9G, system_memory = memory_limit*0.08, hidden_sys_memory = memory_limit*0.03.
+    // For example, memory_limit = 200G, adaptive system_memory and hidden_sys_memory are 16G and 6G.
+    switch (adap_mem_config) {
+      case ADAPTIVE_SYSTEM_MEMORY:
+        adap_memory_size = dep_memory_limit * 0.08;
+        break;
+      case ADAPTIVE_HIDDEN_SYS_MEMORY:
+        adap_memory_size = dep_memory_limit * 0.03;
+        break;
     }
   }
-  return memory_size;
+  return adap_memory_size;
 }
-
+int64_t ObServerMemoryConfig::get_extra_memory()
+{
+  return memory_limit_ < lib::ObRunningModeConfig::MINI_MEM_UPPER ? 0 : hidden_sys_memory_;
+}
 int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
 {
   int ret = OB_SUCCESS;
   const bool is_arbitration_mode = OBSERVER.is_arbitration_mode();
   int64_t memory_limit = server_config.memory_limit;
+
   if (0 == memory_limit) {
     memory_limit = get_phy_mem_size() * server_config.memory_limit_percentage / 100;
   }
-  int64_t system_memory = server_config.system_memory;
-  if (memory_limit < (1 << 30) ) {
-    // The memory_limit should not be less than 1G for arbitration mode
-    ret = OB_INVALID_CONFIG;
-    LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), "phy mem", get_phy_mem_size());
-  } else if (is_arbitration_mode) {
-    // do nothing
-  } else if (0 == system_memory) {
-    system_memory = get_capacity_default_memory(SYSTEM_MEMORY, memory_limit);
-    if (0 == system_memory) {
+
+  if (is_arbitration_mode) {
+    if (memory_limit < (1LL << 30) ) {
+      // The memory_limit should not be less than 1G for arbitration mode
       ret = OB_INVALID_CONFIG;
       LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), "phy mem", get_phy_mem_size());
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  // do nothing
-  } else if (memory_limit > system_memory) {
-    memory_limit_ = memory_limit;
-    system_memory_ = system_memory;
-    LOG_INFO("update memory_limit or system_memory success",
-              K(memory_limit_), K(system_memory_));
-  } else {
-    ret = OB_INVALID_CONFIG;
-    LOG_ERROR("update memory_limit or system_memory failed",
-              K(memory_limit), K(system_memory));
-  }
-
-  int64_t observer_tenant_hold = lib::get_tenant_memory_hold(OB_SERVER_TENANT_ID);
-  if (observer_tenant_hold > system_memory_ && false == is_arbitration_mode) {
-    if (server_config._ignore_system_memory_over_limit_error) {
-      LOG_WARN("the hold of tenant_500 is over the system_memory",
-               K(observer_tenant_hold), K_(system_memory));
     } else {
-      LOG_ERROR("the hold of tenant_500 is over the system_memory",
-                K(observer_tenant_hold), K_(system_memory));
+      memory_limit_ = memory_limit;
+      LOG_INFO("update observer memory config success", K_(memory_limit));
+    }
+  } else if (memory_limit < (4LL << 30)) {
+    // The memory_limit should not be less than 4G for observer
+    ret = OB_INVALID_CONFIG;
+    LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), "phy mem", get_phy_mem_size());
+  } else {
+    // update observer memory config
+    int64_t system_memory = server_config.system_memory;
+    int64_t hidden_sys_memory = server_config._hidden_sys_tenant_memory;
+    int64_t min_server_avail_memory = max(ObUnitResource::UNIT_MIN_MEMORY, server_config.__min_full_resource_pool_memory);
+
+    if (0 != system_memory && 0 != hidden_sys_memory) {
+      // do-nothing
+    } else if (0 == system_memory && 0 == hidden_sys_memory) {
+      system_memory = get_adaptive_memory_config(memory_limit, MEMORY_LIMIT, ADAPTIVE_SYSTEM_MEMORY);
+      hidden_sys_memory = get_adaptive_memory_config(memory_limit, MEMORY_LIMIT, ADAPTIVE_HIDDEN_SYS_MEMORY);
+    } else if (0 == hidden_sys_memory) {
+      hidden_sys_memory = get_adaptive_memory_config(system_memory, SYSTEM_MEMORY, ADAPTIVE_HIDDEN_SYS_MEMORY);
+    } else {
+      system_memory = get_adaptive_memory_config(memory_limit, MEMORY_LIMIT, ADAPTIVE_SYSTEM_MEMORY);
+    }
+    if (memory_limit - system_memory >= min_server_avail_memory &&
+        system_memory >= hidden_sys_memory) {
+      memory_limit_ = memory_limit;
+      system_memory_ = system_memory;
+      hidden_sys_memory_ = hidden_sys_memory;
+      LOG_INFO("update observer memory config success",
+                K_(memory_limit), K_(system_memory), K_(hidden_sys_memory));
+    } else {
+      ret = OB_INVALID_CONFIG;
+      LOG_ERROR("update observer memory config failed",
+                K(memory_limit), K(system_memory), K(hidden_sys_memory), K(min_server_avail_memory));
+    }
+
+    //check the hold memory of tenant 500
+    int64_t tenant_500_hold = lib::get_tenant_memory_hold(OB_SERVER_TENANT_ID);
+    int64_t tenant_500_reserved = system_memory_ - get_extra_memory();
+    if (tenant_500_hold > tenant_500_reserved) {
+      if (server_config._ignore_system_memory_over_limit_error) {
+        LOG_ERROR("the hold memory of tenant_500 is over the reserved memory",
+               K(tenant_500_hold), K(tenant_500_reserved));
+      } else {
+        LOG_WARN("the hold memory of tenant_500 is over the reserved memory",
+               K(tenant_500_hold), K(tenant_500_reserved));
+      }
     }
   }
 
@@ -303,15 +354,6 @@ int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
   }
 #endif
   return ret;
-}
-
-void ObServerMemoryConfig::set_server_memory_limit(int64_t memory_limit)
-{
-  if (memory_limit > system_memory_) {
-    LOG_INFO("update memory_limit success", K(memory_limit), K(system_memory_));
-  } else {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "update memory_limit failed", K(memory_limit), K(system_memory_));
-  }
 }
 
 int ObServerConfig::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const

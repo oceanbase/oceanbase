@@ -547,7 +547,7 @@ int ObLogTimeZoneInfoGetter::export_timezone_info_(common::ObTZInfoMap &tz_info_
     return OB_SUCCESS == tmp_ret;
   };
 
-  if (OB_FAIL(tz_info_map.id_map_.for_each(tz_info_op))) {
+  if (OB_FAIL(tz_info_map.id_map_->for_each(tz_info_op))) {
     LOG_ERROR("generate ObRequestTZInfoResult failed", KR(ret));
   } else if (0 >= tz_info_res.tz_array_.count()) {
     // skip empty tz_info_result.
@@ -599,7 +599,7 @@ int ObLogTimeZoneInfoGetter::import_timezone_info_(common::ObTZInfoMap &tz_info_
     for (int idx= 0; OB_SUCC(ret) && idx < tz_info_cnt; idx++) {
       ObTimeZoneInfoPos &new_tz_info = tz_info_res.tz_array_.at(idx);
 
-      if (OB_FAIL(tz_info_map.id_map_.get(new_tz_info.get_tz_id(), stored_tz_info))) {
+      if (OB_FAIL(tz_info_map.id_map_->get(new_tz_info.get_tz_id(), stored_tz_info))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
         } else {
@@ -619,7 +619,7 @@ int ObLogTimeZoneInfoGetter::import_timezone_info_(common::ObTZInfoMap &tz_info_
       }
 
       if (OB_NOT_NULL(stored_tz_info)) {
-        tz_info_map.id_map_.revert(stored_tz_info);
+        tz_info_map.id_map_->revert(stored_tz_info);
         stored_tz_info = nullptr;
       }
     } // end for

@@ -55,6 +55,7 @@ public:
   void wait();
   void destroy();
   void dump_pth();
+  pthread_t get_pthread() { return pth_; }
 
   /// \brief Get current thread object.
   ///

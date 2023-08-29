@@ -57,7 +57,6 @@ using namespace oceanbase::obrpc;
 
 ObVirtualTenantManager::ObVirtualTenantManager()
   : tenant_map_(NULL),
-    tenant_pool_(),
     allocator_(ObModIds::OB_TENANT_INFO),
     memattr_(OB_SERVER_TENANT_ID, ObModIds::OB_TENANT_INFO),
     is_inited_(false)
@@ -75,16 +74,13 @@ ObVirtualTenantManager &ObVirtualTenantManager::get_instance()
   return instance_;
 }
 
-int ObVirtualTenantManager::init(const int64_t tenant_cnt)
+int ObVirtualTenantManager::init()
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     COMMON_LOG(WARN, "init twice", K(ret));
-  } else if (OB_UNLIKELY(tenant_cnt <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid argument", K(tenant_cnt), K(ret));
-  } else if (OB_FAIL(init_tenant_map_(tenant_cnt))) {
+  } else if (OB_FAIL(init_tenant_map_())) {
     COMMON_LOG(WARN, "Fail to init tenant map, ", K(ret));
   } else {
     is_inited_ = true;
@@ -95,36 +91,15 @@ int ObVirtualTenantManager::init(const int64_t tenant_cnt)
   return ret;
 }
 
-int ObVirtualTenantManager::init_tenant_map_(const int64_t tenant_cnt)
+int ObVirtualTenantManager::init_tenant_map_()
 {
   int ret = OB_SUCCESS;
   char *buf = NULL;
-  if (OB_UNLIKELY(tenant_cnt <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid argument", K(tenant_cnt), K(ret));
-  } else if (NULL == (buf = (char*) allocator_.alloc((
-       sizeof(ObTenantInfo*) * tenant_cnt) + sizeof(ObTenantInfo) * tenant_cnt))) {
+  if (NULL == (buf = (char*) allocator_.alloc(sizeof(ObTenantBucket) * BUCKET_NUM))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     COMMON_LOG(ERROR, "Fail to allocate memory, ", K(ret));
-  } else if (OB_FAIL(tenant_pool_.init(tenant_cnt, buf))) {
-    COMMON_LOG(WARN, "Fail to init tenant pool, ", K(ret));
   } else {
-    buf += (sizeof(ObTenantInfo*) * tenant_cnt);
-    ObTenantInfo *info = new (buf) ObTenantInfo[tenant_cnt];
-    for (int64_t idx = 0; idx < tenant_cnt && OB_SUCC(ret); ++idx) {
-      info[idx].reset();
-      if (OB_FAIL(tenant_pool_.push(&(info[idx])))) {
-        COMMON_LOG(WARN, "Fail to push info to pool, ", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (NULL == (buf = (char*) allocator_.alloc(sizeof(ObTenantBucket) * BUCKET_NUM))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        COMMON_LOG(ERROR, "Fail to allocate memory, ", K(ret));
-      } else {
-        tenant_map_ = new (buf) ObTenantBucket[BUCKET_NUM];
-      }
-    }
+    tenant_map_ = new (buf) ObTenantBucket[BUCKET_NUM];
   }
   return ret;
 }
@@ -132,7 +107,6 @@ int ObVirtualTenantManager::init_tenant_map_(const int64_t tenant_cnt)
 void ObVirtualTenantManager::destroy()
 {
   tenant_map_ = NULL;
-  tenant_pool_.destroy();
   allocator_.reset();
   is_inited_ = false;
 }
@@ -178,18 +152,18 @@ int ObVirtualTenantManager::add_tenant(const uint64_t tenant_id)
     if (OB_SUCC(bucket.get_the_node(tenant_id, node))) {
       //tenant is exist do nothing
     } else {
-      ObTenantInfo *info = NULL;
-      if (OB_FAIL(tenant_pool_.pop(info))) {
-        COMMON_LOG(WARN, "Fail to pop info from pool, ", K(ret));
+      ret = OB_SUCCESS;
+      ObTenantInfo *info = OB_NEW(ObTenantInfo, memattr_);
+      if (OB_ISNULL(info)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        COMMON_LOG(WARN, "Fail to alloc ObTenantInfo", K(ret));
       } else {
         info->reset();
         info->tenant_id_ = tenant_id;
         if (OB_UNLIKELY(!bucket.info_list_.add_last(info))) {
           ret = OB_ERR_UNEXPECTED;
           COMMON_LOG(ERROR, "Fail to add proc to wait list, ", K(ret));
-           if (OB_SUCCESS != (tmp_ret = tenant_pool_.push(info))) {
-            COMMON_LOG(WARN, "Fail to push collects to pool, ", K(tmp_ret));
-          }
+          ob_delete(info);
         }
       }
     }
@@ -221,11 +195,8 @@ int ObVirtualTenantManager::del_tenant(const uint64_t tenant_id)
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "The info is null, ", K(ret));
       } else {
-        if (OB_FAIL(tenant_pool_.push(info))) {
-          COMMON_LOG(WARN, "Fail to push collect to pool, ", K(ret));
-        } else {
-          COMMON_LOG(INFO, "del_tenant succeed", K(tenant_id));
-        }
+        ob_delete(info);
+        COMMON_LOG(INFO, "del_tenant succeed", K(tenant_id));
       }
     }
   }

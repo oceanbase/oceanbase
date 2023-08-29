@@ -75,16 +75,31 @@ void ObLatchStat::reset()
 /**
  * ----------------------------------------------------------ObLatchStatArray-----------------------------------------------------
  */
-ObLatchStatArray::ObLatchStatArray()
-  : items_()
+ObLatchStatArray::ObLatchStatArray(ObIAllocator *allocator)
+  : allocator_(allocator), items_()
 {
+}
+
+ObLatchStatArray::~ObLatchStatArray()
+{
+  for (int64_t i = 0; i < ObLatchIds::LATCH_END; ++i) {
+    if (OB_ISNULL(items_[i])) {
+    } else {
+      free_item(items_[i]);
+      items_[i] = NULL;
+    }
+  }
 }
 
 int ObLatchStatArray::add(const ObLatchStatArray &other)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; i < ObLatchIds::LATCH_END && OB_SUCCESS == ret; ++i) {
-    ret = items_[i].add(other.items_[i]);
+    if (OB_ISNULL(other.get_item(i))) continue;
+    auto *item = get_or_create_item(i);
+    if (OB_NOT_NULL(item)) {
+      ret = item->add(*other.get_item(i));
+    }
   }
   return ret;
 }
@@ -92,7 +107,52 @@ int ObLatchStatArray::add(const ObLatchStatArray &other)
 void ObLatchStatArray::reset()
 {
   for (int64_t i = 0; i < ObLatchIds::LATCH_END; ++i) {
-    items_[i].reset();
+    if (OB_ISNULL(items_[i])) {
+    } else {
+      items_[i]->reset();
+    }
+  }
+}
+
+static constexpr int NODE_NUM =
+  common::hash::NodeNumTraits<ObLatchStat, common::OB_MALLOC_MIDDLE_BLOCK_SIZE>::NODE_NUM;
+using LatchStatAlloc = hash::SimpleAllocer<ObLatchStat, NODE_NUM>;
+
+LatchStatAlloc &get_latch_stat_alloc()
+{
+  struct Wrapper
+  {
+    Wrapper()
+    {
+      instance_.set_attr(SET_USE_500("LatchStat"));
+      instance_.set_leak_check(false);
+    }
+    LatchStatAlloc instance_;
+  };
+  static Wrapper w;
+  return w.instance_;
+}
+
+ObLatchStat *ObLatchStatArray::create_item()
+{
+  ObLatchStat *stat = NULL;
+  lib::ObDisableDiagnoseGuard disable_diagnose_guard;
+  if (OB_ISNULL(allocator_)) {
+    stat = get_latch_stat_alloc().alloc();
+  } else {
+    stat = OB_NEWx(ObLatchStat, allocator_);
+  }
+  return stat;
+}
+
+void ObLatchStatArray::free_item(ObLatchStat *stat)
+{
+  lib::ObDisableDiagnoseGuard disable_diagnose_guard;
+  if (OB_ISNULL(allocator_)) {
+    get_latch_stat_alloc().free(stat);
+  } else {
+    stat->~ObLatchStat();
+    allocator_->free(stat);
   }
 }
 
@@ -567,11 +627,11 @@ ObDiagnoseSessionInfo *ObDiagnoseSessionInfo::get_local_diagnose_info()
   return di;
 }
 
-ObDiagnoseTenantInfo::ObDiagnoseTenantInfo()
+ObDiagnoseTenantInfo::ObDiagnoseTenantInfo(ObIAllocator *allocator)
   : event_stats_(),
     stat_add_stats_(),
     stat_set_stats_(),
-    latch_stats_()
+    latch_stats_(allocator)
 {
 }
 

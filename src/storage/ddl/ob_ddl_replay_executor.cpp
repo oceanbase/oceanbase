@@ -128,7 +128,8 @@ int ObDDLStartReplayExecutor::do_replay_(ObTabletHandle &handle)
     LOG_WARN("skip replay ddl start", K(ret), "ls_id", ls_->get_ls_id(), K(handle));
   } else if (OB_FAIL(handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle, true/*try_create*/))) {
     LOG_WARN("create ddl kv mgr failed", K(ret), K(handle), KPC_(log), K_(scn));
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(*handle.get_obj(),
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(*ls_,
+                                                            *handle.get_obj(),
                                                             table_key,
                                                             scn_,
                                                             log_->get_data_format_version(),

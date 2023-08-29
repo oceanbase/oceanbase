@@ -17,7 +17,7 @@
 #include "lib/geo/ob_geo_func_common.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "lib/geo/ob_geo.h"
-#include "observer/omt/ob_tenant_srs_mgr.h"
+#include "observer/omt/ob_tenant_srs.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 
 using namespace oceanbase::common;
@@ -114,7 +114,7 @@ int ObExprSTSRID::eval_st_srid_common(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
       LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "SRID", func_name);
       LOG_WARN("srid input value out of range", K(ret), K(datum->get_int()));
     } else if (0 != (srid = datum->get_uint32())) {
-      if (OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(session->get_effective_tenant_id(), srs_guard))) {
+      if (OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
         LOG_WARN("failed to get srs guard", K(ret));
       } else if (OB_FAIL(srs_guard.get_srs_item(srid, srs))) {
         LOG_WARN("failed to get srs item", K(ret));

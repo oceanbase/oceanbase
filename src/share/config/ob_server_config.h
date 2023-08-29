@@ -149,25 +149,34 @@ private:
 class ObServerMemoryConfig
 {
 public:
-  enum CapacityType {
+  enum DependentMemConfig {
+    MEMORY_LIMIT,
     SYSTEM_MEMORY,
-    HIDDEN_SYS_MEMORY,
+  };
+  enum AdaptiveMemConfig {
+    ADAPTIVE_SYSTEM_MEMORY,
+    ADAPTIVE_HIDDEN_SYS_MEMORY,
   };
   friend class unittest::ObSimpleClusterTestBase;
   friend class unittest::ObMultiReplicaTestBase;
   ObServerMemoryConfig();
   static ObServerMemoryConfig &get_instance();
   int reload_config(const ObServerConfig& server_config);
-  int64_t get_capacity_default_memory(CapacityType type, int64_t memory_limit);
   int64_t get_server_memory_limit() { return memory_limit_; }
   int64_t get_reserved_server_memory() { return system_memory_; }
   int64_t get_server_memory_avail() { return memory_limit_ - system_memory_; }
+  int64_t get_hidden_sys_memory() { return hidden_sys_memory_; }
+  //the extra_memory just used by real sys when non_mini_mode
+  int64_t get_extra_memory();
+
 private:
-// set_server_memory_limit just for mittest
-  void set_server_memory_limit(int64_t memory_limit);
+  int64_t get_adaptive_memory_config(const int64_t memory_size,
+                                     DependentMemConfig dep_mem_config,
+                                     AdaptiveMemConfig adap_mem_config);
 private:
   int64_t memory_limit_;
   int64_t system_memory_;
+  int64_t hidden_sys_memory_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObServerMemoryConfig);
 };

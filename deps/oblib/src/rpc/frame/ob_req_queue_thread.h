@@ -15,7 +15,7 @@
 
 
 #include "lib/ob_define.h"
-#include "lib/queue/ob_lighty_queue.h"
+#include "lib/queue/ob_priority_queue.h"
 #include "lib/profile/ob_trace_id.h"
 #include "lib/net/ob_addr.h"
 #include "rpc/frame/obi_req_qhandler.h"
@@ -66,7 +66,7 @@ public:
   }
 
 private:
-  int process_task(void *task);
+  int process_task(ObLink *task);
 
   DISALLOW_COPY_AND_ASSIGN(ObReqQueue);
 
@@ -74,8 +74,7 @@ protected:
 
   bool wait_finish_;
   int push_worker_count_;
-  int64_t capacity_;
-  common::ObLightyQueue queue_;
+  common::ObPriorityQueue<1> queue_;
   ObiReqQHandler *qhandler_;
 
   static const int64_t MAX_PACKET_SIZE = 2 * 1024 * 1024L; // 2M

@@ -18,6 +18,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "lib/container/ob_iarray.h"
+#include "lib/queue/ob_priority_queue.h"
 
 namespace oceanbase
 {
@@ -174,6 +175,7 @@ private:
   common::ObISQLClient *sql_proxy_;
 };
 
+using ObDBMSJobQueue = common::ObPriorityQueue<1>;
 }
 }
 

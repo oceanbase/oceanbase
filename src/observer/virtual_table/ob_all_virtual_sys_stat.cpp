@@ -193,6 +193,12 @@ int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, ObStatEventS
         (OB_SYS_TENANT_ID == tenant_id) ? global_poc_server.get_ratelimit_rxbytes() : -1;
     stat_events.get(ObStatEventIds::STANDBY_FETCH_LOG_BANDWIDTH_LIMIT - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_ =
         (OB_SYS_TENANT_ID == tenant_id) ? global_poc_server.get_ratelimit() : -1;
+    stat_events.get(ObStatEventIds::MEMORY_LIMIT - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_ =
+        (OB_SYS_TENANT_ID == tenant_id) ? GMEMCONF.get_server_memory_limit() : 0;
+    stat_events.get(ObStatEventIds::SYSTEM_MEMORY - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_ =
+        (OB_SYS_TENANT_ID == tenant_id) ? GMEMCONF.get_reserved_server_memory() : 0;
+    stat_events.get(ObStatEventIds::HIDDEN_SYS_MEMORY - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_ =
+        (OB_SYS_TENANT_ID == tenant_id) ? GMEMCONF.get_hidden_sys_memory() : 0;
 
     int ret_bk = ret;
     if (NULL != GCTX.omt_) {

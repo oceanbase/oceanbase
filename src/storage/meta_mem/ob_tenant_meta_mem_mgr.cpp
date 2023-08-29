@@ -127,9 +127,7 @@ void ObTenantMetaMemMgr::TabletPersistTask::runTimerTask()
 }
 
 ObTenantMetaMemMgr::ObTenantMetaMemMgr(const uint64_t tenant_id)
-  : cmp_ret_(OB_SUCCESS),
-    compare_(cmp_ret_),
-    wash_lock_(common::ObLatchIds::TENANT_META_MEM_MGR_LOCK),
+  : wash_lock_(common::ObLatchIds::TENANT_META_MEM_MGR_LOCK),
     wash_func_(*this),
     tenant_id_(tenant_id),
     bucket_lock_(),
@@ -154,6 +152,7 @@ ObTenantMetaMemMgr::ObTenantMetaMemMgr(const uint64_t tenant_id)
     tx_data_memtable_pool_(tenant_id, MAX_TX_DATA_MEMTABLE_CNT_IN_OBJ_POOL, "TxDataMemObj", ObCtxIds::DEFAULT_CTX_ID),
     tx_ctx_memtable_pool_(tenant_id, MAX_TX_CTX_MEMTABLE_CNT_IN_OBJ_POOL, "TxCtxMemObj", ObCtxIds::DEFAULT_CTX_ID),
     lock_memtable_pool_(tenant_id, MAX_LOCK_MEMTABLE_CNT_IN_OBJ_POOL, "LockMemObj", ObCtxIds::DEFAULT_CTX_ID),
+    meta_cache_io_allocator_(),
     is_inited_(false)
 {
   for (int64_t i = 0; i < ObITable::TableType::MAX_TABLE_TYPE; i++) {
@@ -185,6 +184,7 @@ int ObTenantMetaMemMgr::init()
   lib::ObMemAttr mem_attr(tenant_id_, "MetaAllocator", ObCtxIds::META_OBJ_CTX_ID);
   lib::ObMemAttr map_attr(tenant_id_, "TabletMap");
   lib::ObMemAttr other_attr(tenant_id_, "T3MOtherMem");
+  const int64_t mem_limit = 4 * 1024 * 1024 * 1024LL;
   const int64_t bucket_num = cal_adaptive_bucket_num();
   const int64_t pin_set_bucket_num = common::hash::cal_next_prime(DEFAULT_BUCKET_NUM);
   if (OB_UNLIKELY(is_inited_)) {
@@ -204,6 +204,8 @@ int ObTenantMetaMemMgr::init()
     LOG_WARN("fail to create thread for t3m", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TenantMetaMemMgr, persist_tg_id_))) {
     LOG_WARN("fail to create thread for t3m", K(ret));
+  } else if (OB_FAIL(meta_cache_io_allocator_.init(OB_MALLOC_MIDDLE_BLOCK_SIZE, "StorMetaCacheIO", tenant_id_, mem_limit))) {
+    LOG_WARN("fail to init storage meta cache io allocator", K(ret), K_(tenant_id), K(mem_limit));
   } else {
     init_pool_arr();
     is_inited_ = true;
@@ -319,6 +321,7 @@ void ObTenantMetaMemMgr::destroy()
   for (int64_t i = 0; i <= ObITable::TableType::REMOTE_LOGICAL_MINOR_SSTABLE; i++) {
     pool_arr_[i] = nullptr;
   }
+  meta_cache_io_allocator_.destroy();
   is_inited_ = false;
 }
 

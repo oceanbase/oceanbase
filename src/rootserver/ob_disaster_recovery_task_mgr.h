@@ -107,7 +107,7 @@ public:
   // @param [in] task_mgr, to execute over a task
   int handle_not_in_progress_task(
       ObDRTaskMgr &task_mgr);
-  
+
   // remove task from schedule_list and clean it
   // @param [in] task, the task to finish schedule
   int finish_schedule(
@@ -195,7 +195,7 @@ private:
 class ObDRTaskMgr : public ObRsReentrantThread
 {
 public:
-  const static int64_t TASK_QUEUE_LIMIT = 1L << 20;
+  const static int64_t TASK_QUEUE_LIMIT = 10000; //1w
   const static int64_t ONCE_ADD_TASK_CNT = TASK_QUEUE_LIMIT / 2;
   const static int64_t SAFE_DISCARD_TASK_INTERVAL = 200L * 1000L; // 200ms
   const static int64_t DATA_IN_CLEAR_INTERVAL = 20L * 60L * 1000000L; // 20min
@@ -298,7 +298,7 @@ public:
       const ObDRTaskRetComment &ret_comment);
 
   // operations of reach_concurrency_limit
-  void set_reach_concurrency_limit() { 
+  void set_reach_concurrency_limit() {
     concurrency_limited_ts_ = common::ObTimeUtility::current_time();
   }
   void clear_reach_concurrency_limit() {
@@ -365,7 +365,7 @@ private:
       const ObDRTask &task);
 
   // try to log inmemory task infos according to balancer_log_interval
-  // @param [in] last_dump_ts, last time do logging 
+  // @param [in] last_dump_ts, last time do logging
   int try_dump_statistic_(
       int64_t &last_dump_ts) const;
   int inner_dump_statistic_() const;

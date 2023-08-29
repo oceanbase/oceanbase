@@ -37,7 +37,7 @@ public:
   ~ObTabletDDLKvMgr();
   int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id); // init before memtable mgr
   int ddl_start_nolock(const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t data_format_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
-  int ddl_start(ObTablet &tablet, const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t data_format_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
+  int ddl_start(ObLS &ls, ObTablet &tablet, const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t data_format_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
   int ddl_commit(ObTablet &tablet, const share::SCN &start_scn, const share::SCN &commit_scn); // schedule build a major sstable
   int schedule_ddl_dump_task(ObTablet &tablet, const share::SCN &start_scn, const share::SCN &rec_scn);
   int schedule_ddl_merge_task(ObTablet &tablet, const share::SCN &start_scn, const share::SCN &commit_scn); // try wait build major sstable

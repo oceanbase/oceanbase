@@ -70,7 +70,7 @@ void ObUnitResource::reset()
   max_cpu_ = 0;
   min_cpu_ = 0;
   memory_size_ = 0;
-  log_disk_size_ = 0;
+  log_disk_size_ = INVALID_LOG_DISK_SIZE;
   max_iops_ = 0;
   min_iops_ = 0;
   iops_weight_ = INVALID_IOPS_WEIGHT;
@@ -164,7 +164,11 @@ int ObUnitResource::init_and_check_log_disk_(const ObUnitResource &user_spec)
   const int64_t unit_min_log_disk_size = UNIT_MIN_LOG_DISK_SIZE;
   // user specify log_disk_size
   if (user_spec.is_log_disk_size_valid()) {
-    if (user_spec.log_disk_size() < unit_min_log_disk_size) {
+    if (0 == user_spec.log_disk_size()) {
+      // log_disk_size is only allowed to be 0 for hidden SYS
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Log_disk_size can only be specified as 0 for hidden SYS, not for normal unit.", KR(ret), K(user_spec));
+    } else if (user_spec.log_disk_size() < unit_min_log_disk_size) {
       ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
       LOG_WARN("log_disk_size is below limit", KR(ret), K(user_spec),
           K(unit_min_log_disk_size));
@@ -374,7 +378,11 @@ int ObUnitResource::update_and_check_log_disk_(const ObUnitResource &user_spec)
   if (! user_spec.is_log_disk_size_valid()) {
     // not specified, need not update
   } else {
-    if (user_spec.log_disk_size() < unit_min_log_disk_size) {
+    if (0 == user_spec.log_disk_size()) {
+      // log_disk_size is only allowed to be 0 for hidden SYS
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Log_disk_size can only be specified as 0 for hidden SYS, not for normal unit.", KR(ret), K(user_spec));
+    } else if (user_spec.log_disk_size() < unit_min_log_disk_size) {
       ret = OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT;
       LOG_WARN("log_disk_size is below limit", KR(ret), K(user_spec), K(unit_min_log_disk_size));
       LOG_USER_ERROR(OB_RESOURCE_UNIT_VALUE_BELOW_LIMIT, "LOG_DISK_SIZE", to_cstring(unit_min_log_disk_size));
@@ -471,7 +479,7 @@ int ObUnitResource::update_and_check_valid_for_unit(const ObUnitResource &user_s
     ret = update_and_check_mem_(user_spec);
   }
 
-  // check MEMORY
+  // check LOG_DISK_SIZE
   if (OB_SUCCESS == ret) {
     ret = update_and_check_log_disk_(user_spec);
   }
@@ -565,7 +573,8 @@ DEF_TO_STRING(ObUnitResource)
       "min_cpu:%.6g, max_cpu:%.6g, memory_size:\"%.9gGB\", "
       "log_disk_size:\"%.9gGB\", min_iops:%ld, max_iops:%ld, iops_weight:%ld",
       min_cpu_, max_cpu_, (double)memory_size_/1024/1024/1024,
-      (double)log_disk_size_/1024/1024/1024, min_iops_, max_iops_, iops_weight_);
+      is_log_disk_size_valid() ? (double)log_disk_size_/1024/1024/1024 : log_disk_size_,
+      min_iops_, max_iops_, iops_weight_);
   J_OBJ_END();
   return pos;
 }
@@ -651,91 +660,32 @@ int ObUnitResource::divide_meta_tenant(ObUnitResource &meta_resource)
   return ret;
 }
 
-int ObUnitResource::gen_sys_tenant_default_unit_resource()
+int ObUnitResource::gen_sys_tenant_default_unit_resource(const bool is_hidden_sys)
 {
   int ret = OB_SUCCESS;
 
   reset();
+  memory_size_ = is_hidden_sys ? GMEMCONF.get_hidden_sys_memory() :
+                                 max(UNIT_MIN_MEMORY, GCONF.__min_full_resource_pool_memory);
+  max_cpu_ = GCONF.get_sys_tenant_default_max_cpu();
+  min_cpu_ = GCONF.get_sys_tenant_default_min_cpu();
+  // for hidden SYS tenant, log_disk_size is 0
+  // for real SYS tenant, log_disk_size is determined by real_memory_size (including extra_memory)
+  int64_t real_memory_size = memory_size_ + GMEMCONF.get_extra_memory();
+  log_disk_size_ = is_hidden_sys ? 0 : max(real_memory_size, UNIT_MIN_LOG_DISK_SIZE);
+  max_iops_ = get_default_iops();
+  min_iops_ = max_iops_;
+  iops_weight_ = get_default_iops_weight(min_cpu_);
 
-  if (OB_FAIL(get_sys_tenant_default_memory(memory_size_))) {
-    LOG_ERROR("generate sys tenant default memory fail", KR(ret));
-  } else {
-    max_cpu_ = GCONF.get_sys_tenant_default_max_cpu();
-    min_cpu_ = GCONF.get_sys_tenant_default_min_cpu();
-    // SYS tenant log_disk_size keep same with memory size
-    log_disk_size_ = max(memory_size_, UNIT_MIN_LOG_DISK_SIZE);
-    max_iops_ = get_default_iops();
-    min_iops_ = max_iops_;
-    iops_weight_ = get_default_iops_weight(min_cpu_);
-
-    if (OB_UNLIKELY(! is_valid_for_unit())) {
-      ret = OB_RESOURCE_UNIT_VALUE_INVALID;
-      LOG_ERROR("sys tenant default unit resource is not valid for unit", KR(ret), KPC(this));
-    }
+  if (OB_UNLIKELY(! is_valid_for_unit())) {
+    ret = OB_RESOURCE_UNIT_VALUE_INVALID;
+    LOG_ERROR("sys tenant default unit resource is not valid for unit", KR(ret), K(is_hidden_sys), KPC(this));
   }
 
-  LOG_INFO("gen_sys_tenant_default_unit_resource", KR(ret), KPC(this), K(lbt()));
+  LOG_INFO("gen_sys_tenant_default_unit_resource", KR(ret), K(is_hidden_sys), KPC(this), K(lbt()));
 
   if (OB_FAIL(ret)) {
     reset();
-  }
-  return ret;
-}
-
-int ObUnitResource::get_sys_tenant_default_memory(int64_t &memory_size)
-{
-  int ret = OB_SUCCESS;
-  const int64_t unit_min_memory = UNIT_MIN_MEMORY;
-  const int64_t __min_full_resource_pool_memory = GCONF.__min_full_resource_pool_memory;
-  const int64_t sys_tenant_memory = GCONF._hidden_sys_tenant_memory;
-  const int64_t system_memory = GMEMCONF.get_reserved_server_memory();
-  const int64_t server_memory_limit = GMEMCONF.get_server_memory_limit();
-  const int64_t server_avail_memory = server_memory_limit - system_memory;
-
-  memory_size = 0;
-
-  if (OB_UNLIKELY(server_avail_memory < UNIT_MIN_MEMORY)) {
-    ret = OB_INVALID_CONFIG;
-    LOG_ERROR("server available memory is little than unit min memory, can not create sys tenant. "
-        "try adjust config 'memory_limit' or 'system_memory'.",
-        KR(ret), K(unit_min_memory), K(server_avail_memory), K(system_memory), K(server_memory_limit));
-  } else if (OB_UNLIKELY(server_avail_memory < __min_full_resource_pool_memory)) {
-    ret = OB_INVALID_CONFIG;
-    LOG_ERROR("server available memory is little than __min_full_resource_pool_memory, can not create sys tenant. "
-        "try adjust config '__min_full_resource_pool_memory', 'memory_limit' or 'system_memory'.",
-        KR(ret), K(__min_full_resource_pool_memory), K(server_avail_memory), K(system_memory), K(server_memory_limit));
-  } else if (OB_UNLIKELY(server_avail_memory < sys_tenant_memory)) {
-    ret = OB_INVALID_CONFIG;
-    LOG_ERROR("server available memory is little than sys_tenant_memory, can not create sys tenant. "
-        "try adjust config 'sys_tenant_memory', 'memory_limit' or 'system_memory'.",
-        KR(ret), K(sys_tenant_memory), K(server_avail_memory), K(system_memory), K(server_memory_limit));
-  } else if (OB_UNLIKELY(0 != sys_tenant_memory && sys_tenant_memory < __min_full_resource_pool_memory)) {
-    ret = OB_INVALID_CONFIG;
-    LOG_ERROR("sys_tenant_memory is little than __min_full_resource_pool_memory, can not create sys tenant. "
-        "try adjust config 'sys_tenant_memory' or '__min_full_resource_pool_memory'.",
-        KR(ret), K(sys_tenant_memory), K(__min_full_resource_pool_memory));
-  } else {
-    if (0 == sys_tenant_memory) {
-      // SYS tenant MEMORY is auto computed by memory_limit
-      memory_size = GMEMCONF.get_capacity_default_memory(ObServerMemoryConfig::HIDDEN_SYS_MEMORY,
-                                                         server_memory_limit);
-
-      // SYS tenant MEMORY is restricted by UNIT_MIN_MEMORY
-      memory_size = max(memory_size, UNIT_MIN_MEMORY);
-
-      // SYS tenant MEMORY is restricted by __min_full_resource_pool_memory
-      memory_size = max(memory_size, __min_full_resource_pool_memory);
-    } else {
-      memory_size = sys_tenant_memory;
-    }
-    LOG_INFO("get_sys_tenant_default_memory",
-        "sys_tenant_default_memory_G", memory_size/GB,
-        "sys_tenant_memory_G", sys_tenant_memory/GB,
-        "server_avail_memory_G", server_avail_memory/GB,
-        "unit_min_memory_G", unit_min_memory/GB,
-        "__min_full_resource_pool_memory_G", __min_full_resource_pool_memory/GB,
-        "server_memory_limit_G", server_memory_limit/GB,
-        "system_memory_G", system_memory/GB);
   }
   return ret;
 }

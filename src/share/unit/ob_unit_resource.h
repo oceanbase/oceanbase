@@ -83,6 +83,7 @@ public:
   // default factor of mapping MEMORY_SIZE to LOG_DISK_SIZE
   // MEMORY_SIZE * FACTOR = LOG_DISK_SIZE
   static const int64_t MEMORY_TO_LOG_DISK_FACTOR = 3;
+  static const int64_t INVALID_LOG_DISK_SIZE = -1;
 
   ////////////////////////// IOPS ////////////////////////////
   // IOPS is shared by META and USER tenant.
@@ -260,8 +261,8 @@ public:
   bool is_memory_size_valid_for_user_tenant() const { return memory_size_ >= USER_TENANT_MIN_MEMORY; }
 
   int64_t log_disk_size() const { return log_disk_size_; }
-  bool is_log_disk_size_valid() const { return log_disk_size_ > 0; }
-  bool is_log_disk_size_valid_for_unit() const { return log_disk_size_ >= UNIT_MIN_LOG_DISK_SIZE; }
+  bool is_log_disk_size_valid() const { return log_disk_size_ >= 0; }
+  bool is_log_disk_size_valid_for_unit() const { return 0 == log_disk_size_ || log_disk_size_ >= UNIT_MIN_LOG_DISK_SIZE; }
   bool is_log_disk_size_valid_for_meta_tenant() const { return log_disk_size_ >= META_TENANT_MIN_LOG_DISK_SIZE; }
   bool is_log_disk_size_valid_for_user_tenant() const { return log_disk_size_ >= USER_TENANT_MIN_LOG_DISK_SIZE; }
 
@@ -298,10 +299,9 @@ public:
   int divide_meta_tenant(ObUnitResource &meta_resource);
 
   // generate sys tenant default unit resource based on configuration
-  int gen_sys_tenant_default_unit_resource();
+  int gen_sys_tenant_default_unit_resource(const bool is_hidden_sys = false);
 
   /////////////////////////////////// static functions ///////////////////////////////////
-  static int get_sys_tenant_default_memory(int64_t &memory_size);
 
   // get default LOG_DISK_SIZE based on MEMORY_SIZE
   static int64_t get_default_log_disk_size(const int64_t memory_size)

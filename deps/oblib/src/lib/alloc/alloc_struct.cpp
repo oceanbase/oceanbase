@@ -17,13 +17,19 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/utility/ob_fast_convert.h"
 
-using namespace oceanbase;
-using namespace lib;
+namespace oceanbase
+{
+
 using namespace common;
+
+namespace lib
+{
 
 thread_local ObMemAttr ObMallocHookAttrGuard::tl_mem_attr(OB_SERVER_TENANT_ID,
                                                           "glibc_malloc",
                                                           ObCtxIds::GLIBC);
+static int64_t g_divisive_mem_size[OB_MAX_CPU_NUM];
+static thread_local bool g_is_ob_mem_mgr_path = false;
 
 ObMallocHookAttrGuard::ObMallocHookAttrGuard(const ObMemAttr& attr)
   : old_attr_(tl_mem_attr)
@@ -87,3 +93,42 @@ void Label::fmt(char *buf, int64_t buf_len, int64_t &pos, const char *str)
     }
   }
 }
+
+int64_t get_divisive_mem_size()
+{
+  int64_t total_size = 0;
+  for (int64_t i = 0; i < OB_MAX_CPU_NUM; i++) {
+    total_size += g_divisive_mem_size[i];
+  }
+  return total_size;
+}
+
+void inc_divisive_mem_size(const int64_t size)
+{
+  const int64_t idx = ob_gettid() % OB_MAX_CPU_NUM;
+  __sync_fetch_and_add(&(g_divisive_mem_size[idx]), size);
+}
+
+void dec_divisive_mem_size(const int64_t size)
+{
+  const int64_t idx = ob_gettid() % OB_MAX_CPU_NUM;
+  __sync_fetch_and_add(&(g_divisive_mem_size[idx]), 0 - size);
+}
+
+void set_ob_mem_mgr_path()
+{
+  g_is_ob_mem_mgr_path = true;
+}
+
+void unset_ob_mem_mgr_path()
+{
+  g_is_ob_mem_mgr_path = false;
+}
+
+bool is_ob_mem_mgr_path()
+{
+  return g_is_ob_mem_mgr_path;
+}
+
+} // end of namespace lib
+} // end of namespace oceanbase

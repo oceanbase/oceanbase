@@ -236,6 +236,7 @@ public:
   { }
   const ObTZInfoMap *get_tz_map() const { return tz_info_map_; }
   void set_tz_map(const common::ObTZInfoMap *tz_info_map);
+  TO_STRING_KV(KP_(tz_info_map));
 private:
   ObTZInfoMap *tz_info_map_;
 };
@@ -541,6 +542,8 @@ public:
   common::ObSArray<ObTZTransitionTypeInfo> &get_next_tz_tran_types() { return tz_tran_types_[get_next_idx() % 2]; }
   common::ObSArray<ObTZRevertTypeInfo> &get_next_tz_revt_types() { return tz_revt_types_[get_next_idx() % 2]; }
   int calc_revt_types();
+  bool operator==(const ObTimeZoneInfoPos &other) const;
+  void set_tz_type_attr(const lib::ObMemAttr &attr);
   virtual int timezone_to_str(char *buf, const int64_t len, int64_t &pos) const;
   VIRTUAL_TO_STRING_KV("tz_name", common::ObString(common::OB_MAX_TZ_NAME_LEN, tz_name_),
                        "tz_id", tz_id_,
@@ -594,7 +597,12 @@ public:
   }
   ~ObTZNameIDInfo() {}
   TO_STRING_KV(K_(tz_id), KCSTRING_(tz_name));
+  bool operator==(const ObTZNameIDInfo &other) const
+  {
+    return (tz_id_ == other.tz_id_
+            && 0 == STRCASECMP(tz_name_, other.tz_name_));
 
+  }
 public:
   int64_t tz_id_;
   char tz_name_[common::OB_MAX_TZ_NAME_LEN];
@@ -630,10 +638,9 @@ typedef common::ObLinkHashMap<ObTZNameKey, ObTZNameIDInfo, ObTZNameIDAlloc> ObTZ
 class ObTZInfoMap
 {
 public:
-  ObTZInfoMap() : inited_(false), id_map_(), name_map_() {}
+  ObTZInfoMap() : inited_(false), id_map_(&id_map_buf_), name_map_(&name_map_buf_) {}
   ~ObTZInfoMap() {}
   int init(const lib::ObMemAttr &attr);
-  int reset();
   void destroy();
   int print_tz_info_map();
   bool is_inited() { return inited_; }
@@ -641,11 +648,12 @@ public:
   int get_tz_info_by_name(const common::ObString &tz_name, ObTimeZoneInfoPos &tz_info_by_name);
   int get_tz_info_by_id(const int64_t tz_id, ObTimeZoneInfoPos *&tz_info_by_id);
   int get_tz_info_by_name(const common::ObString &tz_name, ObTimeZoneInfoPos *&tz_info_by_name);
-  void free_tz_info_pos(ObTimeZoneInfoPos *&tz_info) { id_map_.revert(tz_info); tz_info = NULL; }
 public:
   bool inited_;
-  ObTZInfoIDPosMap id_map_; // tz_id => ObTimeZoneInfoPos
-  ObTZInfoNameIDMap name_map_; // tz_name => tz_id
+  ObTZInfoIDPosMap *id_map_;
+  ObTZInfoNameIDMap *name_map_;
+  ObTZInfoIDPosMap id_map_buf_; // tz_id => ObTimeZoneInfoPos
+  ObTZInfoNameIDMap name_map_buf_; // tz_name => tz_id
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTZInfoMap);

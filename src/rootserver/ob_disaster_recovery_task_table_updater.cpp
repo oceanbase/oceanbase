@@ -143,9 +143,7 @@ int ObDRTaskTableUpdater::init(
       ? MINI_MODE_UPDATE_THREAD_CNT
       : UPDATE_THREAD_CNT;
   const int64_t queue_size =
-      lib::is_mini_mode()
-      ? MINI_MODE_TASK_QUEUE_SIZE
-      : TASK_QUEUE_SIZE;
+      TASK_QUEUE_SIZE;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));

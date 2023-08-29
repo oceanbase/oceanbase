@@ -164,4 +164,5 @@ TG_DEF(WR_TIMER_THREAD, WrTimer, TIMER)
 TG_DEF(SvrStartupHandler, SvrStartupHandler, QUEUE_THREAD,
    ThreadCountPair(observer::ObServerStartupTaskHandler::get_thread_num(), observer::ObServerStartupTaskHandler::get_thread_num()),
    observer::ObServerStartupTaskHandler::MAX_QUEUED_TASK_NUM)
+TG_DEF(TntSharedTimer, TntSharedTimer, TIMER)
 #endif

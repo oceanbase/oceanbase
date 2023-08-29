@@ -13,7 +13,7 @@
 #ifndef OCEANBASE_TENANT_TIMEZONE_H_
 #define OCEANBASE_TENANT_TIMEZONE_H_
 
-#include "lib/timezone/ob_timezone_info.h"
+#include "src/share/ob_time_zone_info_manager.h"
 
 namespace oceanbase {
 
@@ -25,34 +25,28 @@ class ObTenantTimezone
 {
   friend class ObTenantTimezoneMgr;
 public:
-  ObTenantTimezone();
-  ObTenantTimezone(uint64_t tenant_id);
+  ObTenantTimezone(common::ObMySQLProxy &sql_proxy, uint64_t tenant_id);
   virtual ~ObTenantTimezone();
   ObTenantTimezone(const ObTenantTimezone &)=delete;
   ObTenantTimezone &operator=(const ObTenantTimezone &)=delete;
 
-  int init(ObTenantTimezoneMgr *tz_mgr);
+  int init();
   int update_timezone(int64_t tz_version);
 
   bool is_inited() { return is_inited_; }
   bool get_update_task_not_exist() { return update_task_not_exist_; }
   int get_ref_count(int64_t &ref_count);
   uint64_t get_tenant_id() const { return tenant_id_; }
-  common::ObTZInfoMap *get_tz_map() { return tz_info_map_; }
-  common::ObTimeZoneInfoManager *get_tz_mgr() { return tz_info_mgr_; }
+  common::ObTZInfoMap *get_tz_map() { return tz_info_mgr_.get_tz_info_map(); }
+  common::ObTimeZoneInfoManager &get_tz_mgr() { return tz_info_mgr_; }
 
   void set_update_task_not_exist() { update_task_not_exist_ = true; }
-  void set_tz_mgr(common::ObTimeZoneInfoManager *tz_mgr) { tz_info_mgr_ = tz_mgr; }
-  void set_tenant_tz_mgr(ObTenantTimezoneMgr *tz_mgr) { tenant_tz_mgr_ = tz_mgr; };
-  void destroy();
   VIRTUAL_TO_STRING_KV(K_(is_inited), K_(tenant_id));
 
 private:
   bool is_inited_;
   uint64_t tenant_id_;
-  ObTenantTimezoneMgr *tenant_tz_mgr_;
-  common::ObTimeZoneInfoManager *tz_info_mgr_;
-  common::ObTZInfoMap *tz_info_map_;
+  common::ObTimeZoneInfoManager tz_info_mgr_;
   bool update_task_not_exist_;
 };
 

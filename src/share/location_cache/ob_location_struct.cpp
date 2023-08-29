@@ -56,9 +56,7 @@ OB_SERIALIZE_MEMBER(ObTabletLSKey,
 OB_SERIALIZE_MEMBER(ObTabletLSCache,
     cache_key_,
     ls_id_,
-    renew_time_,
-    row_scn_,
-    last_access_ts_);
+    renew_time_);
 
 ObLSReplicaLocation::ObLSReplicaLocation()
     : server_(),
@@ -704,9 +702,7 @@ int ObTabletLocation::deep_copy(
 ObTabletLSCache::ObTabletLSCache()
     : cache_key_(),
       ls_id_(),
-      renew_time_(0),
-      row_scn_(0),
-      last_access_ts_(0)
+      renew_time_(0)
 {
 }
 
@@ -720,8 +716,6 @@ void ObTabletLSCache::reset()
   cache_key_.reset();
   ls_id_.reset();
   renew_time_ = 0;
-  row_scn_ = 0;
-  last_access_ts_ = 0;
 }
 
 int ObTabletLSCache::assign(const ObTabletLSCache &other)
@@ -731,8 +725,6 @@ int ObTabletLSCache::assign(const ObTabletLSCache &other)
     cache_key_ = other.cache_key_;
     ls_id_ = other.ls_id_;
     renew_time_ = other.renew_time_;
-    row_scn_ = other.row_scn_;
-    last_access_ts_ = other.last_access_ts_;
   }
   return ret;
 }
@@ -741,8 +733,7 @@ bool ObTabletLSCache::is_valid() const
 {
   return cache_key_.is_valid()
       && ls_id_.is_valid()
-      && renew_time_ > 0
-      && row_scn_ > 0;
+      && renew_time_ > 0;
 }
 
 bool ObTabletLSCache::mapping_is_same_with(const ObTabletLSCache &other) const
@@ -754,9 +745,7 @@ bool ObTabletLSCache::mapping_is_same_with(const ObTabletLSCache &other) const
 bool ObTabletLSCache::operator==(const ObTabletLSCache &other) const
 {
   return mapping_is_same_with(other)
-      && renew_time_ == other.renew_time_
-      && row_scn_ == other.row_scn_
-      && last_access_ts_ == other.last_access_ts_;
+      && renew_time_ == other.renew_time_;
 }
 
 bool ObTabletLSCache::operator!=(const ObTabletLSCache &other) const
@@ -777,8 +766,6 @@ int ObTabletLSCache::init(
   } else {
     ls_id_ = ls_id;
     renew_time_ = renew_time;
-    row_scn_ = row_scn;
-    last_access_ts_ = 0;
     ObLink::reset();
   }
   return ret;

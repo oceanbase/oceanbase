@@ -238,11 +238,11 @@ int ObGlobalInterruptManager::create_checker_node(ObInterruptChecker *checker,
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
+  ObMemAttr attr(GET_TENANT_ID(), ObModIds::OB_INTERRUPT_CHECKER_NODE, common::ObCtxIds::DEFAULT_CTX_ID);
   if (OB_ISNULL(checker)) {
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(ERROR, "invaild checker pointer", K(ret));
-  } else if (OB_ISNULL(ptr = ob_malloc(sizeof(ObInterruptCheckerNode),
-                                       ObModIds::OB_INTERRUPT_CHECKER_NODE))) {
+  } else if (OB_ISNULL(ptr = ob_malloc(sizeof(ObInterruptCheckerNode), attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LIB_LOG(WARN, "fail to alloc memory in interrupt manager", K(ret));
   } else {

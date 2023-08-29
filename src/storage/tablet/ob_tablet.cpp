@@ -4146,13 +4146,25 @@ int ObTablet::start_ddl_if_need()
   } else if (OB_FAIL(get_ddl_kv_mgr(ddl_kv_mgr_handle, true/*try_create*/))) {
     LOG_WARN("create ddl kv mgr failed", K(ret));
   } else {
+    ObLS *ls = nullptr;
+    ObLSService *ls_service = nullptr;
+    ObLSHandle ls_handle;
     ObITable::TableKey table_key;
     table_key.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
     table_key.tablet_id_ = tablet_meta_.tablet_id_;
     table_key.version_range_.base_version_ = 0;
     table_key.version_range_.snapshot_version_ = tablet_meta_.ddl_snapshot_version_;
     const SCN &start_scn = tablet_meta_.ddl_start_scn_;
-    if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(*this,
+    if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
+    } else if (OB_FAIL(ls_service->get_ls(tablet_meta_.ls_id_, ls_handle, ObLSGetMod::TABLET_MOD))) {
+      LOG_WARN("failed to get ls", K(ret));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be NULL", K(ret), KP(ls));
+    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(*ls,
+                                                       *this,
                                                        table_key,
                                                        start_scn,
                                                        tablet_meta_.ddl_data_format_version_,

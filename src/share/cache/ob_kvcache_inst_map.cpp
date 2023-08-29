@@ -176,12 +176,11 @@ ObKVCacheInstHandle& ObKVCacheInstHandle::operator = (const ObKVCacheInstHandle&
 ObKVCacheInstMap::ObKVCacheInstMap()
   : lock_(common::ObLatchIds::KV_CACHE_INST_LOCK),
     inst_map_(),
-    inst_pool_(),
     list_lock_(common::ObLatchIds::KV_CACHE_LIST_LOCK),
     list_map_(),
     list_pool_(),
     configs_(NULL),
-    allocator_("CACHE_INST"),
+    allocator_("TenantMBList"),
     inst_keys_(),
     mem_limit_getter_(NULL),
     is_inited_(false)
@@ -209,19 +208,6 @@ int ObKVCacheInstMap::init(const int64_t max_entry_cnt, const ObKVCacheConfig *c
   if (OB_SUCC(ret)) {
     if (OB_FAIL(inst_map_.create(max_entry_cnt, "CACHE_INST_MAP", "CACHE_INST_MAP"))) {
       COMMON_LOG(WARN, "Fail to create inst map, ", K(ret));
-    } else if (NULL == (buf = (char*) allocator_.alloc((sizeof(ObKVCacheInst) + sizeof(ObKVCacheInst*))* max_entry_cnt))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      COMMON_LOG(ERROR, "Fail to allocate memory, ", K(max_entry_cnt), K(ret));
-    } else if (OB_FAIL(inst_pool_.init(max_entry_cnt, buf + sizeof(ObKVCacheInst) * max_entry_cnt))) {
-      COMMON_LOG(WARN, "Fail to init inst pool, ", K(ret));
-    } else {
-      ObKVCacheInst *inst = NULL;
-      for (int64_t i = 0; OB_SUCC(ret) && i < max_entry_cnt; ++i) {
-        inst = new (buf + sizeof(ObKVCacheInst) * i) ObKVCacheInst();
-        if (OB_FAIL(inst_pool_.push(inst))) {
-          COMMON_LOG(WARN, "Fail to push inst to pool, ", K(ret));
-        }
-      }
     }
   }
 
@@ -270,7 +256,6 @@ void ObKVCacheInstMap::destroy()
 {
   inst_map_.destroy();
   tenant_set_.destroy();
-  inst_pool_.destroy();
   list_map_.destroy();
   list_pool_.destroy();
   allocator_.reset();
@@ -310,7 +295,9 @@ int ObKVCacheInstMap::get_cache_inst(
       } else if (OB_HASH_NOT_EXIST == ret) {
         lib::ObMemAttr attr(inst_key.tenant_id_, "CACHE_MAP_NODE");
         SET_USE_500(attr);
-        if (OB_FAIL(inst_pool_.pop(inst))) {
+        inst = OB_NEW(ObKVCacheInst, ObMemAttr(inst_key.tenant_id_, "CACHE_INST"));
+        if (OB_ISNULL(inst)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
           COMMON_LOG(WARN, "Fail to alloc cache inst, ", K(ret));
         } else if (OB_FAIL(get_mb_list(inst_key.tenant_id_, inst->mb_list_handle_))) {
           COMMON_LOG(WARN, "get mb list failed", K(ret), "tenant_id", inst_key.tenant_id_);
@@ -331,9 +318,7 @@ int ObKVCacheInstMap::get_cache_inst(
         if (OB_FAIL(ret) && NULL != inst) {
           inst->reset();
           int tmp_ret = OB_SUCCESS;
-          if (OB_SUCCESS != (tmp_ret = inst_pool_.push(inst))) {
-            COMMON_LOG(ERROR, "Fail to push inst to pool, ", K(tmp_ret));
-          }
+          ob_delete(inst);
           if (OB_SUCCESS != (tmp_ret = inst_map_.erase_refactored(inst_key))) {
             if (OB_HASH_NOT_EXIST != tmp_ret) {
               COMMON_LOG(ERROR, "Fail to erase inst key, ", K(ret));
@@ -417,9 +402,8 @@ int ObKVCacheInstMap::erase_tenant(const uint64_t tenant_id)
       if (OB_FAIL(inst_map_.erase_refactored(tmp_key))) {
         COMMON_LOG(WARN, "Fail to erase cache inst from inst map", K(ret));
       } else if (FALSE_IT(inst->reset())) {
-      } else if (OB_FAIL(inst_pool_.push(inst))) {
-        COMMON_LOG(ERROR, "Fail to push inst back to inst pool", K(ret));
-        ob_abort();
+      } else {
+        ob_delete(inst);
       }
     }
   }

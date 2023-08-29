@@ -15,7 +15,7 @@
 #include "lib/geo/ob_geo_func_register.h"
 #include "ob_expr_st_transform.h"
 #include "lib/geo/ob_srs_info.h"
-#include "observer/omt/ob_tenant_srs_mgr.h"
+#include "observer/omt/ob_tenant_srs.h"
 #include "lib/geo/ob_geo_normalize_visitor.h"
 #include "lib/geo/ob_geo_wkb_size_visitor.h"
 #include "lib/geo/ob_geo_wkb_visitor.h"

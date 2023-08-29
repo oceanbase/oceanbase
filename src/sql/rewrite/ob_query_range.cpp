@@ -21,7 +21,7 @@
 #include "sql/engine/expr/ob_expr_like.h"
 #include "common/ob_smart_call.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "observer/omt/ob_tenant_srs_mgr.h"
+#include "observer/omt/ob_tenant_srs.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 
 //if cnd is true get full range key part which is always true
@@ -8759,12 +8759,12 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
   double distance = NAN;
 
   // todo : fix me, get effective tenant_id
-  if ((input_srid != 0) && OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(lib::current_resource_owner_id(), srs_guard))) {
-    LOG_WARN("get tenant srs guard failed", K(lib::current_resource_owner_id()), K(input_srid), K(ret));
+  if ((input_srid != 0) && OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
+    LOG_WARN("get tenant srs guard failed", K(input_srid), K(ret));
   } else if ((input_srid != 0) && OB_FAIL(srs_guard.get_srs_item(input_srid, srs_item))) {
     LOG_WARN("get tenant srs failed", K(input_srid), K(ret));
   } else if (((input_srid == 0) || !(srs_item->is_geographical_srs())) &&
-             OB_FAIL(OTSRS_MGR.get_srs_bounds(input_srid, srs_item, srs_bound))) {
+             OB_FAIL(OTSRS_MGR->get_srs_bounds(input_srid, srs_item, srs_bound))) {
     LOG_WARN("failed to get srs item", K(ret));
   } else if (op_type == ObGeoRelationType::T_DWITHIN) {
     distance = out_key_part->geo_keypart_->distance_.get_double();
@@ -8903,12 +8903,12 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
   ObExecContext *exec_ctx = NULL;
   ObString buffer_geo;
 
-  if ((input_srid != 0) && OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(lib::current_resource_owner_id(), srs_guard))) {
-    LOG_WARN("get tenant srs guard failed", K(lib::current_resource_owner_id()), K(input_srid), K(ret));
+  if ((input_srid != 0) && OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
+    LOG_WARN("get tenant srs guard failed", K(input_srid), K(ret));
   } else if ((input_srid != 0) && OB_FAIL(srs_guard.get_srs_item(input_srid, srs_item))) {
     LOG_WARN("get tenant srs failed", K(input_srid), K(ret));
   } else if (((input_srid == 0) || !(srs_item->is_geographical_srs())) &&
-             OB_FAIL(OTSRS_MGR.get_srs_bounds(input_srid, srs_item, srs_bound))) {
+             OB_FAIL(OTSRS_MGR->get_srs_bounds(input_srid, srs_item, srs_bound))) {
     LOG_WARN("failed to get srs item", K(ret));
   }
   if (s2object == NULL && OB_SUCC(ret)) {

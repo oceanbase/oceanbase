@@ -747,7 +747,8 @@ int ObDDLRedoLogWriter::write(
   return ret;
 }
 
-int ObDDLRedoLogWriter::write_ddl_start_log(ObTabletHandle &tablet_handle,
+int ObDDLRedoLogWriter::write_ddl_start_log(ObLSHandle &ls_handle,
+                                            ObTabletHandle &tablet_handle,
                                             ObDDLKvMgrHandle &ddl_kv_mgr_handle,
                                             const ObDDLStartLog &log,
                                             ObLogHandler *log_handler,
@@ -799,6 +800,8 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObTabletHandle &tablet_handle,
     LOG_WARN("fail to seriaize ddl start log", K(ret));
   } else if (OB_FAIL(log.serialize(buffer, buffer_size, pos))) {
     LOG_WARN("fail to seriaize ddl start log", K(ret));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_ddl_log_handler()->add_tablet(log.get_table_key().get_tablet_id()))) {
+    LOG_WARN("add tablet failed", K(ret));
   } else if (OB_FAIL(log_handler->append(buffer,
                                          buffer_size,
                                          SCN::min_scn(),
@@ -1180,7 +1183,7 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
     LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle, true/*try_create*/))) {
     LOG_WARN("create ddl kv mgr failed", K(ret));
-  } else if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_start_log(tablet_handle, ddl_kv_mgr_handle, log, ls->get_log_handler(), tmp_scn))) {
+  } else if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_start_log(ls_handle, tablet_handle, ddl_kv_mgr_handle, log, ls->get_log_handler(), tmp_scn))) {
     LOG_WARN("fail to write ddl start log", K(ret), K(table_key));
   } else if (FALSE_IT(set_start_scn(tmp_scn))) {
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->register_to_tablet(get_start_scn(), ddl_kv_mgr_handle))) {

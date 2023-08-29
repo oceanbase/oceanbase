@@ -18,6 +18,7 @@
 #include "share/ob_time_zone_info_manager.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "lib/hash/ob_hashset.h"
+#include "observer/ob_server.h"
 
 using namespace oceanbase::common;
 
@@ -51,7 +52,7 @@ int ObTenantTimezoneMgr::UpdateTenantTZOp::operator() (common::hash::HashMapPair
 {
   int ret = OB_SUCCESS;
   ObTenantTimezone &tenant_tz = *entry.second;
-  if (OB_FAIL(tenant_tz.get_tz_mgr()->fetch_time_zone_info())) {
+  if (OB_FAIL(tenant_tz.get_tz_mgr().fetch_time_zone_info())) {
     LOG_WARN("fail to update time zone info", K(ret));
   }
   return ret;
@@ -157,16 +158,16 @@ int ObTenantTimezoneMgr::add_tenant_timezone(uint64_t tenant_id)
       || OB_NOT_NULL(timezone = timezone_map_.get(tenant_id))) {
   } else {
     ObTenantTimezone *new_timezone = nullptr;
-    new_timezone = OB_NEW(ObTenantTimezone, "TenantTZ", tenant_id);
+    new_timezone = OB_NEW(ObTenantTimezone, "TenantTZ", OBSERVER.get_mysql_proxy(), tenant_id);
     if (OB_ISNULL(new_timezone)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc new tenant timezone failed", K(ret));
-    } else if(OB_FAIL(new_timezone->init(this))) {
+    } else if(OB_FAIL(new_timezone->init())) {
       LOG_WARN("new tenant timezone init failed", K(ret));
     } else if (OB_FAIL(timezone_map_.set_refactored(tenant_id, new_timezone, 1))) {
       LOG_WARN("add new tenant timezone failed", K(ret));
     } else {
-      LOG_INFO("add tenant timezone success!", K(tenant_id));
+      LOG_INFO("add tenant timezone success!", K(tenant_id), K(sizeof(ObTenantTimezone)));
     }
     if (OB_FAIL(ret)) {
       ob_delete(new_timezone);
@@ -193,10 +194,7 @@ int ObTenantTimezoneMgr::del_tenant_timezone(uint64_t tenant_id)
   } else if (OB_FAIL(timezone_map_.erase_refactored(tenant_id))) {
     LOG_WARN("erase tenant timezone failed", K(ret), K(tenant_id));
   } else {
-    ObTZInfoMap *tz_map = timezone->get_tz_map();
-    LOG_INFO("drop tenant tz push back succeed", K(timezone->get_tz_map()),
-             K(timezone->get_tenant_id()));
-    timezone->destroy();
+    LOG_INFO("drop tenant tz push back succeed", K(timezone->get_tenant_id()));
     ob_delete(timezone);
   }
   return ret;
@@ -218,7 +216,7 @@ int ObTenantTimezoneMgr::get_tenant_timezone_inner(const uint64_t tenant_id,
     LOG_WARN("tenant tz is null", K(ret));
   } else {
     timezone_wrap.set_tz_map(timezone->get_tz_map());
-    tz_info_mgr = timezone->get_tz_mgr();
+    tz_info_mgr = &(timezone->get_tz_mgr());
   }
   return ret;
 }

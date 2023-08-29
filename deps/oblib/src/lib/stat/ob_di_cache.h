@@ -42,7 +42,7 @@ public:
 class ObDITenantCollect : public ObDINode<ObDITenantCollect>
 {
 public:
-  ObDITenantCollect();
+  ObDITenantCollect(ObIAllocator *allocator = NULL);
   virtual ~ObDITenantCollect();
   void clean();
   uint64_t tenant_id_;
@@ -62,6 +62,10 @@ public:
       uint64_t session_id,
       ObDISessionCollect *&diag_infos);
   int get_node(uint64_t session_id, ObDISessionCollect *&session_collect);
+private:
+  static const int64_t MAX_SESSION_COLLECT_NUM = OB_MAX_SERVER_SESSION_CNT / 4;
+  STATIC_ASSERT((MAX_SESSION_COLLECT_NUM > 4 * 1024 && MAX_SESSION_COLLECT_NUM < 10 * 1024),
+      "unexpected MAX_SESSION_COLLECT_NUM");
 private:
   struct ObSessionBucket
   {
@@ -89,8 +93,8 @@ private:
   };
   ObDISessionCache();
   virtual ~ObDISessionCache();
-  ObSessionBucket di_map_[OB_MAX_SERVER_SESSION_CNT];
-  ObDISessionCollect collects_[OB_MAX_SERVER_SESSION_CNT];
+  ObSessionBucket di_map_[MAX_SESSION_COLLECT_NUM];
+  ObDISessionCollect collects_[MAX_SESSION_COLLECT_NUM];
 };
 
 struct ObTenantBucket

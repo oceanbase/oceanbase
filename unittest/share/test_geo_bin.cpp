@@ -17,7 +17,7 @@
 #include "lib/geo/ob_geo_reverse_coordinate_visitor.h"
 #include "lib/geo/ob_srs_info.h"
 #include "lib/geo/ob_geo_utils.h"
-#include "observer/omt/ob_tenant_srs_mgr.h"
+#include "observer/omt/ob_tenant_srs.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "lib/random/ob_random.h"
 #undef private
@@ -1988,9 +1988,9 @@ TEST_F(TestGeoBin, wkb_size_visitor_geom_collection)
     ASSERT_EQ(data.length(), visitor.geo_size());
 }
 
-int mock_get_tenant_srs_item(ObIAllocator &allocator, omt::ObTenantSrsMgr &srs_mgr, uint64_t tenant_id, uint64_t srs_id, const ObSrsItem *&srs_item)
+int mock_get_tenant_srs_item(ObIAllocator &allocator, uint64_t tenant_id, uint64_t srs_id, const ObSrsItem *&srs_item)
 {
-    UNUSEDx(srs_mgr, tenant_id);
+    UNUSEDx( tenant_id);
     int ret = OB_SUCCESS;
     ObGeographicRs rs;
     rs.rs_name.assign_ptr("ED50", strlen("ED50"));
@@ -2027,17 +2027,7 @@ int mock_get_tenant_srs_item(ObIAllocator &allocator, omt::ObTenantSrsMgr &srs_m
 
 void get_srs_item(ObIAllocator &allocator, uint64_t srs_id, const ObSrsItem *&srs_item)
 {
-  static bool is_inited = false;
-  common::ObMySQLProxy sql_proxy;
-  omt::ObTenantSrsMgr &tenant_srs_mgr_instance = OTSRS_MGR;
-  ObAddr tmp_addr(ObAddr::IPV4, "127.0.0.1", 80);
-  ObMultiVersionSchemaService &tmp_schema_service = ObMultiVersionSchemaService::get_instance();
-  if (!is_inited) {
-    ASSERT_EQ(OB_SUCCESS, tenant_srs_mgr_instance.init(&sql_proxy, tmp_addr, &tmp_schema_service));
-    is_inited = true;
-    ASSERT_EQ(OB_SUCCESS, mock_get_tenant_srs_item(allocator, tenant_srs_mgr_instance, OB_SYS_TENANT_ID, srs_id, srs_item));
-  }
-
+  ASSERT_EQ(OB_SUCCESS, mock_get_tenant_srs_item(allocator, OB_SYS_TENANT_ID, srs_id, srs_item));
 }
 
 TEST_F(TestGeoBin, coordinate_range_visitor_point)

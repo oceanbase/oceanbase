@@ -7,8 +7,8 @@
 typedef void (*log_func_t)(int level, const char *file, int line, const char *function, const char *fmt, va_list ap);
 extern void do_log(int level, const char* file, int line, const char* func, const char* format, ...) __attribute__((format(printf, 5, 6)));
 extern void ob_set_thread_name(const char* type);
-extern int ob_pthread_create(pthread_t *thread, const pthread_attr_t *attr,
-                             void *(*start_routine) (void *), void *arg);
+extern int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg);
+extern void ob_pthread_join(void *ptr);
 extern int64_t ob_update_loop_ts();
 extern log_func_t g_log_func;
 extern int g_log_level;
@@ -21,11 +21,6 @@ extern __thread format_t g_log_fbuf;
 void ob_set_thread_name(const char* type)
 {
   prctl(PR_SET_NAME, type);
-}
-int ob_pthread_create(pthread_t *thread, const pthread_attr_t *attr,
-                      void *(*start_routine) (void *), void *arg)
-{
-  return pthread_create(thread, attr, start_routine, arg);
 }
 int64_t ob_update_loop_ts()
 {

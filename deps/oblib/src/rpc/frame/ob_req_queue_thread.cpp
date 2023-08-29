@@ -34,22 +34,22 @@ using namespace oceanbase::lib;
 ObReqQueue::ObReqQueue(int capacity)
     : wait_finish_(true),
       push_worker_count_(0),
-      capacity_(capacity),
       queue_(),
       qhandler_(NULL),
       host_()
 {
+  queue_.set_limit(capacity);
 }
 
 ObReqQueue::~ObReqQueue()
 {
   LOG_INFO("begin to destroy queue", K(queue_.size()));
-  queue_.destroy();
 }
 
 int ObReqQueue::init(const int64_t tenant_id)
 {
-  return queue_.init(capacity_, "ReqQueue", tenant_id);
+  UNUSED(tenant_id);
+  return OB_SUCCESS;
 }
 
 void ObReqQueue::set_qhandler(ObiReqQHandler *qhandler)
@@ -74,18 +74,18 @@ bool ObReqQueue::push(ObRequest *req, int max_queue_len, bool block)
   }
 
   if (bret) {
-    bret = OB_LIKELY(OB_SUCCESS == queue_.push(req));
+    bret = OB_LIKELY(OB_SUCCESS == queue_.push(req, 0));
   }
   return bret;
 }
 
 oceanbase::rpc::ObRequest *ObReqQueue::pop()
 {
-  void *task = NULL;
+  ObLink *task = NULL;
   int64_t timeout = 0;
   ObRequest *req = NULL;
   if (queue_.size() > 0 && OB_LIKELY(OB_SUCCESS == queue_.pop(task, timeout)) && OB_NOT_NULL(task)) {
-    req = reinterpret_cast<ObRequest *>(task);
+    req = static_cast<ObRequest *>(task);
   }
   return req;
 }
@@ -95,7 +95,7 @@ void ObReqQueue::set_host(const ObAddr &host)
   host_ = host;
 }
 
-int ObReqQueue::process_task(void *task)
+int ObReqQueue::process_task(ObLink *task)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(task) || OB_ISNULL(qhandler_)) {
@@ -106,7 +106,7 @@ int ObReqQueue::process_task(void *task)
     param.set_mem_attr(common::OB_SERVER_TENANT_ID, ObModIds::OB_ROOT_CONTEXT, ObCtxIds::WORK_AREA)
       .set_properties(USE_TL_PAGE_OPTIONAL);
     CREATE_WITH_TEMP_CONTEXT(param) {
-      ObRequest *req = reinterpret_cast<ObRequest *>(task);
+      ObRequest *req = static_cast<ObRequest *>(task);
 
       // init trace id
       if (ObRequest::OB_RPC == req->get_type()) {
@@ -164,7 +164,7 @@ void ObReqQueue::loop()
 {
   int ret = OB_SUCCESS;
   int64_t timeout = 3000 * 1000;
-  void *task = NULL;
+  ObLink *task = NULL;
   if (OB_ISNULL(qhandler_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(qhandler_));

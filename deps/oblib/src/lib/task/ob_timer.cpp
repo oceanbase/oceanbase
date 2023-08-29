@@ -104,7 +104,7 @@ void ObTimer::stop()
 void ObTimer::wait()
 {
   ObMonitor<Mutex>::Lock guard(monitor_);
-  while (has_running_task_) {
+  while (running_task_ != NULL) {
     static const int64_t WAIT_INTERVAL_US = 2000000; // 2s
     (void)monitor_.timed_wait(ObSysTime(WAIT_INTERVAL_US));
   }
@@ -125,7 +125,6 @@ void ObTimer::destroy()
     {
       ObMonitor<Mutex>::Lock guard(monitor_);
       for (int64_t i = 0; i < tasks_num_; ++i) {
-        tokens_[i].task->cancelCallBack();
         ATOMIC_STORE(&(tokens_[i].task->timer_), nullptr);
       }
       tasks_num_ = 0;
@@ -245,41 +244,112 @@ int ObTimer::insert_token(const Token &token)
   return ret;
 }
 
-int ObTimer::cancel(const ObTimerTask &task)
+int ObTimer::cancel_task(const ObTimerTask &task)
 {
   int ret = OB_SUCCESS;
   ObMonitor<Mutex>::Lock guard(monitor_);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else {
-    int64_t pos = -1;
-    for (int64_t i = 0; i < tasks_num_; ++i) {
-      if (&task == tokens_[i].task) {
-        pos = i;
-        break;
+    if (&task == uncanceled_task_) {
+      // repeat cancel, do-nothing
+    } else if (&task == running_task_) {
+      if (uncanceled_task_ != NULL) {
+        ret = OB_ERR_UNEXPECTED;
+      } else {
+        ATOMIC_STORE(&const_cast<ObTimerTask&>(task).timer_, nullptr);
+        uncanceled_task_ = &const_cast<ObTimerTask&>(task);
+        OB_LOG(INFO, "cancel task", KP(this), K_(thread_id), K(wakeup_time_), K(tasks_num_), K(task));
+      }
+    } else {
+      int64_t pos = -1;
+      for (int64_t i = 0; i < tasks_num_; ++i) {
+        if (&task == tokens_[i].task) {
+          pos = i;
+          break;
+        }
+      }
+      if (-1 == pos) {
+        // not found, do-nothing
+      } else {
+        ATOMIC_STORE(&const_cast<ObTimerTask&>(task).timer_, nullptr);
+        memmove(&tokens_[pos], &tokens_[pos + 1],
+                sizeof(tokens_[0]) * (tasks_num_ - pos - 1));
+        --tasks_num_;
+        OB_LOG(INFO, "cancel task", KP(this), K_(thread_id), K(wakeup_time_), K(tasks_num_), K(task));
       }
     }
-    if (pos != -1) {
-      tokens_[pos].task->cancelCallBack();
-      ATOMIC_STORE(&(tokens_[pos].task->timer_), nullptr);
-      memmove(&tokens_[pos], &tokens_[pos + 1],
-              sizeof(tokens_[0]) * (tasks_num_ - pos - 1));
-      --tasks_num_;
-      OB_LOG(INFO, "cancel task", KP(this), K_(thread_id), K(pos), K(wakeup_time_), K(tasks_num_), K(task));
-    }
+  }
+  return ret;
+}
+
+int ObTimer::wait_task(const ObTimerTask &task)
+{
+  int ret = OB_SUCCESS;
+  ObMonitor<Mutex>::Lock guard(monitor_);
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+  } else {
+    do {
+      bool exist = &task == running_task_;
+      if (!exist) exist = &task == uncanceled_task_;
+      for (int64_t i = 0; !exist && i < tasks_num_; ++i) {
+        if (&task == tokens_[i].task) {
+          exist = true;
+          break;
+        }
+      }
+      if (!exist) {
+        break;
+      } else {
+        (void)monitor_.timed_wait(ObSysTime(10 * 1000/*10ms*/));
+      }
+    } while (true);
+  }
+  return ret;
+}
+
+int ObTimer::cancel(const ObTimerTask &task)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(cancel_task(task))) {
+    OB_LOG(WARN, "failed to cancel_task", K(ret), K(task));
+  // @TODO: nijia.nj
+  //} else if (OB_FAIL(wait_task(task))) {
+  //  OB_LOG(WARN, "failed to wait_task", K(ret), K(task));
   }
   return ret;
 }
 
 void ObTimer::cancel_all()
 {
-  ObMonitor<Mutex>::Lock guard(monitor_);
-  for (int64_t i = 0; i < tasks_num_; ++i) {
-    tokens_[i].task->cancelCallBack();
-    ATOMIC_STORE(&(tokens_[i].task->timer_), nullptr);
-  }
-  tasks_num_ = 0;
-  OB_LOG(INFO, "cancel all", KP(this), K_(thread_id), K(wakeup_time_), K(tasks_num_));
+  int ret = OB_SUCCESS;
+  do {
+    ObMonitor<Mutex>::Lock guard(monitor_);
+    for (int64_t i = 0; i < tasks_num_; ++i) {
+      ATOMIC_STORE(&(tokens_[i].task->timer_), nullptr);
+    }
+    tasks_num_ = 0;
+    if (running_task_ != NULL) {
+      if (uncanceled_task_ == running_task_) {
+        // do-nothing
+      } else if (uncanceled_task_ != NULL) {
+        ret = OB_ERR_UNEXPECTED;
+      } else {
+        ATOMIC_STORE(&running_task_->timer_, nullptr);
+        uncanceled_task_ = running_task_;
+      }
+      if (OB_SUCC(ret)) {
+        (void)monitor_.timed_wait(ObSysTime(10 * 1000/*10ms*/));
+      }
+    } else {
+      if (uncanceled_task_ != NULL) {
+        ret = OB_ERR_UNEXPECTED;
+      }
+      break;
+    }
+  } while (OB_SUCC(ret));
+  OB_LOG(INFO, "cancel all", K(ret), KP(this), K_(thread_id), K(wakeup_time_), K(tasks_num_));
 }
 
 void ObTimer::run1()
@@ -308,8 +378,9 @@ void ObTimer::run1()
       if (is_destroyed_) {
         break;
       }
+
       //add repeated task to tasks_ again
-      if (token.delay != 0 && token.task->need_retry() && !is_stopped_) {
+      if (token.delay != 0 && !is_stopped_) {
         has_running_repeat_task_ = false;
         token.scheduled_time = ObSysTime::now(ObSysTime::Monotonic).toMicroSeconds() + token.delay;
         if (OB_SUCCESS != (tmp_ret = insert_token(
@@ -317,7 +388,7 @@ void ObTimer::run1()
           OB_LOG_RET(WARN, tmp_ret, "insert token error", K(tmp_ret), K(token));
         }
       }
-      has_running_task_ = false;
+      running_task_ = NULL;
       if (is_stopped_) {
         monitor_.notify_all();
       }
@@ -340,8 +411,8 @@ void ObTimer::run1()
       while (tasks_num_ > 0 && !is_destroyed_ && !is_stopped_) {
         const int64_t now = ObSysTime::now(ObSysTime::Monotonic).toMicroSeconds();
         if (tokens_[0].scheduled_time <= now) {
-          has_running_task_ = true;
           token = tokens_[0];
+          running_task_ = token.task;
           memmove(tokens_, tokens_ + 1, (tasks_num_ - 1) * sizeof(tokens_[0]));
           --tasks_num_;
           ATOMIC_STORE(&(token.task->timer_), nullptr);
@@ -374,13 +445,19 @@ void ObTimer::run1()
       }
     }
 
-    if (token.task != NULL && has_running_task_ && !is_destroyed_ && !is_stopped_) {
+    if (token.task != NULL && running_task_ != NULL && !is_destroyed_ && !is_stopped_) {
       bool timeout_check = token.task->timeout_check();
       const int64_t start_time = ::oceanbase::common::ObTimeUtility::current_time();
       if (timeout_check) {
         ObTimerMonitor::get_instance().start_task(thread_id_, start_time, token.delay, token.task);
       }
       token.task->runTimerTask();
+      ObMonitor<Mutex>::Lock guard(monitor_);
+      if (token.task == uncanceled_task_) {
+        uncanceled_task_ = NULL;
+        token.delay = 0;
+        monitor_.notify_all();
+      }
 
       const int64_t end_time = ::oceanbase::common::ObTimeUtility::current_time();
       const int64_t elapsed_time = end_time - start_time;

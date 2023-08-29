@@ -96,7 +96,27 @@ TEST(TestThreads, DynamicThread)
   ASSERT_EQ(4, starts);
   ASSERT_EQ(4, exits);
 }
+extern "C" {
+int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg);
+void ob_pthread_join(void *ptr);
+pthread_t ob_pthread_get_pth(void *ptr);
+}
 
+void *my_func(void *arg)
+{
+  pthread_t *pth = (pthread_t*)arg;
+  *pth = pthread_self();
+  return NULL;
+}
+TEST(TestThreads, ObPthread)
+{
+  pthread_t pth = 0;
+  void *tid = NULL;
+  ASSERT_EQ(0, ob_pthread_create(&tid, my_func, &pth));
+  sleep(1);
+  ASSERT_EQ(ob_pthread_get_pth(tid), pth);
+  ob_pthread_join(tid);
+}
 int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);

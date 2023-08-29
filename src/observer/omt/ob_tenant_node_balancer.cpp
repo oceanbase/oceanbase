@@ -259,8 +259,8 @@ int ObTenantNodeBalancer::get_server_allocated_resource(ServerResource &server_r
         server_resource.max_cpu_ += tenant_units.at(i).config_.max_cpu();
         server_resource.min_cpu_ += tenant_units.at(i).config_.min_cpu();
       }
-
-      server_resource.memory_size_ += max(ObMallocAllocator::get_instance()->get_tenant_limit(tenant_units.at(i).tenant_id_),
+      int64_t extra_memory = is_sys_tenant(tenant_units.at(i).tenant_id_) ? GMEMCONF.get_extra_memory() : 0;
+      server_resource.memory_size_ += max(ObMallocAllocator::get_instance()->get_tenant_limit(tenant_units.at(i).tenant_id_) - extra_memory,
                                           tenant_units.at(i).config_.memory_size());
       server_resource.log_disk_size_ += tenant_units.at(i).config_.log_disk_size();
     }
@@ -346,17 +346,19 @@ int ObTenantNodeBalancer::check_new_tenant(const ObUnitInfoGetter::ObTenantConfi
       }
     }
   } else {
-    if (is_sys_tenant(tenant_id) && tenant->is_hidden()) {
-      if (OB_FAIL(omt_->convert_hidden_to_real_sys_tenant(unit, abs_timeout_us))) {
+    int64_t extra_memory = 0;
+    if (is_sys_tenant(tenant_id)) {
+      if (tenant->is_hidden() && OB_FAIL(omt_->convert_hidden_to_real_sys_tenant(unit, abs_timeout_us))) {
         LOG_WARN("fail to create real sys tenant", K(unit));
       }
+      extra_memory = GMEMCONF.get_extra_memory();
     }
     if (OB_SUCC(ret) && !(unit == tenant->get_unit())) {
       if (OB_FAIL(omt_->update_tenant_unit(unit))) {
         LOG_WARN("fail to update tenant unit", K(ret), K(tenant_id));
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(omt_->update_tenant_memory(unit))) {
+    if (OB_SUCC(ret) && OB_FAIL(omt_->update_tenant_memory(unit, extra_memory))) {
       LOG_ERROR("fail to update tenant memory", K(ret), K(tenant_id));
     }
   }
@@ -371,16 +373,13 @@ int ObTenantNodeBalancer::check_new_tenant(const ObUnitInfoGetter::ObTenantConfi
 int ObTenantNodeBalancer::refresh_hidden_sys_memory()
 {
   int ret = OB_SUCCESS;
-  int64_t sys_tenant_memory = 0;
   int64_t allowed_mem_limit = 0;
   ObTenant *tenant = nullptr;
   if (OB_FAIL(omt_->get_tenant(OB_SYS_TENANT_ID, tenant))) {
     LOG_WARN("get sys tenant failed", K(ret));
   } else if (OB_ISNULL(tenant) || !tenant->is_hidden()) {
     // do nothing
-  } else if (OB_FAIL(ObUnitResource::get_sys_tenant_default_memory(sys_tenant_memory))) {
-    LOG_WARN("get hidden sys tenant default memory failed", K(ret));
-  } else if (OB_FAIL(omt_->update_tenant_memory(OB_SYS_TENANT_ID, sys_tenant_memory, allowed_mem_limit))) {
+  } else if (OB_FAIL(omt_->update_tenant_memory(OB_SYS_TENANT_ID, GMEMCONF.get_hidden_sys_memory(), allowed_mem_limit))) {
     LOG_WARN("update hidden sys tenant memory failed", K(ret));
   } else {
     LOG_INFO("update hidden sys tenant memory succeed ", K(allowed_mem_limit));

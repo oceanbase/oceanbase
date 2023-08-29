@@ -273,7 +273,7 @@ OB_INLINE ret_type get_##name() const { return name##_; }
   {
     OB_UNIS_VERSION(1);
   public:
-    typedef common::ObSEArray<share::schema::ObSchemaObjVersion, 32> RefObjVersion;
+    typedef common::ObSEArray<share::schema::ObSchemaObjVersion, 16> RefObjVersion;
     ObDependencyObjItem()
       : error_ret_(common::OB_SUCCESS),
         ref_obj_op_(INVALID_OP),
@@ -348,7 +348,7 @@ OB_INLINE ret_type get_##name() const { return name##_; }
   };
 
 
-  typedef common::ObSEArray<DependencyObjKeyItemPair, 32> DependencyObjKeyItemPairs;
+  typedef common::ObSEArray<DependencyObjKeyItemPair, 8> DependencyObjKeyItemPairs;
   struct ObGetDependencyObjOp
   {
   public:

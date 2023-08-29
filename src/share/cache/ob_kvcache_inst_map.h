@@ -166,7 +166,6 @@ private:
 private:
   DRWLock lock_;
   KVCacheInstMap  inst_map_;
-  ObFixedQueue<ObKVCacheInst> inst_pool_;
   DRWLock list_lock_;
   TenantMBListMap list_map_;
   ObFixedQueue<ObTenantMBList> list_pool_;

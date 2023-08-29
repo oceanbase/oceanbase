@@ -190,6 +190,16 @@ public:
   {
     return common::OB_NOT_SUPPORTED;
   }
+  virtual int cancel_task(const common::ObTimerTask &task)
+  {
+    UNUSED(task);
+    return common::OB_NOT_SUPPORTED;
+  }
+  virtual int wait_task(const common::ObTimerTask &task)
+  {
+    UNUSED(task);
+    return common::OB_NOT_SUPPORTED;
+  }
   virtual void set_queue_size(const int64_t qsize)
   {
     UNUSED(qsize);
@@ -829,6 +839,26 @@ public:
     }
     return ret;
   }
+  int cancel_task(const common::ObTimerTask &task) override
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_ISNULL(timer_)) {
+      ret = common::OB_ERR_UNEXPECTED;
+    } else {
+      ret = timer_->cancel_task(task);
+    }
+    return ret;
+  }
+  int wait_task(const common::ObTimerTask &task) override
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_ISNULL(timer_)) {
+      ret = common::OB_ERR_UNEXPECTED;
+    } else {
+      ret = timer_->wait_task(task);
+    }
+    return ret;
+  }
   void destroy()
   {
     if (timer_ != nullptr) {
@@ -1048,6 +1078,7 @@ public:
         TG_MGR.tgs_[tg_id];                          \
       if (OB_ISNULL(tg)) {                           \
         ret = common::OB_ERR_UNEXPECTED;             \
+        OB_LOG(WARN, "null tg", K(tg_id));           \
       } else {                                       \
         auto f = [&]() { return tg->func(args); };   \
         ret = lib::FWrap<decltype(f), std::is_void<decltype(f())>::value>()(f); \
@@ -1084,6 +1115,8 @@ public:
 #define TG_STOP(tg_id) do { int r = TG_INVOKE(tg_id, stop); UNUSED(r); } while (0)
 #define TG_CANCEL_R(tg_id, args...) TG_INVOKE(tg_id, cancel, args)
 #define TG_CANCEL(tg_id, args...) do { int r = TG_INVOKE(tg_id, cancel, args); UNUSED(r); } while (0)
+#define TG_CANCEL_TASK(tg_id, args...) do { int r = TG_INVOKE(tg_id, cancel_task, args); UNUSED(r); } while (0)
+#define TG_WAIT_TASK(tg_id, args...) do { int r = TG_INVOKE(tg_id, wait_task, args); UNUSED(r); } while (0)
 #define TG_CANCEL_ALL(tg_id) TG_INVOKE(tg_id, cancel_all)
 #define TG_TASK_EXIST(tg_id, args...) TG_INVOKE(tg_id, task_exist, args)
 #define TG_SCHEDULE(tg_id, args...) TG_INVOKE(tg_id, schedule, args)

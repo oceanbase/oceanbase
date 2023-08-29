@@ -224,7 +224,8 @@ public:
             const blocksstable::MacroBlockId &macro_block_id,
             char *buffer,
             ObDDLRedoLogHandle &handle);
-  int write_ddl_start_log(ObTabletHandle &tablet_handle,
+  int write_ddl_start_log(ObLSHandle &ls_handle,
+                          ObTabletHandle &tablet_handle,
                           ObDDLKvMgrHandle &ddl_kv_mgr_handle,
                           const ObDDLStartLog &log,
                           logservice::ObLogHandler *log_handler,

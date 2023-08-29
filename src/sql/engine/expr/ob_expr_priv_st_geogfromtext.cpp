@@ -15,7 +15,7 @@
 #include "sql/engine/expr/ob_expr_priv_st_geogfromtext.h"
 #include "lib/geo/ob_geo_common.h"
 #include "lib/geo/ob_wkt_parser.h"
-#include "observer/omt/ob_tenant_srs_mgr.h"
+#include "observer/omt/ob_tenant_srs.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 #include "lib/geo/ob_geo_reverse_coordinate_visitor.h"
 #include "lib/geo/ob_geo_func_common.h"
@@ -106,7 +106,7 @@ int ObExprPrivSTGeogFromText::eval_priv_st_geogfromtext_common(const ObExpr &exp
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(OTSRS_MGR.get_tenant_srs_guard(session->get_effective_tenant_id(), srs_guard))) {
+    } else if (OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
       LOG_WARN("failed to get srs guard", K(ret));
     } else if (OB_FAIL(srs_guard.get_srs_item(srid, srs_item))) {
       LOG_WARN("failed to get srs item", K(ret));

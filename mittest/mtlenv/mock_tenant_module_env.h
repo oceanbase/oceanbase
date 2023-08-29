@@ -32,6 +32,8 @@
 #include "observer/omt/ob_tenant.h"
 #include "observer/omt/ob_worker_processor.h"
 #include "observer/omt/ob_tenant_meta.h"
+#include "observer/omt/ob_multi_tenant.h"
+#include "observer/omt/ob_tenant_srs.h"
 #include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
 #include "share/ob_alive_server_tracer.h"
 #include "share/ob_device_manager.h"
@@ -600,7 +602,7 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (OB_FAIL(session_mgr_.init())) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
-  } else if (OB_FAIL(ObVirtualTenantManager::get_instance().init(10))) {
+  } else if (OB_FAIL(ObVirtualTenantManager::get_instance().init())) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.init(THE_IO_DEVICE, 2 * 1024 * 1024))) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
@@ -638,8 +640,6 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(ERROR, "init timer fail", KR(ret));
   } else if (OB_FAIL(TG_START(lib::TGDefIDs::MemDumpTimer))) {
     STORAGE_LOG(ERROR, "init memory dump timer fail", KR(ret));
-  } else if (OB_FAIL(ObOptStatMonitorManager::get_instance().init(&sql_proxy_))) {
-    STORAGE_LOG(ERROR, "failed to init opt stat monitor manager", KR(ret));
   } else {
     obrpc::ObRpcNetHandler::CLUSTER_ID = 1;
     oceanbase::palf::election::INIT_TS = 1;
@@ -665,6 +665,7 @@ int MockTenantModuleEnv::init()
     } else {
       oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
       MTL_BIND(ObTenantIOManager::mtl_init, ObTenantIOManager::mtl_destroy);
+      MTL_BIND2(mtl_new_default, omt::ObSharedTimer::mtl_init, omt::ObSharedTimer::mtl_start, omt::ObSharedTimer::mtl_stop, omt::ObSharedTimer::mtl_wait, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTenantSchemaService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObStorageLogger::mtl_init, ObStorageLogger::mtl_start, ObStorageLogger::mtl_stop, ObStorageLogger::mtl_wait, mtl_destroy_default);
       MTL_BIND2(ObTenantMetaMemMgr::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
@@ -699,6 +700,7 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(server_obj_pool_mtl_new<ObTableScanIterator>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObTableScanIterator>);
       MTL_BIND(ObTenantSQLSessionMgr::mtl_init, ObTenantSQLSessionMgr::mtl_destroy);
       MTL_BIND2(mtl_new_default, ObRebuildService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, omt::ObTenantSrs::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     }
     if (OB_FAIL(ret)) {
 

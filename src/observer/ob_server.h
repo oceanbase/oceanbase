@@ -85,7 +85,6 @@ namespace oceanbase
 namespace omt
 {
 class ObTenantTimezoneMgr;
-class ObTenantSrsMgr;
 }
 namespace share
 {
@@ -281,7 +280,6 @@ private:
   int init_table_lock_rpc_client();
   int start_log_mgr();
   int stop_log_mgr();
-  int init_srs_mgr();
   int reload_bandwidth_throttle_limit(int64_t network_speed);
   int get_network_speed_from_sysfs(int64_t &network_speed);
   int get_network_speed_from_config_file(int64_t &network_speed);
@@ -361,8 +359,6 @@ private:
   common::ObConfigManager config_mgr_;
   omt::ObTenantConfigMgr &tenant_config_mgr_;
   omt::ObTenantTimezoneMgr &tenant_timezone_mgr_;
-  // gis: srs mgr
-  omt::ObTenantSrsMgr &tenant_srs_mgr_;
 
   // The Oceanbase schema relating to.
   share::schema::ObMultiVersionSchemaService &schema_service_;

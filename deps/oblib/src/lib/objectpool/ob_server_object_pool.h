@@ -177,7 +177,8 @@ private:
     ObPoolArenaHead *array;
     int32_t array_size;
   };
-  static const int64_t MAX_POOL_NUM = 1L << 21;
+  // This structure is used to index all object pools. It is currently invalid and needs to be redesigned later
+  static const int64_t MAX_POOL_NUM = 1024;
   static PoolPair pool_list_[MAX_POOL_NUM];
   static int64_t pool_num_;
 };

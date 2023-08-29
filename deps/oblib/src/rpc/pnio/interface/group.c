@@ -240,7 +240,7 @@ PN_API int pn_provision(int listen_id, int gid, int thread_count)
     pn_t* pn = pn_create(listen_id, gid, count);
     if (NULL == pn) {
       err = ENOMEM;
-    } else if (0 != (err = ob_pthread_create(&pn->pd, NULL, pn_thread_func, pn))) {
+    } else if (0 != (err = ob_pthread_create(&pn->pd, pn_thread_func, pn))) {
       pn_destroy(pn);
     } else {
       pn->has_stopped_ = false;
@@ -384,7 +384,8 @@ PN_API void pn_wait(uint64_t gid)
     for (int tid = 0; tid < pgrp->count; tid++) {
       pn_t *pn = get_pn_for_send(pgrp, tid);
       if (!pn->has_stopped_) {
-        pthread_join(pn->pd, NULL);
+        ob_pthread_join(pn->pd);
+        pn->pd = NULL;
         pn->has_stopped_ = true;
       }
     }

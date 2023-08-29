@@ -127,7 +127,7 @@ int ObUnitConfig::gen_sys_tenant_unit_config(const bool is_hidden_sys)
   const char *name = is_hidden_sys ? HIDDEN_SYS_UNIT_CONFIG_NAME : SYS_UNIT_CONFIG_NAME;
   const uint64_t unit_config_id = is_hidden_sys ? HIDDEN_SYS_UNIT_CONFIG_ID : SYS_UNIT_CONFIG_ID;
 
-  if (OB_FAIL(ur.gen_sys_tenant_default_unit_resource())) {
+  if (OB_FAIL(ur.gen_sys_tenant_default_unit_resource(is_hidden_sys))) {
     LOG_WARN("generate sys tenant default unit resource fail", KR(ret), K(ur));
   } else if (OB_FAIL(init(unit_config_id, name, ur))) {
     LOG_WARN("init unit config fail", KR(ret), K(unit_config_id), K(name), K(ur));

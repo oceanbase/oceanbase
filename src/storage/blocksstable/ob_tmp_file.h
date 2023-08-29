@@ -408,9 +408,6 @@ private:
 
 private:
   static const int64_t DEFAULT_BUCKET_NUM = 10243L;
-  static const int64_t TOTAL_LIMIT = 15 * 1024L * 1024L * 1024L;
-  static const int64_t HOLD_LIMIT = 8 * 1024L * 1024L;
-  static const int64_t BLOCK_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
   bool is_inited_;
   int64_t next_fd_;
   int64_t next_dir_;

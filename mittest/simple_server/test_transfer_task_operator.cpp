@@ -191,16 +191,16 @@ TEST_F(TestTransferTaskOperator, test_basic_func)
 
   // ObTrasnferTaskComment
   ASSERT_TRUE(0 == strcmp(transfer_task_comment_to_str(ObTransferTaskComment::EMPTY_COMMENT), ""));
-  ASSERT_TRUE(0 == strcmp(transfer_task_comment_to_str(ObTransferTaskComment::WAIT_FOR_MEMBER_LIST), "WAIT FOR MEMBER LIST TO BE SAME"));
-  ASSERT_TRUE(0 == strcmp(transfer_task_comment_to_str(ObTransferTaskComment::TASK_COMPLETED_AS_NO_VALID_PARTITION), "TASK COMPLETED AS NO VALID PARTITION"));
-  ASSERT_TRUE(0 == strcmp(transfer_task_comment_to_str(ObTransferTaskComment::TASK_CANCELED), "TASK CANCELED"));
-  ASSERT_TRUE(0 == strcmp(transfer_task_comment_to_str(ObTransferTaskComment::MAX_COMMENT), "UNKNOW"));
+  ASSERT_TRUE(0 == strcmp(transfer_task_comment_to_str(ObTransferTaskComment::WAIT_FOR_MEMBER_LIST), "Wait for member list to be same"));
+  ASSERT_TRUE(0 == strcmp(transfer_task_comment_to_str(ObTransferTaskComment::TASK_COMPLETED_AS_NO_VALID_PARTITION), "Task completed as no valid partition"));
+  ASSERT_TRUE(0 == strcmp(transfer_task_comment_to_str(ObTransferTaskComment::TASK_CANCELED), "Task canceled"));
+  ASSERT_TRUE(0 == strcmp(transfer_task_comment_to_str(ObTransferTaskComment::MAX_COMMENT), "Unknow"));
 
-  ASSERT_TRUE(ObTransferTaskComment::WAIT_FOR_MEMBER_LIST == str_to_transfer_task_comment("WAIT FOR MEMBER LIST TO BE SAME"));
-  ASSERT_TRUE(ObTransferTaskComment::TASK_COMPLETED_AS_NO_VALID_PARTITION == str_to_transfer_task_comment("TASK COMPLETED AS NO VALID PARTITION"));
-  ASSERT_TRUE(ObTransferTaskComment::TASK_CANCELED == str_to_transfer_task_comment("TASK CANCELED"));
+  ASSERT_TRUE(ObTransferTaskComment::WAIT_FOR_MEMBER_LIST == str_to_transfer_task_comment("Wait for member list to be same"));
+  ASSERT_TRUE(ObTransferTaskComment::TASK_COMPLETED_AS_NO_VALID_PARTITION == str_to_transfer_task_comment("Task completed as no valid partition"));
+  ASSERT_TRUE(ObTransferTaskComment::TASK_CANCELED == str_to_transfer_task_comment("Task canceled"));
   ASSERT_TRUE(ObTransferTaskComment::EMPTY_COMMENT == str_to_transfer_task_comment(""));
-  ASSERT_TRUE(ObTransferTaskComment::MAX_COMMENT == str_to_transfer_task_comment("UNKNOW"));
+  ASSERT_TRUE(ObTransferTaskComment::MAX_COMMENT == str_to_transfer_task_comment("Unknow"));
   ASSERT_TRUE(ObTransferTaskComment::MAX_COMMENT == str_to_transfer_task_comment("XXXXX"));
 }
 
@@ -217,6 +217,11 @@ TEST_F(TestTransferTaskOperator, test_operator)
   ObArray<ObTransferTask::TaskStatus> task_status;
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ObTransferTaskOperator::get_all_task_status(sql_proxy, tenant_id_, task_status));
   ASSERT_TRUE(task_status.empty());
+
+  // get_max_task_id_from_history when history is empty
+  ObTransferTaskID max_task_id;
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get_max_task_id_from_history(sql_proxy, tenant_id_, max_task_id));
+  ASSERT_TRUE(!max_task_id.is_valid());
 
   // insert
   ObTransferTask other_task;
@@ -235,7 +240,7 @@ TEST_F(TestTransferTaskOperator, test_operator)
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, task_id_, false, task));
   ASSERT_TRUE(task.get_task_id() == task_id_);
   ASSERT_TRUE(task.get_tablet_list().empty());
-  ASSERT_TRUE(0 == strcmp(transfer_task_comment_to_str(task.get_comment()), "TASK CANCELED"));
+  ASSERT_TRUE(0 == strcmp(transfer_task_comment_to_str(task.get_comment()), "Task canceled"));
   LOG_INFO("get from table", K(task));
   task.reset();
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get(sql_proxy, tenant_id_, task_id_, true, task));
@@ -375,6 +380,10 @@ TEST_F(TestTransferTaskOperator, test_operator)
   ASSERT_TRUE(0 == compare(lock_conflict_part_list_str, history_lock_conflict_part_list_str));
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ObTransferTaskOperator::get_history_task(sql_proxy,
       tenant_id_, ObTransferTaskID(555), history_task, create_time, finish_time));
+
+  max_task_id.reset();
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get_max_task_id_from_history(sql_proxy, tenant_id_, max_task_id));
+  ASSERT_TRUE(max_task_id == task_id_);
 }
 
 } // namespace share

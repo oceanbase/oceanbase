@@ -179,40 +179,6 @@ int futex_hook(uint32_t *uaddr, int futex_op, uint32_t val, const struct timespe
   return ret;
 }
 
-struct PthreadCreateArgument
-{
-  PthreadCreateArgument(void *(*start_routine)(void *), void *arg)
-  {
-    start_routine_ = start_routine;
-    arg_ = arg;
-    in_use_ = 1;
-  }
-  void *(*start_routine_)(void *);
-  void *arg_;
-  int in_use_; // TO avoid memory alloc, there is a sync wait for pthread_create.
-};
-
-void* run_func(void* arg)
-{
-  struct PthreadCreateArgument* parg = (struct PthreadCreateArgument*)arg;
-  void *(*start_routine)(void *) = parg->start_routine_;
-  void *real_arg = parg->arg_;
-  ATOMIC_STORE(&(parg->in_use_), 0);
-  ::oceanbase::lib::ObStackHeaderGuard stack_header_guard;
-  return start_routine(real_arg);
-}
-
-int ob_pthread_create(pthread_t *thread, const pthread_attr_t *attr,
-                      void *(*start_routine) (void *), void *arg)
-{
-  struct PthreadCreateArgument parg(start_routine, arg);
-  int ret = pthread_create(thread, attr, run_func, &parg);
-  while (ATOMIC_LOAD(&(parg.in_use_)) != 0) {
-    sched_yield();
-  }
-  return ret;
-}
-
 void ob_set_thread_name(const char* type)
 {
   ::oceanbase::lib::set_thread_name(type);

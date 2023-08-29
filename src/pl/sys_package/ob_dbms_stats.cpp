@@ -4814,7 +4814,7 @@ int ObDbmsStats::process_not_size_manual_column(sql::ObExecContext &ctx,
   if (OB_SUCC(ret) && !auto_columns.empty()) {
     if (OB_FAIL(ObOptStatMonitorManager::flush_database_monitoring_info(ctx, true, false))) {
       LOG_WARN("failed to do flush database monitoring info", K(ret));
-    } else if (OB_FAIL(ObOptStatMonitorManager::get_instance().get_column_usage_from_table(
+    } else if (OB_FAIL(ObOptStatMonitorManager::get_column_usage_from_table(
                 ctx, auto_columns, table_param.tenant_id_, table_param.table_id_))) {
       LOG_WARN("failed to get column usage from table", K(ret));
     } else {

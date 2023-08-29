@@ -91,6 +91,7 @@ void ObPartitionBalance::destroy()
         iter->second.at(i)->~ObLSPartGroupDesc();
       }
     }
+    iter->second.destroy();
   }
   //reset
   bg_builder_.destroy();
@@ -243,17 +244,16 @@ int ObPartitionBalance::on_new_partition(
   } else {
     // create partition group if in new partition group
     if (in_new_partition_group) {
-      ObTransferPartGroup *part_group = nullptr;
-      if (OB_ISNULL(part_group = reinterpret_cast<ObTransferPartGroup*>(allocator_.alloc(sizeof(ObTransferPartGroup))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("alloc mem fail", KR(ret));
-      } else if (FALSE_IT(cur_part_group_ = new(part_group) ObTransferPartGroup(allocator_))) {
-      } else if (OB_FAIL(add_part_to_bg_map_(src_ls_id, *cur_part_group_, bg))) {
-        LOG_WARN("add partition to balance group fail", KR(ret), K(src_ls_id), K(bg),
-            K(cur_part_group_));
+      ObTransferPartGroup *new_pg = NULL;
+      if (OB_FAIL(add_new_pg_to_bg_map_(src_ls_id, bg, new_pg))) {
+        LOG_WARN("add new partition group to balance group failed", KR(ret), K(src_ls_id), K(bg), K(new_pg));
+      } else if (OB_ISNULL(new_pg)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("new_pg is null", KR(ret), K(src_ls_id), K(bg), K(new_pg));
       } else {
         // add new partition group
         src_ls_desc->add_partgroup(1, 0);
+        cur_part_group_ = new_pg;
       }
     }
     // if not in new partition group, current part group should be valid
@@ -274,9 +274,10 @@ int ObPartitionBalance::on_new_partition(
   return ret;
 }
 
-int ObPartitionBalance::add_part_to_bg_map_(const ObLSID &ls_id,
-    ObTransferPartGroup &part_group,
-    ObBalanceGroup &bg)
+int ObPartitionBalance::add_new_pg_to_bg_map_(
+    const ObLSID &ls_id,
+    ObBalanceGroup &bg,
+    ObTransferPartGroup *&part_group)
 {
   int ret = OB_SUCCESS;
   ObArray<ObLSPartGroupDesc *> *ls_part_desc_arr = NULL;
@@ -291,12 +292,13 @@ int ObPartitionBalance::add_part_to_bg_map_(const ObLSID &ls_id,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get part from balance group fail", KR(ret), K(ls_id), K(bg));
       } else {
+        ls_part_desc_arr->set_block_allocator(ModulePageAllocator(allocator_, "LSPartDescArr"));
         for (int64_t i = 0; OB_SUCC(ret) && i < ls_desc_array_.count(); i++) {
           ObLSPartGroupDesc *ls_part_desc = nullptr;
           if (OB_ISNULL(ls_part_desc = reinterpret_cast<ObLSPartGroupDesc*>(allocator_.alloc(sizeof(ObLSPartGroupDesc))))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("alloc mem fail", KR(ret), K(ls_id), K(bg));
-          } else if (FALSE_IT(new(ls_part_desc) ObLSPartGroupDesc(ls_desc_array_.at(i)->get_ls_id()))) {
+          } else if (FALSE_IT(new(ls_part_desc) ObLSPartGroupDesc(ls_desc_array_.at(i)->get_ls_id(), allocator_))) {
           } else if (OB_FAIL(ls_part_desc_arr->push_back(ls_part_desc))) {
             LOG_WARN("push_back fail", KR(ret), K(ls_id), K(bg));
           }
@@ -308,8 +310,8 @@ int ObPartitionBalance::add_part_to_bg_map_(const ObLSID &ls_id,
     bool find_ls = false;
     for (int64_t idx = 0; OB_SUCC(ret) && idx < ls_part_desc_arr->count(); idx++) {
       if (ls_part_desc_arr->at(idx)->get_ls_id() == ls_id) {
-        if (OB_FAIL(ls_part_desc_arr->at(idx)->get_part_groups().push_back(&part_group))) {
-          LOG_WARN("push_back fail", KR(ret));
+        if (OB_FAIL(ls_part_desc_arr->at(idx)->add_new_part_group(part_group))) {
+          LOG_WARN("add_new_part_group failed", KR(ret), K(ls_id), K(idx), KPC(ls_part_desc_arr), K(part_group));
         }
         find_ls = true;
         break;
@@ -884,6 +886,24 @@ int ObPartitionHelper::get_sub_part_info(const schema::ObSimpleTableSchemaV2 &ta
     LOG_WARN("fail init part_info", KR(ret), K(tablet_id), K(part_id));
   }
 
+  return ret;
+}
+
+int ObPartitionBalance::ObLSPartGroupDesc::add_new_part_group(ObTransferPartGroup *&part_group)
+{
+  int ret = OB_SUCCESS;
+  part_group = NULL;
+  const int64_t part_group_size = sizeof(ObTransferPartGroup);
+  void *buf = alloc_.alloc(part_group_size);
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory for partition group fail", KR(ret), K(buf), K(part_group_size));
+  } else if (OB_ISNULL(part_group = new(buf) ObTransferPartGroup(alloc_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("construct ObTransferPartGroup fail", KR(ret), K(buf), K(part_group_size));
+  } else if (OB_FAIL(part_groups_.push_back(part_group))) {
+    LOG_WARN("push back new partition group fail", KR(ret), K(part_group), K(part_groups_));
+  }
   return ret;
 }
 

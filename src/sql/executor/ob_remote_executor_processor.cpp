@@ -834,10 +834,19 @@ int ObRpcRemoteExecuteP::init()
   int ret = OB_SUCCESS;
   if (OB_FAIL(base_init())) {
     LOG_WARN("init remote base execute context failed", K(ret));
-  } else if (OB_FAIL(result_.init())) {
-    LOG_WARN("fail to init result", K(ret));
-  } else {
-    arg_.set_deserialize_param(exec_ctx_, phy_plan_);
+  }
+  if (OB_SUCC(ret)) {
+    uint64_t mtl_id = MTL_ID();
+    mtl_id = (mtl_id == OB_INVALID_TENANT_ID ?
+                        OB_SERVER_TENANT_ID :
+                        mtl_id);
+
+    result_.set_tenant_id(mtl_id);
+    if (OB_FAIL(result_.init())) {
+      LOG_WARN("fail to init result", K(ret));
+    } else {
+      arg_.set_deserialize_param(exec_ctx_, phy_plan_);
+    }
   }
   return ret;
 }
@@ -1026,15 +1035,19 @@ int ObRpcRemoteSyncExecuteP::init()
   ObRemoteTask &task = arg_;
   if (OB_FAIL(base_init())) {
     LOG_WARN("init remote base execute context failed", K(ret));
-  } else if (OB_FAIL(result_.init())) {
-    LOG_WARN("fail to init result", K(ret));
-  } else if (OB_FAIL(exec_ctx_.create_physical_plan_ctx())) {
-    LOG_WARN("create physical plan ctx failed", K(ret));
-  } else {
-    ObPhysicalPlanCtx *plan_ctx = exec_ctx_.get_physical_plan_ctx();
-    plan_ctx->get_remote_sql_info().ps_params_ = &plan_ctx->get_param_store_for_update();
-    task.set_remote_sql_info(&plan_ctx->get_remote_sql_info());
-    task.set_exec_ctx(&exec_ctx_);
+  }
+  if (OB_SUCC(ret)) {
+    result_.set_tenant_id(MTL_ID());
+    if (OB_FAIL(result_.init())) {
+      LOG_WARN("fail to init result", K(ret));
+    } else if (OB_FAIL(exec_ctx_.create_physical_plan_ctx())) {
+      LOG_WARN("create physical plan ctx failed", K(ret));
+    } else {
+      ObPhysicalPlanCtx *plan_ctx = exec_ctx_.get_physical_plan_ctx();
+      plan_ctx->get_remote_sql_info().ps_params_ = &plan_ctx->get_param_store_for_update();
+      task.set_remote_sql_info(&plan_ctx->get_remote_sql_info());
+      task.set_exec_ctx(&exec_ctx_);
+    }
   }
   return ret;
 }

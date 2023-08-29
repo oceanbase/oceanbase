@@ -155,7 +155,7 @@ class ObDedupQueue : public lib::ThreadPool
 public:
   static const int64_t TOTAL_LIMIT = 1024L * 1024L * 1024L;
   static const int64_t HOLD_LIMIT = 512L * 1024L * 1024L;
-  static const int64_t PAGE_SIZE = common::OB_MALLOC_BIG_BLOCK_SIZE;
+  static const int64_t PAGE_SIZE = common::OB_MALLOC_MIDDLE_BLOCK_SIZE;
   static const int64_t TASK_MAP_SIZE = 20L * 1000;
   static const int64_t TASK_QUEUE_SIZE = 20L * 1000;
 public:
@@ -186,7 +186,7 @@ private:
   HashAllocator;
   typedef hash::ObHashMap<const IObDedupTask *,
                           IObDedupTask *,
-                          hash::MultiWriteDefendMode,
+                          hash::LatchReadWriteDefendMode,
                           hash::hash_func<const IObDedupTask *>,
                           hash::equal_to<const IObDedupTask *>,
                           HashAllocator,

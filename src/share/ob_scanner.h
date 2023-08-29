@@ -135,7 +135,11 @@ public:
 
   /// dump all data for debug purpose
   void dump() const;
-  void set_tenant_id(uint64_t tenant_id) { row_store_.set_tenant_id(tenant_id); }
+  void set_tenant_id(uint64_t tenant_id)
+  {
+    tenant_id_ = tenant_id;
+    row_store_.set_tenant_id(tenant_id);
+  }
   ObIArray<sql::ObTableRowCount> &get_table_row_counts() { return table_row_counts_; }
   int assign_implicit_cursor(const common::ObIArray<sql::ObImplicitCursorInfo> &implicit_cursors)
   { return implicit_cursors_.assign(implicit_cursors); }

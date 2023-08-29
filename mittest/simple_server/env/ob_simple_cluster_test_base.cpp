@@ -161,7 +161,6 @@ int ObSimpleClusterTestBase::start()
   GCONF.enable_perf_event = false;
   GCONF.enable_sql_audit = true;
   GCONF.enable_record_trace_log = false;
-  GMEMCONF.set_server_memory_limit(10 * 1024  * 1024 * 1024ul);
 
   int32_t log_level;
   bool change_log_level = false;

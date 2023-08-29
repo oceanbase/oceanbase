@@ -37,10 +37,10 @@ void ObDISessionCollect::clean()
   base_value_.reset();
 }
 
-ObDITenantCollect::ObDITenantCollect()
+ObDITenantCollect::ObDITenantCollect(ObIAllocator *allocator)
   : tenant_id_(0),
     last_access_time_(0),
-    base_value_()
+    base_value_(allocator)
 {
 }
 
@@ -78,7 +78,7 @@ int ObDISessionCache::get_node(uint64_t session_id, ObDISessionCollect *&session
 {
   int ret = OB_SUCCESS;
   thread_local ObRandom random;
-  ObSessionBucket &bucket = di_map_[session_id % OB_MAX_SERVER_SESSION_CNT];
+  ObSessionBucket &bucket = di_map_[session_id % MAX_SESSION_COLLECT_NUM];
   while (1) {
     bucket.lock_.rdlock();
     if (OB_SUCCESS == (ret = bucket.get_the_node(session_id, session_collect))) {
@@ -91,14 +91,14 @@ int ObDISessionCache::get_node(uint64_t session_id, ObDISessionCollect *&session
       bucket.lock_.unlock();
       int64_t pos = 0;
       while (1) {
-        pos = random.get(0, OB_MAX_SERVER_SESSION_CNT-1);
+        pos = random.get(0, MAX_SESSION_COLLECT_NUM - 1);
         if (OB_SUCCESS == (ret = collects_[pos].lock_.try_wrlock())) {
           break;
         }
       }
       if (OB_SUCCESS == ret) {
         if (0 != collects_[pos].session_id_) {
-          ObSessionBucket &des_bucket = di_map_[collects_[pos].session_id_ % OB_MAX_SERVER_SESSION_CNT];
+          ObSessionBucket &des_bucket = di_map_[collects_[pos].session_id_ % MAX_SESSION_COLLECT_NUM];
           des_bucket.lock_.wrlock();
           des_bucket.list_.remove(&collects_[pos]);
           collects_[pos].clean();
@@ -135,7 +135,7 @@ int ObDISessionCache::get_all_diag_info(ObIArray<std::pair<uint64_t, ObDISession
   std::pair<uint64_t, ObDISessionCollect*> pair;
   ObDISessionCollect *head = NULL;
   ObDISessionCollect *node = NULL;
-  for (int64_t i = 0; OB_SUCC(ret) && i < OB_MAX_SERVER_SESSION_CNT; ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < MAX_SESSION_COLLECT_NUM; ++i) {
     ObSessionBucket &bucket = di_map_[i];
     bucket.lock_.rdlock();
     head = bucket.list_.get_header();
@@ -158,7 +158,7 @@ int ObDISessionCache::get_the_diag_info(
   ObDISessionCollect *&diag_infos)
 {
   int ret = OB_SUCCESS;
-  ObSessionBucket &bucket = di_map_[session_id % OB_MAX_SERVER_SESSION_CNT];
+  ObSessionBucket &bucket = di_map_[session_id % MAX_SESSION_COLLECT_NUM];
   bucket.lock_.rdlock();
   ObDISessionCollect *collect = NULL;
   if (OB_SUCCESS == (ret = bucket.get_the_node(session_id, collect))) {
@@ -501,7 +501,7 @@ int ObDIGlobalTenantCache::get_tenant_stat(ObIAllocator &allocator,
         if (NULL == (buf = allocator.alloc(sizeof(ObDITenantCollect)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
         } else {
-          got_collect = new (buf) ObDITenantCollect();
+          got_collect = new (buf) ObDITenantCollect(&allocator);
           got_collect->tenant_id_ = collect->tenant_id_;
           bucket.list_.add_last(got_collect);
         }

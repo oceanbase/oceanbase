@@ -35,7 +35,7 @@ ObAsyncTaskQueue::~ObAsyncTaskQueue()
   }
 }
 
-int ObAsyncTaskQueue::init(const int64_t thread_cnt, const int64_t queue_size, const char *thread_name)
+int ObAsyncTaskQueue::init(const int64_t thread_cnt, const int64_t queue_size, const char *thread_name, const int64_t page_size)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -44,7 +44,7 @@ int ObAsyncTaskQueue::init(const int64_t thread_cnt, const int64_t queue_size, c
   } else if (thread_cnt <= 0|| queue_size <= 0 || 0 != (queue_size & (queue_size - 1))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(thread_cnt), K(queue_size), K(ret));
-  } else if (OB_FAIL(allocator_.init(TOTAL_LIMIT, HOLD_LIMIT, PAGE_SIZE))) {
+  } else if (OB_FAIL(allocator_.init(TOTAL_LIMIT, HOLD_LIMIT, page_size))) {
     LOG_WARN("allocator init failed", "total limit", static_cast<int64_t>(TOTAL_LIMIT),
         "hold limit", static_cast<int64_t>(HOLD_LIMIT),
         "page size",  static_cast<int64_t>(PAGE_SIZE), K(ret));

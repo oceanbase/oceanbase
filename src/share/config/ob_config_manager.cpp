@@ -214,82 +214,96 @@ int ObConfigManager::dump2file(const char* path) const
     path = dump_path_;
   }
 
-  PageArena<> pa;
-
   if (OB_ISNULL(path) || STRLEN(path) <= 0) {
     ret = OB_INVALID_ERROR;
     LOG_WARN("NO dump path specified!", K(ret));
   } else {
-    // write server config
-    char *buf = nullptr;
-    char *tmp_path = nullptr;
-    char *hist_path = nullptr;
-    int64_t pos = 0;
-    if (OB_ISNULL(buf = pa.alloc(OB_MAX_PACKET_LENGTH))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("ob tc malloc memory for buf failed", K(ret));
-    }
-    if (OB_ISNULL(tmp_path = pa.alloc(MAX_PATH_SIZE))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("ob tc malloc memory for tmp configure path failed", K(ret));
-    } else {
-      snprintf(tmp_path, MAX_PATH_SIZE, "%s.tmp", path);
-    }
-    if (OB_ISNULL(hist_path = pa.alloc(MAX_PATH_SIZE))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("ob tc malloc memory for history configure path fail", K(ret));
-    } else {
-      snprintf(hist_path, MAX_PATH_SIZE, "%s.history", path);
+    const int64_t min_buffer_size = 2LL << 20;
+    const int64_t max_buffer_size = 64LL << 20;
+    int64_t buf_size = min_buffer_size;
+    bool need_retry = true;
+    while (OB_SUCC(ret) && need_retry) {
+      PageArena<> pa;
+      char *buf = nullptr;
+      char *tmp_path = nullptr;
+      char *hist_path = nullptr;
+      int64_t pos = 0;
+      need_retry = false;
+      if (OB_ISNULL(buf = pa.alloc(buf_size))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("ob tc malloc memory for buf failed", K(ret));
+      }
+      if (OB_ISNULL(tmp_path = pa.alloc(MAX_PATH_SIZE))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("ob tc malloc memory for tmp configure path failed", K(ret));
+      } else {
+        snprintf(tmp_path, MAX_PATH_SIZE, "%s.tmp", path);
+      }
+      if (OB_ISNULL(hist_path = pa.alloc(MAX_PATH_SIZE))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("ob tc malloc memory for history configure path fail", K(ret));
+      } else {
+        snprintf(hist_path, MAX_PATH_SIZE, "%s.history", path);
+      }
+
+      #ifdef ERRSIM
+      ret = OB_E(EventTable::EN_WRITE_CONFIG_FILE_FAILED) OB_SUCCESS;;
+      if (OB_FAIL(ret)) {
+        ret = OB_IO_ERROR;
+        LOG_WARN("ERRSIM, write config file failed", K(ret));
+      }
+      #endif
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(server_config_.serialize(buf, buf_size, pos))) {
+          LOG_WARN("Serialize server config fail!", K(pos), K(buf_size), K(ret));
+          if (OB_SIZE_OVERFLOW == ret && (buf_size << 1) <= max_buffer_size) {
+            buf_size = buf_size << 1;
+            need_retry = true;
+          }
+        } else if (OB_FAIL(check_header_change(path, buf)) && OB_EAGAIN == ret) {
+          LOG_INFO("Header not change, no need to write server config!");
+        } else if ((fd = ::open(tmp_path, O_WRONLY | O_CREAT | O_TRUNC,
+                                S_IRUSR  | S_IWUSR | S_IRGRP)) < 0) {
+          ret = OB_IO_ERROR;
+          LOG_WARN("fail to create config file", K(tmp_path), KERRMSG, K(ret));
+        } else if (pos != (size = unintr_write(fd, buf, pos))) {
+          ret = OB_IO_ERROR;
+          LOG_WARN("Write server config fail!", K(errno), KERRMSG, K(pos), K(size), K(ret));
+          if (0 != close(fd)) {
+            LOG_WARN("fail to close file fd", K(fd), K(errno), KERRMSG, K(ret));
+          }
+        } else if (::fsync(fd) != 0) {
+          ret = OB_IO_ERROR;
+          LOG_WARN("Sync server config fail!", K(errno), KERRMSG, K(pos), K(size), K(ret));
+          if (0 != close(fd)) {
+            LOG_WARN("fail to close file fd", K(fd), K(errno), KERRMSG, K(ret));
+          }
+        } else if (0 != close(fd)) {
+          ret = OB_IO_ERROR;
+          LOG_WARN("fail to close file fd", K(fd), KERRMSG, K(ret));
+        } else {
+          LOG_INFO("Write server config successfully!", K(pos), K(buf_size));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (0 != ::rename(path, hist_path) && errno != ENOENT) {
+          ret = OB_ERR_SYS;
+          LOG_WARN("fail to backup history config file", KERRMSG, K(ret));
+        }
+        // 运行到这里的时候可能掉电，导致没有 conf 文件，需要 DBA 手工拷贝  tmp 文件到这里
+        if (0 != ::rename(tmp_path, path) && errno != ENOENT) {
+          ret = OB_ERR_SYS;
+          LOG_WARN("fail to move tmp config file", KERRMSG, K(ret));
+        }
+      } else if (OB_EAGAIN == ret) {
+        ret = OB_SUCCESS;
+      } else if (need_retry) {
+        ret = OB_SUCCESS;
+      }
     }
 
-    #ifdef ERRSIM
-    ret = OB_E(EventTable::EN_WRITE_CONFIG_FILE_FAILED) OB_SUCCESS;;
-    if (OB_FAIL(ret)) {
-      ret = OB_IO_ERROR;
-      LOG_WARN("ERRSIM, write config file failed", K(ret));
-    }
-    #endif
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(server_config_.serialize(buf, OB_MAX_PACKET_LENGTH, pos))) {
-        LOG_WARN("Serialize server config fail!", K(ret));
-      } else if (OB_FAIL(check_header_change(path, buf)) && OB_EAGAIN == ret) {
-        LOG_INFO("Header not change, no need to write server config!");
-      } else if ((fd = ::open(tmp_path, O_WRONLY | O_CREAT | O_TRUNC,
-                              S_IRUSR  | S_IWUSR | S_IRGRP)) < 0) {
-        ret = OB_IO_ERROR;
-        LOG_WARN("fail to create config file", K(tmp_path), KERRMSG, K(ret));
-      } else if (pos != (size = unintr_write(fd, buf, pos))) {
-        ret = OB_IO_ERROR;
-        LOG_WARN("Write server config fail!", K(errno), KERRMSG, K(pos), K(size), K(ret));
-        if (0 != close(fd)) {
-          LOG_WARN("fail to close file fd", K(fd), K(errno), KERRMSG, K(ret));
-        }
-      } else if (::fsync(fd) != 0) {
-        ret = OB_IO_ERROR;
-        LOG_WARN("Sync server config fail!", K(errno), KERRMSG, K(pos), K(size), K(ret));
-        if (0 != close(fd)) {
-          LOG_WARN("fail to close file fd", K(fd), K(errno), KERRMSG, K(ret));
-        }
-      } else if (0 != close(fd)) {
-        ret = OB_IO_ERROR;
-        LOG_WARN("fail to close file fd", K(fd), KERRMSG, K(ret));
-      } else {
-        LOG_INFO("Write server config successfully!");
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (0 != ::rename(path, hist_path) && errno != ENOENT) {
-        ret = OB_ERR_SYS;
-        LOG_WARN("fail to backup history config file", KERRMSG, K(ret));
-      }
-      // 运行到这里的时候可能掉电，导致没有 conf 文件，需要 DBA 手工拷贝  tmp 文件到这里
-      if (0 != ::rename(tmp_path, path) && errno != ENOENT) {
-        ret = OB_ERR_SYS;
-        LOG_WARN("fail to move tmp config file", KERRMSG, K(ret));
-      }
-    } else if (OB_EAGAIN == ret) {
-      ret = OB_SUCCESS;
-    }
+    // write server config
+
   }
   return ret;
 }

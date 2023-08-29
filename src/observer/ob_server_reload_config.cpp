@@ -157,10 +157,8 @@ int ObServerReloadConfig::operator()()
 #ifdef OB_USE_ASAN
     __MemoryContext__::set_enable_asan_allocator(GCONF.enable_asan_for_memory_context);
 #endif
-#if defined(__x86_64__)
     ObMallocSampleLimiter::set_interval(GCONF._max_malloc_sample_interval,
                                      GCONF._min_malloc_sample_interval);
-#endif
     if (!is_arbitration_mode) {
       ObIOConfig io_config;
       int64_t cpu_cnt = GCONF.cpu_count;
@@ -199,6 +197,9 @@ int ObServerReloadConfig::operator()()
   int64_t cache_size = GCONF.memory_chunk_cache_size;
   if (0 == cache_size) {
     cache_size = GMEMCONF.get_server_memory_limit();
+    if (cache_size >= (32L<<30)) {
+      cache_size -= (4L<<30);
+    }
   }
   int64_t large_cache_size = GCONF._memory_large_chunk_cache_size;
   if (0 == large_cache_size) {

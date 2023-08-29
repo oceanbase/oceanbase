@@ -1089,16 +1089,21 @@ int ObOptimizer::add_column_usage_arg(const ObDMLStmt &stmt,
 int ObOptimizer::update_column_usage_infos()
 {
   int ret = OB_SUCCESS;
-  const ObSQLSessionInfo *session = ctx_.get_session_info();
+  ObSQLSessionInfo *session = ctx_.get_session_info();
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
+    LOG_WARN("get unexpected null", K(ret), K(session));
   } else {
-    ret = ObOptStatMonitorManager::get_instance().update_local_cache(
-                session->get_effective_tenant_id(),
-                ctx_.get_column_usage_infos());
+    MTL_SWITCH(session->get_effective_tenant_id()) {
+      ObOptStatMonitorManager *optstat_monitor_mgr = NULL;
+      if (OB_ISNULL(optstat_monitor_mgr = MTL(ObOptStatMonitorManager*))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(optstat_monitor_mgr));
+      } else if (OB_FAIL(optstat_monitor_mgr->update_local_cache(ctx_.get_column_usage_infos()))) {
+        LOG_WARN("failed to update local cache", K(ret));
+      } else {/*do nothiing*/}
+    }
   }
-
   return ret;
 }
 
