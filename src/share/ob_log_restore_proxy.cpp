@@ -41,6 +41,7 @@ namespace share
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", privilege is insufficient");          \
       break;                                                                                           \
     case -ER_ACCESS_DENIED_ERROR:                                                                      \
+    case OB_PASSWORD_WRONG:                                                                            \
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", please check the user and password"); \
       break;                                                                                           \
     case -ER_DBACCESS_DENIED_ERROR:                                                                    \
@@ -63,6 +64,9 @@ namespace share
       break;                                                                                           \
     case -ER_CONNECT_FAILED:                                                                           \
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", please check the network");           \
+      break;                                                                                           \
+    case OB_ERR_TENANT_IS_LOCKED:                                                                      \
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args ", primary tenant is locked");           \
       break;                                                                                           \
     default:                                                                                           \
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "get primary " args);                                        \

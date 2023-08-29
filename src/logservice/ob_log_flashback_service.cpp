@@ -181,7 +181,7 @@ int ObLogFlashbackService::wait_all_ls_replicas_log_sync_(
           CLOG_LOG(WARN, "push_back failed", K(ret), K_(self), K(op));
         }
       }
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "logs of some replicas may be not sync, check these replicas");
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "logs of some replicas may be not sync, role transition");
       CLOG_LOG(WARN, "logs of some replicas may be not sync, check these replicas", K(ret),
           K_(self), K(failed_ls_ops));
     }
@@ -274,8 +274,8 @@ int ObLogFlashbackService::do_flashback_(
           CLOG_LOG(WARN, "push_back failed", K(ret), K_(self), K(op));
         }
       }
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "logs of some replicas may have not been flashbacked, check these replicas");
-      CLOG_LOG(WARN, "logs of some replicas may have not been flashbacked, check these replicas",
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "logs of some replicas may have not finished flashback, role transition");
+      CLOG_LOG(WARN, "logs of some replicas may have not finished flashback, check these replicas",
           K(ret), K_(self), K(failed_ls_ops));
     }
   }

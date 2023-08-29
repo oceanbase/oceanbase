@@ -29,6 +29,9 @@
 #include "storage/tx/ob_timestamp_service.h"  // ObTimestampService
 #include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
 #include "share/balance/ob_balance_task_helper_operator.h"//ObBalanceTaskHelper
+#include "lib/utility/ob_macro_utils.h"
+#include "lib/ob_errno.h"
+#include "share/oracle_errno.h"//oracle error code
 
 namespace oceanbase
 {
@@ -36,6 +39,48 @@ using namespace share;
 using namespace palf;
 namespace rootserver
 {
+
+#define TENANT_ROLE_TRANS_USER_ERROR                                                                                                      \
+  int tmp_ret = OB_SUCCESS;                                                                                                               \
+  ObSqlString str;                                                                                                                        \
+  switch (ret) {                                                                                                                          \
+    case -ER_TABLEACCESS_DENIED_ERROR:                                                                                                    \
+    case OB_ERR_NO_TABLE_PRIVILEGE:                                                                                                       \
+    case -OER_TABLE_OR_VIEW_NOT_EXIST:                                                                                                    \
+    case -ER_DBACCESS_DENIED_ERROR:                                                                                                       \
+    case OB_ERR_NO_DB_PRIVILEGE:                                                                                                          \
+    case OB_ERR_NULL_VALUE:                                                                                                               \
+    case OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH:                                                                                               \
+    case -ER_CONNECT_FAILED:                                                                                                              \
+    case OB_PASSWORD_WRONG:                                                                                                               \
+    case -ER_ACCESS_DENIED_ERROR:                                                                                                         \
+    case OB_ERR_NO_LOGIN_PRIVILEGE:                                                                                                       \
+    case -OER_INTERNAL_ERROR_CODE:                                                                                                        \
+      if (OB_TMP_FAIL(str.assign_fmt("query primary failed(original error code: %d), switch to primary", ret))) {                         \
+        LOG_WARN("tenant role trans user error str assign failed");                                                                       \
+      } else {                                                                                                                            \
+        ret = OB_OP_NOT_ALLOW;                                                                                                            \
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, str.ptr());                                                                                       \
+      }                                                                                                                                   \
+      break;                                                                                                                              \
+    case OB_ERR_TENANT_IS_LOCKED:                                                                                                         \
+      ret = OB_OP_NOT_ALLOW;                                                                                                              \
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "primary tenant is locked, role transition");                                                       \
+      break;                                                                                                                              \
+    case OB_SOURCE_TENANT_STATE_NOT_MATCH:                                                                                                \
+      LOG_USER_ERROR(OB_SOURCE_TENANT_STATE_NOT_MATCH);                                                                                   \
+      break;                                                                                                                              \
+    case OB_SOURCE_LS_STATE_NOT_MATCH:                                                                                                    \
+      LOG_USER_ERROR(OB_SOURCE_LS_STATE_NOT_MATCH);                                                                                       \
+      break;                                                                                                                              \
+    default:                                                                                                                              \
+      if (OB_TMP_FAIL(str.assign_fmt("wait tenant sync to latest failed(original error code: %d), switch to primary", ret))){             \
+        LOG_WARN("tenant role trans user error str assign failed");                                                                       \
+      } else {                                                                                                                            \
+        ret = OB_OP_NOT_ALLOW;                                                                                                            \
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, str.ptr());                                                                                       \
+      }                                                                                                                                   \
+  }                                                                                                                                       \
 
 const char* const ObTenantRoleTransitionConstants::SWITCH_TO_PRIMARY_LOG_MOD_STR = "SWITCH_TO_PRIMARY";
 const char* const ObTenantRoleTransitionConstants::SWITCH_TO_STANDBY_LOG_MOD_STR = "SWITCH_TO_STANDBY";
@@ -114,7 +159,8 @@ int ObTenantRoleTransitionService::failover_to_primary()
   LOG_INFO("[ROLE_TRANSITION] finish failover to primary", KR(ret), K(tenant_info), K(cost));
   return ret;
 }
-  
+
+ERRSIM_POINT_DEF(ERRSIM_TENANT_ROLE_TRANS_WAIT_SYNC_ERROR);
 int ObTenantRoleTransitionService::do_failover_to_primary_(const share::ObAllTenantInfo &tenant_info)
 {
   int ret = OB_SUCCESS;
@@ -134,6 +180,11 @@ int ObTenantRoleTransitionService::do_failover_to_primary_(const share::ObAllTen
   } else if (obrpc::ObSwitchTenantArg::OpType::SWITCH_TO_PRIMARY == switch_optype_
              && OB_FAIL(wait_tenant_sync_to_latest_until_timeout_(tenant_id_, tenant_info))) {
     LOG_WARN("fail to wait_tenant_sync_to_latest_until_timeout_", KR(ret), K_(tenant_id), K(tenant_info));
+    TENANT_ROLE_TRANS_USER_ERROR;
+  } else if (OB_SUCC(ret) && ERRSIM_TENANT_ROLE_TRANS_WAIT_SYNC_ERROR) {
+    ret = ERRSIM_TENANT_ROLE_TRANS_WAIT_SYNC_ERROR;
+    TENANT_ROLE_TRANS_USER_ERROR;
+    LOG_WARN("errsim wait_tenant_sync_to_latest_until_timeout", K(ret));
   } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role(
                  tenant_id_, sql_proxy_, tenant_info.get_switchover_epoch(),
                  share::STANDBY_TENANT_ROLE, tenant_info.get_switchover_status(),
@@ -378,7 +429,7 @@ int ObTenantRoleTransitionService::do_switch_access_mode_to_append(
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("Tenant status changed by concurrent operation, switch to primary not allowed",
                KR(ret), K(tenant_info), K(cur_tenant_info));
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Tenant status changed by concurrent operation, switch to primary");
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant status changed by concurrent operation, switch to primary");
     } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role(
             tenant_id_, &trans, tenant_info.get_switchover_epoch(),
             share::PRIMARY_TENANT_ROLE, tenant_info.get_switchover_status(),

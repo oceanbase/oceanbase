@@ -233,9 +233,9 @@ int ObLogRestoreSourceServiceConfigParser::check_before_update_inner_config(
     } else if (!for_verify && OB_FAIL(service_attr_.check_restore_source_is_self_(source_is_self, tenant_id_))) {
       LOG_WARN("check restore source is self failed");
     } else if (source_is_self) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("set standby itself as log restore source is not allowed");
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "set standby itself as log restore source");
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("set tenant itself as log restore source is not allowed");
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set tenant itself as log restore source is");
     } else if (OB_FAIL(proxy.get_compatibility_mode(service_attr_.user_.tenant_id_, service_attr_.user_.mode_))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get primary compatibility mode failed", K(tenant_id_), K(service_attr_.user_.tenant_id_));
