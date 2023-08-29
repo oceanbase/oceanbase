@@ -1834,11 +1834,8 @@ int ObTransformWinMagic::check_join_push_down(ObDMLStmt *main_stmt,
                 expr->get_relation_ids().has_member(view_table_idx) &&
                 expr->get_relation_ids().has_member(push_down_table_idx)) {
         ObSEArray<ObRawExpr *, 4> column_exprs;
-        if (!expr->is_op_expr()) {
+        if (!expr->is_op_expr() || expr->get_param_count() < 2) {
           //do nothing
-        } else if (expr->get_param_count() < 2) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("equal expr param count is less than 2", K(ret));
         } else if (OB_ISNULL(expr->get_param_expr(0)) ||
                   OB_ISNULL(expr->get_param_expr(1))) {
           ret = OB_ERR_UNEXPECTED;
