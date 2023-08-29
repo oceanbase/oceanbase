@@ -122,7 +122,9 @@ int ObEmptyServerChecker::try_delete_server_()
         const ObAddr &addr= server_info->get_server();
         if (OB_FAIL(unit_mgr_->check_server_empty(addr, server_empty))) {
           LOG_WARN("check_server_empty failed", "server", addr, KR(ret));
-        } else if (server_empty && OB_FAIL(empty_servers_.push_back(addr))) {
+        } else if (!server_empty) {
+          LOG_INFO("server not empty and has units on it", "server", addr, KR(ret));
+        } else if (OB_FAIL(empty_servers_.push_back(addr))) {
           LOG_WARN("failed to push back empty server", KR(ret), KPC(server_info));
         }
       }

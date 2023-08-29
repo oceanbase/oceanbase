@@ -59,16 +59,20 @@ int ObUnitStatManager::gather_stat()
 {
   int ret = OB_SUCCESS;
   ObArray<share::ObUnitStat> unit_stats;
+  ObArray<share::ObUnit> units;
+  unit_stat_map_.reuse();
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(ut_operator_.get_unit_stats(unit_stats))) {
     LOG_WARN("get unit_stats failed", KR(ret));
+  } else if (OB_FAIL(ut_operator_.get_units(units))) {
+    LOG_WARN("get units failed", KR(ret));
   } else {
-    ObUnitStatMap::Item *item;
+    ObUnitStatMap::Item *item = NULL;
     FOREACH_CNT_X(unit_stat, unit_stats, OB_SUCC(ret)) {
       if (OB_FAIL(unit_stat_map_.locate(unit_stat->get_unit_id(), item))) {
-        LOG_WARN("fail to init stat for unit", KR(ret), K(unit_stat->get_unit_id()));
+        LOG_WARN("fail to locate unit_stat", KR(ret), K(unit_stat->get_unit_id()));
       } else if (OB_FAIL(ERRSIM_UNIT_DISK_ASSIGN)) {
         if (OB_FAIL(item->v_.init(unit_stat->get_unit_id(),
                                   1024 * 1024 * 1024,  // assign 1 GB for test use only
@@ -80,6 +84,34 @@ int ObUnitStatManager::gather_stat()
         LOG_ERROR("errsim triggered, assign unit_stats' required size to 1GB.", KR(ret), KP(item));
       } else {
         item->v_.deep_copy(*unit_stat);
+      }
+    }
+    // FIXME: (cangming.zl) temp workaround for problem of units on offline servers.
+    FOREACH_CNT_X(unit, units, OB_SUCC(ret)) {
+      share::ObUnitStat tmp_unit_stat;
+      if (OB_SUCC(unit_stat_map_.get(unit->unit_id_, tmp_unit_stat))) {
+        // do nothing, unit_stat of this unit is already set
+      } else {
+        if (OB_HASH_NOT_EXIST != ret) {
+          LOG_WARN("fail to try to get from unit_stat_map", KR(ret), K(unit->unit_id_));
+        } else { /*OB_HASH_NOT_EXIST*/
+          // Let required_size of unit_stat unable to get from __all_virtual_unit be 0
+          ret = OB_SUCCESS;
+          if (OB_FAIL(unit_stat_map_.locate(unit->unit_id_, item))) {
+            LOG_WARN("fail to locate unit_stat", KR(ret), K(unit->unit_id_));
+          } else {
+            if (OB_ISNULL(item)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("item is nullptr", KR(ret));
+            } else if (OB_FAIL(item->v_.init(unit->unit_id_,
+                                      0 /*required_size*/,
+                                      unit->migrate_from_server_.is_valid()/*is_migrating*/))) {
+              LOG_WARN("fail to init unit_stat", KR(ret), K(unit->unit_id_));
+            } else {
+              LOG_INFO("unit not in unit_stat_map, set required_size as 0", KR(ret), K(unit->unit_id_));
+            }
+          }
+        }
       }
     }
   }
