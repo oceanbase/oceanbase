@@ -1475,7 +1475,7 @@ public:
 
   static int add_param_lossless_cast_constraint(ObTransformerCtx &ctx,
                                                 ObRawExpr *expr,
-                                                const ObExprResType &dst_type);
+                                                const ObRawExpr *dst_expr);
 
   static int calc_expr_value(ObTransformerCtx &ctx, ObRawExpr *expr, bool &is_not_null);
 

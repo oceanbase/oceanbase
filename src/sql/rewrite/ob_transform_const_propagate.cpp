@@ -1737,8 +1737,8 @@ int ObTransformConstPropagate::add_equal_param_constraint(ObRawExpr *column_expr
     }
   } else if (PRE_CALC_LOSSLESS_CAST == expect_result) {
     if (OB_FAIL(ObTransformUtils::add_param_lossless_cast_constraint(*ctx_,
-                                                            const_expr,
-                                                            column_expr->get_result_type()))) {
+                                                                     const_expr,
+                                                                     column_expr))) {
       LOG_WARN("failed to add param not null constraint", K(ret));
     }
   } else {

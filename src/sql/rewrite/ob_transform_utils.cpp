@@ -9676,23 +9676,22 @@ int ObTransformUtils::add_param_null_constraint(ObTransformerCtx &ctx,
 
 int ObTransformUtils::add_param_lossless_cast_constraint(ObTransformerCtx &ctx,
                                                          ObRawExpr *expr,
-                                                         const ObExprResType &dst_type)
+                                                         const ObRawExpr *dst_expr)
 {
   int ret = OB_SUCCESS;
-  ObRawExpr *cast_expr = NULL;
+  ObRawExpr *cast_expr = expr;
   ObRawExpr *equal_expr = NULL;
-  if (OB_ISNULL(expr) || OB_ISNULL(ctx.expr_factory_)) {
+  if (OB_ISNULL(expr) || OB_ISNULL(dst_expr) || OB_ISNULL(ctx.expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(ctx.expr_factory_,
-                                                             ctx.session_info_,
-                                                             *expr,
-                                                             dst_type,
-                                                             cast_expr))) {
+  } else if (OB_FAIL(add_cast_for_replace(*ctx.expr_factory_,
+                                          dst_expr,
+                                          cast_expr,
+                                          ctx.session_info_))) {
     LOG_WARN("failed to add cast expr", K(ret));
   } else if (OB_UNLIKELY(cast_expr == expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("must add cast for lossless cast constraint", K(dst_type), KPC(expr), K(ret));
+    LOG_WARN("must add cast for lossless cast constraint", KPC(dst_expr), KPC(expr), K(ret));
   } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*ctx.expr_factory_,
                                                            ctx.session_info_,
                                                            T_OP_EQ,
