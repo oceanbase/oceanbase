@@ -142,11 +142,13 @@ bool ObWorkingSet::add_handle_ref(WorkingSetMB *ws_mb)
   return added;
 }
 
-void ObWorkingSet::de_handle_ref(WorkingSetMB *ws_mb, const bool do_retire)
+uint32_t ObWorkingSet::de_handle_ref(WorkingSetMB *ws_mb, const bool do_retire)
 {
+  uint32_t ref_cnt = 0;
   if (NULL != ws_mb) {
-    mb_handle_allocator_->de_handle_ref(ws_mb->mb_handle_, do_retire);
+    ref_cnt = mb_handle_allocator_->de_handle_ref(ws_mb->mb_handle_, do_retire);
   }
+  return ref_cnt;
 }
 
 int ObWorkingSet::alloc(ObKVCacheInst &inst, const enum ObKVCachePolicy policy,

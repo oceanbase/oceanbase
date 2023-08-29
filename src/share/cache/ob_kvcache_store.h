@@ -45,7 +45,7 @@ public:
       const enum ObKVCachePolicy policy = LRU);
 protected:
   virtual bool add_handle_ref(MBWrapper *mb_wrapper) = 0;
-  virtual void de_handle_ref(MBWrapper *mb_wrapper, const bool do_retire = true) = 0;
+  virtual uint32_t de_handle_ref(MBWrapper *mb_wrapper, const bool do_retire = true) = 0;
   virtual int alloc(ObKVCacheInst &inst, const enum ObKVCachePolicy policy,
       const int64_t block_size, MBWrapper *&mb_wrapper) = 0;
   virtual int free(MBWrapper *mb_wrapper) = 0;
@@ -63,7 +63,7 @@ private:
       const enum ObKVCachePolicy policy);
 };
 
-class ObKVCacheStore : public ObIKVCacheStore<ObKVMemBlockHandle>,
+class ObKVCacheStore final : public ObIKVCacheStore<ObKVMemBlockHandle>,
     public ObIMBHandleAllocator
 {
 public:
@@ -97,7 +97,7 @@ public:
 
   virtual bool add_handle_ref(ObKVMemBlockHandle *mb_handle, const uint32_t seq_num);
   virtual bool add_handle_ref(ObKVMemBlockHandle *mb_handle);
-  virtual void de_handle_ref(ObKVMemBlockHandle *mb_handle, const bool do_retire = true);
+  virtual uint32_t de_handle_ref(ObKVMemBlockHandle *mb_handle, const bool do_retire = true) override;
   int64_t get_handle_ref_cnt(const ObKVMemBlockHandle *mb_handle);
   virtual int64_t get_block_size() const { return block_size_; }
   // implement functions of ObIMBWrapperMgr

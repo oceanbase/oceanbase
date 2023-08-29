@@ -267,7 +267,7 @@ public:
 
   virtual bool add_handle_ref(ObKVMemBlockHandle *mb_handle, const uint32_t seq_num) = 0;
   virtual bool add_handle_ref(ObKVMemBlockHandle *mb_handle) = 0;
-  virtual void de_handle_ref(ObKVMemBlockHandle *mb_handle, const bool do_retire = true) = 0;
+  virtual uint32_t de_handle_ref(ObKVMemBlockHandle *mb_handle, const bool do_retire = true) = 0;
 
   virtual int64_t get_block_size() const = 0;
 };
