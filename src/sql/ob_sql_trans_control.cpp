@@ -918,7 +918,9 @@ int ObSqlTransControl::release_stash_savepoint(ObExecContext &exec_ctx,
   ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
   transaction::ObTransService *txs = NULL;
   CK (OB_NOT_NULL(session));
-  CHECK_SESSION (session);
+  // NOTE: should _NOT_ check session is zombie, because the stash savepoint
+  // should be release before query quit
+  // CHECK_SESSION (session);
   OZ (get_tx_service(session, txs), *session);
   OZ (acquire_tx_if_need_(txs, *session));
   OZ (txs->release_explicit_savepoint(*session->get_tx_desc(), sp_name, get_real_session_id(*session)), *session, sp_name);
