@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/dml/ob_dml_ctx_define.h"
+#include "sql/engine/dml/ob_fk_checker.h"
 #include "sql/das/ob_das_utils.h"
 namespace oceanbase
 {
@@ -112,11 +113,79 @@ int ObTriggerColumnsInfo::set_trigger_rowid()
   return set_trigger_column(true, false, false, false, true);
 }
 
+OB_SERIALIZE_MEMBER(ObForeignKeyCheckerCtdef,
+                    calc_part_id_expr_,
+                    part_id_dep_exprs_,
+                    das_scan_ctdef_,
+                    loc_meta_,
+                    is_part_table_,
+                    tablet_id_,
+                    rowkey_count_,
+                    rowkey_ids_);
+
 OB_SERIALIZE_MEMBER(ObTriggerArg, trigger_id_, trigger_events_.bit_value_, timing_points_.bit_value_);
 
-OB_SERIALIZE_MEMBER(ObForeignKeyColumn, name_, idx_, name_idx_);
+OB_SERIALIZE_MEMBER(ObForeignKeyColumn, name_, idx_, name_idx_, obj_meta_);
 
-OB_SERIALIZE_MEMBER(ObForeignKeyArg, ref_action_, table_name_, columns_, database_name_, is_self_ref_, table_id_);
+// OB_SERIALIZE_MEMBER(ObForeignKeyArg,
+//                     ref_action_,
+//                     table_name_,
+//                     columns_,
+//                     database_name_,
+//                     is_self_ref_,
+//                     table_id_,
+//                     fk_ctdef_);
+
+OB_DEF_SERIALIZE(ObForeignKeyArg)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              ref_action_,
+              table_name_,
+              columns_,
+              database_name_,
+              is_self_ref_,
+              table_id_
+  );
+  if (OB_NOT_NULL(fk_ctdef_)) {
+    OB_UNIS_ENCODE(*fk_ctdef_);
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObForeignKeyArg)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE,
+              ref_action_,
+              table_name_,
+              columns_,
+              database_name_,
+              is_self_ref_,
+              table_id_
+  );
+  if (OB_NOT_NULL(fk_ctdef_)) {
+    OB_UNIS_DECODE(*fk_ctdef_);
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObForeignKeyArg)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              ref_action_,
+              table_name_,
+              columns_,
+              database_name_,
+              is_self_ref_,
+              table_id_
+  );
+  if (OB_NOT_NULL(fk_ctdef_)) {
+    OB_UNIS_ADD_LEN(*fk_ctdef_);
+  }
+  return len;
+}
 
 OB_SERIALIZE_MEMBER(ColumnContent,
                     projector_index_,
@@ -689,6 +758,18 @@ OB_DEF_SERIALIZE_SIZE(ObInsertUpCtDef)
   OB_UNIS_ADD_LEN(*ins_ctdef_);
   OB_UNIS_ADD_LEN(*upd_ctdef_);
   return len;
+}
+
+ObDMLBaseRtDef::~ObDMLBaseRtDef()
+{
+  for (int64_t i = 0; i < fk_checker_array_.count(); ++i) {
+    ObForeignKeyChecker *fk_checker = fk_checker_array_.at(i);
+    if (OB_NOT_NULL(fk_checker)) {
+      fk_checker->reset();
+      fk_checker = nullptr;
+    }
+  }
+  fk_checker_array_.release_array();
 }
 }  // namespace sql
 }  // namespace oceanbase

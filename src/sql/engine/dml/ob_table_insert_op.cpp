@@ -26,6 +26,8 @@
 #include "lib/profile/ob_perf_event.h"
 #include "share/schema/ob_table_dml_param.h"
 #include "share/ob_tablet_autoincrement_service.h"
+#include "sql/engine/cmd/ob_table_direct_insert_service.h"
+#include "sql/engine/dml/ob_fk_checker.h"
 
 
 namespace oceanbase
@@ -142,6 +144,7 @@ OB_INLINE int ObTableInsertOp::open_table_for_each()
     LOG_WARN("allocate insert rtdef failed", K(ret), K(MY_SPEC.ins_ctdefs_.count()));
   }
   trigger_clear_exprs_.reset();
+  fk_checkers_.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < ins_rtdefs_.count(); ++i) {
     InsRtDefArray &rtdefs = ins_rtdefs_.at(i);
     const ObTableInsertSpec::InsCtDefArray &ctdefs = MY_SPEC.ins_ctdefs_.at(i);
@@ -151,7 +154,7 @@ OB_INLINE int ObTableInsertOp::open_table_for_each()
     for (int64_t j = 0; OB_SUCC(ret) && j < rtdefs.count(); ++j) {
       ObInsRtDef &ins_rtdef = rtdefs.at(j);
       const ObInsCtDef &ins_ctdef = *ctdefs.at(j);
-      if (OB_FAIL(ObDMLService::init_ins_rtdef(dml_rtctx_, ins_rtdef, ins_ctdef, trigger_clear_exprs_))) {
+      if (OB_FAIL(ObDMLService::init_ins_rtdef(dml_rtctx_, ins_rtdef, ins_ctdef, trigger_clear_exprs_, fk_checkers_))) {
         LOG_WARN("init insert rtdef failed", K(ret));
       }
     }
@@ -454,6 +457,7 @@ OB_INLINE int ObTableInsertOp::close_table_for_each()
   }
   return ret;
 }
+
 
 }  // namespace sql
 }  // namespace oceanbase

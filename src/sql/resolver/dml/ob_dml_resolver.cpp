@@ -5326,6 +5326,191 @@ int ObDMLResolver::resolve_table_partition_expr(const TableItem &table_item, con
   return ret;
 }
 
+int ObDMLResolver::resolve_foreign_key_constraint(const TableItem *table_item)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_ISNULL(table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table item is null", K(ret));
+  } else if (!table_item->is_basic_table()) {
+    //nothing to do, only resolve foreign key constraint for basic table
+  } else if (OB_FAIL(schema_checker_->get_table_schema(MTL_ID(), table_item->ref_id_, table_schema))) {
+    LOG_WARN("get table schema failed", K_(table_item->table_name), K(table_item->ref_id_), K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table schema not exist", K(ret), K(table_item->ref_id_));
+  } else if (OB_FAIL(resolve_fk_table_partition_expr(*table_item, *table_schema))) {
+    LOG_WARN("failed to resolve partition expr used for foreign key check", K(ret));
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_fk_table_partition_expr(const TableItem &table_item, const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObDMLStmt *dml_stmt = get_stmt();
+  if (OB_ISNULL(dml_stmt)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("dml_stmt is null", K(ret));
+  } else if (table_schema.get_foreign_key_infos().count() > 0) {
+    const common::ObIArray<ObForeignKeyInfo> & foreign_key_infos = table_schema.get_foreign_key_infos();
+    for (int64_t i = 0; i < foreign_key_infos.count(); i++) {
+      const ObForeignKeyInfo &foreign_key_info = foreign_key_infos.at(i);
+      const uint64_t parent_table_id = foreign_key_info.parent_table_id_;
+      const uint64_t child_table_id = foreign_key_info.child_table_id_;
+      if (child_table_id == table_schema.get_table_id() && !foreign_key_info.is_parent_table_mock_) {
+        const ObTableSchema *parent_table_schema = nullptr;
+        bool parent_key_is_pkey = false;
+        const common::ObSEArray<uint64_t, 8> &parent_column_ids = foreign_key_info.parent_column_ids_;
+        const ObTableSchema *resolve_table_schema = nullptr;
+        uint64_t fk_scan_tid = OB_INVALID_ID;
+        if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), parent_table_id, parent_table_schema))) { //NOTE: Can we use this function to get schema here
+          if (OB_TABLE_NOT_EXIST == ret) {
+            // Note: Parent table not exist, return OB_ERR_NO_REFERENCED_ROW instead of table not exist to ensure compatibility
+            ret = OB_ERR_NO_REFERENCED_ROW;
+          }
+          LOG_WARN("get parent table schema from schema checker failed", K(ret), K(parent_table_id));
+        } else if (OB_ISNULL(parent_table_schema)) {
+          // Note: Parent table not exist, return OB_ERR_NO_REFERENCED_ROW instead of table not exist to ensure compatibility
+          ret = OB_ERR_NO_REFERENCED_ROW;
+          LOG_WARN("parent table not exists", K(parent_table_id));
+        } else if (OB_FAIL(parent_table_schema->get_fk_check_index_tid(*schema_checker_->get_schema_guard(), parent_column_ids, fk_scan_tid))) {
+          LOG_WARN("failed to get table id to perform scan task for foreign key check", K(ret));
+        } else if (OB_INVALID_ID == fk_scan_tid) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid table id to perform scan task for foregin key check", K(ret));
+        } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), fk_scan_tid, resolve_table_schema))) {
+          LOG_WARN("failed to get table schema to perform foreign key check", K(ret), K(fk_scan_tid));
+        } else if (OB_ISNULL(resolve_table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("table schema used to perform foreign key check not exist", K(ret), K(fk_scan_tid));
+        } else {
+          ObRawExpr *parent_part_expr = nullptr;
+          ObRawExpr *parent_subpart_expr = nullptr;
+          const ObString &part_str = resolve_table_schema->get_part_option().get_part_func_expr_str();
+          ObPartitionFuncType part_type = resolve_table_schema->get_part_option().get_part_func_type();
+          // NOTE: for parent index table, can we still use table_item of child table here
+          if (resolve_table_schema->get_part_level() != PARTITION_LEVEL_ZERO) {
+            if (OB_FAIL(resolve_partition_expr(table_item, *resolve_table_schema, part_type, part_str, parent_part_expr, true, &foreign_key_info))) {
+              LOG_WARN("Failed to resolve partition expr", K(ret), K(part_str), K(part_type));
+            } else if (PARTITION_LEVEL_TWO == resolve_table_schema->get_part_level()) {
+              const ObString &parent_subpart_str = resolve_table_schema->get_sub_part_option().get_part_func_expr_str();
+              ObPartitionFuncType parent_subpart_type = resolve_table_schema->get_sub_part_option().get_part_func_type();
+              if (OB_FAIL(resolve_partition_expr(table_item, *parent_table_schema, parent_subpart_type, parent_subpart_str, parent_subpart_expr, true, &foreign_key_info))) {
+                LOG_WARN("Failed to resolve partition expr", K(ret));
+              }
+            }
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(dml_stmt->set_part_expr(foreign_key_info.foreign_key_id_, fk_scan_tid,
+                                parent_part_expr, parent_subpart_expr))) {
+              LOG_WARN("set part expr to dml stmt failed", K(ret));
+            } else {
+              LOG_TRACE("resolve partition expr", K(table_item), KPC(parent_part_expr), K(part_str));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::map_to_fk_column_name(const ObTableSchema &child_table_schema,
+                                         const ObTableSchema &parent_table_schema,
+                                         const ObForeignKeyInfo &fk_info,
+                                         const ObString &pk_col_name,
+                                         ObString &fk_col_name)
+{
+  int ret = OB_SUCCESS;
+  bool is_column_exist = false;
+  if (OB_ISNULL(parent_table_schema.get_column_schema(pk_col_name))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parent column schema is null", K(ret),K(pk_col_name));
+  } else {
+    const uint64_t pk_col_id = parent_table_schema.get_column_schema(pk_col_name)->get_column_id();
+    uint64_t fk_col_id = OB_INVALID_ID;
+    if OB_FAIL(fk_info.get_child_column_id(pk_col_id, fk_col_id)) {
+      LOG_WARN("failed to get child column id according parent column id", K(ret));
+    } else {
+      child_table_schema.get_column_name_by_column_id(fk_col_id, fk_col_name, is_column_exist);
+      if (!is_column_exist) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child column is not exist", K(ret), K(fk_col_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_columns_for_fk_partition_expr(ObRawExpr *&expr,
+                                            ObIArray<ObQualifiedName> &columns,
+                                            const TableItem &table_item, // table_item of dml table(child_table)
+                                            const ObTableSchema &parent_table_schema,
+                                            const ObForeignKeyInfo *fk_info)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t child_table_id = fk_info->child_table_id_;
+  const ObTableSchema *child_table_schema = nullptr;
+  if (OB_ISNULL(fk_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("foreign key info is null", K(ret));
+  } else if (OB_FAIL(schema_checker_->get_table_schema(MTL_ID(),child_table_id, child_table_schema))) {
+    LOG_WARN("failed to get child table schema", K(ret));
+  } else {
+    ObArray<ObRawExpr*> real_exprs;
+    for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
+      ObQualifiedName &q_name = columns.at(i);
+      ObRawExpr *real_ref_expr = NULL;
+      ObString child_col_name;
+      if (q_name.is_sys_func()) {
+        if (OB_FAIL(resolve_qualified_identifier(q_name, columns, real_exprs, real_ref_expr))) {
+          LOG_WARN("resolve sysfunc expr failed", K(q_name), K(ret));
+        } else if (OB_ISNULL(real_ref_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expr is NULL", K(ret));
+        } else if (!real_ref_expr->is_sys_func_expr()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid exor", K(*real_ref_expr), K(ret));
+        } else {
+          ObSysFunRawExpr *sys_func_expr = static_cast<ObSysFunRawExpr*>(real_ref_expr);
+          if (OB_FAIL(sys_func_expr->check_param_num())) {
+            LOG_WARN("sys func check param failed", K(ret));
+          }
+        }
+      } else if (OB_FAIL(map_to_fk_column_name(*child_table_schema, parent_table_schema, *fk_info, q_name.col_name_, child_col_name))) {
+        LOG_WARN("failed to map parent column name to child column name", K(ret));
+      } else {
+        ColumnItem *column_item = NULL;
+        if (OB_ISNULL(child_col_name)) {
+          LOG_WARN("failed to get column name of foreign key column", K(ret), K(q_name.col_name_));
+        } else if (OB_FAIL(resolve_basic_column_item(table_item, child_col_name, parent_table_schema.is_oracle_tmp_table(), column_item))) {
+          LOG_WARN("resolve basic column item failed", K(i), K(q_name), K(ret));
+        } else {
+          real_ref_expr = column_item->expr_;
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < real_exprs.count(); ++i) {
+          if (OB_FAIL(ObRawExprUtils::replace_ref_column(real_ref_expr, columns.at(i).ref_expr_, real_exprs.at(i)))) {
+            LOG_WARN("failed to replace real expr", K(i), K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+          // nothing to do
+        } else if (OB_FAIL(real_exprs.push_back(real_ref_expr))) {
+          LOG_WARN("failed to push back real ref exprs", K(ret));
+        } else if OB_FAIL((ObRawExprUtils::replace_ref_column(expr, q_name.ref_expr_, real_ref_expr))) {
+          LOG_WARN("failed to replace real ref column", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+
 //for recursively process columns item in resolve_partition_expr
 //just wrap columns process logic in resolve_partition_expr
 int ObDMLResolver::resolve_columns_for_partition_expr(ObRawExpr *&expr,
@@ -5372,13 +5557,14 @@ int ObDMLResolver::resolve_columns_for_partition_expr(ObRawExpr *&expr,
   }
   return ret;
 }
-
 int ObDMLResolver::resolve_partition_expr(
     const TableItem &table_item,
     const ObTableSchema &table_schema,
     const ObPartitionFuncType part_type,
     const ObString &part_str,
-    ObRawExpr *&expr)
+    ObRawExpr *&expr,
+    bool for_fk,
+    const ObForeignKeyInfo *fk_info)
 {
   int ret = OB_SUCCESS;
   ObArray<ObQualifiedName> columns;
@@ -5489,7 +5675,14 @@ int ObDMLResolver::resolve_partition_expr(
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(resolve_columns_for_partition_expr(expr, columns, table_item, table_schema.is_oracle_tmp_table()))) {
+    if (for_fk) {
+      if (OB_ISNULL(fk_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fk_info is nullptr when resolve foreign key part expr", K(ret));
+      } else if (OB_FAIL(resolve_columns_for_fk_partition_expr(expr, columns, table_item, table_schema, fk_info))) {
+        LOG_WARN("resolve columns for parent table partition expr failed", K(ret));
+      }
+    } else if (OB_FAIL(resolve_columns_for_partition_expr(expr, columns, table_item, table_schema.is_oracle_tmp_table()))) {
       LOG_WARN("resolve columns for partition expr failed", K(ret));
     }
   }

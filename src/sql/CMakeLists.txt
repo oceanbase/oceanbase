@@ -233,6 +233,7 @@ ob_set_subtarget(ob_sql engine_dml
   engine/dml/ob_link_dml_op.cpp
   engine/dml/ob_link_op.cpp
   engine/dml/ob_trigger_handler.cpp
+  engine/dml/ob_fk_checker.cpp
 )
 
 ob_set_subtarget(ob_sql engine_expr

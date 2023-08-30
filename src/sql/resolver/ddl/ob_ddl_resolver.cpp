@@ -7901,9 +7901,18 @@ int ObDDLResolver::resolve_foreign_key_options(const ParseNode *node,
           action = ACTION_CASCADE;
           break;
         case T_SET_NULL:
-          // action = ACTION_SET_NULL;
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "create foreign key with set null option");
+          {
+            uint64_t data_version = 0;
+            if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), data_version))) {
+              LOG_WARN("failed to get data version", K(ret), K(session_info_->get_effective_tenant_id()));
+            } else if (data_version >= DATA_VERSION_4_2_1_0) {
+              action = ACTION_SET_NULL;
+            } else {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("current tenant data version is less than 4.2.1.0, foreign key set null not supported", K(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "create foreign key with set null option");
+            }
+          }
           break;
         case T_NO_ACTION:
           action = ACTION_NO_ACTION;
@@ -7975,9 +7984,18 @@ int ObDDLResolver::resolve_foreign_key_option(const ParseNode *option_node,
       action = ACTION_CASCADE;
       break;
     case T_SET_NULL:
-      // action = ACTION_SET_NULL;
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create foreign key with set null option");
+      {
+        uint64_t data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), data_version))) {
+          LOG_WARN("failed to get data version", K(ret), K(session_info_->get_effective_tenant_id()));
+        } else if (data_version >= DATA_VERSION_4_2_1_0) {
+          action = ACTION_SET_NULL;
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("current tenant data version is less than 4.2.1.0, foreign key set null not supported", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "create foreign key with set null option");
+        }
+      }
       break;
     default:
       ret = OB_INVALID_ARGUMENT;
@@ -8119,6 +8137,7 @@ int ObDDLResolver::resolve_foreign_key_state(
 // description: 检查创建外键时父表和子表的外键列数量和类型是否匹配
 //              检查创建外键时父表的外键列是否是主键或者唯一索引
 //              检查当外键属于自引用时，外键列是否不为同一列
+//              检查外键的casacde行为是否和schema里的定义相冲突 例如 set_null 和 not_null
 //
 // @param [in] arg  已经存有外键信息的 ObCreateForeignKeyArg
 // @return oceanbase error code defined in lib/ob_errno.def
@@ -8299,6 +8318,34 @@ int ObDDLResolver::check_foreign_key_reference(
                                              TABLE_SCHEMA,
                                              parent_table_schema->get_schema_version())))) {
             LOG_WARN("push back to based_schema_object_infos_ failed", K(ret));
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && (arg.delete_action_ == ACTION_SET_NULL || arg.update_action_ == ACTION_SET_NULL)) {
+      // To compatible with oracle and mysql, check if set null ref action is valid
+      // More detail can be found in:
+      for (int64_t i = 0; OB_SUCC(ret) && i < arg.child_columns_.count(); ++i) {
+        const ObString &fk_col_name = arg.child_columns_.at(i);
+        const ObColumnSchemaV2 *fk_col_schema = child_table_schema->get_column_schema(fk_col_name);
+        if (OB_ISNULL(fk_col_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("foreign key column schema is null", K(ret), K(i));
+        } else if (fk_col_schema->is_generated_column()) {
+          ret = OB_ERR_UNSUPPORTED_FK_SET_NULL_ON_GENERATED_COLUMN;
+          LOG_WARN("foreign key column is generated column", K(ret), K(i), K(fk_col_name));
+        } else if (!fk_col_schema->is_nullable() && lib::is_mysql_mode()) {
+          ret = OB_ERR_FK_COLUMN_NOT_NULL;
+          LOG_USER_ERROR(OB_ERR_FK_COLUMN_NOT_NULL, to_cstring(fk_col_name), to_cstring(arg.foreign_key_name_));
+        } else if (lib::is_mysql_mode() ) {
+          // check if fk column is base column of virtual generated column in MySQL mode
+          const uint64_t fk_col_id = fk_col_schema->get_column_id();
+          bool is_stored_base_col = false;
+          if (OB_FAIL(child_table_schema->check_is_stored_generated_column_base_column(fk_col_id, is_stored_base_col))) {
+            LOG_WARN("failed to check foreign key column is virtual generated column base column", K(ret), K(i));
+          } else if (is_stored_base_col) {
+            ret = OB_ERR_CANNOT_ADD_FOREIGN;
+            LOG_WARN("foreign key column is the base column of stored generated column in mysql mode", K(ret), K(i), K(fk_col_name));
           }
         }
       }

@@ -25,6 +25,7 @@
 #include "sql/engine/dml/ob_dml_service.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
 #include "sql/engine/expr/ob_expr_calc_partition_id.h"
+#include "sql/engine/dml/ob_fk_checker.h"
 
 namespace oceanbase
 {
@@ -214,13 +215,18 @@ int ObTableMergeOp::open_table_for_each()
     LOG_WARN("fail to init ObRowkey used for distinct check", K(ret));
   }
   trigger_clear_exprs_.reset();
+  fk_checkers_.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.merge_ctdefs_.count(); ++i) {
     ObMergeCtDef *merge_ctdef = MY_SPEC.merge_ctdefs_.at(i);
     if (OB_NOT_NULL(merge_ctdef->ins_ctdef_)) {
       // init insert rtdef
       const ObInsCtDef &ins_ctdef = *merge_ctdef->ins_ctdef_;
       ObInsRtDef &ins_rtdef = merge_rtdefs_.at(i).ins_rtdef_;
-      if (OB_FAIL(ObDMLService::init_ins_rtdef(dml_rtctx_, ins_rtdef, ins_ctdef, trigger_clear_exprs_))) {
+      if (OB_FAIL(ObDMLService::init_ins_rtdef(dml_rtctx_,
+                                               ins_rtdef,
+                                               ins_ctdef,
+                                               trigger_clear_exprs_,
+                                               fk_checkers_))) {
         LOG_WARN("init ins rtdef failed", K(ret));
       } else if (ins_ctdef.is_primary_index_) {
         if (OB_FAIL(ObDMLService::process_before_stmt_trigger(ins_ctdef, ins_rtdef, dml_rtctx_,
@@ -237,7 +243,11 @@ int ObTableMergeOp::open_table_for_each()
       const ObUpdCtDef &upd_ctdef = *merge_ctdef->upd_ctdef_;
       ObUpdRtDef &upd_rtdef = merge_rtdefs_.at(i).upd_rtdef_;
       upd_rtdef.primary_rtdef_ = &merge_rtdefs_.at(0).upd_rtdef_;
-      if (OB_FAIL(ObDMLService::init_upd_rtdef(dml_rtctx_, upd_rtdef, upd_ctdef, trigger_clear_exprs_))) {
+      if (OB_FAIL(ObDMLService::init_upd_rtdef(dml_rtctx_,
+                                               upd_rtdef,
+                                               upd_ctdef,
+                                               trigger_clear_exprs_,
+                                               fk_checkers_))) {
         LOG_WARN("init upd rtdef failed", K(ret));
       } else if (upd_ctdef.is_primary_index_) {
         if (OB_FAIL(ObDMLService::process_before_stmt_trigger(upd_ctdef, upd_rtdef, dml_rtctx_,

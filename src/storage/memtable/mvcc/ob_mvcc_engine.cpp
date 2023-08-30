@@ -14,6 +14,7 @@
 #include "storage/memtable/mvcc/ob_mvcc_engine.h"
 #include "storage/memtable/mvcc/ob_mvcc_acc_ctx.h"
 #include "storage/memtable/ob_memtable.h"
+#include "storage/memtable/ob_row_conflict_handler.h"
 #include "storage/tx_table/ob_tx_table.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/access/ob_index_sstable_estimator.h"
@@ -106,7 +107,8 @@ int ObMvccEngine::get(ObMvccAccessCtx &ctx,
                       const ObQueryFlag &query_flag,
                       const ObMemtableKey *parameter_key,
                       ObMemtableKey *returned_key,
-                      ObMvccValueIterator &value_iter)
+                      ObMvccValueIterator &value_iter,
+                      ObStoreRowLockState &lock_state)
 {
   int ret = OB_SUCCESS;
   ObMvccRow *value = NULL;
@@ -128,6 +130,8 @@ int ObMvccEngine::get(ObMvccAccessCtx &ctx,
     if (OB_SUCCESS != (tmp_ret = try_compact_row_when_mvcc_read_(ctx.get_snapshot_version(), *value))) {
       TRANS_LOG(WARN, "fail to try to compact row", K(tmp_ret));
     }
+  } else if (query_flag.is_for_foreign_key_check()) {
+    ret = ObRowConflictHandler::check_foreign_key_constraint_for_memtable(&ctx, value, lock_state);
   } else {
     // do nothing
   }
@@ -240,8 +244,6 @@ int ObMvccEngine::check_row_locked(ObMvccAccessCtx &ctx,
     }
   } else if (OB_FAIL(value->check_row_locked(ctx, lock_state))) {
     TRANS_LOG(WARN, "check row locked fail", K(ret), KPC(value), K(ctx), K(lock_state));
-  } else {
-    lock_state.mvcc_row_ = value; // use to re-check
   }
 
   return ret;

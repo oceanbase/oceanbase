@@ -14,6 +14,7 @@
 #define DEV_SRC_SQL_ENGINE_DML_OB_DML_CTX_DEFINE_H_
 #include "sql/das/ob_das_dml_ctx_define.h"
 #include "sql/das/ob_das_ref.h"
+#include "sql/das/ob_das_scan_op.h"
 namespace oceanbase
 {
 namespace sql
@@ -21,6 +22,8 @@ namespace sql
 typedef ObDASOpType ObDMLOpType;
 
 class ObTableModifyOp;
+class ObForeignKeyChecker;
+typedef common::ObArrayWrap<ObForeignKeyChecker*> FkCheckerArray;
 
 struct ObErrLogCtDef
 {
@@ -296,16 +299,55 @@ public:
   ObForeignKeyColumn()
     : name_(),
       idx_(-1),
-      name_idx_(-1)
+      name_idx_(-1),
+      obj_meta_()
   {}
   inline void reset() { name_.reset(); idx_ = -1; name_idx_ = -1; }
   TO_STRING_KV(N_COLUMN_NAME, name_,
                N_INDEX, idx_,
-               N_INDEX, name_idx_);
+               N_INDEX, name_idx_,
+               N_META, obj_meta_);
   common::ObString name_;
   int32_t idx_;  // index of the column id in column_ids_ of ObTableModify. value column idx
   int32_t name_idx_;
+  ObObjMeta obj_meta_; // This is used to cast fk type to parent key type
 };
+
+struct ObForeignKeyCheckerCtdef
+{
+  OB_UNIS_VERSION(1);
+public:
+   ObForeignKeyCheckerCtdef(ObIAllocator &alloc)
+    : calc_part_id_expr_(nullptr),
+      part_id_dep_exprs_(alloc),
+      das_scan_ctdef_(alloc),
+      loc_meta_(alloc),
+      is_part_table_(false),
+      tablet_id_(),
+      rowkey_count_(0),
+      rowkey_ids_(alloc)
+  {}
+  // 父表的主表/unique索引表对应的分区键
+
+  TO_STRING_KV(KPC_(calc_part_id_expr),
+               K_(part_id_dep_exprs),
+               K_(das_scan_ctdef),
+               K_(loc_meta),
+               K_(is_part_table),
+               K_(tablet_id),
+               K_(rowkey_count));
+  ObExpr *calc_part_id_expr_;
+  // calc_part_id_expr_计算所依赖的表达式，用于clear_eval_flag
+  ExprFixedArray part_id_dep_exprs_;
+  // 回表查询，为了结构统一，主表也需要一次回表，第一次的insert都返回主表的主键
+  ObDASScanCtDef das_scan_ctdef_;
+  ObDASTableLocMeta loc_meta_;
+  bool is_part_table_;
+  ObTabletID tablet_id_;
+  int64_t rowkey_count_;
+  IntFixedArray rowkey_ids_; //save the index of parent key column in rowkey
+};
+
 
 class ObForeignKeyArg
 {
@@ -317,7 +359,9 @@ public:
       table_name_(),
       columns_(),
       is_self_ref_(false),
-      table_id_(OB_INVALID_ID)
+      table_id_(0),
+      fk_ctdef_(nullptr),
+      use_das_scan_(false)
   {}
 
   ObForeignKeyArg(common::ObIAllocator &alloc)
@@ -326,7 +370,9 @@ public:
       table_name_(),
       columns_(alloc),
       is_self_ref_(false),
-      table_id_(OB_INVALID_ID)
+      table_id_(0),
+      fk_ctdef_(nullptr),
+      use_das_scan_(false)
   {}
   inline void reset()
   {
@@ -343,7 +389,10 @@ public:
   common::ObString table_name_;
   common::ObFixedArray<ObForeignKeyColumn, common::ObIAllocator> columns_;
   bool is_self_ref_;
+  // the index table id of unique index for parent key, used to build das task to scan index table
   uint64_t table_id_;
+  ObForeignKeyCheckerCtdef *fk_ctdef_;
+  bool use_das_scan_;
 };
 typedef common::ObFixedArray<ObForeignKeyArg, common::ObIAllocator> ObForeignKeyArgArray;
 
@@ -471,7 +520,7 @@ protected:
 //dml base runtime context definition
 struct ObDMLBaseRtDef
 {
-  virtual ~ObDMLBaseRtDef() = default;
+  virtual ~ObDMLBaseRtDef();
   VIRTUAL_TO_STRING_KV(K_(trig_rtdef),
                        K_(cur_row_num));
   ObTrigDMLRtDef trig_rtdef_;
@@ -481,6 +530,7 @@ struct ObDMLBaseRtDef
   //reference the das base ctdef to facilitate
   //some modules to access the das rtdef
   ObDASDMLBaseRtDef &das_base_rtdef_;
+  FkCheckerArray fk_checker_array_;
 protected:
   ObDMLBaseRtDef(ObDASDMLBaseRtDef &das_base_rtdef)
     : trig_rtdef_(),

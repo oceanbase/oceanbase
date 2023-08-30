@@ -737,6 +737,46 @@ int ObSqlTransControl::stmt_refresh_snapshot(ObExecContext &exec_ctx) {
   return ret;
 }
 
+int ObSqlTransControl::set_fk_check_snapshot(ObExecContext &exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
+  ObDASCtx &das_ctx = DAS_CTX(exec_ctx);
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(exec_ctx);
+  const ObPhysicalPlan *plan = plan_ctx->get_phy_plan();
+  // insert stmt does not set snapshot by default, set snapshopt for foreign key check induced by insert heres
+  if (plan->is_plain_insert()) {
+    transaction::ObTransService *txs = NULL;
+    auto &snapshot = das_ctx.get_snapshot();
+    auto &tx_desc = *session->get_tx_desc();
+    int64_t stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);
+    share::ObLSID local_ls_id;
+    bool local_single_ls_plan = plan->is_local_plan()
+      && OB_PHY_PLAN_LOCAL == plan->get_location_type()
+      && has_same_lsid(das_ctx, snapshot, local_ls_id);
+    if (OB_FAIL(get_tx_service(session, txs))) {
+      LOG_WARN("failed to get transaction service", K(ret));
+    } else {
+      if (local_single_ls_plan) {
+        ret = txs->get_ls_read_snapshot(tx_desc,
+                                        session->get_tx_isolation(),
+                                        local_ls_id,
+                                        stmt_expire_ts,
+                                        snapshot);
+      } else {
+        ret = txs->get_read_snapshot(tx_desc,
+                                      session->get_tx_isolation(),
+                                      stmt_expire_ts,
+                                      snapshot);
+      }
+      if (OB_FAIL(ret)) {
+        LOG_WARN("fail to get snapshot", K(ret), K(local_ls_id), KPC(session));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSqlTransControl::stmt_setup_savepoint_(ObSQLSessionInfo *session,
                                              ObDASCtx &das_ctx,
                                              ObPhysicalPlanCtx *plan_ctx,

@@ -6161,6 +6161,9 @@ public:
     }
     return ret;
   }
+
+  int get_child_column_id(const uint64_t parent_column_id, uint64_t &child_column_id) const;
+  int get_parent_column_id(const uint64_t child_column_id, uint64_t &parent_column_id) const;
   inline void reset()
   {
     table_id_ = common::OB_INVALID_ID;

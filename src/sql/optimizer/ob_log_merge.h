@@ -57,6 +57,7 @@ public:
                                 ObSqlPlanItem &plan_item) override;
 protected:
   int generate_rowid_expr_for_trigger() override;
+  virtual int generate_part_id_expr_for_foreign_key(ObIArray<ObRawExpr*> &all_exprs) override;
   int generate_multi_part_partition_id_expr() override;
   virtual int gen_location_constraint(void *ctx) override;
   DISALLOW_COPY_AND_ASSIGN(ObLogMerge);

@@ -50,6 +50,7 @@ struct ObQueryFlag
 #define OBSF_BIT_IS_SHOW_SEED         1
 #define OBSF_BIT_SKIP_READ_LOB        1
 #define OBSF_BIT_IS_LOOKUP_FOR_4377   1
+#define OBSF_BIT_FOR_FOREING_KEY_CHECK 1
 #define OBSF_BIT_RESERVED             31
 
   static const uint64_t OBSF_MASK_SCAN_ORDER = (0x1UL << OBSF_BIT_SCAN_ORDER) - 1;
@@ -74,6 +75,7 @@ struct ObQueryFlag
   static const uint64_t OBSF_MASK_IS_LARGE_QUERY = (0x1UL << OBSF_BIT_IS_LARGE_QUERY) - 1;
   static const uint64_t OBSF_MASK_IS_SSTABLE_CUT = (0x1UL << OBSF_BIT_IS_SSTABLE_CUT) - 1;
   static const uint64_t OBSF_MASK_SKIP_READ_LOB = (0x1UL << OBSF_BIT_SKIP_READ_LOB) - 1;
+  static const uint64_t OBSF_MASK_FOR_FOREING_KEY_CHECK = (0x1UL << OBSF_BIT_FOR_FOREING_KEY_CHECK) - 1;
 
   enum ScanOrder
   {
@@ -134,6 +136,7 @@ struct ObQueryFlag
       uint64_t is_show_seed_   : OBSF_BIT_IS_SHOW_SEED;
       uint64_t skip_read_lob_   : OBSF_BIT_SKIP_READ_LOB;
       uint64_t is_lookup_for_4377_ : OBSF_BIT_IS_LOOKUP_FOR_4377;
+      uint64_t for_foreign_key_check_ : OBSF_BIT_FOR_FOREING_KEY_CHECK;
       uint64_t reserved_       : OBSF_BIT_RESERVED;
     };
   };
@@ -212,9 +215,11 @@ struct ObQueryFlag
   inline void set_use_fast_agg() { use_fast_agg_ = UseFastAgg; }
   inline void set_iter_uncommitted_row() { iter_uncommitted_row_ = true; }
   inline void set_not_iter_uncommitted_row() { iter_uncommitted_row_ = false; }
-  inline bool iter_uncommitted_row() const { return iter_uncommitted_row_; }
+  inline void set_for_foreign_key_check() { for_foreign_key_check_ = true; }
   inline void set_ignore_trans_stat() { ignore_trans_stat_ = true; }
   inline void set_not_ignore_trans_stat() { ignore_trans_stat_ = false; }
+  inline bool iter_uncommitted_row() const { return iter_uncommitted_row_; }
+  inline bool is_for_foreign_key_check() const { return for_foreign_key_check_; }
   inline bool is_ignore_trans_stat() const { return ignore_trans_stat_; }
   inline bool is_sstable_cut() const { return is_sstable_cut_; }
   inline bool is_skip_read_lob() const { return skip_read_lob_; }
@@ -250,6 +255,7 @@ struct ObQueryFlag
                "is_sstable_cut", is_sstable_cut_,
                "skip_read_lob", skip_read_lob_,
                "is_lookup_for_4377", is_lookup_for_4377_,
+               "is_for_foreign_key_check", for_foreign_key_check_,
                "reserved", reserved_);
   OB_UNIS_VERSION(1);
 };

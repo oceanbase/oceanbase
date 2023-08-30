@@ -1250,7 +1250,10 @@ OB_INLINE int ObLocalIndexLookupOp::init_scan_param()
   }
   // lookup to main table should invoke multi get
   scan_param_.is_get_ = true;
-
+  scan_param_.is_for_foreign_check_ = lookup_rtdef_->is_for_foreign_check_;
+  if (lookup_rtdef_->is_for_foreign_check_) {
+    scan_param_.trans_desc_ = tx_desc_;
+  }
   if (OB_NOT_NULL(snapshot_)) {
     scan_param_.snapshot_ = *snapshot_;
   } else {

@@ -13434,6 +13434,54 @@ int ObTableLatestSchemaVersion::assign(const ObTableLatestSchemaVersion &other)
   return ret;
 }
 
+int ObForeignKeyInfo::get_child_column_id(const uint64_t parent_column_id, uint64_t &child_column_id) const
+{
+  int ret = OB_SUCCESS;
+  child_column_id = OB_INVALID_ID;
+  if (parent_column_ids_.count() == child_column_ids_.count()) {
+    for (int64_t i = 0; i < parent_column_ids_.count(); ++i) {
+      if (parent_column_ids_.at(i) == parent_column_id) {
+        child_column_id = child_column_ids_.at(i);
+        break;
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("The number of parent key columns and foreign key columns is different",
+              K(ret), K(parent_column_ids_.count()), K(child_column_ids_.count()));
+  }
+
+  if (OB_SUCC(ret) && OB_INVALID_ID == child_column_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Not find corresponding child column id", K(ret), K(parent_column_id));
+  }
+  return ret;
+}
+
+int ObForeignKeyInfo::get_parent_column_id(const uint64_t child_column_id, uint64_t &parent_column_id) const
+{
+  int ret = OB_SUCCESS;
+  parent_column_id = OB_INVALID_ID;
+  if (parent_column_ids_.count() == child_column_ids_.count()) {
+    for (int64_t i = 0; i < child_column_ids_.count(); ++i) {
+      if (child_column_ids_.at(i) == child_column_id) {
+        parent_column_id = parent_column_ids_.at(i);
+        break;
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("The number of parent key columns and foreign key columns is different",
+              K(ret), K(parent_column_ids_.count()), K(child_column_ids_.count()));
+  }
+
+  if (OB_SUCC(ret) && OB_INVALID_ID == parent_column_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Not find corresponding parent column id", K(ret), K(child_column_id));
+  }
+ return ret;
+}
+
 //
 //
 } //namespace schema

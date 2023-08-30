@@ -256,6 +256,21 @@ public:
                                JoinedTable* &joined_table);
 
   int resolve_table_partition_expr(const TableItem &table_item, const share::schema::ObTableSchema &table_schema);
+  int resolve_fk_table_partition_expr(const TableItem &table_item, const ObTableSchema &table_schema);
+
+  int resolve_foreign_key_constraint(const TableItem *table_item);
+
+  // map parent key column name to foreign key column name
+  int map_to_fk_column_name(const ObTableSchema &child_table_schema,
+                            const ObTableSchema &parent_table_schema,
+                            const ObForeignKeyInfo &fk_info,
+                            const ObString &pk_col_name,
+                            ObString &fk_col_name);
+  int resolve_columns_for_fk_partition_expr(ObRawExpr *&expr,
+                                            ObIArray<ObQualifiedName> &columns,
+                                            const TableItem &table_item, // table_item of dml table(child_table)
+                                            const ObTableSchema &parent_table_schema,
+                                            const ObForeignKeyInfo *fk_info);
   virtual int resolve_column_ref_expr(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
                        ObArray<ObQualifiedName> *input_columns = NULL);
@@ -263,7 +278,9 @@ public:
                              const share::schema::ObTableSchema &table_schema,
                              const share::schema::ObPartitionFuncType part_type,
                              const common::ObString &part_str,
-                             ObRawExpr *&expr);
+                             ObRawExpr *&expr,
+                             bool for_fk = false,
+                             const ObForeignKeyInfo *fk_info = nullptr);
   static int resolve_special_expr_static(const ObTableSchema *table_schema,
                                          const ObSQLSessionInfo &session_info,
                                          ObRawExprFactory &expr_factory,

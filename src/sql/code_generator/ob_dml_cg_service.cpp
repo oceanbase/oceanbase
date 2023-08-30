@@ -1006,7 +1006,7 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
   return ret;
 }
 
-int ObDmlCgService::generate_dml_column_ids(ObLogicalOperator &op,
+int ObDmlCgService::generate_dml_column_ids(const ObLogicalOperator &op,
                                             const ObIArray<ObColumnRefRawExpr*> &columns_exprs,
                                             ObIArray<uint64_t> &column_ids)
 {
@@ -1033,7 +1033,7 @@ int ObDmlCgService::generate_dml_column_ids(ObLogicalOperator &op,
   return ret;
 }
 
-int ObDmlCgService::generate_updated_column_ids(ObLogDelUpd &log_op,
+int ObDmlCgService::generate_updated_column_ids(const ObLogDelUpd &log_op,
                                                 const ObAssignments &assigns,
                                                 const ObIArray<uint64_t> &column_ids,
                                                 ObIArray<uint64_t> &updated_column_ids)
@@ -2605,11 +2605,11 @@ int ObDmlCgService::need_foreign_key_handle(const ObForeignKeyArg &fk_arg,
 }
 
 int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
-                                    uint64_t name_table_id,
-                                    const common::ObIArray<uint64_t> &column_ids,
-                                    const common::ObIArray<uint64_t> &updated_column_ids,
-                                    const ObIArray<uint64_t> &name_column_ids,
-                                    const ObIArray<uint64_t> &value_column_ids,
+                                    bool check_parent_table,
+                                    const IndexDMLInfo &index_dml_info,
+                                    const ObForeignKeyInfo &fk_info,
+                                    const ObLogDelUpd &op,
+                                    ObRawExpr* fk_part_id_expr,
                                     ObSchemaGetterGuard &schema_guard,
                                     ObDMLBaseCtDef &dml_ctdef)
 {
@@ -2620,7 +2620,18 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
   const ObColumnSchemaV2 *column_schema = NULL;
   ObIAllocator &allocator = cg_.phy_plan_->get_allocator();
   const ObDASDMLBaseCtDef &das_ctdef = dml_ctdef.das_base_ctdef_;
-  if (OB_FAIL(need_foreign_key_handle(fk_arg, updated_column_ids,
+  ObArray<uint64_t> column_ids;
+  ObArray<uint64_t> updated_column_ids;
+  fk_arg.use_das_scan_ = check_parent_table;
+  const ObIArray<uint64_t> &value_column_ids = check_parent_table ? fk_info.child_column_ids_ : fk_info.parent_column_ids_;
+  const ObIArray<uint64_t> &name_column_ids = check_parent_table ? fk_info.parent_column_ids_ : fk_info.child_column_ids_;
+  uint64_t name_table_id = check_parent_table ? fk_info.parent_table_id_ : fk_info.child_table_id_;
+
+  if (OB_FAIL(generate_dml_column_ids(op, index_dml_info.column_exprs_, column_ids))) {
+    LOG_WARN("add column ids failed", K(ret));
+  } else if (OB_FAIL(generate_updated_column_ids(op, index_dml_info.assignments_, column_ids, updated_column_ids))) {
+    LOG_WARN("add updated column ids failed", K(ret), K(index_dml_info.assignments_));
+  } else if (OB_FAIL(need_foreign_key_handle(fk_arg, updated_column_ids,
                                       value_column_ids, das_ctdef.op_type_,
                                       need_handle))) {
     LOG_WARN("failed to check if need handle foreign key", K(ret));
@@ -2681,15 +2692,237 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("foreign key column id is not in colunm ids",
                 K(fk_arg), K(value_column_ids.at(i)), K(ret));
-    } else if (OB_FAIL(fk_arg.columns_.push_back(fk_column))) {
-      LOG_WARN("failed to push foreign key column", K(fk_arg), K(fk_column), K(ret));
+    } else {
+      fk_column.obj_meta_ = column_schema->get_meta_type();
+      if (OB_FAIL(fk_arg.columns_.push_back(fk_column))) {
+        LOG_WARN("failed to push foreign key column", K(fk_arg), K(fk_column), K(ret));
+      }
     }
   }
-  if (OB_SUCC(ret) && need_handle) {
-    if (OB_FAIL(dml_ctdef.fk_args_.push_back(fk_arg))) {
-      LOG_WARN("failed to add foreign key arg", K(fk_arg), K(ret));
+
+  // if need use das scan to perform foreign key check, create fk_check_ctdef for fk_arg
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (need_handle) {
+    if (check_parent_table) {
+      ObDMLCtDefAllocator<ObForeignKeyCheckerCtdef> fk_allocator(cg_.phy_plan_->get_allocator());
+      if (OB_ISNULL(fk_arg.fk_ctdef_ = fk_allocator.alloc())) {
+        LOG_WARN("failed to alocate foreign key ctdef", K(ret));
+      } else if (OB_FAIL(generate_fk_check_ctdef(op, name_table_id,
+                                                fk_part_id_expr,
+                                                name_column_ids,
+                                                schema_guard,
+                                                *fk_arg.fk_ctdef_))) {
+        LOG_WARN("failed to check foreign key check ctdef", K(ret));
+      } else if (OB_FAIL(dml_ctdef.fk_args_.push_back(fk_arg))) {
+        LOG_WARN("failed to add foreign key arg", K(fk_arg), K(ret));
+      }
     } else {
-      cg_.phy_plan_->set_has_nested_sql(true);
+      if (OB_FAIL(dml_ctdef.fk_args_.push_back(fk_arg))) {
+        LOG_WARN("failed to add foreign key arg", K(fk_arg), K(ret));
+      } else {
+        cg_.phy_plan_->set_has_nested_sql(true);
+      }
+    }
+  } else if (!need_handle) {
+    fk_arg.use_das_scan_ = false;
+  }
+  return ret;
+}
+
+int ObDmlCgService::generate_fk_check_ctdef(const ObLogDelUpd &op,
+                                            uint64_t name_table_id,
+                                            ObRawExpr* fk_part_id_expr,
+                                            const common::ObIArray<uint64_t> &name_column_ids,
+                                            share::schema::ObSchemaGetterGuard &schema_guard,
+                                            ObForeignKeyCheckerCtdef &fk_ctdef)
+{
+  int ret = OB_SUCCESS;
+  uint64_t index_tid = OB_INVALID_ID;
+  // check if need create check ctdef
+  if (get_fk_check_scan_table_id(name_table_id, name_column_ids, schema_guard, index_tid)) {
+    LOG_WARN("failed to get foreign key check scan table id", K(name_table_id), K(ret));
+  } else if (OB_INVALID_ID == index_tid) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid index table id to build das scan task for foreign key check", K(ret));
+  } else if (OB_FAIL(generate_fk_scan_ctdef(schema_guard, index_tid, fk_ctdef.das_scan_ctdef_))) {
+    LOG_WARN("failed to generate das scan ctdef for foreign key check", K(ret));
+  } else if (OB_FAIL(generate_fk_table_loc_info(index_tid, fk_ctdef.loc_meta_, fk_ctdef.tablet_id_, fk_ctdef.is_part_table_))) {
+    LOG_WARN("failed to generate table location meta for foreign key check", K(ret));
+  } else {
+    const uint64_t tenant_id = MTL_ID();
+    const ObTableSchema *table_schema = nullptr;
+    fk_ctdef.rowkey_ids_.set_capacity(name_column_ids.count());
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, index_tid, table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret));
+    } else if (OB_FAIL(generate_rowkey_idx_for_foreign_key(name_column_ids, table_schema, fk_ctdef.rowkey_ids_))) {
+      LOG_WARN("failed to generate rowkey ids for foreign key", K(ret));
+    } else {
+      fk_ctdef.rowkey_count_ = table_schema->get_rowkey_column_num();
+    }
+  }
+  // generate the part expr used for building das task to perform foreign key check if parent table is partitioned
+  if (OB_SUCC(ret)) {
+    ObRawExpr *part_id_expr_for_lookup = NULL;
+    ObExpr *rt_part_id_expr = NULL;
+    ObSEArray<ObRawExpr *, 4> constraint_dep_exprs;
+    ObSEArray<ObRawExpr *, 4> constraint_raw_exprs;
+    if (OB_ISNULL(part_id_expr_for_lookup = fk_part_id_expr)) {
+      // check if table to perform das task is partiton table
+    } else if (OB_FAIL(cg_.generate_calc_part_id_expr(*part_id_expr_for_lookup, nullptr, rt_part_id_expr))) {
+      LOG_WARN("generate rt part_id_expr failed", K(ret), KPC(part_id_expr_for_lookup));
+    } else if (OB_ISNULL(rt_part_id_expr)) {
+      LOG_WARN("rt part_id_expr for lookup is null", K(ret));
+    } else if (OB_FAIL(constraint_raw_exprs.push_back(part_id_expr_for_lookup))) {
+      LOG_WARN("fail to push part_id_expr to constraint_raw_exprs", K(ret));
+    } else if (OB_FAIL(cg_.generate_calc_exprs(constraint_dep_exprs,
+                                               constraint_raw_exprs,
+                                               fk_ctdef.part_id_dep_exprs_,
+                                               op.get_type(),
+                                               false))) {
+      LOG_WARN("fail to generate part_id_expr depend calc_expr", K(constraint_dep_exprs),
+          K(constraint_raw_exprs), K(fk_ctdef.part_id_dep_exprs_));
+    } else {
+      fk_ctdef.calc_part_id_expr_ = rt_part_id_expr;
+    }
+  }
+  return ret;
+}
+
+int ObDmlCgService::generate_rowkey_idx_for_foreign_key(const ObIArray<uint64_t> &name_column_ids,
+                                           const ObTableSchema *parent_table,
+                                           ObIArray<int64_t> &rowkey_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(parent_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema used for foreign key check is null", K(ret));
+  } else if (OB_FAIL(rowkey_ids.reserve(name_column_ids.count()))) {
+    LOG_WARN("failed to reverse rowkey ids", K(ret));
+  } else {
+    const ObRowkeyInfo &rowkey_info = parent_table->get_rowkey_info();
+    for (int64_t i = 0; OB_SUCC(ret) && i < name_column_ids.count(); ++i) {
+      const uint64_t column_id = name_column_ids.at(i);
+      int64_t index = -1;
+      if (OB_FAIL(rowkey_info.get_index(column_id, index))) {
+        LOG_WARN("failed to get the index of parent column in primary key", K(ret));
+      } else if (OB_FAIL(rowkey_ids.push_back(index))) {
+        LOG_WARN("failed to push back rowkey index", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDmlCgService::generate_fk_table_loc_info(uint64_t index_table_id,
+                                               ObDASTableLocMeta &loc_meta,
+                                               ObTabletID &tablet_id,
+                                               bool &is_part_table)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = nullptr;
+  ObSchemaGetterGuard *schema_guard = nullptr;
+  if (OB_ISNULL(cg_.opt_ctx_)
+      || OB_ISNULL(schema_guard = cg_.opt_ctx_->get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(ret), K(cg_.opt_ctx_), K(schema_guard));
+  } else if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), index_table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(index_table_id));
+  } else {
+    loc_meta.table_loc_id_ = index_table_id;
+    loc_meta.ref_table_id_ = index_table_id;
+    loc_meta.select_leader_ = 1;
+    loc_meta.is_dup_table_ = (ObDuplicateScope::DUPLICATE_SCOPE_NONE != table_schema->get_duplicate_scope());
+    if (PARTITION_LEVEL_ZERO == table_schema->get_part_level()) {
+      tablet_id = table_schema->get_tablet_id();
+    } else {
+      is_part_table = true;
+    }
+  }
+
+  return ret;
+}
+
+int ObDmlCgService::get_fk_check_scan_table_id(const uint64_t parent_table_id,
+                                              const common::ObIArray<uint64_t> &name_column_ids,
+                                              share::schema::ObSchemaGetterGuard &schema_guard,
+                                              uint64_t &index_table_id)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_FAIL(schema_guard.get_table_schema(tenant_id, parent_table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_FAIL(table_schema->get_fk_check_index_tid(schema_guard, name_column_ids, index_table_id))) {
+    LOG_WARN("failed to get scan table id for foreign key check", K(ret));
+  }
+  return ret;
+}
+
+int ObDmlCgService::generate_fk_scan_ctdef(share::schema::ObSchemaGetterGuard &schema_guard,
+                                          const uint64_t index_tid,
+                                          ObDASScanCtDef &scan_ctdef)
+{
+  int ret = OB_SUCCESS;
+  scan_ctdef.ref_table_id_ = index_tid;
+  const uint64_t tenant_id = MTL_ID();
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_FAIL(schema_guard.get_table_schema(tenant_id, index_tid, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_FAIL(schema_guard.get_schema_version(
+      TABLE_SCHEMA, tenant_id, index_tid, scan_ctdef.schema_version_))) {
+    LOG_WARN("fail to get schema version", K(ret), K(tenant_id), K(index_tid));
+  } else {
+    scan_ctdef.table_param_.get_enable_lob_locator_v2()
+        = (cg_.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0);
+    if (OB_FAIL(scan_ctdef.table_param_.convert(*table_schema, scan_ctdef.access_column_ids_))) {
+      LOG_WARN("convert table param failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDmlCgService::generate_fk_scan_part_id_expr(ObLogDelUpd &op,
+                                                  uint64_t parent_table_id,
+                                                  uint64_t index_tid,
+                                                  ObForeignKeyCheckerCtdef &fk_ctdef)
+{
+  int ret = OB_SUCCESS;
+
+  // check if the table to perform das scan task is partition table
+  bool is_part_table = false;
+  if (OB_SUCC(ret) && is_part_table) {
+    ObRawExpr *part_id_expr_for_lookup = NULL;
+    ObExpr *rt_part_id_expr = NULL;
+    ObSEArray<ObRawExpr *, 4> constraint_dep_exprs;
+    ObSEArray<ObRawExpr *, 4> constraint_raw_exprs;
+    ObLogPlan *log_plan = nullptr;
+    if (OB_ISNULL(log_plan = op.get_plan())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("plan is null", K(ret));
+    } else if (OB_FAIL(log_plan->gen_calc_part_id_expr(parent_table_id,
+                                                      index_tid,
+                                                      CALC_PARTITION_TABLET_ID,
+                                                      part_id_expr_for_lookup))) {
+      LOG_WARN("failed to gen calc part id expr", K(ret));
+    } else if (OB_ISNULL(part_id_expr_for_lookup)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("part_id_expr for lookup is null", K(ret));
+    } else if (OB_FAIL(cg_.generate_calc_part_id_expr(*part_id_expr_for_lookup, nullptr, rt_part_id_expr))) {
+      LOG_WARN("generate rt part_id_expr failed", K(ret), KPC(part_id_expr_for_lookup));
+    } else if (OB_ISNULL(rt_part_id_expr)) {
+      LOG_WARN("rt part_id_expr for lookup is null", K(ret));
+    } else if (OB_FAIL(constraint_raw_exprs.push_back(part_id_expr_for_lookup))) {
+      LOG_WARN("fail to push part_id_expr to constraint_raw_exprs", K(ret));
+    } else if (OB_FAIL(cg_.generate_calc_exprs(constraint_dep_exprs,
+                                               constraint_raw_exprs,
+                                               fk_ctdef.part_id_dep_exprs_,
+                                               op.get_type(),
+                                               false))) {
+      LOG_WARN("fail to generate part_id_expr depend calc_expr", K(constraint_dep_exprs),
+          K(constraint_raw_exprs), K(fk_ctdef.part_id_dep_exprs_));
+    } else {
+      fk_ctdef.calc_part_id_expr_ = rt_part_id_expr;
     }
   }
   return ret;
@@ -2703,12 +2936,8 @@ int ObDmlCgService::convert_foreign_keys(ObLogDelUpd &op,
   ObLogPlan *log_plan = NULL;
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObIArray<ObForeignKeyInfo> *fk_infos = NULL;
-  const ObIArray<uint64_t> *value_column_ids = NULL;
-  const ObIArray<uint64_t> *name_column_ids = NULL;
-  ObArray<uint64_t> column_ids;
-  ObArray<uint64_t> updated_column_ids;
-  uint64_t name_table_id = OB_INVALID_ID;
   const ObTableSchema *table_schema = NULL;
+  bool check_parent_table = false;
   if (OB_ISNULL(log_plan = op.get_plan()) || OB_ISNULL(cg_.phy_plan_) ||
              OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_sql_schema_guard()) ||
              OB_ISNULL(schema_guard->get_schema_guard())) {
@@ -2729,10 +2958,6 @@ int ObDmlCgService::convert_foreign_keys(ObLogDelUpd &op,
     LOG_WARN("foreign key infos is null", K(ret));
   } else if (OB_FAIL(dml_ctdef.fk_args_.init(table_schema->get_foreign_key_real_count()))) {
     LOG_WARN("failed to init foreign key stmts", K(ret));
-  } else if (OB_FAIL(generate_dml_column_ids(op, index_dml_info.column_exprs_, column_ids))) {
-    LOG_WARN("add column ids failed", K(ret));
-  } else if (OB_FAIL(generate_updated_column_ids(op, index_dml_info.assignments_, column_ids, updated_column_ids))) {
-    LOG_WARN("add updated column ids failed", K(ret), K(index_dml_info.assignments_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < fk_infos->count(); i++) {
       const ObForeignKeyInfo &fk_info = fk_infos->at(i);
@@ -2768,9 +2993,6 @@ int ObDmlCgService::convert_foreign_keys(ObLogDelUpd &op,
         fk_arg.is_self_ref_ = true;
       }
       if (OB_SUCC(ret) && fk_info.table_id_ == fk_info.child_table_id_) {
-        name_table_id = fk_info.parent_table_id_;
-        name_column_ids = &fk_info.parent_column_ids_;
-        value_column_ids = &fk_info.child_column_ids_;
         if (DAS_OP_TABLE_INSERT == dml_ctdef.dml_type_
             || DAS_OP_TABLE_UPDATE == dml_ctdef.dml_type_) {
           if (lib::is_mysql_mode() && fk_info.is_parent_table_mock_) {
@@ -2791,22 +3013,20 @@ int ObDmlCgService::convert_foreign_keys(ObLogDelUpd &op,
           } else {
             fk_arg.ref_action_ = ACTION_CHECK_EXIST;
           }
+          check_parent_table = true;
         } else {
           fk_arg.ref_action_ = ACTION_INVALID;
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(generate_fk_arg(fk_arg, name_table_id,
-                                    column_ids, updated_column_ids,
-                                    *name_column_ids, *value_column_ids,
-                                    *schema_guard->get_schema_guard(),
-                                    dml_ctdef))) {
+        } else if (fk_arg.ref_action_ != ACTION_INVALID &&
+                   OB_FAIL(generate_fk_arg(fk_arg, check_parent_table, index_dml_info, fk_info, op,
+                                          index_dml_info.fk_lookup_part_id_expr_.at(i),
+                                          *schema_guard->get_schema_guard(),
+                                          dml_ctdef))) {
           LOG_WARN("failed to add fk arg to dml ctdef", K(ret));
         }
       }
       if (OB_SUCC(ret) && fk_info.table_id_ == fk_info.parent_table_id_) {
-        name_table_id = fk_info.child_table_id_;
-        name_column_ids = &fk_info.child_column_ids_;
-        value_column_ids = &fk_info.parent_column_ids_;
         if (DAS_OP_TABLE_UPDATE == dml_ctdef.dml_type_) {
           fk_arg.ref_action_ = fk_info.update_action_;
         } else if (DAS_OP_TABLE_DELETE == dml_ctdef.dml_type_) {
@@ -2814,11 +3034,14 @@ int ObDmlCgService::convert_foreign_keys(ObLogDelUpd &op,
         } else {
           fk_arg.ref_action_ = ACTION_INVALID;
         }
-        if (OB_FAIL(generate_fk_arg(fk_arg, name_table_id,
-                                    column_ids, updated_column_ids,
-                                    *name_column_ids, *value_column_ids,
-                                    *schema_guard->get_schema_guard(),
-                                    dml_ctdef))) {
+        check_parent_table = false;
+        if (fk_arg.ref_action_ != ACTION_INVALID && OB_FAIL(generate_fk_arg(fk_arg,
+                                                            check_parent_table,
+                                                            index_dml_info,
+                                                            fk_info, op,
+                                                            nullptr, // fk_lookup_part_id_expr_, for parent table, don't use scan task to perform foreign key check
+                                                            *schema_guard->get_schema_guard(),
+                                                            dml_ctdef))) {
           LOG_WARN("failed to add fk arg to dml ctdef", K(ret));
         }
       }

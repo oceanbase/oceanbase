@@ -576,6 +576,7 @@ int ObMemtable::exist(
   ObMemtableKey returned_mtk;
   ObMvccValueIterator value_iter;
   ObQueryFlag query_flag;
+  ObStoreRowLockState lock_state;
   query_flag.read_latest_ = true;
   query_flag.prewarm_ = false;
   //get_begin(context.store_ctx_->mvcc_acc_ctx_);
@@ -594,8 +595,27 @@ int ObMemtable::exist(
                                       query_flag,
                                       &parameter_mtk,
                                       &returned_mtk,
-                                      value_iter))) {
+                                      value_iter,
+                                      lock_state))) {
     TRANS_LOG(WARN, "get value iter fail, ", K(ret));
+    if (OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TRANSACTION_SET_VIOLATION == ret) {
+      if (!query_flag.is_for_foreign_key_check()) {
+        ret = OB_ERR_UNEXPECTED;  // to prevent retrying casued by throwing 6005
+        TRANS_LOG(WARN, "should not meet row conflict if it's not for foreign key check",
+                  K(ret), K(query_flag));
+      } else if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
+        ObRowConflictHandler::post_row_read_conflict(
+          context.store_ctx_->mvcc_acc_ctx_,
+          *parameter_mtk.get_rowkey(),
+          lock_state,
+          key_.tablet_id_,
+          freezer_->get_ls_id(),
+          0, 0 /* these two params get from mvcc_row, and for statistics, so we ignore them */,
+          lock_state.trans_scn_);
+      }
+    } else {
+      TRANS_LOG(WARN, "fail to do mvcc engine get", K(ret));
+    }
   } else {
     const void *tnode = nullptr;
     const ObMemtableDataHeader *mtd = nullptr;
@@ -710,20 +730,25 @@ int ObMemtable::get(
                                         context.query_flag_,
                                         &parameter_mtk,
                                         &returned_mtk,
-                                        value_iter))) {
-      TRANS_LOG(WARN, "fail to do mvcc engine get", K(ret));
-    } else if (param.is_for_foreign_check_ &&
-               OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint_for_memtable(&value_iter, lock_state))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
-        ObRowConflictHandler::post_row_read_conflict(
-                      *value_iter.get_mvcc_acc_ctx(),
-                      *parameter_mtk.get_rowkey(),
-                      lock_state,
-                      key_.tablet_id_,
-                      freezer_->get_ls_id(),
-                      value_iter.get_mvcc_row()->get_last_compact_cnt(),
-                      value_iter.get_mvcc_row()->get_total_trans_node_cnt(),
-                      lock_state.trans_scn_);
+                                        value_iter,
+                                        lock_state))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TRANSACTION_SET_VIOLATION == ret) {
+        if (!context.query_flag_.is_for_foreign_key_check()) {
+          ret = OB_ERR_UNEXPECTED;  // to prevent retrying casued by throwing 6005
+          TRANS_LOG(WARN, "should not meet lock conflict if it's not for foreign key check",
+                    K(ret), K(context.query_flag_));
+        } else if (OB_TRY_LOCK_ROW_CONFLICT == ret){
+          ObRowConflictHandler::post_row_read_conflict(
+                        context.store_ctx_->mvcc_acc_ctx_,
+                        *parameter_mtk.get_rowkey(),
+                        lock_state,
+                        key_.tablet_id_,
+                        freezer_->get_ls_id(),
+                        0, 0 /* these two params get from mvcc_row, and for statistics, so we ignore them */,
+                        lock_state.trans_scn_);
+        }
+      } else {
+        TRANS_LOG(WARN, "fail to do mvcc engine get", K(ret));
       }
     } else {
       const int64_t request_cnt = read_info->get_request_count();

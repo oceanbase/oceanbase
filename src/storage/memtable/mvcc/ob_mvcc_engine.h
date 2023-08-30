@@ -96,7 +96,8 @@ public:
           const ObQueryFlag &query_flag,
           const ObMemtableKey *parameter_key,
           ObMemtableKey *internal_key,
-          ObMvccValueIterator &value_iter);
+          ObMvccValueIterator &value_iter,
+          storage::ObStoreRowLockState &lock_state);
   int scan(ObMvccAccessCtx &ctx,
            const ObQueryFlag &query_flag,
            const ObMvccScanRange &range,

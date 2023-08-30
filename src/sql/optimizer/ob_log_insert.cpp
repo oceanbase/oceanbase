@@ -365,6 +365,58 @@ int ObLogInsert::generate_rowid_expr_for_trigger()
   return ret;
 }
 
+int ObLogInsert::generate_part_id_expr_for_foreign_key(ObIArray<ObRawExpr*> &all_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_index_dml_infos().count(); ++i) {
+    IndexDMLInfo *dml_info = get_index_dml_infos().at(i);
+    if (OB_ISNULL(dml_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dml info is null", K(ret), K(dml_info));
+    } else if (!dml_info->is_primary_index_) {
+      // do nothing
+    } else if (OB_FAIL(generate_fk_lookup_part_id_expr(*dml_info))) {
+      LOG_WARN("failed to generate lookup part expr for foreign key", K(ret));
+    } else if (OB_FAIL(convert_insert_new_fk_lookup_part_id_expr(all_exprs, *dml_info))) {
+      LOG_WARN("failed to convert lookup part expr for foreign key", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    /*do nothing*/
+  } else if (is_replace()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_replace_index_dml_infos().count(); ++i) {
+      IndexDMLInfo *dml_info = get_replace_index_dml_infos().at(i);
+      if (OB_ISNULL(dml_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dml info is null", K(ret), K(dml_info));
+      } else if (!dml_info->is_primary_index_) {
+        // do nothing
+      } else if (OB_FAIL(generate_fk_lookup_part_id_expr(*dml_info))) {
+        LOG_WARN("failed to generate lookup part expr for foreign key", K(ret));
+      } else if (OB_FAIL(convert_update_new_fk_lookup_part_id_expr(all_exprs, *dml_info))) {
+        LOG_WARN("failed to convert lookup part expr for foreign key", K(ret));
+      }
+    }
+  } else if (get_insert_up()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_insert_up_index_dml_infos().count(); ++i) {
+      IndexDMLInfo *dml_info = get_insert_up_index_dml_infos().at(i);
+      if (OB_ISNULL(dml_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dml info is null", K(ret), K(dml_info));
+      } else if (!dml_info->is_primary_index_) {
+        // do nothing
+      } else if (OB_FAIL(generate_fk_lookup_part_id_expr(*dml_info))) {
+        LOG_WARN("failed to generate lookup part expr for foreign key", K(ret));
+      } else if (OB_FAIL(convert_update_new_fk_lookup_part_id_expr(all_exprs, *dml_info))) {
+        LOG_WARN("failed to convert lookup part expr for foreign key", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObLogInsert::generate_multi_part_partition_id_expr()
 {
   int ret = OB_SUCCESS;

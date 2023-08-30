@@ -39,7 +39,8 @@ int ObPxMultiPartInsertOp::inner_open()
   } else if (OB_FAIL(ObDMLService::init_ins_rtdef(dml_rtctx_,
                                                   ins_rtdef_,
                                                   MY_SPEC.ins_ctdef_,
-                                                  trigger_clear_exprs_))) {
+                                                  trigger_clear_exprs_,
+                                                  fk_checkers_))) {
     LOG_WARN("init insert rtdef failed", K(ret));
   } else if (!(MY_SPEC.row_desc_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;

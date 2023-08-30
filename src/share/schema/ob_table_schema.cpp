@@ -7177,6 +7177,68 @@ int ObTableSchema::add_foreign_key_info(const ObForeignKeyInfo &foreign_key_info
   return ret;
 }
 
+int ObTableSchema::get_fk_check_index_tid(ObSchemaGetterGuard &schema_guard, const common::ObIArray<uint64_t> &parent_column_ids, uint64_t &scan_index_tid) const
+{
+  int ret = OB_SUCCESS;
+  scan_index_tid = OB_INVALID_ID;
+  bool is_rowkey_column = false;
+  if (0 >= parent_column_ids.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column number in parent key is zero", K(ret), K(parent_column_ids.count()));
+  } else if (OB_FAIL(check_rowkey_column(parent_column_ids, is_rowkey_column))) {
+    LOG_WARN("failed to check if parent key is rowkey", K(ret));
+  } else if (is_rowkey_column) {
+    scan_index_tid = table_id_;
+  } else {
+    bool find = false;
+    for (int i = 0; OB_SUCC(ret) && i < simple_index_infos_.count() && !find; ++i) {
+      const ObAuxTableMetaInfo &index_info = simple_index_infos_.at(i);
+      const uint64_t index_tid = index_info.table_id_;
+      const ObTableSchema *index_schema = NULL;
+      if (!is_unique_index(index_info.index_type_)) {
+        // do nothing
+      } else if (OB_FAIL(schema_guard.get_table_schema(get_tenant_id(),
+                                                index_tid,
+                                                index_schema))) {
+        LOG_WARN("fail to get table schema", K(ret));
+      } else if (OB_ISNULL(index_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index schema from schema guard is NULL", K(ret), K(index_schema));
+      } else if (parent_column_ids.count() == index_schema->get_index_column_num()) {
+        const ObIndexInfo &index_info = index_schema->get_index_info();
+        bool is_rowkey = true;
+        int j = 0;
+        for (; OB_SUCC(ret) && j < parent_column_ids.count() && is_rowkey; ++j) {
+          if (OB_FAIL(index_info.is_rowkey_column(parent_column_ids.at(j), is_rowkey))) {
+            LOG_WARN("failed to check parent column is unique index column", K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && is_rowkey) {
+          find = true;
+          scan_index_tid = index_tid;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::check_rowkey_column(const common::ObIArray<uint64_t> &parent_column_ids, bool &is_rowkey) const
+{
+  int ret = OB_SUCCESS;
+  is_rowkey = true;
+  if (parent_column_ids.count() != rowkey_column_num_) {
+    is_rowkey = false;
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < parent_column_ids.count() && is_rowkey; ++i) {
+      const uint64_t parent_column_id = parent_column_ids.at(i);
+      ret = rowkey_info_.is_rowkey_column(parent_column_id, is_rowkey);
+    }
+  }
+  return ret;
+}
+
+
 int ObTableSchema::add_simple_index_info(const ObAuxTableMetaInfo &simple_index_info)
 {
   int ret = OB_SUCCESS;
@@ -7673,6 +7735,26 @@ int ObTableSchema::convert_column_udt_set_ids(const ObHashMap<uint64_t, uint64_t
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::check_is_stored_generated_column_base_column(uint64_t column_id, bool &is_stored_base_col) const
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *column = NULL;
+  is_stored_base_col = false;
+  for (ObTableSchema::const_column_iterator iter = column_begin();
+       OB_SUCC(ret) && iter != column_end() && !is_stored_base_col;
+       ++iter) {
+    const ObColumnSchemaV2 *column_schema = *iter;
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Column schema is NULL", K(ret));
+    } else if (column_schema->is_stored_generated_column()
+               && column_schema->has_cascaded_column_id(column_id)) {
+      is_stored_base_col = true;
     }
   }
   return ret;

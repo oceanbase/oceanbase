@@ -224,10 +224,6 @@ int ObAccessService::table_scan(
   ObLS *ls = nullptr;
   ObLSTabletService *tablet_service = nullptr;
   ObTableScanParam &param = static_cast<ObTableScanParam &>(vparam);
-  // TODO(yichang): maybe we need to move this scan_flag_ setting to sql layer?
-  if (param.is_for_foreign_check_) {
-    param.scan_flag_.set_iter_uncommitted_row();
-  }
   ObStoreAccessType access_type = param.scan_flag_.is_read_latest() ?
     ObStoreAccessType::READ_LATEST : ObStoreAccessType::READ;
   SCN user_specified_snapshot_scn;

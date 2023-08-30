@@ -269,7 +269,8 @@ public:
                K_(tablet_locs),
                K_(is_writing),
                K_(is_reading),
-               K_(need_refresh));
+               K_(need_refresh),
+               K_(is_fk_check));
 
   /**
    * BE CAREFUL!!! can't declare implicit allocator or
@@ -291,7 +292,8 @@ public:
       uint64_t is_reading_                      : 1; //mark this table is reading
       uint64_t rebuild_reference_               : 1; //mark whether rebuild the related reference
       uint64_t need_refresh_                    : 1;
-      uint64_t reserved_                        : 60;
+      uint64_t is_fk_check_                     : 1; //mark this table is used for foreign key checking
+      uint64_t reserved_                        : 59;
     };
   };
 

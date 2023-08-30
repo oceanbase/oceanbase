@@ -300,6 +300,45 @@ int ObLogMerge::generate_rowid_expr_for_trigger()
   return ret;
 }
 
+int ObLogMerge::generate_part_id_expr_for_foreign_key(ObIArray<ObRawExpr*> &all_exprs)
+{
+  int ret = OB_SUCCESS;
+  const ObMergeStmt *merge_stmt = static_cast<const ObMergeStmt *>(get_stmt());
+  if (OB_ISNULL(merge_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("merge stmt is null", K(ret), K(merge_stmt));
+  } else if (merge_stmt->has_insert_clause()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_index_dml_infos().count(); ++i) {
+      IndexDMLInfo *ins_info = get_index_dml_infos().at(i);
+      if (OB_ISNULL(ins_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dml info is null", K(ret), K(ins_info));
+      } else if (!ins_info->is_primary_index_) {
+        // do nothing
+      } else if (OB_FAIL(generate_fk_lookup_part_id_expr(*ins_info))) {
+        LOG_WARN("failed to generate lookup part expr for foreign key", K(ret));
+      } else if (OB_FAIL(convert_insert_new_fk_lookup_part_id_expr(all_exprs,*ins_info))) {
+        LOG_WARN("failed to convert lookup part expr for foreign key", K(ret));
+      }
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_update_infos().count(); ++i) {
+    IndexDMLInfo *upd_info = get_update_infos().at(i);
+    if (OB_ISNULL(upd_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("update info is null", K(ret), K(upd_info));
+    } else if (!upd_info->is_primary_index_) {
+      // do nothing
+    } else if (OB_FAIL(generate_fk_lookup_part_id_expr(*upd_info))) {
+      LOG_WARN("failed to generate lookup part expr for foreign key", K(ret));
+    } else if (OB_FAIL(convert_update_new_fk_lookup_part_id_expr(all_exprs, *upd_info))) {
+      LOG_WARN("failed to convert lookup part expr for foreign key", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObLogMerge::generate_multi_part_partition_id_expr()
 {
   int ret = OB_SUCCESS;

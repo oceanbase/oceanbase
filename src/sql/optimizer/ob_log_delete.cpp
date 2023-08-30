@@ -149,6 +149,15 @@ int ObLogDelete::generate_rowid_expr_for_trigger()
   return ret;
 }
 
+int ObLogDelete::generate_part_id_expr_for_foreign_key(ObIArray<ObRawExpr*> &all_exprs)
+{
+  // NOTE: for delete parent table, don't support foregin key checks use das task now,
+  // no need to generate part id expr, do nothing here
+  int ret = OB_SUCCESS;
+
+  return ret;
+}
+
 int ObLogDelete::get_plan_item_info(PlanText &plan_text,
                                     ObSqlPlanItem &plan_item)
 {

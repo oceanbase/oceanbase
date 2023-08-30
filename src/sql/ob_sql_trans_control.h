@@ -197,6 +197,7 @@ public:
                                   const ObPhysicalPlanCtx *plan_ctx,
                                   transaction::ObTransService *txs);
   static int stmt_refresh_snapshot(ObExecContext &ctx);
+  static int set_fk_check_snapshot(ObExecContext &exec_ctx);
   static int stmt_setup_savepoint_(ObSQLSessionInfo *session,
                                    ObDASCtx &das_ctx,
                                    ObPhysicalPlanCtx *plan_ctx,

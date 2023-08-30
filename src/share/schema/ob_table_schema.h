@@ -1177,6 +1177,7 @@ public:
   inline bool has_generated_column() const { return generated_columns_.num_members() > 0; }
   // The table has a generated column that is a partition key.
   bool has_generated_and_partkey_column() const;
+  int check_is_stored_generated_column_base_column(uint64_t column_id, bool &is_stored_base_col) const;
   // Check whether the data table column has prefix index column deps.
   int check_prefix_index_columns_depend(const ObColumnSchemaV2 &data_column_schema, ObSchemaGetterGuard &schema_guard, bool &has_prefix_idx_col_deps) const;
   int check_functional_index_columns_depend(const ObColumnSchemaV2 &data_column_schema, ObSchemaGetterGuard &schema_guard, bool &has_prefix_idx_col_deps) const;
@@ -1326,6 +1327,9 @@ public:
   int remove_foreign_key_info(const uint64_t foreign_key_id);
   inline void reset_foreign_key_infos() { foreign_key_infos_.reset(); }
   int add_simple_index_info(const ObAuxTableMetaInfo &simple_index_info);
+
+  int get_fk_check_index_tid(ObSchemaGetterGuard &schema_guard, const common::ObIArray<uint64_t> &parent_column_ids, uint64_t &scan_index_tid) const;
+  int check_rowkey_column(const common::ObIArray<uint64_t> &parent_column_ids, bool &is_rowkey) const;
 
   // trigger
   inline const common::ObIArray<uint64_t> &get_trigger_list() const

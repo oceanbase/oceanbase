@@ -20,6 +20,7 @@
 #include "sql/engine/expr/ob_expr_calc_partition_id.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "sql/engine/dml/ob_fk_checker.h"
 
 namespace oceanbase
 {
@@ -183,18 +184,27 @@ OB_INLINE int ObTableInsertUpOp::init_insert_up_rtdef()
     LOG_WARN("allocate insert up rtdef failed", K(ret), K(MY_SPEC.insert_up_ctdefs_.count()));
   }
   trigger_clear_exprs_.reset();
+  fk_checkers_.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < insert_up_rtdefs_.count(); ++i) {
     ObInsertUpCtDef *insert_up_ctdef = MY_SPEC.insert_up_ctdefs_.at(i);
     const ObInsCtDef *ins_ctdef = insert_up_ctdef->ins_ctdef_;
     const ObUpdCtDef *upd_ctdef = insert_up_ctdef->upd_ctdef_;
     ObInsRtDef &ins_rtdef = insert_up_rtdefs_.at(i).ins_rtdef_;
     ObUpdRtDef &upd_rtdef = insert_up_rtdefs_.at(i).upd_rtdef_;
-    if (OB_FAIL(ObDMLService::init_ins_rtdef(dml_rtctx_, ins_rtdef, *ins_ctdef, trigger_clear_exprs_))) {
+    if (OB_FAIL(ObDMLService::init_ins_rtdef(dml_rtctx_,
+                                             ins_rtdef,
+                                             *ins_ctdef,
+                                             trigger_clear_exprs_,
+                                             fk_checkers_))) {
       LOG_WARN("init insert rt_def failed", K(ret), KPC(ins_ctdef));
     } else if (OB_ISNULL(upd_ctdef)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("upd_ctdef is null", K(ret));
-    } else if (OB_FAIL(ObDMLService::init_upd_rtdef(dml_rtctx_, upd_rtdef, *upd_ctdef, trigger_clear_exprs_))) {
+    } else if (OB_FAIL(ObDMLService::init_upd_rtdef(dml_rtctx_,
+                                                    upd_rtdef,
+                                                    *upd_ctdef,
+                                                    trigger_clear_exprs_,
+                                                    fk_checkers_))) {
       LOG_WARN("init upd_rt_def failed", K(ret), KPC(upd_ctdef));
     } else {
       ins_rtdef.das_rtdef_.table_loc_->is_writing_ = true;
@@ -848,7 +858,7 @@ int ObTableInsertUpOp::do_insert_up()
       LOG_WARN("fail to load all row", K(ret));
     } else if (OB_FAIL(post_all_dml_das_task(dml_rtctx_, false))) {
       LOG_WARN("fail to post all das task", K(ret));
-    } else if (!check_is_duplicated() && OB_FAIL(ObDMLService::handle_after_row_processing(execute_single_row_, &dml_modify_rows_))) {
+    } else if (!check_is_duplicated() && OB_FAIL(ObDMLService::handle_after_row_processing(this, &dml_modify_rows_))) {
       LOG_WARN("try insert is not duplicated, failed to process foreign key handle", K(ret));
     } else if (!check_is_duplicated()) {
       insert_rows_ += insert_rows;
@@ -872,7 +882,7 @@ int ObTableInsertUpOp::do_insert_up()
       LOG_WARN("do insert rows post process failed", K(ret));
     } else if (OB_FAIL(post_all_dml_das_task(dml_rtctx_, false))) {
       LOG_WARN("do insert rows post process failed", K(ret));
-    } else if (OB_FAIL(ObDMLService::handle_after_row_processing(execute_single_row_, &dml_modify_rows_))) {
+    } else if (OB_FAIL(ObDMLService::handle_after_row_processing(this, &dml_modify_rows_))) {
       LOG_WARN("try insert is duplicated, failed to process foreign key handle", K(ret));
     }
 

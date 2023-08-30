@@ -352,18 +352,34 @@ int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
   int ret = OB_SUCCESS;
   const ObMemtableKey *key = NULL;
   ObMvccValueIterator *value_iter = NULL;
-
+  ObStoreRowLockState lock_state;
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "not init", KP(this));
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(prepare_scan())) {
     TRANS_LOG(WARN, "prepare scan fail", K(ret));
-  } else if (OB_FAIL(row_iter_.get_next_row(key, value_iter, iter_flag_))
+  } else if (OB_FAIL(row_iter_.get_next_row(key, value_iter, iter_flag_, lock_state))
       || NULL == key || NULL == value_iter) {
-    if (OB_ITER_END != ret) {
+    if (OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TRANSACTION_SET_VIOLATION == ret) {
+      if (!context_->query_flag_.is_for_foreign_key_check()) {
+        ret = OB_ERR_UNEXPECTED;  // to prevent retrying casued by throwing 6005
+        TRANS_LOG(WARN, "should not meet row conflict if it's not for foreign key check",
+                  K(ret), K(context_->query_flag_));
+      } else if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
+        const ObStoreRowkey *tmp_rowkey = nullptr;
+        key->get_rowkey(tmp_rowkey);
+        ObRowConflictHandler::post_row_read_conflict(
+                              context_->store_ctx_->mvcc_acc_ctx_,
+                              *tmp_rowkey,
+                              lock_state,
+                              context_->tablet_id_,
+                              context_->ls_id_,
+                              0, 0 /* these two params get from mvcc_row, and for statistics, so we ignore them */,
+                              lock_state.trans_scn_);
+      }
+    } else if (OB_ITER_END != ret) {
       TRANS_LOG(WARN, "row_iter_ get_next_row fail", K(ret), KP(key), KP(value_iter));
     }
-    ret = (OB_SUCCESS == ret) ? OB_ERR_UNEXPECTED : ret;
   } else {
     TRANS_LOG(DEBUG, "chaser debug memtable next row", KPC(key), K(iter_flag_), K(bitmap_.get_nop_cnt()));
     const ObStoreRowkey *rowkey = NULL;
@@ -373,21 +389,7 @@ int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
     concurrency_control::ObTransStatRow trans_stat_row;
     (void)value_iter->get_trans_stat_row(trans_stat_row);
 
-    ObStoreRowLockState lock_state;
-    if (param_->is_for_foreign_check_ &&
-        OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint_for_memtable(value_iter, lock_state))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
-        ObRowConflictHandler::post_row_read_conflict(
-                      *value_iter->get_mvcc_acc_ctx(),
-                      *rowkey,
-                      lock_state,
-                      context_->tablet_id_,
-                      context_->ls_id_,
-                      value_iter->get_mvcc_row()->get_last_compact_cnt(),
-                      value_iter->get_mvcc_row()->get_total_trans_node_cnt(),
-                      lock_state.trans_scn_);
-      }
-    } else if (OB_FAIL(ObReadRow::iterate_row(*read_info_, *rowkey, *(context_->allocator_), *value_iter, row_, bitmap_, row_scn))) {
+    if (OB_FAIL(ObReadRow::iterate_row(*read_info_, *rowkey, *(context_->allocator_), *value_iter, row_, bitmap_, row_scn))) {
       TRANS_LOG(WARN, "iterate_row fail", K(ret), K(*rowkey), KP(value_iter));
     } else {
       STORAGE_LOG(DEBUG, "chaser debug memtable next row", K(row_));

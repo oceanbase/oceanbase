@@ -17,6 +17,7 @@
 #include "sql/engine/dml/ob_dml_service.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
 #include "sql/engine/expr/ob_expr_calc_partition_id.h"
+#include "sql/engine/dml/ob_fk_checker.h"
 
 namespace oceanbase
 {
@@ -214,6 +215,7 @@ OB_INLINE int ObTableUpdateOp::open_table_for_each()
     LOG_WARN("allocate update rtdef failed", K(ret), K(MY_SPEC.upd_ctdefs_.count()));
   }
   trigger_clear_exprs_.reset();
+  fk_checkers_.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < upd_rtdefs_.count(); ++i) {
     UpdRtDefArray &rtdefs = upd_rtdefs_.at(i);
     const ObTableUpdateSpec::UpdCtDefArray &ctdefs = MY_SPEC.upd_ctdefs_.at(i);
@@ -224,7 +226,11 @@ OB_INLINE int ObTableUpdateOp::open_table_for_each()
       const ObUpdCtDef &upd_ctdef = *ctdefs.at(j);
       ObUpdRtDef &upd_rtdef = rtdefs.at(j);
       upd_rtdef.primary_rtdef_ = &rtdefs.at(0);
-      if (OB_FAIL(ObDMLService::init_upd_rtdef(dml_rtctx_, upd_rtdef, upd_ctdef, trigger_clear_exprs_))) {
+      if (OB_FAIL(ObDMLService::init_upd_rtdef(dml_rtctx_,
+                                               upd_rtdef,
+                                               upd_ctdef,
+                                               trigger_clear_exprs_,
+                                               fk_checkers_))) {
         LOG_WARN("init upd rtdef failed", K(ret));
       }
     }
@@ -481,5 +487,6 @@ int ObTableUpdateOp::write_rows_post_proc(int last_errno)
 
   return ret;
 }
+
 } // end namespace sql
 } // end namespace oceanbase

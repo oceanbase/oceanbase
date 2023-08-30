@@ -660,6 +660,8 @@ int ObLogDelUpd::inner_get_op_exprs(ObIArray<ObRawExpr*> &all_exprs, bool need_c
     LOG_WARN("failed to find trasn info producer", K(ret));
   } else if (OB_FAIL(generate_rowid_expr_for_trigger())) {
     LOG_WARN("failed to try add rowid col expr for trigger", K(ret));
+  } else if (OB_FAIL(generate_part_id_expr_for_foreign_key(all_exprs))) {
+    LOG_WARN("failed to generate part expr for foreign key", K(ret));
   } else if (NULL != lock_row_flag_expr_ && OB_FAIL(all_exprs.push_back(lock_row_flag_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
   } else if (OB_FAIL(append(all_exprs, view_check_exprs_))) {
@@ -1307,6 +1309,134 @@ int ObLogDelUpd::generate_lookup_part_id_expr(IndexDMLInfo &index_info)
   return ret;
 }
 
+int ObLogDelUpd::generate_fk_lookup_part_id_expr(IndexDMLInfo &index_dml_info)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t table_id = index_dml_info.ref_table_id_;
+  ObLogPlan *log_plan = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+  const ObIArray<ObForeignKeyInfo> *fk_infos = NULL;
+  const ObTableSchema *table_schema = NULL;
+  if (OB_ISNULL(log_plan = get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema or plan is NULL", K(ret), KP(schema_guard), KP(get_plan()));
+  } else if (OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_schema_guard()) ||
+             OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get schama guart", K(ret), K(schema_guard), K(session_info));
+  } else if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
+                                                    index_dml_info.ref_table_id_,
+                                                    table_schema))) {
+    LOG_WARN("failed to get table schema", K(index_dml_info.ref_table_id_), K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(index_dml_info.ref_table_id_), K(ret));
+  } else if (!table_schema->is_user_table()) {
+    // do nothing, especially for global index.
+    LOG_DEBUG("skip generate partition key for foreign key",
+              "table_name", table_schema->get_table_name_str(),
+              "table_type", table_schema->get_table_type());
+  } else if (OB_ISNULL(fk_infos = &table_schema->get_foreign_key_infos())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("foreign key infos is null", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < fk_infos->count(); i++) {
+      const ObForeignKeyInfo &fk_info = fk_infos->at(i);
+      ObRawExpr* fk_scan_part_expr = nullptr;
+      if (fk_info.table_id_ != fk_info.child_table_id_) {
+        // update parent table, check child table, don't use das task to perform foreign key check
+        ret = index_dml_info.fk_lookup_part_id_expr_.push_back(fk_scan_part_expr);
+      } else if (!fk_info.is_parent_table_mock_) {
+        const uint64_t parent_table_id = fk_info.parent_table_id_;
+        const ObTableSchema *parent_table_schema = NULL;
+        uint64_t scan_index_tid = OB_INVALID_ID;
+        if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
+                                                   parent_table_id,
+                                                   parent_table_schema))) {
+          LOG_WARN("failed to get table schema of parent table", K(ret), K(parent_table_id));
+        } else if (OB_ISNULL(parent_table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("parent table not exist", K(ret), K(parent_table_id));
+        } else if (OB_FAIL(parent_table_schema->get_fk_check_index_tid(*schema_guard, fk_info.parent_column_ids_, scan_index_tid))) {
+          LOG_WARN("failed to get index tid used to build scan das task for foreign key checks", K(ret));
+        } else if (OB_INVALID_ID == scan_index_tid) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get invalid table id to build das scan task for foreign key checks", K(ret));
+        } else {
+          ObRawExpr* fk_look_up_part_id_expr = nullptr;
+          const ObTableSchema* scan_table_schema = nullptr;
+          if (schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
+                                             scan_index_tid,
+                                             scan_table_schema)) {
+            LOG_WARN("failed to get scan table schema to perform foreign key check", K(ret), K(scan_index_tid));
+          } else if (OB_ISNULL(scan_table_schema)) {
+            ret = OB_TABLE_NOT_EXIST;
+            LOG_WARN("table schema scanned for foreign key check not exist", K(ret));
+          } else if (scan_table_schema->get_part_level() != PARTITION_LEVEL_ZERO &&
+                    OB_FAIL(log_plan->gen_calc_part_id_expr(fk_info.foreign_key_id_, // init table_id by foreign key id
+                                                            scan_index_tid,
+                                                            CALC_PARTITION_TABLET_ID,
+                                                            fk_look_up_part_id_expr))) {
+            LOG_WARN("failed to gen calc part id expr", K(ret));
+          } else if (OB_FAIL(index_dml_info.fk_lookup_part_id_expr_.push_back(fk_look_up_part_id_expr))) {
+            LOG_WARN("failed to push part id expr to array", K(ret), K(index_dml_info.fk_lookup_part_id_expr_));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogDelUpd::convert_insert_new_fk_lookup_part_id_expr(ObIArray<ObRawExpr*> &all_exprs, IndexDMLInfo &index_dml_info)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> dml_columns;
+  ObSEArray<ObRawExpr *, 4> dml_values;
+  if (OB_FAIL(get_insert_exprs(index_dml_info, dml_columns, dml_values))) {
+    LOG_WARN("failed to get insert exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info.fk_lookup_part_id_expr_.count(); ++i) {
+      ObRawExpr *fk_look_up_part_id_expr = index_dml_info.fk_lookup_part_id_expr_.at(i);
+      if (OB_ISNULL(fk_look_up_part_id_expr)) {
+        //nothing to do
+      } else if (OB_FAIL(replace_expr_for_fk_part_expr(dml_columns,
+                                                      dml_values,
+                                                      fk_look_up_part_id_expr))) {
+        LOG_WARN("failed to replace column ref expr for partition expr used for foreign key check", K(ret));
+      } else if (OB_FAIL(all_exprs.push_back(fk_look_up_part_id_expr))) {
+        LOG_WARN("failed to push foreign key check partition expr to all exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogDelUpd::convert_update_new_fk_lookup_part_id_expr(ObIArray<ObRawExpr*> &all_exprs, IndexDMLInfo &index_dml_info)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> dml_columns;
+  ObSEArray<ObRawExpr *, 4> dml_values;
+  if (OB_FAIL(get_update_exprs(index_dml_info, dml_columns, dml_values))) {
+    LOG_WARN("failed to get insert exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info.fk_lookup_part_id_expr_.count(); ++i) {
+      ObRawExpr *fk_look_up_part_id_expr = index_dml_info.fk_lookup_part_id_expr_.at(i);
+      if (OB_ISNULL(fk_look_up_part_id_expr)) {
+
+      } else if (OB_FAIL(replace_expr_for_fk_part_expr(dml_columns,
+                                                       dml_values,
+                                                       fk_look_up_part_id_expr))) {
+        LOG_WARN("failed to replace column ref expr for partition expr used for foreign key check", K(ret));
+      } else if (OB_FAIL(all_exprs.push_back(fk_look_up_part_id_expr))) {
+        LOG_WARN("failed to push foreign key check partition expr to all exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogDelUpd::generate_insert_new_calc_partid_expr(IndexDMLInfo &index_dml_info)
 {
   int ret = OB_SUCCESS;
@@ -1359,6 +1489,33 @@ int ObLogDelUpd::convert_expr_by_dml_operation(const ObIArray<ObRawExpr *> &dml_
       LOG_WARN("failed to add replace pair", K(ret));
     } else if (OB_FAIL(copier.copy_on_replace(cur_value, new_value))) {
       LOG_WARN("failed to copy on replace expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogDelUpd::replace_expr_for_fk_part_expr(const ObIArray<ObRawExpr *> &dml_columns,
+                                               const ObIArray<ObRawExpr *> &dml_new_values,
+                                               ObRawExpr *fk_part_id_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("current value expr is null", K(ret), K(get_plan()));
+  } else {
+    ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
+    if (OB_FAIL(copier.add_replaced_expr(dml_columns, dml_new_values))) {
+      LOG_WARN("failed to add replace pair", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < fk_part_id_expr->get_param_count(); ++i) {
+        ObRawExpr *param = fk_part_id_expr->get_param_expr(i);
+        ObRawExpr *new_param = NULL;
+        if (OB_FAIL(copier.copy_on_replace(param, new_param))) {
+          LOG_WARN("failed to static replace expr", K(ret));
+        } else {
+          fk_part_id_expr->get_param_expr(i) = new_param;
+        }
+      }
     }
   }
   return ret;

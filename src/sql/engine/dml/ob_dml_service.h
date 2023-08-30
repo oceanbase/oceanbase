@@ -152,7 +152,8 @@ public:
   static int init_ins_rtdef(ObDMLRtCtx &dml_rtctx,
                             ObInsRtDef &ins_rtdef,
                             const ObInsCtDef &ins_ctdef,
-                            ObIArray<ObExpr*> &clear_exprs);
+                            ObIArray<ObExpr*> &clear_exprs,
+                            ObIArray<ObForeignKeyChecker*> &fk_checkers);
   static int init_trigger_for_insert(ObDMLRtCtx &dml_rtctx,
                                      const ObInsCtDef &ins_ctdef,
                                      ObInsRtDef &ins_rtdef,
@@ -162,7 +163,8 @@ public:
   static int init_upd_rtdef(ObDMLRtCtx &dml_rtctx,
                             ObUpdRtDef &upd_rtdef,
                             const ObUpdCtDef &upd_ctdef,
-                            ObIArray<ObExpr*> &clear_exprs);
+                            ObIArray<ObExpr*> &clear_exprs,
+                            ObIArray<ObForeignKeyChecker*> &fk_checkers);
   static int init_das_ins_rtdef_for_update(ObDMLRtCtx &dml_rtctx,
                                            const ObUpdCtDef &upd_ctdef,
                                            ObUpdRtDef &upd_rtdef);
@@ -228,13 +230,18 @@ public:
   static int get_nested_dup_table_ctx(const uint64_t table_id,
                                       DASDelCtxList& del_ctx_list,
                                       SeRowkeyDistCtx *&rowkey_dist_ctx);
-  static int handle_after_row_processing_single(ObDMLModifyRowsList *dml_modify_rows);
-  static int handle_after_row_processing_batch(ObDMLModifyRowsList *dml_modify_rows);
-  static int handle_after_row_processing(bool execute_single_row, ObDMLModifyRowsList *dml_modify_rows);
+  static int handle_after_processing_single_row(ObDMLModifyRowsList *dml_modify_rows);
+  static int handle_after_processing_multi_row(ObDMLModifyRowsList *dml_modify_rows, ObTableModifyOp *op);
+  // static int handle_after_processing_batch(const ObTableModifyOp *op,
+  //                                           ObDMLModifyRowsList *dml_modify_rows);
+  static int handle_after_row_processing(ObTableModifyOp *op, ObDMLModifyRowsList *dml_modify_rows);
   static int init_ob_rowkey( ObIAllocator &allocator, const int64_t rowkey_cnt, ObRowkey &table_rowkey);
   static int add_trans_info_datum(ObExpr *trans_info_expr,
                                   ObEvalCtx &eval_ctx,
                                   ObChunkDatumStore::StoredRow *stored_row);
+  static int init_fk_checker_array(ObDMLRtCtx &dml_rtctx,
+                                   const ObDMLBaseCtDef &dml_ctdef,
+                                   FkCheckerArray &fk_checker_array);
   static int log_user_error_inner(int ret,
                                   int64_t row_num,
                                   common::ObString &column_name,
@@ -260,6 +267,8 @@ private:
                                   ObEvalCtx &eval_ctx,
                                   ObDMLBaseRtDef &dml_rtdef,
                                   common::ObIAllocator &allocator);
+  static int build_batch_fk_check_tasks(const ObDMLBaseCtDef &dml_ctdef,
+                                        ObDMLBaseRtDef &dml_rtdef);
 };
 
 template <int N, typename DMLIterator>

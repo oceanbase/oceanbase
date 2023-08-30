@@ -1090,9 +1090,9 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
                                                         sstable_->get_end_scn());
 
         if (OB_FAIL(lock_for_read(lock_for_read_arg,
-                                    can_read,
-                                    trans_version,
-                                    is_determined_state))) {
+                                  can_read,
+                                  trans_version,
+                                  is_determined_state))) {
           STORAGE_LOG(WARN, "fail to check transaction status", K(ret), KPC(row_header), K_(macro_id));
         }
       }
@@ -1100,7 +1100,7 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
 
     if (OB_SUCC(ret)) {
       ObStoreRowLockState lock_state;
-      if (param_->is_for_foreign_check_ &&
+      if (context_->query_flag_.is_for_foreign_key_check() &&
           OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint_for_sstable(
                   acc_ctx.get_tx_table_guards(),
                   acc_ctx.get_tx_id(),

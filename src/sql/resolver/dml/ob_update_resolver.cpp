@@ -443,6 +443,8 @@ int ObUpdateResolver::resolve_table_list(const ParseNode &parse_tree)
       LOG_WARN("failed to resolve table", K(ret));
     //这里是为了兼容oracle的报错行为，对于直接向子查询更新数据时如果子查询中from项不为1项时，报错这种子查询是非法的，
     //其他情形同update view类似判断，这里不再重复解决
+    } else if (OB_FAIL(resolve_foreign_key_constraint(table_item))) {
+      LOG_WARN("failed to resolve foreign key constraint", K(ret), K(table_item->ref_id_));
     } else if (is_oracle_mode() && table_node->num_child_ == 2) {
       if (OB_ISNULL(table_item) || (!table_item->is_generated_table() && !table_item->is_temp_table()) ||
           OB_ISNULL(ref_stmt = table_item->ref_query_)) {

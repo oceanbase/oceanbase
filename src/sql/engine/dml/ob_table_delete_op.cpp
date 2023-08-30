@@ -165,6 +165,7 @@ OB_INLINE int ObTableDeleteOp::open_table_for_each()
   if (OB_FAIL(del_rtdefs_.allocate_array(ctx_.get_allocator(), MY_SPEC.del_ctdefs_.count()))) {
     LOG_WARN("allocate delete rtdef failed", K(ret), K(MY_SPEC.del_ctdefs_.count()));
   }
+  fk_checkers_.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < del_rtdefs_.count(); ++i) {
     DelRtDefArray &rtdefs = del_rtdefs_.at(i);
     const ObTableDeleteSpec::DelCtDefArray &ctdefs = MY_SPEC.del_ctdefs_.at(i);

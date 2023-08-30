@@ -20,17 +20,17 @@ using namespace common;
 using namespace memtable;
 using namespace transaction;
 namespace storage {
-int ObRowConflictHandler::check_foreign_key_constraint_for_memtable(ObMvccValueIterator *value_iter,
+int ObRowConflictHandler::check_foreign_key_constraint_for_memtable(ObMvccAccessCtx *ctx,
+                                                                    ObMvccRow *row,
                                                                     ObStoreRowLockState &lock_state)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(value_iter)) {
+  if (OB_ISNULL(row)) {
     ret = OB_BAD_NULL_ERROR;
     TRANS_LOG(ERROR, "the ObMvccValueIterator is null", K(ret));
-  } else if (OB_FAIL(value_iter->check_row_locked(lock_state))) {
+  } else if (OB_FAIL(row->check_row_locked(*ctx, lock_state))) {
     TRANS_LOG(WARN, "check row locked fail", K(ret), K(lock_state));
   } else {
-    const ObMvccAccessCtx *ctx = value_iter->get_mvcc_acc_ctx();
     const ObTransID my_tx_id = ctx->get_tx_id();
     const share::SCN snapshot_version = ctx->get_snapshot_version();
     if (lock_state.is_locked_ && my_tx_id != lock_state.lock_trans_id_) {
@@ -62,7 +62,7 @@ int ObRowConflictHandler::check_foreign_key_constraint_for_sstable(ObTxTableGuar
   if (!data_trans_id.is_valid()) {
     if (trans_version > snapshot_version) {
       ret = OB_TRANSACTION_SET_VIOLATION;
-      TRANS_LOG(WARN, "meet tsc on sstable", K(ret), K(lock_state.trans_version_), K(snapshot_version));
+      TRANS_LOG(WARN, "meet tsc on sstable", K(ret), K(trans_version), K(snapshot_version));
     }
   } else {
     ObTxTable *tx_table = nullptr;

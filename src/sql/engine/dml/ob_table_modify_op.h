@@ -17,6 +17,7 @@
 #include "sql/engine/dml/ob_dml_ctx_define.h"
 #include "observer/ob_inner_sql_connection.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/dml/ob_fk_checker.h"
 
 namespace oceanbase
 {
@@ -42,10 +43,26 @@ private:
                            const ObExprPtrIArray &old_row,
                            const ObExprPtrIArray &new_row,
                            bool &has_changed);
-  static int check_exist(ObTableModifyOp &modify_op, const ObForeignKeyArg &fk_arg,
-                         const ObExprPtrIArray &row, bool expect_zero);
+  static int check_exist(ObTableModifyOp &modify_op,
+                         const ObForeignKeyArg &fk_arg,
+                         const ObExprPtrIArray &row,
+                         ObForeignKeyChecker *fk_checker,
+                         bool expect_zero);
+  static int check_exist_inner_sql(ObTableModifyOp &modify_op,
+                                   const ObForeignKeyArg &fk_arg,
+                                   const ObExprPtrIArray &row,
+                                   bool expect_zero);
+  static int check_exist_scan_task(ObTableModifyOp &modify_op,
+                                   const ObForeignKeyArg &fk_arg,
+                                   const ObExprPtrIArray &row,
+                                   ObForeignKeyChecker *fk_checker,
+                                   bool expect_zero);
   static int cascade(ObTableModifyOp &modify_op, const ObForeignKeyArg &fk_arg,
                      const ObExprPtrIArray &old_row, const ObExprPtrIArray &new_row);
+
+  static int set_null(ObTableModifyOp &modify_op, const ObForeignKeyArg &fk_arg,
+                     const ObExprPtrIArray &old_row);
+
   static int gen_set(ObEvalCtx &eval_ctx, char *&buf, int64_t &len, int64_t &pos,
                      const common::ObIArray<ObForeignKeyColumn> &columns,
                      const ObExprPtrIArray &row, common::ObIAllocator &alloc,
@@ -59,6 +76,12 @@ private:
                               const ObExprPtrIArray &row, const char *delimiter,
                               common::ObIAllocator &alloc,
                               const common::ObObjPrintParams &print_params, bool forbid_null);
+
+  static int gen_column_null_value(ObEvalCtx &ctx, char *&buf, int64_t &len, int64_t &pos,
+                              const common::ObIArray<ObForeignKeyColumn> &columns,
+                              common::ObIAllocator &alloc,
+                              const common::ObObjPrintParams &print_params);
+
   static int is_self_ref_row(ObEvalCtx &ctx, const ObExprPtrIArray &row,
                              const ObForeignKeyArg &fk_arg, bool &is_self_ref);
 };
@@ -110,7 +133,8 @@ public:
       uint64_t use_dist_das_                    : 1;
       uint64_t has_instead_of_trigger_          : 1; // abandoned, don't use again
       uint64_t is_pdml_update_split_            : 1; // 标记delete, insert op是否由update拆分而来
-      uint64_t reserved_                        : 56;
+      uint64_t check_fk_batch_                  : 1; // mark if the foreign key constraint can be checked in batch
+      uint64_t reserved_                        : 55;
     };
   };
 private:
@@ -181,6 +205,7 @@ public:
   {
     dml_rtctx_.cleanup();
     trigger_clear_exprs_.reset();
+    fk_checkers_.reset();
     ObOperator::destroy();
   }
 
@@ -216,6 +241,8 @@ public:
 
   ObDMLModifyRowsList& get_dml_modify_row_list() { return dml_modify_rows_;}
   int submit_all_dml_task();
+
+  int perform_batch_fk_check();
 protected:
   OperatorOpenOrder get_operator_open_order() const;
   virtual int inner_open();
@@ -264,6 +291,7 @@ public:
   ObErrLogRtDef err_log_rt_def_;
   ObSEArray<ObExpr *, 4> trigger_clear_exprs_;
   ObDMLModifyRowsList dml_modify_rows_;
+  ObSEArray<ObForeignKeyChecker *, 4> fk_checkers_;
 private:
   ObSQLSessionInfo::StmtSavedValue *saved_session_;
   char saved_session_buf_[sizeof(ObSQLSessionInfo::StmtSavedValue)] __attribute__((aligned (16)));;

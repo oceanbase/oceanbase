@@ -43,7 +43,8 @@ public:
     old_rowid_expr_(NULL),
     new_rowid_expr_(NULL),
     trans_info_expr_(NULL),
-    related_index_ids_()
+    related_index_ids_(),
+    fk_lookup_part_id_expr_()
   {
   }
   inline void reset()
@@ -72,6 +73,7 @@ public:
     new_rowid_expr_ = NULL,
     trans_info_expr_ = NULL,
     related_index_ids_.reset();
+    fk_lookup_part_id_expr_.reset();
   }
   int64_t to_explain_string(char *buf, int64_t buf_len, ExplainType type) const;
   int init_assignment_info(const ObAssignments &assignments,
@@ -168,6 +170,8 @@ public:
   common::ObSEArray<ObRawExpr*, 64, common::ModulePageAllocator, true> column_old_values_exprs_;
   // local index id related to current dml
   TableIDArray related_index_ids_;
+
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> fk_lookup_part_id_expr_;
 
   TO_STRING_KV(K_(table_id),
                K_(ref_table_id),
@@ -330,12 +334,19 @@ public:
   virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
 protected:
   virtual int generate_rowid_expr_for_trigger() = 0;
+  virtual int generate_part_id_expr_for_foreign_key(ObIArray<ObRawExpr*> &all_exprs) = 0;
   virtual int generate_multi_part_partition_id_expr() = 0;
   int generate_old_rowid_expr(IndexDMLInfo &table_dml_info);
   int generate_update_new_rowid_expr(IndexDMLInfo &table_dml_info);
   int generate_insert_new_rowid_expr(IndexDMLInfo &table_dml_info);
   int generate_old_calc_partid_expr(IndexDMLInfo &index_info);
   int generate_lookup_part_id_expr(IndexDMLInfo &index_info);
+  int generate_fk_lookup_part_id_expr(IndexDMLInfo &index_info);
+  int convert_insert_new_fk_lookup_part_id_expr(ObIArray<ObRawExpr*> &all_exprs,IndexDMLInfo &index_dml_info);
+  int convert_update_new_fk_lookup_part_id_expr(ObIArray<ObRawExpr*> &all_exprs, IndexDMLInfo &index_dml_info);
+  int replace_expr_for_fk_part_expr(const ObIArray<ObRawExpr *> &dml_columns,
+                                    const ObIArray<ObRawExpr *> &dml_new_values,
+                                    ObRawExpr *fk_part_id_expr);
   int generate_insert_new_calc_partid_expr(IndexDMLInfo &index_dml_info);
   int generate_update_new_calc_partid_expr(IndexDMLInfo &index_dml_info);
 

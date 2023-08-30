@@ -29,7 +29,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "sql/ob_sql_utils.h"
-
+#include "sql/engine/dml/ob_fk_checker.h"
 namespace oceanbase
 {
 using namespace common;
@@ -1207,11 +1207,61 @@ int ObDMLService::init_trigger_for_insert(
   return ret;
 }
 
+int ObDMLService::init_fk_checker_array(ObDMLRtCtx &dml_rtctx,
+                                        const ObDMLBaseCtDef &dml_ctdef,
+                                        FkCheckerArray &fk_checker_array)
+{
+  int ret = OB_SUCCESS;
+  ObIAllocator &allocator = dml_rtctx.get_exec_ctx().get_allocator();
+  const ObForeignKeyArgArray &fk_args = dml_ctdef.fk_args_;
+  if (!fk_args.empty()) {
+    if (OB_FAIL(fk_checker_array.allocate_array(allocator, fk_args.count()))) {
+      LOG_WARN("failed to create foreign key checker array", K(ret));
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < fk_args.count(); ++i) {
+        fk_checker_array.at(i) = nullptr;
+      }
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && i < fk_args.count(); ++i) {
+    const ObForeignKeyArg &fk_arg = fk_args.at(i);
+    ObForeignKeyChecker *fk_checker = nullptr;
+    if (fk_arg.use_das_scan_) {
+      if (OB_ISNULL(fk_arg.fk_ctdef_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("need to perform foreign key check by das scan task, but scan ctdef is null", K(ret));
+      } else {
+        // create fk_checker here
+        void *checker_buf = allocator.alloc(sizeof(ObForeignKeyChecker));
+        if (OB_ISNULL(checker_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("cllocate foreign key checker buffer failed", K(ret));
+        } else {
+          fk_checker = new(checker_buf) ObForeignKeyChecker(dml_rtctx.get_eval_ctx(), *fk_arg.fk_ctdef_);
+          fk_checker_array.at(i) = fk_checker;
+          const ObExprFrameInfo *expr_frame_info = NULL;
+          expr_frame_info = nullptr != dml_rtctx.op_.get_spec().expr_frame_info_
+                               ? dml_rtctx.op_.get_spec().expr_frame_info_
+                               : &(dml_rtctx.op_.get_spec().plan_->get_expr_frame_info());
+          int64_t estimate_row = dml_rtctx.op_.get_spec().rows_;
+          ObIAllocator *allocator = &dml_rtctx.op_.get_exec_ctx().get_allocator();
+          if (OB_FAIL(fk_checker->init_foreign_key_checker(estimate_row, expr_frame_info, *fk_arg.fk_ctdef_,
+                                                           dml_ctdef.new_row_, allocator))) {
+            LOG_WARN("failed to init foreign key checker", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDMLService::init_ins_rtdef(
   ObDMLRtCtx &dml_rtctx,
   ObInsRtDef &ins_rtdef,
   const ObInsCtDef &ins_ctdef,
-  ObIArray<ObExpr*> &clear_exprs)
+  ObIArray<ObExpr*> &clear_exprs,
+  ObIArray<ObForeignKeyChecker*> &fk_checkers)
 {
   int ret = OB_SUCCESS;
   dml_rtctx.get_exec_ctx().set_dml_event(ObDmlEventType::DE_INSERTING);
@@ -1230,9 +1280,16 @@ int ObDMLService::init_ins_rtdef(
     LOG_WARN("init related das ctdef failed", K(ret));
   } else if (OB_FAIL(init_trigger_for_insert(dml_rtctx, ins_ctdef, ins_rtdef, clear_exprs))) {
     LOG_WARN("failed to init trigger for insert", K(ret));
+  } else if (OB_FAIL(init_fk_checker_array(dml_rtctx, ins_ctdef, ins_rtdef.fk_checker_array_))) {
+    LOG_WARN("failed to init foreign key checker array", K(ret));
   } else {
     ins_rtdef.das_rtdef_.related_ctdefs_ = &ins_ctdef.related_ctdefs_;
     ins_rtdef.das_rtdef_.related_rtdefs_ = &ins_rtdef.related_rtdefs_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < ins_rtdef.fk_checker_array_.count(); ++i) {
+      if (OB_NOT_NULL(ins_rtdef.fk_checker_array_.at(i))) {
+        fk_checkers.push_back(ins_rtdef.fk_checker_array_.at(i));
+      }
+    }
   }
   return ret;
 }
@@ -1271,6 +1328,8 @@ int ObDMLService::init_del_rtdef(ObDMLRtCtx &dml_rtctx,
     LOG_WARN("init related das ctdef failed", K(ret));
   } else if (OB_FAIL(init_trigger_for_delete(dml_rtctx, del_ctdef, del_rtdef))) {
     LOG_WARN("failed to init trigger for delete", K(ret));
+  } else if (OB_FAIL(init_fk_checker_array(dml_rtctx, del_ctdef, del_rtdef.fk_checker_array_))) {
+    LOG_WARN("failed to init foreign key checker array", K(ret));
   } else {
     del_rtdef.das_rtdef_.related_ctdefs_ = &del_ctdef.related_ctdefs_;
     del_rtdef.das_rtdef_.related_rtdefs_ = &del_rtdef.related_rtdefs_;
@@ -1397,7 +1456,8 @@ int ObDMLService::init_upd_rtdef(
   ObDMLRtCtx &dml_rtctx,
   ObUpdRtDef &upd_rtdef,
   const ObUpdCtDef &upd_ctdef,
-  ObIArray<ObExpr*> &clear_exprs)
+  ObIArray<ObExpr*> &clear_exprs,
+  ObIArray<ObForeignKeyChecker*> &fk_checkers)
 {
   int ret = OB_SUCCESS;
   const ObDASTableLocMeta *loc_meta = get_table_loc_meta(upd_ctdef.multi_ctdef_);
@@ -1416,10 +1476,17 @@ int ObDMLService::init_upd_rtdef(
     LOG_WARN("init related das ctdef failed", K(ret));
   } else if (OB_FAIL(init_trigger_for_update(dml_rtctx, upd_ctdef, upd_rtdef, dml_rtctx.op_, clear_exprs))) {
     LOG_WARN("failed to init trigger for update", K(ret));
+  } else if (OB_FAIL(init_fk_checker_array(dml_rtctx, upd_ctdef, upd_rtdef.fk_checker_array_))) {
+    LOG_WARN("failed to init foreign key checker array", K(ret));
   } else {
     upd_rtdef.dupd_rtdef_.related_ctdefs_ = &upd_ctdef.related_upd_ctdefs_;
     upd_rtdef.dupd_rtdef_.related_rtdefs_ = &upd_rtdef.related_upd_rtdefs_;
     dml_rtctx.get_exec_ctx().set_update_columns(&upd_ctdef.assign_columns_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < upd_rtdef.fk_checker_array_.count(); ++i) {
+      if (OB_NOT_NULL(upd_rtdef.fk_checker_array_.at(i))) {
+        fk_checkers.push_back(upd_rtdef.fk_checker_array_.at(i));
+      }
+    }
   }
 
   if (OB_SUCC(ret) && T_DISTINCT_NONE != upd_ctdef.distinct_algo_) {
@@ -2079,68 +2146,82 @@ int ObDMLService::get_nested_dup_table_ctx(const uint64_t table_id,  DASDelCtxLi
   return ret;
 }
 
-int ObDMLService::handle_after_row_processing_batch(ObDMLModifyRowsList *dml_modify_rows)
+int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_modify_rows, ObTableModifyOp *dml_op)
 {
   int ret = OB_SUCCESS;
   const ObDmlEventType t_insert = ObDmlEventType::DE_INSERTING;
   const ObDmlEventType t_update = ObDmlEventType::DE_UPDATING;
   const ObDmlEventType t_delete = ObDmlEventType::DE_DELETING;
-  ObDMLModifyRowsList::iterator row_iter = dml_modify_rows->begin();
-  for (; OB_SUCC(ret) && row_iter != dml_modify_rows->end(); row_iter++) {
-    ObDMLModifyRowNode &modify_row = *row_iter;
-    if (OB_ISNULL(modify_row.full_row_) && OB_ISNULL(modify_row.new_row_) && OB_ISNULL(modify_row.old_row_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid parameter for batch post row processing", K(ret));
-    } else if (OB_ISNULL(modify_row.dml_op_) || OB_ISNULL(modify_row.dml_ctdef_) || OB_ISNULL(modify_row.dml_rtdef_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid parameter for batch post row processing", K(ret));
-    } else {
-      ObTableModifyOp &op = *modify_row.dml_op_;
-      const ObDMLBaseCtDef &dml_ctdef = *modify_row.dml_ctdef_;
-      ObDMLBaseRtDef &dml_rtdef = *modify_row.dml_rtdef_;
-      const ObDmlEventType dml_event = modify_row.dml_event_;
-      // process foreign key
-      if (OB_NOT_NULL(modify_row.full_row_) && OB_FAIL(modify_row.full_row_->to_expr(modify_row.dml_ctdef_->full_row_, op.get_eval_ctx()))) {
-        LOG_WARN("failed to covert stored full row to expr", K(ret));
-      } else if (OB_NOT_NULL(modify_row.old_row_) && OB_FAIL(modify_row.old_row_->to_expr(dml_ctdef.old_row_, op.get_eval_ctx()))) {
-        LOG_WARN("failed to covert stored old row to expr", K(ret));
-      } else if (OB_NOT_NULL(modify_row.new_row_) && OB_FAIL(modify_row.new_row_->to_expr(dml_ctdef.new_row_, op.get_eval_ctx()))) {
-        LOG_WARN("failed to covert stored new row to expr", K(ret));
+  if (OB_ISNULL(dml_modify_rows) || OB_ISNULL(dml_op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dml operator or modify rows list is null", K(dml_modify_rows), K(dml_op));
+  } else {
+    ObDMLModifyRowsList::iterator row_iter = dml_modify_rows->begin();
+    for (; OB_SUCC(ret) && row_iter != dml_modify_rows->end(); row_iter++) {
+      ObDMLModifyRowNode &modify_row = *row_iter;
+      if (OB_ISNULL(modify_row.full_row_) && OB_ISNULL(modify_row.new_row_) && OB_ISNULL(modify_row.old_row_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid parameter for batch post row processing", K(ret));
+      } else if (OB_ISNULL(modify_row.dml_op_) || OB_ISNULL(modify_row.dml_ctdef_) || OB_ISNULL(modify_row.dml_rtdef_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid parameter for batch post row processing", K(ret));
       } else {
-        if (t_update == dml_event) {
-          // for update op, Foreign key checks need to be performed only if the value has changed
-          if (reinterpret_cast<ObUpdRtDef &>(dml_rtdef).is_row_changed_ && OB_FAIL(ForeignKeyHandle::do_handle(op, dml_ctdef, dml_rtdef))) {
-            LOG_WARN("failed to handle foreign key constraints", K(ret));
+        ObTableModifyOp &op = *modify_row.dml_op_;
+        const ObDMLBaseCtDef &dml_ctdef = *modify_row.dml_ctdef_;
+        ObDMLBaseRtDef &dml_rtdef = *modify_row.dml_rtdef_;
+        const ObDmlEventType dml_event = modify_row.dml_event_;
+        // process foreign key
+        if (OB_NOT_NULL(modify_row.full_row_) && OB_FAIL(modify_row.full_row_->to_expr(modify_row.dml_ctdef_->full_row_, op.get_eval_ctx()))) {
+          LOG_WARN("failed to covert stored full row to expr", K(ret));
+        } else if (OB_NOT_NULL(modify_row.old_row_) && OB_FAIL(modify_row.old_row_->to_expr(dml_ctdef.old_row_, op.get_eval_ctx()))) {
+          LOG_WARN("failed to covert stored old row to expr", K(ret));
+        } else if (OB_NOT_NULL(modify_row.new_row_) && OB_FAIL(modify_row.new_row_->to_expr(dml_ctdef.new_row_, op.get_eval_ctx()))) {
+          LOG_WARN("failed to covert stored new row to expr", K(ret));
+        } else if (op.need_foreign_key_checks()) {
+          if (t_update == dml_event && !reinterpret_cast<ObUpdRtDef &>(dml_rtdef).is_row_changed_) {
+            LOG_DEBUG("update operation don't change any value, no need to perform foreign key check");
+          } else {
+            // if check foreign key in batch, build fk check tasks here
+            if (dml_op->get_spec().check_fk_batch_) {
+              if (OB_FAIL(build_batch_fk_check_tasks(dml_ctdef, dml_rtdef))) {
+                LOG_WARN("failed to build batch check foreign key checks", K(ret));
+              }
+            } else if (OB_FAIL(ForeignKeyHandle::do_handle(op, dml_ctdef, dml_rtdef))) {
+              LOG_WARN("failed to handle foreign key constraints", K(ret));
+            }
           }
-        } else if (OB_FAIL(ForeignKeyHandle::do_handle(op, dml_ctdef, dml_rtdef))) {
-          LOG_WARN("failed to handle foreign key constraints", K(ret));
+        }
+        // process after row trigger
+        if (OB_SUCC(ret) && dml_ctdef.trig_ctdef_.all_tm_points_.has_after_row()) {
+          ObEvalCtx &eval_ctx = op.get_eval_ctx();
+          if (dml_event != t_insert && dml_event != t_update && dml_event != t_delete) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid trigger event", K(ret));
+          } else if (t_insert == dml_event && OB_FAIL(TriggerHandle::init_param_new_row(
+              eval_ctx, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_))) {
+            LOG_WARN("failed to init trigger parameter for new row", K(ret));
+          } else if (t_delete == dml_event && OB_FAIL(TriggerHandle::init_param_old_row(
+              eval_ctx, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_))) {
+            LOG_WARN("failed to init trigger parameter for old row", K(ret));
+          } else if (t_update == dml_event && OB_FAIL(TriggerHandle::init_param_rows(
+              eval_ctx, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_))) {
+            LOG_WARN("failed to init trigger parameter for old row and new row", K(ret));
+          } else if (OB_FAIL(TriggerHandle::do_handle_after_row(op, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_, dml_event))) {
+            LOG_WARN("failed to handle after trigger", K(ret));
+          }
         }
       }
-      // process after row trigger
-      if (OB_SUCC(ret) && dml_ctdef.trig_ctdef_.all_tm_points_.has_after_row()) {
-        ObEvalCtx &eval_ctx = op.get_eval_ctx();
-        if (dml_event != t_insert && dml_event != t_update && dml_event != t_delete) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid trigger event", K(ret));
-        } else if (t_insert == dml_event && OB_FAIL(TriggerHandle::init_param_new_row(
-            eval_ctx, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_))) {
-          LOG_WARN("failed to init trigger parameter for new row", K(ret));
-        } else if (t_delete == dml_event && OB_FAIL(TriggerHandle::init_param_old_row(
-            eval_ctx, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_))) {
-          LOG_WARN("failed to init trigger parameter for old row", K(ret));
-        } else if (t_update == dml_event && OB_FAIL(TriggerHandle::init_param_rows(
-            eval_ctx, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_))) {
-          LOG_WARN("failed to init trigger parameter for old row and new row", K(ret));
-        } else if (OB_FAIL(TriggerHandle::do_handle_after_row(op, dml_ctdef.trig_ctdef_, dml_rtdef.trig_rtdef_, dml_event))) {
-          LOG_WARN("failed to handle after trigger", K(ret));
-        }
-      }
+    }
+
+    // check the result of batch foreign key check results
+    if (OB_SUCC(ret) && dml_op->get_spec().check_fk_batch_ && OB_FAIL(dml_op->perform_batch_fk_check())) {
+      LOG_WARN("failed to perform batch foreign key check", K(ret));
     }
   }
   return ret;
 }
 
-int ObDMLService::handle_after_row_processing_single(ObDMLModifyRowsList *dml_modify_rows)
+int ObDMLService::handle_after_processing_single_row(ObDMLModifyRowsList *dml_modify_rows)
 {
   int ret = OB_SUCCESS;
   // for single-row processing, the expr defined in ctdef and trig parameters haven't been refreshed
@@ -2185,18 +2266,49 @@ int ObDMLService::handle_after_row_processing_single(ObDMLModifyRowsList *dml_mo
   return ret;
 }
 
-int ObDMLService::handle_after_row_processing(bool execute_single_row, ObDMLModifyRowsList *dml_modify_rows)
+int ObDMLService::handle_after_row_processing(ObTableModifyOp *op,
+                                              ObDMLModifyRowsList *dml_modify_rows)
 {
   int ret = OB_SUCCESS;
-  if (1 > dml_modify_rows->size()) {
+  if (OB_ISNULL(op) || OB_ISNULL(dml_modify_rows)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table modify operator or list of the modify rows is null", K(ret), K(op), K(dml_modify_rows));
+  } else if (1 > dml_modify_rows->size()) {
     // after row processing list is empty, nothing to do
     #ifndef NDEBUG
       LOG_INFO("No row need to perform foreign key check or after row trigger");
     #endif
-  } else if (execute_single_row) {
-    ret = handle_after_row_processing_single(dml_modify_rows);
+  } else if (op->execute_single_row_) {
+    ret = handle_after_processing_single_row(dml_modify_rows);
   } else {
-    ret = handle_after_row_processing_batch(dml_modify_rows);
+    ret = handle_after_processing_multi_row(dml_modify_rows, op);
+  }
+  return ret;
+}
+
+int ObDMLService::build_batch_fk_check_tasks(const ObDMLBaseCtDef &dml_ctdef,
+                                             ObDMLBaseRtDef &dml_rtdef)
+{
+  int ret = OB_SUCCESS;
+  if (dml_rtdef.fk_checker_array_.count() != dml_ctdef.fk_args_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("foreign key aruments count is not equal with foreign key checker count",
+              K(ret),K(dml_rtdef.fk_checker_array_.count()), K(dml_ctdef.fk_args_.count()));
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < dml_rtdef.fk_checker_array_.count(); ++i) {
+      ObForeignKeyChecker *fk_checker = dml_rtdef.fk_checker_array_.at(i);
+      const ObForeignKeyArg &fk_arg = dml_ctdef.fk_args_.at(i);
+      bool need_check = true;
+      if (OB_ISNULL(fk_checker)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("foreign key checker is nullptr", K(ret), K(i));
+      } else if (!fk_arg.use_das_scan_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("foreign key check can not use das scan", K(ret), K(i));
+      } else if (OB_FAIL(fk_checker->build_fk_check_das_task(fk_arg.columns_, dml_ctdef.new_row_, need_check))) {
+        LOG_WARN("failed to build batch foreign key check scan task", K(ret));
+      }
+    }
   }
   return ret;
 }

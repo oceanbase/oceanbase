@@ -23,6 +23,7 @@
 #include "sql/das/ob_das_insert_op.h"
 #include "sql/das/ob_data_access_service.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
+#include "sql/engine/dml/ob_fk_checker.h"
 
 namespace oceanbase
 {
@@ -179,13 +180,14 @@ OB_INLINE int ObTableReplaceOp::init_replace_rtdef()
     LOG_WARN("allocate insert rtdef failed", K(ret), K(MY_SPEC.replace_ctdefs_.count()));
   }
   trigger_clear_exprs_.reset();
+  fk_checkers_.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < replace_rtdefs_.count(); ++i) {
     ObReplaceCtDef *replace_ctdef = MY_SPEC.replace_ctdefs_.at(i);
     const ObInsCtDef *ins_ctdef = replace_ctdef->ins_ctdef_;
     const ObDelCtDef *del_ctdef = replace_ctdef->del_ctdef_;
     ObInsRtDef &ins_rtdef = replace_rtdefs_.at(i).ins_rtdef_;
     ObDelRtDef &del_rtdef = replace_rtdefs_.at(i).del_rtdef_;
-    OZ(ObDMLService::init_ins_rtdef(dml_rtctx_, ins_rtdef, *ins_ctdef, trigger_clear_exprs_));
+    OZ(ObDMLService::init_ins_rtdef(dml_rtctx_, ins_rtdef, *ins_ctdef, trigger_clear_exprs_, fk_checkers_));
     OZ(ObDMLService::init_del_rtdef(dml_rtctx_, del_rtdef, *del_ctdef));
     if (OB_SUCC(ret)) {
       ins_rtdef.das_rtdef_.table_loc_->is_writing_ = true;
@@ -472,7 +474,7 @@ int ObTableReplaceOp::do_replace_into()
       LOG_WARN("fail to load all row", K(ret));
     } else if (OB_FAIL(post_all_dml_das_task())) {
       LOG_WARN("fail to post all das task", K(ret));
-    } else if (!check_is_duplicated() && OB_FAIL(ObDMLService::handle_after_row_processing(execute_single_row_, &dml_modify_rows_))) {
+    } else if (!check_is_duplicated() && OB_FAIL(ObDMLService::handle_after_row_processing(this, &dml_modify_rows_))) {
       LOG_WARN("try insert is not duplicated, failed to process foreign key handle", K(ret));
     } else if (!check_is_duplicated()) {
       LOG_DEBUG("try insert is not duplicated", K(ret));
@@ -493,7 +495,7 @@ int ObTableReplaceOp::do_replace_into()
       LOG_WARN("fail to prepare final das task", K(ret));
     } else if (OB_FAIL(post_all_dml_das_task())) {
       LOG_WARN("do insert rows post process failed", K(ret));
-    } else if (OB_FAIL(ObDMLService::handle_after_row_processing(execute_single_row_, &dml_modify_rows_))) {
+    } else if (OB_FAIL(ObDMLService::handle_after_row_processing(this, &dml_modify_rows_))) {
       LOG_WARN("try insert is duplicated, failed to process foreign key handle", K(ret));
     }
 

@@ -1086,6 +1086,9 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx, ObStoreRowLockState &lock_
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    lock_state.mvcc_row_ = this;
+  }
   return ret;
 }
 

@@ -42,7 +42,8 @@ int ObPxMultiPartUpdateOp::inner_open()
   } else if (OB_FAIL(ObDMLService::init_upd_rtdef(dml_rtctx_,
                                                   upd_rtdef_,
                                                   MY_SPEC.upd_ctdef_,
-                                                  trigger_clear_exprs_))) {
+                                                  trigger_clear_exprs_,
+                                                  fk_checkers_))) {
     LOG_WARN("init update rtdef failed", K(ret));
   }
   LOG_TRACE("pdml static update op", K(ret), K_(MY_SPEC.row_desc));

@@ -113,6 +113,7 @@ public:
 protected:
   int get_constraint_info_exprs(ObIArray<ObRawExpr*> &all_exprs);
   virtual int generate_rowid_expr_for_trigger() override;
+  virtual int generate_part_id_expr_for_foreign_key(ObIArray<ObRawExpr*> &all_exprs) override;
   virtual int generate_multi_part_partition_id_expr() override;
 protected:
   bool is_replace_;
