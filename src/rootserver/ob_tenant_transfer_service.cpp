@@ -448,6 +448,7 @@ int ObTenantTransferService::lock_table_and_part_(
   } else if (OB_FAIL(ordered_part_list.assign(part_list))) {
     LOG_WARN("assign failed", KR(ret), K(part_list), K(ordered_part_list));
   } else {
+    allocator.set_tenant_id(tenant_id_);
     part_list.reset();
     ObSimpleTableSchemaV2 *table_schema = NULL;
     ObTransferPartInfo::Compare cmp;
@@ -814,6 +815,7 @@ int ObTenantTransferService::generate_related_tablet_ids_(
   if (IS_NOT_INIT || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
+  } else if (FALSE_IT(allocator.set_tenant_id(tenant_id_))) {
   } else if (table_schema.is_global_index_table()) {
     // skip get related tables
   } else if (OB_UNLIKELY(! need_balance_table(table_schema))) {
@@ -1313,6 +1315,7 @@ int ObTenantTransferService::unlock_table_and_part_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mtl ObTableLockService is null", KR(ret), K_(tenant_id));
   } else {
+    allocator.set_tenant_id(tenant_id_);
     ObSimpleTableSchemaV2 *table_schema = NULL;
     const int64_t timeout_us = GCONF.internal_sql_execute_timeout;
     ObTransferPartInfo::Compare cmp;
