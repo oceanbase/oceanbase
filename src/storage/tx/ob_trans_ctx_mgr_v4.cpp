@@ -290,6 +290,11 @@ void ObLSTxCtxMgr::print_all_tx_ctx_(const int64_t max_print, const bool verbose
 //
 //STOPPED                N          STOPPED         N                N                     N                      N                      N                      N                 N                      STOPPED  N          N
 //END                    N          N               N                N                     N                      N                      N                      N                 N                      N        N          N
+
+// return value:
+//   OB_SUCCESS for success
+//   OB_STATE_NOT_MATCH for switch state fail
+//   others for error
 int ObLSTxCtxMgr::StateHelper::switch_state(const int64_t op)
 {
   int ret = OB_SUCCESS;

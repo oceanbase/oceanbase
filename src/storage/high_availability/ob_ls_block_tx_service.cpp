@@ -70,7 +70,6 @@ int ObLSBlockTxService::switch_to_leader()
 {
   ObMutexGuard mutex_guard(mutex_);
   ls_->get_tx_svr()->unblock_normal();
-  cur_seq_.set_min();
   STORAGE_LOG(INFO, "[BLOCK_TX]switch to leader finish");
   return OB_SUCCESS;
 }
@@ -163,14 +162,13 @@ int ObLSBlockTxService::ha_unblock_tx(const share::SCN &new_seq)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ls is not inited", K(ret));
-  } else if (OB_FAIL(check_is_leader_())) {
-    STORAGE_LOG(WARN, "failed to check is leader", K(ret));
-  } else if (OB_FAIL(check_seq_(new_seq))) {
-    STORAGE_LOG(WARN, "failed to check seq", K(ret));
+  } else if (new_seq != cur_seq_) {
+    ret = OB_SEQUENCE_NOT_MATCH;
+    STORAGE_LOG(WARN, "unblock tx get unexpected sequence", K(ret), K(new_seq), K(cur_seq_));
   } else if (OB_FAIL(ls_->get_tx_svr()->unblock_normal())) {
     if (OB_STATE_NOT_MATCH == ret) {
       ret = OB_SUCCESS;
-      STORAGE_LOG(INFO, "transfer already unblock", KPC_(ls), K(new_seq));
+      STORAGE_LOG(INFO, "tx is already unblock", KPC_(ls), K(new_seq));
     } else {
       STORAGE_LOG(WARN, "failed to unblock normal", K(ret), K(new_seq));
     }
@@ -189,20 +187,10 @@ int ObLSBlockTxService::ha_unblock_tx(const share::SCN &new_seq)
 int ObLSBlockTxService::check_is_leader_()
 {
   int ret =  OB_SUCCESS;
-  ObLSHandle ls_handle;
-  ObLSService *ls_srv = NULL;
-  ObLS *ls = NULL;
-  logservice::ObLogService *log_service = nullptr;
   ObRole role;
   int64_t proposal_id = 0;
-  if (OB_ISNULL(ls_srv = MTL(ObLSService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "ls srv should not be NULL", K(ret), KP(ls_srv));
-  } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "log service should not be NULL", K(ret), KP(log_service));
-  } else if (OB_FAIL(log_service->get_palf_role(ls_->get_ls_id(), role, proposal_id))) {
-    STORAGE_LOG(WARN, "failed to get role", K(ret));
+  if (OB_FAIL(ls_->get_log_handler()->get_role(role, proposal_id))) {
+    STORAGE_LOG(WARN, "failed to get role", K(ret), KPC(ls_));
   } else if (!is_strong_leader(role)) {
     ret = OB_NOT_MASTER;
     STORAGE_LOG(WARN, "ls is not leader, can not block tx", K(ret), K(role));
@@ -216,8 +204,8 @@ int ObLSBlockTxService::check_seq_(const share::SCN &new_seq)
   if (cur_seq_.is_min()) {
     // do not check
   } else if (new_seq < cur_seq_) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "seq is too old", K(ret), K(new_seq), K(cur_seq_));
+    ret = OB_SEQUENCE_TOO_SMALL;
+    STORAGE_LOG(WARN, "seq is too SMALL", K(ret), K(new_seq), K(cur_seq_));
   }
   STORAGE_LOG(INFO, "compare seq", K(ret), K(new_seq), K(cur_seq_));
   return ret;
@@ -229,8 +217,9 @@ int ObLSBlockTxService::update_seq_(const share::SCN &new_seq)
   if (!new_seq.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "seq is not valid", K(ret), K(new_seq), K(cur_seq_));
-  } else if (new_seq <= cur_seq_) {
-    ret = OB_ERR_UNEXPECTED;
+  } else if (new_seq == cur_seq_) {
+    //do nothing
+  } else if (new_seq < cur_seq_) {
     STORAGE_LOG(WARN, "seq is too old", K(ret), K(new_seq), K(cur_seq_));
   } else {
     cur_seq_ = new_seq;

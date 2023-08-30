@@ -68,7 +68,6 @@ public:
   int safe_to_destroy(bool &is_safe);
   int offline();
   void online();
-
 private:
   int get_transfer_task_(share::ObTransferTaskInfo &task_info);
   int get_transfer_task_from_inner_table_(
@@ -132,6 +131,7 @@ private:
       common::ObAddr &addr);
   int do_trans_transfer_start_(
       const share::ObTransferTaskInfo &task_info,
+      const palf::LogConfigVersion &config_version,
       ObTimeoutCtx &timeout_ctx,
       ObMySQLTransaction &trans);
   int start_trans_(
@@ -151,6 +151,12 @@ private:
       const share::ObTransferTaskInfo &task_info,
       ObTimeoutCtx &timeout_ctx,
       share::SCN &start_scn);
+  int get_tablet_start_transfer_out_scn_(
+      const ObTransferTabletInfo &tablet_info,
+      const int64_t index,
+      ObTimeoutCtx &timeout_ctx,
+      share::SCN &start_scn);
+
   int wait_src_ls_replay_to_start_scn_(
       const share::ObTransferTaskInfo &task_info,
       const share::SCN &start_scn,
@@ -191,10 +197,12 @@ private:
   int block_and_kill_tx_(
       const share::ObTransferTaskInfo &task_info,
       const bool enable_kill_trx,
-      ObTimeoutCtx &timeout_ctx);
+      ObTimeoutCtx &timeout_ctx,
+      bool &succ_block_tx);
   int block_tx_(
       const uint64_t tenant_id,
-      const share::ObLSID &ls_id);
+      const share::ObLSID &ls_id,
+      const share::SCN &gts);
   int check_and_kill_tx_(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
@@ -203,16 +211,31 @@ private:
       ObTimeoutCtx &timeout_ctx);
   int kill_tx_(
       const uint64_t tenant_id,
-      const share::ObLSID &ls_id);
+      const share::ObLSID &ls_id,
+      const share::SCN &gts);
   int unblock_tx_(
       const uint64_t tenant_id,
-      const share::ObLSID &ls_id);
+      const share::ObLSID &ls_id,
+      const share::SCN &gts);
   int get_gts_(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id);
   int record_server_event_(const int32_t ret, const int64_t round, const share::ObTransferTaskInfo &task_info) const;
   int clear_prohibit_medium_flag_(const share::ObLSID &ls_id);
   int stop_ls_schedule_medium_(const share::ObLSID &ls_id, bool &succ_stop);
+  int get_next_tablet_info_(
+      const share::ObLSID &dest_ls_id,
+      const ObTransferTabletInfo &transfer_tablet_info,
+      ObTabletHandle &tablet_handle,
+      obrpc::ObCopyTabletInfo &tablet_info);
+  int clear_prohibit_(
+      const share::ObTransferTaskInfo &task_info,
+      const bool is_block_tx,
+      const bool is_medium_stop);
+  int get_config_version_(
+      palf::LogConfigVersion &config_version);
+  int check_config_version_(
+      const palf::LogConfigVersion &config_version);
 
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
@@ -228,6 +251,7 @@ private:
   int64_t retry_count_;
   ObTransferWorkerMgr transfer_worker_mgr_;
   int64_t round_;
+  share::SCN gts_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObTransferHandler);
 };
 }

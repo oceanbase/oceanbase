@@ -592,49 +592,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObCopySSTableMacroRangeObProducer);
 };
 
-class ObCopyTransferTabletInfoObReader
-{
-public:
-  ObCopyTransferTabletInfoObReader();
-  virtual ~ObCopyTransferTabletInfoObReader();
-  int init(
-      const ObStorageHASrcInfo &src_info,
-      const obrpc::ObTransferTabletInfoArg &rpc_arg,
-      obrpc::ObStorageRpcProxy &srv_rpc_proxy,
-      common::ObInOutBandwidthThrottle &bandwidth_throttle);
-  int fetch_tablet_info(obrpc::ObCopyTabletInfo &tablet_info);
-private:
-  bool is_inited_;
-  ObStorageStreamRpcReader<obrpc::OB_FETCH_TRANSFER_TABLET_INFO> rpc_reader_;
-  DISALLOW_COPY_AND_ASSIGN(ObCopyTransferTabletInfoObReader);
-};
-
-class ObCopyTransferTabletInfoObProducer
-{
-public:
-  ObCopyTransferTabletInfoObProducer();
-  virtual ~ObCopyTransferTabletInfoObProducer();
-  int init(
-      const uint64_t tenant_id,
-      const share::ObLSID &src_ls_id,
-      const share::ObLSID &dest_ls_id,
-      const common::ObIArray<share::ObTransferTabletInfo> &tablet_list);
-  int get_next_tablet_info(obrpc::ObCopyTabletInfo &tablet_info);
-private:
-  int get_next_tablet_info_(
-      const share::ObTransferTabletInfo &transfer_tablet_info,
-      ObTabletHandle &tablet_handle,
-      obrpc::ObCopyTabletInfo &tablet_info);
-private:
-  bool is_inited_;
-  share::ObLSID src_ls_id_;
-  share::ObLSID dest_ls_id_;
-  ObArray<share::ObTransferTabletInfo> tablet_list_;
-  int64_t tablet_index_;
-  ObLSHandle ls_handle_;
-  DISALLOW_COPY_AND_ASSIGN(ObCopyTransferTabletInfoObProducer);
-};
-
 class ObICopyLSViewInfoReader
 {
 public:

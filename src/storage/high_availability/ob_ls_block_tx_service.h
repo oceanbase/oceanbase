@@ -41,6 +41,8 @@ public:
   virtual int flush(share::SCN &scn) override final;
 
 public:
+  //Not thread safe
+  //Now only used for storage ha
   int ha_block_tx(const share::SCN &new_seq);
   int ha_kill_tx(const share::SCN &new_seq);
   int ha_unblock_tx(const share::SCN &new_seq);

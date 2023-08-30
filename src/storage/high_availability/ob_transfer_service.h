@@ -52,7 +52,6 @@ private:
   int64_t wakeup_cnt_;
   ObLSService *ls_service_;
   ObArray<share::ObLSID> ls_id_array_;
-
   DISALLOW_COPY_AND_ASSIGN(ObTransferService);
 };
 
