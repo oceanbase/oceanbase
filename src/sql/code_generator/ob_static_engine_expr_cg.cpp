@@ -229,7 +229,7 @@ int ObStaticEngineExprCG::cg_exprs(const ObIArray<ObRawExpr *> &raw_exprs,
     // cg_expr_parents must be after cg_expr_by_operator,
     // because cg_expr_by_operator may replace rt_expr.args_
     } else if (OB_FAIL(cg_expr_parents(raw_exprs))) {
-      LOG_WARN("fail to init expr parenets", K(ret), K(raw_exprs));
+      LOG_WARN("fail to init expr parents", K(ret), K(raw_exprs));
       // init res_buf_len_, frame_idx_, datum_off_, res_buf_off_
     } else if (OB_FAIL(cg_all_frame_layout(raw_exprs, expr_info))) {
       LOG_WARN("fail to init expr data layout", K(ret), K(raw_exprs));
@@ -614,8 +614,8 @@ int ObStaticEngineExprCG::cg_param_frame_layout(const ObIArray<ObRawExpr *> &par
         rt_expr->res_buf_off_ = 0;
         rt_expr->res_buf_len_ = 0;
         // 对于T_QUESTIONMARK的param表达式, 使用extra_记录其实际value在
-        // datam_param_store中下标,  通过该下标, 在执行期可以访问
-        // datum_param_store中存放的信息,
+        // data_param_store中下标,  通过该下标, 在执行期可以访问
+        // data_param_store中存放的信息,
         // 当前使用场景是在ObExprValuesOp中进行动态cast时,
         // 可以通过该下标最终获取参数化后原始参数值的类型;
         rt_expr->extra_ = param_idx;
@@ -701,7 +701,7 @@ int ObStaticEngineExprCG::cg_frame_layout_vector_version(const ObIArray<ObRawExp
     LOG_WARN("Failed to create tmp frame info", K(ret));
   }
 
-  // calulate the datums layout in each frame
+  // caculate the datums layout in each frame
   for (int64_t idx = 0; OB_SUCC(ret) && idx < tmp_frame_infos.count(); idx++) {
     const ObFrameInfo &frame = tmp_frame_infos.at(idx).frame_info_;
     int64_t expr_start_pos = tmp_frame_infos.at(idx).expr_start_pos_;
@@ -898,7 +898,7 @@ int ObStaticEngineExprCG::arrange_datums_data(ObIArray<ObRawExpr *> &exprs,
 {
   int ret = OB_SUCCESS;
   if (continuous_datum) {
-    // Layout1: Frame is seperated from meta part and data part.
+    // Layout1: Frame is separated from meta part and data part.
     // Meta part(datum header) are allocated continuously.
     // Reserved data/buf part are allocated continuously
     // Frame layouts:
@@ -987,7 +987,7 @@ int ObStaticEngineExprCG::arrange_datums_data(ObIArray<ObRawExpr *> &exprs,
     CK((total_header_len + expr_data_offset) == frame.frame_size_);
   } else {
     // Layout2: Frame is seperated by exprs
-    // All data(metas + reserved data/buf) within one expr are allocated continously
+    // All data(metas + reserved data/buf) within one expr are allocated continuously
     // Frame layouts:
     // +--------------------------------+
     // | Datums in Expr1                |
@@ -1297,7 +1297,7 @@ int ObStaticEngineExprCG::calc_exprs_res_buf_len(const ObIArray<ObRawExpr *> &ra
         rt_expr->res_buf_len_ = min(def_res_len,
                                     static_cast<uint32_t>(rt_expr->max_length_));
       } else {
-        // max_length may eaual -1
+        // max_length may equal -1
         rt_expr->res_buf_len_ = def_res_len;
       }
     } else {
@@ -1336,7 +1336,7 @@ int ObStaticEngineExprCG::create_tmp_frameinfo(const common::ObIArray<ObRawExpr 
       // FIXME: should never hit this block.
       // expr_datums_size larger than max frame size, means _rowsets_max_rows is tool large.
       // So far manually tune sys arg _rowsets_max_rows to a smaller value.
-      // Long term: create a function automaticly tune the datums size
+      // Long term: create a function automaticaly tune the datums size
       LOG_WARN("Frame allocation failure, please tune _rowsets_max_rows to a smaller number",
                 K(expr_datums_size));
       ret = OB_ERR_UNEXPECTED;

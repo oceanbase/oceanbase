@@ -1952,11 +1952,11 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
     }
     if (OB_SUCC(ret) && trigger_infos.count() > 0) {
       //why we need add extra 1, the reason is trigger can use rowid and now we don't mock rowid
-      //column schema, So, we must occupy the postition for rowid in advance.
-      int64_t expectd_col_cnt = lib::is_oracle_mode() ? table_schema->get_column_count() + 1 :
+      //column schema, So, we must occupy the positition for rowid in advance.
+      int64_t expected_col_cnt = lib::is_oracle_mode() ? table_schema->get_column_count() + 1 :
                                                         table_schema->get_column_count();
       if (is_instead_of) {
-        expectd_col_cnt = dml_stmt->get_instead_of_trigger_column_count();
+        expected_col_cnt = dml_stmt->get_instead_of_trigger_column_count();
       }
       trig_ctdef.tg_event_ = dml_event;
       ObTriggerInfo::ActionOrderComparator action_order_com;
@@ -1965,7 +1965,7 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
         ret = common::OB_ERR_UNEXPECTED;
         LOG_WARN("sort error", K(ret));
       }
-      OZ (trig_ctdef.trig_col_info_.init(expectd_col_cnt));
+      OZ (trig_ctdef.trig_col_info_.init(expected_col_cnt));
       OZ (trig_ctdef.tg_args_.init(trigger_infos.count()));
       for (int64_t i = 0; OB_SUCC(ret) && i < trigger_infos.count(); i++) {
         OZ (add_trigger_arg(*trigger_infos.at(i), dml_ctdef));
@@ -1986,25 +1986,25 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
       } else if (OB_FAIL(generate_updated_column_ids(log_op, assigns, column_ids, updated_column_ids))) {
         LOG_WARN("add updated column ids failed", K(ret), K(assigns));
       } else if (ObTriggerEvents::has_insert_event(dml_event)) {
-        OZ(trig_ctdef.new_row_exprs_.init(expectd_col_cnt));
+        OZ(trig_ctdef.new_row_exprs_.init(expected_col_cnt));
       } else if (ObTriggerEvents::has_delete_event(dml_event)) {
-        OZ(trig_ctdef.old_row_exprs_.init(expectd_col_cnt));
+        OZ(trig_ctdef.old_row_exprs_.init(expected_col_cnt));
       } else if (ObTriggerEvents::has_update_event(dml_event)) {
-        OZ(trig_ctdef.old_row_exprs_.init(expectd_col_cnt));
-        OZ(trig_ctdef.new_row_exprs_.init(expectd_col_cnt));
+        OZ(trig_ctdef.old_row_exprs_.init(expected_col_cnt));
+        OZ(trig_ctdef.new_row_exprs_.init(expected_col_cnt));
         LOG_DEBUG("update columns", K(updated_column_ids));
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected status: not supported", K(ret), K(op_type));
       }
-      if (OB_SUCC(ret) && OB_FAIL(trig_ctdef.trig_col_info_.init(expectd_col_cnt))) {
+      if (OB_SUCC(ret) && OB_FAIL(trig_ctdef.trig_col_info_.init(expected_col_cnt))) {
         LOG_WARN("failed to init trigger column info", K(ret));
       }
       ObTableSchema::const_column_iterator cs_iter = table_schema->column_begin();
       ObTableSchema::const_column_iterator cs_iter_end = table_schema->column_end();
       int64_t i = 0;
       int64_t col_idx = INT64_MAX;
-      int64_t total_count = is_instead_of ? expectd_col_cnt : table_schema->get_column_count();
+      int64_t total_count = is_instead_of ? expected_col_cnt : table_schema->get_column_count();
       for (i = 0; OB_SUCC(ret) && i < total_count; i++) {
         // how to calc cell_idx and proj_idx ?
         // see
@@ -2138,14 +2138,14 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
       } else if (!is_instead_of) {
         OV (i == table_schema->get_column_count() && cs_iter == cs_iter_end, OB_ERR_UNEXPECTED, i, table_schema->get_column_count());
       } else {
-        OV (i == expectd_col_cnt, OB_ERR_UNEXPECTED, i, expectd_col_cnt);
+        OV (i == expected_col_cnt, OB_ERR_UNEXPECTED, i, expected_col_cnt);
         if (dml_stmt->get_instead_of_trigger_column_count() != trig_ctdef.trig_col_info_.get_count()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected status: the column count of instead of trigger is not match",
             K(ret),
             K(dml_stmt->get_instead_of_trigger_column_count()),
             K(trig_ctdef.trig_col_info_.get_count()),
-            K(expectd_col_cnt));
+            K(expected_col_cnt));
         }
       }
       LOG_DEBUG("debug trigger", K(trig_ctdef.new_row_exprs_.count()),
@@ -2675,11 +2675,11 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
        * and spec is value table here.
        */
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("foreign key column id is not in colunm ids",
+      LOG_WARN("foreign key column id is not in column ids",
                 K(fk_arg), K(name_column_ids.at(i)), K(ret));
     } else if (!var_exist_in_array(column_ids, value_column_ids.at(i), fk_column.idx_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("foreign key column id is not in colunm ids",
+      LOG_WARN("foreign key column id is not in column ids",
                 K(fk_arg), K(value_column_ids.at(i)), K(ret));
     } else if (OB_FAIL(fk_arg.columns_.push_back(fk_column))) {
       LOG_WARN("failed to push foreign key column", K(fk_arg), K(fk_column), K(ret));
