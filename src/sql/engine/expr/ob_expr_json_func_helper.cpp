@@ -380,14 +380,16 @@ int ObJsonExprHelper::oracle_datum2_json_val(const ObDatum *json_datum,
 
       uint32_t parse_flag = ObJsonParser::JSN_RELAXED_FLAG;
       ObString j_str = json_datum->get_string();
+      ObString out_str;
       bool need_convert = (cs_type != CS_TYPE_INVALID && cs_type != CS_TYPE_BINARY);
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(
                     allocator, val_type, cs_type, data_meta.has_lob_header(), j_str))) {
         LOG_WARN("fail to get real data.", K(ret), K(j_str));
-      } else if (need_convert && OB_FAIL(ObExprUtil::convert_string_collation(j_str, cs_type, j_str, CS_TYPE_UTF8MB4_BIN, *allocator))) {
+      } else if (need_convert && OB_FAIL(ObExprUtil::convert_string_collation(j_str, cs_type, out_str, CS_TYPE_UTF8MB4_BIN, *allocator))) {
         LOG_WARN("fail to convert charset.", K(ret), K(j_str), K(cs_type));
-      } else if (!need_convert && OB_FAIL(deep_copy_ob_string(*allocator, j_str, j_str))) {
+      } else if ((!need_convert || out_str.ptr() == j_str.ptr()) && OB_FAIL(deep_copy_ob_string(*allocator, j_str, out_str))) {
         LOG_WARN("fail to deep copy string.", K(ret), K(j_str));
+      } else if (FALSE_IT(j_str.assign_ptr(out_str.ptr(), out_str.length()))) {
       } else if (!is_format_json || is_raw_type) {
         if (is_raw_type) {
           ObObj tmp_result;
