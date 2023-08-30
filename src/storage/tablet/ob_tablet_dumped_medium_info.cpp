@@ -62,6 +62,7 @@ int ObTabletDumpedMediumInfo::init(common::ObIAllocator &allocator)
     LOG_WARN("init twice", K(ret), K_(is_inited));
   } else {
     allocator_ = &allocator;
+    medium_info_list_.set_attr(lib::ObMemAttr(MTL_ID(), "mds_medium_info"));
     is_inited_ = true;
   }
 
