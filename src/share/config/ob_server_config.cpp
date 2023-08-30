@@ -225,12 +225,12 @@ int64_t ObServerMemoryConfig::get_adaptive_memory_config(const int64_t memory_si
                                                          AdaptiveMemConfig adap_mem_config)
 {
   // According to different memory_limit, the kernel can provide adaptive memory_size for default capacity.
-  static const int64_t      memory_limit_array[] = {4LL<<30, 12LL<<30, 20LL<<30, 36LL<<30, 60LL<<30, 80LL<<30, 100LL<<30, 120LL<<30, 130LL<<30};
-  static const int64_t     system_memory_array[] = {1LL<<30, 1LL<<30,  4LL<<30,  5LL<<30,  6LL<<30,  7LL<<30,  8LL<<30,   9LL<<30,   9LL<<30};
-  static const int64_t hidden_sys_memory_array[] = {1LL<<30, 1LL<<30,  1LL<<30,  1LL<<30,  2LL<<30,  2LL<<30,  2LL<<30,   3LL<<30,   3LL<<30};
+  static const int64_t      memory_limit_array[] = {4LL<<30, 12LL<<30, 20LL<<30, 40LL<<30, 60LL<<30, 80LL<<30, 100LL<<30, 130LL<<30};
+  static const int64_t     system_memory_array[] = {1LL<<30,  5LL<<30,  6LL<<30,  7LL<<30,  8LL<<30,  9LL<<30,  10LL<<30,  11LL<<30};
+  static const int64_t hidden_sys_memory_array[] = {1LL<<30,  2LL<<30,  2LL<<30,  3LL<<30,  3LL<<30,  4LL<<30,   4LL<<30,   4LL<<30};
   static const int64_t array_size = ARRAYSIZEOF(memory_limit_array);
 
-  int64_t adap_memory_size = 0;
+  int64_t adap_memory_size = 1LL<<30;
   int64_t dep_memory_limit = 0;
   const int64_t *dep_array = NULL;
   switch (dep_mem_config) {
@@ -245,9 +245,9 @@ int64_t ObServerMemoryConfig::get_adaptive_memory_config(const int64_t memory_si
   }
   if (memory_size < dep_array[array_size - 1]) {
     // When memory_limit < 130G, adaptive memory is calculated by array.
-    // For example, memory_limit = 16G, adaptive system_memory and hidden_sys_memory are 1G and 1G.
-    for (int i = 0; i < array_size; ++i) {
-      if (memory_size < dep_array[i]) {
+    // For example, memory_limit = 16G, adaptive system_memory and hidden_sys_memory are 5G and 2G.
+    for (int i = array_size - 1; i >= 0; --i) {
+      if (memory_size >= dep_array[i]) {
         switch (adap_mem_config) {
           case ADAPTIVE_SYSTEM_MEMORY:
             adap_memory_size = system_memory_array[i];
@@ -260,7 +260,7 @@ int64_t ObServerMemoryConfig::get_adaptive_memory_config(const int64_t memory_si
       }
     }
   } else {
-    // When memory_limit >= 130G or system_memory >= 9G, system_memory = memory_limit*0.08, hidden_sys_memory = memory_limit*0.03.
+    // When memory_limit >= 130G or system_memory >= 11G, system_memory = memory_limit*0.08, hidden_sys_memory = memory_limit*0.03.
     // For example, memory_limit = 200G, adaptive system_memory and hidden_sys_memory are 16G and 6G.
     switch (adap_mem_config) {
       case ADAPTIVE_SYSTEM_MEMORY:
