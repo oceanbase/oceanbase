@@ -368,7 +368,7 @@ int ObMetaPointer<T>::deserialize(
     STORAGE_LOG(WARN, "invalid argument", K(ret), KP(buf), K(buf_len), KP(t));
   } else if (OB_FAIL(set_attr_for_obj(t))) {
     STORAGE_LOG(WARN, "fail to set attr for obj", K(ret));
-  } else if (OB_FAIL(t->deserialize(allocator, buf, buf_len, pos))) {
+  } else if (OB_FAIL(t->load_deserialize(allocator, buf, buf_len, pos))) {
     STORAGE_LOG(WARN, "fail to de-serialize T", K(ret), KP(buf), K(buf_len), KP(t));
   }
   return ret;

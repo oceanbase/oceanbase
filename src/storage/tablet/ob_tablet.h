@@ -228,6 +228,13 @@ public:
   // serialize & deserialize
   int serialize(char *buf, const int64_t len, int64_t &pos) const;
   // for normal tablet deserialize
+  int load_deserialize(
+      common::ObArenaAllocator &allocator,
+      const char *buf,
+      const int64_t len,
+      int64_t &pos);
+  int deserialize_post_work(
+      common::ObArenaAllocator &allocator);
   int deserialize(
       common::ObArenaAllocator &allocator,
       const char *buf,
