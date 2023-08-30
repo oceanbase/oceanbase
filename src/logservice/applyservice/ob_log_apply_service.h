@@ -263,6 +263,7 @@ private:
   ObMiniStat::ObStatItem cb_wait_thread_stat_; //等待首次线程调度的耗时, 此次处理不一定会回调
   ObMiniStat::ObStatItem cb_wait_commit_stat_; //从第一次被处理到真正回调之间的耗时
   ObMiniStat::ObStatItem cb_execute_stat_; //cb执行on_success/on_failure的耗时
+  ObMiniStat::ObStatItem cb_stat_; //cb从产生到执行on_success的耗时
 };
 
 class ObLogApplyService : public lib::TGTaskHandler

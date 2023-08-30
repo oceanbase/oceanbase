@@ -269,7 +269,8 @@ ObApplyStatus::ObApplyStatus()
       cb_append_stat_("[APPLY STAT CB APPEND COST TIME]", 5 * 1000 * 1000),
       cb_wait_thread_stat_("[APPLY STAT CB IN QUEUE TIME]", 5 * 1000 * 1000),
       cb_wait_commit_stat_("[APPLY STAT CB WAIT COMMIT TIME]", 5 * 1000 * 1000),
-      cb_execute_stat_("[APPLY STAT CB EXECUTE TIME]", 5 * 1000 * 1000)
+      cb_execute_stat_("[APPLY STAT CB EXECUTE TIME]", 5 * 1000 * 1000),
+      cb_stat_("[APPLY STAT CB TOTAL TIME]", 5 * 1000 * 1000)
 {
 }
 
@@ -925,10 +926,11 @@ void ObApplyStatus::statistics_cb_cost_(const LSN &lsn,
     cb_wait_thread_stat_.stat(cb_wait_thread_time);
     cb_wait_commit_stat_.stat(cb_wait_commit_time);
     cb_execute_stat_.stat(cb_cost_time);
+    cb_stat_.stat(total_cost_time);
     if (total_cost_time > 1000 * 1000) { //1s
       CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "cb cost too much time", K(lsn), K(scn), K(idx), K(total_cost_time), K(append_cost_time),
                K(cb_wait_thread_time), K(cb_wait_commit_time), K(cb_cost_time), K(append_start_time), K(append_finish_time),
-               K(cb_first_handle_time), K(cb_first_handle_time), K(cb_finish_time));
+               K(cb_first_handle_time), K(cb_finish_time));
     }
   }
 }

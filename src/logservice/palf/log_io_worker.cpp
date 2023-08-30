@@ -429,6 +429,8 @@ int LogIOWorker::BatchLogIOFlushLogTaskMgr::handle(const int64_t tg_id, IPalfEnv
       ret = OB_ERR_UNEXPECTED;
       PALF_LOG(ERROR, "BatchLogIOFlushLogTask in batch_io_task_array_ is nullptr, unexpected error!!!",
                K(ret), KP(io_task), K(i));
+    } else if (OB_FAIL(statistics_wait_cost_(first_handle_ts, io_task))) {
+      PALF_LOG(WARN, "do statistics failed", K(ret));
     } else if (OB_FAIL(io_task->do_task(tg_id, palf_env_impl))) {
       PALF_LOG(WARN, "do_task failed", K(ret), KP(io_task));
     } else {
@@ -515,5 +517,30 @@ bool LogIOWorker::has_purge_throttling_tasks_() const
   }
   return submitted_seq != handled_seq;
 }
+
+int LogIOWorker::BatchLogIOFlushLogTaskMgr::statistics_wait_cost_(int64_t first_handle_ts, BatchLogIOFlushLogTask *batch_io_task)
+{
+  int ret = OB_SUCCESS;
+  BatchLogIOFlushLogTask::BatchIOTaskArray batch_io_task_array;
+  batch_io_task->get_io_task_array(batch_io_task_array);
+  int64_t total_wait_cost = 0;
+  int64_t cnt = batch_io_task_array.count();
+  for (int64_t i = 0; i < cnt; i++) {
+    LogIOFlushLogTask *io_flush_task = batch_io_task_array[i];
+    if (OB_ISNULL(io_flush_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(ERROR, "io_flush_task is nullptr, unpexected error", K(ret), KP(io_flush_task), KPC(this));
+      break;
+    } else {
+      int64_t init_task_ts = io_flush_task->get_init_task_ts();
+      total_wait_cost += first_handle_ts - init_task_ts;
+    }
+  }
+  if (OB_SUCC(ret) && cnt > 0) {
+    wait_cost_stat_->stat(cnt, total_wait_cost);
+  }
+  return ret;
+}
+
 } // end namespace palf
 } // end namespace oceanbase

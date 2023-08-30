@@ -321,36 +321,31 @@ STAT_EVENT_ADD_DEF(LS_ALL_TABLE_OPERATOR_GET_COUNT, "log stream table operator g
 STAT_EVENT_ADD_DEF(LS_ALL_TABLE_OPERATOR_GET_TIME, "log stream table operator get time", ObStatClassIds::DEBUG, 70007, false, true)
 
 //CLOG 80001 ~ 90000
-STAT_EVENT_ADD_DEF(CLOG_RPC_COUNT, "clog rpc count", ObStatClassIds::CLOG, 80023, false, true)
-STAT_EVENT_ADD_DEF(CLOG_RPC_REQUEST_HANDLE_TIME, "clog rpc request handle time", ObStatClassIds::CLOG, 80025, false, true)
-STAT_EVENT_ADD_DEF(CLOG_RPC_REQUEST_COUNT, "clog rpc request count", ObStatClassIds::CLOG, 80026, false, true)
-STAT_EVENT_ADD_DEF(CLOG_WRITE_COUNT, "clog write count", ObStatClassIds::CLOG, 80040, false, true)
-STAT_EVENT_ADD_DEF(CLOG_WRITE_TIME, "clog write time", ObStatClassIds::CLOG, 80041, false, true)
+STAT_EVENT_ADD_DEF(PALF_WRITE_IO_COUNT, "palf write io count to disk",  ObStatClassIds::CLOG, 80001, true, true)
+STAT_EVENT_ADD_DEF(PALF_WRITE_SIZE, "palf write size to disk",  ObStatClassIds::CLOG, 80002, true, true)
+STAT_EVENT_ADD_DEF(PALF_WRITE_TIME, "palf write total time to disk", ObStatClassIds::CLOG, 80003, true, true)
+STAT_EVENT_ADD_DEF(PALF_READ_COUNT_FROM_CACHE, "palf read count from cache", ObStatClassIds::CLOG, 80004, true, true)
+STAT_EVENT_ADD_DEF(PALF_READ_SIZE_FROM_CACHE, "palf read size from cache", ObStatClassIds::CLOG, 80005, true, true)
+STAT_EVENT_ADD_DEF(PALF_READ_TIME_FROM_CACHE, "palf read total time from cache", ObStatClassIds::CLOG, 80006, true, true)
+STAT_EVENT_ADD_DEF(PALF_READ_IO_COUNT_FROM_DISK, "palf read io count from disk", ObStatClassIds::CLOG, 80007, true, true)
+STAT_EVENT_ADD_DEF(PALF_READ_SIZE_FROM_DISK, "palf read size from disk", ObStatClassIds::CLOG, 80008, true, true)
+STAT_EVENT_ADD_DEF(PALF_READ_TIME_FROM_DISK, "palf read total time from disk", ObStatClassIds::CLOG, 80009, true, true)
+STAT_EVENT_ADD_DEF(PALF_HANDLE_RPC_REQUEST_COUNT, "palf handle rpc request count", ObStatClassIds::CLOG, 80010, true, true)
+STAT_EVENT_ADD_DEF(ARCHIVE_READ_LOG_SIZE, "archive read log size", ObStatClassIds::CLOG, 80011, true, true)
+STAT_EVENT_ADD_DEF(ARCHIVE_WRITE_LOG_SIZE, "archive write log size", ObStatClassIds::CLOG, 80012, true, true)
+STAT_EVENT_ADD_DEF(RESTORE_READ_LOG_SIZE, "restore read log size", ObStatClassIds::CLOG, 80013, true, true)
+STAT_EVENT_ADD_DEF(RESTORE_WRITE_LOG_SIZE, "restore write log size", ObStatClassIds::CLOG, 80014, true, true)
 STAT_EVENT_ADD_DEF(CLOG_TRANS_LOG_TOTAL_SIZE, "clog trans log total size", ObStatClassIds::CLOG, 80057, false, true)
-
-// 80100
-STAT_EVENT_ADD_DEF(PALF_APPEND_LOG_ENTRY_COUNT, "palf append log entry count", ObStatClassIds::CLOG, 80100, true, true)
-STAT_EVENT_ADD_DEF(PALF_APPEND_LOG_SIZE, "palf append log size", ObStatClassIds::CLOG, 80101, true, true)
-STAT_EVENT_ADD_DEF(PALF_WRITE_LOG_SIZE_TO_DISK, "palf write log size to disk",  ObStatClassIds::CLOG, 80102, true, true)
-// TODO(fankun.fan): Add this statistic after log4200 is merged
-// STAT_EVENT_ADD_DEF(PALF_READ_LOG_SIZE_FROM_CACHE, "palf read log size from cache", ObStatClassIds::CLOG, 80103, true, true)
-STAT_EVENT_ADD_DEF(PALF_READ_LOG_SIZE_FROM_DISK, "palf read log size from disk", ObStatClassIds::CLOG, 80104, true, true)
-STAT_EVENT_ADD_DEF(PALF_HANDLE_RPC_REQUEST_COUNT, "palf handle rpc request count", ObStatClassIds::CLOG, 80105, true, true)
-STAT_EVENT_ADD_DEF(ARCHIVE_READ_LOG_SIZE, "archive read log size", ObStatClassIds::CLOG, 80106, true, true)
-STAT_EVENT_ADD_DEF(ARCHIVE_WRITE_LOG_SIZE, "archive write log size", ObStatClassIds::CLOG, 80107, true, true)
-STAT_EVENT_ADD_DEF(RESTORE_READ_LOG_SIZE, "restore read log size", ObStatClassIds::CLOG, 80108, true, true)
-STAT_EVENT_ADD_DEF(RESTORE_WRITE_LOG_SIZE, "restore write log size", ObStatClassIds::CLOG, 80109, true, true)
 
 // CLOG.EXTLOG 81001 ~ 90000
 STAT_EVENT_ADD_DEF(CLOG_EXTLOG_FETCH_LOG_SIZE, "external log service fetch log size", ObStatClassIds::CLOG, 81001, false, true)
 STAT_EVENT_ADD_DEF(CLOG_EXTLOG_FETCH_LOG_COUNT, "external log service fetch log count", ObStatClassIds::CLOG, 81002, false, true)
 STAT_EVENT_ADD_DEF(CLOG_EXTLOG_FETCH_RPC_COUNT, "external log service fetch rpc count", ObStatClassIds::CLOG, 81003, false, true)
 
-//CLOG.REPLAY
+// CLOG.REPLAY
 
 
-//CLOG.PROXY
-
+// CLOG.PROXY
 
 // ELECTION
 

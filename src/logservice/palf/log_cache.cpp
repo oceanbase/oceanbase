@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX PALF
+#include "lib/stat/ob_session_stat.h"
 #include "log_cache.h"
 #include "palf_handle_impl.h"
 
@@ -70,6 +71,7 @@ int LogHotCache::read(const LSN &read_begin_lsn,
   int ret = OB_SUCCESS;
   int64_t read_size = 0, hit_cnt = 0, read_cnt = 0;
   out_read_size = 0;
+  int64_t start_ts = ObTimeUtility::fast_current_time();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (!read_begin_lsn.is_valid() || in_read_size <= 0 || OB_ISNULL(buf)) {
@@ -83,8 +85,12 @@ int LogHotCache::read(const LSN &read_begin_lsn,
           K(in_read_size));
     }
   } else {
+    int64_t cost_ts = ObTimeUtility::fast_current_time() - start_ts;
     hit_cnt = ATOMIC_AAF(&hit_count_, 1);
     read_size = ATOMIC_AAF(&read_size_, out_read_size);
+    EVENT_TENANT_INC(ObStatEventIds::PALF_READ_COUNT_FROM_CACHE, MTL_ID());
+    EVENT_ADD(ObStatEventIds::PALF_READ_SIZE_FROM_CACHE, out_read_size);
+    EVENT_ADD(ObStatEventIds::PALF_READ_TIME_FROM_CACHE, cost_ts);
     PALF_LOG(TRACE, "read_data_from_buffer success", K(ret), K_(palf_id), K(read_begin_lsn),
         K(in_read_size), K(out_read_size));
   }

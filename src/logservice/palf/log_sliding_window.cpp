@@ -119,7 +119,7 @@ LogSlidingWindow::LogSlidingWindow()
     is_rebuilding_(false),
     last_rebuild_lsn_(),
     last_record_end_lsn_(PALF_INITIAL_LSN_VAL),
-    fs_cb_cost_stat_("[PALF STAT FS CB]", PALF_STAT_PRINT_INTERVAL_US),
+    fs_cb_cost_stat_("[PALF STAT FS CB EXCUTE COST TIME]", PALF_STAT_PRINT_INTERVAL_US),
     log_life_time_stat_("[PALF STAT LOG LIFE TIME]", PALF_STAT_PRINT_INTERVAL_US),
     accum_slide_log_cnt_(0),
     accum_log_gen_to_freeze_cost_(0),

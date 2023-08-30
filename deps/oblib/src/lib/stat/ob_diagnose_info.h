@@ -276,6 +276,9 @@ private:
   EVENT_ADD(stat_no, value);
 
 #define EVENT_INC(stat_no) EVENT_ADD(stat_no, 1)
+
+#define EVENT_TENANT_INC(stat_no, tenant_id) EVENT_TENANT_ADD(stat_no, 1, tenant_id)
+
 #define EVENT_DEC(stat_no) EVENT_ADD(stat_no, -1)
 
 #define EVENT_SET(stat_no, value)                               \

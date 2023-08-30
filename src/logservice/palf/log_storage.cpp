@@ -15,8 +15,7 @@
 #include "lib/ob_errno.h"             // OB_INVALID_ARGUMENT
 #include "lib/stat/ob_session_stat.h" // Session
 #include "log_reader_utils.h"         // ReadBuf
-#include "palf_handle_impl.h"        // LogHotCache
-#include "share/rc/ob_tenant_base.h"
+#include "palf_handle_impl.h"         // LogHotCache
 #include "share/scn.h"
 
 namespace oceanbase
@@ -40,6 +39,10 @@ LogStorage::LogStorage() :
     update_manifest_cb_(),
     plugins_(NULL),
     hot_cache_(NULL),
+    last_accum_read_statistic_time_(OB_INVALID_TIMESTAMP),
+    accum_read_io_count_(0),
+    accum_read_log_size_(0),
+    accum_read_cost_ts_(0),
     is_inited_(false)
 {}
 
@@ -115,7 +118,9 @@ void LogStorage::destroy()
   log_reader_.destroy();
   block_mgr_.destroy();
   last_accum_read_statistic_time_ = OB_INVALID_TIMESTAMP;
+  accum_read_io_count_ = 0;
   accum_read_log_size_ = 0;
+  accum_read_cost_ts_ = 0;
   PALF_LOG(INFO, "LogStorage destroy success");
 }
 
@@ -852,6 +857,7 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
   const offset_t read_offset = lsn_2_offset(read_lsn, logical_block_size_);
   const offset_t real_read_offset =
     read_offset == 0 && true ==  need_read_log_block_header ? 0 : get_phy_offset_(read_lsn);
+  const int64_t start_ts = ObTimeUtility::fast_current_time();
 
   if (read_lsn >= log_tail) {
     ret = OB_ERR_OUT_OF_UPPER_BOUND;
@@ -873,11 +879,20 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
              K(read_lsn),
              K(out_read_size),
              K(log_tail));
-    EVENT_TENANT_ADD(ObStatEventIds::PALF_READ_LOG_SIZE_FROM_DISK, out_read_size, MTL_ID());
+    const int64_t cost_ts = ObTimeUtility::fast_current_time() - start_ts;
+    EVENT_TENANT_INC(ObStatEventIds::PALF_READ_IO_COUNT_FROM_DISK, MTL_ID());
+    EVENT_ADD(ObStatEventIds::PALF_READ_SIZE_FROM_DISK, out_read_size);
+    EVENT_ADD(ObStatEventIds::PALF_READ_TIME_FROM_DISK, cost_ts);
+    ATOMIC_INC(&accum_read_io_count_);
     ATOMIC_AAF(&accum_read_log_size_, out_read_size);
-    if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, last_accum_read_statistic_time_)) {
-      PALF_LOG(INFO, "[PALF STAT READ LOG SIZE FROM DISK]", KPC(this), K(accum_read_log_size_));
+    ATOMIC_AAF(&accum_read_cost_ts_, cost_ts);
+    if (palf_reach_time_interval(PALF_IO_STAT_PRINT_INTERVAL_US, last_accum_read_statistic_time_)) {
+      const int64_t avg_pread_cost = accum_read_cost_ts_ / accum_read_io_count_;
+      PALF_LOG(INFO, "[PALF STAT READ LOG INFO FROM DISK]", KPC(this), K_(accum_read_io_count),
+          K_(accum_read_log_size), K(avg_pread_cost));
+      ATOMIC_STORE(&accum_read_io_count_, 0);
       ATOMIC_STORE(&accum_read_log_size_, 0);
+      ATOMIC_STORE(&accum_read_cost_ts_, 0);
     }
   }
 

@@ -200,7 +200,9 @@ private:
   char block_header_serialize_buf_[MAX_INFO_BLOCK_SIZE];
   LogHotCache *hot_cache_;
   int64_t last_accum_read_statistic_time_;
+  int64_t accum_read_io_count_;
   int64_t accum_read_log_size_;
+  int64_t accum_read_cost_ts_;
   bool is_inited_;
 };
 

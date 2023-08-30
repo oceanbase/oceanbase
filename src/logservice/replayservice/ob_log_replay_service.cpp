@@ -168,8 +168,8 @@ ObLogReplayService::ObLogReplayService()
     replayable_point_(),
     replay_status_map_(),
     pending_replay_log_size_(0),
-    wait_cost_stat_("[REPLAY STAT REPLAY TASK IN QUEUE TIME]", 1 * 1000 * 1000L),
-    replay_cost_stat_("[REPLAY STAT REPLAY TASK EXECUTE COST TIME]", 1 * 1000 * 1000L)
+    wait_cost_stat_("[REPLAY STAT REPLAY TASK IN QUEUE TIME]", PALF_STAT_PRINT_INTERVAL_US),
+    replay_cost_stat_("[REPLAY STAT REPLAY TASK EXECUTE COST TIME]", PALF_STAT_PRINT_INTERVAL_US)
   {}
 
 ObLogReplayService::~ObLogReplayService()

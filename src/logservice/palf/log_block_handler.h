@@ -157,8 +157,6 @@ private:
   int64_t total_write_size_;
   int64_t total_write_size_after_dio_;
   int64_t ob_pwrite_used_ts_;
-  int64_t last_accum_write_statistic_time_;
-  int64_t accum_write_disk_size_;
   int64_t count_;
   int64_t trace_time_;
   int dir_fd_;
