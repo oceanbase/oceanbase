@@ -120,6 +120,8 @@
 #define ob_tolower(s, c) (uchar)((s)->to_lower[(uchar)(c)])
 #define ob_sort_order(s,c) (uchar)((s)->sort_order[(uchar)(c)])
 
+#define is_valid_ascii(e) (0x00<=(uchar)(e) && (uchar)(e)<=0x7F)
+
 struct ObCharsetInfo;
 struct ObUCAInfo;
 struct ObContractions;

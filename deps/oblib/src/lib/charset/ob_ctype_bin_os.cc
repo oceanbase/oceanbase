@@ -225,10 +225,11 @@ static size_t
 ob_strnxfrm_8bit_bin(const ObCharsetInfo *cs,
                      unsigned char * dst, size_t dstlen, unsigned int nweights,
                      const unsigned char *src, size_t srclen, unsigned int flags,
-                     bool *is_valid_unicode __attribute__((unused)))
+                     bool *is_valid_unicode)
 {
   set_if_smaller(srclen, dstlen);
   set_if_smaller(srclen, nweights);
+  *is_valid_unicode = 1;
   if (dst != src) {
     memcpy(dst, src, srclen);
   }

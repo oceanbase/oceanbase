@@ -926,6 +926,7 @@ static size_t ob_strnxfrm_simple(const ObCharsetInfo* cs __attribute__((unused))
   frmlen = frmlen > srclen ? srclen : frmlen;
   end = src + frmlen;
   remainder = src + (frmlen % 8);
+  *is_valid_unicode = 1;
   for (; src < remainder;) *dst++ = ob_sort_order(cs,*src++);
   while(src < end) {
     *dst++ = ob_sort_order(cs,*src++);
