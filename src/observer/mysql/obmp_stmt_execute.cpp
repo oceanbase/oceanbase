@@ -736,10 +736,7 @@ int ObMPStmtExecute::parse_request_param_value(ObIAllocator &alloc,
   } else {
     param.set_type(ob_type);
     param.set_param_meta();
-    bool is_null = ObSMUtils::update_from_bitmap(param, bitmap, idx);
-    if (is_null) {
-      LOG_DEBUG("param is null", K(idx), K(param), K(param_type));
-    } else if (OB_FAIL(parse_param_value(alloc,
+    if (OB_FAIL(parse_param_value(alloc,
                                          param_type,
                                          charset,
                                          is_oracle_mode() ? cs_server : cs_conn,
@@ -748,6 +745,7 @@ int ObMPStmtExecute::parse_request_param_value(ObIAllocator &alloc,
                                          session->get_timezone_info(),
                                          &param_type_info,
                                          param,
+                                         bitmap,
                                          idx))) {
       LOG_WARN("get param value failed", K(param));
     } else {
@@ -2477,6 +2475,7 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
                                        const common::ObTimeZoneInfo *tz_info,
                                        TypeInfo *type_info,
                                        ObObjParam &param,
+                                       const char *bitmap,
                                        int16_t param_id)
 {
   int ret = OB_SUCCESS;
@@ -2494,7 +2493,10 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
   } else if (OB_ISNULL(piece_cache) || OB_ISNULL(piece)) {
     // send piece data will init piece cache
     // if piece cache is null, it must not be send piece protocol
-    if (OB_UNLIKELY(MYSQL_TYPE_COMPLEX == type)) {
+    bool is_null = ObSMUtils::update_from_bitmap(param, bitmap, param_id);
+    if (is_null) {
+      LOG_DEBUG("param is null", K(param_id), K(param), K(type));
+    } else if (OB_UNLIKELY(MYSQL_TYPE_COMPLEX == type)) {
       if (OB_FAIL(parse_complex_param_value(allocator, charset, cs_type, ncs_type,
                                             data, tz_info, type_info,
                                             param))) {
