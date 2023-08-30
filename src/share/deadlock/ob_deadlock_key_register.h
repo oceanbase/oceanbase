@@ -11,7 +11,7 @@
  */
 
 #ifdef NEED_DEFINE
-#include "../unittest/share/deadlock/test_key.h"// module unittest
+#include "share/deadlock/test/test_key.h"// module unittest
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tablelock/ob_table_lock_deadlock.h"
 #endif

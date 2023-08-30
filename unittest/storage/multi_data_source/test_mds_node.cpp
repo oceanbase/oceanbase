@@ -25,7 +25,6 @@
 #include "storage/multi_data_source/runtime_utility/mds_factory.h"
 #include "common/ob_clock_generator.h"
 #include "storage/multi_data_source/mds_node.h"
-#include "example_user_helper_define.cpp"
 #include "common/meta_programming/ob_type_traits.h"
 #include "storage/multi_data_source/mds_row.h"
 namespace oceanbase {

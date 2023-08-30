@@ -14,7 +14,6 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "multi_data_source/example_user_data_define.h"
 #include "share/ob_ls_id.h"
 #include "storage/multi_data_source/mds_writer.h"
 #include <thread>
@@ -22,7 +21,6 @@
 #include <vector>
 #include <chrono>
 #include <exception>
-#include "common_define.h"
 #include "lib/ob_errno.h"
 #include "share/ob_errno.h"
 #include "storage/multi_data_source/adapter_define/mds_dump_node.h"
@@ -33,7 +31,6 @@
 #include "storage/multi_data_source/mds_unit.h"
 #include "storage/multi_data_source/mds_table_handle.h"
 #include "storage/multi_data_source/mds_table_handler.h"
-#include "example_user_helper_define.cpp"
 #include "storage/tx/ob_trans_define.h"
 #include <algorithm>
 #include <numeric>

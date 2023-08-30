@@ -16,7 +16,7 @@
 #define protected public
 #include "share/deadlock/ob_deadlock_key_wrapper.h"
 #include "share/deadlock/ob_deadlock_detector_mgr.h"
-#include "test_key.h"
+#include "share/deadlock/test/test_key.h"
 #include <string>
 #include <iostream>
 #include <thread>

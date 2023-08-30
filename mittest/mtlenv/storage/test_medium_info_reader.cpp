@@ -25,7 +25,6 @@
 #include "unittest/storage/test_tablet_helper.h"
 #include "unittest/storage/test_dml_common.h"
 #include "unittest/storage/init_basic_struct.h"
-#include "unittest/storage/multi_data_source/common_define.h"
 #include "unittest/storage/schema_utils.h"
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
 #include "storage/tablet/ob_tablet_persister.h"

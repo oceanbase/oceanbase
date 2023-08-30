@@ -16,7 +16,6 @@
 #include <exception>
 #define private public
 #define protected public
-#include "common_define.h"
 #include "lib/allocator/ob_malloc.h"
 #include "storage/multi_data_source/mds_node.h"
 #include <thread>

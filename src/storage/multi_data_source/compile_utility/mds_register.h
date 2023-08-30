@@ -9,8 +9,8 @@
 #if defined (NEED_MDS_REGISTER_DEFINE) && !defined (NEED_GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION)
   #include "src/storage/multi_data_source/compile_utility/mds_dummy_key.h"
   #include "src/storage/multi_data_source/mds_ctx.h"
-  #include "unittest/storage/multi_data_source/example_user_data_define.h"
-  #include "unittest/storage/multi_data_source/example_user_helper_define.h"
+  #include "src/storage/multi_data_source/test/example_user_data_define.h"
+  #include "src/storage/multi_data_source/test/example_user_helper_define.h"
   #include "src/storage/tablet/ob_tablet_create_delete_mds_user_data.h"
   #include "src/storage/tablet/ob_tablet_create_mds_helper.h"
   #include "src/storage/tablet/ob_tablet_delete_mds_helper.h"

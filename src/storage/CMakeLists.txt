@@ -568,6 +568,7 @@ ob_set_subtarget(ob_storage multi_data_source
   multi_data_source/ob_mds_table_merge_dag.cpp
   multi_data_source/ob_mds_table_merge_dag_param.cpp
   multi_data_source/ob_mds_table_merge_task.cpp
+  multi_data_source/test/example_user_helper_define.cpp
 )
 
 ob_set_subtarget(ob_storage tablelock

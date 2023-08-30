@@ -27,9 +27,6 @@
 #include "storage/multi_data_source/runtime_utility/mds_factory.h"
 #include "common/ob_clock_generator.h"
 #include "storage/multi_data_source/mds_node.h"
-#include "unittest/storage/multi_data_source/common_define.h"
-#include "unittest/storage/multi_data_source/example_user_data_define.h"
-#include "unittest/storage/multi_data_source/example_user_helper_define.h"
 #include "storage/multi_data_source/mds_table_handle.h"
 #include "storage/tablet/ob_tablet_meta.h"
 #define MIT_TESTCASE_LABEL

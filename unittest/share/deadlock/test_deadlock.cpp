@@ -23,7 +23,7 @@
 #include "share/deadlock/ob_lcl_scheme/ob_lcl_message.h"
 #include "lib/function/ob_function.h"
 #include "common/ob_clock_generator.h"
-#include "share/deadlock/test_key.h"
+#include "share/deadlock/test/test_key.h"
 #include <string>
 #include <iostream>
 #include <thread>

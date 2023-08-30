@@ -18,7 +18,6 @@
 #define protected public
 #define private public
 #include "ob_tablet_id.h"
-#include "storage/multi_data_source/common_define.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "lib/utility/serialization.h"
 #include "share/cache/ob_kv_storecache.h"
@@ -27,7 +26,6 @@
 #include "storage/multi_data_source/mds_table_handle.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tablet/ob_tablet.h"
-#include "unittest/storage/multi_data_source/example_user_helper_define.cpp"
 #include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
 
 namespace oceanbase

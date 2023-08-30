@@ -15,7 +15,6 @@
 #include "lib/utility/utility.h"
 #include "share/ob_errno.h"
 #include <exception>
-#include "common_define.h"
 #include "lib/allocator/ob_malloc.h"
 #include "storage/multi_data_source/mds_node.h"
 #include <thread>

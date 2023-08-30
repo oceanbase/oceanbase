@@ -9,8 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
-#include "multi_data_source/example_user_data_define.h"
 #include "share/ob_errno.h"
 #include <gtest/gtest.h>
 
