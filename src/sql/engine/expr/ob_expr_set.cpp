@@ -88,11 +88,8 @@ int ObExprSet::eval_coll(const ObObj &obj, ObExecContext &ctx, pl::ObPLNestedTab
   ObIAllocator *collection_allocator = NULL;
   ObObj *data_arr = NULL;
   int64_t elem_count = 0;
-  coll = static_cast<pl::ObPLNestedTable*>(allocator.alloc(sizeof(pl::ObPLNestedTable)));
-  if (OB_ISNULL(coll)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("alloc memory failed.", K(ret));
-  } else if (OB_ISNULL(c1)) {
+
+  if (OB_ISNULL(c1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("union udt failed due to null udt", K(ret), K(obj));
   } else if (pl::PL_NESTED_TABLE_TYPE != c1->get_type()) {
@@ -103,20 +100,26 @@ int ObExprSet::eval_coll(const ObObj &obj, ObExecContext &ctx, pl::ObPLNestedTab
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("union udt failed due to null udt", K(ret), K(c1->get_count()), K(c1->is_inited()));
   } else {
-    coll = new(coll)pl::ObPLNestedTable(c1->get_id());
-    collection_allocator =
-                static_cast<ObIAllocator*>(allocator.alloc(sizeof(pl::ObPLCollAllocator)));
-    collection_allocator = new(collection_allocator)pl::ObPLCollAllocator(coll);
-    if (OB_ISNULL(collection_allocator)) {
+    coll = static_cast<pl::ObPLNestedTable*>(allocator.alloc(sizeof(pl::ObPLNestedTable)));
+    if (OB_ISNULL(coll)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("alloc pl collection allocator failed.", K(ret));
+      LOG_WARN("alloc memory failed.", K(ret));
     } else {
-      if (OB_FAIL(ObExprMultiSet::calc_ms_one_distinct(collection_allocator,
-                                                        reinterpret_cast<ObObj *>(c1->get_data()),
-                                                        c1->get_count(),
-                                                        data_arr,
-                                                        elem_count))) {
-        LOG_WARN("failed to distinct nest table", K(ret));
+      coll = new(coll)pl::ObPLNestedTable(c1->get_id());
+      collection_allocator =
+                  static_cast<ObIAllocator*>(allocator.alloc(sizeof(pl::ObPLCollAllocator)));
+      collection_allocator = new(collection_allocator)pl::ObPLCollAllocator(coll);
+      if (OB_ISNULL(collection_allocator)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc pl collection allocator failed.", K(ret));
+      } else {
+        if (OB_FAIL(ObExprMultiSet::calc_ms_one_distinct(collection_allocator,
+                                                          reinterpret_cast<ObObj *>(c1->get_data()),
+                                                          c1->get_count(),
+                                                          data_arr,
+                                                          elem_count))) {
+          LOG_WARN("failed to distinct nest table", K(ret));
+        }
       }
     }
   }
@@ -175,20 +178,23 @@ int ObExprSet::calc_set(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
     OX (obj->set_extend(reinterpret_cast<int64_t>(coll), coll->get_type()));
     OZ (expr_datum.from_obj(*obj));
     //Collection constructed here must be recorded and destructed at last
-    if (OB_NOT_NULL(coll->get_allocator()) &&
-        OB_NOT_NULL(dynamic_cast<pl::ObPLCollAllocator*>(coll->get_allocator()))) {
-      int tmp_ret = OB_SUCCESS;
-      auto &exec_ctx = ctx.exec_ctx_;
-      if (OB_ISNULL(exec_ctx.get_pl_ctx())) {
-        tmp_ret = exec_ctx.init_pl_ctx();
+    if (OB_NOT_NULL(coll) &&
+        OB_NOT_NULL(coll->get_allocator())) {
+      common::ObIAllocator *collection_allocator = dynamic_cast<pl::ObPLCollAllocator*>(coll->get_allocator());
+      if (OB_NOT_NULL(collection_allocator)) {
+        int tmp_ret = OB_SUCCESS;
+        auto &exec_ctx = ctx.exec_ctx_;
+        if (OB_ISNULL(exec_ctx.get_pl_ctx())) {
+          tmp_ret = exec_ctx.init_pl_ctx();
+        }
+        if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(exec_ctx.get_pl_ctx())) {
+          tmp_ret = exec_ctx.get_pl_ctx()->add(*obj);
+        }
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
+        }
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
-      if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(exec_ctx.get_pl_ctx())) {
-        tmp_ret = exec_ctx.get_pl_ctx()->add(*obj);
-      }
-      if (OB_SUCCESS != tmp_ret) {
-        LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
-      }
-      ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
   }
 #endif
