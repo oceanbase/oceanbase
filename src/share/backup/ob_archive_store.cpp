@@ -1430,9 +1430,24 @@ int ObArchiveStore::get_round_max_checkpoint_scn(const int64_t dest_id, const in
     LOG_WARN("ObArchiveStore not init", K(ret));
   } else if (OB_FAIL(get_piece_range(dest_id, round_id, min_piece_id, max_piece_id))) {
     LOG_WARN("failed to get piece range", K(ret), K(dest_id), K(round_id));
-  } else if (OB_FALSE_IT(piece_id = max_piece_id)) {
-  } else if (OB_FAIL(get_piece_max_checkpoint_scn(dest_id, round_id, piece_id, max_checkpoint_scn))) {
-    LOG_WARN("failed to get piece max checkpoint scn", K(ret), K(dest_id), K(round_id), K(min_piece_id), K(max_checkpoint_scn));
+  } else {
+    piece_id = max_piece_id;
+    // filter empty piece
+    while (OB_SUCC(ret)) {
+      if (piece_id < min_piece_id) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("no valid piece exist", K(ret), K(dest_id), K(round_id), K(min_piece_id), K(max_piece_id), K(piece_id), K(max_checkpoint_scn));
+      } else if (OB_FAIL(get_piece_max_checkpoint_scn(dest_id, round_id, piece_id, max_checkpoint_scn))) {
+        LOG_WARN("failed to get piece max checkpoint scn", K(ret), K(dest_id), K(round_id), K(min_piece_id), K(max_checkpoint_scn));
+      } else if (max_checkpoint_scn.is_min()) {
+        // empty piece
+        LOG_INFO("ignore empty piece", K(dest_id), K(round_id), K(min_piece_id), K(max_piece_id), K(piece_id));
+        --piece_id;
+      } else {
+        LOG_INFO("get max checkpoint scn", K(dest_id), K(round_id), K(min_piece_id), K(max_piece_id), K(piece_id), K(max_checkpoint_scn));
+        break;
+      }
+    }
   }
 
   return ret;
