@@ -559,7 +559,10 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
     piece.is_server_ = true;
     piece.is_deliver_ = true;
     RPC_STAT(pkt.get_pcode(), tenant->id(), piece);
-    if (OB_FAIL(tenant->recv_request(req))) {
+    if (tenant->has_stopped()) {
+      ret = OB_TENANT_NOT_IN_SERVER;
+      LOG_WARN("tenant is stopped", K(ret), K(tenant->id()));
+    } else if (OB_FAIL(tenant->recv_request(req))) {
       if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
         LOG_WARN("tenant receive request fail", K(*tenant), K(req));
       }
@@ -730,13 +733,14 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
             K(tenant_id), K(ret));
       }*/
 
-      if (OB_SUCC(ret) && OB_FAIL(tenant->recv_request(req))) {
+      if (OB_FAIL(ret)) {
+            // do nothing
+      } else if (tenant->has_stopped()) {
+        ret = OB_TENANT_NOT_IN_SERVER;
+        LOG_WARN("tenant is stopped", K(ret), K(tenant->id()));
+      } else if (OB_FAIL(tenant->recv_request(req))) {
         EVENT_INC(MYSQL_DELIVER_FAIL);
-        if (OB_IN_STOP_STATE == ret) {
-          LOG_WARN("deliver request fail", K(req), K(*tenant));
-        } else {
-          LOG_ERROR("deliver request fail", K(req), K(*tenant));
-        }
+        LOG_ERROR("deliver request fail", K(req), K(*tenant));
       }
     }
   }
