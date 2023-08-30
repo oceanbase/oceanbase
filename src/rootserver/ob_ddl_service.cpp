@@ -4251,14 +4251,17 @@ int ObDDLService::check_drop_column_with_drop_constraint(
               ObConstraint* const* res = std::find_if(alter_table_schema.constraint_begin(), alter_table_schema.constraint_end(), [&cst_name](const ObConstraint* cst)
                              { return 0 == cst_name.case_compare(cst->get_constraint_name_str()); });
               if (alter_table_schema.constraint_end() == res) {
-                ret = OB_ERR_DROP_COL_REFERENCED_MULTI_COLS_CONSTRAINT;
                 LOG_WARN("the column is related to check constraint, can not be dropped", K(ret), K(cst_name), K(dropped_column_name));
                 if (is_oracle_mode) {
-                  LOG_USER_ERROR(OB_ERR_DROP_COL_REFERENCED_MULTI_COLS_CONSTRAINT, dropped_column_name.length(),
-                    dropped_column_name.ptr(), cst_name.length(), cst_name.ptr());
+                  ret = OB_ERR_MODIFY_OR_DROP_MULTI_COLUMN_CONSTRAINT;
+                  LOG_USER_ERROR(OB_ERR_DROP_COL_REFERENCED_MULTI_COLS_CONSTRAINT,
+                                 dropped_column_name.length(), dropped_column_name.ptr(),
+                                 cst_name.length(), cst_name.ptr());
                 } else {
-                  LOG_USER_ERROR(OB_ERR_DROP_COL_REFERENCED_MULTI_COLS_CONSTRAINT, cst_name.length(), cst_name.ptr(),
-                    dropped_column_name.length(), dropped_column_name.ptr());
+                  ret = OB_ERR_DROP_COL_REFERENCED_MULTI_COLS_CONSTRAINT;
+                  LOG_USER_ERROR(OB_ERR_DROP_COL_REFERENCED_MULTI_COLS_CONSTRAINT,
+                                 cst_name.length(), cst_name.ptr(), dropped_column_name.length(),
+                                 dropped_column_name.ptr());
                 }
               }
             }
@@ -6932,6 +6935,8 @@ int ObDDLService::modify_constraint_check_expr(
     const share::schema::ObColumnSchemaV2 &orig_column,
     const share::schema::ObColumnSchemaV2 &alter_column,
     share::schema::ObTableSchema &table_schema,
+    obrpc::ObAlterTableArg &alter_table_arg,
+    const bool is_oracle_mode,
     const common::ObTimeZoneInfo &tz_info,
     common::ObIAllocator &allocator,
     ObDDLOperator *ddl_operator,
@@ -6948,7 +6953,28 @@ int ObDDLService::modify_constraint_check_expr(
     if ((*iter)->get_check_expr_str().empty()) {
       continue;
     }
-    if (OB_FAIL(rebuild_constraint_check_expr(orig_column, alter_column, **iter, table_schema,
+    // -- mysql mode, should succeed
+    // drop table t1;
+    // CREATE TABLE t1 (col1 INT primary key, col2 INT);
+    // ALTER TABLE t1 ADD CONSTRAINT my_check3 CHECK (col1+col2> col1+1);
+    // ALTER TABLE t1 drop CONSTRAINT my_check3, rename column col2 to col3,rename column col1 to col5;
+    //
+    // if corresponding constraint is being dropped, columns are allowed to be renamed, and there's no
+    // need to rebuild constraint expression.
+    bool dropped_cst = false;
+    if (!is_oracle_mode
+        && alter_table_arg.alter_constraint_type_ == obrpc::ObAlterTableArg::DROP_CONSTRAINT) {
+      for (auto cst_iter = alter_table_arg.alter_table_schema_.constraint_begin();
+           !dropped_cst && cst_iter != alter_table_arg.alter_table_schema_.constraint_end();
+           cst_iter++) {
+        if ((*cst_iter)->get_constraint_name_str().case_compare((*iter)->get_constraint_name_str())
+            == 0) {
+          dropped_cst = true;
+        }
+      }
+    }
+    if (dropped_cst) {
+    } else if (OB_FAIL(rebuild_constraint_check_expr(orig_column, alter_column, **iter, table_schema,
                 tz_info, allocator, new_check_expr_str, need_modify_check_expr))) {
       LOG_WARN("fail to gen constraint check expr", K(ret));
     } else if (need_modify_check_expr) {
@@ -7933,6 +7959,7 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
   ObArray<int64_t> drop_cols_id_arr;
   bool is_oracle_mode = false;
   LOG_DEBUG("check before alter table column", K(origin_table_schema), K(alter_table_schema), K(new_table_schema));
+  ObSchemaChecker schema_checker;
   if (OB_ISNULL(tz_info_wrap.get_time_zone_info())
       || OB_ISNULL(tz_info_wrap.get_time_zone_info()->get_tz_info_map())) {
     ret = OB_ERR_UNEXPECTED;
@@ -7942,6 +7969,8 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
   } else if (OB_ISNULL(nls_formats)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid nls_formats", K(ret));
+  } else if (OB_FAIL(schema_checker.init(schema_guard))) {
+    LOG_WARN("init schema checker failed", K(ret));
   } else {
     AlterColumnSchema *alter_column_schema;
     ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
@@ -7976,6 +8005,20 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
         LOG_WARN("fail to update new table flags", K(ret));
       } else {/* do nothing. */}
     }
+    bool is_rename_first = false;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(check_rename_first(alter_table_schema, origin_table_schema, is_oracle_mode,
+                                          is_rename_first))) {
+      LOG_WARN("check rename first failed", K(ret));
+    }
+    if (OB_SUCC(ret) && is_rename_first) {
+      if (OB_FAIL(pre_rename_mysql_columns_offline(
+                   origin_table_schema, alter_table_schema, is_oracle_mode, alter_table_arg,
+                   new_table_schema, schema_checker, schema_guard, update_column_name_set,
+                   need_redistribute_column_id, is_contain_part_key))) {
+        LOG_WARN("pre rename columns failed", K(ret));
+      }
+    }
     for (; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
       if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
         ret = OB_ERR_UNEXPECTED;
@@ -7987,20 +8030,10 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
         const ObSchemaOperationType op_type = alter_column_schema->alter_type_;
         switch (op_type) {
           case OB_DDL_DROP_COLUMN: {
-            orig_column_schema = origin_table_schema.get_column_schema(orig_column_name);
-            ObColumnNameHashWrapper orig_column_key(orig_column_name);
-            if (OB_FAIL(check_can_drop_column(orig_column_name,
-                                              orig_column_schema,
-                                              origin_table_schema,
-                                              new_table_schema,
-                                              new_table_schema.get_column_count() > new_table_cols_cnt + 1 ?
-                                              new_table_schema.get_column_count() : new_table_cols_cnt + 1,
-                                              schema_guard))) {
-              LOG_WARN("column cannot be dropped", K(ret), K(new_table_cols_cnt), KPC(orig_column_schema));
-            } else if (OB_FAIL(drop_column_update_new_table(origin_table_schema,
-                                                            new_table_schema,
-                                                            *orig_column_schema))) {
-              LOG_WARN("fail to drop column update new table", K(ret));
+            if (OB_FAIL(drop_column_offline(origin_table_schema, new_table_schema,
+                                                   schema_guard, orig_column_name,
+                                                   new_table_cols_cnt))) {
+              LOG_WARN("drop column offline failed", K(ret));
             } else {
               need_redistribute_column_id = true;
             }
@@ -8038,11 +8071,22 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
             } else {
               const ObString &column_name = alter_column_schema->get_column_name_str();
               ObColumnNameHashWrapper column_key(column_name);
-              if (OB_HASH_EXIST == update_column_name_set.exist_refactored(column_key)) {
+              if (!is_oracle_mode) {
+                // mysql mode
+                // do not check updated column name for adding column
+                // otherwise following alter stmt will report error:
+                //
+                // CREATE TABLE t1 (col1 varchar(50), col2 varchar(50),c5 varchar(50),c3 varchar(50) ,c4 varchar(50) primary key,c8 int);
+                // ALTER TABLE t1 add c5 int,drop c3,rename column c5 to c3;
+                //
+                // do nothing
+              } else if (OB_HASH_EXIST == update_column_name_set.exist_refactored(column_key)) {
                 ret = OB_HASH_EXIST;
                 LOG_WARN("duplicate column name", K(ret), K(column_name));
               } else if (OB_FAIL(update_column_name_set.set_refactored(column_key))) {
                 LOG_WARN("failed to add column name to hash set.", K(column_name), K(ret));
+              }
+              if (OB_FAIL(ret)) {
               } else {
                 need_redistribute_column_id = true;
               }
@@ -8051,136 +8095,33 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
           }
           case OB_DDL_CHANGE_COLUMN:
           case OB_DDL_MODIFY_COLUMN: {
-            ObSchemaChecker schema_checker;
-            const ObString &new_column_name = alter_column_schema->get_column_name_str();
-            orig_column_schema = new_table_schema.get_column_schema(orig_column_name);
-            if (OB_FAIL(schema_checker.init(schema_guard))) {
-              LOG_WARN("failed to init schema guard", K(ret));
-            } else if (OB_ISNULL(orig_column_schema)) {
-              ret = OB_ERR_BAD_FIELD_ERROR;
-              LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, orig_column_name.length(), orig_column_name.ptr(),
-                    origin_table_schema.get_table_name_str().length(), origin_table_schema.get_table_name_str().ptr());
-              LOG_WARN("unknown column", KR(ret), K(orig_column_name), K(new_table_schema));
-            } else if (orig_column_schema->is_tbl_part_key_column() && !is_contain_part_key) {
-              is_contain_part_key = true;
-              if (OB_FAIL(new_table_schema.assign_partition_schema(alter_table_schema))) {
-                LOG_WARN("failed to assign partition schema", K(ret));
-              }
-            }
-            if (OB_SUCC(ret)) {
-              if (alter_column_schema->is_generated_column() && OB_FAIL(ObDDLResolver::reformat_generated_column_expr(alter_column_schema->get_cur_default_value(),
-                                                           tz_info_wrap,
-                                                           nls_formats,
-                                                           allocator,
-                                                           new_table_schema,
-                                                           *alter_column_schema,
-                                                           alter_table_schema.get_sql_mode(),
-                                                           &schema_checker))) {
-                LOG_WARN("fail to check default value", KPC(alter_column_schema), K(ret));
-              }
-            }
-
-            ObColumnNameHashWrapper orig_column_key(orig_column_name);
-            if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(pre_check_orig_column_schema(*alter_column_schema,
-                                                            origin_table_schema,
-                                                            update_column_name_set))) {
-              RS_LOG(WARN, "failed to pre check orig column schema", K(ret));
-            } else if (OB_DDL_CHANGE_COLUMN == op_type &&
-                      orig_column_schema->has_generated_column_deps()) {
-              if (OB_FAIL(update_generated_column_schema(*alter_column_schema,
-                                                          *orig_column_schema,
-                                                          origin_table_schema,
-                                                          tz_info_wrap,
-                                                          new_table_schema))) {
-                RS_LOG(WARN, "failed to rebuild generated column schema", K(ret));
-              }
-            }
-            if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(validate_update_column_for_materialized_view(
-                               origin_table_schema, *orig_column_schema))) {
-              LOG_WARN("fail to validate update column for materialized view", K(ret));
-            }
-            if (OB_SUCC(ret)) {
-              /* rename column, no need to check gen col dup */
-              ObSEArray<ObString, 4> empty_expr_arr;
-              if (OB_FAIL(ObDDLResolver::check_default_value(alter_column_schema->get_cur_default_value(),
-                                                             tz_info_wrap,
-                                                             nls_formats,
-                                                             allocator,
-                                                             new_table_schema,
-                                                             *alter_column_schema,
-                                                             empty_expr_arr,
-                                                             alter_table_schema.get_sql_mode(),
-                                                             !alter_column_schema->is_generated_column(), /* allow_sequence */
-                                                             &schema_checker))) {
-                LOG_WARN("fail to check default value", KPC(alter_column_schema),K(ret));
-              }
-            }
-            if (OB_SUCC(ret) && orig_column_schema->get_column_name_str() != alter_column_schema->get_column_name_str()) {
-              if (orig_column_schema->is_tbl_part_key_column()
-                  && OB_FAIL(modify_part_func_expr(
-                             orig_column_schema->get_column_name_str(),
-                             alter_column_schema->get_column_name_str(),
-                             new_table_schema,
-                             *tz_info_wrap.get_time_zone_info(),
-                             allocator))) {
-                LOG_WARN("modify part func expr failed", K(ret));
-              } else if (OB_FAIL(modify_part_func_expr_for_global_index(
-                                 *orig_column_schema,
-                                 *alter_column_schema,
-                                 new_table_schema,
-                                 *tz_info_wrap.get_time_zone_info(),
-                                 allocator,
-                                 nullptr/* ddl_operator */,
-                                 nullptr/* trans */,
-                                 nullptr/* global_idx_schema_array */))) {
-                LOG_WARN("failed to modify part_func_expr for global_index", K(ret));
-              } else if (OB_FAIL(modify_constraint_check_expr(
-                          *orig_column_schema,
-                          *alter_column_schema,
-                          new_table_schema,
-                          *tz_info_wrap.get_time_zone_info(),
-                          allocator,
-                          nullptr/* ddl_operator */,
-                          nullptr/* trans */))) {
-                LOG_WARN("failed to modify check_expr constraint", K(ret));
-              }
-            }
-
-            if (OB_SUCC(ret)) {
-              //copy attributes that can be change by alter table change ...
+            if (is_rename_first && alter_column_schema->alter_type_ == OB_DDL_CHANGE_COLUMN
+                && is_rename_column(*alter_column_schema)) {
+              // do nothing
+            } else {
               ObColumnSchemaV2 new_column_schema;
-              bool is_change_column_order = false;
               ObSEArray<ObString, 1> new_pk_column;
-              bool for_view = false;
-              if (OB_FAIL(new_column_schema.assign(*orig_column_schema))) {
-                LOG_WARN("fail to assign column schema", KR(ret));
+              bool is_change_column_order = false;
+              orig_column_schema = new_table_schema.get_column_schema(orig_column_name);
+              ObColumnNameHashWrapper orig_column_key(orig_column_name);
+              if (OB_FAIL(prepare_change_modify_column_offline(
+                                                       *alter_column_schema, origin_table_schema,
+                                                       alter_table_schema, is_oracle_mode,
+                                                       alter_table_arg, new_table_schema,
+                                                       schema_checker, schema_guard,
+                                                       update_column_name_set,
+                                                       new_column_schema,
+                                                       is_contain_part_key))) {
+                LOG_WARN("prepare new column schema failed", K(ret));
+              } else if (OB_FAIL(new_table_schema.alter_column(
+                           new_column_schema, ObTableSchema::CHECK_MODE_OFFLINE, false))) {
+                LOG_WARN("alter column failed", K(ret));
               } else if (alter_column_schema->is_primary_key_) {
-                if (!new_table_schema.is_heap_table()) {
-                  ret = OB_ERR_MULTIPLE_PRI_KEY;
-                  LOG_WARN("multiple primary key defined", K(ret));
-                } else if (OB_FAIL(new_pk_column.push_back(alter_column_schema->get_column_name_str()))){
-                  LOG_WARN("failed to push back pk col name", K(ret));
+                if (OB_FAIL(new_pk_column.push_back(alter_column_schema->get_column_name_str()))) {
+                  LOG_WARN("push back element failed", K(ret));
                 }
               }
               if (OB_FAIL(ret)) {
-              } else if (OB_FAIL(fill_new_column_attributes(*alter_column_schema,
-                                                     new_column_schema))) {
-                RS_LOG(WARN, "fail to fill new column attributes", K(ret));
-              } else if (OB_FAIL(new_column_schema.set_orig_default_value(alter_column_schema->get_orig_default_value()))) {
-                LOG_WARN("failed to set orig default value", K(ret));
-              } else if (OB_FAIL(resolve_timestamp_column(alter_column_schema,
-                                                          new_table_schema,
-                                                          new_column_schema,
-                                                          tz_info_wrap,
-                                                          nls_formats,
-                                                          allocator))) {
-                RS_LOG(WARN, "fail to resolve timestamp column", K(ret));
-              } else if (OB_FAIL(new_table_schema.alter_column(new_column_schema,
-                         ObTableSchema::CHECK_MODE_OFFLINE,
-                         for_view))) {
-                RS_LOG(WARN, "failed to change column", K(ret));
               } else if (!new_pk_column.empty() && OB_FAIL(add_primary_key(new_pk_column, new_table_schema))) {
                 LOG_WARN("failed to add pk to table", K(ret), K(new_pk_column), K(new_table_schema));
               } else if (OB_FAIL(new_table_schema.check_primary_key_cover_partition_column())) {
@@ -8190,18 +8131,20 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                   ret = OB_HASH_EXIST;
                   RS_LOG(WARN, "duplicate index name", K(ret), K(orig_column_name));
                 } else if (OB_FAIL(update_column_name_set.set_refactored(orig_column_key))) {
-                  RS_LOG(WARN, "failed to add index_name to hash set.",
-                      K(orig_column_name), K(ret));
-                } else if (OB_FAIL(check_is_change_column_order(new_table_schema, *alter_column_schema, is_change_column_order))) {
+                  RS_LOG(WARN, "failed to add index_name to hash set.", K(orig_column_name), K(ret));
+                } else if (OB_FAIL(check_is_change_column_order(
+                             new_table_schema, *alter_column_schema, is_change_column_order))) {
                   LOG_WARN("failed to check is change column order", K(ret));
                 } else if (is_change_column_order) {
                   if (alter_column_schema->get_column_id() != orig_column_schema->get_column_id()) {
                     ret = OB_ERR_UNEXPECTED;
-                    LOG_WARN("invalid alter column schema column id", K(ret), K(*alter_column_schema), K(*orig_column_schema));
-                  } else if (OB_FAIL(new_table_schema.reorder_column(new_column_schema.get_column_name_str(),
-                                                                     alter_column_schema->is_first_,
-                                                                     alter_column_schema->get_prev_column_name(),
-                                                                     alter_column_schema->get_next_column_name()))) {
+                    LOG_WARN("invalid alter column schema column id", K(ret), K(*alter_column_schema),
+                             K(*orig_column_schema));
+                  } else if (OB_FAIL(new_table_schema.reorder_column(
+                               new_column_schema.get_column_name_str(),
+                               alter_column_schema->is_first_,
+                               alter_column_schema->get_prev_column_name(),
+                               alter_column_schema->get_next_column_name()))) {
                     LOG_WARN("failed to reorder column", K(ret));
                   } else {
                     need_redistribute_column_id = true;
@@ -8393,6 +8336,21 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
         }
       }
     }
+    bool is_rename_first = false;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(check_rename_first(alter_table_schema, origin_table_schema, is_oracle_mode,
+                                          is_rename_first))) {
+      LOG_WARN("check rename first failed", K(ret));
+    }
+
+    if (OB_SUCC(ret) && is_rename_first) {
+      if (OB_FAIL(pre_rename_mysql_columns_online(
+                   origin_table_schema, alter_table_schema, is_oracle_mode, new_table_schema,
+                   alter_table_arg, schema_checker, ddl_operator, update_column_name_set, trans,
+                   schema_guard, idx_schema_array, global_idx_schema_array))) {
+        LOG_WARN("failed to pre alter change columns", K(ret));
+      }
+    }
 
     // Extended type info is resolved in session collation type, then we convert it to
     // system collation in ObDDLResolver::fill_extended_type_info().
@@ -8423,150 +8381,46 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
             break;
           }
           case OB_DDL_CHANGE_COLUMN: {
-            orig_column_schema = new_table_schema.get_column_schema(orig_column_name);
-            ObColumnNameHashWrapper orig_column_key(orig_column_name);
-            /* rename column, no need to check gen col dup */
-            ObSEArray<ObString, 4> empty_expr_arr;
-            if (OB_FAIL(ObDDLResolver::check_default_value(
-                        alter_column_schema->get_cur_default_value(),
-                        tz_info_wrap,
-                        nls_formats,
-                        allocator,
-                        new_table_schema,
-                        *alter_column_schema,
-                        empty_expr_arr,
-                        alter_table_schema.get_sql_mode(),
-                        !alter_column_schema->is_generated_column(), /* allow_sequence */
-                        &schema_checker))) {
-              LOG_WARN("fail to check default value", KPC(alter_column_schema),K(ret));
-            } else if (OB_FAIL(pre_check_orig_column_schema(*alter_column_schema,
-                                                      origin_table_schema,
-                                                      update_column_name_set))) {
-              RS_LOG(WARN, "failed to pre check orig column schema", K(ret));
-            } else if (orig_column_schema->has_generated_column_deps()) {
-              if (OB_FAIL(update_generated_column_schema(*alter_column_schema,
-                                                          *orig_column_schema,
-                                                          origin_table_schema,
-                                                          tz_info_wrap,
-                                                          new_table_schema,
-                                                          &ddl_operator,
-                                                          &trans))) {
-                RS_LOG(WARN, "failed to rebuild generated column schema", K(ret));
-              }
-            }
-            if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(validate_update_column_for_materialized_view(
-                               origin_table_schema, *orig_column_schema))) {
-              LOG_WARN("fail to validate update column for materialized view", K(ret));
-            }
-            if (OB_SUCC(ret)) {
-              if (alter_column_schema->is_primary_key_) {
-                if (new_table_schema.get_rowkey_column_num() > 0) {
-                  if (new_table_schema.is_heap_table()) {
-                    ret = OB_NOT_SUPPORTED;
-                    RS_LOG(WARN, "not support to add primary key!", K(ret));
-                  } else {
-                    ret = OB_ERR_MULTIPLE_PRI_KEY;
-                    RS_LOG(WARN, "multiple primary key defined", K(ret));
-                  }
-                }
-              }
-              if (OB_SUCC(ret) && alter_column_schema->is_autoincrement_) {
-                if (alter_column_schema->is_autoincrement()) {
-                  if (orig_column_schema->get_column_id() != new_table_schema.get_autoinc_column_id()) {
-                    // not supported now; from non-auto-increment column to auto-increment column
-                    ret = OB_NOT_SUPPORTED;
-                    RS_LOG(WARN, "from non-auto-increment column to auto-increment column",
-                           "alter_column_id", alter_column_schema->get_column_id(),
-                           "auto_inc_column_id", new_table_schema.get_autoinc_column_id(),
-                           K(ret));
-                  }
-                }
-              }
-            }
-            if (OB_SUCC(ret) && orig_column_schema->get_column_name_str() != alter_column_schema->get_column_name_str()) {
-              if (orig_column_schema->is_tbl_part_key_column()
-                  && OB_FAIL(modify_part_func_expr(
-                             orig_column_schema->get_column_name_str(),
-                             alter_column_schema->get_column_name_str(),
-                             new_table_schema,
-                             *tz_info_wrap.get_time_zone_info(),
-                             allocator))) {
-                LOG_WARN("modify part func expr failed", K(ret));
-              } else if (OB_FAIL(modify_part_func_expr_for_global_index(
-                                 *orig_column_schema,
-                                 *alter_column_schema,
-                                 new_table_schema,
-                                 *tz_info_wrap.get_time_zone_info(),
-                                 allocator,
-                                 &ddl_operator,
-                                 &trans,
-                                 global_idx_schema_array))) {
-                LOG_WARN("failed to modify part_func_expr for global_index", K(ret));
-              } else if (OB_FAIL(modify_constraint_check_expr(
-                          *orig_column_schema,
-                          *alter_column_schema,
-                          new_table_schema,
-                          *tz_info_wrap.get_time_zone_info(),
-                          allocator,
-                          &ddl_operator,
-                          &trans))) {
-                LOG_WARN("failed to modify check_expr constraint", K(ret));
-              }
-            }
+            if (is_rename_first && is_rename_column(*alter_column_schema)) { break; }
 
-            if (OB_SUCC(ret)) {
-              if (OB_FAIL(check_can_alter_column_type(*orig_column_schema, *alter_column_schema, origin_table_schema))) {
-                LOG_WARN("fail to check can alter column type", K(ret));
-              }
-            }
-
-            if (OB_SUCC(ret)) {
-              //copy attributes that can be change by alter table change ...
-              ObColumnSchemaV2 new_column_schema;
-              if (OB_FAIL(new_column_schema.assign(*orig_column_schema))) {
-                LOG_WARN("fail to assign column schema", KR(ret));
-              } else if (OB_FAIL(fill_new_column_attributes(*alter_column_schema,
-                                                     new_column_schema))) {
-                RS_LOG(WARN, "fail to fill new column attributes", K(ret));
-              } else if (OB_FAIL(resolve_timestamp_column(alter_column_schema,
-                                                          new_table_schema,
-                                                          new_column_schema,
-                                                          tz_info_wrap,
-                                                          nls_formats,
-                                                          allocator))) {
-                RS_LOG(WARN, "fail to resolve timestamp column", K(ret));
-              } else if (OB_FAIL(new_table_schema.alter_column(new_column_schema,
-                                 ObTableSchema::CHECK_MODE_ONLINE,
-                                 for_view))) {
-                RS_LOG(WARN, "failed to change column", K(ret));
-              } else if (OB_FAIL(check_new_column_for_index(
-                                 idx_schema_array,
-                                 new_column_schema))) {
-                RS_LOG(WARN, "failed to check new column for index", K(ret));
-              } else if (OB_FAIL(new_table_schema.check_primary_key_cover_partition_column())) {
-                RS_LOG(WARN, "fail to check primary key cover partition column", K(ret));
-              } else if (OB_FAIL(ddl_operator.update_single_column(
-                                 trans,
-                                 origin_table_schema,
-                                 new_table_schema,
-                                 new_column_schema))) {
-                RS_LOG(WARN, "failed to alter column", K(alter_column_schema), K(ret));
-              } else if (OB_FAIL(alter_table_update_index_and_view_column(
+            ObColumnSchemaV2 new_column_schema;
+            if (OB_FAIL(prepare_change_modify_column_online(
+                         *alter_column_schema, origin_table_schema, alter_table_schema,
+                         is_oracle_mode, alter_table_arg, new_table_schema, schema_checker,
+                         ddl_operator, trans, schema_guard, global_idx_schema_array,
+                         update_column_name_set, new_column_schema))) {
+              LOG_WARN("prepare alter column failed", K(ret));
+            } else if (OB_FAIL(new_table_schema.alter_column(
+                         new_column_schema, ObTableSchema::CHECK_MODE_ONLINE, for_view))) {
+              LOG_WARN("failed to alter column", K(ret));
+            } else if (OB_FAIL(check_new_column_for_index(idx_schema_array, new_column_schema))) {
+              RS_LOG(WARN, "failed to check new column for index", K(ret));
+            } else if (OB_FAIL(new_table_schema.check_primary_key_cover_partition_column())) {
+              RS_LOG(WARN, "fail to check primary key cover partition column", K(ret));
+            } else if (OB_FAIL(ddl_operator.update_single_column(
+                         trans, origin_table_schema, new_table_schema, new_column_schema))) {
+              RS_LOG(WARN, "failed to alter column", K(alter_column_schema), K(ret));
+            } else if (OB_FAIL(alter_table_update_index_and_view_column(
                                  new_table_schema,
                                  new_column_schema,
                                  ddl_operator,
                                  trans,
                                  global_idx_schema_array))) {
-                RS_LOG(WARN, "failed to update index column", K(ret));
-              } else {
-                if (OB_HASH_EXIST == update_column_name_set.exist_refactored(orig_column_key)) {
-                  ret = OB_HASH_EXIST;
+              RS_LOG(WARN, "failed to update index column", K(ret));
+            } else {
+              ObColumnNameHashWrapper orig_column_key(orig_column_name);
+              if (OB_FAIL(update_column_name_set.exist_refactored(orig_column_key))) {
+                if (OB_HASH_EXIST == ret) {
                   RS_LOG(WARN, "duplicate index name", K(ret), K(orig_column_name));
-                } else if (OB_FAIL(update_column_name_set.set_refactored(orig_column_key))) {
-                  RS_LOG(WARN, "failed to add index_name to hash set.",
-                      K(orig_column_name), K(ret));
+                } else if (OB_HASH_NOT_EXIST == ret) {
+                  ret = OB_SUCCESS;
+                } else {
+                  RS_LOG(WARN, "exist refactored failed", K(ret));
                 }
+              }
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(update_column_name_set.set_refactored(orig_column_key))) {
+                RS_LOG(WARN, "failed to add index_name to hash set.", K(orig_column_name), K(ret));
               }
             }
             break;
@@ -8575,14 +8429,16 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
             LOG_DEBUG("check alter column schema", KPC(alter_column_schema));
             orig_column_schema = new_table_schema.get_column_schema(orig_column_name);
             ObColumnNameHashWrapper orig_column_key(orig_column_name);
-            if (alter_column_schema->is_generated_column() && OB_FAIL(ObDDLResolver::reformat_generated_column_expr(alter_column_schema->get_cur_default_value(),
-                                                           tz_info_wrap,
-                                                           nls_formats,
-                                                           allocator,
-                                                           new_table_schema,
-                                                           *alter_column_schema,
-                                                           alter_table_schema.get_sql_mode(),
-                                                           &schema_checker))) {
+            if (alter_column_schema->is_generated_column()
+                && OB_FAIL(ObDDLResolver::reformat_generated_column_expr(
+                                                alter_column_schema->get_cur_default_value(),
+                                                tz_info_wrap,
+                                                nls_formats,
+                                                allocator,
+                                                new_table_schema,
+                                                *alter_column_schema,
+                                                alter_table_schema.get_sql_mode(),
+                                                &schema_checker))) {
               LOG_WARN("fail to check default value", KPC(alter_column_schema), K(ret));
             } else if (OB_FAIL(pre_check_orig_column_schema(*alter_column_schema,
                                                             origin_table_schema,
@@ -8788,39 +8644,10 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
             break;
           }
           case OB_DDL_DROP_COLUMN: {
-            orig_column_schema = origin_table_schema.get_column_schema(orig_column_name);
-            ObColumnNameHashWrapper orig_column_key(orig_column_name);
-            if (OB_FAIL(check_can_drop_column(orig_column_name, orig_column_schema, origin_table_schema, new_table_schema, new_table_schema.get_column_count(), schema_guard))) {
-              LOG_WARN("column cannot be dropped", K(ret), KPC(orig_column_schema));
-            } else if (OB_HASH_EXIST == update_column_name_set.exist_refactored(orig_column_key)) {
-              //column that has been modified, can't not modify again
-              ret = OB_ERR_BAD_FIELD_ERROR;
-              LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, orig_column_name.length(), orig_column_name.ptr(),
-                             origin_table_schema.get_table_name_str().length(),
-                             origin_table_schema.get_table_name_str().ptr());
-              RS_LOG(WARN, "column that has been altered, can't not update again");
-            } else if (OB_FAIL(validate_update_column_for_materialized_view(origin_table_schema, *orig_column_schema))) {
-              LOG_WARN("fail to validate update column for materialized view", K(ret));
-            } else if (OB_FAIL(ddl_operator.drop_sequence_in_drop_column(*orig_column_schema,
-                trans, schema_guard))) {
-              RS_LOG(WARN, "alter table drop identity column fail", K(ret));
-            } else if (OB_FAIL(ddl_operator.alter_table_drop_aux_column(
-                      new_table_schema,
-                      *orig_column_schema,
-                      trans,
-                      USER_INDEX))) {
-              RS_LOG(WARN, "failed to drop index column", K(ret));
-            } else if (OB_FAIL(ddl_operator.alter_table_drop_aux_column(
-                      new_table_schema,
-                      *orig_column_schema,
-                      trans,
-                      AUX_VERTIAL_PARTITION_TABLE))) {
-              RS_LOG(WARN, "failed to drop aux vp column", K(ret));
-            } else if (OB_FAIL(ddl_operator.update_prev_id_for_delete_column(origin_table_schema,
-                new_table_schema, *orig_column_schema, trans))) {
-              LOG_WARN("failed to update column previous id for delele column", K(ret));
-            } else if (OB_FAIL(ddl_operator.delete_single_column(trans, new_table_schema, orig_column_name))) {
-              RS_LOG(WARN, "failed to delete column", K(alter_column_schema), K(ret));
+            if (OB_FAIL(drop_column_online(origin_table_schema, new_table_schema,
+                                           orig_column_name, ddl_operator, schema_guard, trans,
+                                           update_column_name_set))) {
+              LOG_WARN("online drop column failed", K(ret));
             }
             break;
           }
@@ -33819,6 +33646,638 @@ int ObDDLService::check_alter_tenant_when_rebalance_is_disabled_(
         "Tenant (%lu) Primary Zone with the first priority will be changed from '%s' to '%s', "
         "but tenant 'enable_rebalance' is disabled, alter tenant", tenant_id, orig_str.ptr(), new_str.ptr());
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
+  }
+  return ret;
+}
+
+int ObDDLService::pre_rename_mysql_columns_online(
+                           const ObTableSchema &origin_table_schema,
+                           const AlterTableSchema &alter_table_schema,
+                           const bool is_oracle_mode,
+                           ObTableSchema &new_table_schema,
+                           obrpc::ObAlterTableArg &alter_table_arg,
+                           ObSchemaChecker &schema_checker,
+                           ObDDLOperator &ddl_operator,
+                           common::hash::ObHashSet<ObColumnNameHashWrapper> &update_column_name_set,
+                           common::ObMySQLTransaction &trans,
+                           ObSchemaGetterGuard &schema_guard,
+                           ObIArray<ObTableSchema> &idx_schema_array,
+                           ObIArray<ObTableSchema> *global_idx_schema_array)
+{
+  int ret = OB_SUCCESS;
+  const common::ObTimeZoneInfoWrap &tz_info_wrap = alter_table_arg.tz_info_wrap_;
+  const common::ObString *nls_formats = alter_table_arg.nls_formats_;
+  common::ObIAllocator &allocator = alter_table_arg.allocator_;
+  ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
+  ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+  const ObCollationType cur_extended_type_info_collation = ObCharset::get_system_collation();
+  AlterColumnSchema *alter_column_schema = nullptr;
+  ObSEArray<ObColumnSchemaV2, 16> new_col_schemas;
+  ObSEArray<ObString, 16> orig_col_names;
+  for (; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
+    if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("*it_begin is NULL", K(ret));
+    } else {
+      const ObString &orig_column_name = alter_column_schema->get_origin_column_name();
+      const ObString &dst_column_name = alter_column_schema->get_column_name_str();
+      ObColumnSchemaV2 new_column_schema;
+      /* rename column, no need to check gen col dup */
+      ObSEArray<ObString, 4> empty_expr_arr;
+      if (is_oracle_mode || alter_column_schema->alter_type_ != OB_DDL_CHANGE_COLUMN
+          || !is_rename_column(*alter_column_schema)) {
+        continue;
+      } else if (OB_FAIL(prepare_change_modify_column_online(
+                   *alter_column_schema, origin_table_schema, alter_table_schema, is_oracle_mode,
+                   alter_table_arg, new_table_schema, schema_checker, ddl_operator, trans,
+                   schema_guard, global_idx_schema_array, update_column_name_set,
+                   new_column_schema))) {
+        LOG_WARN("prepare alter column schema failed", K(ret));
+      } else if (OB_FAIL(new_col_schemas.push_back(new_column_schema))) {
+        LOG_WARN("failed to push back element", K(ret));
+      } else if (OB_FAIL(orig_col_names.push_back(orig_column_name))) {
+        LOG_WARN("failed to push back element", K(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (new_col_schemas.empty()) { // do nothing
+  } else if (OB_FAIL(new_table_schema.alter_mysql_table_columns(
+               new_col_schemas, orig_col_names, ObTableSchema::CHECK_MODE_ONLINE))) {
+    LOG_WARN("failed to alter batch columns", K(ret));
+  } else if (OB_FAIL(check_new_columns_for_index(idx_schema_array, origin_table_schema,
+                                                 new_col_schemas))) {
+    LOG_WARN("check new columns for indexes failed", K(ret));
+  } else if (OB_FAIL(new_table_schema.check_primary_key_cover_partition_column())) {
+    LOG_WARN("failed to check primary key over partition column", K(ret));
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < new_col_schemas.count(); i++) {
+      if (OB_FAIL(ddl_operator.update_single_column(trans, origin_table_schema, new_table_schema,
+                                                    new_col_schemas.at(i)))) {
+        LOG_WARN("failed to alter column", K(ret), K(new_col_schemas.at(i)));
+      } else if (OB_FAIL(alter_table_update_index_and_view_column(
+                   new_table_schema, new_col_schemas.at(i), ddl_operator, trans,
+                   global_idx_schema_array))) {
+        LOG_WARN("failedt o update index column", K(ret));
+      } else {
+        ObColumnNameHashWrapper orig_col_name_key(orig_col_names.at(i));
+        if (OB_FAIL(update_column_name_set.exist_refactored(orig_col_name_key))) {
+          if (ret == OB_HASH_EXIST) {
+            LOG_WARN("duplicate index name", K(ret), K(orig_col_name_key.column_name_));
+          } else if (ret == OB_HASH_NOT_EXIST) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("exists refactored failed", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(update_column_name_set.set_refactored(orig_col_name_key))) {
+          LOG_WARN("failed to add index_name to hashset", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::prepare_change_modify_column_online(AlterColumnSchema &alter_column_schema,
+                           const ObTableSchema &origin_table_schema,
+                           const AlterTableSchema &alter_table_schema,
+                           const bool is_oracle_mode,
+                           obrpc::ObAlterTableArg &alter_table_arg,
+                           ObTableSchema &new_table_schema,
+                           sql::ObSchemaChecker &schema_checker,
+                           ObDDLOperator &ddl_operator,
+                           common::ObMySQLTransaction &trans,
+                           ObSchemaGetterGuard &schema_guard,
+                           ObIArray<ObTableSchema> *global_idx_schema_array,
+                           common::hash::ObHashSet<ObColumnNameHashWrapper> &update_column_name_set,
+                           ObColumnSchemaV2 &new_column_schema)
+{
+  int ret = OB_SUCCESS;
+  const common::ObTimeZoneInfoWrap &tz_info_wrap = alter_table_arg.tz_info_wrap_;
+  const common::ObString *nls_formats = alter_table_arg.nls_formats_;
+  common::ObIAllocator &allocator = alter_table_arg.allocator_;
+  const ObString &orig_column_name = alter_column_schema.get_origin_column_name();
+  const ObColumnSchemaV2 *orig_column_schema = new_table_schema.get_column_schema(orig_column_name);
+  ObColumnNameHashWrapper orig_column_key(orig_column_name);
+  /* rename column, no need to check gen col dup */
+  ObSEArray<ObString, 4> empty_expr_arr;
+  if (OB_FAIL(ObDDLResolver::check_default_value(
+        alter_column_schema.get_cur_default_value(), tz_info_wrap, nls_formats, allocator,
+        new_table_schema, alter_column_schema, empty_expr_arr, alter_table_schema.get_sql_mode(),
+        !alter_column_schema.is_generated_column(), &schema_checker))) {
+    LOG_WARN("failed to check default value", K(ret), K(alter_column_schema));
+  } else if (OB_FAIL(pre_check_orig_column_schema(alter_column_schema, origin_table_schema,
+                                                  update_column_name_set))) {
+    LOG_WARN("failed to pre check orig column schema", K(ret));
+  } else if (orig_column_schema->has_generated_column_deps()) {
+    if (OB_FAIL(update_generated_column_schema(alter_column_schema, *orig_column_schema,
+                                               origin_table_schema, tz_info_wrap, new_table_schema,
+                                               &ddl_operator, &trans))) {
+      LOG_WARN("failed to rebuild generated column schema", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(validate_update_column_for_materialized_view(origin_table_schema, *orig_column_schema))) {
+    LOG_WARN("failed to validate update column for materialized view", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (alter_column_schema.is_primary_key_) {
+      if (new_table_schema.get_rowkey_column_num() > 0) {
+        if (new_table_schema.is_heap_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support to add primary key", K(ret));
+        } else {
+          ret = OB_ERR_MULTIPLE_PRI_KEY;
+          LOG_WARN("multiple primary key defined", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && alter_column_schema.is_autoincrement_) {
+      if (alter_column_schema.is_autoincrement()) {
+        if (orig_column_schema->get_column_id() != new_table_schema.get_autoinc_column_id()) {
+          // not supported now; from non-auto-increment column to auto-increment column
+          ret = OB_NOT_SUPPORTED;
+          RS_LOG(WARN, "from non-auto-increment column to auto-increment column", "alter_column_id",
+                 alter_column_schema.get_column_id(), "auto_inc_column_id",
+                 new_table_schema.get_autoinc_column_id(), K(ret));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)
+      && orig_column_schema->get_column_name_str() != alter_column_schema.get_column_name_str()) {
+    if (orig_column_schema->is_tbl_part_key_column()
+        && OB_FAIL(modify_part_func_expr(orig_column_schema->get_column_name_str(),
+                                         alter_column_schema.get_column_name_str(),
+                                         new_table_schema,
+                                         *tz_info_wrap.get_time_zone_info(), allocator))) {
+      LOG_WARN("modify part func expr failed", K(ret));
+    } else if (OB_FAIL(modify_part_func_expr_for_global_index(
+                 *orig_column_schema, alter_column_schema, new_table_schema,
+                 *tz_info_wrap.get_time_zone_info(), allocator, &ddl_operator, &trans,
+                 global_idx_schema_array))) {
+      LOG_WARN("failed to modify part_func_expr for global_index", K(ret));
+    } else if (OB_FAIL(modify_constraint_check_expr(
+                 *orig_column_schema, alter_column_schema, new_table_schema, alter_table_arg,
+                 is_oracle_mode, *tz_info_wrap.get_time_zone_info(), allocator, &ddl_operator,
+                 &trans))) {
+      LOG_WARN("failed to modify check_expr constraint", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(check_can_alter_column_type(*orig_column_schema, alter_column_schema,
+                                            origin_table_schema))) {
+      LOG_WARN("fail to check can alter column type", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(new_column_schema.assign(*orig_column_schema))) {
+      LOG_WARN("failed to asisgn column schema", KR(ret));
+    } else if (OB_FAIL(fill_new_column_attributes(alter_column_schema, new_column_schema))) {
+      LOG_WARN("failed to fill new column attributes", K(ret));
+    } else if (OB_FAIL(resolve_timestamp_column(&alter_column_schema, new_table_schema,
+                                                new_column_schema, tz_info_wrap, nls_formats,
+                                                allocator))) {
+      LOG_WARN("failed to resolve timestamp column", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::drop_column_online(
+  const ObTableSchema &origin_table_schema, ObTableSchema &new_table_schema,
+  const ObString &orig_column_name, ObDDLOperator &ddl_operator, ObSchemaGetterGuard &schema_guard,
+  common::ObMySQLTransaction &trans,
+  common::hash::ObHashSet<ObColumnNameHashWrapper> &update_column_name_set)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *orig_column_schema =
+    origin_table_schema.get_column_schema(orig_column_name);
+  if (OB_ISNULL(orig_column_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid null column schema", K(ret), K(orig_column_name));
+  } else {
+    ObColumnNameHashWrapper orig_column_key(orig_column_name);
+    if (OB_FAIL(check_can_drop_column(orig_column_name, orig_column_schema, origin_table_schema,
+                                      new_table_schema, new_table_schema.get_column_count(),
+                                      schema_guard))) {
+      LOG_WARN("check drop column failed", K(ret));
+    } else if (OB_HASH_EXIST == update_column_name_set.exist_refactored(orig_column_key)) {
+      ret = OB_ERR_BAD_FIELD_ERROR;
+      LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, orig_column_name.length(), orig_column_name.ptr(),
+                     origin_table_schema.get_table_name_str().length(),
+                     origin_table_schema.get_table_name_str().ptr());
+      LOG_WARN("column has beed modified, can't drop", K(ret));
+    } else if (OB_FAIL(validate_update_column_for_materialized_view(origin_table_schema,
+                                                                    *orig_column_schema))) {
+      LOG_WARN("failed to validate update column for materialized view", K(ret));
+    } else if (OB_FAIL(ddl_operator.drop_sequence_in_drop_column(*orig_column_schema, trans,
+                                                                 schema_guard))) {
+      RS_LOG(WARN, "alter table drop identity column fail", K(ret));
+    } else if (OB_FAIL(ddl_operator.alter_table_drop_aux_column(
+                 new_table_schema, *orig_column_schema, trans, USER_INDEX))) {
+      LOG_WARN("drop index column failed", K(ret));
+    } else if (OB_FAIL(ddl_operator.alter_table_drop_aux_column(
+                 new_table_schema, *orig_column_schema, trans, AUX_VERTIAL_PARTITION_TABLE))) {
+      LOG_WARN("drop aux vp column failed", K(ret));
+    } else if (OB_FAIL(ddl_operator.update_prev_id_for_delete_column(
+                 origin_table_schema, new_table_schema, *orig_column_schema, trans))) {
+      LOG_WARN("failed to update column previous id for delete column", K(ret));
+    } else if (OB_FAIL(
+                 ddl_operator.delete_single_column(trans, new_table_schema, orig_column_name))) {
+      LOG_WARN("failed to delete column", K(ret), K(orig_column_name));
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::drop_column_offline(const ObTableSchema &origin_table_schema,
+                                      ObTableSchema &new_table_schema,
+                                      ObSchemaGetterGuard &schema_guard,
+                                      const ObString &orig_column_name,
+                                      const int64_t new_tbl_cols_cnt)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *orig_column_schema =
+    origin_table_schema.get_column_schema(orig_column_name);
+  ObColumnNameHashWrapper orig_column_key(orig_column_name);
+  if (OB_FAIL(check_can_drop_column(orig_column_name, orig_column_schema, origin_table_schema,
+                                    new_table_schema,
+                                    (new_table_schema.get_column_count() > new_tbl_cols_cnt + 1 ?
+                                       new_table_schema.get_column_count() :
+                                       new_tbl_cols_cnt + 1),
+                                    schema_guard))) {
+    LOG_WARN("column cannot be dropped", K(ret), K(new_tbl_cols_cnt), K(orig_column_schema));
+  } else if (OB_FAIL(drop_column_update_new_table(origin_table_schema, new_table_schema,
+                                                  *orig_column_schema))) {
+    LOG_WARN("fail to drop column update new table", K(ret));
+  } else {
+    // do nothing
+  }
+  return ret;
+}
+
+int ObDDLService::prepare_change_modify_column_offline(AlterColumnSchema &alter_column_schema,
+                           const ObTableSchema &origin_table_schema,
+                           const AlterTableSchema &alter_table_schema,
+                           const bool is_oracle_mode,
+                           obrpc::ObAlterTableArg &alter_table_arg,
+                           ObTableSchema &new_table_schema,
+                           sql::ObSchemaChecker &schema_checker,
+                           ObSchemaGetterGuard &schema_guard,
+                           common::hash::ObHashSet<ObColumnNameHashWrapper> &update_column_name_set,
+                           ObColumnSchemaV2 &new_column_schema,
+                           bool &is_contain_part_key)
+{
+  int ret = OB_SUCCESS;
+  const common::ObTimeZoneInfoWrap &tz_info_wrap = alter_table_arg.tz_info_wrap_;
+  const common::ObString *nls_formats = alter_table_arg.nls_formats_;
+  common::ObIAllocator &allocator = alter_table_arg.allocator_;
+  const ObString &orig_column_name = alter_column_schema.get_origin_column_name();
+  ObColumnNameHashWrapper orig_column_key(orig_column_name);
+  ObColumnSchemaV2 *orig_column_schema = new_table_schema.get_column_schema(orig_column_name);
+  if (OB_ISNULL(orig_column_schema)) {
+    ret = OB_ERR_BAD_FIELD_ERROR;
+    LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, orig_column_name.length(), orig_column_name.ptr(),
+                   origin_table_schema.get_table_name_str().length(),
+                   origin_table_schema.get_table_name_str().ptr());
+    LOG_WARN("unknown column", K(ret), K(orig_column_name), K(new_table_schema));
+  } else if (orig_column_schema->is_tbl_part_key_column() && !is_contain_part_key) {
+    is_contain_part_key = true;
+    if (OB_FAIL(new_table_schema.assign_partition_schema(alter_table_schema))) {
+      LOG_WARN("failed to assign partition schema", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (alter_column_schema.is_generated_column()
+             && OB_FAIL(ObDDLResolver::reformat_generated_column_expr(
+               alter_column_schema.get_cur_default_value(), tz_info_wrap, nls_formats, allocator,
+               new_table_schema, alter_column_schema, alter_table_schema.get_sql_mode(),
+               &schema_checker))) {
+    LOG_WARN("faled to check default value", K(ret), K(alter_column_schema));
+  } else if (OB_FAIL(pre_check_orig_column_schema(alter_column_schema, origin_table_schema,
+                                                  update_column_name_set))) {
+    LOG_WARN("failed to pre check orig column schema", K(ret));
+  } else if (OB_DDL_CHANGE_COLUMN == alter_column_schema.alter_type_
+             && orig_column_schema->has_generated_column_deps()) {
+    if (OB_FAIL(update_generated_column_schema(alter_column_schema, *orig_column_schema,
+                                               origin_table_schema, tz_info_wrap,
+                                               new_table_schema))) {
+      LOG_WARN("failed to rebuild generated column schema", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(validate_update_column_for_materialized_view(origin_table_schema,
+                                                                  *orig_column_schema))) {
+    LOG_WARN("fial to validate update column for materialized view", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    /* rename column, no need to check gen col dup */
+    ObSEArray<ObString, 4> empty_expr_arr;
+    if (OB_FAIL(ObDDLResolver::check_default_value(
+          alter_column_schema.get_cur_default_value(), tz_info_wrap, nls_formats, allocator,
+          new_table_schema, alter_column_schema, empty_expr_arr, alter_table_schema.get_sql_mode(),
+          !alter_column_schema.is_generated_column(), /* allow_sequence */
+          &schema_checker))) {
+      LOG_WARN("fail to check default value", K(alter_column_schema), K(ret));
+    }
+  }
+  if (OB_SUCC(ret)
+      && orig_column_schema->get_column_name_str() != alter_column_schema.get_column_name_str()) {
+    if (orig_column_schema->is_tbl_part_key_column()
+        && OB_FAIL(modify_part_func_expr(
+                     orig_column_schema->get_column_name_str(),
+                     alter_column_schema.get_column_name_str(),
+                     new_table_schema,
+                     *tz_info_wrap.get_time_zone_info(),
+                     allocator))) {
+      LOG_WARN("modify part func expr failed", K(ret));
+    } else if (OB_FAIL(modify_part_func_expr_for_global_index(
+                         *orig_column_schema,
+                         alter_column_schema,
+                         new_table_schema,
+                         *tz_info_wrap.get_time_zone_info(),
+                         allocator,
+                         nullptr/* ddl_operator */,
+                         nullptr/* trans */,
+                         nullptr/* global_idx_schema_array */))) {
+      LOG_WARN("failed to modify part_func_expr for global_index", K(ret));
+    } else if (OB_FAIL(modify_constraint_check_expr(
+                         *orig_column_schema,
+                         alter_column_schema,
+                         new_table_schema,
+                         alter_table_arg,
+                         is_oracle_mode,
+                         *tz_info_wrap.get_time_zone_info(),
+                         allocator,
+                         nullptr/* ddl_operator */,
+                         nullptr/* trans */))) {
+      LOG_WARN("failed to modify check_expr constraint", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(new_column_schema.assign(*orig_column_schema))) {
+      LOG_WARN("assign column schema failed", K(ret));
+    } else if (alter_column_schema.is_primary_key_) {
+      if (!new_table_schema.is_heap_table()) {
+        ret = OB_ERR_MULTIPLE_PRI_KEY;
+        LOG_WARN("multiple primary key defined", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(fill_new_column_attributes(alter_column_schema, new_column_schema))) {
+      LOG_WARN("fill new column attributes failed", K(ret));
+    } else if (OB_FAIL(new_column_schema.set_orig_default_value(
+                 alter_column_schema.get_orig_default_value()))) {
+      LOG_WARN("set orig default value failed", K(ret));
+    } else if (OB_FAIL(resolve_timestamp_column(&alter_column_schema, new_table_schema,
+                                                new_column_schema, tz_info_wrap, nls_formats,
+                                                allocator))) {
+      LOG_WARN("resolve timestamp column failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::pre_rename_mysql_columns_offline(
+    const ObTableSchema &origin_table_schema, AlterTableSchema &alter_table_schema,
+    bool is_oracle_mode, obrpc::ObAlterTableArg &alter_table_arg, ObTableSchema &new_table_schema,
+    sql::ObSchemaChecker &schema_checker,
+    ObSchemaGetterGuard &schema_guard,
+    common::hash::ObHashSet<ObColumnNameHashWrapper> &update_column_name_set,
+    bool &need_redistribute_column_id, bool &is_contain_part_key)
+{
+  int ret = OB_SUCCESS;
+  AlterColumnSchema *alter_column_schema;
+  ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
+  ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+  ObSEArray<ObColumnSchemaV2, 16> new_column_schemas;
+  ObSEArray<ObString, 8> new_pk_column;
+  ObSEArray<AlterColumnSchema *, 16> alter_column_schemas;
+  ObSEArray<const ObColumnSchemaV2 *, 16> orig_column_schemas;
+  ObSEArray<ObString, 16> orig_column_names;
+  for (; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
+    if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("*it_begin is NULL", K(ret));
+    } else if (is_oracle_mode || alter_column_schema->alter_type_ != OB_DDL_CHANGE_COLUMN
+               || !is_rename_column(*alter_column_schema)) {
+      // do nothing
+    } else {
+      const ObString &orig_column_name = alter_column_schema->get_origin_column_name();
+      ObColumnNameHashWrapper orig_column_key(orig_column_name);
+      ObColumnSchemaV2 new_column_schema;
+      const ObColumnSchemaV2 *orig_column_schema =
+        new_table_schema.get_column_schema(orig_column_name);
+      if (OB_FAIL(alter_column_schemas.push_back(alter_column_schema))) {
+        LOG_WARN("push back element failed", K(ret));
+      } else if (OB_FAIL(orig_column_schemas.push_back(orig_column_schema))) {
+        LOG_WARN("push back element failed", K(ret));
+      } else {
+        if (OB_FAIL(prepare_change_modify_column_offline(
+              *alter_column_schema, origin_table_schema, alter_table_schema, is_oracle_mode,
+              alter_table_arg, new_table_schema, schema_checker, schema_guard,
+              update_column_name_set, new_column_schema, is_contain_part_key))) {
+          LOG_WARN("prepare change column offline failed", K(ret));
+        } else if (alter_column_schema->is_primary_key_) {
+          if (OB_FAIL(new_pk_column.push_back(alter_column_schema->get_column_name_str()))) {
+            LOG_WARN("push back element failed", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(new_column_schemas.push_back(new_column_schema))) {
+          LOG_WARN("push back element failed", K(ret));
+        } else if (OB_FAIL(
+                     orig_column_names.push_back(alter_column_schema->get_origin_column_name()))) {
+          LOG_WARN("push back element failed", K(ret));
+        } else {
+          if (OB_HASH_EXIST == update_column_name_set.exist_refactored(orig_column_key)) {
+            ret = OB_HASH_EXIST;
+            RS_LOG(WARN, "duplicate index name", K(ret), K(orig_column_name));
+          } else if (OB_FAIL(update_column_name_set.set_refactored(orig_column_key))) {
+            RS_LOG(WARN, "failed to add index_name to hash set.", K(orig_column_name), K(ret));
+          }
+        }
+      }
+    }
+  } // end for
+  if (OB_FAIL(ret)) {
+  } else if (alter_column_schemas.empty()) { // do nothing
+  } else if (OB_FAIL(new_table_schema.alter_mysql_table_columns(
+               new_column_schemas, orig_column_names, ObTableSchema::CHECK_MODE_OFFLINE))) {
+    LOG_WARN("alter mysql table columns failed", K(ret));
+  } else if (!new_pk_column.empty() && OB_FAIL(add_primary_key(new_pk_column, new_table_schema))) {
+    LOG_WARN("failed to add pk to table", K(ret), K(new_pk_column), K(new_table_schema));
+  } else if (OB_FAIL(new_table_schema.check_primary_key_cover_partition_column())) {
+    RS_LOG(WARN, "fail to check primary key cover partition column", K(ret));
+  }
+
+  for (int i = 0; OB_SUCC(ret) && i < alter_column_schemas.count(); i++) {
+    bool is_change_column_order = false;
+    if (OB_FAIL(check_is_change_column_order(new_table_schema, *alter_column_schemas.at(i), is_change_column_order))) {
+      LOG_WARN("failed to check is change column order", K(ret));
+    } else if (is_change_column_order) {
+      if (alter_column_schemas.at(i)->get_column_id()
+          != orig_column_schemas.at(i)->get_column_id()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid alter column schema column id", K(ret), K(*alter_column_schemas.at(i)),
+                 K(*orig_column_schemas.at(i)));
+      } else if (OB_FAIL(new_table_schema.reorder_column(
+                   alter_column_schemas.at(i)->get_column_name_str(),
+                   alter_column_schemas.at(i)->is_first_,
+                   alter_column_schemas.at(i)->get_prev_column_name(),
+                   alter_column_schemas.at(i)->get_next_column_name()))) {
+        LOG_WARN("failed to reorder column", K(ret));
+      } else {
+        need_redistribute_column_id = true;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObDDLService::check_new_columns_for_index(ObIArray<ObTableSchema> &idx_schemas,
+                                              const ObTableSchema &orig_table_schema,
+                                              ObIArray<ObColumnSchemaV2> &new_column_schemas)
+{
+  int ret = OB_SUCCESS;
+  ObTableSchema *index_table_schema = NULL;
+  hash::ObHashSet<uint64_t> main_table_rowkeys;
+  if (OB_FAIL(main_table_rowkeys.create(32))) {
+    LOG_WARN("create bucket failed", K(ret));
+  } else {
+    ObTableSchema::const_column_iterator iter = orig_table_schema.column_begin();
+    ObTableSchema::const_column_iterator end = orig_table_schema.column_end();
+    ObColumnSchemaV2 *col = nullptr;
+    for(; OB_SUCC(ret) && iter != end; iter++) {
+      if (OB_ISNULL(col = static_cast<ObColumnSchemaV2 *>(*iter))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid null *iter", K(ret));
+      } else if (col->is_rowkey_column()) {
+        if (OB_FAIL(main_table_rowkeys.set_refactored(col->get_column_id()))) {
+          LOG_WARN("set hashset failed");
+        }
+      }
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && i < idx_schemas.count(); i++) {
+    index_table_schema = &idx_schemas.at(i);
+    ObSEArray<ObColumnSchemaV2, 8> copy_index_column_schemas;
+    ObSEArray<ObString , 8> orig_column_names;
+    for (int j = 0; OB_SUCC(ret) && j < new_column_schemas.count(); j++) {
+      const ObColumnSchemaV2 *orig_idx_col_schema =
+        index_table_schema->get_column_schema(new_column_schemas.at(j).get_column_id());
+      bool is_main_table_rowkey = false;
+      int tmp_ret = main_table_rowkeys.exist_refactored(new_column_schemas.at(j).get_column_id());
+      if (tmp_ret == OB_HASH_EXIST) {
+        is_main_table_rowkey = true;
+      }
+      if (OB_ISNULL(orig_idx_col_schema)) {
+        RS_LOG(INFO, "index table do not contain this column", "column_name",
+               new_column_schemas.at(j).get_column_name_str(), "index_table",
+               index_table_schema->get_table_name_str());
+        continue;
+      } else if (!orig_idx_col_schema->is_rowkey_column()
+                 && !is_main_table_rowkey) {
+        RS_LOG(INFO, "ingore not rowkey column", "column_name",
+               new_column_schemas.at(j).get_column_name_str(), "index_table",
+               index_table_schema->get_table_name_str());
+      } else if (OB_FAIL(orig_column_names.push_back(orig_idx_col_schema->get_column_name_str()))) {
+        LOG_WARN("push back element failed", K(ret));
+      } else {
+        ObColumnSchemaV2 copy_index_column_schema;
+        copy_index_column_schema = new_column_schemas.at(j);
+        copy_index_column_schema.set_rowkey_position(orig_idx_col_schema->get_rowkey_position());
+        copy_index_column_schema.set_index_position(orig_idx_col_schema->get_index_position());
+        copy_index_column_schema.set_tbl_part_key_pos(orig_idx_col_schema->get_tbl_part_key_pos());
+        if (OB_FAIL(copy_index_column_schemas.push_back(copy_index_column_schema))) {
+          LOG_WARN("push back element failed", K(ret));
+        }
+      }
+    } // end for
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(index_table_schema->alter_mysql_table_columns(
+            copy_index_column_schemas, orig_column_names, ObTableSchema::CHECK_MODE_ONLINE))) {
+        LOG_WARN("alter index column schemas failed", K(ret));
+      } else if (!index_table_schema->is_valid()) {
+        ret = OB_SCHEMA_ERROR;
+        LOG_WARN("index table schema is invalid", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+// if alter stmt contains column renaming request and dst column name already exists in table,
+// renaming needs to execute first.
+int ObDDLService::check_rename_first(const AlterTableSchema &alter_table_schema,
+                                     const ObTableSchema &table_schema,
+                                     const bool is_oracle_mode, bool &is_rename_first)
+{
+  int ret = OB_SUCCESS;
+  AlterColumnSchema *alter_column_schema = nullptr;
+  const ObColumnSchemaV2 *column_schema = nullptr;
+  is_rename_first = false;
+  if (is_oracle_mode) {
+    // need to check rename cycle only in mysql mode.
+  } else {
+    hash::ObHashSet<ObColumnNameHashWrapper> orig_keys;
+    if (OB_FAIL(orig_keys.create(32))) {
+      LOG_WARN("init hashset failed", K(ret));
+    } else {
+      for (auto col_iter = table_schema.column_begin(); OB_SUCC(ret) && col_iter != table_schema.column_end(); col_iter++) {
+        if (OB_ISNULL(column_schema = static_cast<const ObColumnSchemaV2 *>(*col_iter))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid null *col_iter", K(ret));
+        } else {
+          ObColumnNameHashWrapper orig_key(column_schema->get_column_name_str());
+          if (OB_FAIL(orig_keys.set_refactored(orig_key))) {
+            LOG_WARN("set hashset failed", K(ret));
+          }
+        }
+      } // end for
+      for (auto col_iter = alter_table_schema.column_begin();
+           !is_rename_first && OB_SUCC(ret) && col_iter != alter_table_schema.column_end();
+           col_iter++) {
+        alter_column_schema = static_cast<AlterColumnSchema *>(*col_iter);
+        if (OB_ISNULL(alter_column_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid null alter_column_schema", K(ret));
+        } else {
+          ObColumnNameHashWrapper orig_key(alter_column_schema->get_origin_column_name());
+          ObColumnNameHashWrapper new_key(alter_column_schema->get_column_name_str());
+          if (alter_column_schema->alter_type_ == OB_DDL_DROP_COLUMN) {
+            ret = orig_keys.erase_refactored(orig_key);
+            if (OB_FAIL(ret)) {
+              if (ret == OB_HASH_NOT_EXIST) {
+                ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
+                LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY,
+                               alter_column_schema->get_origin_column_name().length(),
+                               alter_column_schema->get_origin_column_name().ptr());
+                LOG_WARN("invalid drop column", K(*alter_column_schema));
+              } else {
+                LOG_WARN("erase refactored failed", K(ret));
+              }
+            }
+          } else if (!(orig_key == new_key)) {
+            ret = orig_keys.exist_refactored(new_key);
+            if (ret == OB_HASH_EXIST || ret == OB_HASH_NOT_EXIST) {
+              is_rename_first = (ret == OB_HASH_EXIST);
+              ret = OB_SUCCESS;
+            } else if (OB_FAIL(ret)) {
+              LOG_WARN("exist refactored failed", K(ret));
+            }
+          }
+        }
+      }
+    }
   }
   return ret;
 }

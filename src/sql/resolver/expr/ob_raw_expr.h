@@ -1128,6 +1128,7 @@ public:
       : database_name_(),
         tbl_name_(),
         col_name_(),
+        dblink_name_(),
         is_star_(false),
         ref_expr_(NULL),
         parents_expr_info_(),
@@ -1144,6 +1145,7 @@ public:
     database_name_ = other.database_name_;
     tbl_name_ = other.tbl_name_;
     col_name_ = other.col_name_;
+    dblink_name_ = other.dblink_name_;
     is_star_ = other.is_star_;
     ref_expr_ = other.ref_expr_;
     parents_expr_info_ = other.parents_expr_info_;
@@ -1226,6 +1228,7 @@ public:
   TO_STRING_KV(N_DATABASE_NAME, database_name_,
                N_TABLE_NAME, tbl_name_,
                N_COLUMN, col_name_,
+               K_(dblink_name),
                K_(is_star),
                K_(ref_expr),
                K_(parents_expr_info),
@@ -1237,6 +1240,7 @@ public:
   common::ObString database_name_;
   common::ObString tbl_name_; //当用于UDF的时候，表示package name
   common::ObString col_name_; //当用于UDF的时候，表示function name
+  common::ObString dblink_name_;
   bool is_star_;
   ObColumnRefRawExpr *ref_expr_;
   ObExprInfo parents_expr_info_;
@@ -3411,12 +3415,14 @@ public:
   ObSysFunRawExpr(common::ObIAllocator &alloc)
     : ObOpRawExpr(alloc),
       func_name_(),
-      operator_id_(common::OB_INVALID_ID)
+      operator_id_(common::OB_INVALID_ID),
+      dblink_id_(common::OB_INVALID_ID)
       { set_expr_class(ObIRawExpr::EXPR_SYS_FUNC); }
   ObSysFunRawExpr()
     : ObOpRawExpr(),
       func_name_(),
-      operator_id_(common::OB_INVALID_ID)
+      operator_id_(common::OB_INVALID_ID),
+      dblink_id_(common::OB_INVALID_ID)
     { set_expr_class(ObIRawExpr::EXPR_SYS_FUNC); }
   virtual ~ObSysFunRawExpr() {}
   int assign(const ObRawExpr &other) override;
@@ -3445,6 +3451,11 @@ public:
   int get_autoinc_nextval_name(char *buf, int64_t buf_len, int64_t &pos) const;
   void set_op_id(int64_t operator_id) { operator_id_ = operator_id; }
   int64_t get_op_id() const { return operator_id_; }
+  void set_dblink_name(const common::ObString &name) { dblink_name_ = name; }
+  const common::ObString &get_dblink_name() const { return dblink_name_; }
+  void set_dblink_id(int64_t dblink_id) { dblink_id_ = dblink_id; }
+  int64_t get_dblink_id() const { return dblink_id_; }
+  bool is_dblink_sys_func() const { return common::OB_INVALID_ID != dblink_id_; }
 
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
@@ -3452,13 +3463,17 @@ public:
                                             N_REL_ID, rel_ids_,
                                             N_FUNC, func_name_,
                                             N_CHILDREN, exprs_,
-                                            K_(enum_set_values));
+                                            K_(enum_set_values),
+                                            K_(dblink_name),
+                                            K_(dblink_id));
 private:
   int check_param_num_internal(int32_t param_num, int32_t param_count, ObExprOperatorType type);
   DISALLOW_COPY_AND_ASSIGN(ObSysFunRawExpr);
   common::ObString func_name_;
+  common::ObString dblink_name_;
   //用于记录rownum表达式归属的count算子的op_id_
   uint64_t operator_id_;
+  uint64_t dblink_id_;
 };
 
 inline void ObSysFunRawExpr::set_func_name(const common::ObString &name)

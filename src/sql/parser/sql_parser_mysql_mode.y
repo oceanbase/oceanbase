@@ -1639,6 +1639,22 @@ simple_expr collation %prec NEG
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, json_unquoted_node, params);
   store_pl_ref_object_symbol($$, result, REF_FUNC);
 }
+| relation_name '.' relation_name USER_VARIABLE
+{
+  ParseNode *dblink_node = $4;
+  if (NULL != dblink_node) {
+    dblink_node->type_ = T_DBLINK_NAME;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REMOTE_SEQUENCE, 4, NULL, $1, $3, $4);
+}
+| relation_name '.' relation_name '.' relation_name USER_VARIABLE
+{
+  ParseNode *dblink_node = $6;
+  if (NULL != dblink_node) {
+    dblink_node->type_ = T_DBLINK_NAME;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REMOTE_SEQUENCE, 4, $1, $3, $5, $6);
+}
 ;
 expr:
 expr AND expr %prec AND
@@ -14706,6 +14722,14 @@ ADD COLUMN column_definition
 | MODIFY column_definition
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_MODIFY, 1, $2);
+}
+| RENAME COLUMN column_definition_ref TO column_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_RENAME, 2, $3, $5);
+  if ($3->children_[0] != NULL || $3->children_[1] != NULL) {
+    yyerror(&@3, result, "");
+    YYERROR;
+  }
 }
 /* we don't have table constraint, so ignore it */
 ;

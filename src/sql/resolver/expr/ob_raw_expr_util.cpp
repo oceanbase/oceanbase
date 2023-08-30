@@ -1726,6 +1726,7 @@ int ObRawExprUtils::resolve_sequence_object(const ObQualifiedName &q_name,
   ObRawExpr *column_expr = NULL;
   ObDMLStmt *stmt = NULL == dml_resolver ? NULL : dml_resolver->get_stmt();
   ObSynonymChecker syn_checker;
+  uint64_t dblink_id = OB_INVALID_ID;
   if (!q_name.tbl_name_.empty() &&
         ObSequenceNamespaceChecker::is_curr_or_next_val(q_name.col_name_)) {
     LOG_DEBUG("sequence object", K(q_name));
@@ -1734,7 +1735,10 @@ int ObRawExprUtils::resolve_sequence_object(const ObQualifiedName &q_name,
     ObStmtScope current_scope = NULL != dml_resolver && !is_generated_column
                                   ? dml_resolver->get_current_scope()
                                   : T_FIELD_LIST_SCOPE;
-    if (OB_FAIL(sequence_namespace_checker.check_sequence_namespace(q_name, syn_checker, sequence_id))) {
+    if (OB_FAIL(sequence_namespace_checker.check_sequence_namespace(q_name,
+                                                                    syn_checker,
+                                                                    sequence_id,
+                                                                    &dblink_id))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "check basic column namespace failed", K(ret), K(q_name));
     } else if (OB_UNLIKELY(T_FIELD_LIST_SCOPE != current_scope &&
                            T_UPDATE_SCOPE != current_scope &&
@@ -1749,6 +1753,11 @@ int ObRawExprUtils::resolve_sequence_object(const ObQualifiedName &q_name,
                                               sequence_id, stmt))) {
       LOG_WARN("resolve column item failed", K(ret));
     } else {
+      if (OB_INVALID_ID != dblink_id && T_FUN_SYS_SEQ_NEXTVAL == column_expr->get_expr_type()) {
+        ObSequenceRawExpr *seq_expr = static_cast<ObSequenceRawExpr*>(column_expr);
+        seq_expr->set_dblink_name(q_name.dblink_name_);
+        seq_expr->set_dblink_id(dblink_id);
+      }
       real_ref_expr = column_expr;
       StmtType type = stmt::T_NONE;
       if (NULL != dml_resolver) {

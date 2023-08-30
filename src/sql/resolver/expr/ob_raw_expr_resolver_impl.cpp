@@ -1142,6 +1142,12 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
         }
         break;
       }
+      case T_REMOTE_SEQUENCE: {
+        if (OB_FAIL(process_remote_sequence_node(node, expr))) {
+          LOG_WARN("failed to process remote sequence node", K(ret));
+        }
+        break;
+      }
       default:
         ret = OB_ERR_PARSER_SYNTAX;
         LOG_WARN("Wrong type in expression", K(get_type_name(node->type_)));
@@ -1317,6 +1323,65 @@ int ObRawExprResolverImpl::process_xml_attributes_values_node(const ParseNode *n
     }
   }
   OX(expr = func_expr);
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_remote_sequence_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObQualifiedName column_ref;
+  if (OB_ISNULL(node) || OB_ISNULL(ctx_.columns_) || OB_ISNULL(ctx_.session_info_) ||
+      OB_ISNULL(ctx_.schema_checker_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(node), K_(ctx_.columns), KPC(ctx_.session_info_), K(ret));
+  } else if(OB_SUCC(ret) && T_REMOTE_SEQUENCE != node->type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node->type_ error", K(node->type_));
+  } else if (OB_SUCC(ret) && (4 != node->num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("num_child_ error", K(node->num_child_));
+  } else if (OB_FAIL(ObResolverUtils::resolve_column_ref(
+            node, ctx_.case_mode_, column_ref))) {
+    LOG_WARN("fail to resolve column ref", K(ret));
+  } else if (OB_UNLIKELY(column_ref.is_star_)) {
+    ret = OB_ERR_PARSER_SYNTAX;
+    LOG_WARN("all star should be replaced");
+  } else {
+    ParseNode* dblink_node = node->children_[3];
+    if (dblink_node != NULL) {
+      column_ref.dblink_name_.assign_ptr(const_cast<char*>(dblink_node->str_value_),
+                                           static_cast<int32_t>(dblink_node->str_len_));
+    }
+    column_ref.parents_expr_info_ = ctx_.parents_expr_info_;
+    ObColumnRefRawExpr *b_expr = NULL;
+    uint64_t tenant_id = ctx_.session_info_->get_effective_tenant_id();
+    const ObDbLinkSchema *dblink_schema = NULL;
+    if (OB_FAIL(ctx_.schema_checker_->get_dblink_schema(tenant_id,
+                                                        column_ref.dblink_name_,
+                                                        dblink_schema))) {
+      LOG_WARN("failed to get dblink schema", K(ret));
+    } else if (OB_ISNULL(dblink_schema)) {
+      ret = OB_DBLINK_NOT_EXIST_TO_ACCESS;
+      LOG_WARN("cat not find dblink", K(column_ref.dblink_name_), K(ret));
+    } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_REF_COLUMN, b_expr))) {
+      LOG_WARN("fail to create raw expr", K(ret));
+    } else if (OB_ISNULL(b_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column ref expr is null");
+    } else {
+      column_ref.ref_expr_ = b_expr;
+      if (lib::is_mysql_mode()) {
+        column_ref.database_name_ = dblink_schema->get_database_name();
+      } else {
+        column_ref.database_name_ = dblink_schema->get_user_name();
+      }
+      if (OB_FAIL(ctx_.columns_->push_back(column_ref))) {
+        LOG_WARN("Add column failed", K(ret));
+      } else {
+        expr = b_expr;
+      }
+    }
+  }
   return ret;
 }
 

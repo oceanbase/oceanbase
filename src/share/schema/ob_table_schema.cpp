@@ -2150,6 +2150,79 @@ int ObTableSchema::alter_column(ObColumnSchemaV2 &column_schema, ObColumnCheckMo
   return ret;
 }
 
+int ObTableSchema::alter_mysql_table_columns(ObIArray<ObColumnSchemaV2> &columns,
+                                             ObIArray<ObString> &orig_names,
+                                             ObColumnCheckMode check_mode)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObColumnSchemaV2 *, 16> src_cols;
+  ObSEArray<ObColumnSchemaV2 *, 16> rename_cols;
+  bool is_oracle_mode = false;
+  if (OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("failed to check oracle mode", K(ret));
+  } else if (OB_UNLIKELY(is_oracle_mode)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("only for mysql mode", K(ret));
+  }
+  for (int i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
+    ObColumnSchemaV2 *src_col = get_column_schema(orig_names.at(i));
+    if (OB_ISNULL(src_col)) {
+      ret = OB_ERR_BAD_FIELD_ERROR;
+      LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, orig_names.at(i).length(),
+                     orig_names.at(i).ptr(), table_name_.length(), table_name_.ptr());
+      LOG_WARN("column not exists", K(ret), "column_name", columns.at(i).get_column_name());
+    } else if (ObColumnCheckMode::CHECK_MODE_ONLINE == check_mode
+               && OB_FAIL(check_column_can_be_altered_online(src_col, &columns.at(i)))) {
+      if (OB_ERR_COLUMN_DUPLICATE == ret) {
+        // create table t (a int, b int);
+        // alter table t rename column a to b, rename column b to a;
+        // `check_column_can_be_altered_online` will report for scenrio above, ignore error for now,
+        // if the final columns have duplicated names, error will be reported later.
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to alter column schema", K(ret));
+      }
+    } else if (ObColumnCheckMode::CHECK_MODE_OFFLINE == check_mode
+               && OB_FAIL(check_column_can_be_altered_offline(src_col, &columns.at(i)))) {
+      if (OB_ERR_COLUMN_DUPLICATE == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("check column can be altered offline failed", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && !src_col->is_autoincrement() && columns.at(i).is_autoincrement()) {
+      autoinc_column_id_ = columns.at(i).get_column_id();
+    }
+    if (OB_SUCC(ret) && src_col->is_autoincrement() && !columns.at(i).is_autoincrement()) {
+      autoinc_column_id_ = 0;
+    }
+    if (OB_SUCC(ret) && OB_FAIL(src_cols.push_back(src_col))) {
+      LOG_WARN("push back element failed", K(ret));
+    }
+    if (OB_SUCC(ret) && src_col->get_column_name_str() != columns.at(i).get_column_name_str()) {
+      if (OB_FAIL(remove_col_from_name_hash_array(is_oracle_mode, src_col))) {
+        LOG_WARN("failed to remove old column name from name_hash_array", K(ret));
+      } else if (OB_FAIL(src_col->set_column_name(columns.at(i).get_column_name_str()))) {
+        LOG_WARN("failed to change column namem", K(ret));
+      } else if (OB_FAIL(rename_cols.push_back(src_col))) {
+        LOG_WARN("push back element failed", K(ret));
+      }
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && i < rename_cols.count(); i++) {
+    if (OB_FAIL(add_col_to_name_hash_array(is_oracle_mode, rename_cols.at(i)))) {
+      LOG_WARN("failed to add new column name to name_hash_array", K(ret));
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && i < src_cols.count(); i++) {
+    if (OB_FAIL(src_cols.at(i)->assign(columns.at(i)))) {
+      LOG_WARN("failed to assign src schema", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTableSchema::reorder_column(const ObString &column_name, const bool is_first, const ObString &prev_column_name, const ObString &next_column_name)
 {
   int ret = OB_SUCCESS;
@@ -2171,6 +2244,8 @@ int ObTableSchema::reorder_column(const ObString &column_name, const bool is_fir
     const ObString &target_name = is_before ? next_column_name : prev_column_name;
     if (OB_ISNULL(target_column = get_column_schema(target_name))) {
       ret = OB_ERR_BAD_FIELD_ERROR;
+      LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, target_name.length(), target_name.ptr(),
+                     table_name_.length(), table_name_.ptr());
       LOG_WARN("failed to get target table schema by name", K(ret), K(target_name));
     } else {
       target_column_id = target_column->get_column_id();

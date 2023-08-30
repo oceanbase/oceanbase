@@ -3569,15 +3569,18 @@ int ObSql::code_generate(
                                    result.get_exec_context().get_min_cluster_version(),
                                    &(pctx->get_datum_param_store()));
     phy_plan->set_is_packed(logical_plan->get_optimizer_context().is_packed());
+    bool has_dblink = false;
     if (OB_FAIL(code_generator.generate(*logical_plan, *phy_plan))) {
       LOG_WARN("Failed to generate physical plan", KPC(logical_plan), K(ret));
+    } else if (OB_FAIL(ObDblinkUtils::has_reverse_link_or_any_dblink(stmt, has_dblink, true))) {
+      LOG_WARN("failed to check dblink in stmt", K(ret));
     } else {
       //session上的ignore_stmt状态给CG使用，在CG结束后需要清空掉
       sql_ctx.session_info_->set_ignore_stmt(false);
       LOG_DEBUG("phy plan", K(*phy_plan));
       phy_plan->stat_.is_use_jit_ = use_jit;
       phy_plan->set_returning(stmt->is_returning());
-      phy_plan->set_has_link_table(stmt->has_link_table());
+      phy_plan->set_has_link_table(has_dblink);
       // set plan insert flag : insert into values(..); // value num is n (n >= 1);
       if (stmt->is_insert_stmt()) {
         ObInsertStmt *insert_stmt = static_cast<ObInsertStmt *>(stmt);

@@ -34,12 +34,14 @@ public:
   ~ObSequenceNamespaceChecker() {};
   int check_sequence_namespace(const ObQualifiedName &q_name,
                                ObSynonymChecker &syn_checker,
-                               uint64_t &sequence_id);
+                               uint64_t &sequence_id,
+                               uint64_t *dblink_id=NULL);
   int check_sequence_namespace(const ObQualifiedName &q_name,
                                ObSynonymChecker &syn_checker,
                                const ObSQLSessionInfo *session_info,
                                const ObSchemaChecker *schema_checker,
-                               uint64_t &sequence_id);
+                               uint64_t &sequence_id,
+                               uint64_t *dblink_id=NULL);
   inline static bool is_curr_or_next_val(const common::ObString &s)
   {
     return 0 == s.case_compare("nextval")  || 0 == s.case_compare("currval");
@@ -52,6 +54,19 @@ private:
                                               const ObSchemaChecker *schema_checker,
                                               bool &exists,
                                               uint64_t &sequence_id);
+  int check_link_sequence_exists(const ObDbLinkSchema *dblink_schema,
+                                sql::ObSQLSessionInfo *session_info,
+                                const ObString &database_name,
+                                const ObString &sequence_name,
+                                bool &exists,
+                                bool &has_currval,
+                                number::ObNumber &currval);
+  int fetch_dblink_sequence_schema(const uint64_t tenant_id,
+                                  const uint64_t db_id,
+                                  const uint64_t dblink_id,
+                                  const common::ObString &sequence_name,
+                                  ObSQLSessionInfo *session_info,
+                                  uint64_t &sequence_id);
   const ObSchemaChecker *schema_checker_;
   const ObSQLSessionInfo *session_info_;
 };

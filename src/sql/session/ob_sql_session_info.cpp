@@ -56,6 +56,7 @@
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "observer/ob_sql_client_decorator.h"
 #include "ob_sess_info_verify.h"
+#include "share/schema/ob_schema_utils.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -228,6 +229,10 @@ int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
                                                   ObMemAttr(orig_tenant_id_, "SequenceMap")))) {
     LOG_WARN("create sequence current value map failed", K(ret));
   } else if (!is_acquire_from_pool() &&
+             OB_FAIL(dblink_sequence_id_map_.create(hash::cal_next_prime(32),
+                                                  ObMemAttr(orig_tenant_id_, "SequenceIdMap")))) {
+    LOG_WARN("create dblink sequence id map failed", K(ret));
+  } else if (!is_acquire_from_pool() &&
              OB_FAIL(contexts_map_.create(hash::cal_next_prime(32),
                                           ObMemAttr(orig_tenant_id_, "ContextsMap")))) {
     LOG_WARN("create contexts map failed", K(ret));
@@ -305,6 +310,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     session_type_ = INVALID_TYPE;
     package_state_map_.reuse();
     sequence_currval_map_.reuse();
+    dblink_sequence_id_map_.reuse();
     curr_session_context_size_ = 0;
     pl_context_ = NULL;
     pl_can_retry_ = true;
@@ -372,6 +378,8 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   in_bytes_ = 0;
   out_bytes_ = 0;
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
+  current_dblink_sequence_id_ = 0;
+  dblink_sequence_schemas_.reset();
 }
 
 void ObSQLSessionInfo::clean_status()
@@ -2266,7 +2274,8 @@ int ObSQLSessionInfo::get_sequence_value(uint64_t tenant_id,
   } else if (OB_FAIL(sequence_currval_map_.get_refactored(seq_id, value))) {
     LOG_WARN("fail get seq", K(tenant_id), K(seq_id), K(ret));
     if (OB_HASH_NOT_EXIST == ret) {
-      LOG_USER_ERROR(OB_HASH_NOT_EXIST, "sequence is not yet defined in this session");
+      ret = OB_ERR_SEQUENCE_NOT_DEFINE;
+      LOG_USER_ERROR(OB_ERR_SEQUENCE_NOT_DEFINE);
     }
   } else {
     // ok
@@ -2291,18 +2300,97 @@ int ObSQLSessionInfo::set_sequence_value(uint64_t tenant_id,
   return ret;
 }
 
-int ObSQLSessionInfo::drop_sequence_value_if_exists(uint64_t tenant_id, uint64_t seq_id)
+int ObSQLSessionInfo::drop_sequence_value_if_exists(uint64_t seq_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id ||
-      OB_INVALID_ID == seq_id)) {
-    LOG_WARN("invalid args", K(tenant_id), K(seq_id), K(ret));
+  if (OB_UNLIKELY(OB_INVALID_ID == seq_id)) {
+    LOG_WARN("invalid args", K(seq_id), K(ret));
   } else if (OB_FAIL(sequence_currval_map_.erase_refactored(seq_id))) {
     if (OB_HASH_NOT_EXIST == ret) {
-      LOG_INFO("drop sequence value not exists", K(ret),  K(tenant_id), K(seq_id));
+      LOG_INFO("drop sequence value not exists", K(ret), K(seq_id));
       ret = OB_SUCCESS;
     } else {
-      LOG_WARN("drop sequence value failed", K(ret), K(tenant_id), K(seq_id));
+      LOG_WARN("drop sequence value failed", K(ret), K(seq_id));
+    }
+  } else {
+    sequence_currval_encoder_.is_changed_ = true;
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::get_dblink_sequence_id(const ObString &sequence_name,
+                                            uint64_t dblink_id,
+                                            uint64_t &seq_id)const
+{
+  int ret = OB_SUCCESS;
+  ObDBlinkSequenceIdKey key(sequence_name, dblink_id);
+  if (OB_UNLIKELY(OB_INVALID_ID == dblink_id ||
+      sequence_name.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid args", K(dblink_id), K(seq_id), K(ret));
+  } else if (OB_FAIL(dblink_sequence_id_map_.get_refactored(key, seq_id))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      seq_id = OB_INVALID_ID;
+      ret = OB_SUCCESS;
+    }
+  } else {
+    // ok
+  }
+  LOG_TRACE("get dblink sequence id", K(sequence_name), K(dblink_id), K(seq_id));
+  return ret;
+}
+
+int ObSQLSessionInfo::get_next_sequence_id(uint64_t &seq_id)
+{
+  int ret = OB_SUCCESS;
+  seq_id = ++current_dblink_sequence_id_;
+  sequence_currval_encoder_.is_changed_ = true;
+  return ret;
+}
+
+int ObSQLSessionInfo::set_dblink_sequence_id(const ObString &sequence_name,
+                                            uint64_t dblink_id,
+                                            uint64_t seq_id)
+{
+  int ret = OB_SUCCESS;
+  ObString name;
+  const bool overwrite_exits = true;
+  if (OB_UNLIKELY(OB_INVALID_ID == dblink_id ||
+      OB_INVALID_ID == seq_id ||
+      sequence_name.empty())) {
+    LOG_WARN("invalid args", K(dblink_id), K(seq_id), K(ret));
+  } else if (OB_FAIL(ob_write_string(get_session_allocator(), sequence_name, name))) {
+    LOG_WARN("failed to write obstring", K(ret));
+  } else {
+    ObDBlinkSequenceIdKey key(name, dblink_id);
+    if (OB_FAIL(dblink_sequence_id_map_.set_refactored(key, seq_id, overwrite_exits))) {
+      LOG_WARN("fail get seq", K(dblink_id), K(seq_id), K(ret));
+    } else {
+      sequence_currval_encoder_.is_changed_ = true;
+      LOG_TRACE("set new dblink sequence id", K(name), K(dblink_id), K(seq_id));
+    }
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::drop_dblink_sequence_id_if_exists(const ObString &sequence_name,
+                                                        uint64_t dblink_id,
+                                                        uint64_t seq_id)
+{
+  int ret = OB_SUCCESS;
+  ObDBlinkSequenceIdKey key(sequence_name, dblink_id);
+  if (OB_UNLIKELY(OB_INVALID_ID == dblink_id ||
+      OB_INVALID_ID == seq_id ||
+      sequence_name.empty())) {
+    LOG_WARN("invalid args", K(sequence_name), K(dblink_id), K(seq_id), K(ret));
+  } else if (OB_FAIL(drop_sequence_value_if_exists(seq_id))) {
+    LOG_WARN("failed to drop sequence value", K(ret));
+  } else if (OB_FAIL(dblink_sequence_id_map_.erase_refactored(key))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      LOG_INFO("drop sequence value not exists", K(ret),  K(dblink_id), K(seq_id));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("drop sequence value failed", K(ret), K(dblink_id), K(seq_id));
     }
   } else {
     sequence_currval_encoder_.is_changed_ = true;
@@ -3615,6 +3703,7 @@ int ObAppCtxInfoEncoder::display_sess_info(ObSQLSessionInfo &sess, const char* c
 int ObSequenceCurrvalEncoder::serialize(ObSQLSessionInfo &sess, char *buf, const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
+  //serialize currval map
   ObSequenceCurrvalMap &map = sess.get_sequence_currval_map();
   OB_UNIS_ENCODE(map.size());
   int64_t count = 0;
@@ -3623,6 +3712,17 @@ int ObSequenceCurrvalEncoder::serialize(ObSQLSessionInfo &sess, char *buf, const
     OB_UNIS_ENCODE(it->second);
   }
   CK (count == map.size());
+  OB_UNIS_ENCODE(sess.get_current_dblink_sequence_id());
+  //serialize dblink sequence id map
+  ObDBlinkSequenceIdMap &id_map = sess.get_dblink_sequence_id_map();
+  OB_UNIS_ENCODE(id_map.size());
+  count = 0;
+  for (auto it = id_map.begin(); OB_SUCC(ret) && it != id_map.end(); ++it, ++count) {
+    OB_UNIS_ENCODE(it->first.sequence_name_);
+    OB_UNIS_ENCODE(it->first.dblink_id_);
+    OB_UNIS_ENCODE(it->second);
+  }
+  CK (count == id_map.size());
   return ret;
 }
 
@@ -3630,6 +3730,8 @@ int ObSequenceCurrvalEncoder::deserialize(ObSQLSessionInfo &sess, const char *bu
 {
   int ret = OB_SUCCESS;
   int64_t map_size = 0;
+  int64_t current_id = 0;
+  //deserialize currval map
   OB_UNIS_DECODE(map_size);
   ObSequenceCurrvalMap &map = sess.get_sequence_currval_map();
   OX (sess.reuse_all_sequence_value());
@@ -3639,6 +3741,19 @@ int ObSequenceCurrvalEncoder::deserialize(ObSQLSessionInfo &sess, const char *bu
     OB_UNIS_DECODE(seq_id);
     OB_UNIS_DECODE(seq_val);
     OZ (map.set_refactored(seq_id, seq_val, true /*overwrite_exits*/));
+  }
+  OB_UNIS_DECODE(current_id);
+  sess.set_current_dblink_sequence_id(current_id);
+  //deserialize dblink seuqnce id map
+  OB_UNIS_DECODE(map_size);
+  ObDBlinkSequenceIdMap &id_map = sess.get_dblink_sequence_id_map();
+  ObDBlinkSequenceIdKey key;
+  seq_id = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < map_size; ++i) {
+    OB_UNIS_DECODE(key.sequence_name_);
+    OB_UNIS_DECODE(key.dblink_id_);
+    OB_UNIS_DECODE(seq_id);
+    OZ (id_map.set_refactored(key, seq_id, true /*overwrite_exits*/));
   }
   return ret;
 }
@@ -3650,6 +3765,14 @@ int64_t ObSequenceCurrvalEncoder::get_serialize_size(ObSQLSessionInfo& sess) con
   OB_UNIS_ADD_LEN(map.size());
   for (auto it = map.begin(); it != map.end(); ++it) {
     OB_UNIS_ADD_LEN(it->first);
+    OB_UNIS_ADD_LEN(it->second);
+  }
+  OB_UNIS_ADD_LEN(sess.get_current_dblink_sequence_id());
+  ObDBlinkSequenceIdMap &id_map = sess.get_dblink_sequence_id_map();
+  OB_UNIS_ADD_LEN(id_map.size());
+  for (auto it = id_map.begin(); it != id_map.end(); ++it) {
+    OB_UNIS_ADD_LEN(it->first.sequence_name_);
+    OB_UNIS_ADD_LEN(it->first.dblink_id_);
     OB_UNIS_ADD_LEN(it->second);
   }
   return len;
@@ -3703,6 +3826,8 @@ int ObSequenceCurrvalEncoder::display_sess_info(ObSQLSessionInfo &sess,
   int64_t pos = 0;
   int64_t data_len = last_sess_length;
   int64_t map_size = 0;
+  int64_t current_id = 0;
+  bool found_mismatch = false;
   OB_UNIS_DECODE(map_size);
   ObSequenceCurrvalMap &map = sess.get_sequence_currval_map();
   if (map_size != map.size()) {
@@ -3710,7 +3835,6 @@ int ObSequenceCurrvalEncoder::display_sess_info(ObSQLSessionInfo &sess,
     LOG_WARN("Sequence currval map size mismatch", K(ret), "current_map_size", map.size(),
              "last_map_size", map_size);
   } else {
-    bool found_mismatch = false;
     uint64_t seq_id = 0;
     ObSequenceValue seq_val_decode;
     ObSequenceValue seq_val_origin;
@@ -3735,9 +3859,45 @@ int ObSequenceCurrvalEncoder::display_sess_info(ObSQLSessionInfo &sess,
         }
       }
     }
-    if (OB_SUCC(ret) && !found_mismatch) {
+  }
+  if (OB_SUCC(ret)) {
+    OB_UNIS_DECODE(current_id);
+    OB_UNIS_DECODE(map_size);
+    ObDBlinkSequenceIdMap &id_map = sess.get_dblink_sequence_id_map();
+    if (map_size != id_map.size()) {
       share::ObTaskController::get().allow_next_syslog();
-      LOG_WARN("All sequence currval is matched", K(ret), K(map_size));
+      LOG_WARN("Sequence id map size mismatch", K(ret), "current_map_size", id_map.size(),
+              "last_map_size", map_size);
+    } else {
+      ObDBlinkSequenceIdKey key;
+      uint64_t seq_id_decode = 0;
+      uint64_t seq_id_origin = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && !found_mismatch && i < map_size; ++i) {
+        OB_UNIS_DECODE(key.sequence_name_);
+        OB_UNIS_DECODE(key.dblink_id_);
+        OB_UNIS_DECODE(seq_id_decode);
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(id_map.get_refactored(key, seq_id_origin))) {
+            if (ret == OB_HASH_NOT_EXIST) {
+              found_mismatch = true;
+              share::ObTaskController::get().allow_next_syslog();
+              LOG_WARN("Decoded sequence id not found", K(ret), K(i), K(map_size), K(seq_id_decode));
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("Fail to get refactored from map", K(ret), K(seq_id_decode));
+            }
+          } else if (seq_id_decode != seq_id_origin) {
+            found_mismatch = true;
+            share::ObTaskController::get().allow_next_syslog();
+            LOG_WARN("Sequence id mismatch", K(ret), K(i), K(map_size),
+                    "current_seq_id", seq_id_decode, "last_seq_id", seq_id_origin);
+          }
+        }
+      }
+      if (OB_SUCC(ret) && !found_mismatch) {
+        share::ObTaskController::get().allow_next_syslog();
+        LOG_WARN("All sequence currval is matched", K(ret), K(map_size));
+      }
     }
   }
   return ret;
@@ -4030,5 +4190,54 @@ int ObSQLSessionInfo::set_xa_end_timeout_seconds(int64_t seconds)
       xa_end_timeout_seconds_ = seconds;
     }
   }
+  return ret;
+}
+
+int ObSQLSessionInfo::add_dblink_sequence_schema(ObSequenceSchema *schema)
+{
+  int ret = OB_SUCCESS;
+  ObSequenceSchema *new_sequence_schema = NULL;
+  const ObSequenceSchema* exists_schema = NULL;
+  if (OB_ISNULL(schema)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("sequence schema is null", K(ret));
+  } else if (OB_UNLIKELY(!schema->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(schema));
+  } else if (OB_FAIL(get_dblink_sequence_schema(schema->get_sequence_id(),
+                                                 exists_schema))) {
+    LOG_WARN("failed to get dblink sequence schema", K(ret));
+  } else if (NULL != exists_schema) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sequence exists", KPC(schema));
+  } else if (OB_FAIL(ObSchemaUtils::alloc_schema(get_session_allocator(),
+                                                 *schema,
+                                                 new_sequence_schema))) {
+    LOG_WARN("alloca sequence schema failed", K(ret));
+  } else if (OB_ISNULL(new_sequence_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL ptr", K(new_sequence_schema), K(ret));
+  } else if (OB_FAIL(dblink_sequence_schemas_.push_back(new_sequence_schema))) {
+    LOG_WARN("failed to push back sequence schema", K(ret));
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::get_dblink_sequence_schema(int64_t sequence_id, const ObSequenceSchema* &schema)const
+{
+  int ret = OB_SUCCESS;
+  bool find = false;
+  schema = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && !find && i < dblink_sequence_schemas_.count(); ++i) {
+    ObSequenceSchema *seq_schema = dblink_sequence_schemas_.at(i);
+    if (OB_ISNULL(seq_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null schema", K(ret));
+    } else if (sequence_id == seq_schema->get_sequence_id()) {
+      find = true;
+      schema = dblink_sequence_schemas_.at(i);
+    }
+  }
+  LOG_TRACE("get dblink sequence schema", K(sequence_id), K(dblink_sequence_schemas_));
   return ret;
 }

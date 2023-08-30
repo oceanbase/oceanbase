@@ -129,7 +129,13 @@ int ObLinkOp::init_dblink(uint64_t dblink_id, ObDbLinkProxy *dblink_proxy, bool 
     LOG_WARN("dblink schema is NULL", K(ret), K(dblink_id));
   } else if (FALSE_IT(set_link_driver_proto(static_cast<DblinkDriverProto>(dblink_schema_->get_driver_proto())))) {
     // do nothing
-  } else if (OB_FAIL(ObLinkOp::init_dblink_param_ctx(param_ctx))) {
+  } else if (OB_FAIL(ObLinkOp::init_dblink_param_ctx(ctx_,
+                                                     param_ctx,
+                                                     link_type_,
+                                                     tenant_id_,
+                                                     dblink_id_,
+                                                     sessid_,
+                                                     next_sql_req_level_))) {
     LOG_WARN("failed to init dblink param ctx", K(ret));
   } else if (OB_FAIL(dblink_proxy->create_dblink_pool(param_ctx,
                                                       dblink_schema_->get_host_addr(),
@@ -356,22 +362,28 @@ int ObLinkSpec::set_param_infos(const ObIArray<ObParamPosIdx> &param_infos)
   return ret;
 }
 
-int ObLinkOp::init_dblink_param_ctx(dblink_param_ctx &param_ctx)
+int ObLinkOp::init_dblink_param_ctx(ObExecContext &exec_ctx,
+                                   common::sqlclient::dblink_param_ctx &param_ctx,
+                                   common::sqlclient::DblinkDriverProto link_type,
+                                   uint64_t tenant_id,
+                                   uint64_t dblink_id,
+                                   uint32_t session_id,
+                                   int64_t next_sql_req_level)
 {
   int ret = OB_SUCCESS;
   uint16_t charset_id = 0;
   uint16_t ncharset_id = 0;
-  if (OB_FAIL(get_charset_id(ctx_, charset_id, ncharset_id))) {
+  if (OB_FAIL(get_charset_id(exec_ctx, charset_id, ncharset_id))) {
     LOG_WARN("failed to get session charset id", K(ret));
   } else {
     param_ctx.charset_id_ = charset_id;
     param_ctx.ncharset_id_ = ncharset_id;
     param_ctx.pool_type_ = DblinkPoolType::DBLINK_POOL_DEF;
-    param_ctx.tenant_id_ = tenant_id_;
-    param_ctx.dblink_id_ = dblink_id_;
-    param_ctx.link_type_ = link_type_;
-    param_ctx.sessid_ = sessid_;
-    param_ctx.sql_request_level_ = next_sql_req_level_;
+    param_ctx.tenant_id_ = tenant_id;
+    param_ctx.dblink_id_ = dblink_id;
+    param_ctx.link_type_ = link_type;
+    param_ctx.sessid_ = session_id;
+    param_ctx.sql_request_level_ = next_sql_req_level;
   }
   return ret;
 }

@@ -1970,7 +1970,17 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
               break;
             }
           } while (true);
-          if (is_oracle_mode()) {
+          if (T_REMOTE_SEQUENCE == project_node->type_) {
+            if (project_node->num_child_ < 3) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected select item type",
+                       K(select_item), K(project_node->type_), K(project_node->num_child_), K(ret));
+            } else {
+              alias_node = project_node->children_[2];
+              select_item.alias_name_.assign_ptr(const_cast<char *>(alias_node->str_value_),
+                                                 static_cast<int32_t>(alias_node->str_len_));
+            }
+          } else if (is_oracle_mode()) {
             if (T_OBJ_ACCESS_REF != project_node->type_) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected select item type", K(select_item), K(project_node->type_), K(ret));

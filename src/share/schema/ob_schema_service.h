@@ -507,6 +507,7 @@ public:
   const common::ObString& get_prev_column_name() const { return prev_column_name_;};
   int set_prev_column_name(const common::ObString& prev_column_name)
     { return deep_copy_str(prev_column_name, prev_column_name_); }
+
   void reset();
 
   ObSchemaOperationType alter_type_;

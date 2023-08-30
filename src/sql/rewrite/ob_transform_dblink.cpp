@@ -261,6 +261,7 @@ int ObTransformDBlink::recursive_get_target_dblink_id(ObSelectStmt *stmt, uint64
       } else if (id != target_dblink_id) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("multi dblink table dml not support", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "multi dblink table dml not support");
       }
     } else if (OB_INVALID_ID != target_dblink_id) {
       ret = OB_NOT_SUPPORTED;
@@ -298,6 +299,8 @@ int ObTransformDBlink::inner_reverse_link_table(ObDMLStmt *stmt, uint64_t target
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "dblink write with user defined function/variable/type");
   } else if (OB_FAIL(reverse_link_tables(stmt->get_table_items(), target_dblink_id))) {
     LOG_WARN("failed to reverse link table", K(ret));
+  } else if (OB_FAIL(reverse_link_sequence(*stmt, target_dblink_id))) {
+    LOG_WARN("failed to reverse link sequence", K(ret));
   } else if (OB_FAIL(formalize_link_table(stmt))) {
     LOG_WARN("failed to formalize link table", K(ret));
   }
@@ -389,6 +392,32 @@ int ObTransformDBlink::reverse_link_tables(ObDMLStmt &stmt,
   return ret;
 }
 
+int ObTransformDBlink::reverse_link_sequence(ObDMLStmt &stmt, uint64_t target_dblink_id)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 2> seq_exprs;
+  if (OB_FAIL(stmt.get_sequence_exprs(seq_exprs))) {
+    LOG_WARN("failed to get sequence exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < seq_exprs.count(); ++i) {
+    ObRawExpr *expr = seq_exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (T_FUN_SYS_SEQ_NEXTVAL == expr->get_expr_type()) {
+      ObSequenceRawExpr *seq_expr = static_cast<ObSequenceRawExpr*>(expr);
+      if (target_dblink_id != seq_expr->get_dblink_id()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("read local sequence object in dblink write not support", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "read local sequence object in dblink write not support");
+      } else {
+        seq_expr->set_dblink_id(OB_INVALID_ID);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTransformDBlink::reverse_link_table_for_temp_table(ObDMLStmt *root_stmt, uint64_t target_dblink_id)
 {
   int ret = OB_SUCCESS;
@@ -431,6 +460,8 @@ int ObTransformDBlink::pack_link_table(ObDMLStmt *stmt, bool &trans_happened)
     if (OB_FAIL(reverse_link_tables(stmt->get_table_items(),
                                     is_reverse_link ? 0 : dblink_id))) {
       LOG_WARN("failed to reverse link table", K(ret));
+    } else if (OB_FAIL(reverse_link_sequence(*stmt, is_reverse_link ? 0 : dblink_id))) {
+      LOG_WARN("failed to reverse link sequence", K(ret));
     } else if (OB_FAIL(formalize_link_table(stmt))) {
       LOG_WARN("failed to formalize link table stmt", K(ret));
     } else if (lib::is_oracle_mode() &&
@@ -523,7 +554,7 @@ int ObTransformDBlink::collect_link_table(ObDMLStmt *stmt,
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
-  } else if (stmt->has_sequence() || stmt->is_hierarchical_query() || stmt->is_unpivot_select() ||
+  } else if (stmt->is_hierarchical_query() || stmt->is_unpivot_select() ||
              (stmt->is_select_stmt() && sel_stmt->has_select_into())) {
     all_table_from_one_dblink = false;
   } else if (has_invalid_link_expr(*stmt, has_special_expr)) {
@@ -565,13 +596,33 @@ int ObTransformDBlink::collect_link_table(ObDMLStmt *stmt,
       LOG_WARN("failed to collect link table", K(ret));
     }
   }
+  if (OB_SUCC(ret) && helpers.count() == 1) {
+    dblink_id = helpers.at(0).dblink_id_;
+    is_reverse_link = helpers.at(0).is_reverse_link_;
+  }
   all_table_from_one_dblink &= (1 == helpers.count() || stmt->is_set_stmt());
+  //check sequence
+  if (OB_SUCC(ret) && all_table_from_one_dblink) {
+    ObSEArray<ObRawExpr*, 2> seq_exprs;
+    if (OB_FAIL(stmt->get_sequence_exprs(seq_exprs))) {
+      LOG_WARN("failed to get sequence exprs", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && all_table_from_one_dblink && i < seq_exprs.count(); ++i) {
+      ObRawExpr *expr = seq_exprs.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (T_FUN_SYS_SEQ_NEXTVAL == expr->get_expr_type()) {
+        ObSequenceRawExpr *seq_expr = static_cast<ObSequenceRawExpr*>(expr);
+        if (dblink_id != seq_expr->get_dblink_id()) {
+          all_table_from_one_dblink = false;
+        }
+      }
+    }
+  }
+  //check child stmt
   if (OB_SUCC(ret) && all_table_from_one_dblink) {
     ObSEArray<ObSelectStmt*, 4> child_stmts;
-    if (helpers.count() == 1) {
-      dblink_id = helpers.at(0).dblink_id_;
-      is_reverse_link = helpers.at(0).is_reverse_link_;
-    }
     if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
       LOG_WARN("failed to get child stmts", K(ret));
     }

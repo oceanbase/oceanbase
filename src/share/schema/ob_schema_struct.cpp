@@ -10880,7 +10880,8 @@ OB_SERIALIZE_MEMBER(ObSequenceSchema,
                     schema_version_,
                     name_,
                     option_,
-                    is_system_generated_);
+                    is_system_generated_,
+                    dblink_id_);
 
 ObSequenceSchema::ObSequenceSchema()
   : ObSchema()
@@ -10917,6 +10918,7 @@ int ObSequenceSchema::assign(const ObSequenceSchema &src_schema)
     set_sequence_id(src_schema.sequence_id_);
     set_schema_version(src_schema.schema_version_);
     set_is_system_generated(src_schema.is_system_generated_);
+    set_dblink_id(src_schema.get_dblink_id());
     if (OB_FAIL(option_.assign(src_schema.option_))) {
       LOG_WARN("fail assign option", K(src_schema));
     } else if (OB_FAIL(set_sequence_name(src_schema.name_))) {
@@ -10945,6 +10947,7 @@ void ObSequenceSchema::reset()
   is_system_generated_ = false;
   reset_string(name_);
   option_.reset();
+  dblink_id_ = OB_INVALID_ID;
 }
 
 int64_t ObSequenceSchema::get_convert_size() const

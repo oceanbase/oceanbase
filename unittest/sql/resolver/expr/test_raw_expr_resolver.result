@@ -1613,7 +1613,9 @@
   "children": [
   ],
   "enum_set_values": [
-  ]
+  ],
+  "dblink_name":"",
+  "dblink_id":-1
 }
 [10] utc_timestamp()
 {
@@ -1649,7 +1651,9 @@
   "children": [
   ],
   "enum_set_values": [
-  ]
+  ],
+  "dblink_name":"",
+  "dblink_id":-1
 }
 [11] floor(3.14)
 {
@@ -1714,7 +1718,9 @@
     }
   ],
   "enum_set_values": [
-  ]
+  ],
+  "dblink_name":"",
+  "dblink_id":-1
 }
 [12] count(*)
 {
@@ -2388,7 +2394,9 @@
     }
   ],
   "enum_set_values": [
-  ]
+  ],
+  "dblink_name":"",
+  "dblink_id":-1
 }
 [19] @a
 {
@@ -2457,7 +2465,9 @@
     }
   ],
   "enum_set_values": [
-  ]
+  ],
+  "dblink_name":"",
+  "dblink_id":-1
 }
 [20] c1
 {
@@ -5022,7 +5032,9 @@
                 }
               ],
               "enum_set_values": [
-              ]
+              ],
+              "dblink_name":"",
+              "dblink_id":-1
             },
              {
               "item_type":"T_INT",
@@ -5056,7 +5068,9 @@
             }
           ],
           "enum_set_values": [
-          ]
+          ],
+          "dblink_name":"",
+          "dblink_id":-1
         },
          {
           "item_type":"T_INT",
@@ -5090,7 +5104,9 @@
         }
       ],
       "enum_set_values": [
-      ]
+      ],
+      "dblink_name":"",
+      "dblink_id":-1
     },
      {
       "item_type":"T_INT",
@@ -5124,7 +5140,9 @@
     }
   ],
   "enum_set_values": [
-  ]
+  ],
+  "dblink_name":"",
+  "dblink_id":-1
 }
 [34] X not like Y
 {

@@ -1823,7 +1823,7 @@ int ObResolverUtils::resolve_column_ref(const ParseNode *node, const ObNameCaseM
   ObString column_name;
   ObString table_name;
   ObString database_name;
-  if (OB_ISNULL(node) || OB_UNLIKELY(node->type_ != T_COLUMN_REF)) {
+  if (OB_ISNULL(node) || node->num_child_ < 3) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parse node is invalid", K(node));
   } else {

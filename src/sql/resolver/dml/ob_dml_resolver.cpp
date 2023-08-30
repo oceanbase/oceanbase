@@ -10763,10 +10763,16 @@ int ObDMLResolver::add_sequence_id_to_stmt(uint64_t sequence_id, bool is_currval
       //  note: 按照 Oracle 语义，一个语句中即使出现多次相同对象的 nextval
       //        也只计算一次。所以这里只需要保存唯一的 sequence_id 即可
       const ObSequenceSchema *seq_schema = nullptr;
-      if (OB_ISNULL(params_.schema_checker_->get_schema_guard())) {
+      if (OB_ISNULL(params_.schema_checker_->get_schema_guard()) ||
+          OB_ISNULL(session_info_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema guard ptr is null ptr", K(ret), KP(params_.schema_checker_));
-      } else if (OB_FAIL(params_.schema_checker_->get_schema_guard()->get_sequence_schema(session_info_->get_effective_tenant_id(), sequence_id, seq_schema))) {
+      } else if (OB_FAIL(session_info_->get_dblink_sequence_schema(sequence_id, seq_schema))) {
+        LOG_WARN("failed to get dblink sequence schema", K(ret));
+      } else if (NULL == seq_schema &&
+                OB_FAIL(params_.schema_checker_->get_schema_guard()->get_sequence_schema(session_info_->get_effective_tenant_id(),
+                                                                                         sequence_id,
+                                                                                         seq_schema))) {
         LOG_WARN("get seq schema failed", K(ret));
       } else if (OB_ISNULL(seq_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -10781,11 +10787,13 @@ int ObDMLResolver::add_sequence_id_to_stmt(uint64_t sequence_id, bool is_currval
         LOG_WARN("fail push back sequence id",
                  K(sequence_id), K(ids), K(ret));
       }
-      if (OB_SUCC(ret) && OB_FAIL(add_object_version_to_dependency(DEPENDENCY_SEQUENCE,
-                                                                   SEQUENCE_SCHEMA,
-                                                                   sequence_id,
-                                                                   seq_schema->get_database_id(),
-                                                                   OB_INVALID_ID))) {
+      if (OB_SUCC(ret) &&
+          OB_INVALID_ID == seq_schema->get_dblink_id() &&
+          OB_FAIL(add_object_version_to_dependency(DEPENDENCY_SEQUENCE,
+                                                  SEQUENCE_SCHEMA,
+                                                  sequence_id,
+                                                  seq_schema->get_database_id(),
+                                                  OB_INVALID_ID))) {
         LOG_WARN("add object version to dependency failed", K(ret));
       }
     }

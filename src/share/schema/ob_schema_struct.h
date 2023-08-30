@@ -6585,6 +6585,8 @@ public:
   inline const share::ObSequenceOption &get_sequence_option() const { return option_; }
   inline ObTenantSequenceId get_tenant_sequence_id() const
   { return ObTenantSequenceId(tenant_id_, sequence_id_); }
+  inline uint64_t get_dblink_id() const { return dblink_id_; }
+  inline void set_dblink_id(uint64_t id) { dblink_id_ = id; }
 
   void reset();
 
@@ -6594,7 +6596,8 @@ public:
                        K_(sequence_id),
                        K_(schema_version),
                        K_(option),
-                       K_(is_system_generated));
+                       K_(is_system_generated),
+                       K_(dblink_id));
 private:
   //void *alloc(int64_t size);
   // int get_value(const common::ObString &str, int64_t &val);
@@ -6608,6 +6611,7 @@ private:
   share::ObSequenceOption option_;
   bool is_system_generated_;
   //common::ObArenaAllocator allocator_;
+  uint64_t dblink_id_;
 };
 
 typedef ObSequenceSchema ObSequenceInfo;

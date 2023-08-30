@@ -1003,6 +1003,11 @@ public:
   int delete_all_view_columns();
   int alter_all_view_columns_type_undefined(bool &already_invalid);
   int alter_column(ObColumnSchemaV2 &column, ObColumnCheckMode check_mode, const bool for_view);
+
+  int alter_mysql_table_columns(
+    common::ObIArray<ObColumnSchemaV2> &columns,
+    common::ObIArray<common::ObString> &orig_names,
+    ObColumnCheckMode check_mode);
   int reorder_column(const ObString &column_name, const bool is_first, const ObString &prev_column_name, const ObString &next_column_name);
   int add_aux_vp_tid(const uint64_t aux_vp_tid);
   int add_partition_key(const common::ObString &column_name);

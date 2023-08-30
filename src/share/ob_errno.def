@@ -357,7 +357,7 @@ DEFINE_ERROR_EXT(OB_UDF_EXISTS, -4294, ER_UDF_EXISTS, "HY000", "Function already
 DEFINE_ERROR_EXT(OB_CANT_OPEN_LIBRARY, -4295, ER_CANT_OPEN_LIBRARY, "HY000", "Can't open shared library", "Can not open shared library '%.*s'");
 DEFINE_ERROR_EXT(OB_CANT_FIND_DL_ENTRY, -4296, ER_CANT_FIND_DL_ENTRY, "HY000", "Can't find symbol", "Can't find symbol %.*s in library");
 DEFINE_ERROR(OB_OBJECT_NAME_EXIST, -4297, -1, "HY000", "name is already used by an existing object");
-DEFINE_ORACLE_ERROR_EXT(OB_OBJECT_NAME_NOT_EXIST, -4298, -1, "HY000", "object does not exist", "%s does not exist", 2289, "object does not exist", "%s does not exist");
+DEFINE_ORACLE_ERROR_EXT(OB_OBJECT_NAME_NOT_EXIST, -4298, 4298, "HY000", "object does not exist", "%s does not exist", 2289, "object does not exist", "%s does not exist");
 DEFINE_ERROR_EXT(OB_ERR_DUP_ARGUMENT, -4299, ER_DUP_ARGUMENT, "HY000", "Option used twice in statement", "Option '%s' used twice in statement");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_SEQUENCE_NAME, -4300,-1, "HY000", "invalid sequence name", 2277, "invalid sequence name");
 DEFINE_ORACLE_ERROR(OB_ERR_DUP_MAXVALUE_SPEC, -4301,-1, "HY000", "duplicate MAXVALUE/NOMAXVALUE specifications", 2278, "duplicate MAXVALUE/NOMAXVALUE specifications");

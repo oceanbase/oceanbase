@@ -5569,16 +5569,20 @@ int ObLogPlan::candi_allocate_sequence()
   ObSEArray<CandidatePlan, 4> sequence_plans;
   ObDMLStmt *root_stmt = NULL;
   bool will_use_parallel_sequence = false;
+  bool has_dblink_sequence = false;
   OPT_TRACE_TITLE("start to generate sequence plan");
   if (OB_ISNULL(root_stmt = get_optimizer_context().get_root_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(root_stmt), K(ret));
+  } else if (OB_FAIL(check_has_dblink_sequence(has_dblink_sequence))) {
+    LOG_WARN("failed to check has dblink sequence", K(ret));
   } else if (root_stmt->is_explain_stmt() &&
              OB_ISNULL(root_stmt=static_cast<ObExplainStmt*>(root_stmt)->get_explain_query_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(root_stmt), K(ret));
   } else {
-    will_use_parallel_sequence = get_optimizer_context().is_online_ddl() || root_stmt->is_insert_stmt();
+    will_use_parallel_sequence = (get_optimizer_context().is_online_ddl() || root_stmt->is_insert_stmt())
+                                  && !has_dblink_sequence;
     OPT_TRACE("check will use parallel sequence:", will_use_parallel_sequence);
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); ++i) {
@@ -5601,6 +5605,27 @@ int ObLogPlan::candi_allocate_sequence()
     if (OB_FAIL(prune_and_keep_best_plans(sequence_plans))) {
       LOG_WARN("failed to prune and keep best plans", K(ret));
     } else { /*do nothing*/ }
+  }
+  return ret;
+}
+
+int ObLogPlan::check_has_dblink_sequence(bool &has)
+{
+  int ret = OB_SUCCESS;
+  has = false;
+  ObSQLSessionInfo *session = get_optimizer_context().get_session_info();
+  if (OB_ISNULL(session) || OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is invalid", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !has && i < get_stmt()->get_nextval_sequence_ids().count(); ++i) {
+    const ObSequenceSchema *seq_schema = NULL;
+    if (OB_FAIL(session->get_dblink_sequence_schema(get_stmt()->get_nextval_sequence_ids().at(i),
+                                                    seq_schema))) {
+      LOG_WARN("failed to get dblink sequence schema", K(ret));
+    } else if (NULL != seq_schema) {
+      has = true;
+    }
   }
   return ret;
 }

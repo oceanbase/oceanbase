@@ -409,6 +409,28 @@ typedef common::hash::ObHashMap<uint64_t, pl::ObPLPackageState *,
                                 common::hash::NoPthreadDefendMode> ObPackageStateMap;
 typedef common::hash::ObHashMap<uint64_t, share::ObSequenceValue,
                                 common::hash::NoPthreadDefendMode> ObSequenceCurrvalMap;
+struct ObDBlinkSequenceIdKey{
+  ObDBlinkSequenceIdKey()
+  :dblink_id_(OB_INVALID_ID)
+  {}
+  ObDBlinkSequenceIdKey(const common::ObString &name, uint64_t dblink_id)
+  :sequence_name_(name),dblink_id_(dblink_id)
+  {}
+  ~ObDBlinkSequenceIdKey(){}
+  int hash(uint64_t &res) const
+  {
+    res = 0;
+    res = common::murmurhash(sequence_name_.ptr(), sequence_name_.length(), 0);
+    res = common::murmurhash(&dblink_id_, sizeof(uint64_t), res);
+    return OB_SUCCESS;
+  }
+  bool operator==(const ObDBlinkSequenceIdKey &rv) const
+  { return dblink_id_ == rv.dblink_id_ && sequence_name_ == rv.sequence_name_; }
+  common::ObString sequence_name_;
+  uint64_t dblink_id_;
+};
+typedef common::hash::ObHashMap<ObDBlinkSequenceIdKey, uint64_t,
+                                common::hash::NoPthreadDefendMode> ObDBlinkSequenceIdMap;
 typedef common::hash::ObHashMap<common::ObString,
                                 ObContextUnit *,
                                 common::hash::NoPthreadDefendMode,
@@ -800,6 +822,8 @@ public:
   void gen_gtt_trans_scope_unique_id();
   common::ObIArray<uint64_t> &get_gtt_session_scope_ids() { return gtt_session_scope_ids_; }
   common::ObIArray<uint64_t> &get_gtt_trans_scope_ids() { return gtt_trans_scope_ids_; }
+  int add_dblink_sequence_schema(ObSequenceSchema *schema);
+  int get_dblink_sequence_schema(int64_t sequence_id, const ObSequenceSchema* &schema)const;
 
   void set_for_trigger_package(bool value) { is_for_trigger_package_ = value; }
   bool is_for_trigger_package() const { return is_for_trigger_package_; }
@@ -1022,10 +1046,22 @@ public:
                          uint64_t seq_id,
                          const share::ObSequenceValue &value);
 
-  int drop_sequence_value_if_exists(uint64_t tenant_id, uint64_t seq_id);
+  int drop_sequence_value_if_exists(uint64_t seq_id);
+  int get_dblink_sequence_id(const common::ObString &sequence_name,
+                             uint64_t dblink_id,
+                             uint64_t &seq_id) const;
+  int get_next_sequence_id(uint64_t &seq_id);
+  int set_dblink_sequence_id(const common::ObString &sequence_name,
+                            uint64_t dblink_id,
+                            uint64_t seq_id);
+
+  int drop_dblink_sequence_id_if_exists(const common::ObString &sequence_name,
+                                        uint64_t dblink_id,
+                                        uint64_t seq_id);
   void reuse_all_sequence_value()
   {
     sequence_currval_map_.reuse();
+    dblink_sequence_id_map_.reuse();
   }
   int get_context_values(const common::ObString &context_name,
                         const common::ObString &attribute,
@@ -1086,6 +1122,9 @@ public:
   ObSequenceCurrvalEncoder &get_sequence_currval_encoder() { return sequence_currval_encoder_; }
   ObContextsMap &get_contexts_map() { return contexts_map_; }
   ObSequenceCurrvalMap &get_sequence_currval_map() { return sequence_currval_map_; }
+  ObDBlinkSequenceIdMap  &get_dblink_sequence_id_map() { return dblink_sequence_id_map_; }
+  void set_current_dblink_sequence_id(int64_t id) { current_dblink_sequence_id_ = id; }
+  int64_t get_current_dblink_sequence_id() const { return current_dblink_sequence_id_; }
   int get_mem_ctx_alloc(common::ObIAllocator *&alloc);
   int update_sess_sync_info(const SessionSyncInfoType sess_sync_info_type,
                                 const char *buf, const int64_t length, int64_t &pos);
@@ -1314,6 +1353,8 @@ private:
   SessionType session_type_;
   ObPackageStateMap package_state_map_;
   ObSequenceCurrvalMap sequence_currval_map_;
+  ObDBlinkSequenceIdMap dblink_sequence_id_map_;
+  int64_t current_dblink_sequence_id_;
   ObContextsMap contexts_map_;
   int64_t curr_session_context_size_;
 
@@ -1464,6 +1505,7 @@ private:
   int32_t vport_;
   int64_t in_bytes_;
   int64_t out_bytes_;
+  common::ObSEArray<ObSequenceSchema*, 2> dblink_sequence_schemas_;
 };
 
 inline bool ObSQLSessionInfo::is_terminate(int &ret) const

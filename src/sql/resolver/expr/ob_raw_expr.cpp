@@ -3623,7 +3623,9 @@ int ObSysFunRawExpr::assign(const ObRawExpr &other)
       const ObSysFunRawExpr &tmp =
           static_cast<const ObSysFunRawExpr &>(other);
       func_name_ = tmp.func_name_;
+      dblink_name_ = tmp.dblink_name_;
       operator_id_ = tmp.operator_id_;
+      dblink_id_ = tmp.dblink_id_;
     }
   }
   return ret;
@@ -3640,6 +3642,8 @@ int ObSysFunRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
       LOG_WARN("inner allocator or expr factory is NULL", K(inner_alloc_), K(ret));
     } else if (OB_FAIL(ob_write_string(*inner_alloc_, func_name_, func_name_))) {
       LOG_WARN("fail to write string", K(func_name_), K(ret));
+    } else if (OB_FAIL(ob_write_string(*inner_alloc_, dblink_name_, dblink_name_))) {
+      LOG_WARN("fail to write string", K(dblink_name_), K(ret));
     }
   }
   return ret;
@@ -3655,6 +3659,7 @@ void ObSysFunRawExpr::reset()
   ObNonTerminalRawExpr::reset();
   func_name_.reset();
   clear_child();
+  dblink_id_ = OB_INVALID_ID;
 }
 
 bool ObSysFunRawExpr::inner_same_as(
@@ -3672,7 +3677,8 @@ bool ObSysFunRawExpr::inner_same_as(
     //for EXPR_UDF and EXPR_SYS_FUNC
     const ObSysFunRawExpr *s_expr = static_cast<const ObSysFunRawExpr *>(&expr);
     if (ObCharset::case_insensitive_equal(func_name_, s_expr->get_func_name())
-        && this->get_param_count() == s_expr->get_param_count()) {
+        && this->get_param_count() == s_expr->get_param_count() &&
+        get_dblink_id() == s_expr->get_dblink_id()) {
       bool_ret = true;
       for (int64_t i = 0; bool_ret && i < s_expr->get_param_count(); i++) {
         if (OB_ISNULL(get_param_expr(i)) || OB_ISNULL(s_expr->get_param_expr(i))) {
@@ -4158,10 +4164,17 @@ int ObSequenceRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(BUF_PRINTF("%.*s.%.*s",
-                         name_.length(), name_.ptr(),
-                         action_.length(), action_.ptr()))) {
+                          name_.length(), name_.ptr(),
+                          action_.length(), action_.ptr()))) {
     LOG_WARN("fail to BUF_PRINTF", K(ret));
-  } else if (EXPLAIN_EXTENDED == type) {
+  } else if (is_dblink_sys_func()) {
+    if (OB_FAIL(BUF_PRINTF("@%.*s",
+                          get_dblink_name().length(),
+                          get_dblink_name().ptr()))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && EXPLAIN_EXTENDED == type) {
     if (OB_FAIL(BUF_PRINTF("("))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     } else if (OB_FAIL(BUF_PRINTF("%p", this))) {

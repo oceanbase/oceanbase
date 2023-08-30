@@ -20,11 +20,12 @@ namespace oceanbase
 {
 namespace sql
 {
-
 class ObSequenceSpec : public ObOpSpec
 {
   OB_UNIS_VERSION_V(1);
 public:
+
+
   ObSequenceSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
 
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K_(nextval_seq_ids));
@@ -42,6 +43,60 @@ public:
   common::ObFixedArray<uint64_t, common::ObIAllocator> nextval_seq_ids_;
 };
 
+class ObSequenceExecutor {
+  public:
+    ObSequenceExecutor()
+    :dblink_id_(OB_INVALID_ID) {}
+    ~ObSequenceExecutor() { destroy(); }
+    virtual int init(ObExecContext &ctx)=0;
+    virtual void reset() { seq_ids_.reset(); seq_schemas_.reset();}
+    virtual void destroy() { seq_ids_.reset(); seq_schemas_.reset(); }
+    virtual int get_nextval(ObExecContext &ctx)=0;
+    uint64_t get_dblink_id() const { return dblink_id_; }
+    void set_dblink_id(uint64_t id) { dblink_id_ = id; }
+    int add_sequence_id(uint64_t id) { return seq_ids_.push_back(id); }
+    TO_STRING_KV(K_(seq_ids), K_(dblink_id));
+  protected:
+    // schema 放入 context 中是为了利用它的 cache 能力
+    common::ObSEArray<share::schema::ObSequenceSchema, 1> seq_schemas_;
+    common::ObSEArray<uint64_t, 2> seq_ids_;
+    uint64_t dblink_id_;
+};
+
+class ObLocalSequenceExecutor : public ObSequenceExecutor {
+  public:
+    ObLocalSequenceExecutor();
+    ~ObLocalSequenceExecutor();
+    virtual int init(ObExecContext &ctx) override;
+    virtual void reset() override;
+    virtual void destroy() override;
+    virtual int get_nextval(ObExecContext &ctx) override;
+  private:
+    // sequence 暴露给用户层的是一个 cache
+    // cache 底层负责做 sequence 的缓存更新以及全局的协调
+    share::ObSequenceCache *sequence_cache_;
+};
+
+class ObRemoteSequenceExecutor : public ObSequenceExecutor {
+  public:
+    ObRemoteSequenceExecutor();
+    ~ObRemoteSequenceExecutor();
+    virtual int init(ObExecContext &ctx) override;
+    virtual void reset() override;
+    virtual void destroy() override;
+    virtual int get_nextval(ObExecContext &ctx) override;
+  private:
+    int init_dblink_connection(ObExecContext &ctx);
+    int init_sequence_sql(ObExecContext &ctx);
+    int rescan();
+  private:
+    uint32_t sessid_;
+    common::sqlclient::DblinkDriverProto link_type_;
+    char* format_sql_;
+    int64_t format_sql_length_;
+    common::sqlclient::ObISQLConnection *dblink_conn_;
+};
+
 class ObSequenceOp : public ObOperator
 {
 public:
@@ -54,16 +109,10 @@ public:
 
   void reset()
   {
-    sequence_cache_ = NULL;
-    seq_schemas_.reset();
+    seq_executors_.reset();
   }
 
-  virtual void destroy() override
-  {
-    sequence_cache_ = NULL;
-    seq_schemas_.reset();
-    ObOperator::destroy();
-  }
+  virtual void destroy() override;
 private:
   int init_op();
   /**
@@ -73,11 +122,7 @@ private:
    */
   int try_get_next_row();
 private:
-  // sequence 暴露给用户层的是一个 cache
-  // cache 底层负责做 sequence 的缓存更新以及全局的协调
-  share::ObSequenceCache *sequence_cache_;
-  // schema 放入 context 中是为了利用它的 cache 能力
-  common::ObSEArray<share::schema::ObSequenceSchema, 1> seq_schemas_;
+  common::ObSEArray<ObSequenceExecutor*, 1> seq_executors_;
 };
 
 } // end namespace sql

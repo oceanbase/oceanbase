@@ -1648,6 +1648,8 @@ private:
       const share::schema::ObColumnSchemaV2 &orig_column,
       const share::schema::ObColumnSchemaV2 &alter_column,
       share::schema::ObTableSchema &table_schema,
+      obrpc::ObAlterTableArg &alter_table_arg,
+      const bool is_oracle_mode,
       const common::ObTimeZoneInfo &tz_info,
       common::ObIAllocator &allocator,
       ObDDLOperator *ddl_operator,
@@ -2382,6 +2384,79 @@ int check_alter_tenant_when_rebalance_is_disabled_(
 
 private:
   int check_locality_compatible_(ObTenantSchema &schema);
+
+  int pre_rename_mysql_columns_online(const ObTableSchema &origin_table_schema,
+                          const AlterTableSchema &alter_table_schema,
+                          const bool is_oracle_mode,
+                          ObTableSchema &new_table_schema,
+                          obrpc::ObAlterTableArg &alter_table_arg,
+                          sql::ObSchemaChecker &schema_checker,
+                          ObDDLOperator &ddl_operator,
+                          common::hash::ObHashSet<ObColumnNameHashWrapper> &update_column_name_set,
+                          common::ObMySQLTransaction &trans,
+                          ObSchemaGetterGuard &schema_guard,
+                          ObIArray<ObTableSchema> &idx_schema_array,
+                          ObIArray<ObTableSchema> *global_idx_schema_array);
+
+  int drop_column_online(const ObTableSchema &origin_table_schema, ObTableSchema &new_table_schema,
+                         const ObString &orig_column_name, ObDDLOperator &ddl_operator,
+                         ObSchemaGetterGuard &schema_guard, common::ObMySQLTransaction &trans,
+                         common::hash::ObHashSet<ObColumnNameHashWrapper> &update_column_name_set);
+
+  int drop_column_offline(const ObTableSchema &origin_table_schema,
+                          ObTableSchema &new_table_schema,
+                          ObSchemaGetterGuard &schema_guard, const ObString &orig_column_name,
+                          const int64_t new_tbl_cols_cnt);
+  int prepare_change_modify_column_online(AlterColumnSchema &alter_col,
+                           const ObTableSchema &origin_table_schema,
+                           const AlterTableSchema &alter_table_schema,
+                           const bool is_oracle_mode,
+                           obrpc::ObAlterTableArg &alter_table_arg,
+                           ObTableSchema &new_table_schema,
+                           sql::ObSchemaChecker &schema_checker,
+                           ObDDLOperator &ddl_operator,
+                           common::ObMySQLTransaction &trans,
+                           ObSchemaGetterGuard &schema_guard,
+                           ObIArray<ObTableSchema> *global_idx_schema_array,
+                           common::hash::ObHashSet<ObColumnNameHashWrapper> &update_column_name_set,
+                           ObColumnSchemaV2 &new_column_schema);
+
+  int prepare_change_modify_column_offline(AlterColumnSchema &alter_col,
+                           const ObTableSchema &origin_table_schema,
+                           const AlterTableSchema &alter_table_schema,
+                           const bool is_oracle_mode,
+                           obrpc::ObAlterTableArg &alter_table_arg,
+                           ObTableSchema &new_table_schema,
+                           sql::ObSchemaChecker &schema_checker,
+                           ObSchemaGetterGuard &schema_guard,
+                           common::hash::ObHashSet<ObColumnNameHashWrapper> &update_column_name_set,
+                           ObColumnSchemaV2 &new_column_schema,
+                           bool &is_contain_part_key);
+  int pre_rename_mysql_columns_offline(
+    const ObTableSchema &origin_table_schema, AlterTableSchema &alter_table_schema,
+    bool is_oracle_mode, obrpc::ObAlterTableArg &alter_table_arg, ObTableSchema &new_table_schema,
+    sql::ObSchemaChecker &schema_checker,
+    ObSchemaGetterGuard &schema_guard,
+    common::hash::ObHashSet<ObColumnNameHashWrapper> &update_column_name_set,
+    bool &need_redistribute_column_id,
+    bool &is_contain_part_key);
+
+  int check_new_columns_for_index(ObIArray<ObTableSchema> &idx_schemas,
+                                  const ObTableSchema &origin_table_schema,
+                                  ObIArray<ObColumnSchemaV2> &new_column_schemas);
+
+  int check_rename_first(const AlterTableSchema &alter_table_schema,
+                         const ObTableSchema &table_schema,
+                         const bool is_oracle_mode,
+                         bool &is_rename_first);
+
+  inline bool is_rename_column(const AlterColumnSchema &alter_column_schema)
+  {
+    ObColumnNameHashWrapper orig_key(alter_column_schema.get_origin_column_name());
+    ObColumnNameHashWrapper new_key(alter_column_schema.get_column_name_str());
+    return !(orig_key == (new_key));
+  }
+
 private:
   bool inited_;
   volatile bool stopped_;

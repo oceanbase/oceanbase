@@ -931,6 +931,7 @@ public:
 
   /** @brief Allocate sequence op on top of plan candidates */
   int candi_allocate_sequence();
+  int check_has_dblink_sequence(bool &has);
   int allocate_sequence_as_top(ObLogicalOperator *&old_top);
 
   int candi_allocate_err_log(const ObDelUpdStmt *stmt);

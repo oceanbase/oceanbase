@@ -694,7 +694,15 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
           }
         case T_ALTER_PARTITION_OPTION: {
             alter_table_stmt->set_alter_table_partition();
-            if (OB_FAIL(resolve_partition_options(*action_node))) {
+            if (lib::is_mysql_mode() && alter_table_stmt->get_alter_table_arg().is_alter_columns_) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(
+                OB_NOT_SUPPORTED,
+                "specify alter_column_action and alter_partition_action in a single alter table stmt");
+              LOG_WARN(
+                "alter_column_action and alter_partition_action in a single alter table stmt",
+                K(ret));
+            } else if (OB_FAIL(resolve_partition_options(*action_node))) {
               SQL_RESV_LOG(WARN, "Resolve partition option failed!", K(ret));
             }
             break;
@@ -5497,7 +5505,10 @@ int ObAlterTableResolver::is_exist_item_type(const ParseNode &node,
 int ObAlterTableResolver::resolve_rename_column(const ParseNode &node)
 {
   int ret = OB_SUCCESS;
-  if (T_COLUMN_RENAME != node.type_ || OB_ISNULL(node.children_) ||
+  if (lib::is_mysql_mode() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql rename column in current version");
+  } else if (T_COLUMN_RENAME != node.type_ || OB_ISNULL(node.children_) ||
       OB_ISNULL(node.children_[0]) || T_COLUMN_REF != node.children_[0]->type_ ||
       OB_ISNULL(node.children_[1]) || T_IDENT != node.children_[1]->type_) {
     ret = OB_ERR_UNEXPECTED;
@@ -5534,7 +5545,8 @@ int ObAlterTableResolver::resolve_rename_column(const ParseNode &node)
                        table_schema_->get_table_name_str().ptr());
       }
       SQL_RESV_LOG(WARN, "fail to get origin column schema", K(ret));
-    } else if (ObCharset::case_sensitive_equal(origin_column_name, new_column_name)) {
+    } else if (lib::is_oracle_mode()
+               && ObCharset::case_sensitive_equal(origin_column_name, new_column_name)) {
       //先拿原schema再判断node中colname重名的这一顺序是兼容oracle的.
       ret = OB_ERR_FIELD_SPECIFIED_TWICE;
       LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(origin_column_name));
@@ -5544,6 +5556,10 @@ int ObAlterTableResolver::resolve_rename_column(const ParseNode &node)
       SQL_RESV_LOG(WARN, "fail to set origin column name", K(origin_column_name), K(ret));
     } else if (OB_FAIL(alter_column_schema.set_column_name(new_column_name))) {
       SQL_RESV_LOG(WARN, "fail to set new column name", K(new_column_name), K(ret));
+    } else if (lib::is_mysql_mode()
+               && OB_FAIL(check_mysql_rename_column(alter_column_schema, *table_schema_,
+                                                    *alter_table_stmt))) {
+      LOG_WARN("check rename mysql columns failed", K(ret));
     } else {
       //rs端复用ddl_change_column
       alter_column_schema.alter_type_ = OB_DDL_CHANGE_COLUMN;
@@ -5630,6 +5646,77 @@ int ObAlterTableResolver::resolve_modify_all_trigger(const ParseNode &node)
       OX (new_tg_arg.set_trigger_id(table_schema_->get_trigger_list().at(i)));
       OZ (alter_table_stmt->get_tg_arg().trigger_infos_.push_back(new_tg_arg));
       LOG_DEBUG("alter table all triggers", K(new_tg_arg.get_trigger_id()), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObAlterTableResolver::check_mysql_rename_column(const AlterColumnSchema &alter_column_schema,
+                                                    const ObTableSchema &origin_table_schema,
+                                                    ObAlterTableStmt &alter_table_stmt)
+{
+  int ret = OB_SUCCESS;
+  ObColumnSchemaV2 *column = nullptr;
+  const ObPartitionOption &part_opt = origin_table_schema.get_part_option();
+  // check table part key deps
+  if (alter_column_schema.is_tbl_part_key_column()
+      && part_opt.get_part_func_type() != PARTITION_FUNC_TYPE_KEY_IMPLICIT) {
+    ret = OB_ERR_DEPENDENT_BY_PARTITION_FUNC;
+    LOG_USER_ERROR(OB_ERR_DEPENDENT_BY_PARTITION_FUNC,
+                   alter_column_schema.get_origin_column_name().length(),
+                   alter_column_schema.get_origin_column_name().ptr());
+    LOG_WARN("alter column has table part key deps", K(ret), K(alter_column_schema));
+  }
+  // generated column deps
+  for (auto col_iter = origin_table_schema.column_begin();
+       OB_SUCC(ret) && (col_iter != origin_table_schema.column_end()); col_iter++) {
+    if (OB_ISNULL(column = *col_iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null *col_iter", K(ret));
+    } else if (column->has_cascaded_column_id(alter_column_schema.get_column_id())
+               && column->is_generated_column()) {
+      if (!column->is_hidden()) {
+        ret = OB_ERR_DEPENDENT_BY_GENERATED_COLUMN;
+        LOG_USER_ERROR(OB_ERR_DEPENDENT_BY_GENERATED_COLUMN,
+                       alter_column_schema.get_origin_column_name().length(),
+                       alter_column_schema.get_origin_column_name().ptr());
+        LOG_WARN("alter column has generated column deps", K(ret), K(alter_column_schema));
+      }
+    }
+  }
+
+  // constraints deps
+  for (auto cst_iter = origin_table_schema.constraint_begin();
+       OB_SUCC(ret) && (cst_iter != origin_table_schema.constraint_end()); cst_iter++) {
+    if ((*cst_iter)->get_column_cnt() == 0
+        || (*cst_iter)->get_constraint_type() != CONSTRAINT_TYPE_CHECK) {
+      continue;
+    } else {
+      bool dropped_cst = false;
+      AlterTableSchema &alter_table_schema = alter_table_stmt.get_alter_table_arg().alter_table_schema_;
+      for (auto it = alter_table_schema.constraint_begin();
+           OB_SUCC(ret)
+           && !dropped_cst
+           && (alter_table_stmt.get_alter_table_arg().alter_constraint_type_
+                == ObAlterTableArg::DROP_CONSTRAINT)
+           && it != alter_table_schema.constraint_end();
+           it++) {
+        if ((*it)->get_constraint_id() == (*cst_iter)->get_constraint_id()) {
+          dropped_cst = true;
+        }
+      }
+      for (auto it = (*cst_iter)->cst_col_begin();
+           !dropped_cst && OB_SUCC(ret) && it != (*cst_iter)->cst_col_end(); it++) {
+        if (*it == alter_column_schema.get_column_id()) {
+          ret = OB_ERR_DROP_COL_REFERENCED_MULTI_COLS_CONSTRAINT;
+          LOG_USER_ERROR(OB_ERR_DROP_COL_REFERENCED_MULTI_COLS_CONSTRAINT,
+                         (*cst_iter)->get_constraint_name_str().length(),
+                         (*cst_iter)->get_constraint_name_str().ptr(),
+                         alter_column_schema.get_origin_column_name().length(),
+                         alter_column_schema.get_origin_column_name().ptr());
+          LOG_WARN("column has contraint deps", K(ret), K(alter_column_schema));
+        }
+      }
     }
   }
   return ret;

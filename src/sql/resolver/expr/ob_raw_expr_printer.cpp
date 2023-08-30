@@ -2855,6 +2855,9 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("sequence should sepcify format as seqname.action", K(ret));
           }
+          if (OB_SUCC(ret) && seq_expr->is_dblink_sys_func()) {
+            DATA_PRINTF("@%.*s", LEN_AND_PTR(seq_expr->get_dblink_name()));
+          }
         }
         break;
       }
