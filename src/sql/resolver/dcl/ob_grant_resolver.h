@@ -102,13 +102,23 @@ public:
       share::schema::ObPrivLevel &grant_level,
       bool &is_directory,
       bool &explicit_db);
-  int check_user_dup_and_role_grant_option(
+  int check_user_dup(
       share::schema::ObSchemaGetterGuard *guard,
       ObIArray<ObString> &user_name_array,
       const ObGrantStmt *grant_stmt,
       const ObString& user_name,
       const ObString& host_name,
-      const ObString& priv_user_name);
+      const ObString& priv_user_name,
+      bool &contain_role,
+      bool &is_all_role);
+  int rebuild_table_priv(
+      ObGrantStmt *grant_stmt,
+      bool is_owner,
+      const bool is_all_role);
+  int check_role_grant_option(
+      const ObGrantStmt *grant_stmt,
+      const bool contain_role);
+
   static int resolve_role_sys_obj_all_col_priv_list(const ParseNode *role_sys_list,
                                                     ObIArray<ObString> &role_name_array,
                                                     share::ObRawPrivArray &sys_priv_array);
@@ -117,7 +127,8 @@ private:
   int build_table_priv_arary_for_all(
       ObGrantStmt *grant_stmt,
       share::ObRawObjPrivArray &table_priv_array,
-      bool is_owner);
+      bool is_owner,
+      bool is_role);
   int check_obj_priv_valid(
       ObGrantStmt *grant_stmt,
       share::ObRawObjPriv ora_obj_priv);

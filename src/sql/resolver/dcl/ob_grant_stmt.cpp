@@ -43,7 +43,8 @@ ObGrantStmt::ObGrantStmt(ObIAllocator *name_pool)
       ins_col_ids_(),
       upd_col_ids_(),
       ref_col_ids_(),
-      ref_query_(NULL)
+      ref_query_(NULL),
+      is_grant_all_tab_priv_(false)
 {
 }
 
@@ -68,7 +69,8 @@ ObGrantStmt::ObGrantStmt()
       ins_col_ids_(),
       upd_col_ids_(),
       ref_col_ids_(),
-      ref_query_(NULL)
+      ref_query_(NULL),
+      is_grant_all_tab_priv_(false)
 {
 }
 

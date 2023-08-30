@@ -68,6 +68,7 @@ public:
   int set_ref_col_ids(ObSEArray<uint64_t, 4> &col_ids) { return ref_col_ids_.assign(col_ids); }
   void set_ref_query(ObSelectStmt* ref_query) { ref_query_ = ref_query; }
   int add_grantee(const common::ObString &grantee);
+  void set_grant_all_tab_priv(bool is_grant_all) { is_grant_all_tab_priv_ = is_grant_all; }
 
   const share::ObRawPrivArray& get_priv_array() const {return sys_priv_array_;}
   const share::ObRawObjPrivArray& get_obj_priv_array() const {return obj_priv_array_;}
@@ -78,6 +79,7 @@ public:
   ObPrivSet get_priv_set() const { return priv_set_; }
   uint64_t get_tenant_id() const { return tenant_id_; }
   const common::ObStrings& get_grantees() const { return grantees_; }
+  bool is_grant_all_tab_priv() const { return is_grant_all_tab_priv_; }
 
   virtual bool cause_implicit_commit() const { return true; }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return grant_arg_; }
@@ -107,6 +109,7 @@ private:
   ObSEArray<uint64_t, 4> upd_col_ids_;
   ObSEArray<uint64_t, 4> ref_col_ids_;
   ObSelectStmt *ref_query_; // 用于grant 视图时，对视图依赖的table,view等做递归权限check.
+  bool is_grant_all_tab_priv_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObGrantStmt);
