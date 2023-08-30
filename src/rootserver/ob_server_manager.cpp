@@ -255,22 +255,24 @@ int ObServerManager::delete_server(const ObIArray<ObAddr> &servers, const ObZone
         new_server_status = *server_status;
       }
     }
-    if (OB_FAIL(ret)) {
-    } else {
+    if (OB_SUCC(ret)) {
       new_server_status.admin_status_ = ObServerStatus::OB_SERVER_ADMIN_DELETING;
       ROOTSERVICE_EVENT_ADD("server", "delete_server", K(server));
       LOG_INFO("delete server, server change status to deleting", K(server), K(zone));
-		  char ip_buf[common::MAX_IP_ADDR_LENGTH];
+      char ip_buf[common::MAX_IP_ADDR_LENGTH];
       (void)server.ip_to_string(ip_buf, common::MAX_IP_ADDR_LENGTH);
-      int64_t job_id = RS_JOB_CREATE(DELETE_SERVER, trans,
-                                     "svr_ip", ip_buf, "svr_port", server.get_port());
-      if (job_id < 1) {
-		    ret = OB_SQL_OPT_ERROR;
-        LOG_WARN("insert into all_rootservice_job failed ", K(ret));
+      int64_t job_id = 0;
+      if (OB_FAIL(RS_JOB_CREATE_WITH_RET(
+          job_id,
+          JOB_TYPE_DELETE_SERVER,
+          trans,
+          "svr_ip", ip_buf,
+          "svr_port", server.get_port()))) {
+        LOG_WARN("fail to create rs job DELETE_SERVER", KR(ret));
       } else if (OB_FAIL(st_operator_.update_status(server,
                                                     new_server_status.get_display_status(),
                                                     new_server_status.last_hb_time_, trans))) {
-         LOG_WARN("st_operator update_status failed", K(server), K(new_server_status), K(ret));
+        LOG_WARN("st_operator update_status failed", K(server), K(new_server_status), K(ret));
       } else {
         const ObServerStatus::ServerAdminStatus status = ObServerStatus::OB_SERVER_ADMIN_DELETING;
         const bool remove = false;
@@ -362,17 +364,16 @@ int ObServerManager::end_delete_server(const ObAddr &server, const ObZone &zone,
         // complete the job
         char ip_buf[common::MAX_IP_ADDR_LENGTH];
         (void)server.ip_to_string(ip_buf, common::MAX_IP_ADDR_LENGTH);
-        ObRsJobInfo job_info;
-        ret = RS_JOB_FIND(job_info, trans, "job_type", "DELETE_SERVER",
-                          "job_status", "INPROGRESS",
+        int64_t job_id = 0;
+        ret = RS_JOB_FIND(DELETE_SERVER, job_id, trans,
                           "svr_ip", ip_buf, "svr_port", server.get_port());
-        if (OB_SUCC(ret)  && job_info.job_id_ > 0) {
+        if (OB_SUCC(ret)  && job_id > 0) {
           int tmp_ret = commit ? OB_SUCCESS : OB_CANCELED;
-          if (OB_FAIL(RS_JOB_COMPLETE(job_info.job_id_, tmp_ret, trans))) {
+          if (OB_FAIL(RS_JOB_COMPLETE(job_id, tmp_ret, trans))) {
             LOG_WARN("all_rootservice_job update failed" , K(ret), K(server));
           }
         } else {
-          LOG_WARN("failed to find job", K(ret), K(server));
+          LOG_WARN("failed to find job", K(ret), K(server), K(job_id));
         }
       }
       if (OB_SUCC(ret)) {

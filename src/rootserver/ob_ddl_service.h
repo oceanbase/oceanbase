@@ -2309,6 +2309,7 @@ private:
   int add_sys_table_lob_aux(const int64_t tenant_id, const uint64_t table_id,
                             ObTableSchema &meta_schema, ObTableSchema &data_schema);
   int check_has_multi_autoinc(share::schema::ObTableSchema &table_schema);
+
 private:
 #ifdef OB_BUILD_ARBITRATION
   int check_tenant_arbitration_service_status_(
@@ -2378,9 +2379,10 @@ private:
                                     const ObIArray<const ObTableSchema*> &orig_table_schemas,
                                     const ObIArray<ObTableSchema*> &new_table_schemas,
                                     ObMySQLTransaction &trans);
-int check_alter_tenant_when_rebalance_is_disabled_(
-    const share::schema::ObTenantSchema &orig_tenant_schema,
-    const share::schema::ObTenantSchema &new_tenant_schema);
+
+  int check_alter_tenant_when_rebalance_is_disabled_(
+      const share::schema::ObTenantSchema &orig_tenant_schema,
+      const share::schema::ObTenantSchema &new_tenant_schema);
 
 private:
   int check_locality_compatible_(ObTenantSchema &schema);

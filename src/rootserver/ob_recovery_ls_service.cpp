@@ -1065,7 +1065,9 @@ int ObRecoveryLSService::do_standby_balance_()
     LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id_));
   } else {
     ObTenantLSInfo tenant_info(proxy_, &tenant_schema, tenant_id_);
-    if (OB_FAIL(ObLSServiceHelper::balance_ls_group(tenant_info))) {
+    bool is_balanced = false;
+    bool need_execute_balance = true;
+    if (OB_FAIL(ObLSServiceHelper::balance_ls_group(need_execute_balance, tenant_info, is_balanced))) {
       LOG_WARN("failed to balance ls group", KR(ret));
     }
   }

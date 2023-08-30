@@ -41,11 +41,16 @@ struct ObCommitAlterTenantLocalityArg : public obrpc::ObDDLArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCommitAlterTenantLocalityArg() : tenant_id_(common::OB_INVALID_ID) {}
+  ObCommitAlterTenantLocalityArg() :
+      tenant_id_(common::OB_INVALID_ID),
+      rs_job_id_(0),
+      rs_job_check_ret_(OB_NEED_WAIT) {}
   bool is_valid() const { return common::OB_INVALID_ID != tenant_id_;}
-  TO_STRING_KV(K_(tenant_id));
+  TO_STRING_KV(K_(tenant_id), K_(rs_job_id), K_(rs_job_check_ret));
 
   uint64_t tenant_id_;
+  int64_t rs_job_id_;
+  int rs_job_check_ret_;
 };
 
 class ObAlterLocalityFinishChecker : public share::ObCheckStopProvider
@@ -63,7 +68,8 @@ public:
       common::ObMySQLProxy &sql_proxy,
       share::ObLSTableOperator &lst_operator); 
   int check();
-        
+  static int find_rs_job(const uint64_t tenant_id, int64_t &job_id, ObISQLClient &sql_proxy);
+
 private:
   //check whether this checker is stopped
   virtual int check_stop() const override;

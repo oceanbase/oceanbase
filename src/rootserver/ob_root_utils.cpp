@@ -38,6 +38,7 @@
 #include "share/ob_primary_zone_util.h"           // ObPrimaryZoneUtil
 #include "share/ob_server_table_operator.h"
 #include "share/ob_zone_table_operation.h"
+#include "rootserver/ob_tenant_balance_service.h"    // for ObTenantBalanceService
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::share;
@@ -2199,6 +2200,72 @@ int ObRootUtils::notify_switch_leader(
       if (OB_TMP_FAIL(proxy.wait())) {
         ret = OB_SUCC(ret) ? tmp_ret : ret;
         LOG_WARN("failed to wait all result", KR(ret), KR(tmp_ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRootUtils::check_tenant_ls_balance(uint64_t tenant_id, int &check_ret)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  bool pass = false;
+  check_ret = OB_NEED_WAIT;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
+  } else if (tenant_data_version < DATA_VERSION_4_2_1_0 || !is_user_tenant(tenant_id)) {
+    // in v4.1 no need to check ls balance
+    // to let rs jobs' return_code be OB_SUCCESS, we set has_checked true
+    // non-user tenant has no ls balance
+    check_ret = OB_SUCCESS;
+  } else if (!ObShareUtil::is_tenant_enable_rebalance(tenant_id)) {
+    check_ret = OB_SKIP_CHECKING_LS_STATUS;
+  } else if (OB_FAIL(ObTenantBalanceService::is_ls_balance_finished(tenant_id, pass))) {
+    LOG_WARN("fail to execute is_ls_balance_finished", KR(ret), K(tenant_id));
+  } else if (pass) {
+    check_ret = OB_SUCCESS;
+  } else {
+    check_ret = OB_NEED_WAIT;
+  }
+  return ret;
+}
+
+int ObRootUtils::is_first_priority_primary_zone_changed(
+    const share::schema::ObTenantSchema &orig_tenant_schema,
+    const share::schema::ObTenantSchema &new_tenant_schema,
+    ObIArray<ObZone> &orig_first_primary_zone,
+    ObIArray<ObZone> &new_first_primary_zone,
+    bool &is_changed)
+{
+  int ret = OB_SUCCESS;
+  orig_first_primary_zone.reset();
+  new_first_primary_zone.reset();
+  is_changed = false;
+  if (OB_UNLIKELY(orig_tenant_schema.get_tenant_id() != new_tenant_schema.get_tenant_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input tenant schema", KR(ret), K(orig_tenant_schema), K(new_tenant_schema));
+  } else if (OB_FAIL(ObPrimaryZoneUtil::get_tenant_primary_zone_array(
+      orig_tenant_schema,
+      orig_first_primary_zone))) {
+    LOG_WARN("fail to get tenant primary zone array", KR(ret),
+        K(orig_tenant_schema), K(orig_first_primary_zone));
+  } else if (OB_FAIL(ObPrimaryZoneUtil::get_tenant_primary_zone_array(
+      new_tenant_schema,
+      new_first_primary_zone))) {
+    LOG_WARN("fail to get tenant primary zone array", KR(ret),
+        K(new_tenant_schema), K(new_first_primary_zone));
+  } else if (orig_first_primary_zone.count() != new_first_primary_zone.count()) {
+    is_changed = true;
+  } else {
+    ARRAY_FOREACH(new_first_primary_zone, idx) {
+      const ObZone &zone = new_first_primary_zone.at(idx);
+      if (!common::has_exist_in_array(orig_first_primary_zone, zone)) {
+        is_changed = true;
+        break;
       }
     }
   }

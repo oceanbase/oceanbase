@@ -51,7 +51,18 @@ public:
   static int try_update_ls_primary_zone(
     const share::ObLSPrimaryZoneInfo &primary_zone_info,
     const common::ObZone &new_primary_zone,
-    const common::ObSqlString &zone_priority);
+    const common::ObSqlString &new_zone_priority);
+  static int need_update_ls_primary_zone (
+    const share::ObLSPrimaryZoneInfo &primary_zone_info,
+    const common::ObZone &new_primary_zone,
+    const common::ObSqlString &new_zone_priority,
+    bool &need_update);
+  static int prepare_sys_ls_balance_primary_zone_info(
+    const uint64_t tenant_id,
+    share::ObLSPrimaryZoneInfo &primary_zone_info,
+    common::ObZone &new_primary_zone,
+    common::ObSqlString &new_zone_priority);
+  static int check_sys_ls_primary_zone_balanced(const uint64_t tenant_id, int &check_ret);
 
 private:
   static int adjust_primary_zone_by_ls_group_(const common::ObIArray<common::ObZone> &primary_zone_array,

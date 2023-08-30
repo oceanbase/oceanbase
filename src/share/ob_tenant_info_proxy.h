@@ -162,9 +162,17 @@ public:
   static int init_tenant_info(const ObAllTenantInfo &tenant_info, ObISQLClient *proxy);
 
   static int is_standby_tenant(
-             ObISQLClient *proxy,
-             const uint64_t tenant_id,
-             bool &is_standby);
+      ObISQLClient *proxy,
+      const uint64_t tenant_id,
+      bool &is_standby);
+  static int is_primary_tenant(
+      ObISQLClient *proxy,
+      const uint64_t tenant_id,
+      bool &is_primary);
+  static int get_tenant_role(
+      ObISQLClient *proxy,
+      const uint64_t tenant_id,
+      ObTenantRole &tenant_role);
 
   static int get_primary_tenant_ids(
              ObISQLClient *proxy,

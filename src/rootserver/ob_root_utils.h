@@ -645,6 +645,12 @@ public:
   static int get_primary_zone(ObZoneManager &zone_mgr,
                               const common::ObIArray<share::schema::ObZoneScore> &zone_score_array,
                               common::ObIArray<common::ObZone> &primary_zone);
+  static int is_first_priority_primary_zone_changed(
+    const share::schema::ObTenantSchema &orig_tenant_schema,
+    const share::schema::ObTenantSchema &new_tenant_schema,
+    ObIArray<ObZone> &orig_first_primary_zone,
+    ObIArray<ObZone> &new_first_primary_zone,
+    bool &is_changed);
 
   template<class T>
       static int check_left_f_in_primary_zone(ObZoneManager &zone_mgr,
@@ -673,6 +679,7 @@ public:
       obrpc::ObSrvRpcProxy *rpc_proxy,
       const share::ObLSInfo &ls_info,
       const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
+  static int check_tenant_ls_balance(uint64_t tenant_id, int &check_ret);
 
 };
 

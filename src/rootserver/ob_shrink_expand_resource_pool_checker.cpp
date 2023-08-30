@@ -11,7 +11,7 @@
  */
 #define USING_LOG_PREFIX RS
 
-#include "ob_shrink_resource_pool_checker.h"
+#include "ob_shrink_expand_resource_pool_checker.h"
 #include "lib/container/ob_array.h"
 #include "ob_unit_manager.h"
 #include "ob_root_utils.h"//get_tenant_id
@@ -29,20 +29,20 @@ using namespace share::schema;
 namespace rootserver
 {
 
-int ObShrinkResourcePoolChecker::check_stop() const
+int ObShrinkExpandResourcePoolChecker::check_stop() const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObShrinkResourcePoolChecker not init", KR(ret), K(is_inited_));
+    LOG_WARN("ObShrinkExpandResourcePoolChecker not init", KR(ret), K(is_inited_));
   } else if (is_stop_) {
     ret = OB_CANCELED;
-    LOG_WARN("ObShrinkResourcePoolChecker stopped", KR(ret), K(is_stop_));
+    LOG_WARN("ObShrinkExpandResourcePoolChecker stopped", KR(ret), K(is_stop_));
   } else {} // do nothing
   return ret;
 }
 
-int ObShrinkResourcePoolChecker::init(
+int ObShrinkExpandResourcePoolChecker::init(
     share::schema::ObMultiVersionSchemaService *schema_service,
     rootserver::ObUnitManager *unit_mgr,
     share::ObLSTableOperator &lst_operator,
@@ -51,7 +51,7 @@ int ObShrinkResourcePoolChecker::init(
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("ObShrinkResourcePoolChecker not init", KR(ret), K(is_inited_));
+    LOG_WARN("ObShrinkExpandResourcePoolChecker not init", KR(ret), K(is_inited_));
   } else if (OB_ISNULL(schema_service)
              || OB_ISNULL(unit_mgr)) {
     ret = OB_INVALID_ARGUMENT;
@@ -66,16 +66,16 @@ int ObShrinkResourcePoolChecker::init(
   return ret;
 }
 
-int ObShrinkResourcePoolChecker::check()
+int ObShrinkExpandResourcePoolChecker::check()
 {
   int ret = OB_SUCCESS;
   LOG_INFO("start check shrink resource pool");
   ObArray<uint64_t> tenant_ids;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObShrinkResourcePoolChecker not init", KR(ret));
+    LOG_WARN("ObShrinkExpandResourcePoolChecker not init", KR(ret));
   } else if (OB_FAIL(check_stop())) {
-    LOG_WARN("ObShrinkResourcePoolChecker stop", KR(ret));
+    LOG_WARN("ObShrinkExpandResourcePoolChecker stop", KR(ret));
   } else if (OB_FAIL(ObTenantUtils::get_tenant_ids(schema_service_, tenant_ids))) {
     LOG_WARN("fail to get tenant id array", KR(ret));
   } else {
@@ -89,6 +89,7 @@ int ObShrinkResourcePoolChecker::check()
       } else if (is_meta_tenant(tenant_id)) {
         //nothing TODO
       } else {
+        ObCurTraceId::init(GCONF.self_addr_);
         LOG_INFO("start check shrink resource pool", K(tenant_id));
         if (OB_TMP_FAIL(check_shrink_resource_pool_finished_by_tenant_(tenant_id))) {
           LOG_WARN("fail to check shrink resource pool finish", KR(ret), KR(tmp_ret), K(tenant_id));
@@ -100,21 +101,22 @@ int ObShrinkResourcePoolChecker::check()
   return ret;
 }
 
-int ObShrinkResourcePoolChecker::check_shrink_resource_pool_finished_by_tenant_(
+int ObShrinkExpandResourcePoolChecker::check_shrink_resource_pool_finished_by_tenant_(
     const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> pool_ids;
   bool in_shrinking = true;
   bool is_finished = true;
+  int check_ret = OB_NEED_WAIT;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObShrinkResourcePoolChecker not init", KR(ret));
+    LOG_WARN("ObShrinkExpandResourcePoolChecker not init", KR(ret));
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else if (OB_FAIL(check_stop())) {
-    LOG_WARN("ObShrinkResourcePoolChecker stop", KR(ret));
+    LOG_WARN("ObShrinkExpandResourcePoolChecker stop", KR(ret));
   } else if (OB_ISNULL(sql_proxy_) || OB_ISNULL(unit_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", KR(ret), KP(sql_proxy_), KP(unit_mgr_));
@@ -126,15 +128,21 @@ int ObShrinkResourcePoolChecker::check_shrink_resource_pool_finished_by_tenant_(
   } else if (OB_FAIL(unit_mgr_->check_pool_in_shrinking(pool_ids.at(0), in_shrinking))) {
     LOG_WARN("failed to check resource pool in shrink", KR(ret), K(pool_ids));
   } else if (!in_shrinking) {
-    //nothing todo
+    // check if there exists expand task
+    // if exists, then check whether this task can be committed and commit it if ls is balanced
+    // if not exists, return OB_SUCCESS
+    if (OB_FAIL(check_and_commit_expand_resource_pool_(tenant_id))) {
+      LOG_WARN("fail to execute check_and_commit_expand_resource_pool_", KR(ret), K(tenant_id));
+    }
   } else {
     //check shrink finish
     //get all unit and server
-    //check ls not in the unit and ls_meta not in the server
     ObArray<share::ObUnit> units;
     ObArray<common::ObAddr> servers;
     ObArray<uint64_t> unit_ids;
     ObArray<uint64_t> unit_group_ids;
+    int tmp_ret = OB_SUCCESS;
+    int64_t job_id = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < pool_ids.count(); ++i) {
       units.reset();
       if (OB_FAIL(unit_mgr_->get_deleting_units_of_pool(pool_ids.at(i), units))) {
@@ -143,21 +151,37 @@ int ObShrinkResourcePoolChecker::check_shrink_resource_pool_finished_by_tenant_(
         LOG_WARN("failed to extract units server and ids", KR(ret), K(units));
       }
     }//end for get all unit group, units, server
+    // find the corresponding rs job at first, then check if we can complete it
+    // if we only find the rs job at the committing period,
+    // we do not know whether the job has been changed during checking process
+    // e.g. job 1 is the rs job before checking,
+    //      right after checking, job 2 is created and job 1 is canceled by job 2,
+    //      then committing process will find job 2 and complete job 2 immediately,
+    //      which means, job 2 is completed without checking.
+    if (OB_SUCC(ret) && OB_TMP_FAIL(unit_mgr_->find_alter_resource_tenant_unit_num_rs_job(tenant_id, job_id, *sql_proxy_))) {
+    // even if there is no corresponding rs job, we should do complete job (e.g. remove deleting unit in __all_unit table)
+      if (OB_ENTRY_NOT_EXIST == tmp_ret) {
+        FLOG_WARN("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] there exists unit_num changing without corresponding rs job",
+            KR(ret), K(tmp_ret), K(tenant_id));
+      } else {
+        LOG_WARN("fail to execute find_alter_resource_tenant_unit_num_rs_job", KR(ret), KR(tmp_ret), K(tenant_id));
+      }
+    }
     if (FAILEDx(check_shrink_resource_pool_finished_by_ls_(tenant_id,
-                servers, unit_ids, unit_group_ids, is_finished))) {
+                servers, unit_ids, unit_group_ids, is_finished, check_ret))) {
       LOG_WARN("failed to check shrink by ls", KR(ret), K(servers), K(unit_ids), K(unit_group_ids));
     }
     if (OB_SUCC(ret) && is_finished) {
-      //commit finish of the tenant
-      if (OB_FAIL(commit_tenant_shrink_resource_pool_(tenant_id))) {
-        LOG_WARN("failed to shrink tenant resource pool", KR(ret), K(tenant_id));
+      // commit finish of the tenant
+      if (OB_FAIL(commit_tenant_shrink_resource_pool_(tenant_id, job_id, check_ret))) { // shrink
+        LOG_WARN("failed to shrink tenant resource pool", KR(ret), K(tenant_id), K(job_id), K(check_ret));
       }
     }
   }
   return ret;
 }
 
-int ObShrinkResourcePoolChecker::extract_units_servers_and_ids_(
+int ObShrinkExpandResourcePoolChecker::extract_units_servers_and_ids_(
     const ObIArray<share::ObUnit> &units,
     ObIArray<common::ObAddr> &servers,
     ObIArray<uint64_t> &unit_ids,
@@ -182,29 +206,37 @@ int ObShrinkResourcePoolChecker::extract_units_servers_and_ids_(
   return ret;
 }
 
-int ObShrinkResourcePoolChecker::check_shrink_resource_pool_finished_by_ls_(
+int ObShrinkExpandResourcePoolChecker::check_shrink_resource_pool_finished_by_ls_(
     const uint64_t tenant_id,
     const ObIArray<common::ObAddr> &servers,
     const ObIArray<uint64_t> &unit_ids,
     const ObIArray<uint64_t> &unit_group_ids,
-    bool &is_finished)
+    bool &is_finished,
+    int &check_ret)
 {
   int ret = OB_SUCCESS;
   is_finished = true;
+  check_ret = OB_NEED_WAIT;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObShrinkResourcePoolChecker not init", KR(ret));
+    LOG_WARN("ObShrinkExpandResourcePoolChecker not init", KR(ret));
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
              || 0 == servers.count() || 0 == unit_ids.count()
              || 0 == unit_group_ids.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(servers), K(unit_ids), K(unit_group_ids));
   } else if (OB_FAIL(check_stop())) {
-    LOG_WARN("ObShrinkResourcePoolChecker stop", KR(ret));
+    LOG_WARN("ObShrinkExpandResourcePoolChecker stop", KR(ret));
   } else if (OB_ISNULL(sql_proxy_) || OB_ISNULL(unit_mgr_) || OB_ISNULL(lst_operator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", KR(ret), KP(sql_proxy_), KP(unit_mgr_), KP(lst_operator_));
+  } else if (OB_FAIL(ObRootUtils::check_tenant_ls_balance(tenant_id, check_ret))) {
+    LOG_WARN("fail to execute check_tenant_ls_balance", KR(ret), K(tenant_id));
+  } else if (OB_NEED_WAIT == check_ret) {
+    is_finished = false;
   } else {
+     // check ls meta table for shrinking
+     // to make sure that all the ls in deleting units have been migrated to some other normal units
     ObLSStatusInfoArray ls_status_array;
     ObLSStatusOperator ls_status_op;
     if (OB_FAIL(ls_status_op.get_all_tenant_related_ls_status_info(
@@ -216,7 +248,7 @@ int ObShrinkResourcePoolChecker::check_shrink_resource_pool_finished_by_ls_(
       share::ObLSInfo ls_info;
       int64_t ls_replica_cnt = 0;
       if (OB_FAIL(check_stop())) {
-        LOG_WARN("ObShrinkResourcePoolChecker stopped", KR(ret));
+        LOG_WARN("ObShrinkExpandResourcePoolChecker stopped", KR(ret));
       } else if (has_exist_in_array(unit_group_ids, ls_status_info.unit_group_id_)) {
         is_finished = false;
         LOG_INFO("has ls in the unit group", KR(ret), K(ls_status_info));
@@ -244,24 +276,74 @@ int ObShrinkResourcePoolChecker::check_shrink_resource_pool_finished_by_ls_(
   return ret;
 }
 
-int ObShrinkResourcePoolChecker::commit_tenant_shrink_resource_pool_(
-      const uint64_t tenant_id)
+int ObShrinkExpandResourcePoolChecker::commit_tenant_shrink_resource_pool_(
+      const uint64_t tenant_id,
+      const int64_t job_id,
+      const int check_ret)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BEFORE_FINISH_UNIT_NUM);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObShrinkResourcePoolChecker not init", KR(ret));
+    LOG_WARN("ObShrinkExpandResourcePoolChecker not init", KR(ret));
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else if (OB_FAIL(check_stop())) {
-    LOG_WARN("ObShrinkResourcePoolChecker stop", KR(ret));
+    LOG_WARN("ObShrinkExpandResourcePoolChecker stop", KR(ret));
   } else if (OB_ISNULL(unit_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", KR(ret), KP(unit_mgr_));
-  } else if (OB_FAIL(unit_mgr_->commit_shrink_tenant_resource_pool(tenant_id))) {
-    LOG_WARN("fail to shrink resource pool", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(unit_mgr_->commit_shrink_tenant_resource_pool(tenant_id, job_id, check_ret))) {
+    LOG_WARN("fail to shrink resource pool", KR(ret), K(tenant_id), K(job_id), K(check_ret));
   } else {} // no more to do
+  return ret;
+}
+
+int ObShrinkExpandResourcePoolChecker::check_and_commit_expand_resource_pool_(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t check_job_id = 0;
+  int check_ret = OB_NEED_WAIT;
+  if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy_ is null", KR(ret), KP(sql_proxy_));
+  } else if (OB_FAIL(RS_JOB_FIND(
+      ALTER_RESOURCE_TENANT_UNIT_NUM,
+      check_job_id,
+      *sql_proxy_,
+      "tenant_id", tenant_id))) {
+    // find the corresponding rs job at first, then check if we can complete it
+    // if we only find the rs job at the committing period,
+    // we do not know whether the job has been changed during checking process
+    // e.g. job 1 is the rs job before checking,
+    //      right after checking, job 2 is created and job 1 is canceled by job 2,
+    //      then committing process will find job 2 and complete job 2 immediately,
+    //      which means, job 2 is completed without checking.
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to find rs job", KR(ret), K(tenant_id));
+    }
+  } else if (OB_FAIL(ObRootUtils::check_tenant_ls_balance(tenant_id, check_ret))) {
+    LOG_WARN("fail to execute check_tenant_ls_balance", KR(ret), K(tenant_id));
+  } else if (OB_NEED_WAIT != check_ret) {
+    DEBUG_SYNC(BEFORE_FINISH_UNIT_NUM);
+    if (OB_FAIL(check_stop())) {
+      LOG_WARN("ObShrinkExpandResourcePoolChecker stop", KR(ret));
+    } else if (OB_SUCC(RS_JOB_COMPLETE(check_job_id, check_ret, *sql_proxy_))) {
+      FLOG_INFO("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] complete an inprogress rs job EXPAND UNIT_NUM",
+          KR(ret), K(tenant_id), K(check_job_id), K(check_ret));
+    } else {
+      LOG_WARN("fail to complete rs job", KR(ret), K(tenant_id), K(check_job_id), K(check_ret));
+      if (OB_EAGAIN == ret) {
+        FLOG_WARN("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] the specified rs job EXPAND UNIT_NUM might has "
+            "been already completed due to a new job or deleted in table manually",
+            KR(ret), K(tenant_id), K(check_job_id), K(check_ret));
+        ret = OB_SUCCESS; // no need to return the error code
+      }
+    }
+  }
   return ret;
 }
 } // end namespace rootserver

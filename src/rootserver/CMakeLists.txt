@@ -33,6 +33,7 @@ ob_set_subtarget(ob_rootserver common
   ob_disaster_recovery_task_executor.cpp
   ob_migrate_unit_finish_checker.cpp
   ob_rootservice_util_checker.cpp
+  ob_alter_primary_zone_checker.cpp
   ob_all_server_checker.cpp
   ob_all_server_task.cpp
   ob_balance_info.cpp
@@ -94,7 +95,7 @@ ob_set_subtarget(ob_rootserver common
   ob_lob_piece_builder.cpp
   ob_lob_meta_builder.cpp
   ob_ls_recovery_stat_handler.cpp
-  ob_shrink_resource_pool_checker.cpp
+  ob_shrink_expand_resource_pool_checker.cpp
 )
 
 ob_set_subtarget(ob_rootserver balance

@@ -74,12 +74,18 @@ public:
     UNUSED(lsn);
     return OB_SUCCESS;
   }
+  static int gather_stat_primary_zone_num_and_units(
+      const uint64_t &tenant_id,
+      int64_t &primary_zone_num,
+      ObIArray<share::ObSimpleUnitGroup> &unit_group_array);
+  static int gather_ls_status_stat(const uint64_t &tenant_id, share::ObLSStatusInfoArray &ls_array);
+  static int is_ls_balance_finished(const uint64_t &tenant_id, bool &is_finished);
 
 private:
+  static int is_primary_tenant_ls_balance_finished_(const uint64_t &tenant_id, bool &is_finished);
+  static int is_standby_tenant_ls_balance_finished_(const uint64_t &tenant_id, bool &is_finished);
   //load current unit group and primary zone
   int gather_stat_();
-  //load __all_ls_status
-  int gather_ls_status_stat_();
   //process current job
   int try_process_current_job(int64_t &job_cnt);
   //accordint to primary_zone and unit group

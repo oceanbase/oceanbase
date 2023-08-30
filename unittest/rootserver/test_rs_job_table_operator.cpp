@@ -126,7 +126,7 @@ TEST_F(TestRsJobTableOperator, test_api)
 
   // find job
   ASSERT_EQ(OB_SUCCESS, trans.start(&db_initer_.get_sql_proxy()));
-  ret = RS_JOB_FIND(job_info, trans, "job_type", "ALTER_TENANT_LOCALITY", "job_status", "INPROGRESS");
+  ret = RS_JOB_FIND(ALTER_TENANT_LOCALITY, job_info, trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(job_id1, job_info.job_id_);
   ASSERT_EQ(50, job_info.progress_);
@@ -168,7 +168,7 @@ TEST_F(TestRsJobTableOperator, test_api)
   ASSERT_EQ(OB_TRANS_CTX_NOT_EXIST, ret);
   ret = RS_JOB_UPDATE(job_id1, trans, "extra_info", "slflskdjfoiw");
   ASSERT_EQ(OB_TRANS_CTX_NOT_EXIST, ret);
-  ret = RS_JOB_FIND(job_info, trans, "job_type", "ALTER_TENANT_LOCALITY", "job_status", "INPROGRESS");
+  ret = RS_JOB_FIND(ALTER_TENANT_LOCALITY, job_info, trans);
   ASSERT_EQ(OB_TRANS_CTX_NOT_EXIST, ret);
   ret = RS_JOB_COMPLETE(job_id1, 0, trans);
   ASSERT_EQ(OB_TRANS_CTX_NOT_EXIST, ret);

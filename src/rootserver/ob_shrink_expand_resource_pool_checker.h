@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_ROOTSERVER_OB_SHRINK_RESOURCE_POOL_CHECKER_
-#define OCEANBASE_ROOTSERVER_OB_SHRINK_RESOURCE_POOL_CHECKER_
+#ifndef OCEANBASE_ROOTSERVER_OB_SHRINK_EXPAND_RESOURCE_POOL_CHECKER_
+#define OCEANBASE_ROOTSERVER_OB_SHRINK_EXPAND_RESOURCE_POOL_CHECKER_
 
 #include "share/ob_define.h"
 #include "ob_root_utils.h"
@@ -39,17 +39,17 @@ class DRLSInfo;
 class ObUnitManager;
 class ObServerManager;
 class ObZoneManager;
-class ObShrinkResourcePoolChecker : public share::ObCheckStopProvider
+class ObShrinkExpandResourcePoolChecker : public share::ObCheckStopProvider
 {
 public:
-  ObShrinkResourcePoolChecker(volatile bool &is_stop)
+  ObShrinkExpandResourcePoolChecker(volatile bool &is_stop)
       : is_stop_(is_stop),
         sql_proxy_(NULL),
         unit_mgr_(NULL),
         schema_service_(NULL),
         lst_operator_(NULL),
         is_inited_(false) {}
-  virtual ~ObShrinkResourcePoolChecker() {}
+  virtual ~ObShrinkExpandResourcePoolChecker() {}
 public:
   int init(
       share::schema::ObMultiVersionSchemaService *schema_service,
@@ -72,9 +72,13 @@ private:
     const ObIArray<common::ObAddr> &servers,
     const ObIArray<uint64_t> &unit_ids,
     const ObIArray<uint64_t> &unit_group_ids,
-    bool &is_finished);
+    bool &is_finished,
+    int &check_ret);
   int commit_tenant_shrink_resource_pool_(
-      const uint64_t tenant_id);
+      const uint64_t tenant_id,
+      const int64_t job_id,
+      const int check_ret);
+  int check_and_commit_expand_resource_pool_(const uint64_t tenant_id);
 private:
   const volatile bool &is_stop_;
   common::ObMySQLProxy *sql_proxy_;

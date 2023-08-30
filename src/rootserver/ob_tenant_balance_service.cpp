@@ -100,8 +100,8 @@ void ObTenantBalanceService::do_work()
         //check ls status is match with __all_ls
         //TODO
         if (ObShareUtil::is_tenant_enable_transfer(tenant_id_)) {
-          if (OB_FAIL(gather_ls_status_stat_())) {
-            LOG_WARN("failed to gather ls status", KR(ret));
+          if (OB_FAIL(gather_ls_status_stat(tenant_id_, ls_array_))) {
+            LOG_WARN("failed to gather ls status", KR(ret), K(tenant_id_), K(ls_array_));
           } else if (OB_FAIL(ls_balance_(job_cnt))) {
             LOG_WARN("failed to do ls balance", KR(ret));
           } else if (0 == job_cnt) {
@@ -114,8 +114,10 @@ void ObTenantBalanceService::do_work()
           if (OB_FAIL(get_tenant_schema(tenant_id_, tenant_schema_copy))) {
             LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id_));
           } else {
+            bool is_balanced = false;
+            bool need_execute_balance = true;
             ObTenantLSInfo tenant_info(GCTX.sql_proxy_, &tenant_schema_copy, tenant_id_);
-            if (OB_FAIL(ObLSServiceHelper::balance_ls_group(tenant_info))) {
+            if (OB_FAIL(ObLSServiceHelper::balance_ls_group(need_execute_balance, tenant_info, is_balanced))) {
               LOG_WARN("failed to balance ls group", KR(ret));
             }
           }
@@ -151,6 +153,40 @@ void ObTenantBalanceService::do_work()
   }
 }
 
+int ObTenantBalanceService::gather_stat_primary_zone_num_and_units(
+    const uint64_t &tenant_id,
+    int64_t &primary_zone_num,
+    ObIArray<share::ObSimpleUnitGroup> &unit_group_array)
+{
+  int ret = OB_SUCCESS;
+  unit_group_array.reset();
+  primary_zone_num = 0;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ptr is null", KR(ret), KP(GCTX.sql_proxy_), KP(GCTX.schema_service_));
+  } else {
+    //get primary zone
+    share::schema::ObTenantSchema tenant_schema;
+    ObArray<ObZone> primary_zone;
+    if (OB_FAIL(get_tenant_schema(tenant_id, tenant_schema))) {
+      LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id));
+    } else if (!tenant_schema.is_normal()) {
+      //already wait tenant ready, must be normal
+      ret = OB_ERR_UNEXPECTED;
+      WSTAT("tenant schema not ready is unexpected", KR(ret));
+    } else if (OB_FAIL(ObLSServiceHelper::get_primary_zone_unit_array(&tenant_schema,
+            primary_zone, unit_group_array))) {
+      LOG_WARN("failed to get primary zone unit array", KR(ret), K(tenant_schema));
+    } else {
+      primary_zone_num = primary_zone.count();
+    }
+  }
+  return ret;
+}
+
 int ObTenantBalanceService::gather_stat_()
 {
   int ret = OB_SUCCESS;
@@ -158,37 +194,24 @@ int ObTenantBalanceService::gather_stat_()
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_ISNULL(GCTX.sql_proxy_)
-             || OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ptr is null", KR(ret), KP(GCTX.sql_proxy_), KP(GCTX.schema_service_));
+  } else if (OB_FAIL(gather_stat_primary_zone_num_and_units(
+      tenant_id_,
+      primary_zone_num_,
+      unit_group_array_))) {
+    LOG_WARN("fail to execute gather_stat_primary_zone_num_and_units", KR(ret), K(tenant_id_));
   } else {
-    //get primary zone
-    share::schema::ObTenantSchema tenant_schema;
-    ObArray<ObZone> primary_zone;
-    if (OB_FAIL(get_tenant_schema(tenant_id_, tenant_schema))) {
-      LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id_));
-    } else if (!tenant_schema.is_normal()) {
-      //already wait tenant ready, must be normal
-      ret = OB_ERR_UNEXPECTED;
-      WSTAT("tenant schema not ready is unexpected", KR(ret));
-    } else if (OB_FAIL(ObLSServiceHelper::get_primary_zone_unit_array(&tenant_schema,
-            primary_zone, unit_group_array_))) {
-      LOG_WARN("failed to get primary zone unit array", KR(ret), K(tenant_schema));
-    } else {
-      primary_zone_num_ = primary_zone.count();
-      ATOMIC_SET(&loaded_, true);
-    }
+    ATOMIC_SET(&loaded_, true);
   }
   return ret;
 }
 
-int ObTenantBalanceService::gather_ls_status_stat_()
+int ObTenantBalanceService::gather_ls_status_stat(const uint64_t &tenant_id, share::ObLSStatusInfoArray &ls_array)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+  ls_array.reset();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", KR(ret), KP(GCTX.sql_proxy_));
@@ -196,25 +219,25 @@ int ObTenantBalanceService::gather_ls_status_stat_()
     //get ls status info
     //must remove ls group id = 0, those ls no need balance, such as sys ls and duplicate ls
     ObLSStatusOperator status_op;
-    ObLSAttrOperator ls_op(tenant_id_, GCTX.sql_proxy_);
+    ObLSAttrOperator ls_op(tenant_id, GCTX.sql_proxy_);
     share::ObLSAttrArray ls_attr_array;
-    if (OB_FAIL(status_op.get_all_ls_status_by_order(tenant_id_, ls_array_, *GCTX.sql_proxy_))) {
-      LOG_WARN("failed to get status by order", KR(ret), K(tenant_id_));
+    if (OB_FAIL(status_op.get_all_ls_status_by_order(tenant_id, ls_array, *GCTX.sql_proxy_))) {
+      LOG_WARN("failed to get status by order", KR(ret), K(tenant_id));
     } else if (OB_FAIL(ls_op.get_all_ls_by_order(ls_attr_array))) {
       LOG_WARN("failed to get ls attr array", KR(ret));
-    } else if (ls_attr_array.count() > ls_array_.count()) {
+    } else if (ls_attr_array.count() > ls_array.count()) {
       //only ls status has more ls, such as some ls is waitoffline
       ret = OB_NEED_WAIT;
       WSTAT("has ls need create", KR(ret), K(ls_attr_array));
     }
     int64_t attr_index = ls_attr_array.count() - 1;
     bool need_remove_ls = false;
-    for (int64_t i = ls_array_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+    for (int64_t i = ls_array.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
       if (attr_index < 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls attr array is unexpected", KR(ret), K(i), K(ls_attr_array));
       } else {
-        const ObLSStatusInfo &status_info = ls_array_.at(i);
+        const ObLSStatusInfo &status_info = ls_array.at(i);
         const ObLSAttr &ls_info = ls_attr_array.at(attr_index);
         need_remove_ls = false;
         if (status_info.ls_id_ == ls_info.get_ls_id()) {
@@ -241,7 +264,7 @@ int ObTenantBalanceService::gather_ls_status_stat_()
           if (!status_info.ls_is_wait_offline()) {
             ret = OB_ERR_UNEXPECTED;
             WSTAT("ls status not expected", KR(ret), K(status_info), K(ls_info),
-                  K(ls_array_), K(ls_attr_array));
+                  K(ls_array), K(ls_attr_array));
           }
         } else {
           // ls in status can not large than in __all_ls by order
@@ -250,8 +273,8 @@ int ObTenantBalanceService::gather_ls_status_stat_()
                 K(status_info));
         }
         if (OB_SUCC(ret) && need_remove_ls) {
-          ISTAT("LS no need balance", "ls_status", ls_array_.at(i));
-          if (OB_FAIL(ls_array_.remove(i))) {
+          ISTAT("LS no need balance", "ls_status", ls_array.at(i));
+          if (OB_FAIL(ls_array.remove(i))) {
             LOG_WARN("failed to remvoe no ls group ls", KR(ret), K(i));
           }
         }
@@ -261,6 +284,108 @@ int ObTenantBalanceService::gather_ls_status_stat_()
   return ret;
 }
 
+int ObTenantBalanceService::is_ls_balance_finished(const uint64_t &tenant_id, bool &is_finished)
+{
+  int ret = OB_SUCCESS;
+  bool is_primary = true;
+  is_finished = false;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant or not user tenant", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (ObAllTenantInfoProxy::is_primary_tenant(GCTX.sql_proxy_, tenant_id, is_primary)) {
+    LOG_WARN("fail to execute is_primary_tenant", KR(ret), K(tenant_id));
+  } else if (is_primary) {
+    if (OB_FAIL(is_primary_tenant_ls_balance_finished_(tenant_id, is_finished))) {
+      LOG_WARN("fail to execute is_primary_tenant_ls_balance_finished_", KR(ret), K(tenant_id));
+    }
+  } else {
+    // standby & restore
+    if (OB_FAIL(is_standby_tenant_ls_balance_finished_(tenant_id, is_finished))) {
+      LOG_WARN("fail to execute is_standby_tenant_ls_balance_finished_", KR(ret), K(tenant_id));
+    }
+  }
+  LOG_TRACE("check whether the tenant has balanced ls", K(ret), K(tenant_id), K(is_primary), K(is_finished));
+  return ret;
+}
+
+int  ObTenantBalanceService::is_primary_tenant_ls_balance_finished_(
+    const uint64_t &tenant_id,
+    bool &is_finished)
+{
+  int ret = OB_SUCCESS;
+  int64_t job_cnt = 1;
+  int64_t start_time = OB_INVALID_TIMESTAMP, finish_time = OB_INVALID_TIMESTAMP;
+  ObBalanceJob job;
+  ObLSBalanceTaskHelper ls_balance_helper;
+  bool need_ls_balance = false;
+  int64_t primary_zone_num = 0;
+  share::ObLSStatusInfoArray ls_array;
+  ObArray<share::ObSimpleUnitGroup> unit_group_array;
+  is_finished = false;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ptr is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant or not user tenant", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObBalanceJobTableOperator::get_balance_job(
+      tenant_id, false, *GCTX.sql_proxy_, job, start_time, finish_time))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      job_cnt = 0;
+    } else {
+      LOG_WARN("fail to get balance job", KR(ret), K(tenant_id));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (0 != job_cnt) {
+    is_finished= false;
+  } else if (OB_FAIL(gather_ls_status_stat(tenant_id, ls_array))) {
+    LOG_WARN("fail to execute gather_ls_status_stat", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(gather_stat_primary_zone_num_and_units(tenant_id, primary_zone_num, unit_group_array))) {
+    LOG_WARN("fail to execute gather_stat_primary_zone_num_and_units", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ls_balance_helper.init(
+      tenant_id, ls_array, unit_group_array, primary_zone_num, GCTX.sql_proxy_))) {
+    LOG_WARN("failed to init ls balance helper", KR(ret), K(ls_array), K(unit_group_array),
+        K(primary_zone_num), K(tenant_id));
+  } else if (OB_FAIL(ls_balance_helper.check_need_ls_balance(need_ls_balance))) {
+    LOG_WARN("failed to check_ls need balance", KR(ret));
+  } else {
+    is_finished = !need_ls_balance;
+  }
+  LOG_INFO("check whether the primary_tenant has balanced ls", KR(ret), K(tenant_id), K(ls_array),
+      K(primary_zone_num), K(unit_group_array), K(need_ls_balance));
+  return ret;
+}
+
+int ObTenantBalanceService::is_standby_tenant_ls_balance_finished_(
+    const uint64_t &tenant_id,
+    bool &is_finished)
+{
+  int ret = OB_SUCCESS;
+  ObTenantSchema tenant_schema;
+  is_finished = false;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant or not user tenant", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObTenantThreadHelper::get_tenant_schema(tenant_id, tenant_schema))) {
+    LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id));
+  } else {
+    ObTenantLSInfo tenant_info(GCTX.sql_proxy_, &tenant_schema, tenant_id);
+    bool need_execute_balance = false;
+    if (OB_FAIL(ObLSServiceHelper::balance_ls_group(need_execute_balance, tenant_info, is_finished))) {
+      LOG_WARN("failed to balance ls group", KR(ret), K(tenant_info));
+    }
+    LOG_INFO("check whether the non_primary_tenant has balanced ls", KR(ret), K(tenant_id), K(tenant_info));
+  }
+  return ret;
+}
 
 int ObTenantBalanceService::try_process_current_job(int64_t &job_cnt)
 {

@@ -16,7 +16,8 @@
 #include "lib/net/ob_addr.h"
 #include "ob_migrate_unit_finish_checker.h"
 #include "ob_alter_locality_finish_checker.h"
-#include "ob_shrink_resource_pool_checker.h"
+#include "ob_shrink_expand_resource_pool_checker.h"
+#include "ob_alter_primary_zone_checker.h"
 
 namespace oceanbase
 {
@@ -45,7 +46,8 @@ private:
   volatile bool &stop_;
   ObMigrateUnitFinishChecker migrate_unit_finish_checker_;
   ObAlterLocalityFinishChecker alter_locality_finish_checker_;
-  ObShrinkResourcePoolChecker shrink_resource_pool_checker_;
+  ObShrinkExpandResourcePoolChecker shrink_expand_resource_pool_checker_;
+  ObAlterPrimaryZoneChecker alter_primary_zone_checker_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRootServiceUtilChecker);

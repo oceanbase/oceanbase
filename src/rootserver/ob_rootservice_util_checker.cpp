@@ -21,7 +21,8 @@ ObRootServiceUtilChecker::ObRootServiceUtilChecker(volatile bool &stop)
     stop_(stop),
     migrate_unit_finish_checker_(stop),
     alter_locality_finish_checker_(stop),
-    shrink_resource_pool_checker_(stop)
+    shrink_expand_resource_pool_checker_(stop),
+    alter_primary_zone_checker_(stop)
 {
 }
 
@@ -58,10 +59,13 @@ int ObRootServiceUtilChecker::init(
           sql_proxy,
           lst_operator))) {
     LOG_WARN("fail to init alter locality finish checker", KR(ret));
-  } else if (OB_FAIL(shrink_resource_pool_checker_.init(&schema_service,
+  } else if (OB_FAIL(shrink_expand_resource_pool_checker_.init(&schema_service,
                  &unit_mgr, lst_operator, sql_proxy))) {
-    LOG_WARN("failed to init shrink resource pool", KR(ret));
-  } else {
+    LOG_WARN("fail to init shrink resource pool", KR(ret));
+  } else if (OB_FAIL(alter_primary_zone_checker_.init(schema_service))) {
+    LOG_WARN("fail to init alter primary zone checker", KR(ret));
+  }
+  else {
     inited_ = true;
   }
   return ret;
@@ -76,16 +80,20 @@ int ObRootServiceUtilChecker::rootservice_util_check()
   } else {
     int tmp_ret = OB_SUCCESS;
     // migrate unit finish checker
-    if (OB_SUCCESS != (tmp_ret = migrate_unit_finish_checker_.check())) {
+    if (OB_TMP_FAIL(migrate_unit_finish_checker_.check())) {
       LOG_WARN("fail to check migrate unit finish", KR(tmp_ret));
     }
     // alter locality finish checker
-    if (OB_SUCCESS != (tmp_ret = alter_locality_finish_checker_.check())) {
+    if (OB_TMP_FAIL(alter_locality_finish_checker_.check())) {
       LOG_WARN("fail to check alter locality finish", KR(tmp_ret));
     }
 
-    if (OB_TMP_FAIL(shrink_resource_pool_checker_.check())) {
-      LOG_WARN("failed to check shrink resource pool", KR(tmp_ret));
+    if (OB_TMP_FAIL(shrink_expand_resource_pool_checker_.check())) {
+      LOG_WARN("fail to check shrink resource pool", KR(tmp_ret));
+    }
+
+    if (OB_TMP_FAIL(alter_primary_zone_checker_.check())) {
+      LOG_WARN("fail to check alter primary zone", KR(tmp_ret));
     }
   }
   return ret;

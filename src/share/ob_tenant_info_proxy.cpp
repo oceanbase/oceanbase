@@ -225,7 +225,26 @@ int ObAllTenantInfoProxy::init_tenant_info(
 
   return ret;
 }
-
+int ObAllTenantInfoProxy::get_tenant_role(
+    ObISQLClient *proxy,
+    const uint64_t tenant_id,
+    ObTenantRole &tenant_role)
+{
+  int ret = OB_SUCCESS;
+  ObAllTenantInfo tenant_info;
+  if (OB_ISNULL(proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("proxy is null", KR(ret), KP(proxy));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id is invalid", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(load_tenant_info(tenant_id, proxy, false /*for_update*/, tenant_info))) {
+    LOG_WARN("fail to load_tenant_info", KR(ret), K(tenant_id));
+  } else {
+    tenant_role = tenant_info.get_tenant_role();
+  }
+  return ret;
+}
 int ObAllTenantInfoProxy::is_standby_tenant(
     ObISQLClient *proxy,
     const uint64_t tenant_id,
@@ -233,46 +252,29 @@ int ObAllTenantInfoProxy::is_standby_tenant(
 {
   int ret = OB_SUCCESS;
   is_standby = false;
-  if (OB_ISNULL(proxy)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("proxy is null", KR(ret), KP(proxy));
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tenant_id is invalid", KR(ret), K(tenant_id));
-  } else if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
-    is_standby = false;
+  ObTenantRole tenant_role;
+  // the validity checking is in get_tenant_role
+  if (OB_FAIL(get_tenant_role(proxy, tenant_id, tenant_role))) {
+    LOG_WARN("fail to get tenant_role", KR(ret), K(tenant_id));
   } else {
-    HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObSqlString sql;
-      ObTimeoutCtx ctx;
-      common::sqlclient::ObMySQLResult *result = NULL;
-      uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
-      if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
-        LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
-      } else if (OB_FAIL(sql.assign_fmt("select tenant_role from %s where tenant_id = %lu",
-                     OB_ALL_TENANT_INFO_TNAME, tenant_id))) {
-        LOG_WARN("failed to assign sql", KR(ret), K(sql));
-      } else if (OB_FAIL(proxy->read(res, exec_tenant_id, sql.ptr()))) {
-        LOG_WARN("failed to read", KR(ret), K(exec_tenant_id), K(sql));
-      } else if (OB_ISNULL(result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get sql result", KR(ret));
-      } else if (OB_FAIL(result->next())) {
-        if (OB_ITER_END == ret) {
-          ret = OB_TENANT_NOT_EXIST;
-          LOG_WARN("tenant not exist", KR(ret), K(sql));
-        } else {
-          LOG_WARN("fail to get next", KR(ret), K(sql));
-        }
-      } else {
-        ObString tenant_role_str;
-        EXTRACT_VARCHAR_FIELD_MYSQL(*result, "tenant_role", tenant_role_str);
-        if (OB_SUCC(ret)) {
-          ObTenantRole tenant_role(tenant_role_str);
-          is_standby = tenant_role.is_standby();
-        }
-      }
-    } // end HEAP_VAR
+    is_standby = tenant_role.is_standby();
+  }
+  return ret;
+}
+
+int ObAllTenantInfoProxy::is_primary_tenant(
+    ObISQLClient *proxy,
+    const uint64_t tenant_id,
+    bool &is_primary)
+{
+  int ret = OB_SUCCESS;
+  is_primary = false;
+  ObTenantRole tenant_role;
+  // the validity checking is in get_tenant_role
+  if (OB_FAIL(get_tenant_role(proxy, tenant_id, tenant_role))) {
+    LOG_WARN("fail to get tenant_role", KR(ret), K(tenant_id));
+  } else {
+    is_primary = tenant_role.is_primary();
   }
   return ret;
 }

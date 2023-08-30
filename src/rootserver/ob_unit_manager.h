@@ -171,6 +171,10 @@ public:
       const uint64_t tenant_id,
       const int64_t new_unit_num,
       const common::ObIArray<uint64_t> &unit_group_id_array);
+  int find_alter_resource_tenant_unit_num_rs_job(
+    const uint64_t tenant_id,
+    int64_t &job_id,
+    common::ObISQLClient &sql_proxy);
   virtual int check_locality_for_logonly_unit(const share::schema::ObTenantSchema &tenant_schema,
                                               const common::ObIArray<share::ObResourcePoolName> &pool_names,
                                               bool &is_permitted);
@@ -228,7 +232,10 @@ public:
                                      common::ObIArray<share::ObUnitInfo> &unit_infos) const;
   virtual int get_deleting_units_of_pool(const uint64_t resource_pool_id,
                                          common::ObIArray<share::ObUnit> &units) const;
-  virtual int commit_shrink_tenant_resource_pool(const uint64_t tenant_id);
+  virtual int commit_shrink_tenant_resource_pool(
+      const uint64_t tenant_id,
+      const int64_t job_id,
+      const int check_ret);
   virtual int get_all_unit_infos_by_tenant(const uint64_t tenant_id,
                                            common::ObIArray<share::ObUnitInfo> &unit_infos);
   virtual int get_unit_infos(const common::ObIArray<share::ObResourcePoolName> &pools,
@@ -478,15 +485,34 @@ private:
       const common::ObZone &zone,
       const common::ObReplicaType replica_type,
       common::ObIArray<ObUnitManager::ObUnitLoad> &unit_loads);
+  int register_alter_resource_tenant_unit_num_rs_job(
+      const uint64_t tenant_id,
+      const int64_t new_unit_num,
+      const AlterUnitNumType alter_unit_num_type,
+      common::ObMySQLTransaction &trans);
   int register_shrink_tenant_pool_unit_num_rs_job(
       const uint64_t tenant_id,
       const int64_t new_unit_num,
       common::ObMySQLTransaction &trans);
-  int rollback_shrink_tenant_pool_unit_num_rs_job(
+  int rollback_alter_resource_tenant_unit_num_rs_job(
       const uint64_t tenant_id,
+      const int64_t new_unit_num,
       common::ObMySQLTransaction &trans);
+
+  int cancel_alter_resource_tenant_unit_num_rs_job(
+  const uint64_t tenant_id,
+  common::ObMySQLTransaction &trans);
+  int create_alter_resource_tenant_unit_num_rs_job(
+      const uint64_t tenant_id,
+      const int64_t new_unit_num,
+      int64_t &job_id,
+      common::ObMySQLTransaction &trans,
+      ObRsJobType job_type = ObRsJobType::JOB_TYPE_ALTER_RESOURCE_TENANT_UNIT_NUM);
+
   int complete_shrink_tenant_pool_unit_num_rs_job_(
       const uint64_t tenant_id,
+      const int64_t job_id,
+      const int check_ret,
       common::ObMySQLTransaction &trans);
   int complete_migrate_unit_rs_job_in_pool(
       const int64_t resource_pool_id,
@@ -972,6 +998,7 @@ private:
     }
     return str;
   }
+  void print_user_error_(const uint64_t tenant_id);
 
 private:
   bool inited_;

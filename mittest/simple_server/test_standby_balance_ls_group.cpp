@@ -97,7 +97,8 @@ TEST_F(TestStandbyBalance, BalanceLSGroup)
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write(OB_SYS_TENANT_ID, sql.ptr(), affected_row));
   ASSERT_EQ(1, affected_row);
   ObTenantLSInfo tenant_stat(get_curr_observer().get_gctx().sql_proxy_, &tenant_schema1, tenant_id_);
-  ASSERT_EQ(OB_SUCCESS, ObLSServiceHelper::balance_ls_group(tenant_stat));
+  bool is_balanced = false;
+  ASSERT_EQ(OB_SUCCESS, ObLSServiceHelper::balance_ls_group(true /*need_execute_balance*/, tenant_stat, is_balanced));
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select ls_id, ls_group_id, unit_group_id from __all_ls_status where ls_id != 1 order by ls_id"));
   int64_t ls_id = 0;
   uint64_t ls_group_id = 0;
@@ -144,7 +145,7 @@ TEST_F(TestStandbyBalance, BalanceLSGroup)
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("insert into __all_unit(unit_id, unit_group_id, resource_pool_id, zone, svr_ip, svr_port, migrate_from_svr_ip, migrate_from_svr_port, status) values(%lu, %lu, 1, 'z1', '127.0.0.1', 2882, ' ', 0, 'ACTIVE')", u2, u2));
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_row));
   ASSERT_EQ(1, affected_row);
-  ASSERT_EQ(OB_SUCCESS, ObLSServiceHelper::balance_ls_group(tenant_stat));
+  ASSERT_EQ(OB_SUCCESS, ObLSServiceHelper::balance_ls_group(true /*need_execute_balance*/, tenant_stat, is_balanced));
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select ls_id, ls_group_id, unit_group_id from __all_ls_status where ls_id != 1 order by ls_id"));
   SMART_VAR(ObMySQLProxy::MySQLResult, res1) {
     ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res1, sql.ptr()));

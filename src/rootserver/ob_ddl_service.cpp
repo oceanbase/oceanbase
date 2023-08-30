@@ -72,6 +72,7 @@
 #include "rootserver/ddl_task/ob_ddl_retry_task.h"
 #include "rootserver/freeze/ob_freeze_info_manager.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
+#include "rootserver/ob_alter_primary_zone_checker.h"
 #include "rootserver/ob_tenant_thread_helper.h"//get_zone_priority
 #include "lib/utility/ob_tracepoint.h"
 #include "observer/ob_server_struct.h"
@@ -22453,28 +22454,29 @@ int ObDDLService::commit_alter_tenant_locality(
               LOG_WARN("fail to alter meta tenant", KR(ret));
             }
           }
-          if (OB_SUCC(ret)) {
-            //do rs_job
-            ObRsJobInfo job_info;
-            if (OB_SUCC(RS_JOB_FIND(job_info, trans,
-                                  "job_type", "ALTER_TENANT_LOCALITY",
-                                  "job_status", "INPROGRESS",
-                                  "tenant_id", arg.tenant_id_))) {
-             // good, find job
-             } else if (OB_SUCC(RS_JOB_FIND(job_info, trans,
-                                          "job_type", "ROLLBACK_ALTER_TENANT_LOCALITY",
-                                          "job_status", "INPROGRESS",
-                                          "tenant_id", arg.tenant_id_))) {
-             // good, find job
-             } else {
-               LOG_WARN("failed to find job", KR(ret), "tenant_id", arg.tenant_id_);
-             }
-             if (OB_SUCC(ret) && job_info.job_id_ > 0) {
-               if (OB_FAIL(RS_JOB_COMPLETE(job_info.job_id_, 0, trans))) {
-                  LOG_WARN("do rs_job update failed", K(ret), K(job_info));
-               }
-             }
-           }
+          int return_code = arg.rs_job_check_ret_;
+          int64_t job_id = arg.rs_job_id_;
+          if (OB_FAIL(ret)) {
+          } else if (OB_SUCC(RS_JOB_COMPLETE(job_id, return_code, trans))) {
+            FLOG_INFO("[ALTER_TENANT_LOCALITY NOTICE] complete an inprogress rs job", KR(ret),
+                  K(arg), K(return_code));
+          } else {
+            LOG_WARN("fail to complete rs job", KR(ret), K(job_id), K(return_code));
+            if (OB_EAGAIN == ret) {
+              int64_t find_job_id = 0;
+              if (OB_FAIL(ObAlterLocalityFinishChecker::find_rs_job(arg.tenant_id_, find_job_id, trans))) {
+                LOG_WARN("fail to find rs job", KR(ret), K(arg));
+                if (OB_ENTRY_NOT_EXIST == ret) {
+                  FLOG_WARN("[ALTER_TENANT_LOCALITY NOTICE] the specified rs job might has "
+                      "been already deleted in table manually", KR(ret), K(arg), K(return_code));
+                  ret = OB_SUCCESS;
+                }
+              } else {
+                ret = OB_EAGAIN;
+                FLOG_WARN("[ALTER_TENANT_LOCALITY NOTICE] a non-checked rs job cannot be committed", KR(ret), K(arg), K(find_job_id));
+              }
+            }
+          }
         }
         int temp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
@@ -22623,7 +22625,13 @@ int ObDDLService::set_new_tenant_options(
                  K(ret), K(new_tenant_schema), K(orig_tenant_schema));
       } else {} // no more to do
     } else if (TO_NEW_LOCALITY == alter_locality_type) {
-      if (OB_FAIL(try_modify_tenant_locality(
+      if (arg.alter_option_bitset_.has_member(obrpc::ObModifyTenantArg::FORCE_LOCALITY)) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("only locality rollback can be forced", KR(ret), K(arg));
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "only locality rollback can be forced, "
+            "forcing to be in a new locality is"); // forcing to be in a new locality is not allowed
+      }
+      if (FAILEDx(try_modify_tenant_locality(
               arg, new_tenant_schema, orig_tenant_schema, zones_in_pool,
               zone_region_list, alter_locality_op))) {
         LOG_WARN("fail to try modify tenant locality",
@@ -22775,7 +22783,7 @@ int ObDDLService::try_rollback_modify_tenant_locality(
     } else if (0 < alter_paxos_tasks.count() || non_paxos_locality_modified) {
       if (arg.alter_option_bitset_.has_member(obrpc::ObModifyTenantArg::FORCE_LOCALITY)) {
         if (OB_FAIL(new_schema.set_previous_locality(""))) {
-          LOG_WARN("fail to set previous locality", K(ret));
+          LOG_WARN("fail to set previous locality", KR(ret));
         }
       } else {
         if (OB_FAIL(new_schema.set_previous_locality(orig_schema.get_locality_str()))) {
@@ -23554,7 +23562,19 @@ int ObDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, const 
 #endif
       }
 
-      if (OB_FAIL(ret)) {
+      if (FAILEDx(ObAlterPrimaryZoneChecker::create_alter_tenant_primary_zone_rs_job_if_needed(
+          arg,
+          tenant_id,
+          *orig_tenant_schema,
+          new_tenant_schema,
+          trans))) {
+        // if the command is alter tenant primary zone, we need to check whether first priority zone
+        // has been changed. if so, the number of ls will be changed as well.
+        // when the change occurs, we need to create a rs job ALTER_TENANT_PRIMARY_ZONE to
+        // track if the number of ls matches the number of first primary zone
+        // otherwise, the rs job is completed immediately
+        LOG_WARN("fail to execute create_alter_tenant_primary_zone_rs_job_if_needed", KR(ret),
+            K(arg), K(tenant_id), KPC(orig_tenant_schema), K(new_tenant_schema));
       } else if (OB_FAIL(ddl_operator.alter_tenant(new_tenant_schema, trans, &arg.ddl_stmt_str_))) {
         LOG_WARN("failed to alter tenant", K(ret));
       } else if (OB_FAIL(try_alter_meta_tenant_schema(
@@ -23653,7 +23673,6 @@ int ObDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, const 
   }
   return ret;
 }
-
 
 // not used
 // When alter tenant, tenant option and sys variable are both set to readonly,
@@ -23793,64 +23812,47 @@ int ObDDLService::record_tenant_locality_event_history(
 	  ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  if (ALTER_LOCALITY == alter_locality_op) {
-    int64_t job_id = RS_JOB_CREATE(ALTER_TENANT_LOCALITY, trans,
-                                   "tenant_name", tenant_schema.get_tenant_name(),
-                                   "tenant_id", tenant_schema.get_tenant_id(),
-                                   "sql_text", ObHexEscapeSqlStr(arg.ddl_stmt_str_),
-                                   "extra_info", tenant_schema.get_previous_locality_str());
-    if (job_id < 1) {
-      ret = OB_SQL_OPT_ERROR;
-      LOG_WARN("insert into all_rootservice_job failed", K(ret), "tenant_id", tenant_schema.get_tenant_id());
-    }
-  } else if (ROLLBACK_ALTER_LOCALITY == alter_locality_op) {
-    ObRsJobInfo job_info;
-    if (OB_SUCC(RS_JOB_FIND(job_info, trans,
-                            "job_type", "ALTER_TENANT_LOCALITY",
-                            "job_status", "INPROGRESS",
-                            "tenant_id", tenant_schema.get_tenant_id()))) {
-      //good find job
-    } else if (OB_SUCC(RS_JOB_FIND(job_info, trans,
-                                   "job_type", "ROLLBACK_ALTER_TENANT_LOCALITY",
-                                   "job_status", "INPROGRESS",
-                                   "tenant_id", tenant_schema.get_tenant_id()))) {
-      //good find job
-    } else {
-      LOG_WARN("failed to find job need rollback", K(ret), K(tenant_schema.get_tenant_id()));
-    }
-    if (OB_SUCC(ret) && job_info.job_id_ > 0) {
-      if (OB_FAIL(RS_JOB_COMPLETE(job_info.job_id_, -1, trans))) {// The change task is rolled back, this change failed
-        LOG_WARN("update rs_job failed", K(ret), "tenant_id", tenant_schema.get_tenant_id());
-      }
-    } else {
-      LOG_WARN("failed to find rs job", K(ret), "tenant_id", tenant_schema.get_tenant_id());
-    }
-    if (OB_SUCC(ret)) {
-      int64_t job_id = RS_JOB_CREATE(ROLLBACK_ALTER_TENANT_LOCALITY, trans,
-                                     "tenant_name", tenant_schema.get_tenant_name(),
-                                     "tenant_id", tenant_schema.get_tenant_id(),
-                                     "sql_text", ObHexEscapeSqlStr(arg.ddl_stmt_str_),
-                                     "extra_info", tenant_schema.get_locality_str());
-      if (job_id < 1) {
-        ret = OB_SQL_OPT_ERROR;
-        LOG_WARN("insert into all_rootservice_job failed", K(ret), "tenant_id", tenant_schema.get_tenant_id());
-      }
-    }
-  } else if (NOP_LOCALITY_OP == alter_locality_op) {
-    int64_t job_id = RS_JOB_CREATE(ALTER_TENANT_LOCALITY, trans,
-                                   "tenant_name", tenant_schema.get_tenant_name(),
-                                   "tenant_id", tenant_schema.get_tenant_id(),
-                                   "sql_text", ObHexEscapeSqlStr(arg.ddl_stmt_str_),
-                                   "extra_info", tenant_schema.get_previous_locality_str());
-    if (job_id < 1) {
-      ret = OB_SQL_OPT_ERROR;
-      LOG_WARN("insert into all_rootservice_job failed", K(ret), "tenant_id", tenant_schema.get_tenant_id());
-    } else if (OB_FAIL(RS_JOB_COMPLETE(job_id, 0, trans))) {// The change task is rolled back, this change failed
-      LOG_WARN("complete rs_job failed", K(ret), "tenant_id", tenant_schema.get_tenant_id());
-    }
-  } else {
+  uint64_t tenant_data_version = 0;
+  int64_t job_id = 0;
+  ObRsJobType job_type = JOB_TYPE_INVALID;
+  if (ALTER_LOCALITY_OP_INVALID == alter_locality_op) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid alter locality op", K(ret), K(alter_locality_op));
+  } else if (ROLLBACK_ALTER_LOCALITY == alter_locality_op) {
+    int64_t job_id = 0;
+    if (OB_FAIL(ObAlterLocalityFinishChecker::find_rs_job(tenant_schema.get_tenant_id(), job_id, trans))) {
+      LOG_WARN("failed to find rs job", K(ret), "tenant_id", tenant_schema.get_tenant_id());
+    } else {
+      ret = RS_JOB_COMPLETE(job_id, OB_CANCELED, trans); // The change task is rolled back, this change failed
+      FLOG_INFO("[ALTER_TENANT_LOCALITY NOTICE] cancel an old inprogress rs job due to rollback", KR(ret),
+          "tenant_id", tenant_schema.get_tenant_id(), K(job_id));
+    }
+    if (FAILEDx(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, tenant_data_version))) {
+      LOG_WARN("fail to get sys tenant's min data version", KR(ret));
+    } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
+      job_type = ObRsJobType::JOB_TYPE_ROLLBACK_ALTER_TENANT_LOCALITY;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // ALTER_LOCALITY, ROLLBACK_ALTER_LOCALITY(only 4.2), NOP_LOCALITY_OP
+    job_type =  ObRsJobType::JOB_TYPE_INVALID == job_type ?
+                ObRsJobType::JOB_TYPE_ALTER_TENANT_LOCALITY : job_type;
+    ret = RS_JOB_CREATE_WITH_RET(job_id, job_type, trans,
+        "tenant_name", tenant_schema.get_tenant_name(),
+        "tenant_id", tenant_schema.get_tenant_id(),
+        "sql_text", ObHexEscapeSqlStr(arg.ddl_stmt_str_),
+        "extra_info", tenant_schema.get_previous_locality_str());
+    FLOG_INFO("[ALTER_TENANT_LOCALITY NOTICE] create a new rs job", KR(ret),
+        "tenant_id", tenant_schema.get_tenant_id(), K(job_id), K(alter_locality_op));
+  }
+  if (OB_SUCC(ret)) {
+    if ((ROLLBACK_ALTER_LOCALITY == alter_locality_op
+        && arg.alter_option_bitset_.has_member(obrpc::ObModifyTenantArg::FORCE_LOCALITY))
+        || NOP_LOCALITY_OP == alter_locality_op) {
+      ret = RS_JOB_COMPLETE(job_id, 0, trans);
+      FLOG_INFO("[ALTER_TENANT_LOCALITY NOTICE] complete a new rs job immediately", KR(ret),
+          "tenant_id", tenant_schema.get_tenant_id(), K(job_id), K(alter_locality_op));
+    }
   }
   return ret;
 }
@@ -30373,6 +30375,12 @@ int ObDDLService::check_alter_tenant_replica_options(
           new_tenant_schema, orig_tenant_schema, zone_list, schema_guard))) {
     LOG_WARN("fail to check replica options", K(ret));
   } else {} // no more
+  if (OB_OP_NOT_ALLOW == ret
+      && arg.alter_option_bitset_.has_member(obrpc::ObModifyTenantArg::FORCE_LOCALITY)) {
+    ret = OB_SUCCESS;
+    LOG_WARN("FORCE ROLLBACK LOCALITY should skip all checks", KR(ret), K(arg),
+        K(orig_tenant_schema), K(new_tenant_schema));
+  }
   return ret;
 }
 
@@ -33595,6 +33603,7 @@ int ObDDLService::check_alter_tenant_when_rebalance_is_disabled_(
   ObArray<ObZone> orig_first_primary_zone;
   ObArray<ObZone> new_first_primary_zone;
   bool is_allowed = true;
+  bool is_first_primary_zone_changed = false;
   if (OB_UNLIKELY(orig_tenant_schema.get_tenant_id() != new_tenant_schema.get_tenant_id())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid input tenant schema", KR(ret), K(orig_tenant_schema), K(new_tenant_schema));
@@ -33604,26 +33613,15 @@ int ObDDLService::check_alter_tenant_when_rebalance_is_disabled_(
     is_allowed = true;
   } else if (ObShareUtil::is_tenant_enable_rebalance(tenant_id)) {
     is_allowed = true;
-  } else if (OB_FAIL(ObPrimaryZoneUtil::get_tenant_primary_zone_array(
+  } else if (OB_FAIL(ObRootUtils::is_first_priority_primary_zone_changed(
       orig_tenant_schema,
-      orig_first_primary_zone))) {
-    LOG_WARN("fail to get tenant primary zone array", KR(ret),
-        K(orig_tenant_schema), K(orig_first_primary_zone));
-  } else if (OB_FAIL(ObPrimaryZoneUtil::get_tenant_primary_zone_array(
       new_tenant_schema,
-      new_first_primary_zone))) {
-    LOG_WARN("fail to get tenant primary zone array", KR(ret),
-        K(new_tenant_schema), K(new_first_primary_zone));
-  } else if (orig_first_primary_zone.count() != new_first_primary_zone.count()) {
+      orig_first_primary_zone,
+      new_first_primary_zone,
+      is_first_primary_zone_changed))) {
+    LOG_WARN("fail to check is_first_priority_primary_zone_changed", KR(ret), K(orig_tenant_schema), K(new_tenant_schema));
+  } else if (is_first_primary_zone_changed) {
     is_allowed = false;
-  } else {
-    ARRAY_FOREACH(new_first_primary_zone, idx) {
-      const ObZone &zone = new_first_primary_zone.at(idx);
-      if (!common::has_exist_in_array(orig_first_primary_zone, zone)) {
-        is_allowed = false;
-        break;
-      }
-    }
   }
   if (OB_SUCC(ret) && !is_allowed) {
     ObSqlString orig_str;

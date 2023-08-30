@@ -260,35 +260,98 @@ int ObBalanceLSPrimaryZone::balance_ls_primary_zone_(
 int ObBalanceLSPrimaryZone::try_update_ls_primary_zone(
     const share::ObLSPrimaryZoneInfo &primary_zone_info,
     const common::ObZone &new_primary_zone,
-    const common::ObSqlString &zone_priority)
+    const common::ObSqlString &new_zone_priority)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!primary_zone_info.is_valid()
-        || new_primary_zone.is_empty() || zone_priority.empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("primary zone info is invalid", KR(ret), K(primary_zone_info),
-        K(new_primary_zone), K(zone_priority));
-  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+  bool need_update = false;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy is null", KR(ret));
-  } else if (new_primary_zone != primary_zone_info.get_primary_zone()
-      || zone_priority.string() != primary_zone_info.get_zone_priority_str()) {
+    LOG_WARN("sql proxy is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(need_update_ls_primary_zone(
+      primary_zone_info,
+      new_primary_zone,
+      new_zone_priority,
+      need_update))) {
+    LOG_WARN("fail to check need_update_ls_primary_zone", KR(ret), K(primary_zone_info),
+        K(new_primary_zone), K(new_zone_priority));
+  } else if (need_update) {
     ObLSLifeAgentManager ls_life_agent(*GCTX.sql_proxy_);
     if (OB_FAIL(ls_life_agent.update_ls_primary_zone(primary_zone_info.get_tenant_id(),
             primary_zone_info.get_ls_id(),
-            new_primary_zone, zone_priority.string()))) {
+            new_primary_zone, new_zone_priority.string()))) {
       LOG_WARN("failed to update ls primary zone", KR(ret), K(primary_zone_info),
-          K(new_primary_zone), K(zone_priority));
+          K(new_primary_zone), K(new_zone_priority));
     }
     LOG_INFO("update ls primary zone", KR(ret), K(new_primary_zone),
-        K(zone_priority), K(primary_zone_info));
+        K(new_zone_priority), K(primary_zone_info));
   } else {
     //no need update
   }
   return ret;
 }
 
+int ObBalanceLSPrimaryZone::need_update_ls_primary_zone (
+    const share::ObLSPrimaryZoneInfo &primary_zone_info,
+    const common::ObZone &new_primary_zone,
+    const common::ObSqlString &new_zone_priority,
+    bool &need_update)
+{
+  int ret = OB_SUCCESS;
+  need_update = false;
+  if (OB_UNLIKELY(!primary_zone_info.is_valid()
+        || new_primary_zone.is_empty() || new_zone_priority.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("primary zone info is invalid", KR(ret), K(primary_zone_info),
+        K(new_primary_zone), K(new_zone_priority));
+  } else if (new_primary_zone != primary_zone_info.get_primary_zone()
+      || new_zone_priority.string() != primary_zone_info.get_zone_priority_str()) {
+    need_update = true;
+  }
+  return ret;
+}
+
 int ObBalanceLSPrimaryZone::try_update_sys_ls_primary_zone(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  share::ObLSPrimaryZoneInfo primary_zone_info;
+  ObZone new_primary_zone;
+  ObSqlString new_zone_priority;
+  if (OB_UNLIKELY(is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("user tenant no need update sys ls primary zone", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(prepare_sys_ls_balance_primary_zone_info(
+      tenant_id,
+      primary_zone_info,
+      new_primary_zone,
+      new_zone_priority))) {
+    LOG_WARN("fail to prepare sys_ls_balance_primary_zone_info", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(try_update_ls_primary_zone(
+          primary_zone_info, new_primary_zone, new_zone_priority))) {
+    LOG_WARN("failed to update ls primary zone", KR(ret), K(primary_zone_info),
+        K(new_primary_zone), K(new_zone_priority));
+  } else if (is_meta_tenant(tenant_id)) {
+    //user sys ls has same primary zone with meta sys ls
+    share::ObLSPrimaryZoneInfo user_primary_zone_info;
+    share::ObLSStatusOperator status_op;
+    const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
+    if (OB_FAIL(status_op.get_ls_primary_zone_info(user_tenant_id, SYS_LS,
+        user_primary_zone_info, *GCTX.sql_proxy_))) {
+      LOG_WARN("failed to get ls primary_zone info", KR(ret), K(tenant_id), K(user_tenant_id));
+    } else if (OB_FAIL(try_update_ls_primary_zone(
+        user_primary_zone_info, new_primary_zone,
+        new_zone_priority))) {
+      LOG_WARN("failed to update ls primary zone", KR(ret), K(user_primary_zone_info),
+          K(new_primary_zone), K(new_zone_priority));
+    }
+  }
+  return ret;
+}
+
+int ObBalanceLSPrimaryZone::prepare_sys_ls_balance_primary_zone_info(
+    const uint64_t tenant_id,
+    share::ObLSPrimaryZoneInfo &primary_zone_info,
+    common::ObZone &new_primary_zone,
+    common::ObSqlString &new_zone_priority)
 {
   int ret = OB_SUCCESS;
   share::schema::ObTenantSchema tenant_schema;
@@ -297,15 +360,12 @@ int ObBalanceLSPrimaryZone::try_update_sys_ls_primary_zone(const uint64_t tenant
     LOG_WARN("unexpected error", KR(ret), KP(GCTX.sql_proxy_), KP(GCTX.schema_service_));
   } else if (OB_UNLIKELY(is_user_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("user tenant no need update sys ls primary zone", KR(ret), K(tenant_id));
+    LOG_WARN("only meta ans sys tenant are allowed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(ObTenantThreadHelper::get_tenant_schema(tenant_id, tenant_schema))) {
     LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id));
   } else {
-    share::ObLSPrimaryZoneInfo primary_zone_info;
-    ObArray<common::ObZone> primary_zone;
     share::ObLSStatusOperator status_op;
-    ObZone new_primary_zone;
-    ObSqlString new_zone_priority;
+    ObArray<common::ObZone> primary_zone;
     if (OB_FAIL(ObPrimaryZoneUtil::get_tenant_primary_zone_array(
             tenant_schema, primary_zone))) {
       LOG_WARN("failed to get tenant primary zone array", KR(ret), K(tenant_schema));
@@ -326,31 +386,45 @@ int ObBalanceLSPrimaryZone::try_update_sys_ls_primary_zone(const uint64_t tenant
     } else if (is_sys_tenant(tenant_id)) {
       //sys tenant use tenant normalize primary zone
       if (OB_FAIL(ObPrimaryZoneUtil::get_tenant_zone_priority(
-              tenant_schema, new_zone_priority))) {
+          tenant_schema, new_zone_priority))) {
         LOG_WARN("failed to get tenant primary zone array", KR(ret), K(tenant_schema));
       }
     } else if (OB_FAIL(ObTenantThreadHelper::get_zone_priority(new_primary_zone,
-            tenant_schema, new_zone_priority))) {
+        tenant_schema, new_zone_priority))) {
       LOG_WARN("failed to get normalize primary zone", KR(ret), K(new_primary_zone));
     }
-    if (FAILEDx(try_update_ls_primary_zone(
-            primary_zone_info, new_primary_zone, new_zone_priority))) {
-      LOG_WARN("failed to update ls primary zone", KR(ret), K(primary_zone_info),
-          K(new_primary_zone), K(new_zone_priority));
-    } else if (is_meta_tenant(tenant_id)) {
-      //user sys ls has same primary zone with meta sys ls
-      share::ObLSPrimaryZoneInfo user_primary_zone_info;
-      const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
-      if (OB_FAIL(status_op.get_ls_primary_zone_info(user_tenant_id, SYS_LS,
-              user_primary_zone_info, *GCTX.sql_proxy_))) {
-        LOG_WARN("failed to get ls primary_zone info", KR(ret), K(tenant_id), K(user_tenant_id));
-      } else if (OB_FAIL(try_update_ls_primary_zone(
-                     user_primary_zone_info, new_primary_zone,
-                     new_zone_priority))) {
-        LOG_WARN("failed to update ls primary zone", KR(ret), K(user_primary_zone_info),
-            K(new_primary_zone), K(new_zone_priority));
-      }
-    }
+  }
+  return ret;
+}
+
+int ObBalanceLSPrimaryZone::check_sys_ls_primary_zone_balanced(const uint64_t tenant_id, int &check_ret)
+{
+  int ret = OB_SUCCESS;
+  share::ObLSPrimaryZoneInfo primary_zone_info;
+  ObZone new_primary_zone;
+  ObSqlString new_zone_priority;
+  bool need_update = false;
+  check_ret = OB_NEED_WAIT;
+  if (OB_UNLIKELY(is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("only meta ans sys tenant are allowed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(prepare_sys_ls_balance_primary_zone_info(
+      tenant_id,
+      primary_zone_info,
+      new_primary_zone,
+      new_zone_priority))) {
+    LOG_WARN("fail to prepare sys_ls_balance_primary_zone_info", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(need_update_ls_primary_zone(
+      primary_zone_info,
+      new_primary_zone,
+      new_zone_priority,
+      need_update))) {
+    LOG_WARN("fail to check need_update_ls_primary_zone", KR(ret), K(primary_zone_info),
+        K(new_primary_zone), K(new_zone_priority));
+  } else if (!need_update) {
+    check_ret = OB_SUCCESS;
+  } else {
+    check_ret = OB_NEED_WAIT;
   }
   return ret;
 }

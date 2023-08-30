@@ -73,10 +73,10 @@ enum ObRsJobType
 {
   JOB_TYPE_INVALID = 0,
   JOB_TYPE_ALTER_TENANT_LOCALITY,
-  JOB_TYPE_ROLLBACK_ALTER_TENANT_LOCALITY,
+  JOB_TYPE_ROLLBACK_ALTER_TENANT_LOCALITY, // deprecated in V4.2
   JOB_TYPE_MIGRATE_UNIT,
   JOB_TYPE_DELETE_SERVER,
-  JOB_TYPE_SHRINK_RESOURCE_TENANT_UNIT_NUM,
+  JOB_TYPE_SHRINK_RESOURCE_TENANT_UNIT_NUM, // deprecated in V4.2
   JOB_TYPE_RESTORE_TENANT,
   JOB_TYPE_UPGRADE_STORAGE_FORMAT_VERSION,
   JOB_TYPE_STOP_UPGRADE_STORAGE_FORMAT_VERSION,
@@ -91,6 +91,8 @@ enum ObRsJobType
   JOB_TYPE_UPGRADE_INSPECTION,
   JOB_TYPE_UPGRADE_END,
   JOB_TYPE_UPGRADE_ALL,
+  JOB_TYPE_ALTER_RESOURCE_TENANT_UNIT_NUM,
+  JOB_TYPE_ALTER_TENANT_PRIMARY_ZONE,
   JOB_TYPE_MAX
 };
 
@@ -100,6 +102,8 @@ enum ObRsJobStatus
   JOB_STATUS_INPROGRESS,
   JOB_STATUS_SUCCESS,
   JOB_STATUS_FAILED,
+  JOB_STATUS_SKIP_CHECKING_LS_STATUS,
+  JOB_STATUS_CANCELED,
   JOB_STATUS_MAX
 };
 
@@ -162,6 +166,7 @@ public:
   static const char* get_job_type_str(ObRsJobType job_type);
   static ObRsJobType get_job_type(const common::ObString &job_type_str);
   static ObRsJobStatus get_job_status(const common::ObString &job_status_str);
+  static bool is_valid_job_type(const ObRsJobType &rs_job_type);
 public:
   ObRsJobTableOperator();
   virtual ~ObRsJobTableOperator() = default;
@@ -173,7 +178,7 @@ public:
   // get job info by id
   int get_job(int64_t job_id, ObRsJobInfo &job_info);
   // find the one job with the search conditions
-  int find_job(share::ObDMLSqlSplicer &pairs, ObRsJobInfo &job_info, common::ObISQLClient &trans);
+  int find_job(const ObRsJobType job_type, share::ObDMLSqlSplicer &pairs, int64_t &job_id, common::ObISQLClient &trans);
   // update the job with the specified values
   int update_job(int64_t job_id, share::ObDMLSqlSplicer &pairs, common::ObISQLClient &trans);
   int update_job_progress(int64_t job_id, int64_t progress, common::ObISQLClient &trans);
@@ -195,9 +200,6 @@ private:
   int alloc_job_id(int64_t &job_id);
   int load_max_job_id(int64_t &max_job_id, int64_t &row_count);
   int cons_job_info(const common::sqlclient::ObMySQLResult &res, ObRsJobInfo &job_info);
-  int load_row_count(int64_t &row_count);
-  int delete_rows_if_necessary();
-  int delete_rows();
 private:
   // data members
   bool inited_;
@@ -219,22 +221,9 @@ public:
 
 #define THE_RS_JOB_TABLE ::oceanbase::rootserver::ObRsJobTableOperatorSingleton::get_instance()
 
-// usage: int64_t job_id = RS_JOB_CREATE(ALTER_TENANT_LOCALITY, "tenant_id", 1010);
+// usage: ret = RS_JOB_CREATE_WITH_RET(job_id, JOB_TYPE_ALTER_TENANT_LOCALITY, "tenant_id", 1010);
 // no need to fill the following column, all these columns are filled automatically:
 // job_type, job_status, gmt_create, gmt_modified, rs_svr_ip, rs_svr_port, progress(0)
-#define RS_JOB_CREATE(job_type, trans, args...)                                \
-  ({                                                                    \
-    int64_t ret_job_id = -1;                                            \
-    int tmp_ret = ::oceanbase::common::OB_SUCCESS;                      \
-    ::oceanbase::share::ObDMLSqlSplicer dml;                            \
-    tmp_ret = ::oceanbase::rootserver::ob_build_dml_elements(dml, ##args); \
-    if (::oceanbase::common::OB_SUCCESS == tmp_ret) {                   \
-      THE_RS_JOB_TABLE.create_job(JOB_TYPE_ ## job_type, dml, ret_job_id, (trans)); \
-    }                                                                   \
-    ret_job_id;                                                         \
-  })
-
-// just like RS_JOB_CREATE, macro with return code
 #define RS_JOB_CREATE_WITH_RET(job_id, job_type, trans, args...)        \
   ({                                                                    \
     job_id = ::oceanbase::common::OB_INVALID_ID;                    \
@@ -278,7 +267,10 @@ public:
 
 // job finished:
 // 1. result_code == 0, update status(SUCCESS) and progress(100) automatically
-// 2. result_code != 0, update status(FAILED) automatically
+// 2. result_code == -4762, update status(SKIP_CHECKING_LS_STATUS),
+//                          the job is finished without checking whether ls are balanced
+// 3. result_code == -4072, update status(CANCELED) the job is cancelled by a new job
+// 4. else,  update status(FAILED) automatically
 #define RS_JOB_COMPLETE(job_id, result_code, trans)                    \
   THE_RS_JOB_TABLE.complete_job((job_id), (result_code), (trans))
 
@@ -286,14 +278,14 @@ public:
 #define RS_JOB_GET(job_id, job_info)                    \
   THE_RS_JOB_TABLE.get_job((job_id), (job_info))
 
-// usage: ret = RS_JOB_FIND(job_info, "job_status", "INPROGRESS", "job_type", "ALTER_TENANT_LOCALITY", "tenant_id", 1010);
-#define RS_JOB_FIND(job_info, trans, args...)                                  \
+// usage: ret = RS_JOB_FIND(ALTER_TENANT_LOCALITY, job_id, "tenant_id", 1010);
+#define RS_JOB_FIND(job_type, job_id, trans, args...)                                  \
   ({                                                                    \
     int tmp_ret = ::oceanbase::common::OB_SUCCESS;                      \
     ::oceanbase::share::ObDMLSqlSplicer dml;                            \
     tmp_ret = ::oceanbase::rootserver::ob_build_dml_elements(dml, ##args); \
     if (::oceanbase::common::OB_SUCCESS == tmp_ret) {                   \
-      tmp_ret = THE_RS_JOB_TABLE.find_job(dml, job_info, (trans));      \
+      tmp_ret = THE_RS_JOB_TABLE.find_job(JOB_TYPE_ ## job_type, dml, job_id, (trans));      \
     }                                                                   \
     tmp_ret;                                                            \
   })

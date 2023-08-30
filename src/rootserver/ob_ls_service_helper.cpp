@@ -899,10 +899,14 @@ int ObLSServiceHelper::create_new_ls_in_trans(
   return ret;
 }
 
-int ObLSServiceHelper::balance_ls_group(ObTenantLSInfo& tenant_ls_info)
+int ObLSServiceHelper::balance_ls_group(
+    const bool need_execute_balance,
+    ObTenantLSInfo& tenant_ls_info,
+    bool &is_balanced)
 {
   int ret = OB_SUCCESS;
   int64_t task_cnt = 0;
+  is_balanced = true;
   if (OB_FAIL(tenant_ls_info.gather_stat())) {
     LOG_WARN("failed to gather stat", KR(ret));
   } else if (OB_FAIL(try_shrink_standby_unit_group_(tenant_ls_info, task_cnt))) {
@@ -933,12 +937,13 @@ int ObLSServiceHelper::balance_ls_group(ObTenantLSInfo& tenant_ls_info)
         }
       }//end for
       if (OB_SUCC(ret) && max_count - min_count > 1) {
-        if (OB_FAIL(balance_ls_group_between_unit_group_(tenant_ls_info, min_index, max_index))) {
+        is_balanced = false;
+        if (need_execute_balance && OB_FAIL(balance_ls_group_between_unit_group_(tenant_ls_info, min_index, max_index))) {
           LOG_WARN("failed to balance ls group between unit group", KR(ret), K(tenant_ls_info),
               K(min_index), K(max_index));
         }
       }
-    } while (OB_SUCC(ret) && (max_count - min_count) > 1);
+    } while (OB_SUCC(ret) && (max_count - min_count) > 1 && need_execute_balance);
   }
   return ret;
 }

@@ -230,7 +230,10 @@ public:
       ObTenantLSInfo& tenant_ls_info,
       common::ObMySQLTransaction &trans,
       const share::ObLSFlag &ls_flag);
-  static int balance_ls_group(ObTenantLSInfo& tenant_ls_info);//for standby tenant
+  static int balance_ls_group(
+      const bool need_execute_balance,
+      ObTenantLSInfo& tenant_ls_info,
+      bool &is_balanced);//for standby tenant
   static int update_ls_recover_in_trans(
             const share::ObLSRecoveryStat &ls_recovery_stat,
             const bool only_update_readable_scn,
