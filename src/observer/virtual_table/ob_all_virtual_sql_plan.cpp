@@ -505,23 +505,25 @@ int ObAllVirtualSqlPlan::dump_all_tenant_plans()
 int ObAllVirtualSqlPlan::dump_tenant_plans(int64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  DumpAllPlan dump_plan;
-  dump_plan.tenant_id_ = tenant_id;
-  dump_plan.plan_ids_ = &plan_ids_;
-  // !!!引用plan cache资源之前必须加ObReqTimeGuard
-  ObReqTimeGuard req_timeinfo_guard;
-  ObPlanCache *plan_cache = NULL;
-  MTL_SWITCH(tenant_id) {
-    plan_cache = MTL(ObPlanCache*);
-    if (OB_ISNULL(plan_cache)) {
-      ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "unexpect null plan cache", K(ret));
-    } else if (OB_FAIL(plan_cache->foreach_alloc_cache_obj(dump_plan))) {
-      SERVER_LOG(WARN, "failed to dump plan", K(ret));
+  if (!is_virtual_tenant_id(tenant_id)) {
+    DumpAllPlan dump_plan;
+    dump_plan.tenant_id_ = tenant_id;
+    dump_plan.plan_ids_ = &plan_ids_;
+    // !!!引用plan cache资源之前必须加ObReqTimeGuard
+    ObReqTimeGuard req_timeinfo_guard;
+    ObPlanCache *plan_cache = NULL;
+    MTL_SWITCH(tenant_id) {
+      plan_cache = MTL(ObPlanCache*);
+      if (OB_ISNULL(plan_cache)) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "unexpect null plan cache", K(ret));
+      } else if (OB_FAIL(plan_cache->foreach_alloc_cache_obj(dump_plan))) {
+        SERVER_LOG(WARN, "failed to dump plan", K(ret));
+      }
+    } // mtl switch ends
+    if (OB_OP_NOT_ALLOW == ret) {
+      ret = OB_SUCCESS;
     }
-  } // mtl switch ends
-  if (OB_OP_NOT_ALLOW == ret) {
-    ret = OB_SUCCESS;
   }
   return ret;
 }
