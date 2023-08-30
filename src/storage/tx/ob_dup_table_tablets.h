@@ -789,7 +789,9 @@ private:
   // int get_changing_new_set_(DupTabletChangeMap *&changing_new_set);
   // int get_old_tablet_set_(DupTabletChangeMap *&old_tablet_set);
   int alloc_extra_free_tablet_set_();
-  int get_free_tablet_set(DupTabletChangeMap *&free_set, const uint64_t target_id = 0);
+  int get_free_tablet_set(DupTabletChangeMap *&free_set,
+                          const bool force_alloc = false,
+                          const uint64_t target_id = 0);
 
   // If get a free tablet set, need set tablet set type and push into queue
   int get_target_tablet_set_(const DupTabletSetCommonHeader &target_common_header,
