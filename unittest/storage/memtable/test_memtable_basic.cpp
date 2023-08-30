@@ -42,6 +42,21 @@ using namespace blocksstable;
 using namespace memtable;
 using namespace transaction;
 
+namespace concurrent_control
+{
+int check_sequence_set_violation(const concurrent_control::ObWriteFlag ,
+                                 const transaction::ObTxSEQ ,
+                                 const transaction::ObTransID ,
+                                 const blocksstable::ObDmlFlag ,
+                                 const transaction::ObTxSEQ ,
+                                 const transaction::ObTransID ,
+                                 const blocksstable::ObDmlFlag ,
+                                 const transaction::ObTxSEQ )
+{
+  return OB_SUCCESS;
+}
+} // concurrent_control
+
 namespace common
 {
 // override the function
