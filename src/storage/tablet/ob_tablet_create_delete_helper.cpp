@@ -38,8 +38,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#define PRINT_CREATE_ARG(arg) (ObSimpleBatchCreateTabletArg(arg))
-
 using namespace oceanbase::obrpc;
 using namespace oceanbase::common;
 using namespace oceanbase::share;

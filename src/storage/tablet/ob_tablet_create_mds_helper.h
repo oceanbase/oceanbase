@@ -154,6 +154,7 @@ private:
       const share::SCN &scn,
       mds::BufferCtx &ctx,
       const bool for_old_mds);
+  static void handle_ret_for_replay(int &ret);
 };
 } // namespace storage
 } // namespace oceanbase
