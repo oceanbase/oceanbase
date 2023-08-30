@@ -24,7 +24,7 @@ namespace storage
 class ObLobLocatorHelper
 {
 public:
-  ObLobLocatorHelper();
+  ObLobLocatorHelper(common::ObIAllocator& allocator);
   virtual ~ObLobLocatorHelper();
   void reset();
   void reuse() {

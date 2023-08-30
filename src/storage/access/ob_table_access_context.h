@@ -92,6 +92,13 @@ struct ObTableAccessContext
   inline common::ObIAllocator *get_range_allocator() {
     return nullptr == range_allocator_ ? allocator_ : range_allocator_;
   }
+  inline void reset_lob_locator_helper() {
+    if (OB_NOT_NULL(lob_locator_helper_)) {
+      lob_locator_helper_->~ObLobLocatorHelper();
+      lob_locator_helper_ = nullptr;
+      lob_allocator_.reset();
+    }
+  }
   // used for query
   int init(ObTableScanParam &scan_param,
            ObStoreCtx &ctx,
@@ -123,6 +130,7 @@ struct ObTableAccessContext
     K_(out_cnt),
     K_(trans_version_range),
     K_(merge_scn),
+    K_(lob_allocator),
     K_(lob_locator_helper),
     KP_(iter_pool),
     KP_(block_row_store),
@@ -161,6 +169,7 @@ public:
   common::ObVersionRange trans_version_range_;
   const common::ObSEArray<int64_t, 4, common::ModulePageAllocator> *range_array_pos_;
   share::SCN merge_scn_;
+  common::ObArenaAllocator lob_allocator_;
   ObLobLocatorHelper *lob_locator_helper_;
   ObStoreRowIterPool *iter_pool_;
   ObBlockRowStore *block_row_store_;

@@ -27,7 +27,7 @@ using namespace blocksstable;
 namespace storage
 {
 
-ObLobLocatorHelper::ObLobLocatorHelper()
+ObLobLocatorHelper::ObLobLocatorHelper(common::ObIAllocator& allocator)
   : table_id_(OB_INVALID_ID),
     tablet_id_(OB_INVALID_ID),
     ls_id_(OB_INVALID_ID),
@@ -35,7 +35,7 @@ ObLobLocatorHelper::ObLobLocatorHelper()
     rowid_version_(ObURowIDData::INVALID_ROWID_VERSION),
     rowid_project_(nullptr),
     rowid_objs_(),
-    locator_allocator_(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    locator_allocator_(allocator),
     rowkey_str_(),
     enable_locator_v2_(),
     is_inited_(false)
