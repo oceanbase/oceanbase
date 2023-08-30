@@ -29,19 +29,6 @@ namespace transaction
 {
 namespace tablelock
 {
-int ObOBJLock::register_into_deadlock_detector_(const ObStoreCtx &ctx,
-                                                const ObTableLockOp &lock_op)
-{
-  UNUSEDx(ctx, lock_op);
-  return OB_SUCCESS;
-}
-
-int ObOBJLock::unregister_from_deadlock_detector_(const ObTableLockOp &lock_op)
-{
-  UNUSED(lock_op);
-  return OB_SUCCESS;
-}
-
 class TestObjLock : public MockTxEnv,
                     public ::testing::Test
 {
@@ -572,9 +559,9 @@ TEST_F(TestObjLock, lock_conflict_in_in)
     ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
   } else {
     // deadlock detect will kill the trans
-    // ASSERT_EQ(OB_ERR_EXCLUSIVE_LOCK_CONFLICT, ret);
+    // ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
     // ASSERT_EQ(OB_TRANS_KILLED, ret);
-    ASSERT_EQ((ret == OB_TRANS_KILLED || ret == OB_ERR_EXCLUSIVE_LOCK_CONFLICT), true);
+    ASSERT_EQ((ret == OB_TRANS_KILLED || ret == OB_TRY_LOCK_ROW_CONFLICT), true);
   }
 
   // 1.3 clean.

@@ -25,6 +25,7 @@
 #include "storage/memtable/ob_memtable_context.h"    // ObMemtableCtx
 #include "storage/tablelock/ob_mem_ctx_table_lock.h"
 #include "storage/tablelock/ob_table_lock_common.h"
+#include "storage/tablelock/ob_table_lock_deadlock.h"
 #include "storage/tablelock/ob_table_lock_rpc_struct.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_part_ctx.h"
@@ -135,6 +136,7 @@ int ObLockMemtable::lock_(
   ObTableLockMode lock_mode_in_same_trans = 0x0;
   bool lock_exist = false;
   ObLockStep succ_step = STEP_BEGIN;
+  bool register_to_deadlock = false;
   ObTxIDSet conflict_tx_set;
 
   // 1. record lock myself(check conflict).
@@ -150,8 +152,8 @@ int ObLockMemtable::lock_(
       conflict_tx_set.reset();
       ObMvccWriteGuard guard(true);
       if (ObClockGenerator::getClock() >= param.expired_time_) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("lock timeout", K(ret), K(param));
+        ret = (ret == OB_TRY_LOCK_ROW_CONFLICT ? OB_ERR_EXCLUSIVE_LOCK_CONFLICT : OB_TIMEOUT);
+        LOG_WARN("lock timeout", K(ret), K(lock_op), K(param));
       } else if (OB_FAIL(guard.write_auth(ctx))) {
         LOG_WARN("not allow lock table.", K(ret), K(ctx));
       } else if (FALSE_IT(mem_ctx = static_cast<ObMemtableCtx *>(ctx.mvcc_acc_ctx_.mem_ctx_))) {
@@ -181,14 +183,41 @@ int ObLockMemtable::lock_(
         }
         LOG_WARN("record lock at mem_ctx failed.", K(ret), K(lock_op));
       }
+
       if (OB_FAIL(ret) && succ_step == STEP_IN_LOCK_MGR) {
         obj_lock_map_.remove_lock_record(lock_op);
+      }
+      if (!need_retry &&
+          ret == OB_TRY_LOCK_ROW_CONFLICT) {
+        if (param.is_try_lock_) {
+        } else if (ctx.mvcc_acc_ctx_.tx_ctx_->is_table_lock_killed()) {
+          // trans is killed by deadlock detect or abort because of
+          // something else.
+          ret = OB_TRANS_KILLED;
+        } else if (lock_op.is_dml_lock_op() /* only dml lock will wait at lock wait mgr */) {
+          // wait at lock wait mgr but not retry at here.
+        } else {
+          // register to deadlock detector.
+          need_retry = true;
+          if (!lock_op.is_dml_lock_op() && !register_to_deadlock) {
+            if (OB_TMP_FAIL(register_into_deadlock_detector_(ctx, lock_op))) {
+              LOG_WARN("register to deadlock detector failed", K(ret), K(lock_op));
+            } else {
+              register_to_deadlock = true;
+            }
+          }
+        }
       }
     }
     if (need_retry) {
       ob_usleep(USLEEP_TIME);
     }
   } while (need_retry);
+  if (OB_UNLIKELY(register_to_deadlock)) {
+    if (OB_TMP_FAIL(unregister_from_deadlock_detector_(lock_op))) {
+      LOG_WARN("unregister from deadlock detector failed", K(tmp_ret), K(lock_op));
+    }
+  }
   // return success if lock twice.
   if (ret == OB_OBJ_LOCK_EXIST) {
     ret = OB_SUCCESS;
@@ -286,6 +315,11 @@ int ObLockMemtable::unlock_(
       }
       if (OB_FAIL(ret) && succ_step == STEP_IN_LOCK_MGR) {
         obj_lock_map_.remove_lock_record(unlock_op);
+      }
+      if (!need_retry &&
+          is_need_retry_unlock_error(ret) &&
+          !is_try_lock) {
+        need_retry = true;
       }
     }
     if (need_retry) {
@@ -945,6 +979,62 @@ int ObLockMemtable::replay_lock(
     // do nothing
   }
   LOG_DEBUG("ObMemtable::replay_lock finish.", K(ret), K(lock_op), K(ls_id_));
+  return ret;
+}
+
+int ObLockMemtable::register_into_deadlock_detector_(
+    const ObStoreCtx &ctx,
+    const ObTableLockOp &lock_op)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObTransLockPartID tx_lock_part_id;
+  ObAddr parent_addr;
+  const ObLSID &ls_id = ctx.ls_id_;
+  const int64_t priority = ~(ctx.mvcc_acc_ctx_.tx_desc_->get_active_ts());
+  tx_lock_part_id.lock_id_ = lock_op.lock_id_;
+  tx_lock_part_id.trans_id_ = lock_op.create_trans_id_;
+  if (OB_FAIL(ObTableLockDeadlockDetectorHelper::register_trans_lock_part(
+      tx_lock_part_id, ls_id, priority))) {
+    LOG_WARN("register trans lock part failed", K(ret), K(tx_lock_part_id),
+             K(ls_id));
+  } else if (OB_FAIL(ObTransDeadlockDetectorAdapter::get_trans_scheduler_info_on_participant(
+      tx_lock_part_id.trans_id_, ls_id, parent_addr))) {
+    LOG_WARN("get scheduler address failed", K(tx_lock_part_id), K(ls_id));
+  } else if (OB_FAIL(ObTableLockDeadlockDetectorHelper::add_parent(
+      tx_lock_part_id, parent_addr, lock_op.create_trans_id_))) {
+    LOG_WARN("add parent failed", K(ret), K(tx_lock_part_id));
+  } else if (OB_FAIL(ObTableLockDeadlockDetectorHelper::block(tx_lock_part_id,
+                                                              ls_id,
+                                                              lock_op))) {
+    LOG_WARN("add dependency failed", K(ret), K(tx_lock_part_id));
+  } else {
+    LOG_DEBUG("succeed register to the dead lock detector");
+  }
+  if (OB_FAIL(ret)) {
+    if (OB_SUCCESS != (tmp_ret = ObTableLockDeadlockDetectorHelper::
+                       unregister_trans_lock_part(tx_lock_part_id))) {
+      if (tmp_ret != OB_ENTRY_NOT_EXIST) {
+        LOG_WARN("unregister from deadlock detector failed", K(ret),
+                 K(tx_lock_part_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLockMemtable::unregister_from_deadlock_detector_(const ObTableLockOp &lock_op)
+{
+  int ret = OB_SUCCESS;
+  ObTransLockPartID tx_lock_part_id;
+  tx_lock_part_id.lock_id_ = lock_op.lock_id_;
+  tx_lock_part_id.trans_id_ = lock_op.create_trans_id_;
+  if (OB_FAIL(ObTableLockDeadlockDetectorHelper::unregister_trans_lock_part(
+      tx_lock_part_id))) {
+    LOG_WARN("unregister trans lock part failed", K(ret), K(tx_lock_part_id));
+  } else {
+    // do nothing
+  }
   return ret;
 }
 

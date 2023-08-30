@@ -162,20 +162,17 @@ private:
       const ObLockParam &param,
       const ObTableLockOp &lock_op,
       const ObTableLockMode &lock_mode_in_same_trans,
-      bool &need_retry,
       ObMalloc &allocator,
       ObTxIDSet &conflict_tx_set);
   int slow_lock(
       const ObLockParam &param,
       const ObTableLockOp &lock_op,
       const ObTableLockMode &lock_mode_in_same_trans,
-      bool &need_retry,
       ObMalloc &allocator,
       ObTxIDSet &conflict_tx_set);
   int try_fast_lock_(
       const ObTableLockOp &lock_op,
       const ObTableLockMode &lock_mode_in_same_trans,
-      bool &need_retry,
       ObTxIDSet &conflict_tx_set);
   int unlock_(
       const ObTableLockOp &unlock_op,
@@ -238,10 +235,6 @@ private:
       ObMalloc &allocator,
       bool &is_compact,
       const bool is_force = false);
-  int register_into_deadlock_detector_(
-      const storage::ObStoreCtx &ctx,
-      const ObTableLockOp &lock_op);
-  int unregister_from_deadlock_detector_(const ObTableLockOp &lock_op);
 private:
   int get_index_by_lock_mode(ObTableLockMode mode);
   int check_op_allow_lock_from_list_(

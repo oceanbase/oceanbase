@@ -22,7 +22,6 @@
 #include "storage/tablelock/ob_obj_lock.h"
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/tablelock/ob_mem_ctx_table_lock.h"
-#include "storage/tablelock/ob_table_lock_deadlock.h"
 #include "storage/tablelock/ob_table_lock_iterator.h"
 #include "storage/tablelock/ob_table_lock_rpc_struct.h"
 
@@ -170,7 +169,6 @@ int ObOBJLock::slow_lock(
     const ObLockParam &param,
     const ObTableLockOp &lock_op,
     const ObTableLockMode &lock_mode_in_same_trans,
-    bool &need_retry,
     ObMalloc &allocator,
     ObTxIDSet &conflict_tx_set)
 {
@@ -187,7 +185,6 @@ int ObOBJLock::slow_lock(
   WRLockGuard guard(rwlock_);
   if (is_deleted_) {
     ret = OB_EAGAIN;
-    need_retry = false;
   } else if (OB_FAIL(check_allow_lock_(lock_op,
                                        lock_mode_in_same_trans,
                                        conflict_tx_set,
@@ -222,17 +219,14 @@ int ObOBJLock::slow_lock(
                            op_list, allocator);
   }
   // 1. need retry basic conditions
-  if (ret == OB_TRY_LOCK_ROW_CONFLICT && !param.is_try_lock_) {
-    need_retry = true;
-  }
+  // lock conflict and it is not try lock.
   // 2. need retry second conditions
   // out trans lock or in trans lock table lock should not retry if
   // it is conflict with dml lock.
-  if (need_retry) {
+  if (ret == OB_TRY_LOCK_ROW_CONFLICT && !param.is_try_lock_) {
     if (!lock_op.is_dml_lock_op() &&
         conflict_with_dml_lock &&
         param.is_deadlock_avoid_enabled_) {
-      need_retry = false;
       ret = OB_TRANS_KILLED;
     }
   }
@@ -414,14 +408,12 @@ int ObOBJLock::update_lock_status(const ObTableLockOp &lock_op,
 int ObOBJLock::try_fast_lock_(
     const ObTableLockOp &lock_op,
     const ObTableLockMode &lock_mode_in_same_trans,
-    bool &need_retry,
     ObTxIDSet &conflict_tx_set)
 {
   int ret = OB_SUCCESS;
   bool unused_conflict_with_dml_lock = false;
   if (is_deleted_) {
     ret = OB_EAGAIN;
-    need_retry = false;
   } else if (OB_UNLIKELY(lock_op.need_record_lock_op())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("this lock op should not do fast lock", KR(ret), K(lock_op));
@@ -447,7 +439,6 @@ int ObOBJLock::fast_lock(
     const ObLockParam &param,
     const ObTableLockOp &lock_op,
     const ObTableLockMode &lock_mode_in_same_trans,
-    bool &need_retry,
     ObMalloc &allocator,
     ObTxIDSet &conflict_tx_set)
 {
@@ -458,7 +449,6 @@ int ObOBJLock::fast_lock(
     RDLockGuard guard(rwlock_);
     if (OB_FAIL(try_fast_lock_(lock_op,
                                lock_mode_in_same_trans,
-                               need_retry,
                                conflict_tx_set))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_EAGAIN != ret) {
         LOG_WARN("try fast lock failed", KR(ret), K(lock_op));
@@ -466,10 +456,6 @@ int ObOBJLock::fast_lock(
     } else {
       LOG_DEBUG("succeed create lock ", K(lock_op));
     }
-  }
-  // 1. need retry basic conditions
-  if (ret == OB_TRY_LOCK_ROW_CONFLICT && !param.is_try_lock_) {
-    need_retry = true;
   }
   return ret;
 }
@@ -485,7 +471,6 @@ int ObOBJLock::lock(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   int64_t USLEEP_TIME = 100; // 0.1 ms
-  bool register_to_deadlock = false;
   // 1. lock myself.
   // 2. try to lock.
   LOG_DEBUG("ObOBJLock::lock ", K(param), K(lock_op));
@@ -493,73 +478,31 @@ int ObOBJLock::lock(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument.", K(ret), K(lock_op));
   } else {
-    bool need_retry = false;
-    do {
-      need_retry = false;
-      if (OB_LIKELY(!lock_op.need_record_lock_op())) {
-        if (OB_FAIL(fast_lock(param,
-                              lock_op,
-                              lock_mode_in_same_trans,
-                              need_retry,
-                              allocator,
-                              conflict_tx_set))) {
-          if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
-              ret != OB_EAGAIN) {
-            LOG_WARN("lock failed.", K(ret), K(lock_op));
-          }
-        }
-      } else if (OB_FAIL(slow_lock(param,
-                                   lock_op,
-                                   lock_mode_in_same_trans,
-                                   need_retry,
-                                   allocator,
-                                   conflict_tx_set))) {
+    if (OB_LIKELY(!lock_op.need_record_lock_op())) {
+      if (OB_FAIL(fast_lock(param,
+                            lock_op,
+                            lock_mode_in_same_trans,
+                            allocator,
+                            conflict_tx_set))) {
         if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
             ret != OB_EAGAIN) {
           LOG_WARN("lock failed.", K(ret), K(lock_op));
         }
       }
+    } else if (OB_FAIL(slow_lock(param,
+                                 lock_op,
+                                 lock_mode_in_same_trans,
+                                 allocator,
+                                 conflict_tx_set))) {
+      if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
+          ret != OB_EAGAIN) {
+        LOG_WARN("lock failed.", K(ret), K(lock_op));
+      }
+    }
 
-      if (need_retry &&
-          ret == OB_TRY_LOCK_ROW_CONFLICT) {
-        need_retry = false;
-        if (param.is_try_lock_) {
-        } else if (OB_UNLIKELY(ObClockGenerator::getClock() >= param.expired_time_)) {
-          ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT; // TODO: specialize error code with different lock mode
-          LOG_WARN("lock is timeout", K(ret), K(lock_op), K(param));
-        } else if (ctx.mvcc_acc_ctx_.tx_ctx_->is_table_lock_killed()) {
-          // trans is killed by deadlock detect or abort because of
-          // something else.
-          need_retry = false;
-          ret = OB_TRANS_KILLED;
-        } else if (lock_op.is_dml_lock_op() /* only dml lock will wait at lock wait mgr */) {
-          // wait at lock wait mgr but not retry at here.
-          need_retry = false;
-        } else {
-          // register to deadlock detector.
-          need_retry = true;
-          if (!lock_op.is_dml_lock_op() &&
-              !register_to_deadlock) {
-            if (OB_FAIL(register_into_deadlock_detector_(ctx,
-                                                         lock_op))) {
-              LOG_WARN("register to deadlock detector failed", K(ret),
-                       K(lock_op));
-            } else {
-              register_to_deadlock = true;
-            }
-          }
-          ob_usleep(USLEEP_TIME);
-        }
-      }
-      if (OB_FAIL(ret) && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-        LOG_WARN("ObOBJLock::lock ", K(ret), K(param), K(lock_op));
-        print();
-      }
-    } while (need_retry);
-    if (OB_UNLIKELY(register_to_deadlock)) {
-      if (OB_SUCCESS != (tmp_ret = unregister_from_deadlock_detector_(lock_op))) {
-        LOG_WARN("unregister from deadlock detector failed", K(tmp_ret), K(lock_op));
-      }
+    if (OB_FAIL(ret) && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+      LOG_WARN("ObOBJLock::lock ", K(ret), K(param), K(lock_op));
+      print();
     }
   }
   LOG_DEBUG("ObOBJLock::lock finish", K(ret), K(conflict_tx_set));
@@ -585,35 +528,25 @@ int ObOBJLock::unlock(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("should only slow lock op", K(ret), K(unlock_op));
   } else {
-    bool need_retry = false;
-    do {
-      need_retry = false;
-      {
-        WRLockGuard guard(rwlock_);
-        if (!is_try_lock && OB_UNLIKELY(ObClockGenerator::getClock() >= expired_time)) {
-          ret = (ret == OB_SUCCESS ? OB_TIMEOUT : ret);
-          LOG_WARN("unlock is timeout", K(ret), K(unlock_op));
-        } else if (is_deleted_) {
-          // need retry from upper layer.
-          ret = OB_EAGAIN;
-          need_retry = false;
-        } else if (OB_FAIL(unlock_(unlock_op, allocator))) {
-          if (is_need_retry_unlock_error(ret) && !is_try_lock) {
-            need_retry = true;
-          } else {
-            LOG_WARN("unlock failed.", K(ret), K(unlock_op));
-          }
+    {
+      WRLockGuard guard(rwlock_);
+      if (!is_try_lock && OB_UNLIKELY(ObClockGenerator::getClock() >= expired_time)) {
+        ret = (ret == OB_SUCCESS ? OB_TIMEOUT : ret);
+        LOG_WARN("unlock is timeout", K(ret), K(unlock_op));
+      } else if (is_deleted_) {
+        // need retry from upper layer.
+        ret = OB_EAGAIN;
+      } else if (OB_FAIL(unlock_(unlock_op, allocator))) {
+        if (!is_need_retry_unlock_error(ret)) {
+          LOG_WARN("unlock failed.", K(ret), K(unlock_op));
         }
       }
-      if (need_retry) {
-        ob_usleep(USLEEP_TIME);
-      }
-      if (OB_FAIL(ret) && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-        LOG_WARN("ObOBJLock::unlock ", K(ret), K(is_try_lock),
-                 K(expired_time), K(unlock_op));
-        print();
-      }
-    } while (need_retry);
+    }
+    if (OB_FAIL(ret) && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+      LOG_WARN("ObOBJLock::unlock ", K(ret), K(is_try_lock),
+               K(expired_time), K(unlock_op));
+      print();
+    }
   }
   LOG_DEBUG("ObOBJLock::unlock finish.", K(ret));
 
@@ -1583,61 +1516,6 @@ int ObOBJLock::compact_tablelock_(ObMalloc &allocator,
     } else {
       // do nothing
     }
-  }
-  return ret;
-}
-
-int ObOBJLock::register_into_deadlock_detector_(const ObStoreCtx &ctx,
-                                                const ObTableLockOp &lock_op)
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObTransLockPartID tx_lock_part_id;
-  ObAddr parent_addr;
-  const ObLSID &ls_id = ctx.ls_id_;
-  const int64_t priority = ~(ctx.mvcc_acc_ctx_.tx_desc_->get_active_ts());
-  tx_lock_part_id.lock_id_ = lock_op.lock_id_;
-  tx_lock_part_id.trans_id_ = lock_op.create_trans_id_;
-  if (OB_FAIL(ObTableLockDeadlockDetectorHelper::register_trans_lock_part(
-      tx_lock_part_id, ls_id, priority))) {
-    LOG_WARN("register trans lock part failed", K(ret), K(tx_lock_part_id),
-             K(ls_id));
-  } else if (OB_FAIL(ObTransDeadlockDetectorAdapter::get_trans_scheduler_info_on_participant(
-      tx_lock_part_id.trans_id_, ls_id, parent_addr))) {
-    LOG_WARN("get scheduler address failed", K(tx_lock_part_id), K(ls_id));
-  } else if (OB_FAIL(ObTableLockDeadlockDetectorHelper::add_parent(
-      tx_lock_part_id, parent_addr, lock_op.create_trans_id_))) {
-    LOG_WARN("add parent failed", K(ret), K(tx_lock_part_id));
-  } else if (OB_FAIL(ObTableLockDeadlockDetectorHelper::block(tx_lock_part_id,
-                                                              ls_id,
-                                                              lock_op))) {
-    LOG_WARN("add dependency failed", K(ret), K(tx_lock_part_id));
-  } else {
-    LOG_DEBUG("succeed register to the dead lock detector");
-  }
-  if (OB_FAIL(ret)) {
-    if (OB_SUCCESS != (tmp_ret = ObTableLockDeadlockDetectorHelper::
-                       unregister_trans_lock_part(tx_lock_part_id))) {
-      if (tmp_ret != OB_ENTRY_NOT_EXIST) {
-        LOG_WARN("unregister from deadlock detector failed", K(ret),
-                 K(tx_lock_part_id));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObOBJLock::unregister_from_deadlock_detector_(const ObTableLockOp &lock_op)
-{
-  int ret = OB_SUCCESS;
-  ObTransLockPartID tx_lock_part_id;
-  tx_lock_part_id.lock_id_ = lock_op.lock_id_;
-  tx_lock_part_id.trans_id_ = lock_op.create_trans_id_;
-  if (OB_FAIL(ObTableLockDeadlockDetectorHelper::unregister_trans_lock_part(
-      tx_lock_part_id))) {
-    LOG_WARN("unregister trans lock part failed", K(ret), K(tx_lock_part_id));
-  } else {
-    // do nothing
   }
   return ret;
 }

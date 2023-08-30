@@ -195,6 +195,9 @@ private:
                               const ObTableLockMode &lock_mode,
                               const ObTransID &conflict_tx_id,
                               ObFunction<int(bool &need_wait)> &recheck_f);
+  int register_into_deadlock_detector_(const ObStoreCtx &ctx,
+                                       const ObTableLockOp &lock_op);
+  int unregister_from_deadlock_detector_(const ObTableLockOp &lock_op);
 private:
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;
