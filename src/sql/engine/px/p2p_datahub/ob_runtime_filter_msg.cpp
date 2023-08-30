@@ -1484,6 +1484,10 @@ int ObRFInFilterMsg::ObRFInFilterNode::hash(uint64_t &hash_ret) const
   return ret;
 }
 
+// the ObRFInFilterNode stores in ObRFInFilter always be the datum of build table,
+// while the other node can be the build table(during insert or merge process)
+// or the probe table(during filter process),
+// so the compare process relys on the other node, always using other's cmp_func_.
 bool ObRFInFilterMsg::ObRFInFilterNode::operator==(const ObRFInFilterNode &other) const
 {
   int cmp_ret = 0;
@@ -1492,7 +1496,9 @@ bool ObRFInFilterMsg::ObRFInFilterNode::operator==(const ObRFInFilterNode &other
     if (row_->at(i).is_null() && other.row_->at(i).is_null()) {
       continue;
     } else {
-      int tmp_ret = cmp_funcs_->at(i).cmp_func_(row_->at(i), other.row_->at(i), cmp_ret);
+      // because cmp_func is chosen as compare(probe_data/build_data, build_data)
+      // so the other's data must be placed at first
+      int tmp_ret = other.cmp_funcs_->at(i).cmp_func_(other.row_->at(i), row_->at(i), cmp_ret);
       if (cmp_ret != 0) {
         ret = false;
         break;
