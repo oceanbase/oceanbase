@@ -898,7 +898,8 @@ int ObMySQLUtil::double_cell_str(char *buf, const int64_t len, double val,
     LOG_WARN("invalid input", KP(buf), K(ret));
   } else {
     if (BINARY == type) {
-      if (std::fpclassify(val) == FP_ZERO && std::signbit(val)) {
+      if (lib::is_oracle_mode() && // only oracle mode need convert
+          std::fpclassify(val) == FP_ZERO && std::signbit(val)) {
         val = val * -1; // if -0.0, change to 0.0
       }
       if (len - pos > DBL_SIZE) {
