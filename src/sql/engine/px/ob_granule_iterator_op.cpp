@@ -358,6 +358,10 @@ int ObGranuleIteratorOp::rescan()
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "rescan before all task in gi");
         LOG_WARN("rescan before all task fetched", K(ret), K(state_));
+        // core dump by design:
+#ifdef ENABLE_DEBUG_LOG
+        abort_unless(false);
+#endif
       }
     }
     if (OB_SUCC(ret)) {
