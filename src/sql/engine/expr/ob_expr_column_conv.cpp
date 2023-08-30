@@ -285,15 +285,16 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
         LOG_WARN("inconsistent datatypes", "expected", type_tc, "got", value_tc);
       } else {
         bool is_ddl = const_cast<sql::ObSQLSessionInfo *>(type_ctx.get_session())->get_ddl_info().is_ddl();
+        type_ctx.set_cast_mode(type_ctx.get_cast_mode() |
+                                  type_ctx.get_raw_expr()->get_extra() |
+                                  CM_COLUMN_CONVERT);
         if (!is_ddl) {
-          type_ctx.set_cast_mode(type_ctx.get_cast_mode() |
-                                  type_ctx.get_raw_expr()->get_extra() |
-                                  CM_COLUMN_CONVERT |
-                                  CM_CHARSET_CONVERT_IGNORE_ERR);
-        } else {
-          type_ctx.set_cast_mode(type_ctx.get_cast_mode() |
-                                  type_ctx.get_raw_expr()->get_extra() |
-                                  CM_COLUMN_CONVERT );
+          bool is_strict = is_strict_mode(type_ctx.get_session()->get_sql_mode());
+          if (lib::is_mysql_mode() && is_strict) {
+            //do nothing
+          } else {
+            type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_CHARSET_CONVERT_IGNORE_ERR);
+          }
         }
         types[4].set_calc_meta(type);
       }

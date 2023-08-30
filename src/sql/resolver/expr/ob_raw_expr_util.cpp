@@ -3776,10 +3776,15 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
                 K(session->get_current_query_string()));
 #endif
     } else {
+      //setup implicit cast charset convert ignore error
+      ObCastMode cm_zf = cm;
+      if ((cm_zf & CM_COLUMN_CONVERT) != 0) {
+       //if CM_CHARSET_CONVERT_IGNORE_ERR should be set is judged in column_conv expr.
+      } else {
+        cm_zf |= CM_CHARSET_CONVERT_IGNORE_ERR;
+      }
       // setup zerofill cm
       // eg: select concat(cast(c_zf as char(10)), cast(col_no_zf as char(10))) from t1;
-      ObCastMode cm_zf = cm;
-      cm_zf |= CM_CHARSET_CONVERT_IGNORE_ERR;
       if (expr.get_result_type().has_result_flag(ZEROFILL_FLAG)) {
         cm_zf |= CM_ZERO_FILL;
       }
