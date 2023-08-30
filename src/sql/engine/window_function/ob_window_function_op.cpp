@@ -580,11 +580,27 @@ int ObWindowFunctionOp::NonAggrCellNthValue::eval(RowsReader &row_reader,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid number of params", K(params.count()), K(ret));
   } else if (OB_FAIL(ObWindowFunctionOp::get_param_int_value(*params.at(1),
-      op_.eval_ctx_, is_null, nth_val))) {
-    LOG_WARN("get_param_int_value failed", K(ret));
-  } else if (OB_UNLIKELY(is_null || nth_val <= 0)) {
+      op_.eval_ctx_, is_null, nth_val, false, lib::is_mysql_mode()))) {
+    if (ret == OB_ERR_WINDOW_FRAME_ILLEGAL) {
+      if (is_null) {
+        ret = OB_SUCCESS;
+        val.set_null();
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("Incorrect arguments to nth_value", K(ret));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "nth_value");
+      }
+    } else {
+      LOG_WARN("get_param_int_value failed", K(ret));
+    }
+  } else if (OB_UNLIKELY(lib::is_oracle_mode() && (is_null || nth_val <= 0))) {
     ret = OB_DATA_OUT_OF_RANGE;
     LOG_WARN("invalid argument", K(ret), K(is_null), K(nth_val));
+  } else if (OB_UNLIKELY(lib::is_mysql_mode() &&
+                         (!params.at(1)->obj_meta_.is_integer_type() || nth_val == 0))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments to nth_value", K(ret), K(nth_val), K(params.at(1)->obj_meta_));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "nth_value");
   } else {
     const bool is_ignore_null = wf_info_.is_ignore_null_;
     const bool is_from_first = wf_info_.is_from_first_;
