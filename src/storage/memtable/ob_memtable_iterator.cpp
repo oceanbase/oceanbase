@@ -347,6 +347,70 @@ int ObMemtableScanIterator::get_real_range(const ObDatumRange &range, ObDatumRan
   return ret;
 }
 
+int ObMemtableScanIterator::inner_get_next_row_(const ObStoreRowkey *rowkey, ObMvccValueIterator *value_iter, ObDatumRow *row_param)
+{
+  int ret = OB_SUCCESS;
+  int64_t row_scn = 0;
+
+  if (OB_UNLIKELY(OB_ISNULL(rowkey))) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "inner_get_next_row_ fail", K(ret), K(rowkey), K(value_iter), K(row_param));
+  } else if (OB_UNLIKELY(OB_ISNULL(value_iter))) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "inner_get_next_row_ fail", K(ret), K(rowkey), K(value_iter), K(row_param));
+  } else if (OB_UNLIKELY(OB_ISNULL(row_param))) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "inner_get_next_row_ fail", K(ret), K(rowkey), K(value_iter), K(row_param));
+  } else {
+    concurrency_control::ObTransStatRow trans_stat_row;
+    (void)value_iter->get_trans_stat_row(trans_stat_row);
+
+    ObStoreRowLockState lock_state;
+    if (param_->is_for_foreign_check_ &&
+        OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint_for_memtable(value_iter, lock_state))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
+        ObRowConflictHandler::post_row_read_conflict(
+                      *value_iter->get_mvcc_acc_ctx(),
+                      *rowkey,
+                      lock_state,
+                      context_->tablet_id_,
+                      context_->ls_id_,
+                      value_iter->get_mvcc_row()->get_last_compact_cnt(),
+                      value_iter->get_mvcc_row()->get_total_trans_node_cnt(),
+                      lock_state.trans_scn_);
+      }
+    } else if (OB_FAIL(ObReadRow::iterate_row(*read_info_, *rowkey, *(context_->allocator_), *value_iter, *row_param, bitmap_, row_scn))) {
+      TRANS_LOG(WARN, "iterate_row fail", K(ret), K(*rowkey), KP(value_iter));
+    } else {
+      STORAGE_LOG(DEBUG, "chaser debug memtable next row", K(*row_param));
+      if (param_->need_scn_) {
+        const ObColDescIArray *out_cols = nullptr;
+        if (OB_ISNULL(out_cols = param_->get_out_col_descs())) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "Unexpected null columns desc", K(ret), K_(param));
+        } else {
+          if (row_scn == share::SCN::max_scn().get_val_for_tx()) {
+            // TODO(handora.qc): remove it as if we confirmed no problem according to row_scn
+            TRANS_LOG(INFO, "use max row scn", KPC(value_iter->get_mvcc_acc_ctx()), K(trans_stat_row));
+          }
+
+          for (int64_t i = 0; i < out_cols->count(); i++) {
+            if (out_cols->at(i).col_id_ == OB_HIDDEN_TRANS_VERSION_COLUMN_ID) {
+              row_param->storage_datums_[i].reuse();
+              row_param->storage_datums_[i].set_int(row_scn);
+              TRANS_LOG(DEBUG, "set row scn is", K(i), K(row_scn), K_(row));
+            }
+          }
+        }
+      }
+      // generate trans stat datum for 4377 check
+      concurrency_control::build_trans_stat_datum(param_, *row_param, trans_stat_row);
+      row_param->scan_index_ = 0;
+    }
+  }
+  return ret;
+}
+
 int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
@@ -367,55 +431,8 @@ int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
   } else {
     TRANS_LOG(DEBUG, "chaser debug memtable next row", KPC(key), K(iter_flag_), K(bitmap_.get_nop_cnt()));
     const ObStoreRowkey *rowkey = NULL;
-    int64_t row_scn = 0;
     key->get_rowkey(rowkey);
-
-    concurrency_control::ObTransStatRow trans_stat_row;
-    (void)value_iter->get_trans_stat_row(trans_stat_row);
-
-    ObStoreRowLockState lock_state;
-    if (param_->is_for_foreign_check_ &&
-        OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint_for_memtable(value_iter, lock_state))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
-        ObRowConflictHandler::post_row_read_conflict(
-                      *value_iter->get_mvcc_acc_ctx(),
-                      *rowkey,
-                      lock_state,
-                      context_->tablet_id_,
-                      context_->ls_id_,
-                      value_iter->get_mvcc_row()->get_last_compact_cnt(),
-                      value_iter->get_mvcc_row()->get_total_trans_node_cnt(),
-                      lock_state.trans_scn_);
-      }
-    } else if (OB_FAIL(ObReadRow::iterate_row(*read_info_, *rowkey, *(context_->allocator_), *value_iter, row_, bitmap_, row_scn))) {
-      TRANS_LOG(WARN, "iterate_row fail", K(ret), K(*rowkey), KP(value_iter));
-    } else {
-      STORAGE_LOG(DEBUG, "chaser debug memtable next row", K(row_));
-      if (param_->need_scn_) {
-        const ObColDescIArray *out_cols = nullptr;
-        if (OB_ISNULL(out_cols = param_->get_out_col_descs())) {
-          ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(WARN, "Unexpected null columns desc", K(ret), K_(param));
-        } else {
-          if (row_scn == share::SCN::max_scn().get_val_for_tx()) {
-            // TODO(handora.qc): remove it as if we confirmed no problem according to row_scn
-            TRANS_LOG(INFO, "use max row scn", KPC(value_iter->get_mvcc_acc_ctx()), K(trans_stat_row));
-          }
-
-          for (int64_t i = 0; i < out_cols->count(); i++) {
-            if (out_cols->at(i).col_id_ == OB_HIDDEN_TRANS_VERSION_COLUMN_ID) {
-              row_.storage_datums_[i].reuse();
-              row_.storage_datums_[i].set_int(row_scn);
-              TRANS_LOG(DEBUG, "set row scn is", K(i), K(row_scn), K_(row));
-            }
-          }
-        }
-      }
-
-      // generate trans stat datum for 4377 check
-      concurrency_control::build_trans_stat_datum(param_, row_, trans_stat_row);
-
-      row_.scan_index_ = 0;
+    if (OB_SUCC(inner_get_next_row_(rowkey, value_iter, &row_))) {
       row = &row_;
     }
   }
@@ -437,6 +454,207 @@ void ObMemtableScanIterator::reset()
   row_.reset();
   bitmap_.reuse();
   iter_flag_ = 0;
+}
+
+/**
+ * ------------------------ObMemtableBlockScanIterator-------------------------
+ */
+ObMemtableBlockScanIterator::ObMemtableBlockScanIterator()
+    : border_key_(NULL)
+{
+  type_ = ObStoreRowIterator::IteratorScan;
+}
+
+ObMemtableBlockScanIterator::~ObMemtableBlockScanIterator()
+{
+
+}
+
+int ObMemtableBlockScanIterator::init(
+    const storage::ObTableIterParam &param,
+    storage::ObTableAccessContext &context,
+    ObITable *table,
+    const void *query_range)
+{
+  int ret = OB_SUCCESS;
+  char *trans_info_ptr = nullptr;
+  if (is_inited_) {
+    ObMemtableScanIterator::reset();
+    mt_blk_scanner_.reuse();
+  }
+
+  if (param.need_trans_info()) {
+    int64_t length = concurrency_control::ObTransStatRow::MAX_TRANS_STRING_SIZE;
+    if (OB_ISNULL(trans_info_ptr = static_cast<char *>(context.stmt_allocator_->alloc(length)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      TRANS_LOG(WARN, "fail to alloc memory", K(ret));
+    }
+  }
+  if (OB_FAIL(ObMemtableScanIterator::init(param, context, table, query_range))) {
+    STORAGE_LOG(WARN, "ObMemtableScanIterator init failed", K(ret));
+  } else if (OB_FAIL(mt_blk_scanner_.init(context.stmt_allocator_,
+                                          read_info_->get_request_count(),
+                                          trans_info_ptr,
+                                          read_info_))) {
+    TRANS_LOG(WARN, "Failed to init datum row batch", K(ret), K(param.need_trans_info()));
+  } else {
+    block_row_store_ = context.block_row_store_;
+  }
+  return ret;
+}
+
+int ObMemtableBlockScanIterator::get_next_row_()
+{
+  int ret = OB_SUCCESS;
+  const ObMemtableKey *key = nullptr;
+  ObMvccValueIterator *value_iter = nullptr;
+  ObDatumRow *row_param = &row_;
+
+  if (OB_FAIL(row_iter_.get_next_row(key, value_iter, iter_flag_))
+      || nullptr == key || nullptr == value_iter) {
+    if (OB_ITER_END != ret) {
+      TRANS_LOG(WARN, "row_iter_ get_next_row fail", K(ret), KP(key), KP(value_iter));
+    }
+    ret = (OB_SUCCESS == ret) ? OB_ERR_UNEXPECTED : ret;
+  } else {
+    TRANS_LOG(DEBUG, "chaser debug memtable next row", KPC(key), K(iter_flag_), K(bitmap_.get_nop_cnt()));
+    const ObStoreRowkey *rowkey = nullptr;
+    key->get_rowkey(rowkey);
+
+    if (!OB_ISNULL(border_key_)) {
+      if (context_->query_flag_.is_reverse_scan()) {
+        if (*rowkey > border_key_->get_store_rowkey()) {
+          // Has not reach the blockscan end.
+          row_param = mt_blk_scanner_.next_new_row();
+        } else {
+          border_key_ = nullptr;
+          mt_blk_scanner_.set_last_batch();
+        }
+      } else {
+        if (*rowkey < border_key_->get_store_rowkey()) {
+          // Has not reach the blockscan end.
+          row_param = mt_blk_scanner_.next_new_row();
+        } else {
+          border_key_ = nullptr;
+          mt_blk_scanner_.set_last_batch();
+        }
+      }
+    }
+
+    ret = inner_get_next_row_(rowkey, value_iter, row_param);
+  }
+
+  return ret;
+}
+
+void ObMemtableBlockScanIterator::reset_blockscan()
+{
+  block_row_store_->reset_blockscan();
+  mt_blk_scanner_.reuse();
+  border_key_ = nullptr;
+}
+
+int ObMemtableBlockScanIterator::inner_get_next_row(const ObDatumRow *&row)
+{
+  int ret = OB_SUCCESS;
+  bool got_one_row = false;
+  const ObMemtableKey *key = nullptr;
+  ObMvccValueIterator *value_iter = nullptr;
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "not init", KP(this));
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(prepare_scan())) {
+    TRANS_LOG(WARN, "prepare scan fail", K(ret));
+  } else {
+    while (OB_SUCC(ret) && !got_one_row) {
+      if (mt_blk_scanner_.has_cached_row()) {
+        // Get one row directly from batch.
+        row = mt_blk_scanner_.get_next_row(block_row_store_->filter_applied());
+        got_one_row = true;
+      } else if (mt_blk_scanner_.has_reached_iter_end()) {
+        // Get iter end whilt contructing batch.
+        ret = OB_ITER_END;
+        reset_blockscan();
+      } else if (mt_blk_scanner_.has_reached_border_key()) {
+        // Reach border key.
+        reset_blockscan();
+        row = &row_;
+        got_one_row = true;
+      } else if (OB_NOT_NULL(border_key_)) {
+        if (OB_FAIL(construct_new_batch())) {
+          STORAGE_LOG(WARN, "Construct new batch failed.", K(ret));
+        }
+      } else {
+        // Get one row without single edge scan.
+        if (OB_FAIL(get_next_row_())) {
+          if (OB_ITER_END != ret) {
+            TRANS_LOG(WARN, "row_iter_ get_next_row fail", K(ret), KP(key), KP(value_iter));
+          }
+        } else {
+          row = &row_;
+          got_one_row = true;
+        }
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    iter_flag_ = 0;
+  }
+
+  return ret;
+}
+
+int ObMemtableBlockScanIterator::refresh_blockscan_checker(const blocksstable::ObDatumRowkey &rowkey) {
+  int ret = OB_SUCCESS;
+  if (!rowkey.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected invalid rowkey.", K(rowkey));
+  } else if (nullptr == block_row_store_) {
+    ret = OB_ERR_UNDEFINED;
+    STORAGE_LOG(WARN, "Unexpected NULL block_row_store.", K(rowkey));
+  } else {
+    block_row_store_->set_blockscan();
+    border_key_ = &rowkey;
+  }
+  return ret;
+}
+
+int ObMemtableBlockScanIterator::construct_new_batch()
+{
+  int ret = OB_SUCCESS;
+  bool done = false;
+  while (OB_SUCC(ret) && !done) {
+    mt_blk_scanner_.reuse();
+    while (!mt_blk_scanner_.is_full()) {
+      if (OB_FAIL(get_next_row_())) {
+        if (OB_ITER_END == ret) {
+          mt_blk_scanner_.set_reach_iter_end();
+          border_key_ = nullptr;
+          // Temporarily hide the OB_ITER_END.
+          ret = OB_SUCCESS;
+        } else {
+          TRANS_LOG(WARN, "get next row failed while constructing memtable scan row batch", K(ret));
+        }
+        break;
+      } else if (!mt_blk_scanner_.has_reached_border_key()) {
+        mt_blk_scanner_.increase_size();
+      } else {
+        // inner_get_next_row_ will set last batch and reset border key.
+        break;
+      }
+    }
+    // Run filter on this batch until it has some qualified rows.
+    if (OB_SUCC(ret) && mt_blk_scanner_.size() > 0 && !block_row_store_->filter_is_null()) {
+      ret = block_row_store_->apply_blockscan(mt_blk_scanner_, mt_blk_scanner_.size());
+      mt_blk_scanner_.set_bitmap(block_row_store_->get_filter()->get_result());
+    }
+    done = (OB_SUCC(ret) && (mt_blk_scanner_.has_reached_border_key() ||
+            mt_blk_scanner_.has_reached_iter_end() ||
+            mt_blk_scanner_.has_cached_row()));
+  }
+  return ret;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

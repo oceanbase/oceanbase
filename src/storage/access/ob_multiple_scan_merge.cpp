@@ -15,6 +15,8 @@
 #include "share/ob_get_compat_mode.h"
 #include "ob_block_row_store.h"
 #include "storage/ob_row_fuse.h"
+#include "storage/memtable/ob_memtable.h"
+#include "storage/blocksstable/ob_sstable.h"
 #include "ob_aggregated_store.h"
 
 namespace oceanbase
@@ -33,7 +35,8 @@ ObMultipleScanMerge::ObMultipleScanMerge()
     iter_del_row_(false),
     consumer_cnt_(0),
     range_(NULL),
-    cow_range_()
+    cow_range_(),
+    border_key_()
 {
   type_ = ObQRIterType::T_SINGLE_SCAN;
 }
@@ -146,6 +149,43 @@ void ObMultipleScanMerge::collect_merge_stat(ObTableStoreStat &stat) const
   stat.single_scan_stat_.output_row_cnt_ += access_ctx_->table_store_stat_.output_row_cnt_;
 }
 
+int ObMultipleScanMerge::calc_mem2sst_rowcnt_ratio(
+    common::ObSEArray<storage::ObITable *, common::DEFAULT_STORE_CNT_IN_STORAGE> tables,
+    const int64_t table_cnt,
+    double &mem2sst_rowcnt_ratio)
+{
+  int ret = OB_SUCCESS;
+  int64_t memtable_row_count = 0;
+  int64_t sstable_row_count = 0;
+  ObITable *table = nullptr;
+  ObSSTableMetaHandle sst_meta_hdl;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i <= table_cnt; ++i) {
+    if (OB_FAIL(tables.at(i, table))) {
+      STORAGE_LOG(WARN, "Fail to get ith store", K(i), K(ret));
+    } else if (table->is_memtable()) {
+      memtable_row_count += static_cast<memtable::ObMemtable *>(table)->get_physical_row_cnt();
+    } else if (table->is_sstable()) {
+      if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
+        STORAGE_LOG(WARN, "Fail to get sstable meta handle", K(i), K(ret));
+      } else {
+        sstable_row_count += sst_meta_hdl.get_sstable_meta().get_row_count();
+      }
+    }
+  }
+  // STORAGE_LOG(INFO, "show mem2sst row count ratio", K(memtable_row_count), K(sstable_row_count));
+  if (OB_SUCC(ret)) {
+    if (0 == sstable_row_count) {
+      // TODO(jianxian): use config or const value for this threshold 1000.
+      mem2sst_rowcnt_ratio = memtable_row_count > 1000 ? DBL_MAX : 0;
+    } else {
+      mem2sst_rowcnt_ratio = 1.0 * memtable_row_count / sstable_row_count;
+    }
+  }
+
+  return ret;
+}
+
 int ObMultipleScanMerge::construct_iters()
 {
   int ret = OB_SUCCESS;
@@ -158,6 +198,7 @@ int ObMultipleScanMerge::construct_iters()
     STORAGE_LOG(WARN, "iter cnt is not equal to table cnt", K(ret), "iter cnt", iters_.count(),
         "table cnt", tables_.count(), KP(this));
   } else if (tables_.count() > 0) {
+    double mem2sst_rowcnt_ratio = 0;
     ObITable *table = NULL;
     ObStoreRowIterator *iter = NULL;
     const ObTableIterParam *iter_pram = NULL;
@@ -166,6 +207,8 @@ int ObMultipleScanMerge::construct_iters()
 
     if (OB_FAIL(set_rows_merger(tables_.count()))) {
       STORAGE_LOG(WARN, "Failed to alloc rows merger", K(ret), K(tables_));
+    } else if (OB_FAIL(calc_mem2sst_rowcnt_ratio(tables_, table_cnt, mem2sst_rowcnt_ratio))) {
+      STORAGE_LOG(WARN, "Failed to calculate memtable : sstable row count", K(ret), K(tables_));
     }
 
     consumer_cnt_ = 0;
@@ -176,6 +219,7 @@ int ObMultipleScanMerge::construct_iters()
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Fail to get access param", K(i), K(ret), K(*table));
       } else if (!use_cache_iter) {
+        const_cast<ObTableIterParam *>(iter_pram)->set_mem2sst_rowcnt_ratio(mem2sst_rowcnt_ratio);
         if (OB_FAIL(table->scan(*iter_pram, *access_ctx_, *range_, iter))) {
           STORAGE_LOG(WARN, "Fail to get iterator", K(ret), K(i), K(*iter_pram));
         } else if (OB_FAIL(iters_.push_back(iter))) {
@@ -444,7 +488,9 @@ int ObMultipleScanMerge::inner_merge_row(ObDatumRow &row)
       if (nullptr == iter) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Unexpected null iter", K(ret), K(consumers_[0]));
-      } else if (iter->is_sstable_iter()) {
+      } else if (iter->is_sstable_iter() || !iter->is_block_row_store_null()) {
+        // Just to avoid prepare_blockscan throw a warning.
+        // TODO(jianxian): find a better way, maybe via itrator type.
         if (OB_FAIL(prepare_blockscan(*iter))) {
           STORAGE_LOG(WARN, "Failed to check blockscan", K(ret));
         }
@@ -482,25 +528,36 @@ int ObMultipleScanMerge::prepare_blockscan(ObStoreRowIterator &iter)
 {
   int ret = OB_SUCCESS;
   const ObScanMergeLoserTreeItem *top_item = nullptr;
-  ObDatumRowkey rowkey;
   const int64_t rowkey_col_cnt = access_param_->iter_param_.get_schema_rowkey_count();
+  const ObColDescIArray *rowkey_col_descs = nullptr;
   if (rows_merger_->empty()) {
     if (access_ctx_->query_flag_.is_reverse_scan()) {
-      rowkey.set_min_rowkey();
+      border_key_.set_min_rowkey();
     } else {
-      rowkey.set_max_rowkey();
+      border_key_.set_max_rowkey();
     }
   } else if (OB_FAIL(rows_merger_->top(top_item))) {
     STORAGE_LOG(WARN, "Failed to get top item", K(ret));
   } else if (OB_ISNULL(top_item) || OB_ISNULL(top_item->row_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "item or row is null", K(ret), KP(top_item));
-  } else if (OB_FAIL(rowkey.assign(top_item->row_->storage_datums_, rowkey_col_cnt))) {
+  } else if (OB_FAIL(border_key_.assign(top_item->row_->storage_datums_, rowkey_col_cnt))) {
     STORAGE_LOG(WARN, "assign rowkey failed", K(ret));
   }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(iter.refresh_blockscan_checker(rowkey))) {
-    STORAGE_LOG(WARN, "Failed to check pushdown skip", K(ret), K(rowkey));
+
+  if (OB_SUCC(ret)) {
+    if (iter.is_sstable_iter()) {
+      if (OB_FAIL(iter.refresh_blockscan_checker(border_key_))) {
+        STORAGE_LOG(WARN, "Failed to check pushdown skip", K(ret), K(border_key_));
+      }
+    } else if (OB_ISNULL(rowkey_col_descs = access_param_->iter_param_.get_out_col_descs())) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "Unexpected null out cols", K(ret));
+    } else if (OB_FAIL(border_key_.prepare_memtable_readable(*rowkey_col_descs, *access_ctx_->allocator_))) {
+      STORAGE_LOG(WARN, "Fail to transfer store rowkey", K(ret), K(border_key_));
+    } else if (OB_FAIL(iter.refresh_blockscan_checker(border_key_))) {
+      STORAGE_LOG(WARN, "Failed to check pushdown skip", K(ret), K(border_key_));
+    }
   }
   return ret;
 }

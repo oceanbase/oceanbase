@@ -178,4 +178,6 @@ elseif (OB_INCLUDE_TOOLS)
   add_subdirectory(tools EXCLUDE_FROM_ALL)
 endif()
 
+add_subdirectory(mittest EXCLUDE_FROM_ALL)
+
 include(cmake/RPM.cmake)

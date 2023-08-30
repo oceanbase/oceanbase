@@ -728,6 +728,12 @@ DEF_STR_WITH_CHECKER(_rpc_checksum, OB_CLUSTER_PARAMETER, "Force",
 DEF_TIME(_ob_trans_rpc_timeout, OB_CLUSTER_PARAMETER, "3s", "[0s, 3600s]",
          "transaction rpc timeout(s). Range: [0s, 3600s]",
          ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(memtable_scan_filter_pushdown, OB_TENANT_PARAMETER, "1", "[0, 1]",
+        "use blockscan for memtable scan",
+        ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_DBL(memtable_scan_optimization_threshold, OB_TENANT_PARAMETER, "2", "[0,]",
+        "the threshold of memtable sstable row count to turn on memtable scan optimization",
+        ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_early_lock_release, OB_TENANT_PARAMETER, "True",
          "enable early lock release",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

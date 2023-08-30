@@ -79,14 +79,15 @@ public:
     UNUSED(rowkey);
     return OB_NOT_SUPPORTED;
   }
+  bool is_block_row_store_null() const { return nullptr == block_row_store_; }
   bool can_blockscan() const
   {
-    return (IteratorScan == type_ || IteratorMultiScan == type_) && is_sstable_iter_ &&
+    return (IteratorScan == type_ || IteratorMultiScan == type_) &&
         nullptr != block_row_store_ && block_row_store_->can_blockscan();
   }
   bool filter_applied() const
   {
-    return (IteratorScan == type_ || IteratorMultiScan == type_) && is_sstable_iter_ &&
+    return (IteratorScan == type_ || IteratorMultiScan == type_) &&
         nullptr != block_row_store_ && block_row_store_->filter_applied();
   }
   virtual int get_next_row(const blocksstable::ObDatumRow *&row);

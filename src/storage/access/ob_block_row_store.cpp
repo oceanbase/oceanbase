@@ -16,6 +16,7 @@
 #include "common/sql_mode/ob_sql_mode_utils.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "storage/ob_i_store.h"
+#include "storage/memtable/ob_memtable_block_row_scanner.h"
 #include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
 #include "storage/blocksstable/ob_micro_block_reader.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
@@ -154,6 +155,35 @@ int ObBlockRowStore::apply_blockscan(
   return ret;
 }
 
+int ObBlockRowStore::apply_blockscan(
+    memtable::ObMemtableBlockRowScanner &mt_blk_scanner,
+    const int64_t row_count)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBlockRowStore is not inited", K(ret), K(*this));
+  } else if (OB_UNLIKELY(row_count <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpceted row count of micro block", K(ret), K(row_count));
+  } else if (!pd_filter_info_.is_pd_filter_) {
+    filter_applied_ = false;
+  } else if (nullptr == pd_filter_info_.filter_) {
+    // nothing to do
+    filter_applied_ = true;
+  } else {
+    if (OB_FAIL(filter_memtable_block(row_count,
+                                      mt_blk_scanner,
+                                      nullptr,
+                                      pd_filter_info_.filter_))) {
+      LOG_WARN("Failed to apply pushdown filter in block reader", K(ret), K(*this));
+    } else {
+      filter_applied_ = true;
+    }
+  }
+  return ret;
+}
+
 int ObBlockRowStore::filter_micro_block(
     const int64_t row_count,
      blocksstable::ObIMicroBlockRowScanner &micro_scanner,
@@ -189,6 +219,70 @@ int ObBlockRowStore::filter_micro_block(
           LOG_WARN("Unexpected null child filter", K(ret));
         } else if (OB_FAIL(filter_micro_block(row_count, micro_scanner, filter, children[i]))) {
           LOG_WARN("Failed to filter micro block", K(ret), K(i), KP(children[i]));
+        } else if (OB_ISNULL(child_result = children[i]->get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected get null filter bitmap", K(ret));
+        } else {
+          if (filter->is_logic_and_node()) {
+            if (OB_FAIL(result->bit_and(*child_result))) {
+              LOG_WARN("Failed to merge result bitmap", K(ret), KP(child_result));
+            } else if (result->is_all_false()) {
+              break;
+            }
+          } else  {
+            if (OB_FAIL(result->bit_or(*child_result))) {
+              LOG_WARN("Failed to merge result bitmap", K(ret), KP(child_result));
+            } else if (result->is_all_true()) {
+              break;
+            }
+          }
+        }
+      }
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported filter executor type", K(ret), K(filter->get_type()));
+  }
+  return ret;
+}
+
+int ObBlockRowStore::filter_memtable_block(
+    const int64_t row_count,
+    memtable::ObMemtableBlockRowScanner &mt_blk_scanner,
+    sql::ObPushdownFilterExecutor *parent,
+    sql::ObPushdownFilterExecutor *filter)
+{
+  int ret = OB_SUCCESS;
+  common::ObBitmap *result = nullptr;
+
+  if (OB_UNLIKELY(nullptr == filter || row_count <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), KP(filter), K(row_count));
+  } else if (OB_FAIL(filter->init_bitmap(row_count, result))) {
+    LOG_WARN("Failed to get filter bitmap", K(ret));
+  } else if (OB_ISNULL(result)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null filter bitmap", K(ret));
+  } else if (nullptr != parent && OB_FAIL(parent->prepare_skip_filter())) {
+    LOG_WARN("Failed to check parent blockscan", K(ret));
+  } else if (filter->is_filter_node()) {
+    // Leaf node;
+    if (OB_FAIL(mt_blk_scanner.filter_pushdown_filter(parent, filter, pd_filter_info_, *result))) {
+      STORAGE_LOG(WARN, "Fail to filter pushdown filter in memtable block", K(ret), KPC(filter));
+    }
+  } else if (filter->is_logic_op_node()) {
+    if (OB_UNLIKELY(filter->get_child_count() < 2)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected child count of filter executor", K(ret), K(filter->get_child_count()), KP(filter));
+    } else {
+      sql::ObPushdownFilterExecutor **children = filter->get_childs();
+      for (uint32_t i = 0; OB_SUCC(ret) && i < filter->get_child_count(); i++) {
+        const common::ObBitmap *child_result = nullptr;
+        if (OB_ISNULL(children[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected null child filter", K(ret));
+        } else if (OB_FAIL(filter_memtable_block(row_count, mt_blk_scanner, filter, children[i]))) {
+          LOG_WARN("Failed to filter memtable scan rowbatch", K(ret), K(i), KP(children[i]));
         } else if (OB_ISNULL(child_result = children[i]->get_result())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected get null filter bitmap", K(ret));

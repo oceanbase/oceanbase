@@ -540,6 +540,7 @@ ob_set_subtarget(ob_storage memtable
   memtable/ob_row_compactor.cpp
   memtable/ob_row_conflict_handler.cpp
   memtable/ob_concurrent_control.cpp
+  memtable/ob_memtable_block_row_scanner.cpp
 )
 
 ob_set_subtarget(ob_storage memtable_mvcc

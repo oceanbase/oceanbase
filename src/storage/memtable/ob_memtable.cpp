@@ -865,9 +865,23 @@ int ObMemtable::scan(
         }
       }
     } else {
-      ALLOCATE_TABLE_STORE_ROW_IETRATOR(context,
-            ObMemtableScanIterator,
-            scan_iter_ptr);
+      // omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      // TODO(jianxian): use config or const for the threshold 2.
+      if (param.enable_pd_blockscan() && param.get_mem2sst_rowcnt_ratio() >= 2) {
+        ALLOCATE_TABLE_STORE_ROW_IETRATOR(context,
+              ObMemtableBlockScanIterator,
+              scan_iter_ptr);
+        // TRANS_LOG(INFO, "Memtable scan iterator choice : blockscan",
+        //           K(param.get_mem2sst_rowcnt_ratio()),
+        //           K(real_range), K(param), K(context));
+      } else {
+        ALLOCATE_TABLE_STORE_ROW_IETRATOR(context,
+              ObMemtableScanIterator,
+              scan_iter_ptr);
+        // TRANS_LOG(INFO, "Memtable scan iterator choice : normal",
+        //           K(param.get_mem2sst_rowcnt_ratio()),
+        //           K(real_range), K(param), K(context));
+      }
       if (OB_SUCC(ret)) {
         if (NULL == scan_iter_ptr) {
           ret = OB_ERR_UNEXPECTED;

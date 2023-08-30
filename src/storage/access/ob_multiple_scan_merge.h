@@ -54,6 +54,10 @@ protected:
   int set_rows_merger(const int64_t table_cnt);
 private:
   int prepare_blockscan(ObStoreRowIterator &iter);
+  int calc_mem2sst_rowcnt_ratio(
+      common::ObSEArray<storage::ObITable *, common::DEFAULT_STORE_CNT_IN_STORAGE> tables,
+      const int64_t table_cnt,
+      double &mem2sst_rowcnt_ratio);
 protected:
   ObScanMergeLoserTreeCmp tree_cmp_;
   ObScanSimpleMerger *simple_merge_;
@@ -65,6 +69,7 @@ protected:
 private:
   const blocksstable::ObDatumRange *range_;
   blocksstable::ObDatumRange cow_range_;
+  blocksstable::ObDatumRowkey border_key_;
 
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObMultipleScanMerge);

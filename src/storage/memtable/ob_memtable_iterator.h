@@ -21,6 +21,7 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "storage/memtable/ob_memtable_interface.h"
 #include "storage/memtable/ob_memtable_key.h"
+#include "storage/memtable/ob_memtable_block_row_scanner.h"
 #include "storage/memtable/mvcc/ob_mvcc_iterator.h"
 #include "storage/memtable/mvcc/ob_mvcc_engine.h"
 #include "storage/memtable/mvcc/ob_crtp_util.h"
@@ -132,6 +133,10 @@ public:
       storage::ObITable *table,
       const void *query_range) override;
 public:
+  int inner_get_next_row_(
+      const ObStoreRowkey *rowkey,
+      ObMvccValueIterator *value_iter,
+      blocksstable::ObDatumRow *row_param);
   virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row);
   virtual void reset();
   virtual void reuse() override { reset(); }
@@ -170,6 +175,27 @@ protected:
   uint8_t iter_flag_;
 };
 
+class ObMemtableBlockScanIterator : public ObMemtableScanIterator
+{
+private:
+  ObMemtableBlockRowScanner mt_blk_scanner_;
+  // The boder key of single edge scan, it also server as an indication
+  // of whether we can get a batch or just single row.
+  const blocksstable::ObDatumRowkey *border_key_;
+  int get_next_row_();
+  int construct_new_batch();
+public:
+  ObMemtableBlockScanIterator();
+  virtual ~ObMemtableBlockScanIterator();
+  virtual int refresh_blockscan_checker(const blocksstable::ObDatumRowkey &rowkey) override final;
+  virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row);
+  void reset_blockscan();
+  virtual int init(
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
+      storage::ObITable *table,
+      const void *query_range) override;
+};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
