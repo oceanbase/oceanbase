@@ -425,7 +425,7 @@ END_P SET_VAR DELIMITER
 %type <node> parameterized_trim
 %type <ival> opt_with_consistent_snapshot opt_config_scope opt_index_keyname opt_full
 %type <node> opt_work begin_stmt commit_stmt rollback_stmt opt_ignore xa_begin_stmt xa_end_stmt xa_prepare_stmt xa_commit_stmt xa_rollback_stmt
-%type <node> alter_table_stmt alter_table_actions alter_table_action alter_column_option alter_index_option alter_constraint_option alter_partition_option opt_to alter_tablegroup_option opt_table opt_tablegroup_option_list alter_tg_partition_option
+%type <node> alter_table_stmt alter_table_actions alter_table_action_list alter_table_action alter_column_option alter_index_option alter_constraint_option standalone_alter_action alter_partition_option opt_to alter_tablegroup_option opt_table opt_tablegroup_option_list alter_tg_partition_option
 %type <node> tablegroup_option_list tablegroup_option alter_tablegroup_actions alter_tablegroup_action tablegroup_option_list_space_seperated
 %type <node> opt_tg_partition_option tg_hash_partition_option tg_key_partition_option tg_range_partition_option tg_subpartition_option tg_list_partition_option
 %type <node> alter_column_behavior opt_set opt_position_column
@@ -13295,6 +13295,19 @@ ALTER TABLE relation_factor alter_table_actions
 ;
 
 alter_table_actions:
+alter_table_action_list
+{
+  $$ = $1;
+}
+| standalone_alter_action
+{
+  $$ = $1;
+}
+|
+{ $$ = NULL; }
+;
+
+alter_table_action_list:
 alter_table_action
 {
   $$ = $1;
@@ -13303,8 +13316,6 @@ alter_table_action
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
 }
-|
-{ $$ = NULL; }
 ;
 
 alter_table_action:
@@ -13335,10 +13346,6 @@ opt_set table_option_list_space_seperated
 | alter_index_option
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_INDEX_OPTION, 1, $1);
-}
-| alter_partition_option
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_PARTITION_OPTION, 1, $1);
 }
 | alter_constraint_option
 {
@@ -13387,6 +13394,13 @@ ADD constraint_definition
 {
   $$ = $2;
   $$->value_ = 1;
+}
+;
+
+standalone_alter_action:
+alter_partition_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_PARTITION_OPTION, 1, $1);
 }
 ;
 

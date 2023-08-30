@@ -585,7 +585,6 @@ protected:
                                  const ObRawExpr *col_expr,
                                  bool &res);
 
-
   int resolve_range_partition_elements(ParseNode *node,
                                        const bool is_subpartition,
                                        const share::schema::ObPartitionFuncType part_type,
