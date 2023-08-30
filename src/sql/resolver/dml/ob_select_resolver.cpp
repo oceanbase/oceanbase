@@ -1878,8 +1878,8 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
         }
       } else if (OB_UNLIKELY((params_.is_from_create_view_ || params_.is_from_create_table_)
                              && !params_.is_specified_col_name_
-                             && 0 == select_item.expr_name_.case_compare(
-                                     OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME))) {
+                             && (lib::is_oracle_mode() && 0 == select_item.expr_name_.case_compare(
+                                                           OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME)))) {
         // must name alias for rowid
         //  eg: create view/table as select rowid from t1;
         ret = OB_NO_COLUMN_ALIAS;

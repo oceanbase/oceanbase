@@ -9455,7 +9455,7 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem &table_it
               if (!with_is_json_constraint) {
                 with_is_json_constraint = check_generated_column_has_json_constraint(ref_stmt, col_ref);
               }
-              if (!ObCharset::case_insensitive_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME, col_ref->get_column_name())) {
+              if (lib::is_mysql_mode() || !ObCharset::case_insensitive_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME, col_ref->get_column_name())) {
                 col_expr->set_joined_dup_column(col_ref->is_joined_dup_column());
                 col_expr->set_lob_column(col_ref->is_lob_column());
                 col_expr->set_srs_id(col_ref->get_srs_id());
@@ -9483,7 +9483,8 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem &table_it
     } else if (OB_ISNULL(col_expr)) {
       ret = OB_ERR_BAD_FIELD_ERROR;
       LOG_WARN("col_expr is nully, it maybe rowid", K(ret), K(column_name), K(column_id));
-    } else if (ObCharset::case_insensitive_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME,
+    } else if (lib::is_oracle_mode() &&
+               ObCharset::case_insensitive_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME,
                                                  col_expr->get_column_name())) {
       if (stmt->is_select_stmt()) {
         ObRawExpr *empty_rowid_expr = NULL;

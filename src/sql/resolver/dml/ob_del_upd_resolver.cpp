@@ -473,7 +473,8 @@ int ObDelUpdResolver::resolve_assign_columns(const ParseNode &assign_target,
     } else if (q_name.is_star_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("'*' should not be here, parser has already blocked this error", K(ret));
-    } else if (ObCharset::case_insensitive_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME,
+    } else if (lib::is_oracle_mode() &&
+               ObCharset::case_insensitive_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME,
                                                  q_name.col_name_)) {
       ret = OB_ERR_VIRTUAL_COL_NOT_ALLOWED;
       LOG_WARN("cannot update rowid pseudo column", K(ret), K(q_name));
@@ -867,8 +868,9 @@ int ObDelUpdResolver::set_base_table_for_updatable_view(TableItem &table_item,
     } else {
       ObRawExpr *expr = stmt->get_select_item(idx).expr_;
       if (!expr->is_column_ref_expr() ||
-          ObCharset::case_insensitive_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME,
-                                     static_cast<ObColumnRefRawExpr *>(expr)->get_column_name())) {
+          (lib::is_oracle_mode() &&
+           ObCharset::case_insensitive_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME,
+                                             static_cast<ObColumnRefRawExpr *>(expr)->get_column_name()))) {
         ret = is_mysql_mode() ? OB_ERR_NONUPDATEABLE_COLUMN : OB_ERR_VIRTUAL_COL_NOT_ALLOWED;
         LOG_WARN("column is not updatable", K(ret), K(col_ref));
       } else {
@@ -1046,8 +1048,9 @@ int ObDelUpdResolver::check_same_base_table(const TableItem &table_item,
   } else {
     ObRawExpr *expr = stmt->get_select_item(idx).expr_;
     if (!expr->is_column_ref_expr() ||
-        ObCharset::case_insensitive_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME,
-                                      static_cast<ObColumnRefRawExpr *>(expr)->get_column_name())) {
+        (lib::is_oracle_mode() &&
+         ObCharset::case_insensitive_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME,
+                                      static_cast<ObColumnRefRawExpr *>(expr)->get_column_name()))) {
       ret = is_mysql_mode() ? OB_ERR_NONUPDATEABLE_COLUMN : OB_ERR_VIRTUAL_COL_NOT_ALLOWED;
       LOG_WARN("column is not updatable", K(ret), K(col_ref));
     } else {
