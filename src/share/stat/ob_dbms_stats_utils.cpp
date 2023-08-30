@@ -236,6 +236,9 @@ int ObDbmsStatsUtils::check_is_sys_table(share::schema::ObSchemaGetterGuard &sch
       table_id == share::OB_ALL_HISTOGRAM_STAT_HISTORY_TID ||
       table_id == share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TID ||//circular dependency
       table_id == share::OB_ALL_OPTSTAT_USER_PREFS_TID ||
+//bug:
+      table_id == share::OB_ALL_SYS_VARIABLE_TID ||//circular dependency
+      table_id == share::OB_ALL_SYS_VARIABLE_HISTORY_TID ||//circular dependency
       table_id == share::OB_ALL_MONITOR_MODIFIED_TID) {
     is_valid = false;
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant))) {
