@@ -573,6 +573,8 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node, ObIArray<uint6
     sub_select_resolver_->set_current_view_level(current_view_level_);
     //select层不应该看到上层的insert stmt的属性，所以upper scope stmt应该为空
     sub_select_resolver_->set_parent_namespace_resolver(NULL);
+    //for values stmt: insert into table_name values row()...
+    sub_select_resolver_->set_upper_insert_resolver(this);
     TableItem *sub_select_table = NULL;
     ObString view_name;
     ObSEArray<ColumnItem, 4> column_items;
@@ -630,17 +632,23 @@ int ObInsertResolver::check_insert_select_field(ObInsertStmt &insert_stmt,
                                                                    is_generated_column))) {
           LOG_WARN("check basic column generated failed", K(ret));
     } else if (is_generated_column) {
-      ret = OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN;
-      if (!is_oracle_mode()) {
-        ColumnItem *orig_col_item = NULL;
-        if (NULL != (orig_col_item = insert_stmt.get_column_item_by_id(
-            insert_stmt.get_insert_table_info().table_id_, value_desc->get_column_id()))
-            && orig_col_item->expr_ != NULL) {
-          const ObString &column_name = orig_col_item->expr_->get_column_name();
-          const ObString &table_name = orig_col_item->expr_->get_table_name();
-          LOG_USER_ERROR(OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN,
-                        column_name.length(), column_name.ptr(),
-                        table_name.length(), table_name.ptr());
+      if (select_stmt.get_table_size() == 1 &&
+          select_stmt.get_table_item(0) != NULL &&
+          select_stmt.get_table_item(0)->is_values_table()) {
+        //do nothing, already checked in advance.
+      } else {
+        ret = OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN;
+        if (!is_oracle_mode()) {
+          ColumnItem *orig_col_item = NULL;
+          if (NULL != (orig_col_item = insert_stmt.get_column_item_by_id(
+              insert_stmt.get_insert_table_info().table_id_, value_desc->get_column_id()))
+              && orig_col_item->expr_ != NULL) {
+            const ObString &column_name = orig_col_item->expr_->get_column_name();
+            const ObString &table_name = orig_col_item->expr_->get_table_name();
+            LOG_USER_ERROR(OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN,
+                          column_name.length(), column_name.ptr(),
+                          table_name.length(), table_name.ptr());
+          }
         }
       }
     } else if (!session_info_->is_in_user_scope() && value_desc->is_always_identity_column()) {

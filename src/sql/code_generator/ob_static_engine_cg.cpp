@@ -1865,7 +1865,23 @@ int ObStaticEngineCG::generate_spec(ObLogExprValues &op,
     if (spec.ins_values_batch_opt_) {
       spec.contain_ab_param_ = true;
     }
-    if (OB_FAIL(spec.values_.prepare_allocate(op.get_value_exprs().count()))) {
+    bool find_group = false;
+    int64_t group_idx = -1;
+    ObExecContext * exec_ctx = nullptr;
+    if (OB_ISNULL(opt_ctx_) || OB_ISNULL(exec_ctx = opt_ctx_->get_exec_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get exec context", K(ret), KP(opt_ctx_));
+    } else if (exec_ctx->has_dynamic_values_table()) {
+      if (OB_FAIL(op.get_array_param_group_id(group_idx, find_group))) {
+        LOG_WARN("failed to get_array_param_group_id", K(ret));
+      } else if (find_group) {
+        spec.array_group_idx_ = group_idx;
+        spec.contain_ab_param_ = true;
+      }
+    }
+
+    if (OB_FAIL(ret)) { /* do nothing */
+    } else if (OB_FAIL(spec.values_.prepare_allocate(op.get_value_exprs().count()))) {
       LOG_WARN("init fixed array failed", K(ret), K(op.get_value_exprs().count()));
     } else if (OB_FAIL(spec.column_names_.prepare_allocate(op.get_value_desc().count()))) {
       LOG_WARN("init fixed array failed", K(ret), K(op.get_value_desc().count()));

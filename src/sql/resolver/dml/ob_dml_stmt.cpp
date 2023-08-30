@@ -282,6 +282,8 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
     LOG_WARN("failed to assign part ids", K(ret));
   } else if (OB_FAIL(part_names_.assign(other.part_names_))) {
     LOG_WARN("failed to assign part names", K(ret));
+  } else if (OB_FAIL(expr_copier.copy(other.table_values_, table_values_))) {
+    LOG_WARN("failed to deep copy table values", K(ret));
   }
   return ret;
 }
@@ -854,6 +856,9 @@ int ObDMLStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
                OB_FAIL(visitor.visit(table_items_.at(i)->json_table_def_->doc_expr_,
                                      SCOPE_FROM))) {
       LOG_WARN("failed to add json table doc expr", K(ret));
+     } else if (OB_FAIL(visitor.visit(table_items_.at(i)->table_values_,
+                                      SCOPE_FROM))) {
+      LOG_WARN("failed to visit table values", K(ret));
     } else { /*do nothing*/ }
   }
 
@@ -2431,6 +2436,27 @@ int ObDMLStmt::generate_json_table_name(ObIAllocator &allocator, ObString &table
   int64_t pos = 0;
   const uint64_t OB_MAX_SUBQUERY_NAME_LENGTH = 64;
   const char *SUBQUERY_VIEW = "JSON_TABLE";
+  char buf[OB_MAX_SUBQUERY_NAME_LENGTH];
+  int64_t buf_len = OB_MAX_SUBQUERY_NAME_LENGTH;
+  if (OB_FAIL(BUF_PRINTF("%s", SUBQUERY_VIEW))) {
+    LOG_WARN("append name to buf error", K(ret));
+  } else if (OB_FAIL(append_id_to_view_name(buf, OB_MAX_SUBQUERY_NAME_LENGTH, pos, false))) {
+    LOG_WARN("append name to buf error", K(ret));
+  } else {
+    ObString generate_name(pos, buf);
+    if (OB_FAIL(ob_write_string(allocator, generate_name, table_name))) {
+      LOG_WARN("failed to write string", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::generate_values_table_name(ObIAllocator &allocator, ObString &table_name)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  const uint64_t OB_MAX_SUBQUERY_NAME_LENGTH = 64;
+  const char *SUBQUERY_VIEW = "VALUES_TABLE";
   char buf[OB_MAX_SUBQUERY_NAME_LENGTH];
   int64_t buf_len = OB_MAX_SUBQUERY_NAME_LENGTH;
   if (OB_FAIL(BUF_PRINTF("%s", SUBQUERY_VIEW))) {
@@ -4552,6 +4578,14 @@ int ObDMLStmt::check_has_cursor_expression(bool &has_cursor_expr) const
     }
   }
   return ret;
+}
+
+bool ObDMLStmt::is_values_table_query() const
+{
+  return is_select_stmt() &&
+         table_items_.count() == 1 &&
+         table_items_.at(0) != NULL &&
+         table_items_.at(0)->is_values_table();
 }
 
 ObJtColBaseInfo::ObJtColBaseInfo()

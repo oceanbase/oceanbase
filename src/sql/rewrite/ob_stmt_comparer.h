@@ -317,6 +317,13 @@ public:
                               ObStmtMapInfo &map_info,
                               QueryRelation &relation);
 
+  static int compare_values_table_item(const ObDMLStmt *first,
+                                       const TableItem *first_table,
+                                       const ObDMLStmt *second,
+                                       const TableItem *second_table,
+                                       ObStmtMapInfo &map_info,
+                                       QueryRelation &relation);
+
 };
 
 }

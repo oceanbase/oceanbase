@@ -213,10 +213,10 @@ int ObLogExprValues::do_re_est_cost(EstimateCostInfo &param, double &card, doubl
       OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (get_stmt()->is_insert_stmt()) {
+  } else if (get_stmt()->is_insert_stmt() || is_values_table_) {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    const ObInsertStmt *insert_stmt = static_cast<const ObInsertStmt*>(get_stmt());
-    card = insert_stmt->get_insert_row_count();
+    card = get_stmt()->is_insert_stmt() ? static_cast<const ObInsertStmt*>(get_stmt())->get_insert_row_count() :
+                                          get_values_row_count();
     op_cost = ObOptEstCost::cost_get_rows(get_card(), opt_ctx.get_cost_model_type());
     cost = op_cost;
   } else {
@@ -247,7 +247,7 @@ int ObLogExprValues::compute_one_row_info()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (!get_stmt()->is_insert_stmt()) {
-    is_at_most_one_row_ = true;
+    is_at_most_one_row_ = get_values_row_count() <= 1;
   } else { /*do nothing*/ }
 
   return ret;
@@ -268,6 +268,10 @@ int ObLogExprValues::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     if (OB_FAIL(append(all_exprs, insert_stmt->get_values_desc()))) {
       LOG_WARN("failed to append exprs", K(ret));
     } else { /*do nothing*/ }
+  } else if (is_values_table_) {
+    if (OB_FAIL(append(all_exprs, value_desc_))) {
+      LOG_WARN("failed to append exprs", K(ret));
+    } else { /*do nothing*/ }
   } else { /*do nothing*/ }
   return ret;
 }
@@ -278,9 +282,9 @@ int ObLogExprValues::allocate_expr_post(ObAllocExprContext &ctx)
   if (OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_stmt()), K(ret));
-  } else if (get_stmt()->is_insert_stmt()) {
-    const ObInsertStmt *insert_stmt = static_cast<const ObInsertStmt*>(get_stmt());
-    const ObIArray<ObColumnRefRawExpr*> &values_desc = insert_stmt->get_values_desc();
+  } else if (get_stmt()->is_insert_stmt() || is_values_table_) {
+    const ObIArray<ObColumnRefRawExpr*> &values_desc = get_stmt()->is_insert_stmt() ?
+                                  static_cast<const ObInsertStmt*>(get_stmt())->get_values_desc() : value_desc_;
     for (int64_t i = 0; OB_SUCC(ret) && i < values_desc.count(); ++i) {
       ObColumnRefRawExpr *value_col = values_desc.at(i);
       if (OB_FAIL(mark_expr_produced(value_col, branch_id_, id_, ctx))) {
@@ -305,6 +309,7 @@ int ObLogExprValues::allocate_expr_post(ObAllocExprContext &ctx)
   } else if (OB_FAIL(mark_probably_local_exprs())) {
     LOG_WARN("failed to mark local exprs", K(ret));
   } else { /*do nothing*/ }
+
   return ret;
 }
 
@@ -423,6 +428,13 @@ int ObLogExprValues::get_plan_item_info(PlanText &plan_text,
     EXPLAIN_PRINT_INSERT_VALUES(values, output_exprs_.count(), type);
     END_BUF_PRINT(plan_item.special_predicates_,
                   plan_item.special_predicates_len_);
+    if (OB_SUCC(ret) && is_values_table_) {
+      const ObString &name = get_table_name();
+      BUF_PRINT_OB_STR(name.ptr(),
+                       name.length(),
+                       plan_item.object_alias_,
+                       plan_item.object_alias_len_);
+    }
   }
   return ret;
 }
@@ -478,6 +490,33 @@ bool ObLogExprValues::is_ins_values_batch_opt() const
     bret = get_stmt()->get_query_ctx()->ins_values_batch_opt_;
   }
   return bret;
+}
+
+int ObLogExprValues::get_array_param_group_id(int64_t &group_id, bool &find)
+{
+  int ret = OB_SUCCESS;
+  const ObExecContext *exec_ctx = NULL;
+  find = false;
+  group_id = -1;
+  if (OB_ISNULL(my_plan_) ||
+      OB_ISNULL(exec_ctx = my_plan_->get_optimizer_context().get_exec_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(ret), KP(my_plan_), KP(exec_ctx));
+  } else if (exec_ctx->has_dynamic_values_table()) {
+    for (int64_t i = 0; OB_SUCC(ret) && !find && i < value_exprs_.count(); i++) {
+      if (OB_ISNULL(value_exprs_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("raw_expr is null", K(ret));
+      } else if (value_exprs_.at(i)->is_const_raw_expr()) {
+        const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr *>(value_exprs_.at(i));
+        if (const_expr->get_array_param_group_id() >= 0) {
+          find = true;
+          group_id = const_expr->get_array_param_group_id();
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 bool ObLogExprValues::contain_array_binding_param() const

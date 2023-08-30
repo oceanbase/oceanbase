@@ -92,6 +92,7 @@
 #include "sql/monitor/ob_sql_plan.h"
 #include "sql/optimizer/ob_explain_log_plan.h"
 #include "sql/dblink/ob_dblink_utils.h"
+#include "sql/plan_cache/ob_values_table_compression.h"
 
 namespace oceanbase
 {
@@ -4473,7 +4474,8 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
           pctx->get_remote_sql_info().ps_param_cnt_ = static_cast<int32_t>(param_store.count());
         } else if (phy_plan->temp_sql_can_prepare()
             && pc_ctx.neg_param_index_.is_empty()
-            && !pc_ctx.sql_ctx_.is_batch_params_execute()) {
+            && !pc_ctx.sql_ctx_.is_batch_params_execute()
+            && !pc_ctx.exec_ctx_.has_dynamic_values_table()) {
           //本地是文本协议的SQL，并且缓存在plan中，走ps协议
           //@TODO:yuchen.wyc 文本协议中如果出现不能参数化的参数，由于param store里的值可能不是参数化对应的值
           //例如select a, b-1 from t1; 这里会参数化成select a, b-? from t1;但param store里对应的是-1
@@ -4680,8 +4682,8 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
   // for batched multi stmt, we only parse and optimize the first statement
   // only in multi_query, need do this
   if (!(PC_PS_MODE == mode || PC_PL_MODE == mode) &&
-      context.is_batch_params_execute() &&
-      OB_FAIL(get_first_batched_multi_stmt(pc_ctx, context.multi_stmt_item_, outlined_stmt))) {
+      (context.is_batch_params_execute() || pc_ctx.exec_ctx_.has_dynamic_values_table()) &&
+      OB_FAIL(get_reconstructed_batch_stmt(pc_ctx, outlined_stmt))) {
     LOG_WARN("failed to get first batched stmt item", K(ret));
   } else if (OB_FAIL(ObUDRUtils::match_udr_and_refill_ctx(outlined_stmt,
                                                           context,
@@ -4893,9 +4895,16 @@ int ObSql::handle_parser(const ObString &sql,
     LOG_WARN("fail to parser normal query", K(sql), K(ret));
   }
   if (OB_SUCC(ret)) {
-    pctx->set_original_param_cnt(pctx->get_param_store().count());
-    if (OB_FAIL(pctx->init_datum_param_store())) {
-      LOG_WARN("fail to init datum param store", K(ret));
+    if (exec_ctx.has_dynamic_values_table()) {
+      if (OB_FAIL(ObValuesTableCompression::resolve_params_for_values_clause(pc_ctx))) {
+        LOG_WARN("failed to resolve batch param store for values table", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      pctx->set_original_param_cnt(pctx->get_param_store().count());
+      if (OB_FAIL(pctx->init_datum_param_store())) {
+        LOG_WARN("fail to init datum param store", K(ret));
+      }
     }
   }
   LOG_DEBUG("SQL MEM USAGE", K(parser_mem_usage), K(last_mem_usage));
@@ -5494,7 +5503,7 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
   return ret;
 }
 
-int ObSql::get_first_batched_multi_stmt(ObPlanCacheCtx &pc_ctx, ObMultiStmtItem &multi_stmt_item, ObString &stmt_sql)
+int ObSql::get_reconstructed_batch_stmt(ObPlanCacheCtx &pc_ctx, ObString& stmt_sql)
 {
   int ret = OB_SUCCESS;
   if (pc_ctx.sql_ctx_.is_do_insert_batch_opt()) {
@@ -5510,14 +5519,18 @@ int ObSql::get_first_batched_multi_stmt(ObPlanCacheCtx &pc_ctx, ObMultiStmtItem 
       LOG_TRACE("print new_reconstruct_sql",
           K(pc_ctx.fp_result_.pc_key_.name_), K(pc_ctx.insert_batch_opt_info_.new_reconstruct_sql_));
     }
-  } else if (OB_ISNULL(multi_stmt_item.get_queries())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(multi_stmt_item));
-  } else if (OB_UNLIKELY(multi_stmt_item.get_queries()->empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected array count", K(ret));
-  } else {
-    stmt_sql = multi_stmt_item.get_queries()->at(0);
+  } else if (pc_ctx.sql_ctx_.handle_batched_multi_stmt()) {
+    if (OB_ISNULL(pc_ctx.sql_ctx_.multi_stmt_item_.get_queries())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(pc_ctx.sql_ctx_.multi_stmt_item_));
+    } else if (OB_UNLIKELY(pc_ctx.sql_ctx_.multi_stmt_item_.get_queries()->empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected array count", K(ret));
+    } else {
+      stmt_sql = pc_ctx.sql_ctx_.multi_stmt_item_.get_queries()->at(0);
+    }
+  } else if (pc_ctx.exec_ctx_.has_dynamic_values_table()) {
+    stmt_sql = pc_ctx.new_raw_sql_;
   }
   return ret;
 }

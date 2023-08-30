@@ -72,6 +72,21 @@ struct ObRemoteSqlInfo
   bool sql_from_pl_;
 };
 
+/* refer to a group of array params
+ * values clause using now
+ */
+struct ObArrayParamGroup {
+  OB_UNIS_VERSION(1);
+public:
+  ObArrayParamGroup() : row_count_(0), column_count_(0), start_param_idx_(0) {}
+  ObArrayParamGroup(const int64_t row_cnt, const int64_t param_cnt, const int64_t start_param_idx)
+    : row_count_(row_cnt), column_count_(param_cnt), start_param_idx_(start_param_idx) {}
+  int64_t row_count_;
+  int64_t column_count_;
+  int64_t start_param_idx_; // in param store
+  TO_STRING_KV(K(row_count_), K(column_count_), K(start_param_idx_));
+};
+
 class ObPhysicalPlanCtx
 {
   OB_UNIS_VERSION(1);
@@ -435,7 +450,7 @@ public:
   bool get_is_ps_rewrite_sql() const { return is_ps_rewrite_sql_; }
   void set_plan_start_time(int64_t t) { plan_start_time_ = t; }
   int64_t get_plan_start_time() const { return plan_start_time_; }
-  int replace_batch_param_datum(int64_t cur_group_id);
+  int replace_batch_param_datum(const int64_t cur_group_id, const int64_t start_param, const int64_t param_cnt);
   void set_last_trace_id(const common::ObCurTraceId::TraceId &trace_id)
   {
     last_trace_id_ = trace_id;
@@ -443,7 +458,8 @@ public:
   const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
   common::ObCurTraceId::TraceId &get_last_trace_id() { return last_trace_id_; }
   void set_spm_timeout_timestamp(const int64_t timeout) { spm_ts_timeout_us_ = timeout; }
-
+  const ObIArray<ObArrayParamGroup> &get_array_param_groups() const { return array_param_groups_; }
+  ObIArray<ObArrayParamGroup> &get_array_param_groups() { return array_param_groups_; }
 private:
   void reset_datum_frame(char *frame, int64_t expr_cnt);
   int extend_param_frame(const int64_t old_size);
@@ -507,6 +523,7 @@ private:
   int64_t orig_question_mark_cnt_;
   common::ObCurTraceId::TraceId last_trace_id_;
   int64_t tenant_srs_version_;
+  ObSEArray<ObArrayParamGroup, 2> array_param_groups_;
 
 private:
   /**

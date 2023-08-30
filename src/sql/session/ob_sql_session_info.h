@@ -985,7 +985,7 @@ public:
   int restore_sql_session(StmtSavedValue &saved_value);
   int restore_session(StmtSavedValue &saved_value);
   ObExecContext *get_cur_exec_ctx() { return cur_exec_ctx_; }
-
+  const ObExecContext *get_cur_exec_ctx() const { return cur_exec_ctx_; }
   int begin_nested_session(StmtSavedValue &saved_value, bool skip_cur_stmt_tables = false);
   int end_nested_session(StmtSavedValue &saved_value);
 

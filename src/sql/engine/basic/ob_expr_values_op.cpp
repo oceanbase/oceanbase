@@ -83,6 +83,7 @@ int ObExprValuesSpec::serialize(char *buf,
       OB_UNIS_ENCODE(contain_ab_param_);
       OB_UNIS_ENCODE(ins_values_batch_opt_);
       OB_UNIS_ENCODE(column_names_);
+      OB_UNIS_ENCODE(array_group_idx_);
     }
   }
 
@@ -107,6 +108,7 @@ OB_DEF_SERIALIZE_SIZE(ObExprValuesSpec)
   OB_UNIS_ADD_LEN(contain_ab_param_);
   OB_UNIS_ADD_LEN(ins_values_batch_opt_);
   OB_UNIS_ADD_LEN(column_names_);
+  OB_UNIS_ADD_LEN(array_group_idx_);
   return len;
 }
 
@@ -120,6 +122,7 @@ OB_DEF_SERIALIZE(ObExprValuesSpec)
   OB_UNIS_ENCODE(contain_ab_param_);
   OB_UNIS_ENCODE(ins_values_batch_opt_);
   OB_UNIS_ENCODE(column_names_);
+  OB_UNIS_ENCODE(array_group_idx_);
   return ret;
 }
 
@@ -133,6 +136,7 @@ OB_DEF_DESERIALIZE(ObExprValuesSpec)
   OB_UNIS_DECODE(contain_ab_param_);
   OB_UNIS_DECODE(ins_values_batch_opt_);
   OB_UNIS_DECODE(column_names_);
+  OB_UNIS_DECODE(array_group_idx_);
   return ret;
 }
 
@@ -180,6 +184,7 @@ int64_t ObExprValuesSpec::get_serialize_size_(const ObPhyOpSeriCtx &seri_ctx) co
   OB_UNIS_ADD_LEN(contain_ab_param_);
   OB_UNIS_ADD_LEN(ins_values_batch_opt_);
   OB_UNIS_ADD_LEN(column_names_);
+  OB_UNIS_ADD_LEN(array_group_idx_);
   return len;
 }
 
@@ -193,7 +198,10 @@ ObExprValuesOp::ObExprValuesOp(ObExecContext &exec_ctx,
     cm_(CM_NONE),
     err_log_service_(get_eval_ctx()),
     err_log_rt_def_(),
-    has_sequence_(false)
+    has_sequence_(false),
+    real_value_cnt_(0),
+    param_idx_(0),
+    param_cnt_(0)
 {
 }
 
@@ -203,14 +211,17 @@ int ObExprValuesOp::inner_open()
   node_idx_ = 0;
   const bool is_explicit_cast = false;
   const int32_t result_flag = 0;
-  if (OB_FAIL(datum_caster_.init(eval_ctx_.exec_ctx_))) {
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+  if (OB_ISNULL(plan_ctx) || OB_ISNULL(ctx_.get_sql_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected NULL ptr", K(ret), KP(plan_ctx), KP(ctx_.get_sql_ctx()));
+  } else if (OB_FAIL(datum_caster_.init(eval_ctx_.exec_ctx_))) {
     LOG_WARN("fail to init datum_caster", K(ret));
   } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(is_explicit_cast, result_flag,
                                                        ctx_.get_my_session(), cm_))) {
     LOG_WARN("fail to get_default_cast_mode", K(ret));
   } else {
     // see ObSQLUtils::wrap_column_convert_ctx(), add CM_WARN_ON_FAIL for INSERT IGNORE.
-    ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
     cm_ = cm_ | CM_COLUMN_CONVERT;
     if (plan_ctx->is_ignore_stmt() || !is_strict_mode(ctx_.get_my_session()->get_sql_mode())) {
       // CM_CHARSET_CONVERT_IGNORE_ERR is will give '?' when do string_string convert.
@@ -225,6 +236,29 @@ int ObExprValuesOp::inner_open()
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected child cnt", K(child_cnt_), K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      if (MY_SPEC.contain_ab_param_ && !ctx_.has_dynamic_values_table()) {
+        int64_t value_group = MY_SPEC.contain_ab_param_ ?
+                              ctx_.get_sql_ctx()->get_batch_params_count() : 1;
+        real_value_cnt_ = MY_SPEC.get_value_count() * value_group;
+        param_idx_ = 0;
+        param_cnt_ = plan_ctx->get_datum_param_store().count();
+      } else if (MY_SPEC.contain_ab_param_ && ctx_.has_dynamic_values_table() &&
+                 MY_SPEC.array_group_idx_ >= 0) {
+        if (OB_UNLIKELY(MY_SPEC.array_group_idx_ >= plan_ctx->get_array_param_groups().count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected idx", K(ret), K(MY_SPEC.array_group_idx_));
+        } else {
+          ObArrayParamGroup &array_param_group = plan_ctx->get_array_param_groups().at(MY_SPEC.array_group_idx_);
+          real_value_cnt_ = MY_SPEC.get_value_count() * array_param_group.row_count_;
+          param_cnt_ = array_param_group.column_count_;
+          param_idx_ = array_param_group.start_param_idx_;
+        }
+      } else {
+        real_value_cnt_ = MY_SPEC.get_value_count();
+      }
+      LOG_TRACE("init expr values op", K(real_value_cnt_), K(param_cnt_), K(param_idx_));
     }
   }
   return ret;
@@ -314,11 +348,9 @@ int ObExprValuesOp::get_real_batch_obj_type(ObDatumMeta &src_meta,
                                             int64_t group_idx)
 {
   int ret = OB_SUCCESS;
-  if (MY_SPEC.ins_values_batch_opt_
-      && T_QUESTIONMARK == src_expr->type_
-      && (src_expr->frame_idx_
-       < spec_.plan_->get_expr_frame_info().const_frame_.count()
-          + spec_.plan_->get_expr_frame_info().param_frame_.count())) {
+  if (T_QUESTIONMARK == src_expr->type_ &&
+      src_expr->frame_idx_ < spec_.plan_->get_expr_frame_info().const_frame_.count() +
+                             spec_.plan_->get_expr_frame_info().param_frame_.count()) {
     int64_t param_idx = src_expr->extra_;
     ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
     const ObSqlArrayObj *array_obj = NULL;
@@ -426,20 +458,16 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   int64_t col_num = MY_SPEC.get_output_count();
   int64_t col_idx = 0;
-  int64_t batch_cnt = ctx_.get_sql_ctx()->get_batch_params_count();
-  int64_t value_group = (MY_SPEC.contain_ab_param_ ? batch_cnt : 1);
-  int64_t real_value_cnt = MY_SPEC.get_value_count() * value_group;
-  if (node_idx_ == real_value_cnt) {
+  if (node_idx_ == real_value_cnt_) {
     // there is no values any more
     ret = OB_ITER_END;
   } else {
     bool is_break = false;
     ObDatum *datum = NULL;
-    ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
     int64_t group_idx = 0;
     if (MY_SPEC.contain_ab_param_) {
       group_idx = node_idx_ / MY_SPEC.get_value_count();
-      if (OB_FAIL(plan_ctx->replace_batch_param_datum(group_idx))) {
+      if (OB_FAIL(plan_ctx->replace_batch_param_datum(group_idx, param_idx_, param_cnt_))) {
         LOG_WARN("replace batch param datum failed", K(ret), K(group_idx));
       }
     }
@@ -450,7 +478,7 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
         }
       }
     }
-    while (OB_SUCC(ret) && node_idx_ < real_value_cnt && !is_break) {
+    while (OB_SUCC(ret) && node_idx_ < real_value_cnt_ && !is_break) {
       int64_t real_node_idx = node_idx_ % MY_SPEC.get_value_count();
       int64_t row_num = real_node_idx / col_num + 1;
       ObExpr *src_expr = MY_SPEC.values_.at(real_node_idx);

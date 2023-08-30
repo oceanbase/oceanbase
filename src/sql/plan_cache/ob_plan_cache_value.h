@@ -300,11 +300,6 @@ private:
                           share::schema::ObSchemaObjVersion &local_outline_version);
 
   int get_outline_param_index(ObExecContext &exec_ctx, int64_t &param_idx) const;
-
-  static int handle_varchar_charset(ObCharsetType charset_type,
-                                    ObIAllocator &allocator,
-                                    ParseNode *&node);
-
   /**
    * @brief if there is a temporary table in dependency tables
    * @retval is_contain: true for containing temporary table
@@ -355,9 +350,6 @@ private:
   int need_check_schema_version(ObPlanCacheCtx &pc_ctx,
                                 int64_t &new_schema_version,
                                 bool &need_check);
-
-  static int rm_space_for_neg_num(ParseNode *param_node, ObIAllocator &allocator);
-
   int assign_udr_infos(ObPlanCacheCtx &pc_ctx);
   void reset_tpl_sql_const_cons();
   int check_tpl_sql_const_cons(const ObFastParserResult &fp_result,
@@ -420,6 +412,7 @@ private:
   //Therefore, it is necessary to distinguish whether it is nested SQL or not.
   bool is_nested_sql_;
   bool is_batch_execute_;
+  bool has_dynamic_values_table_;
   // only when not need to param, this feild will be used.
   common::ObString raw_sql_;
   common::ObFixedArray<PCVSchemaObj *, common::ObIAllocator> stored_schema_objs_;

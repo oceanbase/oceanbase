@@ -539,7 +539,8 @@ OB_NOINLINE int ObPreCalcExprFrameInfo::do_batch_stmt_eval(ObExecContext &exec_c
   } // for end
   //replace array param to the real param and eval the pre calc expr
   for (int64_t group_id = 0; OB_SUCC(ret) && group_id < group_cnt; ++group_id) {
-    if (OB_FAIL(exec_ctx.get_physical_plan_ctx()->replace_batch_param_datum(group_id))) {
+    if (OB_FAIL(exec_ctx.get_physical_plan_ctx()->replace_batch_param_datum(group_id, 0,
+                              exec_ctx.get_physical_plan_ctx()->get_datum_param_store().count()))) {
       LOG_WARN("replace batch param frame failed", K(ret));
     }
     //params of each group need to clear the datum evaluted flags before calc the pre_calc_expr

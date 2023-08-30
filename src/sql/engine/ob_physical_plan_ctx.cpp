@@ -77,6 +77,7 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
       tenant_schema_version_(OB_INVALID_VERSION),
       orig_question_mark_cnt_(0),
       tenant_srs_version_(OB_INVALID_VERSION),
+      array_param_groups_(),
       affected_rows_(0),
       is_affect_found_row_(false),
       found_rows_(0),
@@ -555,27 +556,62 @@ OB_INLINE void ObPhysicalPlanCtx::get_param_frame_info(int64_t param_idx,
   eval_info = reinterpret_cast<ObEvalInfo *>(param_frame_ptrs_.at(idx) + off + sizeof(ObDatum));
 }
 
-int ObPhysicalPlanCtx::replace_batch_param_datum(int64_t cur_group_id)
+int ObPhysicalPlanCtx::replace_batch_param_datum(const int64_t cur_group_id,
+                                                 const int64_t start_param,
+                                                 const int64_t param_cnt)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < datum_param_store_.count(); i++) {
-    if (datum_param_store_.at(i).meta_.is_ext_sql_array()) {
-      //need to expand the real param to param frame
-      ObDatum *datum = nullptr;
-      ObEvalInfo *eval_info = nullptr;
-      get_param_frame_info(i, datum, eval_info);
-      const ObSqlDatumArray *datum_array = datum_param_store_.at(i).get_sql_datum_array();;
-      if (OB_UNLIKELY(cur_group_id < 0) || OB_UNLIKELY(cur_group_id >= datum_array->count_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid group id", K(ret), K(cur_group_id), K(datum_array->count_));
-      } else {
-        //assign datum ptr to the real param datum
-        *datum = datum_array->data_[cur_group_id];
-        eval_info->evaluated_ = true;
-        LOG_DEBUG("replace batch param datum", K(cur_group_id), KPC(datum), K(datum));
+  const int64_t datum_cnt = datum_param_store_.count();
+  if (OB_UNLIKELY(start_param < 0 || start_param + param_cnt > datum_cnt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected params", K(ret), K(start_param), K(param_cnt), K(datum_cnt));
+  } else {
+    for (int64_t i = start_param; OB_SUCC(ret) && i < start_param + param_cnt; i++) {
+      if (datum_param_store_.at(i).meta_.is_ext_sql_array()) {
+        //need to expand the real param to param frame
+        ObDatum *datum = nullptr;
+        ObEvalInfo *eval_info = nullptr;
+        get_param_frame_info(i, datum, eval_info);
+        const ObSqlDatumArray *datum_array = datum_param_store_.at(i).get_sql_datum_array();;
+        if (OB_UNLIKELY(cur_group_id < 0) || OB_UNLIKELY(cur_group_id >= datum_array->count_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid group id", K(ret), K(cur_group_id), K(datum_array->count_));
+        } else {
+          //assign datum ptr to the real param datum
+          *datum = datum_array->data_[cur_group_id];
+          eval_info->evaluated_ = true;
+          LOG_DEBUG("replace batch param datum", K(cur_group_id), KPC(datum), K(datum));
+        }
       }
     }
   }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObArrayParamGroup)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(row_count_);
+  OB_UNIS_ENCODE(column_count_);
+  OB_UNIS_ENCODE(start_param_idx_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObArrayParamGroup)
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN(row_count_);
+  OB_UNIS_ADD_LEN(column_count_);
+  OB_UNIS_ADD_LEN(start_param_idx_);
+  return len;
+}
+
+OB_DEF_DESERIALIZE(ObArrayParamGroup)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_DECODE(row_count_);
+  OB_UNIS_DECODE(column_count_);
+  OB_UNIS_DECODE(start_param_idx_);
   return ret;
 }
 
@@ -686,6 +722,13 @@ OB_DEF_SERIALIZE(ObPhysicalPlanCtx)
   OB_UNIS_ENCODE(plan_start_time_);
   OB_UNIS_ENCODE(last_trace_id_);
   OB_UNIS_ENCODE(tenant_srs_version_);
+  OB_UNIS_ENCODE(original_param_cnt_);
+  OB_UNIS_ENCODE(array_param_groups_.count());
+  if (OB_SUCC(ret) && array_param_groups_.count() > 0) {
+    for (int64_t i = 0 ; OB_SUCC(ret) && i < array_param_groups_.count(); i++) {
+      OB_UNIS_ENCODE(array_param_groups_.at(i));
+    }
+  }
   return ret;
 }
 
@@ -769,6 +812,13 @@ OB_DEF_SERIALIZE_SIZE(ObPhysicalPlanCtx)
   OB_UNIS_ADD_LEN(plan_start_time_);
   OB_UNIS_ADD_LEN(last_trace_id_);
   OB_UNIS_ADD_LEN(tenant_srs_version_);
+  OB_UNIS_ADD_LEN(original_param_cnt_);
+  OB_UNIS_ADD_LEN(array_param_groups_.count());
+  if (array_param_groups_.count() > 0) {
+    for (int64_t i = 0 ; i < array_param_groups_.count(); i++) {
+      OB_UNIS_ADD_LEN(array_param_groups_.at(i));
+    }
+  }
   return len;
 }
 
@@ -851,6 +901,33 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
   }
   OB_UNIS_DECODE(last_trace_id_);
   OB_UNIS_DECODE(tenant_srs_version_);
+  OB_UNIS_DECODE(original_param_cnt_);
+  int64_t array_group_count = 0;
+  OB_UNIS_DECODE(array_group_count);
+  if (OB_SUCC(ret) && array_group_count > 0) {
+    for (int64_t i = 0 ; OB_SUCC(ret) && i < array_group_count; i++) {
+      ObArrayParamGroup array_p_group;
+      OB_UNIS_DECODE(array_p_group);
+      if (OB_FAIL(array_param_groups_.push_back(array_p_group))) {
+        LOG_WARN("failed to push back");
+      }
+    }
+  }
+  if (OB_SUCC(ret) && array_group_count > 0 &&
+      datum_param_store_.count() == 0 &&
+      datum_param_store_.count() != param_store_.count()) {
+    if (OB_FAIL(datum_param_store_.prepare_allocate(param_store_.count()))) {
+      LOG_WARN("fail to prepare allocate", K(ret), K(param_store_.count()));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_store_.count(); i++) {
+      ObDatumObjParam &datum_param = datum_param_store_.at(i);
+      if (OB_FAIL(datum_param.alloc_datum_reserved_buff(param_store_.at(i).meta_, allocator_))) {
+        LOG_WARN("alloc datum reserved buffer failed", K(ret));
+      } else if (OB_FAIL(datum_param.from_objparam(param_store_.at(i), &allocator_))) {
+        LOG_WARN("fail to convert obj param", K(ret), K(param_store_.at(i)));
+      }
+    }
+  }
   return ret;
 }
 

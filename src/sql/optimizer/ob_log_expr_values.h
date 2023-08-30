@@ -23,7 +23,9 @@ class ObLogExprValues : public ObLogicalOperator
   public:
     ObLogExprValues(ObLogPlan &plan)
         : ObLogicalOperator(plan),
-          err_log_define_()
+          err_log_define_(),
+          is_values_table_(false),
+          table_name_()
 
     {}
     virtual ~ObLogExprValues() {}
@@ -72,6 +74,14 @@ class ObLogExprValues : public ObLogicalOperator
 
     virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
+    int get_array_param_group_id(int64_t &group_id, bool &find);
+    void set_is_values_table(bool is_values_table) { is_values_table_ = is_values_table; }
+    int64_t get_values_row_count() const {
+      return is_values_table_ && value_desc_.count() > 0 ? value_exprs_.count() / value_desc_.count() : 1;
+    }
+    inline common::ObString &get_table_name() { return table_name_; }
+    inline const common::ObString &get_table_name() const { return table_name_; }
+    inline void set_table_name(const common::ObString &table_name) { table_name_ = table_name; }
   private:
     int construct_array_binding_values();
     int construct_sequence_values();
@@ -80,6 +90,9 @@ class ObLogExprValues : public ObLogicalOperator
     common::ObSEArray<ObColumnRefRawExpr*, 4, common::ModulePageAllocator, true> value_desc_;
     //add for error_logging
     ObErrLogDefine err_log_define_;
+    //for values table
+    bool is_values_table_;
+    common::ObString table_name_;
 
     DISALLOW_COPY_AND_ASSIGN(ObLogExprValues);
   };

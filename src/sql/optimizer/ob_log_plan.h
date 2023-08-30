@@ -84,6 +84,7 @@ class ObDelUpdStmt;
 class ObExchangeInfo;
 class ObDmlTableInfo;
 struct IndexDMLInfo;
+class ValuesTablePath;
 
 struct FunctionTableDependInfo {
   TO_STRING_KV(
@@ -563,6 +564,9 @@ public:
 
   int allocate_function_table_path(FunctionTablePath *func_table_path,
                                    ObLogicalOperator *&out_access_path_op);
+
+  int allocate_values_table_path(ValuesTablePath *values_table_path,
+                                 ObLogicalOperator *&out_access_path_op);
 
   int get_has_global_index_filters(const ObIArray<ObRawExpr*> &filter_exprs,
                                    const ObIArray<uint64_t> &index_columns,

@@ -891,6 +891,7 @@ int ObConstRawExpr::assign(const ObRawExpr &other)
       obj_meta_ = const_expr.get_expr_obj_meta();
       is_date_unit_ = const_expr.is_date_unit_;
       is_literal_bool_ = const_expr.is_literal_bool();
+      array_param_group_id_ = const_expr.get_array_param_group_id();
     }
   }
   return ret;
@@ -945,6 +946,7 @@ void ObConstRawExpr::reset()
   value_.reset();
   literal_prefix_.reset();
   is_literal_bool_ = false;
+  array_param_group_id_ = -1;
 }
 
 void ObConstRawExpr::set_is_date_unit()

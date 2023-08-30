@@ -916,6 +916,7 @@ ob_set_subtarget(ob_sql plan_cache
   plan_cache/ob_lib_cache_object_manager.cpp
   plan_cache/ob_lib_cache_node_factory.cpp
   plan_cache/ob_plan_match_helper.cpp
+  plan_cache/ob_values_table_compression.cpp
 )
 
 ob_set_subtarget(ob_sql resolver

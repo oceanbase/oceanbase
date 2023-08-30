@@ -108,7 +108,8 @@ enum PathType
   FAKE_CTE_TABLE_ACCESS,
   FUNCTION_TABLE_ACCESS,
   TEMP_TABLE_ACCESS,
-  JSON_TABLE_ACCESS
+  JSON_TABLE_ACCESS,
+  VALUES_TABLE_ACCESS
 };
 
 enum JtColType {
@@ -478,25 +479,6 @@ enum class ObParamOption {
   MAX_VALUE
 };
 
-struct ObSqlArrayObj
-{
-  ObSqlArrayObj()
-    : data_(nullptr),
-      count_(0),
-      element_()
-  {
-  }
-  typedef common::ObArrayWrap<common::ObObjParam> DataArray;
-  static ObSqlArrayObj *alloc(common::ObIAllocator &allocator, int64_t count);
-  TO_STRING_KV("data", DataArray(data_, count_),
-               K_(count),
-               K_(element));
-  common::ObObjParam *data_;
-//  ObObjParam *data_1_;
-  int64_t count_;
-  common::ObDataType element_;
-};
-
 enum DominateRelation
 {
   OBJ_LEFT_DOMINATE = 0,
@@ -572,21 +554,6 @@ enum ObIDPAbortType
   IDP_ENUM_FAILED_ABORT = 3,
   IDP_NO_ABORT = 4
 };
-
-OB_INLINE ObSqlArrayObj *ObSqlArrayObj::alloc(common::ObIAllocator &allocator, int64_t count)
-{
-  ObSqlArrayObj *array_obj = nullptr;
-  void *array_buf = nullptr;
-  void *data_buf = nullptr;
-  int64_t array_size = sizeof(ObSqlArrayObj) + sizeof(common::ObObjParam) * count;
-  if (OB_NOT_NULL(array_buf = allocator.alloc(array_size))) {
-    array_obj = new (array_buf) ObSqlArrayObj();
-    data_buf = static_cast<char*>(array_buf) + sizeof(ObSqlArrayObj);
-    array_obj->data_ = new (data_buf) common::ObObjParam[count];
-    array_obj->count_ = count;
-  }
-  return array_obj;
-}
 
 struct ObSqlDatumArray
 {

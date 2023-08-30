@@ -4679,6 +4679,11 @@ bool oceanbase::sql::Path::is_access_path() const
   return NULL != parent_ && parent_->get_type() == ACCESS;
 }
 
+bool oceanbase::sql::Path::is_values_table_path() const
+{
+  return NULL != parent_ && parent_->get_type() == VALUES_TABLE_ACCESS;
+}
+
 bool oceanbase::sql::Path::is_join_path() const
 {
   return NULL != parent_ && parent_->get_type() == JOIN;
@@ -6937,6 +6942,8 @@ int ObJoinOrder::init_base_join_order(const TableItem *table_item)
       set_type(FUNCTION_TABLE_ACCESS);
     } else if (table_item->is_json_table()) {
       set_type(JSON_TABLE_ACCESS);
+    } else if (table_item->is_values_table()) {
+      set_type(VALUES_TABLE_ACCESS);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid type of table item", K(table_item->type_), K(ret));
@@ -6962,6 +6969,8 @@ int ObJoinOrder::generate_base_paths()
     OPT_TRACE_TITLE("begin generate subplan");
     ret = generate_normal_subquery_paths();
     OPT_TRACE_TITLE("end generate subplan");
+  } else if (VALUES_TABLE_ACCESS == get_type()) {
+    ret = generate_values_table_paths();
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected base path type", K(get_type()), K(ret));
@@ -13483,6 +13492,20 @@ int ObJoinOrder::copy_path(const Path& src_path, Path* &dst_path)
         dst_path = new_cte_path;
       }
     }
+  } else if (src_path.is_values_table_path()) {
+    const ValuesTablePath &values_table_path = static_cast<const ValuesTablePath&>(src_path);
+    ValuesTablePath *new_values_table_path = NULL;
+    if (OB_ISNULL(new_values_table_path = reinterpret_cast<ValuesTablePath*>(allocator_->alloc(sizeof(ValuesTablePath))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("failed to allocate an ValuesTablePath", K(ret));
+    } else {
+      new_values_table_path = new(new_values_table_path) ValuesTablePath();
+      if (OB_FAIL(new_values_table_path->assign(values_table_path, allocator_))) {
+        LOG_WARN("failed to assign access path", K(ret));
+      } else {
+        dst_path = new_values_table_path;
+      }
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected path type", K(ret));
@@ -14455,4 +14478,117 @@ bool ObJoinOrder::virtual_table_index_can_range_scan(uint64_t table_id) {
     }
   }
   return bret;
+}
+
+int ValuesTablePath::assign(const ValuesTablePath &other, common::ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(Path::assign(other, allocator))) {
+    LOG_WARN("failed to assgin", K(ret));
+  } else {
+    table_id_ = other.table_id_;
+  }
+  return ret;
+}
+
+int ValuesTablePath::estimate_cost()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(parent_) || OB_ISNULL(parent_->get_plan())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(parent_), K(ret));
+  } else {
+    ObOptimizerContext &opt_ctx = parent_->get_plan()->get_optimizer_context();
+    cost_ = ObOptEstCost::cost_get_rows(get_path_output_rows(), opt_ctx.get_cost_model_type());
+    op_cost_ = cost_;
+  }
+  return ret;
+}
+
+int ObJoinOrder::generate_values_table_paths()
+{
+  int ret = OB_SUCCESS;
+  ValuesTablePath *values_path = NULL;
+  const ObDMLStmt *stmt = NULL;
+  TableItem *table_item = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(allocator_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(get_plan()), K(stmt), K(allocator_), K(ret));
+  } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id_)) ||
+             OB_UNLIKELY(!table_item->is_values_table() ||
+                         stmt->get_column_size(table_id_) == 0 ||
+                         table_item->table_values_.empty() ||
+                         table_item->table_values_.count() % stmt->get_column_size(table_id_) != 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(table_id_), KPC(stmt), K(ret));
+  } else if (OB_ISNULL(values_path = reinterpret_cast<ValuesTablePath*>(
+                       allocator_->alloc(sizeof(ValuesTablePath))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate values path", K(ret));
+  } else {
+    values_path = new(values_path) ValuesTablePath();
+    values_path->table_id_ = table_id_;
+    values_path->parent_ = this;
+    ObSEArray<ObExecParamRawExpr *, 4> nl_params;
+    output_rows_ = table_item->table_values_.count() / stmt->get_column_size(table_id_);
+    values_path->strong_sharding_ = get_plan()->get_optimizer_context().get_match_all_sharding();
+    if (OB_FAIL(values_path->set_parallel_and_server_info_for_match_all())) {
+      LOG_WARN("failed set parallel and server info for match all", K(ret));
+    } else if (OB_FAIL(append(values_path->filter_, get_restrict_infos()))) {
+      LOG_WARN("failed to append filter", K(ret));
+    } else if (OB_FAIL(ObOptEstCost::estimate_width_for_table(get_plan()->get_basic_table_metas(),
+                                                              get_plan()->get_selectivity_ctx(),
+                                                              stmt->get_column_items(),
+                                                              table_id_,
+                                                              output_row_size_))) {
+      LOG_WARN("estimate width of row failed", K(table_id_), K(ret));
+    } else if (OB_FAIL(param_values_table_expr(table_item->table_values_,
+                                               nl_params,
+                                               values_path->subquery_exprs_))) {
+      LOG_WARN("failed to extract param for values table expr", K(ret));
+    } else if (OB_FAIL(values_path->nl_params_.assign(nl_params))) {
+      LOG_WARN("failed to assign nl params", K(ret));
+    } else if (OB_FAIL(values_path->estimate_cost())) {
+      LOG_WARN("failed to estimate cost", K(ret));
+    } else if (OB_FAIL(values_path->compute_pipeline_info())) {
+      LOG_WARN("failed to compute pipelined path", K(ret));
+    } else if (OB_FAIL(add_path(values_path))) {
+      LOG_WARN("failed to add path", K(ret));
+    } else { /*do nothing*/ }
+  }
+  return ret;
+}
+
+int ObJoinOrder::param_values_table_expr(ObIArray<ObRawExpr*> &values_vector,
+                                         ObIArray<ObExecParamRawExpr *> &nl_params,
+                                         ObIArray<ObRawExpr*> &subquery_exprs)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = NULL;
+  ObLogPlan *plan = get_plan();
+  for (int64_t i = 0; OB_SUCC(ret) && i < values_vector.count(); ++i) {
+    ObSEArray<ObRawExpr *, 1> old_values_exprs;
+    ObSEArray<ObRawExpr *, 1> new_values_exprs;
+    ObSEArray<ObExecParamRawExpr *, 4> tmp_nl_params;
+    if (OB_ISNULL(plan = get_plan()) || OB_ISNULL(stmt = plan->get_stmt())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("NULL pointer error", K(plan), K(ret));
+    } else if (OB_FAIL(old_values_exprs.push_back(values_vector.at(i)))) {
+      LOG_WARN("failed to push back function table expr", K(ret));
+    } else if (OB_FAIL(extract_params_for_inner_path(values_vector.at(i)->get_relation_ids(),
+                                                     tmp_nl_params,
+                                                     subquery_exprs,
+                                                     old_values_exprs,
+                                                     new_values_exprs))) {
+      LOG_WARN("failed to extract params", K(ret));
+    } else if (OB_UNLIKELY(new_values_exprs.count() != 1) || OB_ISNULL(new_values_exprs.at(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("new values table expr is invalid", K(ret), K(new_values_exprs));
+    } else if (OB_FAIL(append(nl_params, tmp_nl_params))) {
+      LOG_WARN("failed to append", K(ret));
+    } else {
+      values_vector.at(i) = new_values_exprs.at(0);
+    }
+  }
+  return ret;
 }

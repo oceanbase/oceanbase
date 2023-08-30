@@ -204,7 +204,8 @@ struct TableItem
                K_(ddl_schema_version), K_(ddl_table_id),
                K_(is_view_table), K_(part_ids), K_(part_names), K_(cte_type),
                KPC_(function_table_expr),
-               K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type));
+               K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type),
+               K(table_values_));
 
   enum TableType
   {
@@ -219,6 +220,7 @@ struct TableItem
     LINK_TABLE,
     JSON_TABLE,
     EXTERNAL_TABLE,
+    VALUES_TABLE
   };
 
   /**
@@ -254,6 +256,7 @@ struct TableItem
   bool is_link_table() const { return OB_INVALID_ID != dblink_id_; } // why not use type_, cause type_ will be changed in dblink transform rule, but dblink id don't change
   bool is_link_type() const { return LINK_TABLE == type_; } // after dblink transformer, LINK_TABLE will be BASE_TABLE, BASE_TABLE will be LINK_TABLE
   bool is_json_table() const { return JSON_TABLE == type_; }
+  bool is_values_table() const { return VALUES_TABLE == type_; }//used to mark values statement: values row(1,2), row(3,4);
   bool is_synonym() const { return !synonym_name_.empty(); }
   bool is_oracle_all_or_user_sys_view() const
   {
@@ -337,6 +340,8 @@ struct TableItem
   common::ObSEArray<ObString, 1, common::ModulePageAllocator, true> part_names_;
   // json table
   ObJsonTableDef* json_table_def_;
+  // values table
+  common::ObArray<ObRawExpr*, common::ModulePageAllocator, true> table_values_;
 };
 
 struct ColumnItem
@@ -817,6 +822,15 @@ public:
   int64_t get_table_size() const { return table_items_.count(); }
   int64_t get_CTE_table_size() const;
   int64_t get_column_size() const { return column_items_.count(); }
+  int64_t get_column_size(const uint64_t table_id) const {
+    int64_t size = 0;
+    for (int64_t i = 0; i < column_items_.count(); i++) {
+      if (table_id == column_items_.at(i).table_id_) {
+        ++size;
+      }
+    }
+    return size;
+  }
   inline int64_t get_condition_size() const { return condition_exprs_.count(); }
   void reset_table_items() { table_items_.reset(); }
   const ColumnItem *get_column_item(int64_t index) const
@@ -902,6 +916,7 @@ public:
   int generate_anonymous_view_name(ObIAllocator &allocator, ObString &view_name);
   int generate_func_table_name(ObIAllocator &allocator, ObString &table_name);
   int generate_json_table_name(ObIAllocator &allocator, ObString &table_name);
+  int generate_values_table_name(ObIAllocator &allocator, ObString &table_name);
   int append_id_to_view_name(char *buf,
                              int64_t buf_len,
                              int64_t &pos,
@@ -1138,6 +1153,7 @@ public:
                                       bool need_replace);
 
   int check_has_cursor_expression(bool &has_cursor_expr) const;
+  bool is_values_table_query() const;
 
   int do_formalize_query_ref_exprs_pre();
 

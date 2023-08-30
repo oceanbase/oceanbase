@@ -43,6 +43,7 @@
 #include "sql/spm/ob_spm_evolution_plan.h"
 #endif
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
+#include "sql/plan_cache/ob_values_table_compression.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
@@ -718,32 +719,35 @@ int ObPlanCache::construct_fast_parser_result(common::ObIAllocator &allocator,
                                                  batch_count,
                                                  first_truncated_sql))) {
         LOG_WARN("fail to do insert optimization", K(ret));
-      } else if (!can_do_batch_insert) {
-        // can't do batch insert
-      } else if (OB_FAIL(rebuild_raw_params(allocator,
-                                            pc_ctx,
-                                            fp_result,
-                                            batch_count))) {
-        LOG_WARN("fail to rebuild raw_param", K(ret), K(batch_count));
-      } else if (pc_ctx.insert_batch_opt_info_.multi_raw_params_.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected multi_raw_params, can't do batch insert opt, but not need to return error",
-            K(batch_count), K(first_truncated_sql), K(pc_ctx.raw_sql_), K(fp_result));
-      } else if (OB_ISNULL(pc_ctx.insert_batch_opt_info_.multi_raw_params_.at(0))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null ptr, can't do batch insert opt, but not need to return error",
-            K(batch_count), K(first_truncated_sql), K(pc_ctx.raw_sql_), K(fp_result));
-      } else {
-        fp_result.raw_params_.reset();
-        fp_result.raw_params_.set_allocator(&allocator);
-        fp_result.raw_params_.set_capacity(pc_ctx.insert_batch_opt_info_.multi_raw_params_.at(0)->count());
-        if (OB_FAIL(fp_result.raw_params_.assign(*pc_ctx.insert_batch_opt_info_.multi_raw_params_.at(0)))) {
-          LOG_WARN("fail to assign raw_param", K(ret));
+      } else if (can_do_batch_insert) {
+        if (OB_FAIL(rebuild_raw_params(allocator,
+                                       pc_ctx,
+                                       fp_result,
+                                       batch_count))) {
+          LOG_WARN("fail to rebuild raw_param", K(ret), K(batch_count));
+        } else if (pc_ctx.insert_batch_opt_info_.multi_raw_params_.empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected multi_raw_params, can't do batch insert opt, but not need to return error",
+              K(batch_count), K(first_truncated_sql), K(pc_ctx.raw_sql_), K(fp_result));
+        } else if (OB_ISNULL(pc_ctx.insert_batch_opt_info_.multi_raw_params_.at(0))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null ptr, can't do batch insert opt, but not need to return error",
+              K(batch_count), K(first_truncated_sql), K(pc_ctx.raw_sql_), K(fp_result));
         } else {
-          pc_ctx.sql_ctx_.set_is_do_insert_batch_opt(batch_count);
-          fp_result.pc_key_.name_.assign_ptr(first_truncated_sql.ptr(), first_truncated_sql.length());
-          LOG_DEBUG("print new fp_result.pc_key_.name_", K(fp_result.pc_key_.name_));
+          fp_result.raw_params_.reset();
+          fp_result.raw_params_.set_allocator(&allocator);
+          fp_result.raw_params_.set_capacity(pc_ctx.insert_batch_opt_info_.multi_raw_params_.at(0)->count());
+          if (OB_FAIL(fp_result.raw_params_.assign(*pc_ctx.insert_batch_opt_info_.multi_raw_params_.at(0)))) {
+            LOG_WARN("fail to assign raw_param", K(ret));
+          } else {
+            pc_ctx.sql_ctx_.set_is_do_insert_batch_opt(batch_count);
+            fp_result.pc_key_.name_.assign_ptr(first_truncated_sql.ptr(), first_truncated_sql.length());
+            LOG_DEBUG("print new fp_result.pc_key_.name_", K(fp_result.pc_key_.name_));
+          }
         }
+      } else if (OB_FAIL(ObValuesTableCompression::try_batch_exec_params(allocator, pc_ctx,
+                                                      *pc_ctx.sql_ctx_.session_info_, fp_result))) {
+        LOG_WARN("failed to check fold params valid", K(ret));
       }
     }
   }

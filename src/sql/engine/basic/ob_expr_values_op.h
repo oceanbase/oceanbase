@@ -36,9 +36,10 @@ public:
       str_values_array_(alloc),
       err_log_ct_def_(alloc),
       contain_ab_param_(0),
-      ins_values_batch_opt_(false)
+      ins_values_batch_opt_(false),
+      array_group_idx_(-1)
   { }
-
+  INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K(array_group_idx_));
   int64_t get_value_count() const { return values_.count(); }
   int64_t get_is_strict_json_desc_count() const { return is_strict_json_desc_.count(); }
   virtual int serialize(char *buf,
@@ -57,6 +58,7 @@ public:
   ObErrLogCtDef err_log_ct_def_;
   int64_t contain_ab_param_;
   bool ins_values_batch_opt_;
+  int64_t array_group_idx_;
 };
 
 class ObExprValuesOp : public ObOperator
@@ -94,6 +96,9 @@ private:
   ObErrLogService err_log_service_;
   ObErrLogRtDef err_log_rt_def_;
   bool has_sequence_;
+  int64_t real_value_cnt_;
+  int64_t param_idx_;
+  int64_t param_cnt_;
 };
 
 } // end namespace sql

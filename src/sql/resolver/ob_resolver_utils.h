@@ -754,6 +754,18 @@ public:
                                             ObSQLSessionInfo &session_info,
                                             ObDataTypeCastParams &dtc_params);
   static bool is_expr_can_be_used_in_table_function(const ObRawExpr &expr);
+  static int resolver_param(ObPlanCacheCtx &pc_ctx,
+                            ObSQLSessionInfo &session,
+                            const ParamStore &phy_ctx_params,
+                            const stmt::StmtType stmt_type,
+                            const ObCharsetType param_charset_type,
+                            const ObBitSet<> &neg_param_index,
+                            const ObBitSet<> &not_param_index,
+                            const ObBitSet<> &must_be_positive_idx,
+                            const ObPCParam *pc_param,
+                            const int64_t param_idx,
+                            ObObjParam &obj_param,
+                            bool &is_param);
   static int check_keystore_status(const uint64_t tenant_id, ObSchemaChecker &schema_checker);
   static int check_encryption_name(common::ObString &encryption_name, bool &need_encrypt);
 private:
@@ -783,6 +795,10 @@ private:
   static int check_partition_range_value_result_type(const share::schema::ObPartitionFuncType part_type,
                                                      const ObColumnRefRawExpr &part_column_expr,
                                                      ObRawExpr &part_value_expr);
+  static int rm_space_for_neg_num(ParseNode *param_node, ObIAllocator &allocator);
+  static int handle_varchar_charset(ObCharsetType charset_type,
+                                    ObIAllocator &allocator,
+                                    ParseNode *&node);
   static const common::ObString stmt_type_string[];
 
   // disallow construct

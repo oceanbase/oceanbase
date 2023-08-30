@@ -359,6 +359,34 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
       }
       break;
     }
+    case TableItem::VALUES_TABLE: {
+      int64_t column_cnt = stmt_->get_column_size(table_item->table_id_);
+      const ObIArray<ObRawExpr *> &values = table_item->table_values_;
+      if (OB_UNLIKELY(column_cnt <= 0 || values.empty() || values.count() % column_cnt != 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(column_cnt), K(values));
+      } else {
+        DATA_PRINTF("(VALUES ");
+        for (int64_t i = 0; OB_SUCC(ret) && i < values.count(); ++i) {
+          if (i % column_cnt == 0) {
+            if (i == 0) {
+              DATA_PRINTF("ROW(");
+            } else {
+              DATA_PRINTF("), ROW(");
+            }
+          }
+          if (OB_SUCC(ret)) {
+            OZ (expr_printer_.do_print(values.at(i), T_FROM_SCOPE));
+            if (OB_SUCC(ret) && (i + 1) % column_cnt != 0) {
+              DATA_PRINTF(", ");
+            }
+          }
+        }
+        DATA_PRINTF("))");
+        DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
+      }
+      break;
+    }
     default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unknown table type", K(ret), K(table_item->type_));

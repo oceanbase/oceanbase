@@ -405,7 +405,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_query_expression_option_list query_expression_option_list query_expression_option opt_distinct opt_distinct_or_all opt_separator projection
 %type <node> from_list table_references table_reference table_factor normal_relation_factor dot_relation_factor relation_factor
 %type <node> relation_factor_in_hint relation_factor_in_hint_list relation_factor_in_pq_hint opt_relation_factor_in_hint_list relation_factor_in_use_join_hint_list
-%type <node> relation_factor_in_leading_hint_list joined_table tbl_name table_subquery
+%type <node> relation_factor_in_leading_hint_list joined_table tbl_name table_subquery table_subquery_alias
 %type <node> relation_factor_with_star relation_with_star_list opt_with_star
 %type <node> index_hint_type key_or_index index_hint_scope index_element index_list opt_index_list
 %type <node> add_key_or_index_opt add_key_or_index add_unique_key_opt add_unique_key add_constraint_uniq_key_opt add_constraint_uniq_key add_constraint_pri_key_opt add_constraint_pri_key add_primary_key_opt add_primary_key add_spatial_index_opt add_spatial_index
@@ -514,6 +514,7 @@ END_P SET_VAR DELIMITER
 %type <node> json_table_expr mock_jt_on_error_on_empty jt_column_list json_table_column_def
 %type <node> json_table_ordinality_column_def json_table_exists_column_def json_table_value_column_def json_table_nested_column_def
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
+%type <node> table_values_caluse table_values_caluse_with_order_by_and_limit values_row_list row_value
 
 %start sql_stmt
 %%
@@ -7879,6 +7880,7 @@ dml_table_name values_clause
 {
   ParseNode *into_node = NULL;
   malloc_non_terminal_node(into_node, result->malloc_pool_, T_INSERT_INTO_CLAUSE, 2, $1, NULL);
+  refine_insert_values_table($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_SINGLE_TABLE_INSERT, 4,
                            into_node, /*insert_into_clause*/
                            $2, /*values_clause*/
@@ -7889,6 +7891,7 @@ dml_table_name values_clause
 {
   ParseNode *into_node = NULL;
   malloc_non_terminal_node(into_node, result->malloc_pool_, T_INSERT_INTO_CLAUSE, 2, $1, NULL);
+  refine_insert_values_table($4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_SINGLE_TABLE_INSERT, 4,
                            into_node, /*insert_into_clause*/
                            $4, /*values_clause*/
@@ -7901,6 +7904,7 @@ dml_table_name values_clause
   ParseNode *column_list = NULL;
   merge_nodes(column_list, result, T_COLUMN_LIST, $3);
   malloc_non_terminal_node(into_node, result->malloc_pool_, T_INSERT_INTO_CLAUSE, 2, $1, column_list);
+  refine_insert_values_table($5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_SINGLE_TABLE_INSERT, 4,
                            into_node, /*insert_into_clause*/
                            $5, /*values_clause*/
@@ -8309,6 +8313,14 @@ no_table_select
 {
   $$ = $1;
 }
+| table_values_caluse
+{
+  $$ = $1;
+}
+| table_values_caluse_with_order_by_and_limit
+{
+  $$ = $1;
+}
 ;
 
 select_clause_set_with_order_and_limit:
@@ -8363,6 +8375,10 @@ no_table_select
   $$ = $1;
 }
 | select_with_parens %prec LOWER_PARENS
+{
+  $$ = $1;
+}
+| table_values_caluse
 {
   $$ = $1;
 }
@@ -10590,27 +10606,39 @@ BLOCK
 
 
 table_subquery:
-select_with_parens relation_name
+select_with_parens table_subquery_alias
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 2, $1, $2);
   $$->sql_str_off_ = @1.first_column;
 }
-| select_with_parens AS relation_name
+| select_with_parens AS table_subquery_alias
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 2, $1, $3);
   $$->sql_str_off_ = @1.first_column;
 }
-| select_with_parens use_flashback relation_name
+| select_with_parens use_flashback table_subquery_alias
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $3, NULL, NULL, NULL, $2);
   $$->sql_str_off_ = @1.first_column;
 }
-| select_with_parens use_flashback AS relation_name
+| select_with_parens use_flashback AS table_subquery_alias
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $4, NULL, NULL, NULL, $2);
   $$->sql_str_off_ = @1.first_column;
 }
 ;
+
+table_subquery_alias:
+relation_name
+{
+  $$ = $1;
+}
+| relation_name '(' alias_name_list ')'
+{
+  ParseNode *col_alias_list = NULL;
+  merge_nodes(col_alias_list, result, T_COLUMN_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, col_alias_list);
+}
 
 /*
   table PARTITION(list of partitions)
@@ -11301,6 +11329,60 @@ column_name opt_asc_desc
   malloc_non_terminal_node($$, result->malloc_pool_, T_SORT_KEY, 2, $1, $2);
 }
 ;*/
+
+/*****************************************************************************
+ *
+ *	Values statement clause (Mysql8.0 values statement grammer implement)
+ *  https://dev.mysql.com/doc/refman/8.0/en/values.html
+ *
+*****************************************************************************/
+table_values_caluse:
+VALUES values_row_list
+{
+  ParseNode *values_node = NULL;
+  ParseNode *value_list = NULL;
+  merge_nodes(value_list, result, T_VALUES_ROW_LIST, $2);
+  malloc_non_terminal_node(values_node, result->malloc_pool_, T_VALUES_TABLE_EXPRESSION, 1, value_list);
+  malloc_select_values_stmt($$, result, values_node, NULL, NULL);
+}
+;
+
+table_values_caluse_with_order_by_and_limit:
+VALUES values_row_list order_by
+{
+  ParseNode *values_node = NULL;
+  ParseNode *value_list = NULL;
+  merge_nodes(value_list, result, T_VALUES_ROW_LIST, $2);
+  malloc_non_terminal_node(values_node, result->malloc_pool_, T_VALUES_TABLE_EXPRESSION, 1, value_list);
+  malloc_select_values_stmt($$, result, values_node, $3, NULL);
+}
+| VALUES values_row_list opt_order_by limit_clause
+{
+  ParseNode *values_node = NULL;
+  ParseNode *value_list = NULL;
+  merge_nodes(value_list, result, T_VALUES_ROW_LIST, $2);
+  malloc_non_terminal_node(values_node, result->malloc_pool_, T_VALUES_TABLE_EXPRESSION, 1, value_list);
+  malloc_select_values_stmt($$, result, values_node, $3, $4);
+}
+;
+
+values_row_list:
+values_row_list ',' row_value
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+| row_value
+{
+  $$ = $1;
+}
+;
+
+row_value:
+ROW '(' insert_vals ')'
+{
+  merge_nodes($$, result, T_VALUE_VECTOR, $3);
+}
+;
 
 /*****************************************************************************
  *

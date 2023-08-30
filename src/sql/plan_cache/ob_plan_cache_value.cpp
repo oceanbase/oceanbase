@@ -29,6 +29,8 @@
 #include "share/ob_duplicate_scope_define.h"
 #include "pl/ob_pl_stmt.h"
 #include "share/resource_manager/ob_resource_manager.h"
+#include "sql/plan_cache/ob_values_table_compression.h"
+
 using namespace oceanbase::share::schema;
 using namespace oceanbase::common;
 using namespace oceanbase::pl;
@@ -175,6 +177,7 @@ ObPlanCacheValue::ObPlanCacheValue()
     need_param_(true),
     is_nested_sql_(false),
     is_batch_execute_(false),
+    has_dynamic_values_table_(false),
     stored_schema_objs_(pc_alloc_),
     stmt_type_(stmt::T_MAX)
 {
@@ -266,6 +269,7 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
     need_param_ = plan->need_param();
     is_nested_sql_ = ObSQLUtils::is_nested_sql(&pc_ctx.exec_ctx_);
     is_batch_execute_ = pc_ctx.sql_ctx_.is_batch_params_execute();
+    has_dynamic_values_table_ = pc_ctx.exec_ctx_.has_dynamic_values_table();
     MEMCPY(sql_id_, pc_ctx.sql_ctx_.sql_id_, sizeof(pc_ctx.sql_ctx_.sql_id_));
     if (OB_FAIL(not_param_index_.add_members2(pc_ctx.not_param_index_))) {
       LOG_WARN("fail to add not param index members", K(ret));
@@ -520,6 +524,12 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
           LOG_WARN("failed to resolver row params", K(ret));
         }
       }
+    } else if (OB_UNLIKELY(pc_ctx.exec_ctx_.has_dynamic_values_table())) {
+      if (OB_FAIL(ObValuesTableCompression::resolve_params_for_values_clause(pc_ctx, stmt_type_,
+                  not_param_info_, param_charset_type_, neg_param_index_, not_param_index_,
+                  must_be_positive_idx_, params))) {
+        LOG_WARN("failed to resolve_params_for_values_clause ", K(ret));
+      }
     } else if (OB_FAIL(resolver_params(pc_ctx,
                                        stmt_type_,
                                        param_charset_type_,
@@ -669,124 +679,39 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
                                       const stmt::StmtType stmt_type,
                                       const ObIArray<ObCharsetType> &param_charset_type,
                                       const ObBitSet<> &neg_param_index,
-                                      const ObBitSet<> &not_param_index_,
+                                      const ObBitSet<> &not_param_index,
                                       const ObBitSet<> &must_be_positive_idx,
                                       ObIArray<ObPCParam *> &raw_params,
                                       ParamStore *obj_params)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = pc_ctx.exec_ctx_.get_my_session();
-  ParseNode *raw_param = NULL;
+  ObPhysicalPlanCtx *phy_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx();
+  const int64_t raw_param_cnt = raw_params.count();
   ObObjParam value;
-  if (OB_ISNULL(session)) {
+  if (OB_ISNULL(session) || OB_ISNULL(phy_ctx)) {
     ret = OB_INVALID_ARGUMENT;
-    SQL_PC_LOG(WARN, "invalid argument", K(ret), KP(session));
-  } else if (obj_params != NULL && PC_PS_MODE != pc_ctx.mode_ && PC_PL_MODE != pc_ctx.mode_) {
-    ObCollationType collation_connection = static_cast<ObCollationType>(
-                                           session->get_local_collation_connection());
-    int64_t N = raw_params.count();
-    (void)obj_params->reserve(N);
-    if (N != param_charset_type.count()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("raw_params and param_charset_type count is different",
-                K(N), K(param_charset_type.count()),
-                K(pc_ctx.raw_sql_), K(ret));
+    SQL_PC_LOG(WARN, "invalid argument", K(ret), KP(session), KP(phy_ctx));
+  } else if (obj_params == NULL || PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
+    /* do nothing */
+  } else if (OB_UNLIKELY(raw_param_cnt != param_charset_type.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_PC_LOG(WARN, "raw_params and param_charset_type count is different", K(ret),
+               K(raw_param_cnt), K(param_charset_type.count()), K(pc_ctx.raw_sql_));
+  } else {
+    CHECK_COMPATIBILITY_MODE(session);
+    ObCollationType collation_connection = static_cast<ObCollationType>(session->get_local_collation_connection());
+    (void)obj_params->reserve(raw_param_cnt);
+    for (int64_t i = 0; OB_SUCC(ret) && i < raw_param_cnt; i++) {
+      bool is_param = false;
+      if (OB_FAIL(ObResolverUtils::resolver_param(pc_ctx, *session, phy_ctx->get_param_store_for_update(), stmt_type,
+                  param_charset_type.at(i), neg_param_index, not_param_index, must_be_positive_idx,
+                  raw_params.at(i), i, value, is_param))) {
+        SQL_PC_LOG(WARN, "failed to resolver param", K(ret), K(i));
+      } else if (is_param && OB_FAIL(obj_params->push_back(value))) {
+        SQL_PC_LOG(WARN, "fail to push item to array", K(ret));
+      } else {/* do nothing */}
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
-      value.reset();
-      if (OB_ISNULL(raw_params.at(i))) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", K(ret), K(raw_params.at(i)));
-      } else if (NULL == (raw_param = raw_params.at(i)->node_)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", K(ret), K(raw_param));
-      } else if (!not_param_index_.has_member(i)) { //not param
-        if (neg_param_index.has_member(i)) {
-          // select -  1.2 from dual
-          // "-  1.2" will be treated as a const node with neg sign
-          // however, ObNumber::from("-  1.2") will throw a error, for there are spaces between neg sign and num
-          // so remove spaces before resolve_const is called
-          if (OB_FAIL(rm_space_for_neg_num(raw_param, pc_ctx.allocator_))) {
-            SQL_PC_LOG(WARN, "fail to remove spaces for neg node", K(ret));
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(handle_varchar_charset(param_charset_type.at(i),
-                                                  pc_ctx.allocator_,
-                                                  raw_param))) {
-          SQL_PC_LOG(WARN, "fail to handle varchar charset");
-        }
-        ObString literal_prefix;
-        const bool is_paramlize = false;
-        CHECK_COMPATIBILITY_MODE(session);
-        int64_t server_collation = CS_TYPE_INVALID;
-        if (OB_SUCC(ret) && T_QUESTIONMARK == raw_param->type_) {
-          ObPhysicalPlanCtx *phy_ctx = pc_ctx.exec_ctx_.get_physical_plan_ctx();
-          int64_t idx = raw_param->value_;
-          CK (nullptr != phy_ctx);
-          CK (idx >= 0 && idx < phy_ctx->get_param_store_for_update().count());
-          OX (value.set_is_boolean(phy_ctx->get_param_store_for_update().at(idx).is_boolean()));
-        }
-        if (OB_FAIL(ret)) {
-        } else if (lib::is_oracle_mode() &&
-          OB_FAIL(session->get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
-          LOG_WARN("get sys variable failed", K(ret));
-        } else if (OB_FAIL(ObResolverUtils::resolve_const(raw_param,
-                                                stmt_type,
-                                                pc_ctx.allocator_,
-                                                collation_connection,
-                                                session->get_nls_collation_nation(),
-                                                session->get_timezone_info(),
-                                                value,
-                                                is_paramlize,
-                                                literal_prefix,
-                                                session->get_actual_nls_length_semantics(),
-                                                static_cast<ObCollationType>(server_collation),
-                                                NULL, session->get_sql_mode()))) {
-          SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
-        } else if (FALSE_IT(value.set_raw_text_info(
-                              static_cast<int32_t>(raw_param->raw_sql_offset_),
-                              static_cast<int32_t>(raw_param->text_len_)))) {
-          // nothing.
-        } else if (OB_FAIL(obj_params->push_back(value))) {
-          SQL_PC_LOG(WARN, "fail to push item to array", K(ret));
-        } else if (ob_is_numeric_type(value.get_type())) {
-          if (must_be_positive_idx.has_member(i)) {
-            if (value.is_boolean()) {
-              // boolean will skip this check
-            } else if (lib::is_oracle_mode()
-                && (value.is_negative_number()
-                    || (value.is_zero_number() && '-' == raw_param->str_value_[0]))) { // -0 is also counted as negative
-              ret = OB_ERR_UNEXPECTED;
-              LOG_TRACE("param must be positive", K(ret), K(i), K(value));
-              pc_ctx.should_add_plan_ = false; // 内部主动抛出not supported时候需要设置这个标志，以免新计划add plan导致锁冲突
-            } else if (lib::is_mysql_mode()
-                       && value.is_integer_type()
-                       && (value.get_int() < 0
-                           || (0 == value.get_int() && '-' == raw_param->str_value_[0]))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_TRACE("param must be positive", K(ret), K(i), K(value));
-              pc_ctx.should_add_plan_ = false; // 内部主动抛出not supported时候需要设置这个标志，以免新计划add plan导致锁冲突
-            } else {
-              // do nothing
-            }
-          }
-        }
-        SQL_PC_LOG(TRACE, "is_param",
-                   K(i),
-                   K(value),
-                   K(raw_param->type_),
-                   K(raw_param->value_),
-                   "str_value", ObString(raw_param->str_len_, raw_param->str_value_));
-      } else {
-        SQL_PC_LOG(TRACE, "not_param",
-                   K(i),
-                   K(value),
-                   K(raw_param->type_),
-                   K(raw_param->value_),
-                   "str_value", ObString(raw_param->str_len_, raw_param->str_value_));
-      }
-    } // for end
   }
   return ret;
 }
@@ -1493,6 +1418,7 @@ void ObPlanCacheValue::reset()
   contain_sys_name_table_ = false;
   is_nested_sql_ = false;
   is_batch_execute_ = false;
+  has_dynamic_values_table_ = false;
   for (int64_t i = 0; i < stored_schema_objs_.count(); i++) {
     if (OB_ISNULL(stored_schema_objs_.at(i)) || OB_ISNULL(pc_alloc_)) {
       // do nothing
@@ -1697,7 +1623,8 @@ int ObPlanCacheValue::match(ObPlanCacheCtx &pc_ctx,
     //because nested sql's plan be forced to use DAS plan
     //but the general sql's plan has no this constraint
     is_same = false;
-  } else if (is_batch_execute_ != pc_ctx.sql_ctx_.is_batch_params_execute()) {
+  } else if (is_batch_execute_ != pc_ctx.sql_ctx_.is_batch_params_execute()||
+             has_dynamic_values_table_ != pc_ctx.exec_ctx_.has_dynamic_values_table()) {
     // the plan of batch execute sql can't match with the plan of general sql
     is_same = false;
   } else if (!need_param_) {
@@ -1739,43 +1666,6 @@ int ObPlanCacheValue::match(ObPlanCacheCtx &pc_ctx,
       LOG_WARN("failed to check dep table schema", K(ret));
     }
   }
-  return ret;
-}
-
-int ObPlanCacheValue::handle_varchar_charset(ObCharsetType charset_type,
-                                             ObIAllocator &allocator,
-                                             ParseNode *&node)
-{
-  int ret = OB_SUCCESS;
-  if ((T_HEX_STRING == node->type_ || T_VARCHAR == node->type_)
-      && CHARSET_INVALID != charset_type) {
-    ParseNode *charset_node = new_node(&allocator, T_CHARSET, 0);
-    ParseNode *varchar_node = NULL;
-    if (T_HEX_STRING == node->type_) {
-      varchar_node = new_non_terminal_node(&allocator, T_VARCHAR, 1, charset_node);
-    } else if (T_VARCHAR == node->type_) {
-      varchar_node = new_non_terminal_node(&allocator, T_VARCHAR, 2, charset_node, node);
-    }
-
-    if (OB_ISNULL(charset_node) || OB_ISNULL(varchar_node)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else {
-      const char *name = ObCharset::charset_name(charset_type);
-      charset_node->str_value_ = parse_strdup(name, &allocator, &(charset_node->str_len_));
-      if (NULL == charset_node->str_value_) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-      } else {
-        varchar_node->str_value_ = node->str_value_;
-        varchar_node->str_len_ = node->str_len_;
-        varchar_node->raw_text_ = node->raw_text_;
-        varchar_node->text_len_ = node->text_len_;
-        varchar_node->type_ = T_VARCHAR;
-
-        node = varchar_node;
-      }
-    }
-  }
-
   return ret;
 }
 
@@ -2301,39 +2191,6 @@ int ObPlanCacheValue::lift_tenant_schema_version(int64_t new_schema_version)
     // do nothing
   } else {
     ATOMIC_STORE(&(tenant_schema_version_), new_schema_version);
-  }
-  return ret;
-}
-
-int ObPlanCacheValue::rm_space_for_neg_num(ParseNode *param_node, ObIAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-  char *buf = NULL;
-  int64_t pos = 0;
-  int64_t idx = 0;
-  if (param_node->str_len_ <= 0) {
-    // do nothing
-  } else if ('-' != param_node->str_value_[idx]) {
-     // 'select - 1.2 from dual' and 'select 1.2 from dual' will hit the same plan, the key is
-     // select ? from dual, so '- 1.2' and '1.2' will all go here, if '-' is not presented,
-     // do nothing
-    LOG_TRACE("rm space for neg num", K(idx), K(ObString(param_node->str_len_, param_node->str_value_)));
-  } else if (OB_ISNULL(buf = (char *)allocator.alloc(param_node->str_len_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocator memory", K(ret), K(param_node->str_len_));
-  } else {
-    buf[pos++] =  '-';
-    idx += 1;
-    for (; idx < param_node->str_len_ && isspace(param_node->str_value_[idx]); idx++);
-    int32_t len = (int32_t)(param_node->str_len_ - idx);
-    if (len > 0) {
-      MEMCPY(buf + pos, param_node->str_value_ + idx, len);
-    }
-    pos += len;
-    param_node->str_value_ = buf;
-    param_node->str_len_ = pos;
-
-    LOG_DEBUG("rm space for neg num", K(idx), K(ObString(param_node->str_len_, param_node->str_value_)));
   }
   return ret;
 }

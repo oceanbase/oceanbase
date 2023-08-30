@@ -47,7 +47,9 @@ public:
       equal_columns_(),
       cur_joined_table_(NULL),
       check_unique_(true),
-      join_infos_(NULL) {}
+      join_infos_(NULL),
+      dml_stmt_(NULL)
+      {}
 
   ~ObColumnNamespaceChecker() {};
   /**
@@ -101,6 +103,7 @@ public:
                           bool skip_join_dup = false);
   int set_equal_columns(const common::ObIArray<common::ObString> &columns);
   void clear_equal_columns();
+  void set_dml_stmt(const ObDMLStmt *dml_stmt) { dml_stmt_ = dml_stmt; }
 private:
   int find_column_in_single_table(const TableItem &table_item,
                                   const ObQualifiedName &q_name,
@@ -133,6 +136,7 @@ private:
   const TableItem *cur_joined_table_;
   bool check_unique_;
   common::ObIArray<ResolverJoinInfo> *join_infos_;
+  const ObDMLStmt *dml_stmt_;
   friend class ObTableItemIterator;
 };
 }  // namespace sql

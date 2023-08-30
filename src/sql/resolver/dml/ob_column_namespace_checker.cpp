@@ -337,6 +337,23 @@ int ObColumnNamespaceChecker::check_column_exists(const TableItem &table_item, c
     } else {
       is_exist = false;
     }
+  } else if (table_item.is_values_table()) {
+    ObSEArray<ObColumnRefRawExpr *, 4> values_desc;
+    if (OB_ISNULL(dml_stmt_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(dml_stmt_));
+    } else if (OB_FAIL(dml_stmt_->get_column_exprs(table_item.table_id_, values_desc))) {
+      LOG_WARN("failed to get column exprs");
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && !is_exist && i < values_desc.count(); ++i) {
+        if (OB_ISNULL(values_desc.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), K(values_desc.at(i)));
+        } else {
+          is_exist = ObCharset::case_compat_mode_equal(values_desc.at(i)->get_column_name(), col_name);
+        }
+      }
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected table type", K_(table_item.type));

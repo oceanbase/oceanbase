@@ -492,7 +492,7 @@ private:
                                 ObExecContext &exec_ctx,
                                 ObSchemaGetterGuard &schema_guard,
                                 ObSqlTraits &sql_traits);
-  int get_first_batched_multi_stmt(ObPlanCacheCtx &pc_ctx, ObMultiStmtItem& multi_stmt_item, ObString& sql);
+  int get_reconstructed_batch_stmt(ObPlanCacheCtx &pc_ctx, ObString& stmt_sql);
   static int add_param_to_param_store(const ObObjParam &param,
                                       ParamStore &param_store);
 

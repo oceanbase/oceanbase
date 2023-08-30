@@ -61,7 +61,7 @@ protected:
                              ObAssignment &assign) override;
   virtual int resolve_table(const ParseNode &parse_tree, TableItem *&table_item) override;
   virtual int resolve_generate_table(const ParseNode &table_node,
-                                     const ObString &alias_name,
+                                     const ParseNode *alias_node,
                                      TableItem *&table_item) override;
   virtual int mock_values_column_ref(const ObColumnRefRawExpr *column_ref) override;
   virtual int find_value_desc(ObInsertTableInfo &table_info, uint64_t column_id, ObRawExpr *&column_ref) override;

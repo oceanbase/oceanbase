@@ -340,12 +340,7 @@ int ObMergeResolver::resolve_table(const ParseNode &parse_tree, TableItem *&tabl
         break;
       }
       case T_SELECT: {
-        alias_node = parse_tree.children_[1];
-        ObString alias_name;
-        if (alias_node != NULL) {
-          alias_name.assign_ptr((char *)(alias_node->str_value_), static_cast<int32_t>(alias_node->str_len_));
-        }
-        if (OB_FAIL(resolve_generate_table(*table_node, alias_name, table_item))) {
+        if (OB_FAIL(resolve_generate_table(*table_node, parse_tree.children_[1], table_item))) {
           LOG_WARN("fail to resolve generate taable", K(ret));
         }
         break;
@@ -433,7 +428,7 @@ int ObMergeResolver::check_column_validity(ObColumnRefRawExpr *col_expr)
 }
 
 int ObMergeResolver::resolve_generate_table(const ParseNode &table_node,
-                                            const ObString &alias_name,
+                                            const ParseNode *alias_node,
                                             TableItem *&table_item)
 {
   int ret = OB_SUCCESS;
@@ -460,7 +455,10 @@ int ObMergeResolver::resolve_generate_table(const ParseNode &table_node,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create table item failed", K(ret));
   } else {
-    
+    ObString alias_name;
+    if (alias_node != NULL) {
+      alias_name.assign_ptr((char *)(alias_node->str_value_), static_cast<int32_t>(alias_node->str_len_));
+    }
     item->ref_query_ = child_stmt;
     item->table_id_ = generate_table_id();
     item->table_name_ = alias_name;

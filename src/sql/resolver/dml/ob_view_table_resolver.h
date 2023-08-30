@@ -64,7 +64,7 @@ protected:
   virtual int expand_view(TableItem &view_item);
   virtual int resolve_subquery_info(const common::ObIArray<ObSubQueryInfo> &subquery_info);
   int check_view_circular_reference(const TableItem &view_item);
-  virtual int resolve_generate_table(const ParseNode &table_node, const ObString &alias_name, TableItem *&table_item);
+  virtual int resolve_generate_table(const ParseNode &table_node, const ParseNode *alias_node, TableItem *&table_item);
   virtual int set_select_item(SelectItem &select_item, bool is_auto_gen);
   virtual const ObString get_view_db_name() const override { return view_db_name_; }
   virtual const ObString get_view_name() const override { return view_name_; }

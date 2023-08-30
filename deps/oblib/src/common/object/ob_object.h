@@ -4047,6 +4047,38 @@ public:
   bool is_zero_fill_;
 };
 
+
+struct ObSqlArrayObj
+{
+  ObSqlArrayObj()
+    : data_(nullptr),
+      count_(0),
+      element_()
+  {
+  }
+  typedef common::ObArrayWrap<common::ObObjParam> DataArray;
+  static ObSqlArrayObj *alloc(common::ObIAllocator &allocator, int64_t count);
+  TO_STRING_KV("data", DataArray(data_, count_), K_(count), K_(element));
+  common::ObObjParam *data_;
+  int64_t count_;
+  common::ObDataType element_;
+};
+
+OB_INLINE ObSqlArrayObj *ObSqlArrayObj::alloc(common::ObIAllocator &allocator, int64_t count)
+{
+  ObSqlArrayObj *array_obj = nullptr;
+  void *array_buf = nullptr;
+  void *data_buf = nullptr;
+  int64_t array_size = sizeof(ObSqlArrayObj) + sizeof(common::ObObjParam) * count;
+  if (OB_NOT_NULL(array_buf = allocator.alloc(array_size))) {
+    array_obj = new (array_buf) ObSqlArrayObj();
+    data_buf = static_cast<char*>(array_buf) + sizeof(ObSqlArrayObj);
+    array_obj->data_ = new (data_buf) common::ObObjParam[count];
+    array_obj->count_ = count;
+  }
+  return array_obj;
+}
+
 OB_INLINE int64_t ObObj::get_deep_copy_size() const
 {
   int64_t ret = 0;

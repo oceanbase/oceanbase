@@ -2077,7 +2077,8 @@ public:
   ObConstRawExpr()
     :is_date_unit_(false),
      is_literal_bool_(false),
-     is_batch_stmt_parameter_(false)/*: precalc_expr_(NULL)*/
+     is_batch_stmt_parameter_(false),/*: precalc_expr_(NULL)*/
+     array_param_group_id_(-1)
   { ObRawExpr::set_expr_class(ObRawExpr::EXPR_CONST); }
   ObConstRawExpr(common::ObIAllocator &alloc)
     : ObIRawExpr(alloc),
@@ -2085,7 +2086,8 @@ public:
       ObConstExpr(),
       is_date_unit_(false),
       is_literal_bool_(false),
-      is_batch_stmt_parameter_(false)
+      is_batch_stmt_parameter_(false),
+      array_param_group_id_(-1)
   { ObIRawExpr::set_expr_class(ObIRawExpr::EXPR_CONST); }
   ObConstRawExpr(const oceanbase::common::ObObj &val, ObItemType expr_type = T_INVALID)
     : ObIRawExpr(expr_type),
@@ -2093,7 +2095,8 @@ public:
       ObConstExpr(),
       is_date_unit_(false),
       is_literal_bool_(false),
-      is_batch_stmt_parameter_(false)
+      is_batch_stmt_parameter_(false),
+      array_param_group_id_(-1)
   {
     set_value(val);
     set_expr_class(ObIRawExpr::EXPR_CONST);
@@ -2123,6 +2126,8 @@ public:
   bool is_literal_bool() const { return is_literal_bool_; }
   void set_is_batch_stmt_parameter() { is_batch_stmt_parameter_ = true; }
   bool is_batch_stmt_parameter() { return is_batch_stmt_parameter_; }
+  void set_array_param_group_id(int64_t id) { array_param_group_id_ = id; }
+  int64_t get_array_param_group_id() const { return array_param_group_id_; }
   DECLARE_VIRTUAL_TO_STRING;
 
 private:
@@ -2134,6 +2139,7 @@ private:
   // is_batch_stmt_parameter_ only used for array_binding batch_execution optimization
   // Indicates that the current parameter is the batch parameter
   bool is_batch_stmt_parameter_;
+  int64_t array_param_group_id_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConstRawExpr);
 };

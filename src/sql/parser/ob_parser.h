@@ -111,7 +111,7 @@ public:
                        PreParseResult &res);
 
 enum State {
-  S_START,
+  S_START = 0,
   S_COMMENT,
   S_C_COMMENT,
   S_NORMAL,
@@ -146,7 +146,12 @@ enum State {
   S_EXPLAIN_EXTENDED,
   S_EXPLAIN_EXTENDED_NOADDR,
   S_EXPLAIN_PARTITIONS,
-
+  S_SELECT,
+  S_INSERT,
+  S_DELETE,
+  S_VALUES,
+  S_TABLE,
+  S_INTO,
   // add new states above me
   S_MAX
 };
@@ -161,6 +166,11 @@ enum State {
                          bool *is_call_procedure = NULL);
   static bool is_explain_stmt(const common::ObString &stmt,
                               const char *&p_normal_start);
+  static bool is_comment(const char *&p,
+                         const char *&p_end,
+                         State &save_state,
+                         State &state,
+                         State error_state);
 private:
   static int scan_trace_id(const char *ptr,
                            int64_t len,
@@ -180,11 +190,6 @@ private:
                           State &save_state,
                           State &state,
                           State next_state);
-  static bool is_comment(const char *&p,
-                         const char *&p_end,
-                         State &save_state,
-                         State &state,
-                         State error_state);
   // types and constants
 private:
   // disallow copy

@@ -910,6 +910,9 @@ int ObDelUpdResolver::set_base_table_for_updatable_view(TableItem &table_item,
           } else if (new_table_item->is_fake_cte_table()) {
             ret = OB_ERR_ILLEGAL_VIEW_UPDATE;
             LOG_WARN("illegal view update", K(ret));
+          } else if (new_table_item->is_values_table()) {
+            ret = dml->is_insert_stmt() ? OB_ERR_NON_INSERTABLE_TABLE : OB_ERR_NON_UPDATABLE_TABLE;
+            LOG_WARN("view is not updatable", K(ret));
           } else if (new_table_item->is_json_table()) {
             ret = OB_ERR_NON_INSERTABLE_TABLE;
             LOG_WARN("json table can not be insert", K(ret));
@@ -1010,6 +1013,9 @@ int ObDelUpdResolver::set_base_table_for_view(TableItem &table_item, const bool 
         if (OB_FAIL(SMART_CALL(set_base_table_for_view(*base, inner_log_error)))) {
           LOG_WARN("set base table for view failed", K(ret));
         }
+      } else if (base->is_values_table()) {
+        ret = OB_ERR_NON_UPDATABLE_TABLE;
+        LOG_WARN("non update table", K(ret));
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected table type in view", K(ret), K(*base));
@@ -3262,6 +3268,10 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
         LOG_WARN("fail to append new values_desc");
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    //move generated columns behind basic columns before resolve values
+    OZ (adjust_values_desc_position(table_info, value_idxs));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++) {
     ParseNode *vector_node = node->children_[i];

@@ -2562,30 +2562,59 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
 //          LOG_DEBUG("prepare stmt add new param", K(ctx_.prepare_param_count_));
         }
       } else {
+        int64_t param_idx = val.get_unknown();
         if (OB_ISNULL(ctx_.param_list_)) {
           ret = OB_NOT_INIT;
           LOG_WARN("context param list is null", K(ret));
-        } else if (val.get_unknown() >= ctx_.param_list_->count()) {
+        } else if (param_idx >= ctx_.param_list_->count()) {
           ret = OB_ERR_BIND_VARIABLE_NOT_EXIST;
           LOG_WARN("bind variable does not exist",
-                   K(ret), K(val.get_unknown()), K(ctx_.param_list_->count()));
+                   K(ret), K(param_idx), K(ctx_.param_list_->count()));
         } else {
-          const ObObjParam &param = ctx_.param_list_->at(val.get_unknown());
+          const ObObjParam &param = ctx_.param_list_->at(param_idx);
           c_expr->set_is_literal_bool(param.is_boolean());
           if (param.is_ext()) {
-#ifndef OB_BUILD_ORACLE_PL
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("not support array binding", K(ret));
-#else
-            pl::ObPLNestedTable *param_array = reinterpret_cast<pl::ObPLNestedTable*>(param.get_ext());
-            if (OB_ISNULL(param_array)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("param array is invalid", KPC(param_array));
+            // values statement
+            if (param.is_ext_sql_array()) {
+              ObSqlArrayObj *param_array = reinterpret_cast<ObSqlArrayObj*>(param.get_ext());
+              const ObExecContext *exec_ctx = NULL;
+              const ObPhysicalPlanCtx *phy_ctx = NULL;
+              if (OB_ISNULL(param_array) || OB_ISNULL(ctx_.session_info_) ||
+                  OB_ISNULL(exec_ctx = ctx_.session_info_->get_cur_exec_ctx()) ||
+                  OB_ISNULL(phy_ctx = ctx_.session_info_->get_cur_exec_ctx()->get_physical_plan_ctx())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("param array is invalid", K(ret), KPC(param_array));
+              } else {
+                c_expr->set_meta_type(param_array->element_.get_meta_type());
+                c_expr->set_expr_obj_meta(param_array->element_.get_meta_type());
+                c_expr->set_accuracy(param_array->element_.get_accuracy());
+                c_expr->set_param(param);
+                const ObIArray<ObArrayParamGroup> &array_param_groups = phy_ctx->get_array_param_groups();
+                for (int64_t i = 0; i < array_param_groups.count(); i++) {
+                  const ObArrayParamGroup &group = array_param_groups.at(i);
+                  if (param_idx >= group.start_param_idx_ &&
+                      param_idx < group.start_param_idx_ + group.column_count_) {
+                    c_expr->set_array_param_group_id(i);
+                    break;
+                  }
+                }
+              }
             } else {
-              c_expr->set_meta_type(param_array->get_element_type().get_meta_type());
-              c_expr->set_expr_obj_meta(param_array->get_element_type().get_meta_type());
-              c_expr->set_accuracy(param_array->get_element_type().get_accuracy());
-              c_expr->set_param(param);
+#ifndef OB_BUILD_ORACLE_PL
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("not support array binding", K(ret));
+            }
+#else
+              pl::ObPLNestedTable *param_array = reinterpret_cast<pl::ObPLNestedTable*>(param.get_ext());
+              if (OB_ISNULL(param_array)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("param array is invalid", K(ret), KPC(param_array));
+              } else {
+                c_expr->set_meta_type(param_array->get_element_type().get_meta_type());
+                c_expr->set_expr_obj_meta(param_array->get_element_type().get_meta_type());
+                c_expr->set_accuracy(param_array->get_element_type().get_accuracy());
+                c_expr->set_param(param);
+              }
             }
 #endif
           } else {

@@ -2193,7 +2193,98 @@ DEFINE_GET_SERIALIZE_SIZE(ObObj)
   return len;
 }
 
-OB_SERIALIZE_MEMBER_INHERIT(ObObjParam, ObObj, accuracy_, res_flags_);
+DEFINE_SERIALIZE(ObObjParam)
+{
+  int ret = ObObj::serialize(buf, buf_len, pos);
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(accuracy_);
+    OB_UNIS_ENCODE(res_flags_);
+    if (OB_SUCC(ret) && is_ext_sql_array()) {
+      const ObSqlArrayObj *array_obj = reinterpret_cast<const ObSqlArrayObj*>(get_ext());
+      int64_t n = sizeof(ObSqlArrayObj);
+      if (OB_ISNULL(array_obj)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL ptr", K(ret), KP(array_obj));
+      } else if (buf_len - pos < n) {
+        ret = OB_BUF_NOT_ENOUGH;
+        LOG_WARN("serialize buf not enough", K(ret), "remain", buf_len - pos, "needed", n);
+      } else {
+        MEMCPY(buf + pos, array_obj, n);
+        pos += n;
+        if (array_obj->count_ == 0) {
+          /* do nothing */
+        } else if (OB_ISNULL(array_obj->data_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("data is NULL ptr", K(ret), KP(array_obj->data_));
+        } else {
+          n = sizeof(array_obj->data_[0]) * array_obj->count_;
+          if (buf_len - pos < n) {
+            ret = OB_BUF_NOT_ENOUGH;
+            LOG_WARN("serialize buf not enough", K(ret), "remain", buf_len - pos, "needed", n);
+          } else {
+            MEMCPY(buf + pos, static_cast<const void*>(array_obj->data_), n);
+            pos += n;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+DEFINE_DESERIALIZE(ObObjParam)
+{
+  int ret = ObObj::deserialize(buf, data_len, pos);
+  if (OB_SUCC(ret)) {
+    OB_UNIS_DECODE(accuracy_);
+    OB_UNIS_DECODE(res_flags_);
+    if (OB_SUCC(ret) && is_ext_sql_array()) {
+      ObSqlArrayObj *array_obj = NULL;
+      int64_t n = sizeof(ObSqlArrayObj);
+      if (data_len - pos < n) {
+        ret = OB_BUF_NOT_ENOUGH;
+        LOG_WARN("deserialize buf not enough", K(ret), "remain", data_len - pos, "needed", n);
+      } else {
+        array_obj = reinterpret_cast<ObSqlArrayObj *>(const_cast<char *>(buf + pos));
+        pos += n;
+      }
+      if (OB_SUCC(ret) && array_obj->count_ > 0) {
+        n = sizeof(ObObjParam) * array_obj->count_;
+        if (data_len - pos < n) {
+          ret = OB_BUF_NOT_ENOUGH;
+          LOG_WARN("deserialize buf not enough", K(ret), "remain", data_len - pos, "needed", n);
+        } else {
+          array_obj->data_ = reinterpret_cast<ObObjParam *>(const_cast<char *>(buf + pos));
+          pos += n;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        set_extend(reinterpret_cast<int64_t>(array_obj), T_EXT_SQL_ARRAY);
+      }
+    }
+  }
+  return ret;
+}
+
+DEFINE_GET_SERIALIZE_SIZE(ObObjParam)
+{
+  int64_t len = ObObj::get_serialize_size();
+  OB_UNIS_ADD_LEN(accuracy_);
+  OB_UNIS_ADD_LEN(res_flags_);
+  if (is_ext_sql_array()) {
+    len += sizeof(ObSqlArrayObj);
+    const ObSqlArrayObj *array_obj = reinterpret_cast<const ObSqlArrayObj*>(get_ext());
+    if (NULL != array_obj) {
+      len += sizeof(ObSqlArrayObj);
+      if (array_obj->count_ == 0) {
+        /* do nothing */
+      } else if (NULL != array_obj->data_) {
+        len += sizeof(array_obj->data_[0]) * array_obj->count_;
+      }
+    }
+  }
+  return len;
+}
 
 OB_SERIALIZE_MEMBER(ParamFlag, flag_);
 

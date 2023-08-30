@@ -1135,4 +1135,55 @@ do {\
     }                                                                           \
   } while(0);                                                                   \
 
+#define malloc_select_values_stmt(node, result, values_node, order_by_node, limit_node)\
+  do {\
+    /*gen select list*/\
+    ParseNode *star_node = NULL;\
+    malloc_terminal_node(star_node, result->malloc_pool_, T_STAR);\
+    dup_string_to_node(star_node, result->malloc_pool_, "*");\
+    ParseNode *project_node = NULL;\
+    malloc_non_terminal_node(project_node, result->malloc_pool_, T_PROJECT_STRING, 1, star_node);\
+    ParseNode *project_list_node = NULL;\
+    merge_nodes(project_list_node, result, T_PROJECT_LIST, project_node);\
+    /*gen from list*/\
+    ParseNode *alias_node = NULL;\
+    malloc_non_terminal_node(alias_node, result->malloc_pool_, T_ALIAS, 2, values_node, NULL);\
+    ParseNode *from_list = NULL;\
+    merge_nodes(from_list, result, T_FROM_LIST, alias_node);\
+    /*malloc select node*/\
+    malloc_select_node(node, result->malloc_pool_);\
+    node->children_[PARSE_SELECT_SELECT] = project_list_node;\
+    node->children_[PARSE_SELECT_FROM] = from_list;\
+    node->children_[PARSE_SELECT_ORDER] = order_by_node;\
+    node->children_[PARSE_SELECT_LIMIT] = limit_node;\
+  } while(0);\
+
+#define refine_insert_values_table(node)\
+  do {\
+     if (node != NULL && node->type_ == T_SELECT && node->children_[PARSE_SELECT_FROM] != NULL &&\
+         node->children_[PARSE_SELECT_FROM]->type_ == T_FROM_LIST &&\
+         node->children_[PARSE_SELECT_FROM]->num_child_ == 1 &&\
+         node->children_[PARSE_SELECT_FROM]->children_ != NULL &&\
+         node->children_[PARSE_SELECT_FROM]->children_[0] != NULL &&\
+         node->children_[PARSE_SELECT_FROM]->children_[0]->type_ == T_ALIAS) {\
+      ParseNode *alias_node = node->children_[PARSE_SELECT_FROM]->children_[0];\
+      if (alias_node->children_ != NULL &&\
+          alias_node->num_child_ == 2 && \
+          alias_node->children_[0] != NULL &&\
+          alias_node->children_[0]->type_ == T_VALUES_TABLE_EXPRESSION) {\
+        ParseNode *values_table_node = alias_node->children_[0];\
+        if (values_table_node->children_ != NULL &&\
+            values_table_node->num_child_ == 1 && \
+            values_table_node->children_[0] != NULL &&\
+            values_table_node->children_[0]->type_ == T_VALUES_ROW_LIST) {\
+          values_table_node->children_[0]->type_ = T_VALUE_LIST;\
+          if (node->children_[PARSE_SELECT_ORDER] == NULL &&\
+              node->children_[PARSE_SELECT_LIMIT] == NULL) {\
+            node = values_table_node->children_[0]; \
+          }\
+        }\
+      }\
+     }\
+  } while(0);\
+
 #endif /* OCEANBASE_SRC_SQL_PARSER_SQL_PARSER_BASE_H_ */

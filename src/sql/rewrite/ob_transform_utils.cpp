@@ -2203,6 +2203,28 @@ int ObTransformUtils::is_column_expr_not_null(ObNotNullContext &ctx,
                                         constraints))) {
       LOG_WARN("failed to check expr not null", K(ret));
     }
+  } else if (table->is_values_table()) {
+    int64_t idx = expr->get_column_id() - OB_APP_MIN_COLUMN_ID;
+    int64_t column_cnt = ctx.stmt_->get_column_size(table->table_id_);
+    if (OB_UNLIKELY(idx >= column_cnt || column_cnt == 0 || table->table_values_.empty() ||
+                    table->table_values_.count() % column_cnt != 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(idx), KPC(table), K(column_cnt));
+    } else {
+      is_not_null = true;
+      int64_t row_count = table->table_values_.count() / column_cnt;
+      for (int64_t i = 0; OB_SUCC(ret) && is_not_null && i < row_count; ++i) {
+        if (OB_UNLIKELY(column_cnt * i + idx >= table->table_values_.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(ret), K(i), K(idx), KPC(table), K(column_cnt));
+        } else if (OB_FAIL(is_expr_not_null(ctx,
+                                            table->table_values_.at(column_cnt * i + idx),
+                                            is_not_null,
+                                            constraints))) {
+          LOG_WARN("failed to check expr not null", K(ret));
+        } else {/*do nothing*/}
+      }
+    }
   } else {
     // do nothing
   }
@@ -10528,7 +10550,8 @@ int ObTransformUtils::check_project_pruning_validity(ObSelectStmt &stmt, bool &i
   bool is_const = false;
   if (stmt.has_distinct() || stmt.is_recursive_union() ||
       (stmt.is_set_stmt() && stmt.is_set_distinct()) ||
-      stmt.is_hierarchical_query() || stmt.is_contains_assignment()) {
+      stmt.is_hierarchical_query() || stmt.is_contains_assignment() ||
+      stmt.is_values_table_query()) {
     // do nothing
     OPT_TRACE("stmt has distinct/assignment or is set stmt");
   } else if (stmt.get_select_item_size() == 1
@@ -11020,6 +11043,12 @@ int ObTransformUtils::is_table_item_correlated(
         LOG_WARN("unexpect null expr", K(ret));
       } else if (OB_FAIL(is_correlated_expr(query_ref.get_exec_params(), table->json_table_def_->doc_expr_, contains))) {
         LOG_WARN("failed to check function table expr correlated", K(ret));
+      }
+    } else if (table->is_values_table()) {
+      for (int64_t j = 0; OB_SUCC(ret) && !contains && j < table->table_values_.count(); ++j) {
+        if (OB_FAIL(is_correlated_expr(query_ref.get_exec_params(), table->table_values_.at(j), contains))) {
+          LOG_WARN("failed to check values table expr correlated", K(ret));
+        }
       }
     }
   }

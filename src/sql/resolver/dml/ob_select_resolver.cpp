@@ -2273,6 +2273,13 @@ int ObSelectResolver::expand_target_list(
     if (OB_FAIL(resolve_all_json_table_columns(table_item, &column_items))) {
       LOG_WARN("resolve function table columns failed", K(ret));
     }
+  } else if (table_item.is_values_table()) {
+    if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(get_stmt()->get_column_size() == 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), KPC(get_stmt()));
+    } else if (OB_FAIL(append(column_items, get_stmt()->get_column_items()))) {
+      LOG_WARN("failed to append", K(ret));
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected table type", K_(table_item.type), K(ret));

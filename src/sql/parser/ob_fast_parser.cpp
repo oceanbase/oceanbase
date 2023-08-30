@@ -62,7 +62,7 @@ int ObFastParser::parse(const common::ObString &stmt,
                         int64_t &no_param_sql_len,
                         ParamList *&param_list,
                         int64_t &param_num,
-                        ObQuestionMarkCtx &ctx,
+                        ObFastParserResult &fp_result,
                         int64_t &values_token_pos)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_parse);
@@ -72,34 +72,25 @@ int ObFastParser::parse(const common::ObString &stmt,
     if (OB_FAIL(fp.parse(stmt, no_param_sql, no_param_sql_len, param_list, param_num, values_token_pos))) {
       LOG_WARN("failed to fast parser", K(stmt));
     } else {
-      ctx = fp.get_question_mark_ctx();
+      fp_result.question_mark_ctx_ = fp.get_question_mark_ctx();
+      fp_result.values_tokens_.set_capacity(fp.get_values_tokens().count());
+      for (int64_t i = 0; OB_SUCC(ret) && i < fp.get_values_tokens().count(); ++i) {
+        if (OB_FAIL(fp_result.values_tokens_.push_back(ObValuesTokenPos(
+                                                     fp.get_values_tokens().at(i).no_param_sql_pos_,
+                                                     fp.get_values_tokens().at(i).param_idx_)))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      }
     }
   } else {
     ObFastParserOracle fp(allocator, fp_ctx);
     if (OB_FAIL(fp.parse(stmt, no_param_sql, no_param_sql_len, param_list, param_num, values_token_pos))) {
       LOG_WARN("failed to fast parser", K(stmt));
     } else {
-      ctx = fp.get_question_mark_ctx();
+      fp_result.question_mark_ctx_ = fp.get_question_mark_ctx();
     }
   }
   return ret;
-}
-
-inline int64_t ObFastParserBase::ObRawSql::strncasecmp(
-       int64_t pos, const char *str, const int64_t size)
-{
-  // It is not necessary to check if str is nullptr
-  char ch = char_at(pos);
-  for (int64_t i = 0; i < size; i++) {
-    if (ch >= 'A' && ch <= 'Z') {
-      ch += 32;
-    }
-    if (ch != str[i]) {
-      return -1;
-    }
-    ch = char_at(++pos);
-  }
-  return 0;
 }
 
 ObFastParserBase::ObFastParserBase(
@@ -782,31 +773,6 @@ int ObFastParserBase::process_insert_or_replace(const char *str, const int64_t s
     } else {
       // 说明是insert token
       get_insert_ = true;
-    }
-  }
-  return ret;
-}
-
-int ObFastParserBase::process_values(const char *str)
-{
-  int ret = OB_SUCCESS;
-  if (get_insert_) {
-    if (is_oracle_mode_) {
-      if (CHECK_EQ_STRNCASECMP("alues", 5)) {
-        values_token_pos_ = raw_sql_.cur_pos_;
-        raw_sql_.scan(5);
-      }
-    } else {
-      // mysql support: insert ... values / value (xx, ...);
-      if (CHECK_EQ_STRNCASECMP("alues", 5)) {
-        values_token_pos_ = raw_sql_.cur_pos_;
-        raw_sql_.scan(5);
-      } else if (CHECK_EQ_STRNCASECMP("alue", 4)) {
-        values_token_pos_ = raw_sql_.cur_pos_;
-        raw_sql_.scan(4);
-      } else {
-        // do nothing
-      }
     }
   }
   return ret;
@@ -2606,6 +2572,42 @@ int ObFastParserMysql::process_identifier_begin_with_n()
   return ret;
 }
 
+int ObFastParserMysql::process_values(const char *str)
+{
+  int ret = OB_SUCCESS;
+  if (get_insert_) {
+    if (!is_oracle_mode_) {
+      // mysql support: insert ... values / value (xx, ...);
+      if (CHECK_EQ_STRNCASECMP("alues", 5)) {
+        if (OB_FAIL(values_tokens_.push_back(ObValuesTokenPos(no_param_sql_len_ +
+                    cur_token_begin_pos_ - copy_begin_pos_, param_num_)))) {
+          LOG_WARN("failed to push back", K(ret));
+        } else {
+          values_token_pos_ = raw_sql_.cur_pos_;
+          raw_sql_.scan(5);
+        }
+      } else if (CHECK_EQ_STRNCASECMP("alue", 4)) {
+        values_token_pos_ = raw_sql_.cur_pos_;
+        raw_sql_.scan(4);
+      } else {
+        // do nothing
+      }
+    }
+  } else {
+    if (!is_oracle_mode_) {
+      if (CHECK_EQ_STRNCASECMP("alues", 5)) {
+        if (OB_FAIL(values_tokens_.push_back(ObValuesTokenPos(no_param_sql_len_ +
+                    cur_token_begin_pos_ - copy_begin_pos_, param_num_)))) {
+          LOG_WARN("failed to push back", K(ret));
+        } else {
+          raw_sql_.scan(5);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObFastParserMysql::process_identifier(bool is_number_begin)
 {
   int ret = OB_SUCCESS;
@@ -2665,7 +2667,7 @@ int ObFastParserMysql::process_identifier(bool is_number_begin)
       case 'v':
       case 'V':
         // 是不是values;
-        process_values("alues");
+        OZ (process_values("alues"));
         break;
 
       case 'r': // replace
@@ -3011,6 +3013,20 @@ int ObFastParserOracle::process_identifier_begin_with_n()
   return ret;
 }
 
+int ObFastParserOracle::process_values(const char *str)
+{
+  int ret = OB_SUCCESS;
+  if (get_insert_) {
+    if (is_oracle_mode_) {
+      if (CHECK_EQ_STRNCASECMP("alues", 5)) {
+        values_token_pos_ = raw_sql_.cur_pos_;
+        raw_sql_.scan(5);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObFastParserOracle::process_identifier(bool is_number_begin)
 {
   int ret = OB_SUCCESS;
@@ -3096,7 +3112,7 @@ int ObFastParserOracle::process_identifier(bool is_number_begin)
       }
       case 'v':
       case 'V':
-        process_values("alues");
+        OZ (process_values("alues"));
         break;
       default: {
         break;

@@ -192,6 +192,17 @@ struct PsNotParamInfo
   TO_STRING_KV(K_(idx), K_(ps_param));
 };
 
+struct ObValuesTokenPos {
+	ObValuesTokenPos() : no_param_sql_pos_(0), param_idx_(0) {}
+	ObValuesTokenPos(const int64_t no_param_pos, const int64_t param_idx)
+		: no_param_sql_pos_(no_param_pos), param_idx_(param_idx) {}
+  int64_t no_param_sql_pos_;
+  int64_t param_idx_;
+  TO_STRING_KV(K(no_param_sql_pos_), K(param_idx_));
+};
+
+typedef common::ObFixedArray<ObPCParam *, common::ObIAllocator> ObArrayPCParam;
+
 struct ObFastParserResult
 {
 private:
@@ -203,7 +214,8 @@ public:
       raw_params_(&inner_alloc_),
       parameterized_params_(&inner_alloc_),
       cache_params_(NULL),
-      values_token_pos_(0)
+      values_token_pos_(0),
+      values_tokens_(&inner_alloc_)
   {
     reset_question_mark_ctx();
   }
@@ -212,7 +224,9 @@ public:
   common::ObFixedArray<const common::ObObjParam *, common::ObIAllocator> parameterized_params_;
   ParamStore *cache_params_;
   ObQuestionMarkCtx question_mark_ctx_;
-  int64_t values_token_pos_;
+  int64_t values_token_pos_; // for insert values
+  common::ObFixedArray<ObValuesTokenPos, common::ObIAllocator> values_tokens_; // for values table
+  common::ObSEArray<ObArrayPCParam *, 4, common::ModulePageAllocator, true> array_params_;
 
   void reset() {
     pc_key_.reset();
@@ -220,6 +234,8 @@ public:
     parameterized_params_.reuse();
     cache_params_ = NULL;
     values_token_pos_ = 0;
+    values_tokens_.reuse();
+    array_params_.reuse();
   }
   void reset_question_mark_ctx()
   {
@@ -230,7 +246,28 @@ public:
     question_mark_ctx_.by_name_ = false;
     question_mark_ctx_.by_defined_name_ = false;
   }
-   TO_STRING_KV(K(pc_key_), K(raw_params_), K(parameterized_params_), K(cache_params_), K(values_token_pos_));
+  int assign(const ObFastParserResult &other)
+  {
+    int ret = OB_SUCCESS;
+    pc_key_ = other.pc_key_;
+    raw_params_.set_allocator(&inner_alloc_);
+    parameterized_params_.set_allocator(&inner_alloc_);
+    cache_params_ = other.cache_params_;
+    question_mark_ctx_ = other.question_mark_ctx_;
+    values_tokens_.set_allocator(&inner_alloc_);
+    if (OB_FAIL(raw_params_.assign(other.raw_params_))) {
+      SQL_PC_LOG(WARN, "failed to assign fix array", K(ret));
+    } else if (OB_FAIL(parameterized_params_.assign(other.parameterized_params_))) {
+      SQL_PC_LOG(WARN, "failed to assign fix array", K(ret));
+    } else if (OB_FAIL(values_tokens_.assign(other.values_tokens_))) {
+      SQL_PC_LOG(WARN, "failed to assign fix array", K(ret));
+    } else if (OB_FAIL(array_params_.assign(other.array_params_))) {
+      SQL_PC_LOG(WARN, "failed to assign array", K(ret));
+    }
+    return ret;
+  }
+  TO_STRING_KV(K(pc_key_), K(raw_params_), K(parameterized_params_), K(cache_params_), K(values_token_pos_),
+               K(values_tokens_), K(array_params_));
 };
 
 enum WayToGenPlan {
@@ -341,6 +378,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
       is_inner_sql_(false),
       is_original_ps_mode_(false),
       ab_params_(NULL),
+      new_raw_sql_(),
       is_rewrite_sql_(false),
       rule_name_(),
       def_name_ctx_(NULL),
@@ -419,6 +457,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     K(dynamic_param_info_list_),
     K(tpl_sql_const_cons_),
     K(is_original_ps_mode_),
+    K(new_raw_sql_),
     K(need_retry_add_plan_),
     K(insert_batch_opt_info_)
     );
@@ -469,6 +508,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
   bool is_inner_sql_;
   bool is_original_ps_mode_;
   ParamStore *ab_params_;  // arraybinding batch parameters,
+  ObString new_raw_sql_;  // values clause rebuild raw sql
 
   // **********  for rewrite rule **********
   bool is_rewrite_sql_;

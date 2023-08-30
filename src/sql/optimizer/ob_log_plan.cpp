@@ -5411,6 +5411,11 @@ int ObLogPlan::create_plan_tree_from_path(Path *path,
       if (OB_FAIL(allocate_subquery_path(subquery_path, op))) {
         LOG_WARN("failed to allocate subquery path", K(ret));
       } else { /* Do nothing */ }
+    } else if (path->is_values_table_path()) {
+      ValuesTablePath *values_table_path = static_cast<ValuesTablePath *>(path);
+      if (OB_FAIL(allocate_values_table_path(values_table_path, op))) {
+        LOG_WARN("failed to allocate values table path", K(ret));
+      } else { /* Do nothing */ }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected path type");
@@ -13898,6 +13903,41 @@ int ObLogPlan::perform_gather_stat_replace(ObLogicalOperator *op)
     }
     if (OB_SUCC(ret) && OB_FAIL(op->replace_op_exprs(stat_gather_replacer_))) {
       LOG_WARN("failed to replace generated aggr expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::allocate_values_table_path(ValuesTablePath *values_table_path,
+                                          ObLogicalOperator *&out_access_path_op)
+{
+  int ret = OB_SUCCESS;
+  ObLogExprValues *values_op = NULL;
+  const TableItem *table_item = NULL;
+  if (OB_ISNULL(values_table_path) || OB_ISNULL(get_stmt()) ||
+      OB_ISNULL(table_item = get_stmt()->get_table_item_by_id(values_table_path->table_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(values_table_path), K(get_stmt()), K(ret));
+  } else if (OB_ISNULL(values_op = static_cast<ObLogExprValues*>(get_log_op_factory().
+                                   allocate(*this, LOG_EXPR_VALUES)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate values op", K(ret));
+  } else {
+    values_op->set_table_name(table_item->get_table_name());
+    values_op->set_is_values_table(true);
+    ObSEArray<ObColumnRefRawExpr *, 4> values_desc;
+    if (OB_FAIL(values_op->add_values_expr(table_item->table_values_))) {
+      LOG_WARN("failed to add values expr", K(ret));
+    } else if (OB_FAIL(get_stmt()->get_column_exprs(values_table_path->table_id_, values_desc))) {
+      LOG_WARN("failed to get column exprs");
+    } else if (OB_FAIL(values_op->add_values_desc(values_desc))) {
+      LOG_WARN("failed to add values desc", K(ret));
+    } else if (OB_FAIL(append(values_op->get_filter_exprs(), values_table_path->filter_))) {
+      LOG_WARN("failed to append expr", K(ret));
+    } else if (OB_FAIL(values_op->compute_property(values_table_path))) {
+      LOG_WARN("failed to compute propery", K(ret));
+    } else {
+      out_access_path_op = values_op;
     }
   }
   return ret;

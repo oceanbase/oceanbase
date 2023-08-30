@@ -609,7 +609,8 @@ int ObTransformRule::adjust_transformed_stmt(ObIArray<ObParentDMLStmt> &parent_s
 bool ObTransformRule::is_normal_disabled_transform(const ObDMLStmt &stmt)
 {
   return (stmt.is_hierarchical_query() && transform_method_ != TransMethod::ROOT_ONLY) ||
-         stmt.is_insert_all_stmt();
+         stmt.is_insert_all_stmt() ||
+         stmt.is_values_table_query();
 }
 
 int ObTransformRule::need_transform(const common::ObIArray<ObParentDMLStmt> &parent_stmts,
