@@ -136,7 +136,8 @@ public:
 
   static int64_t get_default_tablet_pool_count()
   {
-    return lib::is_mini_mode() ? MIN_MODE_MAX_TABLET_CNT_IN_OBJ_POOL : MAX_TABLET_CNT_IN_OBJ_POOL;
+    const bool is_small_tenant = MTL_CTX() != nullptr && MTL_MEM_SIZE() <= 2 * 1024 * 1024; // memory is less than 2GB;
+    return lib::is_mini_mode() || is_small_tenant ? MIN_MODE_MAX_TABLET_CNT_IN_OBJ_POOL : MAX_TABLET_CNT_IN_OBJ_POOL;
   }
   static int64_t get_default_normal_tablet_pool_count()
   {

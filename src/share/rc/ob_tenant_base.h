@@ -336,6 +336,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
   share::ObTenantEnv::get_tenant() == nullptr ? OB_ERR_UNEXPECTED : share::ObTenantEnv::get_tenant()->unregister_module_thread_dynamic(th)
 #define MTL_IS_MINI_MODE() share::ObTenantEnv::get_tenant()->is_mini_mode()
 #define MTL_CPU_COUNT() share::ObTenantEnv::get_tenant()->unit_max_cpu()
+#define MTL_MEM_SIZE() share::ObTenantEnv::get_tenant()->unit_memory_size()
 
 // 注意MTL_BIND调用需要在租户创建之前，否则会导致租户创建时无法调用到绑定的函数。
 #define MTL_BIND(INIT, DESTROY) \
