@@ -6551,7 +6551,9 @@ int ObPartTransCtx::submit_log_impl_(const int64_t log_type, const bool pending,
         const bool with_need_update_version = need_update_trans_version(real_log_type);
         const bool with_base_ts = (OB_SUCCESS == get_status_()) && need_carry_base_ts(real_log_type);
         int64_t base_ts = global_trans_version_;
-        if (OB_LOG_TRANS_CLEAR == real_log_type) {
+        // When the `with_base_ts` is false(e.g. when the tx aborts), there is no need to set
+        // `base_ts` to `clear_log_base_ts_`.
+        if (with_base_ts && OB_LOG_TRANS_CLEAR == real_log_type) {
           if (base_ts > clear_log_base_ts_) {
             TRANS_LOG(ERROR, "unexpected clear log base ts", K(base_ts), K(clear_log_base_ts_), K(*this));
           } else {
@@ -6582,7 +6584,7 @@ int ObPartTransCtx::submit_log_impl_(const int64_t log_type, const bool pending,
               }
             }
           } else if (with_base_ts) {
-            // commit log / clear log
+            // commit log / clear(after commit) log
             if (OB_FAIL(clog_adapter_->submit_log(
                     self_, ObVersion(2), buf, pos, base_ts, &submit_log_cb_, pg_, cur_log_id, cur_log_timestamp))) {
               TRANS_LOG(WARN, "submit log error", KR(ret), "context", *this);
@@ -6591,6 +6593,7 @@ int ObPartTransCtx::submit_log_impl_(const int64_t log_type, const bool pending,
               update_max_submitted_log_timestamp_(cur_log_timestamp);
             }
           } else {
+            // abort log / clear(after abort) log
             if (OB_FAIL(clog_adapter_->submit_log(
                     self_, ObVersion(2), buf, pos, &submit_log_cb_, pg_, cur_log_id, cur_log_timestamp))) {
               TRANS_LOG(WARN, "submit log error", KR(ret), "context", *this);
