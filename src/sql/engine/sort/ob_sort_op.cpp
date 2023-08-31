@@ -25,6 +25,7 @@ namespace sql
 ObSortSpec::ObSortSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
   : ObOpSpec(alloc, type),
   topn_expr_(nullptr),
+  topn_offset_expr_(nullptr),
   topk_limit_expr_(nullptr),
   topk_offset_expr_(nullptr),
   all_exprs_(alloc),
@@ -42,6 +43,7 @@ ObSortSpec::ObSortSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type
 
 OB_SERIALIZE_MEMBER((ObSortSpec, ObOpSpec),
                     topn_expr_,
+                    topn_offset_expr_,
                     topk_limit_expr_,
                     topk_offset_expr_,
                     all_exprs_,
@@ -137,9 +139,11 @@ int ObSortOp::get_int_value(const ObExpr *in_val, int64_t &out_val)
   return ret;
 }
 
-int ObSortOp::get_topn_count(int64_t &topn_cnt)
+int ObSortOp::get_topn_count(int64_t &topn_cnt, int64_t &topn_offset)
 {
   int ret = OB_SUCCESS;
+  topn_offset = 0;
+
   topn_cnt = INT64_MAX;
   if ((OB_ISNULL(MY_SPEC.topn_expr_) && OB_ISNULL(MY_SPEC.topk_limit_expr_))) {
     // do nothing
@@ -152,6 +156,11 @@ int ObSortOp::get_topn_count(int64_t &topn_cnt)
       LOG_WARN("failed to get int value", K(ret), K(MY_SPEC.topn_expr_));
     } else {
       topn_cnt = std::max(MY_SPEC.minimum_row_count_, topn_cnt);
+    }
+    if (NULL != MY_SPEC.topn_offset_expr_) {
+      if (OB_FAIL(get_int_value(MY_SPEC.topn_offset_expr_, topn_offset))) {
+        LOG_WARN("failed to get int value", K(ret), K(MY_SPEC.topn_offset_expr_));
+      }
     }
   } else if (NULL != MY_SPEC.topk_limit_expr_) {
     int64_t limit = -1;
@@ -425,12 +434,13 @@ int ObSortOp::init_prefix_sort(int64_t tenant_id,
 int ObSortOp::init_sort(int64_t tenant_id,
                         int64_t row_count,
                         bool is_batch,
-                        int64_t topn_cnt)
+                        int64_t topn_cnt,
+                        int64_t offset)
 {
   int ret = OB_SUCCESS;
   OZ(sort_impl_.init(tenant_id, &MY_SPEC.sort_collations_, &MY_SPEC.sort_cmp_funs_,
       &eval_ctx_, &ctx_, MY_SPEC.enable_encode_sortkey_opt_, MY_SPEC.is_local_merge_sort_,
-      false /* need_rewind */, MY_SPEC.part_cnt_, topn_cnt, MY_SPEC.is_fetch_with_ties_));
+      false /* need_rewind */, MY_SPEC.part_cnt_, topn_cnt, offset, MY_SPEC.is_fetch_with_ties_));
   if (is_batch) {
     read_batch_func_ = &ObSortOp::sort_impl_next_batch;
   } else {
@@ -456,12 +466,13 @@ int ObSortOp::inner_get_next_row()
     // the innocent DEFAULT tenant. We should think about changing the name of this function.
     is_first_ = false;
     int64_t topn_cnt = INT64_MAX;
+    int64_t offset = 0;
     int64_t row_count = MY_SPEC.rows_;
     const int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
     if (OB_FAIL(ObPxEstimateSizeUtil::get_px_size(
         &ctx_, MY_SPEC.px_est_size_factor_, MY_SPEC.rows_, row_count))) {
       LOG_WARN("failed to get px size", K(ret));
-    } else if (OB_FAIL(get_topn_count(topn_cnt))) {
+    } else if (OB_FAIL(get_topn_count(topn_cnt, offset))) {
       LOG_WARN("failed to get topn count", K(ret));
     } else if (topn_cnt <= 0) {
       iter_end_ = true;
@@ -471,7 +482,7 @@ int ObSortOp::inner_get_next_row()
         LOG_WARN("failed to init prefix sort", K(ret));
       }
     } else {
-      if (OB_FAIL(init_sort(tenant_id, row_count, false, topn_cnt))) {
+      if (OB_FAIL(init_sort(tenant_id, row_count, false, topn_cnt, offset))) {
         LOG_WARN("failed to init sort", K(ret));
       }
     }
@@ -510,12 +521,13 @@ int ObSortOp::inner_get_next_batch(const int64_t max_row_cnt)
   } else if (is_first_) {
     is_first_ = false;
     int64_t topn_cnt = INT64_MAX;
+    int64_t offset = 0;
     int64_t row_count = MY_SPEC.rows_;
     const int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
     if (OB_FAIL(ObPxEstimateSizeUtil::get_px_size(
         &ctx_, MY_SPEC.px_est_size_factor_, MY_SPEC.rows_, row_count))) {
       LOG_WARN("failed to get px size", K(ret));
-    } else if (OB_FAIL(get_topn_count(topn_cnt))) {
+    } else if (OB_FAIL(get_topn_count(topn_cnt, offset))) {
       LOG_WARN("failed to get topn count", K(ret));
     } else if (topn_cnt <= 0) {
       brs_.end_ = true;
@@ -525,7 +537,7 @@ int ObSortOp::inner_get_next_batch(const int64_t max_row_cnt)
         LOG_WARN("failed to init batch prefix sort", K(ret));
       }
     } else {
-      if (OB_FAIL(init_sort(tenant_id, row_count, true, topn_cnt))) {
+      if (OB_FAIL(init_sort(tenant_id, row_count, true, topn_cnt, offset))) {
         LOG_WARN("failed to init batch sort", K(ret));
       }
     }

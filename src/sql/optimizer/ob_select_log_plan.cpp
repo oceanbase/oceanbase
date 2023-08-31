@@ -1114,6 +1114,7 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
                                               top_is_local_order ? 0 : prefix_pos,
                                               !need_sort && top_is_local_order,
                                               nullptr,
+                                              nullptr,
                                               is_fetch_with_ties,
                                               use_part_sort ? &hash_sortkey : NULL))) {
         LOG_WARN("failed to allcoate sort as top", K(ret));
@@ -1151,6 +1152,7 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
                                                            need_sort,
                                                            prefix_pos,
                                                            top->get_is_local_order(),
+                                                           nullptr,
                                                            nullptr,
                                                            is_fetch_with_ties,
                                                            use_part_sort ? &hash_sortkey : NULL))) {
@@ -5981,6 +5983,7 @@ int ObSelectLogPlan::create_none_dist_win_func(ObLogicalOperator *top,
     } else if (OB_FAIL(allocate_sort_and_exchange_as_top(hash_sort_top, exch_info, sort_keys, need_sort,
                                                          prefix_pos, is_local_order,
                                                          NULL, /* topn_expr */
+                                                         NULL, /* offset_expr */
                                                          false, /* is_fetch_with_ties */
                                                          &hash_sortkey))) {
       LOG_WARN("failed to allocate sort and exchange as top", K(ret));
@@ -6262,6 +6265,7 @@ int ObSelectLogPlan::create_normal_hash_dist_win_func(ObLogicalOperator *&top,
                                                       prefix_pos,
                                                       top->get_is_local_order(),
                                                       NULL, /* topn_expr */
+                                                      NULL, /* offset_expr */
                                                       false, /* is_fetch_with_ties */
                                                       hash_sortkey))) {
     LOG_WARN("failed to allocate sort and exchange as top", K(ret));
@@ -6301,6 +6305,7 @@ int ObSelectLogPlan::create_pushdown_hash_dist_win_func(ObLogicalOperator *&top,
                                              sort_keys,
                                              need_sort && !top_is_local_order ? prefix_pos : 0,
                                              need_sort ? false : top_is_local_order,
+                                             NULL,
                                              NULL,
                                              false, // is_fetch_with_ties
                                              hash_sortkey))) {
