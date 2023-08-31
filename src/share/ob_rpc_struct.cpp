@@ -4602,6 +4602,8 @@ int ObAdminMergeArg::assign(const ObAdminMergeArg &other)
   if (this != &other) {
     type_ = other.type_;
     affect_all_ = other.affect_all_;
+    affect_all_user_ = other.affect_all_user_;
+    affect_all_meta_ = other.affect_all_meta_;
     if (OB_FAIL(tenant_ids_.assign(other.tenant_ids_))) {
       LOG_WARN("fail to assign tenant_ids", KR(ret), K(other));
     }
@@ -4611,7 +4613,7 @@ int ObAdminMergeArg::assign(const ObAdminMergeArg &other)
 }
 
 OB_SERIALIZE_MEMBER(ObAdminMergeArg,
-   type_, affect_all_, tenant_ids_);
+   type_, affect_all_, tenant_ids_, affect_all_user_, affect_all_meta_);
 
 bool ObAdminRecoveryArg::is_valid() const
 {
@@ -4624,7 +4626,8 @@ OB_SERIALIZE_MEMBER(ObAdminClearRoottableArg,
    tenant_name_);
 
 OB_SERIALIZE_MEMBER(ObAdminSetConfigItem,
-    name_, value_, comment_, zone_, server_, tenant_name_, exec_tenant_id_, tenant_ids_);
+    name_, value_, comment_, zone_, server_, tenant_name_, exec_tenant_id_, tenant_ids_,
+    want_to_set_tenant_config_);
 
 OB_SERIALIZE_MEMBER(ObAdminSetConfigArg, items_, is_inner_, is_backup_config_);
 

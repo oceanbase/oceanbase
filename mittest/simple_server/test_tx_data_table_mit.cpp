@@ -190,7 +190,9 @@ void ObTxDataTableTest::freeze_tx_data(ObTxDataTable *tx_data_table)
     ::sleep(1);
     int64_t affected_rows = 0;
     ObSqlString sql;
-    EXE_SQL("alter system minor freeze tenant all;");
+    EXE_SQL("alter system minor freeze tenant sys;");
+    EXE_SQL("alter system minor freeze tenant all_user;");
+    EXE_SQL("alter system minor freeze tenant all_meta;");
   }
   ATOMIC_STORE(&stop, true);
   STORAGE_LOG(INFO, "freeze done");

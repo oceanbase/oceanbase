@@ -105,6 +105,22 @@ def check_is_update_sql(sql):
         and word_list[1].lower().startswith('@') and ':=' == word_list[2].lower()):
       raise MyError('sql must be update, key_word="{0}", sql="{1}"'.format(key_word, sql))
 
+def get_min_cluster_version(cur):
+  min_cluster_version = 0
+  sql = """select distinct value from oceanbase.GV$OB_PARAMETERS where name='min_observer_version'"""
+  logging.info(sql)
+  cur.execute(sql)
+  results = cur.fetchall()
+  if len(results) != 1:
+    logging.exception('min_observer_version is not sync')
+    raise e
+  elif len(results[0]) != 1:
+    logging.exception('column cnt not match')
+    raise e
+  else:
+    min_cluster_version = get_version(results[0][0])
+  return min_cluster_version
+
 def set_parameter(cur, parameter, value, timeout = 0):
   sql = """alter system set {0} = '{1}'""".format(parameter, value)
   logging.info(sql)
@@ -112,9 +128,15 @@ def set_parameter(cur, parameter, value, timeout = 0):
   wait_parameter_sync(cur, False, parameter, value, timeout)
 
 def set_tenant_parameter(cur, parameter, value, timeout = 0):
-  sql = """alter system set {0} = '{1}' tenant = 'all'""".format(parameter, value)
-  logging.info(sql)
-  cur.execute(sql)
+  tenants_list = []
+  if get_min_cluster_version(cur) < get_version("4.2.1.0"):
+    tenants_list = ['all']
+  else:
+    tenants_list = ['sys', 'all_user', 'all_meta']
+  for tenants in tenants_list:
+    sql = """alter system set {0} = '{1}' tenant = '{2}'""".format(parameter, value, tenants)
+    logging.info(sql)
+    cur.execute(sql)
   wait_parameter_sync(cur, True, parameter, value, timeout)
 
 def get_ori_enable_ddl(cur, timeout):
@@ -289,14 +311,26 @@ def do_end_upgrade(cur, timeout):
   wait_parameter_sync(cur, False, "enable_upgrade_mode", "False", timeout)
 
 def do_suspend_merge(cur, timeout):
-    action_sql = "alter system suspend merge tenant = all"
-    rollback_sql = "alter system resume merge tenant = all"
+  tenants_list = []
+  if get_min_cluster_version(cur) < get_version("4.2.1.0"):
+    tenants_list = ['all']
+  else:
+    tenants_list = ['sys', 'all_user', 'all_meta']
+  for tenants in tenants_list:
+    action_sql = "alter system suspend merge tenant = {0}".format(tenants)
+    rollback_sql = "alter system resume merge tenant = {0}".format(tenants)
     logging.info(action_sql)
     cur.execute(action_sql)
 
 def do_resume_merge(cur, timeout):
-    action_sql = "alter system resume merge tenant = all"
-    rollback_sql = "alter system suspend merge tenant = all"
+  tenants_list = []
+  if get_min_cluster_version(cur) < get_version("4.2.1.0"):
+    tenants_list = ['all']
+  else:
+    tenants_list = ['sys', 'all_user', 'all_meta']
+  for tenants in tenants_list:
+    action_sql = "alter system resume merge tenant = {0}".format(tenants)
+    rollback_sql = "alter system suspend merge tenant = {0}".format(tenants)
     logging.info(action_sql)
     cur.execute(action_sql)
 

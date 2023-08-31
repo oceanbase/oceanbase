@@ -175,7 +175,11 @@ TEST_F(TestTransferHandler, prepare_valid_data)
   //set transfer service wakup interval
   ObSqlString sql;
   int64_t affected_rows = 0;
-  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set _transfer_service_wakeup_interval = '5s' tenant = all"));
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set _transfer_service_wakeup_interval = '5s' tenant = sys"));
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set _transfer_service_wakeup_interval = '5s' tenant = all_user"));
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set _transfer_service_wakeup_interval = '5s' tenant = all_meta"));
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   sql.reset();
 

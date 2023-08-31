@@ -293,7 +293,9 @@ public:
     ObSqlString sql;
     int64_t affected_rows = 0;
 
-    WRITE_SQL_BY_CONN(connection, "alter system minor freeze tenant all;");
+    WRITE_SQL_BY_CONN(connection, "alter system minor freeze tenant sys;");
+    WRITE_SQL_BY_CONN(connection, "alter system minor freeze tenant all_user;");
+    WRITE_SQL_BY_CONN(connection, "alter system minor freeze tenant all_meta;");
     fprintf(stdout, "start flush user data\n");
     sleep(10);
 

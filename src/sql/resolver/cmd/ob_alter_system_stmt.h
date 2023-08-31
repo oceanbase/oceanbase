@@ -22,13 +22,18 @@ namespace oceanbase
 {
 namespace sql
 {
+enum FreezeAllUserOrMeta {
+  FREEZE_ALL_USER = 0x01,
+  FREEZE_ALL_META = 0x02
+};
+
 class ObFreezeStmt : public ObSystemCmdStmt
 {
 public:
   ObFreezeStmt()
     : ObSystemCmdStmt(stmt::T_FREEZE),
       major_freeze_(false),
-      freeze_all_(false),
+      freeze_all_flag_(0),
       opt_server_list_(),
       opt_tenant_ids_(),
       opt_tablet_id_(),
@@ -36,6 +41,7 @@ public:
   ObFreezeStmt(common::ObIAllocator *name_pool)
     : ObSystemCmdStmt(name_pool, stmt::T_FREEZE),
       major_freeze_(false),
+      freeze_all_flag_(0),
       opt_server_list_(),
       opt_tenant_ids_(),
       opt_tablet_id_(),
@@ -44,8 +50,10 @@ public:
 
   bool is_major_freeze() const { return major_freeze_; }
   void set_major_freeze(bool major_freeze) { major_freeze_ = major_freeze; }
-  bool is_freeze_all() const { return freeze_all_; }
-  void set_freeze_all(bool freeze_all) { freeze_all_ = freeze_all; }
+  bool is_freeze_all_user() const { return 0 != (freeze_all_flag_ & FREEZE_ALL_USER); }
+  void set_freeze_all_user() { freeze_all_flag_ |= FREEZE_ALL_USER; }
+  bool is_freeze_all_meta() const { return 0 != (freeze_all_flag_ & FREEZE_ALL_META); }
+  void set_freeze_all_meta() { freeze_all_flag_ |= FREEZE_ALL_META; }
   inline obrpc::ObServerList &get_ignore_server_list() { return opt_server_list_; }
   inline obrpc::ObServerList &get_server_list() { return opt_server_list_; }
   inline common::ObSArray<uint64_t> &get_tenant_ids() { return opt_tenant_ids_; }
@@ -56,13 +64,13 @@ public:
     return opt_server_list_.push_back(server);
   }
 
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(major_freeze),
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(major_freeze), K(freeze_all_flag_),
                K(opt_server_list_), K(opt_tenant_ids_), K(opt_tablet_id_), K(opt_ls_id_));
 private:
   bool major_freeze_;
   // for major_freeze, it is ignore server list
   // for minor_freeze, it is candidate server list
-  bool freeze_all_;
+  int freeze_all_flag_;
   // for major_freeze only
   obrpc::ObServerList opt_server_list_;
   // for minor_freeze only,

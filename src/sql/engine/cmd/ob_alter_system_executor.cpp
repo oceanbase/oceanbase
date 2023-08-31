@@ -72,7 +72,7 @@ int ObFreezeExecutor::execute(ObExecContext &ctx, ObFreezeStmt &stmt)
   } else {
     if (!stmt.is_major_freeze()) {
       const uint64_t local_tenant_id = MTL_ID();
-      bool freeze_all = stmt.is_freeze_all();
+      bool freeze_all = (stmt.is_freeze_all_user() || stmt.is_freeze_all_meta());
       ObRootMinorFreezeArg arg;
       if (OB_FAIL(arg.tenant_ids_.assign(stmt.get_tenant_ids()))) {
         LOG_WARN("failed to assign tenant_ids", K(ret));
@@ -89,8 +89,33 @@ int ObFreezeExecutor::execute(ObExecContext &ctx, ObFreezeStmt &stmt)
           if (OB_ISNULL(GCTX.schema_service_)) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid GCTX", KR(ret));
-          } else if (OB_FAIL(GCTX.schema_service_->get_tenant_ids(arg.tenant_ids_))) {
-            LOG_WARN("fail to get all tenant ids", KR(ret));
+          } else if (stmt.is_freeze_all_user() == stmt.is_freeze_all_meta()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("freeze_all_user and freeze_all_meta cannot be true together",
+                     KR(ret), "freeze_all_user", stmt.is_freeze_all_user(),
+                     "freeze_all_meta", stmt.is_freeze_all_meta());
+          } else {
+            common::ObSArray<uint64_t> tmp_tenant_ids;
+            if (OB_FAIL(GCTX.schema_service_->get_tenant_ids(tmp_tenant_ids))) {
+              LOG_WARN("fail to get all tenant ids", KR(ret));
+            } else {
+              using FUNC_TYPE = bool (*) (const uint64_t);
+              FUNC_TYPE func = nullptr;
+              if (stmt.is_freeze_all_user()) {
+                func = is_user_tenant;
+              } else {
+                func = is_meta_tenant;
+              }
+              arg.tenant_ids_.reset();
+              for (int64_t i = 0; OB_SUCC(ret) && (i < tmp_tenant_ids.count()); ++i) {
+                uint64_t tmp_tenant_id = tmp_tenant_ids.at(i);
+                if (func(tmp_tenant_id)) {
+                  if (OB_FAIL(arg.tenant_ids_.push_back(tmp_tenant_id))) {
+                    LOG_WARN("failed to push back tenant_id", KR(ret));
+                  }
+                }
+              }
+            }
           }
         // get local tenant to freeze if there is no any parameter except server_list
         } else if (arg.tenant_ids_.empty() &&
@@ -130,7 +155,8 @@ int ObFreezeExecutor::execute(ObExecContext &ctx, ObFreezeStmt &stmt)
       }
     } else {
       rootserver::ObMajorFreezeParam param;
-      param.freeze_all_ = stmt.is_freeze_all();
+      param.freeze_all_user_ = stmt.is_freeze_all_user();
+      param.freeze_all_meta_ = stmt.is_freeze_all_meta();
       param.transport_ = GCTX.net_frame_->get_req_transport();
       for (int64_t i = 0; (i < stmt.get_tenant_ids().count()) && OB_SUCC(ret); ++i) {
         uint64_t tenant_id = stmt.get_tenant_ids().at(i);

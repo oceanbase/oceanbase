@@ -81,9 +81,13 @@ alter system recycle replica zone 'z1';
 alter system major freeze;
 alter system start merge zone = 'z1';
 alter system suspend merge;
-alter system suspend merge tenant = all;
+alter system suspend merge tenant = sys;
+alter system suspend merge tenant = all_user;
+alter system suspend merge tenant = all_meta;
 alter system resume merge;
-alter system resume merge tenant = all;
+alter system resume merge tenant = sys;
+alter system resume merge tenant = all_user;
+alter system resume merge tenant = all_meta;
 alter system clear roottable;
 alter system clear roottable tenant = 'xxx';
 alter system modify zone 'z1' set region 'r1'

@@ -50,8 +50,9 @@ int ObMajorFreezeHelper::major_freeze(
 {
   int ret = OB_SUCCESS;
   ObSEArray<obrpc::ObSimpleFreezeInfo, 32> freeze_info_array;
+  bool freeze_all = (param.freeze_all_user_ || param.freeze_all_meta_);
   if (OB_UNLIKELY(!param.is_valid()
-                  || (!param.freeze_all_ && param.freeze_info_array_.empty()))) {
+                  || (!freeze_all && param.freeze_info_array_.empty()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(param), KR(ret));
   } else if (OB_FAIL(get_freeze_info(param, freeze_info_array))) {
@@ -71,9 +72,10 @@ int ObMajorFreezeHelper::get_freeze_info(
   int ret = OB_SUCCESS;
 
   ObArray<obrpc::ObSimpleFreezeInfo> tmp_info_array;
-  if (param.freeze_all_) {
-    if (OB_FAIL(get_all_tenant_freeze_info(tmp_info_array))) {
-      LOG_WARN("fail to get all tenant freeze info", KR(ret));
+  if (param.freeze_all_user_ || param.freeze_all_meta_) {
+    if (OB_FAIL(get_specific_tenant_freeze_info(tmp_info_array,
+                                                param.freeze_all_user_, param.freeze_all_meta_))) {
+      LOG_WARN("fail to get specific tenant freeze info", KR(ret));
     }
   } else {
     if (OB_FAIL(tmp_info_array.assign(param.freeze_info_array_))) {
@@ -173,6 +175,42 @@ int ObMajorFreezeHelper::get_all_tenant_freeze_info(
         obrpc::ObSimpleFreezeInfo info(tenant_ids[i]);
         if(OB_FAIL(freeze_info_array.push_back(info))) {
           LOG_WARN("fail to push back", KR(ret), "tenant_id", tenant_ids[i]);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMajorFreezeHelper::get_specific_tenant_freeze_info(
+    common::ObIArray<obrpc::ObSimpleFreezeInfo> &freeze_info_array,
+    bool freeze_all_user,
+    bool freeze_all_meta)
+{
+  int ret = OB_SUCCESS;
+  if (freeze_all_user == freeze_all_meta) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("freeze_all_user and freeze_all_meta cannot be true or false together",
+              KR(ret), K(freeze_all_user), K(freeze_all_meta));
+  } else {
+    ObSEArray<obrpc::ObSimpleFreezeInfo, 32> tmp_freeze_info_array;
+    if (OB_FAIL(get_all_tenant_freeze_info(tmp_freeze_info_array))) {
+      LOG_WARN("fail to get all tenant freeze info", KR(ret));
+    } else {
+      using FUNC_TYPE = bool (*) (const uint64_t);
+      FUNC_TYPE func = nullptr;
+      if (freeze_all_user) {
+        func = is_user_tenant;
+      } else {
+        func = is_meta_tenant;
+      }
+      freeze_info_array.reset();
+      for (int64_t i = 0; OB_SUCC(ret) && (i < tmp_freeze_info_array.count()); ++i) {
+        if (func(tmp_freeze_info_array.at(i).tenant_id_)) {
+          if (OB_FAIL(freeze_info_array.push_back(tmp_freeze_info_array.at(i)))) {
+            LOG_WARN("fail to push back freeze info",
+                     KR(ret), K(i), "freeze_info", tmp_freeze_info_array.at(i));
+          }
         }
       }
     }
@@ -320,9 +358,10 @@ int ObMajorFreezeHelper::do_tenant_admin_merge(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(param), KR(ret)); 
   } else {
-    if (param.need_all_) {
-      if (OB_FAIL(get_all_tenant_freeze_info(freeze_info_array))) {
-        LOG_WARN("fail to get all tenant freeze info", KR(ret));
+    if (param.need_all_user_ || param.need_all_meta_) {
+      if (OB_FAIL(get_specific_tenant_freeze_info(freeze_info_array,
+                                                  param.need_all_user_, param.need_all_meta_))) {
+        LOG_WARN("fail to get specific tenant freeze info", KR(ret));
       }
     } else {
       for (int64_t i = 0; (i < param.tenant_array_.count()) && OB_SUCC(ret); ++i) {

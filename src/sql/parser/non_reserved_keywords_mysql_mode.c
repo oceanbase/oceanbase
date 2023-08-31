@@ -37,6 +37,8 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"aggregate", AGGREGATE},
   {"algorithm", ALGORITHM},
   {"all", ALL},
+  {"all_meta", ALL_META},
+  {"all_user", ALL_USER},
   {"alter", ALTER},
   {"always", ALWAYS},
   {"analyse", ANALYSE},

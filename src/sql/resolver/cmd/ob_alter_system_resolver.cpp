@@ -354,7 +354,9 @@ int ObAlterSystemResolverUtil::resolve_tenant(
     const ParseNode &tenants_node,
     const uint64_t tenant_id,
     common::ObSArray<uint64_t> &tenant_ids,
-    bool &affect_all)
+    bool &affect_all,
+    bool &affect_all_user,
+    bool &affect_all_meta)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -379,6 +381,8 @@ int ObAlterSystemResolverUtil::resolve_tenant(
     ObString tenant_name;
     uint64_t tmp_tenant_id = 0;
     affect_all = false;
+    affect_all_user = false;
+    affect_all_meta = false;
 
     for (int64_t i = 0; OB_SUCC(ret) && (i < tenants_node.num_child_); ++i) {
       ParseNode *node = tenants_node.children_[i];
@@ -392,8 +396,12 @@ int ObAlterSystemResolverUtil::resolve_tenant(
         if (tenant_name.empty()) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid argument", KR(ret));
-        } else if (!strcasecmp(tenant_name.ptr(), "all")) {
+        } else if (0 == strcasecmp(tenant_name.ptr(), "all")) {
           affect_all = true;
+        } else if (0 == strcasecmp(tenant_name.ptr(), "all_user")) {
+          affect_all_user = true;
+        } else if (0 == strcasecmp(tenant_name.ptr(), "all_meta")) {
+          affect_all_meta = true;
         } else if (OB_FAIL(schema_guard.get_tenant_id(tenant_name, tmp_tenant_id))) {
           LOG_WARN("tenant not exist", K(tenant_name), KR(ret));
         } else {
@@ -423,17 +431,20 @@ int ObAlterSystemResolverUtil::resolve_tenant(
       tenant_name.reset();
     }
 
-    if (OB_SUCC(ret) && affect_all) {
+    if (OB_SUCC(ret) && (affect_all || affect_all_user || affect_all_meta)) {
       if (OB_SYS_TENANT_ID != tenant_id) {
         ret = OB_ERR_NO_PRIVILEGE;
         LOG_WARN("Only sys tenant can operate all tenants", KR(ret), K(tenant_id));
       } else if (tenants_node.num_child_ > 1) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("use 'tenant = all' syntax to affect all tenants", KR(ret), "tenant list count", 
-          tenants_node.num_child_);
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("all/all_user/all_meta must be used separately",
+                 KR(ret), "tenant list count", tenants_node.num_child_);
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "all/all_user/all_meta in combination with other names is");
       }
     }
-    FLOG_INFO("resolve tenants", K(affect_all), K(tenant_ids));
+    FLOG_INFO("resolve tenants", K(affect_all), K(affect_all_user),
+              K(affect_all_meta), K(tenant_ids));
   }
   return ret;
 }
@@ -520,10 +531,27 @@ int ObFreezeResolver::resolve_major_freeze_(ObFreezeStmt *freeze_stmt, ParseNode
       LOG_WARN("children of tenant should not be null", KR(ret));
     } else {
       bool affect_all = false;
-      if (OB_FAIL(Util::resolve_tenant(*opt_tenant_list_v2, cur_tenant_id, freeze_stmt->get_tenant_ids(), affect_all))) {
+      bool affect_all_user = false;
+      bool affect_all_meta = false;
+      if (OB_FAIL(Util::resolve_tenant(*opt_tenant_list_v2, cur_tenant_id,
+        freeze_stmt->get_tenant_ids(), affect_all, affect_all_user, affect_all_meta))) {
         LOG_WARN("fail to resolve tenant", KR(ret));
-      } else if (affect_all) {
-        freeze_stmt->set_freeze_all(affect_all);
+      } else if (affect_all || affect_all_user || affect_all_meta) {
+        if ((true == affect_all && true == affect_all_user) ||
+            (true == affect_all && true == affect_all_meta) ||
+            (true == affect_all_user && true == affect_all_meta)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("only one of affect_all,affect_all_user,affect_all_meta can be true",
+                  KR(ret), K(affect_all), K(affect_all_user), K(affect_all_meta));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                         "all/all_user/all_meta in combination with other names is");
+        } else {
+          if (affect_all || affect_all_user) {
+            freeze_stmt->set_freeze_all_user();
+          } else {
+            freeze_stmt->set_freeze_all_meta();
+          }
+        }
       }
     }
   } else {
@@ -569,6 +597,8 @@ int ObFreezeResolver::resolve_tenant_ls_tablet_(ObFreezeStmt *freeze_stmt,
     LOG_WARN("children of tenant should not be null", KR(ret));
   } else {
     bool affect_all = false;
+    bool affect_all_user = false;
+    bool affect_all_meta = false;
     const ParseNode *tenant_list_tuple = nullptr;
     const ParseNode *opt_tablet_id = nullptr;
     const ParseNode *ls_id = nullptr;
@@ -609,16 +639,31 @@ int ObFreezeResolver::resolve_tenant_ls_tablet_(ObFreezeStmt *freeze_stmt,
 
     if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(tenant_list_tuple) &&
-               OB_FAIL(Util::resolve_tenant(
-                   *tenant_list_tuple, cur_tenant_id, freeze_stmt->get_tenant_ids(), affect_all))) {
+               OB_FAIL(Util::resolve_tenant(*tenant_list_tuple, cur_tenant_id,
+                                            freeze_stmt->get_tenant_ids(),
+                                            affect_all, affect_all_user, affect_all_meta))) {
       LOG_WARN("fail to resolve tenant", KR(ret));
     } else if (OB_NOT_NULL(ls_id) && OB_FAIL(Util::resolve_ls_id(ls_id, freeze_stmt->get_ls_id()))) {
       LOG_WARN("fail to resolve tablet id", KR(ret));
     } else if (OB_NOT_NULL(opt_tablet_id) &&
                OB_FAIL(Util::resolve_tablet_id(opt_tablet_id, freeze_stmt->get_tablet_id()))) {
       LOG_WARN("fail to resolve tablet id", KR(ret));
-    } else if (affect_all) {
-      freeze_stmt->set_freeze_all(affect_all);
+    } else if (affect_all || affect_all_user || affect_all_meta) {
+      if ((true == affect_all && true == affect_all_user) ||
+          (true == affect_all && true == affect_all_meta) ||
+          (true == affect_all_user && true == affect_all_meta)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("only one of affect_all,affect_all_user,affect_all_meta can be true",
+                KR(ret), K(affect_all), K(affect_all_user), K(affect_all_meta));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "all/all_user/all_meta in combination with other names is");
+      } else {
+        if (affect_all || affect_all_user) {
+          freeze_stmt->set_freeze_all_user();
+        } else {
+          freeze_stmt->set_freeze_all_meta();
+        }
+      }
     }
   }
 
@@ -1477,15 +1522,33 @@ int ObAdminMergeResolver::resolve(const ParseNode &parse_tree)
             LOG_WARN("type is not T_TENANT_LIST", "type", get_type_name(tenants_node->type_));
           } else {
             bool affect_all = false;
+            bool affect_all_user = false;
+            bool affect_all_meta = false;
             const int64_t child_num = tenants_node->num_child_;
             if (OB_UNLIKELY(nullptr == tenants_node->children_)
                 || OB_UNLIKELY(0 == child_num)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("children of tenant should not be null", KR(ret), K(child_num));
-            } else if (OB_FAIL(Util::resolve_tenant(*tenants_node, cur_tenant_id, stmt->get_rpc_arg().tenant_ids_, affect_all))) {
+            } else if (OB_FAIL(Util::resolve_tenant(*tenants_node, cur_tenant_id,
+                                                    stmt->get_rpc_arg().tenant_ids_, affect_all,
+                                                    affect_all_user, affect_all_meta))) {
               LOG_WARN("fail to resolve tenant", KR(ret), K(cur_tenant_id));
-            } else if (affect_all) {
-              stmt->get_rpc_arg().affect_all_ = true;
+            } else if (affect_all || affect_all_user || affect_all_meta) {
+              if ((true == affect_all && true == affect_all_user) ||
+                  (true == affect_all && true == affect_all_meta) ||
+                  (true == affect_all_user && true == affect_all_meta)) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("only one of affect_all,affect_all_user,affect_all_meta can be true",
+                        KR(ret), K(affect_all), K(affect_all_user), K(affect_all_meta));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                               "all/all_user/all_meta in combination with other names is");
+              } else {
+                if (affect_all || affect_all_user) {
+                  stmt->get_rpc_arg().affect_all_user_ = true;
+                } else {
+                  stmt->get_rpc_arg().affect_all_meta_ = true;
+                }
+              }
             }
           }
         } else {
@@ -2396,15 +2459,33 @@ int ObClearMergeErrorResolver::resolve(const ParseNode &parse_tree)
             LOG_WARN("type is not T_TENANT_LIST", "type", get_type_name(tenants_node->type_));
           } else {
             bool affect_all = false;
+            bool affect_all_user = false;
+            bool affect_all_meta = false;
             const int64_t child_num = tenants_node->num_child_;
             if (OB_UNLIKELY(nullptr == tenants_node->children_)
                 || OB_UNLIKELY(0 == child_num)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("children of tenant should not be null", KR(ret), K(child_num));
-            } else if (OB_FAIL(Util::resolve_tenant(*tenants_node, cur_tenant_id, stmt->get_rpc_arg().tenant_ids_, affect_all))) {
+            } else if (OB_FAIL(Util::resolve_tenant(*tenants_node, cur_tenant_id,
+                                                    stmt->get_rpc_arg().tenant_ids_, affect_all,
+                                                    affect_all_user, affect_all_meta))) {
               LOG_WARN("fail to resolve tenant", KR(ret), K(cur_tenant_id));
-            } else if (affect_all) {
-              stmt->get_rpc_arg().affect_all_ = true;
+            } else if (affect_all || affect_all_user || affect_all_meta) {
+              if ((true == affect_all && true == affect_all_user) ||
+                  (true == affect_all && true == affect_all_meta) ||
+                  (true == affect_all_user && true == affect_all_meta)) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("only one of affect_all,affect_all_user,affect_all_meta can be true",
+                        KR(ret), K(affect_all), K(affect_all_user), K(affect_all_meta));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                               "all/all_user/all_meta in combination with other names is");
+              } else {
+                if (affect_all || affect_all_user) {
+                  stmt->get_rpc_arg().affect_all_user_ = true;
+                } else {
+                  stmt->get_rpc_arg().affect_all_meta_ = true;
+                }
+              }
             }
           }
         } else {
@@ -2664,7 +2745,13 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
                                               stmt->get_rpc_arg().tenant_name_))) {
         LOG_WARN("resolve tenant_name failed", K(ret));
       } else {
-        if (OB_NOT_NULL(parse_tree.children_[1])) {
+        const ObString &tenant_name = stmt->get_rpc_arg().tenant_name_;
+        if (OB_FAIL(ObResolverUtils::check_not_supported_tenant_name(tenant_name))) {
+          LOG_WARN("since 4.2.1, naming a tenant as all/all_user/all_meta is not supported",
+                   KR(ret), K(tenant_name));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                         "since 4.2.1, naming a tenant as all/all_user/all_meta is");
+        } else if (OB_NOT_NULL(parse_tree.children_[1])) {
           if (session_info_->user_variable_exists(OB_RESTORE_SOURCE_NAME_SESSION_STR)) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("invalid sql syntax", KR(ret));
@@ -2989,6 +3076,8 @@ int ObRunUpgradeJobResolver::resolve(const ParseNode &parse_tree)
           && OB_NOT_NULL(parse_tree.children_[1])) {
         ParseNode *tenants_node = parse_tree.children_[1];
         bool affect_all = false;
+        bool affect_all_user = false;
+        bool affect_all_meta = false;
         const int64_t child_num = tenants_node->num_child_;
         const uint64_t cur_tenant_id = session_info_->get_effective_tenant_id();
         ObSArray<uint64_t> &tenant_ids = stmt->get_rpc_arg().tenant_ids_;
@@ -3000,9 +3089,15 @@ int ObRunUpgradeJobResolver::resolve(const ParseNode &parse_tree)
                    || OB_UNLIKELY(0 == child_num)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("children of tenant should not be null", KR(ret), K(child_num));
-        } else if (OB_FAIL(Util::resolve_tenant(
-                   *tenants_node, cur_tenant_id, tenant_ids, affect_all))) {
+        } else if (OB_FAIL(Util::resolve_tenant(*tenants_node, cur_tenant_id, tenant_ids,
+                                                affect_all, affect_all_user, affect_all_meta))) {
           LOG_WARN("fail to resolve tenant", KR(ret), K(cur_tenant_id));
+        } else if (affect_all_user || affect_all_meta) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("all_user/all_meta is not supported by ALTER SYSTEM RUN UPGRADE JOB",
+                  KR(ret), K(affect_all_user), K(affect_all_meta));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                        "use all_user/all_meta in 'ALTER SYSTEM RUN UPGRADE JOB' syntax is");
         } else if (affect_all && 0 != tenant_ids.count()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("tenant_ids should be empty when specify tenant = all", KR(ret));
@@ -4003,13 +4098,22 @@ int ObArchiveLogResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("type is not T_TENANT_LIST", "type", get_type_name(t_node->type_));
       } else {
         bool affect_all = false;
+        bool affect_all_user = false;
+        bool affect_all_meta = false;
         const int64_t child_num = t_node->num_child_;
         if (OB_UNLIKELY(nullptr == t_node->children_)
             || OB_UNLIKELY(0 == child_num)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("children of tenant should not be null", KR(ret), K(child_num));
-        } else if (OB_FAIL(Util::resolve_tenant(*t_node, tenant_id, archive_tenant_ids, affect_all))) {
+        } else if (OB_FAIL(Util::resolve_tenant(*t_node, tenant_id, archive_tenant_ids,
+                                                affect_all, affect_all_user, affect_all_meta))) {
           LOG_WARN("fail to resolve tenant", KR(ret), K(tenant_id));
+        } else if (affect_all_user || affect_all_meta) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("all_user/all_meta is not supported by ALTER SYSTEM ARCHIVELOG",
+                  KR(ret), K(affect_all_user), K(affect_all_meta));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                        "use all_user/all_meta in 'ALTER SYSTEM ARCHIVELOG' syntax is");
         } else if (affect_all) {
         } else if (archive_tenant_ids.empty()) {
           ret = OB_NOT_SUPPORTED;

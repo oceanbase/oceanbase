@@ -8050,6 +8050,17 @@ int ObResolverUtils::check_encryption_name(ObString &encryption_name, bool &need
   return ret;
 }
 
+int ObResolverUtils::check_not_supported_tenant_name(const ObString &tenant_name)
+{
+  int ret = OB_SUCCESS;
+  if (0 == tenant_name.case_compare("all") ||
+      0 == tenant_name.case_compare("all_user") ||
+      0 == tenant_name.case_compare("all_meta")) {
+    ret = OB_NOT_SUPPORTED;
+  }
+  return ret;
+}
+
 int ObResolverUtils::rm_space_for_neg_num(ParseNode *param_node, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;

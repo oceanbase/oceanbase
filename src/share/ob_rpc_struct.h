@@ -5317,15 +5317,18 @@ public:
   };
 
   ObAdminMergeArg()
-    : type_(START_MERGE), affect_all_(false), tenant_ids_() {}
+    : type_(START_MERGE), affect_all_(false), tenant_ids_(), affect_all_user_(false),
+      affect_all_meta_(false) {}
   bool is_valid() const;
-  TO_STRING_KV(K_(type), K_(affect_all), K_(tenant_ids));
+  TO_STRING_KV(K_(type), K_(affect_all), K_(tenant_ids), K_(affect_all_user), K_(affect_all_meta));
 
   int assign(const ObAdminMergeArg &other);
 
   Type type_;
-  bool affect_all_;
+  bool affect_all_; // the reason affect_all_ is not removed is for RPC compatibility
   common::ObSArray<uint64_t> tenant_ids_;
+  bool affect_all_user_;
+  bool affect_all_meta_;
 };
 
 class ObAdminRecoveryArg
@@ -5366,9 +5369,10 @@ struct ObAdminSetConfigItem
   OB_UNIS_VERSION(1);
 public:
   ObAdminSetConfigItem() : name_(), value_(), comment_(), zone_(), server_(), tenant_name_(),
-                           exec_tenant_id_(common::OB_SYS_TENANT_ID), tenant_ids_() {}
+                           exec_tenant_id_(common::OB_SYS_TENANT_ID), tenant_ids_(),
+                           want_to_set_tenant_config_(false) {}
   TO_STRING_KV(K_(name), K_(value), K_(comment), K_(zone), K_(server), K_(tenant_name),
-               K_(exec_tenant_id), K_(tenant_ids));
+               K_(exec_tenant_id), K_(tenant_ids), K_(want_to_set_tenant_config));
 
   common::ObFixedLengthString<common::OB_MAX_CONFIG_NAME_LEN> name_;
   common::ObFixedLengthString<common::OB_MAX_CONFIG_VALUE_LEN> value_;
@@ -5378,6 +5382,7 @@ public:
   common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name_;
   uint64_t exec_tenant_id_;
   common::ObSArray<uint64_t> tenant_ids_;
+  bool want_to_set_tenant_config_;
 };
 
 struct ObAdminSetConfigArg

@@ -160,6 +160,12 @@ int ObModifyTenantResolver::resolve(const ParseNode &parse_tree)
         new_tenant_name.assign_ptr(
             (char *)(parse_tree.children_[3]->str_value_),
             static_cast<int32_t>(parse_tree.children_[3]->str_len_));
+        if (OB_FAIL(ObResolverUtils::check_not_supported_tenant_name(new_tenant_name))) {
+          LOG_WARN("since 4.2.1, renaming a tenant to all/all_user/all_meta is not supported",
+                   KR(ret), K(new_tenant_name));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                         "since 4.2.1, renaming a tenant to all/all_user/all_meta is");
+        }
       }
     } else {
       new_tenant_name.reset();

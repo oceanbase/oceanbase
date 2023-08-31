@@ -174,7 +174,9 @@ void ObTxCtxTableTest::dump_ctx_with_merged_undo_action()
 
   // 执行一次事务上下文表的转储，保证建表语句产生的多源事务能够被转储下去，retain ctx可以被释放
   SLEEP_BEFORE_DUMP_TX_CTX = false;
-  WRITE_SQL_BY_CONN(sys_conn, "alter system minor freeze tenant all;");
+  WRITE_SQL_BY_CONN(sys_conn, "alter system minor freeze tenant sys;");
+  WRITE_SQL_BY_CONN(sys_conn, "alter system minor freeze tenant all_user;");
+  WRITE_SQL_BY_CONN(sys_conn, "alter system minor freeze tenant all_meta;");
   sleep(5);
 
 

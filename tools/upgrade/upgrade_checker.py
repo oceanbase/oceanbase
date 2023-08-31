@@ -580,6 +580,16 @@ def check_schema_status(query_cur):
     fail_list.append('{0} schema not available, please check'.format(results[0][0]))
   logging.info('check schema status success')
 
+# 16. 检查是否存在名为all/all_user/all_meta的租户
+def check_not_supported_tenant_name(query_cur):
+  names = ["all", "all_user", "all_meta"]
+  (desc, results) = query_cur.exec_query("""select tenant_name from oceanbase.DBA_OB_TENANTS""")
+  for i in range(len(results)):
+    if results[i][0].lower() in names:
+      fail_list.append('a tenant named all/all_user/all_meta (case insensitive) cannot exist in the cluster, please rename the tenant')
+      break
+  logging.info('check special tenant name success')
+
 # last check of do_check, make sure no function execute after check_fail_list
 def check_fail_list():
   if len(fail_list) != 0 :
@@ -621,6 +631,7 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
       check_observer_status(query_cur)
       check_schema_status(query_cur)
       check_server_version(query_cur)
+      check_not_supported_tenant_name(query_cur)
       # all check func should execute before check_fail_list
       check_fail_list()
       modify_server_permanent_offline_time(cur)

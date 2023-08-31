@@ -62,7 +62,9 @@ public:
   static int resolve_tenant(const ParseNode &tenants_node, 
                             const uint64_t tenant_id,
                             common::ObSArray<uint64_t> &tenant_ids,
-                            bool &affect_all);
+                            bool &affect_all,
+                            bool &affect_all_user,
+                            bool &affect_all_meta);
 };
 
 #define DEF_SIMPLE_CMD_RESOLVER(name)                                   \
