@@ -2147,6 +2147,9 @@ int ObTransformPreProcess::create_connect_by_view(ObSelectStmt &stmt)
                                                             shared_exprs,
                                                             view_stmt))) {
       LOG_WARN("failed to create select items", K(ret));
+    } else if (view_stmt->get_select_item_size() == 0 &&
+                OB_FAIL(ObTransformUtils::create_dummy_select_item(*view_stmt, ctx_))) {
+      LOG_WARN("failed to create dummy select item", K(ret));
     } else if (OB_FAIL(view_stmt->adjust_subquery_list())) {
       LOG_WARN("failed to adjust subquery list", K(ret));
     } else if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(*view_stmt))) {
@@ -2302,6 +2305,9 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
                                                             select_list,
                                                             left_view_stmt))) {
       LOG_WARN("failed to create select items", K(ret));
+    } else if (left_view_stmt->get_select_item_size() == 0 &&
+              OB_FAIL(ObTransformUtils::create_dummy_select_item(*left_view_stmt, ctx_))) {
+      LOG_WARN("failed to create dummy select item", K(ret));
     } else if (OB_FAIL(left_view_stmt->adjust_subquery_list())) {
       LOG_WARN("failed to adjust subquery list", K(ret));
     }
@@ -2406,6 +2412,7 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
                                           connect_by_prior_exprs,
                                           converted_exprs,
                                           false))) {
+      LOG_WARN("failed to modify prior exprs", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < converted_exprs.count(); ++i) {
       ObRawExpr *expr = converted_exprs.at(i);
@@ -2429,7 +2436,7 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
                                           prior_exprs,
                                           converted_exprs,
                                           true))) {
-      LOG_WARN("failed to modify prior exprs");
+      LOG_WARN("failed to modify prior exprs", K(ret));
     } else if (OB_FAIL(stmt.replace_relation_exprs(prior_exprs, converted_exprs))) {
       LOG_WARN("failed to replace stmt expr", K(ret));
     }
@@ -2457,7 +2464,8 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
     if (OB_FAIL(ObOptimizerUtil::remove_item(stmt.get_subquery_exprs(),
                                              left_view_stmt->get_subquery_exprs()))) {
       LOG_WARN("failed to remove subqueries", K(ret));
-    } else if (OB_FAIL(stmt.replace_relation_exprs(select_list, right_columns))) {
+    } else if (!select_list.empty()
+               && OB_FAIL(stmt.replace_relation_exprs(select_list, right_columns))) {
       LOG_WARN("failed to replace inner stmt expr", K(ret));
     } else if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(stmt))) {
       LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
@@ -2659,7 +2667,8 @@ int ObTransformPreProcess::modify_prior_exprs(ObRawExprFactory &expr_factory,
 {
   int ret = OB_SUCCESS;
   ObRawExprCopier copier(expr_factory);
-  if (OB_FAIL(copier.add_replaced_expr(parent_columns, left_columns))) {
+  if (!parent_columns.empty()
+      && OB_FAIL(copier.add_replaced_expr(parent_columns, left_columns))) {
     LOG_WARN("failed to add replaced expr", K(ret));
   }
   for (int64_t i = 0; i < prior_exprs.count() && OB_SUCC(ret); i++) {
