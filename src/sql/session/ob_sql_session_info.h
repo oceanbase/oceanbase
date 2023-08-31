@@ -909,6 +909,7 @@ public:
     for (auto it = contexts_map_.begin(); it != contexts_map_.end(); ++it) {
       if (OB_NOT_NULL(it->second)) {
         it->second->destroy();
+        mem_context_->get_malloc_allocator().free(it->second);
       }
     }
     contexts_map_.reuse();
