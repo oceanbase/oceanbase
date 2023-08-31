@@ -1178,12 +1178,23 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*> &table_i
   ObSEArray<ConflictDetector*, 8> outer_join_detectors;
   ObSEArray<ObRawExpr*, 4> all_table_filters;
   ObSEArray<ObRawExpr*, 4> table_filters;
+  ObSEArray<ObRawExpr*, 4> redundant_quals;
+  ObSEArray<ObRawExpr*, 4> all_quals;
   ObRelIds all_table_ids;
   ObRelIds table_ids;
   if (OB_FAIL(split_or_quals(table_items, quals))) {
     LOG_WARN("failed to split or quals", K(ret));
   } else if (OB_FAIL(get_table_ids(table_items, all_table_ids))) {
     LOG_WARN("failed to get table ids", K(ret));
+  } else if (OB_FAIL(deduce_redundant_join_conds(quals,
+                                                 redundant_quals))) {
+    LOG_WARN("failed to deduce redundancy quals", K(ret));
+  } else if (OB_FAIL(all_quals.assign(quals))) {
+    LOG_WARN("failed to assign array", K(ret));
+  } else if (OB_FAIL(append(all_quals, redundant_quals))) {
+    LOG_WARN("failed to append array", K(ret));
+  } else {
+    OPT_TRACE("deduce redundant qual:", redundant_quals);
   }
   //1. 生成单个table item内部的冲突规则
   for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
@@ -1224,8 +1235,8 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*> &table_i
   ObRawExpr *expr = NULL;
   ConflictDetector *detector = NULL;
   ObSEArray<ObRawExpr*, 4> join_conditions;
-  for (int64_t i = 0; OB_SUCC(ret) && i < quals.count(); ++i) {
-    if (OB_ISNULL(expr = quals.at(i))) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_quals.count(); ++i) {
+    if (OB_ISNULL(expr = all_quals.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
     } else if (ObOptimizerUtil::find_item(all_table_filters, expr)) {
@@ -13963,6 +13974,95 @@ int ObLogPlan::allocate_values_table_path(ValuesTablePath *values_table_path,
       LOG_WARN("failed to compute propery", K(ret));
     } else {
       out_access_path_op = values_op;
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::deduce_redundant_join_conds(const ObIArray<ObRawExpr*> &quals,
+                                           ObIArray<ObRawExpr*> &redundant_quals)
+{
+  int ret = OB_SUCCESS;
+  EqualSets all_equal_sets;
+  ObSEArray<ObRelIds, 8> connect_infos;
+  if (OB_FAIL(ObEqualAnalysis::compute_equal_set(&allocator_,
+                                                 quals,
+                                                 all_equal_sets))) {
+    LOG_WARN("failed to compute equal set", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < quals.count(); ++i) {
+    if (OB_ISNULL(quals.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(add_var_to_array_no_dup(connect_infos,
+                                               quals.at(i)->get_relation_ids()))) {
+      LOG_WARN("failed to add var to array no dup", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_equal_sets.count(); ++i) {
+    ObIArray<ObRawExpr*> *esets = all_equal_sets.at(i);
+    if (OB_ISNULL(esets)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(deduce_redundant_join_conds_with_equal_set(*esets,
+                                                                  connect_infos,
+                                                                  redundant_quals))) {
+      LOG_WARN("failed to deduce redundancy quals with equal set", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::deduce_redundant_join_conds_with_equal_set(
+               const ObIArray<ObRawExpr*> &equal_set,
+               ObIArray<ObRelIds> &connect_infos,
+               ObIArray<ObRawExpr*> &redundant_quals)
+{
+  int ret = OB_SUCCESS;
+  ObRelIds table_ids;
+  ObRawExpr *new_expr = NULL;
+  if (OB_ISNULL(get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  }
+  for (int64_t m = 0; OB_SUCC(ret) && m < equal_set.count() - 1; ++m) {
+    for (int64_t n = m + 1; OB_SUCC(ret) && n < equal_set.count(); ++n) {
+      table_ids.reuse();
+      new_expr = NULL;
+      if (OB_ISNULL(equal_set.at(m)) ||
+          OB_ISNULL(equal_set.at(n))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (equal_set.at(m)->get_result_meta() !=
+                  equal_set.at(n)->get_result_meta()) {
+        // do nothing
+      } else if (!equal_set.at(m)->has_flag(CNT_COLUMN) ||
+                 !equal_set.at(n)->has_flag(CNT_COLUMN) ||
+                 equal_set.at(m)->get_relation_ids().overlap(equal_set.at(n)->get_relation_ids())) {
+        // do nothing
+      } else if (OB_FAIL(table_ids.add_members(equal_set.at(m)->get_relation_ids())) ||
+                 OB_FAIL(table_ids.add_members(equal_set.at(n)->get_relation_ids()))) {
+        LOG_WARN("failed to add members", K(ret));
+      } else if (ObOptimizerUtil::find_item(connect_infos, table_ids)) {
+        // do nothing
+      } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(
+                         get_optimizer_context().get_expr_factory(),
+                         get_optimizer_context().get_session_info(),
+                         T_OP_EQ,
+                         new_expr,
+                         equal_set.at(m),
+                         equal_set.at(n)))) {
+          LOG_WARN("failed to create double op expr", K(ret));
+      } else if (OB_ISNULL(new_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(new_expr->pull_relation_id())) {
+        LOG_WARN("failed to pull releation id");
+      } else if (OB_FAIL(connect_infos.push_back(table_ids))) {
+          LOG_WARN("failed to push back array", K(ret));
+      } else if (OB_FAIL(redundant_quals.push_back(new_expr))) {
+        LOG_WARN("failed to push back array", K(ret));
+      }
     }
   }
   return ret;

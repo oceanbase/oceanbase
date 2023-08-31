@@ -288,7 +288,7 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |MERGE JOIN           |    |4       |17          |
+|0 |MERGE JOIN           |    |2       |17          |
 |1 |├─MERGE JOIN         |    |5       |12          |
 |2 |│ ├─SORT             |    |6       |6           |
 |3 |│ │ └─TABLE FULL SCAN|aa  |6       |5           |
@@ -300,9 +300,9 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([cc.c2], [aa.a3]), filter(nil), rowset=16
-      equal_conds([aa.a2 = cc.c2], [aa.a3 = cc.c3]), other_conds(nil)
+      equal_conds([aa.a2 = cc.c2], [bb.b3 = cc.c3]), other_conds(nil)
       merge_directions([ASC], [DESC])
-  1 - output([aa.a3], [aa.a2]), filter(nil), rowset=16
+  1 - output([aa.a3], [aa.a2], [bb.b3]), filter(nil), rowset=16
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([ASC], [DESC])
   2 - output([aa.a3], [aa.a2]), filter(nil), rowset=16
@@ -311,7 +311,7 @@ Outputs & filters:
       access([aa.a2], [aa.a3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([aa.a1]), range(MIN ; MAX)always true
-  4 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
+  4 - output([bb.b3], [bb.b2]), filter(nil), rowset=16
       sort_keys([bb.b2, ASC], [bb.b3, DESC])
   5 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
       access([bb.b2], [bb.b3]), partitions(p0)
@@ -332,7 +332,7 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |MERGE JOIN           |    |4       |17          |
+|0 |MERGE JOIN           |    |2       |17          |
 |1 |├─MERGE JOIN         |    |5       |12          |
 |2 |│ ├─SORT             |    |6       |6           |
 |3 |│ │ └─TABLE FULL SCAN|aa  |6       |5           |
@@ -344,9 +344,9 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([cc.c2], [aa.a3]), filter(nil), rowset=16
-      equal_conds([aa.a2 = cc.c2], [aa.a3 = cc.c3]), other_conds(nil)
+      equal_conds([aa.a2 = cc.c2], [bb.b3 = cc.c3]), other_conds(nil)
       merge_directions([ASC], [DESC])
-  1 - output([aa.a3], [aa.a2]), filter(nil), rowset=16
+  1 - output([aa.a3], [aa.a2], [bb.b3]), filter(nil), rowset=16
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([ASC], [DESC])
   2 - output([aa.a3], [aa.a2]), filter(nil), rowset=16
@@ -355,7 +355,7 @@ Outputs & filters:
       access([aa.a2], [aa.a3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([aa.a1]), range(MIN ; MAX)always true
-  4 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
+  4 - output([bb.b3], [bb.b2]), filter(nil), rowset=16
       sort_keys([bb.b2, ASC], [bb.b3, DESC])
   5 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
       access([bb.b2], [bb.b3]), partitions(p0)
@@ -889,7 +889,7 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |MERGE JOIN                     |        |4       |76          |
+|0 |MERGE JOIN                     |        |2       |76          |
 |1 |├─MERGE JOIN                   |        |5       |52          |
 |2 |│ ├─PX COORDINATOR MERGE SORT  |        |6       |26          |
 |3 |│ │ └─EXCHANGE OUT DISTR       |:EX10000|6       |25          |
@@ -910,9 +910,9 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([cc.c2], [aa.a3]), filter(nil), rowset=16
-      equal_conds([aa.a2 = cc.c2], [aa.a3 = cc.c3]), other_conds(nil)
+      equal_conds([aa.a2 = cc.c2], [bb.b3 = cc.c3]), other_conds(nil)
       merge_directions([ASC], [DESC])
-  1 - output([aa.a3], [aa.a2]), filter(nil), rowset=16
+  1 - output([aa.a3], [aa.a2], [bb.b3]), filter(nil), rowset=16
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([ASC], [DESC])
   2 - output([aa.a3], [aa.a2]), filter(nil), rowset=16
@@ -927,11 +927,11 @@ Outputs & filters:
       access([aa.a2], [aa.a3]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([aa.__pk_increment]), range(MIN ; MAX)always true
-  7 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
+  7 - output([bb.b3], [bb.b2]), filter(nil), rowset=16
       sort_keys([bb.b2, ASC], [bb.b3, DESC])
-  8 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
+  8 - output([bb.b3], [bb.b2]), filter(nil), rowset=16
       dop=1
-  9 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
+  9 - output([bb.b3], [bb.b2]), filter(nil), rowset=16
       sort_keys([bb.b2, ASC], [bb.b3, DESC])
  10 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
       force partition granule
@@ -960,7 +960,7 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |MERGE JOIN                     |        |4       |76          |
+|0 |MERGE JOIN                     |        |2       |76          |
 |1 |├─MERGE JOIN                   |        |5       |52          |
 |2 |│ ├─PX COORDINATOR MERGE SORT  |        |6       |26          |
 |3 |│ │ └─EXCHANGE OUT DISTR       |:EX10000|6       |25          |
@@ -981,9 +981,9 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([cc.c2], [aa.a3]), filter(nil), rowset=16
-      equal_conds([aa.a2 = cc.c2], [aa.a3 = cc.c3]), other_conds(nil)
+      equal_conds([aa.a2 = cc.c2], [bb.b3 = cc.c3]), other_conds(nil)
       merge_directions([ASC], [DESC])
-  1 - output([aa.a3], [aa.a2]), filter(nil), rowset=16
+  1 - output([aa.a3], [aa.a2], [bb.b3]), filter(nil), rowset=16
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([ASC], [DESC])
   2 - output([aa.a3], [aa.a2]), filter(nil), rowset=16
@@ -998,11 +998,11 @@ Outputs & filters:
       access([aa.a2], [aa.a3]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([aa.__pk_increment]), range(MIN ; MAX)always true
-  7 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
+  7 - output([bb.b3], [bb.b2]), filter(nil), rowset=16
       sort_keys([bb.b2, ASC], [bb.b3, DESC])
-  8 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
+  8 - output([bb.b3], [bb.b2]), filter(nil), rowset=16
       dop=1
-  9 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
+  9 - output([bb.b3], [bb.b2]), filter(nil), rowset=16
       sort_keys([bb.b2, ASC], [bb.b3, DESC])
  10 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
       force partition granule

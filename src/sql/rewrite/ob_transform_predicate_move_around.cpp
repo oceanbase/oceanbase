@@ -2787,6 +2787,7 @@ int ObTransformPredicateMoveAround::pushdown_semi_info_right_filter(ObDMLStmt *s
   TableItem *view_table = NULL;
   bool can_push = false;
   ObSEArray<ObRawExpr*, 16> right_filters;
+  ObSEArray<ObRawExpr*, 4> column_exprs;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx) || OB_ISNULL(semi_info) || OB_ISNULL(ctx->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt), K(ctx), K(semi_info), K(ctx->expr_factory_));
@@ -2806,6 +2807,8 @@ int ObTransformPredicateMoveAround::pushdown_semi_info_right_filter(ObDMLStmt *s
     LOG_WARN("failed to remove right filters", K(ret));
   } else if (OB_FAIL(add_var_to_array_no_dup(transed_stmts_, stmt))) {
     LOG_WARN("append transed stmt failed", K(ret));
+  } else if (OB_FAIL(stmt->get_column_exprs(semi_info->right_table_id_, column_exprs))) {
+    LOG_WARN("failed to get column exprs", K(ret));
   } else if (OB_FAIL(ObTransformUtils::replace_with_empty_view(ctx_,
                                                                stmt,
                                                                view_table,
@@ -2815,7 +2818,9 @@ int ObTransformPredicateMoveAround::pushdown_semi_info_right_filter(ObDMLStmt *s
                                                           stmt,
                                                           view_table,
                                                           right_table,
-                                                          &right_filters))) {
+                                                          &right_filters,
+                                                          NULL,
+                                                          &column_exprs))) {
     LOG_WARN("failed to create view with table", K(ret));
   } else if (OB_FAIL(rename_pullup_predicates(*stmt, *view_table, pullup_preds))) {
     LOG_WARN("failed to rename pullup preds", K(ret));

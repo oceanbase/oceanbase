@@ -171,8 +171,10 @@ int ObPredicateDeduce::choose_equal_preds(ObIArray<uint8_t> &chosen,
         if (OB_FAIL(expr_equal_with_const.add_member(var_id))) {
           LOG_WARN("failed to add member", K(ret));
         }
-      } else if (!is_table_filter(i, j)) {
+      } else if (is_const(i) && is_const(j)) {
         set(chosen, i, j, EQ);
+      } else if (!is_table_filter(i, j)) {
+        // do nothing
       } else if (OB_FAIL(table_filter.push_back(i * N + j))) {
         LOG_WARN("failed to push back table filter", K(ret));
       }

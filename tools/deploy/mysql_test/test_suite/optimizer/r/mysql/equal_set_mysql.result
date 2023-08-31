@@ -561,7 +561,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      equal_conds([t1.b = t3.b], [t1.c = t3.c]), other_conds(nil)
+      equal_conds([t1.b = t3.b], [t2.c = t3.c]), other_conds(nil)
       merge_directions([ASC], [ASC])
   1 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
       equal_conds([t1.b = t2.b], [t1.c = t2.c]), other_conds(nil)
@@ -596,7 +596,7 @@ Outputs & filters:
   0 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
       group([t1.b], [t1.c], [t2.b], [t2.c], [t3.b], [t3.c]), agg_func(nil)
   1 - output([t1.b], [t1.c], [t2.b], [t2.c], [t3.b], [t3.c], [t1.a], [t1.d], [t2.a], [t2.d], [t3.a], [t3.d]), filter(nil), rowset=16
-      equal_conds([t1.b = t3.b], [t1.c = t3.c]), other_conds(nil)
+      equal_conds([t1.b = t3.b], [t2.c = t3.c]), other_conds(nil)
       merge_directions([ASC], [ASC])
   2 - output([t1.b], [t1.c], [t2.b], [t2.c], [t1.a], [t1.d], [t2.a], [t2.d]), filter(nil), rowset=16
       equal_conds([t1.b = t2.b], [t1.c = t2.c]), other_conds(nil)
@@ -695,7 +695,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      equal_conds([t1.b = t3.b], [t1.c = t3.c]), other_conds(nil)
+      equal_conds([t1.b = t3.b], [t2.c = t3.c]), other_conds(nil)
       merge_directions([ASC], [ASC])
   1 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
       equal_conds([t1.b = t2.b], [t1.c = t2.c]), other_conds(nil)
@@ -730,7 +730,7 @@ Outputs & filters:
   0 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
       group([t1.b], [t1.c], [t2.b], [t3.b], [t2.c], [t3.c]), agg_func(nil)
   1 - output([t1.b], [t1.c], [t2.b], [t3.b], [t2.c], [t3.c], [t1.a], [t1.d], [t2.a], [t2.d], [t3.a], [t3.d]), filter(nil), rowset=16
-      equal_conds([t1.b = t3.b], [t1.c = t3.c]), other_conds(nil)
+      equal_conds([t1.b = t3.b], [t2.c = t3.c]), other_conds(nil)
       merge_directions([ASC], [ASC])
   2 - output([t1.b], [t1.c], [t2.b], [t2.c], [t1.a], [t1.d], [t2.a], [t2.d]), filter(nil), rowset=16
       equal_conds([t1.b = t2.b], [t1.c = t2.c]), other_conds(nil)
@@ -4597,12 +4597,12 @@ Outputs & filters:
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t2.a, t2.b, t3.a, t3.b)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t2.a, t2.b, t3.a, t3.b)]), filter(nil), rowset=16
       dop=1
-  2 - output([t1.a], [t3.a], [t1.b], [t3.b], [t2.a], [t2.b]), filter(nil), rowset=16
+  2 - output([t1.a], [t3.a], [t2.b], [t3.b], [t2.a], [t1.b]), filter(nil), rowset=16
       partition wise, force partition granule
-  3 - output([t1.a], [t3.a], [t1.b], [t3.b], [t2.a], [t2.b]), filter(nil), rowset=16
-      equal_conds([t1.a = t3.a], [t1.b = t3.b]), other_conds(nil)
+  3 - output([t1.a], [t3.a], [t2.b], [t3.b], [t2.a], [t1.b]), filter(nil), rowset=16
+      equal_conds([t1.a = t3.a], [t2.b = t3.b]), other_conds(nil)
       merge_directions([ASC], [ASC])
-  4 - output([t1.a], [t1.b], [t2.a], [t2.b]), filter(nil), rowset=16
+  4 - output([t1.a], [t2.b], [t2.a], [t1.b]), filter(nil), rowset=16
       equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
       merge_directions([ASC], [ASC])
   5 - output([t1.a], [t1.b]), filter(nil), rowset=16
@@ -5083,12 +5083,12 @@ Outputs & filters:
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t2.a, t2.b, t3.a, t3.b)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t2.a, t2.b, t3.a, t3.b)]), filter(nil), rowset=16
       dop=1
-  2 - output([t3.a], [t1.a], [t3.b], [t1.b], [t2.a], [t2.b]), filter(nil), rowset=16
+  2 - output([t3.a], [t1.a], [t2.b], [t3.b], [t2.a], [t1.b]), filter(nil), rowset=16
       partition wise, force partition granule
-  3 - output([t3.a], [t1.a], [t3.b], [t1.b], [t2.a], [t2.b]), filter(nil), rowset=16
-      equal_conds([t3.a = t1.a], [t3.b = t1.b]), other_conds(nil)
+  3 - output([t3.a], [t1.a], [t2.b], [t3.b], [t2.a], [t1.b]), filter(nil), rowset=16
+      equal_conds([t3.a = t1.a], [t2.b = t3.b]), other_conds(nil)
       merge_directions([ASC], [ASC])
-  4 - output([t1.a], [t1.b], [t2.a], [t2.b]), filter(nil), rowset=16
+  4 - output([t1.a], [t2.b], [t2.a], [t1.b]), filter(nil), rowset=16
       equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
       merge_directions([ASC], [ASC])
   5 - output([t1.a], [t1.b]), filter(nil), rowset=16
@@ -5295,10 +5295,10 @@ Query Plan
 |1 |└─EXCHANGE OUT DISTR     |:EX10000|1       |47          |
 |2 |  └─PX PARTITION ITERATOR|        |1       |46          |
 |3 |    └─MERGE JOIN         |        |1       |46          |
-|4 |      ├─TABLE FULL SCAN  |t3      |1       |16          |
-|5 |      └─MERGE JOIN       |        |1       |31          |
-|6 |        ├─TABLE FULL SCAN|t1      |1       |16          |
-|7 |        └─TABLE FULL SCAN|t2      |1       |16          |
+|4 |      ├─MERGE JOIN       |        |1       |31          |
+|5 |      │ ├─TABLE FULL SCAN|t1      |1       |16          |
+|6 |      │ └─TABLE FULL SCAN|t2      |1       |16          |
+|7 |      └─TABLE FULL SCAN  |t3      |1       |16          |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -5310,21 +5310,21 @@ Outputs & filters:
   3 - output([t1.a], [t1.b]), filter(nil), rowset=16
       equal_conds([t1.a = t3.a], [t1.b = t3.b]), other_conds(nil)
       merge_directions([ASC], [ASC])
-  4 - output([t3.a], [t3.b]), filter(nil), rowset=16
-      access([t3.a], [t3.b]), partitions(p0sp[0-1], p1sp[0-1])
-      is_index_back=false, is_global_index=false,
-      range_key([t3.a], [t3.b]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t1.a], [t1.b]), filter(nil), rowset=16
+  4 - output([t1.a], [t1.b]), filter(nil), rowset=16
       equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
       merge_directions([ASC], [ASC])
-  6 - output([t1.a], [t1.b]), filter(nil), rowset=16
+  5 - output([t1.a], [t1.b]), filter(nil), rowset=16
       access([t1.a], [t1.b]), partitions(p0sp[0-1], p1sp[0-1])
       is_index_back=false, is_global_index=false,
       range_key([t1.a], [t1.b]), range(MIN,MIN ; MAX,MAX)always true
-  7 - output([t2.a], [t2.b]), filter(nil), rowset=16
+  6 - output([t2.a], [t2.b]), filter(nil), rowset=16
       access([t2.a], [t2.b]), partitions(p0sp[0-1], p1sp[0-1])
       is_index_back=false, is_global_index=false,
       range_key([t2.a], [t2.b]), range(MIN,MIN ; MAX,MAX)always true
+  7 - output([t3.a], [t3.b]), filter(nil), rowset=16
+      access([t3.a], [t3.b]), partitions(p0sp[0-1], p1sp[0-1])
+      is_index_back=false, is_global_index=false,
+      range_key([t3.a], [t3.b]), range(MIN,MIN ; MAX,MAX)always true
 explain select * from t1 where (t1.a, t1.b) in (select t2.a, t2.b from t2 where (t2.a, t2.b) in (select t3.a, t3.b from t3));
 Query Plan
 =============================================================
@@ -5347,13 +5347,13 @@ Outputs & filters:
   2 - output([t1.a], [t1.b]), filter(nil), rowset=16
       partition wise, force partition granule
   3 - output([t1.a], [t1.b]), filter(nil), rowset=16
-      equal_conds([t1.a = t3.a], [t1.b = t3.b]), other_conds(nil)
+      equal_conds([t1.a = t3.a], [t2.b = t3.b]), other_conds(nil)
       merge_directions([ASC], [ASC])
   4 - output([t3.a], [t3.b]), filter(nil), rowset=16
       access([t3.a], [t3.b]), partitions(p0sp[0-1], p1sp[0-1])
       is_index_back=false, is_global_index=false,
       range_key([t3.a], [t3.b]), range(MIN,MIN ; MAX,MAX)always true
-  5 - output([t1.a], [t1.b]), filter(nil), rowset=16
+  5 - output([t1.a], [t1.b], [t2.b]), filter(nil), rowset=16
       equal_conds([t1.a = t2.a], [t1.b = t2.b]), other_conds(nil)
       merge_directions([ASC], [ASC])
   6 - output([t1.a], [t1.b]), filter(nil), rowset=16
@@ -5438,11 +5438,11 @@ Outputs & filters:
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
       dop=1
-  2 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+  2 - output([t1.a], [t2.b], [t1.b], [t1.c], [t1.d], [t2.a], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
       partition wise, force partition granule
-  3 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=false
-  4 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
+  3 - output([t1.a], [t2.b], [t1.b], [t1.c], [t1.d], [t2.a], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:2)], [t2.b(:3)]), use_batch=false
+  4 - output([t1.a], [t2.b], [t1.b], [t1.c], [t1.d], [t2.a], [t2.c], [t2.d]), filter(nil), rowset=16
       conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=false
   5 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
@@ -5925,11 +5925,11 @@ Outputs & filters:
   0 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
   1 - output([INTERNAL_FUNCTION(t1.a, t1.b, t1.c, t1.d, t2.a, t2.b, t2.c, t2.d, t3.a, t3.b, t3.c, t3.d)]), filter(nil), rowset=16
       dop=1
-  2 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+  2 - output([t1.a], [t2.b], [t1.b], [t1.c], [t1.d], [t2.a], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
       partition wise, force partition granule
-  3 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
-      conds(nil), nl_params_([t1.a(:2)], [t1.b(:3)]), use_batch=false
-  4 - output([t1.a], [t1.b], [t1.c], [t1.d], [t2.a], [t2.b], [t2.c], [t2.d]), filter(nil), rowset=16
+  3 - output([t1.a], [t2.b], [t1.b], [t1.c], [t1.d], [t2.a], [t2.c], [t2.d], [t3.a], [t3.b], [t3.c], [t3.d]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.a(:2)], [t2.b(:3)]), use_batch=false
+  4 - output([t1.a], [t2.b], [t1.b], [t1.c], [t1.d], [t2.a], [t2.c], [t2.d]), filter(nil), rowset=16
       conds(nil), nl_params_([t1.a(:0)], [t1.b(:1)]), use_batch=false
   5 - output([t1.a], [t1.b], [t1.c], [t1.d]), filter(nil), rowset=16
       access([t1.a], [t1.b], [t1.c], [t1.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
@@ -5944,7 +5944,7 @@ Outputs & filters:
       access([t3.a], [t3.b], [t3.c], [t3.d]), partitions(p0sp[0-4], p1sp[0-4], p2sp[0-4], p3sp[0-4], p4sp[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t3.a], [t3.b], [t3.c]), range(MIN ; MAX),
-      range_cond([t3.a = :2], [t3.b = :3])
+      range_cond([t3.a = :2], [:3 = t3.b])
 explain select/*+leading(t1,t2,t3)*/ * from t1 full join t2 on t1.a = t2.a and t1.b = t2.b inner join t3 on t1.a = t3.a and t1.b = t3.b;
 Query Plan
 ===================================================================
