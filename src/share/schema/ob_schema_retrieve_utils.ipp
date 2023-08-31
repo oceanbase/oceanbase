@@ -914,6 +914,7 @@ int ObSchemaRetrieveUtils::retrieve_constraint_column_info(const uint64_t tenant
   return ret;
 }
 
+// when tenant_id is sys, recycle_objs's tenant_id is invalid, can not use it
 template<typename T>
 int ObSchemaRetrieveUtils::retrieve_recycle_object(
     const uint64_t tenant_id,
@@ -2467,11 +2468,7 @@ int ObSchemaRetrieveUtils::fill_recycle_object(
   EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, original_name, recycle_obj);
   EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, type, recycle_obj, ObRecycleObject::RecycleObjType);
   if (OB_SUCC(ret)) {
-    if (tenant_id == OB_SYS_TENANT_ID) {
-      EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, tenant_id, recycle_obj, uint64_t);
-    } else {
-      recycle_obj.set_tenant_id(tenant_id);
-    }
+    recycle_obj.set_tenant_id(tenant_id);
   }
   return ret;
 }
