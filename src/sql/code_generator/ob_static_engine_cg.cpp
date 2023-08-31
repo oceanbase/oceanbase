@@ -2733,7 +2733,7 @@ int ObStaticEngineCG::generate_spec(ObLogGranuleIterator &op, ObGranuleIteratorS
       "desc", op.desc_order(),
       "flags", op.get_gi_flags(),
       "tsc_ids", spec.pw_dml_tsc_ids_,
-      "repart_pruning_idx", spec.repart_pruning_tsc_idx_,
+      "repart_pruning_tsc_idx", spec.repart_pruning_tsc_idx_,
       K(pwj_gi), K(enable_repart_pruning));
   return ret;
 }

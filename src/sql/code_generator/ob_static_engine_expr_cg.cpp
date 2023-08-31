@@ -614,8 +614,8 @@ int ObStaticEngineExprCG::cg_param_frame_layout(const ObIArray<ObRawExpr *> &par
         rt_expr->res_buf_off_ = 0;
         rt_expr->res_buf_len_ = 0;
         // 对于T_QUESTIONMARK的param表达式, 使用extra_记录其实际value在
-        // data_param_store中下标,  通过该下标, 在执行期可以访问
-        // data_param_store中存放的信息,
+        // datam_param_store中下标,  通过该下标, 在执行期可以访问
+        // datam_param_store中存放的信息,
         // 当前使用场景是在ObExprValuesOp中进行动态cast时,
         // 可以通过该下标最终获取参数化后原始参数值的类型;
         rt_expr->extra_ = param_idx;
