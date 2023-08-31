@@ -665,6 +665,10 @@ int ObTransformRule::transform_self(common::ObIArray<ObParentDMLStmt> &parent_st
       OB_ISNULL(query_hint = stmt->get_stmt_hint().query_hint_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null point error", K(ret), K(stmt), K(ctx_), K(query_hint));
+  } else if (stmt->is_select_stmt() &&
+             static_cast<ObSelectStmt*>(stmt)->get_select_item_size() == 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("find select stmt with 0 select item", K(ret), KPC(stmt));
   } else if (OB_FAIL(stmt->get_qb_name(ctx_->src_qb_name_))) {
     LOG_WARN("failed to get qb name", K(ret));
   } else {
