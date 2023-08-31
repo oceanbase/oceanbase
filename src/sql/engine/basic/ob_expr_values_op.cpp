@@ -480,7 +480,7 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
     }
     while (OB_SUCC(ret) && node_idx_ < real_value_cnt_ && !is_break) {
       int64_t real_node_idx = node_idx_ % MY_SPEC.get_value_count();
-      int64_t row_num = real_node_idx / col_num + 1;
+      int64_t row_num = (MY_SPEC.ins_values_batch_opt_ ? group_idx : (real_node_idx / col_num)) + 1;
       ObExpr *src_expr = MY_SPEC.values_.at(real_node_idx);
       ObExpr *dst_expr = MY_SPEC.output_.at(col_idx);
       ObDatumMeta src_meta = src_expr->datum_meta_;
