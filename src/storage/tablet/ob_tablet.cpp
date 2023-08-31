@@ -1584,6 +1584,8 @@ int ObTablet::deserialize(
         mds_data_.auto_inc_seq_.ptr_ = nullptr;
       } else {
         IO_AND_DESERIALIZE(allocator, mds_data_.auto_inc_seq_.addr_, auto_inc_seq);
+      }
+      if (OB_SUCC(ret) && OB_NOT_NULL(auto_inc_seq)) {
         const int auto_inc_seq_size = auto_inc_seq->get_deep_copy_size();
         ObIStorageMetaObj *auto_inc_seq_obj = nullptr;
         if (OB_UNLIKELY(remain < auto_inc_seq_size)) {
