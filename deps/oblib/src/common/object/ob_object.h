@@ -1978,9 +1978,7 @@ inline ObObj::ObObj(const ObObj &other)
 
 inline void ObObj::reset()
 {
-  meta_.set_null();
-  meta_.set_collation_type(CS_TYPE_INVALID);
-  meta_.set_collation_level(CS_LEVEL_INVALID);
+  meta_.reset();
   val_len_ = 0;
   v_.int64_ = 0;
 }
