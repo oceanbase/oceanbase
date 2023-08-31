@@ -19500,7 +19500,7 @@ size_t ob_varlen_encoding_gb18030_for_memcmp(const struct ObCharsetInfo* cs,
       src += mblen;
     } else {
       *is_valid_unicode = is_valid_ascii(*src);
-      *dst++= sort_order ? sort_order[*src++] : *src++;
+      *dst++= sort_order ? sort_order[*src] : *src;
       ++src;
     }
   }
@@ -19559,7 +19559,7 @@ size_t ob_varlen_encoding_gb18030_for_spacecmp(const struct ObCharsetInfo* cs,
       src += mblen;		
     } else {		
       *is_valid_unicode = is_valid_ascii(*src);
-      *dst++= sort_order ? sort_order[*src++] : *src++;
+      *dst++= sort_order ? sort_order[*src] : *src;
       ++src;		
     }		
   }		
