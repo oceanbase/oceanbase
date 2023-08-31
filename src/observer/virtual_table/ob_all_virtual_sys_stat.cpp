@@ -237,6 +237,19 @@ int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, ObStatEventS
     } else {
       // it is ok to not have any records
     }
+
+    {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (tenant_config.is_valid()) {
+        MTL_SWITCH(tenant_id) {
+          auto *tenant_base = MTL_CTX();
+          int64_t max_sess_num = tenant_base->get_max_session_num(tenant_config->_resource_limit_max_session_num);
+          stat_events.get(ObStatEventIds::MAX_SESSION_NUM - ObStatEventIds::STAT_EVENT_ADD_END - 1)->stat_value_
+              = max_sess_num;
+        }
+      }
+    }
+
     ret = ret_bk;
   }
   return ret;

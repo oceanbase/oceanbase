@@ -1747,7 +1747,7 @@ int ObMPConnect::verify_connection(const uint64_t tenant_id) const
                                                                         cur_connections))) {
               LOG_WARN("fail to get session count", K(ret));
             } else if (tenant_exists && cur_connections >= max_sess_num) {
-              ret = OB_RESOURCE_OUT;
+              ret = OB_ERR_CON_COUNT_ERROR;
               LOG_WARN("too much sessions", K(ret), K(tenant_id), K(cur_connections), K(max_sess_num),
                        K(tenant_name_), K(user_name_));
             }

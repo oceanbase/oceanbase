@@ -718,6 +718,10 @@ STAT_EVENT_SET_DEF(IS_MINI_MODE, "is mini mode", ObStatClassIds::RESOURCE, "is m
 STAT_EVENT_SET_DEF(MEMORY_HOLD_SIZE, "observer memory hold size", ObStatClassIds::RESOURCE, "observer memory hold size", 140011, false, true)
 STAT_EVENT_SET_DEF(WORKER_TIME, "worker time", ObStatClassIds::RESOURCE, "worker time", 140012, false, true)
 STAT_EVENT_SET_DEF(CPU_TIME, "cpu time", ObStatClassIds::RESOURCE, "cpu time", 140013, false, true)
+// 140014
+// 140015
+// 140016
+STAT_EVENT_SET_DEF(MAX_SESSION_NUM, "max session num", ObStatClassIds::RESOURCE, "max session num", 140017, false, true)
 
 //CLOG
 STAT_EVENT_SET_DEF(CLOG_DISK_FREE_SIZE, "clog disk free size", ObStatClassIds::CLOG, "clog disk free size", 150001, false, true)
