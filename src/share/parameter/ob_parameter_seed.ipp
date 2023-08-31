@@ -200,8 +200,8 @@ DEF_BOOL(enable_syslog_recycle, OB_CLUSTER_PARAMETER, "False",
          "specifies whether log file recycling is turned on. "
          "Value: True：turned on; False: turned off",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(memory_limit_percentage, OB_CLUSTER_PARAMETER, "80", "[10, 90]",
-        "the size of the memory reserved for internal use(for testing purpose). Range: [10, 90]",
+DEF_INT(memory_limit_percentage, OB_CLUSTER_PARAMETER, "80", "[10, 95]",
+        "the size of the memory reserved for internal use(for testing purpose). Range: [10, 95]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(cache_wash_threshold, OB_CLUSTER_PARAMETER, "4GB", "[0B,]",
         "size of remaining memory at which cache eviction will be triggered. Range: [0,+∞)",

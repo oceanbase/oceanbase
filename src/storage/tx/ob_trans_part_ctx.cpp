@@ -5686,6 +5686,7 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObIArray<ObTxCommitCallback> &
     if (pending_write_) {
       TRANS_LOG(INFO, "current tx is executing stmt", K(*this));
       mt_ctx_.wait_pending_write();
+      timeguard.click();
       need_submit_log = true;
     } else if (!is_committing_()) {
       need_submit_log = true;
