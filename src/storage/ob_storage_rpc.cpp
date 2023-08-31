@@ -27,9 +27,11 @@
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
+#include "lib/thread/thread.h"
 
 namespace oceanbase
 {
+using namespace lib;
 using namespace common;
 using namespace share;
 using namespace obrpc;
@@ -1230,6 +1232,7 @@ int ObStorageStreamRpcP<RPC_CODE>::flush_and_wait()
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "bandwidth_throttle_ must not null", K(ret));
   } else {
+    Thread::WaitGuard guard(Thread::WAIT_FOR_IO_EVENT);
     if (OB_SUCCESS != (tmp_ret = bandwidth_throttle_->limit_out_and_sleep(
         this->result_.get_position(), last_send_time_, max_idle_time))) {
       STORAGE_LOG(WARN, "failed limit out band", K(tmp_ret));
