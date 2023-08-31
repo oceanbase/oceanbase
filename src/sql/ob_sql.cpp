@@ -4780,7 +4780,8 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
                                    use_plan_cache,
                                    add_plan_to_pc))) { //加入多表分布式计划的判断，判断是否还需需要add plan
     LOG_WARN("get need_add_plan failed", K(ret));
-  } else if (!add_plan_to_pc && context.is_batch_params_execute()) {
+  } else if (!add_plan_to_pc &&
+      (context.is_batch_params_execute() && parse_result.result_tree_->children_[0]->type_ != T_EXPLAIN)) {
     ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
     LOG_WARN("add_plan_to_pc is false so batched multi_stmt rollback", K(ret));
   } else if (spm_ctx.is_retry_for_spm_) {
