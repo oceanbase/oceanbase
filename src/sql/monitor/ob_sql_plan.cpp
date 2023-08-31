@@ -474,7 +474,7 @@ int ObSqlPlan::escape_quotes(ObSqlPlanItem &plan_item)
 }
 
 /**
- * escape qutotes for string value
+ * escape quotes for string value
  * oracle: '  => ''
  * mysql:  '  => \'
  */
@@ -493,7 +493,7 @@ int ObSqlPlan::inner_escape_quotes(char* &ptr, int64_t &length)
     int64_t pos = 0;
     if (OB_ISNULL(buf=(char*)allocator_.alloc(buf_len))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate mempry", K(ret));
+      LOG_WARN("failed to allocate memory", K(ret));
     } else {
       for (int64_t i = 0; i < length; ++i) {
         if (ptr[i] == '\'') {

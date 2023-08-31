@@ -82,7 +82,7 @@ int ObExecStatCollector::collect_plan_monitor_info(uint64_t job_id,
         SQL_MONITOR_LOG(WARN, "fail to get operator info by index", K(ret), K(i));
       } else if (OB_ISNULL(op_info)) {
         ret = OB_ERR_UNEXPECTED;
-        SQL_MONITOR_LOG(WARN, "get invalie op_info", K(ret), K(op_info));
+        SQL_MONITOR_LOG(WARN, "get invalid op_info", K(ret), K(op_info));
       } else if (OB_FAIL(op_info->set_job_id(job_id))) {
         SQL_MONITOR_LOG(WARN, "fail to set job id", K(ret), K(job_id));
       } else if (OB_FAIL(op_info->set_task_id(task_id))) {
@@ -142,7 +142,7 @@ int ObExecStatDispatch::dispatch(bool need_add_monitor,
           } else if (need_add_monitor && OB_FAIL(monitor_info->add_operator_info(op_info))) {
             LOG_WARN("fail to add operator info", K(ret), K(op_info));
           } else if (need_update_plan && OB_FAIL(plan->op_stats_.add_op_stat(op_info))) {
-            LOG_WARN("fail to add operatgor info", K(ret), K(op_info));
+            LOG_WARN("fail to add operator info", K(ret), K(op_info));
           }
           break;
         }

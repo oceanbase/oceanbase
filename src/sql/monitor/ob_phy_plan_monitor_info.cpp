@@ -41,7 +41,7 @@ int ObPhyPlanMonitorInfo::get_operator_info(int64_t op_id, ObPhyOperatorMonitorI
   ARRAY_FOREACH_NORET(operator_infos_, idx) {
     if (operator_infos_.at(idx).get_op_id() == op_id) {
       if (OB_FAIL(info.assign(operator_infos_.at(idx)))) {
-        LOG_WARN("fail to assgin to phy_operator info", K(ret));
+        LOG_WARN("fail to assign to phy_operator info", K(ret));
       } else {
         ret = OB_SUCCESS;
       }
