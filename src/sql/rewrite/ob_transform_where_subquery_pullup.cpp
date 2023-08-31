@@ -1074,8 +1074,8 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
                                         cond_exprs.at(i),
                                         true,
                                         queries))) {
-       LOG_WARN("failed to get single set subquery", K(ret));
-     }
+      LOG_WARN("failed to get single set subquery", K(ret));
+    }
     for (int64_t j = 0; OB_SUCC(ret) && j < queries.count(); ++j) {
       ObSelectStmt *subquery = NULL;
       ObQueryRefRawExpr *query_expr = queries.at(j).query_ref_expr_;

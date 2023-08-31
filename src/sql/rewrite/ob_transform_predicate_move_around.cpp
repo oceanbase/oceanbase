@@ -45,6 +45,22 @@ int ObTransformPredicateMoveAround::transform_one_stmt(
 {
   int ret = OB_SUCCESS;
   UNUSED(parent_stmts);
+  if (OB_FAIL(do_transform_predicate_move_around(stmt, trans_happened))) {
+    LOG_WARN("failed to do transform_predicate_move_around", K(ret));
+  } else if (transed_stmts_.empty() || !trans_happened) {
+  // transform not happened actually
+  } else if (OB_FAIL(adjust_transed_stmts())) {
+    LOG_WARN("sort sort transed stmts failed", K(ret));
+  } else if (OB_FAIL(add_transform_hint(*stmt, &transed_stmts_))) {
+    LOG_WARN("add transform hint failed", K(ret));
+  }
+  transed_stmts_.reuse();
+  return ret;
+}
+
+int ObTransformPredicateMoveAround::do_transform_predicate_move_around(ObDMLStmt *&stmt, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
   bool is_happened = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -76,14 +92,6 @@ int ObTransformPredicateMoveAround::transform_one_stmt(
       temp_table_infos_.at(i)->~ObSqlTempTableInfo();
     }
   }
-  if (OB_FAIL(ret) || transed_stmts_.empty() || !trans_happened) {
-    // transform not happened actually
-  } else if (OB_FAIL(adjust_transed_stmts())) {
-    LOG_WARN("sort sort transed stmts failed", K(ret));
-  } else if (OB_FAIL(add_transform_hint(*stmt, &transed_stmts_))) {
-    LOG_WARN("add transform hint failed", K(ret));
-  }
-  transed_stmts_.reuse();
   temp_table_infos_.reuse();
   return ret;
 }
@@ -253,18 +261,24 @@ int ObTransformPredicateMoveAround::check_outline_valid_to_transform(const ObDML
   return ret;
 }
 
-
-int ObTransformPredicateMoveAround::transform_one_stmt_with_outline(ObIArray<ObParentDMLStmt> &parent_stmts,
-                                              ObDMLStmt *&stmt,
-                                              bool &trans_happened) {
+int ObTransformPredicateMoveAround::transform_one_stmt_with_outline(
+                                                            ObIArray<ObParentDMLStmt> &parent_stmts,
+                                                            ObDMLStmt *&stmt,
+                                                            bool &trans_happened) {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(transform_one_stmt(parent_stmts, stmt, trans_happened))) {
-    LOG_WARN("transform one stmt with outline failed", K(ret));
-  } else if (!trans_happened) {
-    LOG_DEBUG("outline data trans not happened");
+  UNUSED(parent_stmts);
+  if (OB_FAIL(do_transform_predicate_move_around(stmt, trans_happened))) {
+    LOG_WARN("failed to do transform_predicate_move_around", K(ret));
+  } else if (transed_stmts_.empty() || !trans_happened) {
+    LOG_TRACE("outline data trans not happened");
+  } else if (OB_FAIL(adjust_transed_stmts())) {
+    LOG_WARN("sort sort transed stmts failed", K(ret));
+  } else if (OB_FAIL(add_transform_hint(*stmt, &transed_stmts_))) {
+    LOG_WARN("add transform hint failed", K(ret));
   } else {
-    ctx_->trans_list_loc_ += applied_hints_.count();
+    ctx_->trans_list_loc_ += transed_stmts_.count();
   }
+  transed_stmts_.reuse();
   return ret;
 }
 
@@ -1295,7 +1309,7 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
       SMART_VAR(PredsArray, all_old_preds) {
         ObIArray<FromItem> &from_items = stmt->get_from_items();
         ObIArray<SemiInfo*> &semi_infos = stmt->get_semi_infos();
-        if ((!is_happened || !real_happened_) && OB_FAIL(store_all_preds(*stmt, all_old_preds))) {
+        if (OB_FAIL(store_all_preds(*stmt, all_old_preds))) {
           LOG_WARN("failed to store all preds", K(ret));
         }  else if (OB_FAIL(gather_pullup_preds_from_semi_outer_join(*stmt, stmt->get_condition_exprs(), true))) {
           LOG_WARN("failed to pullup preds from semi outer join", K(ret));
@@ -1320,7 +1334,7 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
           }
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(check_transform_happened(*stmt, all_old_preds, is_happened))) {
+        } else if (OB_FAIL(check_transform_happened(all_old_preds, *stmt, is_happened))) {
           LOG_WARN("failed to check transform happened", K(ret));
         } else if (is_happened && OB_FAIL(add_var_to_array_no_dup(transed_stmts_, stmt))) {
           LOG_WARN("append transed stmt failed", K(ret));
@@ -1402,17 +1416,15 @@ int ObTransformPredicateMoveAround::store_join_conds(const TableItem *table,
   return ret;
 }
 
-int ObTransformPredicateMoveAround::check_transform_happened(const ObDMLStmt &stmt,
-                                                             const ObIArray<ObSEArray<ObRawExpr*, 16>> &all_preds,
+int ObTransformPredicateMoveAround::check_transform_happened(const ObIArray<ObSEArray<ObRawExpr*, 16>> &all_preds,
+                                                             ObDMLStmt &stmt,
                                                              bool &is_happened)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<JoinedTable*> &join_tables = stmt.get_joined_tables();
-  const ObIArray<SemiInfo*> &semi_infos = stmt.get_semi_infos();
+  ObIArray<JoinedTable*> &join_tables = stmt.get_joined_tables();
+  ObIArray<SemiInfo*> &semi_infos = stmt.get_semi_infos();
   bool real_happened = is_happened && real_happened_;
-  if (real_happened) {
-    // do nothing
-  } else if (OB_UNLIKELY(all_preds.empty())) {
+  if (OB_UNLIKELY(all_preds.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected empty", K(ret), K(all_preds.count()));
   } else if (OB_FAIL(check_conds_deduced(all_preds.at(0), stmt.get_condition_exprs(), real_happened))) {
@@ -1420,7 +1432,7 @@ int ObTransformPredicateMoveAround::check_transform_happened(const ObDMLStmt &st
   } else {
     uint64_t idx = 1;
     for (int64_t i = 0; !real_happened && OB_SUCC(ret) && i < join_tables.count(); ++i) {
-      if (OB_FAIL(check_join_conds_deduced(join_tables.at(i), all_preds, idx, real_happened))) {
+      if (OB_FAIL(check_join_conds_deduced(all_preds, idx, join_tables.at(i), real_happened))) {
         LOG_WARN("failed to check join conds deduced", K(ret));
       }
     }
@@ -1447,17 +1459,18 @@ int ObTransformPredicateMoveAround::check_transform_happened(const ObDMLStmt &st
   return ret;
 }
 
-int ObTransformPredicateMoveAround::check_join_conds_deduced(const TableItem *table,
-                                                             const ObIArray<ObSEArray<ObRawExpr*, 16>> &all_preds,
-                                                             uint64_t &idx,
-                                                             bool &is_happened)
+int ObTransformPredicateMoveAround::check_join_conds_deduced(
+                                               const ObIArray<ObSEArray<ObRawExpr*, 16>> &all_preds,
+                                               uint64_t &idx,
+                                               TableItem *table,
+                                               bool &is_happened)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (!is_happened && table->is_joined_table()) {
-    const JoinedTable *join_table = static_cast<const JoinedTable*>(table);
+    JoinedTable *join_table = static_cast<JoinedTable*>(table);
     if (OB_UNLIKELY(all_preds.count() <= idx)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected idx", K(ret), K(idx), K(all_preds.count()));
@@ -1467,9 +1480,9 @@ int ObTransformPredicateMoveAround::check_join_conds_deduced(const TableItem *ta
       ++idx;
     }
     if (OB_FAIL(ret) || is_happened) {
-    } else if (OB_FAIL(SMART_CALL(check_join_conds_deduced(join_table->left_table_, all_preds, idx, is_happened)))) {
+    } else if (OB_FAIL(SMART_CALL(check_join_conds_deduced(all_preds, idx, join_table->left_table_, is_happened)))) {
       LOG_WARN("failed to check join conds deduced", K(ret));
-    } else if (OB_FAIL(SMART_CALL(check_join_conds_deduced(join_table->right_table_, all_preds, idx, is_happened)))) {
+    } else if (OB_FAIL(SMART_CALL(check_join_conds_deduced(all_preds, idx, join_table->right_table_, is_happened)))) {
       LOG_WARN("failed to check join conds deduced", K(ret));
     }
   }
@@ -1477,30 +1490,30 @@ int ObTransformPredicateMoveAround::check_join_conds_deduced(const TableItem *ta
 }
 
 int ObTransformPredicateMoveAround::check_conds_deduced(const ObIArray<ObRawExpr *> &old_conditions,
-                                                        const ObIArray<ObRawExpr *> &new_conditions,
+                                                        ObIArray<ObRawExpr *> &new_conditions,
                                                         bool &is_happened)
 {
   int ret = OB_SUCCESS;
-  if (!is_happened || !real_happened_) {
-    bool happened = false;
-    uint64_t new_conditions_count = new_conditions.count();
-    uint64_t old_conditions_count = old_conditions.count();
-    if (new_conditions_count != old_conditions_count) {
-      happened = true;
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && !happened && i < new_conditions_count; ++i) {
-        if (!ObPredicateDeduce::find_equal_expr(old_conditions, new_conditions.at(i)) ||
-            !ObPredicateDeduce::find_equal_expr(new_conditions, old_conditions.at(i))) {
-          happened = true;
-        }
+  bool happened = false;
+  uint64_t new_conditions_count = new_conditions.count();
+  uint64_t old_conditions_count = old_conditions.count();
+  if (new_conditions_count != old_conditions_count) {
+    happened = true;
+  } else {
+    for (int64_t i = 0; !happened && i < new_conditions_count; ++i) {
+      if (!ObPredicateDeduce::find_equal_expr(old_conditions, new_conditions.at(i)) ||
+          !ObPredicateDeduce::find_equal_expr(new_conditions, old_conditions.at(i))) {
+        happened = true;
       }
     }
-    if (OB_SUCC(ret) && happened) {
-      is_happened = true;
-      real_happened_ = true;
-    }
-    LOG_DEBUG("check transform happened", K(old_conditions), K(new_conditions), K(is_happened));
   }
+  if (happened) {
+    is_happened = true;
+    real_happened_ = true;
+  } else if (OB_FAIL(new_conditions.assign(old_conditions))) {
+    LOG_WARN("failed to assign exprs", K(ret));
+  }
+  LOG_DEBUG("check transform happened", K(old_conditions), K(new_conditions), K(happened));
   return ret;
 }
 
@@ -3566,8 +3579,7 @@ int ObTransformPredicateMoveAround::check_enable_no_pred_deduce(ObDMLStmt &stmt,
     LOG_WARN("unexpected null", K(ret), K(ctx_), K(query_hint));
   } else if (query_hint->has_outline_data()) {
     bool has_hint = ObOptimizerUtil::find_item(applied_hints_, hint);
-    enable_no_pred_deduce = (hint == NULL ? true : 
-                                           (has_hint ? hint->is_disable_hint() : true));
+    enable_no_pred_deduce = (hint == NULL ? true : (has_hint ? hint->is_disable_hint() : true));
   } else {
     const ObHint *no_rewrite = stmt.get_stmt_hint().get_no_rewrite_hint();
     enable_no_pred_deduce = (hint == NULL ? no_rewrite != NULL : hint->is_disable_hint());
