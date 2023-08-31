@@ -45,6 +45,7 @@ public:
     pre_mem_used_(0), dumped_size_(0), data_ratio_(0.5), active_time_(0), number_pass_(0),
     calc_count_(0)
   {
+    sql_id_[0] = '\0';
     ObRandom rand;
     random_id_ = rand.get();
   }
@@ -178,7 +179,7 @@ private:
   int64_t dop_;
   int64_t plan_id_;
   int64_t exec_id_;
-  ObString sql_id_;
+  char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   int64_t session_id_;
   // 取 min(cache_size, global_bound_size)
   // sort场景，在global_bound_size比较大情况下，sort理论上有data和extra内存，data应该是one-pass size

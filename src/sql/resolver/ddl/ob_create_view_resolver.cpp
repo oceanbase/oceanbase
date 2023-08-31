@@ -774,6 +774,7 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
         column.set_charset_type(table_schema.get_charset_type());
         column.set_collation_type(expr->get_collation_type());
         column.set_accuracy(expr->get_accuracy());
+        column.set_zero_fill(expr->get_result_type().has_result_flag(ZEROFILL_FLAG));
         OZ (adjust_string_column_length_within_max(column, lib::is_oracle_mode()));
         if (lib::is_mysql_mode()) { // oracle mode has default expr value, not support now
           OZ (resolve_column_default_value(&select_stmt, select_item, column, alloc, session_info));
