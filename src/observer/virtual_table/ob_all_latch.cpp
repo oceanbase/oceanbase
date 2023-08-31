@@ -78,7 +78,7 @@ int ObAllLatch::get_the_diag_info(const uint64_t tenant_id)
   } else {
     std::pair<uint64_t, common::ObDiagnoseTenantInfo*> pair;
     pair.first = tenant_id;
-    pair.second = new (buf) common::ObDiagnoseTenantInfo();
+    pair.second = new (buf) common::ObDiagnoseTenantInfo(allocator_);
     if (OB_FAIL(common::ObDIGlobalTenantCache::get_instance().get_the_diag_info(tenant_id, *(pair.second)))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
