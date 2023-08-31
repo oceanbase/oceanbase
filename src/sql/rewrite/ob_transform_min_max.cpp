@@ -37,9 +37,12 @@ namespace sql
 int ObTransformMinMax::MinMaxAggrHelper::assign(const MinMaxAggrHelper &other)
 {
   int ret = OB_SUCCESS;
-  aggr_expr_id_ = other.aggr_expr_id_;
-  raw_expr_id_ = other.raw_expr_id_;
-  raw_expr_ptr_ = other.raw_expr_ptr_;
+  if (OB_FAIL(aggr_expr_ids_.assign(other.aggr_expr_ids_))) {
+    LOG_WARN("failed to assign aggr expr ids", K(ret));
+  } else {
+    raw_expr_id_ = other.raw_expr_id_;
+    raw_expr_ptr_ = other.raw_expr_ptr_;
+  }
   return ret;
 }
 
@@ -129,38 +132,25 @@ int ObTransformMinMax::check_expr_validity(ObTransformerCtx &ctx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null helper", K(ret));
     } else {
-      helper->aggr_expr_id_ = -1;
+      helper->aggr_expr_ids_.reuse();
       helper->raw_expr_id_ = expr_id;
       helper->raw_expr_ptr_ = const_cast<ObRawExpr*>(expr);
     }
   } else {
     ObSEArray<int64_t, 2> aggr_expr_ids;
-    int64_t aggr_id = -1;
-    for (int64_t j = 0; OB_SUCC(ret) && j < select_stmt->get_aggr_item_size(); j++) {
-      bool is_agg_valid = false;
-      ObAggFunRawExpr *temp_aggr_expr = select_stmt->get_aggr_item(j);
-      if (OB_ISNULL(temp_aggr_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("params have null", K(ret));
-      } else if (OB_FAIL(check_valid_aggr_expr(expr, temp_aggr_expr, is_agg_valid))) {
-        LOG_WARN("failed to check is valid select list", K(ret));
-      }
-      if (is_agg_valid) {
-        if (OB_FAIL(aggr_expr_ids.push_back(j))) {
-          LOG_WARN("failed to push aggr expr back to array", K(ret));
-        }
-      }
-    }
-    if (aggr_expr_ids.count() != 1) {
-      is_valid = false;
+    if (OB_FAIL(check_valid_aggr_expr(expr, select_stmt->get_aggr_items(), aggr_expr_ids, is_valid))) {
+      LOG_WARN("failed to check valid aggr expr", K(ret));
+    } else if (!is_valid) {
+      // do nothing
+    } else if (OB_FAIL(MinMaxAggrHelper::alloc_helper(*ctx.allocator_, helper))) {
+      LOG_WARN("failed to allocate helper", K(ret));
+    } else if (OB_ISNULL(helper)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null helper", K(ret));
     } else {
-      if (OB_FAIL(MinMaxAggrHelper::alloc_helper(*ctx.allocator_, helper))) {
-        LOG_WARN("failed to allocate helper", K(ret));
-      } else if (OB_ISNULL(helper)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null helper", K(ret));
+      if (OB_FAIL(helper->aggr_expr_ids_.assign(aggr_expr_ids))) {
+        LOG_WARN("failed to assign aggr expr ids", K(ret));
       } else {
-        helper->aggr_expr_id_ = aggr_expr_ids.at(0);
         helper->raw_expr_id_ = expr_id;
         helper->raw_expr_ptr_ = const_cast<ObRawExpr*>(expr);
       }
@@ -241,7 +231,7 @@ int ObTransformMinMax::check_transform_validity(ObTransformerCtx &ctx,
           LOG_WARN("params have null", K(ret));
         } else if (OB_FAIL(check_expr_validity(ctx, select_stmt, having_expr, i, is_valid, helper))) {
           LOG_WARN("failed to check expr validity", K(ret));
-        } else if (NULL != havinghelpers) {
+        } else if (NULL == havinghelpers) {
           // do nothing
         } else if (OB_FAIL(havinghelpers->push_back(helper))) {
           LOG_WARN("failed to push back having helper", K(ret));
@@ -266,6 +256,9 @@ int ObTransformMinMax::create_new_ref_expr(ObQueryRefRawExpr *&ref_expr,
     LOG_WARN("params have null", K(ret), K(ctx_));
   } else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_REF_QUERY, ref_expr))) {
     LOG_WARN("failed to create ref query expr", K(ret));
+  } else if (OB_ISNULL(ref_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("params have null", K(ret));
   } else {
     ref_expr->set_output_column(aggr_ref_stmt->get_select_item_size());
     for (int64_t i = 0; OB_SUCC(ret) && i < aggr_ref_stmt->get_select_item_size(); ++i) {
@@ -362,7 +355,7 @@ int ObTransformMinMax::do_transform(ObDMLStmt *&stmt, ObIArray<MinMaxAggrHelper*
     ObSEArray<ObSelectStmt*, 4> query_array;
     bool has_not_pushed_origin_stmt = true;
     for (int i = 0; OB_SUCC(ret) && i < selecthelpers.count(); i++) {
-      if (selecthelpers.at(i)->aggr_expr_id_ == -1){
+      if (selecthelpers.at(i)->aggr_expr_ids_.empty()){
         // this expr is const expr, don't need replace as subquery
         query_array.push_back(NULL);
       } else if (has_not_pushed_origin_stmt) {
@@ -416,58 +409,92 @@ int ObTransformMinMax::do_transform(ObDMLStmt *&stmt, ObIArray<MinMaxAggrHelper*
       if (OB_ISNULL(helper) || helper->raw_expr_id_ == -1) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null helper pointer", K(ret));
-      } else if (helper->aggr_expr_id_ == -1) { // NULL == query_array.at(i)
+      } else if (helper->aggr_expr_ids_.empty()) { // NULL == query_array.at(i)
         if (OB_FAIL(new_stmt->add_select_item(select_stmt->get_select_item(helper->raw_expr_id_)))) {
           LOG_WARN("failed to add select item", K(ret));
         }
       } else {
-        ObSelectStmt* ref_query = query_array.at(i);
-        ObRawExpr* select_expr = ref_query->get_select_item(helper->raw_expr_id_).expr_;
-        SelectItem select_item = ref_query->get_select_item(helper->raw_expr_id_);
-        // delete all select item except needed select item
-        ref_query->get_select_items().reuse();
-        if (OB_FAIL(ref_query->get_select_items().push_back(select_item))) {
-          LOG_WARN("failed to push back select item", K(ret));
+        ObSelectStmt* one_select_ref_query = query_array.at(i);
+        ObSEArray<ObSelectStmt*, 4> one_select_query_array;
+        ObRawExpr* ori_select_expr = NULL;
+        if (OB_ISNULL(one_select_ref_query)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null query pointer", K(ret));
+        } else if (OB_ISNULL(ori_select_expr = one_select_ref_query->get_select_item(helper->raw_expr_id_).expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null expr pointer", K(ret));
+        } else if (OB_FAIL(one_select_query_array.push_back(one_select_ref_query))) {
+          LOG_WARN("failed to push back select stmt");
         }
-        ObSelectStmt *&aggr_ref_stmt = agg_ref_stmt_list.at(helper->aggr_expr_id_);
-        ObAggFunRawExpr *aggr_expr = ref_query->get_aggr_item(helper->aggr_expr_id_);
-        ObQueryRefRawExpr *ref_expr = NULL;
-        if (NULL != aggr_ref_stmt) {
-          for (int i = 0; i < new_stmt->get_subquery_expr_size(); i++) {
-            if (OB_ISNULL(new_stmt->get_subquery_exprs().at(i))) {
+        for (int id = 1; OB_SUCC(ret) && id < helper->aggr_expr_ids_.count(); id++) {
+          ObDMLStmt* one_aggr_ref_query = NULL;
+          if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*ctx_->stmt_factory_, *ctx_->expr_factory_, 
+                                                       one_select_ref_query, one_aggr_ref_query))) {
+            LOG_WARN("failed to create select stmt");
+          } else if (OB_FAIL(one_aggr_ref_query->update_stmt_table_id(*one_select_ref_query))) {
+            //update stmt table id after find conds_exprs
+            LOG_WARN("failed to update table id", K(ret));
+          } else if (OB_FAIL(one_select_query_array.push_back(static_cast<ObSelectStmt*>(one_aggr_ref_query)))) {
+            LOG_WARN("failed to push back select stmt"); 
+          } 
+        }
+        SelectItem select_item = one_select_ref_query->get_select_item(helper->raw_expr_id_);
+        // replace ref expr into select expr
+        for (int j = 0; OB_SUCC(ret) && j < helper->aggr_expr_ids_.count(); j++) {
+          // delete all select item except needed select item
+          ObSelectStmt *one_aggr_ref_stmt = one_select_query_array.at(j);
+          if (OB_ISNULL(one_aggr_ref_stmt)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null pointer", K(ret));
+          } else {
+            ObAggFunRawExpr *aggr_expr = one_aggr_ref_stmt->get_aggr_item(helper->aggr_expr_ids_.at(j));
+            ObAggFunRawExpr *ori_aggr_expr = one_select_ref_query->get_aggr_item(helper->aggr_expr_ids_.at(j));
+            one_aggr_ref_stmt->get_select_items().reuse();
+            select_item.expr_ = aggr_expr;
+            if (OB_FAIL(one_aggr_ref_stmt->get_select_items().push_back(select_item))) {
+              LOG_WARN("failed to push back select item", K(ret));
+            }
+            ObSelectStmt *&aggr_ref_stmt = agg_ref_stmt_list.at(helper->aggr_expr_ids_.at(j));
+            ObQueryRefRawExpr *ref_expr = NULL;
+            if (NULL != aggr_ref_stmt) {
+              for (int k = 0; k < new_stmt->get_subquery_expr_size(); k++) {
+                if (OB_ISNULL(new_stmt->get_subquery_exprs().at(k))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("params have null", K(ret));
+                } else if (aggr_ref_stmt == new_stmt->get_subquery_exprs().at(k)->get_ref_stmt()) {
+                  ref_expr = new_stmt->get_subquery_exprs().at(k);
+                }
+              }
+              if (OB_ISNULL(ref_expr)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("ref expr should not be null", K(ret));
+              }
+            } else if (OB_ISNULL(aggr_expr) || OB_ISNULL(ori_aggr_expr)) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("params have null", K(ret));
-            } else if (aggr_ref_stmt == new_stmt->get_subquery_exprs().at(i)->get_ref_stmt()) {
-              ref_expr = new_stmt->get_subquery_exprs().at(i);
+              LOG_WARN("unexpected null pointer", K(ret));
+            } else if (OB_FAIL(do_transform_one_stmt(one_aggr_ref_stmt, aggr_expr, aggr_ref_stmt))) {
+              LOG_WARN("failed to transform column aggregate", K(ret));
+            } else if (OB_FAIL(create_new_ref_expr(ref_expr, aggr_ref_stmt, ori_select_expr))) {
+              LOG_WARN("failed to create new ref query expr", K(ret));
+            } else if (OB_FAIL(new_stmt->add_subquery_ref(ref_expr))) {
+              LOG_WARN("failed to add ref query expr to subquery ref list", K(ret));
+            } 
+            LOG_INFO("xql check expr", KPC(ori_select_expr), KPC(ori_aggr_expr));
+            if (OB_SUCC(ret) && OB_FAIL(replace_aggr_expr_by_subquery(ori_select_expr, ori_aggr_expr, ref_expr))) {
+              LOG_WARN("failed to replace ref_expr into select_expr", K(ret));
             }
           }
-          if (OB_ISNULL(ref_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("ref expr should not be null", K(ret));
-          }
-        } else if (OB_FAIL(do_transform_one_stmt(ref_query, aggr_expr, aggr_ref_stmt))) {
-          LOG_WARN("failed to transform column aggregate", K(ret));
-        } else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_REF_QUERY, ref_expr))) {
-          LOG_WARN("failed to create ref query expr", K(ret));
-        } else if (OB_FAIL(create_new_ref_expr(ref_expr, aggr_ref_stmt, select_expr))) {
-          LOG_WARN("failed to create new ref query expr", K(ret));
-        } else if (OB_FAIL(new_stmt->add_subquery_ref(ref_expr))) {
-          LOG_WARN("failed to add ref query expr to subquery ref list", K(ret));
         }
-        // replace ref expr into select expr
-        bool is_replace_valid = false;
-        if (OB_FAIL(replace_aggr_expr_by_subquery(select_expr, aggr_expr, ref_expr, is_replace_valid))) {
-          LOG_WARN("failed to replace ref_expr into having_expr", K(ret));
-        } else if (!is_replace_valid) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("not find right aggr expr", K(ret));
+        if (OB_FAIL(ret)) {
+          // do nothing
         } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
-                                                                select_expr,
+                                                                ori_select_expr,
                                                                 new_stmt))) {
           LOG_WARN("failed to create select item from ref query", K(ret));
+        } else {
+          new_stmt->get_select_item(i).expr_name_ = select_item.expr_name_;
+          new_stmt->get_select_item(i).alias_name_ = select_item.alias_name_;
         }
-        new_stmt->get_select_item(i).expr_name_ = select_item.expr_name_;
-        new_stmt->get_select_item(i).alias_name_ = select_item.alias_name_;
       }
     }
     // treat having list
@@ -478,59 +505,77 @@ int ObTransformMinMax::do_transform(ObDMLStmt *&stmt, ObIArray<MinMaxAggrHelper*
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null pointer", K(ret));
         } else {
-          ObSelectStmt *&aggr_ref_stmt = agg_ref_stmt_list.at(helper->aggr_expr_id_);
-          ObQueryRefRawExpr *ref_expr = NULL;
-          if (NULL != aggr_ref_stmt) {
-            for (int k = 0; k < new_stmt->get_subquery_expr_size(); k++) {
-              if (OB_ISNULL(new_stmt->get_subquery_exprs().at(k))) {
+          // replace ref expr into having expr
+          ObSelectStmt* one_having_ref_query = having_query_array.at(i);
+          ObSEArray<ObSelectStmt*, 4> one_having_expr_query_array;
+          if (OB_FAIL(one_having_expr_query_array.push_back(one_having_ref_query))) {
+            LOG_WARN("failed to push back select stmt"); 
+          }
+          for (int id = 1; OB_SUCC(ret) && id < helper->aggr_expr_ids_.count(); id++) {
+            ObDMLStmt* one_aggr_ref_query = NULL;
+            if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*ctx_->stmt_factory_, *ctx_->expr_factory_, 
+                                                         one_having_ref_query, one_aggr_ref_query))) {
+              LOG_WARN("failed to create select stmt");
+            } else if (OB_FAIL(one_aggr_ref_query->update_stmt_table_id(*one_having_ref_query))) {
+              //update stmt table id after find conds_exprs
+              LOG_WARN("failed to update table id", K(ret));
+            } else if (OB_FAIL(one_having_expr_query_array.push_back(static_cast<ObSelectStmt*>(one_aggr_ref_query)))) {
+              LOG_WARN("failed to push back select stmt"); 
+            } 
+          }
+          for (int j = 0; OB_SUCC(ret) && j < helper->aggr_expr_ids_.count(); j++) {
+            ObSelectStmt *&aggr_ref_stmt = agg_ref_stmt_list.at(helper->aggr_expr_ids_.at(j));
+            ObQueryRefRawExpr *ref_expr = NULL;
+            if (NULL != aggr_ref_stmt) {
+              for (int k = 0; k < new_stmt->get_subquery_expr_size(); k++) {
+                if (OB_ISNULL(new_stmt->get_subquery_exprs().at(k))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("params have null", K(ret));
+                } else if (aggr_ref_stmt == new_stmt->get_subquery_exprs().at(k)->get_ref_stmt()) {
+                  ref_expr = new_stmt->get_subquery_exprs().at(k);
+                }
+              }
+              if (OB_ISNULL(ref_expr)) {
                 ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("params have null", K(ret));
-              } else if (aggr_ref_stmt == new_stmt->get_subquery_exprs().at(k)->get_ref_stmt()) {
-                ref_expr = new_stmt->get_subquery_exprs().at(k);
+                LOG_WARN("ref expr should not be null", K(ret));
+              }
+            } else {
+              ObSelectStmt* one_aggr_ref_query = one_having_expr_query_array.at(j);
+              if (OB_ISNULL(one_aggr_ref_query)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected null param", K(ret));
+              } else {
+                ObAggFunRawExpr *aggr_expr = one_aggr_ref_query->get_aggr_item(helper->aggr_expr_ids_.at(j));
+                if (OB_ISNULL(aggr_expr)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected null pointer", K(ret));
+                } 
+                // set having_query select item
+                one_aggr_ref_query->get_select_items().reuse();
+                if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
+                                                                  aggr_expr,
+                                                                  one_aggr_ref_query))) {
+                  LOG_WARN("failed to create select item from ref query", K(ret));
+                } else if (OB_FAIL(do_transform_one_stmt(one_aggr_ref_query, 
+                                                         aggr_expr, 
+                                                         aggr_ref_stmt))) {
+                  LOG_WARN("failed to transform column aggregate", K(ret));
+                } else if (OB_FAIL(create_new_ref_expr(ref_expr, aggr_ref_stmt, aggr_expr))) {
+                  LOG_WARN("failed to create new ref query expr", K(ret));
+                } else if (OB_FAIL(new_stmt->add_subquery_ref(ref_expr))) {
+                  LOG_WARN("failed to add ref query expr to subquery ref list", K(ret));
+                }
               }
             }
-            if (OB_ISNULL(ref_expr)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("ref expr should not be null", K(ret));
-            }
-          } else {
-            ObSelectStmt* having_query = having_query_array.at(i);
-            ObAggFunRawExpr *temp_aggr_expr = having_query->get_aggr_item(helper->aggr_expr_id_);
-            if (OB_ISNULL(having_query) || OB_ISNULL(temp_aggr_expr)) {
+            ObAggFunRawExpr *ori_aggr_expr = select_stmt->get_aggr_item(helper->aggr_expr_ids_.at(j));
+            if (OB_ISNULL(ori_aggr_expr)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected null param", K(ret));
-            } else {
-              // set having_query select item
-              having_query->get_select_items().reuse();
-              if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
-                                                                temp_aggr_expr,
-                                                                having_query))) {
-                LOG_WARN("failed to create select item from ref query", K(ret));
-              } else if (OB_FAIL(do_transform_one_stmt(having_query, 
-                                                       temp_aggr_expr, 
-                                                       aggr_ref_stmt))) {
-                LOG_WARN("failed to transform column aggregate", K(ret));
-              } else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_REF_QUERY, ref_expr))) {
-                LOG_WARN("failed to create ref query expr", K(ret));
-              } else if (OB_FAIL(create_new_ref_expr(ref_expr, aggr_ref_stmt, temp_aggr_expr))) {
-                LOG_WARN("failed to create new ref query expr", K(ret));
-              } else if (OB_FAIL(new_stmt->add_subquery_ref(ref_expr))) {
-                LOG_WARN("failed to add ref query expr to subquery ref list", K(ret));
-              }
+            } else if (OB_FAIL(replace_aggr_expr_by_subquery(helper->raw_expr_ptr_, ori_aggr_expr, ref_expr))) {
+              LOG_WARN("failed to replace ref_expr into having_expr", K(ret));
             }
           }
-          // replace ref expr into having expr
-          bool is_replace_valid = false;
-          ObAggFunRawExpr *ori_aggr_expr = select_stmt->get_aggr_item(helper->aggr_expr_id_);
-          if (OB_ISNULL(ori_aggr_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected null param", K(ret));
-          } else if (OB_FAIL(replace_aggr_expr_by_subquery(helper->raw_expr_ptr_, ori_aggr_expr, ref_expr, is_replace_valid))) {
-            LOG_WARN("failed to replace ref_expr into having_expr", K(ret));
-          } else if (!is_replace_valid) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("not find right aggr expr", K(ret));
-          } else if (OB_FAIL(new_stmt->add_condition_expr(helper->raw_expr_ptr_))) {
+          if (OB_FAIL(new_stmt->add_condition_expr(helper->raw_expr_ptr_))) {
             LOG_WARN("failed to add condition expr for new stmt");
           }
         }
@@ -544,39 +589,71 @@ int ObTransformMinMax::do_transform(ObDMLStmt *&stmt, ObIArray<MinMaxAggrHelper*
 }
 
 int ObTransformMinMax::check_valid_aggr_expr(const ObRawExpr *expr,
-                                             const ObAggFunRawExpr *aggr_expr,
+                                             ObIArray<ObAggFunRawExpr *> &aggr_expr_array,
+                                             ObIArray<int64_t> &aggr_expr_ids,
                                              bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  bool is_stack_overflow = false;
   is_valid = false;
-  const ObRawExpr *param = NULL;
-  if (OB_ISNULL(aggr_expr) || OB_ISNULL(expr)) {
+  if (OB_FAIL(SMART_CALL(inner_check_valid_aggr_expr(expr, aggr_expr_array, aggr_expr_ids, is_valid)))) {
+    LOG_WARN("failed to check is_valid_expr", K(ret));
+  } else if (aggr_expr_ids.count() == 0) {
+    is_valid = false;
+  }
+  return ret;
+}                        
+
+int ObTransformMinMax::inner_check_valid_aggr_expr(const ObRawExpr *expr,
+                                                   ObIArray<ObAggFunRawExpr *> &aggr_expr_array,
+                                                   ObIArray<int64_t> &aggr_expr_ids,
+                                                   bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  bool is_stack_overflow = false;
+  if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr should not be NULL", K(ret), KP(expr), KP(aggr_expr));
+    LOG_WARN("expr should not be NULL", K(ret), KP(expr));
   } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
     LOG_WARN("failed to check stack overflow", K(ret));
   } else if (is_stack_overflow) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
-  } else if (expr == aggr_expr) {
-    is_valid = true;
+  // } else if (expr == aggr_expr) {
+  //   is_valid = true;
   } else if (expr->has_flag(CNT_AGG)) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (OB_ISNULL(param = expr->get_param_expr(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("param is null", K(ret));
-      } else if (param->is_const_expr()) {
-        /* do nothing */
-      } else if (param->has_flag(CNT_AGG)) {
-        if (OB_FAIL(SMART_CALL(check_valid_aggr_expr(param, aggr_expr, is_valid)))) {
-          LOG_WARN("failed to check is_valid_expr", K(ret));
-        } else if (!is_valid) {
+    if (expr->has_flag(IS_AGG)) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < aggr_expr_array.count(); j++) {
+        ObAggFunRawExpr *aggr_expr = aggr_expr_array.at(j);
+        if (OB_ISNULL(aggr_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("params have null", K(ret));
+        } else if (expr == aggr_expr) {
+          is_valid = true;
+          if (is_contain(aggr_expr_ids, j)) {
+            continue; // duplicate min/max are shared in one expr
+          } else if (OB_FAIL(aggr_expr_ids.push_back(j))) {
+            LOG_WARN("failed to push back id", K(ret));
+          }
+        }
+      }
+    } else {
+      const ObRawExpr *param = NULL;
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+        if (OB_ISNULL(param = expr->get_param_expr(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param is null", K(ret));
+        } else if (param->is_const_expr()) {
+          /* do nothing */
+        } else if (param->has_flag(CNT_AGG)) {
+          if (OB_FAIL(SMART_CALL(inner_check_valid_aggr_expr(param, aggr_expr_array, aggr_expr_ids, is_valid)))) {
+            LOG_WARN("failed to check is_valid_expr", K(ret));
+          } else if (!is_valid) {
+            break;
+          }
+        } else {
+          is_valid = false;
           break;
         }
-      } else {
-        is_valid = false;
-        break;
       }
     }
   }
@@ -585,12 +662,28 @@ int ObTransformMinMax::check_valid_aggr_expr(const ObRawExpr *expr,
 
 int ObTransformMinMax::replace_aggr_expr_by_subquery(ObRawExpr *&expr,
                                                      const ObAggFunRawExpr *aggr_expr,
+                                                     ObRawExpr *ref_expr)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  if (OB_FAIL(SMART_CALL(replace_aggr_expr_by_subquery(expr, 
+                                                      aggr_expr, 
+                                                      ref_expr,
+                                                      is_valid)))) {
+    LOG_WARN("failed to check is_valid_expr", K(ret));
+  } else if (!is_valid) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not find right aggr expr", K(ret));
+  }
+  return ret;
+}                                                     
+int ObTransformMinMax::replace_aggr_expr_by_subquery(ObRawExpr *&expr,
+                                                     const ObAggFunRawExpr *aggr_expr,
                                                      ObRawExpr *ref_expr,
                                                      bool &is_valid)
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
-  is_valid = false;
   if (OB_ISNULL(aggr_expr) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr should not be NULL", K(ret), KP(expr), KP(aggr_expr));
@@ -599,27 +692,28 @@ int ObTransformMinMax::replace_aggr_expr_by_subquery(ObRawExpr *&expr,
   } else if (is_stack_overflow) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
-  } else if (expr == aggr_expr) {
-    is_valid = true;
-    expr = ref_expr;
+  // } else if (expr == aggr_expr) {
+  //   is_valid = true;
+  //   expr = ref_expr;
   } else if (expr->has_flag(CNT_AGG)) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (OB_ISNULL(expr->get_param_expr(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("param is null", K(ret));
-      } else if (expr->get_param_expr(i)->is_const_expr()) {
-        /* do nothing */
-      } else if (expr->get_param_expr(i)->has_flag(CNT_AGG)) {
-        if (OB_FAIL(SMART_CALL(replace_aggr_expr_by_subquery(expr->get_param_expr(i), 
-                                                             aggr_expr, 
-                                                             ref_expr, 
-                                                             is_valid)))) {
-          LOG_WARN("failed to check is_valid_expr", K(ret));
-        } else if (!is_valid) {
-          break;
+    if (expr == aggr_expr) {
+      expr = ref_expr;
+      is_valid = true;
+    } else if (!expr->has_flag(IS_AGG)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+        if (OB_ISNULL(expr->get_param_expr(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param is null", K(ret));
+        } else if (expr->get_param_expr(i)->is_const_expr() || expr->get_param_expr(i)->is_query_ref_expr()) {
+          /* do nothing */
+        } else if (expr->get_param_expr(i)->has_flag(CNT_AGG)) {
+          if (OB_FAIL(SMART_CALL(replace_aggr_expr_by_subquery(expr->get_param_expr(i), 
+                                                              aggr_expr, 
+                                                              ref_expr,
+                                                              is_valid)))) {
+            LOG_WARN("failed to check is_valid_expr", K(ret));
+          }
         }
-      } else {
-        break;
       }
     }
   }

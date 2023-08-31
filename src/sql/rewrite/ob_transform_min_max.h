@@ -65,23 +65,23 @@ public:
                                  bool &trans_happened) override;
   struct MinMaxAggrHelper {
     MinMaxAggrHelper()
-      : aggr_expr_id_(-1),
+      : aggr_expr_ids_(),
         raw_expr_id_(-1),
         raw_expr_ptr_(NULL) {}
     virtual ~MinMaxAggrHelper() {};
     void reset() {
-      aggr_expr_id_ = -1;
+      aggr_expr_ids_.reuse();
       raw_expr_id_ = -1;
       raw_expr_ptr_ = NULL;
     }
     int assign(const MinMaxAggrHelper &other);
     static int alloc_helper(ObIAllocator &allocator, MinMaxAggrHelper* &helper);
 
-    TO_STRING_KV(K(aggr_expr_id_),
+    TO_STRING_KV(K(aggr_expr_ids_),
                  K(raw_expr_id_),
                  K(raw_expr_ptr_));
 
-    int64_t aggr_expr_id_;
+    ObSEArray<int64_t, 4> aggr_expr_ids_;
     int64_t raw_expr_id_;
     ObRawExpr *raw_expr_ptr_;
   };
@@ -116,13 +116,23 @@ private:
                                    bool &is_expected_index);
 
   static int check_valid_aggr_expr(const ObRawExpr *expr,
-                                   const ObAggFunRawExpr *aggr_expr,
+                                   ObIArray<ObAggFunRawExpr *> &aggr_expr_array,
+                                   ObIArray<int64_t> &aggr_expr_ids,
                                    bool &is_valid);
+
+  static int inner_check_valid_aggr_expr(const ObRawExpr *expr,
+                                         ObIArray<ObAggFunRawExpr *> &aggr_expr_array,
+                                         ObIArray<int64_t> &aggr_expr_ids,
+                                         bool &is_valid);
                                 
   static int replace_aggr_expr_by_subquery(ObRawExpr *&expr,
                                            const ObAggFunRawExpr *aggr_expr,
+                                           ObRawExpr *ref_expr);
+
+  static int replace_aggr_expr_by_subquery(ObRawExpr *&expr,
+                                           const ObAggFunRawExpr *aggr_expr,
                                            ObRawExpr *ref_expr,
-                                           bool &is_valid);
+                                           bool &is_valid);                                         
 
   int set_child_condition(ObSelectStmt *stmt, ObRawExpr *aggr_expr);
 
