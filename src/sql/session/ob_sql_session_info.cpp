@@ -198,7 +198,8 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       vid_(OB_INVALID_ID),
       vport_(0),
       in_bytes_(0),
-      out_bytes_(0)
+      out_bytes_(0),
+      current_dblink_sequence_id_(0)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -3862,6 +3863,12 @@ int ObSequenceCurrvalEncoder::display_sess_info(ObSQLSessionInfo &sess,
   }
   if (OB_SUCC(ret)) {
     OB_UNIS_DECODE(current_id);
+    if (current_id != sess.get_current_dblink_sequence_id()) {
+      found_mismatch = true;
+      share::ObTaskController::get().allow_next_syslog();
+            LOG_WARN("current dblink sequence id mismatch",
+                    "current_seq_id", current_id, "last_seq_id", sess.get_current_dblink_sequence_id());
+    }
     OB_UNIS_DECODE(map_size);
     ObDBlinkSequenceIdMap &id_map = sess.get_dblink_sequence_id_map();
     if (map_size != id_map.size()) {

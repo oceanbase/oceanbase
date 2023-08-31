@@ -1354,7 +1354,6 @@ private:
   ObPackageStateMap package_state_map_;
   ObSequenceCurrvalMap sequence_currval_map_;
   ObDBlinkSequenceIdMap dblink_sequence_id_map_;
-  int64_t current_dblink_sequence_id_;
   ObContextsMap contexts_map_;
   int64_t curr_session_context_size_;
 
@@ -1505,6 +1504,7 @@ private:
   int32_t vport_;
   int64_t in_bytes_;
   int64_t out_bytes_;
+  int64_t current_dblink_sequence_id_;
   common::ObSEArray<ObSequenceSchema*, 2> dblink_sequence_schemas_;
 };
 
