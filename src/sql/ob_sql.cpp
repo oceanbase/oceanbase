@@ -5468,6 +5468,25 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
         } else if (OB_ISNULL(table_schema)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid null table schema", K(ret));
+        } else if (table_schema->is_storage_local_index_table()) {
+          // Local index table has the same location as the primary table.
+          // But the schema of local index table is incompleted, causing error when it is rerouted.
+          // Therefore, returns the primary table to proxy for rerouting.
+          const uint64_t data_table_id = table_schema->get_data_table_id();
+          const ObTableSchema *data_table_schema = NULL;
+          if (OB_FAIL(pc_ctx.sql_ctx_.schema_guard_->get_table_schema(
+              MTL_ID(),
+              data_table_id,
+              data_table_schema))) {
+            LOG_WARN("failed to get table schema", KR(ret), "tenant_id", MTL_ID(), K(data_table_id));
+          } else if (OB_ISNULL(data_table_schema)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid null table schema", KR(ret), "tenant_id", MTL_ID(), K(data_table_id));
+          } else {
+            table_schema = data_table_schema;
+          }
+        }
+        if (OB_FAIL(ret)) {
         } else if (OB_ISNULL(pc_ctx.sql_ctx_.get_or_create_reroute_info())) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("get reroute info failed", K(ret));
