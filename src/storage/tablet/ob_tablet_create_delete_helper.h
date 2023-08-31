@@ -212,17 +212,6 @@ int ObTabletCreateDeleteHelper::process_for_old_mds(
   }
   return ret;
 };
-
-class ObSimpleBatchCreateTabletArg
-{
-public:
-  ObSimpleBatchCreateTabletArg(const obrpc::ObBatchCreateTabletArg &arg);
-  ~ObSimpleBatchCreateTabletArg() = default;
-public:
-  int64_t to_string(char *buf, const int64_t buf_len) const;
-private:
-  const obrpc::ObBatchCreateTabletArg &arg_;
-};
 } // namespace storage
 } // namespace oceanbase
 

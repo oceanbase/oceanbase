@@ -22,14 +22,15 @@
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/meta_mem/ob_tablet_map_key.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
+#include "storage/tablet/ob_batch_create_tablet_pretty_arg.h"
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
+#include "storage/tablet/ob_tablet_create_replay_executor.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "logservice/replayservice/ob_tablet_replay_executor.h"
 
 #define USING_LOG_PREFIX MDS
-#define PRETTY_ARG(arg) (ObSimpleBatchCreateTabletArg(arg))
+#define PRETTY_ARG(arg) (ObBatchCreateTabletPrettyArg(arg))
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -39,74 +40,6 @@ namespace oceanbase
 {
 namespace storage
 {
-class ObTabletCreateReplayExecutor final : public logservice::ObTabletReplayExecutor
-{
-public:
-  ObTabletCreateReplayExecutor();
-
-  int init(
-      mds::BufferCtx &user_ctx,
-      const share::SCN &scn,
-      const bool for_old_mds);
-
-protected:
-  bool is_replay_update_tablet_status_() const override
-  {
-    return true;
-  }
-
-  int do_replay_(ObTabletHandle &tablet_handle) override;
-
-  virtual bool is_replay_update_mds_table_() const override
-  {
-    return true;
-  }
-
-private:
-  mds::BufferCtx *user_ctx_;
-  share::SCN scn_;
-  bool for_old_mds_;
-};
-
-
-ObTabletCreateReplayExecutor::ObTabletCreateReplayExecutor()
-  :logservice::ObTabletReplayExecutor(), user_ctx_(nullptr)
-{}
-
-int ObTabletCreateReplayExecutor::init(
-    mds::BufferCtx &user_ctx,
-    const share::SCN &scn,
-    const bool for_old_mds)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("tablet create replay executor init twice", KR(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(!scn.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", KR(ret), K(scn));
-  } else {
-    user_ctx_ = &user_ctx;
-    scn_ = scn;
-    is_inited_ = true;
-    for_old_mds_ = for_old_mds;
-  }
-  return ret;
-}
-
-int ObTabletCreateReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  mds::MdsCtx &user_ctx = static_cast<mds::MdsCtx&>(*user_ctx_);
-  ObTabletCreateDeleteMdsUserData user_data(ObTabletStatus::NORMAL, ObTabletMdsUserDataType::CREATE_TABLET);
-
-  if (OB_FAIL(replay_to_mds_table_(tablet_handle, user_data, user_ctx, scn_, for_old_mds_))) {
-    LOG_WARN("failed to replay to tablet", K(ret));
-  }
-
-  return ret;
-}
-
 int ObTabletCreateMdsHelper::on_commit_for_old_mds(
     const char* buf,
     const int64_t len,

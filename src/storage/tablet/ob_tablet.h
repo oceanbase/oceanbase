@@ -145,7 +145,7 @@ public:
 
 public:
   // first time create tablet
-  int init(
+  int init_for_first_time_creation(
       common::ObArenaAllocator &allocator,
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
@@ -158,25 +158,25 @@ public:
       blocksstable::ObSSTable *sstable,
       ObFreezer *freezer);
   // dump/merge build new multi version tablet
-  int init(
+  int init_for_merge(
       common::ObArenaAllocator &allocator,
       const ObUpdateTableStoreParam &param,
       const ObTablet &old_tablet);
   // dump/merge mds table to tablet_meta
-  int init(
+  int init_for_mds_table_dump(
       common::ObArenaAllocator &allocator,
       const ObTablet &old_tablet,
       const share::SCN &flush_scn,
       const ObTabletMdsData &mds_table_data,
       const ObTabletMdsData &base_data);
   // transfer build new tablet
-  int init(
+  int init_with_migrate_param(
       common::ObArenaAllocator &allocator,
       const ObMigrationTabletParam &param,
       const bool is_update,
       ObFreezer *freezer);
   //batch update table store with range cut
-  int init(
+  int init_for_sstable_replace(
       common::ObArenaAllocator &allocator,
       const ObBatchUpdateTableStoreParam &param,
       const ObTablet &old_tablet);
@@ -185,7 +185,7 @@ public:
       common::ObArenaAllocator &allocator,
       const ObTablet &old_tablet);
   // batch replace sstables without data modification
-  int init(
+  int init_for_defragment(
       common::ObArenaAllocator &allocator,
       const ObIArray<storage::ObITable *> &tables,
       const ObTablet &old_tablet);

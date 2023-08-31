@@ -840,7 +840,7 @@ int ObLSTabletService::rebuild_tablet_with_old(
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
     LOG_WARN("fail to acquire temporary tablet", K(ret), K(key));
   } else if (FALSE_IT(tmp_tablet = tmp_tablet_hdl.get_obj())) {
-  } else if (OB_FAIL(tmp_tablet->init(allocator, mig_tablet_param, true/*is_update*/, freezer))) {
+  } else if (OB_FAIL(tmp_tablet->init_with_migrate_param(allocator, mig_tablet_param, true/*is_update*/, freezer))) {
     LOG_WARN("failed to init tablet", K(ret), K(mig_tablet_param));
   } else if (FALSE_IT(tmp_tablet->set_next_tablet_guard(tablet_guard))) {
   } else if (FALSE_IT(time_guard.click("InitTablet"))) {
@@ -887,7 +887,7 @@ int ObLSTabletService::migrate_update_tablet(
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
     LOG_WARN("fail to acquire temporary tablet", K(ret), K(key));
   } else if (FALSE_IT(new_tablet = tmp_tablet_hdl.get_obj())) {
-  } else if (OB_FAIL(new_tablet->init(allocator, mig_tablet_param, true/*is_update*/, freezer))) {
+  } else if (OB_FAIL(new_tablet->init_with_migrate_param(allocator, mig_tablet_param, true/*is_update*/, freezer))) {
     LOG_WARN("failed to init tablet", K(ret), K(mig_tablet_param));
   } else if (FALSE_IT(time_guard.click("InitTablet"))) {
   } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*new_tablet, new_tablet_hdl))) {
@@ -928,7 +928,7 @@ int ObLSTabletService::migrate_create_tablet(
 
   if (OB_FAIL(ObTabletCreateDeleteHelper::create_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
     LOG_WARN("fail to create temporary tablet", K(ret), K(key));
-  } else if (OB_FAIL(tmp_tablet_hdl.get_obj()->init(allocator, mig_tablet_param, false/*is_update*/, freezer))) {
+  } else if (OB_FAIL(tmp_tablet_hdl.get_obj()->init_with_migrate_param(allocator, mig_tablet_param, false/*is_update*/, freezer))) {
     LOG_WARN("fail to init tablet", K(ret), K(mig_tablet_param));
   } else if (FALSE_IT(time_guard.click("InitTablet"))) {
   } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*tmp_tablet_hdl.get_obj(), tablet_handle))) {
@@ -1092,7 +1092,7 @@ int ObLSTabletService::update_tablet_table_store(
       if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
         LOG_WARN("fail to acquire temporary tablet", K(ret), K(key));
       } else if (FALSE_IT(tmp_tablet = tmp_tablet_hdl.get_obj())) {
-      } else if (OB_FAIL(tmp_tablet->init(allocator, tables, *old_tablet))) {
+      } else if (OB_FAIL(tmp_tablet->init_for_defragment(allocator, tables, *old_tablet))) {
         LOG_WARN("fail to init new tablet", K(ret), KPC(old_tablet));
       } else if (FALSE_IT(time_guard.click("InitTablet"))) {
       } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*tmp_tablet, new_tablet_hdl))) {
@@ -1157,7 +1157,7 @@ int ObLSTabletService::update_tablet_table_store(
       ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
       ObTablet *old_tablet = old_tablet_hdl.get_obj();
       ObMetaDiskAddr disk_addr;
-      if (OB_FAIL(tmp_tablet->init(allocator, param, *old_tablet))) {
+      if (OB_FAIL(tmp_tablet->init_for_merge(allocator, param, *old_tablet))) {
         LOG_WARN("failed to init tablet", K(ret), K(param), KPC(old_tablet));
       } else if (FALSE_IT(time_guard.click("InitNew"))) {
       } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*tmp_tablet, new_tablet_hdl))) {
@@ -1441,7 +1441,7 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
         } else {
           LOG_WARN("failed to read mds table", K(ret), K(key));
         }
-      } else if (CLICK_FAIL(tmp_tablet->init(allocator, *old_tablet, flush_scn, mds_data, old_tablet->mds_data_))) {
+      } else if (CLICK_FAIL(tmp_tablet->init_for_mds_table_dump(allocator, *old_tablet, flush_scn, mds_data, old_tablet->mds_data_))) {
         LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet), K(flush_scn));
       } else if (CLICK_FAIL(ObTabletPersister::persist_and_transform_tablet(*tmp_tablet, new_tablet_handle))) {
         LOG_WARN("fail to persist and transform tablet", K(ret), KPC(tmp_tablet), K(new_tablet_handle));
@@ -1999,8 +1999,8 @@ int ObLSTabletService::create_tablet(
       sstable = &new_sstable;
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(tablet->init(*allocator, ls_id, tablet_id, data_tablet_id, create_scn, snapshot_version,
-        table_schema, compat_mode, table_store_flag, sstable, freezer))) {
+    } else if (OB_FAIL(tablet->init_for_first_time_creation(*allocator, ls_id, tablet_id, data_tablet_id,
+        create_scn, snapshot_version, table_schema, compat_mode, table_store_flag, sstable, freezer))) {
       LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
           K(create_scn), K(snapshot_version), K(table_schema), K(compat_mode), K(table_store_flag));
     } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, tablet_handle, tablet_handle))) {
@@ -2066,8 +2066,8 @@ int ObLSTabletService::create_inner_tablet(
     sstable = &new_sstable;
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(tmp_tablet->init(allocator, ls_id, tablet_id, data_tablet_id, create_scn, snapshot_version,
-      table_schema, compat_mode, table_store_flag, sstable, freezer))) {
+  } else if (OB_FAIL(tmp_tablet->init_for_first_time_creation(allocator, ls_id, tablet_id, data_tablet_id,
+      create_scn, snapshot_version, table_schema, compat_mode, table_store_flag, sstable, freezer))) {
     LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
         K(create_scn), K(snapshot_version), K(table_schema), K(compat_mode), K(table_store_flag));
 
@@ -2147,7 +2147,7 @@ int ObLSTabletService::create_transfer_in_tablet(
         || OB_ISNULL(allocator = tablet_handle.get_allocator())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("new tablet is null", K(ret), KP(tablet), KP(allocator), K(tablet_handle));
-    } else if (OB_FAIL(tablet->init(*allocator, tablet_meta, false/*is_update*/, freezer))) {
+    } else if (OB_FAIL(tablet->init_with_migrate_param(*allocator, tablet_meta, false/*is_update*/, freezer))) {
       LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_meta));
     } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, tablet_handle, tablet_handle))) {
       LOG_WARN("failed to compare and swap tablet", K(ret), K(key), K(tablet_handle));
@@ -2203,7 +2203,7 @@ int ObLSTabletService::create_empty_shell_tablet(
       ObFreezer *freezer = ls_->get_freezer();
       ObTablet *new_tablet = tablet_handle.get_obj();
       ObMetaDiskAddr disk_addr;
-      if (OB_FAIL(new_tablet->init(*tablet_handle.get_allocator(), param, false/*is_update*/, freezer))) {
+      if (OB_FAIL(new_tablet->init_with_migrate_param(*tablet_handle.get_allocator(), param, false/*is_update*/, freezer))) {
         LOG_WARN("failed to init tablet", K(ret), K(param));
       } else if (OB_FAIL(ObTabletSlogHelper::write_empty_shell_tablet_slog(new_tablet, disk_addr))) {
         LOG_WARN("fail to write update tablet slog", K(ret), K(ls_id), K(tablet_id));
@@ -3417,7 +3417,7 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
       if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_handle))) {
         LOG_WARN("failed to acquire tablet", K(ret), K(key));
       } else if (FALSE_IT(tmp_tablet = tmp_tablet_handle.get_obj())) {
-      } else if (OB_FAIL(tmp_tablet->init(allocator, param, *old_tablet))) {
+      } else if (OB_FAIL(tmp_tablet->init_for_sstable_replace(allocator, param, *old_tablet))) {
         LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet));
       } else if (FALSE_IT(time_guard.click("InitTablet"))) {
       } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*tmp_tablet, new_tablet_handle))) {

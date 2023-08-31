@@ -187,12 +187,14 @@ ob_set_subtarget(ob_storage backup
 )
 
 ob_set_subtarget(ob_storage tablet
+  tablet/ob_batch_create_tablet_pretty_arg.cpp
   tablet/ob_full_tablet_creator.cpp
   tablet/ob_tablet_binding_helper.cpp
   tablet/ob_tablet_binding_replay_executor.cpp
   tablet/ob_tablet_common.cpp
   tablet/ob_tablet_complex_addr.cpp
   tablet/ob_tablet_create_delete_helper.cpp
+  tablet/ob_tablet_create_replay_executor.cpp
   tablet/ob_tablet_create_sstable_param.cpp
   tablet/ob_tablet_ddl_info.cpp
   tablet/ob_tablet_id_set.cpp

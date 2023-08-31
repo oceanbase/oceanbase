@@ -241,7 +241,7 @@ TEST_F(TestLSMigrationParam, test_migrate_tablet_param)
   store_flag.set_with_major_sstable();
   SCN scn;
   scn.convert_from_ts(ObTimeUtility::current_time());
-  ret = src_handle.get_obj()->init(allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
+  ret = src_handle.get_obj()->init_for_first_time_creation(allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
       scn, 2022, table_schema,
       lib::Worker::CompatMode::MYSQL, store_flag, nullptr, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
@@ -259,7 +259,7 @@ TEST_F(TestLSMigrationParam, test_migrate_tablet_param)
   ret = t3m->create_tmp_tablet(WashTabletPriority::WTP_HIGH, dst_key, allocator_, ls_handle, dst_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
-  ret = dst_handle.get_obj()->init(allocator_, tablet_param, false, ls_handle.get_ls()->get_freezer());
+  ret = dst_handle.get_obj()->init_with_migrate_param(allocator_, tablet_param, false, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   const ObTabletMeta &src_meta = src_handle.get_obj()->get_tablet_meta();
@@ -303,7 +303,7 @@ TEST_F(TestLSMigrationParam, test_migration_param_compat)
   store_flag.set_with_major_sstable();
   SCN scn;
   scn.convert_from_ts(ObTimeUtility::current_time());
-  ret = src_handle.get_obj()->init(allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
+  ret = src_handle.get_obj()->init_for_first_time_creation(allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
       scn, 2022, table_schema,
       lib::Worker::CompatMode::MYSQL, store_flag, nullptr, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);

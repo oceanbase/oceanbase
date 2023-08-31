@@ -692,7 +692,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   ObTabletID empty_tablet_id;
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
-  ret = tablet->init(allocator_, ls_id_, tablet_id, tablet_id,
+  ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), table_schema,
       lib::Worker::CompatMode::MYSQL, store_flag, &sstable, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
@@ -790,7 +790,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ObTabletID empty_tablet_id;
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
-  ret = tablet->init(allocator_, ls_id_, tablet_id, tablet_id,
+  ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), table_schema, lib::Worker::CompatMode::MYSQL,
       store_flag, &sstable, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
@@ -893,7 +893,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   ObTabletID empty_tablet_id;
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
-  ret = tablet->init(allocator_, ls_id_, tablet_id, tablet_id,
+  ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), table_schema, lib::Worker::CompatMode::MYSQL,
       store_flag, nullptr, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
@@ -1077,7 +1077,7 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ObTabletID empty_tablet_id;
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
-  ret = tablet->init(allocator_, ls_id_, tablet_id, tablet_id,
+  ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), table_schema,
       lib::Worker::CompatMode::MYSQL, store_flag, &sstable, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
@@ -1199,7 +1199,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
   ObTabletID empty_tablet_id;
   ObTabletTableStoreFlag store_flag;
   store_flag.set_with_major_sstable();
-  ret = tablet->init(allocator_, ls_id_, tablet_id, tablet_id,
+  ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), table_schema,
       lib::Worker::CompatMode::MYSQL, store_flag, &sstable, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);

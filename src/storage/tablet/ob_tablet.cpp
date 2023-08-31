@@ -184,7 +184,7 @@ void ObTablet::reset()
   is_inited_ = false;
 }
 
-int ObTablet::init(
+int ObTablet::init_for_first_time_creation(
     common::ObArenaAllocator &allocator,
     const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,
@@ -264,7 +264,7 @@ int ObTablet::init(
   return ret;
 }
 
-int ObTablet::init(
+int ObTablet::init_for_merge(
     common::ObArenaAllocator &allocator,
     const ObUpdateTableStoreParam &param,
     const ObTablet &old_tablet)
@@ -370,7 +370,7 @@ int ObTablet::init(
   return ret;
 }
 
-int ObTablet::init(
+int ObTablet::init_for_mds_table_dump(
     common::ObArenaAllocator &allocator,
     const ObTablet &old_tablet,
     const share::SCN &flush_scn,
@@ -434,14 +434,14 @@ int ObTablet::init(
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
     }
     is_inited_ = true;
-    LOG_INFO("succeeded to init tablet for dump mds table", K(ret), K(old_tablet), K(flush_scn), KPC(this), K(mds_table_data), K(base_data));
+    LOG_INFO("succeeded to init tablet for mds table dump", K(ret), K(old_tablet), K(flush_scn), KPC(this), K(mds_table_data), K(base_data));
   }
   ObTablet::free_storage_schema(tmp_arena_allocator, old_storage_schema);
 
   return ret;
 }
 
-int ObTablet::init(
+int ObTablet::init_with_migrate_param(
     common::ObArenaAllocator &allocator,
     const ObMigrationTabletParam &param,
     const bool is_update,
@@ -530,7 +530,7 @@ int ObTablet::init(
   return ret;
 }
 
-int ObTablet::init(
+int ObTablet::init_for_defragment(
     common::ObArenaAllocator &allocator,
     const ObIArray<ObITable *> &tables,
     const ObTablet &old_tablet)
@@ -608,7 +608,7 @@ int ObTablet::init(
   return ret;
 }
 
-int ObTablet::init(
+int ObTablet::init_for_sstable_replace(
     common::ObArenaAllocator &allocator,
     const ObBatchUpdateTableStoreParam &param,
     const ObTablet &old_tablet)

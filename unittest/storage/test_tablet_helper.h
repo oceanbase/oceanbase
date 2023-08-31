@@ -132,11 +132,11 @@ inline int TestTabletHelper::create_tablet(
     const ObTabletMapKey key(ls_id, tablet_id);
     if (OB_FAIL(t3m->create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, tablet_handle))) {
       STORAGE_LOG(WARN, "t3m acquire tablet failed", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(tablet_handle.get_obj()->init(
+    } else if (OB_FAIL(tablet_handle.get_obj()->init_for_first_time_creation(
         *tablet_handle.get_allocator(),
         ls_id, tablet_id, tablet_id, share::SCN::base_scn(),
         snapshot_version, table_schema, compat_mode, store_flag, sstable, freezer))){
-      STORAGE_LOG(WARN, "tablet init failed", K(ret), K(ls_id), K(tablet_id));
+      STORAGE_LOG(WARN, "failed to init tablet", K(ret), K(ls_id), K(tablet_id));
     } else if (ObTabletStatus::Status::MAX != tablet_status) {
       ObTabletCreateDeleteMdsUserData data;
       data.tablet_status_ = tablet_status;
