@@ -245,18 +245,14 @@ int ObBasicTabletMergeDag::get_tablet_and_compat_mode()
     compat_mode_ = tmp_tablet_handle.get_obj()->get_tablet_meta().compat_mode_;
   }
 
+  ObTablet *tmp_tablet = tmp_tablet_handle.get_obj();
   if (OB_SUCC(ret) && is_mini_merge(merge_type_)) {
-    int64_t inc_sstable_cnt = tmp_tablet_handle.get_obj()->get_table_store().get_minor_sstables().count() + 1/*major table*/;
-    bool is_exist = false;
-    if (OB_FAIL(MTL(ObTenantDagScheduler *)->check_dag_exist(this, is_exist))) {
-      LOG_WARN("failed to check dag exist", K(ret), K_(param));
-    } else if (is_exist) {
-      ++inc_sstable_cnt;
-    }
-    if (OB_SUCC(ret) && inc_sstable_cnt >= MAX_SSTABLE_CNT_IN_STORAGE) {
+    if (ObPartitionMergePolicy::sstable_cnt_in_storage_oversize(tmp_tablet->get_table_store(), this)) {
       ret = OB_TOO_MANY_SSTABLE;
       LOG_WARN("Too many sstables in tablet, cannot schdule mini compaction, retry later",
-          K(ret), K_(ls_id), K_(tablet_id), K(inc_sstable_cnt), K(tmp_tablet_handle.get_obj()));
+          K(ret), K_(ls_id), K_(tablet_id), K(tmp_tablet));
+      // print warning info log // TODO(@jingshui) : add priority for suspect info
+      ObPartitionMergePolicy::diagnose_table_count_unsafe(MINI_MERGE, *tmp_tablet);
     }
   }
 

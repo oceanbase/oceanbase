@@ -27,6 +27,7 @@
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/scn.h"
+#include "share/scheduler/ob_dag_scheduler.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 using namespace oceanbase;
@@ -174,8 +175,8 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
   } else if (OB_UNLIKELY(nullptr == tablet.get_memtable_mgr() || !table_store.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null memtable mgr from tablet or invalid table store", K(ret), K(tablet), K(table_store));
-  } else if (table_store.get_minor_sstables().count() >= MAX_SSTABLE_CNT_IN_STORAGE) {
-    ret = OB_SIZE_OVERFLOW;
+  } else if (ObPartitionMergePolicy::sstable_cnt_in_storage_oversize(table_store, nullptr/*dag*/)) {
+    ret = OB_TOO_MANY_SSTABLE;
     LOG_ERROR("Too many sstables, delay mini merge until sstable count falls below MAX_SSTABLE_CNT",
               K(ret), K(table_store), K(tablet));
     // add compaction diagnose info
@@ -704,6 +705,27 @@ int ObPartitionMergePolicy::diagnose_minor_dag(
   return ret;
 }
 
+bool ObPartitionMergePolicy::sstable_cnt_in_storage_oversize(
+    const ObTabletTableStore &table_store,
+    const share::ObIDag *dag)
+{
+  int tmp_ret = OB_SUCCESS;
+  int64_t inc_sstable_cnt = table_store.get_minor_sstables().count() + 1/*major table*/;
+  bool is_exist = false;
+  if (nullptr != dag && OB_TMP_FAIL(MTL(ObTenantDagScheduler *)->check_dag_exist(dag, is_exist))) {
+    LOG_WARN_RET(tmp_ret, "failed to check dag exist", K(dag));
+  } else if (is_exist) {
+    ++inc_sstable_cnt;
+  }
+  return inc_sstable_cnt >= MAX_SSTABLE_CNT_IN_STORAGE;
+}
+
+bool ObPartitionMergePolicy::sstable_cnt_oversize(
+    const ObTabletTableStore &table_store)
+{
+  return table_store.get_table_count() > ObTabletTableStore::MAX_SSTABLE_CNT;
+}
+
 int ObPartitionMergePolicy::diagnose_table_count_unsafe(
     const ObMergeType merge_type,
     const storage::ObTablet &tablet)
@@ -730,21 +752,21 @@ int ObPartitionMergePolicy::diagnose_table_count_unsafe(
   const ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   int64_t min_reserved_snapshot = 0;
-  int64_t min_merged_snapshot = INT64_MAX;
+  int64_t max_merged_snapshot = INT64_MAX;
   ObString snapshot_from_str;
-  const ObSSTable *major_sstable = static_cast<const ObSSTable *>(major_tables.get_boundary_table(false/*last*/));
+  const ObSSTable *major_sstable = static_cast<const ObSSTable *>(major_tables.get_boundary_table(true/*last*/));
   if (OB_ISNULL(major_sstable)) {
     const ObSSTable *minor_sstable = static_cast<const ObSSTable *>(minor_tables.get_boundary_table(false/*last*/));
     ADD_COMPACTION_INFO_PARAM(tmp_str, buf_len, "no major sstable. first_minor_start_scn = ", minor_sstable->get_start_scn());
-  } else if (FALSE_IT(min_merged_snapshot = major_sstable->get_snapshot_version())) {
+  } else if (FALSE_IT(max_merged_snapshot = major_sstable->get_snapshot_version())) {
   } else if (OB_FAIL(MTL_CALL_FREEZE_INFO_MGR(diagnose_min_reserved_snapshot,
       tablet_id,
-      min_merged_snapshot,
+      max_merged_snapshot,
       min_reserved_snapshot,
       snapshot_from_str))) {
     LOG_WARN("failed to get min reserved snapshot", K(ret), K(tablet_id));
   } else if (snapshot_from_str.length() > 0) {
-    ADD_COMPACTION_INFO_PARAM(tmp_str, buf_len, "snapstho_type", snapshot_from_str, K(min_reserved_snapshot));
+    ADD_COMPACTION_INFO_PARAM(tmp_str, buf_len, "snapshot_type", snapshot_from_str, K(min_reserved_snapshot));
   }
 
   // check have minor merge DAG
@@ -755,6 +777,7 @@ int ObPartitionMergePolicy::diagnose_table_count_unsafe(
     LOG_WARN("failed to diagnose history minor dag", K(tmp_ret), K(ls_id), K(tablet_id), K(tmp_str));
   }
 
+  LOG_WARN("sstable count is not safe", K(tmp_str));
   // add suspect info
   ADD_SUSPECT_INFO(merge_type, ls_id, tablet_id,
       "sstable count is not safe", "extra_info", tmp_str);

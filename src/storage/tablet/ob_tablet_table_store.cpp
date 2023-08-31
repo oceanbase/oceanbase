@@ -1242,12 +1242,13 @@ int ObTabletTableStore::check_ready_for_read()
     LOG_INFO("no valid major sstable, not ready for read", K(*this));
   } else if (OB_FAIL(check_continuous())) {
     LOG_WARN("failed to check continuous of tables", K(ret));
-  } else if (minor_tables_.count() + 1 > MAX_SSTABLE_CNT_IN_STORAGE) {
-    ret = OB_SIZE_OVERFLOW;
+  } else if (ObPartitionMergePolicy::sstable_cnt_in_storage_oversize(*this, nullptr/*dag*/)) {
+    ret = OB_TOO_MANY_SSTABLE;
     LOG_WARN("Too Many sstables in table store", K(ret), KPC(this), KPC(tablet_ptr_));
     MTL(concurrency_control::ObMultiVersionGarbageCollector *)->report_sstable_overflow();
-  } else if (get_table_count() > ObTabletTableStore::MAX_SSTABLE_CNT) {
-    ret = OB_SIZE_OVERFLOW;
+    ObPartitionMergePolicy::diagnose_table_count_unsafe(MAJOR_MERGE, *tablet_ptr_);
+  } else if (ObPartitionMergePolicy::sstable_cnt_oversize(*this)) {
+    ret = OB_TOO_MANY_SSTABLE;
     LOG_WARN("Too Many sstables, cannot add another sstable any more", K(ret), KPC(this), KPC(tablet_ptr_));
     MTL(concurrency_control::ObMultiVersionGarbageCollector *)->report_sstable_overflow();
     ObPartitionMergePolicy::diagnose_table_count_unsafe(MAJOR_MERGE, *tablet_ptr_);

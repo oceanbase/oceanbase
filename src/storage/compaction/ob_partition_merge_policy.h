@@ -33,6 +33,10 @@ struct ObTableHandleV2;
 class ObLS;
 class ObTableStoreIterator;
 }
+namespace share
+{
+class ObIDag;
+}
 using namespace storage;
 
 namespace blocksstable
@@ -94,6 +98,11 @@ public:
       const storage::ObMergeType merge_type,
       const storage::ObTablet &tablet);
 
+  static bool sstable_cnt_in_storage_oversize(
+      const ObTabletTableStore &table_store,
+      const share::ObIDag *dag);
+  static bool sstable_cnt_oversize(
+      const ObTabletTableStore &table_store);
   static int get_multi_version_start(
       const ObMergeType merge_type,
       ObLS &ls,

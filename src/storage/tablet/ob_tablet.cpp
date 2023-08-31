@@ -2497,12 +2497,19 @@ int ObTablet::get_kept_multi_version_start(
     multi_version_start = MIN(MAX(min_reserved_snapshot, multi_version_start), tablet.get_snapshot_version());
 
     const int64_t current_time = common::ObTimeUtility::fast_current_time() * 1000; // needs ns here.
-    if (current_time - multi_version_start > 120 * 60 * 1000 * 1000L /*2 hour*/) {
-      if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000L /*10s*/)) {
-        LOG_INFO("tablet multi version start not advance for a long time", K(ret),
-                "ls_id", tablet.get_tablet_meta().ls_id_, K(tablet_id),
-                K(multi_version_start), K(old_min_reserved_snapshot), K(min_medium_snapshot),
-                "ls_min_reserved_snapshot", ls.get_min_reserved_snapshot(), K(tablet));
+    if (current_time - multi_version_start > 10_hour * 1000L /*needs ns here*/) {
+      if (REACH_TENANT_TIME_INTERVAL(30_s)) {
+        int64_t unused_version = 0;
+        ObString snapshot_from_str;
+        if (OB_TMP_FAIL(MTL(ObTenantFreezeInfoMgr*)->diagnose_min_reserved_snapshot(
+            tablet_id, max_merged_snapshot, unused_version, snapshot_from_str))) {
+          LOG_WARN("failed to diagnose min reserved snapshot", K(tmp_ret), K(tablet_id));
+        }
+        LOG_ERROR("tablet multi version start not advance for a long time", K(ret),
+                "ls_id", tablet.get_tablet_meta().ls_id_, K(tablet_id), K(multi_version_start),
+                "snapshot_type", snapshot_from_str, K(old_min_reserved_snapshot),
+                K(min_medium_snapshot), "ls_min_reserved_snapshot", ls.get_min_reserved_snapshot(),
+                K(tablet));
       }
     }
   }
