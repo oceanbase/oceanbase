@@ -297,7 +297,8 @@ int ObHeartbeatService::set_hb_responses_(const int64_t whitelist_epoch_id, ObSe
       } else if (OB_UNLIKELY(!hb_response->is_valid())) {
         // if an observer does not reply the rpc, we will get an invalid hb_response.
         tmp_ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid hb_response", KR(ret), KR(tmp_ret), KPC(hb_response));
+        LOG_WARN("there might be servers which haven't replied to heartbeat requests",
+            KR(ret), KR(tmp_ret), KPC(hb_response));
       } else if (OB_FAIL(hb_responses_.push_back(*hb_response))) {
         LOG_WARN("fail to push an element into hb_responses_", KR(ret), KPC(hb_response));
       } else {
