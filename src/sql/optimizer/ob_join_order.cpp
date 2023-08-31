@@ -7428,7 +7428,19 @@ int ObJoinOrder::generate_temp_table_paths()
       LOG_WARN("failed to compute pipelined path", K(ret));
     } else if (OB_FAIL(add_path(temp_table_path))) {
       LOG_WARN("failed to add path", K(ret));
-    } else { /*do nothing*/ }
+    } else if (ObShardingInfo::is_shuffled_server_list(temp_table_path->server_list_)) {
+      /** Two temp tables with shuffled server list might not be in the same real server list
+       *  TEMP1 (shuffled : s1,s2)    TEMP2 (shuffled : s3,s4)
+       *             |                           |
+       *          GROUPY BY                   GROUP BY
+       *             |                           |
+       *        HASH EXCHANGE               HASH EXCHANGE
+       *             |                           |
+       *      TABLE SCAN(s1, s2)         TABLE SCAN(s3, s4)
+       *  TEMP1 and TEMP2 should not be union all by ext partition wise
+      */
+      temp_table_path->server_list_.reuse();
+    }
   }
   return ret;
 }

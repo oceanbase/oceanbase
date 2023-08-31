@@ -1229,7 +1229,6 @@ int ObLogicalOperator::check_property_valid() const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(ObGlobalHint::DEFAULT_PARALLEL > get_parallel()
-                  || get_server_list().empty()
                   || get_server_cnt() < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("has invalid parallel or server info", K(ret), K(get_parallel()),
