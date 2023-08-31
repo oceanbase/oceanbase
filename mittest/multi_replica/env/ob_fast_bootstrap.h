@@ -174,35 +174,24 @@ namespace share
 {
 namespace schema
 {
-
 common::SpinRWLock lock_for_schema_version;
 int ObSchemaServiceSQLImpl::gen_new_schema_version(
     uint64_t tenant_id,
     int64_t refreshed_schema_version,
     int64_t &schema_version)
 {
+  SpinWLockGuard guard(lock_for_schema_version);
   int ret = OB_SUCCESS;
   schema_version = OB_INVALID_VERSION;
-  SpinWLockGuard guard(lock_for_schema_version);
-  if (OB_INVALID_TENANT_ID == tenant_id) {
+  const int64_t version_cnt = 1;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", K(ret), K(tenant_id));
-  } else {
-    if (is_sys_tenant(tenant_id)) {
-      if (OB_FAIL(gen_leader_sys_schema_version(tenant_id, schema_version))) {
-          LOG_WARN("failed to gen leader sys tenant_id schema version", K(ret), K(tenant_id));
-      }
-    } else {
-      // normal tenant
-      if (OB_FAIL(gen_leader_normal_schema_version(tenant_id, refreshed_schema_version, schema_version))) {
-        LOG_WARN("failed to gen leader normal schema version", K(ret), K(tenant_id), K(refreshed_schema_version));
-      }
-
-    }
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(gen_tenant_new_schema_version_(tenant_id, refreshed_schema_version, version_cnt, schema_version))) {
+    LOG_WARN("fail to gen schema version", KR(ret), K(tenant_id), K(refreshed_schema_version));
   }
-  if (OB_FAIL(ret)) {
-  } else {
-    LOG_INFO("new schema version", K(schema_version), "this", OB_P(this));
+  if (OB_SUCC(ret)) {
+    LOG_INFO("new schema version", K(tenant_id), K(schema_version));
   }
   return ret;
 }

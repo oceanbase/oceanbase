@@ -108,6 +108,8 @@ class ObMultiVersionSchemaService;
 class ObSchemaGetterGuard;
 class ObMultiVersionSchemaService : public ObServerSchemaService
 {
+typedef common::ObSortedVector<ObSchemaMgr *> SchemaMgrInfos;
+typedef SchemaMgrInfos::iterator SchemaMgrIterator;
 public:
   static bool g_skip_resolve_materialized_view_definition_;
 
@@ -170,6 +172,12 @@ public:
                          const int64_t schema_version,
                          common::ObKVCacheHandle &handle,
                          const ObSchema *&schema);
+
+  int get_latest_schema(common::ObIAllocator &allocator,
+                        const ObSchemaType schema_type,
+                        const uint64_t tenant_id,
+                        const uint64_t schema_id,
+                        const ObSchema *&schema);
 
   const ObSimpleTenantSchema* get_simple_gts_tenant() const
   {
@@ -234,6 +242,13 @@ public:
   virtual int set_last_refreshed_schema_info(const ObRefreshSchemaInfo &schema_info);
   int update_baseline_schema_version(const uint64_t tenant_id, const int64_t baseline_schema_version);
   int gen_new_schema_version(uint64_t tenant_id, int64_t &schema_version);
+  // gen schema versions in [start_version, end_version] with specified schema version cnt.
+  // @param[out]:
+  //  - schema_version: end_version
+  int gen_batch_new_schema_versions(
+      const uint64_t tenant_id,
+      const int64_t version_cnt,
+      int64_t &schema_version);
 
   /*----------- check schema interface -----------------*/
   bool is_sys_full_schema() const;
@@ -324,6 +339,7 @@ public:
                               bool &is_restore);
   int check_restore_tenant_exist(const common::ObIArray<uint64_t> &tenant_ids, bool &exist);
 
+  int get_tenant_name_case_mode(const uint64_t tenant_id, ObNameCaseMode &name_case_mode);
   /*------------- refresh schema interface -----------------*/
   int broadcast_tenant_schema(
       const uint64_t tenant_id,
@@ -403,6 +419,10 @@ private:
   int try_gc_another_allocator(const uint64_t tenant_id,
                                ObSchemaMemMgr *&mem_mgr,
                                ObSchemaMgrCache *&schema_mgr_cache);
+  // try release slot's schema mgr which is in current allocator and without reference
+  int try_gc_current_allocator(const uint64_t tenant_id,
+                               ObSchemaMemMgr *&mem_mgr,
+                               ObSchemaMgrCache *&schema_mgr_cache);
 
   int get_schema_status(
       const common::ObArray<ObRefreshSchemaStatus> &schema_status_array,
@@ -453,12 +473,18 @@ private:
                                 ObSchemaMgrCache &schema_mgr_cache);
   int switch_allocator_(ObSchemaMemMgr &mem_mgr,
                         ObSchemaMgr *&latest_schema_mgr);
+  inline static bool compare_schema_mgr_info_(const ObSchemaMgr *lhs,
+                                              const ObSchemaMgr *rhs);
+  int try_gc_allocator_when_add_schema_(const uint64_t tenant_id,
+                                        ObSchemaMemMgr *&mem_mgr,
+                                        ObSchemaMgrCache *&schema_mgr_cache);
 private:
   static const int64_t MAX_VERSION_COUNT = 64;
   static const int64_t MAX_VERSION_COUNT_FOR_LIBOBLOG = 6;
   static const int32_t MAX_RETRY_TIMES = 10;
   static const int64_t RETRY_INTERVAL_US = 1000 * 1000; //1s
   static const int64_t DEFAULT_TENANT_SET_SIZE = 64;
+  static const int64_t RESERVE_SCHEMA_MGR_CNT = 10;
 
   bool init_;
   mutable lib::ObMutex schema_refresh_mutex_;//assert only one thread can refresh schema

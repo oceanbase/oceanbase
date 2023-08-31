@@ -555,19 +555,24 @@ bool ObSchemaCache::need_use_sys_cache(const ObSchemaCacheKey &cache_key) const
 {
   bool is_need = false;
   if (TENANT_SCHEMA == cache_key.schema_type_
-      && (OB_SYS_TENANT_ID == cache_key.schema_id_
+      && (is_sys_tenant(cache_key.schema_id_)
           || OB_GTS_TENANT_ID == cache_key.schema_id_)) {
     is_need = true;
   } else if (USER_SCHEMA == cache_key.schema_type_
              && is_sys_tenant(cache_key.tenant_id_)) {
     is_need = true;
-  } else if (TABLE_SCHEMA == cache_key.schema_type_
-             && is_inner_table(cache_key.schema_id_)) {
-    // Ensure cache of full sys table schemas won't be washed while create tenant or bootstrap.
-    // FIXME:(yanmu.ztl) Recycle user/meta tenant's full table schema when tenant is dropped.
-    is_need = true;
+  } else if (TABLE_SCHEMA == cache_key.schema_type_) {
+    if (is_inner_table(cache_key.schema_id_)) {
+      if (is_sys_tenant(cache_key.tenant_id_)) {
+        is_need = true;
+      } else if (!is_virtual_table(cache_key.schema_id_)
+                && !is_sys_view(cache_key.schema_id_)) {
+        is_need = true;
+      }
+      // normal tenant's virtual table and view schema should use kvcache to store
+    }
   } else if (SYS_VARIABLE_SCHEMA == cache_key.schema_type_
-             && OB_SYS_TENANT_ID == cache_key.schema_id_) {
+             && is_sys_tenant(cache_key.schema_id_)) {
     is_need = true;
   }
   return is_need;
@@ -929,7 +934,9 @@ int ObSchemaFetcher::fetch_schema(ObSchemaType schema_type,
   } else {
     do {
       observer::ObUseWeakGuard use_weak_guard;
-      if (OB_FAIL(schema_service_->can_read_schema_version(schema_status, schema_version))) {
+      if (INT64_MAX == schema_version) {
+        // skip inspection while fetch latest schema
+      } else if (OB_FAIL(schema_service_->can_read_schema_version(schema_status, schema_version))) {
         LOG_WARN("incremant schema is not readable now, waiting and retry", K(ret), K(retry_times), K(schema_version));
         if (OB_SCHEMA_EAGAIN == ret) {
           retry = (retry_times++ < RETRY_TIMES_MAX);

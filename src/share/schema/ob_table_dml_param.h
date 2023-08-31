@@ -57,8 +57,8 @@ public:
   OB_INLINE int64_t get_column_count() const { return columns_.count(); }
   OB_INLINE const Columns &get_columns() const { return columns_; }
   OB_INLINE const ColumnMap &get_col_map() const { return col_map_; }
-  OB_INLINE bool is_index_table() const { return ObTableSchema::is_index_table(table_type_); }
-  OB_INLINE bool is_lob_meta_table() const { return ObTableSchema::is_aux_lob_meta_table(table_type_); }
+  OB_INLINE bool is_index_table() const { return share::schema::is_index_table(table_type_); }
+  OB_INLINE bool is_lob_meta_table() const { return share::schema::is_aux_lob_meta_table(table_type_); }
   OB_INLINE bool is_materialized_view() const
   { return ObTableSchema::is_materialized_view(table_type_); }
   OB_INLINE bool is_storage_index_table() const

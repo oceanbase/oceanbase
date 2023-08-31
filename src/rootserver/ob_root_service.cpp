@@ -108,6 +108,9 @@
 #include "logservice/ob_log_service.h"
 #include "rootserver/ob_heartbeat_service.h"
 
+#include "parallel_ddl/ob_create_table_helper.h" // ObCreateTableHelper
+#include "parallel_ddl/ob_create_view_helper.h"  // ObCreateViewHelper
+
 namespace oceanbase
 {
 
@@ -1279,6 +1282,8 @@ void ObRootService::wait()
   FLOG_INFO("rebalance task mgr exit success");
   TG_WAIT(lib::TGDefIDs::GlobalCtxTimer);
   FLOG_INFO("global ctx timer exit success");
+  ddl_service_.get_index_name_checker().reset_all_cache();
+  FLOG_INFO("reset index name checker success");
   ObUpdateRsListTask::clear_lock();
   THE_RS_JOB_TABLE.reset_max_job_id();
   int64_t cost = ObTimeUtility::current_time() - start_time;
@@ -2970,6 +2975,67 @@ int ObRootService::handle_security_audit(const ObSecurityAuditArg &arg)
   return ret;
 }
 
+
+int ObRootService::parallel_ddl_pre_check_(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  bool is_dropped = false;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service_->check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
+    LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
+  } else if (is_dropped) {
+    ret = OB_TENANT_HAS_BEEN_DROPPED;
+    LOG_WARN("tenant has been dropped", KR(ret), K(tenant_id));
+  } else if (!schema_service_->is_tenant_refreshed(tenant_id)) {
+    // use this err to trigger DDL retry and release current thread.
+    ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+    LOG_WARN("tenant' schema not refreshed yet, need retry", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObRootService::parallel_create_table(const ObCreateTableArg &arg, ObCreateTableRes &res)
+{
+  LOG_TRACE("receive create table arg", K(arg));
+  int64_t begin_time = ObTimeUtility::current_time();
+  const uint64_t tenant_id = arg.exec_tenant_id_;
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(parallel_ddl_pre_check_(tenant_id))) {
+    LOG_WARN("pre check failed before parallel ddl execute", KR(ret), K(tenant_id));
+  } else if (arg.schema_.is_view_table()) {
+    ObCreateViewHelper create_view_helper(schema_service_, tenant_id, arg, res);
+    if (OB_FAIL(create_view_helper.init(ddl_service_))) {
+      LOG_WARN("fail to init create view helper", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(create_view_helper.execute())) {
+      LOG_WARN("fail to execute create view", KR(ret), K(tenant_id));
+    }
+  } else {
+    ObCreateTableHelper create_table_helper(schema_service_, tenant_id, arg, res);
+    if (OB_FAIL(create_table_helper.init(ddl_service_))) {
+      LOG_WARN("fail to init create table helper", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(create_table_helper.execute())) {
+      LOG_WARN("fail to execute create table", KR(ret), K(tenant_id));
+    }
+  }
+  int64_t cost = ObTimeUtility::current_time() - begin_time;
+  LOG_TRACE("finish create table", KR(ret), K(arg), K(cost));
+  ROOTSERVICE_EVENT_ADD("ddl", "parallel_create_table",
+                        K(ret), K(tenant_id),
+                        "table_id", res.table_id_, K(cost));
+  return ret;
+}
+
 int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &res)
 {
   LOG_DEBUG("receive create table arg", K(arg));
@@ -3197,6 +3263,7 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
         } else if (OB_FAIL(index_builder.generate_schema(index_arg,
                                                          table_schema,
                                                          global_index_without_column_info,
+                                                         true, /*generate_id*/
                                                          index_schema))) {
           LOG_WARN("generate_schema for index failed", K(index_arg), K(table_schema), K(ret));
         }
@@ -4093,6 +4160,10 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
         ddl_type = ObDDLType::DDL_TRUNCATE_PARTITION;
       } else if (obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == nonconst_arg.alter_part_type_) {
         ddl_type = ObDDLType::DDL_TRUNCATE_SUB_PARTITION;
+      } else if (obrpc::ObAlterTableArg::RENAME_PARTITION == nonconst_arg.alter_part_type_) {
+        ddl_type = ObDDLType::DDL_RENAME_PARTITION;
+      } else if (obrpc::ObAlterTableArg::RENAME_SUB_PARTITION == nonconst_arg.alter_part_type_) {
+        ddl_type = ObDDLType::DDL_RENAME_SUB_PARTITION;
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected ddl type", K(ret), K(nonconst_arg.alter_part_type_), K(nonconst_arg));

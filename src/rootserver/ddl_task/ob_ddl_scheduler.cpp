@@ -972,6 +972,8 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
       case DDL_TRUNCATE_TABLE:
       case DDL_DROP_PARTITION:
       case DDL_DROP_SUB_PARTITION:
+      case DDL_RENAME_PARTITION:
+      case DDL_RENAME_SUB_PARTITION:
       case DDL_TRUNCATE_PARTITION:
       case DDL_TRUNCATE_SUB_PARTITION:
       default:
@@ -1798,6 +1800,8 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
       case DDL_TRUNCATE_TABLE:
       case DDL_DROP_PARTITION:
       case DDL_DROP_SUB_PARTITION:
+      case DDL_RENAME_PARTITION:
+      case DDL_RENAME_SUB_PARTITION:
       case DDL_TRUNCATE_PARTITION:
       case DDL_TRUNCATE_SUB_PARTITION:
         ret = schedule_ddl_retry_task(record);

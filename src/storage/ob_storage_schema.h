@@ -150,10 +150,10 @@ public:
   virtual inline int64_t get_progressive_merge_num() const override { return progressive_merge_num_; }
   virtual inline uint64_t get_master_key_id() const override { return master_key_id_; }
   virtual inline bool is_use_bloomfilter() const override { return is_use_bloomfilter_; }
-  virtual inline bool is_index_table() const override { return share::schema::ObTableSchema::is_index_table(table_type_); }
+  virtual inline bool is_index_table() const override { return share::schema::is_index_table(table_type_); }
   virtual inline bool is_storage_index_table() const override
   {
-    return share::schema::ObTableSchema::is_index_table(table_type_) || is_materialized_view();
+    return share::schema::is_index_table(table_type_) || is_materialized_view();
   }
   inline bool is_materialized_view() const { return share::schema::ObTableSchema::is_materialized_view(table_type_); }
   virtual inline bool is_global_index_table() const override { return share::schema::ObSimpleTableSchemaV2::is_global_index_table(index_type_); }

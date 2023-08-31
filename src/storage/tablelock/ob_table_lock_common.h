@@ -223,6 +223,8 @@ enum class ObLockOBJType : char
   OBJ_TYPE_EXTERNAL_TABLE_REFRESH = 6, // for external table
   OBJ_TYPE_ONLINE_DDL_TABLE = 7, // online ddl table
   OBJ_TYPE_ONLINE_DDL_TABLET = 8, // online ddl tablets
+  OBJ_TYPE_DATABASE_NAME = 9,   // for database related ddl
+  OBJ_TYPE_OBJECT_NAME = 10,     // for obj related ddl
   OBJ_TYPE_MAX
 };
 
@@ -251,6 +253,18 @@ int lock_obj_type_to_string(const ObLockOBJType obj_type,
   }
   case ObLockOBJType::OBJ_TYPE_TENANT: {
     strncpy(str, "TENANT", str_len);
+    break;
+  }
+  case ObLockOBJType::OBJ_TYPE_EXTERNAL_TABLE_REFRESH: {
+    strncpy(str, "EXTERNAL_TABLE", str_len);
+    break;
+  }
+  case ObLockOBJType::OBJ_TYPE_DATABASE_NAME: {
+    strncpy(str, "DATABASE_NAME", str_len);
+    break;
+  }
+  case ObLockOBJType::OBJ_TYPE_OBJECT_NAME: {
+    strncpy(str, "OBJECT_NAME", str_len);
     break;
   }
   default: {

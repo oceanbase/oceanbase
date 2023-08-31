@@ -27,6 +27,11 @@ namespace oceanbase
 {
 namespace rootserver
 {
+bool is_parallel_ddl(const obrpc::ObRpcPacketCode pcode)
+{
+  return obrpc::OB_TRUNCATE_TABLE_V2 == pcode
+         || obrpc::OB_PARALLEL_CREATE_TABLE == pcode;
+}
 
 // precondition: enable_ddl = false
 bool is_allow_when_disable_ddl(const obrpc::ObRpcPacketCode pcode, const obrpc::ObDDLArg *ddl_arg)
@@ -129,10 +134,16 @@ protected:
             RS_LOG(WARN, "ddl operation not allow in standby", KR(ret), KPC(ddl_arg_));
           } else {
             auto *tsi_value = GET_TSI(share::schema::TSIDDLVar);
+            // used for parallel ddl
+            auto *tsi_generator = GET_TSI(share::schema::TSISchemaVersionGenerator);
             if (OB_ISNULL(tsi_value)) {
               ret = OB_ERR_UNEXPECTED;
               RS_LOG(WARN, "Failed to get TSIDDLVar", K(ret), K(pcode));
+            } else if (OB_ISNULL(tsi_generator)) {
+              ret = OB_ERR_UNEXPECTED;
+              RS_LOG(WARN, "Failed to get TSISchemaVersionGenerator", KR(ret), K(pcode));
             } else {
+              tsi_generator->reset();
               tsi_value->exec_tenant_id_ = ddl_arg_->exec_tenant_id_;
               tsi_value->ddl_id_str_ = NULL;
               const common::ObString &ddl_id_str = ddl_arg_->ddl_id_str_;
@@ -183,7 +194,7 @@ protected:
           int64_t start_ts = ObTimeUtility::current_time();
           bool with_ddl_lock = false;
           if (is_ddl_like_) {
-            if (obrpc::OB_TRUNCATE_TABLE_V2 == pcode) {
+            if (is_parallel_ddl(pcode)) {
               if (OB_FAIL(root_service_.get_ddl_service().ddl_rlock())) {
                 RS_LOG(WARN, "root service ddl lock fail", K(ret), K(ddl_arg_));
               }
@@ -329,6 +340,7 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_TABLEGROUP, ObRpcCreateTablegroupP,
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_TABLEGROUP, ObRpcDropTablegroupP, drop_tablegroup(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_TABLEGROUP, ObRpcAlterTablegroupP, alter_tablegroup(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_TABLE, ObRpcCreateTableP, create_table(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_PARALLEL_CREATE_TABLE, ObRpcParallelCreateTableP, parallel_create_table(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_TABLE, ObRpcAlterTableP, alter_table(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_TABLE, ObRpcDropTableP, drop_table(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_RENAME_TABLE, ObRpcRenameTableP, rename_table(arg_));

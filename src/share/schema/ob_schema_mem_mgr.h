@@ -27,19 +27,22 @@ public:
   ObSchemaMemory():pos_(OB_INVALID_INDEX), tenant_id_(OB_INVALID_TENANT_ID),
                   mem_used_(OB_INVALID_COUNT), mem_total_(OB_INVALID_COUNT),
                   used_schema_mgr_cnt_(OB_INVALID_COUNT),
-                  free_schema_mgr_cnt_(OB_INVALID_COUNT) {}
+                  free_schema_mgr_cnt_(OB_INVALID_COUNT),
+                  allocator_idx_(OB_INVALID_INDEX) {}
   ~ObSchemaMemory() {}
   void reset();
   void init(const int64_t pos, const uint64_t &tenant_id,
             const int64_t &mem_used, const int64_t &mem_total,
             const int64_t &used_schema_mgr_cnt,
-            const int64_t &free_schema_mgr_cnt);
+            const int64_t &free_schema_mgr_cnt,
+            const int64_t &allocator_idx);
   int64_t get_pos() const { return pos_; }
   uint64_t get_tenant_id() const { return tenant_id_; }
   int64_t get_mem_used() const { return mem_used_; }
   int64_t get_mem_total() const { return mem_total_; }
   int64_t get_used_schema_mgr_cnt() const { return used_schema_mgr_cnt_; }
   int64_t get_free_schema_mgr_cnt() const { return free_schema_mgr_cnt_; }
+  int64_t get_allocator_idx() const { return allocator_idx_; }
   TO_STRING_KV(K_(pos), K_(mem_used), K_(mem_total),
                K_(used_schema_mgr_cnt), K_(free_schema_mgr_cnt));
 private:
@@ -49,6 +52,7 @@ private:
   int64_t mem_total_;
   int64_t used_schema_mgr_cnt_;
   int64_t free_schema_mgr_cnt_;
+  int64_t allocator_idx_;
 };
 namespace common
 {
@@ -79,6 +83,8 @@ public:
   uint64_t get_tenant_id() const { return tenant_id_; }
   int try_reset_another_allocator();
   int get_another_ptrs(common::ObArray<void *> &ptrs);
+  int get_current_ptrs(common::ObArray<void *> &ptrs);
+  int get_all_ptrs(common::ObArray<void *> &ptrs);
   int get_all_alloc_info(common::ObIArray<ObSchemaMemory> &tenant_mem_infos);
   int alloc_schema_mgr(ObSchemaMgr *&schema_mgr, bool alloc_for_liboblog);
   int free_schema_mgr(ObSchemaMgr *&schema_mgr);

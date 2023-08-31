@@ -414,7 +414,7 @@ public:
         || share::schema::ObTableType::MATERIALIZED_VIEW == table_type_;
   }
   OB_INLINE share::schema::ObIndexType get_index_type() const { return index_type_; }
-  OB_INLINE bool is_index_table() const { return share::schema::ObTableSchema::is_index_table(table_type_); }
+  OB_INLINE bool is_index_table() const { return share::schema::is_index_table(table_type_); }
   OB_INLINE bool is_normal_index() const
   {
     return share::schema::INDEX_TYPE_NORMAL_LOCAL == index_type_

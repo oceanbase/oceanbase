@@ -294,7 +294,8 @@ int ObIndexBuilder::do_create_global_index(
             new_arg, new_table_schema, allocator, gen_columns))) {
       LOG_WARN("fail to adjust expr index args", K(ret));
     } else if (OB_FAIL(generate_schema(
-        new_arg, new_table_schema, global_index_without_column_info, index_schema))) {
+        new_arg, new_table_schema, global_index_without_column_info,
+        true/*generate_id*/, index_schema))) {
       LOG_WARN("fail to generate schema", K(ret), K(new_arg));
     } else {
       if (gen_columns.empty()) {
@@ -472,7 +473,8 @@ int ObIndexBuilder::do_create_local_index(
               my_arg, new_table_schema, allocator, gen_columns))) {
         LOG_WARN("fail to adjust expr index args", K(ret));
       } else if (OB_FAIL(generate_schema(
-              my_arg, new_table_schema, global_index_without_column_info, index_schema))) {
+              my_arg, new_table_schema, global_index_without_column_info,
+              true/*generate_id*/, index_schema))) {
         LOG_WARN("fail to generate schema", K(ret), K(my_arg));
       } else if (OB_FAIL(new_table_schema.check_create_index_on_hidden_primary_key(index_schema))) {
         LOG_WARN("failed to check create index on table", K(ret), K(index_schema));
@@ -626,6 +628,7 @@ int ObIndexBuilder::generate_schema(
     const ObCreateIndexArg &arg,
     ObTableSchema &data_schema,
     const bool global_index_without_column_info,
+    const bool generate_id,
     ObTableSchema &schema)
 {
   int ret = OB_SUCCESS;
@@ -804,10 +807,12 @@ int ObIndexBuilder::generate_schema(
       LOG_WARN("fail to assign partition schema", K(schema), K(ret));
     } else if (OB_FAIL(ddl_service_.try_format_partition_schema(schema))) {
       LOG_WARN("fail to format partition schema", KR(ret), K(schema));
-    } else if (OB_FAIL(ddl_service_.generate_object_id_for_partition_schema(schema))) {
-      LOG_WARN("fail to generate object_id for partition schema", KR(ret), K(schema));
-    } else if (OB_FAIL(ddl_service_.generate_tablet_id(schema))) {
-      LOG_WARN("fail to fetch new table id", K(schema), K(ret));
+    } else if (generate_id) {
+      if (OB_FAIL(ddl_service_.generate_object_id_for_partition_schema(schema))) {
+        LOG_WARN("fail to generate object_id for partition schema", KR(ret), K(schema));
+      } else if (OB_FAIL(ddl_service_.generate_tablet_id(schema))) {
+        LOG_WARN("fail to fetch new table id", KR(ret), K(schema));
+      }
     }
   }
   return ret;

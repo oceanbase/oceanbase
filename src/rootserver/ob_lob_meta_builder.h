@@ -36,9 +36,11 @@ public:
   explicit ObLobMetaBuilder(ObDDLService &ddl_service);
   virtual ~ObLobMetaBuilder();
 
+  // won't fetch new table id if specified_table_id is valid
   int generate_aux_lob_meta_schema(
       share::schema::ObSchemaService *schema_service,
       const share::schema::ObTableSchema &data_schema,
+      const uint64_t specified_table_id,
       share::schema::ObTableSchema &aux_lob_meta_schema,
       bool generate_id);
 

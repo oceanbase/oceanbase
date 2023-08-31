@@ -120,6 +120,7 @@ public:
              uint64_t tenant_id,
              uint64_t data_table_id,
              ObIArray<ObTableSchema> &table_schemas);
+
   // Optimized method to batch get latest table schemas from cache or inner_table automatically.
   //
   // @param[in] sql_client: ObISQLClient
@@ -151,6 +152,12 @@ public:
       const uint64_t tenant_id,
       const ObObjectID &table_id,
       ObSimpleTableSchemaV2 *&table_schema);
+
+  static int try_check_parallel_ddl_schema_in_sync(
+             const ObTimeoutCtx &ctx,
+             const uint64_t tenant_id,
+             const int64_t schema_version,
+             const int64_t consensus_timeout);
 private:
   static int get_tenant_variable(schema::ObSchemaGetterGuard &schema_guard,
                                  uint64_t tenant_id,

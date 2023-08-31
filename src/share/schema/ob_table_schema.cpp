@@ -108,8 +108,8 @@ ObSimpleTableSchemaV2::ObSimpleTableSchemaV2()
 
 ObSimpleTableSchemaV2::ObSimpleTableSchemaV2(ObIAllocator *allocator)
     : ObPartitionSchema(allocator),
-      simple_foreign_key_info_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
-      simple_constraint_info_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator))
+      simple_foreign_key_info_array_(SCHEMA_MID_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
+      simple_constraint_info_array_(SCHEMA_MID_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator))
 {
   reset();
 }
@@ -1415,22 +1415,22 @@ ObTableSchema::ObTableSchema()
 ObTableSchema::ObTableSchema(ObIAllocator *allocator)
   : ObSimpleTableSchemaV2(allocator),
     view_schema_(allocator),
-    base_table_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
-    depend_table_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
-    simple_index_infos_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
-    aux_vp_tid_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
+    base_table_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
+    depend_table_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
+    simple_index_infos_(SCHEMA_MID_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
+    aux_vp_tid_array_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
     rowkey_info_(allocator),
     shadow_rowkey_info_(allocator),
     index_info_(allocator),
     partition_key_info_(allocator),
     subpartition_key_info_(allocator),
-    foreign_key_infos_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
-    label_se_column_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
-    trigger_list_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
-    depend_mock_fk_parent_table_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
-    rls_policy_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
-    rls_group_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
-    rls_context_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator))
+    foreign_key_infos_(SCHEMA_BIG_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
+    label_se_column_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
+    trigger_list_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
+    depend_mock_fk_parent_table_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
+    rls_policy_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
+    rls_group_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
+    rls_context_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator))
 {
   reset();
 }
@@ -5773,6 +5773,40 @@ int ObSimpleTableSchemaV2::get_index_name(const ObString &table_name, ObString &
   }
   return ret;
 }
+
+uint64_t ObSimpleTableSchemaV2::extract_data_table_id_from_index_name(const ObString &index_name)
+{
+  int64_t pos = 0;
+  ObString data_table_id_str;
+  uint64_t data_table_id = OB_INVALID_ID;
+  if (!index_name.prefix_match(OB_INDEX_PREFIX)) {
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "index table name not in valid format", K(index_name));
+  } else {
+    pos = strlen(OB_INDEX_PREFIX);
+    while (NULL != index_name.ptr() &&
+        isdigit(*(index_name.ptr() + pos)) &&
+        pos < index_name.length()) {
+      ++pos;
+    }
+    if (pos + 1 >= index_name.length()) {
+      LOG_WARN_RET(OB_INVALID_ARGUMENT, "index table name not in valid format", K(pos), K(index_name), K(index_name.length()));
+    } else if ('_' != *(index_name.ptr() + pos)) {
+      LOG_WARN_RET(OB_INVALID_ARGUMENT, "index table name not in valid format", K(pos), K(index_name), K(index_name.length()));
+    } else {
+      data_table_id_str.assign_ptr(
+          index_name.ptr() + strlen(OB_INDEX_PREFIX),
+          static_cast<ObString::obstr_size_t>(pos) - strlen(OB_INDEX_PREFIX));
+      int ret = (common_string_unsigned_integer(
+                  0, ObVarcharType, CS_TYPE_UTF8MB4_GENERAL_CI, data_table_id_str, false, data_table_id));
+      if (OB_FAIL(ret)) {
+        data_table_id = OB_INVALID_ID;
+        LOG_WARN("convert string to uint failed", KR(ret), K(data_table_id_str), K(index_name));
+      }
+    }
+  }
+  return data_table_id;
+}
+
 
 int ObSimpleTableSchemaV2::generate_origin_index_name()
 {

@@ -96,6 +96,7 @@ int ObAllVirtualSchemaMemory::inner_get_next_row(common::ObNewRow *&row)
     const int64_t free_schema_mgr_cnt = schema_mem.get_free_schema_mgr_cnt();
     const int64_t mem_used = schema_mem.get_mem_used();
     const int64_t mem_total = schema_mem.get_mem_total();
+    const int64_t allocator_idx = schema_mem.get_allocator_idx();
 
     const int64_t col_count = output_column_ids_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
@@ -134,6 +135,10 @@ int ObAllVirtualSchemaMemory::inner_get_next_row(common::ObNewRow *&row)
         }
         case MEM_TOTAL: {
           cur_row_.cells_[i].set_int(mem_total);
+          break;
+        }
+        case ALLOCATOR_IDX: {
+          cur_row_.cells_[i].set_int(allocator_idx);
           break;
         }
         default : {

@@ -29,6 +29,103 @@ namespace oceanbase
 using namespace common;
 namespace share
 {
+
+void ObIDGenerator::reset()
+{
+  inited_ = false;
+  step_ = 0;
+  start_id_ = common::OB_INVALID_ID;
+  end_id_ = common::OB_INVALID_ID;
+  current_id_ = common::OB_INVALID_ID;
+}
+
+int ObIDGenerator::init(
+    const uint64_t step,
+    const uint64_t start_id,
+    const uint64_t end_id)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_UNLIKELY(start_id > end_id || 0 == step)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid start_id/end_id", KR(ret), K(start_id), K(end_id), K(step));
+  } else {
+    step_ = step;
+    start_id_ = start_id;
+    end_id_ = end_id;
+    current_id_ = start_id - step_;
+    inited_ = true;
+  }
+  return ret;
+}
+
+int ObIDGenerator::next(uint64_t &current_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("generator is not inited", KR(ret), KPC(this));
+  } else if (current_id_ >= end_id_) {
+    ret = OB_ITER_END;
+  } else {
+    current_id_ += step_;
+    current_id = current_id_;
+  }
+  return ret;
+}
+
+int ObIDGenerator::get_start_id(uint64_t &start_id) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("generator is not inited", KR(ret), KPC(this));
+  } else {
+    start_id = start_id_;
+  }
+  return ret;
+}
+
+int ObIDGenerator::get_current_id(uint64_t &current_id) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("generator is not inited", KR(ret), KPC(this));
+  } else {
+    current_id = current_id_;
+  }
+  return ret;
+}
+
+int ObIDGenerator::get_end_id(uint64_t &end_id) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("generator is not inited", KR(ret), KPC(this));
+  } else {
+    end_id = end_id_;
+  }
+  return ret;
+}
+
+int ObIDGenerator::get_id_cnt(uint64_t &cnt) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("generator is not inited", KR(ret), KPC(this));
+  } else if (OB_UNLIKELY(end_id_ < start_id_
+             || step_ <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid start_id/end_id/step", KR(ret), KPC(this));
+  } else {
+    cnt = (end_id_ - start_id_) / step_ + 1;
+  }
+  return ret;
+}
+
 int ObShareUtil::set_default_timeout_ctx(ObTimeoutCtx &ctx, const int64_t default_timeout)
 {
   int ret = OB_SUCCESS;

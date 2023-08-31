@@ -281,6 +281,14 @@ public:
                             share::schema::ObTableSchema &inc_table_schema,
                             share::schema::ObTableSchema &new_table_schema,
                             common::ObMySQLTransaction &trans);
+  int rename_table_partitions(const share::schema::ObTableSchema &orig_table_schema,
+                            share::schema::ObTableSchema &inc_table_schema,
+                            share::schema::ObTableSchema &new_table_schema,
+                            common::ObMySQLTransaction &trans);
+  int rename_table_subpartitions(const share::schema::ObTableSchema &orig_table_schema,
+                              share::schema::ObTableSchema &inc_table_schema,
+                              share::schema::ObTableSchema &new_table_schema,
+                              common::ObMySQLTransaction &trans);
   int get_part_array_from_table(const share::schema::ObTableSchema &orig_table_schema,
                                 const share::schema::ObTableSchema &inc_table_schema,
                                 common::ObIArray<share::schema::ObPartition*> &part_array);

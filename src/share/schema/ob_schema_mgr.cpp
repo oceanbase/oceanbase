@@ -510,7 +510,9 @@ ObSchemaMgr::ObSchemaMgr()
       mock_fk_parent_table_mgr_(allocator_),
       rls_policy_mgr_(allocator_),
       rls_group_mgr_(allocator_),
-      rls_context_mgr_(allocator_)
+      rls_context_mgr_(allocator_),
+      timestamp_in_slot_(0),
+      allocator_idx_(OB_INVALID_INDEX)
 {
 }
 
@@ -562,7 +564,9 @@ ObSchemaMgr::ObSchemaMgr(ObIAllocator &allocator)
       mock_fk_parent_table_mgr_(allocator_),
       rls_policy_mgr_(allocator_),
       rls_group_mgr_(allocator_),
-      rls_context_mgr_(allocator_)
+      rls_context_mgr_(allocator_),
+      timestamp_in_slot_(0),
+      allocator_idx_(OB_INVALID_INDEX)
 {
 }
 
@@ -654,6 +658,7 @@ void ObSchemaMgr::reset()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
+    timestamp_in_slot_ = 0;
     schema_version_ = OB_INVALID_VERSION;
     is_consistent_ = true;
 
@@ -3538,39 +3543,6 @@ int ObSchemaMgr::remove_aux_table(const ObSimpleTableSchemaV2 &schema_to_del)
   return ret;
 }
 
-uint64_t ObSchemaMgr::extract_data_table_id_from_index_name(const ObString &index_name) const
-{
-  int64_t pos = 0;
-  ObString data_table_id_str;
-  uint64_t data_table_id = OB_INVALID_ID;
-  if (!index_name.prefix_match(OB_INDEX_PREFIX)) {
-    LOG_WARN_RET(OB_INVALID_ARGUMENT, "index table name not in valid format", K(index_name));
-  } else {
-    pos = strlen(OB_INDEX_PREFIX);
-    while (NULL != index_name.ptr() &&
-        isdigit(*(index_name.ptr() + pos)) &&
-        pos < index_name.length()) {
-      ++pos;
-    }
-    if (pos + 1 >= index_name.length()) {
-      LOG_WARN_RET(OB_INVALID_ARGUMENT, "index table name not in valid format", K(pos), K(index_name), K(index_name.length()));
-    } else if ('_' != *(index_name.ptr() + pos)) {
-      LOG_WARN_RET(OB_INVALID_ARGUMENT, "index table name not in valid format", K(pos), K(index_name), K(index_name.length()));
-    } else {
-      data_table_id_str.assign_ptr(
-          index_name.ptr() + strlen(OB_INDEX_PREFIX),
-          static_cast<ObString::obstr_size_t>(pos) - strlen(OB_INDEX_PREFIX));
-      int ret = (common_string_unsigned_integer(
-                  0, ObVarcharType, CS_TYPE_UTF8MB4_GENERAL_CI, data_table_id_str, false, data_table_id));
-      if (OB_FAIL(ret)) {
-        data_table_id = OB_INVALID_ID;
-        LOG_WARN("convert string to uint failed", K(ret), K(data_table_id_str), K(index_name));
-      }
-    }
-  }
-  return data_table_id;
-}
-
 int ObSchemaMgr::get_table_schema(
     const uint64_t tenant_id,
     const uint64_t table_id,
@@ -3793,15 +3765,10 @@ int ObSchemaMgr::get_index_schema(
       // FIXME: oracle mode not support drop user/database to recyclebin yet, now
       // can determine whether the index is in the recycle bin based on database_id
       ObString cutted_index_name;
-      ObSimpleTableSchemaV2 tmp_schema_for_cutting_ind_name;
-      tmp_schema_for_cutting_ind_name.reset();
-      tmp_schema_for_cutting_ind_name.set_table_type(USER_INDEX);
-      uint64_t data_table_id = extract_data_table_id_from_index_name(table_name);
+      uint64_t data_table_id = ObSimpleTableSchemaV2::extract_data_table_id_from_index_name(table_name);
       if (OB_INVALID_ID == data_table_id) {
         // nothing to do, need to go on and it will get a empty ptr of dst table_schema
-      } else if (OB_FAIL(tmp_schema_for_cutting_ind_name.set_table_name(table_name))){
-        LOG_WARN("fail to set index name", K(ret));
-      } else if (OB_FAIL(tmp_schema_for_cutting_ind_name.get_index_name(cutted_index_name))) {
+      } else if (OB_FAIL(ObSimpleTableSchemaV2::get_index_name(table_name, cutted_index_name))) {
         if (OB_SCHEMA_ERROR == ret) {
           // If the input table_name of the function does not conform to the prefixed index name format of'__idx_DataTableId_IndexName',
           // an empty table schema pointer should be returned, and no error should be reported, so reset the error code to OB_SUCCESS
@@ -3827,6 +3794,80 @@ int ObSchemaMgr::get_index_schema(
     }
   }
 
+  return ret;
+}
+
+int ObSchemaMgr::deep_copy_index_name_map(
+    common::ObIAllocator &allocator,
+    ObIndexNameMap &index_name_cache)
+{
+  int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
+  if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
+      tenant_id_, is_oracle_mode))) {
+    LOG_WARN("fail to get tenant mode", KR(ret), K_(tenant_id));
+  } else {
+    // index_name_cache will destory or not init, so sub_map_mem_size should be set first
+    // to reduce dynamic memory allocation and avoid error.
+    (void) index_name_cache.set_sub_map_mem_size(index_name_map_.get_sub_map_mem_size());
+    if (OB_FAIL(index_name_cache.init())) {
+      LOG_WARN("init index name cache failed", KR(ret));
+    }
+  }
+  for (int64_t sub_map_id = 0;
+       OB_SUCC(ret) && sub_map_id < index_name_map_.get_sub_map_count();
+       sub_map_id++) {
+    auto it = index_name_map_.begin(sub_map_id);
+    auto end = index_name_map_.end(sub_map_id);
+    for (; OB_SUCC(ret) && it != end; ++it) {
+      const ObSimpleTableSchemaV2 *index_schema = *it;
+      void *buf = NULL;
+      ObIndexNameInfo *index_name_info = NULL;
+      uint64_t data_table_id = OB_INVALID_ID;
+      uint64_t database_id = OB_INVALID_ID;
+      ObString index_name;
+      if (OB_ISNULL(index_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index schema is null", KR(ret));
+      } else if (FALSE_IT(database_id = index_schema->get_database_id())) {
+      } else if (OB_UNLIKELY(!is_recyclebin_database_id(database_id)
+                 && index_schema->get_origin_index_name_str().empty())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid index schema", KR(ret), KPC(index_schema));
+      } else if (OB_ISNULL(buf = allocator.alloc(sizeof(ObIndexNameInfo)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc index name info", KR(ret));
+      } else if (FALSE_IT(index_name_info = new (buf) ObIndexNameInfo())) {
+      } else if (OB_FAIL(index_name_info->init(allocator, *index_schema))) {
+        LOG_WARN("fail to init index name info", KR(ret), KPC(index_schema));
+      } else if (is_recyclebin_database_id(database_id)) {
+        data_table_id = OB_INVALID_ID;
+        index_name = index_name_info->get_index_name();
+      } else {
+        data_table_id = (is_oracle_mode && !is_mysql_sys_database_id(database_id)) ?
+                        OB_INVALID_ID : index_name_info->get_data_table_id();
+        index_name = index_name_info->get_original_index_name();
+      }
+      if (OB_SUCC(ret)) {
+        int overwrite = 0;
+        ObIndexSchemaHashWrapper index_name_wrapper(index_name_info->get_tenant_id(),
+                                                    database_id,
+                                                    data_table_id,
+                                                    index_name);
+        if (OB_FAIL(index_name_cache.set_refactored(
+            index_name_wrapper, index_name_info, overwrite))) {
+          LOG_WARN("fail to set refactored", KR(ret), KPC(index_name_info));
+          if (OB_HASH_EXIST == ret) {
+            ObIndexNameInfo **exist_index_info = index_name_cache.get(index_name_wrapper);
+            if (OB_NOT_NULL(exist_index_info) && OB_NOT_NULL(*exist_index_info)) {
+              FLOG_ERROR("duplicated index info exist", KR(ret),
+                         KPC(index_name_info), KPC(*exist_index_info));
+            }
+          }
+        }
+      }
+    } // end for
+  } // end for
   return ret;
 }
 

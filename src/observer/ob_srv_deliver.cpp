@@ -31,6 +31,7 @@
 #include "observer/omt/ob_tenant.h"
 #include "observer/omt/ob_multi_tenant.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
+#include "rootserver/ob_rs_rpc_processor.h"
 #include "common/ob_clock_generator.h"
 
 using namespace oceanbase::common;
@@ -466,7 +467,7 @@ int ObSrvDeliver::init_queue_threads()
   // TODO: fufeng, make it configurable
   if (OB_FAIL(create_queue_thread(lib::TGDefIDs::LeaseQueueTh, "LeaseQueueTh", lease_queue_))) {
   } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::DDLQueueTh, "DDLQueueTh", ddl_queue_))) {
-  } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::DDLPQueueTh, "DDLPQueueTh", ddl_parallel_queue_))) {
+  } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::DDLPQueueTh, PARALLEL_DDL_THREAD_NAME, ddl_parallel_queue_))) {
   } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::MysqlQueueTh,
                                          "MysqlQueueTh", mysql_queue_))) {
   } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::DiagnoseQueueTh,
@@ -524,8 +525,7 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
   } else if (OB_RENEW_LEASE == pkt.get_pcode()) {
     queue = &lease_queue_->queue_;
   } else if (10 == pkt.get_priority()) {
-    // for new parallel truncate table rpc
-    if (OB_TRUNCATE_TABLE_V2 == pkt.get_pcode()) {
+    if (rootserver::is_parallel_ddl(pkt.get_pcode())) {
       queue = &ddl_parallel_queue_->queue_;
     } else {
       queue = &ddl_queue_->queue_;

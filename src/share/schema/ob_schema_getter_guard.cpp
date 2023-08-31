@@ -9035,6 +9035,22 @@ int ObSchemaGetterGuard::check_global_index_exist(const uint64_t tenant_id, cons
   return ret;
 }
 
+int ObSchemaGetterGuard::deep_copy_index_name_map(
+    common::ObIAllocator &allocator,
+    ObIndexNameMap &index_name_cache)
+{
+  int ret = OB_SUCCESS;
+  const ObSchemaMgr *mgr = NULL;
+  if (OB_FAIL(check_lazy_guard(tenant_id_, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret), K_(tenant_id));
+  // const_cast to iterate index_name_map_, mgr won't be changed actually
+  } else if (OB_FAIL(const_cast<ObSchemaMgr*>(mgr)
+             ->deep_copy_index_name_map(allocator, index_name_cache))) {
+    LOG_WARN("fail to deep copy index name map", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
 } //end of namespace schema
 } //end of namespace share
 } //end of namespace oceanbase

@@ -489,6 +489,52 @@ int ObTableSqlService::drop_inc_all_sub_partition(common::ObISQLClient &sql_clie
   return ret;
 }
 
+int ObTableSqlService::rename_inc_part_info(
+    ObISQLClient &sql_client,
+    const ObTableSchema &table_schema,
+    const ObTableSchema &inc_table_schema,
+    const int64_t new_schema_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_ddl_allowed(table_schema))) {
+    LOG_WARN("check ddl allowed failed", KR(ret), K(table_schema));
+  } else if (!table_schema.is_user_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupport behavior on not user table", KR(ret), K(table_schema));
+  } else {
+    const ObPartitionSchema *table_schema_ptr = &table_schema;
+    const ObPartitionSchema *inc_table_schema_ptr = &inc_table_schema;
+    ObRenameIncPartHelper rename_part_helper(table_schema_ptr, inc_table_schema_ptr, new_schema_version, sql_client);
+    if (OB_FAIL(rename_part_helper.rename_partition_info())) {
+      LOG_WARN("fail to rename partition", KR(ret), KPC(table_schema_ptr), KPC(inc_table_schema_ptr));
+    }
+  }
+  return ret;
+}
+
+int ObTableSqlService::rename_inc_subpart_info(
+    ObISQLClient &sql_client,
+    const ObTableSchema &table_schema,
+    const ObTableSchema &inc_table_schema,
+    const int64_t new_schema_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_ddl_allowed(table_schema))) {
+    LOG_WARN("check ddl allowed failed", KR(ret), K(table_schema));
+  } else if (!table_schema.is_user_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupport behavior on not user table", KR(ret), K(table_schema));
+  } else {
+    const ObPartitionSchema *table_schema_ptr = &table_schema;
+    const ObPartitionSchema *inc_table_schema_ptr = &inc_table_schema;
+    ObRenameIncSubpartHelper rename_subpart_helper(table_schema_ptr, inc_table_schema_ptr, new_schema_version, sql_client);
+    if (OB_FAIL(rename_subpart_helper.rename_subpartition_info())) {
+      LOG_WARN("fail to rename partition", KR(ret), KPC(table_schema_ptr), KPC(inc_table_schema_ptr));
+    }
+  }
+  return ret;
+}
+
 int ObTableSqlService::drop_inc_part_info(
     ObISQLClient &sql_client,
     const ObTableSchema &table_schema,

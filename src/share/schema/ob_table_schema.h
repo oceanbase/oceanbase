@@ -263,6 +263,8 @@ public:
   {
     return (ObViewColumnFilledFlag)((table_mode >> TM_VIEW_COLUMN_FILLED_OFFSET) & VIEW_COLUMN_FILLED_MASK);
   }
+  inline bool is_user_hidden_table() const
+  { return TABLE_STATE_IS_HIDDEN_MASK & state_flag_; }
   TO_STRING_KV("table_mode_flag", mode_flag_,
                "pk_mode", pk_mode_,
                "table_state_flag", state_flag_,
@@ -560,7 +562,7 @@ public:
   inline bool is_offline_ddl_table() const
   { return TABLE_STATE_IS_DDL_MASK & table_mode_.state_flag_; }
   inline bool is_user_hidden_table() const
-  { return TABLE_STATE_IS_HIDDEN_MASK & table_mode_.state_flag_; }
+  { return table_mode_.is_user_hidden_table(); }
   inline bool is_offline_ddl_original_table() const
   { return is_offline_ddl_table() && !is_user_hidden_table(); }
   inline bool check_can_do_ddl() const
@@ -709,6 +711,8 @@ public:
   static int get_index_name(Allocator &allocator, uint64_t table_id,
       const common::ObString &src, common::ObString &dst);
   static int get_index_name(const common::ObString &src, common::ObString &dst);
+
+  static uint64_t extract_data_table_id_from_index_name(const common::ObString &index_name);
   int generate_origin_index_name();
   virtual int check_if_oracle_compat_mode(bool &is_oracle_mode) const;
   // interface derived
@@ -720,26 +724,23 @@ public:
   inline bool is_sys_view() const { return share::schema::ObTableType::SYSTEM_VIEW == table_type_; }
   inline bool is_storage_index_table() const override { return is_index_table() || is_materialized_view(); }
   inline static bool is_storage_index_table(share::schema::ObTableType table_type)
-  { return is_index_table(table_type) || is_materialized_view(table_type);}
+  { return share::schema::is_index_table(table_type) || is_materialized_view(table_type);}
   inline bool is_storage_local_index_table() const { return is_index_local_storage() || is_materialized_view(); }
   inline bool is_user_table() const { return share::schema::ObTableType::USER_TABLE == table_type_; }
   inline bool is_sys_table() const { return share::schema::ObTableType::SYSTEM_TABLE == table_type_; }
   inline bool is_vir_table() const { return share::schema::ObTableType::VIRTUAL_TABLE == table_type_; }
-  inline bool is_view_table() const { return share::schema::ObTableType::USER_VIEW == table_type_ || share::schema::ObTableType::SYSTEM_VIEW == table_type_ || share::schema::ObTableType::MATERIALIZED_VIEW == table_type_; }
-  inline bool is_index_table()  const { return is_index_table(table_type_); }
-  inline static bool is_index_table(share::schema::ObTableType table_type) { return share::schema::ObTableType::USER_INDEX == table_type; }
-  inline bool is_tmp_table() const { return share::schema::ObTableType::TMP_TABLE == table_type_ || share::schema::ObTableType::TMP_TABLE_ORA_SESS == table_type_ || share::schema::ObTableType::TMP_TABLE_ORA_TRX == table_type_; }
+  inline bool is_view_table() const { return share::schema::is_view_table(table_type_); }
+  inline bool is_index_table()  const { return share::schema::is_index_table(table_type_); }
+  inline bool is_tmp_table() const { return is_mysql_tmp_table() || share::schema::ObTableType::TMP_TABLE_ORA_SESS == table_type_ || share::schema::ObTableType::TMP_TABLE_ORA_TRX == table_type_; }
   inline bool is_ctas_tmp_table() const { return 0 != session_id_ && !is_tmp_table(); }
-  inline bool is_mysql_tmp_table() const { return share::schema::ObTableType::TMP_TABLE == table_type_; }
+  inline bool is_mysql_tmp_table() const { return share::schema::is_mysql_tmp_table(table_type_); }
   inline bool is_oracle_tmp_table() const { return share::schema::ObTableType::TMP_TABLE_ORA_SESS == table_type_ || share::schema::ObTableType::TMP_TABLE_ORA_TRX == table_type_; }
   inline bool is_oracle_sess_tmp_table() const { return share::schema::ObTableType::TMP_TABLE_ORA_SESS == table_type_; }
   inline bool is_oracle_trx_tmp_table() const { return share::schema::ObTableType::TMP_TABLE_ORA_TRX == table_type_; }
   virtual inline bool is_aux_vp_table() const override { return share::schema::ObTableType::AUX_VERTIAL_PARTITION_TABLE == table_type_; }
-  inline bool is_aux_lob_piece_table() const { return share::schema::ObTableType::AUX_LOB_PIECE == table_type_; }
-  inline static bool is_aux_lob_meta_table(share::schema::ObTableType table_type)
-  { return schema::ObTableType::AUX_LOB_META == table_type; }
-  inline bool is_aux_lob_meta_table() const { return share::schema::ObTableType::AUX_LOB_META == table_type_; }
-  inline bool is_aux_lob_table() const { return schema::is_aux_lob_table(table_type_); }
+  inline bool is_aux_lob_piece_table() const { return share::schema::is_aux_lob_piece_table(table_type_); }
+  inline bool is_aux_lob_meta_table() const { return share::schema::is_aux_lob_meta_table(table_type_); }
+  inline bool is_aux_lob_table() const { return is_aux_lob_meta_table() || is_aux_lob_piece_table(); }
   inline bool is_aux_table() const { return share::schema::ObTableType::USER_INDEX == table_type_ || share::schema::ObTableType::AUX_VERTIAL_PARTITION_TABLE == table_type_ || share::schema::ObTableType::AUX_LOB_PIECE == table_type_ || share::schema::ObTableType::AUX_LOB_META == table_type_; }
   // Primary partition table judgment: still USER_TABLE, but data_table_id_ is the same as itself,
   // the default data_table_id_ is 0
@@ -816,6 +817,7 @@ public:
   inline bool get_in_offline_ddl_white_list() const { return in_offline_ddl_white_list_; }
 
   inline bool has_rowid() const { return is_user_table() || is_tmp_table(); }
+  inline bool gen_normal_tablet() const { return has_rowid() && !is_extended_rowid_mode(); }
 
   DECLARE_VIRTUAL_TO_STRING;
 protected:

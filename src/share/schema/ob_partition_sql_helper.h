@@ -406,6 +406,48 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObDropIncSubPartHelper);
 };
 
+//rename partition
+class ObRenameIncPartHelper
+{
+public:
+  ObRenameIncPartHelper(const ObPartitionSchema *ori_table,
+                        const ObPartitionSchema *inc_table,
+                        const int64_t schema_version,
+                        common::ObISQLClient &sql_client)
+      : ori_table_(ori_table),
+        inc_table_(inc_table),
+        schema_version_(schema_version),
+        sql_client_(sql_client) {}
+  virtual ~ObRenameIncPartHelper() {}
+  int rename_partition_info();
+private:
+  const ObPartitionSchema *ori_table_;
+  const ObPartitionSchema *inc_table_;
+  int64_t schema_version_;
+  common::ObISQLClient &sql_client_;
+  DISALLOW_COPY_AND_ASSIGN(ObRenameIncPartHelper);
+};
+//rename subpartition
+class ObRenameIncSubpartHelper
+{
+public:
+  ObRenameIncSubpartHelper(const ObPartitionSchema *ori_table,
+                        const ObPartitionSchema *inc_table,
+                        const int64_t schema_version,
+                        common::ObISQLClient &sql_client)
+      : ori_table_(ori_table),
+        inc_table_(inc_table),
+        schema_version_(schema_version),
+        sql_client_(sql_client) {}
+  virtual ~ObRenameIncSubpartHelper() {}
+  int rename_subpartition_info();
+private:
+  const ObPartitionSchema *ori_table_;
+  const ObPartitionSchema *inc_table_;
+  int64_t schema_version_;
+  common::ObISQLClient &sql_client_;
+  DISALLOW_COPY_AND_ASSIGN(ObRenameIncSubpartHelper);
+};
 } //end of schema
 } //end of share
 } //end of oceanbase

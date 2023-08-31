@@ -226,7 +226,10 @@ bool ObLockParam::is_valid() const
             || ObLockOBJType::OBJ_TYPE_LS == lock_id_.obj_type_
             || ObLockOBJType::OBJ_TYPE_EXTERNAL_TABLE_REFRESH == lock_id_.obj_type_
             || ObLockOBJType::OBJ_TYPE_ONLINE_DDL_TABLE == lock_id_.obj_type_
-            || ObLockOBJType::OBJ_TYPE_ONLINE_DDL_TABLET == lock_id_.obj_type_)));
+            || ObLockOBJType::OBJ_TYPE_ONLINE_DDL_TABLET == lock_id_.obj_type_
+            || ObLockOBJType::OBJ_TYPE_DATABASE_NAME == lock_id_.obj_type_
+            || ObLockOBJType::OBJ_TYPE_OBJECT_NAME == lock_id_.obj_type_
+            )));
 }
 
 void ObLockRequest::reset()

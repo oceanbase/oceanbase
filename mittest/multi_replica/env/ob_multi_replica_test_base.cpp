@@ -606,6 +606,15 @@ int ObMultiReplicaTestBase::create_tenant(const char *tenant_name,
       SERVER_LOG(WARN, "create_tenant", K(ret));
     }
   }
+  {
+    ObSqlString sql;
+    if (FAILEDx(sql.assign_fmt("alter system set _enable_parallel_table_creation = false tenant = all"))) {
+      SERVER_LOG(WARN, "create_tenant", KR(ret));
+    } else if (OB_FAIL(sql_proxy.write(sql.ptr(), affected_rows))) {
+      SERVER_LOG(WARN, "create_tenant", KR(ret));
+    }
+    usleep(5 * 1000 * 1000L); // 5s
+  }
   if (change_log_level) {
     OB_LOGGER.set_log_level(log_level);
   }

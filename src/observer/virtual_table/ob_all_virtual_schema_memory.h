@@ -36,6 +36,7 @@ class ObAllVirtualSchemaMemory: public common::ObVirtualTableScannerIterator
     FREE_SCHEMA_MGR_CNT,
     MEM_USED,
     MEM_TOTAL,
+    ALLOCATOR_IDX,
   };
 public:
   explicit ObAllVirtualSchemaMemory(share::schema::ObMultiVersionSchemaService &schema_service)

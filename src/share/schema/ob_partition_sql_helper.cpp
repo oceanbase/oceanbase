@@ -1539,6 +1539,153 @@ int ObDropIncSubPartHelper::drop_subpartition_info()
   return ret;
 }
 
+int ObRenameIncPartHelper::rename_partition_info()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ori_table_) || OB_ISNULL(inc_table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table is null", KR(ret), KP(ori_table_), KP(inc_table_));
+  } else if (!ori_table_->is_user_partition_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupport behavior on not user partition table", KR(ret), KPC(ori_table_));
+  } else {
+    const uint64_t tenant_id = ori_table_->get_tenant_id();
+    const uint64_t table_id = ori_table_->get_table_id();
+    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+    ObDMLSqlSplicer dml;
+    ObSqlString part_sql;
+    ObPartition **part_array = inc_table_->get_part_array();
+    ObPartition *inc_part = nullptr;
+    const int64_t inc_part_num = inc_table_->get_partition_num();
+    int64_t affected_rows = 0;
+    if (OB_ISNULL(part_array)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inc table part_array is null", KR(ret), KP(inc_table_));
+    } else if (OB_UNLIKELY(1 != inc_part_num)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inc part num should be 1", KR(ret), K(inc_part_num));
+    } else if (OB_ISNULL(inc_part = part_array[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inc_part is null", KR(ret));
+    } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))
+          || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id)))
+          || OB_FAIL(dml.add_pk_column("part_id", inc_part->get_part_id()))
+          || OB_FAIL(dml.add_column("schema_version", schema_version_))
+          || OB_FAIL(dml.add_column("part_name", inc_part->get_part_name().ptr()))) {
+      LOG_WARN("dml add column failed", KR(ret));
+    } else if (OB_FAIL(dml.splice_update_sql(share::OB_ALL_PART_TNAME, part_sql))) {
+      LOG_WARN("dml splice update sql failed", KR(ret));
+    } else if (OB_FAIL(sql_client_.write(exec_tenant_id, part_sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to execute sql",KR(ret), K(tenant_id), K(part_sql));
+    } else if (OB_UNLIKELY(inc_part_num != affected_rows)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected affected rows", KR(ret), K(inc_part_num), K(affected_rows));
+    } else {
+      ObDMLSqlSplicer history_dml;
+      ObSqlString part_history_sql;
+      affected_rows = 0;
+      HEAP_VAR(ObAddIncPartDMLGenerator, part_dml_gen,
+                ori_table_, *inc_part, inc_part_num, inc_part->get_part_idx(), schema_version_) {
+        if (OB_FAIL(part_dml_gen.gen_dml(history_dml))) {
+          LOG_WARN("gen dml failed", KR(ret));
+        } else if (OB_FAIL(history_dml.add_column("is_deleted", false))) {
+          LOG_WARN("add column failed", KR(ret));
+        } else if (OB_FAIL(history_dml.splice_insert_sql(share::OB_ALL_PART_HISTORY_TNAME,
+                                                        part_history_sql))) {
+          LOG_WARN("failed to splice batch insert sql", KR(ret), K(part_history_sql));
+        } else if (OB_FAIL(sql_client_.write(exec_tenant_id, part_history_sql.ptr(), affected_rows))) {
+          LOG_WARN("execute sql failed", KR(ret), K(part_history_sql), KPC(inc_part));
+        } else if (OB_UNLIKELY(inc_part_num != affected_rows)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("history affected_rows is unexpected", KR(ret), K(inc_part_num), K(affected_rows));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRenameIncSubpartHelper::rename_subpartition_info()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ori_table_) || OB_ISNULL(inc_table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table is null", KR(ret), KP(ori_table_), KP(inc_table_));
+  } else if (!ori_table_->is_user_subpartition_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupport behavior on not user subpartition table", KR(ret), KPC(ori_table_));
+  } else {
+    int64_t tenant_id = ori_table_->get_tenant_id();
+    const uint64_t table_id = ori_table_->get_table_id();
+    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+    ObDMLSqlSplicer dml;
+    ObSqlString subpart_sql;
+    ObPartition **part_array = inc_table_->get_part_array();
+    ObPartition *inc_part = nullptr;
+    const int64_t inc_part_num = inc_table_->get_partition_num();
+    if (OB_ISNULL(part_array)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("partition array is null", KR(ret), KP(inc_table_));
+    } else if (OB_UNLIKELY(1 != inc_part_num)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inc part num should be 1", KR(ret), K(inc_part_num));
+    } else if (OB_ISNULL(inc_part = part_array[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inc part is null", KR(ret));
+    } else {
+      ObSubPartition **subpart_array = inc_part->get_subpart_array();
+      ObSubPartition *inc_subpart = nullptr;
+      const int64_t inc_subpart_num = inc_part->get_subpartition_num();
+      int64_t affected_rows = 0;
+      if (OB_ISNULL(subpart_array)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("subpart_array is null", KR(ret));
+      } else if (OB_UNLIKELY(1 != inc_subpart_num)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("inc subpart num should be 1", KR(ret), K(inc_subpart_num));
+      } else if (OB_ISNULL(inc_subpart = subpart_array[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("inc_subpart is null", KR(ret));
+      } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))
+              ||OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id)))
+              ||OB_FAIL(dml.add_pk_column("part_id", inc_part->get_part_id()))
+              ||OB_FAIL(dml.add_pk_column("sub_part_id", inc_subpart->get_sub_part_id()))
+              ||OB_FAIL(dml.add_column("schema_version", schema_version_))
+              ||OB_FAIL(dml.add_column("sub_part_name", inc_subpart->get_part_name().ptr()))) {
+        LOG_WARN("dml add column failed", KR(ret));
+      } else if (OB_FAIL(dml.splice_update_sql(share::OB_ALL_SUB_PART_TNAME, subpart_sql))) {
+        LOG_WARN("dml splice update sql failed", KR(ret));
+      } else if (OB_FAIL(sql_client_.write(exec_tenant_id, subpart_sql.ptr(), affected_rows))) {
+        LOG_WARN("fail to execute sql",KR(ret), K(tenant_id), K(subpart_sql));
+      } else if (OB_UNLIKELY(inc_subpart_num != affected_rows)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected affected rows", KR(ret), K(inc_subpart_num), K(affected_rows));
+      } else {
+        ObDMLSqlSplicer history_sub_dml;
+        ObSqlString subpart_history_sql;
+        affected_rows = 0;
+        HEAP_VAR(ObAddIncSubPartDMLGenerator, sub_part_dml_gen,
+                ori_table_, *inc_part, *inc_subpart, inc_part_num, inc_part->get_part_idx(),
+                inc_subpart->get_sub_part_idx(), schema_version_) {
+          if (OB_FAIL(sub_part_dml_gen.gen_dml(history_sub_dml))) {
+            LOG_WARN("gen dml history failed", KR(ret));
+          } else if (OB_FAIL(history_sub_dml.add_column("is_deleted", false))) {
+            LOG_WARN("add column failed", KR(ret));
+          } else if (OB_FAIL(history_sub_dml.splice_insert_sql(share::OB_ALL_SUB_PART_HISTORY_TNAME,
+                                                              subpart_history_sql))) {
+            LOG_WARN("failed to splice insert sql", KR(ret), K(subpart_history_sql));
+          } else if (OB_FAIL(sql_client_.write(exec_tenant_id,subpart_history_sql.ptr(), affected_rows))) {
+            LOG_WARN("execute sql failed", KR(ret), K(subpart_history_sql));
+          } else if (OB_UNLIKELY(inc_subpart_num != affected_rows)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("history affected_rows is unexpected", KR(ret), K(inc_part_num), K(affected_rows));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
 } //end of schema
 } //end of share
 } //end of oceanbase

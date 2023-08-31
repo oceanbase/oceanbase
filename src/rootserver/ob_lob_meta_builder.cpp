@@ -36,6 +36,7 @@ ObLobMetaBuilder::~ObLobMetaBuilder()
 int ObLobMetaBuilder::generate_aux_lob_meta_schema(
     ObSchemaService *schema_service,
     const share::schema::ObTableSchema &data_schema,
+    const uint64_t specified_table_id,
     share::schema::ObTableSchema &aux_lob_meta_schema,
     bool need_generate_id)
 {
@@ -47,14 +48,15 @@ int ObLobMetaBuilder::generate_aux_lob_meta_schema(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(data_schema), K(ret));
   } else {
-    uint64_t new_table_id = OB_INVALID_ID;
+    uint64_t new_table_id = specified_table_id;
     const int64_t buf_size = 64;
     char buf[buf_size];
     MEMSET(buf, 0, buf_size);
     int64_t pos = 0;
     if (OB_FAIL(generate_schema(data_schema, aux_lob_meta_schema))) {
       LOG_WARN("generate_schema for aux vp table failed", K(data_schema), K(ret));
-    } else if (OB_FAIL(schema_service->fetch_new_table_id(data_schema.get_tenant_id(), new_table_id))) {
+    } else if (OB_INVALID_ID == new_table_id
+               && OB_FAIL(schema_service->fetch_new_table_id(data_schema.get_tenant_id(), new_table_id))) {
       LOG_WARN("failed to fetch_new_table_id", "tenant_id", data_schema.get_tenant_id(), K(ret));
     } else if (OB_FAIL(generate_lob_meta_table_name(new_table_id, buf, buf_size, pos))) {
       LOG_WARN("failed to generate_lob_meta_table_name", K(ret), K(new_table_id));

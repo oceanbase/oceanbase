@@ -32,10 +32,9 @@ public:
   ObTableCreator(
       const uint64_t tenant_id,
       const share::SCN &frozen_scn,
-      share::ObLSTableOperator &lst_operator,
       ObMySQLTransaction &trans)
                 : tenant_id_(tenant_id),
-                  tablet_creator_(tenant_id, frozen_scn, lst_operator, trans),
+                  tablet_creator_(tenant_id, frozen_scn, trans),
                   trans_(trans),
                   ls_id_array_(),
                   inited_(false) {}

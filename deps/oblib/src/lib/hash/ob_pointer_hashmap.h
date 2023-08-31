@@ -766,6 +766,7 @@ public:
 
   int64_t get_sub_map_count() const { return sub_map_count_; }
   int64_t get_sub_map_mem_size() const { return sub_map_mem_size_; }
+  void set_sub_map_mem_size(int64_t sub_map_mem_size) { sub_map_mem_size_ = sub_map_mem_size; }
   TO_STRING_KV(KP(this), K_(sub_map_count), K_(sub_map_mem_size), K(allocator_.get_label()));
 private:
   ObPointerHashMap(const ObPointerHashMap &other, const int64_t resize_to)

@@ -18,6 +18,7 @@
 #include "lib/utility/serialization.h"
 #include "lib/oblog/ob_log_module.h"
 #include "ob_schema_macro_define.h"
+#include "share/schema/ob_schema_struct.h"
 
 namespace oceanbase
 {
@@ -224,6 +225,8 @@ DEFINE_SERIALIZE(AlterTableSchema)
     SHARE_SCHEMA_LOG(WARN, "fail to serialize sql_mode_", K(ret));
   } else if (OB_FAIL(split_partition_name_.serialize(buf, buf_len, pos))) {
     SHARE_SCHEMA_LOG(WARN, "fail to serialize partition_name", K(ret));
+  } else if (OB_FAIL(new_part_name_.serialize(buf, buf_len, pos))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to serialize new_part_name", K(ret));
   }
   return ret;
 }
@@ -251,6 +254,8 @@ DEFINE_DESERIALIZE(AlterTableSchema)
     SHARE_SCHEMA_LOG(WARN, "fail to deserialize sql mode", K(ret));
   } else if (OB_FAIL(split_partition_name_.deserialize(buf, data_len, pos))) {
     SHARE_SCHEMA_LOG(WARN, "fail to deserialize split_partition_name", K(ret));
+  } else if (OB_FAIL(new_part_name_.deserialize(buf, data_len, pos))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to serialize new_part_name", K(ret));
   }
   return ret;
 }
@@ -268,6 +273,7 @@ void AlterTableSchema::reset()
   split_partition_name_.reset();
   split_high_bound_val_.reset();
   split_list_row_values_.reset();
+  new_part_name_.reset();
 }
 
 int64_t AlterTableSchema::to_string(char *buf, const int64_t buf_len) const
@@ -280,7 +286,8 @@ int64_t AlterTableSchema::to_string(char *buf, const int64_t buf_len) const
        K_(origin_database_name),
        K_(split_partition_name),
        K_(split_high_bound_val),
-       K_(split_list_row_values));
+       K_(split_list_row_values),
+       K_(new_part_name));
   J_COMMA();
   J_NAME(N_ALTER_TABLE_SCHEMA);
   J_COLON();
@@ -581,17 +588,19 @@ DEFINE_GET_SERIALIZE_SIZE(AlterTableSchema)
   size += alter_option_bitset_.get_serialize_size();
   size += serialization::encoded_length_vi64(sql_mode_);
   size += split_partition_name_.get_serialize_size();
+  size += new_part_name_.get_serialize_size();
   return size;
 }
 
 bool ObSchemaService::is_formal_version(const int64_t schema_version)
 {
-  return schema_version % SCHEMA_VERSION_INC_STEP == 0;
+  return schema_version % ObSchemaVersionGenerator::SCHEMA_VERSION_INC_STEP == 0;
 }
 
 bool ObSchemaService::is_sys_temp_version(const int64_t schema_version)
 {
-  return schema_version % SCHEMA_VERSION_INC_STEP == (SCHEMA_VERSION_INC_STEP - 1);
+  return schema_version % ObSchemaVersionGenerator::SCHEMA_VERSION_INC_STEP
+         == (ObSchemaVersionGenerator::SCHEMA_VERSION_INC_STEP - 1);
 }
 
 int ObSchemaService::gen_core_temp_version(const int64_t schema_version,

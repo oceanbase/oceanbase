@@ -17,7 +17,6 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/allocator/page_arena.h"
-#include "share/cache/ob_kv_storecache.h"
 #include "share/schema/ob_schema_mgr_cache.h"
 #include "share/schema/ob_package_info.h"
 #include "share/schema/ob_routine_info.h"
@@ -118,21 +117,6 @@ class ObSchemaGetterGuard
 {
 friend class ObMultiVersionSchemaService;
 friend class MockSchemaService;
-  struct SchemaObj
-  {
-    SchemaObj()
-    : schema_type_(OB_MAX_SCHEMA),
-      tenant_id_(common::OB_INVALID_ID),
-      schema_id_(common::OB_INVALID_ID),
-      schema_(NULL)
-    {}
-    ObSchemaType schema_type_;
-    uint64_t tenant_id_;
-    uint64_t schema_id_;
-    ObSchema *schema_;
-    common::ObKVCacheHandle handle_;
-    TO_STRING_KV(K_(schema_type), K_(tenant_id), K_(schema_id), KP_(schema));
-  };
 const static int DEFAULT_RESERVE_SIZE = 2;
 typedef common::ObSEArray<SchemaObj, DEFAULT_RESERVE_SIZE> SchemaObjs;
 typedef common::ObSEArray<ObSchemaMgrInfo, DEFAULT_RESERVE_SIZE> SchemaMgrInfos;
@@ -1050,6 +1034,9 @@ public:
       const uint64_t table_id,
       const uint64_t column_id,
       bool &is_key);
+
+  int deep_copy_index_name_map(common::ObIAllocator &allocator,
+                               ObIndexNameMap &index_name_cache);
 private:
   int check_ssl_access(const ObUserInfo &user_info,
                        SSL *ssl_st);

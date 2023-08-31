@@ -1612,7 +1612,7 @@ int ObDDLOperator::create_sequence_in_create_table(ObTableSchema &table_schema,
         ObSequenceDDLProxy ddl_operator(schema_service_);
         char temp_sequence_name[OB_MAX_SEQUENCE_NAME_LENGTH + 1] = { 0 };
         int32_t len = snprintf(temp_sequence_name, sizeof(temp_sequence_name), "%s%lu%c%lu",
-                              "ISEQ$$_",
+                              IDENTITY_COLUMN_SEQUENCE_OBJECT_NAME_PREFIX,
                               ObSchemaUtils::get_extract_schema_id(table_schema.get_tenant_id(), table_schema.get_table_id()),
                               '_',
                               column_schema.get_column_id());
@@ -2514,6 +2514,52 @@ int ObDDLOperator::check_part_equal(
     }
   }
 
+  return ret;
+}
+
+int ObDDLOperator::rename_table_partitions(const ObTableSchema &orig_table_schema,
+                                         ObTableSchema &inc_table_schema,
+                                         ObTableSchema &new_table_schema,
+                                         ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", KR(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().rename_inc_part_info(trans,
+                                                                          orig_table_schema,
+                                                                          inc_table_schema,
+                                                                          new_schema_version))) {
+    LOG_WARN("rename inc part info failed", KR(ret));
+  }
+  return ret;
+}
+
+int ObDDLOperator::rename_table_subpartitions(const ObTableSchema &orig_table_schema,
+                                         ObTableSchema &inc_table_schema,
+                                         ObTableSchema &new_table_schema,
+                                         ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", KR(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().rename_inc_subpart_info(trans,
+                                                                          orig_table_schema,
+                                                                          inc_table_schema,
+                                                                          new_schema_version))) {
+    LOG_WARN("rename inc subpart info failed", KR(ret));
+  }
   return ret;
 }
 

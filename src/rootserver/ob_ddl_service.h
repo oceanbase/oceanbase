@@ -37,6 +37,7 @@
 #include "share/ob_freeze_info_proxy.h"
 #include "common/ob_common_utility.h"
 #include "share/config/ob_config.h" // ObConfigPairs
+#include "rootserver/parallel_ddl/ob_index_name_checker.h"
 
 namespace oceanbase
 {
@@ -47,7 +48,6 @@ using ObAddrArray = ObSEArray<ObAddr, 3>;
 class ObMySQLProxy;
 class ObAddr;
 class ObMySQLTransaction;
-class ObDDLSQLTransaction;
 }
 namespace obrpc
 {
@@ -95,27 +95,6 @@ class ObTableGroupHelp;
 //class ObFreezeInfoManager;
 class ObSnapshotInfoManager;
 
-class ObDDLTaskController
-{
-public:
-  ObDDLTaskController() : inited_(false) {}
-  int init();
-  static const int DDL_TASK_COND_SLOT = 16;
-  int register_task_and_assign_schema_version(share::schema::ObMultiVersionSchemaService *schema_service,
-      const uint64_t tenant_id,
-      const uint64_t schema_version_count,
-      ObIArray<int64_t> &schema_version_res);
-  int wait_task_ready(int64_t schema_version);
-  int del_task_schema_version(int64_t schema_version);
-private:
-  int check_task_ready(int64_t schema_version, bool &ready);
-private:
-  bool inited_;
-  ObThreadCond cond_slot_[DDL_TASK_COND_SLOT];
-  ObSEArray<int64_t, 32> tasks_;
-  common::SpinRWLock lock_;
-};
-
 class ObDDLService
 {
 public:
@@ -146,6 +125,7 @@ public:
   ObZoneManager &get_zone_mgr() { return *zone_mgr_; }
   ObSnapshotInfoManager &get_snapshot_mgr() { return *snapshot_mgr_; }
   share::ObLSTableOperator &get_lst_operator() { return *lst_operator_; }
+  share::schema::ObIndexNameChecker &get_index_name_checker() { return index_name_checker_; }
 
   // create_index_table will fill table_id and frozen_version to table_schema
   virtual int create_index_table(const obrpc::ObCreateIndexArg &arg,
@@ -292,14 +272,15 @@ public:
                                 common::ObArenaAllocator &allocator,
                                 obrpc::ObAlterTableRes &res,
                                 ObIArray<ObDDLTaskRecord> &ddl_tasks);
-  template <typename PARTITION_SCHEMA>
   int generate_object_id_for_partition_schemas(
-      ObIArray<PARTITION_SCHEMA> &partition_schemas);
+      ObIArray<ObTableSchema> &partition_schemas);
   int generate_object_id_for_partition_schema(
       ObPartitionSchema &partition_schema,
-      const bool gen_subpart_only = false);
+      const bool gen_subpart_only = false,
+      share::ObIDGenerator *batch_id_generator = NULL);
   int generate_tables_tablet_id(ObIArray<ObTableSchema> &table_schemas);
-  int generate_tablet_id(ObTableSchema &schema);
+  int generate_tablet_id(ObTableSchema &schema,
+                         share::ObIDGenerator *batch_id_generator = NULL);
   int alter_table_column(
       const share::schema::ObTableSchema &origin_table_schema,
       const share::schema::AlterTableSchema & alter_table_schema,
@@ -420,7 +401,8 @@ public:
                                      share::schema::ObTableSchema &new_table_schema,
                                      ObDDLOperator &ddl_operator,
                                      ObSchemaGetterGuard &schema_guard,
-                                     ObMySQLTransaction &trans);
+                                     ObMySQLTransaction &trans,
+                                     const ObTableSchema &orig_data_table_schema);
   virtual int alter_table_constraints(const obrpc::ObAlterTableArg::AlterConstraintType type,
                                       share::schema::ObSchemaGetterGuard &schema_guard,
                                       const share::schema::ObTableSchema &orig_table_schema,
@@ -1072,6 +1054,10 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   int recompile_view(const ObTableSchema &view_schema, const bool reset_view_column_infos, ObDDLSQLTransaction &trans);
   int recompile_all_views_batch(const uint64_t tenant_id, const common::ObIArray<uint64_t > &view_ids);
   int try_add_dep_info_for_all_synonyms_batch(const uint64_t tenant_id, const common::ObIArray<uint64_t> &synonym_ids);
+  int try_check_and_set_table_schema_in_tablegroup(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      share::schema::ObTableSchema &schema);
+
 private:
   enum PartitionBornMethod : int64_t
   {
@@ -1120,6 +1106,15 @@ private:
     LOCALITY_NOT_CHANGED,
     ALTER_LOCALITY_INVALID,
   };
+
+  int calc_partition_object_id_cnt_(
+      const ObPartitionSchema &partition_schema,
+      const bool gen_subpart_only,
+      int64_t &object_cnt);
+  int calc_table_tablet_id_cnt_(
+      const ObTableSchema &table_schema,
+      uint64_t &tablet_cnt);
+
   int check_has_index_operation(
       ObSchemaGetterGuard &schema_guard,
       const uint64_t teannt_id,
@@ -2245,6 +2240,10 @@ private:
                                             const bool is_split);
   int check_alter_partitions(const share::schema::ObTableSchema &orig_table_schema,
                              obrpc::ObAlterTableArg &alter_table_arg);
+  int check_alter_rename_partitions_(const share::schema::ObTableSchema &orig_table_schema,
+                                                const obrpc::ObAlterTableArg &alter_table_arg);
+  int check_alter_rename_subpartitions_(const share::schema::ObTableSchema &orig_table_schema,
+                                                const obrpc::ObAlterTableArg &alter_table_arg);
   int check_alter_drop_partitions(const share::schema::ObTableSchema &orig_table_schema,
                                   const obrpc::ObAlterTableArg &alter_table_arg,
                                   const bool is_truncate);
@@ -2270,9 +2269,6 @@ private:
                            const share::schema::ObSysVariableSchema &old_sys_variable,
                            share::schema::ObSysVariableSchema &new_sys_variable,
                            bool& value_changed);
-  int try_check_and_set_table_schema_in_tablegroup(
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      share::schema::ObTableSchema &schema);
 
   virtual int reconstruct_table_schema_from_recyclebin(share::schema::ObTableSchema &index_table_schema,
                                                        const share::schema::ObRecycleObject &recycle_obj,
@@ -2331,6 +2327,9 @@ private:
   int gen_inc_table_schema_for_drop_part(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema);
+  int gen_inc_table_schema_for_rename_part_(
+      const share::schema::ObTableSchema &orig_table_schema,
+      share::schema::AlterTableSchema &inc_table_schema);
   int gen_inc_table_schema_for_trun_part(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema,
@@ -2339,6 +2338,9 @@ private:
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema);
   int gen_inc_table_schema_for_drop_subpart(
+      const share::schema::ObTableSchema &orig_table_schema,
+      share::schema::AlterTableSchema &inc_table_schema);
+  int gen_inc_table_schema_for_rename_subpart_(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema);
   int gen_inc_table_schema_for_trun_subpart(
@@ -2379,10 +2381,36 @@ private:
                                     const ObIArray<const ObTableSchema*> &orig_table_schemas,
                                     const ObIArray<ObTableSchema*> &new_table_schemas,
                                     ObMySQLTransaction &trans);
-
   int check_alter_tenant_when_rebalance_is_disabled_(
       const share::schema::ObTenantSchema &orig_tenant_schema,
       const share::schema::ObTenantSchema &new_tenant_schema);
+
+  //not check belong to the same table
+  int check_same_partition_(const bool is_oracle_mode, const ObPartition &l, const ObPartition &r,
+                            const ObPartitionFuncType part_type, bool &is_matched) const;
+  //not check belong to the same table
+  int check_same_subpartition_(const bool is_oracle_mode, const ObSubPartition &l, const ObSubPartition &r,
+                               const ObPartitionFuncType part_type, bool &is_matched) const;
+  //After renaming a partition/subpartition, the consistency of the partition name between the data table and aux table is no longer guaranteed.
+  //Therefore, the partition names in the inc aux table must be synchronized with the ori aux table after assigning the data table's partition
+  //schema to the inc aux table.
+  //This function relies on the assumption that the inc table schema has a valid partition name.
+  int fix_local_idx_part_name_(const ObSimpleTableSchemaV2 &ori_data_table_schema,
+                                          const ObSimpleTableSchemaV2 &ori_table_schema,
+                                          ObSimpleTableSchemaV2 &inc_table_schema);
+  //This function relies on the assumption that the inc table schema has a valid subpartition name.
+  int fix_local_idx_subpart_name_(const ObSimpleTableSchemaV2 &ori_data_table_schema,
+                                          const ObSimpleTableSchemaV2 &ori_table_schema,
+                                          ObSimpleTableSchemaV2 &inc_table_schema);
+  //During the process of adding a partition/subpartition, we only check whether the partition schema of the argument is valid.
+  //It's possible for the inc aux table's partition name to duplicate with an existing partition name if one renames a partition/subpartition
+  //to another name and then adds a partition/subpartition with the same name.
+  //In this case, we will generate a name with a part/subpart id to replace the inc part/subpart name to avoid duplication.
+  int fix_local_idx_part_name_for_add_part_(const ObSimpleTableSchemaV2 &ori_table_schema,
+                                          ObSimpleTableSchemaV2 &inc_table_schema);
+
+  int fix_local_idx_part_name_for_add_subpart_(const ObSimpleTableSchemaV2 &ori_table_schema,
+                                          ObSimpleTableSchemaV2 &inc_table_schema);
 
 private:
   int check_locality_compatible_(ObTenantSchema &schema);
@@ -2471,9 +2499,10 @@ private:
   ObZoneManager *zone_mgr_;
   ObUnitManager *unit_mgr_;
   ObSnapshotInfoManager *snapshot_mgr_;
-  mutable common::SpinRWLock pz_entity_cnt_lock_;
-  ObDDLTaskController ddl_task_controller_;
   ObLatch ddl_lock_; // for ddl concurrent control
+
+  // for paralled ddl to cache oracle's index name map
+  share::schema::ObIndexNameChecker index_name_checker_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDDLService);
 };
@@ -2688,20 +2717,6 @@ int ObDDLService::check_partition_name_valid(const SCHEMA &orig_schema,
           break;
         }
       }
-    }
-  }
-  return ret;
-}
-
-template <typename PARTITION_SCHEMA>
-int ObDDLService::generate_object_id_for_partition_schemas(
-    ObIArray<PARTITION_SCHEMA> &partition_schemas)
-{
-  int ret = common::OB_SUCCESS;
-  for (int64_t i = 0; i < partition_schemas.count() && OB_SUCC(ret); i++) {
-    if (OB_FAIL(generate_object_id_for_partition_schema(partition_schemas.at(i)))) {
-      RS_LOG(WARN, "fail to generate object_id for partitions",
-             KR(ret), K(partition_schemas.at(i)));
     }
   }
   return ret;

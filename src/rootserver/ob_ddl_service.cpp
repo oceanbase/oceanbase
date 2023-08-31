@@ -176,7 +176,9 @@ ObDDLService::ObDDLService()
     lst_operator_(NULL),
     zone_mgr_(NULL),
     unit_mgr_(NULL),
-    snapshot_mgr_(NULL)
+    snapshot_mgr_(NULL),
+    ddl_lock_(),
+    index_name_checker_()
 {
 }
 
@@ -192,7 +194,9 @@ int ObDDLService::init(obrpc::ObSrvRpcProxy &rpc_proxy,
   int ret = OB_SUCCESS;
   if (inited_) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("init twice");
+    LOG_WARN("init twice", KR(ret));
+  } else if (OB_FAIL(index_name_checker_.init(sql_proxy))) {
+    LOG_WARN("fail to init index name checker", KR(ret));
   } else {
     rpc_proxy_ = &rpc_proxy;
     common_rpc_ = &common_rpc;
@@ -675,29 +679,66 @@ int ObDDLService::replace_table_schema_type(ObTableSchema &schema)
   return ret;
 }
 
-// Actually, object_id can be allocated within the same ddl trans.
-// To avoid refactor more codes, generate_object_id_for_partition_schema() should be called with generate_tablet_id().
-//
-// [@input]gen_subpart_only:
-// - True  : for add/drop subpartition situations, part_id is valid and should not be generated again.
-// - False : other situations.
-int ObDDLService::generate_object_id_for_partition_schema(
-    ObPartitionSchema &partition_schema,
-    const bool gen_subpart_only /* = false*/)
+int ObDDLService::generate_object_id_for_partition_schemas(
+    ObIArray<ObTableSchema> &partition_schemas)
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = partition_schema.get_tenant_id();
-  // table_id/tablegroup_id
+  const bool gen_subpart_only = false;
+  int64_t total_object_cnt = 0;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < partition_schemas.count(); i++) {
+    const ObTableSchema &partition_schema = partition_schemas.at(i);
+    int64_t object_cnt = 0;
+    if (OB_FAIL(calc_partition_object_id_cnt_(partition_schema, gen_subpart_only, object_cnt))) {
+      LOG_WARN("fail to calc partition object id cnt", KR(ret));
+    } else {
+      total_object_cnt += object_cnt;
+    }
+  } // end for
+
+  if (OB_SUCC(ret) && total_object_cnt > 0) {
+    ObIDGenerator id_generator;
+    ObObjectID max_object_id = OB_INVALID_ID;
+    ObObjectID min_object_id = OB_INVALID_ID;
+    const uint64_t tenant_id = partition_schemas.at(0).get_tenant_id();
+    if (OB_ISNULL(schema_service_) || OB_ISNULL(schema_service_->get_schema_service())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema_service is empty", KR(ret), KP_(schema_service));
+    } else if (OB_FAIL(schema_service_->get_schema_service()
+                       ->fetch_new_partition_ids(tenant_id, total_object_cnt, max_object_id))) {
+      LOG_WARN("fail to get max object id", KR(ret), K(tenant_id), K(total_object_cnt));
+    } else if (OB_UNLIKELY(0 >= (min_object_id = max_object_id - total_object_cnt + 1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("min_object_id should be greator than 0",
+               KR(ret), K(min_object_id), K(max_object_id), K(total_object_cnt));
+    } else if (OB_FAIL(id_generator.init(1/*step*/, min_object_id, max_object_id))) {
+      LOG_WARN("fail to init id generator", KR(ret), K(min_object_id), K(max_object_id));
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_schemas.count(); i++) {
+      ObTableSchema &partition_schema = partition_schemas.at(i);
+      if (OB_FAIL(generate_object_id_for_partition_schema(partition_schema, gen_subpart_only, &id_generator))) {
+        LOG_WARN("fail to generate object_id for partition schema", KR(ret));
+      }
+    } // end for
+  }
+  return ret;
+}
+
+int ObDDLService::calc_partition_object_id_cnt_(
+    const ObPartitionSchema &partition_schema,
+    const bool gen_subpart_only,
+    int64_t &object_cnt)
+{
+  int ret = OB_SUCCESS;
   const int64_t schema_id = partition_schema.get_table_id();
-  ObPartitionLevel part_level = partition_schema.get_part_level();
-  ObSchemaService *schema_service = schema_service_->get_schema_service();
-  int64_t all_partition_num = OB_INVALID_ID;
-  if (OB_ISNULL(schema_service)) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("schema_service must not null", K(ret));
-  } else if (part_level >= PARTITION_LEVEL_MAX) {
+  const ObPartitionLevel part_level = partition_schema.get_part_level();
+  const int64_t partition_num = partition_schema.get_partition_num();
+  const int64_t first_part_num = partition_schema.get_first_part_num();
+  object_cnt = 0;
+  if (OB_UNLIKELY(part_level >= PARTITION_LEVEL_MAX)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("part level is unexpected", K(partition_schema), K(ret));
+    LOG_WARN("part level is unexpected", KR(ret), K(part_level));
   } else if (is_inner_table(schema_id)
              || is_sys_tablegroup_id(schema_id)
              || PARTITION_LEVEL_ZERO == part_level) {
@@ -706,40 +747,69 @@ int ObDDLService::generate_object_id_for_partition_schema(
     // 2. For partitioned virtual table(list columns only):
     //    object_id for its partition is hard code by schema.
     // For the above reasons, we won't allocate object_id for table/tablegroup
-  } else if (0 >= (all_partition_num = partition_schema.get_all_part_num())) {
+    object_cnt = 0;
+  } else if (OB_UNLIKELY(first_part_num != partition_num)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("first_part_num is not equal to partition_num", KR(ret), K(partition_schema));
+  } else if (OB_UNLIKELY(0 >= (object_cnt = partition_schema.get_all_part_num()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid partition num", KR(ret), K(all_partition_num), K(partition_schema));
+    LOG_WARN("invalid partition num", KR(ret), K(object_cnt), K(partition_schema));
+  } else if (PARTITION_LEVEL_TWO == part_level && !gen_subpart_only) {
+    object_cnt += first_part_num;
+  }
+  return ret;
+}
+
+// Actually, object_id can be allocated within the same ddl trans.
+// To avoid refactor more codes, generate_object_id_for_partition_schema() should be called with generate_tablet_id().
+//
+// [@input]gen_subpart_only:
+// - True  : for add/drop subpartition situations, part_id is valid and should not be generated again.
+// - False : other situations.
+int ObDDLService::generate_object_id_for_partition_schema(
+    ObPartitionSchema &partition_schema,
+    const bool gen_subpart_only /* = false */,
+    ObIDGenerator *batch_id_generator /* = NULL */)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = partition_schema.get_tenant_id();
+  // table_id/tablegroup_id
+  const int64_t schema_id = partition_schema.get_table_id();
+  ObPartitionLevel part_level = partition_schema.get_part_level();
+  ObPartition** part_array = partition_schema.get_part_array();
+  int64_t partition_num = partition_schema.get_partition_num();
+  int64_t object_cnt = 0;
+  if (OB_FAIL(calc_partition_object_id_cnt_(partition_schema, gen_subpart_only, object_cnt))) {
+    LOG_WARN("fail to calc partition object id cnt", KR(ret), K(partition_schema));
+  } else if (0 == object_cnt) {
+    // skip
+  } else if (OB_ISNULL(part_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part_array is empty", KR(ret), KP(part_array));
   } else {
-    // For table/tablegroup's partitions
-    ObObjectID max_object_id = OB_INVALID_ID;
-    ObObjectID min_object_id = OB_INVALID_ID;
-    ObObjectID object_id = OB_INVALID_ID;
-    ObPartition** part_array = partition_schema.get_part_array();
-    int64_t partition_num = partition_schema.get_partition_num();
-    int64_t first_part_num = partition_schema.get_first_part_num();
-    int64_t subpartition_num = PARTITION_LEVEL_TWO == part_level ?  all_partition_num : 0;
-    int64_t object_num = subpartition_num;
-    if (!gen_subpart_only) {
-      object_num += first_part_num;
-    }
-    if (first_part_num <= 0 || all_partition_num <= 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid first_part_num/all_partition_num",
-               KR(ret), K(first_part_num), K(subpartition_num), K(partition_schema));
-    } else if (OB_ISNULL(part_array) || first_part_num != partition_num) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("part_array is empty or first_part_num is not equal to partition_num",
-               KR(ret), K(partition_schema));
-    } else if (OB_FAIL(schema_service->fetch_new_partition_ids(tenant_id, object_num, max_object_id))) {
-      LOG_WARN("fail to get max object id", KR(ret), K(tenant_id), K(object_num));
-    } else if (0 >= (min_object_id = max_object_id - object_num + 1)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("min_object_id should be greator than 0",
-               KR(ret), K(min_object_id), K(max_object_id), K(object_num));
-    } else {
-      object_id = min_object_id;
+    ObIDGenerator tmp_id_generator;
+    if (OB_ISNULL(batch_id_generator)) {
+      ObObjectID max_object_id = OB_INVALID_ID;
+      ObObjectID min_object_id = OB_INVALID_ID;
+      if (OB_ISNULL(schema_service_) || OB_ISNULL(schema_service_->get_schema_service())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema_service is empty", KR(ret), KP_(schema_service));
+      } else if (OB_FAIL(schema_service_->get_schema_service()
+                         ->fetch_new_partition_ids(tenant_id, object_cnt, max_object_id))) {
+        LOG_WARN("fail to get max object id", KR(ret), K(tenant_id), K(object_cnt));
+      } else if (OB_UNLIKELY(0 >= (min_object_id = max_object_id - object_cnt + 1))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("min_object_id should be greator than 0",
+                 KR(ret), K(min_object_id), K(max_object_id), K(object_cnt));
+      } else if (OB_FAIL(tmp_id_generator.init(1/*step*/, min_object_id, max_object_id))) {
+        LOG_WARN("fail to init id generator", KR(ret), K(min_object_id), K(max_object_id));
+      }
     }
 
+    ObObjectID object_id = OB_INVALID_ID;
+    ObIDGenerator &id_generator = OB_ISNULL(batch_id_generator) ?
+                                  tmp_id_generator :
+                                  *batch_id_generator;
     // 1. generate object_id for partitions
     if (OB_SUCC(ret) && !gen_subpart_only) {
       for (int64_t i = 0; OB_SUCC(ret) && i < partition_num; i++) {
@@ -747,11 +817,10 @@ int ObDDLService::generate_object_id_for_partition_schema(
         if (OB_ISNULL(part)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("part is null", KR(ret), K(i));
-        } else if (object_id > max_object_id) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("object_id is invalid", KR(ret), K(object_id), K(max_object_id), K(partition_schema));
+        } else if (OB_FAIL(id_generator.next(object_id))) {
+          LOG_WARN("fail to get next object id", KR(ret));
         } else {
-          part->set_part_id(object_id++);
+          part->set_part_id(object_id);
         }
       } // end for
     }
@@ -763,7 +832,7 @@ int ObDDLService::generate_object_id_for_partition_schema(
         if (OB_ISNULL(part)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("part is null", KR(ret), K(i));
-        } else if (part->get_part_id() <= 0) {
+        } else if (OB_UNLIKELY(part->get_part_id() <= 0)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("part_id is invalid", KR(ret), KPC(part));
         } else if (OB_ISNULL(part->get_subpart_array())
@@ -776,13 +845,11 @@ int ObDDLService::generate_object_id_for_partition_schema(
             if (OB_ISNULL(subpart)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("subpart is null", KR(ret), KPC(part), K(j));
-            } else if (object_id > max_object_id) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("object_id is invalid",
-                       KR(ret), K(object_id), K(max_object_id), K(partition_schema));
+            } else if (OB_FAIL(id_generator.next(object_id))) {
+              LOG_WARN("fail to get next object id", KR(ret));
             } else {
               subpart->set_part_id(part->get_part_id());
-              subpart->set_sub_part_id(object_id++);
+              subpart->set_sub_part_id(object_id);
             }
           } // end for subpart
         }
@@ -795,81 +862,171 @@ int ObDDLService::generate_object_id_for_partition_schema(
 int ObDDLService::generate_tables_tablet_id(ObIArray<ObTableSchema> &table_schemas)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; i < table_schemas.count() && OB_SUCC(ret); i++) {
-    if (OB_FAIL(generate_tablet_id(table_schemas.at(i)))) {
-      LOG_WARN("fail to generate_tablet_id", KR(ret), K(table_schemas.at(i)));
+  int64_t total_normal_tablet_cnt = 0;
+  int64_t total_extended_tablet_cnt = 0;
+  ObIDGenerator normal_tablet_id_generator;
+  ObIDGenerator extended_tablet_id_generator;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+
+  if (OB_ISNULL(schema_service_) || OB_ISNULL(schema_service_->get_schema_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret), KP_(schema_service));
+  } else if (table_schemas.count() > 0) {
+    tenant_id = table_schemas.at(0).get_tenant_id();
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); i++) {
+    const ObTableSchema &table_schema = table_schemas.at(i);
+    uint64_t tablet_cnt = 0;
+    if (OB_FAIL(calc_table_tablet_id_cnt_(table_schema, tablet_cnt))) {
+      LOG_WARN("fail to calc tablet_id cnt", KR(ret));
+    } else if (table_schema.gen_normal_tablet()) {
+      total_normal_tablet_cnt += tablet_cnt;
+    } else {
+      total_extended_tablet_cnt += tablet_cnt;
+    }
+  }
+
+  if (OB_SUCC(ret) && total_normal_tablet_cnt > 0) {
+    uint64_t min_tablet_id = OB_INVALID_ID;
+    uint64_t max_tablet_id = OB_INVALID_ID;
+    if (OB_FAIL(schema_service_->get_schema_service()->fetch_new_tablet_ids(
+                tenant_id, true /*gen_normal_tablet*/, total_normal_tablet_cnt, min_tablet_id))) {
+      LOG_WARN("fail to fetch new tablet id", KR(ret), K(total_normal_tablet_cnt));
+    } else if (FALSE_IT(max_tablet_id = min_tablet_id + total_normal_tablet_cnt - 1)) {
+    } else if (OB_FAIL(normal_tablet_id_generator.init(1/*step*/, min_tablet_id, max_tablet_id))) {
+      LOG_WARN("fail to init id generator", KR(ret), K(min_tablet_id), K(max_tablet_id));
+    }
+  }
+
+  if (OB_SUCC(ret) && total_extended_tablet_cnt> 0) {
+    uint64_t min_tablet_id = OB_INVALID_ID;
+    uint64_t max_tablet_id = OB_INVALID_ID;
+    if (OB_FAIL(schema_service_->get_schema_service()->fetch_new_tablet_ids(
+                tenant_id, false/*gen_normal_tablet*/, total_extended_tablet_cnt, min_tablet_id))) {
+      LOG_WARN("fail to fetch new tablet id", KR(ret), K(total_extended_tablet_cnt));
+    } else if (FALSE_IT(max_tablet_id = min_tablet_id + total_extended_tablet_cnt - 1)) {
+    } else if (OB_FAIL(extended_tablet_id_generator.init(1/*step*/, min_tablet_id, max_tablet_id))) {
+      LOG_WARN("fail to init id generator", KR(ret), K(min_tablet_id), K(max_tablet_id));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); i++) {
+    ObTableSchema &table_schema = table_schemas.at(i);
+    ObIDGenerator &id_generator = table_schema.gen_normal_tablet() ?
+                                  normal_tablet_id_generator :
+                                  extended_tablet_id_generator;
+    if (OB_FAIL(generate_tablet_id(table_schema, &id_generator))) {
+      LOG_WARN("fail to generator tablet_id", KR(ret));
     }
   }
   return ret;
 }
 
-int ObDDLService::generate_tablet_id(ObTableSchema &table_schema)
+int ObDDLService::calc_table_tablet_id_cnt_(
+    const ObTableSchema &table_schema,
+    uint64_t &tablet_cnt)
 {
   int ret = OB_SUCCESS;
-  uint64_t new_tablet_id = OB_INVALID_ID;
-  ObPartitionLevel part_level = table_schema.get_part_level();
-  ObSchemaService *schema_service = schema_service_->get_schema_service();
-  uint64_t tablet_num = OB_INVALID_ID;
+  tablet_cnt = 0;
+  if (is_sys_table(table_schema.get_table_id())
+      || table_schema.is_vir_table()
+      || table_schema.is_view_table()
+      || table_schema.is_external_table()) {
+    // 1. sys table use table_id as tablet_id
+    // 2. virtual table/view/external table don't have tablet_id
+  } else if (OB_UNLIKELY((tablet_cnt = table_schema.get_all_part_num()) <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get tablet cnt", KR(ret), K(tablet_cnt), K(table_schema));
+  }
+  return ret;
+}
 
-  if (OB_ISNULL(schema_service)) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("schema_service must not null", K(ret));
-  } else if (part_level >= PARTITION_LEVEL_MAX) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("part level is unexpected", K(table_schema), K(ret));
-  } else if (is_sys_table(table_schema.get_table_id())) {
+int ObDDLService::generate_tablet_id(
+    ObTableSchema &table_schema,
+    ObIDGenerator *batch_id_generator /* = NULL*/)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tablet_num = OB_INVALID_ID;
+  if (is_sys_table(table_schema.get_table_id())) {
     table_schema.set_tablet_id(table_schema.get_table_id());
-  } else if (table_schema.is_vir_table() || table_schema.is_view_table() || table_schema.is_external_table()) {
-  } else if ((tablet_num = table_schema.get_all_part_num()) <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get tablet num", K(table_schema), K(ret), K(tablet_num));
-  } else if (OB_FAIL(schema_service->fetch_new_tablet_ids(
-                     table_schema, new_tablet_id, tablet_num))) {
-    LOG_WARN("fail to fetch new table id", K(table_schema), K(ret));
-  } else if (PARTITION_LEVEL_ZERO == part_level) {
-    table_schema.set_tablet_id(new_tablet_id);
+  } else if (OB_FAIL(calc_table_tablet_id_cnt_(table_schema, tablet_num))) {
+    LOG_WARN("fail to calc tablet num", KR(ret), K(table_schema));
+  } else if (0 == tablet_num) {
+    // skip
   } else {
-    uint64_t max_id = new_tablet_id + tablet_num - 1;
-    ObPartition **part_array = table_schema.get_part_array();
-    int64_t part_num = table_schema.get_partition_num();
-    if (OB_ISNULL(part_array)) {
+    ObIDGenerator tmp_id_generator;
+    if (OB_ISNULL(batch_id_generator)) {
+      const uint64_t tenant_id = table_schema.get_tenant_id();
+      uint64_t min_tablet_id = OB_INVALID_ID;
+      uint64_t max_tablet_id = OB_INVALID_ID;
+      if (OB_ISNULL(schema_service_) || OB_ISNULL(schema_service_->get_schema_service())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("schema service is null", KR(ret), KP_(schema_service));
+      } else if (OB_FAIL(schema_service_->get_schema_service()->fetch_new_tablet_ids(
+                         tenant_id, table_schema.gen_normal_tablet(), tablet_num, min_tablet_id))) {
+        LOG_WARN("fail to fetch new tablet id", KR(ret), K(tablet_num));
+      } else if (FALSE_IT(max_tablet_id = min_tablet_id + tablet_num - 1)) {
+      } else if (OB_FAIL(tmp_id_generator.init(1/*step*/, min_tablet_id, max_tablet_id))) {
+        LOG_WARN("fail to init id generator", KR(ret), K(min_tablet_id), K(max_tablet_id));
+      }
+    }
+
+    ObIDGenerator &id_generator = OB_ISNULL(batch_id_generator) ?
+                                  tmp_id_generator :
+                                  *batch_id_generator;
+    uint64_t new_tablet_id = OB_INVALID_ID;
+    ObPartitionLevel part_level = table_schema.get_part_level();
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(part_level >= PARTITION_LEVEL_MAX)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("part array is null", K(table_schema), K(ret));
+      LOG_WARN("part level is unexpected", KR(ret), K(part_level));
+    } else if (PARTITION_LEVEL_ZERO == part_level) {
+      if (OB_FAIL(id_generator.next(new_tablet_id))) {
+        LOG_WARN("fail to get next tablet_id", KR(ret));
+      } else {
+        (void) table_schema.set_tablet_id(new_tablet_id);
+      }
     } else {
-      for (int64_t i = 0; i < part_num && OB_SUCC(ret); ++i) {
-        if (OB_ISNULL(part_array[i])) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("NULL ptr", K(i), K(table_schema), K(ret));
-        } else if (PARTITION_LEVEL_ONE == part_level) {
-          if (max_id < new_tablet_id) {
+      ObPartition **part_array = table_schema.get_part_array();
+      int64_t part_num = table_schema.get_partition_num();
+      if (OB_ISNULL(part_array)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("part array is null", KR(ret), KP(part_array));
+      } else {
+        for (int64_t i = 0; i < part_num && OB_SUCC(ret); i++) {
+          if (OB_ISNULL(part_array[i])) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("fetch max id error", K(table_schema), K(max_id), K(ret));
-          } else {
-            part_array[i]->set_tablet_id(new_tablet_id++);
-          }
-        } else if (PARTITION_LEVEL_TWO == part_level) {
-          ObSubPartition **sub_part_array = part_array[i]->get_subpart_array();
-          int64_t sub_part_num = part_array[i]->get_subpartition_num();
-          if (OB_ISNULL(sub_part_array)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("part array is null", K(table_schema), K(ret));
-          } else {
-            for (int64_t j = 0; j < sub_part_num && OB_SUCC(ret); j++) {
-              if (OB_ISNULL(sub_part_array[j])) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("NULL ptr", K(j), K(table_schema), K(ret));
-              } else if (max_id < new_tablet_id) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("fetch max id error", K(table_schema), K(max_id), K(ret));
-              } else {
-                sub_part_array[j]->set_tablet_id(new_tablet_id++);
-              }
+            LOG_WARN("NULL ptr", KR(ret), K(i));
+          } else if (PARTITION_LEVEL_ONE == part_level) {
+            if (OB_FAIL(id_generator.next(new_tablet_id))) {
+              LOG_WARN("fail to get next tablet_id", KR(ret));
+            } else {
+              part_array[i]->set_tablet_id(new_tablet_id);
             }
+          } else if (PARTITION_LEVEL_TWO == part_level) {
+            ObSubPartition **sub_part_array = part_array[i]->get_subpart_array();
+            int64_t sub_part_num = part_array[i]->get_subpartition_num();
+            if (OB_ISNULL(sub_part_array)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("sub part array is null", KR(ret), K(i));
+            } else {
+              for (int64_t j = 0; j < sub_part_num && OB_SUCC(ret); j++) {
+                if (OB_ISNULL(sub_part_array[j])) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("NULL ptr", KR(ret), K(i), K(j));
+                } else if (OB_FAIL(id_generator.next(new_tablet_id))) {
+                  LOG_WARN("fail to get next tablet_id", KR(ret));
+                } else {
+                  sub_part_array[j]->set_tablet_id(new_tablet_id);
+                }
+              } // end for
+            }
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("4.0 not support part type", KR(ret), K(part_level));
           }
-        } else {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("4.0 not support part type", K(table_schema), K(ret));
-        }
+        } // end for
       }
     }
   }
@@ -1970,7 +2127,6 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
         ObTableCreator table_creator(
                        tenant_id,
                        frozen_scn,
-                       *lst_operator_,
                        trans);
         ObNewTableTabletAllocator new_table_tablet_allocator(
                                   tenant_id,
@@ -5004,7 +5160,6 @@ int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
     ObTableCreator table_creator(
                    tenant_id,
                    frozen_scn,
-                   *lst_operator_,
                    trans);
     ObNewTableTabletAllocator new_table_tablet_allocator(
                               tenant_id,
@@ -5226,6 +5381,7 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
               } else if (OB_FAIL(index_builder.generate_schema(*create_index_arg,
                                                         new_table_schema,
                                                         global_index_without_column_info,
+                                                        true, /*generate_id*/
                                                         index_schema))) {
                 LOG_WARN("failed to generate index schema!", K(ret));
               } else if (OB_FAIL(ddl_operator.alter_table_create_index(new_table_schema,
@@ -8706,7 +8862,6 @@ int ObDDLService::create_aux_lob_table_if_need(ObTableSchema &data_table_schema,
     ObTableCreator table_creator(
                    tenant_id,
                    frozen_scn,
-                   *lst_operator_,
                    trans);
     ObNewTableTabletAllocator new_table_tablet_allocator(
                               tenant_id,
@@ -9119,6 +9274,96 @@ int ObDDLService::gen_inc_table_schema_for_add_subpart(
       LOG_WARN("iter part failed", KR(ret));
     }
   } // end for iterate inc part
+  return ret;
+}
+
+int ObDDLService::gen_inc_table_schema_for_rename_part_(
+    const ObTableSchema &orig_table_schema,
+    AlterTableSchema &inc_table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObPartition **inc_part_array = inc_table_schema.get_part_array();
+  ObPartition *inc_part = nullptr;
+  const int64_t inc_part_num = inc_table_schema.get_partition_num();
+  if (OB_ISNULL(inc_part_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inc part array is null", KR(ret), K(inc_table_schema));
+  } else if (OB_UNLIKELY(1 != inc_part_num)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rename multiple partitions at a time not support", KR(ret),K(inc_part_num));
+  } else if (OB_ISNULL(inc_part = inc_part_array[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inc part is null", KR(ret), KP(inc_part_array), K(inc_table_schema));
+  } else {
+    const ObPartition *part = nullptr;
+    const ObString &part_name = inc_part->get_part_name();
+    const ObString &new_part_name = inc_table_schema.get_new_part_name();
+    if (OB_FAIL(orig_table_schema.get_partition_by_name(part_name, part))) {
+      LOG_WARN("should check schema first or should not in this step", KR(ret), K(part_name), K(orig_table_schema));
+    } else if (OB_ISNULL(part)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get part failed", KR(ret), K(orig_table_schema));
+    } else if (OB_FAIL(inc_part->assign(*part))) {
+      LOG_WARN("failed to assign partition", KR(ret), KPC(part), KPC(inc_part));
+    } else if (OB_FAIL(inc_part->set_part_name(new_part_name))) {
+      LOG_WARN("failed to set inc part name", KR(ret), KPC(part), K(new_part_name));
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::gen_inc_table_schema_for_rename_subpart_(
+    const share::schema::ObTableSchema &orig_table_schema,
+    share::schema::AlterTableSchema &inc_table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObPartition **inc_part_array = inc_table_schema.get_part_array();
+  ObPartition *inc_part = nullptr;
+  const int64_t inc_part_num = inc_table_schema.get_partition_num();
+  if (OB_ISNULL(inc_part_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inc part array is null", KR(ret), K(inc_table_schema));
+  } else if (OB_UNLIKELY(1 != inc_part_num)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rename multiple subpartitions at a time not support", KR(ret), K(inc_part_num));
+  } else if (OB_ISNULL(inc_part = inc_part_array[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inc_part is null", KR(ret), KP(inc_part_array), K(inc_table_schema));
+  } else {
+    const ObPartition *part = nullptr;
+    const ObSubPartition *subpart = nullptr;
+    ObSubPartition **inc_subpart_array = inc_part->get_subpart_array();
+    ObSubPartition *inc_subpart = nullptr;
+    ObSubPartition inc_subpart_content;
+    const int64_t inc_subpart_num = inc_part->get_subpartition_num();
+    const ObString &new_part_name = inc_table_schema.get_new_part_name();
+    if (OB_ISNULL(inc_subpart_array)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inc subpart array is null", KR(ret), K(inc_table_schema));
+    } else if (OB_UNLIKELY(1 != inc_subpart_num)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rename multiple subpartitions at a time not support", KR(ret), K(inc_subpart_num));
+    } else if (OB_ISNULL(inc_subpart = inc_subpart_array[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inc subpart is null", KR(ret), KP(inc_subpart_array));
+    } else if (OB_FAIL(orig_table_schema.get_subpartition_by_name(inc_subpart->get_part_name(), part, subpart))) {
+      LOG_WARN("should check schema first or should not in this step", KR(ret), KP(part), KP(subpart));
+    } else if (OB_ISNULL(part) || OB_ISNULL(subpart)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null part/subpart", KR(ret), KP(part), KP(subpart));
+    } else if (OB_FAIL(inc_subpart_content.assign(*subpart))) {
+      LOG_WARN("failed to assign subpartition", KR(ret), KPC(part), K(inc_subpart_content));
+    } else if (OB_FAIL(inc_subpart_content.set_part_name(new_part_name))) {
+      LOG_WARN("set inc subpart name faild", KR(ret), K(inc_subpart_content), K(new_part_name));
+    } else if (OB_FAIL(inc_part->ObBasePartition::assign(*part))) {
+      LOG_WARN("failed to assign inc part", KR(ret), KPC(inc_part), KPC(part));
+    } else if (OB_FAIL(inc_part->add_partition(inc_subpart_content))) {
+      LOG_WARN("inc_part fail to add inc_subpart", KR(ret), KPC(inc_part), K(inc_subpart_content));
+    } else {
+      //not used in rename subpartition, just for integrity
+      inc_part->set_sub_part_num(part->get_sub_part_num());
+    }
+  }
   return ret;
 }
 
@@ -9602,6 +9847,7 @@ int ObDDLService::generate_tables_array(const ObAlterTableArg::AlterPartitionTyp
     modify_sub_part_template_flags = true;
     new_table_schema.unset_sub_part_template_def_valid();
   }
+  const ObString new_part_name = inc_table_schema.get_new_part_name();
   if (!orig_table_schema.has_tablet() || orig_table_schema.is_index_local_storage() || orig_table_schema.is_aux_lob_table()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table_schema must be data table or global indexes", KR(ret), K(orig_table_schema));
@@ -9619,28 +9865,35 @@ int ObDDLService::generate_tables_array(const ObAlterTableArg::AlterPartitionTyp
     LOG_WARN("fail to set interval range", K(ret));
   } else if (OB_FAIL(inc_table_schema.assign(tmp_inc_table_schema))) {
     LOG_WARN("failed to push back table_schema", KR(ret), K(new_table_schema));
+  } else if (OB_FAIL(inc_table_schema.set_new_part_name(new_part_name))) {
+    LOG_WARN("fail to set new part name", KR(ret), K(inc_table_schema));
   } else if (OB_FAIL(inc_table_schemas.push_back(&inc_table_schema))) {
     LOG_WARN("failed to push back table_schema", KR(ret), K(inc_table_schema));
   } else if (OB_FAIL(orig_table_schema.get_simple_index_infos(simple_index_infos))) {
     LOG_WARN("get_simple_index_infos failed", KR(ret));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-    if (OB_FAIL(aux_table_ids.push_back(simple_index_infos.at(i).table_id_))) {
-      LOG_WARN("fail to push back index table id", KR(ret));
+  if (obrpc::ObAlterTableArg::RENAME_PARTITION == op_type
+   ||obrpc::ObAlterTableArg::RENAME_SUB_PARTITION == op_type) {
+    //do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+      if (OB_FAIL(aux_table_ids.push_back(simple_index_infos.at(i).table_id_))) {
+        LOG_WARN("fail to push back index table id", KR(ret));
+      }
     }
-  }
-  if (OB_SUCC(ret)) {
-    uint64_t mtid = orig_table_schema.get_aux_lob_meta_tid();
-    uint64_t ptid = orig_table_schema.get_aux_lob_piece_tid();
-    if (!((mtid != OB_INVALID_ID && ptid != OB_INVALID_ID) || (mtid == OB_INVALID_ID && ptid == OB_INVALID_ID))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Expect meta tid and piece tid both valid or both invalid", KR(ret), K(mtid), K(ptid));
-    } else if (OB_INVALID_ID != mtid &&
-        OB_FAIL(aux_table_ids.push_back(mtid))) {
-      LOG_WARN("fail to push back lob meta tid", KR(ret), K(mtid));
-    } else if (OB_INVALID_ID != ptid &&
-        OB_FAIL(aux_table_ids.push_back(ptid))) {
-      LOG_WARN("fail to push back lob piece tid", KR(ret), K(ptid));
+    if (OB_SUCC(ret)) {
+      uint64_t mtid = orig_table_schema.get_aux_lob_meta_tid();
+      uint64_t ptid = orig_table_schema.get_aux_lob_piece_tid();
+      if (!((mtid != OB_INVALID_ID && ptid != OB_INVALID_ID) || (mtid == OB_INVALID_ID && ptid == OB_INVALID_ID))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Expect meta tid and piece tid both valid or both invalid", KR(ret), K(mtid), K(ptid));
+      } else if (OB_INVALID_ID != mtid &&
+          OB_FAIL(aux_table_ids.push_back(mtid))) {
+        LOG_WARN("fail to push back lob meta tid", KR(ret), K(mtid));
+      } else if (OB_INVALID_ID != ptid &&
+          OB_FAIL(aux_table_ids.push_back(ptid))) {
+        LOG_WARN("fail to push back lob piece tid", KR(ret), K(ptid));
+      }
     }
   }
 
@@ -9767,7 +10020,8 @@ int ObDDLService::alter_tables_partitions(const obrpc::ObAlterTableArg &alter_ta
                                               *new_table_schemas.at(i),
                                               ddl_operator,
                                               schema_guard,
-                                              trans))) {
+                                              trans,
+                                              *orig_table_schemas.at(0)))) {
       LOG_WARN("alter table partitions failed", KR(ret), K(i), KPC(new_table_schemas.at(i)), KPC(inc_table_schemas.at(i)));
     }
   }
@@ -9791,7 +10045,8 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
                                          ObTableSchema &new_table_schema,
                                          ObDDLOperator &ddl_operator,
                                          ObSchemaGetterGuard &schema_guard,
-                                         ObMySQLTransaction &trans)
+                                         ObMySQLTransaction &trans,
+                                         const ObTableSchema &orig_data_table_schema)
 {
   DEBUG_SYNC(BEFORE_ALTER_TABLE_PARTITION);
   int ret = OB_SUCCESS;
@@ -9818,6 +10073,8 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
       LOG_WARN("fail to generate object_id for partition schema", KR(ret), K(inc_table_schema));
     } else if (OB_FAIL(generate_tablet_id(inc_table_schema))) {
       LOG_WARN("fail to fetch new table id", K(inc_table_schema), KR(ret));
+    } else if (OB_FAIL(fix_local_idx_part_name_for_add_part_(orig_table_schema, inc_table_schema))) {
+      LOG_WARN("fail to fix local idx part name for add part", KR(ret), K(orig_table_schema), K(inc_table_schema));
     } else if (OB_FAIL(ddl_operator.add_table_partitions(orig_table_schema,
                                                   inc_table_schema,
                                                   new_table_schema,
@@ -9827,6 +10084,8 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
   } else if (obrpc::ObAlterTableArg::ADD_SUB_PARTITION == op_type) {
     if (OB_FAIL(ObDDLLock::lock_for_add_partition_in_trans(orig_table_schema, trans))) {
       LOG_WARN("failed to lock for add drop partition", K(ret));
+    } else if (OB_FAIL(fix_local_idx_part_name_(orig_data_table_schema, orig_table_schema, inc_table_schema))) {
+      LOG_WARN("fail to fix local idx part name", KR(ret), K(orig_data_table_schema), K(orig_table_schema), K(inc_table_schema));
     } else if (OB_FAIL(gen_inc_table_schema_for_add_subpart(orig_table_schema, inc_table_schema))) {
       LOG_WARN("fail to gen inc table schema for add subpart",
                KR(ret), K(orig_table_schema), K(inc_table_schema));
@@ -9834,6 +10093,8 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
       LOG_WARN("fail to generate object_id for partition schema", KR(ret), K(inc_table_schema));
     } else if (OB_FAIL(generate_tablet_id(inc_table_schema))) {
       LOG_WARN("fail to fetch new table id", K(inc_table_schema), KR(ret));
+    } else if (OB_FAIL(fix_local_idx_part_name_for_add_subpart_(orig_table_schema, inc_table_schema))) {
+      LOG_WARN("fail to fix local idx part name for add subpart", KR(ret), K(orig_table_schema), K(inc_table_schema));
     } else if (OB_FAIL(ddl_operator.add_table_subpartitions(orig_table_schema,
                                                             inc_table_schema,
                                                             new_table_schema,
@@ -9841,8 +10102,34 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
       LOG_WARN("failed to add table partitions", KR(ret));
     }
 
+  } else if (obrpc::ObAlterTableArg::RENAME_PARTITION == op_type) {
+    if (OB_FAIL(gen_inc_table_schema_for_rename_part_(orig_table_schema, inc_table_schema))) {
+      LOG_WARN("fail to gen inc table schema for rename part",
+                KR(ret), K(orig_table_schema), K(inc_table_schema));
+    } else if (OB_FAIL(lock_partitions(trans, inc_table_schema))) {
+      LOG_WARN("failed to get tablet ids", KR(ret), K(orig_table_schema), K(inc_table_schema));
+    } else if (OB_FAIL(ddl_operator.rename_table_partitions(orig_table_schema,
+                                                            inc_table_schema,
+                                                            new_table_schema,
+                                                            trans))) {
+      LOG_WARN("failed to rename table partitions", KR(ret), K(orig_table_schema), K(inc_table_schema), K(new_table_schema));
+      }
+  } else if (obrpc::ObAlterTableArg::RENAME_SUB_PARTITION == op_type) {
+    if (OB_FAIL(gen_inc_table_schema_for_rename_subpart_(orig_table_schema, inc_table_schema))) {
+      LOG_WARN("fail to gen inc table schema for rename subpart",
+                KR(ret), K(orig_table_schema), K(inc_table_schema));
+    } else if (OB_FAIL(lock_partitions(trans, inc_table_schema))) {
+      LOG_WARN("failed to get tablet ids", KR(ret), K(orig_table_schema), K(inc_table_schema));
+    } else if (OB_FAIL(ddl_operator.rename_table_subpartitions(orig_table_schema,
+                                                               inc_table_schema,
+                                                               new_table_schema,
+                                                               trans))) {
+    LOG_WARN("failed to rename table subpartitions", KR(ret), K(orig_table_schema), K(inc_table_schema));
+    }
   } else if (obrpc::ObAlterTableArg::DROP_PARTITION == op_type) {
-    if (OB_FAIL(gen_inc_table_schema_for_drop_part(orig_table_schema, inc_table_schema))) {
+    if (OB_FAIL(fix_local_idx_part_name_(orig_data_table_schema, orig_table_schema, inc_table_schema))) {
+      LOG_WARN("fix local idx part name", KR(ret), K(orig_data_table_schema), K(orig_table_schema), K(inc_table_schema));
+    } else if (OB_FAIL(gen_inc_table_schema_for_drop_part(orig_table_schema, inc_table_schema))) {
       LOG_WARN("fail to gen inc table schema for drop part",
                KR(ret), K(orig_table_schema), K(inc_table_schema));
     } else if (OB_FAIL(lock_partitions(trans, inc_table_schema))) {
@@ -9857,6 +10144,8 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
     if (inc_table_schema.get_partition_num() != 1) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("drop subparts not in a part", KR(ret));
+    } else if (OB_FAIL(fix_local_idx_subpart_name_(orig_data_table_schema, orig_table_schema, inc_table_schema))) {
+      LOG_WARN("fail to fix local idx subpart name", KR(ret), K(orig_data_table_schema), K(orig_table_schema), K(inc_table_schema));
     } else if (OB_FAIL(gen_inc_table_schema_for_drop_subpart(orig_table_schema, inc_table_schema))) {
       LOG_WARN("fail to gen inc table for drop subpart",
                KR(ret), K(orig_table_schema), K(inc_table_schema));
@@ -9869,7 +10158,9 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
       LOG_WARN("failed to drop table partitions", KR(ret));
     }
   } else if (obrpc::ObAlterTableArg::TRUNCATE_PARTITION == op_type) {
-    if (OB_FAIL(gen_inc_table_schema_for_trun_part(
+    if (OB_FAIL(fix_local_idx_part_name_(orig_data_table_schema, orig_table_schema, inc_table_schema))) {
+      LOG_WARN("fix local idx part name", KR(ret), K(orig_data_table_schema), K(orig_table_schema), K(inc_table_schema));
+    } else if (OB_FAIL(gen_inc_table_schema_for_trun_part(
                 orig_table_schema, inc_table_schema, del_table_schema))) {
       LOG_WARN("fail to generate inc table schema", KR(ret), K(orig_table_schema));
     } else if (OB_FAIL(lock_partitions(trans, del_table_schema))) {
@@ -9885,7 +10176,9 @@ int ObDDLService::alter_table_partitions(const obrpc::ObAlterTableArg &alter_tab
       LOG_WARN("failed to truncate partitions", KR(ret));
     }
   } else if (obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == op_type) {
-    if (OB_FAIL(gen_inc_table_schema_for_trun_subpart(
+    if (OB_FAIL(fix_local_idx_subpart_name_(orig_data_table_schema, orig_table_schema, inc_table_schema))) {
+      LOG_WARN("fail to fix local idx subpart name", KR(ret), K(orig_data_table_schema), K(orig_table_schema), K(inc_table_schema));
+    } else if (OB_FAIL(gen_inc_table_schema_for_trun_subpart(
         orig_table_schema, inc_table_schema, del_table_schema))) {
       LOG_WARN("fail to generate inc table schema", KR(ret), K(orig_table_schema));
     } else if (OB_FAIL(lock_partitions(trans, del_table_schema))) {
@@ -10380,6 +10673,10 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             operation_type = OB_DDL_DROP_SUB_PARTITION;
           } else if (obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_) {
             operation_type = OB_DDL_TRUNCATE_SUB_PARTITION;
+          } else if (obrpc::ObAlterTableArg::RENAME_PARTITION == alter_table_arg.alter_part_type_) {
+            operation_type = OB_DDL_RENAME_PARTITION;
+          } else if (obrpc::ObAlterTableArg::RENAME_SUB_PARTITION == alter_table_arg.alter_part_type_) {
+            operation_type = OB_DDL_RENAME_SUB_PARTITION;
           } else if (obrpc::ObAlterTableArg::SET_INTERVAL == alter_table_arg.alter_part_type_) {
             operation_type = OB_DDL_SET_INTERVAL;
           } else if (obrpc::ObAlterTableArg::INTERVAL_TO_RANGE == alter_table_arg.alter_part_type_) {
@@ -10534,8 +10831,9 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
               LOG_WARN("failed to get frozen status for create tablet", KR(ret), K(tenant_id));
             } else {
-              ObTableCreator table_creator(tenant_id, frozen_scn,
-                                           *lst_operator_, trans);
+              ObTableCreator table_creator(tenant_id,
+                                           frozen_scn,
+                                           trans);
               common::ObArray<share::ObLSID> ls_id_array;
               const ObTableSchema *tmp_table_schema = inc_table_schema_ptrs.at(0);
               ObNewTableTabletAllocator new_table_tablet_allocator(tenant_id, schema_guard, sql_proxy_);
@@ -11753,6 +12051,14 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
       LOG_WARN("failed to check drop partition", K(ret), K(orig_table_schema), K(alter_table_arg));
     }
     is_drop_or_truncate = true;
+  } else if (obrpc::ObAlterTableArg::RENAME_PARTITION == alter_part_type) {
+    if (OB_FAIL(check_alter_rename_partitions_(orig_table_schema, alter_table_arg))) {
+      LOG_WARN("failed to check rename partition", KR(ret), K(orig_table_schema), K(alter_table_arg));
+    }
+  } else if (obrpc::ObAlterTableArg::RENAME_SUB_PARTITION == alter_part_type) {
+    if (OB_FAIL(check_alter_rename_subpartitions_(orig_table_schema, alter_table_arg))) {
+      LOG_WARN("failed to check rename subpartition", KR(ret), K(orig_table_schema), K(alter_table_arg));
+    }
   } else if (obrpc::ObAlterTableArg::ADD_PARTITION == alter_part_type) {
     if (OB_FAIL(check_alter_add_partitions(orig_table_schema, alter_table_arg))) {
       LOG_WARN("failed to check add paritions", K(ret), K(orig_table_schema), K(alter_table_arg));
@@ -11815,6 +12121,143 @@ int ObDDLService::check_table_pk(const share::schema::ObTableSchema &orig_table_
   return ret;
 }
 
+// rename partition
+//1. is partition table
+//2. ensure that origin partition name exist and new partition name not exist
+//3. currently this partition is not splitting
+
+int ObDDLService::check_alter_rename_partitions_(const share::schema::ObTableSchema &orig_table_schema,
+                                                const obrpc::ObAlterTableArg &alter_table_arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  const ObPartitionLevel part_level = orig_table_schema.get_part_level();
+  const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
+  const int64_t part_num = alter_table_schema.get_partition_num();
+  ObPartition **part_array = alter_table_schema.get_part_array();
+  ObPartition *inc_part = nullptr;
+  ObCheckPartitionMode check_partition_mode = CHECK_PARTITION_MODE_NORMAL;
+  const ObPartition *part = nullptr;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(orig_table_schema.get_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get data version failed", KR(ret), K(orig_table_schema.get_tenant_id()));
+  } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("cluster version and feature mismatch", KR(ret));
+  } else if (!orig_table_schema.is_user_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupport behavior on not user table", KR(ret), K(orig_table_schema));
+  } else if (PARTITION_LEVEL_ZERO == part_level) {
+    ret = OB_ERR_PARTITION_MGMT_ON_NONPARTITIONED;
+    LOG_USER_ERROR(OB_ERR_PARTITION_MGMT_ON_NONPARTITIONED);
+    LOG_WARN("unsupport management on non_partition table", KR(ret));
+  } else if (OB_ISNULL(part_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part_array is null", KR(ret), KP(part_array));
+  } else if (OB_UNLIKELY(1 != part_num)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rename multi part at a time not support", KR(ret), K(part_num));
+  } else if (OB_ISNULL(inc_part = part_array[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inc part is null", KR(ret), KP(part_array), K(alter_table_schema));
+  } else {
+    const ObString &origin_partition_name = inc_part->get_part_name();
+    const ObString &new_partition_name = alter_table_schema.get_new_part_name();
+    if (OB_UNLIKELY(ObCharset::case_insensitive_equal(origin_partition_name, new_partition_name))) {
+      ret = OB_ERR_RENAME_PARTITION_NAME_DUPLICATE;
+      LOG_USER_ERROR(OB_ERR_RENAME_PARTITION_NAME_DUPLICATE, new_partition_name.length(), new_partition_name.ptr());
+      LOG_WARN("origin part name equal to new part name", KR(ret), K(origin_partition_name), K(new_partition_name));
+    } else if (OB_FAIL(orig_table_schema.check_partition_duplicate_with_name(new_partition_name))) {
+      if (OB_DUPLICATE_OBJECT_NAME_EXIST == ret) {
+        ret = OB_ERR_RENAME_PARTITION_NAME_DUPLICATE;
+        LOG_USER_ERROR(OB_ERR_RENAME_PARTITION_NAME_DUPLICATE, new_partition_name.length(), new_partition_name.ptr());
+        LOG_WARN("new part name duplicate with existed partition", KR(ret), K(new_partition_name));
+      } else {
+        LOG_WARN("check new part name duplicate failed", KR(ret), K(new_partition_name));
+      }
+    } else if (OB_FAIL(orig_table_schema.get_partition_by_name(origin_partition_name, part))) {
+      LOG_WARN("get part by name failed", KR(ret), K(origin_partition_name), K(orig_table_schema));
+    }
+  }
+  return ret;
+}
+
+// rename subpartition
+//1. is subpartition table
+//2. ensure that origin subpartition name exist and new subpartition name not exist
+//3. currently this partition is not splitting
+
+int ObDDLService::check_alter_rename_subpartitions_(const share::schema::ObTableSchema &orig_table_schema,
+                                                  const obrpc::ObAlterTableArg &alter_table_arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  const ObPartitionLevel part_level = orig_table_schema.get_part_level();
+  const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
+  const int64_t part_num = alter_table_schema.get_partition_num();
+  ObPartition **part_array = alter_table_schema.get_part_array();
+  ObPartition *inc_part = nullptr;
+  const ObPartition *part = nullptr;
+  const ObSubPartition *subpart = nullptr;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(orig_table_schema.get_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get data version failed", KR(ret), K(orig_table_schema.get_tenant_id()));
+  } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("cluster version and feature mismatch", KR(ret));
+  } else if (!orig_table_schema.is_user_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupport behavior on not user table", KR(ret), K(orig_table_schema));
+  } else if (PARTITION_LEVEL_ZERO == part_level) {
+    ret = OB_ERR_PARTITION_MGMT_ON_NONPARTITIONED;
+    LOG_USER_ERROR(OB_ERR_PARTITION_MGMT_ON_NONPARTITIONED);
+    LOG_WARN("unsupport management on not partition table", KR(ret));
+  } else if (PARTITION_LEVEL_ONE == part_level) {
+    ret = OB_ERR_NOT_COMPOSITE_PARTITION;
+    LOG_USER_ERROR(OB_ERR_NOT_COMPOSITE_PARTITION);
+    LOG_WARN("unsupport management on not composite partition table", KR(ret));
+  } else if (OB_ISNULL(part_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part_array is null", KR(ret), K(alter_table_schema));
+  } else if (OB_UNLIKELY(1 != part_num)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rename subpart on multi part at a time not support", KR(ret), K(part_num));
+  } else if (OB_ISNULL(inc_part = part_array[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inc part is null", KR(ret), KP(part_array));
+  } else {
+    ObSubPartition **subpart_array = inc_part->get_subpart_array();
+    ObSubPartition *inc_subpart = nullptr;
+    const int64_t subpart_num = inc_part->get_subpartition_num();
+    if (OB_ISNULL(subpart_array)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subpart_array is null", KR(ret));
+    } else if (OB_UNLIKELY(1 != subpart_num)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rename multi subpart at a time not support", KR(ret), K(part_num));
+    } else if (OB_ISNULL(inc_subpart = subpart_array[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inc_subpart is null", KR(ret), KP(subpart_array));
+    } else {
+      const ObString &origin_partition_name = inc_subpart->get_part_name();
+      const ObString &new_partition_name = alter_table_schema.get_new_part_name();
+      if (OB_UNLIKELY(ObCharset::case_insensitive_equal(origin_partition_name, new_partition_name))) {
+        ret = OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE;
+        LOG_USER_ERROR(OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE, new_partition_name.length(), new_partition_name.ptr());
+        LOG_WARN("origin subpart name equal to new subpart name", KR(ret), K(origin_partition_name), K(new_partition_name));
+      } else if (OB_FAIL(orig_table_schema.check_partition_duplicate_with_name(new_partition_name))) {
+        if (OB_DUPLICATE_OBJECT_NAME_EXIST == ret) {
+          ret = OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE;
+          LOG_USER_ERROR(OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE, new_partition_name.length(), new_partition_name.ptr());
+          LOG_WARN("new subpart name duplicate with existed partition", KR(ret), K(new_partition_name));
+        } else {
+          LOG_WARN("check new subpart name duplicate failed", KR(ret), K(new_partition_name));
+        }
+      } else if (OB_FAIL(orig_table_schema.get_subpartition_by_name(origin_partition_name, part, subpart))) {
+        LOG_WARN("get subpart by name failed", KR(ret), K(origin_partition_name), K(orig_table_schema));
+      }
+    }
+  }
+  return ret;
+}
 // drop or truncate partition
 //1. is partition table
 //2. Cannot drop all partitions, but truncate does not have this restriction
@@ -13309,8 +13752,9 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
       } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
         LOG_WARN("failed to get frozen status for create tablet", KR(ret), K(tenant_id));
       } else {
-        ObTableCreator table_creator(tenant_id, frozen_scn,
-                                     *lst_operator_, trans);
+        ObTableCreator table_creator(tenant_id,
+                                    frozen_scn,
+                                     trans);
         ObNewTableTabletAllocator new_table_tablet_allocator(
                                   tenant_id,
                                   schema_guard,
@@ -13954,7 +14398,6 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
     ObTableCreator table_creator(
                    tenant_id,
                    frozen_scn,
-                   *lst_operator_,
                    trans);
     ObNewTableTabletAllocator new_table_tablet_allocator(
                               tenant_id,
@@ -14054,16 +14497,17 @@ int ObDDLService::build_aux_lob_table_schema_if_need(ObTableSchema &data_table_s
   ObLobMetaBuilder lob_meta_builder(*this);
   ObLobPieceBuilder lob_piece_builder(*this);
   bool lob_col_found = false;
+  const uint64_t new_table_id = OB_INVALID_ID;
   for (int64_t i = 0; OB_SUCC(ret) && i < data_table_schema.get_column_count() && !lob_col_found; ++i) {
     if (is_lob_storage(data_table_schema.get_column_schema_by_idx(i)->get_data_type())) {
       HEAP_VARS_2((ObTableSchema, lob_meta_schema), (ObTableSchema, lob_piece_schema)) {
         if (OB_FAIL(lob_meta_builder.generate_aux_lob_meta_schema(
-          schema_service_->get_schema_service(), data_table_schema, lob_meta_schema, true))) {
+          schema_service_->get_schema_service(), data_table_schema, new_table_id, lob_meta_schema, true))) {
           LOG_WARN("generate_schema for lob meta table failed", K(data_table_schema), K(ret));
         } else if (OB_FAIL(table_schemas.push_back(lob_meta_schema))) {
           LOG_WARN("push_back lob meta table failed", K(ret));
         } else if (OB_FAIL(lob_piece_builder.generate_aux_lob_piece_schema(
-          schema_service_->get_schema_service(), data_table_schema, lob_piece_schema, true))) {
+          schema_service_->get_schema_service(), data_table_schema, new_table_id, lob_piece_schema, true))) {
           LOG_WARN("generate_schema for lob data table failed", K(data_table_schema), K(ret));
         } else if (OB_FAIL(table_schemas.push_back(lob_piece_schema))) {
           LOG_WARN("push_back lob data table failed", K(ret));
@@ -14346,6 +14790,7 @@ int ObDDLService::add_new_index_schema(obrpc::ObAlterTableArg &alter_table_arg,
                 } else if (OB_FAIL(index_builder.generate_schema(*create_index_arg,
                                                           new_table_schema,
                                                           global_index_without_column_info,
+                                                          true, /*generate_id*/
                                                           index_schema))) {
                   LOG_WARN("failed to generate index schema!", K(ret));
                 } else {
@@ -16556,7 +17001,7 @@ int ObDDLService::inner_drop_and_create_tablet_(const int64_t &schema_version,
       if (FAILEDx(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
         LOG_WARN("fail to get frozen status for create tablet", KR(ret), K(tenant_id));
       } else {
-        ObTableCreator table_creator(tenant_id, frozen_scn, *GCTX.lst_operator_, trans);
+        ObTableCreator table_creator(tenant_id, frozen_scn, trans);
         if (OB_FAIL(table_creator.init(false/*need_check_tablet_cnt*/))) {
           LOG_WARN("table_creator init failed", KR(ret), K(tenant_id));
         } else if (1 == create_table_count && create_table_schema_ptrs.at(0)->is_global_index_table()) {
@@ -16812,7 +17257,7 @@ int ObDDLService::new_truncate_table_in_trans(const ObIArray<const ObTableSchema
     }
   }
   if (OB_INVALID_ID != task_id) {
-    int tmp_ret = schema_service_->get_ddl_trans_controller().remove_task(task_id);
+    int tmp_ret = schema_service_->get_ddl_trans_controller().remove_task(tenant_id, task_id);
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("remove_task fail", KR(ret), KR(tmp_ret), K(tenant_id), K(task_id));
     }
@@ -17381,13 +17826,16 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
           if (OB_SUCC(ret) && new_table_schema.has_lob_column()) {
             ObLobMetaBuilder lob_meta_builder(*this);
             ObLobPieceBuilder lob_data_builder(*this);
+            const uint64_t new_table_id = OB_INVALID_ID;
             ObTableSchema lob_meta_schema;
             ObTableSchema lob_piece_schema;
-            if (OB_FAIL(lob_meta_builder.generate_aux_lob_meta_schema(schema_service, new_table_schema, lob_meta_schema, false))) {
+            if (OB_FAIL(lob_meta_builder.generate_aux_lob_meta_schema(
+                schema_service, new_table_schema, new_table_id, lob_meta_schema, false))) {
               LOG_WARN("generate_schema for lob meta table failed", K(new_table_schema), K(ret));
             } else if (OB_FAIL(table_schemas.push_back(lob_meta_schema))) {
               LOG_WARN("push_back lob meta table failed", K(ret));
-            } else if (OB_FAIL(lob_data_builder.generate_aux_lob_piece_schema(schema_service, new_table_schema, lob_piece_schema, false))) {
+            } else if (OB_FAIL(lob_data_builder.generate_aux_lob_piece_schema(
+                       schema_service, new_table_schema, new_table_id, lob_piece_schema, false))) {
               LOG_WARN("generate_schema for lob data table failed", K(new_table_schema), K(ret));
             } else if (OB_FAIL(table_schemas.push_back(lob_piece_schema))) {
               LOG_WARN("push_back lob data table failed", K(ret));
@@ -17747,12 +18195,15 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema &orig_tab
     if (OB_SUCC(ret) && new_table_schema.has_lob_column()) {
       ObLobMetaBuilder lob_meta_builder(*this);
       ObLobPieceBuilder lob_data_builder(*this);
+      const uint64_t new_table_id = OB_INVALID_ID;
       HEAP_VARS_2((ObTableSchema, lob_meta_schema), (ObTableSchema, lob_piece_schema)) {
-        if (OB_FAIL(lob_meta_builder.generate_aux_lob_meta_schema(&schema_service, new_table_schema, lob_meta_schema, false))) {
+        if (OB_FAIL(lob_meta_builder.generate_aux_lob_meta_schema(
+                    &schema_service, new_table_schema, new_table_id, lob_meta_schema, false))) {
           LOG_WARN("generate_schema for lob meta table failed", K(new_table_schema), K(ret));
         } else if (OB_FAIL(new_schemas.push_back(lob_meta_schema))) {
           LOG_WARN("push_back lob meta table failed", K(ret));
-        } else if (OB_FAIL(lob_data_builder.generate_aux_lob_piece_schema(&schema_service, new_table_schema, lob_piece_schema, false))) {
+        } else if (OB_FAIL(lob_data_builder.generate_aux_lob_piece_schema(
+                   &schema_service, new_table_schema, new_table_id, lob_piece_schema, false))) {
           LOG_WARN("generate_schema for lob data table failed", K(new_table_schema), K(ret));
         } else if (OB_FAIL(new_schemas.push_back(lob_piece_schema))) {
           LOG_WARN("push_back lob data table failed", K(ret));
@@ -21858,7 +22309,6 @@ int ObDDLService::create_tenant_sys_tablets(
     SCN frozen_scn = SCN::base_scn();
     ObTableCreator table_creator(tenant_id,
                                  frozen_scn,
-                                 *lst_operator_,
                                  trans);
     ObNewTableTabletAllocator new_table_tablet_allocator(
                               tenant_id,
@@ -31966,9 +32416,26 @@ int ObDDLSQLTransaction::lock_ddl_epoch(ObISQLClient *proxy)
 int ObDDLSQLTransaction::end(const bool commit)
 {
   int ret = OB_SUCCESS;
+
+  // always reset index_name_checker_ before non parallell ddl commits.
+  if (commit && !enable_ddl_parallel_) {
+    if (OB_ISNULL(GCTX.root_service_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("root_service is null", KR(ret));
+    } else {
+      ObIndexNameChecker &checker = GCTX.root_service_
+                                      ->get_ddl_service()
+                                        .get_index_name_checker();
+      if (OB_FAIL(checker.reset_cache(tenant_id_))) {
+        LOG_ERROR("reset cache failed", KR(ret), K(tenant_id_));
+      }
+    }
+  }
+
   int tmp_ret = OB_SUCCESS;
   auto *tsi_oper = GET_TSI(share::schema::TSILastOper);
-  if (OB_ISNULL(tsi_oper)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(tsi_oper)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get tsi oper", KR(ret));
   } else if (OB_ISNULL(schema_service_)) {
@@ -31994,8 +32461,6 @@ int ObDDLSQLTransaction::end(const bool commit)
       arg.schema_operation_.tenant_id_ = tenant_id_;
       if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id_, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id_));
-      }
-      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ddl_sql_service.log_nop_operation(arg.schema_operation_,
                                                            new_schema_version,
                                                            arg.ddl_stmt_str_,
@@ -34276,6 +34741,305 @@ int ObDDLService::check_rename_first(const AlterTableSchema &alter_table_schema,
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObDDLService::fix_local_idx_part_name_(const ObSimpleTableSchemaV2 &ori_data_table_schema,
+                                          const ObSimpleTableSchemaV2 &ori_table_schema,
+                                          ObSimpleTableSchemaV2 &inc_table_schema)
+{
+  int ret = OB_SUCCESS;
+  bool ori_oracle_mode = false;
+  bool is_matched = false;
+  const schema::ObPartitionOption &ori_part_option = ori_table_schema.get_part_option();
+  schema::ObPartitionFuncType ori_part_func_type = ori_part_option.get_part_func_type();
+  ObCheckPartitionMode check_partition_mode = CHECK_PARTITION_MODE_NORMAL;
+  const ObPartitionLevel part_level = inc_table_schema.get_part_level();
+  ObPartition **inc_part_array = inc_table_schema.get_part_array();
+  const int64_t inc_partition_num = inc_table_schema.get_partition_num();
+  const ObPartition *ori_data_part = nullptr;
+  const ObPartition *ori_part = nullptr;
+  ObPartition *inc_part = nullptr;
+  int64_t part_id = 0;
+  int64_t part_idx = 0;
+  ObString part_name;
+  if (!ori_table_schema.is_aux_table()) {
+    //no need to fix
+  } else if (OB_UNLIKELY(ori_data_table_schema.get_table_id() != ori_table_schema.get_data_table_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("data_table_id not same", KR(ret), K(ori_data_table_schema.get_table_id()), K(ori_table_schema.get_data_table_id()));
+  } else if (OB_UNLIKELY(ori_table_schema.get_table_id() != inc_table_schema.get_table_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("inc table id not euqal to ori table id", KR(ret), K(ori_table_schema.get_table_id()), K(inc_table_schema.get_table_id()));
+  } else if (OB_FAIL(ori_table_schema.check_if_oracle_compat_mode(ori_oracle_mode))) {
+    LOG_WARN("fail to get ori aux table oracle mode", KR(ret), K(ori_table_schema));
+  } else if (PARTITION_LEVEL_ZERO == part_level) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("inc table should be a partitioned table", KR(ret), K(part_level));
+  } else if (OB_ISNULL(inc_part_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inc_table_part_array is null", KR(ret), KP(inc_part_array));
+  } else {
+    for (int64_t i = 0; i < inc_partition_num && OB_SUCC(ret); i++) {
+      if (FALSE_IT(inc_part = inc_part_array[i])) {
+      } else if (OB_ISNULL(inc_part)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("inc_part is null", KR(ret), KP(inc_part_array), K(i), K(inc_table_schema));
+      } else {
+        const ObString &inc_part_name = inc_part->get_part_name();
+        if (OB_FAIL(ori_data_table_schema.get_partition_by_name(inc_part_name, ori_data_part))) {
+          LOG_WARN("fail to get partition by name", KR(ret), K(inc_part_name), KPC(ori_data_part));
+        } else if (FALSE_IT(part_id = ori_data_part->get_part_id())) {
+        } else if (OB_FAIL(ori_data_table_schema.get_partition_index_by_id(part_id, check_partition_mode, part_idx))) {
+          LOG_WARN("fail to get part idx", KR(ret), K(part_id), K(part_idx));
+        } else if (OB_FAIL(ori_table_schema.get_partition_by_partition_index(part_idx, check_partition_mode, ori_part))) {
+          LOG_WARN("fail to get src part by idx", KR(ret), K(part_idx), KPC(ori_part));
+        } else if (OB_ISNULL(ori_part)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("src part is null", KR(ret));
+        } else if (FALSE_IT(part_name = ori_part->get_part_name())){
+        } else if (OB_FAIL(check_same_partition_(ori_oracle_mode, *ori_data_part, *ori_part, ori_part_func_type, is_matched))) {
+          LOG_WARN("fail to check ori_table_part and ori_aux_part is the same", KR(ret), KPC(ori_data_part), KPC(ori_part), K(ori_part_func_type));
+        } else if (OB_UNLIKELY(!is_matched)) {
+          ret = OB_INDEX_INELIGIBLE;
+          LOG_WARN("part with the same offset not equal, maybe not the right index", KR(ret), KPC(ori_data_part), KPC(ori_part));
+        } else if (OB_FAIL(inc_part->set_part_name(part_name))) {
+          LOG_WARN("fail to set part name", KR(ret), KPC(inc_part), K(part_name));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::fix_local_idx_subpart_name_(const ObSimpleTableSchemaV2 &ori_data_table_schema,
+                                          const ObSimpleTableSchemaV2 &ori_table_schema,
+                                          ObSimpleTableSchemaV2 &inc_table_schema)
+{
+  int ret = OB_SUCCESS;
+  bool ori_oracle_mode = false;
+  bool is_matched = false;
+  const schema::ObPartitionOption &ori_part_option = ori_table_schema.get_part_option();
+  schema::ObPartitionFuncType ori_part_func_type = ori_part_option.get_part_func_type();
+  const schema::ObPartitionOption &ori_subpart_option = ori_table_schema.get_sub_part_option();
+  schema::ObPartitionFuncType ori_subpart_func_type = ori_subpart_option.get_sub_part_func_type();
+  ObCheckPartitionMode check_partition_mode = CHECK_PARTITION_MODE_NORMAL;
+  const ObPartitionLevel part_level = inc_table_schema.get_part_level();
+  ObPartition **inc_part_array = inc_table_schema.get_part_array();
+  ObSubPartition **inc_subpart_array = nullptr;
+  const int64_t inc_partition_num = inc_table_schema.get_partition_num();
+  const ObPartition *ori_data_part = nullptr;
+  const ObPartition *ori_part = nullptr;
+  ObPartition *inc_part = nullptr;
+  const ObSubPartition *ori_data_subpart = nullptr;
+  const ObSubPartition *ori_subpart = nullptr;
+  ObSubPartition *inc_subpart = nullptr;
+  int64_t part_id = 0;
+  int64_t part_idx = 0;
+  int64_t subpart_id = 0;
+  int64_t subpart_idx = 0;
+  ObString part_name;
+  if (!ori_table_schema.is_aux_table()) {
+    //no need to fix
+  } else if (OB_UNLIKELY(ori_data_table_schema.get_table_id() != ori_table_schema.get_data_table_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("data_table_id not same", KR(ret), K(ori_data_table_schema.get_table_id()), K(ori_table_schema.get_data_table_id()));
+  } else if (OB_UNLIKELY(ori_table_schema.get_table_id() != inc_table_schema.get_table_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("inc table id not euqal to ori table id", KR(ret), K(ori_table_schema.get_table_id()), K(inc_table_schema.get_table_id()));
+  } else if (OB_FAIL(ori_table_schema.check_if_oracle_compat_mode(ori_oracle_mode))) {
+    LOG_WARN("fail to get ori aux table oracle mode", KR(ret), K(ori_table_schema));
+  } else if (PARTITION_LEVEL_TWO != part_level) {
+    //no need to fix
+  } else if (OB_ISNULL(inc_part_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inc_table_part_array is null", KR(ret), KP(inc_part_array));
+  } else {
+    for (int64_t i = 0; i < inc_partition_num && OB_SUCC(ret); i++){
+      inc_part = inc_part_array[i];
+      if (OB_ISNULL(inc_part)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("inc_part is null", KR(ret), KP(inc_part_array), K(i), K(inc_table_schema));
+      } else if (OB_ISNULL(inc_subpart_array = inc_part->get_subpart_array())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("inc_aux_table_subpart_array is null ptr", KR(ret));
+      } else {
+        const int64_t inc_subpartition_num = inc_part->get_subpartition_num();
+        for (int64_t j = 0; j < inc_subpartition_num && OB_SUCC(ret); j++) {
+          if (OB_ISNULL(inc_subpart = inc_subpart_array[j])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("inc_aux_table subpart is null ptr", KR(ret), K(j));
+          } else if (OB_FAIL(ori_data_table_schema.get_subpartition_by_name(inc_subpart->get_part_name(), ori_data_part, ori_data_subpart))) {
+            LOG_WARN("fail to get subpartition by name", KR(ret), K(inc_subpart->get_part_name()), KP(ori_data_part), KP(ori_data_subpart));
+          } else if (FALSE_IT(part_id = ori_data_part->get_part_id())) {
+          } else if (OB_FAIL(ori_data_table_schema.get_partition_index_by_id(part_id, check_partition_mode, part_idx))) {
+            LOG_WARN("fail to get part idx", KR(ret), K(part_id), K(part_idx));
+          } else if (OB_FAIL(ori_table_schema.get_partition_by_partition_index(part_idx, check_partition_mode, ori_part))) {
+            LOG_WARN("fail to get src part by idx", KR(ret), K(part_idx), KPC(ori_part));
+          } else if (OB_ISNULL(ori_part)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("src part is null", KR(ret));
+          } else if (OB_FAIL(check_same_partition_(ori_oracle_mode, *ori_data_part, *ori_part, ori_part_func_type, is_matched))) {
+            LOG_WARN("fail to check ori_table_part and ori_aux_part is the same", KR(ret), KPC(ori_data_part), KPC(ori_part), K(ori_part_func_type));
+          } else if (OB_UNLIKELY(!is_matched)) {
+            ret = OB_INDEX_INELIGIBLE;
+            LOG_WARN("part with the same offset not equal, maybe not the right index", KR(ret), KPC(inc_part), KPC(ori_part));
+          } else if (FALSE_IT(subpart_id = ori_data_subpart->get_sub_part_id())) {
+          } else if (OB_FAIL(ori_data_part->get_normal_subpartition_index_by_id(subpart_id, subpart_idx))) {
+            LOG_WARN("src subpart array is null ptr", KR(ret), K(subpart_id), K(subpart_idx));
+          } else if (OB_FAIL(ori_part->get_normal_subpartition_by_subpartition_index(subpart_idx, ori_subpart))) {
+            LOG_WARN("fail to get src subpart by subpart index", KR(ret), K(subpart_idx));
+          } else if (OB_ISNULL(ori_subpart)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to get src subpart.", KR(ret));
+          } else if (FALSE_IT(part_name = ori_subpart->get_part_name())) {
+          } else if (OB_FAIL(check_same_subpartition_(ori_oracle_mode, *ori_data_subpart, *ori_subpart, ori_subpart_func_type, is_matched))) {
+            LOG_WARN("fail to check ori_table_subpart and ori_aux_subpart is the same", KR(ret), KPC(ori_data_part), KPC(ori_part), K(ori_subpart_func_type));
+          } else if (OB_UNLIKELY(!is_matched)) {
+            ret = OB_INDEX_INELIGIBLE;
+            LOG_WARN("part with the same offset not equal, maybe not the right index", KR(ret), KPC(inc_subpart), KPC(ori_subpart));
+          } else if (OB_FAIL(inc_subpart->set_part_name(part_name))) {
+            LOG_WARN("fail to set subpart name", KR(ret), KPC(inc_part), K(part_name));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::fix_local_idx_part_name_for_add_part_(const ObSimpleTableSchemaV2 &ori_table_schema,
+                                          ObSimpleTableSchemaV2 &inc_table_schema)
+{
+  int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
+  const int64_t inc_partition_num = inc_table_schema.get_partition_num();
+  ObPartition **inc_part_array = inc_table_schema.get_part_array();
+  ObPartition *inc_part = nullptr;
+  char buf[OB_MAX_PARTITION_NAME_LENGTH];
+  ObString part_name;
+  if (OB_UNLIKELY(ori_table_schema.get_table_id() != inc_table_schema.get_table_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ori table id not equal to inc table schema id");
+  } else if (!ori_table_schema.is_aux_table()) {
+    //no need to fix
+  } else if (OB_FAIL(ori_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to check oracle mode", KR(ret), K(ori_table_schema));
+  } else if (OB_ISNULL(inc_part_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inc part array is null", KR(ret), K(inc_table_schema));
+  } else {
+    for (int64_t i = 0; i < inc_partition_num && OB_SUCC(ret); i++) {
+      inc_part = inc_part_array[i];
+      if (OB_ISNULL(inc_part)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("inc part is null", KR(ret));
+      } else if (OB_FAIL(ori_table_schema.check_partition_duplicate_with_name(inc_part->get_part_name()))) {
+        if (OB_DUPLICATE_OBJECT_NAME_EXIST == ret) {
+          MEMSET(buf, 0, OB_MAX_PARTITION_NAME_LENGTH);
+          if (OB_FAIL(ObPartitionSchema::gen_hash_part_name(
+              inc_part->get_part_id(), FIRST_PART, is_oracle_mode, buf, OB_MAX_PARTITION_NAME_LENGTH, NULL, NULL))) {
+            LOG_WARN("fail to get part name", KR(ret), K(i));
+          } else if (FALSE_IT(part_name.assign_ptr(buf, static_cast<int32_t>(strlen(buf))))) {
+          } else if (OB_FAIL(inc_part->set_part_name(part_name))) {
+            LOG_WARN("fail to set name", KR(ret), KPC(inc_part), K(part_name));
+          }
+        } else {
+          LOG_WARN("fail to check dupliate partition with name", KR(ret), K(ori_table_schema), K(inc_part->get_part_name()));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::fix_local_idx_part_name_for_add_subpart_(const ObSimpleTableSchemaV2 &ori_table_schema,
+                                          ObSimpleTableSchemaV2 &inc_table_schema)
+{
+  int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
+  const int64_t inc_partition_num = inc_table_schema.get_partition_num();
+  ObPartition **inc_part_array = inc_table_schema.get_part_array();
+  ObPartition *inc_part = nullptr;
+  char buf[OB_MAX_PARTITION_NAME_LENGTH];
+  ObString part_name;
+  if (OB_UNLIKELY(ori_table_schema.get_table_id() != inc_table_schema.get_table_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ori table id not equal to inc table schema id");
+  } else if (!ori_table_schema.is_aux_table()) {
+    //no need to fix
+  } else if (OB_FAIL(ori_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to check oracle mode", KR(ret), K(ori_table_schema));
+  } else if (OB_ISNULL(inc_part_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inc part array is null", KR(ret), K(inc_table_schema));
+  } else {
+    for (int64_t i = 0; i < inc_partition_num && OB_SUCC(ret); i++) {
+      inc_part = inc_part_array[i];
+      if (OB_ISNULL(inc_part)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("inc part is null", KR(ret));
+      } else {
+        const int64_t inc_subpartition_num = inc_part->get_subpartition_num();
+        ObSubPartition **inc_subpart_array = inc_part->get_subpart_array();
+        ObSubPartition *inc_subpart = nullptr;
+        for (int64_t j = 0; j < inc_subpartition_num && OB_SUCC(ret); j++) {
+          inc_subpart = inc_subpart_array[j];
+          if (OB_ISNULL(inc_subpart)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("inc_subpart is null", KR(ret));
+          } else if (OB_FAIL(ori_table_schema.check_partition_duplicate_with_name(inc_subpart->get_part_name()))) {
+            if (OB_DUPLICATE_OBJECT_NAME_EXIST == ret) {
+              MEMSET(buf, 0, OB_MAX_PARTITION_NAME_LENGTH);
+              if (OB_FAIL(ObPartitionSchema::gen_hash_part_name(
+                  inc_subpart->get_sub_part_id(), TEMPLATE_SUB_PART, is_oracle_mode, buf, OB_MAX_PARTITION_NAME_LENGTH, NULL, NULL))) {
+                LOG_WARN("fail to get part name", KR(ret), K(i));
+              } else if (FALSE_IT(part_name.assign_ptr(buf, static_cast<int32_t>(strlen(buf))))) {
+              } else if (OB_FAIL(inc_subpart->set_part_name(part_name))) {
+                LOG_WARN("fail to set name", KR(ret), KPC(inc_subpart), K(part_name));
+              }
+            } else {
+              LOG_WARN("fail to check dupliate partition with name", KR(ret), K(ori_table_schema), K(inc_subpart->get_part_name()));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::check_same_partition_(const bool is_oracle_mode, const ObPartition &l, const ObPartition &r,
+                                       const ObPartitionFuncType part_type, bool &is_matched) const
+{
+  int ret = OB_SUCCESS;
+  is_matched = false;
+  if (l.get_sub_part_num() == r.get_sub_part_num()
+      && l.get_sub_interval_start() == r.get_sub_interval_start()
+      && l.get_sub_part_interval() == r.get_sub_part_interval()) {
+    if (is_hash_like_part(part_type)) {
+      if(l.get_part_idx() == r.get_part_idx()) {
+        is_matched = true;
+      }
+    } else if (OB_FAIL(schema::ObPartitionUtils::check_partition_value(is_oracle_mode, l, r, part_type, is_matched))) {
+      LOG_WARN("fail to check partition value", KR(ret), K(l), K(r));
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::check_same_subpartition_(const bool is_oracle_mode, const ObSubPartition &l, const ObSubPartition &r,
+                                          const ObPartitionFuncType part_type, bool &is_matched) const
+{
+  int ret = OB_SUCCESS;
+  is_matched = false;
+  if (is_hash_like_part(part_type)) {
+    if (l.get_sub_part_idx() == r.get_sub_part_idx()) {
+       is_matched = true;
+    }
+  } else if (OB_FAIL(schema::ObPartitionUtils::check_partition_value(is_oracle_mode, l, r, part_type, is_matched))) {
+      LOG_WARN("fail to check partition value", KR(ret), K(l), K(r));
   }
   return ret;
 }

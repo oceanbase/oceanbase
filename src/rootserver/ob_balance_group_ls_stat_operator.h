@@ -256,7 +256,6 @@ private:
   uint64_t tenant_id_;
   share::schema::ObSchemaGetterGuard &schema_guard_;
   common::ObMySQLProxy *sql_proxy_;
-  common::ObMySQLTransaction trans_;
   ObBalanceGroupLSStatOperator bg_ls_stat_operator_;
   MyStatus status_;
   common::ObArray<share::ObLSID> ls_id_array_;

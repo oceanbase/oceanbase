@@ -117,7 +117,7 @@ int ObAllVirtualSchemaSlot::inner_get_next_row(common::ObNewRow *&row)
     const int64_t total_ref_cnt = schema_slot.get_ref_cnt();
     const int64_t schema_version = schema_slot.get_schema_version();
     const int64_t schema_count = schema_slot.get_schema_count();
-
+    const int64_t allocator_idx = schema_slot.get_allocator_idx();
     const int64_t col_count = output_column_ids_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       uint64_t col_id = output_column_ids_.at(i);
@@ -160,6 +160,10 @@ int ObAllVirtualSchemaSlot::inner_get_next_row(common::ObNewRow *&row)
           }
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
                                                 ObCharset::get_default_charset()));
+          break;
+        }
+        case ALLOCATOR_IDX: {
+          cur_row_.cells_[i].set_int(static_cast<int64_t>(allocator_idx));
           break;
         }
         default : {

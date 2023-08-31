@@ -27,18 +27,21 @@ void ObSchemaMemory::reset() {
   mem_total_ = OB_INVALID_COUNT;
   used_schema_mgr_cnt_ = OB_INVALID_COUNT;
   free_schema_mgr_cnt_ = OB_INVALID_COUNT;
+  allocator_idx_ = OB_INVALID_INDEX;
 }
 
 void ObSchemaMemory::init(const int64_t pos, const uint64_t &tenant_id,
                           const int64_t &mem_used, const int64_t &mem_total,
                           const int64_t &used_schema_mgr_cnt,
-                          const int64_t &free_schema_mgr_cnt) {
+                          const int64_t &free_schema_mgr_cnt,
+                          const int64_t &allocator_idx) {
   pos_ = pos;
   tenant_id_ = tenant_id;
   mem_used_ = mem_used;
   mem_total_ = mem_total;
   used_schema_mgr_cnt_ = used_schema_mgr_cnt;
   free_schema_mgr_cnt_ = free_schema_mgr_cnt;
+  allocator_idx_ = allocator_idx;
 }
 namespace share
 {
@@ -146,6 +149,7 @@ int ObSchemaMemMgr::alloc_schema_mgr(ObSchemaMgr *&schema_mgr, bool alloc_for_li
     schema_mgr = new (tmp_ptr) ObSchemaMgr();
   } else {
     schema_mgr = new (tmp_ptr) ObSchemaMgr(*allocator);
+    schema_mgr->set_allocator_idx(pos_);
   }
   if (OB_SUCC(ret) && OB_ISNULL(schema_mgr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -250,9 +254,10 @@ int ObSchemaMemMgr::free_schema_mgr(ObSchemaMgr *&schema_mgr)
     LOG_WARN("turn on error injection ERRSIM_FREE_SCEHMA_MGR", KR(ret));
   } else if (OB_NOT_NULL(schema_mgr)) {
     const uint64_t tenant_id = schema_mgr->get_tenant_id();
+    const int64_t timestamp_in_slot = schema_mgr->get_timestamp_in_slot();
     const int64_t schema_version = schema_mgr->get_schema_version();
     schema_mgr->~ObSchemaMgr();
-    FLOG_INFO("[SCHEMA_RELEASE] free schema mgr", K(tenant_id), K(schema_version));
+    FLOG_INFO("[SCHEMA_RELEASE] free schema mgr", K(tenant_id), K(schema_version), K(timestamp_in_slot));
     SpinWLockGuard guard(schema_mem_rwlock_);
     if (OB_FAIL(free_(static_cast<void *>(schema_mgr)))) {
       LOG_ERROR("free schema_mgr failed", KR(ret), K(tenant_id), K(schema_version));
@@ -301,7 +306,7 @@ int ObSchemaMemMgr::get_all_alloc_info(common::ObIArray<ObSchemaMemory> &schema_
     mem_total = allocator_[pos_].total();
     used_schema_mgr_cnt = ptrs_[pos_].count();
     free_schema_mgr_cnt = all_ptrs_[pos_] - used_schema_mgr_cnt;
-    schema_mem.init(0, tenant_id, mem_used, mem_total, used_schema_mgr_cnt, free_schema_mgr_cnt);
+    schema_mem.init(0, tenant_id, mem_used, mem_total, used_schema_mgr_cnt, free_schema_mgr_cnt, pos_);
     if (OB_FAIL(schema_mem_infos.push_back(schema_mem))) {
       LOG_WARN("fail to push back schema_mem", KR(ret));
     } else {
@@ -309,7 +314,7 @@ int ObSchemaMemMgr::get_all_alloc_info(common::ObIArray<ObSchemaMemory> &schema_
       mem_total = allocator_[1 - pos_].total();
       used_schema_mgr_cnt = ptrs_[1 - pos_].count();
       free_schema_mgr_cnt = all_ptrs_[1 - pos_] - used_schema_mgr_cnt;
-      schema_mem.init(1, tenant_id, mem_used, mem_total, used_schema_mgr_cnt, free_schema_mgr_cnt);
+      schema_mem.init(1, tenant_id, mem_used, mem_total, used_schema_mgr_cnt, free_schema_mgr_cnt, 1 - pos_);
       if (OB_FAIL(schema_mem_infos.push_back(schema_mem))) {
         LOG_WARN("fail to push back schema_mem", KR(ret));
       }
@@ -537,6 +542,7 @@ int ObSchemaMemMgr::try_reset_another_allocator()
 int ObSchemaMemMgr::get_another_ptrs(common::ObArray<void *> &ptrs)
 {
   int ret = OB_SUCCESS;
+  ptrs.reset();
 
   SpinRLockGuard guard(schema_mem_rwlock_);
   if (!check_inner_stat()) {
@@ -547,6 +553,52 @@ int ObSchemaMemMgr::get_another_ptrs(common::ObArray<void *> &ptrs)
     for (int64_t i = 0; OB_SUCC(ret) && i < another_ptrs.count(); i++) {
       if (OB_FAIL(ptrs.push_back(another_ptrs.at(i)))) {
         LOG_WARN("fail to push back ptr", K(ret), K(i));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSchemaMemMgr::get_current_ptrs(common::ObArray<void *> &ptrs)
+{
+  int ret = OB_SUCCESS;
+  ptrs.reset();
+
+  SpinRLockGuard guard(schema_mem_rwlock_);
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else {
+    common::ObArray<void *> &current_ptrs = ptrs_[pos_];
+    for (int64_t i = 0; OB_SUCC(ret) && i < current_ptrs.count(); i++) {
+      if (OB_FAIL(ptrs.push_back(current_ptrs.at(i)))) {
+        LOG_WARN("fail to push back ptr", KR(ret), K(i));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSchemaMemMgr::get_all_ptrs(common::ObArray<void *> &ptrs)
+{
+  int ret = OB_SUCCESS;
+  ptrs.reset();
+
+  SpinRLockGuard guard(schema_mem_rwlock_);
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else {
+    common::ObArray<void *> &current_ptrs = ptrs_[pos_];
+    common::ObArray<void *> &another_ptrs = ptrs_[1 - pos_];
+    for (int64_t i = 0; OB_SUCC(ret) && i < current_ptrs.count(); i++) {
+      if (OB_FAIL(ptrs.push_back(current_ptrs.at(i)))) {
+        LOG_WARN("fail to push back current ptr", KR(ret), K(i));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < another_ptrs.count(); i++) {
+      if (OB_FAIL(ptrs.push_back(another_ptrs.at(i)))) {
+        LOG_WARN("fail to push back another ptr", KR(ret), K(i));
       }
     }
   }

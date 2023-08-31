@@ -154,6 +154,15 @@ public:
                         const ObTableSchema &ori_table,
                         const ObTableSchema &inc_table,
                         const int64_t schema_version);
+  int rename_inc_part_info(common::ObISQLClient &sql_client,
+                           const ObTableSchema &ori_table,
+                           const ObTableSchema &inc_table,
+                           const int64_t schema_version);
+  int rename_inc_subpart_info(common::ObISQLClient &sql_client,
+                           const ObTableSchema &ori_table,
+                           const ObTableSchema &inc_table,
+                           const int64_t schema_version);
+
   int drop_inc_part_info(
       common::ObISQLClient &sql_client,
       const ObTableSchema &ori_table,

@@ -23,6 +23,7 @@
 #include "share/ob_define.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_column_schema.h"
+#include "share/schema/ob_routine_info.h"
 
 namespace oceanbase
 {
@@ -113,6 +114,8 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_SET_INTERVAL, = 57)                                 \
   ACT(OB_DDL_INTERVAL_TO_RANGE, = 58)                            \
   ACT(OB_DDL_TRUNCATE_TABLE, = 59)                               \
+  ACT(OB_DDL_RENAME_PARTITION, = 60)                             \
+  ACT(OB_DDL_RENAME_SUB_PARTITION, = 61)                         \
   ACT(OB_DDL_TABLE_OPERATION_END, = 100)                         \
   ACT(OB_DDL_TENANT_OPERATION_BEGIN, = 101)                      \
   ACT(OB_DDL_ADD_TENANT,)                                        \
@@ -542,7 +545,8 @@ public:
       sql_mode_(SMO_DEFAULT),
       split_partition_name_(),
       split_high_bound_val_(),
-      split_list_row_values_()
+      split_list_row_values_(),
+      new_part_name_()
   {
   }
   AlterTableSchema(common::ObIAllocator *allocator)
@@ -556,7 +560,8 @@ public:
       sql_mode_(SMO_DEFAULT),
       split_partition_name_(),
       split_high_bound_val_(),
-      split_list_row_values_()
+      split_list_row_values_(),
+      new_part_name_()
   {
   }
   inline const common::ObString &get_origin_table_name() const { return origin_table_name_; }
@@ -575,6 +580,8 @@ public:
   inline const common::ObRowkey& get_split_list_row_values() const {
     return split_list_row_values_;
   }
+  inline const common::ObString &get_new_part_name() const { return new_part_name_; }
+  inline int set_new_part_name(const common::ObString &new_part_name);
   int assign_subpartiton_key_info(const common::ObPartitionKeyInfo& src_info);
 
   int add_alter_column(const AlterColumnSchema &column, const bool need_allocate);
@@ -595,6 +602,7 @@ public:
   // for tablegroup
   common::ObRowkey split_high_bound_val_;
   common::ObRowkey split_list_row_values_;
+  common::ObString new_part_name_;
   int assign(const ObTableSchema &src_schema);
   //virtual int add_partition(const ObPartition &part);
   //virtual int add_subpartition(const ObSubPartition &sub_part);
@@ -608,6 +616,11 @@ public:
 int AlterTableSchema::set_split_partition_name(const common::ObString &partition_name)
 {
   return deep_copy_str(partition_name, split_partition_name_);
+}
+
+int AlterTableSchema::set_new_part_name(const common::ObString &new_part_name)
+{
+  return deep_copy_str(new_part_name, new_part_name_);
 }
 
 int AlterTableSchema::set_origin_table_name(const common::ObString &origin_table_name)
@@ -949,7 +962,11 @@ public:
   virtual int fetch_new_directory_id(const uint64_t tenant_id, uint64_t &new_directory_id) = 0;
   virtual int fetch_new_normal_rowid_table_tablet_ids(const uint64_t tenant_id, uint64_t &tablet_id, const uint64_t size) = 0;
   virtual int fetch_new_extended_rowid_table_tablet_ids(const uint64_t tenant_id, uint64_t &tablet_id, const uint64_t size) = 0;
-  virtual int fetch_new_tablet_ids(const ObTableSchema &table_schema, uint64_t &tablet_id, const uint64_t size) = 0;
+  virtual int fetch_new_tablet_ids(
+              const uint64_t tenant_id,
+              const bool gen_normal_tablet,
+              const uint64_t size,
+              uint64_t &min_tablet_id) = 0;
   virtual int fetch_new_context_id(const uint64_t tenant_id, uint64_t &new_context_id) = 0;
   virtual int fetch_new_rls_policy_id(const uint64_t tenant_id, uint64_t &new_rls_policy_id) = 0;
   virtual int fetch_new_rls_group_id(const uint64_t tenant_id, uint64_t &new_rls_group_id) = 0;
@@ -1082,10 +1099,25 @@ public:
       const uint64_t table_id,
       common::ObISQLClient &sql_client,
       ObMockFKParentTableSchema &mock_fk_parent_table_schema) = 0;
+  virtual int get_audits_in_owner(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const ObSAuditType audit_type,
+              const uint64_t owner_id,
+              common::ObIArray<ObSAuditSchema> &audit_schemas) = 0;
   virtual void set_refreshed_schema_version(const int64_t schema_version) = 0;
-  virtual int gen_new_schema_version(uint64_t tenant_id,
-                                     int64_t refreshed_schema_version,
+  virtual int gen_new_schema_version(const uint64_t tenant_id,
+                                     const int64_t refreshed_schema_version,
                                      int64_t &schema_version) = 0;
+
+  // gen schema versions in [start_version, end_version] with specified schema version cnt.
+  // @param[out]:
+  // - schema_version: end_version
+  virtual int gen_batch_new_schema_versions(
+              const uint64_t tenant_id,
+              const int64_t refreshed_schema_version,
+              const int64_t version_cnt,
+              int64_t &schema_version) = 0;
   virtual int get_new_schema_version(uint64_t tenant_id, int64_t &schema_version) = 0;
 
   virtual int get_ori_schema_version(const ObRefreshSchemaStatus &schema_status,
@@ -1143,24 +1175,6 @@ public:
                                     const common::ObString &dblink_name,
                                     bool is_reverse_link,
                                     uint64_t *current_scn) = 0;
-  // when refresh schema, if new ddl operations are as following:
-  // (ALTER USER TABLE, v1), (ALTER SYS TABLE, v2),
-  // if we replay new ddl operation one by one, when we execute sql to read sys table
-  // to fetch user table schema, leader partition server find sys table version not match,
-  // read new user table schema will fail, so we need first refresh sys table schema,
-  // then publish, then refresh new user table schemas and publish,
-  // but what version we used to publish sys table schema when we haven't refresh use table,
-  // we use a temporary version which means it don't contain all schema item whose version
-  // is small than temporary version. now we have temporary core versin for core table,
-  // temporary system version for system table, we set SCHEMA_VERSION_INC_STEP to 8 so that
-  // it is enough when we add more temporary version
-  static const int64_t SCHEMA_VERSION_INC_STEP = 8;
-  // After support standalone cluster, the generation of the schema version of the standalone cluster depends on
-  // the schema version of the primary cluster. In order to ensure that the schema version of the primary and standalone cluster
-  // can be globally and uniquely incremented, the schema version of the primary cluster is set to the second level,
-  // and the schema version of the standalone cluster is generated. Remove the reference to time
-  // In millisecond increments
-  static const int64_t SYS_SCHEMA_VERSION_INC_STEP = 1 * 1000LL;
 
   static bool is_formal_version(const int64_t schema_version);
   static bool is_sys_temp_version(const int64_t schema_version);
@@ -1170,6 +1184,112 @@ public:
                                   int64_t &sys_temp_version);
   static int alloc_table_schema(const ObTableSchema &table, common::ObIAllocator &allocator,
                                 ObTableSchema *&allocated_table_schema);
+
+  /*----------- interfaces for latest schema start -----------*/
+  virtual int get_tablegroup_id(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const ObString &tablegroup_name,
+              uint64_t &tablegroup_id) = 0;
+
+  virtual int get_database_id(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const ObString &database_name,
+              uint64_t &database_id) = 0;
+
+  virtual int get_table_id(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t database_id,
+              const uint64_t session_id,
+              const ObString &table_name,
+              uint64_t &table_id,
+              ObTableType &table_type,
+              int64_t &schema_version) = 0;
+
+  virtual int get_index_id(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t database_id,
+              const ObString &index_name,
+              uint64_t &index_id) = 0;
+
+  virtual int get_mock_fk_parent_table_id(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t database_id,
+              const ObString &table_name,
+              uint64_t &mock_fk_parent_table_id) = 0;
+
+  virtual int get_synonym_id(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t database_id,
+              const ObString &synonym_name,
+              uint64_t &synonym_id) = 0;
+
+  virtual int get_constraint_id(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t database_id,
+              const ObString &constraint_name,
+              uint64_t &constraint_id) = 0;
+
+  virtual int get_foreign_key_id(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t database_id,
+              const ObString &foreign_key_name,
+              uint64_t &foreign_key_id) = 0;
+
+  virtual int get_sequence_id(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t database_id,
+              const ObString &sequence_name,
+              uint64_t &sequence_id,
+              bool &is_system_generated) = 0;
+
+  virtual int get_package_id(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t database_id,
+              const ObString &package_name,
+              const ObPackageType package_type,
+              const int64_t compatible_mode,
+              uint64_t &package_id) = 0;
+
+  virtual int get_routine_id(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t database_id,
+              const uint64_t package_id,
+              const uint64_t overload,
+              const ObString &routine_name,
+              common::ObIArray<std::pair<uint64_t, share::schema::ObRoutineType>> &routine_pairs) = 0;
+
+  virtual int get_udt_id(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t database_id,
+              const uint64_t package_id,
+              const ObString &udt_name,
+              uint64_t &udt_id) = 0;
+
+  virtual int get_table_schema_versions(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const common::ObIArray<uint64_t> &table_ids,
+              common::ObIArray<ObSchemaIdVersion> &versions) = 0;
+
+  virtual int get_mock_fk_parent_table_schema_versions(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const common::ObIArray<uint64_t> &table_ids,
+              common::ObIArray<ObSchemaIdVersion> &versions) = 0;
+
+  /*----------- interfaces for latest schema end -------------*/
 
 };
 }//namespace schema

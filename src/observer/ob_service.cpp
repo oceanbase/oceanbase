@@ -116,8 +116,8 @@ int ObSchemaReleaseTimeTask::init(ObServerSchemaUpdater &schema_updater, int tg_
   } else {
     schema_updater_ = &schema_updater;
     is_inited_ = true;
-    if (OB_FAIL(TG_SCHEDULE(tg_id, *this, REFRESH_INTERVAL, true /*schedule repeatly*/))) {
-      LOG_WARN("fail to schedule task ObSchemaReleaseTimeTask", K(ret));
+    if (OB_FAIL(schedule_())) {
+      LOG_WARN("fail to schedule ObSchemaReleaseTimeTask in init", KR(ret));
     }
   }
   return ret;
@@ -127,6 +127,19 @@ void ObSchemaReleaseTimeTask::destroy()
 {
   is_inited_ = false;
   schema_updater_ = nullptr;
+}
+
+int ObSchemaReleaseTimeTask::schedule_()
+{
+  int ret = OB_SUCCESS;
+  int64_t memory_recycle_interval = GCONF._schema_memory_recycle_interval;
+  if (0 == memory_recycle_interval) {
+    memory_recycle_interval = 15L * 60L * 1000L * 1000L; //15mins
+  }
+  if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::ServerGTimer, *this, memory_recycle_interval, false /*not schedule repeatly*/))) {
+    LOG_ERROR("fail to schedule task ObSchemaReleaseTimeTask", KR(ret));
+  }
+  return ret;
 }
 
 void ObSchemaReleaseTimeTask::runTimerTask()
@@ -140,6 +153,10 @@ void ObSchemaReleaseTimeTask::runTimerTask()
     LOG_WARN("ObSchemaReleaseTimeTask task got null ptr", K(ret));
   } else if (OB_FAIL(schema_updater_->try_release_schema())) {
     LOG_WARN("ObSchemaReleaseTimeTask failed", K(ret));
+  }
+  // we should ignore error to schedule task
+  if (OB_FAIL(schedule_())) {
+    LOG_WARN("fail to schedule ObSchemaReleaseTimeTask in runTimerTask", KR(ret));
   }
 }
 

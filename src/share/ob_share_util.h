@@ -27,6 +27,47 @@ namespace storage
 }
 namespace share
 {
+
+// available range is [start_id, end_id]
+class ObIDGenerator
+{
+public:
+  ObIDGenerator()
+    : inited_(false),
+      step_(0),
+      start_id_(common::OB_INVALID_ID),
+      end_id_(common::OB_INVALID_ID),
+      current_id_(common::OB_INVALID_ID)
+  {}
+  ObIDGenerator(const uint64_t step)
+    : inited_(false),
+      step_(step),
+      start_id_(common::OB_INVALID_ID),
+      end_id_(common::OB_INVALID_ID),
+      current_id_(common::OB_INVALID_ID)
+  {}
+
+  virtual ~ObIDGenerator() {}
+  void reset();
+
+  int init(const uint64_t step,
+           const uint64_t start_id,
+           const uint64_t end_id);
+  int next(uint64_t &current_id);
+
+  int get_start_id(uint64_t &start_id) const;
+  int get_current_id(uint64_t &current_id) const;
+  int get_end_id(uint64_t &end_id) const;
+  int get_id_cnt(uint64_t &cnt) const;
+  TO_STRING_KV(K_(inited), K_(step), K_(start_id), K_(end_id), K_(current_id));
+protected:
+  bool inited_;
+  uint64_t step_;
+  uint64_t start_id_;
+  uint64_t end_id_;
+  uint64_t current_id_;
+};
+
 class ObShareUtil
 {
 public:

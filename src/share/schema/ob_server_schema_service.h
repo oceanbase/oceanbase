@@ -861,6 +861,7 @@ public:
   int64_t get_table_count() const;
   //the schema service should be thread safe
   ObSchemaService *get_schema_service(void) const;
+  common::ObMySQLProxy *get_sql_proxy(void) const { return sql_proxy_; }
   void dump_schema_manager() const;
 
   // public utils

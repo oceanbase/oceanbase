@@ -135,6 +135,10 @@ private:
                              const share::schema::ObTableSchema &orig_table_schema);
   int resolve_drop_subpartition(const ParseNode &node,
                                 const share::schema::ObTableSchema &orig_table_schema);
+  int resolve_rename_partition(const ParseNode &node,
+                             const share::schema::ObTableSchema &orig_table_schema);
+  int resolve_rename_subpartition(const ParseNode &node,
+                             const share::schema::ObTableSchema &orig_table_schema);
   int check_subpart_name(const share::schema::ObPartition &partition,
                          const share::schema::ObSubPartition &subpartition);
   int resolve_add_constraint(const ParseNode &node);

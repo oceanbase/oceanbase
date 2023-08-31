@@ -371,6 +371,90 @@ int ObMultiVersionSchemaService::build_full_materalized_view_schema(
   return ret;
 }
 
+// for ObLatestSchemaGuard
+int ObMultiVersionSchemaService::get_latest_schema(
+    common::ObIAllocator &allocator,
+    const ObSchemaType schema_type,
+    const uint64_t tenant_id,
+    const uint64_t schema_id,
+    const ObSchema *&schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(TENANT_SCHEMA == schema_type && !is_sys_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id for TENANT_SCHEMA", KR(ret), K(tenant_id), K(schema_id));
+  } else if (OB_UNLIKELY(SYS_VARIABLE_SCHEMA == schema_type && tenant_id != schema_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id and schema_id not match for TENANT_SCHEMA",
+             KR(ret), K(tenant_id), K(schema_id));
+  } else if (OB_UNLIKELY(!is_normal_schema(schema_type)
+             || OB_INVALID_ID == schema_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(schema_type), K(tenant_id), K(schema_id));
+  } else if ((TABLE_SCHEMA == schema_type
+              || TABLE_SIMPLE_SCHEMA == schema_type)
+             && OB_ALL_CORE_TABLE_TID == schema_id) {
+    const ObTableSchema *hard_code_schema = schema_cache_.get_all_core_table();
+    if (OB_ISNULL(hard_code_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("all core table schema is null", KR(ret));
+    } else if (is_sys_tenant(tenant_id)) {
+      schema = hard_code_schema;
+    } else {
+      ObTableSchema* new_table = NULL;
+      if (OB_FAIL(ObSchemaUtils::alloc_schema(allocator, new_table))) {
+        LOG_WARN("fail to alloc table schema", KR(ret));
+      } else if (OB_FAIL(new_table->assign(*hard_code_schema))) {
+        LOG_WARN("fail to assign all core schema", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(
+                tenant_id, *new_table))) {
+        LOG_WARN("fail to construct tenant's __all_core_table schema", KR(ret), K(tenant_id));
+      } else {
+        schema = static_cast<const ObSchema*>(new_table);
+      }
+    }
+  } else {
+    ObRefreshSchemaStatus schema_status;
+    schema_status.tenant_id_ = tenant_id;
+    const int64_t schema_version = INT64_MAX;
+    ObSchema *new_schema = NULL;
+    if (OB_FAIL(schema_fetcher_.fetch_schema(schema_type,
+                                             schema_status,
+                                             schema_id,
+                                             schema_version,
+                                             allocator,
+                                             new_schema))) {
+      LOG_WARN("fail to fetch schema", KR(ret), K(schema_type),
+               K(tenant_id), K(schema_id), K(schema_version));
+    } else if (OB_ISNULL(new_schema)) {
+      // schema not exist or schema history is recycled.
+    } else if (TABLE_SCHEMA != schema_type) {
+      schema = new_schema;
+    } else {
+      ObTableSchema *new_table = static_cast<ObTableSchema *>(new_schema);
+      if (MATERIALIZED_VIEW == new_table->get_table_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support to fetch latest mv", KR(ret), "table_id", schema_id);
+      } else if (OB_ALL_CORE_TABLE_TID == schema_id) {
+        // do-nothing
+      } else if (!need_construct_aux_infos_(*new_table)) {
+        // do-nothing
+      } else if (ObSysTableChecker::is_sys_table_has_index(schema_id)) {
+        if (OB_FAIL(ObSysTableChecker::fill_sys_index_infos(*new_table))) {
+          LOG_WARN("fail to fill sys indexes", KR(ret), K(tenant_id), "table_id", schema_id);
+        }
+      } else if (OB_FAIL(construct_aux_infos_(*sql_proxy_,
+                 schema_status, tenant_id, *new_table))) {
+        LOG_WARN("fail to construct aux infos", KR(ret), K(tenant_id), "table_id", schema_id);
+      }
+      if (OB_SUCC(ret)) {
+        schema = static_cast<const ObSchema*>(new_table);
+      }
+    }
+  }
+  return ret;
+}
+
 // In order to facilitate the processing of the tenant_space table and index, the logic of updating the schema_cache
 // is placed in the upper layer, and at the same time, the schema_guard is passed in to obtain the tenant schema
 // Whether it is lazy mode is distinguished by whether mgr is NULL
@@ -2073,9 +2157,11 @@ int ObMultiVersionSchemaService::add_schema(
   ObSchemaMgr *schema_mgr_for_cache = NULL;
   ObSchemaMemMgr *mem_mgr = NULL;
   ObSchemaMgrCache *schema_mgr_cache = NULL;
+  int64_t new_schema_version = OB_INVALID_VERSION;
   int64_t refreshed_schema_version = OB_INVALID_VERSION;
   int64_t received_broadcast_version = OB_INVALID_VERSION;
   ObSchemaStore* schema_store = NULL;
+  const int64_t start_time = ObTimeUtility::current_time();
   if (!force_add && !check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("inner stat error", K(ret));
@@ -2097,7 +2183,7 @@ int ObMultiVersionSchemaService::add_schema(
     LOG_WARN("mem_mgr is null", K(ret), K(tenant_id));
   } else {
     schema_mgr_cache = &schema_store->schema_mgr_cache_;
-    int64_t new_schema_version = schema_mgr_for_cache->get_schema_version();
+    new_schema_version = schema_mgr_for_cache->get_schema_version();
     refreshed_schema_version = schema_store->get_refreshed_version();
     if (OB_ISNULL(schema_mgr_cache)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2126,21 +2212,26 @@ int ObMultiVersionSchemaService::add_schema(
         LOG_WARN("fail to check can switch allocator", KR(ret));
       } else if (can_switch) {
         // Switch allocator && rewrite schema_mgr_for_cache_
-        LOG_INFO("try to switch allocator", KR(ret), K(tenant_id), K(new_schema_version));
         if (OB_FAIL(switch_allocator_(*mem_mgr, schema_mgr_for_cache))) {
           LOG_WARN("fail to alloc schema mgr after switch allocator", KR(ret), K(tenant_id), K(new_schema_version));
         }
       }
     }
     if (OB_SUCC(ret)) {
-      schema_store->update_refreshed_version(new_schema_version);
-      FLOG_INFO("[REFRESH_SCHEMA] change refreshed_schema_version with new mode", K(tenant_id), K(new_schema_version));
       // Because RS only notifies other observers through RPC, the received_broadcast_version of the local observer
       // is not updated
       // This variable will be copied in obmp_query to ob_latest_schema_version in the session variable
       // The proxy will use the variable ob_latest_schema_version to ensure that
       // multiple observers are connected to the same schema version.
+      schema_store->update_refreshed_version(new_schema_version);
+      FLOG_INFO("[REFRESH_SCHEMA] change refreshed_schema_version with new mode", K(tenant_id), K(new_schema_version));
+      // To reduce allocator's memory more frequently
+      if (OB_FAIL(try_gc_allocator_when_add_schema_(tenant_id, mem_mgr, schema_mgr_cache))) {
+        LOG_WARN("fail to gc current allocator when add schema", KR(ret), K(tenant_id), K(new_schema_version));
+      }
     }
+    int64_t end_time = ObTimeUtility::current_time();
+    LOG_INFO("finish add schema", KR(ret), K(tenant_id), K(new_schema_version), "cost_ts", start_time - end_time);
   }
   return ret;
 }
@@ -2207,6 +2298,7 @@ int ObMultiVersionSchemaService::switch_allocator_(
     ObSchemaMgr *&latest_schema_mgr)
 {
   int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
 
   if (OB_ISNULL(latest_schema_mgr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2221,6 +2313,8 @@ int ObMultiVersionSchemaService::switch_allocator_(
     ObSchemaMgr *old_mgr = latest_schema_mgr;
     const uint64_t tenant_id = latest_schema_mgr->get_tenant_id();
     const int64_t schema_version = latest_schema_mgr->get_schema_version();
+    LOG_INFO("try to switch allocator", KR(ret), K(tenant_id), K(schema_version));
+
     if (OB_FAIL(mem_mgr.alloc_schema_mgr(new_mgr, alloc_for_liboblog))) {
       LOG_WARN("fail to alloc mem", KR(ret));
     } else {
@@ -2261,6 +2355,8 @@ int ObMultiVersionSchemaService::switch_allocator_(
         LOG_ERROR("fail to free new_mgr", KR(tmp_ret), K(schema_version));
       }
     }
+    int64_t end_time = ObTimeUtility::current_time();
+    LOG_INFO("finish switch allocator", KR(ret), K(tenant_id), K(schema_version), "cost_ts", end_time - start_time);
   }
   return ret;
 }
@@ -3416,7 +3512,7 @@ int ObMultiVersionSchemaService::try_gc_tenant_schema_mgr_for_refresh(
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(try_gc_tenant_schema_mgr(mem_mgr, schema_mgr_cache))) {
-      LOG_WARN("fail to elimiante schema mgr", K(ret), K(tenant_id));
+      LOG_WARN("fail to eliminate schema mgr", K(ret), K(tenant_id));
     } else if (OB_FAIL(destroy_schema_struct(tenant_id))) {
       LOG_WARN("fail to destroy schema struct", K(ret), K(tenant_id));
     }
@@ -3451,7 +3547,7 @@ int ObMultiVersionSchemaService::try_gc_tenant_schema_mgr_for_fallback(
     } else {
       schema_mgr_cache = &schema_store->schema_mgr_cache_for_liboblog_;
       if (OB_FAIL(try_gc_tenant_schema_mgr(mem_mgr, schema_mgr_cache))) {
-        LOG_WARN("fail to elimiante schema mgr", K(ret), K(tenant_id));
+        LOG_WARN("fail to eliminate schema mgr", K(ret), K(tenant_id));
       }
     }
   }
@@ -3530,6 +3626,10 @@ int ObMultiVersionSchemaService::try_gc_existed_tenant_schema_mgr()
         } else if (OB_FAIL(try_gc_tenant_schema_mgr_for_fallback(tenant_id))) {
           LOG_WARN("fail to gc tenant schema mgr for fallback", KR(ret), K(tenant_id));
         }
+        // 3.let schema mgr to free slot's memory
+        if (OB_FAIL(try_gc_current_allocator(tenant_id, mem_mgr, schema_mgr_cache))) {
+          LOG_WARN("fail to gc current slot", KR(ret), K(tenant_id));
+        }
       }
     }
   }
@@ -3580,8 +3680,8 @@ int ObMultiVersionSchemaService::try_gc_another_allocator(
         if (OB_ISNULL(another_ptrs.at(i))) {
           LOG_WARN("ptrs is null", K(ret), K(tenant_id), K(i));
         } else if (FALSE_IT(eli_schema_mgr = static_cast<ObSchemaMgr *>(another_ptrs.at(i)))) {
-        } else if (OB_FAIL(schema_mgr_cache->try_elimiante_schema_mgr(eli_schema_mgr))) {
-          LOG_WARN("fail to elimiante schema_mgr", K(ret), K(tenant_id), K(eli_schema_mgr));
+        } else if (OB_FAIL(schema_mgr_cache->try_eliminate_schema_mgr(eli_schema_mgr))) {
+          LOG_WARN("fail to eliminate schema_mgr", K(ret), K(tenant_id), K(eli_schema_mgr));
         } else if (OB_FAIL(mem_mgr->free_schema_mgr(eli_schema_mgr))) {
           LOG_ERROR("free eli schema mgr falied", KR(ret), K(tenant_id));
         }
@@ -3593,6 +3693,188 @@ int ObMultiVersionSchemaService::try_gc_another_allocator(
     }
   }
   LOG_INFO("try gc another allocator", K(ret), K(tenant_id));
+  return ret;
+}
+
+// try to gc current allocator's schema mgr, it can reduce the number of schema mgr in the background
+int ObMultiVersionSchemaService::try_gc_current_allocator(
+    const uint64_t tenant_id,
+    ObSchemaMemMgr *&mem_mgr,
+    ObSchemaMgrCache *&schema_mgr_cache)
+{
+  int ret = OB_SUCCESS;
+  int64_t recycle_interval = GCONF._schema_memory_recycle_interval;
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_ISNULL(mem_mgr) || OB_ISNULL(schema_mgr_cache)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("mem_mgr or schema_mgr_cahe is null",
+             KR(ret), K(tenant_id), KP(mem_mgr), KP(schema_mgr_cache));
+  } else if (tenant_id != mem_mgr->get_tenant_id()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id not match", KR(ret), K(tenant_id), K(mem_mgr->get_tenant_id()));
+  } else if (0 == recycle_interval) {
+    // 0 means turn off gc current allocator
+    LOG_TRACE("_schema_memory_recycle_interval is zero, turn off gc current allocator", K(tenant_id));
+  } else {
+    int64_t start_time = ObTimeUtility::current_time();
+    ObArray<void *> current_ptrs;
+    int64_t local_version = OB_INVALID_VERSION;
+    lib::ObMutexGuard guard(schema_refresh_mutex_);
+
+    if (OB_FAIL(mem_mgr->get_current_ptrs(current_ptrs))) {
+      LOG_WARN("fail to get another ptrs", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(get_tenant_refreshed_schema_version(tenant_id, local_version))) {
+      LOG_WARN("fail to get local refreshed schema version", KR(ret), K(tenant_id));
+    } else if (!ObSchemaService::is_formal_version(local_version)) {
+      LOG_TRACE("ignore to free current allocator when refreshed version is not formal", K(tenant_id), K(local_version));
+    } else {
+      int64_t eli_timestamp = 0;
+      ObSchemaMgr *eli_schema_mgr = NULL;
+      int64_t eli_schema_version = OB_INVALID_VERSION;
+      for (int64_t i = 0; OB_SUCC(ret) && i < current_ptrs.count(); i++) {
+        if (OB_ISNULL(current_ptrs.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ptrs is null", KR(ret), K(tenant_id), K(i));
+        } else {
+          eli_schema_mgr = static_cast<ObSchemaMgr *>(current_ptrs.at(i));
+          eli_timestamp = eli_schema_mgr->get_timestamp_in_slot();
+          eli_schema_version = eli_schema_mgr->get_schema_version();
+          if (eli_schema_version >= local_version
+              || (recycle_interval > ObClockGenerator::getClock() - eli_timestamp)) {
+            LOG_TRACE("no need to gc current allocator's schema mgr", K(tenant_id), K(eli_timestamp),
+                      K(eli_schema_version), K(local_version), K(recycle_interval));
+          } else {
+            //gc only those that have been put in the slot for more than recycle_interval
+            LOG_INFO("try to gc current allocator's schema mgr which is in slot",
+                     K(tenant_id), K(eli_schema_version), K(local_version),
+                     K(eli_timestamp), K(recycle_interval));
+            if (OB_FAIL(schema_mgr_cache->try_eliminate_schema_mgr(eli_schema_mgr))) {
+              if (OB_EAGAIN == ret) {
+                // schema mgr in use, just ignore
+                ret = OB_SUCCESS;
+              } else {
+                LOG_WARN("fail to eliminate schema_mgr", KR(ret), K(tenant_id),
+                         K(eli_schema_version), K(eli_timestamp));
+              }
+            } else if (OB_FAIL(mem_mgr->free_schema_mgr(eli_schema_mgr))) {
+              LOG_ERROR("free eli schema mgr falied", KR(ret), K(tenant_id));
+            }
+          }
+        }
+      }
+    }
+    int64_t end_time = ObTimeUtility::current_time();
+    LOG_INFO("finish gc current allocator's schema mgr which is in slot", KR(ret), K(tenant_id),
+             "cost_ts", end_time - start_time);
+  }
+  return ret;
+}
+
+bool ObMultiVersionSchemaService::compare_schema_mgr_info_(
+     const ObSchemaMgr *lhs,
+     const ObSchemaMgr *rhs)
+{
+  return lhs->get_schema_version() < rhs->get_schema_version();
+}
+
+// need protected by schema_refresh_mutex_
+// try to gc current and another allocators' schema mgr, it can reduce the number of schema mgr in the foreground
+// 1.reserve_mgr_count can let us reserve the number of total schema mgr
+// 2.we can turn this off by set _schema_memory_recycle_interval to zero
+int ObMultiVersionSchemaService::try_gc_allocator_when_add_schema_(
+    const uint64_t tenant_id,
+    ObSchemaMemMgr *&mem_mgr,
+    ObSchemaMgrCache *&schema_mgr_cache)
+{
+  int ret = OB_SUCCESS;
+  ObArray<void *> all_ptrs;
+  int64_t local_version = OB_INVALID_VERSION;
+  int64_t reserve_version = OB_INVALID_VERSION;
+  int64_t start_time = ObTimeUtility::current_time();
+  const int64_t reserve_mgr_count = RESERVE_SCHEMA_MGR_CNT;
+  if (OB_ISNULL(mem_mgr) || OB_ISNULL(schema_mgr_cache)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("mem_mgr or schema_mgr_cahe is null",
+             KR(ret), K(tenant_id), KP(mem_mgr), KP(schema_mgr_cache));
+  } else if (0 > reserve_mgr_count) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("reserve_mgr_count is less than zero", KR(ret));
+  } else if (0 == GCONF._schema_memory_recycle_interval) {
+    // ignore
+  } else if (OB_FAIL(mem_mgr->get_all_ptrs(all_ptrs))) {
+    LOG_WARN("fail to get another ptrs", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(get_tenant_refreshed_schema_version(tenant_id, local_version))) {
+    LOG_WARN("fail to get local refreshed schema version", KR(ret), K(tenant_id));
+  } else if (!ObSchemaService::is_formal_version(local_version)) {
+    LOG_TRACE("ignore to free current allocator when refreshed version is not formal", K(tenant_id), K(local_version));
+  } else {
+    SchemaMgrIterator iter;
+    SchemaMgrInfos schema_mgr_infos;
+    ObSchemaMgr *eli_schema_mgr = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_ptrs.count(); i++) {
+      iter = schema_mgr_infos.end();
+      eli_schema_mgr = static_cast<ObSchemaMgr *>(all_ptrs.at(i));
+      if (OB_ISNULL(eli_schema_mgr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("eli_schema_mgr is null", KR(ret), K(tenant_id), K(i));
+      } else if (OB_FAIL(schema_mgr_infos.insert(eli_schema_mgr, iter, compare_schema_mgr_info_))) {
+        LOG_WARN("fail to insert schema mgr info", KR(ret), K(tenant_id));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // ignore
+    } else if (all_ptrs.count() != schema_mgr_infos.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("all_ptrs and schema_mgr_infos count not equal", KR(ret), K(tenant_id),
+                K(all_ptrs.count()), K(schema_mgr_infos.count()));
+    } else {
+      int64_t schema_mgr_cnt = schema_mgr_infos.count();
+      int64_t reserve_index = schema_mgr_cnt > reserve_mgr_count ?
+                              schema_mgr_cnt - reserve_mgr_count - 1 : OB_INVALID_INDEX;
+      // we should skip free schema mgr when schema_mgr_cnt less than reserve_mgr_count
+      if (reserve_index >= 0 && 0 != schema_mgr_cnt) {
+        reserve_version = schema_mgr_infos.at(reserve_index)->get_schema_version();
+      }
+    }
+    int64_t eli_schema_version = 0;
+    int64_t total_schema_ptr_cnt = all_ptrs.count();
+    int64_t remain_schema_ptr_cnt = all_ptrs.count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < total_schema_ptr_cnt; i++) {
+      eli_schema_mgr = static_cast<ObSchemaMgr *>(all_ptrs.at(i));
+      if (OB_ISNULL(eli_schema_mgr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("eli_schema_mgr is null", KR(ret), K(tenant_id), K(i));
+      } else {
+        eli_schema_version = eli_schema_mgr->get_schema_version();
+        if (eli_schema_version >= local_version
+            || eli_schema_version >= reserve_version) {
+          LOG_TRACE("no need to gc allocator's schema mgr", K(tenant_id),
+                    K(eli_schema_version), K(local_version), K(reserve_version));
+        } else {
+          LOG_INFO("try to gc allocator's schema mgr which schema version is less than reserve_version",
+                    K(tenant_id), K(eli_schema_version), K(local_version), K(reserve_version));
+          if (OB_FAIL(schema_mgr_cache->try_eliminate_schema_mgr(eli_schema_mgr))) {
+            if (OB_EAGAIN == ret) {
+              // schema mgr in use, just ignore
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("fail to eliminate schema_mgr", KR(ret), K(tenant_id), K(eli_schema_version));
+            }
+          } else if (OB_FAIL(mem_mgr->free_schema_mgr(eli_schema_mgr))) {
+            LOG_ERROR("free eli schema mgr falied", KR(ret), K(tenant_id));
+          } else {
+            remain_schema_ptr_cnt--;
+          }
+        }
+      }
+    } // for
+    int64_t end_time = ObTimeUtility::current_time();
+    LOG_INFO("finish gc allocator's schema mgr when add schema", KR(ret), K(tenant_id),
+              K(total_schema_ptr_cnt), K(remain_schema_ptr_cnt), K(reserve_version),
+              "cost_ts", end_time - start_time);
+  }
   return ret;
 }
 
@@ -3861,6 +4143,30 @@ int ObMultiVersionSchemaService::gen_new_schema_version(
   return ret;
 }
 
+int ObMultiVersionSchemaService::gen_batch_new_schema_versions(
+    const uint64_t tenant_id,
+    const int64_t version_cnt,
+    int64_t &schema_version)
+{
+  int ret = OB_SUCCESS;
+  int64_t refreshed_schema_version = OB_INVALID_VERSION;
+  schema_version = OB_INVALID_VERSION;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+                 || version_cnt < 1)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(get_tenant_refreshed_schema_version(tenant_id, refreshed_schema_version))) {
+    LOG_WARN("fail to get refreshed schema version", KR(ret), K(tenant_id), K(refreshed_schema_version));
+  } else if (OB_ISNULL(schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service_->gen_batch_new_schema_versions(
+             tenant_id, refreshed_schema_version, version_cnt, schema_version))) {
+    LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id), K(version_cnt), K(refreshed_schema_version));
+  }
+  return ret;
+}
+
 int ObMultiVersionSchemaService::get_new_schema_version(uint64_t tenant_id, int64_t &schema_version) {
   int ret = OB_SUCCESS;
   schema_version = OB_INVALID_VERSION;
@@ -4082,6 +4388,36 @@ int ObMultiVersionSchemaService::check_restore_tenant_exist(
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObMultiVersionSchemaService::get_tenant_name_case_mode(
+    const uint64_t tenant_id,
+    ObNameCaseMode &name_case_mode)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard guard;
+  const ObSimpleSysVariableSchema *sys_variable = NULL;
+  bool is_oracle_mode = false;
+  name_case_mode = OB_NAME_CASE_INVALID;
+  if (is_sys_tenant(tenant_id)
+      || is_meta_tenant(tenant_id)) {
+    name_case_mode = OB_ORIGIN_AND_INSENSITIVE;
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("fail to check oracle mode", KR(ret), K(tenant_id));
+  } else if (is_oracle_mode) {
+    // name_case_mode is incorrent and meaningless for oracle tenant.
+    name_case_mode = OB_ORIGIN_AND_SENSITIVE;
+  } else if (OB_FAIL(get_tenant_schema_guard(tenant_id, guard))) {
+    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(guard.get_sys_variable_schema(tenant_id, sys_variable))) {
+    LOG_WARN("fail to get sys variable schema", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(sys_variable)) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("sys variable not exist", KR(ret), K(tenant_id));
+  } else {
+    name_case_mode = sys_variable->get_name_case_mode();
   }
   return ret;
 }

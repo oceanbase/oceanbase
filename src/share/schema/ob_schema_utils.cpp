@@ -492,6 +492,47 @@ int ObSchemaUtils::construct_inner_table_schemas(
   }
   return ret;
 }
+int ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
+    const ObTimeoutCtx &ctx,
+    const uint64_t tenant_id,
+    const int64_t schema_version,
+    const int64_t consensus_timeout)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  ObMultiVersionSchemaService *schema_service = NULL;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+      || schema_version <= 0
+      || consensus_timeout < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(schema_version), K(consensus_timeout));
+  } else if (OB_ISNULL(schema_service = GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is null", KR(ret));
+  }
+  while (OB_SUCC(ret) && ctx.get_timeout() > 0) {
+    int64_t refreshed_schema_version = OB_INVALID_VERSION;
+    int64_t consensus_schema_version = OB_INVALID_VERSION;
+    if (OB_FAIL(schema_service->get_tenant_refreshed_schema_version(tenant_id, refreshed_schema_version))) {
+      LOG_WARN("get refreshed schema_version fail", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(schema_service->get_tenant_broadcast_consensus_version(tenant_id, consensus_schema_version))) {
+      LOG_WARN("get consensus schema_version fail", KR(ret), K(tenant_id));
+    } else if (refreshed_schema_version >= schema_version
+                && consensus_schema_version >= schema_version) {
+      break;
+    } else if (refreshed_schema_version >= schema_version
+                && ObTimeUtility::current_time() - start_time >= consensus_timeout) {
+      break;
+    } else {
+      if (REACH_TIME_INTERVAL(1000 * 1000L)) { // 1s
+        LOG_WARN("schema version not sync", K(tenant_id),
+                 K(refreshed_schema_version), K(consensus_schema_version), K(schema_version));
+      }
+      ob_usleep(10 * 1000L); // 10ms
+    }
+  }
+  return ret;
+}
 
 int ObSchemaUtils::batch_get_latest_table_schemas(
     common::ObISQLClient &sql_client,

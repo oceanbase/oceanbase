@@ -5362,7 +5362,7 @@ int ObDMLResolver::resolve_fk_table_partition_expr(const TableItem &table_item, 
       if (child_table_id == table_schema.get_table_id() && !foreign_key_info.is_parent_table_mock_) {
         const ObTableSchema *parent_table_schema = nullptr;
         bool parent_key_is_pkey = false;
-        const common::ObSEArray<uint64_t, 8> &parent_column_ids = foreign_key_info.parent_column_ids_;
+        const common::ObSEArray<uint64_t, 4> &parent_column_ids = foreign_key_info.parent_column_ids_;
         const ObTableSchema *resolve_table_schema = nullptr;
         uint64_t fk_scan_tid = OB_INVALID_ID;
         if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), parent_table_id, parent_table_schema))) { //NOTE: Can we use this function to get schema here

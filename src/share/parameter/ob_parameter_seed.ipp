@@ -477,6 +477,9 @@ DEF_VERSION(compatible, OB_TENANT_PARAMETER, "4.2.1.0", "compatible version for 
 DEF_BOOL(enable_ddl, OB_CLUSTER_PARAMETER, "True", "specifies whether DDL operation is turned on. "
          "Value:  True:turned on;  False: turned off",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_parallel_table_creation, OB_TENANT_PARAMETER, "True", "specifies whether create table parallelly. "
+         "Value:  True: create table parallelly;  False: create table serially",
+         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_major_freeze, OB_CLUSTER_PARAMETER, "True", "specifies whether major_freeze function is turned on. "
          "Value:  True:turned on;  False: turned off",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1200,9 +1203,9 @@ DEF_STR_WITH_CHECKER(_audit_mode, OB_TENANT_PARAMETER, "NONE",
         "MYSQL: use mysql audit"
         "ORACLE: use oracle audit",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_max_schema_slot_num, OB_CLUSTER_PARAMETER, "128", "[2,8192]",
+DEF_INT(_max_schema_slot_num, OB_CLUSTER_PARAMETER, "128", "[2,256]",
         "the max schema slot number for each tenant, "
-        "Range: [2, 8192] in integer",
+        "Range: [2, 256] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT_WITH_CHECKER(_ob_query_rate_limit, OB_TENANT_PARAMETER, "-1",
         common::ObConfigQueryRateLimitChecker,
@@ -1565,6 +1568,12 @@ DEF_BOOL(_force_explict_500_malloc, OB_CLUSTER_PARAMETER, "False",
 DEF_CAP(range_optimizer_max_mem_size, OB_TENANT_PARAMETER, "128M", "[16M,1G]",
         "to limit the memory consumption for the query range optimizer. Range: [16M,1G]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_schema_memory_recycle_interval, OB_CLUSTER_PARAMETER, "15m", "[0s,)",
+        "the time interval between the schedules of schema memory recycle task. "
+        "0 means only turn off gc current allocator, "
+        "and other schema memory recycle task's interval will be 15mins. "
+        "Range [0s,)",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 #ifdef ENABLE_500_MEMORY_LIMIT
 DEF_BOOL(_enable_system_tenant_memory_limit, OB_CLUSTER_PARAMETER, "True",
          "specifies whether allowed to limit the memory of tenant 500",

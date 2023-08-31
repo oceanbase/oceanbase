@@ -53,7 +53,8 @@ public:
   void destroy();
   virtual void runTimerTask() override;
 private:
-  const static int64_t REFRESH_INTERVAL = 30L * 60L * 1000L * 1000L; // 30min
+  int schedule_();
+private:
   ObServerSchemaUpdater *schema_updater_;
   bool is_inited_;
 };

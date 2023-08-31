@@ -423,6 +423,7 @@ ob_set_subtarget(ob_share schema
   schema/ob_sequence_sql_service.cpp
   schema/ob_server_schema_service.cpp
   schema/ob_table_schema.cpp
+  schema/ob_latest_schema_guard.cpp
 )
 
 ob_set_subtarget(ob_share stat

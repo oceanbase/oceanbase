@@ -295,6 +295,8 @@ trace::ObSpanCtx* ObDDLTracing::begin_task_span()
       case DDL_TRUNCATE_TABLE:
       case DDL_DROP_PARTITION:
       case DDL_DROP_SUB_PARTITION:
+      case DDL_RENAME_PARTITION:
+      case DDL_RENAME_SUB_PARTITION:
       case DDL_TRUNCATE_PARTITION:
       case DDL_TRUNCATE_SUB_PARTITION:
         span = FLT_BEGIN_SPAN(ddl_retry_task);
@@ -375,6 +377,8 @@ trace::ObSpanCtx* ObDDLTracing::restore_task_span()
       case DDL_TRUNCATE_TABLE:
       case DDL_DROP_PARTITION:
       case DDL_DROP_SUB_PARTITION:
+      case DDL_RENAME_PARTITION:
+      case DDL_RENAME_SUB_PARTITION:
       case DDL_TRUNCATE_PARTITION:
       case DDL_TRUNCATE_SUB_PARTITION:
         span = FLT_RESTORE_DDL_SPAN(ddl_retry_task, task_span_id_, task_start_ts_);
@@ -756,6 +760,12 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
       break;
     case DDL_DROP_SUB_PARTITION:
       ddl_type_str = "drop sub partition";
+      break;
+    case DDL_RENAME_PARTITION:
+      ddl_type_str = "rename partition";
+      break;
+    case DDL_RENAME_SUB_PARTITION:
+      ddl_type_str = "rename sub partition";
       break;
     case DDL_TRUNCATE_PARTITION:
       ddl_type_str = "truncate partition";

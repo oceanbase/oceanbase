@@ -29,6 +29,8 @@
 #include "share/ob_priv_common.h"
 #include "lib/worker.h"
 #include "objit/common/ob_item_type.h"
+#include "share/ob_share_util.h"          // ObIDGenerator
+#include "share/cache/ob_kv_storecache.h" // ObKVCacheHandle
 #include "lib/hash/ob_pointer_hashmap.h"
 #include "lib/string/ob_sql_string.h"
 
@@ -49,6 +51,7 @@ class ObIAllocator;
 class ObSqlString;
 class ObString;
 class ObDataTypeCastParams;
+class ObKVCacheHandle;
 }
 namespace sql
 {
@@ -136,6 +139,12 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 
 // table_flags stored in __all_table.table_flag
 #define CASCADE_RLS_OBJECT_FLAG (INT64_C(1) << 0)
+
+// schema array size
+static const int64_t SCHEMA_SMALL_MALLOC_BLOCK_SIZE = 64;
+static const int64_t SCHEMA_MALLOC_BLOCK_SIZE = 128;
+static const int64_t SCHEMA_MID_MALLOC_BLOCK_SIZE = 256;
+static const int64_t SCHEMA_BIG_MALLOC_BLOCK_SIZE = 1024;
 
 //-------enum defenition
 enum ObTableLoadType
@@ -258,6 +267,13 @@ const char *ob_table_type_str(ObTableType type);
 const char *ob_mysql_table_type_str(ObTableType type);
 
 ObTableType get_inner_table_type_by_id(const uint64_t tid);
+
+bool is_mysql_tmp_table(const ObTableType table_type);
+bool is_view_table(const ObTableType table_type);
+bool is_index_table(const ObTableType table_type);
+bool is_aux_lob_meta_table(const ObTableType table_type);
+bool is_aux_lob_piece_table(const ObTableType table_type);
+bool is_aux_lob_table(const ObTableType table_type);
 
 enum ObIndexType
 {
@@ -408,6 +424,54 @@ public:
 
 };
 
+class ObSchemaIdVersion
+{
+public:
+  ObSchemaIdVersion()
+    : schema_id_(common::OB_INVALID_ID),
+      schema_version_(common::OB_INVALID_VERSION)
+  {}
+  ~ObSchemaIdVersion() {}
+  int init(const uint64_t schema_id, const int64_t schema_version);
+  void reset();
+  bool is_valid() const;
+  uint64_t get_schema_id() const { return schema_id_; }
+  int64_t get_schema_version() const { return schema_version_; }
+  TO_STRING_KV(K_(schema_id), K_(schema_version));
+private:
+  uint64_t schema_id_;
+  int64_t schema_version_;
+};
+
+class ObSchemaVersionGenerator : public ObIDGenerator
+{
+public:
+  // when refresh schema, if new ddl operations are as following:
+  // (ALTER USER TABLE, v1), (ALTER SYS TABLE, v2),
+  // if we replay new ddl operation one by one, when we execute sql to read sys table
+  // to fetch user table schema, leader partition server find sys table version not match,
+  // read new user table schema will fail, so we need first refresh sys table schema,
+  // then publish, then refresh new user table schemas and publish,
+  // but what version we used to publish sys table schema when we haven't refresh use table,
+  // we use a temporary version which means it don't contain all schema item whose version
+  // is small than temporary version. now we have temporary core versin for core table,
+  // temporary system version for system table, we set SCHEMA_VERSION_INC_STEP to 8 so that
+  // it is enough when we add more temporary version
+  static const int64_t SCHEMA_VERSION_INC_STEP = 8;
+public:
+  ObSchemaVersionGenerator()
+    : ObIDGenerator(SCHEMA_VERSION_INC_STEP) {}
+  virtual ~ObSchemaVersionGenerator() {}
+
+  int init(const int64_t start_version, const int64_t end_version);
+  int next_version(int64_t &current_version);
+  int get_start_version(int64_t &start_version) const;
+  int get_current_version(int64_t &current_version) const;
+  int get_end_version(int64_t &end_version) const;
+  int get_version_cnt(int64_t &version_cnt) const;
+};
+typedef ObSchemaVersionGenerator TSISchemaVersionGenerator;
+
 struct ObRefreshSchemaInfo
 {
   OB_UNIS_VERSION(1);
@@ -509,12 +573,6 @@ inline bool is_index_local_storage(ObIndexType index_type)
            || INDEX_TYPE_DOMAIN_CTXCAT == index_type
            || INDEX_TYPE_SPATIAL_LOCAL == index_type
            || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type;
-}
-
-inline bool is_aux_lob_table(const ObTableType &table_type)
-{
-  return AUX_LOB_META == table_type
-      || AUX_LOB_PIECE == table_type;
 }
 
 inline bool is_related_table(
@@ -690,6 +748,8 @@ typedef enum {
   RLS_POLICY_SCHEMA = 36,
   RLS_GROUP_SCHEMA = 37,
   RLS_CONTEXT_SCHEMA = 38,
+  CONSTRAINT_SCHEMA = 39,   // not dependent schema
+  FOREIGN_KEY_SCHEMA = 40,  // not dependent schema
   ///<<< add schema type before this line
   OB_MAX_SCHEMA
 } ObSchemaType;
@@ -1196,7 +1256,6 @@ public:
   inline int get_err_ret() const { return error_ret_; }
 protected:
   static const int64_t STRING_ARRAY_EXTEND_CNT = 7;
-  static const int64_t SCHEMA_MALLOC_BLOCK_SIZE = 128;
   void *alloc(const int64_t size);
   void free(void *ptr);
   int deep_copy_str(const char *src, common::ObString &dest);
@@ -1264,6 +1323,23 @@ int ObSchema::set_charset_and_collation_options(common::ObCharsetType src_charse
   }
   return ret;
 }
+
+struct SchemaObj
+{
+  SchemaObj()
+  : schema_type_(OB_MAX_SCHEMA),
+    tenant_id_(common::OB_INVALID_ID),
+    schema_id_(common::OB_INVALID_ID),
+    schema_(NULL),
+    handle_()
+  {}
+  ObSchemaType schema_type_;
+  uint64_t tenant_id_;
+  uint64_t schema_id_;
+  ObSchema *schema_;
+  common::ObKVCacheHandle handle_;
+  TO_STRING_KV(K_(schema_type), K_(tenant_id), K_(schema_id), KP_(schema));
+};
 
 class ObLocality
 {
@@ -1958,7 +2034,7 @@ public:
   int64_t get_schema_version() const
   { return schema_version_; }
 
-  int set_part_name(common::ObString &part_name)
+  int set_part_name(const common::ObString &part_name)
   { return deep_copy_str(part_name, name_); }
   const common::ObString &get_part_name() const
   { return name_; }
@@ -2081,6 +2157,10 @@ public:
   ObSubPartition **get_hidden_subpart_array() const { return hidden_subpartition_array_; }
   int64_t get_hidden_subpartition_num() const { return hidden_subpartition_num_; }
   int preserve_subpartition(const int64_t &capacity);
+  int get_normal_subpartition_by_subpartition_index(const int64_t subpartition_index,
+                                                const ObSubPartition *&partition) const;
+  int get_normal_subpartition_index_by_id(const int64_t subpart_id,
+                                      int64_t &subpartition_index) const;
 
   INHERIT_TO_STRING_KV(
     "BasePartition", ObBasePartition,
@@ -2433,6 +2513,29 @@ public:
   // only used for generate part_name
   int get_max_part_id(int64_t &part_id) const;
   int get_max_part_idx(int64_t &part_idx) const;
+  //@param[in] name: the partition name which you want to get partition by
+  //@param[out] part: the partition get by the name, when this function could not find the partition
+  //            by the name, this param would be nullptr
+  //@param[ret] when this function traversal all the partition but could not find the partition by name,
+  //            the ret would be OB_UNKNOWN_PARTITION.
+  //note this function would only check partition
+  int get_partition_by_name(const ObString &name, const ObPartition *&part) const;
+  //@param[in] name: the subpartition name which you want to get subpartition by
+  //@param[out] part: the partition that the subpartition get by the name belongs to, when this function could not
+  //            find the subpartition by the name, this param would be nullptr
+  //            subpart: the subpartition get by the name, when this function could not find the subpartition
+  //            by the name, this param would be nullptr
+  //@param[ret] when this function traversal all the subpartition but could not find the subpartition by name,
+  //            the ret would be OB_UNKNOWN_SUBPARTITION.
+  //note this function would only check subpartition
+  int get_subpartition_by_name(const ObString &name, const ObPartition *&part, const ObSubPartition *&subpart) const;
+  //@param[in] name: the partition or subpartition name you want to check
+  //           whether there is already a partition or subpartition have the same name
+  //@param[ret] when this function traversal all partitions and subpartitions and find the name is duplicate with
+  //            existed (sub)partition it will return OB_DUPLICATE_OBJECT_EXIST
+  //note this function would check both partitions and subpartitions
+  int check_partition_duplicate_with_name(const ObString &name) const;
+
 protected:
   int inner_add_partition(const ObPartition &part);
   template<class T>
@@ -6210,8 +6313,8 @@ public:
   uint64_t foreign_key_id_;
   uint64_t child_table_id_;
   uint64_t parent_table_id_;
-  common::ObSEArray<uint64_t, 8> child_column_ids_;
-  common::ObSEArray<uint64_t, 8> parent_column_ids_;
+  common::ObSEArray<uint64_t, 4> child_column_ids_;
+  common::ObSEArray<uint64_t, 4> parent_column_ids_;
   ObReferenceAction update_action_;
   ObReferenceAction delete_action_;
   common::ObString foreign_key_name_;
@@ -6523,6 +6626,7 @@ private:
   common::ObString encrypted_key_;
 };
 
+static const char* IDENTITY_COLUMN_SEQUENCE_OBJECT_NAME_PREFIX = "ISEQ$$_";
 class ObSequenceSchema: public ObSchema
 {
   OB_UNIS_VERSION(1);
@@ -8114,6 +8218,52 @@ private:
   int64_t schema_version_;
   bool is_deleted_;
 };
+
+class ObIndexNameInfo
+{
+public:
+  ObIndexNameInfo();
+  ~ObIndexNameInfo() {}
+  void reset();
+
+  int init(common::ObIAllocator &allocator,
+           const share::schema::ObSimpleTableSchemaV2 &index_schema);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  uint64_t get_database_id() const { return database_id_; }
+  uint64_t get_data_table_id() const { return data_table_id_; }
+  uint64_t get_index_id() const { return index_id_; }
+  const ObString& get_index_name() const { return index_name_; }
+  const ObString& get_original_index_name() const { return original_index_name_; }
+  TO_STRING_KV(K_(tenant_id), K_(database_id),
+               K_(data_table_id), K_(index_id),
+               K_(index_name), K_(original_index_name));
+private:
+  uint64_t tenant_id_;
+  uint64_t database_id_;
+  uint64_t data_table_id_;
+  uint64_t index_id_;
+  ObString index_name_;
+  ObString original_index_name_;
+  DISALLOW_COPY_AND_ASSIGN(ObIndexNameInfo);
+};
+
+template<class K, class V>
+struct GetIndexNameKey
+{
+  void operator()(const K &k, const V &v)
+  {
+    UNUSED(k);
+    UNUSED(v);
+  }
+};
+
+template<>
+struct GetIndexNameKey<ObIndexSchemaHashWrapper, ObIndexNameInfo*>
+{
+  ObIndexSchemaHashWrapper operator()(const ObIndexNameInfo *index_name_info) const;
+};
+
+typedef common::hash::ObPointerHashMap<ObIndexSchemaHashWrapper, ObIndexNameInfo*, GetIndexNameKey, 1024> ObIndexNameMap;
 
 }//namespace schema
 }//namespace share

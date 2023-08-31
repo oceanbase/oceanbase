@@ -708,7 +708,6 @@ int ObBootstrap::create_all_core_table_partition()
     ObMySQLProxy &sql_proxy = ddl_service_.get_sql_proxy();
     ObTableCreator table_creator(OB_SYS_TENANT_ID,
                                  SCN::base_scn(),
-                                 lst_operator_,
                                  trans);
     if (OB_FAIL(trans.start(&sql_proxy, OB_SYS_TENANT_ID))) {
       LOG_WARN("fail to start trans", KR(ret));
@@ -757,7 +756,6 @@ int ObBootstrap::create_all_partitions()
     ObMySQLProxy &sql_proxy = ddl_service_.get_sql_proxy();
     ObTableCreator table_creator(OB_SYS_TENANT_ID,
                                  SCN::base_scn(),
-                                 lst_operator_,
                                  trans);
     if (OB_FAIL(trans.start(&sql_proxy, OB_SYS_TENANT_ID))) {
       LOG_WARN("fail to start trans", KR(ret));

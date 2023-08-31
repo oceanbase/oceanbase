@@ -477,6 +477,7 @@ public:
   int create_database(const obrpc::ObCreateDatabaseArg &arg, obrpc::UInt64 &db_id);
   int create_tablegroup(const obrpc::ObCreateTablegroupArg &arg, obrpc::UInt64 &tg_id);
   int handle_security_audit(const obrpc::ObSecurityAuditArg &arg);
+  int parallel_create_table(const obrpc::ObCreateTableArg &arg, obrpc::ObCreateTableRes &res);
   int create_table(const obrpc::ObCreateTableArg &arg, obrpc::ObCreateTableRes &res);
   int alter_database(const obrpc::ObAlterDatabaseArg &arg);
   int alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlterTableRes &res);
@@ -856,7 +857,7 @@ private:
   int handle_cancel_backup_backup(const obrpc::ObBackupManageArg &arg);
   int handle_cancel_all_backup_force(const obrpc::ObBackupManageArg &arg);
   int clean_global_context();
-private:
+
   bool is_sys_tenant(const common::ObString &tenant_name);
   int table_allow_ddl_operation(const obrpc::ObAlterTableArg &arg);
   int get_table_schema(uint64_t tenant_id,
@@ -874,11 +875,13 @@ private:
   void update_cpu_quota_concurrency_in_memory_();
   int set_cpu_quota_concurrency_config_();
   int try_notify_switch_leader(const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
-private:
+
   int precheck_interval_part(const obrpc::ObAlterTableArg &arg);
   int old_add_server(const obrpc::ObAdminServerArg &arg);
   int old_delete_server(const obrpc::ObAdminServerArg &arg);
   int old_cancel_delete_server(const obrpc::ObAdminServerArg &arg);
+
+  int parallel_ddl_pre_check_(const uint64_t tenant_id);
 private:
   static const int64_t OB_MAX_CLUSTER_REPLICA_COUNT = 10000000;
   static const int64_t OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT = 5;

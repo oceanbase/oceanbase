@@ -76,6 +76,7 @@ public:
   int generate_schema(const obrpc::ObCreateIndexArg &arg,
                       share::schema::ObTableSchema &data_schema,
                       const bool global_index_without_column_info,
+                      const bool generate_id,
                       share::schema::ObTableSchema &index_schema);
   int submit_drop_index_task(
       common::ObMySQLTransaction &trans,

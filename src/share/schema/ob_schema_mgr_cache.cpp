@@ -29,17 +29,19 @@ void ObSchemaSlot::reset() {
   schema_count_ = OB_INVALID_COUNT;
   mod_ref_infos_.reset();
   ref_cnt_ = OB_INVALID_COUNT;
+  allocator_idx_ = OB_INVALID_INDEX;
 }
 
 void ObSchemaSlot::init(const uint64_t &tenant_id, const int64_t &slot_id,
                         const int64_t &schema_version, const int64_t &schema_count,
-                        const int64_t &ref_cnt, const common::ObString &str) {
+                        const int64_t &ref_cnt, const common::ObString &str, const int64_t &allocator_idx) {
   tenant_id_ = tenant_id;
   slot_id_ = slot_id;
   schema_version_ = schema_version;
   schema_count_ = schema_count;
   ref_cnt_ = ref_cnt;
   mod_ref_infos_ = str;
+  allocator_idx_ = allocator_idx;
 }
 
 namespace share
@@ -348,30 +350,14 @@ static const char* ref_info_type_strs[] = {
   "STACK",
   "VTABLE_SCAN_PARAM",
   "INNER_SQL_RESULT",
-  "TABLE_API_ROW_ITER",
-  "STAT_CONV_INFO",
-  "SHUFFLE_TASK_HANDLE",
   "LOAD_DATA_IMPL",
   "PX_TASK_PROCESSS",
-  "TABLE_SCAN",
-  "DIST_EXECUTER",
-  "MINI_TASK_BASE",
   "REMOTE_EXE",
   "CACHED_GUARD",
   "UNIQ_CHECK",
-  "LOGIC_ROW",
-  "TAILORED_ROW_ITER",
-  "SSTABLE_MERGE_CTX",
   "SSTABLE_SPLIT_CTX",
   "RELATIVE_TABLE",
-  "RECOVER_POINT",
-  "PART_SCHEMA_RECORDER",
   "VIRTUAL_TABLE",
-  "PHY_RES_STAT",
-  "TENANT_PT_ITER",
-  "INDEX_PARAM",
-  "BACKUP_CHECKER",
-  "DIS_TASK_SPLITER",
   "DAS_CTX",
   "SCHEMA_RECORDER",
   "SPI_RESULT_SET",
@@ -441,6 +427,7 @@ int ObSchemaMgrCache::get_slot_info(common::ObIAllocator &allocator, common::ObI
     int64_t schema_version = OB_INVALID_VERSION;
     int64_t schema_count = OB_INVALID_COUNT;
     int64_t ref_cnt = OB_INVALID_COUNT;
+    int64_t allocator_idx = OB_INVALID_INDEX;
     ObSchemaSlot schema_slot;
     ObString tmp_str;
     ObString ref_infos;
@@ -461,6 +448,7 @@ int ObSchemaMgrCache::get_slot_info(common::ObIAllocator &allocator, common::ObI
           slot_id = i;
           tenant_id = schema_mgr->get_tenant_id();
           schema_version = schema_mgr->get_schema_version();
+          allocator_idx = schema_mgr->get_allocator_idx();
           ref_cnt = schema_mgr_items_[i].ref_cnt_;
           mod_ref = schema_mgr_items_[i].mod_ref_cnt_;
           if (OB_FAIL(schema_mgr->get_schema_count(schema_count))) {
@@ -479,7 +467,7 @@ int ObSchemaMgrCache::get_slot_info(common::ObIAllocator &allocator, common::ObI
           }
           if (OB_SUCC(ret)) {
             schema_slot.init(tenant_id, slot_id, schema_version,
-                              schema_count, ref_cnt, ref_infos);
+                              schema_count, ref_cnt, ref_infos, allocator_idx);
             if (OB_FAIL(schema_slot_infos.push_back(schema_slot))) {
               LOG_WARN("push back to schema_slot_infos failed", KR(ret), K(tenant_id), K(schema_version));
             }
@@ -570,8 +558,13 @@ int ObSchemaMgrCache::put(ObSchemaMgr *schema_mgr,
       }
     } else {
       eli_schema_mgr = dst_item->schema_mgr_;
+      schema_mgr->set_timestamp_in_slot(ObClockGenerator::getClock());
       dst_item->schema_mgr_ = schema_mgr;
-      LOG_INFO("dst schema mgr item ptr", K(dst_item), K(dst_item->schema_mgr_->get_schema_version()), K(target_pos));
+      uint64_t tenant_id = schema_mgr->get_tenant_id();
+      int64_t dst_timestamp = schema_mgr->get_timestamp_in_slot();
+      int64_t dst_schema_version = schema_mgr->get_schema_version();
+      LOG_INFO("dst schema mgr item ptr", K(tenant_id), K(dst_item),
+               K(dst_timestamp), K(dst_schema_version), K(target_pos));
       (void)ATOMIC_STORE(&dst_item->ref_cnt_, 0);
       for (int64_t i = 0; i < ObSchemaMgrItem::MOD_MAX; i++) {
         (void)ATOMIC_STORE(&dst_item->mod_ref_cnt_[i], 0);
@@ -636,7 +629,7 @@ int ObSchemaMgrCache::try_gc_tenant_schema_mgr(ObSchemaMgr *&eli_schema_mgr)
   return ret;
 }
 
-int ObSchemaMgrCache::try_elimiante_schema_mgr(ObSchemaMgr *&eli_schema_mgr)
+int ObSchemaMgrCache::try_eliminate_schema_mgr(ObSchemaMgr *&eli_schema_mgr)
 {
   int ret = OB_SUCCESS;
   if (!check_inner_stat()) {
@@ -658,7 +651,12 @@ int ObSchemaMgrCache::try_elimiante_schema_mgr(ObSchemaMgr *&eli_schema_mgr)
       } else if (eli_schema_mgr != tmp_schema_mgr) {
       } else if (ATOMIC_LOAD(&schema_mgr_item.ref_cnt_) > 0) {
         ret = OB_EAGAIN;
-        LOG_WARN("schema mgr is in use, try elimiante later", K(ret), K(tmp_schema_mgr));
+        uint64_t tenant_id = tmp_schema_mgr->get_tenant_id();
+        int64_t ref_cnt = ATOMIC_LOAD(&schema_mgr_item.ref_cnt_);
+        int64_t timestamp = tmp_schema_mgr->get_timestamp_in_slot();
+        int64_t schema_version = tmp_schema_mgr->get_schema_version();
+        LOG_WARN("schema mgr is in use, try eliminate later", KR(ret), K(tenant_id),
+                 K(ref_cnt), K(schema_version), K(timestamp));
       } else {
         eli_schema_mgr = tmp_schema_mgr;
         schema_mgr_item.schema_mgr_ = NULL;
@@ -694,6 +692,7 @@ void ObSchemaMgrCache::dump() const
       const ObSchemaMgr *schema_mgr = schema_mgr_item.schema_mgr_;
       uint64_t tenant_id = OB_INVALID_TENANT_ID;
       int64_t schema_version = OB_INVALID_VERSION;
+      int64_t timestamp_in_slot = 0;
       int64_t schema_count = 0;
       int64_t schema_size = 0;
       if (OB_NOT_NULL(schema_mgr)) {
@@ -704,10 +703,12 @@ void ObSchemaMgrCache::dump() const
         ret = OB_SUCC(ret) ? tmp_ret : ret;
         tenant_id = schema_mgr->get_tenant_id();
         schema_version = schema_mgr->get_schema_version();
+        timestamp_in_slot = schema_mgr->get_timestamp_in_slot();
         total_count += schema_count;
         total_size += schema_size;
         FLOG_INFO("[SCHEMA_STATISTICS] dump schema_mgr_item", "i", i, K(ret),
-                  K(tenant_id), K(schema_version), K(schema_count), K(schema_size),
+                  K(tenant_id), K(schema_version), K(schema_count),
+                  K(schema_size), K(timestamp_in_slot),
                   "ref_cnt", schema_mgr_item.ref_cnt_,
                   "mod_ref_cnt", ObArrayWrap<int64_t>(schema_mgr_item.mod_ref_cnt_,
                                                      ObSchemaMgrItem::MOD_MAX));

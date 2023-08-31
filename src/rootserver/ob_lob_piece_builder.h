@@ -27,9 +27,11 @@ public:
   explicit ObLobPieceBuilder(ObDDLService &ddl_service);
   virtual ~ObLobPieceBuilder();
 
+  // won't fetch new table id if specified_table_id is valid
   int generate_aux_lob_piece_schema(
       share::schema::ObSchemaService *schema_service,
       const share::schema::ObTableSchema &data_schema,
+      const uint64_t specified_table_id,
       share::schema::ObTableSchema &aux_vp_table_schema,
       bool generate_id);
 

@@ -406,7 +406,6 @@ ObNewTableTabletAllocator::ObNewTableTabletAllocator(
   : tenant_id_(tenant_id),
     schema_guard_(schema_guard),
     sql_proxy_(sql_proxy),
-    trans_(),
     bg_ls_stat_operator_(),
     status_(MyStatus::INVALID),
     ls_id_array_(),
@@ -431,8 +430,6 @@ int ObNewTableTabletAllocator::init()
     LOG_WARN("sql proxy ptr is null", KR(ret), KP(sql_proxy_));
   } else if (OB_FAIL(bg_ls_stat_operator_.init(sql_proxy_))) {
     LOG_WARN("fail to init bg_ls_stat_operator_", KR(ret));
-  } else if (OB_FAIL(trans_.start(sql_proxy_, meta_tenant_id))) {
-    LOG_WARN("fail to start trans", KR(ret), K(meta_tenant_id));
   } else {
     status_ = MyStatus::WAIT_TO_PREPARE;
     is_add_partition_ = false;
@@ -561,19 +558,8 @@ int ObNewTableTabletAllocator::get_ls_id_array(
 int ObNewTableTabletAllocator::finish(
     const bool commit)
 {
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    // by pass, maybe invoked with !inited_
-  } else if (!trans_.is_started()) {
-    // bypass
-  } else {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = trans_.end(commit))) {
-      LOG_WARN("fail to end trans", KR(ret), KR(tmp_ret), K(commit));
-      ret = (OB_SUCCESS == ret ? tmp_ret : ret);
-    }
-  }
-  return ret;
+  UNUSED(commit);
+  return OB_SUCCESS;
 }
 
 int ObNewTableTabletAllocator::get_tablet_id_array(
@@ -716,7 +702,7 @@ int ObNewTableTabletAllocator::alloc_tablet_for_create_balance_group(
     if (OB_SUCC(ret)) {
       if (OB_FAIL(bg_ls_stat_operator_.insert_update_balance_group_ls_stat(
               THIS_WORKER.get_timeout_remain(),
-              trans_,
+              *sql_proxy_,
               tenant_id_,
               bg_id,
               bg_ls_stat_array))) {
@@ -829,7 +815,7 @@ int ObNewTableTabletAllocator::alloc_tablet_for_add_balance_group(
       if (OB_SUCC(ret)) {
         if (OB_FAIL(bg_ls_stat_operator_.insert_update_balance_group_ls_stat(
                 THIS_WORKER.get_timeout_remain(),
-                trans_,
+                *sql_proxy_,
                 tenant_id_,
                 bg_id,
                 final_ls_stat_array))) {
@@ -873,10 +859,10 @@ int ObNewTableTabletAllocator::alloc_tablet_for_one_level_partitioned_balance_gr
       common::ObArray<ObBalanceGroupLSStat> bg_ls_stat_array;
       if (OB_FAIL(bg_ls_stat_operator_.get_balance_group_ls_stat(
               THIS_WORKER.get_timeout_remain(),
-              trans_,
+              *sql_proxy_,
               tenant_id_,
               bg.id(),
-              true, /*for update*/
+              false, /*for update*/
               bg_ls_stat_array))) {
         LOG_WARN("fail to get balance group ls stat", KR(ret),
                  K(tenant_id_), K(bg));
@@ -937,10 +923,10 @@ int ObNewTableTabletAllocator::alloc_tablet_for_two_level_partitioned_balance_gr
         common::ObArray<ObBalanceGroupLSStat> bg_ls_stat_array;
         if (OB_FAIL(bg_ls_stat_operator_.get_balance_group_ls_stat(
                 THIS_WORKER.get_timeout_remain(),
-                trans_,
+                *sql_proxy_,
                 tenant_id_,
                 bg.id(),
-                true, /*for update*/
+                false, /*for update*/
                 bg_ls_stat_array))) {
           LOG_WARN("fail to get balance group ls stat", KR(ret),
                    K(tenant_id_), K(bg));
@@ -983,10 +969,10 @@ int ObNewTableTabletAllocator::alloc_tablet_for_non_partitioned_balance_group(
     LOG_WARN("fail to get available ls", KR(ret));
   } else if (OB_FAIL(bg_ls_stat_operator_.get_balance_group_ls_stat(
           THIS_WORKER.get_timeout_remain(),
-          trans_,
+          *sql_proxy_,
           tenant_id_,
           bg.id(),
-          true, /*for update*/
+          false, /*for update*/
           bg_ls_stat_array))) {
     LOG_WARN("fail to get balance group ls stat", KR(ret), K(tenant_id_), K(bg));
   } else if (OB_FAIL(alloc_tablet_for_add_balance_group(

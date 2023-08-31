@@ -2391,6 +2391,157 @@ int ObAlterTableResolver::check_subpart_name(const ObPartition &partition,
   }
   return ret;
 }
+int ObAlterTableResolver::resolve_rename_partition(const ParseNode &node,
+                             const share::schema::ObTableSchema &orig_table_schema)
+{
+  int ret = OB_SUCCESS;
+  const ObPartitionLevel part_level = orig_table_schema.get_part_level();
+  uint64_t tenant_data_version = 0;
+  ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+  if (T_ALTER_PARTITION_RENAME != node.type_
+      || OB_ISNULL(node.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse tree", KR(ret));
+  } else if (OB_UNLIKELY(2 != node.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse tree, num child != 2", KR(ret), K(node.num_child_));
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session_info is null", KR(ret), KP(this));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get data version failed", KR(ret), K(session_info_->get_effective_tenant_id()));
+  } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("cluster version and feature mismatch", KR(ret));
+  } else if (!orig_table_schema.is_user_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupport behavior on not user table", KR(ret), K(orig_table_schema));
+  } else if (PARTITION_LEVEL_ZERO == part_level) {
+    ret = OB_ERR_PARTITION_MGMT_ON_NONPARTITIONED;
+    LOG_USER_ERROR(OB_ERR_PARTITION_MGMT_ON_NONPARTITIONED);
+    LOG_WARN("unsupport management on non partitioned table", KR(ret), K(orig_table_schema));
+  } else if (OB_ISNULL(alter_table_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("alter table stmt should not be null", KR(ret));
+  } else {
+    AlterTableSchema &alter_table_schema =
+        alter_table_stmt->get_alter_table_arg().alter_table_schema_;
+    const ObPartition *part = nullptr;
+    ObPartition inc_part;
+    ObString origin_partition_name(static_cast<int32_t>(node.children_[0]->str_len_),
+        node.children_[0]->str_value_);
+    ObString new_partition_name(static_cast<int32_t>(node.children_[1]->str_len_),
+        node.children_[1]->str_value_);
+    const ObPartitionOption &ori_part_option = orig_table_schema.get_part_option();
+    if (OB_UNLIKELY(ObCharset::case_insensitive_equal(origin_partition_name, new_partition_name))) {
+      ret = OB_ERR_RENAME_PARTITION_NAME_DUPLICATE;
+      LOG_USER_ERROR(OB_ERR_RENAME_PARTITION_NAME_DUPLICATE, new_partition_name.length(), new_partition_name.ptr());
+      LOG_WARN("origin part name equal to new part name", KR(ret), K(origin_partition_name), K(new_partition_name));
+    } else if (OB_FAIL(orig_table_schema.check_partition_duplicate_with_name(new_partition_name))) {
+      if (OB_DUPLICATE_OBJECT_NAME_EXIST == ret) {
+        ret = OB_ERR_RENAME_PARTITION_NAME_DUPLICATE;
+        LOG_USER_ERROR(OB_ERR_RENAME_PARTITION_NAME_DUPLICATE, new_partition_name.length(), new_partition_name.ptr());
+        LOG_WARN("new part name duplicate with existed partition", KR(ret), K(new_partition_name));
+      } else {
+        LOG_WARN("check new part name duplicate failed", KR(ret), K(new_partition_name));
+      }
+    } else if (OB_FAIL(orig_table_schema.get_partition_by_name(origin_partition_name, part))) {
+      LOG_WARN("get part by name failed", KR(ret), K(origin_partition_name), K(orig_table_schema));
+    } else if (OB_FAIL(alter_table_schema.set_new_part_name(new_partition_name))) {
+      LOG_WARN("table set new partition name failed", KR(ret), K(alter_table_schema), K(new_partition_name));
+    } else if (OB_FAIL(inc_part.set_part_name(origin_partition_name))) {
+      LOG_WARN("inc part set name failed", KR(ret), K(inc_part), K(origin_partition_name));
+    } else if (OB_FAIL(alter_table_schema.add_partition(inc_part))) {
+      LOG_WARN("alter table add inc part failed", KR(ret), K(alter_table_schema), K(inc_part));
+    } else if (OB_FAIL(alter_table_schema.get_part_option().assign(ori_part_option))) {
+      LOG_WARN("alter table set part option failed", KR(ret), K(alter_table_schema), K(ori_part_option));
+    } else {
+      alter_table_schema.get_part_option().set_part_num(alter_table_schema.get_partition_num());
+      alter_table_schema.set_part_level(part_level);
+    }
+  }
+  return ret;
+}
+
+int ObAlterTableResolver::resolve_rename_subpartition(const ParseNode &node,
+                                                      const share::schema::ObTableSchema &orig_table_schema)
+{
+  int ret = OB_SUCCESS;
+  const ObPartitionLevel part_level = orig_table_schema.get_part_level();
+  uint64_t tenant_data_version = 0;
+  ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+  if (T_ALTER_SUBPARTITION_RENAME != node.type_
+  || OB_ISNULL(node.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse tree", KR(ret));
+  } else if (OB_UNLIKELY(2 != node.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse tree, num child != 2",KR(ret), K(node.num_child_));
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session_info is null", KR(ret), KP(this));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get data version failed", KR(ret), K(session_info_->get_effective_tenant_id()));
+  } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("cluster version and feature mismatch", KR(ret));
+  } else if (!orig_table_schema.is_user_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupport behavior on not user table", KR(ret), K(orig_table_schema));
+  } else if (PARTITION_LEVEL_ZERO == part_level) {
+    ret = OB_ERR_PARTITION_MGMT_ON_NONPARTITIONED;
+    LOG_USER_ERROR(OB_ERR_PARTITION_MGMT_ON_NONPARTITIONED);
+    LOG_WARN("unsupport management on not partition table", KR(ret));
+  } else if (PARTITION_LEVEL_ONE == part_level) {
+    ret = OB_ERR_NOT_COMPOSITE_PARTITION;
+    LOG_USER_ERROR(OB_ERR_NOT_COMPOSITE_PARTITION);
+    LOG_WARN("unsupport management on not composite partition table", KR(ret));
+  } else if (OB_ISNULL(alter_table_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("alter table stmt should not be null", KR(ret));
+  } else {
+    AlterTableSchema &alter_table_schema =
+        alter_table_stmt->get_alter_table_arg().alter_table_schema_;
+    const ObPartition *part = nullptr;
+    const ObSubPartition *subpart = nullptr;
+    ObPartition inc_part;
+    ObSubPartition inc_subpart;
+    ObString origin_partition_name(static_cast<int32_t>(node.children_[0]->str_len_),
+        node.children_[0]->str_value_);
+    ObString new_partition_name(static_cast<int32_t>(node.children_[1]->str_len_),
+        node.children_[1]->str_value_);
+    const ObPartitionOption &ori_part_option = orig_table_schema.get_part_option();
+    if (OB_UNLIKELY(ObCharset::case_insensitive_equal(origin_partition_name, new_partition_name))) {
+      ret = OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE;
+      LOG_USER_ERROR(OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE, new_partition_name.length(), new_partition_name.ptr());
+      LOG_WARN("origin subpart name equal to new subpart name", KR(ret), K(origin_partition_name), K(new_partition_name));
+    } else if (OB_FAIL(orig_table_schema.check_partition_duplicate_with_name(new_partition_name))) {
+      if (OB_DUPLICATE_OBJECT_NAME_EXIST == ret) {
+        ret = OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE;
+        LOG_USER_ERROR(OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE, new_partition_name.length(), new_partition_name.ptr());
+        LOG_WARN("new subpart name duplicate with existed partition", KR(ret), K(new_partition_name));
+      } else {
+        LOG_WARN("check new subpart name duplicate failed", KR(ret), K(new_partition_name));
+      }
+    } else if (OB_FAIL(orig_table_schema.get_subpartition_by_name(origin_partition_name, part, subpart))) {
+      LOG_WARN("get part by name failed", KR(ret), K(origin_partition_name), K(orig_table_schema));
+    } else if (OB_FAIL(inc_subpart.set_part_name(origin_partition_name))) {
+      LOG_WARN("inc subpart set name failed", KR(ret), K(inc_subpart), K(origin_partition_name));
+    } else if (OB_FAIL(inc_part.add_partition(inc_subpart))) {
+      LOG_WARN("inc part add inc subpart failed", KR(ret), K(inc_part), K(inc_subpart));
+    } else if (OB_FAIL(alter_table_schema.add_partition(inc_part))) {
+      LOG_WARN("alter table add inc part failed", KR(ret), K(alter_table_schema), K(inc_part));
+    } else if (OB_FAIL(alter_table_schema.set_new_part_name(new_partition_name))) {
+      LOG_WARN("alter table schema set new part name failed", KR(ret), K(alter_table_schema), K(new_partition_name));
+    } else if (OB_FAIL(alter_table_schema.get_part_option().assign(ori_part_option))) {
+      LOG_WARN("alter table set part option failed", KR(ret), K(alter_table_schema), K(ori_part_option));
+    } else {
+      alter_table_schema.set_part_level(orig_table_schema.get_part_level());
+      alter_table_schema.get_part_option().set_part_num(alter_table_schema.get_partition_num());
+    }
+  }
+  return ret;
+}
 
 int ObAlterTableResolver::resolve_alter_index(const ParseNode &node)
 {
@@ -3799,6 +3950,22 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
           } else {
             alter_table_stmt->get_alter_table_arg().alter_part_type_ =
                   ObAlterTableArg::ADD_SUB_PARTITION;
+          }
+          break;
+        }
+        case T_ALTER_PARTITION_RENAME:{
+          if (OB_FAIL(resolve_rename_partition(*partition_node, *table_schema_))) {
+            LOG_WARN("Resolve rename partition error!", KR(ret));
+          } else {
+            alter_table_stmt->get_alter_table_arg().alter_part_type_=ObAlterTableArg::RENAME_PARTITION;
+          }
+          break;
+        }
+        case T_ALTER_SUBPARTITION_RENAME:{
+          if (OB_FAIL(resolve_rename_subpartition(*partition_node, *table_schema_))) {
+            LOG_WARN("Resolve rename subpartition error!", KR(ret));
+          } else {
+            alter_table_stmt->get_alter_table_arg().alter_part_type_=ObAlterTableArg::RENAME_SUB_PARTITION;
           }
           break;
         }

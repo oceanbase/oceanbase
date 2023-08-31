@@ -65,7 +65,7 @@ struct ObCDCTableInfo
 
   inline uint64_t get_table_id() const { return table_id_; }
   inline const share::schema::ObTableType &get_table_type() const { return table_type_; }
-  inline bool is_index_table() const { return share::schema::ObSimpleTableSchemaV2::is_index_table(table_type_); }
+  inline bool is_index_table() const { return share::schema::is_index_table(table_type_); }
 
   bool operator==(const ObCDCTableInfo &that) const {
     return table_id_ == that.table_id_ && table_type_ == that.table_type_;

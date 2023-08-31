@@ -804,6 +804,14 @@ public:
   // get virtual table id or sys view id
   int get_non_sys_table_ids(const uint64_t tenant_id, ObIArray<uint64_t> &non_sys_table_ids) const;
 
+  int64_t get_timestamp_in_slot() const { return timestamp_in_slot_; };
+  void set_timestamp_in_slot(const int64_t timestamp) { timestamp_in_slot_ = timestamp; }
+  int64_t get_allocator_idx() const { return allocator_idx_; }
+  void set_allocator_idx(const int64_t allocator_idx) { allocator_idx_ = allocator_idx; }
+
+  int deep_copy_index_name_map(
+      common::ObIAllocator &allocator,
+      ObIndexNameMap &index_name_cache);
 private:
   inline bool check_inner_stat() const;
 
@@ -887,7 +895,6 @@ private:
   int rebuild_schema_meta_if_not_consistent();
   int rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt);
   int rebuild_db_hashmap();
-  uint64_t extract_data_table_id_from_index_name(const common::ObString &index_name) const;
 
   /*schema statistics*/
   int get_tenant_statistics(ObSchemaStatisticsInfo &schema_info) const;
@@ -947,6 +954,8 @@ private:
   ObRlsPolicyMgr rls_policy_mgr_;
   ObRlsGroupMgr rls_group_mgr_;
   ObRlsContextMgr rls_context_mgr_;
+  int64_t timestamp_in_slot_; // when schema mgr put in slot, we will set the timestamp
+  int64_t allocator_idx_;
 };
 
 }//end of namespace schema

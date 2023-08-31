@@ -38,6 +38,7 @@ class ObAllVirtualSchemaSlot: public common::ObVirtualTableScannerIterator
     SCHEMA_COUNT,
     REF_CNT,
     REF_INFO,
+    ALLOCATOR_IDX,
   };
 public:
   explicit ObAllVirtualSchemaSlot(share::schema::ObMultiVersionSchemaService &schema_service)

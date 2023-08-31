@@ -2775,7 +2775,9 @@ DEF_TO_STRING(ObCreateForeignKeyArg)
        K_(is_modify_validate_flag),
        K_(rely_flag),
        K_(is_modify_rely_flag),
-       K_(is_modify_fk_state));
+       K_(is_modify_fk_state),
+       K_(parent_database_id),
+       K_(parent_table_id));
   J_OBJ_END();
   return pos;
 }
@@ -2798,7 +2800,9 @@ OB_SERIALIZE_MEMBER((ObCreateForeignKeyArg, ObIndexArg),
                     is_modify_rely_flag_,
                     is_modify_fk_state_,
                     need_validate_data_,
-                    is_parent_table_mock_);
+                    is_parent_table_mock_,
+                    parent_database_id_,
+                    parent_table_id_);
 
 bool ObDropForeignKeyArg::is_valid() const
 {

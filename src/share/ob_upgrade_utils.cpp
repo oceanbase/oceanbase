@@ -253,7 +253,7 @@ int ObUpgradeUtils::check_schema_sync(
                "       OR (a.refreshed_schema_version mod %ld) != 0) ",
                OB_ALL_VIRTUAL_SERVER_SCHEMA_INFO_TNAME,
                OB_ALL_VIRTUAL_SERVER_SCHEMA_INFO_TNAME,
-               schema::ObSchemaService::SCHEMA_VERSION_INC_STEP))) {
+               schema::ObSchemaVersionGenerator::SCHEMA_VERSION_INC_STEP))) {
       LOG_WARN("fail to assign sql", KR(ret));
     } else if (OB_INVALID_TENANT_ID != tenant_id
                && OB_FAIL(sql.append_fmt(" AND a.tenant_id = %ld", tenant_id))) {

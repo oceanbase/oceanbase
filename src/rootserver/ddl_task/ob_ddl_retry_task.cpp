@@ -88,7 +88,9 @@ int ObDDLRetryTask::deep_copy_ddl_arg(
     } else if (ObDDLType::DDL_DROP_PARTITION == ddl_type
             || ObDDLType::DDL_DROP_SUB_PARTITION == ddl_type
             || ObDDLType::DDL_TRUNCATE_PARTITION == ddl_type
-            || ObDDLType::DDL_TRUNCATE_SUB_PARTITION == ddl_type) {
+            || ObDDLType::DDL_TRUNCATE_SUB_PARTITION == ddl_type
+            || ObDDLType::DDL_RENAME_PARTITION == ddl_type
+            || ObDDLType::DDL_RENAME_SUB_PARTITION == ddl_type) {
       if (OB_ISNULL(ddl_arg_buf = static_cast<char *>(allocator.alloc(sizeof(obrpc::ObAlterTableArg))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret));
@@ -145,7 +147,9 @@ int ObDDLRetryTask::init_compat_mode(const share::ObDDLType &ddl_type,
   } else if (ObDDLType::DDL_DROP_PARTITION == ddl_type
           || ObDDLType::DDL_DROP_SUB_PARTITION == ddl_type
           || ObDDLType::DDL_TRUNCATE_PARTITION == ddl_type
-          || ObDDLType::DDL_TRUNCATE_SUB_PARTITION == ddl_type) {
+          || ObDDLType::DDL_TRUNCATE_SUB_PARTITION == ddl_type
+          || ObDDLType::DDL_RENAME_PARTITION == ddl_type
+          || ObDDLType::DDL_RENAME_SUB_PARTITION == ddl_type) {
     compat_mode_ = static_cast<const obrpc::ObAlterTableArg *>(source_arg)->compat_mode_;
   }
   return ret;
@@ -390,6 +394,8 @@ int ObDDLRetryTask::drop_schema(const ObDDLTaskStatus next_task_status)
       }
       case ObDDLType::DDL_DROP_PARTITION:
       case ObDDLType::DDL_DROP_SUB_PARTITION:
+      case ObDDLType::DDL_RENAME_PARTITION:
+      case ObDDLType::DDL_RENAME_SUB_PARTITION:
       case ObDDLType::DDL_TRUNCATE_PARTITION:
       case ObDDLType::DDL_TRUNCATE_SUB_PARTITION: {
         obrpc::ObAlterTableArg *arg = static_cast<obrpc::ObAlterTableArg *>(ddl_arg_);
@@ -450,6 +456,8 @@ int ObDDLRetryTask::wait_alter_table(const ObDDLTaskStatus new_status)
     }
     case ObDDLType::DDL_DROP_PARTITION:
     case ObDDLType::DDL_DROP_SUB_PARTITION:
+    case ObDDLType::DDL_RENAME_PARTITION:
+    case ObDDLType::DDL_RENAME_SUB_PARTITION:
     case ObDDLType::DDL_TRUNCATE_PARTITION:
     case ObDDLType::DDL_TRUNCATE_SUB_PARTITION: {
       obrpc::ObAlterTableArg *arg = static_cast<obrpc::ObAlterTableArg *>(ddl_arg_);
@@ -652,7 +660,9 @@ int ObDDLRetryTask::deserlize_params_from_message(const uint64_t tenant_id, cons
   } else if (ObDDLType::DDL_DROP_PARTITION == task_type_
           || ObDDLType::DDL_DROP_SUB_PARTITION == task_type_
           || ObDDLType::DDL_TRUNCATE_PARTITION == task_type_
-          || ObDDLType::DDL_TRUNCATE_SUB_PARTITION == task_type_) {
+          || ObDDLType::DDL_TRUNCATE_SUB_PARTITION == task_type_
+          || ObDDLType::DDL_RENAME_PARTITION == task_type_
+          || ObDDLType::DDL_RENAME_SUB_PARTITION == task_type_) {
     obrpc::ObAlterTableArg tmp_arg;
     if (OB_FAIL(tmp_arg.deserialize(buf, buf_size, pos))) {
       LOG_WARN("serialize table failed", K(ret));

@@ -1914,6 +1914,8 @@ public:
     SET_INTERVAL,
     // cnovert interval to range
     INTERVAL_TO_RANGE,
+    RENAME_PARTITION,
+    RENAME_SUB_PARTITION,
     NO_OPERATION = 1000
   };
   enum AlterConstraintType
@@ -2426,7 +2428,9 @@ public:
     is_modify_rely_flag_(false),
     is_modify_fk_state_(false),
     need_validate_data_(true),
-    is_parent_table_mock_(false)
+    is_parent_table_mock_(false),
+    parent_database_id_(common::OB_INVALID_ID),
+    parent_table_id_(common::OB_INVALID_ID)
   {}
   virtual ~ObCreateForeignKeyArg()
   {}
@@ -2452,6 +2456,8 @@ public:
     is_modify_fk_state_ = false;
     need_validate_data_ = true;
     is_parent_table_mock_ = false;
+    parent_database_id_ = common::OB_INVALID_ID;
+    parent_table_id_ = common::OB_INVALID_ID;
   }
   bool is_valid() const;
   int assign(const ObCreateForeignKeyArg &other) {
@@ -2479,6 +2485,8 @@ public:
       is_modify_fk_state_ = other.is_modify_fk_state_;
       need_validate_data_ = other.need_validate_data_;
       is_parent_table_mock_ = other.is_parent_table_mock_;
+      parent_database_id_ = other.parent_database_id_;
+      parent_table_id_ = other.parent_table_id_;
     }
     return ret;
   }
@@ -2503,6 +2511,8 @@ public:
   bool is_modify_fk_state_;
   bool need_validate_data_;
   bool is_parent_table_mock_;
+  uint64_t parent_database_id_;  // used in ddl_service to store related object_id
+  uint64_t parent_table_id_;     // used in ddl_service to store related object_id
 };
 
 struct ObDropForeignKeyArg : public ObIndexArg

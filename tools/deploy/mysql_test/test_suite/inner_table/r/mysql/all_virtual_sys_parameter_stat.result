@@ -268,6 +268,7 @@ _enable_newsort
 _enable_new_sql_nio
 _enable_oracle_priv_check
 _enable_parallel_minor_merge
+_enable_parallel_table_creation
 _enable_partition_level_retry
 _enable_pkt_nio
 _enable_plan_cache_mem_diagnosis
@@ -354,6 +355,7 @@ _rowsets_enabled
 _rowsets_max_rows
 _rowsets_target_maxsize
 _rpc_checksum
+_schema_memory_recycle_interval
 _send_bloom_filter_size
 _server_standby_fetch_log_bandwidth_limit
 _session_context_size

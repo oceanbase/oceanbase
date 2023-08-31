@@ -178,10 +178,11 @@ int ObDDLTransController::broadcast_consensus_version(const int64_t tenant_id,
   return ret;
 }
 
-int ObDDLTransController::create_task_and_assign_schema_version(const uint64_t tenant_id,
-      const uint64_t schema_version_count,
-      int64_t &task_id,
-      ObIArray<int64_t> &schema_version_res)
+int ObDDLTransController::create_task_and_assign_schema_version(
+    const uint64_t tenant_id,
+    const uint64_t schema_version_count,
+    int64_t &task_id,
+    ObIArray<int64_t> &schema_version_res)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -194,13 +195,22 @@ int ObDDLTransController::create_task_and_assign_schema_version(const uint64_t t
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("register_task_and_assign_schema_version", KR(ret), K(tenant_id), K(schema_version_count), K(schema_version_res));
   } else {
-    int64_t new_schema_version = 0;
+    int64_t end_schema_version = OB_INVALID_VERSION;
     SpinWLockGuard guard(lock_);
-    for (int i = 0; OB_SUCC(ret) && i < schema_version_count; i++) {
-      if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id, new_schema_version))) {
-        LOG_WARN("register_task_and_assign_schema_version", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(schema_version_res.push_back(new_schema_version))) {
-        LOG_WARN("register_task_and_assign_schema_version", KR(ret));
+    if (OB_FAIL(schema_service_->gen_batch_new_schema_versions(
+                tenant_id, schema_version_count, end_schema_version))) {
+      LOG_WARN("fail to gen batch new schema versions", KR(ret), K(schema_version_count));
+    } else if (OB_FAIL(schema_version_res.reserve(schema_version_count))) {
+      LOG_WARN("fail to reserve memory", KR(ret), K(schema_version_count));
+    } else {
+      int64_t new_schema_version = end_schema_version -
+      (schema_version_count - 1) * ObSchemaVersionGenerator::SCHEMA_VERSION_INC_STEP;
+      for (int i = 0; OB_SUCC(ret) && i < schema_version_count; i++) {
+        if (OB_FAIL(schema_version_res.push_back(new_schema_version))) {
+          LOG_WARN("register_task_and_assign_schema_version", KR(ret));
+        } else {
+          new_schema_version += ObSchemaVersionGenerator::SCHEMA_VERSION_INC_STEP;
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -228,7 +238,10 @@ int ObDDLTransController::create_task_and_assign_schema_version(const uint64_t t
   return ret;
 }
 
-int ObDDLTransController::check_task_ready(uint64_t tenant_id, int64_t task_id, bool &ready)
+int ObDDLTransController::check_task_ready_(
+    const uint64_t tenant_id,
+    const int64_t task_id,
+    bool &ready)
 {
   int ret = OB_SUCCESS;
   int idx = OB_INVALID_INDEX;
@@ -237,14 +250,10 @@ int ObDDLTransController::check_task_ready(uint64_t tenant_id, int64_t task_id, 
   for (int i = 0; i < tasks_.count(); i++) {
     if (tasks_.at(i).tenant_id_ == tenant_id) {
       pre_task_count++;
-    }
-    if (tasks_.at(i).task_id_ == task_id) {
-      if (tenant_id != tasks_.at(i).tenant_id_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("task tenant_id mismatch", KR(ret), K(tenant_id), K(tasks_));
+      if (tasks_.at(i).task_id_ == task_id) {
+        idx = i;
+        break;
       }
-      idx = i;
-      break;
     }
   }
   ready = false;
@@ -260,9 +269,13 @@ int ObDDLTransController::check_task_ready(uint64_t tenant_id, int64_t task_id, 
   } else {
     // gc end task
     for (int i = 0; i < 10; i++) {
-      if (!tasks_.empty() && tasks_.at(0).task_id_ != task_id && tasks_.at(0).task_end_) {
-        int tmp_ret = tasks_.remove(0);
-        if (tmp_ret != OB_SUCCESS) {
+      if (!tasks_.empty()
+          && tasks_.at(0).task_end_
+          && !(tasks_.at(0).tenant_id_ == tenant_id
+               && tasks_.at(0).task_id_ == task_id)) {
+        LOG_INFO("gc parallel ddl task", K(tasks_.at(0)));
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(tasks_.remove(0))) {
           LOG_WARN("check_task_ready", KR(tmp_ret));
         }
       } else {
@@ -273,15 +286,18 @@ int ObDDLTransController::check_task_ready(uint64_t tenant_id, int64_t task_id, 
   return ret;
 }
 
-int ObDDLTransController::wait_task_ready(uint64_t tenant_id, int64_t task_id, int64_t wait_us)
+int ObDDLTransController::wait_task_ready(
+    const uint64_t tenant_id,
+    const int64_t task_id,
+    const int64_t wait_us)
 {
   int ret = OB_SUCCESS;
   bool ready = false;
   uint64_t cond_idx = task_id % DDL_TASK_COND_SLOT;
   int64_t start_time = ObTimeUtility::current_time();
   while (OB_SUCC(ret) && ObTimeUtility::current_time() - start_time < wait_us) {
-    if (OB_FAIL(check_task_ready(tenant_id, task_id, ready))) {
-      LOG_WARN("wait_task_ready", KR(ret), K(task_id), K(ready));
+    if (OB_FAIL(check_task_ready_(tenant_id, task_id, ready))) {
+      LOG_WARN("wait_task_ready", KR(ret), K(tenant_id), K(task_id), K(ready));
     } else if (ready) {
       break;
     } else {
@@ -291,26 +307,29 @@ int ObDDLTransController::wait_task_ready(uint64_t tenant_id, int64_t task_id, i
   }
   if (OB_FAIL(ret)) {
   } else if (!ready) {
-    remove_task(task_id);
-    ret = OB_TIMEOUT;
-    LOG_WARN("wait_task_ready", KR(ret), K(task_id), K(tasks_), K(ready));
+    if (OB_FAIL(remove_task(tenant_id, task_id))) {
+      LOG_WARN("fail to remove task", KR(ret), K(tenant_id), K(task_id));
+    } else {
+      ret = OB_TIMEOUT;
+    }
+    LOG_WARN("wait_task_ready", KR(ret), K(tenant_id), K(task_id), K(tasks_), K(ready));
   }
   return ret;
 }
 
-int ObDDLTransController::remove_task(int64_t task_id)
+int ObDDLTransController::remove_task(const uint64_t tenant_id, const int64_t task_id)
 {
   int ret = OB_SUCCESS;
   int idx = OB_INVALID_INDEX;
-  uint64_t tenant_id = OB_INVALID_TENANT_ID;
   SpinWLockGuard guard(lock_);
   for (int i = 0; i < tasks_.count(); i++) {
-    if (tasks_.at(i).task_id_ == task_id) {
+    if (tasks_.at(i).tenant_id_ == tenant_id
+        && tasks_.at(i).task_id_ == task_id) {
       tasks_.at(i).task_end_ = true;
       idx = i;
-      tenant_id = tasks_.at(i).tenant_id_;
+      LOG_INFO("remove parallel ddl task", K(tasks_.at(i)));
       if (OB_FAIL(tasks_.remove(i))) {
-        LOG_WARN("remove_task fail", KR(ret), K(task_id));
+        LOG_WARN("remove_task fail", KR(ret), K(tenant_id), K(task_id));
       } else if (OB_FAIL(tenants_.set_refactored(tenant_id, 1, 0, 1))) {
         LOG_WARN("set_refactored fail", KR(ret), K(tenant_id));
       } else {
@@ -322,10 +341,10 @@ int ObDDLTransController::remove_task(int64_t task_id)
   if (OB_FAIL(ret)) {
   } else if (OB_INVALID_INDEX == idx) {
     ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("task_id not found", KR(ret), K(task_id), K(tasks_));
+    LOG_WARN("task_id not found", KR(ret), K(tenant_id), K(task_id), K(tasks_));
   } else if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant_id is invalid", KR(ret), K(task_id), K(tasks_));
+    LOG_WARN("tenant_id is invalid", KR(ret), K(tenant_id), K(task_id), K(tasks_));
   } else {
     // wake up next
     for (int next = idx; next < tasks_.count(); next++) {
@@ -340,7 +359,8 @@ int ObDDLTransController::remove_task(int64_t task_id)
   return ret;
 }
 
-int ObDDLTransController::check_enable_ddl_trans_new_lock(uint64_t tenant_id, bool &res)
+int ObDDLTransController::check_enable_ddl_trans_new_lock(
+    const uint64_t tenant_id, bool &res)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -362,7 +382,7 @@ int ObDDLTransController::check_enable_ddl_trans_new_lock(uint64_t tenant_id, bo
   return ret;
 }
 
-int ObDDLTransController::set_enable_ddl_trans_new_lock(uint64_t tenant_id)
+int ObDDLTransController::set_enable_ddl_trans_new_lock(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {

@@ -19,17 +19,12 @@
 #include "common/ob_tablet_id.h"//ObTabletID
 #include "share/ob_rpc_struct.h"//ObBatchCreateTabletArg
 #include "share/ob_ls_id.h"//share::ObLSID
-#include "share/ls/ob_ls_table_operator.h"
 
 namespace oceanbase
 {
 namespace rpc
 {
 class ObBatchCreateTabletArg;
-}
-namespace share
-{
-class ObLSTableOperator;
 }
 namespace rootserver
 {
@@ -102,11 +97,9 @@ const static int64_t BATCH_ARG_SIZE = 1024 * 1024;  // 1M
   ObTabletCreator(
       const uint64_t tenant_id,
       const share::SCN &major_frozen_scn,
-      share::ObLSTableOperator &lst_operator,
       ObMySQLTransaction &trans)
                 : tenant_id_(tenant_id),
                   major_frozen_scn_(major_frozen_scn),
-                  lst_operator_(&lst_operator),
                   allocator_("TbtCret"),
                   args_map_(),
                   trans_(trans),
@@ -125,7 +118,6 @@ private:
 private:
   const uint64_t tenant_id_;
   const share::SCN major_frozen_scn_;
-  share::ObLSTableOperator *lst_operator_;
   ObArenaAllocator allocator_;
   common::hash::ObHashMap<share::ObLSID, ObBatchCreateTabletHelper*> args_map_;
   ObMySQLTransaction &trans_;

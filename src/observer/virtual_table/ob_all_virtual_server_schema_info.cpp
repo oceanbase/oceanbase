@@ -74,8 +74,6 @@ int ObAllVirtualServerSchemaInfo::inner_get_next_row(common::ObNewRow *&row)
         LOG_WARN("fail to get schema guard", K(tmp_ret), K(tenant_id));
       } else if (OB_SUCCESS != (tmp_ret = schema_guard.get_schema_count(tenant_id, schema_count))) {
         LOG_WARN("fail to get schema count", K(tmp_ret), K(tenant_id));
-      } else if (OB_SUCCESS != (tmp_ret = schema_guard.get_schema_size(tenant_id, schema_size))) {
-        LOG_WARN("fail to get schema size", K(tmp_ret), K(tenant_id));
       }
     }
 
@@ -110,7 +108,13 @@ int ObAllVirtualServerSchemaInfo::inner_get_next_row(common::ObNewRow *&row)
           break;
         }
         case OB_APP_MIN_COLUMN_ID + 6: { // schema_size
-          cur_row_.cells_[i].set_int(schema_size);
+          int tmp_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (tmp_ret = schema_guard.get_schema_size(tenant_id, schema_size))) {
+            cur_row_.cells_[i].set_int(OB_INVALID_ID);
+            LOG_WARN("fail to get schema size", K(tmp_ret), K(tenant_id));
+          } else {
+            cur_row_.cells_[i].set_int(schema_size);
+          }
           break;
         }
         case OB_APP_MIN_COLUMN_ID + 7: { // min_schema_version
