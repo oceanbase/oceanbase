@@ -251,7 +251,7 @@ int ObGetObjectDefinition::get_table_definition(ObString &ddl_str, const uint64_
       ObSchemaPrinter schema_printer(*schema_guard_);
       int64_t pos = 0;
       if (table_schema->is_view_table()) {
-        if (OB_FAIL(schema_printer.print_view_definition(table_id,
+        if (OB_FAIL(schema_printer.print_view_definiton(table_id,
                                                         table_def_buf,
                                                         OB_MAX_VARCHAR_LENGTH,
                                                         pos))) {

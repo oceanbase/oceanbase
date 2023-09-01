@@ -2665,7 +2665,7 @@ int ObPLExecState::final(int ret)
         int tmp_ret = OB_SUCCESS;
         ObPLCursorInfo *cursor = NULL;
         ObObjParam param;
-        ObSPIService::ObCursorDeclareLoc loc;
+        ObSPIService::ObCusorDeclareLoc loc;
         tmp_ret = ObSPIService::spi_get_cursor_info(&ctx_, func_.get_package_id(),
                                           func_.get_routine_id(),
                                           i, cursor, param, loc);
@@ -2710,7 +2710,7 @@ int ObPLExecState::final(int ret)
       if (OB_FAIL(ret)) {
         ObPLCursorInfo *cursor = NULL;
         ObObjParam param;
-        ObSPIService::ObCursorDeclareLoc loc;
+        ObSPIService::ObCusorDeclareLoc loc;
         tmp_ret = ObSPIService::spi_get_cursor_info(&ctx_, func_.get_package_id(),
                                           func_.get_routine_id(),
                                           i, cursor, param, loc);
@@ -2754,7 +2754,7 @@ int ObPLExecState::final(int ret)
         // local cursor must be closed.
         ObPLCursorInfo *cursor = NULL;
         ObObjParam param;
-        ObSPIService::ObCursorDeclareLoc loc;
+        ObSPIService::ObCusorDeclareLoc loc;
         tmp_ret = ObSPIService::spi_get_cursor_info(&ctx_, func_.get_package_id(),
                                           func_.get_routine_id(),
                                           i, cursor, param, loc);

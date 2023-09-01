@@ -120,7 +120,7 @@ public:
       const common::ObTimeZoneInfo *tz_info,
       bool is_agent_mode) const;
 
-  int print_view_definition(const uint64_t tenant_id,
+  int print_view_definiton(const uint64_t tenant_id,
                            const uint64_t table_id,
                            char *buf,
                            const int64_t &buf_len,

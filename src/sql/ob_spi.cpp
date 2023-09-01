@@ -178,9 +178,9 @@ int ObSPIResultSet::restore_session(ObSQLSessionInfo *session,
   return ret;
 }
 
-int ObSPIResultSet::store_origin_session(ObSQLSessionInfo *session)
+int ObSPIResultSet::store_orign_session(ObSQLSessionInfo *session)
 {
-  return store_session(session, origin_session_value_, origin_nested_count_);
+  return store_session(session, orign_session_value_, orign_nested_count_);
 }
 
 int ObSPIResultSet::store_cursor_session(ObSQLSessionInfo *session)
@@ -188,9 +188,9 @@ int ObSPIResultSet::store_cursor_session(ObSQLSessionInfo *session)
   return store_session(session, cursor_session_value_, cursor_nested_count_);
 }
 
-int ObSPIResultSet::restore_origin_session(ObSQLSessionInfo *session)
+int ObSPIResultSet::restore_orign_session(ObSQLSessionInfo *session)
 {
-  return ObSPIResultSet::restore_session(session, origin_session_value_, origin_nested_count_);
+  return ObSPIResultSet::restore_session(session, orign_session_value_, orign_nested_count_);
 }
 
 int ObSPIResultSet::restore_cursor_session(ObSQLSessionInfo *session)
@@ -343,7 +343,7 @@ int ObSPIResultSet::start_trans(ObExecContext &ctx)
 int ObSPIResultSet::set_cursor_env(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
-  OZ (store_origin_session(&session));
+  OZ (store_orign_session(&session));
   OZ (restore_cursor_session(&session));
   OX (need_end_nested_stmt_ = EST_RESTORE_SESSION);
   return ret;
@@ -353,7 +353,7 @@ int ObSPIResultSet::reset_cursor_env(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   OZ (store_cursor_session(&session));
-  OZ (restore_origin_session(&session));
+  OZ (restore_orign_session(&session));
   OX (need_end_nested_stmt_ = EST_NEED_NOT);
   return ret;
 }
@@ -367,7 +367,7 @@ int ObSPIResultSet::start_cursor_stmt(
   CK (OB_NOT_NULL(pl_ctx->exec_ctx_));
   CK (OB_NOT_NULL(session = pl_ctx->exec_ctx_->get_my_session()));
   if (OB_SUCC(ret)) {
-    OZ (store_origin_session(session));
+    OZ (store_orign_session(session));
     OX (need_end_nested_stmt_ = EST_RESTORE_SESSION);
   }
   LOG_TRACE("call spi start cursor stmt",
@@ -441,7 +441,7 @@ void ObSPIResultSet::end_nested_stmt_if_need(ObPLExecCtx *pl_ctx, int &result)
     OX (pl_ctx->exec_ctx_->get_my_session()->get_pl_context()->set_exception_handler_illegal());
     switch (need_end_nested_stmt_) {
     case EST_RESTORE_SESSION:
-      OZ (restore_origin_session(session));
+      OZ (restore_orign_session(session));
       break;
     case EST_END_NESTED_SESSION:
       OZ (end_nested_session(*session));
@@ -1358,23 +1358,23 @@ void ObSPIService::adjust_pl_status_for_xa(sql::ObExecContext &ctx, int &result)
   if (OB_NOT_NULL(ctx.get_my_session())
       && ctx.get_my_session()->get_pl_context()) {
     ctx.get_my_session()->set_pl_can_retry(false);
-    recreate_implicit_savepoint_if_need(ctx, result);
+    recreate_implicit_savapoint_if_need(ctx, result);
   }
   return;
 }
 
-int ObSPIService::recreate_implicit_savepoint_if_need(pl::ObPLExecCtx *ctx, int &result)
+int ObSPIService::recreate_implicit_savapoint_if_need(pl::ObPLExecCtx *ctx, int &result)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()->get_pl_context()));
-  OZ (recreate_implicit_savepoint_if_need(*(ctx->exec_ctx_), result));
+  OZ (recreate_implicit_savapoint_if_need(*(ctx->exec_ctx_), result));
   return ret;
 }
 
-int ObSPIService::recreate_implicit_savepoint_if_need(sql::ObExecContext &ctx, int &result)
+int ObSPIService::recreate_implicit_savapoint_if_need(sql::ObExecContext &ctx, int &result)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(ctx.get_my_session()));
@@ -1468,7 +1468,7 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
       && OB_NOT_NULL(ctx->exec_ctx_->get_my_session()->get_pl_implicit_cursor())) {
     ctx->exec_ctx_->get_my_session()->get_pl_implicit_cursor()->set_rowcount(0);
   }
-  recreate_implicit_savepoint_if_need(ctx, ret);
+  recreate_implicit_savapoint_if_need(ctx, ret);
   LOG_DEBUG("spi end trans", K(ret), K(sql), K(is_rollback));
 
   return ret;
@@ -1736,7 +1736,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
         if (ObStmt::is_ddl_stmt(stmt_type, true)) {
           OZ (force_refresh_schema(session->get_effective_tenant_id()), sql);
         }
-        recreate_implicit_savepoint_if_need(ctx, ret);
+        recreate_implicit_savapoint_if_need(ctx, ret);
       }
     }
     // 记录第一条SQL执行PartitionHit信息, 并对PartitionHit进行Freeze, 防止后续的SQL冲掉
@@ -1956,7 +1956,7 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
         if (ObStmt::is_ddl_stmt(stmt_type, true)) {
           OZ (force_refresh_schema(session->get_effective_tenant_id()), sql_stmt);
         }
-        recreate_implicit_savepoint_if_need(ctx, ret);
+        recreate_implicit_savapoint_if_need(ctx, ret);
       }
     }
     // 记录第一条SQL执行PartitionHit信息, 并对PartitionHit进行Freeze, 防止后续的SQL冲掉
@@ -2945,7 +2945,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
           //DDL语句,需要强制刷新schema
           OZ (force_refresh_schema(session->get_effective_tenant_id()));
         }
-        recreate_implicit_savepoint_if_need(ctx, ret);
+        recreate_implicit_savapoint_if_need(ctx, ret);
       }
 
       spi_result.end_nested_stmt_if_need(ctx, ret);
@@ -3027,7 +3027,7 @@ int ObSPIService::cursor_open_check(ObPLExecCtx *ctx,
                                         int64_t cursor_index,
                                         ObPLCursorInfo *&cursor,
                                         ObObjParam &obj,
-                                        ObCursorDeclareLoc loc)
+                                        ObCusorDeclareLoc loc)
 {
   int ret = OB_SUCCESS;
   ObExecContext *exec_ctx = NULL;
@@ -3267,7 +3267,7 @@ int ObSPIService::spi_get_cursor_info(ObPLExecCtx *ctx,
                                       int64_t index,
                                       ObPLCursorInfo *&cursor,
                                       ObObjParam &param,
-                                      ObSPIService::ObCursorDeclareLoc &location)
+                                      ObSPIService::ObCusorDeclareLoc &location)
 {
   int ret = OB_SUCCESS;
   cursor = NULL;
@@ -3390,7 +3390,7 @@ int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
                                             ObSQLSessionInfo &session_info,
                                             uint64_t package_id,
                                             uint64_t routine_id,
-                                            ObCursorDeclareLoc loc,
+                                            ObCusorDeclareLoc loc,
                                             const int64_t *formal_param_idxs,
                                             const ObSqlExpression **actual_param_exprs,
                                             int64_t cursor_param_count)
@@ -3450,7 +3450,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
   ObSQLSessionInfo *session_info = NULL;
   ObPLCursorInfo *cursor = NULL;
   ObObjParam cursor_var;
-  ObCursorDeclareLoc loc;
+  ObCusorDeclareLoc loc;
   if (OB_ISNULL(ctx)
      || OB_ISNULL(ctx->exec_ctx_)
      || OB_ISNULL(session_info = ctx->exec_ctx_->get_my_session())
@@ -4264,7 +4264,7 @@ int ObSPIService::spi_cursor_fetch(ObPLExecCtx *ctx,
   int ret = OB_SUCCESS;
   ObPLCursorInfo *cursor = NULL;
   ObObjParam cur_var;
-  ObCursorDeclareLoc loc;
+  ObCusorDeclareLoc loc;
   OZ (spi_get_cursor_info(ctx, package_id, routine_id, cursor_index, cursor, cur_var, loc));
   if (OB_SUCC(ret) && OB_ISNULL(cursor)) {
       ret = OB_ERR_INVALID_CURSOR;
@@ -4345,7 +4345,7 @@ int ObSPIService::spi_cursor_close(ObPLExecCtx *ctx,
   int ret = OB_SUCCESS;
   ObPLCursorInfo *cursor = NULL;
   ObObjParam cur_var;
-  ObCursorDeclareLoc loc;
+  ObCusorDeclareLoc loc;
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
@@ -5787,7 +5787,7 @@ int ObSPIService::spi_handle_ref_cursor_refcount(ObPLExecCtx *ctx,
 #else
   ObPLCursorInfo *cursor_info = NULL;
   ObObjParam cursor_var;
-  ObCursorDeclareLoc odc;
+  ObCusorDeclareLoc odc;
   LOG_DEBUG("spi handle ref cursor", K(package_id), K(routine_id), K(index), K(addend));
   OZ (spi_get_cursor_info(ctx, package_id, routine_id, index, cursor_info, cursor_var, odc));
   if (OB_NOT_NULL(cursor_info)) {
