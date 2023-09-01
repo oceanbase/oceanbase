@@ -778,7 +778,8 @@ public:
     cursor_flag_(CURSOR_FLAG_UNDEF),
     ref_count_(0),
     is_scrollable_(false),
-    last_execute_time_(0)
+    last_execute_time_(0),
+    last_stream_cursor_(false)
   {
     reset();
   }
@@ -796,7 +797,8 @@ public:
     is_scrollable_(false),
     snapshot_(),
     is_need_check_snapshot_(false),
-    last_execute_time_(0)
+    last_execute_time_(0),
+    last_stream_cursor_(false)
   {
     reset();
   }
@@ -1043,6 +1045,7 @@ protected:
   transaction::ObTxReadSnapshot snapshot_;
   bool is_need_check_snapshot_;
   int64_t last_execute_time_; // 记录上一次cursor操作的时间点
+  bool last_stream_cursor_; // cursor复用场景下，记录上一次是否是流式cursor
 };
 
 class ObPLGetCursorAttrInfo
