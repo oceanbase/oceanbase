@@ -345,8 +345,7 @@ int ObBloomFilterMacroBlockWriter::flush_macro_block()
       ObMacroBlockHandle macro_handle;
       ObMacroBlockWriteInfo macro_write_info;
       macro_write_info.buffer_ = data_buffer_.data();
-      macro_write_info.size_ = data_buffer_.capacity();
-      macro_write_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+      macro_write_info.size_ = data_buffer_.upper_align_length();
       macro_write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
       macro_write_info.io_desc_.set_group_id(ObIOModule::BLOOM_FILTER_IO);
       if (OB_FAIL(ObBlockManager::write_block(macro_write_info, macro_handle))) {
