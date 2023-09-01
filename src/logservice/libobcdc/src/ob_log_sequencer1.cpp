@@ -264,6 +264,7 @@ void ObLogSequencer::run1()
       ObByteLockGuard guard(trans_queue_lock_);
 
       while (OB_SUCC(ret) && ! trans_queue_.empty() && ! lib::ThreadPool::has_set_stop()) {
+        ObLogTraceIdGuard trace_guard;
         TrxSortElem top_trx_sort_elem = trans_queue_.top();
         const int64_t trans_commit_version = top_trx_sort_elem.get_trans_commit_version();
         monitor.mark_and_get_cost("begin", true);
@@ -288,6 +289,10 @@ void ObLogSequencer::run1()
       ISTAT("[OUTPUT]", K(global_checkpoint_), K(last_global_checkpoint_), "checkpoint_delay", NTS_TO_DELAY(global_checkpoint_),
           K(global_seq_), "size", trans_queue_.size());
     }
+  }
+
+  if (OB_SUCC(ret) && lib::ThreadPool::has_set_stop()) {
+    ret = OB_IN_STOP_STATE;
   }
 
   // exit on fail
@@ -744,8 +749,10 @@ int ObLogSequencer::handle_participants_ready_trans_(const bool is_dml_trans,
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tenant is NULL, unexpected error", KR(ret), K(guard));
     } else {
-      if (OB_FAIL(recycle_resources_after_trans_ready_(*trans_ctx, *tenant))) {
-        LOG_ERROR("recycle_resources_after_trans_ready_ fail", KR(ret), KPC(trans_ctx), KPC(tenant));
+      if (OB_FAIL(recycle_resources_after_trans_ready_(*trans_ctx, *tenant, stop_flag))) {
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("recycle_resources_after_trans_ready_ fail", KR(ret), KPC(trans_ctx), KPC(tenant));
+        }
       }
     }
 
@@ -843,7 +850,7 @@ int ObLogSequencer::handle_multi_data_source_info_(
   PartTransTask *part_trans_task = trans_ctx.get_participant_objs();
   IObLogPartMgr &part_mgr = tenant.get_part_mgr();
 
-  while (OB_SUCC(ret) && OB_NOT_NULL(part_trans_task)) {
+  while (OB_SUCC(ret) && OB_NOT_NULL(part_trans_task) && ! stop_flag) {
     if (! part_trans_task->is_sys_ls_part_trans()) {
       // USER_LS part_trans_task in DIST_DDL_TRANS won't into dispatcher, set_ref_cnt to 1 to
       // recycle the part_trans_task.
@@ -853,7 +860,7 @@ int ObLogSequencer::handle_multi_data_source_info_(
       const CDCTabletChangeInfoArray &tablet_change_info_arr =
           part_trans_task->get_multi_data_source_info().get_tablet_change_info_arr();
       for (int64_t tablet_change_info_idx = 0;
-          OB_SUCC(ret) && tablet_change_info_idx < tablet_change_info_arr.count();
+          OB_SUCC(ret) && ! stop_flag && tablet_change_info_idx < tablet_change_info_arr.count();
           tablet_change_info_idx++) {
         const ObCDCTabletChangeInfo &tablet_change_info = tablet_change_info_arr.at(tablet_change_info_idx);
         if (OB_UNLIKELY(! tablet_change_info.is_valid())) {
@@ -1084,7 +1091,7 @@ int ObLogSequencer::wait_until_formatter_done_(volatile bool &stop_flag)
 // 6. The inability to sequence does not decrement the reference count, leading to interdependencies and deadlocks
 //
 // Therefore, unlike previous implementations, resources are not reclaimed after sequencing, but after the distributed transaction has been assembled
-int ObLogSequencer::recycle_resources_after_trans_ready_(TransCtx &trans_ctx, ObLogTenant &tenant)
+int ObLogSequencer::recycle_resources_after_trans_ready_(TransCtx &trans_ctx, ObLogTenant &tenant, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
 
@@ -1099,7 +1106,7 @@ int ObLogSequencer::recycle_resources_after_trans_ready_(TransCtx &trans_ctx, Ob
     PartTransTask *participant = trans_ctx.get_participant_objs();
 
     // Iterate over each statement of each partitioned transaction of a distributed transaction
-    while (NULL != participant) {
+    while (NULL != participant && ! stop_flag) {
       // TODO is_ddl_trans: LS_TABLE的事务如何处理？
       if (participant->is_dml_trans() || participant->is_ddl_trans()) {
         const logservice::TenantLSID &tls_id = participant->get_tls_id();
@@ -1110,6 +1117,10 @@ int ObLogSequencer::recycle_resources_after_trans_ready_(TransCtx &trans_ctx, Ob
       }
 
       participant = participant->next_task();
+    }
+
+    if (OB_SUCC(ret) && stop_flag) {
+      ret = OB_IN_STOP_STATE;
     }
   }
 

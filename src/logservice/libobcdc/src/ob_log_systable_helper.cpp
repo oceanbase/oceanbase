@@ -105,22 +105,19 @@ int QueryTimeZoneInfoVersionStrategy::build_sql_statement(char *sql_buf,
   int ret = OB_SUCCESS;
   pos = 0;
   const char *query_sql = NULL;
-  const bool need_query_tenant_timezone_version = true;
+  const bool tenant_sync_mode = TCTX.is_tenant_sync_mode();
 
   query_sql = "SELECT VALUE FROM __ALL_VIRTUAL_SYS_STAT WHERE NAME = 'CURRENT_TIMEZONE_VERSION' AND TENANT_ID = ";
+
   if (OB_ISNULL(sql_buf) || OB_UNLIKELY(mul_statement_buf_len <=0)) {
     LOG_ERROR("invalid argument", K(sql_buf), K(mul_statement_buf_len));
     ret = OB_INVALID_ARGUMENT;
+  } else if (TCTX.is_tenant_sync_mode()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("not support fetch timezone_version in tenant_sync_mode", KR(ret));
   } else if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
-          "%s", query_sql))) {
-    LOG_ERROR("build sql fail", KR(ret), K(pos), K(query_sql), "buf_size", mul_statement_buf_len, K(sql_buf));
-  } else {
-    if (need_query_tenant_timezone_version) {
-      if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos, "%lu;", tenant_id_))) {
-        LOG_ERROR("build tenant_id sql fail", KR(ret), K(pos), K(query_sql),
-            "buf_size", mul_statement_buf_len, K(sql_buf), K(tenant_id_));
-      }
-    }
+      "%s %lu", query_sql, tenant_id_))) {
+    LOG_ERROR("build sql fail", KR(ret), K(pos), K(query_sql), "buf_size", mul_statement_buf_len, K(sql_buf), K_(tenant_id));
   }
 
   return ret;

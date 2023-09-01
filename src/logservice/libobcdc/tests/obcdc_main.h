@@ -85,7 +85,7 @@ private:
   const char              *tg_match_pattern_;
 
   // Record heartbeat microsecond time stamps
-  int64_t                 last_heartbeat_timestamp_micro_sec_;
+  int64_t                 last_heartbeat_timestamp_usec_;
 
   volatile bool           stop_flag_ CACHE_ALIGNED;
 

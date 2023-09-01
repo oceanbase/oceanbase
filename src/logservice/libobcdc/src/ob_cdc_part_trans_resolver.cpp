@@ -225,8 +225,10 @@ int ObCDCPartTransResolver::read(
           serve_info,
           missing_info,
           has_redo_in_cur_entry))) {
-        LOG_ERROR("read_trans_log_ fail", KR(ret), K_(tls_id), K(tx_log_block_header),
-            K(tx_header), K(has_redo_in_cur_entry));
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("read_trans_log_ fail", KR(ret), K_(tls_id), K(tx_log_block_header),
+              K(tx_header), K(has_redo_in_cur_entry));
+        }
       }
     }
 
@@ -411,8 +413,10 @@ int ObCDCPartTransResolver::read_trans_log_(
     case transaction::ObTxLogType::TX_REDO_LOG:
     {
       if (OB_FAIL(handle_redo_(tx_id, lsn, submit_ts, handling_miss_log, tx_log_block))) {
-        LOG_ERROR("handle_redo_ fail", KR(ret), K_(tls_id), K(tx_id), K(tx_id), K(lsn), K(tx_log_header),
-            K(missing_info));
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("handle_redo_ fail", KR(ret), K_(tls_id), K(tx_id), K(tx_id), K(lsn), K(tx_log_header),
+              K(missing_info));
+        }
       }
       break;
     }
@@ -541,7 +545,7 @@ int ObCDCPartTransResolver::handle_redo_(
       LOG_DEBUG("redo_log duplication", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(submit_ts),
           K(redo_log), K(handling_miss_log), K(task));
       ret = OB_SUCCESS;
-    } else {
+    } else if (OB_IN_STOP_STATE != ret) {
       LOG_ERROR("push_redo_log into PartTransTask fail", KR(ret), K_(tls_id), K(tx_id), K(lsn),
           K(handling_miss_log), K(task), K(redo_log));
     }

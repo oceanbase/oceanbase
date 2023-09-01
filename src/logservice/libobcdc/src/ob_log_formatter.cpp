@@ -37,6 +37,7 @@
 #include "ob_cdc_lob_aux_table_parse.h"    // ObCDCLobAuxMetaStorager
 #include "ob_cdc_udt.h"                 // ObCDCUdtValueBuilder
 #include "ob_log_trace_id.h"            // ObLogTraceIdGuard
+#include "ob_log_timezone_info_getter.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -312,8 +313,8 @@ int ObLogFormatter::get_task_count(
 int ObLogFormatter::handle(void *data, const int64_t thread_index, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
-  set_cdc_thread_name("Formatter", thread_index);
   ObLogTraceIdGuard trace_guard;
+  set_cdc_thread_name("Formatter", thread_index);
   bool cur_stmt_need_callback = false;
   IStmtTask *stmt_task = static_cast<IStmtTask *>(data);
   DmlStmtTask *dml_stmt_task = dynamic_cast<DmlStmtTask *>(stmt_task);
@@ -1057,7 +1058,8 @@ int ObLogFormatter::build_row_value_(
   ColValueList *old_cols = nullptr;
   ObLobDataOutRowCtxList *new_lob_ctx_cols = nullptr;
   TableSchemaInfo *tb_schema_info = NULL;
-  IObLogTenantMgr *tenant_mgr_ = TCTX.tenant_mgr_;
+  IObCDCTimeZoneInfoGetter *tz_info_getter = TCTX.timezone_info_getter_;
+  ObCDCTenantTimeZoneInfo *obcdc_tenant_tz_info = nullptr;
   ObTimeZoneInfoWrap *tz_info_wrap = nullptr;
 
   if (OB_UNLIKELY(! inited_)) {
@@ -1082,12 +1084,13 @@ int ObLogFormatter::build_row_value_(
   } else if (OB_ISNULL(tb_schema_info)) {
     LOG_ERROR("tb_schema_info is null", K(tb_schema_info));
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_ISNULL(tenant_mgr_)) {
+  } else if (OB_ISNULL(tz_info_getter)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("tenant_mgr_ is nullptr", KR(ret), K(tenant_mgr_));
-  } else if (OB_FAIL(tenant_mgr_->get_tenant_tz_wrap(tenant_id, tz_info_wrap))) {
+    LOG_ERROR("tz_info_getter is nullptr", KR(ret), K(tz_info_getter));
+  } else if (OB_FAIL(tz_info_getter->get_tenant_tz_info(tenant_id, obcdc_tenant_tz_info))) {
     LOG_ERROR("get_tenant_tz_wrap failed", KR(ret), K(tenant_id));
   } else {
+    const ObTimeZoneInfoWrap *tz_info_wrap = &(obcdc_tenant_tz_info->get_tz_wrap());
     const int64_t column_num = tb_schema_info->get_usr_column_count();
     const uint64_t aux_lob_meta_tid = tb_schema_info->get_aux_lob_meta_tid();
     const bool is_cur_stmt_task_cb_progress = stmt_task->is_callback();
