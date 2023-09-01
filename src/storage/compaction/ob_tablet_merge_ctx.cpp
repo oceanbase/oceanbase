@@ -783,12 +783,6 @@ int ObTabletMergeCtx::inner_init_for_mini(bool &skip_rest_operation)
     // TODO(@DanLin) optimize this interface
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to get merge tables", K(ret), KPC(this), K(get_merge_table_result));
-    } else { // OB_NO_NEED_MERGE
-      int tmp_ret = OB_SUCCESS;
-      // then release memtable
-      if (OB_TMP_FAIL(tablet->release_memtables(tablet->get_tablet_meta().clog_checkpoint_scn_))) {
-        LOG_WARN("failed to release memtable", K(tmp_ret), K(tablet->get_tablet_meta().clog_checkpoint_scn_));
-      }
     }
   } else if (FALSE_IT(time_guard_.click(ObCompactionTimeGuard::COMPACTION_POLICY))) {
   } else if (get_merge_table_result.update_tablet_directly_) {
@@ -829,44 +823,26 @@ int ObTabletMergeCtx::get_schema_and_gene_from_result(const ObGetMergeTablesResu
 int ObTabletMergeCtx::update_tablet_or_release_memtable(const ObGetMergeTablesResult &get_merge_table_result)
 {
   int ret = OB_SUCCESS;
-  int64_t old_storage_schema_version = 0;
   ObTablet *old_tablet = tablet_handle_.get_obj();
-  // check whether snapshot is updated or have storage_schema
-  bool update_table_store_flag = false;
-  ObArenaAllocator temp_allocator("DirUpdateTablet", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-  const ObStorageSchema *schema_on_tablet = nullptr;
 
   if (OB_UNLIKELY(!is_mini_merge(param_.merge_type_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("can only update tablet in mini merge", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(get_merge_table_result.scn_range_.end_scn_ > old_tablet->get_tablet_meta().clog_checkpoint_scn_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("can't have larger end_log_ts", K(ret), K(get_merge_table_result), K(old_tablet->get_tablet_meta()));
+  } else if (old_tablet->get_tablet_meta().snapshot_version_ >= get_merge_table_result.version_range_.snapshot_version_) {
+    // do nothing, no need to advance snapshot version on tablet meta.
   } else if (OB_FAIL(get_storage_schema_to_merge(get_merge_table_result.handle_))) {
     LOG_WARN("failed to get storage schema", K(ret), K(get_merge_table_result));
   } else if (OB_ISNULL(schema_ctx_.storage_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("storage schema is unexpected null", K(ret), KPC(this));
-  } else if (OB_FAIL(old_tablet->load_storage_schema(temp_allocator, schema_on_tablet))) {
-    LOG_WARN("failed to load storage schema", K(ret), KPC(old_tablet));
-  } else if (OB_UNLIKELY(get_merge_table_result.scn_range_.end_scn_ > old_tablet->get_tablet_meta().clog_checkpoint_scn_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("can't have larger end_log_ts", K(ret), K(get_merge_table_result), K(old_tablet->get_tablet_meta()));
-  } else if (get_merge_table_result.version_range_.snapshot_version_ > old_tablet->get_snapshot_version()
-    || schema_on_tablet->compare_schema_newer(*schema_ctx_.storage_schema_)) {
-    // need write slog to update snapshot_version on tablet_meta
-    // if schema on memtable is newer, need update into tablet
-    // (written rows are rolled back on leader, no logging, end_scn won't be updated)
-    update_table_store_flag = true;
   }
 
-  const SCN &release_memtable_scn = old_tablet->get_clog_checkpoint_scn();
-  if (OB_FAIL(ret)) {
-  } else if (update_table_store_flag && OB_FAIL(update_tablet_directly(get_merge_table_result))) {
-    LOG_WARN("failed to update tablet directly", K(ret), K(get_merge_table_result), K(update_table_store_flag));
-  } else if (OB_FAIL(old_tablet->release_memtables(release_memtable_scn))) {
-    LOG_WARN("failed to release memtable", K(ret), K(release_memtable_scn));
-  } else {
-    LOG_INFO("success to release memtable", K(ret), K_(param), K(release_memtable_scn));
+  if (FAILEDx(update_tablet_directly(get_merge_table_result))) {
+    LOG_WARN("failed to update tablet directly", K(ret), K(get_merge_table_result));
   }
-  ObTablet::free_storage_schema(temp_allocator, schema_on_tablet);
   return ret;
 }
 
@@ -891,6 +867,12 @@ int ObTabletMergeCtx::update_tablet_directly(const ObGetMergeTablesResult &get_m
   if (OB_FAIL(ls_handle_.get_ls()->update_tablet_table_store(
       param_.tablet_id_, param, new_tablet_handle))) {
     LOG_WARN("failed to update tablet table store", K(ret), K(param));
+  } else if (OB_TMP_FAIL(new_tablet_handle.get_obj()->release_memtables(new_tablet_handle.get_obj()->get_tablet_meta().clog_checkpoint_scn_))) {
+    LOG_WARN("failed to release memtable", K(tmp_ret), K(param));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(schema_ctx_.storage_schema_)) {
   } else if (OB_FAIL(merge_info_.init(*this, false/*need_check*/))) {
     LOG_WARN("failed to inie merge info", K(ret));
   } else if (OB_FAIL(tables_handle_.assign(get_merge_table_result.handle_))) { // assgin for generate_participant_table_info
