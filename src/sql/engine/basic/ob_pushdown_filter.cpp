@@ -964,24 +964,12 @@ int ObOrFilterExecutor::init_evaluated_datums()
 int ObWhiteFilterExecutor::init_evaluated_datums()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(filter_.expr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null expr", K(ret));
+  if (OB_FAIL(eval_right_val_to_objs())) {
+    LOG_WARN("Failed to eval right values to obj array for other OP except WHITE_OP_IN", K(ret), 
+              K(filter_.get_op_type()));
+  } else if (WHITE_OP_IN == filter_.get_op_type() && OB_FAIL(init_obj_set())) {
+    LOG_WARN("Failed to init Object set in filter node", K(ret));
   } else {
-    // load objs from datum
-    if (WHITE_OP_IN == filter_.get_op_type()) {
-      // fill params_ for WHITE_OP_IN
-      if (OB_FAIL(eval_in_right_val_to_objs())) {
-        LOG_WARN("Failed to eval right values to obj array for WHITE_OP_IN", K(ret));
-      } else if (OB_FAIL(init_obj_set())) {
-        LOG_WARN("Failed to init Object set in filter node", K(ret));
-      }
-    } else {
-      if (OB_FAIL(eval_right_val_to_objs())) {
-        LOG_WARN("Failed to eval right values to obj array for other OP except WHITE_OP_IN", K(ret), 
-                 K(filter_.get_op_type()));
-      }
-    }
     LOG_DEBUG("[PUSHDOWN], white pushdown filter inited params", K(params_));
   }
   return ret;
@@ -990,33 +978,39 @@ int ObWhiteFilterExecutor::init_evaluated_datums()
 int ObWhiteFilterExecutor::eval_right_val_to_objs()
 {
   int ret = OB_SUCCESS;
-  const ObExpr &expr = *(filter_.expr_);
-  if (WHITE_OP_IN == filter_.get_op_type()) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("this function does not support WHITE_OP_IN", K(ret), K(filter_.get_op_type()));
-  } else if (OB_FAIL(init_array_param(params_, expr.arg_cnt_))) {
+  uint32_t arg_count;
+  ObExpr* arg_parent_expr;
+  const bool is_op_in = WHITE_OP_IN == filter_.get_op_type();
+  if (OB_ISNULL(filter_.expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr in filter is null", K(ret));
+  } else if (OB_FALSE_IT(arg_count = is_op_in ? filter_.expr_->inner_func_cnt_ : filter_.expr_->arg_cnt_)) {
+  } else if (OB_FALSE_IT(arg_parent_expr = is_op_in ? filter_.expr_->args_[1] : filter_.expr_)) {
+  } else if (OB_FAIL(init_array_param(params_, arg_count))) {
     LOG_WARN("Failed to alloc params", K(ret));
   } else {
     ObEvalCtx &ctx = op_.get_eval_ctx();
     ObDatum *datum = NULL;
     null_param_contained_ = false;
-    // fill params_ for other WHITE_OP_XX
     ObObj param;
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
-      const ObExpr *cur_arg = expr.args_[i];
+    // 1. get datum from expr
+    // 2. transform to obj
+    // 3. append to params_
+    for (uint32_t i = 0; OB_SUCC(ret) && i < arg_count; ++i) {
+      const ObExpr *cur_arg = arg_parent_expr->args_[i];
       if (OB_ISNULL(cur_arg)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null expr arguments", K(ret), K(i));
-      } else if (cur_arg->type_ == T_REF_COLUMN) {
+      } else if (!is_op_in && cur_arg->type_ == T_REF_COLUMN) {
         // skip column reference expr
         continue;
       } else {
         if (OB_FAIL(cur_arg->eval(ctx, datum))) {
           LOG_WARN("evaluate filter arg expr failed", K(ret), K(i));
+        } else if (!is_op_in && !null_param_contained_ && datum->is_null()) {
+          null_param_contained_ = true;
         } else if (OB_FAIL(datum->to_obj(param, cur_arg->obj_meta_, cur_arg->obj_datum_map_))) {
           LOG_WARN("convert datum to obj failed", K(ret));
-        } else if (!null_param_contained_ && datum->is_null()) {
-          null_param_contained_ = true;
         } else if (OB_FAIL(params_.push_back(param))) {
           LOG_WARN("Failed to push back param", K(ret));
         }
@@ -1024,54 +1018,6 @@ int ObWhiteFilterExecutor::eval_right_val_to_objs()
     }
   }
   return ret;
-}
-
-int ObWhiteFilterExecutor::eval_in_right_val_to_objs()
-{
-  int ret = OB_SUCCESS;
-  const ObExpr &expr = *(filter_.expr_);
-  if (WHITE_OP_IN != filter_.get_op_type()) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("call this function but not WHITE_OP_IN", K(ret), K(filter_.get_op_type()));
-  } else if (OB_FAIL(init_array_param(params_, expr.inner_func_cnt_))) {
-    LOG_WARN("Failed to alloc params", K(ret));
-  } else {
-    ObEvalCtx &ctx = op_.get_eval_ctx();
-    // 参考 ObExprInOrNotIn::eval_in_without_row_fallback 实现
-    ObDatum *right = NULL;
-    null_param_contained_ = false;
-    // for each param of WHITE_OP_IN
-    // get right datum, transform to obj, append to params_
-    ObObj param;
-    for (int i = 0; OB_SUCC(ret) && i < expr.inner_func_cnt_; ++i) {
-      const ObExpr *cur_arg = expr.args_[1]->args_[i];
-      if (OB_ISNULL(cur_arg)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid null arg", K(ret), K(cur_arg), K(i));
-      } else if (OB_FAIL(cur_arg->eval(ctx, right))) {
-        LOG_WARN("failed to eval right datum", K(ret));
-      } else if (!null_param_contained_ && right->is_null()) {
-        null_param_contained_ = true;
-      } else if (OB_FAIL(right->to_obj(param, cur_arg->obj_meta_, cur_arg->obj_datum_map_))) {
-        LOG_WARN("convert datum to obj failed", K(ret));
-      } else if (OB_FAIL(params_.push_back(param))) {
-        LOG_WARN("Failed to push back param", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-void ObWhiteFilterExecutor::check_null_params()
-{
-  null_param_contained_ = false;
-  for (int64_t i = 0; !null_param_contained_ && i < params_.count(); i++) {
-    if ((lib::is_mysql_mode() && params_.at(i).is_null())
-        || (lib::is_oracle_mode() && params_.at(i).is_null_oracle())) {
-      null_param_contained_ = true;
-    }
-  }
-  return;
 }
 
 int ObWhiteFilterExecutor::init_obj_set()

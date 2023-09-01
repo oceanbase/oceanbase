@@ -538,9 +538,7 @@ public:
                        K_(null_param_contained), K_(params), K(param_set_.created()),
                        K_(filter));
 private:
-  int eval_in_right_val_to_objs();
   int eval_right_val_to_objs();
-  void check_null_params();
   int init_obj_set();
 private:
   bool null_param_contained_;
