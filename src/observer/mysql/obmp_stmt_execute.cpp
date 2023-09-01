@@ -2531,55 +2531,60 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
   } else {
     if (OB_UNLIKELY(MYSQL_TYPE_COMPLEX == type)) {
       // this must be array bounding.
-      // 1. read count
-      ObMySQLUtil::get_length(data, count);
-      // 2. make null map
-      int64_t bitmap_bytes = ((count + 7) / 8);
-      char is_null_map[bitmap_bytes];
-      MEMSET(is_null_map, 0, bitmap_bytes);
-      length = piece_cache->get_length_length(count) + bitmap_bytes;
-      // 3. get string buffer (include lenght + value)
-      if (OB_FAIL(str_buf.prepare_allocate(count))) {
-        LOG_WARN("prepare fail.");
-      } else if (OB_FAIL(piece_cache->get_buffer(stmt_id_,
-                                                 param_id,
-                                                 count,
-                                                 length,
-                                                 str_buf,
-                                                 is_null_map))) {
-        LOG_WARN("piece get buffer fail.", K(ret), K(stmt_id_), K(param_id));
+      bool is_null = ObSMUtils::update_from_bitmap(param, bitmap, param_id);
+      if (is_null) {
+        LOG_DEBUG("param is null", K(param_id), K(param), K(type));
       } else {
-        // 4. merge all this info
-        char *tmp = static_cast<char*>(piece->get_allocator()->alloc(length));
-        int64_t pos = 0;
-        if (OB_ISNULL(tmp)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to alloc memory", K(ret));
-        } else if (FALSE_IT(MEMSET(tmp, 0, length))) {
-        } else if (OB_FAIL(ObMySQLUtil::store_length(tmp, length, count, pos))) {
-          LOG_WARN("store length fail.", K(ret), K(stmt_id_), K(param_id));
+        // 1. read count
+        ObMySQLUtil::get_length(data, count);
+        // 2. make null map
+        int64_t bitmap_bytes = ((count + 7) / 8);
+        char is_null_map[bitmap_bytes];
+        MEMSET(is_null_map, 0, bitmap_bytes);
+        length = piece_cache->get_length_length(count) + bitmap_bytes;
+        // 3. get string buffer (include lenght + value)
+        if (OB_FAIL(str_buf.prepare_allocate(count))) {
+          LOG_WARN("prepare fail.");
+        } else if (OB_FAIL(piece_cache->get_buffer(stmt_id_,
+                                                  param_id,
+                                                  count,
+                                                  length,
+                                                  str_buf,
+                                                  is_null_map))) {
+          LOG_WARN("piece get buffer fail.", K(ret), K(stmt_id_), K(param_id));
         } else {
-          MEMCPY(tmp+pos, is_null_map, bitmap_bytes);
-          pos += bitmap_bytes;
-          for (int64_t i=0; OB_SUCC(ret) && i<count; i++) {
-            if (OB_FAIL(ObMySQLUtil::store_obstr(tmp, length, str_buf.at(i).string(), pos))) {
-              LOG_WARN("store string fail.", K(ret), K(stmt_id_), K(param_id),
-                      K(length), K(pos), K(i), K(str_buf.at(i).string()), K(str_buf.at(i).string().length()),
-                      K(str_buf.at(i).length()));
+          // 4. merge all this info
+          char *tmp = static_cast<char*>(piece->get_allocator()->alloc(length));
+          int64_t pos = 0;
+          if (OB_ISNULL(tmp)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to alloc memory", K(ret));
+          } else if (FALSE_IT(MEMSET(tmp, 0, length))) {
+          } else if (OB_FAIL(ObMySQLUtil::store_length(tmp, length, count, pos))) {
+            LOG_WARN("store length fail.", K(ret), K(stmt_id_), K(param_id));
+          } else {
+            MEMCPY(tmp+pos, is_null_map, bitmap_bytes);
+            pos += bitmap_bytes;
+            for (int64_t i=0; OB_SUCC(ret) && i<count; i++) {
+              if (OB_FAIL(ObMySQLUtil::store_obstr(tmp, length, str_buf.at(i).string(), pos))) {
+                LOG_WARN("store string fail.", K(ret), K(stmt_id_), K(param_id),
+                        K(length), K(pos), K(i), K(str_buf.at(i).string()), K(str_buf.at(i).string().length()),
+                        K(str_buf.at(i).length()));
+              }
             }
           }
-        }
-        if (OB_FAIL(ret)) {
-          // do nothing.
-        } else {
-          const char* src = tmp;
-          if (OB_FAIL(parse_complex_param_value(allocator, charset, cs_type, ncs_type,
-                                                src, tz_info, type_info,
-                                                param))) {
-            LOG_WARN("failed to parse complex value", K(ret));
+          if (OB_FAIL(ret)) {
+            // do nothing.
+          } else {
+            const char* src = tmp;
+            if (OB_FAIL(parse_complex_param_value(allocator, charset, cs_type, ncs_type,
+                                                  src, tz_info, type_info,
+                                                  param))) {
+              LOG_WARN("failed to parse complex value", K(ret));
+            }
           }
+          piece->get_allocator()->free(tmp);
         }
-        piece->get_allocator()->free(tmp);
       }
     } else {
       if (OB_FAIL(str_buf.prepare_allocate(count))) {
