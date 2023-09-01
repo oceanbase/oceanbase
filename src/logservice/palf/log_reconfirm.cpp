@@ -146,10 +146,17 @@ void LogReconfirm::destroy()
   }
 }
 
-bool LogReconfirm::need_start_up()
+bool LogReconfirm::need_wlock()
 {
   ObLockGuard<ObSpinLock> guard(lock_);
-  return state_ == INITED;
+  // Note: even the wlock is not required in INITED state,
+  // we still add it to speedup the reconfirmation
+  return INITED == state_ ||
+         WAITING_LOG_FLUSHED == state_ ||
+         FETCH_MAX_LOG_LSN == state_ ||
+         RECONFIRM_MODE_META == state_ ||
+         RECONFIRMING == state_ ||
+         START_WORKING == state_;
 }
 
 int LogReconfirm::init_reconfirm_()
@@ -469,7 +476,9 @@ int LogReconfirm::reconfirm()
           PALF_EVENT("Reconfirm come into WAITING_LOG_FLUSHED state", palf_id_, K_(self), K_(majority_cnt),
           K_(curr_paxos_follower_list));
         }
-        break;
+        if (state_ != WAITING_LOG_FLUSHED) {
+          break;
+        }
       }
       case WAITING_LOG_FLUSHED: {
         if (OB_FAIL(purge_throttling_())) {
@@ -540,9 +549,8 @@ int LogReconfirm::reconfirm()
           state_ = RECONFIRMING;
           PALF_EVENT("Reconfirm come into RECONFIRMING state", palf_id_, K_(self));
         }
-        if (state_ != RECONFIRMING) {
-          break;
-        }
+        // need break because next state requires wlock
+        break;
       }
       case RECONFIRMING: {
         LSN last_lsn;

@@ -308,14 +308,7 @@ int LogStateMgr::switch_state()
         reset_broadcast_leader_();
       } else { }
     } else if (is_leader_reconfirm_()) {
-      if (is_reconfirm_need_start_()) {
-        ret = reconfirm_->reconfirm();
-        if (OB_EAGAIN == ret) {
-          ret = OB_SUCCESS;
-        }
-      }
-      if (OB_SUCCESS != ret
-          || is_reconfirm_timeout_()) {
+      if (is_reconfirm_timeout_()) {
         ret = reconfirm_to_follower_pending_();
       } else if (need_update_leader_(new_leader)) {
         ret = reconfirm_to_follower_pending_();
@@ -833,7 +826,7 @@ bool LogStateMgr::leader_reconfirm_need_switch_()
   int state_changed = false;
   common::ObAddr new_leader;
   int ret = OB_SUCCESS;
-  if (is_reconfirm_need_start_()) {
+  if (is_reconfirm_need_wlock_()) {
     state_changed = true;
   } else if (is_reconfirm_timeout_()) {
     state_changed = true;
@@ -878,9 +871,9 @@ bool LogStateMgr::is_reconfirm_timeout_()
   return bool_ret;
 }
 
-bool LogStateMgr::is_reconfirm_need_start_()
+bool LogStateMgr::is_reconfirm_need_wlock_()
 {
-  return reconfirm_->need_start_up();
+  return reconfirm_->need_wlock();
 }
 
 bool LogStateMgr::is_reconfirm_state_changed_(int &ret)

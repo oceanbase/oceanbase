@@ -151,7 +151,7 @@ private:
   void reset_status_();
 
   bool is_reconfirm_timeout_();
-  bool is_reconfirm_need_start_();
+  bool is_reconfirm_need_wlock_();
   bool is_reconfirm_state_changed_(int &ret);
 
   bool need_update_leader_(common::ObAddr &new_leader);
