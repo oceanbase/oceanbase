@@ -199,7 +199,7 @@ explain select distinct v3, v4, v5 from skyline_int order by v3, v4, v5, v6;
 explain select distinct v3, v4 from skyline_int union select  distinct c2, c3 from other;
 
 ## order by会消除或者能被union所用
-explain select v3, v4 from skyline_int order by v3, v4 union select  distinct c2, c3 from other order by v3, v4;
+explain (select v3, v4 from skyline_int order by v3, v4) union select  distinct c2, c3 from other order by v3, v4;
 explain (select v3, v4 from skyline_int order by v3, v4) union (select  distinct c2, c3 from other order by c2, c3) order by 1,2;
 
 ## 强制走 nestloop，保左表的序，group by的序能被用

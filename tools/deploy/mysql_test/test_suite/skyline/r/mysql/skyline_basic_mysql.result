@@ -956,7 +956,7 @@ Outputs & filters:
       access([t2.x], [t2.y], [t2.z]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.x], [t2.y], [t2.z], [t2.pk2]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
-explain select a, b, c from t1 order by c, b, a union select x, y, z from t2;
+explain (select a, b, c from t1 order by c, b, a )union select x, y, z from t2;
 Query Plan
 =============================================================
 |ID|OPERATOR            |NAME         |EST.ROWS|EST.TIME(us)|
@@ -2707,7 +2707,7 @@ Outputs & filters:
       is_index_back=false, is_global_index=false,
       range_key([t6.b], [t6.a], [t6.c], [t6.pk]), range(1,2,MAX,MAX ; 1,MAX,MAX,MAX),
       range_cond([t6.b = 1], [t6.a > 2])
-explain select c from t6 where b = 1 limit 9 union select pk from tmp;
+explain (select c from t6 where b = 1 limit 9) union select pk from tmp;
 Query Plan
 ===========================================================
 |ID|OPERATOR            |NAME       |EST.ROWS|EST.TIME(us)|
@@ -2728,7 +2728,7 @@ Outputs & filters:
       access([tmp.pk]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([tmp.pk]), range(MIN ; MAX)always true
-explain select /*+index(t6 idx_b_c)*/ c from t6 where b = 1 limit 9 union select pk from tmp;
+explain (select /*+index(t6 idx_b_c)*/ c from t6 where b = 1 limit 9) union select pk from tmp;
 Query Plan
 ===========================================================
 |ID|OPERATOR            |NAME       |EST.ROWS|EST.TIME(us)|
@@ -2749,7 +2749,7 @@ Outputs & filters:
       access([tmp.pk]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([tmp.pk]), range(MIN ; MAX)always true
-explain select /*+index(t6 idx_b_a_c)*/ c from t6 where b = 1 limit 9 union select pk from tmp;
+explain (select /*+index(t6 idx_b_a_c)*/ c from t6 where b = 1 limit 9) union select pk from tmp;
 Query Plan
 =============================================================
 |ID|OPERATOR            |NAME         |EST.ROWS|EST.TIME(us)|

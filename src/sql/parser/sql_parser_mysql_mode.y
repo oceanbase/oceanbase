@@ -8363,14 +8363,6 @@ select_clause_set set_type select_clause_set_right
   select_node->children_[PARSE_SELECT_LATER] = $3;
   $$ = select_node;
 }
-| select_clause_set_with_order_and_limit set_type select_clause_set_right {
-  ParseNode *select_node = NULL;
-  malloc_select_node(select_node, result->malloc_pool_);
-  select_node->children_[PARSE_SELECT_SET] = $2;
-  select_node->children_[PARSE_SELECT_FORMER] = $1;
-  select_node->children_[PARSE_SELECT_LATER] = $3;
-  $$ = select_node;
-}
 | select_clause_set_left set_type select_clause_set_right {
   ParseNode *select_node = NULL;
   malloc_select_node(select_node, result->malloc_pool_);
@@ -8401,15 +8393,7 @@ no_table_select
 ;
 
 select_clause_set_left:
-no_table_select_with_order_and_limit
-{
-  $$ = $1;
-}
-| simple_select_with_order_and_limit
-{
-  $$ = $1;
-}
-| select_clause_set_right
+select_clause_set_right
 {
   $$ = $1;
 }
