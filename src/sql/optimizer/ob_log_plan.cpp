@@ -956,7 +956,7 @@ int ObLogPlan::pre_process_quals(const ObIArray<TableItem*> &table_items,
     } else if (qual->is_const_expr()) {
       ret = add_startup_filter(qual);
     } else if (qual->has_flag(CNT_RAND_FUNC) ||
-               qual->has_flag(CNT_USER_VARIABLE) ||
+               qual->has_flag(CNT_DYNAMIC_USER_VARIABLE) ||
                qual->has_flag(CNT_PL_UDF) ||
                qual->has_flag(CNT_SO_UDF)) {
       ret = add_special_expr(qual);

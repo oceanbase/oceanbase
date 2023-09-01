@@ -533,9 +533,9 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
         LOG_WARN("failed to add flag IS_STATE_FUNC", K(ret));
       }
     }
-    if (OB_SUCC(ret) && T_OP_GET_USER_VAR == expr.get_expr_type()) {
-      if (OB_FAIL(expr.add_flag(IS_USER_VARIABLE))) {
-        LOG_WARN("failed to add flag IS_USER_VARIABLE", K(ret));
+    if (OB_SUCC(ret) && T_OP_GET_USER_VAR == expr.get_expr_type() && !expr.is_const_expr()) {
+      if (OB_FAIL(expr.add_flag(IS_DYNAMIC_USER_VARIABLE))) {
+        LOG_WARN("failed to add flag IS_DYNAMIC_USER_VARIABLE", K(ret));
       }
     }
 

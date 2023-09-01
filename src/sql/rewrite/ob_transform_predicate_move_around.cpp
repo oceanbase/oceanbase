@@ -2758,7 +2758,7 @@ int ObTransformPredicateMoveAround::choose_pushdown_preds(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("predicate is null", K(ret), K(expr));
     } else if (expr->has_flag(CNT_SUB_QUERY) ||
-               expr->has_flag(CNT_USER_VARIABLE)) {
+               expr->has_flag(CNT_DYNAMIC_USER_VARIABLE)) {
       // push down a exec param may not a good idea
       ret = invalid_preds.push_back(expr);
     } else {

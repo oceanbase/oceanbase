@@ -429,8 +429,7 @@ int ObCreateViewResolver::check_privilege_needed(ObCreateTableStmt &stmt,
       if (OB_ISNULL(table_item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table item is null");
-      } else if (TableItem::BASE_TABLE == table_item->type_
-                  || TableItem::ALIAS_TABLE == table_item->type_) {
+      } else if (table_item->is_basic_table() || table_item->is_view_table_) {
         //no check for information_schema select
         ObString info_schema("information_schema");
         bool is_table_name_equal = false;

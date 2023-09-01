@@ -1840,7 +1840,7 @@ int ObLogicalOperator::extract_non_const_exprs(const ObIArray<ObRawExpr*> &input
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(expr));
     } else if (expr->is_const_raw_expr() ||
-               expr->has_flag(IS_USER_VARIABLE)) {
+               expr->has_flag(IS_DYNAMIC_USER_VARIABLE)) {
       /*do nothing*/
     } else if (OB_FAIL(non_const_exprs.push_back(expr))) {
       LOG_WARN("failed to push back expr", K(ret));

@@ -35,7 +35,7 @@ enum ObExprInfoFlag
   IS_IS_EXPR,
   IS_VALUES,
   IS_DEFAULT,
-  IS_USER_VARIABLE,
+  IS_DYNAMIC_USER_VARIABLE, // user variable which is assigned in query or query has udf
   IS_STATE_FUNC,
   IS_SET_OP,
   IS_LAST_INSERT_ID,
@@ -67,7 +67,7 @@ enum ObExprInfoFlag
   CNT_IS_EXPR,
   CNT_VALUES,
   CNT_DEFAULT,
-  CNT_USER_VARIABLE,
+  CNT_DYNAMIC_USER_VARIABLE,
   CNT_STATE_FUNC,
   CNT_SET_OP,
   CNT_LAST_INSERT_ID,
@@ -117,7 +117,7 @@ inline const char* get_expr_info_flag_str(const ObExprInfoFlag flag)
     case IS_CUR_TIME: { ret = "IS_CUR_TIME"; break; }
     case IS_IS_EXPR: { ret = "IS_IS_EXPR"; break; }
     case IS_STATE_FUNC: { ret = "IS_STATE_FUNC"; break; }
-    case IS_USER_VARIABLE: { ret = "IS_USER_VARIABLE"; break; }
+    case IS_DYNAMIC_USER_VARIABLE: { ret = "IS_DYNAMIC_USER_VARIABLE"; break; }
     case IS_SET_OP: { ret = "IS_SET_OP"; break; }
     case IS_LAST_INSERT_ID: { ret = "IS_LAST_INSERT_ID"; break; }
     case IS_RAND_FUNC: { ret = "IS_RAND_FUNC"; break;}
@@ -140,7 +140,7 @@ inline const char* get_expr_info_flag_str(const ObExprInfoFlag flag)
     case CNT_ALIAS: { ret = "CNT_ALIAS"; break; }
     case CNT_CUR_TIME: { ret = "CNT_CUR_TIME"; break; }
     case CNT_IS_EXPR: { ret = "CNT_IS_EXPR"; break; }
-    case CNT_USER_VARIABLE: { ret = "CNT_USER_VARIABLE"; break; }
+    case CNT_DYNAMIC_USER_VARIABLE: { ret = "CNT_DYNAMIC_USER_VARIABLE"; break; }
     case CNT_STATE_FUNC: { ret = "CNT_STATE_FUNC"; break; }
     case CNT_SET_OP: { ret = "CNT_SET_OP"; break; }
     case CNT_LAST_INSERT_ID: { ret = "CNT_LAST_INSERT_ID"; break; }

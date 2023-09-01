@@ -12121,7 +12121,7 @@ int ObTransformUtils::check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr*> &sele
                expr->has_generalized_column()) {
       // do nothing
     } else if (expr->has_flag(CNT_STATE_FUNC) ||
-               expr->has_flag(CNT_USER_VARIABLE) ||
+               expr->has_flag(CNT_DYNAMIC_USER_VARIABLE) ||
                expr->has_flag(CNT_ALIAS) ||
                expr->has_flag(CNT_VALUES) ||
                expr->has_flag(CNT_SEQ_EXPR) ||

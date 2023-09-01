@@ -8519,7 +8519,7 @@ int ObTransformPreProcess::expand_for_last_insert_id(ObDMLStmt &stmt, ObIArray<O
           !expr->has_flag(CNT_SUB_QUERY) &&
           !expr->has_flag(CNT_ROWNUM) &&
           !expr->has_flag(CNT_SEQ_EXPR) &&
-          !expr->has_flag(CNT_USER_VARIABLE)) {
+          !expr->has_flag(CNT_DYNAMIC_USER_VARIABLE)) {
       bool removable = false;
       ObRawExpr *left = expr->get_param_expr(0);
       ObRawExpr *right = expr->get_param_expr(1);

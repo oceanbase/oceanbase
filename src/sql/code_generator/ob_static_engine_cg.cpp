@@ -878,8 +878,7 @@ int ObStaticEngineCG::generate_calc_exprs(
             && T_FUN_SYS_ROWNUM != raw_expr->get_expr_type()
             && T_CTE_SEARCH_COLUMN != raw_expr->get_expr_type()
             && T_CTE_CYCLE_COLUMN != raw_expr->get_expr_type()
-            && !(raw_expr->is_const_expr() || raw_expr->has_flag(IS_USER_VARIABLE))
-            // TODO:@guoping.wgp, following T_FUN_SYS_PART restrictions should be removed later
+            && !(raw_expr->is_const_expr() || raw_expr->has_flag(IS_DYNAMIC_USER_VARIABLE))
             && !(T_FUN_SYS_PART_HASH == raw_expr->get_expr_type() || T_FUN_SYS_PART_KEY == raw_expr->get_expr_type())) {
           if (raw_expr->is_calculated()) {
             ret = OB_ERR_UNEXPECTED;
