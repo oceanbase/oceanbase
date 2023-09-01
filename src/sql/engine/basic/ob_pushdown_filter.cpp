@@ -965,8 +965,7 @@ int ObWhiteFilterExecutor::init_evaluated_datums()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(eval_right_val_to_objs())) {
-    LOG_WARN("Failed to eval right values to obj array for other OP except WHITE_OP_IN", K(ret), 
-              K(filter_.get_op_type()));
+    LOG_WARN("Failed to eval right values to obj array", K(ret), K(filter_.get_op_type()));
   } else if (WHITE_OP_IN == filter_.get_op_type() && OB_FAIL(init_obj_set())) {
     LOG_WARN("Failed to init Object set in filter node", K(ret));
   } else {
@@ -983,7 +982,7 @@ int ObWhiteFilterExecutor::eval_right_val_to_objs()
   const bool is_op_in = WHITE_OP_IN == filter_.get_op_type();
   if (OB_ISNULL(filter_.expr_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr in filter is null", K(ret));
+    LOG_WARN("filter_.expr is null", K(ret));
   } else if (OB_FALSE_IT(arg_count = is_op_in ? filter_.expr_->inner_func_cnt_ : filter_.expr_->arg_cnt_)) {
   } else if (OB_FALSE_IT(arg_parent_expr = is_op_in ? filter_.expr_->args_[1] : filter_.expr_)) {
   } else if (OB_FAIL(init_array_param(params_, arg_count))) {
