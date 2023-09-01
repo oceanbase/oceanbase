@@ -122,6 +122,7 @@ int ObTabletReplayExecutor::replay_get_tablet_(
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
+  const bool is_update_mds_table = is_replay_update_mds_table_();
   if (!scn.is_valid() || !tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "check can skip replay to mds get invalid argument", K(ret), K(scn), K(tablet_id));
@@ -134,7 +135,7 @@ int ObTabletReplayExecutor::replay_get_tablet_(
       if (OB_FAIL(ls->replay_get_tablet_no_check(tablet_id, scn, tablet_handle))) {
         CLOG_LOG(WARN, "replay get table failed", KR(ret), K(ls_id), K(tablet_id));
       }
-    } else if (OB_FAIL(ls->replay_get_tablet(tablet_id, scn, tablet_handle))) {
+    } else if (OB_FAIL(ls->replay_get_tablet(tablet_id, scn, is_update_mds_table, tablet_handle))) {
       CLOG_LOG(WARN, "replay get table failed", KR(ret), K(ls_id), K(tablet_id));
     }
 

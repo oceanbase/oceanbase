@@ -606,8 +606,9 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
   int ret = OB_SUCCESS;
   lib::Worker::CompatMode mode;
   ObTabletHandle tablet_handle;
+  const bool is_update_mds_table = false;
 
-  if (OB_FAIL(ls_->replay_get_tablet(row_head.tablet_id_, log_ts_ns_, tablet_handle))) {
+  if (OB_FAIL(ls_->replay_get_tablet(row_head.tablet_id_, log_ts_ns_, is_update_mds_table, tablet_handle))) {
     if (OB_OBSOLETE_CLOG_NEED_SKIP == ret) {
       ctx_->force_no_need_replay_checksum();
       ret = OB_SUCCESS;

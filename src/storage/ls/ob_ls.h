@@ -337,6 +337,7 @@ public:
   // get tablet while replaying clog
   int replay_get_tablet(const common::ObTabletID &tablet_id,
                         const share::SCN &scn,
+                        const bool is_update_mds_table,
                         ObTabletHandle &handle) const;
   // get tablet but don't check user_data while replaying clog, because user_data may not exist.
   int replay_get_tablet_no_check(

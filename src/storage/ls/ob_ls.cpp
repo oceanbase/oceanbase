@@ -1604,6 +1604,7 @@ int ObLS::replay_get_tablet_no_check(
 int ObLS::replay_get_tablet(
     const common::ObTabletID &tablet_id,
     const SCN &scn,
+    const bool is_update_mds_table,
     ObTabletHandle &handle) const
 {
   int ret = OB_SUCCESS;
@@ -1639,7 +1640,8 @@ int ObLS::replay_get_tablet(
       ret = OB_OBSOLETE_CLOG_NEED_SKIP;
       LOG_INFO("tablet is already deleted, need skip", KR(ret), K(ls_id), K(tablet_id), K(scn));
     }
-  } else if (scn > tablet->get_clog_checkpoint_scn()) {
+  } else if ((!is_update_mds_table && scn > tablet->get_clog_checkpoint_scn())
+      || (is_update_mds_table && scn > tablet->get_mds_checkpoint_scn())) {
     if (OB_FAIL(tablet->get_latest_tablet_status(data, is_committed))) {
       if (OB_EMPTY_RESULT == ret) {
         ret = OB_EAGAIN;
