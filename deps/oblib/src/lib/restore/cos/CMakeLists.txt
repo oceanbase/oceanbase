@@ -25,7 +25,7 @@ add_custom_command(
   OUTPUT cos_sdk_objs.o
   COMMAND ${OB_LD_BIN} -r $<TARGET_OBJECTS:cos_wrapper> -o cos_wrapper.o
   COMMAND ${OB_LD_BIN} -r cos_wrapper.o ${CMAKE_CURRENT_BINARY_DIR}/cos_a2o/cos_sdk_lib.o -o cos_sdk_objs.tmp.o
-  COMMAND objcopy --localize-hidden cos_sdk_objs.tmp.o cos_sdk_objs.o
+  COMMAND ${OB_OBJCOPY_BIN} --localize-hidden cos_sdk_objs.tmp.o cos_sdk_objs.o
   DEPENDS cos_wrapper cos_sdk_lib.o
   BYPRODUCTS cos_sdk_objs.o
   COMMAND_EXPAND_LISTS
