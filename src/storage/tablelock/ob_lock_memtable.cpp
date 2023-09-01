@@ -165,13 +165,14 @@ int ObLockMemtable::lock_(
                                                    lock_mode_in_same_trans))) {
         LOG_WARN("failed to check lock exist ", K(ret), K(lock_op));
       } else if (lock_exist) {
-        // do nothing
+        // if the lock is DBMS_LOCK, we should return error code
+        // to notify PL to return the actual execution result.
+        if (lock_op.lock_id_.obj_type_ == ObLockOBJType::OBJ_TYPE_DBMS_LOCK) {
+          ret = OB_OBJ_LOCK_EXIST;
+        }
+        LOG_INFO("lock is exist", K(ret), K(lock_op));
       } else if (FALSE_IT(lock_upgrade(lock_mode_in_same_trans, lock_op))) {
-      } else if (OB_FAIL(obj_lock_map_.lock(param,
-                                            ctx,
-                                            lock_op,
-                                            lock_mode_in_same_trans,
-                                            conflict_tx_set))) {
+      } else if (OB_FAIL(obj_lock_map_.lock(param, ctx, lock_op, lock_mode_in_same_trans, conflict_tx_set))) {
         if (ret != OB_TRY_LOCK_ROW_CONFLICT &&
             ret != OB_OBJ_LOCK_EXIST) {
           LOG_WARN("record lock at lock map mgr failed.", K(ret), K(lock_op));
@@ -218,8 +219,8 @@ int ObLockMemtable::lock_(
       LOG_WARN("unregister from deadlock detector failed", K(tmp_ret), K(lock_op));
     }
   }
-  // return success if lock twice.
-  if (ret == OB_OBJ_LOCK_EXIST) {
+  // return success if lock twice, except for DBMS_LOCK.
+  if (ret == OB_OBJ_LOCK_EXIST && lock_op.lock_id_.obj_type_ != ObLockOBJType::OBJ_TYPE_DBMS_LOCK) {
     ret = OB_SUCCESS;
   }
   if (OB_TRY_LOCK_ROW_CONFLICT == ret &&
@@ -467,14 +468,19 @@ int ObLockMemtable::check_lock_conflict(
                                                lock_mode_in_same_trans))) {
     LOG_WARN("failed to check lock exist ", K(ret), K(lock_op));
   } else if (lock_exist) {
+    // if the lock is DBMS_LOCK, we should return error code
+    // to notify PL to return the actual execution result.
+    if (lock_op.lock_id_.obj_type_ == ObLockOBJType::OBJ_TYPE_DBMS_LOCK) {
+      ret = OB_OBJ_LOCK_EXIST;
+    }
     LOG_INFO("lock is exist", K(ret), K(lock_op));
   } else if (OB_FAIL(obj_lock_map_.check_allow_lock(lock_op,
                                                     lock_mode_in_same_trans,
                                                     conflict_tx_set,
                                                     include_finish_tx,
                                                     only_check_dml_lock))) {
-    // if the lock exist, just return success.
-    if (OB_OBJ_LOCK_EXIST == ret) {
+    // return success if lock twice, except for DBMS_LOCK.
+    if (OB_OBJ_LOCK_EXIST == ret && lock_op.lock_id_.obj_type_ != ObLockOBJType::OBJ_TYPE_DBMS_LOCK) {
       ret = OB_SUCCESS;
     } else if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
     } else {

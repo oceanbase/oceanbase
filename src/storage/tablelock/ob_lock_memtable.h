@@ -202,11 +202,14 @@ private:
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;
   typedef common::SpinWLockGuard WLockGuard;
+  typedef common::ObLinearHashMap<ObString, uint64_t> LockHandleMap;
 
   bool is_inited_;
 
   // the lock map store lock data
   ObOBJLockMap obj_lock_map_;
+  LockHandleMap allocated_lockhandle_map_;
+
   share::SCN freeze_scn_;
   // data before the flushed_scn_ have been flushed
   share::SCN flushed_scn_;

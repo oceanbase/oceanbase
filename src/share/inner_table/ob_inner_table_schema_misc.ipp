@@ -4212,6 +4212,8 @@ case OB_ALL_RLS_GROUP_IDX_RLS_GROUP_TABLE_ID_TID:
 case OB_ALL_RLS_GROUP_HISTORY_IDX_RLS_GROUP_HIS_TABLE_ID_TID:
 case OB_ALL_RLS_CONTEXT_IDX_RLS_CONTEXT_TABLE_ID_TID:
 case OB_ALL_RLS_CONTEXT_HISTORY_IDX_RLS_CONTEXT_HIS_TABLE_ID_TID:
+case OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_LOCKHANDLE_TID:
+case OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_EXPIRATION_TID:
 
 #endif
 
@@ -4258,6 +4260,7 @@ case OB_ALL_SERVER_EVENT_HISTORY_TID:
 case OB_ALL_DDL_TASK_STATUS_TID:
 case OB_ALL_PART_TID:
 case OB_ALL_HISTOGRAM_STAT_HISTORY_TID:
+case OB_ALL_DBMS_LOCK_ALLOCATED_TID:
 case OB_ALL_PLAN_BASELINE_ITEM_TID:
 case OB_ALL_TENANT_GLOBAL_TRANSACTION_TID:
 case OB_ALL_DATABASE_TID:
@@ -4586,6 +4589,15 @@ case OB_ALL_PART_TID: {
 }
 case OB_ALL_HISTOGRAM_STAT_HISTORY_TID: {
   if (FAILEDx(index_tids.push_back(OB_ALL_HISTOGRAM_STAT_HISTORY_IDX_HISTOGRAM_STAT_HIS_SAVTIME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_DBMS_LOCK_ALLOCATED_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_LOCKHANDLE_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_EXPIRATION_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -5256,6 +5268,21 @@ case OB_ALL_HISTOGRAM_STAT_HISTORY_TID: {
   }
   break;
 }
+case OB_ALL_DBMS_LOCK_ALLOCATED_TID: {
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_dbms_lock_allocated_idx_dbms_lock_allocated_lockhandle_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_dbms_lock_allocated_idx_dbms_lock_allocated_expiration_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
 case OB_ALL_PLAN_BASELINE_ITEM_TID: {
   index_schema.reset();
   if (FAILEDx(ObInnerTableSchema::all_plan_baseline_item_idx_spm_item_sql_id_schema(index_schema))) {
@@ -5731,6 +5758,10 @@ case OB_ALL_FOREIGN_KEY_TID: {
   } else if (OB_FAIL(table_ids.push_back(OB_ALL_RLS_CONTEXT_IDX_RLS_CONTEXT_TABLE_ID_TID))) {
     LOG_WARN("add index id failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(table_ids.push_back(OB_ALL_RLS_CONTEXT_HISTORY_IDX_RLS_CONTEXT_HIS_TABLE_ID_TID))) {
+    LOG_WARN("add index id failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_LOCKHANDLE_TID))) {
+    LOG_WARN("add index id failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_EXPIRATION_TID))) {
     LOG_WARN("add index id failed", KR(ret), K(tenant_id));
 
 #endif

@@ -248,6 +248,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 457	__wr_statname	0	201001	1
 458	__wr_sysstat	0	201001	1
 459	__all_balance_task_helper	0	201001	1
+471	__all_dbms_lock_allocated	0	201001	1
 472	__wr_control	0	201001	1
 473	__all_tenant_event_history	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1

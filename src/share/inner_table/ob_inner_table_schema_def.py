@@ -5815,8 +5815,26 @@ def_table_schema(
 # 468 : __all_mview_refresh_stats
 # 469 : __all_mview_refresh_change_stats
 # 470 : __all_mview_refresh_stmt_stats
-# 471 : __all_dbms_lock_allocated
-# 472 : __wr_control
+
+def_table_schema(
+    owner = 'yangyifei.yyf',
+    table_name = '__all_dbms_lock_allocated',
+    table_id = '471',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+      ('name', 'varchar:128', 'false'),
+    ],
+    in_tenant_space = True,
+    is_cluster_private = False,
+    meta_record_in_sys = False,
+    normal_columns = [
+      ('lockid', 'int'),
+      ('lockhandle', 'varchar:128'),
+      ('expiration', 'timestamp'),
+    ],
+)
+
 def_table_schema(
     owner = 'yuchen.wyc',
     table_id = 472,
@@ -10972,6 +10990,7 @@ def_table_schema(
   rowkey_columns = [
   ],
 
+  in_tenant_space = True,
   normal_columns = [
   ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
   ('svr_port', 'int'),
@@ -12879,7 +12898,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15388'
 # 15394: __all_mview_refresh_stats
 # 15395: __all_mview_refresh_change_stats
 # 15396: __all_mview_refresh_stmt_stats
-# 15397: __all_dbms_lock_allocated
+def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15397', all_def_keywords['__all_dbms_lock_allocated'])))
 # 15398: __all_virtual_wr_control
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15398', all_def_keywords['__all_virtual_wr_control'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15399', all_def_keywords['__all_virtual_tenant_event_history']))
@@ -12905,7 +12924,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15403'
 # 15411: __all_virtual_import_table_task
 # 15412: __all_virtual_import_table_task_history
 # 15413: __all_virtual_import_stmt_exec_history
-# 15414: __all_virtual_ls_info
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keywords['__all_virtual_ls_info']))
 # 15415: idx_dbms_lock_allocated_lockhandle_real_agent
 # 15416: idx_dbms_lock_allocated_expiration_real_agent
 
@@ -27477,20 +27496,19 @@ def_table_schema(
     SVR_PORT AS SVR_PORT,
     TENANT_ID AS TENANT_ID,
     TRANS_ID AS TRANS_ID,
-    CASE TYPE WHEN 1 THEN 'TR'
-              WHEN 2 THEN 'TX'
-              WHEN 3 THEN 'TM'
-              ELSE 'UNDEFINED' END
+    CASE WHEN TYPE = 1 THEN 'TR'
+         WHEN TYPE = 2 THEN 'TX'
+         WHEN TYPE = 3 THEN 'TM'
+         ELSE 'UNDEFINED' END
     AS TYPE,
-    CASE TYPE WHEN 1 THEN TABLET_ID
-              WHEN 2 THEN HOLDER_TRANS_ID
-              WHEN 3 THEN (SELECT DISTINCT OBJ_ID FROM oceanbase.__ALL_VIRTUAL_OBJ_LOCK WHERE oceanbase.__ALL_VIRTUAL_OBJ_LOCK.LOCK_ID = oceanbase.__ALL_VIRTUAL_LOCK_WAIT_STAT.ROWKEY)
-              ELSE -1 END
+    CASE WHEN TYPE = 1 THEN TABLET_ID
+         WHEN TYPE = 2 THEN HOLDER_TRANS_ID
+         WHEN TYPE = 3 THEN (SELECT DISTINCT OBJ_ID FROM oceanbase.__ALL_VIRTUAL_OBJ_LOCK WHERE oceanbase.__ALL_VIRTUAL_OBJ_LOCK.LOCK_ID = oceanbase.__ALL_VIRTUAL_LOCK_WAIT_STAT.ROWKEY)
+         ELSE -1 END
     AS ID1,
-    CASE TYPE WHEN 1 THEN CONCAT(CONCAT(HOLDER_TRANS_ID, '-'), ROWKEY)
-              WHEN 2 THEN NULL
-              WHEN 3 THEN NULL
-              ELSE 'ERROR' END
+    CASE WHEN TYPE = 1 THEN CONCAT(CONCAT(HOLDER_TRANS_ID, '-'), ROWKEY)
+         WHEN TYPE = 2 OR TYPE = 3 THEN NULL
+         ELSE 'ERROR' END
     AS ID2,
     'NONE' AS LMODE,
     LOCK_MODE AS REQUEST,
@@ -27574,20 +27592,33 @@ def_table_schema(
     UNION ALL
 
     SELECT
-    SVR_IP AS SVR_IP,
-    SVR_PORT AS SVR_PORT,
-    TENANT_ID AS TENANT_ID,
-    CREATE_TRANS_ID AS TRANS_ID,
-    'TM' AS TYPE,
-    OBJ_ID AS ID1,
+    OBJ_LOCK.SVR_IP AS SVR_IP,
+    OBJ_LOCK.SVR_PORT AS SVR_PORT,
+    OBJ_LOCK.TENANT_ID AS TENANT_ID,
+    OBJ_LOCK.CREATE_TRANS_ID AS TRANS_ID,
+    CASE WHEN OBJ_LOCK.OBJ_TYPE IN ('TABLE', 'TABLET') THEN 'TM'
+         WHEN OBJ_LOCK.OBJ_TYPE = 'DBMS_LOCK' THEN 'UL'
+         ELSE 'UNKONWN' END
+    AS TYPE,
+    OBJ_LOCK.OBJ_ID AS ID1,
     NULL AS ID2,
-    LOCK_MODE AS LMODE,
+    OBJ_LOCK.LOCK_MODE AS LMODE,
     'NONE' AS REQUEST,
-    TIME_AFTER_CREATE AS CTIME,
+    OBJ_LOCK.TIME_AFTER_CREATE AS CTIME,
     0 AS BLOCK
     FROM
-    oceanbase.__ALL_VIRTUAL_OBJ_LOCK
-    WHERE (OBJ_TYPE = 'TABLE' OR OBJ_TYPE = 'TABLET') AND EXTRA_INFO LIKE '%tx_ctx%'
+    oceanbase.__ALL_VIRTUAL_OBJ_LOCK AS OBJ_LOCK
+    INNER JOIN
+    oceanbase.__ALL_VIRTUAL_LS_INFO AS LS_INFO
+    ON
+    OBJ_LOCK.SVR_IP = LS_INFO.SVR_IP AND
+    OBJ_LOCK.SVR_PORT = LS_INFO.SVR_PORT AND
+    OBJ_LOCK.TENANT_ID = LS_INFO.TENANT_ID AND
+    OBJ_LOCK.LS_ID = LS_INFO.LS_ID
+    WHERE
+    OBJ_LOCK.OBJ_TYPE IN ('TABLE', 'TABLET', 'DBMS_LOCK') AND
+    OBJ_LOCK.EXTRA_INFO LIKE '%tx_ctx%' AND
+    LS_INFO.LS_STATE = 'LEADER'
 """.replace("\n", " ")
 )
 def_table_schema(
@@ -46723,7 +46754,23 @@ JOIN SYS.ALL_VIRTUAL_OPTSTAT_GLOBAL_PREFS_REAL_AGENT GP
 # 25253: DBA_OB_MVIEW_REFRESH_STATS
 # 25254: DBA_OB_MVIEW_REFRESH_CHANGE_STATS
 # 25255: DBA_OB_MVIEW_REFRESH_STMT_STATS
-# 25256: DBMS_LOCK_ALLOCATED
+
+def_table_schema(
+  owner = 'yangyifei.yyf',
+  table_name      = 'DBMS_LOCK_ALLOCATED',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25256',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT NAME, LOCKID, EXPIRATION FROM SYS.ALL_VIRTUAL_DBMS_LOCK_ALLOCATED_REAL_AGENT
+""".replace("\n", " ")
+)
+
 # 25257: DBA_WR_CONTROL
 def_table_schema(
   owner           = 'jiajingzhe.jjz',
@@ -52428,20 +52475,20 @@ SELECT
   SVR_PORT AS SVR_PORT,
   TENANT_ID AS TENANT_ID,
   TRANS_ID AS TRANS_ID,
-  CASE TYPE WHEN 1 THEN 'TR'
-            WHEN 2 THEN 'TX'
-            WHEN 3 THEN 'TM'
-            ELSE 'UNDEFINED' END
+  CASE WHEN TYPE = 1 THEN 'TR'
+       WHEN TYPE = 2 THEN 'TX'
+       WHEN TYPE = 3 THEN 'TM'
+       ELSE 'UNDEFINED' END
   AS TYPE,
-  CASE TYPE WHEN 1 THEN TABLET_ID
-            WHEN 2 THEN HOLDER_TRANS_ID
-            WHEN 3 THEN (SELECT DISTINCT OBJ_ID FROM SYS.ALL_VIRTUAL_OBJ_LOCK WHERE SYS.ALL_VIRTUAL_OBJ_LOCK.LOCK_ID = SYS.ALL_VIRTUAL_LOCK_WAIT_STAT.ROWKEY)
-            ELSE -1 END
+  CASE WHEN TYPE = 1 THEN TABLET_ID
+       WHEN TYPE = 2 THEN HOLDER_TRANS_ID
+       WHEN TYPE = 3 THEN (SELECT DISTINCT OBJ_ID FROM SYS.ALL_VIRTUAL_OBJ_LOCK WHERE SYS.ALL_VIRTUAL_OBJ_LOCK.LOCK_ID = SYS.ALL_VIRTUAL_LOCK_WAIT_STAT.ROWKEY)
+       ELSE -1 END
   AS ID1,
-  CASE TYPE WHEN 1 THEN CONCAT(CONCAT(HOLDER_TRANS_ID, '-'), ROWKEY)
-            WHEN 2 THEN NULL
-            WHEN 3 THEN NULL
-            ELSE 'ERROR' END
+  CASE WHEN TYPE = 1 THEN CONCAT(CONCAT(HOLDER_TRANS_ID, '-'), ROWKEY)
+       WHEN TYPE = 2 THEN NULL
+       WHEN TYPE = 3 THEN NULL
+       ELSE 'ERROR' END
   AS ID2,
   'NONE' AS LMODE,
   LOCK_MODE AS REQUEST,
@@ -52525,20 +52572,30 @@ GROUP BY SVR_IP, SVR_PORT, TENANT_ID, TRANS_ID
 UNION ALL
 
 SELECT
-  SVR_IP AS SVR_IP,
-  SVR_PORT AS SVR_PORT,
-  TENANT_ID AS TENANT_ID,
-  CREATE_TRANS_ID AS TRANS_ID,
-  'TM' AS TYPE,
-  OBJ_ID AS ID1,
+  OBJ_LOCK.SVR_IP AS SVR_IP,
+  OBJ_LOCK.SVR_PORT AS SVR_PORT,
+  OBJ_LOCK.TENANT_ID AS TENANT_ID,
+  OBJ_LOCK.CREATE_TRANS_ID AS TRANS_ID,
+  CASE WHEN OBJ_LOCK.OBJ_TYPE IN ('TABLE', 'TABLET') THEN 'TM'
+       WHEN OBJ_LOCK.OBJ_TYPE = 'DBMS_LOCK' THEN 'UL'
+       ELSE 'UNKOWN' END
+  AS TYPE,
+  OBJ_LOCK.OBJ_ID AS ID1,
   NULL AS ID2,
-  LOCK_MODE AS LMODE,
+  OBJ_LOCK.LOCK_MODE AS LMODE,
   'NONE' AS REQUEST,
-  TIME_AFTER_CREATE AS CTIME,
+  OBJ_LOCK.TIME_AFTER_CREATE AS CTIME,
   0 AS BLOCK
 FROM
-  SYS.ALL_VIRTUAL_OBJ_LOCK
-WHERE (OBJ_TYPE = 'TABLE' OR OBJ_TYPE = 'TABLET') AND EXTRA_INFO LIKE '%tx_ctx%'
+  SYS.ALL_VIRTUAL_OBJ_LOCK OBJ_LOCK
+INNER JOIN
+  SYS.ALL_VIRTUAL_LS_INFO LS_INFO
+ON
+  OBJ_LOCK.SVR_IP = LS_INFO.SVR_IP AND OBJ_LOCK.SVR_PORT = LS_INFO.SVR_PORT
+  AND OBJ_LOCK.TENANT_ID = LS_INFO.TENANT_ID AND OBJ_LOCK.LS_ID = LS_INFO.LS_ID
+WHERE
+  OBJ_LOCK.OBJ_TYPE IN ('TABLE', 'TABLET', 'DBMS_LOCK') AND OBJ_LOCK.EXTRA_INFO LIKE '%tx_ctx%'
+  AND LS_INFO.LS_STATE = 'LEADER'
   """.replace("\n", " "),
 )
 
@@ -53674,8 +53731,23 @@ def_sys_index_table(
   keywords = all_def_keywords['__all_rls_context_history'])
 
 # 101089 : placeholder for unique index of __all_tenant_snapshots
-# 101090 : placeholder for index of __all_dbms_lock_allocated lockhandle column
-# 101091 : placeholder for index of __all_dbms_lock_allocated expiration column
+
+def_sys_index_table(
+  index_name = 'idx_dbms_lock_allocated_lockhandle',
+  index_table_id = 101090,
+  index_columns = ['lockhandle'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_dbms_lock_allocated'])
+
+def_sys_index_table(
+  index_name = 'idx_dbms_lock_allocated_expiration',
+  index_table_id = 101091,
+  index_columns = ['expiration'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_dbms_lock_allocated'])
+
 # 101092 : placeholder for index of __all_tablet_reorganize_history
 # 101093 : placeholder for index of __all_kv_ttl_task
 # 101094 : placeholder for index of __all_kv_ttl_task_history
@@ -54390,6 +54462,26 @@ def_agent_index_table(
   real_table_name = '__all_rls_context' ,
   real_index_name = 'idx_rls_context_table_id',
   keywords = all_def_keywords['ALL_VIRTUAL_RLS_CONTEXT_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_dbms_lock_allocated_lockhandle_real_agent',
+  index_table_id = 15415,
+  index_columns = ['lockhandle'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_dbms_lock_allocated' ,
+  real_index_name = 'idx_dbms_lock_allocated_lockhandle',
+  keywords = all_def_keywords['ALL_VIRTUAL_DBMS_LOCK_ALLOCATED_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_dbms_lock_allocated_expiration_real_agent',
+  index_table_id = 15416,
+  index_columns = ['expiration'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_dbms_lock_allocated' ,
+  real_index_name = 'idx_dbms_lock_allocated_expiration',
+  keywords = all_def_keywords['ALL_VIRTUAL_DBMS_LOCK_ALLOCATED_REAL_AGENT_ORA'])
 
 # End Oracle Agent table Index
 ################################################################################

@@ -341,8 +341,12 @@ private:
               OB_LOG_(WARN, "failed to get column from row");
             }
           }
-          if (OB_ITER_END == ret && 1 == iter_times) {
-            ret = OB_SUCCESS;
+          if (OB_ITER_END == ret) {
+            if (1 == iter_times) {
+              ret = OB_SUCCESS;
+            } else if (0 == iter_times) {
+              ret = OB_EMPTY_RESULT;
+            }
           } else {
             OB_LOG_(WARN, "iter failed", K(iter_times));
           }
