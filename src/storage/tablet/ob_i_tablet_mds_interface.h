@@ -46,7 +46,7 @@ public:
   template <typename T>
   int is_locked_by_others(bool &is_locked, const mds::MdsWriter &self = mds::MdsWriter()) const;
 
-  int check_mds_written(bool &written);
+  int check_tablet_status_written(bool &written);
   // specialization get for each module
   int get_latest_tablet_status(ObTabletCreateDeleteMdsUserData &data, bool &is_committed) const;
   int get_tablet_status(const share::SCN &snapshot,
