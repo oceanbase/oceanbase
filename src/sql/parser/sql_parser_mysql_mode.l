@@ -1395,6 +1395,15 @@ BEGIN(in_c_comment);
 
 "&&" {return AND_OP;}
 "="  {return COMP_EQ;}
+"==" {
+  ParseResult *p = (ParseResult *)yyextra;
+  if (!p->pl_parse_info_.is_pl_parse_) {
+    yyerror(yylloc, yyextra, "== operator not in pl context\n");
+    return PARSER_SYNTAX_ERROR;
+  } else {
+    return COMP_EQ;
+  }
+}
 ":="  {return SET_VAR;}
 "<=>"  {return COMP_NSEQ;}
 ">=" {return COMP_GE;}
