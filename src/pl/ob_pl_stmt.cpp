@@ -3404,7 +3404,9 @@ int ObPLBlockNS::get_cursor_by_name(const ObExprResolveContext &ctx,
     ret = OB_ERR_SP_UNDECLARED_VAR;
     LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR, cursor_name.length(), cursor_name.ptr());
     LOG_WARN("undeclare cursor of ", K(cursor_name));
-  } else if (package_name.empty() && database_name.empty()) {
+  } else if ((package_name.empty() && database_name.empty())
+              || (0 == package_name.case_compare(get_package_name())
+                   && (database_name.empty() || 0 == database_name.case_compare(get_db_name())))) {
     // local cursor
     CK (OB_NOT_NULL(get_cursor_table()));
     CK (OB_NOT_NULL(get_symbol_table()));
