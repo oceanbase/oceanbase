@@ -6507,8 +6507,16 @@ int ObOptimizerUtil::pushdown_filter_into_subquery(const ObDMLStmt &parent_stmt,
       can_pushdown = true;
     }
   }
-  if (OB_SUCC(ret) && !can_pushdown) {
-    ret = remain_filters.assign(pushdown_filters);
+  if (OB_SUCC(ret)) {
+    if (can_pushdown) {
+      if (OB_FAIL(remove_special_exprs(candi_filters, remain_filters))) {
+        LOG_WARN("failed to remove special exprs", K(ret));
+      }
+    } else {
+      if (OB_FAIL(remain_filters.assign(pushdown_filters))) {
+        LOG_WARN("failed to assign exprs", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -6536,8 +6544,6 @@ int ObOptimizerUtil::check_pushdown_filter(const ObDMLStmt &parent_stmt,
       }
     } else if (OB_FAIL(candi_filters.assign(pushdown_filters))) {
       LOG_WARN("failed to assign exprs", K(ret));
-    } else if (OB_FAIL(remove_special_exprs(candi_filters, remain_filters))) {
-      LOG_WARN("failed to remove special exprs", K(ret));
     }
   } else if (OB_FAIL(get_groupby_win_func_common_exprs(subquery,
                                                       common_exprs,
@@ -6629,8 +6635,6 @@ int ObOptimizerUtil::check_pushdown_filter_overlap_index(const ObDMLStmt &stmt,
   } else if (is_match_index) {
     if (OB_FAIL(candi_filters.assign(pushdown_filters))) {
       LOG_WARN("failed to assign exprs", K(ret));
-    } else if (OB_FAIL(remove_special_exprs(candi_filters, remain_filters))) {
-      LOG_WARN("failed to remove special exprs", K(ret));
     }
   } else {
     if (OB_FAIL(remain_filters.assign(pushdown_filters))) {
