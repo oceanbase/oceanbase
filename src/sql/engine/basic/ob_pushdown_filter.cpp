@@ -1767,7 +1767,7 @@ int PushdownFilterInfo::init(const storage::ObTableIterParam &iter_param,
   } else if (OB_UNLIKELY(!iter_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to init store pushdown filter", K(ret), K(iter_param));
-  } else if (nullptr == iter_param.pushdown_filter_) {
+  } else if (OB_ISNULL(iter_param.pushdown_filter_)) {
     // nothing to do without filter exprs
   } else if (OB_ISNULL((buf = alloc.alloc(sizeof(ObObj) * out_col_cnt)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1801,7 +1801,9 @@ int PushdownFilterInfo::init(const storage::ObTableIterParam &iter_param,
     }
   }
 
-  if (OB_SUCC(ret) && (iter_param.vectorized_enabled_ && filter_->is_filter_white_node())) {
+  if (OB_ISNULL(filter_)) {
+    // nothing to do without filter
+  } else if (OB_SUCC(ret) && (iter_param.vectorized_enabled_ && filter_->is_filter_white_node())) {
     if (OB_ISNULL(buf = alloc.alloc(sizeof(ObDatum) * batch_size_))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc white_batch_datums_", K(ret), K(batch_size_));
