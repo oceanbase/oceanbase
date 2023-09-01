@@ -75,7 +75,22 @@ int ObDBMSSchedJobInfo::deep_copy(ObIAllocator &allocator, const ObDBMSSchedJobI
   OZ (ob_write_string(allocator, other.field1_, field1_));
   OZ (ob_write_string(allocator, other.exec_env_, exec_env_));
   OZ (ob_write_string(allocator, other.job_name_, job_name_));
+  OZ (ob_write_string(allocator, other.job_class_, job_class_));
   OZ (ob_write_string(allocator, other.program_name_, program_name_));
+  return ret;
+}
+
+int ObDBMSSchedJobClassInfo::deep_copy(common::ObIAllocator &allocator, const ObDBMSSchedJobClassInfo &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  is_oracle_tenant_ = other.is_oracle_tenant_;
+  log_history_ = other.log_history_;
+  OZ (ob_write_string(allocator, other.job_class_name_, job_class_name_));
+  OZ (ob_write_string(allocator, other.service_, service_));
+  OZ (ob_write_string(allocator, other.resource_consumer_group_, resource_consumer_group_));
+  OZ (ob_write_string(allocator, other.logging_level_, logging_level_));
+  OZ (ob_write_string(allocator, other.comments_, comments_));
   return ret;
 }
 

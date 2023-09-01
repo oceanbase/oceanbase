@@ -4364,6 +4364,7 @@ def_table_schema(
   normal_columns = [
     ('code', 'int', 'true', '0'),
     ('message', 'varchar:4000'),
+    ('job_class', 'varchar:30', 'true'),
   ],
 )
 
@@ -5902,7 +5903,26 @@ def_table_schema(
   ],
 )
 
-# 474 : __all_tenant_scheduler_job_classes
+def_table_schema(
+  table_name     = '__all_tenant_scheduler_job_class',
+  owner          = 'huangrenhuang.hrh',
+  table_id       = '474',
+  table_type     = 'SYSTEM_TABLE',
+  gm_columns     = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('job_class_name', 'varchar:30', 'false'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+  normal_columns = [
+    ('resource_consumer_group', 'varchar:30', 'true'),
+    ('service', 'varchar:64', 'true'),
+    ('logging_level', 'varchar:11', 'true'),
+    ('log_history', 'number:38:0', 'true'),
+    ('comments', 'varchar:240', 'true'),
+  ],
+)
 # 475 : __all_recover_table_job
 # 476 : __all_recover_table_job_history
 # 477 : __all_import_table_job
@@ -12492,8 +12512,6 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12418: __all_virtual_cgroup_info
 # 12419: __all_virtual_cgroup_config
 
-# 12420: __all_virtual_flt_config
-
 def_table_schema(
   owner = 'guoyun.lgy',
   table_name = '__all_virtual_flt_config',
@@ -12514,7 +12532,11 @@ def_table_schema(
   ('record_policy', 'varchar:32')
   ]
 )
-# 12421: __all_virtual_tenant_scheduler_job_class
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12421',
+  table_name = '__all_virtual_tenant_scheduler_job_class',
+  keywords = all_def_keywords['__all_tenant_scheduler_job_class']))
 
 # 12422: __all_virtual_recover_table_job
 # 12423: __all_virtual_recover_table_job_history
@@ -12911,11 +12933,11 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15402', all_def_ke
 # 15403: __all_virtual_flt_config
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15403', all_def_keywords['__all_virtual_flt_config'])))
 
-# 15404: __all_virtual_tenant_scheduler_job_run_detail
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15404', all_def_keywords['__all_tenant_scheduler_job_run_detail']))
 
 # 15405: __all_virtual_session_info
 
-# 15406: __all_virtual_tenant_scheduler_job_class
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15406', all_def_keywords['__all_tenant_scheduler_job_class']))
 
 # 15407: __all_virtual_recover_table_job
 # 15408: __all_virtual_recover_table_job_history
@@ -46865,8 +46887,41 @@ def_table_schema(
   """.replace("\n", " ")
 )
 
-# 25260: DBA_SCHEDULER_JOB_RUN_DETAILS
-# 25261: DBA_SCHEDULER_JOB_CLASSES
+def_table_schema(
+  owner = 'fyy280124',
+  table_name      = 'DBA_SCHEDULER_JOB_RUN_DETAILS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25260',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT * FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_RUN_DETAIL_REAL_AGENT T
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'huangrenhuang.hrh',
+  table_name      = 'DBA_SCHEDULER_JOB_CLASSES',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25261',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+    T.JOB_CLASS_NAME AS JOB_CLASS_NAME,
+    T.RESOURCE_CONSUMER_GROUP AS RESOURCE_CONSUMER_GROUP,
+    T.SERVICE AS SERVICE,
+    T.LOGGING_LEVEL AS LOGGING_LEVEL,
+    T.LOG_HISTORY AS LOG_HISTORY,
+    T.COMMENTS AS COMMENTS
+    FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_CLASS_REAL_AGENT T
+""".replace("\n", " ")
+)
 
 # 25262: DBA_OB_RECOVER_TABLE_JOBS
 # 25263: DBA_OB_RECOVER_TABLE_JOB_HISTORY

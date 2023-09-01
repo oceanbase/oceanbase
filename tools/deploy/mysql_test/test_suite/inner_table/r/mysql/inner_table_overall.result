@@ -251,6 +251,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 471	__all_dbms_lock_allocated	0	201001	1
 472	__wr_control	0	201001	1
 473	__all_tenant_event_history	0	201001	1
+474	__all_tenant_scheduler_job_class	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -639,6 +640,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12416	__all_virtual_balance_task_helper	2	201001	1
 12417	__all_virtual_balance_group_ls_stat	2	201001	1
 12420	__all_virtual_flt_config	2	201001	1
+12421	__all_virtual_tenant_scheduler_job_class	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
