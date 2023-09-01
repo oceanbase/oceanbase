@@ -126,7 +126,7 @@ public:
 
   int inner_expand_temp_table(TempTableInfo &helper);
 
-  int check_stmt_can_materialize(ObSelectStmt *stmt, bool &is_valid);
+  int check_stmt_can_materialize(ObSelectStmt *stmt, bool is_existing_cte, bool &is_valid);
 
   int check_stmt_has_cross_product(ObSelectStmt *stmt, bool &has_cross_product);
   
@@ -146,10 +146,25 @@ public:
                      ObSelectStmt *right_stmt,
                      hash::ObHashMap<uint64_t, ObDMLStmt *> &parent_map,
                      bool &has_stmt);
+  int check_has_stmt(const ObIArray<ObSelectStmt *> &left_stmt,
+                     ObSelectStmt *right_stmt,
+                     hash::ObHashMap<uint64_t, ObDMLStmt *> &parent_map,
+                     bool &has_stmt);
 
-  bool is_similar_stmt(ObSelectStmt& stmt,
-                       const ObStmtMapInfo &map_info,
-                       QueryRelation relation);
+  int check_stmt_can_extract_temp_table(ObSelectStmt *first,
+                                        ObSelectStmt *second,
+                                        const ObStmtMapInfo &map_info,
+                                        QueryRelation relation,
+                                        bool check_basic,
+                                        bool &is_valid);
+  int check_equal_join_condition_match(ObSelectStmt &first,
+                                       ObSelectStmt &second,
+                                       const ObStmtMapInfo &map_info,
+                                       bool &is_match);
+  int check_index_condition_match(ObSelectStmt &first,
+                                  ObSelectStmt &second,
+                                  const ObStmtMapInfo &map_info,
+                                  bool &is_match);
 
   int remove_simple_stmts(ObIArray<ObSelectStmt*> &stmts);
 

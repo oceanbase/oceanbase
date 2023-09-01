@@ -24,6 +24,7 @@
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/rewrite/ob_predicate_deduce.h"
 #include "common/ob_smart_call.h"
+#include "ob_transform_min_max.h"
 
 using namespace oceanbase::common;
 
@@ -226,7 +227,7 @@ int ObTransformTempTable::expand_temp_table(ObIArray<TempTableInfo> &temp_table_
     } else if (1 == helper.table_infos_.count()) {
       need_expand = true;
       OPT_TRACE("CTE`s refer once, force inline");
-    } else if (OB_FAIL(check_stmt_can_materialize(helper.temp_table_query_, can_materia))) {
+    } else if (OB_FAIL(check_stmt_can_materialize(helper.temp_table_query_, true, can_materia))) {
       LOG_WARN("failed to check extract cte valid", K(ret));
     } else if (!can_materia) {
       need_expand = true;
@@ -308,29 +309,53 @@ int ObTransformTempTable::inner_expand_temp_table(TempTableInfo &helper)
   return ret;
 }
 
-int ObTransformTempTable::check_stmt_can_materialize(ObSelectStmt *stmt, bool &is_valid)
+int ObTransformTempTable::check_stmt_can_materialize(ObSelectStmt *stmt, bool is_existing_cte, bool &is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = true;
   bool has_cross_product = false;
-  if (OB_ISNULL(stmt)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null stmt", K(ret));
+    LOG_WARN("unexpect null", K(ret));
   } else if (0 == stmt->get_table_items().count() &&
              !stmt->is_set_stmt()) {
     //expression stmt不允许物化
     is_valid = false;
     OPT_TRACE("expression stmt can not materialize")
+  } else if (!is_existing_cte && stmt->has_limit()) {
+    is_valid = false;
+    OPT_TRACE("limit will not be materialized");
   } else if (1 == stmt->get_table_items().count()) {
-    TableItem *table = stmt->get_table_item(0);
-    if (stmt->has_group_by() ||
-        stmt->has_limit() ||
-        stmt->has_window_function() ||
-        table->is_generated_table()) {
-      is_valid = true;    
+    if (is_existing_cte) {
+      TableItem *table = stmt->get_table_item(0);
+      if (stmt->has_group_by() ||
+          stmt->has_limit() ||
+          stmt->has_window_function() ||
+          table->is_generated_table()) {
+        is_valid = true;
+      } else {
+        is_valid = false;
+        OPT_TRACE("single table cte will not be materialized");
+      }
     } else {
-      is_valid = false;
-      OPT_TRACE("single table query will not be materialized");
+      ObAggFunRawExpr *dummy = NULL;
+      bool can_use_fast_min_max = false;
+      STOP_OPT_TRACE;
+      if (ObTransformMinMax::check_transform_validity(*ctx_, stmt, dummy, can_use_fast_min_max)) {
+        LOG_WARN("failed to check fast min max", K(ret));
+      }
+      RESUME_OPT_TRACE;
+      if (OB_FAIL(ret)) {
+      } else if (can_use_fast_min_max) {
+        is_valid = false;
+        OPT_TRACE("fast min max query will not be materialized");
+      } else if (stmt->has_group_by() ||
+                 stmt->has_window_function()) {
+        is_valid = true;
+      } else {
+        is_valid = false;
+        OPT_TRACE("single table query without aggr/win will not be materialized");
+      }
     }
   } else if (OB_FAIL(check_stmt_has_cross_product(stmt, has_cross_product))) {
     LOG_WARN("failed to check has cross product", K(ret));
@@ -504,19 +529,15 @@ int ObTransformTempTable::inner_extract_common_subquery_as_cte(ObDMLStmt &root_s
       for (int64_t j = 0; OB_SUCC(ret) && !find_similar && j < compare_info.count(); ++j) {
         map_info.reset();
         bool has_stmt = false;
+        bool is_valid = false;
         StmtCompareHelper &helper = compare_info.at(j);
+        bool check_basic_similarity = !helper.hint_force_stmt_set_.empty() &&
+                                      helper.hint_force_stmt_set_.has_qb_name(stmt);
         if (!helper.hint_force_stmt_set_.empty() &&
             !helper.hint_force_stmt_set_.has_qb_name(stmt)) {
           //hint forbid，do nothing
-        } else if (OB_FAIL(check_has_stmt(helper.stmt_,
+        } else if (OB_FAIL(check_has_stmt(helper.similar_stmts_,
                                           stmt,
-                                          parent_map,
-                                          has_stmt))) {
-          LOG_WARN("failed to check has stmt", K(ret));
-        } else if (has_stmt) {
-          //do nothing
-        } else if (OB_FAIL(check_has_stmt(stmt,
-                                          helper.stmt_,
                                           parent_map,
                                           has_stmt))) {
           LOG_WARN("failed to check has stmt", K(ret));
@@ -527,10 +548,15 @@ int ObTransformTempTable::inner_extract_common_subquery_as_cte(ObDMLStmt &root_s
                                                                   map_info,
                                                                   relation))) {
           LOG_WARN("failed to check stmt containment", K(ret));
-        } else if (!is_similar_stmt(*stmt, map_info, relation)) {
-          //do nothing
-        } else if (helper.stmt_->is_scala_group_by() ^ stmt->is_scala_group_by()) {
-          //do nothing
+        } else if (OB_FAIL(check_stmt_can_extract_temp_table(helper.stmt_,
+                                                             stmt,
+                                                             map_info,
+                                                             relation,
+                                                             check_basic_similarity,
+                                                             is_valid))) {
+          LOG_WARN("failed to check is similar stmt");
+        } else if (!is_valid) {
+          // do nothing
         } else if (OB_FAIL(helper.similar_stmts_.push_back(stmt))) {
           LOG_WARN("failed to push back stmt", K(ret));
         } else if (OB_FAIL(helper.stmt_map_infos_.push_back(map_info))) {
@@ -640,26 +666,183 @@ int ObTransformTempTable::check_has_stmt(ObSelectStmt *left_stmt,
   return ret;
 }
 
-bool ObTransformTempTable::is_similar_stmt(ObSelectStmt& stmt,
-                                          const ObStmtMapInfo &map_info,
-                                          QueryRelation relation)
+int ObTransformTempTable::check_has_stmt(const ObIArray<ObSelectStmt *> &stmts,
+                                         ObSelectStmt *right_stmt,
+                                         hash::ObHashMap<uint64_t, ObDMLStmt *> &parent_map,
+                                         bool &has_stmt)
 {
-  bool bret = false;
-  if (stmt.is_set_stmt()) {
-    bret = QueryRelation::QUERY_EQUAL == relation && map_info.is_order_equal_;;
-  } else if (stmt.get_table_size() < 2) {
-    if (stmt.get_group_expr_size() > 0 ||
-        stmt.get_rollup_expr_size() > 0 ||
-        stmt.get_grouping_sets_items_size() > 0 ||
-        stmt.get_multi_rollup_items_size() > 0) {
-      bret = map_info.is_group_equal_;
-    } else if (stmt.get_aggr_item_size() > 0) {
-      bret = map_info.is_table_equal_ && map_info.is_from_equal_ && map_info.is_semi_info_equal_ && map_info.is_cond_equal_;
+  int ret = OB_SUCCESS;
+  has_stmt = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !has_stmt && i < stmts.count(); i ++) {
+    if (OB_FAIL(check_has_stmt(stmts.at(i), right_stmt, parent_map, has_stmt))) {
+      LOG_WARN("failed to check has stmt", K(ret));
+    } else if (has_stmt) {
+      //do nothing
+    } else if (OB_FAIL(check_has_stmt(right_stmt, stmts.at(i), parent_map, has_stmt))) {
+      LOG_WARN("failed to check has stmt", K(ret));
     }
-  } else {
-    bret = map_info.is_table_equal_ && map_info.is_from_equal_ && map_info.is_semi_info_equal_;
   }
-  return bret;
+  return ret;
+}
+
+int ObTransformTempTable::check_stmt_can_extract_temp_table(ObSelectStmt *first,
+                                                            ObSelectStmt *second,
+                                                            const ObStmtMapInfo &map_info,
+                                                            QueryRelation relation,
+                                                            bool check_basic_similarity,
+                                                            bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  if (OB_ISNULL(first) || OB_ISNULL(second)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  } else if (first->is_scala_group_by() ^ second->is_scala_group_by()) {
+    is_valid = false;
+  } else if (second->is_set_stmt()) {
+    is_valid = QueryRelation::QUERY_EQUAL == relation && map_info.is_order_equal_;
+  } else if (second->get_table_size() < 2) {
+    if (second->get_group_expr_size() > 0 ||
+        second->get_rollup_expr_size() > 0) {
+      is_valid = map_info.is_group_equal_ && map_info.is_cond_equal_;
+    } else if (second->get_aggr_item_size() > 0) {
+      is_valid = map_info.is_table_equal_ && map_info.is_from_equal_ && map_info.is_semi_info_equal_ && map_info.is_cond_equal_;
+    }
+  } else if (map_info.is_table_equal_ && map_info.is_from_equal_ && map_info.is_semi_info_equal_) {
+    is_valid = true;
+    if (map_info.is_cond_equal_ || check_basic_similarity) {
+      // do nothing
+    } else if (OB_FAIL(check_equal_join_condition_match(*first, *second, map_info, is_valid))) {
+      LOG_WARN("failed to check condition", K(ret));
+    } else if (!is_valid) {
+      // do nothing
+    } else if (OB_FAIL(check_index_condition_match(*first, *second, map_info, is_valid))) {
+      LOG_WARN("failed to check condition", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformTempTable::check_equal_join_condition_match(ObSelectStmt &first,
+                                                           ObSelectStmt &second,
+                                                           const ObStmtMapInfo &map_info,
+                                                           bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  // Check equal join condition
+  ObSqlBitSet<> map_join_conds;
+  is_match = true;
+  for (int64_t i = 0; OB_SUCC(ret) && is_match && i < first.get_condition_size(); ++i) {
+    ObRawExpr *expr = first.get_condition_expr(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret));
+    } else if (expr->has_flag(IS_JOIN_COND)) {
+      int64_t cond_pos_in_other = map_info.cond_map_.at(i);
+      if (OB_INVALID_ID == cond_pos_in_other) {
+        // Equal join conds of first stmt not in second stmt
+        is_match = false;
+      } else if (OB_FAIL(map_join_conds.add_member(cond_pos_in_other))) {
+        LOG_WARN("failed to add member", K(ret));
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_match && i < second.get_condition_size(); ++i) {
+    ObRawExpr *expr = second.get_condition_expr(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret));
+    } else if (expr->has_flag(IS_JOIN_COND) && !map_join_conds.has_member(i)) {
+      // Equal join conds of second stmt not in first stmt
+      is_match = false;
+    }
+  }
+  return ret;
+}
+
+int ObTransformTempTable::check_index_condition_match(ObSelectStmt &first,
+                                                      ObSelectStmt &second,
+                                                      const ObStmtMapInfo &map_info,
+                                                      bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = true;
+  ObSqlBitSet<> map_index_conds;
+  for (int64_t i = 0; OB_SUCC(ret) && is_match && i < first.get_condition_size(); ++i) {
+    ObRawExpr *cond = NULL;
+    bool index_match = false;
+    if (OB_ISNULL(cond = first.get_condition_expr(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("condition expr is null", K(ret));
+    } else if (cond->has_flag(IS_SIMPLE_COND) ||
+               cond->has_flag(IS_RANGE_COND) ||
+               T_OP_IS == cond->get_expr_type()) {
+      ObSEArray<ObRawExpr*, 2> column_exprs;
+      ObColumnRefRawExpr *col_expr = NULL;
+      if (OB_FAIL(ObRawExprUtils::extract_column_exprs(cond, column_exprs))) {
+        LOG_WARN("failed to extrace column exprs", K(ret));
+      } else if (1 != column_exprs.count()) {
+        //do nothing
+      } else if (OB_ISNULL(column_exprs.at(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (!column_exprs.at(0)->is_column_ref_expr()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expect column ref expr", K(*column_exprs.at(0)), K(ret));
+      } else if (FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr*>(column_exprs.at(0)))) {
+      } else if (OB_ISNULL(first.get_table_item_by_id(col_expr->get_table_id()))) {
+        //do nothing
+      } else if (OB_FAIL(ObTransformUtils::is_match_index(ctx_->sql_schema_guard_,
+                                                          &first,
+                                                          col_expr,
+                                                          index_match))) {
+        LOG_WARN("failed to check is match index", K(ret));
+      } else if (index_match) {
+        int64_t cond_pos_in_other = map_info.cond_map_.at(i);
+        if (OB_INVALID_ID == cond_pos_in_other) {
+          // Index conds of first stmt not in second stmt
+          is_match = false;
+        } else if (OB_FAIL(map_index_conds.add_member(cond_pos_in_other))) {
+          LOG_WARN("failed to add member", K(ret));
+        }
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_match && i < second.get_condition_size(); ++i) {
+    ObRawExpr *cond = NULL;
+    bool index_match = false;
+    if (OB_ISNULL(cond = second.get_condition_expr(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("condition expr is null", K(ret));
+    } else if (cond->has_flag(IS_SIMPLE_COND) ||
+               cond->has_flag(IS_RANGE_COND) ||
+               T_OP_IS == cond->get_expr_type()) {
+      ObSEArray<ObRawExpr*, 2> column_exprs;
+      ObColumnRefRawExpr *col_expr = NULL;
+      if (OB_FAIL(ObRawExprUtils::extract_column_exprs(cond, column_exprs))) {
+        LOG_WARN("failed to extrace column exprs", K(ret));
+      } else if (1 != column_exprs.count()) {
+        //do nothing
+      } else if (OB_ISNULL(column_exprs.at(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (!column_exprs.at(0)->is_column_ref_expr()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expect column ref expr", K(*column_exprs.at(0)), K(ret));
+      } else if (FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr*>(column_exprs.at(0)))) {
+      } else if (OB_ISNULL(second.get_table_item_by_id(col_expr->get_table_id()))) {
+        //do nothing
+      } else if (OB_FAIL(ObTransformUtils::is_match_index(ctx_->sql_schema_guard_,
+                                                          &second,
+                                                          col_expr,
+                                                          index_match))) {
+        LOG_WARN("failed to check is match index", K(ret));
+      } else if (index_match && !map_index_conds.has_member(i)) {
+        is_match = false;
+      }
+    }
+  }
+  return ret;
 }
 
 /**
@@ -778,7 +961,7 @@ int ObTransformTempTable::remove_simple_stmts(ObIArray<ObSelectStmt*> &stmts)
       //do nothing
     } else if (ObOptimizerUtil::find_item(ctx_->temp_table_ignore_stmts_, subquery)) {
       //do nothing
-    } else if (OB_FAIL(check_stmt_can_materialize(subquery, is_valid))) {
+    } else if (OB_FAIL(check_stmt_can_materialize(subquery, false, is_valid))) {
       LOG_WARN("failed to check stmt is valid", K(ret));
     } else if (!is_valid) {
       //do nothing
