@@ -73,12 +73,14 @@ public:
   static uint32_t capacity_offset_bits() { return offsetof(Ob2DArray, capacity_) * 8; }
 
   NEED_SERIALIZE_AND_DESERIALIZE;
-private:
-  using MyOp = ObClassOp<T, std::is_trivial<T>::value>;
-  // function members
+
+protected:
   template <typename U>
   int inner_assign(const U &other);
 
+private:
+  using MyOp = ObClassOp<T, std::is_trivial<T>::value>;
+  // function members
   void construct_items(T *ptr, int64_t cnt);
   int set_default(const int64_t new_size);
   T *get_obj_pos(int64_t i) const;
