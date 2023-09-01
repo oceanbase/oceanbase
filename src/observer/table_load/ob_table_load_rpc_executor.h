@@ -107,6 +107,8 @@ public:
       SERVER_LOG(WARN, "fail to check args", K(ret));
     } else if (OB_FAIL(process())) {
       SERVER_LOG(WARN, "fail to process", K(ret));
+    } else if (OB_FAIL(set_result_header())) {
+      SERVER_LOG(WARN, "fail to set result header", K(ret));
     } else if (OB_FAIL(serialize())) {
       SERVER_LOG(WARN, "fail to do serialize", K(ret));
     }
@@ -118,6 +120,7 @@ protected:
   virtual int deserialize() = 0;
   virtual int check_args() = 0;
   virtual int process() = 0;
+  virtual int set_result_header() = 0;
   // serialize res to result
   virtual int serialize() = 0;
 

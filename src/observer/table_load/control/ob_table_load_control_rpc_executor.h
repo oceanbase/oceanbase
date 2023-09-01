@@ -40,11 +40,12 @@ public:
 
 protected:
   int deserialize() override { return this->request_.get_arg(this->arg_); }
-  int serialize() override
+  int set_result_header() override
   {
     this->result_.command_type_ = pcode;
-    return this->result_.set_res(this->res_, allocator_);
+    return OB_SUCCESS;
   }
+  int serialize() override { return this->result_.set_res(this->res_, allocator_); }
 
 protected:
   common::ObIAllocator &allocator_;

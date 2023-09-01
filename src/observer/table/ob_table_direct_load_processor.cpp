@@ -31,7 +31,7 @@ ObTableDirectLoadP::ObTableDirectLoadP(const ObGlobalContext &gctx)
 int ObTableDirectLoadP::check_arg()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(arg_.operation_type_ == ObTableDirectLoadOperationType::MAX_TYPE ||
+  if (OB_UNLIKELY(arg_.header_.operation_type_ == ObTableDirectLoadOperationType::MAX_TYPE ||
                   arg_.arg_content_.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(arg_));
@@ -60,7 +60,7 @@ ObTableAPITransCb *ObTableDirectLoadP::new_callback(rpc::ObRequest *req)
 uint64_t ObTableDirectLoadP::get_request_checksum()
 {
   uint64_t checksum = 0;
-  checksum = ob_crc64(checksum, &result_.operation_type_, sizeof(result_.operation_type_));
+  checksum = ob_crc64(checksum, &result_.header_, sizeof(result_.header_));
   checksum = ob_crc64(checksum, result_.res_content_.ptr(), result_.res_content_.length());
   return checksum;
 }
