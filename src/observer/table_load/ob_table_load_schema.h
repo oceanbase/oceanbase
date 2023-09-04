@@ -46,6 +46,7 @@ public:
                K_(collation_type), K_(column_descs), K_(is_inited));
 private:
   int init_table_schema(const share::schema::ObTableSchema *table_schema);
+  int prepare_col_desc(const ObTableSchema *table_schema, common::ObIArray<share::schema::ObColDesc> &col_descs);
 public:
   common::ObArenaAllocator allocator_;
   common::ObString table_name_;
