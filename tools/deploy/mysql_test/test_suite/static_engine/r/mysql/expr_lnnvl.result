@@ -35,3 +35,26 @@ select lnnvl('abc') from dual;
 |            1 |
 +--------------+
 
+drop view if exists v1;
+create view v1 as select lnnvl(1) from dual;
+show create view v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE VIEW `v1` AS select lnnvl(1) AS `lnnvl(1)`	utf8mb4	utf8mb4_general_ci
+explain select * from v1;
+Query Plan
+==========================================
+|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------
+|0 |EXPRESSION|    |1       |1           |
+==========================================
+Outputs & filters:
+-------------------------------------
+  0 - output([lnnvl(cast(1, TINYINT(-1, 0)))]), filter(nil)
+      values({lnnvl(cast(1, TINYINT(-1, 0)))})
+select * from v1;
++----------+
+| lnnvl(1) |
++----------+
+|        0 |
++----------+
+drop view v1;
