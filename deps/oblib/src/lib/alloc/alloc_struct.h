@@ -22,6 +22,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/alloc/alloc_assist.h"
 #include "lib/alloc/abit_set.h"
+#include "lib/allocator/ob_mod_define.h"
 
 #ifndef NDEBUG
 #define MEMCHK_LEVEL 1
@@ -64,6 +65,7 @@ enum ObAllocPrio
   OB_NORMAL_ALLOC,
   OB_HIGH_ALLOC
 };
+
 
 struct ObLabel
 {
@@ -123,6 +125,7 @@ struct ObMemAttr
   uint64_t tenant_id_;
   ObLabel label_;
   uint64_t ctx_id_;
+  uint64_t sub_ctx_id_;
   ObAllocPrio prio_;
 
   explicit ObMemAttr(
@@ -133,6 +136,7 @@ struct ObMemAttr
       : tenant_id_(tenant_id),
         label_(label),
         ctx_id_(ctx_id),
+        sub_ctx_id_(ObSubCtxIds::MAX_SUB_CTX_ID),
         prio_(prio) {}
   int64_t to_string(char* buf, const int64_t buf_len) const;
   bool use_500() const { return use_500_; }
