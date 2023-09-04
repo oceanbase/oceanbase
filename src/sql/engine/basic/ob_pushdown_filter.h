@@ -427,9 +427,6 @@ struct PushdownFilterInfo
     bool ret = is_inited_;
     if (is_pd_filter_ && nullptr != filter_) {
       ret = ret && (nullptr != col_buf_) && (nullptr != datum_buf_);
-      if (filter_->is_filter_white_node()) {
-        ret = ret && (nullptr != white_batch_datums_) && (nullptr != white_batch_datums_buf_);
-      }
     }
     if (0 < batch_size_) {
       ret = ret && (nullptr != cell_data_ptrs_) && (nullptr != row_ids_);
@@ -456,9 +453,6 @@ struct PushdownFilterInfo
   const char **cell_data_ptrs_;
   int64_t *row_ids_;
   common::ObIAllocator *allocator_;
-  // for white filter IN batch_decode
-  common::ObDatum *white_batch_datums_;
-  void *white_batch_datums_buf_;
 };
 
 class ObBlackFilterExecutor : public ObPushdownFilterExecutor
@@ -511,7 +505,8 @@ public:
                         ObPushdownWhiteFilterNode &filter,
                         ObPushdownOperator &op)
       : ObPushdownFilterExecutor(alloc, op, PushdownExecutorType::WHITE_FILTER_EXECUTOR),
-      null_param_contained_(false), params_(alloc), filter_(filter) {}
+        null_param_contained_(false), params_(alloc), filter_(filter),
+        batch_decode_datums_(nullptr) {}
   ~ObWhiteFilterExecutor()
   {
     params_.reset();
@@ -534,6 +529,8 @@ public:
   OB_INLINE const ObObj &get_max_param() const { return params_.at(params_.count() - 1); };
   OB_INLINE ObWhiteFilterOperatorType get_op_type() const
   { return filter_.get_op_type(); }
+  int get_datums_from_column(common::ObDatum *&datums);
+  OB_INLINE common::ObDatum *get_batch_decode_datums() const { return batch_decode_datums_; };
   INHERIT_TO_STRING_KV("ObPushdownWhiteFilterExecutor", ObPushdownFilterExecutor,
                        K_(null_param_contained), K_(params), K(param_set_.created()),
                        K_(filter));
@@ -545,6 +542,7 @@ private:
   ParamArray params_;
   common::hash::ObHashSet<common::ObObj, common::hash::NoPthreadDefendMode, ObWhiteFilterHashFunc> param_set_;
   ObPushdownWhiteFilterNode &filter_;
+  ObDatum* batch_decode_datums_;
 };
 
 class ObAndFilterExecutor : public ObPushdownFilterExecutor

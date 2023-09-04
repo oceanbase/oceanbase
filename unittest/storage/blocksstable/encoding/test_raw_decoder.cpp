@@ -344,12 +344,13 @@ int TestRawDecoder::test_filter_pushdown(
     common::ObBitmap &result_bitmap,
     common::ObFixedArray<ObObj, ObIAllocator> &objs)
 {
+  static const int TEST_BATCH_SIZE = 12;
   int ret = OB_SUCCESS;
   sql::PushdownFilterInfo pd_filter_info;
   sql::ObExecContext exec_ctx(allocator_);
   sql::ObEvalCtx eval_ctx(exec_ctx);
   sql::ObPushdownExprSpec expr_spec(allocator_);
-  expr_spec.max_batch_size_ = 12;
+  expr_spec.max_batch_size_ = TEST_BATCH_SIZE;
   sql::ObPushdownOperator op(eval_ctx, expr_spec);
   sql::ObWhiteFilterExecutor filter(allocator_, filter_node, op);
   filter.col_offsets_.init(COLUMN_CNT);
@@ -369,9 +370,25 @@ int TestRawDecoder::test_filter_pushdown(
   pd_filter_info.init(iter_param ,allocator_, is_pad_char_to_full_length(SMO_MYSQL40));
   ObObj *col_buf = new (obj_buf) ObObj [COLUMN_CNT]();
   // procedure like ObWhiteFilterExecutor::init_evaluated_datums
+  void *buf = nullptr;
+  // 1. prepare filter.params_
   filter.params_ = objs;
   if (sql::WHITE_OP_IN == filter.get_op_type()) {
+    // 2.1 init obj set
     filter.init_obj_set();
+    // 2.2 prepare filter.batch_decode_datums_
+    if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObDatum) * TEST_BATCH_SIZE))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc filter.batch_decode_datums_", K(ret), K(TEST_BATCH_SIZE));
+    } else if (FALSE_IT(filter.batch_decode_datums_ = reinterpret_cast<ObDatum *>(buf))) {
+    } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(int8_t) * OBJ_DATUM_MAX_RES_SIZE * TEST_BATCH_SIZE))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc buffer for filter.batch_decode_datums_", K(ret), K(TEST_BATCH_SIZE));
+    } else {
+      for (int64_t i = 0; i < TEST_BATCH_SIZE; ++i) {
+        filter.batch_decode_datums_[i].ptr_ = reinterpret_cast<char *>(buf) + i * OBJ_DATUM_MAX_RES_SIZE;
+      }
+    }
   }
   pd_filter_info.col_buf_ = col_buf;
   pd_filter_info.col_capacity_ = full_column_cnt_;
@@ -380,6 +397,13 @@ int TestRawDecoder::test_filter_pushdown(
   pd_filter_info.filter_->n_cols_ = 1;
 
   ret = decoder.filter_pushdown_filter(nullptr, filter, pd_filter_info, result_bitmap);
+  
+  if (nullptr != buf) {
+    allocator_.free(buf);
+  }
+  if (nullptr != filter.batch_decode_datums_) {
+    allocator_.free(filter.batch_decode_datums_);
+  }
   return ret;
 }
 

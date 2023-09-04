@@ -964,10 +964,13 @@ int ObOrFilterExecutor::init_evaluated_datums()
 int ObWhiteFilterExecutor::init_evaluated_datums()
 {
   int ret = OB_SUCCESS;
+  ObWhiteFilterOperatorType op_type = filter_.get_op_type();
   if (OB_FAIL(eval_right_val_to_objs())) {
     LOG_WARN("Failed to eval right values to obj array", K(ret), K(filter_.get_op_type()));
-  } else if (WHITE_OP_IN == filter_.get_op_type() && OB_FAIL(init_obj_set())) {
+  } else if (WHITE_OP_IN == op_type && OB_FAIL(init_obj_set())) {
     LOG_WARN("Failed to init Object set in filter node", K(ret));
+  } else if (WHITE_OP_IN == op_type && OB_FAIL(get_datums_from_column(batch_decode_datums_))) {
+    LOG_WARN("Failed to init datums for batch_decode", K(ret));
   } else {
     LOG_DEBUG("[PUSHDOWN], white pushdown filter inited params", K(params_));
   }
@@ -1067,6 +1070,27 @@ int ObWhiteFilterExecutor::exist_in_obj_array(const ObObj &obj, bool &is_exist) 
     is_exist = false;
   } else {
     is_exist = std::binary_search(params_.begin(), params_.end(), obj, ObWhiteFilterParamsCmpFunc());
+  }
+  return ret;
+}
+
+int ObWhiteFilterExecutor::get_datums_from_column(common::ObDatum *&datums)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx &eval_ctx = op_.get_eval_ctx();
+  if (OB_ISNULL(filter_.expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null expr", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < filter_.expr_->arg_cnt_; i++) {
+      if (OB_ISNULL(filter_.expr_->args_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null expr arguments", K(ret), K(i));
+      } else if (filter_.expr_->args_[i]->type_ == T_REF_COLUMN) {
+        datums = filter_.expr_->args_[i]->locate_batch_datums(eval_ctx);
+        break;
+      }
+    }
   }
   return ret;
 }
@@ -1672,14 +1696,6 @@ void PushdownFilterInfo::reset()
       allocator_->free(row_ids_);
       row_ids_ = nullptr;
     }
-    if (nullptr != white_batch_datums_) {
-      allocator_->free(white_batch_datums_);
-      white_batch_datums_ = nullptr;
-    }
-    if (nullptr != white_batch_datums_buf_) {
-      allocator_->free(white_batch_datums_buf_);
-      white_batch_datums_buf_ = nullptr;
-    }
     allocator_ = nullptr;
   }
   filter_ = nullptr;
@@ -1743,24 +1759,6 @@ int PushdownFilterInfo::init(const storage::ObTableIterParam &iter_param,
       LOG_WARN("fail to alloc row_ids", K(ret), K(batch_size_));
     } else {
       row_ids_ = reinterpret_cast<int64_t *>(buf);
-    }
-  }
-
-  if (OB_ISNULL(filter_)) {
-    // nothing to do without filter
-  } else if (OB_SUCC(ret) && (iter_param.vectorized_enabled_ && filter_->is_filter_white_node())) {
-    if (OB_ISNULL(buf = alloc.alloc(sizeof(ObDatum) * batch_size_))) {
-      ret = common::OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc white_batch_datums_", K(ret), K(batch_size_));
-    } else if (FALSE_IT(white_batch_datums_ = reinterpret_cast<ObDatum *>(buf))) {
-    } else if (OB_ISNULL(buf = alloc.alloc(sizeof(int8_t) * OBJ_DATUM_MAX_RES_SIZE * batch_size_))) {
-      ret = common::OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc white_batch_datums_", K(ret), K(batch_size_));
-    } else if (FALSE_IT(white_batch_datums_buf_ = buf)) {
-    } else {
-      for (int64_t i = 0; i < batch_size_; ++i) {
-        white_batch_datums_[i].ptr_ = reinterpret_cast<char *>(white_batch_datums_buf_) + i * OBJ_DATUM_MAX_RES_SIZE;
-      }
     }
   }
 
