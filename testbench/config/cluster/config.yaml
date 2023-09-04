@@ -3,10 +3,10 @@ instance_observer:
     devname: lo
     cluster_id: 1
     # please set memory limit to a suitable value which is matching resource. 
-    memory_limit: 4G # The maximum running memory for an observer
+    memory_limit: 6G # The maximum running memory for an observer
     system_memory: 1G # The reserved system memory. system_memory is reserved for general tenants. The default value is 30G.
-    datafile_size: 18G # Size of the data file. 
-    log_disk_size: 18G # The size of disk space used by the clog files.
+    datafile_size: 16G # Size of the data file. 
+    log_disk_size: 16G # The size of disk space used by the clog files.
     cpu_count: 2
     production_mode: false
     syslog_level: INFO # System log level. The default value is INFO.

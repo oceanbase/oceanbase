@@ -1,0 +1,9 @@
+function(ob_mittest_testbench case)
+  ob_unittest(${ARGV})
+  target_link_libraries(${case} PRIVATE oceanbase ob_testbench_workload)
+  set_tests_properties(${case} PROPERTIES LABELS "testbench")
+endfunction()
+
+ob_mittest_testbench(test_testbench_systable_helper test_testbench_systable_helper.cpp)
+# ob_mittest_testbench(test_mysql_connection_pool test_mysql_connection_pool.cpp)
+# ob_mittest_testbench(test_async_operation test_async_operation.cpp)

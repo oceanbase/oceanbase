@@ -100,8 +100,8 @@ ObMySQLConnectionPool::ObMySQLConnectionPool()
     server_pool_(),
     check_read_consistency_(true)
 {
-  OB_LOGGER.set_log_level(OB_LOG_LEVEL_DEBUG);
-  OB_LOGGER.set_file_name("log/scheduler.log", true, false);
+  // OB_LOGGER.set_log_level(OB_LOG_LEVEL_DEBUG);
+  // OB_LOGGER.set_file_name("log/scheduler.log", true, false);
   int ret = OB_SUCCESS;
   set_db_param(DEFAULT_DB_USER, DEFAULT_DB_PASS, DEFAULT_DB_NAME);
   init_sql_[0] = '\0';
