@@ -56,7 +56,6 @@ English | [中文版](README_CN.md)
     
     OceanBase Database adopts Paxos Consensus algorithm to achieve Zero RPO and less than 8 seconds of RTO. Supports intra-city/remote disaster recovery, enabling multi-activity in multiple locations and zero data loss.
 
-
 - **MySQL Compatible**
      
      OceanBase Database is highly compatible with MySQL, which ensures that zero or few modification is needed for migration.
