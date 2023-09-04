@@ -50,7 +50,7 @@ public:
   const ObTableApiExecutor* get_child() const { return child_; }
   OB_INLINE const ObTableCtx& get_table_ctx() const { return tb_ctx_; }
   OB_INLINE sql::ObEvalCtx &get_eval_ctx() { return eval_ctx_; }
-  void clear_evaluated_flag();
+  virtual void clear_evaluated_flag();
 
 protected:
   ObTableCtx &tb_ctx_;

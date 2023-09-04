@@ -1894,6 +1894,8 @@ public:
        TABLE_DOP,
        INCREMENT_MODE,
        ENABLE_EXTENDED_ROWID,
+       TTL_DEFINITION,
+       KV_ATTRIBUTES,
        MAX_OPTION = 1000
   };
   enum AlterPartitionType
@@ -9964,6 +9966,50 @@ public:
   uint64_t load_count_;
 };
 
+struct ObTTLRequestArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum TTLRequestType {
+    TTL_TRIGGER_TYPE = 0,
+    TTL_SUSPEND_TYPE = 1,
+    TTL_RESUME_TYPE = 2,
+    TTL_CANCEL_TYPE = 3,
+    TTL_MOVE_TYPE = 4,
+    TTL_INVALID_TYPE = 5
+  };
+
+  ObTTLRequestArg()
+    : cmd_code_(-1), trigger_type_(-1), task_id_(OB_INVALID_ID), tenant_id_(OB_INVALID_ID)
+  {}
+  ~ObTTLRequestArg() = default;
+  bool is_valid() const {
+    // return cmd_code_ != -1 && OB_INVALID_ID != task_id_ && trigger_type_ != -1 && tenant_id_ != OB_INVALID_ID;
+    return cmd_code_ != -1 && trigger_type_ != -1 && tenant_id_ != OB_INVALID_ID;
+  }
+  int assign(const ObTTLRequestArg &other);
+  TO_STRING_KV(K_(cmd_code), K_(trigger_type), K_(task_id), K_(tenant_id));
+public:
+  int32_t cmd_code_; // enum TTLCmdType
+  int32_t trigger_type_; // system or user
+  int64_t task_id_;  // task id
+  uint64_t tenant_id_; // tenand_id array
+};
+
+struct ObTTLResponseArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObTTLResponseArg();
+  int assign(const ObTTLResponseArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(task_id), K_(server_addr), K_(task_status));
+public:
+  uint64_t tenant_id_;
+  int64_t task_id_;
+  ObAddr server_addr_;
+  uint8_t task_status_;
+  int err_code_;
+};
 struct ObAdminUnlockMemberListOpArg final
 {
   OB_UNIS_VERSION(1);

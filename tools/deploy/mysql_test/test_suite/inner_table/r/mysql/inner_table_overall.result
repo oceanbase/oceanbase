@@ -213,6 +213,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 407	__all_mock_fk_parent_table_column	0	201001	1
 408	__all_mock_fk_parent_table_column_history	0	201001	1
 409	__all_log_restore_source	0	201001	1
+410	__all_kv_ttl_task	0	201001	1
+411	__all_kv_ttl_task_history	0	201001	1
 412	__all_service_epoch	0	201001	1
 413	__all_spatial_reference_systems	0	201001	1
 416	__all_column_checksum_error_info	0	201001	1
@@ -576,6 +578,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12323	__all_virtual_mock_fk_parent_table_column_history	2	201001	1
 12324	__all_virtual_log_restore_source	2	201001	1
 12325	__all_virtual_query_response_time	2	201001	1
+12326	__all_virtual_kv_ttl_task	2	201001	1
+12327	__all_virtual_kv_ttl_task_history	2	201001	1
 12330	__all_virtual_column_checksum_error_info	2	201001	1
 12331	__all_virtual_kvcache_handle_leak_info	2	201001	1
 12334	__all_virtual_tablet_compaction_info	2	201001	1
@@ -876,11 +880,15 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21297	DBA_OB_DEADLOCK_EVENT_HISTORY	1	201001	1
 21298	CDB_OB_DEADLOCK_EVENT_HISTORY	1	201001	1
 21299	CDB_OB_SYS_VARIABLES	1	201001	1
+21300	DBA_OB_KV_TTL_TASKS	1	201001	1
+21301	DBA_OB_KV_TTL_TASK_HISTORY	1	201001	1
 21302	GV$OB_LOG_STAT	1	201001	1
 21303	V$OB_LOG_STAT	1	201001	1
 21304	ST_GEOMETRY_COLUMNS	1	201002	1
 21305	ST_SPATIAL_REFERENCE_SYSTEMS	1	201002	1
 21306	QUERY_RESPONSE_TIME	1	201002	1
+21307	CDB_OB_KV_TTL_TASKS	1	201001	1
+21308	CDB_OB_KV_TTL_TASK_HISTORY	1	201001	1
 21311	DBA_RSRC_PLANS	1	201001	1
 21312	DBA_RSRC_PLAN_DIRECTIVES	1	201001	1
 21313	DBA_RSRC_GROUP_MAPPINGS	1	201001	1

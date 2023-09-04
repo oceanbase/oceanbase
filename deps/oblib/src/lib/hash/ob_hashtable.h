@@ -1311,6 +1311,19 @@ public:
     return read_atomic(key, callback, preproc_);
   }
 
+  // 该原子操作在bucket上添加的写锁,
+  // 如果节点存在，调用 callback 进行修改，如果节点不存在，插入该节点
+  //
+  // 返回值：
+  //   OB_SUCCESS 表示成功
+  //   其它 表示出错
+  template<class _callback>
+  int set_or_update(const _key_type &key, const _value_type &value,
+                    _callback &callback)
+  {
+    return set_or_update(key, value, callback, preproc_);
+  }
+
   int erase_refactored(const _key_type &key, _value_type *value = NULL)
   {
     int ret = OB_SUCCESS;
@@ -1597,6 +1610,40 @@ public:
     return ret;
   }
 
+  // 不存在就插入，存在就调用 callback 修改
+  // 该原子操作在bucket上添加的写锁
+  template<class _callback, class _preproc>
+  int set_or_update(const _key_type &key, const _value_type &value,
+                    _callback &callback, _preproc &preproc)
+  {
+    int ret = OB_SUCCESS;
+    uint64_t hash_value;
+    if (OB_UNLIKELY(!inited(buckets_)) || OB_UNLIKELY(NULL == allocer_)) {
+      HASH_WRITE_LOG(HASH_WARNING, "hashtable not init");
+      ret = OB_NOT_INIT;
+    } else if (OB_FAIL(hashfunc_(key, hash_value))) {
+      HASH_WRITE_LOG(HASH_WARNING, "hash key failed, ret = %d", ret);
+    } else {
+      int64_t bucket_pos = hash_value % bucket_num_;
+      hashbucket &bucket = buckets_[bucket_pos];
+      bucket_lock_cond blc(bucket);
+      writelocker locker(blc.lock());
+      hashnode *node = bucket.node;
+      while (NULL != node) {
+        if (equal_(getkey_(node->data), key)) {
+          callback(preproc(node->data));
+          break;
+        } else {
+          node = node->next;
+        }
+      }
+      if (NULL == node) {
+        ret = internal_set(bucket, value, false);
+      }
+    }
+
+    return ret;
+  }
 private:
   _bucket_allocer default_bucket_allocer_;
   _allocer *allocer_;

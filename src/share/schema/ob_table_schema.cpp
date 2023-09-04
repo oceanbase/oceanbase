@@ -1650,6 +1650,15 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
     }
   }
 
+
+  if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.ttl_definition_, ttl_definition_))) {
+    LOG_WARN("deep copy ttl definition failed", K(ret));
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.kv_attributes_, kv_attributes_))) {
+    LOG_WARN("deep copy kv attributes failed", K(ret));
+  }
+
   if (OB_FAIL(ret)) {
     LOG_WARN("failed to assign table schema", K(ret));
   }
@@ -3113,6 +3122,8 @@ int64_t ObTableSchema::get_convert_size() const
   convert_size += external_file_location_.length() + 1;
   convert_size += external_file_location_access_info_.length() + 1;
   convert_size += external_file_pattern_.length() + 1;
+  convert_size += ttl_definition_.length() + 1;
+  convert_size += kv_attributes_.length() + 1;
   return convert_size;
 }
 
@@ -3197,6 +3208,8 @@ void ObTableSchema::reset()
   external_file_location_.reset();
   external_file_location_access_info_.reset();
   external_file_pattern_.reset();
+  ttl_definition_.reset();
+  kv_attributes_.reset();
   ObSimpleTableSchemaV2::reset();
 }
 
@@ -6192,6 +6205,14 @@ OB_DEF_SERIALIZE(ObTableSchema)
                 external_file_pattern_);
   }
   }();
+
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(ttl_definition_);
+  }
+
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(kv_attributes_);
+  }
   return ret;
 }
 
@@ -6303,6 +6324,8 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   ObString create_host;
   ObString table_name;
   ObString expire_info;
+  ObString ttl_definition;
+  ObString kv_attributes;
 
   LST_DO_CODE(OB_UNIS_DECODE,
               tenant_id_,
@@ -6541,6 +6564,20 @@ OB_DEF_DESERIALIZE(ObTableSchema)
     }
   }
   }();
+
+  if (OB_SUCC(ret)) {
+    OB_UNIS_DECODE(ttl_definition);
+    if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(ttl_definition, ttl_definition_))) {
+      LOG_WARN("deep_copy_str failed", K(ret), K(ttl_definition));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    OB_UNIS_DECODE(kv_attributes);
+    if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(kv_attributes, kv_attributes_))) {
+      LOG_WARN("deep_copy_str failed", K(ret), K(kv_attributes));
+    }
+  }
   return ret;
 }
 
@@ -6678,6 +6715,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(external_file_location_access_info_);
   OB_UNIS_ADD_LEN(external_file_format_);
   OB_UNIS_ADD_LEN(external_file_pattern_);
+  OB_UNIS_ADD_LEN(ttl_definition_);
+  OB_UNIS_ADD_LEN(kv_attributes_);
   return len;
 }
 

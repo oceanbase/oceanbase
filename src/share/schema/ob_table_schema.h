@@ -1029,6 +1029,8 @@ public:
   // Copy all constraint information in src_schema
   int assign_constraint(const ObTableSchema &other);
   void clear_constraint();
+  int set_ttl_definition(const common::ObString &ttl_definition) { return deep_copy_str(ttl_definition, ttl_definition_); }
+  int set_kv_attributes(const common::ObString &kv_attributes) { return deep_copy_str(kv_attributes, kv_attributes_); }
 //get methods
   bool is_valid() const;
 
@@ -1115,6 +1117,8 @@ public:
   inline const common::ObString &get_expire_info() const { return expire_info_; }
   inline ObViewSchema &get_view_schema() { return view_schema_; }
   inline const ObViewSchema &get_view_schema() const { return view_schema_; }
+  inline const common::ObString &get_ttl_definition() const { return ttl_definition_; }
+  inline const common::ObString &get_kv_attributes() const { return kv_attributes_; }
   bool has_check_constraint() const;
   inline bool has_constraint() const { return cst_cnt_ > 0; }
   bool is_column_in_check_constraint(const uint64_t col_id) const;
@@ -1631,6 +1635,12 @@ protected:
   common::ObString external_file_location_;
   common::ObString external_file_location_access_info_;
   common::ObString external_file_pattern_;
+
+  // table ttl
+  common::ObString ttl_definition_;
+
+  // kv attributes
+  common::ObString kv_attributes_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema

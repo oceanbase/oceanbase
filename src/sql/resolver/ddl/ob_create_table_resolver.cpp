@@ -2404,7 +2404,9 @@ int ObCreateTableResolver::set_table_option_to_schema(ObTableSchema &table_schem
       if (OB_FAIL(table_schema.set_expire_info(expire_info_)) ||
           OB_FAIL(table_schema.set_compress_func_name(compress_method_)) ||
           OB_FAIL(table_schema.set_comment(comment_)) ||
-          OB_FAIL(table_schema.set_tablegroup_name(tablegroup_name_))) {
+          OB_FAIL(table_schema.set_tablegroup_name(tablegroup_name_)) ||
+          OB_FAIL(table_schema.set_ttl_definition(ttl_definition_)) ||
+          OB_FAIL(table_schema.set_kv_attributes(kv_attributes_))) {
         SQL_RESV_LOG(WARN, "set table_options failed", K(ret));
       }
     }

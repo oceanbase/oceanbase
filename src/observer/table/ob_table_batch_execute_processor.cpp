@@ -306,20 +306,27 @@ int ObTableBatchExecuteP::htable_put()
   const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
   ObTableApiCacheGuard cache_guard;
+  ObHTableLockHandle *lock_handle = nullptr;
+  uint64_t table_id = OB_INVALID_ID;
 
   if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
   } else if (OB_FAIL(init_single_op_tb_ctx(tb_ctx_, batch_operation.at(0)))) {
     LOG_WARN("fail to init table ctx", K(ret));
+  } else if (FALSE_IT(table_id = tb_ctx_.get_table_id())) {
   } else if (OB_FAIL(start_trans(false, /* is_readonly */
                                  sql::stmt::T_INSERT,
                                  arg_.consistency_level_,
-                                 tb_ctx_.get_table_id(),
+                                 table_id,
                                  tb_ctx_.get_ls_id(),
                                  get_timeout_ts()))) {
     LOG_WARN("failed to start readonly transaction", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
+  } else if (OB_FAIL(HTABLE_LOCK_MGR->acquire_handle(get_trans_desc()->tid(), lock_handle))) {
+    LOG_WARN("fail to get htable lock handle", K(ret));
+  } else if (OB_FAIL(ObHTableUtils::lock_htable_rows(table_id, batch_operation, *lock_handle, ObHTableLockMode::SHARED))) {
+    LOG_WARN("fail to lock htable rows", K(ret), K(table_id), K(batch_operation));
   } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_INSERT_UP>(tb_ctx_,
                                                                                     cache_guard,
                                                                                     spec))) {
@@ -350,8 +357,9 @@ int ObTableBatchExecuteP::htable_put()
   }
 
   int tmp_ret = ret;
-  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
-    LOG_WARN("fail to end trans");
+  const bool use_sync = false;
+  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts(), use_sync, lock_handle))) {
+    LOG_WARN("failed to end trans");
   }
 
   ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
@@ -489,20 +497,27 @@ int ObTableBatchExecuteP::htable_delete()
   tb_ctx_.set_batch_operation(&batch_operation);
   observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
   ObTableApiCacheGuard cache_guard;
+  ObHTableLockHandle *lock_handle = nullptr;
+  uint64_t table_id = OB_INVALID_ID;
 
   if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
   } else if (OB_FAIL(init_single_op_tb_ctx(tb_ctx_, batch_operation.at(0)))) {
     LOG_WARN("fail to init table ctx", K(ret));
+  } else if (FALSE_IT(table_id = tb_ctx_.get_table_id())) {
   } else if (OB_FAIL(start_trans(false, /* is_readonly */
                                  sql::stmt::T_INSERT,
                                  arg_.consistency_level_,
-                                 tb_ctx_.get_table_id(),
+                                 table_id,
                                  tb_ctx_.get_ls_id(),
                                  get_timeout_ts()))) {
     LOG_WARN("failed to start readonly transaction", K(ret));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
+  } else if (OB_FAIL(HTABLE_LOCK_MGR->acquire_handle(get_trans_desc()->tid(), lock_handle))) {
+    LOG_WARN("fail to get htable lock handle", K(ret));
+  } else if (OB_FAIL(ObHTableUtils::lock_htable_rows(table_id, batch_operation, *lock_handle, ObHTableLockMode::SHARED))) {
+    LOG_WARN("fail to lock htable rows", K(ret), K(table_id), K(batch_operation));
   } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_DELETE>(tb_ctx_,
                                                                                  cache_guard,
                                                                                  spec))) {
@@ -541,10 +556,10 @@ int ObTableBatchExecuteP::htable_delete()
       LOG_WARN("failed to add result", K(ret));
     }
   }
-
+  const bool use_sync = false;
   int tmp_ret = ret;
-  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
-    LOG_WARN("fail to end trans");
+  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts(), use_sync, lock_handle))) {
+    LOG_WARN("failed to end trans");
   }
   ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
   return ret;
@@ -880,9 +895,11 @@ int ObTableBatchExecuteP::htable_mutate_row()
 {
   int ret = OB_SUCCESS;
   const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
+  const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
   uint64_t table_id = OB_INVALID_ID;
   ObSEArray<ObTabletID, 1> tablet_ids;
   ObLSID ls_id;
+  ObHTableLockHandle *lock_handle = nullptr;
 
   if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
@@ -902,8 +919,11 @@ int ObTableBatchExecuteP::htable_mutate_row()
                                  ls_id,
                                  get_timeout_ts()))) {
     LOG_WARN("fail to start transaction", K(ret));
+  } else if (OB_FAIL(HTABLE_LOCK_MGR->acquire_handle(get_trans_desc()->tid(), lock_handle))) {
+    LOG_WARN("fail to get htable lock handle", K(ret));
+  } else if (OB_FAIL(ObHTableUtils::lock_htable_rows(table_id, batch_operation, *lock_handle, ObHTableLockMode::SHARED))) {
+    LOG_WARN("fail to lock htable rows", K(ret), K(table_id), K(batch_operation));
   } else {
-    const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
     int64_t N = batch_operation.count();
     for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
     {
@@ -939,7 +959,8 @@ int ObTableBatchExecuteP::htable_mutate_row()
   }
 
   int tmp_ret = ret;
-  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
+  const bool use_sync = false;
+  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts(), use_sync, lock_handle))) {
     LOG_WARN("failed to end trans");
   }
   ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;

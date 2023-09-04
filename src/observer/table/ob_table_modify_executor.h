@@ -96,9 +96,34 @@ protected:
                         ObTableInsRtDef &ins_rtdef);
   int delete_row_to_das(const ObTableDelCtDef &del_ctdef,
                         ObTableDelRtDef &del_rtdef);
-  // for replace & insert_up
+  // for replace & insert_up & ttl executor
   int get_next_conflict_rowkey(sql::DASTaskIter &task_iter,
                                const sql::ObConflictChecker &conflict_checker);
+  // for htable
+  int modify_htable_timestamp();
+  int fetch_conflict_rowkey(sql::ObConflictChecker &conflict_checker);
+  int reset_das_env(ObTableInsRtDef &ins_rtdef);
+  int check_whether_row_change(const ObChunkDatumStore::StoredRow &upd_old_row,
+                               const ObChunkDatumStore::StoredRow &upd_new_row,
+                               const ObTableUpdCtDef &upd_ctdef,
+                               bool &is_row_changed);
+  int to_expr_skip_old(const ObChunkDatumStore::StoredRow &store_row,
+                       const ObRowkey &constraint_rowkey,
+                       const ObTableUpdCtDef &upd_ctdef);
+  int generate_del_rtdef_for_update(const ObTableUpdCtDef &upd_ctdef,
+                                    ObTableUpdRtDef &upd_rtdef);
+  int generate_ins_rtdef_for_update(const ObTableUpdCtDef &upd_ctdef,
+                                    ObTableUpdRtDef &upd_rtdef);
+  int delete_upd_old_row_to_das(const ObRowkey &constraint_rowkey,
+                                const sql::ObConflictValue &constraint_value,
+                                const ObTableUpdCtDef &upd_ctdef,
+                                ObTableUpdRtDef &upd_rtdef,
+                                sql::ObDMLRtCtx &dml_rtctx);
+  int insert_upd_new_row_to_das(const ObTableUpdCtDef &upd_ctdef,
+                                ObTableUpdRtDef &upd_rtdef,
+                                sql::ObDMLRtCtx &dml_rtctx);
+  int execute_das_task(sql::ObDMLRtCtx &dml_rtctx, bool del_task_ahead);
+  void set_need_fetch_conflict(sql::ObDMLRtCtx &upd_rtctx,ObTableInsRtDef &ins_rtdef);
 protected:
   sql::ObDMLRtCtx dml_rtctx_;
   int64_t affected_rows_;

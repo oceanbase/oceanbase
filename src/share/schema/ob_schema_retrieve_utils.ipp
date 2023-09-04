@@ -1316,6 +1316,10 @@ int ObSchemaRetrieveUtils::fill_table_schema(
       result, external_file_format, table_schema, true/*skip null*/, true/*ignore column error*/, external_file_format);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, external_file_pattern, table_schema, true/*skip null*/, true/*ignore column error*/, external_file_pattern);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, ttl_definition, table_schema, true, ignore_column_error, "");
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, kv_attributes, table_schema, true, ignore_column_error, "");
   }
   if (OB_SUCC(ret) && OB_FAIL(fill_sys_table_lob_tid(table_schema))) {
     SHARE_SCHEMA_LOG(WARN, "fail to fill lob table id for inner table", K(ret), K(table_schema.get_table_id()));

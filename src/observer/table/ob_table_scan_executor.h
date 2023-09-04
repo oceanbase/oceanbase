@@ -52,6 +52,7 @@ public:
   int get_next_row() override;
   int close() override;
   void destroy() override {}
+  virtual void clear_evaluated_flag() override;
 public:
   OB_INLINE const ObTableApiScanSpec& get_spec() const { return scan_spec_; }
   OB_INLINE void reset()
@@ -78,6 +79,7 @@ private:
   int prepare_das_task();
   int do_table_scan();
   int get_next_row_with_das();
+  int check_filter(bool &filter);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiScanExecutor);
 };
@@ -91,9 +93,9 @@ public:
   }
   virtual ~ObTableApiScanRowIterator() {};
 public:
-  int open(ObTableApiScanExecutor *executor);
-  int get_next_row(common::ObNewRow *&row);
-  int close();
+  virtual int open(ObTableApiScanExecutor *executor);
+  virtual int get_next_row(common::ObNewRow *&row);
+  virtual int close();
 private:
   ObTableApiScanExecutor *scan_executor_;
 private:

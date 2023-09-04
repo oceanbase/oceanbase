@@ -2258,6 +2258,11 @@ typedef enum ObItemType
   T_ALTER_SYSTEM_KILL, // used to support kill session in oracle
 
   T_LOB_STORAGE_CLAUSE,
+  T_TABLE_TTL,
+  T_TTL_DEFINITION,
+  T_TTL_EXPR,
+  T_REMOVE_TTL,
+  T_KV_ATTRIBUTES,
   T_VALUES_TABLE_EXPRESSION,//used to values statement
   T_VALUES_ROW_LIST,//used to values statement
   T_MAX //Attention: add a new type before T_MAX

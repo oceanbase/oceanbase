@@ -289,7 +289,7 @@ END_P SET_VAR DELIMITER
 
         JOB JSON JSON_ARRAYAGG JSON_OBJECTAGG JSON_VALUE JSON_TABLE
 
-        KEY_BLOCK_SIZE KEY_VERSION KVCACHE
+        KEY_BLOCK_SIZE KEY_VERSION KVCACHE KV_ATTRIBUTES
 
         LAG LANGUAGE LAST LAST_VALUE LEAD LEADER LEAVES LESS LEAK LEAK_MOD LEAK_RATE LIB LINESTRING LIST_
         LISTAGG LOCAL LOCALITY LOCATION LOCKED LOCKS LOGFILE LOGONLY_REPLICA_NUM LOGS LOCK_ LOGICAL_READS
@@ -344,7 +344,7 @@ END_P SET_VAR DELIMITER
         TABLE_CHECKSUM TABLE_MODE TABLE_ID TABLE_NAME TABLEGROUPS TABLES TABLESPACE TABLET TABLET_ID TABLET_MAX_SIZE
         TEMPLATE TEMPORARY TEMPTABLE TENANT TEXT THAN TIME TIMESTAMP TIMESTAMPADD TIMESTAMPDIFF TP_NO
         TP_NAME TRACE TRADITIONAL TRANSACTION TRIGGERS TRIM TRUNCATE TYPE TYPES TASK TABLET_SIZE
-        TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TOP_K_FRE_HIST TIMES TRIM_SPACE
+        TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TOP_K_FRE_HIST TIMES TRIM_SPACE TTL
 
         UNCOMMITTED UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_NUM UNLOCKED UNTIL
         UNUSUAL UPGRADE USE_BLOOM_FILTER UNKNOWN USE_FRM USER USER_RESOURCES UNBOUNDED UP UNLIMITED
@@ -516,6 +516,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
 %type <node> table_values_caluse table_values_caluse_with_order_by_and_limit values_row_list row_value
 
+%type <node> ttl_definition ttl_expr ttl_unit
 %start sql_stmt
 %%
 ////////////////////////////////////////////////////////////////
@@ -6341,6 +6342,16 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void)($2) ; /* make bison mute */
   malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_FILE_PATTERN, 1, $3);
 }
+| TTL '(' ttl_definition ')'
+{
+  merge_nodes($$, result, T_TTL_DEFINITION, $3);
+  dup_expr_string($$, result, @3.first_column, @3.last_column);
+}
+| KV_ATTRIBUTES opt_equal_mark STRING_VALUE
+{
+  (void)($2); /*  make bison mute*/
+  malloc_non_terminal_node($$, result->malloc_pool_, T_KV_ATTRIBUTES, 1, $3);
+}
 ;
 
 parallel_option:
@@ -6359,6 +6370,64 @@ PARALLEL opt_equal_mark INTNUM
   malloc_terminal_node(int_node, result->malloc_pool_, T_INT);
   int_node->value_ = 1;
   malloc_non_terminal_node($$, result->malloc_pool_, T_PARALLEL, 1, int_node);
+}
+;
+
+ttl_definition:
+ttl_expr
+{
+  $$ = $1;
+}
+| ttl_definition ',' ttl_expr
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+ttl_expr:
+simple_expr '+' INTERVAL INTNUM ttl_unit
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TTL_EXPR, 3, $1, $4, $5);
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+;
+
+ttl_unit:
+SECOND
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_SECOND;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| MINUTE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MINUTE;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| HOUR
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_HOUR;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| DAY
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_DAY;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| MONTH
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MONTH;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| YEAR
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_YEAR;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
 }
 ;
 
@@ -14234,6 +14303,10 @@ DROP CONSTRAINT constraint_name
 //      merge_nodes(col_list, result->malloc_pool_, T_COLUMN_LIST, $3);
 //      malloc_non_terminal_node($$, result->malloc_pool_, T_ORDER_BY, 1, col_list);
 //    }*/
+| REMOVE TTL
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_REMOVE_TTL);
+}
 ;
 
 // mysql 模式下的 constraint 特指 check constraint
@@ -15466,6 +15539,38 @@ ALTER SYSTEM RESUME BACKUP
   value->value_ = 0;
 
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 2, type, value);
+}
+|
+ALTER SYSTEM TRIGGER TTL opt_tenant_list_v2
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 0;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_TTL, 2, type, $5);
+}
+|
+ALTER SYSTEM SUSPEND TTL opt_tenant_list_v2
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_TTL, 2, type, $5);
+}
+|
+ALTER SYSTEM RESUME TTL opt_tenant_list_v2
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_TTL, 2, type, $5);
+}
+|
+ALTER SYSTEM CANCEL TTL opt_tenant_list_v2
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 3;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_TTL, 2, type, $5);
 }
 |
 ALTER SYSTEM VALIDATE DATABASE opt_copy_id
@@ -18512,6 +18617,7 @@ ACCOUNT
 |       TRIM
 |       TRIM_SPACE
 |       TRUNCATE
+|       TTL
 |       TYPE
 |       TYPES
 |       TABLEGROUP_ID
@@ -18598,6 +18704,7 @@ ACCOUNT
 |       MY_NAME
 |       CONNECT
 |       STATEMENT_ID
+|       KV_ATTRIBUTES
 ;
 
 unreserved_keyword_special:

@@ -89,8 +89,6 @@ private:
   int load_replace_rows(bool &is_iter_end);
   int get_next_row_from_child();
   int post_das_task();
-  int fetch_conflict_rowkey();
-  int reset_das_env();
   int check_values(bool &is_equal,
                    const ObChunkDatumStore::StoredRow *replace_row,
                    const ObChunkDatumStore::StoredRow *delete_row);

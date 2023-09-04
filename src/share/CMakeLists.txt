@@ -247,6 +247,7 @@ ob_set_subtarget(ob_share common_mixed
   detect/ob_detect_rpc_processor.cpp
   detect/ob_detect_manager_utils.cpp
   table/ob_table_load_sql_statistics.cpp
+  table/ob_ttl_util.cpp
 )
 
 ob_set_subtarget(ob_share tablet

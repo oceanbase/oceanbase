@@ -75,6 +75,7 @@ enable_async_syslog
 enable_cgroup
 enable_ddl
 enable_early_lock_release
+enable_kv_ttl
 enable_major_freeze
 enable_monotonic_weak_read
 enable_ob_ratelimit
@@ -106,6 +107,8 @@ ignore_replay_checksum_error
 index_block_cache_priority
 internal_sql_execute_timeout
 job_queue_processes
+kv_ttl_duty_duration
+kv_ttl_history_recycle_interval
 large_query_threshold
 large_query_worker_percentage
 leak_mod_to_check

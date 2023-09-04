@@ -499,6 +499,8 @@ public:
   static int all_mock_fk_parent_table_column_schema(share::schema::ObTableSchema &table_schema);
   static int all_mock_fk_parent_table_column_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_log_restore_source_schema(share::schema::ObTableSchema &table_schema);
+  static int all_kv_ttl_task_schema(share::schema::ObTableSchema &table_schema);
+  static int all_kv_ttl_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_service_epoch_schema(share::schema::ObTableSchema &table_schema);
   static int all_spatial_reference_systems_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_checksum_error_info_schema(share::schema::ObTableSchema &table_schema);
@@ -862,6 +864,8 @@ public:
   static int all_virtual_mock_fk_parent_table_column_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_log_restore_source_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_query_response_time_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_kv_ttl_task_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_kv_ttl_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_column_checksum_error_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_kvcache_handle_leak_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tablet_compaction_info_schema(share::schema::ObTableSchema &table_schema);
@@ -1404,11 +1408,15 @@ public:
   static int dba_ob_deadlock_event_history_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_deadlock_event_history_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_sys_variables_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_kv_ttl_tasks_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_kv_ttl_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_log_stat_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_log_stat_schema(share::schema::ObTableSchema &table_schema);
   static int st_geometry_columns_schema(share::schema::ObTableSchema &table_schema);
   static int st_spatial_reference_systems_schema(share::schema::ObTableSchema &table_schema);
   static int query_response_time_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_kv_ttl_tasks_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_kv_ttl_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int dba_rsrc_plans_schema(share::schema::ObTableSchema &table_schema);
   static int dba_rsrc_plan_directives_schema(share::schema::ObTableSchema &table_schema);
   static int dba_rsrc_group_mappings_schema(share::schema::ObTableSchema &table_schema);
@@ -2144,6 +2152,8 @@ public:
   static int all_mock_fk_parent_table_column_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_mock_fk_parent_table_column_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_log_restore_source_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_kv_ttl_task_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_kv_ttl_task_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_service_epoch_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_spatial_reference_systems_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_checksum_error_info_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -2396,6 +2406,8 @@ public:
   static int all_mock_fk_parent_table_column_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_mock_fk_parent_table_column_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_log_restore_source_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_kv_ttl_task_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_kv_ttl_task_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_service_epoch_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_spatial_reference_systems_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_checksum_error_info_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -2622,6 +2634,8 @@ public:
   static int all_rls_context_history_idx_rls_context_his_table_id_schema(share::schema::ObTableSchema &table_schema);
   static int all_dbms_lock_allocated_idx_dbms_lock_allocated_lockhandle_schema(share::schema::ObTableSchema &table_schema);
   static int all_dbms_lock_allocated_idx_dbms_lock_allocated_expiration_schema(share::schema::ObTableSchema &table_schema);
+  static int all_kv_ttl_task_idx_kv_ttl_task_table_id_schema(share::schema::ObTableSchema &table_schema);
+  static int all_kv_ttl_task_history_idx_kv_ttl_task_history_upd_time_schema(share::schema::ObTableSchema &table_schema);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObInnerTableSchema);
@@ -2850,6 +2864,8 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_mock_fk_parent_table_column_schema,
   ObInnerTableSchema::all_mock_fk_parent_table_column_history_schema,
   ObInnerTableSchema::all_log_restore_source_schema,
+  ObInnerTableSchema::all_kv_ttl_task_schema,
+  ObInnerTableSchema::all_kv_ttl_task_history_schema,
   ObInnerTableSchema::all_service_epoch_schema,
   ObInnerTableSchema::all_spatial_reference_systems_schema,
   ObInnerTableSchema::all_column_checksum_error_info_schema,
@@ -3216,6 +3232,8 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_mock_fk_parent_table_column_history_schema,
   ObInnerTableSchema::all_virtual_log_restore_source_schema,
   ObInnerTableSchema::all_virtual_query_response_time_schema,
+  ObInnerTableSchema::all_virtual_kv_ttl_task_schema,
+  ObInnerTableSchema::all_virtual_kv_ttl_task_history_schema,
   ObInnerTableSchema::all_virtual_column_checksum_error_info_schema,
   ObInnerTableSchema::all_virtual_kvcache_handle_leak_info_schema,
   ObInnerTableSchema::all_virtual_tablet_compaction_info_schema,
@@ -3852,11 +3870,15 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_deadlock_event_history_schema,
   ObInnerTableSchema::cdb_ob_deadlock_event_history_schema,
   ObInnerTableSchema::cdb_ob_sys_variables_schema,
+  ObInnerTableSchema::dba_ob_kv_ttl_tasks_schema,
+  ObInnerTableSchema::dba_ob_kv_ttl_task_history_schema,
   ObInnerTableSchema::gv_ob_log_stat_schema,
   ObInnerTableSchema::v_ob_log_stat_schema,
   ObInnerTableSchema::st_geometry_columns_schema,
   ObInnerTableSchema::st_spatial_reference_systems_schema,
   ObInnerTableSchema::query_response_time_schema,
+  ObInnerTableSchema::cdb_ob_kv_ttl_tasks_schema,
+  ObInnerTableSchema::cdb_ob_kv_ttl_task_history_schema,
   ObInnerTableSchema::dba_rsrc_plans_schema,
   ObInnerTableSchema::dba_rsrc_plan_directives_schema,
   ObInnerTableSchema::dba_rsrc_group_mappings_schema,
@@ -4481,6 +4503,8 @@ const schema_create_func sys_index_table_schema_creators [] = {
   ObInnerTableSchema::all_rls_context_history_idx_rls_context_his_table_id_schema,
   ObInnerTableSchema::all_dbms_lock_allocated_idx_dbms_lock_allocated_lockhandle_schema,
   ObInnerTableSchema::all_dbms_lock_allocated_idx_dbms_lock_allocated_expiration_schema,
+  ObInnerTableSchema::all_kv_ttl_task_idx_kv_ttl_task_table_id_schema,
+  ObInnerTableSchema::all_kv_ttl_task_history_idx_kv_ttl_task_history_upd_time_schema,
   NULL,};
 
 const schema_create_func information_schema_table_schema_creators[] = {
@@ -4685,6 +4709,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_TID,
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_HISTORY_TID,
   OB_ALL_LOG_RESTORE_SOURCE_TID,
+  OB_ALL_KV_TTL_TASK_TID,
+  OB_ALL_KV_TTL_TASK_HISTORY_TID,
   OB_ALL_SERVICE_EPOCH_TID,
   OB_ALL_SPATIAL_REFERENCE_SYSTEMS_TID,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_TID,
@@ -4876,6 +4902,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_PRIVILEGE_TID,
   OB_ALL_VIRTUAL_LOG_RESTORE_SOURCE_TID,
   OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_TID,
+  OB_ALL_VIRTUAL_KV_TTL_TASK_TID,
+  OB_ALL_VIRTUAL_KV_TTL_TASK_HISTORY_TID,
   OB_ALL_VIRTUAL_TABLET_COMPACTION_INFO_TID,
   OB_ALL_VIRTUAL_LS_REPLICA_TASK_PLAN_TID,
   OB_ALL_VIRTUAL_SHOW_TRACE_TID,
@@ -5334,6 +5362,8 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_ARCHIVELOG_PIECE_FILES_TID,
   OB_DBA_OB_BACKUP_PARAMETER_TID,
   OB_DBA_OB_DEADLOCK_EVENT_HISTORY_TID,
+  OB_DBA_OB_KV_TTL_TASKS_TID,
+  OB_DBA_OB_KV_TTL_TASK_HISTORY_TID,
   OB_GV_OB_LOG_STAT_TID,
   OB_V_OB_LOG_STAT_TID,
   OB_ST_GEOMETRY_COLUMNS_TID,
@@ -5917,6 +5947,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_RLS_CONTEXT_HISTORY_IDX_RLS_CONTEXT_HIS_TABLE_ID_TID,
   OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_LOCKHANDLE_TID,
   OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_EXPIRATION_TID,
+  OB_ALL_KV_TTL_TASK_IDX_KV_TTL_TASK_TABLE_ID_TID,
+  OB_ALL_KV_TTL_TASK_HISTORY_IDX_KV_TTL_TASK_HISTORY_UPD_TIME_TID,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DATA_TABLE_ID_REAL_AGENT_TID,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DB_TB_NAME_REAL_AGENT_TID,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_TB_NAME_REAL_AGENT_TID,
@@ -6183,6 +6215,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_AUX_LOB_META_TID,
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_HISTORY_AUX_LOB_META_TID,
   OB_ALL_LOG_RESTORE_SOURCE_AUX_LOB_META_TID,
+  OB_ALL_KV_TTL_TASK_AUX_LOB_META_TID,
+  OB_ALL_KV_TTL_TASK_HISTORY_AUX_LOB_META_TID,
   OB_ALL_SERVICE_EPOCH_AUX_LOB_META_TID,
   OB_ALL_SPATIAL_REFERENCE_SYSTEMS_AUX_LOB_META_TID,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_AUX_LOB_META_TID,
@@ -6414,6 +6448,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_AUX_LOB_PIECE_TID,
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_LOG_RESTORE_SOURCE_AUX_LOB_PIECE_TID,
+  OB_ALL_KV_TTL_TASK_AUX_LOB_PIECE_TID,
+  OB_ALL_KV_TTL_TASK_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_SERVICE_EPOCH_AUX_LOB_PIECE_TID,
   OB_ALL_SPATIAL_REFERENCE_SYSTEMS_AUX_LOB_PIECE_TID,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_AUX_LOB_PIECE_TID,
@@ -6925,6 +6961,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_TNAME,
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_HISTORY_TNAME,
   OB_ALL_LOG_RESTORE_SOURCE_TNAME,
+  OB_ALL_KV_TTL_TASK_TNAME,
+  OB_ALL_KV_TTL_TASK_HISTORY_TNAME,
   OB_ALL_SERVICE_EPOCH_TNAME,
   OB_ALL_SPATIAL_REFERENCE_SYSTEMS_TNAME,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_TNAME,
@@ -7116,6 +7154,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_PRIVILEGE_TNAME,
   OB_ALL_VIRTUAL_LOG_RESTORE_SOURCE_TNAME,
   OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_TNAME,
+  OB_ALL_VIRTUAL_KV_TTL_TASK_TNAME,
+  OB_ALL_VIRTUAL_KV_TTL_TASK_HISTORY_TNAME,
   OB_ALL_VIRTUAL_TABLET_COMPACTION_INFO_TNAME,
   OB_ALL_VIRTUAL_LS_REPLICA_TASK_PLAN_TNAME,
   OB_ALL_VIRTUAL_SHOW_TRACE_TNAME,
@@ -7574,6 +7614,8 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_ARCHIVELOG_PIECE_FILES_TNAME,
   OB_DBA_OB_BACKUP_PARAMETER_TNAME,
   OB_DBA_OB_DEADLOCK_EVENT_HISTORY_TNAME,
+  OB_DBA_OB_KV_TTL_TASKS_TNAME,
+  OB_DBA_OB_KV_TTL_TASK_HISTORY_TNAME,
   OB_GV_OB_LOG_STAT_TNAME,
   OB_V_OB_LOG_STAT_TNAME,
   OB_ST_GEOMETRY_COLUMNS_TNAME,
@@ -8157,6 +8199,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_RLS_CONTEXT_HISTORY_IDX_RLS_CONTEXT_HIS_TABLE_ID_TNAME,
   OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_LOCKHANDLE_TNAME,
   OB_ALL_DBMS_LOCK_ALLOCATED_IDX_DBMS_LOCK_ALLOCATED_EXPIRATION_TNAME,
+  OB_ALL_KV_TTL_TASK_IDX_KV_TTL_TASK_TABLE_ID_TNAME,
+  OB_ALL_KV_TTL_TASK_HISTORY_IDX_KV_TTL_TASK_HISTORY_UPD_TIME_TNAME,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DATA_TABLE_ID_REAL_AGENT_TNAME,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DB_TB_NAME_REAL_AGENT_TNAME,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_TB_NAME_REAL_AGENT_TNAME,
@@ -8423,6 +8467,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_AUX_LOB_META_TNAME,
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_LOG_RESTORE_SOURCE_AUX_LOB_META_TNAME,
+  OB_ALL_KV_TTL_TASK_AUX_LOB_META_TNAME,
+  OB_ALL_KV_TTL_TASK_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_SERVICE_EPOCH_AUX_LOB_META_TNAME,
   OB_ALL_SPATIAL_REFERENCE_SYSTEMS_AUX_LOB_META_TNAME,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_AUX_LOB_META_TNAME,
@@ -8654,6 +8700,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_AUX_LOB_PIECE_TNAME,
   OB_ALL_MOCK_FK_PARENT_TABLE_COLUMN_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_LOG_RESTORE_SOURCE_AUX_LOB_PIECE_TNAME,
+  OB_ALL_KV_TTL_TASK_AUX_LOB_PIECE_TNAME,
+  OB_ALL_KV_TTL_TASK_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_SERVICE_EPOCH_AUX_LOB_PIECE_TNAME,
   OB_ALL_SPATIAL_REFERENCE_SYSTEMS_AUX_LOB_PIECE_TNAME,
   OB_ALL_COLUMN_CHECKSUM_ERROR_INFO_AUX_LOB_PIECE_TNAME,
@@ -10863,6 +10911,22 @@ LOBMapping const lob_aux_table_mappings [] = {
   },
 
   {
+    OB_ALL_KV_TTL_TASK_TID,
+    OB_ALL_KV_TTL_TASK_AUX_LOB_META_TID,
+    OB_ALL_KV_TTL_TASK_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_kv_ttl_task_aux_lob_meta_schema,
+    ObInnerTableSchema::all_kv_ttl_task_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_KV_TTL_TASK_HISTORY_TID,
+    OB_ALL_KV_TTL_TASK_HISTORY_AUX_LOB_META_TID,
+    OB_ALL_KV_TTL_TASK_HISTORY_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_kv_ttl_task_history_aux_lob_meta_schema,
+    ObInnerTableSchema::all_kv_ttl_task_history_aux_lob_piece_schema
+  },
+
+  {
     OB_ALL_SERVICE_EPOCH_TID,
     OB_ALL_SERVICE_EPOCH_AUX_LOB_META_TID,
     OB_ALL_SERVICE_EPOCH_AUX_LOB_PIECE_TID,
@@ -11211,12 +11275,12 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 249;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 722;
-const int64_t OB_SYS_VIEW_COUNT = 762;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1738;
+const int64_t OB_SYS_TABLE_COUNT = 251;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 724;
+const int64_t OB_SYS_VIEW_COUNT = 766;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1746;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1741;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1749;
 
 } // end namespace share
 } // end namespace oceanbase

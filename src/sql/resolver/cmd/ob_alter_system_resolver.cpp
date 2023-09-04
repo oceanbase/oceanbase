@@ -4309,6 +4309,71 @@ int ObAlterSystemResolverUtil::get_tenant_ids(const ParseNode &t_node, ObIArray<
   return ret;
 }
 
+int ObTableTTLResolver::resolve(const ParseNode& parse_tree)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;;
+  const uint64_t cur_tenant_id = session_info_->get_effective_tenant_id();
+  if (OB_FAIL(GET_MIN_DATA_VERSION(cur_tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("TTL command is not supported in data version less than 4.2.1", K(ret), K(tenant_data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "TTL command is not supported in data version less than 4.2.1");
+  } else if (OB_UNLIKELY(T_TABLE_TTL != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_TABLE_TTL", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null", K(ret));
+  } else if (OB_UNLIKELY(2 != parse_tree.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info should not be null", K(ret));
+  } else {
+    ObTableTTLStmt* ttl_stmt = create_stmt<ObTableTTLStmt>();
+    const int64_t type = parse_tree.children_[0]->value_;
+    ParseNode *opt_tenant_list_v2 = parse_tree.children_[1];
+    if (NULL == ttl_stmt) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObTableTTLStmt failed");
+    } else if (OB_FAIL(ttl_stmt->set_type(type))) {
+      LOG_WARN("fail to set param", K(ret), K(type));
+    } else {
+      if (NULL == opt_tenant_list_v2) {
+        if (OB_SYS_TENANT_ID == cur_tenant_id) {
+          ttl_stmt->set_ttl_all(true);
+        } else if (OB_FAIL(ttl_stmt->get_tenant_ids().push_back(cur_tenant_id))) {
+          LOG_WARN("fail to push owned tenant id ", KR(ret), "owned tenant_id", cur_tenant_id);
+        }
+      } else if (OB_SYS_TENANT_ID != cur_tenant_id) {
+        ret = OB_ERR_NO_PRIVILEGE;
+        LOG_WARN("only sys tenant can add suffix opt(tenant=name)", KR(ret), K(cur_tenant_id));
+      } else {
+        bool affect_all = false;
+        bool affect_all_user = false;
+        bool affect_all_meta = false;
+        if (OB_FAIL(Util::resolve_tenant(*opt_tenant_list_v2, cur_tenant_id, ttl_stmt->get_tenant_ids(), affect_all, affect_all_user, affect_all_meta))) {
+          LOG_WARN("fail to resolve tenant", KR(ret), KP(opt_tenant_list_v2), K(cur_tenant_id));
+        } else if (affect_all_meta) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("affect_all_meta and affect_all_user is not supported", KR(ret), K(affect_all_meta), K(affect_all_user));
+          LOG_USER_WARN(OB_NOT_SUPPORTED, "affect_all_meta and affect_all_user");
+        } else if (affect_all || affect_all_user) {
+          ttl_stmt->set_ttl_all(true);
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      stmt_ = ttl_stmt;
+    }
+  }
+
+  return ret;
+}
+
 int ObBackupManageResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;

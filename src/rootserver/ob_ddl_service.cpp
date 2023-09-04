@@ -2414,6 +2414,7 @@ int ObDDLService::set_raw_table_options(
   int ret = OB_SUCCESS;
   //replace alter options
   need_update_index_table = false;
+  uint64_t tenant_id = new_table_schema.get_tenant_id();
   for (int32_t i = ObAlterTableArg::AUTO_INCREMENT;
        OB_SUCC(ret) && i < ObAlterTableArg::MAX_OPTION; ++i) {
     if (alter_table_schema.alter_option_bitset_.has_member(i)) {
@@ -2498,7 +2499,6 @@ int ObDDLService::set_raw_table_options(
           const ObString &origin_table_name = alter_table_schema.get_origin_table_name();
           const ObString &new_database_name = alter_table_schema.get_database_name();
           const ObString &origin_database_name = alter_table_schema.get_origin_database_name();
-          uint64_t tenant_id = new_table_schema.get_tenant_id();
           ObNameCaseMode mode = OB_NAME_CASE_INVALID;
           bool is_oracle_mode = false;
           bool has_mv = false;
@@ -2721,6 +2721,32 @@ int ObDDLService::set_raw_table_options(
         case ObAlterTableArg::TABLESPACE_ID: {
           new_table_schema.set_tablespace_id(alter_table_schema.get_tablespace_id());
           new_table_schema.set_encryption_str(alter_table_schema.get_encryption_str());
+          break;
+        }
+        case ObAlterTableArg::TTL_DEFINITION: {
+          uint64_t compat_version = OB_INVALID_VERSION;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+            LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+          } else if (compat_version < DATA_VERSION_4_2_1_0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("ttl definition less than 4.2.1 not support", K(ret), K(compat_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl definition less than 4.2.1");
+          } else if (OB_FAIL(new_table_schema.set_ttl_definition(alter_table_schema.get_ttl_definition()))) {
+            LOG_WARN("fail to set ttl definition", K(ret));
+          }
+          break;
+        }
+        case ObAlterTableArg::KV_ATTRIBUTES: {
+          uint64_t compat_version = OB_INVALID_VERSION;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+            LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+          } else if (compat_version < DATA_VERSION_4_2_1_0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("kv attributes less than 4.2.1 not support", K(ret), K(compat_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "kv attributes less than 4.2");
+          } else if (OB_FAIL(new_table_schema.set_kv_attributes(alter_table_schema.get_kv_attributes()))) {
+            LOG_WARN("fail to set kv attributes", K(ret));
+          }
           break;
         }
         default: {

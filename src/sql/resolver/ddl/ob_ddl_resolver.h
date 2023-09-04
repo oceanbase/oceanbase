@@ -849,6 +849,10 @@ protected:
 
   int deep_copy_string_in_part_expr(ObPartitionedStmt* stmt);
   int deep_copy_column_expr_name(common::ObIAllocator &allocator, ObIArray<ObRawExpr*> &exprs);
+  int check_ttl_definition(const ParseNode *node);
+
+  int get_ttl_columns(const ObString &ttl_definition, ObIArray<ObString> &ttl_columns);
+
   void reset();
   int64_t block_size_;
   int64_t consistency_level_;
@@ -906,6 +910,8 @@ protected:
   int64_t table_dop_; // default value is 1
   int64_t hash_subpart_num_;
   bool is_external_table_;
+  common::ObString ttl_definition_;
+  common::ObString kv_attributes_;
 private:
   template <typename STMT>
   DISALLOW_COPY_AND_ASSIGN(ObDDLResolver);

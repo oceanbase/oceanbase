@@ -66,6 +66,7 @@
 #include "storage/high_availability/ob_ls_member_list_service.h"
 #include "storage/high_availability/ob_ls_block_tx_service.h"
 #include "storage/high_availability/ob_ls_transfer_info.h"
+#include "observer/table/ttl/ob_tenant_tablet_ttl_mgr.h"
 
 namespace oceanbase
 {
@@ -909,6 +910,7 @@ private:
   rootserver::ObLSRecoveryStatHandler ls_recovery_stat_handler_;
   ObLSMemberListService member_list_service_;
   ObLSBlockTxService block_tx_service_;
+  table::ObTenantTabletTTLMgr tablet_ttl_mgr_;
 private:
   bool is_inited_;
   uint64_t tenant_id_;

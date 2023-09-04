@@ -166,6 +166,7 @@ void TestCreateExecutor::fake_ctx_init_common(ObTableCtx &fake_ctx, ObTableSchem
   g_sess_node_val.is_inited_ = true;
   g_sess_node_val.sess_info_.test_init(0, 0, 0, NULL);
   g_sess_node_val.sess_info_.load_all_sys_vars(schema_guard_);
+  fake_ctx.init_phy_plan_ctx();
 }
 
 TEST_F(TestCreateExecutor, scan)
@@ -531,7 +532,12 @@ TEST_F(TestCreateExecutor, test_cache)
   // get lib cache
   ObPlanCache *lib_cache = &plan_cache;
   // construct cache key
-  ObTableApiCacheKey cache_key(1001, 1001, 1, ObTableOperationType::Type::INSERT);
+  ObTableApiCacheKey cache_key;
+  cache_key.table_id_ = 1001;
+  cache_key.index_table_id_ = 1001;
+  cache_key.schema_version_ = 1;
+  cache_key.operation_type_ = ObTableOperationType::Type::INSERT;
+  cache_key.is_ttl_table_ = false;
   // construct ctx
   ObILibCacheCtx ctx;
   // construct cache obj

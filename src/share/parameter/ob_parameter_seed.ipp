@@ -1606,7 +1606,19 @@ ERRSIM_DEF_STR_LIST(errsim_module_types, OB_TENANT_PARAMETER, "",
 ERRSIM_DEF_DBL(errsim_module_error_percentage, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the percentage of the error happened to errsim module. "
         "Range: [0, 100] in percentage",
-        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
+
+// ttl
+DEF_STR_WITH_CHECKER(kv_ttl_duty_duration, OB_TENANT_PARAMETER, "", common::ObTTLDutyDurationChecker,
+    "ttl background task working time duration"
+    "begin_time or end_time in Range, e.g., [23:00:00, 24:00:00]",
+    ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(kv_ttl_history_recycle_interval, OB_TENANT_PARAMETER, "7d", "[1d, 180d]",
+    "the time to recycle ttl history. Range: [1d, 180d]",
+    ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_kv_ttl, OB_TENANT_PARAMETER, "False",
+    "specifies whether ttl task is enbled",
+    ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR_WITH_CHECKER(sql_protocol_min_tls_version, OB_CLUSTER_PARAMETER, "none",
                      common::ObConfigSQLTlsVersionChecker,
                      "SQL SSL control options, used to specify the minimum SSL/TLS version number. "

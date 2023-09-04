@@ -30,6 +30,9 @@ public:
                                             ObTableQueryResult &one_result,
                                             const ObTableCtx &tb_ctx,
                                             ObTableQueryResultIterator *&result_iter);
+  static int get_rowkey_column_names(const ObTableSchema &table_schema, ObIArray<ObString> &names);
+  static int get_full_column_names(const ObTableSchema &table_schema, ObIArray<ObString> &names);
+
 private:
   static int check_htable_query_args(const ObTableQuery &query, const ObTableCtx &tb_ctx);
 private:

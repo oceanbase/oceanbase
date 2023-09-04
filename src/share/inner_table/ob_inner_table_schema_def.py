@@ -273,6 +273,8 @@ all_table_def = dict(
       ('external_file_location_access_info', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
       ('external_file_format', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
       ('external_file_pattern', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
+      ('ttl_definition', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'false', ''),
+      ('kv_attributes', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'false', '')
     ],
 )
 
@@ -5096,8 +5098,63 @@ def_table_schema(
   ],
 )
 
-# 410 : __all_kv_ttl_task
-# 411 : __all_kv_ttl_task_history
+all_kv_ttl_task_def = dict(
+  owner = 'shenyunlong.syl',
+  table_name = '__all_kv_ttl_task',
+  table_id = '410',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('task_id', 'int'),
+      ('table_id', 'int'),
+      ('tablet_id', 'int')
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('task_start_time', 'int'),
+    ('task_update_time', 'int'),
+    ('trigger_type', 'int'),
+    ('status', 'int'),
+    ('ttl_del_cnt', 'int'),
+    ('max_version_del_cnt', 'int'),
+    ('scan_cnt', 'int'),
+    ('row_key', 'varbinary:2048'),
+    ('ret_code', 'varchar:OB_MAX_ERROR_MSG_LEN')
+  ],
+)
+
+all_kv_ttl_task_history_def = dict(
+  owner = 'shenyunlong.syl',
+  table_name = '__all_kv_ttl_task_history',
+  table_id = '411',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('task_id', 'int'),
+      ('table_id', 'int'),
+      ('tablet_id', 'int')
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('task_start_time', 'int'),
+    ('task_update_time', 'int'),
+    ('trigger_type', 'int'),
+    ('status', 'int'),
+    ('ttl_del_cnt', 'int'),
+    ('max_version_del_cnt', 'int'),
+    ('scan_cnt', 'int'),
+    ('row_key', 'varbinary:2048'),
+    ('ret_code', 'varchar:OB_MAX_ERROR_MSG_LEN')
+  ],
+)
+def_table_schema(**all_kv_ttl_task_def)
+def_table_schema(**all_kv_ttl_task_history_def)
 
 def_table_schema(
   owner = 'donglou.zl',
@@ -11544,8 +11601,17 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12326: __all_virtual_kv_ttl_task
-# 12327: __all_virtual_kv_ttl_task_history
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12326',
+  table_name = '__all_virtual_kv_ttl_task',
+  keywords = all_def_keywords['__all_kv_ttl_task'],
+  in_tenant_space=True))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12327',
+  table_name = '__all_virtual_kv_ttl_task_history',
+  keywords = all_def_keywords['__all_kv_ttl_task_history'],
+  in_tenant_space=True))
 
 # 12328: __all_virtual_tenant_datafile
 # 12329: __all_virtual_tenant_datafile_history
@@ -24362,8 +24428,89 @@ def_table_schema(
   """.replace("\n", " "),
 )
 
-# 21300:  DBA_OB_KV_TTL_TASKS
-# 21301:  DBA_OB_KV_TTL_TASK_HISTORY
+def_table_schema(
+  owner           = 'shenyunlong.syl',
+  table_name      = 'DBA_OB_KV_TTL_TASKS',
+  table_id        = '21300',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.tablet_id as TABLET_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as END_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC"
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 0 then "PREPARED"
+        when 1 then "RUNNING"
+        when 2 then "PENDING"
+        when 3 then "CANCELED"
+        when 4 then "FINISHED"
+        when 5 then "MOVED"
+        when 15 then "RS_TRIGGERING"
+        when 16 then "RS_SUSPENDING"
+        when 17 then "RS_CANCELING"
+        when 18 then "RS_MOVING"
+        when 47 then "RS_TRIGGERD"
+        when 48 then "RS_SUSPENDED"
+        when 49 then "RS_CANCELED"
+        when 50 then "RS_MOVED"
+        else "INVALID" END AS STATUS,
+      a.ttl_del_cnt as TTL_DEL_CNT,
+      a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
+      a.scan_cnt as SCAN_CNT,
+      a.ret_code as RET_CODE
+      FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_table b on
+          a.table_id = b.table_id and a.tenant_id = effective_tenant_id()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'shenyunlong.syl',
+  table_name      = 'DBA_OB_KV_TTL_TASK_HISTORY',
+  table_id        = '21301',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.tablet_id as TABLET_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as END_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC"
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 0 then "PREPARED"
+        when 1 then "RUNNING"
+        when 2 then "PENDING"
+        when 3 then "CANCELED"
+        when 4 then "FINISHED"
+        when 5 then "MOVED"
+        else "INVALID" END AS STATUS,
+      a.ttl_del_cnt as TTL_DEL_CNT,
+      a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
+      a.scan_cnt as SCAN_CNT,
+      a.ret_code as RET_CODE
+      FROM oceanbase.__all_virtual_kv_ttl_task_history a left outer JOIN oceanbase.__all_table b on
+          a.table_id = b.table_id and a.tenant_id = effective_tenant_id()
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner = 'xianlin.lh',
@@ -24497,8 +24644,89 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-# 21307: CDB_OB_KV_TTL_TASKS
-# 21308: CDB_OB_KV_TTL_TASK_HISTORY
+def_table_schema(
+  owner = 'shenyunlong.syl',
+  table_name      = 'CDB_OB_KV_TTL_TASKS',
+  table_id        = '21307',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+      a.tenant_id as TENANT_ID,
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.tablet_id as TABLET_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as END_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC"
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 0 then "PREPARED"
+        when 1 then "RUNNING"
+        when 2 then "PENDING"
+        when 3 then "CANCELED"
+        when 4 then "FINISHED"
+        when 5 then "MOVED"
+        when 15 then "RS_TRIGGERING"
+        when 16 then "RS_SUSPENDING"
+        when 17 then "RS_CANCELING"
+        when 18 then "RS_MOVING"
+        when 47 then "RS_TRIGGERD"
+        when 48 then "RS_SUSPENDED"
+        when 49 then "RS_CANCELED"
+        when 50 then "RS_MOVED"
+        else "INVALID" END AS STATUS,
+      a.ttl_del_cnt as TTL_DEL_CNT,
+      a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
+      a.scan_cnt as SCAN_CNT,
+      a.ret_code as RET_CODE
+      FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_virtual_table b on
+          a.table_id = b.table_id and a.tenant_id = b.tenant_id
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'shenyunlong.syl',
+  table_name      = 'CDB_OB_KV_TTL_TASK_HISTORY',
+  table_id        = '21308',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+      a.tenant_id as TENANT_ID,
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.tablet_id as TABLET_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as END_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC"
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 0 then "PREPARED"
+        when 1 then "RUNNING"
+        when 2 then "PENDING"
+        when 3 then "CANCELED"
+        when 4 then "FINISHED"
+        when 5 then "MOVED"
+        else "INVALID" END AS STATUS,
+      a.ttl_del_cnt as TTL_DEL_CNT,
+      a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
+      a.scan_cnt as SCAN_CNT,
+      a.ret_code as RET_CODE
+      FROM oceanbase.__all_virtual_kv_ttl_task_history a left outer JOIN oceanbase.__all_virtual_table b on
+          a.table_id = b.table_id and a.tenant_id = b.tenant_id
+""".replace("\n", " ")
+)
 
 # 21309: CDB_OB_DATAFILE
 # 21310: DBA_OB_DATAFILE
@@ -53806,6 +54034,22 @@ def_sys_index_table(
 # 101092 : placeholder for index of __all_tablet_reorganize_history
 # 101093 : placeholder for index of __all_kv_ttl_task
 # 101094 : placeholder for index of __all_kv_ttl_task_history
+
+def_sys_index_table(
+  index_name = 'idx_kv_ttl_task_table_id',
+  index_table_id = 101093,
+  index_columns = ['table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_kv_ttl_task'])
+
+def_sys_index_table(
+  index_name = 'idx_kv_ttl_task_history_upd_time',
+  index_table_id = 101094,
+  index_columns = ['task_update_time'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_kv_ttl_task_history'])
 
 ################################################################################
 # Oracle Agent table Index

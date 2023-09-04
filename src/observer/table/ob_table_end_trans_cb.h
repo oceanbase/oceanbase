@@ -15,6 +15,7 @@
 #include "ob_rpc_async_response.h"
 #include "sql/ob_end_trans_callback.h"
 #include "share/table/ob_table.h"
+#include "ob_htable_lock_mgr.h"
 namespace oceanbase
 {
 namespace table
@@ -26,12 +27,15 @@ public:
   virtual ~ObTableAPITransCb();
   void destroy_cb_if_no_ref();
   void set_tx_desc(transaction::ObTxDesc *tx_desc) { tx_desc_ = tx_desc; }
+  void set_lock_handle(ObHTableLockHandle *lock_handle);
 protected:
   transaction::ObTxDesc *tx_desc_;
 private:
   int32_t ref_count_;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObTableAPITransCb);
+protected:
+  ObHTableLockHandle *lock_handle_; // hbase row lock handle
 };
 
 

@@ -131,10 +131,12 @@
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "rootserver/ob_heartbeat_service.h"
 #include "share/detect/ob_detect_manager.h"
+#include "observer/table/ttl/ob_ttl_service.h"
 #ifdef ERRSIM
 #include "share/errsim_module/ob_tenant_errsim_module_mgr.h"
 #include "share/errsim_module/ob_tenant_errsim_event_mgr.h"
 #endif
+#include "observer/table/ob_htable_lock_mgr.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -518,12 +520,14 @@ int ObMultiTenant::init(ObAddr myaddr,
       //           mtl_wait_default, mtl_destroy_default);
     }
     MTL_BIND2(mtl_new_default, rootserver::ObHeartbeatService::mtl_init, nullptr, rootserver::ObHeartbeatService::mtl_stop, rootserver::ObHeartbeatService::mtl_wait, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, table::ObTTLService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
 
 #ifdef ERRSIM
     MTL_BIND2(mtl_new_default, ObTenantErrsimModuleMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantErrsimEventMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
 #endif
 
+    MTL_BIND(table::ObHTableLockMgr::mtl_init, table::ObHTableLockMgr::mtl_destroy);
     MTL_BIND2(mtl_new_default, ObSharedTimer::mtl_init, ObSharedTimer::mtl_start, ObSharedTimer::mtl_stop, ObSharedTimer::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObOptStatMonitorManager::mtl_init, ObOptStatMonitorManager::mtl_start, ObOptStatMonitorManager::mtl_stop, ObOptStatMonitorManager::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantSrs::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);

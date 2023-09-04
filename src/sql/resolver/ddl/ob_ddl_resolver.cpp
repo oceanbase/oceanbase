@@ -42,6 +42,7 @@
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "pl/ob_pl_stmt.h"
+#include "share/table/ob_ttl_util.h"
 namespace oceanbase
 {
 using namespace common;
@@ -109,7 +110,9 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     tablespace_id_(OB_INVALID_ID),
     table_dop_(DEFAULT_TABLE_DOP),
     hash_subpart_num_(-1),
-    is_external_table_(false)
+    is_external_table_(false),
+    ttl_definition_(),
+    kv_attributes_()
 {
   table_mode_.reset();
 }
@@ -2126,6 +2129,84 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
               LOG_WARN("failed to set external file pattern", K(ret), K(pattern));
             }
           }
+        }
+        break;
+      }
+      case T_TTL_DEFINITION: {
+        uint64_t tenant_data_version = 0;;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("ttl definition is not supported in data version less than 4.2.1", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl definition is not supported in data version less than 4.2.1");
+        } else if (!is_index_option) {
+          if (OB_ISNULL(option_node->children_)) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_RESV_LOG(WARN, "(the children of option_node is null", K(option_node->children_), K(ret));
+          } else {
+            ObRawExpr *expr = NULL;
+            ObString tmp_str;
+            tmp_str.assign_ptr(const_cast<char *>(option_node->str_value_),
+                                  static_cast<int32_t>(option_node->str_len_));
+            if (OB_ISNULL(option_node->children_[0])) {
+              ret = OB_ERR_UNEXPECTED;
+              SQL_RESV_LOG(ERROR,"children can't be null", K(ret));
+            } else if (OB_FAIL(ob_write_string(*allocator_, tmp_str, ttl_definition_))) {
+              SQL_RESV_LOG(WARN, "write string failed", K(ret));
+            } else if (OB_FAIL(check_ttl_definition(option_node))) {
+              LOG_WARN("fail to check ttl definition", K(ret));
+            } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+              if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::TTL_DEFINITION))) {
+                SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
+              }
+            }
+          }
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("index option should not specify ttl", K(ret));
+        }
+        break;
+      }
+      case T_KV_ATTRIBUTES: {
+        uint64_t tenant_data_version = 0;;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("kv attributes is not supported in data version less than 4.2.1", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "kv attributes is not supported in data version less than 4.2.1");
+        } else if (!is_index_option) {
+          if (OB_ISNULL(option_node->children_)) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_RESV_LOG(WARN, "(the children of option_node is null", K(option_node->children_), K(ret));
+          } else if (OB_ISNULL(option_node->children_[0])) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_RESV_LOG(ERROR,"children can't be null", K(ret));
+          } else {
+            ObRawExpr *expr = NULL;
+            ObString tmp_str;
+            int32_t max_versions = 0;
+            int32_t time_to_live = 0;
+            tmp_str.assign_ptr(const_cast<char *>(option_node->children_[0]->str_value_),
+                                  static_cast<int32_t>(option_node->children_[0]->str_len_));
+            LOG_INFO("resolve kv attributes", K(tmp_str));
+            if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
+                          *allocator_, session_info_->get_dtc_params(), tmp_str))) {
+              LOG_WARN("fail to convert comment to utf8", K(ret));
+            } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(tmp_str, max_versions, time_to_live))) {
+              LOG_WARN("fail to parse kv attributes", K(ret));
+            } else if (OB_FAIL(ob_write_string(*allocator_, tmp_str, kv_attributes_))) {
+              SQL_RESV_LOG(WARN, "write string failed", K(ret));
+            } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+              if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::KV_ATTRIBUTES))) {
+                SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
+              }
+            }
+          }
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("index option should not specify kv attributes", K(ret));
         }
         break;
       }
@@ -4238,6 +4319,8 @@ void ObDDLResolver::reset() {
   tablespace_id_ = OB_INVALID_ID;
   table_dop_ = DEFAULT_TABLE_DOP;
   hash_subpart_num_ = -1;
+  ttl_definition_.reset();
+  kv_attributes_.reset();
 }
 
 bool ObDDLResolver::is_valid_prefix_key_type(const ObObjTypeClass column_type_class)
@@ -10948,6 +11031,32 @@ int ObDDLResolver::deep_copy_string_in_part_expr(ObPartitionedStmt* stmt)
   return ret;
 }
 
+int ObDDLResolver::get_ttl_columns(const ObString &ttl_definition, ObIArray<ObString> &ttl_columns)
+{
+  int ret = OB_SUCCESS;
+  if (ttl_definition.empty()) {
+    // do nothing
+  } else {
+    ObString right = ttl_definition;
+    bool is_end = false;
+    while (OB_SUCC(ret) && !is_end) {
+      ObString left = right.split_on(',');
+      if (left.empty()) {
+        left = right;
+        is_end = true;
+      }
+      ObString column_name = left.split_on('+').trim();
+      if (column_name.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null column name", K(ret));
+      } else if (OB_FAIL(ttl_columns.push_back(column_name))) {
+        LOG_WARN("fail to add column name", K(ret), K(column_name));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLResolver::deep_copy_column_expr_name(common::ObIAllocator &allocator,
                                               ObIArray<ObRawExpr*> &exprs)
 {
@@ -10969,6 +11078,55 @@ int ObDDLResolver::deep_copy_column_expr_name(common::ObIAllocator &allocator,
       }
     }
   }
+  return ret;
+}
+
+int ObDDLResolver::check_ttl_definition(const ParseNode *node)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *column_schema = NULL;
+  const ObTableSchema *tbl_schema = NULL;
+  if (OB_ISNULL(schema_checker_) || OB_ISNULL(stmt_) ||
+      OB_ISNULL(session_info_) || OB_ISNULL(node) || node->type_ != T_TTL_DEFINITION) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(ERROR,"unexpected null value", K(ret), K_(schema_checker),
+                 K_(stmt), K_(session_info), K(node));
+  } else if (node->type_ != T_TTL_DEFINITION) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(ERROR,"unexpected node type", K(ret), K(node->type_));
+  } else if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
+    ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+    tbl_schema = &create_table_stmt->get_create_table_arg().schema_;
+  } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+    ObAlterTableStmt *alter_table_stmt = static_cast<ObAlterTableStmt*>(stmt_);
+    if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+      database_name_, table_name_, false, tbl_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K(session_info_->get_effective_tenant_id()),
+        K(alter_table_stmt->get_alter_table_arg()));
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported statement for TTL expression", K(ret), K(stmt_->get_stmt_type()));
+  }
+
+  if (OB_SUCC(ret)) {
+    ObString ttl_definition(node->str_len_, node->str_value_);
+    ObSEArray<ObString, 8> ttl_columns;
+    if (OB_FAIL(get_ttl_columns(ttl_definition, ttl_columns))) {
+      LOG_WARN("fail to get ttl columns", K(ttl_definition));
+    }
+    for (int i = 0; i < OB_SUCC(ret) && ttl_columns.count(); i++) {
+      ObString column_name = ttl_columns.at(i);
+      if (NULL == (column_schema = tbl_schema->get_column_schema(column_name))) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("ttl column is invalid", K(ret));
+      } else if ((!ob_is_datetime_tc(column_schema->get_data_type()))) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("invalid ttl expression, ttl column type should be datetime or timestamp", K(ret), K(column_schema->get_data_type()));
+      }
+    }
+  }
+
   return ret;
 }
 

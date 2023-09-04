@@ -363,7 +363,7 @@ int ObTableApiProcessorBase::init_read_trans(const ObTableConsistencyLevel consi
 
   if (OB_FAIL(txs->acquire_tx(trans_desc_, session().get_sessid()))) {
     LOG_WARN("failed to acquire tx desc", K(ret));
-  } else if (OB_FAIL(setup_tx_snapshot_(*trans_desc_, strong_read, ls_id, timeout_ts))) {
+  } else if (OB_FAIL(setup_tx_snapshot_(*trans_desc_, tx_snapshot_, strong_read, ls_id, timeout_ts))) {
     LOG_WARN("setup txn snapshot fail", K(ret), KPC_(trans_desc), K(strong_read), K(ls_id), K(timeout_ts));
     txs->release_tx(*trans_desc_);
     trans_desc_ = NULL;
@@ -382,6 +382,7 @@ void ObTableApiProcessorBase::release_read_trans()
 }
 
 int ObTableApiProcessorBase::setup_tx_snapshot_(transaction::ObTxDesc &trans_desc,
+                                                transaction::ObTxReadSnapshot &tx_snapshot,
                                                 const bool strong_read,
                                                 const share::ObLSID &ls_id,
                                                 const int64_t timeout_ts)
@@ -390,10 +391,10 @@ int ObTableApiProcessorBase::setup_tx_snapshot_(transaction::ObTxDesc &trans_des
   transaction::ObTransService *txs = MTL(transaction::ObTransService*);
   if (strong_read) {
     if (ls_id.is_valid()) {
-      if (OB_FAIL(txs->get_ls_read_snapshot(trans_desc, transaction::ObTxIsolationLevel::RC, ls_id, timeout_ts, tx_snapshot_))) {
+      if (OB_FAIL(txs->get_ls_read_snapshot(trans_desc, transaction::ObTxIsolationLevel::RC, ls_id, timeout_ts, tx_snapshot))) {
         LOG_WARN("fail to get LS read snapshot", K(ret));
       }
-    } else if (OB_FAIL(txs->get_read_snapshot(trans_desc, transaction::ObTxIsolationLevel::RC, timeout_ts, tx_snapshot_))) {
+    } else if (OB_FAIL(txs->get_read_snapshot(trans_desc, transaction::ObTxIsolationLevel::RC, timeout_ts, tx_snapshot))) {
       LOG_WARN("fail to get global read snapshot", K(ret));
     }
   } else {
@@ -404,21 +405,31 @@ int ObTableApiProcessorBase::setup_tx_snapshot_(transaction::ObTxDesc &trans_des
               weak_read_snapshot))) {
       LOG_WARN("fail to get weak read snapshot", K(ret));
     } else {
-      tx_snapshot_.init_weak_read(weak_read_snapshot);
+      tx_snapshot.init_weak_read(weak_read_snapshot);
     }
   }
   return ret;
 }
 
 int ObTableApiProcessorBase::start_trans(bool is_readonly, const sql::stmt::StmtType stmt_type,
-                                         const ObTableConsistencyLevel consistency_level, uint64_t table_id,
-                                         const ObLSID &ls_id, int64_t timeout_ts)
+                                         const ObTableConsistencyLevel consistency_level,
+                                         uint64_t table_id, const ObLSID &ls_id, int64_t timeout_ts)
 {
-  UNUSEDx(stmt_type);
+  UNUSED(stmt_type);
+  return start_trans_(is_readonly, trans_desc_, tx_snapshot_, consistency_level,
+                      trans_state_ptr_, table_id, ls_id, timeout_ts);
+}
+
+int ObTableApiProcessorBase::start_trans_(bool is_readonly,
+                                          transaction::ObTxDesc *&trans_desc,
+                                          transaction::ObTxReadSnapshot &tx_snapshot,
+                                          const ObTableConsistencyLevel consistency_level,
+                                          sql::TransState *trans_state_ptr,
+                                          uint64_t table_id, const ObLSID &ls_id, int64_t timeout_ts)
+{
   int ret = OB_SUCCESS;
   NG_TRACE(T_start_trans_begin);
 
-  const uint64_t tenant_id = credential_.tenant_id_;
   bool strong_read = ObTableConsistencyLevel::STRONG == consistency_level;
   if ((!is_readonly) && (ObTableConsistencyLevel::EVENTUAL == consistency_level)) {
     ret = OB_NOT_SUPPORTED;
@@ -436,32 +447,34 @@ int ObTableApiProcessorBase::start_trans(bool is_readonly, const sql::stmt::Stmt
     tx_param.isolation_ = transaction::ObTxIsolationLevel::RC;
     tx_param.cluster_id_ = ObServerConfig::get_instance().cluster_id;
     tx_param.timeout_us_ = std::max(0l, timeout_ts - ObClockGenerator::getClock());
-    if (true == trans_state_ptr_->is_start_trans_executed()) {
+    if (true == trans_state_ptr->is_start_trans_executed()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("start_trans is executed", K(ret));
     } else {
-      if (OB_FAIL(txs->acquire_tx(trans_desc_, session().get_sessid()))) {
+      if (OB_FAIL(txs->acquire_tx(trans_desc, session().get_sessid()))) {
         LOG_WARN("failed to acquire tx desc", K(ret));
-      } else if (OB_FAIL(txs->start_tx(*trans_desc_, tx_param))) {
-        LOG_WARN("failed to start trans", K(ret), KPC_(trans_desc));
-        txs->release_tx(*trans_desc_);
-        trans_desc_ = NULL;
+      } else if (OB_FAIL(txs->start_tx(*trans_desc, tx_param))) {
+        LOG_WARN("failed to start trans", K(ret), KPC(trans_desc));
+        txs->release_tx(*trans_desc);
+        trans_desc = NULL;
       }
-      trans_state_ptr_->set_start_trans_executed(OB_SUCC(ret));
+      trans_state_ptr->set_start_trans_executed(OB_SUCC(ret));
     }
   }
   NG_TRACE(T_start_trans_end);
   // 2. acquire snapshot
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(setup_tx_snapshot_(*trans_desc_, strong_read, ls_id, timeout_ts))) {
-      LOG_WARN("setup txn snapshot fail", K(ret), KPC_(trans_desc), K(strong_read), K(ls_id), K(timeout_ts));
+    if (OB_FAIL(setup_tx_snapshot_(*trans_desc, tx_snapshot, strong_read, ls_id, timeout_ts))) {
+      LOG_WARN("setup txn snapshot fail", K(ret), KPC(trans_desc), K(strong_read), K(ls_id), K(timeout_ts));
     }
   }
   return ret;
 }
 
+// NOTE: the lock handle pointer can be converted to bool parameter use_sync,
+//       be careful whenever you want to pass the lock handle
 int ObTableApiProcessorBase::end_trans(bool is_rollback, rpc::ObRequest *req, int64_t timeout_ts,
-                                       bool use_sync /*=false*/)
+                                       bool use_sync /*=false*/, ObHTableLockHandle *lock_handle /*nullptr*/)
 {
   int ret = OB_SUCCESS;
   int end_ret = OB_SUCCESS;
@@ -478,12 +491,12 @@ int ObTableApiProcessorBase::end_trans(bool is_rollback, rpc::ObRequest *req, in
   NG_TRACE(T_end_trans_begin);
   if (trans_state_ptr_->is_start_trans_executed() && trans_state_ptr_->is_start_trans_success()) {
     if (trans_desc_->is_rdonly() || use_sync) {
-      ret = sync_end_trans(is_rollback, timeout_ts);
+      ret = sync_end_trans(is_rollback, timeout_ts, lock_handle);
     } else {
       if (is_rollback) {
-        ret = sync_end_trans(true, timeout_ts);
+        ret = sync_end_trans(true, timeout_ts, lock_handle);
       } else {
-        ret = async_commit_trans(req, timeout_ts);
+        ret = async_commit_trans(req, timeout_ts, lock_handle);
       }
     }
     trans_state_ptr_->clear_start_trans_executed();
@@ -493,36 +506,43 @@ int ObTableApiProcessorBase::end_trans(bool is_rollback, rpc::ObRequest *req, in
   return ret;
 }
 
-int ObTableApiProcessorBase::sync_end_trans(bool is_rollback, int64_t timeout_ts)
+int ObTableApiProcessorBase::sync_end_trans(bool is_rollback, int64_t timeout_ts, ObHTableLockHandle *lock_handle /*nullptr*/)
+{
+  return sync_end_trans_(is_rollback, trans_desc_, timeout_ts, lock_handle);
+}
+
+int ObTableApiProcessorBase::sync_end_trans_(bool is_rollback, transaction::ObTxDesc *&trans_desc,
+                                             int64_t timeout_ts, ObHTableLockHandle *lock_handle /*nullptr*/)
 {
   int ret = OB_SUCCESS;
 
   transaction::ObTransService *txs = MTL(transaction::ObTransService*);
   const int64_t stmt_timeout_ts = timeout_ts;
   if (is_rollback) {
-    if (OB_FAIL(txs->rollback_tx(*trans_desc_))) {
-      LOG_WARN("fail rollback trans when session terminate", K(ret), KPC_(trans_desc));
+    if (OB_FAIL(txs->rollback_tx(*trans_desc))) {
+      LOG_WARN("fail rollback trans when session terminate", K(ret), KPC(trans_desc));
     }
-  } else {
+  } else if (OB_FAIL(txs->commit_tx(*trans_desc, stmt_timeout_ts))) {
     ACTIVE_SESSION_FLAG_SETTER_GUARD(in_committing);
-    if (OB_FAIL(txs->commit_tx(*trans_desc_, stmt_timeout_ts))) {
-      LOG_WARN("fail commit trans when session terminate",
-                K(ret), KPC_(trans_desc), K(stmt_timeout_ts));
-    }
+    LOG_WARN("fail commit trans when session terminate",
+              K(ret), KPC(trans_desc), K(stmt_timeout_ts));
   }
 
   int tmp_ret = ret;
-  if (OB_FAIL(txs->release_tx(*trans_desc_))) {
-    LOG_ERROR("release tx failed", K(ret), KPC_(trans_desc));
+  if (OB_FAIL(txs->release_tx(*trans_desc))) {
+    LOG_ERROR("release tx failed", K(ret), KPC(trans_desc));
+  }
+  if (lock_handle != nullptr) {
+    HTABLE_LOCK_MGR->release_handle(*lock_handle);
   }
   ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
-  trans_desc_ = NULL;
+  trans_desc = NULL;
   LOG_DEBUG("ObTableApiProcessorBase::sync_end_trans", K(ret), K(is_rollback), K(stmt_timeout_ts));
 
   return ret;
 }
 
-int ObTableApiProcessorBase::async_commit_trans(rpc::ObRequest *req, int64_t timeout_ts)
+int ObTableApiProcessorBase::async_commit_trans(rpc::ObRequest *req, int64_t timeout_ts, ObHTableLockHandle *lock_handle /*nullptr*/)
 {
   int ret = OB_SUCCESS;
   transaction::ObTransService *txs = MTL(transaction::ObTransService*);
@@ -538,6 +558,7 @@ int ObTableApiProcessorBase::async_commit_trans(rpc::ObRequest *req, int64_t tim
     }
     callback.set_is_need_rollback(is_rollback);
     callback.set_end_trans_type(sql::ObExclusiveEndTransCallback::END_TRANS_TYPE_IMPLICIT);
+    callback.set_lock_handle(lock_handle);
     callback.handout();
     callback.set_tx_desc(trans_desc_);
     const int64_t stmt_timeout_ts = timeout_ts;

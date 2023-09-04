@@ -66,6 +66,30 @@ int ObTableCtx::init_sess_info(ObTableApiCredential &credential)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret), K(credential));
   }
+  return ret;
+}
+
+int ObTableCtx::init_common(ObTableApiCredential &credential,
+                            const common::ObTabletID &arg_tablet_id,
+                            const uint64_t table_id,
+                            const int64_t &timeout_ts)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = credential.tenant_id_;
+  const uint64_t database_id = credential.database_id_;
+
+  if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard_))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard_.get_table_schema(tenant_id,
+                                                    table_id,
+                                                    table_schema_))) {
+    LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNKNOWN_TABLE;
+    LOG_WARN("fail get table schema by table id", K(ret), K(tenant_id), K(database_id), K(table_id));
+  } else if (OB_FAIL(inner_init_common(credential, arg_tablet_id, table_schema_->get_table_name(), timeout_ts))) {
+    LOG_WARN("fail to inner init common", KR(ret), K(credential), K(arg_tablet_id), K(timeout_ts));
+  }
 
   return ret;
 }
@@ -76,11 +100,8 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
                             const int64_t &timeout_ts)
 {
   int ret = OB_SUCCESS;
-  bool is_cache_hit = false;
-  const ObTenantSchema *tenant_schema = nullptr;
   const uint64_t tenant_id = credential.tenant_id_;
   const uint64_t database_id = credential.database_id_;
-  ObTabletID tablet_id = arg_tablet_id;
 
   if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard_))) {
     LOG_WARN("fail to get schema guard", K(ret), K(tenant_id), K(arg_table_name));
@@ -89,10 +110,29 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
                                                     arg_table_name,
                                                     false, /* is_index */
                                                     table_schema_))) {
-    LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(database_id), K(arg_table_name));
-  } else if (OB_ISNULL(table_schema_)) {
+    LOG_WARN("fail to get table schema", K(ret), K(tenant_id), "database_id", credential.database_id_, K(arg_table_name));
+  } else if (OB_FAIL(inner_init_common(credential, arg_tablet_id, arg_table_name, timeout_ts))) {
+    LOG_WARN("fail to inner init common", KR(ret), K(credential), K(arg_tablet_id),
+      K(arg_table_name), K(timeout_ts));
+  }
+
+  return ret;
+}
+
+int ObTableCtx::inner_init_common(ObTableApiCredential &credential,
+                                  const common::ObTabletID &arg_tablet_id,
+                                  const common::ObString &table_name,
+                                  const int64_t &timeout_ts)
+{
+  int ret = OB_SUCCESS;
+  bool is_cache_hit = false;
+  const ObTenantSchema *tenant_schema = nullptr;
+  const uint64_t tenant_id = credential.tenant_id_;
+  const uint64_t database_id = credential.database_id_;
+  ObTabletID tablet_id = arg_tablet_id;
+  if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNKNOWN_TABLE;
-    LOG_WARN("fail get table schema by table name", K(ret), K(tenant_id), K(database_id), K(arg_table_name));
+    LOG_WARN("table schema is null", K(ret), K(tenant_id), K(table_name));
   } else if (OB_FAIL(schema_guard_.get_tenant_info(tenant_id, tenant_schema))) {
     LOG_WARN("fail to get tenant schema", K(ret), K(tenant_id));
   } else if (OB_ISNULL(tenant_schema)) {
@@ -104,7 +144,7 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
     if (is_scan_) { // 扫描场景使用table_schema上的tablet id,客户端已经做了路由分发
       if (table_schema_->is_partitioned_table()) { // 不支持分区表
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("partitioned table not supported", K(ret), K(arg_table_name));
+        LOG_WARN("partitioned table not supported", K(ret), K(table_name));
       } else {
         tablet_id = table_schema_->get_tablet_id();
       }
@@ -126,19 +166,24 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
                                                  0, /* expire_renew_time */
                                                  is_cache_hit,
                                                  ls_id_))) {
-    LOG_WARN("fail to get ls id", K(ret), K(tablet_id), K(arg_table_name));
+    LOG_WARN("fail to get ls id", K(ret), K(tablet_id), K(table_name));
   } else if (!is_scan_ && OB_FAIL(adjust_entity())) {
     LOG_WARN("fail to adjust entity", K(ret));
   } else {
     tenant_id_ = tenant_id;
     database_id_ = database_id;
-    table_name_ = arg_table_name;
+    table_name_ = table_name;
     ref_table_id_ = table_schema_->get_table_id();
     index_table_id_ = ref_table_id_;
     tablet_id_ = tablet_id;
     index_tablet_id_ = tablet_id_;
     tenant_schema_version_ = tenant_schema->get_schema_version();
     timeout_ts_ = timeout_ts;
+    is_ttl_table_ = !table_schema_->get_ttl_definition().empty();
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(init_phy_plan_ctx())) {
+    LOG_WARN("fail to init physical plan ctx", KR(ret));
   }
 
   return ret;
@@ -639,18 +684,12 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
 int ObTableCtx::init_insert()
 {
   int ret = OB_SUCCESS;
-  void *buf = allocator_.alloc(sizeof(ObPhysicalPlanCtx));
-  if (OB_ISNULL(buf)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc ObPhysicalPlanCtx", K(ret), K(sizeof(ObPhysicalPlanCtx)));
-  } else {
-    ObPhysicalPlanCtx *phy_plan_ctx = new(buf) ObPhysicalPlanCtx(allocator_);
-    phy_plan_ctx->set_timeout_timestamp(timeout_ts_); // ObConflictChecker::init_das_scan_rtdef 需要
-    phy_plan_ctx->set_tenant_schema_version(tenant_schema_version_);
-    exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
-    if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
-      LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
-    }
+  ObPhysicalPlanCtx *phy_plan_ctx = get_physical_plan_ctx();
+  if (OB_ISNULL(phy_plan_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("phy_plan_ctx is null", K(ret));
+  } else if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
+    LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
   }
   return init_dml_related_tid();
 }
@@ -766,6 +805,23 @@ int ObTableCtx::init_delete()
   return ret;
 }
 
+int ObTableCtx::init_phy_plan_ctx()
+{
+  int ret = OB_SUCCESS;
+  void *buf = allocator_.alloc(sizeof(ObPhysicalPlanCtx));
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc ObPhysicalPlanCtx", K(ret), K(sizeof(ObPhysicalPlanCtx)));
+  } else {
+    ObPhysicalPlanCtx *phy_plan_ctx = new(buf) ObPhysicalPlanCtx(allocator_);
+    phy_plan_ctx->set_timeout_timestamp(timeout_ts_); // ObConflictChecker::init_das_scan_rtdef 需要
+    phy_plan_ctx->set_tenant_schema_version(tenant_schema_version_);
+    phy_plan_ctx->set_cur_time(ObTimeUtility::current_time());
+    exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
+  }
+  return ret;
+}
+
 int ObTableCtx::init_replace()
 {
   int ret = OB_SUCCESS;
@@ -773,19 +829,42 @@ int ObTableCtx::init_replace()
   if (OB_FAIL(init_dml_related_tid())) {
     LOG_WARN("fail to init dml related tids", K(ret));
   } else {
-    void *buf = allocator_.alloc(sizeof(ObPhysicalPlanCtx));
-    if (OB_ISNULL(buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc ObPhysicalPlanCtx", K(ret), K(sizeof(ObPhysicalPlanCtx)));
-    } else {
-      ObPhysicalPlanCtx *phy_plan_ctx = new(buf) ObPhysicalPlanCtx(allocator_);
-      phy_plan_ctx->set_timeout_timestamp(timeout_ts_); // ObConflictChecker::init_das_scan_rtdef 需要
-      phy_plan_ctx->set_tenant_schema_version(tenant_schema_version_);
-      exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
-      if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
-        LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
-      }
+    ObPhysicalPlanCtx *phy_plan_ctx = get_physical_plan_ctx();
+    if (OB_ISNULL(phy_plan_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("phy_plan_ctx is null", K(ret));
+    } else if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
+      LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
     }
+  }
+
+  return ret;
+}
+
+int ObTableCtx::init_ttl_delete(ObRowkey &start_key)
+{
+  int ret = OB_SUCCESS;
+  ObTableQuery query;
+  ObNewRange range;
+  ObRowkey real_start_key;
+  range.end_key_.set_max_row();
+  set_is_ttl_table(false);
+  if (!start_key.is_valid()) {
+    real_start_key.set_min_row();
+  } else {
+    real_start_key = start_key;
+  }
+
+  range.start_key_ = real_start_key;
+  if (OB_FAIL(query.add_scan_range(range))) {
+    LOG_WARN("fail to generate key ranges", KR(ret), K(range));
+  } else if (OB_FAIL(init_scan(query, false/* is_weak_read */))) {
+    LOG_WARN("fail to init scan ctx", KR(ret), K(query));
+  }
+
+  // 2. init related index table id
+  if (OB_SUCC(ret) && OB_FAIL(init_dml_related_tid())) {
+    LOG_WARN("fail to init dml related table ids", K(ret));
   }
 
   return ret;
@@ -799,18 +878,12 @@ int ObTableCtx::init_insert_up()
   if (OB_FAIL(init_update())) {
     LOG_WARN("fail to init update", K(ret));
   } else {
-    void *buf = allocator_.alloc(sizeof(ObPhysicalPlanCtx));
-    if (OB_ISNULL(buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc ObPhysicalPlanCtx", K(ret), K(sizeof(ObPhysicalPlanCtx)));
-    } else {
-      ObPhysicalPlanCtx *phy_plan_ctx = new(buf) ObPhysicalPlanCtx(allocator_);
-      phy_plan_ctx->set_timeout_timestamp(timeout_ts_); // ObConflictChecker::init_das_scan_rtdef 需要
-      phy_plan_ctx->set_tenant_schema_version(tenant_schema_version_);
-      exec_ctx_.set_physical_plan_ctx(phy_plan_ctx);
-      if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
-        LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
-      }
+    ObPhysicalPlanCtx *phy_plan_ctx = get_physical_plan_ctx();
+    if (OB_ISNULL(phy_plan_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("phy_plan_ctx is null", K(ret));
+    } else if (OB_FAIL(add_auto_inc_param(*phy_plan_ctx))) {
+      LOG_WARN("fail to add auto inc param", K(ret), K(phy_plan_ctx));
     }
   }
 

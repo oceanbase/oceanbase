@@ -65,6 +65,8 @@
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/tablet/ob_tablet_multi_source_data.h"
 #include "storage/high_availability/ob_rebuild_service.h"
+#include "observer/table/ttl/ob_ttl_service.h"
+#include "observer/table/ttl/ob_tenant_tablet_ttl_mgr.h"
 #include "share/wr/ob_wr_service.h"
 
 namespace oceanbase
@@ -308,6 +310,21 @@ int ObLS::init(const share::ObLSID &ls_id,
         REGISTER_TO_LOGSERVICE(logservice::HEARTBEAT_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObHeartbeatService *));
         LOG_INFO("heartbeat service is registered successfully");
       }
+
+      if (OB_SUCC(ret) && is_user_tenant(tenant_id)) {
+        if (ls_id.is_sys_ls()) {
+          REGISTER_TO_LOGSERVICE(logservice::TTL_LOG_BASE_TYPE, MTL(table::ObTTLService *));
+          LOG_INFO("register tenant ttl service complete", KR(ret));
+        } else if (ls_id.is_user_ls()) {
+          if (OB_FAIL(tablet_ttl_mgr_.init(this))) {
+            LOG_WARN("fail to init tablet ttl manager", KR(ret));
+          } else {
+            REGISTER_TO_LOGSERVICE(logservice::TTL_LOG_BASE_TYPE, &tablet_ttl_mgr_);
+            LOG_INFO("register tenant tablet ttl mgr complete", KR(ret));
+          }
+        }
+      }
+
 
       if (OB_SUCC(ret)) {             // don't delete it
         election_priority_.set_ls_id(ls_id);
@@ -844,6 +861,15 @@ void ObLS::destroy()
   if (is_sys_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
     UNREGISTER_FROM_LOGSERVICE(logservice::WORKLOAD_REPOSITORY_SERVICE_LOG_BASE_TYPE,
         GCTX.wr_service_);
+  }
+
+  if (is_user_tenant(MTL_ID())) {
+    if (ls_meta_.ls_id_.is_sys_ls()) {
+      UNREGISTER_FROM_LOGSERVICE(logservice::TTL_LOG_BASE_TYPE, MTL(table::ObTTLService *));
+    } else if (ls_meta_.ls_id_.is_user_ls()) {
+      UNREGISTER_FROM_LOGSERVICE(logservice::TTL_LOG_BASE_TYPE, tablet_ttl_mgr_);
+      tablet_ttl_mgr_.destroy();
+    }
   }
 
   tx_table_.destroy();

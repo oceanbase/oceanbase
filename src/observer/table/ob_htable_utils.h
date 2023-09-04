@@ -15,7 +15,10 @@
 #include "common/row/ob_row.h"
 #include "lib/string/ob_string.h"
 #include "share/table/ob_table.h"
+#include "ob_htable_lock_mgr.h"
+#include "share/table/ob_table_rpc_struct.h"
 #include <stdint.h>
+#include "share/schema/ob_table_schema.h"
 
 namespace oceanbase
 {
@@ -160,6 +163,7 @@ public:
   virtual int64_t get_timestamp() const override;
   virtual common::ObString get_value() const override;
   virtual Type get_type() const { return Type::NORMAL; }
+  int get_value(ObString &str) const;
 private:
   const ObITableEntity *entity_;
   DISALLOW_COPY_AND_ASSIGN(ObHTableCellEntity2);
@@ -302,6 +306,13 @@ public:
   static int64_t current_time_millis() { return common::ObTimeUtility::current_time() / 1000; }
   static int java_bytes_to_int64(const ObString &bytes, int64_t &val);
   static int int64_to_java_bytes(int64_t val, char bytes[8]);
+  // lock all rows of mutations in the given lock mode with the given lock handle,
+  // for put, delete, mutations in check_and_xxx
+  static int lock_htable_rows(uint64_t table_id, const ObTableBatchOperation &mutations, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
+  // lock the check row in the given lock mode with the given lock hanle,
+  // for increment, append, and check operation in check_and_xxx
+  static int lock_htable_row(uint64_t table_id, const ObTableQuery &htable_query, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
+  static int check_htable_schema(const share::schema::ObTableSchema &table_schema);
 private:
   ObHTableUtils() = delete;
   ~ObHTableUtils() = delete;

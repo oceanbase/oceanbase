@@ -9231,6 +9231,41 @@ int ObBroadcastConsensusVersionArg::assign(const ObBroadcastConsensusVersionArg 
   }
   return ret;
 }
+OB_SERIALIZE_MEMBER(ObTTLResponseArg, tenant_id_, task_id_, server_addr_, task_status_);
+ObTTLResponseArg::ObTTLResponseArg()
+    : tenant_id_(0),
+      task_id_(OB_INVALID_ID),
+      server_addr_(),
+      task_status_(15),
+      err_code_(OB_SUCCESS)
+{}
+
+int ObTTLResponseArg::assign(const ObTTLResponseArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    tenant_id_ = other.tenant_id_;
+    task_id_ = other.task_id_;
+    server_addr_ = other.server_addr_;
+    task_status_ = other.task_status_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObTTLRequestArg, cmd_code_, trigger_type_, task_id_, tenant_id_);
+
+int ObTTLRequestArg::assign(const ObTTLRequestArg &other)
+{
+  int ret = OB_SUCCESS;
+
+  cmd_code_ = other.cmd_code_;
+  task_id_ = other.task_id_;
+  tenant_id_ = other.tenant_id_;
+  trigger_type_ = other.trigger_type_;
+
+  return ret;
+}
 
 OB_SERIALIZE_MEMBER(ObBroadcastConsensusVersionRes, ret_);
 
