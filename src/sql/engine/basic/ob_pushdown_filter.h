@@ -173,9 +173,18 @@ struct ObWhiteFilterHashFunc
 
 struct ObWhiteFilterParamsCmpFunc
 {
-  OB_INLINE bool operator()(const common::ObObj &obj1, const common::ObObj &obj2) const {
-    return -1 == ObObjCmpFuncs::compare_nullsafe(obj1, obj2, CS_TYPE_INVALID);
+  OB_INLINE bool operator()(const common::ObObj &obj1, const common::ObObj &obj2) {
+    int cmp = ObObjCmpFuncs::compare_nullsafe(obj1, obj2, CS_TYPE_INVALID);
+    if (OB_UNLIKELY(ObObjCmpFuncs::ObCmpRes::CR_OB_ERROR == cmp)) {
+      ret_ = OB_ERR_UNEXPECTED;
+    }
+    return ObObjCmpFuncs::ObCmpRes::CR_LT == cmp;
   }
+
+  OB_INLINE int get_ret_code() const { return ret_; };
+
+private:
+  int ret_ = OB_SUCCESS;
 };
 
 enum ObWhiteFilterOperatorType

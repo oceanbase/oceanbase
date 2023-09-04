@@ -1031,18 +1031,24 @@ int ObWhiteFilterExecutor::init_obj_set()
   }
   if (OB_FAIL(param_set_.create(params_.count() * 2))) {
     LOG_WARN("Failed to create hash set", K(ret));
-  }
-  for (int i = 0; OB_SUCC(ret) && i < params_.count(); ++i) {
-    if (OB_FAIL(param_set_.set_refactored(params_.at(i)))) {
-      if (OB_UNLIKELY(ret != OB_HASH_EXIST)) {
-        LOG_WARN("Failed to insert object into hashset", K(ret));
-      } else {
-        ret = OB_SUCCESS;
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < params_.count(); ++i) {
+      if (OB_FAIL(param_set_.set_refactored(params_.at(i)))) {
+        if (OB_UNLIKELY(ret != OB_HASH_EXIST)) {
+          LOG_WARN("Failed to insert object into hashset", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+        }
       }
     }
   }
   // 2. make params sorted
-  std::sort(params_.begin(), params_.end(), ObWhiteFilterParamsCmpFunc());
+  ObWhiteFilterParamsCmpFunc cmp_func;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FALSE_IT(std::sort(params_.begin(), params_.end(), cmp_func))) {
+  } else if (OB_FAIL(cmp_func.get_ret_code())) {
+    LOG_WARN("Failed to sort obj params, compare failed", K(ret));
+  }
   return ret;
 }
 
@@ -1069,7 +1075,11 @@ int ObWhiteFilterExecutor::exist_in_obj_array(const ObObj &obj, bool &is_exist) 
   if (params_.count() > 8 && (obj < get_min_param() || obj > get_max_param())) {
     is_exist = false;
   } else {
-    is_exist = std::binary_search(params_.begin(), params_.end(), obj, ObWhiteFilterParamsCmpFunc());
+    ObWhiteFilterParamsCmpFunc cmp_func;
+    if (OB_FALSE_IT(is_exist = std::binary_search(params_.begin(), params_.end(), obj, cmp_func))) {
+    } else if (OB_FAIL(cmp_func.get_ret_code())) {
+      LOG_WARN("Failed to binary_search obj params, compare failed", K(ret));
+    }
   }
   return ret;
 }
