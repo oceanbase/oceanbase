@@ -902,7 +902,7 @@ int ObPlanCacheValue::resolve_insert_multi_values_param(ObPlanCacheCtx &pc_ctx,
                                        must_be_positive_idx,
                                        *raw_param_array,
                                        &temp_obj_params))) {
-      LOG_WARN("failed to resolve params", K(ret));
+      LOG_WARN("failed to resolve parames", K(ret));
     } else {
       LOG_DEBUG("print one insert temp_obj_params",
           K(temp_obj_params), K(params_num), K(query_num), K(pc_ctx.not_param_info_));
@@ -1190,7 +1190,7 @@ int ObPlanCacheValue::get_one_group_params(int64_t pos, const ParamStore &src_pa
   int ret = OB_SUCCESS;
   int64_t N = src_params.count();
   if (OB_FAIL(dst_params.reserve(N))) {
-    LOG_WARN("fail to reserve parameter_store", K(ret), K(N));
+    LOG_WARN("fail to reserve paramer_store", K(ret), K(N));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
     const ObObjParam &objparam = src_params.at(i);
@@ -1305,7 +1305,7 @@ int ObPlanCacheValue::add_plan(ObPlanCacheObject &plan,
      1. When start to resolve a sql, record the current version of mapping rule.
      2. Before adding a plan into plan cache, check whether the recorded version is same as current version,
         and not add into plan cache if not same.
-     THERE IS A FLAW of this solution. If step 4 occurs right in the gap between check version and add plan in plan cache,
+     THERE IS A FLAW of this solution. If step 4 accurs right in the gap between check version and add plan in plan cache,
      a stale plan will be added into plan cache. Since the gap is quite small, we think the flaw is acceptable.
   */
   } else if (pc_ctx.sql_ctx_.res_map_rule_version_ != 0) {

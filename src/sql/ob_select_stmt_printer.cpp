@@ -974,7 +974,7 @@ int ObSelectStmtPrinter::print_with_check_option()
     const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt_);
     if (select_stmt->is_view_stmt()) {
       /* only print 'with check option' of subquery.
-       * with check option of view is printed in ObSchemaPrinter::print_view_definition.
+       * with check option of view is printed in ObSchemaPrinter::print_view_definiton.
        * otherwise it may cause a syntax error when ViewResolver resolve definition of a view.
        * case: create view v as select * from t with check option.
        * if we print 'with check option' of a view here, definition of the view is
@@ -1003,7 +1003,7 @@ int ObSelectStmtPrinter::find_recursive_cte_table(const ObSelectStmt* stmt, Tabl
   } else if (!stmt->is_recursive_union() ||
              OB_ISNULL(set_query=stmt->get_set_query(1))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expect recursive cte stmt", K(ret));
+    LOG_WARN("expect recurisve cte stmt", K(ret));
   }
   for (int i = 0; OB_SUCC(ret) && !table && i < set_query->get_table_items().count(); ++i) {
     TableItem *table_item = set_query->get_table_item(i);
