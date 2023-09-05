@@ -22,7 +22,7 @@ namespace oceanbase
 namespace common
 {
 static constexpr int64_t ALL_STACK_LIMIT = 10L << 20;
-static constexpr int64_t STACK_PER_EXTEND = (2L << 20) - ACHUNK_PRESERVE_SIZE;
+static constexpr int64_t STACK_PER_EXTEND = (2L << 20) - ACHUNK_PRESERVE_SIZE * 2;
 static constexpr int64_t STACK_RESERVED_SIZE = 128L << 10;
 RLOCAL_EXTERN(int64_t, all_stack_size);
 
@@ -42,7 +42,7 @@ inline int call_with_new_stack(void * arg_, int(*func_) (void*))
     ori_stack_size : all_stack_size)) {
   } else if (all_stack_size + stack_size > ALL_STACK_LIMIT) {
     ret = OB_SIZE_OVERFLOW;
-  } else if (OB_ISNULL(stack_addr = lib::g_stack_allocer.alloc(tenant_id, stack_size))) {
+  } else if (OB_ISNULL(stack_addr = lib::g_stack_allocer.smart_call_alloc(tenant_id, stack_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     all_stack_size += stack_size;
