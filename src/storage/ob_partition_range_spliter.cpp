@@ -1296,9 +1296,10 @@ int ObPartitionMultiRangeSpliter::split_multi_ranges(RangeSplitInfoArray &range_
           cur_avg_task_size = range_info.total_size_ / range_split_array.count();
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < range_split_array.count(); i++) {
-          if (sum_size >= avg_task_size
+          if (multi_range_split_array.count() + 1 < expected_task_count
+            && (sum_size >= avg_task_size
               || (sum_size >= task_size_low_watermark
-                  && sum_size + cur_avg_task_size >= task_size_high_watermark)) {
+                  && sum_size + cur_avg_task_size >= task_size_high_watermark))) {
             if (OB_FAIL(merge_and_push_range_array(refra_range_split_array, allocator,
                                                    multi_range_split_array))) {
               STORAGE_LOG(WARN, "Failed to merge and push split range array", K(ret), K(refra_range_split_array));
