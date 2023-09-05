@@ -480,19 +480,24 @@ int ObIntegerBaseDiffDecoder::in_operator(
     base_obj.v_.uint64_ = base_;
     // use max(obj_set) compare with base
     bool filter_obj_smaller_than_base = filter.get_max_param() < base_obj;
-    
+    ObDatum *datums = nullptr;
+
     if (filter_obj_smaller_than_base) {
       // Do not need to decode the data
       // All rows are false
       result_bitmap.reuse();
       LOG_DEBUG("Hit shortcut, max(obj_set) < base_obj, return all-false bitmap", K(base_obj));
-        } else {
+    } else if (OB_FAIL(filter.get_datums_from_column(datums))) {
+      LOG_WARN("Failed to get datums from column for batch decode", K(ret));
+    } else if (OB_ISNULL(datums)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Get null datums from column for batch decode", K(ret));
+    } else {
       // prepare arguments
       int64_t cur_row_id = 0;
       int64_t end_row_id = col_ctx.micro_block_header_->row_count_;
       int64_t last_start = cur_row_id;
       int64_t row_cap = 0;
-      ObDatum *datums = filter.get_batch_decode_datums();
       bool null_value_contained = (result_bitmap.popcnt() > 0);
       ObObj cur_obj;
       bool result = false;

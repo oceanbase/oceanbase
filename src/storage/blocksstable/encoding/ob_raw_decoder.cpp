@@ -843,18 +843,23 @@ int ObRawDecoder::in_operator(
     ObBitmap &result_bitmap) const
 {
   int ret = OB_SUCCESS;
-    if (OB_UNLIKELY(filter.get_objs().count() == 0
-             || result_bitmap.size() != col_ctx.micro_block_header_->row_count_
-             || NULL == row_index)) {
+  ObDatum *datums = nullptr;
+  if (OB_UNLIKELY(filter.get_objs().count() == 0
+              || result_bitmap.size() != col_ctx.micro_block_header_->row_count_
+              || NULL == row_index)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Pushdown in operator: Invalid arguments", K(ret), K(filter.get_objs()));
-    } else {
+  } else if (OB_FAIL(filter.get_datums_from_column(datums))) {
+    LOG_WARN("Failed to get datums from column for batch decode", K(ret));
+  } else if (OB_ISNULL(datums)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Get null datums from column for batch decode", K(ret));
+  } else {
     // prepare arguments
     int64_t cur_row_id = 0;
     int64_t end_row_id = col_ctx.micro_block_header_->row_count_;
     int64_t last_start = cur_row_id;
     int64_t row_cap = 0;
-    ObDatum *datums = filter.get_batch_decode_datums();
     bool null_value_contained = (result_bitmap.popcnt() > 0);
     ObObj cur_obj;
     bool result = false;

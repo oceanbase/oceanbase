@@ -969,8 +969,6 @@ int ObWhiteFilterExecutor::init_evaluated_datums()
     LOG_WARN("Failed to eval right values to obj array", K(ret), K(filter_.get_op_type()));
   } else if (WHITE_OP_IN == op_type && OB_FAIL(init_obj_set())) {
     LOG_WARN("Failed to init Object set in filter node", K(ret));
-  } else if (WHITE_OP_IN == op_type && OB_FAIL(get_datums_from_column(batch_decode_datums_))) {
-    LOG_WARN("Failed to init datums for batch_decode", K(ret));
   } else {
     LOG_DEBUG("[PUSHDOWN], white pushdown filter inited params", K(params_));
   }
@@ -1084,7 +1082,7 @@ int ObWhiteFilterExecutor::exist_in_obj_array(const ObObj &obj, bool &is_exist) 
   return ret;
 }
 
-int ObWhiteFilterExecutor::get_datums_from_column(common::ObDatum *&datums)
+int ObWhiteFilterExecutor::get_datums_from_column(common::ObDatum *&datums) const
 {
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = op_.get_eval_ctx();

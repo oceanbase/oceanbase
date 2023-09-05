@@ -33,6 +33,24 @@
 
 namespace oceanbase
 {
+namespace sql
+{
+class MockWhiteFilter : public sql::ObWhiteFilterExecutor
+{
+public:
+  MockWhiteFilter(common::ObIAllocator &alloc,
+                        ObPushdownWhiteFilterNode &filter,
+                        ObPushdownOperator &op)
+      : ObWhiteFilterExecutor(alloc, filter, op) {}
+
+  int get_datums_from_column(common::ObDatum *&datums) const override {
+    datums = batch_decode_datums_;
+    return OB_SUCCESS;
+  }
+
+  ObDatum* batch_decode_datums_;
+};
+}
 namespace blocksstable
 {
 using namespace common;
@@ -325,7 +343,8 @@ int TestColumnDecoder::test_filter_pushdown(
   sql::ObPushdownExprSpec expr_spec(allocator_);
   expr_spec.max_batch_size_ = TEST_BATCH_SIZE;
   sql::ObPushdownOperator op(eval_ctx, expr_spec);
-  sql::ObWhiteFilterExecutor filter(allocator_, filter_node, op);
+  // sql::ObWhiteFilterExecutor filter(allocator_, filter_node, op);
+  sql::MockWhiteFilter filter(allocator_, filter_node, op);
   filter.col_offsets_.init(COLUMN_CNT);
   filter.col_params_.init(COLUMN_CNT);
   const ObColumnParam *col_param = nullptr;
