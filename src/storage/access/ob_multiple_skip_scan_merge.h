@@ -43,6 +43,9 @@ private:
   const static int32_t START_KEY_OFFSET_OF_SCAN_ROWS_RANGE = 2;
   const static int32_t END_KEY_OFFSET_OF_SCAN_ROWS_RANGE = 3;
   const static int32_t SKIP_SCAN_ROWKEY_DATUMS_ARRAY_CNT = 4;
+  const static int64_t SKIP_SCAN_CHECK_INTERRUPT_CNT = 100;
+  const static int64_t SKIP_SCAN_RETIRE_TO_NORMAL_SCAN_LIMIT = 1000;
+  int open_skip_scan(const blocksstable::ObDatumRange &range, const blocksstable::ObDatumRange &skip_scan_range);
   int prepare_range(blocksstable::ObStorageDatum *datums, blocksstable::ObDatumRange &range);
   void prepare_rowkey(blocksstable::ObStorageDatum *datums, const blocksstable::ObDatumRowkey &rowkey,
       const int64_t datum_cnt, const bool is_min);
@@ -65,6 +68,14 @@ private:
       }
     }
   }
+  OB_INLINE bool should_check_interrupt() const
+  {
+    return 0 == scan_rowkey_cnt_ % SKIP_SCAN_CHECK_INTERRUPT_CNT;
+  }
+  OB_INLINE bool should_retire_to_scan() const
+  {
+    return scan_rowkey_cnt_ > SKIP_SCAN_RETIRE_TO_NORMAL_SCAN_LIMIT;
+  }
 
   enum SkipScanState {
     SCAN_ROWKEY,
@@ -72,14 +83,17 @@ private:
     SCAN_ROWS,
     UPDATE_SCAN_ROWKEY_RANGE,
     SCAN_FINISHED,
+    RETIRED_TO_SCAN,
   };
   SkipScanState state_;
+  int64_t scan_rowkey_cnt_;
   int64_t schema_rowkey_cnt_;
   int64_t ss_rowkey_prefix_cnt_;
   blocksstable::ObDatumRange scan_rowkey_range_;
   blocksstable::ObDatumRange scan_rows_range_;
   int64_t datums_cnt_;
   blocksstable::ObStorageDatum *datums_;
+  const blocksstable::ObDatumRange *origin_range_;
   common::ObArenaAllocator range_allocator_;
   common::ObArenaAllocator rowkey_allocator_;
 };
