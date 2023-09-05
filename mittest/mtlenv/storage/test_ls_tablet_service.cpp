@@ -641,7 +641,7 @@ TEST_F(TestLSTabletService, test_get_ls_min_end_scn)
   share::SCN test_scn = share::SCN::min_scn();
   share::SCN expect_scn;
   share::SCN orig_scn;
-  expect_scn.val_ = 1;
+  expect_scn.val_ = 0;
 
   share::SCN min_end_scn_from_latest_tablets = SCN::max_scn();
   share::SCN min_end_scn_from_old_tablets = SCN::max_scn();
