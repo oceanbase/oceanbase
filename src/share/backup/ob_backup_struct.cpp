@@ -1726,7 +1726,7 @@ int ObBackupInfoStatus::set_info_backup_status(
 
 /* ObBackupSetDesc */
 
-ObBackupSetDesc::ObBackupSetDesc() : backup_set_id_(-1), backup_type_()
+ObBackupSetDesc::ObBackupSetDesc() : backup_set_id_(-1), backup_type_(), min_restore_scn_(), total_bytes_(0)
 {}
 
 bool ObBackupSetDesc::is_valid() const
@@ -1743,6 +1743,8 @@ int ObBackupSetDesc::assign(const ObBackupSetDesc &that)
   } else {
     backup_set_id_ = that.backup_set_id_;
     backup_type_.type_ = that.backup_type_.type_;
+    min_restore_scn_ = that.min_restore_scn_;
+    total_bytes_ = that.total_bytes_;
   }
   return ret;
 }
@@ -3104,7 +3106,8 @@ const char *ObHAResultInfo::get_failed_type_str() const
     "RESTORE_DATA",
     "RESTORE_CLOG",
     "BACKUP_DATA",
-    "BACKUP_CLEAN"
+    "BACKUP_CLEAN",
+    "RECOVER_TABLE"
   };
   if (type_ < ROOT_SERVICE || type_ >= MAX_FAILED_TYPE) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid failed type", K(type_));
@@ -4261,6 +4264,44 @@ int share::backup_scn_to_time_tag(const SCN &scn, char *buf, const int64_t buf_l
   return ret;
 }
 
+int ObRestoreBackupSetBriefInfo::get_restore_backup_set_brief_info_str(
+    common::ObIAllocator &allocator, common::ObString &str) const
+{
+  int ret = OB_SUCCESS;
+  char *str_buf = NULL;
+  int64_t str_buf_len = 128;
+  if (str_buf_len > OB_MAX_LONGTEXT_LENGTH + 1) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("format str is too long", KR(ret), K(str_buf_len));
+  } else if (OB_ISNULL(str_buf = static_cast<char *>(allocator.alloc(str_buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc buf", KR(ret), K(str_buf_len));
+  } else if (OB_FALSE_IT(MEMSET(str_buf, '\0', str_buf_len))) {
+  } else {
+    // type: FULL min_restore_scn: 2022-05-31 12:00:00 size: 22 G
+    // path: file:///test_backup_dest
+    int64_t pos = 0;
+    const char *type_str = backup_set_desc_.backup_type_.is_full_backup() ? OB_STR_FULL_BACKUP : OB_STR_INC_BACKUP;
+    char scn_display_buf[OB_MAX_TIME_STR_LENGTH] = "";
+    if (OB_FALSE_IT(pos = 0)) {
+    } else if (OB_FAIL(backup_scn_to_time_tag(backup_set_desc_.min_restore_scn_, scn_display_buf, OB_MAX_TIME_STR_LENGTH, pos))) {
+      LOG_WARN("failed to backup scn to time tag", K(ret));
+    } else if (OB_FAIL(databuff_printf(str_buf, str_buf_len, pos, "type: %s, min_restore_scn_display: %s, size: %s.",
+        type_str, scn_display_buf, to_cstring(ObSizeLiteralPrettyPrinter(backup_set_desc_.total_bytes_))))) {
+      LOG_WARN("failed to databuff print", K(ret), KPC(this));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(str_buf) || str_buf_len <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected format str", KR(ret), K(str_buf), K(str_buf_len));
+  } else {
+    str.assign_ptr(str_buf, STRLEN(str_buf));
+    LOG_DEBUG("get log path list str", KR(ret), K(str));
+  }
+  return ret;
+}
+
 int ObRestoreBackupSetBriefInfo::assign(const ObRestoreBackupSetBriefInfo &that)
 {
   int ret = OB_SUCCESS;
@@ -4307,6 +4348,62 @@ int ObBackupSkippedType::parse_from_str(const ObString &str)
     type_ = MAX_TYPE;
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid backup skipped type str", KR(ret), K(str));
+  }
+  return ret;
+}
+
+int ObRestoreLogPieceBriefInfo::get_restore_log_piece_brief_info_str(
+    common::ObIAllocator &allocator, common::ObString &str) const
+{
+  int ret = OB_SUCCESS;
+  char *str_buf = NULL;
+  int64_t str_buf_len = 128;
+  if (str_buf_len > OB_MAX_LONGTEXT_LENGTH + 1) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("format str is too long", KR(ret), K(str_buf_len));
+  } else if (OB_ISNULL(str_buf = static_cast<char *>(allocator.alloc(str_buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc buf", KR(ret), K(str_buf_len));
+  } else if (OB_FALSE_IT(MEMSET(str_buf, '\0', str_buf_len))) {
+  } else {
+    // start_scn_display: 2022-05-31 12:00:00 checkpoint_scn_display: 2022-05-32 12:00:00
+    // path: file:///test_archive_dest
+    int64_t pos = 0;
+    char buf1[OB_MAX_TIME_STR_LENGTH] = "";
+    char buf2[OB_MAX_TIME_STR_LENGTH] = "";
+    if (OB_FAIL(backup_scn_to_time_tag(start_scn_, buf1, sizeof(buf1), pos))) {
+      LOG_WARN("failed to backup scn to time", K(ret), K(start_scn_));
+    } else if (OB_FALSE_IT(pos = 0)) {
+    } else if (OB_FAIL(backup_scn_to_time_tag(checkpoint_scn_, buf2, sizeof(buf2), pos))) {
+      LOG_WARN("failed to backup scn to time", K(ret), K(checkpoint_scn_));
+    } else if (OB_FAIL(databuff_printf(str_buf, str_buf_len, "start_scn_display: %s, checkpoint_scn_display: %s.", buf1, buf2))) {
+      LOG_WARN("failed to databuff print", K(ret), KPC(this));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(str_buf) || str_buf_len <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected format str", KR(ret), K(str_buf), K(str_buf_len));
+  } else {
+
+    str.assign_ptr(str_buf, STRLEN(str_buf));
+    LOG_DEBUG("get log path list str", KR(ret), K(str));
+  }
+  return ret;
+}
+
+int ObRestoreLogPieceBriefInfo::assign(const ObRestoreLogPieceBriefInfo &that)
+{
+  int ret = OB_SUCCESS;
+  if (!that.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(that));
+  } else if (OB_FAIL(piece_path_.assign(that.piece_path_))) {
+    LOG_WARN("fail to assign backup set path", K(ret), K(that));
+  } else {
+    piece_id_ = that.piece_id_;
+    start_scn_ = that.start_scn_;
+    checkpoint_scn_ = that.checkpoint_scn_;
   }
   return ret;
 }

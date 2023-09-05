@@ -56,8 +56,6 @@ public:
       K(has_rebuild_index_), K(has_rebuild_constraint_), K(has_rebuild_foreign_key_), K(is_sstable_complete_task_submitted_));
 private:
   int wait_data_complement(const share::ObDDLTaskStatus next_task_status);
-  int send_build_single_replica_request();
-  int check_build_single_replica(bool &is_end);
   int copy_table_dependent_objects(const share::ObDDLTaskStatus next_task_status);
   int take_effect(const share::ObDDLTaskStatus next_task_status);
   int copy_table_indexes();
@@ -68,13 +66,10 @@ private:
   virtual int64_t get_serialize_param_size() const override;
 private:
   static const int64_t OB_COLUMN_REDEFINITION_TASK_VERSION = 1L; 
-  int64_t sstable_complete_request_time_;
   bool has_rebuild_index_;
   bool has_rebuild_constraint_;
   bool has_rebuild_foreign_key_;
-  bool is_sstable_complete_task_submitted_;
   common::ObArenaAllocator allocator_;
-  ObDDLSingleReplicaExecutor replica_builder_;
 };
 
 }  // end namespace rootserver

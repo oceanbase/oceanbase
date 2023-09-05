@@ -47,7 +47,7 @@ int ObDDLExecutorUtil::handle_session_exception(ObSQLSessionInfo &session)
 int ObDDLExecutorUtil::wait_ddl_finish(
     const uint64_t tenant_id,
     const int64_t task_id,
-    ObSQLSessionInfo &session,
+    ObSQLSessionInfo *session,
     obrpc::ObCommonRpcProxy *common_rpc_proxy,
     const bool is_support_cancel)
 {
@@ -93,7 +93,7 @@ int ObDDLExecutorUtil::wait_ddl_finish(
         }
 
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(handle_session_exception(session))) {
+        } else if (nullptr != session && OB_FAIL(handle_session_exception(*session))) {
           LOG_WARN("session exeception happened", K(ret), K(is_support_cancel));
           if (is_support_cancel && OB_TMP_FAIL(cancel_ddl_task(tenant_id, common_rpc_proxy))) {
             LOG_WARN("cancel ddl task failed", K(tmp_ret));

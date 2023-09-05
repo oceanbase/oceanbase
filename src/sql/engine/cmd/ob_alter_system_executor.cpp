@@ -2574,6 +2574,27 @@ int ObCheckpointSlogExecutor::execute(ObExecContext &ctx, ObCheckpointSlogStmt &
   return ret;
 }
 
+int ObRecoverTableExecutor::execute(ObExecContext &ctx, ObRecoverTableStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObTaskExecutorCtx *task_exec_ctx = nullptr;
+  ObCommonRpcProxy *common_proxy = nullptr;
+  ObAddr server;
+  if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get task executor failed");
+  } else if (OB_ISNULL(common_proxy = task_exec_ctx->get_common_rpc())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get common rpc proxy failed");
+  } else if (OB_FAIL(common_proxy->recover_table(stmt.get_rpc_arg()))) {
+    LOG_WARN("failed to send recover table rpc", K(ret));
+  } else {
+    const obrpc::ObRecoverTableArg &recover_table_rpc_arg = stmt.get_rpc_arg();
+    LOG_INFO("send recover table rpc finish", K(recover_table_rpc_arg));
+  }
+  return ret;
+}
+
 int ObCancelRestoreExecutor::execute(ObExecContext &ctx, ObCancelRestoreStmt &stmt)
 {
   int ret = OB_SUCCESS;

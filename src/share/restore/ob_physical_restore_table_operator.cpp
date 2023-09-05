@@ -519,6 +519,16 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_INT_VALUE(concurrency, job);
 
     if (OB_SUCC(ret)) {
+      if (name == "backup_dest") {
+        ObString value;
+        EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "value", value, true, false, value);
+        if (FAILEDx((job).set_backup_dest(value))) {
+          LOG_WARN("failed to set column value", KR(ret), K(value));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       if (name == "kms_encrypt") {
         int64_t kms_encrypt = 0;
         if (OB_FAIL(retrieve_int_value(result, kms_encrypt))) {
@@ -946,6 +956,31 @@ int ObPhysicalRestoreTableOperator::get_job_by_tenant_name(
     LOG_WARN("invalid exec_tenant_id", K(ret), K(tenant_name));
   } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE job_id in (SELECT job_id "
                                     "FROM %s WHERE name = 'tenant_name' AND value = '%.*s')",
+                                    OB_ALL_RESTORE_JOB_TNAME,
+                                    OB_ALL_RESTORE_JOB_TNAME,
+                                    tenant_name.length(), tenant_name.ptr()))) {
+    LOG_WARN("failed to assign sql", K(ret), K(tenant_name));
+  } else if (OB_FAIL(get_restore_job_by_sql_(exec_tenant_id, sql, job_info))) {
+    LOG_WARN("failed to get restore job by sql", KR(ret), K(sql), K(exec_tenant_id));
+  }
+  return ret;
+}
+
+int ObPhysicalRestoreTableOperator::get_job_by_restore_tenant_name(
+    const ObString &tenant_name,
+    ObPhysicalRestoreJob &job_info)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const uint64_t exec_tenant_id = get_exec_tenant_id(tenant_id_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("sql proxy is null", K(ret));
+  } else if (OB_UNLIKELY(tenant_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid exec_tenant_id", K(ret), K(tenant_name));
+  } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE job_id in (SELECT job_id "
+                                    "FROM %s WHERE name = 'restore_tenant_name' AND value = '%.*s')",
                                     OB_ALL_RESTORE_JOB_TNAME,
                                     OB_ALL_RESTORE_JOB_TNAME,
                                     tenant_name.length(), tenant_name.ptr()))) {

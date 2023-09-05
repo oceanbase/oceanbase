@@ -1551,7 +1551,7 @@ int ObDDLRedoLogWriterCallback::init(const ObDDLMacroBlockType block_type,
     LOG_WARN("ObDDLSSTableRedoWriter has been inited twice", K(ret));
   } else if (OB_UNLIKELY(!table_key.is_valid() || nullptr == ddl_writer || DDL_MB_INVALID_TYPE == block_type || 0 == task_id || !ddl_kv_mgr_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(table_key), K(block_type));
+    LOG_WARN("invalid arguments", K(ret), K(table_key), K(block_type), K(task_id));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ddl_kv_mgr_handle.get_obj()->get_ls_id(), ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), KPC(ddl_kv_mgr_handle.get_obj()));
   } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,

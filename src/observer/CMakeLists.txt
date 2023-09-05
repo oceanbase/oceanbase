@@ -360,6 +360,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_table_columns.cpp
   virtual_table/ob_table_index.cpp
   virtual_table/ob_tenant_all_tables.cpp
+  virtual_table/ob_tenant_show_restore_preview.cpp
   virtual_table/ob_tenant_show_tables.cpp
   virtual_table/ob_tenant_virtual_charset.cpp
   virtual_table/ob_tenant_virtual_privilege.cpp

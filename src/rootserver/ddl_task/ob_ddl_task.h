@@ -39,7 +39,7 @@ public:
   uint64_t hash() const;
   int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator==(const ObDDLTaskKey &other) const;
-  bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_ && OB_INVALID_ID != object_id_ && schema_version_ > 0; }
+  bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_ && OB_INVALID_ID != object_id_ && schema_version_ > 0;}
   int assign(const ObDDLTaskKey &other);
   TO_STRING_KV(K_(tenant_id), K_(object_id), K_(schema_version));
 public:
@@ -328,6 +328,17 @@ public:
   TO_STRING_KV(K(is_inited_), K_(tenant_id), K(table_id_), K(is_trans_end_), K(wait_type_),
       K(wait_version_), K_(pending_tx_id), K(tablet_ids_.count()), K(snapshot_array_.count()));
 
+public:
+  /**
+   * To calculate the final snapshot version used for writing macro block.
+   * @param [in] tenant_id
+   * @param [in] trans_end_snapshot: usually the snapshot version obtained after wait trans end.
+   * @param [out] snapshot: used for data scan, row trans version for ddl.
+  */
+  static int calc_snapshot_with_gts(
+      const uint64_t tenant_id,
+      const int64_t trans_end_snapshot,
+      int64_t &snapshot);
 private:
   static bool is_wait_trans_type_valid(const WaitTransType wait_trans_type);
   int get_snapshot_check_list(
@@ -451,7 +462,7 @@ class ObDDLTask : public common::ObDLinkBase<ObDDLTask>
 public:
   explicit ObDDLTask(const share::ObDDLType task_type)
     : lock_(), ddl_tracing_(this), is_inited_(false), need_retry_(true), is_running_(false), is_abort_(false),
-      task_type_(task_type), trace_id_(), tenant_id_(0), object_id_(0), schema_version_(0),
+      task_type_(task_type), trace_id_(), tenant_id_(0), dst_tenant_id_(0), object_id_(0), schema_version_(0), dst_schema_version_(0),
       target_object_id_(0), task_status_(share::ObDDLTaskStatus::PREPARE), snapshot_version_(0), ret_code_(OB_SUCCESS), task_id_(0),
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),
       allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0),
@@ -472,17 +483,17 @@ public:
   bool get_is_abort() { return is_abort_; }
   void set_consumer_group_id(const int64_t group_id) { consumer_group_id_ = group_id; }
   bool try_set_running() { return !ATOMIC_CAS(&is_running_, false, true); }
-  uint64_t get_tenant_id() const { return tenant_id_; }
+  uint64_t get_tenant_id() const { return dst_tenant_id_; }
   uint64_t get_object_id() const { return object_id_; }
-  int64_t get_schema_version() const { return schema_version_; }
+  int64_t get_schema_version() const { return dst_schema_version_; }
   uint64_t get_target_object_id() const { return target_object_id_; }
   int64_t get_task_status() const { return task_status_; }
   int64_t get_snapshot_version() const { return snapshot_version_; }
   int get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_str);
   int64_t get_ret_code() const { return ret_code_; }
   int64_t get_task_id() const { return task_id_; }
-  ObDDLTaskID get_ddl_task_id() const { return ObDDLTaskID(tenant_id_, task_id_); }
-  ObDDLTaskKey get_task_key() const { return ObDDLTaskKey(tenant_id_, target_object_id_, schema_version_); }
+  ObDDLTaskID get_ddl_task_id() const { return ObDDLTaskID(dst_tenant_id_, task_id_); }
+  ObDDLTaskKey get_task_key() const { return ObDDLTaskKey(dst_tenant_id_, target_object_id_, dst_schema_version_); }
   int64_t get_parent_task_id() const { return parent_task_id_; }
   int64_t get_task_version() const { return task_version_; }
   int64_t get_parallelism() const { return parallelism_; }
@@ -543,7 +554,8 @@ public:
       K_(ret_code), K_(task_id), K_(parent_task_id), K_(parent_task_key),
       K_(task_version), K_(parallelism), K_(ddl_stmt_str), K_(compat_mode),
       K_(sys_task_id), K_(err_code_occurence_cnt), K_(stat_info),
-      K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_), K(sql_exec_addr_), K_(data_format_version), K(consumer_group_id_));
+      K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_), K(sql_exec_addr_), K_(data_format_version), K(consumer_group_id_),
+      K_(dst_tenant_id), K_(dst_schema_version));
 protected:
   int gather_redefinition_stats(const uint64_t tenant_id,
                                 const int64_t task_id,
@@ -585,8 +597,10 @@ protected:
   share::ObDDLType task_type_;
   TraceId trace_id_;
   uint64_t tenant_id_;
+  uint64_t dst_tenant_id_;
   uint64_t object_id_;
   uint64_t schema_version_;
+  uint64_t dst_schema_version_;
   uint64_t target_object_id_;
   share::ObDDLTaskStatus task_status_;
   int64_t snapshot_version_;

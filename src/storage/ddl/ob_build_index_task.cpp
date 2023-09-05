@@ -87,7 +87,7 @@ int ObUniqueIndexChecker::calc_column_checksum(
     const common::ObIArray<bool> &need_reshape,
     const ObColDescIArray &cols_desc,
     const ObIArray<int32_t> &output_projector,
-    ObIStoreRowIterator &iterator,
+    ObLocalScan &iterator,
     common::ObIArray<int64_t> &column_checksum,
     int64_t &row_count)
 {
@@ -102,13 +102,14 @@ int ObUniqueIndexChecker::calc_column_checksum(
     STORAGE_LOG(WARN, "fail to reserve column", K(ret), K(column_cnt));
   } else {
     const ObDatumRow *row = NULL;
+    const ObDatumRow *unused_row = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
       if (OB_FAIL(column_checksum.push_back(0))) {
         STORAGE_LOG(WARN, "fail to push back column checksum", K(ret));
       }
     }
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(iterator.get_next_row(row))) {
+      if (OB_FAIL(iterator.get_next_row(row, unused_row))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           break;

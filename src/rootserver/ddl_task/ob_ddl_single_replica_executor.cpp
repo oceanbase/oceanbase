@@ -38,10 +38,12 @@ int ObDDLSingleReplicaExecutor::build(const ObDDLSingleReplicaExecutorParam &par
       LOG_WARN("fail to assign tablet ids", K(ret));
     } else {
       tenant_id_ = param.tenant_id_;
+      dest_tenant_id_ = param.dest_tenant_id_;
       type_ = param.type_;
       source_table_id_ = param.source_table_id_;
       dest_table_id_ = param.dest_table_id_;
       schema_version_ = param.schema_version_;
+      dest_schema_version_ = param.dest_schema_version_;
       snapshot_version_ = param.snapshot_version_;
       task_id_ = param.task_id_;
       execution_id_ = param.execution_id_;
@@ -98,63 +100,75 @@ int ObDDLSingleReplicaExecutor::schedule_task()
     const bool force_renew = true;
     bool is_cache_hit = false;
     const int64_t expire_renew_time = force_renew ? INT64_MAX : 0;
-    ObLSID ls_id;
+    ObLSID orig_ls_id;
+    ObLSID dest_ls_id;
     common::ObArray<int> ret_array;
     ObArray<common::ObTabletID> request_source_tablet_ids;
     ObArray<common::ObTabletID> request_dest_tablet_ids;
     ObArray<int64_t> request_tablet_task_ids;
     int tmp_ret = OB_SUCCESS;
     {
-      {
-        ObSpinLockGuard guard(lock_);
-        // send rpc request may cost too much time, thus set some status before rpc request under lock.
-        for (int64_t i = 0; OB_SUCC(ret) && i < build_infos.count(); i++) {
-          ObPartitionBuildInfo &build_info = build_infos.at(i);
-          if (ObPartitionBuildStat::BUILD_INIT == build_info.stat_ || build_info.need_schedule()) {
-            if (OB_FAIL(request_source_tablet_ids.push_back(source_tablet_ids_.at(i)))) {
-              LOG_WARN("push backed failed", K(ret));
-            } else if (OB_FAIL(request_dest_tablet_ids.push_back(dest_tablet_ids_.at(i)))) {
-              LOG_WARN("push back failed", K(ret));
-            } else if (OB_FAIL(request_tablet_task_ids.push_back(tablet_task_ids_.at(i)))) {
-              LOG_WARN("push back failed", K(ret));
-            } else {
-              build_info.stat_ = ObPartitionBuildStat::BUILD_INIT;
-            }
+      ObSpinLockGuard guard(lock_);
+      // send rpc request may cost too much time, thus set some status before rpc request under lock.
+      for (int64_t i = 0; OB_SUCC(ret) && i < build_infos.count(); i++) {
+        ObPartitionBuildInfo &build_info = build_infos.at(i);
+        if (ObPartitionBuildStat::BUILD_INIT == build_info.stat_|| build_info.need_schedule()) {
+          if (OB_FAIL(request_source_tablet_ids.push_back(source_tablet_ids_.at(i)))) {
+            LOG_WARN("push backed failed", K(ret));
+          } else if (OB_FAIL(request_dest_tablet_ids.push_back(dest_tablet_ids_.at(i)))) {
+            LOG_WARN("push back failed", K(ret));
+          } else if (OB_FAIL(request_tablet_task_ids.push_back(tablet_task_ids_.at(i)))) {
+            LOG_WARN("push back failed", K(ret));
+          } else {
+            build_info.stat_ = ObPartitionBuildStat::BUILD_INIT;
           }
         }
       }
-
-      for (int64_t i = 0; OB_SUCC(ret) && i < request_source_tablet_ids.count(); ++i) {
-        ObAddr leader_addr;
-        obrpc::ObDDLBuildSingleReplicaRequestArg arg;
-        arg.ls_id_ = share::ObLSID::INVALID_LS_ID;
-        arg.tenant_id_ = tenant_id_;
-        arg.source_tablet_id_ = request_source_tablet_ids.at(i);
-        arg.dest_tablet_id_ = request_dest_tablet_ids.at(i);
-        arg.source_table_id_ = source_table_id_;
-        arg.dest_schema_id_ = dest_table_id_;
-        arg.schema_version_ = schema_version_;
-        arg.snapshot_version_ = snapshot_version_;
-        arg.ddl_type_ = type_;
-        arg.task_id_ = task_id_;
-        arg.parallelism_ = parallelism_;
-        arg.execution_id_ = execution_id_;
-        arg.data_format_version_ = data_format_version_;
-        arg.tablet_task_id_ = request_tablet_task_ids.at(i);
-        arg.consumer_group_id_ = consumer_group_id_;
-        if (OB_FAIL(location_service->get(tenant_id_, arg.source_tablet_id_,
-                expire_renew_time, is_cache_hit, ls_id))) {
-          LOG_WARN("get ls failed", K(ret), K(arg.source_tablet_id_));
-        } else if (OB_FAIL(location_service->get_leader(GCONF.cluster_id, tenant_id_, ls_id, force_renew, leader_addr))) {
-          LOG_WARN("get leader failed", K(ret), K(tenant_id_), K(ls_id));
-        } else if (FALSE_IT(arg.ls_id_ = ls_id)) {
-        } else if (OB_FAIL(proxy.call(leader_addr, rpc_timeout, tenant_id_, arg))) {
-          LOG_WARN("fail to send rpc", K(ret), K(rpc_timeout));
-        } else if (OB_FAIL(idxs.push_back(i))) {
-          LOG_WARN("fail to push back idx", K(ret));
-        } else {
-          LOG_INFO("send build single replica request", K(arg));
-        }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < request_source_tablet_ids.count(); ++i) {
+      // get leader of partition
+      ObAddr orig_leader_addr;
+      ObAddr dest_leader_addr;
+      obrpc::ObDDLBuildSingleReplicaRequestArg arg;
+      arg.ls_id_ = share::ObLSID::INVALID_LS_ID;
+      arg.dest_ls_id_ = share::ObLSID::INVALID_LS_ID;
+      arg.tenant_id_ = tenant_id_;
+      arg.dest_tenant_id_ = dest_tenant_id_;
+      arg.source_tablet_id_ = request_source_tablet_ids.at(i);
+      arg.dest_tablet_id_ = request_dest_tablet_ids.at(i);
+      arg.source_table_id_ = source_table_id_;
+      arg.dest_schema_id_ = dest_table_id_;
+      arg.schema_version_ = schema_version_;
+      arg.dest_schema_version_ = dest_schema_version_;
+      arg.snapshot_version_ = snapshot_version_;
+      arg.ddl_type_ = type_;
+      arg.task_id_ = task_id_;
+      arg.parallelism_ = parallelism_;
+      arg.execution_id_ = execution_id_;
+      arg.data_format_version_ = data_format_version_;
+      arg.tablet_task_id_ = request_tablet_task_ids.at(i);
+      arg.consumer_group_id_ = consumer_group_id_;
+      if (OB_FAIL(location_service->get(tenant_id_, arg.source_tablet_id_,
+              expire_renew_time, is_cache_hit, orig_ls_id))) {
+        LOG_WARN("get ls failed", K(ret), K(arg.source_tablet_id_));
+      } else if (OB_FAIL(location_service->get_leader(GCONF.cluster_id, tenant_id_, orig_ls_id, force_renew, orig_leader_addr))) {
+        LOG_WARN("get leader failed", K(ret), K(tenant_id_), K(orig_ls_id));
+      } else if (FALSE_IT(arg.ls_id_ = orig_ls_id)) {
+      } else if (OB_FAIL(location_service->get(dest_tenant_id_, arg.dest_tablet_id_,
+                          expire_renew_time, is_cache_hit, dest_ls_id))) {
+        LOG_WARN("get ls failed", K(ret), K(arg.dest_tablet_id_));
+      } else if (OB_FAIL(location_service->get_leader(GCONF.cluster_id, dest_tenant_id_, dest_ls_id, force_renew, dest_leader_addr))) {
+        LOG_WARN("get leader failed", K(ret), K(dest_tenant_id_), K(dest_ls_id));
+      } else if (ObDDLType::DDL_TABLE_RESTORE != arg.ddl_type_ && orig_leader_addr != dest_leader_addr) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("orig leader addr not equal dest leader addr", K(ret), K(orig_leader_addr), K(dest_leader_addr), K(arg));
+      } else if (FALSE_IT(arg.dest_ls_id_ = dest_ls_id)) {
+      } else if (OB_FAIL(proxy.call(dest_leader_addr, rpc_timeout, dest_tenant_id_, arg))) {
+        LOG_WARN("fail to send rpc", K(ret), K(rpc_timeout));
+      } else if (OB_FAIL(idxs.push_back(i))) {
+        LOG_WARN("fail to push back idx", K(ret));
+      } else {
+        LOG_INFO("send build single replica request", K(arg), K(dest_leader_addr));
       }
     }
     if (OB_SUCCESS != (tmp_ret = proxy.wait_all(ret_array))) {
@@ -221,9 +235,9 @@ int ObDDLSingleReplicaExecutor::check_build_end(bool &is_end, int64_t &ret_code)
       }
       if (OB_SUCC(ret) && build_infos.count() == succ_cnt) {
         if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(
-              tenant_id_, dest_table_id_, execution_id_, task_id_))) {
+              dest_tenant_id_, dest_table_id_, execution_id_, task_id_))) {
           LOG_WARN("fail to check sstable checksum_report_finish",
-            K(ret), K(tenant_id_), K(dest_table_id_), K(execution_id_), K(task_id_));
+            K(ret), K(dest_tenant_id_), K(dest_table_id_), K(execution_id_), K(task_id_));
         }
         is_end = true;
         ret_code = ret;
@@ -245,13 +259,13 @@ int ObDDLSingleReplicaExecutor::set_partition_task_status(const common::ObTablet
                                                           const int64_t row_scanned,
                                                           const int64_t row_inserted)
 {
+  LOG_INFO("ObDDLSingleReplicaExecutor::set_partition_task_status", K(ret_code));
   int ret = OB_SUCCESS;
   common::ObIArray<ObPartitionBuildInfo> &build_infos = partition_build_stat_;
   if (OB_UNLIKELY(!tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tablet_id));
   } else {
-    LOG_INFO("receive tablet task status", K(tablet_id), K(ret_code));
     ObSpinLockGuard guard(lock_);
     for (int64_t i = 0; OB_SUCC(ret) && i < source_tablet_ids_.count(); ++i) {
       if (tablet_id == source_tablet_ids_.at(i)) {

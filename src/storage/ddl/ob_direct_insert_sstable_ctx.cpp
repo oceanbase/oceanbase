@@ -351,7 +351,8 @@ int ObSSTableInsertSliceWriter::append_row(const ObNewRow &row_val)
           ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT;
         bool has_lob_header = store_row_.row_val_.cells_[i].has_lob_header();
         if (OB_FAIL(ObInsertLobColumnHelper::insert_lob_column(
-              lob_allocator_, ls_id_, tablet_id_, col_descs_->at(i), datum, timeout_ts, has_lob_header))) {
+              lob_allocator_, ls_id_, tablet_id_, col_descs_->at(i), datum, timeout_ts, has_lob_header,
+              MTL_ID()))) {
           LOG_WARN("fail to insert_lob_col", KR(ret), K(datum));
         }
       }

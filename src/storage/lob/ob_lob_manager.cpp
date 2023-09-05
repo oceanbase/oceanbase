@@ -415,14 +415,15 @@ int ObLobManager::is_remote(ObLobAccessParam& param, bool& is_remote, common::Ob
   } else if (!lob_locator->is_persist_lob()) {
     is_remote = false;
   } else {
-    int64_t tenant_id = MTL_ID();
+    uint64_t tenant_id = param.tenant_id_;
     if (OB_FAIL(get_ls_leader(param, tenant_id, param.ls_id_, dst_addr))) {
       LOG_WARN("failed to get ls leader", K(ret), K(tenant_id), K(param.ls_id_));
     } else {
-      is_remote = (dst_addr != self_addr);
+      // lob from other tenant also should read by rpc
+      is_remote = (dst_addr != self_addr) || (tenant_id != MTL_ID());
       if (param.from_rpc_ == true && is_remote) {
         ret = OB_NOT_MASTER;
-        LOG_WARN("call from rpc, but remote again", K(ret), K(dst_addr), K(self_addr));
+        LOG_WARN("call from rpc, but remote again", K(ret), K(dst_addr), K(self_addr), K(tenant_id), K(MTL_ID()));
       }
     }
   }
@@ -446,7 +447,7 @@ int ObLobManager::query_remote(ObLobAccessParam& param, common::ObAddr& dst_addr
   } else {
     SMART_VAR(ObLobQueryArg, arg) {
       // build arg
-      arg.tenant_id_ = MTL_ID();
+      arg.tenant_id_ = param.tenant_id_;
       arg.offset_ = param.offset_;
       arg.len_ = param.len_;
       arg.cs_type_ = param.coll_type_;
@@ -465,7 +466,7 @@ int ObLobManager::query_remote(ObLobAccessParam& param, common::ObAddr& dst_addr
                           .timeout(timeout)
                           .lob_query(arg, rpc_buffer, handle);
       if (OB_FAIL(ret)) {
-        LOG_WARN("failed to do remote query", K(ret));
+        LOG_WARN("failed to do remote query", K(ret), K(arg));
       } else {
         ObLobQueryBlock block;
         ObString block_data;
@@ -1187,6 +1188,7 @@ int ObLobManager::append(
         data.assign_buffer(buf + cur_handle_size, append_lob_len);
         SMART_VAR(ObLobAccessParam, read_param) {
           read_param.tx_desc_ = param.tx_desc_;
+          read_param.tenant_id_ = param.src_tenant_id_;
           if (OB_FAIL(build_lob_param(read_param, *param.allocator_, param.coll_type_,
                       0, UINT64_MAX, param.timeout_, lob))) {
             LOG_WARN("fail to build read param", K(ret), K(lob));
@@ -1311,6 +1313,7 @@ int ObLobManager::append(
       if (OB_SUCC(ret)) {
         SMART_VAR(ObLobAccessParam, read_param) {
           read_param.tx_desc_ = param.tx_desc_;
+          read_param.tenant_id_ = param.src_tenant_id_;
           if (OB_FAIL(build_lob_param(read_param, *param.allocator_, param.coll_type_,
                       0, UINT64_MAX, param.timeout_, lob))) {
             LOG_WARN("fail to build read param", K(ret), K(lob));
@@ -1831,7 +1834,7 @@ int ObLobManager::getlength_remote(ObLobAccessParam& param, common::ObAddr& dst_
   } else {
     SMART_VAR(ObLobQueryArg, arg) {
       // build arg
-      arg.tenant_id_ = MTL_ID();
+      arg.tenant_id_ = param.tenant_id_;
       arg.offset_ = param.offset_;
       arg.len_ = param.len_;
       arg.cs_type_ = param.coll_type_;
@@ -3349,7 +3352,7 @@ int ObLobQueryIter::open(ObLobAccessParam &param, common::ObAddr dst_addr)
     obrpc::ObStorageRpcProxy *svr_rpc_proxy = ls_service->get_storage_rpc_proxy();
     const int64_t cluster_id = GCONF.cluster_id;
     // build arg
-    query_arg_.tenant_id_ = MTL_ID();
+    query_arg_.tenant_id_ = param.tenant_id_;
     query_arg_.offset_ = param.offset_;
     query_arg_.len_ = param.len_;
     query_arg_.cs_type_ = param.coll_type_;

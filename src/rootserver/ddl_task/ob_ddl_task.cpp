@@ -743,6 +743,9 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
     case DDL_DIRECT_LOAD_INSERT:
       ddl_type_str = "direct load insert";
       break;
+    case DDL_TABLE_RESTORE:
+      ddl_type_str = "recover table restore ddl";
+      break;
     case DDL_MODIFY_AUTO_INCREMENT:
       ddl_type_str = "modify auto increment";
       break;
@@ -884,10 +887,10 @@ int ObDDLTask::convert_to_record(
   const int64_t serialize_param_size = get_serialize_param_size();
   int64_t pos = 0;
   task_record.gmt_create_ = get_gmt_create();
-  task_record.tenant_id_ = get_tenant_id();
+  task_record.tenant_id_ = get_tenant_id(); //dest tenant id.
   task_record.object_id_ = get_object_id();
   task_record.target_object_id_ = get_target_object_id();
-  task_record.schema_version_ = get_schema_version();
+  task_record.schema_version_ = get_schema_version(); // dest schema version.
   task_record.ddl_type_ = get_task_type();
   task_record.trace_id_ = get_trace_id();
   task_record.task_status_ = get_task_status();
@@ -976,22 +979,22 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
   if (OB_ISNULL(root_service = GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
-  } else if (OB_FAIL(root_service->get_schema_service().check_if_tenant_has_been_dropped(tenant_id_, is_tenant_dropped))) {
-    LOG_WARN("check if tenant has been dropped failed", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(root_service->get_schema_service().check_if_tenant_has_been_dropped(dst_tenant_id_, is_tenant_dropped))) {
+    LOG_WARN("check if tenant has been dropped failed", K(ret), K(dst_tenant_id_));
   } else if (is_tenant_dropped) {
     need_retry_ = false;
-    LOG_INFO("tenant has been dropped, exit anyway", K(ret), K(task_id_), K(parent_task_id_), K(tenant_id_));
-  } else if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(&root_service->get_sql_proxy(), tenant_id_, is_standby_tenant))) {
-    LOG_WARN("check is standby tenant failed", K(ret), K(tenant_id_));
+    LOG_INFO("tenant has been dropped, exit anyway", K(ret), K(task_id_), K(parent_task_id_), K(dst_tenant_id_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(&root_service->get_sql_proxy(), dst_tenant_id_, is_standby_tenant))) {
+    LOG_WARN("check is standby tenant failed", K(ret), K(dst_tenant_id_));
   } else if (is_standby_tenant) {
     need_retry_ = false;
-    LOG_INFO("tenant is standby, exit anyway", K(ret), K(task_id_), K(parent_task_id_), K(tenant_id_));
-  } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id_))) {
+    LOG_INFO("tenant is standby, exit anyway", K(ret), K(task_id_), K(parent_task_id_), K(dst_tenant_id_));
+  } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), dst_tenant_id_))) {
     LOG_WARN("start transaction failed", K(ret));
   } else {
     int64_t table_task_status = 0;
     int64_t execution_id = -1;
-    if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id_, task_id_, table_task_status, execution_id))) {
+    if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, dst_tenant_id_, task_id_, table_task_status, execution_id))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         need_retry_ = false;
       }
@@ -1012,11 +1015,11 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
           ret = update_task_record_status_and_msg(trans, real_new_status);
         }
       } else if (OB_FAIL(ObDDLTaskRecordOperator::update_task_status(
-              trans, tenant_id_, task_id_, static_cast<int64_t>(real_new_status)))) {
+              trans, dst_tenant_id_, task_id_, static_cast<int64_t>(real_new_status)))) {
         LOG_WARN("update task status failed", K(ret), K(task_id_), K(real_new_status));
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(ObDDLTaskRecordOperator::update_ret_code(trans, tenant_id_, task_id_, ret_code_))) {
+        if (OB_FAIL(ObDDLTaskRecordOperator::update_ret_code(trans, dst_tenant_id_, task_id_, ret_code_))) {
           LOG_WARN("failed to update ret code", K(ret));
         }
       }
@@ -1030,10 +1033,10 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
     if (OB_SUCC(ret) && old_status != real_new_status) {
       const char *status_str = ddl_task_status_to_str(real_new_status);
       if (status_str) {
-        ROOTSERVICE_EVENT_ADD("ddl_scheduler", "switch_state", K_(tenant_id), K_(task_id), K_(object_id), K_(target_object_id),
+        ROOTSERVICE_EVENT_ADD("ddl_scheduler", "switch_state", "tenant_id", dst_tenant_id_, K_(task_id), K_(object_id), K_(target_object_id),
           "new_state", status_str, K_(snapshot_version), ret_code_);
       } else {
-        ROOTSERVICE_EVENT_ADD("ddl_scheduler", "switch_state", K_(tenant_id), K_(task_id), K_(object_id), K_(target_object_id),
+        ROOTSERVICE_EVENT_ADD("ddl_scheduler", "switch_state", "tenant_id", dst_tenant_id_, K_(task_id), K_(object_id), K_(target_object_id),
           "new_state", real_new_status, K_(snapshot_version), ret_code_);
       }
       task_status_ = real_new_status;
@@ -1041,7 +1044,7 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
 
     if (OB_CANCELED == real_ret_code) {
       (void)ObDDLTaskRecordOperator::kill_task_inner_sql(root_service->get_sql_proxy(),
-          trace_id_, tenant_id_, task_id_, snapshot_version_, sql_exec_addr_); // ignore return code
+          trace_id_, dst_tenant_id_, task_id_, snapshot_version_, sql_exec_addr_); // ignore return code
       LOG_WARN("ddl_task switch_status kill_task_inner_sql");
     }
   }
@@ -1089,9 +1092,9 @@ int ObDDLTask::remove_task_record()
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else if (OB_FAIL(ObDDLTaskRecordOperator::delete_record(root_service->get_sql_proxy(),
-                                                            tenant_id_,
+                                                            dst_tenant_id_,
                                                             task_id_))) {
-    LOG_WARN("delete record failed", K(ret), K(task_id_));
+    LOG_WARN("delete record failed", K(ret), K(dst_tenant_id_), K(task_id_));
   }
   return ret;
 }
@@ -1113,9 +1116,9 @@ int ObDDLTask::report_error_code(const ObString &forward_user_message, const int
     error_message.affected_rows_ = affected_rows;
     const bool is_ddl_retry_task = is_drop_schema_block_concurrent_trans(task_type_);
     if (OB_SUCCESS != ret_code_) {
-      if (OB_FAIL(ObDDLErrorMessageTableOperator::load_ddl_user_error(tenant_id_, task_id_, object_id_,
+      if (OB_FAIL(ObDDLErrorMessageTableOperator::load_ddl_user_error(dst_tenant_id_, task_id_, object_id_,
               *GCTX.sql_proxy_, error_message))) {
-        LOG_WARN("load ddl user error failed", K(ret), K(tenant_id_), K(task_id_), K(object_id_));
+        LOG_WARN("load ddl user error failed", K(ret), K(dst_tenant_id_), K(task_id_), K(object_id_));
         if (OB_ITER_END == ret) {     // no single replica error message found, use ret_code_
           ret = OB_SUCCESS;
           if (is_oracle_mode && DDL_CREATE_INDEX != task_type_ && OB_ERR_DUPLICATED_UNIQUE_KEY == ret_code_) {
@@ -1167,7 +1170,7 @@ int ObDDLTask::report_error_code(const ObString &forward_user_message, const int
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObDDLErrorMessageTableOperator::report_ddl_error_message(error_message, tenant_id_, task_id_,
+      if (OB_FAIL(ObDDLErrorMessageTableOperator::report_ddl_error_message(error_message, dst_tenant_id_, task_id_,
           target_object_id_, schema_version_, -1/*object id*/, GCTX.self_addr(), GCTX.root_service_->get_sql_proxy()))) {
         LOG_WARN("report ddl error message failed", K(ret));
       }
@@ -2012,11 +2015,6 @@ int ObDDLWaitTransEndCtx::get_snapshot(int64_t &snapshot_version)
 {
   int ret = OB_SUCCESS;
   snapshot_version = 0;
-  ObRootService *root_service = nullptr;
-  ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
-  ObSimpleFrozenStatus frozen_status;
-  const int64_t timeout_us = ObDDLUtil::get_default_ddl_rpc_timeout();
-  SCN curr_ts;
   bool is_external_consistent = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -2024,42 +2022,20 @@ int ObDDLWaitTransEndCtx::get_snapshot(int64_t &snapshot_version)
   } else if (!is_trans_end_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("not all transactions are end", K(ret));
-  } else if (OB_ISNULL(root_service = GCTX.root_service_)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("root service is null", K(ret), KP(root_service));
   } else {
-    {
-      MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
-      // ignore return, MTL is only used in get_ts_sync, which will handle switch failure.
-      // for performance, everywhere calls get_ts_sync should ensure using correct tenant ctx
-      tenant_guard.switch_to(tenant_id_);
-      if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id_,
-                                        timeout_us,
-                                        curr_ts,
-                                        is_external_consistent))) {
-        LOG_WARN("fail to get gts sync", K(ret), K(tenant_id_), K(timeout_us), K(curr_ts), K(is_external_consistent));
+    int64_t max_snapshot = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < snapshot_array_.count(); ++i) {
+      int64_t cur_snapshot = snapshot_array_.at(i);
+      if (0 >= cur_snapshot) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("current snapshot is invalid", K(ret), K(cur_snapshot));
+      } else {
+        max_snapshot = max(max_snapshot, cur_snapshot);
       }
     }
     if (OB_SUCC(ret)) {
-      int64_t max_snapshot = 0;
-      for (int64_t i = 0; OB_SUCC(ret) && i < snapshot_array_.count(); ++i) {
-        int64_t cur_snapshot = snapshot_array_.at(i);
-        if (0 >= cur_snapshot) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("current snapshot is invalid", K(ret), K(cur_snapshot));
-        } else {
-          max_snapshot = max(max_snapshot, cur_snapshot);
-        }
-      }
-      if (OB_SUCC(ret)) {
-        snapshot_version = max(max_snapshot, curr_ts.get_val_for_tx() - INDEX_SNAPSHOT_VERSION_DIFF);
-        if (OB_FAIL(freeze_info_proxy.get_freeze_info(
-            root_service->get_sql_proxy(), SCN::min_scn(), frozen_status))) {
-          LOG_WARN("get freeze info failed", K(ret));
-        } else {
-          const int64_t frozen_scn_val = frozen_status.frozen_scn_.get_val_for_tx();
-          snapshot_version = max(snapshot_version, frozen_scn_val);
-        }
+      if (OB_FAIL(calc_snapshot_with_gts(tenant_id_, max_snapshot, snapshot_version))) {
+        LOG_WARN("calc snapshot with gts failed", K(ret), K(tenant_id_), K(max_snapshot), K(snapshot_version));
       }
     }
   }
@@ -2070,6 +2046,52 @@ bool ObDDLWaitTransEndCtx::is_wait_trans_type_valid(const WaitTransType wait_tra
 {
   return wait_trans_type > WaitTransType::MIN_WAIT_TYPE
     && wait_trans_type < WaitTransType::MAX_WAIT_TYPE;
+}
+
+int ObDDLWaitTransEndCtx::calc_snapshot_with_gts(
+    const uint64_t tenant_id,
+    const int64_t trans_end_snapshot,
+    int64_t &snapshot)
+{
+  int ret = OB_SUCCESS;
+  snapshot = 0;
+  SCN curr_ts;
+  bool is_external_consistent = false;
+  ObRootService *root_service = nullptr;
+  const int64_t timeout_us = ObDDLUtil::get_default_ddl_rpc_timeout();
+  ObFreezeInfoProxy freeze_info_proxy(tenant_id);
+  ObSimpleFrozenStatus frozen_status;
+  if (OB_UNLIKELY(tenant_id == common::OB_INVALID_ID)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(root_service = GCTX.root_service_)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("root service is null", K(ret), KP(root_service));
+  } else {
+    {
+      MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
+      // ignore return, MTL is only used in get_ts_sync, which will handle switch failure.
+      // for performance, everywhere calls get_ts_sync should ensure using correct tenant ctx
+      tenant_guard.switch_to(tenant_id);
+      if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id,
+                                        timeout_us,
+                                        curr_ts,
+                                        is_external_consistent))) {
+        LOG_WARN("fail to get gts sync", K(ret), K(tenant_id), K(timeout_us), K(curr_ts), K(is_external_consistent));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      snapshot = max(trans_end_snapshot, curr_ts.get_val_for_tx() - INDEX_SNAPSHOT_VERSION_DIFF);
+      if (OB_FAIL(freeze_info_proxy.get_freeze_info(
+          root_service->get_sql_proxy(), SCN::min_scn(), frozen_status))) {
+        LOG_WARN("get freeze info failed", K(ret));
+      } else {
+        const int64_t frozen_scn_val = frozen_status.frozen_scn_.get_val_for_tx();
+        snapshot = max(snapshot, frozen_scn_val);
+      }
+    }
+  }
+  return ret;
 }
 
 int ObDDLWaitTransEndCtx::get_snapshot_check_list(
@@ -2465,6 +2487,7 @@ bool ObDDLTaskRecord::is_valid() const
     && tenant_id_ > 0
     && task_version_ > 0
     && OB_INVALID_ID != object_id_
+    && OB_INVALID_ID != target_object_id_
     && schema_version_ > 0
     && execution_id_ >= -1;
   return is_valid;

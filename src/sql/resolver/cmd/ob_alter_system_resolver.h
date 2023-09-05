@@ -250,6 +250,38 @@ DEF_SIMPLE_CMD_RESOLVER(ObEnableSqlThrottleResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObDisableSqlThrottleResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObSetRegionBandwidthResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObCancelRestoreResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObCancelRecoverTableResolver);
+
+class ObRecoverTableResolver : public ObSystemCmdResolver
+{
+public:
+  ObRecoverTableResolver(ObResolverParams &params) : ObSystemCmdResolver(params) {}
+  virtual ~ObRecoverTableResolver() {}
+  virtual int resolve(const ParseNode &parse_tree);
+
+private:
+  int resolve_tenant_(const ParseNode *node, uint64_t &tenant_id, common::ObString &tenant_name,
+      lib::Worker::CompatMode &compat_mode, ObNameCaseMode &case_mode);
+  int resolve_scn_(const ParseNode *node, obrpc::ObPhysicalRestoreTenantArg &arg);
+  int resolve_recover_tables_(
+      const ParseNode *node, const lib::Worker::CompatMode &compat_mode, const ObNameCaseMode &case_mode,
+      share::ObImportTableArg &import_arg);
+  int resolve_remap_(const ParseNode *node, const lib::Worker::CompatMode &compat_mode, const ObNameCaseMode &case_mode,
+      share::ObImportRemapArg &remap_arg);
+  int resolve_remap_tables_(
+      const ParseNode *node, const lib::Worker::CompatMode &compat_mode, const ObNameCaseMode &case_mode,
+      share::ObImportRemapArg &remap_arg);
+  int resolve_remap_tablegroups_(
+      const ParseNode *node, share::ObImportRemapArg &remap_arg);
+  int resolve_remap_tablespaces_(
+      const ParseNode *node, share::ObImportRemapArg &remap_arg);
+#ifndef OB_BUILD_TDE_SECURITY
+  int resolve_kms_info_(const common::ObString &restore_option, common::ObString &kms_info);
+#endif
+  int resolve_backup_set_pwd_(common::ObString &pwd);
+  int resolve_restore_source_(common::ObString &restore_source);
+};
+
 DEF_SIMPLE_CMD_RESOLVER(ObTableTTLResolver);
 
 #undef DEF_SIMPLE_CMD_RESOLVER

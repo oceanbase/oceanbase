@@ -345,6 +345,7 @@ const char *const OB_BACKUP_DECRYPTION_PASSWD_ARRAY_SESSION_STR = "__ob_backup_d
 const char *const OB_RESTORE_SOURCE_NAME_SESSION_STR = "__ob_restore_source_name__";
 const char *const OB_RESTORE_PREVIEW_TENANT_ID_SESSION_STR = "__ob_restore_preview_tenant_id__";
 const char *const OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR = "__ob_restore_preview_backup_dest__";
+const char *const OB_RESTORE_PREVIEW_SCN_SESSION_STR = "__ob_restore_preview_timestamp__";
 const char *const OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR = "__ob_restore_preview_timestamp__";
 const char *const OB_RESTORE_PREVIEW_BACKUP_CLUSTER_NAME_SESSION_STR = "__ob_restore_preview_backup_cluster_name__";
 const char *const OB_RESTORE_PREVIEW_BACKUP_CLUSTER_ID_SESSION_STR = "__ob_restore_preview_backup_cluster_id__";
@@ -407,6 +408,10 @@ const char *const OB_BACKUP_SUFFIX=".obbak";
 const char *const OB_ARCHIVE_SUFFIX=".obarc";
 const char *const OB_STR_MIN_RESTORE_SCN_DISPLAY = "min_restore_scn_display";
 const char *const OB_STR_CHECKPOINT_FILE_NAME = "checkpoint_info";
+const char *const OB_STR_SRC_TENANT_NAME = "src_tenant_name";
+const char *const OB_STR_AUX_TENANT_NAME = "aux_tenant_name";
+const char *const OB_STR_TARGET_TENANT_NAME = "target_tenant_name";
+const char *const OB_STR_TARGET_TENANT_ID = "target_tenant_id";
 
 enum ObBackupFileType
 {
@@ -553,22 +558,41 @@ struct ObBackupSetDesc {
   bool operator==(const ObBackupSetDesc &other) const;
   void reset();
 
-  TO_STRING_KV(K_(backup_set_id), K_(backup_type));
+  TO_STRING_KV(K_(backup_set_id), K_(backup_type), K_(min_restore_scn), K_(total_bytes));
   int64_t backup_set_id_;
   ObBackupType backup_type_;  // FULL OR INC
+  share::SCN min_restore_scn_;
+  int64_t total_bytes_;
 };
 
 struct ObRestoreBackupSetBriefInfo final
 {
 public:
-  ObRestoreBackupSetBriefInfo(): backup_set_path_(), backup_set_desc_() {}
+  ObRestoreBackupSetBriefInfo(): backup_set_path_(), backup_set_desc_(){}
   ~ObRestoreBackupSetBriefInfo() {}
   void reset() { backup_set_path_.reset(); }
   bool is_valid() const { return !backup_set_path_.is_empty(); }
   int assign(const ObRestoreBackupSetBriefInfo &that);
+  int get_restore_backup_set_brief_info_str(common::ObIAllocator &allocator, common::ObString &str) const;
   TO_STRING_KV(K_(backup_set_path), K_(backup_set_desc));
   share::ObBackupSetPath backup_set_path_;
   share::ObBackupSetDesc backup_set_desc_;
+};
+
+struct ObRestoreLogPieceBriefInfo final
+{
+public:
+  ObRestoreLogPieceBriefInfo(): piece_path_(), piece_id_(0), start_scn_(), checkpoint_scn_() {}
+  ~ObRestoreLogPieceBriefInfo() {}
+  void reset() { piece_path_.reset(); }
+  bool is_valid() const { return !piece_path_.is_empty(); }
+  int get_restore_log_piece_brief_info_str(common::ObIAllocator &allocator, common::ObString &str) const;
+  int assign(const ObRestoreLogPieceBriefInfo &that);
+  TO_STRING_KV(K_(piece_path), K_(piece_id), K_(start_scn), K_(checkpoint_scn));
+  share::ObBackupPiecePath piece_path_;
+  int64_t piece_id_;
+  share::SCN start_scn_;
+  share::SCN checkpoint_scn_;
 };
 
 class ObBackupStorageInfo;

@@ -1143,6 +1143,18 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_TENANT_VIRTUAL_SHOW_RESTORE_PREVIEW_TID:
+          {
+            ObTenantShowRestorePreview *restore_preview = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObTenantShowRestorePreview, restore_preview))) {
+              if (OB_FAIL(restore_preview->init())) {
+                SERVER_LOG(WARN, "failed to init restore preview", K(ret));
+              } else {
+                vt_iter = static_cast<ObVirtualTableIterator *>(restore_preview);
+              }
+            }
+            break;
+          }
           case OB_TENANT_VIRTUAL_OBJECT_DEFINITION_TID:
           {
             ObGetObjectDefinition *get_object_def = NULL;

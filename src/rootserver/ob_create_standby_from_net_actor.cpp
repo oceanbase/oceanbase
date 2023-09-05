@@ -230,7 +230,7 @@ int ObCreateStandbyFromNetActor::refresh_schema_()
   } else if (OB_FAIL(schema_status_proxy->get_refresh_schema_status(tenant_id_, refresh_schema_status))) {
     LOG_WARN("fail to get refresh schema status", KR(ret), K_(tenant_id));
   } else if (refresh_schema_status.snapshot_timestamp_ == 0) {
-    if (OB_FAIL(ObRestoreService::reset_schema_status(tenant_id_, sql_proxy_))) {
+    if (OB_FAIL(ObRestoreScheduler::reset_schema_status(tenant_id_, sql_proxy_))) {
       WSTAT("failed to reset schema status", KR(ret), K_(tenant_id));
     }
   }

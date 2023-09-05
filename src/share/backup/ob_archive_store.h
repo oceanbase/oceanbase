@@ -406,7 +406,7 @@ public:
 
   // Get pieces needed in the specific interval indicated by 'start_scn' and 'end_scn'.
   // Return OB_ENTRY_NOT_EXIST if cannot find enough pieces.
-  int get_piece_paths_in_range(const SCN &start_scn, const SCN &end_scn, ObIArray<share::ObBackupPath> &pieces);
+  int get_piece_paths_in_range(const SCN &start_scn, const SCN &end_scn, ObIArray<share::ObRestoreLogPieceBriefInfo> &pieces);
 
   // Get archive file range in one piece
   // return OB_ENTRY_NOT_EXIST if no file exist

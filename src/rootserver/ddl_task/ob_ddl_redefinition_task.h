@@ -73,10 +73,14 @@ class ObSyncTabletAutoincSeqCtx final
 public:
   ObSyncTabletAutoincSeqCtx();
   ~ObSyncTabletAutoincSeqCtx() {}
-  int init(uint64_t tenant_id, int64_t src_table_id, int64_t dest_table_id);
+  int init(
+      const uint64_t src_tenant_id,
+      const uint64_t dst_tenant_id,
+      int64_t src_table_id,
+      int64_t dest_table_id);
   int sync();
   bool is_inited() const { return is_inited_; }
-  TO_STRING_KV(K_(is_inited), K_(is_synced), K_(tenant_id), K_(orig_src_tablet_ids), K_(src_tablet_ids),
+  TO_STRING_KV(K_(is_inited), K_(is_synced), K_(src_tenant_id), K_(dst_tenant_id), K_(orig_src_tablet_ids), K_(src_tablet_ids),
                K_(dest_tablet_ids), K_(autoinc_params));
 private:
   int build_ls_to_tablet_map(
@@ -98,7 +102,8 @@ private:
   static const int64_t MAP_BUCKET_NUM = 1024;
   bool is_inited_;
   bool is_synced_;
-  uint64_t tenant_id_;
+  uint64_t src_tenant_id_;
+  uint64_t dst_tenant_id_;
   ObSEArray<ObTabletID, 1> orig_src_tablet_ids_;
   ObSEArray<ObTabletID, 1> src_tablet_ids_;
   ObSEArray<ObTabletID, 1> dest_tablet_ids_;
@@ -113,7 +118,9 @@ public:
     build_replica_request_time_(0), complete_sstable_job_ret_code_(INT64_MAX), alter_table_arg_(),
     dependent_task_result_map_(), snapshot_held_(false), has_synced_autoincrement_(false),
     has_synced_stats_info_(false), update_autoinc_job_ret_code_(INT64_MAX), update_autoinc_job_time_(0),
-    check_table_empty_job_ret_code_(INT64_MAX), check_table_empty_job_time_(0) {}
+    check_table_empty_job_ret_code_(INT64_MAX), check_table_empty_job_time_(0),
+    is_sstable_complete_task_submitted_(false), sstable_complete_request_time_(0), replica_builder_()
+     {}
   virtual ~ObDDLRedefinitionTask() {}
   virtual int process() = 0;
   virtual int update_complete_sstable_job_status(
@@ -138,7 +145,10 @@ public:
 protected:
   int prepare(const share::ObDDLTaskStatus next_task_status);
   int check_table_empty(const share::ObDDLTaskStatus next_task_status);
-  int obtain_snapshot(const share::ObDDLTaskStatus next_task_status);
+  virtual int obtain_snapshot(const share::ObDDLTaskStatus next_task_status);
+  virtual int wait_data_complement(const share::ObDDLTaskStatus next_task_status);
+  int send_build_single_replica_request();
+  int check_build_single_replica(bool &is_end);
   bool check_can_validate_column_checksum(
       const bool is_oracle_mode,
       const share::schema::ObColumnSchemaV2 &src_column_schema,
@@ -148,8 +158,8 @@ protected:
       const share::schema::ObTableSchema &dest_table_schema,
       common::hash::ObHashMap<uint64_t, uint64_t> &validate_checksum_column_ids);
   int check_data_dest_tables_columns_checksum(const int64_t execution_id);
-  int fail();
-  int success();
+  virtual int fail();
+  virtual int success();
   int hold_snapshot(const int64_t snapshot_version);
   int release_snapshot(const int64_t snapshot_version);
   int add_constraint_ddl_task(const int64_t constraint_id);
@@ -240,6 +250,9 @@ protected:
   int64_t update_autoinc_job_time_;
   int64_t check_table_empty_job_ret_code_;
   int64_t check_table_empty_job_time_;
+  bool is_sstable_complete_task_submitted_;
+  int64_t sstable_complete_request_time_;
+  ObDDLSingleReplicaExecutor replica_builder_;
 };
 
 }  // end namespace rootserver

@@ -541,7 +541,7 @@ int ObInnerTableOperator::compare_and_swap(
     LOG_WARN("invalid new_value", K(ret), K(key), K(column_name), K(old_value), K(new_value));
   } else if (OB_FAIL(sql.assign_fmt("%s='%s'", column_name, new_value))) {
     LOG_WARN("fail to assign sql", K(ret), K(key), K(column_name), K(old_value), K(new_value));
-  } else if (OB_FAIL(predicates.assign_fmt("%s=%s", column_name, old_value))) {
+  } else if (OB_FAIL(predicates.assign_fmt("%s='%s'", column_name, old_value))) {
     LOG_WARN("fail to assign sql", K(ret), K(key), K(column_name), K(old_value), K(new_value));
   } else if (OB_FAIL(do_compare_and_swap_(proxy, key, sql.ptr(), predicates.ptr(), affected_rows))) {
     LOG_WARN("fail to update column", K(ret), K(key), K(column_name), K(old_value), K(new_value));

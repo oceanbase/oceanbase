@@ -16,11 +16,13 @@
 #include "logservice/ob_log_service.h"
 #include "observer/ob_server_struct.h"
 #include "share/ob_dml_sql_splicer.h"
+#include "share/ob_ddl_common.h"
 #include "share/ob_ddl_checksum.h"
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "share/ob_freeze_info_proxy.h"
 #include "share/ob_get_compat_mode.h"
 #include "share/schema/ob_table_dml_param.h"
+#include "share/schema/ob_part_mgr_util.h"
 #include "sql/engine/px/ob_granule_util.h"
 #include "sql/ob_sql_utils.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
@@ -55,70 +57,102 @@ using namespace blocksstable;
 
 namespace storage
 {
+
 int ObComplementDataParam::init(const ObDDLBuildSingleReplicaRequestArg &arg)
 {
   int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
   const ObTenantSchema *tenant_schema = nullptr;
-  const ObTableSchema *data_table_schema = nullptr;
-  const ObTableSchema *hidden_table_schema = nullptr;
-  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
-  const bool check_formal = arg.dest_schema_id_ > OB_MAX_CORE_TABLE_ID;       //avoid circular dependencies
-  const uint64_t tenant_id = arg.tenant_id_;
+  const ObTableSchema *orig_table_schema = nullptr;
+  const ObTableSchema *dest_table_schema = nullptr;
+  const uint64_t orig_tenant_id = arg.tenant_id_;
+  const uint64_t dest_tenant_id = arg.dest_tenant_id_;
+  const int64_t orig_table_id = arg.source_table_id_;
+  const int64_t dest_table_id = arg.dest_schema_id_;
+  const int64_t orig_schema_version = arg.schema_version_;
+  const int64_t dest_schema_version = arg.dest_schema_version_;
+  ObSchemaGetterGuard src_tenant_schema_guard;
+  ObSchemaGetterGuard dst_tenant_schema_guard;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObComplementDataParam has been inited before", K(ret));
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
-  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
-             tenant_id, schema_guard, arg.schema_version_))) {
-    LOG_WARN("fail to get tenant schema guard", K(ret), K(arg));
-  } else if (check_formal && OB_FAIL(schema_guard.check_formal_guard())) {
-    LOG_WARN("schema_guard is not formal", K(ret), K(arg));
-  } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
-    LOG_WARN("fail to get tenant info", K(ret), K(arg));
-  } else if (OB_ISNULL(tenant_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("tenant not exist", K(ret), K(arg));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-             arg.dest_schema_id_, hidden_table_schema))) {
-    LOG_WARN("fail to get hidden table schema", K(ret), K(arg));
-  } else if (OB_ISNULL(hidden_table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("hidden table schema not exist", K(ret), K(arg));
-  } else if (OB_UNLIKELY(hidden_table_schema->get_association_table_id() != arg.source_table_id_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error", K(ret), K(arg), K(hidden_table_schema->get_association_table_id()));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-             arg.source_table_id_, data_table_schema))) {
-    LOG_WARN("fail to get data table schema", K(ret), K(arg));
-  } else if (OB_ISNULL(data_table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("data table schema not exist", K(ret), K(arg));
-  } else if (OB_FAIL(guard.switch_to(tenant_id))) {
-    LOG_WARN("fail to switch to tenant", K(ret), K(arg));
-  } else if (FALSE_IT(snapshot_version_ = arg.snapshot_version_)) {
-  } else if (OB_FAIL(split_task_ranges(arg.ls_id_, arg.source_tablet_id_, data_table_schema->get_tablet_size(), arg.parallelism_))) {
-    LOG_WARN("fail to init concurrent params", K(ret), K(arg));
-  } else if (OB_FAIL(ObCompatModeGetter::get_table_compat_mode(tenant_id, arg.source_table_id_, compat_mode_))) {
-    LOG_WARN("failed to get compat mode", K(ret), K(arg));
   } else {
+    MTL_SWITCH (OB_SYS_TENANT_ID) {
+      if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+                orig_tenant_id, src_tenant_schema_guard, orig_schema_version))) {
+        LOG_WARN("fail to get tenant schema guard", K(ret), K(orig_tenant_id), K(orig_schema_version));
+      } else if (OB_FAIL(src_tenant_schema_guard.get_tenant_info(orig_tenant_id, tenant_schema))) {
+        LOG_WARN("fail to get tenant info", K(ret), K(orig_tenant_id));
+      } else if (OB_ISNULL(tenant_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("tenant not exist", K(ret), K(orig_tenant_id), K(orig_schema_version));
+      } else if (OB_FAIL(src_tenant_schema_guard.get_table_schema(orig_tenant_id, orig_table_id, orig_table_schema))) {
+        LOG_WARN("fail to get table schema", K(ret), K(orig_tenant_id), K(orig_table_id));
+      } else if (OB_ISNULL(orig_table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table not exist", K(ret), K(orig_tenant_id), K(orig_table_id), K(orig_schema_version));
+      } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+                dest_tenant_id, dst_tenant_schema_guard, dest_schema_version))) {
+        LOG_WARN("fail to get tenant schema guard", K(ret), K(dest_tenant_id), K(dest_schema_version));
+      } else if (OB_FAIL(dst_tenant_schema_guard.get_tenant_info(dest_tenant_id, tenant_schema))) {
+        LOG_WARN("fail to get tenant info", K(ret), K(dest_tenant_id));
+      } else if (OB_ISNULL(tenant_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("tenant not exist", K(ret), K(dest_tenant_id), K(dest_schema_version));
+      } else if (OB_FAIL(dst_tenant_schema_guard.get_table_schema(dest_tenant_id, dest_table_id, dest_table_schema))) {
+        LOG_WARN("fail to get table schema", K(ret), K(dest_tenant_id), K(dest_table_id));
+      } else if (OB_ISNULL(dest_table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table not exist", K(ret), K(dest_tenant_id), K(dest_table_id), K(dest_schema_version));
+      } else if (OB_FAIL(ObCompatModeGetter::get_table_compat_mode(orig_tenant_id, arg.source_table_id_, compat_mode_))) {
+        LOG_WARN("failed to get compat mode", K(ret), K(arg));
+      } else {
+        snapshot_version_ = arg.snapshot_version_;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (orig_tenant_id == dest_tenant_id) {
+        if (OB_UNLIKELY(dest_table_schema->get_association_table_id() != arg.source_table_id_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error", K(ret), K(arg), K(dest_table_schema->get_association_table_id()));
+        } else if (OB_FAIL(split_task_ranges(arg.ls_id_, arg.source_tablet_id_, orig_table_schema->get_tablet_size(), arg.parallelism_))) {
+          LOG_WARN("fail to init concurrent params", K(ret), K(arg));
+        }
+      } else {
+        // TODO yiren, support parallel for remote scan.
+        // 1. support split task range even if data in other nodes.
+        // 2. support query the data by adding rowkey range(hidden_column_visible for heap table).
+        // recover restore table ddl task.
+        ObStoreRange whole_range;
+        whole_range.set_whole_range();
+        if (OB_FAIL(ranges_.push_back(whole_range))) {
+          LOG_WARN("push back failed", K(ret));
+        } else {
+          concurrent_cnt_ = 1;
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
     is_inited_ = true;
-    tenant_id_ = tenant_id;
-    ls_id_ = arg.ls_id_;
-    source_table_id_ = arg.source_table_id_;
-    dest_table_id_ = arg.dest_schema_id_;
-    source_tablet_id_ = arg.source_tablet_id_;
+    orig_tenant_id_ = orig_tenant_id;
+    dest_tenant_id_ = dest_tenant_id;
+    orig_table_id_ = orig_table_id;
+    dest_table_id_ = dest_table_id;
+    orig_schema_version_ = orig_schema_version;
+    dest_schema_version_ = dest_schema_version;
+    orig_tablet_id_ = arg.source_tablet_id_;
     dest_tablet_id_ = arg.dest_tablet_id_;
-    schema_version_ = arg.schema_version_;
+    orig_ls_id_ = arg.ls_id_;
+    dest_ls_id_ = arg.dest_ls_id_;
     task_id_ = arg.task_id_;
     execution_id_ = arg.execution_id_;
     tablet_task_id_ = arg.tablet_task_id_;
     data_format_version_ = arg.data_format_version_;
-    FLOG_INFO("succeed to init ObComplementDataParam", K(ret), K(is_inited_), K(tenant_id_), K(ls_id_),
-      K(source_tablet_id_), K(dest_tablet_id_), K(schema_version_), K(task_id_), K(arg), K(concurrent_cnt_),
-      K(data_format_version_));
+    FLOG_INFO("succeed to init ObComplementDataParam", K(ret), KPC(this));
   }
   return ret;
 }
@@ -234,9 +268,9 @@ int ObComplementDataContext::init(const ObComplementDataParam &param, const ObDa
   } else if (OB_UNLIKELY(!param.is_valid() || !desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(param), K(desc));
-  } else if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(param.ls_id_, param.dest_tablet_id_, first_major_sstable, table_store_wrapper))) {
+  } else if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(param.dest_ls_id_, param.dest_tablet_id_, first_major_sstable, table_store_wrapper))) {
     LOG_WARN("check if major sstable exist failed", K(ret), K(param));
-  } else if (OB_FAIL(data_sstable_redo_writer_.init(param.ls_id_,
+  } else if (OB_FAIL(data_sstable_redo_writer_.init(param.dest_ls_id_,
                                                     param.dest_tablet_id_))) {
     LOG_WARN("fail to init data sstable redo writer", K(ret), K(param));
   } else if (nullptr != index_builder_) {
@@ -381,7 +415,6 @@ int ObComplementDataDag::create_first_task()
   } else if (OB_FAIL(add_task(*merge_task))) {
     LOG_WARN("add task failed");
   }
-
   return ret;
 }
 
@@ -405,16 +438,16 @@ int ObComplementDataDag::prepare_context()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected", K(ret), K(param_));
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
-             param_.tenant_id_, schema_guard, param_.schema_version_))) {
+             param_.dest_tenant_id_, schema_guard, param_.dest_schema_version_))) {
     LOG_WARN("fail to get tenant schema guard", K(ret), K(param_));
-  } else if (OB_FAIL(schema_guard.get_table_schema(param_.tenant_id_,
+  } else if (OB_FAIL(schema_guard.get_table_schema(param_.dest_tenant_id_,
              param_.dest_table_id_, hidden_table_schema))) {
     LOG_WARN("fail to get hidden table schema", K(ret), K(param_));
   } else if (OB_ISNULL(hidden_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("hidden table schema not exist", K(ret), K(param_));
   } else if (OB_FAIL(data_desc.init_as_index(*hidden_table_schema,
-                                    param_.ls_id_,
+                                    param_.dest_ls_id_,
                                     param_.dest_tablet_id_,
                                     MAJOR_MERGE,
                                     param_.snapshot_version_,
@@ -435,9 +468,10 @@ int64_t ObComplementDataDag::hash() const
     tmp_ret = OB_ERR_SYS;
     LOG_ERROR("table schema must not be NULL", K(tmp_ret), K(is_inited_), K(param_));
   } else {
-    hash_val = param_.tenant_id_ + param_.ls_id_.hash()
-             + param_.source_table_id_ + param_.dest_table_id_
-             + param_.source_tablet_id_.hash() + param_.dest_tablet_id_.hash() + ObDagType::DAG_TYPE_DDL;
+    hash_val = param_.orig_tenant_id_ + param_.dest_tenant_id_
+             + param_.orig_table_id_ + param_.dest_table_id_
+             + param_.orig_ls_id_.hash() + param_.dest_ls_id_.hash()
+             + param_.orig_tablet_id_.hash() + param_.dest_tablet_id_.hash() + ObDagType::DAG_TYPE_DDL;
   }
   return hash_val;
 }
@@ -454,9 +488,10 @@ bool ObComplementDataDag::operator==(const ObIDag &other) const
       tmp_ret = OB_ERR_SYS;
       LOG_ERROR("invalid argument", K(tmp_ret), K(param_), K(dag.param_));
     } else {
-      is_equal = (param_.tenant_id_ == dag.param_.tenant_id_) && (param_.ls_id_ == dag.param_.ls_id_) &&
-                 (param_.source_table_id_ == dag.param_.source_table_id_) && (param_.dest_table_id_ == dag.param_.dest_table_id_) &&
-                 (param_.source_tablet_id_ == dag.param_.source_tablet_id_) && (param_.dest_tablet_id_ == dag.param_.dest_tablet_id_);
+      is_equal = (param_.orig_tenant_id_ == dag.param_.orig_tenant_id_) && (param_.dest_tenant_id_ == dag.param_.dest_tenant_id_) &&
+                 (param_.orig_table_id_ == dag.param_.orig_table_id_) && (param_.dest_table_id_ == dag.param_.dest_table_id_) &&
+                 (param_.orig_ls_id_ == dag.param_.orig_ls_id_) && (param_.dest_ls_id_ == dag.param_.dest_ls_id_) &&
+                 (param_.orig_tablet_id_ == dag.param_.orig_tablet_id_) && (param_.dest_tablet_id_ == dag.param_.dest_tablet_id_);
     }
   }
   return is_equal;
@@ -482,18 +517,22 @@ int ObComplementDataDag::report_replica_build_status()
 #endif
     obrpc::ObDDLBuildSingleReplicaResponseArg arg;
     ObAddr rs_addr;
-    arg.tenant_id_ = param_.tenant_id_;
-    arg.ls_id_ = param_.ls_id_;
-    arg.tablet_id_ = param_.source_tablet_id_;
-    arg.source_table_id_ = param_.source_table_id_;
+    arg.tenant_id_ = param_.orig_tenant_id_;
+    arg.dest_tenant_id_ = param_.dest_tenant_id_;
+    arg.ls_id_ = param_.orig_ls_id_;
+    arg.dest_ls_id_ = param_.dest_ls_id_;
+    arg.tablet_id_ = param_.orig_tablet_id_;
+    arg.source_table_id_ = param_.orig_table_id_;
     arg.dest_schema_id_ = param_.dest_table_id_;
     arg.ret_code_ = context_.complement_data_ret_;
     arg.snapshot_version_ = param_.snapshot_version_;
-    arg.schema_version_ = param_.schema_version_;
+    arg.schema_version_ = param_.orig_schema_version_;
+    arg.dest_schema_version_ = param_.dest_schema_version_;
     arg.task_id_ = param_.task_id_;
     arg.execution_id_ = param_.execution_id_;
     arg.row_scanned_ = context_.row_scanned_;
     arg.row_inserted_ = context_.row_inserted_;
+    arg.server_addr_ = GCTX.self_addr();
     FLOG_INFO("send replica build status response to RS", K(ret), K(context_), K(arg));
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) {
@@ -516,12 +555,13 @@ int ObComplementDataDag::fill_info_param(compaction::ObIBasicInfoParam *&out_par
     ret = OB_NOT_INIT;
     LOG_WARN("ObComplementDataDag has not been initialized", K(ret));
   } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
-                                param_.ls_id_.id(),
-                                static_cast<int64_t>(param_.source_tablet_id_.id()),
+                                param_.orig_ls_id_.id(),
+                                static_cast<int64_t>(param_.orig_tablet_id_.id()),
                                 static_cast<int64_t>(param_.dest_tablet_id_.id()),
-                                static_cast<int64_t>(param_.source_table_id_),
+                                static_cast<int64_t>(param_.orig_table_id_),
                                 static_cast<int64_t>(param_.dest_table_id_),
-                                param_.schema_version_, param_.snapshot_version_))) {
+                                param_.orig_schema_version_,
+                                param_.snapshot_version_))) {
     LOG_WARN("failed to fill info param", K(ret));
   }
   return ret;
@@ -537,7 +577,7 @@ int ObComplementDataDag::fill_dag_key(char *buf, const int64_t buf_len) const
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid params", K(ret), K(param_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, "logstream_id=%ld source_tablet_id=%ld dest_tablet_id=%ld",
-                              param_.ls_id_.id(), param_.source_tablet_id_.id(), param_.dest_tablet_id_.id()))) {
+                              param_.orig_ls_id_.id(), param_.orig_tablet_id_.id(), param_.dest_tablet_id_.id()))) {
     LOG_WARN("fill dag key for ddl table merge dag failed", K(ret), K(param_));
   }
   return ret;
@@ -625,9 +665,9 @@ int ObComplementWriteTask::init(const int64_t task_id, ObComplementDataParam &pa
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(task_id), K(param), K(context));
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
-             param.tenant_id_, schema_guard, param.schema_version_))) {
+             param.dest_tenant_id_, schema_guard, param.dest_schema_version_))) {
     LOG_WARN("fail to get tenant schema guard", K(ret), K(param));
-  } else if (OB_FAIL(schema_guard.get_table_schema(param.tenant_id_,
+  } else if (OB_FAIL(schema_guard.get_table_schema(param.dest_tenant_id_,
              param.dest_table_id_, hidden_table_schema))) {
     LOG_WARN("fail to get hidden table schema", K(ret), K(param));
   } else if (OB_ISNULL(hidden_table_schema)) {
@@ -660,14 +700,15 @@ int ObComplementWriteTask::process()
   } else if (OB_SUCCESS != (context_->complement_data_ret_)) {
     LOG_WARN("complement data has already failed", "ret", context_->complement_data_ret_);
   } else if (context_->is_major_sstable_exist_) {
-  } else if (OB_FAIL(guard.switch_to(param_->tenant_id_))) {
-    LOG_WARN("switch to tenant failed", K(ret), K(param_->tenant_id_));
-  } else if (OB_FAIL(local_scan_by_range())) {
-    LOG_WARN("fail to do local scan by range", K(ret), K(task_id_));
-  } else {
-    LOG_INFO("finish the complement write task", K(ret));
+  } else if (OB_FAIL(guard.switch_to(param_->dest_tenant_id_, false))) {
+    LOG_WARN("switch to tenant failed", K(ret), K(param_->dest_tenant_id_));
+  } else if (param_->dest_tenant_id_ == param_->orig_tenant_id_) {
+    if (OB_FAIL(local_scan_by_range())) {
+      LOG_WARN("local scan and append row for column redefinition failed", K(ret), K(task_id_));
+    }
+  } else if (OB_FAIL(remote_scan())) {
+    LOG_WARN("remote scan for recover restore table ddl failed", K(ret));
   }
-
   if (OB_FAIL(ret) && OB_NOT_NULL(context_)) {
     context_->complement_data_ret_ = ret;
     ret = OB_SUCCESS;
@@ -719,76 +760,82 @@ int ObComplementWriteTask::generate_col_param()
   org_col_ids_.reuse();
   output_projector_.reuse();
   ObArray<ObColDesc> tmp_col_ids;
-  ObSchemaGetterGuard schema_guard;
+  ObSchemaGetterGuard hold_buf_src_tenant_schema_guard;
+  ObSchemaGetterGuard hold_buf_dst_tenant_schema_guard;
+  ObSchemaGetterGuard *src_tenant_schema_guard = nullptr;
+  ObSchemaGetterGuard *dst_tenant_schema_guard = nullptr;
   const ObTableSchema *data_table_schema = nullptr;
   const ObTableSchema *hidden_table_schema = nullptr;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
-             param_->tenant_id_, schema_guard, param_->schema_version_))) {
-    LOG_WARN("fail to get tenant schema guard", K(ret), KPC(param_));
-  } else if (OB_FAIL(schema_guard.get_table_schema(param_->tenant_id_,
-             param_->source_table_id_, data_table_schema))) {
-    LOG_WARN("fail to get data table schema", K(ret), K(arg));
-  } else if (OB_ISNULL(data_table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("data table schema not exist", K(ret), K(arg));
-  } else if (OB_FAIL(schema_guard.get_table_schema(param_->tenant_id_,
-             param_->dest_table_id_, hidden_table_schema))) {
-    LOG_WARN("fail to get hidden table schema", K(ret), KPC(param_));
-  } else if (OB_ISNULL(hidden_table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("hidden table schema not exist", K(ret), KPC(param_));
-  } else if (OB_FAIL(hidden_table_schema->get_store_column_ids(tmp_col_ids, false))) {
-    LOG_WARN("fail to get column ids", K(ret), KPC(hidden_table_schema));
-  } else if (OB_FAIL(org_col_ids_.assign(tmp_col_ids))) {
-    LOG_WARN("fail to assign col descs", K(ret), K(tmp_col_ids));
-  } else {
-    // generate col_ids
-    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_col_ids.count(); i++) {
-      const uint64_t hidden_column_id = tmp_col_ids.at(i).col_id_;
-      const ObColumnSchemaV2 *hidden_column_schema = hidden_table_schema->get_column_schema(hidden_column_id);
-      if (OB_ISNULL(hidden_column_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null column schema", K(ret), K(hidden_column_id));
-      } else {
-        const ObString &hidden_column_name = hidden_column_schema->get_column_name_str();
-        const ObColumnSchemaV2 *data_column_schema = data_table_schema->get_column_schema(hidden_column_name);
-        ObColDesc tmp_col_desc = tmp_col_ids.at(i);
-        if (nullptr == data_column_schema) {
-          // may be newly added column, can not find in data table.
-        } else if (FALSE_IT(tmp_col_desc.col_id_ = data_column_schema->get_column_id())) {
-        } else if (OB_FAIL(col_ids_.push_back(tmp_col_desc))) {
-          LOG_WARN("fail to push back col desc", K(ret), K(tmp_col_ids.at(i)), K(tmp_col_desc));
-        }
-      }
-    }
-  }
-  // generate output_projector.
-  if (OB_FAIL(ret)) {
-  } else {
-    // notice that, can not find newly added column, get the row firstly, and then resolve it.
-    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_col_ids.count(); i++) {
-      const ObColumnSchemaV2 *hidden_column_schema = hidden_table_schema->get_column_schema(tmp_col_ids.at(i).col_id_);
-      const ObString &hidden_column_name = hidden_column_schema->get_column_name_str();
-      for (int64_t j = 0; OB_SUCC(ret) && j < col_ids_.count(); j++) {
-        const ObColumnSchemaV2 *data_column_schema = data_table_schema->get_column_schema(col_ids_.at(j).col_id_);
-        if (nullptr == data_column_schema) {
-          // may be newly added column.
-        } else if (hidden_column_name == data_column_schema->get_column_name_str()) {
-          if (OB_FAIL(output_projector_.push_back(static_cast<int32_t>(j)))) {
-            LOG_WARN("fail to push back output projector", K(ret));
+  MTL_SWITCH (OB_SYS_TENANT_ID) {
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not init", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::get_tenant_schema_guard(param_->orig_tenant_id_, param_->dest_tenant_id_,
+        hold_buf_src_tenant_schema_guard, hold_buf_dst_tenant_schema_guard,
+        src_tenant_schema_guard, dst_tenant_schema_guard))) {
+      LOG_WARN("get tenant schema guard failed", K(ret), KPC(param_));
+    } else if (OB_FAIL(src_tenant_schema_guard->get_table_schema(param_->orig_tenant_id_,
+              param_->orig_table_id_, data_table_schema))) {
+      LOG_WARN("fail to get data table schema", K(ret), K(arg));
+    } else if (OB_ISNULL(data_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("data table schema not exist", K(ret), K(arg));
+    } else if (OB_FAIL(dst_tenant_schema_guard->get_table_schema(param_->dest_tenant_id_,
+              param_->dest_table_id_, hidden_table_schema))) {
+      LOG_WARN("fail to get hidden table schema", K(ret), KPC(param_));
+    } else if (OB_ISNULL(hidden_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("hidden table schema not exist", K(ret), KPC(param_));
+    } else if (OB_FAIL(hidden_table_schema->get_store_column_ids(tmp_col_ids, false))) {
+      LOG_WARN("fail to get column ids", K(ret), KPC(hidden_table_schema));
+    } else if (OB_FAIL(org_col_ids_.assign(tmp_col_ids))) {
+      LOG_WARN("fail to assign col descs", K(ret), K(tmp_col_ids));
+    } else {
+      // generate col_ids
+      for (int64_t i = 0; OB_SUCC(ret) && i < tmp_col_ids.count(); i++) {
+        const uint64_t hidden_column_id = tmp_col_ids.at(i).col_id_;
+        const ObColumnSchemaV2 *hidden_column_schema = hidden_table_schema->get_column_schema(hidden_column_id);
+        if (OB_ISNULL(hidden_column_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null column schema", K(ret), K(hidden_column_id));
+        } else {
+          const ObString &hidden_column_name = hidden_column_schema->get_column_name_str();
+          const ObColumnSchemaV2 *data_column_schema = data_table_schema->get_column_schema(hidden_column_name);
+          ObColDesc tmp_col_desc = tmp_col_ids.at(i);
+          if (nullptr == data_column_schema) {
+            // may be newly added column, can not find in data table.
+          } else if (FALSE_IT(tmp_col_desc.col_id_ = data_column_schema->get_column_id())) {
+          } else if (OB_FAIL(col_ids_.push_back(tmp_col_desc))) {
+            LOG_WARN("fail to push back col desc", K(ret), K(tmp_col_ids.at(i)), K(tmp_col_desc));
           }
-          break;
         }
       }
     }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(col_ids_.count() != output_projector_.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error", K(ret), K_(col_ids), K_(output_projector));
+    // generate output_projector.
+    if (OB_FAIL(ret)) {
+    } else {
+      // notice that, can not find newly added column, get the row firstly, and then resolve it.
+      for (int64_t i = 0; OB_SUCC(ret) && i < tmp_col_ids.count(); i++) {
+        const ObColumnSchemaV2 *hidden_column_schema = hidden_table_schema->get_column_schema(tmp_col_ids.at(i).col_id_);
+        const ObString &hidden_column_name = hidden_column_schema->get_column_name_str();
+        for (int64_t j = 0; OB_SUCC(ret) && j < col_ids_.count(); j++) {
+          const ObColumnSchemaV2 *data_column_schema = data_table_schema->get_column_schema(col_ids_.at(j).col_id_);
+          if (nullptr == data_column_schema) {
+            // may be newly added column.
+          } else if (hidden_column_name == data_column_schema->get_column_name_str()) {
+            if (OB_FAIL(output_projector_.push_back(static_cast<int32_t>(j)))) {
+              LOG_WARN("fail to push back output projector", K(ret));
+            }
+            break;
+          }
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(col_ids_.count() != output_projector_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret), K_(col_ids), K_(output_projector));
+    }
   }
   return ret;
 }
@@ -841,15 +888,16 @@ int ObComplementWriteTask::do_local_scan()
     ObSSTable *sstable = nullptr;
     ObTransService *trans_service = nullptr;
     ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> sstables;
-    const uint64_t tenant_id = param_->tenant_id_;
+    const uint64_t tenant_id = param_->dest_tenant_id_;
+    const int64_t schema_version = param_->dest_schema_version_;
     ObTxDesc *read_tx_desc = nullptr; // for reading lob column from aux_lob_table by table_scan
 
-    if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->orig_ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
       LOG_WARN("fail to get log stream", K(ret), KPC(param_));
     } else if (OB_UNLIKELY(nullptr == ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls is null", K(ret), K(ls_handle));
-    } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(param_->source_tablet_id_,
+    } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(param_->orig_tablet_id_,
             param_->snapshot_version_, iterator, allow_not_ready))) {
       if (OB_REPLICA_NOT_READABLE == ret) {
         ret = OB_EAGAIN;
@@ -867,15 +915,19 @@ int ObComplementWriteTask::do_local_scan()
       ObSchemaGetterGuard schema_guard;
       const ObTableSchema *data_table_schema = nullptr;
       const ObTableSchema *hidden_table_schema = nullptr;
-      if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
-                tenant_id, schema_guard, param_->schema_version_))) {
+      if (OB_UNLIKELY(param_->orig_tenant_id_ != param_->dest_tenant_id_
+                  || param_->orig_schema_version_ != param_->dest_schema_version_)) {
+        ret = OB_ERR_SYS;
+        LOG_WARN("err sys", K(ret), KPC(param_));
+      } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+                tenant_id, schema_guard, schema_version))) {
         LOG_WARN("fail to get tenant schema guard", K(ret), KPC(param_));
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-                param_->source_table_id_, data_table_schema))) {
-        LOG_WARN("fail to get data table schema", K(ret), K(arg));
+                param_->orig_table_id_, data_table_schema))) {
+        LOG_WARN("fail to get data table schema", K(ret), KPC(param_));
       } else if (OB_ISNULL(data_table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
-        LOG_WARN("data table schema not exist", K(ret), K(arg));
+        LOG_WARN("data table schema not exist", K(ret), KPC(param_));
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
                 param_->dest_table_id_, hidden_table_schema))) {
         LOG_WARN("fail to get hidden table schema", K(ret), KPC(param_));
@@ -892,19 +944,18 @@ int ObComplementWriteTask::do_local_scan()
                                         false/*output all columns of hidden table*/))) {
         LOG_WARN("fail to init local scan param", K(ret), K(*param_));
       } else if (OB_FAIL(ObInsertLobColumnHelper::start_trans(
-          param_->ls_id_, true/*is_for_read*/, INT64_MAX, read_tx_desc))) {
+          param_->orig_ls_id_, true/*is_for_read*/, INT64_MAX, read_tx_desc))) {
         LOG_WARN("fail to get tx_desc", K(ret));
       } else if (OB_FAIL(local_scan.table_scan(*data_table_schema,
-                                               param_->ls_id_,
-                                               param_->source_tablet_id_,
+                                               param_->orig_ls_id_,
+                                               param_->orig_tablet_id_,
                                                iterator,
                                                query_flag,
                                                datum_range, read_tx_desc))) {
         LOG_WARN("fail to do table scan", K(ret));
       }
     }
-
-    if (FAILEDx(append_row(local_scan))) {
+    if (FAILEDx(append_row(&local_scan))) {
       LOG_WARN("append row failed", K(ret));
     }
 
@@ -920,7 +971,47 @@ int ObComplementWriteTask::do_local_scan()
   return ret;
 }
 
-int ObComplementWriteTask::add_extra_rowkey(const int64_t rowkey_cnt, const int64_t extra_rowkey_cnt, const blocksstable::ObDatumRow &row)
+int ObComplementWriteTask::remote_scan()
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_time = ObTimeUtility::current_time();
+  if (OB_ISNULL(param_) || OB_UNLIKELY(!param_->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(idx), KP(param_));
+  } else if (OB_FAIL(generate_col_param())) {
+    LOG_WARN("fail to get column ids", K(ret));
+  } else if (OB_FAIL(do_remote_scan())) {
+    LOG_WARN("fail to do remote scan", K_(task_id), KPC(param_));
+  } else {
+    LOG_INFO("finish remote scan", K(ret), "cost_time", ObTimeUtility::current_time() - start_time , K_(task_id));
+  }
+  return ret;
+}
+
+int ObComplementWriteTask::do_remote_scan()
+{
+  int ret = OB_SUCCESS;
+  SMART_VAR(ObRemoteScan, remote_scan) {
+    remote_scan.reset();
+    if (OB_FAIL(remote_scan.init(param_->orig_tenant_id_,
+                                  param_->orig_table_id_,
+                                  param_->dest_tenant_id_,
+                                  param_->dest_table_id_,
+                                  param_->orig_schema_version_,
+                                  param_->dest_schema_version_,
+                                  param_->orig_tablet_id_))) {
+      LOG_WARN("fail to remote_scan init", K(ret), KPC(param_));
+    } else if (OB_FAIL(append_row(&remote_scan))) {
+      LOG_WARN("append row remote scan failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObComplementWriteTask::add_extra_rowkey(const int64_t rowkey_cnt,
+                                            const int64_t extra_rowkey_cnt,
+                                            const blocksstable::ObDatumRow &row,
+                                            const int64_t sql_no)
 {
   int ret = OB_SUCCESS;
   int64_t rowkey_column_count = rowkey_cnt;
@@ -943,7 +1034,7 @@ int ObComplementWriteTask::add_extra_rowkey(const int64_t rowkey_cnt, const int6
   return ret;
 }
 
-int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
+int ObComplementWriteTask::append_row(ObScan *scan)
 {
   int ret = OB_SUCCESS;
   ObDataStoreDesc data_desc;
@@ -975,24 +1066,24 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("ObComplementWriteTask is not inited", K(ret));
-    } else if (OB_ISNULL(param_) || OB_UNLIKELY(!param_->is_valid()) || OB_ISNULL(context_)) {
+    } else if (OB_ISNULL(param_) || OB_ISNULL(scan) || OB_UNLIKELY(!param_->is_valid()) || OB_ISNULL(context_)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid arguments", K(param_), KP(context_), K(ret));
+      LOG_WARN("invalid arguments", K(ret), KPC(param_), KPC(context_));
     } else if (OB_FAIL(macro_start_seq.set_parallel_degree(task_id_))) {
       LOG_WARN("set parallel degree failed", K(ret), K(task_id_));
     } else {
       const ObTableSchema *hidden_table_schema = nullptr;
       if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
-                param_->tenant_id_, schema_guard, param_->schema_version_))) {
+                param_->dest_tenant_id_, schema_guard, param_->dest_schema_version_))) {
         LOG_WARN("fail to get tenant schema guard", K(ret), KPC(param_));
-      } else if (OB_FAIL(schema_guard.get_table_schema(param_->tenant_id_,
+      } else if (OB_FAIL(schema_guard.get_table_schema(param_->dest_tenant_id_,
                 param_->dest_table_id_, hidden_table_schema))) {
         LOG_WARN("fail to get hidden table schema", K(ret), KPC(param_));
       } else if (OB_ISNULL(hidden_table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
-        LOG_WARN("table not exist", K(ret), K(param_->tenant_id_), K(param_->dest_table_id_));
+        LOG_WARN("table not exist", K(ret), K(param_->dest_tenant_id_), K(param_->dest_table_id_));
       } else if (OB_FAIL(data_desc.init(*hidden_table_schema,
-                                        param_->ls_id_,
+                                        param_->dest_ls_id_,
                                         param_->dest_tablet_id_,
                                         MAJOR_MERGE,
                                         param_->snapshot_version_,
@@ -1005,7 +1096,7 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
       } else if (OB_UNLIKELY(!hidden_table_key.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("hidden table key is invalid", K(ret), K(hidden_table_key));
-      } else if (OB_FAIL(sstable_redo_writer.init(param_->ls_id_, param_->dest_tablet_id_))) {
+      } else if (OB_FAIL(sstable_redo_writer.init(param_->dest_ls_id_, param_->dest_tablet_id_))) {
         LOG_WARN("fail to init sstable redo writer", K(ret));
       } else if (OB_UNLIKELY(nullptr == static_cast<ObComplementDataDag *>(get_dag()))) {
         ret = OB_ERR_UNEXPECTED;
@@ -1019,7 +1110,6 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
       } else {
         rowkey_column_cnt = hidden_table_schema->get_rowkey_column_num();
       }
-
       ObTableSchemaParam schema_param(allocator);
       // Hack to prevent row reshaping from converting empty string to null.
       //
@@ -1044,17 +1134,20 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
         LOG_WARN("failed to init datum row", K(ret), K(data_desc.get_full_stored_col_descs()));
       }
     }
-
     while (OB_SUCC(ret)) {      //get each row from row_iter
       const ObDatumRow *tmp_row = nullptr;
+      const ObDatumRow *reshape_row_only_for_remote_scan = nullptr;
       ObStoreRow tmp_store_row;
       ObColumnChecksumCalculator *checksum_calculator = nullptr;
       t1 = ObTimeUtility::current_time();
       dag_yield();
-      if (OB_FAIL(local_scan.get_next_row(tmp_row))) {
+      if (OB_FAIL(scan->get_next_row(tmp_row, reshape_row_only_for_remote_scan))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("fail to get next row", K(ret));
         }
+      } else if (OB_ISNULL(tmp_row)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tmp_row is nullptr", K(ret));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < org_col_ids_.count(); i++) {
         ObStorageDatum &datum = tmp_row->storage_datums_[i];
@@ -1064,7 +1157,8 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
           lob_cnt++;
           const int64_t timeout_ts = ObTimeUtility::current_time() + 60000000; // 60s
           if (OB_FAIL(ObInsertLobColumnHelper::insert_lob_column(
-              lob_allocator, param_->ls_id_, param_->dest_tablet_id_, org_col_ids_.at(i), datum, timeout_ts, true))) {
+              lob_allocator, param_->dest_ls_id_, param_->dest_tablet_id_,
+              org_col_ids_.at(i), datum, timeout_ts, true, param_->orig_tenant_id_))) {
             LOG_WARN("fail to insert_lob_col", K(ret), K(datum));
           }
         }
@@ -1091,12 +1185,23 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
           }
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_ISNULL(checksum_calculator = local_scan.get_checksum_calculator())) {
+        } else if (OB_ISNULL(checksum_calculator = scan->get_checksum_calculator())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("checksum calculator is nullptr", K(ret), KP(checksum_calculator));
-        } else if (OB_FAIL(checksum_calculator->calc_column_checksum(data_desc.get_full_stored_col_descs(), &write_row_, nullptr, nullptr))) {
-          LOG_WARN("fail to calc column checksum", K(ret), K(write_row_));
-        } else {
+        } else if (param_->orig_tenant_id_ == param_->dest_tenant_id_) {
+          if (OB_FAIL(checksum_calculator->calc_column_checksum(data_desc.get_full_stored_col_descs(), &write_row_, nullptr, nullptr))) {
+            LOG_WARN("fail to calc column checksum", K(ret), K(write_row_));
+          }
+        } else if (param_->orig_tenant_id_ != param_->dest_tenant_id_) {
+          if (OB_ISNULL(reshape_row_only_for_remote_scan)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected err", K(ret), K(write_row_));
+          } else if (OB_FAIL(checksum_calculator->calc_column_checksum(org_col_ids_/*without extra rowkey*/,
+              reshape_row_only_for_remote_scan, nullptr, nullptr))) {
+            LOG_WARN("fail to calc column checksum", K(ret), K(write_row_), KPC(reshape_row_only_for_remote_scan));
+          }
+        }
+        if (OB_SUCC(ret)) {
           t3 = ObTimeUtility::current_time();
           append_row_time += t3 - t2;
           context_->row_inserted_++;
@@ -1122,10 +1227,16 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(local_scan.get_origin_table_checksum(report_col_checksums, report_col_ids))) {
+    } else if (OB_FAIL(scan->get_origin_table_checksum(report_col_checksums, report_col_ids))) {
       LOG_WARN("fail to get origin table columns checksum", K(ret));
-    } else if (OB_FAIL(ObDDLChecksumOperator::update_checksum(param_->tenant_id_,
-                                                              param_->source_table_id_,
+    }
+    /**
+     * For DDL_RESTORE_TABLE, orig tenant id is differen to dest tenant id.
+     * Meanwhile, the original tenant is a backup tenant, can not support write operation,
+     * report its' checksum under the dest tenant, and origin_table_id + ddl_task_id will aviod the conflict.
+    */
+    else if (OB_FAIL(ObDDLChecksumOperator::update_checksum(param_->dest_tenant_id_,
+                                                              param_->orig_table_id_,
                                                               param_->task_id_,
                                                               report_col_checksums,
                                                               report_col_ids,
@@ -1133,7 +1244,9 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
                                                               param_->tablet_task_id_ << 48 | task_id_,
                                                               *GCTX.sql_proxy_))) {
       LOG_WARN("fail to report origin table checksum", K(ret));
-    } else {/* do nothing. */}
+    } else {
+      LOG_INFO("update checksum successfully", K(param_->orig_table_id_), K(report_col_checksums), K(param_->orig_tablet_id_));
+    }
   }
   return ret;
 }
@@ -1180,13 +1293,13 @@ int ObComplementMergeTask::process()
   } else if (FALSE_IT(dag = static_cast<ObComplementDataDag *>(tmp_dag))) {
   } else if (OB_SUCCESS != (context_->complement_data_ret_)) {
     LOG_WARN("complement data has already failed", "ret", context_->complement_data_ret_);
-  } else if (OB_FAIL(guard.switch_to(param_->tenant_id_))) {
-    LOG_WARN("switch to tenant failed", K(ret), K(param_->tenant_id_));
+  } else if (OB_FAIL(guard.switch_to(param_->dest_tenant_id_, false))) {
+    LOG_WARN("switch to tenant failed", K(ret), K(param_->dest_tenant_id_));
   } else if (context_->is_major_sstable_exist_) {
     ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
     const ObSSTable *first_major_sstable = nullptr;
     ObSSTableMetaHandle sst_meta_hdl;
-    if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->dest_ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
       LOG_WARN("failed to get log stream", K(ret), K(*param_));
     } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
                                                  param_->dest_tablet_id_,
@@ -1207,7 +1320,7 @@ int ObComplementMergeTask::process()
         LOG_WARN("unexpected error, major sstable shoud not be null", K(ret), K(*param_));
       } else if (OB_FAIL(first_major_sstable->get_meta(sst_meta_hdl))) {
         LOG_WARN("fail to get sstable meta handle", K(ret));
-      } else if (OB_FAIL(ObTabletDDLUtil::report_ddl_checksum(param_->ls_id_,
+      } else if (OB_FAIL(ObTabletDDLUtil::report_ddl_checksum(param_->dest_ls_id_,
                                                               param_->dest_tablet_id_,
                                                               param_->dest_table_id_,
                                                               1 /* execution_id */,
@@ -1215,7 +1328,7 @@ int ObComplementMergeTask::process()
                                                               sst_meta_hdl.get_sstable_meta().get_col_checksum(),
                                                               sst_meta_hdl.get_sstable_meta().get_col_checksum_cnt()))) {
         LOG_WARN("report ddl column checksum failed", K(ret), K(*param_));
-      } else if (OB_FAIL(GCTX.ob_service_->submit_tablet_update_task(param_->tenant_id_, param_->ls_id_, param_->dest_tablet_id_))) {
+      } else if (OB_FAIL(GCTX.ob_service_->submit_tablet_update_task(param_->dest_tenant_id_, param_->dest_ls_id_, param_->dest_tablet_id_))) {
         LOG_WARN("fail to submit tablet update task", K(ret), K(*param_));
       }
     }
@@ -1238,6 +1351,7 @@ int ObComplementMergeTask::process()
 int ObComplementMergeTask::add_build_hidden_table_sstable()
 {
   int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
   ObITable::TableKey hidden_table_key;
   SCN commit_scn;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1248,10 +1362,12 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
       || OB_UNLIKELY(!param_->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected", K(ret), KP(param_), KP(context_));
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->dest_ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("failed to get log stream", K(ret), K(param_->dest_ls_id_));
   } else if (OB_FAIL(param_->get_hidden_table_key(hidden_table_key))) {
     LOG_WARN("fail to get hidden table key", K(ret), K(hidden_table_key));
   } else if (OB_FAIL(context_->data_sstable_redo_writer_.end_ddl_redo_and_create_ddl_sstable(
-      param_->ls_id_, hidden_table_key, param_->dest_table_id_, param_->execution_id_, param_->task_id_))) {
+      param_->dest_ls_id_, hidden_table_key, param_->dest_table_id_, param_->execution_id_, param_->task_id_))) {
     LOG_WARN("failed to end ddl redo", K(ret));
   }
   return ret;
@@ -1261,7 +1377,7 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
  * -----------------------------------ObLocalScan-----------------------------------------
  */
 
-ObLocalScan::ObLocalScan() : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), source_table_id_(OB_INVALID_ID),
+ObLocalScan::ObLocalScan() : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), table_id_(OB_INVALID_ID),
     dest_table_id_(OB_INVALID_ID), schema_version_(0), extended_gc_(), snapshot_version_(common::OB_INVALID_VERSION),
     txs_(nullptr), default_row_(), tmp_row_(), row_iter_(nullptr), scan_merge_(nullptr), ctx_(), access_param_(),
     access_ctx_(), get_table_param_(), allocator_("ObLocalScan"), calc_buf_(ObModIds::OB_SQL_EXPR_CALC),
@@ -1339,7 +1455,7 @@ int ObLocalScan::init(
         LOG_WARN("failed to deep copy default row", K(ret));
       } else {
         tenant_id_ = data_table_schema.get_tenant_id();
-        source_table_id_ = data_table_schema.get_table_id();
+        table_id_ = data_table_schema.get_table_id();
         dest_table_id_ = hidden_table_schema.get_table_id();
         schema_version_ = hidden_table_schema.get_schema_version();
         is_inited_ = true;
@@ -1354,6 +1470,7 @@ int ObLocalScan::get_output_columns(
     ObIArray<ObColDesc> &col_ids)
 {
   int ret = OB_SUCCESS;
+  col_ids.reset();
   if (output_org_cols_only_) {
     if (OB_FAIL(col_ids.assign(extended_gc_.extended_col_ids_))) {
       LOG_WARN("assign tmp col ids failed", K(ret));
@@ -1630,11 +1747,11 @@ int ObLocalScan::get_origin_table_checksum(
              tenant_id_, schema_guard, schema_version_))) {
     LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id_), K(schema_version_));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_,
-             source_table_id_, data_table_schema))) {
-    LOG_WARN("get data table schema failed", K(ret), K(tenant_id_), K(source_table_id_));
+             table_id_, data_table_schema))) {
+    LOG_WARN("get data table schema failed", K(ret), K(tenant_id_), K(table_id_));
   } else if (OB_ISNULL(data_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("data table not exist", K(ret), K(tenant_id_), K(source_table_id_));
+    LOG_WARN("data table not exist", K(ret), K(tenant_id_), K(table_id_));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_,
              dest_table_id_, hidden_table_schema))) {
     LOG_WARN("fail to get hidden table schema", K(ret), K(tenant_id_), K(dest_table_id_));
@@ -1670,8 +1787,11 @@ int ObLocalScan::get_origin_table_checksum(
   return ret;
 }
 
-int ObLocalScan::get_next_row(const ObDatumRow *&tmp_row)
+int ObLocalScan::get_next_row(
+    const ObDatumRow *&tmp_row,
+    const ObDatumRow *&tmp_row_after_reshape)
 {
+  UNUSED(tmp_row_after_reshape);
   int ret = OB_SUCCESS;
   tmp_row = nullptr;
   calc_buf_.reuse();
@@ -1691,7 +1811,7 @@ int ObLocalScan::get_next_row(const ObDatumRow *&tmp_row)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error", K(ret), K(j), K(extended_gc_.extended_col_ids_.count()));
         } else {
-            tmp_row_.storage_datums_[i] = row->storage_datums_[j++];
+          tmp_row_.storage_datums_[i] = row->storage_datums_[j++];
         }
       } else {
         // the column is newly added, thus fill with default value.
@@ -1701,6 +1821,408 @@ int ObLocalScan::get_next_row(const ObDatumRow *&tmp_row)
   }
   if (OB_SUCC(ret)) {
     tmp_row = &tmp_row_;
+  }
+  return ret;
+}
+
+ObRemoteScan::ObRemoteScan()
+  : is_inited_(false),
+    current_(0),
+    tenant_id_(OB_INVALID_ID),
+    table_id_(OB_INVALID_ID),
+    dest_tenant_id_(OB_INVALID_ID),
+    dest_table_id_(OB_INVALID_ID),
+    schema_version_(0),
+    dest_schema_version_(0),
+    row_without_reshape_(),
+    row_with_reshape_(),
+    res_(),
+    result_(nullptr),
+    allocator_("DDLRemoteScan"),
+    org_col_ids_(),
+    column_names_(),
+    checksum_calculator_()
+{
+}
+
+ObRemoteScan::~ObRemoteScan()
+{
+  reset();
+}
+
+void ObRemoteScan::reset()
+{
+  is_inited_ = false;
+  current_ = 0;
+  tenant_id_ = OB_INVALID_ID;
+  table_id_ = OB_INVALID_ID;
+  dest_tenant_id_ = OB_INVALID_ID;
+  dest_table_id_ = OB_INVALID_ID;
+  schema_version_ = 0;
+  dest_schema_version_ = 0;
+  row_without_reshape_.reset();
+  row_with_reshape_.reset();
+  res_.reset();
+  result_ = nullptr;
+  org_col_ids_.reset();
+  column_names_.reset();
+  allocator_.reset();
+}
+
+int ObRemoteScan::init(const uint64_t tenant_id,
+                       const int64_t table_id,
+                       const uint64_t dest_tenant_id,
+                       const int64_t dest_table_id,
+                       const int64_t schema_version,
+                       const int64_t dest_schema_version,
+                       const ObTabletID &src_tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret));
+  } else if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id
+      || OB_INVALID_ID == dest_tenant_id || OB_INVALID_ID == dest_table_id
+      || schema_version <= 0 || dest_schema_version <= 0 || !src_tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id),
+      K(dest_tenant_id), K(dest_table_id), K(schema_version), K(dest_schema_version), K(src_tablet_id));
+  } else {
+    ObSqlString sql_string;
+    ObSchemaGetterGuard schema_guard;
+    const ObTableSchema *hidden_table_schema = nullptr;
+    bool is_oracle_mode = false;
+    if (OB_FAIL((ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+        dest_tenant_id, schema_guard, dest_schema_version)))) {
+      LOG_WARN("fail to get tenant schema guard", K(ret), K(dest_tenant_id), K(dest_schema_version));
+    } else if (OB_FAIL(schema_guard.get_table_schema(dest_tenant_id, dest_table_id, hidden_table_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(table_id));
+    } else if (OB_ISNULL(hidden_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table not exist", K(ret), K(dest_tenant_id), K(dest_table_id));
+    } else if (OB_FAIL(hidden_table_schema->get_store_column_ids(org_col_ids_))) {
+      LOG_WARN("fail to get store column ids", K(ret));
+    } else if (OB_FAIL(hidden_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("Failed to check oralce mode", K(ret));
+    } else if (OB_UNLIKELY(org_col_ids_.count() <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("org col ids count is 0", K(ret));
+    } else if (OB_FAIL(row_without_reshape_.init(allocator_, org_col_ids_.count()))) {
+      LOG_WARN("fail to init tmp_row", K(ret), K(org_col_ids_.count()));
+    } else if (OB_FAIL(row_with_reshape_.init(allocator_, org_col_ids_.count()))) {
+      LOG_WARN("fail to init tmp_row", K(ret), K(org_col_ids_.count()));
+    } else if (OB_FAIL(checksum_calculator_.init(org_col_ids_.count()))) {
+      LOG_WARN("fail to init checksum_calculator", K(ret));
+    } else {
+      tenant_id_ = tenant_id;
+      table_id_ = table_id;
+      dest_tenant_id_ = dest_tenant_id;
+      dest_table_id_ = dest_table_id;
+      schema_version_ = schema_version;
+      dest_schema_version_ = dest_schema_version;
+      src_tablet_id_ = src_tablet_id;
+      row_without_reshape_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+      row_with_reshape_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+      if (OB_FAIL(generate_build_select_sql(sql_string))) {
+        LOG_WARN("fail to generate build replica sql", K(ret), K(sql_string));
+      } else if (is_oracle_mode && OB_FAIL(prepare_iter(sql_string, GCTX.ddl_oracle_sql_proxy_))) {
+        LOG_WARN("prepare iter under oracle mode failed", K(ret), K(sql_string));
+      } else if (!is_oracle_mode && OB_FAIL(prepare_iter(sql_string, GCTX.ddl_sql_proxy_))) {
+        LOG_WARN("prepare iter under mysql mode failed", K(ret), K(sql_string));
+      } else {
+        is_inited_ = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRemoteScan::generate_build_select_sql(ObSqlString &sql_string)
+{
+  int ret = OB_SUCCESS;
+  sql_string.reset();
+  ObSchemaGetterGuard hold_buf_src_tenant_schema_guard;
+  ObSchemaGetterGuard hold_buf_dst_tenant_schema_guard;
+  ObSchemaGetterGuard *src_tenant_schema_guard = nullptr;
+  ObSchemaGetterGuard *dst_tenant_schema_guard = nullptr;
+  bool is_oracle_mode = false;
+  ObArray<ObColDesc> dest_column_ids;
+  const ObDatabaseSchema *orig_db_schema = nullptr;
+  const share::schema::ObTableSchema *orig_table_schema = nullptr;
+  const share::schema::ObTableSchema *dest_table_schema = nullptr;
+  MTL_SWITCH (OB_SYS_TENANT_ID) {
+    if (OB_UNLIKELY(is_inited_)) {
+      ret = OB_INIT_TWICE;
+      LOG_WARN("init twice", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::get_tenant_schema_guard(tenant_id_, dest_tenant_id_,
+        hold_buf_src_tenant_schema_guard, hold_buf_dst_tenant_schema_guard,
+        src_tenant_schema_guard, dst_tenant_schema_guard))) {
+      LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_), K(dest_tenant_id_));
+    } else if (OB_FAIL(src_tenant_schema_guard->get_table_schema(tenant_id_, table_id_, orig_table_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K(tenant_id_), K(table_id_));
+    } else if (OB_ISNULL(orig_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table not exist", K(ret), K(tenant_id_), K(table_id_));
+    }  else if (OB_FAIL(orig_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("Failed to check oralce mode", K(ret));
+    } else if (OB_FAIL(src_tenant_schema_guard->get_database_schema(tenant_id_, orig_table_schema->get_database_id(), orig_db_schema))) {
+      LOG_WARN("fail to get database schema", K(ret), K(tenant_id_));
+    } else if (OB_ISNULL(orig_db_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, database schema must not be nullptr", K(ret), KPC(orig_table_schema));
+    } else if (OB_FAIL(dst_tenant_schema_guard->get_table_schema(dest_tenant_id_, dest_table_id_, dest_table_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K(dest_tenant_id_), K(dest_table_id_));
+    } else if (OB_ISNULL(dest_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table not exist", K(ret), K(dest_tenant_id_), K(dest_table_id_));
+    } else if (OB_FAIL(dest_table_schema->get_store_column_ids(dest_column_ids, false))) {
+      LOG_WARN("get store column ids failed", K(ret), KPC(dest_table_schema));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < dest_column_ids.count(); i++) {
+        const uint64_t dest_column_id = dest_column_ids.at(i).col_id_;
+        const ObColumnSchemaV2 *dest_column_schema = dest_table_schema->get_column_schema(dest_column_id);
+        if (OB_ISNULL(dest_column_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null column schema", K(ret), K(dest_column_id));
+        } else {
+          const ObString &dest_column_name = dest_column_schema->get_column_name_str();
+          const ObColumnSchemaV2 *orig_column_schema = orig_table_schema->get_column_schema(dest_column_name);
+          if (OB_ISNULL(orig_column_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column not exist", K(ret), K(dest_column_name), KPC(dest_table_schema));
+          } else if (OB_FAIL(column_names_.push_back(ObColumnNameInfo(dest_column_name, dest_column_id >= OB_MIN_SHADOW_COLUMN_ID,
+              orig_column_schema->is_enum_or_set())))) {
+            LOG_WARN("fail to push back column name failed", K(ret));
+          }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        ObSqlString query_column_sql_string;
+        if (OB_FAIL(ObDDLUtil::generate_column_name_str(column_names_, is_oracle_mode, true, true, false/*use_heap_table_ddl_plan*/, query_column_sql_string))) {
+          LOG_WARN("fail to generate column name str", K(ret));
+        } else {
+          ObString orig_database_name_with_escape;
+          ObString orig_table_name_with_escape;
+          ObSqlString query_partition_sql;
+          const bool is_part_table = orig_table_schema->is_partitioned_table();
+          const char *split_char = is_oracle_mode ? "\"" : "`";
+          if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+              allocator_, orig_db_schema->get_database_name_str(), orig_database_name_with_escape, is_oracle_mode))) {
+            LOG_WARN("generate new name failed", K(ret));
+          } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+              allocator_, orig_table_schema->get_table_name_str(), orig_table_name_with_escape, is_oracle_mode))) {
+            LOG_WARN("generate new name failed", K(ret));
+          } else if (is_part_table) {
+            ObString partition_name_with_escape;
+            const ObBasePartition *source_partition = nullptr;
+            if (OB_FAIL(fetch_source_part_info(src_tablet_id_, *orig_table_schema, source_partition))) {
+              LOG_WARN("fetch source part info failed", K(ret));
+            } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+              allocator_, source_partition->get_part_name(), partition_name_with_escape, is_oracle_mode))) {
+              LOG_WARN("generate new name failed", K(ret), KPC(source_partition));
+            } else if (OB_FAIL(query_partition_sql.assign_fmt("%s%.*s%s.%s%.*s%s partition (%s%.*s%s)",
+                split_char, static_cast<int>(orig_database_name_with_escape.length()), orig_database_name_with_escape.ptr(), split_char,
+                split_char, static_cast<int>(orig_table_name_with_escape.length()), orig_table_name_with_escape.ptr(), split_char,
+                split_char, static_cast<int>(partition_name_with_escape.length()), partition_name_with_escape.ptr(), split_char))) {
+              LOG_WARN("add specified query partition failed", K(ret),
+                K(orig_database_name_with_escape), K(orig_table_name_with_escape), K(partition_name_with_escape));
+            }
+          } else if (OB_FAIL(query_partition_sql.assign_fmt("%s%.*s%s.%s%.*s%s",
+              split_char, static_cast<int>(orig_database_name_with_escape.length()), orig_database_name_with_escape.ptr(), split_char,
+              split_char, static_cast<int>(orig_table_name_with_escape.length()), orig_table_name_with_escape.ptr(), split_char))) {
+            LOG_WARN("add specified query partition failed", K(ret),
+              K(orig_database_name_with_escape), K(orig_table_name_with_escape));
+          }
+
+          if (FAILEDx(sql_string.assign_fmt("SELECT /*+opt_param('hidden_column_visible' 'true')*/ %.*s from %.*s",
+                            static_cast<int>(query_column_sql_string.length()), query_column_sql_string.ptr(),
+                            static_cast<int>(query_partition_sql.length()), query_partition_sql.ptr()))) {
+            LOG_WARN("fail to assign sql string", K(ret), K(query_column_sql_string), K(query_partition_sql));
+          }
+        }
+      }
+    }
+  }
+  LOG_TRACE("generate query sql finished", K(ret), K(sql_string));
+  return ret;
+}
+
+int ObRemoteScan::fetch_source_part_info(
+    const common::ObTabletID &src_tablet_id,
+    const share::schema::ObTableSchema &src_table_schema,
+    const ObBasePartition*& source_partition)
+{
+  int ret = OB_SUCCESS;
+  source_partition = nullptr;
+  const ObPartition *part = nullptr;
+  const ObCheckPartitionMode check_partition_mode = CHECK_PARTITION_MODE_NORMAL;
+  const bool has_subpart = src_table_schema.get_part_level() == share::schema::PARTITION_LEVEL_TWO;
+  if (OB_UNLIKELY(!src_tablet_id.is_valid() || !src_table_schema.is_valid() || (!src_table_schema.is_partitioned_table()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(src_tablet_id), K(src_table_schema));
+  } else {
+    ObPartIterator iter(src_table_schema, check_partition_mode);
+    while (OB_SUCC(ret) && nullptr == source_partition) {
+      if (OB_FAIL(iter.next(part))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("iter partition failed", K(ret));
+        }
+      } else if (OB_ISNULL(part)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null partition", K(ret));
+      } else if (!has_subpart) {
+        if (src_tablet_id == part->get_tablet_id()) {
+          source_partition = part;
+        }
+      } else {
+        const ObSubPartition *subpart = nullptr;
+        ObSubPartIterator sub_iter(src_table_schema, *part, check_partition_mode);
+        while (OB_SUCC(ret) && nullptr == source_partition) {
+          if (OB_FAIL(sub_iter.next(subpart))) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              break;
+            } else {
+              LOG_WARN("iter sub part failed", K(ret));
+            }
+          } else if (OB_ISNULL(subpart)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get null subpartition", K(ret));
+          } else if (src_tablet_id == subpart->get_tablet_id()) {
+            source_partition = subpart;
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && nullptr == source_partition) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected err", K(ret), K(src_tablet_id), K(src_table_schema));
+  }
+  return ret;
+}
+
+int ObRemoteScan::get_next_row(
+    const blocksstable::ObDatumRow *&tmp_row_without_reshape,
+    const blocksstable::ObDatumRow *&tmp_row_with_reshape)
+{
+  int ret = OB_SUCCESS;
+  tmp_row_without_reshape = nullptr;
+  tmp_row_with_reshape = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(result_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("result is nullptr", K(ret));
+  } else if (OB_FAIL(result_->next())) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("result next failed", K(ret));
+    }
+  } else {
+    row_without_reshape_.reuse();
+    row_with_reshape_.reuse();
+    for (int64_t i = 0; OB_SUCC(ret) && i < org_col_ids_.count(); i++) {
+      ObObj obj;
+      if (OB_FAIL(result_->get_obj(i, obj))) {
+        LOG_WARN("failed to get object", K(ret), "column_id", org_col_ids_.at(i).col_id_);
+      } else if (OB_FAIL(row_without_reshape_.storage_datums_[i].from_obj_enhance(obj))) {
+        LOG_WARN("failed to from obj enhance", K(ret));
+      }
+      /**
+       * For fix-length type column, the select result is padded to full char length, and row needs to
+       * be reshaped to keep the same format as lines written into macro block, avoiding checksum error.
+      */
+      else if (OB_FAIL(row_with_reshape_.storage_datums_[i].from_obj_enhance(obj))) {
+        LOG_WARN("failed to from obj enhance", K(ret));
+      } else if (obj.is_fixed_len_char_type()
+        && OB_FAIL(ObDDLUtil::reshape_ddl_column_obj(row_with_reshape_.storage_datums_[i], obj.get_meta()))) {
+        LOG_WARN("reshape failed", K(ret), K(obj));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      tmp_row_without_reshape = &row_without_reshape_;
+      tmp_row_with_reshape = &row_with_reshape_;
+    }
+  }
+  return ret;
+}
+
+int ObRemoteScan::prepare_iter(const ObSqlString &sql_string, common::ObCommonSqlProxy *sql_proxy)
+{
+  int ret = OB_SUCCESS;
+  ObSessionParam session_param;
+  ObSQLMode sql_mode = SMO_STRICT_ALL_TABLES | SMO_PAD_CHAR_TO_FULL_LENGTH;
+  session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode);
+  session_param.tz_info_wrap_ = nullptr;
+  session_param.ddl_info_.set_is_ddl(true);
+  session_param.ddl_info_.set_source_table_hidden(false);
+  session_param.ddl_info_.set_dest_table_hidden(false);
+  if (OB_ISNULL(sql_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret));
+  } else if (OB_FAIL(sql_proxy->read(res_, tenant_id_, sql_string.ptr(), &session_param))) {
+    LOG_WARN("fail to execute sql", K(ret), K_(tenant_id), K(sql_string));
+  } else if (OB_ISNULL(result_ = res_.get_result())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ObMySQLResult is nullptr", K(ret), K(sql_string));
+  }
+  return ret;
+}
+
+int ObRemoteScan::get_origin_table_checksum(ObArray<int64_t> &report_col_checksums, ObArray<int64_t> &report_col_ids)
+{
+  int ret = OB_SUCCESS;
+  report_col_checksums.reuse();
+  report_col_ids.reuse();
+  ObArray<ObColDesc> tmp_col_ids;
+  ObSchemaGetterGuard hold_buf_src_tenant_schema_guard;
+  ObSchemaGetterGuard hold_buf_dst_tenant_schema_guard;
+  ObSchemaGetterGuard *src_tenant_schema_guard = nullptr;
+  ObSchemaGetterGuard *dst_tenant_schema_guard = nullptr;
+  const share::schema::ObTableSchema *dest_table_schema = nullptr;
+  const share::schema::ObTableSchema *orig_table_schema = nullptr;
+  MTL_SWITCH (OB_SYS_TENANT_ID) {
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not init", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::get_tenant_schema_guard(tenant_id_, dest_tenant_id_,
+        hold_buf_src_tenant_schema_guard, hold_buf_dst_tenant_schema_guard,
+        src_tenant_schema_guard, dst_tenant_schema_guard))) {
+      LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_), K(dest_tenant_id_));
+    } else if (OB_FAIL(src_tenant_schema_guard->get_table_schema(tenant_id_, table_id_, orig_table_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K(tenant_id_), K(table_id_));
+    } else if (OB_ISNULL(orig_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table not exist", K(ret), K(tenant_id_), K(table_id_));
+    } else if (OB_FAIL(dst_tenant_schema_guard->get_table_schema(dest_tenant_id_, dest_table_id_, dest_table_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K_(dest_tenant_id), K_(dest_table_id));
+    } else if (OB_ISNULL(dest_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("dest table schema is nullptr", K(ret));
+    } else if (OB_FAIL(dest_table_schema->get_store_column_ids(tmp_col_ids, false))) {
+      LOG_WARN("fail to get store column ids", K(ret), K(tmp_col_ids));
+    } else {
+      const int64_t rowkey_cols_cnt = dest_table_schema->get_rowkey_column_num();
+      for (int64_t i = 0; OB_SUCC(ret) && i < tmp_col_ids.size(); i++) {
+        const ObColumnSchemaV2 *dest_col_schema = dest_table_schema->get_column_schema(tmp_col_ids.at(i).col_id_);
+        const ObString &dest_column_name = dest_col_schema->get_column_name_str();
+        const ObColumnSchemaV2 *orig_col_schema = orig_table_schema->get_column_schema(dest_column_name);
+        const int64_t index_in_array = i;
+        if (OB_ISNULL(orig_col_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("data column schema should not be null", K(ret), K(dest_column_name));
+        } else if (OB_FAIL(report_col_ids.push_back(orig_col_schema->get_column_id()))) {
+          LOG_WARN("fail to push back col id", K(ret), KPC(orig_col_schema));
+        } else if (OB_FAIL(report_col_checksums.push_back(checksum_calculator_.get_column_checksum()[index_in_array]))) {
+          LOG_WARN("fail to push back col checksum", K(ret));
+        } else {/* do nothing */}
+      }
+    }
   }
   return ret;
 }

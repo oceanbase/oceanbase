@@ -514,6 +514,158 @@ int ObUpdateDDLTaskActiveTimeArg::assign(const ObUpdateDDLTaskActiveTimeArg &arg
   return ret;
 }
 
+ObRecoverRestoreTableDDLArg::~ObRecoverRestoreTableDDLArg()
+{
+  reset();
+}
+
+void ObRecoverRestoreTableDDLArg::reset()
+{
+  target_schema_.reset();
+  src_tenant_id_ = common::OB_INVALID_ID;
+  src_table_id_ = common::OB_INVALID_ID;
+  ddl_task_id_ = common::OB_INVALID_ID;
+  allocator_.reset();
+  ObDDLArg::reset();
+}
+
+bool ObRecoverRestoreTableDDLArg::is_valid() const
+{
+  return OB_INVALID_ID != target_schema_.get_tenant_id()
+         && OB_INVALID_ID != target_schema_.get_database_id()
+         && !target_schema_.get_table_name_str().empty()
+         && OB_INVALID_ID != src_tenant_id_
+         && OB_INVALID_ID != src_table_id_
+         && ddl_task_id_ > 0;
+}
+
+int ObRecoverRestoreTableDDLArg::assign(const ObRecoverRestoreTableDDLArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!other.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(other));
+  } else if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("assign failed", K(ret));
+  } else if (OB_FAIL(target_schema_.assign(other.target_schema_))) {
+    LOG_WARN("assign failed", K(ret));
+  } else if (OB_FAIL(tz_info_.assign(other.tz_info_))) {
+    LOG_WARN("assign failed", K(ret));
+  } else if (OB_FAIL(tz_info_wrap_.deep_copy(other.tz_info_wrap_))) {
+    LOG_WARN("assign failed", K(ret));
+  } else {
+    src_tenant_id_ = other.src_tenant_id_;
+    src_table_id_ = other.src_table_id_;
+    ddl_task_id_ = ddl_task_id_;
+    char *tmp_ptr[ObNLSFormatEnum::NLS_MAX] = {};
+    for (int64_t i = 0; OB_SUCC(ret) && i < ObNLSFormatEnum::NLS_MAX; ++i) {
+      const ObString &cur_str = other.nls_formats_[i];
+      if (OB_ISNULL(tmp_ptr[i] = (char *)allocator_.alloc(cur_str.length()))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory failed", K(ret), "size", cur_str.length());
+      } else {
+        MEMCPY(tmp_ptr[i], cur_str.ptr(), cur_str.length());
+        nls_formats_[i].assign_ptr(tmp_ptr[i], cur_str.length());
+      }
+    }
+    if (OB_FAIL(ret)) {
+      for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
+        allocator_.free(tmp_ptr[i]);
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObRecoverRestoreTableDDLArg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(this));
+  } else if (OB_FAIL(ObDDLArg::serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize DDLArg", K(ret), K(buf_len), K(pos));
+  } else {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                target_schema_,
+                src_tenant_id_,
+                src_table_id_,
+                ddl_task_id_,
+                tz_info_,
+                tz_info_wrap_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < ObNLSFormatEnum::NLS_MAX; i++) {
+      if (OB_FAIL(nls_formats_[i].serialize(buf, buf_len, pos))) {
+        LOG_WARN("fail to serialize nls_formats_[i]", K(ret), K(nls_formats_[i]));
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObRecoverRestoreTableDDLArg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::deserialize(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize DDLArg", K(ret), K(data_len), K(pos));
+  } else {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                target_schema_,
+                src_tenant_id_,
+                src_table_id_,
+                ddl_task_id_,
+                tz_info_,
+                tz_info_wrap_);
+    ObString tmp_string;
+    char *tmp_ptr[ObNLSFormatEnum::NLS_MAX] = {};
+    for (int64_t i = 0; OB_SUCC(ret) && i < ObNLSFormatEnum::NLS_MAX; i++) {
+      if (OB_FAIL(tmp_string.deserialize(buf, data_len, pos))) {
+        LOG_WARN("fail to deserialize nls_formats_", K(ret), K(i));
+      } else if (OB_ISNULL(tmp_ptr[i] = (char *)allocator_.alloc(tmp_string.length()))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory!", K(ret));
+      } else {
+        MEMCPY(tmp_ptr[i], tmp_string.ptr(), tmp_string.length());
+        nls_formats_[i].assign_ptr(tmp_ptr[i], tmp_string.length());
+        tmp_string.reset();
+      }
+    }
+    if (OB_FAIL(ret)) {
+      for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; i++) {
+        allocator_.free(tmp_ptr[i]);
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObRecoverRestoreTableDDLArg)
+{
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    len += ObDDLArg::get_serialize_size();
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+                target_schema_,
+                src_tenant_id_,
+                src_table_id_,
+                ddl_task_id_,
+                tz_info_,
+                tz_info_wrap_);
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; i++) {
+        len += nls_formats_[i].get_serialize_size();
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    len = -1;
+  }
+  return len;
+}
+
 bool ObCreateHiddenTableArg::is_valid() const
 {
   return (OB_INVALID_ID != tenant_id_
@@ -522,7 +674,6 @@ bool ObCreateHiddenTableArg::is_valid() const
           && OB_INVALID_ID != dest_tenant_id_
           && share::DDL_INVALID != ddl_type_);
 }
-
 int ObCreateHiddenTableArg::assign(const ObCreateHiddenTableArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -547,7 +698,6 @@ int ObCreateHiddenTableArg::assign(const ObCreateHiddenTableArg &arg)
   }
   return ret;
 }
-
 OB_DEF_SERIALIZE(ObCreateHiddenTableArg)
 {
   int ret = OB_SUCCESS;
@@ -578,7 +728,6 @@ OB_DEF_SERIALIZE(ObCreateHiddenTableArg)
   }
   return ret;
 }
-
 OB_DEF_DESERIALIZE(ObCreateHiddenTableArg)
 {
   int ret = OB_SUCCESS;
@@ -618,7 +767,6 @@ OB_DEF_DESERIALIZE(ObCreateHiddenTableArg)
   }
   return ret;
 }
-
 OB_DEF_SERIALIZE_SIZE(ObCreateHiddenTableArg)
 {
   int64_t len = 0;
@@ -663,6 +811,7 @@ int ObCreateHiddenTableRes::assign(const ObCreateHiddenTableRes &res)
   schema_version_ = res.schema_version_;
   return ret;
 }
+
 OB_SERIALIZE_MEMBER(ObCreateHiddenTableRes,
                     tenant_id_,
                     table_id_,
@@ -671,6 +820,7 @@ OB_SERIALIZE_MEMBER(ObCreateHiddenTableRes,
                     trace_id_,
                     task_id_,
                     schema_version_);
+
 OB_SERIALIZE_MEMBER(ObStartRedefTableRes,
                     task_id_,
                     tenant_id_,
@@ -3164,7 +3314,8 @@ bool ObCalcColumnChecksumRequestArg::is_valid() const
 {
   bool bret = OB_INVALID_ID != tenant_id_ &&  OB_INVALID_ID != target_table_id_
       && OB_INVALID_VERSION != schema_version_ && execution_id_ >= 0
-      && OB_INVALID_VERSION != snapshot_version_ && OB_INVALID_ID != source_table_id_ && task_id_ > 0;
+      && OB_INVALID_VERSION != snapshot_version_ && OB_INVALID_ID != source_table_id_
+      && task_id_ > 0;
   for (int64_t i = 0; bret && i < calc_items_.count(); ++i) {
     bret = calc_items_.at(i).is_valid();
   }
@@ -4390,7 +4541,9 @@ OB_SERIALIZE_MEMBER((ObPhysicalRestoreTenantArg, ObCmdArg),
                     encrypt_key_,
                     kms_uri_,
                     kms_encrypt_key_,
-                    restore_timestamp_);
+                    restore_timestamp_,
+                    initiator_job_id_,
+                    initiator_tenant_id_);
 
 ObPhysicalRestoreTenantArg::ObPhysicalRestoreTenantArg()
   : ObCmdArg(),
@@ -4407,7 +4560,9 @@ ObPhysicalRestoreTenantArg::ObPhysicalRestoreTenantArg()
     encrypt_key_(),
     kms_uri_(),
     kms_encrypt_key_(),
-    restore_timestamp_()
+    restore_timestamp_(),
+    initiator_job_id_(0),
+    initiator_tenant_id_(OB_INVALID_TENANT_ID)
 {
 }
 
@@ -4431,6 +4586,8 @@ int ObPhysicalRestoreTenantArg::assign(const ObPhysicalRestoreTenantArg &other)
     kms_uri_ = other.kms_uri_;
     kms_encrypt_key_ = other.kms_encrypt_key_;
     restore_timestamp_ = other.restore_timestamp_;
+    initiator_job_id_ = other.initiator_job_id_;
+    initiator_tenant_id_ = other.initiator_tenant_id_;
   }
   return ret;
 }
@@ -6981,19 +7138,22 @@ OB_SERIALIZE_MEMBER(ObLogReqLoadProxyProgressRequest, agency_addr_seq_, principa
 OB_SERIALIZE_MEMBER(ObLogReqLoadProxyProgressResponse, err_, progress_);
 
 OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestArg, tenant_id_, ls_id_, source_tablet_id_, dest_tablet_id_,
-  source_table_id_, dest_schema_id_, schema_version_, snapshot_version_, ddl_type_, task_id_, execution_id_,
-  parallelism_, tablet_task_id_, data_format_version_, consumer_group_id_);
+  source_table_id_, dest_schema_id_, schema_version_, snapshot_version_, ddl_type_, task_id_,
+  execution_id_, parallelism_, tablet_task_id_, data_format_version_, consumer_group_id_, dest_tenant_id_, dest_ls_id_, dest_schema_version_);
 
 int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaRequestArg &other)
 {
   int ret = OB_SUCCESS;
   tenant_id_ = other.tenant_id_;
   ls_id_ = other.ls_id_;
+  dest_tenant_id_ = other.dest_tenant_id_;
+  dest_ls_id_ = other.dest_ls_id_;
   source_tablet_id_ = other.source_tablet_id_;
   dest_tablet_id_ = other.dest_tablet_id_;
   source_table_id_ = other.source_table_id_;
   dest_schema_id_ = other.dest_schema_id_;
   schema_version_ = other.schema_version_;
+  dest_schema_version_ = other.dest_schema_version_;
   snapshot_version_ = other.snapshot_version_;
   ddl_type_ = other.ddl_type_;
   task_id_ = other.task_id_;
@@ -7016,23 +7176,30 @@ int ObDDLBuildSingleReplicaRequestResult::assign(const ObDDLBuildSingleReplicaRe
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaResponseArg, tenant_id_, ls_id_, tablet_id_, source_table_id_, dest_schema_id_, ret_code_, snapshot_version_, schema_version_, task_id_, execution_id_, row_scanned_, row_inserted_);
+OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaResponseArg, tenant_id_, ls_id_, tablet_id_,
+                    source_table_id_, dest_schema_id_, ret_code_, snapshot_version_, schema_version_,
+                    task_id_, execution_id_, row_scanned_, row_inserted_, dest_tenant_id_, dest_ls_id_, dest_schema_version_,
+                    server_addr_);
 
 int ObDDLBuildSingleReplicaResponseArg::assign(const ObDDLBuildSingleReplicaResponseArg &other)
 {
   int ret = OB_SUCCESS;
   tenant_id_ = other.tenant_id_;
+  dest_tenant_id_ = other.dest_tenant_id_;
   ls_id_ = other.ls_id_;
+  dest_ls_id_ = other.dest_ls_id_;
   tablet_id_ = other.tablet_id_;
   source_table_id_ = other.source_table_id_;
   dest_schema_id_ = other.dest_schema_id_;
   ret_code_ = other.ret_code_;
   snapshot_version_ = other.snapshot_version_;
   schema_version_ = other.schema_version_;
+  dest_schema_version_ = other.dest_schema_version_;
   task_id_ = other.task_id_;
   execution_id_ = other.execution_id_;
   row_scanned_ = other.row_scanned_;
   row_inserted_ = other.row_inserted_;
+  server_addr_ = other.server_addr_;
   return ret;
 }
 
@@ -9264,6 +9431,36 @@ int ObTTLRequestArg::assign(const ObTTLRequestArg &other)
   tenant_id_ = other.tenant_id_;
   trigger_type_ = other.trigger_type_;
 
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObRecoverTableArg, tenant_id_, tenant_name_, import_arg_, restore_tenant_arg_, action_);
+
+ObRecoverTableArg::ObRecoverTableArg()
+ : tenant_id_(OB_INVALID_TENANT_ID), tenant_name_(), import_arg_(), restore_tenant_arg_(), action_() {}
+
+bool ObRecoverTableArg::is_valid() const
+{
+  bool ret = OB_INVALID_TENANT_ID != tenant_id_
+          && (Action::CANCEL == action_ || !restore_tenant_arg_.restore_option_.empty());
+  return ret;
+}
+
+int ObRecoverTableArg::assign(const ObRecoverTableArg &that)
+{
+  int ret = OB_SUCCESS;
+  if (!that.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid recover table arg", K(ret), K(that));
+  } else if (OB_FAIL(import_arg_.assign(that.import_arg_))) {
+    LOG_WARN("fail to assign", K(that.import_arg_));
+  } else if (OB_FAIL(restore_tenant_arg_.assign(that.restore_tenant_arg_))) {
+    LOG_WARN("failed to assign restore tenant arg", K(ret));
+  } else {
+    tenant_id_ = that.tenant_id_;
+    tenant_name_ = that.tenant_name_;
+    action_ = that.action_;
+  }
   return ret;
 }
 

@@ -1320,6 +1320,18 @@ private:
   obrpc::ObRecoverTenantArg rpc_arg_;
 };
 
+class ObRecoverTableStmt : public ObSystemCmdStmt
+{
+public:
+  ObRecoverTableStmt()
+    : ObSystemCmdStmt(stmt::T_RECOVER_TABLE), rpc_arg_() {}
+  virtual ~ObRecoverTableStmt() {}
+  obrpc::ObRecoverTableArg &get_rpc_arg() { return rpc_arg_; }
+private:
+  obrpc::ObRecoverTableArg rpc_arg_;
+};
+
+
 } // end namespace sql
 } // end namespace oceanbase
 

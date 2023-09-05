@@ -954,7 +954,7 @@ int ObBackupDataStore::do_get_backup_set_array_(const common::ObString &passwd_a
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_desc_array.count(); ++i) {
-    const share::ObBackupSetDesc &backup_set_desc = backup_set_desc_array.at(i);
+    share::ObBackupSetDesc &backup_set_desc = backup_set_desc_array.at(i);
     backup_desc_.backup_set_id_ = backup_set_desc.backup_set_id_;
     backup_desc_.backup_type_.type_ = backup_set_desc.backup_type_.type_;
     backup_set_dest_.reset();
@@ -982,6 +982,8 @@ int ObBackupDataStore::do_get_backup_set_array_(const common::ObString &passwd_a
           || share::ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE != backup_set_file.file_status_) {
         LOG_WARN("invalid status backup set can not be used to restore", K(backup_set_file));
       } else if (backup_set_file.backup_type_.is_full_backup()) {
+        backup_set_desc.min_restore_scn_ = backup_set_file.min_restore_scn_;
+        backup_set_desc.total_bytes_ = backup_set_file.stats_.output_bytes_;
         if (OB_FAIL(backup_set_map.clear())) {
           LOG_WARN("fail to clear backup set map", K(ret));
         } else if (OB_FAIL(backup_set_map.set_refactored(backup_set_file.backup_set_id_, backup_set_desc))) {
@@ -993,6 +995,8 @@ int ObBackupDataStore::do_get_backup_set_array_(const common::ObString &passwd_a
       } else if (backup_set_file.backup_type_.is_inc_backup()) {
         share::ObBackupSetDesc value;
         value.backup_set_id_ = backup_set_file.prev_full_backup_set_id_;
+        backup_set_desc.min_restore_scn_ = backup_set_file.min_restore_scn_;
+        backup_set_desc.total_bytes_ = backup_set_file.stats_.output_bytes_;
         if (OB_FAIL(backup_set_map.get_refactored(backup_set_file.prev_full_backup_set_id_, value))) {
           if (OB_ENTRY_NOT_EXIST == ret) {
             ret = OB_SUCCESS;

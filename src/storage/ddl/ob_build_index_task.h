@@ -18,6 +18,7 @@
 #include "storage/ob_store_row_comparer.h"
 #include "storage/ob_parallel_external_sort.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
+#include "storage/ddl/ob_complement_data_task.h"
 
 namespace oceanbase
 {
@@ -96,7 +97,7 @@ private:
       const common::ObIArray<bool> &need_reshape,
       const ObColDescIArray &cols_desc,
       const common::ObIArray<int32_t> &output_projector,
-      ObIStoreRowIterator &iterator,
+      ObLocalScan &iterator,
       common::ObIArray<int64_t> &column_checksum,
       int64_t &row_count);
   int report_column_checksum(const common::ObIArray<int64_t> &column_checksum,

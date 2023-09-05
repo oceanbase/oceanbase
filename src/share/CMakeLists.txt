@@ -214,6 +214,9 @@ ob_set_subtarget(ob_share common_mixed
   ratelimit/ob_rl_struct.cpp
   rc/ob_context.cpp
   rc/ob_tenant_base.cpp
+  restore/ob_import_table_struct.cpp
+  restore/ob_import_util.cpp
+  restore/ob_recover_table_util.cpp
   restore/ob_restore_args.cpp
   restore/ob_restore_uri_parser.cpp
   restore/ob_ls_restore_status.cpp
@@ -223,7 +226,17 @@ ob_set_subtarget(ob_share common_mixed
   restore/ob_log_restore_source.cpp
   restore/ob_log_restore_source_mgr.cpp
   restore/ob_restore_table_operator.cpp
+  restore/ob_recover_table_persist_helper.cpp
   restore/ob_restore_persist_helper.cpp
+  restore/ob_import_table_persist_helper.cpp
+  restore/ob_import_item_format_provider.cpp
+  restore/ob_import_schema_item.hpp
+  restore/ob_import_partition_item.cpp
+  restore/ob_import_table_item.cpp
+  restore/ob_remap_schema_item.hpp
+  restore/ob_import_remap_arg.cpp
+  restore/ob_import_table_arg.cpp
+  restore/ob_import_arg.cpp
   sequence/ob_sequence_cache.cpp
   sequence/ob_sequence_ddl_proxy.cpp
   sequence/ob_sequence_dml_proxy.cpp

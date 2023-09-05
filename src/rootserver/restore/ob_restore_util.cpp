@@ -53,7 +53,8 @@ int ObRestoreUtil::fill_physical_restore_job(
     job.init_restore_key(OB_SYS_TENANT_ID, job_id); 
     job.set_status(PhysicalRestoreStatus::PHYSICAL_RESTORE_CREATE_TENANT);
     job.set_tenant_name(arg.tenant_name_);
-    job.set_initiator_tenant_id(OB_SYS_TENANT_ID);
+    job.set_initiator_job_id(arg.initiator_job_id_);
+    job.set_initiator_tenant_id(arg.initiator_tenant_id_);
     if (OB_FAIL(job.set_description(arg.description_))) {
       LOG_WARN("fail to set description", K(ret));
     }
@@ -292,11 +293,12 @@ int ObRestoreUtil::fill_compat_backup_path(
   ObArenaAllocator allocator;
   ObArray<ObString> tenant_path_array;
   ObArray<ObRestoreBackupSetBriefInfo> backup_set_list;
-  ObArray<ObBackupPiecePath> backup_piece_list;
+  ObArray<ObRestoreLogPieceBriefInfo> backup_piece_list;
   ObArray<ObBackupPathString> log_path_list;
   ObString tenant_dest_list;
   int64_t last_backup_set_idx = -1;
   bool restore_using_compl_log = false;
+  share::SCN restore_scn;
   if (!arg.multi_uri_.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(arg));
@@ -308,8 +310,11 @@ int ObRestoreUtil::fill_compat_backup_path(
     LOG_WARN("failed to copy backup dest", K(ret), K(arg));
   } else if (OB_FAIL(check_restore_using_complement_log_(tenant_path_array, restore_using_compl_log))) {
     LOG_WARN("failed to check only contain backup set", K(ret), K(tenant_path_array));
-  } else if (OB_FAIL(fill_restore_scn_(arg, tenant_path_array, restore_using_compl_log, job))) {
+  } else if (OB_FAIL(fill_restore_scn_(
+      arg.restore_scn_, arg.restore_timestamp_, arg.with_restore_scn_, tenant_path_array, arg.passwd_array_,
+      restore_using_compl_log, restore_scn))) {
     LOG_WARN("fail to fill restore scn", K(ret), K(arg), K(tenant_path_array));
+  } else if (OB_FALSE_IT(job.set_restore_scn(restore_scn))) {
   } else if (OB_FAIL(get_restore_source(restore_using_compl_log, tenant_path_array, arg.passwd_array_, job.get_restore_scn(),
       backup_set_list, backup_piece_list, log_path_list))) {
     LOG_WARN("fail to get restore source", K(ret), K(tenant_path_array), K(arg));
@@ -322,22 +327,26 @@ int ObRestoreUtil::fill_compat_backup_path(
   } else if (OB_FAIL(do_fill_backup_info_(backup_set_list.at(last_backup_set_idx).backup_set_path_, job))) {
     LOG_WARN("fail to do fill backup info");
   }
-
   return ret;
 }
 
-int ObRestoreUtil::fill_restore_scn_(const obrpc::ObPhysicalRestoreTenantArg &arg, 
-    const ObIArray<ObString> &tenant_path_array, const bool restore_using_compl_log,
-    share::ObPhysicalRestoreJob &job)
+int ObRestoreUtil::fill_restore_scn_(
+    const share::SCN &src_scn,
+    const ObString &timestamp,
+    const bool with_restore_scn,
+    const ObIArray<ObString> &tenant_path_array,
+    const common::ObString &passwd,
+    const bool restore_using_compl_log,
+    share::SCN &restore_scn)
 {
   int ret = OB_SUCCESS;
-  if (!arg.is_valid() || tenant_path_array.empty()) {
+  if (tenant_path_array.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(arg), K(tenant_path_array));
-  } else if (arg.with_restore_scn_) {
+    LOG_WARN("invalid argument", K(ret), K(tenant_path_array));
+  } else if (with_restore_scn) {
     // restore scn which is specified by user
-    job.set_restore_scn(arg.restore_scn_);
-  } else if (!arg.with_restore_scn_) {
+    restore_scn = src_scn;
+  } else if (!with_restore_scn) {
     if (restore_using_compl_log) {
       SCN min_restore_scn = SCN::min_scn();
       ARRAY_FOREACH_X(tenant_path_array, i, cnt, OB_SUCC(ret)) {
@@ -354,7 +363,7 @@ int ObRestoreUtil::fill_restore_scn_(const obrpc::ObPhysicalRestoreTenantArg &ar
           LOG_WARN("failed to read format file", K(ret), K(store));
         } else if (ObBackupDestType::DEST_TYPE_BACKUP_DATA != format_desc.dest_type_) {
           LOG_INFO("skip log dir", K(tenant_path), K(format_desc));
-        } else if (OB_FAIL(store.get_max_backup_set_file_info(arg.passwd_array_, backup_set_file_desc))) {
+        } else if (OB_FAIL(store.get_max_backup_set_file_info(passwd, backup_set_file_desc))) {
           LOG_WARN("fail to get backup set array", K(ret));
         } else {
           min_restore_scn = backup_set_file_desc.min_restore_scn_;
@@ -365,18 +374,15 @@ int ObRestoreUtil::fill_restore_scn_(const obrpc::ObPhysicalRestoreTenantArg &ar
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid min restore scn, do not find available backup tenant path to restore", K(ret), K(tenant_path_array));
         } else {
-          job.set_restore_scn(min_restore_scn);
+          restore_scn = min_restore_scn;
         }
       }
-    } else if (!arg.restore_timestamp_.empty()) {
-      SCN restore_scn = SCN::min_scn();
+    } else if (!timestamp.empty()) {
       common::ObTimeZoneInfoWrap time_zone_wrap;
       if (OB_FAIL(get_backup_sys_time_zone_(tenant_path_array, time_zone_wrap))) {
         LOG_WARN("failed to get backup sys time zone", K(ret), K(tenant_path_array));
-      } else if (OB_FAIL(convert_restore_timestamp_to_scn_(arg.restore_timestamp_, time_zone_wrap, restore_scn))) {
+      } else if (OB_FAIL(convert_restore_timestamp_to_scn_(timestamp, time_zone_wrap, restore_scn))) {
         LOG_WARN("failed to convert restore timestamp to scn", K(ret));
-      } else {
-        job.set_restore_scn(restore_scn);
       }
     } else {
       int64_t round_id = 0;
@@ -408,7 +414,7 @@ int ObRestoreUtil::fill_restore_scn_(const obrpc::ObPhysicalRestoreTenantArg &ar
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid max checkpoint scn, no archvie tenant path", K(ret), K(tenant_path_array));
         } else {
-          job.set_restore_scn(max_checkpoint_scn);
+          restore_scn = max_checkpoint_scn;
         }
       }
     }
@@ -458,7 +464,7 @@ int ObRestoreUtil::get_restore_source(
     const common::ObString &passwd_array,
     const SCN &restore_scn,
     ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list,
-    ObIArray<ObBackupPiecePath> &backup_piece_list,
+    ObIArray<ObRestoreLogPieceBriefInfo> &backup_piece_list,
     ObIArray<ObBackupPathString> &log_path_list)
 {
   int ret = OB_SUCCESS;
@@ -552,8 +558,8 @@ int ObRestoreUtil::get_restore_backup_set_array_(
 
 int ObRestoreUtil::get_restore_backup_piece_list_(
     const ObBackupDest &dest,
-    const ObArray<share::ObBackupPath> &piece_array,
-    ObIArray<ObBackupPiecePath> &backup_piece_list)
+    const ObArray<share::ObRestoreLogPieceBriefInfo> &piece_array,
+    ObIArray<ObRestoreLogPieceBriefInfo> &backup_piece_list)
 {
   int ret = OB_SUCCESS; 
   if (!dest.is_valid()) {
@@ -561,12 +567,15 @@ int ObRestoreUtil::get_restore_backup_piece_list_(
     LOG_WARN("dest is invalid", K(ret), K(dest));
   } else {
     for (int64_t j = 0; OB_SUCC(ret) && j < piece_array.count(); ++j) {
-      const share::ObBackupPath &piece_path = piece_array.at(j);
-      ObBackupPiecePath backup_piece_path;
+      const share::ObRestoreLogPieceBriefInfo &piece_path = piece_array.at(j);
+      ObRestoreLogPieceBriefInfo backup_piece_path;
+      backup_piece_path.piece_id_ = piece_path.piece_id_;
+      backup_piece_path.start_scn_ = piece_path.start_scn_;
+      backup_piece_path.checkpoint_scn_ = piece_path.checkpoint_scn_;
       ObBackupDest piece_dest;
-      if (OB_FAIL(piece_dest.set(piece_path.get_ptr(), dest.get_storage_info()))) {
+      if (OB_FAIL(piece_dest.set(piece_path.piece_path_.ptr(), dest.get_storage_info()))) {
         LOG_WARN("fail to set piece dest", K(ret), K(piece_path), K(dest)); 
-      } else if (OB_FAIL(piece_dest.get_backup_dest_str(backup_piece_path.ptr(), backup_piece_path.capacity()))) {
+      } else if (OB_FAIL(piece_dest.get_backup_dest_str(backup_piece_path.piece_path_.ptr(), backup_piece_path.piece_path_.capacity()))) {
         LOG_WARN("fail to get piece dest str", K(ret), K(piece_dest));
       } else if (OB_FAIL(backup_piece_list.push_back(backup_piece_path))) {
         LOG_WARN("fail to push backup piece list", K(ret));
@@ -580,7 +589,7 @@ int ObRestoreUtil::get_restore_backup_piece_list_(
 int ObRestoreUtil::get_restore_backup_piece_list_(
     const ObBackupDest &dest,
     const ObArray<share::ObPieceKey> &piece_array,
-    ObIArray<ObBackupPiecePath> &backup_piece_list)
+    ObIArray<ObRestoreLogPieceBriefInfo> &backup_piece_list)
 {
   int ret = OB_SUCCESS;
   if (!dest.is_valid()) {
@@ -589,15 +598,16 @@ int ObRestoreUtil::get_restore_backup_piece_list_(
   } else {
     for (int64_t j = 0; OB_SUCC(ret) && j < piece_array.count(); ++j) {
       const share::ObPieceKey &piece_key = piece_array.at(j);
+      ObRestoreLogPieceBriefInfo backup_piece_path;
+      backup_piece_path.piece_id_ = piece_key.piece_id_;
       ObBackupPath backup_path;
-      ObBackupPiecePath backup_piece_path;
       ObBackupDest piece_dest;
       if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(dest, piece_key.dest_id_,
           piece_key.round_id_, piece_key.piece_id_, backup_path))) {
         LOG_WARN("failed to get piece dir path", K(ret), K(dest), K(piece_key));
       } else if (OB_FAIL(piece_dest.set(backup_path.get_ptr(), dest.get_storage_info()))) {
         LOG_WARN("fail to set piece dest", K(ret), K(backup_path), K(dest));
-      } else if (OB_FAIL(piece_dest.get_backup_dest_str(backup_piece_path.ptr(), backup_piece_path.capacity()))) {
+      } else if (OB_FAIL(piece_dest.get_backup_dest_str(backup_piece_path.piece_path_.ptr(), backup_piece_path.piece_path_.capacity()))) {
         LOG_WARN("fail to get piece dest str", K(ret), K(piece_dest));
       } else if (OB_FAIL(backup_piece_list.push_back(backup_piece_path))) {
         LOG_WARN("fail to push backup piece list", K(ret));
@@ -628,11 +638,11 @@ int ObRestoreUtil::get_restore_log_piece_array_(
     const ObIArray<ObString> &tenant_path_array,
     const SCN &restore_start_scn,
     const SCN &restore_end_scn,
-    ObIArray<ObBackupPiecePath> &backup_piece_list,
+    ObIArray<ObRestoreLogPieceBriefInfo> &backup_piece_list,
     ObIArray<share::ObBackupPathString> &log_path_list)
 {
   int ret = OB_SUCCESS;
-  ObArray<share::ObBackupPath> piece_array;
+  ObArray<share::ObRestoreLogPieceBriefInfo> piece_array;
   if (tenant_path_array.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invaldi argument", K(ret), K(tenant_path_array));
@@ -667,7 +677,7 @@ int ObRestoreUtil::get_restore_log_array_for_complement_log_(
     const ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list,
     const share::SCN &restore_start_scn,
     const share::SCN &restore_end_scn,
-    ObIArray<share::ObBackupPiecePath> &backup_piece_list,
+    ObIArray<share::ObRestoreLogPieceBriefInfo> &backup_piece_list,
     ObIArray<share::ObBackupPathString> &log_path_list)
 {
   int ret = OB_SUCCESS;
@@ -701,7 +711,7 @@ int ObRestoreUtil::get_restore_log_array_for_complement_log_(
 
 int ObRestoreUtil::do_fill_backup_path_(
     const ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list,
-    const ObIArray<ObBackupPiecePath> &backup_piece_list,
+    const ObIArray<ObRestoreLogPieceBriefInfo> &backup_piece_list,
     const ObIArray<ObBackupPathString> &log_path_list,
     share::ObPhysicalRestoreJob &job)
 {
@@ -709,8 +719,17 @@ int ObRestoreUtil::do_fill_backup_path_(
   if (backup_set_list.empty() || backup_piece_list.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(backup_set_list), K(backup_piece_list));
-  } else if (OB_FAIL(job.get_multi_restore_path_list().set(backup_set_list, backup_piece_list, log_path_list))) {
-    LOG_WARN("failed to set mutli restore path list", KR(ret));
+  } else {
+    ObArray<share::ObBackupPiecePath> backup_piece_path_list;
+    for (int64_t i = 0; OB_SUCC(ret) && i < backup_piece_list.count(); ++i) {
+      if (OB_FAIL(backup_piece_path_list.push_back(backup_piece_list.at(i).piece_path_))) {
+        LOG_WARN("failed to push backup piece", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(job.get_multi_restore_path_list().set(backup_set_list, backup_piece_path_list, log_path_list))) {
+      LOG_WARN("failed to set mutli restore path list", KR(ret));
+    }
   }
   return ret;
 }

@@ -676,6 +676,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"relaylog", RELAYLOG},
   {"release", RELEASE},
   {"reload", RELOAD},
+  {"remap", REMAP},
   {"remove", REMOVE},
   {"rename", RENAME},
   {"reorganize", REORGANIZE},

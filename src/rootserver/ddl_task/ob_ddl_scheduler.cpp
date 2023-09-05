@@ -26,6 +26,7 @@
 #include "rootserver/ddl_task/ob_index_build_task.h"
 #include "rootserver/ddl_task/ob_modify_autoinc_task.h"
 #include "rootserver/ddl_task/ob_table_redefinition_task.h"
+#include "rootserver/ddl_task/ob_recover_restore_table_task.h"
 #include "share/ob_ddl_common.h"
 #include "share/ob_rpc_struct.h"
 #include "share/longops_mgr/ob_longops_mgr.h"
@@ -907,6 +908,20 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
           LOG_WARN("fail to create table redefinition task", K(ret));
         }
         break;
+      case DDL_TABLE_RESTORE:
+        if (OB_FAIL(create_recover_restore_table_task(proxy,
+                                                   param.type_,
+                                                   param.src_table_schema_,
+                                                   param.dest_table_schema_,
+                                                   param.parallelism_,
+                                                   param.consumer_group_id_,
+                                                   param.task_id_,
+                                                   static_cast<const obrpc::ObAlterTableArg *>(param.ddl_arg_),
+                                                   *param.allocator_,
+                                                   task_record))) {
+          LOG_WARN("fail to create recover restore table task", K(ret));
+        }
+        break;
       case DDL_DROP_PRIMARY_KEY:
         alter_table_arg = static_cast<const obrpc::ObAlterTableArg *>(param.ddl_arg_);
         if (OB_FAIL(create_drop_primary_key_task(proxy,
@@ -1460,10 +1475,12 @@ int ObDDLScheduler::create_table_redefinition_task(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", K(ret), K(task_id), KP(alter_table_arg), KP(src_schema), KP(dest_schema));
     } else if (OB_FAIL(redefinition_task.init(src_schema->get_tenant_id(),
+                                              dest_schema->get_tenant_id(),
                                               task_id,
                                               type,
                                               src_schema->get_table_id(),
                                               dest_schema->get_table_id(),
+                                              dest_schema->get_schema_version(),
                                               dest_schema->get_schema_version(),
                                               parallelism,
                                               consumer_group_id,
@@ -1624,6 +1641,48 @@ int ObDDLScheduler::create_ddl_retry_task(
     LOG_WARN("fail to insert task record", K(ret));
   }
   LOG_INFO("ddl_scheduler create ddl retry task finished", K(ret), K(ddl_retry_task));
+  return ret;
+}
+
+int ObDDLScheduler::create_recover_restore_table_task(
+    common::ObISQLClient &proxy,
+    const share::ObDDLType &type,
+    const share::schema::ObTableSchema *src_schema,
+    const share::schema::ObTableSchema *dest_schema,
+    const int64_t parallelism,
+    const int64_t consumer_group_id,
+    const int64_t task_id,
+    const obrpc::ObAlterTableArg *alter_table_arg,
+    ObIAllocator &allocator,
+    ObDDLTaskRecord &task_record)
+{
+  int ret = OB_SUCCESS;
+  SMART_VAR(ObRecoverRestoreTableTask, redefinition_task) {
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("ObDDLScheduler has not been inited", K(ret));
+    } else if (OB_UNLIKELY(0 == task_id) || OB_ISNULL(alter_table_arg) || OB_ISNULL(src_schema) || OB_ISNULL(dest_schema)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arguments", K(ret), K(task_id), KP(alter_table_arg), KP(src_schema), KP(dest_schema));
+    } else if (OB_FAIL(redefinition_task.init(src_schema->get_tenant_id(),
+                                              dest_schema->get_tenant_id(),
+                                              task_id,
+                                              type,
+                                              src_schema->get_table_id(),
+                                              dest_schema->get_table_id(),
+                                              src_schema->get_schema_version(),
+                                              dest_schema->get_schema_version(),
+                                              parallelism,
+                                              consumer_group_id,
+                                              *alter_table_arg))) {
+      LOG_WARN("fail to init redefinition task", K(ret));
+    } else if (OB_FAIL(redefinition_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
+      LOG_WARN("set trace id failed", K(ret));
+    } else if (OB_FAIL(insert_task_record(proxy, redefinition_task, allocator, task_record))) {
+      LOG_WARN("fail to insert task record", K(ret));
+    }
+    LOG_INFO("ddl_scheduler create table redefinition task finished", K(ret), K(redefinition_task), K(common::lbt()));
+  }
   return ret;
 }
 
@@ -1805,6 +1864,9 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
       case DDL_TRUNCATE_PARTITION:
       case DDL_TRUNCATE_SUB_PARTITION:
         ret = schedule_ddl_retry_task(record);
+        break;
+      case DDL_TABLE_RESTORE:
+        ret = schedule_recover_restore_table_task(record);
         break;
       default: {
         ret = OB_NOT_SUPPORTED;
@@ -2034,6 +2096,35 @@ int ObDDLScheduler::schedule_drop_index_task(const ObDDLTaskRecord &task_record)
   return ret;
 }
 
+int ObDDLScheduler::schedule_recover_restore_table_task(const ObDDLTaskRecord &task_record)
+{
+  int ret = OB_SUCCESS;
+  ObRecoverRestoreTableTask *redefinition_task = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLScheduler has not been inited", K(ret));
+  } else if (OB_FAIL(alloc_ddl_task(redefinition_task))) {
+    LOG_WARN("alloc ddl task failed", K(ret));
+  } else if (OB_FAIL(redefinition_task->init(task_record))) {
+    LOG_WARN("init table redefinition task failed", K(ret));
+  } else if (OB_FAIL(redefinition_task->set_trace_id(task_record.trace_id_))) {
+    LOG_WARN("set trace id failed", K(ret));
+  } else if (OB_FAIL(inner_schedule_ddl_task(redefinition_task, task_record))) {
+    if (OB_ENTRY_EXIST != ret) {
+      LOG_WARN("inner schedule task failed", K(ret), K(*redefinition_task));
+    }
+  } else if (ObDDLTask::check_is_load_data(task_record.ddl_type_)
+            && OB_FAIL(manager_reg_heart_beat_task_.update_task_active_time(ObDDLTaskID(task_record.tenant_id_, task_record.task_id_)))) {
+    LOG_WARN("register_task_time recover fail", K(ret));
+  }
+  if (OB_FAIL(ret) && nullptr != redefinition_task) {
+    redefinition_task->~ObRecoverRestoreTableTask();
+    allocator_.free(redefinition_task);
+    redefinition_task = nullptr;
+  }
+  return ret;
+}
+
 int ObDDLScheduler::add_task_to_longops_mgr(ObDDLTask *ddl_task)
 {
   int ret = OB_SUCCESS;
@@ -2208,6 +2299,11 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
           case ObDDLType::DDL_DIRECT_LOAD:
           case ObDDLType::DDL_DIRECT_LOAD_INSERT:
             if (OB_FAIL(static_cast<ObTableRedefinitionTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
+              LOG_WARN("update complete sstable job status", K(ret));
+            }
+            break;
+          case ObDDLType::DDL_TABLE_RESTORE:
+            if (OB_FAIL(static_cast<ObRecoverRestoreTableTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
               LOG_WARN("update complete sstable job status", K(ret));
             }
             break;

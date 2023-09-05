@@ -39,7 +39,7 @@
 #include "rootserver/ob_recovery_ls_service.h"
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
 #include "rootserver/ob_tenant_balance_service.h"
-#include "rootserver/restore/ob_restore_scheduler.h"
+#include "rootserver/restore/ob_restore_service.h"
 #include "share/ob_tenant_info_proxy.h"
 #include "share/leak_checker/obj_leak_checker.h"
 #include "share/ob_ls_id.h"

@@ -220,6 +220,14 @@ public:
                          const share::schema::ObTableSchema **table_schema);
   int create_hidden_table(const obrpc::ObCreateHiddenTableArg &create_hidden_table_arg,
                                       obrpc::ObCreateHiddenTableRes &res);
+  /**
+   * For recover restore table ddl task, it is a cross-tenant task, including,
+   * 1. Create a hidden table under different tenant but associated with the source table;
+   * 2. Do not change any attribute of the source table;
+   * 3. Create a recover ddl task to complement the data of the hidden table;
+  */
+  int recover_restore_table_ddl_task(
+      const obrpc::ObRecoverRestoreTableDDLArg &arg);
   int check_index_on_foreign_key(const ObTableSchema *index_table_schema,
                                 const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos,
                                 bool &have_index);
@@ -476,7 +484,6 @@ public:
       const uint64_t session_id,
       ObDDLSQLTransaction &trans);
   int write_ddl_barrier(
-      const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
       const uint64_t session_id,
       ObDDLSQLTransaction &trans);
@@ -497,6 +504,35 @@ public:
    *    step5: rename hidden table name to orig table name and modify the state to non-hidden
    */
   int swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter_table_arg);
+
+  /**
+   * The function is designed for the recover restore table ddl, which is to check whether the object
+   * in table schema is duplicated with others in the sample table space.
+   * If the object is named by the default function of the system, then a new object name will be
+   * generated to replace the old.
+  */
+  int check_and_replace_default_index_name_on_demand(
+      const bool is_oracle_mode,
+      common::ObIAllocator &allocator,
+      const ObTableSchema &hidden_data_schema,
+      const ObString &target_data_table_name,
+      ObTableSchema &new_index_schema);
+    int check_and_replace_dup_constraint_name_on_demand(
+      const bool is_oracle_mode,
+      ObSchemaGetterGuard &tenant_schema_guard,
+      ObTableSchema &hidden_data_schema,
+      common::ObIAllocator &allocator,
+      ObDDLOperator &ddl_operator,
+      ObDDLSQLTransaction &trans);
+
+
+  /**
+   * This function is called by the DDL RESTORE TABLE TASK.
+   * This task will create a hidden table, but will not be associated with the original table,
+   * and any attribute of the origin table will not change to avoid cross-tenant transactions.
+   * And the following function will make the hidden table and its' rebuilt indexes visible after data filling.
+  */
+  int make_recover_restore_tables_visible(obrpc::ObAlterTableArg &alter_table_arg);
   /**
    * This function is called by the storage layer in the second stage of offline ddl
    * For foreign keys that refer to the columns of the original table, a corresponding hidden
@@ -929,6 +965,34 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
 
   obrpc::ObCommonRpcProxy *get_common_rpc() { return common_rpc_; }
   int get_tenant_schema_guard_with_version_in_inner_table(const uint64_t tenant_id, share::schema::ObSchemaGetterGuard &schema_guard);
+  /**
+   * NOTICE: The interface is designed for Offline DDL operation only.
+   * The caller can not obtain the schema via the hold_buf_src_tenant_schema_guard whose
+   * validity is limited by whether src_tenant_id and dst_tenant_id are the same.
+   *
+   * 1. This interface will provide the same tenant schema guard when src_tenant_id = dst_tenant_id,
+   *    to avoid using two different versions of the guard caused by the parallel ddl under the tenant.
+   * 2. This interface will provide corresponding tenant schema guard when src_tenant_id != dst_tenant_id.
+   *
+   * @param [in] src_tenant_id
+   * @param [in] dst_tenant_id
+   * @param [in] hold_buf_src_tenant_schema_guard: hold buf, invalid when src_tenant_id = dst_tenant_id.
+   * @param [in] hold_buf_dst_tenant_schema_guard: hold buf.
+   * @param [out] src_tenant_schema_guard:
+   *    pointer to the hold_buf_dst_tenant_schema_guard if src_tenant_id = dst_tenant_id,
+   *    pointer to the hold_buf_src_tenant_schema_guard if src_tenant_id != dst_tenant_id,
+   *    is always not nullptr if the interface return OB_SUCC.
+* @param [out] dst_tenant_schema_guard:
+   *    pointer to the hold_buf_dst_tenant_schema_guard,
+   *    is always not nullptr if the interface return OB_SUCC.
+  */
+  int get_tenant_schema_guard_with_version_in_inner_table(
+    const uint64_t src_tenant_id,
+    const uint64_t dst_tenant_id,
+    share::schema::ObSchemaGetterGuard &hold_buf_src_tenant_schema_guard,
+    share::schema::ObSchemaGetterGuard &hold_buf_dst_tenant_schema_guard,
+    share::schema::ObSchemaGetterGuard *&src_tenant_schema_guard,
+    share::schema::ObSchemaGetterGuard *&dst_tenant_schema_guard);
   int drop_index_to_recyclebin(const share::schema::ObTableSchema &table_schema);
   int check_tenant_in_alter_locality(const uint64_t tenant_id, bool &in_alter_locality);
   // trigger
@@ -1316,15 +1380,17 @@ private:
                                        bool &is_match);
   // in the first stage, create a hidden table without creating constraints, foreign keys
   // and indexes. if it needs to be created, it will be created in the second stage
-  int create_user_hidden_table(const share::schema::ObTableSchema &orig_table_schema,
-                               share::schema::ObTableSchema &hidden_table_schema,
-                               const obrpc::ObSequenceDDLArg *sequence_ddl_arg,
-                               const bool bind_tablets,
-                               share::schema::ObSchemaGetterGuard &schema_guard,
-                               ObDDLOperator &ddl_operator,
-                               common::ObMySQLTransaction &trans,
-                               common::ObIAllocator &allocator,
-                               const ObString &index_name = ObString(""));
+  int create_user_hidden_table(
+      const share::schema::ObTableSchema &orig_table_schema,
+      share::schema::ObTableSchema &hidden_table_schema,
+      const obrpc::ObSequenceDDLArg *sequence_ddl_arg,
+      const bool bind_tablets,
+      share::schema::ObSchemaGetterGuard &src_tenant_schema_guard,
+      share::schema::ObSchemaGetterGuard &dst_tenant_schema_guard,
+      ObDDLOperator &ddl_operator,
+      common::ObMySQLTransaction &trans,
+      common::ObIAllocator &allocator,
+      const ObString &index_name = ObString(""));
   int rebuild_triggers_on_hidden_table(
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
@@ -1454,6 +1520,7 @@ private:
   int get_orig_and_hidden_table_schema(
       const obrpc::ObAlterTableArg &alter_table_arg,
       share::schema::ObSchemaGetterGuard &schema_guard,
+      share::schema::ObSchemaGetterGuard &dest_schema_guard,
       const share::schema::AlterTableSchema &alter_table_schema,
       const share::schema::ObTableSchema *&orig_table_schema,
       const share::schema::ObTableSchema *&hidden_table_schema);
@@ -1513,6 +1580,7 @@ private:
       const share::schema::ObTableSchema &orig_table_schema,
       const ObTableSchema &hidden_table_schema,
       ObSchemaGetterGuard &schema_guard,
+      ObSchemaGetterGuard &dest_schema_guard,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       ObSArray<ObTableSchema> &new_table_schemas,
@@ -1523,9 +1591,11 @@ private:
       const bool is_oracle_mode,
       bool &need_rebuild);
   int reconstruct_index_schema(
+      obrpc::ObAlterTableArg &alter_table_arg,
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
       share::schema::ObSchemaGetterGuard &schema_guard,
+      share::schema::ObSchemaGetterGuard &dest_schema_guard,
       const common::ObIArray<int64_t> &drop_cols_id_arr,
       const share::ObColumnNameMap &col_name_map,
       const common::ObTimeZoneInfo &tz_info,
@@ -1905,7 +1975,6 @@ public:
   int ddl_rlock();
   int ddl_wlock();
   int ddl_unlock() { return ddl_lock_.unlock(); }
-
 private:
   int generate_tenant_schema(
       const obrpc::ObCreateTenantArg &arg,

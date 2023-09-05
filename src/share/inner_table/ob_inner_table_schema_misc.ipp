@@ -455,6 +455,10 @@ case OB_ALL_VIRTUAL_COLUMN_CHECKSUM_ERROR_INFO_TID:
 case OB_ALL_VIRTUAL_DEADLOCK_EVENT_HISTORY_TID:
 case OB_ALL_VIRTUAL_GLOBAL_CONTEXT_VALUE_TID:
 case OB_ALL_VIRTUAL_GLOBAL_TRANSACTION_TID:
+case OB_ALL_VIRTUAL_IMPORT_TABLE_JOB_TID:
+case OB_ALL_VIRTUAL_IMPORT_TABLE_JOB_HISTORY_TID:
+case OB_ALL_VIRTUAL_IMPORT_TABLE_TASK_TID:
+case OB_ALL_VIRTUAL_IMPORT_TABLE_TASK_HISTORY_TID:
 case OB_ALL_VIRTUAL_KV_TTL_TASK_TID:
 case OB_ALL_VIRTUAL_KV_TTL_TASK_HISTORY_TID:
 case OB_ALL_VIRTUAL_LOG_ARCHIVE_DEST_PARAMETER_TID:
@@ -474,6 +478,8 @@ case OB_ALL_VIRTUAL_LS_RESTORE_PROGRESS_TID:
 case OB_ALL_VIRTUAL_LS_STATUS_TID:
 case OB_ALL_VIRTUAL_LS_TRANSFER_MEMBER_LIST_LOCK_INFO_TID:
 case OB_ALL_VIRTUAL_MERGE_INFO_TID:
+case OB_ALL_VIRTUAL_RECOVER_TABLE_JOB_TID:
+case OB_ALL_VIRTUAL_RECOVER_TABLE_JOB_HISTORY_TID:
 case OB_ALL_VIRTUAL_RESTORE_JOB_TID:
 case OB_ALL_VIRTUAL_RESTORE_JOB_HISTORY_TID:
 case OB_ALL_VIRTUAL_RESTORE_PROGRESS_TID:
@@ -948,6 +954,70 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       break;
     }
 
+    case OB_ALL_VIRTUAL_IMPORT_TABLE_JOB_TID: {
+      ObIteratePrivateVirtualTable *iter = NULL;
+      const bool meta_record_in_sys = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_IMPORT_TABLE_JOB_TID, meta_record_in_sys, index_schema, params))) {
+        SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
+        iter->~ObIteratePrivateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_IMPORT_TABLE_JOB_HISTORY_TID: {
+      ObIteratePrivateVirtualTable *iter = NULL;
+      const bool meta_record_in_sys = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_IMPORT_TABLE_JOB_HISTORY_TID, meta_record_in_sys, index_schema, params))) {
+        SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
+        iter->~ObIteratePrivateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_IMPORT_TABLE_TASK_TID: {
+      ObIteratePrivateVirtualTable *iter = NULL;
+      const bool meta_record_in_sys = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_IMPORT_TABLE_TASK_TID, meta_record_in_sys, index_schema, params))) {
+        SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
+        iter->~ObIteratePrivateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_IMPORT_TABLE_TASK_HISTORY_TID: {
+      ObIteratePrivateVirtualTable *iter = NULL;
+      const bool meta_record_in_sys = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_IMPORT_TABLE_TASK_HISTORY_TID, meta_record_in_sys, index_schema, params))) {
+        SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
+        iter->~ObIteratePrivateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
     case OB_ALL_VIRTUAL_KV_TTL_TASK_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1075,7 +1145,9 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_LS_ARB_REPLICA_TASK_HISTORY_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1139,9 +1211,7 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_LS_RECOVERY_STAT_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = true;
@@ -1244,6 +1314,38 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
         SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
       } else if (OB_FAIL(iter->init(OB_ALL_MERGE_INFO_TID, meta_record_in_sys, index_schema, params))) {
+        SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
+        iter->~ObIteratePrivateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_RECOVER_TABLE_JOB_TID: {
+      ObIteratePrivateVirtualTable *iter = NULL;
+      const bool meta_record_in_sys = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_RECOVER_TABLE_JOB_TID, meta_record_in_sys, index_schema, params))) {
+        SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
+        iter->~ObIteratePrivateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_RECOVER_TABLE_JOB_HISTORY_TID: {
+      ObIteratePrivateVirtualTable *iter = NULL;
+      const bool meta_record_in_sys = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_RECOVER_TABLE_JOB_HISTORY_TID, meta_record_in_sys, index_schema, params))) {
         SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
         iter->~ObIteratePrivateVirtualTable();
         allocator.free(iter);
@@ -1365,7 +1467,9 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TENANT_EVENT_HISTORY_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1461,9 +1565,7 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_WR_SNAPSHOT_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -4043,6 +4145,18 @@ case OB_ALL_DEADLOCK_EVENT_HISTORY_AUX_LOB_PIECE_TID:
 case OB_ALL_GLOBAL_CONTEXT_VALUE_TID:
 case OB_ALL_GLOBAL_CONTEXT_VALUE_AUX_LOB_META_TID:
 case OB_ALL_GLOBAL_CONTEXT_VALUE_AUX_LOB_PIECE_TID:
+case OB_ALL_IMPORT_TABLE_JOB_TID:
+case OB_ALL_IMPORT_TABLE_JOB_AUX_LOB_META_TID:
+case OB_ALL_IMPORT_TABLE_JOB_AUX_LOB_PIECE_TID:
+case OB_ALL_IMPORT_TABLE_JOB_HISTORY_TID:
+case OB_ALL_IMPORT_TABLE_JOB_HISTORY_AUX_LOB_META_TID:
+case OB_ALL_IMPORT_TABLE_JOB_HISTORY_AUX_LOB_PIECE_TID:
+case OB_ALL_IMPORT_TABLE_TASK_TID:
+case OB_ALL_IMPORT_TABLE_TASK_AUX_LOB_META_TID:
+case OB_ALL_IMPORT_TABLE_TASK_AUX_LOB_PIECE_TID:
+case OB_ALL_IMPORT_TABLE_TASK_HISTORY_TID:
+case OB_ALL_IMPORT_TABLE_TASK_HISTORY_AUX_LOB_META_TID:
+case OB_ALL_IMPORT_TABLE_TASK_HISTORY_AUX_LOB_PIECE_TID:
 case OB_ALL_KV_TTL_TASK_TID:
 case OB_ALL_KV_TTL_TASK_IDX_KV_TTL_TASK_TABLE_ID_TID:
 case OB_ALL_KV_TTL_TASK_AUX_LOB_META_TID:
@@ -4103,6 +4217,12 @@ case OB_ALL_LS_TRANSFER_MEMBER_LIST_LOCK_INFO_AUX_LOB_PIECE_TID:
 case OB_ALL_MERGE_INFO_TID:
 case OB_ALL_MERGE_INFO_AUX_LOB_META_TID:
 case OB_ALL_MERGE_INFO_AUX_LOB_PIECE_TID:
+case OB_ALL_RECOVER_TABLE_JOB_TID:
+case OB_ALL_RECOVER_TABLE_JOB_AUX_LOB_META_TID:
+case OB_ALL_RECOVER_TABLE_JOB_AUX_LOB_PIECE_TID:
+case OB_ALL_RECOVER_TABLE_JOB_HISTORY_TID:
+case OB_ALL_RECOVER_TABLE_JOB_HISTORY_AUX_LOB_META_TID:
+case OB_ALL_RECOVER_TABLE_JOB_HISTORY_AUX_LOB_PIECE_TID:
 case OB_ALL_RESERVED_SNAPSHOT_TID:
 case OB_ALL_RESERVED_SNAPSHOT_AUX_LOB_META_TID:
 case OB_ALL_RESERVED_SNAPSHOT_AUX_LOB_PIECE_TID:

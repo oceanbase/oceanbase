@@ -254,6 +254,12 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 472	__wr_control	0	201001	1
 473	__all_tenant_event_history	0	201001	1
 474	__all_tenant_scheduler_job_class	0	201001	1
+475	__all_recover_table_job	0	201001	1
+476	__all_recover_table_job_history	0	201001	1
+477	__all_import_table_job	0	201001	1
+478	__all_import_table_job_history	0	201001	1
+479	__all_import_table_task	0	201001	1
+480	__all_import_table_task_history	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -328,6 +334,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 11098	__all_virtual_audit_action	2	201001	1
 11099	__all_virtual_dag_warning_history	2	201001	1
 11100	__all_virtual_tablet_encrypt_info	2	201001	1
+11102	__tenant_virtual_show_restore_preview	2	201001	1
 11104	__all_virtual_master_key_version_info	2	201001	1
 11105	__all_virtual_dag	2	201001	1
 11106	__all_virtual_dag_scheduler	2	201001	1
@@ -645,6 +652,12 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12417	__all_virtual_balance_group_ls_stat	2	201001	1
 12420	__all_virtual_flt_config	2	201001	1
 12421	__all_virtual_tenant_scheduler_job_class	2	201001	1
+12422	__all_virtual_recover_table_job	2	201001	1
+12423	__all_virtual_recover_table_job_history	2	201001	1
+12424	__all_virtual_import_table_job	2	201001	1
+12425	__all_virtual_import_table_job_history	2	201001	1
+12426	__all_virtual_import_table_task	2	201001	1
+12427	__all_virtual_import_table_task_history	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -994,6 +1007,18 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21447	DBA_OB_TENANT_EVENT_HISTORY	1	201001	1
 21448	CDB_OB_TENANT_EVENT_HISTORY	1	201001	1
 21449	GV$OB_FLT_TRACE_CONFIG	1	201001	1
+21463	CDB_OB_RECOVER_TABLE_JOBS	1	201001	1
+21464	DBA_OB_RECOVER_TABLE_JOBS	1	201001	1
+21465	CDB_OB_RECOVER_TABLE_JOB_HISTORY	1	201001	1
+21466	DBA_OB_RECOVER_TABLE_JOB_HISTORY	1	201001	1
+21467	CDB_OB_IMPORT_TABLE_JOBS	1	201001	1
+21468	DBA_OB_IMPORT_TABLE_JOBS	1	201001	1
+21469	CDB_OB_IMPORT_TABLE_JOB_HISTORY	1	201001	1
+21470	DBA_OB_IMPORT_TABLE_JOB_HISTORY	1	201001	1
+21471	CDB_OB_IMPORT_TABLE_TASKS	1	201001	1
+21472	DBA_OB_IMPORT_TABLE_TASKS	1	201001	1
+21473	CDB_OB_IMPORT_TABLE_TASK_HISTORY	1	201001	1
+21474	DBA_OB_IMPORT_TABLE_TASK_HISTORY	1	201001	1
 21477	GV$OB_TENANT_RUNTIME_INFO	1	201001	1
 21478	V$OB_TENANT_RUNTIME_INFO	1	201001	1
 check sys table count and table_id range success

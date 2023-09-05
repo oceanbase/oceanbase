@@ -905,6 +905,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObCancelRestoreStmt, ObCancelRestoreExecutor);
         break;
       }
+      case stmt::T_RECOVER_TABLE: {
+        DEFINE_EXECUTE_CMD(ObRecoverTableStmt, ObRecoverTableExecutor);
+        break;
+      }
       case stmt::T_BACKUP_MANAGE: {
         DEFINE_EXECUTE_CMD(ObBackupManageStmt, ObBackupManageExecutor);
         break;
