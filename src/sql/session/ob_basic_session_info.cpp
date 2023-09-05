@@ -6161,7 +6161,7 @@ int ObExecEnv::init(const ObString &exec_env)
 #undef SET_ENV_VALUE
 #undef GET_ENV_VALUE
 
-int ObExecEnv::load(ObBasicSessionInfo &session)
+int ObExecEnv::load(ObBasicSessionInfo &session, ObIAllocator *alloc)
 {
   int ret = OB_SUCCESS;
   ObObj val;
@@ -6190,7 +6190,11 @@ int ObExecEnv::load(ObBasicSessionInfo &session)
       }
       break;
       case PLSQL_CCFLAGS: {
-        plsql_ccflags_ = val.get_varchar();
+        if (OB_NOT_NULL(alloc)) {
+          OZ (ob_write_string(*alloc, val.get_varchar(), plsql_ccflags_));
+        } else {
+          plsql_ccflags_ = val.get_varchar();
+        }
       }
       break;
       default: {

@@ -945,7 +945,8 @@ int ObPLContext::set_exec_env(ObPLFunction &routine)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(session_info_));
-  OZ (exec_env_.load(*session_info_));
+  CK (OB_NOT_NULL(my_exec_ctx_));
+  OZ (exec_env_.load(*session_info_, &my_exec_ctx_->get_allocator()));
   if (OB_SUCC(ret) && exec_env_ != routine.get_exec_env()) {
     OZ (routine.get_exec_env().store(*session_info_));
     OX (need_reset_exec_env_ = true);
