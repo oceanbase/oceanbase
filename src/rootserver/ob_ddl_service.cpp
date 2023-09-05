@@ -8001,6 +8001,7 @@ int ObDDLService::add_new_column_to_table_schema(
     common::ObIAllocator &allocator,
     ObTableSchema &new_table_schema,
     AlterColumnSchema &alter_column_schema,
+    ObIArray<ObString> &gen_col_expr_arr,
     ObSchemaGetterGuard &schema_guard,
     ObDDLOperator *ddl_operator,
     common::ObMySQLTransaction *trans)
@@ -8010,7 +8011,6 @@ int ObDDLService::add_new_column_to_table_schema(
   const bool update_inner_table = nullptr != ddl_operator && nullptr != trans;
   bool is_oracle_mode = false;
   bool is_contain_part_key = false;
-  ObSEArray<ObString, 4> gen_col_expr_arr;
   LOG_DEBUG("check before alter table column", K(origin_table_schema), K(alter_table_schema), K(new_table_schema));
   if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("failed to get oracle mode", K(ret));
@@ -8018,21 +8018,6 @@ int ObDDLService::add_new_column_to_table_schema(
              || OB_ISNULL(tz_info_wrap.get_time_zone_info()->get_tz_info_map())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tz_info_wrap", K(tz_info_wrap), K(ret));
-  } else {
-    ObTableSchema::const_column_iterator iter = origin_table_schema.column_begin();
-    ObTableSchema::const_column_iterator end = origin_table_schema.column_end();
-    for (; OB_SUCC(ret) && iter != end; ++iter) {
-      const ObColumnSchemaV2 *column = *iter;
-      if (OB_ISNULL(column)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid column schema", K(column));
-      } else if (column->is_generated_column()) {
-        const common::ObObj* ObObjtmp = &column->get_cur_default_value();
-        if (OB_FAIL(gen_col_expr_arr.push_back(ObObjtmp->get_string()))) {
-          LOG_WARN("failed to add col expr", K(ret));
-        }
-      }
-    }
   }
   // fill column collation
   if (OB_FAIL(ret)) {
@@ -8213,6 +8198,7 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
     lib::Worker::CompatMode compat_mode = (is_oracle_mode ?
     lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
     lib::CompatModeGuard tmpCompatModeGuard(compat_mode);
+    ObSEArray<ObString, 4> gen_col_expr_arr;
     if (OB_FAIL(update_column_name_set.create(32))) {
       LOG_WARN("failed to create update column name set", K(ret));
     } else if (OB_FAIL(get_all_dropped_column_ids(alter_table_arg,
@@ -8253,6 +8239,20 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
         LOG_WARN("pre rename columns failed", K(ret));
       }
     }
+    share::schema::ObTableSchema::const_column_iterator iter = origin_table_schema.column_begin();
+    share::schema::ObTableSchema::const_column_iterator end = origin_table_schema.column_end();
+    for (; OB_SUCC(ret) && iter != end; ++iter) {
+      const share::schema::ObColumnSchemaV2 *column = *iter;
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid column schema", K(column));
+      } else if (column->is_generated_column()) {
+        const common::ObObj* ObObjtmp = &column->get_cur_default_value();
+        if (OB_FAIL(gen_col_expr_arr.push_back(ObObjtmp->get_string()))) {
+        LOG_WARN("fail to push back ObSEArray gen_col_expr_arr", K(ret));
+        }
+      }
+    }
     for (; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
       if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
         ret = OB_ERR_UNEXPECTED;
@@ -8282,6 +8282,7 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                                                        alter_table_arg.allocator_,
                                                        new_table_schema,
                                                        *alter_column_schema,
+                                                       gen_col_expr_arr,
                                                        schema_guard,
                                                        nullptr,
                                                        nullptr))) {
@@ -8382,6 +8383,106 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                     LOG_WARN("failed to reorder column", K(ret));
                   } else {
                     need_redistribute_column_id = true;
+                  }
+                }
+              }
+            }
+            break;
+          }
+          case OB_DDL_ALTER_COLUMN: {
+            ObSchemaChecker schema_checker;
+            orig_column_schema = new_table_schema.get_column_schema(orig_column_name);
+            ObColumnNameHashWrapper orig_column_key(orig_column_name);
+            if (OB_FAIL(schema_checker.init(schema_guard))) {
+              LOG_WARN("failed to init schema guard", K(ret));
+            } else if (OB_ISNULL(orig_column_schema)) {
+              ret = OB_ERR_BAD_FIELD_ERROR;
+              LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, orig_column_name.length(), orig_column_name.ptr(),
+                    origin_table_schema.get_table_name_str().length(), origin_table_schema.get_table_name_str().ptr());
+              LOG_WARN("unknown column", KR(ret), K(orig_column_name), K(new_table_schema));
+            } else if (OB_FAIL(pre_check_orig_column_schema(*alter_column_schema,
+                                                     origin_table_schema,
+                                                     update_column_name_set))) {
+              RS_LOG(WARN, "failed to pre check orig column schema", K(ret));
+            } else if (OB_FAIL(validate_update_column_for_materialized_view(
+                       origin_table_schema, *orig_column_schema))) {
+              LOG_WARN("fail to validate update column for materialized view", K(ret));
+            }
+            //column that has been modified, can't not modify again
+            if (OB_SUCC(ret)) {
+              ObColumnSchemaV2 new_column_schema;
+              bool for_view = false;
+              if (OB_FAIL(new_column_schema.assign(*orig_column_schema))) {
+                LOG_WARN("fail to assign column schema", KR(ret));
+              } else if (OB_FAIL(resolve_timestamp_column(alter_column_schema,
+                                                   new_table_schema,
+                                                   new_column_schema,
+                                                   tz_info_wrap,
+                                                   nls_formats,
+                                                   allocator))) {
+                RS_LOG(WARN, "fail to resolve timestamp column", K(ret));
+              } else if (OB_FAIL(new_table_schema.alter_column(new_column_schema,
+                         ObTableSchema::CHECK_MODE_OFFLINE,
+                         for_view))) {
+                RS_LOG(WARN, "failed to change column", K(ret));
+              } else {
+                ObObj default_value;
+                if (alter_column_schema->is_drop_default_) {
+                  default_value.set_null();
+                  new_column_schema.del_column_flag(DEFAULT_EXPR_V2_COLUMN_FLAG);
+                  if (OB_FAIL(new_column_schema.set_cur_default_value(default_value))) {
+                    RS_LOG(WARN, "failed to set current default value");
+                  }
+                } else {
+                  default_value = alter_column_schema->get_cur_default_value();
+                  if (!default_value.is_null() && ob_is_text_tc(new_column_schema.get_data_type())) {
+                    ret = OB_INVALID_DEFAULT;
+                    LOG_USER_ERROR(OB_INVALID_DEFAULT, new_column_schema.get_column_name_str().length(),
+                                                       new_column_schema.get_column_name_str().ptr());
+                    RS_LOG(WARN, "BLOB, TEXT column can't have a default value!", K(default_value), K(ret));
+                  } else if (ob_is_json_tc(new_column_schema.get_data_type())
+                             || ob_is_geometry_tc(new_column_schema.get_data_type())) {
+                    // cannot alter json column to any default value
+                    // text column also cannot be alter to null in mysql
+                    ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
+                    LOG_USER_ERROR(OB_ERR_BLOB_CANT_HAVE_DEFAULT, new_column_schema.get_column_name_str().length(),
+                                   new_column_schema.get_column_name_str().ptr());
+                    RS_LOG(WARN, "JSON column can't have a default value!", K(default_value), K(ret));
+                  } else if (!new_column_schema.is_nullable() && default_value.is_null()) {
+                    ret = OB_INVALID_DEFAULT;
+                    LOG_USER_ERROR(OB_INVALID_DEFAULT, new_column_schema.get_column_name_str().length(),
+                                   new_column_schema.get_column_name_str().ptr());
+                    RS_LOG(WARN, "not null column with default value null!", K(ret));
+                  } else if (OB_FAIL(ObDDLResolver::check_default_value(default_value,
+                                                                        tz_info_wrap,
+                                                                        nls_formats,
+                                                                        allocator,
+                                                                        new_table_schema,
+                                                                        new_column_schema,
+                                                                        gen_col_expr_arr,
+                                                                        alter_table_schema.get_sql_mode(),
+                                                                        !alter_column_schema->is_generated_column(), /* allow_sequence */
+                                                                        &schema_checker))) {
+                    LOG_WARN("fail to check default value", KPC(alter_column_schema),K(ret));
+                  } else if (OB_FAIL(new_column_schema.set_cur_default_value(default_value))) {
+                    RS_LOG(WARN, "failed to set current default value");
+                  }
+                }
+              }
+              if (OB_SUCC(ret)) {
+                if (OB_FAIL(new_table_schema.alter_column(new_column_schema,
+                            ObTableSchema::CHECK_MODE_OFFLINE,
+                            for_view))) {
+                  RS_LOG(WARN, "failed to change column", K(ret));
+                } else if (OB_FAIL(new_table_schema.check_primary_key_cover_partition_column())) {
+                  RS_LOG(WARN, "failed to check primary key cover partition column", K(ret));
+                } else {
+                  if (OB_HASH_EXIST == update_column_name_set.exist_refactored(orig_column_key)) {
+                    ret = OB_HASH_EXIST;
+                    RS_LOG(WARN, "duplicate index name", K(ret), K(orig_column_name));
+                  } else if (OB_FAIL(update_column_name_set.set_refactored(orig_column_key))) {
+                    RS_LOG(WARN, "failed to add index_name to hash set.",
+                           K(orig_column_name), K(ret));
                   }
                 }
               }
@@ -8607,6 +8708,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                                                        alter_table_arg.allocator_,
                                                        new_table_schema,
                                                        *alter_column_schema,
+                                                       gen_col_expr_arr,
                                                        schema_guard,
                                                        &ddl_operator,
                                                        &trans))) {

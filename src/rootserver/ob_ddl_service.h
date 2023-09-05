@@ -309,6 +309,7 @@ public:
       common::ObIAllocator &allocator,
       share::schema::ObTableSchema &new_table_schema,
       share::schema::AlterColumnSchema &alter_column_schema,
+      ObIArray<ObString> &gen_col_expr_arr,
       share::schema::ObSchemaGetterGuard &schema_guard,
       ObDDLOperator *ddl_operator,
       common::ObMySQLTransaction *trans);
