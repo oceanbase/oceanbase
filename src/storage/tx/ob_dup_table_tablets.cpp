@@ -404,7 +404,7 @@ int ObLSDupTabletsMgr::init_free_tablet_pool_()
     DUP_TABLE_LOG(WARN, "get free tablet set failed", K(ret));
   } else {
     removing_old_set_->get_common_header().set_old();
-    removing_old_set_->set_related_set_op_type(DupTableRelatedSetOpType::OLD_GC);
+    removing_old_set_->set_related_set_op_type(DupTableRelatedSetOpType::NEW_GC);
   }
 
   DUP_TABLE_LOG(INFO, "finish init tablet map", K(ret), KPC(removing_old_set_),
@@ -835,14 +835,8 @@ DupTabletChangeMap *ObLSDupTabletsMgr::get_need_gc_set_(bool &new_round)
                         KPC(removing_old_set_), KPC(readable_set_in_gc_));
       readable_set_in_gc_ = nullptr;
     } else {
-      while (OB_NOT_NULL(readable_set_in_gc_) && !readable_set_in_gc_->need_gc_scan(gc_start_time_)
-             && readable_set_in_gc_ != readable_tablets_list_.get_header()) {
-        readable_set_in_gc_ = readable_set_in_gc_->get_next();
-      }
-
-      if (readable_set_in_gc_ == readable_tablets_list_.get_header()) {
-        readable_set_in_gc_ = nullptr;
-      }
+      READABLE_DLIST_FOREACH_X(readable_set_in_gc_, readable_tablets_list_,
+                               !readable_set_in_gc_->need_gc_scan(gc_start_time_));
     }
   }
 
@@ -851,6 +845,12 @@ DupTabletChangeMap *ObLSDupTabletsMgr::get_need_gc_set_(bool &new_round)
       readable_set_in_gc_ = readable_tablets_list_.get_first();
       new_round = true;
     }
+  }
+
+  if (readable_set_in_gc_ == readable_tablets_list_.get_header()) {
+    readable_set_in_gc_ = nullptr;
+    DUP_TABLE_LOG(INFO, "readable_set_in_gc_ is null ptr, no need start gc", K(readable_tablets_list_.get_size()),
+                  KP(removing_old_set_), KP(readable_set_in_gc_), KP(readable_tablets_list_.get_header()));
   }
 
   return readable_set_in_gc_;
@@ -2509,7 +2509,7 @@ int ObLSDupTabletsMgr::return_tablet_set_(DupTabletChangeMap *need_free_set)
   } else if (need_free_set->get_common_header().is_old_set()) {
     need_free_set->reuse();
     need_free_set->get_common_header().set_old();
-    need_free_set->set_related_set_op_type(DupTableRelatedSetOpType::OLD_GC);
+    need_free_set->set_related_set_op_type(DupTableRelatedSetOpType::NEW_GC);
   } else {
     if (OB_FAIL(ret)) {
     } else {
@@ -2521,6 +2521,8 @@ int ObLSDupTabletsMgr::return_tablet_set_(DupTabletChangeMap *need_free_set)
       }
       if (need_free_set == changing_new_set_) {
         changing_new_set_ = nullptr;
+      } else if (need_free_set == readable_set_in_gc_) {
+        readable_set_in_gc_ = nullptr;
       }
     }
   }
@@ -2547,9 +2549,6 @@ int ObLSDupTabletsMgr::check_and_recycle_empty_readable_set_(DupTabletChangeMap 
       DUP_TABLE_LOG(WARN, "remove empty readable set from list failed", K(ret), KPC(readable_set));
     } else if (OB_FAIL(return_tablet_set_(readable_set))) {
       DUP_TABLE_LOG(WARN, "return empty readable set failed", K(ret), KPC(readable_set));
-    } else if (readable_set == readable_set_in_gc_) {
-      // readable_set recycled, restart scan readable list
-      readable_set_in_gc_ = nullptr;
     }
   }
 
