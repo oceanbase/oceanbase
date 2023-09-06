@@ -163,6 +163,16 @@ struct ObQueryCacheValueHandle
   TO_STRING_KV(KP(query_cache_value_), K(handle_));
 };
 
+struct ObQueryCacheCtx
+{
+  bool use_query_cache_{false};
+  bool insert_query_cache_{false};
+  bool is_select_sql_cache_{false};
+  bool is_select_sql_no_cache_{false};
+  ObQueryCacheKey query_cache_key_;
+  ObQueryCacheValueHandle query_cache_handle_;
+};
+
 class ObQueryCache : public common::ObKVCache<ObQueryCacheKey, ObQueryCacheValue>
 {
   static constexpr uint64_t PLACE_HOLDER = 0x1;
@@ -173,7 +183,6 @@ public:
   inline void add_mem_size(int64_t row_mem_size) { ATOMIC_AAF(&row_mem_size_, row_mem_size); }
   inline void add_row_cnt(int64_t row_cnt) { ATOMIC_AAF(&row_cnt_, row_cnt); }
   inline uint64_t get_size() const { return size() + row_mem_size_; }
-  inline DRWLock &get_lock() { return lock_; } 
   OB_INLINE bool is_valid() { return OB_NOT_NULL(instance_) && PLACE_HOLDER != (uint64_t)instance_; }
   int query(const ObQueryCacheKey &key, ObQueryCacheValueHandle &handle);
   int insert(const ObQueryCacheKey &key,
@@ -194,7 +203,6 @@ private:
   int64_t row_cnt_;
   common::ObArenaAllocator inner_alloc_;
   common::ObSafeArenaAllocator alloc_;
-  DRWLock lock_;
 };
 
 } // end namespace sql

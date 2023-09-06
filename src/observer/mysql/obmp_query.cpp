@@ -741,6 +741,11 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       ctx_.enable_sql_resource_manage_ = true;
       //storage::ObPartitionService* ps = static_cast<storage::ObPartitionService *> (GCTX.par_ser_);
       //bool is_read_only = false;
+      result.get_exec_context().get_query_cache_ctx()->query_cache_key_ =
+            ObQueryCacheKey(session.get_login_tenant_id(),
+                            session.get_database_id(),
+                            sql,
+                            session);
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (OB_ISNULL(ctx_.schema_guard_)) {
@@ -748,11 +753,10 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
         LOG_WARN("newest schema is NULL", K(ret));
       } else if (OB_FAIL(set_session_active(sql, session, single_process_timestamp_))) {
         LOG_WARN("fail to set session active", K(ret));
-      } else if (OB_FAIL(can_use_query_cache(sql, session, use_query_cache))) {
+      } else if (OB_FAIL(can_use_query_cache(sql, session, result, use_query_cache))) {
         LOG_WARN("failed to check can use query cache", K(ret));
       } else if (use_query_cache
-                && OB_SUCC(session.set_query_cache_key(sql))
-                && OB_SUCC(query_cache->query(session.get_query_cache_key(), handle))) {
+                && OB_SUCC(query_cache->query(result.get_exec_context().get_query_cache_ctx()->query_cache_key_, handle))) {
         handle.query_cache_value_->add_frequency();
         // send result set to client
         if (OB_FAIL(query_cache_response_query_header(handle, result, session))) {
@@ -846,16 +850,19 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       exec_end_timestamp_ = ObTimeUtility::current_time();
 
       // query cache record some statistics
-      if (session.get_insert_query_cache()
-          && OB_NOT_NULL(session.get_query_cache_handle().query_cache_value_)) {
-        const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
-        session.get_query_cache_handle().query_cache_value_->set_exec_time(time_cost);
-        const int64_t value_cost = session.get_query_cache_handle().query_cache_value_->get_row_mem_size();
-        session.get_query_cache_handle().query_cache_value_->set_cost(value_cost);
-        session.get_query_cache_handle().query_cache_value_->set_valid(true);
-        session.get_query_cache()->add_mem_size(value_cost);
-        session.get_query_cache()->add_row_cnt(session.get_query_cache_handle().query_cache_value_->get_row_cnt());
-        session.get_query_cache_handle().handle_.reset();
+      if (result.get_exec_context().get_query_cache_ctx()->insert_query_cache_) {
+        ObQueryCacheValueHandle insert_handle = result.get_exec_context().get_query_cache_ctx()->query_cache_handle_;
+        if (OB_NOT_NULL(insert_handle.query_cache_value_)) {
+          const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
+          insert_handle.query_cache_value_->set_exec_time(time_cost);
+          const int64_t row_cnt = insert_handle.query_cache_value_->get_row_cnt();
+          const int64_t value_cost = insert_handle.query_cache_value_->get_row_mem_size();
+          insert_handle.query_cache_value_->set_cost(value_cost);
+          insert_handle.query_cache_value_->set_valid(true);
+          session.get_query_cache()->add_mem_size(value_cost);
+          session.get_query_cache()->add_row_cnt(row_cnt);
+          insert_handle.handle_.reset();
+        }
       }
 
       // some statistics must be recorded for plan stat, even though sql audit disabled
@@ -1050,6 +1057,7 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
 
 int ObMPQuery::can_use_query_cache(const ObString &sql,
                                   sql::ObSQLSessionInfo &session,
+                                  ObMySQLResultSet &result,
                                   bool &use_query_cache)
 {
   int ret = OB_SUCCESS;
@@ -1067,7 +1075,7 @@ int ObMPQuery::can_use_query_cache(const ObString &sql,
     // not support inner db
     use_query_cache &= (!is_inner_db(session.get_database_id()));
   }
-  session.set_use_query_cache(use_query_cache);
+  result.get_exec_context().get_query_cache_ctx()->use_query_cache_ =  use_query_cache;
   return ret;
 }
 
@@ -1077,14 +1085,14 @@ int ObMPQuery::can_insert_query_cache(sql::ObSQLSessionInfo &session,
 { 
   int ret = OB_SUCCESS;
   int64_t query_cache_type_temp;
-  insert_query_cache = session.get_use_query_cache();
+  insert_query_cache = result.get_exec_context().get_query_cache_ctx()->use_query_cache_;
   insert_query_cache &= (session.get_query_cache()->count() <= 100000);
   if (OB_FAIL(session.get_sys_variable(share::SYS_VAR_USE_QUERY_CACHE, query_cache_type_temp))) {
     LOG_WARN("failed to get sys variable query cache type", K(ret));
   } else if (insert_query_cache) {
     // check sys varible 'query_cache_type' after parse.
-    insert_query_cache &= (query_cache_type_temp == 1 && false == session.get_select_sql_no_cache())
-                      || (query_cache_type_temp == 2 && true == session.get_select_sql_cache());
+    insert_query_cache &= (query_cache_type_temp == 1 && false == result.get_exec_context().get_query_cache_ctx()->is_select_sql_no_cache_)
+                      || (query_cache_type_temp == 2 && true == result.get_exec_context().get_query_cache_ctx()->is_select_sql_cache_);
     // not support inner table
     const ObPhysicalPlan *temp_plan = result.get_physical_plan();
     const common::ObIArray<ObTableLocation> &table_locations = temp_plan->get_table_locations();
@@ -1096,7 +1104,7 @@ int ObMPQuery::can_insert_query_cache(sql::ObSQLSessionInfo &session,
     // not support uncertainty function
     // TODO
   }
-  session.set_insert_query_cache(insert_query_cache);
+  result.get_exec_context().get_query_cache_ctx()->insert_query_cache_ = insert_query_cache;
   return ret;
 }
 

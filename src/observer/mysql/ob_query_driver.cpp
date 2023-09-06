@@ -98,23 +98,23 @@ int ObQueryDriver::response_query_header(const ColumnsFieldIArray &fields,
 
   // 发送 field 信息
   if (OB_SUCC(ret)) {
-    if (session_.get_insert_query_cache()) {
+    if (result->get_exec_context().get_query_cache_ctx()->insert_query_cache_) {
       // Store fields to query cache.
       ObQueryCacheValueHandle handle;
       const ColumnsFieldArray &real_fields = reinterpret_cast<const ColumnsFieldArray &>(fields);
-      if (OB_FAIL(session_.get_query_cache()->insert(session_.get_query_cache_key(),
+      if (OB_FAIL(session_.get_query_cache()->insert(result->get_exec_context().get_query_cache_ctx()->query_cache_key_,
                                                     real_fields,
                                                     handle))) {
         // The resultset will not be inserted into the query cache
         // if there is a key that already exists.
         // Only allow one thread insert key successfully when them have same key.
-        session_.set_insert_query_cache(false);
+        result->get_exec_context().get_query_cache_ctx()->insert_query_cache_ = false;
         handle.handle_.reset();
         if (ret == OB_ENTRY_EXIST) {
           ret = OB_SUCCESS;
         }
       } else {
-        session_.set_query_cache_handle(handle);
+        result->get_exec_context().get_query_cache_ctx()->query_cache_handle_ = handle;
       }
     }
 
@@ -289,22 +289,23 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
     }
 
     // Store the row to query cache.
-    if (session_.get_insert_query_cache()) {
+    if (result.get_exec_context().get_query_cache_ctx()->insert_query_cache_) {
       ObNewRow tmp_row = *row;
       // A query resultset size need < query_cache_limit to add query cache.
       cur_row_size += row->get_deep_copy_size();
+      ObQueryCacheValueHandle &handle = result.get_exec_context().get_query_cache_ctx()->query_cache_handle_;
       if (cur_row_size < query_cache_limit) {
-        if (OB_SUCC(ret) && OB_FAIL(session_.get_query_cache_handle().query_cache_value_->add_row(tmp_row))) {
+        if (OB_SUCC(ret) && OB_FAIL(handle.query_cache_value_->add_row(tmp_row))) {
           LOG_WARN("failed to add row to row store", K(ret));
-          session_.set_insert_query_cache(false);
+          result.get_exec_context().get_query_cache_ctx()->insert_query_cache_ = false;
           if (OB_ALLOCATE_MEMORY_FAILED == ret) {
             ret = OB_SUCCESS;
           }
-          session_.get_query_cache_handle().handle_.reset();
+          handle.handle_.reset();
         }
       } else {
-        session_.set_insert_query_cache(false);
-        session_.get_query_cache_handle().handle_.reset();
+        result.get_exec_context().get_query_cache_ctx()->insert_query_cache_ = false;
+        handle.handle_.reset();
         LOG_WARN("resultset size over query cache limit", K(ret), K(cur_row_size));
       }
     }
@@ -333,8 +334,9 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
       }
     }
   }
-  if (session_.get_insert_query_cache()) {
-    session_.get_query_cache_handle().query_cache_value_->set_packed(is_packed);
+  if (result.get_exec_context().get_query_cache_ctx()->insert_query_cache_
+      && OB_NOT_NULL(result.get_exec_context().get_query_cache_ctx()->query_cache_handle_.query_cache_value_)) {
+    result.get_exec_context().get_query_cache_ctx()->query_cache_handle_.query_cache_value_->set_packed(is_packed);
   }
   if (is_cac_found_rows) {
     while (OB_SUCC(ret) && !OB_FAIL(result.get_next_row(result_row))) {

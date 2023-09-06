@@ -3224,8 +3224,8 @@ int ObSql::generate_plan(ParseResult &parse_result,
     if (OB_FAIL(ret)) {
     } else if (stmt::T_SELECT == stmt->get_stmt_type()) {
       ObSelectStmt *select_stmt = static_cast<ObSelectStmt*>(stmt);
-      result.get_session().set_select_sql_cache(select_stmt->get_sql_cache());
-      result.get_session().set_select_sql_no_cache(select_stmt->get_sql_no_cache());
+      result.get_exec_context().get_query_cache_ctx()->is_select_sql_cache_ = select_stmt->get_sql_cache();
+      result.get_exec_context().get_query_cache_ctx()->is_select_sql_no_cache_ = select_stmt->get_sql_no_cache();
     }
 
     if (OB_FAIL(ret)) {

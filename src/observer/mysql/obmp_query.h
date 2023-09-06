@@ -113,6 +113,7 @@ private:
                             bool &insert_query_cache);
   int can_use_query_cache(const ObString &sql,
                           sql::ObSQLSessionInfo &session,
+                          ObMySQLResultSet &result,
                           bool &use_query_cache);
   int query_cache_response_row(sql::ObSQLSessionInfo &session,
                                         ObMySQLResultSet &result,
