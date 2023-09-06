@@ -759,11 +759,11 @@ int ObPartitionMergePolicy::diagnose_table_count_unsafe(
     const ObSSTable *minor_sstable = static_cast<const ObSSTable *>(minor_tables.get_boundary_table(false/*last*/));
     ADD_COMPACTION_INFO_PARAM(tmp_str, buf_len, "no major sstable. first_minor_start_scn = ", minor_sstable->get_start_scn());
   } else if (FALSE_IT(max_merged_snapshot = major_sstable->get_snapshot_version())) {
-  } else if (OB_FAIL(MTL_CALL_FREEZE_INFO_MGR(diagnose_min_reserved_snapshot,
+  } else if (OB_FAIL(MTL_CALL_FREEZE_INFO_MGR(get_min_reserved_snapshot,
       tablet_id,
       max_merged_snapshot,
       min_reserved_snapshot,
-      snapshot_from_str))) {
+      &snapshot_from_str))) {
     LOG_WARN("failed to get min reserved snapshot", K(ret), K(tablet_id));
   } else if (snapshot_from_str.length() > 0) {
     ADD_COMPACTION_INFO_PARAM(tmp_str, buf_len, "snapshot_type", snapshot_from_str, K(min_reserved_snapshot));

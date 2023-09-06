@@ -457,13 +457,13 @@ int64_t ObTenantFreezeInfoMgr::get_min_reserved_snapshot_for_tx()
 int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
     const ObTabletID &tablet_id,
     const int64_t merged_version,
-    int64_t &snapshot_version)
+    int64_t &snapshot_version,
+    ObString *snapshot_from_type/*nullptr*/)
 {
   int ret = OB_SUCCESS;
   FreezeInfo freeze_info;
   int64_t duration = 0;
-  bool unused = false;
-  snapshot_version = 0;
+  const char *snapshot_type = nullptr;
 
   RLockGuard lock_guard(lock_);
   ObIArray<ObSnapshotInfo> &snapshots = snapshots_[cur_idx_];
@@ -486,67 +486,17 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
     }
 
     snapshot_version = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L * 1000L);
-    snapshot_version = std::min(snapshot_version, get_min_reserved_snapshot_for_tx());
-    snapshot_version = std::min(snapshot_version, freeze_info.freeze_version);
-
-    for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret); ++i) {
-      bool related = false;
-      const ObSnapshotInfo &snapshot = snapshots.at(i);
-      if (OB_FAIL(is_snapshot_related_to_tablet(tablet_id, snapshot, related))) {
-        STORAGE_LOG(WARN, "fail to check snapshot relation", K(ret), K(tablet_id), K(snapshot));
-      } else if (related) {
-        snapshot_version = std::min(snapshot_version, snapshot.snapshot_scn_.get_val_for_tx());
-      }
-    }
-    LOG_DEBUG("get_min_reserved_snapshot", K(ret), K(duration), K(snapshot_version), K(freeze_info),
-        K(snapshot_gc_ts_));
-  }
-  return ret;
-}
-
-int ObTenantFreezeInfoMgr::diagnose_min_reserved_snapshot(
-    const ObTabletID &tablet_id,
-    const int64_t merge_snapshot_version,
-    int64_t &snapshot_version,
-    common::ObString &snapshot_from_type)
-{
-  int ret = OB_SUCCESS;
-  FreezeInfo freeze_info;
-  int64_t duration = 0;
-  bool unused = false;
-
-  RLockGuard lock_guard(lock_);
-  ObIArray<ObSnapshotInfo> &snapshots = snapshots_[cur_idx_];
-
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "not init", K(ret));
-  } else if (OB_FAIL(get_multi_version_duration(duration))) {
-    STORAGE_LOG(WARN, "fail to get multi version duration", K(ret), K(tablet_id));
-  } else {
-    if (merge_snapshot_version < 1) {
-      freeze_info.freeze_version = 0;
-    } else if (OB_FAIL(get_freeze_info_behind_snapshot_version_(merge_snapshot_version, freeze_info))) {
-      if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("failed to get freeze info behind snapshot", K(ret), K(merge_snapshot_version));
-      } else {
-        freeze_info.freeze_version = INT64_MAX;
-        ret = OB_SUCCESS;
-      }
-    }
-
-    snapshot_version = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L * 1000L);
-    snapshot_from_type = "undo_retention";
+    snapshot_type = "undo_retention";
 
     const int64_t snapshot_version_for_tx = get_min_reserved_snapshot_for_tx();
     if (snapshot_version_for_tx < snapshot_version) {
       snapshot_version = snapshot_version_for_tx;
-      snapshot_from_type = "snapshot_for_tx";
+      snapshot_type = "snapshot_for_tx";
     }
 
     if (freeze_info.freeze_version < snapshot_version) {
       snapshot_version = freeze_info.freeze_version;
-      snapshot_from_type = "major_freeze_ts";
+      snapshot_type = "major_freeze_ts";
     }
 
     for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret); ++i) {
@@ -556,8 +506,23 @@ int ObTenantFreezeInfoMgr::diagnose_min_reserved_snapshot(
         STORAGE_LOG(WARN, "fail to check snapshot relation", K(ret), K(tablet_id), K(snapshot));
       } else if (related && snapshot.snapshot_scn_.get_val_for_tx() < snapshot_version) {
         snapshot_version = snapshot.snapshot_scn_.get_val_for_tx();
-        snapshot_from_type = snapshot.get_snapshot_type_str();
+        snapshot_type = snapshot.get_snapshot_type_str();
       }
+    }
+    LOG_TRACE("get_min_reserved_snapshot", K(ret), K(duration), K(snapshot_version), K(freeze_info),
+        K(snapshot_gc_ts_));
+
+    const int64_t current_time = common::ObTimeUtility::fast_current_time() * 1000; // needs ns here.
+    if (need_check_snapshot_version(snapshot_version)
+        && duration < MULTI_VERSION_START_OUTDATED_TIME/*10 hour*/
+        && current_time - snapshot_version > MULTI_VERSION_START_OUTDATED_TIME) {
+      if (REACH_TENANT_TIME_INTERVAL(30_s)) {
+        LOG_WARN("tablet multi version start not advance for a long time", K(ret),
+                K(tablet_id), K(snapshot_version), K(snapshot_type), K(duration));
+      }
+    }
+    if (OB_NOT_NULL(snapshot_from_type)) {
+      *snapshot_from_type = snapshot_type;
     }
   }
   return ret;

@@ -94,16 +94,13 @@ public:
 
   int get_neighbour_major_freeze(const int64_t snapshot_version, NeighbourFreezeInfo &info);
 
+  bool need_check_snapshot_version(const int64_t snapshot_version) const { return snapshot_version > MAGIC_SNAPSHOT_VERSION; }
   int64_t get_min_reserved_snapshot_for_tx();
   int get_min_reserved_snapshot(
       const ObTabletID &tablet_id,
       const int64_t merged_version,
-      int64_t &snapshot_version);
-  int diagnose_min_reserved_snapshot(
-      const ObTabletID &tablet_id,
-      const int64_t merged_version,
       int64_t &snapshot_version,
-      common::ObString &snapshot_from_type);
+      ObString *snapshot_from_type = nullptr);
   int get_reserve_points(
       const int64_t tenant_id,
       const share::ObSnapShotType snapshot_type,
@@ -133,6 +130,8 @@ private:
   typedef common::RWLock::RLockGuard RLockGuard;
   typedef common::RWLock::WLockGuard WLockGuard;
 
+  static const int64_t MAGIC_SNAPSHOT_VERSION = 936806400000; // 1999-09-09 00:00:00
+  static const int64_t MULTI_VERSION_START_OUTDATED_TIME = 10L * 3600L * 1000L * 1000L * 1000L; // 10hour // need ns
   static const int64_t RELOAD_INTERVAL = 1L * 1000L * 1000L;
   static const int64_t UPDATE_LS_RESERVED_SNAPSHOT_INTERVAL = 10L * 1000L * 1000L;
   static const int64_t MAX_GC_SNAPSHOT_TS_REFRESH_TS = 10L * 60L * 1000L * 1000L;
