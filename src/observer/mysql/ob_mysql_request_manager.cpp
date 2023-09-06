@@ -47,7 +47,7 @@ ObMySQLRequestRecord::~ObMySQLRequestRecord()
 const int64_t ObMySQLRequestManager::EVICT_INTERVAL;
 
 ObMySQLRequestManager::ObMySQLRequestManager()
-  : inited_(false), destroyed_(false), request_id_(0), mem_limit_(0),
+  : inited_(false), destroyed_(false),
     allocator_(), queue_(), task_(),
     tenant_id_(OB_INVALID_TENANT_ID), tg_id_(-1), stop_flag_(true)
 {
@@ -61,25 +61,25 @@ ObMySQLRequestManager::~ObMySQLRequestManager()
 }
 
 int ObMySQLRequestManager::init(uint64_t tenant_id,
-                                const int64_t max_mem_size,
-                                const int64_t queue_size)
+                                const int64_t queue_size,
+                                const int64_t subqueue_size)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
     ret = OB_INIT_TWICE;
-  } else if (OB_FAIL(queue_.init(ObModIds::OB_MYSQL_REQUEST_RECORD, queue_size, tenant_id))) {
-    SERVER_LOG(WARN, "Failed to init ObMySQLRequestQueue", K(ret));
   } else if (OB_FAIL(allocator_.init(SQL_AUDIT_PAGE_SIZE,
                                      ObModIds::OB_MYSQL_REQUEST_RECORD,
                                      tenant_id,
                                      INT64_MAX))) {
     SERVER_LOG(WARN, "failed to init allocator", K(ret));
+  } else if (OB_FAIL(queue_.init(ObModIds::OB_MYSQL_REQUEST_RECORD, queue_size, 
+                          subqueue_size, &allocator_, tenant_id))) {
+    SERVER_LOG(WARN, "Failed to init ObMySQLRequestQueue", K(ret));
   } else {
     //check FIFO mem used and sql audit records every 1 seconds
     if (OB_FAIL(task_.init(this))) {
       SERVER_LOG(WARN, "fail to init sql audit time tast", K(ret));
     } else {
-      mem_limit_ = max_mem_size;
       tenant_id_ = tenant_id;
       inited_ = true;
       destroyed_ = false;
@@ -113,6 +113,7 @@ void ObMySQLRequestManager::stop()
 {
   if (inited_ && !stop_flag_) {
     TG_STOP(tg_id_);
+    stop_flag_ = true;
   }
 }
 
@@ -174,7 +175,7 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
     if (NULL == (buf = (char*)alloc(total_size))) {
       if (REACH_TIME_INTERVAL(100 * 1000)) {
         SERVER_LOG(WARN, "record concurrent fifoallocator alloc mem failed",
-            K(total_size), K(tenant_id_), K(mem_limit_), K(request_id_), K(ret));
+            K(total_size), K(tenant_id_), K(ret));
       }
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
@@ -241,7 +242,7 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
         if (is_sensitive) {
           free(record);
           record = NULL;
-        } else if (OB_FAIL(queue_.push_with_imme_seq(record, record->data_.request_id_))) {
+        } else if (OB_FAIL(queue_.push_with_retry(record, record->data_.request_id_))) {
           //sql audit槽位已满时会push失败, 依赖后台线程进行淘汰获得可用槽位
           if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
             SERVER_LOG(WARN, "push into queue failed", K(ret));
@@ -305,16 +306,15 @@ int ObMySQLRequestManager::mtl_init(ObMySQLRequestManager* &req_mgr)
     LOG_WARN("ObMySQLRequestManager not alloc yet", K(ret));
   } else {
     uint64_t tenant_id = lib::current_resource_owner_id();
-    int64_t mem_limit = lib::get_tenant_memory_limit(tenant_id);
-    mem_limit = static_cast<int64_t>(static_cast<double>(mem_limit) * SQL_AUDIT_MEM_FACTOR);
     bool use_mini_queue = lib::is_mini_mode() || MTL_IS_MINI_MODE() || is_meta_tenant(tenant_id);
-    int64_t queue_size = use_mini_queue ? MINI_MODE_MAX_QUEUE_SIZE : MAX_QUEUE_SIZE;
-    if (OB_FAIL(req_mgr->init(tenant_id, mem_limit, queue_size))) {
+    int64_t queue_size = MAX_QUEUE_CAPACITY;
+    int64_t subqueue_size = use_mini_queue ? MINI_SUBQUEUE_CAPACITY : SUBQUEUE_CAPACITY;
+    if (OB_FAIL(req_mgr->init(tenant_id, queue_size, subqueue_size))) {
       LOG_WARN("failed to init request manager", K(ret));
     } else {
       // do nothing
     }
-    LOG_INFO("mtl init finish", K(tenant_id), K(mem_limit), K(queue_size), K(ret));
+    LOG_INFO("mtl init finish", K(tenant_id), K(queue_size), K(ret));
   }
   if (OB_FAIL(ret) && req_mgr != nullptr) {
     // cleanup

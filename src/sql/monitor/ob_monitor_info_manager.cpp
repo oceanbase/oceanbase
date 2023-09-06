@@ -89,6 +89,7 @@ int ObMonitorInfoManager::get_by_request_id(int64_t request_id,
         ret = OB_SUCCESS;
         break;
       }
+      /* Note(fhkong): 这里存在问题，假如tmp_info == NULL时，不应该revert(ref)的 */
       if (NULL != ref) {
         slow_query_queue_.revert(ref);
       }
@@ -106,7 +107,7 @@ int ObMonitorInfoManager::get_by_index(int64_t index,
   if (OB_UNLIKELY(index < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguemnt", K(ret), K(index));
-  } else if (index >= get_start_index() + get_size()) {
+  } else if (index >= get_start_index() + get_size()) { 
     ret = OB_ITER_END;
   } else if (NULL == (plan_info = static_cast<ObPhyPlanMonitorInfo*>(slow_query_queue_.get(index, ref)))) {
     ret = OB_ENTRY_NOT_EXIST;
@@ -152,7 +153,7 @@ int ObMonitorInfoManager::add_monitor_info(ObPhyPlanMonitorInfo *info)
       int64_t &req_id = info->get_request_id();
       int64_t cur_operator_info_size = info->get_operator_info_memory_size();
       if (OB_FAIL(slow_query_queue_.push_with_imme_seq((void*)info, req_id))) {
-        if (OB_SIZE_OVERFLOW == ret) {
+        if (OB_SIZE_OVERFLOW == ret) { /* Note(fhkong): 错误码走不到 */
           clear_queue(OB_BATCH_GC_COUNT);
         }
       } else {

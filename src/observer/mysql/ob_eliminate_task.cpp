@@ -52,11 +52,10 @@ int ObEliminateTask::init(const ObMySQLRequestManager *request_manager)
   return ret;
 }
 
-// 检查配置内存限时是否更改：mem_limit = tenant_mem_limit * ob_sql_audit_percentage
+// 检查配置内存限制是否更改：mem_limit = tenant_mem_limit * ob_sql_audit_percentage
 int ObEliminateTask::check_config_mem_limit(bool &is_change)
 {
   const int64_t MINIMUM_LIMIT = 64 * 1024 * 1024;   // at lease 64M
-  const int64_t MAXIMUM_LIMIT = 1024 * 1024 * 1024; // 1G maximum
   int ret = OB_SUCCESS;
   is_change = false;
   int64_t mem_limit = config_mem_limit_;
@@ -88,7 +87,7 @@ int ObEliminateTask::check_config_mem_limit(bool &is_change)
 }
 
 //剩余内存淘汰曲线图,当mem_limit在[64M, 100M]时, 内存剩余20M时淘汰;
-//               当mem_limit在[100M, 5G]时, 内存甚于mem_limit*0.2时淘汰;
+//               当mem_limit在[100M, 5G]时, 内存剩余mem_limit*0.2时淘汰;
 //               当mem_limit在[5G, +∞]时, 内存剩余1G时淘汰;
 //高低水位线内存差曲线图，当mem_limit在[64M, 100M]时, 内存差为:20M;
 //                        当mem_limit在[100M, 5G]时，内存差：mem_limit*0.2;
@@ -151,24 +150,19 @@ void ObEliminateTask::runTimerTask()
   } else if (OB_FAIL(calc_evict_mem_level(evict_low_mem_level, evict_high_mem_level))) {
     LOG_WARN("fail to get sql audit evict memory level", K(ret));
   } else {
-    int64_t queue_size = request_manager_->get_capacity();
-    bool use_mini_queue = lib::is_mini_mode() || MTL_IS_MINI_MODE()
-                          || is_meta_tenant(request_manager_->get_tenant_id());
-    release_cnt = use_mini_queue
-                  ? ObMySQLRequestManager::MINI_MODE_BATCH_RELEASE_SIZE
-                  : ObMySQLRequestManager::BATCH_RELEASE_SIZE;
-    evict_high_size_level = queue_size * ObMySQLRequestManager::HIGH_LEVEL_EVICT_PERCENTAGE;
-    evict_low_size_level = queue_size * ObMySQLRequestManager::LOW_LEVEL_EVICT_PERCENTAGE;
+    int64_t queue_capacity = request_manager_->get_capacity();
+    evict_high_size_level = queue_capacity * ObMySQLRequestManager::HIGH_LEVEL_EVICT_PERCENTAGE;
+    evict_low_size_level = queue_capacity * ObMySQLRequestManager::LOW_LEVEL_EVICT_PERCENTAGE;
     allocator = request_manager_->get_allocator();
     if (OB_ISNULL(allocator)) {
       ret = OB_NOT_INIT;
       LOG_WARN("fail to get sql audit evict memory level", K(ret));
     }
-    if (OB_SUCC(ret) && REACH_TIME_INTERVAL(30 * 1000 * 1000)) { // 30s delay
+    if (OB_SUCC(ret) && REACH_TIME_INTERVAL(30 * 1000 * 1000)) { // 30s delay 
       LOG_INFO("Eliminate task evict sql audit",
-          K(request_manager_->get_tenant_id()), K(queue_size), K(config_mem_limit_),
+          K(request_manager_->get_tenant_id()), K(request_manager_->get_size_allocated()), 
           K(request_manager_->get_size_used()), K(evict_high_size_level), K(evict_low_size_level),
-          K(allocator->allocated()), K(evict_high_mem_level), K(evict_low_mem_level));
+          K(config_mem_limit_), K(allocator->allocated()), K(evict_high_mem_level), K(evict_low_mem_level));
     }
   }
 
@@ -185,10 +179,10 @@ void ObEliminateTask::runTimerTask()
                "mem_used", allocator->allocated());
       int64_t last_time_allocated = allocator->allocated();
       while (evict_low_mem_level < allocator->allocated()) {
-        request_manager_->release_old(release_cnt);
+        request_manager_->release_batch();
         evict_batch_count++;
         if ((evict_low_mem_level < allocator->allocated()) && (last_time_allocated == allocator->allocated())) {
-          LOG_INFO("release old cannot free more memory");
+          LOG_INFO("release old cannot free more memory", "last_time_allocated", last_time_allocated, "this_time_allocated", allocator->allocated());
           break;
         }
         last_time_allocated = allocator->allocated();
@@ -204,7 +198,7 @@ void ObEliminateTask::runTimerTask()
                "size_used",request_manager_->get_size_used(),
                "mem_used", allocator->allocated());
       for (int i = 0; i < evict_batch_count; i++) {
-        request_manager_->release_old(release_cnt);
+        request_manager_->release_batch();
       }
     }
     //如果sql_audit_memory_limit改变, 则需要将ObConcurrentFIFOAllocator中total_limit_更新;

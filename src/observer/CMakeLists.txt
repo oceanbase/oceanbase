@@ -72,6 +72,7 @@ ob_set_subtarget(ob_server mysql
   mysql/ob_query_retry_ctrl.cpp
   mysql/ob_sync_cmd_driver.cpp
   mysql/ob_sync_plan_driver.cpp
+  mysql/ob_tl_queue.cpp
   mysql/obmp_base.cpp
   mysql/obmp_change_user.cpp
   mysql/obmp_connect.cpp
