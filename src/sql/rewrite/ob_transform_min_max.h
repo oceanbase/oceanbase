@@ -86,6 +86,7 @@ public:
     ObRawExpr *raw_expr_ptr_;
   };
 
+  // check every expr is valid
   static int check_expr_validity(ObTransformerCtx &ctx,
                                  ObSelectStmt *select_stmt,
                                  const ObRawExpr *expr,
