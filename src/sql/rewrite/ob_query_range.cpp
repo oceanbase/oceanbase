@@ -4519,7 +4519,9 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
           }
         }
 
-        if (OB_SUCC(ret) && !is_reach_mem_limit_) {
+        if (OB_SUCC(ret) && !is_reach_mem_limit_ &&
+            !result->is_always_false() &&
+            !result->is_always_true()) {
           result->link_gt(rest);
           // link to the or_next_ list
           if (NULL != tail) {
