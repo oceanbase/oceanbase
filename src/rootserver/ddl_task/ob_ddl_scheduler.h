@@ -406,6 +406,19 @@ private:
       const obrpc::ObDDLArg *arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
+
+  int create_recover_restore_table_task(
+      common::ObISQLClient &proxy,
+      const share::ObDDLType &type,
+      const share::schema::ObTableSchema *src_schema,
+      const share::schema::ObTableSchema *dest_schema,
+      const int64_t parallelism,
+      const int64_t consumer_group_id,
+      const int64_t task_id,
+      const obrpc::ObAlterTableArg *alter_table_arg,
+      ObIAllocator &allocator,
+      ObDDLTaskRecord &task_record);
+
   int schedule_build_index_task(
       const ObDDLTaskRecord &task_record);
   int schedule_drop_primary_key_task(const ObDDLTaskRecord &task_record);
@@ -415,6 +428,7 @@ private:
   int schedule_modify_autoinc_task(const ObDDLTaskRecord &task_record);
   int schedule_drop_index_task(const ObDDLTaskRecord &task_record);
   int schedule_ddl_retry_task(const ObDDLTaskRecord &task_record);
+  int schedule_recover_restore_table_task(const ObDDLTaskRecord &task_record);
   int add_sys_task(ObDDLTask *task);
   int remove_sys_task(ObDDLTask *task);
   int add_task_to_longops_mgr(ObDDLTask *ddl_task);

@@ -1744,9 +1744,11 @@ public:
   void set_added_win_dist() { outline_print_flags_ |= ADDED_WIN_DIST_HINT; }
   const common::ObIArray<ObRawExpr*> &get_onetime_query_refs() const { return onetime_query_refs_; }
   int deduce_redundant_join_conds(const ObIArray<ObRawExpr*> &quals,
+                                  const ObIArray<TableItem*> &table_items,
                                   ObIArray<ObRawExpr*> &redundancy_quals);
   int deduce_redundant_join_conds_with_equal_set(const ObIArray<ObRawExpr*> &equal_set,
                                                  ObIArray<ObRelIds> &connect_infos,
+                                                 ObIArray<ObRelIds> &single_table_ids,
                                                  ObIArray<ObRawExpr*> &redundancy_quals);
 private:
   static const int64_t IDP_PATHNUM_THRESHOLD = 5000;

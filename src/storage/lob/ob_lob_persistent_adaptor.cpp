@@ -77,7 +77,7 @@ int ObPersistentLobApator::scan_lob_meta(
   if (OB_FAIL(get_lob_tablets(param, data_tablet, lob_meta_tablet, lob_piece_tablet))) {
     LOG_WARN("failed to get tablets.", K(ret), K(param));
   } else {
-    uint64_t tenant_id = MTL_ID();
+    uint64_t tenant_id = param.tenant_id_;
     // 2. prepare tablet scan param
     scan_param.tablet_id_ = lob_meta_tablet.get_obj()->get_tablet_meta().tablet_id_;
     scan_param.schema_version_ = lob_meta_tablet.get_obj()->get_tablet_meta().max_sync_storage_schema_version_;
@@ -149,7 +149,7 @@ int ObPersistentLobApator::get_lob_data(
     if (OB_FAIL(get_lob_tablets(param, data_tablet, lob_meta_tablet, lob_piece_tablet))) {
       LOG_WARN("failed to get tablets.", K(ret), K(param));
     } else {
-      uint64_t tenant_id = MTL_ID();
+      uint64_t tenant_id = param.tenant_id_;
       // 2. prepare tablet scan param
       ObTableScanParam scan_param;
       scan_param.table_param_ = param.piece_tablet_param_;
@@ -239,7 +239,7 @@ int ObPersistentLobApator::fetch_lob_id(ObLobAccessParam& param, uint64_t &lob_i
   if (OB_FAIL(get_lob_tablets_id(param, lob_meta_tablet_id, lob_piece_tablet_id))) {
     LOG_WARN("get lob tablet id failed.", K(ret), K(param));
   } else {
-    uint64_t tenant_id = MTL_ID();
+    uint64_t tenant_id = param.tenant_id_;
     share::ObTabletAutoincrementService &auto_inc = share::ObTabletAutoincrementService::get_instance();
     if (OB_FAIL(auto_inc.get_autoinc_seq(tenant_id, lob_meta_tablet_id, lob_id))) {
       LOG_WARN("get lob_id fail", K(ret), K(tenant_id), K(lob_meta_tablet_id));
@@ -386,7 +386,7 @@ int ObPersistentLobApator::erase_lob_meta(ObLobAccessParam &param, ObLobMetaInfo
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("get tx desc null.", K(ret), K(param));
   } else {
-    uint64_t tenant_id = MTL_ID();
+    uint64_t tenant_id = param.tenant_id_;
     if (OB_FAIL(prepare_lob_meta_dml(param, tenant_id, data_tablet, lob_meta_tablet))) {
       LOG_WARN("failed to prepare lob meta dml", K(ret));
     } else {
@@ -437,7 +437,7 @@ int ObPersistentLobApator::erase_lob_piece_tablet(ObLobAccessParam& param, ObLob
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("get tx desc null.", K(ret), K(param));
   } else {
-    uint64_t tenant_id = MTL_ID();
+    uint64_t tenant_id = param.tenant_id_;
 
     ObDMLBaseParam dml_base_param;
     share::schema::ObTableDMLParam table_dml_param(*param.allocator_);
@@ -499,7 +499,7 @@ int ObPersistentLobApator::write_lob_meta(ObLobAccessParam& param, ObLobMetaInfo
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("get tx desc null.", K(ret), K(param));
   } else {
-    uint64_t tenant_id = MTL_ID();
+    uint64_t tenant_id = param.tenant_id_;
     if (OB_FAIL(prepare_lob_meta_dml(param, tenant_id, data_tablet, lob_meta_tablet))) {
       LOG_WARN("failed to prepare lob meta dml.", K(ret));
     } else {
@@ -550,7 +550,7 @@ int ObPersistentLobApator::update_lob_meta(ObLobAccessParam& param, ObLobMetaInf
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("get tx desc null.", K(ret), K(param));
   } else {
-    uint64_t tenant_id = MTL_ID();
+    uint64_t tenant_id = param.tenant_id_;
     ObSEArray<uint64_t, 6> update_column_ids;
 
     for (int i = 2; OB_SUCC(ret) && i < ObLobMetaUtil::LOB_META_COLUMN_CNT; ++i) {
@@ -667,7 +667,7 @@ int ObPersistentLobApator::write_lob_piece_tablet(ObLobAccessParam& param, ObLob
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("get tx desc null.", K(ret), K(param));
   } else {
-    uint64_t tenant_id = MTL_ID();
+    uint64_t tenant_id = param.tenant_id_;
 
     ObDMLBaseParam dml_base_param;
     share::schema::ObTableDMLParam table_dml_param(*param.allocator_);
@@ -730,7 +730,7 @@ int ObPersistentLobApator::update_lob_piece_tablet(ObLobAccessParam& param, ObLo
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("get tx desc null.", K(ret), K(param));
   } else {
-    uint64_t tenant_id = MTL_ID();
+    uint64_t tenant_id = param.tenant_id_;
 
     ObDMLBaseParam dml_base_param;
     share::schema::ObTableDMLParam table_dml_param(*param.allocator_);
@@ -810,7 +810,7 @@ int ObPersistentLobApator::build_common_scan_param(
     ObTableScanParam& scan_param)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_id = MTL_ID();
+  uint64_t tenant_id = param.tenant_id_;
   scan_param.ls_id_ = param.ls_id_;
 
   ObQueryFlag query_flag(ObQueryFlag::Forward, // scan_order

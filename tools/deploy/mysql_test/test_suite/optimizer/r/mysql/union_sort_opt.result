@@ -1735,7 +1735,7 @@ CREATE TABLE T1 (PK INT PRIMARY KEY, C1 INT, C2 INT);
 CREATE TABLE T2 (PK INT PRIMARY KEY, C1 INT, C2 INT);
 CREATE TABLE T3 (PK INT PRIMARY KEY, C1 INT, C2 INT);
 
-EXPLAIN SELECT C1, C2, PK FROM T1 ORDER BY PK DESC LIMIT 1 UNION (SELECT C1, C2, PK FROM T2 UNION SELECT C1, C2 ,PK FROM T3);
+EXPLAIN (SELECT C1, C2, PK FROM T1 ORDER BY PK DESC LIMIT 1) UNION (SELECT C1, C2, PK FROM T2 UNION SELECT C1, C2 ,PK FROM T3);
 Query Plan
 ==========================================================
 |ID|OPERATOR           |NAME       |EST.ROWS|EST.TIME(us)|
@@ -1763,7 +1763,7 @@ Outputs & filters:
       access([t3.PK], [t3.C1], [t3.C2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t3.PK]), range(MIN ; MAX)always true
-SELECT C1, C2, PK FROM T1 ORDER BY PK DESC LIMIT 1 UNION (SELECT C1, C2, PK FROM T2 UNION SELECT C1, C2 ,PK FROM T3);
+(SELECT C1, C2, PK FROM T1 ORDER BY PK DESC LIMIT 1) UNION (SELECT C1, C2, PK FROM T2 UNION SELECT C1, C2 ,PK FROM T3);
 +------+------+----+
 | C1   | C2   | PK |
 +------+------+----+

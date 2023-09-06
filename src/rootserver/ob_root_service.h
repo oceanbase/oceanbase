@@ -487,6 +487,14 @@ public:
   int abort_redef_table(const obrpc::ObAbortRedefTableArg &arg);
   int update_ddl_task_active_time(const obrpc::ObUpdateDDLTaskActiveTimeArg &arg);
   int create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res);
+  /**
+   * For recover restore table ddl, data insert into the target table is selected from another tenant.
+   * The function is used to create a hidden target table without any change on the source table,
+   * and then register a recover task into ddl task queue to finish the all procedures.
+   * The format about the command is,
+   * alter system recover table test.t1 to tenant backup_oracle_tenant from '$ARCHIVE_FILES_PATH' with 'pool_list=small_pool_0&primary_zone=z1' remap table test.t1:recover_test.t3;
+  */
+  int recover_restore_table_ddl(const obrpc::ObRecoverRestoreTableDDLArg &arg);
   int execute_ddl_task(const obrpc::ObAlterTableArg &arg, common::ObSArray<uint64_t> &obj_ids);
   int cancel_ddl_task(const obrpc::ObCancelDDLTaskArg &arg);
   int alter_tablegroup(const obrpc::ObAlterTablegroupArg &arg);
@@ -789,6 +797,7 @@ public:
   int handle_validate_database(const obrpc::ObBackupManageArg &arg);
   int handle_validate_backupset(const obrpc::ObBackupManageArg &arg);
   int handle_cancel_validate(const obrpc::ObBackupManageArg &arg);
+  int handle_recover_table(const obrpc::ObRecoverTableArg &arg);
   int disaster_recovery_task_reply(const obrpc::ObDRTaskReplyResult &arg);
   int standby_upgrade_virtual_schema(const obrpc::ObDDLNopOpreatorArg &arg);
   int check_backup_scheduler_working(obrpc::Bool &is_working);

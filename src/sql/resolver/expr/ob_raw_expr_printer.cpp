@@ -2923,7 +2923,11 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         break;
       }
       case T_FUN_SYS_LNNVL: {
-        DATA_PRINTF("(%.*s", LEN_AND_PTR(func_name));
+        if (lib::is_oracle_mode()) {
+          DATA_PRINTF("(%.*s", LEN_AND_PTR(func_name));
+        } else {
+          DATA_PRINTF("%.*s(", LEN_AND_PTR(func_name));
+        }
         if (1 != expr->get_param_count()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("param count should be equal 1", K(ret), K(expr->get_param_count()));

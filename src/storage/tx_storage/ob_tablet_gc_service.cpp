@@ -402,7 +402,7 @@ int ObTabletGCHandler::check_tablet_need_gc_(
     ObTabletCreateDeleteMdsUserData data;
     bool mds_table_not_null = false;
     bool is_finish = false;
-    if (OB_FAIL(tablet->check_mds_written(mds_table_not_null))) {
+    if (OB_FAIL(tablet->check_tablet_status_written(mds_table_not_null))) {
       STORAGE_LOG(WARN, "failed to check mds written", KR(ret), KPC(tablet));
     } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(data, is_finish))) {
       if (OB_EMPTY_RESULT == ret) {

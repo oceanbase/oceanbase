@@ -137,6 +137,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_rpc_processor.cpp
   table/ob_table_query_sync_processor.cpp
   table/ob_table_service.cpp
+  table/ob_htable_lock_mgr.cpp
   table/ob_table_context.cpp
   table/ob_table_executor.cpp
   table/ob_table_delete_executor.cpp
@@ -155,6 +156,11 @@ ob_set_subtarget(ob_server table
   table/ob_table_query_common.cpp
   table/ob_table_direct_load_processor.cpp
   table/ob_table_aggregation.cpp
+  table/ttl/ob_ttl_service.cpp
+  table/ttl/ob_tenant_ttl_manager.cpp
+  table/ttl/ob_tenant_tablet_ttl_mgr.cpp
+  table/ttl/ob_table_ttl_task.cpp
+  table/ttl/ob_table_ttl_executor.cpp
 )
 
 ob_set_subtarget(ob_server table_load
@@ -354,6 +360,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_table_columns.cpp
   virtual_table/ob_table_index.cpp
   virtual_table/ob_tenant_all_tables.cpp
+  virtual_table/ob_tenant_show_restore_preview.cpp
   virtual_table/ob_tenant_show_tables.cpp
   virtual_table/ob_tenant_virtual_charset.cpp
   virtual_table/ob_tenant_virtual_privilege.cpp

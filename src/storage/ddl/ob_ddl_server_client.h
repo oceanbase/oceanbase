@@ -23,16 +23,30 @@ namespace storage
 class ObDDLServerClient final
 {
 public:
+  /**
+   * For recover restore table ddl task, including:
+   * 1. create a user hidden table under the target tenant(dest tenant).
+   * 2. import the backup tenant's data into the target tenant by the table redefinition task.
+  */
+  static int execute_recover_restore_table(const obrpc::ObRecoverRestoreTableDDLArg &arg);
+  /**
+   * for load data.
+  */
   static int create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res, int64_t &snapshot_version, sql::ObSQLSessionInfo &session);
   static int start_redef_table(const obrpc::ObStartRedefTableArg &arg, obrpc::ObStartRedefTableRes &res, sql::ObSQLSessionInfo &session);
   static int copy_table_dependents(const obrpc::ObCopyTableDependentsArg &arg, sql::ObSQLSessionInfo &session);
   static int finish_redef_table(const obrpc::ObFinishRedefTableArg &finish_redef_arg,
                                 const obrpc::ObDDLBuildSingleReplicaResponseArg &build_single_arg,
                                 sql::ObSQLSessionInfo &session);
-  static int abort_redef_table(const obrpc::ObAbortRedefTableArg &arg, sql::ObSQLSessionInfo &session);
+  static int finish_redef_table(const obrpc::ObFinishRedefTableArg &finish_redef_arg);
+  static int abort_redef_table(const obrpc::ObAbortRedefTableArg &arg, sql::ObSQLSessionInfo *session = nullptr);
   static int build_ddl_single_replica_response(const obrpc::ObDDLBuildSingleReplicaResponseArg &arg);
 private:
-  static int wait_task_reach_pending(const uint64_t tenant_id, const int64_t task_id, int64_t &snapshot_version, ObMySQLProxy &sql_proxy, sql::ObSQLSessionInfo &session);
+  static int wait_task_reach_pending(
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      int64_t &snapshot_version,
+      ObMySQLProxy &sql_proxy);
   static int heart_beat_clear(const int64_t task_id);
   static int check_need_stop(const uint64_t tenant_id);
 };

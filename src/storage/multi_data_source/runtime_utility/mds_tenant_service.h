@@ -98,6 +98,83 @@ struct ObMdsMemoryLeakDebugInfo
 class ObTenantMdsAllocator : public ObIAllocator
 {
   friend class ObTenantMdsService;
+  static constexpr int64_t ALLOC_INFO_BUCKET_SIZE = (1ULL << 7);
+  struct AllocInfoBucket {
+    AllocInfoBucket()
+    : alloc_type_(nullptr),
+    total_alloc_size_(0),
+    total_free_size_(0),
+    total_alloc_times_(0),
+    total_free_times_(0) {}
+    void record_alloc_info(int64_t alloc_size) {
+      ATOMIC_AAF(&total_alloc_times_, 1);
+      ATOMIC_AAF(&total_alloc_size_, alloc_size);
+    }
+    void record_free_info(int64_t free_size) {
+      ATOMIC_AAF(&total_free_times_, 1);
+      ATOMIC_AAF(&total_free_size_, free_size);
+    }
+    const char *alloc_type_;
+    int64_t total_alloc_size_;
+    int64_t total_free_size_;
+    int64_t total_alloc_times_;
+    int64_t total_free_times_;
+  };
+  struct AllockInfoMap {
+    AllockInfoMap() = default;
+    void record_alloc_info(const char *type, int64_t alloc_size) {
+      int64_t idx = find_idx_(type);
+      if (idx != -1) {
+        bucket[idx].record_alloc_info(alloc_size);
+      }
+    }
+    void record_free_info(const char *type, int64_t free_size) {
+      int64_t idx = find_idx_(type);
+      if (idx != -1) {
+        bucket[idx].record_free_info(free_size);
+      }
+    }
+    int64_t find_idx_(const char *type) {
+      int64_t ret_idx = -1;
+      if (OB_NOT_NULL(type)) {
+        constexpr int64_t MASK = ALLOC_INFO_BUCKET_SIZE - 1;
+        int64_t hash_idx = ((int64_t)type);
+        for (int64_t idx = hash_idx; idx < hash_idx + ALLOC_INFO_BUCKET_SIZE && ret_idx == -1; ++idx) {
+          int64_t redirected_idx = (idx & MASK);
+          const char *alloc_type = ATOMIC_LOAD(&bucket[redirected_idx].alloc_type_);
+          if (OB_LIKELY(alloc_type == type)) {// find existing bucket
+            ret_idx = redirected_idx;
+          } else if (OB_LIKELY(alloc_type == nullptr)) {// take a new place
+            if (nullptr == ATOMIC_CAS(&bucket[redirected_idx].alloc_type_, nullptr, type)) {
+              ret_idx = redirected_idx;
+            }
+          }
+        }
+      }
+      return ret_idx;
+    }
+    void dump() const {
+      for (int64_t idx = 0; idx < ALLOC_INFO_BUCKET_SIZE; ++idx) {
+        const char *alloc_type = ATOMIC_LOAD(&bucket[idx].alloc_type_);
+        int64_t total_alloc_size = ATOMIC_LOAD(&bucket[idx].total_alloc_size_);
+        int64_t total_free_size = ATOMIC_LOAD(&bucket[idx].total_free_size_);
+        int64_t total_alloc_times = ATOMIC_LOAD(&bucket[idx].total_alloc_times_);
+        int64_t total_free_times = ATOMIC_LOAD(&bucket[idx].total_free_times_);
+        int64_t active_size = total_alloc_size - total_free_size;
+        int64_t active_alloc_times = total_alloc_times - total_free_times;
+        if (OB_NOT_NULL(alloc_type)) {
+          MDS_LOG_RET(INFO, OB_SUCCESS, "[MDS_MEMORY]dump memory useage", K(alloc_type),
+                      "active_alloc_size", to_cstring(ObSizeLiteralPrettyPrinter(active_size)),
+                      "active_alloc_times", active_alloc_times,
+                      "average_active_size", active_alloc_times == 0 ? "INVALID" : to_cstring(ObSizeLiteralPrettyPrinter(active_size / active_alloc_times)),
+                      "history_alloc_size", to_cstring(ObSizeLiteralPrettyPrinter(total_alloc_size)),
+                      "history_alloc_times", total_alloc_times,
+                      "average_history_size", total_alloc_times == 0 ? "INVALID" : to_cstring(ObSizeLiteralPrettyPrinter(total_alloc_size/total_alloc_times)));
+        }
+      }
+    }
+    AllocInfoBucket bucket[ALLOC_INFO_BUCKET_SIZE];
+  };
 private:
   static const int64_t MDS_ALLOC_CONCURRENCY = 32;
 public:
@@ -109,10 +186,12 @@ public:
   virtual void free(void *ptr) override;
   virtual void set_attr(const ObMemAttr &attr) override;
   int64_t hold() { return allocator_.hold(); }
+  void dump() { alloc_info_map_.dump(); }
   TO_STRING_KV(KP(this));
 private:
   common::ObBlockAllocMgr block_alloc_;
   common::ObVSliceAlloc allocator_;
+  AllockInfoMap alloc_info_map_;
 };
 
 struct ObTenantBufferCtxAllocator : public ObIAllocator// for now, it is just a wrapper of mtl_malloc
@@ -134,6 +213,7 @@ struct ObTenantMdsTimer
   TO_STRING_KV(KP(this), K_(recycle_task_handle))
   common::ObOccamTimerTaskRAIIHandle recycle_task_handle_;
   common::ObOccamTimerTaskRAIIHandle dump_special_mds_table_status_task_handle_;
+  common::ObOccamTimerTaskRAIIHandle dump_memory_statistics_task_handle_;
   common::ObOccamTimer timer_;
 private:
   int process_with_tablet_(ObTablet &tablet);

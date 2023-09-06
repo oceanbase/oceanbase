@@ -33,11 +33,13 @@ public:
   virtual ~ObTableRedefinitionTask();
   int init(
       const uint64_t tenant_id,
+      const uint64_t dest_tenant_id,
       const int64_t task_id,
       const share::ObDDLType &ddl_type,
       const int64_t data_table_id,
       const int64_t dest_table_id,
       const int64_t schema_version,
+      const int64_t dest_schema_version,
       const int64_t parallelism,
       const int64_t consumer_group_id,
       const obrpc::ObAlterTableArg &alter_table_arg,
@@ -74,6 +76,10 @@ protected:
   int table_redefinition(const share::ObDDLTaskStatus next_task_status);
   int copy_table_dependent_objects(const share::ObDDLTaskStatus next_task_status);
   int take_effect(const share::ObDDLTaskStatus next_task_status);
+  int set_partition_task_status(const common::ObTabletID &tablet_id,
+                                const int ret_code,
+                                const int64_t row_scanned,
+                                const int64_t row_inserted);
   int repending(const share::ObDDLTaskStatus next_task_status);
 private:
   inline bool get_is_copy_indexes() const {return is_copy_indexes_;}

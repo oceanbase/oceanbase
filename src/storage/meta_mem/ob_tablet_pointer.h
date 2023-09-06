@@ -65,8 +65,8 @@ public:
   int get_mds_table(mds::MdsTableHandle &handle, bool not_exist_create = false);
   // interfaces forward to mds_table_handler_
   void mark_mds_table_deleted();
-  void set_mds_written();
-  bool is_mds_written() const;
+  void set_tablet_status_written();
+  bool is_tablet_status_written() const;
   int try_release_mds_nodes_below(const share::SCN &scn);
   int try_gc_mds_table();
   int get_min_mds_ckpt_scn(share::SCN &scn);

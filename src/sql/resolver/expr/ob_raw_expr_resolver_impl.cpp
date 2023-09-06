@@ -2605,8 +2605,14 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             }
 #endif
           } else {
-            c_expr->set_meta_type(ObSQLUtils::is_oracle_empty_string(param)
+            if (ObNullType == param.get_type() &&
+                T_QUESTIONMARK == c_expr->get_expr_type() &&
+                ObDateTimeType == param.get_null_meta().get_type()) {
+              c_expr->set_meta_type(param.get_null_meta());
+            } else {
+              c_expr->set_meta_type(ObSQLUtils::is_oracle_empty_string(param)
                                   ? param.get_param_meta() : param.get_meta());
+            }
             c_expr->set_expr_obj_meta(param.get_param_meta());
             c_expr->set_accuracy(param.get_accuracy());
             c_expr->set_result_flag(param.get_result_flag()); // not_null etc

@@ -2358,42 +2358,41 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
   } else {
     if (DDL_DROP_COLUMN == arg.ddl_type_
         || DDL_ADD_COLUMN_OFFLINE == arg.ddl_type_
-        || DDL_COLUMN_REDEFINITION == arg.ddl_type_) {
-      MTL_SWITCH(arg.tenant_id_) {
-        int saved_ret = OB_SUCCESS;
-        ObTenantDagScheduler *dag_scheduler = nullptr;
-        ObComplementDataDag *dag = nullptr;
-        if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("dag scheduler is null", K(ret));
-        } else if (OB_FAIL(dag_scheduler->alloc_dag(dag))) {
-          LOG_WARN("fail to alloc dag", K(ret));
-        } else if (OB_ISNULL(dag)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected error, dag is null", K(ret), KP(dag));
-        } else if (OB_FAIL(dag->init(arg))) {
-          LOG_WARN("fail to init complement data dag", K(ret), K(arg));
-        } else if (OB_FAIL(dag->create_first_task())) {
-          LOG_WARN("create first task failed", K(ret));
-        } else if (OB_FAIL(dag_scheduler->add_dag(dag))) {
-          saved_ret = ret;
-          LOG_WARN("add dag failed", K(ret), K(arg));
-          if (OB_EAGAIN == saved_ret) {
-            dag_scheduler->get_complement_data_dag_progress(dag, res.row_scanned_, res.row_inserted_);
-          }
-        } else {
-          dag = nullptr;
+        || DDL_COLUMN_REDEFINITION == arg.ddl_type_
+        || DDL_TABLE_RESTORE == arg.ddl_type_) {
+      int saved_ret = OB_SUCCESS;
+      ObTenantDagScheduler *dag_scheduler = nullptr;
+      ObComplementDataDag *dag = nullptr;
+      if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dag scheduler is null", K(ret));
+      } else if (OB_FAIL(dag_scheduler->alloc_dag(dag))) {
+        LOG_WARN("fail to alloc dag", K(ret));
+      } else if (OB_ISNULL(dag)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, dag is null", K(ret), KP(dag));
+      } else if (OB_FAIL(dag->init(arg))) {
+        LOG_WARN("fail to init complement data dag", K(ret), K(arg));
+      } else if (OB_FAIL(dag->create_first_task())) {
+        LOG_WARN("create first task failed", K(ret));
+      } else if (OB_FAIL(dag_scheduler->add_dag(dag))) {
+        saved_ret = ret;
+        LOG_WARN("add dag failed", K(ret), K(arg));
+        if (OB_EAGAIN == saved_ret) {
+          dag_scheduler->get_complement_data_dag_progress(dag, res.row_scanned_, res.row_inserted_);
         }
-        if (OB_NOT_NULL(dag)) {
-          (void) dag->handle_init_failed_ret_code(ret);
-          dag_scheduler->free_dag(*dag);
-          dag = nullptr;
-        }
-        if (OB_FAIL(ret)) {
-          // RS does not retry send RPC to tablet leader when the dag exists.
-          ret = OB_EAGAIN == saved_ret ? OB_SUCCESS : ret;
-          ret = OB_SIZE_OVERFLOW == saved_ret ? OB_EAGAIN : ret;
-        }
+      } else {
+        dag = nullptr;
+      }
+      if (OB_NOT_NULL(dag)) {
+        (void) dag->handle_init_failed_ret_code(ret);
+        dag_scheduler->free_dag(*dag);
+        dag = nullptr;
+      }
+      if (OB_FAIL(ret)) {
+        // RS does not retry send RPC to tablet leader when the dag exists.
+        ret = OB_EAGAIN == saved_ret ? OB_SUCCESS : ret;
+        ret = OB_SIZE_OVERFLOW == saved_ret ? OB_EAGAIN : ret;
       }
       LOG_INFO("obs get rpc to build drop column dag", K(ret));
     } else {

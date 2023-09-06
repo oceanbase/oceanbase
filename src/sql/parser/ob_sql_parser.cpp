@@ -69,6 +69,7 @@ int ObSQLParser::parse_and_gen_sqlid(void *malloc_pool,
     parse_result->minus_ctx_.pos_ = -1;
     parse_result->minus_ctx_.raw_sql_offset_ = -1;
     parse_result->is_for_trigger_ = false;
+    parse_result->is_for_remap_ = false;
     parse_result->is_dynamic_sql_ = false;
     parse_result->is_batched_multi_enabled_split_ = false;
     parse_result->may_bool_value_ = false;

@@ -45,6 +45,22 @@ class CallBack
     HashValue v_;
 };
 
+class Predicate
+{
+  public:
+    bool operator () (HashMapPair<HashKey, HashValue> &v)
+    {
+      return v.second >= min_value_;
+    };
+    void set_min_value(HashValue v)
+    {
+      min_value_ = v;
+    };
+  private:
+    HashValue min_value_;
+};
+
+
 TEST(TestObHashMap, create)
 {
   ObHashMap<HashKey, HashValue> hm;
@@ -272,6 +288,60 @@ TEST(TestObHashMap, atomic)
   EXPECT_EQ(OB_HASH_NOT_EXIST, hm.atomic_refactored(key + 1, callback));
   EXPECT_EQ(OB_SUCCESS, hm.get_refactored(key, value_tmp));
   EXPECT_EQ(value_update, value_tmp);
+}
+
+TEST(TestObHashMap, set_or_update)
+{
+  ObHashMap<HashKey, HashValue> hm;
+  uint64_t key = 1;
+  uint64_t value = 100;
+  CallBack callback;
+  HashValue value_tmp;
+
+  // 没有create
+  EXPECT_EQ(OB_NOT_INIT, hm.set_or_update(key, value, callback));
+  hm.create(cal_next_prime(gHashItemNum), ObModIds::OB_HASH_BUCKET);
+
+  callback.set_v(value);
+  EXPECT_EQ(OB_HASH_NOT_EXIST, hm.get_refactored(key, value_tmp));
+  EXPECT_EQ(OB_SUCCESS, hm.set_or_update(key, value, callback));
+  EXPECT_EQ(OB_SUCCESS, hm.get_refactored(key, value_tmp));
+  EXPECT_EQ(value, value_tmp);
+
+  uint64_t value_update = 3000;
+  callback.set_v(value_update);
+  EXPECT_EQ(OB_SUCCESS, hm.set_or_update(key, value, callback));
+  EXPECT_EQ(OB_SUCCESS, hm.get_refactored(key, value_tmp));
+  EXPECT_EQ(value_update, value_tmp);
+}
+
+TEST(TestObHashMap, erase_if)
+{
+  ObHashMap<HashKey, HashValue> hm;
+  uint64_t key = 1;
+  uint64_t value = 100;
+  Predicate pred;
+  HashValue value_tmp;
+  bool is_erased = true;
+
+  // 没有create
+  EXPECT_EQ(OB_NOT_INIT, hm.erase_if(key, pred, is_erased));
+  hm.create(cal_next_prime(gHashItemNum), ObModIds::OB_HASH_BUCKET);
+
+  pred.set_min_value(value + 1);
+  EXPECT_EQ(OB_HASH_NOT_EXIST, hm.get_refactored(key, value_tmp));
+  EXPECT_EQ(OB_SUCCESS, hm.set_refactored(key, value));
+  EXPECT_EQ(OB_SUCCESS, hm.erase_if(key, pred, is_erased, &value_tmp));
+  EXPECT_EQ(false, is_erased);
+  EXPECT_EQ(OB_SUCCESS, hm.get_refactored(key, value_tmp));
+  EXPECT_EQ(value, value_tmp);
+
+  pred.set_min_value(value);
+  value_tmp = 0;
+  EXPECT_EQ(OB_SUCCESS, hm.erase_if(key, pred, is_erased, &value_tmp));
+  EXPECT_EQ(true, is_erased);
+  EXPECT_EQ(value, value_tmp);
+  EXPECT_EQ(OB_HASH_NOT_EXIST, hm.get_refactored(key, value_tmp));
 }
 
 struct GAllocator

@@ -245,7 +245,25 @@ public:
     }
     return ret;
   };
-
+  // 该原子操作在bucket上添加的写锁,
+  // 如果节点存在，调用 callback 进行修改，如果节点不存在，插入该节点
+  //
+  // 返回值：
+  //   OB_SUCCESS 表示成功
+  //   其它 表示出错
+  template <class _callback>
+  int set_or_update(const _key_type &key, const _value_type &value,
+                    _callback &callback)
+  {
+    int ret = OB_SUCCESS;
+    pair_type pair;
+    if (OB_FAIL(pair.init(key, value))) {
+      HASH_WRITE_LOG(HASH_WARNING, "init pair failed, ret=%d", ret);
+    } else {
+      ret = ht_.set_or_update(key, pair, callback);
+    }
+    return ret;
+  };
   // erase key value pair if pred is met
   // thread safe erase, will add write lock to the bucket
   // return value:
@@ -267,7 +285,6 @@ public:
     }
     return ret;
   }
-
   template <class _archive>
   int serialization(_archive &archive)
   {

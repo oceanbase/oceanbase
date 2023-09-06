@@ -69,6 +69,7 @@ extern void obsql_oracle_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, 
 %token <node> CLIENT_VERSION
 %token <node> MYSQL_DRIVER
 %token <node> HEX_STRING_VALUE
+%token <node> REMAP_TABLE_VAL
 %token <node> OUTLINE_DEFAULT_TOKEN/*use for outline parser to just filter hint of query_sql*/
 
 /*empty_query::
@@ -101,6 +102,7 @@ extern void obsql_oracle_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, 
 %nonassoc   KILL_EXPR
 %nonassoc   CONNECTION QUERY
 %nonassoc   LOWER_COMMA
+%nonassoc   REMAP
 %nonassoc   ',' WITH
 %left	UNION EXCEPT MINUS
 %left	INTERSECT
@@ -289,7 +291,7 @@ END_P SET_VAR DELIMITER
 
         JOB JSON JSON_ARRAYAGG JSON_OBJECTAGG JSON_VALUE JSON_TABLE
 
-        KEY_BLOCK_SIZE KEY_VERSION KVCACHE
+        KEY_BLOCK_SIZE KEY_VERSION KVCACHE KV_ATTRIBUTES
 
         LAG LANGUAGE LAST LAST_VALUE LEAD LEADER LEAVES LESS LEAK LEAK_MOD LEAK_RATE LIB LINESTRING LIST_
         LISTAGG LOCAL LOCALITY LOCATION LOCKED LOCKS LOGFILE LOGONLY_REPLICA_NUM LOGS LOCK_ LOGICAL_READS
@@ -322,7 +324,7 @@ END_P SET_VAR DELIMITER
         QUARTER QUERY QUERY_RESPONSE_TIME QUEUE_TIME QUICK
 
         REBUILD RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
-        RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
+        RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMAP REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
         REPLICA_NUM REPLICA_TYPE REPLICATION REPORT RESET RESOURCE RESOURCE_POOL_LIST RESPECT RESTART
         RESTORE RESUME RETURNED_SQLSTATE RETURNS RETURNING REVERSE ROLLBACK ROLLUP ROOT
         ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROW_COUNT ROW_FORMAT ROWS RTREE RUN
@@ -344,7 +346,7 @@ END_P SET_VAR DELIMITER
         TABLE_CHECKSUM TABLE_MODE TABLE_ID TABLE_NAME TABLEGROUPS TABLES TABLESPACE TABLET TABLET_ID TABLET_MAX_SIZE
         TEMPLATE TEMPORARY TEMPTABLE TENANT TEXT THAN TIME TIMESTAMP TIMESTAMPADD TIMESTAMPDIFF TP_NO
         TP_NAME TRACE TRADITIONAL TRANSACTION TRIGGERS TRIM TRUNCATE TYPE TYPES TASK TABLET_SIZE
-        TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TOP_K_FRE_HIST TIMES TRIM_SPACE
+        TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TOP_K_FRE_HIST TIMES TRIM_SPACE TTL
 
         UNCOMMITTED UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_NUM UNLOCKED UNTIL
         UNUSUAL UPGRADE USE_BLOOM_FILTER UNKNOWN USE_FRM USER USER_RESOURCES UNBOUNDED UP UNLIMITED
@@ -500,7 +502,8 @@ END_P SET_VAR DELIMITER
 %type <node> alter_tablespace_stmt
 %type <node> permanent_tablespace permanent_tablespace_options permanent_tablespace_option alter_tablespace_actions alter_tablespace_action opt_force_purge
 %type <node> opt_sql_throttle_for_priority opt_sql_throttle_using_cond sql_throttle_one_or_more_metrics sql_throttle_metric
-%type <node> opt_copy_id opt_backup_dest opt_preview opt_backup_backup_dest opt_tenant_info opt_with_active_piece get_format_unit opt_backup_tenant_list opt_backup_to opt_description policy_name opt_recovery_window opt_redundancy opt_backup_copies opt_restore_until opt_backup_key_info opt_encrypt_key
+%type <node> opt_copy_id opt_backup_dest opt_backup_backup_dest opt_tenant_info opt_with_active_piece get_format_unit opt_backup_tenant_list opt_backup_to opt_description policy_name opt_recovery_window opt_redundancy opt_backup_copies opt_restore_until opt_backup_key_info opt_encrypt_key
+%type <node> opt_recover_tenant recover_table_list recover_table_relation_name restore_remap_list remap_relation_name table_relation_name opt_recover_remap_item_list restore_remap_item_list restore_remap_item remap_item
 %type <node> new_or_old new_or_old_column_ref diagnostics_info_ref
 %type <node> on_empty on_error json_on_response opt_returning_type opt_on_empty_or_error json_value_expr opt_ascii opt_truncate_clause
 %type <node> ws_nweights opt_ws_as_char opt_ws_levels ws_level_flag_desc ws_level_flag_reverse ws_level_flags ws_level_list ws_level_list_item ws_level_number ws_level_range ws_level_list_or_range
@@ -516,6 +519,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
 %type <node> table_values_caluse table_values_caluse_with_order_by_and_limit values_row_list row_value
 
+%type <node> ttl_definition ttl_expr ttl_unit
 %start sql_stmt
 %%
 ////////////////////////////////////////////////////////////////
@@ -6341,6 +6345,16 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void)($2) ; /* make bison mute */
   malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_FILE_PATTERN, 1, $3);
 }
+| TTL '(' ttl_definition ')'
+{
+  merge_nodes($$, result, T_TTL_DEFINITION, $3);
+  dup_expr_string($$, result, @3.first_column, @3.last_column);
+}
+| KV_ATTRIBUTES opt_equal_mark STRING_VALUE
+{
+  (void)($2); /*  make bison mute*/
+  malloc_non_terminal_node($$, result->malloc_pool_, T_KV_ATTRIBUTES, 1, $3);
+}
 ;
 
 parallel_option:
@@ -6359,6 +6373,64 @@ PARALLEL opt_equal_mark INTNUM
   malloc_terminal_node(int_node, result->malloc_pool_, T_INT);
   int_node->value_ = 1;
   malloc_non_terminal_node($$, result->malloc_pool_, T_PARALLEL, 1, int_node);
+}
+;
+
+ttl_definition:
+ttl_expr
+{
+  $$ = $1;
+}
+| ttl_definition ',' ttl_expr
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+ttl_expr:
+simple_expr '+' INTERVAL INTNUM ttl_unit
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TTL_EXPR, 3, $1, $4, $5);
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+;
+
+ttl_unit:
+SECOND
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_SECOND;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| MINUTE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MINUTE;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| HOUR
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_HOUR;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| DAY
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_DAY;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| MONTH
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MONTH;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| YEAR
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_YEAR;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
 }
 ;
 
@@ -8363,14 +8435,6 @@ select_clause_set set_type select_clause_set_right
   select_node->children_[PARSE_SELECT_LATER] = $3;
   $$ = select_node;
 }
-| select_clause_set_with_order_and_limit set_type select_clause_set_right {
-  ParseNode *select_node = NULL;
-  malloc_select_node(select_node, result->malloc_pool_);
-  select_node->children_[PARSE_SELECT_SET] = $2;
-  select_node->children_[PARSE_SELECT_FORMER] = $1;
-  select_node->children_[PARSE_SELECT_LATER] = $3;
-  $$ = select_node;
-}
 | select_clause_set_left set_type select_clause_set_right {
   ParseNode *select_node = NULL;
   malloc_select_node(select_node, result->malloc_pool_);
@@ -8401,15 +8465,7 @@ no_table_select
 ;
 
 select_clause_set_left:
-no_table_select_with_order_and_limit
-{
-  $$ = $1;
-}
-| simple_select_with_order_and_limit
-{
-  $$ = $1;
-}
-| select_clause_set_right
+select_clause_set_right
 {
   $$ = $1;
 }
@@ -14250,6 +14306,10 @@ DROP CONSTRAINT constraint_name
 //      merge_nodes(col_list, result->malloc_pool_, T_COLUMN_LIST, $3);
 //      malloc_non_terminal_node($$, result->malloc_pool_, T_ORDER_BY, 1, col_list);
 //    }*/
+| REMOVE TTL
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_REMOVE_TTL);
+}
 ;
 
 // mysql 模式下的 constraint 特指 check constraint
@@ -15254,16 +15314,21 @@ ALTER SYSTEM CLEAR RESTORE SOURCE
   malloc_terminal_node($$, result->malloc_pool_, T_CLEAR_RESTORE_SOURCE);
 }
 |
-ALTER SYSTEM RESTORE table_list FOR relation_name opt_backup_dest opt_restore_until WITH STRING_VALUE opt_encrypt_key opt_backup_key_info opt_description
+ALTER SYSTEM RECOVER TABLE recover_table_list opt_recover_tenant opt_backup_dest opt_restore_until WITH STRING_VALUE opt_encrypt_key opt_backup_key_info opt_recover_remap_item_list opt_description
 {
   ParseNode *tables = NULL;
-  merge_nodes(tables, result, T_TABLE_LIST, $4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PHYSICAL_RESTORE_TENANT, 8, $6, $7, $8, $10, $11, $12, $13, tables);
+  merge_nodes(tables, result, T_TABLE_LIST, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RECOVER_TABLE, 9, $6, $7, $8, $10, tables, $11, $12, $13, $14);
 }
 |
-ALTER SYSTEM RESTORE relation_name opt_backup_dest opt_restore_until WITH STRING_VALUE opt_encrypt_key opt_backup_key_info opt_description opt_preview
+ALTER SYSTEM RESTORE FROM STRING_VALUE opt_restore_until PREVIEW
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PHYSICAL_RESTORE_TENANT, 8, $4, $5, $6, $8, $9, $10, $11, $12);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PHYSICAL_RESTORE_TENANT, 2, $5, $6);
+}
+|
+ALTER SYSTEM RESTORE relation_name opt_backup_dest opt_restore_until WITH STRING_VALUE opt_encrypt_key opt_backup_key_info opt_description
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PHYSICAL_RESTORE_TENANT, 7, $4, $5, $6, $8, $9, $10, $11);
 }
 |
 ALTER SYSTEM CHANGE TENANT change_tenant_name_or_tenant_id
@@ -15458,6 +15523,11 @@ ALTER SYSTEM CANCEL RESTORE relation_name
   malloc_non_terminal_node($$, result->malloc_pool_, T_CANCEL_RESTORE, 1, $5);
 }
 |
+ALTER SYSTEM CANCEL RECOVER TABLE relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CANCEL_RECOVER_TABLE, 1, $6);
+}
+|
 ALTER SYSTEM SUSPEND BACKUP
 {
   ParseNode *type = NULL;
@@ -15482,6 +15552,38 @@ ALTER SYSTEM RESUME BACKUP
   value->value_ = 0;
 
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 2, type, value);
+}
+|
+ALTER SYSTEM TRIGGER TTL opt_tenant_list_v2
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 0;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_TTL, 2, type, $5);
+}
+|
+ALTER SYSTEM SUSPEND TTL opt_tenant_list_v2
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_TTL, 2, type, $5);
+}
+|
+ALTER SYSTEM RESUME TTL opt_tenant_list_v2
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_TTL, 2, type, $5);
+}
+|
+ALTER SYSTEM CANCEL TTL opt_tenant_list_v2
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 3;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_TTL, 2, type, $5);
 }
 |
 ALTER SYSTEM VALIDATE DATABASE opt_copy_id
@@ -16081,13 +16183,133 @@ STRING_VALUE
 ;
 
 opt_backup_dest:
-/*empry*/
+/*empty*/
 {
   $$ = NULL;
 }
 | FROM STRING_VALUE
 {
   $$ = $2;
+}
+;
+
+recover_table_list:
+recover_table_relation_name
+{
+  $$ = $1;
+}
+| recover_table_list ',' recover_table_relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+recover_table_relation_name:
+'*' '.' '*'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 3, NULL, NULL, NULL);
+}
+| relation_name '.' table_relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 3, $1, $3, NULL);
+}
+| relation_name '.' '*'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 3, $1, NULL, NULL);
+}
+| { result->is_for_remap_ = 1; } REMAP_TABLE_VAL
+{
+  $$ = $2;
+}
+;
+
+opt_recover_tenant:
+TO tenant_name
+{
+  $$ = $2;
+}
+;
+
+opt_recover_remap_item_list:
+/*empty*/
+{
+  $$ = NULL;
+}
+| restore_remap_item_list
+{
+  ParseNode *remap_items = NULL;
+  merge_nodes(remap_items, result, T_TABLE_LIST, $1);
+  $$ = remap_items;
+}
+;
+
+restore_remap_item_list:
+restore_remap_item
+{
+  $$ = $1;
+}
+| restore_remap_item_list restore_remap_item
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+}
+;
+
+restore_remap_item:
+REMAP { result->is_for_remap_ = 1 } remap_item
+{
+  $$ = $3;
+}
+;
+
+remap_item:
+TABLE restore_remap_list
+{
+  ParseNode *tables = NULL;
+  merge_nodes(tables, result, T_REMAP_TABLE, $2);
+  $$ = tables;
+}
+| TABLEGROUP restore_remap_list
+{
+  ParseNode *tablegroups = NULL;
+  merge_nodes(tablegroups, result, T_REMAP_TABLEGROUP, $2);
+  $$ = tablegroups;
+}
+| TABLESPACE restore_remap_list
+{
+  ParseNode *tablespaces = NULL;
+  merge_nodes(tablespaces, result, T_REMAP_TABLESPACE, $2);
+  $$ = tablespaces;
+}
+;
+
+restore_remap_list:
+remap_relation_name
+{
+  $$ = $1;
+}
+| restore_remap_list ',' REMAP_TABLE_VAL
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+remap_relation_name:
+REMAP_TABLE_VAL
+{
+  $$ = $1;
+}
+;
+
+table_relation_name:
+relation_name
+{
+  $$ = $1;
+}
+| mysql_reserved_keyword
+{
+  ParseNode *table_name = NULL;
+  get_non_reserved_node(table_name, result->malloc_pool_, @1.first_column, @1.last_column);
+  $$ = table_name;
 }
 ;
 
@@ -16237,17 +16459,6 @@ BACKUP_COPIES opt_equal_mark INTNUM
   $$ = $3;
 }
 | /* EMPTY */
-{
-  $$ = NULL;
-}
-;
-
-opt_preview:
-PREVIEW
-{
-  malloc_terminal_node($$, result->malloc_pool_, T_PREVIEW);
-}
-|
 {
   $$ = NULL;
 }
@@ -17085,7 +17296,8 @@ opt_description:
 ;
 
 opt_restore_until:
-/*EMPTY*/  { $$ = NULL; }
+/*EMPTY*/
+{ $$ = NULL; }
 | UNTIL TIME COMP_EQ STRING_VALUE
 {
   ParseNode *is_scn = NULL;
@@ -18363,6 +18575,7 @@ ACCOUNT
 |       RELAY_LOG_POS
 |       RELAY_THREAD
 |       RELOAD
+|       REMAP
 |       REMOVE
 |       REORGANIZE
 |       REPAIR
@@ -18528,6 +18741,7 @@ ACCOUNT
 |       TRIM
 |       TRIM_SPACE
 |       TRUNCATE
+|       TTL
 |       TYPE
 |       TYPES
 |       TABLEGROUP_ID
@@ -18614,6 +18828,7 @@ ACCOUNT
 |       MY_NAME
 |       CONNECT
 |       STATEMENT_ID
+|       KV_ATTRIBUTES
 ;
 
 unreserved_keyword_special:

@@ -138,6 +138,25 @@ int ObTableApiSessPoolMgr::update_sess(ObTableApiCredential &credential)
   return ret;
 }
 
+int ObTableApiSessPoolMgr::create_pool_if_not_exists(int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObTableApiSessPoolGuard guard;
+  if (OB_FAIL(get_session_pool(tenant_id, guard))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      if (OB_FAIL(extend_sess_pool(tenant_id, guard))) {
+        LOG_WARN("fail to extend sess pool", K(ret), K(tenant_id));
+      } else {
+        LOG_INFO("success to extend sess pool", K(ret), K(tenant_id));
+      }
+    } else {
+      LOG_WARN("fait to get session pool", K(ret), K(tenant_id));
+    }
+  }
+
+  return ret;
+}
+
 int ObTableApiSessPoolMgr::extend_sess_pool(uint64_t tenant_id,
                                             ObTableApiSessPoolGuard &guard)
 {
@@ -555,7 +574,7 @@ int ObTableApiSessPool::create_and_add_node(ObTableApiCredential &credential)
 
 // 1. login时调用
 // 2. 不存在，创建; 存在，旧的移动到淘汰链表, 添加新的node
-int ObTableApiSessPool::update_sess(ObTableApiCredential &credential)
+int ObTableApiSessPool::update_sess(ObTableApiCredential &credential, bool replace_old_node)
 {
   int ret = OB_SUCCESS;
 
@@ -569,7 +588,7 @@ int ObTableApiSessPool::update_sess(ObTableApiCredential &credential)
     } else {
       LOG_WARN("fail to get session node", K(ret), K(key));
     }
-  } else { // exist, 替换node，old node移动到淘汰链表等待淘汰
+  } else if (replace_old_node) { // exist, 替换node，old node移动到淘汰链表等待淘汰
     if (OB_FAIL(replace_sess(credential))) {
       LOG_WARN("fail to replace session node", K(ret), K(credential));
     }

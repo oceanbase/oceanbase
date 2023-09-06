@@ -1187,6 +1187,7 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*> &table_i
   } else if (OB_FAIL(get_table_ids(table_items, all_table_ids))) {
     LOG_WARN("failed to get table ids", K(ret));
   } else if (OB_FAIL(deduce_redundant_join_conds(quals,
+                                                 table_items,
                                                  redundant_quals))) {
     LOG_WARN("failed to deduce redundancy quals", K(ret));
   } else if (OB_FAIL(all_quals.assign(quals))) {
@@ -13980,11 +13981,14 @@ int ObLogPlan::allocate_values_table_path(ValuesTablePath *values_table_path,
 }
 
 int ObLogPlan::deduce_redundant_join_conds(const ObIArray<ObRawExpr*> &quals,
+                                           const ObIArray<TableItem*> &table_items,
                                            ObIArray<ObRawExpr*> &redundant_quals)
 {
   int ret = OB_SUCCESS;
   EqualSets all_equal_sets;
   ObSEArray<ObRelIds, 8> connect_infos;
+  ObSEArray<ObRelIds, 8> single_table_ids;
+  ObRelIds table_ids;
   if (OB_FAIL(ObEqualAnalysis::compute_equal_set(&allocator_,
                                                  quals,
                                                  all_equal_sets))) {
@@ -13999,6 +14003,14 @@ int ObLogPlan::deduce_redundant_join_conds(const ObIArray<ObRawExpr*> &quals,
       LOG_WARN("failed to add var to array no dup", K(ret));
     }
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
+    table_ids.reuse();
+    if (OB_FAIL(get_table_ids(table_items.at(i), table_ids))) {
+      LOG_WARN("failed to get table ids", K(ret));
+    } else if (OB_FAIL(single_table_ids.push_back(table_ids))) {
+      LOG_WARN("failed to push back table ids", K(ret));
+    }
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < all_equal_sets.count(); ++i) {
     ObIArray<ObRawExpr*> *esets = all_equal_sets.at(i);
     if (OB_ISNULL(esets)) {
@@ -14006,6 +14018,7 @@ int ObLogPlan::deduce_redundant_join_conds(const ObIArray<ObRawExpr*> &quals,
       LOG_WARN("get unexpected null", K(ret));
     } else if (OB_FAIL(deduce_redundant_join_conds_with_equal_set(*esets,
                                                                   connect_infos,
+                                                                  single_table_ids,
                                                                   redundant_quals))) {
       LOG_WARN("failed to deduce redundancy quals with equal set", K(ret));
     }
@@ -14016,6 +14029,7 @@ int ObLogPlan::deduce_redundant_join_conds(const ObIArray<ObRawExpr*> &quals,
 int ObLogPlan::deduce_redundant_join_conds_with_equal_set(
                const ObIArray<ObRawExpr*> &equal_set,
                ObIArray<ObRelIds> &connect_infos,
+               ObIArray<ObRelIds> &single_table_ids,
                ObIArray<ObRawExpr*> &redundant_quals)
 {
   int ret = OB_SUCCESS;
@@ -14044,6 +14058,8 @@ int ObLogPlan::deduce_redundant_join_conds_with_equal_set(
                  OB_FAIL(table_ids.add_members(equal_set.at(n)->get_relation_ids()))) {
         LOG_WARN("failed to add members", K(ret));
       } else if (ObOptimizerUtil::find_item(connect_infos, table_ids)) {
+        // do nothing
+      } else if (ObOptimizerUtil::find_superset(table_ids, single_table_ids)) {
         // do nothing
       } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(
                          get_optimizer_context().get_expr_factory(),

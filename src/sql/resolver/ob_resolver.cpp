@@ -1056,8 +1056,16 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(CancelRestore);
         break;
       }
+      case T_CANCEL_RECOVER_TABLE: {
+        REGISTER_STMT_RESOLVER(CancelRecoverTable);
+        break;
+      }
       case T_BACKUP_KEY: {
         REGISTER_STMT_RESOLVER(BackupKey);
+        break;
+      }
+      case T_RECOVER_TABLE: {
+        REGISTER_STMT_RESOLVER(RecoverTable);
         break;
       }
       case T_BACKUP_MANAGE: {
@@ -1134,6 +1142,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_CHECKPOINT_SLOG: {
         REGISTER_STMT_RESOLVER(CheckpointSlog);
+        break;
+      }
+      case T_TABLE_TTL: {
+        REGISTER_STMT_RESOLVER(TableTTL);
         break;
       }
       default: {

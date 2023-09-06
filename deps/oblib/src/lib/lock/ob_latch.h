@@ -231,6 +231,7 @@ public:
   inline bool is_wrlocked() const;
   inline bool is_wrlocked_by(const uint32_t *puid = NULL) const;
   inline uint32_t get_wid() const;
+  inline uint32_t get_rdcnt() const;
   int64_t to_string(char* buf, const int64_t buf_len) const;
   void enable_record_stat(bool enable) { record_stat_ = enable; }
   bool need_record_stat() const { return record_stat_; }
@@ -538,6 +539,12 @@ inline uint32_t ObLatch::get_wid() const
 {
   uint32_t lock = ATOMIC_LOAD(&lock_);
   return (0 == (lock & WRITE_MASK)) ? 0 : (lock & ~(WAIT_MASK | WRITE_MASK));
+}
+
+inline uint32_t ObLatch::get_rdcnt() const
+{
+  uint32_t lock = ATOMIC_LOAD(&lock_);
+  return (0 == (lock & WRITE_MASK)) ? (lock & ~(WAIT_MASK | WRITE_MASK)) : 0;
 }
 
 inline int ObLatch::LowTryRDLock::operator()(volatile uint32_t *latch,

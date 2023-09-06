@@ -663,6 +663,7 @@ do {                                                                            
 #define IS_NEED_PARAMETERIZE ((ParseResult *)yyextra)->need_parameterize_
 #define IS_FOR_TRIGGER       ((ParseResult *)yyextra)->is_for_trigger_
 #define IF_FOR_PREPROCESS    ((ParseResult *)yyextra)->is_for_preprocess_
+#define IS_FOR_REMAP         ((ParseResult *)yyextra)->is_for_remap_
 
 #define COPY_STRING(src, src_len, dst)                                                          \
 do {                                                                                            \

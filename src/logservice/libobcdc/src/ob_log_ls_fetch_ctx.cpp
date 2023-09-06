@@ -531,7 +531,7 @@ int LSFetchCtx::read_miss_tx_log(
   } else {
 
     if (OB_FAIL(part_trans_resolver_->read(buf, buf_len, pos, lsn, submit_ts, serve_info_, missing, tsi))) {
-      if (OB_ITEM_NOT_SETTED != ret) {
+      if (OB_ITEM_NOT_SETTED != ret && OB_IN_STOP_STATE != ret) {
         LOG_ERROR("resolve miss_log fail", KR(ret), K(log_entry), K(log_base_header), K(lsn), K(missing));
       }
     }
@@ -1440,7 +1440,7 @@ void LSFetchInfoForPrint::print_fetch_progress(const char *description,
       "discarded=%d delay=%s tps=%.2lf progress=%s",
       description, idx, array_cnt, to_cstring(tls_id_),
       to_cstring(fetch_mod_),
-      is_discarded_, TVAL_TO_STR(cur_time * NS_CONVERSION - progress_.get_progress()),
+      is_discarded_, TVAL_TO_STR(cur_time - progress_.get_progress() / NS_CONVERSION),
       tps_, to_cstring(progress_));
 }
 

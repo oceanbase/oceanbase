@@ -51,7 +51,7 @@ int ObFullTabletCreator::init(const uint64_t tenant_id)
   } else {
     ContextParam param;
     param.set_mem_attr(tenant_id, "MSTXCTX", common::ObCtxIds::DEFAULT_CTX_ID)
-      .set_ablock_size(64L << 10)
+      .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE)
       .set_properties(ALLOC_THREAD_SAFE);
     if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(mstx_mem_ctx_, param))) {
       LOG_WARN("fail to create entity", K(ret));

@@ -68,6 +68,13 @@ public:
   virtual void clean_dtl_interm_result(ObExecContext &ctx) override;
 
 private:
+  struct CleanDtlIntermRes
+  {
+    ObPxCoordInfo &coord_info_;
+    uint64_t tenant_id_;
+    CleanDtlIntermRes(ObPxCoordInfo &coord_info, const uint64_t &tenant_id) : coord_info_(coord_info), tenant_id_(tenant_id) {}
+    bool operator()(const ObAddr &attr, ObPxCleanDtlIntermResArgs *arg);
+  };
   int build_transmit_recieve_channel(ObExecContext &ctx, ObDfo *dfo) const;
   int init_dfo_channel(ObExecContext &ctx, ObDfo *child, ObDfo *parent) const;
   int init_data_xchg_ch(ObExecContext &ctx, ObDfo *dfo) const;

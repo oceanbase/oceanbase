@@ -482,15 +482,17 @@ ObLink* ObLockWaitMgr::check_timeout()
         iter->on_retry_lock(hash);
         TRANS_LOG(INFO, "current task should be waken up cause reaching run ts", K(*iter));
       } else if (0 == iter->sessid_) {
-        //do nothing, may be rpc plan, sessionid is not setted
+        // do nothing, may be rpc plan, sessionid is not setted
       } else if (NULL != deadlocked_session
                  && is_deadlocked_session_(deadlocked_session,
                                            iter->sessid_)) {
         node2del = iter;
         TRANS_LOG(INFO, "session is deadlocked, pop the request",
                   "sessid", iter->sessid_, K(*iter));
+      } else {
+        // do nothing
       }
-      if (need_check_session) {
+      if (need_check_session && iter->sessid_ != 0) { // when lock wait in dag worker, session is not exist
         sql::ObSQLSessionInfo *session_info = NULL;
         int ret = OB_SUCCESS;
         int tmp_ret = OB_SUCCESS;

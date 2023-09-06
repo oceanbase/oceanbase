@@ -105,7 +105,10 @@ namespace transaction {
 namespace concurrency_control {
   class ObMultiVersionGarbageCollector; // MVCC GC
 }
-
+namespace table
+{
+  class ObHTableLockMgr;
+}
 namespace logservice
 {
   class ObLogService;
@@ -175,6 +178,11 @@ namespace observer
 }
 namespace storage {
   class MockTenantModuleEnv;
+}
+
+namespace table
+{
+  class ObTTLService;
 }
 
 namespace share
@@ -308,7 +316,9 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       TenantErrsimEvent                             \
       oceanbase::sql::ObTenantSQLSessionMgr*,       \
       oceanbase::common::ObOptStatMonitorManager*,  \
-      omt::ObTenantSrs*                             \
+      omt::ObTenantSrs*,                            \
+      table::ObHTableLockMgr*,                      \
+      table::ObTTLService*      \
   )
 
 

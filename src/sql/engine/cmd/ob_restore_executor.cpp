@@ -83,19 +83,12 @@ int ObPhysicalRestoreTenantExecutor::execute(
           LOG_WARN("failed to remove user variable", KR(tmp_ret));
         }
       }
-
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(sync_wait_tenant_created_(ctx, restore_tenant_arg.tenant_name_, job_id))) {
         LOG_WARN("failed to sync wait tenant created", K(ret));
       }
-
-    } else {
-    // TODO(chongrong.th): fix restore preview in 4.3
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("restore preview is not support now", K(ret));
-      // if (OB_FAIL(physical_restore_preview(ctx, stmt))) {
-      //  LOG_WARN("failed to do physical restore preview", K(ret));
-      // }
+    } else if (OB_FAIL(physical_restore_preview(ctx, stmt))) {
+      LOG_WARN("failed to do physical restore preview", K(ret));
     }
   }
   return ret;
@@ -189,6 +182,7 @@ int ObPhysicalRestoreTenantExecutor::physical_restore_preview(
 {
   int ret = OB_SUCCESS;
   ObSqlString set_backup_dest_sql;
+  ObSqlString set_scn_sql;
   ObSqlString set_timestamp_sql;
   sqlclient::ObISQLConnection *conn = NULL;
   observer::ObInnerSQLConnectionPool *pool = NULL;
@@ -196,7 +190,6 @@ int ObPhysicalRestoreTenantExecutor::physical_restore_preview(
   ObSQLSessionInfo *session_info = ctx.get_my_session();
   const obrpc::ObPhysicalRestoreTenantArg &restore_tenant_arg = stmt.get_rpc_arg();
   int64_t affected_rows = 0;
-
   if (OB_ISNULL(session_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), KP(session_info));
@@ -212,18 +205,21 @@ int ObPhysicalRestoreTenantExecutor::physical_restore_preview(
   } else if (OB_FAIL(set_backup_dest_sql.assign_fmt("set @%s = '%.*s'",
       OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR, restore_tenant_arg.uri_.length(), restore_tenant_arg.uri_.ptr()))) {
     LOG_WARN("failed to set backup dest", KR(ret), K(set_backup_dest_sql));
-  } else if (OB_FAIL(set_timestamp_sql.assign_fmt("set @%s = '%lu'",
-      OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR, restore_tenant_arg.restore_scn_.get_val_for_inner_table_field()))) {
-    LOG_WARN("failed to set timestamp", KR(ret), K(set_timestamp_sql));
+  } else if (OB_FAIL(set_scn_sql.assign_fmt("set @%s = '%ld'",
+      OB_RESTORE_PREVIEW_SCN_SESSION_STR, restore_tenant_arg.with_restore_scn_ ? restore_tenant_arg.restore_scn_.get_val_for_inner_table_field() : 0))) {
+    LOG_WARN("failed to set timestamp", KR(ret), K(set_scn_sql));
+  } else if (OB_FAIL(set_scn_sql.assign_fmt("set @%s = '%.*s'",
+      OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR, restore_tenant_arg.restore_timestamp_.length(), restore_tenant_arg.uri_.ptr()))) {
+    LOG_WARN("failed to set timestamp", KR(ret), K(set_scn_sql));
   } else if (OB_FAIL(pool->acquire(session_info, conn))) {
     LOG_WARN("failed to get conn", K(ret));
   } else if (OB_FAIL(conn->execute_write(session_info->get_effective_tenant_id(),
       set_backup_dest_sql.ptr(), affected_rows))) {
     LOG_WARN("failed to set backup dest", K(ret), K(set_backup_dest_sql));
   } else if (OB_FAIL(conn->execute_write(session_info->get_effective_tenant_id(),
-      set_timestamp_sql.ptr(), affected_rows))) {
-    LOG_WARN("failed to set restore timestamp", K(ret), K(set_timestamp_sql));
-  } 
+      set_scn_sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to set restore timestamp", K(ret), K(set_scn_sql));
+  }
 
   return ret;
 }

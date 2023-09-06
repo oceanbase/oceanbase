@@ -20,6 +20,11 @@
 #include "ob_dup_table_base.h"
 #include "ob_dup_table_ts_sync.h"
 
+#define READABLE_DLIST_FOREACH_X(curr, dlist, extra_condition)     \
+  for (;OB_NOT_NULL(curr) && curr != (dlist).get_header()         \
+        && (extra_condition);                                     \
+        curr = curr->get_next())
+
 namespace oceanbase
 {
 
@@ -404,9 +409,17 @@ public:
   bool need_gc_scan(int64_t gc_start_time) {
     bool bool_ret = false;
 
-    if (get_related_set_op_type() == DupTableRelatedSetOpType::INVALID) {
+    if (!get_common_header().is_readable_set()) {
+      DUP_TABLE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "not readable set, not need gc",
+                        K(gc_start_time), KPC(this));
+      bool_ret = false;
+    } else if (get_related_set_op_type() != DupTableRelatedSetOpType::INVALID) {
+      DUP_TABLE_LOG(INFO, "this readable set used for other operation, should skip gc", KPC(this));
+      bool_ret = false;
+    } else {
       bool_ret = true;
     }
+
     if (bool_ret) {
       if (last_gc_scan_ts_ <= 0
           || gc_start_time > last_gc_scan_ts_) {

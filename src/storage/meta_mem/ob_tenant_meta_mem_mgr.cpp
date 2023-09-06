@@ -885,6 +885,8 @@ int ObTenantMetaMemMgr::get_min_end_scn_from_single_tablet(ObTablet *tablet,
     } else {
       // step 3 : if minor sstable do not exist, us max{tablet_clog_checkpoint, ls_clog_checkpoint} as end_scn
       end_scn = SCN::max(tablet->get_tablet_meta().clog_checkpoint_scn_, ls_checkpoint);
+      // the clog with scn of checkpoint scn may depend on the tx data with a commit scn of checkpoint scn
+      end_scn = SCN::max(SCN::scn_dec(end_scn), SCN::min_scn());
     }
 
     if (end_scn < min_end_scn) {

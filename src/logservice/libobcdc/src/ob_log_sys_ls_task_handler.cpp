@@ -21,7 +21,7 @@
 #include "ob_log_schema_getter.h"       // IObLogSchemaGetter
 #include "ob_log_tenant_mgr.h"          // IObLogTenantMgr
 #include "ob_log_config.h"              // TCONF
-#include "ob_log_trace_id.h"
+#include "ob_log_trace_id.h"            // ObLogTraceIdGuard
 
 #define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[STAT] [SYS_LS_HANDLER] " fmt, ##args)
 #define STAT(level, fmt, args...) OBLOG_LOG(level, "[STAT] [SYS_LS_HANDLER] " fmt, ##args)
@@ -344,6 +344,7 @@ int ObLogSysLsTaskHandler::handle_task_(PartTransTask &task,
     const bool is_tenant_served)
 {
   int ret = OB_SUCCESS;
+  ObLogTraceIdGuard trace_guard;
 
   if (OB_UNLIKELY(! task.is_ddl_trans()
       && ! task.is_ls_op_trans()

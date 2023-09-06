@@ -66,7 +66,7 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   ObTableQueryResultIterator *tmp_result_iter = nullptr;
   bool has_filter = (query.get_htable_filter().is_valid() || query.get_filter_string().length() > 0);
-  const ObString &schema_comment = tb_ctx.get_table_schema()->get_comment_str();
+  const ObString &kv_attributes = tb_ctx.get_table_schema()->get_kv_attributes();
 
   if (OB_FAIL(one_result.assign_property_names(tb_ctx.get_query_col_names()))) {
     LOG_WARN("fail to assign property names to one result", K(ret), K(tb_ctx));
@@ -86,10 +86,15 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
       } else {
         tmp_result_iter = htable_result_iter;
         ObHColumnDescriptor desc;
-        if (OB_FAIL(desc.from_string(schema_comment))) {
-          LOG_WARN("fail to parse hcolumn_desc from comment string", K(ret), K(schema_comment));
-        } else if (desc.get_time_to_live() > 0) {
-          htable_result_iter->set_ttl(desc.get_time_to_live());
+        if (OB_FAIL(desc.from_string(kv_attributes))) {
+          LOG_WARN("fail to parse hcolumn_desc from kv attributes", K(ret), K(kv_attributes));
+        } else {
+          if (desc.get_time_to_live() > 0) {
+            htable_result_iter->set_ttl(desc.get_time_to_live());
+          }
+          if (desc.get_max_version() > 0) {
+            htable_result_iter->set_max_version(desc.get_max_version());
+          }
         }
       }
     } else { // tableapi
@@ -129,6 +134,50 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
 
   if (OB_SUCC(ret)) {
     result_iter = tmp_result_iter;
+  }
+
+  return ret;
+}
+
+int ObTableQueryUtils::get_rowkey_column_names(const ObTableSchema &table_schema, ObIArray<ObString> &names)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *column_schema = nullptr;
+  const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
+  const int64_t N = rowkey_info.get_size();
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
+    uint64_t column_id = OB_INVALID_ID;
+    if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
+      LOG_WARN("fail to get column id", K(ret), K(i), K(rowkey_info));
+    } else if (NULL == (column_schema = table_schema.get_column_schema(column_id))){
+      ret = OB_ERR_COLUMN_NOT_FOUND;
+      LOG_WARN("column not exists", K(ret), K(column_id));
+    } else if (OB_FAIL(names.push_back(column_schema->get_column_name_str()))) {
+      LOG_WARN("fail to push back rowkey column name", K(ret), K(names));
+    }
+  }
+
+  return ret;
+}
+
+int ObTableQueryUtils::get_full_column_names(const ObTableSchema &table_schema, ObIArray<ObString> &names)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *column_schema = nullptr;
+  const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
+  const int64_t N = rowkey_info.get_size();
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
+    uint64_t column_id = OB_INVALID_ID;
+    if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
+      LOG_WARN("fail to get column id", K(ret), K(i), K(rowkey_info));
+    } else if (NULL == (column_schema = table_schema.get_column_schema(column_id))){
+      ret = OB_ERR_COLUMN_NOT_FOUND;
+      LOG_WARN("column not exists", K(ret), K(column_id));
+    } else if (OB_FAIL(names.push_back(column_schema->get_column_name_str()))) {
+      LOG_WARN("fail to push back rowkey column name", K(ret), K(names));
+    }
   }
 
   return ret;

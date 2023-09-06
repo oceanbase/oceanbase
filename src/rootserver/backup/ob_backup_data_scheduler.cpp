@@ -959,7 +959,8 @@ int ObBackupDataScheduler::process()
       LOG_WARN("[DATA_BACKUP]failed to init tenant backup job mgr", K(ret), K_(tenant_id), K(job_attr));
     } else if (OB_SUCCESS != (tmp_ret = job_mgr->process())) { // tenant level backups are isolated
       LOG_WARN("[DATA_BACKUP]failed to schedule tenant backup job", K(tmp_ret), K_(tenant_id), K(job_attr));
-      if (!is_sys_tenant(tenant_id_) && OB_SUCCESS != (tmp_ret = handle_failed_job_(tenant_id_, tmp_ret, *job_mgr, job_attr))) {
+      if (job_attr.status_.is_backup_finish()) { // completed, failed or canceled job no need to deal error code
+      } else if (!is_sys_tenant(tenant_id_) && OB_SUCCESS != (tmp_ret = handle_failed_job_(tenant_id_, tmp_ret, *job_mgr, job_attr))) {
         LOG_WARN("failed to handle user tenant failed job", K(tmp_ret), K(job_attr));
       } else {
         backup_service_->wakeup();

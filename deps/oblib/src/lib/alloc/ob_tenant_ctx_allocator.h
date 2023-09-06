@@ -41,7 +41,9 @@ using InvokeFunc = std::function<int (const ObTenantMemoryMgr*)>;
 public:
   explicit ObTenantCtxAllocator(uint64_t tenant_id, uint64_t ctx_id = 0)
     : resource_handle_(), ref_cnt_(0), tenant_id_(tenant_id),
-      ctx_id_(ctx_id), deleted_(false), obj_mgr_(*this, tenant_id_, ctx_id_),
+      ctx_id_(ctx_id), deleted_(false),
+      obj_mgr_(*this, tenant_id_, ctx_id_, INTACT_NORMAL_AOBJECT_SIZE,
+               common::ObCtxParallel::instance().parallel_of_ctx(ctx_id_), NULL),
       idle_size_(0), head_chunk_(), chunk_cnt_(0),
       chunk_freelist_mutex_(common::ObLatchIds::CHUNK_FREE_LIST_LOCK),
       using_list_mutex_(common::ObLatchIds::CHUNK_USING_LIST_LOCK),
@@ -55,8 +57,16 @@ public:
     attr.ctx_id_ = ctx_id;
     chunk_freelist_mutex_.enable_record_stat(false);
     using_list_mutex_.enable_record_stat(false);
+    for (int i = 0; i < ObSubCtxIds::MAX_SUB_CTX_ID; ++i) {
+      new (obj_mgrs_ + i) ObjectMgr(*this, tenant_id_, ctx_id_, INTACT_MIDDLE_AOBJECT_SIZE, 4, &obj_mgr_);
+    }
   }
-  virtual ~ObTenantCtxAllocator() {}
+  virtual ~ObTenantCtxAllocator()
+  {
+    for (int i = 0; i < ObSubCtxIds::MAX_SUB_CTX_ID; ++i) {
+      obj_mgrs_[i].~ObjectMgr();
+    }
+  }
   int set_tenant_memory_mgr()
   {
     int ret = common::OB_SUCCESS;
@@ -165,7 +175,17 @@ public:
   int iter_label(VisitFunc func) const;
   int64_t sync_wash(int64_t wash_size);
   int64_t sync_wash();
-  bool check_has_unfree(char *first_label) { return obj_mgr_.check_has_unfree(first_label); }
+  bool check_has_unfree(char *first_label)
+  {
+    bool has_unfree = obj_mgr_.check_has_unfree();
+    if (has_unfree) {
+      bool tmp_has_unfree = obj_mgr_.check_has_unfree(first_label);
+      for (int i = 0; i < ObSubCtxIds::MAX_SUB_CTX_ID && !tmp_has_unfree; ++i) {
+        tmp_has_unfree = obj_mgrs_[i].check_has_unfree(first_label);
+      }
+    }
+    return has_unfree;
+  }
   void update_wash_stat(int64_t related_chunks, int64_t blocks, int64_t size);
 private:
   int64_t inc_ref_cnt(int64_t cnt) { return ATOMIC_FAA(&ref_cnt_, cnt); }
@@ -214,6 +234,9 @@ private:
   int64_t wash_related_chunks_;
   int64_t washed_blocks_;
   int64_t washed_size_;
+  union {
+    ObjectMgr obj_mgrs_[ObSubCtxIds::MAX_SUB_CTX_ID];
+  };
 }; // end of class ObTenantCtxAllocator
 
 } // end of namespace lib

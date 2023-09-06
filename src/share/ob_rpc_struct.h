@@ -72,6 +72,7 @@
 #include "logservice/palf/log_meta_info.h"//LogConfigVersion
 #include "share/scn.h"//SCN
 #include "share/ob_server_table_operator.h"
+#include "share/restore/ob_import_arg.h"
 
 namespace oceanbase
 {
@@ -1233,6 +1234,7 @@ public:
     table_name_.reset();
     database_name_.reset();
     index_action_type_ = INVALID_ACTION;
+    ObDDLArg::reset();
   }
   bool is_valid() const;
   virtual bool is_allow_when_upgrade() const;
@@ -1557,7 +1559,6 @@ public:
   uint64_t tenant_id_;
   common::ObSArray<ObRenameTableItem> rename_table_items_;
 };
-
 struct ObStartRedefTableArg final
 {
   OB_UNIS_VERSION(1);
@@ -1755,6 +1756,38 @@ public:
   uint64_t tenant_id_;
 };
 
+struct ObRecoverRestoreTableDDLArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRecoverRestoreTableDDLArg() :
+     ObDDLArg(),
+     target_schema_(),
+     src_tenant_id_(common::OB_INVALID_ID),
+     src_table_id_(common::OB_INVALID_ID),
+     ddl_task_id_(common::OB_INVALID_ID),
+     tz_info_wrap_(),
+     nls_formats_{},
+     allocator_("RestorTableDDL")
+  {
+  }
+  virtual ~ObRecoverRestoreTableDDLArg();
+  int assign(const ObRecoverRestoreTableDDLArg &other);
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(target_schema), K_(src_tenant_id), K_(src_table_id), K_(tz_info_wrap),
+               "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX));
+public:
+  share::schema::ObTableSchema target_schema_; // with dest tenant_id, database_id, and table name.
+  uint64_t src_tenant_id_;
+  int64_t src_table_id_;
+  int64_t ddl_task_id_;
+  common::ObTimeZoneInfo tz_info_;
+  common::ObTimeZoneInfoWrap tz_info_wrap_;
+  common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
+  common::ObArenaAllocator allocator_;
+};
+
 struct ObCreateHiddenTableArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
@@ -1856,7 +1889,6 @@ public:
   share::ObTaskId trace_id_;
 };
 
-
 struct ObAlterTableArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
@@ -1894,6 +1926,8 @@ public:
        TABLE_DOP,
        INCREMENT_MODE,
        ENABLE_EXTENDED_ROWID,
+       TTL_DEFINITION,
+       KV_ATTRIBUTES,
        MAX_OPTION = 1000
   };
   enum AlterPartitionType
@@ -2402,6 +2436,7 @@ public:
   common::ObString nls_timestamp_tz_format_;
   ObSQLMode sql_mode_;
   common::ObAddr inner_sql_exec_addr_;
+
 };
 
 typedef ObCreateIndexArg ObAlterPrimaryArg;
@@ -2699,10 +2734,10 @@ public:
   virtual bool is_allow_when_upgrade() const { return true; }
   void reset()
   {
-    ObDDLArg::reset();
     tenant_id_ = OB_INVALID_ID;
     table_id_ = common::OB_INVALID_ID;
     table_name_.reset();
+    ObDDLArg::reset();
   }
   uint64_t tenant_id_;
   uint64_t database_id_;
@@ -5156,7 +5191,9 @@ public:
                K_(encrypt_key),
                K_(kms_uri),
                K_(kms_encrypt_key),
-               K_(restore_timestamp));
+               K_(restore_timestamp),
+               K_(initiator_job_id),
+               K_(initiator_tenant_id));
 
   common::ObString tenant_name_;
   common::ObString uri_;
@@ -5172,6 +5209,8 @@ public:
   common::ObString kms_uri_;
   common::ObString kms_encrypt_key_;
   common::ObString restore_timestamp_;
+  uint64_t initiator_job_id_;
+  uint64_t initiator_tenant_id_;
 };
 
 struct ObServerZoneArg
@@ -8592,18 +8631,19 @@ struct ObDDLBuildSingleReplicaRequestArg final
 public:
   ObDDLBuildSingleReplicaRequestArg() : tenant_id_(OB_INVALID_ID), ls_id_(), source_tablet_id_(), dest_tablet_id_(),
                                         source_table_id_(OB_INVALID_ID), dest_schema_id_(OB_INVALID_ID),
-                                        schema_version_(0), snapshot_version_(0), ddl_type_(0), task_id_(0),
-                                        parallelism_(0), execution_id_(-1), tablet_task_id_(0), data_format_version_(0),
-                                        consumer_group_id_(0) {}
+                                        schema_version_(0), snapshot_version_(0), ddl_type_(0), task_id_(0), parallelism_(0), execution_id_(-1), tablet_task_id_(0),
+                                        data_format_version_(0), consumer_group_id_(0), dest_tenant_id_(OB_INVALID_ID), dest_ls_id_(), dest_schema_version_(0)
+  {}
   bool is_valid() const {
     return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && source_tablet_id_.is_valid() && dest_tablet_id_.is_valid()
-           && OB_INVALID_ID != source_table_id_ && OB_INVALID_ID != dest_schema_id_ && schema_version_ > 0 && snapshot_version_ > 0
-           && task_id_ > 0 && parallelism_ > 0 && tablet_task_id_ > 0 && data_format_version_ > 0 && consumer_group_id_ >= 0;
+           && OB_INVALID_ID != source_table_id_ && OB_INVALID_ID != dest_schema_id_ && schema_version_ > 0
+           && snapshot_version_ > 0 && dest_schema_version_ > 0 && task_id_ > 0 && parallelism_ > 0 && tablet_task_id_ > 0
+           && data_format_version_ > 0 && consumer_group_id_ >= 0;
   }
   int assign(const ObDDLBuildSingleReplicaRequestArg &other);
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(source_tablet_id), K_(dest_tablet_id),
-    K_(source_table_id), K_(dest_schema_id), K_(schema_version), K_(snapshot_version),
-    K_(task_id), K_(parallelism), K_(execution_id), K_(tablet_task_id), K_(data_format_version),
+  TO_STRING_KV(K_(tenant_id), K_(dest_tenant_id), K_(ls_id), K_(dest_ls_id), K_(source_tablet_id),
+    K_(dest_tablet_id), K_(source_table_id), K_(dest_schema_id), K_(schema_version), K_(dest_schema_version),
+    K_(snapshot_version), K_(task_id), K_(parallelism), K_(execution_id), K_(tablet_task_id), K_(data_format_version),
     K_(consumer_group_id));
 public:
   uint64_t tenant_id_;
@@ -8621,6 +8661,9 @@ public:
   int64_t tablet_task_id_;
   int64_t data_format_version_;
   int64_t consumer_group_id_;
+  uint64_t dest_tenant_id_;
+  share::ObLSID dest_ls_id_;
+  int64_t dest_schema_version_;
 };
 
 struct ObDDLBuildSingleReplicaRequestResult final
@@ -8644,17 +8687,21 @@ struct ObDDLBuildSingleReplicaResponseArg final
   OB_UNIS_VERSION(1);
 public:
   ObDDLBuildSingleReplicaResponseArg()
-    : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_(), source_table_id_(), dest_schema_id_(OB_INVALID_ID),
-      ret_code_(OB_SUCCESS), snapshot_version_(0), schema_version_(0), task_id_(0), execution_id_(-1),
-      row_scanned_(0), row_inserted_(0)
+    : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_(), source_table_id_(OB_INVALID_ID), dest_schema_id_(OB_INVALID_ID),
+      ret_code_(OB_SUCCESS), snapshot_version_(0), schema_version_(0), task_id_(0), execution_id_(-1), row_scanned_(0),
+      row_inserted_(0), dest_tenant_id_(OB_INVALID_ID), dest_ls_id_(), dest_schema_version_(0), server_addr_()
   {}
   ~ObDDLBuildSingleReplicaResponseArg() = default;
-  bool is_valid() const { return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && tablet_id_.is_valid()
+  bool is_valid() const { return OB_INVALID_ID != tenant_id_ && OB_INVALID_ID != dest_tenant_id_
+                          && ls_id_.is_valid() && dest_ls_id_.is_valid() && tablet_id_.is_valid()
                           && OB_INVALID_ID != source_table_id_ && OB_INVALID_ID != dest_schema_id_
-                          && snapshot_version_ > 0 && schema_version_ > 0 && task_id_ > 0 && execution_id_ >= 0; }
+                          && snapshot_version_ > 0 && schema_version_ > 0 && dest_schema_version_ > 0
+                          && task_id_ > 0 && execution_id_ >= 0; }
   int assign(const ObDDLBuildSingleReplicaResponseArg &other);
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(source_table_id), K_(dest_schema_id), K_(ret_code),
-               K_(snapshot_version), K_(schema_version), K_(task_id), K_(execution_id), K_(row_scanned), K_(row_inserted));
+  TO_STRING_KV(K_(tenant_id), K_(dest_tenant_id), K_(ls_id), K_(dest_ls_id),
+               K_(tablet_id), K_(source_table_id), K_(dest_schema_id), K_(ret_code),
+               K_(snapshot_version), K_(schema_version), K_(dest_schema_version), K_(task_id),
+               K_(execution_id), K_(row_scanned), K_(row_inserted), K_(server_addr));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -8668,6 +8715,10 @@ public:
   int64_t execution_id_;
   int64_t row_scanned_;
   int64_t row_inserted_;
+  uint64_t dest_tenant_id_;
+  share::ObLSID dest_ls_id_;
+  int64_t dest_schema_version_;
+  common::ObAddr server_addr_;
 };
 
 struct ObLogReqLoadProxyRequest
@@ -9952,6 +10003,30 @@ private:
   int ret_;
 };
 
+struct ObRecoverTableArg
+{
+public:
+  OB_UNIS_VERSION(1);
+public:
+  enum Action
+  {
+    INITIATE = 0,
+    CANCEL,
+    MAX
+  };
+  ObRecoverTableArg();
+  ~ObRecoverTableArg() {}
+  bool is_valid() const;
+  int assign(const ObRecoverTableArg &that);
+  TO_STRING_KV(K_(tenant_id), K_(tenant_name), K_(import_arg), K_(restore_tenant_arg), K_(action));
+public:
+  uint64_t tenant_id_; // tenant which is the table recover to.
+  common::ObString tenant_name_;
+  share::ObImportArg import_arg_;
+  ObPhysicalRestoreTenantArg restore_tenant_arg_;
+  Action action_;
+};
+
 struct ObLoadBaselineRes
 {
   OB_UNIS_VERSION(1);
@@ -9964,6 +10039,50 @@ public:
   uint64_t load_count_;
 };
 
+struct ObTTLRequestArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum TTLRequestType {
+    TTL_TRIGGER_TYPE = 0,
+    TTL_SUSPEND_TYPE = 1,
+    TTL_RESUME_TYPE = 2,
+    TTL_CANCEL_TYPE = 3,
+    TTL_MOVE_TYPE = 4,
+    TTL_INVALID_TYPE = 5
+  };
+
+  ObTTLRequestArg()
+    : cmd_code_(-1), trigger_type_(-1), task_id_(OB_INVALID_ID), tenant_id_(OB_INVALID_ID)
+  {}
+  ~ObTTLRequestArg() = default;
+  bool is_valid() const {
+    // return cmd_code_ != -1 && OB_INVALID_ID != task_id_ && trigger_type_ != -1 && tenant_id_ != OB_INVALID_ID;
+    return cmd_code_ != -1 && trigger_type_ != -1 && tenant_id_ != OB_INVALID_ID;
+  }
+  int assign(const ObTTLRequestArg &other);
+  TO_STRING_KV(K_(cmd_code), K_(trigger_type), K_(task_id), K_(tenant_id));
+public:
+  int32_t cmd_code_; // enum TTLCmdType
+  int32_t trigger_type_; // system or user
+  int64_t task_id_;  // task id
+  uint64_t tenant_id_; // tenand_id array
+};
+
+struct ObTTLResponseArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObTTLResponseArg();
+  int assign(const ObTTLResponseArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(task_id), K_(server_addr), K_(task_status));
+public:
+  uint64_t tenant_id_;
+  int64_t task_id_;
+  ObAddr server_addr_;
+  uint8_t task_status_;
+  int err_code_;
+};
 struct ObAdminUnlockMemberListOpArg final
 {
   OB_UNIS_VERSION(1);

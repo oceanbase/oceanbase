@@ -17,7 +17,8 @@ using namespace oceanbase::common;
 using namespace oceanbase::table;
 ObTableAPITransCb::ObTableAPITransCb()
     :tx_desc_(NULL),
-     ref_count_(2)
+     ref_count_(2),
+     lock_handle_(nullptr)
 {}
 
 ObTableAPITransCb::~ObTableAPITransCb()
@@ -35,6 +36,11 @@ void ObTableAPITransCb::destroy_cb_if_no_ref()
   }
 }
 
+void ObTableAPITransCb::set_lock_handle(ObHTableLockHandle *lock_handle)
+{
+  lock_handle_ = lock_handle;
+}
+
 ////////////////////////////////////////////////////////////////
 void ObTableExecuteEndTransCb::callback(int cb_param)
 {
@@ -49,6 +55,9 @@ void ObTableExecuteEndTransCb::callback(int cb_param)
     MTL(transaction::ObTransService*)->release_tx(*tx_desc_);
     tx_desc_ = NULL;
   }
+  if (lock_handle_ != nullptr) {
+    HTABLE_LOCK_MGR->release_handle(*lock_handle_);
+  }
   this->handin();
   CHECK_BALANCE("[table async callback]");
   if (cb_param != OB_SUCCESS) {
@@ -62,6 +71,7 @@ void ObTableExecuteEndTransCb::callback(int cb_param)
   } else {
     LOG_INFO("async send execute response", K(cb_param));
   }
+
   this->destroy_cb_if_no_ref();
 }
 
@@ -101,6 +111,9 @@ void ObTableBatchExecuteEndTransCb::callback(int cb_param)
   } else if (OB_NOT_NULL(tx_desc_)) {
     MTL(transaction::ObTransService*)->release_tx(*tx_desc_);
     tx_desc_ = NULL;
+  }
+  if (lock_handle_ != nullptr) {
+    HTABLE_LOCK_MGR->release_handle(*lock_handle_);
   }
   this->handin();
   CHECK_BALANCE("[table batch async callback]");

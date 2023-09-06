@@ -190,6 +190,7 @@ int ObTableApiScanExecutor::get_next_row_with_das()
   int ret = OB_SUCCESS;
   bool got_row = false;
   while (OB_SUCC(ret) && !got_row) {
+    bool filter = false;
     clear_evaluated_flag();
     if (OB_FAIL(scan_result_.get_next_row())) {
       if (OB_ITER_END == ret) {
@@ -201,12 +202,36 @@ int ObTableApiScanExecutor::get_next_row_with_das()
       } else {
         LOG_WARN("get next row from das result failed", K(ret));
       }
+    } else if (OB_FAIL(check_filter(filter))) {
+      LOG_WARN("fail to check row filtered", K(ret));
+    } else if (filter) {
+      LOG_DEBUG("the row is filtered", K(ret));
     } else {
       ++input_row_cnt_;
       ++output_row_cnt_;
       got_row = true;
     }
   }
+  return ret;
+}
+
+int ObTableApiScanExecutor::check_filter(bool &filter)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObExpr *> &exprs = scan_spec_.get_ctdef().filter_exprs_;
+  ObDatum *datum = NULL;
+  filter = false;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count() && !filter; i++) {
+    if (OB_FAIL(exprs.at(i)->eval(eval_ctx_, datum))) {
+      LOG_WARN("fail to eval filter expr", K(ret), K(*exprs.at(i)));
+    } else if (tb_ctx_.is_ttl_table()) {
+      filter = (!datum->is_null() && datum->get_bool()); // ttl场景下，过期表达式不过滤is_null
+    } else {
+      filter = datum->get_bool();
+    }
+  }
+
   return ret;
 }
 
@@ -344,6 +369,15 @@ int ObTableApiScanRowIterator::close()
   }
 
   return ret;
+}
+
+void ObTableApiScanExecutor::clear_evaluated_flag()
+{
+  const ExprFixedArray &filter_exprs = get_spec().get_ctdef().filter_exprs_;
+  for (int64_t i = 0; i < filter_exprs.count(); i++) {
+    ObSQLUtils::clear_expr_eval_flags(*filter_exprs.at(i), eval_ctx_);
+  }
+  ObTableApiExecutor::clear_evaluated_flag();
 }
 
 }  // namespace table

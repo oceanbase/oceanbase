@@ -1173,6 +1173,47 @@ private:
   share::ObBackupPathString backup_dest_;
   ObString encrypt_key_;
 };
+class ObTableTTLStmt : public ObSystemCmdStmt {
+public:
+  ObTableTTLStmt()
+    : ObSystemCmdStmt(stmt::T_TABLE_TTL),
+      type_(obrpc::ObTTLRequestArg::TTL_INVALID_TYPE),
+      opt_tenant_ids_(),
+      ttl_all_(false)
+  {}
+  virtual ~ObTableTTLStmt()
+  {}
+
+  obrpc::ObTTLRequestArg::TTLRequestType get_type() const
+  {
+    return type_;
+  }
+  int set_type(const int64_t type)
+  {
+    int ret = common::OB_SUCCESS;
+
+    if (type < 0 || type >= obrpc::ObTTLRequestArg::TTL_MOVE_TYPE) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "invalid args", K(type));
+    } else {
+      type_ = static_cast<obrpc::ObTTLRequestArg::TTLRequestType>(type);
+    }
+
+    return ret;
+  }
+  inline common::ObSArray<uint64_t> &get_tenant_ids() { return opt_tenant_ids_; }
+  bool is_ttl_all() const { return ttl_all_; }
+  void set_ttl_all(bool ttl_all) { ttl_all_ = ttl_all; }
+
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), K_(type),
+               K_(opt_tenant_ids), K_(ttl_all));
+
+private:
+  uint64_t tenant_id_;
+  obrpc::ObTTLRequestArg::TTLRequestType type_;
+  common::ObSArray<uint64_t> opt_tenant_ids_;
+  bool ttl_all_;
+};
 
 class ObBackupSetEncryptionStmt : public ObSystemCmdStmt
 {
@@ -1278,6 +1319,18 @@ public:
 private:
   obrpc::ObRecoverTenantArg rpc_arg_;
 };
+
+class ObRecoverTableStmt : public ObSystemCmdStmt
+{
+public:
+  ObRecoverTableStmt()
+    : ObSystemCmdStmt(stmt::T_RECOVER_TABLE), rpc_arg_() {}
+  virtual ~ObRecoverTableStmt() {}
+  obrpc::ObRecoverTableArg &get_rpc_arg() { return rpc_arg_; }
+private:
+  obrpc::ObRecoverTableArg rpc_arg_;
+};
+
 
 } // end namespace sql
 } // end namespace oceanbase

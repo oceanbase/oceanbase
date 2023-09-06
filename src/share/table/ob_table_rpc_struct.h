@@ -260,11 +260,22 @@ public:
   ObQueryOperationType query_type_;
 };
 
+struct ObTableDirectLoadRequestHeader
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableDirectLoadRequestHeader() : operation_type_(ObTableDirectLoadOperationType::MAX_TYPE) {}
+  TO_STRING_KV(K_(addr), K_(operation_type));
+public:
+  ObAddr addr_;
+  ObTableDirectLoadOperationType operation_type_;
+};
+
 class ObTableDirectLoadRequest
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableDirectLoadRequest() : operation_type_(ObTableDirectLoadOperationType::MAX_TYPE) {}
+  ObTableDirectLoadRequest() {}
   template <class Arg>
   int set_arg(const Arg &arg, common::ObIAllocator &allocator)
   {
@@ -295,22 +306,31 @@ public:
     }
     return ret;
   }
-  TO_STRING_KV("credential", common::ObHexStringWrap(credential_), K_(operation_type),
+  TO_STRING_KV(K_(header),
+               "credential", common::ObHexStringWrap(credential_),
                "arg_content", common::ObHexStringWrap(arg_content_));
 public:
+  ObTableDirectLoadRequestHeader header_;
   ObString credential_;
-  ObTableDirectLoadOperationType operation_type_;
   ObString arg_content_;
+};
+
+struct ObTableDirectLoadResultHeader
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableDirectLoadResultHeader() : operation_type_(ObTableDirectLoadOperationType::MAX_TYPE) {}
+  TO_STRING_KV(K_(addr), K_(operation_type));
+public:
+  ObAddr addr_;
+  ObTableDirectLoadOperationType operation_type_;
 };
 
 class ObTableDirectLoadResult
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableDirectLoadResult()
-    : allocator_(nullptr), operation_type_(ObTableDirectLoadOperationType::MAX_TYPE)
-  {
-  }
+  ObTableDirectLoadResult() : allocator_(nullptr) {}
   template <class Res>
   int set_res(const Res &res, common::ObIAllocator &allocator)
   {
@@ -343,10 +363,10 @@ public:
     }
     return ret;
   }
-  TO_STRING_KV(K_(operation_type), "res_content", common::ObHexStringWrap(res_content_));
+  TO_STRING_KV(K_(header), "res_content", common::ObHexStringWrap(res_content_));
 public:
   common::ObIAllocator *allocator_; // for deserialize
-  ObTableDirectLoadOperationType operation_type_;
+  ObTableDirectLoadResultHeader header_;
   ObString res_content_;
 };
 

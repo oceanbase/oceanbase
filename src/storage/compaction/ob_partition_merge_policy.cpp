@@ -201,8 +201,9 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to find mini merge tables", K(ret), K(freeze_info));
     }
-  } else if (!result.update_tablet_directly_
-      && OB_FAIL(deal_with_minor_result(merge_type, ls, tablet, result))) {
+  } else if (result.update_tablet_directly_) {
+    // do nothing
+  } else if (OB_FAIL(deal_with_minor_result(merge_type, ls, tablet, result))) {
     LOG_WARN("failed to deal with minor merge result", K(ret));
   }
 
@@ -229,7 +230,7 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
   // can only take out all frozen memtable
   ObIMemtable *memtable = nullptr;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
-  bool need_update_snapshot_version = false;
+  bool has_release_memtable = false;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < memtable_handles.count(); ++i) {
     if (OB_ISNULL(memtable = static_cast<ObIMemtable *>(memtable_handles.at(i).get_table()))) {
@@ -242,15 +243,12 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
       FLOG_INFO("memtable cannot mini merge now", K(ret), K(i), KPC(memtable), K(max_snapshot_version), K(memtable_handles), K(param));
       break;
     } else if (memtable->get_end_scn() <= clog_checkpoint_scn) {
-      if (!tablet_id.is_special_merge_tablet() &&
-          memtable->get_snapshot_version() > tablet.get_tablet_meta().snapshot_version_) {
-        need_update_snapshot_version = true;
-      } else {
-        LOG_DEBUG("memtable wait to release", K(param), KPC(memtable));
-        continue;
-      }
+      has_release_memtable = true;
     } else if (result.handle_.get_count() > 0) {
-      if (result.scn_range_.end_scn_ < memtable->get_start_scn()) {
+      if (result.scn_range_.end_scn_ <= clog_checkpoint_scn) {
+        // meet the first memtable should be merged, reset the result to remove the memtable should be released.
+        result.reset();
+      } else if (result.scn_range_.end_scn_ < memtable->get_start_scn()) {
         FLOG_INFO("scn range  not continues, reset previous minor merge tables",
                   "last_end_scn", result.scn_range_.end_scn_, KPC(memtable), K(tablet));
         // mini merge always use the oldest memtable to dump
@@ -264,32 +262,28 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
       }
     }
 
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(result.handle_.add_memtable(memtable))) {
-        LOG_WARN("Failed to add memtable", KPC(memtable), K(ret));
-      } else {
-        // update end_scn/snapshot_version
-        if (1 == result.handle_.get_count()) {
-          result.scn_range_.start_scn_ = memtable->get_start_scn();
-        }
-        result.scn_range_.end_scn_ = memtable->get_end_scn();
-        result.version_range_.snapshot_version_ = MAX(memtable->get_snapshot_version(), result.version_range_.snapshot_version_);
+    if (FAILEDx(result.handle_.add_memtable(memtable))) {
+      LOG_WARN("Failed to add memtable", K(ret), KPC(memtable));
+    } else {
+      // update end_scn/snapshot_version
+      if (1 == result.handle_.get_count()) {
+        result.scn_range_.start_scn_ = memtable->get_start_scn();
       }
+      result.scn_range_.end_scn_ = memtable->get_end_scn();
+      result.version_range_.snapshot_version_ = MAX(memtable->get_snapshot_version(), result.version_range_.snapshot_version_);
     }
   } // end for
 
-  bool need_check_tablet = false;
-  if (OB_FAIL(ret)) {
-  } else {
+  if (OB_SUCC(ret)) {
+    bool need_check_tablet = false;
     result.suggest_merge_type_ = param.merge_type_;
     result.version_range_.multi_version_start_ = tablet.get_multi_version_start();
-    if (result.handle_.empty()) {
-      ret = OB_NO_NEED_MERGE;
-    } else if (result.scn_range_.end_scn_ <= clog_checkpoint_scn) {
-      if (need_update_snapshot_version) {
+
+    if (result.scn_range_.end_scn_ <= clog_checkpoint_scn) {
+      if (has_release_memtable) {
         result.update_tablet_directly_ = true;
         result.version_range_.multi_version_start_ = 0; // set multi_version_start to pass tablet::init check
-        LOG_INFO("meet empty force freeze memtable, could update tablet directly", K(ret), K(result));
+        FLOG_INFO("no memtable should be merged, but has memtable should be released", K(ret), K(result), K(memtable_handles));
       } else {
         ret = OB_NO_NEED_MERGE;
       }

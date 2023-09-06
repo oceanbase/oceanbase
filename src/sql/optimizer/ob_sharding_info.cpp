@@ -604,19 +604,20 @@ int ObShardingInfo::check_if_match_partition_wise(const EqualSets &equal_sets,
     bool is_equal = false;
     PwjTable l_table;
     PwjTable r_table;
-    ObStrictPwjComparer pwj_comparer;
-    if (OB_FAIL(l_table.init(*first_left_sharding))) {
-      LOG_WARN("failed to init pwj table with sharding info", K(ret));
-    } else if (OB_FAIL(r_table.init(*first_right_sharding))) {
-      LOG_WARN("failed to init pwj table with sharding info", K(ret));
-    } else if (OB_FAIL(pwj_comparer.add_table(l_table, is_equal))) {
-      LOG_WARN("failed to add table", K(ret));
-    } else if (!is_equal) {
-      // do nothing
-    } else if (OB_FAIL(pwj_comparer.add_table(r_table, is_equal))) {
-      LOG_WARN("failed to add table", K(ret));
-    } else if (is_equal) {
-      is_partition_wise = true;
+    SMART_VAR(ObStrictPwjComparer, pwj_comparer) {
+      if (OB_FAIL(l_table.init(*first_left_sharding))) {
+        LOG_WARN("failed to init pwj table with sharding info", K(ret));
+      } else if (OB_FAIL(r_table.init(*first_right_sharding))) {
+        LOG_WARN("failed to init pwj table with sharding info", K(ret));
+      } else if (OB_FAIL(pwj_comparer.add_table(l_table, is_equal))) {
+        LOG_WARN("failed to add table", K(ret));
+      } else if (!is_equal) {
+        // do nothing
+      } else if (OB_FAIL(pwj_comparer.add_table(r_table, is_equal))) {
+        LOG_WARN("failed to add table", K(ret));
+      } else if (is_equal){
+        is_partition_wise = true;
+      }
     }
   }
   LOG_TRACE("succeed check if match partition wise",
@@ -1003,18 +1004,19 @@ int ObShardingInfo::is_sharding_equal(const ObShardingInfo *left_sharding,
   } else  {
     PwjTable l_table;
     PwjTable r_table;
-    ObStrictPwjComparer pwj_comparer;
-    if (OB_FAIL(l_table.init(*left_sharding))) {
-      LOG_WARN("failed to init pwj table with sharding info", K(ret));
-    } else if (OB_FAIL(r_table.init(*right_sharding))) {
-      LOG_WARN("failed to init pwj table with sharding info", K(ret));
-    } else if (OB_FAIL(pwj_comparer.add_table(l_table, is_equal))) {
-      LOG_WARN("failed to add table", K(ret));
-    } else if (!is_equal) {
-      // do nothing
-    } else if (OB_FAIL(pwj_comparer.add_table(r_table, is_equal))) {
-      LOG_WARN("failed to add table", K(ret));
-    } else { /*do nothing*/ }
+    SMART_VAR(ObStrictPwjComparer, pwj_comparer) {
+      if (OB_FAIL(l_table.init(*left_sharding))) {
+        LOG_WARN("failed to init pwj table with sharding info", K(ret));
+      } else if (OB_FAIL(r_table.init(*right_sharding))) {
+        LOG_WARN("failed to init pwj table with sharding info", K(ret));
+      } else if (OB_FAIL(pwj_comparer.add_table(l_table, is_equal))) {
+        LOG_WARN("failed to add table", K(ret));
+      } else if (!is_equal) {
+        // do nothing
+      } else if (OB_FAIL(pwj_comparer.add_table(r_table, is_equal))) {
+        LOG_WARN("failed to add table", K(ret));
+      } else { /*do nothing*/ }
+    }
   }
   if (OB_SUCC(ret)) {
     LOG_TRACE("succeed to check whether sharding info is equal", K(is_equal));

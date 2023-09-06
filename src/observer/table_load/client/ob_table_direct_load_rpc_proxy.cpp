@@ -31,7 +31,7 @@ int ObTableDirectLoadRpcProxy::dispatch(ObTableDirectLoadExecContext &ctx,
     break;
 
   int ret = OB_SUCCESS;
-  switch (request.operation_type_) {
+  switch (request.header_.operation_type_) {
     OB_TABLE_DIRECT_LOAD_RPC_DISPATCH(ObTableDirectLoadOperationType::BEGIN);
     OB_TABLE_DIRECT_LOAD_RPC_DISPATCH(ObTableDirectLoadOperationType::COMMIT);
     OB_TABLE_DIRECT_LOAD_RPC_DISPATCH(ObTableDirectLoadOperationType::ABORT);

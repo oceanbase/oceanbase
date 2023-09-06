@@ -302,12 +302,6 @@ int ObLogRestoreProxyUtil::refresh_conn(const common::ObIArray<common::ObAddr> &
     LOG_WARN("set db param failed", K(user_name), K(user_password), K(db_name));
   } else if (OB_FAIL(server_prover_.set_restore_source_server(addr_array))) {
     LOG_WARN("set_restore_source_server failed", K(addr_array));
-  } else {
-    ObString name(user_name);
-    ObString passwd(user_password);
-    ObString db(db_name);
-    LOG_INFO("print refresh_conn", K(name), K(passwd), K(db));
-    connection_.signal_refresh();
   }
   return ret;
 }

@@ -26,6 +26,7 @@
 #include "lib/compress/ob_compress_util.h"
 #include "storage/tx/ob_trans_define.h"
 #include "sql/engine/ob_exec_feedback_info.h"
+#include "sql/ob_sql_define.h"
 
 namespace oceanbase
 {
@@ -545,9 +546,9 @@ public:
 public:
   static const int64_t DEFAULT_RANGE_COUNT = 8;
   typedef common::ObSEArray<common::ObRowkey, DEFAULT_RANGE_COUNT> EndKeys;
-  typedef Ob2DArray<ObDatum> DatumKey;
+  typedef ObTMSegmentArray<ObDatum> DatumKey;
   typedef ObSEArray<int64_t, 2> RangeWeight;
-  typedef ObSEArray<DatumKey, DEFAULT_RANGE_COUNT> RangeCut; // not include MAX at last nor MIN at first
+  typedef ObTMArray<DatumKey> RangeCut; // not include MAX at last nor MIN at first
   typedef ObSEArray<RangeWeight, DEFAULT_RANGE_COUNT> RangeWeights;
 
   int64_t tablet_id_;

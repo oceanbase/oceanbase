@@ -21,6 +21,7 @@
 #include "ob_table_service.h"
 #include "sql/monitor/ob_exec_stat.h"
 #include "share/table/ob_table.h"
+#include "ob_htable_lock_mgr.h"
 namespace oceanbase
 {
 namespace table
@@ -115,7 +116,19 @@ public:
   int start_trans(bool is_readonly, const sql::stmt::StmtType stmt_type,
                   const table::ObTableConsistencyLevel consistency_level, uint64_t table_id,
                   const share::ObLSID &ls_id, int64_t timeout_ts);
-  int end_trans(bool is_rollback, rpc::ObRequest *req, int64_t timeout_ts, bool use_sync = false);
+  int end_trans(bool is_rollback, rpc::ObRequest *req, int64_t timeout_ts,
+                bool use_sync = false, table::ObHTableLockHandle *lock_handle = nullptr);
+  static int start_trans_(bool is_readonly, transaction::ObTxDesc*& trans_desc,
+                          transaction::ObTxReadSnapshot &tx_snapshot,
+                          const ObTableConsistencyLevel consistency_level,
+                          sql::TransState *trans_state_ptr,
+                          uint64_t table_id, const share::ObLSID &ls_id, int64_t timeout_ts);
+  int sync_end_trans(bool is_rollback, int64_t timeout_ts, table::ObHTableLockHandle *lock_handle = nullptr);
+  static int sync_end_trans_(bool is_rollback,
+                             transaction::ObTxDesc *&trans_desc,
+                             int64_t timeout_ts,
+                             table::ObHTableLockHandle *lock_handle = nullptr);
+
   // for get
   int init_read_trans(const table::ObTableConsistencyLevel  consistency_level,
                       const share::ObLSID &ls_id,
@@ -146,9 +159,12 @@ protected:
   virtual int check_table_index_supported(uint64_t table_id, bool &is_supported);
 
 private:
-  int setup_tx_snapshot_(transaction::ObTxDesc &trans_desc, const bool strong_read, const share::ObLSID &ls_id, const int64_t timeout_ts);
-  int async_commit_trans(rpc::ObRequest *req, int64_t timeout_ts);
-  int sync_end_trans(bool is_rollback, int64_t timeout_ts);
+  int async_commit_trans(rpc::ObRequest *req, int64_t timeout_ts, table::ObHTableLockHandle *lock_handle = nullptr);
+  static int setup_tx_snapshot_(transaction::ObTxDesc &trans_desc,
+                               transaction::ObTxReadSnapshot &tx_snapshot,
+                               const bool strong_read,
+                               const share::ObLSID &ls_id,
+                               const int64_t timeout_ts);
 protected:
   const ObGlobalContext &gctx_;
   ObTableService *table_service_;

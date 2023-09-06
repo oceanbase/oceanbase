@@ -21,6 +21,7 @@
 #include "lib/profile/ob_perf_event.h"
 #include "lib/geo/ob_s2adapter.h"
 #include "lib/geo/ob_geo_utils.h"
+#include "share/ob_ddl_common.h"
 #include "share/ob_ddl_checksum.h"
 #include "storage/access/ob_table_scan_iterator.h"
 #include "observer/ob_server_struct.h"
@@ -2596,7 +2597,7 @@ int ObTableScanOp::add_ddl_column_checksum()
       // } else if (OB_FAIL(corrupt_obj(store_datum))) {
       //   LOG_WARN("failed to corrupt obj", K(ret));
 #endif
-      } else if (col_need_reshape_[i] && OB_FAIL(reshape_ddl_column_obj(store_datum, e->obj_meta_))) {
+      } else if (col_need_reshape_[i] && OB_FAIL(ObDDLUtil::reshape_ddl_column_obj(store_datum, e->obj_meta_))) {
         LOG_WARN("reshape ddl column obj failed", K(ret));
       } else {
         column_checksum_[i] += store_datum.checksum(0);
@@ -2642,7 +2643,7 @@ int ObTableScanOp::add_ddl_column_checksum_batch(const int64_t row_count)
           // } else if (OB_FAIL(corrupt_obj(store_datum))) {
           //   LOG_WARN("failed to corrupt obj", K(ret));
 #endif
-          } else if (col_need_reshape_[i] && OB_FAIL(reshape_ddl_column_obj(store_datum, e->obj_meta_))) {
+          } else if (col_need_reshape_[i] && OB_FAIL(ObDDLUtil::reshape_ddl_column_obj(store_datum, e->obj_meta_))) {
             LOG_WARN("reshape ddl column obj failed", K(ret));
           } else {
             column_checksum_[i] += store_datum.checksum(0);
@@ -2657,39 +2658,6 @@ int ObTableScanOp::add_ddl_column_checksum_batch(const int64_t row_count)
                 K(MY_SPEC.output_));
     }
     clear_evaluated_flag();
-  }
-  return ret;
-}
-
-int ObTableScanOp::reshape_ddl_column_obj(ObDatum &datum, const ObObjMeta &obj_meta)
-{
-  int ret = OB_SUCCESS;
-  if (datum.is_null()) {
-    // do not need to reshape
-  } else if (obj_meta.is_lob_storage()) {
-    ObLobLocatorV2 lob(datum.get_string(), obj_meta.has_lob_header());
-    ObString disk_loc;
-    if (!lob.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid lob locator", K(ret));
-    } else if (!lob.is_lob_disk_locator() && !lob.is_persist_lob()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid lob locator, should be persist lob", K(ret), K(lob));
-    } else if (OB_FAIL(lob.get_disk_locator(disk_loc))) {
-      LOG_WARN("get disk locator failed", K(ret), K(lob));
-    }
-    if (OB_SUCC(ret)) {
-      datum.set_string(disk_loc);
-    }
-  } else if (OB_UNLIKELY(!obj_meta.is_fixed_len_char_type())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("no need to reshape non-char", K(ret));
-  } else {
-    const char *ptr = datum.ptr_;
-    int32_t len = datum.len_;
-    int32_t trunc_len_byte = static_cast<int32_t>(ObCharset::strlen_byte_no_sp(
-        obj_meta.get_collation_type(), ptr, len));
-    datum.set_string(ObString(trunc_len_byte, ptr));
   }
   return ret;
 }

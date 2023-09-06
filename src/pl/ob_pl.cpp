@@ -1872,7 +1872,7 @@ int ObPL::execute(ObExecContext &ctx,
                     NULL, // result
                     NULL, // status
                     stack_ctx.is_top_stack(),
-                    !stack_ctx.is_top_stack(), // inner call
+                    false, // inner call
                     false, // in function
                     true)); // anonymous
         // unprepare it ...

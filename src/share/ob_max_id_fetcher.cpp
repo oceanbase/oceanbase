@@ -51,6 +51,7 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
   { "ob_max_used_object_id", "max used object id"},
   { "ob_max_used_lock_owner_id", "max used lock owner id"},
   { "ob_max_used_rewrite_rule_version", "max used rewrite rule version"},
+  { "ob_max_used_ttl_task_id", "max used ttl task id"},
   /* the following id_type will be changed to ob_max_used_object_id and won't be persisted. */
   { "ob_max_used_table_id", "max used table id"},
   { "ob_max_used_database_id", "max used database id"},
@@ -114,7 +115,8 @@ int ObMaxIdFetcher::convert_id_type(
     case OB_MAX_USED_SYS_PL_OBJECT_ID_TYPE:
     case OB_MAX_USED_OBJECT_ID_TYPE:
     case OB_MAX_USED_LOCK_OWNER_ID_TYPE:
-    case OB_MAX_USED_REWRITE_RULE_VERSION_TYPE: {
+    case OB_MAX_USED_REWRITE_RULE_VERSION_TYPE:
+    case OB_MAX_USED_TTL_TASK_ID_TYPE: {
       dst = src;
       break;
     }
@@ -304,7 +306,8 @@ int ObMaxIdFetcher::fetch_new_max_id(const uint64_t tenant_id,
         case OB_MAX_USED_LOCK_OWNER_ID_TYPE:
         case OB_MAX_USED_LS_ID_TYPE:
         case OB_MAX_USED_LS_GROUP_ID_TYPE:
-        case OB_MAX_USED_REWRITE_RULE_VERSION_TYPE: {
+        case OB_MAX_USED_REWRITE_RULE_VERSION_TYPE:
+        case OB_MAX_USED_TTL_TASK_ID_TYPE: {
           // won't check other id
           break;
         }
@@ -446,6 +449,7 @@ int ObMaxIdFetcher::fetch_max_id(ObISQLClient &sql_client, const uint64_t tenant
   ObZone zone;
   const char *id_name = NULL;
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  bool no_max_id = false;
   if (OB_INVALID_ID == tenant_id || !valid_max_id_type(max_id_type)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(max_id_type));
@@ -484,12 +488,19 @@ int ObMaxIdFetcher::fetch_max_id(ObISQLClient &sql_client, const uint64_t tenant
         }
       } else {
         if (OB_ITER_END == ret) {
-          ret = OB_ENTRY_NOT_EXIST;
+          no_max_id = true;
         } else {
           LOG_WARN("fail to get id", "name", id_name, K(ret));
         }
       }
     }
+  }
+
+  if (OB_ENTRY_NOT_EXIST == ret) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("4018 not caused by no max id", K(ret));
+  } else if (OB_ITER_END == ret && no_max_id) {
+    ret = OB_ENTRY_NOT_EXIST;
   }
   return ret;
 }

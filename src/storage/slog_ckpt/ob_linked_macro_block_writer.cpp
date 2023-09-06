@@ -51,45 +51,39 @@ int ObLinkedMacroBlockWriter::write_block(const char *buf, const int64_t buf_len
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLinkedMacroBlockWriter has not been inited", K(ret));
-  } else if (OB_UNLIKELY(nullptr == buf)) {
+  } else if (OB_UNLIKELY(nullptr == buf || buf_len < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(buf));
+    LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len));
   } else {
-    const int64_t macro_block_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
-    if (buf_len != macro_block_size) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(macro_block_size), K(buf_len));
-    } else {
-      ObMacroBlockWriteInfo write_info;
-      write_info.size_ = macro_block_size;
-      write_info.io_desc_ = io_desc_;
-      write_info.buffer_ = buf;
-      write_info.io_desc_.set_group_id(ObIOModule::LINKED_MACRO_BLOCK_IO);
-      MacroBlockId previous_block_id;
-      previous_block_id.set_block_index(MacroBlockId::EMPTY_ENTRY_BLOCK_INDEX);
-      if (!handle_.is_empty()) {
-        const int64_t io_timeout_ms = GCONF._data_storage_io_timeout / 1000L;
-        if (OB_FAIL(handle_.wait(io_timeout_ms))) {
-          LOG_WARN("fail to wait io finish", K(ret));
-        } else {
-          previous_block_id = handle_.get_macro_id();
-          pre_block_id = previous_block_id;
-        }
+    ObMacroBlockWriteInfo write_info;
+    write_info.size_ = buf_len;
+    write_info.io_desc_ = io_desc_;
+    write_info.buffer_ = buf;
+    write_info.io_desc_.set_group_id(ObIOModule::LINKED_MACRO_BLOCK_IO);
+    MacroBlockId previous_block_id;
+    previous_block_id.set_block_index(MacroBlockId::EMPTY_ENTRY_BLOCK_INDEX);
+    if (!handle_.is_empty()) {
+      const int64_t io_timeout_ms = GCONF._data_storage_io_timeout / 1000L;
+      if (OB_FAIL(handle_.wait(io_timeout_ms))) {
+        LOG_WARN("fail to wait io finish", K(ret));
+      } else {
+        previous_block_id = handle_.get_macro_id();
+        pre_block_id = previous_block_id;
       }
+    }
 
-      if (OB_SUCC(ret)) {
-        linked_header.set_previous_block_id(previous_block_id);
-        common_header.set_payload_checksum(static_cast<int32_t>(
-          ob_crc64(buf + common_header.get_serialize_size(), common_header.get_payload_size())));
-      }
+    if (OB_SUCC(ret)) {
+      linked_header.set_previous_block_id(previous_block_id);
+      common_header.set_payload_checksum(static_cast<int32_t>(
+        ob_crc64(buf + common_header.get_serialize_size(), common_header.get_payload_size())));
+    }
 
-      if (OB_SUCC(ret)) {
-        handle_.reset();
-        if (OB_FAIL(ObBlockManager::async_write_block(write_info, handle_))) {
-          LOG_WARN("fail to async write block", K(ret), K(write_info), K(handle_));
-        } else if (OB_FAIL(write_ctx_.add_macro_block_id(handle_.get_macro_id()))) {
-          LOG_WARN("fail to add macro id", K(ret), "macro id", handle_.get_macro_id());
-        }
+    if (OB_SUCC(ret)) {
+      handle_.reset();
+      if (OB_FAIL(ObBlockManager::async_write_block(write_info, handle_))) {
+        LOG_WARN("fail to async write block", K(ret), K(write_info), K(handle_));
+      } else if (OB_FAIL(write_ctx_.add_macro_block_id(handle_.get_macro_id()))) {
+        LOG_WARN("fail to add macro id", K(ret), "macro id", handle_.get_macro_id());
       }
     }
   }
@@ -371,8 +365,9 @@ int ObLinkedMacroBlockItemWriter::write_block()
   common_header_->set_payload_size(
     static_cast<int32_t>(io_buf_pos_ - common_header_->get_serialize_size()));
   MacroBlockId pre_block_id;
+  const int64_t upper_align_size = upper_align(io_buf_pos_, DIO_ALIGN_SIZE);
   if (OB_FAIL(block_writer_.write_block(
-        io_buf_, io_buf_size_, *common_header_, *linked_header_, pre_block_id))) {
+        io_buf_, upper_align_size, *common_header_, *linked_header_, pre_block_id))) {
     LOG_WARN("fail to write block", K(ret));
   } else if (OB_FAIL(set_pre_block_inflight_items_addr(pre_block_id))) {
     LOG_WARN("fail to set pre block inflight items addr", K(ret));

@@ -1060,7 +1060,9 @@ int ObExprCast::cg_expr(ObExprCGCtx &op_cg_ctx,
       CK(OB_NOT_NULL(src_raw_expr = raw_expr.get_param_expr(0)));
       if (OB_SUCC(ret)) {
         const ObExprResType &src_res_type = src_raw_expr->get_result_type();
-        if (OB_UNLIKELY(UINT_MAX8 < src_res_type.get_length())) {
+        if (ob_is_string_or_lob_type(in_type)) {
+          // do nothing, setting the zerofill length only makes sense when in_type is a numeric type
+        } else if (OB_UNLIKELY(UINT_MAX8 < src_res_type.get_length())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected zerofill length", K(ret), K(src_res_type.get_length()));
         } else if (ob_is_string_or_lob_type(out_type)) {

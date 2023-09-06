@@ -123,8 +123,14 @@ int ObTableApiExecuteP::init_tb_ctx()
   } else {
     switch(op_type) {
       case ObTableOperationType::INSERT: {
-        if (OB_FAIL(tb_ctx_.init_insert())) {
-          LOG_WARN("fail to init insert ctx", K(ret), K(tb_ctx_));
+        if (tb_ctx_.is_ttl_table()) {
+          if (OB_FAIL(tb_ctx_.init_insert_up())) {
+            LOG_WARN("fail to init insert up ctx", K(ret), K(tb_ctx_));
+          }
+        } else {
+          if (OB_FAIL(tb_ctx_.init_insert())) {
+            LOG_WARN("fail to init insert ctx", K(ret), K(tb_ctx_));
+          }
         }
         break;
       }
@@ -211,11 +217,19 @@ int ObTableApiExecuteP::try_process()
   } else if (OB_UNLIKELY(!is_index_supported)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("index type is not supported by table api", K(ret));
+  } else if (OB_FAIL(check_arg2())) {
+    LOG_WARN("fail to check arg", K(ret));
+  } else if (OB_FAIL(init_tb_ctx())) {
+    LOG_WARN("fail to init tb ctx", K(ret));
   } else {
     switch (table_operation.type()) {
       case ObTableOperationType::INSERT:
         stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_INSERT;
-        ret = process_dml_op<TABLE_API_EXEC_INSERT>();
+        if (tb_ctx_.is_ttl_table()) {
+          ret = process_dml_op<TABLE_API_EXEC_TTL>();
+        } else {
+          ret = process_dml_op<TABLE_API_EXEC_INSERT>();
+        }
         break;
       case ObTableOperationType::GET:
         stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_GET;
@@ -231,7 +245,11 @@ int ObTableApiExecuteP::try_process()
         break;
       case ObTableOperationType::INSERT_OR_UPDATE:
         stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_INSERT_OR_UPDATE;
-        ret = process_dml_op<TABLE_API_EXEC_INSERT_UP>();
+        if (tb_ctx_.is_ttl_table()) {
+          ret = process_dml_op<TABLE_API_EXEC_TTL>();
+        } else {
+          ret = process_dml_op<TABLE_API_EXEC_INSERT_UP>();
+        }
         break;
       case ObTableOperationType::REPLACE:
         stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_REPLACE;
@@ -239,11 +257,19 @@ int ObTableApiExecuteP::try_process()
         break;
       case ObTableOperationType::INCREMENT:
         stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_INCREMENT;
-        ret = process_dml_op<TABLE_API_EXEC_INSERT_UP>();
+        if (tb_ctx_.is_ttl_table()) {
+          ret = process_dml_op<TABLE_API_EXEC_TTL>();
+        } else {
+          ret = process_dml_op<TABLE_API_EXEC_INSERT_UP>();
+        }
         break;
       case ObTableOperationType::APPEND:
         stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_APPEND;
-        ret = process_dml_op<TABLE_API_EXEC_INSERT_UP>();
+        if (tb_ctx_.is_ttl_table()) {
+          ret = process_dml_op<TABLE_API_EXEC_TTL>();
+        } else {
+          ret = process_dml_op<TABLE_API_EXEC_INSERT_UP>();
+        }
         break;
       default:
         ret = OB_INVALID_ARGUMENT;
@@ -251,6 +277,12 @@ int ObTableApiExecuteP::try_process()
         break;
     }
     audit_row_count_ = 1;
+  }
+
+  if (OB_FAIL(ret)) {
+    // init_tb_ctx will return some replaceable error code
+    result_.set_errno(ret);
+    table::ObTableApiUtil::replace_ret_code(ret);
   }
 
 #ifndef NDEBUG

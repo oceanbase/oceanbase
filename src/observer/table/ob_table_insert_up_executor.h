@@ -105,35 +105,16 @@ private:
   }
   int generate_insert_up_rtdef(const ObTableInsUpdCtDef &ctdef,
                                ObTableInsUpdRtDef &rtdef);
-  void set_need_fetch_conflict();
   int refresh_exprs_frame(const ObTableEntity *entity);
   int get_next_row_from_child();
-  int try_insert_row(bool &is_iter_end, int64_t &insert_rows);
+  int try_insert_row();
   int try_update_row();
-  int execute_das_task(sql::ObDMLRtCtx &dml_rtctx, bool del_task_ahead);
-  int fetch_conflict_rowkey();
-  int reset_das_env();
   int do_insert_up_cache();
   int prepare_final_insert_up_task();
   int do_update(const ObRowkey &constraint_rowkey,
                 const sql::ObConflictValue &constraint_value);
   int do_insert(const ObRowkey &constraint_rowkey,
                 const sql::ObConflictValue &constraint_value);
-  int delete_upd_old_row_to_das(const ObRowkey &constraint_rowkey,
-                                const sql::ObConflictValue &constraint_value);
-  int insert_upd_new_row_to_das();
-  int generate_del_rtdef_for_update(const ObTableUpdCtDef &upd_ctdef,
-                                    ObTableUpdRtDef &upd_rtdef);
-  int generate_ins_rtdef_for_update(const ObTableUpdCtDef &upd_ctdef,
-                                    ObTableUpdRtDef &upd_rtdef);
-  int to_expr_skip_old(const ObChunkDatumStore::StoredRow &store_row,
-                       const ObRowkey &constraint_rowkey);
-  // for htable
-  int modify_htable_timestamp();
-
-  int check_whether_row_change(const ObChunkDatumStore::StoredRow &upd_old_row,
-                               const ObChunkDatumStore::StoredRow &upd_new_row);
-
 private:
   common::ObArenaAllocator allocator_;
   const ObTableApiInsertUpSpec &insert_up_spec_;

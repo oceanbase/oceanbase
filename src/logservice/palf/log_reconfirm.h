@@ -51,7 +51,7 @@ public:
            LogEngine *log_engine);
   virtual void destroy();
   virtual void reset_state();
-  virtual bool need_start_up();
+  virtual bool need_wlock();
   virtual bool can_receive_log() const;
   virtual bool can_do_degrade() const;
   virtual int reconfirm();
@@ -84,23 +84,17 @@ private:
 	// all previous logs have been confirmed, the only effect is to avoid unnecessary
 	// pulling logs.
     WAITING_LOG_FLUSHED = 1,
-	// this state is not correctness guarantee, because we guarantee that: for each follower
-	// replica, it will not response any ack until flush log finished(redo log or meta log).
-	// NB: we should keep the prospoal_id comes from log_state_mgr is the maxest of redo log and
-	// meta log.
-    WRITING_PREAPRE_LOG = 3,
 	// this state is used to query who is the newest server, records it as 'newest_server_',
-	// actually, FETCH_MAX_LOG_LSN and WRITING_PREAPRE_LOG is one phase.
-    FETCH_MAX_LOG_LSN = 4,
+    FETCH_MAX_LOG_LSN = 2,
 	// this state is used to reconfirm mode_meta to majority.
-    RECONFIRM_MODE_META = 5,
+    RECONFIRM_MODE_META = 3,
 	// this state is used to fetch all logs from the 'newest_server_'.
-    RECONFIRM_FETCH_LOG = 6,
+    RECONFIRM_FETCH_LOG = 4,
 	// this state is used to wait fetch log finished, and then write START_WORKING log.
-    RECONFIRMING = 7,
+    RECONFIRMING = 5,
 	// this state is used to wait write START_WORKING finished.
-    START_WORKING = 8,
-    FINISHED = 9,
+    START_WORKING = 6,
+    FINISHED = 7,
   };
 
   const char *state_to_string(const State &state) const
@@ -109,7 +103,6 @@ private:
     {
       case(State::INITED): return "INITED";
       case(State::WAITING_LOG_FLUSHED): return "WAITING_LOG_FLUSHED";
-      case(State::WRITING_PREAPRE_LOG): return "WRITING_PREAPRE_LOG";
       case(State::FETCH_MAX_LOG_LSN): return "FETCH_MAX_LOG_LSN";
       case(State::RECONFIRM_FETCH_LOG): return "RECONFIRM_FETCH_LOG";
       case(State::RECONFIRM_MODE_META): return "RECONFIRM_MODE_META";

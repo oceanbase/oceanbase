@@ -55,16 +55,12 @@ private:
   int process_dml_op()
   {
     int ret = OB_SUCCESS;
-    if (OB_FAIL(check_arg2())) {
-      SERVER_LOG(WARN, "fail to check arg", K(ret));
-    } else if (OB_FAIL(init_tb_ctx())) {
-      SERVER_LOG(WARN, "fail to init tb ctx", K(ret));
-    } else if (OB_FAIL(start_trans(false, /* is_readonly */
-                                  sql::stmt::T_INSERT,
-                                  arg_.consistency_level_,
-                                  tb_ctx_.get_table_id(),
-                                  tb_ctx_.get_ls_id(),
-                                  get_timeout_ts()))) {
+    if (OB_FAIL(start_trans(false, /* is_readonly */
+                            sql::stmt::T_INSERT,
+                            arg_.consistency_level_,
+                            tb_ctx_.get_table_id(),
+                            tb_ctx_.get_ls_id(),
+                            get_timeout_ts()))) {
       SERVER_LOG(WARN, "fail to start trans", K(ret));
     } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
       SERVER_LOG(WARN, "fail to init trans", K(ret));

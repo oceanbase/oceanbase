@@ -273,6 +273,8 @@ all_table_def = dict(
       ('external_file_location_access_info', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
       ('external_file_format', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
       ('external_file_pattern', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
+      ('ttl_definition', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'false', ''),
+      ('kv_attributes', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'false', '')
     ],
 )
 
@@ -4364,6 +4366,7 @@ def_table_schema(
   normal_columns = [
     ('code', 'int', 'true', '0'),
     ('message', 'varchar:4000'),
+    ('job_class', 'varchar:30', 'true'),
   ],
 )
 
@@ -5095,8 +5098,63 @@ def_table_schema(
   ],
 )
 
-# 410 : __all_kv_ttl_task
-# 411 : __all_kv_ttl_task_history
+all_kv_ttl_task_def = dict(
+  owner = 'shenyunlong.syl',
+  table_name = '__all_kv_ttl_task',
+  table_id = '410',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('task_id', 'int'),
+      ('table_id', 'int'),
+      ('tablet_id', 'int')
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('task_start_time', 'int'),
+    ('task_update_time', 'int'),
+    ('trigger_type', 'int'),
+    ('status', 'int'),
+    ('ttl_del_cnt', 'int'),
+    ('max_version_del_cnt', 'int'),
+    ('scan_cnt', 'int'),
+    ('row_key', 'varbinary:2048'),
+    ('ret_code', 'varchar:OB_MAX_ERROR_MSG_LEN')
+  ],
+)
+
+all_kv_ttl_task_history_def = dict(
+  owner = 'shenyunlong.syl',
+  table_name = '__all_kv_ttl_task_history',
+  table_id = '411',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('task_id', 'int'),
+      ('table_id', 'int'),
+      ('tablet_id', 'int')
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('task_start_time', 'int'),
+    ('task_update_time', 'int'),
+    ('trigger_type', 'int'),
+    ('status', 'int'),
+    ('ttl_del_cnt', 'int'),
+    ('max_version_del_cnt', 'int'),
+    ('scan_cnt', 'int'),
+    ('row_key', 'varbinary:2048'),
+    ('ret_code', 'varchar:OB_MAX_ERROR_MSG_LEN')
+  ],
+)
+def_table_schema(**all_kv_ttl_task_def)
+def_table_schema(**all_kv_ttl_task_history_def)
 
 def_table_schema(
   owner = 'donglou.zl',
@@ -5815,8 +5873,26 @@ def_table_schema(
 # 468 : __all_mview_refresh_stats
 # 469 : __all_mview_refresh_change_stats
 # 470 : __all_mview_refresh_stmt_stats
-# 471 : __all_dbms_lock_allocated
-# 472 : __wr_control
+
+def_table_schema(
+    owner = 'yangyifei.yyf',
+    table_name = '__all_dbms_lock_allocated',
+    table_id = '471',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+      ('name', 'varchar:128', 'false'),
+    ],
+    in_tenant_space = True,
+    is_cluster_private = False,
+    meta_record_in_sys = False,
+    normal_columns = [
+      ('lockid', 'int'),
+      ('lockhandle', 'varchar:128'),
+      ('expiration', 'timestamp'),
+    ],
+)
+
 def_table_schema(
     owner = 'yuchen.wyc',
     table_id = 472,
@@ -5854,7 +5930,6 @@ def_table_schema(
     ('tenant_id', 'int', 'false', 'OB_INVALID_TENANT_ID'),
     ('gmt_create', 'timestamp:6', 'false')
   ],
-
   in_tenant_space = True,
   is_cluster_private = True,
   meta_record_in_sys = False,
@@ -5884,19 +5959,342 @@ def_table_schema(
   ],
 )
 
-# 474 : __all_tenant_scheduler_job_classes
-# 475 : __all_recover_table_job
-# 476 : __all_recover_table_job_history
-# 477 : __all_import_table_job
-# 478 : __all_import_table_job_history
-# 479 : __all_import_table_task
-# 480 : __all_import_table_task_history
+def_table_schema(
+  table_name     = '__all_tenant_scheduler_job_class',
+  owner          = 'huangrenhuang.hrh',
+  table_id       = '474',
+  table_type     = 'SYSTEM_TABLE',
+  gm_columns     = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('job_class_name', 'varchar:30', 'false'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+  normal_columns = [
+    ('resource_consumer_group', 'varchar:30', 'true'),
+    ('service', 'varchar:64', 'true'),
+    ('logging_level', 'varchar:11', 'true'),
+    ('log_history', 'number:38:0', 'true'),
+    ('comments', 'varchar:240', 'true'),
+  ],
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name    = '__all_recover_table_job',
+  table_id      = '475',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('job_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+      ('initiator_tenant_id', 'int'),
+      ('initiator_job_id', 'int'),
+      ('start_ts', 'int'),
+      ('end_ts', 'int'),
+      ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+      ('aux_tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH'),
+      ('target_tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH'),
+      ('target_tenant_id', 'int'),
+      ('import_all', 'bool'),
+      ('db_list', 'longtext', 'true', ''),
+      ('hex_db_list', 'longtext', 'true', ''),
+      ('table_list', 'longtext', 'true', ''),
+      ('hex_table_list', 'longtext', 'true', ''),
+      ('partition_list', 'longtext', 'true', ''),
+      ('hex_partition_list', 'longtext', 'true', ''),
+      ('restore_scn', 'uint'),
+      ('restore_option', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH'),
+      ('backup_dest', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH'),
+      ('backup_set_list', 'longtext'),
+      ('backup_piece_list', 'longtext'),
+      ('backup_passwd', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+      ('external_kms_info', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+      ('remap_db_list', 'longtext', 'true', ''),
+      ('hex_remap_db_list', 'longtext', 'true', ''),
+      ('remap_table_list', 'longtext', 'true', ''),
+      ('hex_remap_table_list', 'longtext', 'true', ''),
+      ('remap_partition_list', 'longtext', 'true', ''),
+      ('hex_remap_partition_list', 'longtext', 'true', ''),
+      ('remap_tablegroup_list', 'longtext', 'true', ''),
+      ('hex_remap_tablegroup_list', 'longtext', 'true', ''),
+      ('remap_tablespace_list', 'longtext', 'true', ''),
+      ('hex_remap_tablespace_list', 'longtext', 'true', ''),
+      ('result', 'varchar:OB_DEFAULT_STATUS_LENTH', 'true', ''),
+      ('comment', 'longtext', 'true', ''),
+      ('description', 'longtext', 'true', ''),
+  ],
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name    = '__all_recover_table_job_history',
+  table_id      = '476',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('job_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+      ('initiator_tenant_id', 'int'),
+      ('initiator_job_id', 'int'),
+      ('start_ts', 'int'),
+      ('end_ts', 'int'),
+      ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+      ('aux_tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH'),
+      ('target_tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH'),
+      ('target_tenant_id', 'int'),
+      ('import_all', 'bool'),
+      ('db_list', 'longtext', 'true', ''),
+      ('hex_db_list', 'longtext', 'true', ''),
+      ('table_list', 'longtext', 'true', ''),
+      ('hex_table_list', 'longtext', 'true', ''),
+      ('partition_list', 'longtext', 'true', ''),
+      ('hex_partition_list', 'longtext', 'true', ''),
+      ('restore_scn', 'uint'),
+      ('restore_option', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH'),
+      ('backup_dest', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH'),
+      ('backup_set_list', 'longtext'),
+      ('backup_piece_list', 'longtext'),
+      ('backup_passwd', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+      ('external_kms_info', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+      ('remap_db_list', 'longtext', 'true', ''),
+      ('hex_remap_db_list', 'longtext', 'true', ''),
+      ('remap_table_list', 'longtext', 'true', ''),
+      ('hex_remap_table_list', 'longtext', 'true', ''),
+      ('remap_partition_list', 'longtext', 'true', ''),
+      ('hex_remap_partition_list', 'longtext', 'true', ''),
+      ('remap_tablegroup_list', 'longtext', 'true', ''),
+      ('hex_remap_tablegroup_list', 'longtext', 'true', ''),
+      ('remap_tablespace_list', 'longtext', 'true', ''),
+      ('hex_remap_tablespace_list', 'longtext', 'true', ''),
+      ('result', 'varchar:OB_DEFAULT_STATUS_LENTH', 'true', ''),
+      ('comment', 'longtext', 'true', ''),
+      ('description', 'longtext', 'true', ''),
+  ],
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name    = '__all_import_table_job',
+  table_id      = '477',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('job_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+      ('initiator_tenant_id', 'int'),
+      ('initiator_job_id', 'int'),
+      ('start_ts', 'int'),
+      ('end_ts', 'int'),
+      ('src_tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH'),
+      ('src_tenant_id', 'int'),
+      ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+      ('import_all', 'bool'),
+      ('db_list', 'longtext', 'true', ''),
+      ('hex_db_list', 'longtext', 'true', ''),
+      ('table_list', 'longtext', 'true', ''),
+      ('hex_table_list', 'longtext', 'true', ''),
+      ('partition_list', 'longtext', 'true', ''),
+      ('hex_partition_list', 'longtext', 'true', ''),
+      ('remap_db_list', 'longtext', 'true', ''),
+      ('hex_remap_db_list', 'longtext', 'true', ''),
+      ('remap_table_list', 'longtext', 'true', ''),
+      ('hex_remap_table_list', 'longtext', 'true', ''),
+      ('remap_partition_list', 'longtext', 'true', ''),
+      ('hex_remap_partition_list', 'longtext', 'true', ''),
+      ('remap_tablegroup_list', 'longtext', 'true', ''),
+      ('hex_remap_tablegroup_list', 'longtext', 'true', ''),
+      ('remap_tablespace_list', 'longtext', 'true', ''),
+      ('hex_remap_tablespace_list', 'longtext', 'true', ''),
+      ('total_table_count', 'int'),
+      ('finished_table_count', 'int'),
+      ('failed_table_count', 'int'),
+      ('total_bytes', 'int'),
+      ('finished_bytes', 'int'),
+      ('failed_bytes', 'int'),
+      ('result', 'varchar:OB_DEFAULT_STATUS_LENTH', 'true', ''),
+      ('comment', 'longtext', 'true', ''),
+      ('description', 'longtext', 'true', ''),
+  ],
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name    = '__all_import_table_job_history',
+  table_id      = '478',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('job_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+      ('initiator_tenant_id', 'int'),
+      ('initiator_job_id', 'int'),
+      ('start_ts', 'int'),
+      ('end_ts', 'int'),
+      ('src_tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH'),
+      ('src_tenant_id', 'int'),
+      ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+      ('import_all', 'bool'),
+      ('db_list', 'longtext', 'true', ''),
+      ('hex_db_list', 'longtext', 'true', ''),
+      ('table_list', 'longtext', 'true', ''),
+      ('hex_table_list', 'longtext', 'true', ''),
+      ('partition_list', 'longtext', 'true', ''),
+      ('hex_partition_list', 'longtext', 'true', ''),
+      ('remap_db_list', 'longtext', 'true', ''),
+      ('hex_remap_db_list', 'longtext', 'true', ''),
+      ('remap_table_list', 'longtext', 'true', ''),
+      ('hex_remap_table_list', 'longtext', 'true', ''),
+      ('remap_partition_list', 'longtext', 'true', ''),
+      ('hex_remap_partition_list', 'longtext', 'true', ''),
+      ('remap_tablegroup_list', 'longtext', 'true', ''),
+      ('hex_remap_tablegroup_list', 'longtext', 'true', ''),
+      ('remap_tablespace_list', 'longtext', 'true', ''),
+      ('hex_remap_tablespace_list', 'longtext', 'true', ''),
+      ('total_table_count', 'int'),
+      ('finished_table_count', 'int'),
+      ('failed_table_count', 'int'),
+      ('total_bytes', 'int'),
+      ('finished_bytes', 'int'),
+      ('failed_bytes', 'int'),
+      ('result', 'varchar:OB_DEFAULT_STATUS_LENTH', 'true', ''),
+      ('comment', 'longtext', 'true', ''),
+      ('description', 'longtext', 'true', ''),
+  ],
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name    = '__all_import_table_task',
+  table_id      = '479',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('task_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+      ('job_id', 'int'),
+      ('src_tenant_id', 'int'),
+      ('src_tablespace', 'varchar:OB_MAX_TABLESPACE_NAME_LENGTH', 'true', ''),
+      ('src_tablegroup', 'varchar:OB_MAX_TABLEGROUP_NAME_LENGTH', 'true', ''),
+      ('src_database', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'true', ''),
+      ('src_table', 'varchar:OB_MAX_USER_TABLE_NAME_LENGTH_ORACLE', 'true', ''),
+      ('src_partition', 'varchar:OB_MAX_PARTITION_NAME_LENGTH', 'true', ''),
+      ('target_tablespace', 'varchar:OB_MAX_TABLESPACE_NAME_LENGTH', 'true', ''),
+      ('target_tablegroup', 'varchar:OB_MAX_TABLEGROUP_NAME_LENGTH', 'true', ''),
+      ('target_database', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'true', ''),
+      ('target_table', 'varchar:OB_MAX_USER_TABLE_NAME_LENGTH_ORACLE', 'true', ''),
+      ('table_column', 'int'),
+      ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+      ('start_ts', 'int'),
+      ('completion_ts', 'int'),
+      ('cumulative_ts', 'int'),
+      ('total_bytes', 'int'),
+      ('total_rows', 'int'),
+      ('imported_bytes', 'int'),
+      ('imported_rows', 'int'),
+      ('total_index_count', 'int'),
+      ('imported_index_count', 'int'),
+      ('failed_index_count', 'int'),
+      ('total_constraint_count', 'int'),
+      ('imported_constraint_count', 'int'),
+      ('failed_constraint_count', 'int'),
+      ('total_ref_constraint_count', 'int'),
+      ('imported_ref_constraint_count', 'int'),
+      ('failed_ref_constraint_count', 'int'),
+      ('total_trigger_count', 'int'),
+      ('imported_trigger_count', 'int'),
+      ('failed_trigger_count', 'int'),
+      ('result', 'varchar:OB_DEFAULT_STATUS_LENTH', 'true', ''),
+      ('comment', 'longtext', 'true', ''),
+  ],
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name    = '__all_import_table_task_history',
+  table_id      = '480',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('task_id', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+      ('job_id', 'int'),
+      ('src_tenant_id', 'int'),
+      ('src_tablespace', 'varchar:OB_MAX_TABLESPACE_NAME_LENGTH', 'true', ''),
+      ('src_tablegroup', 'varchar:OB_MAX_TABLEGROUP_NAME_LENGTH', 'true', ''),
+      ('src_database', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'true', ''),
+      ('src_table', 'varchar:OB_MAX_USER_TABLE_NAME_LENGTH_ORACLE', 'true', ''),
+      ('src_partition', 'varchar:OB_MAX_PARTITION_NAME_LENGTH', 'true', ''),
+      ('target_tablespace', 'varchar:OB_MAX_TABLESPACE_NAME_LENGTH', 'true', ''),
+      ('target_tablegroup', 'varchar:OB_MAX_TABLEGROUP_NAME_LENGTH', 'true', ''),
+      ('target_database', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'true', ''),
+      ('target_table', 'varchar:OB_MAX_USER_TABLE_NAME_LENGTH_ORACLE', 'true', ''),
+      ('table_column', 'int'),
+      ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+      ('start_ts', 'int'),
+      ('completion_ts', 'int'),
+      ('cumulative_ts', 'int'),
+      ('total_bytes', 'int'),
+      ('total_rows', 'int'),
+      ('imported_bytes', 'int'),
+      ('imported_rows', 'int'),
+      ('total_index_count', 'int'),
+      ('imported_index_count', 'int'),
+      ('failed_index_count', 'int'),
+      ('total_constraint_count', 'int'),
+      ('imported_constraint_count', 'int'),
+      ('failed_constraint_count', 'int'),
+      ('total_ref_constraint_count', 'int'),
+      ('imported_ref_constraint_count', 'int'),
+      ('failed_ref_constraint_count', 'int'),
+      ('total_trigger_count', 'int'),
+      ('imported_trigger_count', 'int'),
+      ('failed_trigger_count', 'int'),
+      ('result', 'varchar:OB_DEFAULT_STATUS_LENTH', 'true', ''),
+      ('comment', 'longtext', 'true', ''),
+  ],
+)
+
 # 481 : __all_import_stmt_exec_history
 # 482 : __all_tablet_reorganize_history
 
 #
 # 余留位置
-
 ################################################################################
 
 
@@ -8175,7 +8573,22 @@ def_table_schema(
     vtable_route_policy = 'distributed',
 )
 
-#11102 __virtual_show_restore_preview abandoned on 4.0
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name     = '__tenant_virtual_show_restore_preview',
+  table_id       = '11102',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+  ],
+
+  normal_columns = [
+    ('backup_type', 'varchar:20'),
+    ('backup_id', 'int'),
+    ('backup_dest', 'varchar:OB_MAX_BACKUP_DEST_LENGTH', 'true'),
+    ('description', 'varchar:OB_MAX_BACKUP_DEST_LENGTH', 'true'),
+  ],
+)
 
 def_table_schema(
   owner = 'sean.yyj',
@@ -10972,6 +11385,7 @@ def_table_schema(
   rowkey_columns = [
   ],
 
+  in_tenant_space = True,
   normal_columns = [
   ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
   ('svr_port', 'int'),
@@ -11505,8 +11919,17 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12326: __all_virtual_kv_ttl_task
-# 12327: __all_virtual_kv_ttl_task_history
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12326',
+  table_name = '__all_virtual_kv_ttl_task',
+  keywords = all_def_keywords['__all_kv_ttl_task'],
+  in_tenant_space=True))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12327',
+  table_name = '__all_virtual_kv_ttl_task_history',
+  keywords = all_def_keywords['__all_kv_ttl_task_history'],
+  in_tenant_space=True))
 
 # 12328: __all_virtual_tenant_datafile
 # 12329: __all_virtual_tenant_datafile_history
@@ -12473,8 +12896,6 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12418: __all_virtual_cgroup_info
 # 12419: __all_virtual_cgroup_config
 
-# 12420: __all_virtual_flt_config
-
 def_table_schema(
   owner = 'guoyun.lgy',
   table_name = '__all_virtual_flt_config',
@@ -12495,14 +12916,46 @@ def_table_schema(
   ('record_policy', 'varchar:32')
   ]
 )
-# 12421: __all_virtual_tenant_scheduler_job_class
 
-# 12422: __all_virtual_recover_table_job
-# 12423: __all_virtual_recover_table_job_history
-# 12424: __all_virtual_import_table_job
-# 12425: __all_virtual_import_table_job_history
-# 12426: __all_virtual_import_table_task
-# 12427: __all_virtual_import_table_task_history
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12421',
+  table_name = '__all_virtual_tenant_scheduler_job_class',
+  keywords = all_def_keywords['__all_tenant_scheduler_job_class']))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12422',
+  table_name = '__all_virtual_recover_table_job',
+  keywords = all_def_keywords['__all_recover_table_job'],
+  in_tenant_space = True))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12423',
+  table_name = '__all_virtual_recover_table_job_history',
+  keywords = all_def_keywords['__all_recover_table_job_history'],
+  in_tenant_space = True))
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12424',
+  table_name = '__all_virtual_import_table_job',
+  keywords = all_def_keywords['__all_import_table_job'],
+  in_tenant_space = True))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12425',
+  table_name = '__all_virtual_import_table_job_history',
+  keywords = all_def_keywords['__all_import_table_job_history'],
+  in_tenant_space = True))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12426',
+  table_name = '__all_virtual_import_table_task',
+  keywords = all_def_keywords['__all_import_table_task'],
+  in_tenant_space = True))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12427',
+  table_name = '__all_virtual_import_table_task_history',
+  keywords = all_def_keywords['__all_import_table_task_history'],
+  in_tenant_space = True))
 # 12428: __all_virtual_import_stmt_exec_history
 
 # 12429: __all_virtual_data_activity_metrics
@@ -12879,7 +13332,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15388'
 # 15394: __all_mview_refresh_stats
 # 15395: __all_mview_refresh_change_stats
 # 15396: __all_mview_refresh_stmt_stats
-# 15397: __all_dbms_lock_allocated
+def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15397', all_def_keywords['__all_dbms_lock_allocated'])))
 # 15398: __all_virtual_wr_control
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15398', all_def_keywords['__all_virtual_wr_control'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15399', all_def_keywords['__all_virtual_tenant_event_history']))
@@ -12892,20 +13345,19 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15402', all_def_ke
 # 15403: __all_virtual_flt_config
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15403', all_def_keywords['__all_virtual_flt_config'])))
 
-# 15404: __all_virtual_tenant_scheduler_job_run_detail
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15404', all_def_keywords['__all_tenant_scheduler_job_run_detail']))
 
 # 15405: __all_virtual_session_info
 
-# 15406: __all_virtual_tenant_scheduler_job_class
-
-# 15407: __all_virtual_recover_table_job
-# 15408: __all_virtual_recover_table_job_history
-# 15409: __all_virtual_import_table_job
-# 15410: __all_virtual_import_table_job_history
-# 15411: __all_virtual_import_table_task
-# 15412: __all_virtual_import_table_task_history
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15406', all_def_keywords['__all_tenant_scheduler_job_class']))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15407', all_def_keywords['__all_virtual_recover_table_job'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15408', all_def_keywords['__all_virtual_recover_table_job_history'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15409', all_def_keywords['__all_virtual_import_table_job'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15410', all_def_keywords['__all_virtual_import_table_job_history'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15411', all_def_keywords['__all_virtual_import_table_task'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15412', all_def_keywords['__all_virtual_import_table_task_history'])))
 # 15413: __all_virtual_import_stmt_exec_history
-# 15414: __all_virtual_ls_info
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keywords['__all_virtual_ls_info']))
 # 15415: idx_dbms_lock_allocated_lockhandle_real_agent
 # 15416: idx_dbms_lock_allocated_expiration_real_agent
 
@@ -24321,8 +24773,89 @@ def_table_schema(
   """.replace("\n", " "),
 )
 
-# 21300:  DBA_OB_KV_TTL_TASKS
-# 21301:  DBA_OB_KV_TTL_TASK_HISTORY
+def_table_schema(
+  owner           = 'shenyunlong.syl',
+  table_name      = 'DBA_OB_KV_TTL_TASKS',
+  table_id        = '21300',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.tablet_id as TABLET_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as END_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC"
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 0 then "PREPARED"
+        when 1 then "RUNNING"
+        when 2 then "PENDING"
+        when 3 then "CANCELED"
+        when 4 then "FINISHED"
+        when 5 then "MOVED"
+        when 15 then "RS_TRIGGERING"
+        when 16 then "RS_SUSPENDING"
+        when 17 then "RS_CANCELING"
+        when 18 then "RS_MOVING"
+        when 47 then "RS_TRIGGERD"
+        when 48 then "RS_SUSPENDED"
+        when 49 then "RS_CANCELED"
+        when 50 then "RS_MOVED"
+        else "INVALID" END AS STATUS,
+      a.ttl_del_cnt as TTL_DEL_CNT,
+      a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
+      a.scan_cnt as SCAN_CNT,
+      a.ret_code as RET_CODE
+      FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_table b on
+          a.table_id = b.table_id and a.tenant_id = effective_tenant_id()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'shenyunlong.syl',
+  table_name      = 'DBA_OB_KV_TTL_TASK_HISTORY',
+  table_id        = '21301',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.tablet_id as TABLET_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as END_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC"
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 0 then "PREPARED"
+        when 1 then "RUNNING"
+        when 2 then "PENDING"
+        when 3 then "CANCELED"
+        when 4 then "FINISHED"
+        when 5 then "MOVED"
+        else "INVALID" END AS STATUS,
+      a.ttl_del_cnt as TTL_DEL_CNT,
+      a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
+      a.scan_cnt as SCAN_CNT,
+      a.ret_code as RET_CODE
+      FROM oceanbase.__all_virtual_kv_ttl_task_history a left outer JOIN oceanbase.__all_table b on
+          a.table_id = b.table_id and a.tenant_id = effective_tenant_id()
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner = 'xianlin.lh',
@@ -24456,8 +24989,89 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-# 21307: CDB_OB_KV_TTL_TASKS
-# 21308: CDB_OB_KV_TTL_TASK_HISTORY
+def_table_schema(
+  owner = 'shenyunlong.syl',
+  table_name      = 'CDB_OB_KV_TTL_TASKS',
+  table_id        = '21307',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+      a.tenant_id as TENANT_ID,
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.tablet_id as TABLET_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as END_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC"
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 0 then "PREPARED"
+        when 1 then "RUNNING"
+        when 2 then "PENDING"
+        when 3 then "CANCELED"
+        when 4 then "FINISHED"
+        when 5 then "MOVED"
+        when 15 then "RS_TRIGGERING"
+        when 16 then "RS_SUSPENDING"
+        when 17 then "RS_CANCELING"
+        when 18 then "RS_MOVING"
+        when 47 then "RS_TRIGGERD"
+        when 48 then "RS_SUSPENDED"
+        when 49 then "RS_CANCELED"
+        when 50 then "RS_MOVED"
+        else "INVALID" END AS STATUS,
+      a.ttl_del_cnt as TTL_DEL_CNT,
+      a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
+      a.scan_cnt as SCAN_CNT,
+      a.ret_code as RET_CODE
+      FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_virtual_table b on
+          a.table_id = b.table_id and a.tenant_id = b.tenant_id
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'shenyunlong.syl',
+  table_name      = 'CDB_OB_KV_TTL_TASK_HISTORY',
+  table_id        = '21308',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+      a.tenant_id as TENANT_ID,
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.tablet_id as TABLET_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as END_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC"
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 0 then "PREPARED"
+        when 1 then "RUNNING"
+        when 2 then "PENDING"
+        when 3 then "CANCELED"
+        when 4 then "FINISHED"
+        when 5 then "MOVED"
+        else "INVALID" END AS STATUS,
+      a.ttl_del_cnt as TTL_DEL_CNT,
+      a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
+      a.scan_cnt as SCAN_CNT,
+      a.ret_code as RET_CODE
+      FROM oceanbase.__all_virtual_kv_ttl_task_history a left outer JOIN oceanbase.__all_virtual_table b on
+          a.table_id = b.table_id and a.tenant_id = b.tenant_id
+""".replace("\n", " ")
+)
 
 # 21309: CDB_OB_DATAFILE
 # 21310: DBA_OB_DATAFILE
@@ -27477,20 +28091,19 @@ def_table_schema(
     SVR_PORT AS SVR_PORT,
     TENANT_ID AS TENANT_ID,
     TRANS_ID AS TRANS_ID,
-    CASE TYPE WHEN 1 THEN 'TR'
-              WHEN 2 THEN 'TX'
-              WHEN 3 THEN 'TM'
-              ELSE 'UNDEFINED' END
+    CASE WHEN TYPE = 1 THEN 'TR'
+         WHEN TYPE = 2 THEN 'TX'
+         WHEN TYPE = 3 THEN 'TM'
+         ELSE 'UNDEFINED' END
     AS TYPE,
-    CASE TYPE WHEN 1 THEN TABLET_ID
-              WHEN 2 THEN HOLDER_TRANS_ID
-              WHEN 3 THEN (SELECT DISTINCT OBJ_ID FROM oceanbase.__ALL_VIRTUAL_OBJ_LOCK WHERE oceanbase.__ALL_VIRTUAL_OBJ_LOCK.LOCK_ID = oceanbase.__ALL_VIRTUAL_LOCK_WAIT_STAT.ROWKEY)
-              ELSE -1 END
+    CASE WHEN TYPE = 1 THEN TABLET_ID
+         WHEN TYPE = 2 THEN HOLDER_TRANS_ID
+         WHEN TYPE = 3 THEN (SELECT DISTINCT OBJ_ID FROM oceanbase.__ALL_VIRTUAL_OBJ_LOCK WHERE oceanbase.__ALL_VIRTUAL_OBJ_LOCK.LOCK_ID = oceanbase.__ALL_VIRTUAL_LOCK_WAIT_STAT.ROWKEY)
+         ELSE -1 END
     AS ID1,
-    CASE TYPE WHEN 1 THEN CONCAT(CONCAT(HOLDER_TRANS_ID, '-'), ROWKEY)
-              WHEN 2 THEN NULL
-              WHEN 3 THEN NULL
-              ELSE 'ERROR' END
+    CASE WHEN TYPE = 1 THEN CONCAT(CONCAT(HOLDER_TRANS_ID, '-'), ROWKEY)
+         WHEN TYPE = 2 OR TYPE = 3 THEN NULL
+         ELSE 'ERROR' END
     AS ID2,
     'NONE' AS LMODE,
     LOCK_MODE AS REQUEST,
@@ -27574,20 +28187,33 @@ def_table_schema(
     UNION ALL
 
     SELECT
-    SVR_IP AS SVR_IP,
-    SVR_PORT AS SVR_PORT,
-    TENANT_ID AS TENANT_ID,
-    CREATE_TRANS_ID AS TRANS_ID,
-    'TM' AS TYPE,
-    OBJ_ID AS ID1,
+    OBJ_LOCK.SVR_IP AS SVR_IP,
+    OBJ_LOCK.SVR_PORT AS SVR_PORT,
+    OBJ_LOCK.TENANT_ID AS TENANT_ID,
+    OBJ_LOCK.CREATE_TRANS_ID AS TRANS_ID,
+    CASE WHEN OBJ_LOCK.OBJ_TYPE IN ('TABLE', 'TABLET') THEN 'TM'
+         WHEN OBJ_LOCK.OBJ_TYPE = 'DBMS_LOCK' THEN 'UL'
+         ELSE 'UNKONWN' END
+    AS TYPE,
+    OBJ_LOCK.OBJ_ID AS ID1,
     NULL AS ID2,
-    LOCK_MODE AS LMODE,
+    OBJ_LOCK.LOCK_MODE AS LMODE,
     'NONE' AS REQUEST,
-    TIME_AFTER_CREATE AS CTIME,
+    OBJ_LOCK.TIME_AFTER_CREATE AS CTIME,
     0 AS BLOCK
     FROM
-    oceanbase.__ALL_VIRTUAL_OBJ_LOCK
-    WHERE (OBJ_TYPE = 'TABLE' OR OBJ_TYPE = 'TABLET') AND EXTRA_INFO LIKE '%tx_ctx%'
+    oceanbase.__ALL_VIRTUAL_OBJ_LOCK AS OBJ_LOCK
+    INNER JOIN
+    oceanbase.__ALL_VIRTUAL_LS_INFO AS LS_INFO
+    ON
+    OBJ_LOCK.SVR_IP = LS_INFO.SVR_IP AND
+    OBJ_LOCK.SVR_PORT = LS_INFO.SVR_PORT AND
+    OBJ_LOCK.TENANT_ID = LS_INFO.TENANT_ID AND
+    OBJ_LOCK.LS_ID = LS_INFO.LS_ID
+    WHERE
+    OBJ_LOCK.OBJ_TYPE IN ('TABLE', 'TABLET', 'DBMS_LOCK') AND
+    OBJ_LOCK.EXTRA_INFO LIKE '%tx_ctx%' AND
+    LS_INFO.LS_STATE = 'LEADER'
 """.replace("\n", " ")
 )
 def_table_schema(
@@ -28633,18 +29259,532 @@ def_table_schema(
 # 21461: GV$OB_PL_CACHE_OBJECT
 # 21462: V$OB_PL_CACHE_OBJECT
 
-# 21463: CDB_OB_RECOVER_TABLE_JOBS
-# 21464: DBA_OB_RECOVER_TABLE_JOBS
-# 21465: CDB_OB_RECOVER_TABLE_JOB_HISTORY
-# 21466: DBA_OB_RECOVER_TABLE_JOB_HISTORY
-# 21467: CDB_OB_IMPORT_TABLE_JOBS
-# 21468: DBA_OB_IMPORT_TABLE_JOBS
-# 21469: CDB_OB_IMPORT_TABLE_JOB_HISTORY
-# 21470: DBA_OB_IMPORT_TABLE_JOB_HISTORY
-# 21471: CDB_OB_IMPORT_TABLE_TASKS
-# 21472: DBA_OB_IMPORT_TABLE_TASKS
-# 21473: CDB_OB_IMPORT_TABLE_TASK_HISTORY
-# 21474: DBA_OB_IMPORT_TABLE_TASK_HISTORY
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'CDB_OB_RECOVER_TABLE_JOBS',
+  table_id        = '21463',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+    TENANT_ID,
+    JOB_ID,
+    INITIATOR_TENANT_ID,
+    INITIATOR_JOB_ID,
+    USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+    CASE
+      WHEN END_TS = 0
+        THEN NULL
+      ELSE
+        USEC_TO_TIME(END_TS)
+      END AS FINISH_TIMESTAMP,
+    STATUS,
+    AUX_TENANT_NAME,
+    TARGET_TENANT_NAME,
+    IMPORT_ALL,
+    DB_LIST,
+    TABLE_LIST,
+    RESTORE_SCN,
+    CASE
+      WHEN RESTORE_SCN = 0
+        THEN NULL
+      ELSE
+        SCN_TO_TIMESTAMP(RESTORE_SCN)
+      END AS RESTORE_SCN_DISPLAY,
+    RESTORE_OPTION,
+    BACKUP_DEST,
+    BACKUP_SET_LIST,
+    BACKUP_PIECE_LIST,
+    BACKUP_PASSWD,
+    EXTERNAL_KMS_INFO,
+    REMAP_DB_LIST,
+    REMAP_TABLE_LIST,
+    REMAP_TABLEGROUP_LIST,
+    REMAP_TABLESPACE_LIST,
+    RESULT,
+    COMMENT,
+    DESCRIPTION
+    FROM OCEANBASE.__ALL_VIRTUAL_RECOVER_TABLE_JOB;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'DBA_OB_RECOVER_TABLE_JOBS',
+  table_id        = '21464',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+    JOB_ID,
+    INITIATOR_TENANT_ID,
+    INITIATOR_JOB_ID,
+    USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+    CASE
+      WHEN END_TS = 0
+        THEN NULL
+      ELSE
+        USEC_TO_TIME(END_TS)
+      END AS FINISH_TIMESTAMP,
+    STATUS,
+    AUX_TENANT_NAME,
+    TARGET_TENANT_NAME,
+    IMPORT_ALL,
+    DB_LIST,
+    TABLE_LIST,
+    RESTORE_SCN,
+    CASE
+      WHEN RESTORE_SCN = 0
+        THEN NULL
+      ELSE
+        SCN_TO_TIMESTAMP(RESTORE_SCN)
+      END AS RESTORE_SCN_DISPLAY,
+    RESTORE_OPTION,
+    BACKUP_DEST,
+    BACKUP_SET_LIST,
+    BACKUP_PIECE_LIST,
+    BACKUP_PASSWD,
+    EXTERNAL_KMS_INFO,
+    REMAP_DB_LIST,
+    REMAP_TABLE_LIST,
+    REMAP_TABLEGROUP_LIST,
+    REMAP_TABLESPACE_LIST,
+    RESULT,
+    COMMENT,
+    DESCRIPTION
+    FROM OCEANBASE.__ALL_VIRTUAL_RECOVER_TABLE_JOB
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'CDB_OB_RECOVER_TABLE_JOB_HISTORY',
+  table_id        = '21465',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+    TENANT_ID,
+    JOB_ID,
+    INITIATOR_TENANT_ID,
+    INITIATOR_JOB_ID,
+    USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+    USEC_TO_TIME(END_TS) AS FINISH_TIMESTAMP,
+    STATUS,
+    AUX_TENANT_NAME,
+    TARGET_TENANT_NAME,
+    IMPORT_ALL,
+    DB_LIST,
+    TABLE_LIST,
+    RESTORE_SCN,
+    CASE
+      WHEN RESTORE_SCN = 0
+        THEN NULL
+      ELSE
+        SCN_TO_TIMESTAMP(RESTORE_SCN)
+      END AS RESTORE_SCN_DISPLAY,
+    RESTORE_OPTION,
+    BACKUP_DEST,
+    BACKUP_SET_LIST,
+    BACKUP_PIECE_LIST,
+    BACKUP_PASSWD,
+    EXTERNAL_KMS_INFO,
+    REMAP_DB_LIST,
+    REMAP_TABLE_LIST,
+    REMAP_TABLEGROUP_LIST,
+    REMAP_TABLESPACE_LIST,
+    RESULT,
+    COMMENT,
+    DESCRIPTION
+    FROM OCEANBASE.__ALL_VIRTUAL_RECOVER_TABLE_JOB_HISTORY;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'DBA_OB_RECOVER_TABLE_JOB_HISTORY',
+  table_id        = '21466',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+    JOB_ID,
+    INITIATOR_TENANT_ID,
+    INITIATOR_JOB_ID,
+    USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+    USEC_TO_TIME(END_TS) AS FINISH_TIMESTAMP,
+    STATUS,
+    AUX_TENANT_NAME,
+    TARGET_TENANT_NAME,
+    IMPORT_ALL,
+    DB_LIST,
+    TABLE_LIST,
+    RESTORE_SCN,
+    CASE
+      WHEN RESTORE_SCN = 0
+        THEN NULL
+      ELSE
+        SCN_TO_TIMESTAMP(RESTORE_SCN)
+      END AS RESTORE_SCN_DISPLAY,
+    RESTORE_OPTION,
+    BACKUP_DEST,
+    BACKUP_SET_LIST,
+    BACKUP_PIECE_LIST,
+    BACKUP_PASSWD,
+    EXTERNAL_KMS_INFO,
+    REMAP_DB_LIST,
+    REMAP_TABLE_LIST,
+    REMAP_TABLEGROUP_LIST,
+    REMAP_TABLESPACE_LIST,
+    RESULT,
+    COMMENT,
+    DESCRIPTION
+    FROM OCEANBASE.__ALL_VIRTUAL_RECOVER_TABLE_JOB_HISTORY
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'CDB_OB_IMPORT_TABLE_JOBS',
+  table_id        = '21467',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+    TENANT_ID,
+    JOB_ID,
+    INITIATOR_TENANT_ID,
+    INITIATOR_JOB_ID,
+    USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+    CASE
+      WHEN END_TS = 0
+        THEN NULL
+      ELSE
+        USEC_TO_TIME(END_TS)
+      END AS FINISH_TIMESTAMP,
+    SRC_TENANT_NAME,
+    SRC_TENANT_ID,
+    STATUS,
+    IMPORT_ALL,
+    DB_LIST,
+    TABLE_LIST,
+    REMAP_DB_LIST,
+    REMAP_TABLE_LIST,
+    REMAP_TABLEGROUP_LIST,
+    REMAP_TABLESPACE_LIST,
+    TOTAL_TABLE_COUNT,
+    FINISHED_TABLE_COUNT,
+    FAILED_TABLE_COUNT,
+    RESULT,
+    COMMENT,
+    DESCRIPTION
+    FROM OCEANBASE.__ALL_VIRTUAL_IMPORT_TABLE_JOB;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'DBA_OB_IMPORT_TABLE_JOBS',
+  table_id        = '21468',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+    JOB_ID,
+    INITIATOR_TENANT_ID,
+    INITIATOR_JOB_ID,
+    USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+    CASE
+      WHEN END_TS = 0
+        THEN NULL
+      ELSE
+        USEC_TO_TIME(END_TS)
+      END AS FINISH_TIMESTAMP,
+    SRC_TENANT_NAME,
+    SRC_TENANT_ID,
+    STATUS,
+    IMPORT_ALL,
+    DB_LIST,
+    TABLE_LIST,
+    REMAP_DB_LIST,
+    REMAP_TABLE_LIST,
+    REMAP_TABLEGROUP_LIST,
+    REMAP_TABLESPACE_LIST,
+    TOTAL_TABLE_COUNT,
+    FINISHED_TABLE_COUNT,
+    FAILED_TABLE_COUNT,
+    RESULT,
+    COMMENT,
+    DESCRIPTION
+    FROM OCEANBASE.__ALL_VIRTUAL_IMPORT_TABLE_JOB
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'CDB_OB_IMPORT_TABLE_JOB_HISTORY',
+  table_id        = '21469',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+    TENANT_ID,
+    JOB_ID,
+    INITIATOR_TENANT_ID,
+    INITIATOR_JOB_ID,
+    USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+    USEC_TO_TIME(END_TS) AS FINISH_TIMESTAMP,
+    SRC_TENANT_NAME,
+    SRC_TENANT_ID,
+    STATUS,
+    IMPORT_ALL,
+    DB_LIST,
+    TABLE_LIST,
+    REMAP_DB_LIST,
+    REMAP_TABLE_LIST,
+    REMAP_TABLEGROUP_LIST,
+    REMAP_TABLESPACE_LIST,
+    TOTAL_TABLE_COUNT,
+    FINISHED_TABLE_COUNT,
+    FAILED_TABLE_COUNT,
+    RESULT,
+    COMMENT,
+    DESCRIPTION
+    FROM OCEANBASE.__ALL_VIRTUAL_IMPORT_TABLE_JOB_HISTORY;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'DBA_OB_IMPORT_TABLE_JOB_HISTORY',
+  table_id        = '21470',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+    JOB_ID,
+    INITIATOR_TENANT_ID,
+    INITIATOR_JOB_ID,
+    USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+    USEC_TO_TIME(END_TS) AS FINISH_TIMESTAMP,
+    SRC_TENANT_NAME,
+    SRC_TENANT_ID,
+    STATUS,
+    IMPORT_ALL,
+    DB_LIST,
+    TABLE_LIST,
+    REMAP_DB_LIST,
+    REMAP_TABLE_LIST,
+    REMAP_TABLEGROUP_LIST,
+    REMAP_TABLESPACE_LIST,
+    TOTAL_TABLE_COUNT,
+    FINISHED_TABLE_COUNT,
+    FAILED_TABLE_COUNT,
+    RESULT,
+    COMMENT,
+    DESCRIPTION
+    FROM OCEANBASE.__ALL_VIRTUAL_IMPORT_TABLE_JOB_HISTORY
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'CDB_OB_IMPORT_TABLE_TASKS',
+  table_id        = '21471',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+    TENANT_ID,
+    TASK_ID,
+    JOB_ID,
+    SRC_TENANT_ID,
+    SRC_TABLESPACE,
+    SRC_TABLEGROUP,
+    SRC_DATABASE,
+    SRC_TABLE,
+    SRC_PARTITION,
+    TARGET_TABLESPACE,
+    TARGET_TABLEGROUP,
+    TARGET_DATABASE,
+    TARGET_TABLE,
+    TABLE_COLUMN,
+    STATUS,
+    USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+    USEC_TO_TIME(COMPLETION_TS) AS COMPLETION_TIMESTAMP,
+    CUMULATIVE_TS,
+    TOTAL_INDEX_COUNT,
+    IMPORTED_INDEX_COUNT,
+    FAILED_INDEX_COUNT,
+    TOTAL_CONSTRAINT_COUNT,
+    IMPORTED_CONSTRAINT_COUNT,
+    FAILED_CONSTRAINT_COUNT,
+    TOTAL_REF_CONSTRAINT_COUNT,
+    IMPORTED_REF_CONSTRAINT_COUNT,
+    FAILED_REF_CONSTRAINT_COUNT,
+    RESULT,
+    COMMENT
+    FROM OCEANBASE.__ALL_VIRTUAL_IMPORT_TABLE_TASK;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'DBA_OB_IMPORT_TABLE_TASKS',
+  table_id        = '21472',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+    TASK_ID,
+    JOB_ID,
+    SRC_TENANT_ID,
+    SRC_TABLESPACE,
+    SRC_TABLEGROUP,
+    SRC_DATABASE,
+    SRC_TABLE,
+    SRC_PARTITION,
+    TARGET_TABLESPACE,
+    TARGET_TABLEGROUP,
+    TARGET_DATABASE,
+    TARGET_TABLE,
+    TABLE_COLUMN,
+    STATUS,
+    USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+    USEC_TO_TIME(COMPLETION_TS) AS COMPLETION_TIMESTAMP,
+    CUMULATIVE_TS,
+    TOTAL_INDEX_COUNT,
+    IMPORTED_INDEX_COUNT,
+    FAILED_INDEX_COUNT,
+    TOTAL_CONSTRAINT_COUNT,
+    IMPORTED_CONSTRAINT_COUNT,
+    FAILED_CONSTRAINT_COUNT,
+    TOTAL_REF_CONSTRAINT_COUNT,
+    IMPORTED_REF_CONSTRAINT_COUNT,
+    FAILED_REF_CONSTRAINT_COUNT,
+    RESULT,
+    COMMENT
+    FROM OCEANBASE.__ALL_VIRTUAL_IMPORT_TABLE_TASK
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'CDB_OB_IMPORT_TABLE_TASK_HISTORY',
+  table_id        = '21473',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+    TENANT_ID,
+    TASK_ID,
+    JOB_ID,
+    SRC_TENANT_ID,
+    SRC_TABLESPACE,
+    SRC_TABLEGROUP,
+    SRC_DATABASE,
+    SRC_TABLE,
+    SRC_PARTITION,
+    TARGET_TABLESPACE,
+    TARGET_TABLEGROUP,
+    TARGET_DATABASE,
+    TARGET_TABLE,
+    TABLE_COLUMN,
+    STATUS,
+    USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+    USEC_TO_TIME(COMPLETION_TS) AS COMPLETION_TIMESTAMP,
+    CUMULATIVE_TS,
+    TOTAL_INDEX_COUNT,
+    IMPORTED_INDEX_COUNT,
+    FAILED_INDEX_COUNT,
+    TOTAL_CONSTRAINT_COUNT,
+    IMPORTED_CONSTRAINT_COUNT,
+    FAILED_CONSTRAINT_COUNT,
+    TOTAL_REF_CONSTRAINT_COUNT,
+    IMPORTED_REF_CONSTRAINT_COUNT,
+    FAILED_REF_CONSTRAINT_COUNT,
+    RESULT,
+    COMMENT
+    FROM OCEANBASE.__ALL_VIRTUAL_IMPORT_TABLE_TASK_HISTORY;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'DBA_OB_IMPORT_TABLE_TASK_HISTORY',
+  table_id        = '21474',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+    TASK_ID,
+    JOB_ID,
+    SRC_TENANT_ID,
+    SRC_TABLESPACE,
+    SRC_TABLEGROUP,
+    SRC_DATABASE,
+    SRC_TABLE,
+    SRC_PARTITION,
+    TARGET_TABLESPACE,
+    TARGET_TABLEGROUP,
+    TARGET_DATABASE,
+    TARGET_TABLE,
+    TABLE_COLUMN,
+    STATUS,
+    USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+    USEC_TO_TIME(COMPLETION_TS) AS COMPLETION_TIMESTAMP,
+    CUMULATIVE_TS,
+    TOTAL_INDEX_COUNT,
+    IMPORTED_INDEX_COUNT,
+    FAILED_INDEX_COUNT,
+    TOTAL_CONSTRAINT_COUNT,
+    IMPORTED_CONSTRAINT_COUNT,
+    FAILED_CONSTRAINT_COUNT,
+    TOTAL_REF_CONSTRAINT_COUNT,
+    IMPORTED_REF_CONSTRAINT_COUNT,
+    FAILED_REF_CONSTRAINT_COUNT,
+    RESULT,
+    COMMENT
+    FROM OCEANBASE.__ALL_VIRTUAL_IMPORT_TABLE_TASK_HISTORY
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
 # 21475: CDB_OB_IMPORT_STMT_EXEC_HISTORY
 # 21476: DBA_OB_IMPORT_STMT_EXEC_HISTORY
 
@@ -46723,7 +47863,23 @@ JOIN SYS.ALL_VIRTUAL_OPTSTAT_GLOBAL_PREFS_REAL_AGENT GP
 # 25253: DBA_OB_MVIEW_REFRESH_STATS
 # 25254: DBA_OB_MVIEW_REFRESH_CHANGE_STATS
 # 25255: DBA_OB_MVIEW_REFRESH_STMT_STATS
-# 25256: DBMS_LOCK_ALLOCATED
+
+def_table_schema(
+  owner = 'yangyifei.yyf',
+  table_name      = 'DBMS_LOCK_ALLOCATED',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25256',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT NAME, LOCKID, EXPIRATION FROM SYS.ALL_VIRTUAL_DBMS_LOCK_ALLOCATED_REAL_AGENT
+""".replace("\n", " ")
+)
+
 # 25257: DBA_WR_CONTROL
 def_table_schema(
   owner           = 'jiajingzhe.jjz',
@@ -46818,15 +47974,319 @@ def_table_schema(
   """.replace("\n", " ")
 )
 
-# 25260: DBA_SCHEDULER_JOB_RUN_DETAILS
-# 25261: DBA_SCHEDULER_JOB_CLASSES
+def_table_schema(
+  owner = 'fyy280124',
+  table_name      = 'DBA_SCHEDULER_JOB_RUN_DETAILS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25260',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT * FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_RUN_DETAIL_REAL_AGENT T
+""".replace("\n", " ")
+)
 
-# 25262: DBA_OB_RECOVER_TABLE_JOBS
-# 25263: DBA_OB_RECOVER_TABLE_JOB_HISTORY
-# 25264: DBA_OB_IMPORT_TABLE_JOBS
-# 25265: DBA_OB_IMPORT_TABLE_JOB_HISTORY
-# 25266: DBA_OB_IMPORT_TABLE_TASKS
-# 25267: DBA_OB_IMPORT_TABLE_TASK_HISTORY
+def_table_schema(
+  owner           = 'huangrenhuang.hrh',
+  table_name      = 'DBA_SCHEDULER_JOB_CLASSES',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25261',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+    T.JOB_CLASS_NAME AS JOB_CLASS_NAME,
+    T.RESOURCE_CONSUMER_GROUP AS RESOURCE_CONSUMER_GROUP,
+    T.SERVICE AS SERVICE,
+    T.LOGGING_LEVEL AS LOGGING_LEVEL,
+    T.LOG_HISTORY AS LOG_HISTORY,
+    T.COMMENTS AS COMMENTS
+    FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_CLASS_REAL_AGENT T
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'DBA_OB_RECOVER_TABLE_JOBS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25262',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+    JOB_ID,
+    INITIATOR_TENANT_ID,
+    INITIATOR_JOB_ID,
+    TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
+    CASE
+      WHEN END_TS = 0
+        THEN NULL
+      ELSE
+        TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
+      END AS FINISH_TIMESTAMP,
+    STATUS,
+    AUX_TENANT_NAME,
+    TARGET_TENANT_NAME,
+    IMPORT_ALL,
+    DB_LIST,
+    TABLE_LIST,
+    RESTORE_SCN,
+    CASE
+      WHEN RESTORE_SCN = 0
+        THEN NULL
+      ELSE
+        SCN_TO_TIMESTAMP(RESTORE_SCN)
+      END AS RESTORE_SCN_DISPLAY,
+    RESTORE_OPTION,
+    BACKUP_DEST,
+    BACKUP_SET_LIST,
+    BACKUP_PIECE_LIST,
+    BACKUP_PASSWD,
+    EXTERNAL_KMS_INFO,
+    REMAP_DB_LIST,
+    REMAP_TABLE_LIST,
+    REMAP_TABLEGROUP_LIST,
+    REMAP_TABLESPACE_LIST,
+    RESULT,
+    "COMMENT",
+    DESCRIPTION
+    FROM SYS.ALL_VIRTUAL_RECOVER_TABLE_JOB
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'DBA_OB_RECOVER_TABLE_JOB_HISTORY',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25263',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+    JOB_ID,
+    INITIATOR_TENANT_ID,
+    INITIATOR_JOB_ID,
+    TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
+    TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS FINISH_TIMESTAMP,
+    STATUS,
+    AUX_TENANT_NAME,
+    TARGET_TENANT_NAME,
+    IMPORT_ALL,
+    DB_LIST,
+    TABLE_LIST,
+    RESTORE_SCN,
+    CASE
+      WHEN RESTORE_SCN = 0
+        THEN NULL
+      ELSE
+        SCN_TO_TIMESTAMP(RESTORE_SCN)
+      END AS RESTORE_SCN_DISPLAY,
+    RESTORE_OPTION,
+    BACKUP_DEST,
+    BACKUP_SET_LIST,
+    BACKUP_PIECE_LIST,
+    BACKUP_PASSWD,
+    EXTERNAL_KMS_INFO,
+    REMAP_DB_LIST,
+    REMAP_TABLE_LIST,
+    REMAP_TABLEGROUP_LIST,
+    REMAP_TABLESPACE_LIST,
+    RESULT,
+    "COMMENT",
+    DESCRIPTION
+    FROM SYS.ALL_VIRTUAL_RECOVER_TABLE_JOB_HISTORY
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'DBA_OB_IMPORT_TABLE_JOBS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25264',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+    JOB_ID,
+    INITIATOR_TENANT_ID,
+    INITIATOR_JOB_ID,
+    TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
+    CASE
+      WHEN END_TS = 0
+        THEN NULL
+      ELSE
+        TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
+      END AS FINISH_TIMESTAMP,
+    SRC_TENANT_NAME,
+    SRC_TENANT_ID,
+    STATUS,
+    IMPORT_ALL,
+    DB_LIST,
+    TABLE_LIST,
+    REMAP_DB_LIST,
+    REMAP_TABLE_LIST,
+    REMAP_TABLEGROUP_LIST,
+    REMAP_TABLESPACE_LIST,
+    TOTAL_TABLE_COUNT,
+    FINISHED_TABLE_COUNT,
+    FAILED_TABLE_COUNT,
+    RESULT,
+    "COMMENT",
+    DESCRIPTION
+    FROM SYS.ALL_VIRTUAL_IMPORT_TABLE_JOB
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'DBA_OB_IMPORT_TABLE_JOB_HISTORY',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25265',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+    JOB_ID,
+    INITIATOR_TENANT_ID,
+    INITIATOR_JOB_ID,
+    TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
+    TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS FINISH_TIMESTAMP,
+    SRC_TENANT_NAME,
+    SRC_TENANT_ID,
+    STATUS,
+    IMPORT_ALL,
+    DB_LIST,
+    TABLE_LIST,
+    REMAP_DB_LIST,
+    REMAP_TABLE_LIST,
+    REMAP_TABLEGROUP_LIST,
+    REMAP_TABLESPACE_LIST,
+    TOTAL_TABLE_COUNT,
+    FINISHED_TABLE_COUNT,
+    FAILED_TABLE_COUNT,
+    RESULT,
+    "COMMENT",
+    DESCRIPTION
+    FROM SYS.ALL_VIRTUAL_IMPORT_TABLE_JOB_HISTORY
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'DBA_OB_IMPORT_TABLE_TASKS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25266',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+    TASK_ID,
+    JOB_ID,
+    SRC_TENANT_ID,
+    SRC_TABLESPACE,
+    SRC_TABLEGROUP,
+    SRC_DATABASE,
+    SRC_TABLE,
+    SRC_PARTITION,
+    TARGET_TABLESPACE,
+    TARGET_TABLEGROUP,
+    TARGET_DATABASE,
+    TARGET_TABLE,
+    TABLE_COLUMN,
+    STATUS,
+    TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
+    TO_CHAR(COMPLETION_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS COMPLETION_TIMESTAMP,
+    CUMULATIVE_TS,
+    TOTAL_INDEX_COUNT,
+    IMPORTED_INDEX_COUNT,
+    FAILED_INDEX_COUNT,
+    TOTAL_CONSTRAINT_COUNT,
+    IMPORTED_CONSTRAINT_COUNT,
+    FAILED_CONSTRAINT_COUNT,
+    TOTAL_REF_CONSTRAINT_COUNT,
+    IMPORTED_REF_CONSTRAINT_COUNT,
+    FAILED_REF_CONSTRAINT_COUNT,
+    RESULT,
+    "COMMENT"
+    FROM SYS.ALL_VIRTUAL_IMPORT_TABLE_TASK
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chongrong.th',
+  table_name      = 'DBA_OB_IMPORT_TABLE_TASK_HISTORY',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25267',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+    TASK_ID,
+    JOB_ID,
+    SRC_TENANT_ID,
+    SRC_TABLESPACE,
+    SRC_TABLEGROUP,
+    SRC_DATABASE,
+    SRC_TABLE,
+    SRC_PARTITION,
+    TARGET_TABLESPACE,
+    TARGET_TABLEGROUP,
+    TARGET_DATABASE,
+    TARGET_TABLE,
+    TABLE_COLUMN,
+    STATUS,
+    TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
+    TO_CHAR(COMPLETION_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS COMPLETION_TIMESTAMP,
+    CUMULATIVE_TS,
+    TOTAL_INDEX_COUNT,
+    IMPORTED_INDEX_COUNT,
+    FAILED_INDEX_COUNT,
+    TOTAL_CONSTRAINT_COUNT,
+    IMPORTED_CONSTRAINT_COUNT,
+    FAILED_CONSTRAINT_COUNT,
+    TOTAL_REF_CONSTRAINT_COUNT,
+    IMPORTED_REF_CONSTRAINT_COUNT,
+    FAILED_REF_CONSTRAINT_COUNT,
+    RESULT,
+    "COMMENT"
+    FROM SYS.ALL_VIRTUAL_IMPORT_TABLE_TASK_HISTORY
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
 # 25268: DBA_OB_IMPORT_STMT_EXEC_HISTORY
 
 # 余留位置
@@ -52428,20 +53888,20 @@ SELECT
   SVR_PORT AS SVR_PORT,
   TENANT_ID AS TENANT_ID,
   TRANS_ID AS TRANS_ID,
-  CASE TYPE WHEN 1 THEN 'TR'
-            WHEN 2 THEN 'TX'
-            WHEN 3 THEN 'TM'
-            ELSE 'UNDEFINED' END
+  CASE WHEN TYPE = 1 THEN 'TR'
+       WHEN TYPE = 2 THEN 'TX'
+       WHEN TYPE = 3 THEN 'TM'
+       ELSE 'UNDEFINED' END
   AS TYPE,
-  CASE TYPE WHEN 1 THEN TABLET_ID
-            WHEN 2 THEN HOLDER_TRANS_ID
-            WHEN 3 THEN (SELECT DISTINCT OBJ_ID FROM SYS.ALL_VIRTUAL_OBJ_LOCK WHERE SYS.ALL_VIRTUAL_OBJ_LOCK.LOCK_ID = SYS.ALL_VIRTUAL_LOCK_WAIT_STAT.ROWKEY)
-            ELSE -1 END
+  CASE WHEN TYPE = 1 THEN TABLET_ID
+       WHEN TYPE = 2 THEN HOLDER_TRANS_ID
+       WHEN TYPE = 3 THEN (SELECT DISTINCT OBJ_ID FROM SYS.ALL_VIRTUAL_OBJ_LOCK WHERE SYS.ALL_VIRTUAL_OBJ_LOCK.LOCK_ID = SYS.ALL_VIRTUAL_LOCK_WAIT_STAT.ROWKEY)
+       ELSE -1 END
   AS ID1,
-  CASE TYPE WHEN 1 THEN CONCAT(CONCAT(HOLDER_TRANS_ID, '-'), ROWKEY)
-            WHEN 2 THEN NULL
-            WHEN 3 THEN NULL
-            ELSE 'ERROR' END
+  CASE WHEN TYPE = 1 THEN CONCAT(CONCAT(HOLDER_TRANS_ID, '-'), ROWKEY)
+       WHEN TYPE = 2 THEN NULL
+       WHEN TYPE = 3 THEN NULL
+       ELSE 'ERROR' END
   AS ID2,
   'NONE' AS LMODE,
   LOCK_MODE AS REQUEST,
@@ -52525,20 +53985,30 @@ GROUP BY SVR_IP, SVR_PORT, TENANT_ID, TRANS_ID
 UNION ALL
 
 SELECT
-  SVR_IP AS SVR_IP,
-  SVR_PORT AS SVR_PORT,
-  TENANT_ID AS TENANT_ID,
-  CREATE_TRANS_ID AS TRANS_ID,
-  'TM' AS TYPE,
-  OBJ_ID AS ID1,
+  OBJ_LOCK.SVR_IP AS SVR_IP,
+  OBJ_LOCK.SVR_PORT AS SVR_PORT,
+  OBJ_LOCK.TENANT_ID AS TENANT_ID,
+  OBJ_LOCK.CREATE_TRANS_ID AS TRANS_ID,
+  CASE WHEN OBJ_LOCK.OBJ_TYPE IN ('TABLE', 'TABLET') THEN 'TM'
+       WHEN OBJ_LOCK.OBJ_TYPE = 'DBMS_LOCK' THEN 'UL'
+       ELSE 'UNKOWN' END
+  AS TYPE,
+  OBJ_LOCK.OBJ_ID AS ID1,
   NULL AS ID2,
-  LOCK_MODE AS LMODE,
+  OBJ_LOCK.LOCK_MODE AS LMODE,
   'NONE' AS REQUEST,
-  TIME_AFTER_CREATE AS CTIME,
+  OBJ_LOCK.TIME_AFTER_CREATE AS CTIME,
   0 AS BLOCK
 FROM
-  SYS.ALL_VIRTUAL_OBJ_LOCK
-WHERE (OBJ_TYPE = 'TABLE' OR OBJ_TYPE = 'TABLET') AND EXTRA_INFO LIKE '%tx_ctx%'
+  SYS.ALL_VIRTUAL_OBJ_LOCK OBJ_LOCK
+INNER JOIN
+  SYS.ALL_VIRTUAL_LS_INFO LS_INFO
+ON
+  OBJ_LOCK.SVR_IP = LS_INFO.SVR_IP AND OBJ_LOCK.SVR_PORT = LS_INFO.SVR_PORT
+  AND OBJ_LOCK.TENANT_ID = LS_INFO.TENANT_ID AND OBJ_LOCK.LS_ID = LS_INFO.LS_ID
+WHERE
+  OBJ_LOCK.OBJ_TYPE IN ('TABLE', 'TABLET', 'DBMS_LOCK') AND OBJ_LOCK.EXTRA_INFO LIKE '%tx_ctx%'
+  AND LS_INFO.LS_STATE = 'LEADER'
   """.replace("\n", " "),
 )
 
@@ -53674,11 +55144,42 @@ def_sys_index_table(
   keywords = all_def_keywords['__all_rls_context_history'])
 
 # 101089 : placeholder for unique index of __all_tenant_snapshots
-# 101090 : placeholder for index of __all_dbms_lock_allocated lockhandle column
-# 101091 : placeholder for index of __all_dbms_lock_allocated expiration column
+
+def_sys_index_table(
+  index_name = 'idx_dbms_lock_allocated_lockhandle',
+  index_table_id = 101090,
+  index_columns = ['lockhandle'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_dbms_lock_allocated'])
+
+def_sys_index_table(
+  index_name = 'idx_dbms_lock_allocated_expiration',
+  index_table_id = 101091,
+  index_columns = ['expiration'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_dbms_lock_allocated'])
+
 # 101092 : placeholder for index of __all_tablet_reorganize_history
 # 101093 : placeholder for index of __all_kv_ttl_task
 # 101094 : placeholder for index of __all_kv_ttl_task_history
+
+def_sys_index_table(
+  index_name = 'idx_kv_ttl_task_table_id',
+  index_table_id = 101093,
+  index_columns = ['table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_kv_ttl_task'])
+
+def_sys_index_table(
+  index_name = 'idx_kv_ttl_task_history_upd_time',
+  index_table_id = 101094,
+  index_columns = ['task_update_time'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_kv_ttl_task_history'])
 
 ################################################################################
 # Oracle Agent table Index
@@ -54390,6 +55891,26 @@ def_agent_index_table(
   real_table_name = '__all_rls_context' ,
   real_index_name = 'idx_rls_context_table_id',
   keywords = all_def_keywords['ALL_VIRTUAL_RLS_CONTEXT_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_dbms_lock_allocated_lockhandle_real_agent',
+  index_table_id = 15415,
+  index_columns = ['lockhandle'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_dbms_lock_allocated' ,
+  real_index_name = 'idx_dbms_lock_allocated_lockhandle',
+  keywords = all_def_keywords['ALL_VIRTUAL_DBMS_LOCK_ALLOCATED_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_dbms_lock_allocated_expiration_real_agent',
+  index_table_id = 15416,
+  index_columns = ['expiration'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_dbms_lock_allocated' ,
+  real_index_name = 'idx_dbms_lock_allocated_expiration',
+  keywords = all_def_keywords['ALL_VIRTUAL_DBMS_LOCK_ALLOCATED_REAL_AGENT_ORA'])
 
 # End Oracle Agent table Index
 ################################################################################

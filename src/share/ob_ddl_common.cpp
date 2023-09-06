@@ -407,7 +407,12 @@ int ObDDLUtil::generate_column_name_str(
   }
   // append original column name
   if (OB_SUCC(ret) && with_origin_name) {
-    if (OB_FAIL(sql_string.append_fmt("%s%.*s%s", split_char, column_name_info.column_name_.length(), column_name_info.column_name_.ptr(), split_char))) {
+    if (column_name_info.is_enum_set_need_cast_) {
+      // Enum and set in Recover restore table ddl operation will be cast to unsigned, and then append into macro block.
+      if (OB_FAIL(sql_string.append_fmt("cast(%s%.*s%s as unsigned)", split_char, column_name_info.column_name_.length(), column_name_info.column_name_.ptr(), split_char))) {
+        LOG_WARN("append origin column name failed", K(ret));
+      }
+    } else if (OB_FAIL(sql_string.append_fmt("%s%.*s%s", split_char, column_name_info.column_name_.length(), column_name_info.column_name_.ptr(), split_char))) {
       LOG_WARN("append origin column name failed", K(ret));
     }
   }
@@ -529,14 +534,12 @@ int ObDDLUtil::generate_build_replica_sql(
     LOG_WARN("fail to check formal guard", K(ret));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, source_table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(data_table_id));
-  } else if (OB_ISNULL(source_table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("fail to get table schema", K(ret), K(data_table_id));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, dest_table_id, dest_table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(dest_table_id));
-  } else if (OB_ISNULL(dest_table_schema)) {
+  } else if (OB_ISNULL(source_table_schema) || OB_ISNULL(dest_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("fail to get table schema", K(ret), K(dest_table_id));
+    LOG_WARN("fail to get table schema", K(ret), KP(source_table_schema), KP(dest_table_schema),
+      K(tenant_id), K(data_table_id), K(dest_table_id));
   } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(tenant_id, data_table_id, oracle_mode))) {
     LOG_WARN("check if oracle mode failed", K(ret), K(data_table_id));
   } else {
@@ -1163,12 +1166,19 @@ static inline void try_replace_user_tenant_id(const uint64_t user_tenant_id, uin
   check_tenant_id = !is_user_tenant(check_tenant_id) ? check_tenant_id : user_tenant_id;
 }
 
-int ObDDLUtil::replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObAlterTableArg &alter_table_arg)
+int ObDDLUtil::replace_user_tenant_id(
+    const ObDDLType &ddl_type,
+    const uint64_t tenant_id,
+    obrpc::ObAlterTableArg &alter_table_arg)
 {
   int ret = OB_SUCCESS;
-  if (!is_user_tenant(tenant_id)) {
+  if (OB_UNLIKELY(is_invalid_ddl_type(ddl_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(ddl_type));
+  } else if (!is_user_tenant(tenant_id)) {
     LOG_TRACE("not user tenant, no need to replace", K(tenant_id));
   } else {
+    const bool need_replace_schema_info = DDL_TABLE_RESTORE != ddl_type;
     try_replace_user_tenant_id(tenant_id, alter_table_arg.exec_tenant_id_);
     for (int64_t i = 0; OB_SUCC(ret) && i < alter_table_arg.index_arg_list_.count(); ++i) {
       obrpc::ObIndexArg *index_arg = alter_table_arg.index_arg_list_.at(i);
@@ -1180,7 +1190,7 @@ int ObDDLUtil::replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObAlterTa
       try_replace_user_tenant_id(tenant_id, fk_arg.exec_tenant_id_);
       try_replace_user_tenant_id(tenant_id, fk_arg.tenant_id_);
     }
-    if (is_user_tenant(alter_table_arg.alter_table_schema_.get_tenant_id())) {
+    if (need_replace_schema_info && is_user_tenant(alter_table_arg.alter_table_schema_.get_tenant_id())) {
       alter_table_arg.alter_table_schema_.set_tenant_id(tenant_id);
     }
     try_replace_user_tenant_id(tenant_id, alter_table_arg.sequence_ddl_arg_.exec_tenant_id_);
@@ -1226,6 +1236,83 @@ REPLACE_DDL_ARG_FUNC(obrpc::ObTruncateTableArg)
 
 #undef REPLACE_DDL_ARG_FUNC
 
+int ObDDLUtil::reshape_ddl_column_obj(
+    common::ObDatum &datum,
+    const ObObjMeta &obj_meta)
+{
+  int ret = OB_SUCCESS;
+  if (datum.is_null()) {
+    // do not need to reshape
+  } else if (obj_meta.is_lob_storage()) {
+    ObLobLocatorV2 lob(datum.get_string(), obj_meta.has_lob_header());
+    ObString disk_loc;
+    if (!lob.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid lob locator", K(ret));
+    } else if (!lob.is_lob_disk_locator() && !lob.is_persist_lob()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid lob locator, should be persist lob", K(ret), K(lob));
+    } else if (OB_FAIL(lob.get_disk_locator(disk_loc))) {
+      LOG_WARN("get disk locator failed", K(ret), K(lob));
+    }
+    if (OB_SUCC(ret)) {
+      datum.set_string(disk_loc);
+    }
+  } else if (OB_UNLIKELY(!obj_meta.is_fixed_len_char_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("no need to reshape non-char", K(ret));
+  } else {
+    const char *ptr = datum.ptr_;
+    int32_t len = datum.len_;
+    int32_t trunc_len_byte = static_cast<int32_t>(ObCharset::strlen_byte_no_sp(
+        obj_meta.get_collation_type(), ptr, len));
+    datum.set_string(ObString(trunc_len_byte, ptr));
+  }
+  return ret;
+}
+
+int ObDDLUtil::get_tenant_schema_guard(
+    const uint64_t src_tenant_id,
+    const uint64_t dst_tenant_id,
+    share::schema::ObSchemaGetterGuard &hold_buf_src_tenant_schema_guard,
+    share::schema::ObSchemaGetterGuard &hold_buf_dst_tenant_schema_guard,
+    share::schema::ObSchemaGetterGuard *&src_tenant_schema_guard,
+    share::schema::ObSchemaGetterGuard *&dst_tenant_schema_guard)
+{
+  int ret = OB_SUCCESS;
+  src_tenant_schema_guard = nullptr;
+  dst_tenant_schema_guard = nullptr;
+  rootserver::ObRootService *root_service = GCTX.root_service_;
+  if (OB_UNLIKELY(common::OB_INVALID_ID == src_tenant_id || common::OB_INVALID_ID == dst_tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(src_tenant_id), K(dst_tenant_id));
+  } else if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else {
+    share::schema::ObMultiVersionSchemaService &schema_service = root_service->get_schema_service();
+    if (OB_FAIL(schema_service.get_tenant_schema_guard(dst_tenant_id, hold_buf_dst_tenant_schema_guard))) {
+      LOG_WARN("get tanant schema guard failed", K(ret), K(dst_tenant_id));
+    } else if (src_tenant_id != dst_tenant_id) {
+      if (OB_FAIL(schema_service.get_tenant_schema_guard(src_tenant_id, hold_buf_src_tenant_schema_guard))) {
+        LOG_WARN("get tanant schema guard failed", K(ret), K(src_tenant_id));
+      } else {
+        src_tenant_schema_guard = &hold_buf_src_tenant_schema_guard;
+        dst_tenant_schema_guard = &hold_buf_dst_tenant_schema_guard;
+      }
+    } else {
+      src_tenant_schema_guard = &hold_buf_dst_tenant_schema_guard;
+      dst_tenant_schema_guard = &hold_buf_dst_tenant_schema_guard;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(nullptr == src_tenant_schema_guard || nullptr == dst_tenant_schema_guard)) {
+      ret = OB_TENANT_NOT_EXIST;
+      LOG_WARN("tenant not exist", K(ret), K(src_tenant_id), K(dst_tenant_id), KP(src_tenant_schema_guard), KP(dst_tenant_schema_guard));
+    }
+  }
+  return ret;
+}
 
 /******************           ObCheckTabletDataComplementOp         *************/
 

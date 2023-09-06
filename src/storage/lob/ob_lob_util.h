@@ -36,8 +36,9 @@ struct ObLobAccessParam {
       dml_base_param_(nullptr), column_ids_(),
       meta_table_schema_(nullptr), piece_table_schema_(nullptr),
       main_tablet_param_(nullptr), meta_tablet_param_(nullptr), piece_tablet_param_(nullptr),
-      ls_id_(), tablet_id_(), coll_type_(), lob_locator_(nullptr), lob_common_(nullptr),
-      lob_data_(nullptr), byte_size_(0), handle_size_(0), timeout_(0),
+      tenant_id_(MTL_ID()), src_tenant_id_(MTL_ID()),
+      ls_id_(), tablet_id_(), coll_type_(), lob_locator_(nullptr),
+      lob_common_(nullptr), lob_data_(nullptr), byte_size_(0), handle_size_(0), timeout_(0),
       fb_snapshot_(),
       scan_backward_(false), asscess_ptable_(false), offset_(0), len_(0),
       parent_seq_no_(), seq_no_st_(), used_seq_cnt_(0), total_seq_cnt_(0), checksum_(0), update_len_(0),
@@ -51,9 +52,10 @@ struct ObLobAccessParam {
   }
 public:
   int set_lob_locator(common::ObLobLocatorV2 *lob_locator);
-  TO_STRING_KV(K_(ls_id), K_(tablet_id), KPC_(lob_locator), KPC_(lob_common), KPC_(lob_data), K_(byte_size), K_(handle_size),
-    K_(coll_type), K_(scan_backward), K_(offset), K_(len), K_(parent_seq_no), K_(seq_no_st), K_(used_seq_cnt), K_(total_seq_cnt),
-    K_(checksum), K_(update_len), K_(op_type), K_(is_fill_zero), K_(from_rpc), K_(snapshot), K_(tx_id), K_(inrow_read_nocopy));
+  TO_STRING_KV(K_(tenant_id), K_(src_tenant_id), K_(ls_id), K_(tablet_id), KPC_(lob_locator), KPC_(lob_common),
+    KPC_(lob_data), K_(byte_size), K_(handle_size), K_(coll_type), K_(scan_backward), K_(offset), K_(len),
+    K_(parent_seq_no), K_(seq_no_st), K_(used_seq_cnt), K_(total_seq_cnt), K_(checksum), K_(update_len), K_(op_type),
+    K_(is_fill_zero), K_(from_rpc), K_(snapshot), K_(tx_id), K_(inrow_read_nocopy));
 public:
   transaction::ObTxDesc *tx_desc_; // for write/update/delete
   transaction::ObTxReadSnapshot snapshot_; // for read
@@ -68,6 +70,10 @@ public:
   share::schema::ObTableParam *main_tablet_param_; // for test
   share::schema::ObTableParam *meta_tablet_param_; // for test
   share::schema::ObTableParam *piece_tablet_param_; // for test
+  uint64_t tenant_id_;
+  // some lob manager func will access other lob for data
+  // other lob can read from other tenant
+  uint64_t src_tenant_id_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   common::ObCollationType coll_type_;
@@ -194,7 +200,8 @@ public:
                                const share::schema::ObColDesc &column,
                                blocksstable::ObStorageDatum &datum,
                                const int64_t timeout_ts,
-                               const bool has_lob_header);
+                               const bool has_lob_header,
+                               const uint64_t src_tenant_id);
   static int insert_lob_column(ObIAllocator &allocator,
                                const share::ObLSID ls_id,
                                const common::ObTabletID tablet_id,

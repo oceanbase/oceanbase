@@ -36,7 +36,8 @@ class SubObjectMgr : public IBlockMgr
 {
   friend class ObTenantCtxAllocator;
 public:
-  SubObjectMgr(const bool for_logger, const int64_t tenant_id, const int64_t ctx_id);
+  SubObjectMgr(const bool for_logger, const int64_t tenant_id, const int64_t ctx_id,
+               const uint32_t ablock_size, IBlockMgr *blk_mgr);
   virtual ~SubObjectMgr() {}
   OB_INLINE void set_tenant_ctx_allocator(ObTenantCtxAllocator &allocator)
   {
@@ -59,13 +60,13 @@ public:
   OB_INLINE int64_t get_hold() { return bs_.get_total_hold(); }
   OB_INLINE int64_t get_payload() { return bs_.get_total_payload(); }
   OB_INLINE int64_t get_used() { return bs_.get_total_used(); }
+  OB_INLINE bool check_has_unfree()
+  {
+    return bs_.check_has_unfree();
+  }
   OB_INLINE bool check_has_unfree(char *first_label)
   {
-    const bool has_unfree = bs_.check_has_unfree();
-    if (has_unfree) {
-      os_.check_has_unfree(first_label);
-    }
-    return has_unfree;
+    return os_.check_has_unfree(first_label);
   }
 private:
 #ifndef ENABLE_SANITY
@@ -80,7 +81,7 @@ private:
   ObjectSet os_;
 };
 
-class ObjectMgr : public IBlockMgr
+class ObjectMgr final : public IBlockMgr
 {
   static const int N = 32;
 public:
@@ -93,7 +94,8 @@ public:
     int64_t last_wash_ts_;
   };
 public:
-  ObjectMgr(ObTenantCtxAllocator &allocator, uint64_t tenant_id, uint64_t ctx_id);
+  ObjectMgr(ObTenantCtxAllocator &allocator, uint64_t tenant_id, uint64_t ctx_id,
+            uint32_t ablock_size, int parallel, IBlockMgr *blk_mgr);
   ~ObjectMgr();
   void reset();
 
@@ -108,6 +110,7 @@ public:
   void print_usage() const;
   int64_t sync_wash(int64_t wash_size) override;
   Stat get_stat();
+  bool check_has_unfree();
   bool check_has_unfree(char *first_label);
 private:
   SubObjectMgr *create_sub_mgr();
@@ -115,6 +118,9 @@ private:
 
 public:
   ObTenantCtxAllocator &ta_;
+  uint32_t ablock_size_;
+  int parallel_;
+  IBlockMgr *blk_mgr_;
   int sub_cnt_;
   SubObjectMgr root_mgr_;
   SubObjectMgr *sub_mgrs_[N];

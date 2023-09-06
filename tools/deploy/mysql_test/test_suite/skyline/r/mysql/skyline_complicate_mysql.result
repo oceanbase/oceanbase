@@ -1467,7 +1467,7 @@ Outputs & filters:
       access([other.c2], [other.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([other.c2], [other.c3], [other.c1]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-explain select v3, v4 from skyline_int order by v3, v4 union select  distinct c2, c3 from other order by v3, v4;
+explain (select v3, v4 from skyline_int order by v3, v4) union select  distinct c2, c3 from other order by v3, v4;
 Query Plan
 =========================================================================
 |ID|OPERATOR            |NAME                     |EST.ROWS|EST.TIME(us)|

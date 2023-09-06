@@ -25,6 +25,8 @@
 #include "common/ob_range.h"
 #include "rpc/obrpc/ob_poc_rpc_server.h"
 
+#include "share/table/ob_table_ttl_common.h"
+#include "common/rowkey/ob_rowkey.h"
 namespace oceanbase
 {
 namespace common
@@ -236,6 +238,7 @@ struct ObTableOperationType
     INCREMENT = 6,
     APPEND = 7,
     SCAN = 8,
+    TTL = 9, // internal type for ttl executor cache key
     INVALID = 15
   };
 };
@@ -328,6 +331,33 @@ public:
 private:
   const ObITableEntity *entity_;
   ObTableOperationType::Type operation_type_;
+};
+
+class ObTableTTLOperation
+{
+public:
+  ObTableTTLOperation(uint64_t tenant_id, uint64_t table_id, const ObTTLTaskParam &para,
+                      uint64_t del_row_limit, ObRowkey start_rowkey)
+  : tenant_id_(tenant_id), table_id_(table_id), max_version_(para.max_version_),
+    time_to_live_(para.ttl_), is_htable_(para.is_htable_), del_row_limit_(del_row_limit),
+    start_rowkey_(start_rowkey)
+  {}
+
+  ~ObTableTTLOperation() {}
+  bool is_valid() const
+  {
+    return common::OB_INVALID_TENANT_ID != tenant_id_ && common::OB_INVALID_ID != table_id_ &&
+           (!is_htable_ || max_version_ > 0 || time_to_live_ > 0) && del_row_limit_ > 0;
+  }
+  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(max_version),  K_(time_to_live), K_(is_htable), K_(del_row_limit), K_(start_rowkey));
+public:
+  uint64_t tenant_id_;
+  uint64_t table_id_;
+  int32_t max_version_;
+  int32_t time_to_live_;
+  bool is_htable_;
+  uint64_t del_row_limit_;
+  ObRowkey start_rowkey_;
 };
 
 /// common result for ObTable
@@ -903,6 +933,30 @@ enum class ObTableDirectLoadOperationType {
   HEART_BEAT = 5,
   MAX_TYPE
 };
+
+class ObTableTTLOperationResult
+{
+public:
+  ObTableTTLOperationResult()
+    : ttl_del_rows_(0),
+      max_version_del_rows_(0),
+      scan_rows_(0),
+      end_rowkey_()
+    {}
+  ~ObTableTTLOperationResult() {}
+  uint64_t get_ttl_del_row() { return ttl_del_rows_; }
+  uint64_t get_max_version_del_row() { return max_version_del_rows_; }
+  uint64_t get_del_row() { return ttl_del_rows_ + max_version_del_rows_; }
+  uint64_t get_scan_row() { return scan_rows_; }
+  common::ObString get_end_rowkey() { return end_rowkey_; }
+  TO_STRING_KV(K_(ttl_del_rows), K_(max_version_del_rows), K_(scan_rows), K_(end_rowkey));
+public:
+  uint64_t ttl_del_rows_;
+  uint64_t max_version_del_rows_;
+  uint64_t scan_rows_;
+  common::ObString end_rowkey_;
+};
+
 
 } // end namespace table
 } // end namespace oceanbase

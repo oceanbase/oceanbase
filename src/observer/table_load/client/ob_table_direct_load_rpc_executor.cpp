@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_table_direct_load_rpc_executor.h"
+#include "observer/ob_server.h"
 #include "observer/omt/ob_multi_tenant.h"
 #include "observer/omt/ob_tenant.h"
 #include "observer/table_load/ob_table_load_client_service.h"
@@ -27,6 +28,7 @@ namespace oceanbase
 {
 namespace observer
 {
+using namespace observer;
 using namespace omt;
 using namespace share::schema;
 using namespace sql;
@@ -60,6 +62,16 @@ int ObTableDirectLoadBeginExecutor::check_args()
                   arg_.timeout_ <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(arg_));
+  }
+  return ret;
+}
+
+int ObTableDirectLoadBeginExecutor::set_result_header()
+{
+  int ret = OB_SUCCESS;
+  ret = ParentType::set_result_header();
+  if (OB_SUCC(ret)) {
+    this->result_.header_.addr_ = ObServer::get_instance().get_self();
   }
   return ret;
 }
@@ -483,7 +495,8 @@ int ObTableDirectLoadInsertExecutor::decode_payload(const ObString &payload,
     LOG_WARN("invalid args", KR(ret), K(payload));
   } else {
     ObTableLoadSharedAllocatorHandle allocator_handle =
-      ObTableLoadSharedAllocatorHandle::make_handle("TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      ObTableLoadSharedAllocatorHandle::make_handle("TLD_share_alloc", OB_MALLOC_NORMAL_BLOCK_SIZE,
+                                                    MTL_ID());
     const int64_t data_len = payload.length();
     char *buf = nullptr;
     int64_t pos = 0;
@@ -522,7 +535,7 @@ int ObTableDirectLoadInsertExecutor::set_batch_seq_no(int64_t batch_id,
   return ret;
 }
 
-//heart_beat
+// heart_beat
 int ObTableDirectLoadHeartBeatExecutor::check_args()
 {
   int ret = OB_SUCCESS;

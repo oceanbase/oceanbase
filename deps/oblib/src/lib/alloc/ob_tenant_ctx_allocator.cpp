@@ -31,7 +31,14 @@ void *ObTenantCtxAllocator::alloc(const int64_t size, const ObMemAttr &attr)
 {
   abort_unless(attr.tenant_id_ == tenant_id_);
   abort_unless(attr.ctx_id_ == ctx_id_);
-  void *ptr = common_alloc(size, attr, *this, obj_mgr_);
+  void *ptr = NULL;
+  if (OB_LIKELY(ObSubCtxIds::MAX_SUB_CTX_ID == attr.sub_ctx_id_)) {
+    ptr = common_alloc(size, attr, *this, obj_mgr_);
+  } else if (OB_UNLIKELY(attr.sub_ctx_id_ < ObSubCtxIds::MAX_SUB_CTX_ID)) {
+    ptr = common_alloc(size, attr, *this, obj_mgrs_[attr.sub_ctx_id_]);
+  } else {
+    LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "allocate memory with unexpected sub_ctx_id");
+  }
   return ptr;
 }
 
