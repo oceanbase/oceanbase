@@ -22,6 +22,7 @@
 #include "ob_htable_filters.h"
 #include "ob_table_scan_executor.h"
 #include <utility>
+#include "share/schema/ob_table_schema.h"
 
 namespace oceanbase
 {
@@ -31,14 +32,19 @@ class ObHColumnDescriptor final
 {
 public:
   ObHColumnDescriptor()
-      :time_to_live_(0)
+      :time_to_live_(0),
+       max_version_(0)
   {}
-  int from_string(const common::ObString &str);
+  void reset();
+  int from_string(const common::ObString &kv_attributes);
 
   void set_time_to_live(int32_t v) { time_to_live_ = v; }
   int32_t get_time_to_live() const { return time_to_live_; }
+  void set_max_version(int32_t v) { max_version_ = v; }
+  int32_t get_max_version() const { return max_version_; }
 private:
   int32_t time_to_live_; // Time-to-live of cell contents, in seconds.
+  int32_t max_version_;
 };
 
 enum class ObHTableMatchCode
@@ -86,6 +92,8 @@ public:
   // Give the tracker a chance to declare it's done based on only the timestamp.
   bool is_done(int64_t timestamp) const;
   void set_ttl(int32_t ttl_value);
+  void set_max_version(int32_t max_version);
+  int32_t get_max_version() { return max_versions_; }
 protected:
   int32_t max_versions_;  // default: 1
   int32_t min_versions_;  // default: 0
@@ -215,6 +223,7 @@ public:
   int add_same_kq_to_res(ObIArray<common::ObNewRow> &same_kq_cells,
                          ObTableQueryResult *&out_result);
   ObIArray<common::ObNewRow> &get_same_kq_cells() { return same_kq_cells_; }
+  void set_max_version(int32_t max_version) { max_version_ = max_version; }
 private:
   int next_cell();
   int reverse_next_cell(ObIArray<common::ObNewRow> &same_kq_cells,
@@ -231,7 +240,8 @@ private:
   int32_t offset_per_row_per_cf_;
   int64_t max_result_size_;
   int32_t batch_size_;
-  int32_t time_to_live_; // Time-to-live of cell contents, in seconds.
+  int32_t time_to_live_; // Column family level time-to-live, in seconds.
+  int32_t max_version_; // Column family max_version
 
   table::ObTableQueryResult one_hbase_row_;
   ObHTableCellEntity curr_cell_;
@@ -265,8 +275,10 @@ public:
     row_iterator_.set_scan_result(scan_result);
   }
   void set_ttl(int32_t ttl_value) { row_iterator_.set_ttl(ttl_value); }
+  void set_max_version(int32_t max_version_value) { row_iterator_.set_max_version(max_version_value); }
   // parse the filter string
   int parse_filter_string(common::ObIAllocator* allocator);
+  OB_INLINE table::hfilter::Filter *get_hfiter() { return hfilter_; }
 private:
   ObHTableRowIterator row_iterator_;
   table::ObTableQueryResult *one_result_;

@@ -53,8 +53,9 @@ enum ObTableExecutorType
   TABLE_API_EXEC_INSERT_UP = 5,
   TABLE_API_EXEC_REPLACE = 6,
   TABLE_API_EXEC_LOCK = 7,
+  TABLE_API_EXEC_TTL = 8,
   // append new executor type here
-  TABLE_API_EXEC_MAX = 8
+  TABLE_API_EXEC_MAX
 };
 
 // 1.用于存放整个process过程中需要的通用上下文信息
@@ -119,6 +120,7 @@ public:
     return_affected_entity_ = false;
     return_rowkey_ = false;
     cur_cluster_version_ = GET_MIN_CLUSTER_VERSION();
+    is_ttl_table_ = false;
   }
   virtual ~ObTableCtx()
   {}
@@ -148,7 +150,8 @@ public:
                // insert up to string
                K_(is_for_insertup),
                K_(entity_type),
-               K_(cur_cluster_version));
+               K_(cur_cluster_version),
+               K_(is_ttl_table));
 public:
   //////////////////////////////////////// getter ////////////////////////////////////////////////
   // for common
@@ -184,6 +187,8 @@ public:
   OB_INLINE bool is_get() const { return is_get_; }
   OB_INLINE bool is_read_latest() const { return read_latest_; }
   OB_INLINE common::ObQueryFlag::ScanOrder get_scan_order() const { return scan_order_; }
+  OB_INLINE ObIArray<sql::ObRawExpr *>& get_filter_exprs() { return filter_exprs_; }
+  OB_INLINE const ObIArray<sql::ObRawExpr *>& get_filter_exprs() const { return filter_exprs_; }
   OB_INLINE const ObIArray<sql::ObRawExpr *>& get_select_exprs() const { return select_exprs_; }
   OB_INLINE const ObIArray<sql::ObRawExpr *>& get_rowkey_exprs() const { return rowkey_exprs_; }
   OB_INLINE const ObIArray<sql::ObRawExpr *>& get_index_exprs() const { return index_exprs_; }
@@ -213,6 +218,10 @@ public:
   OB_INLINE const ObITableEntity* get_entity() const { return entity_; }
   OB_INLINE ObTableEntityType get_entity_type() const { return entity_type_; }
   OB_INLINE bool is_htable() const { return ObTableEntityType::ET_HKV == entity_type_; }
+  OB_INLINE bool is_insert() const
+  {
+    return ObTableOperationType::Type::INSERT == operation_type_;
+  }
   // for htable
   OB_INLINE const ObTableBatchOperation* get_batch_operation() const { return batch_op_; }
   // for increment/append
@@ -264,10 +273,16 @@ public:
         && operation_type_ != ObTableOperationType::SCAN;
   }
 public:
-  // 初始化common部分(不包括expr_info_, exec_ctx_, all_exprs_)
+  // 基于 table name 初始化common部分(不包括expr_info_, exec_ctx_)
   int init_common(ObTableApiCredential &credential,
                   const common::ObTabletID &arg_tablet_id,
                   const common::ObString &arg_table_name,
+                  const int64_t &timeout_ts);
+
+  // 基于 table id 初始化common部分(不包括expr_info_, exec_ctx_)
+  int init_common(ObTableApiCredential &credential,
+                  const common::ObTabletID &arg_tablet_id,
+                  const uint64_t table_id,
                   const int64_t &timeout_ts);
   // 初始化 insert 相关
   int init_insert();
@@ -298,6 +313,12 @@ public:
   int init_das_context(ObDASCtx &das_ctx);
   // 更新全局自增值
   int update_auto_inc_value();
+  // init table context for ttl operation
+  bool is_ttl_table() const { return is_ttl_table_; }
+
+  void set_is_ttl_table(bool is_ttl_table) { is_ttl_table_ = is_ttl_table; }
+  int init_phy_plan_ctx();
+  int init_ttl_delete(ObRowkey &start_key);
 public:
   // convert lob的allocator需要保证obj写入表达式后才能析构
   static int convert_lob(common::ObIAllocator &allocator, ObObj &obj);
@@ -351,6 +372,13 @@ private:
   // 获取索引表的tablet_id
   int get_related_tablet_id(const share::schema::ObTableSchema &index_schema,
                             common::ObTabletID &related_tablet_id);
+
+
+  // 初始化 table schema 之后的 common 部分
+  int inner_init_common(ObTableApiCredential &credential,
+                        const common::ObTabletID &arg_tablet_id,
+                        const common::ObString &table_name,
+                        const int64_t &timeout_ts);
 private:
   bool is_init_;
   common::ObIAllocator &allocator_; // processor allocator
@@ -384,6 +412,7 @@ private:
   common::ObArray<sql::ObRawExpr*> select_exprs_;
   common::ObArray<sql::ObRawExpr*> rowkey_exprs_;
   common::ObArray<sql::ObRawExpr*> index_exprs_;
+  common::ObArray<sql::ObRawExpr*> filter_exprs_;
   common::ObArray<uint64_t> select_col_ids_; // 基于schema序的select column id
   common::ObArray<uint64_t> query_col_ids_; // 用户查询的select column id
   common::ObArray<common::ObString> query_col_names_; // 用户查询的select column name，引用的是schema上的列名
@@ -421,6 +450,7 @@ private:
   uint64_t cur_cluster_version_;
   // for rowkey constraint info
   common::ObSEArray<ObColumnRefRawExpr*, 8, common::ModulePageAllocator, true> all_column_ref_exprs_;
+  bool is_ttl_table_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableCtx);
 };
@@ -453,6 +483,7 @@ public:
         lookup_ctdef_(nullptr),
         lookup_loc_meta_(nullptr),
         output_exprs_(allocator),
+        filter_exprs_(allocator),
         allocator_(allocator)
   {
   }
@@ -464,6 +495,7 @@ public:
   sql::ObDASTableLocMeta *lookup_loc_meta_;
 
   ExprFixedArray output_exprs_;
+  ExprFixedArray filter_exprs_;
   common::ObIAllocator &allocator_;
 };
 
@@ -707,6 +739,43 @@ public:
   }
   TO_STRING_KV(K_(das_rtdef));
   ObDASLockRtDef das_rtdef_;
+};
+
+struct ObTableTTLCtDef
+{
+public:
+  ObTableTTLCtDef(common::ObIAllocator &alloc)
+      : ins_ctdef_(alloc),
+        del_ctdef_(alloc),
+        upd_ctdef_(alloc),
+        expire_expr_(nullptr),
+        alloc_(alloc)
+  {
+  }
+  TO_STRING_KV(K_(ins_ctdef),
+               K_(del_ctdef));
+  ObTableInsCtDef ins_ctdef_;
+  ObTableDelCtDef del_ctdef_;
+  ObTableUpdCtDef upd_ctdef_;
+  ObExpr *expire_expr_;
+  common::ObIAllocator &alloc_;
+};
+
+struct ObTableTTLRtDef
+{
+public:
+  ObTableTTLRtDef()
+      : ins_rtdef_(),
+        del_rtdef_(),
+        upd_rtdef_()
+  {
+  }
+  TO_STRING_KV(K_(ins_rtdef),
+               K_(del_rtdef),
+               K_(upd_rtdef))
+  ObTableInsRtDef ins_rtdef_;
+  ObTableDelRtDef del_rtdef_;
+  ObTableUpdRtDef upd_rtdef_;
 };
 
 } // end namespace table

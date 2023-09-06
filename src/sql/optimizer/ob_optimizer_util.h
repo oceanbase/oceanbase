@@ -1496,6 +1496,8 @@ public:
                                            bool &can_pushdown_all,
                                            bool check_match_index = true);
 
+  static bool find_superset(const ObRelIds &rel_ids,
+                           const ObIArray<ObRelIds> &single_table_ids);
 private:
   //disallow construct
   ObOptimizerUtil();

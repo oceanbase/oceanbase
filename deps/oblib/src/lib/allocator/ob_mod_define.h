@@ -38,6 +38,12 @@ CTX_ITEM_DEF(UNEXPECTED_IN_500)
 CTX_ITEM_DEF(MAX_CTX_ID)
 #endif
 
+#ifdef SUB_CTX_ITEM_DEF
+SUB_CTX_ITEM_DEF(TEST1)
+SUB_CTX_ITEM_DEF(TEST2)
+SUB_CTX_ITEM_DEF(MAX_SUB_CTX_ID)
+#endif
+
 // Label does not need to be defined here, just pass char * directly in alloc,
 // It is reserved here to be compatible with the existing code of the upper layer
 #ifdef LABEL_ITEM_DEF
@@ -657,6 +663,16 @@ private:
 
 private:
   const char *ctx_names_[CTX_COUNT_LIMIT];
+};
+
+struct ObSubCtxIds
+{
+  enum ObSubCtxIdEnum
+  {
+#define SUB_CTX_ITEM_DEF(name) name,
+#include "lib/allocator/ob_mod_define.h"
+#undef SUB_CTX_ITEM_DEF
+  };
 };
 
 struct ObModIds

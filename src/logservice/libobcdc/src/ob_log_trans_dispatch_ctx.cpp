@@ -16,6 +16,8 @@
 
 #include "ob_log_trans_dispatch_ctx.h"
 #include "ob_log_config.h"              // TCONF
+#include "ob_log_instance.h"            // TCTX
+#include "ob_log_trans_msg_sorter.h"    // IObLogTransMsgSorter
 
 namespace oceanbase
 {
@@ -112,14 +114,18 @@ void TransDispatchCtx::set_normal_priority_budget_(const int64_t &average_budget
   for(int64_t i = 0; i < normal_priority_part_budget_arr_.count(); i++) {
     PartTransDispatchBudget &budget = normal_priority_part_budget_arr_[i];
     PartTransTask *part_trans_task = budget.part_trans_task_;
+    const static int64_t PRINT_STAT_INTERVAL = 10 * _SEC_;
+    IObLogTransMsgSorter *msg_sorter = TCTX.trans_msg_sorter_;
 
     if (average_budget <= 0
         && OB_NOT_NULL(part_trans_task)
+        && OB_NOT_NULL(msg_sorter)
+        && (part_trans_task->get_trans_id() == msg_sorter->get_cur_sort_trans_id()) // wait last trans handled in sorter
         && part_trans_task->is_dispatched_redo_be_sorted()) {
       const int64_t extra_redo_dispatch_size = TCONF.extra_redo_dispatch_memory_size;
 
-      if (REACH_TIME_INTERVAL(1 * _SEC_)) {
-        LOG_INFO("[NOTICE][REDO_DISPATCH] budget usedup but dispatched_redo all sorted, use extra_redo budget",
+      if (REACH_TIME_INTERVAL(PRINT_STAT_INTERVAL)) {
+        LOG_INFO("[NOTICE][REDO_DISPATCH][DATA_SKEW] budget usedup but dispatched_redo all sorted, use extra_redo budget",
             K(budget),
             K(average_budget),
             "extra_redo_dispatch_size", SIZE_TO_STR(extra_redo_dispatch_size),

@@ -42,8 +42,8 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
     create_table_arg.reset();
     create_table_arg.exec_tenant_id_ = arg.tenant_id_;
     create_table_arg.tenant_id_ = arg.tenant_id_;
-    create_table_arg.table_id_ = arg.table_id_;
     create_table_arg.dest_tenant_id_ = arg.tenant_id_;
+    create_table_arg.table_id_ = arg.table_id_;
     create_table_arg.parallelism_ = arg.parallelism_;
     create_table_arg.ddl_type_ = arg.is_load_data_ ? share::DDL_DIRECT_LOAD : share::DDL_DIRECT_LOAD_INSERT;
     create_table_arg.session_id_ = session_info.get_sessid_for_table();
@@ -97,16 +97,19 @@ int ObTableLoadRedefTable::finish(const ObTableLoadRedefTableFinishArg &arg,
       finish_redef_table_arg.tenant_id_ = arg.tenant_id_;
 
       ObDDLBuildSingleReplicaResponseArg build_single_replica_response_arg;
-      build_single_replica_response_arg.task_id_ = arg.task_id_;
-      build_single_replica_response_arg.tenant_id_ = arg.tenant_id_;
-      build_single_replica_response_arg.ls_id_ = share::ObLSID(1);
-      build_single_replica_response_arg.tablet_id_ = ObTableID(-1);
-      build_single_replica_response_arg.source_table_id_ = arg.table_id_;
-      build_single_replica_response_arg.dest_schema_id_ = arg.dest_table_id_;
-      build_single_replica_response_arg.ret_code_ = ret;
-      build_single_replica_response_arg.snapshot_version_ = 1;
-      build_single_replica_response_arg.schema_version_ = arg.schema_version_;
-      build_single_replica_response_arg.execution_id_ = 1;
+      build_single_replica_response_arg.task_id_             = arg.task_id_;
+      build_single_replica_response_arg.tenant_id_           = arg.tenant_id_;
+      build_single_replica_response_arg.dest_tenant_id_      = arg.tenant_id_;
+      build_single_replica_response_arg.source_table_id_     = arg.table_id_;
+      build_single_replica_response_arg.dest_schema_id_      = arg.dest_table_id_;
+      build_single_replica_response_arg.schema_version_      = arg.schema_version_;
+      build_single_replica_response_arg.dest_schema_version_ = arg.schema_version_;
+      build_single_replica_response_arg.ls_id_               = share::ObLSID(1);
+      build_single_replica_response_arg.dest_ls_id_          = share::ObLSID(1);
+      build_single_replica_response_arg.tablet_id_           = ObTableID(-1);
+      build_single_replica_response_arg.snapshot_version_    = 1;
+      build_single_replica_response_arg.execution_id_        = 1;
+      build_single_replica_response_arg.ret_code_            = ret;
       if (OB_FAIL(ObDDLServerClient::finish_redef_table(
             finish_redef_table_arg, build_single_replica_response_arg, session_info))) {
         LOG_WARN("failed to finish redef table", KR(ret), K(finish_redef_table_arg));
@@ -131,7 +134,7 @@ int ObTableLoadRedefTable::abort(const ObTableLoadRedefTableAbortArg &arg,
     ObAbortRedefTableArg abort_redef_table_arg;
     abort_redef_table_arg.task_id_ = arg.task_id_;
     abort_redef_table_arg.tenant_id_ = arg.tenant_id_;
-    if (OB_FAIL(ObDDLServerClient::abort_redef_table(abort_redef_table_arg, session_info))) {
+    if (OB_FAIL(ObDDLServerClient::abort_redef_table(abort_redef_table_arg, &session_info))) {
       LOG_WARN("failed to abort redef table", KR(ret), K(abort_redef_table_arg));
     } else {
       LOG_INFO("succeed to abort hidden table", K(arg));

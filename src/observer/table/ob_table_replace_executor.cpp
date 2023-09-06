@@ -107,13 +107,9 @@ int ObTableApiReplaceExecutor::get_next_row_from_child()
 int ObTableApiReplaceExecutor::load_replace_rows(bool &is_iter_end)
 {
   int ret = OB_SUCCESS;
-  int64_t row_cnt = 0;
   const ObTableReplaceCtDef &ctdef = replace_spec_.get_ctdef();
-  int64_t simulate_batch_row_cnt = - EVENT_CALL(EventTable::EN_TABLE_REPLACE_BATCH_ROW_COUNT);
-  int64_t default_row_batch_cnt = simulate_batch_row_cnt > 0 ?
-                                  simulate_batch_row_cnt : DEFAULT_REPLACE_BATCH_ROW_COUNT;
 
-  while (OB_SUCC(ret) &&  ++row_cnt < default_row_batch_cnt) {
+  while (OB_SUCC(ret)) {
     if (OB_FAIL(get_next_row_from_child())) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to load next row from child", K(ret));
@@ -143,45 +139,6 @@ int ObTableApiReplaceExecutor::post_das_task()
       LOG_WARN("fail to execute all das task", K(ret));
     }
   }
-
-  return ret;
-}
-
-int ObTableApiReplaceExecutor::fetch_conflict_rowkey()
-{
-  int ret = OB_SUCCESS;
-  bool got_row = false;
-  DASTaskIter task_iter = dml_rtctx_.das_ref_.begin_task_iter();
-
-  while (OB_SUCC(ret) && !task_iter.is_end()) {
-    if (OB_FAIL(get_next_conflict_rowkey(task_iter, conflict_checker_))) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("fail to get next conflict rowkey from das_result", K(ret));
-      }
-    } else if (OB_FAIL(conflict_checker_.build_primary_table_lookup_das_task())) {
-      LOG_WARN("fail to build lookup_das_task", K(ret));
-    }
-  }
-
-  ret = (ret == OB_ITER_END ? OB_SUCCESS : ret);
-  return ret;
-}
-
-int ObTableApiReplaceExecutor::reset_das_env()
-{
-  int ret = OB_SUCCESS;
-
-  // 释放第一次try insert的das task
-  if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
-    LOG_WARN("close all das task failed", K(ret));
-  } else {
-    dml_rtctx_.das_ref_.reuse();
-  }
-
-  // 因为第二次插入不需要fetch conflict result了，如果有conflict
-  // 就说明replace into的某些逻辑处理有问题
-  replace_rtdef_.ins_rtdef_.das_rtdef_.need_fetch_conflict_ = false;
-  replace_rtdef_.ins_rtdef_.das_rtdef_.is_duplicated_ = false;
 
   return ret;
 }
@@ -321,9 +278,9 @@ int ObTableApiReplaceExecutor::get_next_row()
       LOG_WARN("fail to post all das task", K(ret));
     } else if (!is_duplicated()) {
       LOG_DEBUG("try insert is not duplicated", K(ret));
-    } else if (OB_FAIL(fetch_conflict_rowkey())) {
+    } else if (OB_FAIL(fetch_conflict_rowkey(conflict_checker_))) {
       LOG_WARN("fail to fetch conflict row", K(ret));
-    } else if (OB_FAIL(reset_das_env())) {
+    } else if (OB_FAIL(reset_das_env(replace_rtdef_.ins_rtdef_))) {
       // 这里需要reuse das 相关信息
       LOG_WARN("fail to reset das env", K(ret));
     } else if (OB_FAIL(ObSqlTransControl::rollback_savepoint(exec_ctx_, savepoint_no))) {

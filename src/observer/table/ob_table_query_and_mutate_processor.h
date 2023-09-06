@@ -77,6 +77,10 @@ private:
                            const common::ObIArray<common::ObString> &names,
                            int64_t &affected_rows);
   int get_rowkey_column_names(common::ObIArray<common::ObString> &names);
+  // check whether checkAndMutate's expected value is null or not
+  static int check_expected_value_is_null(table::ObTableQueryResultIterator *result_iter, bool &is_null);
+  // check value whether the value of first row of htable query result is null(empty string) or not
+  static int check_result_value_is_null(table::ObTableQueryResult *query_result, bool &is_null_value);
 private:
   template<int TYPE>
   int process_dml_op(const table::ObITableEntity &new_entity, int64_t &affected_rows)

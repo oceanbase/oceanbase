@@ -412,6 +412,10 @@ int ObAlterTableResolver::set_table_options()
       SQL_RESV_LOG(WARN, "Write database_name to alter_table_schema failed!", K(database_name_), K(ret));
     } else if (OB_FAIL(alter_table_schema.set_encryption_str(encryption_))) {
       SQL_RESV_LOG(WARN, "Write encryption to alter_table_schema failed!", K(encryption_), K(ret));
+    } else if (OB_FAIL(alter_table_schema.set_ttl_definition(ttl_definition_))) {
+      SQL_RESV_LOG(WARN, "Write ttl_definition to alter_table_schema failed!", K(ret));
+    } else if (OB_FAIL(alter_table_schema.set_kv_attributes(kv_attributes_))) {
+      SQL_RESV_LOG(WARN, "Write kv_attributes to alter_table_schema failed!", K(ret));
     } else {
       alter_table_schema.alter_option_bitset_ = alter_table_bitset_;
     }
@@ -611,6 +615,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
     int64_t alter_column_times = 0;
     int64_t alter_column_visibility_times = 0;
     ObReducedVisibleColSet reduced_visible_col_set;
+    bool has_alter_column_option = false;
     //in mysql mode, resolve add index after resolve column actions
     ObSEArray<int64_t, 4> add_index_action_idxs;
     for (int64_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
@@ -657,6 +662,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
             alter_table_stmt->set_alter_table_column();
             bool temp_is_modify_column_visibility = false;
             bool is_drop_column = false;
+            has_alter_column_option = true;
             if (OB_FAIL(resolve_column_options(*action_node, temp_is_modify_column_visibility, is_drop_column, reduced_visible_col_set))) {
               SQL_RESV_LOG(WARN, "Resolve column option failed!", K(ret));
             } else {
@@ -856,19 +862,26 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
               }
             }
             break;
-          }
+        }
         case T_MODIFY_ALL_TRIGGERS: {
             alter_table_stmt->set_is_alter_triggers(true);
             if (OB_FAIL(resolve_modify_all_trigger(*action_node))) {
               SQL_RESV_LOG(WARN, "failed to resolve trigger option!", K(ret));
             }
-          }
-          break;
+            break;
+        }
         case T_SET_INTERVAL: {
-          if (OB_FAIL(resolve_set_interval(alter_table_stmt, *action_node))) {
-            SQL_RESV_LOG(WARN, "failed to resolve foreign key options in mysql mode!", K(ret));
-          }
-          break;
+            if (OB_FAIL(resolve_set_interval(alter_table_stmt, *action_node))) {
+              SQL_RESV_LOG(WARN, "failed to resolve foreign key options in mysql mode!", K(ret));
+            }
+            break;
+        }
+        case T_REMOVE_TTL: {
+            ttl_definition_.reset();
+            if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::TTL_DEFINITION))) {
+              SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
+            }
+            break;
         }
         default: {
             ret = OB_ERR_UNEXPECTED;
@@ -1021,6 +1034,38 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
     }
     if (OB_SUCC(ret) && OB_FAIL(check_alter_column_schemas_valid(*alter_table_stmt))) {
       LOG_WARN("failed to check alter column schemas valid", K(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      // modify/change definition ttl column is not allowed currently
+      if (has_alter_column_option && alter_table_bitset_.has_member(ObAlterTableArg::TTL_DEFINITION)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "SET/REMOVE TTL together with other Alter Column DDL");
+      } else if (has_alter_column_option) {
+        ObTableSchema tbl_schema;
+        ObSEArray<ObString, 8> ttl_columns;
+        if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
+          LOG_WARN("fail to get table schema", K(ret));
+        } else if (OB_FAIL(get_ttl_columns(tbl_schema.get_ttl_definition(), ttl_columns))) {
+          LOG_WARN("fail to get ttl column", K(ret));
+        } else if (ttl_columns.empty()) {
+          // do nothing
+        } else {
+          AlterTableSchema &alter_table_schema = get_alter_table_stmt()->get_alter_table_arg().alter_table_schema_;
+          ObTableSchema::const_column_iterator iter = alter_table_schema.column_begin();
+          ObTableSchema::const_column_iterator end = alter_table_schema.column_end();
+          for (; OB_SUCC(ret) && iter != end; ++iter) {
+            const AlterColumnSchema *column = static_cast<AlterColumnSchema *>(*iter);
+            if (OB_ISNULL(column)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null alter column", K(ret));
+            } else if (is_ttl_column(column->get_origin_column_name(), ttl_columns)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("Modify/Change TTL column is not allowed", K(ret));
+            }
+          }
+        }
+      }
     }
   }
   return ret;
@@ -5816,6 +5861,17 @@ int ObAlterTableResolver::resolve_modify_all_trigger(const ParseNode &node)
     }
   }
   return ret;
+}
+
+bool ObAlterTableResolver::is_ttl_column(const ObString &orig_column_name, const ObIArray<ObString> &ttl_columns)
+{
+  bool bret = false;
+  for (int64_t i = 0; i < ttl_columns.count() && !bret; i++) {
+    if (orig_column_name.case_compare(ttl_columns.at(i)) == 0) {
+      bret = true;
+    }
+  }
+  return bret;
 }
 
 int ObAlterTableResolver::check_mysql_rename_column(const AlterColumnSchema &alter_column_schema,

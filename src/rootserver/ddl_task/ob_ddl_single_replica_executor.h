@@ -27,12 +27,14 @@ struct ObDDLSingleReplicaExecutorParam final
 public:
   ObDDLSingleReplicaExecutorParam()
     : tenant_id_(common::OB_INVALID_TENANT_ID),
+      dest_tenant_id_(common::OB_INVALID_TENANT_ID),
       type_(share::DDL_INVALID),
       source_tablet_ids_(),
       dest_tablet_ids_(),
       source_table_id_(common::OB_INVALID_ID),
       dest_table_id_(common::OB_INVALID_ID),
       schema_version_(0),
+      dest_schema_version_(0),
       snapshot_version_(0),
       task_id_(0),
       parallelism_(0),
@@ -42,24 +44,26 @@ public:
   {}
   ~ObDDLSingleReplicaExecutorParam() = default;
   bool is_valid() const {
-    return common::OB_INVALID_TENANT_ID != tenant_id_ && share::DDL_INVALID != type_
-           && source_tablet_ids_.count() > 0 && dest_tablet_ids_.count() > 0
+    return common::OB_INVALID_TENANT_ID != tenant_id_ && common::OB_INVALID_TENANT_ID != dest_tenant_id_
+           && share::DDL_INVALID != type_ && source_tablet_ids_.count() > 0 && dest_tablet_ids_.count() > 0
            && common::OB_INVALID_ID != source_table_id_ && common::OB_INVALID_ID != dest_table_id_
-           && schema_version_ > 0 && snapshot_version_ > 0 && task_id_ > 0 && execution_id_ >= 0
-           && data_format_version_ > 0 && consumer_group_id_ >= 0;
+           && schema_version_ > 0 && dest_schema_version_ > 0 && snapshot_version_ > 0 && task_id_ > 0
+           && execution_id_ >= 0 && data_format_version_ > 0 && consumer_group_id_ >= 0;
   }
-  TO_STRING_KV(K_(tenant_id), K_(type), K_(source_tablet_ids), K_(dest_tablet_ids),
-               K_(source_table_id), K_(dest_table_id), K_(schema_version),
+  TO_STRING_KV(K_(tenant_id), K_(dest_tenant_id), K_(type), K_(source_tablet_ids), K_(dest_tablet_ids),
+               K_(source_table_id), K_(dest_table_id), K_(schema_version), K_(dest_schema_version),
                K_(snapshot_version), K_(task_id), K_(parallelism), K_(execution_id),
                K_(data_format_version), K_(consumer_group_id));
 public:
   uint64_t tenant_id_;
+  uint64_t dest_tenant_id_;
   share::ObDDLType type_;
   common::ObArray<common::ObTabletID> source_tablet_ids_;
   common::ObArray<common::ObTabletID> dest_tablet_ids_;
   int64_t source_table_id_;
   int64_t dest_table_id_;
   int64_t schema_version_;
+  int64_t dest_schema_version_;
   int64_t snapshot_version_;
   int64_t task_id_;
   int64_t parallelism_;
@@ -113,6 +117,7 @@ private:
   };
 private:
   uint64_t tenant_id_;
+  uint64_t dest_tenant_id_;
   share::ObDDLType type_;
   common::ObArray<common::ObTabletID> source_tablet_ids_;
   common::ObArray<common::ObTabletID> dest_tablet_ids_;
@@ -120,6 +125,7 @@ private:
   int64_t source_table_id_;
   int64_t dest_table_id_;
   int64_t schema_version_;
+  int64_t dest_schema_version_;
   int64_t snapshot_version_;
   int64_t task_id_;
   int64_t parallelism_;

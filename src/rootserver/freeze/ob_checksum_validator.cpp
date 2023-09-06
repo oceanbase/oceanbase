@@ -826,7 +826,7 @@ int ObCrossClusterTabletChecksumValidator::check_all_table_verification_finished
   } else if (stop) {
     ret = OB_CANCELED;
     LOG_WARN("already stop", KR(ret), K_(tenant_id));
-  } else {
+  } else if (need_validate()) {  // need to validate cross-cluster checksum
     table_count = 0;
     ObSchemaGetterGuard schema_guard;
     SMART_VARS_2((ObArray<const ObSimpleTableSchemaV2 *>, table_schemas),
@@ -853,14 +853,10 @@ int ObCrossClusterTabletChecksumValidator::check_all_table_verification_finished
             } else if (cur_compaction_info.is_verified()) { // already finished verification, skip it!
             } else if (simple_schema->has_tablet()) {
               if (cur_compaction_info.is_index_ckm_verified()) {
-                if (need_validate()) {  // need to validate cross-cluster checksum
-                  if (OB_FAIL(validate_cross_cluster_checksum(stop, frozen_scn, expected_epoch,
-                              simple_schema, table_compaction_map, merge_time_statistics))) {
-                    LOG_WARN("fail to validate cross-cluster checksum", KR(ret), K(stop),
-                             K(frozen_scn), K(expected_epoch), K(table_id));
-                  }
-                } else {  // no need to validate cross-cluster checksum
-                  // do nothing. index validator should already wrote ckm and updated report_scn
+                if (OB_FAIL(validate_cross_cluster_checksum(stop, frozen_scn, expected_epoch,
+                            simple_schema, table_compaction_map, merge_time_statistics))) {
+                  LOG_WARN("fail to validate cross-cluster checksum", KR(ret), K(stop),
+                            K(frozen_scn), K(expected_epoch), K(table_id));
                 }
               }
             } else { // like VIEW that has no tablet, no need to validate cross-cluster checksum
@@ -884,6 +880,8 @@ int ObCrossClusterTabletChecksumValidator::check_all_table_verification_finished
         }
       }
     }
+  } else {  // no need to validate cross-cluster checksum
+    // do nothing. index validator should already wrote ckm and updated report_scn
   }
 
   if (OB_CHECKSUM_ERROR == check_ret) {

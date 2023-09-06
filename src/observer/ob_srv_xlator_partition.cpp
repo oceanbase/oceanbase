@@ -199,6 +199,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObTableQueryAndMutateP, gctx_);
   RPC_PROCESSOR(ObTableQuerySyncP, gctx_);
   RPC_PROCESSOR(ObTableDirectLoadP, gctx_);
+  RPC_PROCESSOR(ObTenantTTLP, gctx_);
 
   // HA GTS
   RPC_PROCESSOR(ObHaGtsPingRequestP, gctx_);

@@ -13,8 +13,12 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_htable_utils.h"
 #include <endian.h>  // be64toh
+#include "ob_htable_filters.h"
+#include "ob_htable_filter_operator.h"
+#include "share/table/ob_table.h"
 using namespace oceanbase::common;
 using namespace oceanbase::table;
+using namespace oceanbase::share::schema;
 
 ObHTableCellEntity::ObHTableCellEntity(common::ObNewRow *ob_row)
     :ob_row_(ob_row)
@@ -97,6 +101,18 @@ ObString ObHTableCellEntity2::get_value() const
     rowkey_str = val.get_varchar();
   }
   return rowkey_str;
+}
+
+int ObHTableCellEntity2::get_value(ObString &str) const
+{
+  int ret = OB_SUCCESS;
+  ObObj val;
+  if (OB_FAIL(entity_->get_property(ObHTableConstants::VALUE_CNAME_STR, val))) {
+    LOG_WARN("failed to get property K", K(ret));
+  } else {
+    str = val.get_varchar();
+  }
+  return ret;
 }
 ////////////////////////////////////////////////////////////////
 ObString ObHTableCellEntity3::get_rowkey() const
@@ -309,4 +325,92 @@ int ObHTableUtils::int64_to_java_bytes(int64_t val, char bytes[8])
   uint64_t big_endian_64bits = htobe64(val);
   memcpy(bytes, &big_endian_64bits, sizeof(int64_t));
   return OB_SUCCESS;
+}
+
+int ObHTableUtils::lock_htable_rows(uint64_t table_id, const ObTableBatchOperation &mutations, ObHTableLockHandle &handle, ObHTableLockMode lock_mode)
+{
+  int ret = OB_SUCCESS;
+  const int64_t N = mutations.count();
+  if (table_id == OB_INVALID_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table id", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+    const ObITableEntity &entity = mutations.at(i).entity();
+    ObHTableCellEntity3 htable_cell(&entity);
+    ObString row = htable_cell.get_rowkey();
+    if (row.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null htable rowkey", K(ret));
+    } else if (OB_FAIL(HTABLE_LOCK_MGR->lock_row(table_id, row, lock_mode, handle))) {
+      LOG_WARN("fail to lock htable row", K(ret), K(table_id), K(row), K(lock_mode));
+    }
+  }
+  return ret;
+}
+
+int ObHTableUtils::lock_htable_row(uint64_t table_id, const ObTableQuery &htable_query, ObHTableLockHandle &handle, ObHTableLockMode lock_mode)
+{
+  int ret = OB_SUCCESS;
+  if (table_id == OB_INVALID_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table id", K(ret));
+  } else if (!htable_query.get_htable_filter().is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid query", K(ret));
+  } else {
+    const ObIArray<common::ObNewRange> &key_ranges = htable_query.get_scan_ranges();
+    const ObObj *start_key_ptr = key_ranges.at(0).start_key_.get_obj_ptr();
+    const ObObj *end_key_ptr = key_ranges.at(0).end_key_.get_obj_ptr();
+    if (OB_ISNULL(start_key_ptr) || OB_ISNULL(end_key_ptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null pointer", K(ret), KP(start_key_ptr), KP(end_key_ptr), K(key_ranges.at(0)));
+    } else {
+      ObString start_key = start_key_ptr->get_string();
+      ObString end_key = end_key_ptr->get_string();
+      if (start_key.empty() || end_key.empty() || start_key != end_key) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument, check operation must only has one row", K(ret), K(start_key), K(end_key));
+      } else if (OB_FAIL(HTABLE_LOCK_MGR->lock_row(table_id, start_key, lock_mode, handle))) {
+        LOG_WARN("fail to lock htable row", K(ret), K(table_id), K(start_key), K(lock_mode));
+      }
+    }
+  }
+  return ret;
+}
+int ObHTableUtils::check_htable_schema(const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *rowkey_schema = NULL;
+  const ObColumnSchemaV2 *qualifier_schema = NULL;
+  const ObColumnSchemaV2 *version_schema = NULL;
+  const ObColumnSchemaV2 *value_schema = NULL;
+
+  if (OB_ISNULL(rowkey_schema = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_K))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("can't get rowkey column schema");
+  } else if (ObHTableConstants::ROWKEY_CNAME_STR.case_compare(rowkey_schema->get_column_name()) != 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the first column should be K", K(ret), K(rowkey_schema->get_column_name()));
+  } else if (OB_ISNULL(qualifier_schema = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_Q))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("can't get qualifier column schema");
+  } else if (ObHTableConstants::CQ_CNAME_STR.case_compare(qualifier_schema->get_column_name()) != 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the second column should be Q", K(ret), K(qualifier_schema->get_column_name()));
+  } else if (OB_ISNULL(version_schema = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_T))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("can't get version column schema");
+  } else if (ObHTableConstants::VERSION_CNAME_STR.case_compare(version_schema->get_column_name()) != 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the third column should be T", K(ret), K(version_schema->get_column_name()));
+  } else if (OB_ISNULL(value_schema = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_V))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("can't get version column schema");
+  } else if (ObHTableConstants::VALUE_CNAME_STR.case_compare(value_schema->get_column_name()) != 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the fourth column should be V", K(ret), K(value_schema->get_column_name()));
+  }
+
+  return ret;
 }

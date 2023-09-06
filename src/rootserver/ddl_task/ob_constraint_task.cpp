@@ -522,6 +522,8 @@ int ObConstraintTask::init(
     consumer_group_id_ = consumer_group_id;
     task_version_ = OB_CONSTRAINT_TASK_VERSION;
     is_table_hidden_ = table_schema->is_user_hidden_table();
+    dst_tenant_id_ = tenant_id_;
+    dst_schema_version_ = schema_version_;
     is_inited_ = true;
     ddl_tracing_.open();
   }
@@ -534,6 +536,7 @@ int ObConstraintTask::init(const ObDDLTaskRecord &task_record)
   const uint64_t table_id = task_record.object_id_;
   const uint64_t target_object_id = task_record.target_object_id_;
   const int64_t schema_version = task_record.schema_version_;
+  task_type_ = task_record.ddl_type_;
   ObSchemaGetterGuard schema_guard;
   ObRootService *root_service = GCTX.root_service_;
   const ObTableSchema *table_schema = nullptr;
@@ -561,7 +564,6 @@ int ObConstraintTask::init(const ObDDLTaskRecord &task_record)
     target_object_id_ = target_object_id;
     tenant_id_ = task_record.tenant_id_;
     task_status_ = static_cast<ObDDLTaskStatus>(task_record.task_status_);
-    task_type_ = task_record.ddl_type_;
     snapshot_version_ = task_record.snapshot_version_;
     schema_version_ = task_record.schema_version_;
     root_service_ = root_service;
@@ -569,6 +571,8 @@ int ObConstraintTask::init(const ObDDLTaskRecord &task_record)
     parent_task_id_ = task_record.parent_task_id_;
     is_table_hidden_ = table_schema->is_user_hidden_table();
     ret_code_ = task_record.ret_code_;
+    dst_tenant_id_ = tenant_id_;
+    dst_schema_version_ = schema_version_;
     is_inited_ = true;
 
     // set up span during recover task
@@ -1913,7 +1917,7 @@ int ObConstraintTask::deserlize_params_from_message(const uint64_t tenant_id, co
     LOG_WARN("ObDDLTask deserlize failed", K(ret));
   } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
     LOG_WARN("serialize table failed", K(ret));
-  } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
+  } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(task_type_, tenant_id, tmp_arg))) {
     LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_arg));
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, alter_table_arg_))) {
     LOG_WARN("deep copy table arg failed", K(ret));

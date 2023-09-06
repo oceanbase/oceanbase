@@ -19,6 +19,7 @@
 #include "ob_table_insert_up_executor.h"
 #include "ob_table_replace_executor.h"
 #include "ob_table_lock_executor.h"
+#include "ttl/ob_table_ttl_executor.h"
 
 namespace oceanbase
 {
@@ -61,6 +62,7 @@ REGISTER_TABLE_API_EXECUTOR(TABLE_API_EXEC_UPDATE, ObTableApiUpdateSpec, ObTable
 REGISTER_TABLE_API_EXECUTOR(TABLE_API_EXEC_INSERT_UP, ObTableApiInsertUpSpec, ObTableApiInsertUpExecutor);
 REGISTER_TABLE_API_EXECUTOR(TABLE_API_EXEC_REPLACE, ObTableApiReplaceSpec, ObTableApiReplaceExecutor);
 REGISTER_TABLE_API_EXECUTOR(TABLE_API_EXEC_LOCK, ObTableApiLockSpec, ObTableApiLockExecutor);
+REGISTER_TABLE_API_EXECUTOR(TABLE_API_EXEC_TTL, ObTableApiTTLSpec, ObTableApiTTLExecutor);
 
 #undef REGISTER_TABLE_API_EXECUTOR
 

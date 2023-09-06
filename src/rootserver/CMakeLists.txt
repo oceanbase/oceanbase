@@ -120,6 +120,7 @@ ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_index_build_task.cpp
   ddl_task/ob_modify_autoinc_task.cpp
   ddl_task/ob_table_redefinition_task.cpp
+  ddl_task/ob_recover_restore_table_task.cpp
 )
 
 ob_set_subtarget(ob_rootserver parallel_ddl
@@ -148,6 +149,11 @@ ob_set_subtarget(ob_rootserver freeze
 )
 
 ob_set_subtarget(ob_rootserver restore
+  restore/ob_import_table_job_scheduler.cpp
+  restore/ob_recover_table_initiator.cpp
+  restore/ob_import_table_task_generator.cpp
+  restore/ob_recover_table_job_scheduler.cpp
+  restore/ob_restore_service.cpp
   restore/ob_restore_scheduler.cpp
   restore/ob_restore_util.cpp
 )

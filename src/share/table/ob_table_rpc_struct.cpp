@@ -92,17 +92,25 @@ OB_SERIALIZE_MEMBER((ObTableQuerySyncRequest, ObTableQueryRequest),
                     query_type_
                     );
 ////////////////////////////////////////////////////////////////
+OB_SERIALIZE_MEMBER_SIMPLE(ObTableDirectLoadRequestHeader,
+                           addr_,
+                           operation_type_);
+
 OB_SERIALIZE_MEMBER(ObTableDirectLoadRequest,
+                    header_,
                     credential_,
-                    operation_type_,
                     arg_content_);
 
+OB_SERIALIZE_MEMBER_SIMPLE(ObTableDirectLoadResultHeader,
+                           addr_,
+                           operation_type_);
+
 OB_UNIS_DEF_SERIALIZE(ObTableDirectLoadResult,
-                      operation_type_,
+                      header_,
                       res_content_);
 
 OB_UNIS_DEF_SERIALIZE_SIZE(ObTableDirectLoadResult,
-                           operation_type_,
+                           header_,
                            res_content_);
 
 OB_DEF_DESERIALIZE(ObTableDirectLoadResult)
@@ -114,7 +122,7 @@ OB_DEF_DESERIALIZE(ObTableDirectLoadResult)
   } else {
     ObString tmp_res_content;
     LST_DO_CODE(OB_UNIS_DECODE,
-                operation_type_,
+                header_,
                 tmp_res_content);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ob_write_string(*allocator_, tmp_res_content, res_content_))) {

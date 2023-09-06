@@ -18,6 +18,7 @@
 #include "ob_htable_utils.h"
 #include "ob_htable_filter_operator.h"
 #include "ob_table_insert_up_executor.h"
+#include "ttl/ob_table_ttl_executor.h"
 #include "ob_table_query_common.h"
 
 namespace oceanbase
@@ -74,22 +75,40 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
 {
   int ret = OB_SUCCESS;
   ObITableEntity *result_entity = nullptr;
-  if (TABLE_API_EXEC_INSERT_UP != spec.get_type()) {
+  if (TABLE_API_EXEC_INSERT_UP != spec.get_type() && TABLE_API_EXEC_TTL != spec.get_type()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid spec type", K(ret), K(spec.get_type()));
   } else if (OB_FAIL(op_result.get_entity(result_entity))) {
     LOG_WARN("fail to get result entity", K(ret), K(result_entity));
   } else {
     ObIAllocator &allocator = tb_ctx.get_allocator();
-    const ObTableApiInsertUpSpec &ins_up_spec = static_cast<const ObTableApiInsertUpSpec&>(spec);
-    const ObIArray<ObExpr *> &full_assign_exprs = ins_up_spec.get_ctdef().upd_ctdef_.full_assign_row_;
-    const ObIArray<ObExpr *> &ins_exprs = ins_up_spec.get_ctdef().ins_ctdef_.new_row_;
+    const ObIArray<ObExpr *> *full_assign_exprs = nullptr;
+    const ObIArray<ObExpr *> *ins_exprs = nullptr;
+    bool use_insert_expr = false;
+    if (TABLE_API_EXEC_INSERT_UP == spec.get_type()) {
+      const ObTableApiInsertUpSpec &ins_up_spec = static_cast<const ObTableApiInsertUpSpec&>(spec);
+      full_assign_exprs = &ins_up_spec.get_ctdef().upd_ctdef_.full_assign_row_;
+      ins_exprs = &ins_up_spec.get_ctdef().ins_ctdef_.new_row_;
+      use_insert_expr = !static_cast<ObTableApiInsertUpExecutor&>(executor).is_insert_duplicated();
+    } else {
+      ObTableApiTTLExecutor &ttl_executor = static_cast<ObTableApiTTLExecutor&>(executor);
+      const ObTableApiTTLSpec &ttl_spec = static_cast<const ObTableApiTTLSpec&>(spec);
+      full_assign_exprs = &ttl_spec.get_ctdef().upd_ctdef_.full_assign_row_;
+      ins_exprs = &ttl_spec.get_ctdef().ins_ctdef_.new_row_;
+      use_insert_expr = !ttl_executor.is_insert_duplicated() || ttl_executor.is_expired();
+    }
     const ObTableCtx::ObAssignIds &assign_ids = tb_ctx.get_assign_ids();
     const int64_t N = assign_ids.count();
     ObObj *obj_array = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * N));
     if (OB_ISNULL(obj_array)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("faild to alloc memory for objs", K(ret));
+    } else if (OB_ISNULL(full_assign_exprs)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("full assign exprs is null", K(ret));
+    } else if (OB_ISNULL(ins_exprs)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("insert exprs is null", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
       uint64_t idx = assign_ids.at(i).idx_;
@@ -100,8 +119,7 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
         LOG_WARN("column not exist", K(ret), K(column_id));
       } else {
         ObObj &obj = obj_array[i];
-        bool is_duplicated = static_cast<ObTableApiInsertUpExecutor&>(executor).is_insert_duplicated();
-        ObExpr *rt_expr = is_duplicated ? full_assign_exprs.at(idx) : ins_exprs.at(idx);
+        ObExpr *rt_expr = use_insert_expr ? ins_exprs->at(idx) : full_assign_exprs->at(idx);
         ObDatum *datum = nullptr;
         const ObString &column_name = column_schema->get_column_name_str();
         if (OB_FAIL(rt_expr->eval(executor.get_eval_ctx(), datum))) {
@@ -324,6 +342,8 @@ int ObHTableDeleteExecutor::query_and_delete(const ObTableQuery &query)
     if (OB_FAIL(result_iter->get_next_result(one_result))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to get next result", K(ret));
+      } else {
+        ret = OB_SUCCESS;
       }
     } else if (OB_ISNULL(one_result)) {
       ret = OB_ERR_UNEXPECTED;

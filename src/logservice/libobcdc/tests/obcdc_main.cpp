@@ -60,7 +60,7 @@ ObLogMain::ObLogMain() : inited_(false),
                          start_timestamp_usec_(0),
                          tenant_id_(OB_INVALID_TENANT_ID),
                          tg_match_pattern_(NULL),
-                         last_heartbeat_timestamp_micro_sec_(0),
+                         last_heartbeat_timestamp_usec_(OB_INVALID_VERSION),
                          stop_flag_(true)
 {
 }
@@ -89,7 +89,7 @@ int ObLogMain::init(int argc, char **argv)
   } else {
     stop_flag_ = true;
     inited_ = true;
-    last_heartbeat_timestamp_micro_sec_ = start_timestamp_usec_;
+    last_heartbeat_timestamp_usec_ = OB_INVALID_VERSION;
   }
 
   return ret;
@@ -116,7 +116,7 @@ void ObLogMain::destroy()
   start_timestamp_usec_ = 0;
   tenant_id_ = OB_INVALID_TENANT_ID;
   tg_match_pattern_ = NULL;
-  last_heartbeat_timestamp_micro_sec_ = 0;
+  last_heartbeat_timestamp_usec_ = OB_INVALID_VERSION;
   stop_flag_ = true;
   output_br_detail_ = false;
   output_br_special_detail_ = false;
@@ -438,55 +438,63 @@ int ObLogMain::verify_record_info_(IBinlogRecord *br)
     LOG_ERROR("get user data fail", K(br), K(oblog_br));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    // heartbeat, updtae last_heartbeat_timestamp_micro_sec_
-    if (HEARTBEAT == br->recordType()) {
-      int64_t timestamp_usec = OB_INVALID_TIMESTAMP;
-      if (is_first_br) {
-        // oblog_tailf -f $CONFIG -t 0 means start at current time
-        // The libobcdc start timestamp is not available
-        // So the first BinlogRecord is obtained based on the checkpoint
-        timestamp_usec = br->getCheckpoint1() * 1000000 + br->getCheckpoint2();
-        is_first_br = false;
-      } else {
-        timestamp_usec = br->getTimestamp() * 1000000 + br->getRecordUsec();
+    // heartbeat, updtae last_heartbeat_timestamp_usec_
+    int64_t checkpoint_timestamp_usec = OB_INVALID_TIMESTAMP;
+
+    if (is_first_br) {
+      // oblog_tailf -f $CONFIG -t 0 means start at current time
+      // The libobcdc start timestamp is not available
+      // So the first BinlogRecord is obtained based on the checkpoint
+      checkpoint_timestamp_usec = br->getCheckpoint1() * 1000000 + br->getCheckpoint2();
+      is_first_br = false;
+    } else if (HEARTBEAT == br->recordType()) {
+      checkpoint_timestamp_usec = br->getTimestamp() * 1000000 + br->getRecordUsec();
+      if (checkpoint_timestamp_usec < last_heartbeat_timestamp_usec_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("checkpoint rollbacked", KR(ret), K(checkpoint_timestamp_usec), K_(last_heartbeat_timestamp_usec));
       }
-      last_heartbeat_timestamp_micro_sec_ = std::max(timestamp_usec, last_heartbeat_timestamp_micro_sec_);
     }
 
-    // Calibration timestamp and checkpoint
-    int64_t precise_timestamp = ObBinlogRecordPrinter::get_precise_timestamp(*br);
-    int64_t timestamp_sec = precise_timestamp / 1000000;
-    int64_t timestamp_usec = precise_timestamp % 1000000;
-    int64_t expect_checkpoint1 = last_heartbeat_timestamp_micro_sec_ / 1000000;
-    int64_t expect_checkpoint2 = last_heartbeat_timestamp_micro_sec_ % 1000000;
+    if (OB_SUCC(ret)) {
+      last_heartbeat_timestamp_usec_ = std::max(checkpoint_timestamp_usec, last_heartbeat_timestamp_usec_);
 
-    if (OB_UNLIKELY(timestamp_sec != br->getTimestamp())
-        || OB_UNLIKELY(timestamp_usec != br->getRecordUsec())) {
-      LOG_ERROR("timestamp is not right", K(precise_timestamp), "br_sec", br->getTimestamp(),
-          "br_usec", br->getRecordUsec());
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_UNLIKELY(expect_checkpoint1 != br->getCheckpoint1())
-        || OB_UNLIKELY(expect_checkpoint2 != br->getCheckpoint2())) {
-      LOG_ERROR("checkpoint is not right", K(br), K(last_heartbeat_timestamp_micro_sec_),
-          K(expect_checkpoint1), "br_checkpoint1", br->getCheckpoint1(),
-          K(expect_checkpoint2), "br_checkpoint2", br->getCheckpoint2(),
-          "getTimestamp", br->getTimestamp(), "getRecordUsec", br->getRecordUsec(),
-          K(is_first_br));
-      ret = OB_ERR_UNEXPECTED;
-    } else {
-      // succ
+      // Calibration timestamp and checkpoint
+      int64_t precise_timestamp = ObBinlogRecordPrinter::get_precise_timestamp(*br);
+      int64_t timestamp_sec = precise_timestamp / 1000000;
+      int64_t timestamp_usec = precise_timestamp % 1000000;
+      int64_t expect_checkpoint1 = last_heartbeat_timestamp_usec_ / 1000000;
+      int64_t expect_checkpoint2 = last_heartbeat_timestamp_usec_ % 1000000;
+
+      if (OB_UNLIKELY(timestamp_sec != br->getTimestamp())
+          || OB_UNLIKELY(timestamp_usec != br->getRecordUsec())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("timestamp is not right", KR(ret), K(precise_timestamp), "br_sec", br->getTimestamp(),
+            "br_usec", br->getRecordUsec());
+      } else if (OB_UNLIKELY(expect_checkpoint1 != br->getCheckpoint1())
+          || OB_UNLIKELY(expect_checkpoint2 != br->getCheckpoint2())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("checkpoint is not right", KR(ret), K(br), K(last_heartbeat_timestamp_usec_),
+            K(expect_checkpoint1), "br_checkpoint1", br->getCheckpoint1(),
+            K(expect_checkpoint2), "br_checkpoint2", br->getCheckpoint2(),
+            "getTimestamp", br->getTimestamp(), "getRecordUsec", br->getRecordUsec(),
+            K(is_first_br));
+      } else {
+        // succ
+      }
     }
   }
 
   return ret;
 }
 
+// use tools/import_time_zone_info.py to import tools/timezone_V1.log into server and will dump
+// timezone_info.conf in obcdc online schema mode
 int ObLogMain::parse_timezone_info_(const char *tzinfo_fpath)
 {
   int ret = OB_SUCCESS;
   char *buf = nullptr;
   char *print_buf = nullptr;
-  const int64_t buf_len = 24 * _M_;
+  const int64_t buf_len = 128 * _M_;
   int64_t pos = 0;
   int64_t str_len = 0;
   common::ObRequestTZInfoResult tz_info_res;
@@ -503,13 +511,14 @@ int ObLogMain::parse_timezone_info_(const char *tzinfo_fpath)
   } else if (OB_FAIL(tz_info_res.deserialize(buf, buf_len, pos))) {
     LOG_ERROR("deserialize tz_info_res failed", KR(ret), K(buf_len), K(pos), KP(buf));
   } else {
+    LOG_STD("prepare parse timezone_info\n");
     const int64_t tz_info_cnt = tz_info_res.tz_array_.count();
     common::databuff_printf(print_buf, buf_len, str_len, "package: %s\r\n", PACKAGE_STRING);
     common::databuff_printf(print_buf, buf_len, str_len, "timezone_info_version: %ld\r\n", tz_info_res.last_version_);
 
     for(int64_t i = 0; OB_SUCC(ret) && i < tz_info_cnt; i++) {
       const common::ObTimeZoneInfoPos &pos = tz_info_res.tz_array_[i];
-      int64_t tmp_buf_len = 1 * _M_;
+      int64_t tmp_buf_len = 2 * _M_;
       char tmp_buf[tmp_buf_len];
       int64_t tmp_pos = pos.to_string(tmp_buf, tmp_buf_len);
       tmp_buf[tmp_pos] = '\0';
@@ -517,6 +526,8 @@ int ObLogMain::parse_timezone_info_(const char *tzinfo_fpath)
       if (OB_FAIL(common::databuff_printf(print_buf, buf_len, str_len,
           "timezone_info_pos[%ld/%ld]: %s\r\n",
           i + 1, tz_info_cnt, tmp_buf))) {
+        LOG_STD("print timezone_info_pos failed, buf_len:%ld, str_len:%ld, tz_info_cnt:%ld/%ld, tmp_buf_len:%ld\n",
+              buf_len, str_len, i, tz_info_cnt, tmp_buf_len);
         LOG_ERROR("print timezone_info_pos failed", KR(ret), K(buf_len), K(str_len), K(i), K(tz_info_cnt));
       }
     }
@@ -534,6 +545,10 @@ int ObLogMain::parse_timezone_info_(const char *tzinfo_fpath)
           parsed_timezone_info_file_name,
           SIZE_TO_STR(str_len));
     }
+  }
+
+  if (OB_FAIL(ret)) {
+    LOG_STD("parse_timezone_info done, ret:%d", ret);
   }
 
   if (OB_NOT_NULL(print_buf)) {

@@ -39,7 +39,7 @@
 #include "rootserver/ob_recovery_ls_service.h"
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
 #include "rootserver/ob_tenant_balance_service.h"
-#include "rootserver/restore/ob_restore_scheduler.h"
+#include "rootserver/restore/ob_restore_service.h"
 #include "share/ob_tenant_info_proxy.h"
 #include "share/leak_checker/obj_leak_checker.h"
 #include "share/ob_ls_id.h"
@@ -65,6 +65,8 @@
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/tablet/ob_tablet_multi_source_data.h"
 #include "storage/high_availability/ob_rebuild_service.h"
+#include "observer/table/ttl/ob_ttl_service.h"
+#include "observer/table/ttl/ob_tenant_tablet_ttl_mgr.h"
 #include "share/wr/ob_wr_service.h"
 
 namespace oceanbase
@@ -308,6 +310,21 @@ int ObLS::init(const share::ObLSID &ls_id,
         REGISTER_TO_LOGSERVICE(logservice::HEARTBEAT_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObHeartbeatService *));
         LOG_INFO("heartbeat service is registered successfully");
       }
+
+      if (OB_SUCC(ret) && is_user_tenant(tenant_id)) {
+        if (ls_id.is_sys_ls()) {
+          REGISTER_TO_LOGSERVICE(logservice::TTL_LOG_BASE_TYPE, MTL(table::ObTTLService *));
+          LOG_INFO("register tenant ttl service complete", KR(ret));
+        } else if (ls_id.is_user_ls()) {
+          if (OB_FAIL(tablet_ttl_mgr_.init(this))) {
+            LOG_WARN("fail to init tablet ttl manager", KR(ret));
+          } else {
+            REGISTER_TO_LOGSERVICE(logservice::TTL_LOG_BASE_TYPE, &tablet_ttl_mgr_);
+            LOG_INFO("register tenant tablet ttl mgr complete", KR(ret));
+          }
+        }
+      }
+
 
       if (OB_SUCC(ret)) {             // don't delete it
         election_priority_.set_ls_id(ls_id);
@@ -844,6 +861,15 @@ void ObLS::destroy()
   if (is_sys_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
     UNREGISTER_FROM_LOGSERVICE(logservice::WORKLOAD_REPOSITORY_SERVICE_LOG_BASE_TYPE,
         GCTX.wr_service_);
+  }
+
+  if (is_user_tenant(MTL_ID())) {
+    if (ls_meta_.ls_id_.is_sys_ls()) {
+      UNREGISTER_FROM_LOGSERVICE(logservice::TTL_LOG_BASE_TYPE, MTL(table::ObTTLService *));
+    } else if (ls_meta_.ls_id_.is_user_ls()) {
+      UNREGISTER_FROM_LOGSERVICE(logservice::TTL_LOG_BASE_TYPE, tablet_ttl_mgr_);
+      tablet_ttl_mgr_.destroy();
+    }
   }
 
   tx_table_.destroy();
@@ -1604,6 +1630,7 @@ int ObLS::replay_get_tablet_no_check(
 int ObLS::replay_get_tablet(
     const common::ObTabletID &tablet_id,
     const SCN &scn,
+    const bool is_update_mds_table,
     ObTabletHandle &handle) const
 {
   int ret = OB_SUCCESS;
@@ -1639,7 +1666,8 @@ int ObLS::replay_get_tablet(
       ret = OB_OBSOLETE_CLOG_NEED_SKIP;
       LOG_INFO("tablet is already deleted, need skip", KR(ret), K(ls_id), K(tablet_id), K(scn));
     }
-  } else if (scn > tablet->get_clog_checkpoint_scn()) {
+  } else if ((!is_update_mds_table && scn > tablet->get_clog_checkpoint_scn())
+      || (is_update_mds_table && scn > tablet->get_mds_checkpoint_scn())) {
     if (OB_FAIL(tablet->get_latest_tablet_status(data, is_committed))) {
       if (OB_EMPTY_RESULT == ret) {
         ret = OB_EAGAIN;

@@ -26,7 +26,8 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/ob_zone_table_operation.h"
 #include "share/backup/ob_backup_struct.h"
-
+#include "share/restore/ob_import_table_struct.h"
+#include "share/restore/ob_recover_table_util.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/cmd/ob_alter_system_stmt.h"
 #include "sql/resolver/cmd/ob_system_cmd_stmt.h"
@@ -2725,24 +2726,47 @@ int ObAdminRollingUpgradeCmdResolver::resolve(const ParseNode &parse_tree)
 int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
+  ObPhysicalRestoreTenantStmt *stmt = nullptr;
   if (OB_UNLIKELY(T_PHYSICAL_RESTORE_TENANT != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("type is not T_PHYSICAL_RESTORE_TENANT", "type", get_type_name(parse_tree.type_));
   } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("children should not be null");
-  } else if (OB_UNLIKELY(8 != parse_tree.num_child_)) {
+  } else if (OB_UNLIKELY(7 != parse_tree.num_child_ && 2 != parse_tree.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("num of children not match", K(ret), "child_num", parse_tree.num_child_);
+  } else if (OB_ISNULL(stmt = create_stmt<ObPhysicalRestoreTenantStmt>())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("create ObPhysicalRestoreTenantStmt failed");
+  } else if (OB_FALSE_IT(stmt_ = stmt)) {
+  } else if (2 == parse_tree.num_child_) {
+    // parse preview
+    stmt->set_is_preview(true);
+    stmt->get_rpc_arg().initiator_tenant_id_ = OB_SYS_TENANT_ID;
+    const ParseNode *time_node = parse_tree.children_[1];
+    if (OB_FAIL(Util::resolve_string(parse_tree.children_[0], stmt->get_rpc_arg().uri_))) {
+      LOG_WARN("resolve string failed", K(ret));
+    } else if (OB_ISNULL(parse_tree.children_[1])) {
+      stmt->get_rpc_arg().with_restore_scn_ = false;
+    } else if (0/*timestamp*/ == time_node->children_[0]->value_) {
+      stmt->get_rpc_arg().restore_timestamp_.assign_ptr(time_node->children_[1]->str_value_, time_node->children_[1]->str_len_);
+      stmt->get_rpc_arg().with_restore_scn_ = false;
+    } else if (1/*timestamp*/ == time_node->children_[0]->value_) {
+      if (share::OB_BASE_SCN_TS_NS >= time_node->children_[1]->value_) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "until scn, it should be positive integer");
+        LOG_WARN("until scn, it should be positive integer", KR(ret), K(time_node->children_[1]->value_));
+      } else if (OB_FAIL(stmt->get_rpc_arg().restore_scn_.convert_for_sql(time_node->children_[1]->value_))) {
+        LOG_WARN("failed to convert scn", K(ret));
+      } else {
+        stmt->get_rpc_arg().with_restore_scn_ = true;
+      }
+    }
   } else {
-    ObPhysicalRestoreTenantStmt *stmt = create_stmt<ObPhysicalRestoreTenantStmt>();
-    if (NULL == stmt) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("create ObPhysicalRestoreTenantStmt failed");
-    } else {
-      stmt_ = stmt;
-      if (OB_FAIL(Util::resolve_relation_name(parse_tree.children_[0],
-                                              stmt->get_rpc_arg().tenant_name_))) {
+    stmt->set_is_preview(false);
+    stmt->get_rpc_arg().initiator_tenant_id_ = OB_SYS_TENANT_ID;
+      if(OB_FAIL(Util::resolve_relation_name(parse_tree.children_[0], stmt->get_rpc_arg().tenant_name_))) {
         LOG_WARN("resolve tenant_name failed", K(ret));
       } else {
         const ObString &tenant_name = stmt->get_rpc_arg().tenant_name_;
@@ -2805,85 +2829,25 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("failed to resolve restore source array", K(ret));
       } else {
         // resolve datetime
+        const ParseNode *time_node = parse_tree.children_[2];
         if (OB_ISNULL(parse_tree.children_[2])) {
           stmt->get_rpc_arg().with_restore_scn_ = false;
-        } else {
-          const ParseNode *time_node = parse_tree.children_[2];
-          if (OB_UNLIKELY(T_PHYSICAL_RESTORE_UNTIL != time_node->type_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("type is not T_PHYSICAL_RESTORE_UNTIL", "type", get_type_name(time_node->type_));
-          } else if (OB_ISNULL(time_node->children_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("children should not be null");
-          } else if (OB_UNLIKELY(2 != time_node->num_child_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("num of children not match", K(ret), "child_num", time_node->num_child_);
-          } else if (OB_ISNULL(time_node->children_[0]) || OB_ISNULL(time_node->children_[1])) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("children should not be null", KP(time_node->children_[0]), KP(time_node->children_[1]));
-          } else if (0/*timestamp*/ == time_node->children_[0]->value_) {
-            stmt->get_rpc_arg().restore_timestamp_.assign_ptr(time_node->children_[1]->str_value_, time_node->children_[1]->str_len_);
-            stmt->get_rpc_arg().with_restore_scn_ = false;
-          } else if (1/*timestamp*/ == time_node->children_[0]->value_) {
-            if (share::OB_BASE_SCN_TS_NS >= time_node->children_[1]->value_) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_USER_ERROR(OB_INVALID_ARGUMENT, "until scn, it should be positive integer");
-              LOG_WARN("until scn, it should be positive integer", KR(ret), K(time_node->children_[1]->value_));
-            } else if (OB_FAIL(stmt->get_rpc_arg().restore_scn_.convert_for_sql(time_node->children_[1]->value_))) {
-              LOG_WARN("failed to convert scn", K(ret));
-            } else {
-              stmt->get_rpc_arg().with_restore_scn_ = true;
-            }
-          }
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        if (8 == parse_tree.num_child_) { // resolve table_list
-          const ParseNode *node = parse_tree.children_[7];
-          if (OB_ISNULL(node)) {
-            stmt->set_is_preview(false);
+        } else if (0/*timestamp*/ == time_node->children_[0]->value_) {
+          stmt->get_rpc_arg().restore_timestamp_.assign_ptr(time_node->children_[1]->str_value_, time_node->children_[1]->str_len_);
+          stmt->get_rpc_arg().with_restore_scn_ = false;
+        } else if (1/*timestamp*/ == time_node->children_[0]->value_) {
+          if (share::OB_BASE_SCN_TS_NS >= time_node->children_[1]->value_) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "until scn, it should be positive integer");
+            LOG_WARN("until scn, it should be positive integer", KR(ret), K(time_node->children_[1]->value_));
+          } else if (OB_FAIL(stmt->get_rpc_arg().restore_scn_.convert_for_sql(time_node->children_[1]->value_))) {
+            LOG_WARN("failed to convert scn", K(ret));
           } else {
-            if (T_TABLE_LIST == node->type_) {
-      // TODO(chongrong.th) table list restore not support, fix this in 4.3
-              ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "table list restore is");
-              // store database_name/table_name with case sensitive.
-              // compare database_name/table_name with tenant's name_case_mode.
-              lib::CompatModeGuard g(lib::Worker::CompatMode::ORACLE);
-              for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++) {
-                const ParseNode *table_node = node->children_[i];
-                if (OB_ISNULL(table_node)) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("table_node is null", KR(ret));
-                } else {
-                  ObString table_name;
-                  ObString database_name;
-                  obrpc::ObTableItem table_item;
-                  if (OB_FAIL(resolve_table_relation_node(table_node,
-                                                          table_name,
-                                                          database_name))) {
-                    LOG_WARN("failed to resolve table name", KR(ret), K(table_item));
-                  } else {
-                    table_item.table_name_ = table_name;
-                    table_item.database_name_ = database_name;
-                    if (OB_FAIL(stmt->get_rpc_arg().add_table_item(table_item))) {
-                      LOG_WARN("failed to add table item", KR(ret), K(table_item));
-                    }
-                  }
-                }
-              }
-            } else if (T_PREVIEW == node->type_) {
-              stmt->set_is_preview(true);
-            } else {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("node type is not right", K(ret), K(node));
-            }
+            stmt->get_rpc_arg().with_restore_scn_ = true;
           }
         }
       }
     }
-  }
   return ret;
 }
 
@@ -4254,6 +4218,49 @@ int ObCancelRestoreResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
+int ObCancelRecoverTableResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  uint64_t session_tenant_id = session_info_->get_effective_tenant_id();
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  ObRecoverTableStmt *stmt = nullptr;
+  ObSchemaGetterGuard schema_guard;
+  ObString tenant_name;
+  if (OB_UNLIKELY(T_CANCEL_RECOVER_TABLE != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_CANCEL_RESTORE", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null", K(ret));
+  } else if (OB_UNLIKELY(1 != parse_tree.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
+  } else if (!is_sys_tenant(session_tenant_id)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("user tenant cancel recover table is not allowed", K(ret), K(session_tenant_id));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "user tenant cancel recover table is");
+  } else if (OB_ISNULL(stmt = create_stmt<ObRecoverTableStmt>())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("failed to create stmt", K(ret));
+  } else if (OB_UNLIKELY(T_IDENT != parse_tree.children_[0]->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid node", K(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(session_tenant_id, schema_guard))) {
+    LOG_WARN("failed to get_tenant_schema_guard", KR(ret));
+  } else if (OB_FALSE_IT(tenant_name.assign_ptr(parse_tree.children_[0]->str_value_, parse_tree.children_[0]->str_len_))) {
+  } else if (OB_FAIL(schema_guard.get_tenant_id(tenant_name, tenant_id))) {
+    LOG_WARN("failed to get tenant id from schema guard", KR(ret), K(tenant_name));
+  } else if (OB_FAIL(ObRecoverTableUtil::check_compatible(tenant_id))) {
+    LOG_WARN("check recover table compatible failed", K(ret));
+  } else {
+    stmt->get_rpc_arg().tenant_id_ = tenant_id;
+    stmt->get_rpc_arg().tenant_name_ = tenant_name;
+    stmt->get_rpc_arg().action_ = ObRecoverTableArg::CANCEL;
+  }
+
+  return ret;
+}
+
 int ObAlterSystemResolverUtil::get_tenant_ids(const ParseNode &t_node, ObIArray<uint64_t> &tenant_ids)
 {
   int ret = OB_SUCCESS;
@@ -4306,6 +4313,71 @@ int ObAlterSystemResolverUtil::get_tenant_ids(const ParseNode &t_node, ObIArray<
       tenant_name.reset();
     } //for tenant end
   }
+  return ret;
+}
+
+int ObTableTTLResolver::resolve(const ParseNode& parse_tree)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;;
+  const uint64_t cur_tenant_id = session_info_->get_effective_tenant_id();
+  if (OB_FAIL(GET_MIN_DATA_VERSION(cur_tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("TTL command is not supported in data version less than 4.2.1", K(ret), K(tenant_data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "TTL command is not supported in data version less than 4.2.1");
+  } else if (OB_UNLIKELY(T_TABLE_TTL != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_TABLE_TTL", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null", K(ret));
+  } else if (OB_UNLIKELY(2 != parse_tree.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info should not be null", K(ret));
+  } else {
+    ObTableTTLStmt* ttl_stmt = create_stmt<ObTableTTLStmt>();
+    const int64_t type = parse_tree.children_[0]->value_;
+    ParseNode *opt_tenant_list_v2 = parse_tree.children_[1];
+    if (NULL == ttl_stmt) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObTableTTLStmt failed");
+    } else if (OB_FAIL(ttl_stmt->set_type(type))) {
+      LOG_WARN("fail to set param", K(ret), K(type));
+    } else {
+      if (NULL == opt_tenant_list_v2) {
+        if (OB_SYS_TENANT_ID == cur_tenant_id) {
+          ttl_stmt->set_ttl_all(true);
+        } else if (OB_FAIL(ttl_stmt->get_tenant_ids().push_back(cur_tenant_id))) {
+          LOG_WARN("fail to push owned tenant id ", KR(ret), "owned tenant_id", cur_tenant_id);
+        }
+      } else if (OB_SYS_TENANT_ID != cur_tenant_id) {
+        ret = OB_ERR_NO_PRIVILEGE;
+        LOG_WARN("only sys tenant can add suffix opt(tenant=name)", KR(ret), K(cur_tenant_id));
+      } else {
+        bool affect_all = false;
+        bool affect_all_user = false;
+        bool affect_all_meta = false;
+        if (OB_FAIL(Util::resolve_tenant(*opt_tenant_list_v2, cur_tenant_id, ttl_stmt->get_tenant_ids(), affect_all, affect_all_user, affect_all_meta))) {
+          LOG_WARN("fail to resolve tenant", KR(ret), KP(opt_tenant_list_v2), K(cur_tenant_id));
+        } else if (affect_all_meta) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("affect_all_meta and affect_all_user is not supported", KR(ret), K(affect_all_meta), K(affect_all_user));
+          LOG_USER_WARN(OB_NOT_SUPPORTED, "affect_all_meta and affect_all_user");
+        } else if (affect_all || affect_all_user) {
+          ttl_stmt->set_ttl_all(true);
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      stmt_ = ttl_stmt;
+    }
+  }
+
   return ret;
 }
 
@@ -4855,6 +4927,601 @@ int ObCheckpointSlogResolver::resolve(const ParseNode &parse_tree)
       } else if (OB_FAIL(Util::resolve_server(parse_tree.children_[1], stmt->server_))) {
         LOG_WARN("resolve server failed", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObRecoverTableResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_NOT_SUPPORTED;
+  if (OB_UNLIKELY(T_RECOVER_TABLE != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_RECOVER_TABLE", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(9 != parse_tree.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
+  } else {
+    ObRecoverTableStmt *stmt = create_stmt<ObRecoverTableStmt>();
+    Worker::CompatMode compat_mode = Worker::CompatMode::INVALID;
+    ObNameCaseMode case_mode = ObNameCaseMode::OB_NAME_CASE_INVALID;
+    if (OB_ISNULL(stmt)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObRecoverTableStmt failed", K(ret));
+    } else if (OB_FAIL(resolve_tenant_(
+        parse_tree.children_[0], stmt->get_rpc_arg().tenant_id_, stmt->get_rpc_arg().tenant_name_, compat_mode, case_mode))) {
+      LOG_WARN("failed to resolve tenant id", K(ret));
+    } else if (OB_FAIL(ObRecoverTableUtil::check_compatible(stmt->get_rpc_arg().tenant_id_))) {
+      LOG_WARN("check recover table compatible failed", K(ret));
+    } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[1], stmt->get_rpc_arg().restore_tenant_arg_.uri_))) {
+      LOG_WARN("failed to resolve backup dest", K(ret));
+    } else if (OB_FAIL(resolve_scn_(parse_tree.children_[2], stmt->get_rpc_arg().restore_tenant_arg_))) {
+      LOG_WARN("failed to resolve restore scn", K(ret));
+    } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[3], stmt->get_rpc_arg().restore_tenant_arg_.restore_option_))) {
+      LOG_WARN("failed to resolve restore option", K(ret));
+    } else if (OB_FAIL(resolve_recover_tables_(
+        parse_tree.children_[4], compat_mode, case_mode, stmt->get_rpc_arg().import_arg_.get_import_table_arg()))) {
+      LOG_WARN("failed to resolve recover table list", K(ret));
+    } else if (OB_NOT_NULL(parse_tree.children_[5])
+        && OB_FAIL(Util::resolve_string(parse_tree.children_[5], stmt->get_rpc_arg().restore_tenant_arg_.encrypt_key_))) {
+      LOG_WARN("failed to resolve encrypt key", K(ret));
+    } else if (OB_NOT_NULL(parse_tree.children_[6])) {
+      ParseNode *kms_node = parse_tree.children_[6];
+      if (2 != kms_node->num_child_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("num of children not match", K(ret), "child_num", kms_node->num_child_);
+      } else if (OB_ISNULL(kms_node->children_[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("kms uri should not be NULL", K(ret));
+      } else if (OB_FAIL(Util::resolve_string(kms_node->children_[0],
+                                              stmt->get_rpc_arg().restore_tenant_arg_.kms_uri_))) {
+        LOG_WARN("failed to resolve kms uri", K(ret));
+      } else if (OB_NOT_NULL(kms_node->children_[1])
+          && OB_FAIL(Util::resolve_string(kms_node->children_[1],
+                                          stmt->get_rpc_arg().restore_tenant_arg_.kms_encrypt_key_))) {
+        LOG_WARN("failed to resolve kms encrypt key", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(parse_tree.children_[7])
+        && OB_FAIL(resolve_remap_(parse_tree.children_[7], compat_mode, case_mode, stmt->get_rpc_arg().import_arg_.get_remap_table_arg()))) {
+      LOG_WARN("failed to resolve remap", K(ret));
+    } else if (OB_NOT_NULL(parse_tree.children_[8])
+        && OB_FAIL(Util::resolve_string(parse_tree.children_[8], stmt->get_rpc_arg().restore_tenant_arg_.description_))) {
+      LOG_WARN("failed to resolve desc", K(ret));
+#ifndef OB_BUILD_TDE_SECURITY
+    } else if (OB_FAIL(resolve_kms_info_(
+        stmt->get_rpc_arg().restore_tenant_arg_.restore_option_, stmt->get_rpc_arg().restore_tenant_arg_.kms_info_))) {
+      LOG_WARN("failed to resolve kms info", K(ret));
+#endif
+    } else if (OB_FAIL(resolve_backup_set_pwd_(stmt->get_rpc_arg().restore_tenant_arg_.passwd_array_))) {
+      LOG_WARN("failed to resolve backup set pwd", K(ret));
+    } else if (OB_FAIL(resolve_restore_source_(stmt->get_rpc_arg().restore_tenant_arg_.multi_uri_))) {
+      LOG_WARN("failed to resolve restore source", K(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      stmt->get_rpc_arg().action_ = ObRecoverTableArg::INITIATE;
+    }
+  }
+  return ret;
+}
+
+int ObRecoverTableResolver::resolve_remap_(
+    const ParseNode *node,
+    const lib::Worker::CompatMode &compat_mode,
+    const ObNameCaseMode &case_mode,
+    share::ObImportRemapArg &remap_arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node must not be null", K(ret));
+  } else if (node->num_child_ > 3) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", node->num_child_);
+  } else {
+    bool parsed_remap_table = false;
+    bool parsed_remap_tablegroup = false;
+    bool parsed_remap_tablespace = false;
+    const int DEFAULT_ERROR_MSG_LEN = 16;
+    for (int64_t i = 0; i < node->num_child_ && OB_SUCC(ret); i++) {
+      const ParseNode *child_node = node->children_[i];
+      if (T_REMAP_TABLE == child_node->type_) {
+        if (parsed_remap_table) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("duplicate remap table is not allowed", K(ret));
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "duplicate REMAP TABLE is");
+        } else if (OB_FAIL(resolve_remap_tables_(child_node, compat_mode, case_mode, remap_arg))) {
+          LOG_WARN("failed to resolve remap tables", K(ret));
+        } else {
+          parsed_remap_table = true;
+        }
+      } else if (T_REMAP_TABLEGROUP == child_node->type_) {
+        if (parsed_remap_tablegroup) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("duplicate remap tablegroup is not allowed", K(ret));
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "duplicate REMAP TABLEGROUP is");
+        } else if (OB_FAIL(resolve_remap_tablegroups_(child_node, remap_arg))) {
+          LOG_WARN("failed to resolve remap tablegroups", K(ret));
+        } else {
+          parsed_remap_tablegroup = true;
+        }
+      } else if (T_REMAP_TABLESPACE == child_node->type_) {
+        if (parsed_remap_tablespace) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("duplicate remap tablespace is not allowed", K(ret));
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "duplicate REMAP TABLESPACE is");
+        } else if (OB_FAIL(resolve_remap_tablespaces_(child_node, remap_arg))) {
+          LOG_WARN("failed to resolve remap tablespaces", K(ret));
+        } else {
+          parsed_remap_tablespace = true;
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid remap", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRecoverTableResolver::resolve_restore_source_(common::ObString &restore_source)
+{
+  int ret = OB_SUCCESS;
+  ObObj value;
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info must not be nullptr", K(ret));
+  } else if (session_info_->user_variable_exists(OB_RESTORE_SOURCE_NAME_SESSION_STR)) {
+    if (OB_FAIL(session_info_->get_user_variable_value(OB_RESTORE_SOURCE_NAME_SESSION_STR, value))) {
+      LOG_WARN("failed to get user variable value", K(ret));
+    } else {
+      restore_source = value.get_char();
+      LOG_INFO("succeed to resolve restore source", K(restore_source));
+    }
+  }
+  return ret;
+}
+
+int ObRecoverTableResolver::resolve_remap_tablespaces_(
+    const ParseNode *node, share::ObImportRemapArg &remap_arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {// no need to remap tablegroups
+  } else if (OB_UNLIKELY(T_REMAP_TABLESPACE != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_REMAP_TABLESPACE", "type", get_type_name(node->type_));
+  } else {
+    share::ObRemapTablespaceItem item;
+    const ObNameCaseMode case_mode = OB_ORIGIN_AND_SENSITIVE;
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+      const ParseNode *remap_ts_node = node->children_[i];
+      if (OB_ISNULL(remap_ts_node)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("remap table group node must not be null", K(ret));
+      } else if (OB_UNLIKELY(T_RELATION_FACTOR != remap_ts_node->type_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid parse node type", K(ret));
+      } else if (OB_UNLIKELY(2 != remap_ts_node->num_child_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid child num", K(ret));
+      } else {
+        const ParseNode *src = remap_ts_node->children_[0];
+        const ParseNode *dst = remap_ts_node->children_[1];
+        if (OB_ISNULL(src) || OB_ISNULL(dst)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("remap tablegroup must not be null", K(ret));
+        } else {
+          ObString src_name(src->str_len_, src->str_value_), dst_name(dst->str_len_, dst->str_value_);
+          item.reset();
+          if (src_name.length() > OB_MAX_TABLESPACE_NAME_LENGTH || src_name.length() <= 0) {
+            ret = OB_ERR_WRONG_VALUE;
+            LOG_WARN("invalid src name or dst name", K(ret), K(src_name));
+            LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "REMAP TABLESPACE", to_cstring(src_name));
+          } else if (dst_name.length() > OB_MAX_TABLESPACE_NAME_LENGTH || dst_name.length() <= 0) {
+            ret = OB_ERR_WRONG_VALUE;
+            LOG_WARN("invalid src name or dst name", K(ret), K(dst_name));
+            LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "REMAP TABLESPACE", to_cstring(dst_name));
+          } else if (OB_FALSE_IT(item.src_.mode_ = case_mode)) {
+          } else if (OB_FALSE_IT(item.target_.mode_ = case_mode)) {
+          } else if (OB_FALSE_IT(item.src_.name_.assign_ptr(src_name.ptr(), src_name.length()))) {
+          } else if (OB_FALSE_IT(item.target_.name_.assign_ptr(dst_name.ptr(), dst_name.length()))) {
+            LOG_WARN("failed to assign", K(dst_name));
+          } else if (OB_FAIL(remap_arg.add_remap_tablespace(item))) {
+            LOG_WARN("failed to add remap tablespace", K(ret), K(item));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRecoverTableResolver::resolve_remap_tablegroups_(
+    const ParseNode *node, share::ObImportRemapArg &remap_arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {// no need to remap tablegroups
+  } else if (OB_UNLIKELY(T_REMAP_TABLEGROUP != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_REMAP_TABLEGROUP", "type", get_type_name(node->type_));
+  } else {
+    share::ObRemapTablegroupItem item;
+    const ObNameCaseMode case_mode = OB_ORIGIN_AND_SENSITIVE;
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+      const ParseNode *remap_tg_node = node->children_[i];
+      if (OB_ISNULL(remap_tg_node)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("remap table group node must not be null", K(ret));
+      } else if (OB_UNLIKELY(T_RELATION_FACTOR != remap_tg_node->type_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid parse node type", K(ret));
+      } else if (OB_UNLIKELY(2 != remap_tg_node->num_child_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid child num", K(ret));
+      } else {
+        const ParseNode *src = remap_tg_node->children_[0];
+        const ParseNode *dst = remap_tg_node->children_[1];
+        if (OB_ISNULL(src) || OB_ISNULL(dst)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("remap tablegroup must not be null", K(ret));
+        } else {
+          ObString src_name(src->str_len_, src->str_value_), dst_name(dst->str_len_, dst->str_value_);
+          item.reset();
+          if (src_name.length() > OB_MAX_TABLEGROUP_NAME_LENGTH || src_name.length() <= 0) {
+            ret = OB_ERR_WRONG_VALUE;
+            LOG_WARN("invalid src name", K(ret), K(src_name));
+            LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "REMAP TABLEGROUP", to_cstring(src_name));
+          } else if (dst_name.length() > OB_MAX_TABLEGROUP_NAME_LENGTH || dst_name.length() <= 0) {
+            ret = OB_ERR_WRONG_VALUE;
+            LOG_WARN("invalid dst name", K(ret), K(dst_name));
+            LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "REMAP TABLEGROUP", to_cstring(dst_name));
+          } else if (OB_FALSE_IT(item.src_.mode_ = case_mode)) {
+          } else if (OB_FALSE_IT(item.target_.mode_ = case_mode)) {
+          } else if (OB_FALSE_IT(item.src_.name_.assign_ptr(src_name.ptr(), src_name.length()))) {
+          } else if (OB_FALSE_IT(item.target_.name_.assign_ptr(dst_name.ptr(), dst_name.length()))) {
+            LOG_WARN("failed to assign", K(dst_name));
+          } else if (OB_FAIL(remap_arg.add_remap_tablegroup(item))) {
+            LOG_WARN("failed to add remap tablegroup", K(ret), K(item));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRecoverTableResolver::resolve_remap_tables_(
+    const ParseNode *node, const lib::Worker::CompatMode &compat_mode, const ObNameCaseMode &case_mode,
+    share::ObImportRemapArg &remap_arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) { // no need to remap tables
+  } else if (OB_UNLIKELY(T_REMAP_TABLE != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_REMAP_TABLE", "type", get_type_name(node->type_));
+  } else {
+    share::ObRemapDatabaseItem remap_db_item;
+    share::ObRemapTableItem remap_table_item;
+    ObCollationType cs_type = CS_TYPE_INVALID;
+    bool perserve_lettercase = Worker::CompatMode::ORACLE == compat_mode ? true : (case_mode != OB_LOWERCASE_AND_INSENSITIVE);
+    // No matter what name case mode is of target tenant, the names of remap tables are case sensitive.
+    const ObNameCaseMode sensitive_case_mode = OB_ORIGIN_AND_SENSITIVE;
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+      bool is_remap_db = false;
+
+      remap_db_item.reset();
+      remap_table_item.reset();
+      remap_db_item.src_.mode_ = sensitive_case_mode;
+      remap_db_item.target_.mode_ = sensitive_case_mode;
+      remap_table_item.src_.mode_ = sensitive_case_mode;
+      remap_table_item.target_.mode_ = sensitive_case_mode;
+      const ParseNode *remap_table_node = node->children_[i];
+      if (OB_ISNULL(remap_table_node)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("remap table group node must not be null", K(ret));
+      } else if (OB_UNLIKELY(T_RELATION_FACTOR != remap_table_node->type_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid parse node type", K(ret));
+      } else if (5 == remap_table_node->num_child_) {
+        // remap table
+        const ParseNode *src_db_node = remap_table_node->children_[0];
+        const ParseNode *src_tb_node = remap_table_node->children_[1];
+        const ParseNode *src_pt_node = remap_table_node->children_[2];
+        const ParseNode *dst_db_node = remap_table_node->children_[3];
+        const ParseNode *dst_tb_node = remap_table_node->children_[4];
+
+        ObString src_db_name, src_tb_name, src_pt_name, dst_db_name, dst_tb_name;
+
+        if (OB_NOT_NULL(src_db_node) && OB_FALSE_IT(src_db_name.assign_ptr(src_db_node->str_value_, src_db_node->str_len_))) {
+        } else if (OB_NOT_NULL(src_tb_node) && OB_FALSE_IT(src_tb_name.assign_ptr(src_tb_node->str_value_, src_tb_node->str_len_))) {
+        } else if (OB_NOT_NULL(src_pt_node) && OB_FALSE_IT(src_pt_name.assign_ptr(src_pt_node->str_value_, src_pt_node->str_len_))) {
+        } else if (OB_NOT_NULL(dst_db_node) && OB_FALSE_IT(dst_db_name.assign_ptr(dst_db_node->str_value_, dst_db_node->str_len_))) {
+        } else if (OB_NOT_NULL(dst_tb_node) && OB_FALSE_IT(dst_tb_name.assign_ptr(dst_tb_node->str_value_, dst_tb_node->str_len_))) {
+        }
+
+        if (!src_db_name.empty() && OB_FAIL(ObSQLUtils::check_and_convert_db_name(cs_type, perserve_lettercase, src_db_name))) {
+          LOG_WARN("failed to check and convert db name", K(ret), K(cs_type), K(perserve_lettercase), K(src_db_name));
+        } else if (!src_tb_name.empty() && OB_FAIL(ObSQLUtils::check_and_convert_table_name(cs_type, perserve_lettercase, src_tb_name))) {
+          LOG_WARN("failed to check and convert table name", K(ret), K(cs_type), K(perserve_lettercase), K(src_tb_name));
+        } else if (!dst_db_name.empty() && OB_FAIL(ObSQLUtils::check_and_convert_db_name(cs_type, perserve_lettercase, dst_db_name))) {
+          LOG_WARN("failed to check and convert db name", K(ret), K(cs_type), K(perserve_lettercase), K(dst_db_name));
+        } else if (!dst_tb_name.empty() && OB_FAIL(ObSQLUtils::check_and_convert_table_name(cs_type, perserve_lettercase, dst_tb_name))) {
+          LOG_WARN("failed to check and convert table name", K(ret), K(cs_type), K(perserve_lettercase), K(dst_tb_name));
+        } else if (!src_pt_name.empty() && src_pt_name.length() > OB_MAX_PARTITION_NAME_LENGTH) {
+          ret = OB_ERR_WRONG_VALUE;
+          LOG_WARN("invalid partition name", K(ret));
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "INVALID PARTITION NAME", to_cstring(src_pt_name));
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_NOT_NULL(src_db_node) && OB_ISNULL(src_tb_node) && OB_ISNULL(src_pt_node) && OB_NOT_NULL(dst_db_node) && OB_ISNULL(dst_tb_node)) {
+          // db_name.'*':new_db_name.'*';
+          remap_db_item.src_.name_.assign_ptr(src_db_name.ptr(), src_db_name.length());
+          remap_db_item.target_.name_.assign_ptr(dst_db_name.ptr(), dst_db_name.length());
+          is_remap_db = true;
+        } else if (OB_NOT_NULL(src_db_node) && OB_NOT_NULL(src_tb_node) && OB_ISNULL(src_pt_node) && OB_ISNULL(dst_db_node) && OB_NOT_NULL(dst_tb_node)) {
+          // db_name.tb_name:new_tb_name;
+          remap_table_item.src_.database_name_.assign_ptr(src_db_name.ptr(), src_db_name.length());
+          remap_table_item.src_.table_name_.assign_ptr(src_tb_name.ptr(), src_tb_name.length());
+          remap_table_item.target_.database_name_.assign_ptr(src_db_name.ptr(), src_db_name.length());
+          remap_table_item.target_.table_name_.assign_ptr(dst_tb_name.ptr(), dst_tb_name.length());
+        } else if (OB_NOT_NULL(src_db_node) && OB_NOT_NULL(src_tb_node) && OB_ISNULL(src_pt_node) && OB_NOT_NULL(dst_db_node) && OB_NOT_NULL(dst_tb_node)) {
+          // db_name.tb_name:new_db_name.new_tb_name
+          remap_table_item.src_.database_name_.assign_ptr(src_db_name.ptr(), src_db_name.length());
+          remap_table_item.src_.table_name_.assign_ptr(src_tb_name.ptr(), src_tb_name.length());
+          remap_table_item.target_.database_name_.assign_ptr(dst_db_name.ptr(), dst_db_name.length());
+          remap_table_item.target_.table_name_.assign_ptr(dst_tb_name.ptr(), dst_tb_name.length());
+        } else if (OB_NOT_NULL(src_db_node) && OB_NOT_NULL(src_tb_node) && OB_NOT_NULL(src_pt_node) && OB_ISNULL(dst_db_node) && OB_NOT_NULL(dst_tb_node)) {
+          // db_name.tb_name:part_name:new_tb_name;
+          int ret = OB_NOT_SUPPORTED;
+          LOG_WARN("remap partition is not supported", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "remap partition");
+        } else if (OB_NOT_NULL(src_db_node) && OB_NOT_NULL(src_tb_node) && OB_NOT_NULL(src_pt_node) && OB_NOT_NULL(dst_db_node) && OB_NOT_NULL(dst_tb_node)) {
+          int ret = OB_NOT_SUPPORTED;
+          LOG_WARN("remap partition is not supported", K(ret));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid remap tables", K(ret));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid remap tables", K(ret));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (!is_remap_db && OB_FAIL(remap_arg.add_remap_table(remap_table_item))) {
+        LOG_WARN("fail to push backup", K(ret), K(remap_table_item));
+      } else if (is_remap_db && OB_FAIL(remap_arg.add_remap_database(remap_db_item))) {
+        LOG_WARN("fail to push backup", K(ret), K(remap_db_item));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRecoverTableResolver::resolve_backup_set_pwd_(common::ObString &pwd)
+{
+  int ret = OB_SUCCESS;
+  ObObj value;
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null" , K(ret));
+  } else if (!session_info_->user_variable_exists(OB_BACKUP_DECRYPTION_PASSWD_ARRAY_SESSION_STR)) {
+    LOG_INFO("no decryption passwd is specified");
+    pwd.reset();
+  } else if (OB_FAIL(session_info_->get_user_variable_value(
+      OB_BACKUP_DECRYPTION_PASSWD_ARRAY_SESSION_STR, value))) {
+    LOG_WARN("fail to get user variable", K(ret));
+  } else {
+    pwd = value.get_varchar();
+    LOG_INFO("succeed to resolve_decryption_passwd", "passwd", pwd);
+  }
+  return ret;
+}
+
+#ifndef OB_BUILD_TDE_SECURITY
+int ObRecoverTableResolver::resolve_kms_info_(const common::ObString &restore_option, common::ObString &kms_info)
+{
+  int ret = OB_SUCCESS;
+  const char *encrypt_option_str = "kms_encrypt=true";
+  ObString kms_var("kms_encrypt_info");
+  int64_t encrypt_opt_str_len = strlen(encrypt_option_str);
+  bool is_kms_encrypt = false;
+  for (int i = 0; i <= restore_option.length() - encrypt_opt_str_len; ++i) {
+    if (0 == STRNCASECMP(restore_option.ptr() + i, encrypt_option_str, encrypt_opt_str_len)) {
+      is_kms_encrypt = true;
+      break;
+    }
+  }
+  if (is_kms_encrypt) {
+     ObObj value;
+    if (OB_ISNULL(session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session is null" , K(ret));
+    } else if (OB_FAIL(session_info_->get_user_variable_value(kms_var, value))) {
+      LOG_WARN("fail to get user variable", K(ret));
+    } else {
+      kms_info = value.get_varchar();
+      if (kms_info.length() > 4000 || kms_info.length() < 0) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("kms info is not valid", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+#endif
+
+int ObRecoverTableResolver::resolve_recover_tables_(
+    const ParseNode *node, const lib::Worker::CompatMode &compat_mode, const ObNameCaseMode &case_mode,
+    share::ObImportTableArg &import_arg)
+{
+  int ret = OB_SUCCESS;
+  ObCollationType cs_type = CS_TYPE_INVALID;
+  bool perserve_lettercase = Worker::CompatMode::ORACLE == compat_mode ? true : (case_mode != OB_LOWERCASE_AND_INSENSITIVE);
+  // No matter what name case mode is of target tenant, the names of recover tables are case sensitive.
+    const ObNameCaseMode sensitive_case_mode = OB_ORIGIN_AND_SENSITIVE;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table list node must not be null", K(ret));
+  } else if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
+    LOG_WARN("failed to get collation connection", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+    const ParseNode *table_relation_node = node->children_[i];
+    if (OB_ISNULL(table_relation_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table relation node must not be null", K(ret));
+    } else if (OB_UNLIKELY(T_RELATION_FACTOR != table_relation_node->type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid parse node type", K(ret));
+    } else if (3 == table_relation_node->num_child_) {
+      const ParseNode *db_node = table_relation_node->children_[0];
+      const ParseNode *tb_node = table_relation_node->children_[1];
+      const ParseNode *pt_node = table_relation_node->children_[2];
+      if (OB_ISNULL(db_node) && OB_ISNULL(tb_node) && OB_ISNULL(pt_node)) {
+        // '*'.'*' recover all table of all all database.
+        if (OB_FAIL(import_arg.set_import_all())) {
+          LOG_WARN("failed to set import all", K(ret));
+        }
+      } else if (OB_NOT_NULL(db_node) && OB_ISNULL(tb_node) && OB_ISNULL(pt_node)) {
+        // db_name.'*' recover all tables of db_name
+        ObString db_name(db_node->str_len_, db_node->str_value_);
+        share::ObImportDatabaseItem db_item(sensitive_case_mode, db_node->str_value_, db_node->str_len_);
+        if (OB_FAIL(ObSQLUtils::check_and_convert_db_name(cs_type, perserve_lettercase, db_name))) {
+          LOG_WARN("failed to check and convert db name", K(ret), K(cs_type), K(perserve_lettercase), K(db_name));
+        } else if (OB_FAIL(import_arg.add_database(db_item))) {
+          LOG_WARN("failed to add database", K(ret), K(db_item));
+        }
+      } else if (OB_NOT_NULL(db_node) && OB_NOT_NULL(tb_node) && OB_ISNULL(pt_node)) {
+        // db_name.tb_name recover tb_name of db_name
+        ObString db_name(db_node->str_len_, db_node->str_value_), tb_name(tb_node->str_len_, tb_node->str_value_);
+        if (OB_FAIL(ObSQLUtils::check_and_convert_table_name(cs_type, perserve_lettercase, tb_name))) {
+          LOG_WARN("failed to check and convert table name", K(ret), K(cs_type), K(perserve_lettercase), K(tb_name));
+        } else if (OB_FAIL(ObSQLUtils::check_and_convert_db_name(cs_type, perserve_lettercase, db_name))) {
+          LOG_WARN("failed to check and convert db name", K(ret), K(cs_type), K(perserve_lettercase), K(db_name));
+        } else {
+          share::ObImportTableItem table_item(sensitive_case_mode, db_name.ptr(), db_name.length(), tb_name.ptr(), tb_name.length());
+          if (OB_FAIL(import_arg.add_table(table_item))) {
+            LOG_WARN("failed to add table", K(ret), K(table_item));
+          }
+        }
+      } else if (OB_NOT_NULL(db_node) && OB_NOT_NULL(tb_node) && OB_NOT_NULL(pt_node)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("recover partition is not support", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "recover partition");
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid recover table list", K(ret));
+        LOG_USER_ERROR(OB_ERR_UNEXPECTED, "invalid recover table list");
+      }
+    } else if (5 == table_relation_node->num_child_) {
+      const ParseNode *db_node = table_relation_node->children_[0];
+      const ParseNode *tb_node = table_relation_node->children_[1];
+      const ParseNode *pt_node = table_relation_node->children_[4];
+      if (OB_NOT_NULL(db_node) && OB_NOT_NULL(tb_node) && OB_NOT_NULL(pt_node)) {
+        // db_name.tb_name:pt_name reocver the partion of tb_name
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("recover partition is not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "recover partition");
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid recover table list", K(ret));
+        LOG_USER_ERROR(OB_ERR_UNEXPECTED, "invalid recover table list");
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid recover table list", K(ret));
+      LOG_USER_ERROR(OB_ERR_UNEXPECTED, "invalid recover table list");
+    }
+  }
+
+  return ret;
+}
+
+int ObRecoverTableResolver::resolve_scn_(
+    const ParseNode *node, obrpc::ObPhysicalRestoreTenantArg &arg)
+{
+  int ret = OB_SUCCESS;
+  const ParseNode *time_node = nullptr;
+  if (OB_ISNULL(node)) { //restore to latest, scn = 0;
+  } else if (OB_FALSE_IT(time_node = node)) {
+  } else if (OB_UNLIKELY(T_PHYSICAL_RESTORE_UNTIL != time_node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_PHYSICAL_RESTORE_UNTIL", "type", get_type_name(time_node->type_));
+  } else if (OB_UNLIKELY(2 != time_node->num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("num of children not match", K(ret), "child_num", time_node->num_child_);
+  } else if (0/*timestamp*/ == time_node->children_[0]->value_) {
+    arg.restore_timestamp_.assign_ptr(time_node->children_[1]->str_value_, time_node->children_[1]->str_len_);
+    arg.with_restore_scn_ = false;
+  } else if (1/*scn*/ == time_node->children_[0]->value_) {
+    if (share::OB_BASE_SCN_TS_NS >= time_node->children_[1]->value_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "until scn, it should be positive integer");
+      LOG_WARN("until scn, it should be positive integer", KR(ret), K(time_node->children_[1]->value_));
+    } else if (OB_FAIL(arg.restore_scn_.convert_for_sql(time_node->children_[1]->value_))) {
+      LOG_WARN("failed to convert scn", K(ret));
+    } else {
+      arg.with_restore_scn_ = true;
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_INFO("invalid until", K(ret));
+    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "invalid until type");
+  }
+  return ret;
+}
+
+int ObRecoverTableResolver::resolve_tenant_(
+    const ParseNode *node, uint64_t &tenant_id, common::ObString &tenant_name, lib::Worker::CompatMode &compat_mode,
+    ObNameCaseMode &case_mode)
+{
+  int ret = OB_SUCCESS;
+  uint64_t session_tenant_id = OB_INVALID_TENANT_ID;
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is NULL", K(ret));
+  } else if (OB_FALSE_IT(session_tenant_id = session_info_->get_effective_tenant_id())) {
+  } else if (is_sys_tenant(session_tenant_id) && OB_NOT_NULL(node)) {
+    // System tenant initiates recover table.
+    if (OB_UNLIKELY(T_TENANT_NAME != node->type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("type is not T_TENANT_NAME", "type", get_type_name(node->type_));
+    } else if (OB_UNLIKELY(1 != node->num_child_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant name node must not be null", K(ret));
+    } else {
+      ObSchemaGetterGuard schema_guard;
+      ObString tmp_tenant_name(node->children_[0]->str_len_, node->children_[0]->str_value_);
+      if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(session_tenant_id, schema_guard))) {
+        LOG_WARN("failed to get_tenant_schema_guard", KR(ret));
+      } else if (OB_FAIL(schema_guard.get_tenant_id(tmp_tenant_name, tenant_id))) {
+        LOG_WARN("failed to get tenant id from schema guard", KR(ret), K(tmp_tenant_name));
+      } else {
+        tenant_name = tmp_tenant_name;
+      }
+    }
+  } else {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("can't initiate table recover", K(ret), K(session_tenant_id));
+    if (is_sys_tenant(session_tenant_id)) {
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "no target tenant specified");
+    } else {
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "user tenant initiate recover table is");
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObSchemaGetterGuard schema_guard;
+    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+      LOG_WARN("failed to get tenant schema guard", K(ret), K(tenant_id));
+    } else if (OB_FAIL(schema_guard.get_tenant_compat_mode(tenant_id, compat_mode))) {
+      LOG_WARN("failed to get compat mode", K(ret), K(tenant_id));
+    } else if (OB_FAIL(schema_guard.get_tenant_name_case_mode(tenant_id, case_mode))) {
+      LOG_WARN("failed to get name case mode", K(ret), K(tenant_id));
     }
   }
   return ret;

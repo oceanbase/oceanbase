@@ -1770,6 +1770,24 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       }
     }
   }
+  if (OB_SUCC(ret) && !strict_compat_ && !is_index_tbl
+      && table_schema.get_ttl_definition().length() > 0
+      && NULL != table_schema.get_ttl_definition().ptr()) {
+    const ObString ttl_definition = table_schema.get_ttl_definition();
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "TTL = (%.*s) ",
+                                ttl_definition.length(), ttl_definition.ptr()))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print ttl definition", K(ret), K(ttl_definition));
+    }
+  }
+  if (OB_SUCC(ret) && !strict_compat_ && !is_index_tbl
+      && table_schema.get_kv_attributes().length() > 0
+      && NULL != table_schema.get_kv_attributes().ptr()) {
+    const ObString kv_attributes = table_schema.get_kv_attributes();
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "KV_ATTRIBUTES = (%.*s) ",
+                            kv_attributes.length(), kv_attributes.ptr()))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print kv attributes", K(ret), K(kv_attributes));
+    }
+  }
   if (OB_SUCC(ret) && pos > 0) {
     pos -= 1;
     buf[pos] = '\0';      // remove trailer space
@@ -2236,6 +2254,26 @@ int ObSchemaPrinter::print_table_definition_table_options(
       OB_LOG(WARN, "fail to print progressive merge num", K(ret), K(table_schema));
     }
   }
+  if (OB_SUCC(ret) && !is_index_tbl && !strict_compat_) {
+    const ObString ttl_definition = table_schema.get_ttl_definition();
+    if (ttl_definition.empty()) {
+      // do nothing
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "TTL = (%.*s) ",
+         ttl_definition.length(), ttl_definition.ptr()))) {
+      OB_LOG(WARN, "fail to print ttl definition", K(ret), K(ttl_definition));
+    }
+  }
+
+  if (OB_SUCC(ret) && !is_index_tbl && !strict_compat_) {
+    const ObString kv_attributes = table_schema.get_kv_attributes();
+    if (kv_attributes.empty()) {
+      // do nothing
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "KV_ATTRIBUTES = (%.*s) ",
+         kv_attributes.length(), kv_attributes.ptr()))) {
+      OB_LOG(WARN, "fail to print kv attributes", K(ret), K(kv_attributes));
+    }
+  }
+
   return ret;
 }
 

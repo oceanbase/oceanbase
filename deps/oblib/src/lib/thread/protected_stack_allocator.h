@@ -32,6 +32,7 @@ struct ObStackHeader
   // use thread instead of alloc
   uint64_t pth_;
   char *base_;
+  bool has_guarded_page_;
   ObStackHeader *prev_;
   ObStackHeader *next_;
 };
@@ -40,11 +41,15 @@ class ProtectedStackAllocator
 {
 public:
   void *alloc(const uint64_t tenant_id, const ssize_t size);
+  void *smart_call_alloc(const uint64_t tenant_id, const ssize_t size);
   void dealloc(void *ptr);
   static ObStackHeader *stack_header(void *ptr);
   static ssize_t page_size();
 private:
-  void *__alloc(const uint64_t tenant_id, const ssize_t size);
+  void *_alloc(const uint64_t tenant_id, const uint64_t ctx_id, const ssize_t size,
+               const bool guard_page);
+  void *__alloc(const uint64_t tenant_id, const uint64_t ctx_id, const ssize_t size,
+                const bool guard_page);
 };
 
 class ObMemoryCutter;

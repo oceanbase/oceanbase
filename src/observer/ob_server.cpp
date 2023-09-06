@@ -106,6 +106,7 @@
 #include "observer/virtual_table/ob_mds_event_buffer.h"
 #include "observer/ob_server_startup_task_handler.h"
 #include "share/detect/ob_detect_manager.h"
+#include "observer/table/ttl/ob_table_ttl_task.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "logservice/arbserver/palf_env_lite_mgr.h"
 #include "logservice/arbserver/ob_arb_srv_network_frame.h"

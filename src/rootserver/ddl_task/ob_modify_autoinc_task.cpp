@@ -183,6 +183,8 @@ int ObModifyAutoincTask::init(const uint64_t tenant_id,
     tenant_id_ = tenant_id;
     task_version_ = OB_MODIFY_AUTOINC_TASK_VERSION;
     task_id_ = task_id;
+    dst_tenant_id_ = tenant_id;
+    dst_schema_version_ = schema_version;
     is_inited_ = true;
     ddl_tracing_.open();
   }
@@ -195,6 +197,7 @@ int ObModifyAutoincTask::init(const ObDDLTaskRecord &task_record)
   const uint64_t data_table_id = task_record.object_id_;
   const uint64_t target_schema_id = task_record.target_object_id_;
   const int64_t schema_version = task_record.schema_version_;
+  task_type_ = ObDDLType::DDL_MODIFY_AUTO_INCREMENT;
   int64_t pos = 0;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -207,7 +210,6 @@ int ObModifyAutoincTask::init(const ObDDLTaskRecord &task_record)
   } else if (OB_FAIL(set_ddl_stmt_str(task_record.ddl_stmt_str_))) {
     LOG_WARN("set ddl stmt str failed", K(ret));
   } else {
-    task_type_ = ObDDLType::DDL_MODIFY_AUTO_INCREMENT;
     object_id_ = data_table_id;
     target_object_id_ = target_schema_id;
     schema_version_ = schema_version;
@@ -216,6 +218,8 @@ int ObModifyAutoincTask::init(const ObDDLTaskRecord &task_record)
     tenant_id_ = task_record.tenant_id_;
     task_id_ = task_record.task_id_;
     ret_code_ = task_record.ret_code_;
+    dst_tenant_id_ = tenant_id_;
+    dst_schema_version_ = schema_version_;
     is_inited_ = true;
 
     // set up span during recover task
@@ -626,7 +630,7 @@ int ObModifyAutoincTask::deserlize_params_from_message(const uint64_t tenant_id,
     LOG_WARN("ObDDLTask deserlize failed", K(ret));
   } else if (OB_FAIL(tmp_arg.deserialize(buf, data_len, pos))) {
     LOG_WARN("serialize table failed", K(ret));
-  } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
+  } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(task_type_, tenant_id, tmp_arg))) {
     LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_arg));
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, alter_table_arg_))) {
     LOG_WARN("deep copy table arg failed", K(ret));

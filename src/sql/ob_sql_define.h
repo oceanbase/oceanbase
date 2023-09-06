@@ -19,6 +19,7 @@
 #include "share/ob_define.h"
 #include "deps/oblib/src/lib/container/ob_array.h"
 #include "src/share/rc/ob_tenant_base.h"
+#include "deps/oblib/src/lib/container/ob_2d_array.h"
 
 namespace oceanbase
 {
@@ -487,7 +488,7 @@ enum DominateRelation
   OBJ_UNCOMPARABLE
 };
 
-// for parallel precedence, refer to 
+// for parallel precedence, refer to
 // https://docs.oracle.com/cd/E11882_01/server.112/e41573/hintsref.htm#PFGRF94937
 enum PXParallelRule
 {
@@ -620,6 +621,30 @@ template<typename T, typename BlockAllocatorT, bool auto_free, typename CallBack
 ObTMArray<T, BlockAllocatorT, auto_free, CallBack, ItemEncode>::ObTMArray(int64_t block_size,
                                                            const BlockAllocatorT &alloc)
     : ObArrayImpl<T, BlockAllocatorT, auto_free, CallBack, ItemEncode>(block_size, alloc)
+{
+  this->set_tenant_id(MTL_ID());
+}
+
+template <typename T, int max_block_size = OB_MALLOC_BIG_BLOCK_SIZE,
+          typename BlockAllocatorT = ModulePageAllocator,
+          bool auto_free = false,
+          typename BlockPointerArrayT = ObSEArray<T *, OB_BLOCK_POINTER_ARRAY_SIZE,
+                                                  BlockAllocatorT, auto_free> >
+class ObTMSegmentArray final : public Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
+          BlockPointerArrayT>
+{
+public:
+  ObTMSegmentArray(const BlockAllocatorT &alloc = BlockAllocatorT("TMSegmentArray"));
+  int assign(const ObTMSegmentArray &other) { return this->inner_assign(other); }
+};
+
+template <typename T, int max_block_size,
+          typename BlockAllocatorT, bool auto_free,
+          typename BlockPointerArrayT>
+ObTMSegmentArray<T, max_block_size, BlockAllocatorT, auto_free,
+          BlockPointerArrayT>::ObTMSegmentArray(const BlockAllocatorT &alloc)
+    : Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
+          BlockPointerArrayT>(alloc)
 {
   this->set_tenant_id(MTL_ID());
 }

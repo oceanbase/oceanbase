@@ -466,7 +466,6 @@ protected:
   int add_ddl_column_checksum();
   int add_ddl_column_checksum_batch(const int64_t row_count);
   static int corrupt_obj(ObObj &obj);
-  int reshape_ddl_column_obj(common::ObDatum &datum, const ObObjMeta &obj_meta);
   int report_ddl_column_checksum();
   int get_next_batch_with_das(int64_t &count, int64_t capacity);
   void replace_bnlj_param(int64_t batch_idx);

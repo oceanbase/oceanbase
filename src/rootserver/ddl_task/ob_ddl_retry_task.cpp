@@ -194,6 +194,8 @@ int ObDDLRetryTask::init(const uint64_t tenant_id,
     task_version_ = OB_DDL_RETRY_TASK_VERSION;
     task_status_ = static_cast<ObDDLTaskStatus>(task_status);
     is_schema_change_done_ = false;
+    dst_tenant_id_ = tenant_id_;
+    dst_schema_version_ = schema_version_;
     is_inited_ = true;
     ddl_tracing_.open();
   }
@@ -221,6 +223,8 @@ int ObDDLRetryTask::init(const ObDDLTaskRecord &task_record)
     ret_code_ = task_record.ret_code_;
     task_status_ = static_cast<ObDDLTaskStatus>(task_record.task_status_);
     is_schema_change_done_ = false; // do not worry about it, check_schema_change_done will correct it.
+    dst_tenant_id_ = tenant_id_;
+    dst_schema_version_ = schema_version_;
     if (nullptr != task_record.message_) {
       int64_t pos = 0;
       if (OB_FAIL(deserlize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
@@ -666,7 +670,7 @@ int ObDDLRetryTask::deserlize_params_from_message(const uint64_t tenant_id, cons
     obrpc::ObAlterTableArg tmp_arg;
     if (OB_FAIL(tmp_arg.deserialize(buf, buf_size, pos))) {
       LOG_WARN("serialize table failed", K(ret));
-    } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(tenant_id, tmp_arg))) {
+    } else if (OB_FAIL(ObDDLUtil::replace_user_tenant_id(task_type_, tenant_id, tmp_arg))) {
       LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_arg));
     } else if (OB_FAIL(deep_copy_ddl_arg(allocator_, task_type_, &tmp_arg))) {
       LOG_WARN("deep copy table arg failed", K(ret));

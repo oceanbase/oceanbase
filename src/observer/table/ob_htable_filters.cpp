@@ -860,6 +860,12 @@ void CheckAndMutateFilter::reset()
   matched_column_ = false;
 }
 
+// NOTE: when value_is_null is true，cannot return other cell directly
+// 判断是否 check 通过，例如当整个 column family 为空的时候，result_count = 0，但是应该是 check 通过
+
+// NOTE: when value_is_null is true, cannot return other cells directly and determine whether check is
+// passed by result_count > 0 in ObTableQueryAndMutateP::try_process.
+// for example, if the whole column family is empty and result_count = 0, but check should passed.
 int CheckAndMutateFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
 {
   int ret = OB_SUCCESS;
@@ -869,29 +875,18 @@ int CheckAndMutateFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_
     LOG_DEBUG("[yzfdebug] already matched column", K(ret_code));
   } else if (found_column_) {  // latest_version_only_ == true
     // found but not matched the column
-    if (value_is_null_) {
-      ret_code = ReturnCode::INCLUDE;
-    } else {
-      ret_code = ReturnCode::NEXT_ROW;
-    }
+    ret_code = ReturnCode::NEXT_ROW;
     LOG_DEBUG("[yzfdebug] latest verion only but not matched", K(ret_code));
-  } else if (!match_column(cell)) {
-    ret_code = ReturnCode::INCLUDE;
-    LOG_DEBUG("[yzfdebug] not found column yet", K(ret_code));
-  } else {
+  } else if (match_column(cell)) {
     found_column_ = true;
     LOG_DEBUG("[yzfdebug] found column", K_(found_column));
-    if (value_is_null_) {
-      ret_code = ReturnCode::NEXT_ROW;
+    if (value_is_null_ || !filter_column_value(cell)) {
+      matched_column_ = true;
+      ret_code = ReturnCode::INCLUDE;
+      LOG_DEBUG("[yzfdebug] found column and match", K(ret_code));
     } else {
-      if (filter_column_value(cell)) {
-        ret_code = ReturnCode::NEXT_ROW;
-        LOG_DEBUG("[yzfdebug] found column but value not match", K(ret_code));
-      } else {
-        matched_column_ = true;
-        ret_code = ReturnCode::INCLUDE;
-        LOG_DEBUG("[yzfdebug] found column and match", K(ret_code));
-      }
+      ret_code = ReturnCode::NEXT_ROW;
+      LOG_DEBUG("[yzfdebug] found column but value not match", K(ret_code));
     }
   }
   return ret;
@@ -912,10 +907,6 @@ bool CheckAndMutateFilter::filter_row()
 {
   LOG_DEBUG("[yzfdebug] filter row", K_(found_column), K_(matched_column), K_(value_is_null));
   bool bret = true;
-  if (value_is_null_) {
-    bret = found_column_;
-  } else {
-    bret = found_column_ ? (!matched_column_) : (false/*filter_if_missing*/);
-  }
+  bret = found_column_ ? (!matched_column_) : true;
   return bret;
 }

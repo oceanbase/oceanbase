@@ -103,9 +103,11 @@
 #include "share/restore/ob_physical_restore_table_operator.h"//ObPhysicalRestoreTableOperator
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 #include "share/scn.h"
+#include "share/restore/ob_recover_table_util.h"
 #include "rootserver/backup/ob_backup_proxy.h" //ObBackupServiceProxy
 #include "logservice/palf_handle_guard.h"
 #include "logservice/ob_log_service.h"
+#include "rootserver/restore/ob_recover_table_initiator.h"
 #include "rootserver/ob_heartbeat_service.h"
 
 #include "parallel_ddl/ob_create_table_helper.h" // ObCreateTableHelper
@@ -3883,6 +3885,12 @@ int ObRootService::execute_ddl_task(const obrpc::ObAlterTableArg &arg,
         }
         break;
       }
+      case share::MAKE_RECOVER_RESTORE_TABLE_TASK_TAKE_EFFECT: {
+        if (OB_FAIL(ddl_service_.make_recover_restore_tables_visible(const_cast<ObAlterTableArg &>(arg)))) {
+          LOG_WARN("make recovert restore task visible failed", K(ret), K(arg));
+        }
+        break;
+      }
       default:
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unknown ddl task type", K(ret), K(arg.ddl_task_type_));
@@ -3968,7 +3976,8 @@ int ObRootService::precheck_interval_part(const obrpc::ObAlterTableArg &arg)
   return ret;
 }
 
-int ObRootService::create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res)
+int ObRootService::create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg,
+                                       obrpc::ObCreateHiddenTableRes &res)
 {
   LOG_DEBUG("receive create hidden table arg", K(arg));
   int ret = OB_SUCCESS;
@@ -3986,7 +3995,7 @@ int ObRootService::create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(arg));
   } else if (OB_FAIL(ddl_service_.create_hidden_table(arg, res))) {
-    LOG_WARN("do create hidden table in trans failed", K(ret));
+    LOG_WARN("do create hidden table in trans failed", K(ret), K(arg));
   }
   return ret;
 }
@@ -4120,6 +4129,28 @@ int ObRootService::start_redef_table(const obrpc::ObStartRedefTableArg &arg, obr
   return ret;
 }
 
+int ObRootService::recover_restore_table_ddl(const obrpc::ObRecoverRestoreTableDDLArg &arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(arg.src_tenant_id_, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(arg));
+  } else if (compat_version < DATA_VERSION_4_2_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("version 4.0 does not support this operation", K(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(ddl_service_.recover_restore_table_ddl_task(arg))) {
+    LOG_WARN("recover restore table ddl task failed", K(ret), K(arg));
+  }
+  LOG_INFO("recover restore table ddl finish", K(ret), K(arg));
+  return ret;
+}
+
 int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlterTableRes &res)
 {
   LOG_DEBUG("receive alter table arg", K(arg));
@@ -4172,7 +4203,7 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
                                                         nonconst_arg.alter_table_schema_.get_database_name(),
                                                         nonconst_arg.alter_table_schema_.get_origin_table_name(),
-                                                        false /* is_index */,
+                                                        false  /* is_index*/,
                                                         orig_table_schema))) {
         LOG_WARN("fail to get and check table schema", K(ret));
       } else if (OB_ISNULL(orig_table_schema)) {
@@ -4189,7 +4220,7 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
                                    arg.consumer_group_id_,
                                    &allocator,
                                    &arg,
-                                   0 /* parent task id*/);
+                                   0 /*parent task id*/);
         if (OB_FAIL(ddl_scheduler_.create_ddl_task(param, sql_proxy_, task_record))) {
           LOG_WARN("submit ddl task failed", K(ret), K(arg));
         } else if (OB_FAIL(ddl_scheduler_.schedule_ddl_task(task_record))) {
@@ -8549,7 +8580,7 @@ int ObRootService::check_restore_tenant_valid(const share::ObPhysicalRestoreJob 
       ObArray<ObZone> zones;
       if (OB_FAIL(pool_list_str.assign(job_info.get_pool_list()))) {
         LOG_WARN("failed to assign pool list", KR(ret), K(job_info));
-      } else if (OB_FAIL(ObRestoreService::assign_pool_list(pool_list_str.ptr(), pool_list))) {
+      } else if (OB_FAIL(ObRestoreScheduler::assign_pool_list(pool_list_str.ptr(), pool_list))) {
         LOG_WARN("failed to assgin pool list", KR(ret), K(pool_list_str));
       } else if (OB_FAIL(ObUnitManager::convert_pool_name_list(pool_list, pools))) {
          LOG_WARN("fail to convert pools", KR(ret), K(pool_list));
@@ -10095,7 +10126,7 @@ int ObRootService::build_ddl_single_replica_response(const obrpc::ObDDLBuildSing
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(arg));
   } else if (OB_FAIL(ddl_scheduler_.on_sstable_complement_job_reply(
-      arg.tablet_id_/*source tablet id*/, ObDDLTaskKey(arg.tenant_id_, arg.dest_schema_id_, arg.schema_version_), arg.snapshot_version_, arg.execution_id_, arg.ret_code_, info))) {
+      arg.tablet_id_/*source tablet id*/, ObDDLTaskKey(arg.dest_tenant_id_, arg.dest_schema_id_, arg.dest_schema_version_), arg.snapshot_version_, arg.execution_id_, arg.ret_code_, info))) {
     LOG_WARN("handle column checksum calc response failed", K(ret), K(arg));
   }
   return ret;
@@ -10432,6 +10463,48 @@ int ObRootService::set_cpu_quota_concurrency_config_()
     LOG_WARN("update cpu_quota_concurrency failed", K(ret));
   } else if (OB_FAIL(check_config_result("cpu_quota_concurrency", "10"))) {
     LOG_WARN("failed to check config same", K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::handle_recover_table(const obrpc::ObRecoverTableArg &arg)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("succeed received recover table arg", K(arg));
+  uint64_t data_version = 0;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (GCTX.is_standby_cluster()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("recover table in standby tenant is not allowed", K(ret), K(arg));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recover table in standby tenant");
+  } else if (GCONF.in_upgrade_mode()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("recover table in upgrade mode is not allowed", K(ret), K(arg));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Cluster is in upgrade mode, recover table is");
+  } else if (OB_FAIL(ObRecoverTableUtil::check_compatible(arg.tenant_id_))) {
+    LOG_WARN("check recover table compatible failed", K(ret), K(arg));
+  } else {
+    ObRecoverTableInitiator initiator;
+    bool is_exist = false;
+    if (OB_FAIL(initiator.init(schema_service_, &sql_proxy_))) {
+      LOG_WARN("failed to init ObRecoverTableInitiator", K(ret));
+    } else if (ObRecoverTableArg::Action::INITIATE == arg.action_
+        && OB_FAIL(initiator.is_recover_job_exist(arg.tenant_id_, is_exist))) {
+      LOG_WARN("failed to check recover job exist", K(ret), K(arg));
+    } else if (is_exist) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("recover job is exist", K(ret), K(arg));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recover table when recover table job exists is");
+    } else if (OB_FAIL(initiator.initiate_recover_table(arg))) {
+      LOG_WARN("failed to initiate table recover", K(ret), K(arg));
+    } else {
+      LOG_INFO("[RECOVER_TABLE] initiate recover table succeed", K(arg));
+    }
   }
   return ret;
 }

@@ -83,7 +83,7 @@ public:
   void destroy();
   int start();
   void stop();
-  void mark_stop_flag() { ATOMIC_STORE(&stop_flag_, false); }
+  void mark_stop_flag() { ATOMIC_STORE(&stop_flag_, true); }
   bool is_stoped() const { return ATOMIC_LOAD(&stop_flag_); }
   int64_t get_thread_num() const { return thread_num_; }
 
@@ -340,6 +340,9 @@ int ObMapQueueThread<MAX_THREAD_NUM>::push(void *data, const uint64_t hash_val)
   if (OB_UNLIKELY(! inited_)) {
     LIB_LOG(ERROR, "not init");
     ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(is_stoped())) {
+    ret = OB_IN_STOP_STATE;
+    LIB_LOG(INFO, "thread pool is not running", KR(ret), K_(stop_flag));
   } else if (OB_ISNULL(data)) {
     LIB_LOG(ERROR, "invalid argument", K(data));
     ret = OB_INVALID_ARGUMENT;

@@ -308,9 +308,10 @@ int ObIStorageClogRecorder::replay_get_tablet_handle(
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
+  const bool is_update_mds_table = false;
   if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls_handle.get_ls()->replay_get_tablet(tablet_id, scn, tablet_handle))) {
+  } else if (OB_FAIL(ls_handle.get_ls()->replay_get_tablet(tablet_id, scn, is_update_mds_table, tablet_handle))) {
     if (OB_OBSOLETE_CLOG_NEED_SKIP == ret) {
       LOG_INFO("clog is obsolete, should skip replay", K(ret), K(ls_id), K(tablet_id), K(scn));
       ret = OB_SUCCESS;

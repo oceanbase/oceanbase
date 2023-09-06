@@ -80,7 +80,7 @@ enum ObDDLType
   DDL_TABLE_REDEFINITION = 1010,
   DDL_DIRECT_LOAD = 1011, // load data
   DDL_DIRECT_LOAD_INSERT = 1012, // insert into select
-
+  DDL_TABLE_RESTORE = 1013, // table restore
 
   // @note new normal ddl type to be defined here !!!
   DDL_NORMAL_TYPE = 10001,
@@ -106,6 +106,7 @@ enum ObDDLTaskType
   UPDATE_AUTOINC_SCHEMA = 9,
   CANCEL_DDL_TASK = 10,
   MODIFY_NOT_NULL_COLUMN_STATE_TASK = 11,
+  MAKE_RECOVER_RESTORE_TABLE_TASK_TAKE_EFFECT = 12,
 };
 
 enum ObDDLTaskStatus {
@@ -236,16 +237,17 @@ struct ObColumnNameInfo final
 {
 public:
   ObColumnNameInfo()
-    : column_name_(), is_shadow_column_(false)
+    : column_name_(), is_shadow_column_(false), is_enum_set_need_cast_(false)
   {}
-  ObColumnNameInfo(const ObString &column_name, const bool is_shadow_column)
-    : column_name_(column_name), is_shadow_column_(is_shadow_column)
+  ObColumnNameInfo(const ObString &column_name, const bool is_shadow_column, const bool is_enum_set_need_cast = false)
+    : column_name_(column_name), is_shadow_column_(is_shadow_column), is_enum_set_need_cast_(is_enum_set_need_cast)
   {}
   ~ObColumnNameInfo() = default;
-  TO_STRING_KV(K_(column_name), K_(is_shadow_column));
+  TO_STRING_KV(K_(column_name), K_(is_shadow_column), K_(is_enum_set_need_cast));
 public:
   ObString column_name_;
   bool is_shadow_column_;
+  bool is_enum_set_need_cast_;
 };
 
 class ObColumnNameMap final {
@@ -412,14 +414,16 @@ public:
      const uint64_t task_id,
      int64_t &data_format_version);
 
-  static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObAlterTableArg &alter_table_arg);
+  static int replace_user_tenant_id(
+    const ObDDLType &ddl_type,
+    const uint64_t tenant_id,
+    obrpc::ObAlterTableArg &alter_table_arg);
   static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObDropDatabaseArg &drop_db_arg);
   static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObDropTableArg &drop_table_arg);
   static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObDropIndexArg &drop_index_arg);
   static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObTruncateTableArg &trucnate_table_arg);
   static int replace_user_tenant_id(const uint64_t tenant_id, obrpc::ObCreateIndexArg &create_index_arg);
 
-private:
   static int generate_column_name_str(
     const common::ObIArray<ObColumnNameInfo> &column_names,
     const bool is_oracle_mode,
@@ -434,6 +438,40 @@ private:
       const bool with_alias_name,
       const bool with_comma,
       ObSqlString &sql_string);
+  static int reshape_ddl_column_obj(
+      common::ObDatum &datum,
+      const ObObjMeta &obj_meta);
+
+  /**
+   * NOTICE: The interface is designed for Offline DDL operation only.
+   * The caller can not obtain the schema via the hold_buf_src_tenant_schema_guard whose
+   * validity is limited by whether src_tenant_id and dst_tenant_id are the same.
+   *
+   * 1. This interface will provide the same tenant schema guard when src_tenant_id = dst_tenant_id,
+   *    to avoid using two different versions of the guard caused by the parallel ddl under the tenant.
+   * 2. This interface will provide corresponding tenant schema guard when src_tenant_id != dst_tenant_id.
+   *
+   * @param [in] src_tenant_id
+   * @param [in] dst_tenant_id
+   * @param [in] hold_buf_src_tenant_schema_guard: hold buf, invalid when src_tenant_id = dst_tenant_id.
+   * @param [in] hold_buf_dst_tenant_schema_guard: hold buf.
+   * @param [out] src_tenant_schema_guard:
+   *    pointer to the hold_buf_dst_tenant_schema_guard if src_tenant_id = dst_tenant_id,
+   *    pointer to the hold_buf_src_tenant_schema_guard if src_tenant_id != dst_tenant_id,
+   *    is always not nullptr if the interface return OB_SUCC.
+   * @param [out] dst_tenant_schema_guard:
+   *    pointer to the hold_buf_dst_tenant_schema_guard,
+   *    is always not nullptr if the interface return OB_SUCC.
+  */
+  static int get_tenant_schema_guard(
+      const uint64_t src_tenant_id,
+      const uint64_t dst_tenant_id,
+      share::schema::ObSchemaGetterGuard &hold_buf_src_tenant_schema_guard,
+      share::schema::ObSchemaGetterGuard &hold_buf_dst_tenant_schema_guard,
+      share::schema::ObSchemaGetterGuard *&src_tenant_schema_guard,
+      share::schema::ObSchemaGetterGuard *&dst_tenant_schema_guard);
+
+private:
   static int generate_order_by_str(
       const ObIArray<int64_t> &select_column_ids,
       const ObIArray<int64_t> &order_column_ids,

@@ -109,7 +109,8 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
                                                const ObColDesc &column,
                                                blocksstable::ObStorageDatum &datum,
                                                const int64_t timeout_ts,
-                                               const bool has_lob_header)
+                                               const bool has_lob_header,
+                                               const uint64_t src_tenant_id)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -152,6 +153,7 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
       } else {
         // 4.0 text tc compatiable
         ObLobAccessParam lob_param;
+        lob_param.src_tenant_id_ = src_tenant_id;
         lob_param.tx_desc_ = tx_desc;
         lob_param.snapshot_ = snapshot;
         lob_param.sql_mode_ = SMO_DEFAULT;
@@ -191,7 +193,7 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   ObStorageDatum datum;
   datum.from_obj(obj);
-  if (OB_SUCC(insert_lob_column(allocator, ls_id, tablet_id, column, datum, timeout_ts, obj.has_lob_header()))) {
+  if (OB_SUCC(insert_lob_column(allocator, ls_id, tablet_id, column, datum, timeout_ts, obj.has_lob_header(), MTL_ID()))) {
     obj.set_lob_value(obj.get_type(), datum.get_string().ptr(), datum.get_string().length());
   }
   return ret;

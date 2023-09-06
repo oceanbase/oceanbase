@@ -14,10 +14,7 @@
 #define OCEANBASE_ROOTSERVER_OB_RESTORE_SCHEDULER_H_
 
 #include "rootserver/restore/ob_restore_util.h"
-#include "rootserver/ob_tenant_thread_helper.h"//ObTenantThreadHelper
 #include "share/backup/ob_backup_struct.h"
-#include "share/ob_rpc_struct.h"
-#include "share/ob_common_rpc_proxy.h"
 #include "share/ob_rpc_struct.h"
 #include "share/ob_upgrade_utils.h"
 
@@ -32,32 +29,20 @@ struct ObHisRestoreJobPersistInfo;
 }
 namespace rootserver
 {
+class ObRestoreService;
 // Running in a single thread.
 // schedule restore job, register to sys ls of meta tenant
-class ObRestoreService : public ObTenantThreadHelper,
-  public logservice::ObICheckpointSubHandler, public logservice::ObIReplaySubHandler,
-  public share::ObCheckStopProvider
+class ObRestoreScheduler
 {
 public:
   static const int64_t MAX_RESTORE_TASK_CNT = 10000;
 public:
-  ObRestoreService();
-  virtual ~ObRestoreService();
-  int init();
-  virtual void do_work() override;
+  ObRestoreScheduler();
+  virtual ~ObRestoreScheduler();
+  int init(ObRestoreService &restore_service);
+  void do_work();
   void destroy();
-  DEFINE_MTL_FUNC(ObRestoreService)
 public:
-  virtual share::SCN get_rec_scn() override { return share::SCN::max_scn();}
-  virtual int flush(share::SCN &rec_scn) override { return OB_SUCCESS; }
-  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const share::SCN &scn) override
-  {
-    UNUSED(buffer);
-    UNUSED(nbytes);
-    UNUSED(lsn);
-    UNUSED(scn);
-    return OB_SUCCESS;
-  }
   enum TenantRestoreStatus
   {
     IN_PROGRESS = 0,
@@ -84,9 +69,6 @@ public:
                        common::ObIArray<common::ObString> &pool_list);
 
 private:
-  int idle();
-  int check_stop() const override;
-
   int process_restore_job(const share::ObPhysicalRestoreJob &job);
   int process_sys_restore_job(const share::ObPhysicalRestoreJob &job);
   int try_recycle_job(const share::ObPhysicalRestoreJob &job);
@@ -149,12 +131,15 @@ private:
   obrpc::ObCommonRpcProxy *rpc_proxy_;
   obrpc::ObSrvRpcProxy *srv_rpc_proxy_;
   share::ObLSTableOperator *lst_operator_;
-  share::ObUpgradeProcesserSet upgrade_processors_;
+  ObRestoreService *restore_service_;
   common::ObAddr self_addr_;
   uint64_t tenant_id_;
   int64_t idle_time_us_;
-  DISALLOW_COPY_AND_ASSIGN(ObRestoreService);
+  DISALLOW_COPY_AND_ASSIGN(ObRestoreScheduler);
 };
+
+
+
 
 } // end namespace rootserver
 } // end namespace oceanbase

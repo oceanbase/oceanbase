@@ -862,11 +862,13 @@ int FetchStream::read_group_entry_(palf::LogGroupEntry &group_entry,
                 reconsume_miss_info,
                 local_tsi,
                 stop_flag))) {
-              LOG_ERROR("reconsume log_entry after missing_log_info resolved failed", KR(ret),
-                  K(log_entry), K(entry_lsn), K(missing_info), K(reconsume_miss_info));
+              if (OB_IN_STOP_STATE != ret) {
+                LOG_ERROR("reconsume log_entry after missing_log_info resolved failed", KR(ret),
+                    K(log_entry), K(entry_lsn), K(missing_info), K(reconsume_miss_info));
+              }
             }
           }
-        } else {
+        } else if (OB_IN_STOP_STATE != ret) {
           LOG_ERROR("handle log_entry failed", KR(ret), K(log_entry), K_(ls_fetch_ctx), K(entry_lsn));
         }
       } else {
@@ -1720,7 +1722,7 @@ int FetchStream::handle_miss_record_or_state_log_(
                 ret = OB_SUCCESS;
                 LOG_INFO("found new miss_record_or_state_log while resolving current miss_record_or_state_log",
                     "tls_id", ls_fetch_ctx_->get_tls_id(), K(misslog_lsn), K(missing_info));
-              } else {
+              } else if (OB_IN_STOP_STATE != ret) {
                 LOG_ERROR("read miss_log failed", KR(ret), K(miss_log_entry), K(misslog_lsn), K(missing_info));
               }
             }
@@ -1915,8 +1917,10 @@ int FetchStream::read_batch_misslog_(
         } else if (OB_FAIL(miss_log_entry.deserialize(buf, len, pos))) {
           LOG_ERROR("deserialize miss_log_entry fail", KR(ret), K(len), K(pos));
         } else if (OB_FAIL(ls_fetch_ctx_->read_miss_tx_log(miss_log_entry, misslog_lsn, tsi, tmp_miss_info))) {
-          LOG_ERROR("read_miss_log fail", KR(ret), K(miss_log_entry),
-              K(misslog_lsn), K(fetched_missing_log_cnt), K(idx), K(tmp_miss_info));
+          if (OB_IN_STOP_STATE != ret) {
+            LOG_ERROR("read_miss_log fail", KR(ret), K(miss_log_entry),
+                K(misslog_lsn), K(fetched_missing_log_cnt), K(idx), K(tmp_miss_info));
+          }
         } else {
           fetched_missing_log_cnt++;
         }

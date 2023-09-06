@@ -4622,6 +4622,7 @@ int ObTablet::get_mds_table_rec_log_scn(SCN &rec_scn)
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = tablet_meta_.ls_id_;
   const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
+  bool is_switched_to_empty_shell = false;
   mds::MdsTableHandle mds_table;
   rec_scn = SCN::max_scn();
   if (IS_NOT_INIT) {
@@ -4642,6 +4643,11 @@ int ObTablet::get_mds_table_rec_log_scn(SCN &rec_scn)
   } else if (!rec_scn.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid scn from mds table", K(ret));
+  } else if (OB_FAIL(mds_table.is_switched_to_empty_shell(is_switched_to_empty_shell))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get mds table empty shell status", K(ret));
+  } else if (is_switched_to_empty_shell) {
+    rec_scn = share::SCN::max_scn();
   }
   return ret;
 }

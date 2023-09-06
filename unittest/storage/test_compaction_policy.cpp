@@ -888,8 +888,7 @@ TEST_F(TestCompactionPolicy, check_mini_merge_basic)
   tablet_handle_.get_obj()->tablet_meta_.clog_checkpoint_scn_.convert_for_tx(300);
   tablet_handle_.get_obj()->tablet_meta_.snapshot_version_ = 300;
   ret = ObPartitionMergePolicy::get_mini_merge_tables(param, ls, *tablet_handle_.get_obj(), result);
-  ASSERT_EQ(OB_NO_NEED_MERGE, ret);
-  ASSERT_EQ(result.update_tablet_directly_, false);
+  ASSERT_EQ(result.update_tablet_directly_, true);
 }
 
 TEST_F(TestCompactionPolicy, check_minor_merge_basic)

@@ -104,7 +104,8 @@ public:
                K(field1_),
                K(scheduler_flags_),
                K(enabled_),
-               K(max_run_duration_));
+               K(max_run_duration_),
+               K(interval_ts_));
 
   bool valid()
   {
@@ -135,6 +136,7 @@ public:
   common::ObString &get_interval() { return interval_; }
   common::ObString &get_program_name() { return program_name_; }
   common::ObString &get_job_name() { return job_name_; }
+  common::ObString &get_job_class() { return job_class_; }
 
   bool is_oracle_tenant() { return is_oracle_tenant_; }
 
@@ -181,6 +183,50 @@ public:
   common::ObString credential_name_;
   common::ObString destination_name_;
   int64_t interval_ts_;
+  bool is_oracle_tenant_;
+};
+
+class ObDBMSSchedJobClassInfo
+{
+public:
+  ObDBMSSchedJobClassInfo() :
+    tenant_id_(common::OB_INVALID_ID),
+    job_class_name_(),
+    resource_consumer_group_(),
+    logging_level_(),
+    log_history_(0),
+    comments_(),
+    is_oracle_tenant_(true) {}
+
+  TO_STRING_KV(K(tenant_id_),
+              K(job_class_name_),
+              K(service_),
+              K(resource_consumer_group_),
+              K(logging_level_),
+              K(log_history_),
+              K(comments_));
+  bool valid()
+  {
+    return tenant_id_ != common::OB_INVALID_ID
+            && !job_class_name_.empty();
+  }
+  uint64_t get_tenant_id() { return tenant_id_; }
+  uint64_t get_log_history() { return log_history_; }
+  common::ObString &get_job_class_name() { return job_class_name_; }
+  common::ObString &get_service() { return service_; }
+  common::ObString &get_resource_consumer_group() { return resource_consumer_group_; }
+  common::ObString &get_logging_level() { return logging_level_; }
+  common::ObString &get_comments() { return comments_; }
+  bool is_oracle_tenant() { return is_oracle_tenant_; }
+  int deep_copy(common::ObIAllocator &allocator, const ObDBMSSchedJobClassInfo &other);
+public:
+  uint64_t tenant_id_;
+  common::ObString job_class_name_;
+  common::ObString service_;
+  common::ObString resource_consumer_group_;
+  common::ObString logging_level_;
+  uint64_t log_history_;
+  common::ObString comments_;
   bool is_oracle_tenant_;
 };
 

@@ -491,6 +491,7 @@ public:
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
   virtual bool filter_row() override;
   virtual bool has_filter_row() override { return true; }
+  OB_INLINE bool value_is_null() { return value_is_null_; }
   TO_STRING_KV("filter", "CheckAndMutateFilter",
                K_(family),
                K_(qualifier),

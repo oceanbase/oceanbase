@@ -52,7 +52,7 @@ namespace libobcdc
 {
 class IObLogMetaManager;
 class IObLogSchemaGetter;
-class IObLogTimeZoneInfoGetter;
+class IObCDCTimeZoneInfoGetter;
 class IObLogFetcher;
 class IObLogSysLsTaskHandler;
 class IObLogDmlParser;
@@ -155,6 +155,7 @@ public:
   int32_t get_log_level() const;
   const char *get_log_file() const;
   void set_disable_redirect_log(const bool flag) { disable_redirect_log_ = flag; }
+  bool is_running() { return is_running_; }
   static void print_version();
   int set_assign_log_dir(const char *log_dir, const int64_t log_dir_len);
 
@@ -204,8 +205,9 @@ private:
   int init_self_addr_();
   int init_schema_(const int64_t start_tstamp_us, int64_t &sys_start_schema_version);
   int init_components_(const uint64_t start_tstamp_ns);
-  int config_tenant_mgr_(const int64_t start_tstamp_ns, const int64_t sys_schema_version);
   void destroy_components_();
+  int start_tenant_service_();
+  int config_tenant_mgr_(const int64_t start_tstamp_us, const int64_t sys_schema_version);
   void write_pid_file_();
   static void *timer_thread_func_(void *args);
   static void *sql_thread_func_(void *args);
@@ -322,6 +324,7 @@ private:
   // External global exposure of variables via TCTX
 public:
   int64_t                   start_tstamp_ns_;
+  int64_t                   sys_start_schema_version_;
   bool                      is_schema_split_mode_;
   bool                      enable_filter_sys_tenant_;
   std::string               drc_message_factory_binlog_record_type_;
@@ -329,12 +332,13 @@ public:
   RefreshMode               refresh_mode_;
   ClientFetchingMode        fetching_mode_;
   bool                      is_tenant_sync_mode_;
+  uint64_t                  tenant_id_; // tenant_id in tenant_sync_mode, OB_INVALID_TENANT_ID in cluster_sync_mode
   ObCDCGlobalInfo           global_info_;
 
   // compoments
   ObLogMysqlProxy           mysql_proxy_;
   ObLogMysqlProxy           tenant_sql_proxy_;
-  IObLogTimeZoneInfoGetter  *timezone_info_getter_;
+  IObCDCTimeZoneInfoGetter  *timezone_info_getter_;
   ObLogHbaseUtil            hbase_util_;
   ObObj2strHelper           obj2str_helper_;
   BRQueue                   br_queue_;
@@ -368,9 +372,6 @@ public:
   IObLogFetcher             *fetcher_;
   IObLogTransStatMgr        *trans_stat_mgr_;                    // Transaction Statistics Management
   IObLogTenantMgr           *tenant_mgr_;
-  // The tz information of the sys tenant is placed in instance because of the refresh schema dependency
-  ObTZInfoMap               tz_info_map_;
-  ObTimeZoneInfoWrap        tz_info_wrap_;
   IObLogTransRedoDispatcher *trans_redo_dispatcher_;
   IObLogTransMsgSorter      *trans_msg_sorter_;
 

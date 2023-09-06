@@ -115,6 +115,8 @@ public:
    * */
   int get_job_by_tenant_name(const ObString &tenant_name,
                            ObPhysicalRestoreJob &job_info);
+  int get_job_by_restore_tenant_name(const ObString &tenant_name,
+                           ObPhysicalRestoreJob &job_info);
 
   /*
    * description: check all ls has restored to consistent_scn

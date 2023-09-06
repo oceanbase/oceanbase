@@ -905,6 +905,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObCancelRestoreStmt, ObCancelRestoreExecutor);
         break;
       }
+      case stmt::T_RECOVER_TABLE: {
+        DEFINE_EXECUTE_CMD(ObRecoverTableStmt, ObRecoverTableExecutor);
+        break;
+      }
       case stmt::T_BACKUP_MANAGE: {
         DEFINE_EXECUTE_CMD(ObBackupManageStmt, ObBackupManageExecutor);
         break;
@@ -995,6 +999,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_CHECKPOINT_SLOG: {
         DEFINE_EXECUTE_CMD(ObCheckpointSlogStmt, ObCheckpointSlogExecutor);
+        break;
+      }
+      case stmt::T_TABLE_TTL: {
+        DEFINE_EXECUTE_CMD(ObTableTTLStmt, ObTableTTLExecutor);
         break;
       }
       case stmt::T_CS_DISKMAINTAIN:

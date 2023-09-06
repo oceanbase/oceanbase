@@ -72,6 +72,7 @@
 #include "rootserver/ob_primary_ls_service.h" // for ObPrimaryLSService
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/session/ob_sess_info_verify.h"
+#include "observer/table/ttl/ob_ttl_service.h"
 
 namespace oceanbase
 {
@@ -2802,6 +2803,30 @@ int ObRpcGetLSReplayedScnP::process()
   } else if (OB_FAIL(gctx_.ob_service_->get_ls_replayed_scn(arg_, result_))) {
     COMMON_LOG(WARN, "failed to get_ls_replayed_scn", KR(ret), K(arg_));
   }
+  return ret;
+}
+
+int ObTenantTTLP::process()
+{
+  int ret = OB_SUCCESS;
+  ObTTLRequestArg &req = arg_;
+  ObTTLResponseArg &res = result_;
+  table::ObTTLService *ttl_service = nullptr;
+
+  if (OB_UNLIKELY(!req.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    RS_LOG(WARN, "invalid argument", K(ret), K(req));
+  } else if (OB_UNLIKELY(req.tenant_id_ != MTL_ID())) {
+    ret = OB_ERR_UNEXPECTED;
+    RS_LOG(ERROR, "mtl_id not match", K(ret), K(req), "mtl_id", MTL_ID());
+  } else if (OB_ISNULL(ttl_service = MTL(table::ObTTLService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    RS_LOG(ERROR, "ttl service is nullptr", KR(ret), K(req));
+  } else if (OB_FAIL(ttl_service->launch_ttl_task(req))) {
+    RS_LOG(WARN, "fail to launch ttl", KR(ret), K(req));
+  }
+  res.err_code_ = ret;
+  ret = OB_SUCCESS;
   return ret;
 }
 

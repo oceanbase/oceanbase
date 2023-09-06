@@ -43,8 +43,8 @@ public:
     int ret = OB_SUCCESS;                                                             \
     table::ObTableDirectLoadRequest request;                                          \
     table::ObTableDirectLoadResult result;                                            \
+    request.header_.operation_type_ = pcode;                                          \
     request.credential_ = credential_;                                                \
-    request.operation_type_ = pcode;                                                  \
     result.allocator_ = &allocator_;                                                  \
     if (OB_FAIL(request.set_arg(arg, allocator_))) {                                  \
       SERVER_LOG(WARN, "fail to set arg", K(ret), K(arg));                            \
@@ -53,7 +53,7 @@ public:
                          .by(tenant_id_)                                              \
                          .direct_load(request, result))) {                            \
       SERVER_LOG(WARN, "fail to rpc call direct load", K(ret), K_(addr), K(request)); \
-    } else if (OB_UNLIKELY(result.operation_type_ != pcode)) {                        \
+    } else if (OB_UNLIKELY(result.header_.operation_type_ != pcode)) {                \
       ret = OB_ERR_UNEXPECTED;                                                        \
       SERVER_LOG(WARN, "unexpected operation type", K(ret), K(request), K(result));   \
     } else if (OB_UNLIKELY(!result.res_content_.empty())) {                           \
@@ -69,8 +69,8 @@ public:
     int ret = OB_SUCCESS;                                                             \
     table::ObTableDirectLoadRequest request;                                          \
     table::ObTableDirectLoadResult result;                                            \
+    request.header_.operation_type_ = pcode;                                          \
     request.credential_ = credential_;                                                \
-    request.operation_type_ = pcode;                                                  \
     result.allocator_ = &allocator_;                                                  \
     if (OB_FAIL(request.set_arg(arg, allocator_))) {                                  \
       SERVER_LOG(WARN, "fail to set arg", K(ret), K(arg));                            \
@@ -79,7 +79,7 @@ public:
                          .by(tenant_id_)                                              \
                          .direct_load(request, result))) {                            \
       SERVER_LOG(WARN, "fail to rpc call direct load", K(ret), K_(addr), K(request)); \
-    } else if (OB_UNLIKELY(result.operation_type_ != pcode)) {                        \
+    } else if (OB_UNLIKELY(result.header_.operation_type_ != pcode)) {                \
       ret = OB_ERR_UNEXPECTED;                                                        \
       SERVER_LOG(WARN, "unexpected operation type", K(ret), K(request), K(result));   \
     } else if (OB_FAIL(result.get_res(res))) {                                        \

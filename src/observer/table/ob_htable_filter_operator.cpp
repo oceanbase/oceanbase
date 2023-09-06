@@ -15,44 +15,29 @@
 #include "ob_htable_utils.h"
 #include "lib/json/ob_json.h"
 #include "share/ob_errno.h"
+#include "share/table/ob_ttl_util.h"
 using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::table::hfilter;
+using namespace oceanbase::share::schema;
 
-int ObHColumnDescriptor::from_string(const common::ObString &str)
+// format: {"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}}
+int ObHColumnDescriptor::from_string(const common::ObString &kv_attributes)
 {
+  reset();
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
-  json::Parser json_parser;
-  json::Value *ast = NULL;
-  if (str.empty()) {
-    // skip
-  } else if (OB_FAIL(json_parser.init(&allocator))) {
-    LOG_WARN("failed to init json parser", K(ret));
-  } else if (OB_FAIL(json_parser.parse(str.ptr(), str.length(), ast))) {
-    LOG_WARN("failed to parse", K(ret), K(str));
-    ret = OB_SUCCESS;
-  } else if (NULL != ast
-             && ast->get_type() == json::JT_OBJECT
-             && ast->get_object().get_size() == 1) {
-    json::Pair *kv = ast->get_object().get_first();
-    if (NULL != kv && kv != ast->get_object().get_header()) {
-      if (kv->name_.case_compare("HColumnDescriptor") == 0) {
-        ast = kv->value_;
-        if (NULL != ast && ast->get_type() == json::JT_OBJECT) {
-          DLIST_FOREACH(elem, ast->get_object()) {
-            if (elem->name_.case_compare("TimeToLive") == 0) {
-              json::Value *ttl_val = elem->value_;
-              if (NULL != ttl_val && ttl_val->get_type() == json::JT_NUMBER) {
-                time_to_live_ = static_cast<int32_t>(ttl_val->get_number());
-              }
-            }
-          }  // end foreach
-        }
-      }
-    }
+  if (kv_attributes.empty()) {
+    // do nothing
+  } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(kv_attributes, max_version_, time_to_live_))) {
+    LOG_WARN("fail to parse kv attributes", K(ret), K(kv_attributes));
   }
   return ret;
+}
+
+void ObHColumnDescriptor::reset()
+{
+  time_to_live_ = 0;
+  max_version_ = 0;
 }
 
 ////////////////////////////////////////////////////////////////
@@ -82,6 +67,19 @@ void ObHTableColumnTracker::set_ttl(int32_t ttl_value)
     oldest_stamp_ = now - (ttl_value * 1000LL);
     LOG_DEBUG("[yzfdebug] set ttl", K(ttl_value), K(now), K_(oldest_stamp));
     NG_TRACE_EXT(t, OB_ID(arg1), ttl_value, OB_ID(arg2), oldest_stamp_);
+  } else {
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid ttl value", K(ttl_value));
+  }
+}
+
+void ObHTableColumnTracker::set_max_version(int32_t max_version)
+{
+  if (max_version > 0) {
+    max_versions_ = max_version;
+    LOG_DEBUG("set max_version", K(max_version));
+    NG_TRACE_EXT(version, OB_ID(arg1), max_version);
+  } else {
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid max version value", K(max_version));
   }
 }
 
@@ -750,8 +748,14 @@ int ObHTableRowIterator::get_next_result(ObTableQueryResult *&out_result)
     }
     if (OB_FAIL(column_tracker_->init(htable_filter_, scan_order_))) {
       LOG_WARN("failed to init column tracker", K(ret));
-    } else if (time_to_live_ > 0) {
-      column_tracker_->set_ttl(time_to_live_);
+    } else {
+      if (time_to_live_ > 0) {
+        column_tracker_->set_ttl(time_to_live_);
+      }
+      if (max_version_ > 0) {
+        int32_t real_max_version = std::min(column_tracker_->get_max_version(), max_version_);
+        column_tracker_->set_max_version(real_max_version);
+      }
     }
   }
   if (OB_SUCC(ret) && NULL == matcher_) {

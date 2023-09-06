@@ -39,6 +39,7 @@ class ObMySQLResult;
 namespace dbms_scheduler
 {
 class ObDBMSSchedJobInfo;
+class ObDBMSSchedJobClassInfo;
 
 class ObDBMSSchedTableOperator
 {
@@ -61,9 +62,16 @@ public:
     uint64_t tenant_id, bool is_oracle_tenant,
     common::ObIAllocator &allocator, common::ObIArray<ObDBMSSchedJobInfo> &job_infos);
 
+  int get_dbms_sched_job_class_info(
+    uint64_t tenant_id, bool is_oracle_tenant, const common::ObString job_class_name,
+    common::ObIAllocator &allocator, ObDBMSSchedJobClassInfo &job_class_info);
+
   int extract_info(
     common::sqlclient::ObMySQLResult &result, int64_t tenant_id, bool is_oracle_tenant,
     common::ObIAllocator &allocator, ObDBMSSchedJobInfo &job_info);
+  int extract_job_class_info(
+    sqlclient::ObMySQLResult &result, int64_t tenant_id, bool is_oracle_tenant,
+    ObIAllocator &allocator, ObDBMSSchedJobClassInfo &job_class_info);
 
   int calc_execute_at(
     ObDBMSSchedJobInfo &job_info, int64_t &execute_at, int64_t &delay, bool ignore_nextdate = false);
@@ -73,6 +81,9 @@ public:
   int check_job_timeout(ObDBMSSchedJobInfo &job_info);
 
   int check_auto_drop(ObDBMSSchedJobInfo &job_info);
+
+  int register_default_job_class(uint64_t tenant_id);
+  int purge_run_detail_histroy(uint64_t tenant_id);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDBMSSchedTableOperator);

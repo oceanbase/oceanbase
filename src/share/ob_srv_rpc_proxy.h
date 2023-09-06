@@ -235,6 +235,7 @@ public:
   RPC_AP(PR5 update_tenant_info_cache, OB_UPDATE_TENANT_INFO_CACHE, (obrpc::ObUpdateTenantInfoCacheArg), obrpc::ObUpdateTenantInfoCacheRes);
   RPC_AP(PR5 broadcast_consensus_version, OB_BROADCAST_CONSENSUS_VERSION, (obrpc::ObBroadcastConsensusVersionArg), obrpc::ObBroadcastConsensusVersionRes);
   RPC_S(PR5 direct_load_control, OB_DIRECT_LOAD_CONTROL, (observer::ObDirectLoadControlRequest), observer::ObDirectLoadControlResult);
+  RPC_S(PR5 dispatch_ttl, OB_TABLE_TTL, (obrpc::ObTTLRequestArg), obrpc::ObTTLResponseArg);
   RPC_S(PR5 admin_unlock_member_list_op, OB_HA_UNLOCK_MEMBER_LIST, (obrpc::ObAdminUnlockMemberListOpArg));
 }; // end of class ObSrvRpcProxy
 

@@ -59,7 +59,8 @@ int ObIndexSSTableBuildTask::process()
   const ObSysVariableSchema *sys_variable_schema = NULL;
   bool oracle_mode = false;
   ObTabletID unused_tablet_id;
-  const ObTableSchema *table_schema = nullptr;
+  const ObTableSchema *data_schema = nullptr;
+  const ObTableSchema *index_schema = nullptr;
   bool need_padding = false;
   bool need_exec_new_inner_sql = true;
 
@@ -77,25 +78,30 @@ int ObIndexSSTableBuildTask::process()
     LOG_WARN("sys variable schema is NULL", K(ret));
   } else if (OB_FAIL(sys_variable_schema->get_oracle_mode(oracle_mode))) {
     LOG_WARN("get oracle mode failed", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, data_table_id_, table_schema))) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, data_table_id_, data_schema))) {
     LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(data_table_id_));
-  } else if (nullptr == table_schema) {
+  } else if (nullptr == data_schema) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, table schema must not be nullptr", K(ret));
+    LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(tenant_id_), K(data_table_id_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, dest_table_id_, index_schema))) {
+    LOG_WARN("get index schema failed", K(ret), K(tenant_id_), K(dest_table_id_));
+  } else if (nullptr == index_schema) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, index schema must not be nullptr", K(ret), K(tenant_id_), K(dest_table_id_));
   } else {
     if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_, data_table_id_,
                                                            dest_table_id_,
-                                                           table_schema->get_schema_version(),
+                                                           data_schema->get_schema_version(),
                                                            snapshot_version_,
                                                            execution_id_,
                                                            task_id_,
                                                            parallelism_,
                                                            false/*use_heap_table_ddl*/,
-                                                           !table_schema->is_user_hidden_table()/*use_schema_version_hint_for_src_table*/,
+                                                           !data_schema->is_user_hidden_table()/*use_schema_version_hint_for_src_table*/,
                                                            nullptr,
                                                            sql_string))) {
       LOG_WARN("fail to generate build replica sql", K(ret));
-    } else if (OB_FAIL(table_schema->is_need_padding_for_generated_column(need_padding))) {
+    } else if (OB_FAIL(data_schema->is_need_padding_for_generated_column(need_padding))) {
       LOG_WARN("fail to check need padding", K(ret));
     } else {
       common::ObCommonSqlProxy *user_sql_proxy = nullptr;
@@ -105,8 +111,8 @@ int ObIndexSSTableBuildTask::process()
       session_param.sql_mode_ = (int64_t *)&sql_mode;
       session_param.tz_info_wrap_ = nullptr;
       session_param.ddl_info_.set_is_ddl(true);
-      session_param.ddl_info_.set_source_table_hidden(table_schema->is_user_hidden_table());
-      session_param.ddl_info_.set_dest_table_hidden(table_schema->is_user_hidden_table());
+      session_param.ddl_info_.set_source_table_hidden(data_schema->is_user_hidden_table());
+      session_param.ddl_info_.set_dest_table_hidden(index_schema->is_user_hidden_table());
       session_param.nls_formats_[ObNLSFormatEnum::NLS_DATE] = nls_date_format_;
       session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = nls_timestamp_format_;
       session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = nls_timestamp_tz_format_;
@@ -380,6 +386,8 @@ int ObIndexBuildTask::init(
     } else if (OB_FAIL(init_ddl_task_monitor_info(index_schema->get_table_id()))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
+      dst_tenant_id_ = tenant_id_;
+      dst_schema_version_ = schema_version_;
       is_inited_ = true;
     }
     ddl_tracing_.open();
@@ -444,6 +452,8 @@ int ObIndexBuildTask::init(const ObDDLTaskRecord &task_record)
     ret_code_ = task_record.ret_code_;
     start_time_ = ObTimeUtility::current_time();
 
+    dst_tenant_id_ = tenant_id_;
+    dst_schema_version_ = schema_version_;
     if (OB_FAIL(init_ddl_task_monitor_info(index_schema->get_table_id()))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
@@ -1211,7 +1221,7 @@ int ObIndexBuildTask::update_index_status_in_schema(const ObTableSchema &index_s
     arg.index_table_id_ = index_schema.get_table_id();
     arg.status_ = new_status;
     arg.exec_tenant_id_ = tenant_id_;
-    arg.in_offline_ddl_white_list_ = index_schema.get_table_state_flag() != TABLE_STATE_NORMAL;
+    arg.in_offline_ddl_white_list_ = true;
     arg.task_id_ = task_id_;
     int64_t ddl_rpc_timeout = 0;
     int64_t tmp_timeout = 0;

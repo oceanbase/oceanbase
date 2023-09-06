@@ -1246,6 +1246,7 @@ int ObMacroBlockWriter::flush_macro_block(ObMacroBlock &macro_block)
   } else if (OB_NOT_NULL(callback_) && OB_FAIL(callback_->write(macro_handle,
                                                                 cur_logic_id,
                                                                 macro_block.get_data_buf(),
+                                                                upper_align(macro_block.get_data_size(), DIO_ALIGN_SIZE),
                                                                 current_macro_seq_))) {
     STORAGE_LOG(WARN, "fail to do callback flush", K(ret));
   }

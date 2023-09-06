@@ -30,6 +30,7 @@ public:
   virtual int write(const ObMacroBlockHandle &macro_handle,
                     const ObLogicMacroBlockId &logic_id,
                     char *buf,
+                    const int64_t buf_len,
                     const int64_t data_seq) = 0;
   virtual int wait() = 0;
 };

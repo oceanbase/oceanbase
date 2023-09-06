@@ -40,11 +40,12 @@ public:
 
 protected:
   int deserialize() override { return this->request_.get_arg(this->arg_); }
-  int serialize() override
+  int set_result_header() override
   {
-    this->result_.operation_type_ = pcode;
-    return this->result_.set_res(this->res_, ctx_.get_allocator());
+    this->result_.header_.operation_type_ = pcode;
+    return OB_SUCCESS;
   }
+  int serialize() override { return this->result_.set_res(this->res_, ctx_.get_allocator()); }
 
 protected:
   ObTableDirectLoadExecContext &ctx_;
@@ -64,6 +65,7 @@ public:
 
 protected:
   int check_args() override;
+  int set_result_header() override;
   int process() override;
 
 private:

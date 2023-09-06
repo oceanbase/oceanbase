@@ -752,7 +752,7 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
     ObIArray<obrpc::ObDDLRes> &ddl_ress = res.ddl_res_array_;
     for (int64_t i = 0; OB_SUCC(ret) && i < ddl_ress.count(); ++i) {
       ObDDLRes &ddl_res = ddl_ress.at(i);
-      if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(ddl_res.tenant_id_, ddl_res.task_id_, *my_session, common_rpc_proxy, is_support_cancel))) {
+      if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(ddl_res.tenant_id_, ddl_res.task_id_, my_session, common_rpc_proxy, is_support_cancel))) {
         LOG_WARN("wait drop index finish", K(ret));
       }
     }
@@ -1255,7 +1255,7 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
         // do nothing, don't check if data is valid
       } else if (OB_FAIL(refresh_schema_for_table(tenant_id))) {
         LOG_WARN("refresh_schema_for_table failed", K(ret));
-      } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_, *my_session, common_rpc_proxy))) {
+      } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_, my_session, common_rpc_proxy))) {
         LOG_WARN("wait check constraint finish", K(ret));
       }
     }
@@ -1266,7 +1266,7 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
       } else {
         if (OB_FAIL(refresh_schema_for_table(tenant_id))) {
           LOG_WARN("refresh_schema_for_table failed", K(ret));
-        } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_, *my_session, common_rpc_proxy))) {
+        } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_, my_session, common_rpc_proxy))) {
           LOG_WARN("wait fk constraint finish", K(ret));
         }
       }
@@ -1279,8 +1279,7 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
         int64_t affected_rows = 0;
         if (OB_FAIL(refresh_schema_for_table(alter_table_arg.exec_tenant_id_))) {
           LOG_WARN("refresh_schema_for_table failed", K(ret));
-        } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_,
-                                                                                    *my_session, common_rpc_proxy))) {
+        } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(tenant_id, res.task_id_, my_session, common_rpc_proxy))) {
           LOG_WARN("fail to wait ddl finish", K(ret), K(tenant_id), K(res));
         }
       }

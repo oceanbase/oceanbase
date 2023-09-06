@@ -681,10 +681,11 @@ int ObPLObjectValue::match_complex_type_info(const ObPlParamInfo &param_info,
     is_same = false;
   } else if (param.get_meta().get_extend_type() != param_info.pl_type_) {
     is_same = false;
-  } else if (param_info.pl_type_ == pl::PL_NESTED_TABLE_TYPE ||
+  } else if ((param_info.pl_type_ == pl::PL_NESTED_TABLE_TYPE ||
              param_info.pl_type_ == pl::PL_ASSOCIATIVE_ARRAY_TYPE ||
              param_info.pl_type_ == pl::PL_VARRAY_TYPE ||
-             param_info.pl_type_ == pl::PL_RECORD_TYPE) {
+             param_info.pl_type_ == pl::PL_RECORD_TYPE) &&
+             OB_INVALID_ID != param_info.udt_id_) { // may be anonymous array
     const pl::ObPLComposite *composite =
             reinterpret_cast<const pl::ObPLComposite*>(param.get_ext());
     if (OB_ISNULL(composite)) {

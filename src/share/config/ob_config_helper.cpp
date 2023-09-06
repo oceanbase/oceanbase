@@ -27,6 +27,7 @@
 #include "sql/optimizer/ob_log_join_filter.h"
 #include "share/ob_encryption_util.h"
 #include "share/ob_resource_limit.h"
+#include "share/table/ob_ttl_util.h"
 #include "src/observer/ob_server.h"
 
 namespace oceanbase
@@ -370,6 +371,12 @@ bool ObConfigRpcChecksumChecker::check(const ObConfigItem &t) const
 {
   common::ObString tmp_string(t.str());
   return obrpc::get_rpc_checksum_check_level_from_string(tmp_string) != obrpc::ObRpcCheckSumCheckLevel::INVALID ;
+}
+
+bool ObTTLDutyDurationChecker::check(const ObConfigItem& t) const
+{
+  common::ObTTLDutyDuration duty_duration;
+  return OB_SUCCESS == common::ObTTLUtil::parse(t.str(), duty_duration) && duty_duration.is_valid();
 }
 
 bool ObConfigMemoryLimitChecker::check(const ObConfigItem &t) const

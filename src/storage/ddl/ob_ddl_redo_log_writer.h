@@ -343,6 +343,7 @@ public:
       const ObMacroBlockHandle &macro_handle,
       const blocksstable::ObLogicMacroBlockId &logic_id,
       char *buf,
+      const int64_t buf_len,
       const int64_t data_seq);
   int wait();
   int prepare_block_buffer_if_need();

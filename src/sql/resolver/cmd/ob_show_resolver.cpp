@@ -1420,9 +1420,19 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
         break;
       }
       case T_SHOW_RESTORE_PREVIEW: {
-  // TODO(chongrong.th): fix restore preview in 4.1
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "show restore preview is");
+        if (OB_UNLIKELY(parse_tree.num_child_ != 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_));
+        } else if (!is_sys_tenant(real_tenant_id)) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("the tenant has no priv to show restore preview", K(ret), K(real_tenant_id));
+        } else {
+          show_resv_ctx.stmt_type_ = stmt::T_SHOW_RESTORE_PREVIEW;
+          GEN_SQL_STEP_1(ObShowSqlSet::SHOW_RESTORE_PREVIEW);
+          GEN_SQL_STEP_2(ObShowSqlSet::SHOW_RESTORE_PREVIEW,
+                         OB_SYS_DATABASE_NAME,
+                         OB_TENANT_VIRTUAL_SHOW_RESTORE_PREVIEW_TNAME);
+        }
         break;
       }
       default:
