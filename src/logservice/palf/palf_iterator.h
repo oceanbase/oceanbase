@@ -90,7 +90,7 @@ public:
   //   OB_INVALID_DATA.
   //   OB_ITER_END, has iterated to the end of block.
   //   OB_NEED_RETRY, the data in cache is not integrity, and the integrity data has been truncate from disk,
-  //                  need read data from storage eagin.(data in cache will not been clean up, therefore,
+  //                  need read data from storage eagain.(data in cache will not been clean up, therefore,
   //                  user need used a new iterator to read data again)
   //   OB_ERR_OUT_LOWER_BOUND, block has been recycled
   //   OB_PARTIAL_LOG, this replica has not finished flashback, and iterator start lsn is not the header of LogGroupEntry.
@@ -116,7 +116,7 @@ public:
   //   OB_INVALID_DATA.
   //   OB_ITER_END, has iterated to the end of block.
   //   OB_NEED_RETRY, the data in cache is not integrity, and the integrity data has been truncate from disk,
-  //                  need read data from storage eagin.(data in cache will not been clean up, therefore,
+  //                  need read data from storage eagain.(data in cache will not been clean up, therefore,
   //                  user need used a new iterator to read data again)
   //   OB_ERR_OUT_LOWER_BOUND, block has been recycled
   //   OB_PARTIAL_LOG, this replica has not finished flashback, and iterator start lsn is not the header of LogGroupEntry.
@@ -142,9 +142,10 @@ public:
   //   OB_SUCCESS.
   //   OB_INVALID_DATA.
   //   OB_ITER_END, has iterated to the end of block.
-  //   OB_NEED_RETRY, the data in cache is not integrity, and the integrity data has been truncate from disk,
-  //                  need read data from storage eagin.(data in cache will not been clean up, therefore,
-  //                  user need used a new iterator to read data again)
+  //   OB_NEED_RETRY:
+  //     1. the data in cache is not integrity, and the integrity data has been truncate from disk,
+  //       need read data from storage eagain.
+  //     2. during read data from disk, there is a concurrently flashback.
   //   OB_ERR_OUT_LOWER_BOUND, block has been recycled
   //   OB_PARTIAL_LOG, this replica has not finished flashback, and iterator start lsn is not the header of LogGroupEntry.
   int next(const share::SCN &replayable_point_scn,

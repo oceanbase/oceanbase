@@ -123,7 +123,8 @@ public:
                K_(block_mgr),
                K(logical_block_size_),
                K(curr_block_writable_size_),
-               KP(block_header_serialize_buf_));
+               KP(block_header_serialize_buf_),
+               K_(flashback_version));
 
 private:
   int do_init_(const char *log_dir,
@@ -140,12 +141,15 @@ private:
   // @ret val:
   //   OB_SUCCESS
   //   OB_ERR_OUT_OF_LOWER_BOUND
+  //      the block has been recycled.
   //   OB_ERR_OUT_OF_UPPER_BOUND
   //      in flashback, (flashback_block_id, max_block_id] may be deleted, however, fetch log may read
   //      some blocks in range of (flashback_block_id, max_block_id].
-  //   OB_NEED_RETRY
+  //   OB_NEED_RETRY, open the block need to be flashbacked failed or there is flashbacking during read data.
   //   OB_ERR_UNEXPECTED
-  int check_read_out_of_bound_(const block_id_t &block_id) const;
+  int check_read_out_of_bound_(const block_id_t &block_id,
+                               const int64_t flashback_version,
+                               const bool no_such_block) const;
   int inner_switch_block_();
   int append_block_header_used_for_meta_storage_();
   int append_block_header_(const LSN &block_min_lsn, const share::SCN &block_min_scn);
@@ -166,7 +170,8 @@ private:
   void update_log_tail_guarded_by_lock_(const int64_t log_size);
   void update_log_tail_guarded_by_lock_(const LSN &lsn);
   const LSN &get_log_tail_guarded_by_lock_() const;
-  const LSN &get_readable_log_tail_guarded_by_lock_() const;
+  void get_readable_log_tail_guarded_by_lock_(LSN &readable_log_tail,
+                                              int64_t &flashback_version) const;
   offset_t get_phy_offset_(const LSN &lsn) const;
   int read_block_header_(const block_id_t block_id, LogBlockHeader &block_header) const;
   bool check_last_block_is_full_(const block_id_t max_block_id) const;
@@ -178,6 +183,7 @@ private:
                    int64_t &out_read_size);
   void reset_log_tail_for_last_block_(const LSN &lsn, bool last_block_exist);
   int update_manifest_(const block_id_t expected_next_block_id, const bool in_restart = false);
+  int check_read_integrity_(const block_id_t &block_id);
 private:
   // Used to perform IO tasks in the background
   LogBlockMgr block_mgr_;
@@ -203,6 +209,7 @@ private:
   int64_t accum_read_io_count_;
   int64_t accum_read_log_size_;
   int64_t accum_read_cost_ts_;
+  int64_t flashback_version_;
   bool is_inited_;
 };
 
