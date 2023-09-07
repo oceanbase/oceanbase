@@ -77,9 +77,9 @@ public:
   static const int64_t US_PER_HOUR = 3600000000;
   //初始化queue大小，常规模式1000w，mini模式10w
   // static const int64_t MAX_QUEUE_SIZE = 10000000; //1000w
-  static const int64_t MAX_QUEUE_CAPACITY = 1024; // 1K
-  static const int64_t SUBQUEUE_CAPACITY = 10000; // 1w
-  static const int64_t MINI_SUBQUEUE_CAPACITY = 1000; // 1k
+  static const int64_t MAX_QUEUE_CAPACITY = 10000; // 1w
+  static const int64_t SUBQUEUE_CAPACITY = 1000; // 1k
+  static const int64_t MINI_SUBQUEUE_CAPACITY = 100; // 100
   // static const int64_t MINI_MODE_MAX_QUEUE_SIZE = 100000; // 10w
   //按行淘汰的高低水位线，以queue大小的百分比设定
   static constexpr float HIGH_LEVEL_EVICT_PERCENTAGE = 0.9; // 90%

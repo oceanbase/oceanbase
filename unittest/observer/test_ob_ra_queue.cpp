@@ -26,6 +26,12 @@ struct DummyAuditRecod {
   uint64_t val;
 };
 
+uint64_t ClockMs() {
+  struct timeval tm;
+  gettimeofday(&tm, nullptr);
+  return static_cast<uint64_t>(tm.tv_sec * 1000) + static_cast<uint64_t>(tm.tv_usec / 1000);
+}
+
 TEST(TestObRaQueue, DummyTest) {
   EXPECT_EQ(1 + 1, 2);
 }
@@ -206,6 +212,69 @@ TEST(TestObRaQueue, ConcurrentPushTest) {
   EXPECT_EQ(0, queue.get_size());
 }
 
+void BenchTest(uint64_t queue_size, uint64_t thread_num) {
+  ObRaQueue queue;
+  int ret = queue.init(ObModIds::OB_MYSQL_REQUEST_RECORD, queue_size);
+  EXPECT_EQ(OB_SUCCESS, ret);
+
+  std::vector<DummyAuditRecod*> audits;
+  for (uint64_t i = 0; i < queue_size ; ++i) {
+    auto *audit = static_cast<DummyAuditRecod*>(malloc(sizeof(DummyAuditRecod)));
+    audit->val = i;
+    audits.push_back(audit);
+  }
+
+  auto PushHelpr = [&queue, &audits, &thread_num](uint64_t thread_itr) {
+    int ret = OB_SUCCESS;
+    int64_t seq = 0;
+    for (uint64_t i = 0; i < audits.size(); ++i) {
+      if (i % thread_num == thread_itr) {
+        ret = queue.push(audits[i], seq);
+        EXPECT_EQ(ret, OB_SUCCESS);
+      }
+    }
+  };
+
+  uint64_t start_time = ClockMs();
+
+  std::vector<std::thread> thread_pool;
+  for (uint64_t thread_itr = 0; thread_itr < thread_num; ++thread_itr) {
+    thread_pool.emplace_back(PushHelpr, thread_itr);
+  }
+  for (auto &t : thread_pool) {
+    t.join();
+  }
+
+  uint64_t end_time = ClockMs();
+  std::cout << "[BenchMark(" << thread_num << "t" << queue_size << ")] Push OPS: " << queue_size / (end_time - start_time) * 1000 << "/s" << std::endl;
+
+  // check push success
+  EXPECT_EQ(0, queue.get_pop_idx());
+  EXPECT_EQ(queue_size, queue.get_push_idx());
+  EXPECT_EQ(queue.get_size(), queue_size);
+
+  // get
+  ObRaQueue::Ref ref; 
+  for (uint64_t req_id = 0; req_id < queue_size; ++req_id) {
+    auto *audit = queue.get(req_id, &ref);
+    EXPECT_NE(audit, nullptr);
+    queue.revert(&ref);
+  }
+
+  // check pop function
+  for (uint64_t i = 0; i < queue_size; ++i) {
+    auto *audit = queue.pop();
+    EXPECT_NE(audit, nullptr);
+    free(audit);
+  }
+  EXPECT_EQ(0, queue.get_size());
+}
+TEST(TestObRaQueue, BenchTest) {
+  BenchTest(100 * 10000, 1);
+  BenchTest(100 * 10000, 5);
+  BenchTest(1000 * 10000, 1);
+  BenchTest(1000 * 10000, 5);
+}
 
 } // namespace test
 } // namespace oceanbase

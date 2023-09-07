@@ -108,15 +108,6 @@ int ObTLQueue::init(const char *label, uint64_t capacity, uint64_t subcapacity,
     mem_label_ = label;
     tenant_id_ = tenant_id;
     allocator_ = allocator;
-    for (uint64_t i = 0; OB_SUCC(ret) && i < QUEUE_POOL_SIZE; ++i) {
-      if (OB_ISNULL(queue_pool_[i] = (ObSubQueue *)ob_malloc(sizeof(ObSubQueue),
-                                                             mem_attr))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-      } else if (OB_FAIL(
-                     queue_pool_[i]->init(label, subcapacity_, tenant_id_))) {
-        /* do nothing */
-      }
-    }
   }
   return ret;
 }
@@ -153,8 +144,7 @@ int ObTLQueue::push(void *p, int64_t &seq) {
         ObMemAttr mem_attr;
         mem_attr.label_ = mem_label_;
         mem_attr.tenant_id_ = tenant_id_;
-        if (NULL != (subq = get_subq_from_pool())) {
-        } else if (OB_ISNULL(subq = (ObSubQueue *)ob_malloc(sizeof(ObSubQueue), mem_attr))) {
+        if (OB_ISNULL(subq = (ObSubQueue *)ob_malloc(sizeof(ObSubQueue), mem_attr))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
         } else if (OB_FAIL(subq->init(mem_label_, subcapacity_, tenant_id_))) {
           ret = OB_NOT_INIT;
@@ -225,14 +215,6 @@ void *ObTLQueue::get(uint64_t idx, Ref *ref) {
 }
 
 void ObTLQueue::destroy() {
-  // free queue_pool_
-  for (uint64_t i = 0; i < QUEUE_POOL_SIZE; ++i) {
-    if (NULL != queue_pool_[i]) {
-      queue_pool_[i]->destroy(allocator_);
-      ob_free(queue_pool_[i]);
-      queue_pool_[i] = NULL;
-    }
-  }
   if (NULL != array_) {
     ObSubQueue *subq = NULL;
     while (pop_ <= push_) {

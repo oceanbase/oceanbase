@@ -26,6 +26,12 @@ struct DummyAuditRecod {
   uint64_t val;
 };
 
+uint64_t ClockMs() {
+  struct timeval tm;
+  gettimeofday(&tm, nullptr);
+  return static_cast<uint64_t>(tm.tv_sec * 1000) + static_cast<uint64_t>(tm.tv_usec / 1000);
+}
+
 static const int64_t TOTAL_SIZE = 1024l * 1024l * 1024l * 8l;
 static const int64_t MY_PAGE_SIZE = 64 * 1024;
 
@@ -338,8 +344,8 @@ TEST(TestObTLQueue, PushTest2) {
 TEST(TestObTLQueue, ConcurrentPushTest) {
   ObTLQueue queue;
   const uint64_t capacity = 1024; 
-  const uint64_t subcapacity = 50000; // 5w
-  const uint64_t queue_size = capacity * subcapacity;  // 5000w
+  const uint64_t subcapacity = 5000; // 5k
+  const uint64_t queue_size = capacity * subcapacity;  // 500w
   const uint64_t thread_num = 5;
 
   ObConcurrentFIFOAllocator allocator;
@@ -389,6 +395,68 @@ TEST(TestObTLQueue, ConcurrentPushTest) {
     ;
   }
   EXPECT_EQ(0, queue.get_size());
+}
+
+void BenchTest(uint64_t capacity, uint64_t subcapacity, uint64_t thread_num) {
+  ObTLQueue queue;
+  const uint64_t queue_size = capacity * subcapacity; 
+
+  ObConcurrentFIFOAllocator allocator;
+  ASSERT_EQ(OB_SUCCESS, allocator.init(TOTAL_SIZE, TOTAL_SIZE, MY_PAGE_SIZE));
+  int ret = queue.init(ObModIds::OB_MYSQL_REQUEST_RECORD, capacity, subcapacity, &allocator);
+  EXPECT_EQ(OB_SUCCESS, ret);
+
+  std::vector<DummyAuditRecod*> audits;
+  for (uint64_t i = 0; i < queue_size ; ++i) {
+    auto *audit = static_cast<DummyAuditRecod*>(allocator.alloc(sizeof(DummyAuditRecod)));
+    audit->val = i;
+    audits.push_back(audit);
+  }
+
+  auto PushHelpr = [&queue, &audits, &thread_num](uint64_t thread_itr) {
+    int ret = OB_SUCCESS;
+    int64_t seq = 0;
+    for (uint64_t i = 0; i < audits.size(); ++i) {
+      if (i % thread_num == thread_itr) {
+        ret = queue.push_with_retry(audits[i], seq);
+        EXPECT_EQ(ret, OB_SUCCESS);
+      }
+    }
+  };
+
+  uint64_t start_time = ClockMs();
+  std::vector<std::thread> thread_pool;
+  for (uint64_t thread_itr = 0; thread_itr < thread_num; ++thread_itr) {
+    thread_pool.emplace_back(PushHelpr, thread_itr);
+  }
+  for (auto &t : thread_pool) {
+    t.join();
+  }
+  uint64_t end_time = ClockMs();
+  std::cout << "[BenchMark(" << thread_num << "t" << queue_size << ")] Push OPS: " << queue_size / (end_time - start_time) * 1000 << "/s" << std::endl;
+
+  // check push success
+  EXPECT_EQ(queue.get_size(), queue_size);
+
+  // get
+  ObRaQueue::Ref ref; 
+  for (uint64_t req_id = 0; req_id < queue_size; ++req_id) {
+    auto *audit = queue.get(req_id, &ref);
+    EXPECT_NE(audit, nullptr);
+    queue.revert(&ref);
+  }
+
+  // check pop function
+  while (OB_SUCC(queue.pop_batch())) {
+    ;
+  }
+  EXPECT_EQ(0, queue.get_size());
+}
+TEST(TestObTLQueue, BenchTest) {
+  BenchTest(10000, 100, 1);
+  BenchTest(10000, 100, 5);
+  BenchTest(10000, 1000, 1);
+  BenchTest(10000, 1000, 5);
 }
 
 } // namespace test

@@ -50,13 +50,11 @@ class ObTLQueue {
 
  public:
   static constexpr uint64_t LOCK = ~0LL;
-  static constexpr uint64_t QUEUE_POOL_SIZE = 5;
   ObTLQueue()
       : pop_(0), push_(0), capacity_(0), subcapacity_(0), mem_label_(NULL),
-        ref_(NULL), array_(NULL) {
-    memset(queue_pool_, 0, sizeof(ObSubQueue *) * QUEUE_POOL_SIZE);
-  };
-  ~ObTLQueue() { destroy(); };
+        ref_(NULL), array_(NULL), allocator_(NULL) 
+  { }
+  ~ObTLQueue() { destroy(); }
   int init(const char *label, uint64_t capacity, uint64_t subcapacity,
            ObConcurrentFIFOAllocator *allocator = NULL, 
            uint64_t tenant_id = OB_INVALID_TENANT_ID);
@@ -118,19 +116,6 @@ class ObTLQueue {
     }
   }
   int64_t xref(int64_t x, int64_t v) { return ATOMIC_AAF(ref_ + idx(x), v); }
-
-  ObSubQueue *get_subq_from_pool() {
-    ObSubQueue *p = NULL;
-    for (uint64_t i = 0; i < QUEUE_POOL_SIZE; ++i) {
-      p = queue_pool_[i];
-      if (NULL != p && (ObSubQueue *)LOCK != p) {
-        queue_pool_[i] = NULL;
-        break;
-      }
-    }
-    return p;
-  }
-
   uint64_t get_subq_size(uint64_t x) const {
     uint64_t ret = 0;
     if (NULL != array_) {
@@ -150,7 +135,6 @@ class ObTLQueue {
   const char *mem_label_;
   uint64_t tenant_id_;
   int64_t *ref_;
-  ObSubQueue *queue_pool_[QUEUE_POOL_SIZE];
   ObSubQueue **array_;
   ObConcurrentFIFOAllocator *allocator_;  
 };
